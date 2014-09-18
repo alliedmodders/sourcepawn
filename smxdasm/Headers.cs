@@ -188,7 +188,7 @@ namespace smxdasm
                 entry.Name = header.string_at(entry.nameoffs);
 
                 // Remember that there's a .dbg.natives section in the file. 
-                if(entry.Name == ".dbg.natives")
+                if (entry.Name == ".dbg.natives")
                     foundDbgNativesSection = true;
 
                 header.Sections[i] = entry;
