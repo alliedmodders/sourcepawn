@@ -85,6 +85,9 @@ namespace smxdasm
         public byte[] Data;
         public SectionEntry[] Sections;
 
+        // Version 0x0101 has the debug structures padded.
+        public bool debugUnpacked;
+
         private string string_at(int index)
         {
             int count = 0;
@@ -169,6 +172,7 @@ namespace smxdasm
 
             // Read section information.
             header.Sections = new SectionEntry[header.num_sections];
+            bool foundDbgNativesSection = false;
             for (var i = 0; i < header.num_sections; i++)
             {
                 var entry = new SectionEntry();
@@ -182,8 +186,18 @@ namespace smxdasm
                 if (entry.Size < 0)
                     throw new Exception("section size overflow");
                 entry.Name = header.string_at(entry.nameoffs);
+
+                // Remember that there's a .dbg.natives section in the file. 
+                if(entry.Name == ".dbg.natives")
+                    foundDbgNativesSection = true;
+
                 header.Sections[i] = entry;
             }
+
+            // There was a brief period of incompatibility, where version == 0x0101
+            // and the packing changed, at the same time .dbg.natives was introduced.
+            // Once the incompatibility was noted, version was bumped to 0x0102.
+            header.debugUnpacked = (header.Version == SP1_VERSION_1_0) && !foundDbgNativesSection;
 
             return header;
         }
