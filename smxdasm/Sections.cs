@@ -485,7 +485,7 @@ namespace smxdasm
         public SmxDebugSymbolsTable(FileHeader file, SectionEntry header, SmxDebugInfoSection info, SmxNameTable names)
             : base(file, header)
         {
-            entries_ = DebugSymbolEntry.From(file.SectionReader(header), info, names);
+            entries_ = DebugSymbolEntry.From(file, file.SectionReader(header), info, names);
         }
 
         private void buildDatRefs()

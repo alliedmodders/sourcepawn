@@ -316,7 +316,7 @@ namespace smxdasm
         public string Name;
         public DebugSymbolDimEntry[] Dims;
 
-        public static DebugSymbolEntry[] From(BinaryReader rd, SmxDebugInfoSection info, SmxNameTable names)
+        public static DebugSymbolEntry[] From(FileHeader hdr, BinaryReader rd, SmxDebugInfoSection info, SmxNameTable names)
         {
             var entries = new DebugSymbolEntry[info.NumSymbols];
             for (var i = 0; i < info.NumSymbols; i++)
@@ -324,6 +324,9 @@ namespace smxdasm
                 var entry = new DebugSymbolEntry();
                 entry.Address = rd.ReadInt32();
                 entry.TagId = rd.ReadUInt16();
+                // There's a padding of 2 bytes after this short.
+                if (hdr.debugUnpacked)
+                    rd.ReadBytes(2);
                 entry.CodeStart = rd.ReadUInt32();
                 entry.CodeEnd = rd.ReadUInt32();
                 entry.Ident = (SymKind)rd.ReadByte();
@@ -332,7 +335,7 @@ namespace smxdasm
                 entry.nameoffs = rd.ReadInt32();
                 entry.Name = names.StringAt(entry.nameoffs);
                 if (entry.dimcount > 0)
-                    entry.Dims = DebugSymbolDimEntry.From(rd, entry.dimcount);
+                    entry.Dims = DebugSymbolDimEntry.From(hdr, rd, entry.dimcount);
                 entries[i] = entry;
             }
             return entries;
@@ -345,12 +348,15 @@ namespace smxdasm
         public ushort tagid;        // Tag id (unmasked).
         public int Size;           // Size of the dimension.
 
-        public static DebugSymbolDimEntry[] From(BinaryReader rd, int count)
+        public static DebugSymbolDimEntry[] From(FileHeader hdr, BinaryReader rd, int count)
         {
             var entries = new DebugSymbolDimEntry[count];
             for (var i = 0; i < count; i++)
             {
                 var entry = new DebugSymbolDimEntry();
+                // There's a padding of 2 bytes before this short.
+                if (hdr != null && hdr.debugUnpacked)
+                    rd.ReadBytes(2);
                 entry.tagid = rd.ReadUInt16();
                 entry.Size = rd.ReadInt32();
                 entries[i] = entry;
@@ -426,7 +432,7 @@ namespace smxdasm
                 entry.dimcount = rd.ReadUInt16();
                 entry.nameoffs = rd.ReadInt32();
                 if (entry.dimcount > 0)
-                    entry.Dims = DebugSymbolDimEntry.From(rd, entry.dimcount);
+                    entry.Dims = DebugSymbolDimEntry.From(null, rd, entry.dimcount);
                 entry.Name = names.StringAt(entry.nameoffs);
                 entries[i] = entry;
             }
