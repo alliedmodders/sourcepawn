@@ -50,6 +50,7 @@ namespace smxviewer
             catch (Exception ex)
             {
                 MessageBox.Show("Could not open file: " + ex.Message, "File error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
 
             try
@@ -63,6 +64,7 @@ namespace smxviewer
             catch (Exception ex)
             {
                 MessageBox.Show("Could not parse file: " + ex.Message);
+                return;
             }
 
             renderFile();
