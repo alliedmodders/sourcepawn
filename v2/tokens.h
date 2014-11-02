@@ -86,8 +86,10 @@ namespace ke {
   _(M_IF,               "#if")                        \
   _(M_INCLUDE,          "#include")                   \
   _(M_LEAVING,          "#leaving")                   \
+  _(M_OPTIONAL_NEWDECLS, "#optional_newdecls")        \
   _(M_OPTIONAL_SEMI,    "#optional_semicolons")       \
   _(M_PRAGMA,           "#pragma")                    \
+  _(M_REQUIRE_NEWDECLS, "#require_newdecls")          \
   _(M_REQUIRE_SEMI,     "#require_semicolons")        \
   _(M_TRYINCLUDE,       "#tryinclude")                \
   _(M_UNDEF,            "#undef")                     \
@@ -199,8 +201,10 @@ enum TokenKind
   _(M_IF)                                             \
   _(M_INCLUDE)                                        \
   _(M_LEAVING)                                        \
+  _(M_OPTIONAL_NEWDECLS)                              \
   _(M_OPTIONAL_SEMI)                                  \
   _(M_PRAGMA)                                         \
+  _(M_REQUIRE_NEWDECLS)                               \
   _(M_REQUIRE_SEMI)                                   \
   _(M_TRYINCLUDE)                                     \
   _(M_UNDEF)                                          \

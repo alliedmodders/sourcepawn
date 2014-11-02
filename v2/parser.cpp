@@ -81,6 +81,8 @@ Parser::expectName()
 bool
 Parser::requireTerminator()
 {
+  if (scanner_.requireSemicolons())
+    return expect(TOK_SEMICOLON);
   if (match(TOK_SEMICOLON))
     return true;
   if (scanner_.peekTokenSameLine() == TOK_EOL)

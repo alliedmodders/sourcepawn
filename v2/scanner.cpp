@@ -38,7 +38,9 @@ Scanner::Scanner(CompileContext &cc, TranslationUnit *tu)
     tu_(tu),
     allowTags_(true),
     cursor_(0),
-    depth_(0)
+    depth_(0),
+    require_semicolons_(false),
+    require_newdecls_(false)
 {
 }
 
@@ -292,6 +294,19 @@ Scanner::readDirective()
 
     case TOK_M_LEAVING:
       leave();
+      break;
+
+    case TOK_M_REQUIRE_SEMI:
+      require_semicolons_ = true;
+      break;
+    case TOK_M_OPTIONAL_SEMI:
+      require_semicolons_ = false;
+      break;
+    case TOK_M_REQUIRE_NEWDECLS:
+      require_newdecls_ = true;
+      break;
+    case TOK_M_OPTIONAL_NEWDECLS:
+      require_newdecls_ = false;
       break;
 
     default:

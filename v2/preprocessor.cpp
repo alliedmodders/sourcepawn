@@ -924,6 +924,22 @@ Preprocessor::directive(TokenKind cmd)
         // forced to leave a breadcrub in the output buffer.
         buffer_.append("#deprecate ");
         buffer_.append(begin, end - begin);
+      } else if (strcmp(text_->literal(), "newdecls") == 0) {
+        SourceLocation loc = text_->loc();
+
+        char *begin, *end;
+        text_->readUntilEnd(&begin, &end);
+
+        AString str(begin, end - begin);
+
+        // The semicolon directive also affects parser state, so we inject it
+        // into the output buffer.
+        if (str.compare("required") == 0)
+          buffer_.append("#require_newdecls\n");
+        else if (str.compare("optional") == 0)
+          buffer_.append("#optional_newdecls\n");
+        else
+          cc_.reportError(loc, Message_InvalidNewDeclState);
       } else if (strcmp(text_->literal(), "semicolon") == 0) {
         // The semicolon directive also affects parser state, so we inject it
         // into the output buffer.

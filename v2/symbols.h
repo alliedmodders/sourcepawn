@@ -177,11 +177,14 @@ class TypeSymbol : public Symbol
   }
 };
 
+typedef PoolList<Symbol *> SymbolList;
+
 class FunctionSymbol : public Symbol
 {
  public:
   FunctionSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
-   : Symbol(node, scope, name)
+   : Symbol(node, scope, name),
+     shadows_(nullptr)
   {
     type_ = type;
   }
@@ -192,13 +195,20 @@ class FunctionSymbol : public Symbol
   FunctionType *type() const {
     return type_->toFunction();
   }
-
   Label *address() {
-      return &address_;
+    return &address_;
+  }
+
+  void setShadows(SymbolList *shadows) {
+    shadows_ = shadows;
+  }
+  SymbolList *shadows() const {
+    return shadows_;
   }
 
  private:
   Label address_;
+  SymbolList *shadows_;
 };
 
 class ConstantSymbol : public Symbol

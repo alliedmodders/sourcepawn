@@ -6,6 +6,7 @@ MSG(ExpectedDigitForFloat,          SyntaxError,            "expected digit in f
 MSG(WrongToken,                     SyntaxError,            "expected token '%s', got '%s'")
 MSG(ExpectedExpression,             SyntaxError,            "expected expression, got '%s'")
 MSG(RedeclaredName,                 SyntaxError,            "name '%s' was redeclared (previous at line %d, col %d)")
+MSG(RedeclaredNameWithFile,         SyntaxError,            "name '%s' was redeclared (previous at file %s, line %d, col %d)")
 MSG(ExpectedLValue,                 SyntaxError,            "impossible assignment, expected l-value")
 MSG(MaximumArrayDepth,              TypeError,              "maximum array dimension depth exceeded")
 MSG(ArrayInitializerDepth,          SyntaxError,            "array declaration and initializer have different dimension counts")
@@ -114,3 +115,4 @@ MSG(MismatchedCharTerminator,       SyntaxError,            "expected \"'\" as e
 MSG(ExpectedLayoutMember,           SyntaxError,            "expected a field, property, or function")
 MSG(InvalidAccessorName,            SyntaxError,            "accessor must be named 'get' or 'set'")
 MSG(AccessorRedeclared,             SyntaxError,            "accessor '%s' was declared twice")
+MSG(InvalidNewDeclState,            SyntaxError,            "invalid newdecl state")

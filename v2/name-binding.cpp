@@ -192,9 +192,9 @@ class NamePopulator : public AstVisitor
 
     // Function statements are always named, so add the name to the outer scope.
     FunctionSymbol *sym = new (pool_) FunctionSymbol(node, env_->scope(), node->name(), type);
-    registerSymbol(sym);
-    node->setSymbol(sym);
 
+    registerGlobalFunction(sym);
+    node->setSymbol(sym);
     visitFunction(node);
   }
   void visitAssignment(Assignment *node) KE_OVERRIDE {
@@ -397,19 +397,64 @@ class NamePopulator : public AstVisitor
     }
   }
 
+  bool registerGlobalFunction(FunctionSymbol *sym) {
+    Scope *scope = getOrCreateScope();
+
+    Symbol *other = scope->localLookup(sym->name());
+    if (!other)
+      return scope->addSymbol(sym);
+
+    // If |other| is not a function, it's an error.
+    FunctionSymbol *orig = other->asFunction();
+    if (!orig) {
+      reportRedeclaration(sym, other);
+      return true;
+    }
+
+    // If both have bodies, it's an error.
+    FunctionStatement *sym_node = sym->node()->toFunctionStatement();
+    FunctionStatement *orig_node = orig->node()->toFunctionStatement();
+    if (sym_node->body() && orig_node->body()) {
+      reportRedeclaration(sym, other);
+      return true;
+    }
+
+    // Build a shadow list, containing all symbols with this name.
+    if (!orig->shadows()) {
+      orig->setShadows(new (pool_) PoolList<Symbol *>());
+      orig->shadows()->append(orig);
+    }
+    orig->shadows()->append(sym);
+    sym_node->setShadowed(orig);
+    return true;
+  }
+
   bool registerSymbol(Symbol *sym) {
     Scope *scope = getOrCreateScope();
 
     if (Symbol *other = scope->localLookup(sym->name())) {
       // Report, but allow errors to continue.
-      cc_.reportError(sym->node()->loc(), Message_RedeclaredName,
-        sym->name()->chars(),
-        other->node()->loc().line,
-        other->node()->loc().col);
+      reportRedeclaration(sym, other);
       return true;
     }
 
     return scope->addSymbol(sym);
+  }
+
+  void reportRedeclaration(Symbol *sym, Symbol *other) {
+    if (other->node()->loc().file != sym->node()->loc().file) {
+      // :TODO: shorten paths.
+      cc_.reportError(sym->node()->loc(), Message_RedeclaredNameWithFile,
+        sym->name()->chars(),
+        other->node()->loc().file->path(),
+        other->node()->loc().line,
+        other->node()->loc().col);
+    } else {
+      cc_.reportError(sym->node()->loc(), Message_RedeclaredName,
+        sym->name()->chars(),
+        other->node()->loc().line,
+        other->node()->loc().col);
+    }
   }
 
   void registerArguments(const FunctionSignature &sig) {

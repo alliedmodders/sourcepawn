@@ -929,6 +929,14 @@ class FunctionNode : public PoolObject
     return varScope_;
   }
 
+  // Set if we're shadowing another symbol.
+  void setShadowed(FunctionSymbol *shadowed) {
+    shadowed_ = shadowed;
+  }
+  FunctionSymbol *shadowed() const {
+    return shadowed_;
+  }
+
  private:
   TokenKind kind_;
   MethodBody *body_;
@@ -936,6 +944,7 @@ class FunctionNode : public PoolObject
   FunctionSymbol *sym_;
   FunctionScope *funScope_;
   Scope *varScope_;
+  FunctionSymbol *shadowed_;
 };
 
 class FunctionStatement :
@@ -950,11 +959,11 @@ class FunctionStatement :
   {
   }
 
+  DECLARE_NODE(FunctionStatement);
+
   Atom *name() const {
     return name_.atom;
   }
-
-  DECLARE_NODE(FunctionStatement);
 
  private:
   NameToken name_;

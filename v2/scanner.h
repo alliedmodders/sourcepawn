@@ -84,6 +84,13 @@ class Scanner : public BasicLexer
     return BasicLexer::literal_length();
   }
 
+  bool requireSemicolons() const {
+    return require_semicolons_;
+  }
+  bool requireNewdecls() const {
+    return require_newdecls_;
+  }
+
  private:
   static const size_t kMaxLookahead = 4;
 
@@ -113,6 +120,9 @@ class Scanner : public BasicLexer
   size_t depth_;
   size_t num_tokens_;
   Token tokens_[kMaxLookahead];
+
+  bool require_semicolons_;
+  bool require_newdecls_;
 
   // :TODO: do something with this.
   bool pending_deprecate_;
