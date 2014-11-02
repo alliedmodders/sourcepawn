@@ -3,7 +3,6 @@ SourcePawn
 
 A small and fast typed language for embedding in host applications.
 
-
 History
 =======
 
@@ -26,5 +25,17 @@ In early 2006, Borja Ferrer ("faluco") and I chose to re-use Pawn in SourceMod, 
 Because these changes were fairly invasive, we renamed the language to "SourcePawn", and pinned the compiler to upstream version 3.2.
 
 In 2014, after many failed attempts to write a new language, I introduced a "Transitional Syntax" to SourcePawn. This syntax introduces real types (such as `int` and `void`), a more C-like declaration style, and the ability to extend tags with methods as if they were objects.
+
+An experimental, unfinished future compiler is in `v2`.
+
+Organization
+============
+
+SourcePawn requires AMBuild to build.
+
+The SourcePawn source tree is divided into the following folders:
+ - `legacy` - The SourcePawn 1.7 compiler and VM.
+ - `compiler` - The SourcePawn 1.8 compiler.
+ - `vm` - The SourcePawn 1.8 VM.
 
 [1] http://www.drdobbs.com/the-small-scripting-language/184411074

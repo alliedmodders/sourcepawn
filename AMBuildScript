@@ -1,0 +1,161 @@
+# vim: set ts=2 sw=2 tw=99 et ft=python:
+# 
+# Copyright (C) 2004-2012 David Anderson
+# 
+# This file is part of SourcePawn.
+# 
+# SourcePawn is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+# 
+# SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# SourcePawn. If not, see http://www.gnu.org/licenses/.
+#
+import os
+import sys
+
+def Normalize(path):
+  return os.path.abspath(os.path.normpath(path))
+
+class KEConfig:
+  def __init__(self):
+    cfg = builder.DetectCompilers()
+    cxx = cfg.cxx
+
+    if cxx.behavior is 'gcc':
+      cfg.cflags += [
+        '-pipe',
+        '-Wall',
+        '-Werror',
+        '-Wno-switch',
+      ]
+      cfg.cxxflags += ['-std=c++11']
+
+      have_gcc = cxx.name is 'gcc'
+      have_clang = cxx.name is 'clang'
+      if have_clang or (have_gcc and cxx.majorVersion >= 4):
+        cfg.cflags += ['-fvisibility=hidden']
+        cfg.cxxflags += ['-fvisibility-inlines-hidden']
+        if have_clang or (have_gcc and cxx.minorVersion >= 6):
+          cfg.cflags += ['-Wno-narrowing']
+        if (have_gcc and cxx.minorVersion >= 7) or (have_clang and cxx.majorVersion >= 4):
+          cfg.cxxflags += ['-Wno-delete-non-virtual-dtor']
+
+      cfg.cxxflags += [
+        '-fno-exceptions',
+        '-fno-threadsafe-statics',
+        '-Wno-non-virtual-dtor',
+        '-Wno-overloaded-virtual',
+        '-Wno-unused-private-field',
+      ]
+
+      if have_gcc:
+        cfg.cflags += ['-mfpmath=sse']
+
+      # Disable some stuff we don't use, that gives us better binary
+      # compatibility on Linux.
+      cfg.cxxflags += [
+        '-fno-exceptions',
+        '-fno-rtti',
+        '-fno-threadsafe-statics',
+        '-Wno-non-virtual-dtor',
+        '-Wno-overloaded-virtual',
+        '-Wno-invalid-offsetof',
+      ]
+
+      if (have_gcc and cxx.majorVersion >= 4 and cxx.minorVersion >= 7) or \
+          (have_clang and cxx.majorVersion >= 3):
+        cfg.cxxflags += ['-Wno-delete-non-virtual-dtor']
+
+      cfg.postlink += ['-lm']
+    elif cxx.name is 'msvc':
+      if builder.options.debug == '1':
+        cfg.cflags += ['/MTd']
+        cfg.linkflags += ['/NODEFAULTLIB:libcmt']
+      else:
+        cfg.cflags += ['/MT']
+      cfg.defines += [
+        '_CRT_SECURE_NO_DEPRECATE',
+        '_CRT_SECURE_NO_WARNINGS',
+        '_CRT_NONSTDC_NO_DEPRECATE',
+        '_ITERATOR_DEBUG_LEVEL=0',
+      ]
+      cfg.cflags += [
+        '/W3',
+      ]
+      cfg.cxxflags += [
+        '/EHsc',
+        '/GR-',
+        '/TP',
+      ]
+      cfg.linkflags += [
+        '/MACHINE:X86',
+        '/SUBSYSTEM:WINDOWS',
+        'kernel32.lib',
+        'user32.lib',
+        'gdi32.lib',
+        'winspool.lib',
+        'comdlg32.lib',
+        'advapi32.lib',
+        'shell32.lib',
+        'ole32.lib',
+        'oleaut32.lib',
+        'uuid.lib',
+        'odbc32.lib',
+        'odbccp32.lib',
+      ] 
+
+    # Optimization
+    if builder.options.opt == '1':
+      cfg.defines += ['NDEBUG']
+      if cxx.behavior == 'gcc':
+        cfg.cflags += ['-O3']
+      elif cxx.behavior == 'msvc':
+        cfg.cflags += ['/Ox']
+        cfg.linkflags += ['/OPT:ICF', '/OPT:REF']
+
+    # Debugging
+    if builder.options.debug == '1':
+      cfg.defines += ['DEBUG', '_DEBUG']
+      if cxx.behavior == 'msvc':
+        cfg.cflags += ['/Od', '/RTC1']
+
+    # This needs to be after our optimization flags which could otherwise disable it.
+    if cxx.name == 'msvc':
+      # Don't omit the frame pointer.
+      cfg.cflags += ['/Oy-']
+
+    # Platform-specifics
+    if builder.target_platform == 'linux':
+      if cxx.name == 'gcc':
+        cfg.linkflags += ['-static-libgcc']
+      elif cxx.name == 'clang':
+        cfg.linkflags += ['-lgcc_eh']
+      cfg.linkflags += ['-lpthread', '-lrt']
+    elif builder.target_platform == 'mac':
+      cfg.linkflags += [
+        '-mmacosx-version-min=10.5',
+      ]
+    elif builder.target_platform == 'windows':
+      cfg.defines += ['WIN32', '_WINDOWS']
+
+    cfg.defines += ['KE_THREADSAFE']
+
+    if builder.options.amtl:
+      amtl_path = Normalize(builder.options.amtl)
+      if not os.path.isdir(amtl_path):
+          raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
+      cfg.cxxincludes += [os.path.join(amtl_path, 'include')]
+    cfg.cxxincludes += [
+      os.path.join(builder.sourcePath, 'include'),
+    ]
+
+KE = KEConfig()
+
+builder.RunScript('v2/AMBuilder', { 'KE': KE })
+
