@@ -84,7 +84,7 @@ class Type : public PoolObject
 
     // Void is an internal type used to specify that a function returns no
     // value.
-    VOID,
+    VOIDTYPE,
 
     // Enums are plain-old-data with int32 storage. They allow for extra
     // type checking that would not be possible with integers.
@@ -141,7 +141,7 @@ class Type : public PoolObject
     return canonical()->kind_ == FUNCTION;
   }
   bool isVoid() {
-    return canonical()->kind_ == VOID;
+    return canonical()->kind_ == VOIDTYPE;
   }
   bool isUnchecked() {
     return canonical()->kind_ == UNCHECKED;

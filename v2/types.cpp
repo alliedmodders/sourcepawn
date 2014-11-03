@@ -23,7 +23,7 @@ using namespace ke;
 Type *
 Type::NewVoid()
 {
-  Type *type = new (POOL()) Type(VOID);
+  Type *type = new (POOL()) Type(VOIDTYPE);
   return type;
 }
 
@@ -123,7 +123,7 @@ Type::Compare(Type *left, Type *right)
     case Type::TYPEDEF:
       return false;
 
-    case Type::VOID:
+    case Type::VOIDTYPE:
       return true;
 
     default:

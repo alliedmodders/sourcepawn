@@ -25,7 +25,7 @@ binary.compiler.cxxincludes += [
 ]
 
 if binary.compiler.cxx.behavior is 'msvc':
-  binary.compiler.postlinkflags += ['/SUBSYSTEM:CONSOLE']
+  binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
 
 binary.sources += [
   'compile-context.cpp',

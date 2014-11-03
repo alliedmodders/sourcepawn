@@ -46,7 +46,7 @@ CoerceToFloat(BoxedPrimitive &in)
 {
   assert(!in.isFloat());
   if (in.isInt()) {
-    in = BoxedPrimitive::Float(in.toInt());
+    in = BoxedPrimitive::Float((float)in.toInt());
     return true;
   }
   return false;

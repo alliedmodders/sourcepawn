@@ -280,7 +280,7 @@ struct Token
   }
   int32_t charValue() const {
     assert(kind == TOK_CHAR_LITERAL);
-    return int_value_;
+    return int32_t(int_value_);
   }
   void setIntValue(int64_t value) {
     int_value_ = value;

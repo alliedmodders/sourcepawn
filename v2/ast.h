@@ -1255,18 +1255,18 @@ class LayoutEntry : public PoolObject
   }
   LayoutEntry(const NameToken &name, const FunctionOrAlias &method)
     : type_(Method),
-      name_(name),
-      method_(method)
+      name_(name)
   {
+    *method_.address() = method;
   }
   LayoutEntry(const NameToken &name, const TypeSpecifier &spec,
               const FunctionOrAlias &getter, const FunctionOrAlias &setter)
    : type_(Accessor),
      name_(name),
      spec_(spec),
-     getter_(getter),
      setter_(setter)
   {
+    *getter_.address() = getter;
   }
 
   Type type() const {
@@ -1281,11 +1281,11 @@ class LayoutEntry : public PoolObject
   }
   const FunctionOrAlias &method() const {
     assert(type() == Method);
-    return method_;
+    return *method_.address();
   }
   const FunctionOrAlias &getter() const {
     assert(type() == Accessor);
-    return getter_;
+    return *getter_.address();
   }
   const FunctionOrAlias &setter() const {
     assert(type() == Accessor);
@@ -1298,8 +1298,8 @@ class LayoutEntry : public PoolObject
   TypeSpecifier spec_;
   union {
     NameProxy *alias_;
-    FunctionOrAlias method_;
-    FunctionOrAlias getter_;
+    StorageBuffer<FunctionOrAlias> method_;
+    StorageBuffer<FunctionOrAlias> getter_;
   };
   FunctionOrAlias setter_;
 };
