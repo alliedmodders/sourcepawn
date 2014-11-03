@@ -77,3 +77,17 @@ TypeManager::newEnum(Atom *name)
   return EnumType::New(name);
 }
 
+Type *
+TypeManager::newQualified(Type *type, Qualifiers qualifiers)
+{
+  if ((type->qualifiers() | qualifiers) == qualifiers)
+    return type;
+
+  if (type->isQualified()) {
+    qualifiers |= type->qualifiers();
+    type = type->unqualified();
+  }
+
+  // :TODO: cache this.
+  return Type::NewQualified(type, qualifiers);
+}

@@ -925,6 +925,10 @@ class NameBinder : public AstVisitor
       return spec->resolved();
 
     Type *baseType = resolveBaseType(spec);
+    if (!baseType) {
+      // Create a placeholder so we don't have to check null everywhere.
+      baseType = TypedefType::New(cc_.add("__unresolved_type__"));
+    }
 
     // Should not have a reference here.
     assert(!baseType->isReference());

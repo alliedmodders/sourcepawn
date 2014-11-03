@@ -1117,9 +1117,9 @@ Parser::parseMethod()
   // Grab the body, or if none is required, require a terminator.
   MethodBody *body = nullptr;
   if (native)
-    body = methodBody();
-  else
     requireNewlineOrSemi();
+  else
+    body = methodBody();
 
   FunctionNode *node = new (pool_) FunctionNode(
     (native ? TOK_NATIVE : TOK_NONE),

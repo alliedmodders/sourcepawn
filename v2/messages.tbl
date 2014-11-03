@@ -51,7 +51,6 @@ MSG(CannotDeclareVoid,              TypeError,              "cannot declare void
 MSG(FunctionDoesNotReturnValue,     SyntaxError,            "cannot use the result of a function with no return value")
 MSG(IdentifierNotFound,             SyntaxError,            "identifier '%s' could not be found")
 MSG(TypeMismatchDuringInvoke,       TypeError,              "incoming type '%s' does not match signature type '%s'")
-MSG(CannotInvokeReturnType,         SyntaxError,            "cannot invoke function with return type '%s'")
 MSG(IdentifierIsNotAType,           SyntaxError,            "identifier '%s' cannot be used as a type")
 MSG(TypeMismatch,                   TypeError,              "type mismatch (expected '%s', got '%s')")
 MSG(PropertyNotFound,               TypeError,              "property '%s' not found on type '%s'")

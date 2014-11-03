@@ -258,8 +258,7 @@ Scanner::readDirective()
         next();
       assert(tok == TOK_INTEGER_LITERAL);
 
-      // :TODO: overflow
-      int index = current()->intValue();
+      int index = current()->int32Value();
 
       // Note: it is very dangerous to lex outside of the normal stream. In
       // spcomp1, we used two separate token buffers to prevent preproc tokens

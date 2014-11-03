@@ -30,7 +30,7 @@ ThreadLocal<CompileContext *> ke::CurrentCompileContext;
 bool
 ke::ReadFileChars(const char *path, char **textp, size_t *lengthp)
 {
-  FILE *fp = fopen(path, "r");
+  FILE *fp = fopen(path, "rb");
   if (!fp)
     return false;
 

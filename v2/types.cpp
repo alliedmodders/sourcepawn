@@ -42,6 +42,15 @@ Type::NewPrimitive(PrimitiveType prim)
   return type;
 }
 
+Type *
+Type::NewQualified(Type *type, Qualifiers qualifiers)
+{
+  assert(!type->isQualified());
+  Type *qual = new (POOL()) Type(QUALIFIER, type);
+  qual->qualifiers_ = qualifiers;
+  return qual;
+}
+
 ArrayType *
 ArrayType::New(Type *contained, int elements)
 {
@@ -71,27 +80,14 @@ EnumType::New(Atom *name)
   return type;
 }
 
-#if 0
-Type *
-Type::NewNative(Type *returnType, Handle<FixedArray> parameters,
-        Handle<FixedArray> defaults, bool variadic)
+TypedefType *
+TypedefType::New(Atom *name, Type *canonical)
 {
-  Local<Type> type(zone, Type::cast(zone->allocate(MapKind_Type, sizeof(Type), Heap::Tenure_Old)));
-  if (!type)
-    return nullptr;
-
-  type->kind_ = NATIVE;
-  type->name_ = nullptr;
-  type->contained_ = nullptr;
-  type->fields_ = nullptr;
-  type->newMap_ = nullptr;
-  type->returnType_ = returnType;
-  type->parameters_ = parameters;
-  type->defaults_ = defaults;
-  type->variadicNative_ = variadic;
-  return type;
+  TypedefType *tdef = new (POOL()) TypedefType(name);
+  if (canonical)
+    tdef->resolve(canonical);
+  return tdef;
 }
-#endif
 
 bool
 Type::Compare(Type *left, Type *right)
@@ -172,3 +168,18 @@ ke::GetTypeName(Type *type)
   return GetPrimitiveName(type->primitive());
 }
 
+const char *
+ke::GetTypeClassName(Type *type)
+{
+  if (type->isArray())
+    return "array";
+  if (type->isFunction())
+    return "function";
+  if (type->isVoid())
+    return "void";
+  if (type->isEnum())
+    return type->toEnum()->name()->chars();
+  if (type->isReference())
+    type = type->toReference()->contained();
+  return GetPrimitiveName(type->primitive());
+}

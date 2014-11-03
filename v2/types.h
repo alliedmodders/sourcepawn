@@ -119,6 +119,11 @@ class Type : public PoolObject
   {
     canonical_ = this;
   }
+  Type(Kind kind, Type *canonical)
+   : kind_(kind),
+     canonical_(canonical)
+  {
+  }
 
  public:   
   static Type *NewVoid();
@@ -173,6 +178,7 @@ class Type : public PoolObject
     assert(isPrimitive());
     return canonical()->primitive_;
   }
+
   bool isPod() {
     return isPrimitive() || isEnum() || isUnchecked();
   }
@@ -200,14 +206,17 @@ class Type : public PoolObject
     return isPrimitive() && primitive() == PrimitiveType::Bool;
   }
 
-  Qualifiers quals() {
+  Qualifiers qualifiers() {
     Type *norm = normalized();
     if (norm->kind_ != QUALIFIER)
       return Qualifiers::None;
-    return norm->quals_;
+    return norm->qualifiers_;
   }
   bool isQualified() {
     return normalized()->kind_ == QUALIFIER;
+  }
+  Type *unqualified() {
+    return canonical();
   }
 
 #define CAST(name)                                \
@@ -282,7 +291,7 @@ class Type : public PoolObject
       //     typedef C const B
       // etc...
       kind_ = QUALIFIER;
-      quals_ |= canonical_->quals_;
+      qualifiers_ |= canonical_->qualifiers_;
       canonical_ = canonical_->canonical_;
     } while (isWrapped() && canonical_->isResolvedTypedef());
   }
@@ -291,7 +300,7 @@ class Type : public PoolObject
   Kind kind_;
   union {
     PrimitiveType primitive_;
-    Qualifiers quals_;
+    Qualifiers qualifiers_;
   };
 
   // For unqualified types, this points to |this|. For qualified types, it
@@ -374,8 +383,8 @@ class ArrayType : public Type
 
 class TypedefType : public Type
 {
-  TypedefType(Kind kind, Atom *name)
-   : Type(kind),
+  TypedefType(Atom *name)
+   : Type(TYPEDEF),
      name_(name)
   {}
 

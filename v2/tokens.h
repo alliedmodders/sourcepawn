@@ -21,6 +21,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <limits.h>
 
 namespace ke {
 
@@ -288,6 +289,10 @@ struct Token
   int64_t intValue() const {
     assert(kind == TOK_INTEGER_LITERAL || kind == TOK_HEX_LITERAL);
     return int_value_;
+  }
+  int32_t int32Value() const {
+    assert(intValue() <= int64_t(INT_MAX));
+    return (int32_t)int_value_;
   }
   void setDoubleValue(double value) {
     double_value_ = value;

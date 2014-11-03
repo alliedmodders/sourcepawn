@@ -71,16 +71,16 @@ struct WrappedFloat {
   float value;
 };
 static inline float operator +(const WrappedFloat &left, const WrappedFloat &right) {
-  return left + right;
+  return left.value + right.value;
 }
 static inline float operator -(const WrappedFloat &left, const WrappedFloat &right) {
-  return left - right;
+  return left.value - right.value;
 }
 static inline float operator *(const WrappedFloat &left, const WrappedFloat &right) {
-  return left * right;
+  return left.value * right.value;
 }
 static inline float operator /(const WrappedFloat &left, const WrappedFloat &right) {
-  return left / right;
+  return left.value / right.value;
 }
 static inline float operator %(const WrappedFloat &left, const WrappedFloat &right) {
   return FloatModulo(left.value, right.value);
@@ -233,11 +233,11 @@ ConstantEvaluator::Evaluate(Expression *expr, BoxedPrimitive *out)
   }
 
   if (IntegerLiteral *lit = expr->asIntegerLiteral()) {
-    *out = BoxedPrimitive::Int(lit->value());
+    *out = BoxedPrimitive::Int((int32_t)lit->value());
     return Ok;
   }
   if (FloatLiteral *lit = expr->asFloatLiteral()) {
-    *out = BoxedPrimitive::Float(lit->value());
+    *out = BoxedPrimitive::Float((float)lit->value());
     return Ok;
   }
 
