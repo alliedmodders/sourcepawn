@@ -149,18 +149,20 @@ class TypeSpecifier
 {
  public:
   enum Attrs {
-    Const    = 0x01,
-    Variadic = 0x02,
-    ByRef    = 0x04
+    Const      = 0x01,
+    Variadic   = 0x02,
+    ByRef      = 0x04,
+    SizedArray = 0x08
   };
 
  public:
   TypeSpecifier()
    : attrs_(0),
-     rank_(0),
-     dims_(nullptr),
-     resolver_(TOK_NONE)
+     resolver_(TOK_NONE),
+     type_(nullptr)
   {
+    dims_ = nullptr;
+    assert(rank_ == 0);
   }
 
   bool needsBinding() const {
@@ -184,7 +186,7 @@ class TypeSpecifier
   }
   void setByRef(const SourceLocation &loc) {
     attrs_ |= ByRef;
-    byref_loc_ = loc;
+    sigil_loc_ = loc;
   }
   bool isConst() const {
     return !!(attrs_ & Const);
@@ -199,6 +201,10 @@ class TypeSpecifier
     assert(isVariadic());
     return variadic_loc_;
   }
+  const SourceLocation &byRefLoc() const {
+    assert(isByRef());
+    return sigil_loc_;
+  }
 
   void setBuiltinType(TokenKind kind) {
     resolver_ = kind;
@@ -212,23 +218,43 @@ class TypeSpecifier
     signature_ = signature;
   }
 
-  void setRank(uint32_t rank) {
-    assert(!isArray());
-    rank_ = rank;
+  // As a small space-saving optimization, we overlay dims with rank. In many
+  // cases the array will have no sized ranks and we'll save allocating a
+  // list of nulls - or, in the vast majority of cases - we'll have no arrays
+  // at all and we save an extra word on the very common TypeSpecifier.
+  void setRank(const SourceLocation &sigil, uint32_t aRank) {
+    assert(!rank());
+    rank_ = aRank;
+    sigil_loc_ = sigil;
   }
-  void setDimensionSizes(ExpressionList *dims) {
-    assert(!isArray());
-    rank_ = dims->length();
+  void setDimensionSizes(const SourceLocation &sigil, ExpressionList *dims) {
+    assert(!rank());
     dims_ = dims;
+    attrs_ |= SizedArray;
+    sigil_loc_ = sigil;
+  }
+  bool isArray() const {
+    return rank() > 0;
+  }
+  const SourceLocation &arrayLoc() const {
+    assert(isArray());
+    return sigil_loc_;
   }
 
-  bool isArray() const {
-    return rank_ > 0;
-  }
   ExpressionList *dims() const {
-    return dims_;
+    if (attrs_ & SizedArray)
+      return dims_;
+    return nullptr;
+  }
+  Expression *sizeOfRank(uint32_t r) {
+    assert(r < rank());
+    if (attrs_ & SizedArray)
+      return dims_->at(r);
+    return nullptr;
   }
   uint32_t rank() const {
+    if (attrs_ & SizedArray)
+      return dims_->length();
     return rank_;
   }
 
@@ -239,9 +265,9 @@ class TypeSpecifier
     assert(resolver() == TOK_NAME || resolver() == TOK_LABEL);
     return name_;
   }
-  FunctionSignature &signature() const {
+  FunctionSignature *signature() const {
     assert(resolver() == TOK_FUNCTION);
-    return *signature_;
+    return signature_;
   }
 
   // For reparse_decl().
@@ -251,22 +277,33 @@ class TypeSpecifier
     attrs_ = saveAttrs;
   }
   void resetArray() {
-    dims_ = nullptr;
     rank_ = 0;
+    dims_ = nullptr;
+    attrs_ &= ~SizedArray;
+  }
+
+  void setResolved(Type *type) {
+    type_ = type;
+  }
+  Type *resolved() const {
+    return type_;
   }
 
  private:
   SourceLocation const_loc_;
   SourceLocation variadic_loc_;
-  SourceLocation byref_loc_;
+  SourceLocation sigil_loc_;
   uint32_t attrs_;
-  uint32_t rank_;
-  ExpressionList *dims_;
+  union {
+    uint32_t rank_;
+    ExpressionList *dims_;
+  };
   TokenKind resolver_;
   union {
     NameProxy *name_;
     FunctionSignature *signature_;
   };
+  Type *type_;
 };
 
 class FunctionSignature : public PoolObject
@@ -905,8 +942,8 @@ class FunctionNode : public PoolObject
   MethodBody *body() const {
     return body_;
   }
-  FunctionSignature &signature() {
-    return signature_;
+  FunctionSignature *signature() {
+    return &signature_;
   }
   TokenKind token() const {
     return kind_;
@@ -1007,15 +1044,13 @@ class EnumStatement : public Statement
 
  public:
   struct Entry {
-    Atom *name;
+    NameProxy *proxy;
     Expression *expr;
-    SourceLocation pos;
     ConstantSymbol *sym;
 
-    Entry(Atom *name, Expression *expr, const SourceLocation &pos)
-      : name(name),
+    Entry(NameProxy *proxy, Expression *expr)
+      : proxy(proxy),
         expr(expr),
-        pos(pos),
         sym(nullptr)
     {
     }
@@ -1316,7 +1351,8 @@ class TypedefStatement : public Statement
   TypedefStatement(const SourceLocation &pos, Atom *name, const TypeSpecifier &spec)
    : Statement(pos),
      name_(name),
-     spec_(spec)
+     spec_(spec),
+     sym_(nullptr)
   {
   }
 
@@ -1329,9 +1365,17 @@ class TypedefStatement : public Statement
     return &spec_;
   }
 
+  TypeSymbol *sym() const {
+    return sym_;
+  }
+  void setSymbol(TypeSymbol *sym) {
+    sym_ = sym;
+  }
+
  private:
   Atom *name_;
   TypeSpecifier spec_;
+  TypeSymbol *sym_;
 };
 
 typedef PoolList<Atom *> NameList;

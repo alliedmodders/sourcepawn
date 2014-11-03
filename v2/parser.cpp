@@ -182,13 +182,14 @@ Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
 
   // If we didn't already fill out array dimensions, do so now.
   if (!spec->isArray() && match(TOK_LBRACKET)) {
+    SourceLocation begin = scanner_.begin();
     uint32_t rank = 0;
     do {
       rank++;
       if (!match(TOK_RBRACKET))
         cc_.reportError(scanner_.begin(), Message_FixedArrayInPrefix);
     } while (match(TOK_LBRACKET));
-    spec->setRank(rank);
+    spec->setRank(begin, rank);
   }
 
   if (flags & DeclFlags::Argument) {
@@ -196,7 +197,7 @@ Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
       if (!spec->isArray())
         spec->setByRef(scanner_.begin());
       else
-        cc_.reportError(scanner_.begin(), Message_ArrayCantBeReference);
+        cc_.reportError(scanner_.begin(), Message_TypeCannotBeReference, "array");
     }
   }
 }
@@ -234,7 +235,7 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
 
   SourceLocation loc = scanner_.begin();
   if (spec->isByRef())
-    cc_.reportError(loc, Message_ArrayCantBeReference);
+    cc_.reportError(loc, Message_TypeCannotBeReference, "array");
 
   uint32_t rank = 0;
   ExpressionList *dims = nullptr;
@@ -270,9 +271,9 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
   }
 
   if (dims)
-    spec->setDimensionSizes(dims);
+    spec->setDimensionSizes(loc, dims);
   else
-    spec->setRank(rank);
+    spec->setRank(loc, rank);
 
   decl->hasPostDims = true;
 }
@@ -1644,10 +1645,10 @@ Parser::enum_()
     if (scanner_.peek() == TOK_RBRACE)
       break;
 
-    SourceLocation pos = scanner_.begin();
     Atom *name = expectName();
     if (!name)
       return nullptr;
+    NameProxy *proxy = new (pool_) NameProxy(scanner_.begin(), name);
 
     Expression *expr = nullptr;
     if (match(TOK_ASSIGN)) {
@@ -1655,7 +1656,7 @@ Parser::enum_()
         return nullptr;
     }
 
-    if (!entries->append(EnumStatement::Entry(name, expr, pos)))
+    if (!entries->append(EnumStatement::Entry(proxy, expr)))
       return nullptr;
   } while (match(TOK_COMMA));
   if (!expect(TOK_RBRACE))
@@ -1975,17 +1976,17 @@ class AstPrinter : public AstVisitor
     }
   }
 
-  void dump(FunctionSignature &sig) {
-    dump(*sig.returnType(), nullptr);
-    if (!sig.parameters()->length()) {
+  void dump(FunctionSignature *sig) {
+    dump(*sig->returnType(), nullptr);
+    if (!sig->parameters()->length()) {
       fprintf(fp_, " ()\n");
       return;
     }
     fprintf(fp_, " (\n");
     indent();
-    for (size_t i = 0; i < sig.parameters()->length(); i++) {
+    for (size_t i = 0; i < sig->parameters()->length(); i++) {
       prefix();
-      VariableDeclaration *param = sig.parameters()->at(i);
+      VariableDeclaration *param = sig->parameters()->at(i);
       dump(*param->spec(), param->name());
       fprintf(fp_, "\n");
     }
@@ -2150,7 +2151,7 @@ class AstPrinter : public AstVisitor
     indent();
     for (size_t i = 0; i < node->entries()->length(); i++) {
       prefix();
-      fprintf(fp_, "%s =\n", node->entries()->at(i).name->chars());
+      fprintf(fp_, "%s =\n", node->entries()->at(i).proxy->name()->chars());
       if (node->entries()->at(i).expr) {
         indent();
         node->entries()->at(i).expr->accept(this);

@@ -23,9 +23,43 @@
 
 namespace ke {
 
+class Scope;
 class Expression;
+class CompileContext;
+class UnaryExpression;
+class BinaryExpression;
 
-bool EvaluateForConstant(Expression *expr, BoxedPrimitive *out);
+class ConstantEvaluator
+{
+ public:
+  enum Result {
+    Ok,
+    TypeError,
+    NotConstant
+  };
+  
+  enum Mode {
+    Speculative,
+    Required
+  };
+
+  ConstantEvaluator(CompileContext &cc, Scope *scope, Mode mode)
+   : cc_(cc),
+     scope_(scope),
+     mode_(mode)
+  {}
+
+  Result Evaluate(Expression *expr, BoxedPrimitive *out);
+
+ private:
+  Result unary(UnaryExpression *expr, const BoxedPrimitive &inner, BoxedPrimitive *out);
+  Result binary(BinaryExpression *expr, BoxedPrimitive &left, BoxedPrimitive &right, BoxedPrimitive *out);
+
+ private:
+  CompileContext &cc_;
+  Scope *scope_;
+  Mode mode_;
+};
 
 }
 

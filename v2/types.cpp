@@ -45,28 +45,9 @@ Type::NewPrimitive(PrimitiveType prim)
 ArrayType *
 ArrayType::New(Type *contained, int elements)
 {
-  assert(!contained->isArray() || contained->toArray()->levels() < MAX_ARRAY_DEPTH);
-
   ArrayType *type = new (POOL()) ArrayType(ARRAY);
   type->contained_ = contained;
   type->elements_ = elements;
-  if (!contained->isArray())
-    type->levels_ = 1;
-  else
-    type->levels_ = contained->toArray()->levels() + 1;
-  return type;
-}
-
-ArrayType *
-ArrayType::NewExternal(Type *contained)
-{
-  ArrayType *type = new (POOL()) ArrayType(EXTERNAL_ARRAY);
-
-  assert(contained->isPrimitive());
-
-  type->contained_ = contained;
-  type->elements_ = DYNAMIC_ARRAY_SIZE;
-  type->levels_ = 1;
   return type;
 }
 
@@ -118,69 +99,61 @@ Type::Compare(Type *left, Type *right)
   if (left == right)
     return true;
 
-  if (left->kind() != right->kind())
+  if (left->kind_ != right->kind_)
     return false;
 
-  switch (left->kind()) {
-   case Type::PRIMITIVE:
-    return left->primitive() == right->primitive();
+  switch (left->kind_) {
+    case Type::PRIMITIVE:
+      return left->primitive() == right->primitive();
 
-   case Type::ARRAY:
+    case Type::ARRAY:
     {
-    ArrayType *aleft = left->toArray();
-    ArrayType *aright = right->toArray();
-    if (aleft->levels() != aright->levels())
-      return false;
-    if (aleft->isFixedLength() != aright->isFixedLength())
-      return false;
-    if (aleft->isFixedLength() && aleft->fixedLength() != aright->fixedLength())
-      return false;
-    return Compare(aleft->contained(), aright->contained());
-   }
-
-   case Type::FUNCTION:
-    {
-    FunctionType *fleft = left->toFunction();
-    FunctionType *fright = right->toFunction();
-    if (!Compare(fleft->returnType(), fright->returnType()))
-      return false;
-    if (fleft->parameters()->length() != fright->parameters()->length())
-      return false;
-    if (fleft->isNative() != fright->isNative())
-      return false;
-    if (fleft->isNative() && (fleft->isNativeVariadic() != fright->isNativeVariadic()))
-      return false;
-    for (unsigned i = 0; i < fleft->parameters()->length(); i++) {
-      Type *leftparam = fleft->parameterAt(i);
-      Type *rightparam = fright->parameterAt(i);
-      if (!Compare(leftparam, rightparam))
+      ArrayType *aleft = left->toArray();
+      ArrayType *aright = right->toArray();
+      if (aleft->size() != aright->size())
         return false;
+      return Compare(aleft->contained(), aright->contained());
     }
-    return true;
-   }
 
-   case Type::ENUM:
-    return false;
+    case Type::FUNCTION:
+      // :TODO:
+      return false;
 
-   case Type::VOID:
-    return true;
+    case Type::ENUM:
+    case Type::TYPEDEF:
+      return false;
 
-   default:
-    assert(left->kind() == Type::REFERENCE);
-    return Compare(left->toReference()->contained(), right->toReference()->contained());
+    case Type::VOID:
+      return true;
+
+    default:
+      assert(left->kind_ == Type::REFERENCE);
+      return Compare(left->toReference()->contained(), right->toReference()->contained());
   }
 }
 
 FunctionType *
-FunctionType::New(TokenKind token)
+FunctionType::New(FunctionSignature *sig)
 {
-  FunctionType *type = new (POOL()) FunctionType();
-  type->kind_ = FUNCTION;
-  type->parameters_ = nullptr;
-  //type->defaults_ = nullptr;
-  type->returnType_ = nullptr;
-  type->token_ = token;
-  return type;
+  return new (POOL()) FunctionType(sig);
+}
+
+const char *
+ke::GetPrimitiveName(PrimitiveType type)
+{
+  switch (type) {
+    case PrimitiveType::Bool:
+      return "bool";
+    case PrimitiveType::Char:
+      return "char";
+    case PrimitiveType::Int32:
+      return "int";
+    case PrimitiveType::Float:
+      return "float";
+    default:
+      assert(false);
+      return "unknown";
+  }
 }
 
 const char *
@@ -196,17 +169,6 @@ ke::GetTypeName(Type *type)
     return type->toEnum()->name()->chars();
   if (type->isReference())
     type = type->toReference()->contained();
-  switch (type->primitive()) {
-    case PrimitiveType_Bool:
-    return "bool";
-    case PrimitiveType_Char:
-    return "String";
-    case PrimitiveType_Int32:
-    return "int";
-    case PrimitiveType_Float:
-    return "Float";
-    default:
-    return "<unknown>";
-  }
+  return GetPrimitiveName(type->primitive());
 }
 

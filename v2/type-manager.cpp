@@ -36,18 +36,16 @@ TypeManager::initialize()
   if (!uncheckedType_)
     return false;
 
-  if ((primitiveTypes_[PrimitiveType_Int32] = Type::NewPrimitive(PrimitiveType_Int32)) == nullptr)
+  if ((primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32)) == nullptr)
     return false;
-  if ((primitiveTypes_[PrimitiveType_Float] = Type::NewPrimitive(PrimitiveType_Float)) == nullptr)
+  if ((primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float)) == nullptr)
     return false;
-  if ((primitiveTypes_[PrimitiveType_Native] = Type::NewPrimitive(PrimitiveType_Native)) == nullptr)
+  if ((primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char)) == nullptr)
     return false;
-  if ((primitiveTypes_[PrimitiveType_Char] = Type::NewPrimitive(PrimitiveType_Char)) == nullptr)
-    return false;
-  if ((primitiveTypes_[PrimitiveType_Bool] = Type::NewPrimitive(PrimitiveType_Bool)) == nullptr)
+  if ((primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool)) == nullptr)
     return false;
 
-  for (unsigned i = 0; i < PrimitiveTypes_Total; i++) {
+  for (size_t i = 0; i < kTotalPrimitiveTypes; i++) {
     Type *type = primitiveTypes_[i];
     if ((referenceTypes_[i] = ReferenceType::New(type)) == nullptr)
       return false;
@@ -63,17 +61,11 @@ TypeManager::newArray(Type *contained, int elements)
   return ArrayType::New(contained, elements);
 }
 
-Type *
-TypeManager::newExternalArray(Type *contained)
-{
-  return ArrayType::NewExternal(contained);
-}
-
 ReferenceType *
 TypeManager::newReference(Type *type)
 {
   if (type->isPrimitive())
-    return referenceTypes_[type->primitive()];
+    return referenceTypes_[size_t(type->primitive())];
 
   // :TODO: cache this.
   return ReferenceType::New(type);

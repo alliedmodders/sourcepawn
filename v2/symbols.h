@@ -75,9 +75,6 @@ class Symbol : public PoolObject
   Atom *name() const {
     return name_;
   }
-  Type *type() const {
-    return type_;
-  }
   Scope *scope() const {
     return scope_;
   }
@@ -103,9 +100,6 @@ class Symbol : public PoolObject
   AstNode *node_;
   Scope *scope_;
   Atom *name_;
-
- protected:
-  Type *type_;
 };
 
 class VariableSymbol : public Symbol
@@ -128,9 +122,9 @@ class VariableSymbol : public Symbol
 
   VariableSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
    : Symbol(node, scope, name),
-     storage_(Unknown)
+     storage_(Unknown),
+     type_(type)
   {
-    type_ = type;
   }
 
   Kind kind() const {
@@ -151,30 +145,38 @@ class VariableSymbol : public Symbol
     assert(storage() != Unknown);
     return address_;
   }
-  bool addressIsInline() const {
-    // See the comment in types.h.
-    if (!type()->addressIsInline())
-      return false;
-    return storage() == Local || storage() == Global;
+  Type *type() const {
+    return type_;
   }
 
  private:
   Storage storage_;
   intptr_t address_;
+  Type *type_;
 };
 
 class TypeSymbol : public Symbol
 {
  public:
   TypeSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
-   : Symbol(node, scope, name)
+   : Symbol(node, scope, name),
+     type_(type)
   {
-    type_ = type;
   }
 
   Kind kind() const {
     return kType;
   }
+
+  Type *type() const {
+    return type_;
+  }
+  void setType(Type *type) {
+    type_ = type;
+  }
+
+ private:
+  Type *type_;
 };
 
 typedef PoolList<Symbol *> SymbolList;
@@ -182,18 +184,14 @@ typedef PoolList<Symbol *> SymbolList;
 class FunctionSymbol : public Symbol
 {
  public:
-  FunctionSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
+  FunctionSymbol(AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
      shadows_(nullptr)
   {
-    type_ = type;
   }
 
   Kind kind() const {
     return kFunction;
-  }
-  FunctionType *type() const {
-    return type_->toFunction();
   }
   Label *address() {
     return &address_;
@@ -214,9 +212,15 @@ class FunctionSymbol : public Symbol
 class ConstantSymbol : public Symbol
 {
  public:
+  ConstantSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
+   : Symbol(node, scope, name),
+     type_(type)
+  {
+  }
   ConstantSymbol(AstNode *node, Scope *scope, Atom *name, Type *type,
                  const BoxedPrimitive &prim)
     : Symbol(node, scope, name),
+      type_(type),
       value_(prim)
   {
     type_ = type;
@@ -225,11 +229,19 @@ class ConstantSymbol : public Symbol
   Kind kind() const {
     return kConstant;
   }
+
   const BoxedPrimitive &value() const {
     return value_;
   }
+  void setValue(const BoxedPrimitive &value) {
+    value_ = value;
+  }
+  Type *type() const {
+    return type_;
+  }
 
  private:
+  Type *type_;
   BoxedPrimitive value_;
 };
 

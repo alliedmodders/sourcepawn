@@ -214,7 +214,7 @@ class HFunction : public HIR
 {
  public:
   HFunction(AstNode *node, FunctionSymbol *sym)
-   : HIR(node, sym->type()),
+   : HIR(node, nullptr /* :TODO: sym->type()*/),
      sym_(sym)
   {
   }

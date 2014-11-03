@@ -30,8 +30,8 @@ class TypeManager
   // Primitive type cache.
   Type *voidType_;
   Type *uncheckedType_;
-  Type *primitiveTypes_[PrimitiveTypes_Total];
-  ReferenceType *referenceTypes_[PrimitiveTypes_Total];
+  Type *primitiveTypes_[kTotalPrimitiveTypes];
+  ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
 
  public:
   TypeManager();
@@ -39,7 +39,7 @@ class TypeManager
   bool initialize();
 
   Type *getPrimitive(PrimitiveType type) {
-    return primitiveTypes_[type];
+    return primitiveTypes_[size_t(type)];
   }
 
   Type *getVoid() {
@@ -50,8 +50,8 @@ class TypeManager
   }
   ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);
-  Type *newExternalArray(Type *contained);
   Type *newEnum(Atom *name);
+  Type *newQualified(Type *type, Qualifiers qualifiers);
 };
 
 }

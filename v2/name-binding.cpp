@@ -145,15 +145,15 @@ class NamePopulator : public AstVisitor
   }
 
   bool declareSystemTypes(Scope *scope) {
-    if (!declareSystemType(scope, "float", PrimitiveType_Float))
+    if (!declareSystemType(scope, "float", PrimitiveType::Float))
       return false;
-    if (!declareSystemType(scope, "_", PrimitiveType_Int32))
+    if (!declareSystemType(scope, "_", PrimitiveType::Int32))
       return false;
-    if (!declareSystemType(scope, "int", PrimitiveType_Int32))
+    if (!declareSystemType(scope, "int", PrimitiveType::Int32))
       return false;
-    if (!declareSystemType(scope, "bool", PrimitiveType_Bool))
+    if (!declareSystemType(scope, "bool", PrimitiveType::Bool))
       return false;
-    if (!declareSystemType(scope, "char", PrimitiveType_Char))
+    if (!declareSystemType(scope, "char", PrimitiveType::Char))
       return false;
     if (!declareSystemType(scope, "void", cc_.types()->getVoid()))
       return false;
@@ -175,28 +175,42 @@ class NamePopulator : public AstVisitor
         iter->initialization()->accept(this);
     }
   }
+
   void visitEnumStatement(EnumStatement *node) KE_OVERRIDE {
+    Scope *scope = getOrCreateScope();
+    Type *type;
+    if (node->name()) {
+      type = EnumType::New(node->name());
+
+      TypeSymbol *sym = new (pool_) TypeSymbol(node, scope, node->name(), type);
+      registerSymbol(sym);
+      node->setSymbol(sym);
+    } else {
+      type = cc_.types()->getPrimitive(PrimitiveType::Int32);
+    }
+
     for (size_t i = 0; i < node->entries()->length(); i++) {
       EnumStatement::Entry &entry = node->entries()->at(i);
       if (entry.expr)
         entry.expr->accept(this);
+
+      ConstantSymbol *cs = new (pool_) ConstantSymbol(entry.proxy, scope, entry.proxy->name(), type);
+      registerSymbol(cs);
+      entry.sym = cs;
     }
   }
+
   void visitFunctionStatement(FunctionStatement *node) KE_OVERRIDE {
     assert(env_->scope()->isGlobal());
 
-    // We create function types ahead of time, not for any particular
-    // reason. It makes things consistent with FunctionTypeStatement,
-    // which actually does produce a type.
-    FunctionType *type = FunctionType::New(node->token());
-
     // Function statements are always named, so add the name to the outer scope.
-    FunctionSymbol *sym = new (pool_) FunctionSymbol(node, env_->scope(), node->name(), type);
+    FunctionSymbol *sym = new (pool_) FunctionSymbol(node, env_->scope(), node->name());
 
     registerGlobalFunction(sym);
     node->setSymbol(sym);
     visitFunction(node);
   }
+
   void visitAssignment(Assignment *node) KE_OVERRIDE {
     node->lvalue()->accept(this);
     node->expression()->accept(this);
@@ -304,8 +318,14 @@ class NamePopulator : public AstVisitor
       }
     }
   }
+
   void visitTypedefStatement(TypedefStatement *node) KE_OVERRIDE {
     visitType(node->spec());
+
+    // Note: we need to wait for type resolution to add a type here.
+    TypeSymbol *sym = new (pool_) TypeSymbol(node, getOrCreateScope(), node->name(), nullptr);
+    registerSymbol(sym);
+    node->setSymbol(sym);
   }
 
   // No-op cases.
@@ -346,7 +366,7 @@ class NamePopulator : public AstVisitor
   }
 
   void visitFunction(FunctionNode *node) {
-    FunctionSignature &signature = node->signature();
+    FunctionSignature *signature = node->signature();
 
     // Scope for the function's arguments.
     SymbolEnv argEnv(&env_, FunctionScope::New(pool_));
@@ -361,31 +381,28 @@ class NamePopulator : public AstVisitor
     // Function statements have quirky semantics around their return type. For
     // reasonable compatibility with SP1, we use the following heuristics for
     // when no explicit type is declared.
-    if (signature.returnType()->resolver() == TOK_IMPLICIT_INT) {
+    if (signature->returnType()->resolver() == TOK_IMPLICIT_INT) {
       bool cell_required = (node->token() == TOK_FORWARD || node->token() == TOK_NATIVE);
       if (cell_required || fun.returns() == ValueReturn)
-        signature.returnType()->setBuiltinType(TOK_INT);
+        signature->returnType()->setBuiltinType(TOK_INT);
       else
-        signature.returnType()->setBuiltinType(TOK_VOID);
+        signature->returnType()->setBuiltinType(TOK_VOID);
     } else {
-      visitType(signature.returnType());
+      visitType(signature->returnType());
     }
 
     node->setScopes(argEnv.scope()->toFunction(), localEnv.scope());
   }
 
+  // Most types will be builtins or names, and we don't need to populate
+  // anything. However, we do check function types to make sure 
   void visitType(TypeSpecifier *spec) {
     switch (spec->resolver()) {
-      case TOK_NAME:
-      case TOK_LABEL:
-        spec->name()->accept(this);
-        break;
-
       case TOK_FUNCTION:
       {
-        FunctionSignature &sig = spec->signature();
-        if (sig.returnType()->needsBinding())
-          visitType(sig.returnType());
+        FunctionSignature *sig = spec->signature();
+        if (sig->returnType()->needsBinding())
+          visitType(sig->returnType());
         
         // We enter a special scope just for the function signature, to detect
         // duplicate names. We don't actually care about the symbols or
@@ -457,10 +474,10 @@ class NamePopulator : public AstVisitor
     }
   }
 
-  void registerArguments(const FunctionSignature &sig) {
+  void registerArguments(FunctionSignature *sig) {
     Scope *scope = getOrCreateScope();
-    for (size_t i = 0; i < sig.parameters()->length(); i++) {
-      VariableDeclaration *var = sig.parameters()->at(i);
+    for (size_t i = 0; i < sig->parameters()->length(); i++) {
+      VariableDeclaration *var = sig->parameters()->at(i);
       if (var->spec()->needsBinding())
         visitType(var->spec());
 
@@ -608,21 +625,90 @@ class NameBinder : public AstVisitor
       return;
 #endif
   }
+
   void visitEnumStatement(EnumStatement *node) {
-    assert(false);
+    int value = 0;
+    for (size_t i = 0; i < node->entries()->length(); i++) {
+      EnumStatement::Entry &entry = node->entries()->at(i);
+      if (entry.expr) {
+        BoxedPrimitive out;
+        ConstantEvaluator ceval(cc_, link_->scope(), ConstantEvaluator::Required);
+        switch (ceval.Evaluate(entry.expr, &out)) {
+          case ConstantEvaluator::Ok:
+            if (!out.isInt()) {
+              cc_.reportError(entry.proxy->loc(), Message_EnumConstantMustBeInt);
+              continue;
+            }
+            break;
+          case ConstantEvaluator::NotConstant:
+            cc_.reportError(entry.proxy->loc(), Message_EnumValueMustBeConstant);
+            break;
+          default:
+            continue;
+        }
+        value = out.toInt();
+      }
+
+      entry.sym->setValue(BoxedPrimitive::Int(value));
+      value++;
+    }
   }
-  void visitFunctionStatement(FunctionStatement *node) {
+
+  void visitLayoutStatement(LayoutStatement *layout) {
+    for (size_t i = 0; i < layout->body()->length(); i++) {
+      LayoutEntry *entry = layout->body()->at(i);
+      switch (entry->type()) {
+        case LayoutEntry::Accessor:
+          if (entry->getter().isFunction())
+            visitFunction(entry->getter().fun());
+          if (entry->setter().isFunction())
+            visitFunction(entry->setter().fun());
+          break;
+
+        case LayoutEntry::Method:
+          if (entry->method().isFunction())
+            visitFunction(entry->method().fun());
+          break;
+      }
+    }
+  }
+
+  void visitFunction(FunctionNode *node) {
     AutoLinkScope funScope(&link_, node->funScope());
     AutoLinkScope varScope(&link_, node->varScope());
 
-    FunctionType *type = node->sym()->type();
-    if (!fillFunctionType(type, node->signature()))
-      return;
+    resolveTypesInSignature(node->signature());
 
     SaveAndSet<FunctionNode *> save(&fun_, node);
 
     if (node->body())
       node->body()->accept(this);
+  }
+
+  void visitFunctionStatement(FunctionStatement *node) {
+    visitFunction(node);
+  }
+
+  void visitTypedefStatement(TypedefStatement *tdef) {
+    Type *type = resolveType(tdef->spec());
+    if (!type) {
+      // Even if we couldn't resolve, put a placeholder there so we can keep
+      // trying to bind names.
+      if (!tdef->sym()->type())
+        tdef->sym()->setType(TypedefType::New(tdef->sym()->name()));
+      return;
+    }
+
+    if (tdef->sym()->type()) {
+      // We already resolved this type earlier. We have to make sure now that it
+      // does not resolve cyclically.
+      if (isCyclicType(type, tdef->sym()->type())) {
+        cc_.reportError(tdef->loc(), Message_CannotResolveCyclicType);
+        return;
+      }
+      tdef->sym()->type()->toTypedef()->resolve(type);
+    }
+    tdef->sym()->setType(type);
   }
 
   void visitNameProxy(NameProxy *proxy) {
@@ -721,6 +807,183 @@ class NameBinder : public AstVisitor
   }
 
  private:
+  void resolveTypesInSignature(FunctionSignature *sig) {
+    resolveType(sig->returnType());
+    for (size_t i = 0; i < sig->parameters()->length(); i++) {
+      VariableDeclaration *param = sig->parameters()->at(i);
+      resolveType(param->spec());
+    }
+  }
+
+  Type *resolveNameToType(NameProxy *proxy) {
+    // Resolve the name.
+    visitNameProxy(proxy);
+    if (!proxy->sym())
+      return nullptr;
+
+    TypeSymbol *sym = proxy->sym()->asType();
+    if (!sym) {
+      cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
+      return nullptr;
+    }
+
+    if (!sym->type() && sym->node()->asTypedefStatement()) {
+      // Create a placeholder. This allows us to resolve dependent types that
+      // have not yet been resolved. For example,
+      //
+      // typedef X function Y ();
+      // typedef Y int
+      //
+      // Here, we'll create a Typedef for Y, which will be filled in later.
+      sym->setType(TypedefType::New(sym->name()));
+    }
+
+    return sym->type();
+  }
+
+  Type *resolveBaseType(TypeSpecifier *spec) {
+    assert(!spec->resolved());
+
+    switch (spec->resolver()) {
+      case TOK_NAME:
+      case TOK_LABEL:
+        return resolveNameToType(spec->name());
+
+      case TOK_VOID:
+        return cc_.types()->getVoid();
+      case TOK_IMPLICIT_INT:
+      case TOK_INT:
+        return cc_.types()->getPrimitive(PrimitiveType::Int32);
+      case TOK_BOOL:
+        return cc_.types()->getPrimitive(PrimitiveType::Bool);
+      case TOK_CHAR:
+        return cc_.types()->getPrimitive(PrimitiveType::Char);
+      case TOK_FLOAT:
+        return cc_.types()->getPrimitive(PrimitiveType::Float);
+
+      case TOK_FUNCTION:
+      {
+        FunctionSignature *sig = spec->signature();
+        resolveTypesInSignature(sig);
+
+        return FunctionType::New(sig);
+      }
+
+      default:
+        assert(false);
+        return nullptr;
+    }
+  }
+
+  // Returns true if it could be resolved to a constant integer; false
+  // otherwise. |outp| is unmodified on failure.
+  bool resolveConstantArraySize(Expression *expr, int *outp) {
+    // We specify Required here, since we will not evaluate the expression
+    // otherwise, and we need to report errors.
+    BoxedPrimitive value;
+    ConstantEvaluator ceval(cc_, link_->scope(), ConstantEvaluator::Required);
+    switch (ceval.Evaluate(expr, &value)) {
+      case ConstantEvaluator::Ok:
+        break;
+      case ConstantEvaluator::NotConstant:
+        cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
+        return false;
+      default:
+        return false;
+    }
+
+    if (!value.isInt()) {
+      cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
+      return false;
+    }
+    if (value.toInt() <= 0) {
+      cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
+      return false;
+    }
+
+    *outp = value.toInt();
+    return true;
+  }
+
+  Type *resolveArrayComponentTypes(TypeSpecifier *spec, Type *type) {
+    if (type->isVoid())
+      cc_.reportError(spec->arrayLoc(), Message_CannotCreateArrayOfVoid);
+
+    size_t rank = spec->rank() - 1;
+    do {
+      int arraySize = ArrayType::kUnsized;
+      Expression *expr = spec->sizeOfRank(rank);
+      if (expr)
+        resolveConstantArraySize(expr, &arraySize);
+      type = cc_.types()->newArray(type, arraySize);
+    } while (rank--);
+    return type;
+  }
+
+  Type *resolveType(TypeSpecifier *spec) {
+    if (spec->resolved())
+      return spec->resolved();
+
+    Type *baseType = resolveBaseType(spec);
+
+    // Should not have a reference here.
+    assert(!baseType->isReference());
+
+    Type *type = baseType;
+    if (spec->rank())
+      type = resolveArrayComponentTypes(spec, type);
+
+    if (spec->isByRef()) {
+      // We refuse to allow by-ref arrays; arrays are always by-ref. We check
+      // this once here, and once again parsing parameters in case we had
+      // placeholders.
+      //
+      // Note: We also forbid this for objects (is ref basically deprecated?
+      // I guess so).
+      if (type->canUseInReferenceType())
+        type = cc_.types()->newReference(type);
+      else
+        cc_.reportError(spec->byRefLoc(), Message_TypeCannotBeReference, GetTypeClassName(type));
+    }
+
+    if (spec->isConst())
+      type = cc_.types()->newQualified(type, Qualifiers::Const);
+
+    // If we've wrapped the type, and it was a placeholder, we have to make
+    // sure later that the transformation we just made is still valid.
+    if (baseType->isUnresolvedTypedef() && baseType != type)
+      placeholder_checks_.append(LazyPlaceholderCheck(spec, baseType->toTypedef()));
+
+    return type;
+  }
+
+  // If traversing the type nesting of |check| reveals a pointer to |first|,
+  // we consider the type cyclic and unresolvable.
+  bool isCyclicType(Type *check, Type *first) {
+    if (check == first || check->canonical() == first)
+      return true;
+
+    if (check->isArray())
+      return isCyclicType(check->toArray()->contained(), first);
+    if (check->isResolvedTypedef())
+      return isCyclicType(check->toTypedef()->actual(), first);
+    if (check->isReference())
+      return isCyclicType(check->toReference()->contained(), first);
+    if (check->isFunction()) {
+      FunctionSignature *signature = check->toFunction()->signature();
+      if (isCyclicType(signature->returnType()->resolved(), first))
+        return true;
+      for (size_t i = 0; i < signature->parameters()->length(); i++) {
+        VariableSymbol *sym = signature->parameters()->at(i)->sym();
+        if (isCyclicType(sym->type(), first))
+          return true;
+      }
+    }
+
+    return false;
+  }
+
+#if 0
   int evaluateDimensions(const SourceLocation &loc, Type *typeArg, ExpressionList *exprs, int dims[MAX_ARRAY_DEPTH]) {
     unsigned level = 0;
     Type *type = typeArg;
@@ -749,7 +1012,8 @@ class NameBinder : public AstVisitor
       }
 
       BoxedPrimitive box;
-      if (EvaluateForConstant(expr, &box) && box.type() == PrimitiveType_Int32) {
+      ConstantEvaluator ceval(cc_, link_->scope(), ConstantEvaluator::Speculative);
+      if (ceval.Evaluate(expr, &box) == ConstantEvaluator::Ok && box.type() == PrimitiveType::Int32) {
         int size = box.toInt();
         if (size <= 0) {
           cc_.reportError(expr->loc(), Message_BadArraySize);
@@ -817,6 +1081,7 @@ class NameBinder : public AstVisitor
     }
     return type->toArray();
   }
+#endif
 
   bool fillFunctionType(FunctionType *fun, const FunctionSignature &sig) {
 #if 0
@@ -868,35 +1133,22 @@ class NameBinder : public AstVisitor
     return true;
   }
 
-  Type *bindType(Expression *expr) {
-    if (!expr) {
-      // If no type was declared, we return int32.
-      return cc_.types()->getPrimitive(PrimitiveType_Int32);
-    }
-    
-    expr->accept(this);
-
-    NameProxy *proxy = expr->asNameProxy();
-    assert(proxy);
-
-    Symbol *sym = proxy->sym();
-    if (!sym)
-      return nullptr;
-
-    if (!sym->isType()) {
-      cc_.reportError(expr->loc(), Message_IdentifierIsNotAType, sym->name()->chars());
-      return nullptr;
-    }
-
-    return sym->type();
-  }
-
  private:
   PoolAllocator &pool_;
   CompileContext &cc_;
   TranslationUnit *unit_;
   AutoLinkScope *link_;
   FunctionNode *fun_;
+
+  struct LazyPlaceholderCheck {
+    LazyPlaceholderCheck(TypeSpecifier *spec, TypedefType *placeholder)
+      : spec(spec),
+        placeholder(placeholder)
+    {}
+    TypeSpecifier *spec;
+    TypedefType *placeholder;
+  };
+  Vector<LazyPlaceholderCheck> placeholder_checks_;
 };
 
 bool

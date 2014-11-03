@@ -36,7 +36,7 @@ SemanticAnalysis::SemanticAnalysis(SemanticAnalysis *parent, FunctionStatement *
    cc_(parent->cc_),
    unit_(parent->unit_),
    scope_(parent->scope_),
-   fun_(node->sym()->type()),
+   fun_(nullptr /* :TODO: node->sym()->type()*/),
    loop_(nullptr),
    hir_(nullptr),
    outp_(nullptr)
@@ -173,14 +173,14 @@ SemanticAnalysis::coercionType(TokenKind token, HIR *left, HIR *right)
 void
 SemanticAnalysis::visitIntegerLiteral(IntegerLiteral *node)
 {
-  Type *type = cc_.types()->getPrimitive(PrimitiveType_Int32);
+  Type *type = cc_.types()->getPrimitive(PrimitiveType::Int32);
   hir_ = new (pool_) HInteger(node, type, node->value());
 }
 
 void
 SemanticAnalysis::visitBooleanLiteral(BooleanLiteral *node)
 {
-  Type *type = cc_.types()->getPrimitive(PrimitiveType_Bool);
+  Type *type = cc_.types()->getPrimitive(PrimitiveType::Bool);
   hir_ = new (pool_) HBoolean(node, type, node->token());
 }
 
@@ -189,8 +189,8 @@ IsNumericType(Type *type)
 {
   if (!type->isPrimitive())
     return false;
-  return type->primitive() == PrimitiveType_Int32 ||
-         type->primitive() == PrimitiveType_Float;
+  return type->primitive() == PrimitiveType::Int32 ||
+         type->primitive() == PrimitiveType::Float;
 }
 
 void
@@ -234,7 +234,7 @@ SemanticAnalysis::visitUnaryExpression(UnaryExpression *expr)
           GetTypeName(hir->type()));
         return;
       }
-      Type *output = cc_.types()->getPrimitive(PrimitiveType_Bool);
+      Type *output = cc_.types()->getPrimitive(PrimitiveType::Bool);
       hir_ = new (pool_) HNot(expr, output, hir);
       break;
     }
@@ -278,7 +278,7 @@ SemanticAnalysis::binary(AstNode *node, TokenKind token, HIR *left, HIR *right)
     case TOK_AND:
     case TOK_OR:
     {
-      Type *result = cc_.types()->getPrimitive(PrimitiveType_Bool);
+      Type *result = cc_.types()->getPrimitive(PrimitiveType::Bool);
       return new (pool_) HBinary(node, result, token, left, right);
     }
 
@@ -498,7 +498,7 @@ SemanticAnalysis::visitForTest(HIRList *output,
                                Label *falseBranch,
                                Label *fallthrough)
 {
-  Type *boolType = cc_.types()->getPrimitive(PrimitiveType_Bool);
+  Type *boolType = cc_.types()->getPrimitive(PrimitiveType::Bool);
 
   // Handle logical and/or.
   BinaryExpression *bin = expr->asBinaryExpression();
@@ -677,6 +677,7 @@ SemanticAnalysis::visitContinueStatement(ContinueStatement *node)
 void
 SemanticAnalysis::visitReturnStatement(ReturnStatement *node)
 {
+#if 0
   if (!node->expression()) {
     if (!fun_->returnType()->isVoid()) {
       cc_.reportError(node->loc(), Message_UsedVoidReturn);
@@ -698,6 +699,7 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement *node)
     return;
 
   emit_return(node, hir);
+#endif
 }
 
 void
@@ -716,6 +718,7 @@ SemanticAnalysis::visitExpressionStatement(ExpressionStatement *stmt)
 void
 SemanticAnalysis::visitCallExpression(CallExpression *node)
 {
+#if 0
   HIR *callee = rvalue(node->callee());
   if (!callee)
     return;
@@ -781,11 +784,13 @@ SemanticAnalysis::visitCallExpression(CallExpression *node)
   }
 
   hir_ = new (pool_) HCall(node, fun->returnType(), callee, args);
+#endif
 }
 
 bool
 SemanticAnalysis::checkArgumentCount(FunctionType *type, unsigned actual)
 {
+#if 0
     if (type->parameters()->length() == actual)
         return true;
 
@@ -806,6 +811,7 @@ SemanticAnalysis::checkArgumentCount(FunctionType *type, unsigned actual)
     //         return false;
     // }
 
+#endif
     return true;
 }
 
