@@ -23,21 +23,27 @@ using namespace ke;
 Type *
 Type::NewVoid()
 {
-  Type *type = new (POOL()) Type(VOIDTYPE);
+  Type *type = new (POOL()) Type(Kind::Void);
   return type;
 }
 
 Type *
 Type::NewUnchecked()
 {
-  Type *type = new (POOL()) Type(UNCHECKED);
+  Type *type = new (POOL()) Type(Kind::Unchecked);
   return type;
+}
+
+Type *
+Type::NewMetaFunction()
+{
+  return new (POOL()) Type(Kind::MetaFunction);
 }
 
 Type *
 Type::NewPrimitive(PrimitiveType prim)
 {
-  Type *type = new (POOL()) Type(PRIMITIVE);
+  Type *type = new (POOL()) Type(Kind::Primitive);
   type->primitive_ = prim;
   return type;
 }
@@ -46,7 +52,7 @@ Type *
 Type::NewQualified(Type *type, Qualifiers qualifiers)
 {
   assert(!type->isQualified());
-  Type *qual = new (POOL()) Type(QUALIFIER, type);
+  Type *qual = new (POOL()) Type(Kind::Qualifier, type);
   qual->qualifiers_ = qualifiers;
   return qual;
 }
@@ -54,7 +60,7 @@ Type::NewQualified(Type *type, Qualifiers qualifiers)
 ArrayType *
 ArrayType::New(Type *contained, int elements)
 {
-  ArrayType *type = new (POOL()) ArrayType(ARRAY);
+  ArrayType *type = new (POOL()) ArrayType(Kind::Array);
   type->contained_ = contained;
   type->elements_ = elements;
   return type;
@@ -75,7 +81,7 @@ EnumType *
 EnumType::New(Atom *name)
 {
   EnumType *type = new (POOL()) EnumType();
-  type->kind_ = ENUM;
+  type->kind_ = Kind::Enum;
   type->name_ = name;
   return type;
 }
@@ -99,10 +105,10 @@ Type::Compare(Type *left, Type *right)
     return false;
 
   switch (left->kind_) {
-    case Type::PRIMITIVE:
+    case Kind::Primitive:
       return left->primitive() == right->primitive();
 
-    case Type::ARRAY:
+    case Kind::Array:
     {
       ArrayType *aleft = left->toArray();
       ArrayType *aright = right->toArray();
@@ -111,19 +117,19 @@ Type::Compare(Type *left, Type *right)
       return Compare(aleft->contained(), aright->contained());
     }
 
-    case Type::FUNCTION:
+    case Kind::Function:
       // :TODO:
       return false;
 
-    case Type::ENUM:
-    case Type::TYPEDEF:
+    case Kind::Enum:
+    case Kind::Typedef:
       return false;
 
-    case Type::VOIDTYPE:
+    case Kind::Void:
       return true;
 
     default:
-      assert(left->kind_ == Type::REFERENCE);
+      assert(left->kind_ == Type::Kind::Reference);
       return Compare(left->toReference()->contained(), right->toReference()->contained());
   }
 }
@@ -132,6 +138,18 @@ FunctionType *
 FunctionType::New(FunctionSignature *sig)
 {
   return new (POOL()) FunctionType(sig);
+}
+
+UnionType *
+UnionType::New(Atom *name)
+{
+  return new (POOL()) UnionType(name);
+}
+
+StructType *
+StructType::New(Atom *name)
+{
+  return new (POOL()) StructType(name);
 }
 
 const char *
@@ -157,10 +175,12 @@ ke::GetTypeName(Type *type)
 {
   if (type->isArray())
     return "array";
-  if (type->isFunction())
+  if (type->isFunction() || type->isMetaFunction())
     return "function";
   if (type->isVoid())
     return "void";
+  if (type->isUnion())
+    return type->toUnion()->name()->chars();
   if (type->isEnum())
     return type->toEnum()->name()->chars();
   if (type->isReference())
@@ -173,13 +193,17 @@ ke::GetTypeClassName(Type *type)
 {
   if (type->isArray())
     return "array";
-  if (type->isFunction())
+  if (type->isFunction() || type->isMetaFunction())
     return "function";
   if (type->isVoid())
     return "void";
   if (type->isEnum())
     return type->toEnum()->name()->chars();
+  if (type->isUnion())
+    return "union";
   if (type->isReference())
     type = type->toReference()->contained();
+  if (type->isUnresolvedTypedef())
+    return "typedef";
   return GetPrimitiveName(type->primitive());
 }

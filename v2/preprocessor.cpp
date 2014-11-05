@@ -20,6 +20,7 @@
 #include <am-vector.h>
 #include <ctype.h>
 #include <assert.h>
+#include <time.h>
 #ifdef WIN32
 # include <windows.h>
 #else
@@ -59,9 +60,39 @@ Preprocessor::preprocess(TranslationUnit *unit)
 void
 Preprocessor::setup_global_macros()
 {
-  Atom *sp2_id = cc_.add("__sourcepawn2__");
-  MacroTable::Insert p = macros_.findForAdd(sp2_id);
-  macros_.add(p, MacroEntry(sp2_id, (char *)"1", 1, nullptr, SourceLocation()));
+  // __sourcepawn2__ == 1
+  {
+    Atom *sp2_id = cc_.add("__sourcepawn2__");
+    MacroTable::Insert p = macros_.findForAdd(sp2_id);
+    macros_.add(p, MacroEntry(sp2_id, (char *)"1", 1, nullptr, SourceLocation()));
+  }
+
+  // __DATE__ and __TIME__
+  {
+    struct tm curtime;
+    time_t td = time(nullptr);
+    localtime_r(&td, &curtime);
+
+#if defined EMSCRIPTEN
+    snprintf(date_, sizeof(date_), "\"%02d/%02d/%04d\"", curtime->tm_mon + 1, curtime->tm_mday, curtime->tm_year + 1900);
+    snprintf(ltime_, sizeof(ltime_), "\"%02d:%02d:%02d\"", curtime->tm_hour, curtime->tm_min, curtime->tm_sec);
+#else
+    strftime(date_, sizeof(date_), "\"%m/%d/%Y\"", &curtime);
+    strftime(ltime_, sizeof(ltime_), "\"%H:%M:%S\"", &curtime);
+#endif
+
+    Atom *date_atom = cc_.add("__DATE__");
+    {
+      MacroTable::Insert p = macros_.findForAdd(date_atom);
+      macros_.add(p, MacroEntry(date_atom, date_, strlen(date_), nullptr, SourceLocation()));
+    }
+
+    Atom *time_atom = cc_.add("__TIME__");
+    {
+      MacroTable::Insert p = macros_.findForAdd(time_atom);
+      macros_.add(p, MacroEntry(time_atom, ltime_, strlen(ltime_), nullptr, SourceLocation()));
+    }
+  }
 }
 
 class CommentStripper : public TextProcessor
@@ -779,7 +810,7 @@ Preprocessor::include(TokenKind cmd, const char *file)
   // compile context. The sprintf is safe since we are not writing a huge
   // string.
   char line[256];
-  sprintf(line, "#file " KE_SIZET_FMT " // ", id);
+  sprintf(line, "#file %" KE_FMT_SIZET " // ", id);
   buffer_.append(line);
   buffer_.append(path, path.length());
   buffer_.append('\n');

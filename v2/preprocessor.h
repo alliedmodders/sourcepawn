@@ -105,70 +105,73 @@ class PreprocessingLexer : public BasicLexer
 
 class Preprocessor
 {
-  public:
-    Preprocessor(CompileContext &cc);
-    ~Preprocessor();
+ public:
+  Preprocessor(CompileContext &cc);
+  ~Preprocessor();
 
-    void preprocess(TranslationUnit *unit);
+  void preprocess(TranslationUnit *unit);
 
-  private:
-    bool expr(int *val);
-    bool unary(int *val);
-    bool binary(int prec, int *val);
+ private:
+  bool expr(int *val);
+  bool unary(int *val);
+  bool binary(int prec, int *val);
 
-    AutoString searchPaths(const char *file);
+  AutoString searchPaths(const char *file);
 
-    bool include(TokenKind cmd, const char *file);
-    bool directive(TokenKind cmd);
-    void substitute();
-    void preprocess();
-    void preprocess(FileContext *file, char *text, size_t length);
-    void setup_global_macros();
+  bool include(TokenKind cmd, const char *file);
+  bool directive(TokenKind cmd);
+  void substitute();
+  void preprocess();
+  void preprocess(FileContext *file, char *text, size_t length);
+  void setup_global_macros();
 
-  private:
-    struct MacroEntry {
-      Atom *id;
-      char *value;
-      size_t valueLength;
-      FileContext *file;
-      SourceLocation loc;
+ private:
+  struct MacroEntry {
+    Atom *id;
+    char *value;
+    size_t valueLength;
+    FileContext *file;
+    SourceLocation loc;
 
-      MacroEntry() { }
-      MacroEntry(Atom *id, char *value, size_t length,
-                 FileContext *file, const SourceLocation &loc)
-      : id(id),
-        value(value),
-        valueLength(length),
-        file(file),
-        loc(loc)
-      {
-      }
-    };
+    MacroEntry() { }
+    MacroEntry(Atom *id, char *value, size_t length,
+               FileContext *file, const SourceLocation &loc)
+    : id(id),
+      value(value),
+      valueLength(length),
+      file(file),
+      loc(loc)
+    {
+    }
+  };
 
-    struct MacroPolicy {
-      typedef MacroEntry Payload;
+  struct MacroPolicy {
+    typedef MacroEntry Payload;
 
-      static uint32_t hash(Atom *key) {
-        return HashPointer((void *)key);
-      }
+    static uint32_t hash(Atom *key) {
+      return HashPointer((void *)key);
+    }
 
-      static bool matches(Atom *key, const Payload &other) {
-        return key == other.id;
-      }
-    };
+    static bool matches(Atom *key, const Payload &other) {
+      return key == other.id;
+    }
+  };
 
-    typedef HashTable<MacroPolicy, SystemAllocatorPolicy> MacroTable;
+  typedef HashTable<MacroPolicy, SystemAllocatorPolicy> MacroTable;
 
-    CompileContext &cc_;
-    CompileBuffer buffer_;
-    PreprocessingLexer *text_;
-    Vector<PreprocessingLexer *> lexers_;
+  CompileContext &cc_;
+  CompileBuffer buffer_;
+  PreprocessingLexer *text_;
+  Vector<PreprocessingLexer *> lexers_;
 
-    Vector<char> command_;
-    MacroTable macros_;
-    StringPool macroStrings_;
+  Vector<char> command_;
+  MacroTable macros_;
+  StringPool macroStrings_;
 
-    Vector<FileContext *> files_;
+  Vector<FileContext *> files_;
+
+  char date_[64];
+  char ltime_[64];
 };
 
 }

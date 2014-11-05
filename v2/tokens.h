@@ -16,8 +16,8 @@
  * You should have received a copy of the GNU General Public License along with
  * SourcePawn. If not, see http://www.gnu.org/licenses/.
  */
-#ifndef _include_jitcraft_token_h_
-#define _include_jitcraft_token_h_
+#ifndef _include_sourcepawn_token_h_
+#define _include_sourcepawn_token_h_
 
 #include <assert.h>
 #include <stdint.h>
@@ -73,6 +73,7 @@ namespace ke {
   _(STOCK,              "stock")                      \
   _(STRUCT,             "struct")                     \
   _(SWITCH,             "switch")                     \
+  _(THIS,               "this")                       \
   _(TRUE,               "true")                       \
   _(TYPEDEF,            "typedef")                    \
   _(UNION,              "union")                      \
@@ -189,6 +190,7 @@ enum TokenKind
   _(STOCK)                                            \
   _(STRUCT)                                           \
   _(SWITCH)                                           \
+  _(THIS)                                             \
   _(TRUE)                                             \
   _(TYPEDEF)                                          \
   _(UNION)                                            \
@@ -380,5 +382,5 @@ extern const char *TokenNames[];
 
 } // namespace ke
 
-#endif //_include_jitcraft_token_h_
+#endif //_include_sourcepawn_token_h_
 

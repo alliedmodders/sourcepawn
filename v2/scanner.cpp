@@ -624,7 +624,7 @@ Token *
 Scanner::cursorPeek()
 {
   assert(depth_ > 0);
-  int cursor = cursor_ + 1;
+  size_t cursor = cursor_ + 1;
   if (cursor == kMaxLookahead)
     cursor = 0;
   return &tokens_[cursor];

@@ -117,3 +117,7 @@ MSG(EnumValueMustBeConstant,        SyntaxError,            "enumeration values 
 MSG(EnumConstantMustBeInt,          SyntaxError,            "enumeration values must be constant integers")
 MSG(CannotCreateArrayOfVoid,        SyntaxError,            "cannot create an array of void")
 MSG(CannotResolveCyclicType,        TypeError,              "could not resolve recursive type")
+MSG(ArgumentNameDeclaredTwice,      SyntaxError,            "argument name '%s' was declared twice")
+MSG(MethodmapOnNonType,             TypeError,              "methodmap cannot apply to non-type '%s'")
+MSG(MethodmapOnNonEnum,             TypeError,              "methodmap cannot apply to non-enum type '%s'")
+MSG(MethodmapAlreadyDefined,        TypeError,              "a methodmap was already defined for type '%s'")

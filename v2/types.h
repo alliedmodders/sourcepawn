@@ -57,7 +57,10 @@ enum class Qualifiers : uint32_t
   None      = 0x0,
 
   // Storage and mutability is constant.
-  Const     = 0x1
+  Const     = 0x1,
+
+  // Storage is constant.
+  ReadOnly  = 0x2
 };
 KE_DEFINE_ENUM_OPERATORS(Qualifiers);
 
@@ -65,11 +68,12 @@ class Type;
 class TypedefType;
 typedef FixedPoolList<Type *> TypeList;
 
-#define TYPE_ENUM_MAP(_)  \
-  _(Enum)                 \
-  _(Reference)            \
-  _(Array)                \
-  _(Function)
+#define TYPE_ENUM_MAP(_)        \
+  _(Enum)                       \
+  _(Reference)                  \
+  _(Array)                      \
+  _(Function)                   \
+  _(Union)
 
 #define FORWARD_DECLARE(name) class name##Type;
 TYPE_ENUM_MAP(FORWARD_DECLARE)
@@ -78,37 +82,46 @@ TYPE_ENUM_MAP(FORWARD_DECLARE)
 class Type : public PoolObject
 {
  protected:
-  enum Kind {
+  enum class Kind {
     // A primitive is a plain-old-data type.
-    PRIMITIVE,
+    Primitive,
 
     // Void is an internal type used to specify that a function returns no
     // value.
-    VOIDTYPE,
+    Void,
 
     // Enums are plain-old-data with int32 storage. They allow for extra
     // type checking that would not be possible with integers.
-    ENUM,
+    Enum,
 
     // A named typedef.
-    TYPEDEF,
+    Typedef,
 
     // Qualifying wrapper.
-    QUALIFIER,
+    Qualifier,
 
     // Unchecked is a magic type that has implicit, bitwise coercion to
     // int32, float, bool, or an enum.
-    UNCHECKED,
+    Unchecked,
 
     // An array is a fixed-length vector of any other type.
-    ARRAY,
+    Array,
+
+    // A discriminated union of types.
+    Union,
+
+    // A value-typed composite type.
+    Struct,
 
     // A reference type may only be specified on parameters, and
     // references may only be computed to primitives or enums.
-    REFERENCE,
+    Reference,
 
     // A function type encapsulates a function signature.
-    FUNCTION
+    Function,
+
+    // The type used for the "Function" tag.
+    MetaFunction
   };
 
   void init(Kind kind, Type *root = NULL);
@@ -127,6 +140,7 @@ class Type : public PoolObject
 
  public:   
   static Type *NewVoid();
+  static Type *NewMetaFunction();
   static Type *NewUnchecked();
   static Type *NewPrimitive(PrimitiveType type);
   static Type *NewQualified(Type *type, Qualifiers quals);
@@ -134,36 +148,27 @@ class Type : public PoolObject
   static bool Compare(Type *left, Type *right);
 
   bool isPrimitive() {
-    return canonical()->kind_ == PRIMITIVE;
-  }
-  bool isArray() {
-    return canonical()->kind_ == ARRAY;
-  }
-  bool isReference() {
-    return canonical()->kind_ == REFERENCE;
-  }
-  bool isFunction() {
-    return canonical()->kind_ == FUNCTION;
+    return canonical()->kind_ == Kind::Primitive;
   }
   bool isVoid() {
-    return canonical()->kind_ == VOIDTYPE;
+    return canonical()->kind_ == Kind::Void;
   }
   bool isUnchecked() {
-    return canonical()->kind_ == UNCHECKED;
+    return canonical()->kind_ == Kind::Unchecked;
   }
-  bool isEnum() {
-    return canonical()->kind_ == ENUM;
+  bool isMetaFunction() {
+    return canonical()->kind_ == Kind::MetaFunction;
   }
 
   // Note that isTypedef() is special in that it does not bypass wrappers.
   bool isTypedef() {
-    return kind_ == TYPEDEF;
+    return kind_ == Kind::Typedef;
   }
   bool isUnresolvedTypedef() {
-    return kind_ == TYPEDEF && canonical_ == this;
+    return kind_ == Kind::Typedef && canonical_ == this;
   }
   bool isResolvedTypedef() {
-    return kind_ == TYPEDEF && canonical_ != this;
+    return kind_ == Kind::Typedef && canonical_ != this;
   }
   TypedefType *toTypedef() {
     assert(isTypedef());
@@ -208,18 +213,21 @@ class Type : public PoolObject
 
   Qualifiers qualifiers() {
     Type *norm = normalized();
-    if (norm->kind_ != QUALIFIER)
+    if (norm->kind_ != Kind::Qualifier)
       return Qualifiers::None;
     return norm->qualifiers_;
   }
   bool isQualified() {
-    return normalized()->kind_ == QUALIFIER;
+    return normalized()->kind_ == Kind::Qualifier;
   }
   Type *unqualified() {
     return canonical();
   }
 
 #define CAST(name)                                \
+  bool is##name() {                               \
+    return canonical()->kind_ == Kind::name;      \
+  }                                               \
   name##Type *to##name() {                        \
     assert(is##name());                           \
     return (name##Type *)canonical();             \
@@ -278,10 +286,10 @@ class Type : public PoolObject
       canonical_ = canonical_->normalized();
 
       // We ignore quals -> placholder.
-      if (canonical_->kind_ != QUALIFIER)
+      if (canonical_->kind_ != Kind::Qualifier)
         break;
 
-      assert(kind_ == QUALIFIER || kind_ == TYPEDEF);
+      assert(kind_ == Kind::Qualifier || kind_ == Kind::Typedef);
 
       // Assume the qualifiers of our inner type, then reach behind the quals.
       // This could cause us to hit another typedef, so we have to be prepared
@@ -290,7 +298,7 @@ class Type : public PoolObject
       //     typedef D const C
       //     typedef C const B
       // etc...
-      kind_ = QUALIFIER;
+      kind_ = Kind::Qualifier;
       qualifiers_ |= canonical_->qualifiers_;
       canonical_ = canonical_->canonical_;
     } while (isWrapped() && canonical_->isResolvedTypedef());
@@ -301,6 +309,7 @@ class Type : public PoolObject
   union {
     PrimitiveType primitive_;
     Qualifiers qualifiers_;
+    uint32_t flags_;
   };
 
   // For unqualified types, this points to |this|. For qualified types, it
@@ -313,15 +322,35 @@ class Type : public PoolObject
 class EnumType : public Type
 {
   EnumType()
-   : Type(ENUM)
+   : Type(Kind::Enum)
   {
+    flags_ = 0;
   }
+
+  static const uint32_t kCreatedForMethodmap = 0x1;
+  static const uint32_t kHasMethodmap = 0x2;
 
  public:
   static EnumType *New(Atom *name);
 
   Atom *name() {
     return name_;
+  }
+
+  void setCreatedForMethodmap() {
+    flags_ |= kCreatedForMethodmap|kHasMethodmap;
+  }
+  void unsetCreatedForMethodmap() {
+    flags_ &= ~kCreatedForMethodmap;
+  }
+  bool wasCreatedForMethodmap() {
+    return !!(flags_ & kCreatedForMethodmap);
+  }
+  void setHasMethodmap() {
+    flags_ |= kHasMethodmap;
+  }
+  bool hasMethodmap() {
+    return !!(flags_ & kHasMethodmap);
   }
 
  private:
@@ -331,7 +360,7 @@ class EnumType : public Type
 class ReferenceType : public Type
 {
   ReferenceType()
-   : Type(REFERENCE)
+   : Type(Kind::Reference)
   {
   }
 
@@ -384,7 +413,7 @@ class ArrayType : public Type
 class TypedefType : public Type
 {
   TypedefType(Atom *name)
-   : Type(TYPEDEF),
+   : Type(Kind::Typedef),
      name_(name)
   {}
 
@@ -412,7 +441,7 @@ class FunctionSignature;
 class FunctionType : public Type
 {
   FunctionType(FunctionSignature *signature)
-   : Type(FUNCTION),
+   : Type(Kind::Function),
      signature_(signature)
   {
   }
@@ -427,6 +456,48 @@ class FunctionType : public Type
  private:
   Atom *name_;
   FunctionSignature *signature_;
+};
+
+class UnionType : public Type
+{
+  UnionType(Atom *atom)
+   : Type(Kind::Union)
+  {}
+
+ public:
+  static UnionType *New(Atom *atom);
+
+  Atom *name() const {
+    return name_;
+  }
+
+  void setTypes(TypeList *types) {
+    types_ = types;
+  }
+  TypeList *types() const {
+    return types_;
+  }
+
+ private:
+  Atom *name_;
+  TypeList *types_;
+};
+
+class StructType : public Type
+{
+  StructType(Atom *atom)
+    : Type(Kind::Struct)
+  {}
+
+ public:
+  static StructType *New(Atom *atom);
+
+  Atom *name() const {
+    return name_;
+  }
+
+ private:
+  Atom *name_;
 };
 
 class BoxedPrimitive

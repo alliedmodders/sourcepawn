@@ -27,12 +27,6 @@ class String;
 
 class TypeManager
 {
-  // Primitive type cache.
-  Type *voidType_;
-  Type *uncheckedType_;
-  Type *primitiveTypes_[kTotalPrimitiveTypes];
-  ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
-
  public:
   TypeManager();
 
@@ -48,10 +42,23 @@ class TypeManager
   Type *getUnchecked() {
     return uncheckedType_;
   }
+  Type *getMetaFunction() {
+      return metaFunctionType_;
+  }
   ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);
   Type *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
+  UnionType *newUnion(Atom *name);
+  StructType *newStruct(Atom *name);
+  TypedefType *newTypedef(Atom *name);
+
+ private:
+  Type *voidType_;
+  Type *uncheckedType_;
+  Type *metaFunctionType_;
+  Type *primitiveTypes_[kTotalPrimitiveTypes];
+  ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
 };
 
 }

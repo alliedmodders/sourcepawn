@@ -157,13 +157,18 @@ ConstantEvaluator::binary(BinaryExpression *expr, BoxedPrimitive &left, BoxedPri
 }
 
 ConstantEvaluator::Result
-ConstantEvaluator::unary(UnaryExpression *expr, const BoxedPrimitive &inner, BoxedPrimitive *out)
+ConstantEvaluator::unary(UnaryExpression *expr, BoxedPrimitive &inner, BoxedPrimitive *out)
 {
   switch (expr->token()) {
     case TOK_NEGATE:
-      if (!inner.isInt())
-        return TypeError;
-      *out = BoxedPrimitive::Int(-inner.toInt());
+      if (inner.isInt()) {
+        *out = BoxedPrimitive::Int(-inner.toInt());
+        return Ok;
+      }
+      if (inner.isFloat()) {
+        *out = BoxedPrimitive::Float(-inner.toFloat());
+        return Ok;
+      }
       return TypeError;
 
     case TOK_TILDE:
@@ -173,14 +178,9 @@ ConstantEvaluator::unary(UnaryExpression *expr, const BoxedPrimitive &inner, Box
       return Ok;
 
     case TOK_NOT:
-      if (inner.isInt())
-        *out = BoxedPrimitive::Bool(!inner.toInt());
-      else if (inner.isFloat())
-        *out = BoxedPrimitive::Bool(!inner.toFloat());
-      else if (inner.isBool())
-        *out = BoxedPrimitive::Bool(!inner.toBool());
-      else
-        return NotConstant;
+      if (!inner.isBool())
+        CoerceToBool(inner);
+      *out = BoxedPrimitive::Bool(!inner.toBool());
       return Ok;
 
     default:

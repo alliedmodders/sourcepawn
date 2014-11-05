@@ -22,6 +22,11 @@
 using namespace ke;
 
 TypeManager::TypeManager()
+ : voidType_(nullptr),
+   uncheckedType_(nullptr),
+   metaFunctionType_(nullptr),
+   primitiveTypes_(),
+   referenceTypes_()
 {
 }
 
@@ -29,27 +34,16 @@ bool
 TypeManager::initialize()
 {
   voidType_ = Type::NewVoid();
-  if (!voidType_)
-    return false;
-
   uncheckedType_ = Type::NewUnchecked();
-  if (!uncheckedType_)
-    return false;
+  metaFunctionType_ = Type::NewMetaFunction();
 
-  if ((primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32)) == nullptr)
-    return false;
-  if ((primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float)) == nullptr)
-    return false;
-  if ((primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char)) == nullptr)
-    return false;
-  if ((primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool)) == nullptr)
-    return false;
+  primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32);
+  primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
+  primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);
+  primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool);
 
-  for (size_t i = 0; i < kTotalPrimitiveTypes; i++) {
-    Type *type = primitiveTypes_[i];
-    if ((referenceTypes_[i] = ReferenceType::New(type)) == nullptr)
-      return false;
-  }
+  for (size_t i = 0; i < kTotalPrimitiveTypes; i++)
+    referenceTypes_[i] = ReferenceType::New(primitiveTypes_[i]);
 
   return true;
 }
@@ -90,4 +84,22 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
 
   // :TODO: cache this.
   return Type::NewQualified(type, qualifiers);
+}
+
+UnionType *
+TypeManager::newUnion(Atom *name)
+{
+  return UnionType::New(name);
+}
+
+StructType *
+TypeManager::newStruct(Atom *name)
+{
+  return StructType::New(name);
+}
+
+TypedefType *
+TypeManager::newTypedef(Atom *name)
+{
+  return TypedefType::New(name);
 }

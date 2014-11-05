@@ -36,11 +36,7 @@ class AstNode;
   /* A named constant produces a ConstantSymbol. */ \
   _(Constant)     \
   /* A named type (class struct, typedef, etc) produces a TypeSymbol. */ \
-  _(Type)       \
-  /* An import name. */ \
-  _(Import)       \
-  /* A name implicitly derived from an import. */ \
-  _(Implicit)
+  _(Type)
 
 #define _(name)   class name##Symbol;
 SYMBOL_KINDS(_)
@@ -162,6 +158,7 @@ class TypeSymbol : public Symbol
    : Symbol(node, scope, name),
      type_(type)
   {
+    assert(type);
   }
 
   Kind kind() const {

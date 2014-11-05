@@ -21,6 +21,7 @@
 
 #include "pool-allocator.h"
 #include <am-hashtable.h>
+#include <am-hashset.h>
 #include <am-string.h>
 #include <string.h>
 
@@ -132,6 +133,23 @@ class StringPool
 
   private:
     Table table_;
+};
+
+struct AtomHashPolicy {
+  static uint32_t hash(Atom *p) {
+    return HashPointer(p);
+  }
+  static bool matches(Atom *a, Atom *b) {
+    return a == b;
+  }
+};
+
+class AtomSet : public HashSet<Atom *, AtomHashPolicy, SystemAllocatorPolicy>
+{
+ public:
+  AtomSet() {
+    init(16);
+  }
 };
 
 } // namespace ke

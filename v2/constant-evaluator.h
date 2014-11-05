@@ -52,7 +52,7 @@ class ConstantEvaluator
   Result Evaluate(Expression *expr, BoxedPrimitive *out);
 
  private:
-  Result unary(UnaryExpression *expr, const BoxedPrimitive &inner, BoxedPrimitive *out);
+  Result unary(UnaryExpression *expr, BoxedPrimitive &inner, BoxedPrimitive *out);
   Result binary(BinaryExpression *expr, BoxedPrimitive &left, BoxedPrimitive &right, BoxedPrimitive *out);
 
  private:

@@ -61,7 +61,8 @@ class FunctionScope;
   _(ArrayLiteral)         \
   _(TypedefStatement)     \
   _(StructInitializer)    \
-  _(LayoutStatement)
+  _(LayoutStatement)      \
+  _(ThisExpression)
 
 // Forward declarations.
 #define _(name) class name;
@@ -618,6 +619,16 @@ class UnaryExpression : public Expression
   }
 };
 
+class ThisExpression : public Expression
+{
+ public:
+  ThisExpression(const SourceLocation &pos)
+   : Expression(pos)
+  {}
+
+  DECLARE_NODE(ThisExpression);
+};
+
 class BinaryExpression : public Expression
 {
   Expression *left_;
@@ -626,10 +637,10 @@ class BinaryExpression : public Expression
 
  public:
   BinaryExpression(const SourceLocation &pos, TokenKind token, Expression *left, Expression *right)
-    : Expression(pos),
-      left_(left),
-      right_(right),
-      token_(token)
+   : Expression(pos),
+     left_(left),
+     right_(right),
+     token_(token)
   {
   }
 
@@ -1315,6 +1326,7 @@ class LayoutStatement : public Statement
      spec_(spec),
      parent_(parent),
      body_(body),
+     sym_(nullptr),
      nullable_(spec == TOK_CLASS)
   {
   }
@@ -1337,11 +1349,19 @@ class LayoutStatement : public Statement
     nullable_ = true;
   }
 
+  void setSymbol(Symbol *sym) {
+    sym_ = sym;
+  }
+  Symbol *sym() const {
+    return sym_;
+  }
+
  private:
   NameToken name_;
   TokenKind spec_;
   NameProxy *parent_;
   LayoutList *body_;
+  Symbol *sym_;
   bool nullable_;
 };
 

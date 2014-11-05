@@ -33,7 +33,6 @@ Parser::Parser(CompileContext &cc, TranslationUnit *tu)
   atom_Float_ = cc_.add("Float");
   atom_String_ = cc_.add("String");
   atom_underbar_ = cc_.add("_");
-  atom_any_ = cc_.add("any");
 }
 
 bool
@@ -485,6 +484,9 @@ Parser::primitive()
       Token *tok = scanner_.current();
       return new (pool_) CharLiteral(scanner_.begin(), tok->charValue());
     }
+
+    case TOK_THIS:
+      return new (pool_) ThisExpression(scanner_.begin());
 
     case TOK_LBRACE:
       return parseCompoundLiteral();
@@ -2117,7 +2119,7 @@ class AstPrinter : public AstVisitor
   }
   void visitIntegerLiteral(IntegerLiteral *node) {
     prefix();
-    fprintf(fp_, "[ IntegerLiteral (" KE_I64_FMT ")\n", node->value());
+    fprintf(fp_, "[ IntegerLiteral (%" KE_FMT_I64 ")\n", node->value());
   }
   void visitBooleanLiteral(BooleanLiteral *node) {
     prefix();
@@ -2192,6 +2194,10 @@ class AstPrinter : public AstVisitor
     indent();
     node->expression()->accept(this);
     unindent();
+  }
+  void visitThisExpression(ThisExpression *node) {
+    prefix();
+    fprintf(fp_, "[ ThisExpression\n");
   }
   void visitSwitchStatement(SwitchStatement *node) {
     prefix();
