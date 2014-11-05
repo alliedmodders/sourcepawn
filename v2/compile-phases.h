@@ -15,17 +15,29 @@
 //
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
-#ifndef _include_spcomp2_names_and_types_h_
-#define _include_spcomp2_names_and_types_h_
+#ifndef _include_spcomp2_compile_phases_
+#define _include_spcomp2_compile_phases_
+
+#include "compile-context.h"
 
 namespace ke {
 
+// Create symbol and scope hierarchies, and bind all names to available
+// definitions. If this succeeds, all NameProxies that need to be bound
+// will have been bound.
+//
+// This phase is a single pass over the AST.
 bool
-PopulateNamesAndTypes(CompileContext &cc, TranslationUnit *unit);
+ResolveNames(CompileContext &cc, TranslationUnit *unit);
 
+// Resolve TypeSpecifiers for all nodes except ones that require advanced
+// type deduction. If this succeeds, all TypeSpecifiers will be resolved
+// to Type objects, and all Type objects will be populated.
+//
+// This phase is a single pass over the AST.
 bool
-BindNamesAndTypes(CompileContext &cc, TranslationUnit *unit);
+ResolveTypes(CompileContext &cc, TranslationUnit *unit);
 
-} // namespace ke 
+}
 
-#endif // _include_spcomp2_names_and_types_h_
+#endif // _include_spcomp2_compile_phases_

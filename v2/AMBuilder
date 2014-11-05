@@ -39,6 +39,7 @@ binary.sources += [
   'semantic-analysis.cpp',
   'smx-builder.cpp',
   'type-manager.cpp',
+  'type-resolver.cpp',
   'types.cpp',
   'main.cpp',
 ]

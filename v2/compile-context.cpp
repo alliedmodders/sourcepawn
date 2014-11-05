@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
+#include "compile-phases.h"
 #include "preprocessor.h"
 #include "parser.h"
-#include "name-binding.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -139,9 +139,9 @@ CompileContext::compile()
 
   printf("\n-- Name and Type Binding --\n");
 
-  if (!PopulateNamesAndTypes(*this, units_[0]))
+  if (!ResolveNames(*this, units_[0]))
     return false;
-  if (!BindNamesAndTypes(*this, units_[0]))
+  if (!ResolveTypes(*this, units_[0]))
     return false;
 
   units_[0]->tree()->dump(stdout);
