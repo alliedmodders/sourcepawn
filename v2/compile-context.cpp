@@ -144,7 +144,7 @@ CompileContext::compile()
   if (!ResolveTypes(*this, units_[0]))
     return false;
 
-  units_[0]->tree()->dump(stdout);
+  //units_[0]->tree()->dump(stdout);
 
   {
     //AmxEmitter sema(*this, units_[0]);

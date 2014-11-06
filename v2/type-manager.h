@@ -47,7 +47,7 @@ class TypeManager
   }
   ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);
-  Type *newEnum(Atom *name);
+  EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
   UnionType *newUnion(Atom *name);
   StructType *newStruct(Atom *name);

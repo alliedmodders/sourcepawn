@@ -1952,9 +1952,9 @@ class AstPrinter : public AstVisitor
     if (spec.isConst())
       fprintf(fp_, "const ");
     if (spec.resolver() == TOK_NAME) {
-      fprintf(fp_, "%s", spec.name()->name()->chars());
+      fprintf(fp_, "%s", spec.proxy()->name()->chars());
     } else if (spec.resolver() == TOK_LABEL) {
-      fprintf(fp_, "%s:", spec.name()->name()->chars());
+      fprintf(fp_, "%s:", spec.proxy()->name()->chars());
     } else if (IsNewTypeToken(spec.resolver())) {
       fprintf(fp_, "%s", TokenNames[spec.resolver()]);
     } else if (spec.resolver() == TOK_IMPLICIT_INT) {

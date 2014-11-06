@@ -22,6 +22,7 @@
 #include "pool-allocator.h"
 #include <am-hashtable.h>
 #include <am-hashset.h>
+#include <am-hashmap.h>
 #include <am-string.h>
 #include <string.h>
 
@@ -135,20 +136,42 @@ class StringPool
     Table table_;
 };
 
-struct AtomHashPolicy {
-  static uint32_t hash(Atom *p) {
+template <typename T>
+struct PointerHashPolicy {
+  static uint32_t hash(T *p) {
     return HashPointer(p);
   }
-  static bool matches(Atom *a, Atom *b) {
+  static bool matches(T *a, T *b) {
     return a == b;
   }
 };
 
-class AtomSet : public HashSet<Atom *, AtomHashPolicy, SystemAllocatorPolicy>
+class AtomSet : public HashSet<Atom *, PointerHashPolicy<Atom>>
 {
+  typedef HashSet<Atom *, PointerHashPolicy<Atom>> Base;
+
  public:
   AtomSet() {
-    init(16);
+    this->init(16);
+  }
+
+  void add(Atom *atom) {
+    Insert p = findForAdd(atom);
+    if (!p.found())
+      add(p, atom);
+  }
+
+  void add(Insert p, Atom *atom) {
+    Base::add(p, atom);
+  }
+};
+
+template <typename T>
+class AtomMap : public HashMap<Atom *, T, PointerHashPolicy<Atom>>
+{
+ public:
+  AtomMap() {
+    this->init(16);
   }
 };
 

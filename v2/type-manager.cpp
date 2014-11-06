@@ -65,7 +65,7 @@ TypeManager::newReference(Type *type)
   return ReferenceType::New(type);
 }
 
-Type *
+EnumType *
 TypeManager::newEnum(Atom *name)
 {
   return EnumType::New(name);

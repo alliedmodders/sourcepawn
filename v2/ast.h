@@ -212,7 +212,7 @@ class TypeSpecifier
   }
   void setNamedType(TokenKind kind, NameProxy *proxy) {
     resolver_ = kind;
-    name_ = proxy;
+    proxy_ = proxy;
   }
   void setFunctionType(FunctionSignature *signature) {
     resolver_ = TOK_FUNCTION;
@@ -262,9 +262,9 @@ class TypeSpecifier
   TokenKind resolver() const {
     return resolver_;
   }
-  NameProxy *name() const {
+  NameProxy *proxy() const {
     assert(resolver() == TOK_NAME || resolver() == TOK_LABEL);
-    return name_;
+    return proxy_;
   }
   FunctionSignature *signature() const {
     assert(resolver() == TOK_FUNCTION);
@@ -301,7 +301,7 @@ class TypeSpecifier
   };
   TokenKind resolver_;
   union {
-    NameProxy *name_;
+    NameProxy *proxy_;
     FunctionSignature *signature_;
   };
   Type *type_;

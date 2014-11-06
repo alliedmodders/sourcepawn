@@ -184,26 +184,18 @@ class TypeResolver : public AstVisitor
     visitFunction(node);
   }
 
-  void visitTypedefStatement(TypedefStatement *tdef) {
-    Type *type = resolveType(tdef->spec());
-    if (!type) {
-      // Even if we couldn't resolve, put a placeholder there so we can keep
-      // trying to bind names.
-      if (!tdef->sym()->type())
-        tdef->sym()->setType(TypedefType::New(tdef->sym()->name()));
+  void visitTypedefStatement(TypedefStatement *node) {
+    Type *type = resolveType(node->spec());
+
+    TypedefType *alias = node->sym()->type()->toTypedef();
+    alias->resolve(type);
+
+    // We already resolved this type earlier. We have to make sure now that it
+    // does not resolve cyclically.
+    if (isCyclicType(type, node->sym()->type())) {
+      cc_.reportError(node->loc(), Message_CannotResolveCyclicType);
       return;
     }
-
-    if (tdef->sym()->type()) {
-      // We already resolved this type earlier. We have to make sure now that it
-      // does not resolve cyclically.
-      if (isCyclicType(type, tdef->sym()->type())) {
-        cc_.reportError(tdef->loc(), Message_CannotResolveCyclicType);
-        return;
-      }
-      tdef->sym()->type()->toTypedef()->resolve(type);
-    }
-    tdef->sym()->setType(type);
   }
 
   void visitAssignment(Assignment *node) {
@@ -314,7 +306,15 @@ class TypeResolver : public AstVisitor
     }
   }
 
-  Type *resolveNameToSymbol(TypeSymbol *sym) {
+  Type *resolveNameToType(NameProxy *proxy) {
+    assert(proxy->sym());
+
+    TypeSymbol *sym = proxy->sym()->asType();
+    if (!sym) {
+      cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
+      return nullptr;
+    }
+
     if (!sym->type() && sym->node()->asTypedefStatement()) {
       // Create a placeholder. This allows us to resolve dependent types that
       // have not yet been resolved. For example,
@@ -329,27 +329,13 @@ class TypeResolver : public AstVisitor
     return sym->type();
   }
 
-  Type *resolveNameToType(NameProxy *proxy) {
-    // Resolve the name.
-    visitNameProxy(proxy);
-    if (!proxy->sym())
-      return nullptr;
-
-    TypeSymbol *sym = proxy->sym()->asType();
-    if (!sym) {
-      cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
-      return nullptr;
-    }
-    return resolveNameToSymbol(sym);
-  }
-
   Type *resolveBaseType(TypeSpecifier *spec) {
     assert(!spec->resolved());
 
     switch (spec->resolver()) {
       case TOK_LABEL:
       case TOK_NAME:
-        return resolveNameToType(spec->name());
+        return resolveNameToType(spec->proxy());
 
       case TOK_VOID:
         return cc_.types()->getVoid();
@@ -460,6 +446,7 @@ class TypeResolver : public AstVisitor
     if (baseType->isUnresolvedTypedef() && baseType != type)
       placeholder_checks_.append(LazyPlaceholderCheck(spec, baseType->toTypedef()));
 
+    spec->setResolved(type);
     return type;
   }
 
@@ -480,8 +467,8 @@ class TypeResolver : public AstVisitor
       if (isCyclicType(signature->returnType()->resolved(), first))
         return true;
       for (size_t i = 0; i < signature->parameters()->length(); i++) {
-        VariableSymbol *sym = signature->parameters()->at(i)->sym();
-        if (isCyclicType(sym->type(), first))
+        VariableDeclaration *decl = signature->parameters()->at(i);
+        if (isCyclicType(decl->spec()->resolved(), first))
           return true;
       }
     }

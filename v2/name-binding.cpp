@@ -142,6 +142,8 @@ class NameResolver : public AstVisitor
     atom_Float_ = cc_.add("Float");
     atom_any_ = cc_.add("any");
     atom_Function_ = cc_.add("Function");
+    atom_bool_ = cc_.add("bool");
+
     globals_ = GlobalScope::New(pool_);
   }
 
@@ -159,6 +161,7 @@ class NameResolver : public AstVisitor
       stmt->accept(this);
     }
 
+    resolveUnknownTags();
     resolveUnboundNames();
     return true;
   }
@@ -534,21 +537,27 @@ class NameResolver : public AstVisitor
 
     switch (spec->resolver()) {
       case TOK_LABEL:
-        if (Type *type = typeForLabelAtom(spec->name()->name())) {
+        if (Type *type = typeForLabelAtom(spec->proxy()->name())) {
           // Just resolve this type ahead of time - it's a builtin with an old-
           // style label.
           spec->setResolved(type);
         } else {
-          // Otherwise, add this to the list of labels that we might have to
-          // create types for.
-          AtomSet::Insert i = user_tags_.findForAdd(spec->name()->name());
-          if (!i.found())
-            user_tags_.add(i, spec->name()->name());
+          visitNameProxy(spec->proxy());
+          if (!spec->proxy()->sym()) {
+            // SourcePawn 1 compatibility: we don't go as far as keeping
+            // separate type and variable/fun symbol tables, but we do lazily
+            // create tags that don't exist if there are no other bindings
+            // available.
+            Atom *atom = spec->proxy()->name();
+            AtomMap<NameProxy *>::Insert p = user_tags_.findForAdd(atom);
+            if (!p.found())
+              user_tags_.add(p, atom, spec->proxy());
+          }
         }
         break;
 
       case TOK_NAME:
-        visitNameProxy(spec->name());
+        visitNameProxy(spec->proxy());
         break;
 
       case TOK_FUNCTION:
@@ -583,6 +592,8 @@ class NameResolver : public AstVisitor
       return cc_.types()->getUnchecked();
     if (atom == atom_Function_)
       return cc_.types()->getMetaFunction();
+    if (atom == atom_bool_)
+      return cc_.types()->getPrimitive(PrimitiveType::Bool);
     return nullptr;
   }
 
@@ -658,6 +669,19 @@ class NameResolver : public AstVisitor
     }
   }
 
+  void resolveUnknownTags() {
+    for (AtomMap<NameProxy *>::iterator iter = user_tags_.iter(); !iter.empty(); iter.next()) {
+      Atom *atom = iter->key;
+      if (globals_->lookup(atom))
+        continue;
+
+      NameProxy *origin = iter->value;
+      EnumType *type = cc_.types()->newEnum(atom);
+      Symbol *sym = new (pool_) TypeSymbol(origin, globals_, atom, type);
+      globals_->addSymbol(sym);
+    }
+  }
+
   void resolveUnboundNames() {
     // Resolve unresolved global names.
     AtomSet seen;
@@ -692,8 +716,9 @@ class NameResolver : public AstVisitor
   Atom *atom_Float_;
   Atom *atom_any_;
   Atom *atom_Function_;
+  Atom *atom_bool_;
 
-  AtomSet user_tags_;
+  AtomMap<NameProxy *> user_tags_;
 };
 
 bool

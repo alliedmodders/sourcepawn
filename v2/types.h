@@ -421,6 +421,7 @@ class TypedefType : public Type
   static TypedefType *New(Atom *name, Type *actual = nullptr);
 
   void resolve(Type *actual) {
+    assert(isUnresolvedTypedef());
     canonical_ = actual;
     actual_ = actual;
   }
