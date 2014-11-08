@@ -26,6 +26,7 @@
 #include "symbols.h"
 #include "string-pool.h"
 #include "tokens.h"
+#include <limits.h>
 
 namespace ke {
 
@@ -509,6 +510,10 @@ class StringLiteral : public Expression
   const Atom *literal() const {
     return literal_;
   }
+  int32_t arrayLength() const {
+    assert(literal()->length() + 1 < INT_MAX);
+    return int32_t(literal()->length() + 1);
+  }
 
  private:
   Atom *literal_;
@@ -574,11 +579,15 @@ class ArrayLiteral : public Expression
   TokenKind token() const {
     return token_;
   }
+  int32_t arrayLength() const {
+    assert(expressions()->length() < INT_MAX);
+    return int32_t(expressions()->length());
+  }
+  bool isFixedArrayLiteral() const {
+    return token() == TOK_LBRACE;
+  }
   ExpressionList *expressions() const {
     return expressions_;
-  }
-  bool isFixed() const {
-    return token_ == TOK_LBRACE;
   }
 };
 

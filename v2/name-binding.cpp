@@ -265,6 +265,9 @@ class NameResolver : public AstVisitor
         }
         break;
       }
+
+      default:
+        assert(false);
     }
 
     if (type) {
@@ -310,6 +313,9 @@ class NameResolver : public AstVisitor
 
   void visitVariableDeclaration(VariableDeclaration *first) override {
     for (VariableDeclaration *iter = first; iter; iter = iter->next()) {
+      // Visit the type so we don't bind the type to the variable name.
+      visitTypeIfNeeded(iter->spec());
+
       // Note: we look at the initializer BEFORE entering the symbol, so a
       // naive "new x = x" will not bind (unless there is an x in an outer
       // scope).

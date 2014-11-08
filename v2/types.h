@@ -383,7 +383,23 @@ class ArrayType : public Type
   }
 
  public:
-  static const int kUnsized = 0;
+  // This array does not have a size specified. It may or may not internally
+  // have a fixed size.
+  static const int kUnsized = -1;
+
+  // This array's size is indeterminate. This is different from Unsized; an
+  // indeterminate rank implies that the number of elements is fixed, but
+  // not known. For example:
+  //   int a[][] = {
+  //      {1, 2},
+  //      {3, 4, 5},
+  //   };
+  //
+  // This is an ArrayType(ArrayType(Primitive::Int32, Indeterminate), 2). The
+  // initial rank is known to have a size of 2, but the next rank's size is not
+  // known. The distinction is for SourcePawn 1 sizeof() and assignment
+  // compatibility.
+  static const int kIndeterminate = -2;
 
   static ArrayType *New(Type *contained, int elements);
 
@@ -397,12 +413,22 @@ class ArrayType : public Type
   Type *contained() const {
     return contained_;
   }
+  //:TODO: remove this.
   bool isCharArray() const {
     return contained()->isPrimitive() &&
            contained()->primitive() == PrimitiveType::Char;
   }
-  int32_t size() const {
+  bool hasFixedSize() const {
+    return elements_ >= 0;
+  }
+  int32_t fixedSize() const {
+    assert(hasFixedSize());
     return elements_;
+  }
+
+  bool equalTo(ArrayType *other) {
+    return elements_ == other->elements_ &&
+           contained_ == other->contained_;
   }
 
  private:

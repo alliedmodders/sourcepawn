@@ -25,10 +25,6 @@
 
 using namespace ke;
 
-static const int INFER_ARRAY_SIZE = 0;
-static const int EVAL_ARRAY_SIZE = -1;
-static const int DYNAMIC_ARRAY_SIZE = -2;
-
 class TypeResolver : public AstVisitor
 {
   class EnterScope : public SaveAndSet<Scope *>
@@ -61,65 +57,18 @@ class TypeResolver : public AstVisitor
   }
 
   void visitVariableDeclaration(VariableDeclaration *node) {
-#if 0
-    // Bind the initializer before registering the declaration, so that we
-    // can error on bogus initializers (new x = x).
-    if (node->initialization())
-      node->initialization()->accept(this);
-
-    Type *type = bindType(node->type());
-    if (!type)
-      return;
-
-    if (node->dims() || type->isArray()) {
-      int dims[MAX_ARRAY_DEPTH];
-      int levels = evaluateDimensions(node->loc(), type, node->dims(), dims);
-      if (levels < 0)
-        return;
-
-      // Do some extra inference based on the initializer, if present.
-      Expression *init = node->initialization();
-      if (init &&
-        init->isArrayLiteral() &&
-        init->toArrayLiteral()->isFixed())
-      {
-        Type *contained = type->isArray()
-                          ? type->toArray()
-                          : type;
-        if (!inferFixedArrayDimensions(init->toArrayLiteral(), contained, dims, levels))
-          return;
-      }
-
-      // If we got extra dimensions, we need to build a new type.
-      if (node->dims()) {
-        if ((type = buildArrayType(type, dims, node->dims()->length())) == nullptr)
-          return;
+    Vector<int> literal_dims;
+    if (Expression *init = node->initialization()) {
+      // Compute the dimensions of initializers in case the declaration type
+      // requires inference.
+      if (ArrayLiteral *lit = init->asArrayLiteral()) {
+        literal_dims = fixedArrayLiteralDimensions(node->spec(), lit);
+      } else if (StringLiteral *lit = init->asStringLiteral()) {
+        literal_dims.append(lit->arrayLength());
       }
     }
 
-    // If the node already has a symbol (meaning it was a global), then
-    // we don't have to do anything more.
-    if (node->sym()) {
-      assert(node->sym()->scope()->kind() == Scope::GLOBAL);
-      node->sym()->setType(type);
-      return;
-    }
-
-    VariableSymbol *sym = new (pool_) VariableSymbol(link_->scope(), node->name(), node->loc(), type);
-    node->setSymbol(sym);
-     
-    if (Symbol *other = link_->scope()->localLookup(sym->name())) {
-      // Report, but allow errors to continue.
-      cc_.reportError(sym->loc(), Message_RedeclaredName,
-              sym->name()->chars(),
-              other->loc().pos.line,
-              other->loc().pos.col);
-      return;
-    }
-    
-    if (!link_->scope()->addSymbol(sym))
-      return;
-#endif
+    resolveType(node->spec(), &literal_dims);
   }
 
   void visitEnumStatement(EnumStatement *node) {
@@ -227,8 +176,6 @@ class TypeResolver : public AstVisitor
     for (size_t i = 0; i < node->statements()->length(); i++)
       node->statements()->at(i)->accept(this);
   }
-  void visitIntegerLiteral(IntegerLiteral *node) {
-  }
   void visitExpressionStatement(ExpressionStatement *node) {
     node->expression()->accept(this);
   }
@@ -264,8 +211,6 @@ class TypeResolver : public AstVisitor
     node->left()->accept(this);
     node->right()->accept(this);
   }
-  void visitBooleanLiteral(BooleanLiteral *node) {
-  }
   void visitSwitchStatement(SwitchStatement *node) {
     node->expression()->accept(this);
     if (node->defaultCase())
@@ -296,8 +241,111 @@ class TypeResolver : public AstVisitor
   }
   void visitNameProxy(NameProxy *node) override {
   }
+  void visitIntegerLiteral(IntegerLiteral *node) {
+  }
+  void visitBooleanLiteral(BooleanLiteral *node) {
+  }
 
  private:
+  static const int kRankUnvisited;
+
+  // Returns true if it could be resolved to a constant integer; false
+  // otherwise. |outp| is unmodified on failure.
+  bool resolveConstantArraySize(Expression *expr, int *outp) {
+    // We specify Required here, since we will not evaluate the expression
+    // otherwise, and we need to report errors.
+    BoxedPrimitive value;
+    ConstantEvaluator ceval(cc_, scope_, ConstantEvaluator::Required);
+    switch (ceval.Evaluate(expr, &value)) {
+      case ConstantEvaluator::Ok:
+        break;
+      case ConstantEvaluator::NotConstant:
+        cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
+        return false;
+      default:
+        return false;
+    }
+
+    if (!value.isInt()) {
+      cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
+      return false;
+    }
+    if (value.toInt() <= 0) {
+      cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
+      return false;
+    }
+
+    *outp = value.toInt();
+    return true;
+  }
+
+  void updateComputedRankSize(Vector<int> &out, size_t rank, int size) {
+    if (out[rank] == kRankUnvisited) {
+      // If we've never visited this rank before, give it whatever we're inputing
+      // as the initial size.
+      out[rank] = size;
+    } else if (out[rank] >= ArrayType::kUnsized && out[rank] != size) {
+      // If we previously detected a fixed size or dynamic size for this rank,
+      // and now are receiving a different size, mark the rank size as
+      // indeterminate.
+      out[rank] = ArrayType::kIndeterminate;
+    }
+  }
+
+  void computeFixedArrayLiteralDimensions(ArrayLiteral *root, size_t rank, size_t highestUnknownRank, Vector<int> &out) {
+    if (rank >= highestUnknownRank) {
+      // Either we've reached the end of the [] sequences on the type, or all
+      // further ranks are known to have a size.
+      return;
+    }
+
+    for (size_t i = 0; i < root->expressions()->length(); i++) {
+      Expression *expr = root->expressions()->at(i);
+      if (ArrayLiteral *lit = expr->asArrayLiteral()) {
+        if (lit->isFixedArrayLiteral()) {
+          updateComputedRankSize(out, rank, lit->arrayLength());
+          computeFixedArrayLiteralDimensions(lit, rank + 1, highestUnknownRank, out);
+        } else {
+          updateComputedRankSize(out, rank, ArrayType::kUnsized);
+        }
+      } else if (StringLiteral *lit = expr->asStringLiteral()) {
+        updateComputedRankSize(out, rank, lit->arrayLength());
+      } else {
+        // If we get here, we either have an invalid construction that looks
+        // something like:
+        //  int a[][] = { 3 };
+        //
+        // I.e., the user has specified more array dimensions than there are
+        // arrays in the literal. We just mark as indeterminate since we'll
+        // error for real in the semantic analysis pass.
+        updateComputedRankSize(out, rank, ArrayType::kIndeterminate);
+      }
+    }
+  }
+
+  Vector<int> fixedArrayLiteralDimensions(TypeSpecifier *spec, ArrayLiteral *lit) {
+    Vector<int> out;
+
+    size_t highestUnknownRank = 0;
+    for (size_t i = 0; i < spec->rank(); i++) {
+      if (!spec->sizeOfRank(i))
+        highestUnknownRank = i + 1;
+      out.append(kRankUnvisited);
+    }
+
+    if (highestUnknownRank > 0) {
+      // Some dimensions were unsized. Compute fixed sizes (if possible) from
+      // the initializer. This is a recursive process so we can try to create
+      // uniform fixed lengths for each sub-array, as SourcePawn 1 did.
+      updateComputedRankSize(out, 0, lit->arrayLength());
+      computeFixedArrayLiteralDimensions(lit, 1, highestUnknownRank, out);
+    }
+
+    // Return the computed list unadultered - resolveArrayComponentTypes()
+    // will correctly merge with the TypeSpecifier.
+    return out;
+  }
+
   void resolveTypesInSignature(FunctionSignature *sig) {
     resolveType(sig->returnType());
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
@@ -306,27 +354,46 @@ class TypeResolver : public AstVisitor
     }
   }
 
-  Type *resolveNameToType(NameProxy *proxy) {
-    assert(proxy->sym());
+  Type *resolveType(TypeSpecifier *spec, const Vector<int> *arrayInitData = nullptr) {
+    if (spec->resolved())
+      return spec->resolved();
 
-    TypeSymbol *sym = proxy->sym()->asType();
-    if (!sym) {
-      cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
-      return nullptr;
+    Type *baseType = resolveBaseType(spec);
+    if (!baseType) {
+      // Create a placeholder so we don't have to check null everywhere.
+      baseType = TypedefType::New(cc_.add("__unresolved_type__"));
     }
 
-    if (!sym->type() && sym->node()->asTypedefStatement()) {
-      // Create a placeholder. This allows us to resolve dependent types that
-      // have not yet been resolved. For example,
+    // Should not have a reference here.
+    assert(!baseType->isReference());
+
+    Type *type = baseType;
+    if (spec->rank())
+      type = resolveArrayComponentTypes(spec, type, arrayInitData);
+
+    if (spec->isByRef()) {
+      // We refuse to allow by-ref arrays; arrays are always by-ref. We check
+      // this once here, and once again parsing parameters in case we had
+      // placeholders.
       //
-      // typedef X function Y ();
-      // typedef Y int
-      //
-      // Here, we'll create a Typedef for Y, which will be filled in later.
-      sym->setType(TypedefType::New(sym->name()));
+      // Note: We also forbid this for objects (is ref basically deprecated?
+      // I guess so).
+      if (type->canUseInReferenceType())
+        type = cc_.types()->newReference(type);
+      else
+        cc_.reportError(spec->byRefLoc(), Message_TypeCannotBeReference, GetTypeClassName(type));
     }
 
-    return sym->type();
+    if (spec->isConst())
+      type = cc_.types()->newQualified(type, Qualifiers::Const);
+
+    // If we've wrapped the type, and it was a placeholder, we have to make
+    // sure later that the transformation we just made is still valid.
+    if (baseType->isUnresolvedTypedef() && baseType != type)
+      placeholder_checks_.append(LazyPlaceholderCheck(spec, baseType->toTypedef()));
+
+    spec->setResolved(type);
+    return type;
   }
 
   Type *resolveBaseType(TypeSpecifier *spec) {
@@ -363,37 +430,30 @@ class TypeResolver : public AstVisitor
     }
   }
 
-  // Returns true if it could be resolved to a constant integer; false
-  // otherwise. |outp| is unmodified on failure.
-  bool resolveConstantArraySize(Expression *expr, int *outp) {
-    // We specify Required here, since we will not evaluate the expression
-    // otherwise, and we need to report errors.
-    BoxedPrimitive value;
-    ConstantEvaluator ceval(cc_, scope_, ConstantEvaluator::Required);
-    switch (ceval.Evaluate(expr, &value)) {
-      case ConstantEvaluator::Ok:
-        break;
-      case ConstantEvaluator::NotConstant:
-        cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
-        return false;
-      default:
-        return false;
+  Type *resolveNameToType(NameProxy *proxy) {
+    assert(proxy->sym());
+
+    TypeSymbol *sym = proxy->sym()->asType();
+    if (!sym) {
+      cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
+      return nullptr;
     }
 
-    if (!value.isInt()) {
-      cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
-      return false;
-    }
-    if (value.toInt() <= 0) {
-      cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
-      return false;
+    if (!sym->type() && sym->node()->asTypedefStatement()) {
+      // Create a placeholder. This allows us to resolve dependent types that
+      // have not yet been resolved. For example,
+      //
+      // typedef X function Y ();
+      // typedef Y int
+      //
+      // Here, we'll create a Typedef for Y, which will be filled in later.
+      sym->setType(TypedefType::New(sym->name()));
     }
 
-    *outp = value.toInt();
-    return true;
+    return sym->type();
   }
 
-  Type *resolveArrayComponentTypes(TypeSpecifier *spec, Type *type) {
+  Type *resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const Vector<int> *arrayInitData = nullptr) {
     if (type->isVoid())
       cc_.reportError(spec->arrayLoc(), Message_CannotCreateArrayOfVoid);
 
@@ -401,52 +461,15 @@ class TypeResolver : public AstVisitor
     do {
       int arraySize = ArrayType::kUnsized;
       Expression *expr = spec->sizeOfRank(rank);
-      if (expr)
+      if (expr) {
         resolveConstantArraySize(expr, &arraySize);
+      } else if (arrayInitData && rank < arrayInitData->length()) {
+        // Use an inferred length if one is available.
+        if (arrayInitData->at(rank) != kRankUnvisited)
+          arraySize = arrayInitData->at(rank);
+      }
       type = cc_.types()->newArray(type, arraySize);
     } while (rank--);
-    return type;
-  }
-
-  Type *resolveType(TypeSpecifier *spec) {
-    if (spec->resolved())
-      return spec->resolved();
-
-    Type *baseType = resolveBaseType(spec);
-    if (!baseType) {
-      // Create a placeholder so we don't have to check null everywhere.
-      baseType = TypedefType::New(cc_.add("__unresolved_type__"));
-    }
-
-    // Should not have a reference here.
-    assert(!baseType->isReference());
-
-    Type *type = baseType;
-    if (spec->rank())
-      type = resolveArrayComponentTypes(spec, type);
-
-    if (spec->isByRef()) {
-      // We refuse to allow by-ref arrays; arrays are always by-ref. We check
-      // this once here, and once again parsing parameters in case we had
-      // placeholders.
-      //
-      // Note: We also forbid this for objects (is ref basically deprecated?
-      // I guess so).
-      if (type->canUseInReferenceType())
-        type = cc_.types()->newReference(type);
-      else
-        cc_.reportError(spec->byRefLoc(), Message_TypeCannotBeReference, GetTypeClassName(type));
-    }
-
-    if (spec->isConst())
-      type = cc_.types()->newQualified(type, Qualifiers::Const);
-
-    // If we've wrapped the type, and it was a placeholder, we have to make
-    // sure later that the transformation we just made is still valid.
-    if (baseType->isUnresolvedTypedef() && baseType != type)
-      placeholder_checks_.append(LazyPlaceholderCheck(spec, baseType->toTypedef()));
-
-    spec->setResolved(type);
     return type;
   }
 
@@ -476,156 +499,6 @@ class TypeResolver : public AstVisitor
     return false;
   }
 
-#if 0
-  int evaluateDimensions(const SourceLocation &loc, Type *typeArg, ExpressionList *exprs, int dims[MAX_ARRAY_DEPTH]) {
-    unsigned level = 0;
-    Type *type = typeArg;
-    while (type->isArray()) {
-      ArrayType *atype = type->toArray();
-      dims[level] = atype->isFixedLength() ? atype->fixedLength() : DYNAMIC_ARRAY_SIZE;
-      type = atype->contained();
-      level++;
-    }
-
-    if (!exprs)
-      return level;
-
-    if (level + exprs->length() > MAX_ARRAY_DEPTH) {
-      cc_.reportError(loc, Message_MaximumArrayDepth);
-      return -1;
-    }
-
-    bool hadEmptySize = false;
-    for (size_t i = 0; i < exprs->length(); i++) {
-      Expression *expr = exprs->at(i);
-      if (!expr) {
-        dims[i] = INFER_ARRAY_SIZE;
-        hadEmptySize = true;
-        continue;
-      }
-
-      BoxedPrimitive box;
-      ConstantEvaluator ceval(cc_, link_->scope(), ConstantEvaluator::Speculative);
-      if (ceval.Evaluate(expr, &box) == ConstantEvaluator::Ok && box.type() == PrimitiveType::Int32) {
-        int size = box.toInt();
-        if (size <= 0) {
-          cc_.reportError(expr->loc(), Message_BadArraySize);
-          return false;
-        }
-
-        dims[i] = size;
-        continue;
-      }
-
-      if (hadEmptySize) {
-        cc_.reportError(expr->loc(), Message_BadDynamicInitializer);
-        return false;
-      }
-
-      dims[i] = EVAL_ARRAY_SIZE;
-    }
-
-    return level + exprs->length();
-  }
-
-  // This function computes missing dimension sizes based on a literal
-  // initializer. We don't really handle any size rules here; we just
-  // do a really dumb inference.
-  bool inferFixedArrayDimensions(ArrayLiteral *lit, Type *contained, int dims[MAX_ARRAY_DEPTH], int levels) {
-    for (int i = 0; i < levels; i++) {
-      if (dims[i] == EVAL_ARRAY_SIZE || dims[i] == DYNAMIC_ARRAY_SIZE) {
-        // The following are invalid:
-        //   new x[<expr>] = {...}
-        //   new Type:x = {...}  // where Type is a non-fixed array type
-        cc_.reportError(lit->loc(), Message_CannotInitializeEvalArray);
-        return false;
-      }
-
-      if (dims[i] == INFER_ARRAY_SIZE) {
-        // Character arrays are always dynamic when inferred from string literals.
-        if (i == levels - 1 && contained->isChar())
-          dims[i] = DYNAMIC_ARRAY_SIZE;
-        else
-          dims[i] = lit->expressions()->length();
-      }
-
-      if (i != levels - 1) {
-        // Fixed array literals are guaranteed to have at least one expression.
-        Expression *next = lit->expressions()->at(0);
-        if (!next->isArrayLiteral()) {
-          // Whelp... this array is just malformed. Not the best error message
-          // but whatever.
-          cc_.reportError(next->loc(), Message_ArraySizeCannotBeDetermined);
-          return false;
-        }
-        lit = next->toArrayLiteral();
-      }
-    }
-
-    return true;
-  }
-
-  ArrayType *buildArrayType(Type *contained, int dims[MAX_ARRAY_DEPTH], size_t postlevels) {
-    Type *type = contained;
-    for (size_t i = postlevels - 1; i < postlevels; i--) {
-      int size = dims[i] > 0 ? dims[i] : ArrayType::DYNAMIC_ARRAY_SIZE;
-      if ((type = cc_.types()->newArray(contained, size)) == nullptr)
-        return nullptr;
-    }
-    return type->toArray();
-  }
-#endif
-
-  bool fillFunctionType(FunctionType *fun, const FunctionSignature &sig) {
-#if 0
-    Type *type = nullptr;
-    if (!fun->returnType()) {
-      if ((type = bindType(sig.returnType())) == nullptr)
-        return false;
-      fun->setReturnType(type);
-    }
-#endif
-
-#if 0
-    // :TODO: some kind of length check...
-    TypeList *params = new (pool_) TypeList(sig.parameters()->length());
-    for (size_t i = 0; i < sig.parameters()->length(); i++) {
-      Parameter *param = sig.parameters()->at(i);
-      if ((type = bindType(param->type())) == nullptr)
-        return false;
-#endif
-
-#if 0
-      if (type->isArray() || param->dims()) {
-        int dims[MAX_ARRAY_DEPTH];
-        int levels = evaluateDimensions(param->loc(), type, param->dims(), dims);
-        if (levels < 0)
-          return false;
-
-        // If we got extra dimensions, we need to build a new type.
-        // Unlike variables, we do not infer anything about array
-        // sizes from its default initializer.
-        if (param->dims()) {
-          if ((type = buildArrayType(type, dims, param->dims()->length())) == nullptr)
-            return false;
-        }
-        assert(!param->reference());
-      } else {
-        if (param->reference()) {
-          if ((type = cc_.types()->newReference(type)) == nullptr)
-            return false;
-        }
-      }
-
-      params->set(i, type);
-      param->sym()->setType(type);
-    }
-
-    fun->setParameterTypes(params);
-#endif
-    return true;
-  }
-
  private:
   PoolAllocator &pool_;
   CompileContext &cc_;
@@ -653,3 +526,5 @@ ke::ResolveTypes(CompileContext &cc, TranslationUnit *unit)
 
   return cc.nerrors() == 0;
 }
+
+const int TypeResolver::kRankUnvisited = INT_MIN;

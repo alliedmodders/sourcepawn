@@ -112,9 +112,7 @@ Type::Compare(Type *left, Type *right)
     {
       ArrayType *aleft = left->toArray();
       ArrayType *aright = right->toArray();
-      if (aleft->size() != aright->size())
-        return false;
-      return Compare(aleft->contained(), aright->contained());
+      return aleft->equalTo(aright);
     }
 
     case Kind::Function:
