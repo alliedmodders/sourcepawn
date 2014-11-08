@@ -290,20 +290,6 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
   if (flags & DeclFlags::Argument) {
     if (match(TOK_AMPERSAND))
       spec->setByRef(scanner_.begin());
-
-    // Multi-tags are forbidden now! YAY! But we parse them anyway just so we
-    // can continue parsing.
-    if (match(TOK_LBRACE)) {
-      cc_.reportError(scanner_.begin(), Message_MultiTagsNotSupported);
-
-      for (;;) {
-        expect(TOK_NAME);
-        if (match(TOK_RBRACE))
-          break;
-        expect(TOK_COMMA);
-      }
-      expect(TOK_COLON);
-    }
   }
 
   if (match(TOK_LABEL)) {
@@ -382,7 +368,7 @@ bool
 Parser::parse_decl(Declaration *decl, uint32_t flags)
 {
   // Match early varargs as old decls.
-  if ((flags & DeclFlags::Argument) && match(TOK_ELLIPSES))
+  if ((flags & DeclFlags::Argument) && peek(TOK_ELLIPSES))
     return parse_old_decl(decl, flags);
 
   // Match const first - it's a common prefix for old and new decls.
