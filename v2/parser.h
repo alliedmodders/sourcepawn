@@ -51,18 +51,9 @@ struct Declaration
 {
   NameToken name;
   TypeSpecifier spec;
-  bool hasPostDims;
-  bool isNew;
 
   Declaration()
-   : hasPostDims(false),
-     isNew(false)
   {
-  }
-
-  void reset() {
-    hasPostDims = false;
-    isNew = false;
   }
 };
 

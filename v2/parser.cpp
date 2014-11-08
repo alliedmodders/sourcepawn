@@ -223,7 +223,6 @@ Parser::parse_new_decl(Declaration *decl, uint32_t flags)
     }
   }
 
-  decl->isNew = true;
   return true;
 }
 
@@ -274,7 +273,7 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
   else
     spec->setRank(loc, rank);
 
-  decl->hasPostDims = true;
+  spec->setHasPostDims();
 }
 
 bool
@@ -345,9 +344,8 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
 bool
 Parser::reparse_decl(Declaration *decl, uint32_t flags)
 {
-  if (!decl->isNew) {
+  if (!decl->spec.isNewDecl()) {
     decl->spec.resetWithAttrs(TypeSpecifier::Const);
-    decl->reset();
     return parse_old_decl(decl, flags);
   }
 
@@ -356,12 +354,11 @@ Parser::reparse_decl(Declaration *decl, uint32_t flags)
     return false;
   decl->name = scanner_.current();
 
-  if (decl->hasPostDims) {
+  if (decl->spec.hasPostDims()) {
     // We have something like:
     //   int x[], y...
     //
     // Reset the fact that we saw an array.
-    decl->hasPostDims = false;
     decl->spec.resetArray();
     if (match(TOK_LBRACKET))
       parse_old_array_dims(decl, flags);
@@ -427,7 +424,7 @@ Parser::parse_decl(Declaration *decl, uint32_t flags)
       if (peek(TOK_NAME) || peek(TOK_AMPERSAND)) {
         // This must be a newdecl, "x[] y" or "x[] &y", the latter of which
         // is illegal, but we flow it through the right path anyway.
-        decl->hasPostDims = false;
+        decl->spec.unsetHasPostDims();
         scanner_.pushBack(name);
         return parse_new_decl(decl, flags);
       }
@@ -1786,8 +1783,8 @@ Parser::global(TokenKind kind)
   if (!parse_decl(&decl, flags))
     return nullptr;
 
-  if (kind == TOK_NEW || decl.hasPostDims || !peek(TOK_LPAREN)) {
-    if (kind == TOK_NEW && decl.isNew)
+  if (kind == TOK_NEW || decl.spec.hasPostDims() || !peek(TOK_LPAREN)) {
+    if (kind == TOK_NEW && decl.spec.isNewDecl())
       cc_.reportError(decl.name.start, Message_NewStyleBadKeyword);
     return variable(TOK_NEW, &decl, attrs);
   }

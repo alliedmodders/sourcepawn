@@ -154,7 +154,9 @@ class TypeSpecifier
     Const      = 0x01,
     Variadic   = 0x02,
     ByRef      = 0x04,
-    SizedArray = 0x08
+    SizedArray = 0x08,
+    NewDecl    = 0x10,
+    PostDims   = 0x20
   };
 
  public:
@@ -272,6 +274,30 @@ class TypeSpecifier
     return signature_;
   }
 
+  bool isNewDecl() const {
+    return !!(attrs_ & NewDecl);
+  }
+  void setNewDecl() {
+    attrs_ |= NewDecl;
+  }
+  bool hasPostDims() const {
+    return !!(attrs_ & PostDims);
+  }
+  void setHasPostDims() {
+    attrs_ |= PostDims;
+  }
+  bool isFixedArray() const {
+    return isNewDecl() && hasPostDims();
+  }
+
+  bool isOldDecl() const {
+    return !isNewDecl();
+  }
+
+  void unsetHasPostDims() {
+    attrs_ &= ~PostDims;
+  }
+
   // For reparse_decl().
   void resetWithAttrs(uint32_t attrMask) {
     uint32_t saveAttrs = attrs_ & attrMask;
@@ -281,7 +307,7 @@ class TypeSpecifier
   void resetArray() {
     rank_ = 0;
     dims_ = nullptr;
-    attrs_ &= ~SizedArray;
+    attrs_ &= ~(SizedArray|PostDims);
   }
 
   void setResolved(Type *type) {
