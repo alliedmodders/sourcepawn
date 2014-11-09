@@ -48,6 +48,7 @@ class FunctionScope;
   _(ExpressionStatement)  \
   _(FunctionStatement)    \
   _(CallExpression)       \
+  _(FieldExpression)      \
   _(IfStatement)          \
   _(IndexExpression)      \
   _(EnumStatement)        \
@@ -720,16 +721,36 @@ class TernaryExpression : public Expression
   }
 };
 
+class FieldExpression : public Expression
+{
+ public:
+  FieldExpression(const SourceLocation &pos, Expression *base, const NameToken &field)
+   : Expression(pos),
+     base_(base),
+     field_(field)
+  {} 
+
+  DECLARE_NODE(FieldExpression);
+
+  Expression *base() const {
+    return base_;
+  }
+  Atom *field() const {
+    return field_.atom;
+  }
+
+ private:
+  Expression *base_;
+  NameToken field_;
+};
+
 class IndexExpression : public Expression
 {
-  Expression *left_;
-  Expression *right_;
-
  public:
   IndexExpression(const SourceLocation &pos, Expression *left, Expression *right)
-    : Expression(pos),
-      left_(left),
-      right_(right)
+   : Expression(pos),
+     left_(left),
+     right_(right)
   {
   }
 
@@ -741,13 +762,14 @@ class IndexExpression : public Expression
   Expression *right() const {
     return right_;
   }
+
+ private:
+  Expression *left_;
+  Expression *right_;
 };
 
 class CallExpression : public Expression
 {
-  Expression *callee_;
-  ExpressionList *arguments_;
-
  public:
   CallExpression(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
     : Expression(pos),
@@ -764,6 +786,10 @@ class CallExpression : public Expression
   ExpressionList *arguments() const {
     return arguments_;
   }
+
+ private:
+  Expression *callee_;
+  ExpressionList *arguments_;
 };
 
 class ForStatement : public Statement

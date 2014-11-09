@@ -413,6 +413,9 @@ class NameResolver : public AstVisitor
     if (node->ifFalse())
       node->ifFalse()->accept(this);
   }
+  void visitFieldExpression(FieldExpression *node) override {
+    node->base()->accept(this);
+  }
   void visitIndexExpression(IndexExpression *node) override {
     node->left()->accept(this);
     node->right()->accept(this);

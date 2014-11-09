@@ -522,6 +522,7 @@ FindOperator(TokenKind tok)
 static int
 BinaryEval(TokenKind tok, int left, int right)
 {
+  // :TODO:
   fprintf(stderr, "no\n");
   abort();
   return 0;

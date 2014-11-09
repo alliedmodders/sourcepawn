@@ -91,6 +91,11 @@ class Parser
   // parsing to continue.
   bool parse_decl(Declaration *decl, uint32_t flags);
 
+  // Consume tokens until |closer| is consumed, or |opener| is peeked, or an
+  // end-of-line is reached. If TOK_ERROR or TOK_EOF is returned, we return
+  // false.
+  bool consume_after_error(TokenKind closer, TokenKind opener);
+
   ExpressionList *dimensions();
   Atom *maybeName();
   Atom *expectName();
@@ -99,6 +104,7 @@ class Parser
   Expression *parseStructInitializer(const SourceLocation &pos);
 
   Expression *primitive();
+  Expression *dotfield(Expression *base);
   Expression *call(Expression *callee);
   Expression *index(Expression *left);
   Expression *prefix();
