@@ -59,12 +59,14 @@ class TypeResolver : public AstVisitor
   void visitVariableDeclaration(VariableDeclaration *node) {
     Vector<int> literal_dims;
     if (Expression *init = node->initialization()) {
-      // Compute the dimensions of initializers in case the declaration type
-      // requires inference.
-      if (ArrayLiteral *lit = init->asArrayLiteral()) {
-        literal_dims = fixedArrayLiteralDimensions(node->spec(), lit);
-      } else if (StringLiteral *lit = init->asStringLiteral()) {
-        literal_dims.append(lit->arrayLength());
+      if (node->spec()->hasPostDims()) {
+        // Compute the dimensions of initializers in case the declaration type
+        // requires inference.
+        if (ArrayLiteral *lit = init->asArrayLiteral()) {
+          literal_dims = fixedArrayLiteralDimensions(node->spec(), lit);
+        } else if (StringLiteral *lit = init->asStringLiteral()) {
+          literal_dims.append(lit->arrayLength());
+        }
       }
     }
 
@@ -254,27 +256,33 @@ class TypeResolver : public AstVisitor
 
   // Returns true if it could be resolved to a constant integer; false
   // otherwise. |outp| is unmodified on failure.
-  bool resolveConstantArraySize(Expression *expr, int *outp) {
-    // We specify Required here, since we will not evaluate the expression
-    // otherwise, and we need to report errors.
+  bool resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, int *outp) {
+    // With old-style decls, we have to speculatively parse for constants.
+    ConstantEvaluator::Mode mode = spec->isOldDecl()
+      ? ConstantEvaluator::Speculative
+      : ConstantEvaluator::Required;
+    ConstantEvaluator ceval(cc_, scope_, mode);
+
     BoxedPrimitive value;
-    ConstantEvaluator ceval(cc_, scope_, ConstantEvaluator::Required);
     switch (ceval.Evaluate(expr, &value)) {
       case ConstantEvaluator::Ok:
         break;
       case ConstantEvaluator::NotConstant:
-        cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
+        if (mode == ConstantEvaluator::Required)
+          cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
         return false;
       default:
         return false;
     }
 
     if (!value.isInt()) {
-      cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
+      if (mode == ConstantEvaluator::Required)
+        cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
       return false;
     }
     if (value.toInt() <= 0) {
-      cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
+      if (mode == ConstantEvaluator::Required)
+        cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
       return false;
     }
 
@@ -465,8 +473,14 @@ class TypeResolver : public AstVisitor
       int arraySize = ArrayType::kUnsized;
       Expression *expr = spec->sizeOfRank(rank);
       if (expr) {
-        resolveConstantArraySize(expr, &arraySize);
+        // Should either be old-style, or fixed-array style.
+        assert(spec->isOldDecl() || spec->hasPostDims());
+
+        resolveConstantArraySize(spec, expr, &arraySize);
       } else if (arrayInitData && rank < arrayInitData->length()) {
+        // Should either be old-style, or fixed-array style.
+        assert(spec->isOldDecl() || spec->hasPostDims());
+
         // Use an inferred length if one is available.
         if (arrayInitData->at(rank) != kRankUnvisited)
           arraySize = arrayInitData->at(rank);

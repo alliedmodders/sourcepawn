@@ -86,6 +86,8 @@ MSG(MacroNotFound,                  SyntaxError,            "preprocessor defini
 MSG(ExtraCharactersAfterDirective,  SyntaxError,            "extra characters after directive")
 MSG(UnterminatedIf,                 SyntaxError,            "unterminated #if or #else")
 MSG(EndIfWithoutIf,                 SyntaxError,            "#endif encountered without #if")
+MSG(ElseWithoutIf,                  SyntaxError,            "#else encountered without #if")
+MSG(ElseDeclaredTwice,              SyntaxError,            "#else appears twice for the same #if (started at line %d)")
 MSG(UnknownPragma,                  SyntaxError,            "unrecognized pragma '%s'")
 MSG(BadIncludeSyntax,               SyntaxError,            "#include file name must be enclosed with '\"' or '<' and '>'")
 MSG(IncludeNotFound,                SyntaxError,            "#include file '%s' could not be found")

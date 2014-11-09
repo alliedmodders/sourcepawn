@@ -65,6 +65,18 @@ class PreprocessingLexer : public BasicLexer
            ? IfNone
            : ifstack_.back().state;
   }
+  bool got_else() const {
+    assert(!ifstack_.empty());
+    return ifstack_.back().got_else;
+  }
+  void set_in_else() {
+    assert(!ifstack_.empty());
+    ifstack_.back().got_else = true;
+    if (ifstate() == IfReading)
+      ifstack_.back().state = IfIgnoring;
+    else
+      ifstack_.back().state = IfReading;
+  }
   SourceLocation ifpos() const {
     return SourceLocation(file(), ifstack_.back().pos);
   }
@@ -92,9 +104,11 @@ class PreprocessingLexer : public BasicLexer
   struct IfEntry {
     SourcePosition pos;
     IfState state;
+    bool got_else;
     IfEntry() : state(IfNone)
     { }
-    IfEntry(const SourcePosition &pos, IfState state) : pos(pos), state(state)
+    IfEntry(const SourcePosition &pos, IfState state)
+      : pos(pos), state(state), got_else(false)
     { }
   };
 
@@ -121,6 +135,7 @@ class Preprocessor
   bool include(TokenKind cmd, const char *file);
   bool directive(TokenKind cmd);
   void substitute();
+  void check_ignored_command(TokenKind cmd);
   void preprocess();
   void preprocess(FileContext *file, char *text, size_t length);
   void setup_global_macros();

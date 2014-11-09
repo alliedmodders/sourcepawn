@@ -82,6 +82,7 @@ namespace ke {
   _(NULLABLE,           "__nullable__")               \
   _(M_DEFINE,           "#define")                    \
   _(M_DEPRECATE,        "#deprecate")                 \
+  _(M_ELSE,             "#else")                      \
   _(M_ENDIF,            "#endif")                     \
   _(M_ENDINPUT,         "#endinput")                  \
   _(M_FILE,             "#file")                      \
@@ -198,6 +199,7 @@ enum TokenKind
   _(VOID)                                             \
   _(M_DEFINE)                                         \
   _(M_DEPRECATE)                                      \
+  _(M_ELSE)                                           \
   _(M_ENDIF)                                          \
   _(M_ENDINPUT)                                       \
   _(M_FILE)                                           \

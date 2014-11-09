@@ -876,12 +876,28 @@ Preprocessor::directive(TokenKind cmd)
       break;
     }
 
+    case TOK_M_ELSE:
+    {
+      if (text_->ifstate() == IfNone) {
+        cc_.reportError(text_->begin(), Message_ElseWithoutIf);
+        return false;
+      }
+      if (text_->got_else()) {
+        cc_.reportError(text_->begin(), Message_ElseDeclaredTwice, text_->ifpos().line);
+        return false;
+      }
+
+      text_->set_in_else();
+      break;
+    }
+
     case TOK_M_ENDIF:
     {
       if (text_->ifstate() == IfNone) {
         cc_.reportError(text_->begin(), Message_EndIfWithoutIf);
         return false;
       }
+
       text_->popif();
       break;
     }
@@ -1033,6 +1049,24 @@ Preprocessor::preprocess(FileContext *file, char *text, size_t length)
   preprocess();
 }
 
+// Some commands we can't ignore, for example - the #else after an #if 0, we
+// handle here.
+void
+Preprocessor::check_ignored_command(TokenKind cmd)
+{
+  switch (cmd) {
+    case TOK_M_IF:
+      text_->pushif(text_->pos(), IfMustIgnore);
+      break;
+
+    case TOK_M_ELSE:
+      if (text_->got_else())
+        cc_.reportError(text_->begin(), Message_ElseDeclaredTwice, text_->ifpos().line);
+      text_->set_in_else();
+      break;
+  }
+}
+
 void
 Preprocessor::preprocess()
 {
@@ -1041,8 +1075,7 @@ Preprocessor::preprocess()
 
     if (text_->ifstate() >= IfIgnoring) {
       if (cmd != TOK_M_ENDIF) {
-        if (cmd == TOK_M_IF)
-          text_->pushif(text_->pos(), IfMustIgnore);
+        check_ignored_command(cmd);
         text_->readline();
         buffer_.append('\n');
         continue;
