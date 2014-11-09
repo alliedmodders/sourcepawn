@@ -28,6 +28,7 @@ if binary.compiler.cxx.behavior is 'msvc':
   binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
 
 binary.sources += [
+  'ast-printer.cpp',
   'compile-context.cpp',
   'constant-evaluator.cpp',
   'name-binding.cpp',
