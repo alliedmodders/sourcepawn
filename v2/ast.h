@@ -590,14 +590,12 @@ class StructInitializer : public Expression
 
 class ArrayLiteral : public Expression
 {
-  TokenKind token_;
-  ExpressionList *expressions_;
-
  public:
-  ArrayLiteral(const SourceLocation &pos, TokenKind token, ExpressionList *expressions)
+  ArrayLiteral(const SourceLocation &pos, TokenKind token, ExpressionList *expressions, bool repeatLastElement)
     : Expression(pos),
       token_(token),
-      expressions_(expressions)
+      expressions_(expressions),
+      repeatLastElement_(repeatLastElement)
   {
   }
 
@@ -616,14 +614,18 @@ class ArrayLiteral : public Expression
   ExpressionList *expressions() const {
     return expressions_;
   }
+  bool repeatLastElement() const {
+    return repeatLastElement_;
+  }
+
+ private:
+  TokenKind token_;
+  ExpressionList *expressions_;
+  bool repeatLastElement_;
 };
 
 class UnaryExpression : public Expression
 {
-  Expression *expression_;
-  TokenKind token_;
-  NameProxy *tag_;
-
  public:
   UnaryExpression(const SourceLocation &pos, TokenKind token, Expression *expr)
     : Expression(pos),
@@ -653,6 +655,11 @@ class UnaryExpression : public Expression
   NameProxy *tag() const {
     return tag_;
   }
+
+ private:
+  Expression *expression_;
+  TokenKind token_;
+  NameProxy *tag_;
 };
 
 class ThisExpression : public Expression

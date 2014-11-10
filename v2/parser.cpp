@@ -550,16 +550,24 @@ Parser::parseCompoundLiteral()
 
   // Otherwise, we need to build a list.
   ExpressionList *list = new (pool_) ExpressionList();
+  bool repeatLastElement = false;
   while (!peek(TOK_RBRACE)) {
+    if (match(TOK_ELLIPSES)) {
+      repeatLastElement = true;
+      break;
+    }
+
     Expression *item = expression();
     if (!item)
       return nullptr;
+    list->append(item);
+
     if (!match(TOK_COMMA))
       break;
   }
   expect(TOK_RBRACE);
 
-  return new (pool_) ArrayLiteral(pos, TOK_LBRACE, list);
+  return new (pool_) ArrayLiteral(pos, TOK_LBRACE, list, repeatLastElement);
 }
 
 Expression *

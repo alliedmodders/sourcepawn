@@ -331,6 +331,12 @@ class AstPrinter : public AstVisitor
       expr->accept(this);
       unindent();
     }
+    if (node->repeatLastElement()) {
+      indent();
+      prefix();
+      fprintf(fp_, "...\n");
+      unindent();
+    }
   }
   void visitStructInitializer(StructInitializer *node) {
     prefix();
