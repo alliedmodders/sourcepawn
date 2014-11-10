@@ -722,12 +722,8 @@ Parser::unary()
     case TOK_SIZEOF:
     {
       scanner_.next();
-      if (!expect(TOK_LPAREN))
-        return nullptr;
       Expression *expr = unary();
       if (!expr)
-        return nullptr;
-      if (!expect(TOK_RPAREN))
         return nullptr;
       return new (pool_) UnaryExpression(pos, token, expr);
     }
@@ -1015,7 +1011,6 @@ Parser::do_()
 {
   // do ::= "do" block "while" "(" expr ")"
   SourceLocation pos = scanner_.begin();
-  scanner_.next();
 
   Statement *body = block();
   if (!body)
