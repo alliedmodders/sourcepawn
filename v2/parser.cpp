@@ -1279,11 +1279,18 @@ Parser::switch_()
         return nullptr;
 
       // A limitation in the grammar is that |case <NAME>:| will be
-      // detected as a label.
-      AutoAllowTags<false> disableTags(scanner_);
+      // detected as a label. We disable tags unless we see an open paren.
+      {
+        Maybe<AutoAllowTags<false>> disable_tags;
+        if (!match(TOK_LPAREN))
+          disable_tags.init(scanner_);
 
-      if ((expr = expression()) == nullptr)
-        return nullptr;
+        if ((expr = expression()) == nullptr)
+          return nullptr;
+
+        if (!disable_tags.initialized())
+          expect(TOK_RPAREN);
+      }
 
       if (peek(TOK_COMMA)) {
         others = new (pool_) ExpressionList();
