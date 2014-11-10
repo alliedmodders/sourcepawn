@@ -452,6 +452,9 @@ class NameResolver : public AstVisitor
     for (size_t i = 0; i < node->pairs()->length(); i++)
       node->pairs()->at(i)->expr()->accept(this);
   }
+  void visitSizeofExpression(SizeofExpression *node) override {
+    node->proxy()->accept(this);
+  }
 
   // No-op nodes.
   void visitIntegerLiteral(IntegerLiteral *node) override {

@@ -102,6 +102,7 @@ class Parser
 
   Expression *parseCompoundLiteral();
   Expression *parseStructInitializer(const SourceLocation &pos);
+  Expression *parseSizeof();
 
   Expression *primitive();
   Expression *dotfield(Expression *base);

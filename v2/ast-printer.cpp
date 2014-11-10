@@ -263,6 +263,13 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
+  void visitSizeofExpression(SizeofExpression *node) {
+    prefix();
+    fprintf(fp_, "[ SizeofExpression (level=%d)\n", (int)node->level());
+    indent();
+    node->proxy()->accept(this);
+    unindent();
+  }
   void visitWhileStatement(WhileStatement *node) {
     prefix();
     fprintf(fp_, "[ WhileStatement (%s)\n",

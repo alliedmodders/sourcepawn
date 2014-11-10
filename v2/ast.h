@@ -57,8 +57,9 @@ class FunctionScope;
   _(ContinueStatement)    \
   _(IncDecExpression)     \
   _(UnaryExpression)      \
+  _(SizeofExpression)     \
   _(TernaryExpression)    \
-  _(TokenLiteral)       \
+  _(TokenLiteral)         \
   _(SwitchStatement)      \
   _(ArrayLiteral)         \
   _(TypedefStatement)     \
@@ -624,14 +625,37 @@ class ArrayLiteral : public Expression
   bool repeatLastElement_;
 };
 
+class SizeofExpression : public Expression
+{
+ public:
+  SizeofExpression(const SourceLocation &pos, NameProxy *proxy, size_t level)
+   : Expression(pos),
+     proxy_(proxy),
+     level_(level)
+  {}
+
+  DECLARE_NODE(SizeofExpression);
+
+  NameProxy *proxy() const {
+    return proxy_;
+  }
+  size_t level() const {
+    return level_;
+  }
+
+ private:
+  NameProxy *proxy_;
+  size_t level_;
+};
+
 class UnaryExpression : public Expression
 {
  public:
   UnaryExpression(const SourceLocation &pos, TokenKind token, Expression *expr)
-    : Expression(pos),
-      expression_(expr),
-      token_(token),
-      tag_(nullptr)
+   : Expression(pos),
+     expression_(expr),
+     token_(token),
+     tag_(nullptr)
   {
   }
 

@@ -231,6 +231,7 @@ class TypeResolver : public AstVisitor
       node->expressions()->at(i)->accept(this);
   }
 
+
   // No-op cases.
   void visitFloatLiteral(FloatLiteral *node) override {
   }
@@ -249,6 +250,8 @@ class TypeResolver : public AstVisitor
   void visitIntegerLiteral(IntegerLiteral *node) {
   }
   void visitTokenLiteral(TokenLiteral *node) {
+  }
+  void visitSizeofExpression(SizeofExpression *node) override {
   }
 
  private:

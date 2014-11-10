@@ -723,10 +723,7 @@ Parser::unary()
     case TOK_SIZEOF:
     {
       scanner_.next();
-      Expression *expr = unary();
-      if (!expr)
-        return nullptr;
-      return new (pool_) UnaryExpression(pos, token, expr);
+      return parseSizeof();
     }
 
     case TOK_LABEL:
@@ -756,6 +753,35 @@ Parser::unary()
   }
 
   return expr;
+}
+
+Expression *
+Parser::parseSizeof()
+{
+  SourceLocation loc = scanner_.begin();
+
+  size_t nparens = 0;
+  while (match(TOK_LPAREN))
+    nparens++;
+
+  Atom *name = expectName();
+  if (!name)
+    return nullptr;
+  NameProxy *proxy = new (pool_) NameProxy(scanner_.begin(), name);
+
+  size_t level = 0;
+  while (match(TOK_LBRACKET)) {
+    if (!expect(TOK_RBRACKET))
+      return nullptr;
+    level++;
+  }
+
+  for (size_t i = 0; i < nparens; i++) {
+    if (!expect(TOK_RPAREN))
+      return nullptr;
+  }
+
+  return new (pool_) SizeofExpression(loc, proxy, level);
 }
 
 Expression *
