@@ -123,3 +123,4 @@ MSG(ArgumentNameDeclaredTwice,      SyntaxError,            "argument name '%s' 
 MSG(MethodmapOnNonType,             TypeError,              "methodmap cannot apply to non-type '%s'")
 MSG(MethodmapOnNonEnum,             TypeError,              "methodmap cannot apply to non-enum type '%s'")
 MSG(MethodmapAlreadyDefined,        TypeError,              "a methodmap was already defined for type '%s'")
+MSG(MacrosAreUnsupported,           SyntaxError,            "macros are no longer supported")

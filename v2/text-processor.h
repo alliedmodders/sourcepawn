@@ -59,6 +59,11 @@ class TextProcessor
       return '\0';
     return *pos_++;
   }
+  bool peekChar(char c) {
+    bool found = (read() == c);
+    pos_--;
+    return found;
+  }
   bool matchChar(char c) {
     if (read() == c)
       return true;

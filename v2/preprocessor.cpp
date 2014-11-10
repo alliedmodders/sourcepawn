@@ -199,9 +199,9 @@ PreprocessingLexer::PreprocessingLexer(CompileContext &cc, FileContext *file, ch
 TokenKind
 PreprocessingLexer::scan()
 {
-  begin_ = pos_;
-
   for (;;) {
+    begin_ = pos_;
+
     char c = read();
     switch (c) {
       case ' ':
@@ -846,6 +846,10 @@ Preprocessor::directive(TokenKind cmd)
         cc_.reportError(text_->begin(), Message_BadDirectiveToken, TokenNames[TOK_NAME]);
         return false;
       }
+      if (text_->peekChar('(')) {
+        cc_.reportError(text_->begin(), Message_MacrosAreUnsupported);
+        return false;
+      }
       Atom *id = text_->name();
       MacroTable::Insert p = macros_.findForAdd(id);
       if (p.found()) {
@@ -983,9 +987,9 @@ Preprocessor::directive(TokenKind cmd)
         // The semicolon directive also affects parser state, so we inject it
         // into the output buffer.
         if (str.compare("required") == 0)
-          buffer_.append("#require_newdecls\n");
+          buffer_.append("#require_newdecls");
         else if (str.compare("optional") == 0)
-          buffer_.append("#optional_newdecls\n");
+          buffer_.append("#optional_newdecls");
         else
           cc_.reportError(loc, Message_InvalidNewDeclState);
       } else if (strcmp(text_->literal(), "semicolon") == 0) {
@@ -995,9 +999,9 @@ Preprocessor::directive(TokenKind cmd)
         if (!expr(&val))
           return false;
         if (val)
-          buffer_.append("#require_semicolons\n");
+          buffer_.append("#require_semicolons");
         else
-          buffer_.append("#optional_semicolons\n");
+          buffer_.append("#optional_semicolons");
       } else {
         cc_.reportError(text_->loc(), Message_UnknownPragma, text_->literal());
         return false;

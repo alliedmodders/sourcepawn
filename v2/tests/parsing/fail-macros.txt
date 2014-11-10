@@ -1,0 +1,1 @@
+syntax error (line 1, col 9): macros are no longer supported
