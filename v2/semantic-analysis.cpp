@@ -178,7 +178,7 @@ SemanticAnalysis::visitIntegerLiteral(IntegerLiteral *node)
 }
 
 void
-SemanticAnalysis::visitBooleanLiteral(BooleanLiteral *node)
+SemanticAnalysis::visitTokenLiteral(TokenLiteral *node)
 {
   Type *type = cc_.types()->getPrimitive(PrimitiveType::Bool);
   hir_ = new (pool_) HBoolean(node, type, node->token());

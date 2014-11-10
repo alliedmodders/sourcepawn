@@ -216,10 +216,9 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ IntegerLiteral (%" KE_FMT_I64 ")\n", node->value());
   }
-  void visitBooleanLiteral(BooleanLiteral *node) {
+  void visitTokenLiteral(TokenLiteral *node) {
     prefix();
-    fprintf(fp_, "[ BooleanLiteral (%s)\n",
-        (node->token() == TOK_TRUE) ? "true" : "false");
+    fprintf(fp_, "[ TokenLiteral (%s)\n", TokenNames[node->token()]);
   }
   void visitFloatLiteral(FloatLiteral *node) {
     prefix();

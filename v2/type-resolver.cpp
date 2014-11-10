@@ -248,7 +248,7 @@ class TypeResolver : public AstVisitor
   }
   void visitIntegerLiteral(IntegerLiteral *node) {
   }
-  void visitBooleanLiteral(BooleanLiteral *node) {
+  void visitTokenLiteral(TokenLiteral *node) {
   }
 
  private:

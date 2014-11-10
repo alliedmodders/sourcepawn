@@ -476,7 +476,8 @@ Parser::primitive()
 
     case TOK_TRUE:
     case TOK_FALSE:
-      return new (pool_) BooleanLiteral(scanner_.begin(), scanner_.current()->kind);
+    case TOK_NULL:
+      return new (pool_) TokenLiteral(scanner_.begin(), scanner_.current()->kind);
 
     case TOK_STRING_LITERAL:
     {

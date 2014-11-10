@@ -63,6 +63,7 @@ namespace ke {
   _(INT,                "int")                        \
   _(METHODMAP,          "methodmap")                  \
   _(NATIVE,             "native")                     \
+  _(NULL,               "null")                       \
   _(NEW,                "new")                        \
   _(OBJECT,             "object")                     \
   _(PROPERTY,           "property")                   \
@@ -182,6 +183,7 @@ enum TokenKind
   _(METHODMAP)                                        \
   _(NATIVE)                                           \
   _(NEW)                                              \
+  _(NULL)                                             \
   _(OBJECT)                                           \
   _(PROPERTY)                                         \
   _(PUBLIC)                                           \

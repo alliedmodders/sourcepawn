@@ -456,7 +456,7 @@ class NameResolver : public AstVisitor
   // No-op nodes.
   void visitIntegerLiteral(IntegerLiteral *node) override {
   }
-  void visitBooleanLiteral(BooleanLiteral *node) override {
+  void visitTokenLiteral(TokenLiteral *node) override {
   }
   void visitFloatLiteral(FloatLiteral *node) override {
   }

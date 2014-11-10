@@ -124,7 +124,7 @@ CompileContext::compile()
 
   printf("-- Preprocessing --\n");
 
-  //puts(units_[0]->text());
+  puts(units_[0]->text());
 
   printf("-- Parsing --\n");
 

@@ -56,7 +56,7 @@ class SemanticAnalysis : public AstVisitor
   void visitFunctionStatement(FunctionStatement *node);
   void visitBlockStatement(BlockStatement *node);
   void visitVariableDeclaration(VariableDeclaration *node);
-  void visitBooleanLiteral(BooleanLiteral *node);
+  void visitTokenLiteral(TokenLiteral *node);
   void visitIntegerLiteral(IntegerLiteral *node);
   void visitReturnStatement(ReturnStatement *node);
   void visitNameProxy(NameProxy *name);

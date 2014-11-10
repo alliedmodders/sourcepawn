@@ -58,7 +58,7 @@ class FunctionScope;
   _(IncDecExpression)     \
   _(UnaryExpression)      \
   _(TernaryExpression)    \
-  _(BooleanLiteral)       \
+  _(TokenLiteral)       \
   _(SwitchStatement)      \
   _(ArrayLiteral)         \
   _(TypedefStatement)     \
@@ -452,18 +452,18 @@ class NameProxy : public Expression
   }
 };
 
-class BooleanLiteral : public Expression
+class TokenLiteral : public Expression
 {
   TokenKind token_;
 
  public:
-  BooleanLiteral(const SourceLocation &pos, TokenKind token)
+  TokenLiteral(const SourceLocation &pos, TokenKind token)
     : Expression(pos),
     token_(token)
   {
   }
 
-  DECLARE_NODE(BooleanLiteral);
+  DECLARE_NODE(TokenLiteral);
   TokenKind token() const {
     return token_;
   }
