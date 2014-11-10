@@ -51,7 +51,7 @@ class PreprocessingLexer : public BasicLexer
   void readline();
   bool readEndOfDirective();
   void readUntilEnd(char **begin, char **end);
-  TokenKind readUntilName(CompileBuffer &buffer);
+  TokenKind readUntilName(CompileBuffer &buffer, bool *tokenWasStacked);
 
   // #if, #else, #endif helpers.
   void pushif(const SourcePosition &pos, IfState state) {

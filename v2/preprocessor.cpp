@@ -438,9 +438,15 @@ PreprocessingLexer::readUntilEnd(char **beginp, char **endp)
   *endp = end + 1;
 }
 
+// Note: tokenWasStacked must be an outparam rather (or some kind of per-token
+// state). If we happen to peek ahead another char, we could deplete the text
+// buffer on the stack, and our caller would incorrectly assume that the token
+// was not produced as part of an extra buffer.
 TokenKind
-PreprocessingLexer::readUntilName(CompileBuffer &buffer)
+PreprocessingLexer::readUntilName(CompileBuffer &buffer, bool *tokenWasStacked)
 {
+  *tokenWasStacked = false;
+
   for (;;) {
     char c = read();
     if (IsLineTerminator(c)) {
@@ -449,6 +455,7 @@ PreprocessingLexer::readUntilName(CompileBuffer &buffer)
     }
 
     if (IsIdentStart(c)) {
+      *tokenWasStacked = stacked();
       literal_.clear();
       literal_.append(c);
       for (;;) {
@@ -579,6 +586,7 @@ Preprocessor::unary(int *val)
     case TOK_NAME:
     {
       Atom *id = text_->name();
+      printf("id=%p |%s|\n", id, id->chars());
       MacroTable::Result r = macros_.find(id);
       if (!r.found()) {
         cc_.reportError(pos, Message_MacroNotFound, text_->literal());
@@ -654,36 +662,43 @@ Preprocessor::substitute()
 {
   assert(!text_->stacked());
 
-  Atom *initial = nullptr;
+  // The atom that initiated a substitution sequence.
+  Atom *rootAtom = nullptr;
 
   while (true) {
-    // "stacked" means we are lexing substitutions and not the primary stream.
-    bool stacked = text_->stacked();
-
     // Find an id to try and substitute.
-    TokenKind tok = text_->readUntilName(buffer_);
+    bool tokenWasStacked;
+    TokenKind tok = text_->readUntilName(buffer_, &tokenWasStacked);
     if (tok != TOK_NAME)
       break;
+
+    // Check if the token was read from text injected by a preprocessor
+    // substitution. If it wasn't, we need to unset rootAtom so can
+    // substitute that name again.
+    if (!tokenWasStacked)
+      rootAtom = nullptr;
 
     Atom *id = text_->name();
     MacroTable::Result r = macros_.find(id);
 
     // If the id is equal to the initial id, to avoid infinite recursion, we
     // don't perform a substitution.
-    if (!r.found() || id == initial) {
+    if (!r.found() || id == rootAtom) {
       buffer_.append(text_->literal(), text_->literal_length());
       continue;
     }
-
-    // Remember the initial identifier we lexed, if we're starting a new
-    // substitution.
-    if (!stacked)
-      initial = id;
 
     // "Substitute" the macro value. The substitution occurs by injecting the
     // macro string into the lexer's stream, tricking us into either copying
     // it into the buffer or continuing subsitutions.
     text_->addText(r->value, r->valueLength);
+
+    // Remember the initial identifier we lexed, if we're starting a new
+    // substitution.
+    if (!rootAtom) {
+      assert(text_->stacked());
+      rootAtom = id;
+    }
   }
 
   buffer_.append('\n');
