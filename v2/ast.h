@@ -178,7 +178,7 @@ class TypeSpecifier
     case TOK_FUNCTION:
       return true;
     default:
-      return false;
+      return dims() != nullptr;
     }
   }
 

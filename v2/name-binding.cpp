@@ -593,6 +593,14 @@ class NameResolver : public AstVisitor
         break;
       }
     }
+
+    if (spec->dims()) {
+      for (size_t i = 0; i < spec->dims()->length(); i++) {
+        Expression *expr = spec->dims()->at(i);
+        if (expr)
+          expr->accept(this);
+      }
+    }
   }
 
   Type *typeForLabelAtom(Atom *atom) {

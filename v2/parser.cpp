@@ -221,6 +221,8 @@ Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
         cc_.reportError(scanner_.begin(), Message_TypeCannotBeReference, "array");
     }
   }
+
+  spec->setNewDecl();
 }
 
 bool
