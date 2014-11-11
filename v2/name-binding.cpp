@@ -351,13 +351,13 @@ class NameResolver : public AstVisitor
     }
 
     for (size_t i = 0; i < node->entries()->length(); i++) {
-      EnumStatement::Entry &entry = node->entries()->at(i);
-      if (entry.expr)
-        entry.expr->accept(this);
+      EnumConstant *cn = node->entries()->at(i);
+      if (cn->expression())
+        cn->expression()->accept(this);
 
-      ConstantSymbol *cs = new (pool_) ConstantSymbol(entry.proxy, scope, entry.proxy->name(), type);
+      ConstantSymbol *cs = new (pool_) ConstantSymbol(cn, scope, cn->name(), type);
       registerSymbol(cs);
-      entry.sym = cs;
+      cn->setSymbol(cs);
     }
   }
 

@@ -76,19 +76,19 @@ class TypeResolver : public AstVisitor
   void visitEnumStatement(EnumStatement *node) {
     int value = 0;
     for (size_t i = 0; i < node->entries()->length(); i++) {
-      EnumStatement::Entry &entry = node->entries()->at(i);
-      if (entry.expr) {
+      EnumConstant *cs = node->entries()->at(i);
+      if (cs->expression()) {
         BoxedPrimitive out;
         ConstantEvaluator ceval(cc_, scope_, ConstantEvaluator::Required);
-        switch (ceval.Evaluate(entry.expr, &out)) {
+        switch (ceval.Evaluate(cs->expression(), &out)) {
           case ConstantEvaluator::Ok:
             if (!out.isInt()) {
-              cc_.reportError(entry.proxy->loc(), Message_EnumConstantMustBeInt);
+              cc_.reportError(cs->expression()->loc(), Message_EnumConstantMustBeInt);
               continue;
             }
             break;
           case ConstantEvaluator::NotConstant:
-            cc_.reportError(entry.proxy->loc(), Message_EnumValueMustBeConstant);
+            cc_.reportError(cs->expression()->loc(), Message_EnumValueMustBeConstant);
             break;
           default:
             continue;
@@ -96,7 +96,7 @@ class TypeResolver : public AstVisitor
         value = out.toInt();
       }
 
-      entry.sym->setValue(BoxedPrimitive::Int(value));
+      cs->sym()->setValue(BoxedPrimitive::Int(value));
       value++;
     }
   }

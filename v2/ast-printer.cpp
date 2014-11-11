@@ -248,20 +248,22 @@ class AstPrinter : public AstVisitor
     node->right()->accept(this);
     unindent();
   }
-  void visitEnumStatement(EnumStatement *node) {
+  void visitEnumStatement(EnumStatement *node) override {
     prefix();
     fprintf(fp_, "[ EnumStatement (%s)\n", node->name() ? node->name()->chars() : "<anonymous>");
     indent();
-    for (size_t i = 0; i < node->entries()->length(); i++) {
-      prefix();
-      fprintf(fp_, "%s =\n", node->entries()->at(i).proxy->name()->chars());
-      if (node->entries()->at(i).expr) {
-        indent();
-        node->entries()->at(i).expr->accept(this);
-        unindent();
-      }
-    }
+    for (size_t i = 0; i < node->entries()->length(); i++)
+      node->entries()->at(i)->accept(this);
     unindent();
+  }
+  void visitEnumConstant(EnumConstant *node) {
+    prefix();
+    fprintf(fp_, "[ EnumConstant (%s)\n", node->name()->chars());
+    if (node->expression()) {
+      indent();
+      node->expression()->accept(this);
+      unindent();
+    }
   }
   void visitSizeofExpression(SizeofExpression *node) {
     prefix();

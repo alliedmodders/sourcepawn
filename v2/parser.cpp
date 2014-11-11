@@ -1701,19 +1701,19 @@ Parser::enum_()
   if (match(TOK_NAME) || match(TOK_LABEL))
     name = scanner_.current_name();
 
-  EnumStatement::EntryList *entries = new (pool_) EnumStatement::EntryList();
+  EnumConstantList *entries = new (pool_) EnumConstantList();
 
   if (!expect(TOK_LBRACE))
     return nullptr;
+
+  EnumStatement *stmt = new (pool_) EnumStatement(pos, name);
 
   do {
     if (scanner_.peek() == TOK_RBRACE)
       break;
 
     Atom *name = expectName();
-    if (!name)
-      return nullptr;
-    NameProxy *proxy = new (pool_) NameProxy(scanner_.begin(), name);
+    SourceLocation loc = scanner_.begin();
 
     Expression *expr = nullptr;
     if (match(TOK_ASSIGN)) {
@@ -1721,15 +1721,15 @@ Parser::enum_()
         return nullptr;
     }
 
-    if (!entries->append(EnumStatement::Entry(proxy, expr)))
-      return nullptr;
+    entries->append(new (pool_) EnumConstant(loc, stmt, name, expr));
   } while (match(TOK_COMMA));
   if (!expect(TOK_RBRACE))
     return nullptr;
 
-  requireTerminator();
+  stmt->setEntries(entries);
 
-  return new (pool_) EnumStatement(pos, name, entries);
+  requireTerminator();
+  return stmt;
 }
 
 ParameterList *

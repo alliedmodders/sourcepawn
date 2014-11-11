@@ -51,6 +51,7 @@ class FunctionScope;
   _(FieldExpression)      \
   _(IfStatement)          \
   _(IndexExpression)      \
+  _(EnumConstant)         \
   _(EnumStatement)        \
   _(WhileStatement)       \
   _(BreakStatement)       \
@@ -1140,33 +1141,56 @@ class IfStatement : public Statement
   }
 };
 
+// There is one EnumConstant per entry in an EnumStatement. We need this to be
+// separate from EnumStatement so we can properly put it in the symbol table.
+class EnumConstant : public Statement
+{
+ public:
+  EnumConstant(const SourceLocation &loc, EnumStatement *parent, Atom *name, Expression *expr)
+   : Statement(loc),
+     parent_(parent),
+     name_(name),
+     expr_(expr),
+     sym_(nullptr)
+  {}
+
+  DECLARE_NODE(EnumConstant);
+
+  EnumStatement *parent() const {
+    return parent_;
+  }
+  Atom *name() const {
+    return name_;
+  }
+  Expression *expression() const {
+    return expr_;
+  }
+
+  void setSymbol(ConstantSymbol *sym) {
+    assert(!sym_);
+    sym_ = sym;
+  }
+  ConstantSymbol *sym() const {
+    return sym_;
+  }
+
+ private:
+  EnumStatement *parent_;
+  Atom *name_;
+  Expression *expr_;
+  ConstantSymbol *sym_;
+};
+
+typedef PoolList<EnumConstant *> EnumConstantList;
+
 class EnumStatement : public Statement
 {
-  Atom *name_;
-  TypeSymbol *sym_;
-
  public:
-  struct Entry {
-    NameProxy *proxy;
-    Expression *expr;
-    ConstantSymbol *sym;
-
-    Entry(NameProxy *proxy, Expression *expr)
-      : proxy(proxy),
-        expr(expr),
-        sym(nullptr)
-    {
-    }
-  };
-
-  typedef PoolList<Entry> EntryList;
-
- public:
-  EnumStatement(const SourceLocation &pos, Atom *name, EntryList *entries)
+  EnumStatement(const SourceLocation &pos, Atom *name)
     : Statement(pos),
       name_(name),
       sym_(nullptr),
-      entries_(entries)
+      entries_(nullptr)
   {
   }
 
@@ -1175,9 +1199,15 @@ class EnumStatement : public Statement
   Atom *name() const {
     return name_;
   }
-  EntryList *entries() const {
+
+  void setEntries(EnumConstantList *entries) {
+    assert(!entries_);
+    entries_ = entries;
+  }
+  EnumConstantList *entries() const {
     return entries_;
   }
+
   void setSymbol(TypeSymbol *sym) {
     assert(!sym_);
     sym_ = sym;
@@ -1185,13 +1215,11 @@ class EnumStatement : public Statement
   TypeSymbol *sym() const {
     return sym_;
   }
-  TokenKind visibility() const {
-    return visibility_;
-  }
 
  private:
-  EntryList *entries_;
-  TokenKind visibility_;
+  Atom *name_;
+  TypeSymbol *sym_;
+  EnumConstantList *entries_;
 };
 
 class IncDecExpression : public Expression
