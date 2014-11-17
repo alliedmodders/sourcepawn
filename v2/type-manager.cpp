@@ -99,7 +99,7 @@ TypeManager::newStruct(Atom *name)
 }
 
 TypedefType *
-TypeManager::newTypedef(Atom *name)
+TypeManager::newTypedef(Atom *name, Type *actual)
 {
-  return TypedefType::New(name);
+  return TypedefType::New(name, actual);
 }

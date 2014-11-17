@@ -22,10 +22,92 @@
 #include "symbols.h"
 #include "constant-evaluator.h"
 #include "types.h"
+#include "layout.h"
 
 using namespace ke;
 
-class TypeResolver : public AstVisitor
+template <typename T>
+class AutoPush
+{
+ public:
+  AutoPush(Vector<T> &stack, const T &item)
+   : stack_(stack)
+  {
+    stack_.append(item);
+  }
+  ~AutoPush() {
+    stack_.pop();
+  }
+ private:
+  Vector<T> &stack_;
+};
+
+// Type Resolution ensures that any type specifier has a bound type, and that
+// any constant expression has a constant value.
+//
+// This pass involves a recursive walk through the AST. Unlike other passes,
+// it may recursively resolve other unrelated AST nodes. For example,
+// 
+//   typedef A = B;
+//   typedef B = int;
+//
+// In order to resolve "A", we will recursively resolve "B". If we have a
+// recursive type, we have to prevent infintie recursion and report an error.
+// Recursive types always occur through name resolution, and there are many
+// patterns in which they can occur.
+//
+// ---- CONSTANT RECURSION ----
+//
+// The first form of recursion we're concerned about is 'constant recursion'.
+// This occurs when resolving a constant expression, it is mutually dependent
+// on another constant expression. There are a few ways to do this. The first
+// is via enum values:
+//
+//    1: enum X {
+//    2:   A = B,
+//    3:   B,
+//    4: };
+//
+// On line 2, resolving the type of 'A' depends on resolving 'B'. We cannot
+// resolve 'B' without knowing the type of 'A'.
+//
+// Another form of constant recursion is through constant definitions:
+//
+//    1: const int A = B;
+//    2: const int B = A;
+//
+// ---- TYPE RECURSION ----
+//
+// Type recursion is when a type must resolve itself in order to resolve. The
+// simplest example is via typedef:
+//
+//    typedef A = B
+//    typedef B = A
+//
+// We detect such a cycle and break it in resolveType(). The bits for doing so
+// are in TypeSpecifier. We can also have other forms of type recursion:
+//
+//    int x[sizeof(Y)] = 10;
+//    int y[sizeof(X)] = 20;
+//
+// Here, we'll break the cycle when resolving the types for the two variables.
+//
+// Methodmaps, structs, and classes may reference their own type, but usually
+// it is illegal. What we cannot do is attempt to compute properties of the
+// type before the type has been fully computed. For example, while evaluating
+// the type of a struct, we cannot compute the size of the struct. This is an
+// illegal sizeof() so that's largely moot - but it's relevant in that something
+// like this would be illegal:
+//
+//    struct X {
+//      X y;
+//    };
+//
+// Since here, X's size implicitly depends on sizeof(X).
+//
+class TypeResolver
+ : public AstVisitor,
+   public ConstantResolver
 {
   class EnterScope : public SaveAndSet<Scope *>
   {
@@ -56,7 +138,64 @@ class TypeResolver : public AstVisitor
     return true;
   }
 
-  void visitVariableDeclaration(VariableDeclaration *node) {
+  // Override for ConstantEvaluator. For simplicity, and to prevent extra
+  // errors, we always give ConstantEvaluator a type pointer back.
+  Type *resolveTypeOfVar(VariableSymbol *sym) override {
+    if (!sym->type())
+      sym->node()->accept(this);
+    return sym->type();
+  }
+
+  virtual bool resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out) {
+    // If we don't have a type, resolve the node right now. This will also
+    // resolve any constexpr, if any.
+    if (!sym->type())
+      sym->node()->accept(this);
+
+    // We have a type, so we know whether can be used as a constant.
+    if (!sym->canUseInConstExpr())
+      return false;
+
+    // If we're currently trying to resolve this variable's constant
+    // expression, report an error.
+    if (sym->isResolvingConstExpr()) {
+      cc_.reportError(sym->node()->loc(),
+                      Message_RecursiveConstantExpression,
+                      sym->name()->chars());
+
+      // Set a bogus constant expression so we don't report again.
+      sym->setConstExpr(DefaultValueForPlainType(sym->type()));
+      return true;
+    }
+
+    // Technically, we must have a constexpr by now. Sometime later we might
+    // let local constants be initialized with non-const values, so we check
+    // here.
+    if (!sym->isConstExpr())
+      return false;
+
+    *out = sym->constExpr();
+    return true;
+  }
+
+  // Override for ConstantEvaluator. If a constant fails to resolve, it must
+  // be set to contain a bogus value (preferably 0 in whatever type is needed).
+  BoxedValue resolveValueOfConstant(ConstantSymbol *sym) override {
+    if (!sym->hasValue())
+      resolveConstant(sym);
+    
+    return sym->value();
+  }
+
+  void visitVariableDeclaration(VariableDeclaration *node) override {
+    // If the node has already been resolved, bail out. This can happen if we
+    // resolved it recursively earlier, or we re-entered while trying to
+    // resolve it recursively, and it's set to an error.
+    if (node->spec()->resolved())
+      return;
+
+    // Note: we should not be able to recurse from inside this block. If it
+    // could, we'd have to mark node->spec() as resolving earlier.
     Vector<int> literal_dims;
     if (Expression *init = node->initialization()) {
       if (node->spec()->hasPostDims()) {
@@ -70,56 +209,240 @@ class TypeResolver : public AstVisitor
       }
     }
 
-    resolveType(node->spec(), &literal_dims);
+    VariableSymbol *sym = node->sym();
+    sym->setType(resolveType(node->spec(), &literal_dims));
+
+    if (!sym->canUseInConstExpr())
+      return;
+
+    // We got a constexpr with no initialization. Just assume it's 0, but
+    // report an error as SP1 does.
+    if (!node->initialization()) {
+      cc_.reportError(node->loc(),
+                      Message_ConstantVariableNeedsConstExpr,
+                      sym->name()->chars());
+      sym->setConstExpr(DefaultValueForPlainType(sym->type()));
+      return;
+    }
+
+    sym->setResolvingConstExpr();
+
+    // In Pawn, a const var *must* be a constexpr. We only care about this for
+    // ints/floats since constexprs aren't really relevant yet otherwise.
+    BoxedValue box;
+    ConstantEvaluator ceval(cc_, this, ConstantEvaluator::Required);
+    switch (ceval.Evaluate(node->initialization(), &box)) {
+      case ConstantEvaluator::Ok:
+        break;
+      case ConstantEvaluator::NotConstant:
+        cc_.reportError(node->loc(),
+                        Message_ConstantVariableNeedsConstExpr,
+                        sym->name()->chars());
+        // FALLTHROUGH.
+      case ConstantEvaluator::TypeError:
+        // Error has already been reported.
+        box = DefaultValueForPlainType(sym->type());
+        break;
+      default:
+        assert(false);
+    }
+
+    // :TODO: type check
+
+    sym->setConstExpr(box);
   }
 
-  void visitEnumStatement(EnumStatement *node) {
+  void visitEnumConstant(EnumConstant *node) override {
+    Type *type = node->parent()->sym()->type();
+
+    // If we don't have an initializer, or our parent type hasn't been
+    // instantiated yet, we upcall to resolve our parent Enum instead.
+    //
+    // We could potentially re-enter, but only after the parent has a
+    // type, so we'll take a different path next time.
+    if (!type || !node->expression()) {
+      // There is no way we can resolve this node without resolving everything
+      // in the enum. However, if the enum is already being resolved, this
+      // means we have a circular dependency between two enum values. Error
+      // about that now.
+      if (type) {
+        // We can reach this through "enum A { B = C, C };" if we are resolving
+        // the enum through the normal AST walk.
+        cc_.reportError(node->loc(),
+                        Message_EnumDependsOnChildEnum,
+                        enum_constant_stack_.back()->name()->chars(),
+                        node->name()->chars());
+
+        // Always set a value.
+        node->sym()->setTypeAndValue(type, DefaultValueForPlainType(type));
+        return;
+      }
+      
+      // We just up-call to our parent, since it needs to resolve all of the
+      // enum values in-order anyway.
+      node->parent()->accept(this);
+    } else {
+      // Note: on failure we just put a dummy 0 in place, so we don't create
+      // extra NotConstant errors.
+      int value;
+      if (!resolveEnumConstantValue(node, &value))
+        value = 0;
+      node->sym()->setTypeAndValue(type, BoxedValue(type, IntValue::FromInt32(value)));
+    }
+  }
+
+  void visitEnumStatement(EnumStatement *node) override {
+    // This should only happen if we resolved the enum before visiting it in
+    // the statement list.
+    if (node->sym()->type())
+      return;
+
+    Type *type;
+    if (node->name()) {
+      type = cc_.types()->newEnum(node->name());
+    } else {
+      type = cc_.types()->getPrimitive(PrimitiveType::Int32);
+    }
+    node->sym()->setType(type);
+
     int value = 0;
     for (size_t i = 0; i < node->entries()->length(); i++) {
       EnumConstant *cs = node->entries()->at(i);
       if (cs->expression()) {
-        BoxedPrimitive out;
-        ConstantEvaluator ceval(cc_, scope_, ConstantEvaluator::Required);
-        switch (ceval.Evaluate(cs->expression(), &out)) {
-          case ConstantEvaluator::Ok:
-            if (!out.isInt()) {
-              cc_.reportError(cs->expression()->loc(), Message_EnumConstantMustBeInt);
-              continue;
-            }
-            break;
-          case ConstantEvaluator::NotConstant:
-            cc_.reportError(cs->expression()->loc(), Message_EnumValueMustBeConstant);
-            break;
-          default:
-            continue;
+        // We may have already resolved a value, for example:
+        //    enum X {
+        //       Y = Z,
+        //       Z = 3,
+        //    };
+        //
+        // Surprisingly, we can resolve "Z" before "Y" with our type resolution
+        // algorithm.
+        if (!cs->sym()->hasValue()) {
+          if (!resolveEnumConstantValue(cs, &value))
+            value = 0;
+        } else {
+          // The value should already have resolved as an int.
+          value = cs->sym()->value().toInteger().asInt32();
         }
-        value = out.toInt();
       }
 
-      cs->sym()->setValue(BoxedPrimitive::Int(value));
+      cs->sym()->setTypeAndValue(type, BoxedValue(type, IntValue::FromInt32(value)));
       value++;
     }
   }
 
-  void visitLayoutStatement(LayoutStatement *layout) {
-    for (size_t i = 0; i < layout->body()->length(); i++) {
-      LayoutEntry *entry = layout->body()->at(i);
-      switch (entry->type()) {
-        case LayoutEntry::Accessor:
-          if (entry->getter().isFunction())
-            visitFunction(entry->getter().fun());
-          if (entry->setter().isFunction())
-            visitFunction(entry->setter().fun());
-          break;
+ private:
+  EnumType *resolveMethodmapParentType(NameProxy *proxy) {
+    // The parent must be a methodmap.
+    TypeSymbol *parentSymbol = proxy->sym()->asType();
+    if (!parentSymbol) {
+      cc_.reportError(proxy->loc(),
+                      Message_MethodmapBadParent,
+                      proxy->name()->chars());
+      return nullptr;
+    }
 
-        case LayoutEntry::Method:
-          if (entry->method().isFunction())
-            visitFunction(entry->method().fun());
-          break;
+    // Don't error twice if we get an unresolved type.
+    Type *type = resolveNameToType(proxy);
+    if (type->isUnresolved())
+      return nullptr;
+
+    if (!type->isEnum() || !type->toEnum()->methodmap()) {
+      cc_.reportError(proxy->loc(),
+                      Message_MethodmapBadParentType,
+                      GetTypeName(type));
+      return nullptr;
+    }
+
+    return type->toEnum();
+  }
+
+ public:
+  void visitMethodmapDecl(MethodmapDecl *methodmap) override {
+    EnumType *type = nullptr;
+
+    // We can tell whether or not the methodmap is attached to an enum by the
+    // node that created its TypeSymbol. If it's not the same, the symbol's
+    // node is the enum we're attached to.
+    if (methodmap->sym()->node() == methodmap) {
+      // If we've already got a type, this methodmap has already been resolved.
+      if (methodmap->sym()->type()) {
+        assert(methodmap->sym()->type()->isEnum());
+        return;
       }
+
+      // Create a new enum type.
+      type = cc_.types()->newEnum(methodmap->name());
+      methodmap->sym()->setType(type);
+    } else {
+      // It's impossible to get here without already having a resolved enum.
+      // Name bindings prevent defining enums *after* methodmaps, and we always
+      // resolve enum methodmaps as part of resolving the enum. The methodmap
+      // decl is not pointed to by anything else.
+      type = methodmap->sym()->type()->toEnum();
+
+      // Check to see whether we've already resolved this methodmap.
+      if (type->methodmap())
+        return;
+    }
+
+    // Create a methodmap now so we don't re-enter.
+    Methodmap *mm = new (pool_) Methodmap();
+    type->setMethodmap(mm);
+
+    // Our parent must be resolved first.
+    EnumType *parent = nullptr;
+    if (methodmap->parent()) {
+      methodmap->parent()->accept(this);
+      parent = resolveMethodmapParentType(methodmap->parent());
+    }
+
+    // Check that we do not appear in the parent chain.
+    for (EnumType *cursor = parent; cursor; cursor = cursor->methodmap()->parent()) {
+      if (cursor->methodmap() == mm) {
+        cc_.reportError(methodmap->parent()->loc(),
+                        Message_MethodmapIsCircular,
+                        methodmap->name()->chars());
+        parent = nullptr;
+        break;
+      }
+    }
+    mm->setParent(parent);
+
+    for (size_t i = 0; i < methodmap->body()->length(); i++) {
+      LayoutDecl *decl = methodmap->body()->at(i);
+      decl->accept(this);
     }
   }
 
+  void visitRecordDecl(RecordDecl *layout) override {
+    // Check whether we've already resolved this somewhere else.
+    if (layout->sym()->type())
+      return;
+
+    RecordType *type = nullptr;
+    switch (layout->token()) {
+      case TOK_UNION:
+        type = cc_.types()->newUnion(layout->name());
+        break;
+
+      case TOK_STRUCT:
+        type = cc_.types()->newStruct(layout->name());
+        break;
+
+      default:
+        assert(false);
+    }
+
+    layout->sym()->setType(type);
+
+    for (size_t i = 0; i < layout->body()->length(); i++) {
+      LayoutDecl *decl = layout->body()->at(i);
+      decl->accept(this);
+    }
+  }
+
+ private:
   void visitFunction(FunctionNode *node) {
     resolveTypesInSignature(node->signature());
 
@@ -131,33 +454,68 @@ class TypeResolver : public AstVisitor
       node->body()->accept(this);
   }
 
-  void visitFunctionStatement(FunctionStatement *node) {
+ public:
+  void visitFieldDecl(FieldDecl *decl) override {
+    // It is not possible to refer to fields as part of a constant or type
+    // expression - no re-entrancy or upward-resolving needed.
+    //
+    // Eventually this will change because of statics and inner typedefs, and
+    // we'll have to make this look similar to visitEnumConstant.
+    assert(!decl->sym() || !decl->sym()->type());
+
+    // Note that fields can be anonymous if in a block union.
+    Type *type = resolveType(decl->spec());
+    if (decl->sym())
+      decl->sym()->setType(type);
+  }
+
+  void visitPropertyDecl(PropertyDecl *decl) override {
+    // It is impossible to use property decl types in constant exprs or
+    // type resolvers. I don't anticipate this ever being a thing  either,
+    // unless we get some kind of decltype() operator. In any case if that
+    // happens then this will need to look more like visitEnumConstant and
+    // have re-entrancy guards.
+    assert(!decl->sym()->type());
+
+    decl->sym()->setType(resolveType(decl->spec()));
+
+    if (decl->getter()->isFunction())
+      visitFunction(decl->getter()->fun());
+    if (decl->setter()->isFunction())
+      visitFunction(decl->setter()->fun());
+  }
+
+  void visitMethodDecl(MethodDecl *decl) override {
+    // It is not possible to refer to methods as part of a constant or type
+    // expression - no re-entrancy or upward-resolving needed.
+    if (decl->method()->isFunction())
+      visitFunction(decl->method()->fun());
+  }
+
+ public:
+  void visitFunctionStatement(FunctionStatement *node) override {
     visitFunction(node);
   }
 
-  void visitTypedefStatement(TypedefStatement *node) {
-    Type *type = resolveType(node->spec());
+  void visitTypedefStatement(TypedefStatement *node) override {
+    assert(!node->spec()->resolved());
 
-    TypedefType *alias = node->sym()->type()->toTypedef();
-    alias->resolve(type);
-
-    // We already resolved this type earlier. We have to make sure now that it
-    // does not resolve cyclically.
-    if (isCyclicType(type, node->sym()->type())) {
-      cc_.reportError(node->loc(), Message_CannotResolveCyclicType);
-      return;
-    }
+    Type *actual = resolveType(node->spec());
+    TypedefType *tdef = cc_.types()->newTypedef(node->name(), actual);
+    node->sym()->setType(tdef);
   }
 
-  void visitAssignment(Assignment *node) {
+  // These cases do not define types, but we do have to visit their children
+  // to find nested declarations or functions.
+  void visitAssignment(Assignment *node) override {
     node->lvalue()->accept(this);
     node->expression()->accept(this);
   }
-  void visitBinaryExpression(BinaryExpression *node) {
+  void visitBinaryExpression(BinaryExpression *node) override {
     node->left()->accept(this);
     node->right()->accept(this);
   }
-  void visitReturnStatement(ReturnStatement *node) {
+  void visitReturnStatement(ReturnStatement *node) override {
     if (node->expression())
       node->expression()->accept(this);
   }
@@ -264,9 +622,9 @@ class TypeResolver : public AstVisitor
     ConstantEvaluator::Mode mode = spec->isOldDecl()
       ? ConstantEvaluator::Speculative
       : ConstantEvaluator::Required;
-    ConstantEvaluator ceval(cc_, scope_, mode);
+    ConstantEvaluator ceval(cc_, this, mode);
 
-    BoxedPrimitive value;
+    BoxedValue value;
     switch (ceval.Evaluate(expr, &value)) {
       case ConstantEvaluator::Ok:
         break;
@@ -274,22 +632,30 @@ class TypeResolver : public AstVisitor
         if (mode == ConstantEvaluator::Required)
           cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
         return false;
+      case ConstantEvaluator::TypeError:
+        // Error already reported.
+        return false;
       default:
+        assert(false);
         return false;
     }
 
-    if (!value.isInt()) {
-      if (mode == ConstantEvaluator::Required)
-        cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
-      return false;
-    }
-    if (value.toInt() <= 0) {
-      if (mode == ConstantEvaluator::Required)
-        cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
+    if (!value.isInteger()) {
+      cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
       return false;
     }
 
-    *outp = value.toInt();
+    const IntValue &iv = value.toInteger();
+    if (iv.isNegativeOrZero()) {
+      cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
+      return false;
+    }
+    if (!iv.valueFitsInInt32()) {
+      cc_.reportError(expr->loc(), Message_ArraySizeTooLarge);
+      return false;
+    }
+
+    *outp = iv.asInt32();
     return true;
   }
 
@@ -368,14 +734,52 @@ class TypeResolver : public AstVisitor
     }
   }
 
+  // The main entrypoint for resolving ConstantSymbols.
+  void resolveConstant(ConstantSymbol *sym) {
+    // Since we're only called from resolveValueOfConstant, we should never
+    // arrive here with a constant already set.
+    assert(!sym->hasValue());
+
+    if (sym->isResolving()) {
+      cc_.reportError(sym->node()->loc(),
+                      Message_RecursiveConstantExpression,
+                      sym->name()->chars());
+      return;
+    }
+
+    // The resolver (such as visitEnumConstant) is responsible for setting the
+    // constant value.
+    sym->setResolving();
+    sym->node()->accept(this);
+    assert(sym->hasValue());
+  }
+
+  Type *resolveTypeIfNeeded(TypeSpecifier *spec) {
+    if (spec->resolved())
+      return spec->resolved();
+    return resolveType(spec);
+  }
+
+  // The main entrypoint for resolving TypeSpecifiers.
   Type *resolveType(TypeSpecifier *spec, const Vector<int> *arrayInitData = nullptr) {
     if (spec->resolved())
       return spec->resolved();
 
+    if (spec->isResolving()) {
+      cc_.reportError(spec->baseLoc(), Message_CannotResolveRecursiveType);
+
+      // We don't want to report this twice, so mark it as resolved.
+      spec->setResolved(&UnresolvedType);
+      return spec->resolved();
+    }
+
+    spec->setResolving();
+
     Type *baseType = resolveBaseType(spec);
     if (!baseType) {
-      // Create a placeholder so we don't have to check null everywhere.
-      baseType = TypedefType::New(cc_.add("__unresolved_type__"));
+      // Return a placeholder so we don't have to check null everywhere.
+      spec->setResolved(&UnresolvedType);
+      return spec->resolved();
     }
 
     // Should not have a reference here.
@@ -401,10 +805,9 @@ class TypeResolver : public AstVisitor
     if (spec->isConst())
       type = cc_.types()->newQualified(type, Qualifiers::Const);
 
-    // If we've wrapped the type, and it was a placeholder, we have to make
-    // sure later that the transformation we just made is still valid.
-    if (baseType->isUnresolvedTypedef() && baseType != type)
-      placeholder_checks_.append(LazyPlaceholderCheck(spec, baseType->toTypedef()));
+    // If we already had a type here, we must have seen a recursive type. It's
+    // okay to rewrite it since we already reported an error somewhere.
+    assert(!spec->resolved() || spec->resolved()->isUnresolved());
 
     spec->setResolved(type);
     return type;
@@ -449,19 +852,22 @@ class TypeResolver : public AstVisitor
 
     TypeSymbol *sym = proxy->sym()->asType();
     if (!sym) {
+      // It's okay to return null here - our caller will massage it into
+      // UnresolvedType.
       cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
       return nullptr;
     }
 
-    if (!sym->type() && sym->node()->asTypedefStatement()) {
-      // Create a placeholder. This allows us to resolve dependent types that
-      // have not yet been resolved. For example,
-      //
-      // typedef X function Y ();
-      // typedef Y int
-      //
-      // Here, we'll create a Typedef for Y, which will be filled in later.
-      sym->setType(TypedefType::New(sym->name()));
+    if (!sym->type()) {
+      // See the giant comment at the top of this file about type recursion.
+      // We should not recurse through here since anything that can construct
+      // a TypeSymbol should either immediately set a type, or be dependent
+      // on TypeSpecifier's recursion checking.
+      sym->node()->accept(this);
+
+      // We should always get a type. Even if everything fails, we should have
+      // set an UnresolvedType.
+      assert(sym->type());
     }
 
     return sym->type();
@@ -493,30 +899,44 @@ class TypeResolver : public AstVisitor
     return type;
   }
 
-  // If traversing the type nesting of |check| reveals a pointer to |first|,
-  // we consider the type cyclic and unresolvable.
-  bool isCyclicType(Type *check, Type *first) {
-    if (check == first || check->canonical() == first)
-      return true;
+  bool resolveEnumConstantValue(EnumConstant *cs, int *outp) {
+    AutoPush<EnumConstant *> track(enum_constant_stack_, cs);
 
-    if (check->isArray())
-      return isCyclicType(check->toArray()->contained(), first);
-    if (check->isResolvedTypedef())
-      return isCyclicType(check->toTypedef()->actual(), first);
-    if (check->isReference())
-      return isCyclicType(check->toReference()->contained(), first);
-    if (check->isFunction()) {
-      FunctionSignature *signature = check->toFunction()->signature();
-      if (isCyclicType(signature->returnType()->resolved(), first))
-        return true;
-      for (size_t i = 0; i < signature->parameters()->length(); i++) {
-        VariableDeclaration *decl = signature->parameters()->at(i);
-        if (isCyclicType(decl->spec()->resolved(), first))
-          return true;
-      }
+    BoxedValue out;
+    ConstantEvaluator ceval(cc_, this, ConstantEvaluator::Required);
+    switch (ceval.Evaluate(cs->expression(), &out)) {
+      case ConstantEvaluator::Ok:
+        if (!out.isInteger() || !out.toInteger().typeFitsInInt32()) {
+          cc_.reportError(cs->expression()->loc(), Message_EnumConstantMustBeInt);
+          return false;
+        }
+        break;
+      case ConstantEvaluator::NotConstant:
+        cc_.reportError(cs->expression()->loc(), Message_EnumValueMustBeConstant);
+        return false;
+      case ConstantEvaluator::TypeError:
+        // error already reported.
+        return false;
+      default:
+        // :TODO: assert unreached instead.
+        assert(false);
+        return false;
     }
 
-    return false;
+    // Note that we don't check the actual type attached to the box here.
+    // Neither C++ nor Pawn do, not that that is necessarily a good reason.
+    // This means the following code is legal:
+    //
+    // enum A {
+    //   B
+    // };
+    // enum C {
+    //   D = B
+    // };
+    //
+    // Even though B's type is A, not C.
+    *outp = out.toInteger().asInt32();
+    return true;
   }
 
  private:
@@ -526,16 +946,10 @@ class TypeResolver : public AstVisitor
   FunctionNode *fun_;
   Scope *scope_;
 
-  struct LazyPlaceholderCheck {
-    LazyPlaceholderCheck(TypeSpecifier *spec, TypedefType *placeholder)
-      : spec(spec),
-        placeholder(placeholder)
-    {}
-    TypeSpecifier *spec;
-    TypedefType *placeholder;
-  };
-  Vector<LazyPlaceholderCheck> placeholder_checks_;
+  Vector<EnumConstant *> enum_constant_stack_;
 };
+
+const int TypeResolver::kRankUnvisited = INT_MIN;
 
 bool
 ke::ResolveTypes(CompileContext &cc, TranslationUnit *unit)
@@ -546,5 +960,3 @@ ke::ResolveTypes(CompileContext &cc, TranslationUnit *unit)
 
   return cc.nerrors() == 0;
 }
-
-const int TypeResolver::kRankUnvisited = INT_MIN;

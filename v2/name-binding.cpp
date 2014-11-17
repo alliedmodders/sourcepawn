@@ -136,7 +136,8 @@ class NameResolver : public AstVisitor
      pool_(cc.pool()),
      unit_(unit),
      env_(nullptr),
-     fun_(nullptr)
+     fun_(nullptr),
+     layout_scope_(nullptr)
   {
     atom_String_ = cc_.add("String");
     atom_Float_ = cc_.add("Float");
@@ -217,96 +218,130 @@ class NameResolver : public AstVisitor
     node->setScopes(argEnv.scope()->toFunction(), localEnv.scope());
   }
 
-  void visitLayoutStatement(LayoutStatement *layout) override {
-    Type *type = nullptr;
-    switch (layout->spec()) {
-      case TOK_UNION:
-        type = cc_.types()->newUnion(layout->name());
-        break;
+  void visitLayoutBody(LayoutDecls *body) {
+    for (size_t i = 0; i < body->length(); i++) {
+      LayoutDecl *decl = body->at(i);
+      decl->accept(this);
+    }
+  }
 
-      case TOK_STRUCT:
-        type = cc_.types()->newStruct(layout->name());
-        break;
+ private:
+ public:
+  void visitFieldDecl(FieldDecl *decl) override {
+    visitTypeIfNeeded(decl->spec());
 
-      case TOK_METHODMAP:
-      {
-        // Methodmaps are only allowed in the global scope. They have very odd
-        // semantics (by design, as part of the transitional syntax): they
-        // create an enum, or they extend an existing enum, in any declaration
-        // order.
-        //
-        // If the symbol already exists, it must be a direct enum type. We do
-        // not accept typedefs.
-        if (Symbol *unk_sym = getOrCreateScope()->lookup(layout->name())) {
-          TypeSymbol *sym = unk_sym->asType();
-          if (!sym) {
-            cc_.reportError(layout->loc(), Message_MethodmapOnNonType, unk_sym->name()->chars());
-            break;
-          }
+    if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
+      cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
+                      "field", decl->name()->chars(),
+                      sym->kindName(),
+                      sym->node()->loc().line, sym->node()->loc().col);
+      return;
+    }
 
-          EnumType *enum_type = sym->type()->asEnum();
-          if (!enum_type) {
-            cc_.reportError(layout->loc(), Message_MethodmapOnNonEnum, GetTypeName(sym->type()));
-            break;
-          }
-          if (enum_type->hasMethodmap()) {
-            cc_.reportError(layout->loc(), Message_MethodmapAlreadyDefined, GetTypeName(sym->type()));
-            break;
-          }
+    Atom *name = decl->name();
+    if (!name) {
+      // Originally, SourcePawn had a concept called "funcenums" to work around
+      // the lack of a true top type. They were untagged unions of function
+      // types. Sourceawn 1.7 future-proofed this syntax the best it could by
+      // introducing something we interpret as a "block union". A block union
+      // simply has a list of types, none of them named.
+      layout_scope_->addAnonymousField(decl);
+      return;
+    }
 
-          // We'll actually construct the methodmap later. We don't set |type|,
-          // since the symbol is already declared.
-          enum_type->setHasMethodmap();
-        } else {
-          // Create a placeholder enum type. Note that it was created for a
-          // methodmap, so we don't error out re-declaring it in the enum.
-          type = cc_.types()->newEnum(layout->name());
-          type->toEnum()->setCreatedForMethodmap();
-        }
-        break;
+    FieldSymbol *sym =
+      new (pool_) FieldSymbol(decl, layout_scope_, decl->name());
+    decl->setSymbol(sym);
+    layout_scope_->addSymbol(sym);
+  }
+
+  void visitPropertyDecl(PropertyDecl *decl) override {
+    visitTypeIfNeeded(decl->spec());
+    if (decl->getter()->isFunction())
+      visitFunction(decl->getter()->fun());
+    if (decl->setter()->isFunction())
+      visitFunction(decl->setter()->fun());
+
+    if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
+      cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
+                      "property", decl->name()->chars(),
+                      sym->kindName(),
+                      sym->node()->loc().line, sym->node()->loc().col);
+      return;
+    }
+
+    PropertySymbol *sym =
+      new (pool_) PropertySymbol(decl, layout_scope_, decl->name());
+    decl->setSymbol(sym);
+    layout_scope_->addSymbol(sym);
+  }
+
+  void visitMethodDecl(MethodDecl *decl) override {
+    if (decl->method()->isFunction())
+      visitFunction(decl->method()->fun());
+
+    // Once we support overloading, this will have to change.
+    if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
+      cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
+                      "method", decl->name()->chars(),
+                      sym->kindName(),
+                      sym->node()->loc().line, sym->node()->loc().col);
+      return;
+    }
+
+    MethodSymbol *sym =
+      new (pool_) MethodSymbol(decl, layout_scope_, decl->name());
+    decl->setSymbol(sym);
+    layout_scope_->addSymbol(sym);
+  }
+
+  void visitRecordDecl(RecordDecl *layout) override {
+    TypeSymbol *sym = new (pool_) TypeSymbol(layout, getOrCreateScope(), layout->name());
+    registerSymbol(sym);
+    layout->setSymbol(sym);
+
+    // Record-types cannot nest yet.
+    assert(!layout_scope_);
+    SaveAndSet<LayoutScope *> save(&layout_scope_, LayoutScope::New(pool_));
+
+    // Record types cannot have methods yet, so there is no need to link this
+    // scope into the scope chain.
+    layout->setScope(layout_scope_);
+
+    visitLayoutBody(layout->body());
+
+    if (layout->token() == TOK_UNION) {
+      if (layout_scope_->hasMixedAnonymousFields()) {
+        cc_.reportError(layout->loc(), Message_UnionCannotMixAnonymousFields);
+        return;
       }
-
-      default:
-        assert(false);
+    } else {
+      // Parser should disallow this.
+      assert(!layout_scope_->anonymous_fields());
     }
+  }
 
-    if (type) {
-      TypeSymbol *sym = new (pool_) TypeSymbol(layout, getOrCreateScope(), layout->name(), type);
-      registerSymbol(sym);
-      layout->setSymbol(sym);
-    }
+  void visitMethodmapDecl(MethodmapDecl *methodmap) override {
+    if (methodmap->parent())
+      methodmap->parent()->accept(this);
 
-    // Traverse the layout body.
-    for (size_t i = 0; i < layout->body()->length(); i++) {
-      LayoutEntry *entry = layout->body()->at(i);
-      switch (entry->type()) {
-        case LayoutEntry::Field:
-          visitTypeIfNeeded(entry->spec());
-          break;
+    defineMethodmap(methodmap);
 
-        case LayoutEntry::Accessor:
-          visitTypeIfNeeded(entry->spec());
-          if (entry->getter().isFunction())
-            visitFunction(entry->getter().fun());
-          if (entry->setter().isFunction())
-            visitFunction(entry->setter().fun());
-          break;
+    // Methodmaps cannot be nested anywhere.
+    assert(!layout_scope_);
+    SaveAndSet<LayoutScope *> save(&layout_scope_, LayoutScope::New(pool_));
 
-        case LayoutEntry::Method:
-          if (entry->method().isFunction())
-            visitFunction(entry->method().fun());
-          break;
-      }
-    }
+    // Note that we do not insert the layout scope into the scope chain. For
+    // simplicity SP1 did not, and we can't break that.
+    methodmap->setScope(layout_scope_);
+
+    visitLayoutBody(methodmap->body());
   }
 
   void visitTypedefStatement(TypedefStatement *node) override {
     visitTypeIfNeeded(node->spec());
 
-    // Create a placeholder type; we can't fill it in until later.
-    TypedefType *type = cc_.types()->newTypedef(node->name());
-
-    TypeSymbol *sym = new (pool_) TypeSymbol(node, getOrCreateScope(), node->name(), type);
+    TypeSymbol *sym = new (pool_) TypeSymbol(node, getOrCreateScope(), node->name());
     registerSymbol(sym);
     node->setSymbol(sym);
   }
@@ -331,23 +366,18 @@ class NameResolver : public AstVisitor
   void visitEnumStatement(EnumStatement *node) override {
     Scope *scope = getOrCreateScope();
 
-    Type *type;
+    // Note: we do not let enums override methodmap declarations. Once a
+    // methodmap has been declared, if no enum had been seen, we cannot
+    // add enum values after the fact. This is handled implicitly by
+    // registerSymbol(), and the fact that methodmaps define an enum.
     if (node->name()) {
-      // Note: we do not let enums override methodmap declarations. Once a
-      // methodmap has been declared, if no enum had been seen, we cannot
-      // add enum values after the fact.
-      //
-      // This would not be hard to implement, but it is semantically weird,
-      // and methodmaps and tags are semantically weird enough as it is.
-      type = EnumType::New(node->name());
-
-      TypeSymbol *sym = new (pool_) TypeSymbol(node, scope, node->name(), type);
+      TypeSymbol *sym = new (pool_) TypeSymbol(node, scope, node->name());
       registerSymbol(sym);
       node->setSymbol(sym);
     } else {
-      // We don't give these an anonyous type - it's basically an int list at
-      // this point.
-      type = cc_.types()->getPrimitive(PrimitiveType::Int32);
+      // If the enum does not have a name, we give it an anonymous symbol.
+      Atom *name = cc_.createAnonymousName(node->loc());
+      node->setSymbol(new (pool_) TypeSymbol(node, scope, name));
     }
 
     for (size_t i = 0; i < node->entries()->length(); i++) {
@@ -355,7 +385,7 @@ class NameResolver : public AstVisitor
       if (cn->expression())
         cn->expression()->accept(this);
 
-      ConstantSymbol *cs = new (pool_) ConstantSymbol(cn, scope, cn->name(), type);
+      ConstantSymbol *cs = new (pool_) ConstantSymbol(cn, scope, cn->name());
       registerSymbol(cs);
       cn->setSymbol(cs);
     }
@@ -481,7 +511,7 @@ class NameResolver : public AstVisitor
 
     switch (env_->kind()) {
       case Scope::Block:
-        env_->setScope(LocalScope::New(pool_));
+        env_->setScope(BlockScope::New(pool_));
         break;
       case Scope::Function:
         env_->setScope(FunctionScope::New(pool_));
@@ -722,6 +752,60 @@ class NameResolver : public AstVisitor
     }
   }
 
+  void defineMethodmap(MethodmapDecl *methodmap) {
+    // Methodmaps are only allowed in the global scope. They have very odd
+    // semantics (by design, as part of the transitional syntax): they
+    // create an enum, or they extend an existing enum, in any declaration
+    // order.
+    //
+    // If the symbol already exists, it must be a direct enum type. We do
+    // not accept typedefs.
+    assert(getOrCreateScope() == globals_);
+
+    Symbol *prev = globals_->lookup(methodmap->name());
+    if (!prev) {
+      TypeSymbol *sym = new (pool_) TypeSymbol(methodmap, globals_, methodmap->name());
+      registerSymbol(sym);
+      methodmap->setSymbol(sym);
+      return;
+    }
+
+    TypeSymbol *sym = prev->asType();
+    if (!sym) {
+      cc_.reportError(methodmap->loc(), Message_MethodmapOnNonType, sym->name()->chars());
+      return;
+    }
+
+    // Builtin types do not have AST nodes.
+    if (!sym->node()) {
+      cc_.reportError(methodmap->loc(), Message_MethodmapOnNonEnum, sym->name()->chars());
+      return;
+    }
+
+    EnumStatement *stmt = sym->node()->asEnumStatement();
+    if (!stmt) {
+      if (sym->node()->asMethodmapDecl()) {
+        // We had something like:
+        //   methodmap X {}
+        //   methodmap X {}
+        //
+        // We can give a slightly more specific error for this case.
+        cc_.reportError(methodmap->loc(),
+                        Message_MethodmapAlreadyDefined,
+                        methodmap->name()->chars());
+      } else {
+        cc_.reportError(methodmap->loc(), Message_MethodmapOnNonEnum, sym->name()->chars());
+      }
+      return;
+    }
+
+    // Mark that our enum statement has a methodmap.
+    stmt->setMethodmap(methodmap);
+
+    // Point the layout at the enum type.
+    methodmap->setSymbol(sym);
+  }
+
  private:
   CompileContext &cc_;
   PoolAllocator &pool_;
@@ -729,6 +813,8 @@ class NameResolver : public AstVisitor
   SymbolEnv *env_;
   FunctionLink *fun_;
   GlobalScope *globals_;
+
+  LayoutScope *layout_scope_;
   
   Vector<NameProxy *> unresolved_names_;
 

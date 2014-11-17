@@ -22,43 +22,10 @@
 
 using namespace ke;
 
-Scope::Scope(PoolAllocator &pool, Kind kind, Scope *enclosing)
-  : pool_(pool),
-  kind_(kind),
-  enclosing_(enclosing)
+Scope::Scope(PoolAllocator &pool, Scope *enclosing)
+ : pool_(pool),
+   enclosing_(enclosing)
 {
-}
-
-bool
-Scope::initialize()
-{
-  if (enclosing_ && !enclosing_->children_.append(this))
-    return false;
-  return true;
-}
-
-void
-Scope::unlink()
-{
-  assert(empty());
-
-  assert(enclosing_->children_[enclosing_->children_.length() - 1] == this);
-  enclosing_->children_.pop();
-
-  // OOM here is swallowed and checked after compilation.
-  // :TODO: make the above true.
-  for (size_t i = 0; i < children_.length(); i++)
-    enclosing_->children_.append(children_[i]);
-}
-
-Scope *
-Scope::unlinkIfEmpty()
-{
-  if (empty()) {
-    unlink();
-    return nullptr;
-  }
-  return this;
 }
 
 Symbol *
@@ -71,8 +38,8 @@ Scope::localLookup(Atom * name)
   return nullptr;
 }
 
-Symbol  *
-Scope::lookup(Atom * name)
+Symbol *
+Scope::lookup(Atom *name)
 {
   for (Scope *scope = this; scope; scope = scope->enclosing()) {
     if (Symbol *bound = scope->localLookup(name))
@@ -81,94 +48,69 @@ Scope::lookup(Atom * name)
   return nullptr;
 }
 
-#if 0
-void
-Scope::setUsesLifoHeap()
-{
-  // Only one lifo slot is needed per scope.
-#if 0
-  if (lifoSlot_)
-    return;
-#endif
-
-  // If the parent of this scope is the function scope, then this is the
-  // function's block scope, and the lifo slot is part of the Frame instead.
-  // Note we can get a function scope here if we're making a temporary in a
-  // function with no local variables.
-  if (kind() == Function || enclosing()->kind() == Function)
-    return;
-
-  Local<Type> type(ZONE(), ZONE()->types()->getPrimitive(PrimitiveType_Native));
-  if (!type)
-    return;
-
-  Local<String> name(ZONE());
-#if 0
-  lifoSlot_ = new (pool_) Variable(this, name, SourcePosition());
-  lifoSlot_->setType(type);
-#endif
-}
-#endif
-
 bool
 Scope::addSymbol(Symbol *sym)
 {
   return names_.append(sym);
 }
 
-LocalScope::LocalScope(PoolAllocator &pool)
- : Scope(pool, Scope::Block, nullptr)
+BlockScope::BlockScope(PoolAllocator &pool)
+ : Scope(pool, nullptr)
 {
 }
 
-LocalScope *
-LocalScope::New(PoolAllocator &pool)
+BlockScope *
+BlockScope::New(PoolAllocator &pool)
 {
-  LocalScope *scope = new (pool) LocalScope(pool);
-  if (!scope->initialize())
-    return nullptr;
-
-  return scope;
+  return new (pool) BlockScope(pool);
 }
 
 FunctionScope::FunctionScope(PoolAllocator &pool)
-  : Scope(pool, Scope::Function, nullptr)
+  : Scope(pool, nullptr)
 {
 }
 
 FunctionScope *
 FunctionScope::New(PoolAllocator &pool)
 {
-  FunctionScope *scope = new (pool) FunctionScope(pool);
-  if (!scope->initialize())
-    return nullptr;
-
-  return scope;
+  return new (pool) FunctionScope(pool);
 }
 
 GlobalScope::GlobalScope(PoolAllocator &pool)
-  : Scope(pool, Scope::Global, nullptr)
+ : Scope(pool, nullptr)
 {
 }
 
 GlobalScope *
 GlobalScope::New(PoolAllocator &pool)
 {
-  GlobalScope *scope = new (pool) GlobalScope(pool);
-  if (!scope->initialize())
-    return nullptr;
-
-  return scope;
+  return new (pool) GlobalScope(pool);
 }
 
-#if 0
-Symbol *
-GlobalScope::findExported(Atom * name)
+LayoutScope::LayoutScope(PoolAllocator &pool)
+ : Scope(pool, nullptr),
+   anonymous_fields_(nullptr)
 {
-  for (size_t i = 0; i < exported_.length(); i++) {
-    if (exported_[i]->name() == name)
-      return exported_[i];
-  }
-  return nullptr;
 }
-#endif
+
+LayoutScope *
+LayoutScope::New(PoolAllocator &pool)
+{
+  return new (pool) LayoutScope(pool);
+}
+
+void
+LayoutScope::addAnonymousField(FieldDecl *decl)
+{
+  if (!anonymous_fields_)
+    anonymous_fields_ = new (POOL()) PoolList<FieldDecl *>();
+  anonymous_fields_->append(decl);
+}
+
+bool
+LayoutScope::hasMixedAnonymousFields() const
+{
+  if (!anonymous_fields_)
+    return false;
+  return names_.length() > 0;
+}

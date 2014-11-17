@@ -17,8 +17,11 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "types.h"
 #include "compile-context.h"
+#include "boxed-value.h"
 
 using namespace ke;
+
+Type ke::UnresolvedType(Type::Kind::Unresolved);
 
 Type *
 Type::NewVoid()
@@ -89,9 +92,11 @@ EnumType::New(Atom *name)
 TypedefType *
 TypedefType::New(Atom *name, Type *canonical)
 {
+  assert(canonical);
+
   TypedefType *tdef = new (POOL()) TypedefType(name);
-  if (canonical)
-    tdef->resolve(canonical);
+  tdef->canonical_ = canonical;
+  tdef->actual_ = canonical;
   return tdef;
 }
 
@@ -171,6 +176,8 @@ ke::GetPrimitiveName(PrimitiveType type)
 const char *
 ke::GetTypeName(Type *type)
 {
+  if (type->isUnresolved())
+    return "unresolved";
   if (type->isArray())
     return "array";
   if (type->isFunction() || type->isMetaFunction())
@@ -189,6 +196,8 @@ ke::GetTypeName(Type *type)
 const char *
 ke::GetTypeClassName(Type *type)
 {
+  if (type->isUnresolved())
+    return "unresolved";
   if (type->isArray())
     return "array";
   if (type->isFunction() || type->isMetaFunction())
@@ -196,12 +205,55 @@ ke::GetTypeClassName(Type *type)
   if (type->isVoid())
     return "void";
   if (type->isEnum())
-    return type->toEnum()->name()->chars();
+    return "enum";
   if (type->isUnion())
     return "union";
   if (type->isReference())
     type = type->toReference()->contained();
-  if (type->isUnresolvedTypedef())
-    return "typedef";
   return GetPrimitiveName(type->primitive());
+}
+
+BoxedValue
+ke::DefaultValueForPlainType(Type *type)
+{
+  if (type->isUnresolved())
+    return BoxedValue(IntValue::FromInt32(0));
+  if (type->isEnum())
+    return BoxedValue(IntValue::FromInt32(0));
+  switch (type->primitive()) {
+    case PrimitiveType::Bool:
+      return BoxedValue(false);
+    case PrimitiveType::Char:
+      return BoxedValue(IntValue::FromInt8(0));
+    case PrimitiveType::Int32:
+      return BoxedValue(IntValue::FromInt32(0));
+    case PrimitiveType::Float:
+      return BoxedValue(FloatValue::FromFloat(0));
+  }
+  assert(false);
+}
+
+int32_t
+ke::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
+{
+  if (!aType->isArray()) {
+    cc.reportError(Message_SizeofRequiresArrayType);
+    return 0;
+  }
+
+  ArrayType *type = aType->toArray();
+  for (size_t i = 1; i <= level; i++) {
+    if (!type->contained()->isArray()) {
+      cc.reportError(Message_SizeofHasTooManyDimensions);
+      return 0;
+    }
+    type = type->contained()->toArray();
+  }
+
+  if (!type->hasFixedSize()) {
+    cc.reportError(Message_SizeofWithIndeterminateArray);
+    return 0;
+  }
+
+  return type->fixedSize();
 }

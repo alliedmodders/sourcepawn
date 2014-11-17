@@ -31,11 +31,20 @@ typedef PoolList<Symbol *> SymbolList;
 #define SCOPE_KIND_MAP(_)         \
   _(Global)                       \
   _(Function)                     \
-  _(Block)
+  _(Block)                        \
+  _(Layout)
 
+// Global scope is the scope used for top-level user-defined names.
 class GlobalScope;
+
+// Function scope is used to hold a function's name and arguments.
 class FunctionScope;
+
+// Block scope is used for local variables inside a block or function body.
 class BlockScope;
+
+// Layout scope is used for symbols attached to a layout.
+class LayoutScope;
 
 class Scope : public PoolObject
 {
@@ -47,7 +56,6 @@ class Scope : public PoolObject
   bool empty() const {
     return names_.length() == 0;
   }
-  void unlink();
 
  public:
   enum Kind {
@@ -61,12 +69,10 @@ class Scope : public PoolObject
   };
 
  public:
-  Scope(PoolAllocator &pool, Kind kind, Scope *enclosing);
-  bool initialize();
+  Scope(PoolAllocator &pool, Scope *enclosing);
 
-  Kind kind() const {
-    return kind_;
-  }
+  virtual Kind kind() const = 0;
+
   Scope *enclosing() const {
     return enclosing_;
   }
@@ -88,7 +94,7 @@ class Scope : public PoolObject
 
 #define _(name)                                                               \
   bool is##name() {                                                           \
-    return kind_ == name;                                                     \
+    return kind() == name;                                                    \
   }                                                                           \
   name##Scope *as##name() {                                                   \
     if (is##name())                                                           \
@@ -103,7 +109,6 @@ class Scope : public PoolObject
 #undef _
 
  private:
-  Kind kind_;
   Scope *enclosing_;
 };
 
@@ -112,23 +117,35 @@ class FunctionScope : public Scope
  public:
   static FunctionScope *New(PoolAllocator &pool);
 
+  virtual Kind kind() const override {
+    return Function;
+  }
+
  private:
   FunctionScope(PoolAllocator &pool);
 };
 
-class LocalScope : public Scope
+class BlockScope : public Scope
 {
  public:
-  static LocalScope *New(PoolAllocator &pool);
+  static BlockScope *New(PoolAllocator &pool);
+
+  virtual Kind kind() const override {
+    return Block;
+  }
 
  private:
-  LocalScope(PoolAllocator &pool);
+  BlockScope(PoolAllocator &pool);
 };
 
 class GlobalScope : public Scope
 {
  public:
   static GlobalScope *New(PoolAllocator &pool);
+
+  virtual Kind kind() const override {
+    return Global;
+  }
 
   PoolList<Symbol *> *exported() {
     return &exported_;
@@ -140,6 +157,29 @@ class GlobalScope : public Scope
  private:
   GlobalScope(PoolAllocator &pool);
   PoolList<Symbol *> exported_;
+};
+
+class LayoutScope : public Scope
+{
+  LayoutScope(PoolAllocator &pool);
+
+ public:
+  static LayoutScope *New(PoolAllocator &pool);
+
+  virtual Kind kind() const override {
+    return Layout;
+  }
+
+  bool hasMixedAnonymousFields() const ;
+
+  // Returns null if there are no anonymous fields.
+  PoolList<FieldDecl *> *anonymous_fields() const {
+    return anonymous_fields_;
+  }
+  void addAnonymousField(FieldDecl *decl);
+
+ private:
+  PoolList<FieldDecl *> *anonymous_fields_;
 };
 
 }

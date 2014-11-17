@@ -91,16 +91,16 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, ")");
   }
-  void dump(LayoutEntry *entry, const FunctionOrAlias &method, const char *prefix) {
+  void dump(Atom *name, const FunctionOrAlias &method, const char *prefix) {
     if (prefix)
       fprintf(fp_, "%s method ", prefix);
     else
       fprintf(fp_, "method ");
     if (method.isAlias()) {
-      fprintf(fp_, "%s = %s", entry->name()->chars(), method.alias()->name()->chars());
+      fprintf(fp_, "%s = %s", name->chars(), method.alias()->name()->chars());
     } else {
       FunctionNode *node = method.fun();
-      fprintf(fp_, "%s ", entry->name()->chars());
+      fprintf(fp_, "%s ", name->chars());
       dump(node->signature());
     }
   }
@@ -369,37 +369,61 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "\n");
     unindent();
   }
-  void visitLayoutStatement(LayoutStatement *node) {
+
+  void dumpLayout(LayoutDecls *body) {
+    for (size_t i = 0; i < body->length(); i++)
+      body->at(i)->accept(this);
+  }
+
+  void visitFieldDecl(FieldDecl *decl) override {
+    prefix();
+    fprintf(fp_, "[ FieldDecl ");
+    dump(*decl->spec(), decl->name());
+    fprintf(fp_, "\n");
+  }
+  void visitMethodDecl(MethodDecl *decl) override {
+    prefix();
+    fprintf(fp_, "[ MethodDecl ");
+    dump(decl->name(), *decl->method(), nullptr);
+    fprintf(fp_, "\n");
+  }
+  void visitPropertyDecl(PropertyDecl *decl) override {
+    prefix();
+    fprintf(fp_, "[ PropertyDecl ");
+    indent();
+    if (!decl->getter()->isEmpty()) {
+      prefix();
+      dump(decl->name(), *decl->getter(), "getter");
+      fprintf(fp_, "\n");
+    }
+    if (!decl->setter()->isEmpty()) {
+      prefix();
+      dump(decl->name(), *decl->setter(), "setter");
+      fprintf(fp_, "\n");
+    }
+    unindent();
+  }
+
+  void visitRecordDecl(RecordDecl *node) override {
     prefix();
     fprintf(fp_, "[ LayoutStatement %s %s\n",
-      TokenNames[node->spec()],
+      TokenNames[node->token()],
       node->name()->chars()
     );
     indent();
-    for (size_t i = 0; i < node->body()->length(); i++) {
-      LayoutEntry *entry = node->body()->at(i);
-      prefix();
-      switch (entry->type()) {
-        case LayoutEntry::Field:
-          fprintf(fp_, "field ");
-          dump(*entry->spec(), entry->name());
-          break;
-        case LayoutEntry::Method:
-          dump(entry, entry->method(), nullptr);
-          break;
-        case LayoutEntry::Accessor:
-        {
-          if (!entry->getter().isEmpty())
-            dump(entry, entry->getter(), "getter");
-          if (!entry->setter().isEmpty())
-            dump(entry, entry->setter(), "setter");
-          break;
-        }
-        default:
-          assert(false);
-      }
-      fprintf(fp_, "\n");
-    }
+    dumpLayout(node->body());
+    unindent();
+  }
+  void visitMethodmapDecl(MethodmapDecl *node) {
+    prefix();
+    fprintf(fp_, "[ MethodmapDecl %s", node->name()->chars());
+    if (node->parent())
+      fprintf(fp_, " (extends %s)", node->parent()->name()->chars());
+    if (node->nullable())
+      fprintf(fp_, " (nullable)");
+    fprintf(fp_, "\n");
+    indent();
+    dumpLayout(node->body());
     unindent();
   }
 };

@@ -146,25 +146,30 @@ struct PointerHashPolicy {
   }
 };
 
-class AtomSet : public HashSet<Atom *, PointerHashPolicy<Atom>>
+template <typename T>
+class PointerSet : public HashSet<T *, PointerHashPolicy<T>>
 {
-  typedef HashSet<Atom *, PointerHashPolicy<Atom>> Base;
+  typedef HashSet<T *, PointerHashPolicy<T>> Base;
 
  public:
-  AtomSet() {
+  typedef typename Base::Insert Insert;
+
+  PointerSet() {
     this->init(16);
   }
 
-  void add(Atom *atom) {
-    Insert p = findForAdd(atom);
+  void add(T *ptr) {
+    Insert p = findForAdd(ptr);
     if (!p.found())
-      add(p, atom);
+      add(p, ptr);
   }
 
-  void add(Insert p, Atom *atom) {
-    Base::add(p, atom);
+  void add(Insert p, T *ptr) {
+    Base::add(p, ptr);
   }
 };
+
+typedef PointerSet<Atom> AtomSet;
 
 template <typename T>
 class AtomMap : public HashMap<Atom *, T, PointerHashPolicy<Atom>>

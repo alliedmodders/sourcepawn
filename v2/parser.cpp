@@ -137,6 +137,8 @@ Parser::requireNewlineOrSemi()
 void
 Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
 {
+  spec->setBaseLoc(tok->start);
+
   if (IsNewTypeToken(tok->kind)) {
     spec->setBuiltinType(tok->kind);
     return;
@@ -168,6 +170,9 @@ Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
 void
 Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
 {
+  // Current token is TOK_FUNCTION.
+  spec->setBaseLoc(scanner_.begin());
+
   TypeSpecifier returnType;
   parse_new_type_expr(&returnType, 0);
 
@@ -271,10 +276,11 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
       continue;
     }
 
-    // Allocate a list to store dimension sizes.
     if (!dims) {
+      // Allocate a list to store dimension sizes, populating our previous
+      // indeterminate dimensions with null.
       dims = new (pool_) ExpressionList();
-      for (uint32_t i = 0; i < rank; i++)
+      for (uint32_t i = 0; i < rank - 1; i++)
         dims->append(nullptr);
     }
 
@@ -319,12 +325,17 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
   if (match(TOK_LABEL)) {
     NameProxy *proxy = new (pool_) NameProxy(scanner_.begin(), scanner_.current_name());
     spec->setNamedType(TOK_LABEL, proxy);
+    spec->setBaseLoc(scanner_.begin());
   } else {
     spec->setBuiltinType(TOK_IMPLICIT_INT);
   }
 
   // Look for varargs and end early.
   if ((flags & DeclFlags::Argument) && match(TOK_ELLIPSES)) {
+    // If we just saw "...", make sure we set a base location even though we
+    // never got one.
+    if (spec->resolver() == TOK_IMPLICIT_INT)
+      spec->setBaseLoc(scanner_.begin());
     spec->setVariadic(scanner_.begin());
     return true;
   }
@@ -342,9 +353,12 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
       return false;
 
     decl->name = scanner_.current();
+    spec->setBaseLoc(decl->name.start);
 
     if (match(TOK_LBRACKET))
       parse_old_array_dims(decl, flags);
+  } else {
+    assert(spec->resolver() != TOK_IMPLICIT_INT);
   }
 
   // :TODO: require newdecls
@@ -425,6 +439,9 @@ Parser::parse_decl(Declaration *decl, uint32_t flags)
     // Make sure to save the name token locally first.
     Token name = *scanner_.current();
     if ((flags & DeclFlags::NamedMask) && match(TOK_LBRACKET)) {
+      // Set the base loc early in case we end up not seeing a newdecl.
+      decl->spec.setBaseLoc(name.start);
+
       // Oh no - we have to parse array dims before we ca n tell what kind of
       // declarator this is. It could be either:
       //   "x[] y" (new-style), or
@@ -1076,9 +1093,11 @@ Parser::matchMethodBind()
   return nullptr;
 }
 
-LayoutEntry *
+PropertyDecl *
 Parser::parseAccessor()
 {
+  SourceLocation begin = scanner_.begin();
+
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
@@ -1137,12 +1156,14 @@ Parser::parseAccessor()
     }
   }
 
-  return new (pool_) LayoutEntry(name, spec, getter, setter);
+  return new (pool_) PropertyDecl(begin, name, spec, getter, setter);
 }
 
-LayoutEntry *
+MethodDecl *
 Parser::parseMethod()
 {
+  SourceLocation begin = scanner_.begin();
+
   bool native = match(TOK_NATIVE);
   bool destructor = match(TOK_TILDE);
 
@@ -1153,6 +1174,7 @@ Parser::parseMethod()
     if (!expect(TOK_NAME))
       return nullptr;
     decl.name = *scanner_.current();
+    decl.spec.setBaseLoc(decl.name.start);
   } else {
     if (!parse_decl(&decl, DeclFlags::MaybeFunction))
       return nullptr;
@@ -1165,7 +1187,7 @@ Parser::parseMethod()
     // Build an aliased definition (like "public X() = Y".
     NameProxy *alias = new (pool_) NameProxy(scanner_.begin(), scanner_.current_name());
     requireNewlineOrSemi();
-    return new (pool_) LayoutEntry(decl.name, FunctionOrAlias(alias));
+    return new (pool_) MethodDecl(begin, decl.name, FunctionOrAlias(alias));
   }
 
   ParameterList *params = arguments();
@@ -1185,7 +1207,7 @@ Parser::parseMethod()
     FunctionSignature(decl.spec, params)
   );
 
-  return new (pool_) LayoutEntry(decl.name, FunctionOrAlias(node));
+  return new (pool_) MethodDecl(begin, decl.name, FunctionOrAlias(node));
 }
 
 Statement *
@@ -1206,34 +1228,29 @@ Parser::methodmap(TokenKind kind)
   if (!expect(TOK_LBRACE))
     return nullptr;
 
-  LayoutList *list = new (pool_) LayoutList();
+  LayoutDecls *decls = new (pool_) LayoutDecls();
   while (!match(TOK_RBRACE)) {
-    LayoutEntry *entry = nullptr;
+    LayoutDecl *decl = nullptr;
     if (match(TOK_PUBLIC))
-      entry = parseMethod();
+      decl = parseMethod();
     else if (match(TOK_PROPERTY))
-      entry = parseAccessor();
+      decl = parseAccessor();
     else
       cc_.reportError(scanner_.begin(), Message_ExpectedLayoutMember);
-    if (!entry)
+    if (!decl)
       return nullptr;
 
-    list->append(entry);
+    decls->append(decl);
   }
 
-  LayoutStatement *layout = new (pool_) LayoutStatement(
-    begin,
-    TOK_METHODMAP,
-    name,
-    extends,
-    list
-  );
+  MethodmapDecl *methodmap =
+    new (pool_) MethodmapDecl(begin, name, extends, decls);
 
   if (nullable)
-    layout->setNullable();
+    methodmap->setNullable();
 
   requireNewlineOrSemi();
-  return layout;
+  return methodmap;
 }
 
 Statement *
@@ -1872,25 +1889,28 @@ Parser::struct_(TokenKind kind)
   if (kind == TOK_UNION)
     flags |= DeclFlags::MaybeNamed;
 
-  LayoutList *list = new (pool_) LayoutList();
+  LayoutDecls *decls = new (pool_) LayoutDecls();
   while (!match(TOK_RBRACE)) {
     Declaration decl;
 
     // Structs need a |public| keyword right now.
-    if (kind == TOK_STRUCT)
+    SourceLocation begin;
+    if (kind == TOK_STRUCT) {
       expect(TOK_PUBLIC);
+      begin = scanner_.begin();
+    }
 
     if (!parse_new_decl(&decl, flags))
       return nullptr;
+    if (!begin.isSet())
+      begin = decl.spec.startLoc();
 
-    LayoutEntry *entry = new (pool_) LayoutEntry(decl.name, decl.spec);
-    list->append(entry);
-
+    decls->append(new (pool_) FieldDecl(begin, decl.name, decl.spec));
     requireNewlineOrSemi();
   }
 
   requireNewlineOrSemi();
-  return new (pool_) LayoutStatement(loc, kind, name, nullptr, list);
+  return new (pool_) RecordDecl(loc, kind, name, decls);
 }
 
 Statement *

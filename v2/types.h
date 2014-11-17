@@ -26,6 +26,8 @@
 
 namespace ke {
 
+struct ReportingContext;
+
 enum class PrimitiveType : uint32_t
 {
   // A boolean type semantically represents 0 or 1. As an optimization, its
@@ -33,11 +35,9 @@ enum class PrimitiveType : uint32_t
   // compares positively to "true".
   Bool,
 
-  // A character is an arbitrary 8-bit value. Characters are not supported
-  // as a normal storage class; they may only be used for arrays. When read
-  // from an array, they are immediately sign extended to 32 bits. Integers
-  // stored into an char array are truncated to 8 bits.
-  Char,     // signed, 8-bit character
+  // A char is an 8-bit signed integer that has some extra coercion rules for
+  // legacy code.
+  Char,
 
   // Enumerations and untyped variables are stored as signed, 32-bit integers.
   Int32,
@@ -58,9 +58,6 @@ enum class Qualifiers : uint32_t
 
   // Storage and mutability is constant.
   Const     = 0x1,
-
-  // Storage is constant.
-  ReadOnly  = 0x2
 };
 KE_DEFINE_ENUM_OPERATORS(Qualifiers);
 
@@ -73,16 +70,21 @@ typedef FixedPoolList<Type *> TypeList;
   _(Reference)                  \
   _(Array)                      \
   _(Function)                   \
-  _(Union)
+  _(Union)                      \
+  _(Struct)
 
 #define FORWARD_DECLARE(name) class name##Type;
 TYPE_ENUM_MAP(FORWARD_DECLARE)
 #undef FORWARD_DECLARE
+class RecordType;
 
 class Type : public PoolObject
 {
- protected:
+ public:
   enum class Kind {
+    // A type that could not be resolved.
+    Unresolved,
+
     // A primitive is a plain-old-data type.
     Primitive,
 
@@ -126,7 +128,7 @@ class Type : public PoolObject
 
   void init(Kind kind, Type *root = NULL);
 
- protected:
+ public:
   Type(Kind kind)
    : kind_(kind)
   {
@@ -138,7 +140,7 @@ class Type : public PoolObject
   {
   }
 
- public:   
+ public:
   static Type *NewVoid();
   static Type *NewMetaFunction();
   static Type *NewUnchecked();
@@ -159,16 +161,13 @@ class Type : public PoolObject
   bool isMetaFunction() {
     return canonical()->kind_ == Kind::MetaFunction;
   }
+  bool isUnresolved() {
+    return canonical()->kind_ == Kind::Unresolved;
+  }
 
   // Note that isTypedef() is special in that it does not bypass wrappers.
   bool isTypedef() {
     return kind_ == Kind::Typedef;
-  }
-  bool isUnresolvedTypedef() {
-    return kind_ == Kind::Typedef && canonical_ == this;
-  }
-  bool isResolvedTypedef() {
-    return kind_ == Kind::Typedef && canonical_ != this;
   }
   TypedefType *toTypedef() {
     assert(isTypedef());
@@ -178,10 +177,17 @@ class Type : public PoolObject
   bool canUseInReferenceType() {
     return isPod();
   }
+  bool canBeUsedInConstExpr() {
+    return isPrimitive() || isEnum();
+  }
 
   PrimitiveType primitive() {
     assert(isPrimitive());
     return canonical()->primitive_;
+  }
+
+  bool isConst() {
+    return (qualifiers() & Qualifiers::Const) == Qualifiers::Const;
   }
 
   bool isPod() {
@@ -240,6 +246,20 @@ class Type : public PoolObject
   TYPE_ENUM_MAP(CAST)
 #undef CAST
 
+  // Record type covers multiple types, so we have separate accessors here.
+  bool isRecord() {
+    return isUnion() || isStruct();
+  }
+  RecordType *toRecord() {
+    assert(isRecord());
+    return (RecordType *)this;
+  }
+  RecordType *asRecord() {
+    if (!isRecord())
+      return nullptr;
+    return toRecord();
+  }
+
  protected:
   bool isWrapped() const {
     return canonical_ != this;
@@ -250,7 +270,7 @@ class Type : public PoolObject
   // normalized and without its wrappings.
   Type *canonical() {
     // Keep canonical bits up to date.
-    if (isWrapped() && canonical_->isResolvedTypedef())
+    if (isWrapped() && canonical_->isTypedef())
       normalize();
     return canonical_;
   }
@@ -260,7 +280,7 @@ class Type : public PoolObject
   // been resolved.
   Type *normalized() {
     if (isTypedef()) {
-      if (canonical_->isResolvedTypedef())
+      if (canonical_->isTypedef())
         normalize();
 
       // We might still return a typedef here, for example if we are unresovled
@@ -281,7 +301,7 @@ class Type : public PoolObject
   // If a typedef chain ends in an unresolved typedef, then
   // normalization stops.
   void normalize() {
-    assert(isWrapped() && canonical_->isResolvedTypedef());
+    assert(isWrapped() && canonical_->isTypedef());
     do {
       canonical_ = canonical_->normalized();
 
@@ -301,7 +321,7 @@ class Type : public PoolObject
       kind_ = Kind::Qualifier;
       qualifiers_ |= canonical_->qualifiers_;
       canonical_ = canonical_->canonical_;
-    } while (isWrapped() && canonical_->isResolvedTypedef());
+    } while (isWrapped() && canonical_->isTypedef());
   }
 
  protected:
@@ -319,16 +339,15 @@ class Type : public PoolObject
   Type *canonical_;
 };
 
+class Methodmap;
+
 class EnumType : public Type
 {
   EnumType()
-   : Type(Kind::Enum)
+   : Type(Kind::Enum),
+     methodmap_(nullptr)
   {
-    flags_ = 0;
   }
-
-  static const uint32_t kCreatedForMethodmap = 0x1;
-  static const uint32_t kHasMethodmap = 0x2;
 
  public:
   static EnumType *New(Atom *name);
@@ -337,24 +356,17 @@ class EnumType : public Type
     return name_;
   }
 
-  void setCreatedForMethodmap() {
-    flags_ |= kCreatedForMethodmap|kHasMethodmap;
+  void setMethodmap(Methodmap *methodmap) {
+    assert(!methodmap_);
+    methodmap_ = methodmap;
   }
-  void unsetCreatedForMethodmap() {
-    flags_ &= ~kCreatedForMethodmap;
-  }
-  bool wasCreatedForMethodmap() {
-    return !!(flags_ & kCreatedForMethodmap);
-  }
-  void setHasMethodmap() {
-    flags_ |= kHasMethodmap;
-  }
-  bool hasMethodmap() {
-    return !!(flags_ & kHasMethodmap);
+  Methodmap *methodmap() const {
+    return methodmap_;
   }
 
  private:
   Atom *name_;
+  Methodmap *methodmap_;
 };
 
 class ReferenceType : public Type
@@ -366,7 +378,7 @@ class ReferenceType : public Type
 
  public:
   static ReferenceType *New(Type *contained);
-  
+
   Type *contained() {
     return contained_;
   }
@@ -401,6 +413,8 @@ class ArrayType : public Type
   // compatibility.
   static const int kIndeterminate = -2;
 
+  // Maximum size of an array. We choose this value because we can compute
+  // addresses as multiples of an index without overflowing.
   static ArrayType *New(Type *contained, int elements);
 
   Type *innermost() const {
@@ -444,13 +458,8 @@ class TypedefType : public Type
   {}
 
  public:
-  static TypedefType *New(Atom *name, Type *actual = nullptr);
+  static TypedefType *New(Atom *name, Type *actual);
 
-  void resolve(Type *actual) {
-    assert(isUnresolvedTypedef());
-    canonical_ = actual;
-    actual_ = actual;
-  }
   Atom *name() const {
     return name_;
   }
@@ -485,18 +494,30 @@ class FunctionType : public Type
   FunctionSignature *signature_;
 };
 
-class UnionType : public Type
+class RecordType : public Type
 {
-  UnionType(Atom *atom)
-   : Type(Kind::Union)
-  {}
-
  public:
-  static UnionType *New(Atom *atom);
+  RecordType(Kind kind, Atom *name)
+   : Type(kind),
+     name_(name)
+  {}
 
   Atom *name() const {
     return name_;
   }
+
+ private:
+  Atom *name_;
+};
+
+class UnionType : public RecordType
+{
+  UnionType(Atom *atom)
+   : RecordType(Kind::Union, atom)
+  {}
+
+ public:
+  static UnionType *New(Atom *atom);
 
   void setTypes(TypeList *types) {
     types_ = types;
@@ -506,85 +527,33 @@ class UnionType : public Type
   }
 
  private:
-  Atom *name_;
   TypeList *types_;
 };
 
-class StructType : public Type
+class StructType : public RecordType
 {
   StructType(Atom *atom)
-    : Type(Kind::Struct)
+   : RecordType(Kind::Struct, atom)
   {}
 
  public:
   static StructType *New(Atom *atom);
-
-  Atom *name() const {
-    return name_;
-  }
-
- private:
-  Atom *name_;
 };
 
-class BoxedPrimitive
-{
-  PrimitiveType type_;
-  union {
-    bool b_;
-    int i_;
-    float f_;
-  };
-
- public:
-  static BoxedPrimitive Int(int i) {
-    BoxedPrimitive b;
-    b.type_ = PrimitiveType::Int32;
-    b.i_ = i;
-    return b;
-  }
-  static BoxedPrimitive Float(float f) {
-    BoxedPrimitive b;
-    b.type_ = PrimitiveType::Float;
-    b.f_ = f;
-    return b;
-  }
-  static BoxedPrimitive Bool(bool b) {
-    BoxedPrimitive box;
-    box.type_ = PrimitiveType::Bool;
-    box.b_ = b;
-    return box;
-  }
-
-  PrimitiveType type() const {
-    return type_;
-  }
-  bool isBool() const {
-    return type() == PrimitiveType::Bool;
-  }
-  bool isInt() const {
-    return type() == PrimitiveType::Int32;
-  }
-  bool isFloat() const {
-    return type() == PrimitiveType::Float;
-  }
-  bool toBool() const {
-    assert(isBool());
-    return b_;
-  }
-  int toInt() const {
-    assert(isInt());
-    return i_;
-  }
-  float toFloat() const {
-    assert(isFloat());
-    return f_;
-  }
-};
+// This should probably be in the type manager... but it should never leak past
+// type resolution.
+extern Type UnresolvedType;
 
 const char *GetPrimitiveName(PrimitiveType type);
 const char *GetTypeName(Type *type);
 const char *GetTypeClassName(Type *type);
+
+// Compute the size of a type. It must be an array type, and it must have
+// at least as many levels as specified, and the specified level must be
+// determinate (fixed).
+//
+// On failure, returns 0 and an error will have been reported.
+int32_t ComputeSizeOfType(ReportingContext &cc, Type *type, size_t level);
 
 }
 

@@ -51,7 +51,7 @@ class TypeManager
   Type *newQualified(Type *type, Qualifiers qualifiers);
   UnionType *newUnion(Atom *name);
   StructType *newStruct(Atom *name);
-  TypedefType *newTypedef(Atom *name);
+  TypedefType *newTypedef(Atom *name, Type *actual);
 
  private:
   Type *voidType_;

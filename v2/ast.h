@@ -32,6 +32,7 @@ namespace ke {
 
 class Scope;
 class FunctionScope;
+class LayoutScope;
 
 #define ASTKINDS(_)       \
   _(VariableDeclaration)  \
@@ -65,7 +66,11 @@ class FunctionScope;
   _(ArrayLiteral)         \
   _(TypedefStatement)     \
   _(StructInitializer)    \
-  _(LayoutStatement)      \
+  _(RecordDecl)           \
+  _(MethodmapDecl)        \
+  _(MethodDecl)           \
+  _(PropertyDecl)         \
+  _(FieldDecl)            \
   _(ThisExpression)
 
 // Forward declarations.
@@ -159,7 +164,8 @@ class TypeSpecifier
     ByRef      = 0x04,
     SizedArray = 0x08,
     NewDecl    = 0x10,
-    PostDims   = 0x20
+    PostDims   = 0x20,
+    Resolving  = 0x40
   };
 
  public:
@@ -172,45 +178,15 @@ class TypeSpecifier
     assert(rank_ == 0);
   }
 
-  bool needsBinding() const {
-    switch (resolver()) {
-    case TOK_NAME:
-    case TOK_LABEL:
-    case TOK_FUNCTION:
-      return true;
-    default:
-      return dims() != nullptr;
-    }
+  const SourceLocation &startLoc() const {
+    return start_loc_;
   }
 
-  void setConst(const SourceLocation &loc) {
-    attrs_ |= Const;
-    const_loc_ = loc;
+  void setBaseLoc(const SourceLocation &loc) {
+    setLocation(base_loc_, loc);
   }
-  void setVariadic(const SourceLocation &loc) {
-    attrs_ |= Variadic;
-    variadic_loc_ = loc;
-  }
-  void setByRef(const SourceLocation &loc) {
-    attrs_ |= ByRef;
-    sigil_loc_ = loc;
-  }
-  bool isConst() const {
-    return !!(attrs_ & Const);
-  }
-  bool isByRef() const {
-    return !!(attrs_ & ByRef);
-  }
-  bool isVariadic() const {
-    return !!(attrs_ & Variadic);
-  }
-  const SourceLocation &variadicLoc() const {
-    assert(isVariadic());
-    return variadic_loc_;
-  }
-  const SourceLocation &byRefLoc() const {
-    assert(isByRef());
-    return sigil_loc_;
+  const SourceLocation &baseLoc() const {
+    return base_loc_;
   }
 
   void setBuiltinType(TokenKind kind) {
@@ -225,6 +201,49 @@ class TypeSpecifier
     signature_ = signature;
   }
 
+  bool needsBinding() const {
+    switch (resolver()) {
+    case TOK_NAME:
+    case TOK_LABEL:
+    case TOK_FUNCTION:
+      return true;
+    default:
+      return dims() != nullptr;
+    }
+  }
+
+  void setVariadic(const SourceLocation &loc) {
+    attrs_ |= Variadic;
+    setLocation(variadic_loc_, loc);
+  }
+  bool isVariadic() const {
+    return !!(attrs_ & Variadic);
+  }
+  const SourceLocation &variadicLoc() const {
+    assert(isVariadic());
+    return variadic_loc_;
+  }
+
+  void setConst(const SourceLocation &loc) {
+    attrs_ |= Const;
+    setLocation(const_loc_, loc);
+  }
+  bool isConst() const {
+    return !!(attrs_ & Const);
+  }
+
+  void setByRef(const SourceLocation &loc) {
+    attrs_ |= ByRef;
+    setLocation(sigil_loc_, loc);
+  }
+  bool isByRef() const {
+    return !!(attrs_ & ByRef);
+  }
+  const SourceLocation &byRefLoc() const {
+    assert(isByRef());
+    return sigil_loc_;
+  }
+
   // As a small space-saving optimization, we overlay dims with rank. In many
   // cases the array will have no sized ranks and we'll save allocating a
   // list of nulls - or, in the vast majority of cases - we'll have no arrays
@@ -233,12 +252,14 @@ class TypeSpecifier
     assert(!rank());
     rank_ = aRank;
     sigil_loc_ = sigil;
+    assert(start_loc_.isSet());
   }
   void setDimensionSizes(const SourceLocation &sigil, ExpressionList *dims) {
     assert(!rank());
     dims_ = dims;
     attrs_ |= SizedArray;
     sigil_loc_ = sigil;
+    assert(start_loc_.isSet());
   }
   bool isArray() const {
     return rank() > 0;
@@ -314,13 +335,37 @@ class TypeSpecifier
   }
 
   void setResolved(Type *type) {
+    // We should not overwrite a type, unless it's a placeholder to stop
+    // double-reporting recursive types.
+    assert(!type_ || type_->isUnresolved());
+
+    // We don't care if isResolving() is true, since sometimes we know the type
+    // earlier than resolution. We do unset the resolving bit however.
     type_ = type;
+    attrs_ &= ~Resolving;
   }
   Type *resolved() const {
     return type_;
   }
 
+  // Mark that we're resolving something, so we can detect recursive types.
+  void setResolving() {
+    attrs_ |= Resolving;
+  }
+  bool isResolving() const {
+    return !!(attrs_ & Resolving);
+  }
+
  private:
+  void setLocation(SourceLocation &where, const SourceLocation &loc) {
+    where = loc;
+    if (!start_loc_.isSet())
+      start_loc_ = loc;
+  }
+
+ private:
+  SourceLocation start_loc_;
+  SourceLocation base_loc_;
   SourceLocation const_loc_;
   SourceLocation variadic_loc_;
   SourceLocation sigil_loc_;
@@ -862,6 +907,7 @@ class ForStatement : public Statement
     return scope_;
   }
   void setScope(Scope *scope) {
+    assert(!scope_);
     scope_ = scope;
   }
 };
@@ -1007,6 +1053,7 @@ class BlockStatement : public Statement
     return scope_;
   }
   void setScope(Scope *scope) {
+    assert(!scope_);
     scope_ = scope;
   }
   TokenKind type() const {
@@ -1060,6 +1107,7 @@ class FunctionNode : public PoolObject
     return sym_;
   }
   void setScopes(FunctionScope *funScope, Scope *varScope) {
+    assert(!funScope_ && !varScope_);
     funScope_ = funScope;
     varScope_ = varScope;
   }
@@ -1187,10 +1235,10 @@ class EnumStatement : public Statement
 {
  public:
   EnumStatement(const SourceLocation &pos, Atom *name)
-    : Statement(pos),
-      name_(name),
-      sym_(nullptr),
-      entries_(nullptr)
+   : Statement(pos),
+     name_(name),
+     sym_(nullptr),
+     entries_(nullptr)
   {
   }
 
@@ -1216,10 +1264,18 @@ class EnumStatement : public Statement
     return sym_;
   }
 
+  void setMethodmap(MethodmapDecl *methodmap) {
+    methodmap_ = methodmap;
+  }
+  MethodmapDecl *methodmap() const {
+    return methodmap_;
+  }
+
  private:
   Atom *name_;
   TypeSymbol *sym_;
   EnumConstantList *entries_;
+  MethodmapDecl *methodmap_;
 };
 
 class IncDecExpression : public Expression
@@ -1278,7 +1334,7 @@ class Case : public PoolObject
 
 struct CaseValue
 {
-  BoxedPrimitive box;
+  BoxedValue value;
   size_t statement;
 
   CaseValue(size_t statement)
@@ -1369,98 +1425,199 @@ class FunctionOrAlias
   NameProxy *alias_;
 };
 
-class LayoutEntry : public PoolObject
+class LayoutDecl : public Statement
 {
  public:
-  enum Type {
-    Field,
-    Accessor,
-    Method
-  };
+  LayoutDecl(const SourceLocation &loc)
+   : Statement(loc)
+  {}
+};
 
-  LayoutEntry(const NameToken &name, const TypeSpecifier &spec)
-   : type_(Field),
+class FieldDecl : public LayoutDecl
+{
+ public:
+  FieldDecl(const SourceLocation &loc, const NameToken &name,
+            const TypeSpecifier &spec)
+   : LayoutDecl(loc),
      name_(name),
      spec_(spec)
-  {
-  }
-  LayoutEntry(const NameToken &name, const FunctionOrAlias &method)
-    : type_(Method),
-      name_(name)
-  {
-    *method_.address() = method;
-  }
-  LayoutEntry(const NameToken &name, const TypeSpecifier &spec,
-              const FunctionOrAlias &getter, const FunctionOrAlias &setter)
-   : type_(Accessor),
-     name_(name),
-     spec_(spec),
-     setter_(setter)
-  {
-    *getter_.address() = getter;
-  }
+  {}
 
-  Type type() const {
-    return type_;
-  }
+  DECLARE_NODE(FieldDecl);
+
   Atom *name() const {
     return name_.atom;
   }
   TypeSpecifier *spec() {
-    assert(type() == Field || type() == Accessor);
     return &spec_;
   }
-  const FunctionOrAlias &method() const {
-    assert(type() == Method);
-    return *method_.address();
+
+  void setSymbol(FieldSymbol *sym) {
+    assert(!sym_);
+    sym_ = sym;
   }
-  const FunctionOrAlias &getter() const {
-    assert(type() == Accessor);
-    return *getter_.address();
-  }
-  const FunctionOrAlias &setter() const {
-    assert(type() == Accessor);
-    return setter_;
+  FieldSymbol *sym() const {
+    return sym_;
   }
 
  private:
-  Type type_;
   NameToken name_;
   TypeSpecifier spec_;
-  union {
-    NameProxy *alias_;
-    StorageBuffer<FunctionOrAlias> method_;
-    StorageBuffer<FunctionOrAlias> getter_;
-  };
-  FunctionOrAlias setter_;
+  FieldSymbol *sym_;
 };
 
-typedef PoolList<LayoutEntry *> LayoutList;
-
-class LayoutStatement : public Statement
+class MethodDecl : public LayoutDecl
 {
  public:
-  LayoutStatement(const SourceLocation &loc, TokenKind spec, const NameToken &name, NameProxy *parent, LayoutList *body)
-   : Statement(loc),
+  MethodDecl(const SourceLocation &loc, const NameToken &name,
+             const FunctionOrAlias &method)
+   : LayoutDecl(loc),
      name_(name),
-     spec_(spec),
-     parent_(parent),
-     body_(body),
-     sym_(nullptr),
-     nullable_(spec == TOK_CLASS)
-  {
-  }
+     method_(method),
+     sym_(nullptr)
+  {}
 
-  DECLARE_NODE(LayoutStatement);
+  DECLARE_NODE(MethodDecl);
 
   Atom *name() const {
     return name_.atom;
   }
-  TokenKind spec() const {
-    return spec_;
+  FunctionOrAlias *method() {
+    return &method_;
   }
-  LayoutList *body() const {
+
+  void setSymbol(MethodSymbol *sym) {
+    assert(!sym_);
+    sym_ = sym;
+  }
+  MethodSymbol *sym() const {
+    return sym_;
+  }
+
+ private:
+  NameToken name_;
+  FunctionOrAlias method_;
+  MethodSymbol *sym_;
+};
+
+class PropertyDecl : public LayoutDecl
+{
+ public:
+  PropertyDecl(const SourceLocation &loc, const NameToken &name, const TypeSpecifier &spec,
+               const FunctionOrAlias &getter, const FunctionOrAlias &setter)
+   : LayoutDecl(loc),
+     name_(name),
+     spec_(spec),
+     getter_(getter),
+     setter_(setter),
+     sym_(nullptr)
+  {}
+
+  DECLARE_NODE(PropertyDecl);
+
+  Atom *name() const {
+    return name_.atom;
+  }
+  TypeSpecifier *spec() {
+    return &spec_;
+  }
+  FunctionOrAlias *getter() {
+    return &getter_;
+  }
+  FunctionOrAlias *setter() {
+    return &setter_;
+  }
+
+  void setSymbol(PropertySymbol *sym) {
+    assert(!sym_);
+    sym_ = sym;
+  }
+  PropertySymbol *sym() const {
+    return sym_;
+  }
+
+ private:
+  NameToken name_;
+  TypeSpecifier spec_;
+  FunctionOrAlias getter_;
+  FunctionOrAlias setter_;
+  PropertySymbol *sym_;
+};
+
+typedef PoolList<LayoutDecl *> LayoutDecls;
+
+class RecordDecl : public Statement
+{
+ public:
+  RecordDecl(const SourceLocation &loc, TokenKind token, const NameToken &name, LayoutDecls *body)
+   : Statement(loc),
+     name_(name),
+     token_(token),
+     body_(body),
+     sym_(nullptr),
+     scope_(nullptr)
+  {
+  }
+
+  DECLARE_NODE(RecordDecl);
+
+  Atom *name() const {
+    return name_.atom;
+  }
+  TokenKind token() const {
+    return token_;
+  }
+  LayoutDecls *body() const {
     return body_;
+  }
+
+  void setSymbol(TypeSymbol *sym) {
+    sym_ = sym;
+  }
+  TypeSymbol *sym() const {
+    return sym_;
+  }
+
+  void setScope(LayoutScope *scope) {
+    assert(!scope_);
+    scope_ = scope;
+  }
+  LayoutScope *scope() const {
+    return scope_;
+  }
+
+ private:
+  NameToken name_;
+  TokenKind token_;
+  LayoutDecls *body_;
+  TypeSymbol *sym_;
+  LayoutScope *scope_;
+};
+
+class MethodmapDecl : public Statement
+{
+ public:
+  MethodmapDecl(const SourceLocation &loc, const NameToken &name, NameProxy *parent, LayoutDecls *body)
+   : Statement(loc),
+     name_(name),
+     parent_(parent),
+     body_(body),
+     sym_(nullptr),
+     scope_(nullptr),
+     nullable_(false)
+  {
+  }
+
+  DECLARE_NODE(MethodmapDecl);
+
+  Atom *name() const {
+    return name_.atom;
+  }
+  LayoutDecls *body() const {
+    return body_;
+  }
+  NameProxy *parent() const {
+    return parent_;
   }
   bool nullable() const {
     return nullable_;
@@ -1469,19 +1626,27 @@ class LayoutStatement : public Statement
     nullable_ = true;
   }
 
-  void setSymbol(Symbol *sym) {
+  void setSymbol(TypeSymbol *sym) {
     sym_ = sym;
   }
-  Symbol *sym() const {
+  TypeSymbol *sym() const {
     return sym_;
+  }
+
+  void setScope(LayoutScope *scope) {
+    assert(!scope_);
+    scope_ = scope;
+  }
+  LayoutScope *scope() const {
+    return scope_;
   }
 
  private:
   NameToken name_;
-  TokenKind spec_;
   NameProxy *parent_;
-  LayoutList *body_;
-  Symbol *sym_;
+  LayoutDecls *body_;
+  TypeSymbol *sym_;
+  LayoutScope *scope_;
   bool nullable_;
 };
 

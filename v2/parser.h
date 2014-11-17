@@ -126,8 +126,8 @@ class Parser
   Expression *expression();
 
   bool matchMethodBind();
-  LayoutEntry *parseMethod();
-  LayoutEntry *parseAccessor();
+  MethodDecl *parseMethod();
+  PropertyDecl *parseAccessor();
 
   ParameterList *arguments();
 

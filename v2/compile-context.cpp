@@ -275,12 +275,42 @@ CompileContext::reportErrorVa(const SourceLocation &loc, Message msg, va_list ap
     setOutOfMemory();
 }
 
+static char *
+FormatString(const char *format, ...)
+{
+  va_list ap;
+  va_start(ap, format);
+  char *str = BuildErrorMessage(format, ap);
+  va_end(ap);
+  return str;
+}
+
+Atom *
+CompileContext::createAnonymousName(const SourceLocation &loc)
+{
+  // :TODO: include file name
+  AutoArray<char> message(FormatString("anonymous at %d:%d", loc.line, loc.col));
+  return add(message);
+}
+
 void
 CompileContext::reportError(const SourceLocation &loc, Message msg, ...)
 {
   va_list ap;
   va_start(ap, msg);
   reportErrorVa(loc, msg, ap);
+  va_end(ap);
+}
+
+void
+ReportingContext::reportError(Message msg, ...)
+{
+  if (!should_error_)
+    return;
+
+  va_list ap;
+  va_start(ap, msg);
+  cc_.reportErrorVa(loc_, msg, ap);
   va_end(ap);
 }
 

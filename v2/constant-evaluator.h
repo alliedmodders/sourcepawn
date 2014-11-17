@@ -20,6 +20,7 @@
 #define _include_sp2_constant_evaluator_h_
 
 #include "types.h"
+#include "symbols.h"
 
 namespace ke {
 
@@ -29,13 +30,44 @@ class CompileContext;
 class UnaryExpression;
 class BinaryExpression;
 
+// We generally don't care about the ordering of constants in global scope, so
+// to make sure we resolve things like:
+//     int x[B];
+//     enum { B = 5 };
+// We allow resolution to recursively re-enter the type resolver.
+class ConstantResolver
+{
+ public:
+  virtual Type *resolveTypeOfVar(VariableSymbol *sym) {
+    return sym->type();
+  }
+  virtual bool resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out) {
+    if (!sym->isConstExpr())
+      return false;
+    *out = sym->constExpr();
+    return true;
+  }
+  virtual BoxedValue resolveValueOfConstant(ConstantSymbol *sym) {
+    return sym->value();
+  }
+};
+
 class ConstantEvaluator
 {
  public:
   enum Result {
+    // A constant was evaluated.
     Ok,
+
+    // A type error was reported.
     TypeError,
-    NotConstant
+
+    // The expression is not constant.
+    NotConstant,
+
+    // The expression could not be evaluated because it relies on a symbol
+    // that has not yet been evaluated.
+    Pending
   };
   
   enum Mode {
@@ -43,21 +75,25 @@ class ConstantEvaluator
     Required
   };
 
-  ConstantEvaluator(CompileContext &cc, Scope *scope, Mode mode)
+  ConstantEvaluator(CompileContext &cc, ConstantResolver *resolver, Mode mode)
    : cc_(cc),
-     scope_(scope),
+     resolver_(resolver),
      mode_(mode)
-  {}
+  {
+    if (!resolver_)
+      resolver_ = &default_resolver_;
+  }
 
-  Result Evaluate(Expression *expr, BoxedPrimitive *out);
+  Result Evaluate(Expression *expr, BoxedValue *out);
 
  private:
-  Result unary(UnaryExpression *expr, BoxedPrimitive &inner, BoxedPrimitive *out);
-  Result binary(BinaryExpression *expr, BoxedPrimitive &left, BoxedPrimitive &right, BoxedPrimitive *out);
+  Result unary(UnaryExpression *expr, BoxedValue &inner, BoxedValue *out);
+  Result binary(BinaryExpression *expr, BoxedValue &left, BoxedValue &right, BoxedValue *out);
 
  private:
   CompileContext &cc_;
-  Scope *scope_;
+  ConstantResolver *resolver_;
+  ConstantResolver default_resolver_;
   Mode mode_;
 };
 

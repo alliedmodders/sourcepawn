@@ -250,6 +250,10 @@ struct SourceLocation : public SourcePosition
    : file(nullptr)
   {
   }
+
+  bool isSet() const {
+    return file && line && col;
+  }
 };
 
 struct SourceExtends

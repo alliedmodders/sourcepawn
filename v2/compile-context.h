@@ -184,6 +184,8 @@ class CompileContext
     return searchPaths_[i];
   }
 
+  Atom *createAnonymousName(const SourceLocation &loc);
+
  private:
   bool initKeywords();
   bool defineKeyword(TokenKind tok);
@@ -227,6 +229,23 @@ static inline PoolAllocator &POOL()
 {
   return CurrentCompileContext->pool();
 }
+
+struct ReportingContext
+{
+ public:
+  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError)
+   : cc_(cc),
+     loc_(loc),
+     should_error_(shouldError)
+  {}
+
+  void reportError(Message msg, ...);
+
+ private:
+  CompileContext &cc_;
+  const SourceLocation &loc_;
+  bool should_error_;
+};
 
 } // namespace ke
 

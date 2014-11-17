@@ -22,6 +22,7 @@
 #include "pool-allocator.h"
 #include "types.h"
 #include "label.h"
+#include "boxed-value.h"
 
 namespace ke {
 
@@ -29,14 +30,13 @@ class String;
 class AstNode;
 
 #define SYMBOL_KINDS(_) \
-  /* Any kind of variable or argument produces a VariableSymbol. */ \
-  _(Variable)     \
-  /* A function declaration produces a FunctionSymbol. */ \
-  _(Function)     \
-  /* A named constant produces a ConstantSymbol. */ \
-  _(Constant)     \
-  /* A named type (class struct, typedef, etc) produces a TypeSymbol. */ \
-  _(Type)
+  _(Variable)           \
+  _(Function)           \
+  _(Constant)           \
+  _(Type)               \
+  _(Method)             \
+  _(Field)              \
+  _(Property)
 
 #define _(name)   class name##Symbol;
 SYMBOL_KINDS(_)
@@ -64,6 +64,7 @@ class Symbol : public PoolObject
   }
 
   virtual Kind kind() const = 0;
+  virtual const char *kindName() const = 0;
 
   AstNode *node() const {
     return node_;
@@ -114,6 +115,7 @@ class VariableSymbol : public Symbol
    : Symbol(node, scope, name),
      storage_(Unknown)
   {
+    address_ = 0;
   }
 
   VariableSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
@@ -121,13 +123,21 @@ class VariableSymbol : public Symbol
      storage_(Unknown),
      type_(type)
   {
+    address_ = 0;
+
+    // Opaque == unresolved.
+    constant_.setOpaqueIntptr(0);
   }
 
-  Kind kind() const {
+  Kind kind() const override {
     return kVariable;
   }
+  const char *kindName() const override {
+    return "variable";
+  }
+
   void setType(Type *type) {
-    assert(!type_);
+    assert(!type_ || type_->isUnresolved());
     type_ = type;
   }
   void allocate(Storage storage, intptr_t address) {
@@ -145,24 +155,59 @@ class VariableSymbol : public Symbol
     return type_;
   }
 
+  // This can only be called after name binding.
+  bool isArgument() const;
+
+  // This can only be called after or during type resolution.
+  bool canUseInConstExpr() const;
+
+  // These are filled in during type resolution.
+  bool isConstExpr() const {
+    return !constant_.isOpaque();
+  }
+  const BoxedValue &constExpr() const {
+    assert(isConstExpr());
+    return constant_;
+  }
+  void setConstExpr(const BoxedValue &value) {
+    // We're allowed to overwrite this if the original value was set to stop
+    // infinite recursion, so no assert here.
+    constant_ = value;
+  }
+
+ private:
+  static const int kResolvingConstExpr = 1;
+
+ public:
+  void setResolvingConstExpr() {
+    assert(!isConstExpr());
+    constant_.setOpaqueIntptr(kResolvingConstExpr);
+  }
+  bool isResolvingConstExpr() const {
+    return constant_.isOpaque() && constant_.toOpaqueIntptr() == kResolvingConstExpr;
+  }
+
  private:
   Storage storage_;
   intptr_t address_;
   Type *type_;
+  BoxedValue constant_;
 };
 
 class TypeSymbol : public Symbol
 {
  public:
-  TypeSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
+  TypeSymbol(AstNode *node, Scope *scope, Atom *name, Type *type = nullptr)
    : Symbol(node, scope, name),
      type_(type)
   {
-    assert(type);
   }
 
-  Kind kind() const {
+  Kind kind() const override {
     return kType;
+  }
+  const char *kindName() const override {
+    return "type";
   }
 
   Type *type() const {
@@ -187,9 +232,13 @@ class FunctionSymbol : public Symbol
   {
   }
 
-  Kind kind() const {
+  Kind kind() const override {
     return kFunction;
   }
+  const char *kindName() const override {
+    return "function";
+  }
+
   Label *address() {
     return &address_;
   }
@@ -209,29 +258,79 @@ class FunctionSymbol : public Symbol
 class ConstantSymbol : public Symbol
 {
  public:
-  ConstantSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
-   : Symbol(node, scope, name),
-     type_(type)
+  ConstantSymbol(AstNode *node, Scope *scope, Atom *name)
+   : Symbol(node, scope, name)
   {
+    // Opaque == unresolved.
+    value_.setOpaqueIntptr(0);
   }
-  ConstantSymbol(AstNode *node, Scope *scope, Atom *name, Type *type,
-                 const BoxedPrimitive &prim)
+  ConstantSymbol(AstNode *node, Scope *scope, Atom *name,
+                 Type *type, const BoxedValue &value)
     : Symbol(node, scope, name),
       type_(type),
-      value_(prim)
+      value_(value)
   {
-    type_ = type;
   }
 
-  Kind kind() const {
+  Kind kind() const override {
     return kConstant;
   }
+  const char *kindName() const override {
+    return "constant";
+  }
 
-  const BoxedPrimitive &value() const {
+  Type *type() const {
+    return type_;
+  }
+
+  const BoxedValue &value() const {
+    assert(hasValue());
     return value_;
   }
-  void setValue(const BoxedPrimitive &value) {
+  bool hasValue() const {
+    return !value_.isOpaque();
+  }
+  void setTypeAndValue(Type *type, const BoxedValue &value) {
+    type_ = type;
     value_ = value;
+  }
+
+ private:
+  static const intptr_t kResolving = 1;
+
+ public:
+  void setResolving() {
+    assert(!hasValue() && !isResolving());
+    value_.setOpaqueIntptr(kResolving);
+  }
+  bool isResolving() const {
+    return value_.isOpaque() && value_.toOpaqueIntptr() == kResolving;
+  }
+
+ private:
+  Type *type_;
+  BoxedValue value_;
+};
+
+class FieldSymbol : public Symbol
+{
+ public:
+  FieldSymbol(AstNode *node, Scope *scope, Atom *name)
+   : Symbol(node, scope, name),
+     type_(nullptr)
+  {
+  }
+
+  Kind kind() const override {
+    return kField;
+  }
+  const char *kindName() const override {
+    return "field";
+  }
+
+  void setType(Type *type) {
+    assert(!type_);
+    type_ = type;
   }
   Type *type() const {
     return type_;
@@ -239,7 +338,50 @@ class ConstantSymbol : public Symbol
 
  private:
   Type *type_;
-  BoxedPrimitive value_;
+};
+
+class PropertySymbol : public Symbol
+{
+ public:
+  PropertySymbol(AstNode *node, Scope *scope, Atom *name)
+   : Symbol(node, scope, name),
+     type_(nullptr)
+  {
+  }
+
+  Kind kind() const override {
+    return kProperty;
+  }
+  const char *kindName() const override {
+    return "property";
+  }
+
+  void setType(Type *type) {
+    assert(!type_);
+    type_ = type;
+  }
+  Type *type() const {
+    return type_;
+  }
+
+ private:
+  Type *type_;
+};
+
+class MethodSymbol : public Symbol
+{
+ public:
+  MethodSymbol(AstNode *node, Scope *scope, Atom *name)
+   : Symbol(node, scope, name)
+  {
+  }
+
+  Kind kind() const override {
+    return kMethod;
+  }
+  const char *kindName() const override {
+    return "method";
+  }
 };
 
 }
