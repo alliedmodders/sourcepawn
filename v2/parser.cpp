@@ -144,7 +144,7 @@ Parser::requireNewlineOrSemi()
 void
 Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
 {
-  spec->setBaseLoc(tok->start);
+  spec->setBaseLoc(tok->start.loc);
 
   if (IsNewTypeToken(tok->kind)) {
     spec->setBuiltinType(tok->kind);
@@ -453,7 +453,7 @@ Parser::parse_decl(Declaration *decl, uint32_t flags)
     Token name = *scanner_.current();
     if ((flags & DeclFlags::NamedMask) && match(TOK_LBRACKET)) {
       // Set the base loc early in case we end up not seeing a newdecl.
-      decl->spec.setBaseLoc(name.start);
+      decl->spec.setBaseLoc(name.start.loc);
 
       // Oh no - we have to parse array dims before we ca n tell what kind of
       // declarator this is. It could be either:
@@ -491,19 +491,19 @@ Parser::primitive()
     case TOK_FLOAT_LITERAL:
     {
       Token *tok = scanner_.current();
-      return new (pool_) FloatLiteral(tok->start, tok->doubleValue());
+      return new (pool_) FloatLiteral(scanner_.begin(), tok->doubleValue());
     }
 
     case TOK_HEX_LITERAL:
     {
       Token *tok = scanner_.current();
-      return new (pool_) IntegerLiteral(tok->start, tok->intValue());
+      return new (pool_) IntegerLiteral(scanner_.begin(), tok->intValue());
     }
 
     case TOK_INTEGER_LITERAL:
     {
       Token *tok = scanner_.current();
-      return new (pool_) IntegerLiteral(tok->start, tok->intValue());
+      return new (pool_) IntegerLiteral(scanner_.begin(), tok->intValue());
     }
 
     case TOK_TRUE:

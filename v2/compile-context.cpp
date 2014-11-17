@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "compile-phases.h"
+#include "source-manager.h"
 #include "preprocessor.h"
 #include "parser.h"
 #include <stdio.h>
@@ -82,6 +83,8 @@ CompileContext::CompileContext(int argc, char **argv)
   assert(!CurrentCompileContext);
 
   CurrentCompileContext = this;
+
+  source_ = new SourceManager();
 
   if (argc < 2) {
     fprintf(stdout, "usage: <file>\n");
@@ -286,11 +289,11 @@ CompileContext::reportErrorVa(const SourceLocation &loc, Message msg, va_list ap
   }
 
   CompileError report;
-  report.file = loc.file;
+  report.file = source_->getFile(loc);
   report.type = MessageTypes[Messages[msg].type];
   report.message = message;
-  report.line = loc.line;
-  report.col = loc.col;
+  report.line = source_->getLine(loc);
+  report.col = source_->getCol(loc);
   if (!errors_.append(report))
     setOutOfMemory();
 }
@@ -308,8 +311,11 @@ FormatString(const char *format, ...)
 Atom *
 CompileContext::createAnonymousName(const SourceLocation &loc)
 {
-  // :TODO: include file name
-  AutoArray<char> message(FormatString("anonymous at %d:%d", loc.line, loc.col));
+  // :SRCLOC: include file name
+  AutoArray<char> message(
+      FormatString("anonymous at %d:%d",
+                   source_->getLine(loc),
+                   source_->getCol(loc)));
   return add(message);
 }
 

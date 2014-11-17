@@ -54,7 +54,7 @@ class PreprocessingLexer : public BasicLexer
   TokenKind readUntilName(CompileBuffer &buffer, bool *tokenWasStacked);
 
   // #if, #else, #endif helpers.
-  void pushif(const SourcePosition &pos, IfState state) {
+  void pushif(const SourceLocation &pos, IfState state) {
     ifstack_.append(IfEntry(pos, state));
   }
   void popif() {
@@ -78,7 +78,8 @@ class PreprocessingLexer : public BasicLexer
       ifstack_.back().state = IfReading;
   }
   SourceLocation ifpos() const {
-    return SourceLocation(file(), ifstack_.back().pos);
+    // :SRCLOC:
+    return SourceLocation();
   }
 
   FileContext *file() const {
@@ -102,12 +103,12 @@ class PreprocessingLexer : public BasicLexer
 
  private:
   struct IfEntry {
-    SourcePosition pos;
+    SourceLocation pos;
     IfState state;
     bool got_else;
     IfEntry() : state(IfNone)
     { }
-    IfEntry(const SourcePosition &pos, IfState state)
+    IfEntry(const SourceLocation &pos, IfState state)
       : pos(pos), state(state), got_else(false)
     { }
   };

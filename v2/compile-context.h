@@ -35,6 +35,7 @@ namespace ke {
 
 class ParseTree;
 class GlobalScope;
+class SourceManager;
 
 class FileContext
 {
@@ -156,9 +157,11 @@ class CompileContext
   PoolAllocator &pool() {
     return pool_;
   }
-
   TypeManager *types() {
     return &types_;
+  }
+  SourceManager &source() {
+    return **source_;
   }
 
   // String interning.
@@ -213,6 +216,7 @@ class CompileContext
  private:
   bool outOfMemory_;
   PoolAllocator pool_;
+  AutoPtr<SourceManager> source_;
   Vector<TranslationUnit *> units_;
   Vector<CompileError> errors_;
   KeywordTable keywords_;

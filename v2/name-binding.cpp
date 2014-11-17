@@ -22,6 +22,7 @@
 #include "symbols.h"
 #include "constant-evaluator.h"
 #include "types.h"
+#include "source-manager.h"
 #include <am-hashset.h>
 
 using namespace ke;
@@ -234,7 +235,8 @@ class NameResolver : public AstVisitor
       cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
                       "field", decl->name()->chars(),
                       sym->kindName(),
-                      sym->node()->loc().line, sym->node()->loc().col);
+                      cc_.source().getLine(sym->node()->loc()),
+                      cc_.source().getCol(sym->node()->loc()));
       return;
     }
 
@@ -266,7 +268,8 @@ class NameResolver : public AstVisitor
       cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
                       "property", decl->name()->chars(),
                       sym->kindName(),
-                      sym->node()->loc().line, sym->node()->loc().col);
+                      cc_.source().getLine(sym->node()->loc()),
+                      cc_.source().getCol(sym->node()->loc()));
       return;
     }
 
@@ -285,7 +288,8 @@ class NameResolver : public AstVisitor
       cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
                       "method", decl->name()->chars(),
                       sym->kindName(),
-                      sym->node()->loc().line, sym->node()->loc().col);
+                      cc_.source().getLine(sym->node()->loc()),
+                      cc_.source().getCol(sym->node()->loc()));
       return;
     }
 
@@ -695,18 +699,18 @@ class NameResolver : public AstVisitor
   }
 
   void reportRedeclaration(Symbol *sym, Symbol *other) {
-    if (other->node()->loc().file != sym->node()->loc().file) {
+    if (!cc_.source().sameFiles(sym->node()->loc(), other->node()->loc())) {
       // :TODO: shorten paths.
       cc_.reportError(sym->node()->loc(), Message_RedeclaredNameWithFile,
         sym->name()->chars(),
-        other->node()->loc().file->path(),
-        other->node()->loc().line,
-        other->node()->loc().col);
+        cc_.source().getFile(other->node()->loc())->path(),
+        cc_.source().getLine(other->node()->loc()),
+        cc_.source().getCol(other->node()->loc()));
     } else {
       cc_.reportError(sym->node()->loc(), Message_RedeclaredName,
         sym->name()->chars(),
-        other->node()->loc().line,
-        other->node()->loc().col);
+        cc_.source().getLine(other->node()->loc()),
+        cc_.source().getCol(other->node()->loc()));
     }
   }
 

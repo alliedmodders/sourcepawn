@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <limits.h>
+#include "source-location.h"
 
 namespace ke {
 
@@ -219,55 +220,21 @@ enum TokenKind
   _(M_UNDEF)                                          \
   _(NULLABLE)
 
-struct SourcePosition
+// We need to test whether a token is on the same line fairly often, so
+// instead of relying on the SourceManager we wrap SourceLocation in a struct
+// just for tokens.
+struct TokenPos
 {
-    unsigned line;
-    unsigned col;
+  SourceLocation loc;
+  unsigned line;
 
-    SourcePosition()
-      : line(0),
-        col(0)
-    {
-    }
-
-    SourcePosition(unsigned line, unsigned col)
-      : line(line),
-        col(col)
-    {
-    }
-};
-
-class FileContext;
-
-struct SourceLocation : public SourcePosition
-{
-  FileContext *file;
-
-  SourceLocation(FileContext *file, const SourcePosition &pos)
-   : SourcePosition(pos),
-     file(file)
+  TokenPos()
+    : line(0)
   {
   }
-  SourceLocation()
-   : file(nullptr)
-  {
-  }
-
-  bool isSet() const {
-    return file && line && col;
-  }
-};
-
-struct SourceExtends
-{
-  FileContext *file;
-  SourcePosition start;
-  SourcePosition end;
-
-  SourceExtends(FileContext *file, const SourcePosition &start, const SourcePosition &end)
-   : file(file),
-     start(start),
-     end(end)
+  TokenPos(const SourceLocation &loc, unsigned line)
+   : loc(loc),
+     line(line)
   {
   }
 };
@@ -277,8 +244,8 @@ class Atom;
 struct Token
 {
   TokenKind kind;
-  SourceLocation start;
-  SourceLocation end;
+  TokenPos start;
+  TokenPos end;
 
   void setAtom(Atom *atom) {
     atom_ = atom;
@@ -330,11 +297,11 @@ struct NameToken
    : atom(nullptr)
   { }
   NameToken(const Token *tok)
-   : start(tok->start),
+   : start(tok->start.loc),
      atom(tok->atom())
   { }
   NameToken(const Token &tok)
-   : start(tok.start),
+   : start(tok.start.loc),
      atom(tok.atom())
   {
   }

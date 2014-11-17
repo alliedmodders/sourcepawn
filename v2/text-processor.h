@@ -78,11 +78,13 @@ class TextProcessor
     line_++;
   }
 
-  SourcePosition pos() const {
-    return SourcePosition(line_, pos_ - linebegin_ + 1);
+  SourceLocation pos() const {
+    // :SRCLOC:
+    return SourceLocation();
   }
-  SourcePosition begin() const {
-    return SourcePosition(line_, begin_ - linebegin_ + 1);
+  SourceLocation begin() const {
+    // :SRCLOC:
+    return SourceLocation();
   }
 
   static inline bool IsDigit(char c) {
@@ -204,11 +206,13 @@ class BasicLexer : public TextProcessor
     return file_;
   }
   SourceLocation loc() const {
-    return SourceLocation(file(), pos());
+    // :SRCLOC:
+    return SourceLocation();
   }
   // Beginning source position of the last instruction.
   SourceLocation begin() const {
-    return SourceLocation(file(), TextProcessor::begin());
+    // :SRCLOC:
+    return SourceLocation();
   }
 
  protected:

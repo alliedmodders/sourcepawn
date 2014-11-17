@@ -135,7 +135,7 @@ CommentStripper::strip()
 
       // C-style comments (/* x */)
       if (c == '*') {
-        SourceLocation begin(file_, pos());
+        SourceLocation begin; // :SRCLOC:
         *pos_++ = ' ';
         *pos_++ = ' ';
 
@@ -869,7 +869,7 @@ Preprocessor::directive(TokenKind cmd)
       MacroTable::Insert p = macros_.findForAdd(id);
       if (p.found()) {
         if (p->file) {
-          cc_.reportError(text_->begin(), Message_MacroRedefinition, id->chars(), p->file->path(), p->loc.line);
+          cc_.reportError(text_->begin(), Message_MacroRedefinition, id->chars(), p->file->path(), 0 /* :SRCLOC: */);
         } else {
           cc_.reportError(text_->begin(), Message_BuiltinMacroRedefinition, id->chars());
         }
@@ -902,7 +902,7 @@ Preprocessor::directive(TokenKind cmd)
         return false;
       }
       if (text_->got_else()) {
-        cc_.reportError(text_->begin(), Message_ElseDeclaredTwice, text_->ifpos().line);
+        cc_.reportError(text_->begin(), Message_ElseDeclaredTwice, 0 /* :SRCLOC */);
         return false;
       }
 
@@ -936,7 +936,7 @@ Preprocessor::directive(TokenKind cmd)
 
     case TOK_M_IF:
     {
-      SourcePosition pos = text_->pos();
+      SourceLocation pos = text_->pos();
       int val;
       if (!expr(&val))
         val = 0;
@@ -1080,7 +1080,7 @@ Preprocessor::check_ignored_command(TokenKind cmd)
 
     case TOK_M_ELSE:
       if (text_->got_else())
-        cc_.reportError(text_->begin(), Message_ElseDeclaredTwice, text_->ifpos().line);
+        cc_.reportError(text_->begin(), Message_ElseDeclaredTwice, 0 /* :SRCLOC: */);
       text_->set_in_else();
       break;
   }

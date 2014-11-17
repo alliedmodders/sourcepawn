@@ -56,10 +56,10 @@ class Scanner : public BasicLexer
 
   // Beginning source position of the last instruction.
   SourceLocation begin() {
-    return current()->start;
+    return current()->start.loc;
   }
   SourceLocation end() {
-    return current()->end;
+    return current()->end.loc;
   }
 
   Token *current() {

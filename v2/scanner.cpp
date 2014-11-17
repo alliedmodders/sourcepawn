@@ -22,6 +22,7 @@
 #include <math.h>
 #include <limits.h>
 #include <string.h>
+#include "source-location.h"
 
 using namespace ke;
 
@@ -342,12 +343,12 @@ Scanner::eatWhitespace()
         if (pos_ != linebegin_ + 1) {
           // Fudge up a token since scan() hasn't set everything up yet.
           pos_--;
-          current()->start = SourceLocation(file(), pos());
+          current()->start = TokenPos(SourceLocation(), line_); // :SRCLOC:
           pos_++;
-          current()->end = SourceLocation(file(), pos());
+          current()->end = TokenPos(SourceLocation(), line_); // :SRCLOC:
           current()->kind = TOK_ERROR;
 
-          cc_.reportError(current()->start, Message_UnexpectedCharacter, c, uint8_t(c));
+          cc_.reportError(current()->start.loc, Message_UnexpectedCharacter, c, uint8_t(c));
           return false;
         }
         readDirective();
@@ -376,7 +377,7 @@ Scanner::scan()
     return TOK_ERROR;
   }
 
-  tok->start = SourceLocation(file(), pos());
+  tok->start = TokenPos(SourceLocation(), line_); // :SRCLOC:
 
   char c = read();
   switch (c) {
@@ -556,7 +557,7 @@ Scanner::scan()
       break;
   }
 
-  tok->end = SourceLocation(file(), pos());
+  tok->end = TokenPos(SourceLocation(), line_); // :SRCLOC:
   return tok->kind;
 }
 
@@ -684,6 +685,7 @@ Scanner::peekTokenSameLine()
   // If there's tokens pushed back, then |fline| is the line of the furthest
   // token parsed. If fline == current token's line, we are guaranteed any
   // buffered token is still on the same line.
+  //  :TODO: check file.
   if (depth_ > 0 && current()->end.line == line_)
     return cursorPeek()->kind;
 
