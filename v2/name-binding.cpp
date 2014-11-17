@@ -409,6 +409,9 @@ class NameResolver : public AstVisitor
       fun_->returns(VoidReturn);
     }
   }
+  void visitDeleteStatement(DeleteStatement *node) override {
+    node->expression()->accept(this);
+  }
   void visitForStatement(ForStatement *node) override {
     SymbolEnv env(&env_, Scope::Block);
 

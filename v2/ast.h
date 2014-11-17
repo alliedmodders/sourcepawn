@@ -71,7 +71,8 @@ class LayoutScope;
   _(MethodDecl)           \
   _(PropertyDecl)         \
   _(FieldDecl)            \
-  _(ThisExpression)
+  _(ThisExpression)       \
+  _(DeleteStatement)
 
 // Forward declarations.
 #define _(name) class name;
@@ -1648,6 +1649,24 @@ class MethodmapDecl : public Statement
   TypeSymbol *sym_;
   LayoutScope *scope_;
   bool nullable_;
+};
+
+class DeleteStatement : public Statement
+{
+ public:
+  DeleteStatement(const SourceLocation &pos, Expression *expr)
+   : Statement(pos),
+     expr_(expr)
+  {}
+
+  DECLARE_NODE(DeleteStatement);
+
+  Expression *expression() const {
+    return expr_;
+  }
+
+ private:
+  Expression *expr_;
 };
 
 class TypedefStatement : public Statement

@@ -993,14 +993,17 @@ Parser::ternary()
 
   Expression *left;
   SourceLocation pos = scanner_.begin();
-  AutoAllowTags<false> disableTags(scanner_);
-  {
+  if (match(TOK_LABEL)) {
+    // A ? B:C would normally get evaluated as NAME QMARK LABEL NAME, but we
+    // special case it here so that the LABEL becomes NAME and the colon gets
+    // stolen.
+    left = new (pool_) NameProxy(scanner_.begin(), scanner_.current_name());
+  } else {
     if ((left = expression()) == nullptr)
       return nullptr;
+    if (!expect(TOK_COLON))
+      return nullptr;
   }
-
-  if (!expect(TOK_COLON))
-    return nullptr;
 
   Expression *right = expression();
   if (!right)
@@ -1288,6 +1291,8 @@ Parser::switch_()
   while (!peek(TOK_RBRACE)) {
     Expression *expr = nullptr;
     ExpressionList *others = nullptr;
+
+    bool need_colon = true;
     if (match(TOK_DEFAULT)) {
       if (defaultCase) {
         cc_.reportError(scanner_.begin(), Message_OneDefaultPerSwitch);
@@ -1296,41 +1301,45 @@ Parser::switch_()
 
       defaultPos = scanner_.begin();
     } else {
-      if (defaultCase) {
-        cc_.reportError(defaultPos, Message_DefaultMustBeLastCase);
-        return nullptr;
-      }
-
       if (!expect(TOK_CASE))
         return nullptr;
 
-      // A limitation in the grammar is that |case <NAME>:| will be
-      // detected as a label. We disable tags unless we see an open paren.
-      {
-        Maybe<AutoAllowTags<false>> disable_tags;
-        if (!match(TOK_LPAREN))
-          disable_tags.init(scanner_);
-
+      // A limitation in the grammar is that |case <NAME>:| will be detected as
+      // a label. SP1 has a disable/enable tag option that gets set here and
+      // unset after an open-paren. We could do that, but in general it's risky
+      // since our token buffer could already have buffered a label. Instead,
+      // we special-case a label token.
+      Expression *expr = nullptr;
+      if (match(TOK_LABEL)) {
+        // We assume this is both an identifier and a tag. If there's anything
+        // else after (like a:b) the user will get parse errors.
+        expr = new (pool_) NameProxy(scanner_.begin(), scanner_.current_name());
+        need_colon = false;
+      } else {
         if ((expr = expression()) == nullptr)
           return nullptr;
 
-        if (!disable_tags.initialized())
-          expect(TOK_RPAREN);
-      }
+        if (peek(TOK_COMMA)) {
+          others = new (pool_) ExpressionList();
+          while (need_colon && match(TOK_COMMA)) {
+            if (match(TOK_LABEL)) {
+              NameProxy *proxy =
+                new (pool_) NameProxy(scanner_.begin(), scanner_.current_name());
+              others->append(proxy);
+              need_colon = false;
+              break;
+            }
 
-      if (peek(TOK_COMMA)) {
-        others = new (pool_) ExpressionList();
-        while (match(TOK_COMMA)) {
-          Expression *other = expression();
-          if (!other)
-            return nullptr;
-          if (!others->append(other))
-            return nullptr;
+            Expression *other = expression();
+            if (!other)
+              return nullptr;
+            others->append(other);
+          }
         }
       }
     }
 
-    if (!expect(TOK_COLON))
+    if (need_colon && !expect(TOK_COLON))
       return nullptr;
 
     Statement *stmt = statementOrBlock();
@@ -1483,6 +1492,20 @@ Parser::localVariableDeclaration(TokenKind kind, uint32_t flags)
     return nullptr;
 
   return variable(kind, &decl, flags);
+}
+
+Statement *
+Parser::delete_()
+{
+  // delete ::= "delete" expr
+  SourceLocation pos = scanner_.begin();
+
+  Expression *expr = expression();
+  if (!expr)
+    return nullptr;
+
+  requireTerminator();
+  return new (pool_) DeleteStatement(pos, expr);
 }
 
 Statement *
@@ -1690,6 +1713,9 @@ Parser::statement()
 
     case TOK_IF:
       return if_();
+
+    case TOK_DELETE:
+      return delete_();
 
     default:
       break;

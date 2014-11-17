@@ -50,6 +50,7 @@ namespace ke {
   _(DECL,               "decl")                       \
   _(DEFAULT,            "default")                    \
   _(DEFINED,            "defined")                    \
+  _(DELETE,             "delete")                     \
   _(DO,                 "do")                         \
   _(ELSE,               "else")                       \
   _(ENUM,               "enum")                       \
@@ -169,6 +170,7 @@ enum TokenKind
   _(DECL)                                             \
   _(DEFAULT)                                          \
   _(DEFINED)                                          \
+  _(DELETE)                                           \
   _(DO)                                               \
   _(ELSE)                                             \
   _(ENUM)                                             \

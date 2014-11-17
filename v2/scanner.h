@@ -54,13 +54,6 @@ class Scanner : public BasicLexer
   // Force an older token back into the stream.
   void pushBack(const Token &tok);
 
-  bool tagsEnabled() const {
-    return allowTags_;
-  }
-  void setTagsEnabled(bool enabled) {
-    allowTags_ = enabled;
-  }
-
   // Beginning source position of the last instruction.
   SourceLocation begin() {
     return current()->start;
@@ -117,7 +110,6 @@ class Scanner : public BasicLexer
 
  private:
   TranslationUnit *tu_;
-  bool allowTags_;
 
   size_t cursor_;
   size_t depth_;
@@ -130,25 +122,6 @@ class Scanner : public BasicLexer
   // :TODO: do something with this.
   bool pending_deprecate_;
   AString deprecation_message_;
-};
-
-template <bool Enabled>
-class AutoAllowTags
-{
-  Scanner &scanner_;
-  bool prev_;
-
- public:
-  AutoAllowTags(Scanner &scanner)
-    : scanner_(scanner),
-      prev_(scanner_.tagsEnabled())
-  {
-    scanner_.setTagsEnabled(Enabled);
-  }
-  ~AutoAllowTags()
-  {
-    scanner_.setTagsEnabled(prev_);
-  }
 };
 
 } // namespace ke

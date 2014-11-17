@@ -36,7 +36,6 @@ const char *ke::TokenNames[] =
 Scanner::Scanner(CompileContext &cc, TranslationUnit *tu)
   : BasicLexer(cc, tu, tu->text(), tu->length()),
     tu_(tu),
-    allowTags_(true),
     cursor_(0),
     depth_(0),
     require_semicolons_(false),
@@ -237,7 +236,7 @@ Scanner::identifier(Token *tok, char first)
   if (tok->kind != TOK_NAME)
     return;
 
-  if (allowTags_ && matchChar(':'))
+  if (matchChar(':'))
     tok->kind = TOK_LABEL;
 
   tok->setAtom(BasicLexer::name());

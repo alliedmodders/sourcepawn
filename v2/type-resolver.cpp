@@ -519,6 +519,9 @@ class TypeResolver
     if (node->expression())
       node->expression()->accept(this);
   }
+  void visitDeleteStatement(DeleteStatement *node) override {
+    node->expression()->accept(this);
+  }
   void visitForStatement(ForStatement *node) {
     EnterScope scope(&scope_, node->scope());
 

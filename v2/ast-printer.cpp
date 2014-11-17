@@ -177,6 +177,13 @@ class AstPrinter : public AstVisitor
       node->expression()->accept(this);
     unindent();
   }
+  void visitDeleteStatement(DeleteStatement *node) {
+    prefix();
+    fprintf(fp_, "[ DeleteStatement\n");
+    indent();
+    node->expression()->accept(this);
+    unindent();
+  }
   void visitForStatement(ForStatement *node) {
     prefix();
     fprintf(fp_, "[ ForStatement\n");

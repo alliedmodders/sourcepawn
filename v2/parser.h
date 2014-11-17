@@ -133,6 +133,7 @@ class Parser
 
   Statement *localVariableDeclaration(TokenKind kind, uint32_t flags = 0);
   Statement *methodmap(TokenKind kind);
+  Statement *delete_();
   Statement *switch_();
   Statement *enum_();
   Statement *if_();
