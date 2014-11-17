@@ -1309,7 +1309,6 @@ Parser::switch_()
       // unset after an open-paren. We could do that, but in general it's risky
       // since our token buffer could already have buffered a label. Instead,
       // we special-case a label token.
-      Expression *expr = nullptr;
       if (match(TOK_LABEL)) {
         // We assume this is both an identifier and a tag. If there's anything
         // else after (like a:b) the user will get parse errors.
