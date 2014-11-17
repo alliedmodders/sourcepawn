@@ -243,6 +243,12 @@ Parser::parse_new_decl(Declaration *decl, uint32_t flags)
   parse_new_type_expr(&decl->spec, flags);
 
   if (flags & DeclFlags::NamedMask) {
+    // special case for |typexpr ...|
+    if ((flags & DeclFlags::Argument) && match(TOK_ELLIPSES)) {
+      decl->spec.setVariadic(scanner_.begin());
+      return true;
+    }
+
     bool named = false;
     if (flags & DeclFlags::MaybeNamed) {
       named = match(TOK_NAME);
@@ -437,7 +443,7 @@ Parser::parse_decl(Declaration *decl, uint32_t flags)
 
   // Otherwise, eat a symbol and try to see what's afterit.
   if (match(TOK_NAME)) {
-    if (peek(TOK_NAME) || peek(TOK_AMPERSAND)) {
+    if (peek(TOK_NAME) || peek(TOK_AMPERSAND) || peek(TOK_ELLIPSES)) {
       // This is a new-style declaration. Given the name back to the lexer.
       scanner_.undo();
       return parse_new_decl(decl, flags);
