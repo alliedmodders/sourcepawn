@@ -82,12 +82,12 @@ struct IntValue
   void setUnsigned(uint64_t value, uint32_t bits) {
     uvalue_ = value;
     bits_ = bits;
-    is_signed_ = 1;
+    is_signed_ = 0;
   }
   void setSigned(int64_t value, uint32_t bits) {
     ivalue_ = value;
     bits_ = bits;
-    is_signed_ = 0;
+    is_signed_ = 1;
   }
 
   const char *getTypename() const;
@@ -124,7 +124,7 @@ struct IntValue
       ivalue_ = v;                        \
     else                                  \
       uvalue_ = v;                        \
-    bits_ = sizeof(v);                    \
+    bits_ = sizeof(v) * 8;                \
     is_signed_ = is_signed;               \
   }                                       \
   static IntValue From##pname(tname v) {  \
