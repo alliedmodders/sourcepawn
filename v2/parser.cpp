@@ -102,13 +102,20 @@ Parser::expectName()
 bool
 Parser::requireTerminator()
 {
+  TokenKind tok = scanner_.peekTokenSameLine();
+  if (tok == TOK_SEMICOLON) {
+    scanner_.next();
+    return true;
+  }
+
+  // We always require that the semicolon be on the same line.
   if (scanner_.requireSemicolons())
-    return expect(TOK_SEMICOLON);
-  if (match(TOK_SEMICOLON))
+    cc_.reportError(scanner_.end(), Message_ExpectedSemicolon);
+
+  if (tok == TOK_EOL)
     return true;
-  if (scanner_.peekTokenSameLine() == TOK_EOL)
-    return true;
-  cc_.reportError(scanner_.begin(), Message_ExpectedNewlineOrSemi);
+
+  cc_.reportError(scanner_.end(), Message_ExpectedNewlineOrSemi);
   return false;
 }
 
@@ -118,7 +125,7 @@ Parser::requireNewline()
 {
   if (scanner_.peekTokenSameLine() == TOK_EOL)
     return true;
-  cc_.reportError(scanner_.begin(), Message_ExpectedNewline);
+  cc_.reportError(scanner_.end(), Message_ExpectedNewline);
   return false;
 }
 
@@ -130,7 +137,7 @@ Parser::requireNewlineOrSemi()
     scanner_.next();
   if (scanner_.peekTokenSameLine() == TOK_EOL)
     return true;
-  cc_.reportError(scanner_.begin(), Message_ExpectedNewline);
+  cc_.reportError(scanner_.end(), Message_ExpectedNewline);
   return false;
 }
 

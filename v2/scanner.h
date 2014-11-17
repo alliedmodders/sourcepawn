@@ -65,6 +65,9 @@ class Scanner : public BasicLexer
   SourceLocation begin() {
     return current()->start;
   }
+  SourceLocation end() {
+    return current()->end;
+  }
 
   Token *current() {
     assert(num_tokens_ > 0);

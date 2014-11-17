@@ -95,6 +95,7 @@ MSG(TooMuchIncludeNesting,          SyntaxError,            "too much include ne
 MSG(NoChainedRelationalOps,         SyntaxError,            "chained relational operators are not yet supported")
 MSG(BuiltinMacroRedefinition,       SyntaxError,            "macro '%s' is builtin and can't be redefined")
 MSG(UndefBuiltinMacro,              SyntaxError,            "cannot #undef a builtin macro")
+MSG(ExpectedSemicolon,              SyntaxError,            "expected a semicolon in semicolons-required mode")
 MSG(ExpectedNewlineOrSemi,          SyntaxError,            "expected newline or semicolon")
 MSG(ExpectedNewline,                SyntaxError,            "expected newline")
 MSG(NewDeclsRequired,               SyntaxError,            "new-style declarations are required here")

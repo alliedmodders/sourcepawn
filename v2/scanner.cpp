@@ -296,10 +296,9 @@ Scanner::readDirective()
       break;
 
     case TOK_M_REQUIRE_SEMI:
-      require_semicolons_ = true;
-      break;
     case TOK_M_OPTIONAL_SEMI:
-      require_semicolons_ = false;
+      // We ignore these. Having a reqire mode makes it harder to share code.
+      // We keep the bit though, in case we want to make a lint-ish tool.
       break;
     case TOK_M_REQUIRE_NEWDECLS:
       require_newdecls_ = true;
