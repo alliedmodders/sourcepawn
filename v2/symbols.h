@@ -113,15 +113,8 @@ class VariableSymbol : public Symbol
  public:
   VariableSymbol(AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
-     storage_(Unknown)
-  {
-    address_ = 0;
-  }
-
-  VariableSymbol(AstNode *node, Scope *scope, Atom *name, Type *type)
-   : Symbol(node, scope, name),
      storage_(Unknown),
-     type_(type)
+     type_(nullptr)
   {
     address_ = 0;
 
