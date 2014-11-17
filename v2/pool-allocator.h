@@ -59,6 +59,21 @@ class PoolAllocator
   PoolAllocator();
   ~PoolAllocator();
 
+  void memoryUsage(size_t *allocated, size_t *reserved, size_t *bookkeeping) const {
+    *allocated = 0;
+    *reserved = 0;
+    *bookkeeping = 0;
+    for (Pool *cursor = last_; cursor; cursor = cursor->prev) {
+      *allocated += size_t(cursor->ptr - cursor->base);
+      *reserved += size_t(cursor->end - cursor->base);
+      *bookkeeping += sizeof(Pool);
+    }
+    if (reserved_) {
+      *reserved += size_t(reserved_->end - reserved_->base);
+      *bookkeeping += sizeof(Pool);
+    }
+  }
+
   void *rawAllocate(size_t bytes) {
     // Guarantee malloc alignment.
     size_t actualBytes = Align(bytes, kMallocAlignment);

@@ -109,6 +109,17 @@ CompileContext::~CompileContext()
   CurrentCompileContext = NULL;
 }
 
+static void
+ReportMemory(FILE *fp)
+{
+  size_t allocated, reserved, bookkeeping;
+  POOL().memoryUsage(&allocated, &reserved, &bookkeeping);
+
+  fprintf(fp, " -- %" KE_FMT_SIZET " bytes allocated in pool\n", allocated);
+  fprintf(fp, " -- %" KE_FMT_SIZET " bytes reserved in pool\n", reserved);
+  fprintf(fp, " -- %" KE_FMT_SIZET " bytes used for bookkeeping\n", bookkeeping);
+}
+
 bool
 CompileContext::compile()
 {
@@ -122,11 +133,11 @@ CompileContext::compile()
   Preprocessor pp(*this);
   pp.preprocess(units_[0]);
 
-  printf("-- Preprocessing --\n");
+  fprintf(stderr, "-- Preprocessing --\n");
 
-  puts(units_[0]->text());
+  ReportMemory(stderr);
 
-  printf("-- Parsing --\n");
+  fprintf(stderr, "-- Parsing --\n");
 
   {
     Parser p(*this, units_[0]);
@@ -137,12 +148,21 @@ CompileContext::compile()
     tree->dump(stdout);
   }
 
-  printf("\n-- Name and Type Binding --\n");
+  ReportMemory(stderr);
+
+  fprintf(stderr, "\n-- Name Binding --\n");
 
   if (!ResolveNames(*this, units_[0]))
     return false;
+
+  ReportMemory(stderr);
+
+  fprintf(stderr, "\n-- Type Resolution --\n");
+
   if (!ResolveTypes(*this, units_[0]))
     return false;
+
+  ReportMemory(stderr);
 
   //units_[0]->tree()->dump(stdout);
 
