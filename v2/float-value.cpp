@@ -34,7 +34,7 @@ FloatValue::UpcastForOp(FloatValue *aLeft, FloatValue *aRight)
 FloatValue 
 FloatValue::Add(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return FromDouble(left.toDouble() + right.toDouble());
   return FromFloat(left.toFloat() + right.toFloat());
@@ -43,7 +43,7 @@ FloatValue::Add(const FloatValue &aLeft, const FloatValue &aRight)
 FloatValue 
 FloatValue::Sub(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return FromDouble(left.toDouble() - right.toDouble());
   return FromFloat(left.toFloat() - right.toFloat());
@@ -52,7 +52,7 @@ FloatValue::Sub(const FloatValue &aLeft, const FloatValue &aRight)
 FloatValue
 FloatValue::Mul(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return FromDouble(left.toDouble() * right.toDouble());
   return FromFloat(left.toFloat() * right.toFloat());
@@ -61,7 +61,7 @@ FloatValue::Mul(const FloatValue &aLeft, const FloatValue &aRight)
 FloatValue
 FloatValue::Div(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return FromDouble(left.toDouble() / right.toDouble());
   return FromFloat(left.toFloat() / right.toFloat());
@@ -70,7 +70,7 @@ FloatValue::Div(const FloatValue &aLeft, const FloatValue &aRight)
 FloatValue
 FloatValue::Mod(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return FromDouble(FloatModulo(left.toDouble(), right.toDouble()));
   return FromFloat(FloatModulo(left.toFloat(), right.toFloat()));
@@ -79,7 +79,7 @@ FloatValue::Mod(const FloatValue &aLeft, const FloatValue &aRight)
 bool
 FloatValue::Ge(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return left.toDouble() >= right.toDouble();
   return left.toFloat() >= right.toFloat();
@@ -88,7 +88,7 @@ FloatValue::Ge(const FloatValue &aLeft, const FloatValue &aRight)
 bool
 FloatValue::Gt(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return left.toDouble() > right.toDouble();
   return left.toFloat() > right.toFloat();
@@ -97,7 +97,7 @@ FloatValue::Gt(const FloatValue &aLeft, const FloatValue &aRight)
 bool
 FloatValue::Le(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return left.toDouble() <= right.toDouble();
   return left.toFloat() <= right.toFloat();
@@ -106,7 +106,7 @@ FloatValue::Le(const FloatValue &aLeft, const FloatValue &aRight)
 bool
 FloatValue::Lt(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return left.toDouble() < right.toDouble();
   return left.toFloat() < right.toFloat();
@@ -115,7 +115,7 @@ FloatValue::Lt(const FloatValue &aLeft, const FloatValue &aRight)
 bool
 FloatValue::Eq(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return left.toDouble() == right.toDouble();
   return left.toFloat() == right.toFloat();
@@ -124,7 +124,7 @@ FloatValue::Eq(const FloatValue &aLeft, const FloatValue &aRight)
 bool
 FloatValue::Ne(const FloatValue &aLeft, const FloatValue &aRight)
 {
-  FloatValue left, right;
+  FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
     return left.toDouble() != right.toDouble();
   return left.toFloat() != right.toFloat();

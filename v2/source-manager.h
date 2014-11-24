@@ -20,28 +20,229 @@
 
 #include <am-utility.h>
 #include <am-string.h>
+#include <am-refcounting.h>
+#include <am-vector.h>
+#include <am-fixedarray.h>
 #include "tokens.h"
+#include "macros.h"
 
 namespace ke {
+
+class CompileContext;
+struct ReportingContext;
+class SourceFile;
+
+// We place some kind of reasonable cap on the size of source files. This cap
+// also applies to the offsets we can allocate in the source manager. Capping
+// the maximum amount of sources at INT_MAX places an upper bound on the size
+// of the AST, and in turn, on other data structures as well.
+static const size_t kMaxTotalSourceFileLength = (INT_MAX / 4) - 1;
+
+typedef FixedArray<uint32_t> LineExtents;
+
+class SourceFile : public Refcounted<SourceFile>
+{
+  friend class SourceManager;
+
+  SourceFile(char *chars, uint32_t length, const char *path)
+   : chars_(chars),
+     length_(length),
+     path_(path)
+  {}
+
+ public:
+  const char *chars() const {
+    return chars_;
+  }
+  uint32_t length() const {
+    return length_;
+  }
+  const char *path() const {
+    return path_.chars();
+  }
+
+  LineExtents *lineCache() {
+    return line_cache_;
+  }
+  void computeLineCache();
+
+ protected:
+  AutoArray<char> chars_;
+  uint32_t length_;
+  AutoPtr<LineExtents> line_cache_;
+  AString path_;
+};
+
+struct FullSourceRef
+{
+  Ref<SourceFile> source;
+  unsigned line;
+  unsigned col;
+
+  FullSourceRef()
+   : line(0),
+     col(0)
+  {}
+  FullSourceRef(SourceFile *buffer, unsigned line, unsigned col)
+   : source(buffer),
+     line(line),
+     col(col)
+  {}
+};
+
+// An LREntry is created each time we register a range of locations (it is
+// short for LocationRangeEntry). For a file, an LREntry covers each character
+// in the file, including a position for EOF. For macros, it covers the number
+// of characters in its token stream, with a position for EOF.
+//
+// LREntries are allocated by calling trackFile() or trackMacro() in the
+// SourceManager.
+//
+// LREntries are not malloc'd, so references must not be held past calls to
+// trackFile() or trackMacro().
+struct LREntry
+{
+  // Starting id for this source range.
+  uint32_t id;
+
+ private:
+  // If we're creating a range from an #include, this is the location in the
+  // parent file we were #included from, if any.
+  //
+  // If we're creating a range for macro insertion, this is where we started
+  // inserting tokens.
+  SourceLocation parent;
+
+  // If we included from a file, this is where we included.
+  Ref<SourceFile> file;
+
+  // If we included from a macro, this is is the macro definition.
+  Macro *macro;
+
+ public:
+  bool isFile() const {
+    return !macro;
+  }
+  bool isMacro() const {
+    return !!macro;
+  }
+  bool valid() const {
+    return id != 0;
+  }
+
+  void init(const SourceLocation &parent, SourceFile *file) {
+    this->parent = parent;
+    this->file = file;
+  }
+  void init(const SourceLocation &parent, Macro *macro) {
+    this->parent = parent;
+    this->macro = macro;
+  }
+
+  SourceFile *getFile() const {
+    assert(isFile());
+    return *file;
+  }
+  Macro *getMacro() const {
+    assert(isMacro());
+    return macro;
+  }
+  const SourceLocation &getParent() const {
+    return parent;
+  }
+
+  LREntry()
+   : id(0),
+     macro(nullptr)
+  {}
+
+  uint32_t length() const {
+    return isFile() ? file->length() : macro->length();
+  }
+
+  bool owns(const SourceLocation &loc) const {
+    if (loc.offset() >= id && loc.offset() <= id + length()) {
+      assert(isMacro() == loc.isInMacro());
+      return true;
+    }
+    return false;
+  }
+
+  SourceLocation filePos(uint32_t offset) const {
+    assert(isFile());
+    assert(offset <= file->length());
+    return SourceLocation::FromFile(id, offset);
+  }
+  SourceLocation macroPos(uint32_t offset) const {
+    assert(isMacro());
+    assert(offset <= macro->length());
+    return SourceLocation::FromMacro(id, offset);
+  }
+};
 
 class SourceManager
 {
  public:
+  SourceManager(CompileContext &cc);
+
+  PassRef<SourceFile> open(ReportingContext &cc, const char *path);
+
   // Returns whether two source locations ultimately originate from the same
   // file (i.e., ignoring macros).
-  bool sameFiles(const SourceLocation &a, const SourceLocation &b) {
-    return false;
-  }
+  bool sameFiles(const SourceLocation &a, const SourceLocation &b);
 
-  FileContext *getFile(const SourceLocation &loc) {
-    return nullptr;
-  }
-  unsigned getLine(const SourceLocation &loc) {
-    return 1;
-  }
-  unsigned getCol(const SourceLocation &loc) {
-    return 0;
-  }
+  // Returns whether two source locations are in the same token buffer.
+  bool sameSourceId(const SourceLocation &a, const SourceLocation &b);
+
+  // Returns whether two locations were inserted from the same line.
+  bool areLocationsInsertedOnSameLine(const SourceLocation &a, const SourceLocation &b);
+
+  // Create a location tracker for a file. If out of bits, returns an invalid
+  // tracker and reports an error;
+  LREntry trackFile(const SourceLocation &from, Ref<SourceFile> file);
+
+  // Create a location tracker for a macro. If out of bits, returns an invalid
+  // tracker and reports an error;
+  LREntry trackMacro(const SourceLocation &from, Macro *macro);
+
+  // Computing a full source location is mildly expensive - moreso when done
+  // in components below. It requires an O(log n) binary search where n is
+  // the number of lines in the file and number of files.
+  FullSourceRef decode(const SourceLocation &loc);
+
+  // These will be removed once we overhaul error reporting.
+  PassRef<SourceFile> getSource(const SourceLocation &loc);
+  unsigned getLine(const SourceLocation &loc);
+  unsigned getCol(const SourceLocation &loc);
+
+ private:
+  unsigned getLine(const LREntry &range, const SourceLocation &loc);
+
+ private:
+  bool trackExtents(uint32_t length, size_t *index);
+
+  // Find the LREntry for a source location.
+  bool findLocation(const SourceLocation &loc, size_t *index);
+
+  // Normalizes a macro SourceLocation to its first insertion point. For a
+  // file, this returns the file. For a macro, it finds the nearest file that
+  // caused the macro to expand.
+  SourceLocation normalize(const SourceLocation &loc);
+
+  unsigned getCol(const SourceLocation &loc, unsigned line);
+
+ private:
+  CompileContext &cc_;
+  AtomMap<Ref<SourceFile>> file_cache_;
+  Vector<LREntry> locations_;
+
+  // Source ids start from 1. The source file id is 1 + len(source) + 1. This
+  // lets us store source locations as a single integer, as we can always
+  // bisect to a particular file, and from there, to a line number and column.
+  uint32_t next_source_id_;
+
+  // One-entry caches. This one is for getSource().
+  uint32_t last_lookup_;
 };
 
 }

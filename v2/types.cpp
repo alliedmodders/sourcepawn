@@ -231,6 +231,7 @@ ke::DefaultValueForPlainType(Type *type)
       return BoxedValue(FloatValue::FromFloat(0));
   }
   assert(false);
+  return BoxedValue(IntValue::FromInt32(0));
 }
 
 int32_t

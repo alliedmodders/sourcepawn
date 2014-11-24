@@ -22,6 +22,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <limits.h>
+#include <stddef.h>
+#include <string.h>
 #include "source-location.h"
 
 namespace ke {
@@ -147,11 +149,13 @@ namespace ke {
   _(QMARK,              "?")                          \
   _(COLON,              ":")                          \
   _(DOT,                ".")                          \
+  _(UNKNOWN,            "<unknown>")                  \
   _(NEWLINE,            "<newline>")                  \
   _(IMPLICIT_INT,       "<implicit-integer>")         \
   /* Mists of dreams drip along the nascent echo, and love no more. */ \
   _(EOL,                "<end-of-line>")              \
-  _(EOF,                "<end-of-file>")
+  _(EOF,                "<end-of-file>")              \
+  _(COMMENT,            "<comment>")
 
 enum TokenKind
 {
@@ -220,9 +224,9 @@ enum TokenKind
   _(M_UNDEF)                                          \
   _(NULLABLE)
 
-// We need to test whether a token is on the same line fairly often, so
-// instead of relying on the SourceManager we wrap SourceLocation in a struct
-// just for tokens.
+// We need to test line positions very frequently during lexing. Rather than
+// rely on SourceManager, which has to do a binary search, we track the line
+// explicitly for raw Tokens. Raw tokens should not be added to the AST.
 struct TokenPos
 {
   SourceLocation loc;
@@ -246,45 +250,64 @@ struct Token
   TokenKind kind;
   TokenPos start;
   TokenPos end;
+  uint32_t source_id; // Tokens always begin and end in the same source id.
+
+  Token()
+   : kind(TOK_NONE),
+     source_id(0)
+  {
+  }
+  Token(TokenKind kind)
+   : kind(kind),
+     source_id(0)
+  {}
+
+  void init(const TokenPos &startPos, uint32_t sourceId) {
+    start = startPos;
+    source_id = sourceId;
+    memset(&u, sizeof(u), 0);
+  }
 
   void setAtom(Atom *atom) {
-    atom_ = atom;
+    u.atom_ = atom;
   }
   Atom *atom() const {
-    assert(atom_);
-    return atom_;
+    assert(u.atom_);
+    return u.atom_;
   }
   void setCharValue(int32_t value) {
     assert(kind == TOK_CHAR_LITERAL);
-    int_value_ = value;
+    u.int_value_ = value;
   }
   int32_t charValue() const {
     assert(kind == TOK_CHAR_LITERAL);
-    return int32_t(int_value_);
+    return int32_t(u.int_value_);
   }
   void setIntValue(int64_t value) {
-    int_value_ = value;
+    u.int_value_ = value;
   }
-  int64_t intValue() const {
+  int64_t int64Value() const {
     assert(kind == TOK_INTEGER_LITERAL || kind == TOK_HEX_LITERAL);
-    return int_value_;
+    return u.int_value_;
   }
   int32_t int32Value() const {
-    assert(intValue() <= int64_t(INT_MAX));
-    return (int32_t)int_value_;
+    assert(int64Value() <= INT_MAX && int64Value() >= INT_MIN);
+    return (int32_t)int64Value();
   }
   void setDoubleValue(double value) {
-    double_value_ = value;
+    u.double_value_ = value;
   }
   double doubleValue() const {
     assert(kind == TOK_FLOAT_LITERAL);
-    return double_value_;
+    return u.double_value_;
   }
 
  private:
-  Atom *atom_;
-  int64_t int_value_;
-  double double_value_;
+  union {
+    Atom *atom_;
+    int64_t int_value_;
+    double double_value_;
+  } u;
 };
 
 // Lighter-weight token object for names only.
@@ -353,6 +376,120 @@ enum Operator {
   OPERATOR_MAP(_)
 #undef _
   Operators_Total
+};
+
+// Positions for comments.
+enum class CommentPos
+{
+  // No tokens on the same line.
+  Front,
+
+  // After a token, starting on the same line.
+  Tail
+};
+
+class TokenRing
+{
+ public:
+  TokenRing()
+   : depth_(0),
+     cursor_(0),
+     num_tokens_(0)
+  {}
+
+  void reset() {
+    depth_ = 0;
+    cursor_ = 0;
+    num_tokens_ = 0;
+  }
+
+  size_t numTokens() const {
+    return num_tokens_;
+  }
+
+  // Get the most recent token that has been lexed or popped.
+  Token *current() {
+    assert(num_tokens_ > 0);
+    return &tokens_[cursor_];
+  }
+
+  // Move to and return the next token pointer to lex into.
+  Token *moveNext() {
+    assert(depth_ == 0);
+    num_tokens_++;
+    if (++cursor_ == kMaxLookahead)
+      cursor_ = 0;
+    return current();
+  }
+
+  bool pushed() const {
+    return depth_ > 0;
+  }
+
+  // Peek at the most recently buffered token.
+  Token *peek() {
+    assert(depth_ > 0);
+    size_t cursor = cursor_ + 1;
+    if (cursor == kMaxLookahead)
+      cursor = 0;
+    return &tokens_[cursor];
+  }
+
+  // Unbuffers one buffered token, and returns it. If no token could be
+  // unbuffered, returns null.
+  Token *maybePop() {
+    if (depth_ == 0)
+      return nullptr;
+    return pop();
+  }
+
+  // Unbuffers one buffered token, and returns it.
+  Token *pop() {
+    assert(depth_ > 0);
+    depth_--;
+    cursor_++;
+    if (cursor_ == kMaxLookahead)
+      cursor_ = 0;
+    return current();
+  }
+
+  // Mark the most recently lexed token as unlexed, so that it will be returned
+  // by the next call to peek(), or skipped by the next call to pop().
+  void push() {
+    assert(depth_ < kMaxLookahead);
+    depth_++;
+    movePrev();
+    assert(depth_ <= num_tokens_);
+  }
+
+  // This function destroys the potential lookahead buffer by injecting a token
+  // that will be seen by the following call to peek(). Calls to push() are
+  // preserved, but further calls to push() will not be able to look past the
+  // injected token.
+  void inject(const Token &tok) {
+    if (depth_ == 0)
+      *moveNext() = tok;
+    else
+      *current() = tok;
+    push();
+  }
+
+ private:
+  // Move the cursor to the previous token slot.
+  void movePrev() {
+    if (cursor_ == 0)
+      cursor_ = kMaxLookahead - 1;
+    else
+      cursor_--;
+  }
+
+ private:
+  static const size_t kMaxLookahead = 4;
+
+  Token tokens_[kMaxLookahead];
+  size_t depth_;
+  size_t cursor_;
+  size_t num_tokens_;
 };
 
 extern const char *TokenNames[];

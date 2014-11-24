@@ -18,16 +18,16 @@
 #include <string.h>
 #include "string-pool.h"
 #include "parser.h"
+#include "preprocessor.h"
 
 using namespace ke;
 
-Parser::Parser(CompileContext &cc, TranslationUnit *tu)
+Parser::Parser(CompileContext &cc, Preprocessor &pp, const CompileOptions &options)
 : cc_(cc),
   pool_(cc_.pool()),
-  tu_(tu),
-  scanner_(cc, tu),
-  allowDeclarations_(true),
-  allowSingleLineFunctions_(true)
+  scanner_(pp),
+  options_(options),
+  allowDeclarations_(true)
 {
   atom_Float_ = cc_.add("Float");
   atom_String_ = cc_.add("String");
@@ -43,20 +43,13 @@ Parser::peek(TokenKind kind)
 bool
 Parser::match(TokenKind kind)
 {
-  if (scanner_.next() == kind)
-    return true;
-  scanner_.undo();
-  return false;
+  return scanner_.match(kind);
 }
 
 bool
 Parser::expect(TokenKind kind)
 {
-  TokenKind got = scanner_.next();
-  if (got == kind)
-    return true;
-  cc_.reportError(scanner_.begin(), Message_WrongToken, TokenNames[kind], TokenNames[got]);
-  return false;
+  return scanner_.expect(kind);
 }
 
 bool
@@ -109,7 +102,7 @@ Parser::requireTerminator()
   }
 
   // We always require that the semicolon be on the same line.
-  if (scanner_.requireSemicolons())
+  if (options_.RequireSemicolons)
     cc_.reportError(scanner_.end(), Message_ExpectedSemicolon);
 
   if (tok == TOK_EOL)
@@ -355,7 +348,7 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
 
   if (flags & DeclFlags::NamedMask) {
     // If this is label-less, check for something like "new int x".
-    if (!peek(TOK_NAME)) {
+    if (!peek(TOK_NAME) && (flags & (DeclFlags::Variable|DeclFlags::Argument))) {
       TokenKind kind = scanner_.next();
       if (IsNewTypeToken(kind))
         cc_.reportError(scanner_.begin(), Message_NewStyleBadKeyword);
@@ -465,7 +458,7 @@ Parser::parse_decl(Declaration *decl, uint32_t flags)
         // This must be a newdecl, "x[] y" or "x[] &y", the latter of which
         // is illegal, but we flow it through the right path anyway.
         decl->spec.unsetHasPostDims();
-        scanner_.pushBack(name);
+        scanner_.injectBack(name);
         return parse_new_decl(decl, flags);
       }
 
@@ -490,20 +483,20 @@ Parser::primitive()
   switch (scanner_.next()) {
     case TOK_FLOAT_LITERAL:
     {
-      Token *tok = scanner_.current();
+      const Token *tok = scanner_.current();
       return new (pool_) FloatLiteral(scanner_.begin(), tok->doubleValue());
     }
 
     case TOK_HEX_LITERAL:
     {
-      Token *tok = scanner_.current();
-      return new (pool_) IntegerLiteral(scanner_.begin(), tok->intValue());
+      const Token *tok = scanner_.current();
+      return new (pool_) IntegerLiteral(scanner_.begin(), tok->int64Value());
     }
 
     case TOK_INTEGER_LITERAL:
     {
-      Token *tok = scanner_.current();
-      return new (pool_) IntegerLiteral(scanner_.begin(), tok->intValue());
+      const Token *tok = scanner_.current();
+      return new (pool_) IntegerLiteral(scanner_.begin(), tok->int64Value());
     }
 
     case TOK_TRUE:
@@ -519,7 +512,7 @@ Parser::primitive()
 
     case TOK_CHAR_LITERAL:
     {
-      Token *tok = scanner_.current();
+      const Token *tok = scanner_.current();
       return new (pool_) CharLiteral(scanner_.begin(), tok->charValue());
     }
 
@@ -547,7 +540,7 @@ Parser::parseStructInitializer(const SourceLocation &pos)
   while (!match(TOK_RBRACE)) {
     if (!expect(TOK_NAME))
       return nullptr;
-    Token name = *scanner_.current();
+    const Token name = *scanner_.current();
 
     if (!match(TOK_ASSIGN))
       return nullptr;
@@ -622,10 +615,10 @@ Parser::prefix()
 
     default:
     {
-      if (IsNewTypeToken(scanner_.current()->kind)) {
+      const Token *tok = scanner_.current();
+      if (IsNewTypeToken(tok->kind)) {
         // Treat the type as a name, even though it's a keyword.
-        Atom *atom = cc_.add(scanner_.literal());
-        return new (pool_) NameProxy(scanner_.begin(), atom);
+        return new (pool_) NameProxy(tok->start.loc, tok->atom());
       }
 
       scanner_.undo();

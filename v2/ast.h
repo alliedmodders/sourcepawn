@@ -376,10 +376,11 @@ class TypeSpecifier
     ExpressionList *dims_;
   };
   TokenKind resolver_;
-  union {
+  /*union {*/
     NameProxy *proxy_;
     FunctionSignature *signature_;
-  };
+    uint32_t dummy_;
+  //};
   Type *type_;
 };
 

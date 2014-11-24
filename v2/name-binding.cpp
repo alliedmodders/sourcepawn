@@ -699,6 +699,8 @@ class NameResolver : public AstVisitor
   }
 
   void reportRedeclaration(Symbol *sym, Symbol *other) {
+    // :SRCLOC:
+#if 0
     if (!cc_.source().sameFiles(sym->node()->loc(), other->node()->loc())) {
       // :TODO: shorten paths.
       cc_.reportError(sym->node()->loc(), Message_RedeclaredNameWithFile,
@@ -712,6 +714,7 @@ class NameResolver : public AstVisitor
         cc_.source().getLine(other->node()->loc()),
         cc_.source().getCol(other->node()->loc()));
     }
+#endif
   }
 
   void registerArguments(FunctionSignature *sig) {

@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "compile-context.h"
+#include "source-manager.h"
 
 using namespace ke;
 
@@ -32,7 +33,14 @@ int main(int argc, char **argv)
     }
     for (size_t i = 0; i < cc.nerrors(); i++) {
       const CompileError &e = cc.getError(i);
-      fprintf(stderr, "%s: %s error (line %d, col %d): %s\n", e.file->path(), e.type, e.line, e.col, e.message);
+      Ref<SourceFile> file = cc.source().getSource(e.loc);
+      unsigned line = cc.source().getLine(e.loc);
+      unsigned col = cc.source().getCol(e.loc);
+      fprintf(stderr, "%s error (line %d, col %d): %s\n",
+              file->path(),
+              line,
+              col,
+              e.message);
     }
     return 1;
   }

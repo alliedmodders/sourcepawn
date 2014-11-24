@@ -1,196 +1,216 @@
-/* vim: set ts=2 sw=2 tw=99 et:
- *
- * Copyright (C) 2012 David Anderson
- *
- * This file is part of SourcePawn.
- *
- * SourcePawn is free software: you can redistribute it and/or modify it under
- * the terms of the GNU General Public License as published by the Free
- * Software Foundation, either version 3 of the License, or (at your option)
- * any later version.
- * 
- * SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * SourcePawn. If not, see http://www.gnu.org/licenses/.
- */
-#ifndef _include_sourcepawn_preprocessor_h_
-#define _include_sourcepawn_preprocessor_h_
+// vim: set ts=2 sw=2 tw=99 et:
+// 
+// Copyright (C) 2012 David Anderson
+// 
+// This file is part of SourcePawn.
+// 
+// SourcePawn is free software: you can redistribute it and/or modify it under
+// the terms of the GNU General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option)
+// any later version.
+// 
+// SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+#ifndef _include_spcomp_preprocessor_h_
+#define _include_spcomp_preprocessor_h_
 
 #include "compile-context.h"
-#include "compile-buffer.h"
-#include "text-processor.h"
-#include "auto-string.h"
+#include "keyword-table.h"
+#include "lexer.h"
+#include "macro-lexer.h"
+#include "process-options.h"
+#include "pool-allocator.h"
 
 namespace ke {
 
-enum IfState {
-  IfNone,
-  IfReading,      // "true" section of an #if/#else chain
-  IfIgnoring,     // "false" section of an #if/#else chain
-  IfMustIgnore,   // "true" already seen, so always ignore.
-};
-
-class PreprocessingLexer : public BasicLexer
-{
- public:
-  PreprocessingLexer(CompileContext &cc, FileContext *file, char *text, size_t length);
-
-  TokenKind command();
-  TokenKind lex();
-  TokenKind peek();
-  bool match(TokenKind kind) {
-    if (peek() != kind)
-      return false;
-    pushed_ = false;
-    return true;
-  }
-  bool expect(TokenKind kind);
-  void readline();
-  bool readEndOfDirective();
-  void readUntilEnd(char **begin, char **end);
-  TokenKind readUntilName(CompileBuffer &buffer, bool *tokenWasStacked);
-
-  // #if, #else, #endif helpers.
-  void pushif(const SourceLocation &pos, IfState state) {
-    ifstack_.append(IfEntry(pos, state));
-  }
-  void popif() {
-    ifstack_.pop();
-  }
-  IfState ifstate() const {
-    return ifstack_.empty()
-           ? IfNone
-           : ifstack_.back().state;
-  }
-  bool got_else() const {
-    assert(!ifstack_.empty());
-    return ifstack_.back().got_else;
-  }
-  void set_in_else() {
-    assert(!ifstack_.empty());
-    ifstack_.back().got_else = true;
-    if (ifstate() == IfReading)
-      ifstack_.back().state = IfIgnoring;
-    else
-      ifstack_.back().state = IfReading;
-  }
-  SourceLocation ifpos() const {
-    // :SRCLOC:
-    return SourceLocation();
-  }
-
-  FileContext *file() const {
-    return file_;
-  }
-
-  void endinput() {
-    assert(!stacked());
-    pos_ = end_;
-  }
-  void purgeIfStack() {
-    ifstack_.clear();
-  }
-
-  void resetToLineStart() {
-    pos_ = linebegin_;
-  }
-
- private:
-  TokenKind scan();
-
- private:
-  struct IfEntry {
-    SourceLocation pos;
-    IfState state;
-    bool got_else;
-    IfEntry() : state(IfNone)
-    { }
-    IfEntry(const SourceLocation &pos, IfState state)
-      : pos(pos), state(state), got_else(false)
-    { }
-  };
-
-  TokenKind saved_;
-  bool pushed_;
-  Vector<IfEntry> ifstack_;
-};
-
+// In earlier iterations of SourcePawn, we used three passes for lexing. The
+// first pass stripped comments. The second pass handled preprocessor
+// directives. The final pass lexed the entire concatenated source buffer for
+// all source files and includes.
+//
+// This had two disadvantages. First, it is slower than having a single-pass
+// lexer. Second, we lost important information in the first two passes, such
+// as the ability to attach comments to tokens, or track the origin of tokens
+// pasted via preprocessor directives.
+//
+// The new system unifies all phases together. As such, the Preprocessor is no
+// longer a distinct phase, but the actual interface for tokenization. Since
+// some components still operate on a per-file basis, we keep the concept of a
+// lexing (the old text-processor) distinct, and the preprocessor keeps a stack
+// of lexers.
 class Preprocessor
 {
+  friend class Lexer;
+  friend class MacroLexer;
+
  public:
-  Preprocessor(CompileContext &cc);
-  ~Preprocessor();
+  Preprocessor(CompileContext &cc, const CompileOptions &options);
 
-  void preprocess(TranslationUnit *unit);
+  // Start preprocessing a file. This blows away any existing lexer state.
+  bool enter(Ref<SourceFile> file);
+
+  // Finish any pending state after having preprocessed tokens. This should
+  // only be called if all tokens were successfully lexed and no errors were
+  // reported. That is, an EOF should have been returned.
+  void leave();
+
+  // Functions for the parser and eval().
+  TokenKind peek();
+  bool match(TokenKind kind);
+  bool expect(TokenKind kind);
+  void undo() {
+    tokens_->push();
+  }
+
+  // If there is a newline in between the most recently lexed token and the
+  // next token, return EOL. Otherwise, return the next token. The next token
+  // is left unbuffered, so the current token ends up unchanged.
+  TokenKind peekTokenSameLine();
+
+  // Retrieves the most recently scanned, unbuffered token.
+  const Token *current() const {
+    return tokens_->current();
+  }
+  const SourceLocation &begin() const {
+    return current()->start.loc;
+  }
+  const SourceLocation &end() const {
+    return current()->end.loc;
+  }
+  Atom *current_name() const {
+    return current()->atom();
+  }
+
+  // Advances the token stream by one token, returning the new token kind.
+  TokenKind next();
+  const Token *nextToken() {
+    next();
+    return current();
+  }
+
+  // Injects a token. See TokenRing::inject.
+  void injectBack(const Token &tok) {
+    tokens_->inject(tok);
+  }
+
+  // Consumes the rest of a line to assist with error messaging.
+  void eatRestOfLine();
 
  private:
-  bool expr(int *val);
-  bool unary(int *val);
-  bool binary(int prec, int *val);
+  // Internal implementation for next().
+  TokenKind scan();
 
-  AutoString searchPaths(const char *file);
+  void setup_builtin_macros();
+  void define_builtin_int(const char *name, int64_t value);
+  void define_builtin_string(const char *name, const char *str);
 
-  bool include(TokenKind cmd, const char *file);
-  bool directive(TokenKind cmd);
-  void substitute();
-  void check_ignored_command(TokenKind cmd);
-  void preprocess();
-  void preprocess(FileContext *file, char *text, size_t length);
-  void setup_global_macros();
+ private: // Interfaces for Lexer and MacroLexer.
+  // #include and #try_include support.
+  bool enterFile(TokenKind directive,
+                 const SourceLocation &from,
+                 const char *file,
+                 const char *where);
+
+  // Defines a new macro, reporting an error if one already exists with the
+  // same name.
+  void defineMacro(Atom *name,
+                   const SourceLocation &nameLoc,
+                   TokenList *tokens);
+
+  // Returns true if the name is a macro and the macro was entered; false
+  // otherwise.
+  bool enterMacro(const SourceLocation &loc, Atom *name);
+
+  // Returns false if an error was reported.
+  bool removeMacro(const SourceLocation &loc, Atom *name);
+
+  // Leaves a lexer. If this returns true, the lexer is finished, and it should
+  // return TOK_NONE instead of TOK_EOF.
+  bool handleEndOfFile();
+
+  void setNextDeprecationMessage(const char *buffer, size_t length) {
+    next_deprecation_message_ = AString(buffer, length);
+  }
+
+  // Nasty business of evaluating a preprocessor expression. Implemented in
+  // tk-evaluator.cpp. Returns false if an error occurred, in which case val
+  // is left unchanged.
+  bool eval(int *val);
+  bool eval_inner(int *val);
+  bool eval_unary(int *val);
+  bool eval_binary(int prec, int *val);
+
+  // These variants handle macro expansion inside evals.
+  TokenKind eval_next();
+  TokenKind eval_peek();
+  bool eval_match(TokenKind kind);
+  bool eval_expect(TokenKind kind);
+
+  // Track comment ranges so we can piece together documentation afterward.
+  void addComment(CommentPos where, const SourceRange &extends);
+
+  TokenKind findKeyword(Atom *name) {
+    return keywords_.findKeyword(name);
+  }
+
+  bool &macro_expansion() {
+    return allow_macro_expansion_;
+  }
 
  private:
-  struct MacroEntry {
-    Atom *id;
-    char *value;
-    size_t valueLength;
-    FileContext *file;
-    SourceLocation loc;
+  // Internal functions.
+  AutoString searchPaths(const char *file, const char *where);
 
-    MacroEntry() { }
-    MacroEntry(Atom *id, char *value, size_t length,
-               FileContext *file, const SourceLocation &loc)
-    : id(id),
-      value(value),
-      valueLength(length),
-      file(file),
-      loc(loc)
-    {
-    }
+ private:
+  struct SavedLexer {
+    Ref<Lexer> lexer;
+    Ref<MacroLexer> macro_lexer;
+
+    SavedLexer()
+    {}
+    SavedLexer(Ref<Lexer> lexer, Ref<MacroLexer> macro_lexer)
+     : lexer(lexer),
+       macro_lexer(macro_lexer)
+    {}
   };
 
-  struct MacroPolicy {
-    typedef MacroEntry Payload;
-
-    static uint32_t hash(Atom *key) {
-      return HashPointer((void *)key);
-    }
-
-    static bool matches(Atom *key, const Payload &other) {
-      return key == other.id;
-    }
-  };
-
-  typedef HashTable<MacroPolicy, SystemAllocatorPolicy> MacroTable;
-
+ private:
   CompileContext &cc_;
-  CompileBuffer buffer_;
-  PreprocessingLexer *text_;
-  Vector<PreprocessingLexer *> lexers_;
+  const CompileOptions &options_;
+  LexOptions lex_options_;
+  KeywordTable keywords_;
 
-  Vector<char> command_;
-  MacroTable macros_;
-  StringPool macroStrings_;
+  AtomMap<Macro *> macros_;
 
-  Vector<FileContext *> files_;
+  Vector<Ref<MacroLexer>> recycled_macro_lexers_;
+  Vector<SavedLexer> lexer_stack_;
 
-  char date_[64];
-  char ltime_[64];
+  // Exactly one of these is set at a given time.
+  Ref<Lexer> lexer_;
+  Ref<MacroLexer> macro_lexer_;
+
+  // We keep two separate token buffers. It's important that preprocessor
+  // tokens do not get injected into the middle of the normal token stream.
+  // SP 1.7 requires a large lookahead (4 tokens), and it's easy for an #ifdef
+  // to lex into that. It was particularly easy in older iterations of the
+  // compiler, but presently, we can handle most preprocessor directives
+  // entirely from within the lexer itself. The only case where we cannot is
+  // eval().
+  TokenRing pp_tokens_;
+  TokenRing normal_tokens_;
+  TokenRing *tokens_;
+
+  // The next deprecation message.
+  AString next_deprecation_message_;
+
+  // Whether or not macro expansion is allowed.
+  bool allow_macro_expansion_;
 };
 
 }
 
-#endif // _include_sourcepawn_preprocessor_h_
-
+#endif // _include_spcomp_preprocessor_h_

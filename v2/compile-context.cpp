@@ -28,88 +28,48 @@ using namespace ke;
 
 ThreadLocal<CompileContext *> ke::CurrentCompileContext;
 
-bool
-ke::ReadFileChars(const char *path, char **textp, size_t *lengthp)
-{
-  FILE *fp = fopen(path, "rb");
-  if (!fp)
-    return false;
-
-  if (fseek(fp, 0, SEEK_END) == -1) {
-    fclose(fp);
-    return false;
-  }
-
-  long size = ftell(fp);
-  if (size == -1 || fseek(fp, 0, SEEK_SET) == -1) {
-    fclose(fp);
-    return false;
-  }
-
-  char *buffer = (char *)calloc(size, 1);
-  if (!buffer)
-    return false;
-
-  if (fread(buffer, 1, size, fp) != size_t(size)) {
-    free(buffer);
-    fclose(fp);
-    return false;
-  }
-
-  fclose(fp);
-
-  *textp = buffer;
-  *lengthp = size;
-  return true;
-}
-
-static inline TranslationUnit *
-ReadFile(const char *path)
-{
-  char *buffer;
-  size_t size;
-  if (!ReadFileChars(path, &buffer, &size))
-    return NULL;
-
-  TranslationUnit *tu = new TranslationUnit(strdup(path), buffer, size);
-  return tu;
-}
-
 CompileContext::CompileContext(int argc, char **argv)
   : outOfMemory_(false),
-    keywords_(SystemAllocatorPolicy()),
     strings_()
 {
   assert(!CurrentCompileContext);
 
   CurrentCompileContext = this;
 
-  source_ = new SourceManager();
+  source_ = new SourceManager(*this);
 
   if (argc < 2) {
     fprintf(stdout, "usage: <file>\n");
     return;
   }
 
-  TranslationUnit *tu = ReadFile(argv[1]);
-  if (!tu) {
-    fprintf(stderr, "error reading file: %s\n", argv[1]);
-    return;
-  }
-
-  units_.append(tu);
+  options_.InputFiles.append(argv[1]);
 
   // We automatically add "include" from the current working directory.
-  searchPaths_.append("include/");
+  options_.SearchPaths.append(AString("include/"));
 }
 
 CompileContext::~CompileContext()
 {
-  for (size_t i = 0; i < units_.length(); i++)
-    delete units_[i];
   for (size_t i = 0; i < errors_.length(); i++)
     free(errors_[i].message);
   CurrentCompileContext = NULL;
+}
+
+bool
+CompileContext::ChangePragmaDynamic(ReportingContext &rc, int64_t value)
+{
+  if (value < 0) {
+    rc.reportError(Message_PragmaDynamicIsNegative);
+    return false;
+  }
+  if (uint64_t(value) >= 64 * kMB) {
+    rc.reportError(Message_PragmaDynamicIsTooLarge);
+    return false;
+  }
+
+  options_.PragmaDynamic = size_t(value);
+  return true;
 }
 
 static void
@@ -126,43 +86,50 @@ ReportMemory(FILE *fp)
 bool
 CompileContext::compile()
 {
-  if (!initKeywords())
-    return false;
   if (!strings_.init())
     return false;
   if (!types_.initialize())
     return false;
 
-  Preprocessor pp(*this);
-  pp.preprocess(units_[0]);
+  ReportingContext rc(*this, SourceLocation());
+  Ref<SourceFile> file = source_->open(rc, options_.InputFiles[0].chars());
+  if (!file)
+    return false;
 
-  fprintf(stderr, "-- Preprocessing --\n");
-
-  ReportMemory(stderr);
+  Preprocessor pp(*this, options_);
 
   fprintf(stderr, "-- Parsing --\n");
 
+  TranslationUnit *unit = new (pool()) TranslationUnit();
   {
-    Parser p(*this, units_[0]);
+    if (!pp.enter(file))
+      return false;
+
+    Parser p(*this, pp, options_);
     ParseTree *tree = p.parse();
     if (!tree || errors_.length())
       return false;
-    units_[0]->attach(tree);
-    tree->dump(stdout);
+
+    pp.leave();
+    if (errors_.length())
+      return false;
+
+    unit->attach(tree);
+    //tree->dump(stdout);
   }
 
   ReportMemory(stderr);
 
   fprintf(stderr, "\n-- Name Binding --\n");
 
-  if (!ResolveNames(*this, units_[0]))
+  if (!ResolveNames(*this, unit))
     return false;
 
   ReportMemory(stderr);
 
   fprintf(stderr, "\n-- Type Resolution --\n");
 
-  if (!ResolveTypes(*this, units_[0]))
+  if (!ResolveTypes(*this, unit))
     return false;
 
   ReportMemory(stderr);
@@ -179,43 +146,6 @@ CompileContext::compile()
     return false;
   if (outOfMemory_)
     return false;
-
-  return true;
-}
-
-TokenKind
-CompileContext::findKeyword(const char *id)
-{
-  KeywordTable::Result r = keywords_.find(id);
-  if (!r.found())
-    return TOK_NONE;
-  return r->tok;
-}
-
-bool
-CompileContext::defineKeyword(TokenKind tok)
-{
-  KeywordTable::Insert p = keywords_.findForAdd(TokenNames[tok]);
-  assert(!p.found());
-
-  KeywordEntry e;
-  e.id = TokenNames[tok];
-  e.tok = tok;
-  keywords_.add(p, e);
-  return true;
-}
-
-bool
-CompileContext::initKeywords()
-{
-  if (!keywords_.init(128))
-    return false;
-
-#define _(name)                                                               \
-  if (!defineKeyword(TOK_##name))                                             \
-    return false;
-  KEYWORDMAP(_)
-#undef _
 
   return true;
 }
@@ -283,19 +213,12 @@ void
 CompileContext::reportErrorVa(const SourceLocation &loc, Message msg, va_list ap)
 {
   char *message = BuildErrorMessage(Messages[msg].format, ap);
-  if (!message) {
-    setOutOfMemory();
-    return;
-  }
 
   CompileError report;
-  report.file = source_->getFile(loc);
+  report.loc = loc;
   report.type = MessageTypes[Messages[msg].type];
   report.message = message;
-  report.line = source_->getLine(loc);
-  report.col = source_->getCol(loc);
-  if (!errors_.append(report))
-    setOutOfMemory();
+  errors_.append(report);
 }
 
 static char *

@@ -21,6 +21,9 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <am-string.h>
+
+namespace ke {
 
 class AutoString
 {
@@ -31,6 +34,10 @@ class AutoString
     AutoString(const char *ptr)
     {
       assign(ptr);
+    }
+    AutoString(const AString &str)
+    {
+      assign(str.chars(), str.length());
     }
     AutoString(const char *ptr, size_t len)
     {
@@ -123,6 +130,8 @@ class AutoString
     char *ptr_;
     size_t length_;
 };
+
+} // namespace ke
 
 #endif // _include_spcomp_auto_string_h_
 

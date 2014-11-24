@@ -21,10 +21,12 @@
 
 #include <stdio.h>
 #include "ast.h"
-#include "scanner.h"
 #include "scopes.h"
+#include "process-options.h"
 
 namespace ke {
+
+class Preprocessor;
 
 namespace DeclFlags
 {
@@ -60,7 +62,7 @@ struct Declaration
 class Parser
 {
  public:
-  Parser(CompileContext &cc, TranslationUnit *tu);
+  Parser(CompileContext &cc, Preprocessor &pp, const CompileOptions &options);
 
   ParseTree *parse();
 
@@ -156,11 +158,10 @@ class Parser
  private:
   CompileContext &cc_;
   PoolAllocator &pool_;
-  TranslationUnit *tu_;
-  Scanner scanner_;
+  Preprocessor &scanner_;
+  const CompileOptions &options_;
   bool encounteredReturn_;
   bool allowDeclarations_;
-  bool allowSingleLineFunctions_;
 
   Atom *atom_Float_;
   Atom *atom_String_;

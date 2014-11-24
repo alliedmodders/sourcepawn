@@ -24,7 +24,8 @@ enum MessageType
 {
     MessageType_SyntaxError,
     MessageType_TypeError,
-    MessageType_SystemError
+    MessageType_SystemError,
+    MessageType_FatalError
 };
 
 enum Message

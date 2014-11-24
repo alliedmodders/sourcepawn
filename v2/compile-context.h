@@ -22,14 +22,15 @@
 #include <am-vector.h>
 #include <am-hashtable.h>
 #include <am-threadlocal.h>
+#include <stdarg.h>
+#include <string.h>
 #include "pool-allocator.h"
 #include "auto-string.h"
 #include "messages.h"
 #include "tokens.h"
 #include "string-pool.h"
-#include <stdarg.h>
-#include <string.h>
 #include "type-manager.h"
+#include "process-options.h"
 
 namespace ke {
 
@@ -37,58 +38,19 @@ class ParseTree;
 class GlobalScope;
 class SourceManager;
 
-class FileContext
+class TranslationUnit : public PoolObject
 {
  public:
-  FileContext(FileContext *parent, const char *path)
-   : path_(path),
-     parent_(parent)
-  {
-  }
-
-  const char *path() const {
-    return path_;
-  }
-  FileContext *parent() const {
-    return parent_;
-  }
-
- private:
-  AutoString path_;
-  FileContext *parent_;
-};
-
-class TranslationUnit : public FileContext
-{
- public:
-  TranslationUnit(const char *path, char *text, size_t length)
-   : FileContext(nullptr, path),
-     text_(text),
-     length_(length),
-     tree_(nullptr),
+  TranslationUnit()
+   : tree_(nullptr),
      globalScope_(nullptr)
   {
   }
 
   ~TranslationUnit()
   {
-    free(text_);
-    for (size_t i = 0; i < files_.length(); i++)
-      delete files_[i];
   }
 
-  char *text() const {
-    return text_;
-  }
-  size_t length() const {
-    return length_;
-  }
-  FileContext *fileAt(size_t index) {
-    return files_[index];
-  }
-  void attach(ParseTree *tree) {
-    tree_ = tree;
-  }
   ParseTree *tree() const {
     return tree_;
   }
@@ -98,18 +60,12 @@ class TranslationUnit : public FileContext
   void setGlobalScope(GlobalScope *scope) {
     globalScope_ = scope;
   }
-
-  void givePreprocessedText(char *text, size_t length, Vector<FileContext *> &files) {
-    free(text_);
-    text_ = text;
-    length_ = length;
-    files_ = ke::Move(files);
+  void attach(ParseTree *tree) {
+    assert(!tree_);
+    tree_ = tree;
   }
 
  private:
-  char *text_;
-  size_t length_;
-  Vector<FileContext *> files_;
   ParseTree *tree_;
   GlobalScope *globalScope_;
 };
@@ -120,18 +76,14 @@ struct CompileError
   : message(nullptr)
   {
   }
-  CompileError(FileContext *file, unsigned line, unsigned col, const char *type, char *message)
-  : file(file),
-    line(line),
-    col(col),
-    type(type),
-    message(message)
+  CompileError(const SourceLocation &loc, const char *type, char *message)
+   : loc(loc),
+     type(type),
+     message(message)
   {
   }
 
-  FileContext *file;
-  unsigned line;
-  unsigned col;
+  SourceLocation loc;
   const char *type;
   char *message;
 };
@@ -172,57 +124,22 @@ class CompileContext
     return strings_.add(str, length);
   }
 
-  TokenKind findKeyword(const char *id);
+  // Option changing.
+  bool ChangePragmaDynamic(ReportingContext &rc, int64_t value);
 
   void reportErrorVa(const SourceLocation &loc, Message msg, va_list ap);
   void reportError(const SourceLocation &loc, Message msg, ...);
-  void setOutOfMemory() {
-    outOfMemory_ = true;
-  }
-
-  size_t numSearchPaths() const {
-    return searchPaths_.length();
-  }
-  const AutoString &getSearchPath(size_t i) {
-    return searchPaths_[i];
-  }
 
   Atom *createAnonymousName(const SourceLocation &loc);
 
  private:
-  bool initKeywords();
-  bool defineKeyword(TokenKind tok);
-
- private:
-  struct KeywordEntry {
-    const char *id;
-    TokenKind tok;
-  };
-
-  struct KeywordPolicy {
-    typedef KeywordEntry Payload;
-
-    static uint32_t hash(const char *key) {
-    return HashCharSequence(key, strlen(key));
-    }
-
-    static bool matches(const char *key, const KeywordEntry &e) {
-    return strcmp(key, e.id) == 0;
-    }
-  };
-
-  typedef HashTable<KeywordPolicy> KeywordTable;
-  
- private:
   bool outOfMemory_;
   PoolAllocator pool_;
   AutoPtr<SourceManager> source_;
-  Vector<TranslationUnit *> units_;
   Vector<CompileError> errors_;
-  KeywordTable keywords_;
   StringPool strings_;
-  Vector<AutoString> searchPaths_;
   TypeManager types_;
+  CompileOptions options_;
 };
 
 bool ReadFileChars(const char *path, char **textp, size_t *lengthp);
@@ -237,7 +154,7 @@ static inline PoolAllocator &POOL()
 struct ReportingContext
 {
  public:
-  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError)
+  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError = true)
    : cc_(cc),
      loc_(loc),
      should_error_(shouldError)
