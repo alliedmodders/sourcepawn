@@ -65,7 +65,8 @@ MacroLexer::next(Token *tok)
 
   cursor_++;
 
-  if (tok->kind == TOK_NAME && pp_.enterMacro(tok->start.loc, tok->atom()))
-    return TOK_NONE;
+  if (tok->kind == TOK_NAME && pp_.enterMacro(tok->start.loc, tok->atom())) {
+    return (tok->kind = TOK_NONE);
+  }
   return tok->kind;
 }

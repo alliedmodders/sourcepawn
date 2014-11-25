@@ -146,20 +146,22 @@ Preprocessor::peek()
 TokenKind
 Preprocessor::scan()
 {
-  TokenKind kind;
+  Token tok;
   do {
     assert(!!macro_lexer_ != !!lexer_);
 
-    Token *tok = tokens_->moveNext();
-    kind = macro_lexer_
-           ? macro_lexer_->next(tok)
-           : lexer_->next(tok);
+    // :TODO: we can't lex directly into the ring (?!) because the ring might
+    // change. We need to analyze and fix this for performance.
+    macro_lexer_
+      ? macro_lexer_->next(&tok)
+      : lexer_->next(&tok);
 
     // Parent lexer should filter out comments.
-    assert(kind != TOK_COMMENT);
-  } while (kind == TOK_NONE);
+    assert(tok.kind != TOK_COMMENT);
+  } while (tok.kind == TOK_NONE);
 
-  return kind;
+  *tokens_->moveNext() = tok;
+  return tok.kind;
 }
 
 bool

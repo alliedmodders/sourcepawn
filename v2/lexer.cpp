@@ -21,7 +21,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <stdarg.h>
-#include <am-bits.h>
+#include <am-arithmetic.h>
 
 using namespace ke;
 
