@@ -45,6 +45,7 @@ binary.sources += [
   'smx-builder.cpp',
   'source-manager.cpp',
   'symbols.cpp',
+  'reporting.cpp',
   'tk-evaluator.cpp',
   'type-manager.cpp',
   'type-resolver.cpp',

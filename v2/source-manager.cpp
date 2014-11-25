@@ -61,7 +61,7 @@ class FileReader
 
     AutoArray<char> buffer(new char[size + 1]);
     if (!buffer) {
-      cc_.reportError(Message_OutOfMemory);
+      cc_.reportFatal(rmsg::outofmemory);
       return false;
     }
 

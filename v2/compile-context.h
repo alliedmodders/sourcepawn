@@ -31,6 +31,7 @@
 #include "string-pool.h"
 #include "type-manager.h"
 #include "process-options.h"
+#include "reporting.h"
 
 namespace ke {
 
@@ -102,9 +103,6 @@ class CompileContext
   const CompileError &getError(size_t i) {
     return errors_[i];
   }
-  bool outOfMemory() {
-    return outOfMemory_;
-  }
 
   PoolAllocator &pool() {
     return pool_;
@@ -127,13 +125,19 @@ class CompileContext
   // Option changing.
   bool ChangePragmaDynamic(ReportingContext &rc, int64_t value);
 
+  // Error reporting.
+
+  void reportFatal(rmsg::Id msg) {
+    reports_->reportFatal(msg);
+  }
+
   void reportErrorVa(const SourceLocation &loc, Message msg, va_list ap);
   void reportError(const SourceLocation &loc, Message msg, ...);
 
   Atom *createAnonymousName(const SourceLocation &loc);
 
  private:
-  bool outOfMemory_;
+  AutoPtr<ReportManager> reports_;
   PoolAllocator pool_;
   AutoPtr<SourceManager> source_;
   Vector<CompileError> errors_;
@@ -150,23 +154,6 @@ static inline PoolAllocator &POOL()
 {
   return CurrentCompileContext->pool();
 }
-
-struct ReportingContext
-{
- public:
-  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError = true)
-   : cc_(cc),
-     loc_(loc),
-     should_error_(shouldError)
-  {}
-
-  void reportError(Message msg, ...);
-
- private:
-  CompileContext &cc_;
-  const SourceLocation &loc_;
-  bool should_error_;
-};
 
 } // namespace ke
 

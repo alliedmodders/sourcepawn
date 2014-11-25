@@ -27,10 +27,6 @@ int main(int argc, char **argv)
 {
   CompileContext cc(argc, argv);
   if (!cc.compile()) {
-    if (cc.outOfMemory()) {
-      fprintf(stderr, "ran out of memory\n");
-      abort();
-    }
     for (size_t i = 0; i < cc.nerrors(); i++) {
       const CompileError &e = cc.getError(i);
       Ref<SourceFile> file = cc.source().getSource(e.loc);

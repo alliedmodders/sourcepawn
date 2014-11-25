@@ -1,4 +1,7 @@
-MSG(OutOfMemory,                    FatalError,             "out of memory")
+RMSG(outofmemory,                   fatal,             "out of memory")
+RMSG(redeclared_name,               syntax,            "name '{0}' was redeclared")
+RMSG(previous_location,             note,              "previous declaration is here")
+
 MSG(UnterminatedComment,            SyntaxError,            "unterminated multi-line comment")
 MSG(UnexpectedCharacter,            SyntaxError,            "unexpected character '%c' (code %02X)")
 MSG(UnterminatedString,             SyntaxError,            "unterminated string")
@@ -6,8 +9,6 @@ MSG(UnknownEscapeCode,              SyntaxError,            "unknown escape code
 MSG(ExpectedDigitForFloat,          SyntaxError,            "expected digit in float literal, got '%c'")
 MSG(WrongToken,                     SyntaxError,            "expected token '%s', got '%s'")
 MSG(ExpectedExpression,             SyntaxError,            "expected expression, got '%s'")
-MSG(RedeclaredName,                 SyntaxError,            "name '%s' was redeclared (previous at line %d, col %d)")
-MSG(RedeclaredNameWithFile,         SyntaxError,            "name '%s' was redeclared (previous at file %s, line %d, col %d)")
 MSG(ExpectedLValue,                 SyntaxError,            "impossible assignment, expected l-value")
 MSG(MaximumArrayDepth,              TypeError,              "maximum array dimension depth exceeded")
 MSG(ArrayInitializerDepth,          SyntaxError,            "array declaration and initializer have different dimension counts")

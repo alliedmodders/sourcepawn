@@ -29,13 +29,13 @@ using namespace ke;
 ThreadLocal<CompileContext *> ke::CurrentCompileContext;
 
 CompileContext::CompileContext(int argc, char **argv)
-  : outOfMemory_(false),
-    strings_()
+  : strings_()
 {
   assert(!CurrentCompileContext);
 
   CurrentCompileContext = this;
 
+  reports_ = new ReportManager(*this);
   source_ = new SourceManager(*this);
 
   if (argc < 2) {
@@ -142,9 +142,7 @@ CompileContext::compile()
     //  return false;
   }
 
-  if (errors_.length())
-    return false;
-  if (outOfMemory_)
+  if (errors_.length() || reports_->HasErrors())
     return false;
 
   return true;
@@ -152,10 +150,12 @@ CompileContext::compile()
 
 const MessageInfo ke::Messages[] =
 {
+#define RMSG(Name, Type, String)
 #define MSG(Name, Type, String) \
     { MessageType_##Type, String },
 # include "messages.tbl"
 #undef MSG
+#undef RMSG
     { MessageType_SyntaxError, NULL }
 };
 

@@ -30,9 +30,11 @@ enum MessageType
 
 enum Message
 {
+#define RMSG(Name, Type, String)
 #define MSG(Name, Type, String)     Message_##Name,
 # include "messages.tbl"
 #undef MSG
+#undef RMSG
     MessageType_Total
 };
 
