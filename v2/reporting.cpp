@@ -168,6 +168,27 @@ GetTerminalWidth()
 #endif
 }
 
+static AString
+ExpandTabsInLine(const char *line, size_t length)
+{
+  AutoString builder;
+
+  size_t last_tab = 0;
+  for (size_t i = 0; i < length; i++) {
+    if (line[i] == '\t') {
+      builder = builder + AString(&line[last_tab], i - last_tab);
+      builder = builder + "        ";
+
+      last_tab = i + 1;
+      continue;
+    }
+  }
+
+  if (last_tab < length - 1)
+    builder = builder + AString(&line[last_tab], length - last_tab);
+  return AString(builder.ptr());
+}
+
 void
 ReportManager::printSourceLine(const FullSourceRef &ref)
 {
@@ -197,9 +218,21 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
     line_length--;
   }
 
-  const char *line_print = lineptr;
+  AString expanded = ExpandTabsInLine(lineptr, line_length);
 
+  const char *line_print = expanded.chars();
+
+  // Recompute the column number if we expanded tabs.
   unsigned col = ref.col;
+  if (expanded.length() != line_length) {
+    for (unsigned i = 0; i < ref.col; i++) {
+      if (lineptr[i] == '\t')
+        col += 7;
+    }
+  }
+
+  line_length = expanded.length();
+
   const char *prefix = "";
   const char *suffix = "";
   if (line_length > max_cols) {
