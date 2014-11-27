@@ -338,7 +338,7 @@ class TypeSpecifier
   void setResolved(Type *type) {
     // We should not overwrite a type, unless it's a placeholder to stop
     // double-reporting recursive types.
-    assert(!type_ || type_->isUnresolved());
+    assert(!type_ || type_->isUnresolvable());
 
     // We don't care if isResolving() is true, since sometimes we know the type
     // earlier than resolution. We do unset the resolving bit however.
@@ -376,11 +376,10 @@ class TypeSpecifier
     ExpressionList *dims_;
   };
   TokenKind resolver_;
-  /*union {*/
+  union {
     NameProxy *proxy_;
     FunctionSignature *signature_;
-    uint32_t dummy_;
-  //};
+  };
   Type *type_;
 };
 
@@ -1445,7 +1444,8 @@ class FieldDecl : public LayoutDecl
             const TypeSpecifier &spec)
    : LayoutDecl(loc),
      name_(name),
-     spec_(spec)
+     spec_(spec),
+     sym_(nullptr)
   {}
 
   DECLARE_NODE(FieldDecl);

@@ -130,7 +130,7 @@ class VariableSymbol : public Symbol
   }
 
   void setType(Type *type) {
-    assert(!type_ || type_->isUnresolved());
+    assert(!type_ || type_->isUnresolvable());
     type_ = type;
   }
   void allocate(Storage storage, intptr_t address) {

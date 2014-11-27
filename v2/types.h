@@ -83,7 +83,7 @@ class Type : public PoolObject
  public:
   enum class Kind {
     // A type that could not be resolved.
-    Unresolved,
+    Unresolvable,
 
     // A primitive is a plain-old-data type.
     Primitive,
@@ -161,16 +161,24 @@ class Type : public PoolObject
   bool isMetaFunction() {
     return canonical()->kind_ == Kind::MetaFunction;
   }
-  bool isUnresolved() {
-    return canonical()->kind_ == Kind::Unresolved;
+  bool isUnresolvable() {
+    return canonical()->kind_ == Kind::Unresolvable;
   }
 
   // Note that isTypedef() is special in that it does not bypass wrappers.
-  bool isTypedef() {
-    return kind_ == Kind::Typedef;
+  bool isResolvedTypedef() const {
+    return kind_ == Kind::Typedef && canonical_ != this;
+  }
+  bool isUnresolvedTypedef() const {
+    return kind_ == Kind::Typedef && canonical_ == this;
   }
   TypedefType *toTypedef() {
-    assert(isTypedef());
+    assert(kind_ == Kind::Typedef);
+    return (TypedefType *)this;
+  }
+  TypedefType *asTypedef() {
+    if (kind_ != Kind::Typedef)
+      return nullptr;
     return (TypedefType *)this;
   }
 
@@ -215,6 +223,17 @@ class Type : public PoolObject
   }
   bool isBool() {
     return isPrimitive() && primitive() == PrimitiveType::Bool;
+  }
+
+  // Check whether this type pointer is actually resolved to anything. This
+  // will return true for Unresolvable types, since technically it has been
+  // resolved to an error. It will return false if the canonical type is a
+  // typedef that has not been resolved.
+  bool isResolved() {
+    // Canonical type should only be a typedef if it is unresolved.
+    assert(canonical()->kind_ != Kind::Typedef ||
+           canonical()->isUnresolvedTypedef());
+    return canonical()->isUnresolvedTypedef();
   }
 
   Qualifiers qualifiers() {
@@ -270,7 +289,7 @@ class Type : public PoolObject
   // normalized and without its wrappings.
   Type *canonical() {
     // Keep canonical bits up to date.
-    if (isWrapped() && canonical_->isTypedef())
+    if (isWrapped() && canonical_->isResolvedTypedef())
       normalize();
     return canonical_;
   }
@@ -279,13 +298,13 @@ class Type : public PoolObject
   // Desugar typedefs until we reach a valid type or a typedef that has not
   // been resolved.
   Type *normalized() {
-    if (isTypedef()) {
-      if (canonical_->isTypedef())
+    if (isResolvedTypedef()) {
+      if (canonical_->isResolvedTypedef())
         normalize();
 
       // We might still return a typedef here, for example if we are unresovled
       // or we're wrapping something unresolved.
-      if (isTypedef())
+      if (isWrapped())
         return canonical_;
     }
 
@@ -301,11 +320,10 @@ class Type : public PoolObject
   // If a typedef chain ends in an unresolved typedef, then
   // normalization stops.
   void normalize() {
-    assert(isWrapped() && canonical_->isTypedef());
+    assert(isWrapped() && canonical_->isResolvedTypedef());
     do {
       canonical_ = canonical_->normalized();
 
-      // We ignore quals -> placholder.
       if (canonical_->kind_ != Kind::Qualifier)
         break;
 
@@ -321,7 +339,7 @@ class Type : public PoolObject
       kind_ = Kind::Qualifier;
       qualifiers_ |= canonical_->qualifiers_;
       canonical_ = canonical_->canonical_;
-    } while (isWrapped() && canonical_->isTypedef());
+    } while (isWrapped() && canonical_->isResolvedTypedef());
   }
 
  protected:
@@ -458,14 +476,18 @@ class TypedefType : public Type
   {}
 
  public:
-  static TypedefType *New(Atom *name, Type *actual);
+  static TypedefType *New(Atom *name);
 
   Atom *name() const {
     return name_;
   }
+
+  // The actual type may be null if it is unresolved. It is only guaranteed to
+  // be set if the TypeResolver phase passes.
   Type *actual() const {
     return actual_;
   }
+  void resolve(Type *actual);
 
  private:
   Atom *name_;
@@ -541,7 +563,7 @@ class StructType : public RecordType
 
 // This should probably be in the type manager... but it should never leak past
 // type resolution.
-extern Type UnresolvedType;
+extern Type UnresolvableType;
 
 const char *GetPrimitiveName(PrimitiveType type);
 const char *GetTypeName(Type *type);

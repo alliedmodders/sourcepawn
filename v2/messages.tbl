@@ -106,6 +106,7 @@ RMSG(implicit_overflow,             type,              "operation '%0' implicitl
 RMSG(sizeof_needs_variable,         type,              "sizeof operator requires a variable name")
 RMSG(sizeof_needs_array,            type,              "sizeof requires a variable with an array type")
 RMSG(sizeof_indeterminate,          type,              "cannot compute size of indeterminate array")
+RMSG(sizeof_invalid_rank,           type,              "sizeof operator specifies too many dimensions")
 RMSG(int_type_overflow,             type,              "operator '%0' does not support types '%1' and '%2'; no sufficiently-sized integer type exists to hold the result")
 
 MSG(SizeofHasTooManyDimensions,     TypeError,              "sizeof has more dimensions than array type")

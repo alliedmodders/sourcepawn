@@ -78,32 +78,46 @@ class AutoPush
 //
 // ---- TYPE RECURSION ----
 //
-// Type recursion is when a type must resolve itself in order to resolve. The
-// simplest example is via typedef:
+// We classify type recursion in two forms. The first is simple type recursion,
+// when a typedef refers to itself. These cycles are easy to break, and we
+// break them in visitTypedef() via a placeholder type. An example:
 //
 //    typedef A = B
 //    typedef B = A
 //
-// We detect such a cycle and break it in resolveType(). The bits for doing so
-// are in TypeSpecifier. We can also have other forms of type recursion:
+// While visit "A", we will create a blank TypedefType object. We will then
+// visit B, which will build a TypedefType object wrapping A. Once back in A,
+// we do a quick check that A does not depend on itself for computing a
+// canonical type.
 //
-//    int x[sizeof(Y)] = 10;
-//    int y[sizeof(X)] = 20;
-//
-// Here, we'll break the cycle when resolving the types for the two variables.
-//
-// Methodmaps, structs, and classes may reference their own type, but usually
-// it is illegal. What we cannot do is attempt to compute properties of the
-// type before the type has been fully computed. For example, while evaluating
-// the type of a struct, we cannot compute the size of the struct. This is an
-// illegal sizeof() so that's largely moot - but it's relevant in that something
-// like this would be illegal:
+// The other form of type recursive is size-dependent types. An easy example of
+// this in C would be:
 //
 //    struct X {
-//      X y;
+//      X x;
 //    };
 //
-// Since here, X's size implicitly depends on sizeof(X).
+// To allocate a struct we must be able to compute its size. But here, its size
+// infinitely expands, and so the type is not resolveable. Another case where
+// this can happen is with the `sizeof` constexpr. For example,
+//
+//    int X[sizeof(Y)] = 10;
+//    int Y[sizeof(X)] = 20;
+//
+// Here, the size of `x` is dependent on computing its own size. We will break
+// this cycle when calling resolveType for sizeof(X), since we will not have
+// finished resolving the type of X. In the future, we may be able to reach
+// something like this through typedefs as well:
+//
+//    typedef X = int[sizeof(Y)];
+//    typedef Y = int[sizeof(X)];
+//
+// This cycle would be broken by sizeof() itself, since it checks whether or
+// not it is trying to compute an unresolved type.
+//
+// Types can generally reference themselves as long as they do not create size
+// dependencies, and in the case of typedefs, as long as we can resolve them to
+// a canonical type that is not a typedef.
 //
 class TypeResolver
  : public AstVisitor,
@@ -343,7 +357,7 @@ class TypeResolver
 
     // Don't error twice if we get an unresolved type.
     Type *type = resolveNameToType(proxy);
-    if (type->isUnresolved())
+    if (type->isUnresolvable())
       return nullptr;
 
     if (!type->isEnum() || !type->toEnum()->methodmap()) {
@@ -495,14 +509,35 @@ class TypeResolver
   }
 
   void visitTypedefStatement(TypedefStatement *node) override {
-    // Note: we may already have resolved() set if we attempted to resolve this
-    // erroneously and recursively.
+    // Recursion guard.
     if (node->spec()->resolved())
       return;
 
+    // Create a placeholder until we've resolved the typedef.
+    TypedefType *type = cc_.types()->newTypedef(node->name());
+    node->sym()->setType(type);
+
     Type *actual = resolveType(node->spec());
-    TypedefType *tdef = cc_.types()->newTypedef(node->name(), actual);
-    node->sym()->setType(tdef);
+    
+    // Check for a recursive type. There might be a better way to do this, but
+    // for now this is what we've got: just manually check any compound type
+    // that wouldn't be able to handle a self-reference.
+    Type *base = actual;
+    if (ArrayType *array = base->asArray()) {
+      while (array->contained()->isArray())
+        array = array->contained()->toArray();
+      base = array->contained();
+    } else if (ReferenceType *ref = base->asReference()) {
+      base = ref->contained();
+    }
+
+    if (type == base->canonical()) {
+      type->resolve(&UnresolvableType);
+      cc_.report(node->spec()->baseLoc(), rmsg::recursive_type);
+      return;
+    }
+
+    type->resolve(actual);
   }
 
   // These cases do not define types, but we do have to visit their children
@@ -771,7 +806,7 @@ class TypeResolver
       cc_.report(spec->baseLoc(), rmsg::recursive_type);
 
       // We don't want to report this twice, so mark it as resolved.
-      spec->setResolved(&UnresolvedType);
+      spec->setResolved(&UnresolvableType);
       return spec->resolved();
     }
 
@@ -780,7 +815,7 @@ class TypeResolver
     Type *baseType = resolveBaseType(spec);
     if (!baseType) {
       // Return a placeholder so we don't have to check null everywhere.
-      spec->setResolved(&UnresolvedType);
+      spec->setResolved(&UnresolvableType);
       return spec->resolved();
     }
 
@@ -811,7 +846,7 @@ class TypeResolver
 
     // If we already had a type here, we must have seen a recursive type. It's
     // okay to rewrite it since we already reported an error somewhere.
-    assert(!spec->resolved() || spec->resolved()->isUnresolved());
+    assert(!spec->resolved() || spec->resolved()->isUnresolvable());
 
     spec->setResolved(type);
     return type;
@@ -857,7 +892,7 @@ class TypeResolver
     TypeSymbol *sym = proxy->sym()->asType();
     if (!sym) {
       // It's okay to return null here - our caller will massage it into
-      // UnresolvedType.
+      // UnresolvableType.
       cc_.report(proxy->loc(), rmsg::not_a_type)
         << proxy->sym()->name();
       return nullptr;
@@ -868,10 +903,15 @@ class TypeResolver
       // We should not recurse through here since anything that can construct
       // a TypeSymbol should either immediately set a type, or be dependent
       // on TypeSpecifier's recursion checking.
+      //
+      // As of a 11/27/2014 refactoring, all AST nodes that can define types,
+      // including typedefs, fill in an empty Type object to prevent recursion.
+      // Each data structure may have its own special cases for the types of 
+      // recursion it can/cannot support.
       sym->node()->accept(this);
 
       // We should always get a type. Even if everything fails, we should have
-      // set an UnresolvedType.
+      // set an UnresolvableType.
       assert(sym->type());
     }
 

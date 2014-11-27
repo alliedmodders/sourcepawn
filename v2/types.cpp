@@ -22,7 +22,7 @@
 
 using namespace ke;
 
-Type ke::UnresolvedType(Type::Kind::Unresolved);
+Type ke::UnresolvableType(Type::Kind::Unresolvable);
 
 Type *
 Type::NewVoid()
@@ -91,14 +91,18 @@ EnumType::New(Atom *name)
 }
 
 TypedefType *
-TypedefType::New(Atom *name, Type *canonical)
+TypedefType::New(Atom *name)
 {
-  assert(canonical);
-
   TypedefType *tdef = new (POOL()) TypedefType(name);
-  tdef->canonical_ = canonical;
-  tdef->actual_ = canonical;
+  tdef->actual_ = nullptr;
   return tdef;
+}
+
+void
+TypedefType::resolve(Type *actual)
+{
+  canonical_ = actual;
+  actual_ = actual;
 }
 
 bool
@@ -177,8 +181,8 @@ ke::GetPrimitiveName(PrimitiveType type)
 static const char *
 GetBaseTypeName(Type *type)
 {
-  if (type->isUnresolved())
-    return "unresolved";
+  if (type->isUnresolvable())
+    return "<unresolved>";
   if (type->isMetaFunction())
     return "function";
   if (type->isVoid())
@@ -275,8 +279,8 @@ ke::BuildTypeName(Type *aType)
 const char *
 ke::GetTypeName(Type *type)
 {
-  if (type->isUnresolved())
-    return "unresolved";
+  if (type->isUnresolvable())
+    return "<unresolvable>";
   if (type->isArray())
     return "array";
   if (type->isFunction() || type->isMetaFunction())
@@ -295,8 +299,8 @@ ke::GetTypeName(Type *type)
 const char *
 ke::GetTypeClassName(Type *type)
 {
-  if (type->isUnresolved())
-    return "unresolved";
+  if (type->isUnresolvable())
+    return "<unresolvable>";
   if (type->isArray())
     return "array";
   if (type->isFunction() || type->isMetaFunction())
@@ -315,7 +319,7 @@ ke::GetTypeClassName(Type *type)
 BoxedValue
 ke::DefaultValueForPlainType(Type *type)
 {
-  if (type->isUnresolved())
+  if (type->isUnresolvable())
     return BoxedValue(IntValue::FromInt32(0));
   if (type->isEnum())
     return BoxedValue(IntValue::FromInt32(0));
@@ -336,15 +340,19 @@ ke::DefaultValueForPlainType(Type *type)
 int32_t
 ke::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
 {
+  if (aType->isUnresolvedTypedef()) {
+    cc.report(rmsg::recursive_type);
+    return 0;
+  }
   if (!aType->isArray()) {
-    cc.report(rmsg::sizeof_needs_variable);
+    cc.report(rmsg::sizeof_needs_array);
     return 0;
   }
 
   ArrayType *type = aType->toArray();
   for (size_t i = 1; i <= level; i++) {
     if (!type->contained()->isArray()) {
-      cc.report(rmsg::sizeof_needs_array);
+      cc.report(rmsg::sizeof_invalid_rank);
       return 0;
     }
     type = type->contained()->toArray();
