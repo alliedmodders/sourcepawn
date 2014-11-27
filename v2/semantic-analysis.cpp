@@ -49,9 +49,12 @@ SemanticAnalysis::analyze(ParseTree *tree)
   for (size_t i = 0; i < tree->statements()->length(); i++) {
     Statement *stmt = tree->statements()->at(i);
     stmt->accept(this);
+
+    if (!cc_.canContinueProcessing())
+      return false;
   }
 
-  return cc_.nerrors() == 0;
+  return cc_.phasePassed();
 }
 
 class AutoEnterScope
@@ -89,7 +92,7 @@ SemanticAnalysis::analyze(FunctionStatement *node)
   node->body()->accept(this);
   emit_epilogue();
 
-  return cc_.nerrors() == 0;
+  return cc_.phasePassed();
 }
 
 void
@@ -204,10 +207,9 @@ SemanticAnalysis::visitUnaryExpression(UnaryExpression *expr)
   switch (tok) {
     case TOK_NEGATE: {
       if (!IsNumericType(hir->type())) {
-        cc_.reportError(expr->loc(),
-          Message_InvalidUnaryType,
-          "'-'",
-          GetTypeName(hir->type()));
+        cc_.report(expr->loc(), rmsg::unary_type_mismatch)
+          << "-"
+          << hir->type();
         return;
       }
       hir_ = new (pool_) HNegate(expr, hir);
@@ -216,10 +218,9 @@ SemanticAnalysis::visitUnaryExpression(UnaryExpression *expr)
 
     case TOK_TILDE: {
       if (!hir->type()->isInt32OrEnum()) {
-        cc_.reportError(expr->loc(),
-          Message_InvalidUnaryType,
-          "'~'",
-          GetTypeName(hir->type()));
+        cc_.report(expr->loc(), rmsg::unary_type_mismatch)
+          << "~"
+          << hir->type();
         return;
       }
       hir_ = new (pool_) HInvert(expr, hir);
@@ -228,10 +229,9 @@ SemanticAnalysis::visitUnaryExpression(UnaryExpression *expr)
 
     case TOK_NOT: {
       if (!hir->type()->isInt32OrEnum() && !hir->type()->isBool()) {
-        cc_.reportError(expr->loc(),
-          Message_InvalidUnaryType,
-          "'!'",
-          GetTypeName(hir->type()));
+        cc_.report(expr->loc(), rmsg::unary_type_mismatch)
+          << "!"
+          << hir->type();
         return;
       }
       Type *output = cc_.types()->getPrimitive(PrimitiveType::Bool);
@@ -415,13 +415,13 @@ SemanticAnalysis::visitIndexExpression(IndexExpression *node)
     return;
 
   if (!right->type()->isInt32OrEnum()) {
-    cc_.reportError(node->right()->loc(), Message_IndexMustBeInteger);
+    //cc_.reportError(node->right()->loc(), Message_IndexMustBeInteger);
     return;
   }
   
   // Do not coerce here, there's no reason to yet.
   if (!left->type()->isArray()) {
-    cc_.reportError(node->left()->loc(), Message_IndexBaseMustBeArray);
+    //cc_.reportError(node->left()->loc(), Message_IndexBaseMustBeArray);
     return;
   }
 
@@ -654,7 +654,7 @@ void
 SemanticAnalysis::visitBreakStatement(BreakStatement *node)
 {
   if (!loop_) {
-    cc_.reportError(node->loc(), Message_BreakOutsideLoop);
+    cc_.report(node->loc(), rmsg::break_outside_loop);
     return;
   }
 
@@ -666,7 +666,7 @@ void
 SemanticAnalysis::visitContinueStatement(ContinueStatement *node)
 {
   if (!loop_) {
-    cc_.reportError(node->loc(), Message_ContinueOutsideLoop);
+    cc_.report(node->loc(), rmsg::continue_outside_loop);
     return;
   }
 
@@ -851,7 +851,7 @@ SemanticAnalysis::lvalue(Expression *expr, LValue *outp)
     return false;
 
   if (!out.isLValue()) {
-    cc_.reportError(expr->loc(), Message_ExpectedLValue);
+    cc_.report(expr->loc(), rmsg::expected_lvalue);
     return false;
   }
 

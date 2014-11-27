@@ -42,16 +42,13 @@ Lexer::Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
 {
 }
 
-void
-Lexer::reportError(const SourceLocation &loc, Message msg, ...)
+MessageBuilder
+Lexer::report(const SourceLocation &loc, rmsg::Id id)
 {
   if (suppress_errors_)
-    return;
+    return MessageBuilder(nullptr);
 
-  va_list ap;
-  va_start(ap, msg);
-  cc_.reportErrorVa(loc, msg, ap);
-  va_end(ap);
+  return cc_.report(loc, id);
 }
 
 static inline bool IsAscii(char c)
@@ -189,7 +186,9 @@ Lexer::numberLiteral(char first)
 
   c = readChar();
   if (!IsDigit(c)) {
-    reportError(pos(), Message_ExpectedDigitForFloat, c);
+    char print[2] = {c, '\0'};
+    cc_.report(pos(), rmsg::expected_digit_for_float)
+      << print;
     return TOK_UNKNOWN;
   }
   literal_.append(c);
@@ -216,7 +215,10 @@ Lexer::numberLiteral(char first)
   }
   if (!IsDigit(c)) {
     pos_--;
-    reportError(pos(), Message_ExpectedDigitForFloat, c);
+
+    char print[2] = {c, '\0'};
+    cc_.report(pos(), rmsg::expected_digit_for_float)
+      << print;
     return TOK_UNKNOWN;
   }
   literal_.append(c);
@@ -302,11 +304,11 @@ Lexer::handleNumber(Token *tok, char first)
       for (size_t i = 0; i < literal_length(); i++) {
         assert(IsDigit(literal_[i]));
         if (!TryUint64Multiply(val, 10, &val)) {
-          reportError(tok->start.loc, Message_IntegerLiteralOverflow);
+          report(tok->start.loc, rmsg::int_literal_overflow);
           break;
         }
         if (!TryUint64Add(val, (literal_[i] - '0'), &val)) {
-          reportError(tok->start.loc, Message_IntegerLiteralOverflow);
+          report(tok->start.loc, rmsg::int_literal_overflow);
           break;
         }
       }
@@ -320,11 +322,11 @@ Lexer::handleNumber(Token *tok, char first)
       for (size_t i = 0; i < literal_length(); i++) {
         uint64_t digit = HexDigitToValue(literal_[i]);
         if (!TryUint64Multiply(val, 10, &val)) {
-          reportError(tok->start.loc, Message_IntegerLiteralOverflow);
+          report(tok->start.loc, rmsg::int_literal_overflow);
           break;
         }
         if (!TryUint64Add(val, digit, &val)) {
-          reportError(tok->start.loc, Message_IntegerLiteralOverflow);
+          report(tok->start.loc, rmsg::int_literal_overflow);
           break;
         }
       }
@@ -439,7 +441,10 @@ Lexer::readEscapeCode()
 
         return r;
       }
-      reportError(lastpos(), Message_UnknownEscapeCode, c);
+      
+      char print[2] = {c, '\0'};
+      cc_.report(lastpos(), rmsg::unknown_escapecode)
+        << print;
       return INT_MAX;
     }
   }
@@ -450,7 +455,7 @@ Lexer::charLiteral(Token *tok)
 {
   char c = readChar();
   if (c == '\'') {
-    reportError(tok->start.loc, Message_InvalidCharLit);
+    report(tok->start.loc, rmsg::invalid_char_literal);
     return TOK_UNKNOWN;
   }
 
@@ -462,7 +467,7 @@ Lexer::charLiteral(Token *tok)
 
   c = readChar();
   if (c != '\'') {
-    reportError(tok->start.loc, Message_MismatchedCharTerminator);
+    report(tok->start.loc, rmsg::bad_char_terminator);
 
     // If the user did something like '5", assume it was a typo and keep the
     // token. Otherwise, backtrack.
@@ -483,7 +488,7 @@ Lexer::stringLiteral(Token *tok)
     if (c == '\"')
       break;
     if (c == '\r' || c == '\n' || c == '\0') {
-      reportError(tok->start.loc, Message_UnterminatedString);
+      cc_.report(tok->start.loc, rmsg::unterminated_string);
       return TOK_STRING_LITERAL;
     }
     if (c == '\\') {
@@ -556,7 +561,7 @@ Lexer::multiLineComment(Token *tok)
     }
 
     if (c == '\0') {
-      reportError(tok->start.loc, Message_UnterminatedComment);
+      cc_.report(tok->start.loc, rmsg::unterminated_comment);
       break;
     }
 
@@ -635,7 +640,7 @@ Lexer::chewLineAfterDirective(bool warnOnNonSpace)
       default:
         if (warnOnNonSpace && !warned) {
           // Note: use cc since we're suppressing internal errors.
-          cc_.reportError(tok.start.loc, Message_ExtraCharactersAfterDirective);
+          cc_.report(tok.start.loc, rmsg::pp_extra_characters);
           warned = true;
         }
         break;
@@ -666,8 +671,10 @@ Lexer::handleDirectiveWhileInactive()
       if (ix->state == IfContext::Dead)
         return;
 
-      if (ix->elseloc.isSet())
-        reportError(begin, Message_ElseDeclaredTwice, 0/* :SRCLOC: */);
+      if (ix->elseloc.isSet()) {
+        report(begin, rmsg::else_declared_twice)
+          << cc_.note(ix->elseloc, rmsg::previous_location);
+      }
 
       ix->elseloc = begin;
       if (ix->state == IfContext::Ignoring)
@@ -696,8 +703,12 @@ Lexer::handleDirectiveWhileInactive()
 void
 Lexer::checkIfStackAtEndOfFile()
 {
-  if (IfContext *ix = currentIf())
-    cc_.reportError(ix->first, Message_UnterminatedIf);
+  if (IfContext *ix = currentIf()) {
+    if (ix->elseloc.isSet())
+      cc_.report(ix->elseloc, rmsg::unterminated_else);
+    else
+      cc_.report(ix->first, rmsg::unterminated_if);
+  }
 }
 
 void
@@ -767,12 +778,13 @@ Lexer::handlePreprocessorDirective()
     {
       Token tok;
       if (directive_next(&tok) != TOK_NAME) {
-        reportError(tok.start.loc, Message_BadDirectiveToken,
-                    TokenNames[TOK_NAME], TokenNames[tok.kind]);
+        cc_.report(tok.start.loc, rmsg::bad_directive_token)
+          << TokenNames[TOK_NAME]
+          << TokenNames[tok.kind];
         return false;
       }
       if (peekChar('(')) {
-        reportError(pos(), Message_MacrosAreUnsupported);
+        report(pos(), rmsg::macro_functions_unsupported);
         return false;
       }
 
@@ -796,11 +808,12 @@ Lexer::handlePreprocessorDirective()
     {
       IfContext *ix = currentIf();
       if (!ix) {
-        reportError(begin, Message_ElseWithoutIf);
+        report(begin, rmsg::else_without_if);
         return false;
       }
       if (ix->elseloc.isSet()) {
-        reportError(begin, Message_ElseDeclaredTwice, 0 /* :SRCLOC: */);
+        report(begin, rmsg::else_declared_twice)
+          << cc_.note(begin, rmsg::previous_location);
         return false;
       }
 
@@ -816,7 +829,7 @@ Lexer::handlePreprocessorDirective()
     {
       IfContext *ix = currentIf();
       if (!ix) {
-        reportError(begin, Message_EndIfWithoutIf);
+        report(begin, rmsg::endif_without_if);
         return false;
       }
 
@@ -829,8 +842,9 @@ Lexer::handlePreprocessorDirective()
       SaveAndSet<bool> disable_expansion(&pp_.macro_expansion(), false);
       Token tok;
       if (directive_next(&tok) != TOK_NAME) {
-        reportError(tok.start.loc, Message_BadDirectiveToken,
-                        TokenNames[TOK_NAME], TokenNames[tok.kind]);
+        cc_.report(tok.start.loc, rmsg::bad_directive_token)
+          << TokenNames[TOK_NAME]
+          << TokenNames[tok.kind];
         return false;
       }
 
@@ -854,7 +868,7 @@ Lexer::handlePreprocessorDirective()
       // Search for a delimiter.
       char c = firstNonSpaceChar();
       if (c != '"' && c != '<') {
-        reportError(lastpos(), Message_BadIncludeSyntax);
+        report(lastpos(), rmsg::bad_include_syntax);
         return false;
       }
 
@@ -863,7 +877,7 @@ Lexer::handlePreprocessorDirective()
       literal_.clear();
       while (true) {
         if (IsLineTerminator(peekChar())) {
-          reportError(pos(), Message_BadIncludeSyntax);
+          report(lastpos(), rmsg::bad_include_syntax);
           return false;
         }
 
@@ -897,7 +911,7 @@ Lexer::handlePreprocessorDirective()
     {
       Token tok;
       if (directive_next(&tok) != TOK_NAME) {
-        cc_.reportError(tok.start.loc, Message_PragmaMustHaveName);
+        cc_.report(tok.start.loc, rmsg::pragma_must_have_name);
         return false;
       }
       if (strcmp(tok.atom()->chars(), "deprecated") == 0) {
@@ -913,7 +927,7 @@ Lexer::handlePreprocessorDirective()
         // Whether or not newdecls are required is limited to the local lexer
         // options, though they are inherited.
         if (directive_next(&tok) != TOK_NAME) {
-          cc_.reportError(tok.start.loc, Message_BadPragmaNewdecls);
+          cc_.report(tok.start.loc, rmsg::bad_pragma_newdecls);
           return false;
         }
         if (strcmp(tok.atom()->chars(), "required") == 0) {
@@ -924,7 +938,7 @@ Lexer::handlePreprocessorDirective()
           options_.RequireNewdecls = false;
           return true;
         }
-        cc_.reportError(tok.start.loc, Message_BadPragmaNewdecls);
+        cc_.report(tok.start.loc, rmsg::bad_pragma_newdecls);
         return false;
       }
       if (strcmp(tok.atom()->chars(), "semicolon") == 0) {
@@ -948,12 +962,14 @@ Lexer::handlePreprocessorDirective()
         ReportingContext rc(cc_, loc);
         return cc_.ChangePragmaDynamic(rc, val);
       }
-      cc_.reportError(tok.start.loc, Message_UnknownPragma, tok.atom()->chars());
+      cc_.report(tok.start.loc, rmsg::unknown_pragma)
+        << tok.atom();
       return false;
     }
 
     default:
-      reportError(begin, Message_UnknownDirective, literal());
+      report(begin, rmsg::unknown_directive)
+        << literal();
       return false;
   }
 }
@@ -1149,8 +1165,14 @@ Lexer::scan(Token *tok)
       // Don't report an error if we're lexing for a directive. We'll report it
       // later down the pipeline, rather than having the start of a valid token
       // that turns out to be deformed midway through.
-      if (!lexing_for_directive_)
-        reportError(tok->start.loc, Message_UnexpectedCharacter, c, uint8_t(c));
+      if (!lexing_for_directive_) {
+        char print[2] = {c, '\0'};
+        char code[16];
+        snprintf(code, sizeof(code), "%02X", uint8_t(c));
+
+        cc_.report(tok->start.loc, rmsg::unexpected_char)
+          << print << code;
+      }
       return TOK_UNKNOWN;
   }
 }

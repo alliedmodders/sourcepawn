@@ -18,13 +18,17 @@
 #ifndef _include_spcomp_reporting_h_
 #define _include_spcomp_reporting_h_
 
-#include "messages.h"
 #include "source-location.h"
+#include "string-pool.h"
 #include <am-refcounting.h>
+#include <am-vector.h>
+#include <am-string.h>
+#include "source-manager.h"
 
 namespace ke {
 
 class CompileContext;
+class Type;
 
 enum class rmsg_type
 {
@@ -48,10 +52,10 @@ namespace rmsg
   };
 };
 
-class Report : public ke::Refcounted<Report>
+class TMessage : public ke::Refcounted<TMessage>
 {
  public: 
-  Report(const SourceLocation &origin, rmsg::Id msgid)
+  TMessage(const SourceLocation &origin, rmsg::Id msgid)
    : origin_(origin),
      message_id_(msgid)
   {}
@@ -59,12 +63,115 @@ class Report : public ke::Refcounted<Report>
   class Arg
   {
    public:
+    virtual AString Render(CompileContext &cc) = 0;
   };
+
+  class StringArg : public Arg
+  {
+   public:
+    explicit StringArg(const char *str)
+     : str_(str)
+    {}
+    explicit StringArg(const AString &str)
+     : str_(str)
+    {}
+    explicit StringArg(AString &&str)
+     : str_(str)
+    {}
+
+    AString Render(CompileContext &cc) override {
+      return str_;
+    }
+
+   private:
+    AString str_;
+  };
+
+  class AtomArg : public Arg
+  {
+   public:
+    explicit AtomArg(Atom *atom)
+     : atom_(atom)
+    {}
+
+    AString Render(CompileContext &cc) override;
+
+   private:
+    Atom *atom_;
+  };
+
+  void addArg(Arg *arg) {
+    args_.append(arg);
+  }
+  void addArg(Atom *atom) {
+    addArg(new AtomArg(atom));
+  }
+  void addArg(const char *str) {
+    addArg(new StringArg(str));
+  }
+  void addArg(const AString &str) {
+    addArg(new StringArg(str));
+  }
+  void addArg(AString &&str) {
+    addArg(new StringArg(str));
+  }
+  void addArg(Type *type);
+
+  void addNote(Ref<TMessage> note) {
+    assert(!note->notes_.length());
+    notes_.append(note);
+  }
+
+  const SourceLocation &origin() const {
+    return origin_;
+  }
+  const rmsg::Id id() const {
+    return message_id_;
+  }
+  size_t num_notes() const {
+    return notes_.length();
+  }
+  PassRef<TMessage> note(size_t i) const {
+    return notes_[i];
+  }
+  const Vector<AutoPtr<Arg>> &args() const {
+    return args_;
+  }
 
  private:
   SourceLocation origin_;
   rmsg::Id message_id_;
-  Vector<Ref<Report>> notes_;
+  Vector<AutoPtr<Arg>> args_;
+  Vector<Ref<TMessage>> notes_;
+};
+
+class MessageBuilder 
+{
+ public:
+  explicit MessageBuilder(Ref<TMessage> report)
+   : report_(report)
+  {}
+  MessageBuilder(MessageBuilder &&other)
+   : report_(other.report_.forget())
+  {}
+
+  template <typename T>
+  MessageBuilder &operator <<(const T &other) {
+    if (!report_)
+      return *this;
+    report_->addArg(other);
+    return *this;
+  }
+  MessageBuilder &operator <<(const MessageBuilder &other) {
+    if (!report_)
+      return *this;
+    assert(report_ != other.report_);
+    report_->addNote(other.report_);
+    return *this;
+  }
+
+ private:
+  Ref<TMessage> report_;
 };
 
 // The report manager is responsible for managing errors, warnings, and
@@ -75,20 +182,44 @@ class ReportManager
   ReportManager(CompileContext &cc);
 
   bool HasErrors() const {
-    return HasFatalError();
+    return HasFatalError() || num_errors_ > 0;
   }
   bool HasFatalError() const {
     return fatal_error_ != rmsg::none;
   }
 
+  void PrintMessages();
+
   void reportFatal(rmsg::Id msg) {
     if (!fatal_error_)
       fatal_error_ = msg;
   }
+  void reportFatal(const SourceLocation &loc, rmsg::Id msg) {
+    if (!fatal_error_) {
+      fatal_error_ = msg;
+      fatal_loc_ = loc;
+    }
+  }
+
+  MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id);
+  MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id);
+
+ private:
+  void printMessage(Ref<TMessage> message);
+  void printSourceLine(const FullSourceRef &ref);
+
+  AString renderSourceRef(const FullSourceRef &ref);
+  AString renderMessage(rmsg::Id id,
+                        const AutoPtr<TMessage::Arg> *args,
+                        size_t len);
 
  private:
   CompileContext &cc_;
   rmsg::Id fatal_error_;
+  SourceLocation fatal_loc_;
+
+  unsigned num_errors_;
+  Vector<Ref<TMessage>> messages_;
 };
 
 struct ReportingContext
@@ -100,8 +231,8 @@ struct ReportingContext
      should_error_(shouldError)
   {}
 
-  void reportError(Message msg, ...);
   void reportFatal(rmsg::Id msg);
+  MessageBuilder report(rmsg::Id msg);
 
  private:
   CompileContext &cc_;

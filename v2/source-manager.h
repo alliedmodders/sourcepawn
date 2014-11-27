@@ -73,9 +73,24 @@ class SourceFile : public Refcounted<SourceFile>
   AString path_;
 };
 
+struct FullMacroRef
+{
+  Macro *macro;
+  unsigned offset;
+
+  FullMacroRef()
+   : macro(nullptr),
+     offset(0)
+  {}
+  FullMacroRef(Macro *macro, unsigned offset)
+   : macro(macro),
+     offset(offset)
+  {}
+};
+
 struct FullSourceRef
 {
-  Ref<SourceFile> source;
+  Ref<SourceFile> file;
   unsigned line;
   unsigned col;
 
@@ -84,10 +99,16 @@ struct FullSourceRef
      col(0)
   {}
   FullSourceRef(SourceFile *buffer, unsigned line, unsigned col)
-   : source(buffer),
+   : file(buffer),
      line(line),
      col(col)
   {}
+};
+
+struct TokenHistory
+{
+  Vector<FullMacroRef> macros;
+  Vector<FullSourceRef> files;
 };
 
 // An LREntry is created each time we register a range of locations (it is
@@ -215,8 +236,15 @@ class SourceManager
   unsigned getLine(const SourceLocation &loc);
   unsigned getCol(const SourceLocation &loc);
 
+  void getTokenHistory(const SourceLocation &loc, TokenHistory *history);
+
+  FullSourceRef getOrigin(const FullMacroRef &ref);
+
  private:
   unsigned getLine(const LREntry &range, const SourceLocation &loc);
+  unsigned getCol(const LREntry &range, const SourceLocation &loc, unsigned line);
+
+  FullSourceRef fullSourceRef(const LREntry &range, const SourceLocation &loc);
 
  private:
   bool trackExtents(uint32_t length, size_t *index);
@@ -228,8 +256,6 @@ class SourceManager
   // file, this returns the file. For a macro, it finds the nearest file that
   // caused the macro to expand.
   SourceLocation normalize(const SourceLocation &loc);
-
-  unsigned getCol(const SourceLocation &loc, unsigned line);
 
  private:
   CompileContext &cc_;

@@ -398,6 +398,9 @@ class FunctionSignature : public PoolObject
   TypeSpecifier *returnType() {
     return &returnType_;
   }
+  const TypeSpecifier *returnType() const {
+    return &returnType_;
+  }
   ParameterList *parameters() const {
     return parameters_;
   }

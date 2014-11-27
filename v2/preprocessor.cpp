@@ -28,11 +28,15 @@
 
 using namespace ke;
 
+static const size_t kMaxIncludeDepth = 50;
+
 Preprocessor::Preprocessor(CompileContext &cc, const CompileOptions &options)
  : cc_(cc),
    options_(options),
    keywords_(cc),
-   tokens_(&normal_tokens_)
+   tokens_(&normal_tokens_),
+   allow_macro_expansion_(true),
+   include_depth_(0)
 {
   setup_builtin_macros();
 }
@@ -118,7 +122,7 @@ Preprocessor::enter(Ref<SourceFile> file)
 }
 
 void
-Preprocessor::leave()
+Preprocessor::cleanup()
 {
   assert(lexer_stack_.empty() && !lexer_->more());
   lexer_->checkIfStackAtEndOfFile();
@@ -191,10 +195,9 @@ Preprocessor::expect(TokenKind kind)
 
   // SP1 unlexed the token here. We do not do that in SP2, reasoning that it's
   // better to always make forward progress.
-  cc_.reportError(tokens_->current()->start.loc,
-                  Message_WrongToken,
-                  TokenNames[kind],
-                  TokenNames[got]);
+  cc_.report(tokens_->current()->start.loc, rmsg::wrong_token)
+    << TokenNames[kind]
+    << TokenNames[got];
   return false;
 }
 
@@ -329,7 +332,8 @@ Preprocessor::enterFile(TokenKind directive,
     if (directive == TOK_M_TRYINCLUDE)
       return true;
 
-    cc_.reportError(from, Message_IncludeNotFound, file);
+    cc_.report(from, rmsg::include_not_found)
+      << file;
     return false;
   }
 
@@ -344,6 +348,13 @@ Preprocessor::enterFile(TokenKind directive,
     return false;
   }
 
+  if (include_depth_ >= kMaxIncludeDepth) {
+    cc_.report(from, rmsg::include_depth_exceeded);
+    return false;
+  }
+
+  include_depth_++;
+
   assert(!macro_lexer_ && lexer_);
   lexer_stack_.append(SavedLexer(lexer_, nullptr));
   lexer_ = new Lexer(cc_, *this, lexer_->options(), new_file, tl);
@@ -355,8 +366,14 @@ Preprocessor::defineMacro(Atom *name, const SourceLocation &nameLoc, TokenList *
 {
   AtomMap<Macro *>::Insert p = macros_.findForAdd(name);
   if (p.found()) {
-    //Macro *prev = p->value;
-    cc_.reportError(nameLoc, Message_MacroRedefinition, name->chars(), 0, 0 /*:SRCLOC */);
+    if (p->value->definedAt.isSet()) {
+      cc_.report(nameLoc, rmsg::macro_redefinition)
+        << name
+        << (cc_.note(p->value->definedAt, rmsg::previous_location));
+    } else {
+      cc_.report(nameLoc, rmsg::builtin_macro_redefinition)
+        << name;
+    }
     return;
   }
 
@@ -369,7 +386,13 @@ Preprocessor::removeMacro(const SourceLocation &loc, Atom *name)
 {
   AtomMap<Macro *>::Result p = macros_.find(name);
   if (!p.found()) {
-    cc_.reportError(loc, Message_MacroNotFound, name->chars());
+    cc_.report(loc, rmsg::macro_not_found)
+      << name;
+    return false;
+  }
+  if (!p->value->definedAt.isSet()) {
+    cc_.report(loc, rmsg::cannot_undef_builtin)
+      << name;
     return false;
   }
 
@@ -434,10 +457,13 @@ Preprocessor::handleEndOfFile()
     return false;
   }
 
-  if (macro_lexer_)
+  if (macro_lexer_) {
     recycled_macro_lexers_.append(macro_lexer_);
-  else if (lexer_)
+  } else if (lexer_) {
+    assert(include_depth_ > 0);
     lexer_->checkIfStackAtEndOfFile();
+    include_depth_--;
+  }
 
   SavedLexer saved = lexer_stack_.popCopy();
   lexer_ = saved.lexer;

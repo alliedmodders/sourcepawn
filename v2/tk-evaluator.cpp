@@ -52,7 +52,7 @@ Preprocessor::eval(int *out)
     }
     if (ok) {
       ok = false;
-      cc_.reportError(current()->start.loc, Message_ExtraCharactersAfterDirective);
+      cc_.report(current()->start.loc, rmsg::pp_extra_characters);
     }
   }
   assert(lexer_ == start);
@@ -171,7 +171,8 @@ Preprocessor::eval_next()
     // can't, it's not a valid identifier.
     const Token *tok = current();
     if (!enterMacro(tok->start.loc, tok->atom())) {
-      cc_.reportError(tok->start.loc, Message_MacroNotFound, tok->atom()->chars());
+      cc_.report(tok->start.loc, rmsg::macro_not_found)
+        << tok->atom();
       return TOK_NAME;
     }
   }
@@ -274,7 +275,7 @@ Preprocessor::eval_unary(int *val)
     {
       const Token *tok = current();
       if (tok->int64Value() > INT_MAX || tok->int64Value() < INT_MIN) {
-        cc_.reportError(tok->start.loc, Message_IntegerLiteralOverflow);
+        cc_.report(tok->start.loc, rmsg::int_literal_overflow);
         return false;
       }
       *val = tok->int32Value();
@@ -288,9 +289,8 @@ Preprocessor::eval_unary(int *val)
     default:
     {
       const Token *tok = current();
-      cc_.reportError(tok->start.loc,
-                      Message_UnexpectedTokenInDirective,
-                      tok->atom()->chars());
+      cc_.report(tok->start.loc, rmsg::unexpected_directive_token)
+        << tok->atom();
       return false;
     }
   }
@@ -331,7 +331,7 @@ Preprocessor::eval_binary(int prec, int *val)
     if (!r)
       return false;
     if ((kind == TOK_SLASH || kind == TOK_PERCENT) && !right) {
-      cc_.reportError(loc, Message_IntegerDivideByZero);
+      cc_.report(loc, rmsg::divide_by_zero);
       return false;
     }
     left = BinaryEval(kind, left, right);

@@ -27,17 +27,8 @@ int main(int argc, char **argv)
 {
   CompileContext cc(argc, argv);
   if (!cc.compile()) {
-    for (size_t i = 0; i < cc.nerrors(); i++) {
-      const CompileError &e = cc.getError(i);
-      Ref<SourceFile> file = cc.source().getSource(e.loc);
-      unsigned line = cc.source().getLine(e.loc);
-      unsigned col = cc.source().getCol(e.loc);
-      fprintf(stderr, "%s error (line %d, col %d): %s\n",
-              file->path(),
-              line,
-              col,
-              e.message);
-    }
+    ReportManager &reporting = cc.reporting();
+    reporting.PrintMessages();
     return 1;
   }
 }

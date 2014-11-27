@@ -55,11 +55,10 @@ IntValue::ValidateAluOp(ReportingContext &cc, TokenKind kind, IntValue *aLeft, I
   {
     // We have an unsigned 64-bit number, plus any signed number. This would
     // require sign-extending both to a 128-bit number, which we don't support.
-    cc.reportError(
-      Message_ArithmeticTypeOverflow,
-      TokenNames[kind],
-      aLeft->getTypename(),
-      aRight->getTypename());
+    cc.report(rmsg::int_type_overflow)
+      << TokenNames[kind]
+      << aLeft->getTypename()
+      << aRight->getTypename();
     return false;
   }
 
@@ -87,7 +86,7 @@ IntValue::Add(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
     if ((rightv > 0 && (leftv > MaxSigned(left.numBits()) - rightv)) ||
         (rightv < 0 && (leftv < MinSigned(left.numBits()) - rightv)))
     {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }
     *outp = FromSigned(leftv + rightv, left.numBits());
@@ -98,7 +97,7 @@ IntValue::Add(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 
     // Check both 64-bit overflow and locally bounded overflow.
     if ((result < ke::Max(leftv, rightv)) || Log2(result) > left.numBits()) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }
     *outp = FromUnsigned(result, left.numBits());
@@ -122,13 +121,13 @@ IntValue::Sub(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
     if ((rightv < 0 && leftv < (MinSigned(left.numBits()) - rightv)) ||
         (rightv > 0 && leftv > (MaxSigned(left.numBits()) - rightv)))
     {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }
     *outp = FromSigned(leftv - rightv, left.numBits());
   } else {
     if (right.asUnsigned() > right.asUnsigned()) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }
     *outp = FromUnsigned(left.asUnsigned() - right.asUnsigned(), left.numBits());
@@ -150,13 +149,13 @@ IntValue::Mul(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 
     // Check 64-bit overflow.
     if (result != 0 && ((result / left.asSigned()) != left.asSigned())) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return true;
     }
 
     // Check locally bounded overflow.
     if (result > MaxSigned(left.numBits()) || result < MinSigned(left.numBits())) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return true;
     }
     *outp = FromSigned(result, left.numBits());
@@ -165,13 +164,13 @@ IntValue::Mul(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 
     // Check 64-bit overflow.
     if (result != 0 && ((result / left.asUnsigned()) != right.asUnsigned())) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return true;
     }
 
     // Check locally bounded overflow.
     if (result > MaxUnsigned(left.numBits())) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return true;
     }
     *outp = FromUnsigned(result, left.numBits());
@@ -189,14 +188,14 @@ IntValue::Div(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
     return false;
 
   if (right.isZero()) {
-    cc.reportError(Message_IntegerDivideByZero);
+    cc.report(rmsg::divide_by_zero);
     return false;
   }
 
   if (sign) {
     // -INT_MIN / -1 == overflow
     if (left.asSigned() == MinSigned(left.numBits()) && right.asSigned() == -1) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }
 
@@ -217,14 +216,14 @@ IntValue::Mod(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
     return false;
 
   if (right.isZero()) {
-    cc.reportError(Message_IntegerDivideByZero);
+    cc.report(rmsg::divide_by_zero);
     return false;
   }
 
   if (sign) {
     // -INT_MIN / -1 == overflow
     if (left.asSigned() == MinSigned(left.numBits()) && right.asSigned() == -1) {
-      cc.reportError(Message_OverflowInConstantExpression, left.getTypename());
+      cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }
 
@@ -392,9 +391,9 @@ bool
 IntValue::Neg(ReportingContext &cc, const IntValue &in, IntValue *outp)
 {
   if (in.isUnsigned() && in.numBits() == kMaxBits) {
-    cc.reportError(Message_ImplicitArithmeticOverflow,
-                   TokenNames[TOK_NEGATE],
-                   in.getTypename());
+    cc.report(rmsg::implicit_overflow)
+      << TokenNames[TOK_NEGATE]
+      << in.getTypename();
     return false;
   }
 

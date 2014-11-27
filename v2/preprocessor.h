@@ -56,7 +56,7 @@ class Preprocessor
   // Finish any pending state after having preprocessed tokens. This should
   // only be called if all tokens were successfully lexed and no errors were
   // reported. That is, an EOF should have been returned.
-  void leave();
+  void cleanup();
 
   // Functions for the parser and eval().
   TokenKind peek();
@@ -209,6 +209,9 @@ class Preprocessor
 
   // Whether or not macro expansion is allowed.
   bool allow_macro_expansion_;
+
+  // Number of files currently #included in the lexer stack.
+  size_t include_depth_;
 };
 
 }

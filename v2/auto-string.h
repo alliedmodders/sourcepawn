@@ -31,6 +31,13 @@ class AutoString
     AutoString() : ptr_(NULL), length_(0)
     {
     }
+    AutoString(AutoString &&other)
+     : ptr_(other.ptr_),
+       length_(other.length_)
+    {
+      other.ptr_ = nullptr;
+      other.length_ = 0;
+    }
     AutoString(const char *ptr)
     {
       assign(ptr);
@@ -62,6 +69,11 @@ class AutoString
       assign(other.ptr(), other.length());
       return *this;
     }
+    AutoString &operator =(AutoString &&other) {
+      Swap(other.ptr_, ptr_);
+      Swap(other.length_, length_);
+      return *this;
+    }
 
     AutoString operator +(const AutoString &other) const {
       size_t len = length() + other.length();
@@ -88,6 +100,12 @@ class AutoString
       r.ptr_ = buf;
       r.length_ = len;
       return r;
+    }
+
+    AutoString operator +(unsigned val) const {
+      char buffer[24];
+      snprintf(buffer, sizeof(buffer), "%d", val);
+      return *this + buffer;
     }
 
     size_t length() const {

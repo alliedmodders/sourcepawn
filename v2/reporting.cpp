@@ -17,12 +17,63 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "reporting.h"
 #include "compile-context.h"
+#include "source-manager.h"
+#include "auto-string.h"
+#include <am-platform.h>
+#if defined(KE_POSIX)
+# include <unistd.h>
+# include <sys/ioctl.h>
+#endif
 
 using namespace ke;
 
+static const char *sMessageTypeStrings[] = {
+  "fatal",
+  "system",
+  "note",
+  "syntax error",
+  "type error",
+};
+
+struct rmsg_info {
+  rmsg_type type;
+  const char *text;
+};
+
+static const rmsg_info sMessageTable[] =
+{
+  { rmsg_type::fatal, "unknown" },
+#define MSG(Name, Type, String)
+#define RMSG(Name, Type, String) \
+  { rmsg_type::Type, String },
+# include "messages.tbl"
+#undef RMSG
+#undef MSG
+};
+
+static inline const char *
+PrintableMessageType(rmsg_type type)
+{
+  return sMessageTypeStrings[(int)type];
+}
+
+static inline const rmsg_info &
+GetMessageInfo(rmsg::Id id)
+{
+  assert(id > rmsg::none && id < rmsg::sentinel);
+  return sMessageTable[id];
+}
+
+void
+TMessage::addArg(Type *type)
+{
+  addArg(BuildTypeName(type));
+}
+
 ReportManager::ReportManager(CompileContext &cc)
  : cc_(cc),
-   fatal_error_(rmsg::none)
+   fatal_error_(rmsg::none),
+   num_errors_(0)
 {
 }
 
@@ -31,4 +82,221 @@ ReportingContext::reportFatal(rmsg::Id msg)
 {
   // We always report fatal errors.
   cc_.reportFatal(msg);
+}
+
+MessageBuilder
+ReportingContext::report(rmsg::Id msg)
+{
+  return cc_.report(loc_, msg);
+}
+
+MessageBuilder
+ReportManager::note(const SourceLocation &loc, rmsg::Id msg_id)
+{
+  assert(GetMessageInfo(msg_id).type == rmsg_type::note);
+
+  Ref<TMessage> message = new TMessage(loc, msg_id);
+  return MessageBuilder(message);
+}
+
+MessageBuilder
+ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
+{
+  assert(GetMessageInfo(msg_id).type != rmsg_type::fatal);
+
+  if (GetMessageInfo(msg_id).type != rmsg_type::note)
+    num_errors_++;
+
+  Ref<TMessage> message = new TMessage(loc, msg_id);
+  messages_.append(message);
+  return MessageBuilder(message);
+}
+
+void
+ReportManager::PrintMessages()
+{
+  for (size_t i = 0; i < messages_.length(); i++)
+    printMessage(messages_[i]);
+}
+
+static inline bool
+IsDigit(char c)
+{
+  return c >= '0' && c <= '9';
+}
+
+static inline unsigned
+GetTerminalWidth()
+{
+#if defined(KE_POSIX)
+  if (!isatty(STDERR_FILENO))
+    return 128;
+
+  struct winsize w;
+  if (ioctl(STDERR_FILENO, TIOCGWINSZ, &w) == -1)
+    return 80;
+  return w.ws_col;
+#else
+  return 80;
+#endif
+}
+
+void
+ReportManager::printSourceLine(const FullSourceRef &ref)
+{
+  static const char *long_prefix = " ... ";
+  static const char *long_suffix = " ... ";
+  const size_t prefix_len = strlen(long_prefix);
+  const size_t suffix_len = strlen(long_suffix);
+  const unsigned min_cols = suffix_len + prefix_len + 12;
+
+  // Fudge factor, we assume we can print at least 16 columns.
+  const unsigned max_cols = ke::Max(GetTerminalWidth(), min_cols);
+
+  const unsigned line_index = ref.line - 1;
+  LineExtents *lines = ref.file->lineCache();
+  const char *lineptr = ref.file->chars() + lines->at(line_index);
+  unsigned line_length = ref.line >= lines->length() - 1
+                         ? ref.file->length() - lines->at(line_index)
+                         : lines->at(line_index + 1) - lines->at(line_index);
+
+  assert(ref.col < line_length);
+
+  // Take off newline characters.
+  while (line_length &&
+         (lineptr[line_length - 1] == '\r' ||
+          lineptr[line_length - 1] == '\n'))
+  {
+    line_length--;
+  }
+
+  const char *line_print = lineptr;
+
+  unsigned col = ref.col;
+  const char *prefix = "";
+  const char *suffix = "";
+  if (line_length > max_cols) {
+    if (col > max_cols) {
+      // Try to reposition everything so we're printing the desired column
+      // in the middle of the line.
+      static const unsigned max_chars = (max_cols - suffix_len - prefix_len);
+      static const unsigned midpoint = max_chars / 2;
+      static const unsigned delta = col - midpoint;
+
+      line_print += delta;
+      line_length = Min(max_chars, line_length - delta);
+      col = prefix_len + midpoint;
+
+      prefix = long_prefix;
+      suffix = long_suffix;
+    } else {
+      suffix = long_suffix;
+      line_length = max_cols - suffix_len;
+    }
+  }
+
+  {
+    AString line(line_print, line_length);
+    fprintf(stderr, "%s%s%s\n", prefix, line.chars(), suffix);
+  }
+
+  for (size_t i = 1; i < col; i++)
+    fprintf(stderr, " ");
+  fprintf(stderr, "^\n");
+}
+
+AString
+ReportManager::renderMessage(rmsg::Id id, const AutoPtr<TMessage::Arg> *args, size_t argc)
+{
+  const rmsg_info &info = GetMessageInfo(id);
+
+  size_t last_insertion = 0;
+  size_t text_length = strlen(info.text);
+
+  AutoString builder = PrintableMessageType(info.type);
+  builder = builder + ": ";
+  for (size_t i = 0; i < text_length; i++) {
+    if (info.text[i] == '%' && IsDigit(info.text[i + 1])) {
+      unsigned argno = info.text[i + 1] - '0';
+      if (argno >= argc) {
+        builder = builder + "(!NO SUCH ARGUMENT!)";
+        continue;
+      }
+
+      builder = builder + AString(info.text + last_insertion, i - last_insertion);
+      builder = builder + args[argno]->Render(cc_);
+
+      last_insertion = i + 2;
+    }
+  }
+
+  if (last_insertion < text_length)
+    builder = builder + AString(info.text + last_insertion, text_length - last_insertion);
+  return AString(builder.ptr());
+}
+
+AString
+ReportManager::renderSourceRef(const FullSourceRef &ref)
+{
+  if (!ref.file)
+    return AString(":0");
+
+  AutoString builder = ref.file->path();
+  builder = builder + ":" + ref.line + ":" + ref.col;
+  return AString(builder.ptr());
+}
+
+void
+ReportManager::printMessage(Ref<TMessage> message)
+{
+  TokenHistory history;
+  cc_.source().getTokenHistory(message->origin(), &history);
+
+  AutoString line;
+  if (history.files.empty())
+    line = renderSourceRef(FullSourceRef());
+  else
+    line = renderSourceRef(history.files[0]);
+  line = line + ": ";
+  line = line + renderMessage(message->id(),
+                              message->args().buffer(),
+                              message->args().length());
+
+  fprintf(stderr, "%s\n", line.ptr());
+
+  if (!history.files.empty())
+    printSourceLine(history.files[0]);
+
+  for (size_t i = 0; i < history.macros.length(); i++) {
+    FullSourceRef ref = cc_.source().getOrigin(history.macros[i]);
+    AutoString note = renderSourceRef(ref);
+    note = note + ": ";
+
+    Atom *name = history.macros[i].macro->name;
+    AutoPtr<TMessage::Arg> arg(new TMessage::AtomArg(name));
+
+    note = note + renderMessage(rmsg::from_macro, &arg, 1);
+
+    fprintf(stderr, "%s\n", note.ptr());
+    printSourceLine(ref);
+  }
+
+  for (size_t i = 1; i < history.files.length(); i++) {
+    AutoString note = renderSourceRef(history.files[i]);
+    note = note + ": ";
+    note = note + renderMessage(rmsg::included_from, nullptr, 0);
+
+    fprintf(stderr, "%s\n", note.ptr());
+  }
+
+  for (size_t i = 0; i < message->num_notes(); i++)
+    printMessage(message->note(i));
+
+  fprintf(stderr, "\n");
+}
+
+AString
+TMessage::AtomArg::Render(CompileContext &cc)
+{
+  return AString(atom_->chars());
 }

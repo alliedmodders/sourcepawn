@@ -133,6 +133,9 @@ class TypeResolver
     for (size_t i = 0; i < unit_->tree()->statements()->length(); i++) {
       Statement *stmt = unit_->tree()->statements()->at(i);
       stmt->accept(this);
+
+      if (!cc_.canContinueProcessing())
+        return false;
     }
 
     return true;
@@ -159,9 +162,8 @@ class TypeResolver
     // If we're currently trying to resolve this variable's constant
     // expression, report an error.
     if (sym->isResolvingConstExpr()) {
-      cc_.reportError(sym->node()->loc(),
-                      Message_RecursiveConstantExpression,
-                      sym->name()->chars());
+      cc_.report(sym->node()->loc(), rmsg::recursive_constexpr)
+        << sym->name();
 
       // Set a bogus constant expression so we don't report again.
       sym->setConstExpr(DefaultValueForPlainType(sym->type()));
@@ -218,9 +220,8 @@ class TypeResolver
     // We got a constexpr with no initialization. Just assume it's 0, but
     // report an error as SP1 does.
     if (!node->initialization()) {
-      cc_.reportError(node->loc(),
-                      Message_ConstantVariableNeedsConstExpr,
-                      sym->name()->chars());
+      cc_.report(node->loc(), rmsg::constant_var_needs_constexpr)
+        << sym->name();
       sym->setConstExpr(DefaultValueForPlainType(sym->type()));
       return;
     }
@@ -235,9 +236,8 @@ class TypeResolver
       case ConstantEvaluator::Ok:
         break;
       case ConstantEvaluator::NotConstant:
-        cc_.reportError(node->loc(),
-                        Message_ConstantVariableNeedsConstExpr,
-                        sym->name()->chars());
+        cc_.report(node->loc(), rmsg::constant_var_needs_constexpr)
+          << sym->name();
         // FALLTHROUGH.
       case ConstantEvaluator::TypeError:
         // Error has already been reported.
@@ -268,10 +268,10 @@ class TypeResolver
       if (type) {
         // We can reach this through "enum A { B = C, C };" if we are resolving
         // the enum through the normal AST walk.
-        cc_.reportError(node->loc(),
-                        Message_EnumDependsOnChildEnum,
-                        enum_constant_stack_.back()->name()->chars(),
-                        node->name()->chars());
+        cc_.report(node->loc(), rmsg::enum_depends_on_child_enum)
+          << enum_constant_stack_.back()->name()
+          << node->name()
+          << cc_.note(enum_constant_stack_.back()->loc(), rmsg::here);
 
         // Always set a value.
         node->sym()->setTypeAndValue(type, DefaultValueForPlainType(type));
@@ -336,9 +336,8 @@ class TypeResolver
     // The parent must be a methodmap.
     TypeSymbol *parentSymbol = proxy->sym()->asType();
     if (!parentSymbol) {
-      cc_.reportError(proxy->loc(),
-                      Message_MethodmapBadParent,
-                      proxy->name()->chars());
+      cc_.report(proxy->loc(), rmsg::bad_methodmap_parent)
+        << proxy->name();
       return nullptr;
     }
 
@@ -348,9 +347,8 @@ class TypeResolver
       return nullptr;
 
     if (!type->isEnum() || !type->toEnum()->methodmap()) {
-      cc_.reportError(proxy->loc(),
-                      Message_MethodmapBadParentType,
-                      GetTypeName(type));
+      cc_.report(proxy->loc(), rmsg::bad_methodmap_parent_type)
+        << type;
       return nullptr;
     }
 
@@ -400,9 +398,8 @@ class TypeResolver
     // Check that we do not appear in the parent chain.
     for (EnumType *cursor = parent; cursor; cursor = cursor->methodmap()->parent()) {
       if (cursor->methodmap() == mm) {
-        cc_.reportError(methodmap->parent()->loc(),
-                        Message_MethodmapIsCircular,
-                        methodmap->name()->chars());
+        cc_.report(methodmap->parent()->loc(), rmsg::circular_methodmap)
+          << methodmap->name();
         parent = nullptr;
         break;
       }
@@ -498,7 +495,10 @@ class TypeResolver
   }
 
   void visitTypedefStatement(TypedefStatement *node) override {
-    assert(!node->spec()->resolved());
+    // Note: we may already have resolved() set if we attempted to resolve this
+    // erroneously and recursively.
+    if (node->spec()->resolved())
+      return;
 
     Type *actual = resolveType(node->spec());
     TypedefType *tdef = cc_.types()->newTypedef(node->name(), actual);
@@ -633,7 +633,7 @@ class TypeResolver
         break;
       case ConstantEvaluator::NotConstant:
         if (mode == ConstantEvaluator::Required)
-          cc_.reportError(expr->loc(), Message_ArraySizeMustBeConstant);
+          cc_.report(expr->loc(), rmsg::array_size_must_be_constant);
         return false;
       case ConstantEvaluator::TypeError:
         // Error already reported.
@@ -644,17 +644,17 @@ class TypeResolver
     }
 
     if (!value.isInteger()) {
-      cc_.reportError(expr->loc(), Message_ArraySizeMustBeInteger);
+      cc_.report(expr->loc(), rmsg::array_size_must_be_int);
       return false;
     }
 
     const IntValue &iv = value.toInteger();
     if (iv.isNegativeOrZero()) {
-      cc_.reportError(expr->loc(), Message_ArraySizeMustBePositive);
+      cc_.report(expr->loc(), rmsg::array_size_must_be_positive);
       return false;
     }
     if (!iv.valueFitsInInt32()) {
-      cc_.reportError(expr->loc(), Message_ArraySizeTooLarge);
+      cc_.report(expr->loc(), rmsg::array_size_too_large);
       return false;
     }
 
@@ -744,9 +744,8 @@ class TypeResolver
     assert(!sym->hasValue());
 
     if (sym->isResolving()) {
-      cc_.reportError(sym->node()->loc(),
-                      Message_RecursiveConstantExpression,
-                      sym->name()->chars());
+      cc_.report(sym->node()->loc(), rmsg::recursive_constexpr)
+        << sym->name();
       return;
     }
 
@@ -769,7 +768,7 @@ class TypeResolver
       return spec->resolved();
 
     if (spec->isResolving()) {
-      cc_.reportError(spec->baseLoc(), Message_CannotResolveRecursiveType);
+      cc_.report(spec->baseLoc(), rmsg::recursive_type);
 
       // We don't want to report this twice, so mark it as resolved.
       spec->setResolved(&UnresolvedType);
@@ -799,10 +798,12 @@ class TypeResolver
       //
       // Note: We also forbid this for objects (is ref basically deprecated?
       // I guess so).
-      if (type->canUseInReferenceType())
+      if (type->canUseInReferenceType()) {
         type = cc_.types()->newReference(type);
-      else
-        cc_.reportError(spec->byRefLoc(), Message_TypeCannotBeReference, GetTypeClassName(type));
+      } else {
+        cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
+          << type;
+      }
     }
 
     if (spec->isConst())
@@ -857,7 +858,8 @@ class TypeResolver
     if (!sym) {
       // It's okay to return null here - our caller will massage it into
       // UnresolvedType.
-      cc_.reportError(proxy->loc(), Message_IdentifierIsNotAType, proxy->sym()->name()->chars());
+      cc_.report(proxy->loc(), rmsg::not_a_type)
+        << proxy->sym()->name();
       return nullptr;
     }
 
@@ -878,7 +880,7 @@ class TypeResolver
 
   Type *resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const Vector<int> *arrayInitData = nullptr) {
     if (type->isVoid())
-      cc_.reportError(spec->arrayLoc(), Message_CannotCreateArrayOfVoid);
+      cc_.report(spec->arrayLoc(), rmsg::array_of_void);
 
     size_t rank = spec->rank() - 1;
     do {
@@ -910,12 +912,12 @@ class TypeResolver
     switch (ceval.Evaluate(cs->expression(), &out)) {
       case ConstantEvaluator::Ok:
         if (!out.isInteger() || !out.toInteger().typeFitsInInt32()) {
-          cc_.reportError(cs->expression()->loc(), Message_EnumConstantMustBeInt);
+          cc_.report(cs->expression()->loc(), rmsg::enum_value_must_be_int);
           return false;
         }
         break;
       case ConstantEvaluator::NotConstant:
-        cc_.reportError(cs->expression()->loc(), Message_EnumValueMustBeConstant);
+        cc_.report(cs->expression()->loc(), rmsg::enum_value_must_be_constant);
         return false;
       case ConstantEvaluator::TypeError:
         // error already reported.
@@ -961,5 +963,5 @@ ke::ResolveTypes(CompileContext &cc, TranslationUnit *unit)
   if (!binder.analyze())
     return false;
 
-  return cc.nerrors() == 0;
+  return cc.phasePassed();
 }

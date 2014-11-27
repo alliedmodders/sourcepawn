@@ -18,6 +18,7 @@
 #include "types.h"
 #include "compile-context.h"
 #include "boxed-value.h"
+#include "ast.h"
 
 using namespace ke;
 
@@ -173,6 +174,104 @@ ke::GetPrimitiveName(PrimitiveType type)
   }
 }
 
+static const char *
+GetBaseTypeName(Type *type)
+{
+  if (type->isUnresolved())
+    return "unresolved";
+  if (type->isMetaFunction())
+    return "function";
+  if (type->isVoid())
+    return "void";
+  if (type->isUnion())
+    return type->toUnion()->name()->chars();
+  if (type->isEnum())
+    return type->toEnum()->name()->chars();
+  return GetPrimitiveName(type->primitive());
+}
+
+static AString BuildTypeFromSpecifier(const TypeSpecifier *spec);
+static AString BuildTypeFromSignature(const FunctionSignature *sig);
+
+static AString
+BuildTypeFromSignature(const FunctionSignature *sig)
+{
+  AutoString base = "function ";
+  base = base + BuildTypeFromSpecifier(sig->returnType());
+  base = base + "(";
+
+  for (size_t i = 0; i < sig->parameters()->length(); i++) {
+    base = base + BuildTypeFromSpecifier(sig->parameters()->at(i)->spec());
+    if (i != sig->parameters()->length() - 1)
+      base = base + ", ";
+  }
+  base = base + ")";
+  return AString(base.ptr());
+}
+
+static AString
+BuildTypeFromSpecifier(const TypeSpecifier *spec)
+{
+  if (spec->resolved())
+    return BuildTypeName(spec->resolved());
+
+  AutoString base;
+  switch (spec->resolver()) {
+    case TOK_NAME:
+    case TOK_LABEL:
+      base = spec->proxy()->name()->chars();
+      break;
+    case TOK_FUNCTION:
+      base = BuildTypeFromSignature(spec->signature());
+      break;
+    default:
+      base = TokenNames[spec->resolver()];
+      break;
+  }
+
+  for (size_t i = 0; i < spec->rank(); i++)
+    base = base + "[]";
+
+  return AString(base.ptr());
+}
+
+AString
+ke::BuildTypeName(Type *aType)
+{
+  if (ArrayType *type = aType->asArray()) {
+    Vector<ArrayType *> stack;
+
+    Type *cursor = type;
+    Type *innermost = nullptr;
+    for (;;) {
+      if (!cursor->isArray()) {
+        innermost = cursor;
+        break;
+      }
+      stack.append(cursor->toArray());
+      cursor = cursor->toArray()->contained();
+    }
+
+    AutoString builder = BuildTypeName(innermost);
+    for (size_t i = 0; i < stack.length(); i++) {
+      if (stack[i]->hasFixedSize()) {
+        builder = builder + "[]";
+      } else {
+        builder = builder + "[" + stack[i]->fixedSize() + "]";
+      }
+    }
+    return AString(builder.ptr());
+  }
+  if (ReferenceType *type = aType->asReference()) {
+    AutoString builder = BuildTypeName(type->contained());
+    return AString((builder + "&").ptr());
+  }
+  if (FunctionType *type = aType->asFunction())
+    return BuildTypeFromSignature(type->signature());
+
+  return AString(GetBaseTypeName(aType));
+}
+
 const char *
 ke::GetTypeName(Type *type)
 {
@@ -238,21 +337,21 @@ int32_t
 ke::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
 {
   if (!aType->isArray()) {
-    cc.reportError(Message_SizeofRequiresArrayType);
+    cc.report(rmsg::sizeof_needs_variable);
     return 0;
   }
 
   ArrayType *type = aType->toArray();
   for (size_t i = 1; i <= level; i++) {
     if (!type->contained()->isArray()) {
-      cc.reportError(Message_SizeofHasTooManyDimensions);
+      cc.report(rmsg::sizeof_needs_array);
       return 0;
     }
     type = type->contained()->toArray();
   }
 
   if (!type->hasFixedSize()) {
-    cc.reportError(Message_SizeofWithIndeterminateArray);
+    cc.report(rmsg::sizeof_indeterminate);
     return 0;
   }
 

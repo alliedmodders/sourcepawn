@@ -61,6 +61,7 @@ Parser::consume_after_error(TokenKind closer, TokenKind opener)
       case TOK_EOL:
         return true;
       case TOK_EOF:
+      case TOK_UNKNOWN:
       case TOK_ERROR:
         return false;
       default:
@@ -103,12 +104,12 @@ Parser::requireTerminator()
 
   // We always require that the semicolon be on the same line.
   if (options_.RequireSemicolons)
-    cc_.reportError(scanner_.end(), Message_ExpectedSemicolon);
+    cc_.report(scanner_.end(), rmsg::expected_semicolon);
 
   if (tok == TOK_EOL)
     return true;
 
-  cc_.reportError(scanner_.end(), Message_ExpectedNewlineOrSemi);
+  cc_.report(scanner_.end(), rmsg::expected_newline_or_semicolon);
   return false;
 }
 
@@ -118,7 +119,7 @@ Parser::requireNewline()
 {
   if (scanner_.peekTokenSameLine() == TOK_EOL)
     return true;
-  cc_.reportError(scanner_.end(), Message_ExpectedNewline);
+  cc_.report(scanner_.end(), rmsg::expected_newline);
   return false;
 }
 
@@ -130,7 +131,7 @@ Parser::requireNewlineOrSemi()
     scanner_.next();
   if (scanner_.peekTokenSameLine() == TOK_EOL)
     return true;
-  cc_.reportError(scanner_.end(), Message_ExpectedNewline);
+  cc_.report(scanner_.end(), rmsg::expected_newline);
   return false;
 }
 
@@ -147,12 +148,12 @@ Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
   if (tok->kind == TOK_LABEL) {
     NameProxy *proxy = new (pool_) NameProxy(scanner_.begin(), scanner_.current_name());
     spec->setNamedType(TOK_LABEL, proxy);
-    cc_.reportError(scanner_.begin(), Message_NewDeclsRequired);
+    cc_.report(scanner_.begin(), rmsg::label_in_newdecl);
     return;
   }
 
   if (tok->kind != TOK_NAME) {
-    cc_.reportError(scanner_.begin(), Message_ExpectedTypeExpr);
+    cc_.report(scanner_.begin(), rmsg::expected_typeexpr);
     return;
   }
 
@@ -160,11 +161,11 @@ Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
   spec->setNamedType(TOK_NAME, proxy);
 
   if (proxy->name() == atom_Float_)
-    cc_.reportError(scanner_.begin(), Message_TypeIsDeprecated, "Float", "float");
+    cc_.report(scanner_.begin(), rmsg::type_is_deprecated) << "Float" << "float";
   else if (proxy->name() == atom_String_)
-    cc_.reportError(scanner_.begin(), Message_TypeIsDeprecated, "String", "char");
+    cc_.report(scanner_.begin(), rmsg::type_is_deprecated) << "String" << "char";
   else if (proxy->name() == atom_underbar_)
-    cc_.reportError(scanner_.begin(), Message_TypeIsDeprecated, "_", "int");
+    cc_.report(scanner_.begin(), rmsg::type_is_deprecated) << "_" << "int";
 }
 
 void
@@ -190,7 +191,7 @@ Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
 {
   if (match(TOK_CONST)) {
     if (spec->isConst())
-      cc_.reportError(scanner_.begin(), Message_ConstSpecifiedTwice);
+      cc_.report(scanner_.begin(), rmsg::const_specified_twice);
     spec->setConst(scanner_.begin());
   }
 
@@ -213,18 +214,14 @@ Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
     do {
       rank++;
       if (!match(TOK_RBRACKET))
-        cc_.reportError(scanner_.begin(), Message_FixedArrayInPrefix);
+        cc_.report(scanner_.begin(), rmsg::fixed_array_in_prefix);
     } while (match(TOK_LBRACKET));
     spec->setRank(begin, rank);
   }
 
   if (flags & DeclFlags::Argument) {
-    if (match(TOK_AMPERSAND)) {
-      if (!spec->isArray())
-        spec->setByRef(scanner_.begin());
-      else
-        cc_.reportError(scanner_.begin(), Message_TypeCannotBeReference, "array");
-    }
+    if (match(TOK_AMPERSAND))
+      spec->setByRef(scanner_.begin());
   }
 
   spec->setNewDecl();
@@ -267,8 +264,6 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
   TypeSpecifier *spec = &decl->spec;
 
   SourceLocation loc = scanner_.begin();
-  if (spec->isByRef())
-    cc_.reportError(loc, Message_TypeCannotBeReference, "array");
 
   uint32_t rank = 0;
   ExpressionList *dims = nullptr;
@@ -300,7 +295,7 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
   } while (match(TOK_LBRACKET));
 
   if (spec->isArray()) {
-    cc_.reportError(loc, Message_DoubleArrayDims);
+    cc_.report(loc, rmsg::double_array_dims);
     return;
   }
 
@@ -319,7 +314,7 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
 
   if (match(TOK_CONST)) {
     if (spec->isConst())
-      cc_.reportError(scanner_.begin(), Message_ConstSpecifiedTwice);
+      cc_.report(scanner_.begin(), rmsg::const_specified_twice);
     spec->setConst(scanner_.begin());
   }
 
@@ -351,7 +346,7 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
     if (!peek(TOK_NAME) && (flags & (DeclFlags::Variable|DeclFlags::Argument))) {
       TokenKind kind = scanner_.next();
       if (IsNewTypeToken(kind))
-        cc_.reportError(scanner_.begin(), Message_NewStyleBadKeyword);
+        cc_.report(scanner_.begin(), rmsg::newdecl_with_new);
       else
         scanner_.undo();
     }
@@ -398,7 +393,7 @@ Parser::reparse_decl(Declaration *decl, uint32_t flags)
     // well because parsing initializers would change them.
     if (match(TOK_LBRACKET)) {
       if (decl->spec.isArray())
-        cc_.reportError(scanner_.begin(), Message_DoubleArrayDims);
+        cc_.report(scanner_.begin(), rmsg::double_array_dims);
     }
 
     assert(!decl->spec.dims());
@@ -525,8 +520,10 @@ Parser::primitive()
     default:
     {
       TokenKind kind = scanner_.current()->kind;
-      if (kind != TOK_ERROR)
-        cc_.reportError(scanner_.begin(), Message_ExpectedExpression, TokenNames[kind]);
+      if (kind != TOK_UNKNOWN) {
+        cc_.report(scanner_.begin(), rmsg::expected_expression)
+          << TokenNames[kind];
+      }
       return nullptr;
     }
   }
@@ -924,7 +921,7 @@ Parser::relational()
       return nullptr;
     left = new (pool_) BinaryExpression(pos, kind, left, right);
     if (++count > 1) {
-      cc_.reportError(pos, Message_NoChainedRelationalOps);
+      cc_.report(pos, rmsg::no_chained_relops);
       return nullptr;
     }
   }
@@ -1133,10 +1130,7 @@ Parser::parseAccessor()
     else if (strcmp(name->chars(), "set") == 0)
       out = &setter;
     else
-      cc_.reportError(scanner_.begin(), Message_InvalidAccessorName);
-
-    if (!out->isEmpty())
-      cc_.reportError(scanner_.begin(), Message_AccessorRedeclared, name->chars());
+      cc_.report(scanner_.begin(), rmsg::invalid_accessor_name);
 
     if (matchMethodBind()) {
       if (!expect(TOK_NAME))
@@ -1245,7 +1239,7 @@ Parser::methodmap(TokenKind kind)
     else if (match(TOK_PROPERTY))
       decl = parseAccessor();
     else
-      cc_.reportError(scanner_.begin(), Message_ExpectedLayoutMember);
+      cc_.report(scanner_.begin(), rmsg::expected_layout_decl);
     if (!decl)
       return nullptr;
 
@@ -1294,7 +1288,7 @@ Parser::switch_()
     bool need_colon = true;
     if (match(TOK_DEFAULT)) {
       if (defaultCase) {
-        cc_.reportError(scanner_.begin(), Message_OneDefaultPerSwitch);
+        cc_.report(scanner_.begin(), rmsg::duplicate_default_case);
         return nullptr;
       }
 
@@ -1347,7 +1341,7 @@ Parser::switch_()
     requireNewline();
 
     if (!peek(TOK_CASE) && !peek(TOK_DEFAULT) && !peek(TOK_RBRACE)) {
-      cc_.reportError(scanner_.begin(), Message_SingleStatementPerCase);
+      cc_.report(scanner_.begin(), rmsg::expected_case);
       return nullptr;
     }
 
@@ -1483,7 +1477,7 @@ Parser::localVariableDeclaration(TokenKind kind, uint32_t flags)
   Declaration decl;
 
   if (!allowDeclarations_)
-    cc_.reportError(scanner_.begin(), Message_VariableMustBeInBlock);
+    cc_.report(scanner_.begin(), rmsg::variable_without_block);
 
   flags |= DeclFlags::Variable;
   if (!parse_decl(&decl, flags))
@@ -1803,7 +1797,7 @@ Parser::arguments()
 
     if (decl.spec.isVariadic()) {
       if (variadic)
-        cc_.reportError(decl.spec.variadicLoc(), Message_MultipleVarargs);
+        cc_.report(decl.spec.variadicLoc(), rmsg::multiple_varargs);
       variadic = true;
     }
 
@@ -1898,7 +1892,7 @@ Parser::global(TokenKind kind)
 
   if (kind == TOK_NEW || decl.spec.hasPostDims() || !peek(TOK_LPAREN)) {
     if (kind == TOK_NEW && decl.spec.isNewDecl())
-      cc_.reportError(decl.name.start, Message_NewStyleBadKeyword);
+      cc_.report(scanner_.begin(), rmsg::newdecl_with_new);
     return variable(TOK_NEW, &decl, attrs);
   }
   return function(TOK_FUNCTION, decl, nullptr, attrs);
@@ -1973,7 +1967,8 @@ Parser::parse()
     TokenKind kind = scanner_.next();
     switch (kind) {
       case TOK_ERROR:
-        return nullptr;
+      case TOK_UNKNOWN:
+        goto err_out;
 
       case TOK_EOF:
         break;
@@ -2016,12 +2011,15 @@ Parser::parse()
         break;
 
       case TOK_FUNCTAG:
-        cc_.reportError(scanner_.begin(), Message_FunctagsNotSupported);
+        cc_.report(scanner_.begin(), rmsg::functags_not_supported);
         scanner_.eatRestOfLine();
         break;
 
       default:
-        cc_.reportError(scanner_.begin(), Message_ExpectedGlobal);
+        if (kind != TOK_UNKNOWN) {
+          cc_.report(scanner_.begin(), rmsg::expected_global_decl)
+            << TokenNames[kind];
+        }
         goto err_out;
     }
 

@@ -79,9 +79,10 @@ CoerceForBinaryFloat(BoxedValue &left, BoxedValue &right)
       *out = BoxedValue(tmp);                                               \
       return Ok;                                                            \
     }                                                                       \
-    cc.reportError(Message_InvalidBinaryType,                               \
-                   TokenNames[tok],                                         \
-                   left.getTypename(), right.getTypename());                \
+    cc.report(rmsg::binary_type_mismatch)                                   \
+      << TokenNames[tok]                                                    \
+      << left.getTypename()                                                 \
+      << right.getTypename();                                               \
     return TypeError;
 
 #define EVAL_BIT_OP(tok, op)                                                \
@@ -93,9 +94,10 @@ CoerceForBinaryFloat(BoxedValue &left, BoxedValue &right)
       *out = BoxedValue(tmp);                                               \
       return Ok;                                                            \
     }                                                                       \
-    cc.reportError(Message_InvalidBinaryType,                               \
-                   TokenNames[tok],                                         \
-                   left.getTypename(), right.getTypename());                \
+    cc.report(rmsg::binary_type_mismatch)                                   \
+      << TokenNames[tok]                                                    \
+      << left.getTypename()                                                 \
+      << right.getTypename();                                               \
     return TypeError;
 
 #define EVAL_LOGIC_OP(tok, op)                                              \
@@ -120,9 +122,10 @@ CoerceForBinaryFloat(BoxedValue &left, BoxedValue &right)
       *out = BoxedValue(tmp);                                               \
       return Ok;                                                            \
     }                                                                       \
-    cc.reportError(Message_InvalidBinaryType,                               \
-                   TokenNames[tok],                                         \
-                   left.getTypename(), right.getTypename());                \
+    cc.report(rmsg::binary_type_mismatch)                                   \
+      << TokenNames[tok]                                                    \
+      << left.getTypename()                                                 \
+      << right.getTypename();                                               \
     return TypeError;
 
 ConstantEvaluator::Result
@@ -173,14 +176,16 @@ ConstantEvaluator::unary(UnaryExpression *expr, BoxedValue &inner, BoxedValue *o
         *out = BoxedValue(FloatValue::Neg(inner.toFloat()));
         return Ok;
       }
-      cc.reportError(Message_InvalidUnaryType, TokenNames[TOK_NEGATE], inner.getTypename());
+      cc.report(rmsg::unary_type_mismatch)
+        << TokenNames[TOK_NEGATE]
+        << inner.getTypename();
       return TypeError;
 
     case TOK_TILDE:
       if (!inner.isInteger()) {
-        cc.reportError(Message_InvalidUnaryType,
-                       TokenNames[TOK_TILDE],
-                       inner.getTypename());
+        cc.report(rmsg::unary_type_mismatch)
+          << TokenNames[TOK_TILDE]
+          << inner.getTypename();
         return TypeError;
       }
       *out = BoxedValue(IntValue::Invert(inner.toInteger()));
@@ -257,7 +262,7 @@ ConstantEvaluator::Evaluate(Expression *expr, BoxedValue *out)
     // Resolve to a variable - not a var or type like C++.
     VariableSymbol *sym = so->proxy()->sym()->asVariable();
     if (!sym) {
-      cc.reportError(Message_SizeofRequiresVariable);
+      cc.report(rmsg::sizeof_needs_variable);
       return TypeError;
     }
 

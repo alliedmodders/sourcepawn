@@ -22,8 +22,8 @@
 #include "tokens.h"
 #include "source-manager.h"
 #include "process-options.h"
-#include "messages.h"
 #include "pool-allocator.h"
+#include "reporting.h"
 
 namespace ke {
 
@@ -178,7 +178,7 @@ class Lexer : public ke::Refcounted<Lexer>
   bool handlePreprocessorDirective();
   void enterPreprocessorDirective();
 
-  void reportError(const SourceLocation &loc, Message msg, ...);
+  MessageBuilder report(const SourceLocation &loc, rmsg::Id id);
 
  private:
   // Internal helpers.

@@ -26,7 +26,6 @@
 #include <string.h>
 #include "pool-allocator.h"
 #include "auto-string.h"
-#include "messages.h"
 #include "tokens.h"
 #include "string-pool.h"
 #include "type-manager.h"
@@ -71,24 +70,6 @@ class TranslationUnit : public PoolObject
   GlobalScope *globalScope_;
 };
 
-struct CompileError
-{
-  CompileError()
-  : message(nullptr)
-  {
-  }
-  CompileError(const SourceLocation &loc, const char *type, char *message)
-   : loc(loc),
-     type(type),
-     message(message)
-  {
-  }
-
-  SourceLocation loc;
-  const char *type;
-  char *message;
-};
-
 class CompileContext
 {
  public:
@@ -97,11 +78,11 @@ class CompileContext
 
   bool compile();
 
-  size_t nerrors() const {
-    return errors_.length();
+  bool phasePassed() const {
+    return !reports_->HasErrors();
   }
-  const CompileError &getError(size_t i) {
-    return errors_[i];
+  bool canContinueProcessing() const {
+    return !reports_->HasFatalError();
   }
 
   PoolAllocator &pool() {
@@ -126,13 +107,21 @@ class CompileContext
   bool ChangePragmaDynamic(ReportingContext &rc, int64_t value);
 
   // Error reporting.
-
+  ReportManager &reporting() {
+    return *reports_.get();
+  }
   void reportFatal(rmsg::Id msg) {
     reports_->reportFatal(msg);
   }
-
-  void reportErrorVa(const SourceLocation &loc, Message msg, va_list ap);
-  void reportError(const SourceLocation &loc, Message msg, ...);
+  void reportFatal(const SourceLocation &loc, rmsg::Id msg) {
+    reports_->reportFatal(loc, msg);
+  }
+  MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id) {
+    return reports_->report(loc, msg_id);
+  }
+  MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id) {
+    return reports_->note(loc, msg_id);
+  }
 
   Atom *createAnonymousName(const SourceLocation &loc);
 
@@ -140,13 +129,10 @@ class CompileContext
   AutoPtr<ReportManager> reports_;
   PoolAllocator pool_;
   AutoPtr<SourceManager> source_;
-  Vector<CompileError> errors_;
   StringPool strings_;
   TypeManager types_;
   CompileOptions options_;
 };
-
-bool ReadFileChars(const char *path, char **textp, size_t *lengthp);
 
 extern ke::ThreadLocal<CompileContext *> CurrentCompileContext;
 

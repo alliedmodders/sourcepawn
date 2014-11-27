@@ -490,7 +490,6 @@ class FunctionType : public Type
   }
 
  private:
-  Atom *name_;
   FunctionSignature *signature_;
 };
 
@@ -547,6 +546,7 @@ extern Type UnresolvedType;
 const char *GetPrimitiveName(PrimitiveType type);
 const char *GetTypeName(Type *type);
 const char *GetTypeClassName(Type *type);
+AString BuildTypeName(Type *type);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be

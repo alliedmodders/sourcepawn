@@ -151,8 +151,7 @@ class NameResolver : public AstVisitor
 
   bool analyze() {
     // At the import level, we declare system types.
-    if (!declareSystemTypes(globals_))
-      return false;
+    declareSystemTypes(globals_);
 
     unit_->setGlobalScope(globals_);
 
@@ -161,6 +160,9 @@ class NameResolver : public AstVisitor
     for (size_t i = 0; i < unit_->tree()->statements()->length(); i++) {
       Statement *stmt = unit_->tree()->statements()->at(i);
       stmt->accept(this);
+
+      if (!cc_.canContinueProcessing())
+        return false;
     }
 
     resolveUnknownTags();
@@ -232,11 +234,11 @@ class NameResolver : public AstVisitor
     visitTypeIfNeeded(decl->spec());
 
     if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
-      cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
-                      "field", decl->name()->chars(),
-                      sym->kindName(),
-                      cc_.source().getLine(sym->node()->loc()),
-                      cc_.source().getCol(sym->node()->loc()));
+      cc_.report(decl->loc(), rmsg::redefined_layout_decl)
+        << "field"
+        << decl->name()
+        << sym->kindName()
+        << cc_.note(sym->node()->loc(), rmsg::previous_location);
       return;
     }
 
@@ -265,11 +267,11 @@ class NameResolver : public AstVisitor
       visitFunction(decl->setter()->fun());
 
     if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
-      cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
-                      "property", decl->name()->chars(),
-                      sym->kindName(),
-                      cc_.source().getLine(sym->node()->loc()),
-                      cc_.source().getCol(sym->node()->loc()));
+      cc_.report(decl->loc(), rmsg::redefined_layout_decl)
+        << "property"
+        << decl->name()
+        << sym->kindName()
+        << cc_.note(sym->node()->loc(), rmsg::previous_location);
       return;
     }
 
@@ -285,11 +287,11 @@ class NameResolver : public AstVisitor
 
     // Once we support overloading, this will have to change.
     if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
-      cc_.reportError(decl->loc(), Message_RedefinedLayoutDecl,
-                      "method", decl->name()->chars(),
-                      sym->kindName(),
-                      cc_.source().getLine(sym->node()->loc()),
-                      cc_.source().getCol(sym->node()->loc()));
+      cc_.report(decl->loc(), rmsg::redefined_layout_decl)
+        << "method"
+        << decl->name()
+        << sym->kindName()
+        << cc_.note(sym->node()->loc(), rmsg::previous_location);
       return;
     }
 
@@ -316,7 +318,7 @@ class NameResolver : public AstVisitor
 
     if (layout->token() == TOK_UNION) {
       if (layout_scope_->hasMixedAnonymousFields()) {
-        cc_.reportError(layout->loc(), Message_UnionCannotMixAnonymousFields);
+        cc_.report(layout->loc(), rmsg::union_cannot_mix_fields);
         return;
       }
     } else {
@@ -540,40 +542,28 @@ class NameResolver : public AstVisitor
     return nullptr;
   }
 
-  bool declareSystemType(Scope *scope, const char *name, Type *type) {
+  void declareSystemType(Scope *scope, const char *name, Type *type) {
     Atom *tag = cc_.add(name);
-    if (!tag)
-      return false;
 
     TypeSymbol *sym = new (pool_) TypeSymbol(nullptr, scope, tag, type);
-    return scope->addSymbol(sym);
+    scope->addSymbol(sym);
   }
 
-  bool declareSystemType(Scope *scope, const char *name, PrimitiveType prim) {
-    return declareSystemType(scope, name, cc_.types()->getPrimitive(prim));
+  void declareSystemType(Scope *scope, const char *name, PrimitiveType prim) {
+    declareSystemType(scope, name, cc_.types()->getPrimitive(prim));
   }
 
-  bool declareSystemTypes(Scope *scope) {
-    if (!declareSystemType(scope, "float", PrimitiveType::Float))
-      return false;
-    if (!declareSystemType(scope, "int", PrimitiveType::Int32))
-      return false;
-    if (!declareSystemType(scope, "bool", PrimitiveType::Bool))
-      return false;
-    if (!declareSystemType(scope, "char", PrimitiveType::Char))
-      return false;
-    if (!declareSystemType(scope, "void", cc_.types()->getVoid()))
-      return false;
+  void declareSystemTypes(Scope *scope) {
+    declareSystemType(scope, "float", PrimitiveType::Float);
+    declareSystemType(scope, "int", PrimitiveType::Int32);
+    declareSystemType(scope, "bool", PrimitiveType::Bool);
+    declareSystemType(scope, "char", PrimitiveType::Char);
+    declareSystemType(scope, "void", cc_.types()->getVoid());
 
     // These are pseudo-deprecated, but we still have them for compatibility.
-    if (!declareSystemType(scope, "_", PrimitiveType::Int32))
-      return false;
-    if (!declareSystemType(scope, "any", cc_.types()->getUnchecked()))
-      return false;
-    if (!declareSystemType(scope, "Function", cc_.types()->getMetaFunction()))
-      return false;
-
-    return true;
+    declareSystemType(scope, "_", PrimitiveType::Int32);
+    declareSystemType(scope, "any", cc_.types()->getUnchecked());
+    declareSystemType(scope, "Function", cc_.types()->getMetaFunction());
   }
 
   void visitTypeIfNeeded(TypeSpecifier *spec) {
@@ -622,7 +612,8 @@ class NameResolver : public AstVisitor
 
           AtomSet::Insert p = seen.findForAdd(decl->name());
           if (p.found()) {
-            cc_.reportError(decl->loc(), Message_ArgumentNameDeclaredTwice, decl->name()->chars());
+            cc_.report(decl->loc(), rmsg::duplicate_argument)
+              << decl->name();
             continue;
           }
           seen.add(p, decl->name());
@@ -699,22 +690,9 @@ class NameResolver : public AstVisitor
   }
 
   void reportRedeclaration(Symbol *sym, Symbol *other) {
-    // :SRCLOC:
-#if 0
-    if (!cc_.source().sameFiles(sym->node()->loc(), other->node()->loc())) {
-      // :TODO: shorten paths.
-      cc_.reportError(sym->node()->loc(), Message_RedeclaredNameWithFile,
-        sym->name()->chars(),
-        cc_.source().getFile(other->node()->loc())->path(),
-        cc_.source().getLine(other->node()->loc()),
-        cc_.source().getCol(other->node()->loc()));
-    } else {
-      cc_.reportError(sym->node()->loc(), Message_RedeclaredName,
-        sym->name()->chars(),
-        cc_.source().getLine(other->node()->loc()),
-        cc_.source().getCol(other->node()->loc()));
-    }
-#endif
+    cc_.report(sym->node()->loc(), rmsg::redeclared_name)
+      << sym->name()
+      << (cc_.note(other->node()->loc(), rmsg::previous_location));
   }
 
   void registerArguments(FunctionSignature *sig) {
@@ -754,7 +732,8 @@ class NameResolver : public AstVisitor
           continue;
         seen.add(p, proxy->name());
 
-        cc_.reportError(proxy->loc(), Message_IdentifierNotFound, proxy->name()->chars());
+        cc_.report(proxy->loc(), rmsg::name_not_found)
+          << proxy->name();
         continue;
       }
 
@@ -782,13 +761,15 @@ class NameResolver : public AstVisitor
 
     TypeSymbol *sym = prev->asType();
     if (!sym) {
-      cc_.reportError(methodmap->loc(), Message_MethodmapOnNonType, sym->name()->chars());
+      cc_.report(methodmap->loc(), rmsg::methodmap_on_non_type)
+        << sym->name();
       return;
     }
 
     // Builtin types do not have AST nodes.
     if (!sym->node()) {
-      cc_.reportError(methodmap->loc(), Message_MethodmapOnNonEnum, sym->name()->chars());
+      cc_.report(methodmap->loc(), rmsg::methodmap_on_non_enum)
+        << sym->name();
       return;
     }
 
@@ -800,11 +781,11 @@ class NameResolver : public AstVisitor
         //   methodmap X {}
         //
         // We can give a slightly more specific error for this case.
-        cc_.reportError(methodmap->loc(),
-                        Message_MethodmapAlreadyDefined,
-                        methodmap->name()->chars());
+        cc_.report(methodmap->loc(), rmsg::methodmap_already_defined)
+          << methodmap->name();
       } else {
-        cc_.reportError(methodmap->loc(), Message_MethodmapOnNonEnum, sym->name()->chars());
+        cc_.report(methodmap->loc(), rmsg::methodmap_on_non_enum)
+          << sym->name();
       }
       return;
     }
@@ -844,6 +825,6 @@ ke::ResolveNames(CompileContext &cc, TranslationUnit *unit)
   if (!populator.analyze())
     return false;
 
-  return cc.nerrors() == 0;
+  return cc.phasePassed();
 }
 

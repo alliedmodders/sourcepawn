@@ -18,7 +18,7 @@
 #include "source-manager.h"
 #include "compile-context.h"
 #include <stdio.h>
-#include <am-bits.h>
+#include <am-arithmetic.h>
 
 using namespace ke;
 
@@ -31,7 +31,7 @@ class FileReader
      fp_(nullptr)
   {
     if ((fp_ = fopen(path, "rb")) == nullptr)
-      cc.reportError(Message_FileReadError);
+      cc.report(rmsg::file_read_error) << path;
   }
   ~FileReader() {
     if (fp_)
@@ -44,18 +44,18 @@ class FileReader
 
   bool read(char **ptr, uint32_t *lengthp) {
     if (fseek(fp_, 0, SEEK_END) == -1) {
-      cc_.reportError(Message_FileReadError, path_);
+      cc_.report(rmsg::file_read_error) << path_;
       return false;
     }
 
     long size = ftell(fp_);
     if (size == -1 || fseek(fp_, 0, SEEK_SET) == -1) {
-      cc_.reportError(Message_FileReadError, path_);
+      cc_.report(rmsg::file_read_error) << path_;
       return false;
     }
 
     if (size_t(size) > kMaxTotalSourceFileLength) {
-      cc_.reportError(Message_FileTooLarge, path_);
+      cc_.report(rmsg::file_too_large) << path_;
       return false;
     }
 
@@ -66,7 +66,7 @@ class FileReader
     }
 
     if (fread((char *)buffer, 1, size, fp_) != size_t(size)) {
-      cc_.reportError(Message_FileReadError, path_);
+      cc_.report(rmsg::file_read_error) << path_;
       return false;
     }
 
@@ -163,7 +163,7 @@ SourceManager::trackFile(const SourceLocation &from, Ref<SourceFile> file)
 {
   size_t loc_index;
   if (!trackExtents(file->length(), &loc_index)) {
-    cc_.reportError(from, Message_RanOutOfFileSourceLocations, file->path());
+    cc_.reportFatal(from, rmsg::out_of_sourcelocs);
     return LREntry();
   }
 
@@ -176,7 +176,7 @@ SourceManager::trackMacro(const SourceLocation &from, Macro *macro)
 {
   size_t loc_index;
   if (!trackExtents(macro->length(), &loc_index)) {
-    cc_.reportError(from, Message_RanOutOfMacroSourceLocations, macro->name->chars());
+    cc_.reportFatal(from, rmsg::out_of_sourcelocs);
     return LREntry();
   }
 
@@ -311,13 +311,7 @@ SourceManager::getLine(const LREntry &range, const SourceLocation &loc)
 }
 
 unsigned
-SourceManager::getCol(const SourceLocation &loc)
-{
-  return getCol(loc, getLine(loc));
-}
-
-unsigned
-SourceManager::getCol(const SourceLocation &aLoc, unsigned line)
+SourceManager::getCol(const SourceLocation &aLoc)
 {
   SourceLocation loc = normalize(aLoc);
 
@@ -325,13 +319,28 @@ SourceManager::getCol(const SourceLocation &aLoc, unsigned line)
   if (!findLocation(loc, &loc_index))
     return 0;
 
-  SourceFile *file = locations_[loc_index].getFile();
+  const LREntry &range = locations_[loc_index];
+  unsigned line = getLine(range, loc);
+  if (!line)
+    return 0;
+  return getCol(range, loc, line);
+}
+
+unsigned
+SourceManager::getCol(const LREntry &range, const SourceLocation &loc, unsigned line)
+{
+  if (!line) {
+    if ((line = getLine(range, loc)) == 0)
+      return 0;
+  }
+
+  SourceFile *file = range.getFile();
 
   // Cached and returned lines are + 1, but the line cache starts at 0.
   line = line - 1;
   assert(line < file->lineCache()->length());
 
-  uint32_t pos = loc.offset() - locations_[loc_index].id;
+  uint32_t pos = loc.offset() - range.id;
   uint32_t line_start = file->lineCache()->at(line);
 
 #if !defined(NDEBUG)
@@ -348,10 +357,27 @@ FullSourceRef
 SourceManager::decode(const SourceLocation &loc)
 {
   FullSourceRef ref;
-  ref.source = getSource(loc);
+  ref.file = getSource(loc);
   ref.line = getLine(loc);
-  ref.col = getCol(loc, ref.line);
+  ref.col = getCol(loc);
   return ref;
+}
+
+FullSourceRef
+SourceManager::getOrigin(const FullMacroRef &ref)
+{
+  Macro *macro = ref.macro;
+  if (!macro->definedAt.isSet())
+    return FullSourceRef();
+
+  assert(!macro->start().isInMacro());
+  size_t loc_index;
+  if (!findLocation(macro->start(), &loc_index))
+    return FullSourceRef();
+
+  FullSourceRef origin = fullSourceRef(locations_[loc_index], macro->start());
+  origin.col += ref.offset;
+  return origin;
 }
 
 bool
@@ -386,4 +412,33 @@ SourceManager::areLocationsInsertedOnSameLine(const SourceLocation &aLocA,
   unsigned line_a = getLine(locations_[loc_a], a);
   unsigned line_b = getLine(locations_[loc_b], b);
   return line_a && line_b && line_a == line_b;
+}
+
+FullSourceRef
+SourceManager::fullSourceRef(const LREntry &range, const SourceLocation &loc)
+{
+  FullSourceRef ref;
+  ref.file = range.getFile();
+  ref.line = getLine(range, loc);
+  ref.col = getCol(range, loc, ref.line);
+  return ref;
+}
+
+void
+SourceManager::getTokenHistory(const SourceLocation &aLoc, TokenHistory *history)
+{
+  SourceLocation loc = aLoc;
+  while (loc.isSet()) {
+    size_t loc_index;
+    if (!findLocation(loc, &loc_index))
+      return;
+
+    const LREntry &range = locations_[loc_index];
+    if (loc.isInMacro()) {
+      history->macros.append(FullMacroRef(range.getMacro(), loc.offset() - range.id));
+    } else {
+      history->files.append(fullSourceRef(range, loc));
+    }
+    loc = range.getParent();
+  }
 }
