@@ -90,10 +90,16 @@ ReportingContext::report(rmsg::Id msg)
   return cc_.report(loc_, msg);
 }
 
+static const size_t kErrorMessageLimit = 100;
+
 MessageBuilder
 ReportManager::note(const SourceLocation &loc, rmsg::Id msg_id)
 {
   assert(GetMessageInfo(msg_id).type == rmsg_type::note);
+
+  // Don't create any new messages after we've reached a limit.
+  if (num_errors_ >= kErrorMessageLimit)
+    return MessageBuilder(nullptr);
 
   Ref<TMessage> message = new TMessage(loc, msg_id);
   return MessageBuilder(message);
@@ -104,8 +110,16 @@ ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
 {
   assert(GetMessageInfo(msg_id).type != rmsg_type::fatal);
 
-  if (GetMessageInfo(msg_id).type != rmsg_type::note)
+  // Don't create any new messages after we've reached a limit.
+  if (num_errors_ >= kErrorMessageLimit)
+    return MessageBuilder(nullptr);
+
+  if (GetMessageInfo(msg_id).type != rmsg_type::note) {
     num_errors_++;
+
+    if (num_errors_ >= kErrorMessageLimit)
+      reportFatal(loc, rmsg::too_many_errors);
+  }
 
   Ref<TMessage> message = new TMessage(loc, msg_id);
   messages_.append(message);
@@ -115,8 +129,21 @@ ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
 void
 ReportManager::PrintMessages()
 {
+  if (fatal_error_ == rmsg::outofmemory) {
+    fprintf(stderr, "fatal error: out of memory\n");
+    return;
+  }
+
   for (size_t i = 0; i < messages_.length(); i++)
     printMessage(messages_[i]);
+
+  if (fatal_error_ != rmsg::none) {
+    FullSourceRef ref = cc_.source().decode(fatal_loc_);
+    AutoString line = renderSourceRef(ref);
+    line = line + ": ";
+    line = line + renderMessage(fatal_error_, nullptr, 0);
+    fprintf(stderr, "%s\n", line.ptr());
+  }
 }
 
 static inline bool

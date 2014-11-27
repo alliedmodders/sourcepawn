@@ -118,8 +118,10 @@ class TMessage : public ke::Refcounted<TMessage>
   void addArg(Type *type);
 
   void addNote(Ref<TMessage> note) {
-    assert(!note->notes_.length());
-    notes_.append(note);
+    if (note) {
+      assert(!note->notes_.length());
+      notes_.append(note);
+    }
   }
 
   const SourceLocation &origin() const {
