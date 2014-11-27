@@ -43,12 +43,10 @@ struct rmsg_info {
 static const rmsg_info sMessageTable[] =
 {
   { rmsg_type::fatal, "unknown" },
-#define MSG(Name, Type, String)
 #define RMSG(Name, Type, String) \
   { rmsg_type::Type, String },
 # include "messages.tbl"
 #undef RMSG
-#undef MSG
 };
 
 static inline const char *

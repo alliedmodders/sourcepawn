@@ -43,10 +43,8 @@ namespace rmsg
 {
   enum Id {
     none,
-#define MSG(Name, Type, String)
 #define RMSG(Name, Type, String)    Name,
 # include "messages.tbl"
-#undef MSG
 #undef RMSG
     sentinel
   };

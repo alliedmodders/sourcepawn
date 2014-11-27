@@ -110,8 +110,6 @@ RMSG(sizeof_indeterminate,          type,              "cannot compute size of i
 RMSG(sizeof_invalid_rank,           type,              "sizeof operator specifies too many dimensions")
 RMSG(int_type_overflow,             type,              "operator '%0' does not support types '%1' and '%2'; no sufficiently-sized integer type exists to hold the result")
 
-MSG(SizeofHasTooManyDimensions,     TypeError,              "sizeof has more dimensions than array type")
-
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")
 //MSG(CannotDeclareVoid,              TypeError,              "cannot declare void variables")
