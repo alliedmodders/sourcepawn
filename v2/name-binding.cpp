@@ -397,6 +397,11 @@ class NameResolver : public AstVisitor
     }
   }
 
+  void visitEnumConstant(EnumConstant *node) override {
+    // Unreachable.
+    assert(false);
+  }
+
   // General AST traversing of simple nodes.
 
   void visitAssignment(Assignment *node) override {

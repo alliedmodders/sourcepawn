@@ -345,6 +345,13 @@ class TypeResolver
     }
   }
 
+  void visitStructInitializer(StructInitializer *node) override {
+    for (size_t i = 0; i < node->pairs()->length(); i++) {
+      Expression *expr = node->pairs()->at(i)->expr();
+      expr->accept(this);
+    }
+  }
+
  private:
   EnumType *resolveMethodmapParentType(NameProxy *proxy) {
     // The parent must be a methodmap.

@@ -69,6 +69,7 @@ RMSG(functags_not_supported,        syntax,            "functags are not support
 RMSG(invalid_accessor_name,         syntax,            "accessor must be named 'get' or 'set'")
 RMSG(expected_layout_decl,          syntax,            "expected a field, property, or function")
 RMSG(no_chained_relops,             syntax,            "chained relational operators are not yet supported")
+RMSG(no_enum_structs,               syntax,            "type-sized enums ('enum structs') are not supported")
 
 // Name binding errors.
 RMSG(redeclared_name,               syntax,            "name '%0' was redeclared")

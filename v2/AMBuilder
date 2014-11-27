@@ -33,6 +33,7 @@ binary.sources += [
   'constant-evaluator.cpp',
   'float-value.cpp',
   'int-value.cpp',
+  'json-printer.cpp',
   'keyword-table.cpp',
   'lexer.cpp',
   'macro-lexer.cpp',

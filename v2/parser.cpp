@@ -1754,8 +1754,16 @@ Parser::enum_()
     if (scanner_.peek() == TOK_RBRACE)
       break;
 
+    if (match(TOK_LABEL))
+      cc_.report(scanner_.begin(), rmsg::no_enum_structs);
+
     Atom *name = expectName();
     SourceLocation loc = scanner_.begin();
+
+    if (peek(TOK_LBRACKET)) {
+      if (dimensions())
+        cc_.report(scanner_.begin(), rmsg::no_enum_structs);
+    }
 
     Expression *expr = nullptr;
     if (match(TOK_ASSIGN)) {

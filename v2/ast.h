@@ -126,7 +126,7 @@ class AstNode : public PoolObject
 class AstVisitor
 {
  public:
-#define _(name) virtual void visit##name(name *node) { assert(false); }
+#define _(name) virtual void visit##name(name *node) = 0;
   ASTKINDS(_)
 #undef _
 };
