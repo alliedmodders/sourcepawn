@@ -131,7 +131,7 @@ CompileContext::compile()
 
   ReportMemory(stderr);
 
-  //units_[0]->tree()->dump(stdout);
+  unit->tree()->toJson(*this, stdout);
 
   {
     //AmxEmitter sema(*this, units_[0]);

@@ -34,6 +34,7 @@ binary.sources += [
   'float-value.cpp',
   'int-value.cpp',
   'json-printer.cpp',
+  'json-tools.cpp',
   'keyword-table.cpp',
   'lexer.cpp',
   'macro-lexer.cpp',

@@ -33,6 +33,7 @@ namespace ke {
 class Scope;
 class FunctionScope;
 class LayoutScope;
+class CompileContext;
 
 #define ASTKINDS(_)       \
   _(VariableDeclaration)  \
@@ -1730,6 +1731,7 @@ class ParseTree : public PoolObject
   }
 
   void dump(FILE *fp);
+  void toJson(CompileContext &cc, FILE *fp);
 
   StatementList *statements() const {
     return statements_;

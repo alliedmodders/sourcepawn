@@ -21,17 +21,59 @@
 #include "string-pool.h"
 #include "pool-allocator.h"
 #include "boxed-value.h"
+#include <stdio.h>
 
 namespace ke {
+
+class JsonRenderer;
 
 class JsonValue : public PoolObject
 {
  public:
+  virtual void Render(JsonRenderer *renderer) = 0;
+};
+
+class JsonNull;
+class JsonBool;
+class JsonInt;
+class JsonString;
+class JsonList;
+class JsonObject;
+
+class JsonRenderer
+{
+ public:
+  JsonRenderer(FILE *fp);
+
+  void Render(JsonValue *value);
+
+  FILE *fp() const {
+    return fp_;
+  }
+
+  void RenderNull(JsonNull *val);
+  void RenderBool(JsonBool *val);
+  void RenderInt(JsonInt *val);
+  void RenderString(JsonString *val);
+  void RenderList(JsonList *val);
+  void RenderObject(JsonObject *val);
+
+ private:
+  void indent();
+  void dedent();
+  void prefix();
+
+ private:
+  FILE *fp_;
+  size_t indent_;
 };
 
 class JsonNull : public JsonValue
 {
  public:
+  void Render(JsonRenderer *renderer) override {
+    renderer->RenderNull(this);
+  }
 };
 
 class JsonBool : public JsonValue
@@ -40,6 +82,14 @@ class JsonBool : public JsonValue
   JsonBool(bool value)
    : value_(value)
   {}
+
+  void Render(JsonRenderer *renderer) override {
+    renderer->RenderBool(this);
+  }
+
+  bool value() const {
+    return value_;
+  }
 
  private:
   bool value_;
@@ -52,6 +102,14 @@ class JsonInt : public JsonValue
    : value_(value)
   {}
 
+  void Render(JsonRenderer *renderer) override {
+    renderer->RenderInt(this);
+  }
+
+  int value() const {
+    return value_;
+  }
+
  private:
   int value_;
 };
@@ -59,7 +117,17 @@ class JsonInt : public JsonValue
 class JsonString : public JsonValue
 {
  public:
-  JsonString(Atom *atom);
+  JsonString(Atom *atom)
+   : atom_(atom)
+   {}
+
+  void Render(JsonRenderer *renderer) override {
+    renderer->RenderString(this);
+  }
+
+  Atom *atom() const {
+    return atom_;
+  }
 
  private:
   Atom *atom_;
@@ -80,6 +148,10 @@ class JsonObject : public JsonValue
     values_.append(value);
   }
 
+  void Render(JsonRenderer *renderer) override {
+    renderer->RenderObject(this);
+  }
+
  private:
   PoolList<Atom *> keys_;
   PoolList<JsonValue *> values_;
@@ -96,6 +168,10 @@ class JsonList : public JsonValue
   }
   size_t length() const {
     return items_.length();
+  }
+
+  void Render(JsonRenderer *renderer) override {
+    renderer->RenderList(this);
   }
 
  private:

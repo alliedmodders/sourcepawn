@@ -22,10 +22,10 @@
 
 using namespace ke;
 
-class JsonPrinter : public AstVisitor
+class JsonBuilder : public AstVisitor
 {
  public:
-  JsonPrinter(CompileContext &cc)
+  JsonBuilder(CompileContext &cc)
    : cc_(cc),
      pool_(cc.pool())
   {
@@ -60,6 +60,16 @@ class JsonPrinter : public AstVisitor
     file_list_ = new (pool_) JsonList();
   }
 
+  JsonObject *toJson(ParseTree *tree) {
+    JsonObject *obj = new (pool_) JsonObject();
+
+    JsonList *list = new (pool_) JsonList();
+    for (size_t i = 0; i < tree->statements()->length(); i++)
+      list->add(toJson(tree->statements()->at(i)));
+    obj->add(atom_body_, list);
+    return obj;
+  }
+
   // Harder cases.
   void visitPropertyDecl(PropertyDecl *node) override {
     rval_->add(atom_name_, new (pool_) JsonString(node->name()));
@@ -70,7 +80,8 @@ class JsonPrinter : public AstVisitor
       rval_->add(cc_.add("setter"), toJson(new (pool_) JsonObject(), node->setter()));
   }
   void visitVariableDeclaration(VariableDeclaration *node) override {
-    rval_->add(atom_name_, new (pool_) JsonString(node->name()));
+    if (node->name())
+      rval_->add(atom_name_, new (pool_) JsonString(node->name()));
     rval_->add(atom_typespec_, toJson(node->spec()));
   }
   void visitTypedefStatement(TypedefStatement *node) override {
@@ -363,6 +374,22 @@ class JsonPrinter : public AstVisitor
         break;
     }
     obj->add(atom_resolver_, resolver);
+
+    if (!spec->rank())
+      return obj;
+
+    JsonList *dims = new (pool_) JsonList();
+    for (size_t i = 0; i < spec->rank(); i++) {
+      if (spec->sizeOfRank(i))
+        dims->add(toJson(spec->sizeOfRank(i)));
+      else
+        dims->add(new (pool_) JsonNull());
+    }
+    if (spec->hasPostDims())
+      obj->add(atom_postdims_, dims);
+    else
+      obj->add(atom_dims_, dims);
+
     return obj;
   }
 
@@ -459,3 +486,12 @@ class JsonPrinter : public AstVisitor
   JsonObject *rval_;
 };
 
+void
+ParseTree::toJson(CompileContext &cc, FILE *fp)
+{
+  JsonBuilder builder(cc);
+  JsonObject *obj = builder.toJson(this);
+  JsonRenderer renderer(fp);
+  renderer.Render(obj);
+  fprintf(fp, "\n");
+}
