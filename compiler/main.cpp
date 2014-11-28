@@ -20,17 +20,27 @@
 #include <string.h>
 #include "compile-context.h"
 #include "source-manager.h"
+#include "type-manager.h"
 
 using namespace ke;
 using namespace sp;
 
 int main(int argc, char **argv)
 {
-  CompileContext cc(argc, argv);
-  if (!cc.compile()) {
-    ReportManager &reporting = cc.reporting();
-    reporting.PrintMessages();
-    return 1;
+  StringPool strings;
+  ReportManager reports;
+  SourceManager source(strings, reports);
+
+  PoolAllocator pool;
+  {
+    PoolScope scope(pool);
+
+    CompileContext cc(pool, strings, reports, source);
+    if (!cc.compile()) {
+      ReportManager &reporting = cc.reporting();
+      reporting.PrintMessages();
+      return 1;
+    }
   }
 }
 

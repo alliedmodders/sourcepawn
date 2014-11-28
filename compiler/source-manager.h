@@ -30,9 +30,9 @@ namespace sp {
 
 using namespace ke;
 
-class CompileContext;
 struct ReportingContext;
 class SourceFile;
+class ReportManager;
 
 // We place some kind of reasonable cap on the size of source files. This cap
 // also applies to the offsets we can allocate in the source manager. Capping
@@ -209,7 +209,7 @@ struct LREntry
 class SourceManager
 {
  public:
-  SourceManager(CompileContext &cc);
+  SourceManager(StringPool &strings, ReportManager &reports);
 
   PassRef<SourceFile> open(ReportingContext &cc, const char *path);
 
@@ -263,7 +263,8 @@ class SourceManager
   SourceLocation normalize(const SourceLocation &loc);
 
  private:
-  CompileContext &cc_;
+  StringPool &strings_;
+  ReportManager &rr_;
   AtomMap<Ref<SourceFile>> file_cache_;
   Vector<LREntry> locations_;
 

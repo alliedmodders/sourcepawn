@@ -87,6 +87,7 @@ class StringPool
     StringPool()
       : table_(SystemAllocatorPolicy())
     {
+      table_.init(256);
     }
 
     ~StringPool()
@@ -95,10 +96,6 @@ class StringPool
         return;
       for (Table::iterator i(&table_); !i.empty(); i.next())
         delete *i;
-    }
-
-    bool init() {
-      return table_.init(256);
     }
 
     Atom *add(const char *str, size_t length) {

@@ -1249,7 +1249,7 @@ Lexer::processTailCommentBlock(Token *tok)
   TokenPos start = tok->start;
   TokenPos end = tok->end;
 
-  while ((tok->kind = scan(tok)) != TOK_COMMENT) {
+  while ((tok->kind = scan(tok)) == TOK_COMMENT) {
     if (tok->start.line > end.line + 1)
       break;
     end = tok->end;
@@ -1264,7 +1264,7 @@ Lexer::handleComments(Token *tok)
 {
   // We don't bother inserting comments from macros, or if we're not parsing
   // for an AST dump.
-  if (!options_.TraceComments || lexing_for_directive_) {
+  if (!pp_.traceComments() || lexing_for_directive_) {
     while (tok->kind == TOK_COMMENT)
       tok->kind = scan(tok);
     return;

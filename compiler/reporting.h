@@ -61,7 +61,7 @@ class TMessage : public ke::Refcounted<TMessage>
   class Arg
   {
    public:
-    virtual AString Render(CompileContext &cc) = 0;
+    virtual AString Render() = 0;
   };
 
   class StringArg : public Arg
@@ -77,7 +77,7 @@ class TMessage : public ke::Refcounted<TMessage>
      : str_(str)
     {}
 
-    AString Render(CompileContext &cc) override {
+    AString Render() override {
       return str_;
     }
 
@@ -92,7 +92,7 @@ class TMessage : public ke::Refcounted<TMessage>
      : atom_(atom)
     {}
 
-    AString Render(CompileContext &cc) override;
+    AString Render() override;
 
    private:
     Atom *atom_;
@@ -179,7 +179,7 @@ class MessageBuilder
 class ReportManager
 {
  public:
-  ReportManager(CompileContext &cc);
+  ReportManager();
 
   bool HasErrors() const {
     return HasFatalError() || num_errors_ > 0;
@@ -189,6 +189,11 @@ class ReportManager
   }
 
   void PrintMessages();
+
+ // Internal API.
+  void setSourceManager(SourceManager *srcmgr) {
+    source_ = srcmgr;
+  }
 
   void reportFatal(rmsg::Id msg) {
     if (!fatal_error_)
@@ -214,7 +219,7 @@ class ReportManager
                         size_t len);
 
  private:
-  CompileContext &cc_;
+  SourceManager *source_;
   rmsg::Id fatal_error_;
   SourceLocation fatal_loc_;
 
@@ -225,17 +230,22 @@ class ReportManager
 struct ReportingContext
 {
  public:
-  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError = true)
-   : cc_(cc),
+  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError = true);
+  ReportingContext(ReportManager &rr, const SourceLocation &loc, bool shouldError = true)
+   : rr_(rr),
      loc_(loc),
      should_error_(shouldError)
   {}
 
-  void reportFatal(rmsg::Id msg);
-  MessageBuilder report(rmsg::Id msg);
+  void reportFatal(rmsg::Id msg) {
+    rr_.reportFatal(msg);
+  }
+  MessageBuilder report(rmsg::Id msg) {
+    return rr_.report(loc_, msg);
+  }
 
  private:
-  CompileContext &cc_;
+  ReportManager &rr_;
   const SourceLocation &loc_;
   bool should_error_;
 };

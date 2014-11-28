@@ -69,24 +69,18 @@ TMessage::addArg(Type *type)
   addArg(BuildTypeName(type));
 }
 
-ReportManager::ReportManager(CompileContext &cc)
- : cc_(cc),
+ReportManager::ReportManager()
+ : source_(nullptr),
    fatal_error_(rmsg::none),
    num_errors_(0)
 {
 }
 
-void
-ReportingContext::reportFatal(rmsg::Id msg)
+ReportingContext::ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError)
+ : rr_(cc.reporting()),
+   loc_(loc),
+   should_error_(shouldError)
 {
-  // We always report fatal errors.
-  cc_.reportFatal(msg);
-}
-
-MessageBuilder
-ReportingContext::report(rmsg::Id msg)
-{
-  return cc_.report(loc_, msg);
 }
 
 static const size_t kErrorMessageLimit = 100;
@@ -137,7 +131,7 @@ ReportManager::PrintMessages()
     printMessage(messages_[i]);
 
   if (fatal_error_ != rmsg::none) {
-    FullSourceRef ref = cc_.source().decode(fatal_loc_);
+    FullSourceRef ref = source_->decode(fatal_loc_);
     AutoString line = renderSourceRef(ref);
     line = line + ": ";
     line = line + renderMessage(fatal_error_, nullptr, 0);
@@ -283,7 +277,7 @@ ReportManager::renderMessage(rmsg::Id id, const AutoPtr<TMessage::Arg> *args, si
       }
 
       builder = builder + AString(info.text + last_insertion, i - last_insertion);
-      builder = builder + args[argno]->Render(cc_);
+      builder = builder + args[argno]->Render();
 
       last_insertion = i + 2;
     }
@@ -309,7 +303,7 @@ void
 ReportManager::printMessage(Ref<TMessage> message)
 {
   TokenHistory history;
-  cc_.source().getTokenHistory(message->origin(), &history);
+  source_->getTokenHistory(message->origin(), &history);
 
   AutoString line;
   if (history.files.empty())
@@ -327,7 +321,7 @@ ReportManager::printMessage(Ref<TMessage> message)
     printSourceLine(history.files[0]);
 
   for (size_t i = 0; i < history.macros.length(); i++) {
-    FullSourceRef ref = cc_.source().getOrigin(history.macros[i]);
+    FullSourceRef ref = source_->getOrigin(history.macros[i]);
     AutoString note = renderSourceRef(ref);
     note = note + ": ";
 
@@ -355,7 +349,7 @@ ReportManager::printMessage(Ref<TMessage> message)
 }
 
 AString
-TMessage::AtomArg::Render(CompileContext &cc)
+TMessage::AtomArg::Render()
 {
   return AString(atom_->chars());
 }

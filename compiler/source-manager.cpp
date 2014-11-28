@@ -108,17 +108,19 @@ SourceFile::computeLineCache()
   memcpy(line_cache_->buffer(), lines.buffer(), sizeof(uint32_t) * lines.length());
 }
 
-SourceManager::SourceManager(CompileContext &cc)
- : cc_(cc),
+SourceManager::SourceManager(StringPool &strings, ReportManager &reports)
+ : strings_(strings),
+   rr_(reports),
    next_source_id_(1),
    last_lookup_(0)
 {
+  reports.setSourceManager(this);
 }
 
 PassRef<SourceFile>
 SourceManager::open(ReportingContext &cc, const char *path)
 {
-  Atom *atom = cc_.add(path);
+  Atom *atom = strings_.add(path);
   AtomMap<Ref<SourceFile>>::Insert p = file_cache_.findForAdd(atom);
   if (p.found())
     return p->value;
@@ -164,7 +166,7 @@ SourceManager::trackFile(const SourceLocation &from, Ref<SourceFile> file)
 {
   size_t loc_index;
   if (!trackExtents(file->length(), &loc_index)) {
-    cc_.reportFatal(from, rmsg::out_of_sourcelocs);
+    rr_.reportFatal(from, rmsg::out_of_sourcelocs);
     return LREntry();
   }
 
@@ -177,7 +179,7 @@ SourceManager::trackMacro(const SourceLocation &from, Macro *macro)
 {
   size_t loc_index;
   if (!trackExtents(macro->length(), &loc_index)) {
-    cc_.reportFatal(from, rmsg::out_of_sourcelocs);
+    rr_.reportFatal(from, rmsg::out_of_sourcelocs);
     return LREntry();
   }
 

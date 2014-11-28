@@ -31,12 +31,13 @@ using namespace sp;
 
 static const size_t kMaxIncludeDepth = 50;
 
-Preprocessor::Preprocessor(CompileContext &cc, const CompileOptions &options)
+Preprocessor::Preprocessor(CompileContext &cc)
  : cc_(cc),
-   options_(options),
+   options_(cc_.options()),
    keywords_(cc),
    tokens_(&normal_tokens_),
    allow_macro_expansion_(true),
+   disable_includes_(false),
    include_depth_(0)
 {
   setup_builtin_macros();
@@ -116,7 +117,6 @@ Preprocessor::enter(Ref<SourceFile> file)
   next_deprecation_message_ = "";
   allow_macro_expansion_ = true;
   lex_options_.RequireNewdecls = options_.RequireNewdecls;
-  lex_options_.TraceComments = options_.DumpAST;
 
   lexer_ = new Lexer(cc_, *this, lex_options_, file, tr);
   return true;
@@ -319,6 +319,9 @@ Preprocessor::enterFile(TokenKind directive,
                         const char *file,
                         const char *where)
 {
+  if (disable_includes_)
+    return false;
+
   AutoString path = searchPaths(file, where);
   if (!path.length()) {
     // Try to append '.inc'.
@@ -477,7 +480,7 @@ Preprocessor::handleEndOfFile()
 void
 Preprocessor::addComment(CommentPos where, const SourceRange &extends)
 {
-  // :TODO:
+  comment_handler_->HandleComment(where, extends);
 }
 
 void

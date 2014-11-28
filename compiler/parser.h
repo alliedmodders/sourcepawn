@@ -62,7 +62,7 @@ struct Declaration
 class Parser
 {
  public:
-  Parser(CompileContext &cc, Preprocessor &pp, const CompileOptions &options);
+  Parser(CompileContext &cc, Preprocessor &pp);
 
   ParseTree *parse();
 

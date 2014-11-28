@@ -29,22 +29,18 @@ using namespace sp;
 
 ThreadLocal<CompileContext *> sp::CurrentCompileContext;
 
-CompileContext::CompileContext(int argc, char **argv)
-  : strings_()
+CompileContext::CompileContext(PoolAllocator &pool,
+                               StringPool &strings,
+                               ReportManager &reports,
+                               SourceManager &source)
+ : pool_(pool),
+   strings_(strings),
+   reports_(reports),
+   source_(source)
 {
   assert(!CurrentCompileContext);
 
   CurrentCompileContext = this;
-
-  reports_ = new ReportManager(*this);
-  source_ = new SourceManager(*this);
-
-  if (argc < 2) {
-    fprintf(stdout, "usage: <file>\n");
-    return;
-  }
-
-  options_.InputFiles.append(argv[1]);
 
   // We automatically add "include" from the current working directory.
   options_.SearchPaths.append(AString("include/"));
@@ -85,17 +81,15 @@ ReportMemory(FILE *fp)
 bool
 CompileContext::compile()
 {
-  if (!strings_.init())
-    return false;
   if (!types_.initialize())
     return false;
 
   ReportingContext rc(*this, SourceLocation());
-  Ref<SourceFile> file = source_->open(rc, options_.InputFiles[0].chars());
+  Ref<SourceFile> file = source_.open(rc, ""); // :TODO: options_.InputFiles[0].chars());
   if (!file)
     return false;
 
-  Preprocessor pp(*this, options_);
+  Preprocessor pp(*this);
 
   fprintf(stderr, "-- Parsing --\n");
 
@@ -104,12 +98,8 @@ CompileContext::compile()
     if (!pp.enter(file))
       return false;
 
-    Parser p(*this, pp, options_);
+    Parser p(*this, pp);
     ParseTree *tree = p.parse();
-    if (!phasePassed())
-      return false;
-
-    pp.cleanup();
     if (!phasePassed())
       return false;
 
@@ -140,7 +130,7 @@ CompileContext::compile()
     //  return false;
   }
 
-  if (reports_->HasErrors())
+  if (reports_.HasErrors())
     return false;
 
   return true;
@@ -151,8 +141,8 @@ CompileContext::createAnonymousName(const SourceLocation &loc)
 {
   // :SRCLOC: include file name
   AutoString builder = "anonymous at ";
-  builder = builder + source_->getLine(loc);
-  builder = builder + source_->getCol(loc);
+  builder = builder + source_.getLine(loc);
+  builder = builder + source_.getCol(loc);
   return add(builder.ptr());
 }
 

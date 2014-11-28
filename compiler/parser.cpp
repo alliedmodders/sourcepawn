@@ -23,11 +23,11 @@
 using namespace ke;
 using namespace sp;
 
-Parser::Parser(CompileContext &cc, Preprocessor &pp, const CompileOptions &options)
+Parser::Parser(CompileContext &cc, Preprocessor &pp)
 : cc_(cc),
   pool_(cc_.pool()),
   scanner_(pp),
-  options_(options),
+  options_(cc_.options()),
   allowDeclarations_(true)
 {
   atom_Float_ = cc_.add("Float");
@@ -2039,6 +2039,8 @@ Parser::parse()
       list->append(statement);
     }
   }
+
+  scanner_.cleanup();
 
  err_out:
   return new (pool_) ParseTree(list);

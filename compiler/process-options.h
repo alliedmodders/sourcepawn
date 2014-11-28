@@ -26,27 +26,29 @@ namespace sp {
 struct LexOptions
 {
   bool RequireNewdecls;
-  bool TraceComments;
 
   LexOptions()
-   : RequireNewdecls(false),
-     TraceComments(false)
+   : RequireNewdecls(false)
   {}
 };
 
 struct CompileOptions
 {
+  // Always require new-style declarations.
   bool RequireNewdecls;
+
+  // Always require semicolons.
   bool RequireSemicolons;
-  bool DumpAST;
-  size_t PragmaDynamic;
+
+  // Memory size for v1 pcode.
+  uint32_t PragmaDynamic;
+
+  // Search paths.
   Vector<AString> SearchPaths;
-  Vector<AString> InputFiles;
 
   CompileOptions()
    : RequireNewdecls(false),
      RequireSemicolons(false),
-     DumpAST(false),
      PragmaDynamic(0)
   {
   }

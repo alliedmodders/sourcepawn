@@ -73,16 +73,18 @@ class TranslationUnit : public PoolObject
 class CompileContext
 {
  public:
-  CompileContext(int argc, char **argv);
+  CompileContext(PoolAllocator &pool, StringPool &strings,
+                 ReportManager &reports,
+                 SourceManager &source);
   ~CompileContext();
 
   bool compile();
 
   bool phasePassed() const {
-    return !reports_->HasErrors();
+    return !reports_.HasErrors();
   }
   bool canContinueProcessing() const {
-    return !reports_->HasFatalError();
+    return !reports_.HasFatalError();
   }
 
   PoolAllocator &pool() {
@@ -92,7 +94,10 @@ class CompileContext
     return &types_;
   }
   SourceManager &source() {
-    return **source_;
+    return source_;
+  }
+  CompileOptions &options() {
+    return options_;
   }
 
   // String interning.
@@ -108,28 +113,28 @@ class CompileContext
 
   // Error reporting.
   ReportManager &reporting() {
-    return *reports_.get();
+    return reports_;
   }
   void reportFatal(rmsg::Id msg) {
-    reports_->reportFatal(msg);
+    reports_.reportFatal(msg);
   }
   void reportFatal(const SourceLocation &loc, rmsg::Id msg) {
-    reports_->reportFatal(loc, msg);
+    reports_.reportFatal(loc, msg);
   }
   MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id) {
-    return reports_->report(loc, msg_id);
+    return reports_.report(loc, msg_id);
   }
   MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id) {
-    return reports_->note(loc, msg_id);
+    return reports_.note(loc, msg_id);
   }
 
   Atom *createAnonymousName(const SourceLocation &loc);
 
  private:
-  AutoPtr<ReportManager> reports_;
-  PoolAllocator pool_;
-  AutoPtr<SourceManager> source_;
-  StringPool strings_;
+  PoolAllocator &pool_;
+  StringPool &strings_;
+  ReportManager &reports_;
+  SourceManager &source_;
   TypeManager types_;
   CompileOptions options_;
 };

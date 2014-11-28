@@ -27,6 +27,12 @@
 
 namespace sp {
 
+class CommentDelegate
+{
+ public:
+  virtual void HandleComment(CommentPos where, const SourceRange &extends) = 0;
+};
+
 // In earlier iterations of SourcePawn, we used three passes for lexing. The
 // first pass stripped comments. The second pass handled preprocessor
 // directives. The final pass lexed the entire concatenated source buffer for
@@ -48,7 +54,7 @@ class Preprocessor
   friend class MacroLexer;
 
  public:
-  Preprocessor(CompileContext &cc, const CompileOptions &options);
+  Preprocessor(CompileContext &cc);
 
   // Start preprocessing a file. This blows away any existing lexer state.
   bool enter(Ref<SourceFile> file);
@@ -64,6 +70,17 @@ class Preprocessor
   bool expect(TokenKind kind);
   void undo() {
     tokens_->push();
+  }
+
+  // Disable #include.
+  void disableIncludes() {
+    disable_includes_ = true;
+  }
+  void setCommentDelegate(CommentDelegate *handler) {
+    comment_handler_ = handler;
+  }
+  bool traceComments() const {
+    return !!comment_handler_;
   }
 
   // If there is a newline in between the most recently lexed token and the
@@ -210,8 +227,14 @@ class Preprocessor
   // Whether or not macro expansion is allowed.
   bool allow_macro_expansion_;
 
+  // Whether or not #include is disabled.
+  bool disable_includes_;
+
   // Number of files currently #included in the lexer stack.
   size_t include_depth_;
+
+  // Handler for comments.
+  CommentDelegate *comment_handler_;
 };
 
 }
