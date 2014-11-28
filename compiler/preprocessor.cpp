@@ -222,7 +222,7 @@ Preprocessor::peekTokenSameLine()
 
   // If both tokens are in the same source file, this becomes very easy.
   if (cur->source_id == next->source_id) {
-    return (cur->end.line == next->start.line)
+    return (cur->end.line == next->start.line && next->kind != TOK_EOF)
            ? next->kind
            : TOK_EOL;
   }

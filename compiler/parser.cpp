@@ -1992,6 +1992,7 @@ Parser::parse()
         scanner_.undo();
         // Fallthrough.
       case TOK_NEW:
+      case TOK_CONST:
       case TOK_STATIC:
       case TOK_PUBLIC:
       case TOK_STOCK:

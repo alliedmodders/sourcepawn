@@ -177,7 +177,7 @@ ExpandTabsInLine(const char *line, size_t length)
     }
   }
 
-  if (last_tab < length - 1)
+  if (last_tab < length)
     builder = builder + AString(&line[last_tab], length - last_tab);
   return AString(builder.ptr());
 }
@@ -201,7 +201,7 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
                          ? ref.file->length() - lines->at(line_index)
                          : lines->at(line_index + 1) - lines->at(line_index);
 
-  assert(ref.col < line_length);
+  assert(ref.col < line_length || ref.offset == ref.file->length());
 
   // Take off newline characters.
   while (line_length &&
