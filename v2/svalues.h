@@ -22,7 +22,7 @@
 #include "symbols.h"
 #include "hir.h"
 
-namespace ke {
+namespace sp {
 
 // An SValue is a value that has not yet been turned into an R- or L-value yet.
 // For example, x[i] is usually an R-value, but must exist as an L-value until

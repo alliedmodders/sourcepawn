@@ -18,6 +18,7 @@
 #include "semantic-analysis.h"
 
 using namespace ke;
+using namespace sp;
 
 SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *unit)
  : pool_(cc.pool()),

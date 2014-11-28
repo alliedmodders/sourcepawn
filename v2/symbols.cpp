@@ -19,6 +19,7 @@
 #include "scopes.h"
 
 using namespace ke;
+using namespace sp;
 
 bool
 VariableSymbol::canUseInConstExpr() const

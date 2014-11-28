@@ -20,7 +20,7 @@
 
 #include "compile-context.h"
 
-namespace ke {
+namespace sp {
 
 // Create symbol and scope hierarchies, and bind all names to available
 // definitions. If this succeeds, all NameProxies that need to be bound

@@ -19,6 +19,7 @@
 #include <am-float.h>
 
 using namespace ke;
+using namespace sp;
 
 bool
 FloatValue::UpcastForOp(FloatValue *aLeft, FloatValue *aRight)

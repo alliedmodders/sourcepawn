@@ -21,6 +21,7 @@
 #include <am-arithmetic.h>
 
 using namespace ke;
+using namespace sp;
 
 class FileReader
 {

@@ -18,6 +18,7 @@
 #include "preprocessor.h"
 
 using namespace ke;
+using namespace sp;
 
 bool
 Preprocessor::eval(int *out)

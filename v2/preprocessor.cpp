@@ -27,6 +27,7 @@
 #endif
 
 using namespace ke;
+using namespace sp;
 
 static const size_t kMaxIncludeDepth = 50;
 

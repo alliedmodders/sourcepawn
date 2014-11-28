@@ -20,7 +20,7 @@
 
 #include <am-utility.h>
 
-namespace ke {
+namespace sp {
 
 #define FLOAT_TYPE_MAP(_)           \
   _(float,   Float)                 \

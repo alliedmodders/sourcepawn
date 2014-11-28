@@ -23,7 +23,9 @@
 #include "boxed-value.h"
 #include <stdio.h>
 
-namespace ke {
+namespace sp {
+
+using namespace ke;
 
 class JsonRenderer;
 

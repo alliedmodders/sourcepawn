@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 using namespace ke;
+using namespace sp;
 
 JsonRenderer::JsonRenderer(FILE *fp)
  : fp_(fp),

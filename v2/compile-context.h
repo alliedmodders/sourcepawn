@@ -32,7 +32,7 @@
 #include "process-options.h"
 #include "reporting.h"
 
-namespace ke {
+namespace sp {
 
 class ParseTree;
 class GlobalScope;

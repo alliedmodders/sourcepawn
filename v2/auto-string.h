@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <am-string.h>
 
-namespace ke {
+namespace sp {
 
 class AutoString
 {

@@ -21,6 +21,7 @@
 #include "preprocessor.h"
 
 using namespace ke;
+using namespace sp;
 
 Parser::Parser(CompileContext &cc, Preprocessor &pp, const CompileOptions &options)
 : cc_(cc),

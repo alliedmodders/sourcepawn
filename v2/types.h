@@ -24,7 +24,7 @@
 #include "string-pool.h"
 #include "pool-allocator.h"
 
-namespace ke {
+namespace sp {
 
 struct ReportingContext;
 

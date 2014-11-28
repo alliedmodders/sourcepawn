@@ -22,7 +22,7 @@
 #include "ast.h"
 #include "scopes.h"
 
-namespace ke {
+namespace sp {
 
 class CompileContext;
 

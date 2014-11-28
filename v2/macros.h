@@ -24,7 +24,7 @@
 #include "pool-allocator.h"
 #include <stddef.h>
 
-namespace ke {
+namespace sp {
 
 typedef FixedPoolList<Token> TokenList;
 

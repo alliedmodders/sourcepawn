@@ -19,6 +19,7 @@
 #include "compile-context.h"
 
 using namespace ke;
+using namespace sp;
 
 const char *
 IntValue::getTypename() const

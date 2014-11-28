@@ -25,7 +25,7 @@
 #include "process-options.h"
 #include "pool-allocator.h"
 
-namespace ke {
+namespace sp {
 
 // In earlier iterations of SourcePawn, we used three passes for lexing. The
 // first pass stripped comments. The second pass handled preprocessor

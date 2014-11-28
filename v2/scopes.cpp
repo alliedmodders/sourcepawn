@@ -21,6 +21,7 @@
 #include "symbols.h"
 
 using namespace ke;
+using namespace sp;
 
 Scope::Scope(PoolAllocator &pool, Scope *enclosing)
  : pool_(pool),

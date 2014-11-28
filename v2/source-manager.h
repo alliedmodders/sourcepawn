@@ -26,7 +26,9 @@
 #include "tokens.h"
 #include "macros.h"
 
-namespace ke {
+namespace sp {
+
+using namespace ke;
 
 class CompileContext;
 struct ReportingContext;

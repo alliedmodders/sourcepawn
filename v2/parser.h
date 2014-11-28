@@ -24,7 +24,7 @@
 #include "scopes.h"
 #include "process-options.h"
 
-namespace ke {
+namespace sp {
 
 class Preprocessor;
 

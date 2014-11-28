@@ -21,7 +21,7 @@
 
 #include <am-allocator-policies.h>
 
-namespace ke {
+namespace sp {
 
 class CompileBuffer : public SystemAllocatorPolicy
 {

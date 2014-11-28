@@ -21,7 +21,7 @@
 #include <am-vector.h>
 #include <am-string.h>
 
-namespace ke {
+namespace sp {
 
 struct LexOptions
 {

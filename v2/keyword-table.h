@@ -21,7 +21,7 @@
 #include "string-pool.h"
 #include "tokens.h"
 
-namespace ke {
+namespace sp {
 
 class CompileContext;
 

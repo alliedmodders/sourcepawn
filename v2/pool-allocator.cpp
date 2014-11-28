@@ -23,6 +23,7 @@
 #include "compile-context.h"
 
 using namespace ke;
+using namespace sp;
 
 PoolAllocator::PoolAllocator()
   : reserved_(NULL),

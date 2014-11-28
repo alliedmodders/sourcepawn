@@ -19,8 +19,9 @@
 #include "compile-context.h"
 
 using namespace ke;
+using namespace sp;
 
-const char *ke::TokenNames[] =
+const char *sp::TokenNames[] =
 {
 #define _(name, str) str,
   TOKENMAP(_)

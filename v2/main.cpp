@@ -22,6 +22,7 @@
 #include "source-manager.h"
 
 using namespace ke;
+using namespace sp;
 
 int main(int argc, char **argv)
 {

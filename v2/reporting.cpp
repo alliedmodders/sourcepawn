@@ -26,6 +26,7 @@
 #endif
 
 using namespace ke;
+using namespace sp;
 
 static const char *sMessageTypeStrings[] = {
   "fatal",

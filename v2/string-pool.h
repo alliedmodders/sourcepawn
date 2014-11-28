@@ -26,7 +26,9 @@
 #include <am-string.h>
 #include <string.h>
 
-namespace ke {
+namespace sp {
+
+using namespace ke;
 
 // Wrapper around AString, since we might want to remove charfs() in a GC-safe
 // implementation.

@@ -22,7 +22,7 @@
 #include "types.h"
 #include "symbols.h"
 
-namespace ke {
+namespace sp {
 
 #define HIR_OPS(_)            \
   _(Jump)                     \

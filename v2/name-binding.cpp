@@ -26,6 +26,7 @@
 #include <am-hashset.h>
 
 using namespace ke;
+using namespace sp;
 
 // The name resolution phase is responsible for creating the symbol and scope
 // hierarchy, as well as performing name binding. After this phase, on success,
@@ -824,7 +825,7 @@ class NameResolver : public AstVisitor
 };
 
 bool
-ke::ResolveNames(CompileContext &cc, TranslationUnit *unit)
+sp::ResolveNames(CompileContext &cc, TranslationUnit *unit)
 {
   NameResolver populator(cc, unit);
   if (!populator.analyze())

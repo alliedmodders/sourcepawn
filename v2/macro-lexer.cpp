@@ -19,6 +19,7 @@
 #include "preprocessor.h"
 
 using namespace ke;
+using namespace sp;
 
 MacroLexer::MacroLexer(CompileContext &cc, Preprocessor &pp,
                        Macro *macro, const LREntry &range)

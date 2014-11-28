@@ -25,7 +25,9 @@
 #include <am-vector.h>
 #include <am-fixedarray.h>
 
-namespace ke {
+namespace sp {
+
+using namespace ke;
 
 // Allocates memory in chunks that are not freed until the entire allocator
 // is freed. This is intended for use with large, temporary data structures.

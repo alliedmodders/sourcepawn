@@ -24,6 +24,7 @@
 #include <am-arithmetic.h>
 
 using namespace ke;
+using namespace sp;
 
 Lexer::Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
              Ref<SourceFile> buffer, const LREntry &range)
@@ -91,7 +92,7 @@ static inline bool IsIdentChar(char c)
 }
 
 int
-ke::StringToInt32(const char *ptr)
+sp::StringToInt32(const char *ptr)
 {
   int v = 0;
   while (IsDigit(*ptr) || *ptr == '_') {

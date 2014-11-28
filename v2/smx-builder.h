@@ -25,7 +25,7 @@
 #include <smx/smx-headers.h>
 #include "string-pool.h"
 
-namespace ke {
+namespace sp {
 
 class SmxSection : public Refcounted<SmxSection>
 {

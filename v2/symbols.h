@@ -24,7 +24,9 @@
 #include "label.h"
 #include "boxed-value.h"
 
-namespace ke {
+namespace sp {
+
+using namespace ke;
 
 class String;
 class AstNode;

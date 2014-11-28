@@ -21,8 +21,9 @@
 #include "ast.h"
 
 using namespace ke;
+using namespace sp;
 
-Type ke::UnresolvableType(Type::Kind::Unresolvable);
+Type sp::UnresolvableType(Type::Kind::Unresolvable);
 
 Type *
 Type::NewVoid()
@@ -161,7 +162,7 @@ StructType::New(Atom *name)
 }
 
 const char *
-ke::GetPrimitiveName(PrimitiveType type)
+sp::GetPrimitiveName(PrimitiveType type)
 {
   switch (type) {
     case PrimitiveType::Bool:
@@ -240,7 +241,7 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec)
 }
 
 AString
-ke::BuildTypeName(Type *aType)
+sp::BuildTypeName(Type *aType)
 {
   if (ArrayType *type = aType->asArray()) {
     Vector<ArrayType *> stack;
@@ -277,7 +278,7 @@ ke::BuildTypeName(Type *aType)
 }
 
 const char *
-ke::GetTypeName(Type *type)
+sp::GetTypeName(Type *type)
 {
   if (type->isUnresolvable())
     return "<unresolvable>";
@@ -297,7 +298,7 @@ ke::GetTypeName(Type *type)
 }
 
 const char *
-ke::GetTypeClassName(Type *type)
+sp::GetTypeClassName(Type *type)
 {
   if (type->isUnresolvable())
     return "<unresolvable>";
@@ -317,7 +318,7 @@ ke::GetTypeClassName(Type *type)
 }
 
 BoxedValue
-ke::DefaultValueForPlainType(Type *type)
+sp::DefaultValueForPlainType(Type *type)
 {
   if (type->isUnresolvable())
     return BoxedValue(IntValue::FromInt32(0));
@@ -338,7 +339,7 @@ ke::DefaultValueForPlainType(Type *type)
 }
 
 int32_t
-ke::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
+sp::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
 {
   if (aType->isUnresolvedTypedef()) {
     cc.report(rmsg::recursive_type);

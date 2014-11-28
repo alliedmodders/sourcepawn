@@ -26,7 +26,7 @@
 #include "label.h"
 #include "svalues.h"
 
-namespace ke {
+namespace sp {
 
 // Semantic analysis occurs after all names and types have been bound. It
 // performs the important task of validating the semantics and type safety

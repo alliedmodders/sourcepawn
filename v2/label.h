@@ -18,7 +18,7 @@
 #ifndef _include_spcomp2_label_h_
 #define _include_spcomp2_label_h_
 
-namespace ke {
+namespace sp {
 
 // A label represents a local control-flow target in a stream. A label
 // may be in three states:

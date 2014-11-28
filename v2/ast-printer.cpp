@@ -18,6 +18,7 @@
 #include "ast.h"
 
 using namespace ke;
+using namespace sp;
 
 class AstPrinter : public AstVisitor
 {

@@ -25,7 +25,7 @@
 #include <am-string.h>
 #include "source-manager.h"
 
-namespace ke {
+namespace sp {
 
 class CompileContext;
 class Type;

@@ -25,7 +25,7 @@
 #include "pool-allocator.h"
 #include "reporting.h"
 
-namespace ke {
+namespace sp {
 
 class CompileContext;
 class Preprocessor;

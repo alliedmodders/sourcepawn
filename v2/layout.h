@@ -21,7 +21,7 @@
 #include "pool-allocator.h"
 #include "string-pool.h"
 
-namespace ke {
+namespace sp {
 
 class Methodmap : public PoolObject
 {

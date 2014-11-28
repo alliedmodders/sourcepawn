@@ -26,7 +26,7 @@
 #include <string.h>
 #include "source-location.h"
 
-namespace ke {
+namespace sp {
 
 // List of tokens the scanner can recognize.
 //

@@ -21,6 +21,7 @@
 #include "source-manager.h"
 
 using namespace ke;
+using namespace sp;
 
 class JsonBuilder : public AstVisitor
 {

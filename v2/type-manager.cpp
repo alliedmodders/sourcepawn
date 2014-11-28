@@ -20,6 +20,7 @@
 #include "type-manager.h"
 
 using namespace ke;
+using namespace sp;
 
 TypeManager::TypeManager()
  : voidType_(nullptr),

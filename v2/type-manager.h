@@ -21,7 +21,7 @@
 
 #include "types.h"
 
-namespace ke {
+namespace sp {
 
 class String;
 

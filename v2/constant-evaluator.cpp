@@ -22,6 +22,7 @@
 #include "compile-context.h"
 
 using namespace ke;
+using namespace sp;
 
 static inline void
 CoerceToBool(BoxedValue &in)

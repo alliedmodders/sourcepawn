@@ -25,8 +25,9 @@
 #include <string.h>
 
 using namespace ke;
+using namespace sp;
 
-ThreadLocal<CompileContext *> ke::CurrentCompileContext;
+ThreadLocal<CompileContext *> sp::CurrentCompileContext;
 
 CompileContext::CompileContext(int argc, char **argv)
   : strings_()

@@ -25,6 +25,7 @@
 #include "layout.h"
 
 using namespace ke;
+using namespace sp;
 
 template <typename T>
 class AutoPush
@@ -1004,7 +1005,7 @@ class TypeResolver
 const int TypeResolver::kRankUnvisited = INT_MIN;
 
 bool
-ke::ResolveTypes(CompileContext &cc, TranslationUnit *unit)
+sp::ResolveTypes(CompileContext &cc, TranslationUnit *unit)
 {
   TypeResolver binder(cc, unit);
   if (!binder.analyze())

@@ -28,7 +28,9 @@
 #include "tokens.h"
 #include <limits.h>
 
-namespace ke {
+namespace sp {
+
+using namespace ke;
 
 class Scope;
 class FunctionScope;

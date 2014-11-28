@@ -21,7 +21,7 @@
 #include <am-utility.h>
 #include "tokens.h"
 
-namespace ke {
+namespace sp {
 
 struct ReportingContext;
 

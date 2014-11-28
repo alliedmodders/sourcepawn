@@ -22,7 +22,7 @@
 #include "int-value.h"
 #include "float-value.h"
 
-namespace ke {
+namespace sp {
 
 class BoxedValue
 {
