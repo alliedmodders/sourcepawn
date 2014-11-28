@@ -126,7 +126,7 @@ void JsonRenderer::RenderObject(JsonObject *val)
   indent();
   for (size_t i = 0; i < val->keys().length(); i++) {
     prefix();
-    fprintf(fp_, "%s: ", val->keys()[i]->chars());
+    fprintf(fp_, "\"%s\": ", val->keys()[i]->chars());
     val->values()[i]->Render(this);
     if (i != val->keys().length() - 1)
       fprintf(fp_, ",");
