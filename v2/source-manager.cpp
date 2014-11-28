@@ -356,11 +356,12 @@ SourceManager::getCol(const LREntry &range, const SourceLocation &loc, unsigned 
 FullSourceRef
 SourceManager::decode(const SourceLocation &loc)
 {
-  FullSourceRef ref;
-  ref.file = getSource(loc);
-  ref.line = getLine(loc);
-  ref.col = getCol(loc);
-  return ref;
+  TokenHistory history;
+  getTokenHistory(loc, &history);
+
+  if (history.files.empty())
+    return FullSourceRef();
+  return history.files[0];
 }
 
 FullSourceRef
@@ -421,6 +422,7 @@ SourceManager::fullSourceRef(const LREntry &range, const SourceLocation &loc)
   ref.file = range.getFile();
   ref.line = getLine(range, loc);
   ref.col = getCol(range, loc, ref.line);
+  ref.offset = loc.offset() - range.id;
   return ref;
 }
 

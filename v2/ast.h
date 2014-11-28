@@ -101,6 +101,7 @@ class AstNode : public PoolObject
   }
   
   virtual Kind kind() const = 0;
+  virtual const char *kindName() const = 0;
 
 #define _(name)   bool is##name() { return kind() == k##name; }           \
           name *to##name() { assert(is##name()); return (name *)this; }   \
@@ -116,11 +117,14 @@ class AstNode : public PoolObject
 };
 
 #define DECLARE_NODE(type)            \
-  Kind kind() const {             \
-    return k##type;             \
-  }                       \
-  void accept(AstVisitor *visitor) {      \
+  Kind kind() const {                 \
+    return k##type;                   \
+  }                                   \
+  void accept(AstVisitor *visitor) {  \
     visitor->visit##type(this);       \
+  }                                   \
+  const char *kindName() const {      \
+    return #type;                     \
   }
 
 class AstVisitor
@@ -231,6 +235,10 @@ class TypeSpecifier
   }
   bool isConst() const {
     return !!(attrs_ & Const);
+  }
+  const SourceLocation &constLoc() const {
+    assert(isConst());
+    return const_loc_;
   }
 
   void setByRef(const SourceLocation &loc) {
@@ -585,7 +593,7 @@ class StringLiteral : public Expression
 
   DECLARE_NODE(StringLiteral);
 
-  const Atom *literal() const {
+  Atom *literal() const {
     return literal_;
   }
   int32_t arrayLength() const {
@@ -1727,6 +1735,46 @@ class ParseTree : public PoolObject
     return statements_;
   }
 };
+
+// For new AstVisitors, copy-paste.
+//  void visitVariableDeclaration(VariableDeclaration *node) override;
+//  void visitForStatement(ForStatement *node) override;
+//  void visitReturnStatement(ReturnStatement *node) override;
+//  void visitIntegerLiteral(IntegerLiteral *node) override;
+//  void visitFloatLiteral(FloatLiteral *node) override;
+//  void visitStringLiteral(StringLiteral *node) override;
+//  void visitCharLiteral(CharLiteral *node) override;
+//  void visitBinaryExpression(BinaryExpression *node) override;
+//  void visitBlockStatement(BlockStatement *node) override;
+//  void visitAssignment(Assignment *node) override;
+//  void visitNameProxy(NameProxy *node) override;
+//  void visitExpressionStatement(ExpressionStatement *node) override;
+//  void visitFunctionStatement(FunctionStatement *node) override;
+//  void visitCallExpression(CallExpression *node) override;
+//  void visitFieldExpression(FieldExpression *node) override;
+//  void visitIfStatement(IfStatement *node) override;
+//  void visitIndexExpression(IndexExpression *node) override;
+//  void visitEnumConstant(EnumConstant *node) override;
+//  void visitEnumStatement(EnumStatement *node) override;
+//  void visitWhileStatement(WhileStatement *node) override;
+//  void visitBreakStatement(BreakStatement *node) override;
+//  void visitContinueStatement(ContinueStatement *node) override;
+//  void visitIncDecExpression(IncDecExpression *node) override;
+//  void visitUnaryExpression(UnaryExpression *node) override;
+//  void visitSizeofExpression(SizeofExpression *node) override;
+//  void visitTernaryExpression(TernaryExpression *node) override;
+//  void visitTokenLiteral(TokenLiteral *node) override;
+//  void visitSwitchStatement(SwitchStatement *node) override;
+//  void visitArrayLiteral(ArrayLiteral *node) override;
+//  void visitTypedefStatement(TypedefStatement *node) override;
+//  void visitStructInitializer(StructInitializer *node) override;
+//  void visitRecordDecl(RecordDecl *node) override;
+//  void visitMethodmapDecl(MethodmapDecl *node) override;
+//  void visitMethodDecl(MethodDecl *node) override;
+//  void visitPropertyDecl(PropertyDecl *node) override;
+//  void visitFieldDecl(FieldDecl *node) override;
+//  void visitThisExpression(ThisExpression *node) override;
+//  void visitDeleteStatement(DeleteStatement *node) override;
 
 }
 

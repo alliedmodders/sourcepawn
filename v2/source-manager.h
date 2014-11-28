@@ -93,15 +93,18 @@ struct FullSourceRef
   Ref<SourceFile> file;
   unsigned line;
   unsigned col;
+  unsigned offset;
 
   FullSourceRef()
    : line(0),
-     col(0)
+     col(0),
+     offset(0)
   {}
-  FullSourceRef(SourceFile *buffer, unsigned line, unsigned col)
+  FullSourceRef(SourceFile *buffer, unsigned line, unsigned col, unsigned offset)
    : file(buffer),
      line(line),
-     col(col)
+     col(col),
+     offset(offset)
   {}
 };
 
