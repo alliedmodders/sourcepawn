@@ -157,5 +157,5 @@ class KEConfig:
 
 KE = KEConfig()
 
-builder.RunScript('v2/AMBuilder', { 'KE': KE })
+builder.RunScript('compiler/AMBuilder', { 'KE': KE })
 
