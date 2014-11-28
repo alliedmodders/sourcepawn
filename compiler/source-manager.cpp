@@ -146,7 +146,8 @@ SourceManager::trackExtents(uint32_t length, size_t *index)
   // colling with the next range.
   uint32_t next_source_id;
   if (!TryUint32Add(next_source_id_, length, &next_source_id) ||
-      !TryUint32Add(next_source_id, 2, &next_source_id))
+      !TryUint32Add(next_source_id, 2, &next_source_id) ||
+      next_source_id > INT_MAX)
   {
     return false;
   }
@@ -357,14 +358,13 @@ SourceManager::getCol(const LREntry &range, const SourceLocation &loc, unsigned 
 }
 
 FullSourceRef
-SourceManager::decode(const SourceLocation &loc)
+SourceManager::decode(const SourceLocation &aLoc)
 {
-  TokenHistory history;
-  getTokenHistory(loc, &history);
-
-  if (history.files.empty())
+  SourceLocation loc = normalize(aLoc);
+  size_t loc_index;
+  if (!findLocation(loc, &loc_index))
     return FullSourceRef();
-  return history.files[0];
+  return fullSourceRef(locations_[loc_index], loc);
 }
 
 FullSourceRef

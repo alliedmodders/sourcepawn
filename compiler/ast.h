@@ -138,6 +138,14 @@ class AstVisitor
 #undef _
 };
 
+class PartialAstVisitor : public AstVisitor
+{
+ public:
+#define _(name) virtual void visit##name(name *node) {}
+  ASTKINDS(_)
+#undef _
+};
+
 class Statement : public AstNode
 {
  public:
@@ -286,7 +294,7 @@ class TypeSpecifier
       return dims_;
     return nullptr;
   }
-  Expression *sizeOfRank(uint32_t r) {
+  Expression *sizeOfRank(uint32_t r) const {
     assert(r < rank());
     if (attrs_ & SizedArray)
       return dims_->at(r);

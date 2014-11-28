@@ -133,10 +133,10 @@ class KEConfig:
     # Platform-specifics
     if builder.target_platform == 'linux':
       if cxx.name == 'gcc':
-        cfg.linkflags += ['-static-libgcc']
+        cfg.postlink += ['-static-libgcc']
       elif cxx.name == 'clang':
-        cfg.linkflags += ['-lgcc_eh']
-      cfg.linkflags += ['-lpthread', '-lrt']
+        cfg.postlink += ['-lgcc_eh']
+      cfg.postlink += ['-lpthread', '-lrt']
     elif builder.target_platform == 'mac':
       cfg.linkflags += [
         '-mmacosx-version-min=10.5',
@@ -158,4 +158,4 @@ class KEConfig:
 KE = KEConfig()
 
 builder.RunScript('compiler/AMBuilder', { 'KE': KE })
-
+builder.RunScript('tools/docparse/AMBuilder', { 'KE': KE })

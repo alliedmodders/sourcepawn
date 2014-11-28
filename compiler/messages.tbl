@@ -11,6 +11,9 @@ RMSG(wrong_token,                   syntax,            "expected token '%0', got
 RMSG(break_outside_loop,            syntax,            "break occurs outside any loop")
 RMSG(continue_outside_loop,         syntax,            "continue occurs outside any loop")
 
+// Tooling stuff.
+RMSG(missing_comment,               note,              "missing comment for %0 '%1'")
+
 // System errors.
 RMSG(file_read_error,               system,            "could not read file %0")
 RMSG(file_too_large,                system,            "file '%0' is too large")

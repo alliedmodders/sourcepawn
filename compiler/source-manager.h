@@ -231,9 +231,15 @@ class SourceManager
   // tracker and reports an error;
   LREntry trackMacro(const SourceLocation &from, Macro *macro);
 
-  // Computing a full source location is mildly expensive - moreso when done
-  // in components below. It requires an O(log n) binary search where n is
-  // the number of lines in the file and number of files.
+  // Computes the full file origin of a location - that is, this skips past
+  // any macro expansions that caused the location to be generated.
+  //
+  // This is the same as calling getTokenHistory() and reading files[0]. If
+  // the location is invalid, |FullSourceRef::file| will be null.
+  //
+  // Computing a full source location is mildly expensive - it requires a
+  // O(log n) binary search where n is the number of lines in the file and
+  // number of files.
   FullSourceRef decode(const SourceLocation &loc);
 
   // These will be removed once we overhaul error reporting.

@@ -187,6 +187,9 @@ class ReportManager
   bool HasFatalError() const {
     return fatal_error_ != rmsg::none;
   }
+  bool HasMessages() const {
+    return HasFatalError() || messages_.length() > 0;
+  }
 
   void PrintMessages();
 

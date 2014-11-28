@@ -27,6 +27,7 @@
 namespace sp {
 
 struct ReportingContext;
+class TypeSpecifier;
 
 enum class PrimitiveType : uint32_t
 {
@@ -569,6 +570,7 @@ const char *GetPrimitiveName(PrimitiveType type);
 const char *GetTypeName(Type *type);
 const char *GetTypeClassName(Type *type);
 AString BuildTypeName(Type *type);
+AString BuildTypeName(const TypeSpecifier *spec);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be

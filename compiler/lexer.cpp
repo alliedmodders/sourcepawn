@@ -1202,7 +1202,7 @@ Lexer::processFrontCommentBlock(Token *tok)
   TokenPos start = tok->start;
   TokenPos end;
 
-  TokenPos last_end = end;
+  TokenPos last_end = tok->end;
   while (true) {
     if ((tok->kind = scan(tok)) != TOK_COMMENT) {
       // If we got something like this:

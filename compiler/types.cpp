@@ -221,10 +221,16 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec)
     return BuildTypeName(spec->resolved());
 
   AutoString base;
+  if (spec->isConst())
+    base = "const ";
+
   switch (spec->resolver()) {
     case TOK_NAME:
     case TOK_LABEL:
       base = spec->proxy()->name()->chars();
+      break;
+    case TOK_IMPLICIT_INT:
+      base = "int";
       break;
     case TOK_FUNCTION:
       base = BuildTypeFromSignature(spec->signature());
@@ -234,10 +240,31 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec)
       break;
   }
 
-  for (size_t i = 0; i < spec->rank(); i++)
+  for (size_t i = 0; i < spec->rank(); i++) {
+    if (Expression *expr = spec->sizeOfRank(i)) {
+      if (IntegerLiteral *lit = expr->asIntegerLiteral()) {
+        char value[24];
+        snprintf(value, sizeof(value), "%d", (int)lit->value());
+        base = base + "[" + value + "]";
+        continue;
+      }
+    }
+
+    // Hack. We can do better if it becomes necessary, these types are only
+    // for diagnostics.
     base = base + "[]";
+  }
+
+  if (spec->isVariadic())
+    base = base + " ...";
 
   return AString(base.ptr());
+}
+
+AString
+sp::BuildTypeName(const TypeSpecifier *spec)
+{
+  return BuildTypeFromSpecifier(spec);
 }
 
 AString
