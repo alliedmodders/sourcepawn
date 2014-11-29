@@ -35,7 +35,25 @@ SourcePawn requires AMBuild to build.
 
 The SourcePawn source tree is divided into the following folders:
  - `legacy` - The SourcePawn 1.7 compiler and VM.
- - `compiler` - The SourcePawn 1.8 compiler.
- - `vm` - The SourcePawn 1.8 VM.
+ - `compiler` - The experimental SourcePawn 2.0 parser.
+ - `tools`
+  - `docparse` - Parse files into JSON that can be consumed by documentation generators.
+ - `docgen` - The documentation generator and frontend tool.
+
+SourcePawn 2 Changes
+====================
+The SourcePawn 2.0 implementation is currently only a parser for the proposed grammar. It also performs name binding and type resolution. The current grammar has a few changes over SourcePawn 1.7:
+ - Enum structs are removed. Enum values can no longer be tagged, and enum type names no longer create a named constant.
+ - Braces are now required on functions.
+ - Most compile-time (preprocessor) directives are removed. The following are allowed:
+  - `#if`, `#else`, `#endif`. `#elseif` will most likely be supported as well.
+  - `#define` is supported, although "macro functions" are not.
+  - `#endinput` is supported.
+  - `#pragma deprecated` is supported.
+  - `#pragma newdecls` is supported.
+  - `#pragma semicolon` is allowed, although it has no effect. Semicolons are always optional.
+  - `#pragma dynamic` is allowed, although it may be ignored.
+ - `decl` is now the same as `new`. Variables are always initialized to 0.
+ - The operator overloading syntax for tags no longer exists.
 
 [1] http://www.drdobbs.com/the-small-scripting-language/184411074
