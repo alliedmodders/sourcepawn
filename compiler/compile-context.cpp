@@ -117,7 +117,7 @@ CompileContext::compile(Ref<SourceFile> file)
 
   ReportMemory(stderr);
 
-  unit->tree()->dump(stdout);
+  // unit->tree()->dump(stdout);
 
   {
     //AmxEmitter sema(*this, units_[0]);

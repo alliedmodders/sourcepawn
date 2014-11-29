@@ -45,12 +45,8 @@ class AstPrinter : public AstVisitor
   }
 
   void dump(const TypeExpr &te, Atom *name) {
-    if (te.spec()) {
-      dump(*te.spec(), name);
-      return;
-    }
-
-    // :TODO:
+    AString str = BuildTypeName(te, name);
+    fprintf(fp_, "%s", str.chars());
   }
 
   void dump(const TypeSpecifier &spec, Atom *name) {

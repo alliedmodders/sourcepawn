@@ -59,11 +59,6 @@ class Preprocessor
   // Start preprocessing a file. This blows away any existing lexer state.
   bool enter(Ref<SourceFile> file);
 
-  // Finish any pending state after having preprocessed tokens. This should
-  // only be called if all tokens were successfully lexed and no errors were
-  // reported. That is, an EOF should have been returned.
-  void cleanup();
-
   // Functions for the parser and eval().
   TokenKind peek();
   bool match(TokenKind kind);

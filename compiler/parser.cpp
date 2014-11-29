@@ -2059,8 +2059,6 @@ Parser::parse()
     }
   }
 
-  scanner_.cleanup();
-
  err_out:
   return new (pool_) ParseTree(list);
 }

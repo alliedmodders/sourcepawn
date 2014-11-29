@@ -187,6 +187,8 @@ GetBaseTypeName(Type *type)
     return "<unresolved>";
   if (type->isMetaFunction())
     return "function";
+  if (type->isUnchecked())
+    return "any";
   if (type->isVoid())
     return "void";
   if (type->isUnion())
@@ -325,11 +327,12 @@ sp::BuildTypeName(Type *aType, Atom *name)
     bool hasFixedSizes = false;
     AutoString brackets;
     for (size_t i = 0; i < stack.length(); i++) {
-      if (stack[i]->hasFixedSize()) {
+      if (!stack[i]->hasFixedSize()) {
         brackets = brackets + "[]";
-        hasFixedSizes = true;
         continue;
       }
+
+      hasFixedSizes = true;
       brackets = brackets + "[" + stack[i]->fixedSize() + "]";
     }
 
@@ -367,46 +370,6 @@ sp::BuildTypeName(const TypeExpr &te, Atom *name)
   if (te.spec())
     return BuildTypeName(te.spec(), name);
   return BuildTypeName(te.resolved(), name);
-}
-
-const char *
-sp::GetTypeName(Type *type)
-{
-  if (type->isUnresolvable())
-    return "<unresolvable>";
-  if (type->isArray())
-    return "array";
-  if (type->isFunction() || type->isMetaFunction())
-    return "function";
-  if (type->isVoid())
-    return "void";
-  if (type->isUnion())
-    return type->toUnion()->name()->chars();
-  if (type->isEnum())
-    return type->toEnum()->name()->chars();
-  if (type->isReference())
-    type = type->toReference()->contained();
-  return GetPrimitiveName(type->primitive());
-}
-
-const char *
-sp::GetTypeClassName(Type *type)
-{
-  if (type->isUnresolvable())
-    return "<unresolvable>";
-  if (type->isArray())
-    return "array";
-  if (type->isFunction() || type->isMetaFunction())
-    return "function";
-  if (type->isVoid())
-    return "void";
-  if (type->isEnum())
-    return "enum";
-  if (type->isUnion())
-    return "union";
-  if (type->isReference())
-    type = type->toReference()->contained();
-  return GetPrimitiveName(type->primitive());
 }
 
 BoxedValue

@@ -123,13 +123,6 @@ Preprocessor::enter(Ref<SourceFile> file)
   return true;
 }
 
-void
-Preprocessor::cleanup()
-{
-  assert(lexer_stack_.empty() && !lexer_->more());
-  lexer_->checkIfStackAtEndOfFile();
-}
-
 TokenKind
 Preprocessor::next()
 {
@@ -153,21 +146,22 @@ TokenKind
 Preprocessor::scan()
 {
   Token tok;
+  TokenKind kind;
   do {
     assert(!!macro_lexer_ != !!lexer_);
 
     // :TODO: we can't lex directly into the ring (?!) because the ring might
     // change. We need to analyze and fix this for performance.
-    macro_lexer_
-      ? macro_lexer_->next(&tok)
-      : lexer_->next(&tok);
+    kind = macro_lexer_
+           ? macro_lexer_->next(&tok)
+           : lexer_->next(&tok);
 
     // Parent lexer should filter out comments.
-    assert(tok.kind != TOK_COMMENT);
-  } while (tok.kind == TOK_NONE);
+    assert(kind != TOK_COMMENT);
+  } while (kind == TOK_NONE);
 
   *tokens_->moveNext() = tok;
-  return tok.kind;
+  return kind;
 }
 
 bool
@@ -466,13 +460,15 @@ Preprocessor::handleEndOfFile()
     recycled_macro_lexers_.append(macro_lexer_);
   } else if (lexer_) {
     assert(include_depth_ > 0);
-    lexer_->checkIfStackAtEndOfFile();
     include_depth_--;
   }
 
-  SavedLexer saved = lexer_stack_.popCopy();
-  lexer_ = saved.lexer;
-  macro_lexer_ = saved.macro_lexer;
+  {
+    SavedLexer &saved = lexer_stack_.back();
+    lexer_ = saved.lexer;
+    macro_lexer_ = saved.macro_lexer;
+    lexer_stack_.pop();
+  }
 
   assert(!!lexer_ != !!macro_lexer_);
   return true;

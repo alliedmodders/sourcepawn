@@ -578,8 +578,6 @@ class StructType : public RecordType
 extern Type UnresolvableType;
 
 const char *GetPrimitiveName(PrimitiveType type);
-const char *GetTypeName(Type *type);
-const char *GetTypeClassName(Type *type);
 
 // Build a type name for diagnostics, with an optional name for building a
 // declaration.

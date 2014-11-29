@@ -55,13 +55,12 @@ class Lexer : public ke::Refcounted<Lexer>
   // Lex one token.
   TokenKind next(Token *token);
 
-  // The preprocessor calls this when a lexer reports EOF, to ensure that the
-  // #if stack is sane.
-  void checkIfStackAtEndOfFile();
-
   bool more() const {
     return canRead();
   }
+
+ private:
+  void checkIfStackAtEndOfFile();
 
  private:
   const char *ptr() const {
@@ -154,11 +153,11 @@ class Lexer : public ke::Refcounted<Lexer>
   TokenKind handleIdentifier(Token *tok, char first);
 
   // Comment handling.
-  TokenKind singleLineComment(Token *tok);
-  TokenKind multiLineComment(Token *tok);
-  void processFrontCommentBlock(Token *tok);
-  void processTailCommentBlock(Token *tok);
-  void handleComments(Token *tok);
+  TokenKind singleLineComment();
+  TokenKind multiLineComment(const SourceLocation &begin);
+  TokenKind processFrontCommentBlock(Token *tok);
+  TokenKind processTailCommentBlock(Token *tok);
+  TokenKind handleComments(Token *tok);
 
   // Consume whitespace and newlines, and then process the first token found.
   // This sets tok->start. If TOK_COMMENT is returned, tok->end is set as well.

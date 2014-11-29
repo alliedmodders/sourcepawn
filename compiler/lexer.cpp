@@ -540,19 +540,15 @@ Lexer::handleIdentifier(Token *tok, char first)
 }
 
 TokenKind
-Lexer::singleLineComment(Token *tok)
+Lexer::singleLineComment()
 {
   while (!IsLineTerminator(peekChar()))
     readChar();
-  
-  // Unlike other tokens, we fill in comments early since we re-lex after
-  // seeing one. Note - use pos(), since the range is (begin, end].
-  tok->end = TokenPos(pos(), line_number_);
-  return (tok->kind = TOK_COMMENT);
+  return TOK_COMMENT;
 }
 
 TokenKind
-Lexer::multiLineComment(Token *tok)
+Lexer::multiLineComment(const SourceLocation &begin)
 {
   while (true) {
     char c = readChar();
@@ -562,7 +558,7 @@ Lexer::multiLineComment(Token *tok)
     }
 
     if (c == '\0') {
-      cc_.report(tok->start.loc, rmsg::unterminated_comment);
+      cc_.report(begin, rmsg::unterminated_comment);
       break;
     }
 
@@ -571,11 +567,7 @@ Lexer::multiLineComment(Token *tok)
         break;
     }
   }
-
-  // Unlike other tokens, we fill in comments early since we re-lex after
-  // seeing one. Note - use pos(), since the range is (begin, end].
-  tok->end = TokenPos(pos(), line_number_);
-  return (tok->kind = TOK_COMMENT);
+  return TOK_COMMENT;
 }
 
 // Advance line heuristics for newline character c.
@@ -710,6 +702,9 @@ Lexer::checkIfStackAtEndOfFile()
     else
       cc_.report(ix->first, rmsg::unterminated_if);
   }
+
+  // Clear so we don't report again.
+  ifstack_.clear();
 }
 
 void
@@ -1021,147 +1016,206 @@ Lexer::scan(Token *tok)
   }
 
   tok->init(TokenPos(lastpos(), line_number_), range_.id);
+
+  TokenKind kind;
   switch (c) {
     case '\0':
-      if (lexing_for_directive_)
-        return TOK_EOL;
+      if (lexing_for_directive_) {
+        kind = TOK_EOL;
+        break;
+      }
+
+      checkIfStackAtEndOfFile();
+
+      // Make sure we finish reading off |this| beforehand, since calling into
+      // |pp| may destroy the lexer.
+      tok->end = TokenPos(pos(), line_number_);
       if (pp_.handleEndOfFile())
-        return TOK_NONE;
-      return TOK_EOF;
+        tok->kind = TOK_NONE;
+      else
+        tok->kind = TOK_EOF;
+      return tok->kind;
     case ';':
-      return TOK_SEMICOLON;
+      kind = TOK_SEMICOLON;
+      break;
     case '{':
-      return TOK_LBRACE;
+      kind = TOK_LBRACE;
+      break;
     case '}':
-      return TOK_RBRACE;
+      kind = TOK_RBRACE;
+      break;
     case '(':
-      return TOK_LPAREN;
+      kind = TOK_LPAREN;
+      break;
     case ')':
-      return TOK_RPAREN;
+      kind = TOK_RPAREN;
+      break;
     case '[':
-      return TOK_LBRACKET;
+      kind = TOK_LBRACKET;
+      break;
     case ']':
-      return TOK_RBRACKET;
+      kind = TOK_RBRACKET;
+      break;
     case '~':
-      return TOK_TILDE;
+      kind = TOK_TILDE;
+      break;
     case '?':
-      return TOK_QMARK;
+      kind = TOK_QMARK;
+      break;
     case ':':
-      return TOK_COLON;
+      kind = TOK_COLON;
+      break;
     case ',':
-      return TOK_COMMA;
+      kind = TOK_COMMA;
+      break;
 
     case '\r':
     case '\n':
       assert(lexing_for_directive_);
-      return TOK_EOL;
+      kind = TOK_EOL;
+      break;
 
     case '.':
       if (matchChar('.')) {
-        if (matchChar('.'))
-          return TOK_ELLIPSES;
+        if (matchChar('.')) {
+          kind = TOK_ELLIPSES;
+          break;
+        }
         pos_ -= 1;
       }
-      return TOK_DOT;
+      kind = TOK_DOT;
+      break;
 
     case '/':
       if (matchChar('='))
-        return TOK_ASSIGN_DIV;
-      if (matchChar('/'))
-        return singleLineComment(tok);
-      if (matchChar('*'))
-        return multiLineComment(tok);
-      return TOK_SLASH;
+        kind = TOK_ASSIGN_DIV;
+      else if (matchChar('/'))
+        kind = singleLineComment();
+      else if (matchChar('*'))
+        kind = multiLineComment(tok->start.loc);
+      else
+        kind = TOK_SLASH;
+      break;
 
     case '*':
       if (matchChar('='))
-        return TOK_ASSIGN_MUL;
-      return TOK_STAR;
+        kind = TOK_ASSIGN_MUL;
+      else
+        kind = TOK_STAR;
+      break;
 
     case '+':
       if (matchChar('='))
-        return TOK_ASSIGN_ADD;
-      if (matchChar('+'))
-        return TOK_INCREMENT;
-      return TOK_PLUS;
+        kind = TOK_ASSIGN_ADD;
+      else if (matchChar('+'))
+        kind = TOK_INCREMENT;
+      else
+        kind = TOK_PLUS;
+      break;
 
     case '&':
       if (matchChar('='))
-        return TOK_ASSIGN_BITAND;
-      if (matchChar('&'))
-        return TOK_AND;
-      return TOK_BITAND;
+        kind = TOK_ASSIGN_BITAND;
+      else if (matchChar('&'))
+        kind = TOK_AND;
+      else
+        kind = TOK_BITAND;
+      break;
 
     case '|':
       if (matchChar('='))
-        return TOK_ASSIGN_BITOR;
-      if (matchChar('|'))
-        return TOK_OR;
-      return TOK_BITOR;
+        kind = TOK_ASSIGN_BITOR;
+      else if (matchChar('|'))
+        kind = TOK_OR;
+      else
+        kind = TOK_BITOR;
+      break;
 
     case '^':
       if (matchChar('='))
-        return TOK_ASSIGN_BITXOR;
-      return TOK_BITXOR;
+        kind = TOK_ASSIGN_BITXOR;
+      else
+        kind = TOK_BITXOR;
+      break;
 
     case '%':
       if (matchChar('='))
-        return TOK_ASSIGN_MOD;
-      return TOK_PERCENT;
+        kind = TOK_ASSIGN_MOD;
+      else
+        kind = TOK_PERCENT;
+      break;
 
     case '-':
       if (matchChar('='))
-        return TOK_ASSIGN_SUB;
-      if (matchChar('-'))
-        return TOK_DECREMENT;
-      return TOK_MINUS;
+        kind = TOK_ASSIGN_SUB;
+      else if (matchChar('-'))
+        kind = TOK_DECREMENT;
+      else
+        kind = TOK_MINUS;
+      break;
 
     case '!':
       if (matchChar('='))
-        return TOK_NOTEQUALS;
-      return TOK_NOT;
+        kind = TOK_NOTEQUALS;
+      else
+        kind = TOK_NOT;
+      break;
 
     case '=':
       if (matchChar('='))
-        return TOK_EQUALS;
-      return TOK_ASSIGN;
+        kind = TOK_EQUALS;
+      else
+        kind = TOK_ASSIGN;
+      break;
 
     case '<':
-      if (matchChar('='))
-        return TOK_LE;
-      if (matchChar('<')) {
+      if (matchChar('=')) {
+        kind = TOK_LE;
+      } else if (matchChar('<')) {
         if (matchChar('='))
-          return TOK_ASSIGN_SHL;
-        return TOK_SHL;
+          kind = TOK_ASSIGN_SHL;
+        else
+          kind = TOK_SHL;
+      } else {
+        kind = TOK_LT;
       }
-      return TOK_LT;
+      break;
 
     case '>':
-      if (matchChar('='))
-        return TOK_GE;
-      if (matchChar('>')) {
+      if (matchChar('=')) {
+        kind = TOK_GE;
+      } else if (matchChar('>')) {
         if (matchChar('>')) {
           if (matchChar('='))
-            return TOK_ASSIGN_USHR;
-          return TOK_USHR;
+            kind = TOK_ASSIGN_USHR;
+          else
+            kind = TOK_USHR;
+        } else {
+          kind = TOK_SHR;
         }
-        return TOK_SHR;
+      } else {
+        kind = TOK_GT;
       }
-      return TOK_GT;
+      break;
 
     case '\'':
-      return charLiteral(tok);
+      kind = charLiteral(tok);
+      break;
 
     case '"':
-      return stringLiteral(tok);
+      kind = stringLiteral(tok);
+      break;
 
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-      return handleNumber(tok, c);
+      kind = handleNumber(tok, c);
+      break;
 
     default:
-      if (IsIdentStart(c))
-        return handleIdentifier(tok, c);
+      if (IsIdentStart(c)) {
+        kind = handleIdentifier(tok, c);
+        break;
+      }
 
       // Don't report an error if we're lexing for a directive. We'll report it
       // later down the pipeline, rather than having the start of a valid token
@@ -1174,8 +1228,15 @@ Lexer::scan(Token *tok)
         cc_.report(tok->start.loc, rmsg::unexpected_char)
           << print << code;
       }
-      return TOK_UNKNOWN;
+      kind = TOK_UNKNOWN;
+      break;
   }
+
+  lexed_tokens_on_line_ = (kind != TOK_NONE);
+
+  tok->kind = kind;
+  tok->end = TokenPos(pos(), line_number_);
+  return kind;
 }
 
 // Lex for a token while inside a preprocessor directive. This is the same as
@@ -1186,25 +1247,25 @@ Lexer::directive_next(Token *tok)
   assert(lexing_for_directive_);
 
   // For now, we ignore comments completely while inside a macro.
-  do {
-    tok->kind = scan(tok);
-  } while (tok->kind == TOK_COMMENT);
+  TokenKind kind;
+  while ((kind = scan(tok)) == TOK_COMMENT)
+  {}
 
-  tok->end = TokenPos(pos(), line_number_);
-  return tok->kind;
+  return kind;
 }
 
 // A front comment is a sequence of comments at most one line away from a non-
 // comment token that is the first token on its line.
-void
+TokenKind
 Lexer::processFrontCommentBlock(Token *tok)
 {
   TokenPos start = tok->start;
   TokenPos end;
 
+  TokenKind kind;
   TokenPos last_end = tok->end;
   while (true) {
-    if ((tok->kind = scan(tok)) != TOK_COMMENT) {
+    if ((kind = scan(tok)) != TOK_COMMENT) {
       // If we got something like this:
       //   /* ... */ status
       //
@@ -1213,7 +1274,7 @@ Lexer::processFrontCommentBlock(Token *tok)
       if (start.line == tok->start.line) {
         // Front comment should be discarded entirely, since the token was not
         // the first token on the line.
-        return;
+        return kind;
       }
       if (tok->start.line != last_end.line) {
         // The last comment ended on a different line from where this token
@@ -1236,63 +1297,68 @@ Lexer::processFrontCommentBlock(Token *tok)
 
   // If we discarded all comments in the block, this will be empty.
   if (!end.loc.isSet())
-    return;
+    return kind;
 
   pp_.addComment(CommentPos::Front, SourceRange(start.loc, end.loc));
+  return kind;
 }
 
 // A tail comment is a sequence of comments appearing after a token, ending
 // after a blank line or a non-comment token.
-void
+TokenKind
 Lexer::processTailCommentBlock(Token *tok)
 {
   TokenPos start = tok->start;
   TokenPos end = tok->end;
 
-  while ((tok->kind = scan(tok)) == TOK_COMMENT) {
+  TokenKind kind;
+  while ((kind = scan(tok)) == TOK_COMMENT) {
     if (tok->start.line > end.line + 1)
       break;
     end = tok->end;
   }
 
   pp_.addComment(CommentPos::Tail, SourceRange(start.loc, end.loc));
+  return kind;
 }
 
 // Note: this calls back into scan(), so we should only call it from next().
-void
+TokenKind
 Lexer::handleComments(Token *tok)
 {
   // We don't bother inserting comments from macros, or if we're not parsing
   // for an AST dump.
+  TokenKind kind = tok->kind;
   if (!pp_.traceComments() || lexing_for_directive_) {
-    while (tok->kind == TOK_COMMENT)
-      tok->kind = scan(tok);
-    return;
+    while ((kind = scan(tok)) == TOK_COMMENT)
+    {}
+    return kind;
   }
 
   if (lexed_tokens_on_line_)
-    processTailCommentBlock(tok);
+    kind = processTailCommentBlock(tok);
 
   // We should be at a token that started on its own line.
   assert(!lexed_tokens_on_line_);
 
   // We can have multiple front comment blocks.
-  while (tok->kind == TOK_COMMENT)
-    processFrontCommentBlock(tok);
+  while (kind == TOK_COMMENT)
+    kind = processFrontCommentBlock(tok);
+  return kind;
 }
 
 TokenKind
 Lexer::next(Token *tok)
 {
-  if ((tok->kind = scan(tok)) == TOK_COMMENT) {
-    handleComments(tok);
-
-    // Should not have any comments after.
-    assert(tok->kind != TOK_COMMENT);
+  TokenKind kind = scan(tok);
+  if (kind == TOK_COMMENT) {
+    kind = handleComments(tok);
+    assert(kind != TOK_COMMENT);
   }
 
-  lexed_tokens_on_line_ = (tok->kind != TOK_NONE);
-
-  tok->end = TokenPos(pos(), line_number_);
-  return tok->kind;
+  // This can differ if we return TOK_NONE. We do this since we don't want to
+  // accidentally destroy part of the token ring in the preprocessor just to
+  // enter into a preprocessor directive.
+  assert(kind == TOK_NONE || kind == tok->kind);
+  return kind;
 }

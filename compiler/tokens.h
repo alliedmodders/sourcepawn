@@ -256,16 +256,18 @@ struct Token
    : kind(TOK_NONE),
      source_id(0)
   {
+    memset(&u, 0, sizeof(u));
   }
   Token(TokenKind kind)
    : kind(kind),
      source_id(0)
-  {}
+  {
+    memset(&u, 0, sizeof(u));
+  }
 
   void init(const TokenPos &startPos, uint32_t sourceId) {
     start = startPos;
     source_id = sourceId;
-    memset(&u, sizeof(u), 0);
   }
 
   void setAtom(Atom *atom) {
