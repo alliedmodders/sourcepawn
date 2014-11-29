@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS `spdoc_function` (
   `id` int unsigned not null auto_increment primary key,
   `include_id` int unsigned not null,
   `class_id` int unsigned not null,
+  `kind` varchar(16),
   `name` varchar(64) not null,
   `signature` text not null,
   `data` text not null,

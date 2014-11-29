@@ -109,12 +109,16 @@ class CommentParser(object):
     rawlines = self.text[body_start:body_end].splitlines()
     lines = []
     for line in rawlines:
+      # Strip comment parts.
       line = line.lstrip()
       if line.startswith('//'):
         line = line.lstrip('/')
+
+      # Strip whitespace.
       line = line.strip()
       line = line.replace('\t', ' ')
       lines.append(line)
+
     self.parse_lines(lines)
 
   def parse_lines(self, lines):
@@ -389,14 +393,15 @@ class DocGen(object):
 
     query = """
       replace into spdoc_function
-        (include_id, class_id, name, signature, data)
+        (include_id, class_id, kind, name, signature, data)
       values
-        (%s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s)
     """
     cn = self.db.cursor()
     cn.execute(query, (
       self.current_include,
       self.current_class,
+      function['kind'],
       function['name'],
       signature,
       JSON.dumps(data)))
