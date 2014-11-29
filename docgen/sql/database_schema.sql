@@ -5,6 +5,7 @@ create table if not exists `spdoc_include` (
   `id` int unsigned not null auto_increment primary key,
   `name` varchar(64) not null,
   `doc` text not null,
+  `content` text not null,
   unique key `name_key` (`name`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1 ;
 

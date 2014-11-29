@@ -214,14 +214,15 @@ class DocGen(object):
 
     json = JSON.loads(stdout)
 
+    query = """
+      replace into spdoc_include
+        (name, doc, content)
+      values
+        (%s,   %s,  %s)
+    """
     cn = self.db.cursor()
-    cn.execute("select id from spdoc_include where name = %s", (include,))
-    row = cn.fetchone()
-    if row is not None:
-      self.current_include = row[0]
-    else:
-      cn.execute("insert into spdoc_include (name) values (%s)", (include,))
-      self.current_include = cn.lastrowid
+    cn.execute(query, (include, '', self.current_file))
+    self.current_include = cn.lastrowid
 
     self.parse_classes(json['methodmaps'])
     self.parse_constants(json['constants'])
