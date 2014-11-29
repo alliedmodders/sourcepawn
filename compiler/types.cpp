@@ -195,7 +195,7 @@ GetBaseTypeName(Type *type)
   return GetPrimitiveName(type->primitive());
 }
 
-static AString BuildTypeFromSpecifier(const TypeSpecifier *spec);
+static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name = nullptr);
 static AString BuildTypeFromSignature(const FunctionSignature *sig);
 
 static AString
@@ -215,7 +215,7 @@ BuildTypeFromSignature(const FunctionSignature *sig)
 }
 
 static AString
-BuildTypeFromSpecifier(const TypeSpecifier *spec)
+BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
 {
   if (spec->resolved())
     return BuildTypeName(spec->resolved());
@@ -225,20 +225,41 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec)
     base = "const ";
 
   switch (spec->resolver()) {
-    case TOK_NAME:
     case TOK_LABEL:
-      base = spec->proxy()->name()->chars();
+    {
+      // HACK: we should move these atoms into the context.
+      const char *chars = spec->proxy()->name()->chars();
+      if (strcmp(chars, "Float") == 0)
+        base = base + "float";
+      else if (strcmp(chars, "String") == 0)
+        base = base + "char";
+      else if (strcmp(chars, "_") == 0)
+        base = base + "int";
+      else
+        base = base + chars;
+      break;
+    }
+    case TOK_NAME:
+      base = base + spec->proxy()->name()->chars();
       break;
     case TOK_IMPLICIT_INT:
-      base = "int";
+      base = base + "int";
       break;
     case TOK_FUNCTION:
-      base = BuildTypeFromSignature(spec->signature());
+      base = base + BuildTypeFromSignature(spec->signature());
       break;
     default:
-      base = TokenNames[spec->resolver()];
+      base = base + TokenNames[spec->resolver()];
       break;
   }
+
+  // We need type analysis to determine the true type, so just make a semi-
+  // intelligent guess based on whether or not any rank has a sized dimension.
+  bool postDims = (spec->isNewDecl() && spec->hasPostDims()) ||
+                  (spec->isOldDecl() && spec->dims());
+
+  if (name && postDims)
+    base = base + " " + name->chars();
 
   for (size_t i = 0; i < spec->rank(); i++) {
     if (Expression *expr = spec->sizeOfRank(i)) {
@@ -254,6 +275,8 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec)
     // for diagnostics.
     base = base + "[]";
   }
+  if (name && !postDims)
+    base = base + " " + name->chars();
 
   if (spec->isVariadic())
     base = base + " ...";
@@ -262,9 +285,9 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec)
 }
 
 AString
-sp::BuildTypeName(const TypeSpecifier *spec)
+sp::BuildTypeName(const TypeSpecifier *spec, Atom *name)
 {
-  return BuildTypeFromSpecifier(spec);
+  return BuildTypeFromSpecifier(spec, name);
 }
 
 AString

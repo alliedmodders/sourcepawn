@@ -156,6 +156,7 @@ class Analyzer : public PartialAstVisitor
     atom_setter_ = cc_.add("setter");
     atom_entries_ = cc_.add("entries");
     atom_constants_ = cc_.add("constants");
+    atom_decl_ = cc_.add("decl");
   }
 
   JsonObject *analyze(ParseTree *tree) {
@@ -180,7 +181,7 @@ class Analyzer : public PartialAstVisitor
   void visitMethodmapDecl(MethodmapDecl *node) override {
     JsonObject *obj = new (pool_) JsonObject();
     if (!startDoc(obj, "class", node->name(), node->loc()))
-      return;
+      obj->add(atom_name_, toJson(node->name()));
 
     SaveAndSet<JsonList *> new_props(&props_, new (pool_) JsonList());
     SaveAndSet<JsonList *> new_methods(&methods_, new (pool_) JsonList());
@@ -284,8 +285,8 @@ class Analyzer : public PartialAstVisitor
     return true;
   }
 
-  JsonString *toJson(const TypeSpecifier *spec) {
-    return toJson(BuildTypeName(spec).chars());
+  JsonString *toJson(const TypeSpecifier *spec, Atom *name = nullptr) {
+    return toJson(BuildTypeName(spec, name).chars());
   }
 
   JsonList *toJson(const ParameterList *params) {
@@ -294,11 +295,18 @@ class Analyzer : public PartialAstVisitor
       VariableDeclaration *decl = params->at(i);
       JsonObject *obj = new (pool_) JsonObject();
 
-      if (decl->name())
-        obj->add(atom_name_, toJson(decl->name()));
-      else
-        obj->add(atom_name_, toJson("..."));
       obj->add(atom_type_, toJson(decl->spec()));
+
+      if (decl->name()) {
+        obj->add(atom_name_, toJson(decl->name()));
+        obj->add(atom_decl_, toJson(decl->spec(), decl->name()));
+      } else {
+        obj->add(atom_name_, toJson("..."));
+
+        AutoString builder = BuildTypeName(decl->spec(), nullptr);
+        builder = builder + " ...";
+        obj->add(atom_decl_, toJson(builder.ptr()));
+      }
       list->add(obj);
     }
     return list;
@@ -330,6 +338,7 @@ class Analyzer : public PartialAstVisitor
   Atom *atom_setter_;
   Atom *atom_entries_;
   Atom *atom_constants_;
+  Atom *atom_decl_;
   JsonList *functions_;
   JsonList *methodmaps_;
   JsonList *enums_;
