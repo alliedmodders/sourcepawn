@@ -215,13 +215,19 @@ class DocGen(object):
     json = JSON.loads(stdout)
 
     query = """
-      replace into spdoc_include
+      insert into spdoc_include
         (name, doc, content)
       values
         (%s,   %s,  %s)
+      on duplicate key update
+        doc = %s,
+        content = %s
     """
     cn = self.db.cursor()
-    cn.execute(query, (include, '', self.current_file))
+    cn.execute(query, (
+      include,
+      '', self.current_file,
+      '', self.current_file))
     self.current_include = cn.lastrowid
 
     self.parse_classes(json['methodmaps'])
@@ -258,20 +264,23 @@ class DocGen(object):
   def parse_class(self, layout):
     doc = self.parse_doc(layout)
 
-    data = { 'tags': doc.tags }
+    data = JSON.dumps({ 'tags': doc.tags })
 
     query = """
-      replace into spdoc_class
+      insert into spdoc_class
         (include_id, name, brief, data)
       values
         (%s, %s, %s, %s)
+      on duplicate key update
+        brief = %s,
+        data = %s
     """
     cn = self.db.cursor()
     cn.execute(query, (
       self.current_include,
       layout['name'],
-      doc.main,
-      JSON.dumps(data)))
+      doc.main, data,
+      doc.main, data))
 
     self.current_class = cn.lastrowid
     for method in layout['methods']:
@@ -284,32 +293,45 @@ class DocGen(object):
     doc = self.parse_doc(property)
     data = { 'tags': doc.tags }
 
-    query = """
-      replace into spdoc_property
-        (include_id, class_id, name, type, getter, setter, brief, data)
-      values
-        (%s,         %s,       %s,   %s,   %s,     %s,     %s,    %s)
-    """
-    cn = self.db.cursor()
-    cn.execute(query, (
-      self.current_include,
-      self.current_class,
-      property['name'],
+    update = (
       property['type'],
       property['getter'],
       property['setter'],
       doc.main,
-      JSON.dumps(data)))
+      JSON.dumps(data),
+    )
+    query_args = (
+      self.current_include,
+      self.current_class,
+      property['name']) + update + update
+
+    query = """
+      insert into spdoc_property
+        (include_id, class_id, name, type, getter, setter, brief, data)
+      values
+        (%s,         %s,       %s,   %s,   %s,     %s,     %s,    %s)
+      on duplicate key update
+        type = %s,
+        getter = %s,
+        setter = %s,
+        brief = %s,
+        data = %s
+    """
+    cn = self.db.cursor()
+    cn.execute(query, query_args)
 
   def parse_constant(self, constant, parent_type, parent_id):
     doc = self.parse_doc(constant)
-    data = { 'tags': doc.tags }
+    data = JSON.dumps({ 'tags': doc.tags })
 
     query = """
-      replace into spdoc_constant
+      insert into spdoc_constant
         (include_id, parent_type, parent_id, name, brief, data)
       values
         (%s,         %s,          %s,        %s,   %s,    %s)
+      on duplicate key update
+        brief = %s,
+        data = %s
     """
     cn = self.db.cursor()
     cn.execute(query, (
@@ -317,25 +339,28 @@ class DocGen(object):
       parent_type,
       parent_id,
       constant['name'],
-      doc.main,
-      JSON.dumps(data)))
+      doc.main, data,
+      doc.main, data))
 
   def parse_enum(self, enum):
     doc = self.parse_doc(enum)
-    data = { 'tags': doc.tags }
+    data = JSON.dumps({ 'tags': doc.tags })
 
     query = """
-      replace into spdoc_enum
+      insert into spdoc_enum
         (include_id, name, brief, data)
       values
         (%s,         %s,   %s,    %s)
+      on duplicate key update
+        brief = %s,
+        data = %s
     """
     cn = self.db.cursor()
     cn.execute(query, (
       self.current_include,
       enum['name'],
-      doc.main,
-      JSON.dumps(data)))
+      doc.main, data,
+      doc.main, data))
 
     enum_id = cn.lastrowid
     for entry in enum['entries']:
@@ -384,11 +409,17 @@ class DocGen(object):
       function['name'],
       ', '.join([arg['decl'] for arg in function['arguments']]))
 
+    json = JSON.dumps(data)
+
     query = """
-      replace into spdoc_function
+      insert into spdoc_function
         (include_id, class_id, kind, name, signature, brief, data)
       values
         (%s, %s, %s, %s, %s, %s, %s)
+      on duplicate key update
+        signature = %s,
+        brief = %s,
+        data = %s
     """
     cn = self.db.cursor()
     cn.execute(query, (
@@ -396,9 +427,8 @@ class DocGen(object):
       self.current_class,
       function.get('kind'),
       function['name'],
-      signature,
-      doc.main,
-      JSON.dumps(data)))
+      signature, doc.main, json,
+      signature, doc.main, json))
 
 def main():
   ap = argparse.ArgumentParser()
