@@ -321,23 +321,44 @@ sp::BuildTypeName(Type *aType, Atom *name)
     }
 
     AutoString builder = BuildTypeName(innermost);
+
+    bool hasFixedSizes = false;
+    AutoString brackets;
     for (size_t i = 0; i < stack.length(); i++) {
       if (stack[i]->hasFixedSize()) {
-        builder = builder + "[]";
-      } else {
-        builder = builder + "[" + stack[i]->fixedSize() + "]";
+        brackets = brackets + "[]";
+        hasFixedSizes = true;
+        continue;
       }
+      brackets = brackets + "[" + stack[i]->fixedSize() + "]";
+    }
+
+    if (name) {
+      if (hasFixedSizes)
+        builder = builder + " " + name->chars() + brackets;
+      else
+        builder = builder + brackets + " " + name->chars();
     }
     return AString(builder.ptr());
   }
+
   if (ReferenceType *type = aType->asReference()) {
     AutoString builder = BuildTypeName(type->contained());
-    return AString((builder + "&").ptr());
+    if (name)
+      builder = builder + " &" + name->chars();
+    else
+      builder = builder + "&";
+    return AString(builder.ptr());
   }
-  if (FunctionType *type = aType->asFunction())
-    return BuildTypeFromSignature(type->signature());
 
-  return AString(GetBaseTypeName(aType));
+  AutoString builder;
+  if (FunctionType *type = aType->asFunction())
+    builder = BuildTypeFromSignature(type->signature());
+  else
+    builder = GetBaseTypeName(aType);
+  if (name)
+    builder = builder + " " + name->chars();
+  return AString(builder.ptr());
 }
 
 AString
