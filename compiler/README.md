@@ -57,7 +57,7 @@ Many other ideas are lessons learned (both the easy and hard ways) from the Spid
 
 The concept of "methodmaps" is based on a combination of C#'s partial classes and Golang's structural subtyping. Inspiration for the recursive type resolution algorithm (whether for better or worse) also came from Golang.
 
-Inspiration for the design of the semantic analysis pipeline came from Clang. Clang, afforded (amazingly enough) by C++ not having implicit-forward-declaration, performs type checking as part of AST construction. While SourcePawn cannot do that, we have benefited from the idea of not duplicating semantic operations between AST checks and code generation.
+Inspiration for the design of the semantic analysis pipeline came from Clang. Clang, afforded (amazingly enough) by C++ not having implicit-forward-declaration, performs type checking as part of AST construction. While this doesn't quite work for SourcePawn, the concept has afforded us with many improvements.
 
 SourcePawn 2 has been an extraordinary process of failed starts. Many, many rewrites (often with completely new semantics, such as dynamic typing) can be found scattered amongst AlliedModders, one dating as far back as 2009 called "iteration 3". Some of these are based on JavaScript, some C#, and oftentimes with implementation concepts from Lua. Many are source-only languages. Only time, much failure, and experience led to the current incarnation of very incremental improvements.
 

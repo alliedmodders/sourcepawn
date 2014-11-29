@@ -169,6 +169,7 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "bool";
     case PrimitiveType::Char:
       return "char";
+    case PrimitiveType::ImplicitInt:
     case PrimitiveType::Int32:
       return "int";
     case PrimitiveType::Float:
@@ -199,14 +200,22 @@ static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name = nu
 static AString BuildTypeFromSignature(const FunctionSignature *sig);
 
 static AString
+BuildTypeFromTypeExpr(const TypeExpr &te)
+{
+  if (te.spec())
+    return BuildTypeFromSpecifier(te.spec());
+  return BuildTypeName(te.resolved());
+}
+
+static AString
 BuildTypeFromSignature(const FunctionSignature *sig)
 {
   AutoString base = "function ";
-  base = base + BuildTypeFromSpecifier(sig->returnType());
+  base = base + BuildTypeFromTypeExpr(sig->returnType());
   base = base + "(";
 
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
-    base = base + BuildTypeFromSpecifier(sig->parameters()->at(i)->spec());
+    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te());
     if (i != sig->parameters()->length() - 1)
       base = base + ", ";
   }
@@ -217,9 +226,6 @@ BuildTypeFromSignature(const FunctionSignature *sig)
 static AString
 BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
 {
-  if (spec->resolved())
-    return BuildTypeName(spec->resolved());
-
   AutoString base;
   if (spec->isConst())
     base = "const ";
@@ -298,7 +304,7 @@ sp::BuildTypeName(const TypeSpecifier *spec, Atom *name)
 }
 
 AString
-sp::BuildTypeName(Type *aType)
+sp::BuildTypeName(Type *aType, Atom *name)
 {
   if (ArrayType *type = aType->asArray()) {
     Vector<ArrayType *> stack;
@@ -332,6 +338,14 @@ sp::BuildTypeName(Type *aType)
     return BuildTypeFromSignature(type->signature());
 
   return AString(GetBaseTypeName(aType));
+}
+
+AString
+sp::BuildTypeName(const TypeExpr &te, Atom *name)
+{
+  if (te.spec())
+    return BuildTypeName(te.spec(), name);
+  return BuildTypeName(te.resolved(), name);
 }
 
 const char *
@@ -386,6 +400,7 @@ sp::DefaultValueForPlainType(Type *type)
       return BoxedValue(false);
     case PrimitiveType::Char:
       return BoxedValue(IntValue::FromInt8(0));
+    case PrimitiveType::ImplicitInt:
     case PrimitiveType::Int32:
       return BoxedValue(IntValue::FromInt32(0));
     case PrimitiveType::Float:

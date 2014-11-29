@@ -43,7 +43,7 @@ class TypeManager
     return uncheckedType_;
   }
   Type *getMetaFunction() {
-      return metaFunctionType_;
+    return metaFunctionType_;
   }
   ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);

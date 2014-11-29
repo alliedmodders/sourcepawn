@@ -26,6 +26,7 @@
 #include "symbols.h"
 #include "string-pool.h"
 #include "tokens.h"
+#include "type-specifier.h"
 #include <limits.h>
 
 namespace sp {
@@ -166,246 +167,12 @@ class Expression : public AstNode
 
 typedef PoolList<Statement *> StatementList;
 typedef PoolList<Expression *> ExpressionList;
-
 typedef PoolList<VariableDeclaration *> ParameterList;
-
-class FunctionSignature;
-
-class TypeSpecifier
-{
- public:
-  enum Attrs {
-    Const      = 0x01,
-    Variadic   = 0x02,
-    ByRef      = 0x04,
-    SizedArray = 0x08,
-    NewDecl    = 0x10,
-    PostDims   = 0x20,
-    Resolving  = 0x40
-  };
-
- public:
-  TypeSpecifier()
-   : attrs_(0),
-     resolver_(TOK_NONE),
-     type_(nullptr)
-  {
-    dims_ = nullptr;
-    assert(rank_ == 0);
-  }
-
-  const SourceLocation &startLoc() const {
-    return start_loc_;
-  }
-
-  void setBaseLoc(const SourceLocation &loc) {
-    setLocation(base_loc_, loc);
-  }
-  const SourceLocation &baseLoc() const {
-    return base_loc_;
-  }
-
-  void setBuiltinType(TokenKind kind) {
-    resolver_ = kind;
-  }
-  void setNamedType(TokenKind kind, NameProxy *proxy) {
-    resolver_ = kind;
-    proxy_ = proxy;
-  }
-  void setFunctionType(FunctionSignature *signature) {
-    resolver_ = TOK_FUNCTION;
-    signature_ = signature;
-  }
-
-  bool needsBinding() const {
-    switch (resolver()) {
-    case TOK_NAME:
-    case TOK_LABEL:
-    case TOK_FUNCTION:
-      return true;
-    default:
-      return dims() != nullptr;
-    }
-  }
-
-  void setVariadic(const SourceLocation &loc) {
-    attrs_ |= Variadic;
-    setLocation(variadic_loc_, loc);
-  }
-  bool isVariadic() const {
-    return !!(attrs_ & Variadic);
-  }
-  const SourceLocation &variadicLoc() const {
-    assert(isVariadic());
-    return variadic_loc_;
-  }
-
-  void setConst(const SourceLocation &loc) {
-    attrs_ |= Const;
-    setLocation(const_loc_, loc);
-  }
-  bool isConst() const {
-    return !!(attrs_ & Const);
-  }
-  const SourceLocation &constLoc() const {
-    assert(isConst());
-    return const_loc_;
-  }
-
-  void setByRef(const SourceLocation &loc) {
-    attrs_ |= ByRef;
-    setLocation(sigil_loc_, loc);
-  }
-  bool isByRef() const {
-    return !!(attrs_ & ByRef);
-  }
-  const SourceLocation &byRefLoc() const {
-    assert(isByRef());
-    return sigil_loc_;
-  }
-
-  // As a small space-saving optimization, we overlay dims with rank. In many
-  // cases the array will have no sized ranks and we'll save allocating a
-  // list of nulls - or, in the vast majority of cases - we'll have no arrays
-  // at all and we save an extra word on the very common TypeSpecifier.
-  void setRank(const SourceLocation &sigil, uint32_t aRank) {
-    assert(!rank());
-    rank_ = aRank;
-    sigil_loc_ = sigil;
-    assert(start_loc_.isSet());
-  }
-  void setDimensionSizes(const SourceLocation &sigil, ExpressionList *dims) {
-    assert(!rank());
-    dims_ = dims;
-    attrs_ |= SizedArray;
-    sigil_loc_ = sigil;
-    assert(start_loc_.isSet());
-  }
-  bool isArray() const {
-    return rank() > 0;
-  }
-  const SourceLocation &arrayLoc() const {
-    assert(isArray());
-    return sigil_loc_;
-  }
-
-  ExpressionList *dims() const {
-    if (attrs_ & SizedArray)
-      return dims_;
-    return nullptr;
-  }
-  Expression *sizeOfRank(uint32_t r) const {
-    assert(r < rank());
-    if (attrs_ & SizedArray)
-      return dims_->at(r);
-    return nullptr;
-  }
-  uint32_t rank() const {
-    if (attrs_ & SizedArray)
-      return dims_->length();
-    return rank_;
-  }
-
-  TokenKind resolver() const {
-    return resolver_;
-  }
-  NameProxy *proxy() const {
-    assert(resolver() == TOK_NAME || resolver() == TOK_LABEL);
-    return proxy_;
-  }
-  FunctionSignature *signature() const {
-    assert(resolver() == TOK_FUNCTION);
-    return signature_;
-  }
-
-  bool isNewDecl() const {
-    return !!(attrs_ & NewDecl);
-  }
-  void setNewDecl() {
-    attrs_ |= NewDecl;
-  }
-  bool hasPostDims() const {
-    return !!(attrs_ & PostDims);
-  }
-  void setHasPostDims() {
-    attrs_ |= PostDims;
-  }
-  bool isFixedArray() const {
-    return isNewDecl() && hasPostDims();
-  }
-
-  bool isOldDecl() const {
-    return !isNewDecl();
-  }
-
-  void unsetHasPostDims() {
-    attrs_ &= ~PostDims;
-  }
-
-  // For reparse_decl().
-  void resetWithAttrs(uint32_t attrMask) {
-    uint32_t saveAttrs = attrs_ & attrMask;
-    *this = TypeSpecifier();
-    attrs_ = saveAttrs;
-  }
-  void resetArray() {
-    rank_ = 0;
-    dims_ = nullptr;
-    attrs_ &= ~(SizedArray|PostDims);
-  }
-
-  void setResolved(Type *type) {
-    // We should not overwrite a type, unless it's a placeholder to stop
-    // double-reporting recursive types.
-    assert(!type_ || type_->isUnresolvable());
-
-    // We don't care if isResolving() is true, since sometimes we know the type
-    // earlier than resolution. We do unset the resolving bit however.
-    type_ = type;
-    attrs_ &= ~Resolving;
-  }
-  Type *resolved() const {
-    return type_;
-  }
-
-  // Mark that we're resolving something, so we can detect recursive types.
-  void setResolving() {
-    attrs_ |= Resolving;
-  }
-  bool isResolving() const {
-    return !!(attrs_ & Resolving);
-  }
-
- private:
-  void setLocation(SourceLocation &where, const SourceLocation &loc) {
-    where = loc;
-    if (!start_loc_.isSet())
-      start_loc_ = loc;
-  }
-
- private:
-  SourceLocation start_loc_;
-  SourceLocation base_loc_;
-  SourceLocation const_loc_;
-  SourceLocation variadic_loc_;
-  SourceLocation sigil_loc_;
-  uint32_t attrs_;
-  union {
-    uint32_t rank_;
-    ExpressionList *dims_;
-  };
-  TokenKind resolver_;
-  union {
-    NameProxy *proxy_;
-    FunctionSignature *signature_;
-  };
-  Type *type_;
-};
 
 class FunctionSignature : public PoolObject
 {
  public:
-  FunctionSignature(const TypeSpecifier &returnType, ParameterList *parameters)
+  FunctionSignature(const TypeExpr &returnType, ParameterList *parameters)
     : returnType_(returnType),
       parameters_(parameters),
       destructor_(false),
@@ -413,11 +180,11 @@ class FunctionSignature : public PoolObject
   {
   }
 
-  TypeSpecifier *returnType() {
-    return &returnType_;
+  TypeExpr &returnType() {
+    return returnType_;
   }
-  const TypeSpecifier *returnType() const {
-    return &returnType_;
+  const TypeExpr &returnType() const {
+    return returnType_;
   }
   ParameterList *parameters() const {
     return parameters_;
@@ -436,7 +203,7 @@ class FunctionSignature : public PoolObject
   }
 
  private:
-  TypeSpecifier returnType_;
+  TypeExpr returnType_;
   ParameterList *parameters_;
   bool destructor_;
   bool native_;
@@ -446,12 +213,12 @@ class VariableDeclaration : public Statement
 {
  public:
   VariableDeclaration(const NameToken &name,
-                      const TypeSpecifier &spec,
+                      const TypeExpr &te,
                       Expression *initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
-     spec_(spec),
+     te_(te),
      sym_(nullptr),
      next_(nullptr)
   {
@@ -465,8 +232,11 @@ class VariableDeclaration : public Statement
   Atom *name() const {
     return name_;
   }
-  TypeSpecifier *spec() {
-    return &spec_;
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
   }
   void setSymbol(VariableSymbol *sym) {
     assert(!sym_);
@@ -491,7 +261,7 @@ class VariableDeclaration : public Statement
  private:
   Atom *name_;
   Expression *initialization_;
-  TypeSpecifier spec_;
+  TypeExpr te_;
   VariableSymbol *sym_;
   VariableDeclaration *next_;
 };
@@ -1459,11 +1229,10 @@ class LayoutDecl : public Statement
 class FieldDecl : public LayoutDecl
 {
  public:
-  FieldDecl(const SourceLocation &loc, const NameToken &name,
-            const TypeSpecifier &spec)
+  FieldDecl(const SourceLocation &loc, const NameToken &name, const TypeExpr &te)
    : LayoutDecl(loc),
      name_(name),
-     spec_(spec),
+     te_(te),
      sym_(nullptr)
   {}
 
@@ -1472,8 +1241,11 @@ class FieldDecl : public LayoutDecl
   Atom *name() const {
     return name_.atom;
   }
-  TypeSpecifier *spec() {
-    return &spec_;
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
   }
 
   void setSymbol(FieldSymbol *sym) {
@@ -1486,7 +1258,7 @@ class FieldDecl : public LayoutDecl
 
  private:
   NameToken name_;
-  TypeSpecifier spec_;
+  TypeExpr te_;
   FieldSymbol *sym_;
 };
 
@@ -1527,11 +1299,11 @@ class MethodDecl : public LayoutDecl
 class PropertyDecl : public LayoutDecl
 {
  public:
-  PropertyDecl(const SourceLocation &loc, const NameToken &name, const TypeSpecifier &spec,
+  PropertyDecl(const SourceLocation &loc, const NameToken &name, const TypeExpr &spec,
                const FunctionOrAlias &getter, const FunctionOrAlias &setter)
    : LayoutDecl(loc),
      name_(name),
-     spec_(spec),
+     te_(spec),
      getter_(getter),
      setter_(setter),
      sym_(nullptr)
@@ -1542,8 +1314,11 @@ class PropertyDecl : public LayoutDecl
   Atom *name() const {
     return name_.atom;
   }
-  TypeSpecifier *spec() {
-    return &spec_;
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
   }
   FunctionOrAlias *getter() {
     return &getter_;
@@ -1562,7 +1337,7 @@ class PropertyDecl : public LayoutDecl
 
  private:
   NameToken name_;
-  TypeSpecifier spec_;
+  TypeExpr te_;
   FunctionOrAlias getter_;
   FunctionOrAlias setter_;
   PropertySymbol *sym_;
@@ -1695,10 +1470,10 @@ class DeleteStatement : public Statement
 class TypedefStatement : public Statement
 {
  public:
-  TypedefStatement(const SourceLocation &pos, Atom *name, const TypeSpecifier &spec)
+  TypedefStatement(const SourceLocation &pos, Atom *name, const TypeExpr &spec)
    : Statement(pos),
      name_(name),
-     spec_(spec),
+     te_(spec),
      sym_(nullptr)
   {
   }
@@ -1708,8 +1483,11 @@ class TypedefStatement : public Statement
   Atom *name() const {
     return name_;
   }
-  TypeSpecifier *spec() {
-    return &spec_;
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
   }
 
   TypeSymbol *sym() const {
@@ -1721,7 +1499,7 @@ class TypedefStatement : public Statement
 
  private:
   Atom *name_;
-  TypeSpecifier spec_;
+  TypeExpr te_;
   TypeSymbol *sym_;
 };
 

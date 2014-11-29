@@ -167,23 +167,14 @@ class TypeResolver
   virtual bool resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out) {
     // If we don't have a type, resolve the node right now. This will also
     // resolve any constexpr, if any.
-    if (!sym->type())
+    if (!sym->type()) {
       sym->node()->accept(this);
+      assert(sym->hasCheckedForConstExpr());
+    }
 
-    // We have a type, so we know whether can be used as a constant.
+    // We have a type, so we know whether it can be used as a constant.
     if (!sym->canUseInConstExpr())
       return false;
-
-    // If we're currently trying to resolve this variable's constant
-    // expression, report an error.
-    if (sym->isResolvingConstExpr()) {
-      cc_.report(sym->node()->loc(), rmsg::recursive_constexpr)
-        << sym->name();
-
-      // Set a bogus constant expression so we don't report again.
-      sym->setConstExpr(DefaultValueForPlainType(sym->type()));
-      return true;
-    }
 
     // Technically, we must have a constexpr by now. Sometime later we might
     // let local constants be initialized with non-const values, so we check
@@ -205,32 +196,46 @@ class TypeResolver
   }
 
   void visitVariableDeclaration(VariableDeclaration *node) override {
-    // If the node has already been resolved, bail out. This can happen if we
-    // resolved it recursively earlier, or we re-entered while trying to
-    // resolve it recursively, and it's set to an error.
-    if (node->spec()->resolved())
-      return;
+    VariableSymbol *sym = node->sym();
 
-    // Note: we should not be able to recurse from inside this block. If it
-    // could, we'd have to mark node->spec() as resolving earlier.
-    Vector<int> literal_dims;
-    if (Expression *init = node->initialization()) {
-      if (node->spec()->hasPostDims()) {
-        // Compute the dimensions of initializers in case the declaration type
-        // requires inference.
-        if (ArrayLiteral *lit = init->asArrayLiteral()) {
-          literal_dims = fixedArrayLiteralDimensions(node->spec(), lit);
-        } else if (StringLiteral *lit = init->asStringLiteral()) {
-          literal_dims.append(lit->arrayLength());
+    if (!sym->type()) {
+      if (TypeSpecifier *spec = node->te().spec()) {
+        // Note: we should not be able to recurse from inside this block. If it
+        // could, we'd have to mark spec as resolving earlier.
+        Vector<int> literal_dims;
+        if (Expression *init = node->initialization()) {
+          if (spec->hasPostDims()) {
+            // Compute the dimensions of initializers in case the declaration type
+            // requires inference.
+            if (ArrayLiteral *lit = init->asArrayLiteral()) {
+              literal_dims = fixedArrayLiteralDimensions(spec, lit);
+            } else if (StringLiteral *lit = init->asStringLiteral()) {
+              literal_dims.append(lit->arrayLength());
+            }
+          }
         }
+
+        sym->setType(resolveType(node->te(), &literal_dims));
+      } else {
+        sym->setType(node->te().resolved());
       }
     }
 
-    VariableSymbol *sym = node->sym();
-    sym->setType(resolveType(node->spec(), &literal_dims));
-
-    if (!sym->canUseInConstExpr())
+    if (sym->isConstExpr() || !sym->canUseInConstExpr())
       return;
+
+    // If we're currently trying to resolve this variable's constant
+    // expression, report an error.
+    if (sym->isResolvingConstExpr()) {
+      cc_.report(node->loc(), rmsg::recursive_constexpr)
+        << sym->name();
+
+      // Pawn requires that const variables have constexprs, so we just set a
+      // default one to quell as many other errors as we can. In the future we
+      // may want to lax this restriction.
+      sym->setConstExpr(DefaultValueForPlainType(sym->type()));
+      return;
+    }
 
     // We got a constexpr with no initialization. Just assume it's 0, but
     // report an error as SP1 does.
@@ -483,7 +488,7 @@ class TypeResolver
     assert(!decl->sym() || !decl->sym()->type());
 
     // Note that fields can be anonymous if in a block union.
-    Type *type = resolveType(decl->spec());
+    Type *type = resolveType(decl->te());
     if (decl->sym())
       decl->sym()->setType(type);
   }
@@ -496,7 +501,7 @@ class TypeResolver
     // have re-entrancy guards.
     assert(!decl->sym()->type());
 
-    decl->sym()->setType(resolveType(decl->spec()));
+    decl->sym()->setType(resolveType(decl->te()));
 
     if (decl->getter()->isFunction())
       visitFunction(decl->getter()->fun());
@@ -518,14 +523,15 @@ class TypeResolver
 
   void visitTypedefStatement(TypedefStatement *node) override {
     // Recursion guard.
-    if (node->spec()->resolved())
+    if (node->te().resolved())
       return;
 
     // Create a placeholder until we've resolved the typedef.
     TypedefType *type = cc_.types()->newTypedef(node->name());
     node->sym()->setType(type);
 
-    Type *actual = resolveType(node->spec());
+    const SourceLocation &baseLoc = node->te().spec()->baseLoc();
+    Type *actual = resolveType(node->te());
     
     // Check for a recursive type. There might be a better way to do this, but
     // for now this is what we've got: just manually check any compound type
@@ -541,7 +547,7 @@ class TypeResolver
 
     if (type == base->canonical()) {
       type->resolve(&UnresolvableType);
-      cc_.report(node->spec()->baseLoc(), rmsg::recursive_type);
+      cc_.report(baseLoc, rmsg::recursive_type);
       return;
     }
 
@@ -776,7 +782,7 @@ class TypeResolver
     resolveType(sig->returnType());
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
       VariableDeclaration *param = sig->parameters()->at(i);
-      resolveType(param->spec());
+      resolveTypeIfNeeded(param->te());
     }
   }
 
@@ -799,23 +805,23 @@ class TypeResolver
     assert(sym->hasValue());
   }
 
-  Type *resolveTypeIfNeeded(TypeSpecifier *spec) {
-    if (spec->resolved())
-      return spec->resolved();
-    return resolveType(spec);
+  Type *resolveTypeIfNeeded(TypeExpr &te) {
+    if (te.resolved())
+      return te.resolved();
+    return resolveType(te);
   }
 
-  // The main entrypoint for resolving TypeSpecifiers.
-  Type *resolveType(TypeSpecifier *spec, const Vector<int> *arrayInitData = nullptr) {
-    if (spec->resolved())
-      return spec->resolved();
+  Type *resolveType(TypeExpr &te, const Vector<int> *arrayInitData = nullptr) {
+    if (te.resolved())
+      return te.resolved();
 
+    TypeSpecifier *spec = te.spec();
     if (spec->isResolving()) {
       cc_.report(spec->baseLoc(), rmsg::recursive_type);
 
       // We don't want to report this twice, so mark it as resolved.
-      spec->setResolved(&UnresolvableType);
-      return spec->resolved();
+      te.setResolved(&UnresolvableType);
+      return te.resolved();
     }
 
     spec->setResolving();
@@ -823,8 +829,8 @@ class TypeResolver
     Type *baseType = resolveBaseType(spec);
     if (!baseType) {
       // Return a placeholder so we don't have to check null everywhere.
-      spec->setResolved(&UnresolvableType);
-      return spec->resolved();
+      te.setResolved(&UnresolvableType);
+      return te.resolved();
     }
 
     // Should not have a reference here.
@@ -854,15 +860,13 @@ class TypeResolver
 
     // If we already had a type here, we must have seen a recursive type. It's
     // okay to rewrite it since we already reported an error somewhere.
-    assert(!spec->resolved() || spec->resolved()->isUnresolvable());
+    assert(!te.resolved() || te.resolved()->isUnresolvable());
 
-    spec->setResolved(type);
+    te.setResolved(type);
     return type;
   }
 
   Type *resolveBaseType(TypeSpecifier *spec) {
-    assert(!spec->resolved());
-
     switch (spec->resolver()) {
       case TOK_LABEL:
       case TOK_NAME:

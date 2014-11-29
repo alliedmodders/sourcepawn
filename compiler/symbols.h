@@ -170,8 +170,13 @@ class VariableSymbol : public Symbol
     constant_ = value;
   }
 
+  bool hasCheckedForConstExpr() const {
+    return !isConstExpr() && !failedToResolveConstExpr();
+  }
+
  private:
   static const int kResolvingConstExpr = 1;
+  static const int kFailedResolveConstExpr = 2;
 
  public:
   void setResolvingConstExpr() {
@@ -180,6 +185,16 @@ class VariableSymbol : public Symbol
   }
   bool isResolvingConstExpr() const {
     return constant_.isOpaque() && constant_.toOpaqueIntptr() == kResolvingConstExpr;
+  }
+
+  // This state is currently unused - we may use it in the future if we want
+  // to support non-constexpr const variables.
+  void setFailedResolveConstExpr() {
+    assert(isResolvingConstExpr());
+    constant_.setOpaqueIntptr(kFailedResolveConstExpr);
+  }
+  bool failedToResolveConstExpr() const {
+    return constant_.isOpaque() && constant_.toOpaqueIntptr() == kFailedResolveConstExpr;
   }
 
  private:

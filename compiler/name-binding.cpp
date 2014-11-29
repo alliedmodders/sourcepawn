@@ -209,12 +209,15 @@ class NameResolver : public AstVisitor
     // Function statements have quirky semantics around their return type. For
     // reasonable compatibility with SP1, we use the following heuristics for
     // when no explicit type is declared.
-    if (signature->returnType()->resolver() == TOK_IMPLICIT_INT) {
+    TypeExpr &rt = signature->returnType();
+    if ((rt.resolved() && rt.resolved()->isImplicitInt()) ||
+        (rt.spec() && rt.spec()->resolver() == TOK_IMPLICIT_INT))
+    {
       bool cell_required = (node->token() == TOK_FORWARD || node->token() == TOK_NATIVE);
       if (cell_required || fun.returns() == ValueReturn)
-        signature->returnType()->setBuiltinType(TOK_INT);
+        rt.setResolved(cc_.types()->getPrimitive(PrimitiveType::Int32));
       else
-        signature->returnType()->setBuiltinType(TOK_VOID);
+        rt.setResolved(cc_.types()->getVoid());
     } else {
       visitTypeIfNeeded(signature->returnType());
     }
@@ -232,7 +235,7 @@ class NameResolver : public AstVisitor
  private:
  public:
   void visitFieldDecl(FieldDecl *decl) override {
-    visitTypeIfNeeded(decl->spec());
+    visitTypeIfNeeded(decl->te());
 
     if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
       cc_.report(decl->loc(), rmsg::redefined_layout_decl)
@@ -261,7 +264,7 @@ class NameResolver : public AstVisitor
   }
 
   void visitPropertyDecl(PropertyDecl *decl) override {
-    visitTypeIfNeeded(decl->spec());
+    visitTypeIfNeeded(decl->te());
     if (decl->getter()->isFunction())
       visitFunction(decl->getter()->fun());
     if (decl->setter()->isFunction())
@@ -346,7 +349,7 @@ class NameResolver : public AstVisitor
   }
 
   void visitTypedefStatement(TypedefStatement *node) override {
-    visitTypeIfNeeded(node->spec());
+    visitTypeIfNeeded(node->te());
 
     TypeSymbol *sym = new (pool_) TypeSymbol(node, getOrCreateScope(), node->name());
     registerSymbol(sym);
@@ -356,7 +359,7 @@ class NameResolver : public AstVisitor
   void visitVariableDeclaration(VariableDeclaration *first) override {
     for (VariableDeclaration *iter = first; iter; iter = iter->next()) {
       // Visit the type so we don't bind the type to the variable name.
-      visitTypeIfNeeded(iter->spec());
+      visitTypeIfNeeded(iter->te());
 
       // Note: we look at the initializer BEFORE entering the symbol, so a
       // naive "new x = x" will not bind (unless there is an x in an outer
@@ -572,20 +575,21 @@ class NameResolver : public AstVisitor
     declareSystemType(scope, "Function", cc_.types()->getMetaFunction());
   }
 
-  void visitTypeIfNeeded(TypeSpecifier *spec) {
-    if (spec->needsBinding())
-      visitType(spec);
+  void visitTypeIfNeeded(TypeExpr &te) {
+    if (te.spec() && te.spec()->needsBinding())
+      visitType(te);
   }
 
-  void visitType(TypeSpecifier *spec) {
-    assert(spec->needsBinding());
+  void visitType(TypeExpr &te) {
+    assert(te.spec()->needsBinding());
 
+    TypeSpecifier *spec = te.spec();
     switch (spec->resolver()) {
       case TOK_LABEL:
         if (Type *type = typeForLabelAtom(spec->proxy()->name())) {
           // Just resolve this type ahead of time - it's a builtin with an old-
           // style label.
-          spec->setResolved(type);
+          te.setResolved(type);
         } else {
           visitNameProxy(spec->proxy());
           if (!spec->proxy()->sym()) {
@@ -614,7 +618,7 @@ class NameResolver : public AstVisitor
         AtomSet seen;
         for (size_t i = 0; i < sig->parameters()->length(); i++) {
           VariableDeclaration *decl = sig->parameters()->at(i);
-          visitTypeIfNeeded(decl->spec());
+          visitTypeIfNeeded(decl->te());
 
           AtomSet::Insert p = seen.findForAdd(decl->name());
           if (p.found()) {
@@ -705,7 +709,7 @@ class NameResolver : public AstVisitor
     Scope *scope = getOrCreateScope();
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
       VariableDeclaration *var = sig->parameters()->at(i);
-      visitTypeIfNeeded(var->spec());
+      visitTypeIfNeeded(var->te());
 
       VariableSymbol *sym = new (pool_) VariableSymbol(var, scope, var->name());
       registerSymbol(sym);

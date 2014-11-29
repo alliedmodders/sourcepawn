@@ -74,7 +74,7 @@ class JsonBuilder : public AstVisitor
   // Harder cases.
   void visitPropertyDecl(PropertyDecl *node) override {
     rval_->add(atom_name_, new (pool_) JsonString(node->name()));
-    rval_->add(atom_typespec_, toJson(node->spec()));
+    rval_->add(atom_typespec_, toJson(node->te()));
     if (!node->getter()->isEmpty())
       rval_->add(cc_.add("getter"), toJson(new (pool_) JsonObject(), node->getter()));
     if (!node->setter()->isEmpty())
@@ -83,11 +83,11 @@ class JsonBuilder : public AstVisitor
   void visitVariableDeclaration(VariableDeclaration *node) override {
     if (node->name())
       rval_->add(atom_name_, new (pool_) JsonString(node->name()));
-    rval_->add(atom_typespec_, toJson(node->spec()));
+    rval_->add(atom_typespec_, toJson(node->te()));
   }
   void visitTypedefStatement(TypedefStatement *node) override {
     rval_->add(atom_name_, new (pool_) JsonString(node->name()));
-    rval_->add(atom_typespec_, toJson(node->spec()));
+    rval_->add(atom_typespec_, toJson(node->te()));
   }
   void visitFunctionStatement(FunctionStatement *node) override {
     rval_->add(atom_name_, new (pool_) JsonString(node->name()));
@@ -221,7 +221,7 @@ class JsonBuilder : public AstVisitor
   void visitFieldDecl(FieldDecl *node) override {
     if (node->name())
       rval_->add(atom_name_, new (pool_) JsonString(node->name()));
-    rval_->add(atom_typespec_, toJson(node->spec()));
+    rval_->add(atom_typespec_, toJson(node->te()));
   }
   void visitEnumConstant(EnumConstant *node) override {
     rval_->add(atom_name_, new (pool_) JsonString(node->name()));
@@ -349,6 +349,14 @@ class JsonBuilder : public AstVisitor
     if (node->body())
       obj->add(atom_body_, toJson(node->body()));
     return obj;
+  }
+
+  JsonObject *toJson(const TypeExpr &te) {
+    if (te.spec())
+      return toJson(te.spec());
+
+    // :TODO:
+    return new (pool_) JsonObject();
   }
 
   JsonObject *toJson(TypeSpecifier *spec) {

@@ -44,6 +44,15 @@ class AstPrinter : public AstVisitor
   {
   }
 
+  void dump(const TypeExpr &te, Atom *name) {
+    if (te.spec()) {
+      dump(*te.spec(), name);
+      return;
+    }
+
+    // :TODO:
+  }
+
   void dump(const TypeSpecifier &spec, Atom *name) {
     if (spec.isConst())
       fprintf(fp_, "const ");
@@ -75,7 +84,7 @@ class AstPrinter : public AstVisitor
   }
 
   void dump(FunctionSignature *sig) {
-    dump(*sig->returnType(), nullptr);
+    dump(sig->returnType(), nullptr);
     if (!sig->parameters()->length()) {
       fprintf(fp_, " ()\n");
       return;
@@ -85,7 +94,7 @@ class AstPrinter : public AstVisitor
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
       prefix();
       VariableDeclaration *param = sig->parameters()->at(i);
-      dump(*param->spec(), param->name());
+      dump(param->te(), param->name());
       fprintf(fp_, "\n");
     }
     unindent();
@@ -373,7 +382,7 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "[ TypedefStatement\n");
     indent();
     prefix();
-    dump(*node->spec(), node->name());
+    dump(node->te(), node->name());
     fprintf(fp_, "\n");
     unindent();
   }
@@ -386,7 +395,7 @@ class AstPrinter : public AstVisitor
   void visitFieldDecl(FieldDecl *decl) override {
     prefix();
     fprintf(fp_, "[ FieldDecl ");
-    dump(*decl->spec(), decl->name());
+    dump(decl->te(), decl->name());
     fprintf(fp_, "\n");
   }
   void visitMethodDecl(MethodDecl *decl) override {

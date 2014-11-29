@@ -210,7 +210,7 @@ class Analyzer : public PartialAstVisitor
     if (!startDoc(obj, "property", node->name(), node->loc()))
       return;
 
-    obj->add(atom_type_, toJson(node->spec()));
+    obj->add(atom_type_, toJson(node->te()));
     obj->add(atom_getter_, new (pool_) JsonBool(!node->getter()->isEmpty()));
     obj->add(atom_setter_, new (pool_) JsonBool(!node->setter()->isEmpty()));
     props_->add(obj);
@@ -288,6 +288,15 @@ class Analyzer : public PartialAstVisitor
   JsonString *toJson(const TypeSpecifier *spec, Atom *name = nullptr) {
     return toJson(BuildTypeName(spec, name).chars());
   }
+  JsonString *toJson(Type *type, Atom *name = nullptr) {
+    return toJson(BuildTypeName(type, name).chars());
+  }
+
+  JsonString *toJson(const TypeExpr &te, Atom *name = nullptr) {
+    if (te.spec())
+      return toJson(te.spec(), name);
+    return toJson(te.resolved(), name);
+  }
 
   JsonList *toJson(const ParameterList *params) {
     JsonList *list = new (pool_) JsonList();
@@ -295,15 +304,15 @@ class Analyzer : public PartialAstVisitor
       VariableDeclaration *decl = params->at(i);
       JsonObject *obj = new (pool_) JsonObject();
 
-      obj->add(atom_type_, toJson(decl->spec()));
+      obj->add(atom_type_, toJson(decl->te()));
 
       if (decl->name()) {
         obj->add(atom_name_, toJson(decl->name()));
-        obj->add(atom_decl_, toJson(decl->spec(), decl->name()));
+        obj->add(atom_decl_, toJson(decl->te(), decl->name()));
       } else {
         obj->add(atom_name_, toJson("..."));
 
-        AutoString builder = BuildTypeName(decl->spec(), nullptr);
+        AutoString builder = BuildTypeName(decl->te(), nullptr);
         builder = builder + " ...";
         obj->add(atom_decl_, toJson(builder.ptr()));
       }

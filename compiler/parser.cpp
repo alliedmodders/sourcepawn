@@ -183,7 +183,9 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   if (!params)
     return;
 
-  FunctionSignature *signature = new (pool_) FunctionSignature(returnType, params);
+  TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(returnType));
+
+  FunctionSignature *signature = new (pool_) FunctionSignature(te, params);
   spec->setFunctionType(signature);
 }
 
@@ -1108,6 +1110,8 @@ Parser::parseAccessor()
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
+  TypeExpr te = TypeExpr(new (pool_) TypeSpecifier (spec));
+
   if (!expect(TOK_NAME))
     return nullptr;
   NameToken name = *scanner_.current();
@@ -1154,13 +1158,13 @@ Parser::parseAccessor()
       FunctionNode *node = new (pool_) FunctionNode(
         (native ? TOK_NATIVE : TOK_NONE),
         body,
-        FunctionSignature(spec, params)
+        FunctionSignature(te, params)
       );
       *out = FunctionOrAlias(node);
     }
   }
 
-  return new (pool_) PropertyDecl(begin, name, spec, getter, setter);
+  return new (pool_) PropertyDecl(begin, name, te, getter, setter);
 }
 
 MethodDecl *
@@ -1205,10 +1209,12 @@ Parser::parseMethod()
   else
     body = methodBody();
 
+  TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(decl.spec));
+
   FunctionNode *node = new (pool_) FunctionNode(
     (native ? TOK_NATIVE : TOK_NONE),
     body,
-    FunctionSignature(decl.spec, params)
+    FunctionSignature(te, params)
   );
 
   return new (pool_) MethodDecl(begin, decl.name, FunctionOrAlias(node));
@@ -1448,7 +1454,9 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
   if (match(TOK_ASSIGN))
     init = expression();
 
-  VariableDeclaration *first = new (pool_) VariableDeclaration(decl->name, decl->spec, init);
+  TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(decl->spec));
+
+  VariableDeclaration *first = new (pool_) VariableDeclaration(decl->name, te, init);
   VariableDeclaration *prev = first;
   while (match(TOK_COMMA)) {
     // Parse the next declaration re-using any sticky information from the
@@ -1460,7 +1468,9 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
     if (match(TOK_ASSIGN))
       init = expression();
 
-    VariableDeclaration *var = new (pool_) VariableDeclaration(decl->name, decl->spec, init);
+    TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(decl->spec));
+
+    VariableDeclaration *var = new (pool_) VariableDeclaration(decl->name, te, init);
     prev->setNext(var);
     prev = var;
   }
@@ -1810,9 +1820,11 @@ Parser::arguments()
       variadic = true;
     }
 
+    TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(decl.spec));
+
     VariableDeclaration *node = new (pool_) VariableDeclaration(
       decl.name,
-      decl.spec,
+      te,
       init
     );
     params->append(node);
@@ -1866,7 +1878,9 @@ Parser::function(TokenKind kind, const Declaration &decl, void *, uint32_t attrs
   else
     requireTerminator();
 
-  FunctionSignature signature(decl.spec, params);
+  TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(decl.spec));
+
+  FunctionSignature signature(te, params);
   return new (pool_) FunctionStatement(decl.name, kind, body, signature);
 }
 
@@ -1939,7 +1953,9 @@ Parser::struct_(TokenKind kind)
     if (!begin.isSet())
       begin = decl.spec.startLoc();
 
-    decls->append(new (pool_) FieldDecl(begin, decl.name, decl.spec));
+    TypeExpr te = TypeExpr(new (pool_) TypeSpecifier(decl.spec));
+
+    decls->append(new (pool_) FieldDecl(begin, decl.name, te));
     requireNewlineOrSemi();
   }
 
@@ -1961,8 +1977,10 @@ Parser::typedef_()
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
+  TypeExpr te(new (pool_) TypeSpecifier(spec));
+
   requireNewlineOrSemi();
-  return new (pool_) TypedefStatement(begin, name, spec);
+  return new (pool_) TypedefStatement(begin, name, te);
 }
 
 ParseTree *

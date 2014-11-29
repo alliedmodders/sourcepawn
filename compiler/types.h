@@ -28,6 +28,7 @@ namespace sp {
 
 struct ReportingContext;
 class TypeSpecifier;
+class TypeExpr;
 
 enum class PrimitiveType : uint32_t
 {
@@ -39,6 +40,10 @@ enum class PrimitiveType : uint32_t
   // A char is an 8-bit signed integer that has some extra coercion rules for
   // legacy code.
   Char,
+
+  // The "implicit int" pseudo-type that we use when an int type was not
+  // explicitly specified.
+  ImplicitInt,
 
   // Enumerations and untyped variables are stored as signed, 32-bit integers.
   Int32,
@@ -224,6 +229,12 @@ class Type : public PoolObject
   }
   bool isBool() {
     return isPrimitive() && primitive() == PrimitiveType::Bool;
+  }
+
+  // This is a very specific check intended for phases which need to know
+  // if a type was not specified, and thus it ignores qualifiers.
+  bool isImplicitInt() const {
+    return kind_ == Kind::Primitive && primitive_ == PrimitiveType::ImplicitInt;
   }
 
   // Check whether this type pointer is actually resolved to anything. This
@@ -569,11 +580,12 @@ extern Type UnresolvableType;
 const char *GetPrimitiveName(PrimitiveType type);
 const char *GetTypeName(Type *type);
 const char *GetTypeClassName(Type *type);
-AString BuildTypeName(Type *type);
 
-// Similar to BuildTypeName, but an optional atom can be specified to correctly
-// insert a variable name in pre- or post- order.
+// Build a type name for diagnostics, with an optional name for building a
+// declaration.
+AString BuildTypeName(Type *type, Atom *name = nullptr);
 AString BuildTypeName(const TypeSpecifier *spec, Atom *name);
+AString BuildTypeName(const TypeExpr &te, Atom *name);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be
