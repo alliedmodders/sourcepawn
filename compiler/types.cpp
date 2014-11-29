@@ -275,8 +275,15 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
     // for diagnostics.
     base = base + "[]";
   }
-  if (name && !postDims)
-    base = base + " " + name->chars();
+  if (name && !postDims) {
+    base = base + " ";
+    if (spec->isByRef())
+      base = base + "&";
+    base = base + name->chars();
+  } else {
+    if (spec->isByRef())
+      base = base + "&";
+  }
 
   if (spec->isVariadic())
     base = base + " ...";
