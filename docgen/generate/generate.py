@@ -401,7 +401,7 @@ class DocGen(object):
     cn.execute(query, (
       self.current_include,
       self.current_class,
-      function['kind'],
+      function.get('kind'),
       function['name'],
       signature,
       JSON.dumps(data)))
