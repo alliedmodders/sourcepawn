@@ -414,6 +414,9 @@ class DocGen(object):
       function['name'],
       ', '.join([arg['decl'] for arg in function['arguments']]))
 
+    if function['returnType'] == 'void':
+      del data['return']
+
     json = JSON.dumps(data)
 
     query = """
