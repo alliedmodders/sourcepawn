@@ -220,6 +220,7 @@ class DocGen(object):
       values
         (%s,   %s,  %s)
       on duplicate key update
+        id = last_insert_id(id),
         doc = %s,
         content = %s
     """
@@ -272,6 +273,7 @@ class DocGen(object):
       values
         (%s, %s, %s, %s)
       on duplicate key update
+        id = last_insert_id(id),
         brief = %s,
         data = %s
     """
@@ -311,6 +313,7 @@ class DocGen(object):
       values
         (%s,         %s,       %s,   %s,   %s,     %s,     %s,    %s)
       on duplicate key update
+        id = last_insert_id(id),
         type = %s,
         getter = %s,
         setter = %s,
@@ -330,6 +333,7 @@ class DocGen(object):
       values
         (%s,         %s,          %s,        %s,   %s,    %s)
       on duplicate key update
+        id = last_insert_id(id),
         brief = %s,
         data = %s
     """
@@ -352,6 +356,7 @@ class DocGen(object):
       values
         (%s,         %s,   %s,    %s)
       on duplicate key update
+        id = last_insert_id(id),
         brief = %s,
         data = %s
     """
@@ -417,6 +422,7 @@ class DocGen(object):
       values
         (%s, %s, %s, %s, %s, %s, %s)
       on duplicate key update
+        id = last_insert_id(id),
         signature = %s,
         brief = %s,
         data = %s
