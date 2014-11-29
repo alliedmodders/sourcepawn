@@ -76,6 +76,7 @@ class CommentParser(object):
     lines = self.text[body_start:body_end].splitlines()
 
     # Strip leading **<
+    lines = [line.lstrip() for line in lines]
     lines = [line.lstrip('*') for line in lines]
     lines = [line.lstrip('<') for line in lines]
 
@@ -231,7 +232,7 @@ class DocGen(object):
 
   def parse_doc(self, obj):
     if 'docStart' not in obj:
-      return None
+      return Comment()
 
     docstart = obj['docStart']
     docend = obj['docEnd']
@@ -256,21 +257,19 @@ class DocGen(object):
   def parse_class(self, layout):
     doc = self.parse_doc(layout)
 
-    data = {}
-    if doc is not None:
-      data['doc'] = doc.main
-      data['tags'] = doc.tags
+    data = { 'tags': doc.tags }
 
     query = """
       replace into spdoc_class
-        (include_id, name, data)
+        (include_id, name, brief, data)
       values
-        (%s, %s, %s)
+        (%s, %s, %s, %s)
     """
     cn = self.db.cursor()
     cn.execute(query, (
       self.current_include,
       layout['name'],
+      doc.main,
       JSON.dumps(data)))
 
     self.current_class = cn.lastrowid
@@ -282,16 +281,13 @@ class DocGen(object):
 
   def parse_property(self, property):
     doc = self.parse_doc(property)
-    data = {
-      'doc': doc.main,
-      'tags': doc.tags,
-    }
+    data = { 'tags': doc.tags }
 
     query = """
       replace into spdoc_property
-        (include_id, class_id, name, type, getter, setter, data)
+        (include_id, class_id, name, type, getter, setter, brief, data)
       values
-        (%s,         %s,       %s,   %s,   %s,     %s,     %s)
+        (%s,         %s,       %s,   %s,   %s,     %s,     %s,    %s)
     """
     cn = self.db.cursor()
     cn.execute(query, (
@@ -301,20 +297,18 @@ class DocGen(object):
       property['type'],
       property['getter'],
       property['setter'],
+      doc.main,
       JSON.dumps(data)))
 
   def parse_constant(self, constant, parent_type, parent_id):
     doc = self.parse_doc(constant)
-    data = {}
-    if doc is not None:
-      data['doc'] = doc.main
-      data['tags'] = doc.tags
+    data = { 'tags': doc.tags }
 
     query = """
       replace into spdoc_constant
-        (include_id, parent_type, parent_id, name, data)
+        (include_id, parent_type, parent_id, name, brief, data)
       values
-        (%s,         %s,          %s,        %s,   %s)
+        (%s,         %s,          %s,        %s,   %s,    %s)
     """
     cn = self.db.cursor()
     cn.execute(query, (
@@ -322,25 +316,24 @@ class DocGen(object):
       parent_type,
       parent_id,
       constant['name'],
+      doc.main,
       JSON.dumps(data)))
 
   def parse_enum(self, enum):
     doc = self.parse_doc(enum)
-    data = {
-      'doc': doc.main,
-      'tags': doc.tags,
-    }
+    data = { 'tags': doc.tags }
 
     query = """
       replace into spdoc_enum
-        (include_id, name, data)
+        (include_id, name, brief, data)
       values
-        (%s,         %s,   %s)
+        (%s,         %s,   %s,    %s)
     """
     cn = self.db.cursor()
     cn.execute(query, (
       self.current_include,
       enum['name'],
+      doc.main,
       JSON.dumps(data)))
 
     enum_id = cn.lastrowid
@@ -350,7 +343,6 @@ class DocGen(object):
   def parse_function(self, function):
     doc = self.parse_doc(function)
     data = {
-      'doc': doc.main,
       'tags': [],
       'return': {
         'type': function['returnType'],
@@ -393,9 +385,9 @@ class DocGen(object):
 
     query = """
       replace into spdoc_function
-        (include_id, class_id, kind, name, signature, data)
+        (include_id, class_id, kind, name, signature, brief, data)
       values
-        (%s, %s, %s, %s, %s, %s)
+        (%s, %s, %s, %s, %s, %s, %s)
     """
     cn = self.db.cursor()
     cn.execute(query, (
@@ -404,6 +396,7 @@ class DocGen(object):
       function.get('kind'),
       function['name'],
       signature,
+      doc.main,
       JSON.dumps(data)))
 
 def main():
