@@ -28,7 +28,8 @@ namespace sp {
 
 typedef FixedPoolList<Token> TokenList;
 
-struct Macro : public PoolObject {
+struct Macro : public PoolObject
+{
   // The location at which this macro was defined.
   SourceLocation definedAt;
 

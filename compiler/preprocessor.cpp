@@ -38,7 +38,8 @@ Preprocessor::Preprocessor(CompileContext &cc)
    tokens_(&normal_tokens_),
    allow_macro_expansion_(true),
    disable_includes_(false),
-   include_depth_(0)
+   include_depth_(0),
+   comment_handler_(nullptr)
 {
   setup_builtin_macros();
 }
@@ -480,7 +481,8 @@ Preprocessor::handleEndOfFile()
 void
 Preprocessor::addComment(CommentPos where, const SourceRange &extends)
 {
-  comment_handler_->HandleComment(where, extends);
+  if (comment_handler_)
+    comment_handler_->HandleComment(where, extends);
 }
 
 void

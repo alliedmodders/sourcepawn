@@ -27,6 +27,11 @@ using namespace sp;
 
 int main(int argc, char **argv)
 {
+  if (argc != 2) {
+    fprintf(stderr, "Usage: <file>\n");
+    return 1;
+  }
+
   StringPool strings;
   ReportManager reports;
   SourceManager source(strings, reports);
@@ -34,13 +39,21 @@ int main(int argc, char **argv)
   PoolAllocator pool;
   {
     PoolScope scope(pool);
-
     CompileContext cc(pool, strings, reports, source);
-    if (!cc.compile()) {
-      ReportManager &reporting = cc.reporting();
-      reporting.PrintMessages();
+    
+    ReportingContext rc(cc, SourceLocation(), false);
+    Ref<SourceFile> file = source.open(rc, argv[1]);
+    if (!file) {
+      fprintf(stderr, "cannot open file '%s'\n", argv[1]);
+      return 1;
+    }
+
+    if (!cc.compile(file) || reports.HasMessages()) {
+      reports.PrintMessages();
       return 1;
     }
   }
+
+  return 0;
 }
 

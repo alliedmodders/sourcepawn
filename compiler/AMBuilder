@@ -49,7 +49,23 @@ binary.sources += [
   'type-manager.cpp',
   'type-resolver.cpp',
   'types.cpp',
-  'main.cpp',
 ]
 KE.libspcomp = builder.Add(binary)
+
+binary = builder.compiler.Program('spcomp')
+binary.compiler.cxxincludes += [
+  os.path.join(builder.sourcePath),
+  os.path.join(builder.sourcePath, 'include'),
+]
+if binary.compiler.cxx.behavior is 'msvc':
+  binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
+
+binary.sources += [
+  'main.cpp',
+]
+binary.compiler.linkflags += [
+  KE.libspcomp.binary
+]
+builder.Add(binary)
+
 

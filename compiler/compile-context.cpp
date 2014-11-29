@@ -79,14 +79,9 @@ ReportMemory(FILE *fp)
 }
 
 bool
-CompileContext::compile()
+CompileContext::compile(Ref<SourceFile> file)
 {
   if (!types_.initialize())
-    return false;
-
-  ReportingContext rc(*this, SourceLocation());
-  Ref<SourceFile> file = source_.open(rc, ""); // :TODO: options_.InputFiles[0].chars());
-  if (!file)
     return false;
 
   Preprocessor pp(*this);
@@ -122,7 +117,7 @@ CompileContext::compile()
 
   ReportMemory(stderr);
 
-  unit->tree()->toJson(*this, stdout);
+  unit->tree()->dump(stdout);
 
   {
     //AmxEmitter sema(*this, units_[0]);

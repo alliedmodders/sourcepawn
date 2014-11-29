@@ -78,7 +78,7 @@ class CompileContext
                  SourceManager &source);
   ~CompileContext();
 
-  bool compile();
+  bool compile(Ref<SourceFile> file);
 
   bool phasePassed() const {
     return !reports_.HasErrors();
