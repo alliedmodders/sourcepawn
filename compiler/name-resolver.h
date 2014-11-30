@@ -19,42 +19,41 @@
 #define _include_spcomp_name_resolver_h_
 
 #include "scopes.h"
-#include "parser.h"
 
 namespace sp {
 
 using namespace ke;
 
-class NameResolver : public Parser::Delegate
+class NameResolver
 {
  public:
   NameResolver(CompileContext &cc);
 
-  void OnEnterParser() override;
-  void OnLeaveParser() override;
-  void OnEnterScope(Scope::Kind kind) override;
-  Scope *OnLeaveScope() override;
-  void OnLeaveOrphanScope() override;
-  void OnNameProxy(NameProxy *proxy) override;
-  void OnTagProxy(NameProxy *proxy) override;
-  void OnEnumDecl(EnumStatement *node) override;
-  void OnEnumValueDecl(EnumConstant *cs) override;
-  void OnVarDecl(VariableDeclaration *var) override;
-  void OnEnterMethodmap(MethodmapDecl *methodmap) override;
-  void OnLeaveMethodmap(MethodmapDecl *methodmap) override;
-  void OnEnterRecordDecl(RecordDecl *decl) override;
-  void OnLeaveRecordDecl(RecordDecl *decl) override;
-  void OnMethodDecl(MethodDecl *decl) override;
-  void OnPropertyDecl(PropertyDecl *decl) override;
-  void OnFieldDecl(FieldDecl *decl) override;
-  void OnEnterFunctionDecl(FunctionStatement *stmt) override;
-  void OnLeaveFunctionDecl(FunctionStatement *node) override;
-  void OnReturnStmt(ReturnStatement *stmt) override;
-  void OnTypedefDecl(TypedefStatement *stmt) override;
+  void OnEnterParser();
+  void OnLeaveParser();
+  void OnEnterScope(Scope::Kind kind);
+  Scope *OnLeaveScope();
+  void OnLeaveOrphanScope();
+  void OnNameProxy(NameProxy *proxy);
+  void OnTagProxy(NameProxy *proxy);
+  void OnEnumDecl(EnumStatement *node);
+  void OnEnumValueDecl(EnumConstant *cs);
+  void OnVarDecl(VariableDeclaration *var);
+  void OnEnterMethodmap(MethodmapDecl *methodmap);
+  void OnLeaveMethodmap(MethodmapDecl *methodmap);
+  void OnEnterRecordDecl(RecordDecl *decl);
+  void OnLeaveRecordDecl(RecordDecl *decl);
+  void OnMethodDecl(MethodDecl *decl);
+  void OnPropertyDecl(PropertyDecl *decl);
+  void OnFieldDecl(FieldDecl *decl);
+  void OnEnterFunctionDecl(FunctionStatement *stmt);
+  void OnLeaveFunctionDecl(FunctionStatement *node);
+  void OnReturnStmt(ReturnStatement *stmt);
+  void OnTypedefDecl(TypedefStatement *stmt);
 
   // In the future we should let this feedback into the next phase, so we can
   // avoid re-walking the entire AST to resolve types.
-  TypeExpr HandleTypeExpr(const TypeSpecifier &spec) override;
+  TypeExpr HandleTypeExpr(const TypeSpecifier &spec);
 
  private:
   void declareSystemTypes(Scope *scope);

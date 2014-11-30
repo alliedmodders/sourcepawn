@@ -96,7 +96,7 @@ CompileContext::compile(Ref<SourceFile> file)
       return false;
 
     NameResolver nr(*this);
-    Parser p(*this, pp, &nr);
+    Parser p(*this, pp, nr);
     ParseTree *tree = p.parse();
     if (!phasePassed())
       return false;

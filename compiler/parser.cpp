@@ -23,20 +23,17 @@
 using namespace ke;
 using namespace sp;
 
-Parser::Parser(CompileContext &cc, Preprocessor &pp, Delegate *delegate)
+Parser::Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver)
 : cc_(cc),
   pool_(cc_.pool()),
   scanner_(pp),
   options_(cc_.options()),
-  delegate_(delegate),
+  delegate_(resolver),
   allowDeclarations_(true)
 {
   atom_Float_ = cc_.add("Float");
   atom_String_ = cc_.add("String");
   atom_underbar_ = cc_.add("_");
-
-  if (!delegate_)
-    delegate_ = &dummy_delegate_;
 }
 
 bool
@@ -143,19 +140,19 @@ Parser::requireNewlineOrSemi()
 class AutoEnterScope
 {
  public:
-  AutoEnterScope(Parser::Delegate *delegate, Scope::Kind kind, Scope **ptr)
+  AutoEnterScope(NameResolver &delegate, Scope::Kind kind, Scope **ptr)
    : delegate_(delegate),
      kind_(kind),
      ptr_(ptr)
   {
-    delegate_->OnEnterScope(kind);
+    delegate_.OnEnterScope(kind);
   }
   ~AutoEnterScope() {
-    *ptr_ = delegate_->OnLeaveScope();
+    *ptr_ = delegate_.OnLeaveScope();
   }
 
  private:
-  Parser::Delegate *delegate_;
+  NameResolver &delegate_;
   Scope::Kind kind_;
   Scope **ptr_;
 };
@@ -168,7 +165,7 @@ Parser::nameref(const Token *tok)
 
   NameProxy *proxy = new (pool_) NameProxy(tok->start.loc, tok->atom());
 
-  delegate_->OnNameProxy(proxy);
+  delegate_.OnNameProxy(proxy);
   return proxy;
 }
 
@@ -180,7 +177,7 @@ Parser::tagref(const Token *tok)
 
   NameProxy *proxy = new (pool_) NameProxy(tok->start.loc, tok->atom());
 
-  delegate_->OnTagProxy(proxy);
+  delegate_.OnTagProxy(proxy);
   return proxy;
 }
 
@@ -227,13 +224,13 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   parse_new_type_expr(&returnType, 0);
 
   // :TODO: only allow new-style arguments.
-  delegate_->OnEnterScope(Scope::Function);
+  delegate_.OnEnterScope(Scope::Function);
   ParameterList *params = arguments();
-  delegate_->OnLeaveOrphanScope();
+  delegate_.OnLeaveOrphanScope();
   if (!params)
     return;
 
-  TypeExpr te = delegate_->HandleTypeExpr(returnType);
+  TypeExpr te = delegate_.HandleTypeExpr(returnType);
 
   FunctionSignature *signature = new (pool_) FunctionSignature(te, params);
   spec->setFunctionType(signature);
@@ -828,7 +825,7 @@ Parser::unary()
       else
         spec.setNamedType(TOK_LABEL, tagref());
 
-      TypeExpr te = delegate_->HandleTypeExpr(spec);
+      TypeExpr te = delegate_.HandleTypeExpr(spec);
 
       Expression *expr = unary();
       if (!expr)
@@ -1208,7 +1205,7 @@ Parser::parseAccessor()
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
-  TypeExpr te = delegate_->HandleTypeExpr(spec);
+  TypeExpr te = delegate_.HandleTypeExpr(spec);
 
   if (!expect(TOK_NAME))
     return nullptr;
@@ -1253,7 +1250,7 @@ Parser::parseAccessor()
   }
 
   PropertyDecl *decl = new (pool_) PropertyDecl(begin, name, te, getter, setter);
-  delegate_->OnPropertyDecl(decl);
+  delegate_.OnPropertyDecl(decl);
   return decl;
 }
 
@@ -1337,11 +1334,11 @@ Parser::parseMethod(Atom *layoutName)
 
     MethodDecl *decl =
       new (pool_) MethodDecl(begin, name, FunctionOrAlias(alias));
-    delegate_->OnMethodDecl(decl);
+    delegate_.OnMethodDecl(decl);
     return decl;
   }
 
-  TypeExpr te = delegate_->HandleTypeExpr(spec);
+  TypeExpr te = delegate_.HandleTypeExpr(spec);
 
   FunctionNode *node = parseFunctionBase(te, kind);
   if (!node)
@@ -1352,7 +1349,7 @@ Parser::parseMethod(Atom *layoutName)
     return nullptr;
 
   MethodDecl *decl = new (pool_) MethodDecl(begin, name, FunctionOrAlias(node));
-  delegate_->OnMethodDecl(decl);
+  delegate_.OnMethodDecl(decl);
   return decl;
 }
 
@@ -1378,7 +1375,7 @@ Parser::methodmap(TokenKind kind)
   if (nullable)
     methodmap->setNullable();
 
-  delegate_->OnEnterMethodmap(methodmap);
+  delegate_.OnEnterMethodmap(methodmap);
 
   LayoutDecls *decls = new (pool_) LayoutDecls();
   while (!match(TOK_RBRACE)) {
@@ -1400,7 +1397,7 @@ Parser::methodmap(TokenKind kind)
   methodmap->setBody(decls);
 
   // Clean up.
-  delegate_->OnLeaveMethodmap(methodmap);
+  delegate_.OnLeaveMethodmap(methodmap);
 
   requireNewlineOrSemi();
   return methodmap;
@@ -1601,11 +1598,11 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
   if (match(TOK_ASSIGN))
     init = expression();
 
-  TypeExpr te = delegate_->HandleTypeExpr(decl->spec);
+  TypeExpr te = delegate_.HandleTypeExpr(decl->spec);
 
   VariableDeclaration *first =
     new (pool_) VariableDeclaration(decl->name, te, init);
-  delegate_->OnVarDecl(first);
+  delegate_.OnVarDecl(first);
 
   VariableDeclaration *prev = first;
   while (match(TOK_COMMA)) {
@@ -1618,11 +1615,11 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
     if (match(TOK_ASSIGN))
       init = expression();
 
-    TypeExpr te = delegate_->HandleTypeExpr(decl->spec);
+    TypeExpr te = delegate_.HandleTypeExpr(decl->spec);
 
     VariableDeclaration *var =
       new (pool_) VariableDeclaration(decl->name, te, init);
-    delegate_->OnVarDecl(var);
+    delegate_.OnVarDecl(var);
 
     prev->setNext(var);
     prev = var;
@@ -1681,7 +1678,7 @@ Parser::return_()
   requireTerminator();
 
   ReturnStatement *stmt = new (pool_) ReturnStatement(pos, expr);
-  delegate_->OnReturnStmt(stmt);
+  delegate_.OnReturnStmt(stmt);
   return stmt;
 }
 
@@ -1917,7 +1914,7 @@ Parser::enum_()
     return nullptr;
 
   EnumStatement *stmt = new (pool_) EnumStatement(pos, name);
-  delegate_->OnEnumDecl(stmt);
+  delegate_.OnEnumDecl(stmt);
 
   do {
     if (scanner_.peek() == TOK_RBRACE)
@@ -1941,7 +1938,7 @@ Parser::enum_()
     }
 
     EnumConstant *cs = new (pool_) EnumConstant(loc, stmt, name, expr);
-    delegate_->OnEnumValueDecl(cs);
+    delegate_.OnEnumValueDecl(cs);
     entries->append(cs);
   } while (match(TOK_COMMA));
   if (!expect(TOK_RBRACE))
@@ -1984,11 +1981,11 @@ Parser::arguments()
       variadic = true;
     }
 
-    TypeExpr te = delegate_->HandleTypeExpr(decl.spec);
+    TypeExpr te = delegate_.HandleTypeExpr(decl.spec);
 
     VariableDeclaration *node =
       new (pool_) VariableDeclaration(decl.name, te, init);
-    delegate_->OnVarDecl(node);
+    delegate_.OnVarDecl(node);
 
     params->append(node);
   } while (match(TOK_COMMA));
@@ -2030,11 +2027,11 @@ Parser::methodBody()
 Statement *
 Parser::function(TokenKind kind, const Declaration &decl, void *, uint32_t attrs)
 {
-  TypeExpr te = delegate_->HandleTypeExpr(decl.spec);
+  TypeExpr te = delegate_.HandleTypeExpr(decl.spec);
 
   FunctionStatement *stmt = new (pool_) FunctionStatement(decl.name, kind);
 
-  delegate_->OnEnterFunctionDecl(stmt);
+  delegate_.OnEnterFunctionDecl(stmt);
 
   Scope *argScope = nullptr;
   {
@@ -2055,7 +2052,7 @@ Parser::function(TokenKind kind, const Declaration &decl, void *, uint32_t attrs
     BlockStatement *body = nullptr;
     if (kind != TOK_FORWARD && kind != TOK_NATIVE) {
       if ((body = methodBody()) == nullptr) {
-        delegate_->OnLeaveFunctionDecl(stmt);
+        delegate_.OnLeaveFunctionDecl(stmt);
         return nullptr;
       }
     }
@@ -2068,7 +2065,7 @@ Parser::function(TokenKind kind, const Declaration &decl, void *, uint32_t attrs
   else
     requireTerminator();
 
-  delegate_->OnLeaveFunctionDecl(stmt);
+  delegate_.OnLeaveFunctionDecl(stmt);
   return stmt;
 }
 
@@ -2126,7 +2123,7 @@ Parser::struct_(TokenKind kind)
     flags |= DeclFlags::MaybeNamed;
 
   RecordDecl *decl = new (pool_) RecordDecl(loc, kind, name);
-  delegate_->OnEnterRecordDecl(decl);
+  delegate_.OnEnterRecordDecl(decl);
 
   LayoutDecls *decls = new (pool_) LayoutDecls();
   while (!match(TOK_RBRACE)) {
@@ -2145,17 +2142,17 @@ Parser::struct_(TokenKind kind)
     if (!begin.isSet())
       begin = decl.spec.startLoc();
 
-    TypeExpr te = delegate_->HandleTypeExpr(decl.spec);
+    TypeExpr te = delegate_.HandleTypeExpr(decl.spec);
 
     FieldDecl *field = new (pool_) FieldDecl(begin, decl.name, te);
-    delegate_->OnFieldDecl(field);
+    delegate_.OnFieldDecl(field);
     decls->append(field);
 
     requireNewlineOrSemi();
   }
   decl->setBody(decls);
 
-  delegate_->OnLeaveRecordDecl(decl);
+  delegate_.OnLeaveRecordDecl(decl);
 
   requireNewlineOrSemi();
   return decl;
@@ -2175,12 +2172,12 @@ Parser::typedef_()
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
-  TypeExpr te = delegate_->HandleTypeExpr(spec);
+  TypeExpr te = delegate_.HandleTypeExpr(spec);
 
   requireNewlineOrSemi();
 
   TypedefStatement *stmt = new (pool_) TypedefStatement(begin, name, te);
-  delegate_->OnTypedefDecl(stmt);
+  delegate_.OnTypedefDecl(stmt);
   return stmt;
 }
 
@@ -2189,7 +2186,7 @@ Parser::parse()
 {
   StatementList *list = new (pool_) StatementList();
 
-  delegate_->OnEnterParser();
+  delegate_.OnEnterParser();
 
   for (;;) {
     Statement *statement = nullptr;
@@ -2262,14 +2259,8 @@ Parser::parse()
     }
   }
 
-  delegate_->OnLeaveParser();
+  delegate_.OnLeaveParser();
 
  err_out:
   return new (pool_) ParseTree(list);
-}
-
-TypeExpr
-Parser::Delegate::HandleTypeExpr(const TypeSpecifier &spec)
-{
-  return TypeExpr(new (POOL()) TypeSpecifier(spec));
 }

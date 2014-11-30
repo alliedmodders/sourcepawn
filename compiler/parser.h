@@ -23,6 +23,7 @@
 #include "ast.h"
 #include "scopes.h"
 #include "process-options.h"
+#include "name-resolver.h"
 
 namespace sp {
 
@@ -62,59 +63,7 @@ struct Declaration
 class Parser
 {
  public:
-  // This is a set of callbacks for performing initial semantic analysis
-  // during parsing.
-  class Delegate
-  {
-   public:
-    virtual void OnNameProxy(NameProxy *proxy)
-    {}
-    virtual void OnTagProxy(NameProxy *proxy)
-    {}
-    virtual void OnEnumDecl(EnumStatement *node)
-    {}
-    virtual void OnEnumValueDecl(EnumConstant *cs)
-    {}
-    virtual void OnVarDecl(VariableDeclaration *var)
-    {}
-    virtual void OnTypedefDecl(TypedefStatement *stmt)
-    {}
-    virtual void OnEnterMethodmap(MethodmapDecl *methodmap)
-    {}
-    virtual void OnLeaveMethodmap(MethodmapDecl *methodmap)
-    {}
-    virtual void OnEnterRecordDecl(RecordDecl *decl)
-    {}
-    virtual void OnLeaveRecordDecl(RecordDecl *decl)
-    {}
-    virtual void OnMethodDecl(MethodDecl *decl)
-    {}
-    virtual void OnPropertyDecl(PropertyDecl *decl)
-    {}
-    virtual void OnFieldDecl(FieldDecl *decl)
-    {}
-    virtual void OnEnterFunctionDecl(FunctionStatement *stmt)
-    {}
-    virtual void OnLeaveFunctionDecl(FunctionStatement *stmt)
-    {}
-    virtual void OnReturnStmt(ReturnStatement *stmt)
-    {}
-    virtual void OnEnterParser()
-    {}
-    virtual void OnLeaveParser()
-    {}
-    virtual void OnEnterScope(Scope::Kind kind)
-    {}
-    virtual Scope *OnLeaveScope() {
-      return nullptr;
-    }
-    virtual void OnLeaveOrphanScope()
-    {}
-    virtual TypeExpr HandleTypeExpr(const TypeSpecifier &spec);
-  };
-
- public:
-  Parser(CompileContext &cc, Preprocessor &pp, Delegate *delegate);
+  Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver);
 
   ParseTree *parse();
 
@@ -215,8 +164,7 @@ class Parser
   PoolAllocator &pool_;
   Preprocessor &scanner_;
   const CompileOptions &options_;
-  Delegate *delegate_;
-  Delegate dummy_delegate_;
+  NameResolver &delegate_;
   bool allowDeclarations_;
 
   Atom *atom_Float_;
