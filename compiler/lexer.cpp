@@ -490,9 +490,21 @@ Lexer::stringLiteral(Token *tok)
       break;
     if (c == '\r' || c == '\n' || c == '\0') {
       cc_.report(tok->start.loc, rmsg::unterminated_string);
-      return TOK_STRING_LITERAL;
+      break;
     }
     if (c == '\\') {
+      // Peek ahead - if this is the last non-whitespace character on the line,
+      // we have to act as if the line was concatenated.
+      const char *ptr = pos_;
+      while (*ptr && IsSkipSpace(*ptr))
+        ptr++;
+      if (*ptr == '\n' || *ptr == '\r') {
+        // Just move to the next line. Note, advanceLine expects *pos_-1 == c.
+        pos_ = ptr + 1;
+        advanceLine(*ptr);
+        continue;
+      }
+
       int code = readEscapeCode();
       if (code == INT_MAX)
         code = '?';
