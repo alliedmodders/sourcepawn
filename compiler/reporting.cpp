@@ -201,7 +201,8 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
                          ? ref.file->length() - lines->at(line_index)
                          : lines->at(line_index + 1) - lines->at(line_index);
 
-  assert(ref.col < line_length || ref.offset == ref.file->length());
+  // Note that line_length includes \n.
+  assert(ref.col <= line_length || ref.offset == ref.file->length());
 
   // Take off newline characters.
   while (line_length &&
