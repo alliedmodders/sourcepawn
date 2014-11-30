@@ -493,7 +493,7 @@ Preprocessor::eatRestOfLine()
 }
 
 void
-Preprocessor::skipUntil(TokenKind kind, SkipFlags flags)
+Preprocessor::skipUntil(TokenKind kind, SkipFlags flags, TokenKind opener)
 {
   TokenKind tok = ((flags & SkipFlags::StartAtCurrent) == SkipFlags::StartAtCurrent)
                   ? current()->kind
@@ -516,6 +516,8 @@ Preprocessor::skipUntil(TokenKind kind, SkipFlags flags)
       if (tok == TOK_SEMICOLON)
         break;
     }
+    if (kind == opener)
+      break;
 
     next();
     tok = peek();

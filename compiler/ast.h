@@ -39,7 +39,7 @@ class LayoutScope;
 class CompileContext;
 
 #define ASTKINDS(_)       \
-  _(VariableDeclaration)  \
+  _(VarDecl)  \
   _(ForStatement)         \
   _(ReturnStatement)      \
   _(IntegerLiteral)       \
@@ -69,7 +69,7 @@ class CompileContext;
   _(TokenLiteral)         \
   _(SwitchStatement)      \
   _(ArrayLiteral)         \
-  _(TypedefStatement)     \
+  _(TypedefDecl)     \
   _(StructInitializer)    \
   _(RecordDecl)           \
   _(MethodmapDecl)        \
@@ -143,7 +143,7 @@ class AstVisitor
 class PartialAstVisitor : public AstVisitor
 {
  public:
-#define _(name) virtual void visit##name(name *node) {}
+#define _(name) virtual void visit##name(name *node) { assert(false); }
   ASTKINDS(_)
 #undef _
 };
@@ -168,7 +168,7 @@ class Expression : public AstNode
 
 typedef PoolList<Statement *> StatementList;
 typedef PoolList<Expression *> ExpressionList;
-typedef PoolList<VariableDeclaration *> ParameterList;
+typedef PoolList<VarDecl *> ParameterList;
 
 class FunctionSignature : public PoolObject
 {
@@ -180,7 +180,8 @@ class FunctionSignature : public PoolObject
     : returnType_(returnType),
       parameters_(parameters),
       destructor_(false),
-      native_(false)
+      native_(false),
+      resolved_(false)
   {
   }
 
@@ -205,18 +206,25 @@ class FunctionSignature : public PoolObject
   void setNative() {
     native_ = true;
   }
+  void setResolved() {
+    resolved_ = true;
+  }
+  bool isResolved() const {
+    return resolved_;
+  }
 
  private:
   TypeExpr returnType_;
   ParameterList *parameters_;
-  bool destructor_;
-  bool native_;
+  bool destructor_ : 1;
+  bool native_ : 1;
+  bool resolved_ : 1;
 };
 
-class VariableDeclaration : public Statement
+class VarDecl : public Statement
 {
  public:
-  VariableDeclaration(const NameToken &name,
+  VarDecl(const NameToken &name,
                       const TypeExpr &te,
                       Expression *initialization)
    : Statement(name.start),
@@ -228,7 +236,7 @@ class VariableDeclaration : public Statement
   {
   }
 
-  DECLARE_NODE(VariableDeclaration);
+  DECLARE_NODE(VarDecl);
 
   Expression *initialization() const {
     return initialization_;
@@ -254,11 +262,11 @@ class VariableDeclaration : public Statement
   //   int x, y, z
   //
   // The declarations are chained together in a linked list.
-  void setNext(VariableDeclaration *next) {
+  void setNext(VarDecl *next) {
     assert(!next_);
     next_ = next;
   }
-  VariableDeclaration *next() const {
+  VarDecl *next() const {
     return next_;
   }
 
@@ -267,7 +275,7 @@ class VariableDeclaration : public Statement
   Expression *initialization_;
   TypeExpr te_;
   VariableSymbol *sym_;
-  VariableDeclaration *next_;
+  VarDecl *next_;
 };
 
 class NameProxy : public Expression
@@ -894,6 +902,7 @@ class FunctionNode : public PoolObject
   FunctionNode(TokenKind kind)
    : kind_(kind),
      body_(nullptr),
+     signature_(nullptr),
      funScope_(nullptr)
   {
   }
@@ -909,11 +918,11 @@ class FunctionNode : public PoolObject
     return body_;
   }
 
-  void setSignature(const TypeExpr &rt, ParameterList *params) {
-    signature_ = FunctionSignature(rt, params);
+  void setSignature(FunctionSignature *signature) {
+    signature_ = signature;
   }
   FunctionSignature *signature() {
-    return &signature_;
+    return signature_;
   }
 
   void setArgScope(Scope *funScope) {
@@ -935,7 +944,7 @@ class FunctionNode : public PoolObject
  private:
   TokenKind kind_;
   BlockStatement *body_;
-  FunctionSignature signature_;
+  FunctionSignature *signature_;
   Scope *funScope_;
   FunctionSymbol *shadowed_;
 };
@@ -1051,7 +1060,9 @@ class EnumStatement : public Statement
    : Statement(pos),
      name_(name),
      sym_(nullptr),
-     entries_(nullptr)
+     entries_(nullptr),
+     resolved_(false),
+     resolving_(false)
   {
   }
 
@@ -1077,6 +1088,22 @@ class EnumStatement : public Statement
     return sym_;
   }
 
+  bool isResolved() const {
+    return resolved_;
+  }
+  bool isResolving() const {
+    return resolving_;
+  }
+  void setResolving() {
+    assert(!isResolving() && !isResolved());
+    resolving_ = true;
+  }
+  void setResolved() {
+    assert(isResolving());
+    resolving_ = false;
+    resolved_ = true;
+  }
+
   void setMethodmap(MethodmapDecl *methodmap) {
     methodmap_ = methodmap;
   }
@@ -1089,6 +1116,8 @@ class EnumStatement : public Statement
   TypeSymbol *sym_;
   EnumConstantList *entries_;
   MethodmapDecl *methodmap_;
+  bool resolved_ : 1;
+  bool resolving_ : 1;
 };
 
 class IncDecExpression : public Expression
@@ -1301,6 +1330,9 @@ class MethodDecl : public LayoutDecl
   FunctionOrAlias *method() {
     return &method_;
   }
+  void setMethod(const FunctionOrAlias &method) {
+    method_ = method;
+  }
 
   void setSymbol(MethodSymbol *sym) {
     assert(!sym_);
@@ -1319,13 +1351,10 @@ class MethodDecl : public LayoutDecl
 class PropertyDecl : public LayoutDecl
 {
  public:
-  PropertyDecl(const SourceLocation &loc, const NameToken &name, const TypeExpr &spec,
-               const FunctionOrAlias &getter, const FunctionOrAlias &setter)
+  PropertyDecl(const SourceLocation &loc, const NameToken &name, const TypeExpr &spec)
    : LayoutDecl(loc),
      name_(name),
      te_(spec),
-     getter_(getter),
-     setter_(setter),
      sym_(nullptr)
   {}
 
@@ -1495,10 +1524,10 @@ class DeleteStatement : public Statement
   Expression *expr_;
 };
 
-class TypedefStatement : public Statement
+class TypedefDecl : public Statement
 {
  public:
-  TypedefStatement(const SourceLocation &pos, Atom *name, const TypeExpr &spec)
+  TypedefDecl(const SourceLocation &pos, Atom *name, const TypeExpr &spec)
    : Statement(pos),
      name_(name),
      te_(spec),
@@ -1506,7 +1535,7 @@ class TypedefStatement : public Statement
   {
   }
 
-  DECLARE_NODE(TypedefStatement);
+  DECLARE_NODE(TypedefDecl);
 
   Atom *name() const {
     return name_;
@@ -1555,7 +1584,7 @@ class ParseTree : public PoolObject
 };
 
 // For new AstVisitors, copy-paste.
-//  void visitVariableDeclaration(VariableDeclaration *node) override;
+//  void visitVarDecl(VarDecl *node) override;
 //  void visitForStatement(ForStatement *node) override;
 //  void visitReturnStatement(ReturnStatement *node) override;
 //  void visitIntegerLiteral(IntegerLiteral *node) override;
@@ -1579,12 +1608,13 @@ class ParseTree : public PoolObject
 //  void visitContinueStatement(ContinueStatement *node) override;
 //  void visitIncDecExpression(IncDecExpression *node) override;
 //  void visitUnaryExpression(UnaryExpression *node) override;
+//  void visitUnsafeCastExpr(UnsafeCastExpr *node) override;
 //  void visitSizeofExpression(SizeofExpression *node) override;
 //  void visitTernaryExpression(TernaryExpression *node) override;
 //  void visitTokenLiteral(TokenLiteral *node) override;
 //  void visitSwitchStatement(SwitchStatement *node) override;
 //  void visitArrayLiteral(ArrayLiteral *node) override;
-//  void visitTypedefStatement(TypedefStatement *node) override;
+//  void visitTypedefDecl(TypedefDecl *node) override;
 //  void visitStructInitializer(StructInitializer *node) override;
 //  void visitRecordDecl(RecordDecl *node) override;
 //  void visitMethodmapDecl(MethodmapDecl *node) override;

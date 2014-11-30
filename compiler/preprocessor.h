@@ -122,8 +122,9 @@ class Preprocessor
   // Consumes the rest of a line to assist with error messaging.
   void eatRestOfLine();
 
-  // Consume until a token has been reached.
-  void skipUntil(TokenKind kind, SkipFlags flags);
+  // Consume until a token has been reached. If opener is specified, it acts
+  // as a second stopping point.
+  void skipUntil(TokenKind kind, SkipFlags flags, TokenKind opener = TOK_NONE);
 
  private:
   // Internal implementation for next().

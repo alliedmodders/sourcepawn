@@ -59,7 +59,7 @@ class AstPrinter : public AstVisitor
     indent();
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
       prefix();
-      VariableDeclaration *param = sig->parameters()->at(i);
+      VarDecl *param = sig->parameters()->at(i);
       dump(param->te(), param->name());
       fprintf(fp_, "\n");
     }
@@ -188,9 +188,9 @@ class AstPrinter : public AstVisitor
       node->statements()->at(i)->accept(this);
     unindent();
   }
-  void visitVariableDeclaration(VariableDeclaration *node) {
+  void visitVarDecl(VarDecl *node) {
     prefix();
-    fprintf(fp_, "[ VariableDeclaration (%s)\n", node->name()->chars());
+    fprintf(fp_, "[ VarDecl (%s)\n", BuildTypeName(node->te(), node->name()).chars());
     indent();
     if (node->initialization())
       node->initialization()->accept(this);
@@ -350,9 +350,9 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitTypedefStatement(TypedefStatement *node) {
+  void visitTypedefDecl(TypedefDecl *node) {
     prefix();
-    fprintf(fp_, "[ TypedefStatement\n");
+    fprintf(fp_, "[ TypedefDecl\n");
     indent();
     prefix();
     dump(node->te(), node->name());

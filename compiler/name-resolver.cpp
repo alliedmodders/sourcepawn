@@ -24,6 +24,7 @@ using namespace sp;
 NameResolver::NameResolver(CompileContext &cc)
  : cc_(cc),
    pool_(cc.pool()),
+   tr_(cc),
    layout_scope_(nullptr)
 {
   atom_String_ = cc_.add("String");
@@ -55,6 +56,11 @@ NameResolver::OnLeaveParser()
 
   resolveUnknownTags();
   resolveUnboundNames();
+
+  if (!cc_.phasePassed())
+    return;
+
+  tr_.analyze();
 }
 
 void
@@ -271,6 +277,16 @@ NameResolver::OnEnumDecl(EnumStatement *node)
     Atom *name = cc_.createAnonymousName(node->loc());
     node->setSymbol(new (pool_) TypeSymbol(node, scope, name));
   }
+
+  Type *type;
+  if (node->name()) {
+    type = cc_.types()->newEnum(node->name());
+  } else {
+    type = cc_.types()->getPrimitive(PrimitiveType::Int32);
+  }
+  node->sym()->setType(type);
+
+  tr_.addPending(node);
 }
 
 void
@@ -279,20 +295,54 @@ NameResolver::OnEnumValueDecl(EnumConstant *cs)
   ConstantSymbol *sym = new (pool_) ConstantSymbol(cs, getOrCreateScope(), cs->name());
   registerSymbol(sym);
   cs->setSymbol(sym);
+
+  // Note: we don't need to add to the type resolver, it'll be handled by the
+  // parent enum.
 }
 
-void
-NameResolver::OnVarDecl(VariableDeclaration *var)
+VarDecl *
+NameResolver::HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *init)
 {
+  Scope *scope = getOrCreateScope();
+
+  // See the comment in TypeResolver::visitVarDecl for why we do not want to
+  // infer sizes from literals for arguments.
+  TypeExpr te;
+  if (init &&
+      !scope->isFunction() &&
+      ((init->isArrayLiteral() && init->asArrayLiteral()->isFixedArrayLiteral()) ||
+       (init->isStringLiteral())))
+  {
+    // Wait until the type resolution pass to figure this out. We still have
+    // to precompute the base though.
+    if (Type *type = resolveBase(spec))
+      spec.setResolvedBaseType(type);
+    te = TypeExpr(new (pool_) TypeSpecifier(spec));
+  } else {
+    te = resolve(spec);
+  }
+
+  // :TODO: set variadic info
+  VarDecl *var = new (pool_) VarDecl(name, te, init);
+
   // Note: the parser has already bound |var->init()| at this point, meaning
   // that aside from globals it should be impossible to self-initialize like:
   //    int x = x;
   //
   // :TODO: do check this for globals.
-  VariableSymbol *sym =
-    new (pool_) VariableSymbol(var, getOrCreateScope(), var->name());
+  VariableSymbol *sym = new (pool_) VariableSymbol(var, scope, var->name());
   registerSymbol(sym);
   var->setSymbol(sym);
+
+  if (te.resolved())
+    sym->setType(te.resolved());
+
+  // Even if we were able to resolve the type, if we have to resolve a constant
+  // value, we'll have to add it to the resolver queue.
+  if (!te.resolved() || sym->canUseInConstExpr())
+    tr_.addPending(var);
+
+  return var;
 }
 
 void
@@ -302,7 +352,18 @@ NameResolver::OnEnterMethodmap(MethodmapDecl *methodmap)
   assert(!layout_scope_);
   layout_scope_ = LayoutScope::New(pool_);
 
-  defineMethodmap(methodmap);
+  bool canDefine = canDefineMethodmap(methodmap);
+  if (!methodmap->sym()) {
+    TypeSymbol *sym = new (pool_) TypeSymbol(methodmap, globals_, methodmap->name());
+    if (canDefine)
+      registerSymbol(sym);
+    sym->setType(cc_.types()->newEnum(methodmap->name()));
+    methodmap->setSymbol(sym);
+  }
+
+  // We always add the methodmap to the resolver, to avoid duplicating the
+  // parent-resolving logic.
+  tr_.addPending(methodmap);
 
   // Note that we do not insert the layout scope into the scope chain. For
   // simplicity SP1 did not, and we can't break that.
@@ -315,8 +376,8 @@ NameResolver::OnLeaveMethodmap(MethodmapDecl *methodmap)
   layout_scope_ = nullptr;
 }
 
-void
-NameResolver::defineMethodmap(MethodmapDecl *methodmap)
+bool
+NameResolver::canDefineMethodmap(MethodmapDecl *methodmap)
 {
   // Methodmaps are only allowed in the global scope. They have very odd
   // semantics (by design, as part of the transitional syntax): they
@@ -328,25 +389,21 @@ NameResolver::defineMethodmap(MethodmapDecl *methodmap)
   assert(getOrCreateScope() == globals_);
 
   Symbol *prev = globals_->lookup(methodmap->name());
-  if (!prev) {
-    TypeSymbol *sym = new (pool_) TypeSymbol(methodmap, globals_, methodmap->name());
-    registerSymbol(sym);
-    methodmap->setSymbol(sym);
-    return;
-  }
+  if (!prev)
+    return true;
 
   TypeSymbol *sym = prev->asType();
   if (!sym) {
     cc_.report(methodmap->loc(), rmsg::methodmap_on_non_type)
       << sym->name();
-    return;
+    return false;
   }
 
   // Builtin types do not have AST nodes.
   if (!sym->node()) {
     cc_.report(methodmap->loc(), rmsg::methodmap_on_non_enum)
       << sym->name();
-    return;
+    return false;
   }
 
   EnumStatement *stmt = sym->node()->asEnumStatement();
@@ -363,7 +420,7 @@ NameResolver::defineMethodmap(MethodmapDecl *methodmap)
       cc_.report(methodmap->loc(), rmsg::methodmap_on_non_enum)
         << sym->name();
     }
-    return;
+    return false;
   }
 
   // Mark that our enum statement has a methodmap.
@@ -371,6 +428,9 @@ NameResolver::defineMethodmap(MethodmapDecl *methodmap)
 
   // Point the layout at the enum type.
   methodmap->setSymbol(sym);
+
+  // Return false - symbol is already defined.
+  return false;
 }
 
 void
@@ -379,6 +439,21 @@ NameResolver::OnEnterRecordDecl(RecordDecl *decl)
   TypeSymbol *sym = new (pool_) TypeSymbol(decl, getOrCreateScope(), decl->name());
   registerSymbol(sym);
   decl->setSymbol(sym);
+
+  RecordType *type = nullptr;
+  switch (decl->token()) {
+    case TOK_UNION:
+      type = cc_.types()->newUnion(decl->name());
+      break;
+
+    case TOK_STRUCT:
+      type = cc_.types()->newStruct(decl->name());
+      break;
+
+    default:
+      assert(false);
+  }
+  sym->setType(type);
 
   // Record-types cannot nest yet.
   assert(!layout_scope_);
@@ -405,28 +480,58 @@ NameResolver::OnLeaveRecordDecl(RecordDecl *decl)
   layout_scope_ = nullptr;
 }
 
-void
-NameResolver::OnPropertyDecl(PropertyDecl *decl)
+PropertyDecl *
+NameResolver::EnterPropertyDecl(const SourceLocation &begin,
+                                const NameToken &nameToken,
+                                TypeSpecifier &spec)
 {
-  if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
+  TypeExpr te = resolve(spec);
+  PropertyDecl *decl = new (pool_) PropertyDecl(begin, nameToken, te);
+
+  PropertySymbol *sym = new (pool_) PropertySymbol(decl, layout_scope_, decl->name());
+  decl->setSymbol(sym);
+
+  if (Symbol *other = layout_scope_->localLookup(decl->name())) {
     cc_.report(decl->loc(), rmsg::redefined_layout_decl)
       << "property"
       << decl->name()
-      << sym->kindName()
-      << cc_.note(sym->node()->loc(), rmsg::previous_location);
-    return;
+      << other->kindName()
+      << cc_.note(other->node()->loc(), rmsg::previous_location);
+  } else {
+    layout_scope_->addSymbol(sym);
   }
 
-  PropertySymbol *sym =
-    new (pool_) PropertySymbol(decl, layout_scope_, decl->name());
-  decl->setSymbol(sym);
-  layout_scope_->addSymbol(sym);
+  return decl;
 }
 
 void
-NameResolver::OnFieldDecl(FieldDecl *decl)
+NameResolver::LeavePropertyDecl(PropertyDecl *decl)
 {
-  Atom *name = decl->name();
+  if (decl->te().resolved())
+    decl->sym()->setType(decl->te().resolved());
+
+  FunctionOrAlias *getter = decl->getter();
+  FunctionOrAlias *setter = decl->setter();
+  if (!decl->te().resolved() ||
+      (getter->fun() && !getter->fun()->signature()->isResolved()) ||
+      (setter->fun() && !setter->fun()->signature()->isResolved()))
+  {
+    tr_.addPending(decl);
+  }
+}
+
+FieldDecl *
+NameResolver::HandleFieldDecl(const SourceLocation &pos,
+                              const NameToken &nameToken,
+                              TypeSpecifier &spec)
+{
+  TypeExpr te = resolve(spec);
+  FieldDecl *decl = new (pool_) FieldDecl(pos, nameToken, te);
+
+  if (!te.resolved())
+    tr_.addPending(decl);
+
+  Atom *name = nameToken.atom;
   if (!name) {
     // Originally, SourcePawn had a concept called "funcenums" to work around
     // the lack of a true top type. They were untagged unions of function
@@ -434,40 +539,93 @@ NameResolver::OnFieldDecl(FieldDecl *decl)
     // introducing something we interpret as a "block union". A block union
     // simply has a list of types, none of them named.
     layout_scope_->addAnonymousField(decl);
-    return;
-  }
-
-  if (Symbol *sym = layout_scope_->localLookup(name)) {
-    cc_.report(decl->loc(), rmsg::redefined_layout_decl)
-      << "field"
-      << name
-      << sym->kindName()
-      << cc_.note(sym->node()->loc(), rmsg::previous_location);
-    return;
+    return decl;
   }
 
   FieldSymbol *sym = new (pool_) FieldSymbol(decl, layout_scope_, name);
   decl->setSymbol(sym);
-  layout_scope_->addSymbol(sym);
+  if (te.resolved())
+    sym->setType(te.resolved());
+
+  if (Symbol *other = layout_scope_->localLookup(name)) {
+    cc_.report(decl->loc(), rmsg::redefined_layout_decl)
+      << "field"
+      << name
+      << other->kindName()
+      << cc_.note(other->node()->loc(), rmsg::previous_location);
+  } else {
+    layout_scope_->addSymbol(sym);
+  }
+
+  return decl;
 }
 
-void
-NameResolver::OnMethodDecl(MethodDecl *decl)
+MethodDecl *
+NameResolver::EnterMethodDecl(const SourceLocation &begin,
+                              const NameToken &nameToken,
+                              TypeSpecifier *spec,
+                              TypeExpr *te)
 {
-  // Once we support overloading, this will have to change.
-  if (Symbol *sym = layout_scope_->localLookup(decl->name())) {
-    cc_.report(decl->loc(), rmsg::redefined_layout_decl)
-      << "method"
-      << decl->name()
-      << sym->kindName()
-      << cc_.note(sym->node()->loc(), rmsg::previous_location);
-    return;
-  }
+  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, FunctionOrAlias());
+
+  if (spec)
+    *te = resolve(*spec);
 
   MethodSymbol *sym =
     new (pool_) MethodSymbol(decl, layout_scope_, decl->name());
   decl->setSymbol(sym);
-  layout_scope_->addSymbol(sym);
+
+  // Once we support overloading, this will have to change.
+  if (Symbol *other = layout_scope_->localLookup(decl->name())) {
+    cc_.report(decl->loc(), rmsg::redefined_layout_decl)
+      << "method"
+      << decl->name()
+      << other->kindName()
+      << cc_.note(other->node()->loc(), rmsg::previous_location);
+  } else {
+    layout_scope_->addSymbol(sym);
+  }
+
+  return decl;
+}
+
+void
+NameResolver::LeaveMethodDecl(MethodDecl *decl)
+{
+  FunctionNode *fun = decl->method()->fun();
+  if (!fun)
+    return;
+
+  // Now that we've parsed the function, check if we were able to resolve its
+  // signature.
+  if (!fun->signature()->isResolved())
+    tr_.addPending(decl);
+}
+
+FunctionSignature *
+NameResolver::HandleFunctionSignature(TypeSpecifier &spec,
+                                      ParameterList *params,
+                                      bool canResolveEagerly)
+{
+  TypeExpr te = resolve(spec);
+  return HandleFunctionSignature(te, params, canResolveEagerly);
+}
+
+FunctionSignature *
+NameResolver::HandleFunctionSignature(const TypeExpr &te,
+                                      ParameterList *params,
+                                      bool canResolveEagerly)
+{
+  FunctionSignature *sig = new (pool_) FunctionSignature(te, params);
+  if (te.resolved() && canResolveEagerly) {
+#if defined(DEBUG)
+    for (size_t i = 0; i < params->length(); i++)
+      assert(params->at(i)->sym()->type());
+#endif
+    sig->setResolved();
+  }
+
+  return sig;
 }
 
 void
@@ -539,6 +697,9 @@ NameResolver::OnLeaveFunctionDecl(FunctionStatement *node)
     else
       rt.setResolved(cc_.types()->getVoid());
   }
+
+  if (!sig->isResolved())
+    tr_.addPending(node);
 }
 
 void
@@ -548,16 +709,159 @@ NameResolver::OnReturnStmt(ReturnStatement *stmt)
     encountered_return_value_ = true;
 }
 
-void
-NameResolver::OnTypedefDecl(TypedefStatement *node)
+TypedefDecl *
+NameResolver::HandleTypedefDecl(const SourceLocation &begin,
+                                Atom *name,
+                                TypeSpecifier &spec)
 {
+  TypeExpr te = resolve(spec);
+  TypedefDecl *node = new (pool_) TypedefDecl(begin, name, te);
+
   TypeSymbol *sym = new (pool_) TypeSymbol(node, getOrCreateScope(), node->name());
+  TypedefType *type = cc_.types()->newTypedef(node->name());
+  sym->setType(type);
+
   registerSymbol(sym);
   node->setSymbol(sym);
+
+  if (te.resolved())
+    type->resolve(te.resolved());
+  else
+    tr_.addPending(node);
+  return node;
 }
 
+UnsafeCastExpr *
+NameResolver::HandleUnsafeCast(const SourceLocation &pos, TypeSpecifier &spec, Expression *expr)
+{
+  TypeExpr te = resolve(spec);
+  UnsafeCastExpr *node = new (pool_) UnsafeCastExpr(pos, te, expr);
+
+  if (!te.resolved())
+    tr_.addPending(node);
+  return node;
+}
+
+// Indicate that a type specifier can't be resolved it, so whatever is
+// consuming it should add it to the resolver queue.
 TypeExpr
-NameResolver::HandleTypeExpr(const TypeSpecifier &spec)
+NameResolver::delay(const TypeSpecifier &spec)
 {
   return TypeExpr(new (pool_) TypeSpecifier(spec));
+}
+
+Type *
+NameResolver::resolveBase(TypeSpecifier &spec)
+{
+  switch (spec.resolver()) {
+    // These are the most common cases - either a primitive type or a signature
+    // containing primitive types. In some cases we could have already resolved
+    // the type even earlier, for example, the parser does this for certain =
+    // builtin tags.
+    case TOK_VOID:
+      return cc_.types()->getVoid();
+    case TOK_IMPLICIT_INT:
+    case TOK_INT:
+      return cc_.types()->getPrimitive(PrimitiveType::Int32);
+    case TOK_BOOL:
+      return cc_.types()->getPrimitive(PrimitiveType::Bool);
+    case TOK_CHAR:
+      return cc_.types()->getPrimitive(PrimitiveType::Char);
+    case TOK_FLOAT:
+      return cc_.types()->getPrimitive(PrimitiveType::Float);
+    case TOK_DEFINED:
+      return spec.getResolvedBase();
+    case TOK_FUNCTION:
+    {
+      FunctionSignature *sig = spec.signature();
+      if (!sig->isResolved())
+        return nullptr;
+      return FunctionType::New(sig);
+    }
+
+    case TOK_LABEL:
+    case TOK_NAME:
+    {
+      NameProxy *proxy = spec.proxy();
+      Symbol *sym = proxy->sym();
+      if (!sym) {
+        // This can happen if we use a type before it's been defined. We wait
+        // until type resolution to try again.
+        return nullptr;
+      }
+
+      TypeSymbol *ts = sym->asType();
+      if (!ts) {
+        cc_.report(proxy->loc(), rmsg::not_a_type) << sym->name();
+        return nullptr;
+      }
+
+      // If we resolved a TypeSymbol, we must have allocated a Type object
+      // (even if it's incomplete).
+      assert(ts->type());
+      return ts->type();
+    }
+
+    default:
+      return nullptr;
+  }
+}
+
+// We make a reasonable effort to resolve types early, since TypeSpecifier is
+// quite a large structure (48 bytes on x86, as of this writing, and it will
+// only get bigger). We want to eliminate it from the AST, as well as reduce
+// dependence on TypeResolver which is a rather expensive pass.
+TypeExpr
+NameResolver::resolve(TypeSpecifier &spec)
+{
+  Type *type = resolveBase(spec);
+  if (!type)
+    return delay(spec);
+
+  // Note: we are only updating the base type! We can't overwrite the whole
+  // spec because it gets reused for parsing some decls.
+  spec.setResolvedBaseType(type);
+
+  // If the base type is an unresolved typedef, we have to wait.
+  if (type->isUnresolvedTypedef())
+    return delay(spec);
+
+  // Error this early so we don't have to check it in each branch below.
+  if (spec.rank()) {
+    if (type->isVoid())
+      cc_.report(spec.arrayLoc(), rmsg::array_of_void);
+  }
+
+  if (spec.dims()) {
+    // If we have explicit dimension sizes, we have to bail out and wait for
+    // type resolution (which also does constant resolution). We do special
+    // case the very common integer literal, single-dimension case.
+    if (spec.rank() != 1)
+      return delay(spec);
+    Expression *expr = spec.sizeOfRank(0);
+    if (!expr || !expr->isIntegerLiteral())
+      return delay(spec);
+    IntegerLiteral *lit = expr->toIntegerLiteral();
+    if (lit->value() < 1 || lit->value() > ArrayType::kMaxSize)
+      return delay(spec);
+
+    type = cc_.types()->newArray(type, (int32_t)lit->value());
+  } else if (spec.rank()) {
+    for (size_t i = 0; i < spec.rank(); i++)
+      type = cc_.types()->newArray(type, ArrayType::kUnsized);
+  }
+
+  if (spec.isByRef()) {
+    if (type->canUseInReferenceType()) {
+      type = cc_.types()->newReference(type);
+    } else {
+      cc_.report(spec.byRefLoc(), rmsg::type_cannot_be_ref)
+        << type;
+    }
+  }
+
+  if (spec.isConst())
+    type = cc_.types()->newQualified(type, Qualifiers::Const);
+
+  return TypeExpr(type);
 }

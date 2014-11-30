@@ -19,6 +19,7 @@
 #define _include_spcomp_name_resolver_h_
 
 #include "scopes.h"
+#include "type-resolver.h"
 
 namespace sp {
 
@@ -38,22 +39,41 @@ class NameResolver
   void OnTagProxy(NameProxy *proxy);
   void OnEnumDecl(EnumStatement *node);
   void OnEnumValueDecl(EnumConstant *cs);
-  void OnVarDecl(VariableDeclaration *var);
+  VarDecl *HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *init);
   void OnEnterMethodmap(MethodmapDecl *methodmap);
   void OnLeaveMethodmap(MethodmapDecl *methodmap);
   void OnEnterRecordDecl(RecordDecl *decl);
   void OnLeaveRecordDecl(RecordDecl *decl);
-  void OnMethodDecl(MethodDecl *decl);
-  void OnPropertyDecl(PropertyDecl *decl);
-  void OnFieldDecl(FieldDecl *decl);
   void OnEnterFunctionDecl(FunctionStatement *stmt);
   void OnLeaveFunctionDecl(FunctionStatement *node);
   void OnReturnStmt(ReturnStatement *stmt);
-  void OnTypedefDecl(TypedefStatement *stmt);
+  FieldDecl *HandleFieldDecl(const SourceLocation &pos,
+                             const NameToken &name,
+                             TypeSpecifier &spec);
+  MethodDecl *EnterMethodDecl(const SourceLocation &begin,
+                              const NameToken &nameToken,
+                              TypeSpecifier *spec,
+                              TypeExpr *te);
+  void LeaveMethodDecl(MethodDecl *decl);
+  PropertyDecl *EnterPropertyDecl(const SourceLocation &begin,
+                                  const NameToken &nameToken,
+                                  TypeSpecifier &spec);
+  void LeavePropertyDecl(PropertyDecl *decl);
+  TypedefDecl *HandleTypedefDecl(const SourceLocation &begin,
+                                 Atom *name,
+                                 TypeSpecifier &spec);
+  UnsafeCastExpr *HandleUnsafeCast(const SourceLocation &pos,
+                                   TypeSpecifier &spec,
+                                   Expression *expr);
 
-  // In the future we should let this feedback into the next phase, so we can
-  // avoid re-walking the entire AST to resolve types.
-  TypeExpr HandleTypeExpr(const TypeSpecifier &spec);
+  FunctionSignature *HandleFunctionSignature(
+    TypeSpecifier &spec,
+    ParameterList *params,
+    bool canResolveEagerly);
+  FunctionSignature *HandleFunctionSignature(
+    const TypeExpr &te,
+    ParameterList *params,
+    bool canResolveEagerly);
 
  private:
   void declareSystemTypes(Scope *scope);
@@ -64,9 +84,12 @@ class NameResolver
   bool registerSymbol(Symbol *sym);
   void registerFunction(FunctionSymbol *sym);
   void reportRedeclaration(Symbol *sym, Symbol *other);
-  void defineMethodmap(MethodmapDecl *methodmap);
+  bool canDefineMethodmap(MethodmapDecl *methodmap);
   void resolveUnknownTags();
   void resolveUnboundNames();
+  TypeExpr delay(const TypeSpecifier &spec);
+  Type *resolveBase(TypeSpecifier &spec);
+  TypeExpr resolve(TypeSpecifier &spec);
 
  private:
   // Rather than create a Scope for every block we encounter, we place a
@@ -136,6 +159,7 @@ class NameResolver
  private:
   CompileContext &cc_;
   PoolAllocator &pool_;
+  TypeResolver tr_;
   GlobalScope *globals_;
   Vector<SymbolEnv> env_;
 

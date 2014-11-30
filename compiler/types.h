@@ -443,6 +443,9 @@ class ArrayType : public Type
   // compatibility.
   static const int kIndeterminate = -2;
 
+  // Maximum array length.
+  static const int kMaxSize = INT_MAX / 4;
+
   // Maximum size of an array. We choose this value because we can compute
   // addresses as multiples of an index without overflowing.
   static ArrayType *New(Type *contained, int elements);

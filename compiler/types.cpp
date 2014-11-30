@@ -195,6 +195,10 @@ GetBaseTypeName(Type *type)
     return type->toUnion()->name()->chars();
   if (type->isEnum())
     return type->toEnum()->name()->chars();
+  if (type->isRecord())
+    return type->toRecord()->name()->chars();
+  if (TypedefType *tdef = type->asTypedef())
+    return tdef->name()->chars();
   return GetPrimitiveName(type->primitive());
 }
 

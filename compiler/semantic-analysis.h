@@ -55,7 +55,7 @@ class SemanticAnalysis : public AstVisitor
  public:
   void visitFunctionStatement(FunctionStatement *node);
   void visitBlockStatement(BlockStatement *node);
-  void visitVariableDeclaration(VariableDeclaration *node);
+  void visitVarDecl(VarDecl *node);
   void visitTokenLiteral(TokenLiteral *node);
   void visitIntegerLiteral(IntegerLiteral *node);
   void visitReturnStatement(ReturnStatement *node);
@@ -83,7 +83,7 @@ class SemanticAnalysis : public AstVisitor
   virtual void emit_function(FunctionStatement *node) = 0;
 
   // Called in either global or local scopes.
-  virtual void emit_variable(VariableDeclaration *node, HIR *init) = 0;
+  virtual void emit_variable(VarDecl *node, HIR *init) = 0;
   virtual void emit_bind(Label *label) = 0;
   virtual void emit_jump(Label *label) = 0;
 

@@ -123,7 +123,7 @@ SemanticAnalysis::visitBlockStatement(BlockStatement *node)
 }
 
 void
-SemanticAnalysis::visitVariableDeclaration(VariableDeclaration *node)
+SemanticAnalysis::visitVarDecl(VarDecl *node)
 {
   PoolScope hir_scope;
   begin_hir(hir_scope);

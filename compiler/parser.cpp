@@ -54,30 +54,6 @@ Parser::expect(TokenKind kind)
   return scanner_.expect(kind);
 }
 
-bool
-Parser::consume_after_error(TokenKind closer, TokenKind opener)
-{
-  for (;;) {
-    TokenKind kind = scanner_.peekTokenSameLine();
-    switch (kind) {
-      case TOK_EOL:
-        return true;
-      case TOK_EOF:
-      case TOK_UNKNOWN:
-      case TOK_ERROR:
-        return false;
-      default:
-        if (kind == opener)
-          return true;
-
-        scanner_.next();
-        if (kind == closer)
-          return true;
-        break;
-    }
-  }
-}
-
 Atom *
 Parser::maybeName()
 {
@@ -224,16 +200,18 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   parse_new_type_expr(&returnType, 0);
 
   // :TODO: only allow new-style arguments.
-  delegate_.OnEnterScope(Scope::Function);
-  ParameterList *params = arguments();
-  delegate_.OnLeaveOrphanScope();
-  if (!params)
-    return;
+  ParameterList *params;
+  bool canResolveEagerly = true;
+  {
+    delegate_.OnEnterScope(Scope::Function);
+    if ((params = arguments(&canResolveEagerly)) == nullptr)
+      params = new (pool_) ParameterList();
+    delegate_.OnLeaveOrphanScope();
+  }
 
-  TypeExpr te = delegate_.HandleTypeExpr(returnType);
-
-  FunctionSignature *signature = new (pool_) FunctionSignature(te, params);
-  spec->setFunctionType(signature);
+  FunctionSignature *sig =
+    delegate_.HandleFunctionSignature(returnType, params, canResolveEagerly);
+  spec->setFunctionType(sig);
 }
 
 void
@@ -825,12 +803,10 @@ Parser::unary()
       else
         spec.setNamedType(TOK_LABEL, tagref());
 
-      TypeExpr te = delegate_.HandleTypeExpr(spec);
-
       Expression *expr = unary();
       if (!expr)
         return nullptr;
-      return new (pool_) UnsafeCastExpr(pos, te, expr);
+      return delegate_.HandleUnsafeCast(pos, spec, expr);
     }
 
     default:
@@ -1174,14 +1150,26 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
 {
   FunctionNode *node = new (pool_) FunctionNode(kind);
 
+  // If our return type and arguments are all eagerly resolvable, we can mark
+  // the signature as resolved.
   Scope *argScope = nullptr;
   {
     AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
-    ParameterList *params = arguments();
-    if (!params)
-      params = new (pool_) ParameterList();
-    node->setSignature(returnType, params);
 
+    bool canEarlyResolve = true;
+    ParameterList *params = arguments(&canEarlyResolve);
+    if (!params) {
+      params = new (pool_) ParameterList();
+      scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
+    }
+
+    FunctionSignature *sig =
+      delegate_.HandleFunctionSignature(returnType, params, canEarlyResolve);
+    node->setSignature(sig);
+
+    // Hrm... should be complting the decl here instead? Right now it seems
+    // fine not to, but in the future it could lead to weird ordering in the
+    // type resolver's queue.
     BlockStatement *body = nullptr;
     if (kind != TOK_NATIVE) {
       if ((body = methodBody()) == nullptr)
@@ -1205,14 +1193,14 @@ Parser::parseAccessor()
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
-  TypeExpr te = delegate_.HandleTypeExpr(spec);
-
   if (!expect(TOK_NAME))
     return nullptr;
   NameToken name = *scanner_.current();
 
   if (!expect(TOK_LBRACE))
     return nullptr;
+
+  PropertyDecl *decl = delegate_.EnterPropertyDecl(begin, name, spec);
 
   FunctionOrAlias getter, setter, dummy;
   while (!match(TOK_RBRACE)) {
@@ -1223,34 +1211,40 @@ Parser::parseAccessor()
       kind = TOK_NATIVE;
 
     Atom *name = expectName();
-    if (!name)
-      return nullptr;
+    if (!name) {
+      scanner_.skipUntil(TOK_RBRACE, SkipFlags::StartAtCurrent);
+      break;
+    }
 
+    FunctionOrAlias dummy;
     FunctionOrAlias *out = &dummy;
     if (strcmp(name->chars(), "get") == 0)
-      out = &getter;
+      out = decl->getter();
     else if (strcmp(name->chars(), "set") == 0)
-      out = &setter;
+      out = decl->setter();
     else
       cc_.report(scanner_.begin(), rmsg::invalid_accessor_name);
 
     if (matchMethodBind()) {
-      if (!expect(TOK_NAME))
-        return nullptr;
+      if (!expect(TOK_NAME)) {
+        // Give the token back in case it was on the next line.
+        scanner_.undo();
+        scanner_.skipUntil(TOK_SEMICOLON, SkipFlags::StopAtLine);
+        break;
+      }
 
       NameProxy *alias = nameref();
       requireNewlineOrSemi();
       *out = FunctionOrAlias(alias);
     } else {
-      FunctionNode *node = parseFunctionBase(te, kind);
+      FunctionNode *node = parseFunctionBase(decl->te(), kind);
       if (!node)
-        return nullptr;
+        break;
       *out = FunctionOrAlias(node);
     }
   }
 
-  PropertyDecl *decl = new (pool_) PropertyDecl(begin, name, te, getter, setter);
-  delegate_.OnPropertyDecl(decl);
+  delegate_.LeavePropertyDecl(decl);
   return decl;
 }
 
@@ -1332,24 +1326,30 @@ Parser::parseMethod(Atom *layoutName)
     NameProxy *alias = nameref();
     requireNewlineOrSemi();
 
-    MethodDecl *decl =
-      new (pool_) MethodDecl(begin, name, FunctionOrAlias(alias));
-    delegate_.OnMethodDecl(decl);
+    MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, nullptr, nullptr);
+    decl->setMethod(FunctionOrAlias(alias));
+    delegate_.LeaveMethodDecl(decl);
     return decl;
   }
 
-  TypeExpr te = delegate_.HandleTypeExpr(spec);
+  if (!name.atom) {
+    // Parse the body (or try to), then leave, if we never got a name.
+    TypeExpr te(new (pool_) TypeSpecifier(spec));
+    parseFunctionBase(te, kind);
+    return nullptr;
+  }
+
+  TypeExpr te;
+  MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, &spec, &te);
 
   FunctionNode *node = parseFunctionBase(te, kind);
-  if (!node)
+  if (!node) {
+    delegate_.LeaveMethodDecl(decl);
     return nullptr;
+  }
+  decl->setMethod(FunctionOrAlias(node));
 
-  // If we never got a name, it's time to bail out.
-  if (!name.atom)
-    return nullptr;
-
-  MethodDecl *decl = new (pool_) MethodDecl(begin, name, FunctionOrAlias(node));
-  delegate_.OnMethodDecl(decl);
+  delegate_.LeaveMethodDecl(decl);
   return decl;
 }
 
@@ -1537,7 +1537,7 @@ Parser::for_()
         is_decl = true;
 
       if (is_decl) {
-        if ((decl = localVariableDeclaration(TOK_NEW, DeclFlags::Inline)) == nullptr)
+        if ((decl = localVarDecl(TOK_NEW, DeclFlags::Inline)) == nullptr)
           return nullptr;
       } else {
         if ((decl = expressionStatement()) == nullptr)
@@ -1598,13 +1598,9 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
   if (match(TOK_ASSIGN))
     init = expression();
 
-  TypeExpr te = delegate_.HandleTypeExpr(decl->spec);
+  VarDecl *first = delegate_.HandleVarDecl(decl->name, decl->spec, init);
 
-  VariableDeclaration *first =
-    new (pool_) VariableDeclaration(decl->name, te, init);
-  delegate_.OnVarDecl(first);
-
-  VariableDeclaration *prev = first;
+  VarDecl *prev = first;
   while (match(TOK_COMMA)) {
     // Parse the next declaration re-using any sticky information from the
     // first decl.
@@ -1615,11 +1611,7 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
     if (match(TOK_ASSIGN))
       init = expression();
 
-    TypeExpr te = delegate_.HandleTypeExpr(decl->spec);
-
-    VariableDeclaration *var =
-      new (pool_) VariableDeclaration(decl->name, te, init);
-    delegate_.OnVarDecl(var);
+    VarDecl *var = delegate_.HandleVarDecl(decl->name, decl->spec, init);
 
     prev->setNext(var);
     prev = var;
@@ -1633,7 +1625,7 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
 
 // Wrapper around variable() for locals.
 Statement *
-Parser::localVariableDeclaration(TokenKind kind, uint32_t flags)
+Parser::localVarDecl(TokenKind kind, uint32_t flags)
 {
   Declaration decl;
 
@@ -1821,7 +1813,7 @@ Parser::statement()
 
     if (is_decl) {
       scanner_.undo();
-      return localVariableDeclaration(TOK_NEW);
+      return localVarDecl(TOK_NEW);
     }
   }
 
@@ -1836,7 +1828,7 @@ Parser::statement()
       kind = TOK_NEW;
     }
 
-    return localVariableDeclaration(kind);
+    return localVarDecl(kind);
   }
 
   // Statements which must be followed by a semicolon will break out of the
@@ -1951,10 +1943,11 @@ Parser::enum_()
 }
 
 ParameterList *
-Parser::arguments()
+Parser::arguments(bool *canEarlyResolve)
 {
   ParameterList *params = new (pool_) ParameterList;
 
+  // Note: though our callers 
   if (!expect(TOK_LPAREN)) {
     scanner_.skipUntil(TOK_RPAREN, SkipFlags::StopAtLine);
     return nullptr;
@@ -1981,17 +1974,19 @@ Parser::arguments()
       variadic = true;
     }
 
-    TypeExpr te = delegate_.HandleTypeExpr(decl.spec);
+    VarDecl *node = delegate_.HandleVarDecl(decl.name, decl.spec, init);
 
-    VariableDeclaration *node =
-      new (pool_) VariableDeclaration(decl.name, te, init);
-    delegate_.OnVarDecl(node);
+    // Mark whether we eagerly resolved a type for this node.
+    *canEarlyResolve &= !!node->sym()->type();
 
     params->append(node);
   } while (match(TOK_COMMA));
 
-  if (!expect(TOK_RPAREN))
-    consume_after_error(TOK_RPAREN, TOK_LBRACE);
+  if (!expect(TOK_RPAREN)) {
+    scanner_.skipUntil(TOK_RPAREN,
+                       SkipFlags::StopAtLine|SkipFlags::StopBeforeMatch,
+                       TOK_LBRACE);
+  }
   return params;
 }
 
@@ -2025,10 +2020,8 @@ Parser::methodBody()
 }
 
 Statement *
-Parser::function(TokenKind kind, const Declaration &decl, void *, uint32_t attrs)
+Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
 {
-  TypeExpr te = delegate_.HandleTypeExpr(decl.spec);
-
   FunctionStatement *stmt = new (pool_) FunctionStatement(decl.name, kind);
 
   delegate_.OnEnterFunctionDecl(stmt);
@@ -2039,15 +2032,18 @@ Parser::function(TokenKind kind, const Declaration &decl, void *, uint32_t attrs
     // that don't have bodies, unfortunately, since they could contain default
     // arguments that bind to named constants or the magic sizeof(arg) expr.
     AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
-    ParameterList *params = arguments();
-    if (!params) {
-      // Set bogus parameters so the signature doesn't end up null.
-      stmt->setSignature(te, new (pool_) ParameterList());
 
+    // :TODO: the logic below this can be shared.
+    bool canEagerResolve = true;
+    ParameterList *params = arguments(&canEagerResolve);
+    if (!params) {
+      params = new (pool_) ParameterList();
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
-    } else {
-      stmt->setSignature(te, params);
     }
+
+    FunctionSignature *signature =
+      delegate_.HandleFunctionSignature(decl.spec, params, canEagerResolve);
+    stmt->setSignature(signature);
 
     BlockStatement *body = nullptr;
     if (kind != TOK_FORWARD && kind != TOK_NATIVE) {
@@ -2077,7 +2073,7 @@ Parser::global(TokenKind kind)
   if (kind == TOK_NATIVE || kind == TOK_FORWARD) {
     if (!parse_decl(&decl, DeclFlags::MaybeFunction))
       return nullptr;
-    return function(kind, decl, nullptr, DeclAttrs::None);
+    return function(kind, decl, DeclAttrs::None);
   }
 
   uint32_t attrs = DeclAttrs::None;
@@ -2103,7 +2099,7 @@ Parser::global(TokenKind kind)
       cc_.report(scanner_.begin(), rmsg::newdecl_with_new);
     return variable(TOK_NEW, &decl, attrs);
   }
-  return function(TOK_FUNCTION, decl, nullptr, attrs);
+  return function(TOK_FUNCTION, decl, attrs);
 }
 
 Statement *
@@ -2142,10 +2138,7 @@ Parser::struct_(TokenKind kind)
     if (!begin.isSet())
       begin = decl.spec.startLoc();
 
-    TypeExpr te = delegate_.HandleTypeExpr(decl.spec);
-
-    FieldDecl *field = new (pool_) FieldDecl(begin, decl.name, te);
-    delegate_.OnFieldDecl(field);
+    FieldDecl *field = delegate_.HandleFieldDecl(begin, decl.name, decl.spec);
     decls->append(field);
 
     requireNewlineOrSemi();
@@ -2172,13 +2165,9 @@ Parser::typedef_()
   TypeSpecifier spec;
   parse_new_type_expr(&spec, 0);
 
-  TypeExpr te = delegate_.HandleTypeExpr(spec);
-
   requireNewlineOrSemi();
 
-  TypedefStatement *stmt = new (pool_) TypedefStatement(begin, name, te);
-  delegate_.OnTypedefDecl(stmt);
-  return stmt;
+  return delegate_.HandleTypedefDecl(begin, name, spec);
 }
 
 ParseTree *

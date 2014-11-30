@@ -22,14 +22,6 @@
 
 namespace sp {
 
-// Resolve TypeSpecifiers for all nodes except ones that require advanced
-// type deduction. If this succeeds, all TypeSpecifiers will be resolved
-// to Type objects, and all Type objects will be populated.
-//
-// This phase is a single pass over the AST.
-bool
-ResolveTypes(CompileContext &cc, TranslationUnit *unit);
-
 }
 
 #endif // _include_spcomp2_compile_phases_

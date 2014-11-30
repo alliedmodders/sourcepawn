@@ -94,11 +94,6 @@ class Parser
   // parsing to continue.
   bool parse_decl(Declaration *decl, uint32_t flags);
 
-  // Consume tokens until |closer| is consumed, or |opener| is peeked, or an
-  // end-of-line is reached. If TOK_ERROR or TOK_EOF is returned, we return
-  // false.
-  bool consume_after_error(TokenKind closer, TokenKind opener);
-
   ExpressionList *dimensions();
   Atom *maybeName();
   Atom *expectName();
@@ -132,12 +127,12 @@ class Parser
   MethodDecl *parseMethod(Atom *layoutName);
   PropertyDecl *parseAccessor();
 
-  ParameterList *arguments();
-  FunctionNode *parseFunctionBase(const TypeExpr &returnType, TokenKind kind);
+  ParameterList *arguments(bool *canEarlyResolve);
+  FunctionNode *parseFunctionBase(const TypeExpr &te, TokenKind kind);
 
   NameProxy *nameref(const Token *tok = nullptr);
   NameProxy *tagref(const Token *tok = nullptr);
-  Statement *localVariableDeclaration(TokenKind kind, uint32_t flags = 0);
+  Statement *localVarDecl(TokenKind kind, uint32_t flags = 0);
   Statement *methodmap(TokenKind kind);
   Statement *delete_();
   Statement *switch_();
@@ -146,7 +141,7 @@ class Parser
   Statement *block();
   BlockStatement *methodBody();
   Statement *variable(TokenKind tok, Declaration *decl, uint32_t flags);
-  Statement *function(TokenKind tok, const Declaration &decl, void *, uint32_t attrs);
+  Statement *function(TokenKind tok, Declaration &decl, uint32_t attrs);
   Statement *expressionStatement();
   Statement *while_();
   Statement *do_();

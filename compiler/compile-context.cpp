@@ -113,13 +113,6 @@ CompileContext::compile(Ref<SourceFile> file)
 
   // ReportMemory(stderr);
 
-  fprintf(stderr, "\n-- Type Resolution --\n");
-
-  if (!ResolveTypes(*this, unit))
-    return false;
-
-  ReportMemory(stderr);
-
   // unit->tree()->dump(stdout);
 
   {
