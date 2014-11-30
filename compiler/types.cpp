@@ -256,6 +256,9 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
     case TOK_FUNCTION:
       base = base + BuildTypeFromSignature(spec->signature());
       break;
+    case TOK_DEFINED:
+      base = base + BuildTypeName(spec->getResolvedBase(), nullptr);
+      break;
     default:
       base = base + TokenNames[spec->resolver()];
       break;

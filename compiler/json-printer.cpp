@@ -128,6 +128,7 @@ class JsonBuilder : public AstVisitor
         rval_->add(atom_value_, new (pool_) JsonBool(false));
         break;
       case TOK_NULL:
+      case TOK_INVALID_FUNCTION:
         rval_->add(atom_value_, new (pool_) JsonNull());
         break;
       default:
@@ -309,6 +310,10 @@ class JsonBuilder : public AstVisitor
   void visitDeleteStatement(DeleteStatement *node) override {
     rval_->add(atom_expression_, toJson(node->expression()));
   }
+  void visitUnsafeCastExpr(UnsafeCastExpr *node) override {
+    rval_->add(atom_type_, toJson(node->te()));
+    rval_->add(atom_expression_, toJson(node->expr()));
+  }
   void visitUnaryExpression(UnaryExpression *node) override {
     rval_->add(atom_expression_, toJson(node->expression()));
   }
@@ -379,6 +384,10 @@ class JsonBuilder : public AstVisitor
       case TOK_FUNCTION:
         resolver = toJson(resolver, spec->signature());
         break;
+      case TOK_DEFINED:
+        resolver->add(
+          atom_name_,
+          new (pool_) JsonString(BuildTypeName(spec->getResolvedBase(), nullptr).chars()));
       default:
         break;
     }

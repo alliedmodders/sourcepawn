@@ -62,7 +62,59 @@ struct Declaration
 class Parser
 {
  public:
-  Parser(CompileContext &cc, Preprocessor &pp);
+  // This is a set of callbacks for performing initial semantic analysis
+  // during parsing.
+  class Delegate
+  {
+   public:
+    virtual void OnNameProxy(NameProxy *proxy)
+    {}
+    virtual void OnTagProxy(NameProxy *proxy)
+    {}
+    virtual void OnEnumDecl(EnumStatement *node)
+    {}
+    virtual void OnEnumValueDecl(EnumConstant *cs)
+    {}
+    virtual void OnVarDecl(VariableDeclaration *var)
+    {}
+    virtual void OnTypedefDecl(TypedefStatement *stmt)
+    {}
+    virtual void OnEnterMethodmap(MethodmapDecl *methodmap)
+    {}
+    virtual void OnLeaveMethodmap(MethodmapDecl *methodmap)
+    {}
+    virtual void OnEnterRecordDecl(RecordDecl *decl)
+    {}
+    virtual void OnLeaveRecordDecl(RecordDecl *decl)
+    {}
+    virtual void OnMethodDecl(MethodDecl *decl)
+    {}
+    virtual void OnPropertyDecl(PropertyDecl *decl)
+    {}
+    virtual void OnFieldDecl(FieldDecl *decl)
+    {}
+    virtual void OnEnterFunctionDecl(FunctionStatement *stmt)
+    {}
+    virtual void OnLeaveFunctionDecl(FunctionStatement *stmt)
+    {}
+    virtual void OnReturnStmt(ReturnStatement *stmt)
+    {}
+    virtual void OnEnterParser()
+    {}
+    virtual void OnLeaveParser()
+    {}
+    virtual void OnEnterScope(Scope::Kind kind)
+    {}
+    virtual Scope *OnLeaveScope() {
+      return nullptr;
+    }
+    virtual void OnLeaveOrphanScope()
+    {}
+    virtual TypeExpr HandleTypeExpr(const TypeSpecifier &spec);
+  };
+
+ public:
+  Parser(CompileContext &cc, Preprocessor &pp, Delegate *delegate);
 
   ParseTree *parse();
 
@@ -128,11 +180,14 @@ class Parser
   Expression *expression();
 
   bool matchMethodBind();
-  MethodDecl *parseMethod();
+  MethodDecl *parseMethod(Atom *layoutName);
   PropertyDecl *parseAccessor();
 
   ParameterList *arguments();
+  FunctionNode *parseFunctionBase(const TypeExpr &returnType, TokenKind kind);
 
+  NameProxy *nameref(const Token *tok = nullptr);
+  NameProxy *tagref(const Token *tok = nullptr);
   Statement *localVariableDeclaration(TokenKind kind, uint32_t flags = 0);
   Statement *methodmap(TokenKind kind);
   Statement *delete_();
@@ -140,7 +195,7 @@ class Parser
   Statement *enum_();
   Statement *if_();
   Statement *block();
-  MethodBody *methodBody();
+  BlockStatement *methodBody();
   Statement *variable(TokenKind tok, Declaration *decl, uint32_t flags);
   Statement *function(TokenKind tok, const Declaration &decl, void *, uint32_t attrs);
   Statement *expressionStatement();
@@ -160,7 +215,8 @@ class Parser
   PoolAllocator &pool_;
   Preprocessor &scanner_;
   const CompileOptions &options_;
-  bool encounteredReturn_;
+  Delegate *delegate_;
+  Delegate dummy_delegate_;
   bool allowDeclarations_;
 
   Atom *atom_Float_;

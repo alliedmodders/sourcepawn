@@ -83,6 +83,10 @@ class TypeSpecifier : public PoolObject
     resolver_ = TOK_FUNCTION;
     signature_ = signature;
   }
+  void setResolvedBaseType(Type *type) {
+    resolver_ = TOK_DEFINED;
+    resolved_ = type;
+  }
 
   bool needsBinding() const {
     switch (resolver()) {
@@ -184,6 +188,10 @@ class TypeSpecifier : public PoolObject
     assert(resolver() == TOK_FUNCTION);
     return signature_;
   }
+  Type *getResolvedBase() const {
+    assert(resolver() == TOK_DEFINED);
+    return resolved_;
+  }
 
   bool isNewDecl() const {
     return !!(attrs_ & NewDecl);
@@ -256,6 +264,7 @@ class TypeSpecifier : public PoolObject
   union {
     NameProxy *proxy_;
     FunctionSignature *signature_;
+    Type *resolved_;
   };
 };
 
@@ -264,6 +273,8 @@ class TypeSpecifier : public PoolObject
 class TypeExpr
 {
  public:
+  TypeExpr() // This constructor should not be used - it's needed for FunctionNode.
+  {}
   explicit TypeExpr(TypeSpecifier *spec)
    : type_(nullptr),
      spec_(spec)

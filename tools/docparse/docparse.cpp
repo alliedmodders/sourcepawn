@@ -375,7 +375,7 @@ Run(CompileContext &cc, const char *path)
         return nullptr;
     }
 
-    Parser parser(cc, pp);
+    Parser parser(cc, pp, nullptr);
 
     tree = parser.parse();
     if (!tree || !cc.phasePassed())

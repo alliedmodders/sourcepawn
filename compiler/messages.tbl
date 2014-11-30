@@ -73,9 +73,12 @@ RMSG(invalid_accessor_name,         syntax,            "accessor must be named '
 RMSG(expected_layout_decl,          syntax,            "expected a field, property, or function")
 RMSG(no_chained_relops,             syntax,            "chained relational operators are not yet supported")
 RMSG(no_enum_structs,               syntax,            "type-sized enums ('enum structs') are not supported")
+RMSG(no_single_line_functions,      syntax,            "function bodies must have braces")
+RMSG(expected_name_and_type,        syntax,            "function signature is missing either a name or a type")
 
 // Name binding errors.
 RMSG(redeclared_name,               syntax,            "name '%0' was redeclared")
+RMSG(redeclared_builtin,            syntax,            "name '%0' was redeclared as a builtin")
 RMSG(redefined_layout_decl,         syntax,            "%0 '%1' was already declared as a %2")
 RMSG(union_cannot_mix_fields,       syntax,            "unions cannot mix anonymous and named fields")
 RMSG(duplicate_argument,            syntax,            "argument name '%0' was declared twice")

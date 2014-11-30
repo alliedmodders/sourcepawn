@@ -22,13 +22,19 @@
 using namespace ke;
 using namespace sp;
 
-TypeManager::TypeManager()
- : voidType_(nullptr),
+TypeManager::TypeManager(StringPool &strings)
+ : strings_(strings),
+   voidType_(nullptr),
    uncheckedType_(nullptr),
    metaFunctionType_(nullptr),
    primitiveTypes_(),
    referenceTypes_()
 {
+  atom_String_ = strings.add("String");
+  atom_Float_ = strings.add("Float");
+  atom_any_ = strings.add("any");
+  atom_Function_ = strings.add("Function");
+  atom_bool_ = strings.add("bool");
 }
 
 bool
@@ -104,4 +110,20 @@ TypedefType *
 TypeManager::newTypedef(Atom *name)
 {
   return TypedefType::New(name);
+}
+
+Type *
+TypeManager::typeForLabelAtom(Atom *atom)
+{
+  if (atom == atom_String_)
+    return getPrimitive(PrimitiveType::Char);
+  if (atom == atom_Float_)
+    return getPrimitive(PrimitiveType::Float);
+  if (atom == atom_any_)
+    return getUnchecked();
+  if (atom == atom_Function_)
+    return getMetaFunction();
+  if (atom == atom_bool_)
+    return getPrimitive(PrimitiveType::Bool);
+  return nullptr;
 }

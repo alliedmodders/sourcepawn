@@ -472,7 +472,6 @@ class TypeResolver
 
     SaveAndSet<FunctionNode *> save(&fun_, node);
     EnterScope funScope(&scope_, node->funScope());
-    EnterScope varScope(&scope_, node->varScope());
 
     if (node->body())
       node->body()->accept(this);
@@ -615,6 +614,10 @@ class TypeResolver
   }
   void visitIncDecExpression(IncDecExpression *node) {
     node->expression()->accept(this);
+  }
+  void visitUnsafeCastExpr(UnsafeCastExpr *node) {
+    resolveTypeIfNeeded(node->te());
+    node->expr()->accept(this);
   }
   void visitUnaryExpression(UnaryExpression *node) {
     if (node->tag())
@@ -883,6 +886,8 @@ class TypeResolver
         return cc_.types()->getPrimitive(PrimitiveType::Char);
       case TOK_FLOAT:
         return cc_.types()->getPrimitive(PrimitiveType::Float);
+      case TOK_DEFINED:
+        return spec->getResolvedBase();
 
       case TOK_FUNCTION:
       {

@@ -65,6 +65,7 @@ namespace sp {
   _(FUNCTION,           "function")                   \
   _(IF,                 "if")                         \
   _(INT,                "int")                        \
+  _(INVALID_FUNCTION,   "INVALID_FUNCTION")           \
   _(METHODMAP,          "methodmap")                  \
   _(NATIVE,             "native")                     \
   _(NULL,               "null")                       \
@@ -187,6 +188,7 @@ enum TokenKind
   _(FUNCTION)                                         \
   _(IF)                                               \
   _(INT)                                              \
+  _(INVALID_FUNCTION)                                 \
   _(METHODMAP)                                        \
   _(NATIVE)                                           \
   _(NEW)                                              \

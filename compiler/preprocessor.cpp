@@ -491,3 +491,36 @@ Preprocessor::eatRestOfLine()
     next();
   }
 }
+
+void
+Preprocessor::skipUntil(TokenKind kind, SkipFlags flags)
+{
+  TokenKind tok = ((flags & SkipFlags::StartAtCurrent) == SkipFlags::StartAtCurrent)
+                  ? current()->kind
+                  : peek();
+
+  if (tok == kind && ((flags & SkipFlags::StopBeforeMatch) == SkipFlags::StopBeforeMatch))
+    return;
+
+  while (tok != TOK_EOF) {
+    if ((flags & SkipFlags::StopAtLine) == SkipFlags::StopAtLine) {
+      if (peekTokenSameLine() == TOK_EOL)
+        return;
+      if (peek() == TOK_SEMICOLON)
+        return;
+    }
+
+    if (tok == kind)
+      break;
+    if ((flags & SkipFlags::StopAtSemi) == SkipFlags::StopAtSemi) {
+      if (tok == TOK_SEMICOLON)
+        break;
+    }
+
+    next();
+    tok = peek();
+  }
+
+  if ((flags & SkipFlags::StopBeforeMatch) != SkipFlags::StopBeforeMatch)
+    next();
+}

@@ -19,6 +19,7 @@
 #ifndef _include_jitcraft_type_manager_h_
 #define _include_jitcraft_type_manager_h_
 
+#include "string-pool.h"
 #include "types.h"
 
 namespace sp {
@@ -28,7 +29,7 @@ class String;
 class TypeManager
 {
  public:
-  TypeManager();
+  TypeManager(StringPool &pool);
 
   bool initialize();
 
@@ -53,12 +54,21 @@ class TypeManager
   StructType *newStruct(Atom *name);
   TypedefType *newTypedef(Atom *name);
 
+  Type *typeForLabelAtom(Atom *atom);
+
  private:
+  StringPool &strings_;
   Type *voidType_;
   Type *uncheckedType_;
   Type *metaFunctionType_;
   Type *primitiveTypes_[kTotalPrimitiveTypes];
   ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
+
+  Atom *atom_String_;
+  Atom *atom_Float_;
+  Atom *atom_any_;
+  Atom *atom_Function_;
+  Atom *atom_bool_;
 };
 
 }

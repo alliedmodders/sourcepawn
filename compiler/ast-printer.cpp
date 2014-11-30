@@ -25,7 +25,7 @@ class AstPrinter : public AstVisitor
   FILE *fp_;
   size_t level_;
 
-  private:
+ private:
   void prefix() {
     for (size_t i = 0; i < level_; i++)
       fprintf(fp_, "  ");
@@ -37,7 +37,7 @@ class AstPrinter : public AstVisitor
     level_--;
   }
 
-  public:
+ public:
   AstPrinter(FILE *fp)
     : fp_(fp),
     level_(0)
@@ -47,36 +47,6 @@ class AstPrinter : public AstVisitor
   void dump(const TypeExpr &te, Atom *name) {
     AString str = BuildTypeName(te, name);
     fprintf(fp_, "%s", str.chars());
-  }
-
-  void dump(const TypeSpecifier &spec, Atom *name) {
-    if (spec.isConst())
-      fprintf(fp_, "const ");
-    if (spec.resolver() == TOK_NAME) {
-      fprintf(fp_, "%s", spec.proxy()->name()->chars());
-    } else if (spec.resolver() == TOK_LABEL) {
-      fprintf(fp_, "%s:", spec.proxy()->name()->chars());
-    } else if (IsNewTypeToken(spec.resolver())) {
-      fprintf(fp_, "%s", TokenNames[spec.resolver()]);
-    } else if (spec.resolver() == TOK_IMPLICIT_INT) {
-      fprintf(fp_, "implicit-int");
-    } else if (spec.resolver() == TOK_FUNCTION) {
-      fprintf(fp_, "function ");
-      dump(spec.signature());
-    }
-
-    if (spec.resolver() != TOK_LABEL && !spec.dims() && spec.rank()) {
-      for (uint32_t i = 0; i < spec.rank(); i++)
-        fprintf(fp_, "[]");
-    }
-
-    if (name)
-      fprintf(fp_, " %s", name->chars());
-
-    if (spec.resolver() == TOK_LABEL || spec.dims()) {
-      for (uint32_t i = 0; i < spec.rank(); i++)
-        fprintf(fp_, "[]");
-    }
   }
 
   void dump(FunctionSignature *sig) {
@@ -173,6 +143,13 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "[ UnaryExpression (%s)\n", TokenNames[node->token()]);
     indent();
     node->expression()->accept(this);
+    unindent();
+  }
+  void visitUnsafeCastExpr(UnsafeCastExpr *node) {
+    prefix();
+    fprintf(fp_, "[ UnsafeCastExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    indent();
+    node->expr()->accept(this);
     unindent();
   }
   void visitReturnStatement(ReturnStatement *node) {

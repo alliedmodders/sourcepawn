@@ -22,14 +22,6 @@
 
 namespace sp {
 
-// Create symbol and scope hierarchies, and bind all names to available
-// definitions. If this succeeds, all NameProxies that need to be bound
-// will have been bound.
-//
-// This phase is a single pass over the AST.
-bool
-ResolveNames(CompileContext &cc, TranslationUnit *unit);
-
 // Resolve TypeSpecifiers for all nodes except ones that require advanced
 // type deduction. If this succeeds, all TypeSpecifiers will be resolved
 // to Type objects, and all Type objects will be populated.

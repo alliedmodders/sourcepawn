@@ -63,6 +63,7 @@ class CompileContext;
   _(ContinueStatement)    \
   _(IncDecExpression)     \
   _(UnaryExpression)      \
+  _(UnsafeCastExpr)       \
   _(SizeofExpression)     \
   _(TernaryExpression)    \
   _(TokenLiteral)         \
@@ -172,6 +173,9 @@ typedef PoolList<VariableDeclaration *> ParameterList;
 class FunctionSignature : public PoolObject
 {
  public:
+  FunctionSignature()
+  {}
+
   FunctionSignature(const TypeExpr &returnType, ParameterList *parameters)
     : returnType_(returnType),
       parameters_(parameters),
@@ -487,6 +491,32 @@ class SizeofExpression : public Expression
   size_t level_;
 };
 
+class UnsafeCastExpr : public Expression
+{
+ public:
+  UnsafeCastExpr(const SourceLocation &pos, const TypeExpr &te, Expression *expr)
+   : Expression(pos),
+     te_(te),
+     expr_(expr)
+  {}
+
+  DECLARE_NODE(UnsafeCastExpr);
+
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
+  }
+  Expression *expr() const {
+    return expr_;
+  }
+
+ private:
+  TypeExpr te_;
+  Expression *expr_;
+};
+
 class UnaryExpression : public Expression
 {
  public:
@@ -672,13 +702,14 @@ class ForStatement : public Statement
 
  public:
   ForStatement(const SourceLocation &pos, Statement *initialization,
-               Expression *condition, Statement *update, Statement *body)
+               Expression *condition, Statement *update, Statement *body,
+               Scope *scope)
     : Statement(pos),
       initialization_(initialization),
       condition_(condition),
       update_(update),
       body_(body),
-      scope_(nullptr)
+      scope_(scope)
   {
   }
 
@@ -829,10 +860,13 @@ class BlockStatement : public Statement
   TokenKind type_;
 
  public:
-  BlockStatement(const SourceLocation &pos, StatementList *statements, TokenKind kind)
+  BlockStatement(const SourceLocation &pos,
+                 StatementList *statements,
+                 TokenKind kind,
+                 Scope *scope)
     : Statement(pos),
       statements_(statements),
-      scope_(nullptr),
+      scope_(scope),
       type_(kind)
   {
   }
@@ -854,61 +888,40 @@ class BlockStatement : public Statement
   }
 };
 
-class MethodBody : public BlockStatement
-{
- public:
-  MethodBody(const SourceLocation &pos, StatementList *statements, bool returnedValue)
-   : BlockStatement(pos, statements, TOK_FUNCTION)
-  {
-  }
-
-  bool returnedValue() const {
-    return returnedValue_;
-  }
-
- private:
-  bool returnedValue_;
-};
-
 class FunctionNode : public PoolObject
 {
  public:
-  FunctionNode(TokenKind kind, MethodBody *body, const FunctionSignature &signature)
+  FunctionNode(TokenKind kind)
    : kind_(kind),
-     body_(body),
-     signature_(signature),
-     sym_(nullptr),
-     funScope_(nullptr),
-     varScope_(nullptr)
+     body_(nullptr),
+     funScope_(nullptr)
   {
   }
 
-  MethodBody *body() const {
+  TokenKind token() const {
+    return kind_;
+  }
+
+  void setBody(BlockStatement *body) {
+    body_ = body;
+  }
+  BlockStatement *body() const {
     return body_;
+  }
+
+  void setSignature(const TypeExpr &rt, ParameterList *params) {
+    signature_ = FunctionSignature(rt, params);
   }
   FunctionSignature *signature() {
     return &signature_;
   }
-  TokenKind token() const {
-    return kind_;
-  }
-  void setSymbol(FunctionSymbol *sym) {
-    assert(!sym_);
-    sym_ = sym;
-  }
-  FunctionSymbol *sym() const {
-    return sym_;
-  }
-  void setScopes(FunctionScope *funScope, Scope *varScope) {
-    assert(!funScope_ && !varScope_);
+
+  void setArgScope(Scope *funScope) {
+    assert(!funScope_);
     funScope_ = funScope;
-    varScope_ = varScope;
   }
-  FunctionScope *funScope() const {
+  Scope *funScope() const {
     return funScope_;
-  }
-  Scope *varScope() const {
-    return varScope_;
   }
 
   // Set if we're shadowing another symbol.
@@ -921,11 +934,9 @@ class FunctionNode : public PoolObject
 
  private:
   TokenKind kind_;
-  MethodBody *body_;
+  BlockStatement *body_;
   FunctionSignature signature_;
-  FunctionSymbol *sym_;
-  FunctionScope *funScope_;
-  Scope *varScope_;
+  Scope *funScope_;
   FunctionSymbol *shadowed_;
 };
 
@@ -934,10 +945,11 @@ class FunctionStatement :
   public FunctionNode
 {
  public:
-  FunctionStatement(const NameToken &name, TokenKind kind, MethodBody *body, const FunctionSignature &signature)
+  FunctionStatement(const NameToken &name, TokenKind kind)
    : Statement(name.start),
-     FunctionNode(kind, body, signature),
-     name_(name)
+     FunctionNode(kind),
+     name_(name),
+     sym_(nullptr)
   {
   }
 
@@ -946,9 +958,17 @@ class FunctionStatement :
   Atom *name() const {
     return name_.atom;
   }
+  void setSymbol(FunctionSymbol *sym) {
+    assert(!sym_);
+    sym_ = sym;
+  }
+  FunctionSymbol *sym() const {
+    return sym_;
+  }
 
  private:
   NameToken name_;
+  FunctionSymbol *sym_;
 };
 
 class IfStatement : public Statement
@@ -1348,11 +1368,11 @@ typedef PoolList<LayoutDecl *> LayoutDecls;
 class RecordDecl : public Statement
 {
  public:
-  RecordDecl(const SourceLocation &loc, TokenKind token, const NameToken &name, LayoutDecls *body)
+  RecordDecl(const SourceLocation &loc, TokenKind token, const NameToken &name)
    : Statement(loc),
      name_(name),
      token_(token),
-     body_(body),
+     body_(nullptr),
      sym_(nullptr),
      scope_(nullptr)
   {
@@ -1365,6 +1385,10 @@ class RecordDecl : public Statement
   }
   TokenKind token() const {
     return token_;
+  }
+
+  void setBody(LayoutDecls *body) {
+    body_ = body;
   }
   LayoutDecls *body() const {
     return body_;
@@ -1396,11 +1420,11 @@ class RecordDecl : public Statement
 class MethodmapDecl : public Statement
 {
  public:
-  MethodmapDecl(const SourceLocation &loc, const NameToken &name, NameProxy *parent, LayoutDecls *body)
+  MethodmapDecl(const SourceLocation &loc, const NameToken &name, NameProxy *parent)
    : Statement(loc),
      name_(name),
      parent_(parent),
-     body_(body),
+     body_(nullptr),
      sym_(nullptr),
      scope_(nullptr),
      nullable_(false)
@@ -1412,9 +1436,6 @@ class MethodmapDecl : public Statement
   Atom *name() const {
     return name_.atom;
   }
-  LayoutDecls *body() const {
-    return body_;
-  }
   NameProxy *parent() const {
     return parent_;
   }
@@ -1423,6 +1444,13 @@ class MethodmapDecl : public Statement
   }
   void setNullable() {
     nullable_ = true;
+  }
+
+  void setBody(LayoutDecls *body) {
+    body_ = body;
+  }
+  LayoutDecls *body() const {
+    return body_;
   }
 
   void setSymbol(TypeSymbol *sym) {

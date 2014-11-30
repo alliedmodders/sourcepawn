@@ -33,6 +33,16 @@ class CommentDelegate
   virtual void HandleComment(CommentPos where, const SourceRange &extends) = 0;
 };
 
+enum class SkipFlags
+{
+  None            = 0x0,
+  StopAtLine      = 0x1,
+  StopBeforeMatch = 0x2,
+  StopAtSemi      = 0x4,
+  StartAtCurrent  = 0x8
+};
+KE_DEFINE_ENUM_OPERATORS(SkipFlags)
+
 // In earlier iterations of SourcePawn, we used three passes for lexing. The
 // first pass stripped comments. The second pass handled preprocessor
 // directives. The final pass lexed the entire concatenated source buffer for
@@ -111,6 +121,9 @@ class Preprocessor
 
   // Consumes the rest of a line to assist with error messaging.
   void eatRestOfLine();
+
+  // Consume until a token has been reached.
+  void skipUntil(TokenKind kind, SkipFlags flags);
 
  private:
   // Internal implementation for next().

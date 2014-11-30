@@ -20,6 +20,7 @@
 #include "source-manager.h"
 #include "preprocessor.h"
 #include "parser.h"
+#include "name-resolver.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,8 @@ CompileContext::CompileContext(PoolAllocator &pool,
  : pool_(pool),
    strings_(strings),
    reports_(reports),
-   source_(source)
+   source_(source),
+   types_(strings)
 {
   assert(!CurrentCompileContext);
 
@@ -93,7 +95,8 @@ CompileContext::compile(Ref<SourceFile> file)
     if (!pp.enter(file))
       return false;
 
-    Parser p(*this, pp);
+    NameResolver nr(*this);
+    Parser p(*this, pp, &nr);
     ParseTree *tree = p.parse();
     if (!phasePassed())
       return false;
@@ -103,12 +106,12 @@ CompileContext::compile(Ref<SourceFile> file)
 
   ReportMemory(stderr);
 
-  fprintf(stderr, "\n-- Name Binding --\n");
+  // fprintf(stderr, "\n-- Name Binding --\n");
 
-  if (!ResolveNames(*this, unit))
-    return false;
+  // if (!ResolveNames(*this, unit))
+  //   return false;
 
-  ReportMemory(stderr);
+  // ReportMemory(stderr);
 
   fprintf(stderr, "\n-- Type Resolution --\n");
 
