@@ -1601,7 +1601,9 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
   VarDecl *first = delegate_.HandleVarDecl(decl->name, decl->spec, init);
 
   VarDecl *prev = first;
-  while (match(TOK_COMMA)) {
+  while (scanner_.peekTokenSameLine() == TOK_COMMA) {
+    scanner_.next();
+
     // Parse the next declaration re-using any sticky information from the
     // first decl.
     if (!reparse_decl(decl, DeclFlags::Variable))
@@ -1819,17 +1821,21 @@ Parser::statement()
 
   // Other declarations don't need any special sniffing.
   if (IsNewTypeToken(kind) ||
-      (kind == TOK_DECL ||
-       kind == TOK_STATIC ||
-       kind == TOK_NEW))
+      kind == TOK_STATIC ||
+      kind == TOK_CONST)
   {
-    if (IsNewTypeToken(kind)) {
+    if (IsNewTypeToken(kind))
       scanner_.undo();
-      kind = TOK_NEW;
-    }
-
     return localVarDecl(kind);
   }
+
+  // We special case these, since otherwise we could mess up parsing this:
+  //    new x;
+  //    x = 5;
+  //
+  // As: "x x = 5".
+  if (kind == TOK_DECL || kind == TOK_NEW)
+    return localVarDecl(kind, DeclFlags::Old);
 
   // Statements which must be followed by a semicolon will break out of the
   // switch. If they may end in BlockStatements, they'll immediately return.
@@ -2033,7 +2039,6 @@ Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
     // arguments that bind to named constants or the magic sizeof(arg) expr.
     AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
 
-    // :TODO: the logic below this can be shared.
     bool canEagerResolve = true;
     ParameterList *params = arguments(&canEagerResolve);
     if (!params) {

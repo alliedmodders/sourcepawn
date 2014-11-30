@@ -22,6 +22,7 @@ def run_tests(args):
     failed = False
 
     for test in tests:
+        test_type = os.path.split(os.path.dirname(test))[-1]
         test_name = os.path.basename(test)
         if test_name.startswith('fail-'):
             kind = 'fail'
@@ -37,10 +38,13 @@ def run_tests(args):
             stdout = stdout.decode('utf-8')
             stderr = stderr.decode('utf-8')
 
-            smx_path = test + '.smx'
-            compiled = os.path.exists(smx_path)
-            if compiled:
-                os.unlink(smx_path)
+            if test_type == 'runtime':
+                smx_path = test + '.smx'
+                compiled = os.path.exists(smx_path)
+                if compiled:
+                    os.unlink(smx_path)
+            else:
+                compiled = p.returncode == 0
 
             status = 'ok'
             if compiled and kind == 'fail':
@@ -63,7 +67,7 @@ def run_tests(args):
                         break
             
             if status == 'fail' or len(fails):
-                print('Test {0} ... FAIL'.format(test))
+                print('Test {0} ... FAIL, exit code {1}'.format(test, p.returncode))
                 failed = True
                 sys.stderr.write('FAILED! Dumping stdout/stderr:\n')
                 sys.stderr.write(stdout)
