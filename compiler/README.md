@@ -1,10 +1,19 @@
 SourcePawn 2
-------------
+============
 
 The SourcePawn 2 compiler is a long-overdue complete rewrite of the SourcePawn language. It introduces new semantics, removes some old semantics, and opens the door for many new language possibilties. It is vastly more efficient and maintainable than the original compiler.
 
+Status
+------
+
+Currently, preprocessing, parsing, name binding, and type resolution are implemented. Semantic analysis and code generation are a work-in-progress.
+
+The current goal is to make the existing passes as solid as possible to use as a basis for other tools (such as syntax rewriting, better error reporting, and automatically generating documentation).
+
+The goal is not to make this proto-compiler fully backward compatible with SourcePawn 1. However, when semantic analysis and code generation are implemented, alternatives to most missing language features will be provided.
+
 Language Changes
-================
+----------------
 SourcePawn 2 currently has the following language changes over SourcePawn 1:
 
  - Enum structs are removed. Enum values can no longer be tagged, and enum type names no longer create a named constant.
@@ -24,14 +33,14 @@ SourcePawn 2 currently has the following language changes over SourcePawn 1:
  - All name binding now supports forward-binding.
 
 Motivation
-==========
+----------
 
 The original SourcePawn 1 compiler is a single forward pipeline with no abstractions. Changing the language or code generation is extremely difficult. Our goal with the v2 compiler is to separate the compilation process into distinct phases, thus making it much easier to extend any given phase or component or introduce new tools or features.
 
 Our goal is to maintain reasonable compatibility with SourcePawn 1, in the hopes that both the implementation path and adoption rate can be as painless as possible.
 
 Design
-======
+------
 A few structures are critical to bootstrapping the compiler, and these are worth describing since they are the heart of the implementation.
 
  - `StringPool` is responsible for *atomizing* strings. Two different string pointers with the exact same character sequence will be *atomized* to the same value (called an `Atom`). Atomization is critical for quickly computing string equivalence and simplifying string mapping. There is one `StringPool` for the entire compilation process.
@@ -51,7 +60,7 @@ During parsing, two extra phases occur inline. These are name resolution, via `N
  - `TypeResolver` recursively walks nodes trying to resolve compile-time constants and types that are too complicated to resolve inline. For example, types that are used before they are defined, types that depend on constant expressions, or types that depend on expression inference. `TypeResolver` does not walk the entire AST; it relies on `NameResolver` giving it a list of nodes to operate on. This is important for reducing the size and complexity of the AST; over time, the `TypeResolver` and `NameResolver` will merge more closely.
 
 Credits
-=======
+-------
 
 I owe a great deal to Clang for having excellent ideas for managing source streams, token history, and error reports. The v2 compiler's single-pipeline preprocessor-lexer, source manager, and error reporter are all heavily rooted in Clang's design.
 
