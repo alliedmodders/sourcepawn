@@ -1,0 +1,13 @@
+License information is provided in each sub-folder, as each project uses a
+different license.
+
+The SourcePawn 1.0 Compiler is licensed under a 3-clause BSD license, and is
+Copyright 1997-2006 ITB CompuPhase, and Copyright 2006-2014 AlliedModders LLC.
+
+The SourcePawn 1.0 Virtual Machine and API are licensed under the GNU General
+Public License, and is Copyright 2004-2014 AlliedModders LLC.
+
+All SourcePawn 2.0 code is licensed under the GNU General Public License,
+version 3, and is Copyright 2012-2014 AlliedModders LLC and David Anderson.
+
+The documentation generator is licensed under a 3-clause BSD license.
