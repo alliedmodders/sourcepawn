@@ -3,8 +3,29 @@ SourcePawn
 
 A small and fast typed language for embedding in host applications.
 
+Status
+------
+
+This repository is aimed at making SourcePawn independent from SourceMod. As of SourceMod 1.8, changes will be made to one and synced to the other.
+
+The distribution of SourcePawn that currently ships with SourceMod is the `legacy` compiler. Other components in this repository have not shipped.
+
+Changes to the legacy repository should be made against the SourceMod master until further notice. They will be synced here periodically.
+
+Organization
+------------
+
+SourcePawn requires AMBuild to build.
+
+The SourcePawn source tree is divided into the following folders:
+ - `legacy` - The SourcePawn 1.7 compiler and VM.
+ - `compiler` - The experimental SourcePawn 2.0 parser.
+ - `tools`
+  - `docparse` - Parse files into JSON that can be consumed by documentation generators.
+ - `docgen` - The documentation generator and frontend tool.
+
 History
-=======
+-------
 
 SourcePawn has a long history - or rather, pre-history. It ultimately comes from SmallC, a language which appeared in Dr. Dobb's Journal in 1984.
 
@@ -25,33 +46,3 @@ In early 2006, Borja Ferrer ("faluco") and I chose to re-use Pawn in SourceMod, 
 Because these changes were fairly invasive, we renamed the language to "SourcePawn", and pinned the compiler to upstream version 3.2.
 
 In 2014, after many failed attempts to write a new language, I introduced a "Transitional Syntax" to SourcePawn. This syntax introduces real types (such as `int` and `void`), a more C-like declaration style, and the ability to extend tags with methods as if they were objects.
-
-Organization
-============
-
-SourcePawn requires AMBuild to build.
-
-The SourcePawn source tree is divided into the following folders:
- - `legacy` - The SourcePawn 1.7 compiler and VM.
- - `compiler` - The experimental SourcePawn 2.0 parser.
- - `tools`
-  - `docparse` - Parse files into JSON that can be consumed by documentation generators.
- - `docgen` - The documentation generator and frontend tool.
-
-SourcePawn 2 Changes
-====================
-The SourcePawn 2.0 implementation is currently only a parser for the proposed grammar. It also performs name binding and type resolution. The current grammar has a few changes over SourcePawn 1.7:
- - Enum structs are removed. Enum values can no longer be tagged, and enum type names no longer create a named constant.
- - Braces are now required on functions.
- - Most compile-time (preprocessor) directives are removed. The following are allowed:
-  - `#if`, `#else`, `#endif`. `#elseif` will most likely be supported as well.
-  - `#define` is supported, although "macro functions" are not.
-  - `#endinput` is supported.
-  - `#pragma deprecated` is supported.
-  - `#pragma newdecls` is supported.
-  - `#pragma semicolon` is allowed, although it has no effect. Semicolons are always optional.
-  - `#pragma dynamic` is allowed, although it may be ignored.
- - `decl` is now the same as `new`. Variables are always initialized to 0.
- - The operator overloading syntax for tags no longer exists.
-
-[1] http://www.drdobbs.com/the-small-scripting-language/184411074
