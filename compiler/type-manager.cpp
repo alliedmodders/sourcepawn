@@ -63,13 +63,14 @@ TypeManager::initialize()
   //   char[]
   //   const char[]
   //   float[3]
+  //   const float[3]
   char_type_ = getPrimitive(PrimitiveType::Char);
   char_array_ = ArrayType::New(char_type_, ArrayType::kUnsized);
   const_char_array_ = Type::NewQualified(char_array_, Qualifiers::Const);
 
   float_type_ = getPrimitive(PrimitiveType::Float);
   float3_array_ = ArrayType::New(float_type_, 3);
-  const_float3_array_ = Type::NewQualified(const_float3_array_, Qualifiers::Const);
+  const_float3_array_ = Type::NewQualified(float3_array_, Qualifiers::Const);
 
   return true;
 }

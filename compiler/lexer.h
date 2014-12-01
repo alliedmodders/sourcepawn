@@ -90,6 +90,8 @@ class Lexer : public ke::Refcounted<Lexer>
     return range_.filePos(pos_ - chars_);
   }
   SourceLocation lastpos() const {
+    if (pos_ == chars_)
+      return pos();
     return range_.filePos((pos_ - 1) - chars_);
   }
 
