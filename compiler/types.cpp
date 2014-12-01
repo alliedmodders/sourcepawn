@@ -348,6 +348,8 @@ sp::BuildTypeName(Type *aType, Atom *name)
         builder = builder + " " + name->chars() + brackets;
       else
         builder = builder + brackets + " " + name->chars();
+    } else {
+      builder = builder + brackets;
     }
     return AString(builder.ptr());
   }

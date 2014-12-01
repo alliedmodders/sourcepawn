@@ -64,6 +64,14 @@ class TypeManager
   Type *primitiveTypes_[kTotalPrimitiveTypes];
   ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
 
+  Type *char_type_;
+  ArrayType *char_array_;
+  Type *const_char_array_;
+
+  Type *float_type_;
+  ArrayType *float3_array_;
+  Type *const_float3_array_;
+
   Atom *atom_String_;
   Atom *atom_Float_;
   Atom *atom_any_;

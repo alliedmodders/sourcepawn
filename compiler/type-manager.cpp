@@ -28,7 +28,13 @@ TypeManager::TypeManager(StringPool &strings)
    uncheckedType_(nullptr),
    metaFunctionType_(nullptr),
    primitiveTypes_(),
-   referenceTypes_()
+   referenceTypes_(),
+   char_type_(nullptr),
+   char_array_(nullptr),
+   const_char_array_(nullptr),
+   float_type_(nullptr),
+   float3_array_(nullptr),
+   const_float3_array_(nullptr)
 {
   atom_String_ = strings.add("String");
   atom_Float_ = strings.add("Float");
@@ -53,13 +59,32 @@ TypeManager::initialize()
   for (size_t i = 0; i < kTotalPrimitiveTypes; i++)
     referenceTypes_[i] = ReferenceType::New(primitiveTypes_[i]);
 
+  // We special case the following types, because they are extremely common:
+  //   char[]
+  //   const char[]
+  //   float[3]
+  char_type_ = getPrimitive(PrimitiveType::Char);
+  char_array_ = ArrayType::New(char_type_, ArrayType::kUnsized);
+  const_char_array_ = Type::NewQualified(char_array_, Qualifiers::Const);
+
+  float_type_ = getPrimitive(PrimitiveType::Float);
+  float3_array_ = ArrayType::New(float_type_, 3);
+  const_float3_array_ = Type::NewQualified(const_float3_array_, Qualifiers::Const);
+
   return true;
 }
 
 ArrayType *
 TypeManager::newArray(Type *contained, int elements)
 {
-  // :TODO: cache this.
+  if (contained == char_type_) {
+    if (elements == ArrayType::kUnsized)
+      return char_array_;
+  } else if (contained == float_type_) {
+    if (elements == 3)
+      return float3_array_;
+  }
+
   return ArrayType::New(contained, elements);
 }
 
@@ -69,7 +94,6 @@ TypeManager::newReference(Type *type)
   if (type->isPrimitive())
     return referenceTypes_[size_t(type->primitive())];
 
-  // :TODO: cache this.
   return ReferenceType::New(type);
 }
 
@@ -82,6 +106,13 @@ TypeManager::newEnum(Atom *name)
 Type *
 TypeManager::newQualified(Type *type, Qualifiers qualifiers)
 {
+  if (qualifiers == Qualifiers::Const) {
+    if (type == char_array_)
+      return const_char_array_;
+    if (type == float3_array_)
+      return const_float3_array_;
+  }
+
   if ((type->qualifiers() | qualifiers) == qualifiers)
     return type;
 
@@ -90,7 +121,6 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
     type = type->unqualified();
   }
 
-  // :TODO: cache this.
   return Type::NewQualified(type, qualifiers);
 }
 
