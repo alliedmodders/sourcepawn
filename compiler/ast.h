@@ -141,7 +141,18 @@ class AstVisitor
 #undef _
 };
 
+// PartialAstVisitor only cares about certain nodes and ignores the rest.
 class PartialAstVisitor : public AstVisitor
+{
+ public:
+#define _(name) virtual void visit##name(name *node) { }
+  ASTKINDS(_)
+#undef _
+};
+
+// StrictAstVisitor will assert if it's missing any methods, but it does not
+// implement all methods.
+class StrictAstVisitor : public AstVisitor
 {
  public:
 #define _(name) virtual void visit##name(name *node) { assert(false); }

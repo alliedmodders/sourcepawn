@@ -1244,7 +1244,8 @@ Lexer::scan(Token *tok)
       break;
   }
 
-  lexed_tokens_on_line_ = (kind != TOK_NONE);
+  if (kind != TOK_NONE && kind != TOK_COMMENT)
+    lexed_tokens_on_line_ = true;
 
   tok->kind = kind;
   tok->end = TokenPos(pos(), line_number_);
@@ -1350,8 +1351,10 @@ Lexer::handleComments(Token *tok)
   if (lexed_tokens_on_line_)
     kind = processTailCommentBlock(tok);
 
-  // We should be at a token that started on its own line.
-  assert(!lexed_tokens_on_line_);
+  // If we get another comment or still have our original comment then our
+  // next token should be on its own line.
+  if (kind == TOK_COMMENT)
+    assert(!lexed_tokens_on_line_);
 
   // We can have multiple front comment blocks.
   while (kind == TOK_COMMENT)

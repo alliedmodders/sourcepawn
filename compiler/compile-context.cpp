@@ -46,6 +46,8 @@ CompileContext::CompileContext(PoolAllocator &pool,
 
   // We automatically add "include" from the current working directory.
   options_.SearchPaths.append(AString("include/"));
+
+  types_.initialize();
 }
 
 CompileContext::~CompileContext()
@@ -83,9 +85,6 @@ ReportMemory(FILE *fp)
 bool
 CompileContext::compile(Ref<SourceFile> file)
 {
-  if (!types_.initialize())
-    return false;
-
   Preprocessor pp(*this);
 
   fprintf(stderr, "-- Parsing --\n");

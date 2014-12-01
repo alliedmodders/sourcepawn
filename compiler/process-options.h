@@ -40,6 +40,9 @@ struct CompileOptions
   // Always require semicolons.
   bool RequireSemicolons;
 
+  // Skip name binding and type resolution.
+  bool SkipResolution;
+
   // Memory size for v1 pcode.
   uint32_t PragmaDynamic;
 
@@ -49,6 +52,7 @@ struct CompileOptions
   CompileOptions()
    : RequireNewdecls(false),
      RequireSemicolons(false),
+     SkipResolution(false),
      PragmaDynamic(0)
   {
   }

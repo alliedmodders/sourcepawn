@@ -110,6 +110,9 @@ class CompileContext
 
   // Option changing.
   bool ChangePragmaDynamic(ReportingContext &rc, int64_t value);
+  void SkipResolution() {
+    options_.SkipResolution = true;
+  }
 
   // Error reporting.
   ReportManager &reporting() {

@@ -54,6 +54,9 @@ NameResolver::OnLeaveParser()
   if (!cc_.phasePassed())
     return;
 
+  if (cc_.options().SkipResolution)
+    return;
+
   resolveUnknownTags();
   resolveUnboundNames();
 

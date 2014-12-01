@@ -301,7 +301,7 @@ class Analyzer : public PartialAstVisitor
   JsonList *toJson(const ParameterList *params) {
     JsonList *list = new (pool_) JsonList();
     for (size_t i = 0; i < params->length(); i++) {
-      VariableDeclaration *decl = params->at(i);
+      VarDecl *decl = params->at(i);
       JsonObject *obj = new (pool_) JsonObject();
 
       obj->add(atom_type_, toJson(decl->te()));
@@ -371,11 +371,14 @@ Run(CompileContext &cc, const char *path)
     {
       ReportingContext rc(cc, SourceLocation());
       Ref<SourceFile> file = cc.source().open(rc, path);
+      if (!file)
+        return nullptr;
       if (!pp.enter(file))
         return nullptr;
     }
 
-    Parser parser(cc, pp, nullptr);
+    NameResolver nr(cc);
+    Parser parser(cc, pp, nr);
 
     tree = parser.parse();
     if (!tree || !cc.phasePassed())
@@ -402,6 +405,8 @@ int main(int argc, char **argv)
     PoolScope scope(pool);
 
     CompileContext cc(pool, strings, reports, source);
+
+    cc.SkipResolution();
 
     JsonObject *obj = Run(cc, argv[1]);
     if (!obj) {

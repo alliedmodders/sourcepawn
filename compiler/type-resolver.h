@@ -33,7 +33,7 @@ using namespace ke;
 class TranslationUnit;
 
 class TypeResolver
- : public PartialAstVisitor,
+ : public StrictAstVisitor,
    public ConstantResolver
 {
  public:
