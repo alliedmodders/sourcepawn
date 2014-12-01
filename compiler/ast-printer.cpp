@@ -84,9 +84,9 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ NameProxy (%s)\n", name->name()->chars());
   }
-  void visitCallExpression(CallExpression *node) {
+  void visitCallExpr(CallExpr *node) {
     prefix();
-    fprintf(fp_, "[ CallExpression\n");
+    fprintf(fp_, "[ CallExpr\n");
     indent();
     node->callee()->accept(this);
     for (size_t i = 0; i < node->arguments()->length(); i++)
@@ -150,6 +150,14 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "[ UnsafeCastExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
     indent();
     node->expr()->accept(this);
+    unindent();
+  }
+  void visitCallNewExpr(CallNewExpr *node) {
+    prefix();
+    fprintf(fp_, "[ CallNewExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    indent();
+    for (size_t i = 0; i < node->arguments()->length(); i++)
+      node->arguments()->at(i)->accept(this);
     unindent();
   }
   void visitReturnStatement(ReturnStatement *node) {

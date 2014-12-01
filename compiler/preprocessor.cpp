@@ -506,7 +506,7 @@ Preprocessor::skipUntil(TokenKind kind, SkipFlags flags, TokenKind opener)
     if ((flags & SkipFlags::StopAtLine) == SkipFlags::StopAtLine) {
       if (peekTokenSameLine() == TOK_EOL)
         return;
-      if (peek() == TOK_SEMICOLON)
+      if (match(TOK_SEMICOLON))
         return;
     }
 

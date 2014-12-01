@@ -742,6 +742,19 @@ NameResolver::HandleUnsafeCast(const SourceLocation &pos, TypeSpecifier &spec, E
   return node;
 }
 
+CallNewExpr *
+NameResolver::HandleCallNewExpr(const SourceLocation &pos,
+                                TypeSpecifier &spec,
+                                ExpressionList *args)
+{
+  TypeExpr te = resolve(spec);
+  CallNewExpr *node = new (pool_) CallNewExpr(pos, te, args);
+
+  if (!te.resolved())
+    tr_.addPending(node);
+  return node;
+}
+
 // Indicate that a type specifier can't be resolved it, so whatever is
 // consuming it should add it to the resolver queue.
 TypeExpr

@@ -649,6 +649,45 @@ Parser::prefix()
       return expr;
     }
 
+    case TOK_NEW:
+    {
+      SourceLocation loc = scanner_.begin();
+
+      TypeSpecifier spec;
+      parse_new_type_expr(&spec, 0);
+
+      if (!expect(TOK_LPAREN))
+        return nullptr;
+      ExpressionList *args = callArgs();
+      if (!args)
+        return nullptr;
+
+      return delegate_.HandleCallNewExpr(loc, spec, args);
+    }
+
+    // Same as the label version, in unary().
+    case TOK_VIEW_AS:
+    {
+      SourceLocation pos = scanner_.begin();
+      if (!expect(TOK_LT))
+        return nullptr;
+
+      TypeSpecifier spec;
+      parse_new_type_expr(&spec, 0);
+
+      if (!expect(TOK_GT))
+        return nullptr;
+      if (!expect(TOK_LPAREN))
+        return nullptr;
+      Expression *expr = expression();
+      if (!expr)
+        return nullptr;
+      if (!expect(TOK_RPAREN))
+        return nullptr;
+
+      return delegate_.HandleUnsafeCast(pos, spec, expr);
+    }
+
     case TOK_NAME:
       return nameref();
 
@@ -666,13 +705,11 @@ Parser::prefix()
   }
 }
 
-Expression *
-Parser::call(Expression *callee)
+// Caller must lex '('.
+ExpressionList *
+Parser::callArgs()
 {
   ExpressionList *arguments = new (pool_) ExpressionList();
-
-  SourceLocation pos = scanner_.begin();
-  expect(TOK_LPAREN);
   
   if (!match(TOK_RPAREN)) {
     while (true) {
@@ -691,7 +728,7 @@ Parser::call(Expression *callee)
       return nullptr;
   }
 
-  return new (pool_) CallExpression(pos, callee, arguments);
+  return arguments;
 }
 
 Expression *
@@ -734,9 +771,16 @@ Parser::primary()
   for (;;) {
     switch (scanner_.peek()) {
       case TOK_LPAREN:
-        if ((expr = call(expr)) == nullptr)
+      {
+        expect(TOK_LPAREN);
+        SourceLocation loc = scanner_.begin();
+
+        ExpressionList *args = callArgs();
+        if (!args)
           return nullptr;
-        break;
+
+        return new (pool_) CallExpr(loc, expr, args);
+      }
 
       case TOK_DOT:
         if ((expr = dotfield(expr)) == nullptr)
@@ -810,6 +854,19 @@ Parser::unary()
     }
 
     default:
+      if (IsNewTypeToken(token)) {
+        scanner_.next();
+        
+        if (peek(TOK_COLON)) {
+          cc_.report(scanner_.begin(), rmsg::need_view_as_operator)
+            << (cc_.note(scanner_.begin(), rmsg::view_as_example) <<
+                scanner_.current_name());
+          return nullptr;
+        }
+
+        // This won't parse, but give the token back anyway.
+        scanner_.undo();
+      }
       break;
   }
 
@@ -1317,6 +1374,14 @@ Parser::parseMethod(Atom *layoutName)
     }
   }
 
+  if (destructor && name.atom) {
+    // Build a new name to include the ~.
+    AutoArray<char> buffer(new char[name.atom->length() + 2]);
+    buffer[0] = '~';
+    strcpy(&buffer[1], name.atom->chars());
+    name.atom = cc_.add(buffer);
+  }
+
   if (isBind) {
     // Handle the rest of the bind pattern.
     if (!expect(TOK_NAME))
@@ -1665,8 +1730,10 @@ Parser::return_()
   Expression *expr = nullptr;
   TokenKind next = scanner_.peekTokenSameLine();
   if (next != TOK_EOL && next != TOK_EOF && next != TOK_SEMICOLON) {
-    if ((expr = expression()) == nullptr)
+    if ((expr = expression()) == nullptr) {
+      scanner_.skipUntil(TOK_SEMICOLON, SkipFlags::StopAtLine);
       return nullptr;
+    }
   }
 
   requireTerminator();
@@ -1681,8 +1748,10 @@ Parser::expressionStatement()
 {
   // exprstmt ::= expr
   Expression *left = assignment();
-  if (!left)
+  if (!left) {
+    scanner_.skipUntil(TOK_SEMICOLON, SkipFlags::StopAtLine);
     return nullptr;
+  }
 
   return new (pool_) ExpressionStatement(left);
 }
@@ -1694,10 +1763,10 @@ Parser::statements()
   StatementList *list = new (pool_) StatementList();
   while (!match(TOK_RBRACE)) {
     // Call statement() directly, so we don't set allowDeclaratiosn to false.
-    Statement *stmt = statement();
-    if (!stmt)
-      return nullptr;
-    list->append(stmt);
+    if (Statement *stmt = statement())
+      list->append(stmt);
+
+    // Note: we keep looping, since statement() will always consume a token.
   }
   return list;
 }

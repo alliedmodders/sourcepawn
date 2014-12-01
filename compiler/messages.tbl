@@ -75,6 +75,8 @@ RMSG(no_chained_relops,             syntax,            "chained relational opera
 RMSG(no_enum_structs,               syntax,            "type-sized enums ('enum structs') are not supported")
 RMSG(no_single_line_functions,      syntax,            "function bodies must have braces")
 RMSG(expected_name_and_type,        syntax,            "function signature is missing either a name or a type")
+RMSG(need_view_as_operator,         syntax,            "to cast with a builtin type, use the new view_as<> operator")
+RMSG(view_as_example,               note,              "example: view_as<%0>(value)")
 
 // Name binding errors.
 RMSG(redeclared_name,               syntax,            "name '%0' was redeclared")

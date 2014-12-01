@@ -39,7 +39,7 @@ class LayoutScope;
 class CompileContext;
 
 #define ASTKINDS(_)       \
-  _(VarDecl)  \
+  _(VarDecl)              \
   _(ForStatement)         \
   _(ReturnStatement)      \
   _(IntegerLiteral)       \
@@ -52,7 +52,8 @@ class CompileContext;
   _(NameProxy)            \
   _(ExpressionStatement)  \
   _(FunctionStatement)    \
-  _(CallExpression)       \
+  _(CallNewExpr)          \
+  _(CallExpr)             \
   _(FieldExpression)      \
   _(IfStatement)          \
   _(IndexExpression)      \
@@ -69,7 +70,7 @@ class CompileContext;
   _(TokenLiteral)         \
   _(SwitchStatement)      \
   _(ArrayLiteral)         \
-  _(TypedefDecl)     \
+  _(TypedefDecl)          \
   _(StructInitializer)    \
   _(RecordDecl)           \
   _(MethodmapDecl)        \
@@ -676,17 +677,44 @@ class IndexExpression : public Expression
   Expression *right_;
 };
 
-class CallExpression : public Expression
+class CallNewExpr : public Expression
 {
  public:
-  CallExpression(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
+  CallNewExpr (const SourceLocation &pos, const TypeExpr &te, ExpressionList *arguments)
+    : Expression(pos),
+      te_(te),
+      arguments_(arguments)
+  {
+  }
+
+  DECLARE_NODE(CallNewExpr);
+
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
+  }
+  ExpressionList *arguments() const {
+    return arguments_;
+  }
+
+ private:
+  TypeExpr te_;
+  ExpressionList *arguments_;
+};
+
+class CallExpr : public Expression
+{
+ public:
+  CallExpr(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
     : Expression(pos),
       callee_(callee),
       arguments_(arguments)
   {
   }
 
-  DECLARE_NODE(CallExpression);
+  DECLARE_NODE(CallExpr);
 
   Expression *callee() const {
     return callee_;
@@ -1597,7 +1625,7 @@ class ParseTree : public PoolObject
 //  void visitNameProxy(NameProxy *node) override;
 //  void visitExpressionStatement(ExpressionStatement *node) override;
 //  void visitFunctionStatement(FunctionStatement *node) override;
-//  void visitCallExpression(CallExpression *node) override;
+//  void visitCallExpr(CallExpr *node) override;
 //  void visitFieldExpression(FieldExpression *node) override;
 //  void visitIfStatement(IfStatement *node) override;
 //  void visitIndexExpression(IndexExpression *node) override;

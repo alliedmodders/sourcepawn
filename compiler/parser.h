@@ -98,13 +98,14 @@ class Parser
   Atom *maybeName();
   Atom *expectName();
 
+  ExpressionList *callArgs();
+
   Expression *parseCompoundLiteral();
   Expression *parseStructInitializer(const SourceLocation &pos);
   Expression *parseSizeof();
 
   Expression *primitive();
   Expression *dotfield(Expression *base);
-  Expression *call(Expression *callee);
   Expression *index(Expression *left);
   Expression *prefix();
   Expression *primary();

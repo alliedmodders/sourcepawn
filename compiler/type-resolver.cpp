@@ -328,6 +328,12 @@ TypeResolver::visitUnsafeCastExpr(UnsafeCastExpr *expr)
 }
 
 void
+TypeResolver::visitCallNewExpr(CallNewExpr *expr)
+{
+  resolveTypeIfNeeded(expr->te());
+}
+
+void
 TypeResolver::visitEnumStatement(EnumStatement *node)
 {
   // This should only happen if we resolved the enum before visiting it in

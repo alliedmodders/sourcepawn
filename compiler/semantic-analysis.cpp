@@ -717,7 +717,7 @@ SemanticAnalysis::visitExpressionStatement(ExpressionStatement *stmt)
 }
 
 void
-SemanticAnalysis::visitCallExpression(CallExpression *node)
+SemanticAnalysis::visitCallExpr(CallExpr *node)
 {
 #if 0
   HIR *callee = rvalue(node->callee());

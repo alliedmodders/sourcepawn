@@ -61,7 +61,7 @@ class SemanticAnalysis : public AstVisitor
   void visitReturnStatement(ReturnStatement *node);
   void visitNameProxy(NameProxy *name);
   void visitExpressionStatement(ExpressionStatement *node);
-  void visitCallExpression(CallExpression *node);
+  void visitCallExpr(CallExpr *node);
   void visitBinaryExpression(BinaryExpression *node);
   void visitAssignment(Assignment *node);
   void visitIfStatement(IfStatement *node);

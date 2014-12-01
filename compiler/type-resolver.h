@@ -54,6 +54,7 @@ class TypeResolver
   void visitFunctionStatement(FunctionStatement *node) override;
   void visitTypedefDecl(TypedefDecl *node) override;
   void visitUnsafeCastExpr(UnsafeCastExpr *expr) override;
+  void visitCallNewExpr(CallNewExpr *expr) override;
 
   void addPending(AstNode *node) {
     work_queue_.append(node);

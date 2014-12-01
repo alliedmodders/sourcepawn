@@ -1,0 +1,2 @@
+3:10: syntax error: to cast with a builtin type, use the new view_as<> operator
+3:10: note: example: view_as<float>(value)

@@ -83,6 +83,7 @@ namespace sp {
   _(TRUE,               "true")                       \
   _(TYPEDEF,            "typedef")                    \
   _(UNION,              "union")                      \
+  _(VIEW_AS,            "view_as")                    \
   _(VOID,               "void")                       \
   _(WHILE,              "while")                      \
   _(NULLABLE,           "__nullable__")               \
@@ -207,6 +208,7 @@ enum TokenKind
   _(TYPEDEF)                                          \
   _(UNION)                                            \
   _(WHILE)                                            \
+  _(VIEW_AS)                                          \
   _(VOID)                                             \
   _(M_DEFINE)                                         \
   _(M_DEPRECATE)                                      \

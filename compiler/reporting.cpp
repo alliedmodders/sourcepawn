@@ -127,8 +127,11 @@ ReportManager::PrintMessages()
     return;
   }
 
-  for (size_t i = 0; i < messages_.length(); i++)
+  for (size_t i = 0; i < messages_.length(); i++) {
     printMessage(messages_[i]);
+    if (i != messages_.length() - 1)
+      fprintf(stderr, "\n");
+  }
 
   if (fatal_error_ != rmsg::none) {
     FullSourceRef ref = source_->decode(fatal_loc_);
@@ -345,8 +348,6 @@ ReportManager::printMessage(Ref<TMessage> message)
 
   for (size_t i = 0; i < message->num_notes(); i++)
     printMessage(message->note(i));
-
-  fprintf(stderr, "\n");
 }
 
 AString

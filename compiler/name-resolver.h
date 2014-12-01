@@ -65,6 +65,9 @@ class NameResolver
   UnsafeCastExpr *HandleUnsafeCast(const SourceLocation &pos,
                                    TypeSpecifier &spec,
                                    Expression *expr);
+  CallNewExpr *HandleCallNewExpr(const SourceLocation &pos,
+                                 TypeSpecifier &spec,
+                                 ExpressionList *args);
 
   FunctionSignature *HandleFunctionSignature(
     TypeSpecifier &spec,
