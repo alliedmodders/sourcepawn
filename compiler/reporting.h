@@ -36,7 +36,8 @@ enum class rmsg_type
   system,
   note,
   syntax,
-  type
+  type,
+  warning
 };
 
 namespace rmsg
@@ -113,6 +114,7 @@ class TMessage : public ke::Refcounted<TMessage>
   void addArg(AString &&str) {
     addArg(new StringArg(str));
   }
+  void addArg(size_t value);
   void addArg(Type *type);
 
   void addNote(Ref<TMessage> note) {
@@ -151,6 +153,9 @@ class MessageBuilder
   explicit MessageBuilder(Ref<TMessage> report)
    : report_(report)
   {}
+  MessageBuilder(const MessageBuilder &other)
+   : report_(other.report_)
+  {}
   MessageBuilder(MessageBuilder &&other)
    : report_(other.report_.forget())
   {}
@@ -165,9 +170,15 @@ class MessageBuilder
   MessageBuilder &operator <<(const MessageBuilder &other) {
     if (!report_)
       return *this;
+    if (!other.report_)
+      return *this;
     assert(report_ != other.report_);
     report_->addNote(other.report_);
     return *this;
+  }
+
+  PassRef<TMessage> get() const {
+    return report_;
   }
 
  private:
@@ -211,6 +222,8 @@ class ReportManager
 
   MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id);
   MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id);
+  MessageBuilder build(const SourceLocation &loc, rmsg::Id msg_id);
+  void report(const Ref<TMessage> &msg);
 
  private:
   void printMessage(Ref<TMessage> message);
@@ -245,6 +258,12 @@ struct ReportingContext
   }
   MessageBuilder report(rmsg::Id msg) {
     return rr_.report(loc_, msg);
+  }
+  MessageBuilder build(rmsg::Id msg) {
+    return rr_.build(loc_, msg);
+  }
+  MessageBuilder note(rmsg::Id msg) {
+    return rr_.note(loc_, msg);
   }
 
  private:

@@ -40,18 +40,24 @@ class TypeManager
   Type *getVoid() {
     return voidType_;
   }
+  Type *getImplicitVoid() {
+    return implicitVoidType_;
+  }
   Type *getUnchecked() {
     return uncheckedType_;
   }
   Type *getMetaFunction() {
     return metaFunctionType_;
   }
+  Type *getNullType() const {
+    return nullType_;
+  }
   ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);
   EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
-  UnionType *newUnion(Atom *name);
-  StructType *newStruct(Atom *name);
+  TypesetType *newTypeset(TypesetDecl *decl);
+  StructType *newStruct(RecordDecl *decl);
   TypedefType *newTypedef(Atom *name);
 
   Type *typeForLabelAtom(Atom *atom);
@@ -59,8 +65,10 @@ class TypeManager
  private:
   StringPool &strings_;
   Type *voidType_;
+  Type *implicitVoidType_;
   Type *uncheckedType_;
   Type *metaFunctionType_;
+  Type *nullType_;
   Type *primitiveTypes_[kTotalPrimitiveTypes];
   ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
 

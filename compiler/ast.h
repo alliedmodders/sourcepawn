@@ -27,6 +27,7 @@
 #include "string-pool.h"
 #include "tokens.h"
 #include "type-specifier.h"
+#include "expr-ops.h"
 #include <limits.h>
 
 namespace sp {
@@ -72,6 +73,7 @@ class CompileContext;
   _(ArrayLiteral)         \
   _(TypedefDecl)          \
   _(StructInitializer)    \
+  _(TypesetDecl)          \
   _(RecordDecl)           \
   _(MethodmapDecl)        \
   _(MethodDecl)           \
@@ -173,14 +175,60 @@ class Expression : public AstNode
 {
  public:
   Expression(const SourceLocation &pos)
-    : AstNode(pos)
+   : AstNode(pos),
+     side_effects_(false),
+     valueKind_(VK::none)
   {
   }
+
+  bool hasSideEffects() const {
+    return side_effects_;
+  }
+  void setHasSideEffects() {
+    side_effects_ = true;
+  }
+
+  Type *type() {
+    if (op_)
+      return op_->type();
+    return type_;
+  }
+  VK vk() const {
+    assert(valueKind_ != VK::none);
+    if (op_)
+      return op_->vk();
+    return valueKind_;
+  }
+  void setBaseResult(Type *type, VK valueKind) {
+    assert(!type_ && !op_);
+    type_ = type;
+    valueKind_ = valueKind;
+  }
+  ExprOp *op() const {
+    return op_;
+  }
+  void setOp(ExprOp *op) {
+    op_ = op;
+  }
+
+ private:
+  Type *type_;
+  ExprOp *op_;
+  bool side_effects_ : 1;
+  VK valueKind_ : 2;
 };
 
 typedef PoolList<Statement *> StatementList;
 typedef PoolList<Expression *> ExpressionList;
 typedef PoolList<VarDecl *> ParameterList;
+
+namespace DeclAttrs
+{
+  static const uint32_t None   = 0x0;
+  static const uint32_t Static = 0x1;
+  static const uint32_t Public = 0x2;
+  static const uint32_t Stock  = 0x4;
+};
 
 class FunctionSignature : public PoolObject
 {
@@ -189,11 +237,11 @@ class FunctionSignature : public PoolObject
   {}
 
   FunctionSignature(const TypeExpr &returnType, ParameterList *parameters)
-    : returnType_(returnType),
-      parameters_(parameters),
-      destructor_(false),
-      native_(false),
-      resolved_(false)
+   : returnType_(returnType),
+     parameters_(parameters),
+     destructor_(false),
+     native_(false),
+     resolved_(false)
   {
   }
 
@@ -237,8 +285,8 @@ class VarDecl : public Statement
 {
  public:
   VarDecl(const NameToken &name,
-                      const TypeExpr &te,
-                      Expression *initialization)
+          const TypeExpr &te,
+          Expression *initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
@@ -892,7 +940,7 @@ class ExpressionStatement : public Statement
 
   DECLARE_NODE(ExpressionStatement);
 
-  Expression *expression() const {
+  Expression *expr() const {
     return expression_;
   }
 };
@@ -993,10 +1041,11 @@ class FunctionStatement :
   public FunctionNode
 {
  public:
-  FunctionStatement(const NameToken &name, TokenKind kind)
+  FunctionStatement(const NameToken &name, TokenKind kind, uint32_t attrs)
    : Statement(name.start),
      FunctionNode(kind),
      name_(name),
+     attrs_(attrs),
      sym_(nullptr)
   {
   }
@@ -1013,9 +1062,29 @@ class FunctionStatement :
   FunctionSymbol *sym() const {
     return sym_;
   }
+  uint32_t attrs() const {
+    return attrs_;
+  }
+
+  const char *decoration() const {
+    if (token() == TOK_FORWARD)
+      return "forward";
+    if (token() == TOK_NATIVE)
+      return "native";
+    if (attrs_ & DeclAttrs::Public)
+      return "public";
+    if (attrs_ & DeclAttrs::Stock)
+      return "stock";
+    if (attrs_ & DeclAttrs::Static)
+      return "static";
+    if (attrs_ & (DeclAttrs::Static|DeclAttrs::Stock))
+      return "static stock";
+    return "function";
+  }
 
  private:
   NameToken name_;
+  uint32_t attrs_;
   FunctionSymbol *sym_;
 };
 
@@ -1431,6 +1500,73 @@ class PropertyDecl : public LayoutDecl
   PropertySymbol *sym_;
 };
 
+class TypesetDecl : public Statement
+{
+ public:
+  TypesetDecl(const SourceLocation &loc, const NameToken &name)
+   : Statement(loc),
+     name_(name),
+     types_(nullptr),
+     sym_(nullptr),
+     can_eagerly_resolve_(true),
+     is_resolved_(false)
+  {
+  }
+
+  DECLARE_NODE(TypesetDecl);
+
+  struct Entry {
+    SourceLocation loc;
+    TypeExpr te;
+
+    Entry()
+    {}
+    Entry(const SourceLocation &loc, const TypeExpr &te)
+     : loc(loc), te(te)
+    {}
+  };
+  typedef FixedPoolList<Entry> Entries;
+
+  Atom *name() const {
+    return name_.atom;
+  }
+
+  void setTypes(Entries *types) {
+    types_ = types;
+  }
+  Entries *types() const {
+    return types_;
+  }
+
+  void setSymbol(TypeSymbol *sym) {
+    sym_ = sym;
+  }
+  TypeSymbol *sym() const {
+    return sym_;
+  }
+
+  void setNeedsFullTypeResolution() {
+    can_eagerly_resolve_ = false;
+  }
+  bool needsFullTypeResolution() const {
+    return !can_eagerly_resolve_;
+  }
+  void setResolved() {
+    is_resolved_ = true;
+  }
+  bool isResolved() const {
+    return is_resolved_;
+  }
+
+ private:
+  NameToken name_;
+  TokenKind token_;
+  Entries *types_;
+  TypeSymbol *sym_;
+  bool can_eagerly_resolve_ : 1;
+  bool is_resolved_ : 1;
+};
+
 typedef PoolList<LayoutDecl *> LayoutDecls;
 
 class RecordDecl : public Statement
@@ -1495,6 +1631,7 @@ class MethodmapDecl : public Statement
      body_(nullptr),
      sym_(nullptr),
      scope_(nullptr),
+     extends_(nullptr),
      nullable_(false)
   {
   }
@@ -1521,6 +1658,13 @@ class MethodmapDecl : public Statement
     return body_;
   }
 
+  EnumType *extends() const {
+    return extends_;
+  }
+  void setExtends(EnumType *extends) {
+    extends_ = extends;
+  }
+
   void setSymbol(TypeSymbol *sym) {
     sym_ = sym;
   }
@@ -1542,6 +1686,7 @@ class MethodmapDecl : public Statement
   LayoutDecls *body_;
   TypeSymbol *sym_;
   LayoutScope *scope_;
+  EnumType *extends_;
   bool nullable_;
 };
 

@@ -406,8 +406,7 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
     return;
 
   // Create a methodmap now so we don't re-enter.
-  Methodmap *mm = new (pool_) Methodmap();
-  type->setMethodmap(mm);
+  type->setMethodmap(methodmap);
 
   // Our parent must be resolved first.
   EnumType *parent = nullptr;
@@ -415,15 +414,15 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
     parent = resolveMethodmapParentType(methodmap->parent());
 
   // Check that we do not appear in the parent chain.
-  for (EnumType *cursor = parent; cursor; cursor = cursor->methodmap()->parent()) {
-    if (cursor->methodmap() == mm) {
+  for (EnumType *cursor = parent; cursor; cursor = cursor->methodmap()->extends()) {
+    if (cursor->methodmap() == methodmap) {
       cc_.report(methodmap->parent()->loc(), rmsg::circular_methodmap)
         << methodmap->name();
       parent = nullptr;
       break;
     }
   }
-  mm->setParent(parent);
+  methodmap->setExtends(parent);
 }
 
 void
@@ -437,10 +436,7 @@ void
 TypeResolver::visitFieldDecl(FieldDecl *decl)
 {
   Type *type = resolveTypeIfNeeded(decl->te());
-
-  // Note that fields can be anonymous if in a block union.
-  if (decl->sym() && !decl->sym()->type())
-    decl->sym()->setType(type);
+  decl->sym()->setType(type);
 }
 
 void
@@ -504,6 +500,56 @@ TypeResolver::visitTypedefDecl(TypedefDecl *node)
   }
 
   type->resolve(actual);
+}
+
+void
+TypeResolver::visitTypesetDecl(TypesetDecl *decl)
+{
+  if (!decl->isResolved())
+    return;
+
+  for (size_t i = 0; i < decl->types()->length(); i++) {
+    TypeExpr &te = decl->types()->at(i).te;
+    resolveTypeIfNeeded(te);
+  }
+
+  verifyTypeset(decl);
+}
+
+void
+TypeResolver::verifyTypeset(TypesetDecl *decl)
+{
+  // Verify that types aren't duplicated. This is an O(n^2) algorithm - we
+  // assume N will be very small.
+  TypesetDecl::Entries *types = decl->types();
+  for (size_t i = 0; i < types->length(); i++) {
+    TypesetDecl::Entry &entry = types->at(i);
+    Type *current = entry.te.resolved();
+
+    if (current->isConst() && current->hasMeaninglessConstCoercion()) {
+      cc_.report(entry.loc, rmsg::typeset_has_useless_const)
+        << current;
+      continue;
+    }
+    if (!current->isFunction()) {
+      cc_.report(entry.loc, rmsg::typeset_unsupported_type);
+      continue;
+    }
+
+    for (size_t j = 0; j < i; j++) {
+      TypesetDecl::Entry &prevEntry = types->at(j);
+      Type *prev = prevEntry.te.resolved();
+
+      if (AreTypesEquivalent(prev, current, Qualifiers::None)) {
+        cc_.report(entry.loc, rmsg::typeset_ambiguous_type)
+          << current << decl->name()
+          << (cc_.note(prevEntry.loc, rmsg::previous_location));
+        break;
+      }
+    }
+  }
+
+  decl->setResolved();
 }
 
 // Returns true if it could be resolved to a constant integer; false
@@ -691,23 +737,12 @@ TypeResolver::resolveType(TypeExpr &te, const Vector<int> *arrayInitData)
   if (spec->rank())
     type = resolveArrayComponentTypes(spec, type, arrayInitData);
 
-  if (spec->isByRef()) {
-    // We refuse to allow by-ref arrays; arrays are always by-ref. We check
-    // this once here, and once again parsing parameters in case we had
-    // placeholders.
-    //
-    // Note: We also forbid this for objects (is ref basically deprecated?
-    // I guess so).
-    if (type->canUseInReferenceType()) {
-      type = cc_.types()->newReference(type);
-    } else {
-      cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
-        << type;
-    }
-  }
+  if (type->isConst())
+    type = applyConstQualifier(spec, type);
 
-  if (spec->isConst())
-    type = cc_.types()->newQualified(type, Qualifiers::Const);
+  // Build references after we've determined const-ness.
+  if (spec->isByRef())
+    type = applyRefType(spec, type);
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -741,6 +776,70 @@ TypeResolver::resolveBaseType(TypeSpecifier *spec)
       assert(false);
       return nullptr;
   }
+}
+
+bool
+TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
+{
+  if (type->isVoid()) {
+    cc_.report(spec->arrayLoc(), rmsg::array_of_void);
+    return false;
+  }
+  if (spec->isConst() && !type->isArray()) {
+    cc_.report(spec->constLoc(), rmsg::cannot_have_array_of_const);
+    return false;
+  }
+  return true;
+}
+
+Type *
+TypeResolver::applyRefType(TypeSpecifier *spec, Type *type)
+{
+  if (!type->canUseInReferenceType()) {
+    cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
+      << type;
+    return type;
+  }
+
+  return cc_.types()->newReference(type);
+}
+
+Type *
+TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type)
+{
+  // Pawn has odd const semantics. C/C++ will decay (const char[][]) to
+  // (const char **), or ptr(ptr(const(char))). Pawn treats "const" not as part
+  // of the type, but as part of the overall mutability of the variable.
+  //
+  // In C++, it is illegal to cast char** to const char**, because this could
+  // discard const qualifiers. From comp.lang.c FAQ 11.10:
+  //   
+  //   1: const char c = 'x';
+  //   2: char *p1;
+  //   3: const char **p2 = &p1;
+  //   4: *p2 = &c;
+  //   5: *p1 = 'd';
+  //
+  // If line 3 were legal, then p1 would type-check but constitute an illegal
+  // assignment. Pawn does not have this problem - it does not decay arrays
+  // into pointers. Because of this we are afforded the ability to play fast
+  // and loose with const and preserve compatibility with SP1.
+  //
+  // So, we define "const" as the following: 
+  //   (a) For arrays, it means that the array contents cannot be mutated.
+  //   (b) For non-arrays, it means that an lvalue cannot be assigned.
+  //   (c) The lvalue computed by indexing a const array is const.
+  //   (d) It is illegal to have an array of a const type that is not a const
+  //       array.
+  assert(spec->isConst());
+
+  if (!type->canUseInConstType()) {
+    cc_.report(spec->constLoc(), rmsg::type_cannot_be_const)
+      << type;
+    return type;
+  }
+
+  return cc_.types()->newQualified(type, Qualifiers::Const);
 }
 
 Type *
@@ -780,8 +879,7 @@ TypeResolver::resolveNameToType(NameProxy *proxy)
 Type *
 TypeResolver::resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const Vector<int> *arrayInitData)
 {
-  if (type->isVoid())
-    cc_.report(spec->arrayLoc(), rmsg::array_of_void);
+  checkArrayInnerType(spec, type);
 
   size_t rank = spec->rank() - 1;
   do {

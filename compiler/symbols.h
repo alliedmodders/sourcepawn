@@ -231,7 +231,8 @@ class TypeSymbol : public Symbol
   Type *type_;
 };
 
-typedef PoolList<Symbol *> SymbolList;
+class FunctionStatement;
+typedef PoolList<FunctionStatement *> FuncStmtList;
 
 class FunctionSymbol : public Symbol
 {
@@ -253,16 +254,14 @@ class FunctionSymbol : public Symbol
     return &address_;
   }
 
-  void setShadows(SymbolList *shadows) {
-    shadows_ = shadows;
-  }
-  SymbolList *shadows() const {
+  void addShadow(FunctionStatement *stmt);
+  FuncStmtList *shadows() const {
     return shadows_;
   }
 
  private:
   Label address_;
-  SymbolList *shadows_;
+  FuncStmtList *shadows_;
 };
 
 class ConstantSymbol : public Symbol

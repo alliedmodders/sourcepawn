@@ -43,6 +43,9 @@ struct CompileOptions
   // Skip name binding and type resolution.
   bool SkipResolution;
 
+  // Skip semantic analysis (type checking).
+  bool SkipSemanticAnalysis;
+
   // Memory size for v1 pcode.
   uint32_t PragmaDynamic;
 
@@ -53,6 +56,7 @@ struct CompileOptions
    : RequireNewdecls(false),
      RequireSemicolons(false),
      SkipResolution(false),
+     SkipSemanticAnalysis(false),
      PragmaDynamic(0)
   {
   }

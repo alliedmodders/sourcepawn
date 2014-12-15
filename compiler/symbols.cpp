@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "symbols.h"
 #include "scopes.h"
+#include "compile-context.h"
 
 using namespace ke;
 using namespace sp;
@@ -49,4 +50,12 @@ bool
 VariableSymbol::isArgument() const
 {
   return scope()->isFunction();
+}
+
+void
+FunctionSymbol::addShadow(FunctionStatement *stmt)
+{
+  if (!shadows_)
+    shadows_ = new (POOL()) FuncStmtList();
+  shadows_->append(stmt);
 }

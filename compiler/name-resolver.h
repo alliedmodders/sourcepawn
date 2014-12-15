@@ -68,6 +68,8 @@ class NameResolver
   CallNewExpr *HandleCallNewExpr(const SourceLocation &pos,
                                  TypeSpecifier &spec,
                                  ExpressionList *args);
+  void EnterTypeIntoTypeset(TypesetDecl *decl, Vector<TypesetDecl::Entry> &types, TypeSpecifier &spec);
+  void FinishTypeset(TypesetDecl *decl, const Vector<TypesetDecl::Entry> &types);
 
   FunctionSignature *HandleFunctionSignature(
     TypeSpecifier &spec,

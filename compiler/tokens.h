@@ -82,6 +82,7 @@ namespace sp {
   _(THIS,               "this")                       \
   _(TRUE,               "true")                       \
   _(TYPEDEF,            "typedef")                    \
+  _(TYPESET,            "typeset")                    \
   _(UNION,              "union")                      \
   _(VIEW_AS,            "view_as")                    \
   _(VOID,               "void")                       \

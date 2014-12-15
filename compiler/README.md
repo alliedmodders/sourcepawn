@@ -28,7 +28,7 @@ SourcePawn 2 currently has the following language changes over SourcePawn 1:
   - `#pragma dynamic` is allowed, although it may be ignored.
  - `decl` is now the same as `new`. Variables are always initialized to 0.
  - `functag` is removed in favor of `typedef`.
- - `funcenum` is removed in favor of `union`.
+ - `funcenum` is removed in favor of `typeset`.
  - The operator overloading syntax for tags no longer exists.
  - All name binding now supports forward-binding.
 

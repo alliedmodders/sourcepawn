@@ -1,6 +1,6 @@
 // vim: set ts=2 sw=2 tw=99 et:
 // 
-// Copyright (C) 2012 David Anderson
+// Copyright (C) 2012-2014 David Anderson
 // 
 // This file is part of SourcePawn.
 // 
@@ -110,7 +110,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ ExpressionStatement\n");
     indent();
-    node->expression()->accept(this);
+    node->expr()->accept(this);
     unindent();
   }
   void visitAssignment(Assignment *node) {
@@ -402,6 +402,17 @@ class AstPrinter : public AstVisitor
     unindent();
   }
 
+  void visitTypesetDecl(TypesetDecl *node) override {
+    prefix();
+    fprintf(fp_, "[ TypesetDecl %s\n", node->name()->chars());
+    indent();
+    for (size_t i = 0; i < node->types()->length(); i++) {
+      prefix();
+      dump(node->types()->at(i).te, nullptr);
+      fprintf(fp_, "\n");
+    }
+    unindent();
+  }
   void visitRecordDecl(RecordDecl *node) override {
     prefix();
     fprintf(fp_, "[ LayoutStatement %s %s\n",

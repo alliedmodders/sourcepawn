@@ -42,14 +42,6 @@ namespace DeclFlags
   static const uint32_t NamedMask = MaybeFunction | Argument | Variable | Field | MaybeNamed;
 };
 
-namespace DeclAttrs
-{
-  static const uint32_t None   = 0x0;
-  static const uint32_t Static = 0x1;
-  static const uint32_t Public = 0x2;
-  static const uint32_t Stock  = 0x4;
-};
-
 struct Declaration
 {
   NameToken name;
@@ -153,6 +145,7 @@ class Parser
   Statement *return_();
   Statement *typedef_();
   Statement *struct_(TokenKind tok);
+  Statement *typeset_();
   Statement *global(TokenKind tok);
 
  private:

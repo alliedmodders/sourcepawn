@@ -51,8 +51,16 @@ TypeManager::initialize()
   metaFunctionType_ = Type::NewMetaFunction();
 
   primitiveTypes_[size_t(PrimitiveType::ImplicitInt)] = Type::NewPrimitive(PrimitiveType::ImplicitInt);
+  primitiveTypes_[size_t(PrimitiveType::Int8)] = Type::NewPrimitive(PrimitiveType::Int8);
+  primitiveTypes_[size_t(PrimitiveType::Uint8)] = Type::NewPrimitive(PrimitiveType::Uint8);
+  primitiveTypes_[size_t(PrimitiveType::Int16)] = Type::NewPrimitive(PrimitiveType::Int16);
+  primitiveTypes_[size_t(PrimitiveType::Uint16)] = Type::NewPrimitive(PrimitiveType::Uint16);
   primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32);
+  primitiveTypes_[size_t(PrimitiveType::Uint32)] = Type::NewPrimitive(PrimitiveType::Uint32);
+  primitiveTypes_[size_t(PrimitiveType::Int64)] = Type::NewPrimitive(PrimitiveType::Int64);
+  primitiveTypes_[size_t(PrimitiveType::Uint64)] = Type::NewPrimitive(PrimitiveType::Uint64);
   primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
+  primitiveTypes_[size_t(PrimitiveType::Double)] = Type::NewPrimitive(PrimitiveType::Double);
   primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);
   primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool);
 
@@ -125,16 +133,16 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
   return Type::NewQualified(type, qualifiers);
 }
 
-UnionType *
-TypeManager::newUnion(Atom *name)
+TypesetType *
+TypeManager::newTypeset(TypesetDecl *decl)
 {
-  return UnionType::New(name);
+  return TypesetType::New(decl);
 }
 
 StructType *
-TypeManager::newStruct(Atom *name)
+TypeManager::newStruct(RecordDecl *decl)
 {
-  return StructType::New(name);
+  return StructType::New(decl);
 }
 
 TypedefType *

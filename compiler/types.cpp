@@ -28,8 +28,19 @@ Type sp::UnresolvableType(Type::Kind::Unresolvable);
 Type *
 Type::NewVoid()
 {
-  Type *type = new (POOL()) Type(Kind::Void);
-  return type;
+  return new (POOL()) Type(Kind::Void);
+}
+
+Type *
+Type::NewImplicitVoid()
+{
+  return new (POOL()) Type(Kind::ImplicitVoid);
+}
+
+Type *
+Type::NewNullType()
+{
+  return new (POOL()) Type(Kind::NullType);
 }
 
 Type *
@@ -149,16 +160,40 @@ FunctionType::New(FunctionSignature *sig)
   return new (POOL()) FunctionType(sig);
 }
 
-UnionType *
-UnionType::New(Atom *name)
+TypesetType *
+TypesetType::New(TypesetDecl *decl)
 {
-  return new (POOL()) UnionType(name);
+  return new (POOL()) TypesetType(decl);
+}
+
+Atom *
+TypesetType::name() const
+{
+  return decl_->name();
+}
+
+size_t
+TypesetType::numTypes() const
+{
+  return decl_->types()->length();
+}
+
+Type *
+TypesetType::typeAt(size_t i) const
+{
+  return decl_->types()->at(i).te.resolved();
+}
+
+Atom *
+RecordType::name() const
+{
+  return decl_->name();
 }
 
 StructType *
-StructType::New(Atom *name)
+StructType::New(RecordDecl *decl)
 {
-  return new (POOL()) StructType(name);
+  return new (POOL()) StructType(decl);
 }
 
 const char *
@@ -191,8 +226,8 @@ GetBaseTypeName(Type *type)
     return "any";
   if (type->isVoid())
     return "void";
-  if (type->isUnion())
-    return type->toUnion()->name()->chars();
+  if (type->isTypeset())
+    return type->toTypeset()->name()->chars();
   if (type->isEnum())
     return type->toEnum()->name()->chars();
   if (type->isRecord())
@@ -331,20 +366,20 @@ sp::BuildTypeName(Type *aType, Atom *name)
 
     AutoString builder = BuildTypeName(innermost);
 
-    bool hasFixedSizes = false;
+    bool hasFixedLengths = false;
     AutoString brackets;
     for (size_t i = 0; i < stack.length(); i++) {
-      if (!stack[i]->hasFixedSize()) {
+      if (!stack[i]->hasFixedLength()) {
         brackets = brackets + "[]";
         continue;
       }
 
-      hasFixedSizes = true;
-      brackets = brackets + "[" + stack[i]->fixedSize() + "]";
+      hasFixedLengths = true;
+      brackets = brackets + "[" + stack[i]->fixedLength() + "]";
     }
 
     if (name) {
-      if (hasFixedSizes)
+      if (hasFixedLengths)
         builder = builder + " " + name->chars() + brackets;
       else
         builder = builder + brackets + " " + name->chars();
@@ -424,10 +459,140 @@ sp::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
     type = type->contained()->toArray();
   }
 
-  if (!type->hasFixedSize()) {
+  if (!type->hasFixedLength()) {
     cc.report(rmsg::sizeof_indeterminate);
     return 0;
   }
 
-  return type->fixedSize();
+  return type->fixedLength();
+}
+
+bool
+sp::AreFunctionTypesEqual(FunctionType *a, FunctionType *b)
+{
+  FunctionSignature *af = a->signature();
+  FunctionSignature *bf = b->signature();
+  if (!AreTypesEquivalent(af->returnType().resolved(),
+                          bf->returnType().resolved(),
+                          Qualifiers::None))
+  {
+    return false;
+  }
+
+  ParameterList *ap = af->parameters();
+  ParameterList *bp = bf->parameters();
+  if (ap->length() != bp->length())
+    return false;
+
+  for (size_t i = 0; i < ap->length(); i++) {
+    VarDecl *arga = ap->at(i);
+    VarDecl *argb = bp->at(i);
+    if (!AreTypesEquivalent(arga->te().resolved(),
+                            argb->te().resolved(),
+                            Qualifiers::None))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Since const is transitive, we require it to be threaded through type
+// equivalence tests.
+bool
+sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
+{
+  Qualifiers qa = (a->qualifiers() | context);
+  Qualifiers qb = (b->qualifiers() | context);
+  if (qa != qb)
+    return false;
+
+  a = a->canonical();
+  b = b->canonical();
+  if (a == b)
+    return false;
+
+  switch (a->canonicalKind()) {
+    case Type::Kind::Primitive:
+      if (!b->isPrimitive())
+        return false;
+      if ((a->primitive() == PrimitiveType::ImplicitInt &&
+           b->primitive() == PrimitiveType::Int32) ||
+          (a->primitive() == PrimitiveType::Int32 &&
+           b->primitive() == PrimitiveType::ImplicitInt))
+      {
+        return true;
+      }
+      // a == b covered earlier.
+      return false;
+    case Type::Kind::Reference:
+    {
+      if (!b->isReference())
+        return false;
+
+      ReferenceType *ar = a->toReference();
+      ReferenceType *br = b->toReference();
+
+      // const is not transitive through references.
+      return AreTypesEquivalent(ar->contained(), br->contained(), Qualifiers::None);
+    }
+    case Type::Kind::Function:
+    {
+      if (!b->isFunction())
+        return false;
+
+      // const is not transitive through function signatures.
+      return AreFunctionTypesEqual(a->toFunction(), b->toFunction());
+    }
+    case Type::Kind::Array:
+    {
+      if (!b->isArray())
+        return false;
+
+      ArrayType *aa = a->toArray();
+      ArrayType *ba = b->toArray();
+      while (true) {
+        // Both arrays must be either dynamic or have the same fixed size.
+        if (aa->hasFixedLength() != ba->hasFixedLength())
+          return false;
+        if (aa->hasFixedLength() && aa->fixedLength() != ba->fixedLength())
+          return false;
+
+        // Both contained types must be the same type.
+        Type *innerA = aa->contained();
+        Type *innerB = ba->contained();
+        if (innerA->isArray() != innerB->isArray())
+          return false;
+        if (!innerA->isArray()) {
+          // const is transitive through arrays.
+          if (!AreTypesEquivalent(innerA, innerB, context))
+            return false;
+
+          // If neither contained type is an array, we're done.
+          break;
+        }
+
+        // Re-check qualifiers.
+        Qualifiers qa = (innerA->qualifiers() | context);
+        Qualifiers qb = (innerB->qualifiers() | context);
+        if (qa != qb)
+          return false;
+      }
+      return true;
+    }
+    // These types have unique instances.
+    case Type::Kind::Void:
+    case Type::Kind::Unchecked:
+    case Type::Kind::MetaFunction:
+    // These types are named and must have the same identity.
+    case Type::Kind::Struct:
+    case Type::Kind::Typeset:
+    case Type::Kind::Enum:
+      // Handled by a == b check earlier.
+      return false;
+    default:
+      // Should not get Unresolvable, Typedef, or Qualifier here.
+      assert(false);
+      return false;
+  }
 }

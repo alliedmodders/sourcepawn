@@ -52,11 +52,6 @@ Lexer::report(const SourceLocation &loc, rmsg::Id id)
   return cc_.report(loc, id);
 }
 
-static inline bool IsAscii(char c)
-{
-  return c >= 0;
-}
-
 static inline bool IsDigit(char c)
 {
   return c >= '0' && c <= '9';

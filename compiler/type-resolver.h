@@ -23,7 +23,6 @@
 #include "symbols.h"
 #include "constant-evaluator.h"
 #include "types.h"
-#include "layout.h"
 #include <am-deque.h>
 
 namespace sp {
@@ -55,10 +54,17 @@ class TypeResolver
   void visitTypedefDecl(TypedefDecl *node) override;
   void visitUnsafeCastExpr(UnsafeCastExpr *expr) override;
   void visitCallNewExpr(CallNewExpr *expr) override;
+  void visitTypesetDecl(TypesetDecl *decl) override;
 
   void addPending(AstNode *node) {
     work_queue_.append(node);
   }
+
+  Type *applyRefType(TypeSpecifier *spec, Type *type);
+  Type *applyConstQualifier(TypeSpecifier *spec, Type *type);
+  bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
+
+  void verifyTypeset(TypesetDecl *decl);
 
  private:
   EnumType *resolveMethodmapParentType(NameProxy *proxy);

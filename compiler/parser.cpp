@@ -2097,7 +2097,8 @@ Parser::methodBody()
 Statement *
 Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
 {
-  FunctionStatement *stmt = new (pool_) FunctionStatement(decl.name, kind);
+  FunctionStatement *stmt =
+    new (pool_) FunctionStatement(decl.name, kind, attrs);
 
   delegate_.OnEnterFunctionDecl(stmt);
 
@@ -2177,6 +2178,35 @@ Parser::global(TokenKind kind)
 }
 
 Statement *
+Parser::typeset_()
+{
+  SourceLocation loc = scanner_.begin();
+
+  if (!expect(TOK_NAME))
+    return nullptr;
+  NameToken name = *scanner_.current();
+
+  if (!expect(TOK_LBRACE))
+    return nullptr;
+
+  TypesetDecl *decl = new (pool_) TypesetDecl(loc, name);
+
+  Vector<TypesetDecl::Entry> types;
+  while (!match(TOK_RBRACE)) {
+    TypeSpecifier spec;
+    parse_new_type_expr(&spec, 0);
+
+    delegate_.EnterTypeIntoTypeset(decl, types, spec);
+
+    requireNewlineOrSemi();
+  }
+  delegate_.FinishTypeset(decl, types);
+
+  requireNewlineOrSemi();
+  return decl;
+}
+
+Statement *
 Parser::struct_(TokenKind kind)
 {
   SourceLocation loc = scanner_.begin();
@@ -2200,18 +2230,12 @@ Parser::struct_(TokenKind kind)
     Declaration decl;
 
     // Structs need a |public| keyword right now.
-    SourceLocation begin;
-    if (kind == TOK_STRUCT) {
-      expect(TOK_PUBLIC);
-      begin = scanner_.begin();
-    }
+    expect(TOK_PUBLIC);
 
     if (!parse_new_decl(&decl, flags))
       break;
 
-    if (!begin.isSet())
-      begin = decl.spec.startLoc();
-
+    SourceLocation begin = decl.spec.startLoc();
     FieldDecl *field = delegate_.HandleFieldDecl(begin, decl.name, decl.spec);
     decls->append(field);
 
@@ -2293,8 +2317,11 @@ Parser::parse()
         break;
 
       case TOK_STRUCT:
-      case TOK_UNION:
         statement = struct_(kind);
+        break;
+
+      case TOK_TYPESET:
+        statement = typeset_();
         break;
 
       case TOK_TYPEDEF:

@@ -34,6 +34,7 @@ static const char *sMessageTypeStrings[] = {
   "note",
   "syntax error",
   "type error",
+  "warning",
 };
 
 struct rmsg_info {
@@ -69,6 +70,14 @@ TMessage::addArg(Type *type)
   addArg(BuildTypeName(type));
 }
 
+void
+TMessage::addArg(size_t value)
+{
+  char buffer[24];
+  snprintf(buffer, sizeof(buffer), "%" KE_FMT_SIZET, value);
+  addArg(buffer);
+}
+
 ReportManager::ReportManager()
  : source_(nullptr),
    fatal_error_(rmsg::none),
@@ -98,24 +107,41 @@ ReportManager::note(const SourceLocation &loc, rmsg::Id msg_id)
   return MessageBuilder(message);
 }
 
-MessageBuilder
-ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
+void
+ReportManager::report(const Ref<TMessage> &msg)
 {
-  assert(GetMessageInfo(msg_id).type != rmsg_type::fatal);
+  assert(GetMessageInfo(msg->id()).type != rmsg_type::fatal);
 
   // Don't create any new messages after we've reached a limit.
   if (num_errors_ >= kErrorMessageLimit)
-    return MessageBuilder(nullptr);
+    return;
 
-  if (GetMessageInfo(msg_id).type != rmsg_type::note) {
+  if (GetMessageInfo(msg->id()).type != rmsg_type::note) {
     num_errors_++;
 
     if (num_errors_ >= kErrorMessageLimit)
-      reportFatal(loc, rmsg::too_many_errors);
+      reportFatal(msg->origin(), rmsg::too_many_errors);
   }
 
+  messages_.append(msg);
+}
+
+MessageBuilder
+ReportManager::build(const SourceLocation &loc, rmsg::Id msg_id)
+{
   Ref<TMessage> message = new TMessage(loc, msg_id);
-  messages_.append(message);
+  return MessageBuilder(message);
+}
+
+MessageBuilder
+ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
+{
+  if (num_errors_ >= kErrorMessageLimit)
+    return MessageBuilder(nullptr);
+
+  Ref<TMessage> message = new TMessage(loc, msg_id);
+  report(message);
+
   return MessageBuilder(message);
 }
 

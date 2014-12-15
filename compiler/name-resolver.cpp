@@ -445,12 +445,8 @@ NameResolver::OnEnterRecordDecl(RecordDecl *decl)
 
   RecordType *type = nullptr;
   switch (decl->token()) {
-    case TOK_UNION:
-      type = cc_.types()->newUnion(decl->name());
-      break;
-
     case TOK_STRUCT:
-      type = cc_.types()->newStruct(decl->name());
+      type = cc_.types()->newStruct(decl);
       break;
 
     default:
@@ -535,15 +531,6 @@ NameResolver::HandleFieldDecl(const SourceLocation &pos,
     tr_.addPending(decl);
 
   Atom *name = nameToken.atom;
-  if (!name) {
-    // Originally, SourcePawn had a concept called "funcenums" to work around
-    // the lack of a true top type. They were untagged unions of function
-    // types. Sourceawn 1.7 future-proofed this syntax the best it could by
-    // introducing something we interpret as a "block union". A block union
-    // simply has a list of types, none of them named.
-    layout_scope_->addAnonymousField(decl);
-    return decl;
-  }
 
   FieldSymbol *sym = new (pool_) FieldSymbol(decl, layout_scope_, name);
   decl->setSymbol(sym);
@@ -659,11 +646,8 @@ NameResolver::registerFunction(FunctionSymbol *sym)
   }
 
   // Build a shadow list, containing all symbols with this name.
-  if (!orig->shadows()) {
-    orig->setShadows(new (pool_) PoolList<Symbol *>());
-    orig->shadows()->append(orig);
-  }
-  orig->shadows()->append(sym);
+  orig->addShadow(orig_node);
+  orig->addShadow(sym_node);
   sym_node->setShadowed(orig);
 }
 
@@ -687,18 +671,16 @@ NameResolver::OnLeaveFunctionDecl(FunctionStatement *node)
 {
   FunctionSignature *sig = node->signature();
 
-  // Function statements have quirky semantics around their return type. For
-  // reasonable compatibility with SP1, we use the following heuristics for
-  // when no explicit type is declared.
+  // For compatibility with SP1, we change implicit-int return values to
+  // implicit-void when there is no return value, so we can error when the
+  // return value is used.
   TypeExpr &rt = sig->returnType();
-  if ((rt.resolved() && rt.resolved()->isImplicitInt()) ||
-      (rt.spec() && rt.spec()->resolver() == TOK_IMPLICIT_INT))
+  if (((rt.resolved() && rt.resolved()->isImplicitInt()) ||
+       (rt.spec() && rt.spec()->resolver() == TOK_IMPLICIT_INT)) &&
+      !(node->token() == TOK_FORWARD || node->token() == TOK_NATIVE) &&
+      !encountered_return_value_)
   {
-    bool cell_required = (node->token() == TOK_FORWARD || node->token() == TOK_NATIVE);
-    if (cell_required || encountered_return_value_)
-      rt.setResolved(cc_.types()->getPrimitive(PrimitiveType::Int32));
-    else
-      rt.setResolved(cc_.types()->getVoid());
+    rt.setResolved(cc_.types()->getImplicitVoid());
   }
 
   if (!sig->isResolved())
@@ -758,6 +740,30 @@ NameResolver::HandleCallNewExpr(const SourceLocation &pos,
   return node;
 }
 
+void
+NameResolver::EnterTypeIntoTypeset(TypesetDecl *decl, Vector<TypesetDecl::Entry> &types, TypeSpecifier &spec)
+{
+  TypeExpr te = resolve(spec);
+  if (!te.resolved())
+    decl->setNeedsFullTypeResolution();
+
+  types.append(TypesetDecl::Entry(spec.startLoc(), te));
+}
+
+void
+NameResolver::FinishTypeset(TypesetDecl *decl, const Vector<TypesetDecl::Entry> &types)
+{
+  TypesetDecl::Entries *list = new (pool_) TypesetDecl::Entries(types.length());
+  for (size_t i = 0; i < types.length(); i++)
+    list->at(i) = types[i];
+  decl->setTypes(list);
+
+  if (decl->needsFullTypeResolution())
+    tr_.addPending(decl);
+  else
+    tr_.verifyTypeset(decl);
+}
+
 // Indicate that a type specifier can't be resolved it, so whatever is
 // consuming it should add it to the resolver queue.
 TypeExpr
@@ -777,6 +783,7 @@ NameResolver::resolveBase(TypeSpecifier &spec)
     case TOK_VOID:
       return cc_.types()->getVoid();
     case TOK_IMPLICIT_INT:
+      return cc_.types()->getPrimitive(PrimitiveType::ImplicitInt);
     case TOK_INT:
       return cc_.types()->getPrimitive(PrimitiveType::Int32);
     case TOK_BOOL:
@@ -842,10 +849,11 @@ NameResolver::resolve(TypeSpecifier &spec)
   if (type->isUnresolvedTypedef())
     return delay(spec);
 
-  // Error this early so we don't have to check it in each branch below.
+  // If we have an array, but it's not a valid construction, then we just error
+  // and delay (we'll never reach type resolution after we error).
   if (spec.rank()) {
-    if (type->isVoid())
-      cc_.report(spec.arrayLoc(), rmsg::array_of_void);
+    if (!tr_.checkArrayInnerType(&spec, type))
+      return delay(spec);
   }
 
   if (spec.dims()) {
@@ -867,17 +875,11 @@ NameResolver::resolve(TypeSpecifier &spec)
       type = cc_.types()->newArray(type, ArrayType::kUnsized);
   }
 
-  if (spec.isByRef()) {
-    if (type->canUseInReferenceType()) {
-      type = cc_.types()->newReference(type);
-    } else {
-      cc_.report(spec.byRefLoc(), rmsg::type_cannot_be_ref)
-        << type;
-    }
-  }
+  if (spec.isByRef())
+    type = tr_.applyRefType(&spec, type);
 
   if (spec.isConst())
-    type = cc_.types()->newQualified(type, Qualifiers::Const);
+    type = tr_.applyConstQualifier(&spec, type);
 
   return TypeExpr(type);
 }

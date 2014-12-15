@@ -21,6 +21,7 @@
 #include "preprocessor.h"
 #include "parser.h"
 #include "name-resolver.h"
+#include "semantic-analysis.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,10 +106,16 @@ CompileContext::compile(Ref<SourceFile> file)
 
   ReportMemory(stderr);
 
-  // fprintf(stderr, "\n-- Name Binding --\n");
+  if (options_.SkipSemanticAnalysis)
+    return true;
 
-  // if (!ResolveNames(*this, unit))
-  //   return false;
+  fprintf(stderr, "\n-- Semantic Analysis --\n");
+
+  SemanticAnalysis sema(*this, unit);
+  if (!sema.analyze())
+    return false;
+
+  ReportMemory(stderr);
 
   // ReportMemory(stderr);
 

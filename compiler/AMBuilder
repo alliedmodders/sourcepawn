@@ -26,6 +26,7 @@ binary.compiler.cxxincludes += [
 
 binary.sources += [
   'ast-printer.cpp',
+  'coercion-rules.cpp',
   'compile-context.cpp',
   'constant-evaluator.cpp',
   'float-value.cpp',
