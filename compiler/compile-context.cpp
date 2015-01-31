@@ -158,12 +158,16 @@ void *operator new[](size_t size)
 	return malloc(size);
 }
 
-void operator delete(void *ptr) 
+# if !defined(_GLIBCXX_USE_NOEXCEPT)
+#  define _GLIBCXX_USE_NOEXCEPT
+# endif
+
+void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	free(ptr);
 }
 
-void operator delete[](void * ptr)
+void operator delete[](void * ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	free(ptr);
 }

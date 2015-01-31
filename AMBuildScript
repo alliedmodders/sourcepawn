@@ -38,6 +38,8 @@ class KEConfig:
 
       have_gcc = cxx.name is 'gcc'
       have_clang = cxx.name is 'clang'
+      if have_clang:
+        cfg.cxxflags += ['-Wno-unused-private-field']
       if have_clang or (have_gcc and cxx.majorVersion >= 4):
         cfg.cflags += ['-fvisibility=hidden']
         cfg.cxxflags += ['-fvisibility-inlines-hidden']
@@ -51,7 +53,6 @@ class KEConfig:
         '-fno-threadsafe-statics',
         '-Wno-non-virtual-dtor',
         '-Wno-overloaded-virtual',
-        '-Wno-unused-private-field',
       ]
 
       if have_gcc:

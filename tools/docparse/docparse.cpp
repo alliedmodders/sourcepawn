@@ -164,6 +164,8 @@ class Analyzer : public PartialAstVisitor
     methodmaps_ = new (pool_) JsonList();
     enums_ = new (pool_) JsonList();
     constants_ = new (pool_) JsonList();
+    typesets_ = new (pool_) JsonList();
+    typedefs_ = new (pool_) JsonList();
 
     for (size_t i = 0; i < tree->statements()->length(); i++) {
       Statement *stmt = tree->statements()->at(i);
@@ -175,6 +177,8 @@ class Analyzer : public PartialAstVisitor
     obj->add(cc_.add("methodmaps"), methodmaps_);
     obj->add(cc_.add("enums"), enums_);
     obj->add(cc_.add("constants"), constants_);
+    obj->add(cc_.add("typesets"), typesets_);
+    obj->add(cc_.add("typedefs"), typedefs_);
     return obj;
   }
 
@@ -214,6 +218,31 @@ class Analyzer : public PartialAstVisitor
     obj->add(atom_getter_, new (pool_) JsonBool(!node->getter()->isEmpty()));
     obj->add(atom_setter_, new (pool_) JsonBool(!node->setter()->isEmpty()));
     props_->add(obj);
+  }
+
+  void visitTypesetDecl(TypesetDecl *decl) override {
+    JsonObject *obj = new (pool_) JsonObject();
+    if (!startDoc(obj, "typeset", decl->name(), decl->loc()))
+      return;
+
+    JsonList *list = new (pool_) JsonList();
+    for (size_t i = 0; i < decl->types()->length(); i++) {
+      const TypesetDecl::Entry &entry = decl->types()->at(i);
+      list->add(toJson(entry.te));
+    }
+    obj->add(cc_.add("types"), list);
+
+    typesets_->add(obj);
+  }
+
+  void visitTypedefDecl(TypedefDecl *decl) override {
+    JsonObject *obj = new (pool_) JsonObject();
+    if (!startDoc(obj, "typedef", decl->name(), decl->loc()))
+      return;
+
+    obj->add(atom_type_, toJson(decl->te()));
+
+    typedefs_->add(obj);
   }
 
   void visitEnumStatement(EnumStatement *node) override {
@@ -352,6 +381,8 @@ class Analyzer : public PartialAstVisitor
   JsonList *methodmaps_;
   JsonList *enums_;
   JsonList *constants_;
+  JsonList *typesets_;
+  JsonList *typedefs_;
 
   JsonList *props_;
   JsonList *methods_;

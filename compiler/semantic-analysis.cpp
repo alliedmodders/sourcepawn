@@ -331,6 +331,6 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement *node)
 {
   assert(funcstate_ && funcstate_->sig);
 
-  Type *retType = funcstate_->sig->returnType().resolved();
+  //Type *retType = funcstate_->sig->returnType().resolved();
   //if (retType->isVoid() || retType->isImplicitVoid())
 }
