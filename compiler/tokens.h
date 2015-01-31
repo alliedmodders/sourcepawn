@@ -207,6 +207,7 @@ enum TokenKind
   _(THIS)                                             \
   _(TRUE)                                             \
   _(TYPEDEF)                                          \
+  _(TYPESET)                                          \
   _(UNION)                                            \
   _(WHILE)                                            \
   _(VIEW_AS)                                          \

@@ -54,6 +54,7 @@ class CompileContext;
   _(ExpressionStatement)  \
   _(FunctionStatement)    \
   _(CallNewExpr)          \
+  _(NewArrayExpr)         \
   _(CallExpr)             \
   _(FieldExpression)      \
   _(IfStatement)          \
@@ -80,7 +81,10 @@ class CompileContext;
   _(PropertyDecl)         \
   _(FieldDecl)            \
   _(ThisExpression)       \
-  _(DeleteStatement)
+  _(DeleteStatement)      \
+  _(ImplicitCastExpr)     \
+  _(FoldedExpr)           \
+  _(ConstructTypesetExpr)
 
 // Forward declarations.
 #define _(name) class name;
@@ -188,32 +192,21 @@ class Expression : public AstNode
     side_effects_ = true;
   }
 
-  Type *type() {
-    if (op_)
-      return op_->type();
+  Type *type() const {
     return type_;
   }
   VK vk() const {
     assert(valueKind_ != VK::none);
-    if (op_)
-      return op_->vk();
     return valueKind_;
   }
-  void setBaseResult(Type *type, VK valueKind) {
-    assert(!type_ && !op_);
+  void setOutput(Type *type, VK valueKind) {
+    assert(!type_);
     type_ = type;
     valueKind_ = valueKind;
-  }
-  ExprOp *op() const {
-    return op_;
-  }
-  void setOp(ExprOp *op) {
-    op_ = op;
   }
 
  private:
   Type *type_;
-  ExprOp *op_;
   bool side_effects_ : 1;
   VK valueKind_ : 2;
 };
@@ -739,10 +732,10 @@ class IndexExpression : public Expression
 class CallNewExpr : public Expression
 {
  public:
-  CallNewExpr (const SourceLocation &pos, const TypeExpr &te, ExpressionList *arguments)
-    : Expression(pos),
-      te_(te),
-      arguments_(arguments)
+  CallNewExpr(const SourceLocation &pos, const TypeExpr &te, ExpressionList *arguments)
+   : Expression(pos),
+     te_(te),
+     arguments_(arguments)
   {
   }
 
@@ -763,6 +756,33 @@ class CallNewExpr : public Expression
   ExpressionList *arguments_;
 };
 
+class NewArrayExpr : public Expression
+{
+ public:
+  NewArrayExpr(const SourceLocation &pos, const TypeExpr &te, ExpressionList *dims)
+   : Expression(pos),
+     te_(te),
+     dims_(dims)
+  {
+  }
+
+  DECLARE_NODE(NewArrayExpr);
+
+  TypeExpr &te() {
+    return te_;
+  }
+  const TypeExpr &te() const {
+    return te_;
+  }
+  ExpressionList *dims() const {
+    return dims_;
+  }
+
+ private:
+  TypeExpr te_;
+  ExpressionList *dims_;
+};
+
 class CallExpr : public Expression
 {
  public:
@@ -780,6 +800,10 @@ class CallExpr : public Expression
   }
   ExpressionList *arguments() const {
     return arguments_;
+  }
+
+  void setCallee(Expression *expr) {
+    callee_ = expr;
   }
 
  private:
@@ -829,6 +853,88 @@ class ForStatement : public Statement
     assert(!scope_);
     scope_ = scope;
   }
+};
+
+// Implicit casts are added during semantic analysis, when following coercion
+// rules.
+class ImplicitCastExpr : public Expression
+{
+ public:
+  ImplicitCastExpr(Expression *expr, CastOp op, Type *to, VK valueKind = VK::rvalue)
+   : Expression(expr->loc()),
+     expr_(expr),
+     op_(op)
+  {
+    setOutput(to, valueKind);
+  }
+
+  DECLARE_NODE(ImplicitCastExpr);
+
+  Expression *expr() const {
+    return expr_;
+  }
+  CastOp op() const {
+    return op_;
+  }
+
+ private:
+  Expression *expr_;
+  CastOp op_;
+};
+
+// Used when invoking a typeset constructor.
+class ConstructTypesetExpr : public Expression
+{
+ public:
+  ConstructTypesetExpr(const SourceLocation &loc, Expression *expr, Type *typeset, size_t typeIndex)
+   : Expression(loc),
+     expr_(expr),
+     typeIndex_(typeIndex)
+  {
+    setOutput(typeset, VK::rvalue);
+  }
+
+  DECLARE_NODE(ConstructTypesetExpr);
+
+  Expression *expr() const {
+    return expr_;
+  }
+  TypesetType *typeset() const {
+    return type()->toTypeset();
+  }
+
+  size_t typeIndex() const {
+    return typeIndex_;
+  }
+
+ private:
+  Expression *expr_;
+  size_t typeIndex_;
+};
+
+// FoldedExprs note that an expression has been constant-folded during semantic
+// analysis, but the original tree is still available if needed.
+class FoldedExpr : public Expression
+{
+ public:
+  FoldedExpr(const SourceRange &range, Expression *original, const BoxedValue &value)
+   : Expression(range.start),
+     original_(original),
+     value_(value)
+  {}
+
+  DECLARE_NODE(FoldedExpr);
+
+  Expression *original() const {
+    return original_;
+  }
+  const BoxedValue &value() const {
+    return value_;
+  }
+
+ private:
+  Expression *original_;
+  BoxedValue value_;
 };
 
 class WhileStatement : public Statement
@@ -1046,7 +1152,8 @@ class FunctionStatement :
      FunctionNode(kind),
      name_(name),
      attrs_(attrs),
-     sym_(nullptr)
+     sym_(nullptr),
+     type_(nullptr)
   {
   }
 
@@ -1064,6 +1171,15 @@ class FunctionStatement :
   }
   uint32_t attrs() const {
     return attrs_;
+  }
+
+  // These are used in the function -> value decay operation. Since most
+  // functions are not used as values, this is an optional cache.
+  FunctionType *type() const {
+    return type_;
+  }
+  void setType(FunctionType *type) {
+    type_ = type;
   }
 
   const char *decoration() const {
@@ -1086,6 +1202,7 @@ class FunctionStatement :
   NameToken name_;
   uint32_t attrs_;
   FunctionSymbol *sym_;
+  FunctionType *type_;
 };
 
 class IfStatement : public Statement

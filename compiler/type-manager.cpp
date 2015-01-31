@@ -27,6 +27,7 @@ TypeManager::TypeManager(StringPool &strings)
    voidType_(nullptr),
    uncheckedType_(nullptr),
    metaFunctionType_(nullptr),
+   overloadedFunctionType_(nullptr),
    primitiveTypes_(),
    referenceTypes_(),
    char_type_(nullptr),
@@ -49,6 +50,7 @@ TypeManager::initialize()
   voidType_ = Type::NewVoid();
   uncheckedType_ = Type::NewUnchecked();
   metaFunctionType_ = Type::NewMetaFunction();
+  overloadedFunctionType_ = Type::NewOverloadedFunction();
 
   primitiveTypes_[size_t(PrimitiveType::ImplicitInt)] = Type::NewPrimitive(PrimitiveType::ImplicitInt);
   primitiveTypes_[size_t(PrimitiveType::Int8)] = Type::NewPrimitive(PrimitiveType::Int8);
@@ -59,6 +61,8 @@ TypeManager::initialize()
   primitiveTypes_[size_t(PrimitiveType::Uint32)] = Type::NewPrimitive(PrimitiveType::Uint32);
   primitiveTypes_[size_t(PrimitiveType::Int64)] = Type::NewPrimitive(PrimitiveType::Int64);
   primitiveTypes_[size_t(PrimitiveType::Uint64)] = Type::NewPrimitive(PrimitiveType::Uint64);
+  primitiveTypes_[size_t(PrimitiveType::NativeInt)] = Type::NewPrimitive(PrimitiveType::NativeInt);
+  primitiveTypes_[size_t(PrimitiveType::NativeUint)] = Type::NewPrimitive(PrimitiveType::NativeUint);
   primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
   primitiveTypes_[size_t(PrimitiveType::Double)] = Type::NewPrimitive(PrimitiveType::Double);
   primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);

@@ -59,3 +59,34 @@ FunctionSymbol::addShadow(FunctionStatement *stmt)
     shadows_ = new (POOL()) FuncStmtList();
   shadows_->append(stmt);
 }
+
+// If a function has a body, or its implementation is native, we consider it
+// to be implemented.
+static inline bool
+IsCandidateFunctionImpl(FunctionStatement *decl)
+{
+  return decl->body() || decl->token() == TOK_NATIVE;
+}
+
+// Find a function statement that has a body, or return null.
+FunctionStatement *
+FunctionSymbol::impl() const
+{
+  if (!shadows_) {
+    if (IsCandidateFunctionImpl(node()->toFunctionStatement()))
+      return node()->toFunctionStatement();
+    return nullptr;
+  }
+
+  FunctionStatement *candidate = nullptr;
+  for (size_t i = 0; i < shadows_->length(); i++) {
+    FunctionStatement *stmt = shadows_->at(i);
+    if (IsCandidateFunctionImpl(stmt)) {
+      // We don't allow overloading yet.
+      assert(!candidate);
+      candidate = stmt;
+    }
+  }
+
+  return candidate;
+}

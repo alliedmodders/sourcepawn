@@ -51,9 +51,9 @@ class Symbol : public PoolObject
 {
  public:
   enum Kind {
-#     define _(name) k##name,
+# define _(name) k##name,
     SYMBOL_KINDS(_)
-#     undef _
+# undef _
     kTotalSymbolKinds
   };
 
@@ -258,6 +258,8 @@ class FunctionSymbol : public Symbol
   FuncStmtList *shadows() const {
     return shadows_;
   }
+
+  FunctionStatement *impl() const;
 
  private:
   Label address_;

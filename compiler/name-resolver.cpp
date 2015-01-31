@@ -673,7 +673,11 @@ NameResolver::OnLeaveFunctionDecl(FunctionStatement *node)
 
   // For compatibility with SP1, we change implicit-int return values to
   // implicit-void when there is no return value, so we can error when the
-  // return value is used.
+  // return value is used. We differentiate this from "void" so the following
+  // transitional case does not error:
+  //
+  //   forward void OnThing1();
+  //   OnThing1() {}
   TypeExpr &rt = sig->returnType();
   if (((rt.resolved() && rt.resolved()->isImplicitInt()) ||
        (rt.spec() && rt.spec()->resolver() == TOK_IMPLICIT_INT)) &&
@@ -738,6 +742,34 @@ NameResolver::HandleCallNewExpr(const SourceLocation &pos,
   if (!te.resolved())
     tr_.addPending(node);
   return node;
+}
+
+NewArrayExpr *
+NameResolver::HandleNewArrayExpr(const SourceLocation &pos,
+                                 TypeSpecifier &spec,
+                                 ExpressionList *args)
+{
+  TypeExpr te = resolve(spec);
+  NewArrayExpr *node = new (pool_) NewArrayExpr(pos, te, args);
+
+  if (!te.resolved())
+    tr_.addPending(node);
+  return node;
+}
+
+TypesetDecl *
+NameResolver::EnterTypeset(const SourceLocation &loc, const NameToken &name)
+{
+  TypesetDecl *decl = new (pool_) TypesetDecl(loc, name);
+
+  TypeSymbol *sym = new (pool_) TypeSymbol(decl, getOrCreateScope(), name.atom);
+  registerSymbol(sym);
+  decl->setSymbol(sym);
+
+  TypesetType *type = cc_.types()->newTypeset(decl);
+  sym->setType(type);
+
+  return decl;
 }
 
 void

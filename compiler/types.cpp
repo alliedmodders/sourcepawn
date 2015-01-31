@@ -57,6 +57,12 @@ Type::NewMetaFunction()
 }
 
 Type *
+Type::NewOverloadedFunction()
+{
+  return new (POOL()) Type(Kind::OverloadedFunction);
+}
+
+Type *
 Type::NewPrimitive(PrimitiveType prim)
 {
   Type *type = new (POOL()) Type(Kind::Primitive);
@@ -510,7 +516,7 @@ sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
   a = a->canonical();
   b = b->canonical();
   if (a == b)
-    return false;
+    return true;
 
   switch (a->canonicalKind()) {
     case Type::Kind::Primitive:

@@ -54,6 +54,7 @@ class TypeResolver
   void visitTypedefDecl(TypedefDecl *node) override;
   void visitUnsafeCastExpr(UnsafeCastExpr *expr) override;
   void visitCallNewExpr(CallNewExpr *expr) override;
+  void visitNewArrayExpr(NewArrayExpr *expr) override;
   void visitTypesetDecl(TypesetDecl *decl) override;
 
   void addPending(AstNode *node) {

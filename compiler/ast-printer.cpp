@@ -145,6 +145,26 @@ class AstPrinter : public AstVisitor
     node->expression()->accept(this);
     unindent();
   }
+  void visitConstructTypesetExpr(ConstructTypesetExpr *node) {
+    prefix();
+    fprintf(fp_, "[ ConstructTypesetExpr (%s)\n", node->typeset()->name()->chars());
+    indent();
+    node->expr()->accept(this);
+    unindent();
+  }
+  void visitImplicitCastExpr(ImplicitCastExpr *node) {
+    prefix();
+    fprintf(fp_, "[ ImplicitCastExpr\n");
+    indent();
+    node->expr()->accept(this);
+    unindent();
+  }
+  void visitFoldedExpr(FoldedExpr *node) {
+    prefix();
+    fprintf(fp_, "[ FoldedExpr\n");
+    node->original()->accept(this);
+    unindent();
+  }
   void visitUnsafeCastExpr(UnsafeCastExpr *node) {
     prefix();
     fprintf(fp_, "[ UnsafeCastExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
@@ -158,6 +178,16 @@ class AstPrinter : public AstVisitor
     indent();
     for (size_t i = 0; i < node->arguments()->length(); i++)
       node->arguments()->at(i)->accept(this);
+    unindent();
+  }
+  void visitNewArrayExpr(NewArrayExpr *node) {
+    prefix();
+    fprintf(fp_, "[ NewArrayeExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    indent();
+    for (size_t i = 0; i < node->dims()->length(); i++) {
+      if (node->dims()->at(i))
+        node->dims()->at(i)->accept(this);
+    }
     unindent();
   }
   void visitReturnStatement(ReturnStatement *node) {

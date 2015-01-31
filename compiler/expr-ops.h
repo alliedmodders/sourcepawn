@@ -23,61 +23,66 @@
 
 namespace sp {
 
-#if 0
-class ExprOp;
-
-// An s-value encodes the result of an expression as either an r-value or an
-// l-value.
-class SVal
+enum class CastOp
 {
- public:
-  enum class Kind {
-    Var,
-    Func,
-    Expr,
-    Op,
-    Const
-  };
+  // No-operation; used for casts that do not affect the result type. Usually
+  // this implies a cast to const, or from char -> int8.
+  nop,
 
-  Kind kind() const {
-    return kind_;
-  }
-  Type *type() const {
-    return type_;
-  }
-  VarDecl *var() const {
-    assert(kind_ == Kind::Var);
-    return var_;
-  }
-  FunctionStatement *fun() const {
-    assert(kind_ == Kind::Func);
-    return fun_;
-  }
-  Expression *expr() const {
-    assert(kind_ == Kind::Expr);
-    return expr_;
-  }
-  ExprOp *op() const {
-    assert(kind_ == Kind::Op);
-    return op_;
-  }
-  const BoxedValue &value() const {
-    assert(kind_ == Kind::Const);
-    return *boxval_.address();
-  }
+  // No-op cast to discard inner types to/from "unchecked", for example,
+  //   int[] -> any[]
+  //   int& -> any&
+  //
+  // This cast is horrible and should be removed once we have variant
+  // types. Despite being a no-op it's in its own category s owe know where
+  // it's used.
+  ref_nop,
 
- private:
-  Kind kind_;
-  Type *type_;
-  union {
-    VarDecl *var_;
-    FunctionStatement *fun_;
-    Expression *expr_;
-    ExprOp *op_;
-    StorageBuffer<BoxedValue> boxval_;
-  };
+  // Convert an l-value or cl-value to a reference.
+  lval_to_ref,
+
+  // Dereference a reference. This produces an rvalue.
+  deref,
+
+  // Store a null as an enum value (32-bit 0).
+  null_to_enum,
+
+  // Store a null as a function or object value.
+  null_to_obj,
+
+  // Bitwise reinterpret of type X to Y (types must be same width).
+  bitcast,
+
+  // Convert an enum or 8, 16, or 32-bit integer to unchecked. This is a
+  // bitcast, possibly preceded by a sign or zero extension.
+  to_unchecked,
+
+  // Convert a function to a meta function.
+  to_metafunction,
+
+  // Convert an integer or enum to a bool.
+  int_to_bool,
+
+  // Convert an integer to a float or double.
+  int_to_float,
+
+  // Promote an integer to a larger type (sign or zero-extend).
+  promote_int,
+
+  // Convert a float or double to a bool.
+  float_to_bool,
+
+  // Convert a float to a double.
+  float_to_double,
+
+  // An assignment from char[X+n] from char[X+m], where m < n.
+  char_array_extend,
+
+  // Coercing T[N] -> T[]
+  fixed_array_decay,
+
+  sentinel
 };
-#endif
 
 // SourcePawn requires value classes similar to C++.
 enum class VK
@@ -110,235 +115,6 @@ enum class VK
   xvalue 
 };
 
-#define EXPROP_MAP(_)                     \
-  _(Deref)                                \
-  _(LvalToRef)                            \
-  _(ToUnchecked)                          \
-  _(ToBool)                               \
-  _(UncheckedToTyped)                     \
-  _(IntToFloat)                           \
-  _(FloatToDouble)                        \
-  _(NullCast)                             \
-  _(IntegerCast)                          \
-  _(ToTypeset)                            \
-  _(FixedArrayDecay)
-
-// Forward declarations.
-#define _(name) class name##Op;
-EXPROP_MAP(_)
-#undef _
-
-class ExprOpVisitor
-{
- public:
-#define _(name) virtual void visit##name##Op(name##Op *op) = 0;
-EXPROP_MAP(_)
-#undef _
-};
-
-// Expression Ops are attached to expressions in the AST. They are generated
-// during semantic analysis to inform code generation of the right sequence
-// of implicit conversions to take after evaluating an expression.
-class ExprOp : public PoolObject
-{
- public:
-  ExprOp(ExprOp *prev, Type *type, VK vk)
-   : prev_(prev),
-     type_(type),
-     valueKind_(vk)
-  {}
-
-  enum class Kind {
-#define _(name) name,
-    EXPROP_MAP(_)
-#undef _
-    sentinel
-  };
-
-  virtual Kind kind() const = 0;
-  virtual void accept(ExprOpVisitor *cg) = 0;
-
-  Type *type() const {
-    return type_;
-  }
-  VK vk() const {
-    return valueKind_;
-  }
-  ExprOp *prev() const {
-    return prev_;
-  }
-
-#define _(name)                               \
-  bool is##name##Op() const {                 \
-    return kind() == Kind::name;              \
-  }                                           \
-  name##Op *as##name##Op() {                  \
-    if (is##name##Op())                       \
-      return nullptr;                         \
-    return to##name##Op();                    \
-  }                                           \
-  name##Op *to##name##Op() {                  \
-    assert(is##name##Op());                   \
-    return (name##Op *)this;                  \
-  }
-  EXPROP_MAP(_)
-#undef _
-
- private:
-  ExprOp *prev_;
-  Type *type_;
-  VK valueKind_;
-};
-
-#define DECLARE_EXPROP(k)                     \
-  Kind kind() const override {                \
-    return Kind::k;                           \
-  }                                           \
-  void accept(ExprOpVisitor *cg) {            \
-    cg->visit##k##Op(this);                   \
-  }
-
-// ref(T) -> T
-class DerefOp : public ExprOp
-{
- public:
-  DerefOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {}
-
-  DECLARE_EXPROP(Deref);
-};
-
-// lval -> ref(lval)
-class LvalToRefOp : public ExprOp
-{
- public:
-  LvalToRefOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::lvalue)
-  {
-    assert(type->isReference());
-  }
-
-  DECLARE_EXPROP(LvalToRef);
-};
-
-// primitive|enum -> unchecked
-class ToUncheckedOp : public ExprOp
-{
- public:
-  ToUncheckedOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {}
-
-  DECLARE_EXPROP(ToUnchecked);
-};
-
-// primitive|enum -> bool
-class ToBoolOp : public ExprOp
-{
- public:
-  ToBoolOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {} 
-
-  DECLARE_EXPROP(ToBool);
-};
-
-// unchecked -> primitive|enum
-class UncheckedToTypedOp : public ExprOp
-{
- public:
-  UncheckedToTypedOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {
-    assert(type->isUnchecked());
-  }
-
-  DECLARE_EXPROP(UncheckedToTyped);
-};
-
-// int* -> float
-class IntToFloatOp : public ExprOp
-{
- public:
-  IntToFloatOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {
-    assert(type->primitive() == PrimitiveType::Float);
-  }
-
-  DECLARE_EXPROP(IntToFloat);
-};
-
-// float -> double
-class FloatToDoubleOp : public ExprOp
-{
- public:
-  FloatToDoubleOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {
-    assert(type->primitive() == PrimitiveType::Double);
-  }
-
-  DECLARE_EXPROP(FloatToDouble);
-};
-
-// null_t -> enum(0)
-class NullCastOp : public ExprOp
-{
- public:
-  NullCastOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {
-  }
-
-  DECLARE_EXPROP(NullCast);
-};
-
-// intN -> intN
-class IntegerCastOp : public ExprOp
-{
- public:
-  IntegerCastOp(ExprOp *prev, Type *type)
-   : ExprOp(prev, type, VK::rvalue)
-  {}
-
-  DECLARE_EXPROP(IntegerCast);
-};
-
-// * -> typeset
-class ToTypesetOp : public ExprOp
-{
- public:
-  ToTypesetOp(ExprOp *prev, size_t typeIndex, Type *to)
-   : ExprOp(prev, to, VK::rvalue),
-     type_index_(typeIndex)
-  {}
-
-  DECLARE_EXPROP(ToTypeset);
-
-  size_t typeIndex() const {
-    return type_index_;
-  }
-
- private:
-  size_t type_index_;
-};
-
-// T[N] -> T[]
-class FixedArrayDecayOp : public ExprOp
-{
- public:
-  FixedArrayDecayOp(ExprOp *prev, Type *to)
-   : ExprOp(prev, to, VK::rvalue)
-  {}
-
-  DECLARE_EXPROP(FixedArrayDecay);
-};
-
-#undef DECLARE_EXPROP
-#undef EXPROP_MAP
-
-}
+} // namespace sp
 
 #endif // _include_spcomp_expression_ops_h_

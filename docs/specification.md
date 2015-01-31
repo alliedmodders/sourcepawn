@@ -340,12 +340,12 @@ We define implicit coercion rules as follows, given value `V` of type `S`, to ty
     1. If `T'` is not `unchecked`, the coercion is illegal.
     2. If `S'` is not `int32`, `float`, or an enumeration, the coercion is illegal.
     3. Let `V` be viewed as a `T'` and proceed with step 1.8.
-  8. `V` has trivial coercion to `T'`.
-  9. Return a reference `T&` to `V`; this does not count as a cast.
+  8. If `V` is not a reference, let `V` be a new reference of type `S&` to `V`. If `V` is a cl-value, its type should be `const(S&)`.
+  9. `V` has trivial coercion to `T`.
 2. If `S` is a reference,
   1. Let `S` be the inner type of the reference `S&`, with the same const-qualifiers.
   2. Let `V` be the result of dereferencing `V`.
-  3. Proceed with coercion; the dereference does not count as a cast or coercion.
+  3. Proceed with coercion from step 3.
 3. If `T` is a struct,
   1. If unqualified `S` is not equivalent to unqualified `T`, the coercion is illegal.
   2. If `S` is const-qualified and `T` is not const-qualified, the coercion is illegal.
@@ -379,17 +379,17 @@ We define implicit coercion rules as follows, given value `V` of type `S`, to ty
   7. Otherwise, the coercion is illegal.
 8. If `T` is an integer or `char`,
   1. If `S` is neither a primitive nor `unchecked`, the coercion is illegal.
-  2. If `S` is `unchecked`, and `T` is not `int32` or `uint32`, the coercion is illegal.
+  2. If `S` is `unchecked`, and `T` is not `int32`, the coercion is illegal.
   3. If `S` is a `float` or `double`, coercion fails as lossy.
   4. If `S` is a `bool`, the coercion is illegal.
   5. If `T` is an `intn` or `uintn`, and `S` is not equivalent to `T`, the coercion is illegal.
-  6. If `S` has a larger bit width than `T`, the coercion is illegal.
-  7. If `S` has a smaller bit width than `T`, given `S`'s bit-width as `m` and `T`'s bit-width as `n`:
-     1. If `S` is unsigned, it is zero-extended to an unsigned integer of `n` bits.
-     2. If `S` is signed, it is sign-extended to a signed integer of `n` bits.
-  8. If `S` is signed and `T` is unsigned, `S` is converted to a `T` containing the same bits.
-  9. If `S` is unsigned and `T` is signed, `S` is converted to a `T` containing the same bits.
-  10. Otherwise, `V` does not require coercion to `T`.
+  6. If the sign of `S` and `T` are different, the coercion is illegal.
+  7. If `S` has a larger bit width than `T`, the coercion is illegal.
+  8. If `S` is `char` and `T` is `int8`, the coercion is a bitwise cast.
+  9. If `S` has a smaller bit width than `T`, given `S`'s bit-width as `m` and `T`'s bit-width as `n`:
+     1. If `S` is unsigned, `V` is zero-extended to an unsigned integer of `n` bits.
+     2. If `S` is signed, `V` is sign-extended to a signed integer of `n` bits.
+  10. Otherwise, no coercion is needed.
 9. If `T` is a function,
   1. If `S` is `null_t`, `null` is returned as a `T`.
   2. If `S` is not a function, the coercion is illegal.

@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "semantic-analysis.h"
+#include "coercion.h"
 
 using namespace ke;
 using namespace sp;
@@ -24,6 +25,7 @@ using namespace sp;
 SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *tu)
  : cc_(cc),
    pool_(cc.pool()),
+   types_(cc.types()),
    tu_(tu),
    funcstate_(nullptr)
 {
@@ -190,36 +192,40 @@ SemanticAnalysis::visitForValue(Expression *expr)
   return expr->type();
 }
 
-Type *
+Expression *
 SemanticAnalysis::visitForRValue(Expression *expr)
 {
   Type *type = visitForValue(expr);
+  if (!type)
+    return nullptr;
+
   if (ReferenceType *ref = type->asReference()) {
     assert(expr->vk() == VK::lvalue || expr->vk() == VK::clvalue);
 
-    expr->setOp(new (pool_) DerefOp(expr->op(), ref->contained()));
+    expr = new (pool_) ImplicitCastExpr(expr, CastOp::deref, ref->contained());
   }
-  return expr->type();
+  return expr;
 }
 
 void
 SemanticAnalysis::visitCallExpr(CallExpr *node)
 {
-  Type *calleeType = visitForRValue(node->callee());
-  if (!calleeType)
+  // :TODO: we must verify that the callee is an implemented scripted func.
+  Expression *callee = visitForRValue(node->callee());
+  if (!callee)
     return;
-
-  if (!calleeType->isFunction()) {
+  if (!callee->type()->isFunction()) {
     cc_.report(node->loc(), rmsg::callee_is_not_a_function)
-      << calleeType;
+      << callee->type();
     return;
   }
+  node->setCallee(callee);
 
-  FunctionSignature *sig = calleeType->toFunction()->signature();
+  FunctionSignature *sig = callee->type()->toFunction()->signature();
   checkCall(sig, node->arguments());
 
   Type *returnType = sig->returnType().resolved();
-  node->setBaseResult(returnType, VK::rvalue);
+  node->setOutput(returnType, VK::rvalue);
 
   // We mark calls as always having side effects.
   node->setHasSideEffects();
@@ -245,9 +251,11 @@ SemanticAnalysis::checkCall(FunctionSignature *sig, ExpressionList *args)
     }
 
     visitForValue(expr);
-    Coercion cr(cc_, expr, Coercion::arg, arg->te().resolved());
-    CR result = do_coerce(cr);
-    if (result != CR::ok && result != CR::converted) {
+    Coercion cr(cc_,
+                Coercion::Reason::arg,
+                expr,
+                arg->te().resolved());
+    if (cr.coerce() != Coercion::Result::ok) {
       auto builder = cc_.report(expr->loc(), rmsg::cannot_coerce_for_arg)
         << expr->type()
         << arg->te().resolved();
@@ -257,8 +265,72 @@ SemanticAnalysis::checkCall(FunctionSignature *sig, ExpressionList *args)
       else
         builder << i;
 
-      builder << diag(expr->loc(), result);
+      builder << cr.diag(expr->loc());
       break;
     }
+
+    // Rewrite the tree for the coerced result.
+    args->at(i) = cr.output();
   }
+}
+
+void
+SemanticAnalysis::visitNameProxy(NameProxy *proxy)
+{
+  Symbol *binding = proxy->sym();
+  switch (binding->kind()) {
+    case Symbol::kType:
+      cc_.report(proxy->loc(), rmsg::cannot_use_type_as_value)
+        << binding->asType()->type();
+      break;
+
+    case Symbol::kConstant:
+    {
+      ConstantSymbol *sym = binding->toConstant();
+      proxy->setOutput(sym->type(), VK::rvalue);
+      break;
+    }
+
+    case Symbol::kFunction:
+    {
+      FunctionSymbol *sym = binding->toFunction();
+      FunctionStatement *decl = sym->impl();
+      if (!decl) {
+        cc_.report(proxy->loc(), rmsg::function_has_no_impl)
+          << sym->name();
+        break;
+      }
+
+      if (!decl->type())
+        decl->setType(FunctionType::New(decl->signature()));
+
+      // Function symbols are clvalues, since they are named.
+      proxy->setOutput(decl->type(), VK::clvalue);
+      break;
+    }
+
+    default:
+      assert(false);
+  }
+}
+
+void
+SemanticAnalysis::visitStringLiteral(StringLiteral *node)
+{
+  // Build a constant array for the character string.
+  Type *charType = types_->getPrimitive(PrimitiveType::Char);
+  ArrayType *arrayType = types_->newArray(charType, node->arrayLength());
+  Type *litType = types_->newQualified(arrayType, Qualifiers::Const);
+
+  // Returned value is always an rvalue.
+  node->setOutput(litType, VK::rvalue);
+}
+
+void
+SemanticAnalysis::visitReturnStatement(ReturnStatement *node)
+{
+  assert(funcstate_ && funcstate_->sig);
+
+  Type *retType = funcstate_->sig->returnType().resolved();
+  //if (retType->isVoid() || retType->isImplicitVoid())
 }

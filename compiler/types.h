@@ -92,11 +92,21 @@ TYPE_ENUM_MAP(FORWARD_DECLARE)
 #undef FORWARD_DECLARE
 class RecordType;
 
+// A Type object represents a builtin or user-created type. Core types have
+// singleton instances (primitives, void, etc), and extremely common types
+// are cached. All Type instantiation occurs through TypeManager.
+//
+// Types that have more complex state (such as arrays or structs) need to be
+// casted to derived types to get more detail. These casts are initiated
+// through methods like toArray or toStruct. IT IS IMPORTANT TO NOTE, that
+// these functions will discard qualifiers. Qualifiers are stored on an
+// intervening wrapping type, and methods like isStruct/toString will peek
+// past the qualifying wrapper.
 class Type : public PoolObject
 {
  public:
   enum class Kind {
-    // A type that could not be resolved.
+    // A type that could not be resolved during type resolution.
     Unresolvable,
 
     // A primitive is a plain-old-data type.
@@ -144,7 +154,14 @@ class Type : public PoolObject
     MetaFunction,
 
     // The type used for "null".
-    NullType
+    NullType,
+
+    // A temporary type used to indicate that an overloaded function was not
+    // resolved to a specific address. This happens, for example, when a
+    // NameProxy resolves to an overloaded function symbol. If the function
+    // cannot or is not coerced or casted to a specific overload, the special
+    // OverloadedFunction type will leak out.
+    OverloadedFunction
   };
 
   void init(Kind kind, Type *root = NULL);
@@ -170,6 +187,7 @@ class Type : public PoolObject
   static Type *NewPrimitive(PrimitiveType type);
   static Type *NewQualified(Type *type, Qualifiers quals);
   static Type *NewImportable();
+  static Type *NewOverloadedFunction();
   static bool Compare(Type *left, Type *right);
 
   bool isPrimitive() {

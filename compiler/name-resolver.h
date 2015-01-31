@@ -68,6 +68,10 @@ class NameResolver
   CallNewExpr *HandleCallNewExpr(const SourceLocation &pos,
                                  TypeSpecifier &spec,
                                  ExpressionList *args);
+  NewArrayExpr *HandleNewArrayExpr(const SourceLocation &pos,
+                                   TypeSpecifier &spec,
+                                   ExpressionList *args);
+  TypesetDecl *EnterTypeset(const SourceLocation &loc, const NameToken &name);
   void EnterTypeIntoTypeset(TypesetDecl *decl, Vector<TypesetDecl::Entry> &types, TypeSpecifier &spec);
   void FinishTypeset(TypesetDecl *decl, const Vector<TypesetDecl::Entry> &types);
 

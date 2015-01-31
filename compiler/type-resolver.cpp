@@ -334,6 +334,12 @@ TypeResolver::visitCallNewExpr(CallNewExpr *expr)
 }
 
 void
+TypeResolver::visitNewArrayExpr(NewArrayExpr *expr)
+{
+  resolveTypeIfNeeded(expr->te());
+}
+
+void
 TypeResolver::visitEnumStatement(EnumStatement *node)
 {
   // This should only happen if we resolved the enum before visiting it in
@@ -783,10 +789,6 @@ TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
 {
   if (type->isVoid()) {
     cc_.report(spec->arrayLoc(), rmsg::array_of_void);
-    return false;
-  }
-  if (spec->isConst() && !type->isArray()) {
-    cc_.report(spec->constLoc(), rmsg::cannot_have_array_of_const);
     return false;
   }
   return true;

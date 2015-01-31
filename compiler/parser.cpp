@@ -654,7 +654,15 @@ Parser::prefix()
       SourceLocation loc = scanner_.begin();
 
       TypeSpecifier spec;
-      parse_new_type_expr(&spec, 0);
+      parse_new_typename(&spec, scanner_.nextToken());
+
+      if (peek(TOK_LBRACKET)) {
+        // :TODO: this is not the final grammar. Match C++?
+        ExpressionList *dims = dimensions();
+        if (!dims)
+          return nullptr;
+        return delegate_.HandleNewArrayExpr(loc, spec, dims);
+      }
 
       if (!expect(TOK_LPAREN))
         return nullptr;
@@ -1310,11 +1318,14 @@ Parser::parseMethod(Atom *layoutName)
 {
   SourceLocation begin = scanner_.begin();
 
+  bool isStatic = match(TOK_STATIC);
+
   TokenKind kind = TOK_NONE;
   if (match(TOK_NATIVE))
     kind = TOK_NATIVE;
 
-  bool destructor = match(TOK_TILDE);
+  // Destructors can't be static.
+  bool destructor = !isStatic && match(TOK_TILDE);
 
   // Binds are the worst. We need a good deal of lookahead to tell the
   // following apart:
@@ -1649,9 +1660,7 @@ Parser::dimensions()
       if (!expect(TOK_RBRACKET))
         return nullptr;
     }
-
-    if (!postDimensions->append(dim))
-      return nullptr;
+    postDimensions->append(dim);
   }
   return postDimensions;
 }
@@ -2189,7 +2198,7 @@ Parser::typeset_()
   if (!expect(TOK_LBRACE))
     return nullptr;
 
-  TypesetDecl *decl = new (pool_) TypesetDecl(loc, name);
+  TypesetDecl *decl = delegate_.EnterTypeset(loc, name);
 
   Vector<TypesetDecl::Entry> types;
   while (!match(TOK_RBRACE)) {

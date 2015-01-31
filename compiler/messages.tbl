@@ -133,6 +133,9 @@ RMSG(ambiguous_coercion,            type,              "implicit coercion is amb
 RMSG(typeset_candidate,             note,              "candidate type: %0")
 RMSG(cannot_coerce_for_arg,         type,              "cannot coerce '%0' to '%1' for argument '%1'")
 RMSG(coercion_diagnostic,           note,              "reason: %0")
+RMSG(cannot_use_type_as_value,      type,              "cannot use type '%0' as a value")
+RMSG(cannot_resolve_function,       type,              "cannot resolve '%0' to an implemented function")
+RMSG(function_has_no_impl,          type,              "function '%0' cannot be used as a value since it does not have a scripted body")
 
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")

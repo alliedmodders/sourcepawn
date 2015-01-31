@@ -33,24 +33,26 @@ class TypeManager
 
   bool initialize();
 
-  Type *getPrimitive(PrimitiveType type) {
+  Type *getPrimitive(PrimitiveType type) const {
     return primitiveTypes_[size_t(type)];
   }
-
-  Type *getVoid() {
+  Type *getVoid() const {
     return voidType_;
   }
-  Type *getImplicitVoid() {
+  Type *getImplicitVoid() const {
     return implicitVoidType_;
   }
-  Type *getUnchecked() {
+  Type *getUnchecked() const {
     return uncheckedType_;
   }
-  Type *getMetaFunction() {
+  Type *getMetaFunction() const {
     return metaFunctionType_;
   }
   Type *getNullType() const {
     return nullType_;
+  }
+  Type *getOverloadedFunction() const {
+    return overloadedFunctionType_;
   }
   ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);
@@ -68,6 +70,7 @@ class TypeManager
   Type *implicitVoidType_;
   Type *uncheckedType_;
   Type *metaFunctionType_;
+  Type *overloadedFunctionType_;
   Type *nullType_;
   Type *primitiveTypes_[kTotalPrimitiveTypes];
   ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
