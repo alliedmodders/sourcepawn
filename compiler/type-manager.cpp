@@ -25,6 +25,7 @@ using namespace sp;
 TypeManager::TypeManager(StringPool &strings)
  : strings_(strings),
    voidType_(nullptr),
+   implicitVoidType_(nullptr),
    uncheckedType_(nullptr),
    metaFunctionType_(nullptr),
    overloadedFunctionType_(nullptr),
@@ -48,6 +49,7 @@ bool
 TypeManager::initialize()
 {
   voidType_ = Type::NewVoid();
+  implicitVoidType_ = Type::NewImplicitVoid();
   uncheckedType_ = Type::NewUnchecked();
   metaFunctionType_ = Type::NewMetaFunction();
   overloadedFunctionType_ = Type::NewOverloadedFunction();

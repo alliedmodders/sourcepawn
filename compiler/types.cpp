@@ -230,7 +230,7 @@ GetBaseTypeName(Type *type)
     return "function";
   if (type->isUnchecked())
     return "any";
-  if (type->isVoid())
+  if (type->isVoid() || type->isImplicitVoid())
     return "void";
   if (type->isTypeset())
     return type->toTypeset()->name()->chars();
