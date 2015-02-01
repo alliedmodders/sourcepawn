@@ -74,6 +74,38 @@ if ($PageEnums) {
 ?>
 
 <?php
+if ($PageTypes) {
+?>
+    <h3 class="page-header">Types</h3>
+    
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <?php
+                foreach($PageTypes as $Type) {
+                    $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Type['name']);
+                    echo '<tr><td>';
+                    echo '<a href="' . $URL . '">' .
+                         htmlspecialchars($Type['name']) .
+                         '</a>';
+                    echo '</td>';
+                    echo '<td>';
+                    RenderDescription($Type['brief']);
+                    echo '</td></tr>';
+                }
+            ?>
+        </table>
+    </div>
+<?php
+}
+?>
+
+<?php
 if ($PageConstants) {
 ?>
     <h3 class="page-header">Constants</h3>

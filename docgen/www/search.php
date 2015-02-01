@@ -9,7 +9,7 @@ function FindFunctions($Database, $IncludeName)
         'join spdoc_include i ' .
         ' on f.include_id = i.id ' .
         'where i.name = :includeName and ' .
-        ' f.class_id = 0 and ' .
+        ' f.parent_id is null and ' .
         ' f.kind <> "forward"';
 
     $STH = $Database->prepare($Query);
@@ -30,7 +30,7 @@ function FindCallbacks($Database, $IncludeName)
         'join spdoc_include i ' .
         ' on f.include_id = i.id ' .
         'where i.name = :includeName and ' .
-        ' f.class_id = 0 and ' .
+        ' f.parent_id is null and ' .
         ' f.kind = "forward"';
 
     $STH = $Database->prepare($Query);
@@ -70,6 +70,24 @@ function FindEnums($Database, $IncludeName)
         'join spdoc_include i ' .
         ' on e.include_id = i.id ' .
         'where i.name = :includeName';
+    $STH = $Database->prepare($Query);
+    $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
+    $STH->execute();
+    $Results = $STH->fetchAll();
+    if (empty($Results))
+        return null;
+    return $Results;
+}
+
+function FindTypes($Database, $IncludeName)
+{
+    $Query =
+        'select t.name, t.kind, t.brief, t.data '.
+        'from spdoc_type t ' .
+        'join spdoc_include i ' .
+        ' on t.include_id = i.id ' .
+        'where i.name = :includeName ' .
+        ' and t.parent_id is null';
     $STH = $Database->prepare($Query);
     $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
     $STH->execute();
@@ -135,8 +153,9 @@ function FindClass($Database, $IncludeName, $Name)
         'join spdoc_include i ' .
         ' on f.include_id = i.id ' .
         'join spdoc_class c ' .
-        ' on f.class_id = c.id ' .
-        'where f.class_id = :classId';
+        ' on f.parent_id = c.id ' .
+        'where f.parent_id = :classId ' .
+        ' and f.parent_type = "class"';
     $STH = $Database->prepare($Query);
     $STH->bindValue(':classId', $Class['id']);
     $STH->execute();
@@ -154,10 +173,28 @@ function FindFunction($Database, $IncludeName, $Name)
         ' on f.include_id = i.id ' .
         'where f.name = :functionName ' .
         ' and i.name = :includeName ' .
-        ' and f.class_id = 0';
+        ' and f.parent_id is null';
     $STH = $Database->prepare($Query);
     $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
     $STH->bindValue(':functionName', $Name, PDO::PARAM_STR);
+    $STH->execute();
+
+    return $STH->fetch();
+}
+
+function FindType($Database, $IncludeName, $Name)
+{
+    $Query =
+        'select t.kind, t.name, t.brief, t.data ' .
+        'from spdoc_type t ' .
+        'join spdoc_include i ' .
+        ' on t.include_id = i.id ' .
+        'where t.name = :typeName ' .
+        ' and i.name = :includeName ' .
+        ' and t.parent_id is null';
+    $STH = $Database->prepare($Query);
+    $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
+    $STH->bindValue(':typeName', $Name, PDO::PARAM_STR);
     $STH->execute();
 
     return $STH->fetch();
@@ -204,9 +241,10 @@ function FindSubObject($Database, $IncludeName, $ClassName, $SubName)
         'join spdoc_include i ' .
         '  on f.include_id = i.id ' .
         'join spdoc_class c ' .
-        '  on f.class_id = c.id ' .
+        '  on f.parent_id = c.id ' .
         'where c.name = :className ' .
         '  and i.name = :includeName ' .
+        '  and f.parent_type = "class" ' .
         '  and f.name = :subName';
     $STH = $Database->prepare($Query);
     $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
@@ -250,6 +288,8 @@ function FindObject($Database, $IncludeName, $Name)
         return Array('type' => 'function', 'data' => $Object);
     if (($Object = FindEnum($Database, $IncludeName, $Name)))
         return Array('type' => 'enum', 'data' => $Object);
+    if (($Object = FindType($Database, $IncludeName, $Name)))
+        return Array('type' => 'type', 'data' => $Object);
     return NULL;
 }
 

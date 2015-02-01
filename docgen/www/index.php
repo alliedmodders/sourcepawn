@@ -24,7 +24,7 @@
             'from spdoc_function f ' .
             'join spdoc_include i ' .
             ' on f.include_id = i.id ' .
-            'where f.class_id = 0 ' .
+            'where f.parent_id is null ' .
             'order by f.kind, f.name asc';
         $STH = $Database->query($Query);
         while ($Function = $STH->fetch()) {
@@ -52,7 +52,7 @@
         }
 
         // Enum list per file.
-        $Enums = Array();
+        $Types = Array();
         $Query =
             'select i.name as include_name, e.name, e.brief ' .
             'from spdoc_enum e ' .
@@ -61,10 +61,30 @@
             'order by e.name asc';
         $STH = $Database->query($Query);
         while ($Enum = $STH->fetch()) {
-            $Enums[$Enum['include_name']][] = Array(
+            $Types[$Enum['include_name']][] = Array(
                 'Name' => $Enum['name'],
                 'Comment' => $Enum['brief'],
             );
+        }
+
+        $Query = 
+            'select i.name as include_name, t.name, t.brief ' .
+            'from spdoc_type t ' .
+            'join spdoc_include i ' .
+            ' on t.include_id = i.id ' .
+            'order by t.name asc';
+        $STH = $Database->Query($Query);
+        while ($Typedef = $STH->fetch()) {
+            $Types[$Typedef['include_name']][] = Array(
+                'Name' => $Typedef['name'],
+                'Comment' => $Typedef['brief'],
+            );
+        }
+
+        foreach ($Types as $_ => &$list) {
+            usort($list, function ($a, $b) {
+                return strcmp($a['Name'], $b['Name']);
+            });
         }
     }
     
@@ -151,6 +171,11 @@
                 require __DIR__ . '/template/enum.php';
                 exit;
             }
+            if ($ObjectType === 'type') {
+                $PageType = $Object;
+                require __DIR__ . '/template/type.php';
+                exit;
+            }
         }
 
         $PageFunctions = FindFunctions($Database, $IncludeName);
@@ -158,6 +183,7 @@
         $PageEnums = FindEnums($Database, $IncludeName);
         $PageConstants = FindConstants($Database, $IncludeName);
         $PageCallbacks = FindCallbacks($Database, $IncludeName);
+        $PageTypes = FindTypes($Database, $IncludeName);
 
         require __DIR__ . '/template/include.php';
         exit;

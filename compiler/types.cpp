@@ -243,26 +243,29 @@ GetBaseTypeName(Type *type)
   return GetPrimitiveName(type->primitive());
 }
 
-static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name = nullptr);
-static AString BuildTypeFromSignature(const FunctionSignature *sig);
+static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags);
+static AString BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags);
 
 static AString
-BuildTypeFromTypeExpr(const TypeExpr &te)
+BuildTypeFromTypeExpr(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
 {
   if (te.spec())
-    return BuildTypeFromSpecifier(te.spec());
-  return BuildTypeName(te.resolved());
+    return BuildTypeFromSpecifier(te.spec(), name, flags);
+  return BuildTypeName(te.resolved(), name, flags);
 }
 
 static AString
-BuildTypeFromSignature(const FunctionSignature *sig)
+BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
 {
   AutoString base = "function ";
-  base = base + BuildTypeFromTypeExpr(sig->returnType());
+  base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags);
   base = base + "(";
 
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
-    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te());
+    Atom *name = !!(flags & TypeDiagFlags::Names)
+                 ? sig->parameters()->at(i)->name()
+                 : nullptr;
+    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, flags);
     if (i != sig->parameters()->length() - 1)
       base = base + ", ";
   }
@@ -271,7 +274,7 @@ BuildTypeFromSignature(const FunctionSignature *sig)
 }
 
 static AString
-BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
+BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
 {
   AutoString base;
   if (spec->isConst())
@@ -299,10 +302,10 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
       base = base + "int";
       break;
     case TOK_FUNCTION:
-      base = base + BuildTypeFromSignature(spec->signature());
+      base = base + BuildTypeFromSignature(spec->signature(), flags);
       break;
     case TOK_DEFINED:
-      base = base + BuildTypeName(spec->getResolvedBase(), nullptr);
+      base = base + BuildTypeName(spec->getResolvedBase(), nullptr, flags);
       break;
     default:
       base = base + TokenNames[spec->resolver()];
@@ -348,13 +351,13 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name)
 }
 
 AString
-sp::BuildTypeName(const TypeSpecifier *spec, Atom *name)
+sp::BuildTypeName(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
 {
-  return BuildTypeFromSpecifier(spec, name);
+  return BuildTypeFromSpecifier(spec, name, flags);
 }
 
 AString
-sp::BuildTypeName(Type *aType, Atom *name)
+sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
 {
   if (ArrayType *type = aType->asArray()) {
     Vector<ArrayType *> stack;
@@ -370,7 +373,7 @@ sp::BuildTypeName(Type *aType, Atom *name)
       cursor = cursor->toArray()->contained();
     }
 
-    AutoString builder = BuildTypeName(innermost);
+    AutoString builder = BuildTypeName(innermost, nullptr, flags);
 
     bool hasFixedLengths = false;
     AutoString brackets;
@@ -396,7 +399,7 @@ sp::BuildTypeName(Type *aType, Atom *name)
   }
 
   if (ReferenceType *type = aType->asReference()) {
-    AutoString builder = BuildTypeName(type->contained());
+    AutoString builder = BuildTypeName(type->contained(), nullptr, flags);
     if (name)
       builder = builder + " &" + name->chars();
     else
@@ -406,7 +409,7 @@ sp::BuildTypeName(Type *aType, Atom *name)
 
   AutoString builder;
   if (FunctionType *type = aType->asFunction())
-    builder = BuildTypeFromSignature(type->signature());
+    builder = BuildTypeFromSignature(type->signature(), flags);
   else
     builder = GetBaseTypeName(aType);
   if (name)
@@ -415,11 +418,11 @@ sp::BuildTypeName(Type *aType, Atom *name)
 }
 
 AString
-sp::BuildTypeName(const TypeExpr &te, Atom *name)
+sp::BuildTypeName(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
 {
   if (te.spec())
-    return BuildTypeName(te.spec(), name);
-  return BuildTypeName(te.resolved(), name);
+    return BuildTypeName(te.spec(), name, flags);
+  return BuildTypeName(te.resolved(), name, flags);
 }
 
 BoxedValue

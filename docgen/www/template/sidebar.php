@@ -20,16 +20,16 @@
 			echo '</ul></div></div>';
         }
 
-        if (!empty($Enums[$File])) {
+        if (!empty($Types[$File])) {
 			echo GetTypeHeader('enum') . '<div class="panel-body panel-sidebar"><ul class="nav nav-sidebar">';
-            foreach ($Enums[$File] as $Enum) {
-                $EnumName = htmlspecialchars($Enum['Name']);
-				$EnumBrief = htmlspecialchars($Enum['Comment']);
+            foreach ($Types[$File] as $Type) {
+                $TypeName = htmlspecialchars($Type['Name']);
+				$TypeBrief = htmlspecialchars($Type['Comment']);
                 
 				echo '<li class="function' .
-					($CurrentOpenClass === $EnumName ? ' active' : '') .
-					'" data-title="' . $EnumName . '" data-content="' . $EnumBrief . '">';
-                echo '<a href="' . $BaseURL . $File . '/' . urlencode($Enum['Name']) . '">' . $EnumName . '</a>';
+					($CurrentOpenClass === $TypeName ? ' active' : '') .
+					'" data-title="' . $TypeName . '" data-content="' . $TypeBrief . '">';
+                echo '<a href="' . $BaseURL . $File . '/' . urlencode($Type['Name']) . '">' . $TypeName . '</a>';
                 echo '</li>';
             }
             
@@ -80,7 +80,7 @@
         switch ($Type)
         {
             case 'class': return '<div class="panel panel-danger"><div class="panel-heading">Classes</div>';
-            case 'enum': return '<div class="panel panel-warning"><div class="panel-heading">Enums</div>';
+            case 'enum': return '<div class="panel panel-warning"><div class="panel-heading">Types</div>';
             case 'forward': return '<div class="panel panel-info"><div class="panel-heading">Callbacks</div>';
             case 'function':
                 return '<div class="panel panel-success"><div class="panel-heading">Functions</div>';

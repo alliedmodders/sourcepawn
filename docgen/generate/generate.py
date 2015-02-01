@@ -178,7 +178,7 @@ class DocGen(object):
       user = self.config['database']['user'],
       passwd = self.config['database']['pass'],
       db = self.config['database']['name'])
-    self.current_class = 0
+    self.current_class = None
 
   def generate(self):
     for include in os.listdir(self.config['includes']):
@@ -187,6 +187,8 @@ class DocGen(object):
       include = include[:len(include) - 4]
 
       self.parse_include(include)
+
+    self.db.commit()
 
   def parse_include(self, include):
     argv = [
@@ -235,6 +237,8 @@ class DocGen(object):
     self.parse_constants(json['constants'])
     self.parse_functions(json['functions'])
     self.parse_enums(json['enums'])
+    self.parse_typesets(json['typesets'])
+    self.parse_typedefs(json['typedefs'])
     self.current_include = None
     self.current_file = None
 
@@ -261,6 +265,12 @@ class DocGen(object):
   def parse_enums(self, enums):
     for enum in enums:
       self.parse_enum(enum)
+  def parse_typesets(self, typesets):
+    for typeset in typesets:
+      self.parse_typeset(typeset)
+  def parse_typedefs(self, types):
+    for typeinfo in types:
+      self.parse_typedef(typeinfo)
 
   def parse_class(self, layout):
     doc = self.parse_doc(layout)
@@ -289,7 +299,7 @@ class DocGen(object):
       self.parse_function(method)
     for property in layout['properties']:
       self.parse_property(property)
-    self.current_class = 0
+    self.current_class = None
 
   def parse_property(self, property):
     doc = self.parse_doc(property)
@@ -371,6 +381,101 @@ class DocGen(object):
     for entry in enum['entries']:
       self.parse_constant(entry, 'enum', enum_id)
 
+  def parse_typedef(self, typeinfo):
+    doc = self.parse_doc(typeinfo)
+    data = JSON.dumps({
+      'brief': doc.main,
+      'tags': doc.tags,
+      'type': typeinfo['type']
+    })
+
+    old_id = self.find_old('spdoc_type', {
+      'include_id': self.current_include,
+      'parent_type': None,
+      'parent_id': None,
+      'name': typeinfo['name']
+    })
+
+    cn = self.db.cursor()
+    if old_id is None:
+      query = """
+        insert into spdoc_type
+          (include_id, parent_type, parent_id, kind, name, brief, data)
+        values
+          (%s,         %s,          %s,        %s,   %s,   %s,    %s)
+      """
+      cn.execute(query, (
+        self.current_include,
+        None, None,
+        'typedef',
+        typeinfo['name'],
+        doc.main, data))
+    else:
+      query = """
+        update spdoc_type
+        set
+          parent_type = %s,
+          parent_id = %s,
+          kind = 'typedef',
+          brief = %s,
+          data = %s
+        where
+          id = %s
+      """
+      cn.execute(query, (None, None, doc.main, data, old_id))
+
+  def parse_typeset(self, typeset):
+    doc = self.parse_doc(typeset)
+
+    types = []
+    for typeinfo in typeset['types']:
+      comment = self.parse_doc(typeinfo)
+      types.append({
+        'brief': comment.main,
+        'tags': comment.tags,
+        'type': typeinfo['type']
+      })
+
+    data = JSON.dumps({
+      'tags': doc.tags,
+      'types': types,
+    })
+
+    old_id = self.find_old('spdoc_type', {
+      'include_id': self.current_include,
+      'parent_type': None,
+      'parent_id': None,
+      'name': typeset['name']
+    })
+
+    cn = self.db.cursor()
+    if old_id is None:
+      query = """
+        insert into spdoc_type
+          (include_id, parent_type, parent_id, kind, name, brief, data)
+        values
+          (%s,         %s,          %s,        %s,   %s,   %s,    %s)
+      """
+      cn.execute(query, (
+        self.current_include,
+        None, None,
+        'typeset',
+        typeset['name'],
+        doc.main, data))
+    else:
+      query = """
+        update spdoc_type
+        set
+          parent_type = %s,
+          parent_id = %s,
+          kind = 'typeset',
+          brief = %s,
+          data = %s
+        where
+          id = %s
+      """
+      cn.execute(query, (None, None, doc.main, data, old_id))
+
   def parse_function(self, function):
     doc = self.parse_doc(function)
     data = {
@@ -419,25 +524,65 @@ class DocGen(object):
 
     json = JSON.dumps(data)
 
-    query = """
-      insert into spdoc_function
-        (include_id, class_id, kind, name, signature, brief, data)
-      values
-        (%s, %s, %s, %s, %s, %s, %s)
-      on duplicate key update
-        id = last_insert_id(id),
-        signature = %s,
-        brief = %s,
-        data = %s
-    """
+    if self.current_class is not None:
+      parent_type = 'class'
+    else:
+      parent_type = None
+
+    old_id = self.find_old('spdoc_function', {
+      'include_id': self.current_include,
+      'parent_type': parent_type,
+      'parent_id': self.current_class,
+      'name': function['name']
+    })
+
     cn = self.db.cursor()
-    cn.execute(query, (
-      self.current_include,
-      self.current_class,
-      function.get('kind'),
-      function['name'],
-      signature, doc.main, json,
-      signature, doc.main, json))
+    if old_id is None:
+      query = """
+        insert into spdoc_function
+          (include_id, parent_type, parent_id, kind, name, signature, brief, data)
+        values
+          (%s, %s, %s, %s, %s, %s, %s, %s)
+      """
+      cn.execute(query, (
+        self.current_include,
+        parent_type,
+        self.current_class,
+        function.get('kind'),
+        function['name'],
+        signature, doc.main, json))
+    else:
+      query = """
+        update spdoc_function
+        set
+          signature = %s,
+          brief = %s,
+          data = %s
+        where
+          id = %s
+      """
+      cn.execute(query, (signature, doc.main, json, old_id))
+
+  def find_old(self, table, args):
+    columns = []
+    values = []
+    for key in args:
+      value = args[key]
+      if value is None:
+        columns.append('{0} IS NULL'.format(key))
+      else:
+        columns.append('{0} = %s'.format(key))
+        values.append(value)
+
+    query = 'SELECT id FROM {0} WHERE {1}'.format(
+      table,
+      ' AND '.join(columns))
+    cn = self.db.cursor()
+    cn.execute(query, values)
+    row = cn.fetchone()
+    if row is None:
+      return None
+    return row[0]
 
 def main():
   ap = argparse.ArgumentParser()

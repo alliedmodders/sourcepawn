@@ -734,11 +734,18 @@ extern Type UnresolvableType;
 
 const char *GetPrimitiveName(PrimitiveType type);
 
+enum class TypeDiagFlags
+{
+  None = 0x0,
+  Names = 0x1
+};
+KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
+
 // Build a type name for diagnostics, with an optional name for building a
 // declaration.
-AString BuildTypeName(Type *type, Atom *name = nullptr);
-AString BuildTypeName(const TypeSpecifier *spec, Atom *name);
-AString BuildTypeName(const TypeExpr &te, Atom *name);
+AString BuildTypeName(Type *type, Atom *name = nullptr, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(const TypeExpr &te, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be

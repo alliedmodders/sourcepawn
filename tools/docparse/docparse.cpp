@@ -228,7 +228,14 @@ class Analyzer : public PartialAstVisitor
     JsonList *list = new (pool_) JsonList();
     for (size_t i = 0; i < decl->types()->length(); i++) {
       const TypesetDecl::Entry &entry = decl->types()->at(i);
-      list->add(toJson(entry.te));
+      JsonObject *te = new (pool_) JsonObject();
+      te->add(atom_type_, toJson(entry.te));
+      unsigned start, end;
+      if (comments_.findCommentFor(entry.loc, &start, &end)) {
+        te->add(atom_doc_start_, new (pool_) JsonInt(start));
+        te->add(atom_doc_end_, new (pool_) JsonInt(end));
+      }
+      list->add(te);
     }
     obj->add(cc_.add("types"), list);
 
@@ -315,10 +322,10 @@ class Analyzer : public PartialAstVisitor
   }
 
   JsonString *toJson(const TypeSpecifier *spec, Atom *name = nullptr) {
-    return toJson(BuildTypeName(spec, name).chars());
+    return toJson(BuildTypeName(spec, name, TypeDiagFlags::Names).chars());
   }
   JsonString *toJson(Type *type, Atom *name = nullptr) {
-    return toJson(BuildTypeName(type, name).chars());
+    return toJson(BuildTypeName(type, name, TypeDiagFlags::Names).chars());
   }
 
   JsonString *toJson(const TypeExpr &te, Atom *name = nullptr) {
@@ -341,7 +348,7 @@ class Analyzer : public PartialAstVisitor
       } else {
         obj->add(atom_name_, toJson("..."));
 
-        AutoString builder = BuildTypeName(decl->te(), nullptr);
+        AutoString builder = BuildTypeName(decl->te(), nullptr, TypeDiagFlags::Names);
         builder = builder + " ...";
         obj->add(atom_decl_, toJson(builder.ptr()));
       }
