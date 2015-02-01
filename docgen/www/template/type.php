@@ -58,7 +58,7 @@ if ($PageType['kind'] === 'typeset') {
 ?>
 <?php
     echo '<p>';
-    echo '<tt>typedef ' . $PageType['name'] . ' = ' . $Data['type'] . ';</tt>';
+    echo '<pre class="syntax">typedef ' . $PageType['name'] . ' = ' . $Data['type'] . ';</pre>';
     echo '</p>';
     if (isset($Data['tags'])) {
         echo '<p>';
