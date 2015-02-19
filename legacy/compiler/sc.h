@@ -80,10 +80,6 @@ typedef struct s_arginfo {  /* function argument info */
   union {
     cell val;           /* default value */
     struct {
-      char *symname;    /* name of another symbol */
-      short level;      /* indirection level for that symbol */
-    } size;             /* used for "sizeof" default value */
-    struct {
       cell *data;       /* values of default array */
       int size;         /* complete length of default array */
       int arraysize;    /* size to reserve on the heap */
@@ -103,6 +99,8 @@ typedef struct s_constvalue {
                          * tag for enumeration lists */
 } constvalue;
 
+struct methodmap_t;
+
 /*  Symbol table format
  *
  *  The symbol name read from the input file is stored in "name", the
@@ -116,7 +114,6 @@ typedef struct s_constvalue {
 typedef struct s_symbol {
   struct s_symbol *next;
   struct s_symbol *parent;  /* hierarchical types */
-  struct s_symbol *target;  /* proxy target */
   char name[sNAMEMAX+1];
   uint32_t hash;        /* value derived from name, for quicker searching */
   cell addr;            /* address or offset (or value for constant, index for native function) */
@@ -151,6 +148,7 @@ typedef struct s_symbol {
   struct s_symbol **refer;  /* referrer list, functions that "use" this symbol */
   int numrefers;        /* number of entries in the referrer list */
   char *documentation;  /* optional documentation string */
+  methodmap_t *methodmap; /* if ident == iMETHODMAP */
 } symbol;
 
 /*  Possible entries for "ident". These are used in the "symbol", "value"
@@ -170,8 +168,8 @@ typedef struct s_symbol {
 #define iFUNCTN     9
 #define iREFFUNC    10
 #define iVARARGS    11  /* function specified ... as argument(s) */
-#define iPROXY      12  /* proxies to another symbol. */
 #define iACCESSOR   13  /* property accessor via a methodmap_method_t */
+#define iMETHODMAP  14  /* symbol defining a methodmap */
 
 /*  Possible entries for "usage"
  *
@@ -228,10 +226,6 @@ typedef struct s_symbol {
 
 #define flgDEPRECATED 0x01  /* symbol is deprecated (avoid use) */
 
-#define uCOUNTOF  0x20  /* set in the "hasdefault" field of the arginfo struct */
-#define uTAGOF    0x40  /* set in the "hasdefault" field of the arginfo struct */
-#define uSIZEOF   0x80  /* set in the "hasdefault" field of the arginfo struct */
-
 #define uMAINFUNC "main"
 #define uENTRYFUNC "entry"
 
@@ -271,6 +265,7 @@ typedef struct svalue_s {
 #define DECLFLAG_DYNAMIC_ARRAYS  0x20 // Dynamic arrays are allowed.
 #define DECLFLAG_OLD             0x40 // Known old-style declaration.
 #define DECLFLAG_FIELD           0x80 // Struct field.
+#define DECLFLAG_NEW            0x100 // Known new-style declaration.
 #define DECLMASK_NAMED_DECL      (DECLFLAG_ARGUMENT | DECLFLAG_VARIABLE | DECLFLAG_MAYBE_FUNCTION | DECLFLAG_FIELD)
 
 typedef struct {
@@ -287,14 +282,16 @@ typedef struct {
   int numtags;       // Number of tags found.
   int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
   char usage;        // Usage flags.
+  bool is_new;       // New-style declaration.
+  bool has_postdims; // Dimensions, if present, were in postfix position.
+
+  bool isCharArray() const;
 } typeinfo_t;
 
 /* For parsing declarations. */
 typedef struct {
   char name[sNAMEMAX + 1];
   typeinfo_t type;
-  int is_new;        // New-style declaration.
-  int has_postdims;  // Dimensions, if present, were in postfix position.
   int opertok;       // Operator token, if applicable.
 } declinfo_t;
 
@@ -389,10 +386,15 @@ enum TokenKind {
   /* value of last multi-character operator */
   tMIDDLE    = tDBLCOLON,
 /* reserved words (statements) */
+  tACQUIRE,
+  tAS,
   tASSERT,
   tBEGIN,
   tBREAK,
+  tBUILTIN,
+  tCATCH,
   tCASE,
+  tCAST_TO,
   tCELLSOF,
   tCHAR,
   tCONST,
@@ -402,27 +404,47 @@ enum TokenKind {
   tDEFINED,
   tDELETE,
   tDO,
+  tDOUBLE,
   tELSE,
   tEND,
   tENUM,
   tEXIT,
+  tEXPLICIT,
+  tFINALLY,
   tFOR,
+  tFOREACH,
   tFORWARD,
   tFUNCENUM,
   tFUNCTAG,
   tFUNCTION,
   tGOTO,
   tIF,
+  tIMPLICIT,
+  tIMPORT,
+  tIN,
   tINT,
+  tINT8,
+  tINT16,
+  tINT32,
+  tINT64,
+  tINTERFACE,
+  tINTN,
+  tLET,
   tMETHODMAP,
+  tNAMESPACE,
   tNATIVE,
   tNEW,
   tNULL,
   tNULLABLE,
   tOBJECT,
   tOPERATOR,
+  tPACKAGE,
+  tPRIVATE,
+  tPROTECTED,
   tPUBLIC,
+  tREADONLY,
   tRETURN,
+  tSEALED,
   tSIZEOF,
   tSLEEP,
   tSTATIC,
@@ -431,16 +453,32 @@ enum TokenKind {
   tSWITCH,
   tTAGOF,
   tTHEN,
+  tTHIS,
+  tTHROW,
+  tTRY,
   tTYPEDEF,
+  tTYPEOF,
+  tTYPESET,
+  tUINT8,
+  tUINT16,
+  tUINT32,
+  tUINT64,
+  tUINTN,
   tUNION,
+  tUSING,
+  tVAR,
+  tVARIANT,
+  tVIEW_AS,
+  tVIRTUAL,
   tVOID,
+  tVOLATILE,
   tWHILE,
+  tWITH,
   /* compiler directives */
   tpASSERT,     /* #assert */
   tpDEFINE,
   tpELSE,       /* #else */
   tpELSEIF,     /* #elseif */
-  tpEMIT,
   tpENDIF,
   tpENDINPUT,
   tpENDSCRPT,
@@ -462,10 +500,12 @@ enum TokenKind {
   tSYMBOL,
   tLABEL,
   tSTRING,
+  tPENDING_STRING, /* string, but not yet dequeued */
   tEXPR,          /* for assigment to "lastst" only (see SC1.C) */
   tENDLESS,       /* endless loop, for assigment to "lastst" only */
   tEMPTYBLOCK,    /* empty blocks for AM bug 4825 */
   tEOL,           /* newline, only returned by peek_new_line() */
+  tNEWDECL,       /* for declloc() */
   tLAST_TOKEN_ID
 };
 
@@ -550,6 +590,7 @@ int pc_enablewarning(int number,int enable);
 const char *pc_tagname(int tag);
 int parse_decl(declinfo_t *decl, int flags);
 const char *type_to_name(int tag);
+bool parse_new_typename(const token_t *tok, int *tagp);
 
 /*
  * Functions called from the compiler (to be implemented by you)
@@ -645,6 +686,7 @@ char *itoh(ucell val);
 #define MATCHTAG_COERCE       0x1 // allow coercion
 #define MATCHTAG_SILENT       0x2 // silence the error(213) warning
 #define MATCHTAG_COMMUTATIVE  0x4 // order does not matter
+#define MATCHTAG_DEDUCE       0x8 // correct coercion
 
 /* function prototypes in SC3.C */
 int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
@@ -937,5 +979,34 @@ typedef struct array_info_s
   int *cur_dims;					/* Current dimensions the recursion is at */
   cell *base;						/* &litq[startlit] */
 } array_info_t;
+
+enum FatalError {
+  FIRST_FATAL_ERROR = 180,
+
+  FATAL_ERROR_READ  = FIRST_FATAL_ERROR,
+  FATAL_ERROR_WRITE,
+  FATAL_ERROR_ALLOC_OVERFLOW,
+  FATAL_ERROR_OOM,
+  FATAL_ERROR_INVALID_INSN,
+  FATAL_ERROR_INT_OVERFLOW,
+  FATAL_ERROR_SCRIPT_OVERFLOW,
+  FATAL_ERROR_OVERWHELMED_BY_BAD,
+  FATAL_ERROR_NO_CODEPAGE,
+  FATAL_ERROR_INVALID_PATH,
+  FATAL_ERROR_ASSERTION_FAILED,
+  FATAL_ERROR_USER_ERROR,
+
+  FATAL_ERRORS_TOTAL
+};
+
+struct AutoDisableLiteralQueue
+{
+ public:
+  AutoDisableLiteralQueue();
+  ~AutoDisableLiteralQueue();
+
+ private:
+  bool prev_value_;
+};
 
 #endif /* SC_H_INCLUDED */
