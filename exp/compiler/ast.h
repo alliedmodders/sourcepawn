@@ -208,7 +208,11 @@ class Expression : public AstNode
  private:
   Type *type_;
   bool side_effects_ : 1;
+#if defined(__clang__)
   VK valueKind_ : 2;
+#else
+  VK valueKind_;
+#endif
 };
 
 typedef PoolList<Statement *> StatementList;

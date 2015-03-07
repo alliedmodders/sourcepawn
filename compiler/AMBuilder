@@ -1,0 +1,89 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
+import os
+
+binary = Root.Program(builder, 'spcomp')
+compiler = binary.compiler
+compiler.includes += [
+  os.path.join(builder.currentSourcePath, '..', 'include'),
+  os.path.join(builder.currentSourcePath, '..', 'third_party'),
+  os.path.join(builder.buildPath, 'includes'),
+  os.path.join(builder.buildPath, builder.buildFolder),
+]
+ 
+if compiler.cc.behavior == 'gcc':
+  compiler.cflags += ['-Wno-format']
+  compiler.c_only_flags += ['-std=c99']
+  if builder.target_platform == 'linux':
+    compiler.postlink += ['-lm']
+  compiler.postlink += ['-lstdc++']
+elif compiler.cc.behavior == 'msvc':
+  if '/SUBSYSTEM:WINDOWS' in compiler.linkflags:
+    compiler.linkflags.remove('/SUBSYSTEM:WINDOWS')
+  if '/SUBSYSTEM:CONSOLE' not in compiler.linkflags:
+    compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
+  if '/TP' in compiler.cxxflags:
+    compiler.cxxflags.remove('/TP')
+
+# The compiler only builds in 32-bit mode.
+if compiler.cxx.like('gcc'):
+  if '-m32' not in compiler.cflags:
+    compiler.cflags += ['-m32']
+  if '-m32' not in compiler.linkflags:
+    compiler.linkflags += ['-m32']
+elif compiler.cxx.like('msvc'):
+  if '/MACHINE:X86' not in compiler.linkflags:
+    compiler.linkflags += ['/MACHINE:X86']
+
+compiler.defines += ['HAVE_STDINT_H']
+if builder.target_platform == 'linux':
+  compiler.defines += [
+    'LINUX',
+    'AMX_ANSIONLY',
+    'ENABLE_BINRELOC',
+    '_GNU_SOURCE'
+  ]
+elif builder.target_platform == 'mac':
+  compiler.defines += [
+    'DARWIN',
+    'AMX_ANSIONLY',
+    'ENABLE_BINRELOC',
+    'HAVE_SAFESTR'
+  ]
+ 
+binary.sources += [
+  'libpawnc.cpp',
+  'lstring.cpp',
+  'memfile.cpp',
+  'pawncc.cpp',
+  'sc1.cpp',
+  'sc2.cpp',
+  'sc3.cpp',
+  'sc4.cpp',
+  'sc5.cpp',
+  'sc6.cpp',
+  'sc7.cpp',
+  'sci18n.cpp',
+  'sclist.cpp',
+  'scmemfil.cpp',
+  'scstate.cpp',
+  'sctracker.cpp',
+  'scvars.cpp',
+  'smx-builder.cpp',
+  'sp_symhash.cpp',
+  '../third_party/zlib/adler32.c',
+  '../third_party/zlib/compress.c',
+  '../third_party/zlib/crc32.c',
+  '../third_party/zlib/deflate.c',
+  '../third_party/zlib/gzio.c',
+  '../third_party/zlib/infback.c',
+  '../third_party/zlib/inffast.c',
+  '../third_party/zlib/inflate.c',
+  '../third_party/zlib/inftrees.c',
+  '../third_party/zlib/trees.c',
+  '../third_party/zlib/uncompr.c',
+  '../third_party/zlib/zutil.c',
+]
+if builder.target_platform != 'windows':
+  binary.sources.append('binreloc.c')
+ 
+Root.spcomp = builder.Add(binary)

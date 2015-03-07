@@ -235,6 +235,7 @@ namespace sp {
   _(STRADJUST_PRI,  "stradjust.pri")  \
   _(UNGEN_STKADJUST,"stackadjust")    \
   _(ENDPROC,        "endproc")        \
+  _(UNGEN_LDGFN_PRI,"ldgfn.pri")     \
   _(FABS,           "fabs")           \
   _(FLOAT,          "float")          \
   _(FLOATADD,       "float.add")      \
@@ -258,8 +259,10 @@ enum OPCODE {
 #define _(op, text) OP_##op,
   OPCODE_LIST(_)
 #undef _
-  OPCODES_TOTAL
+  OPCODES_LAST
 };
+
+#define OPCODES_TOTAL (ucell_t)OPCODES_LAST
 
 } // namespace sp
 

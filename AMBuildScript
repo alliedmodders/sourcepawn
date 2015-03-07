@@ -33,6 +33,7 @@ class KEConfig:
         '-Wall',
         '-Werror',
         '-Wno-switch',
+        '-msse',
       ]
       cfg.cxxflags += ['-std=c++11']
 
@@ -146,17 +147,24 @@ class KEConfig:
       cfg.defines += ['WIN32', '_WINDOWS']
 
     cfg.defines += ['KE_THREADSAFE']
+    cfg.defines += ['SOURCEPAWN_VERSION="1.8"']
 
-    if builder.options.amtl:
-      amtl_path = Normalize(builder.options.amtl)
-      if not os.path.isdir(amtl_path):
-          raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
-      cfg.cxxincludes += [os.path.join(amtl_path, 'include')]
+    if not builder.options.amtl or not os.path.isdir(builder.options.amtl):
+      raise Exception('Must specify a valid --amtl')
+
+    amtl_path = Normalize(builder.options.amtl)
+    if not os.path.isdir(amtl_path):
+      raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
     cfg.cxxincludes += [
+      os.path.join(amtl_path, 'include'),
       os.path.join(builder.sourcePath, 'include'),
     ]
 
+  def Program(self, context, name):
+    return context.compiler.Program(name)
+
 KE = KEConfig()
 
+builder.RunScript('compiler/AMBuilder', { 'Root': KE })
 builder.RunScript('exp/compiler/AMBuilder', { 'KE': KE })
 builder.RunScript('exp/tools/docparse/AMBuilder', { 'KE': KE })
