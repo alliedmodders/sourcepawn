@@ -59,7 +59,6 @@ class KEConfig:
         '-fno-threadsafe-statics',
         '-Wno-non-virtual-dtor',
         '-Wno-overloaded-virtual',
-        '-Wno-invalid-offsetof',
       ]
 
       if have_gcc:
