@@ -149,8 +149,10 @@ class KEConfig:
     amtl_path = Normalize(builder.options.amtl)
     if not os.path.isdir(amtl_path):
       raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
+    self.amtl = amtl_path
+
     cfg.cxxincludes += [
-      os.path.join(amtl_path, 'include'),
+      os.path.join(self.amtl, 'include'),
       os.path.join(builder.sourcePath, 'include'),
     ]
 

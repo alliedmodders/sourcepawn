@@ -4,6 +4,7 @@ import os
 binary = Root.Program(builder, 'spcomp')
 compiler = binary.compiler
 compiler.includes += [
+  os.path.join(Root.amtl, 'include'),
   os.path.join(builder.currentSourcePath, '..', 'include'),
   os.path.join(builder.currentSourcePath, '..', 'third_party'),
   os.path.join(builder.buildPath, 'includes'),
