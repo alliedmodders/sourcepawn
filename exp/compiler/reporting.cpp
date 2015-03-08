@@ -325,7 +325,7 @@ ReportManager::renderSourceRef(const FullSourceRef &ref)
     return AString(":0");
 
   AutoString builder = ref.file->path();
-  builder = builder + ":" + ref.line + ":" + ref.col;
+  builder = builder + ":" + AutoString(ref.line) + ":" + AutoString(ref.col);
   return AString(builder.ptr());
 }
 

@@ -255,6 +255,9 @@ GetSourcePawnFactory(int apiVersion)
 #endif
 
 #if defined __linux__ || defined __APPLE__
+# if !defined(_GLIBCXX_USE_NOEXCEPT)
+#  define _GLIBCXX_USE_NOEXCEPT
+# endif
 extern "C" void __cxa_pure_virtual(void)
 {
 }
@@ -269,12 +272,12 @@ void *operator new[](size_t size)
 	return malloc(size);
 }
 
-void operator delete(void *ptr) 
+void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	free(ptr);
 }
 
-void operator delete[](void * ptr)
+void operator delete[](void * ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	free(ptr);
 }

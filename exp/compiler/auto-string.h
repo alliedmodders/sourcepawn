@@ -54,6 +54,14 @@ class AutoString
     {
       assign(other.ptr(), other.length());
     }
+    explicit AutoString(int32_t val)
+      : ptr_(nullptr),
+        length_(0)
+    {
+      char buffer[24];
+      snprintf(buffer, sizeof(buffer), "%d", val);
+      *this = *this + buffer;
+    }
     ~AutoString()
     {
       free(ptr_);
@@ -100,12 +108,6 @@ class AutoString
       r.ptr_ = buf;
       r.length_ = len;
       return r;
-    }
-
-    AutoString operator +(unsigned val) const {
-      char buffer[24];
-      snprintf(buffer, sizeof(buffer), "%d", val);
-      return *this + buffer;
     }
 
     size_t length() const {

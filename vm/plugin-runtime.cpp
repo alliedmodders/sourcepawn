@@ -24,12 +24,6 @@
 using namespace sp;
 using namespace SourcePawn;
 
-static inline bool
-IsPointerCellAligned(void *p)
-{
-  return uintptr_t(p) % 4 == 0;
-}
-
 PluginRuntime::PluginRuntime(LegacyImage *image)
  : image_(image),
    paused_(false),
@@ -165,12 +159,6 @@ PluginRuntime::SetNames(const char *fullname, const char *name)
 {
   name_ = name;
   full_name_ = name;
-}
-
-static cell_t
-InvalidNative(IPluginContext *pCtx, const cell_t *params)
-{
-  return pCtx->ThrowNativeErrorEx(SP_ERROR_INVALID_NATIVE, "Invalid native");
 }
 
 void

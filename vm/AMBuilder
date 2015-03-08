@@ -2,36 +2,16 @@
 import os
 
 Includes = [
-  os.path.join(SM.mms_root, 'core', 'sourcehook'),
   os.path.join(builder.currentSourcePath),
   os.path.join(builder.currentSourcePath, '..', 'third_party'),
-  os.path.join(builder.sourcePath, 'public'),
-  os.path.join(builder.sourcePath, 'public', 'sourcepawn'),
-  os.path.join(builder.sourcePath, 'public', 'amtl'),
-  os.path.join(builder.sourcePath, 'public', 'jit'),
-  os.path.join(builder.sourcePath, 'public', 'jit', 'x86'),
 
   # The include path for SP v2 stuff.
   os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
 ]
 
-def setup(binary):
-  compiler = binary.compiler
-  compiler.includes += Includes
-  if compiler.vendor == 'gcc' or compiler.vendor == 'clang':
-    compiler.cxxflags += [
-      '-fno-rtti',
-      '-Wno-invalid-offsetof',
-    ]
-  elif binary.compiler.vendor == 'msvc':
-    compiler.cxxflags += ['/GR-']
- 
-  if binary.compiler.cc.behavior == 'msvc':
-    compiler.cxxflags.remove('/TP')
-  return binary
-
 # Build the static library.
-library = setup(builder.compiler.StaticLibrary('sourcepawn'))
+library = builder.compiler.StaticLibrary('sourcepawn')
+library.compiler.includes += Includes
 library.sources += [
   'api.cpp',
   'code-allocator.cpp',
@@ -67,7 +47,8 @@ library.sources += [
 libsourcepawn = builder.Add(library).binary
 
 # Build the dynamically-linked library.
-dll = setup(SM.Library(builder, 'sourcepawn.jit.x86'))
+dll = Root.Library(builder, 'sourcepawn.jit.x86')
+dll.compiler.includes += Includes
 dll.compiler.linkflags[0:0] = [libsourcepawn]
 dll.sources += [
   'dll_exports.cpp'
@@ -76,18 +57,16 @@ dll.sources += [
 if builder.target_platform == 'linux':
   dll.compiler.postlink += ['-lpthread', '-lrt']
 
-SM.binaries += [builder.Add(dll)]
+Root.binaries += [builder.Add(dll)]
 
 # Build the debug shell.
-shell = setup(SM.Program(builder, 'spshell'))
+shell = Root.Program(builder, 'spshell')
+shell.compiler.includes += Includes
 shell.compiler.defines += ['SPSHELL']
 shell.compiler.linkflags[0:0] = [libsourcepawn]
 shell.sources += [
   'dll_exports.cpp'
 ]
-if shell.compiler.cc.behavior == 'msvc':
-  shell.compiler.linkflags.remove('/SUBSYSTEM:WINDOWS')
-  shell.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
 
 if builder.target_platform == 'linux':
   shell.compiler.postlink += ['-lpthread', '-lrt']

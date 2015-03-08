@@ -384,7 +384,7 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
       }
 
       hasFixedLengths = true;
-      brackets = brackets + "[" + stack[i]->fixedLength() + "]";
+      brackets = brackets + "[" + AutoString(stack[i]->fixedLength()) + "]";
     }
 
     if (name) {

@@ -64,7 +64,7 @@
 #endif
 
 #include <time.h>
-#if !defined(SOURCEPAWN_VERSION)
+#if defined(SOURCEMOD_BUILD)
 # include <sourcemod_version.h>
 # define SOURCEPAWN_VERSION SOURCEMOD_VERSION
 #endif

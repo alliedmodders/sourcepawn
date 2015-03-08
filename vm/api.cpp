@@ -33,7 +33,10 @@
 #include <malloc.h>
 #endif
 
-#include <sourcemod_version.h>
+#if defined(SOURCEMOD_BUILD)
+# include <sourcemod_version.h>
+# define SOURCEPAWN_VERSION SOURCEMOD_VERSION
+#endif
 #include "code-stubs.h"
 #include "smx-v1-image.h"
 
@@ -290,13 +293,13 @@ SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
 const char *
 SourcePawnEngine2::GetEngineName()
 {
-  return "SourcePawn 1.7, jit-x86";
+  return "SourcePawn 1.8, jit-x86";
 }
 
 const char *
 SourcePawnEngine2::GetVersionString()
 {
-  return SOURCEMOD_VERSION;
+  return SOURCEPAWN_VERSION;
 }
 
 IDebugListener *
@@ -339,8 +342,6 @@ SourcePawnEngine2::Shutdown()
 IPluginRuntime *
 SourcePawnEngine2::CreateEmptyRuntime(const char *name, uint32_t memory)
 {
-  int err;
-
   ke::AutoPtr<EmptyImage> image(new EmptyImage(memory));
 
   PluginRuntime *rt = new PluginRuntime(image.take());

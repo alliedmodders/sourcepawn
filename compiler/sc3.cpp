@@ -1536,8 +1536,8 @@ static int hier2(value *lval)
   int tag,paranthese;
   cell val;
   char *st;
-  symbol *sym;
   int saveresult;
+  symbol *sym = nullptr;
 
   tok=lex(&val,&st);
   switch (tok) {

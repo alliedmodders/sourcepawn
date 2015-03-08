@@ -24,6 +24,8 @@ def Normalize(path):
 
 class KEConfig:
   def __init__(self):
+    self.binaries = []
+
     cfg = builder.DetectCompilers()
     cxx = cfg.cxx
 
@@ -49,16 +51,6 @@ class KEConfig:
         if (have_gcc and cxx.minorVersion >= 7) or (have_clang and cxx.majorVersion >= 4):
           cfg.cxxflags += ['-Wno-delete-non-virtual-dtor']
 
-      cfg.cxxflags += [
-        '-fno-exceptions',
-        '-fno-threadsafe-statics',
-        '-Wno-non-virtual-dtor',
-        '-Wno-overloaded-virtual',
-      ]
-
-      if have_gcc:
-        cfg.cflags += ['-mfpmath=sse']
-
       # Disable some stuff we don't use, that gives us better binary
       # compatibility on Linux.
       cfg.cxxflags += [
@@ -69,6 +61,9 @@ class KEConfig:
         '-Wno-overloaded-virtual',
         '-Wno-invalid-offsetof',
       ]
+
+      if have_gcc:
+        cfg.cflags += ['-mfpmath=sse']
 
       if (have_gcc and cxx.majorVersion >= 4 and cxx.minorVersion >= 7) or \
           (have_clang and cxx.majorVersion >= 3):
@@ -97,7 +92,6 @@ class KEConfig:
       ]
       cfg.linkflags += [
         '/MACHINE:X86',
-        '/SUBSYSTEM:WINDOWS',
         'kernel32.lib',
         'user32.lib',
         'gdi32.lib',
@@ -161,10 +155,20 @@ class KEConfig:
     ]
 
   def Program(self, context, name):
-    return context.compiler.Program(name)
+    binary = context.compiler.Program(name)
+    if binary.compiler.like('msvc'):
+      binary.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
+    return binary
+
+  def Library(self, context, name):
+    binary = context.compiler.Library(name)
+    if binary.compiler.like('msvc'):
+      binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
+    return binary
 
 KE = KEConfig()
 
 builder.RunScript('compiler/AMBuilder', { 'Root': KE })
+builder.RunScript('vm/AMBuilder', { 'Root': KE })
 builder.RunScript('exp/compiler/AMBuilder', { 'KE': KE })
 builder.RunScript('exp/tools/docparse/AMBuilder', { 'KE': KE })

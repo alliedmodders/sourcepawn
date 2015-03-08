@@ -109,7 +109,6 @@ FrameIterator::nextInvokeFrame()
 void
 FrameIterator::Next()
 {
-  void *pc = nullptr;
   if (exit_frame_.has_exit_native()) {
     // If we're at an exit frame, the return address will yield the current pc.
     const JitExitFrameForNative *exit =
