@@ -5,7 +5,7 @@ function RenderDescription($Desc)
 {
     $Lines = explode("\n", $Desc);
     foreach ($Lines as $Line) {
-        echo "<p>" . htmlspecialchars($Line); "</p>";
+        echo "<p>" . htmlspecialchars($Line) . "</p>";
     }
 }
 
