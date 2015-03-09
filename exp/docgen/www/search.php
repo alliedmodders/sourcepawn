@@ -292,5 +292,3 @@ function FindObject($Database, $IncludeName, $Name)
         return Array('type' => 'type', 'data' => $Object);
     return NULL;
 }
-
-?>

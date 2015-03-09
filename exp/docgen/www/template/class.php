@@ -7,6 +7,8 @@
 
 <ol class="breadcrumb">
     <li><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>"><?php echo $CurrentOpenFile; ?>.inc</a></li>
+    <li>Classes</li>
+    <li class="active"><?php echo htmlspecialchars($PageClass['name']); ?></li>
     
     <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__raw">File</a></li>
 </ol>

@@ -1,16 +1,20 @@
 <?php
 // vim: set ts=4 sw=4 tw=99 et:
     require __DIR__ . '/header.php';
+    
+    $FoundAny = false;
 ?>
 
 <ol class="breadcrumb">
     <li><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>"><?php echo $CurrentOpenFile; ?>.inc</a></li>
-    
+    <li class="active">Overview</li>
+        
     <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__raw">File</a></li>
 </ol>
 
 <?php
 if ($PageClasses) {
+    $FoundAny = true;
 ?>
     <h3 class="page-header">Classes</h3>
     
@@ -43,6 +47,7 @@ if ($PageClasses) {
 
 <?php
 if ($PageEnums) {
+    $FoundAny = true;
 ?>
     <h3 class="page-header">Enums</h3>
     
@@ -75,6 +80,7 @@ if ($PageEnums) {
 
 <?php
 if ($PageTypes) {
+    $FoundAny = true;
 ?>
     <h3 class="page-header">Types</h3>
     
@@ -107,6 +113,7 @@ if ($PageTypes) {
 
 <?php
 if ($PageConstants) {
+    $FoundAny = true;
 ?>
     <h3 class="page-header">Constants</h3>
     
@@ -139,6 +146,7 @@ if ($PageConstants) {
 
 <?php
 if ($PageCallbacks) {
+    $FoundAny = true;
 ?>
     <h3 class="page-header">Callbacks</h3>
     
@@ -171,6 +179,7 @@ if ($PageCallbacks) {
 
 <?php
 if ($PageFunctions) {
+    $FoundAny = true;
 ?>
     <h3 class="page-header">Functions</h3>
     
@@ -196,6 +205,15 @@ if ($PageFunctions) {
                 }
             ?>
         </table>
+    </div>
+<?php
+}
+
+if (!$FoundAny) {
+?>
+    <div class="panel panel-primary">
+        <div class="panel-heading">Empty</div>
+        <div class="panel-body">This include file has no types, functions, or constants.</div>
     </div>
 <?php
 }
