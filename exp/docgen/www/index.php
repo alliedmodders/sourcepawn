@@ -121,26 +121,24 @@
         
         $HeaderTitle = $CurrentOpenFile = $IncludeName;
 
-        switch ($Action) {
-        case '__raw':
-            $Query = 'select content from spdoc_include where name = :includeName';
-            $STH = $Database->prepare($Query);
-            $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
-            $STH->execute();
-            
-            $PageFile = $STH->fetch();
-            
-            if (Empty($PageFile)) {
-                require __DIR__ . '/template/404.php';
+        if ($Action) {
+            if ($Action === '__raw') {
+                $Query = 'select content from spdoc_include where name = :includeName';
+                $STH = $Database->prepare($Query);
+                $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
+                $STH->execute();
+
+                $PageFile = $STH->fetch();
+
+                if (Empty($PageFile)) {
+                    require __DIR__ . '/template/404.php';
+                    exit;
+                }
+
+                require __DIR__ . '/template/raw.php';
                 exit;
             }
-            
-            require __DIR__ . '/template/raw.php';
-            exit;
-            break;
-        }
 
-        if ($Action) {
             if (isset($Path[2]))
                 $Object = FindSubObject($Database, $IncludeName, $Action, $Path[2]);
             else
@@ -178,6 +176,18 @@
             }
         }
 
+        $Query = 'select name from spdoc_include where name = :includeName';
+        $STH = $Database->prepare($Query);
+        $STH->bindValue(':includeName', $IncludeName, PDO::PARAM_STR);
+        $STH->execute();
+
+        $PageFile = $STH->fetch();
+
+        if (Empty($PageFile)) {
+            require __DIR__ . '/template/404.php';
+            exit;
+        }
+
         $PageFunctions = FindFunctions($Database, $IncludeName);
         $PageClasses = FindClasses($Database, $IncludeName);
         $PageEnums = FindEnums($Database, $IncludeName);
@@ -188,5 +198,5 @@
         require __DIR__ . '/template/include.php';
         exit;
     }
-    
+
     require __DIR__ . '/template/main.php';

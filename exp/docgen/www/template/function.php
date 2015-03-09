@@ -13,7 +13,16 @@
 
 <ol class="breadcrumb">
     <li><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>"><?php echo $CurrentOpenFile; ?>.inc</a></li>
-    
+<?php
+if (isset($PageFunction['class_name'])) {
+?>
+    <li><?php echo htmlspecialchars($PageFunction['class_name']); ?></li>
+<?php
+}
+?>
+    <li><?php echo (isset($PageFunction['class_name']) ? 'Methods' : ($PageFunction['kind'] === 'forward' ? 'Callbacks' : 'Functions')); ?></li>
+    <li class="active"><?php echo htmlspecialchars($PageFunction['name']); ?></li>
+
     <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__raw">File</a></li>
 </ol>
 

@@ -5,10 +5,9 @@
 
 <ol class="breadcrumb">
     <li><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>"><?php echo $CurrentOpenFile; ?>.inc</a></li>
-    <li class="active">Raw</li>
+    <li class="active">File</li>
     
-    <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__functions">Functions</a></li>
-    <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>">Constants</a></li>
+    <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>">Overview</a></li>
 </ol>
 
 <h1 class="page-header"><?php echo htmlspecialchars( $CurrentOpenFile ); ?>.inc</h1>

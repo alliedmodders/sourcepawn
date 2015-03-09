@@ -46,5 +46,3 @@ function MethodName($Function)
     }
     return $Function['name'];
 }
-
-?>
