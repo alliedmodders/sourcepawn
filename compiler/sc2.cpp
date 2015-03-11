@@ -1012,7 +1012,7 @@ static int command(void)
         /* nothing */;          /* save start of expression */
       preproc_expr(&val,NULL);  /* get constant expression (or 0 on error) */
       if (!val)
-        error(170,str);         /* assertion failed */
+        error(FATAL_ERROR_ASSERTION_FAILED,str);         /* assertion failed */
       check_empty(lptr);
     } /* if */
     break;
@@ -1267,7 +1267,7 @@ static int command(void)
     while (*lptr<=' ' && *lptr!='\0')
       lptr++;
     if (!SKIPPING)
-      error(171,lptr);  /* user error */
+      error(FATAL_ERROR_USER_ERROR,lptr);  /* user error */
     break;
   default:
     error(31);          /* unknown compiler directive */

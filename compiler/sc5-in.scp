@@ -207,24 +207,24 @@ static const char *errmsg[] = {
 };
 
 static const char *fatalmsg[] = {
-/*182*/  "cannot read from file: \"%s\"\n",
-/*183*/  "cannot write to file: \"%s\"\n",
-/*184*/  "table overflow: \"%s\"\n",
+/*183*/  "cannot read from file: \"%s\"\n",
+/*184*/  "cannot write to file: \"%s\"\n",
+/*185*/  "table overflow: \"%s\"\n",
           /* table can be: loop table
            *               literal table
            *               staging buffer
            *               option table (response file)
            *               peephole optimizer table
            */
-/*185*/  "insufficient memory\n",
-/*186*/  "invalid assembler instruction \"%s\"\n",
-/*187*/  "numeric overflow, exceeding capacity\n",
-/*188*/  "compiled script exceeds the maximum memory size (%ld bytes)\n",
-/*189*/  "too many error messages on one line\n",
-/*190*/  "codepage mapping file not found\n",
-/*191*/  "invalid path: \"%s\"\n",
-/*192*/  "assertion failed: %s\n",
-/*193*/  "user error: %s\n",
+/*186*/  "insufficient memory\n",
+/*187*/  "invalid assembler instruction \"%s\"\n",
+/*188*/  "numeric overflow, exceeding capacity\n",
+/*189*/  "compiled script exceeds the maximum memory size (%ld bytes)\n",
+/*190*/  "too many error messages on one line\n",
+/*191*/  "codepage mapping file not found\n",
+/*192*/  "invalid path: \"%s\"\n",
+/*193*/  "assertion failed: %s\n",
+/*194*/  "user error: %s\n",
 };
 
 static const char *warnmsg[] = {
