@@ -7,18 +7,22 @@
 
 <ol class="breadcrumb">
     <li><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>"><?php echo $CurrentOpenFile; ?>.inc</a></li>
+    <li>Enumerations</li>
+    <li class="active"><?php echo htmlspecialchars($PageEnum['name']); ?></li>
     
     <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__raw">File</a></li>
 </ol>
 
 <h1 class="page-header"><?php echo htmlspecialchars($PageEnum['name']); ?> Enumeration</h1>
 
-<p><?php RenderDescription($PageEnum['brief']); ?></p>
+<?php if (empty($PageEnum['brief'])) { ?>
+  <p class="text-muted">This enumeration has no description.</p>
+<?php } else { RenderDescription($PageEnum['brief']); } ?>
 
 <?php
 if ($PageEnum['entries']) {
 ?>
-    <h4 class="page-header">Values</h4>
+    <h4 class="sub-header2">Values <span class="badge"><?php echo count($PageEnum['entries']); ?></span></h4>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -30,12 +34,12 @@ if ($PageEnum['entries']) {
             </thead>
             <?php
                 foreach ($PageEnum['entries'] as $EnumValue) {
-					echo '<tr>';
-					echo '<td>' . htmlspecialchars($EnumValue['name']) . '</td>';
+                    echo '<tr>';
+                    echo '<td class="col-md-2">' . htmlspecialchars($EnumValue['name']) . '</td>';
                     echo '<td>';
                     RenderDescription($EnumValue['brief']);
-					echo '</td>';
-					echo '</tr>';
+                    echo '</td>';
+                    echo '</tr>';
                 }
             ?>
         </table>
@@ -44,7 +48,7 @@ if ($PageEnum['entries']) {
 }
 
 if (isset($Data['tags'])) {
-	RenderTags($Data['tags']);
+    RenderTags($Data['tags']);
 }
 
 ?>

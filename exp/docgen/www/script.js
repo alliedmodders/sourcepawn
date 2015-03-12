@@ -1,5 +1,8 @@
 (function()
 {
+	var baseUrl = $( 'body' ).data( 'baseurl' ),
+		fullBaseUrl = new RegExp( '^' + escapeRegExp( location.origin + baseUrl ) );
+	
 	$( '.function' ).popover(
 	{
 		container: 'body',
@@ -8,16 +11,65 @@
 	} );
 	
 	$( document )
-		.pjax( 'a', '#pjax-container' )
+		.pjax( 'a', '#pjax-container', { timeout: 8000 } )
 		.on( 'pjax:start', function() { NProgress.start(); } )
 		.on( 'pjax:end',   function() { NProgress.done();  } )
-		.on( 'pjax:clicked', function( ev )
+		.on( 'pjax:clicked pjax:popstate', function( ev )
 			{
 				$( '.function.active' ).removeClass( 'active' );
-				$( ev.target ).parent().addClass( 'active' );
+				
+				var parent = $( ev.target ).parent();
+				
+				if( parent.hasClass( 'function' ) )
+				{
+					parent.addClass( 'active' );
+				}
+				// Try to figure out which function user clicked on
+				// and mark that function as active in the sidebar
+				else
+				{
+					if( $( ev.target ).hasClass( 'file' ) )
+					{
+						return;
+					}
+					
+					var relativeUrl = ( ev.type === 'pjax:popstate' ? ev.state.url : ev.target.href ).replace( fullBaseUrl, '' ),
+						pos = relativeUrl.indexOf( '/' ),
+						file = relativeUrl;
+					
+					if( pos > 0 )
+					{
+						file = file.substring(0, pos);
+						
+						relativeUrl = relativeUrl.substring( pos + 1 );
+						
+						pos = relativeUrl.indexOf( '/' );
+						
+						if( pos > 0 )
+						{
+							relativeUrl = relativeUrl.substring( 0, pos );
+						}
+						
+						$( 'li[data-title="' + relativeUrl + '"]' ).first().addClass( 'active' );
+					}
+					
+					file = $( '#file-' + file );
+					
+					if( file )
+					{
+						var visibleNav = $( '.nav-functions.show' );
+						
+						if( !visibleNav.is( file ) )
+						{
+							visibleNav.removeClass( 'show' );
+						}
+						
+						file.addClass( 'show' );
+					}
+				}
 			} );
 	
-	$( '.file > a' ).on( 'click', function()
+	$( '.file' ).on( 'click', function()
 	{
 		var nav = $( '#file-' + $( this ).text() );
 		
@@ -38,75 +90,75 @@
 		}
 	} );
 	
-	var functions = [];
+	var value,
+		lastValue,
+		elementSearch = $( '.typeahead' ),
+		elementFunctions = $( '#js-functions' ),
+		elementFunctionsDefault = $( '#js-functions-default' ),
+		elementClear = $( '#js-search-clear' );
 	
-	$( '.function' ).each( function( )
+	elementClear.on( 'click', function()
 	{
-		var $this = $( this );
+		lastValue = value = '';
 		
-		functions.push( [ $this.data( 'title' ), $this.data( 'content' ) ] );
+		elementFunctions.hide().empty();
+		elementFunctionsDefault.show();
+		elementSearch.val( '' );
+		elementClear.hide();
 	} );
 	
-	var constantSearch = new Bloodhound( {
-		datumTokenizer: Bloodhound.tokenizers.obj.whitespace( 'value' ),
-		queryTokenizer: Bloodhound.tokenizers.whitespace,
-		remote: $( 'body' ).data( 'baseurl' ) + '__search/%QUERY'
-	} );
-	
-	constantSearch.initialize();
-	
-	$( '.typeahead' ).typeahead(
+	elementSearch.on( 'change', function()
 	{
-		hint: true,
-		highlight: true,
-		minLength: 1
-	},
-	{
-		name: 'functions',
-		displayKey: 'value',
-		templates:
+		value = elementSearch.val();
+		
+		if( value === lastValue )
 		{
-			header: '<h3 class="tt-name">Functions</h3>'
-		},
-		source: function( query, callback )
-		{
-			var matches = [], substrRegex = new RegExp( query, 'i' );
-			
-			$.each( functions, function( i, str )
-			{
-				if( substrRegex.test( str ) )
-				{
-					matches.push( { value: str[ 0 ] } );
-				}
-			} );
-			
-			callback( matches );
+			return;
 		}
-	},
-	{
-		name: 'constants',
-		displayKey: 'value',
-		templates:
+		
+		lastValue = value;
+		
+		if( value.length > 0 )
 		{
-			header: '<h3 class="tt-name">Constants</h3>'
-		},
-		source: constantSearch.ttAdapter()
-	} ).on( 'typeahead:selected', function( a, b, source )
-	{
-		if( source === 'constants' )
+			elementClear.show();
+		}
+		else
 		{
-			$( 'a[data-file="' + b.includeName + '"]' ).click();
+			elementClear.hide();
+		}
+		
+		if( value.length < 2 )
+		{
+			elementFunctions.hide().empty();
+			elementFunctionsDefault.show();
 			
 			return;
 		}
 		
-		var func = $( '[data-title="' + b.value + '"]' );
+		elementSearch.attr( 'disabled', true );
 		
-		$( '.nav-sidebar.show' ).removeClass( 'show' );
+		NProgress.start();
 		
-		func
-			.parent().addClass( 'show' )
-			.end()
-			.find( 'a' ).click();
+		elementFunctions.load( baseUrl + '__search/' + value, function()
+		{
+			elementFunctionsDefault.hide();
+			elementFunctions.show();
+			
+			elementFunctions.find( '.function' ).popover(
+			{
+				container: 'body',
+				placement: 'right',
+				trigger: 'hover'
+			} );
+			
+			elementSearch.removeAttr( 'disabled' );
+			
+			NProgress.done();
+		} );
 	} );
+	
+	function escapeRegExp( str )
+	{
+		return str.replace( /[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&' );
+	}
 }());
