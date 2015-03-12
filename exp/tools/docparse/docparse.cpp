@@ -184,8 +184,8 @@ class Analyzer : public PartialAstVisitor
 
   void visitMethodmapDecl(MethodmapDecl *node) override {
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "class", node->name(), node->loc()))
-      obj->add(atom_name_, toJson(node->name()));
+    obj->add(atom_name_, toJson(node->name()));
+    startDoc(obj, "class", node->name(), node->loc());
 
     SaveAndSet<JsonList *> new_props(&props_, new (pool_) JsonList());
     SaveAndSet<JsonList *> new_methods(&methods_, new (pool_) JsonList());
@@ -199,8 +199,8 @@ class Analyzer : public PartialAstVisitor
 
   void visitMethodDecl(MethodDecl *node) override {
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "method", node->name(), node->loc()))
-      return;
+    obj->add(atom_name_, toJson(node->name()));
+    startDoc(obj, "method", node->name(), node->loc());
 
     if (node->method()->isFunction()) {
       FunctionNode *fun = node->method()->fun();
@@ -211,8 +211,8 @@ class Analyzer : public PartialAstVisitor
   }
   void visitPropertyDecl(PropertyDecl *node) override {
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "property", node->name(), node->loc()))
-      return;
+    obj->add(atom_name_, toJson(node->name()));
+    startDoc(obj, "property", node->name(), node->loc());
 
     obj->add(atom_type_, toJson(node->te()));
     obj->add(atom_getter_, new (pool_) JsonBool(!node->getter()->isEmpty()));
@@ -222,8 +222,8 @@ class Analyzer : public PartialAstVisitor
 
   void visitTypesetDecl(TypesetDecl *decl) override {
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "typeset", decl->name(), decl->loc()))
-      return;
+    obj->add(atom_name_, toJson(decl->name()));
+    startDoc(obj, "typeset", decl->name(), decl->loc());
 
     JsonList *list = new (pool_) JsonList();
     for (size_t i = 0; i < decl->types()->length(); i++) {
@@ -244,8 +244,8 @@ class Analyzer : public PartialAstVisitor
 
   void visitTypedefDecl(TypedefDecl *decl) override {
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "typedef", decl->name(), decl->loc()))
-      return;
+    obj->add(atom_name_, toJson(decl->name()));
+    startDoc(obj, "typedef", decl->name(), decl->loc());
 
     obj->add(atom_type_, toJson(decl->te()));
 
@@ -258,8 +258,8 @@ class Analyzer : public PartialAstVisitor
         EnumConstant *cs = node->entries()->at(i);
 
         JsonObject *val = new (pool_) JsonObject();
-        if (!startDoc(val, "enum value", cs->name(), cs->loc()))
-          val->add(atom_name_, toJson(cs->name()));
+        val->add(atom_name_, toJson(cs->name()));
+        startDoc(val, "enum value", cs->name(), cs->loc());
 
         constants_->add(val);
       }
@@ -267,16 +267,16 @@ class Analyzer : public PartialAstVisitor
     }
 
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "enum", node->name(), node->loc()))
-      return;
+    obj->add(atom_name_, toJson(node->name()));
+    startDoc(obj, "enum", node->name(), node->loc());
 
     JsonList *list = new (pool_) JsonList();
     for (size_t i = 0; i < node->entries()->length(); i++) {
       EnumConstant *cs = node->entries()->at(i);
 
       JsonObject *val = new (pool_) JsonObject();
-      if (!startDoc(val, "enum value", cs->name(), cs->loc()))
-        val->add(atom_name_, toJson(cs->name()));
+      val->add(atom_name_, toJson(cs->name()));
+      startDoc(val, "enum value", cs->name(), cs->loc());
 
       list->add(val);
     }
@@ -287,8 +287,8 @@ class Analyzer : public PartialAstVisitor
 
   void visitFunctionStatement(FunctionStatement *node) override {
     JsonObject *obj = new (pool_) JsonObject();
-    if (!startDoc(obj, "function", node->name(), node->loc()))
-      return;
+    obj->add(atom_name_, toJson(node->name()));
+    startDoc(obj, "function", node->name(), node->loc());
 
     if (node->token() == TOK_FORWARD)
       obj->add(atom_kind_, toJson("forward"));
@@ -304,21 +304,19 @@ class Analyzer : public PartialAstVisitor
   }
 
  private:
-  bool startDoc(JsonObject *obj, const char *type, Atom *name, const SourceLocation &loc) {
+  void startDoc(JsonObject *obj, const char *type, Atom *name, const SourceLocation &loc) {
     unsigned start, end;
     if (!comments_.findCommentFor(loc, &start, &end)) {
       cc_.report(loc, rmsg::missing_comment)
         << type << name;
-      return false;
+      return;
     }
 
     assert(start < INT_MAX);
     assert(end < INT_MAX);
 
-    obj->add(atom_name_, toJson(name));
     obj->add(atom_doc_start_, new (pool_) JsonInt(start));
     obj->add(atom_doc_end_, new (pool_) JsonInt(end));
-    return true;
   }
 
   JsonString *toJson(const TypeSpecifier *spec, Atom *name = nullptr) {
