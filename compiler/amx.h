@@ -92,11 +92,6 @@
 #if HAVE_ALLOCA_H
   #include <alloca.h>
 #endif
-#if defined __WIN32__ || defined _WIN32 || defined WIN32 /* || defined __MSDOS__ */
-  #if !defined alloca
-    #define alloca(n)   _alloca(n)
-  #endif
-#endif
 
 #if !defined arraysize
   #define arraysize(array)  (sizeof(array) / sizeof((array)[0]))

@@ -1,10 +1,6 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-builder.compiler.cflags += [
-  '-Wno-invalid-offsetof'
-]
-
 Includes = [
   os.path.join(Root.amtl, 'include'),
   os.path.join(builder.currentSourcePath),
@@ -17,6 +13,11 @@ Includes = [
 # Build the static library.
 library = builder.compiler.StaticLibrary('sourcepawn')
 library.compiler.includes += Includes
+if library.compiler.like('gcc'):
+  library.compiler.cflags += [
+    '-Wno-invalid-offsetof'
+  ]
+
 library.sources += [
   'api.cpp',
   'code-allocator.cpp',

@@ -42,9 +42,6 @@
 #else
   #include <setjmp.h>
 #endif
-#if !defined(stricmp)
-# define stricmp strcasecmp
-#endif
 #include "osdefs.h"
 #include "amx.h"
 
