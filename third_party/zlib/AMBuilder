@@ -1,0 +1,23 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+library = builder.compiler.StaticLibrary('z')
+library.compiler.includes += [
+  os.path.join(builder.currentSourcePath, '..', 'third_party'),
+]
+library.sources += [
+  'adler32.c',
+  'compress.c',
+  'crc32.c',
+  'deflate.c',
+  'gzio.c',
+  'infback.c',
+  'inffast.c',
+  'inflate.c',
+  'inftrees.c',
+  'trees.c',
+  'uncompr.c',
+  'zutil.c',
+]
+
+Root.zlib = builder.Add(library).binary

@@ -25,7 +25,9 @@ def Normalize(path):
 class KEConfig:
   def __init__(self):
     self.binaries = []
+    self.zlib = None
 
+  def configure(self):
     cfg = builder.DetectCompilers()
     cxx = cfg.cxx
 
@@ -168,8 +170,16 @@ class KEConfig:
     return binary
 
 KE = KEConfig()
+KE.configure()
 
-builder.RunScript('compiler/AMBuilder', { 'Root': KE })
-builder.RunScript('vm/AMBuilder', { 'Root': KE })
-#builder.RunScript('exp/compiler/AMBuilder', { 'KE': KE })
-#builder.RunScript('exp/tools/docparse/AMBuilder', { 'KE': KE })
+BuildScripts = [
+  'third_party/zlib/AMBuilder',
+  'compiler/AMBuilder',
+  'vm/AMBuilder',
+  #'exp/compiler/AMBuilder',
+  #'exp/tools/docparse/AMBuilder'
+]
+
+builder.RunBuildScripts(BuildScripts, {
+  'Root': KE
+})

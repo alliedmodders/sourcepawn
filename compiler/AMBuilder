@@ -64,20 +64,11 @@ binary.sources += [
   'scvars.cpp',
   'smx-builder.cpp',
   'sp_symhash.cpp',
-  '../third_party/zlib/adler32.c',
-  '../third_party/zlib/compress.c',
-  '../third_party/zlib/crc32.c',
-  '../third_party/zlib/deflate.c',
-  '../third_party/zlib/gzio.c',
-  '../third_party/zlib/infback.c',
-  '../third_party/zlib/inffast.c',
-  '../third_party/zlib/inflate.c',
-  '../third_party/zlib/inftrees.c',
-  '../third_party/zlib/trees.c',
-  '../third_party/zlib/uncompr.c',
-  '../third_party/zlib/zutil.c',
 ]
 if builder.target_platform != 'windows':
   binary.sources.append('binreloc.c')
+binary.compiler.linkflags[0:0] = [
+  Root.zlib,
+]
  
 Root.spcomp = builder.Add(binary)
