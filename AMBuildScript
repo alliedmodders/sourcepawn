@@ -198,3 +198,5 @@ if builder.parent is None:
   root.configure()
   sp = SourcePawn(root, root.amtl)
   sp.BuildCore()
+else:
+  rvalue = SourcePawn
