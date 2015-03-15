@@ -10,13 +10,14 @@ Includes = [
   os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
 ]
 
+if builder.compiler.like('gcc'):
+  builder.compiler.cflags += [
+    '-Wno-invalid-offsetof'
+  ]
+
 # Build the static library.
 library = builder.compiler.StaticLibrary('sourcepawn')
 library.compiler.includes += Includes
-if library.compiler.like('gcc'):
-  library.compiler.cflags += [
-    '-Wno-invalid-offsetof'
-  ]
 
 library.sources += [
   'api.cpp',
