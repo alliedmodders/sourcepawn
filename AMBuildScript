@@ -168,12 +168,6 @@ class Config(object):
       binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
     return binary
 
-CoreScripts = [
-  'third_party/zlib/AMBuilder',
-  'compiler/AMBuilder',
-  'vm/AMBuilder',
-]
-
 ProjectScripts = [
   #'exp/compiler/AMBuilder',
   #'exp/tools/docparse/AMBuilder'
@@ -185,9 +179,14 @@ class SourcePawn(object):
     self.root = root
     self.amtl = amtl
     self.zlib = None
+    self.core_scripts = [
+      os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder'),
+      os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
+      os.path.join(builder.currentSourceFolder, 'vm/AMBuilder'),
+    ]
 
   def BuildCore(self):
-    builder.RunBuildScripts(CoreScripts, {
+    builder.RunBuildScripts(self.core_scripts, {
       'Root': self.root,
       'SP': self,
     })
