@@ -5,12 +5,6 @@
         'Password'         => ''
     );
     
-    $Columns = Array(
-        'Functions' => 'pawnfunctions',
-        'Constants' => 'pawnconstants',
-        'Files'     => 'pawnfiles'
-    );
-    
     $BaseURL = '/pawn-docgen/www/';
     $Project = 'SourceMod';
     

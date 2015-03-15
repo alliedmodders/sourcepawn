@@ -1,18 +1,22 @@
 <?php
 // vim: set ts=4 sw=4 tw=99 et:
     require __DIR__ . '/header.php';
+    
+    $FoundAny = false;
 ?>
 
 <ol class="breadcrumb">
     <li><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>"><?php echo $CurrentOpenFile; ?>.inc</a></li>
-    
+    <li class="active">Overview</li>
+        
     <li class="pull-right"><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__raw">File</a></li>
 </ol>
 
 <?php
 if ($PageClasses) {
+    $FoundAny = true;
 ?>
-    <h3 class="page-header">Classes</h3>
+    <h3 class="sub-header2">Classes <span class="badge"><?php echo count($PageClasses); ?></span></h3>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -25,13 +29,13 @@ if ($PageClasses) {
             <?php
                 foreach($PageClasses as $Class) {
                     $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Class['name']);
-                    echo '<tr><td>';
+                    echo '<tr><td class="col-md-2 mono">';
                     echo '<a href="' . $URL . '">' .
                          htmlspecialchars($Class['name']) .
                          '</a>';
                     echo '</td>';
                     echo '<td>';
-                    RenderDescription($Class['brief']);
+                    RenderDescription($Class['brief'], true);
                     echo '</td></tr>';
                 }
             ?>
@@ -43,8 +47,9 @@ if ($PageClasses) {
 
 <?php
 if ($PageEnums) {
+    $FoundAny = true;
 ?>
-    <h3 class="page-header">Enums</h3>
+    <h3 class="sub-header2">Enums <span class="badge"><?php echo count($PageEnums); ?></span></h3>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -57,13 +62,13 @@ if ($PageEnums) {
             <?php
                 foreach($PageEnums as $Enum) {
                     $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Enum['name']);
-                    echo '<tr><td>';
+                    echo '<tr><td class="col-md-2 mono">';
                     echo '<a href="' . $URL . '">' .
                          htmlspecialchars($Enum['name']) .
                          '</a>';
                     echo '</td>';
                     echo '<td>';
-                    RenderDescription($Enum['brief']);
+                    RenderDescription($Enum['brief'], true);
                     echo '</td></tr>';
                 }
             ?>
@@ -75,8 +80,9 @@ if ($PageEnums) {
 
 <?php
 if ($PageTypes) {
+    $FoundAny = true;
 ?>
-    <h3 class="page-header">Types</h3>
+    <h3 class="sub-header2">Types <span class="badge"><?php echo count($PageTypes); ?></span></h3>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -89,13 +95,13 @@ if ($PageTypes) {
             <?php
                 foreach($PageTypes as $Type) {
                     $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Type['name']);
-                    echo '<tr><td>';
+                    echo '<tr><td class="col-md-2 mono">';
                     echo '<a href="' . $URL . '">' .
                          htmlspecialchars($Type['name']) .
                          '</a>';
                     echo '</td>';
                     echo '<td>';
-                    RenderDescription($Type['brief']);
+                    RenderDescription($Type['brief'], true);
                     echo '</td></tr>';
                 }
             ?>
@@ -107,8 +113,9 @@ if ($PageTypes) {
 
 <?php
 if ($PageConstants) {
+    $FoundAny = true;
 ?>
-    <h3 class="page-header">Constants</h3>
+    <h3 class="sub-header2">Constants <span class="badge"><?php echo count($PageConstants); ?></span></h3>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -121,13 +128,13 @@ if ($PageConstants) {
             <?php
                 foreach($PageConstants as $Constant) {
                     $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Constant['name']);
-                    echo '<tr><td>';
+                    echo '<tr><td class="col-md-2 mono">';
                     echo '<a href="' . $URL . '">' .
                          htmlspecialchars($Constant['name']) .
                          '</a>';
                     echo '</td>';
                     echo '<td>';
-                    RenderDescription($Constant['brief']);
+                    RenderDescription($Constant['brief'], true);
                     echo '</td></tr>';
                 }
             ?>
@@ -138,9 +145,10 @@ if ($PageConstants) {
 ?>
 
 <?php
-if ($PageCallbacks) {
+if ($PageForwards) {
+    $FoundAny = true;
 ?>
-    <h3 class="page-header">Callbacks</h3>
+    <h3 class="sub-header2">Forwards <span class="badge"><?php echo count($PageForwards); ?></span></h3>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -151,15 +159,15 @@ if ($PageCallbacks) {
                 </tr>
             </thead>
             <?php
-                foreach($PageCallbacks as $Function) {
+                foreach($PageForwards as $Function) {
                     $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Function['name']);
-                    echo '<tr><td>';
+                    echo '<tr><td class="col-md-2 mono">';
                     echo '<a href="' . $URL . '">' .
                          htmlspecialchars($Function['name']) .
                          '</a>';
                     echo '</td>';
                     echo '<td>';
-                    RenderDescription($Function['brief']);
+                    RenderDescription($Function['brief'], true);
                     echo '</td></tr>';
                 }
             ?>
@@ -171,8 +179,9 @@ if ($PageCallbacks) {
 
 <?php
 if ($PageFunctions) {
+    $FoundAny = true;
 ?>
-    <h3 class="page-header">Functions</h3>
+    <h3 class="sub-header2">Functions <span class="badge"><?php echo count($PageFunctions); ?></span></h3>
     
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
@@ -185,18 +194,29 @@ if ($PageFunctions) {
             <?php
                 foreach($PageFunctions as $Function) {
                     $URL = $BaseURL . $CurrentOpenFile . '/' . htmlspecialchars($Function['name']);
-                    echo '<tr><td>';
+                    echo '<tr><td class="col-md-2 mono">';
                     echo '<a href="' . $URL . '">' .
                          htmlspecialchars($Function['name']) .
                          '</a>';
                     echo '</td>';
                     echo '<td>';
-                    RenderDescription($Function['brief']);
+                    RenderDescription($Function['brief'], true);
                     echo '</td></tr>';
                 }
             ?>
         </table>
     </div>
+<?php
+}
+
+if (!$FoundAny) {
+?>
+  <div class="bs-callout bs-callout-danger">
+    <h4>This file is empty</h4>
+    <p>This include file has no types, functions, or constants that we could display. Sorry about that.</p>
+    <p>&nbsp;</p>
+    <p><a href="<?php echo $BaseURL . $CurrentOpenFile; ?>/__raw">Would you like to view raw contents of this file?</a></p>
+  </div>
 <?php
 }
 ?>

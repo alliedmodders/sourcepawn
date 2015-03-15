@@ -13,7 +13,7 @@
     
     <title><?php echo $Title; ?></title>
     
-    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="<?php echo $BaseURL; ?>style.css">
 </head>
 <body data-baseurl="<?php echo $BaseURL; ?>">
@@ -22,7 +22,8 @@
             <a href="<?php echo $BaseURL; ?>"><?php echo $Project; ?> API</a>
         </div>
         
-        <input class="form-control typeahead" type="text" placeholder="Search functions">
+        <input class="form-control typeahead" type="text" placeholder="Search">
+        <span id="js-search-clear" style="display:none">&times;</span>
         
         <noscript>
             <style>
@@ -39,7 +40,10 @@
             <p class="bg-primary">Search requires javascript to work</p>
         </noscript>
         
-        <?php require __DIR__ . '/sidebar.php'; ?>
+        <div id="js-functions"></div>
+        <div id="js-functions-default">
+            <?php require __DIR__ . '/sidebar.php'; ?>
+        </div>
     </div>
     
     <div class="container-fluid">
