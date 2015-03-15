@@ -14,7 +14,7 @@ before_script:
   - wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key | sudo apt-key add -
   - sudo apt-get update -qq
   - sudo apt-get install -y g++-multilib libc6-dev-i386 lib32stdc++6 lib32z1-dev clang-3.5
-  - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/tools/checkout-deps.sh && cd $CHECKOUT_DIR
+  - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/build/checkout-deps.sh && cd $CHECKOUT_DIR
 script:
   - mkdir debug32 && cd debug32
   - CC="clang-3.5 -m32" CXX="clang-3.5 -m32" python ../configure.py --enable-debug --amtl=../../amtl
