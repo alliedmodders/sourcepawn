@@ -171,5 +171,5 @@ KE = KEConfig()
 
 builder.RunScript('compiler/AMBuilder', { 'Root': KE })
 builder.RunScript('vm/AMBuilder', { 'Root': KE })
-builder.RunScript('exp/compiler/AMBuilder', { 'KE': KE })
-builder.RunScript('exp/tools/docparse/AMBuilder', { 'KE': KE })
+#builder.RunScript('exp/compiler/AMBuilder', { 'KE': KE })
+#builder.RunScript('exp/tools/docparse/AMBuilder', { 'KE': KE })
