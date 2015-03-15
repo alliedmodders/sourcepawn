@@ -54,7 +54,7 @@ dll.sources += [
 if builder.target_platform == 'linux':
   dll.compiler.postlink += ['-lpthread', '-lrt']
 
-SP.libsourcepawn = dll
+SP.libsourcepawn = builder.Add(dll)
 
 # Build the debug shell.
 shell = Root.Program(builder, 'spshell')
