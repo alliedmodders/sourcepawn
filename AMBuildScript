@@ -22,10 +22,9 @@ import sys
 def Normalize(path):
   return os.path.abspath(os.path.normpath(path))
 
-class KEConfig:
+class Config(object):
   def __init__(self):
-    self.binaries = []
-    self.zlib = None
+    super(Config, self).__init__()
 
   def configure(self):
     cfg = builder.DetectCompilers()
@@ -169,17 +168,33 @@ class KEConfig:
       binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
     return binary
 
-KE = KEConfig()
-KE.configure()
-
-BuildScripts = [
+CoreScripts = [
   'third_party/zlib/AMBuilder',
   'compiler/AMBuilder',
   'vm/AMBuilder',
+]
+
+ProjectScripts = [
   #'exp/compiler/AMBuilder',
   #'exp/tools/docparse/AMBuilder'
 ]
 
-builder.RunBuildScripts(BuildScripts, {
-  'Root': KE
-})
+class SourcePawn(object):
+  def __init__(self, root, amtl):
+    super(SourcePawn, self).__init__()
+    self.root = root
+    self.amtl = amtl
+    self.zlib = None
+
+  def BuildCore(self):
+    builder.RunBuildScripts(CoreScripts, {
+      'Root': self.root,
+      'SP': self,
+    })
+
+# If no parent, we're the root of the project, so build everything.
+if builder.parent is None:
+  root = Config()
+  root.configure()
+  sp = SourcePawn(root, root.amtl)
+  sp.BuildCore()

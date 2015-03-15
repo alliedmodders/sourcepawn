@@ -20,4 +20,4 @@ library.sources += [
   'zutil.c',
 ]
 
-Root.zlib = builder.Add(library).binary
+SP.zlib = builder.Add(library).binary

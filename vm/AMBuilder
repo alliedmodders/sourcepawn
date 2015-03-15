@@ -38,14 +38,14 @@ library.sources += [
   'x86/jit_x86.cpp',
   'x86/x86-utils.cpp',
 ]
-libsourcepawn = builder.Add(library).binary
+libsourcepawn = builder.Add(library)
 
 # Build the dynamically-linked library.
 dll = Root.Library(builder, 'sourcepawn.jit.x86')
 dll.compiler.includes += Includes
 dll.compiler.linkflags[0:0] = [
-  libsourcepawn,
-  Root.zlib,
+  libsourcepawn.binary,
+  SP.zlib,
 ]
 dll.sources += [
   'dll_exports.cpp'
@@ -54,15 +54,15 @@ dll.sources += [
 if builder.target_platform == 'linux':
   dll.compiler.postlink += ['-lpthread', '-lrt']
 
-Root.binaries += [builder.Add(dll)]
+SP.libsourcepawn = dll
 
 # Build the debug shell.
 shell = Root.Program(builder, 'spshell')
 shell.compiler.includes += Includes
 shell.compiler.defines += ['SPSHELL']
 shell.compiler.linkflags[0:0] = [
-  libsourcepawn,
-  Root.zlib,
+  libsourcepawn.binary,
+  SP.zlib,
 ]
 shell.sources += [
   'dll_exports.cpp'

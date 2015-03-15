@@ -68,7 +68,7 @@ binary.sources += [
 if builder.target_platform != 'windows':
   binary.sources.append('binreloc.c')
 binary.compiler.linkflags[0:0] = [
-  Root.zlib,
+  SP.zlib,
 ]
  
-Root.spcomp = builder.Add(binary)
+SP.spcomp = builder.Add(binary)
