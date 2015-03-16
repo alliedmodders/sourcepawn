@@ -874,6 +874,7 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
   cell_t *base = reinterpret_cast<cell_t *>(memory_ + hp_);
   cell_t offs = GenerateArrayIndirectionVectors(base, argv, argc, !!autozero);
   assert(size_t(offs) == cells);
+  (void)offs;
 
   argv[argc - 1] = hp_;
   hp_ = new_hp;

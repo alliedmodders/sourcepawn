@@ -60,13 +60,13 @@ SP.libsourcepawn = builder.Add(dll)
 # Build the debug shell.
 shell = Root.Program(builder, 'spshell')
 shell.compiler.includes += Includes
-shell.compiler.defines += ['SPSHELL']
 shell.compiler.linkflags[0:0] = [
   libsourcepawn.binary,
   SP.zlib,
+  '-lstdc++',
 ]
 shell.sources += [
-  'dll_exports.cpp'
+  'shell.cpp'
 ]
 
 if builder.target_platform == 'linux':
