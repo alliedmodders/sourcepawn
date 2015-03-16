@@ -1,0 +1,3 @@
+#!/bin/sh
+
+sh {objdir}/testing/test-compiler.sh

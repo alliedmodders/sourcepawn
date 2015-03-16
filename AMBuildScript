@@ -184,18 +184,26 @@ class SourcePawn(object):
       os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
       os.path.join(builder.currentSourceFolder, 'vm/AMBuilder'),
     ]
-
-  def BuildCore(self):
-    builder.RunBuildScripts(self.core_scripts, {
+    self.suite_scripts = [
+      os.path.join(builder.currentSourceFolder, 'testing/Testing.ambuild'),
+    ]
+    self.vars = {
       'Root': self.root,
       'SP': self,
-    })
+    }
+
+  def BuildCore(self):
+    builder.RunBuildScripts(self.core_scripts, self.vars)
+
+  def BuildSuite(self):
+    self.BuildCore()
+    builder.RunBuildScripts(self.suite_scripts, self.vars)
 
 # If no parent, we're the root of the project, so build everything.
 if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  sp.BuildCore()
+  sp.BuildSuite()
 else:
   rvalue = SourcePawn

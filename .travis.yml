@@ -21,6 +21,8 @@ script:
   - mkdir debug32 && cd debug32
   - CC="clang-3.5 -m32" CXX="clang-3.5 -m32" python ../configure.py --enable-debug --amtl=../../amtl
   - ambuild
+  - testing/test-all.sh
   - mkdir ../opt32 && cd ../opt32
   - CC="clang-3.5 -m32" CXX="clang-3.5 -m32" python ../configure.py --enable-optimize --amtl=../../amtl
   - ambuild
+  - testing/test-all.sh
