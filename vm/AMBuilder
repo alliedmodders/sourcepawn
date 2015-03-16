@@ -12,7 +12,8 @@ Includes = [
 
 if builder.compiler.like('gcc'):
   builder.compiler.cflags += [
-    '-Wno-invalid-offsetof'
+    '-Wno-invalid-offsetof',
+    '-Wno-implicit-exception-spec-mismatch',
   ]
 
 # Build the static library.
