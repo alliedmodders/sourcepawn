@@ -15,6 +15,7 @@ if builder.compiler.like('gcc'):
     '-Wno-invalid-offsetof',
     '-Wno-implicit-exception-spec-mismatch',
   ]
+  builder.compiler.cxxflags += ['-fno-rtti']
 
 # Build the static library.
 library = builder.compiler.StaticLibrary('sourcepawn')
