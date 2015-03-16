@@ -17,6 +17,9 @@ if compiler.cc.behavior == 'gcc':
   if builder.target_platform == 'linux':
     compiler.postlink += ['-lm']
   compiler.postlink += ['-lstdc++']
+  compiler.cxxflags += [
+    '-Wno-implicit-exception-spec-mismatch',
+  ]
 
 # The compiler only builds in 32-bit mode.
 if compiler.cxx.like('gcc'):
