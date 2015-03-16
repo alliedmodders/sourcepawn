@@ -3,14 +3,9 @@
     require_once __DIR__ . '/../settings.php';
     require_once __DIR__ . '/template/render.php';
     require_once __DIR__ . '/search.php';
-    
-    $Path = isset( $_SERVER[ 'QUERY_STRING' ] ) ? trim( $_SERVER[ 'QUERY_STRING' ], '/' ) : '';
-    $RenderLayout = !isset( $_SERVER[ 'HTTP_X_PJAX' ] ) || $_SERVER[ 'HTTP_X_PJAX' ] !== 'true';
 
-    // Stupid bugfix when clicking on homepage
-    if (substr($Path, 0, 6) === '_pjax=') {
-        $Path = '';
-    }
+    $Path = isset($_GET['path']) ? $_GET['path'] : '';
+    $RenderLayout = !isset($_SERVER['HTTP_X_PJAX']) || $_SERVER['HTTP_X_PJAX'] !== 'true';
 
     if ($RenderLayout) {
         $Search = false;

@@ -13,7 +13,7 @@
         $AnythingRendered = true;
 
         echo '<h4><a class="file" data-file="' . $File . '" href="' . $BaseURL . $File . '">' . $File . '</a></h4>';
-        echo '<div class="nav-functions ' . ( $CurrentOpenFile === '%all%' || $CurrentOpenFile === $File ? ' show' : '' ) . '" id="file-' . $File . '">';
+        echo '<div class="nav-functions' . ( $CurrentOpenFile === '%all%' || $CurrentOpenFile === $File ? ' show' : '' ) . '" id="file-' . $File . '">';
 
         if (!empty($Classes[$File])) {
             echo GetTypeHeader('class') . '<div class="panel-body panel-sidebar"><ul class="nav nav-sidebar">';

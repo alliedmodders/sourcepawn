@@ -83,9 +83,38 @@ a.type:hover {
 	border-bottom-style: solid;
 }
 
-/* Hide for mobile, show later */
 .sidebar {
-	display: none;
+	position: fixed;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 1000;
+	display: block;
+	width: 300px;
+	padding: 20px;
+	overflow-x: hidden;
+	overflow-y: scroll;
+	background-color: #f5f5f5;
+	border-right: 1px solid #eee;
+}
+
+.navbar-toggle {
+	background-color: #FFF;
+	border-color: #DDD;
+	margin: 0;
+	position: fixed;
+	left: 10px;
+	top: 10px;
+	z-index: 1337;
+}
+
+.navbar-toggle:focus,
+.navbar-toggle:hover {
+	background-color: #DDD;
+}
+
+.navbar-toggle .icon-bar {
+	background-color: #888;
 }
 
 .nav-functions {
@@ -222,19 +251,10 @@ a.type:hover {
 		padding-left: 40px;
 	}
 	
-	.sidebar {
-		position: fixed;
-		top: 0px;
-		bottom: 0;
-		left: 0;
-		z-index: 1000;
-		display: block;
-		width: 300px;
-		padding: 20px;
-		overflow-x: hidden;
-		overflow-y: scroll;
-		background-color: #f5f5f5;
-		border-right: 1px solid #eee;
+	.sidebar.collapse {
+		display: block !important;
+		height: auto !important;
+		visibility: visible !important
 	}
 }
 
@@ -258,7 +278,7 @@ a.type:hover {
 #nprogress .peg {
 	display: block;
 	position: absolute;
-	right: 0px;
+	right: 0;
 	width: 100px;
 	height: 100%;
 	box-shadow: 0 0 10px #29d, 0 0 5px #29d;

@@ -17,7 +17,12 @@
     <link rel="stylesheet" href="<?php echo $BaseURL; ?>style.css">
 </head>
 <body data-baseurl="<?php echo $BaseURL; ?>">
-    <div class="sidebar">
+    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#js-sidebar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+    </button>
+    <div id="js-sidebar" class="sidebar collapse">
         <div class="header-link">
             <a href="<?php echo $BaseURL; ?>"><?php echo $Project; ?> API</a>
         </div>

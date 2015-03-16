@@ -1,5 +1,11 @@
 (function()
 {
+	// Disable transitions because they work poorly on sidebar toggling
+	$(document).ready(function()
+	{
+		$.support.transition = false;
+	});
+	
 	var baseUrl = $( 'body' ).data( 'baseurl' ),
 		fullBaseUrl = new RegExp( '^' + escapeRegExp( location.origin + baseUrl ) );
 	
