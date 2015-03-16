@@ -44,6 +44,10 @@
 #    define strdup		_strdup
 #    define unlink		_unlink
 #  endif
+#else
+# if !defined(stricmp)
+#  define stricmp strcasecmp
+# endif
 #endif
 
 #if defined __FreeBSD__
