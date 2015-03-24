@@ -84,6 +84,7 @@ class Config(object):
       ]
       cfg.cflags += [
         '/W3',
+        '/wd4351',
       ]
       cfg.cxxflags += [
         '/EHsc',
@@ -169,7 +170,6 @@ class Config(object):
     return binary
 
 ProjectScripts = [
-  #'exp/compiler/AMBuilder',
   #'exp/tools/docparse/AMBuilder'
 ]
 
@@ -187,6 +187,9 @@ class SourcePawn(object):
     self.suite_scripts = [
       os.path.join(builder.currentSourceFolder, 'testing/Testing.ambuild'),
     ]
+    self.exp_scripts = [
+      os.path.join(builder.currentSourceFolder, 'exp/compiler/AMBuilder'),
+    ]
     self.vars = {
       'Root': self.root,
       'SP': self,
@@ -195,8 +198,12 @@ class SourcePawn(object):
   def BuildCore(self):
     builder.RunBuildScripts(self.core_scripts, self.vars)
 
+  def BuildExperimental(self):
+    builder.RunBuildScripts(self.exp_scripts, self.vars)
+
   def BuildSuite(self):
     self.BuildCore()
+    self.BuildExperimental()
     builder.RunBuildScripts(self.suite_scripts, self.vars)
 
 # If no parent, we're the root of the project, so build everything.

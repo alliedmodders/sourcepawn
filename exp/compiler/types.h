@@ -672,6 +672,7 @@ SizeOfPrimitiveType(PrimitiveType type)
       return sizeof(void *);
     default:
       assert(false);
+      return 0;
   }
 }
 
@@ -693,6 +694,7 @@ IsPrimitiveTypeSigned(PrimitiveType type)
       return false;
     default:
       assert(false);
+      return false;
   }
 }
 

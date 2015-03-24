@@ -35,6 +35,7 @@ IntValue::getTypename() const
       return isSigned() ? "int64" : "uint64";
     default:
       assert(false);
+      return 0;
   }
   return "unknown";
 }

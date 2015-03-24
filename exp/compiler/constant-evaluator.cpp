@@ -236,7 +236,7 @@ ConstantEvaluator::Evaluate(Expression *expr, BoxedValue *out)
 
   if (IntegerLiteral *lit = expr->asIntegerLiteral()) {
     if (lit->value() >= INT_MIN && lit->value() <= INT_MAX)
-      *out = BoxedValue(IntValue::FromInt32(lit->value()));
+      *out = BoxedValue(IntValue::FromInt32((int32_t)lit->value()));
     else
       *out = BoxedValue(IntValue::FromInt64(lit->value()));
     return Ok;

@@ -74,7 +74,7 @@ void
 TMessage::addArg(size_t value)
 {
   char buffer[24];
-  snprintf(buffer, sizeof(buffer), "%" KE_FMT_SIZET, value);
+  SafeSprintf(buffer, sizeof(buffer), "%" KE_FMT_SIZET, value);
   addArg(buffer);
 }
 

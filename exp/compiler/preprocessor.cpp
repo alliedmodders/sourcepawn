@@ -54,7 +54,15 @@ Preprocessor::setup_builtin_macros()
   {
     struct tm curtime;
     time_t td = time(nullptr);
+#if defined(KE_WINDOWS)
+    if (struct tm *rv = _localtime64(&td)) {
+      curtime = *rv;
+    } else {
+      MemsetZero(&curtime);
+    }
+#else
     localtime_r(&td, &curtime);
+#endif
 
     char datestring[64];
     char timestring[64];

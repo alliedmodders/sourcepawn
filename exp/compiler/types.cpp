@@ -324,7 +324,7 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flag
     if (Expression *expr = spec->sizeOfRank(i)) {
       if (IntegerLiteral *lit = expr->asIntegerLiteral()) {
         char value[24];
-        snprintf(value, sizeof(value), "%d", (int)lit->value());
+        SafeSprintf(value, sizeof(value), "%d", (int)lit->value());
         base = base + "[" + value + "]";
         continue;
       }

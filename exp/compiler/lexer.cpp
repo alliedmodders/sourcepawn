@@ -1230,7 +1230,7 @@ Lexer::scan(Token *tok)
       if (!lexing_for_directive_) {
         char print[2] = {c, '\0'};
         char code[16];
-        snprintf(code, sizeof(code), "%02X", uint8_t(c));
+        SafeSprintf(code, sizeof(code), "%02X", uint8_t(c));
 
         cc_.report(tok->start.loc, rmsg::unexpected_char)
           << print << code;

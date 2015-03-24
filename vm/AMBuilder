@@ -65,8 +65,9 @@ shell.compiler.includes += Includes
 shell.compiler.linkflags[0:0] = [
   libsourcepawn.binary,
   SP.zlib,
-  '-lstdc++',
 ]
+if shell.compiler.like('gcc'):
+  shell.compiler.linkflags += ['-lstdc++']
 shell.sources += [
   'shell.cpp'
 ]

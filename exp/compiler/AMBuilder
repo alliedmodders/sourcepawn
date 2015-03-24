@@ -50,7 +50,7 @@ binary.sources += [
   'type-resolver.cpp',
   'types.cpp',
 ]
-KE.libspcomp = builder.Add(binary)
+SP.libspcomp = builder.Add(binary)
 
 binary = builder.compiler.Program('spcomp')
 binary.compiler.cxxincludes += [
@@ -64,7 +64,7 @@ binary.sources += [
   'main.cpp',
 ]
 binary.compiler.linkflags += [
-  KE.libspcomp.binary
+  SP.libspcomp.binary
 ]
 builder.Add(binary)
 

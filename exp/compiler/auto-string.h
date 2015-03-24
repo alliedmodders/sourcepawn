@@ -59,7 +59,7 @@ class AutoString
         length_(0)
     {
       char buffer[24];
-      snprintf(buffer, sizeof(buffer), "%d", val);
+      SafeSprintf(buffer, sizeof(buffer), "%d", val);
       *this = *this + buffer;
     }
     ~AutoString()
