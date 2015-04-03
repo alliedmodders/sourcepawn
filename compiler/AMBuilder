@@ -22,12 +22,12 @@ if compiler.cc.behavior == 'gcc':
   ]
 
 # The compiler only builds in 32-bit mode.
-if compiler.cxx.like('gcc'):
+if compiler.like('gcc'):
   if '-m32' not in compiler.cflags:
     compiler.cflags += ['-m32']
   if '-m32' not in compiler.linkflags:
     compiler.linkflags += ['-m32']
-elif compiler.cxx.like('msvc'):
+elif compiler.like('msvc'):
   if '/MACHINE:X86' not in compiler.linkflags:
     compiler.linkflags += ['/MACHINE:X86']
 
