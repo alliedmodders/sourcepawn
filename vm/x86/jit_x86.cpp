@@ -1788,10 +1788,9 @@ Compiler::emitErrorPaths()
     __ movl(Operand(ecx, ExitFrame::offsetOfExitNative()), -1);
     __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
 
-    // Since the return stub wipes out the stack, we don't need to subl after
-    // the call.
     __ push(eax);
     __ call(ExternalAddress((void *)InvokeReportError));
+    __ pop(eax); // Get the error back off the stack.
     __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
   }
 
