@@ -21,16 +21,6 @@ if compiler.cc.behavior == 'gcc':
     '-Wno-implicit-exception-spec-mismatch',
   ]
 
-# The compiler only builds in 32-bit mode.
-if compiler.like('gcc'):
-  if '-m32' not in compiler.cflags:
-    compiler.cflags += ['-m32']
-  if '-m32' not in compiler.linkflags:
-    compiler.linkflags += ['-m32']
-elif compiler.like('msvc'):
-  if '/MACHINE:X86' not in compiler.linkflags:
-    compiler.linkflags += ['/MACHINE:X86']
-
 compiler.defines += ['HAVE_STDINT_H']
 if builder.target_platform == 'linux':
   compiler.defines += [
