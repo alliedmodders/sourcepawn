@@ -127,6 +127,13 @@ class Config(object):
       # Don't omit the frame pointer.
       cfg.cflags += ['/Oy-']
 
+    if builder.options.arch == 'x64':
+      gccarch = '-m64'
+      msvcarch = '/MACHINE:X64'
+    else:
+      gccarch = '-m64'
+      msvcarch = '/MACHINE:X86'
+
     # Platform-specifics
     if builder.target_platform == 'linux':
       if cxx.name == 'gcc':
@@ -140,6 +147,22 @@ class Config(object):
       ]
     elif builder.target_platform == 'windows':
       cfg.defines += ['WIN32', '_WINDOWS']
+
+    if builder.options.arch == 'x64':
+      gccarch = '-m64'
+      msvcarch = '/MACHINE:X64'
+    else:
+      gccarch = '-m32'
+      msvcarch = '/MACHINE:X86'
+
+    if cxx.name == 'msvc':
+      if msvcarch not in cfg.linkflags:    
+        cfg.linkflags += [msvcarch]
+    else:
+      if gccarch not in cfg.cflags:
+        cfg.cflags += [gccarch]
+      if gccarch not in cfg.linkflags:
+        cfg.linkflags += [gccarch]
 
     cfg.defines += ['KE_THREADSAFE']
     cfg.defines += ['SOURCEPAWN_VERSION="1.8"']
@@ -181,10 +204,14 @@ class SourcePawn(object):
     self.zlib = None
     self.core_scripts = [
       os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder'),
+    ]
+    self.spcomp_scripts = [
       os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
+    ]
+    self.vm_scripts = [
       os.path.join(builder.currentSourceFolder, 'vm/AMBuilder'),
     ]
-    self.suite_scripts = [
+    self.test_scripts = [
       os.path.join(builder.currentSourceFolder, 'testing/Testing.ambuild'),
     ]
     self.exp_scripts = [
@@ -198,19 +225,38 @@ class SourcePawn(object):
   def BuildCore(self):
     builder.RunBuildScripts(self.core_scripts, self.vars)
 
+  def BuildSpcomp(self):
+    builder.RunBuildScripts(self.spcomp_scripts, self.vars)
+
+  def BuildVM(self):
+    builder.RunBuildScripts(self.vm_scripts, self.vars)
+
   def BuildExperimental(self):
     builder.RunBuildScripts(self.exp_scripts, self.vars)
 
-  def BuildSuite(self):
-    self.BuildCore()
-    self.BuildExperimental()
-    builder.RunBuildScripts(self.suite_scripts, self.vars)
+  def BuildTests(self):
+    builder.RunBuildScripts(self.test_scripts, self.vars)
 
-# If no parent, we're the root of the project, so build everything.
+  def BuildSuite(self):
+    self.BuildSpcomp()
+    self.BuildVM()
+    self.BuildExperimental()
+    self.BuildTests()
+
 if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  sp.BuildSuite()
+  sp.BuildCore()
+  if builder.options.build == 'spcomp':
+    sp.BuildSpcomp()
+  elif builder.options.build == 'vm':
+    sp.BuildVM()
+  elif builder.options.build == 'exp':
+    sp.BuildExperiemental()
+  elif builder.options.build == 'test':
+    sp.BuildTests()
+  else:
+    sp.BuildSuite()
 else:
   rvalue = SourcePawn
