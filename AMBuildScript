@@ -202,6 +202,8 @@ class SourcePawn(object):
     self.root = root
     self.amtl = amtl
     self.zlib = None
+    self.spcomp = None
+    self.libsourcepawn = None
     self.core_scripts = [
       os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder'),
     ]
