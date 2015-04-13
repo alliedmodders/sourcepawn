@@ -37,5 +37,5 @@ run.options.add_option('--enable-optimize', action='store_const', const='1', des
 run.options.add_option('--arch', dest='arch', default='x86', help='Architecture (x86, x64)')
 run.options.add_option('--amtl', type='string', dest='amtl', default='../../public/amtl', help='AMTL path')
 run.options.add_option('--build', type='string', dest='build', default='all', 
-                       help='Build which components (all, spcomp, vm, exp)')
+                       help='Build which components (all, spcomp, vm, exp, test, core)')
 run.Configure()

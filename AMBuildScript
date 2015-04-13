@@ -202,10 +202,8 @@ class SourcePawn(object):
     self.root = root
     self.amtl = amtl
     self.zlib = None
-    self.core_scripts = [
-      os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder'),
-    ]
     self.spcomp_scripts = [
+      os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder'),
       os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
     ]
     self.vm_scripts = [
@@ -222,9 +220,6 @@ class SourcePawn(object):
       'SP': self,
     }
 
-  def BuildCore(self):
-    builder.RunBuildScripts(self.core_scripts, self.vars)
-
   def BuildSpcomp(self):
     builder.RunBuildScripts(self.spcomp_scripts, self.vars)
 
@@ -237,6 +232,10 @@ class SourcePawn(object):
   def BuildTests(self):
     builder.RunBuildScripts(self.test_scripts, self.vars)
 
+  def BuildCore(self):
+    self.BuildSpcomp()
+    self.BuildVM()
+
   def BuildSuite(self):
     self.BuildSpcomp()
     self.BuildVM()
@@ -247,15 +246,16 @@ if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  sp.BuildCore()
   if builder.options.build == 'spcomp':
     sp.BuildSpcomp()
   elif builder.options.build == 'vm':
     sp.BuildVM()
   elif builder.options.build == 'exp':
-    sp.BuildExperiemental()
+    sp.BuildExperimental()
   elif builder.options.build == 'test':
     sp.BuildTests()
+  elif builder.options.build == 'core':
+    sp.BuildCore()
   else:
     sp.BuildSuite()
 else:
