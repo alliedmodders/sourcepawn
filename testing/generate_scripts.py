@@ -37,7 +37,7 @@ def main():
         spcomp = args.spcomp,
         objdir = args.objdir,
       ))
-  os.chmod(args.out, 0o0755)
+  os.chmod(args.out, 0o755)
 
 if __name__ == '__main__':
   main()
