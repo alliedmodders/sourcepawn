@@ -127,13 +127,6 @@ class Config(object):
       # Don't omit the frame pointer.
       cfg.cflags += ['/Oy-']
 
-    if builder.options.arch == 'x64':
-      gccarch = '-m64'
-      msvcarch = '/MACHINE:X64'
-    else:
-      gccarch = '-m64'
-      msvcarch = '/MACHINE:X86'
-
     # Platform-specifics
     if builder.target_platform == 'linux':
       if cxx.name == 'gcc':
