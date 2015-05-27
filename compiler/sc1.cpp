@@ -7048,6 +7048,7 @@ static int dofor(void)
   save_nestlevel=nestlevel;
   save_endlessloop=endlessloop;
   pushstacklist();
+  pushheaplist();
   
   addwhile(wq);
   skiplab=getlabel();
@@ -7144,6 +7145,8 @@ static int dofor(void)
   jumplabel(wq[wqLOOP]);
   setlabel(wq[wqEXIT]);
   delwhile();
+
+  popheaplist();
 
   assert(nestlevel>=save_nestlevel);
   if (nestlevel>save_nestlevel) {
