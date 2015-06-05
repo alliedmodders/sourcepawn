@@ -240,15 +240,16 @@ if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  if builder.options.build == 'spcomp':
+  build = getattr(builder, 'options')
+  if build == 'spcomp':
     sp.BuildSpcomp()
-  elif builder.options.build == 'vm':
+  elif build == 'vm':
     sp.BuildVM()
-  elif builder.options.build == 'exp':
+  elif build == 'exp':
     sp.BuildExperimental()
-  elif builder.options.build == 'test':
+  elif build == 'test':
     sp.BuildTests()
-  elif builder.options.build == 'core':
+  elif build == 'core':
     sp.BuildCore()
   else:
     sp.BuildSuite()
