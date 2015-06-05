@@ -128,7 +128,7 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
       return const_float3_array_;
   }
 
-  if ((type->qualifiers() | qualifiers) == qualifiers)
+  if ((type->qualifiers() & qualifiers) == qualifiers)
     return type;
 
   if (type->isQualified()) {
