@@ -202,11 +202,23 @@ class Analyzer : public PartialAstVisitor
     obj->add(atom_name_, toJson(node->name()));
     startDoc(obj, "method", node->name(), node->loc());
 
+    FunctionNode *fun = nullptr;
+
     if (node->method()->isFunction()) {
-      FunctionNode *fun = node->method()->fun();
-      obj->add(atom_returnType_, toJson(fun->signature()->returnType()));
-      obj->add(atom_parameters_, toJson(fun->signature()->parameters()));
+      fun = node->method()->fun();
+    } else {
+      Symbol *sym = node->method()->alias()->sym();
+      if (!sym->isFunction()) {
+        fprintf(stderr, "Method %s aliased to %s is not aliased to a function!\n",
+          atom_name_->chars(),
+          sym->name()->chars());
+        return;
+      }
+      fun = sym->toFunction()->impl();
     }
+
+    obj->add(atom_returnType_, toJson(fun->signature()->returnType()));
+    obj->add(atom_parameters_, toJson(fun->signature()->parameters()));
     methods_->add(obj);
   }
   void visitPropertyDecl(PropertyDecl *node) override {
@@ -441,8 +453,6 @@ int main(int argc, char **argv)
     PoolScope scope(pool);
 
     CompileContext cc(pool, strings, reports, source);
-
-    cc.SkipResolution();
 
     JsonObject *obj = Run(cc, argv[1]);
     if (!obj) {
