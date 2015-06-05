@@ -57,7 +57,9 @@ NameResolver::OnLeaveParser()
   resolveUnknownTags();
   resolveUnboundNames();
 
-  if (!cc_.phasePassed())
+  // Type resolution requires successful name binding, which isn't guaranteed
+  // if we are treating name resolution as optional. Bail out now.
+  if (!cc_.phasePassed() || cc_.options().SkipResolution)
     return;
 
   tr_.analyze();
