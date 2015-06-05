@@ -454,6 +454,8 @@ int main(int argc, char **argv)
 
     CompileContext cc(pool, strings, reports, source);
 
+    cc.SkipResolution();
+
     JsonObject *obj = Run(cc, argv[1]);
     if (!obj) {
       reports.PrintMessages();
