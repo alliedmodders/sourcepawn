@@ -373,7 +373,12 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
       cursor = cursor->toArray()->contained();
     }
 
-    AutoString builder = BuildTypeName(innermost, nullptr, flags);
+    AutoString builder;
+    if (aType->isConst()) {
+      builder = "const ";
+    }
+
+    builder = builder + BuildTypeName(innermost, nullptr, flags);
 
     bool hasFixedLengths = false;
     AutoString brackets;
@@ -399,7 +404,12 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
   }
 
   if (ReferenceType *type = aType->asReference()) {
-    AutoString builder = BuildTypeName(type->contained(), nullptr, flags);
+    AutoString builder;
+    if (aType->isConst()) {
+      builder = "const ";
+    }
+
+    builder = builder + BuildTypeName(type->contained(), nullptr, flags);
     if (name)
       builder = builder + " &" + name->chars();
     else
