@@ -29,7 +29,7 @@ binary.sources += [
   'docparse.cpp',
 ]
 binary.compiler.linkflags += [
-  KE.libspcomp.binary
+  SP.libspcomp.binary
 ]
 builder.Add(binary)
 

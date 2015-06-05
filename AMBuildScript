@@ -207,6 +207,7 @@ class SourcePawn(object):
     ]
     self.exp_scripts = [
       os.path.join(builder.currentSourceFolder, 'exp/compiler/AMBuilder'),
+      os.path.join(builder.currentSourceFolder, 'exp/tools/docparse/AMBuilder'),
     ]
     self.vars = {
       'Root': self.root,
