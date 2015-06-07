@@ -2,7 +2,7 @@
     require __DIR__ . '/header.php';
 ?>
 
-<h1>Welcome to the <?php echo $Project; ?> Scripting API Reference</h1>
+<h1 class="page-header">Welcome to the <?php echo $Project; ?> Scripting API Reference</h1>
 
 <div class="bs-callout">
     <p>Enter a search term on the left to look for symbols in the <?php echo $Project; ?> include files.</p>
