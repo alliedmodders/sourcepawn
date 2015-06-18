@@ -54,7 +54,6 @@ class TypeManager
   Type *getOverloadedFunction() const {
     return overloadedFunctionType_;
   }
-  ReferenceType *newReference(Type *type);
   ArrayType *newArray(Type *contained, int elements);
   EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
@@ -73,7 +72,6 @@ class TypeManager
   Type *overloadedFunctionType_;
   Type *nullType_;
   Type *primitiveTypes_[kTotalPrimitiveTypes];
-  ReferenceType *referenceTypes_[kTotalPrimitiveTypes];
 
   Type *char_type_;
   ArrayType *char_array_;

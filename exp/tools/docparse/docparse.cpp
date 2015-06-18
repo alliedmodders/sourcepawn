@@ -344,17 +344,28 @@ class Analyzer : public PartialAstVisitor
     return toJson(te.resolved(), name);
   }
 
+  JsonString *toJson(VarDecl *decl, bool named) {
+    // :TODO: add a BuildTypeName(VarDecl) helper.
+    TypeDiagFlags flags = TypeDiagFlags::Names;
+    if (!!(decl->sym()->storage_flags() & StorageFlags::byref))
+      flags |= TypeDiagFlags::IsByRef;
+    return toJson(BuildTypeName(
+      decl->te(),
+      named ? decl->name() : nullptr,
+      flags).chars());
+  }
+
   JsonList *toJson(const ParameterList *params) {
     JsonList *list = new (pool_) JsonList();
     for (size_t i = 0; i < params->length(); i++) {
       VarDecl *decl = params->at(i);
       JsonObject *obj = new (pool_) JsonObject();
 
-      obj->add(atom_type_, toJson(decl->te()));
+      obj->add(atom_type_, toJson(decl, false));
 
       if (decl->name()) {
         obj->add(atom_name_, toJson(decl->name()));
-        obj->add(atom_decl_, toJson(decl->te(), decl->name()));
+        obj->add(atom_decl_, toJson(decl, true));
       } else {
         obj->add(atom_name_, toJson("..."));
 

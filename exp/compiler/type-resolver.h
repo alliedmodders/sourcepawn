@@ -61,7 +61,6 @@ class TypeResolver
     work_queue_.append(node);
   }
 
-  Type *applyRefType(TypeSpecifier *spec, Type *type);
   Type *applyConstQualifier(TypeSpecifier *spec, Type *type);
   bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
 
@@ -73,6 +72,8 @@ class TypeResolver
 
  private:
   static const int kRankUnvisited;
+
+  FunctionType *maybeResolveFunction(FunctionSignature *sig);
 
   bool resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, int *outp);
   void updateComputedRankSize(Vector<int> &out, size_t rank, int size);

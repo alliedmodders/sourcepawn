@@ -339,8 +339,20 @@ NameResolver::HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *ini
   registerSymbol(sym);
   var->setSymbol(sym);
 
-  if (te.resolved())
+  if (te.resolved()) {
     sym->setType(te.resolved());
+
+    // We need to check this both here and in lazy resolution, which is gross,
+    // but I don't see any obvious way to simplify it yet.
+    if (spec.isByRef() && !sym->type()->canUseInReferenceType()) {
+      cc_.report(spec.byRefLoc(), rmsg::type_cannot_be_ref)
+        << sym->type();
+    }
+  }
+
+  // :TODO: assert we always have an argument scope here.
+  if (spec.isByRef())
+    sym->storage_flags() |= StorageFlags::byref;
 
   // Even if we were able to resolve the type, if we have to resolve a constant
   // value, we'll have to add it to the resolver queue.
@@ -908,9 +920,6 @@ NameResolver::resolve(TypeSpecifier &spec)
     for (size_t i = 0; i < spec.rank(); i++)
       type = cc_.types()->newArray(type, ArrayType::kUnsized);
   }
-
-  if (spec.isByRef())
-    type = tr_.applyRefType(&spec, type);
 
   if (spec.isConst())
     type = tr_.applyConstQualifier(&spec, type);

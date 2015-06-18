@@ -73,7 +73,9 @@ Primitives are divided into sub-groups:
  - Machine-width integer types, `intn` and `uintn`.
  - IEEE-754 Floating-point types (`float` and `double`).
  - Boolean (`bool`), which has two values: `true` and `false`.
- - Character types, `char` (mostly equivalent to `int8`) and `codepoint` (an alias for `int32`).
+ - Character types, `char` (similar to `int8`) and `codepoint` (`int32`).
+
+The character type `char` is considered equivalent to `int8` for numerical semantics. 
 
 Grammar:
 
@@ -321,46 +323,51 @@ Or, a coercion can result in one of the following failure states:
 
 We define implicit coercion rules as follows, given value `V` of type `S`, to type `T`, as follows:
 
-1. If `T` is a struct,
+1. If `T` is a struct or a typeset,
   1. If unqualified `S` is not equivalent to unqualified `T`, the coercion is illegal.
   2. If `S` is const-qualified and `T` is not const-qualified, the coercion is illegal.
   3. `V` has trivial coercion to `T`.
 2. If `T` is an enumeration,
   1. If `T` has a nullable methodmap, and `S` is `null_t`, then return a 32-bit integer 0 typed as `T`.
-  2. If `S` is `unchecked`, and the coercion is for assignment, then `V` is returned as a `T` without changing its underlying value.
+  2. If `S` is `unchecked`, then `V` is returned as a `T` without changing its underlying value.
   3. If `S` is not equivalent to `T`, the coercion is illegal.
   4. Otherwise, no coercion is necessary.
 3. If `T` is `unchecked`,
-  1. If `S` is `unchecked`, `V` does not require coercion to `T`.
-  1. If `S` is not a primitive type or enumeration, the coercion is illegal.
-  2. If `S` is an enumeration, its signed integer is returned.
-  3. If `S` is `double`, `int64`, `uint64`, `intn`, or `uintn`, the coercion is illegal.
-  4. If `S` is `float`, the `V` is converted to a signed 32-bit integer containing the IEEE-754 bit encoding of the `float` value.
-  5. If `S` is a signed integer, it is sign-extended to an `int32` and returned.
-  6. If `S` is an unsigned integer, it is sign-extended to a `uint32` and converted to a signed 32-bit integer containing the twos-complement encoding of the `int32` value.
-  7. If `S` is a bool, it is zero-extended to an `int32` and returned.
+  1. If `S` is `unchecked`, no coercion is necessary.
+  2. If `S` is an enumeration, its signed integer is returned as an `unchecked`.
+  3. If `S` is not a primitive type, the coercion is illegal.
+  4. If `S` is `double`, `int64`, `uint64`, `intn`, or `uintn`, the coercion is illegal.
+  5. If `S` is `float`, the `V` is converted to a signed 32-bit integer containing the IEEE-754 bit encoding of the `float` value.
+  6. If `S` is a signed integer, it is sign-extended to an `int32` and returned.
+  7. If `S` is an unsigned integer, it is sign-extended to a `uint32` and converted to a signed 32-bit integer containing the twos-complement encoding of the `int32` value.
+  8. If `S` is a bool, it is zero-extended to an `int32` and returned.
 4. If `T` is `bool`,
   1. If `S` is an integer, `unchecked`, or enumeration value, it is converted to `true` if any bit in its value is 1, and `false` otherwise.
   2. If `S` is `float` or `double`, it is converted to `false` if `V` is `NaN` or `0.0`, and `true` otherwise.
   3. If `S` is `bool`, no coercion is necessary.
   4. Otherwise, the coercion is illegal.
 5. If `T` is a `double` or `float`,
-  1. If `S` is not a primitive, the coercion is illegal.
-  2. If `S` is `intn` or `uintn`, the coercion is illegal.
-  3. If `S` is `float`, and `T` is `double`, `V` is converted to a `double`.
-  4. If `S` is `double` and `T` is `float`, the coercion fails as lossy.
-  5. If `S` is an integer, `V` is converted to a `T`.
-  6. If `S` is equivalent to `T`, no conversion is necessary.
-  7. Otherwise, the coercion is illegal.
-6. If `T` is an integer or `char`,
-  1. If `S` is neither a primitive nor `unchecked`, the coercion is illegal.
-  2. If `S` is `unchecked`, and `T` is not `int32`, the coercion is illegal.
+  1. If `S` is `unchecked`,
+    1. If `T` is `float`, return the bitwise value of `V` unchanged as an `unchecked`.
+    2. Otherwise, the coercion is illegal.
+  2. If `S` is not a primitive, the coercion is illegal.
+  3. If `S` is `intn` or `uintn`, the coercion is illegal.
+  4. If `S` is `float`, and `T` is `double`, `V` is converted to a `double`.
+  5. If `S` is `double` and `T` is `float`, the coercion fails as lossy.
+  6. If `S` is an integer, `V` is converted to a `T`.
+  7. If `S` is equivalent to `T`, no conversion is necessary.
+  8. Otherwise, the coercion is illegal.
+6. If `T` is an integer,
+  1. If `S` is `unchecked`,
+   1. If `T` is `int32`, return `V`'s bitwise representation unchanged as an `unchecked`.
+   2. Otherwise, the coercion is illegal.
+  2. If `S` is not a primitive, the coercion is illegal.
   3. If `S` is a `float` or `double`, coercion fails as lossy.
   4. If `S` is a `bool`, the coercion is illegal.
   5. If `T` is an `intn` or `uintn`, and `S` is not equivalent to `T`, the coercion is illegal.
-  6. If the sign of `S` and `T` are different, the coercion is illegal.
-  7. If `S` has a larger bit width than `T`, the coercion is illegal.
-  8. If `S` is `char` and `T` is `int8`, the coercion is trivial.
+  6. If `S` is `char` and `T` is `int8`, the bitwise value of `V` is returned unchanged as a `T`.
+  7. If the sign of `S` and `T` are different, the coercion is illegal.
+  8. If `S` has a larger bit width than `T`, the coercion is illegal.
   9. If `S` has a smaller bit width than `T`, given `S`'s bit-width as `m` and `T`'s bit-width as `n`:
      1. If `S` is unsigned, `V` is zero-extended to an unsigned integer of `n` bits.
      2. If `S` is signed, `V` is sign-extended to a signed integer of `n` bits.
@@ -372,20 +379,7 @@ We define implicit coercion rules as follows, given value `V` of type `S`, to ty
   4. If the parameter counts of `T` and `S` are not equivalent, the coercion is illegal.
   5. For each parameter index `i` in `T`, if the parameter type and attributes at index `i` in `T` are not equivalent to the parameter type and attributes at index `i` in `S`, the coercion is illegal.
   6. No coercion is needed.
-8. If `T` is a typeset,
-  1. If unqualified `S` is equivalent to unqualified `T`,
-    1. If `S` is const-qualified and `T` is not const-qualified, the coercion is illegal.
-    2. Otherwise, `V` has trivial coercion to `T`.
-  2. If this is a shallow coercion, the coercion is illegal.
-  3. If `S` has a type in its typeset equivalent to `T`,
-    1. Let `V'` be a new `T`, discriminated as an `S`, with value `V`.
-    2. `V'` has trivial coercion to `T`.
-  4. If `S` has shallow coercion to more than one field in `T`, the coercion is ambiguous.
-  5. If `S` has no coercion to any field in `T`, the coercion is illegal.
-  6. Let `X` be the matched coerceable type in `T`.
-  7. Let `V'` be the result of shallow coercing `V` to `X`.
-  9. Return a new typeset of type `T`, discriminated as `X`, with value `V'`.
-9. If `T` is a fixed-length array,
+8. If `T` is a fixed-length array,
   1. If `S` is not a fixed-length array, the coercion is illegal.
   2. If `S` is `const` and `T` is not `const`, the coercion is illegal.
   3. Let `S'` be the type contained by array `S`.
@@ -397,7 +391,7 @@ We define implicit coercion rules as follows, given value `V` of type `S`, to ty
   9. If the coercion is for assignment, and `S'` is `char`,
      1. If `Sn < Tn`, return a new fixed-length array with a buffer of length `Tn`, and length and capacity `Tn`. The first `Sn` elements of the buffer should be equal to the first `Sn` elements of `V`'s buffer, and the remaining elements should contain 0.
   10. Otherwise, the coercion is illegal.
-10. If `T` is an indeterminate array,
+9. If `T` is an indeterminate array,
   1. If `S` is not an array, the coercion is illegal.
   2. If `S` is `const` and `T` is not `const`, the coercion is illegal.
   3. Let `S'` be the type contained by array `S`.
@@ -408,10 +402,10 @@ We define implicit coercion rules as follows, given value `V` of type `S`, to ty
      2. Let `V'` be a new array of `T'` with the buffer of `V`, length `Sn`, and capacity `Sn`.
      3. `V'` has trivial coercion to `T`.
   7. Otherwise, `V` has trivial coercion to `T`.
-11. If `T` is `null_t`,
+10. If `T` is `null_t`,
   1. If `S` is `null_t`, `V` has trivial coercion to `T`.
   2. Otherwise, the coercion is illegal.
-12. If `T` is `Function`,
+11. If `T` is `Function`,
   1. If `S` is a function, `V` is returned as a `Function`.
   2. If `S` is `null_t`, `V` is returned as a `Function`.
   3. If `S` is `Function`, `V` does not require coercion to `T`.

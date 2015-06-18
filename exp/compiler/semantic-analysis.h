@@ -25,6 +25,8 @@ namespace sp {
 
 class CompileContext;
 class PoolAllocator;
+class TranslationUnit;
+class TypeManager;
 
 class SemanticAnalysis : public StrictAstVisitor
 {

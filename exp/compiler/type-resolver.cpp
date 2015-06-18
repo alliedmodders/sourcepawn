@@ -495,8 +495,6 @@ TypeResolver::visitTypedefDecl(TypedefDecl *node)
     while (array->contained()->isArray())
       array = array->contained()->toArray();
     base = array->contained();
-  } else if (ReferenceType *ref = base->asReference()) {
-    base = ref->contained();
   }
 
   if (type == base->canonical()) {
@@ -679,7 +677,7 @@ TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier *spec, ArrayLiteral *lit
   // Return the computed list unadultered - resolveArrayComponentTypes()
   // will correctly merge with the TypeSpecifier.
   return out;
-}
+} 
 
 void
 TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
@@ -687,7 +685,18 @@ TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
   resolveType(sig->returnType());
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
     VarDecl *param = sig->parameters()->at(i);
-    resolveTypeIfNeeded(param->te());
+    VariableSymbol *sym = param->sym();
+
+    assert(!param->te().resolved() || sym->type());
+    if (!param->te().resolved()) {
+      TypeSpecifier *spec = param->te().spec();
+      sym->setType(resolveType(param->te()));
+
+      if (sym->isByRef() && !sym->type()->canUseInReferenceType()) {
+        cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
+          << sym->type();
+      }
+    }
   }
 }
 
@@ -736,19 +745,12 @@ TypeResolver::resolveType(TypeExpr &te, const Vector<int> *arrayInitData)
     return te.resolved();
   }
 
-  // Should not have a reference here.
-  assert(!baseType->isReference());
-
   Type *type = baseType;
   if (spec->rank())
     type = resolveArrayComponentTypes(spec, type, arrayInitData);
 
   if (type->isConst())
     type = applyConstQualifier(spec, type);
-
-  // Build references after we've determined const-ness.
-  if (spec->isByRef())
-    type = applyRefType(spec, type);
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -792,18 +794,6 @@ TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
     return false;
   }
   return true;
-}
-
-Type *
-TypeResolver::applyRefType(TypeSpecifier *spec, Type *type)
-{
-  if (!type->canUseInReferenceType()) {
-    cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
-      << type;
-    return type;
-  }
-
-  return cc_.types()->newReference(type);
 }
 
 Type *

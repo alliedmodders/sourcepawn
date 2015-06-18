@@ -88,17 +88,6 @@ ArrayType::New(Type *contained, int elements)
   return type;
 }
 
-ReferenceType *
-ReferenceType::New(Type *contained)
-{
-  ReferenceType *type = new (POOL()) ReferenceType();
-
-  assert(!contained->isReference());
-
-  type->contained_ = contained;
-  return type;
-}
-
 EnumType *
 EnumType::New(Atom *name)
 {
@@ -155,8 +144,8 @@ Type::Compare(Type *left, Type *right)
       return true;
 
     default:
-      assert(left->kind_ == Type::Kind::Reference);
-      return Compare(left->toReference()->contained(), right->toReference()->contained());
+      assert(false);
+      return false;
   }
 }
 
@@ -246,6 +235,10 @@ GetBaseTypeName(Type *type)
 static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags);
 static AString BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags);
 
+// When building inner typenames, only include these flags.
+static const TypeDiagFlags kDiagFlagsInnerMask =
+  TypeDiagFlags::Names;
+
 static AString
 BuildTypeFromTypeExpr(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
 {
@@ -258,14 +251,17 @@ static AString
 BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
 {
   AutoString base = "function ";
-  base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags);
+  base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags & kDiagFlagsInnerMask);
   base = base + "(";
 
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
+    TypeDiagFlags varFlags = flags & kDiagFlagsInnerMask;
     Atom *name = !!(flags & TypeDiagFlags::Names)
                  ? sig->parameters()->at(i)->name()
                  : nullptr;
-    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, flags);
+    if (sig->parameters()->at(i)->sym()->isByRef())
+      varFlags |= TypeDiagFlags::IsByRef;
+    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, varFlags);
     if (i != sig->parameters()->length() - 1)
       base = base + ", ";
   }
@@ -302,10 +298,10 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flag
       base = base + "int";
       break;
     case TOK_FUNCTION:
-      base = base + BuildTypeFromSignature(spec->signature(), flags);
+      base = base + BuildTypeFromSignature(spec->signature(), flags & kDiagFlagsInnerMask);
       break;
     case TOK_DEFINED:
-      base = base + BuildTypeName(spec->getResolvedBase(), nullptr, flags);
+      base = base + BuildTypeName(spec->getResolvedBase(), nullptr, flags & kDiagFlagsInnerMask);
       break;
     default:
       base = base + TokenNames[spec->resolver()];
@@ -378,7 +374,7 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
       builder = "const ";
     }
 
-    builder = builder + BuildTypeName(innermost, nullptr, flags);
+    builder = builder + BuildTypeName(innermost, nullptr, flags & kDiagFlagsInnerMask);
 
     bool hasFixedLengths = false;
     AutoString brackets;
@@ -403,25 +399,14 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     return AString(builder.ptr());
   }
 
-  if (ReferenceType *type = aType->asReference()) {
-    AutoString builder;
-    if (aType->isConst()) {
-      builder = "const ";
-    }
-
-    builder = builder + BuildTypeName(type->contained(), nullptr, flags);
-    if (name)
-      builder = builder + " &" + name->chars();
-    else
-      builder = builder + "&";
-    return AString(builder.ptr());
-  }
-
   AutoString builder;
   if (FunctionType *type = aType->asFunction())
-    builder = BuildTypeFromSignature(type->signature(), flags);
+    builder = BuildTypeFromSignature(type->signature(), flags & kDiagFlagsInnerMask);
   else
     builder = GetBaseTypeName(aType);
+  if (!!(flags & TypeDiagFlags::IsByRef)) {
+    builder = builder + "&";
+  }
   if (name)
     builder = builder + " " + name->chars();
   return AString(builder.ptr());
@@ -544,17 +529,6 @@ sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
       }
       // a == b covered earlier.
       return false;
-    case Type::Kind::Reference:
-    {
-      if (!b->isReference())
-        return false;
-
-      ReferenceType *ar = a->toReference();
-      ReferenceType *br = b->toReference();
-
-      // const is not transitive through references.
-      return AreTypesEquivalent(ar->contained(), br->contained(), Qualifiers::None);
-    }
     case Type::Kind::Function:
     {
       if (!b->isFunction())

@@ -27,7 +27,7 @@
 #include "string-pool.h"
 #include "tokens.h"
 #include "type-specifier.h"
-#include "expr-ops.h"
+#include "value-attrs.h"
 #include <limits.h>
 
 namespace sp {

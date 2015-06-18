@@ -29,15 +29,6 @@ enum class CastOp
   // this implies a cast to const, or from char -> int8.
   nop,
 
-  // No-op cast to discard inner types to/from "unchecked", for example,
-  //   int[] -> any[]
-  //   int& -> any&
-  //
-  // This cast is horrible and should be removed once we have variant
-  // types. Despite being a no-op it's in its own category s owe know where
-  // it's used.
-  ref_nop,
-
   // Convert an l-value or cl-value to a reference.
   lval_to_ref,
 
@@ -84,8 +75,8 @@ enum class CastOp
   sentinel
 };
 
-// SourcePawn requires value classes similar to C++.
-enum class VK
+// Value kinds.
+enum class VK : int32_t
 {
   none,
 
@@ -95,25 +86,28 @@ enum class VK
   //   IndexExprs
   lvalue,
 
-  // A clvalue is an lvalue that is immutable. We do not compute reference
-  // types for lvalues, so this is needed to distinguish between const and
-  // non-const lvalues.
-  clvalue,
-
   // An rvalue is anything that is not an lvalue.
-  rvalue,
-
-  // An xvalue is an "expiring" value, meaning that it will be destroyed after
-  // the invoking statement concludes. Expiring values are created for
-  // temporary references, for example:
-  //     void f(int &x = 10);
-  //
-  //     f();
-  //
-  // In this example, the value produced for passing 10 into |x| will be an
-  // xvalue. This only applies to default values.
-  xvalue 
+  rvalue
 };
+
+// Storage class for variables.
+enum class StorageClass : int32_t
+{
+  Unknown,
+  Local,
+  Argument,
+  Global
+};
+
+// L-value attribute flags.
+enum class StorageFlags : int32_t
+{
+  none,
+
+  // This l-value is stored by-reference.
+  byref
+};
+KE_DEFINE_ENUM_OPERATORS(StorageFlags)
 
 } // namespace sp
 

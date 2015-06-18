@@ -30,7 +30,6 @@ TypeManager::TypeManager(StringPool &strings)
    metaFunctionType_(nullptr),
    overloadedFunctionType_(nullptr),
    primitiveTypes_(),
-   referenceTypes_(),
    char_type_(nullptr),
    char_array_(nullptr),
    const_char_array_(nullptr),
@@ -70,9 +69,6 @@ TypeManager::initialize()
   primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);
   primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool);
 
-  for (size_t i = 0; i < kTotalPrimitiveTypes; i++)
-    referenceTypes_[i] = ReferenceType::New(primitiveTypes_[i]);
-
   // We special case the following types, because they are extremely common:
   //   char[]
   //   const char[]
@@ -101,15 +97,6 @@ TypeManager::newArray(Type *contained, int elements)
   }
 
   return ArrayType::New(contained, elements);
-}
-
-ReferenceType *
-TypeManager::newReference(Type *type)
-{
-  if (type->isPrimitive())
-    return referenceTypes_[size_t(type->primitive())];
-
-  return ReferenceType::New(type);
 }
 
 EnumType *

@@ -81,7 +81,6 @@ typedef FixedPoolList<Type *> TypeList;
 
 #define TYPE_ENUM_MAP(_)        \
   _(Enum)                       \
-  _(Reference)                  \
   _(Array)                      \
   _(Function)                   \
   _(Typeset)                    \
@@ -142,10 +141,6 @@ class Type : public PoolObject
 
     // A value-typed composite type.
     Struct,
-
-    // A reference type may only be specified on parameters, and
-    // references may only be computed to primitives or enums.
-    Reference,
 
     // A function type encapsulates a function signature.
     Function,
@@ -234,7 +229,7 @@ class Type : public PoolObject
   }
 
   bool canUseInReferenceType() {
-    return !isArray() && !isReference();
+    return !isArray() && !isStruct();
   }
   bool canBeUsedInConstExpr() {
     return isPrimitive() || isEnum();
@@ -258,7 +253,7 @@ class Type : public PoolObject
 
   // void and & cannot be const. We compute lvalue constness separately.
   bool canUseInConstType() {
-    return !isVoid() && !isReference();
+    return !isVoid();
   }
 
   PrimitiveType primitive() {
@@ -269,8 +264,6 @@ class Type : public PoolObject
   // Same as primitive(), but return int32 for implicit-int and int8 for char.
   PrimitiveType semanticPrimitive() {
     switch (primitive()) {
-      case PrimitiveType::Char:
-        return PrimitiveType::Int8;
       case PrimitiveType::ImplicitInt:
         return PrimitiveType::Int32;
       default:
@@ -474,24 +467,6 @@ class EnumType : public Type
  private:
   Atom *name_;
   MethodmapDecl *methodmap_;
-};
-
-class ReferenceType : public Type
-{
-  ReferenceType()
-   : Type(Kind::Reference)
-  {
-  }
-
- public:
-  static ReferenceType *New(Type *contained);
-
-  Type *contained() {
-    return contained_;
-  }
-
- private:
-  Type *contained_;
 };
 
 class ArrayType : public Type
@@ -739,7 +714,8 @@ const char *GetPrimitiveName(PrimitiveType type);
 enum class TypeDiagFlags
 {
   None = 0x0,
-  Names = 0x1
+  Names = 0x1,
+  IsByRef = 0x2
 };
 KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
 
