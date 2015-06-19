@@ -42,8 +42,9 @@ enum class PrimitiveType : uint32_t
   Char,
 
   // The "implicit int" pseudo-type that we use when an int type was not
-  // explicitly specified.
-  ImplicitInt,
+  // explicitly specified. This should never be used directly, as it is
+  // an internal marker.
+  ImplicitIntDoNotUseDirectly,
 
   Int8,
   Uint8,
@@ -258,17 +259,9 @@ class Type : public PoolObject
 
   PrimitiveType primitive() {
     assert(isPrimitive());
+    if (canonical()->primitive_ == PrimitiveType::ImplicitIntDoNotUseDirectly)
+      return PrimitiveType::Int32;
     return canonical()->primitive_;
-  }
-
-  // Same as primitive(), but return int32 for implicit-int and int8 for char.
-  PrimitiveType semanticPrimitive() {
-    switch (primitive()) {
-      case PrimitiveType::ImplicitInt:
-        return PrimitiveType::Int32;
-      default:
-        return primitive();
-    }
   }
 
   bool isPod() {
@@ -301,7 +294,7 @@ class Type : public PoolObject
   // This is a very specific check intended for phases which need to know
   // if a type was not specified, and thus it ignores qualifiers.
   bool isImplicitInt() const {
-    return kind_ == Kind::Primitive && primitive_ == PrimitiveType::ImplicitInt;
+    return kind_ == Kind::Primitive && primitive_ == PrimitiveType::ImplicitIntDoNotUseDirectly;
   }
 
   // Check whether this type pointer is actually resolved to anything. This

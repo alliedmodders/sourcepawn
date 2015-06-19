@@ -53,7 +53,8 @@ TypeManager::initialize()
   metaFunctionType_ = Type::NewMetaFunction();
   overloadedFunctionType_ = Type::NewOverloadedFunction();
 
-  primitiveTypes_[size_t(PrimitiveType::ImplicitInt)] = Type::NewPrimitive(PrimitiveType::ImplicitInt);
+  primitiveTypes_[size_t(PrimitiveType::ImplicitIntDoNotUseDirectly)] =
+    Type::NewPrimitive(PrimitiveType::ImplicitIntDoNotUseDirectly);
   primitiveTypes_[size_t(PrimitiveType::Int8)] = Type::NewPrimitive(PrimitiveType::Int8);
   primitiveTypes_[size_t(PrimitiveType::Uint8)] = Type::NewPrimitive(PrimitiveType::Uint8);
   primitiveTypes_[size_t(PrimitiveType::Int16)] = Type::NewPrimitive(PrimitiveType::Int16);

@@ -829,7 +829,7 @@ NameResolver::resolveBase(TypeSpecifier &spec)
     case TOK_VOID:
       return cc_.types()->getVoid();
     case TOK_IMPLICIT_INT:
-      return cc_.types()->getPrimitive(PrimitiveType::ImplicitInt);
+      return cc_.types()->getImplicitInt();
     case TOK_INT:
       return cc_.types()->getPrimitive(PrimitiveType::Int32);
     case TOK_BOOL:

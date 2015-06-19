@@ -74,7 +74,7 @@ Conversion::Find(Type *from, Type *to)
 
     case Type::Kind::Primitive:
     {
-      PrimitiveType out = to->semanticPrimitive();
+      PrimitiveType out = to->primitive();
 
       // Steps 4.1-4.4.
       if (out == PrimitiveType::Bool)
@@ -196,7 +196,7 @@ Conversion::CoerceToUnchecked(Type *from, Type *to)
   if (!from->isPrimitive())
     return ConversionResult(ConversionError::type_mismatch);
 
-  PrimitiveType fromType = from->semanticPrimitive();
+  PrimitiveType fromType = from->primitive();
   switch (fromType) {
     case PrimitiveType::Double:
     case PrimitiveType::Int64:

@@ -63,6 +63,10 @@ class TypeManager
 
   Type *typeForLabelAtom(Atom *atom);
 
+  Type *getImplicitInt() {
+    return primitiveTypes_[int(PrimitiveType::ImplicitIntDoNotUseDirectly)];
+  }
+
  private:
   StringPool &strings_;
   Type *voidType_;

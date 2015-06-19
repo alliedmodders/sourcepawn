@@ -199,11 +199,30 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "bool";
     case PrimitiveType::Char:
       return "char";
-    case PrimitiveType::ImplicitInt:
-    case PrimitiveType::Int32:
-      return "int";
     case PrimitiveType::Float:
       return "float";
+    case PrimitiveType::Double:
+      return "double";
+    case PrimitiveType::Int8:
+      return "int8";
+    case PrimitiveType::Uint8:
+      return "uint8";
+    case PrimitiveType::Int16:
+      return "int16";
+    case PrimitiveType::Uint16:
+      return "uint16";
+    case PrimitiveType::Int32:
+      return "int";
+    case PrimitiveType::Uint32:
+      return "uint";
+    case PrimitiveType::Int64:
+      return "int64";
+    case PrimitiveType::Uint64:
+      return "uint64";
+    case PrimitiveType::NativeInt:
+      return "intn";
+    case PrimitiveType::NativeUint:
+      return "uintn";
     default:
       assert(false);
       return "unknown";
@@ -432,7 +451,6 @@ sp::DefaultValueForPlainType(Type *type)
       return BoxedValue(false);
     case PrimitiveType::Char:
       return BoxedValue(IntValue::FromInt8(0));
-    case PrimitiveType::ImplicitInt:
     case PrimitiveType::Int32:
       return BoxedValue(IntValue::FromInt32(0));
     case PrimitiveType::Float:
@@ -518,16 +536,9 @@ sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
 
   switch (a->canonicalKind()) {
     case Type::Kind::Primitive:
-      if (!b->isPrimitive())
-        return false;
-      if ((a->primitive() == PrimitiveType::ImplicitInt &&
-           b->primitive() == PrimitiveType::Int32) ||
-          (a->primitive() == PrimitiveType::Int32 &&
-           b->primitive() == PrimitiveType::ImplicitInt))
-      {
-        return true;
-      }
-      // a == b covered earlier.
+      // Either |b| is not primitive, or they should not have the same
+      // primitive type since each type is a singleton.
+      assert(!b->isPrimitive() || a->primitive() != b->primitive());
       return false;
     case Type::Kind::Function:
     {
