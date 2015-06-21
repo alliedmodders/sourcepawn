@@ -49,7 +49,7 @@ VariableSymbol::canUseInConstExpr() const
 bool
 VariableSymbol::isArgument() const
 {
-  return scope()->isFunction();
+  return scope()->isArgument();
 }
 
 void

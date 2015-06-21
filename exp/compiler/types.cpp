@@ -74,6 +74,8 @@ Type *
 Type::NewQualified(Type *type, Qualifiers qualifiers)
 {
   assert(!type->isQualified());
+  assert(!(qualifiers & Qualifiers::Const) ||
+         TypeSupportsTransitiveConst(type));
   Type *qual = new (POOL()) Type(Kind::Qualifier, type);
   qual->qualifiers_ = qualifiers;
   return qual;
@@ -292,7 +294,7 @@ static AString
 BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
 {
   AutoString base;
-  if (spec->isConst())
+  if (spec->isConst() || !!(flags & TypeDiagFlags::IsConst))
     base = "const ";
 
   switch (spec->resolver()) {
@@ -389,9 +391,8 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     }
 
     AutoString builder;
-    if (aType->isConst()) {
+    if (aType->isConst() || !!(flags & TypeDiagFlags::IsConst))
       builder = "const ";
-    }
 
     builder = builder + BuildTypeName(innermost, nullptr, flags & kDiagFlagsInnerMask);
 

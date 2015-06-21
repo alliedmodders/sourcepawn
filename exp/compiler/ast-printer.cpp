@@ -152,13 +152,6 @@ class AstPrinter : public AstVisitor
     node->expr()->accept(this);
     unindent();
   }
-  void visitImplicitCastExpr(ImplicitCastExpr *node) {
-    prefix();
-    fprintf(fp_, "[ ImplicitCastExpr\n");
-    indent();
-    node->expr()->accept(this);
-    unindent();
-  }
   void visitFoldedExpr(FoldedExpr *node) {
     prefix();
     fprintf(fp_, "[ FoldedExpr\n");

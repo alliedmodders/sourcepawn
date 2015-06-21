@@ -349,6 +349,8 @@ class Analyzer : public PartialAstVisitor
     TypeDiagFlags flags = TypeDiagFlags::Names;
     if (!!(decl->sym()->storage_flags() & StorageFlags::byref))
       flags |= TypeDiagFlags::IsByRef;
+    if (!!(decl->sym()->storage_flags() & StorageFlags::constval))
+      flags |= TypeDiagFlags::IsConst;
     return toJson(BuildTypeName(
       decl->te(),
       named ? decl->name() : nullptr,

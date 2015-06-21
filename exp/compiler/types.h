@@ -71,7 +71,7 @@ enum class Qualifiers : uint32_t
   // None (the default).
   None      = 0x0,
 
-  // Storage and mutability is constant.
+  // Transitive const; different from storage const.
   Const     = 0x1,
 };
 KE_DEFINE_ENUM_OPERATORS(Qualifiers);
@@ -229,32 +229,11 @@ class Type : public PoolObject
     return (TypedefType *)this;
   }
 
-  bool canUseInReferenceType() {
-    return !isArray() && !isStruct();
+  bool passesByReference() {
+    return isArray() || isStruct();
   }
   bool canBeUsedInConstExpr() {
     return isPrimitive() || isEnum();
-  }
-
-  // For certain types, 'const' is meaningless in some scopes. For example,
-  // int, enum, and function types in unions or as arguments basically don't
-  // mean anything as 'const'.
-  bool hasMeaninglessConstCoercion() {
-    switch (canonicalKind()) {
-      case Kind::Primitive:
-      case Kind::Enum:
-      case Kind::Function:
-      case Kind::MetaFunction:
-      case Kind::Unchecked:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  // void and & cannot be const. We compute lvalue constness separately.
-  bool canUseInConstType() {
-    return !isVoid();
   }
 
   PrimitiveType primitive() {
@@ -698,6 +677,47 @@ UnsignedTypeForIntegerSize(size_t size)
   }
 }
 
+// Types where "const" is allowed as a keyword.
+static inline bool
+TypeSupportsConstKeyword(Type *type)
+{
+  return !type->isVoid();
+}
+
+// Types where assignment does not simply change a reference, but copies one
+// or more interior values.
+static inline bool
+HasValueAssignSemantics(Type *type)
+{
+  if (type->isArray())
+    return type->toArray()->hasFixedLength();
+
+  // No objects yet, everything else assigns by-value.
+  return true;
+}
+
+// Types where the "const" keyword becomes transitive.
+static inline bool
+TypeSupportsTransitiveConst(Type *type)
+{
+  switch (type->canonicalKind()) {
+    case Type::Kind::Array:
+    case Type::Kind::Struct:
+    case Type::Kind::Typeset:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Types where values can be interned at compile-time if constant.
+static inline bool
+TypeSupportsCompileTimeInterning(Type *type)
+{
+  return type->canBeUsedInConstExpr() ||
+         (type->isArray() && type->toArray()->hasFixedLength());
+}
+
 // This should probably be in the type manager... but it should never leak past
 // type resolution.
 extern Type UnresolvableType;
@@ -708,7 +728,8 @@ enum class TypeDiagFlags
 {
   None = 0x0,
   Names = 0x1,
-  IsByRef = 0x2
+  IsByRef = 0x2,
+  IsConst = 0x4
 };
 KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
 

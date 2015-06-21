@@ -98,7 +98,7 @@ class NameResolver
   void resolveUnboundNames();
   TypeExpr delay(const TypeSpecifier &spec);
   Type *resolveBase(TypeSpecifier &spec);
-  TypeExpr resolve(TypeSpecifier &spec);
+  TypeExpr resolve(TypeSpecifier &spec, TypeSpecHelper *helper = nullptr);
 
  private:
   // Rather than create a Scope for every block we encounter, we place a

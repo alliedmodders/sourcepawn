@@ -31,6 +31,8 @@ using namespace ke;
 
 class TranslationUnit;
 
+class TypeSpecHelper;
+
 class TypeResolver
  : public StrictAstVisitor,
    public ConstantResolver
@@ -61,7 +63,7 @@ class TypeResolver
     work_queue_.append(node);
   }
 
-  Type *applyConstQualifier(TypeSpecifier *spec, Type *type);
+  Type *applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
   bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
 
   void verifyTypeset(TypesetDecl *decl);
@@ -91,7 +93,7 @@ class TypeResolver
 
   void resolveTypesInSignature(FunctionSignature *sig);
   void resolveConstant(ConstantSymbol *sym);
-  Type *resolveType(TypeExpr &te, const Vector<int> *arrayInitData = nullptr);
+  Type *resolveType(TypeExpr &te, TypeSpecHelper *helper = nullptr, const Vector<int> *arrayInitData = nullptr);
   Type *resolveBaseType(TypeSpecifier *spec);
   Type *resolveNameToType(NameProxy *proxy);
   Type *resolveArrayComponentTypes(TypeSpecifier *spec,
@@ -106,6 +108,41 @@ class TypeResolver
   Deque<AstNode *> work_queue_;
 
   Vector<EnumConstant *> enum_constant_stack_;
+};
+
+// Certain keywords, like "const", may need contextual information to finish
+// resolving. Callsites may provide information and callbacks via
+// TypeSpecHelper.
+class TypeSpecHelper
+{
+ public:
+  // Called when a const-qualifier might be ambiguous, i.e. when the provided
+  // type does not automatically assume responsibility for handling the meaning
+  // of "const". Currently, this applies to any use of "const" with a type
+  // other than an array.
+  //
+  // Return false to indicate that "const" has no meaning in this context
+  // and should be ignored. Otherwise, the provider is responsible for
+  // interpreting its meaning.
+  virtual bool receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type) {
+    return false;
+  }
+  virtual const Vector<int> *arrayInitData() const {
+    return nullptr;
+  }
+};
+
+class VarDeclSpecHelper : public TypeSpecHelper
+{
+ public:
+  VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData);
+
+  bool receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type) override;
+  const Vector<int> *arrayInitData() const override;
+
+ private:
+  VarDecl *decl_;
+  const Vector<int> *array_init_;
 };
 
 }

@@ -273,7 +273,11 @@ class TypeSpecifier : public PoolObject
 class TypeExpr
 {
  public:
-  TypeExpr() // This constructor should not be used - it's needed for FunctionNode.
+  // This constructor should not be used, it's for classes which assign their
+  // type-exprs after being constructed.
+  TypeExpr()
+   : type_(nullptr),
+     spec_(nullptr)
   {}
   explicit TypeExpr(TypeSpecifier *spec)
    : type_(nullptr),
@@ -298,9 +302,11 @@ class TypeExpr
     spec_ = nullptr;
   }
   Type *resolved() const {
+    assert(type_ || spec_);
     return type_;
   }
   TypeSpecifier *spec() const {
+    assert(type_ || spec_);
     return spec_;
   }
 

@@ -203,7 +203,7 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   ParameterList *params;
   bool canResolveEagerly = true;
   {
-    delegate_.OnEnterScope(Scope::Function);
+    delegate_.OnEnterScope(Scope::Argument);
     if ((params = arguments(&canResolveEagerly)) == nullptr)
       params = new (pool_) ParameterList();
     delegate_.OnLeaveOrphanScope();
@@ -1219,7 +1219,7 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
   // the signature as resolved.
   Scope *argScope = nullptr;
   {
-    AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
+    AutoEnterScope argEnv(delegate_, Scope::Argument, &argScope);
 
     bool canEarlyResolve = true;
     ParameterList *params = arguments(&canEarlyResolve);
@@ -2116,7 +2116,7 @@ Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
     // Enter a new scope for arguments. We have to do this even for functions
     // that don't have bodies, unfortunately, since they could contain default
     // arguments that bind to named constants or the magic sizeof(arg) expr.
-    AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
+    AutoEnterScope argEnv(delegate_, Scope::Argument, &argScope);
 
     bool canEagerResolve = true;
     ParameterList *params = arguments(&canEagerResolve);

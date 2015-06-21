@@ -66,15 +66,15 @@ BlockScope::New(PoolAllocator &pool)
   return new (pool) BlockScope(pool);
 }
 
-FunctionScope::FunctionScope(PoolAllocator &pool)
+ArgumentScope::ArgumentScope(PoolAllocator &pool)
   : Scope(pool, nullptr)
 {
 }
 
-FunctionScope *
-FunctionScope::New(PoolAllocator &pool)
+ArgumentScope *
+ArgumentScope::New(PoolAllocator &pool)
 {
-  return new (pool) FunctionScope(pool);
+  return new (pool) ArgumentScope(pool);
 }
 
 GlobalScope::GlobalScope(PoolAllocator &pool)

@@ -82,7 +82,6 @@ class CompileContext;
   _(FieldDecl)            \
   _(ThisExpression)       \
   _(DeleteStatement)      \
-  _(ImplicitCastExpr)     \
   _(FoldedExpr)           \
   _(ConstructTypesetExpr)
 
@@ -281,13 +280,10 @@ class FunctionSignature : public PoolObject
 class VarDecl : public Statement
 {
  public:
-  VarDecl(const NameToken &name,
-          const TypeExpr &te,
-          Expression *initialization)
+  VarDecl(const NameToken &name, Expression *initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
-     te_(te),
      sym_(nullptr),
      next_(nullptr)
   {
@@ -857,33 +853,6 @@ class ForStatement : public Statement
     assert(!scope_);
     scope_ = scope;
   }
-};
-
-// Implicit casts are added during semantic analysis, when following coercion
-// rules.
-class ImplicitCastExpr : public Expression
-{
- public:
-  ImplicitCastExpr(Expression *expr, CastOp op, Type *to, VK valueKind = VK::rvalue)
-   : Expression(expr->loc()),
-     expr_(expr),
-     op_(op)
-  {
-    setOutput(to, valueKind);
-  }
-
-  DECLARE_NODE(ImplicitCastExpr);
-
-  Expression *expr() const {
-    return expr_;
-  }
-  CastOp op() const {
-    return op_;
-  }
-
- private:
-  Expression *expr_;
-  CastOp op_;
 };
 
 // Used when invoking a typeset constructor.
