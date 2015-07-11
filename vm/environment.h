@@ -43,10 +43,10 @@ class Environment : public ISourcePawnEnvironment
 
   static Environment *New();
 
-  void Shutdown() KE_OVERRIDE;
-  ISourcePawnEngine *APIv1() KE_OVERRIDE;
-  ISourcePawnEngine2 *APIv2() KE_OVERRIDE;
-  int ApiVersion() KE_OVERRIDE {
+  void Shutdown() override;
+  ISourcePawnEngine *APIv1() override;
+  ISourcePawnEngine2 *APIv2() override;
+  int ApiVersion() override {
     return SOURCEPAWN_API_VERSION;
   }
 
@@ -55,10 +55,10 @@ class Environment : public ISourcePawnEnvironment
 
   bool InstallWatchdogTimer(int timeout_ms);
 
-  void EnterExceptionHandlingScope(ExceptionHandler *handler) KE_OVERRIDE;
-  void LeaveExceptionHandlingScope(ExceptionHandler *handler) KE_OVERRIDE;
-  bool HasPendingException(const ExceptionHandler *handler) KE_OVERRIDE;
-  const char *GetPendingExceptionMessage(const ExceptionHandler *handler) KE_OVERRIDE;
+  void EnterExceptionHandlingScope(ExceptionHandler *handler) override;
+  void LeaveExceptionHandlingScope(ExceptionHandler *handler) override;
+  bool HasPendingException(const ExceptionHandler *handler) override;
+  const char *GetPendingExceptionMessage(const ExceptionHandler *handler) override;
 
   // Runtime functions.
   const char *GetErrorString(int err);

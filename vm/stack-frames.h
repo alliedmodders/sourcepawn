@@ -23,6 +23,13 @@ using namespace SourcePawn;
 class PluginContext;
 class PluginRuntime;
 
+enum class FrameType : uintptr_t
+{
+  None,
+  Helper,
+  LegacyNative
+};
+
 // An ExitFrame represents the state of the most recent exit from VM state to
 // the outside world. Because this transition is on a critical path, we declare
 // exactly one ExitFrame and save/restore it in InvokeFrame(). Anytime we're in
@@ -32,32 +39,28 @@ class ExitFrame
  public:
   ExitFrame()
    : exit_sp_(nullptr),
-     exit_native_(-1)
+     frame_type_(FrameType::None)
   {}
 
  public:
   const intptr_t *exit_sp() const {
     return exit_sp_;
   }
-  bool has_exit_native() const {
-    return exit_native_ != -1;
-  }
-  uint32_t exit_native() const {
-    assert(has_exit_native());
-    return exit_native_;
+  FrameType frame_type() const {
+    return frame_type_;
   }
 
  public:
   static inline size_t offsetOfExitSp() {
     return offsetof(ExitFrame, exit_sp_);
   }
-  static inline size_t offsetOfExitNative() {
-    return offsetof(ExitFrame, exit_native_);
+  static inline size_t offsetOfFrameType() {
+    return offsetof(ExitFrame, frame_type_);
   }
 
  private:
   const intptr_t *exit_sp_;
-  int exit_native_;
+  FrameType frame_type_;
 };
 
 // An InvokeFrame represents one activation of Execute2().
