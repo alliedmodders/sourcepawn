@@ -266,7 +266,6 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
     assert(0);
   } /* switch */
   markexpr(sPARM,NULL,0);       /* mark the end of a sub-expression */
-  pushval((cell)paramspassed /* *sizeof(cell)*/ );
   assert(sym->ident==iFUNCTN);
   ffcall(sym,NULL,paramspassed);
   if (sc_status!=statSKIP)
@@ -3155,7 +3154,6 @@ static int nesting=0;
   } /* for */
   stgmark(sENDREORDER);         /* mark end of reversed evaluation */
 
-  pushval((cell)nargs /* *sizeof(cell)*/ );
   nest_stkusage++;
   ffcall(sym,NULL,nargs);
   if (sc_status!=statSKIP)

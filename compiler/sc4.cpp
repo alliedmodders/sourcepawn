@@ -835,7 +835,7 @@ void ffcall(symbol *sym,const char *label,int numargs)
   if ((sym->usage & uNATIVE)!=0) {
     /* reserve a SYSREQ id if called for the first time */
     assert(label==NULL);
-    stgwrite("\tsysreq.c ");
+    stgwrite("\tsysreq.n ");
     if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr>=0)
       sym->addr=ntv_funcid++;
     /* Look for an alias */
@@ -850,15 +850,16 @@ void ffcall(symbol *sym,const char *label,int numargs)
       }
     }
     outval(sym->addr,FALSE);
+    stgwrite(" ");
+    outval(numargs,FALSE);
     if (sc_asmfile) {
       stgwrite("\t; ");
       stgwrite(symname);
     } /* if */
     stgwrite("\n"); /* write on a separate line, to mark a sequence point for the peephole optimizer */
-    stgwrite("\tstack ");
-    outval((numargs+1)*sizeof(cell), TRUE);
-    code_idx+=opcodes(2)+opargs(2);
+    code_idx+=opcodes(1)+opargs(2);
   } else {
+    pushval(numargs);
     /* normal function */
     stgwrite("\tcall ");
     if (label!=NULL) {
@@ -1482,11 +1483,9 @@ void invoke_getter(methodmap_method_t *method)
     return;
   }
 
-  // push.c 1
-  // sysreq.c N 1
+  // sysreq.n N 1
   // stack 8
   pushreg(sPRI);
-  pushval(1);
   ffcall(method->getter, NULL, 1);
 
   if (sc_status != statSKIP)
@@ -1504,7 +1503,6 @@ void invoke_setter(methodmap_method_t *method, int save)
     pushreg(sPRI);
   pushreg(sPRI);
   pushreg(sALT);
-  pushval(2);
   ffcall(method->setter, NULL, 2);
   if (save)
     popreg(sPRI);

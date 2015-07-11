@@ -4245,7 +4245,6 @@ static void dodelete()
   // stack 8
   pushreg(sPRI);
   {
-    pushval(1);
     ffcall(map->dtor->target, NULL, 1);
 
     // Only mark usage if we're not skipping codegen.
@@ -6399,9 +6398,8 @@ static void destructsymbols(symbol *root,int level)
         address(sym,sPRI);
         addconst(offset);       /* add offset to array data to the address */
         pushreg(sPRI);
-        pushval(2 /* *sizeof(cell)*/ );/* 2 parameters */
         assert(opsym->ident==iFUNCTN);
-        ffcall(opsym,NULL,1);
+        ffcall(opsym,NULL,2);
         if (sc_status!=statSKIP)
           markusage(opsym,uREAD);   /* do not mark as "used" when this call itself is skipped */
         if ((opsym->usage & uNATIVE)!=0 && opsym->x.lib!=NULL)
