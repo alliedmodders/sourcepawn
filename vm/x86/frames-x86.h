@@ -44,20 +44,18 @@ struct JitFrame
 //
 // Note that it looks reversed compared to JitFrame because we capture the sp
 // before saving registers and pushing arguments.
-struct JitExitFrameForNative
+struct JitExitFrameForLegacyNative
 {
   void *return_address;
   PluginContext *cx;
-  union {
-    uint32_t native_index;
-    SPVM_NATIVE_FUNC fn;
-  } arg;
   const cell_t *params;
+  uint32_t native_index;
+  cell_t saved_hp;
   cell_t saved_alt;
 
-  static inline const JitExitFrameForNative *FromExitSp(const intptr_t *exit_sp) {
-    return reinterpret_cast<const JitExitFrameForNative *>(
-      reinterpret_cast<const uint8_t *>(exit_sp) - sizeof(JitExitFrameForNative));
+  static inline const JitExitFrameForLegacyNative *FromExitSp(const intptr_t *exit_sp) {
+    return reinterpret_cast<const JitExitFrameForLegacyNative *>(
+      reinterpret_cast<const uint8_t *>(exit_sp) - sizeof(JitExitFrameForLegacyNative));
   }
 };
 

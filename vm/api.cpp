@@ -290,6 +290,10 @@ SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
   return Environment::get()->FreeCode((void *)func);
 }
 
+#if !defined(SOURCEPAWN_VERSION)
+# define SOURCEPAWN_VERSION "SourcePawn 1.8"
+#endif
+
 const char *
 SourcePawnEngine2::GetEngineName()
 {

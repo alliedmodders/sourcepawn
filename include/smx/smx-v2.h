@@ -28,7 +28,7 @@
 #ifndef _INCLUDE_SPFILE_HEADERS_v2_H
 #define _INCLUDE_SPFILE_HEADERS_v2_H
 
-#include <smx-headers.h>
+#include <smx/smx-headers.h>
 
 namespace sp {
 
@@ -120,7 +120,7 @@ enum class TypeSpec : uint8_t
   // Only legal as the initial byte or byte following "named" (0x7e) in a
   // parameter for a method signature.
   //
-  // Followed by a typespec. Only typespecs < 0x60 ar elegal.
+  // Followed by a typespec. Only typespecs < 0x60 are legal.
   byref             = 0x70,
 
   // Only legal as the initial byte or byte following "named" (0x7e) in a
@@ -134,13 +134,17 @@ enum class TypeSpec : uint8_t
   // Followed by:
   //     uint32    name    ; Index into the .names section.
   //     typespec  type    ; Type.
-  named             = 0x7E,
+  named             = 0x7D,
+
+  // Not legal; used as a placeholder in certain contexts.
+  none              = 0x7E,
 
   // For readability, this may be emitted at the end of typespec lists. It must
   // not be emitted at the end of nested typespecs.
   terminator        = 0x7F
 };
 
+#if 0
 // Flags for method definitions.
 enum class MethodFlags : uint32_t
 {
@@ -202,6 +206,7 @@ struct smx_pcode_header_t
   // Number of bytes of pcode in the method.
   uint32_t length;
 };
+#endif
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 // DO NOT DEFINE NEW STRUCTURES BELOW.

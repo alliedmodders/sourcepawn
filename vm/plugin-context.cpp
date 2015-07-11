@@ -709,57 +709,6 @@ PluginContext::pushTracker(uint32_t amount)
   return SP_ERROR_NONE;
 }
 
-cell_t
-PluginContext::invokeNative(ucell_t native_idx, cell_t *params)
-{
-  cell_t save_sp = sp_;
-  cell_t save_hp = hp_;
-
-  const sp_native_t *native = m_pRuntime->GetNative(native_idx);
-
-  if (native->status == SP_NATIVE_UNBOUND) {
-    ReportErrorNumber(SP_ERROR_INVALID_NATIVE);
-    return 0;
-  }
-
-  cell_t result = native->pfn(this, params);
-
-  if (save_sp != sp_) {
-    if (!env_->hasPendingException())
-      ReportErrorNumber(SP_ERROR_STACKLEAK);
-    return 0;
-  }
-  if (save_hp != hp_) {
-    if (!env_->hasPendingException())
-      ReportErrorNumber(SP_ERROR_HEAPLEAK);
-    return 0;
-  }
-
-  return result;
-}
-
-cell_t
-PluginContext::invokeBoundNative(SPVM_NATIVE_FUNC pfn, cell_t *params)
-{
-  cell_t save_sp = sp_;
-  cell_t save_hp = hp_;
-
-  cell_t result = pfn(this, params);
-
-  if (save_sp != sp_) {
-    if (!env_->hasPendingException())
-      ReportErrorNumber(SP_ERROR_STACKLEAK);
-    return result;
-  }
-  if (save_hp != hp_) {
-    if (!env_->hasPendingException())
-      ReportErrorNumber(SP_ERROR_HEAPLEAK);
-    return result;
-  }
-
-  return result;
-}
-
 struct array_creation_t
 {
   const cell_t *dim_list;     /* Dimension sizes */
