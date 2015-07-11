@@ -154,16 +154,33 @@ typedef struct sp_pubvar_s
 #define SP_NTVFLAG_EPHEMERAL		(1<<1)	/**< Native can be unbound */
 
 /** 
- * @brief Native lookup table, by default names point back to the sp_plugin_infotab_t structure.
+ * @brief Information about a native entry in a plugin.
  */
-typedef struct sp_native_s
+struct sp_native_t
 {
-	SPVM_NATIVE_FUNC	pfn;	/**< Function pointer */
-	const char *		name;	/**< Name of function */
-	uint32_t			status;	/**< Status flags */
-	uint32_t			flags;	/**< Native flags */
-	void *				user;	/**< Host-specific data */
-} sp_native_t;
+  sp_native_t()
+   : unused1(nullptr),
+     name(nullptr),
+     status(0),
+     flags(0),
+     user(nullptr)
+  {}
+
+  // @brief Deprecated; do not use.
+	SPVM_NATIVE_FUNC	unused1;
+
+  // @brief Name of the native.
+	const char*		name;
+
+  // @brief Binding status (either SP_NATIVE_UNBOUND or SP_NATIVE_BOUND).
+	uint32_t			status;
+
+  // @brief Extra flags set by the host application.
+	uint32_t			flags;
+
+  // @brief An arbitrary pointer provided by the host application.
+	void *				user;
+};
 
 /** 
  * @brief Used for setting natives from modules/host apps.
