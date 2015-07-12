@@ -402,9 +402,9 @@ Lexer::readEscapeCode()
       c = readChar();
       while (IsHexDigit(c) && digits < 2) {
         if (IsDigit(c))
-          c = (c << 4) + (c - '0');
+          r = (r << 4) + (c - '0');
         else
-          c = (c << 4) + (tolower(c) - 'a' + 10);
+          r = (r << 4) + (tolower(c) - 'a' + 10);
         digits++;
         c = readChar();
        }
