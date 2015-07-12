@@ -17,6 +17,7 @@
 #include "dll_exports.h"
 #include "environment.h"
 #include "stack-frames.h"
+#include <sp_native_api.h>
 
 using namespace ke;
 using namespace sp;
@@ -64,59 +65,45 @@ public:
   }
 };
 
-static cell_t Print(IPluginContext *cx, const cell_t *params)
+static int Print(const char* s)
 {
-  char *p;
-  cx->LocalToString(params[1], &p);
-
-  return printf("%s", p);
+  return printf("%s", s);
 }
 
-static cell_t PrintNum(IPluginContext *cx, const cell_t *params)
+static int PrintNum(int num)
 {
-  return printf("%d\n", params[1]);
+  return printf("%d\n", num);
 }
 
-static cell_t PrintNums(IPluginContext *cx, const cell_t *params)
+static cell_t PrintNums(IPluginContext *cx, const CellArgs& args)
 {
-  for (size_t i = 1; i <= size_t(params[0]); i++) {
+  for (size_t i = 0; i < args.count(); i++) {
     int err;
     cell_t *addr;
-    if ((err = cx->LocalToPhysAddr(params[i], &addr)) != SP_ERROR_NONE)
+    if ((err = cx->LocalToPhysAddr(args[i], &addr)) != SP_ERROR_NONE)
       return cx->ThrowNativeErrorEx(err, "Could not read argument");
     fprintf(stdout, "%d", *addr);
-    if (i != size_t(params[0]))
+    if (i != args.count())
       fprintf(stdout, ", ");
   }
   fprintf(stdout, "\n");
   return 1;
 }
 
-static cell_t DoNothing(IPluginContext *cx, const cell_t *params)
+static void DoNothing()
 {
-  return 1;
 }
 
-static void BindNative(IPluginRuntime *rt, const char *name, SPVM_NATIVE_FUNC fn)
+static float PrintFloat(float f)
 {
-  int err;
-  uint32_t index;
-  if ((err = rt->FindNativeByName(name, &index)) != SP_ERROR_NONE)
-    return;
-
-  rt->UpdateNativeBinding(index, fn, 0, nullptr);
+  return printf("%f\n", f);
 }
 
-static cell_t PrintFloat(IPluginContext *cx, const cell_t *params)
-{
-  return printf("%f\n", sp_ctof(params[1]));
-}
-
-static cell_t DoExecute(IPluginContext *cx, const cell_t *params)
+static cell_t DoExecute(IPluginContext* cx, cell_t fn_id, cell_t count)
 {
   int32_t ok = 0;
-  for (size_t i = 0; i < size_t(params[2]); i++) {
-    if (IPluginFunction *fn = cx->GetFunctionById(params[1])) {
+  for (size_t i = 0; i < size_t(count); i++) {
+    if (IPluginFunction *fn = cx->GetFunctionById(fn_id)) {
       if (fn->Execute(nullptr) != SP_ERROR_NONE)
         continue;
       ok++;
@@ -125,10 +112,10 @@ static cell_t DoExecute(IPluginContext *cx, const cell_t *params)
   return ok;
 }
 
-static cell_t DoInvoke(IPluginContext *cx, const cell_t *params)
+static cell_t DoInvoke(IPluginContext* cx, cell_t fn_id, cell_t count)
 {
-  for (size_t i = 0; i < size_t(params[2]); i++) {
-    if (IPluginFunction *fn = cx->GetFunctionById(params[1])) {
+  for (size_t i = 0; i < size_t(count); i++) {
+    if (IPluginFunction *fn = cx->GetFunctionById(fn_id)) {
       if (!fn->Invoke())
         return 0;
     }
@@ -136,7 +123,7 @@ static cell_t DoInvoke(IPluginContext *cx, const cell_t *params)
   return 1;
 }
 
-static cell_t DumpStackTrace(IPluginContext *cx, const cell_t *params)
+static cell_t DumpStackTrace()
 {
   FrameIterator iter;
   DumpStack(iter);
@@ -151,15 +138,6 @@ static int Execute(const char *file)
     fprintf(stderr, "Could not load plugin: %s\n", error);
     return 1;
   }
-
-  BindNative(rt, "print", Print);
-  BindNative(rt, "printnum", PrintNum);
-  BindNative(rt, "printnums", PrintNums);
-  BindNative(rt, "printfloat", PrintFloat);
-  BindNative(rt, "donothing", DoNothing);
-  BindNative(rt, "execute", DoExecute);
-  BindNative(rt, "invoke", DoInvoke);
-  BindNative(rt, "dump_stack_trace", DumpStackTrace);
 
   IPluginFunction *fun = rt->GetFunctionByName("main");
   if (!fun)
@@ -197,6 +175,15 @@ int main(int argc, char **argv)
   ShellDebugListener debug;
   sEnv->SetDebugger(&debug);
   sEnv->InstallWatchdogTimer(5000);
+
+  //sEnv->AddNative("print",      Deduce(Print));
+  sEnv->AddNative("printnum",   Deduce(PrintNum));
+  sEnv->AddNative("printnums",  Deduce(PrintNums));
+  sEnv->AddNative("printfloat", Deduce(PrintFloat));
+  sEnv->AddNative("donothing",  Deduce(DoNothing));
+  sEnv->AddNative("execute",    Deduce(DoExecute));
+  sEnv->AddNative("invoke",     Deduce(DoInvoke));
+  sEnv->AddNative("dump_stack_trace", Deduce(DumpStackTrace));
 
   int errcode = Execute(argv[1]);
 

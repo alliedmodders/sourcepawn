@@ -20,7 +20,9 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include "sp_vm_types.h"
+#include <sp_vm_types.h>
+#include <sp_native_api.h>
+#include <sp_type_deduction.h>
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0xA
@@ -1503,6 +1505,19 @@ namespace SourcePawn
 
 		// @brief Returns the message of the pending exception.
 		virtual const char *GetPendingExceptionMessage(const ExceptionHandler *handler) = 0;
+
+    // @brief Registers a permanent native with the runtime. This native will
+    // be immediately bound to new plugins. Permanent natives cannot be removed
+    // from the environment.
+    virtual void AddNative(const char* name, const NativeSpec* spec) = 0;
+
+    // @brief Registers a list of permanent natives with the runtime. These
+    // natives will be immediately bound to new plugins. Permanent natives
+    // cannot be removed from the environment.
+    //
+    // The provided NativeDef pointer is assumed to be an array, terminated
+    // by a null value in any "name" field.
+    virtual void AddNatives(const NativeDef* spec) = 0;
 	};
 
 	// @brief This class is the entry-point to using SourcePawn from a DLL.

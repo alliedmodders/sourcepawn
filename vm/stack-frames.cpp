@@ -110,19 +110,41 @@ FrameIterator::nextInvokeFrame()
 void
 FrameIterator::Next()
 {
-  if (exit_frame_.frame_type() == FrameType::LegacyNative) {
-    // If we're at an exit frame, the return address will yield the current pc.
-    const JitExitFrameForLegacyNative *exit =
-      JitExitFrameForLegacyNative::FromExitSp(exit_frame_.exit_sp());
-    exit_frame_ = ExitFrame();
+  switch (exit_frame_.frame_type()) {
+    case FrameType::LegacyNative:
+    {
+      // If we're at an exit frame, the return address will yield the current pc.
+      const JitExitFrameForLegacyNative *exit =
+        JitExitFrameForLegacyNative::FromExitSp(exit_frame_.exit_sp());
+      exit_frame_ = ExitFrame();
 
-    pc_ = exit->return_address;
-    cip_ = kInvalidCip;
+      pc_ = nullptr;
+      cip_ = kInvalidCip;
 
-    // The function owning pc_ is in the previous frame.
-    const JitFrame *frame = JitFrame::FromSp(sp_iter_);
-    function_cip_ = frame->function_cip;
-    return;
+      // The function owning pc_ is in the previous frame.
+      const JitFrame *frame = JitFrame::FromSp(sp_iter_);
+      function_cip_ = frame->function_cip;
+      return;
+    }
+    case FrameType::NewNative:
+    {
+      // If we're at an exit frame, the return address will yield the current pc.
+      const JitExitFrameForNewNative *exit =
+        JitExitFrameForNewNative::FromExitSp(exit_frame_.exit_sp());
+      exit_frame_ = ExitFrame();
+
+      pc_ = nullptr;
+      cip_ = kInvalidCip;
+
+      // The function owning pc_ is in the previous frame.
+      const JitFrame *frame = JitFrame::FromSp(sp_iter_);
+      function_cip_ = frame->function_cip;
+      return;
+    }
+    default:
+      assert(exit_frame_.frame_type() == FrameType::Helper ||
+             exit_frame_.frame_type() == FrameType::None);
+      break;
   }
 
   if (sp_iter_ >= sp_stop_) {
@@ -195,13 +217,29 @@ const char *
 FrameIterator::FunctionName() const
 {
   assert(ivk_);
-  if (exit_frame_.frame_type() == FrameType::LegacyNative) {
-    const JitExitFrameForLegacyNative *exit =
-      JitExitFrameForLegacyNative::FromExitSp(exit_frame_.exit_sp());
-    const sp_native_t *native = runtime_->GetNative(exit->native_index);
-    if (!native)
-      return nullptr;
-    return native->name;
+  switch (exit_frame_.frame_type()) {
+    case FrameType::LegacyNative:
+    {
+      const JitExitFrameForLegacyNative *exit =
+        JitExitFrameForLegacyNative::FromExitSp(exit_frame_.exit_sp());
+      const sp_native_t *native = runtime_->GetNative(exit->native_index);
+      if (!native)
+        return nullptr;
+      return native->name;
+    }
+    case FrameType::NewNative:
+    {
+      const JitExitFrameForNewNative *exit =
+        JitExitFrameForNewNative::FromExitSp(exit_frame_.exit_sp());
+      const sp_native_t *native = runtime_->GetNative(exit->native_index);
+      if (!native)
+        return nullptr;
+      return native->name;
+    }
+    default:
+      assert(exit_frame_.frame_type() == FrameType::Helper ||
+             exit_frame_.frame_type() == FrameType::None);
+      break;
   }
 
   return runtime_->image()->LookupFunction(function_cip_);
@@ -210,7 +248,8 @@ FrameIterator::FunctionName() const
 bool
 FrameIterator::IsNativeFrame() const
 {
-  return exit_frame_.frame_type() == FrameType::LegacyNative;
+  return exit_frame_.frame_type() == FrameType::LegacyNative ||
+         exit_frame_.frame_type() == FrameType::NewNative;
 }
 
 bool

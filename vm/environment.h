@@ -28,6 +28,7 @@ using namespace SourcePawn;
 class PluginRuntime;
 class CodeStubs;
 class WatchdogTimer;
+class NativeCache;
 
 // An Environment encapsulates everything that's needed to load and run
 // instances of plugins on a single thread. There can be at most one
@@ -68,11 +69,18 @@ class Environment : public ISourcePawnEnvironment
   void ReportErrorVA(const char *fmt, va_list ap);
   void ReportErrorVA(int code, const char *fmt, va_list ap);
 
+  void AddNative(const char* name, const NativeSpec* spec) override;
+  void AddNatives(const NativeDef* list) override;
+
   // Allocate and free executable memory.
   void *AllocateCode(size_t size);
   void FreeCode(void *code);
   CodeStubs *stubs() {
     return code_stubs_;
+  }
+
+  NativeCache* native_cache() const {
+    return native_cache_;
   }
 
   // Runtime management.
@@ -157,6 +165,7 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<ISourcePawnEngine> api_v1_;
   ke::AutoPtr<ISourcePawnEngine2> api_v2_;
   ke::AutoPtr<WatchdogTimer> watchdog_timer_;
+  ke::AutoPtr<NativeCache> native_cache_;
   ke::Mutex mutex_;
 
   IDebugListener *debugger_;

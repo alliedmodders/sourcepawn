@@ -47,7 +47,12 @@
  */
 inline cell_t sp_ftoc(float val)
 {
-	return *(cell_t *)&val;
+	union {
+		float v;
+		cell_t c;
+	} u;
+	u.v = val;
+	return u.c;
 }
 
 /**
@@ -58,7 +63,12 @@ inline cell_t sp_ftoc(float val)
  */
 inline float sp_ctof(cell_t val)
 {
-	return *(float *)&val;
+	union {
+		float v;
+		cell_t c;
+	} u;
+	u.c = val;
+	return u.v;
 }
 
 #endif //_INCLUDE_SOURCEPAWN_VM_TYPEUTIL_H_

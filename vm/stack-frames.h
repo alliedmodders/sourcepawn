@@ -27,6 +27,7 @@ enum class FrameType : uintptr_t
 {
   None,
   Helper,
+  NewNative,
   LegacyNative
 };
 
@@ -48,6 +49,13 @@ class ExitFrame
   }
   FrameType frame_type() const {
     return frame_type_;
+  }
+
+  void* addressOfExitSp() const {
+    return const_cast<void*>((const void*)&exit_sp_);
+  }
+  void* addressOfFrameType() const {
+    return const_cast<void*>((const void*)&frame_type_);
   }
 
  public:

@@ -102,6 +102,7 @@ class Compiler
   bool emitSysreqN();
   bool emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
   bool emitSysreqC();
+  bool emitSysreqC(uint32_t native_index, NativeEntry* native);
   bool emitSwitch();
   void emitGenArray(bool autozero);
   void emitCallThunks();
@@ -133,7 +134,7 @@ class Compiler
   }
 
  private:
-  AssemblerX86 masm;
+  MacroAssemblerX86 masm;
   Environment *env_;
   PluginRuntime *rt_;
   PluginContext *context_;

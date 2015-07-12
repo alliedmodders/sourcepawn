@@ -16,6 +16,7 @@
 #include "api.h"
 #include "code-stubs.h"
 #include "watchdog_timer.h"
+#include "native-cache.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -68,6 +69,7 @@ Environment::Initialize()
   api_v2_ = new SourcePawnEngine2();
   code_stubs_ = new CodeStubs(this);
   watchdog_timer_ = new WatchdogTimer(this);
+  native_cache_ = new NativeCache();
 
   if ((code_pool_ = Knight::KE_CreateCodeCache()) == nullptr)
     return false;
@@ -399,4 +401,17 @@ int
 Environment::getPendingExceptionCode() const
 {
   return exception_code_;
+}
+
+void
+Environment::AddNative(const char* name, const NativeSpec* spec)
+{
+  native_cache_->add(name, spec);
+}
+
+void
+Environment::AddNatives(const NativeDef* list)
+{
+  for (const NativeDef* iter = list; iter->name; iter++)
+    native_cache_->add(iter->name, iter->spec);
 }

@@ -15,6 +15,7 @@
 #include "x86-utils.h"
 #include "jit_x86.h"
 #include "environment.h"
+#include "code-stubs-x86.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -32,7 +33,6 @@ CodeStubs::InitializeFeatureDetection()
   MacroAssemblerX86::RunFeatureDetection(code);
   return true;
 }
-
 
 bool
 CodeStubs::CompileInvokeStub()
@@ -138,4 +138,171 @@ CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
   __ ret();
 
   return (SPVM_NATIVE_FUNC)LinkCode(env_, masm);
+}
+
+class TypeSpecIter
+{
+ public:
+  TypeSpecIter(const NativeSpec* spec)
+   : iter_(spec->signature),
+     end_(iter_ + spec->length),
+     done_(false),
+     by_ref(false),
+     key(uint8_t(TypeSpec::none))
+  {
+    next();
+  }
+
+  TypeSpecIter nextCopy() {
+    TypeSpecIter copy(*this);
+    copy.next();
+    return copy;
+  }
+  void next() {
+    assert(!done());
+
+    if (iter_ >= end_) {
+      done_ = true;
+      if (!ensureMore())
+        return;
+    }
+
+    if (*iter_ == uint8_t(TypeSpec::byref)) {
+      by_ref = true;
+      iter_++;
+    }
+
+    key = *iter_++;
+  }
+  bool done() const {
+    return done_;
+  }
+
+ private:
+   bool ensureMore() {
+     if (iter_ >= end_) {
+       done_ = true;
+       return false;
+     }
+     return true;
+   }
+
+ private:
+  const uint8_t* iter_;
+  const uint8_t* end_;
+  bool done_;
+
+ public:
+  bool by_ref;
+  uint8_t key;
+};
+
+int
+sp::GenerateNativeThunk(MacroAssemblerX86& masm,
+                        PluginRuntime* rt,
+                        NativeCallContext caller,
+                        NativeInfo* native,
+                        uint32_t native_index,
+                        uint32_t nparams,
+                        Label* error)
+{
+  // Calculate stack space.
+  const NativeSpec* spec = native->spec;
+
+  TypeSpecIter rval(spec);
+  assert(!rval.done());
+
+  TypeSpecIter first_arg(rval.nextCopy());
+
+  int32_t arg_stack = 0;
+  uint32_t arg_count = 0;
+  for (TypeSpecIter iter(first_arg); !iter.done(); iter.next()) {
+    switch (iter.key) {
+      case uint8_t(TypeSpec::int32):
+      case uint8_t(TypeSpec::float32):
+        arg_stack += 4;
+        break;
+      default:
+        assert(false);
+        return SP_ERROR_INVALID_NATIVE;
+    }
+    arg_count++;
+  }
+
+  // Argument counts must match.
+  if (arg_count != nparams)
+    return SP_ERROR_INVALID_NATIVE;
+
+  if (spec->flags & NativeSpecFlags::HasPluginContext)
+    arg_stack += 4;
+
+  ExternalAddress hpAddr(rt->GetBaseContext()->addressOfHp());
+  ExternalAddress spAddr(rt->GetBaseContext()->addressOfSp());
+
+  // Start generating code.
+  __ enterExitFrame(FrameType::NewNative);
+
+  // Save ALT, HP, and store native_index for debugging.
+  __ push(edx);
+  __ push(Operand(hpAddr));
+  __ push(native_index);
+
+  // Compute misalignment - stack must be 16-byte aligned.
+  int32_t total_stack = arg_stack + (3 * sizeof(intptr_t));
+  uint32_t misalignment = Align(total_stack, kStackAlignment) - total_stack;
+  if (misalignment)
+    __ subl(esp, misalignment);
+
+  int32_t arg_index = 0;
+  for (TypeSpecIter iter(first_arg); !iter.done(); iter.next()) {
+    switch (iter.key) {
+      case uint8_t(TypeSpec::int32):
+      case uint8_t(TypeSpec::float32):
+        __ push(Operand(stk, arg_index * sizeof(cell_t)));
+        break;
+      default:
+        assert(false);
+        return SP_ERROR_INVALID_NATIVE;
+    }
+    arg_index++;
+  }
+
+  if (spec->flags & NativeSpecFlags::HasPluginContext)
+    __ push(intptr_t(rt->GetBaseContext()));
+
+  // Sync SP.
+  __ subl(stk, dat);
+  __ movl(Operand(spAddr), stk);
+
+  // Invoke the native.
+  __ call(ExternalAddress(spec->method));
+
+  // Restore HP.
+  int32_t save_base = arg_stack + misalignment;
+  __ movl(edx, Operand(esp, save_base + 1 * sizeof(intptr_t)));
+  __ movl(Operand(hpAddr), edx);
+
+  // Restore ALT.
+  __ movl(edx, Operand(esp, save_base + 2 * sizeof(intptr_t)));
+
+  // Restore SP.
+  __ addl(stk, dat);
+
+  // Drop stack.
+  __ addl(esp, arg_stack + misalignment + 3 * sizeof(intptr_t));
+
+  // If the return value is a float, get the result into eax.
+  assert(pri == eax);
+  if (rval.key == uint8_t(TypeSpec::float32)) {
+    __ subl(esp, sizeof(float));
+    __ fstp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+
+  // Check for errors. Note we jump directly to the return stub since the
+  // error has already been reported.
+  __ movl(ecx, intptr_t(Environment::get()));
+  __ cmpl(Operand(ecx, Environment::offsetOfExceptionCode()), 0);
+  __ j(not_zero, error);
+  return 0;
 }

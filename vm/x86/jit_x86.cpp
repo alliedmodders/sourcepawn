@@ -39,6 +39,7 @@
 #include "environment.h"
 #include "code-stubs.h"
 #include "x86-utils.h"
+#include "code-stubs-x86.h"
 
 using namespace sp;
 
@@ -1441,9 +1442,7 @@ Compiler::emitCallThunks()
 
     // Create the exit frame, then align the stack.
     __ push(0);
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::Helper));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(FrameType::Helper);
 
     // We need to push 4 arguments, and one of them will need an extra word
     // on the stack. Allocate a big block so we're aligned.
@@ -1492,21 +1491,41 @@ Compiler::emitSysreqN()
   NativeEntry* native = rt_->NativeAt(native_index);
   uint32_t nparams = readCell();
 
-  if (native->status == SP_NATIVE_BOUND &&
-      !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL)))
-  {
+  bool immutable = native->status == SP_NATIVE_BOUND &&
+                   !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL));
+  if (immutable) {
     uint32_t replacement = rt_->GetNativeReplacement(native_index);
     if (replacement != OP_NOP)
       return emitOp((OPCODE)replacement);
   }
 
-  // Store the number of parameters on the stack.
-  __ movl(Operand(stk, -4), nparams);
-  __ subl(stk, 4);
-  if (!emitLegacyNativeCall(native_index, native))
-    return false;
-  __ addl(stk, (nparams + 1) * sizeof(cell_t));
+  assert(immutable);
 
+  if (!native->binding) {
+    assert(native->legacy_fn);
+
+    // Store the number of parameters on the stack.
+    __ movl(Operand(stk, -4), nparams);
+    __ subl(stk, 4);
+    if (!emitLegacyNativeCall(native_index, native))
+      return false;
+    __ addl(stk, (nparams + 1) * sizeof(cell_t));
+  }
+
+  //__ breakpoint();
+
+  error_ = GenerateNativeThunk(
+    masm,
+    rt_,
+    NativeCallContext::Inline,
+    native->binding,
+    native_index,
+    nparams,
+    &return_reported_error_);
+  if (error_ != SP_ERROR_NONE)
+    return false;
+
+  __ addl(stk, nparams * sizeof(cell_t));
   return true;
 }
 
@@ -1529,9 +1548,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   // Create the exit frame. This is a JitExitFrameForLegacyNative, so
   // everything we push up to the return address of the call instruction is
   // reflected in that structure.
-  __ movl(eax, intptr_t(&Environment::get()->exit_frame()));
-  __ movl(Operand(eax, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::LegacyNative));
-  __ movl(Operand(eax, ExitFrame::offsetOfExitSp()), esp);
+  __ enterExitFrame(FrameType::LegacyNative);
 
   // Save registers.
   __ push(edx);
@@ -1574,16 +1591,18 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   __ movl(edx, Operand(esp, 3 * sizeof(intptr_t)));
   __ movl(Operand(hpAddr()), edx);
 
+  // Restore local state.
+  __ addl(stk, dat);
+  __ addl(esp, 4 * sizeof(intptr_t));
+
+  // Restore ALT.
+  __ pop(edx);
+
   // Check for errors. Note we jump directly to the return stub since the
   // error has already been reported.
   __ movl(ecx, intptr_t(Environment::get()));
   __ cmpl(Operand(ecx, Environment::offsetOfExceptionCode()), 0);
   __ j(not_zero, &return_reported_error_);
-  
-  // Restore local state.
-  __ addl(stk, dat);
-  __ addl(esp, 4 * sizeof(intptr_t));
-  __ pop(edx);
   return true;
 }
 
@@ -1801,9 +1820,7 @@ Compiler::emitErrorPaths()
 
     // Create the exit frame. We always get here through a call from the opcode
     // (and always via an out-of-line thunk).
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::Helper));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(FrameType::Helper);
 
     __ push(eax);
     __ call(ExternalAddress((void *)InvokeReportError));
@@ -1824,9 +1841,7 @@ Compiler::emitErrorPaths()
     __ bind(&throw_timeout_);
 
     // Create the exit frame.
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::Helper));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(FrameType::Helper);
 
     // Since the return stub wipes out the stack, we don't need to subl after
     // the call.

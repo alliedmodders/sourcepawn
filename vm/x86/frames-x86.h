@@ -59,6 +59,20 @@ struct JitExitFrameForLegacyNative
   }
 };
 
+// See JitExitFrameForLegacyNative. This is similar, just for new-style
+// natives.
+struct JitExitFrameForNewNative
+{
+  uint32_t native_index;
+  cell_t saved_hp;
+  cell_t saved_alt;
+
+  static inline const JitExitFrameForNewNative *FromExitSp(const intptr_t *exit_sp) {
+    return reinterpret_cast<const JitExitFrameForNewNative *>(
+      reinterpret_cast<const uint8_t *>(exit_sp) - sizeof(JitExitFrameForNewNative));
+  }
+};
+
 // Unlke native frames, the exit_sp for these is created at the base address.
 struct JitExitFrameForHelper
 {

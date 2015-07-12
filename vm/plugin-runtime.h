@@ -21,10 +21,12 @@
 #include "compiled-function.h"
 #include "scripted-invoker.h"
 #include "legacy-image.h"
+#include "native-cache.h"
 
 namespace sp {
 
 class PluginContext;
+struct NativeInfo;
 
 struct floattbl_t
 {
@@ -42,6 +44,7 @@ struct NativeEntry : public sp_native_t
    : legacy_fn(nullptr)
   {}
   SPVM_NATIVE_FUNC legacy_fn;
+  Ref<NativeInfo> binding;
 };
 
 /* Jit wants fast access to this so we expose things as public */
@@ -124,6 +127,7 @@ class PluginRuntime
 
  private:
   void SetupFloatNativeRemapping();
+  void InstallNatives();
 
  private:
   ke::AutoPtr<sp::LegacyImage> image_;

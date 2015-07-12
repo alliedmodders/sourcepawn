@@ -97,6 +97,7 @@ PluginRuntime::Initialize()
   if (!function_map_.init(32))
     return false;
 
+  InstallNatives();
   return true;
 }
 
@@ -142,6 +143,25 @@ PluginRuntime::SetupFloatNativeRemapping()
       }
       iter++;
     }
+  }
+}
+
+void
+PluginRuntime::InstallNatives()
+{
+  NativeCache* cache = Environment::get()->native_cache();
+  for (size_t i = 0; i < image_->NumNatives(); i++) {
+    NativeEntry* native = NativeAt(i);
+    if (native->status == SP_NATIVE_BOUND)
+      continue;
+
+    Ref<NativeInfo> info = cache->find(image_->GetNative(i));
+    if (!info)
+      continue;
+
+    assert(!native->legacy_fn);
+    native->status = SP_NATIVE_BOUND;
+    native->binding = info;
   }
 }
 
