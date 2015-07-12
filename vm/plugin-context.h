@@ -151,8 +151,6 @@ class PluginContext : public IPluginContext
 
   int generateArray(cell_t dims, cell_t *stk, bool autozero);
   int generateFullArray(uint32_t argc, cell_t *argv, int autozero);
-  cell_t invokeNative(ucell_t native_idx, cell_t *params);
-  cell_t invokeBoundNative(SPVM_NATIVE_FUNC pfn, cell_t *params);
 
   inline bool checkAddress(cell_t *stk, cell_t addr) {
     if (uint32_t(addr) >= mem_size_)

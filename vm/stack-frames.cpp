@@ -57,6 +57,7 @@ void
 FrameIterator::nextInvokeFrame()
 {
   assert(exit_frame_.exit_sp());
+  assert(exit_frame_.frame_type() != FrameType::None);
   sp_iter_ = exit_frame_.exit_sp();
 
   // Inside an exit frame, the stack looks like this:
@@ -86,7 +87,7 @@ FrameIterator::nextInvokeFrame()
   pc_ = nullptr;
   cip_ = kInvalidCip;
 
-  if (!exit_frame_.has_exit_native()) {
+  if (exit_frame_.frame_type() == FrameType::Helper) {
     // We have an exit frame, but it's not for natives. automatically advance
     // to the most recent scripted frame.
     const JitExitFrameForHelper *exit =
@@ -109,10 +110,10 @@ FrameIterator::nextInvokeFrame()
 void
 FrameIterator::Next()
 {
-  if (exit_frame_.has_exit_native()) {
+  if (exit_frame_.frame_type() == FrameType::LegacyNative) {
     // If we're at an exit frame, the return address will yield the current pc.
-    const JitExitFrameForNative *exit =
-      JitExitFrameForNative::FromExitSp(exit_frame_.exit_sp());
+    const JitExitFrameForLegacyNative *exit =
+      JitExitFrameForLegacyNative::FromExitSp(exit_frame_.exit_sp());
     exit_frame_ = ExitFrame();
 
     pc_ = exit->return_address;
@@ -194,9 +195,10 @@ const char *
 FrameIterator::FunctionName() const
 {
   assert(ivk_);
-  if (exit_frame_.has_exit_native()) {
-    uint32_t native_index = exit_frame_.exit_native();
-    const sp_native_t *native = runtime_->GetNative(native_index);
+  if (exit_frame_.frame_type() == FrameType::LegacyNative) {
+    const JitExitFrameForLegacyNative *exit =
+      JitExitFrameForLegacyNative::FromExitSp(exit_frame_.exit_sp());
+    const sp_native_t *native = runtime_->GetNative(exit->native_index);
     if (!native)
       return nullptr;
     return native->name;
@@ -208,7 +210,7 @@ FrameIterator::FunctionName() const
 bool
 FrameIterator::IsNativeFrame() const
 {
-  return exit_frame_.has_exit_native();
+  return exit_frame_.frame_type() == FrameType::LegacyNative;
 }
 
 bool

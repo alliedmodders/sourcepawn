@@ -36,6 +36,14 @@ struct floattbl_t
   unsigned int index;
 };
 
+struct NativeEntry : public sp_native_t
+{
+  NativeEntry()
+   : legacy_fn(nullptr)
+  {}
+  SPVM_NATIVE_FUNC legacy_fn;
+};
+
 /* Jit wants fast access to this so we expose things as public */
 class PluginRuntime
   : public SourcePawn::IPluginRuntime,
@@ -75,13 +83,17 @@ class PluginRuntime
   void SetNames(const char *fullname, const char *name);
   unsigned GetNativeReplacement(size_t index);
   ScriptedInvoker *GetPublicFunction(size_t index);
-  int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data) KE_OVERRIDE;
-  const sp_native_t *GetNative(uint32_t index) KE_OVERRIDE;
-  int LookupLine(ucell_t addr, uint32_t *line) KE_OVERRIDE;
-  int LookupFunction(ucell_t addr, const char **name) KE_OVERRIDE;
-  int LookupFile(ucell_t addr, const char **filename) KE_OVERRIDE;
-  const char *GetFilename() KE_OVERRIDE {
+  int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data) override;
+  const sp_native_t *GetNative(uint32_t index) override;
+  int LookupLine(ucell_t addr, uint32_t *line) override;
+  int LookupFunction(ucell_t addr, const char **name) override;
+  int LookupFile(ucell_t addr, const char **filename) override;
+  const char *GetFilename() override {
     return full_name_.chars();
+  }
+
+  NativeEntry* NativeAt(size_t index) {
+    return &natives_[index];
   }
 
   PluginContext *GetBaseContext();
@@ -121,7 +133,7 @@ class PluginRuntime
   ke::AString full_name_;
   Code code_;
   Data data_;
-  ke::AutoArray<sp_native_t> natives_;
+  ke::AutoArray<NativeEntry> natives_;
   ke::AutoArray<sp_public_t> publics_;
   ke::AutoArray<sp_pubvar_t> pubvars_;
   ke::AutoArray<ScriptedInvoker *> entrypoints_;
