@@ -29,6 +29,9 @@ DumpStack(IFrameIterator &iter)
 {
   int index = 0;
   for (; !iter.Done(); iter.Next(), index++) {
+    if (iter.IsInternalFrame())
+      continue;
+
     const char *name = iter.FunctionName();
     if (!name) {
       fprintf(stdout, "  [%d] <unknown>\n", index);
@@ -143,6 +146,12 @@ static cell_t DumpStackTrace(IPluginContext *cx, const cell_t *params)
   return 0;
 }
 
+static cell_t ReportError(IPluginContext* cx, const cell_t *params)
+{
+  cx->ReportError("What the crab?!");
+  return 0;
+}
+
 static int Execute(const char *file)
 {
   char error[255];
@@ -160,6 +169,7 @@ static int Execute(const char *file)
   BindNative(rt, "execute", DoExecute);
   BindNative(rt, "invoke", DoInvoke);
   BindNative(rt, "dump_stack_trace", DumpStackTrace);
+  BindNative(rt, "report_error", ReportError);
 
   IPluginFunction *fun = rt->GetFunctionByName("main");
   if (!fun)

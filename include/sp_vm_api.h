@@ -1059,6 +1059,14 @@ namespace SourcePawn
 		 * @return          File path on success, null on failure.
 		 */
 		virtual const char *FilePath() const = 0;
+
+		/**
+		 * @brief Returns true if the frame is an internal frame and should not be
+		 * used for display.
+		 *
+		 * @return          True if an internal frame, false otherwise.
+		 */
+		 virtual bool IsInternalFrame() const = 0;
 	};
 
 	/**

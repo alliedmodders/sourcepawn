@@ -40,6 +40,7 @@ class CodeStubs
   void *ReturnStub() const {
     return return_stub_;
   }
+  void *LegacyNativeStub();
 
  private:
   bool InitializeFeatureDetection();

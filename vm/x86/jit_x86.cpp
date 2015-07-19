@@ -39,6 +39,7 @@
 #include "environment.h"
 #include "code-stubs.h"
 #include "x86-utils.h"
+#include "frames-x86.h"
 
 using namespace sp;
 
@@ -318,6 +319,22 @@ InvokeReportTimeout()
   InvokeReportError(SP_ERROR_TIMEOUT);
 }
 
+// Find the |ebp| associated with the entry frame. We use this to drop out of
+// the entire scripted call stack.
+static void *
+find_entry_fp()
+{
+  void *fp = nullptr;
+  for (FrameIterator iter; !iter.Done(); iter.Next()) {
+    if (iter.IsEntryFrame())
+      break;
+    fp = iter.Frame()->prev_fp;
+  }
+
+  assert(fp);
+  return fp;
+}
+
 bool
 Compiler::emitOp(OPCODE op)
 {
@@ -464,6 +481,8 @@ Compiler::emitOp(OPCODE op)
       break;
 
     case OP_PROC:
+      __ enterFrame(FrameType::Scripted, pcode_start_);
+
       // Push the old frame onto the stack.
       __ movl(tmp, Operand(frmAddr()));
       __ movl(Operand(stk, -4), tmp);
@@ -474,17 +493,6 @@ Compiler::emitOp(OPCODE op)
       __ movl(frm, stk);
       __ subl(tmp, dat);
       __ movl(Operand(frmAddr()), tmp);
-
-      // Store the function cip for stack traces.
-      __ push(pcode_start_);
-
-      // Align the stack to 16-bytes (each call adds 8 bytes).
-      __ subl(esp, 8);
-#if defined(DEBUG)
-      // Debug guards.
-      __ movl(Operand(esp, 0), 0xffaaee00);
-      __ movl(Operand(esp, 4), 0xffaaee04);
-#endif
       break;
 
     case OP_IDXADDR_B:
@@ -859,7 +867,8 @@ Compiler::emitOp(OPCODE op)
       // Remove parameters.
       __ movl(tmp, Operand(stk, 0));
       __ lea(stk, Operand(stk, tmp, ScaleFour, 4));
-      __ addl(esp, 12);
+
+      __ leaveFrame();
       __ ret();
       break;
     }
@@ -1434,23 +1443,15 @@ Compiler::emitCallThunks()
     // Get the return address, since that is the call that we need to patch.
     __ movl(eax, Operand(esp, 0));
 
-    // Push an OP_PROC frame as if we already called the function. This helps
-    // error reporting.
-    __ push(thunk->pcode_offset);
-    __ subl(esp, 8);
-
-    // Create the exit frame, then align the stack.
-    __ push(0);
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::Helper));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    // Enter the exit frame. This aligns the stack.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
 
     // We need to push 4 arguments, and one of them will need an extra word
     // on the stack. Allocate a big block so we're aligned.
     //
     // Note: we add 12 since the push above misaligned the stack.
     static const size_t kStackNeeded = 5 * sizeof(void *);
-    static const size_t kStackReserve = ke::Align(kStackNeeded, 16) + 3 * sizeof(void *);
+    static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
     __ subl(esp, kStackReserve);
 
     // Set arguments.
@@ -1462,9 +1463,11 @@ Compiler::emitCallThunks()
 
     __ call(ExternalAddress((void *)CompileFromThunk));
     __ movl(edx, Operand(esp, 4 * sizeof(void *)));
-    __ addl(esp, kStackReserve + 4 * sizeof(void *)); // Drop the exit frame and fake frame.
+    __ leaveExitFrame();
+
     __ testl(eax, eax);
     jumpOnError(not_zero);
+
     __ jmp(edx);
   }
 }
@@ -1526,15 +1529,11 @@ Compiler::emitSysreqC()
 bool
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 {
-  // Create the exit frame. This is a JitExitFrameForLegacyNative, so
-  // everything we push up to the return address of the call instruction is
-  // reflected in that structure.
-  __ movl(eax, intptr_t(&Environment::get()->exit_frame()));
-  __ movl(Operand(eax, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::LegacyNative));
-  __ movl(Operand(eax, ExitFrame::offsetOfExitSp()), esp);
+  DataLabel return_address;
+  __ enterInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
 
   // Align the stack.
-  static const uint32_t stack_use = 5 * sizeof(intptr_t);
+  static const uint32_t stack_use = 4 * sizeof(intptr_t);
   static const uint32_t misalignment = Align(stack_use, sizeof(intptr_t)) - stack_use;
   if (misalignment)
     __ addl(esp, misalignment);
@@ -1554,9 +1553,6 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   // Save the old heap pointer.
   __ push(Operand(hpAddr()));
 
-  // Push the native index - this is for debugging/callstacks.
-  __ push(native_index);
-
   // Push the last parameter for the C++ function.
   __ push(stk);
 
@@ -1570,29 +1566,31 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 
   // Invoke the native.
   if (immutable)
-    __ call(ExternalAddress(native->legacy_fn));
+    __ call(ExternalAddress((void *)native->legacy_fn));
   else
     __ call(edx);
+  __ bind(&return_address);
   // Map the return address to the cip that initiated this call.
   emitCipMapping(op_cip_);
 
   // Restore the heap pointer.
-  __ movl(edx, Operand(esp, 3 * sizeof(intptr_t)));
+  __ movl(edx, Operand(esp, 2 * sizeof(intptr_t)));
   __ movl(Operand(hpAddr()), edx);
 
   // Restore ALT.
-  __ movl(edx, Operand(esp, 4 * sizeof(intptr_t)));
+  __ movl(edx, Operand(esp, 3 * sizeof(intptr_t)));
 
   // Restore SP.
   __ addl(stk, dat);
 
-  // Drop stack use.
-  __ addl(esp, stack_use + misalignment);
+  // Note: no ret, the frame is inline. We add 4 to esp isntead.
+  __ leaveExitFrame();
+  __ addl(esp, 4);
 
   // Check for errors. Note we jump directly to the return stub since the
   // error has already been reported.
-  __ movl(ecx, intptr_t(Environment::get()));
-  __ cmpl(Operand(ecx, Environment::offsetOfExceptionCode()), 0);
+  ExternalAddress exn_code(Environment::get()->addressOfExceptionCode());
+  __ cmpl(Operand(exn_code), 0);
   __ j(not_zero, &return_reported_error_);
   return true;
 }
@@ -1806,26 +1804,43 @@ Compiler::emitErrorPaths()
   emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
   emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
 
+  Label return_to_invoke;
+
   if (report_error_.used()) {
     __ bind(&report_error_);
 
     // Create the exit frame. We always get here through a call from the opcode
     // (and always via an out-of-line thunk).
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::Helper));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
 
+    // Align the stack and call.
+    __ subl(esp, 12);
     __ push(eax);
     __ call(ExternalAddress((void *)InvokeReportError));
-    __ pop(eax); // Get the error back off the stack.
-    __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
+    __ leaveExitFrame();
+    __ jmp(&return_to_invoke);
   }
 
   // We get here if we know an exception is already pending.
   if (return_reported_error_.used()) {
     __ bind(&return_reported_error_);
-    __ movl(eax, intptr_t(Environment::get()));
-    __ movl(eax, Operand(eax, Environment::offsetOfExceptionCode()));
+    __ call(&return_to_invoke);
+  }
+
+  if (return_to_invoke.used()) {
+    __ bind(&return_to_invoke);
+
+    // We get here either through an explicit call, or a call that terminated
+    // in a tail-jmp here.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+
+    // We cannot jump to the return stub just yet. We could be multiple frames
+    // deep, and our |ebp| does not match the initial frame. Find and restore
+    // it now.
+    __ call(ExternalAddress((void *)find_entry_fp));
+    __ leaveExitFrame();
+
+    __ movl(ebp, eax);
     __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
   }
 
@@ -1834,14 +1849,13 @@ Compiler::emitErrorPaths()
     __ bind(&throw_timeout_);
 
     // Create the exit frame.
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfFrameType()), uint32_t(FrameType::Helper));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
 
-    // Since the return stub wipes out the stack, we don't need to subl after
+    // Since the return stub wipes out the stack, we don't need to addl after
     // the call.
     __ call(ExternalAddress((void *)InvokeReportTimeout));
-    __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error_);
   }
 }
 

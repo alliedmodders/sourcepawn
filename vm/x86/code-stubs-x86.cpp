@@ -37,21 +37,23 @@ CodeStubs::InitializeFeatureDetection()
 bool
 CodeStubs::CompileInvokeStub()
 {
-  AssemblerX86 masm;
+  MacroAssemblerX86 masm;
+  __ enterFrame(FrameType::Entry, 0);
 
-  __ push(ebp);
-  __ movl(ebp, esp);
+  __ push(esi);
+  __ push(edi);
+  __ push(ebx);
 
-  __ push(esi);   // ebp - 4
-  __ push(edi);   // ebp - 8
-  __ push(ebx);   // ebp - 12
-  __ push(esp);   // ebp - 16
+  static const intptr_t kContextOffset = 8 + 0 * sizeof(intptr_t);
+  static const intptr_t kCodeOffset = 8 + 1 * sizeof(intptr_t);
+  static const intptr_t kRvalOffset = 8 + 2 * sizeof(intptr_t);
+  static const intptr_t kFpOffsetToPreAlignedSp = -20;
 
   // ebx = cx
-  __ movl(ebx, Operand(ebp, 8 + 4 * 0));
+  __ movl(ebx, Operand(ebp, kContextOffset));
 
   // ecx = code
-  __ movl(ecx, Operand(ebp, 8 + 4 * 1));
+  __ movl(ecx, Operand(ebp, kCodeOffset));
 
   // eax = cx->memory
   __ movl(eax, Operand(ebx, PluginContext::offsetOfMemory()));
@@ -65,44 +67,34 @@ CodeStubs::CompileInvokeStub()
   // Align the stack.
   __ andl(esp, 0xfffffff0);
 
-  // Set up the last piece of the invoke frame. This lets us find the bounds
-  // of the call stack.
-  __ movl(eax, intptr_t(Environment::get()));
-  __ movl(eax, Operand(eax, Environment::offsetOfTopFrame()));
-  __ movl(Operand(eax, InvokeFrame::offsetOfEntrySp()), esp);
-
-  // Call into plugin (align the stack first).
+  // Call into plugin.
   __ call(ecx);
 
-  // Get input context, store rval.
-  __ movl(ecx, Operand(ebp, 8 + 4 * 2));
+  // Store the rval.
+  __ movl(ecx, Operand(ebp, kRvalOffset));
   __ movl(Operand(ecx, 0), pri);
-
-  // Set no error.
-  __ movl(eax, SP_ERROR_NONE);
 
   // Store latest stk. If we have an error code, we'll jump directly to here,
   // so eax will already be set.
   Label ret;
   __ bind(&ret);
   __ subl(stk, dat);
-  __ movl(ecx, Operand(ebp, 8 + 4 * 0));
+  __ movl(ecx, Operand(ebp, kContextOffset));
   __ movl(Operand(ecx, PluginContext::offsetOfSp()), stk);
 
   // Restore stack.
-  __ movl(esp, Operand(ebp, -16));
+  __ lea(esp, Operand(ebp, kFpOffsetToPreAlignedSp));
 
   // Restore registers and gtfo.
   __ pop(ebx);
   __ pop(edi);
   __ pop(esi);
-  __ pop(ebp);
+  __ leaveFrame();
   __ ret();
 
   // The universal emergency return will jump to here.
   Label error;
   __ bind(&error);
-  __ movl(ecx, Operand(ebp, 8 + 4 * 0)); // ret-path expects ecx = ctx
   __ jmp(&ret);
 
   invoke_stub_ = LinkCode(env_, masm);

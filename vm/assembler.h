@@ -73,6 +73,9 @@ class Assembler
   void writeByte(uint8_t byte) {
     write<uint8_t>(byte);
   }
+  void writeInt16(int16_t word) {
+    write<int16_t>(word);
+  }
   void writeInt32(int32_t word) {
     write<int32_t>(word);
   }
