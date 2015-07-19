@@ -241,7 +241,9 @@ Environment::Invoke(PluginRuntime *runtime, CompiledFunction *fn, cell_t *result
   PluginContext *cx = runtime->GetBaseContext();
 
   InvokeStubFn invoke = code_stubs_->InvokeStub();
-  return invoke(cx, fn->GetEntryAddress(), result);
+  invoke(cx, fn->GetEntryAddress(), result);
+
+  return exception_code_;
 }
 
 void

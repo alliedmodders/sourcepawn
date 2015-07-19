@@ -131,15 +131,15 @@ class Environment : public ISourcePawnEnvironment
     top_ = frame;
   }
   void leaveInvoke() {
-    exit_frame_ = top_->prev_exit_frame();
+    exit_fp_ = top_->prev_exit_fp();
     top_ = top_->prev();
   }
 
   InvokeFrame *top() const {
     return top_;
   }
-  const ExitFrame &exit_frame() const {
-    return exit_frame_;
+  intptr_t* exit_fp() const {
+    return exit_fp_;
   }
 
  public:
@@ -148,6 +148,13 @@ class Environment : public ISourcePawnEnvironment
   }
   static inline size_t offsetOfExceptionCode() {
     return offsetof(Environment, exception_code_);
+  }
+
+  void* addressOfExit() {
+    return &exit_fp_;
+  }
+  void* addressOfExceptionCode() {
+    return &exception_code_;
   }
 
  private:
@@ -176,7 +183,7 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<CodeStubs> code_stubs_;
 
   InvokeFrame *top_;
-  ExitFrame exit_frame_;
+  intptr_t* exit_fp_;
 };
 
 class EnterProfileScope

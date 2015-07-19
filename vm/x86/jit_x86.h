@@ -133,7 +133,7 @@ class Compiler
   }
 
  private:
-  AssemblerX86 masm;
+  MacroAssemblerX86 masm;
   Environment *env_;
   PluginRuntime *rt_;
   PluginContext *context_;

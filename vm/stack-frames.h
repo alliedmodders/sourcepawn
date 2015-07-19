@@ -15,6 +15,7 @@
 
 #include <sp_vm_api.h>
 #include <assert.h>
+#include <am-cxx.h>
 
 namespace sp {
 
@@ -22,46 +23,40 @@ using namespace SourcePawn;
 
 class PluginContext;
 class PluginRuntime;
+struct FrameLayout;
 
-enum class FrameType : uintptr_t
+enum class FrameType : intptr_t
 {
   None,
-  Helper,
-  LegacyNative
+  Entry,
+  Scripted,
+  Exit
 };
+KE_DEFINE_ENUM_COMPARATORS(FrameType, intptr_t);
 
-// An ExitFrame represents the state of the most recent exit from VM state to
-// the outside world. Because this transition is on a critical path, we declare
-// exactly one ExitFrame and save/restore it in InvokeFrame(). Anytime we're in
-// the VM, we are guaranteed to have an ExitFrame for each InvokeFrame().
-class ExitFrame
+enum class ExitFrameType : uintptr_t
 {
- public:
-  ExitFrame()
-   : exit_sp_(nullptr),
-     frame_type_(FrameType::None)
-  {}
-
- public:
-  const intptr_t *exit_sp() const {
-    return exit_sp_;
-  }
-  FrameType frame_type() const {
-    return frame_type_;
-  }
-
- public:
-  static inline size_t offsetOfExitSp() {
-    return offsetof(ExitFrame, exit_sp_);
-  }
-  static inline size_t offsetOfFrameType() {
-    return offsetof(ExitFrame, frame_type_);
-  }
-
- private:
-  const intptr_t *exit_sp_;
-  FrameType frame_type_;
+  Native,
+  Helper
 };
+KE_DEFINE_ENUM_OPERATORS(ExitFrameType);
+KE_DEFINE_ENUM_COMPARATORS(ExitFrameType, intptr_t);
+
+static const uintptr_t kExitFrameTypeBits = 3;
+static const uintptr_t kExitFramePayloadBits = (sizeof(void *) * 8) - kExitFrameTypeBits;
+static inline uintptr_t EncodeExitFrameId(ExitFrameType type, uintptr_t payload)
+{
+  assert(payload < (uintptr_t(1) << kExitFramePayloadBits));
+  return (payload << kExitFrameTypeBits) | uintptr_t(type);
+}
+static inline ExitFrameType GetExitFrameType(uintptr_t stack_val)
+{
+  return ExitFrameType(stack_val & ((1 << kExitFrameTypeBits) - 1));
+}
+static inline uintptr_t GetExitFramePayload(uintptr_t stack_val)
+{
+  return stack_val >> kExitFrameTypeBits;
+}
 
 // An InvokeFrame represents one activation of Execute2().
 class InvokeFrame
@@ -77,27 +72,18 @@ class InvokeFrame
     return cx_;
   }
 
-  const ExitFrame &prev_exit_frame() const {
-    return prev_exit_frame_;
-  }
-  const intptr_t *entry_sp() const {
-    return entry_sp_;
+  intptr_t* prev_exit_fp() const {
+    return prev_exit_fp_;
   }
   ucell_t entry_cip() const {
     return entry_cip_;
   }
 
- public:
-  static inline size_t offsetOfEntrySp() {
-    return offsetof(InvokeFrame, entry_sp_);
-  }
-
  private:
   InvokeFrame *prev_;
   PluginContext *cx_;
-  ExitFrame prev_exit_frame_;
+  intptr_t* prev_exit_fp_;
   ucell_t entry_cip_;
-  const intptr_t *entry_sp_;
 };
 
 class FrameIterator : public SourcePawn::IFrameIterator
@@ -117,20 +103,22 @@ class FrameIterator : public SourcePawn::IFrameIterator
   const char *FilePath() const KE_OVERRIDE;
   unsigned LineNumber() const KE_OVERRIDE;
   IPluginContext *Context() const KE_OVERRIDE;
+  bool IsInternalFrame() const KE_OVERRIDE;
+
+  bool IsEntryFrame() const;
+  FrameLayout* Frame() const;
 
  private:
-  void nextInvokeFrame();
+  void nextInvokeFrame(intptr_t* exit_fp);
   cell_t findCip() const;
+  cell_t function_cip() const;
 
  private:
-  InvokeFrame *ivk_;
-  ExitFrame exit_frame_;
-  PluginRuntime *runtime_;
-  const intptr_t *sp_iter_;
-  const intptr_t *sp_stop_;
-  ucell_t function_cip_;
+  InvokeFrame* ivk_;
+  FrameLayout* cur_frame_;
+  PluginRuntime* runtime_;
   mutable ucell_t cip_;
-  void *pc_;
+  void* pc_;
 };
 
 } // namespace sp
