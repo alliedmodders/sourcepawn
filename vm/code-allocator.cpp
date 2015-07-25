@@ -1,419 +1,158 @@
+// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// 
+// Copyright (C) 2006-2015 AlliedModders LLC
+// 
+// This file is part of SourcePawn. SourcePawn is free software: you can
+// redistribute it and/or modify it under the terms of the GNU General Public
+// License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+//
 #include <assert.h>
-#include <string.h>
-#include <am-utility.h>
-
-#if defined(WIN32)
-#include <windows.h>
-#else
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/mman.h>
-#endif
-
 #include "code-allocator.h"
-
-#define ALIGNMENT	16
-
-using namespace Knight;
-
-struct KeFreedCode;
-
-/**
- * Defines a region of memory that is made of pages. 
- */
-struct KeCodeRegion
-{
-	KeCodeRegion *next;
-	unsigned char *block_start;
-	unsigned char *block_pos;
-	KeFreedCode *free_list;
-	size_t total_size;
-	size_t end_free;
-	size_t total_free;
-};
-
-/**
- * Defines freed code.  We keep the size here because 
- * when we touch the linked list we don't want to dirty pages.
- */
-struct KeFreedCode
-{
-	KeCodeRegion *region;
-	unsigned char *block_start;
-	size_t size;
-	KeFreedCode *next;
-};
-
-struct KeSecret
-{
-	KeCodeRegion *region;
-	size_t size;
-};
-
-class Knight::KeCodeCache
-{
-public:
-	/**
-	 * First region that is live for use.
-	 */
-	KeCodeRegion *first_live;
-
-	/**
-	 * First region that is full but has free entries.
-	 */
-	KeCodeRegion *first_partial;
-
-	/**
-	 * First region that is full.
-	 */
-	KeCodeRegion *first_full;
-
-	/**
-	 * Page granularity and size.
-	 */
-	unsigned int page_size;
-	unsigned int page_granularity;
-
-	/**
-	 * This isn't actually for code, this is the node cache.
-	 */
-	KeCodeRegion *node_cache;
-	KeFreedCode *free_node_list;
-};
-
-KeCodeCache *Knight::KE_CreateCodeCache()
-{
-	KeCodeCache *cache;
-
-	cache = new KeCodeCache;
-
-	memset(cache, 0, sizeof(KeCodeCache));
-
-#if defined(WIN32)
-	SYSTEM_INFO info;
-
-	GetSystemInfo(&info);
-	cache->page_size = info.dwPageSize;
-	cache->page_granularity = info.dwAllocationGranularity;
+#if defined(_WIN32)
+# include <Windows.h>
 #else
-	cache->page_size = cache->page_granularity = sysconf(_SC_PAGESIZE);
+# include <unistd.h>
+# include <sys/mman.h>
 #endif
 
-	return cache;
+using namespace sp;
+
+static const size_t kMaxCachedPools = 8;
+
+CodeAllocator::CodeAllocator()
+{
 }
 
-inline size_t MinAllocSize()
+CodeAllocator::~CodeAllocator()
 {
-	size_t size;
-
-	size = sizeof(KeSecret);
-	size += ALIGNMENT;
-	size -= size % ALIGNMENT;
-
-	return size;
 }
 
-inline size_t ke_GetAllocSize(size_t size)
+CodeChunk
+CodeAllocator::Allocate(size_t rawBytes)
 {
-	size += sizeof(KeSecret);
-	size += ALIGNMENT;
-	size -= size % ALIGNMENT;
+  size_t bytes = Align(rawBytes, kMallocAlignment);
+  if (bytes < rawBytes)
+    return CodeChunk();
 
-	return size;
+  // First search the cache for any pools we can re-use.
+  Ref<CodePool> pool = findPool(bytes);
+  if (pool)
+    return allocateInPool(pool, bytes);
+
+  pool = CodePool::AllocateFor(bytes);
+  if (!pool)
+    return CodeChunk();
+
+  CodeChunk chunk = allocateInPool(pool, bytes);
+
+  // Enter this pool into the cache if we can.
+  if (cached_pools_.length() < kMaxCachedPools) {
+    cached_pools_.append(pool);
+  } else {
+    // If this pool has more free space than any of our cached pools, then
+    // evict the pool with the least amount of free space left.
+    size_t min_index = 0;
+    for (size_t i = 1; i < cached_pools_.length(); i++) {
+      if (cached_pools_[i]->bytesFree() < cached_pools_[min_index]->bytesFree())
+        min_index = i;
+    }
+    if (cached_pools_[min_index]->bytesFree() < pool->bytesFree())
+      cached_pools_[min_index] = pool;
+  }
+
+  return chunk;
 }
 
-void *ke_AllocInRegion(KeCodeCache *cache,
-					   KeCodeRegion **prev,
-					   KeCodeRegion *region,
-					   unsigned char *ptr,
-					   size_t alloc_size,
-					   bool is_live)
+PassRef<CodePool>
+CodeAllocator::findPool(size_t bytes)
 {
-	KeSecret *secret;
-
-	/* Squirrel some info in the alloc. */
-	secret = (KeSecret *)ptr;
-	secret->region = region;
-	secret->size = alloc_size;
-	ptr += sizeof(KeSecret);
-
-	region->total_free -= alloc_size;
-
-	/* Check if we can't use the fast-path anymore. */
-	if ((is_live && region->end_free < MinAllocSize())
-		|| (!is_live && region->total_free < MinAllocSize()))
-	{
-		KeCodeRegion **start;
-
-		*prev = region->next;
-
-		/* Select the appropriate arena. */
-		if (is_live)
-		{
-			if (region->total_free < MinAllocSize())
-			{
-				start = &cache->first_full;
-			}
-			else
-			{
-				start = &cache->first_partial;
-			}
-		}
-		else
-		{
-			start = &cache->first_full;
-		}
-		
-		region->next = *start;
-		*start = region;
-	}
-
-	return ptr;
+  // Find the cached pool with the smallest free region that holds |bytes|, to
+  // reduce fragmentation.
+  Ref<CodePool> min;
+  for (size_t i = 0; i < cached_pools_.length(); i++) {
+    Ref<CodePool> pool = cached_pools_[i];
+    if (bytes > pool->bytesFree())
+      continue;
+    if (!min || pool->bytesFree() < min->bytesFree())
+      min = pool;
+  }
+  return min;
 }
 
-void *ke_AllocFromLive(KeCodeCache *cache, size_t size)
+CodeChunk
+CodeAllocator::allocateInPool(Ref<CodePool> pool, size_t bytes)
 {
-	void *ptr;
-	size_t alloc_size;
-	KeCodeRegion *region, **prev;
-
-	region = cache->first_live;
-	prev = &cache->first_live;
-	alloc_size = ke_GetAllocSize(size);
-
-	while (region != NULL)
-	{
-		if (region->end_free >= alloc_size)
-		{
-			/* Yay! We can do a simple alloc here. */
-			ptr = ke_AllocInRegion(cache, prev, region, region->block_pos, alloc_size, true);
-
-			/* Update our counters. */
-			region->block_pos += alloc_size;
-			region->end_free -= alloc_size;
-
-			return ptr;
-		}
-		prev = &region->next;
-		region = region->next;
-	}
-
-	return NULL;
+  uint8_t* address = pool->allocate(bytes);
+  return CodeChunk(pool, address, bytes);
 }
 
-void *ke_AllocFromPartial(KeCodeCache *cache, size_t size)
+static const size_t kDefaultMinPoolSize = 1 * kMB;
+static size_t kPageGranularity = 0;
+static size_t kMinPoolSize = 1 * kMB;
+
+PassRef<CodePool>
+CodePool::AllocateFor(size_t askBytes)
 {
-	void *ptr;
-	size_t alloc_size;
-	KeCodeRegion *region, **prev;
-
-	region = cache->first_partial;
-	prev = &cache->first_partial;
-	alloc_size = ke_GetAllocSize(size);
-
-	while (region != NULL)
-	{
-		if (region->total_free >= alloc_size)
-		{
-			KeFreedCode *node, **last;
-
-			assert(region->free_list != NULL);
-
-			last = &region->free_list;
-			node = region->free_list;
-			while (node != NULL)
-			{
-				if (node->size >= alloc_size)
-				{
-					/* Use this node */
-					ptr = ke_AllocInRegion(cache, prev, region, node->block_start, alloc_size, false);
-
-					region->total_free -= node->size;
-					*last = node->next;
-
-					/* Make sure bookkeepping is correct. */
-					assert((region->free_list == NULL && region->total_free == 0)
-						   || (region->free_list != NULL && region->total_free != 0));
-
-					/* Link us back into the free node list. */
-					node->next = cache->free_node_list;
-					cache->free_node_list = node->next;
-
-					return ptr;
-				}
-				last = &node->next;
-				node = node->next;
-			}
-		}
-		prev = &region->next;
-		region = region->next;
-	}
-
-	return NULL;
-}
-
-KeCodeRegion *ke_AddRegionForSize(KeCodeCache *cache, size_t size)
-{
-	KeCodeRegion *region;
-
-	region = new KeCodeRegion;
-
-	size = ke_GetAllocSize(size);
-	size += cache->page_granularity * 2;
-	size -= size % cache->page_granularity;
-
-#if defined(WIN32)
-	region->block_start = (unsigned char *)VirtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+  if (!kPageGranularity) {
+    // On Windows, the page granularity is defined as 64KB. On POSIX systems it's
+    // usually 4KB.
+#if defined(_WIN32)
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    kPageGranularity = info.dwAllocationGranularity;
 #else
-	region->block_start = (unsigned char *)mmap(NULL, size, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANON, -1, 0);
-	region->block_start = (region->block_start == MAP_FAILED) ? NULL : region->block_start;
+    kPageGranularity = sysconf(_SC_PAGESIZE);
+#endif
+    assert(ke::IsAligned(kPageGranularity, kMallocAlignment));
+    assert(ke::IsAligned(kDefaultMinPoolSize, kPageGranularity));
+  }
+
+  // If the allocation is larger than our minimum pool size, we only align up
+  // to the page granularity.
+  size_t bytes = (askBytes < kMinPoolSize)
+                 ? kMinPoolSize
+                 : ke::Align(askBytes, kPageGranularity);
+  assert(ke::IsAligned(bytes, kPageGranularity));
+
+#if defined(_WIN32)
+  void* address = (uint8_t* )VirtualAlloc(nullptr, bytes, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+  if (!address)
+    return nullptr;
+#else
+  void* address = mmap(nullptr, bytes, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANON, -1, 0);
+  if (address == MAP_FAILED)
+    return nullptr;
 #endif
 
-	if (region->block_start == NULL)
-	{
-		delete region;
-		return NULL;
-	}
-
-	region->block_pos = region->block_start;
-	region->end_free = region->total_free = region->total_size = size;
-	region->next = cache->first_live;
-	cache->first_live = region;
-	region->free_list = NULL;
-
-	return region;
+  return new CodePool((uint8_t*)address, bytes);
 }
 
-void *Knight::KE_AllocCode(KeCodeCache *cache, size_t size)
+CodePool::CodePool(uint8_t* start, size_t size)
+ : start_(start),
+   ptr_(start),
+   end_(start + size),
+   size_(size)
 {
-	void *ptr;
-
-	/* Check live easy-adds */
-	if (cache->first_live != NULL)
-	{
-		if ((ptr = ke_AllocFromLive(cache, size)) != NULL)
-		{
-			return ptr;
-		}
-	}
-	
-	/* Try looking in the free lists */
-	if (cache->first_partial != NULL)
-	{
-		if ((ptr = ke_AllocFromPartial(cache, size)) != NULL)
-		{
-			return ptr;
-		}
-	}
-
-	/* Create a new region */
-	if (ke_AddRegionForSize(cache, size) == NULL)
-	{
-		return NULL;
-	}
-
-	return ke_AllocFromLive(cache, size);
 }
 
-KeFreedCode *ke_GetFreeNode(KeCodeCache *cache)
+CodePool::~CodePool()
 {
-	KeFreedCode *ret;
-
-	if (cache->free_node_list != NULL)
-	{
-		ret = cache->free_node_list;
-		cache->free_node_list = ret->next;
-
-		return ret;
-	}
-
-	/* See if the current free node region has space. */
-	if (cache->node_cache != NULL
-		&& cache->node_cache->end_free >= sizeof(KeFreedCode))
-	{
-		ret = (KeFreedCode *)cache->node_cache->block_pos;
-		cache->node_cache->block_pos += sizeof(KeFreedCode);
-		cache->node_cache->total_free -= sizeof(KeFreedCode);
-		cache->node_cache->end_free -= sizeof(KeFreedCode);
-
-		return ret;
-	}
-
-	/* Otherwise, we need to alloc a new region. */
-	KeCodeRegion *region = new KeCodeRegion;
-	
-	region->block_start = new unsigned char[cache->page_size / sizeof(KeFreedCode)];
-	region->block_pos = region->block_start + sizeof(KeFreedCode);
-	region->total_size = cache->page_size / sizeof(KeFreedCode);
-	region->total_free = region->end_free = (region->total_size - sizeof(KeFreedCode));
-	region->free_list = NULL;
-	region->next = cache->node_cache;
-	cache->node_cache = region;
-
-	return (KeFreedCode *)region->block_start;
-}
-
-void Knight::KE_FreeCode(KeCodeCache *cache, void *code)
-{
-	KeSecret *secret;
-	KeFreedCode *node;
-	unsigned char *ptr;
-	KeCodeRegion *region;
-
-	ptr = (unsigned char *)code;
-	secret = (KeSecret *)(ptr - sizeof(KeSecret));
-	region = secret->region;
-	node = ke_GetFreeNode(cache);
-	node->block_start = (unsigned char *)code;
-	node->next = region->free_list;
-	region->free_list = node;
-	node->region = region;
-	node->size = secret->size;
-}
-
-KeCodeRegion *ke_DestroyRegion(KeCodeRegion *region)
-{
-	KeCodeRegion *next;
-
-	next = region->next;
-
-#if defined(WIN32)
-	VirtualFree(region->block_start, 0, MEM_RELEASE);
+#if defined(_WIN32)
+  VirtualFree(start_, 0, MEM_RELEASE);
 #else
-	munmap(region->block_start, region->total_size);
+  munmap(start_, size_);
 #endif
-
-	delete region;
-
-	return next;
 }
 
-void ke_DestroyRegionChain(KeCodeRegion *first)
+uint8_t*
+CodePool::allocate(size_t bytes)
 {
-	while (first != NULL)
-	{
-		first = ke_DestroyRegion(first);
-	}
-}
-
-void Knight::KE_DestroyCodeCache(KeCodeCache *cache)
-{
-	/* Destroy every region and call it a day. */
-	ke_DestroyRegionChain(cache->first_full);
-	ke_DestroyRegionChain(cache->first_live);
-	ke_DestroyRegionChain(cache->first_partial);
-
-	/* We use normal malloc for node cache regions */
-	KeCodeRegion *region, *next;
-	
-	region = cache->node_cache;
-	while (region != NULL)
-	{
-		next = region->next;
-		delete [] region->block_start;
-		delete region;
-		region = next;
-	}
-	
-	delete cache;
+  assert(ptr_ + bytes <= end_);
+  uint8_t* result = ptr_;
+  ptr_ += bytes;
+  return result;
 }
