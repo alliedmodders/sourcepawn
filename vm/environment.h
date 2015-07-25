@@ -69,8 +69,7 @@ class Environment : public ISourcePawnEnvironment
   void ReportErrorVA(int code, const char *fmt, va_list ap);
 
   // Allocate and free executable memory.
-  void *AllocateCode(size_t size);
-  void FreeCode(void *code);
+  CodeChunk AllocateCode(size_t size);
   CodeStubs *stubs() {
     return code_stubs_;
   }
@@ -175,7 +174,7 @@ class Environment : public ISourcePawnEnvironment
   bool jit_enabled_;
   bool profiling_enabled_;
 
-  Knight::KeCodeCache *code_pool_;
+  ke::AutoPtr<CodeAllocator> code_alloc_;
   ke::InlineList<PluginRuntime> runtimes_;
 
   uintptr_t frame_id_;

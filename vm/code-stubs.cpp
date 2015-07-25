@@ -17,7 +17,6 @@ using namespace sp;
 
 CodeStubs::CodeStubs(Environment *env)
  : env_(env),
-   invoke_stub_(nullptr),
    return_stub_(nullptr)
 {
 }
@@ -30,11 +29,4 @@ CodeStubs::Initialize()
   if (!CompileInvokeStub())
     return false;
   return true;
-}
-
-void
-CodeStubs::Shutdown()
-{
-  if (invoke_stub_)
-    env_->FreeCode(invoke_stub_);
 }

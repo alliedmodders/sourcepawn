@@ -26,10 +26,10 @@ CodeStubs::InitializeFeatureDetection()
 {
   MacroAssemblerX86 masm;
   MacroAssemblerX86::GenerateFeatureDetection(masm);
-  void *code = LinkCode(env_, masm);
-  if (!code)
+  CodeChunk code = LinkCode(env_, masm);
+  if (!code.address())
     return false;
-  MacroAssemblerX86::RunFeatureDetection(code);
+  MacroAssemblerX86::RunFeatureDetection(code.address());
   return true;
 }
 
@@ -98,10 +98,10 @@ CodeStubs::CompileInvokeStub()
   __ jmp(&ret);
 
   invoke_stub_ = LinkCode(env_, masm);
-  if (!invoke_stub_)
+  if (!invoke_stub_.address())
     return false;
 
-  return_stub_ = reinterpret_cast<uint8_t *>(invoke_stub_) + error.offset();
+  return_stub_ = reinterpret_cast<uint8_t *>(invoke_stub_.address()) + error.offset();
   return true;
 }
 
@@ -129,5 +129,5 @@ CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
   __ pop(ebx);
   __ ret();
 
-  return (SPVM_NATIVE_FUNC)LinkCode(env_, masm);
+  return (SPVM_NATIVE_FUNC)LinkCodeToLegacyPtr(env_, masm);
 }

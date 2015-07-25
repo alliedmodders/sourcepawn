@@ -261,8 +261,8 @@ Compiler::emit(int *errp)
   // This has to come last.
   emitErrorPaths();
 
-  uint8_t *code = LinkCode(env_, masm);
-  if (!code) {
+  CodeChunk code = LinkCode(env_, masm);
+  if (!code.address()) {
     *errp = SP_ERROR_OUT_OF_MEMORY;
     return NULL;
   }
@@ -279,7 +279,7 @@ Compiler::emit(int *errp)
     new FixedArray<CipMapEntry>(cip_map_.length()));
   memcpy(cipmap->buffer(), cip_map_.buffer(), cip_map_.length() * sizeof(CipMapEntry));
 
-  return new CompiledFunction(code, masm.length(), pcode_start_, edges.take(), cipmap.take());
+  return new CompiledFunction(code, pcode_start_, edges.take(), cipmap.take());
 }
 
 // No exit frame - error code is returned directly.
