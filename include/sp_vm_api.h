@@ -20,11 +20,13 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include "sp_vm_types.h"
+#include <sp_vm_types.h>
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0xA
-#define SOURCEPAWN_API_VERSION   0x020A
+#define SOURCEPAWN_API_VERSION	 0x020A
+
+#include <sp_native_api.h>
 
 namespace SourceMod {
   struct IdentityToken_t;
@@ -463,19 +465,10 @@ namespace SourcePawn
     virtual unsigned char *GetDataHash() =0;
 
     /**
-     * @brief Update the native binding at the given index.
-     *
-     * @param pfn       Native function pointer.
-     * @param flags     Native flags.
-     * @param user      User data pointer.
-     */
-    virtual int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data) = 0;
-
-    /**
      * @brief Returns the native at the given index.
      *
      * @param index     Native index.
-     * @return      Native pointer, or NULL on failure.
+     * @return          Native pointer, or NULL on failure.
      */
     virtual const sp_native_t *GetNative(uint32_t index) = 0;
 
@@ -483,6 +476,29 @@ namespace SourcePawn
      * @brief Return the file or location this plugin was loaded from.
      */
     virtual const char *GetFilename() = 0;
+
+    /**
+     * @brief Attempts to bind all natives against the given registry.
+     *
+     * @param registry  The native registry to use.
+     * @return          True if, after binding is complete, all non-optional
+     *                  natives were bound. False otherwise.
+     */
+    virtual bool BindNatives(const ke::Ref<INativeRegistry>& registry) = 0;
+
+    /**
+     * @brief Mark all natives in a particular group as optional.
+     *
+     * @param group     Group containing the natives that will be optional.
+     */
+    virtual void MarkNativesOptional(const ke::Ref<INativeGroup>& group) = 0;
+
+    /**
+     * @brief Mark a single native as optional.
+     *
+     * @param group     Group containing the natives that will be optional.
+     */
+    virtual void MarkNativeOptional(const char* name) = 0;
   };
 
   /**
@@ -1347,18 +1363,18 @@ namespace SourcePawn
     virtual IPluginRuntime *LoadPlugin(ICompilation *co, const char *file, int *err) =0;
 
     /**
-     * @brief Creates a fake native and binds it to a general callback function.
+     * @brief Deprecated; does nothing.
      *
-     * @param callback  Callback function to bind the native to.
-     * @param pData    Private data to pass to the callback when the native is invoked.
-     * @return      A new fake native function as a wrapper around the callback.
+     * @param callback  Unused.
+     * @param pData     Unused.
+     * @return          null
      */
     virtual SPVM_NATIVE_FUNC CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void *pData) =0;
 
     /**
-     * @brief Destroys a fake native function wrapper.  
+     * @brief Deprecated; does nothing.
      *
-     * @param func    Pointer to the fake native created by CreateFakeNative.
+     * @param func      Unused.
      */
     virtual void DestroyFakeNative(SPVM_NATIVE_FUNC func) =0;
 
@@ -1511,6 +1527,9 @@ namespace SourcePawn
 
     // @brief Returns the message of the pending exception.
     virtual const char *GetPendingExceptionMessage(const ExceptionHandler *handler) = 0;
+
+    // @brief Allocate a new native registry.
+    virtual ke::PassRef<INativeRegistry> NewNativeRegistry(const char* name) = 0;
   };
 
   // @brief This class is the entry-point to using SourcePawn from a DLL.

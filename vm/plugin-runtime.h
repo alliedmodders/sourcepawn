@@ -21,6 +21,8 @@
 #include "compiled-function.h"
 #include "scripted-invoker.h"
 #include "legacy-image.h"
+#include "native-group.h"
+#include "native-registry.h"
 
 namespace sp {
 
@@ -39,13 +41,14 @@ struct floattbl_t
 struct NativeEntry : public sp_native_t
 {
   NativeEntry()
-   : legacy_fn(nullptr)
+   : binding(nullptr)
   {}
-  SPVM_NATIVE_FUNC legacy_fn;
+  const NativeDef* binding;
+  Ref<NativeGroup::WeakRef> weak_ref;
 };
 
 /* Jit wants fast access to this so we expose things as public */
-class PluginRuntime
+class PluginRuntime final
   : public SourcePawn::IPluginRuntime,
     public SourcePawn::IPluginDebugInfo,
     public ke::InlineListNode<PluginRuntime>
@@ -83,13 +86,19 @@ class PluginRuntime
   void SetNames(const char *fullname, const char *name);
   unsigned GetNativeReplacement(size_t index);
   ScriptedInvoker *GetPublicFunction(size_t index);
-  int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data) override;
   const sp_native_t *GetNative(uint32_t index) override;
   int LookupLine(ucell_t addr, uint32_t *line) override;
   int LookupFunction(ucell_t addr, const char **name) override;
   int LookupFile(ucell_t addr, const char **filename) override;
   const char *GetFilename() override {
     return full_name_.chars();
+  }
+  bool BindNatives(const ke::Ref<INativeRegistry>& registry) override;
+  void MarkNativesOptional(const ke::Ref<INativeGroup>& group) override;
+  void MarkNativeOptional(const char* name) override;
+
+  void addDependency(NativeGroup::StrongRef* ref) {
+    dependencies_.append(ref);
   }
 
   NativeEntry* NativeAt(size_t index) {
@@ -152,6 +161,8 @@ class PluginRuntime
   FunctionMap function_map_;
   ke::Vector<CompiledFunction *> m_JitFunctions;
 
+  ke::Vector<Ref<NativeGroup::StrongRef>> dependencies_;
+
   // Pause state.
   bool paused_;
 
@@ -165,4 +176,3 @@ class PluginRuntime
 } // sp
 
 #endif //_INCLUDE_SOURCEPAWN_JIT_RUNTIME_H_
-

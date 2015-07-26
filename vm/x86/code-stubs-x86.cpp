@@ -33,7 +33,6 @@ CodeStubs::InitializeFeatureDetection()
   return true;
 }
 
-
 bool
 CodeStubs::CompileInvokeStub()
 {
@@ -105,8 +104,8 @@ CodeStubs::CompileInvokeStub()
   return true;
 }
 
-SPVM_NATIVE_FUNC
-CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
+CodeChunk
+CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *userData)
 {
   AssemblerX86 masm;
 
@@ -119,7 +118,7 @@ CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
   __ andl(esp, 0xfffffff0);
   __ subl(esp, 4);
 
-  __ push(intptr_t(pData));
+  __ push(intptr_t(userData));
   __ push(esi);
   __ push(edi);
   __ call(ExternalAddress((void *)callback));
@@ -129,5 +128,5 @@ CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
   __ pop(ebx);
   __ ret();
 
-  return (SPVM_NATIVE_FUNC)LinkCodeToLegacyPtr(env_, masm);
+  return LinkCode(env_, masm);
 }

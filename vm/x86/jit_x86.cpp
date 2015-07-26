@@ -1441,9 +1441,7 @@ Compiler::emitSysreqN()
   NativeEntry* native = rt_->NativeAt(native_index);
   uint32_t nparams = readCell();
 
-  if (native->status == SP_NATIVE_BOUND &&
-      !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL)))
-  {
+  if (native->binding && !(native->flags & SP_NTVFLAG_DYNAMIC)) {
     uint32_t replacement = rt_->GetNativeReplacement(native_index);
     if (replacement != OP_NOP)
       return emitOp((OPCODE)replacement);
@@ -1488,12 +1486,12 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   __ push(edx);
 
   // Check whether the native is bound.
-  bool immutable = native->status == SP_NATIVE_BOUND &&
-                   !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL));
+  bool immutable = native->binding && !(native->flags & SP_NTVFLAG_DYNAMIC);
   if (!immutable) {
-    __ movl(edx, Operand(ExternalAddress(&native->legacy_fn)));
+    __ movl(edx, Operand(ExternalAddress(&native->binding)));
     __ testl(edx, edx);
     jumpOnError(zero, SP_ERROR_INVALID_NATIVE);
+    __ movl(edx, Operand(edx, offsetof(NativeDef, method)));
   }
 
   // Save the old heap pointer.
@@ -1512,7 +1510,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 
   // Invoke the native.
   if (immutable)
-    __ call(ExternalAddress((void *)native->legacy_fn));
+    __ call(ExternalAddress((void *)native->binding->method));
   else
     __ call(edx);
   __ bind(&return_address);

@@ -150,8 +150,16 @@ typedef struct sp_pubvar_s
 #define SP_NATIVE_UNBOUND		(0)		/**< Native is undefined */
 #define SP_NATIVE_BOUND			(1)		/**< Native is bound */
 
-#define SP_NTVFLAG_OPTIONAL		(1<<0)	/**< Native is optional */
-#define SP_NTVFLAG_EPHEMERAL		(1<<1)	/**< Native can be unbound */
+// The native can be left unbound. This implies SP_NTVFLAG_EPHEMERAL.
+static const uint32_t SP_NTVFLAG_OPTIONAL  = (1<<0);
+
+// The native can be bound or unbound dynamically.
+static const uint32_t SP_NTVFLAG_EPHEMERAL = (1<<1);
+
+// The above flags are equivalent, but can be used to differentiate slightly
+// different cases in the host application. They are combined internally in
+// most cases.
+static const uint32_t SP_NTVFLAG_DYNAMIC = (SP_NTVFLAG_OPTIONAL|SP_NTVFLAG_EPHEMERAL);
 
 /** 
  * @brief Information about a native entry in a plugin.

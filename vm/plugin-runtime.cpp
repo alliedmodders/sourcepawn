@@ -18,7 +18,6 @@
 #include "x86/jit_x86.h"
 #include "plugin-context.h"
 #include "environment.h"
-
 #include "md5/md5.h"
 
 using namespace sp;
@@ -72,6 +71,8 @@ PluginRuntime::Initialize()
   natives_ = new NativeEntry[image_->NumNatives()];
   if (!natives_)
     return false;
+  for (size_t i = 0; i < image_->NumNatives(); i++)
+    natives_[i].name = image_->GetNative(i);
 
   publics_ = new sp_public_t[image_->NumPublics()];
   if (!publics_)
@@ -202,40 +203,11 @@ PluginRuntime::GetNativeByIndex(uint32_t index, sp_native_t **native)
   return SP_ERROR_PARAM;
 }
 
-int
-PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data)
-{
-  if (index >= image_->NumNatives())
-    return SP_ERROR_INDEX;
-
-  NativeEntry* native = &natives_[index];
-
-  // The native must either be unbound, or it must be ephemeral or optional.
-  // Otherwise, we've already baked its address in at callsites and it's too
-  // late to fix them.
-  if (native->status == SP_NATIVE_BOUND &&
-      !(native->flags & (SP_NTVFLAG_OPTIONAL|SP_NTVFLAG_EPHEMERAL)))
-  {
-    return SP_ERROR_PARAM;
-  }
-
-  native->legacy_fn = pfn;
-  native->status = pfn
-                   ? SP_NATIVE_BOUND
-                   : SP_NATIVE_UNBOUND;
-  native->flags = flags;
-  native->user = data;
-  return SP_ERROR_NONE;
-}
-
 const sp_native_t *
 PluginRuntime::GetNative(uint32_t index)
 {
   if (index >= image_->NumNatives())
     return nullptr;
-
-  if (!natives_[index].name)
-    natives_[index].name = image_->GetNative(index);
 
   return &natives_[index];
 }
@@ -487,4 +459,33 @@ PluginRuntime::LookupFile(ucell_t addr, const char **out)
   if (out)
     *out = name;
   return SP_ERROR_NONE;
+}
+
+bool
+PluginRuntime::BindNatives(const ke::Ref<INativeRegistry>& aRegistry)
+{
+  NativeRegistry* registry = aRegistry->ToNativeRegistry();
+  return registry->Bind(this);
+}
+
+void
+PluginRuntime::MarkNativesOptional(const ke::Ref<INativeGroup>& aGroup)
+{
+  NativeGroup* group = aGroup->ToNativeGroup();
+
+  auto mark = [this](const NativeDef* def) {
+    this->MarkNativeOptional(def->name);
+  };
+  group->forEachNative(&mark);
+}
+
+void
+PluginRuntime::MarkNativeOptional(const char* name)
+{
+  size_t index;
+  if (!image_->FindNative(name, &index))
+    return;
+
+  if (!natives_[index].binding)
+    natives_[index].flags |= SP_NTVFLAG_OPTIONAL;
 }

@@ -154,7 +154,11 @@ class ExternalAddress
 {
  public:
   explicit ExternalAddress(void *p)
-    : p_(p)
+   : p_(p)
+  {
+  }
+  explicit ExternalAddress(void* const* p)
+   : p_(const_cast<void **>(p))
   {
   }
 

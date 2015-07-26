@@ -16,6 +16,7 @@
 #include "api.h"
 #include "code-stubs.h"
 #include "watchdog_timer.h"
+#include "native-registry.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -392,4 +393,10 @@ int
 Environment::getPendingExceptionCode() const
 {
   return exception_code_;
+}
+
+ke::PassRef<INativeRegistry>
+Environment::NewNativeRegistry(const char* name)
+{
+  return new NativeRegistry(this, name);
 }

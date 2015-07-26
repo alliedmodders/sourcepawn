@@ -29,6 +29,8 @@ library.sources += [
   'environment.cpp',
   'file-utils.cpp',
   'md5/md5.cpp',
+  'native-group.cpp',
+  'native-registry.cpp',
   'opcodes.cpp',
   'plugin-context.cpp',
   'plugin-runtime.cpp',

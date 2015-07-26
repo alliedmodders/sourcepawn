@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <sp_vm_api.h>
+#include <am-utility.h>
 #include "code-allocator.h"
 
 namespace sp {
@@ -32,7 +33,7 @@ class CodeStubs
  public:
   bool Initialize();
 
-  SPVM_NATIVE_FUNC CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *userData);
+  CodeChunk CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *userData);
 
   InvokeStubFn InvokeStub() const {
     return (InvokeStubFn)invoke_stub_.address();

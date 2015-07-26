@@ -59,6 +59,7 @@ class Environment : public ISourcePawnEnvironment
   void LeaveExceptionHandlingScope(ExceptionHandler *handler) override;
   bool HasPendingException(const ExceptionHandler *handler) override;
   const char *GetPendingExceptionMessage(const ExceptionHandler *handler) override;
+  ke::PassRef<INativeRegistry> NewNativeRegistry(const char* name) override;
 
   // Runtime functions.
   const char *GetErrorString(int err);
