@@ -77,60 +77,6 @@ OpToCondition(OPCODE op)
   }
 }
 
-#if 0 && !defined NDEBUG
-static const char *
-GetFunctionName(const sp_plugin_t *plugin, uint32_t offs)
-{
-  if (!plugin->debug.unpacked) {
-    uint32_t max, iter;
-    sp_fdbg_symbol_t *sym;
-    sp_fdbg_arraydim_t *arr;
-    uint8_t *cursor = (uint8_t *)(plugin->debug.symbols);
-
-    max = plugin->debug.syms_num;
-    for (iter = 0; iter < max; iter++) {
-      sym = (sp_fdbg_symbol_t *)cursor;
-
-      if (sym->ident == sp::IDENT_FUNCTION && sym->codestart <= offs && sym->codeend > offs)
-        return plugin->debug.stringbase + sym->name;
-
-      if (sym->dimcount > 0) {
-        cursor += sizeof(sp_fdbg_symbol_t);
-        arr = (sp_fdbg_arraydim_t *)cursor;
-        cursor += sizeof(sp_fdbg_arraydim_t) * sym->dimcount;
-        continue;
-      }
-
-      cursor += sizeof(sp_fdbg_symbol_t);
-    }
-  } else {
-    uint32_t max, iter;
-    sp_u_fdbg_symbol_t *sym;
-    sp_u_fdbg_arraydim_t *arr;
-    uint8_t *cursor = (uint8_t *)(plugin->debug.symbols);
-
-    max = plugin->debug.syms_num;
-    for (iter = 0; iter < max; iter++) {
-      sym = (sp_u_fdbg_symbol_t *)cursor;
-
-      if (sym->ident == sp::IDENT_FUNCTION && sym->codestart <= offs && sym->codeend > offs)
-        return plugin->debug.stringbase + sym->name;
-
-      if (sym->dimcount > 0) {
-        cursor += sizeof(sp_u_fdbg_symbol_t);
-        arr = (sp_u_fdbg_arraydim_t *)cursor;
-        cursor += sizeof(sp_u_fdbg_arraydim_t) * sym->dimcount;
-        continue;
-      }
-
-      cursor += sizeof(sp_u_fdbg_symbol_t);
-    }
-  }
-
-  return NULL;
-}
-#endif
-
 CompiledFunction *
 sp::CompileFunction(PluginRuntime *prt, cell_t pcode_offs, int *err)
 {
@@ -167,8 +113,8 @@ CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, char *
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
       "Patching thunk to %s::%s\n",
-      runtime->plugin()->name,
-      GetFunctionName(runtime->plugin(), pcode_offs));
+      runtime->Name(),
+      runtime->image()->LookupFunction(pcode_offs));
 #endif
 
   *addrp = fn->GetEntryAddress();
@@ -207,12 +153,12 @@ Compiler::emit(int *errp)
   }
 
 #if defined JIT_SPEW
-  g_engine1.GetDebugHook()->OnDebugSpew(
+  Environment::get()->debugger()->OnDebugSpew(
       "Compiling function %s::%s\n",
       rt_->Name(),
-      GetFunctionName(plugin_, pcode_start_));
+      rt_->image()->LookupFunction(pcode_start_));
 
-  SpewOpcode(plugin_, code_start_, cip_);
+  SpewOpcode(rt_, code_start_, cip_);
 #endif
 
   const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
@@ -230,7 +176,7 @@ Compiler::emit(int *errp)
       break;
 
 #if defined JIT_SPEW
-    SpewOpcode(plugin_, code_start_, cip_);
+    SpewOpcode(rt_, code_start_, cip_);
 #endif
 
     // We assume every instruction is a jump target, so before emitting
