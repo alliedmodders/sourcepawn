@@ -2648,74 +2648,74 @@ enum {
   ARG_DONE,
 };
 
-/*  callfunction
- *
- *  Generates code to call a function. This routine handles default arguments
- *  and positional as well as named parameters.
- */
-static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_result, int matchparanthesis)
+static unsigned sCallNesting = 0;
+static unsigned sCallStackUsage = 0;
+
+class CallArgPusher
 {
-static long nest_stkusage=0L;
-static int nesting=0;
-  int close,lvalue;
-  int argpos;       /* index in the output stream (argpos==nargs if positional parameters) */
-  int argidx=0;     /* index in "arginfo" list */
-  int nargs=0;      /* number of arguments */
-  int heapalloc=0;
-  int namedparams=FALSE;
-  value lval = {0};
-  arginfo *arg;
-  char arglist[sMAXARGS];
-  constvalue arrayszlst = { NULL, "", 0, 0};/* array size list starts empty */
-  constvalue taglst = { NULL, "", 0, 0};    /* tag list starts empty */
-  symbol *symret;
-  cell lexval;
-  char *lexstr;
-  bool pending_this = !!aImplicitThis;
+ public:
+  CallArgPusher(const svalue* implicit_this)
+   : has_this_value_(false),
+     handling_this_(false),
+     old_call_stack_usage_(sCallStackUsage)
+  {
+    sCallNesting++;
 
-  assert(sym!=NULL);
-  lval_result->ident=iEXPRESSION; /* preset, may be changed later */
-  lval_result->constval=0;
-  lval_result->tag=sym->tag;
-  /* check whether this is a function that returns an array */
-  symret=finddepend(sym);
-  assert(symret==NULL || symret->ident==iREFARRAY);
-  if (symret!=NULL) {
-    int retsize;
-    /* allocate space on the heap for the array, and pass the pointer to the
-     * reserved memory block as a hidden parameter
-     */
-    retsize=(int)array_totalsize(symret);
-    assert(retsize>0);
-    modheap(retsize*sizeof(cell));/* address is in ALT */
-    pushreg(sALT);                /* pass ALT as the last (hidden) parameter */
-    markheap(MEMUSE_STATIC, retsize);
-    /* also mark the ident of the result as "array" */
-    lval_result->ident=iREFARRAY;
-    lval_result->sym=symret;
-  } /* if */
-  pushheaplist();
-
-  nesting++;
-  assert(nest_stkusage>=0);
-  #if !defined NDEBUG
-    if (nesting==1)
-      assert(nest_stkusage==0);
-  #endif
-  sc_allowproccall=FALSE;       /* parameters may not use procedure call syntax */
-
-  if ((sym->flags & flgDEPRECATED)!=0) {
-    const char *ptr= (sym->documentation!=NULL) ? sym->documentation : "";
-    error(234,sym->name,ptr);   /* deprecated (probably a native function) */
-  } /* if */
-
-  svalue implicit_this;
-  bool has_complex_this = false;
-  if (aImplicitThis) {
-    implicit_this = *aImplicitThis;
-    has_complex_this = !implicit_this.canRematerialize();
+    if (implicit_this) {
+      has_this_value_ = true;
+      handling_this_ = true;
+      this_value_ = *implicit_this;
+    }
+  }
+  ~CallArgPusher() {
+    sCallNesting--;
+    sCallStackUsage = old_call_stack_usage_;
   }
 
+  void prepare() {
+    if (has_this_value_ && !this_value_.canRematerialize())
+      evaluateAndSaveThis();
+  }
+
+  bool handling_this() const {
+    return handling_this_;
+  }
+  const svalue& thisv() const {
+    assert(has_this_value_);
+    return this_value_;
+  }
+  bool handling_complex_this() const {
+    return handling_this() && !this_value_.canRematerialize();
+  }
+  unsigned old_call_stack_usage() const {
+    return old_call_stack_usage_;
+  }
+
+  void next_arg() {
+    // If we're not handling |this|, or the |this| value is not complex, then
+    // it has just been evaluated and needs to be pushed. (Otherwise, if the
+    // current argument is a complex |this|, then it was already pushed during
+    // prepare).
+    if (!handling_this() || this_value_.canRematerialize()) {
+      if (has_this_value_ && !this_value_.canRematerialize()) {
+        // If we push the current evaluated argument, |this| will be in the
+        // wrong position since we already pushed |this| earlier. To guarantee
+        // it's always in the right spot, we pop |this|, push our new argument,
+        // then re-push |this|.
+        popreg(sALT);
+        pushreg(sPRI);
+        pushreg(sALT);
+      } else {
+        pushreg(sPRI);
+      }
+      markexpr(sPARM,NULL,0);   /* mark the end of a sub-expression */
+      sCallStackUsage++;
+    }
+
+    handling_this_ = false;
+  }
+
+ private:
   // If we have an implicit |this|, and it requires evaluating an expression
   // to compute, then we have to save PRI across each argument. The reason is
   // that Pawn will evaluate arguments like so:
@@ -2770,16 +2770,80 @@ static int nesting=0;
   //  finished:
   //    push.c 3    ; argc
   //
-  if (has_complex_this) {
+  void evaluateAndSaveThis() {
     // Compute an rvalue of |implicit_this|. Note that if it's an accessor,
     // this reduces it to an iEXPRESSION. That's ok. We don't touch it
     // otherwise though, so the type checking logic below basically acts the
     // same. We are careful to not double-evaluate however.
-    if (implicit_this.lvalue)
-      rvalue(&implicit_this);
+    if (this_value_.lvalue)
+      rvalue(&this_value_);
     pushreg(sPRI);
-    nest_stkusage++;
+    sCallStackUsage++;
   }
+
+ private:
+  bool has_this_value_;
+  bool handling_this_;
+  svalue this_value_;
+  unsigned old_call_stack_usage_;
+};
+
+/*  callfunction
+ *
+ *  Generates code to call a function. This routine handles default arguments
+ *  and positional as well as named parameters.
+ */
+static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_result, int matchparanthesis)
+{
+  int close,lvalue;
+  int argpos;       /* index in the output stream (argpos==nargs if positional parameters) */
+  int argidx=0;     /* index in "arginfo" list */
+  int nargs=0;      /* number of arguments */
+  int heapalloc=0;
+  int namedparams=FALSE;
+  value lval = {0};
+  arginfo *arg;
+  char arglist[sMAXARGS];
+  constvalue arrayszlst = { NULL, "", 0, 0};/* array size list starts empty */
+  constvalue taglst = { NULL, "", 0, 0};    /* tag list starts empty */
+  symbol *symret;
+  cell lexval;
+  char *lexstr;
+
+  assert(sym!=NULL);
+  lval_result->ident=iEXPRESSION; /* preset, may be changed later */
+  lval_result->constval=0;
+  lval_result->tag=sym->tag;
+  /* check whether this is a function that returns an array */
+  symret=finddepend(sym);
+  assert(symret==NULL || symret->ident==iREFARRAY);
+  if (symret!=NULL) {
+    int retsize;
+    /* allocate space on the heap for the array, and pass the pointer to the
+     * reserved memory block as a hidden parameter
+     */
+    retsize=(int)array_totalsize(symret);
+    assert(retsize>0);
+    modheap(retsize*sizeof(cell));/* address is in ALT */
+    pushreg(sALT);                /* pass ALT as the last (hidden) parameter */
+    markheap(MEMUSE_STATIC, retsize);
+    /* also mark the ident of the result as "array" */
+    lval_result->ident=iREFARRAY;
+    lval_result->sym=symret;
+  } /* if */
+  pushheaplist();
+
+  sc_allowproccall=FALSE;       /* parameters may not use procedure call syntax */
+
+  if ((sym->flags & flgDEPRECATED)!=0) {
+    const char *ptr= (sym->documentation!=NULL) ? sym->documentation : "";
+    error(234,sym->name,ptr);   /* deprecated (probably a native function) */
+  } /* if */
+
+  CallArgPusher args(aImplicitThis);
+
+  // Setup pre-evaluation stuff for |this|.
+  args.prepare();
 
   /* run through the arguments */
   arg=sym->dim.arglist;
@@ -2804,9 +2868,10 @@ static int nesting=0;
         lexpush();                /* reset the '.' */
     } /* if */
   } /* if */
-  if (pending_this || !close) {
+  if (args.handling_this() || !close) {
     do {
-      if (!pending_this && matchtoken('.')) {
+      bool was_handling_this = args.handling_this();
+      if (!args.handling_this() && matchtoken('.')) {
         namedparams=TRUE;
         if (!needtoken(tSYMBOL))
           break;
@@ -2832,7 +2897,7 @@ static int nesting=0;
       stgmark((char)(sEXPRSTART+argpos));/* mark beginning of new expression in stage */
       if (arglist[argpos]!=ARG_UNHANDLED)
         error(58);                /* argument already set */
-      if (!pending_this && matchtoken('_')) {
+      if (!args.handling_this() && matchtoken('_')) {
         arglist[argpos]=ARG_IGNORED;  /* flag argument as "present, but ignored" */
         if (arg[argidx].ident==0 || arg[argidx].ident==iVARARGS) {
           error(92);             /* argument count mismatch */
@@ -2850,9 +2915,9 @@ static int nesting=0;
         arglist[argpos]=ARG_DONE; /* flag argument as "present" */
         if (arg[argidx].ident!=0 && arg[argidx].numtags==1)     /* set the expected tag, if any */
           lval.cmptag=arg[argidx].tags[0];
-        if (pending_this) {
-          lval = implicit_this.val;
-          lvalue = implicit_this.lvalue;
+        if (args.handling_this()) {
+          lval = args.thisv().val;
+          lvalue = args.thisv().lvalue;
         } else {
           lvalue = hier14(&lval);
           if (lvalue && lval.ident == iACCESSOR) {
@@ -2875,7 +2940,7 @@ static int nesting=0;
         case iVARARGS:
           // hier13() should filter non-methodmap functions, and |this| is
           // always an iVARIABLE.
-          assert(!pending_this);
+          assert(!args.handling_this());
 
           /* always pass by reference */
           if (lval.ident==iVARIABLE || lval.ident==iREFERENCE) {
@@ -2889,14 +2954,14 @@ static int nesting=0;
                 rvalue(&lval);    /* get value in PRI */
                 setheap_pri();    /* address of the value on the heap in PRI */
                 heapalloc+=markheap(MEMUSE_STATIC, 1);
-                nest_stkusage++;
+                sCallStackUsage++;
               } /* if */
             } else if (lvalue) {
               address(lval.sym,sPRI);
             } else {
               setheap_pri();      /* address of the value on the heap in PRI */
               heapalloc+=markheap(MEMUSE_STATIC, 1);
-              nest_stkusage++;
+              sCallStackUsage++;
             } /* if */
           } else if (lval.ident==iCONSTEXPR || lval.ident==iEXPRESSION)
           {
@@ -2904,7 +2969,7 @@ static int nesting=0;
              * value (already in PRI) there */
             setheap_pri();        /* address of the value on the heap in PRI */
             heapalloc+=markheap(MEMUSE_STATIC, 1);
-            nest_stkusage++;
+            sCallStackUsage++;
           } /* if */
           /* ??? handle const array passed by reference */
           /* otherwise, the address is already in PRI */
@@ -2922,7 +2987,7 @@ static int nesting=0;
           if (lvalue) {
             // Note: do not load anything if the implicit this was pre-evaluted
             // for being too complex.
-            if (!(pending_this && has_complex_this))
+            if (!args.handling_complex_this())
               rvalue(&lval);        /* get value (direct or indirect) */
           }
 
@@ -2930,7 +2995,7 @@ static int nesting=0;
           assert(arg[argidx].numtags>0);
 
           // Do not allow user operators to transform |this|.
-          if (!pending_this)
+          if (!args.handling_this())
             check_userop(NULL,lval.tag,arg[argidx].tags[0],2,NULL,&lval.tag);
           if (!checktags_string(arg[argidx].tags, arg[argidx].numtags, &lval))
             checktag(arg[argidx].tags, arg[argidx].numtags, lval.tag);
@@ -2941,7 +3006,7 @@ static int nesting=0;
         case iREFERENCE:
           // hier13() should filter non-methodmap functions, and |this| is
           // always an iVARIABLE.
-          assert(!pending_this);
+          assert(!args.handling_this());
 
           if (!lvalue)
             error(35,argidx+1);   /* argument type mismatch */
@@ -2954,7 +3019,7 @@ static int nesting=0;
             } else {
               setheap_pri();      /* address of the value on the heap in PRI */
               heapalloc+=markheap(MEMUSE_STATIC, 1);
-              nest_stkusage++;
+              sCallStackUsage++;
             } /* if */
           } /* if */
           /* otherwise, the address is already in PRI */
@@ -2968,7 +3033,7 @@ static int nesting=0;
         case iREFARRAY:
           // hier13() should filter non-methodmap functions, and |this| is
           // always an iVARIABLE.
-          assert(!pending_this);
+          assert(!args.handling_this());
 
           if (lval.ident!=iARRAY && lval.ident!=iREFARRAY
               && lval.ident!=iARRAYCELL && lval.ident!=iARRAYCHAR)
@@ -3056,49 +3121,29 @@ static int nesting=0;
           break;
         } /* switch */
 
-        // If we are processing |this| and it's complex, then it was never
-        // actually evaluated as an argument, so don't push it.
-        if (!(pending_this && has_complex_this)) {
-          // If we have a complex |this|, pop it as ALT, push the evaluated
-          // argument, then push |this| again. This makes sure |this| is
-          // always the last argument.
-          if (has_complex_this) {
-            popreg(sALT);
-            pushreg(sPRI);            /* store the function argument on the stack */
-            pushreg(sALT);
-          } else {
-            pushreg(sPRI);            /* store the function argument on the stack */
-          }
-          markexpr(sPARM,NULL,0);   /* mark the end of a sub-expression */
-          nest_stkusage++;
-        }
+        args.next_arg();
       } /* if */
       assert(arglist[argpos]!=ARG_UNHANDLED);
       nargs++;
 
-      // We can already have decided it was time to close because of pending_this.
-      // If that's the case, then bail out now.
-      if (pending_this && close) {
-        pending_this = false;
+      if (was_handling_this && close)
         break;
-      }
 
       if (matchparanthesis) {
         close=matchtoken(')');
         if (!close)               /* if not paranthese... */
           /* Not expecting comma if the first argument was implicit. */
-          if (!pending_this && !needtoken(','))
+          if (!was_handling_this && !needtoken(','))
             break;                /* ...but abort loop if neither */
       } else {
         /* Not expecting comma if the first argument was implicit. */
-        close = (!pending_this && !matchtoken(','));
+        close = (!was_handling_this && !matchtoken(','));
         if (close) {              /* if not comma... */
           if (needtoken(tTERM)==1)/* ...must be end of statement */
             lexpush();            /* push again, because end of statement is analised later */
         } /* if */
       } /* if */
 
-      pending_this = false;
     } while (!close && freading && !matchtoken(tENDEXPR)); /* do */
   } /* if */
   /* check remaining function arguments (they may have default values) */
@@ -3117,7 +3162,7 @@ static int nesting=0;
         if (arg[argidx].defvalue.array.data != NULL) {
           if ((arg[argidx].usage & uCONST)==0) {
             heapalloc+=arg[argidx].defvalue.array.arraysize;
-            nest_stkusage+=arg[argidx].defvalue.array.arraysize;
+            sCallStackUsage+=arg[argidx].defvalue.array.arraysize;
           } /* if */
           /* keep the lengths of all dimensions of a multi-dimensional default array */
           assert(arg[argidx].numdim>0);
@@ -3134,7 +3179,7 @@ static int nesting=0;
         setheap(arg[argidx].defvalue.val);
         /* address of the value on the heap in PRI */
         heapalloc+=markheap(MEMUSE_STATIC, 1);
-        nest_stkusage++;
+        sCallStackUsage++;
       } else {
         int dummytag=arg[argidx].tags[0];
         ldconst(arg[argidx].defvalue.val,sPRI);
@@ -3144,7 +3189,7 @@ static int nesting=0;
       } /* if */
       pushreg(sPRI);            /* store the function argument on the stack */
       markexpr(sPARM,NULL,0);   /* mark the end of a sub-expression */
-      nest_stkusage++;
+      sCallStackUsage++;
     } else {
       error(92,argidx);        /* argument count mismatch */
     } /* if */
@@ -3154,7 +3199,7 @@ static int nesting=0;
   } /* for */
   stgmark(sENDREORDER);         /* mark end of reversed evaluation */
 
-  nest_stkusage++;
+  sCallStackUsage++;
   ffcall(sym,NULL,nargs);
   if (sc_status!=statSKIP)
     markusage(sym,uREAD);       /* do not mark as "used" when this call itself is skipped */
@@ -3175,19 +3220,16 @@ static int nesting=0;
       totalsize++;                    /* add hidden parameter (on the stack) */
     if ((sym->usage & uNATIVE)==0)
       totalsize++;                    /* add "call" opcode */
-    totalsize+=nest_stkusage;
+    totalsize+=sCallStackUsage;
     if (curfunc != NULL) {
       if (curfunc->x.stacksize<totalsize)
         curfunc->x.stacksize=totalsize;
     } else {
       error(10);
     }
-    nest_stkusage-=nargs+heapalloc+1; /* stack/heap space, +1 for argcount param */
-    /* if there is a syntax error in the script, the stack calculation is
-     * probably incorrect; but we may not allow it to drop below zero
-     */
-    if (nest_stkusage<0)
-      nest_stkusage=0;
+    // stack/heap space, +1 for argcount param. Ignore if we have errors.
+    assert((sc_status != statWRITE || sc_total_errors) ||
+           args.old_call_stack_usage() == sCallStackUsage - (nargs + heapalloc + 1));
   }
 
   /* scrap any arrays left on the heap, with the exception of the array that
@@ -3195,7 +3237,6 @@ static int nesting=0;
    * heap that caused by expressions in the function arguments)
    */
   popheaplist();
-  nesting--;
 }
 
 /*  dbltest
