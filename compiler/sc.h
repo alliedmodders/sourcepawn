@@ -967,6 +967,7 @@ extern int pc_anytag;       /* global any tag */
 extern int glbstringread;	  /* last global string read */
 extern int sc_require_newdecls; /* only newdecls are allowed */
 extern bool sc_warnings_are_errors;
+extern unsigned sc_total_errors;
 
 extern constvalue sc_automaton_tab; /* automaton table */
 extern constvalue sc_state_tab;     /* state table */
