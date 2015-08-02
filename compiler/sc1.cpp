@@ -1942,7 +1942,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       #endif
     } /* if */
     begdseg();          /* real (initialized) data in data segment */
-    assert(litidx==0);  /* literal queue should be empty */
+    assert(litidx==0 || !cc_ok());  /* literal queue should be empty */
     if (sc_alignnext) {
       litidx=0;
       aligndata(sc_dataalign);
