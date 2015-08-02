@@ -1822,7 +1822,7 @@ Compiler::emitErrorPaths()
   }
 
   // We get here if we know an exception is already pending.
-  if (return_reported_error_.used()) {
+  if (return_reported_error_.used() || throw_timeout_.used()) {
     __ bind(&return_reported_error_);
     __ call(&return_to_invoke);
   }
