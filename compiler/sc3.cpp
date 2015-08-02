@@ -2798,7 +2798,6 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
   int close,lvalue;
   int argpos;       /* index in the output stream (argpos==nargs if positional parameters) */
   int argidx=0;     /* index in "arginfo" list */
-  int nargs=0;      /* number of arguments */
   int heapalloc=0;
   int namedparams=FALSE;
   value lval = {0};
@@ -2868,6 +2867,8 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
         lexpush();                /* reset the '.' */
     } /* if */
   } /* if */
+
+  unsigned nargs = 0;
   if (args.handling_this() || !close) {
     do {
       bool was_handling_this = args.handling_this();
@@ -3187,9 +3188,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
         check_userop(NULL,arg[argidx].defvalue_tag,arg[argidx].tags[0],2,NULL,&dummytag);
         assert(dummytag==arg[argidx].tags[0]);
       } /* if */
-      pushreg(sPRI);            /* store the function argument on the stack */
-      markexpr(sPARM,NULL,0);   /* mark the end of a sub-expression */
-      sCallStackUsage++;
+      args.next_arg();
     } else {
       error(92,argidx);        /* argument count mismatch */
     } /* if */
