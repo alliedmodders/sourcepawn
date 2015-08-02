@@ -189,7 +189,7 @@ void writetrailer(void)
   } /* if */
 
   /* pad data segment to align the stack and the heap */
-  assert(litidx==0);            /* literal queue should have been emptied */
+  assert(litidx==0 || !cc_ok());            /* literal queue should have been emptied */
   assert(sc_dataalign % sizeof(cell) == 0);
   if (((glb_declared*sizeof(cell)) % sc_dataalign)!=0) {
     begdseg();

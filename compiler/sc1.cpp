@@ -5252,7 +5252,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   cell cidx,glbdecl;
   short filenum;
 
-  assert(litidx==0);    /* literal queue should be empty */
+  assert(litidx==0 || !cc_ok());    /* literal queue should be empty */
   litidx=0;             /* clear the literal pool (should already be empty) */
   lastst=0;             /* no statement yet */
   cidx=0;               /* just to avoid compiler warnings */
