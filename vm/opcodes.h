@@ -33,8 +33,13 @@
 #define _INCLUDE_SOURCEPAWN_JIT_X86_OPCODES_H_
 
 #include <smx/smx-v1-opcodes.h>
+#include <sp_vm_types.h>
+#include "plugin-runtime.h"
 
 namespace SourcePawn {
+#ifdef JIT_SPEW
+	void SpewOpcode(sp::PluginRuntime *runtime, const cell_t *start, const cell_t *cip);
+#endif
 }
 
 #endif //_INCLUDE_SOURCEPAWN_JIT_X86_OPCODES_H_
