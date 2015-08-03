@@ -1767,6 +1767,20 @@ Compiler::emitErrorPaths()
     __ jmp(&return_to_invoke);
   }
 
+  // The timeout uses a special stub.
+  if (throw_timeout_.used()) {
+    __ bind(&throw_timeout_);
+
+    // Create the exit frame.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+
+    // Since the return stub wipes out the stack, we don't need to addl after
+    // the call.
+    __ call(ExternalAddress((void *)InvokeReportTimeout));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error_);
+  }
+
   // We get here if we know an exception is already pending.
   if (return_reported_error_.used()) {
     __ bind(&return_reported_error_);
@@ -1788,20 +1802,6 @@ Compiler::emitErrorPaths()
 
     __ movl(ebp, eax);
     __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
-  }
-
-  // The timeout uses a special stub.
-  if (throw_timeout_.used()) {
-    __ bind(&throw_timeout_);
-
-    // Create the exit frame.
-    __ enterExitFrame(ExitFrameType::Helper, 0);
-
-    // Since the return stub wipes out the stack, we don't need to addl after
-    // the call.
-    __ call(ExternalAddress((void *)InvokeReportTimeout));
-    __ leaveExitFrame();
-    __ jmp(&return_reported_error_);
   }
 }
 
