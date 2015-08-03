@@ -1950,7 +1950,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       sc_alignnext=FALSE;
       litidx=0;         /* global initial data is dumped, so restart at zero */
     } /* if */
-    assert(litidx==0);  /* literal queue should be empty (again) */
+    assert(litidx==0 || !cc_ok());  /* literal queue should be empty (again) */
     if (type->ident == iREFARRAY) {
       // Dynamc array in global scope.
       assert(type->is_new);
@@ -1960,7 +1960,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     if (type->tag == pc_tag_string && type->numdim == 1 && !type->dim[type->numdim - 1]) {
       slength = glbstringread;
     }
-    assert(type->size>=litidx);
+    assert(type->size>=litidx || !cc_ok());
     if (type->numdim == 1)
       type->dim[0] = (int)type->size;
     address=sizeof(cell)*glb_declared;
