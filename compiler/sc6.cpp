@@ -932,7 +932,6 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
   qsort(nativeList.buffer(), nativeList.length(), sizeof(symbol *), sort_by_addr);
   for (size_t i = 0; i < nativeList.length(); i++) {
     symbol *sym = nativeList[i];
-    assert(size_t(sym->addr) == i);
 
     sp_file_natives_t &entry = natives->add();
 
