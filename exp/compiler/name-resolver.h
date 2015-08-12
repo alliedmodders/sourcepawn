@@ -53,7 +53,8 @@ class NameResolver
   MethodDecl *EnterMethodDecl(const SourceLocation &begin,
                               const NameToken &nameToken,
                               TypeSpecifier *spec,
-                              TypeExpr *te);
+                              TypeExpr *te,
+                              bool isStatic);
   void LeaveMethodDecl(MethodDecl *decl);
   PropertyDecl *EnterPropertyDecl(const SourceLocation &begin,
                                   const NameToken &nameToken,

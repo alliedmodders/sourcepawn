@@ -451,9 +451,9 @@ TypeResolver::visitPropertyDecl(PropertyDecl *decl)
   if (!decl->sym()->type())
     decl->sym()->setType(resolveTypeIfNeeded(decl->te()));
 
-  if (FunctionNode *getter = decl->getter()->fun())
+  if (FunctionNode *getter = decl->getter())
     visitFunction(getter);
-  if (FunctionNode *setter = decl->setter()->fun())
+  if (FunctionNode *setter = decl->setter())
     visitFunction(setter);
 }
 
@@ -462,7 +462,7 @@ TypeResolver::visitMethodDecl(MethodDecl *decl)
 {
   // It is not possible to refer to methods as part of a constant or type
   // expression - no re-entrancy or upward-resolving needed.
-  if (FunctionNode *node = decl->method()->fun())
+  if (FunctionNode *node = decl->method())
     visitFunction(node);
 }
 

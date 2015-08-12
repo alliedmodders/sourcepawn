@@ -3538,41 +3538,6 @@ static void check_void_decl(const declinfo_t *decl, int variable)
   }
 }
 
-// Current lexer position is, we've parsed "public", an optional "native", and
-// a type expression.
-//
-// This returns true if there is a method bind, i.e. "() = Y".
-static int match_method_bind()
-{
-  // The grammar here is a little complicated. We must differentiate
-  // between two different rules:
-  //   public X() = Y;
-  //   public X() { ...
-  //
-  // If we parse up to '=', then it becomes harder to call newfunc() later,
-  // since ideally we'd like to back up to the '('. To work around this we
-  // use a hacked in lexer API to push older tokens back into the token
-  // stream.
-  token_t tok;
-  if (lextok(&tok) != '(') {
-    lexpush();
-    return FALSE;
-  }
-
-  if (!matchtoken(')')) {
-    lexpush();
-    return FALSE;
-  }
-
-  if (!matchtoken('=')) {
-    lexpush();
-    lexpush();
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
 // If a name is too long, error and truncate.
 void check_name_length(char *original)
 {
@@ -3642,30 +3607,6 @@ symbol *parse_inline_function(methodmap_t *map,
   return target;
 }
 
-int check_this_tag(methodmap_t *map, symbol *target)
-{
-  // Check the implicit this parameter. Currently we only allow scalars. As
-  // to not encourage enum-structs, we will not allow those either.
-  const arginfo *first_arg = &target->dim.arglist[0];
-  if (first_arg->ident == 0 ||
-      first_arg->ident != iVARIABLE ||
-      first_arg->hasdefault ||
-      first_arg->numtags != 1)
-  {
-    return FALSE;
-  }
-
-  // Ensure the methodmap tag is compatible with |this|.
-  int ok = FALSE;
-  for (methodmap_t *mapptr = map; mapptr; mapptr = mapptr->parent) {
-    if (first_arg->tags[0] == mapptr->tag) {
-      ok = TRUE;
-      break;
-    }
-  }
-  return ok;
-}
-
 int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_method_t *method)
 {
   token_ident_t ident;
@@ -3690,41 +3631,23 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
     return FALSE;
   }
 
-  symbol *target = NULL;
+  typeinfo_t voidtype;
+  char tmpname[METHOD_NAMEMAX + 1];
+  strcpy(tmpname, method->name);
+  if (getter)
+    strcat(tmpname, ".get");
+  else
+    strcat(tmpname, ".set");
 
-  token_ident_t bindsource;
-  int is_bind = match_method_bind();
-  if (is_bind) {
-    if (!needsymbol(&bindsource))
-      return FALSE;
-  }
-
-  if (is_bind) {
-    // Find an existing symbol.
-    target = findglb(bindsource.name, sGLOBAL);
-    if (!target)
-      error(17, bindsource.name);
-    else if (target->ident != iFUNCTN) 
-      error(10);
+  const typeinfo_t *ret_type;
+  if (getter) {
+    ret_type = type;
   } else {
-    typeinfo_t voidtype;
-    char tmpname[METHOD_NAMEMAX + 1];
-    strcpy(tmpname, method->name);
-    if (getter)
-      strcat(tmpname, ".get");
-    else
-      strcat(tmpname, ".set");
-
-    const typeinfo_t *ret_type;
-    if (getter) {
-      ret_type = type;
-    } else {
-      make_primitive(&voidtype, pc_tag_void);
-      ret_type = &voidtype;
-    }
-
-    target = parse_inline_function(map, ret_type, tmpname, is_native, FALSE, false);
+    make_primitive(&voidtype, pc_tag_void);
+    ret_type = &voidtype;
   }
+
+  symbol* target = parse_inline_function(map, ret_type, tmpname, is_native, FALSE, false);
 
   if (!target)
     return FALSE;
@@ -3744,22 +3667,8 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
     // Cannot have extra arguments.
     if (target->dim.arglist[0].ident && target->dim.arglist[1].ident)
       error(127);
-
-    if (!check_this_tag(map, target)) {
-      error(108, layout_spec_name(map->spec), map->name);
-      return FALSE;
-    }
-
-    // Must return the same tag as the property.
-    if (type->tag != target->tag)
-      error(128, "getter", map->name, type_to_name(type->tag));
   } else {
     method->setter = target;
-
-    if (!check_this_tag(map, target)) {
-      error(108, layout_spec_name(map->spec), map->name);
-      return FALSE;
-    }
 
     // Must have one extra argument taking the return type.
     arginfo *arg = &target->dim.arglist[1];
@@ -3775,11 +3684,9 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
       error(150, pc_tagname(type->tag));
       return FALSE;
     }
-    if (target->tag != pc_tag_void)
-      error(151);
   }
 
-  require_newline(is_bind || (target->usage & uNATIVE));
+  require_newline(target->usage & uNATIVE);
   return TRUE;
 }
 
@@ -3817,7 +3724,6 @@ methodmap_method_t *parse_method(methodmap_t *map)
 {
   int maybe_ctor = 0;
   int is_ctor = 0;
-  int is_bind = 0;
   int is_native = 0;
   bool is_static = false;
   const char *spectype = layout_spec_name(map->spec);
@@ -3828,10 +3734,6 @@ methodmap_method_t *parse_method(methodmap_t *map)
   // This stores the name of the method (for destructors, we add a ~).
   token_ident_t ident;
   strcpy(ident.name, "__unknown__");
-
-  // For binding syntax, like X() = Y, this stores the right-hand name.
-  token_ident_t bindsource;
-  strcpy(bindsource.name, "__unknown__");
 
   typeinfo_t type;
   memset(&type, 0, sizeof(type));
@@ -3845,47 +3747,31 @@ methodmap_method_t *parse_method(methodmap_t *map)
   if (matchtoken('~'))
     error(118);
 
-  if (!is_native && got_symbol) {
-    // We didn't see "native", but we saw a symbol. Match for '() =' which
-    // would indicate a method bind.
-    is_bind = match_method_bind();
+  if (got_symbol && matchtoken('(')) {
+    // ::= ident '('
 
-    if (is_bind) {
-      // If we saw "X() =", then grab the right-hand name.
-      if (!needsymbol(&bindsource))
-        return NULL;
-    }
-  }
-
-  if (!is_bind) {
-    if (got_symbol && matchtoken('(')) {
-      // ::= ident '('
-
-      // Push the '(' token back for declargs().
-      maybe_ctor = TRUE;
-      lexpush();
-    } else {
-      // The first token of the type expression is either the symbol we
-      // predictively parsed earlier, or it's been pushed back into the
-      // lex buffer.
-      const token_t *first = got_symbol ? &ident.tok : NULL;
-
-      // Parse for type expression, priming it with the token we predicted
-      // would be an identifier.
-      if (!parse_new_typeexpr(&type, first, 0))
-        return NULL;
-
-      // Now, we should get an identifier.
-      if (!needsymbol(&ident))
-        return NULL;
-
-      // If the identifier is a constructor, error, since the user specified
-      // a type.
-      if (strcmp(ident.name, map->name) == 0)
-        error(99, "constructor");
-    }
+    // Push the '(' token back for declargs().
+    maybe_ctor = TRUE;
+    lexpush();
   } else {
-    is_ctor = (strcmp(ident.name, map->name) == 0);
+    // The first token of the type expression is either the symbol we
+    // predictively parsed earlier, or it's been pushed back into the
+    // lex buffer.
+    const token_t *first = got_symbol ? &ident.tok : NULL;
+
+    // Parse for type expression, priming it with the token we predicted
+    // would be an identifier.
+    if (!parse_new_typeexpr(&type, first, 0))
+      return NULL;
+
+    // Now, we should get an identifier.
+    if (!needsymbol(&ident))
+      return NULL;
+
+    // If the identifier is a constructor, error, since the user specified
+    // a type.
+    if (strcmp(ident.name, map->name) == 0)
+      error(99, "constructor");
   }
 
   // Do some preliminary verification of ctor names.
@@ -3901,26 +3787,10 @@ methodmap_method_t *parse_method(methodmap_t *map)
     error(175);
   }
 
-  symbol *target = NULL;
-  if (is_bind) {
-    // Find an existing symbol.
-    target = findglb(bindsource.name, sGLOBAL);
-    if (!target)
-      error(17, bindsource.name);
-    else if (target->ident != iFUNCTN) 
-      error(10);
-  } else {
-    target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_static);
-  }
+  symbol* target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_static);
 
   if (!target)
     return NULL;
-
-  // Verify constructor targets.
-  if (is_ctor) {
-    if (target->tag != map->tag)
-      error(112, map->name);
-  }
 
   methodmap_method_t *method = (methodmap_method_t *)calloc(1, sizeof(methodmap_method_t));
   strcpy(method->name, ident.name);
@@ -3933,15 +3803,11 @@ methodmap_method_t *parse_method(methodmap_t *map)
   if (is_ctor) {
     if (map->ctor)
       error(113, map->name);
-  } else if (!is_static) {
-    if (!check_this_tag(map, target))
-      error(108, spectype, map->name);
+
+    map->ctor = method;
   }
 
-  if (is_ctor)
-    map->ctor = method;
-
-  require_newline(is_bind || (target->usage & uNATIVE));
+  require_newline(target->usage & uNATIVE);
   return method;
 }
 

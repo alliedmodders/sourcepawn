@@ -526,11 +526,10 @@ NameResolver::LeavePropertyDecl(PropertyDecl *decl)
   if (decl->te().resolved())
     decl->sym()->setType(decl->te().resolved());
 
-  FunctionOrAlias *getter = decl->getter();
-  FunctionOrAlias *setter = decl->setter();
+  FunctionNode* getter = decl->getter();
+  FunctionNode* setter = decl->setter();
   if (!decl->te().resolved() ||
-      (getter->fun() && !getter->fun()->signature()->isResolved()) ||
-      (setter->fun() && !setter->fun()->signature()->isResolved()))
+      (!getter->signature()->isResolved() || !setter->signature()->isResolved()))
   {
     tr_.addPending(decl);
   }
@@ -571,9 +570,10 @@ MethodDecl *
 NameResolver::EnterMethodDecl(const SourceLocation &begin,
                               const NameToken &nameToken,
                               TypeSpecifier *spec,
-                              TypeExpr *te)
+                              TypeExpr *te,
+                              bool isStatic)
 {
-  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, FunctionOrAlias());
+  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, isStatic);
 
   if (spec)
     *te = resolve(*spec);
@@ -599,7 +599,7 @@ NameResolver::EnterMethodDecl(const SourceLocation &begin,
 void
 NameResolver::LeaveMethodDecl(MethodDecl *decl)
 {
-  FunctionNode *fun = decl->method()->fun();
+  FunctionNode *fun = decl->method();
   if (!fun)
     return;
 
