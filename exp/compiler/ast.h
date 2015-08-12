@@ -1470,12 +1470,12 @@ class FieldDecl : public LayoutDecl
 class MethodDecl : public LayoutDecl
 {
  public:
-  MethodDecl(const SourceLocation &loc, const NameToken &name,
-             FunctionNode* node)
+  MethodDecl(const SourceLocation &loc, const NameToken &name, bool isStatic)
    : LayoutDecl(loc),
      name_(name),
-     method_(node),
-     sym_(nullptr)
+     method_(nullptr),
+     sym_(nullptr),
+     static_(isStatic)
   {}
 
   DECLARE_NODE(MethodDecl);
@@ -1490,6 +1490,10 @@ class MethodDecl : public LayoutDecl
     method_ = node;
   }
 
+  bool isStatic() const {
+    return static_;
+  }
+
   void setSymbol(MethodSymbol *sym) {
     assert(!sym_);
     sym_ = sym;
@@ -1502,6 +1506,7 @@ class MethodDecl : public LayoutDecl
   NameToken name_;
   FunctionNode* method_;
   MethodSymbol *sym_;
+  bool static_;
 };
 
 class PropertyDecl : public LayoutDecl
