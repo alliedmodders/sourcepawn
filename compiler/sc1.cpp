@@ -147,6 +147,7 @@ static void dofuncenum(int listmode);
 static void dotypedef();
 static void dotypeset();
 static void domethodmap(LayoutSpec spec);
+static bool dousing();
 static void dobreak(void);
 static void docont(void);
 static void dosleep(void);
@@ -1497,6 +1498,12 @@ static void parse(void)
       break;
     case tMETHODMAP:
       domethodmap(Layout_MethodMap);
+      break;
+    case tUSING:
+      if (!dousing()) {
+        lexclr(TRUE);
+        litidx=0;
+      }
       break;
     case '}':
       error(54);                /* unmatched closing brace */
@@ -3993,60 +4000,10 @@ methodmap_method_t *parse_method(methodmap_t *map)
   return method;
 }
 
-/**
- * domethodmap - declare a method map for OO-ish syntax.
- *
- */
-static void domethodmap(LayoutSpec spec)
+void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
 {
-  int val;
-  char *str;
-  methodmap_t *parent = NULL;
-  const char *spectype = layout_spec_name(spec);
-
-  // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
-  char mapname[sNAMEMAX + 1];
-  if (lex(&val, &str) != tSYMBOL)
-    error(93);
-  strcpy(mapname, str);
-
-  if (!isupper(*mapname))
-    error(109, spectype);
-
-  LayoutSpec old_spec = deduce_layout_spec_by_name(mapname);
-  int can_redef = can_redef_layout_spec(spec, old_spec);
-  if (!can_redef)
-    error(110, mapname, layout_spec_name(old_spec));
-
-  if (matchtoken('<')) {
-    if (lex(&val, &str) != tSYMBOL) {
-      error(93);
-      return;
-    }
-
-    if ((parent = methodmap_find_by_name(str)) == NULL) {
-      error(102, spectype, str);
-    } else if (parent->spec != spec) {
-      error(129);
-    }
-  }
-
-  methodmap_t *map = (methodmap_t *)calloc(1, sizeof(methodmap_t));
-  map->parent = parent;
-  map->spec = spec;
-  strcpy(map->name, mapname);
-  if (spec == Layout_MethodMap) {
-    map->tag = pc_addtag_flags(mapname, FIXEDTAG | METHODMAPTAG);
-
-    if (matchtoken(tNULLABLE) || (parent && parent->nullable))
-      map->nullable = TRUE;
-  } else {
-    map->tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
-  }
-  methodmap_add(map);
-
   if (can_redef) {
-    symbol *sym = findglb(mapname, sGLOBAL);
+    symbol *sym = findglb(map->name, sGLOBAL);
     if (sym && sym->ident != iMETHODMAP) {
       // We should only hit this on the first pass. Assert really hard that
       // we're about to kill an enum definition and not something random.
@@ -4075,7 +4032,7 @@ static void domethodmap(LayoutSpec spec)
       }
     } else if (!sym) {
       sym = addsym(
-        mapname,      // name
+        map->name,    // name
         0,            // addr
         iMETHODMAP,   // ident
         sGLOBAL,      // vclass
@@ -4084,6 +4041,98 @@ static void domethodmap(LayoutSpec spec)
     }
     sym->methodmap = map;
   }
+}
+
+static void declare_handle_intrinsics()
+{
+  // Must not have an existing Handle methodmap.
+  if (methodmap_find_by_name("Handle")) {
+    error(156);
+    return;
+  }
+
+  int tag = pc_addtag_flags("Handle", FIXEDTAG | METHODMAPTAG);
+  methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle", tag);
+  map->nullable = true;
+
+  declare_methodmap_symbol(map, true);
+
+  if (symbol* sym = findglb("CloseHandle", sGLOBAL)) {
+    map->dtor = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
+    map->dtor->target = sym;
+    strcpy(map->dtor->name, "~Handle");
+  }
+}
+
+static bool dousing()
+{
+  token_ident_t ident;
+  if (!needsymbol(&ident))
+    return false;
+  if (strcmp(ident.name, "__intrinsics__") != 0) {
+    error(156);
+    return false;
+  }
+  if (!needtoken('.'))
+    return false;
+  if (!needsymbol(&ident))
+    return false;
+  if (strcmp(ident.name, "Handle") != 0) {
+    error(156);
+    return false;
+  }
+
+  declare_handle_intrinsics();
+  require_newline(TRUE);
+  return true;
+}
+
+/**
+ * domethodmap - declare a method map for OO-ish syntax.
+ *
+ */
+static void domethodmap(LayoutSpec spec)
+{
+  int val;
+  char *str;
+  methodmap_t *parent = NULL;
+  const char *spectype = layout_spec_name(spec);
+
+  // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
+  char mapname[sNAMEMAX + 1];
+  if (lex(&val, &str) != tSYMBOL)
+    error(93);
+  strcpy(mapname, str);
+
+  if (!isupper(*mapname))
+    error(109, spectype);
+
+  LayoutSpec old_spec = deduce_layout_spec_by_name(mapname);
+  bool can_redef = can_redef_layout_spec(spec, old_spec);
+  if (!can_redef)
+    error(110, mapname, layout_spec_name(old_spec));
+
+  if (matchtoken('<')) {
+    if (lex(&val, &str) != tSYMBOL) {
+      error(93);
+      return;
+    }
+
+    if ((parent = methodmap_find_by_name(str)) == NULL) {
+      error(102, spectype, str);
+    } else if (parent->spec != spec) {
+      error(129);
+    }
+  }
+
+  int tag = 0;
+  if (spec == Layout_MethodMap)
+    tag = pc_addtag_flags(mapname, FIXEDTAG | METHODMAPTAG);
+  else
+    tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
+  methodmap_t *map = methodmap_add(parent, spec, mapname, tag);
+
+  declare_methodmap_symbol(map, can_redef);
 
   needtoken('{');
   while (!matchtoken('}')) {

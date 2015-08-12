@@ -1886,7 +1886,6 @@ const char *sc_tokens[] = {
          "native",
          "new",
          "null",
-         "__nullable__",
          "object",
          "operator",
          "package",
@@ -1969,7 +1968,6 @@ IsUnimplementedKeyword(int token)
     case tUINT64:
     case tUINTN:
     case tUNION:
-    case tUSING:
     case tVAR:
     case tVARIANT:
     case tVIRTUAL:

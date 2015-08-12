@@ -1,15 +1,17 @@
 native void printnum(int num);
 
-methodmap Handle __nullable__
+using __intrinsics__.Handle;
+
+methodmap Crab < Handle
 {
-	public Handle() {
-		return Handle:2;
+	public Crab() {
+		return Crab:2;
 	}
-	public native ~Handle();
+	public native ~Crab();
 };
 
 public main()
 {
-	Handle egg = new Handle();
+	Crab egg = new Crab();
 	printnum(_:egg);
 }

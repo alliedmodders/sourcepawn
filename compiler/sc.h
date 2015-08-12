@@ -454,7 +454,6 @@ enum TokenKind {
   tNATIVE,
   tNEW,
   tNULL,
-  tNULLABLE,
   tOBJECT,
   tOPERATOR,
   tPACKAGE,

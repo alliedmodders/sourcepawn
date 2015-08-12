@@ -142,7 +142,7 @@ functag_t *functag_find_intrinsic(int tag);
 LayoutSpec deduce_layout_spec_by_tag(int tag);
 LayoutSpec deduce_layout_spec_by_name(const char *name);
 const char *layout_spec_name(LayoutSpec spec);
-int can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
+bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 
 /**
  * Heap functions
@@ -175,7 +175,10 @@ void resetheaplist();
 /**
  * Method maps.
  */
-void methodmap_add(methodmap_t *map);
+methodmap_t* methodmap_add(methodmap_t* parent,
+                           LayoutSpec spec,
+                           const char* name,
+                           int tag);
 methodmap_t *methodmap_find_by_tag(int tag);
 methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);

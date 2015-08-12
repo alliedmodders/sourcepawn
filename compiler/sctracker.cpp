@@ -460,8 +460,21 @@ void resetheaplist()
   _reset_memlist(&heapusage);
 }
 
-void methodmap_add(methodmap_t *map)
+methodmap_t*
+methodmap_add(methodmap_t* parent,
+              LayoutSpec spec,
+              const char* name,
+              int tag)
 {
+  methodmap_t *map = (methodmap_t *)calloc(1, sizeof(methodmap_t));
+  map->parent = parent;
+  map->spec = spec;
+  strcpy(map->name, name);
+  map->tag = tag;
+
+  if (spec == Layout_MethodMap && parent && parent->nullable)
+    map->nullable = parent->nullable;
+
   if (!methodmap_first) {
     methodmap_first = map;
     methodmap_last = map;
@@ -469,6 +482,7 @@ void methodmap_add(methodmap_t *map)
     methodmap_last->next = map;
     methodmap_last = map;
   }
+  return map;
 }
 
 methodmap_t *methodmap_find_by_tag(int tag)
@@ -571,7 +585,8 @@ const char *layout_spec_name(LayoutSpec spec)
   return "<unknown>";
 }
 
-int can_redef_layout_spec(LayoutSpec def1, LayoutSpec def2)
+bool
+can_redef_layout_spec(LayoutSpec def1, LayoutSpec def2)
 {
   // Normalize the ordering, since these checks are symmetrical.
   if (def1 > def2) {
@@ -582,20 +597,20 @@ int can_redef_layout_spec(LayoutSpec def1, LayoutSpec def2)
 
   switch (def1) {
     case Layout_None:
-      return TRUE;
+      return true;
     case Layout_Enum:
       if (def2 == Layout_Enum || def2 == Layout_FuncTag)
-        return TRUE;
+        return true;
       return def2 == Layout_MethodMap;
     case Layout_FuncTag:
       return def2 == Layout_Enum || def2 == Layout_FuncTag;
     case Layout_PawnStruct:
     case Layout_MethodMap:
-      return FALSE;
+      return false;
     case Layout_Class:
-      return FALSE;
+      return false;
   }
-  return FALSE;
+  return false;
 }
 
 size_t UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...)
