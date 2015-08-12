@@ -1,6 +1,5 @@
-methodmap Handle {
-	public native ~Handle();
-}
+native void CloseHandle(Handle:handle);
+using __intrinsics__.Handle;
 
 stock Crab(Handle h)
 {

@@ -7,7 +7,6 @@ methodmap Crab < Handle
 	public Crab() {
 		return Crab:2;
 	}
-	public native ~Crab();
 };
 
 public main()
