@@ -241,6 +241,7 @@ SemanticAnalysis::checkCall(FunctionSignature *sig, ExpressionList *args)
     } else {
       arg = sig->parameters()->at(i);
     }
+    (void)arg;
 
     visitForValue(expr);
 
