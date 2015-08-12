@@ -1299,49 +1299,29 @@ Parser::parseMethod(Atom *layoutName)
   if (match(TOK_NATIVE))
     kind = TOK_NATIVE;
 
-  // Destructors can't be static.
-  bool destructor = !isStatic && match(TOK_TILDE);
-
   NameToken name;
   TypeSpecifier spec;
-  if (destructor) {
-    spec.setBuiltinType(TOK_VOID);
-    spec.setBaseLoc(scanner_.begin());
-
-    if (!expect(TOK_NAME))
-      return nullptr;
+  if (match(TOK_NAME)) {
+    // See if we have a constructor.
     name = *scanner_.current();
-  } else {
-    if (match(TOK_NAME)) {
-      // See if we have a constructor.
-      name = *scanner_.current();
-      if (name.atom == layoutName && peek(TOK_LPAREN)) {
-        // This is a constructor.
-        spec.setNamedType(TOK_NAME, nameref(scanner_.current()));
-        spec.setBaseLoc(scanner_.begin());
-      } else {
-        // Give the name token back.
-        scanner_.undo();
-        name = NameToken();
-      }
-    }
-
-    if (!name.atom) {
-      parse_new_type_expr(&spec, 0);
-
-      if (peek(TOK_LPAREN))
-        cc_.report(scanner_.begin(), rmsg::expected_name_and_type);
-      else if (expect(TOK_NAME))
-        name = scanner_.current();
+    if (name.atom == layoutName && peek(TOK_LPAREN)) {
+      // This is a constructor.
+      spec.setNamedType(TOK_NAME, nameref(scanner_.current()));
+      spec.setBaseLoc(scanner_.begin());
+    } else {
+      // Give the name token back.
+      scanner_.undo();
+      name = NameToken();
     }
   }
 
-  if (destructor && name.atom) {
-    // Build a new name to include the ~.
-    AutoArray<char> buffer(new char[name.atom->length() + 2]);
-    buffer[0] = '~';
-    strcpy(&buffer[1], name.atom->chars());
-    name.atom = cc_.add(buffer);
+  if (!name.atom) {
+    parse_new_type_expr(&spec, 0);
+
+    if (peek(TOK_LPAREN))
+      cc_.report(scanner_.begin(), rmsg::expected_name_and_type);
+    else if (expect(TOK_NAME))
+      name = scanner_.current();
   }
 
   if (!name.atom) {
@@ -1352,7 +1332,7 @@ Parser::parseMethod(Atom *layoutName)
   }
 
   TypeExpr te;
-  MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, &spec, &te);
+  MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, &spec, &te, isStatic);
 
   FunctionNode *node = parseFunctionBase(te, kind);
   if (!node) {

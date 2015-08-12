@@ -570,9 +570,10 @@ MethodDecl *
 NameResolver::EnterMethodDecl(const SourceLocation &begin,
                               const NameToken &nameToken,
                               TypeSpecifier *spec,
-                              TypeExpr *te)
+                              TypeExpr *te,
+                              bool isStatic)
 {
-  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, nullptr);
+  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, isStatic);
 
   if (spec)
     *te = resolve(*spec);
