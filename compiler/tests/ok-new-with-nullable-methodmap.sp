@@ -1,8 +1,6 @@
 native void printnum(int num);
 
-using __intrinsics__.Handle;
-
-methodmap Crab < Handle
+methodmap Crab __nullable__
 {
 	public Crab() {
 		return Crab:2;

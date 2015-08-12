@@ -106,11 +106,16 @@ struct methodmap_t
   methodmap_t *next;
   methodmap_t *parent;
   int tag;
-  int nullable;
+  bool nullable;
+  bool keyword_nullable;
   LayoutSpec spec;
   char name[sNAMEMAX+1];
   methodmap_method_t **methods;
   size_t nummethods;
+
+  bool must_construct_with_new() const {
+    return nullable || keyword_nullable;
+  }
 
   // Shortcut.
   methodmap_method_t *dtor;

@@ -1886,6 +1886,7 @@ const char *sc_tokens[] = {
          "native",
          "new",
          "null",
+         "__nullable__",
          "object",
          "operator",
          "package",

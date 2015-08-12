@@ -4063,6 +4063,8 @@ static void domethodmap(LayoutSpec spec)
   if (!can_redef)
     error(110, mapname, layout_spec_name(old_spec));
 
+  int old_nullable = matchtoken(tNULLABLE);
+
   if (matchtoken('<')) {
     if (lex(&val, &str) != tSYMBOL) {
       error(93);
@@ -4082,6 +4084,9 @@ static void domethodmap(LayoutSpec spec)
   else
     tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
   methodmap_t *map = methodmap_add(parent, spec, mapname, tag);
+
+  if (old_nullable)
+    map->keyword_nullable = old_nullable;
 
   declare_methodmap_symbol(map, can_redef);
 
