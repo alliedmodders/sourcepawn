@@ -515,6 +515,18 @@ methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name)
   return NULL;
 }
 
+void methodmap_add_method(methodmap_t* map, methodmap_method_t* method)
+{
+  methodmap_method_t** methods =
+    (methodmap_method_t**)realloc(map->methods, sizeof(methodmap_method_t*) * (map->nummethods + 1));
+  if (!methods) {
+    error(FATAL_ERROR_OOM);
+    return;
+  }
+  map->methods = methods;
+  map->methods[map->nummethods++] = method;
+}
+
 void methodmaps_free()
 {
   methodmap_t *ptr = methodmap_first;

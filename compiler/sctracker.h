@@ -182,6 +182,7 @@ methodmap_t* methodmap_add(methodmap_t* parent,
 methodmap_t *methodmap_find_by_tag(int tag);
 methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);
+void methodmap_add_method(methodmap_t* map, methodmap_method_t* method);
 void methodmaps_free();
 
 extern memuse_list_t *heapusage;

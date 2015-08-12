@@ -4006,6 +4006,12 @@ static void declare_handle_intrinsics()
     map->dtor = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
     map->dtor->target = sym;
     strcpy(map->dtor->name, "~Handle");
+
+    methodmap_method_t* close = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
+    close->target = sym;
+    strcpy(close->name, "Close");
+
+    methodmap_add_method(map, close);
   }
 }
 
@@ -4082,7 +4088,6 @@ static void domethodmap(LayoutSpec spec)
   needtoken('{');
   while (!matchtoken('}')) {
     token_t tok;
-    methodmap_method_t **methods;
     methodmap_method_t *method = NULL;
 
     if (lextok(&tok) == tPUBLIC) {
@@ -4110,13 +4115,7 @@ static void domethodmap(LayoutSpec spec)
       continue;
     }
 
-    methods = (methodmap_method_t **)realloc(map->methods, sizeof(methodmap_method_t *) * (map->nummethods + 1));
-    if (!methods) {
-      error(FATAL_ERROR_OOM);
-      return;
-    }
-    map->methods = methods;
-    map->methods[map->nummethods++] = method;
+    methodmap_add_method(map, method);
   }
 
   require_newline(TRUE);
