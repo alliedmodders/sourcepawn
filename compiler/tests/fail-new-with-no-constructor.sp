@@ -1,7 +1,4 @@
-methodmap Handle __nullable__
-{
-	public native ~Handle();
-};
+using __intrinsics__.Handle;
 
 public t()
 {

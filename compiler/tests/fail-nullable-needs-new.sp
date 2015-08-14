@@ -1,11 +1,13 @@
-methodmap Handle __nullable__
+native void CloseHandle(Handle:hndl);
+using __intrinsics__.Handle;
+
+methodmap Crab < Handle
 {
-	public native Handle();
-	public native ~Handle();
+	public native Crab();
 };
 
 public t()
 {
-	Handle egg = Handle();
+	Crab egg = Crab();
 	delete egg;
 }

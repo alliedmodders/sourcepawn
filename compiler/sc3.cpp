@@ -1638,7 +1638,7 @@ static int hier2(value *lval)
     methodmap_t *methodmap = methodmap_find_by_name(st);
     if (!methodmap)
       error(116, st);
-    else if (!methodmap->nullable)
+    else if (!methodmap->must_construct_with_new())
       error(171, methodmap->name);
     else if (!methodmap->ctor)
       error(172, methodmap->name);
@@ -2369,7 +2369,7 @@ restart:
             // Immediately fatal - no function to call.
             return error(172, sym->name);
           }
-          if (sym->methodmap->nullable) {
+          if (sym->methodmap->must_construct_with_new()) {
             // Keep going, this is basically a style thing.
             error(170, sym->methodmap->name);
           }

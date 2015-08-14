@@ -147,6 +147,7 @@ static void dofuncenum(int listmode);
 static void dotypedef();
 static void dotypeset();
 static void domethodmap(LayoutSpec spec);
+static bool dousing();
 static void dobreak(void);
 static void docont(void);
 static void dosleep(void);
@@ -1497,6 +1498,12 @@ static void parse(void)
       break;
     case tMETHODMAP:
       domethodmap(Layout_MethodMap);
+      break;
+    case tUSING:
+      if (!dousing()) {
+        lexclr(TRUE);
+        litidx=0;
+      }
       break;
     case '}':
       error(54);                /* unmatched closing brace */
@@ -3591,15 +3598,12 @@ symbol *parse_inline_function(methodmap_t *map,
                               const char *name,
                               int is_native,
                               int is_ctor,
-                              int is_dtor,
                               bool is_static)
 {
   declinfo_t decl;
   memset(&decl, 0, sizeof(decl));
 
-  if (is_dtor) {
-    make_primitive(&decl.type, pc_tag_void);
-  } else if (is_ctor) {
+  if (is_ctor) {
     make_primitive(&decl.type, map->tag);
   } else {
     decl.type = *type;
@@ -3719,7 +3723,7 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
       ret_type = &voidtype;
     }
 
-    target = parse_inline_function(map, ret_type, tmpname, is_native, FALSE, FALSE, false);
+    target = parse_inline_function(map, ret_type, tmpname, is_native, FALSE, false);
   }
 
   if (!target)
@@ -3813,7 +3817,6 @@ methodmap_method_t *parse_method(methodmap_t *map)
 {
   int maybe_ctor = 0;
   int is_ctor = 0;
-  int is_dtor = 0;
   int is_bind = 0;
   int is_native = 0;
   bool is_static = false;
@@ -3834,87 +3837,59 @@ methodmap_method_t *parse_method(methodmap_t *map)
   memset(&type, 0, sizeof(type));
 
   // Destructors cannot be static.
-  if (!is_static && matchtoken('~')) {
-    // We got something like "public ~Blah = X"
-    is_bind = TRUE;
-    is_dtor = TRUE;
-    if (!needsymbol(&ident))
-      return NULL;
-    if (!needtoken('('))
-      return NULL;
-    if (!needtoken(')'))
-      return NULL;
-    if (!needtoken('='))
-      return NULL;
-    if (!needsymbol(&bindsource))
-      return NULL;
-  } else {
-    int got_symbol;
+  int got_symbol;
 
-    is_native = matchtoken(tNATIVE);
-    got_symbol = matchsymbol(&ident);
+  is_native = matchtoken(tNATIVE);
+  got_symbol = matchsymbol(&ident);
 
-    if (!is_native && got_symbol) {
-      // We didn't see "native", but we saw a symbol. Match for '() =' which
-      // would indicate a method bind.
-      is_bind = match_method_bind();
+  if (matchtoken('~'))
+    error(118);
 
-      if (is_bind) {
-        // If we saw "X() =", then grab the right-hand name.
-        if (!needsymbol(&bindsource))
-          return NULL;
-      }
+  if (!is_native && got_symbol) {
+    // We didn't see "native", but we saw a symbol. Match for '() =' which
+    // would indicate a method bind.
+    is_bind = match_method_bind();
+
+    if (is_bind) {
+      // If we saw "X() =", then grab the right-hand name.
+      if (!needsymbol(&bindsource))
+        return NULL;
     }
+  }
 
-    if (!is_bind) {
-      // All we know at this point is that we do NOT have a method bind. Keep
-      // pattern matching for an inline constructor, destructor, or method.
-      if (!got_symbol && matchtoken('~')) {
-        // ::= '~' ident
-        is_dtor = TRUE;
-        if (!needsymbol(&ident))
-          return NULL;
-      } else if (got_symbol && matchtoken('(')) {
-        // ::= ident '('
+  if (!is_bind) {
+    if (got_symbol && matchtoken('(')) {
+      // ::= ident '('
 
-        // Push the '(' token back for declargs().
-        maybe_ctor = TRUE;
-        lexpush();
-      } else {
-        // The first token of the type expression is either the symbol we
-        // predictively parsed earlier, or it's been pushed back into the
-        // lex buffer.
-        const token_t *first = got_symbol ? &ident.tok : NULL;
-
-        // Parse for type expression, priming it with the token we predicted
-        // would be an identifier.
-        if (!parse_new_typeexpr(&type, first, 0))
-          return NULL;
-
-        // Now, we should get an identifier.
-        if (!needsymbol(&ident))
-          return NULL;
-
-        // If the identifier is a constructor, error, since the user specified
-        // a type.
-        if (strcmp(ident.name, map->name) == 0)
-          error(99, "constructor");
-      }
+      // Push the '(' token back for declargs().
+      maybe_ctor = TRUE;
+      lexpush();
     } else {
-      is_ctor = (strcmp(ident.name, map->name) == 0);
+      // The first token of the type expression is either the symbol we
+      // predictively parsed earlier, or it's been pushed back into the
+      // lex buffer.
+      const token_t *first = got_symbol ? &ident.tok : NULL;
+
+      // Parse for type expression, priming it with the token we predicted
+      // would be an identifier.
+      if (!parse_new_typeexpr(&type, first, 0))
+        return NULL;
+
+      // Now, we should get an identifier.
+      if (!needsymbol(&ident))
+        return NULL;
+
+      // If the identifier is a constructor, error, since the user specified
+      // a type.
+      if (strcmp(ident.name, map->name) == 0)
+        error(99, "constructor");
     }
-  } // if (matchtoken('~'))
+  } else {
+    is_ctor = (strcmp(ident.name, map->name) == 0);
+  }
 
-  // Do some preliminary verification of ctor/dtor names.
-  if (is_dtor) {
-    if (strcmp(ident.name, map->name) != 0)
-      error(114, "destructor", spectype, map->name);
-
-    // Make sure the final name has "~" in it.
-    strcpy(ident.name, "~");
-    strcat(ident.name, map->name);
-    check_name_length(ident.name);
-  } else if (maybe_ctor) {
+  // Do some preliminary verification of ctor names.
+  if (maybe_ctor) {
     if (strcmp(ident.name, map->name) == 0)
       is_ctor = TRUE;
     else
@@ -3935,32 +3910,11 @@ methodmap_method_t *parse_method(methodmap_t *map)
     else if (target->ident != iFUNCTN) 
       error(10);
   } else {
-    target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_dtor, is_static);
+    target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_static);
   }
 
   if (!target)
     return NULL;
-
-  // Verify destructor targets.
-  if (is_dtor) {
-    if (!(target->usage & uNATIVE)) {
-      // Must be a native.
-      error(118);
-      return NULL;
-    }
-
-    if (target->tag != 0 && target->tag != pc_tag_void) {
-      // Cannot return a value.
-      error(99, "destructor");
-      return NULL;
-    }
-
-    if (target->dim.arglist[0].ident && target->dim.arglist[1].ident) {
-      // Cannot have extra arguments.
-      error(119);
-      return NULL;
-    }
-  }
 
   // Verify constructor targets.
   if (is_ctor) {
@@ -3984,8 +3938,6 @@ methodmap_method_t *parse_method(methodmap_t *map)
       error(108, spectype, map->name);
   }
 
-  if (is_dtor)
-    map->dtor = method;
   if (is_ctor)
     map->ctor = method;
 
@@ -3993,60 +3945,10 @@ methodmap_method_t *parse_method(methodmap_t *map)
   return method;
 }
 
-/**
- * domethodmap - declare a method map for OO-ish syntax.
- *
- */
-static void domethodmap(LayoutSpec spec)
+void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
 {
-  int val;
-  char *str;
-  methodmap_t *parent = NULL;
-  const char *spectype = layout_spec_name(spec);
-
-  // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
-  char mapname[sNAMEMAX + 1];
-  if (lex(&val, &str) != tSYMBOL)
-    error(93);
-  strcpy(mapname, str);
-
-  if (!isupper(*mapname))
-    error(109, spectype);
-
-  LayoutSpec old_spec = deduce_layout_spec_by_name(mapname);
-  int can_redef = can_redef_layout_spec(spec, old_spec);
-  if (!can_redef)
-    error(110, mapname, layout_spec_name(old_spec));
-
-  if (matchtoken('<')) {
-    if (lex(&val, &str) != tSYMBOL) {
-      error(93);
-      return;
-    }
-
-    if ((parent = methodmap_find_by_name(str)) == NULL) {
-      error(102, spectype, str);
-    } else if (parent->spec != spec) {
-      error(129);
-    }
-  }
-
-  methodmap_t *map = (methodmap_t *)calloc(1, sizeof(methodmap_t));
-  map->parent = parent;
-  map->spec = spec;
-  strcpy(map->name, mapname);
-  if (spec == Layout_MethodMap) {
-    map->tag = pc_addtag_flags(mapname, FIXEDTAG | METHODMAPTAG);
-
-    if (matchtoken(tNULLABLE) || (parent && parent->nullable))
-      map->nullable = TRUE;
-  } else {
-    map->tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
-  }
-  methodmap_add(map);
-
   if (can_redef) {
-    symbol *sym = findglb(mapname, sGLOBAL);
+    symbol *sym = findglb(map->name, sGLOBAL);
     if (sym && sym->ident != iMETHODMAP) {
       // We should only hit this on the first pass. Assert really hard that
       // we're about to kill an enum definition and not something random.
@@ -4075,7 +3977,7 @@ static void domethodmap(LayoutSpec spec)
       }
     } else if (!sym) {
       sym = addsym(
-        mapname,      // name
+        map->name,    // name
         0,            // addr
         iMETHODMAP,   // ident
         sGLOBAL,      // vclass
@@ -4084,11 +3986,113 @@ static void domethodmap(LayoutSpec spec)
     }
     sym->methodmap = map;
   }
+}
+
+static void declare_handle_intrinsics()
+{
+  // Must not have an existing Handle methodmap.
+  if (methodmap_find_by_name("Handle")) {
+    error(156);
+    return;
+  }
+
+  int tag = pc_addtag_flags("Handle", FIXEDTAG | METHODMAPTAG);
+  methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle", tag);
+  map->nullable = true;
+
+  declare_methodmap_symbol(map, true);
+
+  if (symbol* sym = findglb("CloseHandle", sGLOBAL)) {
+    map->dtor = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
+    map->dtor->target = sym;
+    strcpy(map->dtor->name, "~Handle");
+
+    methodmap_method_t* close = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
+    close->target = sym;
+    strcpy(close->name, "Close");
+
+    methodmap_add_method(map, close);
+  }
+}
+
+static bool dousing()
+{
+  token_ident_t ident;
+  if (!needsymbol(&ident))
+    return false;
+  if (strcmp(ident.name, "__intrinsics__") != 0) {
+    error(156);
+    return false;
+  }
+  if (!needtoken('.'))
+    return false;
+  if (!needsymbol(&ident))
+    return false;
+  if (strcmp(ident.name, "Handle") != 0) {
+    error(156);
+    return false;
+  }
+
+  declare_handle_intrinsics();
+  require_newline(TRUE);
+  return true;
+}
+
+/**
+ * domethodmap - declare a method map for OO-ish syntax.
+ *
+ */
+static void domethodmap(LayoutSpec spec)
+{
+  int val;
+  char *str;
+  methodmap_t *parent = NULL;
+  const char *spectype = layout_spec_name(spec);
+
+  // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
+  char mapname[sNAMEMAX + 1];
+  if (lex(&val, &str) != tSYMBOL)
+    error(93);
+  strcpy(mapname, str);
+
+  if (!isupper(*mapname))
+    error(109, spectype);
+
+  LayoutSpec old_spec = deduce_layout_spec_by_name(mapname);
+  bool can_redef = can_redef_layout_spec(spec, old_spec);
+  if (!can_redef)
+    error(110, mapname, layout_spec_name(old_spec));
+
+  int old_nullable = matchtoken(tNULLABLE);
+
+  if (matchtoken('<')) {
+    if (lex(&val, &str) != tSYMBOL) {
+      error(93);
+      return;
+    }
+
+    if ((parent = methodmap_find_by_name(str)) == NULL) {
+      error(102, spectype, str);
+    } else if (parent->spec != spec) {
+      error(129);
+    }
+  }
+
+  int tag = 0;
+  if (spec == Layout_MethodMap)
+    tag = pc_addtag_flags(mapname, FIXEDTAG | METHODMAPTAG);
+  else
+    tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
+  methodmap_t *map = methodmap_add(parent, spec, mapname, tag);
+
+  if (old_nullable)
+    map->keyword_nullable = old_nullable;
+
+  declare_methodmap_symbol(map, can_redef);
 
   needtoken('{');
   while (!matchtoken('}')) {
     token_t tok;
-    methodmap_method_t **methods;
     methodmap_method_t *method = NULL;
 
     if (lextok(&tok) == tPUBLIC) {
@@ -4116,13 +4120,7 @@ static void domethodmap(LayoutSpec spec)
       continue;
     }
 
-    methods = (methodmap_method_t **)realloc(map->methods, sizeof(methodmap_method_t *) * (map->nummethods + 1));
-    if (!methods) {
-      error(FATAL_ERROR_OOM);
-      return;
-    }
-    map->methods = methods;
-    map->methods[map->nummethods++] = method;
+    methodmap_add_method(map, method);
   }
 
   require_newline(TRUE);
@@ -5548,6 +5546,13 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       argptr->usage = uCONST;
     } else {
       argptr = &sym->dim.arglist[0];
+      if (!argptr->tags) {
+        // Something horrible happened, like a function declaration that was
+        // so messed up that we started parsing it inline and it matched an
+        // existing function with no arguments. Just bail out, because...
+        // what?
+        return 0;
+      }
     }
 
     symbol *sym = addvariable2(

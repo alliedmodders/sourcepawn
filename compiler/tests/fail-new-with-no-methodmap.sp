@@ -1,8 +1,4 @@
-methodmap Handle __nullable__
-{
-	public native Handle();
-	public native ~Handle();
-};
+using __intrinsics__.Handle;
 
 enum Crab {};
 
