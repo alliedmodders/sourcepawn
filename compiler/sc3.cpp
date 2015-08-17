@@ -1686,7 +1686,7 @@ static int hier2(value *lval)
 
     int paren = needtoken('(');
     lval->cmptag = tag;
-    lvalue = hier12(lval);
+    lvalue = hier14(lval);
     if (paren)
       needtoken(')');
     else
