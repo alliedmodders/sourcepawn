@@ -129,7 +129,7 @@ static const char *errmsg[] = {
 /*105*/  "cannot find method or property %s.%s\n",
 /*106*/  "cannot call methods on an array\n",
 /*107*/  "cannot call methods on a function\n",
-/*108*/  "unused108\n",
+/*108*/  "array initializer is invalid\n",
 /*109*/  "%s name must start with an uppercase letter\n",
 /*110*/  "%s has already been defined (previously seen as %s)\n",
 /*111*/  "expected identifier - did you forget a type?\n",
