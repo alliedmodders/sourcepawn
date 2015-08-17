@@ -1587,6 +1587,8 @@ static int hier2(value *lval)
       rvalue(lval);
     invert();                   /* bitwise NOT */
     lval->constval=~lval->constval;
+    if (lval->ident != iCONSTEXPR)
+      lval->ident = iEXPRESSION;
     return FALSE;
   case '!':                     /* ! (logical negate) */
     if (hier2(lval))
@@ -1597,6 +1599,8 @@ static int hier2(value *lval)
     } else {
       lneg();                   /* 0 -> 1,  !0 -> 0 */
       lval->constval=!lval->constval;
+      if (lval->ident != iCONSTEXPR)
+        lval->ident = iEXPRESSION;
       lval->tag=pc_addtag("bool");
     } /* if */
     return FALSE;
@@ -1608,13 +1612,13 @@ static int hier2(value *lval)
      */
     if (lval->ident==iCONSTEXPR && lval->tag==sc_rationaltag && sc_rationaltag!=0) {
       if (rational_digits==0) {
-        #if PAWN_CELL_SIZE==32
+#if PAWN_CELL_SIZE==32
           float *f = (float *)&lval->constval;
-        #elif PAWN_CELL_SIZE==64
+#elif PAWN_CELL_SIZE==64
           double *f = (double *)&lval->constval;
-        #else
-          #error Unsupported cell size
-        #endif
+#else
+# error Unsupported cell size
+#endif
         *f= - *f; /* this modifies lval->constval */
       } else {
         /* the negation of a fixed point number is just an integer negation */
@@ -1626,6 +1630,8 @@ static int hier2(value *lval)
     } else {
       neg();                    /* arithmic negation */
       lval->constval=-lval->constval;
+      if (lval->ident != iCONSTEXPR)
+        lval->ident = iEXPRESSION;
     } /* if */
     return FALSE;
   case tNEW:                    /* call nullable methodmap constructor */
@@ -2951,6 +2957,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           /* always pass by reference */
           if (lval.ident==iVARIABLE || lval.ident==iREFERENCE) {
             assert(lval.sym!=NULL);
+            assert(lvalue);
             if ((lval.sym->usage & uCONST)!=0 && (arg[argidx].usage & uCONST)==0) {
               /* treat a "const" variable passed to a function with a non-const
                * "variable argument list" as a constant here */
@@ -2969,14 +2976,13 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
               heapalloc+=markheap(MEMUSE_STATIC, 1);
               sCallStackUsage++;
             } /* if */
-          } else if (lval.ident==iCONSTEXPR || lval.ident==iEXPRESSION)
-          {
+          } else if (lval.ident==iCONSTEXPR || lval.ident==iEXPRESSION) {
             /* allocate a cell on the heap and store the
              * value (already in PRI) there */
             setheap_pri();        /* address of the value on the heap in PRI */
             heapalloc+=markheap(MEMUSE_STATIC, 1);
             sCallStackUsage++;
-          } /* if */
+          }
           /* ??? handle const array passed by reference */
           /* otherwise, the address is already in PRI */
           if (lval.sym!=NULL)
