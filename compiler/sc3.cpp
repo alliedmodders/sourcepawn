@@ -2957,7 +2957,6 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           /* always pass by reference */
           if (lval.ident==iVARIABLE || lval.ident==iREFERENCE) {
             assert(lval.sym!=NULL);
-            assert(lvalue);
             if ((lval.sym->usage & uCONST)!=0 && (arg[argidx].usage & uCONST)==0) {
               /* treat a "const" variable passed to a function with a non-const
                * "variable argument list" as a constant here */
