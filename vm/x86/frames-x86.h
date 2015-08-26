@@ -25,56 +25,25 @@ using namespace SourcePawn;
 
 class PluginContext;
 
-// This is the layout of the stack in between each scripted function call.
-struct JitFrame
-{
-  intptr_t align0;
-  intptr_t align1;
-  ucell_t function_cip;
-  void *return_address;
-
-  static inline const JitFrame *FromSp(const intptr_t *sp) {
-    return reinterpret_cast<const JitFrame *>(sp);
-  }
-};
-
-// When we're about to call a native, the stack pointer we store in the exit
-// frame is such that (sp + sizeof(JitExitFrameForNative)) conforms to this
-// structure.
+// We create x86 stack frames like:
+//   [return address]
+//   [prev_ebp]
+//       ^--- ebp is captured here.
+//   [frame_type]
+//   [function_id]
 //
-// Note that it looks reversed compared to JitFrame because we capture the sp
-// before saving registers and pushing arguments.
-struct JitExitFrameForNative
+struct FrameLayout
 {
-  void *return_address;
-  PluginContext *cx;
-  union {
-    uint32_t native_index;
-    SPVM_NATIVE_FUNC fn;
-  } arg;
-  const cell_t *params;
-  cell_t saved_alt;
+  intptr_t function_id;
+  intptr_t frame_type;
+  intptr_t* prev_fp;
+  void* return_address;
 
-  static inline const JitExitFrameForNative *FromExitSp(const intptr_t *exit_sp) {
-    return reinterpret_cast<const JitExitFrameForNative *>(
-      reinterpret_cast<const uint8_t *>(exit_sp) - sizeof(JitExitFrameForNative));
-  }
-};
+  // This is -offsetof(FrameLayout, prev_ebp).
+  static const intptr_t kOffsetFromFp = -2;
 
-// Unlke native frames, the exit_sp for these is created at the base address.
-struct JitExitFrameForHelper
-{
-  void *return_address;
-
-  static inline const JitExitFrameForHelper *FromExitSp(const intptr_t *exit_sp) {
-    return reinterpret_cast<const JitExitFrameForHelper *>(exit_sp);
-  }
-
-  bool isCompileFunction() const {
-    return !!return_address;
-  }
-  const JitFrame *prev() const {
-    return reinterpret_cast<const JitFrame *>(this + 1);
+  static inline FrameLayout* FromFp(intptr_t *fp) {
+    return reinterpret_cast<FrameLayout*>(fp + kOffsetFromFp);
   }
 };
 

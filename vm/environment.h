@@ -43,10 +43,10 @@ class Environment : public ISourcePawnEnvironment
 
   static Environment *New();
 
-  void Shutdown() KE_OVERRIDE;
-  ISourcePawnEngine *APIv1() KE_OVERRIDE;
-  ISourcePawnEngine2 *APIv2() KE_OVERRIDE;
-  int ApiVersion() KE_OVERRIDE {
+  void Shutdown() override;
+  ISourcePawnEngine *APIv1() override;
+  ISourcePawnEngine2 *APIv2() override;
+  int ApiVersion() override {
     return SOURCEPAWN_API_VERSION;
   }
 
@@ -55,10 +55,10 @@ class Environment : public ISourcePawnEnvironment
 
   bool InstallWatchdogTimer(int timeout_ms);
 
-  void EnterExceptionHandlingScope(ExceptionHandler *handler) KE_OVERRIDE;
-  void LeaveExceptionHandlingScope(ExceptionHandler *handler) KE_OVERRIDE;
-  bool HasPendingException(const ExceptionHandler *handler) KE_OVERRIDE;
-  const char *GetPendingExceptionMessage(const ExceptionHandler *handler) KE_OVERRIDE;
+  void EnterExceptionHandlingScope(ExceptionHandler *handler) override;
+  void LeaveExceptionHandlingScope(ExceptionHandler *handler) override;
+  bool HasPendingException(const ExceptionHandler *handler) override;
+  const char *GetPendingExceptionMessage(const ExceptionHandler *handler) override;
 
   // Runtime functions.
   const char *GetErrorString(int err);
@@ -69,8 +69,7 @@ class Environment : public ISourcePawnEnvironment
   void ReportErrorVA(int code, const char *fmt, va_list ap);
 
   // Allocate and free executable memory.
-  void *AllocateCode(size_t size);
-  void FreeCode(void *code);
+  CodeChunk AllocateCode(size_t size);
   CodeStubs *stubs() {
     return code_stubs_;
   }
@@ -131,15 +130,15 @@ class Environment : public ISourcePawnEnvironment
     top_ = frame;
   }
   void leaveInvoke() {
-    exit_frame_ = top_->prev_exit_frame();
+    exit_fp_ = top_->prev_exit_fp();
     top_ = top_->prev();
   }
 
   InvokeFrame *top() const {
     return top_;
   }
-  const ExitFrame &exit_frame() const {
-    return exit_frame_;
+  intptr_t* exit_fp() const {
+    return exit_fp_;
   }
 
  public:
@@ -148,6 +147,13 @@ class Environment : public ISourcePawnEnvironment
   }
   static inline size_t offsetOfExceptionCode() {
     return offsetof(Environment, exception_code_);
+  }
+
+  void* addressOfExit() {
+    return &exit_fp_;
+  }
+  void* addressOfExceptionCode() {
+    return &exception_code_;
   }
 
  private:
@@ -168,7 +174,7 @@ class Environment : public ISourcePawnEnvironment
   bool jit_enabled_;
   bool profiling_enabled_;
 
-  Knight::KeCodeCache *code_pool_;
+  ke::AutoPtr<CodeAllocator> code_alloc_;
   ke::InlineList<PluginRuntime> runtimes_;
 
   uintptr_t frame_id_;
@@ -176,7 +182,7 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<CodeStubs> code_stubs_;
 
   InvokeFrame *top_;
-  ExitFrame exit_frame_;
+  intptr_t* exit_fp_;
 };
 
 class EnterProfileScope

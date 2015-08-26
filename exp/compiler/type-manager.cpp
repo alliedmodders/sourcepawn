@@ -30,7 +30,6 @@ TypeManager::TypeManager(StringPool &strings)
    metaFunctionType_(nullptr),
    overloadedFunctionType_(nullptr),
    primitiveTypes_(),
-   referenceTypes_(),
    char_type_(nullptr),
    char_array_(nullptr),
    const_char_array_(nullptr),
@@ -54,7 +53,8 @@ TypeManager::initialize()
   metaFunctionType_ = Type::NewMetaFunction();
   overloadedFunctionType_ = Type::NewOverloadedFunction();
 
-  primitiveTypes_[size_t(PrimitiveType::ImplicitInt)] = Type::NewPrimitive(PrimitiveType::ImplicitInt);
+  primitiveTypes_[size_t(PrimitiveType::ImplicitIntDoNotUseDirectly)] =
+    Type::NewPrimitive(PrimitiveType::ImplicitIntDoNotUseDirectly);
   primitiveTypes_[size_t(PrimitiveType::Int8)] = Type::NewPrimitive(PrimitiveType::Int8);
   primitiveTypes_[size_t(PrimitiveType::Uint8)] = Type::NewPrimitive(PrimitiveType::Uint8);
   primitiveTypes_[size_t(PrimitiveType::Int16)] = Type::NewPrimitive(PrimitiveType::Int16);
@@ -69,9 +69,6 @@ TypeManager::initialize()
   primitiveTypes_[size_t(PrimitiveType::Double)] = Type::NewPrimitive(PrimitiveType::Double);
   primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);
   primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool);
-
-  for (size_t i = 0; i < kTotalPrimitiveTypes; i++)
-    referenceTypes_[i] = ReferenceType::New(primitiveTypes_[i]);
 
   // We special case the following types, because they are extremely common:
   //   char[]
@@ -101,15 +98,6 @@ TypeManager::newArray(Type *contained, int elements)
   }
 
   return ArrayType::New(contained, elements);
-}
-
-ReferenceType *
-TypeManager::newReference(Type *type)
-{
-  if (type->isPrimitive())
-    return referenceTypes_[size_t(type->primitive())];
-
-  return ReferenceType::New(type);
 }
 
 EnumType *

@@ -39,6 +39,7 @@
 #include "environment.h"
 #include "code-stubs.h"
 #include "x86-utils.h"
+#include "frames-x86.h"
 
 using namespace sp;
 
@@ -76,60 +77,6 @@ OpToCondition(OPCODE op)
   }
 }
 
-#if 0 && !defined NDEBUG
-static const char *
-GetFunctionName(const sp_plugin_t *plugin, uint32_t offs)
-{
-  if (!plugin->debug.unpacked) {
-    uint32_t max, iter;
-    sp_fdbg_symbol_t *sym;
-    sp_fdbg_arraydim_t *arr;
-    uint8_t *cursor = (uint8_t *)(plugin->debug.symbols);
-
-    max = plugin->debug.syms_num;
-    for (iter = 0; iter < max; iter++) {
-      sym = (sp_fdbg_symbol_t *)cursor;
-
-      if (sym->ident == sp::IDENT_FUNCTION && sym->codestart <= offs && sym->codeend > offs)
-        return plugin->debug.stringbase + sym->name;
-
-      if (sym->dimcount > 0) {
-        cursor += sizeof(sp_fdbg_symbol_t);
-        arr = (sp_fdbg_arraydim_t *)cursor;
-        cursor += sizeof(sp_fdbg_arraydim_t) * sym->dimcount;
-        continue;
-      }
-
-      cursor += sizeof(sp_fdbg_symbol_t);
-    }
-  } else {
-    uint32_t max, iter;
-    sp_u_fdbg_symbol_t *sym;
-    sp_u_fdbg_arraydim_t *arr;
-    uint8_t *cursor = (uint8_t *)(plugin->debug.symbols);
-
-    max = plugin->debug.syms_num;
-    for (iter = 0; iter < max; iter++) {
-      sym = (sp_u_fdbg_symbol_t *)cursor;
-
-      if (sym->ident == sp::IDENT_FUNCTION && sym->codestart <= offs && sym->codeend > offs)
-        return plugin->debug.stringbase + sym->name;
-
-      if (sym->dimcount > 0) {
-        cursor += sizeof(sp_u_fdbg_symbol_t);
-        arr = (sp_u_fdbg_arraydim_t *)cursor;
-        cursor += sizeof(sp_u_fdbg_arraydim_t) * sym->dimcount;
-        continue;
-      }
-
-      cursor += sizeof(sp_u_fdbg_symbol_t);
-    }
-  }
-
-  return NULL;
-}
-#endif
-
 CompiledFunction *
 sp::CompileFunction(PluginRuntime *prt, cell_t pcode_offs, int *err)
 {
@@ -166,8 +113,8 @@ CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, char *
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
       "Patching thunk to %s::%s\n",
-      runtime->plugin()->name,
-      GetFunctionName(runtime->plugin(), pcode_offs));
+      runtime->Name(),
+      runtime->image()->LookupFunction(pcode_offs));
 #endif
 
   *addrp = fn->GetEntryAddress();
@@ -206,12 +153,12 @@ Compiler::emit(int *errp)
   }
 
 #if defined JIT_SPEW
-  g_engine1.GetDebugHook()->OnDebugSpew(
+  Environment::get()->debugger()->OnDebugSpew(
       "Compiling function %s::%s\n",
       rt_->Name(),
-      GetFunctionName(plugin_, pcode_start_));
+      rt_->image()->LookupFunction(pcode_start_));
 
-  SpewOpcode(plugin_, code_start_, cip_);
+  SpewOpcode(rt_, code_start_, cip_);
 #endif
 
   const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
@@ -229,7 +176,7 @@ Compiler::emit(int *errp)
       break;
 
 #if defined JIT_SPEW
-    SpewOpcode(plugin_, code_start_, cip_);
+    SpewOpcode(rt_, code_start_, cip_);
 #endif
 
     // We assume every instruction is a jump target, so before emitting
@@ -260,8 +207,8 @@ Compiler::emit(int *errp)
   // This has to come last.
   emitErrorPaths();
 
-  uint8_t *code = LinkCode(env_, masm);
-  if (!code) {
+  CodeChunk code = LinkCode(env_, masm);
+  if (!code.address()) {
     *errp = SP_ERROR_OUT_OF_MEMORY;
     return NULL;
   }
@@ -278,7 +225,7 @@ Compiler::emit(int *errp)
     new FixedArray<CipMapEntry>(cip_map_.length()));
   memcpy(cipmap->buffer(), cip_map_.buffer(), cip_map_.length() * sizeof(CipMapEntry));
 
-  return new CompiledFunction(code, masm.length(), pcode_start_, edges.take(), cipmap.take());
+  return new CompiledFunction(code, pcode_start_, edges.take(), cipmap.take());
 }
 
 // No exit frame - error code is returned directly.
@@ -293,20 +240,6 @@ static int
 InvokePopTrackerAndSetHeap(PluginContext *cx)
 {
   return cx->popTrackerAndSetHeap();
-}
-
-// Error code must be checked in the environment.
-static cell_t
-InvokeNativeHelper(PluginContext *cx, ucell_t native_idx, cell_t *params)
-{
-  return cx->invokeNative(native_idx, params);
-}
-
-// Error code must be checked in the environment.
-static cell_t
-InvokeBoundNativeHelper(PluginContext *cx, SPVM_NATIVE_FUNC fn, cell_t *params)
-{
-  return cx->invokeBoundNative(fn, params);
 }
 
 // No exit frame - error code is returned directly.
@@ -330,6 +263,22 @@ InvokeReportTimeout()
 {
   Environment::get()->watchdog()->NotifyTimeoutReceived();
   InvokeReportError(SP_ERROR_TIMEOUT);
+}
+
+// Find the |ebp| associated with the entry frame. We use this to drop out of
+// the entire scripted call stack.
+static void *
+find_entry_fp()
+{
+  void *fp = nullptr;
+  for (FrameIterator iter; !iter.Done(); iter.Next()) {
+    if (iter.IsEntryFrame())
+      break;
+    fp = iter.Frame()->prev_fp;
+  }
+
+  assert(fp);
+  return fp;
 }
 
 bool
@@ -478,6 +427,8 @@ Compiler::emitOp(OPCODE op)
       break;
 
     case OP_PROC:
+      __ enterFrame(FrameType::Scripted, pcode_start_);
+
       // Push the old frame onto the stack.
       __ movl(tmp, Operand(frmAddr()));
       __ movl(Operand(stk, -4), tmp);
@@ -488,17 +439,6 @@ Compiler::emitOp(OPCODE op)
       __ movl(frm, stk);
       __ subl(tmp, dat);
       __ movl(Operand(frmAddr()), tmp);
-
-      // Store the function cip for stack traces.
-      __ push(pcode_start_);
-
-      // Align the stack to 16-bytes (each call adds 8 bytes).
-      __ subl(esp, 8);
-#if defined(DEBUG)
-      // Debug guards.
-      __ movl(Operand(esp, 0), 0xffaaee00);
-      __ movl(Operand(esp, 4), 0xffaaee04);
-#endif
       break;
 
     case OP_IDXADDR_B:
@@ -873,7 +813,8 @@ Compiler::emitOp(OPCODE op)
       // Remove parameters.
       __ movl(tmp, Operand(stk, 0));
       __ lea(stk, Operand(stk, tmp, ScaleFour, 4));
-      __ addl(esp, 12);
+
+      __ leaveFrame();
       __ ret();
       break;
     }
@@ -1276,8 +1217,12 @@ Compiler::emitOp(OPCODE op)
       break;
 
     case OP_SYSREQ_C:
+      if (!emitSysreqC())
+        return false;
+      break;
+
     case OP_SYSREQ_N:
-      if (!emitNativeCall(op))
+      if (!emitSysreqN())
         return false;
       break;
 
@@ -1444,23 +1389,15 @@ Compiler::emitCallThunks()
     // Get the return address, since that is the call that we need to patch.
     __ movl(eax, Operand(esp, 0));
 
-    // Push an OP_PROC frame as if we already called the function. This helps
-    // error reporting.
-    __ push(thunk->pcode_offset);
-    __ subl(esp, 8);
-
-    // Create the exit frame, then align the stack.
-    __ push(0);
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitNative()), -1);
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    // Enter the exit frame. This aligns the stack.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
 
     // We need to push 4 arguments, and one of them will need an extra word
     // on the stack. Allocate a big block so we're aligned.
     //
     // Note: we add 12 since the push above misaligned the stack.
     static const size_t kStackNeeded = 5 * sizeof(void *);
-    static const size_t kStackReserve = ke::Align(kStackNeeded, 16) + 3 * sizeof(void *);
+    static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
     __ subl(esp, kStackReserve);
 
     // Set arguments.
@@ -1472,9 +1409,11 @@ Compiler::emitCallThunks()
 
     __ call(ExternalAddress((void *)CompileFromThunk));
     __ movl(edx, Operand(esp, 4 * sizeof(void *)));
-    __ addl(esp, kStackReserve + 4 * sizeof(void *)); // Drop the exit frame and fake frame.
+    __ leaveExitFrame();
+
     __ testl(eax, eax);
     jumpOnError(not_zero);
+
     __ jmp(edx);
   }
 }
@@ -1490,7 +1429,7 @@ Compiler::readCell()
 }
 
 bool
-Compiler::emitNativeCall(OPCODE op)
+Compiler::emitSysreqN()
 {
   uint32_t native_index = readCell();
 
@@ -1499,31 +1438,66 @@ Compiler::emitNativeCall(OPCODE op)
     return false;
   }
 
-  uint32_t num_params;
-  if (op == OP_SYSREQ_N) {
-    num_params = readCell();
+  NativeEntry* native = rt_->NativeAt(native_index);
+  uint32_t nparams = readCell();
 
-    // See if we can get a replacement opcode. If we can, then recursively
-    // call emitOp() to generate it. Note: it's important that we do this
-    // before generating any code for the SYSREQ.N.
-    unsigned replacement = rt_->GetNativeReplacement(native_index);
+  if (native->status == SP_NATIVE_BOUND &&
+      !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL)))
+  {
+    uint32_t replacement = rt_->GetNativeReplacement(native_index);
     if (replacement != OP_NOP)
       return emitOp((OPCODE)replacement);
-
-    // Store the number of parameters.
-    __ movl(Operand(stk, -4), num_params);
-    __ subl(stk, 4);
   }
 
-  // Create the exit frame. This is a JitExitFrameForNative, so everything we
-  // push up to the return address of the call instruction is reflected in
-  // that structure.
-  __ movl(eax, intptr_t(&Environment::get()->exit_frame()));
-  __ movl(Operand(eax, ExitFrame::offsetOfExitNative()), native_index);
-  __ movl(Operand(eax, ExitFrame::offsetOfExitSp()), esp);
+  // Store the number of parameters on the stack.
+  __ movl(Operand(stk, -4), nparams);
+  __ subl(stk, 4);
+  if (!emitLegacyNativeCall(native_index, native))
+    return false;
+  __ addl(stk, (nparams + 1) * sizeof(cell_t));
+
+  return true;
+}
+
+bool
+Compiler::emitSysreqC()
+{
+  uint32_t native_index = readCell();
+
+  if (native_index >= image_->NumNatives()) {
+    error_ = SP_ERROR_INSTRUCTION_PARAM;
+    return false;
+  }
+
+  return emitLegacyNativeCall(native_index, rt_->NativeAt(native_index));
+}
+
+bool
+Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
+{
+  DataLabel return_address;
+  __ enterInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
+
+  // Align the stack.
+  static const uint32_t stack_use = 4 * sizeof(intptr_t);
+  static const uint32_t misalignment = Align(stack_use, sizeof(intptr_t)) - stack_use;
+  if (misalignment)
+    __ addl(esp, misalignment);
 
   // Save registers.
   __ push(edx);
+
+  // Check whether the native is bound.
+  bool immutable = native->status == SP_NATIVE_BOUND &&
+                   !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL));
+  if (!immutable) {
+    __ movl(edx, Operand(ExternalAddress(&native->legacy_fn)));
+    __ testl(edx, edx);
+    jumpOnError(zero, SP_ERROR_INVALID_NATIVE);
+  }
+
+  // Save the old heap pointer.
+  __ push(Operand(hpAddr()));
 
   // Push the last parameter for the C++ function.
   __ push(stk);
@@ -1531,43 +1505,39 @@ Compiler::emitNativeCall(OPCODE op)
   // Relocate our absolute stk to be dat-relative, and update the context's
   // view.
   __ subl(stk, dat);
-  __ movl(eax, intptr_t(context_));
-  __ movl(Operand(eax, PluginContext::offsetOfSp()), stk);
+  __ movl(Operand(spAddr()), stk);
 
-  const sp_native_t *native = rt_->GetNative(native_index);
-  if ((native->status != SP_NATIVE_BOUND) ||
-      (native->flags & (SP_NTVFLAG_OPTIONAL | SP_NTVFLAG_EPHEMERAL)))
-  {
-    // The native is either unbound, or it could become unbound in the
-    // future. Invoke the slower native callback.
-    __ push(native_index);
-    __ push(intptr_t(rt_->GetBaseContext()));
-    __ call(ExternalAddress((void *)InvokeNativeHelper));
-  } else {
-    // The native is bound so we have a few more guarantees.
-    __ push(intptr_t(native->pfn));
-    __ push(intptr_t(rt_->GetBaseContext()));
-    __ call(ExternalAddress((void *)InvokeBoundNativeHelper));
-  }
+  // Push the first parameter, the context.
+  __ push(intptr_t(rt_->GetBaseContext()));
 
+  // Invoke the native.
+  if (immutable)
+    __ call(ExternalAddress((void *)native->legacy_fn));
+  else
+    __ call(edx);
+  __ bind(&return_address);
   // Map the return address to the cip that initiated this call.
   emitCipMapping(op_cip_);
 
+  // Restore the heap pointer.
+  __ movl(edx, Operand(esp, 2 * sizeof(intptr_t)));
+  __ movl(Operand(hpAddr()), edx);
+
+  // Restore ALT.
+  __ movl(edx, Operand(esp, 3 * sizeof(intptr_t)));
+
+  // Restore SP.
+  __ addl(stk, dat);
+
+  // Note: no ret, the frame is inline. We add 4 to esp isntead.
+  __ leaveExitFrame();
+  __ addl(esp, 4);
+
   // Check for errors. Note we jump directly to the return stub since the
   // error has already been reported.
-  __ movl(ecx, intptr_t(Environment::get()));
-  __ cmpl(Operand(ecx, Environment::offsetOfExceptionCode()), 0);
+  ExternalAddress exn_code(Environment::get()->addressOfExceptionCode());
+  __ cmpl(Operand(exn_code), 0);
   __ j(not_zero, &return_reported_error_);
-  
-  // Restore local state.
-  __ addl(stk, dat);
-  __ addl(esp, 12);
-  __ pop(edx);
-
-  if (op == OP_SYSREQ_N) {
-    // Pop the stack. Do not check the margins.
-    __ addl(stk, (num_params + 1) * sizeof(cell_t));
-  }
   return true;
 }
 
@@ -1778,28 +1748,23 @@ Compiler::emitErrorPaths()
   emitThrowPathIfNeeded(SP_ERROR_HEAPLOW);
   emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
   emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
+  emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
+
+  Label return_to_invoke;
 
   if (report_error_.used()) {
     __ bind(&report_error_);
 
     // Create the exit frame. We always get here through a call from the opcode
     // (and always via an out-of-line thunk).
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitNative()), -1);
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
 
+    // Align the stack and call.
+    __ subl(esp, 12);
     __ push(eax);
     __ call(ExternalAddress((void *)InvokeReportError));
-    __ pop(eax); // Get the error back off the stack.
-    __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
-  }
-
-  // We get here if we know an exception is already pending.
-  if (return_reported_error_.used()) {
-    __ bind(&return_reported_error_);
-    __ movl(eax, intptr_t(Environment::get()));
-    __ movl(eax, Operand(eax, Environment::offsetOfExceptionCode()));
-    __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
+    __ leaveExitFrame();
+    __ jmp(&return_to_invoke);
   }
 
   // The timeout uses a special stub.
@@ -1807,13 +1772,35 @@ Compiler::emitErrorPaths()
     __ bind(&throw_timeout_);
 
     // Create the exit frame.
-    __ movl(ecx, intptr_t(&Environment::get()->exit_frame()));
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitNative()), -1);
-    __ movl(Operand(ecx, ExitFrame::offsetOfExitSp()), esp);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
 
-    // Since the return stub wipes out the stack, we don't need to subl after
+    // Since the return stub wipes out the stack, we don't need to addl after
     // the call.
     __ call(ExternalAddress((void *)InvokeReportTimeout));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error_);
+  }
+
+  // We get here if we know an exception is already pending.
+  if (return_reported_error_.used()) {
+    __ bind(&return_reported_error_);
+    __ call(&return_to_invoke);
+  }
+
+  if (return_to_invoke.used()) {
+    __ bind(&return_to_invoke);
+
+    // We get here either through an explicit call, or a call that terminated
+    // in a tail-jmp here.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+
+    // We cannot jump to the return stub just yet. We could be multiple frames
+    // deep, and our |ebp| does not match the initial frame. Find and restore
+    // it now.
+    __ call(ExternalAddress((void *)find_entry_fp));
+    __ leaveExitFrame();
+
+    __ movl(ebp, eax);
     __ jmp(ExternalAddress(env_->stubs()->ReturnStub()));
   }
 }

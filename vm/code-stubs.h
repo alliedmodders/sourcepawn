@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <sp_vm_api.h>
+#include "code-allocator.h"
 
 namespace sp {
 
@@ -30,16 +31,16 @@ class CodeStubs
 
  public:
   bool Initialize();
-  void Shutdown();
 
   SPVM_NATIVE_FUNC CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *userData);
 
   InvokeStubFn InvokeStub() const {
-    return (InvokeStubFn)invoke_stub_;
+    return (InvokeStubFn)invoke_stub_.address();
   }
   void *ReturnStub() const {
     return return_stub_;
   }
+  void *LegacyNativeStub();
 
  private:
   bool InitializeFeatureDetection();
@@ -47,7 +48,7 @@ class CodeStubs
 
  private:
   Environment *env_;
-  void *invoke_stub_;
+  CodeChunk invoke_stub_;
   void *return_stub_;   // Owned by invoke_stub_.
 };
 

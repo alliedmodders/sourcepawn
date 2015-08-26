@@ -16,12 +16,11 @@
 
 using namespace sp;
 
-CompiledFunction::CompiledFunction(void *entry_addr, size_t code_length,
+CompiledFunction::CompiledFunction(const CodeChunk& code,
                                    cell_t pcode_offs,
                                    FixedArray<LoopEdge> *edges,
                                    FixedArray<CipMapEntry> *cipmap)
-  : entry_(entry_addr),
-    code_length_(code_length),
+  : code_(code),
     code_offset_(pcode_offs),
     edges_(edges),
     cip_map_(cipmap)
@@ -30,7 +29,6 @@ CompiledFunction::CompiledFunction(void *entry_addr, size_t code_length,
 
 CompiledFunction::~CompiledFunction()
 {
-  Environment::get()->FreeCode(entry_);
 }
 
 static int cip_map_entry_cmp(const void *a1, const void *aEntry)
@@ -47,11 +45,11 @@ static int cip_map_entry_cmp(const void *a1, const void *aEntry)
 ucell_t
 CompiledFunction::FindCipByPc(void *pc)
 {
-  if (uintptr_t(pc) < uintptr_t(entry_))
+  if (uintptr_t(pc) < uintptr_t(code_.address()))
     return kInvalidCip;
 
-  uint32_t pcoffs = intptr_t(pc) - intptr_t(entry_);
-  if (pcoffs > code_length_)
+  uint32_t pcoffs = intptr_t(pc) - intptr_t(code_.address());
+  if (pcoffs > code_.bytes())
     return kInvalidCip;
 
   void *ptr = bsearch(

@@ -79,7 +79,10 @@ SourcePawnEngine::ExecAlloc(size_t size)
 void *
 SourcePawnEngine::AllocatePageMemory(size_t size)
 {
-  return Environment::get()->AllocateCode(size);
+  CodeChunk chunk = Environment::get()->AllocateCode(size + sizeof(CodeChunk));
+  CodeChunk* hidden = (CodeChunk*)chunk.address();
+  new (hidden) CodeChunk(chunk);
+  return hidden + 1;
 }
 
 void
@@ -97,7 +100,8 @@ SourcePawnEngine::SetReadWrite(void *ptr)
 void
 SourcePawnEngine::FreePageMemory(void *ptr)
 {
-  Environment::get()->FreeCode(ptr);
+  CodeChunk* hidden = (CodeChunk*)((uint8_t*)ptr - sizeof(CodeChunk));
+  hidden->~CodeChunk();
 }
 
 void
@@ -287,8 +291,12 @@ SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void *pData)
 void
 SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
 {
-  return Environment::get()->FreeCode((void *)func);
+  return Environment::get()->APIv1()->FreePageMemory((void *)func);
 }
+
+#if !defined(SOURCEPAWN_VERSION)
+# define SOURCEPAWN_VERSION "SourcePawn 1.8"
+#endif
 
 const char *
 SourcePawnEngine2::GetEngineName()

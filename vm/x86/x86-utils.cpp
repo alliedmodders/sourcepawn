@@ -15,13 +15,27 @@
 
 using namespace sp;
 
-uint8_t *
+CodeChunk
 sp::LinkCode(Environment *env, AssemblerX86 &masm)
+{
+  if (masm.outOfMemory())
+    return CodeChunk();
+
+  CodeChunk code = env->AllocateCode(masm.length());
+  if (!code.address())
+    return code;
+
+  masm.emitToExecutableMemory(code.address());
+  return code;
+}
+
+uint8_t *
+sp::LinkCodeToLegacyPtr(Environment *env, AssemblerX86 &masm)
 {
   if (masm.outOfMemory())
     return nullptr;
 
-  void *code = env->AllocateCode(masm.length());
+  void *code = env->APIv1()->AllocatePageMemory(masm.length());
   if (!code)
     return nullptr;
 

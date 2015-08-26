@@ -967,6 +967,14 @@ extern int pc_anytag;       /* global any tag */
 extern int glbstringread;	  /* last global string read */
 extern int sc_require_newdecls; /* only newdecls are allowed */
 extern bool sc_warnings_are_errors;
+extern unsigned sc_total_errors;
+
+// Returns true if compilation is in its second phase (writing phase) and has
+// so far proceeded without error.
+static inline bool cc_ok()
+{
+  return sc_status == statWRITE && sc_total_errors == 0;
+}
 
 extern constvalue sc_automaton_tab; /* automaton table */
 extern constvalue sc_state_tab;     /* state table */

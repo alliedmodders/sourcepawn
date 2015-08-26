@@ -16,6 +16,7 @@
 #include <sp_vm_types.h>
 #include <am-fixedarray.h>
 #include <am-refcounting.h>
+#include "code-allocator.h"
 
 namespace sp {
 
@@ -43,8 +44,7 @@ static const ucell_t kInvalidCip = 0xffffffff;
 class CompiledFunction
 {
  public:
-  CompiledFunction(void *entry_addr,
-                   size_t code_length,
+  CompiledFunction(const CodeChunk& code,
                    cell_t pcode_offs,
                    FixedArray<LoopEdge> *edges,
                    FixedArray<CipMapEntry> *cip_map);
@@ -52,7 +52,7 @@ class CompiledFunction
 
  public:
   void *GetEntryAddress() const {
-    return entry_;
+    return code_.address();
   }
   cell_t GetCodeOffset() const {
     return code_offset_;
@@ -67,8 +67,7 @@ class CompiledFunction
   ucell_t FindCipByPc(void *pc);
 
  private:
-  void *entry_;
-  size_t code_length_;
+  CodeChunk code_;
   cell_t code_offset_;
   AutoPtr<FixedArray<LoopEdge>> edges_;
   AutoPtr<FixedArray<CipMapEntry>> cip_map_;

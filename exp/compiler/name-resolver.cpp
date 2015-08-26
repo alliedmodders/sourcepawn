@@ -144,8 +144,8 @@ NameResolver::getOrCreateScope()
     case Scope::Block:
       env.setScope(BlockScope::New(pool_));
       break;
-    case Scope::Function:
-      env.setScope(FunctionScope::New(pool_));
+    case Scope::Argument:
+      env.setScope(ArgumentScope::New(pool_));
       break;
     default:
       assert(false);
@@ -310,25 +310,8 @@ NameResolver::HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *ini
 {
   Scope *scope = getOrCreateScope();
 
-  // See the comment in TypeResolver::visitVarDecl for why we do not want to
-  // infer sizes from literals for arguments.
-  TypeExpr te;
-  if (init &&
-      !scope->isFunction() &&
-      ((init->isArrayLiteral() && init->asArrayLiteral()->isFixedArrayLiteral()) ||
-       (init->isStringLiteral())))
-  {
-    // Wait until the type resolution pass to figure this out. We still have
-    // to precompute the base though.
-    if (Type *type = resolveBase(spec))
-      spec.setResolvedBaseType(type);
-    te = TypeExpr(new (pool_) TypeSpecifier(spec));
-  } else {
-    te = resolve(spec);
-  }
-
   // :TODO: set variadic info
-  VarDecl *var = new (pool_) VarDecl(name, te, init);
+  VarDecl *var = new (pool_) VarDecl(name, init);
 
   // Note: the parser has already bound |var->init()| at this point, meaning
   // that aside from globals it should be impossible to self-initialize like:
@@ -339,12 +322,44 @@ NameResolver::HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *ini
   registerSymbol(sym);
   var->setSymbol(sym);
 
-  if (te.resolved())
-    sym->setType(te.resolved());
+  // Set this before we evaluate the type, since it determines whether or not
+  // a const on a parameter is meaningless.
+  if (spec.isByRef()) {
+    assert(scope->kind() == Scope::Argument && sym->isArgument());
+    sym->storage_flags() |= StorageFlags::byref;
+  }
+
+  // See the comment in TypeResolver::visitVarDecl for why we do not want to
+  // infer sizes from literals for arguments.
+  if (init &&
+      !scope->isArgument() &&
+      ((init->isArrayLiteral() && init->asArrayLiteral()->isFixedArrayLiteral()) ||
+       (init->isStringLiteral())))
+  {
+    // Wait until the type resolution pass to figure this out. We still have
+    // to precompute the base though.
+    if (Type *type = resolveBase(spec))
+      spec.setResolvedBaseType(type);
+    var->te() = TypeExpr(new (pool_) TypeSpecifier(spec));
+  } else {
+    VarDeclSpecHelper helper(var, nullptr);
+    var->te() = resolve(spec, &helper);
+  }
+
+  if (var->te().resolved()) {
+    sym->setType(var->te().resolved());
+
+    // We need to check this both here and in lazy resolution, which is gross,
+    // but I don't see any obvious way to simplify it yet.
+    if (spec.isByRef() && sym->type()->passesByReference()) {
+      cc_.report(spec.byRefLoc(), rmsg::type_cannot_be_ref)
+        << sym->type();
+    }
+  }
 
   // Even if we were able to resolve the type, if we have to resolve a constant
   // value, we'll have to add it to the resolver queue.
-  if (!te.resolved() || sym->canUseInConstExpr())
+  if (!var->te().resolved() || sym->canUseInConstExpr())
     tr_.addPending(var);
 
   return var;
@@ -511,11 +526,10 @@ NameResolver::LeavePropertyDecl(PropertyDecl *decl)
   if (decl->te().resolved())
     decl->sym()->setType(decl->te().resolved());
 
-  FunctionOrAlias *getter = decl->getter();
-  FunctionOrAlias *setter = decl->setter();
+  FunctionNode* getter = decl->getter();
+  FunctionNode* setter = decl->setter();
   if (!decl->te().resolved() ||
-      (getter->fun() && !getter->fun()->signature()->isResolved()) ||
-      (setter->fun() && !setter->fun()->signature()->isResolved()))
+      (!getter->signature()->isResolved() || !setter->signature()->isResolved()))
   {
     tr_.addPending(decl);
   }
@@ -556,9 +570,10 @@ MethodDecl *
 NameResolver::EnterMethodDecl(const SourceLocation &begin,
                               const NameToken &nameToken,
                               TypeSpecifier *spec,
-                              TypeExpr *te)
+                              TypeExpr *te,
+                              bool isStatic)
 {
-  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, FunctionOrAlias());
+  MethodDecl *decl = new (pool_) MethodDecl(begin, nameToken, isStatic);
 
   if (spec)
     *te = resolve(*spec);
@@ -584,7 +599,7 @@ NameResolver::EnterMethodDecl(const SourceLocation &begin,
 void
 NameResolver::LeaveMethodDecl(MethodDecl *decl)
 {
-  FunctionNode *fun = decl->method()->fun();
+  FunctionNode *fun = decl->method();
   if (!fun)
     return;
 
@@ -817,7 +832,7 @@ NameResolver::resolveBase(TypeSpecifier &spec)
     case TOK_VOID:
       return cc_.types()->getVoid();
     case TOK_IMPLICIT_INT:
-      return cc_.types()->getPrimitive(PrimitiveType::ImplicitInt);
+      return cc_.types()->getImplicitInt();
     case TOK_INT:
       return cc_.types()->getPrimitive(PrimitiveType::Int32);
     case TOK_BOOL:
@@ -869,7 +884,7 @@ NameResolver::resolveBase(TypeSpecifier &spec)
 // only get bigger). We want to eliminate it from the AST, as well as reduce
 // dependence on TypeResolver which is a rather expensive pass.
 TypeExpr
-NameResolver::resolve(TypeSpecifier &spec)
+NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
 {
   Type *type = resolveBase(spec);
   if (!type)
@@ -909,11 +924,8 @@ NameResolver::resolve(TypeSpecifier &spec)
       type = cc_.types()->newArray(type, ArrayType::kUnsized);
   }
 
-  if (spec.isByRef())
-    type = tr_.applyRefType(&spec, type);
-
   if (spec.isConst())
-    type = tr_.applyConstQualifier(&spec, type);
+    type = tr_.applyConstQualifier(&spec, type, helper);
 
   return TypeExpr(type);
 }

@@ -23,6 +23,7 @@
 #include "types.h"
 #include "label.h"
 #include "boxed-value.h"
+#include "value-attrs.h"
 
 namespace sp {
 
@@ -104,18 +105,9 @@ class Symbol : public PoolObject
 class VariableSymbol : public Symbol
 {
  public:
-  enum Storage {
-    Unknown,
-    Local,
-    Arg,
-    Heap,
-    Global
-  };
-
- public:
   VariableSymbol(AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
-     storage_(Unknown),
+     storage_(StorageClass::Unknown),
      type_(nullptr)
   {
     address_ = 0;
@@ -135,15 +127,15 @@ class VariableSymbol : public Symbol
     assert(!type_ || type_->isUnresolvable());
     type_ = type;
   }
-  void allocate(Storage storage, intptr_t address) {
+  void allocate(StorageClass storage, intptr_t address) {
     storage_ = storage;
     address_ = address;
   }
-  Storage storage() const {
+  StorageClass storage() const {
     return storage_;
   }
   intptr_t address() const {
-    assert(storage() != Unknown);
+    assert(storage() != StorageClass::Unknown);
     return address_;
   }
   Type *type() const {
@@ -174,6 +166,16 @@ class VariableSymbol : public Symbol
     return !isConstExpr() && !failedToResolveConstExpr();
   }
 
+  StorageFlags& storage_flags() {
+    return storage_flags_;
+  }
+  const StorageFlags storage_flags() const {
+    return storage_flags_;
+  }
+  bool isByRef() const {
+    return !!(storage_flags() & StorageFlags::byref);
+  }
+
  private:
   static const int kResolvingConstExpr = 1;
   static const int kFailedResolveConstExpr = 2;
@@ -198,7 +200,8 @@ class VariableSymbol : public Symbol
   }
 
  private:
-  Storage storage_;
+  StorageClass storage_;
+  StorageFlags storage_flags_;
   intptr_t address_;
   Type *type_;
   BoxedValue constant_;

@@ -106,11 +106,16 @@ struct methodmap_t
   methodmap_t *next;
   methodmap_t *parent;
   int tag;
-  int nullable;
+  bool nullable;
+  bool keyword_nullable;
   LayoutSpec spec;
   char name[sNAMEMAX+1];
   methodmap_method_t **methods;
   size_t nummethods;
+
+  bool must_construct_with_new() const {
+    return nullable || keyword_nullable;
+  }
 
   // Shortcut.
   methodmap_method_t *dtor;
@@ -142,7 +147,7 @@ functag_t *functag_find_intrinsic(int tag);
 LayoutSpec deduce_layout_spec_by_tag(int tag);
 LayoutSpec deduce_layout_spec_by_name(const char *name);
 const char *layout_spec_name(LayoutSpec spec);
-int can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
+bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 
 /**
  * Heap functions
@@ -175,10 +180,14 @@ void resetheaplist();
 /**
  * Method maps.
  */
-void methodmap_add(methodmap_t *map);
+methodmap_t* methodmap_add(methodmap_t* parent,
+                           LayoutSpec spec,
+                           const char* name,
+                           int tag);
 methodmap_t *methodmap_find_by_tag(int tag);
 methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);
+void methodmap_add_method(methodmap_t* map, methodmap_method_t* method);
 void methodmaps_free();
 
 extern memuse_list_t *heapusage;

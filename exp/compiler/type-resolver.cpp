@@ -216,10 +216,8 @@ TypeResolver::visitVarDecl(VarDecl *node)
         }
       }
 
-      if (literal_dims.length())
-        sym->setType(resolveType(node->te(), &literal_dims));
-      else
-        sym->setType(resolveType(node->te(), nullptr));
+      VarDeclSpecHelper helper(node, &literal_dims);
+      sym->setType(resolveType(node->te(), &helper));
     } else {
       sym->setType(node->te().resolved());
     }
@@ -453,9 +451,9 @@ TypeResolver::visitPropertyDecl(PropertyDecl *decl)
   if (!decl->sym()->type())
     decl->sym()->setType(resolveTypeIfNeeded(decl->te()));
 
-  if (FunctionNode *getter = decl->getter()->fun())
+  if (FunctionNode *getter = decl->getter())
     visitFunction(getter);
-  if (FunctionNode *setter = decl->setter()->fun())
+  if (FunctionNode *setter = decl->setter())
     visitFunction(setter);
 }
 
@@ -464,7 +462,7 @@ TypeResolver::visitMethodDecl(MethodDecl *decl)
 {
   // It is not possible to refer to methods as part of a constant or type
   // expression - no re-entrancy or upward-resolving needed.
-  if (FunctionNode *node = decl->method()->fun())
+  if (FunctionNode *node = decl->method())
     visitFunction(node);
 }
 
@@ -495,8 +493,6 @@ TypeResolver::visitTypedefDecl(TypedefDecl *node)
     while (array->contained()->isArray())
       array = array->contained()->toArray();
     base = array->contained();
-  } else if (ReferenceType *ref = base->asReference()) {
-    base = ref->contained();
   }
 
   if (type == base->canonical()) {
@@ -532,15 +528,8 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
     TypesetDecl::Entry &entry = types->at(i);
     Type *current = entry.te.resolved();
 
-    if (current->isConst() && current->hasMeaninglessConstCoercion()) {
-      cc_.report(entry.loc, rmsg::typeset_has_useless_const)
-        << current;
-      continue;
-    }
-    if (!current->isFunction()) {
-      cc_.report(entry.loc, rmsg::typeset_unsupported_type);
-      continue;
-    }
+    // "const int" or something should have thrown an error here.
+    assert(!current->isConst() || TypeSupportsTransitiveConst(current));
 
     for (size_t j = 0; j < i; j++) {
       TypesetDecl::Entry &prevEntry = types->at(j);
@@ -679,7 +668,7 @@ TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier *spec, ArrayLiteral *lit
   // Return the computed list unadultered - resolveArrayComponentTypes()
   // will correctly merge with the TypeSpecifier.
   return out;
-}
+} 
 
 void
 TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
@@ -687,7 +676,20 @@ TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
   resolveType(sig->returnType());
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
     VarDecl *param = sig->parameters()->at(i);
-    resolveTypeIfNeeded(param->te());
+    VariableSymbol *sym = param->sym();
+
+    assert(!param->te().resolved() || sym->type());
+    if (!param->te().resolved()) {
+      TypeSpecifier *spec = param->te().spec();
+
+      VarDeclSpecHelper helper(param, nullptr);
+      sym->setType(resolveType(param->te(), &helper));
+
+      if (sym->isByRef() && sym->type()->passesByReference()) {
+        cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
+          << sym->type();
+      }
+    }
   }
 }
 
@@ -713,7 +715,7 @@ TypeResolver::resolveConstant(ConstantSymbol *sym)
 }
 
 Type *
-TypeResolver::resolveType(TypeExpr &te, const Vector<int> *arrayInitData)
+TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int> *arrayInitData)
 {
   if (te.resolved())
     return te.resolved();
@@ -736,19 +738,12 @@ TypeResolver::resolveType(TypeExpr &te, const Vector<int> *arrayInitData)
     return te.resolved();
   }
 
-  // Should not have a reference here.
-  assert(!baseType->isReference());
-
   Type *type = baseType;
   if (spec->rank())
     type = resolveArrayComponentTypes(spec, type, arrayInitData);
 
-  if (type->isConst())
-    type = applyConstQualifier(spec, type);
-
-  // Build references after we've determined const-ness.
-  if (spec->isByRef())
-    type = applyRefType(spec, type);
+  if (spec->isConst())
+    type = applyConstQualifier(spec, type, helper);
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -795,53 +790,53 @@ TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
 }
 
 Type *
-TypeResolver::applyRefType(TypeSpecifier *spec, Type *type)
+TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper)
 {
-  if (!type->canUseInReferenceType()) {
-    cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
-      << type;
-    return type;
-  }
-
-  return cc_.types()->newReference(type);
-}
-
-Type *
-TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type)
-{
-  // Pawn has odd const semantics. C/C++ will decay (const char[][]) to
-  // (const char **), or ptr(ptr(const(char))). Pawn treats "const" not as part
-  // of the type, but as part of the overall mutability of the variable.
+  // :TODO: spec ref
   //
-  // In C++, it is illegal to cast char** to const char**, because this could
-  // discard const qualifiers. From comp.lang.c FAQ 11.10:
-  //   
-  //   1: const char c = 'x';
-  //   2: char *p1;
-  //   3: const char **p2 = &p1;
-  //   4: *p2 = &c;
-  //   5: *p1 = 'd';
+  // Pawn's "const" is transitive, and consistent in SP1 semantics. However
+  // for SP2, we want to be able to re-assign const array references that
+  // would not perform a copy. To this end, we split const into two concepts:
+  // 
+  // First, const as an l-value attribute makes the storage location readonly.
   //
-  // If line 3 were legal, then p1 would type-check but constitute an illegal
-  // assignment. Pawn does not have this problem - it does not decay arrays
-  // into pointers. Because of this we are afforded the ability to play fast
-  // and loose with const and preserve compatibility with SP1.
+  // Second, const as a qualifier on Array/Struct/Typeset/compound types
+  // requires that any l-value computed into a value of that type, have the
+  // lvalue annotated as const. Additionally, if the type of that lvalue has
+  // a compound type, it must be const-qualified.
   //
-  // So, we define "const" as the following: 
-  //   (a) For arrays, it means that the array contents cannot be mutated.
-  //   (b) For non-arrays, it means that an lvalue cannot be assigned.
-  //   (c) The lvalue computed by indexing a const array is const.
-  //   (d) It is illegal to have an array of a const type that is not a const
-  //       array.
+  // This supports "const int" as being an immutable l-value, but something
+  // like "const int[]" as being re-assignable by reference.
+  //
+  // We do this rather than burden ourselves with a very complex notion of
+  // const, such as in C++, which would probably require computing all
+  // l-values in the AST as reference types.
   assert(spec->isConst());
 
-  if (!type->canUseInConstType()) {
+  if (!TypeSupportsConstKeyword(type)) {
     cc_.report(spec->constLoc(), rmsg::type_cannot_be_const)
       << type;
     return type;
   }
 
-  return cc_.types()->newQualified(type, Qualifiers::Const);
+  if (TypeSupportsTransitiveConst(type))
+    type = cc_.types()->newQualified(type, Qualifiers::Const);
+
+  // The meaning of "const" is ambiguous for types with value assignment
+  // semantics. We let individual callers decide what they want to do.
+  if (HasValueAssignSemantics(type)) {
+    if (helper && helper->receiveConstQualifier(cc_, spec->constLoc(), type))
+      return type;
+
+    // Otherwise, if we have value semantics and are in a context where "const"
+    // has no meaning, it's an error.
+    if (!type->isConst()) {
+      cc_.report(spec->constLoc(), rmsg::const_has_no_meaning)
+        << type;
+    }
+  }
+
+  return type;
 }
 
 Type *
@@ -949,4 +944,39 @@ TypeResolver::resolveEnumConstantValue(EnumConstant *cs, int *outp)
   // Even though B's type is A, not C.
   *outp = out.toInteger().asInt32();
   return true;
+}
+
+VarDeclSpecHelper::VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData)
+ : decl_(decl),
+   array_init_(arrayInitData)
+{
+}
+
+bool
+VarDeclSpecHelper::receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type)
+{
+  VariableSymbol *sym = decl_->sym();
+  if (sym->isArgument()) {
+    if (!!(sym->storage_flags() & StorageFlags::byref)) {
+      cc.report(constLoc, rmsg::const_ref_has_no_meaning) << type;
+      return true;
+    }
+    if (!type->passesByReference()) {
+      cc.report(constLoc, rmsg::const_has_no_meaning) << type;
+      return true;
+    }
+  } else if (TypeSupportsCompileTimeInterning(type)) {
+    sym->storage_flags() |= StorageFlags::constval;
+  }
+
+  sym->storage_flags() |= StorageFlags::readonly;
+  return true;
+}
+
+const Vector<int> *
+VarDeclSpecHelper::arrayInitData() const
+{
+  return array_init_ && array_init_->length() > 0
+         ? array_init_
+         : nullptr;
 }

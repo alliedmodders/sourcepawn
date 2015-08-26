@@ -1,10 +1,4 @@
-enum Handle:
-{
-}
-
-methodmap Handle __nullable__
-{
-}
+using __intrinsics__.Handle;
 
 methodmap StringMap < Handle
 {

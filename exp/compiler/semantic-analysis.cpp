@@ -17,7 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "semantic-analysis.h"
-#include "coercion.h"
+#include "conversion.h"
 
 using namespace ke;
 using namespace sp;
@@ -110,7 +110,7 @@ void
 SemanticAnalysis::checkForwardedFunction(FunctionStatement *forward, FunctionStatement *impl)
 {
   // SP1 didn't check these. We tighten up the semantics a bit for SP2.
-  if (impl->token() == TOK_NATIVE){
+  if (impl->token() == TOK_NATIVE) {
     cc_.report(impl->loc(), rmsg::illegal_forward_native)
       << impl->name()
       << cc_.note(forward->loc(), rmsg::previous_location);
@@ -195,15 +195,7 @@ SemanticAnalysis::visitForValue(Expression *expr)
 Expression *
 SemanticAnalysis::visitForRValue(Expression *expr)
 {
-  Type *type = visitForValue(expr);
-  if (!type)
-    return nullptr;
-
-  if (ReferenceType *ref = type->asReference()) {
-    assert(expr->vk() == VK::lvalue || expr->vk() == VK::clvalue);
-
-    expr = new (pool_) ImplicitCastExpr(expr, CastOp::deref, ref->contained());
-  }
+  visitForValue(expr);
   return expr;
 }
 
@@ -249,8 +241,11 @@ SemanticAnalysis::checkCall(FunctionSignature *sig, ExpressionList *args)
     } else {
       arg = sig->parameters()->at(i);
     }
+    (void)arg;
 
     visitForValue(expr);
+
+#if 0
     Coercion cr(cc_,
                 Coercion::Reason::arg,
                 expr,
@@ -271,6 +266,7 @@ SemanticAnalysis::checkCall(FunctionSignature *sig, ExpressionList *args)
 
     // Rewrite the tree for the coerced result.
     args->at(i) = cr.output();
+#endif
   }
 }
 
@@ -305,7 +301,8 @@ SemanticAnalysis::visitNameProxy(NameProxy *proxy)
         decl->setType(FunctionType::New(decl->signature()));
 
       // Function symbols are clvalues, since they are named.
-      proxy->setOutput(decl->type(), VK::clvalue);
+      // :TODO:
+      proxy->setOutput(decl->type(), VK::lvalue);
       break;
     }
 

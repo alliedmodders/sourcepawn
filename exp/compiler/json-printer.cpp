@@ -15,6 +15,7 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <am-string.h>
 #include "ast.h"
 #include "compile-context.h"
 #include "json-tools.h"
@@ -80,12 +81,12 @@ class JsonBuilder : public AstVisitor
     if (!node->setter()->isEmpty())
       rval_->add(cc_.add("setter"), toJson(new (pool_) JsonObject(), node->setter()));
   }
-  void visitVariableDeclaration(VariableDeclaration *node) override {
+  void visitVarDecl(VarDecl *node) override {
     if (node->name())
       rval_->add(atom_name_, new (pool_) JsonString(node->name()));
     rval_->add(atom_typespec_, toJson(node->te()));
   }
-  void visitTypedefStatement(TypedefStatement *node) override {
+  void visitTypedefDecl(TypedefDecl *node) override {
     rval_->add(atom_name_, new (pool_) JsonString(node->name()));
     rval_->add(atom_typespec_, toJson(node->te()));
   }
@@ -158,7 +159,7 @@ class JsonBuilder : public AstVisitor
     }
     rval_->add(atom_statements_, list);
   }
-  void visitCallExpression(CallExpression *node) override {
+  void visitCallExpr(CallExpr *node) override {
     rval_->add(atom_callee_, toJson(node->callee()));
 
     JsonList *list = new (pool_) JsonList();
@@ -253,7 +254,7 @@ class JsonBuilder : public AstVisitor
   }
   void visitFloatLiteral(FloatLiteral *node) override {
     char value[64];
-    snprintf(value, sizeof(value), "%f", node->value());
+    ke::SafeSprintf(value, sizeof(value), "%f", node->value());
     rval_->add(atom_value_, new (pool_) JsonString(cc_.add(value)));
   }
   void visitCharLiteral(CharLiteral *node) override {
@@ -265,7 +266,7 @@ class JsonBuilder : public AstVisitor
   }
   void visitIntegerLiteral(IntegerLiteral *node) override {
     char value[64];
-    snprintf(value, sizeof(value), "%" KE_FMT_I64, node->value());
+    ke::SafeSprintf(value, sizeof(value), "%" KE_FMT_I64, node->value());
     rval_->add(atom_value_, new (pool_) JsonString(cc_.add(value)));
   }
   void visitTernaryExpression(TernaryExpression *node) override {
@@ -318,7 +319,7 @@ class JsonBuilder : public AstVisitor
     rval_->add(atom_expression_, toJson(node->expression()));
   }
   void visitExpressionStatement(ExpressionStatement *node) override {
-    rval_->add(atom_expression_, toJson(node->expression()));
+    rval_->add(atom_expression_, toJson(node->expr()));
   }
 
   // No-op cases.

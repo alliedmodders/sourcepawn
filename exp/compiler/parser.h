@@ -116,7 +116,6 @@ class Parser
   Expression *assignment();
   Expression *expression();
 
-  bool matchMethodBind();
   MethodDecl *parseMethod(Atom *layoutName);
   PropertyDecl *parseAccessor();
 

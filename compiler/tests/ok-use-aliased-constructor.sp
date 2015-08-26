@@ -1,10 +1,6 @@
 native Handle:CreateHandle();
 
-methodmap Handle __nullable__
-{
-	public native Handle() = CreateHandle;
-	public native ~Handle();
-};
+using __intrinsics__.Handle;
 
 public main()
 {

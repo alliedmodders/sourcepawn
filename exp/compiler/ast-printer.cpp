@@ -67,18 +67,13 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, ")");
   }
-  void dump(Atom *name, const FunctionOrAlias &method, const char *prefix) {
+  void dump(Atom *name, FunctionNode* node, const char *prefix) {
     if (prefix)
       fprintf(fp_, "%s method ", prefix);
     else
       fprintf(fp_, "method ");
-    if (method.isAlias()) {
-      fprintf(fp_, "%s = %s", name->chars(), method.alias()->name()->chars());
-    } else {
-      FunctionNode *node = method.fun();
-      fprintf(fp_, "%s ", name->chars());
-      dump(node->signature());
-    }
+    fprintf(fp_, "%s ", name->chars());
+    dump(node->signature());
   }
   void visitNameProxy(NameProxy *name) {
     prefix();
@@ -148,13 +143,6 @@ class AstPrinter : public AstVisitor
   void visitConstructTypesetExpr(ConstructTypesetExpr *node) {
     prefix();
     fprintf(fp_, "[ ConstructTypesetExpr (%s)\n", node->typeset()->name()->chars());
-    indent();
-    node->expr()->accept(this);
-    unindent();
-  }
-  void visitImplicitCastExpr(ImplicitCastExpr *node) {
-    prefix();
-    fprintf(fp_, "[ ImplicitCastExpr\n");
     indent();
     node->expr()->accept(this);
     unindent();
@@ -412,21 +400,21 @@ class AstPrinter : public AstVisitor
   void visitMethodDecl(MethodDecl *decl) override {
     prefix();
     fprintf(fp_, "[ MethodDecl ");
-    dump(decl->name(), *decl->method(), nullptr);
+    dump(decl->name(), decl->method(), nullptr);
     fprintf(fp_, "\n");
   }
   void visitPropertyDecl(PropertyDecl *decl) override {
     prefix();
     fprintf(fp_, "[ PropertyDecl ");
     indent();
-    if (!decl->getter()->isEmpty()) {
+    if (decl->getter()) {
       prefix();
-      dump(decl->name(), *decl->getter(), "getter");
+      dump(decl->name(), decl->getter(), "getter");
       fprintf(fp_, "\n");
     }
-    if (!decl->setter()->isEmpty()) {
+    if (decl->setter()) {
       prefix();
-      dump(decl->name(), *decl->setter(), "setter");
+      dump(decl->name(), decl->setter(), "setter");
       fprintf(fp_, "\n");
     }
     unindent();

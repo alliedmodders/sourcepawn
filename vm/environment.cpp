@@ -29,7 +29,6 @@ Environment::Environment()
    profiler_(nullptr),
    jit_enabled_(true),
    profiling_enabled_(false),
-   code_pool_(nullptr),
    top_(nullptr)
 {
 }
@@ -68,9 +67,7 @@ Environment::Initialize()
   api_v2_ = new SourcePawnEngine2();
   code_stubs_ = new CodeStubs(this);
   watchdog_timer_ = new WatchdogTimer(this);
-
-  if ((code_pool_ = Knight::KE_CreateCodeCache()) == nullptr)
-    return false;
+  code_alloc_ = new CodeAllocator();
 
   // Safe to initialize code now that we have the code cache.
   if (!code_stubs_->Initialize())
@@ -83,8 +80,8 @@ void
 Environment::Shutdown()
 {
   watchdog_timer_->Shutdown();
-  code_stubs_->Shutdown();
-  Knight::KE_DestroyCodeCache(code_pool_);
+  code_stubs_ = nullptr;
+  code_alloc_ = nullptr;
 
   assert(sEnvironment == this);
   sEnvironment = nullptr;
@@ -165,16 +162,10 @@ Environment::GetErrorString(int error)
   return sErrorMsgTable[error];
 }
 
-void *
+CodeChunk
 Environment::AllocateCode(size_t size)
 {
-  return Knight::KE_AllocCode(code_pool_, size);
-}
-
-void
-Environment::FreeCode(void *code)
-{
-  Knight::KE_FreeCode(code_pool_, code);
+  return code_alloc_->Allocate(size);
 }
 
 void
@@ -241,7 +232,9 @@ Environment::Invoke(PluginRuntime *runtime, CompiledFunction *fn, cell_t *result
   PluginContext *cx = runtime->GetBaseContext();
 
   InvokeStubFn invoke = code_stubs_->InvokeStub();
-  return invoke(cx, fn->GetEntryAddress(), result);
+  invoke(cx, fn->GetEntryAddress(), result);
+
+  return exception_code_;
 }
 
 void

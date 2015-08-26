@@ -203,7 +203,7 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   ParameterList *params;
   bool canResolveEagerly = true;
   {
-    delegate_.OnEnterScope(Scope::Function);
+    delegate_.OnEnterScope(Scope::Argument);
     if ((params = arguments(&canResolveEagerly)) == nullptr)
       params = new (pool_) ParameterList();
     delegate_.OnLeaveOrphanScope();
@@ -1195,21 +1195,6 @@ Parser::do_()
   return new (pool_) WhileStatement(pos, TOK_DO, condition, body);
 }
 
-bool
-Parser::matchMethodBind()
-{
-  if (!match(TOK_LPAREN))
-    return nullptr;
-
-  if (match(TOK_RPAREN)) {
-    if (match(TOK_ASSIGN))
-      return true;
-    scanner_.undo();
-  }
-  scanner_.undo();
-  return nullptr;
-}
-
 FunctionNode *
 Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
 {
@@ -1219,7 +1204,7 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
   // the signature as resolved.
   Scope *argScope = nullptr;
   {
-    AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
+    AutoEnterScope argEnv(delegate_, Scope::Argument, &argScope);
 
     bool canEarlyResolve = true;
     ParameterList *params = arguments(&canEarlyResolve);
@@ -1267,7 +1252,6 @@ Parser::parseAccessor()
 
   PropertyDecl *decl = delegate_.EnterPropertyDecl(begin, name, spec);
 
-  FunctionOrAlias getter, setter, dummy;
   while (!match(TOK_RBRACE)) {
     expect(TOK_PUBLIC);
 
@@ -1281,32 +1265,23 @@ Parser::parseAccessor()
       break;
     }
 
-    FunctionOrAlias dummy;
-    FunctionOrAlias *out = &dummy;
+    bool is_getter = false;
+    bool is_setter = false;
     if (strcmp(name->chars(), "get") == 0)
-      out = decl->getter();
+      is_getter = true;
     else if (strcmp(name->chars(), "set") == 0)
-      out = decl->setter();
+      is_setter = true;
     else
       cc_.report(scanner_.begin(), rmsg::invalid_accessor_name);
 
-    if (matchMethodBind()) {
-      if (!expect(TOK_NAME)) {
-        // Give the token back in case it was on the next line.
-        scanner_.undo();
-        scanner_.skipUntil(TOK_SEMICOLON, SkipFlags::StopAtLine);
-        break;
-      }
+    FunctionNode *node = parseFunctionBase(decl->te(), kind);
+    if (!node)
+      break;
 
-      NameProxy *alias = nameref();
-      requireNewlineOrSemi();
-      *out = FunctionOrAlias(alias);
-    } else {
-      FunctionNode *node = parseFunctionBase(decl->te(), kind);
-      if (!node)
-        break;
-      *out = FunctionOrAlias(node);
-    }
+    if (is_getter)
+      decl->setGetter(node);
+    else if (is_setter)
+      decl->setSetter(node);
   }
 
   delegate_.LeavePropertyDecl(decl);
@@ -1324,88 +1299,29 @@ Parser::parseMethod(Atom *layoutName)
   if (match(TOK_NATIVE))
     kind = TOK_NATIVE;
 
-  // Destructors can't be static.
-  bool destructor = !isStatic && match(TOK_TILDE);
-
-  // Binds are the worst. We need a good deal of lookahead to tell the
-  // following apart:
-  //     public X() = Y;
-  //     public Z X() = Y;
-  //     public int X() {}
-  bool isBind = false;
-
   NameToken name;
   TypeSpecifier spec;
-  if (destructor) {
-    spec.setBuiltinType(TOK_VOID);
-    spec.setBaseLoc(scanner_.begin());
-
-    if (!expect(TOK_NAME))
-      return nullptr;
+  if (match(TOK_NAME)) {
+    // See if we have a constructor.
     name = *scanner_.current();
-
-    // We've got a name, so we can immediately tell whether or not to check
-    // for a bind.
-    isBind = (kind != TOK_NATIVE) && matchMethodBind();
-  } else {
-    if (kind != TOK_NATIVE && match(TOK_NAME)) {
-      name = *scanner_.current();
-      if (!(isBind = matchMethodBind())) {
-        // Failed to see a bind pattern. Give back the name token and throw
-        // away the name.
-        scanner_.undo();
-        name = NameToken();
-      }
-    }
-
-    // If we did not get a bind pattern, we need a decl.
-    if (!isBind) {
-      if (match(TOK_NAME)) {
-        // See if we have a constructor.
-        name = *scanner_.current();
-        if (name.atom == layoutName && peek(TOK_LPAREN)) {
-          // This is a constructor.
-          spec.setNamedType(TOK_NAME, nameref(scanner_.current()));
-          spec.setBaseLoc(scanner_.begin());
-        } else {
-          // Give the name token back.
-          scanner_.undo();
-          name = NameToken();
-        }
-      }
-
-      if (!name.atom) {
-        parse_new_type_expr(&spec, 0);
-
-        if (peek(TOK_LPAREN))
-          cc_.report(scanner_.begin(), rmsg::expected_name_and_type);
-        else if (expect(TOK_NAME))
-          name = scanner_.current();
-      }
+    if (name.atom == layoutName && peek(TOK_LPAREN)) {
+      // This is a constructor.
+      spec.setNamedType(TOK_NAME, nameref(scanner_.current()));
+      spec.setBaseLoc(scanner_.begin());
+    } else {
+      // Give the name token back.
+      scanner_.undo();
+      name = NameToken();
     }
   }
 
-  if (destructor && name.atom) {
-    // Build a new name to include the ~.
-    AutoArray<char> buffer(new char[name.atom->length() + 2]);
-    buffer[0] = '~';
-    strcpy(&buffer[1], name.atom->chars());
-    name.atom = cc_.add(buffer);
-  }
+  if (!name.atom) {
+    parse_new_type_expr(&spec, 0);
 
-  if (isBind) {
-    // Handle the rest of the bind pattern.
-    if (!expect(TOK_NAME))
-      return nullptr;
-
-    // Build an aliased definition (like "public X() = Y".
-    NameProxy *alias = nameref();
-    requireNewlineOrSemi();
-
-    MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, nullptr, nullptr);
-    decl->setMethod(FunctionOrAlias(alias));
-    delegate_.LeaveMethodDecl(decl);
-    return decl;
+    if (peek(TOK_LPAREN))
+      cc_.report(scanner_.begin(), rmsg::expected_name_and_type);
+    else if (expect(TOK_NAME))
+      name = scanner_.current();
   }
 
   if (!name.atom) {
@@ -1416,14 +1332,14 @@ Parser::parseMethod(Atom *layoutName)
   }
 
   TypeExpr te;
-  MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, &spec, &te);
+  MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, &spec, &te, isStatic);
 
   FunctionNode *node = parseFunctionBase(te, kind);
   if (!node) {
     delegate_.LeaveMethodDecl(decl);
     return nullptr;
   }
-  decl->setMethod(FunctionOrAlias(node));
+  decl->setMethod(node);
 
   delegate_.LeaveMethodDecl(decl);
   return decl;
@@ -2116,7 +2032,7 @@ Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
     // Enter a new scope for arguments. We have to do this even for functions
     // that don't have bodies, unfortunately, since they could contain default
     // arguments that bind to named constants or the magic sizeof(arg) expr.
-    AutoEnterScope argEnv(delegate_, Scope::Function, &argScope);
+    AutoEnterScope argEnv(delegate_, Scope::Argument, &argScope);
 
     bool canEagerResolve = true;
     ParameterList *params = arguments(&canEagerResolve);

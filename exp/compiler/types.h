@@ -42,8 +42,9 @@ enum class PrimitiveType : uint32_t
   Char,
 
   // The "implicit int" pseudo-type that we use when an int type was not
-  // explicitly specified.
-  ImplicitInt,
+  // explicitly specified. This should never be used directly, as it is
+  // an internal marker.
+  ImplicitIntDoNotUseDirectly,
 
   Int8,
   Uint8,
@@ -70,7 +71,7 @@ enum class Qualifiers : uint32_t
   // None (the default).
   None      = 0x0,
 
-  // Storage and mutability is constant.
+  // Transitive const; different from storage const.
   Const     = 0x1,
 };
 KE_DEFINE_ENUM_OPERATORS(Qualifiers);
@@ -81,7 +82,6 @@ typedef FixedPoolList<Type *> TypeList;
 
 #define TYPE_ENUM_MAP(_)        \
   _(Enum)                       \
-  _(Reference)                  \
   _(Array)                      \
   _(Function)                   \
   _(Typeset)                    \
@@ -142,10 +142,6 @@ class Type : public PoolObject
 
     // A value-typed composite type.
     Struct,
-
-    // A reference type may only be specified on parameters, and
-    // references may only be computed to primitives or enums.
-    Reference,
 
     // A function type encapsulates a function signature.
     Function,
@@ -233,49 +229,18 @@ class Type : public PoolObject
     return (TypedefType *)this;
   }
 
-  bool canUseInReferenceType() {
-    return !isArray() && !isReference();
+  bool passesByReference() {
+    return isArray() || isStruct();
   }
   bool canBeUsedInConstExpr() {
     return isPrimitive() || isEnum();
   }
 
-  // For certain types, 'const' is meaningless in some scopes. For example,
-  // int, enum, and function types in unions or as arguments basically don't
-  // mean anything as 'const'.
-  bool hasMeaninglessConstCoercion() {
-    switch (canonicalKind()) {
-      case Kind::Primitive:
-      case Kind::Enum:
-      case Kind::Function:
-      case Kind::MetaFunction:
-      case Kind::Unchecked:
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  // void and & cannot be const. We compute lvalue constness separately.
-  bool canUseInConstType() {
-    return !isVoid() && !isReference();
-  }
-
   PrimitiveType primitive() {
     assert(isPrimitive());
+    if (canonical()->primitive_ == PrimitiveType::ImplicitIntDoNotUseDirectly)
+      return PrimitiveType::Int32;
     return canonical()->primitive_;
-  }
-
-  // Same as primitive(), but return int32 for implicit-int and int8 for char.
-  PrimitiveType semanticPrimitive() {
-    switch (primitive()) {
-      case PrimitiveType::Char:
-        return PrimitiveType::Int8;
-      case PrimitiveType::ImplicitInt:
-        return PrimitiveType::Int32;
-      default:
-        return primitive();
-    }
   }
 
   bool isPod() {
@@ -308,7 +273,7 @@ class Type : public PoolObject
   // This is a very specific check intended for phases which need to know
   // if a type was not specified, and thus it ignores qualifiers.
   bool isImplicitInt() const {
-    return kind_ == Kind::Primitive && primitive_ == PrimitiveType::ImplicitInt;
+    return kind_ == Kind::Primitive && primitive_ == PrimitiveType::ImplicitIntDoNotUseDirectly;
   }
 
   // Check whether this type pointer is actually resolved to anything. This
@@ -474,24 +439,6 @@ class EnumType : public Type
  private:
   Atom *name_;
   MethodmapDecl *methodmap_;
-};
-
-class ReferenceType : public Type
-{
-  ReferenceType()
-   : Type(Kind::Reference)
-  {
-  }
-
- public:
-  static ReferenceType *New(Type *contained);
-
-  Type *contained() {
-    return contained_;
-  }
-
- private:
-  Type *contained_;
 };
 
 class ArrayType : public Type
@@ -730,6 +677,47 @@ UnsignedTypeForIntegerSize(size_t size)
   }
 }
 
+// Types where "const" is allowed as a keyword.
+static inline bool
+TypeSupportsConstKeyword(Type *type)
+{
+  return !type->isVoid();
+}
+
+// Types where assignment does not simply change a reference, but copies one
+// or more interior values.
+static inline bool
+HasValueAssignSemantics(Type *type)
+{
+  if (type->isArray())
+    return type->toArray()->hasFixedLength();
+
+  // No objects yet, everything else assigns by-value.
+  return true;
+}
+
+// Types where the "const" keyword becomes transitive.
+static inline bool
+TypeSupportsTransitiveConst(Type *type)
+{
+  switch (type->canonicalKind()) {
+    case Type::Kind::Array:
+    case Type::Kind::Struct:
+    case Type::Kind::Typeset:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Types where values can be interned at compile-time if constant.
+static inline bool
+TypeSupportsCompileTimeInterning(Type *type)
+{
+  return type->canBeUsedInConstExpr() ||
+         (type->isArray() && type->toArray()->hasFixedLength());
+}
+
 // This should probably be in the type manager... but it should never leak past
 // type resolution.
 extern Type UnresolvableType;
@@ -739,7 +727,9 @@ const char *GetPrimitiveName(PrimitiveType type);
 enum class TypeDiagFlags
 {
   None = 0x0,
-  Names = 0x1
+  Names = 0x1,
+  IsByRef = 0x2,
+  IsConst = 0x4
 };
 KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
 

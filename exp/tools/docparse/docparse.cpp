@@ -202,21 +202,7 @@ class Analyzer : public PartialAstVisitor
     obj->add(atom_name_, toJson(node->name()));
     startDoc(obj, "method", node->name(), node->loc());
 
-    FunctionNode *fun = nullptr;
-
-    if (node->method()->isFunction()) {
-      fun = node->method()->fun();
-    } else {
-      Symbol *sym = node->method()->alias()->sym();
-      if (!sym->isFunction()) {
-        fprintf(stderr, "Method %s aliased to %s is not aliased to a function!\n",
-          atom_name_->chars(),
-          sym->name()->chars());
-        return;
-      }
-      fun = sym->toFunction()->impl();
-    }
-
+    FunctionNode *fun = node->method();
     obj->add(atom_returnType_, toJson(fun->signature()->returnType()));
     obj->add(atom_parameters_, toJson(fun->signature()->parameters()));
     methods_->add(obj);
@@ -227,8 +213,8 @@ class Analyzer : public PartialAstVisitor
     startDoc(obj, "property", node->name(), node->loc());
 
     obj->add(atom_type_, toJson(node->te()));
-    obj->add(atom_getter_, new (pool_) JsonBool(!node->getter()->isEmpty()));
-    obj->add(atom_setter_, new (pool_) JsonBool(!node->setter()->isEmpty()));
+    obj->add(atom_getter_, new (pool_) JsonBool(!!node->getter()));
+    obj->add(atom_setter_, new (pool_) JsonBool(!!node->setter()));
     props_->add(obj);
   }
 
@@ -344,17 +330,30 @@ class Analyzer : public PartialAstVisitor
     return toJson(te.resolved(), name);
   }
 
+  JsonString *toJson(VarDecl *decl, bool named) {
+    // :TODO: add a BuildTypeName(VarDecl) helper.
+    TypeDiagFlags flags = TypeDiagFlags::Names;
+    if (!!(decl->sym()->storage_flags() & StorageFlags::byref))
+      flags |= TypeDiagFlags::IsByRef;
+    if (!!(decl->sym()->storage_flags() & StorageFlags::constval))
+      flags |= TypeDiagFlags::IsConst;
+    return toJson(BuildTypeName(
+      decl->te(),
+      named ? decl->name() : nullptr,
+      flags).chars());
+  }
+
   JsonList *toJson(const ParameterList *params) {
     JsonList *list = new (pool_) JsonList();
     for (size_t i = 0; i < params->length(); i++) {
       VarDecl *decl = params->at(i);
       JsonObject *obj = new (pool_) JsonObject();
 
-      obj->add(atom_type_, toJson(decl->te()));
+      obj->add(atom_type_, toJson(decl, false));
 
       if (decl->name()) {
         obj->add(atom_name_, toJson(decl->name()));
-        obj->add(atom_decl_, toJson(decl->te(), decl->name()));
+        obj->add(atom_decl_, toJson(decl, true));
       } else {
         obj->add(atom_name_, toJson("..."));
 

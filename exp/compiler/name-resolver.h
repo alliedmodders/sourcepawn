@@ -53,7 +53,8 @@ class NameResolver
   MethodDecl *EnterMethodDecl(const SourceLocation &begin,
                               const NameToken &nameToken,
                               TypeSpecifier *spec,
-                              TypeExpr *te);
+                              TypeExpr *te,
+                              bool isStatic);
   void LeaveMethodDecl(MethodDecl *decl);
   PropertyDecl *EnterPropertyDecl(const SourceLocation &begin,
                                   const NameToken &nameToken,
@@ -98,7 +99,7 @@ class NameResolver
   void resolveUnboundNames();
   TypeExpr delay(const TypeSpecifier &spec);
   Type *resolveBase(TypeSpecifier &spec);
-  TypeExpr resolve(TypeSpecifier &spec);
+  TypeExpr resolve(TypeSpecifier &spec, TypeSpecHelper *helper = nullptr);
 
  private:
   // Rather than create a Scope for every block we encounter, we place a

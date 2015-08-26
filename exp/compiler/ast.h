@@ -27,7 +27,7 @@
 #include "string-pool.h"
 #include "tokens.h"
 #include "type-specifier.h"
-#include "expr-ops.h"
+#include "value-attrs.h"
 #include <limits.h>
 
 namespace sp {
@@ -82,7 +82,6 @@ class CompileContext;
   _(FieldDecl)            \
   _(ThisExpression)       \
   _(DeleteStatement)      \
-  _(ImplicitCastExpr)     \
   _(FoldedExpr)           \
   _(ConstructTypesetExpr)
 
@@ -281,13 +280,10 @@ class FunctionSignature : public PoolObject
 class VarDecl : public Statement
 {
  public:
-  VarDecl(const NameToken &name,
-          const TypeExpr &te,
-          Expression *initialization)
+  VarDecl(const NameToken &name, Expression *initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
-     te_(te),
      sym_(nullptr),
      next_(nullptr)
   {
@@ -859,33 +855,6 @@ class ForStatement : public Statement
   }
 };
 
-// Implicit casts are added during semantic analysis, when following coercion
-// rules.
-class ImplicitCastExpr : public Expression
-{
- public:
-  ImplicitCastExpr(Expression *expr, CastOp op, Type *to, VK valueKind = VK::rvalue)
-   : Expression(expr->loc()),
-     expr_(expr),
-     op_(op)
-  {
-    setOutput(to, valueKind);
-  }
-
-  DECLARE_NODE(ImplicitCastExpr);
-
-  Expression *expr() const {
-    return expr_;
-  }
-  CastOp op() const {
-    return op_;
-  }
-
- private:
-  Expression *expr_;
-  CastOp op_;
-};
-
 // Used when invoking a typeset constructor.
 class ConstructTypesetExpr : public Expression
 {
@@ -1454,48 +1423,6 @@ class SwitchStatement : public Statement
   CaseValueList *table_;
 };
 
-class FunctionOrAlias
-{
- public:
-  FunctionOrAlias()
-   : fun_(nullptr),
-     alias_(nullptr)
-  {
-  }
-  FunctionOrAlias(FunctionNode *fun)
-   : fun_(fun),
-     alias_(nullptr)
-  { }
-  FunctionOrAlias(NameProxy *alias)
-   : fun_(nullptr),
-     alias_(alias)
-  {
-  }
-
-  bool isEmpty() const {
-    return !alias_ && !fun_;
-  }
-
-  bool isAlias() const {
-    return !!alias_;
-  }
-  NameProxy *alias() const {
-    assert(isAlias());
-    return alias_;
-  }
-
-  bool isFunction() const {
-    return !!fun_;
-  }
-  FunctionNode *fun() const {
-    return fun_;
-  }
-
- private:
-  FunctionNode *fun_;
-  NameProxy *alias_;
-};
-
 class LayoutDecl : public Statement
 {
  public:
@@ -1543,12 +1470,12 @@ class FieldDecl : public LayoutDecl
 class MethodDecl : public LayoutDecl
 {
  public:
-  MethodDecl(const SourceLocation &loc, const NameToken &name,
-             const FunctionOrAlias &method)
+  MethodDecl(const SourceLocation &loc, const NameToken &name, bool isStatic)
    : LayoutDecl(loc),
      name_(name),
-     method_(method),
-     sym_(nullptr)
+     method_(nullptr),
+     sym_(nullptr),
+     static_(isStatic)
   {}
 
   DECLARE_NODE(MethodDecl);
@@ -1556,11 +1483,15 @@ class MethodDecl : public LayoutDecl
   Atom *name() const {
     return name_.atom;
   }
-  FunctionOrAlias *method() {
-    return &method_;
+  FunctionNode* method() {
+    return method_;
   }
-  void setMethod(const FunctionOrAlias &method) {
-    method_ = method;
+  void setMethod(FunctionNode* node) {
+    method_ = node;
+  }
+
+  bool isStatic() const {
+    return static_;
   }
 
   void setSymbol(MethodSymbol *sym) {
@@ -1573,8 +1504,9 @@ class MethodDecl : public LayoutDecl
 
  private:
   NameToken name_;
-  FunctionOrAlias method_;
+  FunctionNode* method_;
   MethodSymbol *sym_;
+  bool static_;
 };
 
 class PropertyDecl : public LayoutDecl
@@ -1584,6 +1516,8 @@ class PropertyDecl : public LayoutDecl
    : LayoutDecl(loc),
      name_(name),
      te_(spec),
+     getter_(nullptr),
+     setter_(nullptr),
      sym_(nullptr)
   {}
 
@@ -1598,11 +1532,18 @@ class PropertyDecl : public LayoutDecl
   const TypeExpr &te() const {
     return te_;
   }
-  FunctionOrAlias *getter() {
-    return &getter_;
+  FunctionNode *getter() {
+    return getter_;
   }
-  FunctionOrAlias *setter() {
-    return &setter_;
+  FunctionNode *setter() {
+    return setter_;
+  }
+
+  void setGetter(FunctionNode *get) {
+    getter_ = get;
+  }
+  void setSetter(FunctionNode *set) {
+    setter_ = set;
   }
 
   void setSymbol(PropertySymbol *sym) {
@@ -1616,8 +1557,8 @@ class PropertyDecl : public LayoutDecl
  private:
   NameToken name_;
   TypeExpr te_;
-  FunctionOrAlias getter_;
-  FunctionOrAlias setter_;
+  FunctionNode* getter_;
+  FunctionNode* setter_;
   PropertySymbol *sym_;
 };
 

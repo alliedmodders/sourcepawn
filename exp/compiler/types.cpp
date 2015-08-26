@@ -74,6 +74,8 @@ Type *
 Type::NewQualified(Type *type, Qualifiers qualifiers)
 {
   assert(!type->isQualified());
+  assert(!(qualifiers & Qualifiers::Const) ||
+         TypeSupportsTransitiveConst(type));
   Type *qual = new (POOL()) Type(Kind::Qualifier, type);
   qual->qualifiers_ = qualifiers;
   return qual;
@@ -85,17 +87,6 @@ ArrayType::New(Type *contained, int elements)
   ArrayType *type = new (POOL()) ArrayType(Kind::Array);
   type->contained_ = contained;
   type->elements_ = elements;
-  return type;
-}
-
-ReferenceType *
-ReferenceType::New(Type *contained)
-{
-  ReferenceType *type = new (POOL()) ReferenceType();
-
-  assert(!contained->isReference());
-
-  type->contained_ = contained;
   return type;
 }
 
@@ -155,8 +146,8 @@ Type::Compare(Type *left, Type *right)
       return true;
 
     default:
-      assert(left->kind_ == Type::Kind::Reference);
-      return Compare(left->toReference()->contained(), right->toReference()->contained());
+      assert(false);
+      return false;
   }
 }
 
@@ -210,11 +201,30 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "bool";
     case PrimitiveType::Char:
       return "char";
-    case PrimitiveType::ImplicitInt:
-    case PrimitiveType::Int32:
-      return "int";
     case PrimitiveType::Float:
       return "float";
+    case PrimitiveType::Double:
+      return "double";
+    case PrimitiveType::Int8:
+      return "int8";
+    case PrimitiveType::Uint8:
+      return "uint8";
+    case PrimitiveType::Int16:
+      return "int16";
+    case PrimitiveType::Uint16:
+      return "uint16";
+    case PrimitiveType::Int32:
+      return "int";
+    case PrimitiveType::Uint32:
+      return "uint";
+    case PrimitiveType::Int64:
+      return "int64";
+    case PrimitiveType::Uint64:
+      return "uint64";
+    case PrimitiveType::NativeInt:
+      return "intn";
+    case PrimitiveType::NativeUint:
+      return "uintn";
     default:
       assert(false);
       return "unknown";
@@ -246,6 +256,10 @@ GetBaseTypeName(Type *type)
 static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags);
 static AString BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags);
 
+// When building inner typenames, only include these flags.
+static const TypeDiagFlags kDiagFlagsInnerMask =
+  TypeDiagFlags::Names;
+
 static AString
 BuildTypeFromTypeExpr(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
 {
@@ -258,14 +272,17 @@ static AString
 BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
 {
   AutoString base = "function ";
-  base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags);
+  base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags & kDiagFlagsInnerMask);
   base = base + "(";
 
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
+    TypeDiagFlags varFlags = flags & kDiagFlagsInnerMask;
     Atom *name = !!(flags & TypeDiagFlags::Names)
                  ? sig->parameters()->at(i)->name()
                  : nullptr;
-    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, flags);
+    if (sig->parameters()->at(i)->sym()->isByRef())
+      varFlags |= TypeDiagFlags::IsByRef;
+    base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, varFlags);
     if (i != sig->parameters()->length() - 1)
       base = base + ", ";
   }
@@ -277,7 +294,7 @@ static AString
 BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
 {
   AutoString base;
-  if (spec->isConst())
+  if (spec->isConst() || !!(flags & TypeDiagFlags::IsConst))
     base = "const ";
 
   switch (spec->resolver()) {
@@ -302,10 +319,10 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flag
       base = base + "int";
       break;
     case TOK_FUNCTION:
-      base = base + BuildTypeFromSignature(spec->signature(), flags);
+      base = base + BuildTypeFromSignature(spec->signature(), flags & kDiagFlagsInnerMask);
       break;
     case TOK_DEFINED:
-      base = base + BuildTypeName(spec->getResolvedBase(), nullptr, flags);
+      base = base + BuildTypeName(spec->getResolvedBase(), nullptr, flags & kDiagFlagsInnerMask);
       break;
     default:
       base = base + TokenNames[spec->resolver()];
@@ -374,11 +391,10 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     }
 
     AutoString builder;
-    if (aType->isConst()) {
+    if (aType->isConst() || !!(flags & TypeDiagFlags::IsConst))
       builder = "const ";
-    }
 
-    builder = builder + BuildTypeName(innermost, nullptr, flags);
+    builder = builder + BuildTypeName(innermost, nullptr, flags & kDiagFlagsInnerMask);
 
     bool hasFixedLengths = false;
     AutoString brackets;
@@ -403,25 +419,14 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     return AString(builder.ptr());
   }
 
-  if (ReferenceType *type = aType->asReference()) {
-    AutoString builder;
-    if (aType->isConst()) {
-      builder = "const ";
-    }
-
-    builder = builder + BuildTypeName(type->contained(), nullptr, flags);
-    if (name)
-      builder = builder + " &" + name->chars();
-    else
-      builder = builder + "&";
-    return AString(builder.ptr());
-  }
-
   AutoString builder;
   if (FunctionType *type = aType->asFunction())
-    builder = BuildTypeFromSignature(type->signature(), flags);
+    builder = BuildTypeFromSignature(type->signature(), flags & kDiagFlagsInnerMask);
   else
     builder = GetBaseTypeName(aType);
+  if (!!(flags & TypeDiagFlags::IsByRef)) {
+    builder = builder + "&";
+  }
   if (name)
     builder = builder + " " + name->chars();
   return AString(builder.ptr());
@@ -447,7 +452,6 @@ sp::DefaultValueForPlainType(Type *type)
       return BoxedValue(false);
     case PrimitiveType::Char:
       return BoxedValue(IntValue::FromInt8(0));
-    case PrimitiveType::ImplicitInt:
     case PrimitiveType::Int32:
       return BoxedValue(IntValue::FromInt32(0));
     case PrimitiveType::Float:
@@ -533,28 +537,10 @@ sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
 
   switch (a->canonicalKind()) {
     case Type::Kind::Primitive:
-      if (!b->isPrimitive())
-        return false;
-      if ((a->primitive() == PrimitiveType::ImplicitInt &&
-           b->primitive() == PrimitiveType::Int32) ||
-          (a->primitive() == PrimitiveType::Int32 &&
-           b->primitive() == PrimitiveType::ImplicitInt))
-      {
-        return true;
-      }
-      // a == b covered earlier.
+      // Either |b| is not primitive, or they should not have the same
+      // primitive type since each type is a singleton.
+      assert(!b->isPrimitive() || a->primitive() != b->primitive());
       return false;
-    case Type::Kind::Reference:
-    {
-      if (!b->isReference())
-        return false;
-
-      ReferenceType *ar = a->toReference();
-      ReferenceType *br = b->toReference();
-
-      // const is not transitive through references.
-      return AreTypesEquivalent(ar->contained(), br->contained(), Qualifiers::None);
-    }
     case Type::Kind::Function:
     {
       if (!b->isFunction())

@@ -1969,7 +1969,6 @@ IsUnimplementedKeyword(int token)
     case tUINT64:
     case tUINTN:
     case tUNION:
-    case tUSING:
     case tVAR:
     case tVARIANT:
     case tVIRTUAL:

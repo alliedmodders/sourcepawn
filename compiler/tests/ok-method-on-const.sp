@@ -5,7 +5,7 @@ enum Handle {
 };
 
 methodmap Handle {
-	public Close() = CloseHandle;
+	public native void Close();
 };
 
 public main()

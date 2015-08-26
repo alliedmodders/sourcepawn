@@ -42,9 +42,9 @@ const char *OpcodeNames[] = {
 
 #ifdef JIT_SPEW
 void
-SourcePawn::SpewOpcode(const sp_plugin_t *plugin, cell_t *start, cell_t *cip)
+SourcePawn::SpewOpcode(PluginRuntime *runtime, const cell_t *start, const cell_t *cip)
 {
-  fprintf(stdout, "  [%05d:%04d]", cip - (cell_t *)plugin->pcode, cip - start);
+  fprintf(stdout, "  [%05d:%04d]", cip - (cell_t *)runtime->code().bytes, cip - start);
 
   if (*cip >= OPCODES_TOTAL) {
     fprintf(stdout, " unknown-opcode\n");
@@ -87,15 +87,15 @@ SourcePawn::SpewOpcode(const sp_plugin_t *plugin, cell_t *start, cell_t *cip)
     case OP_JSLEQ:
       fprintf(stdout, "%05d:%04d",
         cip[1] / 4,
-        ((cell_t *)plugin->pcode + cip[1] / 4) - start);
+        ((cell_t *)runtime->code().bytes + cip[1] / 4) - start);
       break;
 
     case OP_SYSREQ_C:
     case OP_SYSREQ_N:
     {
       uint32_t index = cip[1];
-      if (index < plugin->num_natives)
-        fprintf(stdout, "%s", plugin->natives[index].name); 
+      if (index < runtime->image()->NumNatives())
+        fprintf(stdout, "%s", runtime->NativeAt(index)->name); 
       if (op == OP_SYSREQ_N)
         fprintf(stdout, " ; (%d args, index %d)", cip[2], index);
       else

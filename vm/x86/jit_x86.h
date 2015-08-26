@@ -99,7 +99,9 @@ class Compiler
  private:
   Label *labelAt(size_t offset);
   bool emitCall();
-  bool emitNativeCall(sp::OPCODE op);
+  bool emitSysreqN();
+  bool emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
+  bool emitSysreqC();
   bool emitSwitch();
   void emitGenArray(bool autozero);
   void emitCallThunks();
@@ -116,6 +118,9 @@ class Compiler
   ExternalAddress frmAddr() {
     return ExternalAddress(context_->addressOfFrm());
   }
+  ExternalAddress spAddr() {
+    return ExternalAddress(context_->addressOfSp());
+  }
 
   // Map a return address (i.e. an exit point from a function) to its source
   // cip. This lets us avoid tracking the cip during runtime. These are
@@ -128,7 +133,7 @@ class Compiler
   }
 
  private:
-  AssemblerX86 masm;
+  MacroAssemblerX86 masm;
   Environment *env_;
   PluginRuntime *rt_;
   PluginContext *context_;
@@ -141,7 +146,6 @@ class Compiler
   const cell_t *code_end_;
   Label *jump_map_;
   ke::Vector<BackwardJump> backward_jumps_;
-
   ke::Vector<CipMapEntry> cip_map_;
 
   // Errors.

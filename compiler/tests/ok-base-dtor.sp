@@ -1,10 +1,6 @@
-native Handle:CreateHandle(count);
-native CloseHandle(Handle:handle);
+native void CloseHandle(Handle:hndl);
 
-methodmap Handle {
-	public Handle() = CreateHandle;
-	public ~Handle() = CloseHandle;
-};
+using __intrinsics__.Handle;
 
 methodmap Crab < Handle {
 };

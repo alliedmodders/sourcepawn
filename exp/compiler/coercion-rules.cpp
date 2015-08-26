@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "semantic-analysis.h"
+#include "conversion.h"
 
 using namespace ke;
 using namespace sp;

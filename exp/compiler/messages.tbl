@@ -136,6 +136,8 @@ RMSG(coercion_diagnostic,           note,              "reason: %0")
 RMSG(cannot_use_type_as_value,      type,              "cannot use type '%0' as a value")
 RMSG(cannot_resolve_function,       type,              "cannot resolve '%0' to an implemented function")
 RMSG(function_has_no_impl,          type,              "function '%0' cannot be used as a value since it does not have a scripted body")
+RMSG(const_has_no_meaning,          type,              "const has no meaning on type '%0' in this context")
+RMSG(const_ref_has_no_meaning,      type,              "const reference has no meaning on type '%0' in this context")
 
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")

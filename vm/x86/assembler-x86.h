@@ -570,6 +570,17 @@ class AssemblerX86 : public Assembler
     emit1(0x68);
     writeInt32(imm);
   }
+  void push(DataLabel *src) {
+    emit1(0x68);
+    if (src->bound()) {
+      writeInt32(int32_t(src->offset()) - (position() + 4));
+    } else {
+      writeInt32(0xabcdef0);
+      src->use(pc());
+    }
+    if (!local_refs_.append(pc()))
+      outOfMemory_ = true;
+  }
   void pop(Register reg) {
     emit1(0x58 + reg.code);
   }
@@ -591,6 +602,10 @@ class AssemblerX86 : public Assembler
   }
   void breakpoint() {
     emit1(0xcc);
+  }
+
+  void leave() {
+    emit1(0xc9);
   }
 
   void fld32(const Operand &src) {
@@ -861,6 +876,64 @@ class AssemblerX86 : public Assembler
     int32_t delta = (pc() & ~(bytes - 1)) + bytes - pc();
     for (int32_t i = 0; i < delta; i++)
       emit1(0xcc);
+  }
+
+  static void GenerateFeatureDetection(AssemblerX86 &masm) {
+    masm.push(ebp);
+    masm.movl(ebp, esp);
+    masm.push(ebx);
+    {
+      // Get ECX, EDX feature bits at the first CPUID level.
+      masm.movl(eax, 1);
+      masm.cpuid();
+      masm.movl(eax, Operand(ebp, 8));
+      masm.movl(Operand(eax, 0), ecx);
+      masm.movl(eax, Operand(ebp, 12));
+      masm.movl(Operand(eax, 0), edx);
+    }
+
+    // Zero out bits we're not guaranteed to get.
+    masm.movl(eax, Operand(ebp, 16));
+    masm.movl(Operand(eax, 0), 0);
+
+    Label skip_level_7;
+    {
+      // Get EBX feature bits at 7th CPUID level.
+      masm.movl(eax, 0);
+      masm.cpuid();
+      masm.cmpl(eax, 7);
+      masm.j(below, &skip_level_7);
+      masm.movl(eax, 7);
+      masm.movl(ecx, 0);
+      masm.cpuid();
+      masm.movl(eax, Operand(ebp, 16));
+      masm.movl(Operand(eax, 0), ebx);
+    }
+    masm.bind(&skip_level_7);
+
+    masm.pop(ebx);
+    masm.pop(ebp);
+    masm.ret();
+  }
+
+  static void RunFeatureDetection(void *code) {
+    typedef void (*fn_t)(int *reg_ecx, int *reg_edx, int *reg_ebx);
+
+    int reg_ecx, reg_edx, reg_ebx;
+    ((fn_t)code)(&reg_ecx, &reg_edx, &reg_ebx);
+    
+    CPUFeatures features;
+    features.fpu = !!(reg_edx & (1 << 0));
+    features.mmx = !!(reg_edx & (1 << 23));
+    features.sse = !!(reg_edx & (1 << 25));
+    features.sse2 = !!(reg_edx & (1 << 26));
+    features.sse3 = !!(reg_ecx & (1 << 0));
+    features.ssse3 = !!(reg_ecx & (1 << 9));
+    features.sse4_1 = !!(reg_ecx & (1 << 19));
+    features.sse4_2 = !!(reg_ecx & (1 << 20));
+    features.avx = !!(reg_ecx & (1 << 28));
+    features.avx2 = !!(reg_ebx & (1 << 5));
+    SetFeatures(features);
   }
 
  private:

@@ -30,15 +30,15 @@ typedef PoolList<Symbol *> SymbolList;
 
 #define SCOPE_KIND_MAP(_)         \
   _(Global)                       \
-  _(Function)                     \
+  _(Argument)                     \
   _(Block)                        \
   _(Layout)
 
 // Global scope is the scope used for top-level user-defined names.
 class GlobalScope;
 
-// Function scope is used to hold a function's name and arguments.
-class FunctionScope;
+// Argument scope is used to hold a function's name and arguments.
+class ArgumentScope;
 
 // Block scope is used for local variables inside a block or function body.
 class BlockScope;
@@ -112,17 +112,17 @@ class Scope : public PoolObject
   Scope *enclosing_;
 };
 
-class FunctionScope : public Scope
+class ArgumentScope : public Scope
 {
  public:
-  static FunctionScope *New(PoolAllocator &pool);
+  static ArgumentScope *New(PoolAllocator &pool);
 
   virtual Kind kind() const override {
-    return Function;
+    return Argument;
   }
 
  private:
-  FunctionScope(PoolAllocator &pool);
+  ArgumentScope(PoolAllocator &pool);
 };
 
 class BlockScope : public Scope

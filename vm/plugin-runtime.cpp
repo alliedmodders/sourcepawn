@@ -69,10 +69,9 @@ PluginRuntime::Initialize()
     code_.bytes = aligned_code_;
   }
 
-  natives_ = new sp_native_t[image_->NumNatives()];
+  natives_ = new NativeEntry[image_->NumNatives()];
   if (!natives_)
     return false;
-  memset(natives_, 0, sizeof(sp_native_t) * image_->NumNatives());
 
   publics_ = new sp_public_t[image_->NumPublics()];
   if (!publics_)
@@ -209,9 +208,18 @@ PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_
   if (index >= image_->NumNatives())
     return SP_ERROR_INDEX;
 
-  sp_native_t *native = &natives_[index];
+  NativeEntry* native = &natives_[index];
 
-  native->pfn = pfn;
+  // The native must either be unbound, or it must be ephemeral or optional.
+  // Otherwise, we've already baked its address in at callsites and it's too
+  // late to fix them.
+  if (native->status == SP_NATIVE_BOUND &&
+      !(native->flags & (SP_NTVFLAG_OPTIONAL|SP_NTVFLAG_EPHEMERAL)))
+  {
+    return SP_ERROR_PARAM;
+  }
+
+  native->legacy_fn = pfn;
   native->status = pfn
                    ? SP_NATIVE_BOUND
                    : SP_NATIVE_UNBOUND;

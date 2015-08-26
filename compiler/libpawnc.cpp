@@ -1,4 +1,4 @@
-// vim: set sts=8 ts=2 sw=2 tw=99 noet:
+// vim: set sts=8 ts=2 sw=2 tw=99 et:
 /*  LIBPAWNC.C
  *
  *  A "glue file" for building the Pawn compiler as a DLL or shared library.
@@ -53,6 +53,8 @@ int pc_printf(const char *message,...)
   return ret;
 }
 
+unsigned sc_total_errors = 0;
+
 /* pc_error()
  * Called for producing error output.
  *    number      the error number (as documented in the manual)
@@ -80,6 +82,9 @@ static const char *prefix[3]={ "error", "fatal error", "warning" };
       idx = 1;
     else
       idx = 2;
+
+    if (idx == 0 || idx == 1)
+      sc_total_errors++;
 
     const char *pre=prefix[idx];
     if (firstline>=0)
@@ -234,9 +239,9 @@ char *pc_readsrc(void *handle,unsigned char *target,int maxchars)
         if (outptr < outend)
           *outptr++ = '\n';
       } else {
-				// Replace with \n.
-				*(outptr - 1) = '\n';
-			}
+        // Replace with \n.
+        *(outptr - 1) = '\n';
+      }
       break;
     }
   }
