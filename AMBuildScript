@@ -169,7 +169,8 @@ class Config(object):
     self.amtl = amtl_path
 
     cfg.cxxincludes += [
-      os.path.join(self.amtl, 'include'),
+      os.path.join(self.amtl, 'amtl'),
+      os.path.join(self.amtl),
       os.path.join(builder.sourcePath, 'include'),
     ]
 

@@ -2,7 +2,8 @@
 import os
 
 Includes = [
-  os.path.join(SP.amtl, 'include'),
+  os.path.join(SP.amtl, 'amtl'),
+  os.path.join(SP.amtl),
   os.path.join(builder.currentSourcePath),
   os.path.join(builder.currentSourcePath, '..', 'third_party'),
 
