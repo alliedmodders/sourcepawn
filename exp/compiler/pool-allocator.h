@@ -133,8 +133,8 @@ class PoolScope
   }
 
  private:
-  PoolScope(const PoolScope &other) KE_DELETE;
-  PoolScope &operator =(const PoolScope &other) KE_DELETE;
+  PoolScope(const PoolScope &other) = delete;
+  PoolScope &operator =(const PoolScope &other) = delete;
 };
 
 class PoolObject

@@ -25,13 +25,13 @@ using namespace SourcePawn;
 class SourcePawnFactory : public ISourcePawnFactory
 {
 public:
-	int ApiVersion() KE_OVERRIDE {
+	int ApiVersion() override {
 		return SOURCEPAWN_API_VERSION;
 	}
-	ISourcePawnEnvironment *NewEnvironment() KE_OVERRIDE {
+	ISourcePawnEnvironment *NewEnvironment() override {
 		return Environment::New();
 	}
-	ISourcePawnEnvironment *CurrentEnvironment() KE_OVERRIDE {
+	ISourcePawnEnvironment *CurrentEnvironment() override {
 		return Environment::get();
 	}
 } sFactory;

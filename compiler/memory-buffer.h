@@ -45,7 +45,7 @@ class MemoryBuffer : public ISmxBuffer
     free(buffer_);
   }
 
-  bool write(const void *bytes, size_t len) KE_OVERRIDE {
+  bool write(const void *bytes, size_t len) override {
     if (pos_ + len > end_)
       grow(len);
     memcpy(pos_, bytes, len);
@@ -53,7 +53,7 @@ class MemoryBuffer : public ISmxBuffer
     return true;
   }
 
-  size_t pos() const KE_OVERRIDE {
+  size_t pos() const override {
     return pos_ - buffer_;
   }
 

@@ -91,12 +91,12 @@ class PluginContext : public IPluginContext
   bool GetKey(int k, void **value);
   void Refresh();
   void ClearLastNativeError();
-  ISourcePawnEngine2 *APIv2() KE_OVERRIDE;
-  void ReportError(const char *fmt, ...) KE_OVERRIDE;
-  void ReportErrorVA(const char *fmt, va_list ap) KE_OVERRIDE;
-  void ReportFatalError(const char *fmt, ...) KE_OVERRIDE;
-  void ReportFatalErrorVA(const char *fmt, va_list ap) KE_OVERRIDE;
-  void ReportErrorNumber(int error) KE_OVERRIDE;
+  ISourcePawnEngine2 *APIv2() override;
+  void ReportError(const char *fmt, ...) override;
+  void ReportErrorVA(const char *fmt, va_list ap) override;
+  void ReportFatalError(const char *fmt, ...) override;
+  void ReportFatalErrorVA(const char *fmt, va_list ap) override;
+  void ReportErrorNumber(int error) override;
 
   bool Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result);
 

@@ -91,19 +91,19 @@ class FrameIterator : public SourcePawn::IFrameIterator
  public:
   FrameIterator();
 
-  bool Done() const KE_OVERRIDE {
+  bool Done() const override {
     return !ivk_;
   }
-  void Next() KE_OVERRIDE;
-  void Reset() KE_OVERRIDE;
+  void Next() override;
+  void Reset() override;
 
-  bool IsNativeFrame() const KE_OVERRIDE;
-  bool IsScriptedFrame() const KE_OVERRIDE;
-  const char *FunctionName() const KE_OVERRIDE;
-  const char *FilePath() const KE_OVERRIDE;
-  unsigned LineNumber() const KE_OVERRIDE;
-  IPluginContext *Context() const KE_OVERRIDE;
-  bool IsInternalFrame() const KE_OVERRIDE;
+  bool IsNativeFrame() const override;
+  bool IsScriptedFrame() const override;
+  const char *FunctionName() const override;
+  const char *FilePath() const override;
+  unsigned LineNumber() const override;
+  IPluginContext *Context() const override;
+  bool IsInternalFrame() const override;
 
   bool IsEntryFrame() const;
   FrameLayout* Frame() const;

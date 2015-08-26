@@ -73,57 +73,57 @@ class EmptyImage : public LegacyImage
   }
 
  public:
-  Code DescribeCode() const KE_OVERRIDE {
+  Code DescribeCode() const override {
     Code out;
     out.bytes = code_;
     out.length = sizeof(code_);
     out.version = CodeVersion::SP_1_1;
     return out;
   }
-  Data DescribeData() const KE_OVERRIDE {
+  Data DescribeData() const override {
     Data out;
     out.bytes = data_;
     out.length = sizeof(data_);
     return out;
   }
-  size_t NumNatives() const KE_OVERRIDE {
+  size_t NumNatives() const override {
     return 0;
   }
-  const char *GetNative(size_t index) const KE_OVERRIDE {
+  const char *GetNative(size_t index) const override {
     return nullptr;
   }
-  bool FindNative(const char *name, size_t *indexp) const KE_OVERRIDE {
+  bool FindNative(const char *name, size_t *indexp) const override {
     return false;
   }
-  size_t NumPublics() const KE_OVERRIDE {
+  size_t NumPublics() const override {
     return 0;
   }
-  void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const KE_OVERRIDE {
+  void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const override {
   }
-  bool FindPublic(const char *name, size_t *indexp) const KE_OVERRIDE {
+  bool FindPublic(const char *name, size_t *indexp) const override {
     return false;
   }
-  size_t NumPubvars() const KE_OVERRIDE {
+  size_t NumPubvars() const override {
     return 0;
   }
-  void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const KE_OVERRIDE {
+  void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const override {
   }
-  bool FindPubvar(const char *name, size_t *indexp) const KE_OVERRIDE {
+  bool FindPubvar(const char *name, size_t *indexp) const override {
     return false;
   }
-  size_t HeapSize() const KE_OVERRIDE {
+  size_t HeapSize() const override {
     return heap_size_;
   }
-  size_t ImageSize() const KE_OVERRIDE {
+  size_t ImageSize() const override {
     return 0;
   }
-  const char *LookupFile(uint32_t code_offset) KE_OVERRIDE {
+  const char *LookupFile(uint32_t code_offset) override {
     return nullptr;
   }
   const char *LookupFunction(uint32_t code_offset) {
     return nullptr;
   }
-  bool LookupLine(uint32_t code_offset, uint32_t *line) KE_OVERRIDE {
+  bool LookupLine(uint32_t code_offset, uint32_t *line) override {
     return false;
   }
 

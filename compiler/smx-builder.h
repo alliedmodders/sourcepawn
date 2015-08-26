@@ -70,14 +70,14 @@ class SmxBlobSection : public SmxSection
     extra_ = blob;
     extra_len_ = len;
   }
-  bool write(ISmxBuffer *buf) KE_OVERRIDE {
+  bool write(ISmxBuffer *buf) override {
     if (!buf->write(&t_, sizeof(t_)))
       return false;
     if (!extra_len_)
       return true;
     return buf->write(extra_, extra_len_);
   }
-  size_t length() const KE_OVERRIDE {
+  size_t length() const override {
     return sizeof(t_) + extra_len_;
   }
 
@@ -100,10 +100,10 @@ class SmxBlobSection<void> : public SmxSection
   void add(void *bytes, size_t len) {
     buffer_.write(bytes, len);
   }
-  bool write(ISmxBuffer *buf) KE_OVERRIDE {
+  bool write(ISmxBuffer *buf) override {
     return buf->write(buffer_.bytes(), buffer_.size());
   }
-  size_t length() const KE_OVERRIDE {
+  size_t length() const override {
     return buffer_.size();
   }
 
@@ -132,10 +132,10 @@ class SmxListSection : public SmxSection
   void add(const T &t) {
     list_.append(t);
   }
-  bool write(ISmxBuffer *buf) KE_OVERRIDE {
+  bool write(ISmxBuffer *buf) override {
     return buf->write(list_.buffer(), list_.length() * sizeof(T));
   }
-  size_t length() const KE_OVERRIDE {
+  size_t length() const override {
     return count() * sizeof(T);
   }
   size_t count() const {
@@ -176,8 +176,8 @@ class SmxNameTable : public SmxSection
     return index;
   }
 
-  bool write(ISmxBuffer *buf) KE_OVERRIDE;
-  size_t length() const KE_OVERRIDE {
+  bool write(ISmxBuffer *buf) override;
+  size_t length() const override {
     return buffer_size_;
   }
 

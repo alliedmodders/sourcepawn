@@ -40,22 +40,22 @@ class SmxV1Image
   }
 
  public:
-  Code DescribeCode() const KE_OVERRIDE;
-  Data DescribeData() const KE_OVERRIDE;
-  size_t NumNatives() const KE_OVERRIDE;
-  const char *GetNative(size_t index) const KE_OVERRIDE;
-  bool FindNative(const char *name, size_t *indexp) const KE_OVERRIDE;
-  size_t NumPublics() const KE_OVERRIDE;
-  void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const KE_OVERRIDE;
-  bool FindPublic(const char *name, size_t *indexp) const KE_OVERRIDE;
-  size_t NumPubvars() const KE_OVERRIDE;
-  void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const KE_OVERRIDE;
-  bool FindPubvar(const char *name, size_t *indexp) const KE_OVERRIDE;
-  size_t HeapSize() const KE_OVERRIDE;
-  size_t ImageSize() const KE_OVERRIDE;
-  const char *LookupFile(uint32_t code_offset) KE_OVERRIDE;
-  const char *LookupFunction(uint32_t code_offset) KE_OVERRIDE;
-  bool LookupLine(uint32_t code_offset, uint32_t *line) KE_OVERRIDE;
+  Code DescribeCode() const override;
+  Data DescribeData() const override;
+  size_t NumNatives() const override;
+  const char *GetNative(size_t index) const override;
+  bool FindNative(const char *name, size_t *indexp) const override;
+  size_t NumPublics() const override;
+  void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const override;
+  bool FindPublic(const char *name, size_t *indexp) const override;
+  size_t NumPubvars() const override;
+  void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const override;
+  bool FindPubvar(const char *name, size_t *indexp) const override;
+  size_t HeapSize() const override;
+  size_t ImageSize() const override;
+  const char *LookupFile(uint32_t code_offset) override;
+  const char *LookupFunction(uint32_t code_offset) override;
+  bool LookupLine(uint32_t code_offset, uint32_t *line) override;
 
  private:
    struct Section

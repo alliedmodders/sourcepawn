@@ -157,8 +157,8 @@ class NameResolver
     }
 
    private:
-    SymbolEnv(const SymbolEnv &other) KE_DELETE;
-    SymbolEnv &operator =(const SymbolEnv &other) KE_DELETE;
+    SymbolEnv(const SymbolEnv &other) = delete;
+    SymbolEnv &operator =(const SymbolEnv &other) = delete;
     
    private:
     Scope *scope_;

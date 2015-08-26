@@ -259,10 +259,10 @@ class ErrorReport : public SourcePawn::IErrorReport
      context_(cx)
   {}
 
-  const char *Message() const KE_OVERRIDE {
+  const char *Message() const override {
     return message_;
   }
-  bool IsFatal() const KE_OVERRIDE {
+  bool IsFatal() const override {
     switch (code_) {
       case SP_ERROR_HEAPLOW:
       case SP_ERROR_INVALID_ADDRESS:
@@ -284,7 +284,7 @@ class ErrorReport : public SourcePawn::IErrorReport
         return false;
     }
   }
-  IPluginContext *Context() const KE_OVERRIDE {
+  IPluginContext *Context() const override {
     return context_;
   }
 

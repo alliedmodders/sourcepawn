@@ -58,12 +58,12 @@ class SmxListSection : public SmxSection
   void append(const T &t) {
     list_.append(t);
   }
-  bool write(FILE *fp) KE_OVERRIDE {
+  bool write(FILE *fp) override {
     if (fwrite(list_.buffer(), sizeof(T), list_.length(), fp) != list_.length())
       return false;
     return true;
   }
-  size_t length() const KE_OVERRIDE {
+  size_t length() const override {
     return list_.length() * sizeof(T);
   }
 
@@ -93,8 +93,8 @@ class SmxNameTable : public SmxSection
     return index;
   }
 
-  bool write(FILE *fp) KE_OVERRIDE;
-  size_t length() const KE_OVERRIDE {
+  bool write(FILE *fp) override;
+  size_t length() const override {
     return buffer_size_;
   }
 

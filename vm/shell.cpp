@@ -52,7 +52,7 @@ DumpStack(IFrameIterator &iter)
 class ShellDebugListener : public IDebugListener
 {
 public:
-  void ReportError(const IErrorReport &report, IFrameIterator &iter) KE_OVERRIDE {
+  void ReportError(const IErrorReport &report, IFrameIterator &iter) override {
     fprintf(stdout, "Exception thrown: %s\n", report.Message());
     DumpStack(iter);
   }
