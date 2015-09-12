@@ -44,7 +44,7 @@
 #define UTF8MODE        0x2
 #define ISPACKED        0x4
 static cell litchar(const unsigned char **lptr,int flags);
-static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int automaton,int *cmptag);
+static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag);
 
 static void substallpatterns(unsigned char *line,int buffersize);
 static int match(const char *st,int end);
@@ -2870,7 +2870,7 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
   } /* if */
 }
 
-static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int automaton,int *cmptag)
+static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag)
 {
   symbol *firstmatch=NULL;
   symbol *sym=root->next;
@@ -2881,20 +2881,17 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int a
         && (sym->parent==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
         && (sym->fnumber<0 || sym->fnumber==fnumber))       /* check file number for scope */
     {
-      if (sym->ident==iFUNCTN || automaton<0)
-      {
-        if (cmptag==NULL)
-          return sym;   /* return first match */
-        /* return closest match or first match; count number of matches */
-        if (firstmatch==NULL)
-          firstmatch=sym;
-        assert(cmptag!=NULL);
-        if (*cmptag==0)
-          count++;
-        if (*cmptag==sym->tag) {
-          *cmptag=1;    /* good match found, set number of matches to 1 */
-          return sym;
-        } /* if */
+      if (cmptag==NULL)
+        return sym;   /* return first match */
+      /* return closest match or first match; count number of matches */
+      if (firstmatch==NULL)
+        firstmatch=sym;
+      assert(cmptag!=NULL);
+      if (*cmptag==0)
+        count++;
+      if (*cmptag==sym->tag) {
+        *cmptag=1;    /* good match found, set number of matches to 1 */
+        return sym;
       } /* if */
     } /*  */
     sym=sym->next;
@@ -2997,14 +2994,14 @@ symbol *findglb(const char *name, int filter)
  */
 symbol *findloc(const char *name)
 {
-  return find_symbol(&loctab,name,-1,-1,NULL);
+  return find_symbol(&loctab,name,-1,NULL);
 }
 
 symbol *findconst(const char *name,int *cmptag)
 {
   symbol *sym;
 
-  sym=find_symbol(&loctab,name,-1,-1,cmptag);  /* try local symbols first */
+  sym=find_symbol(&loctab,name,-1,cmptag);  /* try local symbols first */
   if (sym==NULL || sym->ident!=iCONSTEXPR) {   /* not found, or not a constant */
     if (cmptag)
       sym=FindTaggedInHashTable(sp_Globals,name,fcurrent,cmptag);
