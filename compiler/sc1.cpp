@@ -3106,7 +3106,7 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
   }
 
   if (!parse_new_typename(&tok, &type->tag))
-    goto err_out;
+    return FALSE;
 
   // Note: we could have already filled in the prefix array bits, so we check
   // that ident != iARRAY before looking for an open bracket.
@@ -3119,7 +3119,7 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
       type->dim[type->numdim++] = 0;
       if (!matchtoken(']')) {
         error(140);
-        goto err_out;
+        return FALSE;
       }
     } while (matchtoken('['));
     type->ident = iREFARRAY;
@@ -3130,18 +3130,13 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
     if (matchtoken('&')) {
       if (type->ident == iARRAY) {
         error(137);
-        goto err_out;
+        return FALSE;
       }
       type->ident = iREFERENCE;
     }
   }
 
-  type->tag = type->tag;
   return TRUE;
-
-err_out:
-  type->tag = type->tag;
-  return FALSE;
 }
 
 static void parse_old_array_dims(declinfo_t *decl, int flags)
