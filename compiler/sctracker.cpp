@@ -173,8 +173,8 @@ funcenum_t *funcenum_for_symbol(symbol *sym)
   for (arginfo *arg = sym->dim.arglist; arg->ident; arg++) {
     funcarg_t *dest = &ft.args[ft.argcount++];
 
-    dest->tagcount = arg->numtags;
-    memcpy(dest->tags, arg->tags, arg->numtags * sizeof(int));
+    dest->tagcount = 1;
+    dest->tags[0] = arg->tag;
 
     dest->dimcount = arg->numdim;
     memcpy(dest->dims, arg->dim, arg->numdim * sizeof(int));

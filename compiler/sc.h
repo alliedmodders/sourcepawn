@@ -71,8 +71,7 @@ typedef struct s_arginfo {  /* function argument info */
   char name[sNAMEMAX+1];
   char ident;           /* iVARIABLE, iREFERENCE, iREFARRAY or iVARARGS */
   char usage;           /* uCONST */
-  int *tags;            /* argument tag id. list */
-  int numtags;          /* number of tags in the tag list */
+  int tag;              /* argument tag id */
   int dim[sDIMEN_MAX];
   int idxtag[sDIMEN_MAX];
   int numdim;           /* number of dimensions */
@@ -297,8 +296,6 @@ typedef struct {
 
   // Type information.
   int tag;           // Same as tags[0].
-  int tags[MAXTAGS]; // List of tags if multi-tagged.
-  int numtags;       // Number of tags found.
   int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
   char usage;        // Usage flags.
   bool is_new;       // New-style declaration.
@@ -711,13 +708,12 @@ char *itoh(ucell val);
 int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
                          value *lval,int *resulttag);
 int matchtag(int formaltag,int actualtag,int allowcoerce);
-int checktag(int tags[],int numtags,int exprtag);
 int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval);
 int sc_getstateid(constvalue **automaton,constvalue **state);
 cell array_totalsize(symbol *sym);
 int matchtag_string(int ident, int tag);
-int checktag_string(value *sym1, value *sym2);
-int checktags_string(int tags[], int numtags, value *sym1);
+int checkval_string(value *sym1, value *sym2);
+int checktag_string(int tag, value *sym1);
 int lvalexpr(svalue *sval);
 
 /* function prototypes in SC4.C */
