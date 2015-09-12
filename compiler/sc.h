@@ -142,7 +142,6 @@ typedef struct s_symbol {
       short level;      /* number of dimensions below this level */
     } array;
   } dim;                /* for 'dimension', both functions and arrays */
-  constvalue *states;   /* list of state function/state variable ids + addresses */
   int fnumber;          /* static global variables: file number in which the declaration is visible */
   int lnumber;          /* line number (in the current source file) for the declaration */
   struct s_symbol **refer;  /* referrer list, functions that "use" this symbol */

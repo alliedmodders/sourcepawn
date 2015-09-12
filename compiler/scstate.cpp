@@ -331,33 +331,6 @@ static int checkconflict(statelist *psrc,statelist *ptgt)
  */
 void state_conflict(symbol *root)
 {
-  statelist *psrc,*ptgt;
-  constvalue *srcptr,*tgtptr;
-  symbol *sym;
-
-  assert(root!=NULL);
-  for (sym=root->next; sym!=NULL; sym=sym->next) {
-    if (sym->parent!=NULL || sym->ident!=iFUNCTN)
-      continue;                 /* hierarchical data type or no function */
-    if (sym->states==NULL)
-      continue;                 /* this function has no states */
-    for (srcptr=sym->states->next; srcptr!=NULL; srcptr=srcptr->next) {
-      if (srcptr->index==-1)
-        continue;               /* state list id -1 is a special case */
-      psrc=state_getlist_ptr(srcptr->index);
-      assert(psrc!=NULL);
-      for (tgtptr=srcptr->next; tgtptr!=NULL; tgtptr=tgtptr->next) {
-        if (tgtptr->index==-1)
-          continue;             /* state list id -1 is a special case */
-        ptgt=state_getlist_ptr(tgtptr->index);
-        assert(ptgt!=NULL);
-        if (psrc->fsa!=ptgt->fsa && strcmp(sym->name,uENTRYFUNC)!=0)
-          error(83,sym->name);  /* this function is part of another machine */
-        if (checkconflict(psrc,ptgt))
-          error(84,sym->name);  /* state conflict */
-      } /* for (tgtptr) */
-    } /* for (srcptr) */
-  } /* for (sym) */
 }
 
 /* check whether the two state lists (whose ids are passed in) share any

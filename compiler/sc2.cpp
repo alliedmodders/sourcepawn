@@ -2739,15 +2739,6 @@ static void free_symbol(symbol *sym)
       free(arg->tags);
     } /* for */
     free(sym->dim.arglist);
-    if (sym->states!=NULL) {
-      delete_consttable(sym->states);
-      free(sym->states);
-    } /* if */
-  } else if (sym->ident==iVARIABLE || sym->ident==iARRAY) {
-    if (sym->states!=NULL) {
-      delete_consttable(sym->states);
-      free(sym->states);
-    } /* if */
   } else if (sym->ident==iCONSTEXPR && (sym->usage & uENUMROOT)==uENUMROOT) {
     /* free the constant list of an enum root */
     assert(sym->dim.enumlist!=NULL);
@@ -2796,7 +2787,6 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
 {
   symbol *origRoot=root;
   symbol *sym,*parent_sym;
-  constvalue *stateptr;
   int mustdelete;
 
   /* erase only the symbols with a deeper nesting level than the
@@ -2870,10 +2860,6 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
         sym->usage |= uMISSING;
       if (sym->ident==iFUNCTN || sym->ident==iVARIABLE || sym->ident==iARRAY)
         sym->usage &= ~uDEFINE; /* clear "defined" flag */
-      /* set all states as "undefined" too */
-      if (sym->states!=NULL)
-        for (stateptr=sym->states->next; stateptr!=NULL; stateptr=stateptr->next)
-          stateptr->value=0;
       /* for user defined operators, also remove the "prototyped" flag, as
        * user-defined operators *must* be declared before use
        */
@@ -2895,10 +2881,7 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int a
         && (sym->parent==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
         && (sym->fnumber<0 || sym->fnumber==fnumber))       /* check file number for scope */
     {
-      assert(sym->states==NULL || sym->states->next!=NULL); /* first element of the state list is the "root" */
-      if (sym->ident==iFUNCTN
-          || (automaton<0 && sym->states==NULL)
-          || (automaton>=0 && sym->states!=NULL && state_getfsa(sym->states->next->index)==automaton))
+      if (sym->ident==iFUNCTN || automaton<0)
       {
         if (cmptag==NULL)
           return sym;   /* return first match */

@@ -43,128 +43,12 @@ void load_i();
  */
 void writeleader(symbol *root)
 {
-  int lbl_nostate,lbl_table;
-  int statecount;
-  symbol *sym;
-  constvalue *fsa, *state, *stlist;
-  int fsa_id,listid;
-  char lbl_default[sNAMEMAX+1];
-
   assert(code_idx==0);
 
   begcseg();
   stgwrite(";program exit point\n");
   stgwrite("\thalt 0\n\n");
   code_idx+=opcodes(1)+opargs(1);       /* calculate code length */
-
-  /* check whether there are any functions that have states */
-  for (sym=root->next; sym!=NULL; sym=sym->next)
-    if (sym->ident==iFUNCTN && (sym->usage & (uPUBLIC | uREAD))!=0 && sym->states!=NULL)
-      break;
-  if (sym==NULL)
-    return;             /* no function has states, nothing to do next */
-
-  /* generate an error function that is called for an undefined state */
-  stgwrite("\n;exit point for functions called from the wrong state\n");
-  lbl_nostate=getlabel();
-  setlabel(lbl_nostate);
-  stgwrite("\thalt ");
-  outval(AMX_ERR_INVSTATE,TRUE);
-  code_idx+=opcodes(1)+opargs(1);       /* calculate code length */
-
-  /* write the "state-selectors" table with all automatons (update the
-   * automatons structure too, as we are now assigning the address to
-   * each automaton state-selector variable)
-   */
-  assert(glb_declared==0);
-  begdseg();
-  for (fsa=sc_automaton_tab.next; fsa!=NULL; fsa=fsa->next) {
-    defstorage();
-    stgwrite("0\t; automaton ");
-    if (strlen(fsa->name)==0)
-      stgwrite("(anonymous)");
-    else
-      stgwrite(fsa->name);
-    stgwrite("\n");
-    fsa->value=glb_declared*sizeof(cell);
-    glb_declared++;
-  } /* for */
-
-  /* write stubs and jump tables for all state functions */
-  begcseg();
-  for (sym=root->next; sym!=NULL; sym=sym->next) {
-    if (sym->ident==iFUNCTN && (sym->usage & (uPUBLIC | uREAD))!=0 && sym->states!=NULL) {
-      stlist=sym->states->next;
-      assert(stlist!=NULL);     /* there should be at least one state item */
-      listid=stlist->index;
-      assert(listid==-1 || listid>0);
-      if (listid==-1 && stlist->next!=NULL) {
-        /* first index is the "fallback", take the next one (if available) */
-        stlist=stlist->next;
-        listid=stlist->index;
-      } /* if */
-      if (listid==-1) {
-        /* first index is the fallback, there is no second... */
-        strcpy(stlist->name,"0"); /* insert dummy label number */
-        /* this is an error, but we postpone adding the error message until the
-         * function definition
-         */
-        continue;
-      } /* if */
-      /* generate label numbers for all statelist ids */
-      for (stlist=sym->states->next; stlist!=NULL; stlist=stlist->next) {
-        assert(strlen(stlist->name)==0);
-        strcpy(stlist->name,itoh(getlabel()));
-      } /* for */
-      if (strcmp(sym->name,uENTRYFUNC)==0)
-        continue;               /* do not generate stubs for this special function */
-      sym->addr=code_idx;       /* fix the function address now */
-      /* get automaton id for this function */
-      assert(listid>0);
-      fsa_id=state_getfsa(listid);
-      assert(fsa_id>=0);        /* automaton 0 exists */
-      fsa=automaton_findid(fsa_id);
-      /* count the number of states actually used; at the sane time, check
-       * whether there is a default state function
-       */
-      statecount=0;
-      strcpy(lbl_default,itoh(lbl_nostate));
-      for (stlist=sym->states->next; stlist!=NULL; stlist=stlist->next) {
-        if (stlist->index==-1) {
-          assert(strlen(stlist->name)<sizeof lbl_default);
-          strcpy(lbl_default,stlist->name);
-        } else {
-          statecount+=state_count(stlist->index);
-        } /* if */
-      } /* for */
-      /* generate a stub entry for the functions */
-      stgwrite("\tload.pri ");
-      outval(fsa->value,FALSE);
-      stgwrite("\t; ");
-      stgwrite(sym->name);
-      stgwrite("\n");
-      code_idx+=opcodes(1)+opargs(1);   /* calculate code length */
-      lbl_table=getlabel();
-      ffswitch(lbl_table);
-      /* generate the jump table */
-      setlabel(lbl_table);
-      ffcase(statecount,lbl_default,TRUE);
-      for (state=sc_state_tab.next; state!=NULL; state=state->next) {
-        if (state->index==fsa_id) {
-          /* find the label for this list id */
-          for (stlist=sym->states->next; stlist!=NULL; stlist=stlist->next) {
-            if (stlist->index!=-1 && state_inlist(stlist->index,(int)state->value)) {
-              ffcase(state->value,stlist->name,FALSE);
-              break;
-            } /* if */
-          } /* for */
-          if (stlist==NULL && strtol(lbl_default,NULL,16)==lbl_nostate)
-            error(230,state->name,sym->name);  /* unimplemented state, no fallback */
-        } /* if (state belongs to automaton of function) */
-      } /* for (state) */
-      stgwrite("\n");
-    } /* if (is function, used & having states) */
-  } /* for (sym) */
 }
 
 /*  writetrailer

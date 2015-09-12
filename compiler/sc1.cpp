@@ -1906,17 +1906,6 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     /* we have either:
      * a) not found a matching variable (or rejected it, because it was a shadow)
      * b) found a global variable and we were looking for that global variable
-     * c) found a state variable in the automaton that we were looking for
-     */
-    assert(sym==NULL
-           || (sym->states==NULL)
-           || (sym->states!=NULL && sym->next!=NULL && sym->states->next->index==0));
-    /* a state variable may only have a single id in its list (so either this
-     * variable has no states, or it has a single list)
-     */
-    assert(sym==NULL || sym->states==NULL || sym->states->next->next==NULL);
-    /* it is okay for the (global) variable to exist, as long as it belongs to
-     * a different automaton
      */
     if (sym!=NULL && (sym->usage & uDEFINE)!=0)
       error(21,decl->name);     /* symbol already defined */
@@ -1963,8 +1952,6 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     if (sym==NULL) {    /* define only if not yet defined */
       sym=addvariable3(decl,address,sGLOBAL,slength);
     } else {            /* if declared but not yet defined, adjust the variable's address */
-      assert((sym->states==NULL)
-             || (sym->states->next!=NULL && sym->states->next->index==0 && sym->states->next->next==NULL));
       sym->addr=address;
       sym->codeaddr=code_idx;
       sym->usage|=uDEFINE;
@@ -5960,19 +5947,6 @@ static void make_report(symbol *root,FILE *log,char *sourcefile)
       fprintf(log,"\t\t\t<attribute name=\"entry\"/>\n");
     if ((sym->usage & uNATIVE)==0)
       fprintf(log,"\t\t\t<stacksize value=\"%ld\"/>\n",(long)sym->x.stacksize);
-    if (sym->states!=NULL) {
-      constvalue *stlist=sym->states->next;
-      assert(stlist!=NULL);     /* there should be at least one state item */
-      while (stlist!=NULL && stlist->index==-1)
-        stlist=stlist->next;
-      assert(stlist!=NULL);     /* state id should be found */
-      i=state_getfsa(stlist->index);
-      assert(i>=0);             /* automaton 0 exists */
-      stlist=automaton_findid(i);
-      assert(stlist!=NULL);     /* automaton should be found */
-      fprintf(log,"\t\t\t<automaton name=\"%s\"/>\n", strlen(stlist->name)>0 ? stlist->name : "(anonymous)");
-      //??? dump state decision table
-    } /* if */
     assert(sym->refer!=NULL);
     for (i=0; i<sym->numrefers; i++)
       if ((ref=sym->refer[i])!=NULL)
