@@ -831,7 +831,7 @@ static void append_debug_tables(SmxBuilder *builder, StringPool &pool, Ref<SmxNa
     for (arginfo *arg = sym->dim.arglist; arg->ident; arg++) {
       sp_fdbg_ntvarg_t argout;
       argout.ident = arg->ident;
-      argout.tagid = arg->tags[0];
+      argout.tagid = arg->tag;
       argout.dimcount = arg->numdim;
       argout.name = dbgnames->add(pool, arg->name);
       natives->add(&argout, sizeof(argout));

@@ -290,22 +290,19 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
   return TRUE;
 }
 
-int checktags_string(int tags[], int numtags, value *sym1)
+int checktag_string(int tag, value *sym1)
 {
-  int i;
   if (sym1->ident == iARRAY || sym1->ident == iREFARRAY)
-  {
     return FALSE;
-  }
-  for (i=0; i<numtags; i++) {
-    if ((sym1->tag == pc_tag_string && tags[i] == 0) ||
-        (sym1->tag == 0 && tags[i] == pc_tag_string))
-      return TRUE;
+  if ((sym1->tag == pc_tag_string && tag == 0) ||
+      (sym1->tag == 0 && tag == pc_tag_string))
+  {
+    return TRUE;
   }
   return FALSE;
 }
 
-int checktag_string(value *sym1, value *sym2)
+int checkval_string(value *sym1, value *sym2)
 {
   if (sym1->ident == iARRAY || sym2->ident == iARRAY ||
       sym1->ident == iREFARRAY || sym2->ident == iREFARRAY)
@@ -889,7 +886,7 @@ static void plnge2(void (*oper)(void),
       lval1->constval=calc(lval1->constval,oper,lval2->constval,&lval1->boolresult);
     } else {
       // For the purposes of tag matching, we consider the order to be irrelevant.
-      if (!checktag_string(lval1, lval2))
+      if (!checkval_string(lval1, lval2))
         matchtag(lval1->tag, lval2->tag, MATCHTAG_COMMUTATIVE|MATCHTAG_DEDUCE);
       (*oper)();                /* do the (signed) operation */
       lval1->ident=iEXPRESSION;
@@ -1342,7 +1339,7 @@ static int hier14(value *lval1)
     check_userop(NULL,lval2.tag,lval3.tag,2,&lval3,&lval2.tag);
     store(&lval3);      /* now, store the expression result */
   } /* if */
-  if (!oper && !checktag_string(&lval3, &lval2)) {
+  if (!oper && !checkval_string(&lval3, &lval2)) {
     if ((lval3.tag == pc_tag_string && lval2.tag != pc_tag_string) ||
         (lval3.tag != pc_tag_string && lval2.tag == pc_tag_string))
     {
@@ -2626,25 +2623,12 @@ static int findnamedarg(arginfo *arg,char *name)
   return -1;
 }
 
-int checktag(int tags[],int numtags,int exprtag)
+int checktag(int tag,int exprtag)
 {
-  int i;
   int errcount = errnum;
 
-  if (numtags > 1 && (exprtag & OBJECTTAG)) {
-    // This would allow leaking of the pointer, unless we verify that all tags
-    // are object tags. It's easiest to just forbid this. The feature is broken
-    // anyway since there is no way to determine the actual value's type.
-    error(135);
-    return FALSE;
-  }
-
-  assert(tags!=0);
-  assert(numtags>0);
-  for (i=0; i<numtags; i++) {
-    if (matchtag(tags[i],exprtag,MATCHTAG_COERCE|MATCHTAG_SILENT))
-      return TRUE;    /* matching tag */
-  }
+  if (matchtag(tag,exprtag,MATCHTAG_COERCE|MATCHTAG_SILENT))
+    return TRUE;    /* matching tag */
 
   // If matchtag() didn't error, report an error.
   if (errnum == errcount)
@@ -2925,8 +2909,8 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
          */
       } else {
         arglist[argpos]=ARG_DONE; /* flag argument as "present" */
-        if (arg[argidx].ident!=0 && arg[argidx].numtags==1)     /* set the expected tag, if any */
-          lval.cmptag=arg[argidx].tags[0];
+        if (arg[argidx].ident!=0)     /* set the expected tag, if any */
+          lval.cmptag=arg[argidx].tag;
         if (args.handling_this()) {
           lval = args.thisv().val;
           lvalue = args.thisv().lvalue;
@@ -2937,7 +2921,6 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
             lvalue = FALSE;
           }
         }
-        assert(sc_status==statFIRST || arg[argidx].ident == 0 || arg[argidx].tags!=NULL);
         switch (arg[argidx].ident) {
         case 0:
           /* On the first pass, we donm't have all of the parameter info.
@@ -2986,8 +2969,8 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           /* otherwise, the address is already in PRI */
           if (lval.sym!=NULL)
             markusage(lval.sym,uWRITTEN);
-          if (!checktags_string(arg[argidx].tags, arg[argidx].numtags, &lval)
-              && !checktag(arg[argidx].tags,arg[argidx].numtags,lval.tag))
+          if (!checktag_string(arg[argidx].tag, &lval)
+              && !checktag(arg[argidx].tag,lval.tag))
             error(213);
           break;
         case iVARIABLE:
@@ -3003,13 +2986,12 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           }
 
           /* otherwise, the expression result is already in PRI */
-          assert(arg[argidx].numtags>0);
 
           // Do not allow user operators to transform |this|.
           if (!args.handling_this())
-            check_userop(NULL,lval.tag,arg[argidx].tags[0],2,NULL,&lval.tag);
-          if (!checktags_string(arg[argidx].tags, arg[argidx].numtags, &lval))
-            checktag(arg[argidx].tags, arg[argidx].numtags, lval.tag);
+            check_userop(NULL,lval.tag,arg[argidx].tag,2,NULL,&lval.tag);
+          if (!checktag_string(arg[argidx].tag, &lval))
+            checktag(arg[argidx].tag, lval.tag);
           if (lval.tag!=0)
             append_constval(&taglst,arg[argidx].name,lval.tag,0);
           argidx++;               /* argument done */
@@ -3034,7 +3016,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
             } /* if */
           } /* if */
           /* otherwise, the address is already in PRI */
-          checktag(arg[argidx].tags,arg[argidx].numtags,lval.tag);
+          checktag(arg[argidx].tag,lval.tag);
           if (lval.tag!=0)
             append_constval(&taglst,arg[argidx].name,lval.tag,0);
           argidx++;               /* argument done */
@@ -3115,14 +3097,12 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           } /* if */
           /* address already in PRI */
 
-          checktag(arg[argidx].tags,arg[argidx].numtags,lval.tag);
+          checktag(arg[argidx].tag,lval.tag);
 
-          if (arg[argidx].numtags > 0) {
-            if ((arg[argidx].tags[0] != pc_tag_string && lval.tag == pc_tag_string) ||
-                (arg[argidx].tags[0] == pc_tag_string && lval.tag != pc_tag_string))
-            {
-              error(178, type_to_name(lval.tag), type_to_name(arg[argidx].tags[0]));
-            }
+          if ((arg[argidx].tag != pc_tag_string && lval.tag == pc_tag_string) ||
+              (arg[argidx].tag == pc_tag_string && lval.tag != pc_tag_string))
+          {
+            error(178, type_to_name(lval.tag), type_to_name(arg[argidx].tag));
           }
 
           if (lval.tag!=0)
@@ -3192,11 +3172,10 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
         heapalloc+=markheap(MEMUSE_STATIC, 1);
         sCallStackUsage++;
       } else {
-        int dummytag=arg[argidx].tags[0];
+        int dummytag=arg[argidx].tag;
         ldconst(arg[argidx].defvalue.val,sPRI);
-        assert(arg[argidx].numtags>0);
-        check_userop(NULL,arg[argidx].defvalue_tag,arg[argidx].tags[0],2,NULL,&dummytag);
-        assert(dummytag==arg[argidx].tags[0]);
+        check_userop(NULL,arg[argidx].defvalue_tag,arg[argidx].tag,2,NULL,&dummytag);
+        assert(dummytag==arg[argidx].tag);
       } /* if */
       args.next_arg();
     } else {

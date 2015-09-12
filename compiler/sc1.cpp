@@ -3106,7 +3106,7 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
   }
 
   if (!parse_new_typename(&tok, &type->tag))
-    goto err_out;
+    return FALSE;
 
   // Note: we could have already filled in the prefix array bits, so we check
   // that ident != iARRAY before looking for an open bracket.
@@ -3119,7 +3119,7 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
       type->dim[type->numdim++] = 0;
       if (!matchtoken(']')) {
         error(140);
-        goto err_out;
+        return FALSE;
       }
     } while (matchtoken('['));
     type->ident = iREFARRAY;
@@ -3130,20 +3130,13 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
     if (matchtoken('&')) {
       if (type->ident == iARRAY) {
         error(137);
-        goto err_out;
+        return FALSE;
       }
       type->ident = iREFERENCE;
     }
   }
 
-  type->tags[0] = type->tag;
-  type->numtags = 1;
   return TRUE;
-
-err_out:
-  type->tags[0] = type->tag;
-  type->numtags = 1;
-  return FALSE;
 }
 
 static void parse_old_array_dims(declinfo_t *decl, int flags)
@@ -3273,6 +3266,7 @@ static int parse_old_decl(declinfo_t *decl, int flags)
     type->usage |= uCONST;
   }
 
+  int tags[MAXTAGS], numtags = 0;
   if (flags & DECLFLAG_ARGUMENT) {
     if (matchtoken('&'))
       type->ident = iREFERENCE;
@@ -3280,7 +3274,7 @@ static int parse_old_decl(declinfo_t *decl, int flags)
     // grammar for multitags is:
     //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
     if (matchtoken('{')) {
-      while (type->numtags < MAXTAGS) {
+      while (numtags < MAXTAGS) {
         int tag = 0;
 
         if (!matchtoken('_')) {
@@ -3288,7 +3282,7 @@ static int parse_old_decl(declinfo_t *decl, int flags)
           if (expecttoken(tSYMBOL, &tok))
             tag = pc_addtag(tok.str);
         }
-        type->tags[type->numtags++] = tag;
+        tags[numtags++] = tag;
 
         if (matchtoken('}'))
           break;
@@ -3296,19 +3290,19 @@ static int parse_old_decl(declinfo_t *decl, int flags)
       }
       needtoken(':');
     }
-    if (type->numtags > 1)
+    if (numtags > 1)
       error(158);
   }
   
-  if (type->numtags == 0) {
+  if (numtags == 0) {
     if (matchtoken2(tLABEL, &tok))
-      type->tags[type->numtags++] = pc_addtag(tok.str);
+      tags[numtags++] = pc_addtag(tok.str);
     else
-      type->tags[type->numtags++] = 0;
+      tags[numtags++] = 0;
   }
 
   // All finished with tag stuff.
-  type->tag = type->tags[0];
+  type->tag = tags[0];
 
   // Look for varargs and end early.
   if (matchtoken(tELLIPS)) {
@@ -3512,8 +3506,7 @@ int parse_decl(declinfo_t *decl, int flags)
       // The most basic - "x[]" and that's it. Well, we know it has no tag and
       // we know its name. We might as well just complete the entire decl.
       strcpy(decl->name, ident.name);
-      decl->type.tags[decl->type.numtags++] = 0;
-      decl->type.tag = decl->type.tags[0];
+      decl->type.tag = 0;
       return TRUE;
     }
 
@@ -3558,7 +3551,6 @@ static void make_primitive(typeinfo_t *type, int tag)
 {
   memset(type, 0, sizeof(*type));
   type->tag = tag;
-  type->tags[type->numtags++] = type->tag;
   type->ident = iVARIABLE;
 }
 
@@ -3678,8 +3670,7 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
     arginfo *arg = &target->dim.arglist[1];
     if (arg->ident != iVARIABLE ||
         arg->hasdefault ||
-        arg->numtags != 1 ||
-        arg->tags[0] != type->tag)
+        arg->tag != type->tag)
     {
       error(150, pc_tagname(type->tag));
       return FALSE;
@@ -4813,10 +4804,7 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
   /* count arguments and save (first two) tags */
   while (arg=&sym->dim.arglist[count], arg->ident!=0) {
     if (count<2) {
-      if (arg->numtags>1)
-        error(65,count+1);  /* function argument may only have a single tag */
-      else if (arg->numtags==1)
-        tags[count]=arg->tags[0];
+      tags[count]=arg->tag;
     } /* if */
     if (opertok=='~' && count==0) {
       if (arg->ident!=iREFARRAY)
@@ -5284,7 +5272,6 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
       //
       // Switch our decl type to void.
       decl->type.tag = pc_tag_void;
-      decl->type.tags[0] = pc_tag_void;
     }
   }
 
@@ -5339,7 +5326,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
 
 static int argcompare(arginfo *a1,arginfo *a2)
 {
-  int result,level,i;
+  int result,level;
 
   result=1;
   if (result)
@@ -5347,9 +5334,7 @@ static int argcompare(arginfo *a1,arginfo *a2)
   if (result)
     result= a1->usage==a2->usage;           /* "const" flag */
   if (result)
-    result= a1->numtags==a2->numtags;       /* tags (number and names) */
-  for (i=0; result && i<a1->numtags; i++)
-    result= compare_tag(a1->tags[i], a2->tags[i]);
+    result= compare_tag(a1->tag, a2->tag);
   if (result)
     result= a1->numdim==a2->numdim;         /* array dimensions & index tags */
   for (level=0; result && level<a1->numdim; level++)
@@ -5410,19 +5395,10 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       memset(argptr, 0, sizeof(*argptr));
       strcpy(argptr->name, "this");
       argptr->ident = iVARIABLE;
-      argptr->tags = (int *)malloc(sizeof(int));
-      argptr->tags[0] = *thistag;
-      argptr->numtags = 1;
+      argptr->tag = *thistag;
       argptr->usage = uCONST;
     } else {
       argptr = &sym->dim.arglist[0];
-      if (!argptr->tags) {
-        // Something horrible happened, like a function declaration that was
-        // so messed up that we started parsing it inline and it matched an
-        // existing function with no arguments. Just bail out, because...
-        // what?
-        return 0;
-      }
     }
 
     symbol *sym = addvariable2(
@@ -5430,7 +5406,7 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       (argcnt+3)*sizeof(cell),
       argptr->ident,
       sLOCAL,
-      argptr->tags[0],
+      argptr->tag,
       argptr->dim,
       argptr->numdim,
       argptr->idxtag,
@@ -5448,12 +5424,10 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       declinfo_t decl;
 
       parse_decl(&decl, DECLFLAG_ARGUMENT|DECLFLAG_ENUMROOT);
-      assert(decl.type.numtags > 0);
 
       check_void_decl(&decl, TRUE);
 
       if (decl.type.ident == iVARARGS) {
-        assert(decl.type.numtags > 0);
         if ((sym->usage & uPROTOTYPED)==0) {
           /* redimension the argument list, add the entry iVARARGS */
           sym->dim.arglist=(arginfo*)realloc(sym->dim.arglist,(argcnt+2)*sizeof(arginfo));
@@ -5464,11 +5438,7 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
           sym->dim.arglist[argcnt].hasdefault=FALSE;
           sym->dim.arglist[argcnt].defvalue.val=0;
           sym->dim.arglist[argcnt].defvalue_tag=0;
-          sym->dim.arglist[argcnt].numtags=decl.type.numtags;
-          sym->dim.arglist[argcnt].tags=(int*)malloc(decl.type.numtags*sizeof decl.type.tags[0]);
-          if (sym->dim.arglist[argcnt].tags==NULL)
-            error(FATAL_ERROR_OOM);                 /* insufficient memory */
-          memcpy(sym->dim.arglist[argcnt].tags,decl.type.tags,decl.type.numtags*sizeof decl.type.tags[0]);
+          sym->dim.arglist[argcnt].tag = decl.type.tag;
         } else {
           if (argcnt>oldargcnt || sym->dim.arglist[argcnt].ident!=iVARARGS)
             error(25);          /* function definition does not match prototype */
@@ -5510,7 +5480,6 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
         /* may need to free default array argument and the tag list */
         if (arg.ident==iREFARRAY && arg.hasdefault)
           free(arg.defvalue.array.data);
-        free(arg.tags);
       } /* if */
       argcnt++;
     } while (matchtoken(','));
@@ -5549,8 +5518,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
     arg->numdim = type->numdim;
     memcpy(arg->dim, type->dim, sizeof(int) * type->numdim);
     memcpy(arg->idxtag, type->idxtag, sizeof(int) * type->numdim);
-    assert(type->numtags > 0);
-    if (type->tags[0] == pc_tag_string) {
+    if (type->tag == pc_tag_string) {
       slength = arg->dim[arg->numdim - 1];
       arg->dim[arg->numdim - 1] = (type->size + sizeof(cell) - 1) / sizeof(cell);
     }
@@ -5579,7 +5547,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
           // Dynamic array with fixed initializer.
           error(160);
         }
-        initials2(type->ident, type->tags[0], &type->size, arg->dim, arg->numdim, type->enumroot, 1, 0);
+        initials2(type->ident, type->tag, &type->size, arg->dim, arg->numdim, type->enumroot, 1, 0);
         assert(type->size >= litidx);
         /* allocate memory to hold the initial values */
         arg->defvalue.array.data=(cell *)malloc(litidx*sizeof(cell));
@@ -5614,17 +5582,12 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
       assert(type->ident==iVARIABLE || type->ident==iREFERENCE);
       arg->hasdefault=TRUE;     /* argument has a default value */
       exprconst(&arg->defvalue.val,&arg->defvalue_tag,NULL);
-      assert(type->numtags <= 1);
-      matchtag(type->tags[0], arg->defvalue_tag, TRUE);
+      matchtag(type->tag, arg->defvalue_tag, TRUE);
     } /* if */
   } /* if */
   arg->ident=(char)type->ident;
   arg->usage=type->usage;
-  arg->numtags=type->numtags;
-  arg->tags=(int*)malloc(type->numtags * sizeof(type->tags[0]));
-  if (arg->tags==NULL)
-    error(FATAL_ERROR_OOM);                 /* insufficient memory */
-  memcpy(arg->tags, type->tags, type->numtags * sizeof(type->tags[0]));
+  arg->tag = type->tag;
   argsym=findloc(decl->name);
   if (argsym!=NULL) {
     error(21, decl->name);      /* symbol already defined */
@@ -5632,8 +5595,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
     if (chkshadow && (argsym=findglb(decl->name,sSTATEVAR))!=NULL && argsym->ident!=iFUNCTN)
       error(219, decl->name);   /* variable shadows another symbol */
     /* add details of type and address */
-    assert(type->numtags > 0);
-    argsym=addvariable2(decl->name,offset,type->ident,sLOCAL,type->tags[0],
+    argsym=addvariable2(decl->name,offset,type->ident,sLOCAL,type->tag,
                        arg->dim,arg->numdim,arg->idxtag,slength);
     argsym->compound=0;
     if (type->ident==iREFERENCE)
@@ -6015,26 +5977,16 @@ static void make_report(symbol *root,FILE *log,char *sourcefile)
       else
         fprintf(log,"\t\t\t<param name=\"%s\">\n",sym->dim.arglist[arg].name);
       /* print the tag name(s) for each parameter */
-      assert(sym->dim.arglist[arg].numtags>0);
-      assert(sym->dim.arglist[arg].tags!=NULL);
-      paraminfo=(sym->dim.arglist[arg].numtags>1 || sym->dim.arglist[arg].tags[0]!=0)
+      paraminfo=(sym->dim.arglist[arg].tag!=0)
                 || sym->dim.arglist[arg].ident==iREFERENCE
                 || sym->dim.arglist[arg].ident==iREFARRAY;
       if (paraminfo)
         fprintf(log,"\t\t\t\t<paraminfo>");
-      if (sym->dim.arglist[arg].numtags>1 || sym->dim.arglist[arg].tags[0]!=0) {
+      if (sym->dim.arglist[arg].tag!=0) {
         assert(paraminfo);
-        if (sym->dim.arglist[arg].numtags>1)
-          fprintf(log," {");
-        for (i=0; i<sym->dim.arglist[arg].numtags; i++) {
-          if (i>0)
-            fprintf(log,",");
-          tagsym=find_tag_byval(sym->dim.arglist[arg].tags[i]);
-          assert(tagsym!=NULL);
-          fprintf(log,"%s",tagsym->name);
-        } /* for */
-        if (sym->dim.arglist[arg].numtags>1)
-          fprintf(log,"}");
+        tagsym=find_tag_byval(sym->dim.arglist[arg].tag);
+        assert(tagsym!=NULL);
+        fprintf(log,"%s",tagsym->name);
       } /* if */
       switch (sym->dim.arglist[arg].ident) {
       case iREFERENCE:
