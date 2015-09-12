@@ -749,7 +749,6 @@ void ffbounds(cell size);
 void jumplabel(int number);
 void defstorage(void);
 void modstk(int delta);
-void setstk(cell value);
 void modheap(int delta);
 void modheap_i();
 void setheap_pri(void);

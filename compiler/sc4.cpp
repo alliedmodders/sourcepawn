@@ -823,15 +823,6 @@ void modstk(int delta)
   } /* if */
 }
 
-/* set the stack to a hard offset from the frame */
-void setstk(cell value)
-{
-  stgwrite("\tstackadjust ");
-  assert(value<=0);             /* STK should always become <= FRM */
-  outval(value, TRUE);        /* add (negative) offset */
-  code_idx+=opcodes(1)+opargs(1);
-}
-
 void modheap(int delta)
 {
   if (delta) {

@@ -6420,9 +6420,7 @@ static void dolabel(void)
   /* since one can jump around variable declarations or out of compound
    * blocks, the stack must be manually adjusted
    */
-  //:TODO: This is actually generated, egads!
-  //We have to support this and LCTRL/SCTRL
-  setstk(-declared*sizeof(cell));
+  error(82);
   sym->usage|=uDEFINE;  /* label is now defined */
 }
 
