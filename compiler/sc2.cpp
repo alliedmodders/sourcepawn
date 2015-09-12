@@ -456,11 +456,6 @@ static void stripcom(unsigned char *line)
         #if !defined SC_LIGHT
           /* there must be two "*" behind the slash and then white space */
           if (*(line+2)=='*' && *(line+3)<=' ') {
-            /* if we are not in a function, we must attach the previous block
-             * to the global documentation
-             */
-            if (curfunc==NULL && get_docstring(0)!=NULL)
-              sc_attachdocumentation(NULL);
             icomment=2; /* documentation comment */
           } /* if */
           commentidx=0;
@@ -483,11 +478,6 @@ static void stripcom(unsigned char *line)
               str++;    /* skip leading whitespace */
             if ((end=strrchr(str,'\n'))!=NULL)
               *end='\0';/* erase trailing '\n' */
-            /* if there is a disjunct block, we may need to attach the previous
-             * block to the global documentation
-             */
-            if (!singleline && curfunc==NULL && get_docstring(0)!=NULL)
-              sc_attachdocumentation(NULL);
             insert_docstring(str);
             prev_singleline=TRUE;
           } /* if */
@@ -1019,11 +1009,7 @@ static int command(void)
   case tpPRAGMA:
     if (!SKIPPING) {
       if (lex(&val,&str)==tSYMBOL) {
-        if (strcmp(str,"amxlimit")==0) {
-          preproc_expr(&pc_amxlimit,NULL);
-        } else if (strcmp(str,"amxram")==0) {
-          preproc_expr(&pc_amxram,NULL);
-        } else if (strcmp(str,"codepage")==0) {
+        if (strcmp(str,"codepage")==0) {
           char name[sNAMEMAX+1];
           while (*lptr<=' ' && *lptr!='\0')
             lptr++;

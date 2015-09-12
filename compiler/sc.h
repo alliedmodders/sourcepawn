@@ -644,7 +644,6 @@ constvalue *append_constval(constvalue *table,const char *name,cell val,int inde
 constvalue *find_constval(constvalue *table,char *name,int index);
 void delete_consttable(constvalue *table);
 symbol *add_constant(const char *name,cell val,int vclass,int tag);
-void sc_attachdocumentation(symbol *sym);
 constvalue *find_tag_byval(int tag);
 int get_actual_compound(symbol *sym);
 
@@ -900,7 +899,6 @@ extern int sc_debug;        /* debug/optimization options (bit field) */
 extern int sc_packstr;      /* strings are packed by default? */
 extern int sc_asmfile;      /* create .ASM file? */
 extern int sc_listing;      /* create .LST file? */
-extern int sc_compress;     /* compress bytecode? */
 extern int sc_needsemicolon;/* semicolon required to terminate expressions? */
 extern int sc_dataalign;    /* data alignment value */
 extern int sc_alignnext;    /* must frame of the next function be aligned? */
@@ -908,8 +906,6 @@ extern int pc_docexpr;      /* must expression be attached to documentation comm
 extern int sc_showincludes; /* show include files? */
 extern int curseg;          /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;     /* stack size */
-extern cell pc_amxlimit;    /* abstract machine size limit (code + data, or only code) */
-extern cell pc_amxram;      /* abstract machine data size limit */
 extern int freading;        /* is there an input file ready for reading? */
 extern int fline;           /* the line number in the current file */
 extern short fnumber;       /* number of files in the file table (debugging) */
@@ -954,10 +950,6 @@ extern void *inpf_org;      /* main source file */
 extern void *outf;          /* file written to */
 
 extern jmp_buf errbuf;      /* target of longjmp() on a fatal error */
-
-#if !defined SC_LIGHT
-  extern int sc_makereport; /* generate a cross-reference report */
-#endif
 
 #if defined WIN32
 # if !defined snprintf
