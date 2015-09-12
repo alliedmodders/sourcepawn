@@ -842,13 +842,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
     if (isoption) {
       ptr=&argv[arg][1];
       switch (*ptr) {
-      case 'A':
-        i=atoi(option_value(ptr,argv,argc,&arg));
-        if ((i % sizeof(cell))==0)
-          sc_dataalign=i;
-        else
-          about();
-        break;
       case 'a':
         if (*(ptr+1)!='\0')
           about();
@@ -1193,7 +1186,6 @@ static void about(void)
     setcaption();
     pc_printf("Usage:   spcomp <filename> [filename...] [options]\n\n");
     pc_printf("Options:\n");
-    pc_printf("         -A<num>  alignment in bytes of the data segment and the stack\n");
     pc_printf("         -a       output assembler code\n");
     pc_printf("         -c<name> codepage name or number; e.g. 1252 for Windows Latin-1\n");
 #if defined dos_setdrive
