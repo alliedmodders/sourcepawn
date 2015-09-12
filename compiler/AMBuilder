@@ -53,7 +53,6 @@ binary.sources += [
   'sci18n.cpp',
   'sclist.cpp',
   'scmemfil.cpp',
-  'scstate.cpp',
   'sctracker.cpp',
   'scvars.cpp',
   'smx-builder.cpp',

@@ -44,7 +44,7 @@
 #define UTF8MODE        0x2
 #define ISPACKED        0x4
 static cell litchar(const unsigned char **lptr,int flags);
-static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int automaton,int *cmptag);
+static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag);
 
 static void substallpatterns(unsigned char *line,int buffersize);
 static int match(const char *st,int end);
@@ -1121,7 +1121,7 @@ static int command(void)
             /* get the symbol */
             sym=findloc(name);
             if (sym==NULL)
-              sym=findglb(name,sSTATEVAR);
+              sym=findglb(name);
             if (sym!=NULL) {
               sym->usage |= uREAD;
               if (sym->ident==iVARIABLE || sym->ident==iREFERENCE
@@ -2737,15 +2737,6 @@ static void free_symbol(symbol *sym)
         free(arg->defvalue.array.data);
     } /* for */
     free(sym->dim.arglist);
-    if (sym->states!=NULL) {
-      delete_consttable(sym->states);
-      free(sym->states);
-    } /* if */
-  } else if (sym->ident==iVARIABLE || sym->ident==iARRAY) {
-    if (sym->states!=NULL) {
-      delete_consttable(sym->states);
-      free(sym->states);
-    } /* if */
   } else if (sym->ident==iCONSTEXPR && (sym->usage & uENUMROOT)==uENUMROOT) {
     /* free the constant list of an enum root */
     assert(sym->dim.enumlist!=NULL);
@@ -2794,7 +2785,6 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
 {
   symbol *origRoot=root;
   symbol *sym,*parent_sym;
-  constvalue *stateptr;
   int mustdelete;
 
   /* erase only the symbols with a deeper nesting level than the
@@ -2868,10 +2858,6 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
         sym->usage |= uMISSING;
       if (sym->ident==iFUNCTN || sym->ident==iVARIABLE || sym->ident==iARRAY)
         sym->usage &= ~uDEFINE; /* clear "defined" flag */
-      /* set all states as "undefined" too */
-      if (sym->states!=NULL)
-        for (stateptr=sym->states->next; stateptr!=NULL; stateptr=stateptr->next)
-          stateptr->value=0;
       /* for user defined operators, also remove the "prototyped" flag, as
        * user-defined operators *must* be declared before use
        */
@@ -2882,7 +2868,7 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
   } /* if */
 }
 
-static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int automaton,int *cmptag)
+static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag)
 {
   symbol *firstmatch=NULL;
   symbol *sym=root->next;
@@ -2893,23 +2879,17 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int a
         && (sym->parent==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
         && (sym->fnumber<0 || sym->fnumber==fnumber))       /* check file number for scope */
     {
-      assert(sym->states==NULL || sym->states->next!=NULL); /* first element of the state list is the "root" */
-      if (sym->ident==iFUNCTN
-          || (automaton<0 && sym->states==NULL)
-          || (automaton>=0 && sym->states!=NULL && state_getfsa(sym->states->next->index)==automaton))
-      {
-        if (cmptag==NULL)
-          return sym;   /* return first match */
-        /* return closest match or first match; count number of matches */
-        if (firstmatch==NULL)
-          firstmatch=sym;
-        assert(cmptag!=NULL);
-        if (*cmptag==0)
-          count++;
-        if (*cmptag==sym->tag) {
-          *cmptag=1;    /* good match found, set number of matches to 1 */
-          return sym;
-        } /* if */
+      if (cmptag==NULL)
+        return sym;   /* return first match */
+      /* return closest match or first match; count number of matches */
+      if (firstmatch==NULL)
+        firstmatch=sym;
+      assert(cmptag!=NULL);
+      if (*cmptag==0)
+        count++;
+      if (*cmptag==sym->tag) {
+        *cmptag=1;    /* good match found, set number of matches to 1 */
+        return sym;
       } /* if */
     } /*  */
     sym=sym->next;
@@ -3000,32 +2980,9 @@ void markusage(symbol *sym,int usage)
  *
  *  Returns a pointer to the global symbol (if found) or NULL (if not found)
  */
-symbol *findglb(const char *name, int filter)
+symbol *findglb(const char *name)
 {
-  /* find a symbol with a matching automaton first */
-  symbol *sym=NULL;
-
-  if (filter>sGLOBAL && sc_curstates>0) {
-    /* find a symbol whose state list matches the current fsa */
-    sym=find_symbol(&glbtab,name,fcurrent,state_getfsa(sc_curstates),NULL);
-    if (sym!=NULL && sym->ident!=iFUNCTN) {
-      /* if sym!=NULL, we found a variable in the automaton; now we should
-       * also verify whether there is an intersection between the symbol's
-       * state list and the current state list
-       */
-      assert(sym->states!=NULL && sym->states->next!=NULL);
-      if (!state_conflict_id(sc_curstates,sym->states->next->index))
-        sym=NULL;
-    } /* if */
-  } /* if */
-
-  /* if no symbol with a matching automaton exists, find a variable/function
-   * that has no state(s) attached to it
-   */
-  if (sym==NULL)
-    sym=FindInHashTable(sp_Globals,name,fcurrent);
-
-  return sym;
+  return FindInHashTable(sp_Globals,name,fcurrent);
 }
 
 /*  findloc
@@ -3035,14 +2992,14 @@ symbol *findglb(const char *name, int filter)
  */
 symbol *findloc(const char *name)
 {
-  return find_symbol(&loctab,name,-1,-1,NULL);
+  return find_symbol(&loctab,name,-1,NULL);
 }
 
 symbol *findconst(const char *name,int *cmptag)
 {
   symbol *sym;
 
-  sym=find_symbol(&loctab,name,-1,-1,cmptag);  /* try local symbols first */
+  sym=find_symbol(&loctab,name,-1,cmptag);  /* try local symbols first */
   if (sym==NULL || sym->ident!=iCONSTEXPR) {   /* not found, or not a constant */
     if (cmptag)
       sym=FindTaggedInHashTable(sp_Globals,name,fcurrent,cmptag);
@@ -3141,9 +3098,8 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
    * "redeclared" if they are local to an automaton (and findglb() will find
    * the symbol without states if no symbol with states exists).
    */
-  assert(vclass!=sGLOBAL || (sym=findglb(name,sGLOBAL))==NULL || (sym->usage & uDEFINE)==0
-         || (sym->ident==iFUNCTN && sym==curfunc)
-         || (sym->states==NULL && sc_curstates>0));
+  assert(vclass!=sGLOBAL || (sym=findglb(name))==NULL || (sym->usage & uDEFINE)==0
+         || (sym->ident==iFUNCTN && sym==curfunc));
 
   if (ident==iARRAY || ident==iREFARRAY) {
     symbol *parent=NULL,*top;

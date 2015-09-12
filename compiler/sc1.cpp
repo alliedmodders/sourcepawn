@@ -115,7 +115,6 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
 static void initials3(declinfo_t *decl);
 static cell fix_char_size(declinfo_t *decl);
 static cell init(int ident,int *tag,int *errorfound);
-static int getstates(const char *funcname);
 static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag);
 static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstatic, int stock, symbol **symp);
 static int declargs(symbol *sym, int chkshadow, const int *thistag);
@@ -377,7 +376,6 @@ int pc_compile(int argc, char *argv[])
 
   /* second (or third) pass */
   sc_status=statWRITE;                  /* set, to enable warnings */
-  state_conflict(&glbtab);
 
   /* write a report, if requested */
   #if !defined SC_LIGHT
@@ -506,9 +504,6 @@ cleanup:
   DestroyHashTable(sp_Globals);
   delete_consttable(&tagname_tab);
   delete_consttable(&libname_tab);
-  delete_consttable(&sc_automaton_tab);
-  delete_consttable(&sc_state_tab);
-  state_deletetable();
   delete_aliastable();
   delete_pathtable();
   delete_sourcefiletable();
@@ -729,7 +724,6 @@ static void resetglobals(void)
   sc_alignnext=FALSE;
   pc_docexpr=FALSE;
   pc_deprecate=NULL;
-  sc_curstates=0;
   pc_memflags=0;
 }
 
@@ -1367,8 +1361,6 @@ static void setconstants(void)
   else if ((sc_debug & sCHKBOUNDS)==sCHKBOUNDS)
     debug=1;
   add_constant("debug",debug,sGLOBAL,0);
-
-  append_constval(&sc_automaton_tab,"",0,0);    /* anonymous automaton */
 }
 
 static void dodecl(const token_t *tok)
@@ -1900,40 +1892,13 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       assert(!fstatic);
     }
     slength = fix_char_size(decl);
-    assert(sc_curstates==0);
-    sc_curstates=getstates(decl->name);
-    if (sc_curstates<0) {
-      error(85,decl->name);           /* empty state list on declaration */
-      sc_curstates=0;
-    } else if (sc_curstates>0 && ispublic) {
-      error(88,decl->name);           /* public variables may not have states */
-      sc_curstates=0;
-    } /* if */
     sym=findconst(decl->name,NULL);
     if (sym==NULL) {
-      sym=findglb(decl->name,sSTATEVAR);
-      /* if a global variable without states is found and this declaration has
-       * states, the declaration is okay
-       */
-      if (sym!=NULL && sym->states==NULL && sc_curstates>0)
-        sym=NULL;               /* set to NULL, we found the global variable */
-      if (sc_curstates>0 && findglb(decl->name,sGLOBAL)!=NULL)
-        error(233,decl->name);  /* state variable shadows a global variable */
+      sym=findglb(decl->name);
     } /* if */
     /* we have either:
      * a) not found a matching variable (or rejected it, because it was a shadow)
      * b) found a global variable and we were looking for that global variable
-     * c) found a state variable in the automaton that we were looking for
-     */
-    assert(sym==NULL
-           || (sym->states==NULL && sc_curstates==0)
-           || (sym->states!=NULL && sym->next!=NULL && sym->states->next->index==sc_curstates));
-    /* a state variable may only have a single id in its list (so either this
-     * variable has no states, or it has a single list)
-     */
-    assert(sym==NULL || sym->states==NULL || sym->states->next->next==NULL);
-    /* it is okay for the (global) variable to exist, as long as it belongs to
-     * a different automaton
      */
     if (sym!=NULL && (sym->usage & uDEFINE)!=0)
       error(21,decl->name);     /* symbol already defined */
@@ -1980,14 +1945,11 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     if (sym==NULL) {    /* define only if not yet defined */
       sym=addvariable3(decl,address,sGLOBAL,slength);
     } else {            /* if declared but not yet defined, adjust the variable's address */
-      assert((sym->states==NULL && sc_curstates==0)
-             || (sym->states->next!=NULL && sym->states->next->index==sc_curstates && sym->states->next->next==NULL));
       sym->addr=address;
       sym->codeaddr=code_idx;
       sym->usage|=uDEFINE;
     } /* if */
     assert(sym!=NULL);
-    sc_curstates=0;
     if (ispublic)
       sym->usage|=uPUBLIC|uREAD;
     if (decl->type.usage & uCONST)
@@ -2083,7 +2045,7 @@ static void declloc(int tokid)
      * level might indicate a bug.
      */
     if (((sym=findloc(decl.name)) != NULL && sym->compound != nestlevel) ||
-        findglb(decl.name,sGLOBAL) != NULL)
+        findglb(decl.name) != NULL)
     {
       error(219, decl.name);            /* variable shadows another symbol */
     }
@@ -3809,7 +3771,7 @@ methodmap_method_t *parse_method(methodmap_t *map)
 void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
 {
   if (can_redef) {
-    symbol *sym = findglb(map->name, sGLOBAL);
+    symbol *sym = findglb(map->name);
     if (sym && sym->ident != iMETHODMAP) {
       // We should only hit this on the first pass. Assert really hard that
       // we're about to kill an enum definition and not something random.
@@ -3822,7 +3784,7 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
       // Kill previous enumstruct properties, if any.
       if (sym->usage & uENUMROOT) {
         for (constvalue *cv = sym->dim.enumlist; cv; cv = cv->next) {
-          symbol *csym = findglb(cv->name, sGLOBAL);
+          symbol *csym = findglb(cv->name);
           if (csym &&
               csym->ident == iCONSTEXPR &&
               csym->parent == sym &&
@@ -3863,7 +3825,7 @@ static void declare_handle_intrinsics()
 
   declare_methodmap_symbol(map, true);
 
-  if (symbol* sym = findglb("CloseHandle", sGLOBAL)) {
+  if (symbol* sym = findglb("CloseHandle")) {
     map->dtor = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
     map->dtor->target = sym;
     strcpy(map->dtor->name, "~Handle");
@@ -4506,7 +4468,7 @@ static void decl_enum(int vclass)
 
   if (strlen(enumname)>0) {
     if (vclass == sGLOBAL) {
-      if ((enumsym = findglb(enumname, vclass)) != NULL) {
+      if ((enumsym = findglb(enumname)) != NULL) {
         // If we were previously defined as a methodmap, don't overwrite the
         // symbol. Otherwise, flow into add_constant where we will error.
         if (enumsym->ident != iMETHODMAP)
@@ -4597,75 +4559,6 @@ static void decl_enum(int vclass)
   } /* if */
 }
 
-static int getstates(const char *funcname)
-{
-  char fsaname[sNAMEMAX+1],statename[sNAMEMAX+1];
-  cell val;
-  char *str;
-  constvalue *automaton;
-  constvalue *state;
-  int fsa,islabel;
-  int *list;
-  int count,listsize,state_id;
-
-  if (!matchtoken('<'))
-    return 0;
-  if (matchtoken('>'))
-    return -1;          /* special construct: all other states (fall-back) */
-
-  count=0;
-  listsize=0;
-  list=NULL;
-  fsa=-1;
-
-  do {
-    if (!(islabel=matchtoken(tLABEL)) && !needtoken(tSYMBOL))
-      break;
-    tokeninfo(&val,&str);
-    assert(strlen(str)<sizeof fsaname);
-    strcpy(fsaname,str);  /* assume this is the name of the automaton */
-    if (islabel || matchtoken(':')) {
-      /* token is an automaton name, add the name and get a new token */
-      if (!needtoken(tSYMBOL))
-        break;
-      tokeninfo(&val,&str);
-      assert(strlen(str)<sizeof statename);
-      strcpy(statename,str);
-    } else {
-      /* the token was the state name (part of an anynymous automaton) */
-      assert(strlen(fsaname)<sizeof statename);
-      strcpy(statename,fsaname);
-      fsaname[0]='\0';
-    } /* if */
-    if (fsa<0 || fsaname[0]!='\0') {
-      automaton=automaton_add(fsaname);
-      assert(automaton!=NULL);
-      if (fsa>=0 && automaton->index!=fsa)
-        error(83,funcname); /* multiple automatons for a single function/variable */
-      fsa=automaton->index;
-    } /* if */
-    state=state_add(statename,fsa);
-    /* add this state to the state combination list (it will be attached to the
-     * automaton later) */
-    state_buildlist(&list,&listsize,&count,(int)state->value);
-  } while (matchtoken(','));
-  needtoken('>');
-
-  if (count>0) {
-    assert(automaton!=NULL);
-    assert(fsa>=0);
-    state_id=state_addlist(list,count,fsa);
-    assert(state_id>0);
-  } else {
-    /* error is already given */
-    state_id=0;
-  } /* if */
-  if (list!=NULL)
-    free(list);
-
-  return state_id;
-}
-
 // This simpler version of matchtag() only checks whether two tags represent
 // the same type. Because methodmaps are attached to types and are not actually
 // types themselves, we strip out the methodmap bit in case a methodmap was
@@ -4683,7 +4576,7 @@ symbol *fetchfunc(char *name)
 {
   symbol *sym;
 
-  if ((sym=findglb(name,sGLOBAL))!=0) {   /* already in symbol table? */
+  if ((sym=findglb(name))!=0) {   /* already in symbol table? */
     if (sym->ident!=iFUNCTN) {
       error(21,name);                     /* yes, but not as a function */
       return NULL;                        /* make sure the old symbol is not damaged */
@@ -4846,7 +4739,7 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
   /* change the operator name */
   assert(strlen(opername)>0);
   operator_symname(tmpname,opername,tags[0],tags[1],count,resulttag);
-  if ((oldsym=findglb(tmpname,sGLOBAL))!=NULL) {
+  if ((oldsym=findglb(tmpname))!=NULL) {
     int i;
     if ((oldsym->usage & uDEFINE)!=0) {
       char errname[2*sNAMEMAX+16];
@@ -5039,13 +4932,6 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
   sc_attachdocumentation(sym);  /* attach any documenation to the function */
   if (!operatoradjust(decl->opertok,sym,decl->name,decl->type.tag))
     sym->usage &= ~uDEFINE;
-
-  if (getstates(decl->name)!=0) {
-    if (fnative || decl->opertok!=0)
-      error(82);                /* native functions and operators may not have states */
-    else
-      error(231);               /* ignoring state specifications on forward declarations */
-  } /* if */
 
   /* for a native operator, also need to specify an "exported" function name;
    * for a native function, this is optional
@@ -5530,7 +5416,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
         char *name;
         cell val;
         tokeninfo(&val,&name);
-        if ((sym=findglb(name, sGLOBAL)) == NULL) {
+        if ((sym=findglb(name)) == NULL) {
           error(17, name);      /* undefined symbol */
         } else {
           arg->hasdefault=TRUE; /* argument as a default value */
@@ -5592,7 +5478,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
   if (argsym!=NULL) {
     error(21, decl->name);      /* symbol already defined */
   } else {
-    if (chkshadow && (argsym=findglb(decl->name,sSTATEVAR))!=NULL && argsym->ident!=iFUNCTN)
+    if (chkshadow && (argsym=findglb(decl->name))!=NULL && argsym->ident!=iFUNCTN)
       error(219, decl->name);   /* variable shadows another symbol */
     /* add details of type and address */
     argsym=addvariable2(decl->name,offset,type->ident,sLOCAL,type->tag,
@@ -5816,7 +5702,7 @@ static void make_report(symbol *root,FILE *log,char *sourcefile)
       while (enumroot!=NULL) {
         fprintf(log,"\t\t\t<member name=\"C:%s\" value=\"%d\">\n",funcdisplayname(symname,enumroot->name),enumroot->value);
         /* find the constant with this name and get the tag */
-        ref=findglb(enumroot->name,sGLOBAL);
+        ref=findglb(enumroot->name);
         if (ref!=NULL) {
           if (ref->x.tags.index!=0) {
             tagsym=find_tag_byval(ref->x.tags.index);
@@ -5940,19 +5826,6 @@ static void make_report(symbol *root,FILE *log,char *sourcefile)
       fprintf(log,"\t\t\t<attribute name=\"entry\"/>\n");
     if ((sym->usage & uNATIVE)==0)
       fprintf(log,"\t\t\t<stacksize value=\"%ld\"/>\n",(long)sym->x.stacksize);
-    if (sym->states!=NULL) {
-      constvalue *stlist=sym->states->next;
-      assert(stlist!=NULL);     /* there should be at least one state item */
-      while (stlist!=NULL && stlist->index==-1)
-        stlist=stlist->next;
-      assert(stlist!=NULL);     /* state id should be found */
-      i=state_getfsa(stlist->index);
-      assert(i>=0);             /* automaton 0 exists */
-      stlist=automaton_findid(i);
-      assert(stlist!=NULL);     /* automaton should be found */
-      fprintf(log,"\t\t\t<automaton name=\"%s\"/>\n", strlen(stlist->name)>0 ? stlist->name : "(anonymous)");
-      //??? dump state decision table
-    } /* if */
     assert(sym->refer!=NULL);
     for (i=0; i<sym->numrefers; i++)
       if ((ref=sym->refer[i])!=NULL)
@@ -6201,7 +6074,7 @@ static void destructsymbols(symbol *root,int level)
       cell elements;
       /* check that the '~' operator is defined for this tag */
       operator_symname(symbolname,"~",sym->tag,0,1,0);
-      if ((opsym=findglb(symbolname,sGLOBAL))!=NULL) {
+      if ((opsym=findglb(symbolname))!=NULL) {
         /* save PRI, in case of a return statment */
         if (!savepri) {
           pushreg(sPRI);        /* right-hand operand is in PRI */
@@ -6335,7 +6208,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
   /* Test whether a global or local symbol with the same name exists. Since
    * constants are stored in the symbols table, this also finds previously
    * defind constants. */
-  sym=findglb(name,sSTATEVAR);
+  sym=findglb(name);
   if (!sym)
     sym=findloc(name);
   if (sym) {

@@ -180,7 +180,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
   assert(numparam==1 || numparam==2);
   operator_symname(symbolname,opername,tag1,tag2,numparam,tag2);
   swapparams=FALSE;
-  sym=findglb(symbolname,sGLOBAL);
+  sym=findglb(symbolname);
   if (sym==NULL /*|| (sym->usage & uDEFINE)==0*/) {  /* ??? should not check uDEFINE; first pass clears these bits */
     /* check for commutative operators */
     if (tag1==tag2 || oper==NULL || !commutative(oper))
@@ -191,7 +191,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
     assert(numparam==2);        /* commutative operator must be a binary operator */
     operator_symname(symbolname,opername,tag2,tag1,numparam,tag1);
     swapparams=TRUE;
-    sym=findglb(symbolname,sGLOBAL);
+    sym=findglb(symbolname);
     if (sym==NULL /*|| (sym->usage & uDEFINE)==0*/)
       return FALSE;
   } /* if */
@@ -993,59 +993,6 @@ int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval
   return lval.ident;
 }
 
-int sc_getstateid(constvalue **automaton,constvalue **state)
-{
-  char name[sNAMEMAX+1];
-  cell val;
-  char *str;
-  int fsa,islabel;
-
-  assert(automaton!=NULL);
-  assert(state!=NULL);
-  if (!(islabel=matchtoken(tLABEL)) && !needtoken(tSYMBOL))
-    return 0;
-
-  tokeninfo(&val,&str);
-  assert(strlen(str)<sizeof name);
-  strcpy(name,str);
-  if (islabel || matchtoken(':')) {
-    /* token is an automaton name, add the name and get a new token */
-    *automaton=automaton_find(name);
-    /* read in the state name before checking the automaton, to keep the parser
-     * going (an "unknown automaton" error may occur when the "state" instruction
-     * precedes any state definition)
-     */
-    if (!needtoken(tSYMBOL))
-      return 0;
-    tokeninfo(&val,&str);        /* do not copy the name yet, must check automaton first */
-    if (*automaton==NULL) {
-      error(86,name);            /* unknown automaton */
-      return 0;
-    } /* if */
-    assert((*automaton)->index>0);
-    assert(strlen(str)<sizeof name);
-    strcpy(name,str);
-  } else {
-    *automaton=automaton_find("");
-    assert(*automaton!=NULL);
-    assert((*automaton)->index==0);
-  } /* if */
-  assert(*automaton!=NULL);
-  fsa=(*automaton)->index;
-
-  assert(*automaton!=NULL);
-  *state=state_find(name,fsa);
-  if (*state==NULL) {
-    const char *fsaname=(*automaton)->name;
-    if (*fsaname=='\0')
-      fsaname="<main>";
-    error(87,name,fsaname);   /* unknown state for automaton */
-    return 0;
-  } /* if */
-
-  return 1;
-}
-
 cell array_totalsize(symbol *sym)
 {
   cell length;
@@ -1729,7 +1676,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     sym=findloc(st);
     if (sym==NULL)
-      sym=findglb(st,sSTATEVAR);
+      sym=findglb(st);
     if (sym!=NULL && sym->ident!=iFUNCTN && sym->ident!=iREFFUNC && (sym->usage & uDEFINE)==0)
       sym=NULL;                 /* symbol is not a function, it is in the table, but not "defined" */
     val= (sym!=NULL);
@@ -1752,7 +1699,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     sym=findloc(st);
     if (sym==NULL)
-      sym=findglb(st,sSTATEVAR);
+      sym=findglb(st);
     if (sym==NULL)
       return error(17,st);      /* undefined symbol */
     if (sym->ident==iCONSTEXPR)
@@ -1807,7 +1754,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     sym=findloc(st);
     if (sym==NULL)
-      sym=findglb(st,sSTATEVAR);
+      sym=findglb(st);
     if (sym==NULL)
       return error(17,st);      /* undefined symbol */
     if (sym->ident==iCONSTEXPR)
@@ -1865,7 +1812,7 @@ static int hier2(value *lval)
     } else {
       sym=findloc(st);
       if (sym==NULL)
-        sym=findglb(st,sSTATEVAR);
+        sym=findglb(st);
       if (sym==NULL)
         return error(17,st);      /* undefined symbol */
       if ((sym->usage & uDEFINE)==0)
@@ -2508,7 +2455,7 @@ static int primary(value *lval)
       } /* if */
     } /* if */
     /* now try a global variable */
-    if ((sym = findglb(st, sSTATEVAR)) != 0) {
+    if ((sym = findglb(st)) != 0) {
       if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
         /* if the function is only in the table because it was inserted as a
          * stub in the first pass (i.e. it was "used" but never declared or

@@ -94,7 +94,6 @@ typedef struct s_constvalue {
   char name[sNAMEMAX+1];
   cell value;
   int index;            /* index level, for constants referring to array sizes/tags
-                         * automaton id. for states and automatons
                          * tag for enumeration lists */
 } constvalue;
 
@@ -141,7 +140,6 @@ typedef struct s_symbol {
       short level;      /* number of dimensions below this level */
     } array;
   } dim;                /* for 'dimension', both functions and arrays */
-  constvalue *states;   /* list of state function/state variable ids + addresses */
   int fnumber;          /* static global variables: file number in which the declaration is visible */
   int lnumber;          /* line number (in the current source file) for the declaration */
   struct s_symbol **refer;  /* referrer list, functions that "use" this symbol */
@@ -232,8 +230,6 @@ typedef struct s_symbol {
 #define sGLOBAL   0     /* global variable/constant class (no states) */
 #define sLOCAL    1     /* local variable/constant */
 #define sSTATIC   2     /* global life, local scope */
-
-#define sSTATEVAR  3    /* criterion to find variables (sSTATEVAR implies a global variable) */
 
 struct methodmap_method_s;
 
@@ -686,7 +682,7 @@ void delete_symbol(symbol *root,symbol *sym);
 void delete_symbols(symbol *root,int level,int del_labels,int delete_functions);
 int refer_symbol(symbol *entry,symbol *bywhom);
 void markusage(symbol *sym,int usage);
-symbol *findglb(const char *name,int filter);
+symbol *findglb(const char *name);
 symbol *findloc(const char *name);
 symbol *findconst(const char *name,int *matchtag);
 symbol *finddepend(const symbol *parent);
@@ -709,7 +705,6 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
                          value *lval,int *resulttag);
 int matchtag(int formaltag,int actualtag,int allowcoerce);
 int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval);
-int sc_getstateid(constvalue **automaton,constvalue **state);
 cell array_totalsize(symbol *sym);
 int matchtag_string(int ident, int tag);
 int checkval_string(value *sym1, value *sym2);
@@ -870,23 +865,6 @@ cell cp_translate(const unsigned char *string,const unsigned char **endptr);
 cell get_utf8_char(const unsigned char *string,const unsigned char **endptr);
 int scan_utf8(void *fp,const char *filename);
 
-/* function prototypes in SCSTATE.C */
-constvalue *automaton_add(const char *name);
-constvalue *automaton_find(const char *name);
-constvalue *automaton_findid(int id);
-constvalue *state_add(const char *name,int fsa_id);
-constvalue *state_find(const char *name,int fsa_id);
-constvalue *state_findid(int id);
-void state_buildlist(int **list,int *listsize,int *count,int stateid);
-int state_addlist(int *list,int count,int fsa_id);
-void state_deletetable(void);
-int state_getfsa(int listid);
-int state_count(int listid);
-int state_inlist(int listid,int state);
-int state_listitem(int listid,int index);
-void state_conflict(symbol *root);
-int state_conflict_id(int listid1,int listid2);
-
 /* external variables (defined in scvars.c) */
 #if !defined SC_SKIP_VDECL
 typedef struct HashTable HashTable;
@@ -949,7 +927,6 @@ extern int rational_digits; /* number of fractional digits */
 extern int sc_allowproccall;/* allow/detect tagnames in lex() */
 extern short sc_is_utf8;    /* is this source file in UTF-8 encoding */
 extern char *pc_deprecate;  /* if non-NULL, mark next declaration as deprecated */
-extern int sc_curstates;    /* ID of the current state list */
 extern int pc_optimize;     /* (peephole) optimization level */
 extern int pc_memflags;     /* special flags for the stack/heap usage */
 extern int pc_functag;      /* global function tag */
@@ -971,9 +948,6 @@ static inline bool cc_ok()
 {
   return sc_status == statWRITE && sc_total_errors == 0;
 }
-
-extern constvalue sc_automaton_tab; /* automaton table */
-extern constvalue sc_state_tab;     /* state table */
 
 extern void *inpf;          /* file read from (source or include) */
 extern void *inpf_org;      /* main source file */

@@ -89,15 +89,11 @@ int rational_digits=0;  /* number of fractional digits */
 int sc_allowproccall=0; /* allow/detect tagnames in lex() */
 short sc_is_utf8=FALSE; /* is this source file in UTF-8 encoding */
 char *pc_deprecate=NULL;/* if non-null, mark next declaration as deprecated */
-int sc_curstates=0;     /* ID of the current state list */
 int pc_optimize=sOPTIMIZE_NOMACRO; /* (peephole) optimization level */
 int pc_memflags=0;      /* special flags for the stack/heap usage */
 int sc_showincludes=0;  /* show include files */
 int sc_require_newdecls=0; /* Require new-style declarations */
 bool sc_warnings_are_errors=false;
-
-constvalue sc_automaton_tab = { NULL, "", 0, 0}; /* automaton table */
-constvalue sc_state_tab = { NULL, "", 0, 0};   /* state table */
 
 void *inpf    = NULL;   /* file read from (source or include) */
 void *inpf_org= NULL;   /* main source file */
