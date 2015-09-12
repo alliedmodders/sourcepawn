@@ -953,9 +953,6 @@ static inline bool cc_ok()
   return sc_status == statWRITE && sc_total_errors == 0;
 }
 
-extern constvalue sc_automaton_tab; /* automaton table */
-extern constvalue sc_state_tab;     /* state table */
-
 extern void *inpf;          /* file read from (source or include) */
 extern void *inpf_org;      /* main source file */
 extern void *outf;          /* file written to */

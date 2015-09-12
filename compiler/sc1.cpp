@@ -504,8 +504,6 @@ cleanup:
   DestroyHashTable(sp_Globals);
   delete_consttable(&tagname_tab);
   delete_consttable(&libname_tab);
-  delete_consttable(&sc_automaton_tab);
-  delete_consttable(&sc_state_tab);
   delete_aliastable();
   delete_pathtable();
   delete_sourcefiletable();
@@ -1363,8 +1361,6 @@ static void setconstants(void)
   else if ((sc_debug & sCHKBOUNDS)==sCHKBOUNDS)
     debug=1;
   add_constant("debug",debug,sGLOBAL,0);
-
-  append_constval(&sc_automaton_tab,"",0,0);    /* anonymous automaton */
 }
 
 static void dodecl(const token_t *tok)
