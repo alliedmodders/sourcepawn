@@ -860,28 +860,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         chdir(ptr);
         break;
 #endif
-#if 0 /* not allowed to change for SourceMod */
-      case 'd':
-        switch (*option_value(ptr,argv,argc,&arg)) {
-        case '0':
-          sc_debug=0;
-          break;
-        case '1':
-          sc_debug=sCHKBOUNDS;  /* assertions and bounds checking */
-          break;
-        case '2':
-          sc_debug=sCHKBOUNDS | sSYMBOLIC;  /* also symbolic info */
-          break;
-        case '3':
-          sc_debug=sCHKBOUNDS | sSYMBOLIC;
-          pc_optimize=sOPTIMIZE_NONE;
-          /* also avoid peephole optimization */
-          break;
-        default:
-          about();
-        } /* switch */
-        break;
-#endif
       case 'e':
         strlcpy(ename,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of error file */
         break;
@@ -1190,13 +1168,6 @@ static void about(void)
     pc_printf("         -c<name> codepage name or number; e.g. 1252 for Windows Latin-1\n");
 #if defined dos_setdrive
     pc_printf("         -Dpath   active directory path\n");
-#endif
-#if 0 /* not used for SourceMod */
-    pc_printf("         -d<num>  debugging level (default=-d%d)\n",sc_debug);
-    pc_printf("             0    no symbolic information, no run-time checks\n");
-    pc_printf("             1    run-time checks, no symbolic information\n");
-    pc_printf("             2    full debug information and dynamic checking\n");
-    pc_printf("             3    same as -d2, but implies -O0\n");
 #endif
     pc_printf("         -e<name> set name of error file (quiet compile)\n");
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
