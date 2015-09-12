@@ -903,13 +903,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
       case 'p':
         strlcpy(pname,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of implicit include file */
         break;
-      case 'S':
-        i=atoi(option_value(ptr,argv,argc,&arg));
-        if (i>32)
-          pc_stksize=(cell)i;   /* stack size has minimum size */
-        else
-          about();
-        break;
       case 's':
         skipinput=atoi(option_value(ptr,argv,argc,&arg));
         break;
@@ -1184,7 +1177,6 @@ static void about(void)
 #endif
     pc_printf("             2    full optimizations\n");
     pc_printf("         -p<name> set name of \"prefix\" file\n");
-    pc_printf("         -S<num>  stack/heap size in cells (default=%d)\n",(int)pc_stksize);
     pc_printf("         -s<num>  skip lines from the input file\n");
     pc_printf("         -t<num>  TAB indent size (in character positions, default=%d)\n",sc_tabsize);
     pc_printf("         -v<num>  verbosity level; 0=quiet, 1=normal, 2=verbose (default=%d)\n",verbosity);
