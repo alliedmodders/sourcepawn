@@ -953,7 +953,6 @@ extern int rational_digits; /* number of fractional digits */
 extern int sc_allowproccall;/* allow/detect tagnames in lex() */
 extern short sc_is_utf8;    /* is this source file in UTF-8 encoding */
 extern char *pc_deprecate;  /* if non-NULL, mark next declaration as deprecated */
-extern int sc_curstates;    /* ID of the current state list */
 extern int pc_optimize;     /* (peephole) optimization level */
 extern int pc_memflags;     /* special flags for the stack/heap usage */
 extern int pc_functag;      /* global function tag */

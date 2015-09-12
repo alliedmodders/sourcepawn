@@ -729,7 +729,6 @@ static void resetglobals(void)
   sc_alignnext=FALSE;
   pc_docexpr=FALSE;
   pc_deprecate=NULL;
-  sc_curstates=0;
   pc_memflags=0;
 }
 
@@ -1900,25 +1899,9 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       assert(!fstatic);
     }
     slength = fix_char_size(decl);
-    assert(sc_curstates==0);
-    sc_curstates=getstates(decl->name);
-    if (sc_curstates<0) {
-      error(85,decl->name);           /* empty state list on declaration */
-      sc_curstates=0;
-    } else if (sc_curstates>0 && ispublic) {
-      error(88,decl->name);           /* public variables may not have states */
-      sc_curstates=0;
-    } /* if */
     sym=findconst(decl->name,NULL);
     if (sym==NULL) {
       sym=findglb(decl->name,sSTATEVAR);
-      /* if a global variable without states is found and this declaration has
-       * states, the declaration is okay
-       */
-      if (sym!=NULL && sym->states==NULL && sc_curstates>0)
-        sym=NULL;               /* set to NULL, we found the global variable */
-      if (sc_curstates>0 && findglb(decl->name,sGLOBAL)!=NULL)
-        error(233,decl->name);  /* state variable shadows a global variable */
     } /* if */
     /* we have either:
      * a) not found a matching variable (or rejected it, because it was a shadow)
@@ -1926,8 +1909,8 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
      * c) found a state variable in the automaton that we were looking for
      */
     assert(sym==NULL
-           || (sym->states==NULL && sc_curstates==0)
-           || (sym->states!=NULL && sym->next!=NULL && sym->states->next->index==sc_curstates));
+           || (sym->states==NULL)
+           || (sym->states!=NULL && sym->next!=NULL && sym->states->next->index==0));
     /* a state variable may only have a single id in its list (so either this
      * variable has no states, or it has a single list)
      */
@@ -1980,14 +1963,13 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     if (sym==NULL) {    /* define only if not yet defined */
       sym=addvariable3(decl,address,sGLOBAL,slength);
     } else {            /* if declared but not yet defined, adjust the variable's address */
-      assert((sym->states==NULL && sc_curstates==0)
-             || (sym->states->next!=NULL && sym->states->next->index==sc_curstates && sym->states->next->next==NULL));
+      assert((sym->states==NULL)
+             || (sym->states->next!=NULL && sym->states->next->index==0 && sym->states->next->next==NULL));
       sym->addr=address;
       sym->codeaddr=code_idx;
       sym->usage|=uDEFINE;
     } /* if */
     assert(sym!=NULL);
-    sc_curstates=0;
     if (ispublic)
       sym->usage|=uPUBLIC|uREAD;
     if (decl->type.usage & uCONST)

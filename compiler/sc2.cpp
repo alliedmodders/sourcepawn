@@ -3004,30 +3004,7 @@ void markusage(symbol *sym,int usage)
  */
 symbol *findglb(const char *name, int filter)
 {
-  /* find a symbol with a matching automaton first */
-  symbol *sym=NULL;
-
-  if (filter>sGLOBAL && sc_curstates>0) {
-    /* find a symbol whose state list matches the current fsa */
-    sym=find_symbol(&glbtab,name,fcurrent,state_getfsa(sc_curstates),NULL);
-    if (sym!=NULL && sym->ident!=iFUNCTN) {
-      /* if sym!=NULL, we found a variable in the automaton; now we should
-       * also verify whether there is an intersection between the symbol's
-       * state list and the current state list
-       */
-      assert(sym->states!=NULL && sym->states->next!=NULL);
-      if (!state_conflict_id(sc_curstates,sym->states->next->index))
-        sym=NULL;
-    } /* if */
-  } /* if */
-
-  /* if no symbol with a matching automaton exists, find a variable/function
-   * that has no state(s) attached to it
-   */
-  if (sym==NULL)
-    sym=FindInHashTable(sp_Globals,name,fcurrent);
-
-  return sym;
+  return FindInHashTable(sp_Globals,name,fcurrent);
 }
 
 /*  findloc
@@ -3144,8 +3121,7 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
    * the symbol without states if no symbol with states exists).
    */
   assert(vclass!=sGLOBAL || (sym=findglb(name,sGLOBAL))==NULL || (sym->usage & uDEFINE)==0
-         || (sym->ident==iFUNCTN && sym==curfunc)
-         || (sym->states==NULL && sc_curstates>0));
+         || (sym->ident==iFUNCTN && sym==curfunc));
 
   if (ident==iARRAY || ident==iREFARRAY) {
     symbol *parent=NULL,*top;
