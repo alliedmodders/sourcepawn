@@ -259,10 +259,7 @@ void rvalue(value *lval)
     /* indirect fetch, but address not yet in PRI */
     assert(sym!=NULL);
     assert(sym->vclass==sLOCAL);/* global references don't exist in Pawn */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tlref.s.pri ");
-    else
-      stgwrite("\tlref.pri ");
+    stgwrite("\tlref.s.pri ");
     outval(sym->addr,TRUE);
     markusage(sym,uREAD);
     code_idx+=opcodes(1)+opargs(1);
@@ -416,10 +413,8 @@ void store(value *lval)
     code_idx+=opcodes(1)+opargs(1);
   } else if (lval->ident==iREFERENCE) {
     assert(sym!=NULL);
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tsref.s.pri ");
-    else
-      stgwrite("\tsref.pri ");
+    assert(sym->vclass==sLOCAL);
+    stgwrite("\tsref.s.pri ");
     outval(sym->addr,TRUE);
     code_idx+=opcodes(1)+opargs(1);
   } else if (lval->ident==iACCESSOR) {
@@ -1191,18 +1186,12 @@ void inc(value *lval)
     stgwrite("\tpush.pri\n");
     /* load dereferenced value */
     assert(sym->vclass==sLOCAL);    /* global references don't exist in Pawn */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tlref.s.pri ");
-    else
-      stgwrite("\tlref.pri ");
+    stgwrite("\tlref.s.pri ");
     outval(sym->addr,TRUE);
     /* increment */
     stgwrite("\tinc.pri\n");
     /* store dereferenced value */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tsref.s.pri ");
-    else
-      stgwrite("\tsref.pri ");
+    stgwrite("\tsref.s.pri ");
     outval(sym->addr,TRUE);
     stgwrite("\tpop.pri\n");
     code_idx+=opcodes(5)+opargs(2);
@@ -1249,18 +1238,12 @@ void dec(value *lval)
     stgwrite("\tpush.pri\n");
     /* load dereferenced value */
     assert(sym->vclass==sLOCAL);    /* global references don't exist in Pawn */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tlref.s.pri ");
-    else
-      stgwrite("\tlref.pri ");
+    stgwrite("\tlref.s.pri ");
     outval(sym->addr,TRUE);
     /* decrement */
     stgwrite("\tdec.pri\n");
     /* store dereferenced value */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tsref.s.pri ");
-    else
-      stgwrite("\tsref.pri ");
+    stgwrite("\tsref.s.pri ");
     outval(sym->addr,TRUE);
     stgwrite("\tpop.pri\n");
     code_idx+=opcodes(5)+opargs(2);

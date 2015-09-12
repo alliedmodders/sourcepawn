@@ -392,8 +392,6 @@ static OPCODEC opcodelist[] = {
   {155, "load.s.both",sIN_CSEG, parm2 },  /* version 9 */
   {  3, "load.s.pri", sIN_CSEG, parm1 },
   { 10, "lodb.i",     sIN_CSEG, parm1 },
-  {  6, "lref.alt",   sIN_CSEG, parm1 },
-  {  5, "lref.pri",   sIN_CSEG, parm1 },
   {  8, "lref.s.alt", sIN_CSEG, parm1 },
   {  7, "lref.s.pri", sIN_CSEG, parm1 },
   { 34, "move.alt",   sIN_CSEG, parm0 },
@@ -445,8 +443,6 @@ static OPCODEC opcodelist[] = {
   {101, "sless",      sIN_CSEG, parm0 },
   { 72, "smul",       sIN_CSEG, parm0 },
   { 88, "smul.c",     sIN_CSEG, parm1 },
-  { 20, "sref.alt",   sIN_CSEG, parm1 },
-  { 19, "sref.pri",   sIN_CSEG, parm1 },
   { 22, "sref.s.alt", sIN_CSEG, parm1 },
   { 21, "sref.s.pri", sIN_CSEG, parm1 },
   { 67, "sshr",       sIN_CSEG, parm0 },
