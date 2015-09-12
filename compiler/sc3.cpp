@@ -996,59 +996,6 @@ int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval
   return lval.ident;
 }
 
-int sc_getstateid(constvalue **automaton,constvalue **state)
-{
-  char name[sNAMEMAX+1];
-  cell val;
-  char *str;
-  int fsa,islabel;
-
-  assert(automaton!=NULL);
-  assert(state!=NULL);
-  if (!(islabel=matchtoken(tLABEL)) && !needtoken(tSYMBOL))
-    return 0;
-
-  tokeninfo(&val,&str);
-  assert(strlen(str)<sizeof name);
-  strcpy(name,str);
-  if (islabel || matchtoken(':')) {
-    /* token is an automaton name, add the name and get a new token */
-    *automaton=automaton_find(name);
-    /* read in the state name before checking the automaton, to keep the parser
-     * going (an "unknown automaton" error may occur when the "state" instruction
-     * precedes any state definition)
-     */
-    if (!needtoken(tSYMBOL))
-      return 0;
-    tokeninfo(&val,&str);        /* do not copy the name yet, must check automaton first */
-    if (*automaton==NULL) {
-      error(86,name);            /* unknown automaton */
-      return 0;
-    } /* if */
-    assert((*automaton)->index>0);
-    assert(strlen(str)<sizeof name);
-    strcpy(name,str);
-  } else {
-    *automaton=automaton_find("");
-    assert(*automaton!=NULL);
-    assert((*automaton)->index==0);
-  } /* if */
-  assert(*automaton!=NULL);
-  fsa=(*automaton)->index;
-
-  assert(*automaton!=NULL);
-  *state=state_find(name,fsa);
-  if (*state==NULL) {
-    const char *fsaname=(*automaton)->name;
-    if (*fsaname=='\0')
-      fsaname="<main>";
-    error(87,name,fsaname);   /* unknown state for automaton */
-    return 0;
-  } /* if */
-
-  return 1;
-}
-
 cell array_totalsize(symbol *sym)
 {
   cell length;

@@ -95,7 +95,6 @@ typedef struct s_constvalue {
   char name[sNAMEMAX+1];
   cell value;
   int index;            /* index level, for constants referring to array sizes/tags
-                         * automaton id. for states and automatons
                          * tag for enumeration lists */
 } constvalue;
 
@@ -712,7 +711,6 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
 int matchtag(int formaltag,int actualtag,int allowcoerce);
 int checktag(int tags[],int numtags,int exprtag);
 int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval);
-int sc_getstateid(constvalue **automaton,constvalue **state);
 cell array_totalsize(symbol *sym);
 int matchtag_string(int ident, int tag);
 int checktag_string(value *sym1, value *sym2);
@@ -872,23 +870,6 @@ int cp_set(const char *name);
 cell cp_translate(const unsigned char *string,const unsigned char **endptr);
 cell get_utf8_char(const unsigned char *string,const unsigned char **endptr);
 int scan_utf8(void *fp,const char *filename);
-
-/* function prototypes in SCSTATE.C */
-constvalue *automaton_add(const char *name);
-constvalue *automaton_find(const char *name);
-constvalue *automaton_findid(int id);
-constvalue *state_add(const char *name,int fsa_id);
-constvalue *state_find(const char *name,int fsa_id);
-constvalue *state_findid(int id);
-void state_buildlist(int **list,int *listsize,int *count,int stateid);
-int state_addlist(int *list,int count,int fsa_id);
-void state_deletetable(void);
-int state_getfsa(int listid);
-int state_count(int listid);
-int state_inlist(int listid,int state);
-int state_listitem(int listid,int index);
-void state_conflict(symbol *root);
-int state_conflict_id(int listid1,int listid2);
 
 /* external variables (defined in scvars.c) */
 #if !defined SC_SKIP_VDECL

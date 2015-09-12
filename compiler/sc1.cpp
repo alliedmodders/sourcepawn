@@ -115,7 +115,6 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
 static void initials3(declinfo_t *decl);
 static cell fix_char_size(declinfo_t *decl);
 static cell init(int ident,int *tag,int *errorfound);
-static int getstates(const char *funcname);
 static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag);
 static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstatic, int stock, symbol **symp);
 static int declargs(symbol *sym, int chkshadow, const int *thistag);
@@ -377,7 +376,6 @@ int pc_compile(int argc, char *argv[])
 
   /* second (or third) pass */
   sc_status=statWRITE;                  /* set, to enable warnings */
-  state_conflict(&glbtab);
 
   /* write a report, if requested */
   #if !defined SC_LIGHT
@@ -508,7 +506,6 @@ cleanup:
   delete_consttable(&libname_tab);
   delete_consttable(&sc_automaton_tab);
   delete_consttable(&sc_state_tab);
-  state_deletetable();
   delete_aliastable();
   delete_pathtable();
   delete_sourcefiletable();
@@ -4575,75 +4572,6 @@ static void decl_enum(int vclass)
   } /* if */
 }
 
-static int getstates(const char *funcname)
-{
-  char fsaname[sNAMEMAX+1],statename[sNAMEMAX+1];
-  cell val;
-  char *str;
-  constvalue *automaton;
-  constvalue *state;
-  int fsa,islabel;
-  int *list;
-  int count,listsize,state_id;
-
-  if (!matchtoken('<'))
-    return 0;
-  if (matchtoken('>'))
-    return -1;          /* special construct: all other states (fall-back) */
-
-  count=0;
-  listsize=0;
-  list=NULL;
-  fsa=-1;
-
-  do {
-    if (!(islabel=matchtoken(tLABEL)) && !needtoken(tSYMBOL))
-      break;
-    tokeninfo(&val,&str);
-    assert(strlen(str)<sizeof fsaname);
-    strcpy(fsaname,str);  /* assume this is the name of the automaton */
-    if (islabel || matchtoken(':')) {
-      /* token is an automaton name, add the name and get a new token */
-      if (!needtoken(tSYMBOL))
-        break;
-      tokeninfo(&val,&str);
-      assert(strlen(str)<sizeof statename);
-      strcpy(statename,str);
-    } else {
-      /* the token was the state name (part of an anynymous automaton) */
-      assert(strlen(fsaname)<sizeof statename);
-      strcpy(statename,fsaname);
-      fsaname[0]='\0';
-    } /* if */
-    if (fsa<0 || fsaname[0]!='\0') {
-      automaton=automaton_add(fsaname);
-      assert(automaton!=NULL);
-      if (fsa>=0 && automaton->index!=fsa)
-        error(83,funcname); /* multiple automatons for a single function/variable */
-      fsa=automaton->index;
-    } /* if */
-    state=state_add(statename,fsa);
-    /* add this state to the state combination list (it will be attached to the
-     * automaton later) */
-    state_buildlist(&list,&listsize,&count,(int)state->value);
-  } while (matchtoken(','));
-  needtoken('>');
-
-  if (count>0) {
-    assert(automaton!=NULL);
-    assert(fsa>=0);
-    state_id=state_addlist(list,count,fsa);
-    assert(state_id>0);
-  } else {
-    /* error is already given */
-    state_id=0;
-  } /* if */
-  if (list!=NULL)
-    free(list);
-
-  return state_id;
-}
-
 // This simpler version of matchtag() only checks whether two tags represent
 // the same type. Because methodmaps are attached to types and are not actually
 // types themselves, we strip out the methodmap bit in case a methodmap was
@@ -5020,13 +4948,6 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
   sc_attachdocumentation(sym);  /* attach any documenation to the function */
   if (!operatoradjust(decl->opertok,sym,decl->name,decl->type.tag))
     sym->usage &= ~uDEFINE;
-
-  if (getstates(decl->name)!=0) {
-    if (fnative || decl->opertok!=0)
-      error(82);                /* native functions and operators may not have states */
-    else
-      error(231);               /* ignoring state specifications on forward declarations */
-  } /* if */
 
   /* for a native operator, also need to specify an "exported" function name;
    * for a native function, this is optional
