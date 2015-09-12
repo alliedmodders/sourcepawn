@@ -937,25 +937,6 @@ void char2addr(void)
   #endif
 }
 
-/* Align PRI (which should hold a character index) to an address.
- * The first character in a "pack" occupies the highest bits of
- * the cell. This is at the lower memory address on Big Endian
- * computers and on the higher address on Little Endian computers.
- * The ALIGN.pri/alt instructions must solve this machine dependence;
- * that is, on Big Endian computers, ALIGN.pri/alt shuold do nothing
- * and on Little Endian computers they should toggle the address.
- *
- * NOTE: For Source Pawn, this is fliped.  It will do nothing on Little-Endian.
- */
-void charalign(void)
-{
-#if 0	/* TEMPORARILY DISABLED BECAUSE WE DON'T USE BIG ENDIAN */
-  stgwrite("\talign.pri ");
-  outval(sCHARBITS/8,TRUE);
-  code_idx+=opcodes(1)+opargs(1);
-#endif
-}
-
 /*
  *  Add a constant to the primary register.
  */

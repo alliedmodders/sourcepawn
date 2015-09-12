@@ -758,7 +758,6 @@ void cell2addr(void);
 void cell2addr_alt(void);
 void addr2cell(void);
 void char2addr(void);
-void charalign(void);
 void addconst(cell value);
 void setheap_save(cell value);
 void stradjust(regid reg);

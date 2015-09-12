@@ -335,16 +335,12 @@ static OPCODEC opcodelist[] = {
   { 87, "add.c",      sIN_CSEG, parm1 },
   { 14, "addr.alt",   sIN_CSEG, parm1 },
   { 13, "addr.pri",   sIN_CSEG, parm1 },
-  { 30, "align.alt",  sIN_CSEG, parm1 },
-  { 29, "align.pri",  sIN_CSEG, parm1 },
   { 81, "and",        sIN_CSEG, parm0 },
   {121, "bounds",     sIN_CSEG, parm1 },
   {137, "break",      sIN_CSEG, parm0 },  /* version 8 */
   { 49, "call",       sIN_CSEG, do_call },
-  { 50, "call.pri",   sIN_CSEG, parm0 },
   {  0, "case",       sIN_CSEG, do_case },
   {130, "casetbl",    sIN_CSEG, parm0 },  /* version 1 */
-  {118, "cmps",       sIN_CSEG, parm1 },
   {  0, "code",       sIN_CSEG, set_currentfile },
   {156, "const",      sIN_CSEG, parm2 },  /* version 9 */
   { 12, "const.alt",  sIN_CSEG, parm1 },
@@ -361,12 +357,9 @@ static OPCODEC opcodelist[] = {
   { 95, "eq",         sIN_CSEG, parm0 },
   {106, "eq.c.alt",   sIN_CSEG, parm1 },
   {105, "eq.c.pri",   sIN_CSEG, parm1 },
-/*{124, "file",       sIN_CSEG, do_file }, */
   {119, "fill",       sIN_CSEG, parm1 },
   {162, "genarray",   sIN_CSEG, parm1 },
   {163, "genarray.z", sIN_CSEG, parm1 },
-  {100, "geq",        sIN_CSEG, parm0 },
-  { 99, "grtr",       sIN_CSEG, parm0 },
   {120, "halt",       sIN_CSEG, parm1 },
   { 45, "heap",       sIN_CSEG, parm1 },
   { 27, "idxaddr",    sIN_CSEG, parm0 },
@@ -378,19 +371,13 @@ static OPCODEC opcodelist[] = {
   {110, "inc.s",      sIN_CSEG, parm1 },
   { 86, "invert",     sIN_CSEG, parm0 },
   { 55, "jeq",        sIN_CSEG, do_jump },
-  { 60, "jgeq",       sIN_CSEG, do_jump },
-  { 59, "jgrtr",      sIN_CSEG, do_jump },
-  { 58, "jleq",       sIN_CSEG, do_jump },
-  { 57, "jless",      sIN_CSEG, do_jump },
   { 56, "jneq",       sIN_CSEG, do_jump },
   { 54, "jnz",        sIN_CSEG, do_jump },
-  { 52, "jrel",       sIN_CSEG, parm1 },  /* always a number */
   { 64, "jsgeq",      sIN_CSEG, do_jump },
   { 63, "jsgrtr",     sIN_CSEG, do_jump },
   { 62, "jsleq",      sIN_CSEG, do_jump },
   { 61, "jsless",     sIN_CSEG, do_jump },
   { 51, "jump",       sIN_CSEG, do_jump },
-  {128, "jump.pri",   sIN_CSEG, parm0 },  /* version 1 */
   { 53, "jzer",       sIN_CSEG, do_jump },
   { 31, "lctrl",      sIN_CSEG, parm1 },
   {167, "ldgfn.pri",  sIN_CSEG, do_ldgfen },
@@ -398,7 +385,6 @@ static OPCODEC opcodelist[] = {
   { 97, "less",       sIN_CSEG, parm0 },
   { 25, "lidx",       sIN_CSEG, parm0 },
   { 26, "lidx.b",     sIN_CSEG, parm1 },
-/*{125, "line",       sIN_CSEG, parm2 }, */
   {  2, "load.alt",   sIN_CSEG, parm1 },
   {154, "load.both",  sIN_CSEG, parm2 },  /* version 9 */
   {  9, "load.i",     sIN_CSEG, parm0 },
@@ -427,7 +413,6 @@ static OPCODEC opcodelist[] = {
   { 37, "push.alt",   sIN_CSEG, parm0 },
   { 39, "push.c",     sIN_CSEG, parm1 },
   { 36, "push.pri",   sIN_CSEG, parm0 },
-  { 38, "push.r",     sIN_CSEG, parm1 },  /* obsolete (never generated) */
   { 41, "push.s",     sIN_CSEG, parm1 },
   {139, "push2",      sIN_CSEG, parm2 },  /* version 9 */
   {141, "push2.adr",  sIN_CSEG, parm2 },  /* version 9 */
@@ -458,13 +443,10 @@ static OPCODEC opcodelist[] = {
   { 66, "shr",        sIN_CSEG, parm0 },
   { 71, "shr.c.alt",  sIN_CSEG, parm1 },
   { 70, "shr.c.pri",  sIN_CSEG, parm1 },
-  { 94, "sign.alt",   sIN_CSEG, parm0 },
-  { 93, "sign.pri",   sIN_CSEG, parm0 },
   {102, "sleq",       sIN_CSEG, parm0 },
   {101, "sless",      sIN_CSEG, parm0 },
   { 72, "smul",       sIN_CSEG, parm0 },
   { 88, "smul.c",     sIN_CSEG, parm1 },
-/*{127, "srange",     sIN_CSEG, parm2 }, -- version 1 */
   { 20, "sref.alt",   sIN_CSEG, parm1 },
   { 19, "sref.pri",   sIN_CSEG, parm1 },
   { 22, "sref.s.alt", sIN_CSEG, parm1 },
@@ -485,16 +467,9 @@ static OPCODEC opcodelist[] = {
   {132, "swap.alt",   sIN_CSEG, parm0 },  /* version 4 */
   {131, "swap.pri",   sIN_CSEG, parm0 },  /* version 4 */
   {129, "switch",     sIN_CSEG, do_switch }, /* version 1 */
-/*{126, "symbol",     sIN_CSEG, do_symbol }, */
-/*{136, "symtag",     sIN_CSEG, parm1 },  -- version 7 */
-  {123, "sysreq.c",   sIN_CSEG, parm1 },
   {135, "sysreq.n",   sIN_CSEG, parm2 },  /* version 9 (replaces SYSREQ.d from earlier version) */
-  {122, "sysreq.pri", sIN_CSEG, parm0 },
   {161, "tracker.pop.setheap", sIN_CSEG, parm0 },
   {160, "tracker.push.c", sIN_CSEG, parm1 },
-  { 76, "udiv",       sIN_CSEG, parm0 },
-  { 77, "udiv.alt",   sIN_CSEG, parm0 },
-  { 75, "umul",       sIN_CSEG, parm0 },
   { 35, "xchg",       sIN_CSEG, parm0 },
   { 83, "xor",        sIN_CSEG, parm0 },
   { 91, "zero",       sIN_CSEG, parm1 },

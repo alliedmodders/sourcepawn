@@ -868,26 +868,6 @@ static SEQUENCE sequences_cmp[] = {
     seqsize(2,1) - seqsize(1,1)
   },
   {
-      "less!jzer %1!",
-      "jgeq %1!",
-    seqsize(2,1) - seqsize(1,1)
-  },
-  {
-      "leq!jzer %1!",
-      "jgrtr %1!",
-    seqsize(2,1) - seqsize(1,1)
-  },
-  {
-      "grtr!jzer %1!",
-      "jleq %1!",
-    seqsize(2,1) - seqsize(1,1)
-  },
-  {
-      "geq!jzer %1!",
-      "jless %1!",
-    seqsize(2,1) - seqsize(1,1)
-  },
-  {
       "sless!jzer %1!",
       "jsgeq %1!",
     seqsize(2,1) - seqsize(1,1)
