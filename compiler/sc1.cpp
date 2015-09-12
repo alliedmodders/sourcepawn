@@ -690,7 +690,6 @@ static void resetglobals(void)
   sc_status=statIDLE;
   sc_allowproccall=FALSE;
   pc_addlibtable=TRUE;  /* by default, add a "library table" to the output file */
-  sc_alignnext=FALSE;
   pc_docexpr=FALSE;
   pc_deprecate=NULL;
   pc_memflags=0;
@@ -1678,13 +1677,6 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     } /* if */
     begdseg();          /* real (initialized) data in data segment */
     assert(litidx==0 || !cc_ok());  /* literal queue should be empty */
-    if (sc_alignnext) {
-      litidx=0;
-      aligndata(sc_dataalign);
-      dumplits();       /* dump the literal queue */
-      sc_alignnext=FALSE;
-      litidx=0;         /* global initial data is dumped, so restart at zero */
-    } /* if */
     assert(litidx==0 || !cc_ok());  /* literal queue should be empty (again) */
     if (type->ident == iREFARRAY) {
       // Dynamc array in global scope.
@@ -1742,10 +1734,6 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
 
 static bool parse_local_array_initializer(typeinfo_t *type, int *curlit, int *slength)
 {
-  if (sc_alignnext) {
-    aligndata(sc_dataalign);
-    sc_alignnext=FALSE;
-  } /* if */
   *curlit = litidx; /* save current index in the literal table */
   if (type->numdim && !type->dim[type->numdim-1])
     type->size = 0;
@@ -4741,7 +4729,6 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
  *                     curfunc  (altered)
  *                     declared (altered)
  *                     glb_declared (altered)
- *                     sc_alignnext (altered)
  */
 static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstatic, int stock, symbol **symp)
 {
@@ -4871,10 +4858,6 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   startfunc(sym->name); /* creates stack frame */
   insert_dbgline(funcline);
   setline(FALSE);
-  if (sc_alignnext) {
-    alignframe(sc_dataalign);
-    sc_alignnext=FALSE;
-  } /* if */
   declared=0;           /* number of local cells */
   resetstacklist();
   resetheaplist();

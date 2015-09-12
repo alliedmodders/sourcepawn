@@ -65,7 +65,6 @@ int sc_asmfile= FALSE;  /* create .ASM file? */
 int sc_listing= FALSE;  /* create .LST file? */
 int sc_needsemicolon=TRUE;/* semicolon required to terminate expressions? */
 int sc_dataalign=sizeof(cell);/* data alignment value */
-int sc_alignnext=FALSE; /* must frame of the next function be aligned? */
 int pc_docexpr=FALSE;   /* must expression be attached to documentation comment? */
 int curseg    = 0;      /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize=sDEF_AMXSTACK;/* default stack size */

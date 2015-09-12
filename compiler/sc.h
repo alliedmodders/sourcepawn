@@ -722,7 +722,6 @@ void setlabel(int index);
 void markexpr(optmark type,const char *name,cell offset);
 void startfunc(char *fname);
 void endfunc(void);
-void alignframe(int numbytes);
 void rvalue(value *lval);
 void rvalue(svalue *sval);
 void address(symbol *ptr,regid reg);
@@ -899,7 +898,6 @@ extern int sc_asmfile;      /* create .ASM file? */
 extern int sc_listing;      /* create .LST file? */
 extern int sc_needsemicolon;/* semicolon required to terminate expressions? */
 extern int sc_dataalign;    /* data alignment value */
-extern int sc_alignnext;    /* must frame of the next function be aligned? */
 extern int pc_docexpr;      /* must expression be attached to documentation comment? */
 extern int sc_showincludes; /* show include files? */
 extern int curseg;          /* 1 if currently parsing CODE, 2 if parsing DATA */

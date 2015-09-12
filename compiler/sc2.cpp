@@ -1090,8 +1090,6 @@ static int command(void)
           cell val;
           preproc_expr(&val,NULL);
           sc_tabsize=(int)val;
-        } else if (strcmp(str,"align")==0) {
-          sc_alignnext=TRUE;
         } else if (strcmp(str,"unused")==0) {
           char name[sNAMEMAX+1];
           size_t i;

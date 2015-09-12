@@ -238,34 +238,6 @@ void endfunc(void)
   stgwrite("\n");       /* skip a line */
 }
 
-/*  alignframe
- *
- *  Aligns the frame (and the stack) of the current function to a multiple
- *  of the specified byte count. Two caveats: the alignment ("numbytes") should
- *  be a power of 2, and this alignment must be done right after the frame
- *  is set up (before the first variable is declared)
- */
-void alignframe(int numbytes)
-{
-  #if !defined NDEBUG
-    /* "numbytes" should be a power of 2 for this code to work */
-    size_t i;
-    int count=0;
-    for (i=0; i<sizeof numbytes*8; i++)
-      if (numbytes & (1 << i))
-        count++;
-    assert(count==1);
-  #endif
-
-  stgwrite("\tlctrl 4\n");      /* get STK in PRI */
-  stgwrite("\tconst.alt ");     /* get ~(numbytes-1) in ALT */
-  outval(~(numbytes-1),TRUE);
-  stgwrite("\tand\n");          /* PRI = STK "and" ~(numbytes-1) */
-  stgwrite("\tsctrl 4\n");      /* set the new value of STK ... */
-  stgwrite("\tsctrl 5\n");      /* ... and FRM */
-  code_idx+=opcodes(5)+opargs(4);
-}
-
 /*  rvalue
  *
  *  Generate code to get the value of a symbol into "primary".

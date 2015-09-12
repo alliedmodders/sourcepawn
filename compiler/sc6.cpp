@@ -379,7 +379,6 @@ static OPCODEC opcodelist[] = {
   { 61, "jsless",     sIN_CSEG, do_jump },
   { 51, "jump",       sIN_CSEG, do_jump },
   { 53, "jzer",       sIN_CSEG, do_jump },
-  { 31, "lctrl",      sIN_CSEG, parm1 },
   {167, "ldgfn.pri",  sIN_CSEG, do_ldgfen },
   { 98, "leq",        sIN_CSEG, parm0 },
   { 97, "less",       sIN_CSEG, parm0 },
@@ -432,7 +431,6 @@ static OPCODEC opcodelist[] = {
   {152, "push5.s",    sIN_CSEG, parm5 },  /* version 9 */
   { 47, "ret",        sIN_CSEG, parm0 },
   { 48, "retn",       sIN_CSEG, parm0 },
-  { 32, "sctrl",      sIN_CSEG, parm1 },
   { 73, "sdiv",       sIN_CSEG, parm0 },
   { 74, "sdiv.alt",   sIN_CSEG, parm0 },
   {104, "sgeq",       sIN_CSEG, parm0 },
