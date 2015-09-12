@@ -724,7 +724,6 @@ static void initglobals(void)
   sc_debug=sCHKBOUNDS|sSYMBOLIC;   /* sourcemod: full debug stuff */
   pc_optimize=sOPTIMIZE_DEFAULT;   /* sourcemod: full optimization */
   sc_packstr=TRUE;     /* strings are packed by default */
-  sc_compress=FALSE;    /* always disable compact encoding! */
   sc_needsemicolon=FALSE;/* semicolon required to terminate expressions? */
   sc_require_newdecls = FALSE;
   sc_dataalign=sizeof(cell);
@@ -857,15 +856,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         if (verbosity>1)
           verbosity=1;
         break;
-#if 0 /* not allowed in SourceMod */
-      case 'C':
-        #if AMX_COMPACTMARGIN > 2
-          sc_compress=toggle_option(ptr,sc_compress);
-        #else
-          about();
-        #endif
-        break;
-#endif
       case 'c':
         strlcpy(codepage,option_value(ptr,argv,argc,&arg),MAXCODEPAGE);  /* set name of codepage */
         break;
@@ -1205,9 +1195,6 @@ static void about(void)
     pc_printf("Options:\n");
     pc_printf("         -A<num>  alignment in bytes of the data segment and the stack\n");
     pc_printf("         -a       output assembler code\n");
-#if 0 /* not toggleable in SourceMod */
-    pc_printf("         -C[+/-]  compact encoding for output file (default=%c)\n", sc_compress ? '+' : '-');
-#endif
     pc_printf("         -c<name> codepage name or number; e.g. 1252 for Windows Latin-1\n");
 #if defined dos_setdrive
     pc_printf("         -Dpath   active directory path\n");

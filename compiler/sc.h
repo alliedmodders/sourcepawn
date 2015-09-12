@@ -899,7 +899,6 @@ extern int sc_debug;        /* debug/optimization options (bit field) */
 extern int sc_packstr;      /* strings are packed by default? */
 extern int sc_asmfile;      /* create .ASM file? */
 extern int sc_listing;      /* create .LST file? */
-extern int sc_compress;     /* compress bytecode? */
 extern int sc_needsemicolon;/* semicolon required to terminate expressions? */
 extern int sc_dataalign;    /* data alignment value */
 extern int sc_alignnext;    /* must frame of the next function be aligned? */
