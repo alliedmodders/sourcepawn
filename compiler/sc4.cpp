@@ -724,7 +724,7 @@ void ffcall(symbol *sym,const char *label,int numargs)
       sym->addr=ntv_funcid++;
     /* Look for an alias */
     if (lookup_alias(aliasname, sym->name)) {
-      symbol *asym = findglb(aliasname, sGLOBAL);
+      symbol *asym = findglb(aliasname);
       if (asym && asym->ident==iFUNCTN && ((sym->usage & uNATIVE) != 0)) {
         sym = asym;
         if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr>=0) {

@@ -1121,7 +1121,7 @@ static int command(void)
             /* get the symbol */
             sym=findloc(name);
             if (sym==NULL)
-              sym=findglb(name,sSTATEVAR);
+              sym=findglb(name);
             if (sym!=NULL) {
               sym->usage |= uREAD;
               if (sym->ident==iVARIABLE || sym->ident==iREFERENCE
@@ -2982,7 +2982,7 @@ void markusage(symbol *sym,int usage)
  *
  *  Returns a pointer to the global symbol (if found) or NULL (if not found)
  */
-symbol *findglb(const char *name, int filter)
+symbol *findglb(const char *name)
 {
   return FindInHashTable(sp_Globals,name,fcurrent);
 }
@@ -3100,7 +3100,7 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
    * "redeclared" if they are local to an automaton (and findglb() will find
    * the symbol without states if no symbol with states exists).
    */
-  assert(vclass!=sGLOBAL || (sym=findglb(name,sGLOBAL))==NULL || (sym->usage & uDEFINE)==0
+  assert(vclass!=sGLOBAL || (sym=findglb(name))==NULL || (sym->usage & uDEFINE)==0
          || (sym->ident==iFUNCTN && sym==curfunc));
 
   if (ident==iARRAY || ident==iREFARRAY) {

@@ -232,8 +232,6 @@ typedef struct s_symbol {
 #define sLOCAL    1     /* local variable/constant */
 #define sSTATIC   2     /* global life, local scope */
 
-#define sSTATEVAR  3    /* criterion to find variables (sSTATEVAR implies a global variable) */
-
 struct methodmap_method_s;
 
 typedef struct value_s {
@@ -687,7 +685,7 @@ void delete_symbol(symbol *root,symbol *sym);
 void delete_symbols(symbol *root,int level,int del_labels,int delete_functions);
 int refer_symbol(symbol *entry,symbol *bywhom);
 void markusage(symbol *sym,int usage);
-symbol *findglb(const char *name,int filter);
+symbol *findglb(const char *name);
 symbol *findloc(const char *name);
 symbol *findconst(const char *name,int *matchtag);
 symbol *finddepend(const symbol *parent);

@@ -1898,7 +1898,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     slength = fix_char_size(decl);
     sym=findconst(decl->name,NULL);
     if (sym==NULL) {
-      sym=findglb(decl->name,sSTATEVAR);
+      sym=findglb(decl->name);
     } /* if */
     /* we have either:
      * a) not found a matching variable (or rejected it, because it was a shadow)
@@ -2049,7 +2049,7 @@ static void declloc(int tokid)
      * level might indicate a bug.
      */
     if (((sym=findloc(decl.name)) != NULL && sym->compound != nestlevel) ||
-        findglb(decl.name,sGLOBAL) != NULL)
+        findglb(decl.name) != NULL)
     {
       error(219, decl.name);            /* variable shadows another symbol */
     }
@@ -3784,7 +3784,7 @@ methodmap_method_t *parse_method(methodmap_t *map)
 void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
 {
   if (can_redef) {
-    symbol *sym = findglb(map->name, sGLOBAL);
+    symbol *sym = findglb(map->name);
     if (sym && sym->ident != iMETHODMAP) {
       // We should only hit this on the first pass. Assert really hard that
       // we're about to kill an enum definition and not something random.
@@ -3797,7 +3797,7 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
       // Kill previous enumstruct properties, if any.
       if (sym->usage & uENUMROOT) {
         for (constvalue *cv = sym->dim.enumlist; cv; cv = cv->next) {
-          symbol *csym = findglb(cv->name, sGLOBAL);
+          symbol *csym = findglb(cv->name);
           if (csym &&
               csym->ident == iCONSTEXPR &&
               csym->parent == sym &&
@@ -3838,7 +3838,7 @@ static void declare_handle_intrinsics()
 
   declare_methodmap_symbol(map, true);
 
-  if (symbol* sym = findglb("CloseHandle", sGLOBAL)) {
+  if (symbol* sym = findglb("CloseHandle")) {
     map->dtor = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
     map->dtor->target = sym;
     strcpy(map->dtor->name, "~Handle");
@@ -4481,7 +4481,7 @@ static void decl_enum(int vclass)
 
   if (strlen(enumname)>0) {
     if (vclass == sGLOBAL) {
-      if ((enumsym = findglb(enumname, vclass)) != NULL) {
+      if ((enumsym = findglb(enumname)) != NULL) {
         // If we were previously defined as a methodmap, don't overwrite the
         // symbol. Otherwise, flow into add_constant where we will error.
         if (enumsym->ident != iMETHODMAP)
@@ -4589,7 +4589,7 @@ symbol *fetchfunc(char *name)
 {
   symbol *sym;
 
-  if ((sym=findglb(name,sGLOBAL))!=0) {   /* already in symbol table? */
+  if ((sym=findglb(name))!=0) {   /* already in symbol table? */
     if (sym->ident!=iFUNCTN) {
       error(21,name);                     /* yes, but not as a function */
       return NULL;                        /* make sure the old symbol is not damaged */
@@ -4755,7 +4755,7 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
   /* change the operator name */
   assert(strlen(opername)>0);
   operator_symname(tmpname,opername,tags[0],tags[1],count,resulttag);
-  if ((oldsym=findglb(tmpname,sGLOBAL))!=NULL) {
+  if ((oldsym=findglb(tmpname))!=NULL) {
     int i;
     if ((oldsym->usage & uDEFINE)!=0) {
       char errname[2*sNAMEMAX+16];
@@ -5452,7 +5452,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
         char *name;
         cell val;
         tokeninfo(&val,&name);
-        if ((sym=findglb(name, sGLOBAL)) == NULL) {
+        if ((sym=findglb(name)) == NULL) {
           error(17, name);      /* undefined symbol */
         } else {
           arg->hasdefault=TRUE; /* argument as a default value */
@@ -5519,7 +5519,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
   if (argsym!=NULL) {
     error(21, decl->name);      /* symbol already defined */
   } else {
-    if (chkshadow && (argsym=findglb(decl->name,sSTATEVAR))!=NULL && argsym->ident!=iFUNCTN)
+    if (chkshadow && (argsym=findglb(decl->name))!=NULL && argsym->ident!=iFUNCTN)
       error(219, decl->name);   /* variable shadows another symbol */
     /* add details of type and address */
     assert(type->numtags > 0);
@@ -5744,7 +5744,7 @@ static void make_report(symbol *root,FILE *log,char *sourcefile)
       while (enumroot!=NULL) {
         fprintf(log,"\t\t\t<member name=\"C:%s\" value=\"%d\">\n",funcdisplayname(symname,enumroot->name),enumroot->value);
         /* find the constant with this name and get the tag */
-        ref=findglb(enumroot->name,sGLOBAL);
+        ref=findglb(enumroot->name);
         if (ref!=NULL) {
           if (ref->x.tags.index!=0) {
             tagsym=find_tag_byval(ref->x.tags.index);
@@ -6126,7 +6126,7 @@ static void destructsymbols(symbol *root,int level)
       cell elements;
       /* check that the '~' operator is defined for this tag */
       operator_symname(symbolname,"~",sym->tag,0,1,0);
-      if ((opsym=findglb(symbolname,sGLOBAL))!=NULL) {
+      if ((opsym=findglb(symbolname))!=NULL) {
         /* save PRI, in case of a return statment */
         if (!savepri) {
           pushreg(sPRI);        /* right-hand operand is in PRI */
@@ -6260,7 +6260,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
   /* Test whether a global or local symbol with the same name exists. Since
    * constants are stored in the symbols table, this also finds previously
    * defind constants. */
-  sym=findglb(name,sSTATEVAR);
+  sym=findglb(name);
   if (!sym)
     sym=findloc(name);
   if (sym) {

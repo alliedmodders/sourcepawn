@@ -180,7 +180,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
   assert(numparam==1 || numparam==2);
   operator_symname(symbolname,opername,tag1,tag2,numparam,tag2);
   swapparams=FALSE;
-  sym=findglb(symbolname,sGLOBAL);
+  sym=findglb(symbolname);
   if (sym==NULL /*|| (sym->usage & uDEFINE)==0*/) {  /* ??? should not check uDEFINE; first pass clears these bits */
     /* check for commutative operators */
     if (tag1==tag2 || oper==NULL || !commutative(oper))
@@ -191,7 +191,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
     assert(numparam==2);        /* commutative operator must be a binary operator */
     operator_symname(symbolname,opername,tag2,tag1,numparam,tag1);
     swapparams=TRUE;
-    sym=findglb(symbolname,sGLOBAL);
+    sym=findglb(symbolname);
     if (sym==NULL /*|| (sym->usage & uDEFINE)==0*/)
       return FALSE;
   } /* if */
@@ -1679,7 +1679,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     sym=findloc(st);
     if (sym==NULL)
-      sym=findglb(st,sSTATEVAR);
+      sym=findglb(st);
     if (sym!=NULL && sym->ident!=iFUNCTN && sym->ident!=iREFFUNC && (sym->usage & uDEFINE)==0)
       sym=NULL;                 /* symbol is not a function, it is in the table, but not "defined" */
     val= (sym!=NULL);
@@ -1702,7 +1702,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     sym=findloc(st);
     if (sym==NULL)
-      sym=findglb(st,sSTATEVAR);
+      sym=findglb(st);
     if (sym==NULL)
       return error(17,st);      /* undefined symbol */
     if (sym->ident==iCONSTEXPR)
@@ -1757,7 +1757,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     sym=findloc(st);
     if (sym==NULL)
-      sym=findglb(st,sSTATEVAR);
+      sym=findglb(st);
     if (sym==NULL)
       return error(17,st);      /* undefined symbol */
     if (sym->ident==iCONSTEXPR)
@@ -1815,7 +1815,7 @@ static int hier2(value *lval)
     } else {
       sym=findloc(st);
       if (sym==NULL)
-        sym=findglb(st,sSTATEVAR);
+        sym=findglb(st);
       if (sym==NULL)
         return error(17,st);      /* undefined symbol */
       if ((sym->usage & uDEFINE)==0)
@@ -2458,7 +2458,7 @@ static int primary(value *lval)
       } /* if */
     } /* if */
     /* now try a global variable */
-    if ((sym = findglb(st, sSTATEVAR)) != 0) {
+    if ((sym = findglb(st)) != 0) {
       if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
         /* if the function is only in the table because it was inserted as a
          * stub in the first pass (i.e. it was "used" but never declared or

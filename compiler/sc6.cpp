@@ -242,7 +242,7 @@ static cell do_ldgfen(Vector<cell> *buffer, char *params, cell opcode)
   }
   name[i]='\0';
 
-  symbol *sym = findglb(name, sGLOBAL);
+  symbol *sym = findglb(name);
   assert(sym->ident == iFUNCTN);
   assert(!(sym->usage & uNATIVE));
   assert((sym->funcid & 1) == 1);
@@ -277,7 +277,7 @@ static cell do_call(Vector<cell> *buffer, char *params, cell opcode)
   } else {
     // Look up the function address; note that the correct file number must
     // already have been set (in order for static globals to be found).
-    symbol *sym = findglb(name, sGLOBAL);
+    symbol *sym = findglb(name);
     assert(sym->ident == iFUNCTN || sym->ident == iREFFUNC);
     assert(sym->vclass == sGLOBAL);
     p = sym->addr;

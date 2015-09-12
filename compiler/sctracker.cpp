@@ -555,7 +555,7 @@ LayoutSpec deduce_layout_spec_by_tag(int tag)
   name = pc_tagname(tag);
   if (pstructs_find(name))
     return Layout_PawnStruct;
-  if ((sym = findglb(name, sGLOBAL)) != NULL)
+  if ((sym = findglb(name)) != NULL)
     return Layout_Enum;
 
   return Layout_None;
@@ -572,7 +572,7 @@ LayoutSpec deduce_layout_spec_by_name(const char *name)
     return Layout_PawnStruct;
   if ((map = methodmap_find_by_name(name)) != NULL)
     return map->spec;
-  if ((sym = findglb(name, sGLOBAL)) != NULL)
+  if ((sym = findglb(name)) != NULL)
     return Layout_Enum;
 
   return Layout_None;
