@@ -644,7 +644,6 @@ constvalue *append_constval(constvalue *table,const char *name,cell val,int inde
 constvalue *find_constval(constvalue *table,char *name,int index);
 void delete_consttable(constvalue *table);
 symbol *add_constant(const char *name,cell val,int vclass,int tag);
-void sc_attachdocumentation(symbol *sym);
 constvalue *find_tag_byval(int tag);
 int get_actual_compound(symbol *sym);
 

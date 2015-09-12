@@ -1582,97 +1582,6 @@ static void aligndata(int numbytes)
 
 }
 
-#if !defined SC_LIGHT
-/* sc_attachdocumentation()
- * appends documentation comments to the passed-in symbol, or to a global
- * string if "sym" is NULL.
- */
-void sc_attachdocumentation(symbol *sym)
-{
-  int line;
-  size_t length;
-  char *str,*doc;
-
-  if (!sc_makereport || sc_status!=statFIRST || sc_parsenum>0) {
-    /* just clear the entire table */
-    delete_docstringtable();
-    return;
-  } /* if */
-  /* in the case of state functions, multiple documentation sections may
-   * appear; we should concatenate these
-   * (with forward declarations, this is also already the case, so the assertion
-   * below is invalid)
-   */
-  // assert(sym==NULL || sym->documentation==NULL || sym->states!=NULL);
-
-  /* first check the size */
-  length=0;
-  for (line=0; (str=get_docstring(line))!=NULL && *str!=sDOCSEP; line++) {
-    if (length>0)
-      length++;   /* count 1 extra for a separating space */
-    length+=strlen(str);
-  } /* for */
-  if (sym==NULL && sc_documentation!=NULL) {
-    length += strlen(sc_documentation) + 1 + 4; /* plus 4 for "<p/>" */
-    assert(length>strlen(sc_documentation));
-  } /* if */
-
-  if (length>0) {
-    /* allocate memory for the documentation */
-    if (sym!=NULL && sym->documentation!=NULL)
-      length+=strlen(sym->documentation) + 1 + 4;/* plus 4 for "<p/>" */
-    doc=(char*)malloc((length+1)*sizeof(char));
-    if (doc!=NULL) {
-      /* initialize string or concatenate */
-      if (sym==NULL && sc_documentation!=NULL) {
-        strcpy(doc,sc_documentation);
-        strcat(doc,"<p/>");
-      } else if (sym!=NULL && sym->documentation!=NULL) {
-        strcpy(doc,sym->documentation);
-        strcat(doc,"<p/>");
-        free(sym->documentation);
-        sym->documentation=NULL;
-      } else {
-        doc[0]='\0';
-      } /* if */
-      /* collect all documentation */
-      while ((str=get_docstring(0))!=NULL && *str!=sDOCSEP) {
-        if (doc[0]!='\0')
-          strcat(doc," ");
-        strcat(doc,str);
-        delete_docstring(0);
-      } /* while */
-      if (str!=NULL) {
-        /* also delete the separator */
-        assert(*str==sDOCSEP);
-        delete_docstring(0);
-      } /* if */
-      if (sym!=NULL) {
-        assert(sym->documentation==NULL);
-        sym->documentation=doc;
-      } else {
-        if (sc_documentation!=NULL)
-          free(sc_documentation);
-        sc_documentation=doc;
-      } /* if */
-    } /* if */
-  } else {
-    /* delete an empty separator, if present */
-    if ((str=get_docstring(0))!=NULL && *str==sDOCSEP)
-      delete_docstring(0);
-  } /* if */
-}
-
-static void insert_docstring_separator(void)
-{
-  char sep[2]={sDOCSEP,'\0'};
-  insert_docstring(sep);
-}
-#else
-  #define sc_attachdocumentation(s)      (void)(s)
-  #define insert_docstring_separator()
-#endif
-
 /* declstruct - declare global struct symbols
  * 
  * global references: glb_declared (altered)
@@ -1878,7 +1787,6 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
 #endif
 
   assert(!fpublic || !fstatic);         /* may not both be set */
-  insert_docstring_separator();         /* see comment in newfunc() */
   filenum=fcurrent;                     /* save file number at the start of the declaration */
 
   for (;;) {
@@ -1958,7 +1866,6 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       sym->usage|=uSTOCK;
     if (fstatic)
       sym->fnumber=filenum;
-    sc_attachdocumentation(sym);/* attach any documenation to the variable */
     if (sc_status==statSKIP) {
       sc_status=statWRITE;
       code_idx=cidx;
@@ -2843,7 +2750,6 @@ static void decl_const(int vclass)
   int symbolline;
   symbol *sym;
 
-  insert_docstring_separator();         /* see comment in newfunc() */
   do {
     int orgfline;
 
@@ -2893,8 +2799,6 @@ static void decl_const(int vclass)
     fline=orgfline;
 
     sym=add_constant(constname,val,vclass,tag);
-    if (sym!=NULL)
-      sc_attachdocumentation(sym);/* attach any documenation to the constant */
   } while (matchtoken(',')); /* enddo */   /* more? */
   needtoken(tTERM);
 }
@@ -4555,7 +4459,6 @@ static void decl_enum(int vclass)
     /* assign the constant list */
     assert(enumroot!=NULL);
     enumsym->dim.enumlist=enumroot;
-    sc_attachdocumentation(enumsym);  /* attach any documenation to the enumeration */
   } /* if */
 }
 
@@ -4929,7 +4832,6 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
 
   declargs(sym, FALSE, thistag);
   /* "declargs()" found the ")" */
-  sc_attachdocumentation(sym);  /* attach any documenation to the function */
   if (!operatoradjust(decl->opertok,sym,decl->name,decl->type.tag))
     sym->usage &= ~uDEFINE;
 
@@ -5131,15 +5033,6 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
       // We require '{' for new methods.
       if (decl->type.is_new)
         needtoken('{');
-
-      /* Insert a separator so that comments following the statement will not
-       * be attached to this function; they should be attached to the next
-       * function. This is not a problem for functions having a compound block,
-       * because the closing brace is an explicit "end token" for the function.
-       * With single statement functions, the preprocessor may overread the
-       * source code before the parser determines an "end of statement".
-       */
-      insert_docstring_separator();
     } /* if */
   #endif
   statement(NULL,FALSE);
@@ -5188,7 +5081,6 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   } /* if */
   endfunc();
   sym->codeaddr=code_idx;
-  sc_attachdocumentation(sym);  /* attach collected documenation to the function */
   if (litidx) {                 /* if there are literals defined */
     glb_declared+=litidx;
     begdseg();                  /* flip to DATA segment */
