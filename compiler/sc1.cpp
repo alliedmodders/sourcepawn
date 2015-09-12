@@ -445,24 +445,12 @@ cleanup:
 
 #if !defined SC_LIGHT
     if (errnum==0 && strlen(errfname)==0) {
-      int flag_exceed=0;
-      if (pc_amxlimit>0) {
-        long totalsize=code_idx;
-        if (pc_amxram==0)
-          totalsize+=(glb_declared+pc_stksize)*sizeof(cell);
-        if (totalsize>=pc_amxlimit)
-          flag_exceed=1;
-      } /* if */
-      if (pc_amxram>0 && (glb_declared+pc_stksize)*sizeof(cell)>=(unsigned long)pc_amxram)
-        flag_exceed=1;
-      if ((!norun && (sc_debug & sSYMBOLIC)!=0) || verbosity>=2 || flag_exceed) {
+      if ((!norun && (sc_debug & sSYMBOLIC)!=0) || verbosity>=2) {
         pc_printf("Code size:         %8ld bytes\n", (long)code_idx);
         pc_printf("Data size:         %8ld bytes\n", (long)glb_declared*sizeof(cell));
         pc_printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize*sizeof(cell));
         pc_printf("Total requirements:%8ld bytes\n", (long)code_idx+(long)glb_declared*sizeof(cell)+(long)pc_stksize*sizeof(cell));
       } /* if */
-      if (flag_exceed)
-        error(FATAL_ERROR_INT_OVERFLOW,pc_amxlimit+pc_amxram); /* this causes a jump back to label "cleanup" */
     } /* if */
 #endif
 
@@ -728,8 +716,6 @@ static void initglobals(void)
   sc_require_newdecls = FALSE;
   sc_dataalign=sizeof(cell);
   pc_stksize=sDEF_AMXSTACK;/* default stack size */
-  pc_amxlimit=0;        /* no limit on size of the abstract machine */
-  pc_amxram=0;          /* no limit on data size of the abstract machine */
   sc_tabsize=8;         /* assume a TAB is 8 spaces */
   sc_rationaltag=0;     /* assume no support for rational numbers */
   rational_digits=0;    /* number of fractional digits */
@@ -922,21 +908,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
           pc_enablewarning(i,1);
         else if (*ptr=='\0')
           pc_enablewarning(i,2);
-        break;
-      case 'X':
-        if (*(ptr+1)=='D') {
-          i=atoi(option_value(ptr+1,argv,argc,&arg));
-          if (i>64)
-            pc_amxram=(cell)i;  /* abstract machine data/stack has minimum size */
-          else
-            about();
-        } else {
-          i=atoi(option_value(ptr,argv,argc,&arg));
-          if (i>64)
-            pc_amxlimit=(cell)i;/* abstract machine has minimum size */
-          else
-            about();
-        } /* if */
         break;
       case '\\':                /* use \ instead for escape characters */
         sc_ctrlchar='\\';
@@ -1182,8 +1153,6 @@ static void about(void)
     pc_printf("         -v<num>  verbosity level; 0=quiet, 1=normal, 2=verbose (default=%d)\n",verbosity);
     pc_printf("         -w<num>  disable a specific warning by its number\n");
     pc_printf("         -E       treat warnings as errors\n");
-    pc_printf("         -X<num>  abstract machine size limit in bytes\n");
-    pc_printf("         -XD<num> abstract machine data/stack size limit in bytes\n");
     pc_printf("         -\\       use '\\' for escape characters\n");
     pc_printf("         -^       use '^' for escape characters\n");
     pc_printf("         -;<+/->  require a semicolon to end each statement (default=%c)\n", sc_needsemicolon ? '+' : '-');

@@ -69,8 +69,6 @@ int sc_alignnext=FALSE; /* must frame of the next function be aligned? */
 int pc_docexpr=FALSE;   /* must expression be attached to documentation comment? */
 int curseg    = 0;      /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize=sDEF_AMXSTACK;/* default stack size */
-cell pc_amxlimit=0;     /* default abstract machine size limit = none */
-cell pc_amxram=0;       /* default abstract machine data size limit = none */
 int freading  = FALSE;  /* Is there an input file ready for reading? */
 int fline     = 0;      /* the line number in the current file */
 short fnumber = 0;      /* the file number in the file table (debugging) */

@@ -1009,11 +1009,7 @@ static int command(void)
   case tpPRAGMA:
     if (!SKIPPING) {
       if (lex(&val,&str)==tSYMBOL) {
-        if (strcmp(str,"amxlimit")==0) {
-          preproc_expr(&pc_amxlimit,NULL);
-        } else if (strcmp(str,"amxram")==0) {
-          preproc_expr(&pc_amxram,NULL);
-        } else if (strcmp(str,"codepage")==0) {
+        if (strcmp(str,"codepage")==0) {
           char name[sNAMEMAX+1];
           while (*lptr<=' ' && *lptr!='\0')
             lptr++;

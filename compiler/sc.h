@@ -906,8 +906,6 @@ extern int pc_docexpr;      /* must expression be attached to documentation comm
 extern int sc_showincludes; /* show include files? */
 extern int curseg;          /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;     /* stack size */
-extern cell pc_amxlimit;    /* abstract machine size limit (code + data, or only code) */
-extern cell pc_amxram;      /* abstract machine data size limit */
 extern int freading;        /* is there an input file ready for reading? */
 extern int fline;           /* the line number in the current file */
 extern short fnumber;       /* number of files in the file table (debugging) */
