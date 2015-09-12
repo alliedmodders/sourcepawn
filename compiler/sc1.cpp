@@ -89,7 +89,7 @@ static void resetglobals(void);
 static void initglobals(void);
 static char *get_extension(char *filename);
 static void setopt(int argc,char **argv,char *oname,char *ename,char *pname,
-                   char *rname,char *codepage);
+                   char *codepage);
 static void setconfig(char *root);
 static void setcaption(void);
 static void about(void);
@@ -119,7 +119,6 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag);
 static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstatic, int stock, symbol **symp);
 static int declargs(symbol *sym, int chkshadow, const int *thistag);
 static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, arginfo *arg);
-static void make_report(symbol *root,FILE *log,char *sourcefile);
 static void reduce_referrers(symbol *root);
 static int testsymbols(symbol *root,int level,int testlabs,int testconst);
 static void destructsymbols(symbol *root,int level);
@@ -199,7 +198,6 @@ int pc_compile(int argc, char *argv[])
   int entry,i,jmpcode;
   int retcode;
   char incfname[_MAX_PATH];
-  char reportname[_MAX_PATH];
   char codepage[MAXCODEPAGE+1];
   void *inpfmark;
   int lcl_packstr,lcl_needsemicolon,lcl_tabsize,lcl_require_newdecls;
@@ -230,7 +228,7 @@ int pc_compile(int argc, char *argv[])
   if (!phopt_init())
     error(FATAL_ERROR_OOM);         /* insufficient memory */
 
-  setopt(argc,argv,outfname,errfname,incfname,reportname,codepage);
+  setopt(argc,argv,outfname,errfname,incfname,codepage);
   strcpy(binfname,outfname);
   ptr=get_extension(binfname);
   if (ptr!=NULL && stricmp(ptr,".asm")==0)
@@ -377,23 +375,6 @@ int pc_compile(int argc, char *argv[])
   /* second (or third) pass */
   sc_status=statWRITE;                  /* set, to enable warnings */
 
-  /* write a report, if requested */
-  #if !defined SC_LIGHT
-    if (sc_makereport) {
-      FILE *frep=stdout;
-      if (strlen(reportname)>0)
-        frep=fopen(reportname,"wb");    /* avoid translation of \n to \r\n in DOS/Windows */
-      if (frep!=NULL) {
-        make_report(&glbtab,frep,get_sourcefile(0));
-        if (strlen(reportname)>0)
-          fclose(frep);
-      } /* if */
-      if (sc_documentation!=NULL) {
-        free(sc_documentation);
-        sc_documentation=NULL;
-      } /* if */
-    } /* if */
-  #endif
   if (sc_listing)
     goto cleanup;
 
@@ -483,7 +464,7 @@ cleanup:
       if (flag_exceed)
         error(FATAL_ERROR_INT_OVERFLOW,pc_amxlimit+pc_amxram); /* this causes a jump back to label "cleanup" */
     } /* if */
-  #endif
+#endif
 
   if (g_tmpfile[0] != '\0') {
     remove(g_tmpfile);
@@ -774,7 +755,6 @@ static void initglobals(void)
 
 #if !defined SC_LIGHT
   sc_documentation=NULL;
-  sc_makereport=FALSE;  /* do not generate a cross-reference report */
 #endif
 }
 
@@ -845,10 +825,10 @@ static int toggle_option(const char *optptr,int option)
  * an "option list" from the contents of the file.
  */
 static void parserespf(char *filename,char *oname,char *ename,char *pname,
-                       char *rname, char *codepage);
+                       char *codepage);
 
 static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pname,
-                         char *rname, char *codepage)
+                         char *codepage)
 {
   char str[_MAX_PATH];
   const char *ptr;
@@ -962,27 +942,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
       case 'p':
         strlcpy(pname,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of implicit include file */
         break;
-#if !defined SC_LIGHT
-      case 'r':
-        strlcpy(rname,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of report file */
-        sc_makereport=TRUE;
-#if 0 /* dead code due to option_value change to allow spaces between option and value */
-		if (strlen(rname)>0) {
-          set_extension(rname,".xml",FALSE);
-        } else if ((name=get_sourcefile(0))!=NULL) {
-          assert(strlen(rname)==0);
-          assert(strlen(name)<_MAX_PATH);
-          if ((ptr=strrchr(name,DIRSEP_CHAR))!=NULL)
-            ptr++;          /* strip path */
-          else
-            ptr=name;
-          assert(strlen(ptr)<_MAX_PATH);
-          strcpy(rname,ptr);
-          set_extension(rname,".xml",TRUE);
-        } /* if */
-#endif
-        break;
-#endif
       case 'S':
         i=atoi(option_value(ptr,argv,argc,&arg));
         if (i>32)
@@ -1044,7 +1003,7 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
       } /* switch */
     } else if (argv[arg][0]=='@') {
       #if !defined SC_LIGHT
-        parserespf(&argv[arg][1],oname,ename,pname,rname,codepage);
+        parserespf(&argv[arg][1],oname,ename,pname,codepage);
       #endif
     } else if ((ptr=strchr(argv[arg],'='))!=NULL) {
       i=(int)(ptr-argv[arg]);
@@ -1071,24 +1030,13 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         strcpy(oname,ptr);
       } /* if */
       set_extension(oname,".asm",TRUE);
-#if !defined SC_LIGHT
-      if (sc_makereport && strlen(rname)==0) {
-        if ((ptr=strrchr(str,DIRSEP_CHAR))!=NULL)
-          ptr++;          /* strip path */
-        else
-          ptr=str;
-        assert(strlen(ptr)<_MAX_PATH);
-        strcpy(rname,ptr);
-        set_extension(rname,".xml",TRUE);
-      } /* if */
-#endif
     } /* if */
   } /* for */
 }
 
 #if !defined SC_LIGHT
 static void parserespf(char *filename,char *oname,char *ename,char *pname,
-                       char *rname,char *codepage)
+                       char *codepage)
 {
 #define MAX_OPTIONS     100
   FILE *fp;
@@ -1124,7 +1072,7 @@ static void parserespf(char *filename,char *oname,char *ename,char *pname,
   if (ptr!=NULL)
     error(FATAL_ERROR_ALLOC_OVERFLOW,"option table");
   /* parse the option table */
-  parseoptions(argc,argv,oname,ename,pname,rname,codepage);
+  parseoptions(argc,argv,oname,ename,pname,codepage);
   /* free allocated memory */
   free(argv);
   free(string);
@@ -1132,13 +1080,12 @@ static void parserespf(char *filename,char *oname,char *ename,char *pname,
 #endif
 
 static void setopt(int argc,char **argv,char *oname,char *ename,char *pname,
-                   char *rname,char *codepage)
+                   char *codepage)
 {
   delete_sourcefiletable(); /* make sure it is empty */
   *oname='\0';
   *ename='\0';
   *pname='\0';
-  *rname='\0';
   *codepage='\0';
   strcpy(pname,sDEF_PREFIX);
 
@@ -1161,10 +1108,10 @@ static void setopt(int argc,char **argv,char *oname,char *ename,char *pname,
         strcpy(cfgfile,"pawn.cfg");
       } /* if */
       if (access(cfgfile,4)==0)
-        parserespf(cfgfile,oname,ename,pname,rname,codepage);
+        parserespf(cfgfile,oname,ename,pname,codepage);
     } /* if */
   #endif
-  parseoptions(argc,argv,oname,ename,pname,rname,codepage);
+  parseoptions(argc,argv,oname,ename,pname,codepage);
   if (get_sourcefile(0)==NULL)
     about();
 }
@@ -1287,9 +1234,6 @@ static void about(void)
 #endif
     pc_printf("             2    full optimizations\n");
     pc_printf("         -p<name> set name of \"prefix\" file\n");
-#if !defined SC_LIGHT
-    pc_printf("         -r<name> write cross reference report to console or to specified file\n");
-#endif
     pc_printf("         -S<num>  stack/heap size in cells (default=%d)\n",(int)pc_stksize);
     pc_printf("         -s<num>  skip lines from the input file\n");
     pc_printf("         -t<num>  TAB indent size (in character positions, default=%d)\n",sc_tabsize);
@@ -5397,403 +5341,6 @@ static int count_referrers(symbol *entry)
       count++;
   return count;
 }
-
-#if !defined SC_LIGHT
-static int find_xmltag(char *source, const char *xmltag, const char *xmlparam, const char *xmlvalue,
-                       char **outer_start,int *outer_length,
-                       const char **inner_start,int *inner_length)
-{
-  char *ptr;
-  const char *inner_end;
-  int xmltag_len,xmlparam_len,xmlvalue_len;
-  int match;
-
-  assert(source!=NULL);
-  assert(xmltag!=NULL);
-  assert(outer_start!=NULL);
-  assert(outer_length!=NULL);
-  assert(inner_start!=NULL);
-  assert(inner_length!=NULL);
-
-  /* both NULL or both non-NULL */
-  assert((xmlvalue!=NULL && xmlparam!=NULL) || (xmlvalue==NULL && xmlparam==NULL));
-
-  xmltag_len=strlen(xmltag);
-  xmlparam_len= (xmlparam!=NULL) ? strlen(xmlparam) : 0;
-  xmlvalue_len= (xmlvalue!=NULL) ? strlen(xmlvalue) : 0;
-  ptr=source;
-  /* find an opening '<' */
-  while ((ptr=strchr(ptr,'<'))!=NULL) {
-    *outer_start=ptr;           /* be optimistic... */
-    match=FALSE;                /* ...and pessimistic at the same time */
-    ptr++;                      /* skip '<' */
-    while (*ptr!='\0' && *ptr<=' ')
-      ptr++;                    /* skip white space */
-    if (strncmp(ptr,xmltag,xmltag_len)==0 && (*(ptr+xmltag_len)<=' ' || *(ptr+xmltag_len)=='>')) {
-      /* xml tag found, optionally check the parameter */
-      ptr+=xmltag_len;
-      while (*ptr!='\0' && *ptr<=' ')
-        ptr++;                  /* skip white space */
-      if (xmlparam!=NULL) {
-        if (strncmp(ptr,xmlparam,xmlparam_len)==0 && (*(ptr+xmlparam_len)<=' ' || *(ptr+xmlparam_len)=='=')) {
-          ptr+=xmlparam_len;
-          while (*ptr!='\0' && *ptr<=' ')
-            ptr++;              /* skip white space */
-          if (*ptr=='=') {
-            ptr++;              /* skip '=' */
-            while (*ptr!='\0' && *ptr<=' ')
-              ptr++;            /* skip white space */
-            if (*ptr=='"' || *ptr=='\'')
-              ptr++;            /* skip " or ' */
-            assert(xmlvalue!=NULL);
-            if (strncmp(ptr,xmlvalue,xmlvalue_len)==0
-                && (*(ptr+xmlvalue_len)<=' '
-                    || *(ptr+xmlvalue_len)=='>'
-                    || *(ptr+xmlvalue_len)=='"'
-                    || *(ptr+xmlvalue_len)=='\''))
-              match=TRUE;       /* found it */
-          } /* if */
-        } /* if */
-      } else {
-        match=TRUE;             /* don't check the parameter */
-      } /* if */
-    } /* if */
-    if (match) {
-      /* now find the end of the opening tag */
-      while (*ptr!='\0' && *ptr!='>')
-        ptr++;
-      if (*ptr=='>')
-        ptr++;
-      while (*ptr!='\0' && *ptr<=' ')
-        ptr++;                  /* skip white space */
-      *inner_start=ptr;
-      /* find the start of the closing tag (assume no nesting) */
-      while ((ptr=strchr(ptr,'<'))!=NULL) {
-        inner_end=ptr;
-        ptr++;                  /* skip '<' */
-        while (*ptr!='\0' && *ptr<=' ')
-          ptr++;                /* skip white space */
-        if (*ptr=='/') {
-          ptr++;                /* skip / */
-          while (*ptr!='\0' && *ptr<=' ')
-            ptr++;              /* skip white space */
-          if (strncmp(ptr,xmltag,xmltag_len)==0 && (*(ptr+xmltag_len)<=' ' || *(ptr+xmltag_len)=='>')) {
-            /* find the end of the closing tag */
-            while (*ptr!='\0' && *ptr!='>')
-              ptr++;
-            if (*ptr=='>')
-              ptr++;
-            /* set the lengths of the inner and outer segment */
-            assert(*inner_start!=NULL);
-            *inner_length=(int)(inner_end-*inner_start);
-            assert(*outer_start!=NULL);
-            *outer_length=(int)(ptr-*outer_start);
-            break;              /* break out of the loop */
-          } /* if */
-        } /* if */
-      } /* while */
-      return TRUE;
-    } /* if */
-  } /* while */
-  return FALSE; /* not found */
-}
-
-static char *xmlencode(char *dest,char *source)
-{
-  char temp[2*sNAMEMAX+20],*ptr;
-
-  /* replace < by &lt; and such; normally, such a symbol occurs at most once in
-   * a symbol name (e.g. "operator<")
-   */
-  ptr=temp;
-  while (*source!='\0') {
-    switch (*source) {
-    case '<':
-      strcpy(ptr,"&lt;");
-      ptr+=4;
-      break;
-    case '>':
-      strcpy(ptr,"&gt;");
-      ptr+=4;
-      break;
-    case '&':
-      strcpy(ptr,"&amp;");
-      ptr+=5;
-      break;
-    default:
-      *ptr++=*source;
-    } /* switch */
-    source++;
-  } /* while */
-  *ptr='\0';
-  strcpy(dest,temp);
-  return dest;
-}
-
-static void make_report(symbol *root,FILE *log,char *sourcefile)
-{
-  char symname[_MAX_PATH];
-  int i,arg;
-  symbol *sym,*ref;
-  constvalue *tagsym;
-  constvalue *enumroot;
-  char *ptr;
-
-  /* adapt the installation directory */
-  strcpy(symname,sc_rootpath);
-  #if DIRSEP_CHAR=='\\'
-    while ((ptr=strchr(symname,':'))!=NULL)
-      *ptr='|';
-    while ((ptr=strchr(symname,DIRSEP_CHAR))!=NULL)
-      *ptr='/';
-  #endif
-
-  /* the XML header */
-  fprintf(log,"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n");
-  fprintf(log,"<?xml-stylesheet href=\"file:///%s/xml/pawndoc.xsl\" type=\"text/xsl\"?>\n",symname);
-  fprintf(log,"<doc source=\"%s\">\n",sourcefile);
-  ptr=strrchr(sourcefile,DIRSEP_CHAR);
-  if (ptr!=NULL)
-    ptr++;
-  else
-    ptr=sourcefile;
-  fprintf(log,"\t<assembly>\n\t\t<name>%s</name>\n\t</assembly>\n",ptr);
-
-  /* attach the global documentation, if any */
-  if (sc_documentation!=NULL) {
-    fprintf(log,"\n\t<!-- general -->\n");
-    fprintf(log,"\t<general>\n\t\t");
-    fputs(sc_documentation,log);
-    fprintf(log,"\n\t</general>\n\n");
-  } /* if */
-
-  /* use multiple passes to print constants variables and functions in
-   * separate sections
-   */
-  fprintf(log,"\t<members>\n");
-
-  fprintf(log,"\n\t\t<!-- enumerations -->\n");
-  for (sym=root->next; sym!=NULL; sym=sym->next) {
-    if (sym->parent!=NULL)
-      continue;                 /* hierarchical data type */
-    assert(sym->ident==iCONSTEXPR || sym->ident==iVARIABLE
-           || sym->ident==iARRAY || sym->ident==iFUNCTN);
-    if (sym->ident!=iCONSTEXPR || (sym->usage & uENUMROOT)==0)
-      continue;
-    if ((sym->usage & uREAD)==0)
-      continue;
-    fprintf(log,"\t\t<member name=\"T:%s\" value=\"%d\">\n",funcdisplayname(symname,sym->name),sym->addr);
-    if (sym->tag!=0) {
-      tagsym=find_tag_byval(sym->tag);
-      assert(tagsym!=NULL);
-      fprintf(log,"\t\t\t<tagname value=\"%s\"/>\n",tagsym->name);
-    } /* if */
-    /* browse through all fields */
-    if ((enumroot=sym->dim.enumlist)!=NULL) {
-      enumroot=enumroot->next;  /* skip root */
-      while (enumroot!=NULL) {
-        fprintf(log,"\t\t\t<member name=\"C:%s\" value=\"%d\">\n",funcdisplayname(symname,enumroot->name),enumroot->value);
-        /* find the constant with this name and get the tag */
-        ref=findglb(enumroot->name);
-        if (ref!=NULL) {
-          if (ref->x.tags.index!=0) {
-            tagsym=find_tag_byval(ref->x.tags.index);
-            assert(tagsym!=NULL);
-            fprintf(log,"\t\t\t\t<tagname value=\"%s\"/>\n",tagsym->name);
-          } /* if */
-          if (ref->dim.array.length!=1)
-            fprintf(log,"\t\t\t\t<size value=\"%ld\"/>\n",(long)ref->dim.array.length);
-        } /* if */
-        fprintf(log,"\t\t\t</member>\n");
-        enumroot=enumroot->next;
-      } /* while */
-    } /* if */
-    assert(sym->refer!=NULL);
-    for (i=0; i<sym->numrefers; i++) {
-      if ((ref=sym->refer[i])!=NULL)
-        fprintf(log,"\t\t\t<referrer name=\"%s\"/>\n",xmlencode(symname,funcdisplayname(symname,ref->name)));
-    } /* for */
-    if (sym->documentation!=NULL)
-      fprintf(log,"\t\t\t%s\n",sym->documentation);
-    fprintf(log,"\t\t</member>\n");
-  } /* for */
-
-  fprintf(log,"\n\t\t<!-- constants -->\n");
-  for (sym=root->next; sym!=NULL; sym=sym->next) {
-    if (sym->parent!=NULL)
-      continue;                 /* hierarchical data type */
-    assert(sym->ident==iCONSTEXPR || sym->ident==iVARIABLE
-           || sym->ident==iARRAY || sym->ident==iFUNCTN);
-    if (sym->ident!=iCONSTEXPR)
-      continue;
-    if ((sym->usage & uREAD)==0 || (sym->usage & (uENUMFIELD | uENUMROOT))!=0)
-      continue;
-    fprintf(log,"\t\t<member name=\"C:%s\" value=\"%d\">\n",funcdisplayname(symname,sym->name),sym->addr);
-    if (sym->tag!=0) {
-      tagsym=find_tag_byval(sym->tag);
-      assert(tagsym!=NULL);
-      fprintf(log,"\t\t\t<tagname value=\"%s\"/>\n",tagsym->name);
-    } /* if */
-    assert(sym->refer!=NULL);
-    for (i=0; i<sym->numrefers; i++) {
-      if ((ref=sym->refer[i])!=NULL)
-        fprintf(log,"\t\t\t<referrer name=\"%s\"/>\n",xmlencode(symname,funcdisplayname(symname,ref->name)));
-    } /* for */
-    if (sym->documentation!=NULL)
-      fprintf(log,"\t\t\t%s\n",sym->documentation);
-    fprintf(log,"\t\t</member>\n");
-  } /* for */
-
-  fprintf(log,"\n\t\t<!-- variables -->\n");
-  for (sym=root->next; sym!=NULL; sym=sym->next) {
-    if (sym->parent!=NULL)
-      continue;                 /* hierarchical data type */
-    if (sym->ident!=iVARIABLE && sym->ident!=iARRAY)
-      continue;
-    fprintf(log,"\t\t<member name=\"F:%s\">\n",funcdisplayname(symname,sym->name));
-    if (sym->tag!=0) {
-      tagsym=find_tag_byval(sym->tag);
-      assert(tagsym!=NULL);
-      fprintf(log,"\t\t\t<tagname value=\"%s\"/>\n",tagsym->name);
-    } /* if */
-    assert(sym->refer!=NULL);
-    if ((sym->usage & uPUBLIC)!=0)
-      fprintf(log,"\t\t\t<attribute name=\"public\"/>\n");
-    for (i=0; i<sym->numrefers; i++) {
-      if ((ref=sym->refer[i])!=NULL)
-        fprintf(log,"\t\t\t<referrer name=\"%s\"/>\n",xmlencode(symname,funcdisplayname(symname,ref->name)));
-    } /* for */
-    if (sym->documentation!=NULL)
-      fprintf(log,"\t\t\t%s\n",sym->documentation);
-    fprintf(log,"\t\t</member>\n");
-  } /* for */
-
-  fprintf(log,"\n\t\t<!-- functions -->\n");
-  for (sym=root->next; sym!=NULL; sym=sym->next) {
-    if (sym->parent!=NULL)
-      continue;                 /* hierarchical data type */
-    if (sym->ident!=iFUNCTN)
-      continue;
-    if ((sym->usage & (uREAD | uNATIVE))==uNATIVE)
-      continue;                 /* unused native function */
-    funcdisplayname(symname,sym->name);
-    xmlencode(symname,symname);
-    fprintf(log,"\t\t<member name=\"M:%s\" syntax=\"%s(",symname,symname);
-    /* print only the names of the parameters between the parentheses */
-    assert(sym->dim.arglist!=NULL);
-    for (arg=0; sym->dim.arglist[arg].ident!=0; arg++) {
-      int dim;
-      if (arg>0)
-        fprintf(log,", ");
-      switch (sym->dim.arglist[arg].ident) {
-      case iVARIABLE:
-        fprintf(log,"%s",sym->dim.arglist[arg].name);
-        break;
-      case iREFERENCE:
-        fprintf(log,"&amp;%s",sym->dim.arglist[arg].name);
-        break;
-      case iREFARRAY:
-        fprintf(log,"%s",sym->dim.arglist[arg].name);
-        for (dim=0; dim<sym->dim.arglist[arg].numdim;dim++)
-          fprintf(log,"[]");
-        break;
-      case iVARARGS:
-        fprintf(log,"...");
-        break;
-      } /* switch */
-    } /* for */
-    /* ??? should also print an "array return" size */
-    fprintf(log,")\">\n");
-    if (sym->tag!=0) {
-      tagsym=find_tag_byval(sym->tag);
-      assert(tagsym!=NULL);
-      fprintf(log,"\t\t\t<tagname value=\"%s\"/>\n",tagsym->name);
-    } /* if */
-    /* check whether this function is called from the outside */
-    if ((sym->usage & uNATIVE)!=0)
-      fprintf(log,"\t\t\t<attribute name=\"native\"/>\n");
-    if ((sym->usage & uPUBLIC)!=0)
-      fprintf(log,"\t\t\t<attribute name=\"public\"/>\n");
-    if (strcmp(sym->name,uMAINFUNC)==0 || strcmp(sym->name,uENTRYFUNC)==0)
-      fprintf(log,"\t\t\t<attribute name=\"entry\"/>\n");
-    if ((sym->usage & uNATIVE)==0)
-      fprintf(log,"\t\t\t<stacksize value=\"%ld\"/>\n",(long)sym->x.stacksize);
-    assert(sym->refer!=NULL);
-    for (i=0; i<sym->numrefers; i++)
-      if ((ref=sym->refer[i])!=NULL)
-        fprintf(log,"\t\t\t<referrer name=\"%s\"/>\n",xmlencode(symname,funcdisplayname(symname,ref->name)));
-    /* print all symbols that are required for this function to compile */
-    for (ref=root->next; ref!=NULL; ref=ref->next) {
-      if (ref==sym)
-        continue;
-      for (i=0; i<ref->numrefers; i++)
-        if (ref->refer[i]==sym)
-          fprintf(log,"\t\t\t<dependency name=\"%s\"/>\n",xmlencode(symname,funcdisplayname(symname,ref->name)));
-    } /* for */
-    /* print parameter list, with tag & const information, plus descriptions */
-    assert(sym->dim.arglist!=NULL);
-    for (arg=0; sym->dim.arglist[arg].ident!=0; arg++) {
-      int dim,paraminfo;
-      char *outer_start;
-      const char *inner_start;
-      int outer_length,inner_length;
-      if (sym->dim.arglist[arg].ident==iVARARGS)
-        fprintf(log,"\t\t\t<param name=\"...\">\n");
-      else
-        fprintf(log,"\t\t\t<param name=\"%s\">\n",sym->dim.arglist[arg].name);
-      /* print the tag name(s) for each parameter */
-      paraminfo=(sym->dim.arglist[arg].tag!=0)
-                || sym->dim.arglist[arg].ident==iREFERENCE
-                || sym->dim.arglist[arg].ident==iREFARRAY;
-      if (paraminfo)
-        fprintf(log,"\t\t\t\t<paraminfo>");
-      if (sym->dim.arglist[arg].tag!=0) {
-        assert(paraminfo);
-        tagsym=find_tag_byval(sym->dim.arglist[arg].tag);
-        assert(tagsym!=NULL);
-        fprintf(log,"%s",tagsym->name);
-      } /* if */
-      switch (sym->dim.arglist[arg].ident) {
-      case iREFERENCE:
-        fprintf(log," &amp;");
-        break;
-      case iREFARRAY:
-        fprintf(log," ");
-        for (dim=0; dim<sym->dim.arglist[arg].numdim; dim++) {
-          if (sym->dim.arglist[arg].dim[dim]==0) {
-            fprintf(log,"[]");
-          } else {
-            //??? find index tag
-            fprintf(log,"[%d]",sym->dim.arglist[arg].dim[dim]);
-          } /* if */
-        } /* for */
-        break;
-      } /* switch */
-      if (paraminfo)
-        fprintf(log," </paraminfo>\n");
-      /* print the user description of the parameter (parse through
-       * sym->documentation)
-       */
-      if (sym->documentation!=NULL
-          && find_xmltag(sym->documentation, "param", "name", sym->dim.arglist[arg].name,
-                         &outer_start, &outer_length, &inner_start, &inner_length))
-      {
-        fprintf(log,"\t\t\t\t%.*s\n",inner_length,inner_start);
-        /* delete from documentation string */
-        char *tail=outer_start+outer_length;
-        memmove(outer_start,tail,strlen(tail)+1);
-      } /* if */
-      fprintf(log,"\t\t\t</param>\n");
-    } /* for */
-    if (sym->documentation!=NULL)
-      fprintf(log,"\t\t\t%s\n",sym->documentation);
-    fprintf(log,"\t\t</member>\n");
-  } /* for */
-
-  fprintf(log,"\n\t</members>\n");
-  fprintf(log,"</doc>\n");
-}
-#endif
 
 /* Every symbol has a referrer list, that contains the functions that use
  * the symbol. Now, if function "apple" is accessed by functions "banana" and

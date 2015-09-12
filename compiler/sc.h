@@ -954,10 +954,6 @@ extern void *outf;          /* file written to */
 
 extern jmp_buf errbuf;      /* target of longjmp() on a fatal error */
 
-#if !defined SC_LIGHT
-  extern int sc_makereport; /* generate a cross-reference report */
-#endif
-
 #if defined WIN32
 # if !defined snprintf
 #  define snprintf _snprintf

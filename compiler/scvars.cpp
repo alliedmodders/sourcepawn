@@ -103,10 +103,6 @@ jmp_buf errbuf;
 
 HashTable *sp_Globals = NULL;
 
-#if !defined SC_LIGHT
-  int sc_makereport=FALSE; /* generate a cross-reference report */
-#endif
-
 #if defined __WATCOMC__ && !defined NDEBUG
   /* Watcom's CVPACK dislikes .OBJ files without functions */
   static int dummyfunc(void)
