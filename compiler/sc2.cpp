@@ -408,7 +408,6 @@ static void stripcom(unsigned char *line)
     int commentidx=0;
     int skipstar=TRUE;
     static int prev_singleline=FALSE;
-    int singleline=prev_singleline;
 
     prev_singleline=FALSE;  /* preset */
   #endif

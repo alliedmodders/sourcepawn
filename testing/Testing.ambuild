@@ -26,29 +26,34 @@ Scripts = [
   'test-all',
 ]
 
-if builder.target_platform == 'windows':
-  ext = '.bat'
-else:
-  ext = '.sh'
-for script in Scripts:
-  Inputs = [
-    os.path.join(builder.currentSourcePath, 'generate_scripts.py'),
-    script + ext + '.in',
-  ]
-  Outputs = [
-    script + ext,
-  ]
+def fixup_path(mode, path):
+  if builder.target_platform == 'windows':
+    if mode == '.sh':
+      return path.replace('\\', '\\\\')
+  return path
 
-  builder.AddCommand(
-    inputs = Inputs,
-    argv = [
-      sys.executable,
+def gen_scripts(ext):
+  for script in Scripts:
+    Inputs = [
       os.path.join(builder.currentSourcePath, 'generate_scripts.py'),
-      builder.sourcePath,
-      builder.buildPath,
-      os.path.join(builder.currentSourcePath, script + ext + '.in'),
-      os.path.join(builder.buildPath, 'testing', script + ext),
-      os.path.join(builder.buildPath, SP.spcomp.binary.path),
-    ],
-    outputs = Outputs
-  )
+      script + ext + '.in',
+    ]
+    Outputs = [
+      script + ext,
+    ]
+  
+    builder.AddCommand(
+      inputs = Inputs,
+      argv = [
+        sys.executable,
+        os.path.join(builder.currentSourcePath, 'generate_scripts.py'),
+        fixup_path(ext, builder.sourcePath),
+        fixup_path(ext, builder.buildPath),
+        os.path.join(builder.currentSourcePath, script + ext + '.in'),
+        os.path.join(builder.buildPath, 'testing', script + ext),
+        fixup_path(ext, os.path.join(builder.buildPath, SP.spcomp.binary.path)),
+      ],
+      outputs = Outputs
+    )
+gen_scripts('.sh')
+gen_scripts('.bat')

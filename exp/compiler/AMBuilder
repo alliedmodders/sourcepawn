@@ -24,11 +24,20 @@ binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath, 'include'),
 ]
 
+if binary.compiler.like('gcc'):
+  binary.compiler.cflags += [
+    '-Wno-invalid-offsetof',
+    '-Wno-implicit-exception-spec-mismatch',
+    '-Wno-unused-const-variable',
+  ]
+  binary.compiler.cxxflags += ['-fno-rtti']
+
 binary.sources += [
   'ast-printer.cpp',
   'conversion.cpp',
   'compile-context.cpp',
   'constant-evaluator.cpp',
+  'dll_exports.cpp',
   'float-value.cpp',
   'int-value.cpp',
   'json-tools.cpp',

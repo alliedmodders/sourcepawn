@@ -15,6 +15,7 @@ if builder.compiler.like('gcc'):
   builder.compiler.cflags += [
     '-Wno-invalid-offsetof',
     '-Wno-implicit-exception-spec-mismatch',
+    '-Wno-unused-const-variable',
   ]
   builder.compiler.cxxflags += ['-fno-rtti']
 

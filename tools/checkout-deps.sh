@@ -1,24 +1,10 @@
 #!/usr/bin/env bash
-# This should be run inside a folder that contains sourcepawn.
+# This should be run inside a folder that contains sourcemod, otherwise, it will checkout things into "sm-dependencies".
 
 trap "exit" INT
 
-ismac=0
-iswin=0
-
-archive_ext=tar.gz
-decomp="tar zxf"
-
-if [ `uname` = "Darwin" ]; then
-  ismac=1
-elif [ `uname` != "Linux" ] && [ -n "${COMSPEC:+1}" ]; then
-  iswin=1
-  archive_ext=zip
-  decomp=unzip
-fi
-
 if [ ! -d "sourcepawn" ]; then
-  echo "Could not find a SourcePawn repository; make sure you aren't running this script inside it."
+  echo "Could not find a SourceMod repository; make sure you aren't running this script inside it."
   exit 1
 fi
 
@@ -53,14 +39,7 @@ if [ $? -eq 1 ]; then
     python setup.py install
   else
     python setup.py build
-    echo "About to install AMBuild - press Ctrl+C to abort, otherwise enter your password for sudo."
-    sudo python setup.py install
+    echo "Installing AMBuild at the user level. Location can be: ~/.local/bin"
+    python setup.py install --user
   fi
-  cd ..
 fi
-
-repo="https://github.com/alliedmodders/amtl"
-origin=
-branch=master
-name=amtl
-checkout
