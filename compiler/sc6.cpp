@@ -380,8 +380,6 @@ static OPCODEC opcodelist[] = {
   { 51, "jump",       sIN_CSEG, do_jump },
   { 53, "jzer",       sIN_CSEG, do_jump },
   {167, "ldgfn.pri",  sIN_CSEG, do_ldgfen },
-  { 98, "leq",        sIN_CSEG, parm0 },
-  { 97, "less",       sIN_CSEG, parm0 },
   { 25, "lidx",       sIN_CSEG, parm0 },
   { 26, "lidx.b",     sIN_CSEG, parm1 },
   {  2, "load.alt",   sIN_CSEG, parm1 },
