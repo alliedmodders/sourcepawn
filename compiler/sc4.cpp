@@ -734,12 +734,9 @@ void ffcall(symbol *sym,const char *label,int numargs)
  *
  *  Global references: funcstatus  (referred to only)
  */
-void ffret(int remparams)
+void ffret()
 {
-  if (remparams)
-    stgwrite("\tretn\n");
-  else
-    stgwrite("\tret\n");
+  stgwrite("\tretn\n");
   code_idx+=opcodes(1);
 }
 

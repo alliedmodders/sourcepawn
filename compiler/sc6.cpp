@@ -427,9 +427,7 @@ static OPCODEC opcodelist[] = {
   {153, "push5.adr",  sIN_CSEG, parm5 },  /* version 9 */
   {150, "push5.c",    sIN_CSEG, parm5 },  /* version 9 */
   {152, "push5.s",    sIN_CSEG, parm5 },  /* version 9 */
-  { 47, "ret",        sIN_CSEG, parm0 },
   { 48, "retn",       sIN_CSEG, parm0 },
-  { 73, "sdiv",       sIN_CSEG, parm0 },
   { 74, "sdiv.alt",   sIN_CSEG, parm0 },
   {104, "sgeq",       sIN_CSEG, parm0 },
   {103, "sgrtr",      sIN_CSEG, parm0 },
