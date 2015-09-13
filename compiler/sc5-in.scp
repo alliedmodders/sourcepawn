@@ -103,7 +103,7 @@ static const char *errmsg[] = {
 /*079*/  "inconsistent return types (array & non-array)\n",
 /*080*/  "unknown symbol, or not a constant symbol (symbol \"%s\")\n",
 /*081*/  "cannot take a tag as a default value for an indexed array parameter (symbol \"%s\")\n",
-/*082*/  "goto-label is not supported\n",
+/*082*/  "unused82\n",
 /*083*/  "unused83\n",
 /*084*/  "unused84\n",
 /*085*/  "unused85\n",

@@ -123,7 +123,6 @@ static void reduce_referrers(symbol *root);
 static int testsymbols(symbol *root,int level,int testlabs,int testconst);
 static void destructsymbols(symbol *root,int level);
 static constvalue *find_constval_byval(constvalue *table,cell val);
-static symbol *fetchlab(char *name);
 static void statement(int *lastindent,int allow_decl);
 static void compound(int stmt_sameline,int starttok);
 static int test(int label,int parens,int invert);
@@ -138,8 +137,6 @@ static int dowhile(void);
 static int dodo(void);
 static int dofor(void);
 static void doswitch(void);
-static void dogoto(void);
-static void dolabel(void);
 static void doreturn(void);
 static void dofuncenum(int listmode);
 static void dotypedef();
@@ -4908,7 +4905,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
     popstacklist(1);
     declared=0;
   } /* if */
-  if ((lastst!=tRETURN) && (lastst!=tGOTO)){
+  if (lastst!=tRETURN) {
     ldconst(0,sPRI);
     ffret(strcmp(sym->name,uENTRYFUNC)!=0);
     if ((sym->usage & uRETVALUE)!=0) {
@@ -5705,14 +5702,6 @@ static void statement(int *lastindent,int allow_decl)
   case tDEFAULT:
     error(14);     /* not in switch */
     break;
-  case tGOTO:
-    dogoto();
-    lastst=tGOTO;
-    break;
-  case tLABEL:
-    dolabel();
-    lastst=tLABEL;
-    break;
   case tRETURN:
     doreturn();
     lastst=tRETURN;
@@ -5801,7 +5790,7 @@ static void compound(int stmt_sameline,int starttok)
   } /* while */
   if (lastst!=tRETURN)
     destructsymbols(&loctab,nestlevel);
-  if (lastst!=tRETURN && lastst!=tGOTO) {
+  if (lastst!=tRETURN) {
     popheaplist();
     popstacklist(1);
   } else {
@@ -6000,7 +5989,7 @@ static int doif(void)
     if (stmtindent<ifindent && sc_tabsize>0)
       error(217);               /* loose indentation */
     flab2=getlabel();
-    if ((lastst!=tRETURN) && (lastst!=tGOTO))
+    if (lastst!=tRETURN)
       jumplabel(flab2);         /* "true" branch jumps around "else" clause, unless the "true" branch statement already jumped */
     setlabel(flab1);            /* print false label */
     statement(NULL,FALSE);      /* do "else" clause */
@@ -6363,73 +6352,6 @@ static void doassert(void)
     stgset(FALSE);              /* stop staging */
   } /* if */
   needtoken(tTERM);
-}
-
-static void dogoto(void)
-{
-  char *st;
-  cell val;
-  symbol *sym;
-
-  /* if we were inside an endless loop, assume that we jump out of it */
-  endlessloop=0;
-
-  error(4, "goto");
-
-  if (lex(&val,&st)==tSYMBOL) {
-    sym=fetchlab(st);
-    jumplabel((int)sym->addr);
-    sym->usage|=uREAD;  /* set "uREAD" bit */
-    // ??? if the label is defined (check sym->usage & uDEFINE), check
-    //     sym->compound (nesting level of the label) against nestlevel;
-    //     if sym->compound < nestlevel, call the destructor operator
-  } else {
-    error(20,st);       /* illegal symbol name */
-  } /* if */
-  needtoken(tTERM);
-}
-
-static void dolabel(void)
-{
-  char *st;
-  cell val;
-  symbol *sym;
-
-  tokeninfo(&val,&st);  /* retrieve label name again */
-  if (find_constval(&tagname_tab,st,0)!=NULL)
-    error(221,st);      /* label name shadows tagname */
-  sym=fetchlab(st);
-  setlabel((int)sym->addr);
-  /* since one can jump around variable declarations or out of compound
-   * blocks, the stack must be manually adjusted
-   */
-  error(82);
-  sym->usage|=uDEFINE;  /* label is now defined */
-}
-
-/*  fetchlab
- *
- *  Finds a label from the (local) symbol table or adds one to it.
- *  Labels are local in scope.
- *
- *  Note: The "_usage" bit is set to zero. The routines that call "fetchlab()"
- *        must set this bit accordingly.
- */
-static symbol *fetchlab(char *name)
-{
-  symbol *sym;
-
-  sym=findloc(name);            /* labels are local in scope */
-  if (sym){
-    if (sym->ident!=iLABEL)
-      error(19,sym->name);      /* not a label: ... */
-  } else {
-    sym=addsym(name,getlabel(),iLABEL,sLOCAL,0,0);
-    assert(sym!=NULL);          /* fatal error 103 must be given on error */
-    sym->x.declared=(int)declared;
-    sym->compound=nestlevel;
-  } /* if */
-  return sym;
 }
 
 static int is_variadic(symbol *sym)
