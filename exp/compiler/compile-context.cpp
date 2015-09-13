@@ -142,34 +142,3 @@ CompileContext::createAnonymousName(const SourceLocation &loc)
   builder = builder + source_.getCol(loc);
   return add(builder.ptr());
 }
-
-#if defined __linux__
-extern "C" void __cxa_pure_virtual(void)
-{
-}
-
-void *operator new(size_t size)
-{
-	return malloc(size);
-}
-
-void *operator new[](size_t size) 
-{
-	return malloc(size);
-}
-
-# if !defined(_GLIBCXX_USE_NOEXCEPT)
-#  define _GLIBCXX_USE_NOEXCEPT
-# endif
-
-void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
-{
-	free(ptr);
-}
-
-void operator delete[](void * ptr) _GLIBCXX_USE_NOEXCEPT
-{
-	free(ptr);
-}
-#endif
-

@@ -1420,19 +1420,6 @@ static void dumpzero(int count)
   } /* while */
 }
 
-static void aligndata(int numbytes)
-{
-  assert(numbytes % sizeof(cell) == 0);   /* alignment must be a multiple of
-                                           * the cell size */
-  assert(numbytes!=0);
-
-  if ((((glb_declared+litidx)*sizeof(cell)) % numbytes)!=0) {
-    while ((((glb_declared+litidx)*sizeof(cell)) % numbytes)!=0)
-      litadd(0);
-  } /* if */
-
-}
-
 /* declstruct - declare global struct symbols
  * 
  * global references: glb_declared (altered)

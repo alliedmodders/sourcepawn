@@ -160,10 +160,12 @@ class Config(object):
     cfg.defines += ['KE_THREADSAFE']
     cfg.defines += ['SOURCEPAWN_VERSION="1.8"']
 
-    if not builder.options.amtl:
-      raise Exception('Must specify a valid --amtl')
+    if builder.options.amtl:
+      amtl_path = builder.options.amtl
+    else:
+      amtl_path = os.path.join(builder.sourcePath, 'third_party', 'amtl')
 
-    amtl_path = Normalize(builder.options.amtl)
+    amtl_path = Normalize(amtl_path)
     if not os.path.isdir(amtl_path):
       raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
     self.amtl = amtl_path
