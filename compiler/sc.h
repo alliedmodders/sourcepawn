@@ -225,7 +225,6 @@ typedef struct s_symbol {
 #define flgDEPRECATED 0x01  /* symbol is deprecated (avoid use) */
 
 #define uMAINFUNC "main"
-#define uENTRYFUNC "entry"
 
 #define sGLOBAL   0     /* global variable/constant class (no states) */
 #define sLOCAL    1     /* local variable/constant */
@@ -742,7 +741,7 @@ void swap1(void);
 void ffswitch(int label);
 void ffcase(cell value,char *labelname,int newtable);
 void ffcall(symbol *sym,const char *label,int numargs);
-void ffret(int remparams);
+void ffret();
 void ffabort(int reason);
 void ffbounds(cell size);
 void jumplabel(int number);

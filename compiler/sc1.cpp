@@ -4810,9 +4810,9 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   /* declare all arguments */
   argcnt = declargs(sym, TRUE, thistag);
   opererror = !operatoradjust(decl->opertok, sym, decl->name, decl->type.tag);
-  if (strcmp(decl->name, uMAINFUNC)==0 || strcmp(decl->name, uENTRYFUNC)==0) {
+  if (strcmp(decl->name, uMAINFUNC)==0) {
     if (argcnt>0)
-      error(5);         /* "main()" and "entry()" functions may not have any arguments */
+      error(5);         /* "main()" functions may not have any arguments */
     sym->usage|=uREAD;  /* "main()" is the program's entry point: always used */
   } /* if */
 
@@ -4910,7 +4910,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   } /* if */
   if ((lastst!=tRETURN) && (lastst!=tGOTO)){
     ldconst(0,sPRI);
-    ffret(strcmp(sym->name,uENTRYFUNC)!=0);
+    ffret();
     if ((sym->usage & uRETVALUE)!=0) {
       char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
       funcdisplayname(symname,sym->name);
@@ -5253,7 +5253,7 @@ static void reduce_referrers(symbol *root)
         continue;                 /* hierarchical data type */
       if (sym->ident==iFUNCTN
           && (sym->usage & uNATIVE)==0
-          && (sym->usage & uPUBLIC)==0 && strcmp(sym->name,uMAINFUNC)!=0 && strcmp(sym->name,uENTRYFUNC)!=0
+          && (sym->usage & uPUBLIC)==0 && strcmp(sym->name,uMAINFUNC)!=0
           && count_referrers(sym)==0)
       {
         sym->usage&=~(uREAD | uWRITTEN);  /* erase usage bits if there is no referrer */
@@ -6575,7 +6575,7 @@ static void doreturn(void)
   destructsymbols(&loctab,0);           /* call destructor for *all* locals */
   genheapfree(-1);
   genstackfree(-1);                     /* free everything on the stack */
-  ffret(strcmp(curfunc->name,uENTRYFUNC)!=0);
+  ffret();
 }
 
 static void dobreak(void)
