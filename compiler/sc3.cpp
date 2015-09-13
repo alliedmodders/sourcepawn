@@ -2176,7 +2176,6 @@ restart:
             #endif
             ob_add();
           } /* if */
-          charalign();                  /* align character index into array */
         } /* if */
         /* if the array index is a field from an enumeration, get the tag name
          * from the field and save the size of the field too.
@@ -2204,8 +2203,6 @@ restart:
         } /* if */
         popreg(sALT);
         ob_add();       /* base address was popped into secondary register */
-        if (close!=']' || magic_string)
-          charalign();  /* align character index into array */
       } /* if */
       /* the indexed item may be another array (multi-dimensional arrays) */
       assert(cursym==sym && sym!=NULL); /* should still be set */

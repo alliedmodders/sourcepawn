@@ -238,34 +238,6 @@ void endfunc(void)
   stgwrite("\n");       /* skip a line */
 }
 
-/*  alignframe
- *
- *  Aligns the frame (and the stack) of the current function to a multiple
- *  of the specified byte count. Two caveats: the alignment ("numbytes") should
- *  be a power of 2, and this alignment must be done right after the frame
- *  is set up (before the first variable is declared)
- */
-void alignframe(int numbytes)
-{
-  #if !defined NDEBUG
-    /* "numbytes" should be a power of 2 for this code to work */
-    size_t i;
-    int count=0;
-    for (i=0; i<sizeof numbytes*8; i++)
-      if (numbytes & (1 << i))
-        count++;
-    assert(count==1);
-  #endif
-
-  stgwrite("\tlctrl 4\n");      /* get STK in PRI */
-  stgwrite("\tconst.alt ");     /* get ~(numbytes-1) in ALT */
-  outval(~(numbytes-1),TRUE);
-  stgwrite("\tand\n");          /* PRI = STK "and" ~(numbytes-1) */
-  stgwrite("\tsctrl 4\n");      /* set the new value of STK ... */
-  stgwrite("\tsctrl 5\n");      /* ... and FRM */
-  code_idx+=opcodes(5)+opargs(4);
-}
-
 /*  rvalue
  *
  *  Generate code to get the value of a symbol into "primary".
@@ -287,10 +259,7 @@ void rvalue(value *lval)
     /* indirect fetch, but address not yet in PRI */
     assert(sym!=NULL);
     assert(sym->vclass==sLOCAL);/* global references don't exist in Pawn */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tlref.s.pri ");
-    else
-      stgwrite("\tlref.pri ");
+    stgwrite("\tlref.s.pri ");
     outval(sym->addr,TRUE);
     markusage(sym,uREAD);
     code_idx+=opcodes(1)+opargs(1);
@@ -444,10 +413,8 @@ void store(value *lval)
     code_idx+=opcodes(1)+opargs(1);
   } else if (lval->ident==iREFERENCE) {
     assert(sym!=NULL);
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tsref.s.pri ");
-    else
-      stgwrite("\tsref.pri ");
+    assert(sym->vclass==sLOCAL);
+    stgwrite("\tsref.s.pri ");
     outval(sym->addr,TRUE);
     code_idx+=opcodes(1)+opargs(1);
   } else if (lval->ident==iACCESSOR) {
@@ -823,15 +790,6 @@ void modstk(int delta)
   } /* if */
 }
 
-/* set the stack to a hard offset from the frame */
-void setstk(cell value)
-{
-  stgwrite("\tstackadjust ");
-  assert(value<=0);             /* STK should always become <= FRM */
-  outval(value, TRUE);        /* add (negative) offset */
-  code_idx+=opcodes(1)+opargs(1);
-}
-
 void modheap(int delta)
 {
   if (delta) {
@@ -935,25 +893,6 @@ void char2addr(void)
     stgwrite("\tshl.c.pri 1\n");
     code_idx+=opcodes(1)+opargs(1);
   #endif
-}
-
-/* Align PRI (which should hold a character index) to an address.
- * The first character in a "pack" occupies the highest bits of
- * the cell. This is at the lower memory address on Big Endian
- * computers and on the higher address on Little Endian computers.
- * The ALIGN.pri/alt instructions must solve this machine dependence;
- * that is, on Big Endian computers, ALIGN.pri/alt shuold do nothing
- * and on Little Endian computers they should toggle the address.
- *
- * NOTE: For Source Pawn, this is fliped.  It will do nothing on Little-Endian.
- */
-void charalign(void)
-{
-#if 0	/* TEMPORARILY DISABLED BECAUSE WE DON'T USE BIG ENDIAN */
-  stgwrite("\talign.pri ");
-  outval(sCHARBITS/8,TRUE);
-  code_idx+=opcodes(1)+opargs(1);
-#endif
 }
 
 /*
@@ -1247,18 +1186,12 @@ void inc(value *lval)
     stgwrite("\tpush.pri\n");
     /* load dereferenced value */
     assert(sym->vclass==sLOCAL);    /* global references don't exist in Pawn */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tlref.s.pri ");
-    else
-      stgwrite("\tlref.pri ");
+    stgwrite("\tlref.s.pri ");
     outval(sym->addr,TRUE);
     /* increment */
     stgwrite("\tinc.pri\n");
     /* store dereferenced value */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tsref.s.pri ");
-    else
-      stgwrite("\tsref.pri ");
+    stgwrite("\tsref.s.pri ");
     outval(sym->addr,TRUE);
     stgwrite("\tpop.pri\n");
     code_idx+=opcodes(5)+opargs(2);
@@ -1305,18 +1238,12 @@ void dec(value *lval)
     stgwrite("\tpush.pri\n");
     /* load dereferenced value */
     assert(sym->vclass==sLOCAL);    /* global references don't exist in Pawn */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tlref.s.pri ");
-    else
-      stgwrite("\tlref.pri ");
+    stgwrite("\tlref.s.pri ");
     outval(sym->addr,TRUE);
     /* decrement */
     stgwrite("\tdec.pri\n");
     /* store dereferenced value */
-    if (sym->vclass==sLOCAL)
-      stgwrite("\tsref.s.pri ");
-    else
-      stgwrite("\tsref.pri ");
+    stgwrite("\tsref.s.pri ");
     outval(sym->addr,TRUE);
     stgwrite("\tpop.pri\n");
     code_idx+=opcodes(5)+opargs(2);
