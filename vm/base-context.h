@@ -38,6 +38,7 @@ public:
   void ClearLastNativeError() override;
   cell_t ThrowNativeErrorEx(int error, const char *msg, ...) override;
   cell_t ThrowNativeError(const char *msg, ...) override;
+  int GetLastNativeError() override;
 
   // Removed functions.
   int PushCell(cell_t value) override;

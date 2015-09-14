@@ -507,15 +507,6 @@ PluginContext::GetRuntime()
   return m_pRuntime;
 }
 
-int
-PluginContext::GetLastNativeError()
-{
-  Environment *env = env_;
-  if (!env->hasPendingException())
-    return SP_ERROR_NONE;
-  return env->getPendingExceptionCode();
-}
-
 cell_t *
 PluginContext::GetLocalParams()
 {

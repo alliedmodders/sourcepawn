@@ -214,3 +214,12 @@ BasePluginContext::ThrowNativeError(const char *msg, ...)
   va_end(ap);
   return 0;
 }
+
+int
+BasePluginContext::GetLastNativeError()
+{
+  Environment *env = env_;
+  if (!env->hasPendingException())
+    return SP_ERROR_NONE;
+  return env->getPendingExceptionCode();
+}

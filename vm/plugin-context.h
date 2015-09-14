@@ -67,7 +67,6 @@ class PluginContext : public BasePluginContext
   cell_t *GetNullRef(SP_NULL_TYPE type);
   int LocalToStringNULL(cell_t local_addr, char **addr);
   IPluginRuntime *GetRuntime();
-  int GetLastNativeError();
   cell_t *GetLocalParams();
 
   bool Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result);
