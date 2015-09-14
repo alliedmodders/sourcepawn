@@ -114,7 +114,7 @@ typedef struct s_symbol {
   struct s_symbol *parent;  /* hierarchical types */
   char name[sNAMEMAX+1];
   uint32_t hash;        /* value derived from name, for quicker searching */
-  cell addr;            /* address or offset (or value for constant, index for native function) */
+  cell addr_;            /* address or offset (or value for constant, index for native function) */
   cell codeaddr;        /* address (in the code segment) where the symbol declaration starts */
   char vclass;          /* sLOCAL if "addr" refers to a local symbol */
   char ident;           /* see below for possible values */
@@ -147,6 +147,13 @@ typedef struct s_symbol {
   char *documentation;  /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
   int funcid;           /* set for functions during codegen */
+
+  int addr() const {
+    return addr_;
+  }
+  void setAddr(int addr) {
+    addr_ = addr;
+  }
 } symbol;
 
 /*  Possible entries for "ident". These are used in the "symbol", "value"

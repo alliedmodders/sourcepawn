@@ -3235,7 +3235,7 @@ static int constant(value *lval)
   if (tok==tSYMBOL && (sym=findconst(st,&cmptag))!=0) {
     if (cmptag>1)
       error(91,sym->name);  /* ambiguity: multiple matching constants (different tags) */
-    lval->constval=sym->addr;
+    lval->constval=sym->addr();
     ldconst(lval->constval,sPRI);
     lval->ident=iCONSTEXPR;
     lval->tag=sym->tag;

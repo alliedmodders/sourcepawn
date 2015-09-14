@@ -491,10 +491,10 @@ stringlist *insert_dbgsymbol(symbol *sym)
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
     if (sym->ident==iFUNCTN) {
       sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x",
-              sym->addr,sym->tag,symname,sym->addr,sym->codeaddr,sym->ident,sym->vclass);
+              sym->addr(),sym->tag,symname,sym->addr(),sym->codeaddr,sym->ident,sym->vclass);
     } else {
       sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x",
-              sym->addr,sym->tag,symname,sym->codeaddr,code_idx,sym->ident,sym->vclass);
+              sym->addr(),sym->tag,symname,sym->codeaddr,code_idx,sym->ident,sym->vclass);
     } /* if */
     if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
       #if !defined NDEBUG
