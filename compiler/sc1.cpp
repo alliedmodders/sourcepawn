@@ -1559,7 +1559,7 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
           if (sym->tag != arg->tag)
             error(213);
           sym->usage |= uREAD;
-          values[arg->index] = sym->addr;
+          values[arg->index] = sym->addr();
           found[arg->index] = 1;
           refer_symbol(sym, mysym);
           break;
@@ -1590,7 +1590,7 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
     }
   }
 
-  mysym->addr = glb_declared * sizeof(cell);
+  mysym->setAddr(glb_declared * sizeof(cell));
   glb_declared += pstruct->argcount;
 
   for (i=0; i<pstruct->argcount; i++)
@@ -1684,7 +1684,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
     if (sym==NULL) {    /* define only if not yet defined */
       sym=addvariable3(decl,address,sGLOBAL,slength);
     } else {            /* if declared but not yet defined, adjust the variable's address */
-      sym->addr=address;
+      sym->setAddr(address);
       sym->codeaddr=code_idx;
       sym->usage|=uDEFINE;
     } /* if */
@@ -1840,7 +1840,7 @@ static void declloc(int tokid)
           // push.c      N
           // genarray    1
           // const.pri   DAT + offset
-          // load.s.alt  sym->addr
+          // load.s.alt  sym->addr()
           // movs        N * sizeof(cell)
           int cells = litidx - cur_lit;
           pushval(cells);
@@ -4282,7 +4282,7 @@ static void decl_enum(int vclass)
   /* set the enum name to the "next" value (typically the last value plus one) */
   if (enumsym) {
     assert((enumsym->usage & uENUMROOT)!=0);
-    enumsym->addr=value;
+    enumsym->setAddr(value);
     /* assign the constant list */
     assert(enumroot!=NULL);
     enumsym->dim.enumlist=enumroot;
@@ -4356,7 +4356,7 @@ static void define_args(void)
   while (sym!=NULL) {
     assert(sym->ident!=iLABEL);
     assert(sym->vclass==sLOCAL);
-    markexpr(sLDECL,sym->name,sym->addr); /* mark for better optimization */
+    markexpr(sLDECL,sym->name,sym->addr()); /* mark for better optimization */
     sym=sym->next;
   } /* while */
 }
@@ -4645,7 +4645,7 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
     error(25);
   if ((sym->usage & uDEFINE) == 0) {
     // As long as the function stays undefined, update its address and tag.
-    sym->addr = code_idx;
+    sym->setAddr(code_idx);
     sym->tag = decl->type.tag;
   }
 
@@ -4677,11 +4677,11 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
         insert_alias(sym->name,str);
       } else {
         exprconst(&val,NULL,NULL);
-        sym->addr=val;
+        sym->setAddr(val);
         /* At the moment, I have assumed that this syntax is only valid if
          * val < 0. To properly mix "normal" native functions and indexed
          * native functions, one should use negative indices anyway.
-         * Special code for a negative index in sym->addr exists in SC4.C
+         * Special code for a negative index in sym->addr() exists in SC4.C
          * (ffcall()) and in SC6.C (the loops for counting the number of native
          * variables and for writing them).
          */
@@ -4763,7 +4763,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
 
   // As long as the function stays undefined, update its address.
   if (!(sym->usage & uDEFINE))
-    sym->addr = code_idx;
+    sym->setAddr(code_idx);
 
   if (fpublic)
     sym->usage|=uPUBLIC;
@@ -5136,7 +5136,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
           arg->hasdefault=TRUE; /* argument as a default value */
           memset(&arg->defvalue, 0, sizeof(arg->defvalue));
           arg->defvalue.array.data=NULL;
-          arg->defvalue.array.addr=sym->addr;
+          arg->defvalue.array.addr=sym->addr();
           arg->defvalue_tag=sym->tag;
           if (sc_status==statWRITE && (sym->usage & uREAD)==0) {
             markusage(sym, uREAD);
@@ -5558,9 +5558,9 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
     if (redef) {
       error(21,name);           /* symbol already defined */
       return NULL;
-    } else if (sym->addr!=val) {
+    } else if (sym->addr()!=val) {
       error(201,name);          /* redefinition of constant (different value) */
-      sym->addr=val;            /* set new value */
+      sym->setAddr(val);        /* set new value */
     } /* if */
     /* silently ignore redefinitions of constants with the same value & tag */
     return sym;

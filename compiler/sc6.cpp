@@ -280,7 +280,7 @@ static cell do_call(Vector<cell> *buffer, char *params, cell opcode)
     symbol *sym = findglb(name);
     assert(sym->ident == iFUNCTN || sym->ident == iREFFUNC);
     assert(sym->vclass == sGLOBAL);
-    p = sym->addr;
+    p = sym->addr();
   }
 
   if (buffer) {
@@ -600,7 +600,7 @@ static int sort_by_addr(const void *a1, const void *a2)
 {
   symbol *s1 = *(symbol **)a1;
   symbol *s2 = *(symbol **)a2;
-  return s1->addr - s2->addr;
+  return s1->addr() - s2->addr();
 }
 
 struct function_entry {
@@ -842,7 +842,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
   // Build the easy symbol tables.
   for (symbol *sym=glbtab.next; sym; sym=sym->next) {
     if (sym->ident==iFUNCTN) {
-      if ((sym->usage & uNATIVE)!=0 && (sym->usage & uREAD)!=0 && sym->addr >= 0) {
+      if ((sym->usage & uNATIVE)!=0 && (sym->usage & uREAD)!=0 && sym->addr() >= 0) {
         // Natives require special handling, so we save them for later.
         nativeList.append(sym);
         continue;
@@ -858,7 +858,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
         } else {
           // Create a private name.
           char private_name[sNAMEMAX*3 + 1];
-          snprintf(private_name, sizeof(private_name), ".%d.%s", sym->addr, sym->name);
+          snprintf(private_name, sizeof(private_name), ".%d.%s", sym->addr(), sym->name);
 
           entry.name = private_name;
         }
@@ -869,7 +869,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
     } else if (sym->ident==iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
       if ((sym->usage & uPUBLIC)!=0 && (sym->usage & (uREAD | uWRITTEN))!=0) {
         sp_file_pubvars_t &pubvar = pubvars->add();
-        pubvar.address = sym->addr;
+        pubvar.address = sym->addr();
         pubvar.name = names->add(pool, sym->name);
       }
     }
@@ -881,12 +881,12 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
     function_entry &f = functions[i];
     symbol *sym = f.sym;
 
-    assert(sym->addr > 0);
-    assert(sym->codeaddr > sym->addr);
+    assert(sym->addr() > 0);
+    assert(sym->codeaddr > sym->addr());
     assert(sym->usage & uDEFINE);
 
     sp_file_publics_t &pubfunc = publics->add();
-    pubfunc.address = sym->addr;
+    pubfunc.address = sym->addr();
     pubfunc.name = names->add(pool, f.name.chars());
 
     sym->funcid = (uint32_t(i) << 1) | 1;
@@ -896,7 +896,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
   qsort(nativeList.buffer(), nativeList.length(), sizeof(symbol *), sort_by_addr);
   for (size_t i = 0; i < nativeList.length(); i++) {
     symbol *sym = nativeList[i];
-    assert(size_t(sym->addr) == i);
+    assert(size_t(sym->addr()) == i);
 
     sp_file_natives_t &entry = natives->add();
 

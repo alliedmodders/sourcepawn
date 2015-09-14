@@ -3029,7 +3029,7 @@ symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag,int usage
   memset(&entry,0,sizeof entry);
   strcpy(entry.name,name);
   entry.hash=NameHash(name);
-  entry.addr=addr;
+  entry.addr_=addr;
   entry.codeaddr=code_idx;
   entry.vclass=(char)vclass;
   entry.ident=(char)ident;

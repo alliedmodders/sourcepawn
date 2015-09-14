@@ -260,7 +260,7 @@ void rvalue(value *lval)
     assert(sym!=NULL);
     assert(sym->vclass==sLOCAL);/* global references don't exist in Pawn */
     stgwrite("\tlref.s.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     markusage(sym,uREAD);
     code_idx+=opcodes(1)+opargs(1);
   } else if (lval->ident==iACCESSOR) {
@@ -274,7 +274,7 @@ void rvalue(value *lval)
       stgwrite("\tload.s.pri ");
     else
       stgwrite("\tload.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     markusage(sym,uREAD);
     code_idx+=opcodes(1)+opargs(1);
   } /* if */
@@ -328,7 +328,7 @@ void address(symbol *sym,regid reg)
       break;
     } /* switch */
   } /* if */
-  outval(sym->addr,TRUE);
+  outval(sym->addr(),TRUE);
   markusage(sym,uREAD);
   code_idx+=opcodes(1)+opargs(1);
 }
@@ -415,7 +415,7 @@ void store(value *lval)
     assert(sym!=NULL);
     assert(sym->vclass==sLOCAL);
     stgwrite("\tsref.s.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
   } else if (lval->ident==iACCESSOR) {
     invoke_setter(lval->accessor, TRUE);
@@ -426,7 +426,7 @@ void store(value *lval)
       stgwrite("\tstor.s.pri ");
     else
       stgwrite("\tstor.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
   } /* if */
 }
@@ -486,7 +486,7 @@ void copyarray(symbol *sym,cell size)
     else
       stgwrite("\tconst.alt ");
   } /* if */
-  outval(sym->addr,TRUE);
+  outval(sym->addr(),TRUE);
   markusage(sym,uWRITTEN);
 
   code_idx+=opcodes(1)+opargs(1);
@@ -512,7 +512,7 @@ void fillarray(symbol *sym,cell size,cell value)
     else
       stgwrite("\tconst.alt ");
   } /* if */
-  outval(sym->addr,TRUE);
+  outval(sym->addr(),TRUE);
   markusage(sym,uWRITTEN);
 
   assert(size>0);
@@ -687,20 +687,20 @@ void ffcall(symbol *sym,const char *label,int numargs)
     /* reserve a SYSREQ id if called for the first time */
     assert(label==NULL);
     stgwrite("\tsysreq.n ");
-    if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr>=0)
-      sym->addr=ntv_funcid++;
+    if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr()>=0)
+      sym->setAddr(ntv_funcid++);
     /* Look for an alias */
     if (lookup_alias(aliasname, sym->name)) {
       symbol *asym = findglb(aliasname);
       if (asym && asym->ident==iFUNCTN && ((sym->usage & uNATIVE) != 0)) {
         sym = asym;
-        if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr>=0) {
-          sym->addr=ntv_funcid++;
+        if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr()>=0) {
+          sym->setAddr(ntv_funcid++);
           markusage(sym, uREAD);
         }
       }
     }
-    outval(sym->addr,FALSE);
+    outval(sym->addr(),FALSE);
     stgwrite(" ");
     outval(numargs,FALSE);
     if (sc_asmfile) {
@@ -1184,12 +1184,12 @@ void inc(value *lval)
     /* load dereferenced value */
     assert(sym->vclass==sLOCAL);    /* global references don't exist in Pawn */
     stgwrite("\tlref.s.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     /* increment */
     stgwrite("\tinc.pri\n");
     /* store dereferenced value */
     stgwrite("\tsref.s.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     stgwrite("\tpop.pri\n");
     code_idx+=opcodes(5)+opargs(2);
   } else {
@@ -1199,7 +1199,7 @@ void inc(value *lval)
       stgwrite("\tinc.s ");
     else
       stgwrite("\tinc ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
   } /* if */
 }
@@ -1236,12 +1236,12 @@ void dec(value *lval)
     /* load dereferenced value */
     assert(sym->vclass==sLOCAL);    /* global references don't exist in Pawn */
     stgwrite("\tlref.s.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     /* decrement */
     stgwrite("\tdec.pri\n");
     /* store dereferenced value */
     stgwrite("\tsref.s.pri ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     stgwrite("\tpop.pri\n");
     code_idx+=opcodes(5)+opargs(2);
   } else {
@@ -1251,7 +1251,7 @@ void dec(value *lval)
       stgwrite("\tdec.s ");
     else
       stgwrite("\tdec ");
-    outval(sym->addr,TRUE);
+    outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
   } /* if */
 }
