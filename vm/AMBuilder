@@ -25,6 +25,7 @@ library.compiler.includes += Includes
 
 library.sources += [
   'api.cpp',
+  'base-context.cpp',
   'code-allocator.cpp',
   'code-stubs.cpp',
   'compiled-function.cpp',

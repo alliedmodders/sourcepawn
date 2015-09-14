@@ -10,10 +10,10 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#ifndef _INCLUDE_SOURCEPAWN_BASECONTEXT_H_
-#define _INCLUDE_SOURCEPAWN_BASECONTEXT_H_
+#ifndef _INCLUDE_SOURCEPAWN_V1CONTEXT_H_
+#define _INCLUDE_SOURCEPAWN_V1CONTEXT_H_
 
-#include "sp_vm_api.h"
+#include "base-context.h"
 #include "scripted-invoker.h"
 #include "plugin-runtime.h"
 
@@ -36,20 +36,15 @@ static const size_t SP_MAX_RETURN_STACK = 1024;
 class Environment;
 class PluginContext;
 
-class PluginContext : public IPluginContext
+class PluginContext : public BasePluginContext
 {
  public:
   PluginContext(PluginRuntime *pRuntime);
-  ~PluginContext();
+  ~PluginContext() override;
 
   bool Initialize();
 
  public: //IPluginContext
-  IVirtualMachine *GetVirtualMachine();
-  sp_context_t *GetContext();
-  bool IsDebugging();
-  int SetDebugBreak(void *newpfn, void *oldpfn);
-  IPluginDebugInfo *GetDebugInfo();
   int HeapAlloc(unsigned int cells, cell_t *local_addr, cell_t **phys_addr);
   int HeapPop(cell_t local_addr);
   int HeapRelease(cell_t local_addr);
@@ -67,36 +62,13 @@ class PluginContext : public IPluginContext
   int LocalToString(cell_t local_addr, char **addr);
   int StringToLocal(cell_t local_addr, size_t chars, const char *source);
   int StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char *source, size_t *wrtnbytes);
-  int PushCell(cell_t value);
-  int PushCellArray(cell_t *local_addr, cell_t **phys_addr, cell_t array[], unsigned int numcells);
-  int PushString(cell_t *local_addr, char **phys_addr, const char *string);
-  int PushCellsFromArray(cell_t array[], unsigned int numcells);
-  int BindNatives(const sp_nativeinfo_t *natives, unsigned int num, int overwrite);
-  int BindNative(const sp_nativeinfo_t *native);
-  int BindNativeToAny(SPVM_NATIVE_FUNC native);
-  int Execute(uint32_t code_addr, cell_t *result);
-  cell_t ThrowNativeErrorEx(int error, const char *msg, ...);
-  cell_t ThrowNativeError(const char *msg, ...);
   IPluginFunction *GetFunctionByName(const char *public_name);
   IPluginFunction *GetFunctionById(funcid_t func_id);
-  SourceMod::IdentityToken_t *GetIdentity();
   cell_t *GetNullRef(SP_NULL_TYPE type);
   int LocalToStringNULL(cell_t local_addr, char **addr);
-  int BindNativeToIndex(uint32_t index, SPVM_NATIVE_FUNC native);
-  int Execute2(IPluginFunction *function, const cell_t *params, unsigned int num_params, cell_t *result);
   IPluginRuntime *GetRuntime();
   int GetLastNativeError();
   cell_t *GetLocalParams();
-  void SetKey(int k, void *value);
-  bool GetKey(int k, void **value);
-  void Refresh();
-  void ClearLastNativeError();
-  ISourcePawnEngine2 *APIv2() override;
-  void ReportError(const char *fmt, ...) override;
-  void ReportErrorVA(const char *fmt, va_list ap) override;
-  void ReportFatalError(const char *fmt, ...) override;
-  void ReportFatalErrorVA(const char *fmt, va_list ap) override;
-  void ReportErrorNumber(int error) override;
 
   bool Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result);
 
@@ -166,7 +138,6 @@ class PluginContext : public IPluginContext
   }
 
  private:
-  Environment *env_;
   PluginRuntime *m_pRuntime;
   uint8_t *memory_;
   uint32_t data_size_;
@@ -174,8 +145,6 @@ class PluginContext : public IPluginContext
 
   cell_t *m_pNullVec;
   cell_t *m_pNullString;
-  void *m_keys[4];
-  bool m_keys_set[4];
 
   // Tracker for local HEA growth.
   HeapTracker tracker_;
@@ -188,4 +157,4 @@ class PluginContext : public IPluginContext
 
 } // namespace sp
 
-#endif //_INCLUDE_SOURCEPAWN_BASECONTEXT_H_
+#endif //_INCLUDE_SOURCEPAWN_V1CONTEXT_H_
