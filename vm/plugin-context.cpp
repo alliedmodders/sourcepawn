@@ -30,8 +30,7 @@ using namespace SourcePawn;
 static const size_t kMinHeapSize = 16384;
 
 PluginContext::PluginContext(PluginRuntime *pRuntime)
- : env_(Environment::get()),
-   m_pRuntime(pRuntime),
+ : m_pRuntime(pRuntime),
    memory_(nullptr),
    data_size_(m_pRuntime->data().length),
    mem_size_(m_pRuntime->image()->HeapSize()),
@@ -91,62 +90,6 @@ PluginContext::Initialize()
   }
 
   return true;
-}
-
-IVirtualMachine *
-PluginContext::GetVirtualMachine()
-{
-  return NULL;
-}
-
-sp_context_t *
-PluginContext::GetContext()
-{
-  return reinterpret_cast<sp_context_t *>((IPluginContext * )this);
-}
-
-bool
-PluginContext::IsDebugging()
-{
-  return true;
-}
-
-int
-PluginContext::SetDebugBreak(void *newpfn, void *oldpfn)
-{
-  return SP_ERROR_ABORTED;
-}
-
-IPluginDebugInfo *
-PluginContext::GetDebugInfo()
-{
-  return NULL;
-}
-
-int
-PluginContext::Execute(uint32_t code_addr, cell_t *result)
-{
-  return SP_ERROR_ABORTED;
-}
-
-cell_t
-PluginContext::ThrowNativeErrorEx(int error, const char *msg, ...)
-{
-  va_list ap;
-  va_start(ap, msg);
-  env_->ReportErrorVA(error, msg, ap);
-  va_end(ap);
-  return 0;
-}
-
-cell_t
-PluginContext::ThrowNativeError(const char *msg, ...)
-{
-  va_list ap;
-  va_start(ap, msg);
-  env_->ReportErrorVA(SP_ERROR_NATIVE, msg, ap);
-  va_end(ap);
-  return 0;
 }
 
 int
@@ -283,30 +226,6 @@ PluginContext::GetPubVarsNum()
 }
 
 int
-PluginContext::BindNatives(const sp_nativeinfo_t *natives, unsigned int num, int overwrite)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
-PluginContext::BindNative(const sp_nativeinfo_t *native)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
-PluginContext::BindNativeToIndex(uint32_t index, SPVM_NATIVE_FUNC func)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
-PluginContext::BindNativeToAny(SPVM_NATIVE_FUNC native)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
 PluginContext::LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr)
 {
   if (((local_addr >= hp_) && (local_addr < sp_)) ||
@@ -322,24 +241,6 @@ PluginContext::LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr)
 }
 
 int
-PluginContext::PushCell(cell_t value)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
-PluginContext::PushCellsFromArray(cell_t array[], unsigned int numcells)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
-PluginContext::PushCellArray(cell_t *local_addr, cell_t **phys_addr, cell_t array[], unsigned int numcells)
-{
-  return SP_ERROR_ABORTED;
-}
-
-int
 PluginContext::LocalToString(cell_t local_addr, char **addr)
 {
   if (((local_addr >= hp_) && (local_addr < sp_)) ||
@@ -350,12 +251,6 @@ PluginContext::LocalToString(cell_t local_addr, char **addr)
   *addr = (char *)(memory_ + local_addr);
 
   return SP_ERROR_NONE;
-}
-
-int
-PluginContext::PushString(cell_t *local_addr, char **phys_addr, const char *string)
-{
-  return SP_ERROR_ABORTED;
 }
 
 int
@@ -481,16 +376,6 @@ PluginContext::LocalToStringNULL(cell_t local_addr, char **addr)
   return SP_ERROR_NONE;
 }
 
-SourceMod::IdentityToken_t *
-PluginContext::GetIdentity()
-{
-  SourceMod::IdentityToken_t *tok;
-
-  if (GetKey(1, (void **)&tok))
-    return tok;
-  return NULL;
-}
-
 cell_t *
 PluginContext::GetNullRef(SP_NULL_TYPE type)
 {
@@ -508,13 +393,6 @@ PluginContext::IsInExec()
       return true;
   }
   return false;
-}
-
-int
-PluginContext::Execute2(IPluginFunction *function, const cell_t *params, unsigned int num_params, cell_t *result)
-{
-  ReportErrorNumber(SP_ERROR_ABORTED);
-  return SP_ERROR_ABORTED;
 }
 
 bool
@@ -642,33 +520,6 @@ cell_t *
 PluginContext::GetLocalParams()
 {
   return (cell_t *)(memory_ + frm_ + (2 * sizeof(cell_t)));
-}
-
-void
-PluginContext::SetKey(int k, void *value)
-{
-  if (k < 1 || k > 4)
-    return;
-
-  m_keys[k - 1] = value;
-  m_keys_set[k - 1] = true;
-}
-
-bool
-PluginContext::GetKey(int k, void **value)
-{
-  if (k < 1 || k > 4 || m_keys_set[k - 1] == false)
-    return false;
-
-  *value = m_keys[k - 1];
-  return true;
-}
-
-void
-PluginContext::ClearLastNativeError()
-{
-  if (env_->hasPendingException())
-    env_->clearPendingException();
 }
 
 int
@@ -858,46 +709,4 @@ PluginContext::generateArray(cell_t dims, cell_t *stk, bool autozero)
     return err;
 
   return SP_ERROR_NONE;
-}
-
-ISourcePawnEngine2 *
-PluginContext::APIv2()
-{
-  return env_->APIv2();
-}
-
-void
-PluginContext::ReportError(const char *fmt, ...)
-{
-  va_list ap;
-  va_start(ap, fmt);
-  env_->ReportErrorVA(fmt, ap);
-  va_end(ap);
-}
-
-void
-PluginContext::ReportErrorVA(const char *fmt, va_list ap)
-{
-  env_->ReportErrorVA(fmt, ap);
-}
-
-void
-PluginContext::ReportFatalError(const char *fmt, ...)
-{
-  va_list ap;
-  va_start(ap, fmt);
-  env_->ReportErrorVA(SP_ERROR_FATAL, fmt, ap);
-  va_end(ap);
-}
-
-void
-PluginContext::ReportFatalErrorVA(const char *fmt, va_list ap)
-{
-  env_->ReportErrorVA(SP_ERROR_FATAL, fmt, ap);
-}
-
-void
-PluginContext::ReportErrorNumber(int error)
-{
-  env_->ReportError(error);
 }
