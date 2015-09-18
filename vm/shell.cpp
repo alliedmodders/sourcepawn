@@ -157,7 +157,7 @@ static int Execute(const char *file)
   char error[255];
   AutoPtr<IPluginRuntime> rt(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
-    fprintf(stderr, "Could not load plugin: %s\n", error);
+    fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
     return 1;
   }
 
