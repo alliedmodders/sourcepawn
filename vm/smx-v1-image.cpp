@@ -50,6 +50,11 @@ SmxV1Image::validate()
   switch (hdr_->compression) {
     case SmxConsts::FILE_COMPRESSION_GZ:
     {
+      // We don't support junk in binaries, check that disksize matches the actual file size.
+      // (this is to avoid a known crash in inflate() if told that data is bigger than it is)
+      if (hdr_->disksize > length_)
+        return error("illegal disk size");
+
       // The start of the compression cannot be larger than the file.
       if (hdr_->dataoffs > length_)
         return error("illegal compressed region");
@@ -65,7 +70,7 @@ SmxV1Image::validate()
 
       // Allocate the uncompressed image buffer.
       uint32_t compressedSize = hdr_->disksize - hdr_->dataoffs;
-      AutoArray<uint8_t> uncompressed(new uint8_t[hdr_->imagesize]);
+      AutoArray<uint8_t> uncompressed(new(std::nothrow) uint8_t[hdr_->imagesize]);
       if (!uncompressed)
         return error("out of memory");
 
