@@ -243,7 +243,7 @@ if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  build = getattr(builder, 'options')
+  build = getattr(builder.options, 'spcomp')
   if build == 'spcomp':
     sp.BuildSpcomp()
   elif build == 'vm':
