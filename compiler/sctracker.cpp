@@ -472,8 +472,12 @@ methodmap_add(methodmap_t* parent,
   strcpy(map->name, name);
   map->tag = tag;
 
-  if (spec == Layout_MethodMap && parent && parent->nullable)
-    map->nullable = parent->nullable;
+  if (spec == Layout_MethodMap && parent) {
+    if (parent->nullable)
+      map->nullable = parent->nullable;
+    if (parent->keyword_nullable)
+      map->keyword_nullable = parent->keyword_nullable;
+  }
 
   if (!methodmap_first) {
     methodmap_first = map;
