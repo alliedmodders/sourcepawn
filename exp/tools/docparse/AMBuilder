@@ -22,7 +22,7 @@ binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath, 'exp'),
 ]
 
-if binary.compiler.cxx.behavior is 'msvc':
+if binary.compiler.like('msvc'):
   binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
 
 binary.sources += [

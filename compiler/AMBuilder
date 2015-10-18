@@ -12,7 +12,7 @@ compiler.includes += [
   os.path.join(builder.buildPath, builder.buildFolder),
 ]
  
-if compiler.cc.behavior == 'gcc':
+if compiler.like('gcc'):
   compiler.cflags += ['-Wno-format']
   compiler.c_only_flags += ['-std=c99']
   if builder.target_platform == 'linux':

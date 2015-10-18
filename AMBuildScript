@@ -30,7 +30,7 @@ class Config(object):
     cfg = builder.DetectCompilers()
     cxx = cfg.cxx
 
-    if cxx.behavior is 'gcc':
+    if cxx.like('gcc'):
       cfg.cflags += [
         '-pipe',
         '-Wall',
@@ -110,16 +110,16 @@ class Config(object):
     # Optimization
     if builder.options.opt == '1':
       cfg.defines += ['NDEBUG']
-      if cxx.behavior == 'gcc':
+      if cxx.like('gcc'):
         cfg.cflags += ['-O3']
-      elif cxx.behavior == 'msvc':
+      elif cxx.like('msvc'):
         cfg.cflags += ['/Ox']
         cfg.linkflags += ['/OPT:ICF', '/OPT:REF']
 
     # Debugging
     if builder.options.debug == '1':
       cfg.defines += ['DEBUG', '_DEBUG']
-      if cxx.behavior == 'msvc':
+      if cxx.like('msvc'):
         cfg.cflags += ['/Od', '/RTC1']
 
     # This needs to be after our optimization flags which could otherwise disable it.
