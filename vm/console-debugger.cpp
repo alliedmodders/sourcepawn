@@ -1719,6 +1719,9 @@ ConsoleDebugger::AddBreakpoint(const IPluginContext *ctx, const char *line, bool
   PluginContext *context = (PluginContext *)ctx;
   Debugger *debugger = context->GetDebugger();
 
+  if (!debugger->active())
+    return nullptr;
+
   // check if a filename precedes the breakpoint location
   char *sep;
   const char *filename = nullptr;
@@ -1762,6 +1765,9 @@ bool
 ConsoleDebugger::ClearBreakpoint(const IPluginContext *ctx, int bpnum) {
   PluginContext *context = (PluginContext *)ctx;
   Debugger *debugger = context->GetDebugger();
+
+  if (!debugger->active())
+    return false;
 
   return debugger->ClearBreakpoint(bpnum);
 }
