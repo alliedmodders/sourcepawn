@@ -46,6 +46,7 @@ static_assert(sizeof(CaseTableEntry) == sizeof(cell_t) * 2,
 class PcodeVisitor
 {
  public:
+  virtual bool visitBREAK() = 0;
   virtual bool visitLOAD(PawnReg dest, cell_t srcaddr) = 0;
   virtual bool visitLOAD_S(PawnReg dest, cell_t srcoffs) = 0;
   virtual bool visitLREF_S(PawnReg dest, cell_t srcoffs) = 0;
@@ -138,6 +139,10 @@ class PcodeVisitor
 class IncompletePcodeVisitor : public PcodeVisitor
 {
  public:
+  virtual bool visitBREAK() override {
+    assert(false);
+    return false;
+  }
   virtual bool visitLOAD(PawnReg dest, cell_t srcaddr) override {
     assert(false);
     return false;

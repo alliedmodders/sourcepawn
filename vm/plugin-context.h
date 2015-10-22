@@ -36,6 +36,7 @@ static const cell_t STACK_MARGIN = 64; // 16 parameters of safety, I guess
 
 class Environment;
 class PluginContext;
+class Debugger;
 
 class PluginContext : public BasePluginContext
 {
@@ -72,6 +73,10 @@ class PluginContext : public BasePluginContext
 
   bool Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result);
 
+  // Console debugging.
+  Debugger *GetDebugger();
+  bool StartDebugger();
+
   size_t HeapSize() const {
     return mem_size_;
   }
@@ -101,7 +106,7 @@ class PluginContext : public BasePluginContext
     return offsetof(PluginContext, memory_);
   }
 
-  int32_t *addressOfSp() {
+  cell_t *addressOfSp() {
     return &sp_;
   }
   cell_t *addressOfFrm() {
@@ -144,6 +149,7 @@ class PluginContext : public BasePluginContext
 
  private:
   PluginRuntime *m_pRuntime;
+  Debugger *debugger_;
   uint8_t *memory_;
   uint32_t data_size_;
   uint32_t mem_size_;

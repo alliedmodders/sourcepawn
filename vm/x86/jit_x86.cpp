@@ -43,6 +43,7 @@
 #include "outofline-asm.h"
 #include "method-info.h"
 #include "runtime-helpers.h"
+#include "console-debugger.h"
 
 #define __ masm.
 
@@ -1080,6 +1081,14 @@ Compiler::visitTRACKER_POP_SETHEAP()
 }
 
 bool
+Compiler::visitBREAK()
+{
+  __ call(&debug_break_);
+  emitCipMapping(op_cip_);
+  return true;
+}
+
+bool
 Compiler::visitHALT(cell_t value)
 {
   // We don't support this. It's included in the bytestream by default, but it
@@ -1562,6 +1571,29 @@ Compiler::emitThrowPath(int err)
 {
   __ movl(eax, err);
   __ jmp(&report_error_);
+}
+
+void
+Compiler::emitDebugBreakHandler()
+{
+  // Get and store the current stack pointer.
+  __ movl(tmp, stk);
+  __ movl(frm, stk);
+  __ subl(tmp, dat);
+  __ movl(Operand(spAddr()), tmp);
+
+  // Common path for invoking debugger.
+  __ bind(&debug_break_);
+  // Enter the exit frame. This aligns the stack.
+  __ enterExitFrame(ExitFrameType::Helper, 0);
+
+  // Get the context pointer and call the debugging break handler.
+  __ push(intptr_t(rt_->GetBaseContext()));
+  __ call(ExternalAddress((void *)InvokeDebugger));
+  __ leaveExitFrame();
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
+  __ ret();
 }
 
 void

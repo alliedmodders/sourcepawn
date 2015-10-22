@@ -23,6 +23,7 @@
 #include "jit.h"
 #endif
 #include "interpreter.h"
+#include "console-debugger.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -80,6 +81,7 @@ Environment::Initialize()
   api_v2_ = new SourcePawnEngine2();
   watchdog_timer_ = new WatchdogTimer(this);
   code_alloc_ = new CodeAllocator();
+  console_debugger_ = (IConsoleDebugger *)new ConsoleDebugger();
   code_stubs_ = new CodeStubs(this);
 
   // Safe to initialize code now that we have the code cache.
@@ -405,6 +407,10 @@ Environment::DispatchReport(const ErrorReport &report)
   // For now, we always report exceptions even if they might be handled.
   if (debugger_)
     debugger_->ReportError(report, iter);
+
+  // See if the plugin is being debugged
+  if (top_ && top_->cx()->GetDebugger()->active())
+    top_->cx()->GetDebugger()->ReportError(report, iter);
 }
 
 void

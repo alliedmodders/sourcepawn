@@ -54,6 +54,7 @@ for arch in Root.archs:
     'code-allocator.cpp',
     'code-stubs.cpp',
     'compiled-function.cpp',
+    'console-debugger.cpp',
     'environment.cpp',
     'file-utils.cpp',
     'interpreter.cpp',

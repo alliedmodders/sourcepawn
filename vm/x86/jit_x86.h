@@ -44,6 +44,7 @@ class Compiler : public CompilerBase
   Compiler(PluginRuntime *rt, cell_t pcode_offs);
   ~Compiler();
 
+  bool visitBREAK() override;
   bool visitLOAD(PawnReg dest, cell_t srcaddr) override;
   bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
   bool visitLREF_S(PawnReg dest, cell_t srcoffs) override;
@@ -143,6 +144,7 @@ class Compiler : public CompilerBase
   void emitThrowPath(int err) override;
   void emitErrorHandlers() override;
   void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) override;
+  void emitDebugBreakHandler() override;
 
   void emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
   void emitGenArray(bool autozero);

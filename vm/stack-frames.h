@@ -229,6 +229,9 @@ class FrameIterator : public SourcePawn::IFrameIterator
   unsigned LineNumber() const override;
   IPluginContext *Context() const override;
   bool IsInternalFrame() const override;
+  
+ public:
+  cell_t cip() const;
 
  private:
   void nextInvokeFrame();

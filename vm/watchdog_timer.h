@@ -40,6 +40,8 @@ class WatchdogTimer
   bool NotifyTimeoutReceived();
   bool HandleInterrupt();
 
+  void SetIgnore(bool ignore);
+
  private:
   // Watchdog thread.
   void Run();
@@ -50,6 +52,7 @@ class WatchdogTimer
   bool terminate_;
   size_t timeout_ms_;
   ke::ThreadId mainthread_;
+  bool ignore_timeout_;
 
   ke::AutoPtr<ke::Thread> thread_;
   ke::ConditionVariable cv_;

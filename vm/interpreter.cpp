@@ -1033,6 +1033,13 @@ Interpreter::visitSTRADJUST_PRI()
 }
 
 bool
+Interpreter::visitBREAK()
+{
+  // InvokeDebugger(rt_);
+  return true;
+}
+
+bool
 Interpreter::visitHALT(cell_t value)
 {
   // We don't support this. It's included in the bytestream by default, but it

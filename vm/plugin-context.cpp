@@ -19,6 +19,7 @@
 #include "watchdog_timer.h"
 #include "environment.h"
 #include "method-info.h"
+#include "console-debugger.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -54,12 +55,16 @@ PluginContext::PluginContext(PluginRuntime *pRuntime)
   tracker_.pBase = (ucell_t *)malloc(1024);
   tracker_.pCur = tracker_.pBase;
   tracker_.size = 1024 / sizeof(cell_t);
+
+  // Add debugger instance
+  debugger_ = new Debugger(this);
 }
 
 PluginContext::~PluginContext()
 {
   free(tracker_.pBase);
   delete[] memory_;
+  delete debugger_;
 }
 
 bool
@@ -88,6 +93,9 @@ PluginContext::Initialize()
   } else {
     m_pNullString = NULL;
   }
+
+  if (!debugger_->Initialize())
+    return false;
 
   return true;
 }
@@ -489,6 +497,12 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
   return ok;
 }
 
+Debugger *
+PluginContext::GetDebugger()
+{
+  return debugger_;
+}
+
 IPluginRuntime *
 PluginContext::GetRuntime()
 {
@@ -871,5 +885,20 @@ PluginContext::addStack(cell_t amount)
   }
 
   sp_ = new_sp;
+  return true;
+}
+
+bool
+PluginContext::StartDebugger()
+{
+  if (!IsDebugging())
+    return false;
+
+  if (runtime()->IsPaused())
+    return false;
+
+  debugger_->Activate();
+  debugger_->SetRunmode(STEPPING);
+
   return true;
 }

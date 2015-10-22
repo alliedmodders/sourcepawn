@@ -56,6 +56,184 @@ class SmxV1Image
   const char *LookupFunction(uint32_t code_offset) override;
   bool LookupLine(uint32_t code_offset, uint32_t *line) override;
 
+  // Additional information for interactive debugging.
+  class Symbol;
+  bool GetFunctionAddress(const char *function, const char *file, uint32_t *addr) override;
+  bool GetLineAddress(const uint32_t line, const char *file, uint32_t *addr) override;
+  const char *FindFileByPartialName(const char *partialname) override;
+  bool GetVariable(const char *symname, uint32_t scopeaddr, ke::AutoPtr<Symbol> &sym);
+  const char *GetDebugName(uint32_t nameoffs);
+  const char *GetFileName(uint32_t index);
+  uint32_t GetFileCount();
+
+ public:
+  const char *GetTagName(uint32_t tag);
+
+ public:
+   class Symbol
+   {
+   public:
+     Symbol(sp_fdbg_symbol_t *sym) :
+       sym_(sym),
+       unpacked_sym_(nullptr),
+       addr_(sym->addr),
+       tagid_(sym->tagid),
+       codestart_(sym->codestart),
+       codeend_(sym->codeend),
+       ident_(sym->ident),
+       vclass_(sym->vclass),
+       dimcount_(sym->dimcount),
+       name_(sym->name)
+     {}
+
+     Symbol(sp_u_fdbg_symbol_t *sym) :
+       sym_(nullptr),
+       unpacked_sym_(sym),
+       addr_(sym->addr),
+       tagid_(sym->tagid),
+       codestart_(sym->codestart),
+       codeend_(sym->codeend),
+       ident_(sym->ident),
+       vclass_(sym->vclass),
+       dimcount_(sym->dimcount),
+       name_(sym->name)
+     {}
+
+     Symbol(Symbol *sym) :
+       sym_(sym->sym_),
+       unpacked_sym_(sym->unpacked_sym_),
+       addr_(sym->addr_),
+       tagid_(sym->tagid_),
+       codestart_(sym->codestart_),
+       codeend_(sym->codeend_),
+       ident_(sym->ident_),
+       vclass_(sym->vclass_),
+       dimcount_(sym->dimcount_),
+       name_(sym->name_)
+     {}
+
+     const int32_t addr() const {
+       return addr_;
+     }
+     const int16_t tagid() const {
+       return tagid_;
+     }
+     const uint32_t codestart() const {
+       return codestart_;
+     }
+     const uint32_t codeend() const {
+       return codeend_;
+     }
+     const uint8_t ident() const {
+       return ident_;
+     }
+     const uint8_t vclass() const {
+       return vclass_;
+     }
+     const uint16_t dimcount() const {
+       return dimcount_;
+     }
+     const uint32_t name() const {
+       return name_;
+     }
+     void setVClass(uint8_t vclass) {
+       vclass_ = vclass;
+       if (sym_)
+         sym_->vclass = vclass;
+       else
+         unpacked_sym_->vclass = vclass;
+     }
+     const bool packed() const {
+       return sym_ != nullptr;
+     }
+   private:
+     int32_t   addr_;       /**< Address rel to DAT or stack frame */
+     int16_t   tagid_;      /**< Tag id */
+     uint32_t  codestart_;  /**< Start scope validity in code */
+     uint32_t  codeend_;    /**< End scope validity in code */
+     uint8_t   ident_;      /**< Variable type */
+     uint8_t   vclass_;     /**< Scope class (local vs global) */
+     uint16_t  dimcount_;   /**< Dimension count (for arrays) */
+     uint32_t  name_;       /**< Offset into debug nametable */
+
+     sp_fdbg_symbol_t *sym_;
+     sp_u_fdbg_symbol_t *unpacked_sym_;
+   };
+
+   class SymbolIterator
+   {
+   public:
+     SymbolIterator(uint8_t *start, uint32_t debug_symbols_section_size, bool packed)
+      : cursor_(start),
+      packed_(packed)
+     {
+       cursor_end_ = cursor_ + debug_symbols_section_size;
+     }
+
+     bool Done() {
+       if (packed_) {
+         return cursor_ + sizeof(sp_fdbg_symbol_t) > cursor_end_;
+       }
+       else {
+         return cursor_ + sizeof(sp_u_fdbg_symbol_t) > cursor_end_;
+       }
+     }
+
+     Symbol *Next() {
+       if (packed_) {
+         sp_fdbg_symbol_t *sym = reinterpret_cast<sp_fdbg_symbol_t *>(cursor_);
+         if (sym->dimcount > 0)
+           cursor_ += sizeof(sp_fdbg_arraydim_t) * sym->dimcount;
+         cursor_ += sizeof(sp_fdbg_symbol_t);
+
+         return new Symbol(sym);
+       }
+       else {
+         sp_u_fdbg_symbol_t *sym = reinterpret_cast<sp_u_fdbg_symbol_t *>(cursor_);
+         if (sym->dimcount > 0)
+           cursor_ += sizeof(sp_u_fdbg_arraydim_t) * sym->dimcount;
+         cursor_ += sizeof(sp_u_fdbg_symbol_t);
+
+         return new Symbol(sym);
+       }
+     }
+
+   private:
+     uint8_t *cursor_;
+     uint8_t *cursor_end_;
+
+     bool packed_;
+   };
+
+   SymbolIterator symboliterator();
+
+   class ArrayDim
+   {
+   public:
+     ArrayDim(sp_fdbg_arraydim_t *dim)
+       : tagid_(dim->tagid),
+       size_(dim->size)
+     {}
+
+     ArrayDim(sp_u_fdbg_arraydim_t *dim)
+       : tagid_(dim->tagid),
+       size_(dim->size)
+     {}
+
+     int16_t tagid() {
+       return tagid_;
+     }
+     uint32_t size() {
+       return size_;
+     }
+
+   private:
+     int16_t   tagid_;    /**< Tag id */
+     uint32_t  size_;     /**< Size of dimension */
+   };
+
+   ke::Vector<ArrayDim *> *GetArrayDimensions(const Symbol *sym);
+
  private:
    struct Section
    {
@@ -154,6 +332,9 @@ class SmxV1Image
   const List<sp_file_pubvars_t> &pubvars() const {
     return pubvars_;
   }
+  const List<sp_file_tag_t> &tags() const {
+    return tags_;
+  }
 
  protected:
   bool error(const char *msg) {
@@ -173,6 +354,8 @@ class SmxV1Image
  private:
   template <typename SymbolType, typename DimType>
   const char *lookupFunction(const SymbolType *syms, uint32_t addr);
+  template <typename SymbolType, typename DimType>
+  bool getFunctionAddress(const SymbolType *syms, const char *name, uint32_t *addr, uint32_t *index);
 
  private:
   sp_file_hdr_t *hdr_;

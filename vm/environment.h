@@ -14,6 +14,7 @@
 #define _include_sourcepawn_vm_environment_h_
 
 #include <sp_vm_api.h>
+#include <sp_vm_debug_api.h>
 #include <amtl/am-cxx.h>
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-thread-utils.h>
@@ -112,6 +113,10 @@ class Environment : public ISourcePawnEnvironment
     return debugger_;
   }
 
+  IConsoleDebugger *consoledebugger() const {
+    return console_debugger_;
+  }
+
   WatchdogTimer *watchdog() const {
     return watchdog_timer_;
   }
@@ -163,6 +168,8 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<ISourcePawnEngine2> api_v2_;
   ke::AutoPtr<WatchdogTimer> watchdog_timer_;
   ke::Mutex mutex_;
+
+  ke::AutoPtr<IConsoleDebugger> console_debugger_;
 
   IDebugListener *debugger_;
   ExceptionHandler *eh_top_;

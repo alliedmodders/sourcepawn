@@ -58,6 +58,11 @@ class LegacyImage
   virtual const char *LookupFile(uint32_t code_offset) = 0;
   virtual const char *LookupFunction(uint32_t code_offset) = 0;
   virtual bool LookupLine(uint32_t code_offset, uint32_t *line) = 0;
+
+  // Additional information for interactive debugging.
+  virtual bool GetFunctionAddress(const char *function, const char *file, uint32_t *addr) = 0;
+  virtual bool GetLineAddress(const uint32_t line, const char *file, uint32_t *addr) = 0;
+  virtual const char *FindFileByPartialName(const char *partialname) = 0;
 };
 
 class EmptyImage : public LegacyImage
@@ -125,6 +130,15 @@ class EmptyImage : public LegacyImage
   }
   bool LookupLine(uint32_t code_offset, uint32_t *line) override {
     return false;
+  }
+  bool GetFunctionAddress(const char *function, const char *file, uint32_t *addr) override {
+    return false;
+  }
+  bool GetLineAddress(const uint32_t line, const char *file, uint32_t *addr) override {
+    return false;
+  }
+  const char *FindFileByPartialName(const char *partialname) override {
+    return nullptr;
   }
 
  private:

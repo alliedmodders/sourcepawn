@@ -46,6 +46,12 @@ GetSourcePawnFactory(int apiVersion)
 	return &sFactory;
 }
 
+EXPORTFUNC IConsoleDebugger *
+GetConsoleDebugger()
+{
+	return Environment::get()->consoledebugger();
+}
+
 #if defined __linux__ || defined __APPLE__
 # if !defined(_GLIBCXX_USE_NOEXCEPT)
 #  define _GLIBCXX_USE_NOEXCEPT
