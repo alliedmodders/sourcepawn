@@ -1583,14 +1583,14 @@ Compiler::emitDebugBreakHandler()
   if (!env_->consoledebugger()->IsEnabled())
     return;
 
-  // Get and store the current stack pointer.
-  __ movl(tmp, stk);
-  __ movl(frm, stk);
-  __ subl(tmp, dat);
-  __ movl(Operand(spAddr()), tmp);
-
   // Common path for invoking debugger.
   __ bind(&debug_break_);
+
+  // Get and store the current stack pointer.
+  __ movl(tmp, stk);
+  __ subl(tmp, dat);
+  __ movl(Operand(spAddr()), tmp);
+  
   // Enter the exit frame. This aligns the stack.
   __ enterExitFrame(ExitFrameType::Helper, 0);
 
