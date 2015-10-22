@@ -204,6 +204,13 @@ Environment::DeregisterRuntime(PluginRuntime *rt)
   runtimes_.remove(rt);
 }
 
+bool
+Environment::HasRuntimesRegistered()
+{
+  mutex_.AssertCurrentThreadOwns();
+  return !runtimes_.empty();
+}
+
 static inline void
 SwapLoopEdge(uint8_t *code, LoopEdge &e)
 {

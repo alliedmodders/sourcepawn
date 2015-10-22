@@ -1691,6 +1691,21 @@ namespace SourcePawn {
 using namespace sp;
 
 bool
+ConsoleDebugger::IsEnabled() {
+  return enabled_;
+}
+
+bool
+ConsoleDebugger::SetEnabled(bool enable) {
+  ke::AutoLock lock(Environment::get()->lock());
+  if (Environment::get()->HasRuntimesRegistered())
+    return false;
+
+  enabled_ = enable;
+  return true;
+}
+
+bool
 ConsoleDebugger::StartDebugger(const IPluginContext *ctx) {
   PluginContext *context = (PluginContext *)ctx;
   return context->StartDebugger();

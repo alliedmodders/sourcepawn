@@ -81,6 +81,7 @@ class Environment : public ISourcePawnEnvironment
   // Runtime management.
   void RegisterRuntime(PluginRuntime *rt);
   void DeregisterRuntime(PluginRuntime *rt);
+  bool HasRuntimesRegistered();
   void PatchAllJumpsForTimeout();
   void UnpatchAllJumpsFromTimeout();
   ke::Mutex *lock() {

@@ -47,6 +47,18 @@ namespace SourcePawn
   class IConsoleDebugger
   {
   public:
+
+    // @brief Returns whether debugging is enabled in general.
+    virtual bool IsEnabled() = 0;
+
+    /** @brief Enables debugging in general. Prepares generated code for debugging.
+     * Must be set before a plugin is loaded.
+     *
+     * @param enable  Allow debugging?
+     * @return        True if debugging is allowed now, false if there are loaded plugins already.
+     */
+    virtual bool SetEnabled(bool enable) = 0;
+
     /**
      * @brief Activates the debugger on a plugin. Plugin will pause on the next instruction.
      * @param ctx  Context of the plugin to debug.

@@ -1083,8 +1083,11 @@ Compiler::visitTRACKER_POP_SETHEAP()
 bool
 Compiler::visitBREAK()
 {
-  __ call(&debug_break_);
-  emitCipMapping(op_cip_);
+  // Only emit calls, if debugging is enabled in general.
+  if (env_->get()->consoledebugger()->IsEnabled()) {
+    __ call(&debug_break_);
+    emitCipMapping(op_cip_);
+  }
   return true;
 }
 
@@ -1576,6 +1579,10 @@ Compiler::emitThrowPath(int err)
 void
 Compiler::emitDebugBreakHandler()
 {
+  // No need for this chunk, if debugging is disabled.
+  if (!env_->consoledebugger()->IsEnabled())
+    return;
+
   // Get and store the current stack pointer.
   __ movl(tmp, stk);
   __ movl(frm, stk);

@@ -178,10 +178,20 @@ private:
 
 namespace SourcePawn {
   class ConsoleDebugger : IConsoleDebugger {
+  public:
+    ConsoleDebugger() 
+      : enabled_(false)
+    {}
+
+    bool IsEnabled();
+    bool SetEnabled(bool enable);
     bool StartDebugger(const IPluginContext *ctx) override;
     ke::Vector<IBreakpoint *> *GetBreakpoints(const IPluginContext *ctx) override;
     IBreakpoint *AddBreakpoint(const IPluginContext *ctx, const char *line, bool temporary) override;
     bool ClearBreakpoint(const IPluginContext *ctx, int bpnum) override;
+
+  private:
+    bool enabled_;
   };
 }
 #endif	/* _include_sourcepawn_vm_console_debugger_h_ */

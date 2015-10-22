@@ -897,6 +897,9 @@ PluginContext::StartDebugger()
   if (runtime()->IsPaused())
     return false;
 
+  if (!Environment::get()->consoledebugger()->IsEnabled())
+    return false;
+
   debugger_->Activate();
   debugger_->SetRunmode(STEPPING);
 
