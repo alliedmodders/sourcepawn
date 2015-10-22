@@ -1590,6 +1590,7 @@ Compiler::emitDebugBreakHandler()
   // Get the context pointer and call the debugging break handler.
   __ push(intptr_t(rt_->GetBaseContext()));
   __ call(ExternalAddress((void *)InvokeDebugger));
+  __ addl(esp, 4);
   __ leaveExitFrame();
   __ testl(eax, eax);
   jumpOnError(not_zero);
