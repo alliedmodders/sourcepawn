@@ -422,8 +422,8 @@ Debugger::ListCommands(char *command)
   else if (!stricmp(command, "g") || !stricmp(command, "go")) {
     printf("\tGO may be abbreviated to G\n\n"
       "\tGO\t\trun until the next breakpoint or program termination\n"
-      //"\tGO n\t\trun until line number \"n\"\n"
-      //"\tGO name:n\trun until line number \"n\" in file \"name\"\n"
+      "\tGO n\t\trun until line number \"n\"\n"
+      "\tGO name:n\trun until line number \"n\" in file \"name\"\n"
       "\tGO func\t\trun until the current function returns (\"step out\")\n");
   }
   else if (!stricmp(command, "set")) {
@@ -556,6 +556,30 @@ Debugger::HandleInput(cell_t cip, bool isBp)
         SetRunmode(STEPOUT);
         return;
       }
+
+      // Run until that line
+      if (*params != '\0') {
+        const char *filename = currentfile_;
+        params = ParseBreakpointLine(params, &filename);
+        if (params == nullptr)
+          continue;
+
+        Breakpoint *bp = nullptr;
+        // User specified a line number
+        if (isdigit(*params)) {
+          bp = AddBreakpoint(filename, strtol(params, NULL, 10) - 1, true);
+        }
+
+        if (bp == nullptr) {
+          fputs("Invalid format or bad breakpoint address. Type ? go for the syntax.\n", stdout);
+          return;
+        }
+        
+        uint32_t bpline = 0;
+        image->LookupLine(bp->addr(), &bpline);
+        printf("Running until line %d in file %s.\n", bpline, skippath(filename));
+      }
+
       SetRunmode(RUNNING);
       return;
     }
@@ -659,25 +683,10 @@ Debugger::HandleInput(cell_t cip, bool isBp)
         ListBreakpoints();
       }
       else {
-        // check if a filename precedes the breakpoint location
-        char *sep;
         const char *filename = currentfile_;
-        if ((sep = strchr(params, ':')) != nullptr) {
-          /* the user may have given a partial filename (e.g. without a path), so
-          * walk through all files to find a match
-          */
-          *sep = '\0';
-          filename = image->FindFileByPartialName(params);
-          if (filename == nullptr) {
-            fputs("Invalid filename.\n", stdout);
-            continue;
-          }
-
-          // Skip colon and settle before line number
-          params = sep + 1;
-        }
-
-        params = skipwhitespace(params);
+        params = ParseBreakpointLine(params, &filename);
+        if (params == nullptr)
+          continue;
 
         Breakpoint *bp;
         // User specified a line number
@@ -1013,7 +1022,7 @@ Debugger::HandleInput(cell_t cip, bool isBp)
       }
 
       // Parse address.
-      // We support 3 "magic" addresses:
+      // We support 4 "magic" addresses:
       // $cip: instruction pointer
       // $sp: stack pointer
       // $hp: heap pointer
@@ -1304,6 +1313,33 @@ Debugger::ListBreakpoints()
     }
     printf("\n");
   }
+}
+
+char *
+Debugger::ParseBreakpointLine(char *input, const char **filename)
+{
+  LegacyImage *image = context_->runtime()->image();
+
+  // check if a filename precedes the breakpoint location
+  char *sep;
+  if ((sep = strchr(input, ':')) != nullptr) {
+    /* the user may have given a partial filename (e.g. without a path), so
+    * walk through all files to find a match
+    */
+    *sep = '\0';
+    *filename = image->FindFileByPartialName(input);
+    if (*filename == nullptr) {
+      fputs("Invalid filename.\n", stdout);
+      return nullptr;
+    }
+
+    // Skip colon and settle before line number
+    input = sep + 1;
+  }
+
+  input = skipwhitespace(input);
+
+  return input;
 }
 
 bool
@@ -1738,31 +1774,17 @@ ConsoleDebugger::AddBreakpoint(const IPluginContext *ctx, const char *line, bool
     return nullptr;
 
   // check if a filename precedes the breakpoint location
-  char *sep;
   const char *filename = nullptr;
-  if ((sep = (char *)strchr(line, ':')) != nullptr) {
-    /* the user may have given a partial filename (e.g. without a path), so
-    * walk through all files to find a match
-    */
-    *sep = '\0';
-    filename = context->runtime()->image()->FindFileByPartialName(line);
-    if (filename == nullptr) {
-      // invalid filename
-      return nullptr;
-    }
-
-    // Skip colon and settle before line number
-    line = sep + 1;
-  }
+  line = debugger->ParseBreakpointLine((char *)line, &filename);
 
   // User didn't specify a filename. 
   // Use the main source file by default (last one in the list).
-  SmxV1Image *imagev1 = (SmxV1Image *)context->runtime()->image();
-  if (imagev1->GetFileCount() <= 0)
-    return nullptr;
-  filename = imagev1->GetFileName(imagev1->GetFileCount() - 1);
-
-  line = skipwhitespace((char *)line);
+  if (!filename) {
+    SmxV1Image *imagev1 = (SmxV1Image *)context->runtime()->image();
+    if (imagev1->GetFileCount() <= 0)
+      return nullptr;
+    filename = imagev1->GetFileName(imagev1->GetFileCount() - 1);
+  }
 
   Breakpoint *bp;
   // User specified a line number

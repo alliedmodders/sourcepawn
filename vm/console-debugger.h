@@ -93,6 +93,7 @@ public:
   bool CheckBreakpoint(cell_t cip);
   int FindBreakpoint(char *breakpoint);
   void ListBreakpoints();
+  char *ParseBreakpointLine(char *input, const char **filename);
 
   bool AddWatch(const char *symname);
   bool ClearWatch(const char *symname);
