@@ -2575,7 +2575,6 @@ static void decl_const(int vclass)
   token_t tok;
   int exprtag;
   int symbolline;
-  symbol *sym;
 
   do {
     int orgfline;
@@ -2625,7 +2624,7 @@ static void decl_const(int vclass)
     matchtag(tag,exprtag,FALSE);
     fline=orgfline;
 
-    sym=add_constant(constname,val,vclass,tag);
+    add_constant(constname,val,vclass,tag);
   } while (matchtoken(',')); /* enddo */   /* more? */
   needtoken(tTERM);
 }

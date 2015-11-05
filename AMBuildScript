@@ -35,21 +35,16 @@ class Config(object):
         '-pipe',
         '-Wall',
         '-Werror',
-        '-Wno-switch',
         '-msse',
       ]
       cfg.cxxflags += ['-std=c++11']
 
       have_gcc = cxx.name is 'gcc'
       have_clang = cxx.name is 'clang'
-      if have_clang:
-        cfg.cxxflags += ['-Wno-unused-private-field']
       if have_clang or (have_gcc and cxx.majorVersion >= 4):
         cfg.cflags += ['-fvisibility=hidden']
         cfg.cxxflags += ['-fvisibility-inlines-hidden']
-        if have_clang or (have_gcc and cxx.minorVersion >= 6):
-          cfg.cflags += ['-Wno-narrowing']
-        if (have_gcc and cxx.minorVersion >= 7) or (have_clang and cxx.majorVersion >= 4):
+        if have_clang or (have_gcc and (cxx.majorVersion >= 5 or cxx.minorVersion >= 7)):
           cfg.cxxflags += ['-Wno-delete-non-virtual-dtor']
 
       # Disable some stuff we don't use, that gives us better binary
@@ -64,10 +59,6 @@ class Config(object):
 
       if have_gcc:
         cfg.cflags += ['-mfpmath=sse']
-
-      if (have_gcc and cxx.majorVersion >= 4 and cxx.minorVersion >= 7) or \
-          (have_clang and cxx.majorVersion >= 3):
-        cfg.cxxflags += ['-Wno-delete-non-virtual-dtor']
 
       cfg.postlink += ['-lm']
     elif cxx.name is 'msvc':

@@ -26,10 +26,14 @@ binary.compiler.cxxincludes += [
 
 if binary.compiler.like('gcc'):
   binary.compiler.cflags += [
+    '-Wno-error=switch',
+    '-Wno-error=unused-private-field',
     '-Wno-invalid-offsetof',
-    '-Wno-implicit-exception-spec-mismatch',
-    '-Wno-unused-const-variable',
   ]
+
+  if binary.compiler.like('clang'):
+    binary.compiler.cflags += ['-Wno-implicit-exception-spec-mismatch']
+
   binary.compiler.cxxflags += ['-fno-rtti']
 
 binary.sources += [

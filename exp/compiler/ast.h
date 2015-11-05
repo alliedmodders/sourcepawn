@@ -1622,7 +1622,6 @@ class TypesetDecl : public Statement
 
  private:
   NameToken name_;
-  TokenKind token_;
   Entries *types_;
   TypeSymbol *sym_;
   bool can_eagerly_resolve_ : 1;
