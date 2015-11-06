@@ -33,46 +33,14 @@ int InvokeDebugger(PluginContext *ctx);
 
 static const uint32_t MAXLINELENGTH = 128;
 
-class Breakpoint : IBreakpoint {
-public:
-  Breakpoint(LegacyImage *image, ucell_t addr, const char *name, bool temporary = false)
-    : image_(image),
-    addr_(addr),
-    name_(name),
-    temporary_(temporary)
-  {}
-
-  ucell_t addr() {
-    return addr_;
-  }
-  const char *name() override {
-    return name_;
-  }
-  bool temporary() override {
-    return temporary_;
-  }
-  const char *filename() override {
-    return image_->LookupFile(addr_);
-  }
-  uint32_t line() override {
-    uint32_t line;
-    if (image_->LookupLine(addr_, &line))
-      return line;
-    return 0;
-  }
-private:
-  LegacyImage *image_; /* file image of plugin the address is in */
-  ucell_t addr_; /* address (in code or data segment) */
-  const char *name_; /* name of the symbol (function) */
-  bool temporary_; /* delete breakpoint when hit? */
-};
-
 enum Runmode {
   STEPPING, /* step into functions */
   STEPOVER, /* step over functions */
   STEPOUT, /* run until the function returns */
   RUNNING, /* just run */
 };
+
+class Breakpoint;
 
 class Debugger {
 public:
@@ -124,6 +92,11 @@ public:
 public:
   void HandleInput(cell_t cip, bool isBp);
   void ListCommands(char *command);
+
+  // String/Path helpers
+  static const char *SkipPath(const char *str);
+  static char *SkipWhitespace(char *str);
+  static char *TrimString(char *string);
 
 private:
   void HandleHelpCmd(char *line);
@@ -192,6 +165,40 @@ private:
   WatchTable watch_table_;
 };
 
+class Breakpoint : IBreakpoint {
+public:
+  Breakpoint(LegacyImage *image, ucell_t addr, const char *name, bool temporary = false)
+    : image_(image),
+    addr_(addr),
+    name_(name),
+    temporary_(temporary)
+  {}
+
+  ucell_t addr() {
+    return addr_;
+  }
+  const char *name() override {
+    return name_;
+  }
+  bool temporary() override {
+    return temporary_;
+  }
+  const char *filename() override {
+    return Debugger::SkipPath(image_->LookupFile(addr_));
+  }
+  uint32_t line() override {
+    uint32_t line;
+    if (image_->LookupLine(addr_, &line))
+      return line;
+    return 0;
+  }
+private:
+  LegacyImage *image_; /* file image of plugin the address is in */
+  ucell_t addr_; /* address (in code or data segment) */
+  const char *name_; /* name of the symbol (function) */
+  bool temporary_; /* delete breakpoint when hit? */
+};
+
 } // namespace sp
 
 namespace SourcePawn {
@@ -212,5 +219,5 @@ namespace SourcePawn {
     bool enabled_;
   };
 }
-#endif	/* _include_sourcepawn_vm_console_debugger_h_ */
+#endif  /* _include_sourcepawn_vm_console_debugger_h_ */
 

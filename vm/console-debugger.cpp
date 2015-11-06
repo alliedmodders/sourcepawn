@@ -335,7 +335,8 @@ Debugger::SetCurrentFile(const char *file)
   currentfile_ = file;
 }
 
-static char *strstrip(char *string)
+char *
+Debugger::TrimString(char *string)
 {
   int pos;
 
@@ -348,26 +349,31 @@ static char *strstrip(char *string)
   return string;
 }
 
-static char *skipwhitespace(char *str)
+char *
+Debugger::SkipWhitespace(char *str)
 {
   while (*str == ' ' || *str == '\t')
     str++;
   return (char*)str;
 }
 
-static const char *skippath(const char *str)
+const char *
+Debugger::SkipPath(const char *str)
 {
-  const char *p1, *p2;
+  if (str == nullptr)
+    return nullptr;
 
+  const char *p1 = strrchr(str, '\\');
   /* DOS/Windows pathnames */
-  if ((p1 = strrchr(str, '\\')) != NULL)
+  if (p1 != nullptr)
     p1++;
   else
     p1 = str;
   if (p1 == str && p1[1] == ':')
     p1 = str + 2;
   /* Unix pathnames */
-  if ((p2 = strrchr(str, '/')) != NULL)
+  const char *p2 = strrchr(str, '/');
+  if (p2 != nullptr)
     p2++;
   else
     p2 = str;
@@ -511,9 +517,9 @@ Debugger::HandleInput(cell_t cip, bool isBp)
   frames.Reset();
 
   if (!isBp)
-    printf("STOP at line %d in %s\n", lastline_, skippath(currentfile_));
+    printf("STOP at line %d in %s\n", lastline_, SkipPath(currentfile_));
   else
-    printf("BREAK at line %d in %s\n", lastline_, skippath(currentfile_));
+    printf("BREAK at line %d in %s\n", lastline_, SkipPath(currentfile_));
 
   // Print all watched variables now.
   ListWatches();
@@ -525,7 +531,7 @@ Debugger::HandleInput(cell_t cip, bool isBp)
     fgets(line, sizeof(line), stdin);
 
     // strip newline character, plus leading or trailing white space
-    strstrip(line);
+    TrimString(line);
 
     // Repeat the last command, if no new command was given.
     if (strlen(line) == 0) {
@@ -540,7 +546,7 @@ Debugger::HandleInput(cell_t cip, bool isBp)
     }
 
     params = strchr(line, ' ');
-    params = (params != nullptr) ? skipwhitespace(params) : (char*)"";
+    params = (params != nullptr) ? SkipWhitespace(params) : (char*)"";
 
     if (!stricmp(command, "?")) {
       HandleHelpCmd(line);
@@ -655,7 +661,7 @@ Debugger::HandleGoCmd(char *params)
     uint32_t bpline = 0;
     LegacyImage *image = context_->runtime()->image();
     image->LookupLine(bp->addr(), &bpline);
-    printf("Running until line %d in file %s.\n", bpline, skippath(filename));
+    printf("Running until line %d in file %s.\n", bpline, SkipPath(filename));
   }
 
   SetRunmode(RUNNING);
@@ -677,7 +683,7 @@ Debugger::HandleFunctionListCmd()
       printf("%s", imagev1->GetDebugName(sym.name()));
       const char *filename = image->LookupFile(sym.addr());
       if (filename != nullptr) {
-        printf("\t(%s)", skippath(filename));
+        printf("\t(%s)", SkipPath(filename));
       }
       fputs("\n", stdout);
     }
@@ -783,7 +789,7 @@ Debugger::HandleBreakpointCmd(char *command, char *params)
       uint32_t bpline = 0;
       LegacyImage *image = selected_context_->runtime()->image();
       image->LookupLine(bp->addr(), &bpline);
-      printf("Set breakpoint %d in file %s on line %d", breakpoint_map_.elements(), skippath(filename), bpline);
+      printf("Set breakpoint %d in file %s on line %d", breakpoint_map_.elements(), SkipPath(filename), bpline);
       if (bp->name() != nullptr)
         printf(" in function %s", bp->name());
       fputs("\n", stdout);
@@ -957,7 +963,7 @@ Debugger::HandleDisplayFormatChangeCmd(char *params)
     ke::AutoPtr<SmxV1Image::Symbol> sym;
     strncpy(symname, params, len);
     symname[len] = '\0';
-    params = skipwhitespace(ptr);
+    params = SkipWhitespace(ptr);
 
     LegacyImage *image = selected_context_->runtime()->image();
     SmxV1Image *imagev1 = (SmxV1Image *)image;
@@ -997,7 +1003,7 @@ Debugger::HandleDisplayFormatChangeCmd(char *params)
 void
 Debugger::HandlePrintPositionCmd()
 {
-  printf("\tfile: %s", skippath(currentfile_));
+  printf("\tfile: %s", SkipPath(currentfile_));
 
   LegacyImage *image = selected_context_->runtime()->image();
   const char *function = image->LookupFunction(cip_);
@@ -1340,7 +1346,7 @@ int
 Debugger::FindBreakpoint(char *breakpoint)
 {
   LegacyImage *image = context_->runtime()->image();
-  breakpoint = skipwhitespace(breakpoint);
+  breakpoint = SkipWhitespace(breakpoint);
 
   // check if a filename precedes the breakpoint location
   char *sep = strrchr(breakpoint, ':');
@@ -1361,7 +1367,7 @@ Debugger::FindBreakpoint(char *breakpoint)
     breakpoint = sep + 1;
   }
 
-  breakpoint = skipwhitespace(breakpoint);
+  breakpoint = SkipWhitespace(breakpoint);
   Breakpoint *bp;
   const char *fname;
   uint32_t line;
@@ -1409,7 +1415,7 @@ Debugger::ListBreakpoints()
 
     filename = bp->filename();
     if (filename != nullptr) {
-      printf("\tfile: %s", skippath(filename));
+      printf("\tfile: %s", filename);
     }
 
     if (bp->name() != nullptr) {
@@ -1441,7 +1447,7 @@ Debugger::ParseBreakpointLine(char *input, const char **filename)
     input = sep + 1;
   }
 
-  input = skipwhitespace(input);
+  input = SkipWhitespace(input);
 
   return input;
 }
@@ -1819,7 +1825,7 @@ Debugger::DumpStack()
       const char *file = iter.FilePath();
       if (!file)
         file = "<unknown>";
-      fprintf(stdout, "[%d] Line %d, %s::%s\n", index, iter.LineNumber(), file, name);
+      fprintf(stdout, "[%d] Line %d, %s::%s\n", index, iter.LineNumber(), SkipPath(file), name);
     }
   }
 }
