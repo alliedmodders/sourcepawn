@@ -543,45 +543,16 @@ Debugger::HandleInput(cell_t cip, bool isBp)
     params = (params != nullptr) ? skipwhitespace(params) : (char*)"";
 
     if (!stricmp(command, "?")) {
-      result = sscanf(line, "%*s %30s", command);
-      ListCommands(result ? command : nullptr);
+      HandleHelpCmd(line);
     }
     else if (!stricmp(command, "quit")) {
-      fputs("Clearing all breakpoints. Running normally.\n", stdout);
-      Deactivate();
+      HandleQuitCmd();
       return;
     }
     else if (!stricmp(command, "g") || !stricmp(command, "go")) {
-      if (!stricmp(params, "func")) {
-        SetRunmode(STEPOUT);
+      bool exitConsole = HandleGoCmd(params);
+      if (exitConsole)
         return;
-      }
-
-      // Run until that line
-      if (*params != '\0') {
-        const char *filename = currentfile_;
-        params = ParseBreakpointLine(params, &filename);
-        if (params == nullptr)
-          continue;
-
-        Breakpoint *bp = nullptr;
-        // User specified a line number
-        if (isdigit(*params)) {
-          bp = AddBreakpoint(filename, strtol(params, NULL, 10) - 1, true);
-        }
-
-        if (bp == nullptr) {
-          fputs("Invalid format or bad breakpoint address. Type ? go for the syntax.\n", stdout);
-          return;
-        }
-        
-        uint32_t bpline = 0;
-        image->LookupLine(bp->addr(), &bpline);
-        printf("Running until line %d in file %s.\n", bpline, skippath(filename));
-      }
-
-      SetRunmode(RUNNING);
-      return;
     }
     else if (!stricmp(command, "s") || !stricmp(command, "step")) {
       strncpy(lastcommand, "s", sizeof(lastcommand));
@@ -594,542 +565,675 @@ Debugger::HandleInput(cell_t cip, bool isBp)
       return;
     }
     else if (!stricmp(command, "funcs")) {
-      fputs("Listing functions:\n", stdout);
-      SmxV1Image *imagev1 = (SmxV1Image *)image;
-      SmxV1Image::SymbolIterator iter = imagev1->symboliterator();
-      while (!iter.Done()) {
-        const SmxV1Image::Symbol sym = iter.Next();
-        if (sym.ident() == sp::IDENT_FUNCTION &&
-          imagev1->GetDebugName(sym.name()) != nullptr)
-        {
-          printf("%s", imagev1->GetDebugName(sym.name()));
-          const char *filename = image->LookupFile(sym.addr());
-          if (filename != nullptr) {
-            printf("\t(%s)", skippath(filename));
-          }
-          fputs("\n", stdout);
-        }
-      }
+      HandleFunctionListCmd();
     }
     else if (!stricmp(command, "bt") || !stricmp(command, "backtrace")) {
       printf("Stack trace:\n");
       DumpStack();
     }
     else if (!stricmp(command, "f") || !stricmp(command, "frame")) {
-      if (*params == '\0' || !isdigit(*params)) {
-        fputs("Invalid syntax. Type \"? frame\" for help.\n", stdout);
-        continue;
-      }
-
-      uint32_t frame = atoi(params);
-      if (frame < 0 || frame_count_ <= frame) {
-        printf("Invalid frame. There are only %d frames on the stack.\n", frame_count_);
-        continue;
-      }
-
-      if (frame == selected_frame_) {
-        fputs("This frame is already selected.\n", stdout);
-        continue;
-      }
-
-      // Select this frame to operate on.
-      frames_->Reset();
-      uint32_t index = 0;
-      for (; !frames_->Done(); frames_->Next(), index++) {
-        // Iterator is at the chosen frame now.
-        if (index == frame)
-          break;
-      }
-
-      if (!frames_->IsScriptedFrame()) {
-        printf("%d is not a scripted frame.\n", frame);
-        continue;
-      }
-
-      // Get the plugin context of the target frame
-      selected_context_ = (PluginContext *)frames_->Context();
-      image = selected_context_->runtime()->image();
-
-      // Reset the frame iterator again and count all above frames in the context.
-      frames_->Reset();
-      index = 0;
-      uint32_t num_scripted_frames = 0;
-      for (; !frames_->Done(); frames_->Next(), index++) {
-        // Count the scripted frames in the context to find the right frm pointer.
-        if (frames_->IsScriptedFrame() && frames_->Context() == selected_context_)
-          num_scripted_frames++;
-        // We've reached the chosen frame.
-        if (index == frame)
-          break;
-      }
-
-      // Update internal state for this frame.
-      selected_frame_ = frame;
-      cip_ = frames_->cip();
-      currentfile_ = image->LookupFile(cip_);
-      image->LookupLine(cip_, &lastline_);
-
-      // Find correct new frame pointer.
-      cell_t frm = selected_context_->frm();
-      for (uint32_t i = 1; i < num_scripted_frames; i++) {
-        frm = *(cell_t *)(selected_context_->memory() + frm + 4);
-      }
-      frm_ = frm;
-
-      printf("Selected frame %d.\n", frame);
+      HandleFrameCmd(params);
     }
     else if (!stricmp(command, "break") || !stricmp(command, "tbreak")) {
-      if (*params == '\0') {
-        ListBreakpoints();
-      }
-      else {
-        const char *filename = currentfile_;
-        params = ParseBreakpointLine(params, &filename);
-        if (params == nullptr)
-          continue;
-
-        Breakpoint *bp;
-        // User specified a line number
-        if (isdigit(*params)) {
-          bp = AddBreakpoint(filename, strtol(params, NULL, 10) - 1, !stricmp(command, "tbreak"));
-        }
-        // User wants to add a breakpoint at the current location
-        else if (*params == '.') {
-          bp = AddBreakpoint(filename, lastline_ - 1, !stricmp(command, "tbreak"));
-        }
-        // User specified a function name
-        else {
-          bp = AddBreakpoint(filename, params, !stricmp(command, "tbreak"));
-        }
-
-        if (bp == nullptr) {
-          fputs("Invalid breakpoint\n", stdout);
-        }
-        else {
-          uint32_t bpline = 0;
-          image->LookupLine(bp->addr(), &bpline);
-          printf("Set breakpoint %d in file %s on line %d", breakpoint_map_.elements(), skippath(filename), bpline);
-          if (bp->name() != nullptr)
-            printf(" in function %s", bp->name());
-          fputs("\n", stdout);
-        }
-      }
+      HandleBreakpointCmd(command, params);
     }
     else if (!stricmp(command, "cbreak")) {
-      if (*params == '*') {
-        // clear all breakpoints
-        ClearAllBreakpoints();
-      }
-      else {
-        int number = FindBreakpoint(params);
-        if (number < 0 || !ClearBreakpoint(number))
-          fputs("\tUnknown breakpoint (or wrong syntax)\n", stdout);
-        else
-          printf("\tCleared breakpoint %d\n", number);
-      }
+      HandleClearBreakpointCmd(params);
     }
     else if (!stricmp(command, "disp") || !stricmp(command, "d")) {
-      uint32_t idx[sDIMEN_MAX];
-      int dim = 0;
-      memset(idx, 0, sizeof(idx));
-      SmxV1Image *imagev1 = (SmxV1Image *)image;
-      if (*params == '\0') {
-        // display all variables that are in scope
-        SmxV1Image::SymbolIterator iter = imagev1->symboliterator();
-        while (!iter.Done()) {
-          ke::AutoPtr<SmxV1Image::Symbol> sym;
-          sym = iter.Next();
-          if (sym->ident() != sp::IDENT_FUNCTION &&
-            sym->codestart() <= (uint32_t)cip_ &&
-            sym->codeend() >= (uint32_t)cip_)
-          {
-            printf("%s\t<%#8x>\t", (sym->vclass() & DISP_MASK) > 0 ? "loc" : "glb", (sym->vclass() & DISP_MASK) > 0 ? frm_ + sym->addr() : sym->addr());
-            if (imagev1->GetDebugName(sym->name()) != nullptr) {
-              printf("%s\t", imagev1->GetDebugName(sym->name()));
-            }
-
-            DisplayVariable(sym, idx, 0);
-            fputs("\n", stdout);
-          }
-        }
-      }
-      // Display single variable
-      else {
-        ke::AutoPtr<SmxV1Image::Symbol> sym;
-        char *indexptr = strchr(params, '[');
-        char *behindname = nullptr;
-        assert(dim == 0);
-        // Parse all [x][y] dimensions
-        while (indexptr != nullptr && dim < sDIMEN_MAX) {
-          if (behindname == nullptr)
-            behindname = indexptr;
-
-          indexptr++;
-          idx[dim++] = atoi(indexptr);
-          indexptr = strchr(indexptr, '[');
-        }
-
-        // End the string before the first [ temporarily, 
-        // so GetVariable only looks for the variable name.
-        if (behindname != nullptr)
-          *behindname = '\0';
-
-        // find the symbol with the smallest scope
-        if (imagev1->GetVariable(params, cip_, sym)) {
-          // Add the [ back again
-          if (behindname != nullptr)
-            *behindname = '[';
-
-          printf("%s\t<%#8x>\t%s\t", (sym->vclass() & DISP_MASK) > 0 ? "loc" : "glb", (sym->vclass() & DISP_MASK) > 0 ? frm_ + sym->addr() : sym->addr(), params);
-          DisplayVariable(sym, idx, dim);
-          fputs("\n", stdout);
-        }
-        else {
-          fputs("\tSymbol not found, or not a variable\n", stdout);
-        }
-      }
+      HandleVariableDisplayCmd(params);
     }
     else if (!stricmp(command, "set")) {
-      char varname[32];
-      char strvalue[1024];
-      uint32_t index;
-      cell_t value;
-      ke::AutoPtr<SmxV1Image::Symbol> sym;
-      strvalue[0] = '\0';
-      if (sscanf(params, " %[^[ ][%d] = %d", varname, &index, &value) != 3) {
-        index = 0;
-        if (sscanf(params, " %[^= ] = %d", varname, &value) != 2) {
-          varname[0] = '\0';
-          if (sscanf(params, " %[^= ] = \"%[^\"]\"", varname, strvalue) != 2) {
-            strvalue[0] = '\0';
-          }
-        }
-      }
-
-      if (varname[0] != '\0') {
-        // find the symbol with the given range with the smallest scope
-        SmxV1Image *imagev1 = (SmxV1Image *)image;
-        if (imagev1->GetVariable(varname, cip_, sym)) {
-          // user gave an integer as value
-          if (strvalue[0] == '\0') {
-            SetSymbolValue(sym, index, value);
-            if (index > 0)
-              printf("%s[%d] set to %d\n", varname, index, value);
-            else
-              printf("%s set to %d\n", varname, value);
-          }
-          // we have a string as value
-          else {
-            if ((sym->ident() != sp::IDENT_ARRAY
-              && sym->ident() != sp::IDENT_REFARRAY)
-              || sym->dimcount() != 1) {
-              printf("%s is not a string.\n", varname);
-            }
-            else {
-              SetSymbolString(sym, strvalue);
-              printf("%s set to \"%s\"\n", varname, strvalue);
-            }
-          }
-        }
-        else {
-          fputs("Symbol not found or not a variable\n", stdout);
-        }
-      }
-      else {
-        fputs("Invalid syntax for \"set\". Type \"? set\".\n", stdout);
-      }
+      HandleSetVariableCmd(params);
     }
     else if (!stricmp(command, "files")) {
-      fputs("Source files:\n", stdout);
-      // browse through the file table
-      SmxV1Image *imagev1 = (SmxV1Image *)image;
-      for (unsigned int i = 0; i < imagev1->GetFileCount(); i++) {
-        if (imagev1->GetFileName(i) != nullptr) {
-          printf("%s\n", imagev1->GetFileName(i));
-        }
-      }
+      HandleFilesListCmd();
     }
     // Change display format of symbol
     else if (!stricmp(command, "type")) {
-      char symname[32], *ptr;
-      for (ptr = params; *ptr != '\0' && *ptr != ' ' && *ptr != '\t'; ptr++)
-        /* nothing */;
-      int len = (int)(ptr - params);
-      if (len == 0 || len > 31) {
-        fputs("\tInvalid (or missing) symbol name\n", stdout);
-      }
-      else {
-        ke::AutoPtr<SmxV1Image::Symbol> sym;
-        strncpy(symname, params, len);
-        symname[len] = '\0';
-        params = skipwhitespace(ptr);
-
-        SmxV1Image *imagev1 = (SmxV1Image *)image;
-        if (imagev1->GetVariable(symname, cip_, sym)) {
-          assert(sym != nullptr);
-          if (!stricmp(params, "std")) {
-            sym->setVClass((sym->vclass() & DISP_MASK) | DISP_DEFAULT);
-          }
-          else if (!stricmp(params, "string")) {
-            // check array with single dimension
-            if (!(sym->ident() == sp::IDENT_ARRAY || sym->ident() == sp::IDENT_REFARRAY) ||
-              sym->dimcount() != 1)
-              fputs("\t\"string\" display type is only valid for arrays with one dimension\n", stdout);
-            else
-              sym->setVClass((sym->vclass() & DISP_MASK) | DISP_STRING);
-          }
-          else if (!stricmp(params, "bin")) {
-            sym->setVClass((sym->vclass() & DISP_MASK) | DISP_BIN);
-          }
-          else if (!stricmp(params, "hex")) {
-            sym->setVClass((sym->vclass() & DISP_MASK) | DISP_HEX);
-          }
-          else if (!stricmp(params, "float")) {
-            sym->setVClass((sym->vclass() & DISP_MASK) | DISP_FLOAT);
-          }
-          else {
-            fputs("\tUnknown (or missing) display type\n", stdout);
-          }
-          ListWatches();
-        }
-        else {
-          printf("\tUnknown symbol \"%s\"\n", symname);
-        }
-      }
+      HandleDisplayFormatChangeCmd(params);
     }
     else if (!stricmp(command, "pos")) {
-      printf("\tfile: %s", skippath(currentfile_));
-
-      const char *function = image->LookupFunction(cip_);
-      if (function != nullptr)
-        printf("\tfunction: %s", function);
-
-      printf("\tline: %d", lastline_);
-
-      if (selected_frame_ > 0)
-        printf("\tframe: %d", selected_frame_);
-
-      fputs("\n", stdout);
+      HandlePrintPositionCmd();
     }
     else if (!stricmp(command, "w") || !stricmp(command, "watch")) {
-      if (strlen(params) == 0) {
-        fputs("Missing variable name\n", stdout);
-        continue;
-      }
-      if (AddWatch(params))
-        ListWatches();
-      else
-        fputs("Invalid watch\n", stdout);
+      HandleWatchCmd(params);
     }
     else if (!stricmp(command, "cw") || !stricmp(command, "cwatch")) {
-      if (strlen(params) == 0) {
-        fputs("Missing variable name\n", stdout);
-        continue;
-      }
-
-      if (*params == '*') {
-        ClearAllWatches();
-      }
-      else if (isdigit(*params)) {
-        // Delete watch by index
-        if (!ClearWatch(atoi(params)))
-          fputs("Bad watch number\n", stdout);
-      }
-      else {
-        if (!ClearWatch(params))
-          fputs("Variable not watched\n", stdout);
-      }
-      ListWatches();
+      HandleClearWatchCmd(params);
     }
     else if (command[0] == 'x' || command[0] == 'X') {
-      char* fmt = command + 1;
-
-      if (strlen(params) == 0) {
-        fputs("Missing address.\n", stdout);
-        continue;
-      }
-
-      // Format is x/[count][format][size] <address>
-      if (*fmt != '/') {
-        fputs("Bad format specifier.\n", stdout);
-        continue;
-      }
-      fmt++;
-
-      char* count_str = fmt;
-      // Skip count number
-      while (isdigit(*fmt)) {
-        fmt++;
-      }
-
-      // Default count is 1.
-      int count = 1;
-      // Parse [count] number. The amount of stuff to display.
-      if (count_str != fmt) {
-        count = atoi(count_str);
-        if (count <= 0) {
-          fputs("Invalid count.\n", stdout);
-          continue;
-        }
-      }
-
-      // Format letters are o(octal), x(hex), d(decimal), u(unsigned decimal)
-      // t(binary), f(float), a(address), i(instruction), c(char) and s(string).
-      char* format = fmt++;
-      if (*format != 'o' && *format != 'x' && *format != 'd' &&
-        *format != 'u' && *format != 'f' && *format != 'c' &&
-        *format != 's') {
-        printf("Invalid format letter '%c'.\n", *format);
-        continue;
-      }
-
-      // Size letters are b(byte), h(halfword), w(word).
-      char* size_ltr = fmt;
-
-      unsigned int size;
-      unsigned int line_break;
-      unsigned int mask;
-      switch (*size_ltr) {
-      case 'b':
-        size = 1;
-        line_break = 8;
-        mask = 0x000000ff;
-        break;
-      case 'h':
-        size = 2;
-        line_break = 8;
-        mask = 0x0000ffff;
-        break;
-      case 'w':
-        // Default size is a word, if none was given.
-      case '\0':
-        size = 4;
-        line_break = 4;
-        mask = 0xffffffff;
-        break;
-      default:
-        printf("Invalid size letter '%c'.\n", *size_ltr);
-        continue;
-      }
-
-      // Skip the size letter.
-      if (*size_ltr != '\0')
-        fmt++;
-
-      if (*fmt) {
-        fputs("Invalid output format string.\n", stdout);
-        continue;
-      }
-
-      // Parse address.
-      // We support 4 "magic" addresses:
-      // $cip: instruction pointer
-      // $sp: stack pointer
-      // $hp: heap pointer
-      // $frm: frame pointer
-      cell_t address = 0;
-      if (*params == '$') {
-        if (!stricmp(params, "$cip")) {
-          address = cip_;
-        }
-        // TODO: adjust for selected frame like frm_.
-        else if (!stricmp(params, "$sp")) {
-          address = selected_context_->sp();
-        }
-        else if (!stricmp(params, "$hp")) {
-          address = selected_context_->hp();
-        }
-        else if (!stricmp(params, "$frm")) {
-          address = frm_;
-        }
-        else {
-          printf("Unknown address %s.\n", params);
-          continue;
-        }
-      }
-      // This is a raw address.
-      else {
-        address = (cell_t)strtol(params, NULL, 0);
-      }
-
-      if (((address >= selected_context_->hp()) && (address < selected_context_->sp())) ||
-        (address < 0) || ((ucell_t)address >= selected_context_->HeapSize())) {
-        fputs("Address out of plugin's bounds.\n", stdout);
-        continue;
-      }
-
-      // Print the memory
-      // Create a format string for the desired output format.
-      char fmt_string[16];
-      switch (*format) {
-      case 'd':
-      case 'u':
-        snprintf(fmt_string, sizeof(fmt_string), "%%%d%c", size * 2, *format);
-        break;
-      case 'o':
-        snprintf(fmt_string, sizeof(fmt_string), "0%%0%d%c", size * 2, *format);
-        break;
-      case 'x':
-        snprintf(fmt_string, sizeof(fmt_string), "0x%%0%d%c", size * 2, *format);
-        break;
-      case 's':
-        strncpy(fmt_string, "\"%s\"", sizeof(fmt_string));
-        break;
-      case 'c':
-        strncpy(fmt_string, "'%c'", sizeof(fmt_string));
-        break;
-      case 'f':
-        strncpy(fmt_string, "%.2f", sizeof(fmt_string));
-        break;
-      default:
-        continue;
-      }
-
-      cell_t *data;
-      for (int i = 0; i<count; i++) {
-
-        if (((address >= selected_context_->hp()) && (address < selected_context_->sp())) ||
-          (address < 0) || ((ucell_t)address >= selected_context_->HeapSize()))
-          break;
-
-        if (i % line_break == 0) {
-          if (i > 0)
-            fputs("\n", stdout);
-          printf("0x%x: ", address);
-        }
-
-        data = (cell_t *)(selected_context_->memory() + address);
-
-        switch (*format) {
-        case 'f':
-          printf(fmt_string, sp_ctof(*data));
-          break;
-        case 'd':
-        case 'u':
-        case 'o':
-        case 'x':
-          printf(fmt_string, *data & mask);
-          break;
-        case 's':
-          printf(fmt_string, (char*)data);
-          break;
-        default:
-          printf(fmt_string, *data);
-          break;
-        }
-
-        fputs("  ", stdout);
-
-        // Move to the next address based on the size;
-        address += size;
-      }
-
-      fputs("\n", stdout);
+      HandleDumpMemoryCmd(command, params);
     }
     else {
       printf("\tInvalid command \"%s\", use \"?\" to view all commands\n", command);
     }
   }
+}
+
+void
+Debugger::HandleHelpCmd(char *line)
+{
+  char command[32];
+  int result = sscanf(line, "%*s %30s", command);
+  ListCommands(result ? command : nullptr);
+}
+
+void
+Debugger::HandleQuitCmd()
+{
+  fputs("Clearing all breakpoints. Running normally.\n", stdout);
+  Deactivate();
+}
+
+bool
+Debugger::HandleGoCmd(char *params)
+{
+  if (!stricmp(params, "func")) {
+    SetRunmode(STEPOUT);
+    return true;
+  }
+
+  // Run until that line
+  if (*params != '\0') {
+    const char *filename = currentfile_;
+    params = ParseBreakpointLine(params, &filename);
+    if (params == nullptr)
+      return false;
+
+    Breakpoint *bp = nullptr;
+    // User specified a line number
+    if (isdigit(*params)) {
+      bp = AddBreakpoint(filename, strtol(params, NULL, 10) - 1, true);
+    }
+
+    if (bp == nullptr) {
+      fputs("Invalid format or bad breakpoint address. Type \"? go\" for help.\n", stdout);
+      return false;
+    }
+
+    uint32_t bpline = 0;
+    LegacyImage *image = context_->runtime()->image();
+    image->LookupLine(bp->addr(), &bpline);
+    printf("Running until line %d in file %s.\n", bpline, skippath(filename));
+  }
+
+  SetRunmode(RUNNING);
+  return true;
+}
+
+void
+Debugger::HandleFunctionListCmd()
+{
+  fputs("Listing functions:\n", stdout);
+  LegacyImage *image = context_->runtime()->image();
+  SmxV1Image *imagev1 = (SmxV1Image *)image;
+  SmxV1Image::SymbolIterator iter = imagev1->symboliterator();
+  while (!iter.Done()) {
+    const SmxV1Image::Symbol sym = iter.Next();
+    if (sym.ident() == sp::IDENT_FUNCTION &&
+      imagev1->GetDebugName(sym.name()) != nullptr)
+    {
+      printf("%s", imagev1->GetDebugName(sym.name()));
+      const char *filename = image->LookupFile(sym.addr());
+      if (filename != nullptr) {
+        printf("\t(%s)", skippath(filename));
+      }
+      fputs("\n", stdout);
+    }
+  }
+}
+
+void
+Debugger::HandleFrameCmd(char *params)
+{
+  if (*params == '\0' || !isdigit(*params)) {
+    fputs("Invalid syntax. Type \"? frame\" for help.\n", stdout);
+    return;
+  }
+
+  uint32_t frame = atoi(params);
+  if (frame < 0 || frame_count_ <= frame) {
+    printf("Invalid frame. There are only %d frames on the stack.\n", frame_count_);
+    return;
+  }
+
+  if (frame == selected_frame_) {
+    fputs("This frame is already selected.\n", stdout);
+    return;
+  }
+
+  // Select this frame to operate on.
+  frames_->Reset();
+  uint32_t index = 0;
+  for (; !frames_->Done(); frames_->Next(), index++) {
+    // Iterator is at the chosen frame now.
+    if (index == frame)
+      break;
+  }
+
+  if (!frames_->IsScriptedFrame()) {
+    printf("%d is not a scripted frame.\n", frame);
+    return;
+  }
+
+  // Get the plugin context of the target frame
+  selected_context_ = (PluginContext *)frames_->Context();
+  LegacyImage *image = selected_context_->runtime()->image();
+
+  // Reset the frame iterator again and count all above frames in the context.
+  frames_->Reset();
+  index = 0;
+  uint32_t num_scripted_frames = 0;
+  for (; !frames_->Done(); frames_->Next(), index++) {
+    // Count the scripted frames in the context to find the right frm pointer.
+    if (frames_->IsScriptedFrame() && frames_->Context() == selected_context_)
+      num_scripted_frames++;
+    // We've reached the chosen frame.
+    if (index == frame)
+      break;
+  }
+
+  // Update internal state for this frame.
+  selected_frame_ = frame;
+  cip_ = frames_->cip();
+  currentfile_ = image->LookupFile(cip_);
+  image->LookupLine(cip_, &lastline_);
+
+  // Find correct new frame pointer.
+  cell_t frm = selected_context_->frm();
+  for (uint32_t i = 1; i < num_scripted_frames; i++) {
+    frm = *(cell_t *)(selected_context_->memory() + frm + 4);
+  }
+  frm_ = frm;
+
+  printf("Selected frame %d.\n", frame);
+}
+
+void
+Debugger::HandleBreakpointCmd(char *command, char *params)
+{
+  if (*params == '\0') {
+    ListBreakpoints();
+  }
+  else {
+    const char *filename = currentfile_;
+    params = ParseBreakpointLine(params, &filename);
+    if (params == nullptr)
+      return;
+
+    Breakpoint *bp;
+    // User specified a line number
+    if (isdigit(*params)) {
+      bp = AddBreakpoint(filename, strtol(params, NULL, 10) - 1, !stricmp(command, "tbreak"));
+    }
+    // User wants to add a breakpoint at the current location
+    else if (*params == '.') {
+      bp = AddBreakpoint(filename, lastline_ - 1, !stricmp(command, "tbreak"));
+    }
+    // User specified a function name
+    else {
+      bp = AddBreakpoint(filename, params, !stricmp(command, "tbreak"));
+    }
+
+    if (bp == nullptr) {
+      fputs("Invalid breakpoint\n", stdout);
+    }
+    else {
+      uint32_t bpline = 0;
+      LegacyImage *image = selected_context_->runtime()->image();
+      image->LookupLine(bp->addr(), &bpline);
+      printf("Set breakpoint %d in file %s on line %d", breakpoint_map_.elements(), skippath(filename), bpline);
+      if (bp->name() != nullptr)
+        printf(" in function %s", bp->name());
+      fputs("\n", stdout);
+    }
+  }
+}
+
+void
+Debugger::HandleClearBreakpointCmd(char *params)
+{
+  if (*params == '*') {
+    // clear all breakpoints
+    ClearAllBreakpoints();
+  }
+  else {
+    int number = FindBreakpoint(params);
+    if (number < 0 || !ClearBreakpoint(number))
+      fputs("\tUnknown breakpoint (or wrong syntax)\n", stdout);
+    else
+      printf("\tCleared breakpoint %d\n", number);
+  }
+}
+
+void
+Debugger::HandleVariableDisplayCmd(char *params)
+{
+  uint32_t idx[sDIMEN_MAX];
+  int dim = 0;
+  memset(idx, 0, sizeof(idx));
+  LegacyImage *image = selected_context_->runtime()->image();
+  SmxV1Image *imagev1 = (SmxV1Image *)image;
+  if (*params == '\0') {
+    // display all variables that are in scope
+    SmxV1Image::SymbolIterator iter = imagev1->symboliterator();
+    while (!iter.Done()) {
+      ke::AutoPtr<SmxV1Image::Symbol> sym;
+      sym = iter.Next();
+      if (sym->ident() != sp::IDENT_FUNCTION &&
+        sym->codestart() <= (uint32_t)cip_ &&
+        sym->codeend() >= (uint32_t)cip_)
+      {
+        printf("%s\t<%#8x>\t", (sym->vclass() & DISP_MASK) > 0 ? "loc" : "glb", (sym->vclass() & DISP_MASK) > 0 ? frm_ + sym->addr() : sym->addr());
+        if (imagev1->GetDebugName(sym->name()) != nullptr) {
+          printf("%s\t", imagev1->GetDebugName(sym->name()));
+        }
+
+        DisplayVariable(sym, idx, 0);
+        fputs("\n", stdout);
+      }
+    }
+  }
+  // Display single variable
+  else {
+    ke::AutoPtr<SmxV1Image::Symbol> sym;
+    char *indexptr = strchr(params, '[');
+    char *behindname = nullptr;
+    assert(dim == 0);
+    // Parse all [x][y] dimensions
+    while (indexptr != nullptr && dim < sDIMEN_MAX) {
+      if (behindname == nullptr)
+        behindname = indexptr;
+
+      indexptr++;
+      idx[dim++] = atoi(indexptr);
+      indexptr = strchr(indexptr, '[');
+    }
+
+    // End the string before the first [ temporarily, 
+    // so GetVariable only looks for the variable name.
+    if (behindname != nullptr)
+      *behindname = '\0';
+
+    // find the symbol with the smallest scope
+    if (imagev1->GetVariable(params, cip_, sym)) {
+      // Add the [ back again
+      if (behindname != nullptr)
+        *behindname = '[';
+
+      printf("%s\t<%#8x>\t%s\t", (sym->vclass() & DISP_MASK) > 0 ? "loc" : "glb", (sym->vclass() & DISP_MASK) > 0 ? frm_ + sym->addr() : sym->addr(), params);
+      DisplayVariable(sym, idx, dim);
+      fputs("\n", stdout);
+    }
+    else {
+      fputs("\tSymbol not found, or not a variable\n", stdout);
+    }
+  }
+}
+
+void
+Debugger::HandleSetVariableCmd(char *params)
+{
+  char varname[32];
+  char strvalue[1024];
+  uint32_t index;
+  cell_t value;
+  ke::AutoPtr<SmxV1Image::Symbol> sym;
+  strvalue[0] = '\0';
+  // Array assign?
+  if (sscanf(params, " %[^[ ][%d] = %d", varname, &index, &value) != 3) {
+    index = 0;
+    // Normal variable number assign
+    if (sscanf(params, " %[^= ] = %d", varname, &value) != 2) {
+      varname[0] = '\0';
+      // String assign
+      if (sscanf(params, " %[^= ] = \"%[^\"]\"", varname, strvalue) != 2) {
+        strvalue[0] = '\0';
+      }
+    }
+  }
+
+  if (varname[0] != '\0') {
+    // find the symbol with the given range with the smallest scope
+    LegacyImage *image = selected_context_->runtime()->image();
+    SmxV1Image *imagev1 = (SmxV1Image *)image;
+    if (imagev1->GetVariable(varname, cip_, sym)) {
+      // user gave an integer as value
+      if (strvalue[0] == '\0') {
+        SetSymbolValue(sym, index, value);
+        if (index > 0)
+          printf("%s[%d] set to %d\n", varname, index, value);
+        else
+          printf("%s set to %d\n", varname, value);
+      }
+      // we have a string as value
+      else {
+        if ((sym->ident() != sp::IDENT_ARRAY
+          && sym->ident() != sp::IDENT_REFARRAY)
+          || sym->dimcount() != 1) {
+          printf("%s is not a string.\n", varname);
+        }
+        else {
+          SetSymbolString(sym, strvalue);
+          printf("%s set to \"%s\"\n", varname, strvalue);
+        }
+      }
+    }
+    else {
+      fputs("Symbol not found or not a variable\n", stdout);
+    }
+  }
+  else {
+    fputs("Invalid syntax for \"set\". Type \"? set\".\n", stdout);
+  }
+}
+
+void
+Debugger::HandleFilesListCmd()
+{
+  fputs("Source files:\n", stdout);
+  // browse through the file table
+  LegacyImage *image = selected_context_->runtime()->image();
+  SmxV1Image *imagev1 = (SmxV1Image *)image;
+  for (unsigned int i = 0; i < imagev1->GetFileCount(); i++) {
+    if (imagev1->GetFileName(i) != nullptr) {
+      printf("%s\n", imagev1->GetFileName(i));
+    }
+  }
+}
+
+void
+Debugger::HandleDisplayFormatChangeCmd(char *params)
+{
+  char symname[32], *ptr;
+  for (ptr = params; *ptr != '\0' && *ptr != ' ' && *ptr != '\t'; ptr++)
+    /* nothing */;
+  int len = (int)(ptr - params);
+  if (len == 0 || len > 31) {
+    fputs("\tInvalid (or missing) symbol name\n", stdout);
+  }
+  else {
+    ke::AutoPtr<SmxV1Image::Symbol> sym;
+    strncpy(symname, params, len);
+    symname[len] = '\0';
+    params = skipwhitespace(ptr);
+
+    LegacyImage *image = selected_context_->runtime()->image();
+    SmxV1Image *imagev1 = (SmxV1Image *)image;
+    if (imagev1->GetVariable(symname, cip_, sym)) {
+      assert(sym != nullptr);
+      if (!stricmp(params, "std")) {
+        sym->setVClass((sym->vclass() & DISP_MASK) | DISP_DEFAULT);
+      }
+      else if (!stricmp(params, "string")) {
+        // check array with single dimension
+        if (!(sym->ident() == sp::IDENT_ARRAY || sym->ident() == sp::IDENT_REFARRAY) ||
+          sym->dimcount() != 1)
+          fputs("\t\"string\" display type is only valid for arrays with one dimension\n", stdout);
+        else
+          sym->setVClass((sym->vclass() & DISP_MASK) | DISP_STRING);
+      }
+      else if (!stricmp(params, "bin")) {
+        sym->setVClass((sym->vclass() & DISP_MASK) | DISP_BIN);
+      }
+      else if (!stricmp(params, "hex")) {
+        sym->setVClass((sym->vclass() & DISP_MASK) | DISP_HEX);
+      }
+      else if (!stricmp(params, "float")) {
+        sym->setVClass((sym->vclass() & DISP_MASK) | DISP_FLOAT);
+      }
+      else {
+        fputs("\tUnknown (or missing) display type\n", stdout);
+      }
+      ListWatches();
+    }
+    else {
+      printf("\tUnknown symbol \"%s\"\n", symname);
+    }
+  }
+}
+
+void
+Debugger::HandlePrintPositionCmd()
+{
+  printf("\tfile: %s", skippath(currentfile_));
+
+  LegacyImage *image = selected_context_->runtime()->image();
+  const char *function = image->LookupFunction(cip_);
+  if (function != nullptr)
+    printf("\tfunction: %s", function);
+
+  printf("\tline: %d", lastline_);
+
+  if (selected_frame_ > 0)
+    printf("\tframe: %d", selected_frame_);
+
+  fputs("\n", stdout);
+}
+
+void
+Debugger::HandleWatchCmd(char *params)
+{
+  if (strlen(params) == 0) {
+    fputs("Missing variable name\n", stdout);
+    return;
+  }
+  if (AddWatch(params))
+    ListWatches();
+  else
+    fputs("Invalid watch\n", stdout);
+}
+
+void
+Debugger::HandleClearWatchCmd(char *params)
+{
+  if (strlen(params) == 0) {
+    fputs("Missing variable name\n", stdout);
+    return;
+  }
+
+  if (*params == '*') {
+    ClearAllWatches();
+  }
+  else if (isdigit(*params)) {
+    // Delete watch by index
+    if (!ClearWatch(atoi(params)))
+      fputs("Bad watch number\n", stdout);
+  }
+  else {
+    if (!ClearWatch(params))
+      fputs("Variable not watched\n", stdout);
+  }
+  ListWatches();
+}
+
+void
+Debugger::HandleDumpMemoryCmd(char *command, char *params)
+{
+  char* fmt = command + 1;
+
+  if (strlen(params) == 0) {
+    fputs("Missing address.\n", stdout);
+    return;
+  }
+
+  // Format is x/[count][format][size] <address>
+  if (*fmt != '/') {
+    fputs("Bad format specifier.\n", stdout);
+    return;
+  }
+  fmt++;
+
+  char* count_str = fmt;
+  // Skip count number
+  while (isdigit(*fmt)) {
+    fmt++;
+  }
+
+  // Default count is 1.
+  int count = 1;
+  // Parse [count] number. The amount of stuff to display.
+  if (count_str != fmt) {
+    count = atoi(count_str);
+    if (count <= 0) {
+      fputs("Invalid count.\n", stdout);
+      return;
+    }
+  }
+
+  // Format letters are o(octal), x(hex), d(decimal), u(unsigned decimal)
+  // t(binary), f(float), a(address), i(instruction), c(char) and s(string).
+  char* format = fmt++;
+  if (*format != 'o' && *format != 'x' && *format != 'd' &&
+    *format != 'u' && *format != 'f' && *format != 'c' &&
+    *format != 's') {
+    printf("Invalid format letter '%c'.\n", *format);
+    return;
+  }
+
+  // Size letters are b(byte), h(halfword), w(word).
+  char* size_ltr = fmt;
+
+  unsigned int size;
+  unsigned int line_break;
+  unsigned int mask;
+  switch (*size_ltr) {
+  case 'b':
+    size = 1;
+    line_break = 8;
+    mask = 0x000000ff;
+    break;
+  case 'h':
+    size = 2;
+    line_break = 8;
+    mask = 0x0000ffff;
+    break;
+  case 'w':
+    // Default size is a word, if none was given.
+  case '\0':
+    size = 4;
+    line_break = 4;
+    mask = 0xffffffff;
+    break;
+  default:
+    printf("Invalid size letter '%c'.\n", *size_ltr);
+    return;
+  }
+
+  // Skip the size letter.
+  if (*size_ltr != '\0')
+    fmt++;
+
+  if (*fmt) {
+    fputs("Invalid output format string.\n", stdout);
+    return;
+  }
+
+  // Parse address.
+  // We support 4 "magic" addresses:
+  // $cip: instruction pointer
+  // $sp: stack pointer
+  // $hp: heap pointer
+  // $frm: frame pointer
+  cell_t address = 0;
+  if (*params == '$') {
+    if (!stricmp(params, "$cip")) {
+      address = cip_;
+    }
+    // TODO: adjust for selected frame like frm_.
+    else if (!stricmp(params, "$sp")) {
+      address = selected_context_->sp();
+    }
+    else if (!stricmp(params, "$hp")) {
+      address = selected_context_->hp();
+    }
+    else if (!stricmp(params, "$frm")) {
+      address = frm_;
+    }
+    else {
+      printf("Unknown address %s.\n", params);
+      return;
+    }
+  }
+  // This is a raw address.
+  else {
+    address = (cell_t)strtol(params, NULL, 0);
+  }
+
+  if (((address >= selected_context_->hp()) && (address < selected_context_->sp())) ||
+    (address < 0) || ((ucell_t)address >= selected_context_->HeapSize())) {
+    fputs("Address out of plugin's bounds.\n", stdout);
+    return;
+  }
+
+  // Print the memory
+  // Create a format string for the desired output format.
+  char fmt_string[16];
+  switch (*format) {
+  case 'd':
+  case 'u':
+    snprintf(fmt_string, sizeof(fmt_string), "%%%d%c", size * 2, *format);
+    break;
+  case 'o':
+    snprintf(fmt_string, sizeof(fmt_string), "0%%0%d%c", size * 2, *format);
+    break;
+  case 'x':
+    snprintf(fmt_string, sizeof(fmt_string), "0x%%0%d%c", size * 2, *format);
+    break;
+  case 's':
+    strncpy(fmt_string, "\"%s\"", sizeof(fmt_string));
+    break;
+  case 'c':
+    strncpy(fmt_string, "'%c'", sizeof(fmt_string));
+    break;
+  case 'f':
+    strncpy(fmt_string, "%.2f", sizeof(fmt_string));
+    break;
+  default:
+    return;
+  }
+
+  cell_t *data;
+  for (int i = 0; i<count; i++) {
+
+    if (((address >= selected_context_->hp()) && (address < selected_context_->sp())) ||
+      (address < 0) || ((ucell_t)address >= selected_context_->HeapSize()))
+      break;
+
+    if (i % line_break == 0) {
+      if (i > 0)
+        fputs("\n", stdout);
+      printf("0x%x: ", address);
+    }
+
+    data = (cell_t *)(selected_context_->memory() + address);
+
+    switch (*format) {
+    case 'f':
+      printf(fmt_string, sp_ctof(*data));
+      break;
+    case 'd':
+    case 'u':
+    case 'o':
+    case 'x':
+      printf(fmt_string, *data & mask);
+      break;
+    case 's':
+      printf(fmt_string, (char*)data);
+      break;
+    default:
+      printf(fmt_string, *data);
+      break;
+    }
+
+    fputs("  ", stdout);
+
+    // Move to the next address based on the size;
+    address += size;
+  }
+
+  fputs("\n", stdout);
 }
 
 bool

@@ -125,6 +125,23 @@ public:
   void HandleInput(cell_t cip, bool isBp);
   void ListCommands(char *command);
 
+private:
+  void HandleHelpCmd(char *line);
+  void HandleQuitCmd();
+  bool HandleGoCmd(char *params);
+  void HandleFunctionListCmd();
+  void HandleFrameCmd(char *params);
+  void HandleBreakpointCmd(char *command, char *params);
+  void HandleClearBreakpointCmd(char *params);
+  void HandleVariableDisplayCmd(char *params);
+  void HandleSetVariableCmd(char *params);
+  void HandleFilesListCmd();
+  void HandleDisplayFormatChangeCmd(char *params);
+  void HandlePrintPositionCmd();
+  void HandleWatchCmd(char *params);
+  void HandleClearWatchCmd(char *params);
+  void HandleDumpMemoryCmd(char *command, char *params);
+
 public:
   struct BreakpointMapPolicy {
 
