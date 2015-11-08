@@ -92,7 +92,7 @@ struct FullMacroRef
 
 struct FullSourceRef
 {
-  Ref<SourceFile> file;
+  RefPtr<SourceFile> file;
   unsigned line;
   unsigned col;
   unsigned offset;
@@ -140,7 +140,7 @@ struct LREntry
   SourceLocation parent;
 
   // If we included from a file, this is where we included.
-  Ref<SourceFile> file;
+  RefPtr<SourceFile> file;
 
   // If we included from a macro, this is is the macro definition.
   Macro *macro;
@@ -225,7 +225,7 @@ class SourceManager
 
   // Create a location tracker for a file. If out of bits, returns an invalid
   // tracker and reports an error;
-  LREntry trackFile(const SourceLocation &from, Ref<SourceFile> file);
+  LREntry trackFile(const SourceLocation &from, RefPtr<SourceFile> file);
 
   // Create a location tracker for a macro. If out of bits, returns an invalid
   // tracker and reports an error;
@@ -271,7 +271,7 @@ class SourceManager
  private:
   StringPool &strings_;
   ReportManager &rr_;
-  AtomMap<Ref<SourceFile>> file_cache_;
+  AtomMap<RefPtr<SourceFile>> file_cache_;
   Vector<LREntry> locations_;
 
   // Source ids start from 1. The source file id is 1 + len(source) + 1. This

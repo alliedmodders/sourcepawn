@@ -664,17 +664,17 @@ typedef SmxBlobSection<void> SmxDebugSymbolsSection;
 typedef SmxBlobSection<void> SmxDebugNativesSection;
 typedef Vector<symbol *> SymbolList;
 
-static void append_debug_tables(SmxBuilder *builder, StringPool &pool, Ref<SmxNameTable> names, SymbolList &nativeList)
+static void append_debug_tables(SmxBuilder *builder, StringPool &pool, RefPtr<SmxNameTable> names, SymbolList &nativeList)
 {
   // We use a separate name table for historical reasons that are no longer
   // necessary. In the future we should just alias this to ".names".
-  Ref<SmxNameTable> dbgnames = new SmxNameTable(".dbg.strings");
-  Ref<SmxDebugInfoSection> info = new SmxDebugInfoSection(".dbg.info");
-  Ref<SmxDebugLineSection> lines = new SmxDebugLineSection(".dbg.lines");
-  Ref<SmxDebugFileSection> files = new SmxDebugFileSection(".dbg.files");
-  Ref<SmxDebugSymbolsSection> symbols = new SmxDebugSymbolsSection(".dbg.symbols");
-  Ref<SmxDebugNativesSection> natives = new SmxDebugNativesSection(".dbg.natives");
-  Ref<SmxTagSection> tags = new SmxTagSection(".tags");
+  RefPtr<SmxNameTable> dbgnames = new SmxNameTable(".dbg.strings");
+  RefPtr<SmxDebugInfoSection> info = new SmxDebugInfoSection(".dbg.info");
+  RefPtr<SmxDebugLineSection> lines = new SmxDebugLineSection(".dbg.lines");
+  RefPtr<SmxDebugFileSection> files = new SmxDebugFileSection(".dbg.files");
+  RefPtr<SmxDebugSymbolsSection> symbols = new SmxDebugSymbolsSection(".dbg.symbols");
+  RefPtr<SmxDebugNativesSection> natives = new SmxDebugNativesSection(".dbg.natives");
+  RefPtr<SmxTagSection> tags = new SmxTagSection(".tags");
 
   stringlist *dbgstrs = get_dbgstrings();
 
@@ -829,12 +829,12 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
 {
   StringPool pool;
   SmxBuilder builder;
-  Ref<SmxNativeSection> natives = new SmxNativeSection(".natives");
-  Ref<SmxPublicSection> publics = new SmxPublicSection(".publics");
-  Ref<SmxPubvarSection> pubvars = new SmxPubvarSection(".pubvars");
-  Ref<SmxDataSection> data = new SmxDataSection(".data");
-  Ref<SmxCodeSection> code = new SmxCodeSection(".code");
-  Ref<SmxNameTable> names = new SmxNameTable(".names");
+  RefPtr<SmxNativeSection> natives = new SmxNativeSection(".natives");
+  RefPtr<SmxPublicSection> publics = new SmxPublicSection(".publics");
+  RefPtr<SmxPubvarSection> pubvars = new SmxPubvarSection(".pubvars");
+  RefPtr<SmxDataSection> data = new SmxDataSection(".data");
+  RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
+  RefPtr<SmxNameTable> names = new SmxNameTable(".names");
 
   Vector<symbol *> nativeList;
   Vector<function_entry> functions;

@@ -113,7 +113,7 @@ Preprocessor::define_builtin_string(const char *name, const char *str)
 }
 
 bool
-Preprocessor::enter(Ref<SourceFile> file)
+Preprocessor::enter(RefPtr<SourceFile> file)
 {
   LREntry tr = cc_.source().trackFile(SourceLocation(), file);
   if (!tr.valid())
@@ -345,7 +345,7 @@ Preprocessor::enterFile(TokenKind directive,
   }
 
   ReportingContext rc(cc_, from);
-  Ref<SourceFile> new_file = cc_.source().open(rc, path.ptr());
+  RefPtr<SourceFile> new_file = cc_.source().open(rc, path.ptr());
   if (!new_file)
     return false;
 
@@ -438,7 +438,7 @@ Preprocessor::enterMacro(const SourceLocation &nameLoc, Atom *name)
   // We cache macro lexers since we expect to see more macros than we do
   // #includes. This may be an overoptimization given that we're discouraging
   // macros in SP2.
-  Ref<MacroLexer> macro_lexer;
+  RefPtr<MacroLexer> macro_lexer;
   if (recycled_macro_lexers_.empty()) {
     macro_lexer = new MacroLexer(cc_, *this, macro, range);
   } else {

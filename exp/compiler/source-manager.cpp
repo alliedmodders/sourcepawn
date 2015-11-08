@@ -121,7 +121,7 @@ PassRef<SourceFile>
 SourceManager::open(ReportingContext &cc, const char *path)
 {
   Atom *atom = strings_.add(path);
-  AtomMap<Ref<SourceFile>>::Insert p = file_cache_.findForAdd(atom);
+  AtomMap<RefPtr<SourceFile>>::Insert p = file_cache_.findForAdd(atom);
   if (p.found())
     return p->value;
 
@@ -134,7 +134,7 @@ SourceManager::open(ReportingContext &cc, const char *path)
   if (!reader.read(chars.address(), &length))
     return nullptr;
 
-  Ref<SourceFile> file = new SourceFile(chars.forget(), length, path);
+  RefPtr<SourceFile> file = new SourceFile(chars.forget(), length, path);
   file_cache_.add(p, atom, file);
   return file;
 }
@@ -163,7 +163,7 @@ SourceManager::trackExtents(uint32_t length, size_t *index)
 }
 
 LREntry
-SourceManager::trackFile(const SourceLocation &from, Ref<SourceFile> file)
+SourceManager::trackFile(const SourceLocation &from, RefPtr<SourceFile> file)
 {
   size_t loc_index;
   if (!trackExtents(file->length(), &loc_index)) {

@@ -39,7 +39,7 @@ CodeAllocator::Allocate(size_t rawBytes)
     return CodeChunk();
 
   // First search the cache for any pools we can re-use.
-  Ref<CodePool> pool = findPool(bytes);
+  RefPtr<CodePool> pool = findPool(bytes);
   if (pool)
     return allocateInPool(pool, bytes);
 
@@ -72,9 +72,9 @@ CodeAllocator::findPool(size_t bytes)
 {
   // Find the cached pool with the smallest free region that holds |bytes|, to
   // reduce fragmentation.
-  Ref<CodePool> min;
+  RefPtr<CodePool> min;
   for (size_t i = 0; i < cached_pools_.length(); i++) {
-    Ref<CodePool> pool = cached_pools_[i];
+    RefPtr<CodePool> pool = cached_pools_[i];
     if (bytes > pool->bytesFree())
       continue;
     if (!min || pool->bytesFree() < min->bytesFree())
@@ -84,7 +84,7 @@ CodeAllocator::findPool(size_t bytes)
 }
 
 CodeChunk
-CodeAllocator::allocateInPool(Ref<CodePool> pool, size_t bytes)
+CodeAllocator::allocateInPool(RefPtr<CodePool> pool, size_t bytes)
 {
   uint8_t* address = pool->allocate(bytes);
   return CodeChunk(pool, address, bytes);

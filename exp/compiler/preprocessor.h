@@ -67,7 +67,7 @@ class Preprocessor
   Preprocessor(CompileContext &cc);
 
   // Start preprocessing a file. This blows away any existing lexer state.
-  bool enter(Ref<SourceFile> file);
+  bool enter(RefPtr<SourceFile> file);
 
   // Functions for the parser and eval().
   TokenKind peek();
@@ -193,12 +193,12 @@ class Preprocessor
 
  private:
   struct SavedLexer {
-    Ref<Lexer> lexer;
-    Ref<MacroLexer> macro_lexer;
+    RefPtr<Lexer> lexer;
+    RefPtr<MacroLexer> macro_lexer;
 
     SavedLexer()
     {}
-    SavedLexer(Ref<Lexer> lexer, Ref<MacroLexer> macro_lexer)
+    SavedLexer(RefPtr<Lexer> lexer, RefPtr<MacroLexer> macro_lexer)
      : lexer(lexer),
        macro_lexer(macro_lexer)
     {}
@@ -212,12 +212,12 @@ class Preprocessor
 
   AtomMap<Macro *> macros_;
 
-  Vector<Ref<MacroLexer>> recycled_macro_lexers_;
+  Vector<RefPtr<MacroLexer>> recycled_macro_lexers_;
   Vector<SavedLexer> lexer_stack_;
 
   // Exactly one of these is set at a given time.
-  Ref<Lexer> lexer_;
-  Ref<MacroLexer> macro_lexer_;
+  RefPtr<Lexer> lexer_;
+  RefPtr<MacroLexer> macro_lexer_;
 
   // We keep two separate token buffers. It's important that preprocessor
   // tokens do not get injected into the middle of the normal token stream.

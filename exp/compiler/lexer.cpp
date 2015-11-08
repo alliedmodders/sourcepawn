@@ -27,7 +27,7 @@ using namespace ke;
 using namespace sp;
 
 Lexer::Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
-             Ref<SourceFile> buffer, const LREntry &range)
+             RefPtr<SourceFile> buffer, const LREntry &range)
  : cc_(cc),
    pp_(pp),
    options_(options),

@@ -43,7 +43,7 @@ SmxBuilder::write(ISmxBuffer *buf)
 
   size_t current_string_offset = 0;
   for (size_t i = 0; i < sections_.length(); i++) {
-    Ref<SmxSection> section = sections_[i];
+    RefPtr<SmxSection> section = sections_[i];
     header.disksize += section->length();
     current_string_offset += section->name().length() + 1;
   }

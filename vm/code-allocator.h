@@ -72,7 +72,7 @@ struct CodeChunk
   }
 
  private:
-  Ref<CodePool> pool_;
+  RefPtr<CodePool> pool_;
   uint8_t* address_;
   size_t bytes_;
 };
@@ -89,14 +89,14 @@ class CodeAllocator
  private:
   PassRef<CodePool> newPool(size_t bytes);
   PassRef<CodePool> findPool(size_t bytes);
-  CodeChunk allocateInPool(Ref<CodePool> pool, size_t bytes);
+  CodeChunk allocateInPool(RefPtr<CodePool> pool, size_t bytes);
 
  private:
   CodeAllocator(const CodeAllocator&) = delete;
   void operator =(const CodeAllocator&) = delete;
 
  private:
-  Vector<Ref<CodePool>> cached_pools_;
+  Vector<RefPtr<CodePool>> cached_pools_;
 };
 
 } // namespace sp

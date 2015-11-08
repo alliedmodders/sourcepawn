@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     CompileContext cc(pool, strings, reports, source);
     
     ReportingContext rc(cc, SourceLocation(), false);
-    Ref<SourceFile> file = source.open(rc, argv[1]);
+    RefPtr<SourceFile> file = source.open(rc, argv[1]);
     if (!file) {
       fprintf(stderr, "cannot open file '%s'\n", argv[1]);
       return 1;

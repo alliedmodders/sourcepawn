@@ -29,7 +29,7 @@ Preprocessor::eval(int *out)
   //
   // If evaluation fails, we will have to manually discard lexers until we
   // reach the original lexer.
-  Ref<Lexer> start = lexer_;
+  RefPtr<Lexer> start = lexer_;
   assert(start->processingDirective());
 
   // Switch to the preprocessing token buffer. Since we're lexing a directive

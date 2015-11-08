@@ -121,7 +121,7 @@ class SmxBuilder
 
   bool write(FILE *fp);
 
-  void add(const Ref<SmxSection> &section) {
+  void add(const RefPtr<SmxSection> &section) {
     sections_.append(section);
   }
 
@@ -130,8 +130,8 @@ class SmxBuilder
   }
 
  private:
-  Ref<SmxNameTable> names_;
-  Vector<Ref<SmxSection>> sections_;
+  RefPtr<SmxNameTable> names_;
+  Vector<RefPtr<SmxSection>> sections_;
 };
 
 } // namespace ke

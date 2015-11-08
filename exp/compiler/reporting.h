@@ -117,7 +117,7 @@ class TMessage : public ke::Refcounted<TMessage>
   void addArg(size_t value);
   void addArg(Type *type);
 
-  void addNote(Ref<TMessage> note) {
+  void addNote(RefPtr<TMessage> note) {
     if (note) {
       assert(!note->notes_.length());
       notes_.append(note);
@@ -144,13 +144,13 @@ class TMessage : public ke::Refcounted<TMessage>
   SourceLocation origin_;
   rmsg::Id message_id_;
   Vector<AutoPtr<Arg>> args_;
-  Vector<Ref<TMessage>> notes_;
+  Vector<RefPtr<TMessage>> notes_;
 };
 
 class MessageBuilder 
 {
  public:
-  explicit MessageBuilder(Ref<TMessage> report)
+  explicit MessageBuilder(RefPtr<TMessage> report)
    : report_(report)
   {}
   MessageBuilder(const MessageBuilder &other)
@@ -182,7 +182,7 @@ class MessageBuilder
   }
 
  private:
-  Ref<TMessage> report_;
+  RefPtr<TMessage> report_;
 };
 
 // The report manager is responsible for managing errors, warnings, and
@@ -223,10 +223,10 @@ class ReportManager
   MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id);
   MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id);
   MessageBuilder build(const SourceLocation &loc, rmsg::Id msg_id);
-  void report(const Ref<TMessage> &msg);
+  void report(const RefPtr<TMessage> &msg);
 
  private:
-  void printMessage(Ref<TMessage> message);
+  void printMessage(RefPtr<TMessage> message);
   void printSourceLine(const FullSourceRef &ref);
 
   AString renderSourceRef(const FullSourceRef &ref);
@@ -240,7 +240,7 @@ class ReportManager
   SourceLocation fatal_loc_;
 
   unsigned num_errors_;
-  Vector<Ref<TMessage>> messages_;
+  Vector<RefPtr<TMessage>> messages_;
 };
 
 struct ReportingContext

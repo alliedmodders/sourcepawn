@@ -417,7 +417,7 @@ Run(CompileContext &cc, const char *path)
 
     {
       ReportingContext rc(cc, SourceLocation());
-      Ref<SourceFile> file = cc.source().open(rc, path);
+      RefPtr<SourceFile> file = cc.source().open(rc, path);
       if (!file)
         return nullptr;
       if (!pp.enter(file))

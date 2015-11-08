@@ -84,7 +84,7 @@ ReportMemory(FILE *fp)
 }
 
 bool
-CompileContext::compile(Ref<SourceFile> file)
+CompileContext::compile(RefPtr<SourceFile> file)
 {
   Preprocessor pp(*this);
 

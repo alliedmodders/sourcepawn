@@ -204,12 +204,12 @@ class SmxBuilder
 
   bool write(ISmxBuffer *buf);
 
-  void add(const Ref<SmxSection> &section) {
+  void add(const RefPtr<SmxSection> &section) {
     sections_.append(section);
   }
 
  private:
-  Vector<Ref<SmxSection>> sections_;
+  Vector<RefPtr<SmxSection>> sections_;
 };
 
 } // namespace ke

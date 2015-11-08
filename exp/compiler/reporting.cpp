@@ -103,12 +103,12 @@ ReportManager::note(const SourceLocation &loc, rmsg::Id msg_id)
   if (num_errors_ >= kErrorMessageLimit)
     return MessageBuilder(nullptr);
 
-  Ref<TMessage> message = new TMessage(loc, msg_id);
+  RefPtr<TMessage> message = new TMessage(loc, msg_id);
   return MessageBuilder(message);
 }
 
 void
-ReportManager::report(const Ref<TMessage> &msg)
+ReportManager::report(const RefPtr<TMessage> &msg)
 {
   assert(GetMessageInfo(msg->id()).type != rmsg_type::fatal);
 
@@ -129,7 +129,7 @@ ReportManager::report(const Ref<TMessage> &msg)
 MessageBuilder
 ReportManager::build(const SourceLocation &loc, rmsg::Id msg_id)
 {
-  Ref<TMessage> message = new TMessage(loc, msg_id);
+  RefPtr<TMessage> message = new TMessage(loc, msg_id);
   return MessageBuilder(message);
 }
 
@@ -139,7 +139,7 @@ ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
   if (num_errors_ >= kErrorMessageLimit)
     return MessageBuilder(nullptr);
 
-  Ref<TMessage> message = new TMessage(loc, msg_id);
+  RefPtr<TMessage> message = new TMessage(loc, msg_id);
   report(message);
 
   return MessageBuilder(message);
@@ -330,7 +330,7 @@ ReportManager::renderSourceRef(const FullSourceRef &ref)
 }
 
 void
-ReportManager::printMessage(Ref<TMessage> message)
+ReportManager::printMessage(RefPtr<TMessage> message)
 {
   TokenHistory history;
   source_->getTokenHistory(message->origin(), &history);
