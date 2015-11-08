@@ -133,7 +133,7 @@ class TMessage : public ke::Refcounted<TMessage>
   size_t num_notes() const {
     return notes_.length();
   }
-  PassRef<TMessage> note(size_t i) const {
+  RefPtr<TMessage> note(size_t i) const {
     return notes_[i];
   }
   const Vector<AutoPtr<Arg>> &args() const {
@@ -177,7 +177,7 @@ class MessageBuilder
     return *this;
   }
 
-  PassRef<TMessage> get() const {
+  RefPtr<TMessage> get() const {
     return report_;
   }
 

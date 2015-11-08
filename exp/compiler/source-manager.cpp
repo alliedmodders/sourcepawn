@@ -117,7 +117,7 @@ SourceManager::SourceManager(StringPool &strings, ReportManager &reports)
   reports.setSourceManager(this);
 }
 
-PassRef<SourceFile>
+RefPtr<SourceFile>
 SourceManager::open(ReportingContext &cc, const char *path)
 {
   Atom *atom = strings_.add(path);
@@ -243,7 +243,7 @@ SourceManager::normalize(const SourceLocation &aLoc)
   return loc;
 }
 
-PassRef<SourceFile>
+RefPtr<SourceFile>
 SourceManager::getSource(const SourceLocation &aLoc)
 {
   SourceLocation loc = normalize(aLoc);

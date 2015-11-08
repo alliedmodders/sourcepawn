@@ -125,7 +125,7 @@ class SmxBuilder
     sections_.append(section);
   }
 
-  PassRef<SmxNameTable> names() {
+  const RefPtr<SmxNameTable>& names() {
     return names_;
   }
 

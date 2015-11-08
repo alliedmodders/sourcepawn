@@ -38,7 +38,7 @@ class Lexer : public ke::Refcounted<Lexer>
   Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
         RefPtr<SourceFile> buffer, const LREntry &range);
 
-  PassRef<SourceFile> buffer() const {
+  const RefPtr<SourceFile>& buffer() const {
     return buffer_;
   }
   const LexOptions &options() const {

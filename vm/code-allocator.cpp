@@ -67,7 +67,7 @@ CodeAllocator::Allocate(size_t rawBytes)
   return chunk;
 }
 
-PassRef<CodePool>
+RefPtr<CodePool>
 CodeAllocator::findPool(size_t bytes)
 {
   // Find the cached pool with the smallest free region that holds |bytes|, to
@@ -94,7 +94,7 @@ static const size_t kDefaultMinPoolSize = 1 * kMB;
 static size_t kPageGranularity = 0;
 static size_t kMinPoolSize = 1 * kMB;
 
-PassRef<CodePool>
+RefPtr<CodePool>
 CodePool::AllocateFor(size_t askBytes)
 {
   if (!kPageGranularity) {

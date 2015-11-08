@@ -211,7 +211,7 @@ class SourceManager
  public:
   SourceManager(StringPool &strings, ReportManager &reports);
 
-  PassRef<SourceFile> open(ReportingContext &cc, const char *path);
+  RefPtr<SourceFile> open(ReportingContext &cc, const char *path);
 
   // Returns whether two source locations ultimately originate from the same
   // file (i.e., ignoring macros).
@@ -243,7 +243,7 @@ class SourceManager
   FullSourceRef decode(const SourceLocation &loc);
 
   // These will be removed once we overhaul error reporting.
-  PassRef<SourceFile> getSource(const SourceLocation &loc);
+  RefPtr<SourceFile> getSource(const SourceLocation &loc);
   unsigned getLine(const SourceLocation &loc);
   unsigned getCol(const SourceLocation &loc);
 

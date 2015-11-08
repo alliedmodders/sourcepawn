@@ -33,7 +33,7 @@ class CodePool : public ke::Refcounted<CodePool>
  private:
   CodePool(uint8_t* start, size_t size);
 
-  static PassRef<CodePool> AllocateFor(size_t bytes);
+  static RefPtr<CodePool> AllocateFor(size_t bytes);
 
   uint8_t* allocate(size_t bytes);
   size_t bytesFree() const {
@@ -58,7 +58,7 @@ struct CodeChunk
    : address_(nullptr),
      bytes_(0)
   {}
-  CodeChunk(PassRef<CodePool> pool, uint8_t* address, size_t bytes)
+  CodeChunk(RefPtr<CodePool> pool, uint8_t* address, size_t bytes)
    : pool_(pool),
      address_(address),
      bytes_(bytes)
@@ -87,8 +87,8 @@ class CodeAllocator
   CodeChunk Allocate(size_t bytes);
 
  private:
-  PassRef<CodePool> newPool(size_t bytes);
-  PassRef<CodePool> findPool(size_t bytes);
+  RefPtr<CodePool> newPool(size_t bytes);
+  RefPtr<CodePool> findPool(size_t bytes);
   CodeChunk allocateInPool(RefPtr<CodePool> pool, size_t bytes);
 
  private:
