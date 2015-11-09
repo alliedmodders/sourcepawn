@@ -208,6 +208,7 @@ namespace SourcePawn {
       : enabled_(false)
     {}
 
+    int ApiVersion();
     bool IsEnabled();
     bool SetEnabled(bool enable);
     bool StartDebugger(const IPluginContext *ctx) override;

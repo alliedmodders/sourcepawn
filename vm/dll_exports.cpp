@@ -47,8 +47,10 @@ GetSourcePawnFactory(int apiVersion)
 }
 
 EXPORTFUNC IConsoleDebugger *
-GetConsoleDebugger()
+GetConsoleDebugger(int apiVersion)
 {
+	if (apiVersion > SOURCEPAWN_API_VERSION)
+		return nullptr;
 	return Environment::get()->consoledebugger();
 }
 

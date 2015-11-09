@@ -1836,6 +1836,11 @@ namespace SourcePawn {
 
 using namespace sp;
 
+int
+ConsoleDebugger::ApiVersion() {
+  return SOURCEPAWN_CONSOLE_DEBUGGER_API_VERSION;
+}
+
 bool
 ConsoleDebugger::IsEnabled() {
   return enabled_;

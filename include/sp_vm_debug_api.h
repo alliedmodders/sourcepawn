@@ -20,6 +20,9 @@
 
 #include <am-vector.h>
 
+// This is subject to change.
+#define SOURCEPAWN_CONSOLE_DEBUGGER_API_VERSION 0x01
+
 namespace SourcePawn
 {
   class IPluginContext;
@@ -47,6 +50,9 @@ namespace SourcePawn
   class IConsoleDebugger
   {
   public:
+
+    // @brief Return the API version.
+    virtual int ApiVersion() = 0;
 
     // @brief Returns whether debugging is enabled in general.
     virtual bool IsEnabled() = 0;
@@ -94,6 +100,6 @@ namespace SourcePawn
 
   // @brief A function named "GetConsoleDebugger" is exported from the
   // SourcePawn DLL, conforming to the following signature:
-  typedef IConsoleDebugger *(*GetConsoleDebuggerFn)();
+  typedef IConsoleDebugger *(*GetConsoleDebuggerFn)(int apiVersion);
 }
 #endif //_INCLUDE_SOURCEPAWN_VM_DEBUG_API_H_
