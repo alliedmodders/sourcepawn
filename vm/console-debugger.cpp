@@ -547,8 +547,6 @@ Debugger::HandleInput(cell_t cip, bool isBp)
   // Only |step| and |next| can be repeated like that.
   static char lastcommand[32] = "";
 
-  LegacyImage *image = context_->runtime()->image();
-
   // Reset the state.
   FrameIterator frames;
   frames_ = &frames;
@@ -591,7 +589,7 @@ Debugger::HandleInput(cell_t cip, bool isBp)
 
     // Repeat the last command, if no new command was given.
     if (strlen(line) == 0) {
-      strncpy(line, lastcommand, sizeof(line));
+      ke::SafeStrcpy(line, sizeof(line), lastcommand);
     }
     lastcommand[0] = '\0';
 
@@ -619,12 +617,12 @@ Debugger::HandleInput(cell_t cip, bool isBp)
         return;
     }
     else if (!stricmp(command, "s") || !stricmp(command, "step")) {
-      strncpy(lastcommand, "s", sizeof(lastcommand));
+      ke::SafeStrcpy(lastcommand, sizeof(lastcommand), "s");
       SetRunmode(STEPPING);
       return;
     }
     else if (!stricmp(command, "n") || !stricmp(command, "next")) {
-      strncpy(lastcommand, "n", sizeof(lastcommand));
+      ke::SafeStrcpy(lastcommand, sizeof(lastcommand), "n");
       SetRunmode(STEPOVER);
       return;
     }
@@ -1044,7 +1042,7 @@ Debugger::HandleDisplayFormatChangeCmd(char *params)
   else {
     // Copy the symbol name from the params.
     char symname[32];
-    strncpy(symname, params, len);
+    ke::SafeStrcpy(symname, len, params);
     symname[len] = '\0';
 
     // Skip to the desired display type.
@@ -1277,22 +1275,22 @@ Debugger::HandleDumpMemoryCmd(char *command, char *params)
   switch (*format) {
   case 'd':
   case 'u':
-    snprintf(fmt_string, sizeof(fmt_string), "%%%d%c", size * 2, *format);
+    ke::SafeSprintf(fmt_string, sizeof(fmt_string), "%%%d%c", size * 2, *format);
     break;
   case 'o':
-    snprintf(fmt_string, sizeof(fmt_string), "0%%0%d%c", size * 2, *format);
+    ke::SafeSprintf(fmt_string, sizeof(fmt_string), "0%%0%d%c", size * 2, *format);
     break;
   case 'x':
-    snprintf(fmt_string, sizeof(fmt_string), "0x%%0%d%c", size * 2, *format);
+    ke::SafeSprintf(fmt_string, sizeof(fmt_string), "0x%%0%d%c", size * 2, *format);
     break;
   case 's':
-    strncpy(fmt_string, "\"%s\"", sizeof(fmt_string));
+    ke::SafeStrcpy(fmt_string, sizeof(fmt_string), "\"%s\"");
     break;
   case 'c':
-    strncpy(fmt_string, "'%c'", sizeof(fmt_string));
+    ke::SafeStrcpy(fmt_string, sizeof(fmt_string), "'%c'");
     break;
   case 'f':
-    strncpy(fmt_string, "%.2f", sizeof(fmt_string));
+    ke::SafeStrcpy(fmt_string, sizeof(fmt_string), "%.2f");
     break;
   default:
     return;
@@ -1503,8 +1501,6 @@ Debugger::FindBreakpoint(char *breakpoint)
 void
 Debugger::ListBreakpoints()
 {
-  LegacyImage *image = context_->runtime()->image();
-
   Breakpoint *bp;
   uint32_t line;
   const char *filename;

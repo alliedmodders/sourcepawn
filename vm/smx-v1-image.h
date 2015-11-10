@@ -74,8 +74,6 @@ class SmxV1Image
    {
    public:
      Symbol(sp_fdbg_symbol_t *sym) :
-       sym_(sym),
-       unpacked_sym_(nullptr),
        addr_(sym->addr),
        tagid_(sym->tagid),
        codestart_(sym->codestart),
@@ -83,12 +81,12 @@ class SmxV1Image
        ident_(sym->ident),
        vclass_(sym->vclass),
        dimcount_(sym->dimcount),
-       name_(sym->name)
+       name_(sym->name),
+       sym_(sym),
+       unpacked_sym_(nullptr)
      {}
 
      Symbol(sp_u_fdbg_symbol_t *sym) :
-       sym_(nullptr),
-       unpacked_sym_(sym),
        addr_(sym->addr),
        tagid_(sym->tagid),
        codestart_(sym->codestart),
@@ -96,12 +94,12 @@ class SmxV1Image
        ident_(sym->ident),
        vclass_(sym->vclass),
        dimcount_(sym->dimcount),
-       name_(sym->name)
+       name_(sym->name),
+       sym_(nullptr),
+       unpacked_sym_(sym)
      {}
 
      Symbol(Symbol *sym) :
-       sym_(sym->sym_),
-       unpacked_sym_(sym->unpacked_sym_),
        addr_(sym->addr_),
        tagid_(sym->tagid_),
        codestart_(sym->codestart_),
@@ -109,7 +107,9 @@ class SmxV1Image
        ident_(sym->ident_),
        vclass_(sym->vclass_),
        dimcount_(sym->dimcount_),
-       name_(sym->name_)
+       name_(sym->name_),
+       sym_(sym->sym_),
+       unpacked_sym_(sym->unpacked_sym_)
      {}
 
      const int32_t addr() const {

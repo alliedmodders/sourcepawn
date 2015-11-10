@@ -21,10 +21,6 @@
 #include "smx-v1-image.h"
 #include "stack-frames.h"
 
-#if !defined snprintf
-#define snprintf _snprintf
-#endif
-
 namespace sp {
 
 using namespace SourcePawn;

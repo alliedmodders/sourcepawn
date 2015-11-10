@@ -678,7 +678,7 @@ SmxV1Image::getFunctionAddress(const SymbolType *syms, const char *name, uint32_
     }
 
     if (i == *index)
-      *index++;
+      (*index)++;
     i++;
   }
   return false;
