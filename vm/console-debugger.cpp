@@ -102,6 +102,7 @@ int InvokeDebugger(PluginContext *ctx)
   if (!ctx->IsDebugging())
     return SP_ERROR_NOTDEBUGGING;
 
+  // Continue normal execution, if this plugin isn't being debugged.
   Debugger *debugger = ctx->GetDebugger();
   if (!debugger->active())
     return SP_ERROR_NONE;
@@ -109,6 +110,7 @@ int InvokeDebugger(PluginContext *ctx)
   FrameIterator iter;
   cell_t cip = 0;
   // Find first scripted frame on the stack to get the cip from.
+  // There might be some native or helper frames beforehand.
   while (!iter.Done()) {
     if (iter.IsScriptedFrame()) {
       cip = iter.cip();
@@ -117,60 +119,90 @@ int InvokeDebugger(PluginContext *ctx)
     iter.Next();
   }
 
-  debugger->SetBreakCount(debugger->breakcount() + 1);
+  // Remember which runmode we've been in,
+  // before changing to stepping below.
   Runmode orig_runmode = debugger->runmode();
 
-  // when running until the function exit, check the frame address
+  // When running until the function returns, 
+  // check the current frame address against 
+  // the saved one from the function.
+  // If the current one is higher than the saved one,
+  // we're in a caller, so start stepping again!
   if (debugger->runmode() == Runmode::STEPOUT &&
     ctx->frm() > debugger->lastframe())
   {
     debugger->SetRunmode(Runmode::STEPPING);
   }
 
+  // See if there is a breakpoint set at the current cip.
   bool isBreakpoint = false;
-  // when running, check the breakpoints
+  // We don't need to check for breakpoints, 
+  // if we're halting on each line anyways.
   if (debugger->runmode() != Runmode::STEPPING &&
     debugger->runmode() != Runmode::STEPOVER)
   {
-    // check breakpoint address
+    // Check breakpoint address
     isBreakpoint = debugger->CheckBreakpoint(cip);
+    // Continue execution normally.
     if (!isBreakpoint)
       return SP_ERROR_NONE;
 
+    // There is a breakpoint! Start stepping through the plugin.
     debugger->SetRunmode(Runmode::STEPPING);
   }
 
-  // try to avoid halting on the same line twice
+  // Count how often we hit a breakpoint on this line.
+  // Don't break multiple times on the same line,
+  // and return to the previous runmode, if we didn't
+  // break on this line more than 5 times already.
+  debugger->SetBreakCount(debugger->breakcount() + 1);
+
+  // Try to avoid halting on the same line twice.
   uint32_t line = 0;
   if (ctx->runtime()->LookupLine(cip, &line) == SP_ERROR_NONE) {
-    // assume that there are no more than 5 breaks on a single line.
-    // if there are, halt.
+    // Assume that there are no more than 5 breaks on a single line.
+    // If there are, halt.
     if (line == debugger->lastline() && debugger->breakcount() < 5) {
       debugger->SetRunmode(orig_runmode);
       return SP_ERROR_NONE;
     }
   }
+
+  // Remember on which line we halt for the next time.
   debugger->SetLastLine(line);
   debugger->SetBreakCount(0);
 
-  // check whether we are stepping through a sub-function
+  // If we want to skip calls, check whether
+  // we are stepping through a sub-function.
+  // The lastframe is set after changing to a STEPOVER or STEPOUT runmode.
   if (debugger->runmode() == Runmode::STEPOVER) {
     assert(debugger->lastframe() != 0);
+    // If we're in a lower frame, just execute the code.
     if (ctx->frm() < debugger->lastframe())
       return SP_ERROR_NONE;
   }
 
+  // Remember which file we're in.
   const char *filename;
   if (ctx->runtime()->LookupFile(cip, &filename) == SP_ERROR_NONE) {
     debugger->SetCurrentFile(filename);
   }
 
   // Tell the watchdog to take a break.
+  // We might stay in the debugger shell for a while,
+  // so don't let the watchdog hit immediately after
+  // continueing with execution.
   Environment::get()->watchdog()->SetIgnore(true);
 
-  // Echo input back and enable basic control
+  // Echo input back and enable basic control.
+  // This helps to have a shell-like typing experience.
+  // Features depend on the operating system.
   unsigned int old_flags = EnableTerminalEcho();
+
+  // Start the debugger shell and wait for commands.
   debugger->HandleInput(cip, isBreakpoint);
+
+  // Reset the console input mode back to the normal flags.
   ResetTerminalEcho(old_flags);
 
   // Enable the watchdog timer again.
@@ -179,7 +211,9 @@ int InvokeDebugger(PluginContext *ctx)
   // step OVER functions (so save the stack frame)
   if (debugger->runmode() == Runmode::STEPOVER ||
     debugger->runmode() == Runmode::STEPOUT)
+  {
     debugger->SetLastFrame(ctx->frm());
+  }
 
   return SP_ERROR_NONE;
 }
@@ -230,6 +264,7 @@ Debugger::Deactivate()
   SetRunmode(RUNNING);
 }
 
+// Called when a debugged plugin had an error/exception.
 void
 Debugger::ReportError(const IErrorReport& report, FrameIterator& iter)
 {
@@ -249,21 +284,32 @@ Debugger::ReportError(const IErrorReport& report, FrameIterator& iter)
 
   cell_t cip = iter.cip();
 
+  // Remember at which line we stopped.
   uint32_t line = 0;
   context_->runtime()->LookupLine(cip, &line);
   SetLastLine(line);
 
+  // And in which file.
   const char *filename;
   if (context_->runtime()->LookupFile(cip, &filename) == SP_ERROR_NONE) {
     SetCurrentFile(filename);
   }
 
   // Tell the watchdog to take a break.
+  // We might stay in the debugger shell for a while,
+  // so don't let the watchdog hit immediately after
+  // continueing with execution.
   Environment::get()->watchdog()->SetIgnore(true);
 
-  // Echo input back and enable basic control
+  // Echo input back and enable basic control.
+  // This helps to have a shell-like typing experience.
+  // Features depend on the operating system.
   unsigned int old_flags = EnableTerminalEcho();
+
+  // Start the debugger shell and wait for commands.
   HandleInput(cip, false);
+
+  // Reset the console input mode back to the normal flags.
   ResetTerminalEcho(old_flags);
 
   // Enable the watchdog timer again.
@@ -272,7 +318,9 @@ Debugger::ReportError(const IErrorReport& report, FrameIterator& iter)
   // step OVER functions (so save the stack frame)
   if (runmode() == Runmode::STEPOVER ||
     runmode() == Runmode::STEPOUT)
+  {
     SetLastFrame(context_->frm());
+  }
 }
 
 Runmode
@@ -493,9 +541,15 @@ Debugger::ListCommands(char *command)
 void
 Debugger::HandleInput(cell_t cip, bool isBp)
 {
+  // Remember which command was executed last,
+  // so you don't have to type it again if you
+  // want to repeat it.
+  // Only |step| and |next| can be repeated like that.
   static char lastcommand[32] = "";
+
   LegacyImage *image = context_->runtime()->image();
 
+  // Reset the state.
   FrameIterator frames;
   frames_ = &frames;
   frame_count_ = 0;
@@ -514,6 +568,7 @@ Debugger::HandleInput(cell_t cip, bool isBp)
     }
   }
 
+  // Reset the frame iterator, so stack traces start at the beginning again.
   frames.Reset();
 
   if (!isBp)
@@ -528,6 +583,7 @@ Debugger::HandleInput(cell_t cip, bool isBp)
   int result;
   char *params;
   for (;;) {
+    // Read debugger command
     fgets(line, sizeof(line), stdin);
 
     // strip newline character, plus leading or trailing white space
@@ -539,12 +595,14 @@ Debugger::HandleInput(cell_t cip, bool isBp)
     }
     lastcommand[0] = '\0';
 
+    // Extract the first word from the string.
     result = sscanf(line, "%8s", command);
     if (result <= 0) {
       ListCommands(nullptr);
       continue;
     }
 
+    // Optional params start after the command.
     params = strchr(line, ' ');
     params = (params != nullptr) ? SkipWhitespace(params) : (char*)"";
 
@@ -621,7 +679,9 @@ void
 Debugger::HandleHelpCmd(char *line)
 {
   char command[32];
+  // See if there is a command specified after the "?".
   int result = sscanf(line, "%*s %30s", command);
+  // Display general or special help for the command.
   ListCommands(result ? command : nullptr);
 }
 
@@ -635,20 +695,22 @@ Debugger::HandleQuitCmd()
 bool
 Debugger::HandleGoCmd(char *params)
 {
+  // "go func" runs until the function returns.
   if (!stricmp(params, "func")) {
     SetRunmode(STEPOUT);
     return true;
   }
 
-  // Run until that line
+  // There is a parameter given -> run until that line!
   if (*params != '\0') {
     const char *filename = currentfile_;
+    // ParseBreakpointLine prints an error.
     params = ParseBreakpointLine(params, &filename);
     if (params == nullptr)
       return false;
 
     Breakpoint *bp = nullptr;
-    // User specified a line number
+    // User specified a line number. Add a breakpoint.
     if (isdigit(*params)) {
       bp = AddBreakpoint(filename, strtol(params, NULL, 10) - 1, true);
     }
@@ -665,6 +727,8 @@ Debugger::HandleGoCmd(char *params)
   }
 
   SetRunmode(RUNNING);
+  // Return true, to break out of the debugger shell 
+  // and continue execution of the plugin.
   return true;
 }
 
@@ -674,9 +738,13 @@ Debugger::HandleFunctionListCmd()
   fputs("Listing functions:\n", stdout);
   LegacyImage *image = context_->runtime()->image();
   SmxV1Image *imagev1 = (SmxV1Image *)image;
+
+  // Run through all functions with a name and 
+  // print it including the filename where it's defined.
   SmxV1Image::SymbolIterator iter = imagev1->symboliterator();
   while (!iter.Done()) {
     const SmxV1Image::Symbol sym = iter.Next();
+
     if (sym.ident() == sp::IDENT_FUNCTION &&
       imagev1->GetDebugName(sym.name()) != nullptr)
     {
@@ -698,8 +766,10 @@ Debugger::HandleFrameCmd(char *params)
     return;
   }
 
+  // See which frame to select.
   uint32_t frame = atoi(params);
-  if (frame < 0 || frame_count_ <= frame) {
+  // Keep it in bounds.
+  if (frame < 0 || frame >= frame_count_) {
     printf("Invalid frame. There are only %d frames on the stack.\n", frame_count_);
     return;
   }
@@ -817,37 +887,42 @@ void
 Debugger::HandleVariableDisplayCmd(char *params)
 {
   uint32_t idx[sDIMEN_MAX];
-  int dim = 0;
   memset(idx, 0, sizeof(idx));
   LegacyImage *image = selected_context_->runtime()->image();
   SmxV1Image *imagev1 = (SmxV1Image *)image;
+
   if (*params == '\0') {
-    // display all variables that are in scope
+    // Display all variables that are in scope
     SmxV1Image::SymbolIterator iter = imagev1->symboliterator();
     while (!iter.Done()) {
       ke::AutoPtr<SmxV1Image::Symbol> sym;
       sym = iter.Next();
+
+      // Only variables in scope.
       if (sym->ident() != sp::IDENT_FUNCTION &&
         sym->codestart() <= (uint32_t)cip_ &&
         sym->codeend() >= (uint32_t)cip_)
       {
+        // Print the name and address
         printf("%s\t<%#8x>\t", (sym->vclass() & DISP_MASK) > 0 ? "loc" : "glb", (sym->vclass() & DISP_MASK) > 0 ? frm_ + sym->addr() : sym->addr());
         if (imagev1->GetDebugName(sym->name()) != nullptr) {
           printf("%s\t", imagev1->GetDebugName(sym->name()));
         }
 
+        // Print the value.
         DisplayVariable(sym, idx, 0);
         fputs("\n", stdout);
       }
     }
   }
-  // Display single variable
+  // Display a single variable with the given name.
   else {
     ke::AutoPtr<SmxV1Image::Symbol> sym;
     char *indexptr = strchr(params, '[');
     char *behindname = nullptr;
-    assert(dim == 0);
+
     // Parse all [x][y] dimensions
+    int dim = 0;
     while (indexptr != nullptr && dim < sDIMEN_MAX) {
       if (behindname == nullptr)
         behindname = indexptr;
@@ -868,7 +943,9 @@ Debugger::HandleVariableDisplayCmd(char *params)
       if (behindname != nullptr)
         *behindname = '[';
 
+      // Print variable address and name.
       printf("%s\t<%#8x>\t%s\t", (sym->vclass() & DISP_MASK) > 0 ? "loc" : "glb", (sym->vclass() & DISP_MASK) > 0 ? frm_ + sym->addr() : sym->addr(), params);
+      // Print variable value.
       DisplayVariable(sym, idx, dim);
       fputs("\n", stdout);
     }
@@ -885,8 +962,9 @@ Debugger::HandleSetVariableCmd(char *params)
   char strvalue[1024];
   uint32_t index;
   cell_t value;
-  ke::AutoPtr<SmxV1Image::Symbol> sym;
   strvalue[0] = '\0';
+
+  // TODO: Allow float assignments.
   // Array assign?
   if (sscanf(params, " %[^[ ][%d] = %d", varname, &index, &value) != 3) {
     index = 0;
@@ -901,11 +979,13 @@ Debugger::HandleSetVariableCmd(char *params)
   }
 
   if (varname[0] != '\0') {
-    // find the symbol with the given range with the smallest scope
     LegacyImage *image = selected_context_->runtime()->image();
     SmxV1Image *imagev1 = (SmxV1Image *)image;
+    ke::AutoPtr<SmxV1Image::Symbol> sym;
+
+    // Find the symbol within the given range with the smallest scope.
     if (imagev1->GetVariable(varname, cip_, sym)) {
-      // user gave an integer as value
+      // User gave an integer as value
       if (strvalue[0] == '\0') {
         SetSymbolValue(sym, index, value);
         if (index > 0)
@@ -913,7 +993,7 @@ Debugger::HandleSetVariableCmd(char *params)
         else
           printf("%s set to %d\n", varname, value);
       }
-      // we have a string as value
+      // We have a string as value
       else {
         if ((sym->ident() != sp::IDENT_ARRAY
           && sym->ident() != sp::IDENT_REFARRAY)
@@ -939,7 +1019,7 @@ void
 Debugger::HandleFilesListCmd()
 {
   fputs("Source files:\n", stdout);
-  // browse through the file table
+  // Browse through the file table
   LegacyImage *image = selected_context_->runtime()->image();
   SmxV1Image *imagev1 = (SmxV1Image *)image;
   for (unsigned int i = 0; i < imagev1->GetFileCount(); i++) {
@@ -952,28 +1032,37 @@ Debugger::HandleFilesListCmd()
 void
 Debugger::HandleDisplayFormatChangeCmd(char *params)
 {
-  char symname[32], *ptr;
+  char *ptr;
+  // Skip symbol name
   for (ptr = params; *ptr != '\0' && *ptr != ' ' && *ptr != '\t'; ptr++)
     /* nothing */;
+
   int len = (int)(ptr - params);
   if (len == 0 || len > 31) {
     fputs("\tInvalid (or missing) symbol name\n", stdout);
   }
   else {
-    ke::AutoPtr<SmxV1Image::Symbol> sym;
+    // Copy the symbol name from the params.
+    char symname[32];
     strncpy(symname, params, len);
     symname[len] = '\0';
+
+    // Skip to the desired display type.
     params = SkipWhitespace(ptr);
 
     LegacyImage *image = selected_context_->runtime()->image();
     SmxV1Image *imagev1 = (SmxV1Image *)image;
+    ke::AutoPtr<SmxV1Image::Symbol> sym;
+    // Find the variable with that name with the smallest scope.
     if (imagev1->GetVariable(symname, cip_, sym)) {
       assert(sym != nullptr);
+      // Display the variable as decimal integer.
       if (!stricmp(params, "std")) {
         sym->setVClass((sym->vclass() & DISP_MASK) | DISP_DEFAULT);
       }
+      // Display the variable as a string.
       else if (!stricmp(params, "string")) {
-        // check array with single dimension
+        // Check array with single dimension.
         if (!(sym->ident() == sp::IDENT_ARRAY || sym->ident() == sp::IDENT_REFARRAY) ||
           sym->dimcount() != 1)
           fputs("\t\"string\" display type is only valid for arrays with one dimension\n", stdout);
@@ -983,9 +1072,11 @@ Debugger::HandleDisplayFormatChangeCmd(char *params)
       else if (!stricmp(params, "bin")) {
         sym->setVClass((sym->vclass() & DISP_MASK) | DISP_BIN);
       }
+      // Display variable as hexadecimal integer.
       else if (!stricmp(params, "hex")) {
         sym->setVClass((sym->vclass() & DISP_MASK) | DISP_HEX);
       }
+      // Display variable as floating point integer.
       else if (!stricmp(params, "float")) {
         sym->setVClass((sym->vclass() & DISP_MASK) | DISP_FLOAT);
       }
@@ -1003,6 +1094,7 @@ Debugger::HandleDisplayFormatChangeCmd(char *params)
 void
 Debugger::HandlePrintPositionCmd()
 {
+  // Print file, function, line and selected frame.
   printf("\tfile: %s", SkipPath(currentfile_));
 
   LegacyImage *image = selected_context_->runtime()->image();
@@ -1025,6 +1117,7 @@ Debugger::HandleWatchCmd(char *params)
     fputs("Missing variable name\n", stdout);
     return;
   }
+  // List watched variables right away after adding one.
   if (AddWatch(params))
     ListWatches();
   else
@@ -1039,6 +1132,7 @@ Debugger::HandleClearWatchCmd(char *params)
     return;
   }
 
+  // Asterix just removes all watched variables.
   if (*params == '*') {
     ClearAllWatches();
   }
@@ -1057,14 +1151,17 @@ Debugger::HandleClearWatchCmd(char *params)
 void
 Debugger::HandleDumpMemoryCmd(char *command, char *params)
 {
+  // Mimic GDB's |x| command.
   char* fmt = command + 1;
 
+  // Just "x" is invalid.
   if (strlen(params) == 0) {
     fputs("Missing address.\n", stdout);
     return;
   }
 
   // Format is x/[count][format][size] <address>
+  // We require a slash.
   if (*fmt != '/') {
     fputs("Bad format specifier.\n", stdout);
     return;
@@ -1167,6 +1264,7 @@ Debugger::HandleDumpMemoryCmd(char *command, char *params)
     address = (cell_t)strtol(params, NULL, 0);
   }
 
+  // Make sure we just read the plugin's memory.
   if (((address >= selected_context_->hp()) && (address < selected_context_->sp())) ||
     (address < 0) || ((ucell_t)address >= selected_context_->HeapSize())) {
     fputs("Address out of plugin's bounds.\n", stdout);
@@ -1200,21 +1298,26 @@ Debugger::HandleDumpMemoryCmd(char *command, char *params)
     return;
   }
 
+  // Put |count| blocks of formated data on the console.
   cell_t *data;
   for (int i = 0; i<count; i++) {
 
+    // Stop when reading out of bounds.
     if (((address >= selected_context_->hp()) && (address < selected_context_->sp())) ||
       (address < 0) || ((ucell_t)address >= selected_context_->HeapSize()))
       break;
 
+    // Put |line_break| blocks in one line.
     if (i % line_break == 0) {
       if (i > 0)
         fputs("\n", stdout);
       printf("0x%x: ", address);
     }
 
+    // Get the data pointer we want to print.
     data = (cell_t *)(selected_context_->memory() + address);
 
+    // Print the data according to the specified format identifer.
     switch (*format) {
     case 'f':
       printf(fmt_string, sp_ctof(*data));
@@ -1245,6 +1348,7 @@ Debugger::HandleDumpMemoryCmd(char *command, char *params)
 bool
 Debugger::CheckBreakpoint(cell_t cip)
 {
+  // See if there's a break point on the current instruction.
   BreakpointMap::Result result = breakpoint_map_.find(cip);
   if (!result.found())
     return false;
@@ -1265,12 +1369,14 @@ Debugger::AddBreakpoint(const char* file, uint32_t line, bool temporary)
   if (targetfile == nullptr)
     targetfile = currentfile_;
 
+  // Are there that many lines in the file?
   uint32_t addr;
   if (!image->GetLineAddress(line, targetfile, &addr))
     return nullptr;
 
   Breakpoint *bp;
   {
+    // See if there's already a breakpoint in place here.
     BreakpointMap::Insert p = breakpoint_map_.findForAdd(addr);
     if (p.found())
       return p->value;
@@ -1290,12 +1396,14 @@ Debugger::AddBreakpoint(const char* file, const char *function, bool temporary)
   if (targetfile == nullptr)
     return nullptr;
 
+  // Is there a function named like that in the file?
   uint32_t addr;
   if (!image->GetFunctionAddress(function, targetfile, &addr))
     return nullptr;
 
   Breakpoint *bp;
   {
+    // See if there's already a breakpoint in place here.
     BreakpointMap::Insert p = breakpoint_map_.findForAdd(addr);
     if (p.found())
       return p->value;
@@ -1733,9 +1841,11 @@ Debugger::DisplayVariable(SmxV1Image::Symbol *sym, uint32_t index[], int idxleve
     }
   }
 
+  // Print first dimension of array
   if ((sym->ident() == sp::IDENT_ARRAY || sym->ident() == sp::IDENT_REFARRAY) &&
     idxlevel == 0)
   {
+    // Print string
     if ((sym->vclass() & ~DISP_MASK) == DISP_STRING) {
       char *str = GetString(sym);
       if (str != nullptr)
@@ -1743,9 +1853,11 @@ Debugger::DisplayVariable(SmxV1Image::Symbol *sym, uint32_t index[], int idxleve
       else
         fputs("NULL_STRING", stdout);
     }
+    // Print one-dimensional array
     else if (sym->dimcount() == 1) {
       assert(symdims != nullptr); // set in the previous block
       uint32_t len = symdims->at(0)->size();
+      // Only print the first 5 elements
       if (len > 5)
         len = 5;
       else if (len == 0)
@@ -1765,6 +1877,7 @@ Debugger::DisplayVariable(SmxV1Image::Symbol *sym, uint32_t index[], int idxleve
         fputs(",...", stdout);
       fputs("}", stdout);
     }
+    // Not supported..
     else {
       fputs("(multi-dimensional array)", stdout);
     }
@@ -1849,6 +1962,7 @@ ConsoleDebugger::IsEnabled() {
 bool
 ConsoleDebugger::SetEnabled(bool enable) {
   ke::AutoLock lock(Environment::get()->lock());
+  // Don't allow changing the debugger if there are already plugins loaded.
   if (Environment::get()->HasRuntimesRegistered())
     return false;
 
