@@ -57,13 +57,22 @@ namespace SourcePawn
     // @brief Returns whether debugging is enabled in general.
     virtual bool IsEnabled() = 0;
 
-    /** @brief Enables debugging in general. Prepares generated code for debugging.
-     * Must be set before a plugin is loaded.
+    /** 
+     * @brief Enables debugging in general. Prepares generated code for debugging.
+     * Must be set before any plugin is loaded.
      *
      * @param enable  Allow debugging?
      * @return        True if debugging is allowed now, false if there are loaded plugins already.
      */
     virtual bool SetEnabled(bool enable) = 0;
+
+    /**
+     * @brief Directly start a debugging session on the next loaded plugin.
+     * This will break into the plugin when the first instruction is executed.
+     *
+     * @return True if next plugin will be debugged, false if debugging is disabled.
+     */
+    virtual bool DebugNextLoadedPlugin() = 0;
 
     /**
      * @brief Activates the debugger on a plugin. Plugin will pause on the next instruction.

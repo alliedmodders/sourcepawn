@@ -201,19 +201,26 @@ namespace SourcePawn {
   class ConsoleDebugger : IConsoleDebugger {
   public:
     ConsoleDebugger() 
-      : enabled_(false)
+      : enabled_(false),
+        debugNext_(false)
     {}
 
-    int ApiVersion();
-    bool IsEnabled();
-    bool SetEnabled(bool enable);
+  public: //IConsoleDebugger
+    int ApiVersion() override;
+    bool IsEnabled() override;
+    bool SetEnabled(bool enable) override;
+    bool DebugNextLoadedPlugin() override;
     bool StartDebugger(const IPluginContext *ctx) override;
     ke::Vector<IBreakpoint *> *GetBreakpoints(const IPluginContext *ctx) override;
     IBreakpoint *AddBreakpoint(const IPluginContext *ctx, const char *line, bool temporary) override;
     bool ClearBreakpoint(const IPluginContext *ctx, int bpnum) override;
 
+  public:
+    bool ShouldDebugNextLoadedPlugin();
+    void ResetDebugNextLoadedPlugin();
   private:
     bool enabled_;
+    bool debugNext_;
   };
 }
 #endif  /* _include_sourcepawn_vm_console_debugger_h_ */

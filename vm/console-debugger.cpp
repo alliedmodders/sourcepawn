@@ -1967,6 +1967,16 @@ ConsoleDebugger::SetEnabled(bool enable) {
 }
 
 bool
+ConsoleDebugger::DebugNextLoadedPlugin() {
+  if (!IsEnabled())
+    return false;
+
+  debugNext_ = true;
+
+  return true;
+}
+
+bool
 ConsoleDebugger::StartDebugger(const IPluginContext *ctx) {
   PluginContext *context = (PluginContext *)ctx;
   return context->StartDebugger();
@@ -2032,6 +2042,16 @@ ConsoleDebugger::ClearBreakpoint(const IPluginContext *ctx, int bpnum) {
     return false;
 
   return debugger->ClearBreakpoint(bpnum);
+}
+
+bool
+ConsoleDebugger::ShouldDebugNextLoadedPlugin() {
+  return debugNext_;
+}
+
+void
+ConsoleDebugger::ResetDebugNextLoadedPlugin() {
+  debugNext_ = false;
 }
 
 } // namespace SourcePawn
