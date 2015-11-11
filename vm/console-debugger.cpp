@@ -767,7 +767,7 @@ Debugger::HandleFrameCmd(char *params)
   // See which frame to select.
   uint32_t frame = atoi(params);
   // Keep it in bounds.
-  if (frame < 0 || frame >= frame_count_) {
+  if (frame >= frame_count_) {
     printf("Invalid frame. There are only %d frames on the stack.\n", frame_count_);
     return;
   }
@@ -1810,8 +1810,7 @@ Debugger::DisplayVariable(SmxV1Image::Symbol *sym, uint32_t index[], int idxleve
       {
         uint32_t i;
         for (i = 0; i < MAXLINELENGTH - 1 && ptr[i] != '\0'; i++) {
-          if ((ptr[i] < ' ' && ptr[i] != '\n' && ptr[i] != '\r' && ptr[i] != '\t') ||
-            ptr[i] >= 128)
+          if ((ptr[i] < ' ' && ptr[i] != '\n' && ptr[i] != '\r' && ptr[i] != '\t'))
             break; // non-ASCII character
           if (i == 0 && !isalpha(ptr[i]))
             break; // want a letter at the start
