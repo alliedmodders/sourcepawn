@@ -223,3 +223,13 @@ BasePluginContext::GetLastNativeError()
     return SP_ERROR_NONE;
   return env->getPendingExceptionCode();
 }
+
+cell_t
+BasePluginContext::BlamePluginError(SourcePawn::IPluginFunction *pf, const char *msg, ...)
+{
+  va_list ap;
+  va_start(ap, msg);
+  env_->BlamePluginErrorVA(pf, msg, ap);
+  va_end(ap);
+  return 0;
+}

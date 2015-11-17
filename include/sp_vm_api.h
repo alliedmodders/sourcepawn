@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0xA
-#define SOURCEPAWN_API_VERSION   0x020A
+#define SOURCEPAWN_ENGINE2_API_VERSION 0xB
+#define SOURCEPAWN_API_VERSION   0x020B
 
 namespace SourceMod {
   struct IdentityToken_t;
@@ -254,6 +254,13 @@ namespace SourcePawn
      * @return        True on success, false on error.
      */
     virtual bool Invoke(cell_t *rval = nullptr) = 0;
+    
+    /**
+     * @brief Returns a name to identify this function for debugging purposes.
+	 *
+	 * @return       String name.
+     */
+    virtual const char *DebugName() = 0;
   };
 
 
@@ -948,6 +955,12 @@ namespace SourcePawn
      * @param number       Error number.
      */
     virtual void ReportErrorNumber(int error) = 0;
+
+    /**
+     * @brief Report a error caused by a plugin, specifying a function
+     * as the cause.  
+     */
+    virtual cell_t BlamePluginError(IPluginFunction *pf, const char *msg, ...) = 0;
   };
 
   /**
@@ -982,6 +995,20 @@ namespace SourcePawn
      * @return          Plugin context.
      */
     virtual IPluginContext *Context() const = 0;
+
+    /**
+     * @brief Return the error code of the error report.
+     *
+     * @return          Integer code.
+     */
+    virtual int Code() const = 0;
+
+    /**
+     * @brief Return the specific plugin function that caused the error.
+     *
+     * @return          Blamed function.
+     */
+    virtual IPluginFunction *Blame() const = 0;
   };
 
   /**

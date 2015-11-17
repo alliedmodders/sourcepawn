@@ -434,7 +434,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
     result = &ignore_result;
 
   /* We got this far.  It's time to start profiling. */
-  EnterProfileScope scriptScope("SourcePawn", cfun->FullName());
+  EnterProfileScope scriptScope("SourcePawn", cfun->DebugName());
 
   /* See if we have to compile the callee. */
   CompiledFunction *fn = nullptr;

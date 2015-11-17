@@ -39,6 +39,7 @@ public:
   cell_t ThrowNativeErrorEx(int error, const char *msg, ...) override;
   cell_t ThrowNativeError(const char *msg, ...) override;
   int GetLastNativeError() override;
+  cell_t BlamePluginError(SourcePawn::IPluginFunction *pf, const char *msg, ...) override;
 
   // Removed functions.
   int PushCell(cell_t value) override;

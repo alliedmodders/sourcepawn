@@ -253,15 +253,25 @@ Environment::ReportError(int code)
 class ErrorReport : public SourcePawn::IErrorReport
 {
  public:
-  ErrorReport(int code, const char *message, PluginContext *cx)
+  ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf)
    : code_(code),
      message_(message),
-     context_(cx)
+     context_(cx),
+     blame_(pf)
   {}
 
   const char *Message() const override {
     return message_;
   }
+
+  int Code() const override {
+    return code_;
+  }
+
+  IPluginFunction *Blame() const override {
+    return blame_;
+  }
+
   bool IsFatal() const override {
     switch (code_) {
       case SP_ERROR_HEAPLOW:
@@ -292,6 +302,7 @@ class ErrorReport : public SourcePawn::IErrorReport
   int code_;
   const char *message_;
   PluginContext *context_;
+  IPluginFunction *blame_;
 };
 
 void
@@ -321,16 +332,31 @@ Environment::ReportErrorFmt(int code, const char *message, ...)
 void
 Environment::ReportError(int code, const char *message)
 {
+  ErrorReport report(code, message, top_ ? top_->cx() : nullptr, nullptr);
+  DispatchReport(report);
+}
+
+void Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char *fmt, va_list ap)
+{
+  // :TODO: right-size the string rather than rely on this buffer.
+  char buffer[1024];
+  UTIL_FormatVA(buffer, sizeof(buffer), fmt, ap);
+  ErrorReport report(SP_ERROR_USER, buffer, top_ ? top_->cx() : nullptr, pf); 
+  DispatchReport(report);
+}
+
+void
+Environment::DispatchReport(const IErrorReport &report)
+{
   FrameIterator iter;
-  ErrorReport report(code, message, top_ ? top_->cx() : nullptr);
 
   // If this fires, someone forgot to propagate an error.
   assert(!hasPendingException());
 
   // Save the exception state.
   if (eh_top_) {
-    exception_code_ = code;
-    UTIL_Format(exception_message_, sizeof(exception_message_), "%s", message);
+    exception_code_ = report.Code();
+    UTIL_Format(exception_message_, sizeof(exception_message_), "%s", report.Message());
   }
 
   // For now, we always report exceptions even if they might be handled.

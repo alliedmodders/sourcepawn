@@ -67,6 +67,7 @@ class Environment : public ISourcePawnEnvironment
   void ReportErrorFmt(int code, const char *message, ...);
   void ReportErrorVA(const char *fmt, va_list ap);
   void ReportErrorVA(int code, const char *fmt, va_list ap);
+  void BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char *fmt, va_list ap);
 
   // Allocate and free executable memory.
   CodeChunk AllocateCode(size_t size);
@@ -160,6 +161,7 @@ class Environment : public ISourcePawnEnvironment
   bool Initialize();
 
  private:
+  void DispatchReport(const IErrorReport &report);
   ke::AutoPtr<ISourcePawnEngine> api_v1_;
   ke::AutoPtr<ISourcePawnEngine2> api_v2_;
   ke::AutoPtr<WatchdogTimer> watchdog_timer_;
