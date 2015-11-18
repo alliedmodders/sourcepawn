@@ -997,13 +997,6 @@ namespace SourcePawn
     virtual IPluginContext *Context() const = 0;
 
     /**
-     * @brief Return the error code of the error report.
-     *
-     * @return          Integer code.
-     */
-    virtual int Code() const = 0;
-
-    /**
      * @brief Return the specific plugin function that caused the error.
      *
      * @return          Blamed function.

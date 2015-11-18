@@ -250,60 +250,56 @@ Environment::ReportError(int code)
   }
 }
 
-class ErrorReport : public SourcePawn::IErrorReport
-{
- public:
-  ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf)
+ErrorReport::ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf)
    : code_(code),
      message_(message),
      context_(cx),
      blame_(pf)
   {}
 
-  const char *Message() const override {
-    return message_;
-  }
+const char *
+ErrorReport::Message() const {
+  return message_;
+}
 
-  int Code() const override {
-    return code_;
-  }
+IPluginFunction *
+ErrorReport::Blame() const {
+  return blame_;
+}
 
-  IPluginFunction *Blame() const override {
-    return blame_;
+bool
+ErrorReport::IsFatal() const {
+  switch (code_) {
+    case SP_ERROR_HEAPLOW:
+    case SP_ERROR_INVALID_ADDRESS:
+    case SP_ERROR_STACKLOW:
+    case SP_ERROR_INVALID_INSTRUCTION:
+    case SP_ERROR_MEMACCESS:
+    case SP_ERROR_STACKMIN:
+    case SP_ERROR_HEAPMIN:
+    case SP_ERROR_INSTRUCTION_PARAM:
+    case SP_ERROR_STACKLEAK:
+    case SP_ERROR_HEAPLEAK:
+    case SP_ERROR_TRACKER_BOUNDS:
+    case SP_ERROR_PARAMS_MAX:
+    case SP_ERROR_ABORTED:
+    case SP_ERROR_OUT_OF_MEMORY:
+    case SP_ERROR_FATAL:
+      return true;
+    default:
+      return false;
   }
+}
 
-  bool IsFatal() const override {
-    switch (code_) {
-      case SP_ERROR_HEAPLOW:
-      case SP_ERROR_INVALID_ADDRESS:
-      case SP_ERROR_STACKLOW:
-      case SP_ERROR_INVALID_INSTRUCTION:
-      case SP_ERROR_MEMACCESS:
-      case SP_ERROR_STACKMIN:
-      case SP_ERROR_HEAPMIN:
-      case SP_ERROR_INSTRUCTION_PARAM:
-      case SP_ERROR_STACKLEAK:
-      case SP_ERROR_HEAPLEAK:
-      case SP_ERROR_TRACKER_BOUNDS:
-      case SP_ERROR_PARAMS_MAX:
-      case SP_ERROR_ABORTED:
-      case SP_ERROR_OUT_OF_MEMORY:
-      case SP_ERROR_FATAL:
-        return true;
-      default:
-        return false;
-    }
-  }
-  IPluginContext *Context() const override {
-    return context_;
-  }
+IPluginContext *
+ErrorReport::Context() const {
+  return context_;
+}
 
- private:
-  int code_;
-  const char *message_;
-  PluginContext *context_;
-  IPluginFunction *blame_;
-};
+int 
+ErrorReport::Code() const {
+  return code_;
+}
 
 void
 Environment::ReportErrorVA(const char *fmt, va_list ap)
@@ -346,7 +342,7 @@ void Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char
 }
 
 void
-Environment::DispatchReport(const IErrorReport &report)
+Environment::DispatchReport(const ErrorReport &report)
 {
   FrameIterator iter;
 
