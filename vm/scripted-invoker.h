@@ -65,11 +65,11 @@ class ScriptedInvoker : public IPluginFunction
     unsigned int num_params, 
     cell_t *result);
   IPluginRuntime *GetParentRuntime();
-
- public:
-  const char *FullName() const {
+  const char *DebugName() {
     return full_name_;
   }
+
+ public:
   sp_public_t *Public() const {
     return public_;
   }

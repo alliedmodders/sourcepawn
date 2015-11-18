@@ -28,6 +28,7 @@ using namespace SourcePawn;
 class PluginRuntime;
 class CodeStubs;
 class WatchdogTimer;
+class ErrorReport;
 
 // An Environment encapsulates everything that's needed to load and run
 // instances of plugins on a single thread. There can be at most one
@@ -67,6 +68,7 @@ class Environment : public ISourcePawnEnvironment
   void ReportErrorFmt(int code, const char *message, ...);
   void ReportErrorVA(const char *fmt, va_list ap);
   void ReportErrorVA(int code, const char *fmt, va_list ap);
+  void BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char *fmt, va_list ap);
 
   // Allocate and free executable memory.
   CodeChunk AllocateCode(size_t size);
@@ -160,6 +162,7 @@ class Environment : public ISourcePawnEnvironment
   bool Initialize();
 
  private:
+  void DispatchReport(const ErrorReport &report);
   ke::AutoPtr<ISourcePawnEngine> api_v1_;
   ke::AutoPtr<ISourcePawnEngine2> api_v2_;
   ke::AutoPtr<WatchdogTimer> watchdog_timer_;
@@ -199,6 +202,25 @@ class EnterProfileScope
     if (Environment::get()->IsProfilingEnabled())
       Environment::get()->profiler()->LeaveScope();
   }
+};
+
+class ErrorReport : public SourcePawn::IErrorReport
+{
+  public:
+  ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf);
+  int Code() const;
+
+  public: //IErrorReport
+  const char *Message() const override;
+  IPluginFunction *Blame() const override;
+  bool IsFatal() const override;
+  IPluginContext *Context() const override;
+
+ private:
+  int code_;
+  const char *message_;
+  PluginContext *context_;
+  IPluginFunction *blame_;
 };
 
 } // namespace sp
