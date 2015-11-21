@@ -70,7 +70,7 @@ SmxV1Image::validate()
 
       // Allocate the uncompressed image buffer.
       uint32_t compressedSize = hdr_->disksize - hdr_->dataoffs;
-      AutoArray<uint8_t> uncompressed(new(std::nothrow) uint8_t[hdr_->imagesize]);
+      AutoArray<uint8_t> uncompressed(new uint8_t[hdr_->imagesize]);
       if (!uncompressed)
         return error("out of memory");
 
