@@ -35,7 +35,7 @@ if ($PageEnum['entries']) {
             <?php
                 foreach ($PageEnum['entries'] as $EnumValue) {
                     echo '<tr>';
-                    echo '<td class="col-md-2">' . htmlspecialchars($EnumValue['name']) . '</td>';
+                    echo '<td class="col-md-2 mono">' . htmlspecialchars($EnumValue['name']) . '</td>';
                     echo '<td>';
                     RenderDescription($EnumValue['brief']);
                     echo '</td>';
