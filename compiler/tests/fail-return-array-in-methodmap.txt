@@ -1,0 +1,2 @@
+(2) : error 082: properties cannot be arrays
+(8) : error 083: methodmap methods cannot return arrays

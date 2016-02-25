@@ -3386,6 +3386,9 @@ methodmap_method_t *parse_property(methodmap_t *map)
   memset(&type, 0, sizeof(type));
   if (!parse_new_typeexpr(&type, NULL, 0))
     return NULL;
+  if (type.numdim > 0)
+    error(82);
+
   if (!needsymbol(&ident))
     return NULL;
 
@@ -3473,6 +3476,11 @@ methodmap_method_t *parse_method(methodmap_t *map)
     // Constructors may not be static.
     error(175);
   }
+
+  // Natives will hit a similar error on their own, so we only check numdim
+  // if we're not parsing a native.
+  if (!is_native && type.numdim > 0)
+    error(83);
 
   symbol* target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_static);
 
