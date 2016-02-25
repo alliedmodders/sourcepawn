@@ -407,9 +407,6 @@ static void stripcom(unsigned char *line)
     char comment[COMMENT_LIMIT+COMMENT_MARGIN];
     int commentidx=0;
     int skipstar=TRUE;
-    static int prev_singleline=FALSE;
-
-    prev_singleline=FALSE;  /* preset */
   #endif
 
   while (*line){
@@ -478,7 +475,6 @@ static void stripcom(unsigned char *line)
             if ((end=strrchr(str,'\n'))!=NULL)
               *end='\0';/* erase trailing '\n' */
             insert_docstring(str);
-            prev_singleline=TRUE;
           } /* if */
         #endif
         *line++='\n';   /* put "newline" at first slash */
