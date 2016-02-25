@@ -1,5 +1,5 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
+//
 // Copyright (C) 2004-2015 AlliedModers LLC
 //
 // This file is part of SourcePawn. SourcePawn is licensed under the GNU
@@ -169,6 +169,7 @@ class SmxV1Image
   bool validatePubvars();
   bool validateNatives();
   bool validateDebugInfo();
+  bool validateTags();
 
  private:
   template <typename SymbolType, typename DimType>
@@ -188,6 +189,7 @@ class SmxV1Image
   List<sp_file_publics_t> publics_;
   List<sp_file_natives_t> natives_;
   List<sp_file_pubvars_t> pubvars_;
+  List<sp_file_tag_t> tags_;
 
   const Section *debug_names_section_;
   const char *debug_names_;
