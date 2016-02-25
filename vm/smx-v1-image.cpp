@@ -1,5 +1,5 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
+//
 // Copyright (C) 2004-2015 AlliedModers LLC
 //
 // This file is part of SourcePawn. SourcePawn is licensed under the GNU
@@ -167,6 +167,8 @@ SmxV1Image::validate()
   if (!validateNatives())
     return false;
   if (!validateDebugInfo())
+    return false;
+  if (!validateTags())
     return false;
 
   return true;
@@ -389,6 +391,30 @@ SmxV1Image::validateDebugInfo()
       reinterpret_cast<const sp_fdbg_symbol_t *>(buffer() + debug_symbols_section_->dataoffs);
   }
 
+  return true;
+}
+
+bool
+SmxV1Image::validateTags()
+{
+  const Section *section = findSection(".tags");
+  if (!section)
+    return true;
+  if (!validateSection(section))
+    return error("invalid .tags section");
+  if ((section->size % sizeof(sp_file_tag_t)) != 0)
+    return error("invalid .tags section");
+
+  const sp_file_tag_t *tags =
+    reinterpret_cast<const sp_file_tag_t *>(buffer() + section->dataoffs);
+  size_t length = section->size / sizeof(sp_file_tag_t);
+
+  for (size_t i = 0; i < length; i++) {
+    if (!validateName(tags[i].name))
+      return error("invalid tag name");
+  }
+
+  tags_ = List<sp_file_tag_t>(tags, length);
   return true;
 }
 
