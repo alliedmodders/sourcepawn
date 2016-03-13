@@ -27,7 +27,7 @@ class Environment;
 
 typedef bool (*WatchdogCallback)();
 
-class WatchdogTimer : public ke::IRunnable
+class WatchdogTimer
 {
  public:
   WatchdogTimer(Environment *env);

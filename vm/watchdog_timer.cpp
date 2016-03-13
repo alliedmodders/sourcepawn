@@ -43,7 +43,9 @@ WatchdogTimer::Initialize(size_t timeout_ms)
 
   timeout_ms_ = timeout_ms;
 
-  thread_ = new ke::Thread(this, "SM Watchdog");
+  thread_ = new ke::Thread([this]() -> void {
+    Run();
+  }, "SM Watchdog");
   if (!thread_->Succeeded())
     return false;
 
