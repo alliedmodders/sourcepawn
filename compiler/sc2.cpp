@@ -2938,7 +2938,7 @@ int refer_symbol(symbol *entry,symbol *bywhom)
 void markusage(symbol *sym,int usage)
 {
   assert(sym!=NULL);
-  sym->usage |= (char)usage;
+  sym->usage |= usage;
   if ((usage & uWRITTEN)!=0)
     sym->lnumber=fline;
   /* check if (global) reference must be added to the symbol */

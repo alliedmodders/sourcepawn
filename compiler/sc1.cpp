@@ -118,7 +118,7 @@ static cell init(int ident,int *tag,int *errorfound);
 static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag);
 static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstatic, int stock, symbol **symp);
 static int declargs(symbol *sym, int chkshadow, const int *thistag);
-static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, arginfo *arg);
+static void doarg(symbol *sym, declinfo_t *decl, int offset, int chkshadow, arginfo *arg);
 static void reduce_referrers(symbol *root);
 static int testsymbols(symbol *root,int level,int testlabs,int testconst);
 static void destructsymbols(symbol *root,int level);
@@ -4979,7 +4979,6 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
 {
   int argcnt,oldargcnt;
   arginfo arg;
-  int fpublic;
 
   /* if the function is already defined earlier, get the number of arguments
    * of the existing definition
@@ -4989,7 +4988,6 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
     while (sym->dim.arglist[oldargcnt].ident!=0)
       oldargcnt++;
   argcnt=0;                             /* zero aruments up to now */
-  fpublic = (sym->usage & (uPUBLIC|uSTOCK))!=0;
 
   if (thistag && *thistag != -1) {
     arginfo *argptr;
@@ -5068,7 +5066,7 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
        *   base + 3*sizeof(cell)  == first argument of the function
        * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
        */
-      doarg(&decl,(argcnt+3)*sizeof(cell),fpublic,chkshadow,&arg);
+      doarg(sym,&decl,(argcnt+3)*sizeof(cell),chkshadow,&arg);
 
       if ((sym->usage & uPUBLIC) && arg.hasdefault)
         error(59, decl.name); /* arguments of a public function may not have a default value */
@@ -5107,7 +5105,7 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
  *  "fpublic" indicates whether the function for this argument list is public.
  *  The arguments themselves are never public.
  */
-static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, arginfo *arg)
+static void doarg(symbol *fun, declinfo_t *decl, int offset, int chkshadow, arginfo *arg)
 {
   symbol *argsym;
   int slength=0;
@@ -5207,7 +5205,7 @@ static void doarg(declinfo_t *decl, int offset, int fpublic, int chkshadow, argi
     argsym->compound=0;
     if (type->ident==iREFERENCE)
       argsym->usage|=uREAD;     /* because references are passed back */
-    if (fpublic)
+    if (fun->usage & (uPUBLIC|uSTOCK|uCALLBACK))
       argsym->usage|=uREAD;     /* arguments of public functions are always "used" */
     if (type->usage & uCONST)
       argsym->usage|=uCONST;
