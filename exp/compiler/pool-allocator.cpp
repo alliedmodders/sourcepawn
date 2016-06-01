@@ -123,7 +123,7 @@ PoolAllocationPolicy::reportAllocationOverflow()
 }
 
 void *
-PoolAllocationPolicy::malloc(size_t bytes)
+PoolAllocationPolicy::am_malloc(size_t bytes)
 {
   void *p = CurrentCompileContext->pool().rawAllocate(bytes);
   if (!p)
@@ -132,7 +132,7 @@ PoolAllocationPolicy::malloc(size_t bytes)
 }
 
 void
-PoolAllocationPolicy::free(void *ptr)
+PoolAllocationPolicy::am_free(void *ptr)
 {
 }
 
