@@ -2360,6 +2360,7 @@ restart:
     }
 
     funcenum_t *fe = funcenum_for_symbol(sym);
+    markusage(sym, uCALLBACK);
 
     // Get address into pri.
     load_glbfn(sym);

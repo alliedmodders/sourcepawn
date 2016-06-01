@@ -1,4 +1,5 @@
 # vim: set ts=4 sw=4 tw=99 et:
+import re
 import os, sys
 import argparse
 import subprocess
@@ -21,8 +22,17 @@ def run_tests(args):
         elif test.startswith('ok-'):
             kind = 'pass'
 
+        infile = os.path.join(testdir, test + '.sp')
+        with open(infile, 'r') as fp:
+            firstLine = fp.readline()
+        m = re.match("^// sp: (.*)$", firstLine)
+        if m is not None:
+            extra_args = m.group(1).split(' ')
+        else:
+            extra_args = []
+
         try:
-            argv = [os.path.abspath(args.spcomp), os.path.join(testdir, test + '.sp')]
+            argv = [os.path.abspath(args.spcomp), infile] + extra_args
             p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = p.communicate()
             stdout = stdout.decode('utf-8')

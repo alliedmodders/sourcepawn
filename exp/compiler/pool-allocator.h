@@ -163,8 +163,8 @@ class PoolAllocationPolicy
   void reportOutOfMemory();
 
  public:
-  void *malloc(size_t bytes);
-  void free(void *ptr);
+  void *am_malloc(size_t bytes);
+  void am_free(void *ptr);
 };
 
 template <typename T>
