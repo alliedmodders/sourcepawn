@@ -573,7 +573,7 @@ static int htoi(cell *val,const unsigned char *curptr)
   ptr=curptr;
   if (!isdigit(*ptr))   /* should start with digit */
     return 0;
-  if (*ptr=='0' && *(ptr+1)=='x') {     /* C style hexadecimal notation */
+  if (*ptr=='0' && tolower(*(ptr+1))=='x') {     /* C style hexadecimal notation */
     ptr+=2;
     while (ishex(*ptr) || *ptr=='_') {
       if (*ptr!='_') {
