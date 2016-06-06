@@ -533,6 +533,40 @@ static int btoi(cell *val,const unsigned char *curptr)
     return (int)(ptr-curptr);
 }
 
+/*  otoi
+ *
+ *  Attempts to interpret a numeric symbol as a octal value. On
+ *  success it returns the number of characters processed and the value is
+ *  stored in "val". Otherwise it return 0 and "val" is garbage.
+ *
+ *  An octal value must start with "0o"
+ */
+static int otoi(cell *val,const unsigned char *curptr)
+{
+  const unsigned char *ptr;
+
+  *val=0;
+  ptr=curptr;
+  if (!isdigit(*ptr))   /* should start with digit */
+    return 0;
+  if (*ptr=='0' && *(ptr+1)=='o') {
+    ptr+=2;
+    while (isoctal(*ptr) || *ptr=='_') {
+      if (*ptr!='_') {
+        assert(isoctal(*ptr));
+        *val= (*val<<3) + (*ptr-'0');
+      } /* if */
+      ptr++;
+    } /* while */
+  } else {
+    return 0;
+  } /* if */
+  if (alphanum(*ptr))   /* number must be delimited by non-alphanumeric char */
+    return 0;
+  else
+    return (int)(ptr-curptr);
+}
+
 /*  dtoi
  *
  *  Attempts to interpret a numeric symbol as a decimal value. On success
@@ -748,7 +782,8 @@ static int number(cell *val,const unsigned char *curptr)
 
   if ((i=btoi(&value,curptr))!=0      /* binary? */
       || (i=htoi(&value,curptr))!=0   /* hexadecimal? */
-      || (i=dtoi(&value,curptr))!=0)  /* decimal? */
+      || (i=dtoi(&value,curptr))!=0   /* decimal? */
+      || (i=otoi(&value,curptr))!=0)  /* octal? */
   {
     *val=value;
     return i;
@@ -2670,6 +2705,15 @@ int alphanum(char c)
 int ishex(char c)
 {
   return (c>='0' && c<='9') || (c>='a' && c<='f') || (c>='A' && c<='F');
+}
+
+/*  isoctal
+ *
+ *  Test if character "c" is an octal digit ("0".."7").
+ */
+int isoctal(char c)
+{
+  return (c>='0' && c<='7');
 }
 
 /* The local variable table must be searched backwards, so that the deepest
