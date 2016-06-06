@@ -504,12 +504,12 @@ static void stripcom(unsigned char *line)
 
 /*  btoi
  *
- *  Attempts to interpret a numeric symbol as a boolean value. On success
+ *  Attempts to interpret a numeric symbol as a binary value. On success
  *  it returns the number of characters processed (so the line pointer can be
  *  adjusted) and the value is stored in "val". Otherwise it returns 0 and
  *  "val" is garbage.
  *
- *  A boolean value must start with "0b"
+ *  A binary value must start with "0b"
  */
 static int btoi(cell *val,const unsigned char *curptr)
 {
