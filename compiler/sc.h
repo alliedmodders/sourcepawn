@@ -684,6 +684,7 @@ void litadd(cell value);
 void litinsert(cell value,int pos);
 int alphanum(char c);
 int ishex(char c);
+int isoctal(char c);
 void delete_symbol(symbol *root,symbol *sym);
 void delete_symbols(symbol *root,int level,int del_labels,int delete_functions);
 int refer_symbol(symbol *entry,symbol *bywhom);
