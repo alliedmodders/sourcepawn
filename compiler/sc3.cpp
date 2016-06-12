@@ -1647,6 +1647,8 @@ static int hier2(value *lval)
     } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
       // Warn: unsupported cast.
       error(237);
+    } else if (lval->sym && lval->sym->tag == pc_tag_void) {
+      error(89);
     }
     lval->tag = tag;
     return lvalue;
