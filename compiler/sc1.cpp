@@ -6369,6 +6369,8 @@ static void doreturn(void)
   symbol *sym,*sub;
 
   if (!matchtoken(tTERM)) {
+    if (curfunc->tag == pc_tag_void)
+      error(88);
     /* "return <value>" */
     if ((rettype & uRETNONE)!=0)
       error(78);                        /* mix "return;" and "return value;" */

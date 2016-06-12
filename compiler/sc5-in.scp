@@ -109,7 +109,7 @@ static const char *errmsg[] = {
 /*085*/  "unused85\n",
 /*086*/  "unused86\n",
 /*087*/  "unused87\n",
-/*088*/  "unused88\n",
+/*088*/  "cannot return a value from a void function\n",
 /*089*/  "casting a void function is illegal\n",
 /*090*/  "public functions may not return arrays (symbol \"%s\")\n",
 /*091*/  "ambiguous constant; tag override is required (symbol \"%s\")\n",
