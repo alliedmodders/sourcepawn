@@ -3506,9 +3506,9 @@ methodmap_method_t *parse_method(methodmap_t *map)
   return method;
 }
 
-void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
+symbol* declare_methodmap_symbol(methodmap_t* map, bool can_redef, bool is_forward_decl = false, bool have_forward_decl = false)
 {
-  if (can_redef) {
+  if (can_redef || have_forward_decl) {
     symbol *sym = findglb(map->name);
     if (sym && sym->ident != iMETHODMAP) {
       // We should only hit this on the first pass. Assert really hard that
@@ -3543,10 +3543,12 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
         iMETHODMAP,   // ident
         sGLOBAL,      // vclass
         map->tag,     // tag
-        uDEFINE);     // usage
+        is_forward_decl ? 0 : uDEFINE);     // usage
     }
     sym->methodmap = map;
+    return sym;
   }
+  return NULL;
 }
 
 static void declare_handle_intrinsics()
@@ -3619,9 +3621,12 @@ static void domethodmap(LayoutSpec spec)
   if (!isupper(*mapname))
     error(109, spectype);
 
+  symbol *sym = findglb(mapname);
+  bool have_forward_decl = sym && (sym->ident == iMETHODMAP) && ((sym->usage & uDEFINE) == 0);
+
   LayoutSpec old_spec = deduce_layout_spec_by_name(mapname);
   bool can_redef = can_redef_layout_spec(spec, old_spec);
-  if (!can_redef)
+  if (!have_forward_decl && !can_redef)
     error(110, mapname, layout_spec_name(old_spec));
 
   int old_nullable = matchtoken(tNULLABLE);
@@ -3649,7 +3654,16 @@ static void domethodmap(LayoutSpec spec)
   if (old_nullable)
     map->keyword_nullable = old_nullable;
 
-  declare_methodmap_symbol(map, can_redef);
+  bool is_forward_decl = false;
+  if (matchtoken(tTERM) && !lexpeek('{')) 
+    is_forward_decl = true;
+
+  sym = declare_methodmap_symbol(map, can_redef, is_forward_decl, have_forward_decl);
+  if (!is_forward_decl)
+    sym->usage |= uDEFINE;
+
+  if (is_forward_decl)
+    return;
 
   needtoken('{');
   while (!matchtoken('}')) {

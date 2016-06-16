@@ -2879,7 +2879,7 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
        */
       if (sym->ident==iFUNCTN && (sym->usage & uDEFINE)==0)
         sym->usage |= uMISSING;
-      if (sym->ident==iFUNCTN || sym->ident==iVARIABLE || sym->ident==iARRAY)
+      if (sym->ident==iFUNCTN || sym->ident==iVARIABLE || sym->ident==iARRAY || sym->ident==iMETHODMAP)
         sym->usage &= ~uDEFINE; /* clear "defined" flag */
       /* for user defined operators, also remove the "prototyped" flag, as
        * user-defined operators *must* be declared before use
