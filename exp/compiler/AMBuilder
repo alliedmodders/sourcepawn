@@ -27,10 +27,13 @@ binary.compiler.cxxincludes += [
 if binary.compiler.like('gcc'):
   binary.compiler.cflags += [
     '-Wno-invalid-offsetof',
+  ]
+  binary.compiler.cxxflags += ['-fno-rtti']
+if binary.compiler.like('clang'):
+  binary.compiler.cxxflags += [
     '-Wno-implicit-exception-spec-mismatch',
     '-Wno-unused-const-variable',
   ]
-  binary.compiler.cxxflags += ['-fno-rtti']
 
 binary.sources += [
   'ast-printer.cpp',

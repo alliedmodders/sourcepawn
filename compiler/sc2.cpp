@@ -27,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <sp_typeutil.h>
 #include "lstring.h"
 #include "sc.h"
 #include "tokenbuffer.h"
@@ -721,7 +722,7 @@ static int ftoi(cell *val,const unsigned char *curptr)
     /* floating point */
     #if PAWN_CELL_SIZE==32
       float value=(float)fnum;
-      *val=*((cell *)&value);
+      *val=sp::FloatCellUnion(value).cell;
       #if 0 /* SourceMod - not needed */
         /* I assume that the C/C++ compiler stores "float" values in IEEE 754
          * format (as mandated in the ANSI standard). Test this assumption

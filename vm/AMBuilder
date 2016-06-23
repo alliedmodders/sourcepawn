@@ -14,10 +14,17 @@ Includes = [
 if builder.compiler.like('gcc'):
   builder.compiler.cflags += [
     '-Wno-invalid-offsetof',
-    '-Wno-implicit-exception-spec-mismatch',
-    '-Wno-unused-const-variable',
   ]
   builder.compiler.cxxflags += ['-fno-rtti']
+if builder.compiler.like('clang'):
+  builder.compiler.cxxflags += [
+    '-Wno-implicit-exception-spec-mismatch',
+  ]
+if builder.compiler.cxx.name == 'gcc':
+  # ABI restrictions...
+  builder.compiler.cxxflags += [
+    '-Wno-delete-non-virtual-dtor',
+  ]
 
 # Build the static library.
 library = builder.compiler.StaticLibrary('sourcepawn')

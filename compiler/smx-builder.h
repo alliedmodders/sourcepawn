@@ -36,6 +36,8 @@ class SmxSection : public Refcounted<SmxSection>
    : name_(name)
   {
   }
+  virtual ~SmxSection()
+  {}
 
   virtual bool write(ISmxBuffer *buf) = 0;
   virtual size_t length() const = 0;
