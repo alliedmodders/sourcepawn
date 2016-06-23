@@ -917,19 +917,15 @@ Compiler::emitOp(OPCODE op)
 
     case OP_RND_TO_NEAREST:
     {
+      // Docs say that MXCSR must be preserved across function calls, so we
+      // assume that we'll always get the defualt round-to-nearest.
       if (MacroAssemblerX86::Features().sse) {
-        // Assume no one is touching MXCSR.
         __ cvtss2si(pri, Operand(stk, 0));
       } else {
-        static float kRoundToNearest = 0.5f;
-        // From http://wurstcaptures.untergrund.net/assembler_tricks.html#fastfloorf
         __ fld32(Operand(stk, 0));
-        __ fadd32(st0, st0);
-        __ fadd32(Operand(ExternalAddress(&kRoundToNearest)));
         __ subl(esp, 4);
         __ fistp32(Operand(esp, 0));
         __ pop(pri);
-        __ sarl(pri, 1);
       }
       __ addl(stk, 4);
       break;
