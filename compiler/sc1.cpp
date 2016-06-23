@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <amtl/am-unused.h>
 
 #if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
   #include <conio.h>
@@ -978,7 +979,7 @@ static void parserespf(char *filename,char *oname,char *ename,char *pname,
    * a single '\n', so the string size may be smaller than the file
    * size. */
   memset(string,0,(int)size+1);
-  fread(string,1,(int)size,fp);
+  ke::Unused() << fread(string,1,(int)size,fp);
   fclose(fp);
   /* allocate table for option pointers */
   if ((argv=(char **)malloc(MAX_OPTIONS*sizeof(char*)))==NULL)
