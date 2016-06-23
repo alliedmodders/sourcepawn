@@ -483,8 +483,11 @@ static void stripcom(unsigned char *line)
         if (*line=='\"' || *line=='\''){        /* leave literals unaltered */
           c=*line;      /* ending quote, single or double */
           line+=1;
-          while ((*line!=c || *(line-1)==sc_ctrlchar) && *line!='\0')
+          while (*line!=c && *line!='\0') {
+            if (*line==sc_ctrlchar && *(line+1)!='\0')
+              line+=1;  /* skip escape character (but avoid skipping past '\0' */
             line+=1;
+          } /* while */
           line+=1;      /* skip final quote */
         } else {
           line+=1;
