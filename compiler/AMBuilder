@@ -13,13 +13,19 @@ compiler.includes += [
 ]
  
 if compiler.like('gcc'):
-  compiler.cflags += ['-Wno-format', '-fno-strict-aliasing']
+  compiler.cflags += [
+    '-Wno-format',
+  ]
   compiler.c_only_flags += ['-std=c99']
   if builder.target_platform == 'linux':
     compiler.postlink += ['-lm']
   compiler.postlink += ['-lstdc++']
   compiler.cxxflags += [
     '-Wno-implicit-exception-spec-mismatch',
+  ]
+if compiler.cxx.name == 'gcc':
+  compiler.cflags += [
+    '-Wno-maybe-uninitialized',
   ]
 
 compiler.defines += ['HAVE_STDINT_H']

@@ -32,6 +32,7 @@ if binary.compiler.like('gcc'):
 if binary.compiler.like('clang'):
   binary.compiler.cxxflags += [
     '-Wno-implicit-exception-spec-mismatch',
+    '-Wno-unused-const-variable',
   ]
 
 binary.sources += [
