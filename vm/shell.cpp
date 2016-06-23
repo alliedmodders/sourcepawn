@@ -57,7 +57,7 @@ public:
     DumpStack(iter);
   }
 
-  void OnDebugSpew(const char *msg, ...) {
+  void OnDebugSpew(const char *msg, ...) override {
 #if !defined(NDEBUG) && defined(DEBUG)
     va_list ap;
     va_start(ap, msg);

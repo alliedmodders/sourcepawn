@@ -120,7 +120,7 @@ class EmptyImage : public LegacyImage
   const char *LookupFile(uint32_t code_offset) override {
     return nullptr;
   }
-  const char *LookupFunction(uint32_t code_offset) {
+  const char *LookupFunction(uint32_t code_offset) override {
     return nullptr;
   }
   bool LookupLine(uint32_t code_offset, uint32_t *line) override {

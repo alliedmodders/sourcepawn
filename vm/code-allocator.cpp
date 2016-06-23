@@ -90,7 +90,6 @@ CodeAllocator::allocateInPool(RefPtr<CodePool> pool, size_t bytes)
   return CodeChunk(pool, address, bytes);
 }
 
-static const size_t kDefaultMinPoolSize = 1 * kMB;
 static size_t kPageGranularity = 0;
 static size_t kMinPoolSize = 1 * kMB;
 
@@ -108,7 +107,6 @@ CodePool::AllocateFor(size_t askBytes)
     kPageGranularity = sysconf(_SC_PAGESIZE);
 #endif
     assert(ke::IsAligned(kPageGranularity, kMallocAlignment));
-    assert(ke::IsAligned(kDefaultMinPoolSize, kPageGranularity));
   }
 
   // If the allocation is larger than our minimum pool size, we only align up

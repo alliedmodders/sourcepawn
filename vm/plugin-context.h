@@ -45,29 +45,29 @@ class PluginContext : public BasePluginContext
   bool Initialize();
 
  public: //IPluginContext
-  int HeapAlloc(unsigned int cells, cell_t *local_addr, cell_t **phys_addr);
-  int HeapPop(cell_t local_addr);
-  int HeapRelease(cell_t local_addr);
-  int FindNativeByName(const char *name, uint32_t *index);
-  int GetNativeByIndex(uint32_t index, sp_native_t **native);
-  uint32_t GetNativesNum();
-  int FindPublicByName(const char *name, uint32_t *index);
-  int GetPublicByIndex(uint32_t index, sp_public_t **publicptr);
-  uint32_t GetPublicsNum();
-  int GetPubvarByIndex(uint32_t index, sp_pubvar_t **pubvar);
-  int FindPubvarByName(const char *name, uint32_t *index);
-  int GetPubvarAddrs(uint32_t index, cell_t *local_addr, cell_t **phys_addr);
-  uint32_t GetPubVarsNum();
-  int LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr);
-  int LocalToString(cell_t local_addr, char **addr);
-  int StringToLocal(cell_t local_addr, size_t chars, const char *source);
-  int StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char *source, size_t *wrtnbytes);
-  IPluginFunction *GetFunctionByName(const char *public_name);
-  IPluginFunction *GetFunctionById(funcid_t func_id);
-  cell_t *GetNullRef(SP_NULL_TYPE type);
-  int LocalToStringNULL(cell_t local_addr, char **addr);
-  IPluginRuntime *GetRuntime();
-  cell_t *GetLocalParams();
+  int HeapAlloc(unsigned int cells, cell_t *local_addr, cell_t **phys_addr) override;
+  int HeapPop(cell_t local_addr) override;
+  int HeapRelease(cell_t local_addr) override;
+  int FindNativeByName(const char *name, uint32_t *index) override;
+  int GetNativeByIndex(uint32_t index, sp_native_t **native) override;
+  uint32_t GetNativesNum() override;
+  int FindPublicByName(const char *name, uint32_t *index) override;
+  int GetPublicByIndex(uint32_t index, sp_public_t **publicptr) override;
+  uint32_t GetPublicsNum() override;
+  int GetPubvarByIndex(uint32_t index, sp_pubvar_t **pubvar) override;
+  int FindPubvarByName(const char *name, uint32_t *index) override;
+  int GetPubvarAddrs(uint32_t index, cell_t *local_addr, cell_t **phys_addr) override;
+  uint32_t GetPubVarsNum() override;
+  int LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr) override;
+  int LocalToString(cell_t local_addr, char **addr) override;
+  int StringToLocal(cell_t local_addr, size_t chars, const char *source) override;
+  int StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char *source, size_t *wrtnbytes) override;
+  IPluginFunction *GetFunctionByName(const char *public_name) override;
+  IPluginFunction *GetFunctionById(funcid_t func_id) override;
+  cell_t *GetNullRef(SP_NULL_TYPE type) override;
+  int LocalToStringNULL(cell_t local_addr, char **addr) override;
+  IPluginRuntime *GetRuntime() override;
+  cell_t *GetLocalParams() override;
 
   bool Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result);
 
@@ -85,7 +85,7 @@ class PluginContext : public BasePluginContext
   }
 
  public:
-  bool IsInExec();
+  bool IsInExec() override;
 
   static inline size_t offsetOfTracker() {
     return offsetof(PluginContext, tracker_);
