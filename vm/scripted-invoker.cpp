@@ -95,7 +95,7 @@ ScriptedInvoker::PushCellByRef(cell_t *cell, int flags)
 int
 ScriptedInvoker::PushFloat(float number)
 {
-  cell_t val = *(cell_t *)&number;
+  cell_t val = sp::FloatCellUnion(number).cell;
 
   return PushCell(val);
 }

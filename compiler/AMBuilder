@@ -13,7 +13,7 @@ compiler.includes += [
 ]
  
 if compiler.like('gcc'):
-  compiler.cflags += ['-Wno-format']
+  compiler.cflags += ['-Wno-format', '-fno-strict-aliasing']
   compiler.c_only_flags += ['-std=c99']
   if builder.target_platform == 'linux':
     compiler.postlink += ['-lm']
