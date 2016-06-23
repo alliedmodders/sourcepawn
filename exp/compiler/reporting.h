@@ -62,6 +62,7 @@ class TMessage : public ke::Refcounted<TMessage>
   class Arg
   {
    public:
+    virtual ~Arg() {}
     virtual AString Render() = 0;
   };
 

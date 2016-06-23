@@ -34,6 +34,8 @@ class SmxSection : public Refcounted<SmxSection>
    : name_(name)
   {
   }
+  virtual ~SmxSection()
+  {}
 
   virtual bool write(FILE *fp) = 0;
   virtual size_t length() const = 0;

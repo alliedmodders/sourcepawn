@@ -42,7 +42,7 @@ class ScriptedInvoker : public IPluginFunction
 {
  public:
   ScriptedInvoker(PluginRuntime *pRuntime, funcid_t fnid, uint32_t pub_id);
-  ~ScriptedInvoker();
+  virtual ~ScriptedInvoker();
 
  public:
   int PushCell(cell_t cell);
