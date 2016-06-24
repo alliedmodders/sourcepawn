@@ -933,16 +933,31 @@ Compiler::emitOp(OPCODE op)
 
     case OP_RND_TO_CEIL:
     {
+      // Adapted from http://wurstcaptures.untergrund.net/assembler_tricks.html#fastfloorf
+      // (the above does not support the full integer range)
       static float kRoundToCeil = -0.5f;
-      // From http://wurstcaptures.untergrund.net/assembler_tricks.html#fastfloorf
       __ fld32(Operand(stk, 0));
       __ fadd32(st0, st0);
       __ fsubr32(Operand(ExternalAddress(&kRoundToCeil)));
-      __ subl(esp, 4);
-      __ fistp32(Operand(esp, 0));
-      __ pop(pri);
-      __ sarl(pri, 1);
-      __ negl(pri);
+      __ subl(esp, 8);
+      __ fistp64(Operand(esp, 0));
+      __ pop(eax); // low word
+      __ pop(ecx); // high word
+      // divide 64-bit integer by 2 (shift right by 1)
+      __ shrd(eax, ecx, 1);
+      __ sarl(ecx, 1);
+      // negate 64-bit integer in eax:ecx
+      __ negl(eax);
+      __ adcl(ecx, 0);
+      __ negl(ecx);
+      // did this overflow? if so, return 0x80000000
+      Label ok;
+      __ testl(ecx, ecx);
+      __ j(zero, &ok);
+      __ cmpl(ecx, -1);
+      __ j(equal, &ok);
+      __ movl(pri, 0x80000000);
+      __ bind(&ok);
       __ addl(stk, 4);
       break;
     }

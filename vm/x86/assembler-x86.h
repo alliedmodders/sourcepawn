@@ -420,6 +420,14 @@ class AssemblerX86 : public Assembler
   void sarl(const Operand &dest, uint8_t imm) {
     shift_imm(dest, 7, imm);
   }
+  void shrd(Register dest, Register src, uint8_t imm) {
+    emit2(0x0f, 0xac, src.code, dest.code);
+    *pos_++ = imm;
+  }
+  void shrd(const Operand& dest, Register src, uint8_t imm) {
+    emit2(0x0f, 0xac, src.code, dest);
+    *pos_++ = imm;
+  }
 
   void cmpl(Register left, int32_t imm) {
     alu_imm(7, imm, Operand(left));
@@ -499,6 +507,12 @@ class AssemblerX86 : public Assembler
   }
   void addl(const Operand &dest, int32_t imm) {
     alu_imm(0, imm, dest);
+  }
+  void adcl(Register dest, int32_t imm) {
+    alu_imm(2, imm, Operand(dest));
+  }
+  void adcl(const Operand& dest, int32_t imm) {
+    alu_imm(2, imm, dest);
   }
 
   void imull(Register dest, const Operand &src) {
@@ -616,6 +630,9 @@ class AssemblerX86 : public Assembler
   }
   void fistp32(const Operand &dest) {
     emit1(0xdb, 3, dest);
+  }
+  void fistp64(const Operand &dest) {
+    emit1(0xdf, 7, dest);
   }
   void fadd32(const Operand &src) {
     emit1(0xd8, 0, src);
