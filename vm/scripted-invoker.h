@@ -87,7 +87,6 @@ class ScriptedInvoker : public IPluginFunction
 
  private:
   Environment *env_;
-  PluginRuntime *m_pRuntime;
   PluginContext *context_;
   cell_t m_params[SP_MAX_EXEC_PARAMS];
   ParamInfo m_info[SP_MAX_EXEC_PARAMS];

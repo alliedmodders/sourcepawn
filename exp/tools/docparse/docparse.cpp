@@ -387,7 +387,6 @@ class Analyzer : public PartialAstVisitor
   Atom *atom_doc_end_;
   Atom *atom_properties_;
   Atom *atom_methods_;
-  Atom *atom_method_;
   Atom *atom_getter_;
   Atom *atom_setter_;
   Atom *atom_entries_;
