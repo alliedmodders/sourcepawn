@@ -2750,6 +2750,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
   symbol *symret;
   cell lexval;
   char *lexstr;
+  const int firstArgOffset = aImplicitThis ? 1 : 0;
 
   assert(sym!=NULL);
   lval_result->ident=iEXPRESSION; /* preset, may be changed later */
@@ -2923,7 +2924,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
         case iVARIABLE:
           if (lval.ident==iLABEL || lval.ident==iFUNCTN || lval.ident==iREFFUNC
               || lval.ident==iARRAY || lval.ident==iREFARRAY)
-            error(35,argidx+1);   /* argument type mismatch */
+            error(35,argidx+1-firstArgOffset);   /* argument type mismatch */
 
           if (lvalue) {
             // Note: do not load anything if the implicit this was pre-evaluted
@@ -2949,9 +2950,9 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           assert(!args.handling_this());
 
           if (!lvalue)
-            error(35,argidx+1);   /* argument type mismatch */
+            error(35,argidx+1-firstArgOffset);   /* argument type mismatch */
           if (lval.sym!=NULL && (lval.sym->usage & uCONST)!=0 && (arg[argidx].usage & uCONST)==0)
-            error(35,argidx+1);   /* argument type mismatch */
+            error(35,argidx+1-firstArgOffset);   /* argument type mismatch */
           if (lval.ident==iVARIABLE || lval.ident==iREFERENCE) {
             if (lvalue) {
               assert(lval.sym!=NULL);
@@ -2978,7 +2979,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
           if (lval.ident!=iARRAY && lval.ident!=iREFARRAY
               && lval.ident!=iARRAYCELL && lval.ident!=iARRAYCHAR)
           {
-            error(35,argidx+1);   /* argument type mismatch */
+            error(35,argidx+1-firstArgOffset);   /* argument type mismatch */
             break;
           } /* if */
           if (lval.sym!=NULL && (lval.sym->usage & uCONST)!=0 && (arg[argidx].usage & uCONST)==0)
