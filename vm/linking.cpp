@@ -11,7 +11,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "environment.h"
-#include "x86-utils.h"
+#include "linking.h"
 
 using namespace sp;
 

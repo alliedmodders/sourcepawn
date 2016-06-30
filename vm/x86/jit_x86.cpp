@@ -38,7 +38,7 @@
 #include "watchdog_timer.h"
 #include "environment.h"
 #include "code-stubs.h"
-#include "x86-utils.h"
+#include "linking.h"
 #include "frames-x86.h"
 
 using namespace sp;
@@ -77,155 +77,13 @@ OpToCondition(OPCODE op)
   }
 }
 
-CompiledFunction *
-CompiledFunction::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
-{
-  Compiler cc(prt, pcode_offs);
-  CompiledFunction *fun = cc.emit(err);
-  if (!fun)
-    return NULL;
-
-  // Grab the lock before linking code in, since the watchdog timer will look
-  // at this list on another thread.
-  ke::AutoLock lock(Environment::get()->lock());
-
-  prt->AddJittedFunction(fun);
-  return fun;
-}
-
-static int
-CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, char *pc)
-{
-  // If the watchdog timer has declared a timeout, we must process it now,
-  // and possibly refuse to compile, since otherwise we will compile a
-  // function that is not patched for timeouts.
-  if (!Environment::get()->watchdog()->HandleInterrupt())
-    return SP_ERROR_TIMEOUT;
-
-  CompiledFunction *fn = runtime->GetJittedFunctionByOffset(pcode_offs);
-  if (!fn) {
-    int err;
-    fn = CompiledFunction::Compile(runtime, pcode_offs, &err);
-    if (!fn)
-      return err;
-  }
-
-#if defined JIT_SPEW
-  Environment::get()->debugger()->OnDebugSpew(
-      "Patching thunk to %s::%s\n",
-      runtime->Name(),
-      runtime->image()->LookupFunction(pcode_offs));
-#endif
-
-  *addrp = fn->GetEntryAddress();
-
-  /* Right now, we always keep the code RWE */
-  *(intptr_t *)(pc - 4) = intptr_t(fn->GetEntryAddress()) - intptr_t(pc);
-  return SP_ERROR_NONE;
-}
-
 Compiler::Compiler(PluginRuntime *rt, cell_t pcode_offs)
-  : env_(Environment::get()),
-    rt_(rt),
-    context_(rt->GetBaseContext()),
-    image_(rt_->image()),
-    error_(SP_ERROR_NONE),
-    pcode_start_(pcode_offs),
-    code_start_(reinterpret_cast<const cell_t *>(rt_->code().bytes + pcode_start_)),
-    cip_(code_start_),
-    code_end_(reinterpret_cast<const cell_t *>(rt_->code().bytes + rt_->code().length))
+ : CompilerBase(rt, pcode_offs)
 {
-  size_t nmaxops = rt_->code().length / sizeof(cell_t) + 1;
-  jump_map_ = new Label[nmaxops];
 }
 
 Compiler::~Compiler()
 {
-  delete [] jump_map_;
-}
-
-CompiledFunction *
-Compiler::emit(int *errp)
-{
-  if (cip_ >= code_end_ || *cip_ != OP_PROC) {
-    *errp = SP_ERROR_INVALID_INSTRUCTION;
-    return NULL;
-  }
-
-#if defined JIT_SPEW
-  Environment::get()->debugger()->OnDebugSpew(
-      "Compiling function %s::%s\n",
-      rt_->Name(),
-      rt_->image()->LookupFunction(pcode_start_));
-
-  SpewOpcode(rt_, code_start_, cip_);
-#endif
-
-  const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
-
-  cip_++;
-  if (!emitOp(OP_PROC)) {
-      *errp = (error_ == SP_ERROR_NONE) ? SP_ERROR_OUT_OF_MEMORY : error_;
-      return NULL;
-  }
-
-  while (cip_ < code_end_) {
-    // If we reach the end of this function, or the beginning of a new
-    // procedure, then stop.
-    if (*cip_ == OP_PROC || *cip_ == OP_ENDPROC)
-      break;
-
-#if defined JIT_SPEW
-    SpewOpcode(rt_, code_start_, cip_);
-#endif
-
-    // We assume every instruction is a jump target, so before emitting
-    // an opcode, we bind its corresponding label.
-    __ bind(&jump_map_[cip_ - codeseg]);
-
-    // Save the start of the opcode for emitCipMap().
-    op_cip_ = cip_;
-
-    OPCODE op = (OPCODE)readCell();
-    if (!emitOp(op) || error_ != SP_ERROR_NONE) {
-      *errp = (error_ == SP_ERROR_NONE) ? SP_ERROR_OUT_OF_MEMORY : error_;
-      return NULL;
-    }
-  }
-
-  emitCallThunks();
-
-  // For each backward jump, emit a little thunk so we can exit from a timeout.
-  // Track the offset of where the thunk is, so the watchdog timer can patch it.
-  for (size_t i = 0; i < backward_jumps_.length(); i++) {
-    BackwardJump &jump = backward_jumps_[i];
-    jump.timeout_offset = masm.pc();
-    __ call(&throw_timeout_);
-    emitCipMapping(jump.cip);
-  }
-
-  // This has to come last.
-  emitErrorPaths();
-
-  CodeChunk code = LinkCode(env_, masm);
-  if (!code.address()) {
-    *errp = SP_ERROR_OUT_OF_MEMORY;
-    return NULL;
-  }
-
-  AutoPtr<FixedArray<LoopEdge>> edges(
-    new FixedArray<LoopEdge>(backward_jumps_.length()));
-  for (size_t i = 0; i < backward_jumps_.length(); i++) {
-    const BackwardJump &jump = backward_jumps_[i];
-    edges->at(i).offset = jump.pc;
-    edges->at(i).disp32 = int32_t(jump.timeout_offset) - int32_t(jump.pc);
-  }
-
-  AutoPtr<FixedArray<CipMapEntry>> cipmap(
-    new FixedArray<CipMapEntry>(cip_map_.length()));
-  memcpy(cipmap->buffer(), cip_map_.buffer(), cip_map_.length() * sizeof(CipMapEntry));
-
-  return new CompiledFunction(code, pcode_start_, edges.take(), cipmap.take());
 }
 
 // No exit frame - error code is returned directly.
@@ -247,38 +105,6 @@ static int
 InvokeGenerateFullArray(PluginContext *cx, uint32_t argc, cell_t *argv, int autozero)
 {
   return cx->generateFullArray(argc, argv, autozero);
-}
-
-// Exit frame is a JitExitFrameForHelper.
-static void
-InvokeReportError(int err)
-{
-  Environment::get()->ReportError(err);
-}
-
-// Exit frame is a JitExitFrameForHelper. This is a special function since we
-// have to notify the watchdog timer that we're unblocked.
-static void
-InvokeReportTimeout()
-{
-  Environment::get()->watchdog()->NotifyTimeoutReceived();
-  InvokeReportError(SP_ERROR_TIMEOUT);
-}
-
-// Find the |ebp| associated with the entry frame. We use this to drop out of
-// the entire scripted call stack.
-static void *
-find_entry_fp()
-{
-  void *fp = nullptr;
-  for (FrameIterator iter; !iter.Done(); iter.Next()) {
-    if (iter.IsEntryFrame())
-      break;
-    fp = iter.Frame()->prev_fp;
-  }
-
-  assert(fp);
-  return fp;
 }
 
 bool
@@ -1374,9 +1200,9 @@ Compiler::emitCall()
   CompiledFunction *fun = rt_->GetJittedFunctionByOffset(offset);
   if (!fun) {
     // Need to emit a delayed thunk.
-    CallThunk *thunk = new CallThunk(offset);
-    __ call(&thunk->call);
-    if (!thunks_.append(thunk))
+    CallThunk thunk(offset);
+    __ call(&thunk.call);
+    if (!call_thunks_.append(thunk))
       return false;
   } else {
     // Function is already emitted, we can do a direct call.
@@ -1391,11 +1217,11 @@ Compiler::emitCall()
 void
 Compiler::emitCallThunks()
 {
-  for (size_t i = 0; i < thunks_.length(); i++) {
-    CallThunk *thunk = thunks_[i];
+  for (size_t i = 0; i < call_thunks_.length(); i++) {
+    CallThunk& thunk = call_thunks_[i];
 
     Label error;
-    __ bind(&thunk->call);
+    __ bind(&thunk.call);
 
     // Get the return address, since that is the call that we need to patch.
     __ movl(eax, Operand(esp, 0));
@@ -1415,7 +1241,7 @@ Compiler::emitCallThunks()
     __ movl(Operand(esp, 3 * sizeof(void *)), eax);
     __ lea(edx, Operand(esp, 4 * sizeof(void *)));
     __ movl(Operand(esp, 2 * sizeof(void *)), edx);
-    __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk->pcode_offset));
+    __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk.pcode_offset));
     __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(rt_));
 
     __ call(ExternalAddress((void *)CompileFromThunk));
@@ -1427,16 +1253,6 @@ Compiler::emitCallThunks()
 
     __ jmp(edx);
   }
-}
-
-cell_t
-Compiler::readCell()
-{
-  if (cip_ >= code_end_) {
-    error_= SP_ERROR_INVALID_INSTRUCTION;
-    return 0;
-  }
-  return *cip_++;
 }
 
 bool
@@ -1717,50 +1533,8 @@ Compiler::jumpOnError(ConditionCode cc, int err)
 }
 
 void
-Compiler::emitErrorPaths()
+Compiler::emitErrorHandlers()
 {
-  // For each path that had an error check, bind it to an error routine and
-  // add it to the cip map. What we'll get is something like:
-  //
-  //   cmp dividend, 0
-  //   jz error_thunk_0
-  //
-  // error_thunk_0:
-  //   call integer_overflow
-  //
-  // integer_overflow:
-  //   mov eax, SP_ERROR_DIVIDE_BY_ZERO
-  //   jmp report_error
-  //
-  // report_error:
-  //   create exit frame
-  //   push eax
-  //   call InvokeReportError(int err)
-  //
-  for (size_t i = 0; i < error_paths_.length(); i++) {
-    ErrorPath &path = error_paths_[i];
-
-    // If there's no error code, it should be in eax. Otherwise we'll jump to
-    // a path that sets eax to a hardcoded value.
-    __ bind(&path.label);
-    if (path.err == 0)
-      __ call(&report_error_);
-    else
-      __ call(&throw_error_code_[path.err]);
-
-    emitCipMapping(path.cip);
-  }
-
-  emitThrowPathIfNeeded(SP_ERROR_DIVIDE_BY_ZERO);
-  emitThrowPathIfNeeded(SP_ERROR_STACKLOW);
-  emitThrowPathIfNeeded(SP_ERROR_STACKMIN);
-  emitThrowPathIfNeeded(SP_ERROR_ARRAY_BOUNDS);
-  emitThrowPathIfNeeded(SP_ERROR_MEMACCESS);
-  emitThrowPathIfNeeded(SP_ERROR_HEAPLOW);
-  emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
-  emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
-  emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
-
   Label return_to_invoke;
 
   if (report_error_.used()) {
@@ -1817,14 +1591,14 @@ Compiler::emitErrorPaths()
 }
 
 void
-Compiler::emitThrowPathIfNeeded(int err)
+Compiler::emitThrowPath(int err)
 {
-  assert(err < SP_MAX_ERROR_CODES);
-
-  if (!throw_error_code_[err].used())
-    return;
-
-  __ bind(&throw_error_code_[err]);
   __ movl(eax, err);
   __ jmp(&report_error_);
+}
+
+void
+CompilerBase::PatchCallThunk(uint8_t* pc, void* target)
+{
+  *(intptr_t *)(pc - 4) = intptr_t(target) - intptr_t(pc);
 }

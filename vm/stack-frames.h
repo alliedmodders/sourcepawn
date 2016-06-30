@@ -16,6 +16,10 @@
 #include <sp_vm_api.h>
 #include <assert.h>
 #include <am-cxx.h>
+#include <amtl/am-platform.h>
+#if defined(KE_ARCH_X86)
+# include "x86/frames-x86.h"
+#endif
 
 namespace sp {
 

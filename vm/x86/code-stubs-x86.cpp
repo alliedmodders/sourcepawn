@@ -12,7 +12,7 @@
 //
 #include <sp_vm_api.h>
 #include "code-stubs.h"
-#include "x86-utils.h"
+#include "linking.h"
 #include "jit_x86.h"
 #include "environment.h"
 
