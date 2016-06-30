@@ -22,6 +22,8 @@ namespace sp {
 
 using namespace ke;
 
+class PluginRuntime;
+
 struct LoopEdge
 {
   // Offset to the patchable jump instruction, such that (base + offset - 4)
@@ -49,6 +51,8 @@ class CompiledFunction
                    FixedArray<LoopEdge> *edges,
                    FixedArray<CipMapEntry> *cip_map);
   ~CompiledFunction();
+
+  static CompiledFunction* Compile(PluginRuntime* prt, cell_t pcode_offs, int* err);
 
  public:
   void *GetEntryAddress() const {

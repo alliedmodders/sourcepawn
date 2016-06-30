@@ -15,9 +15,9 @@
 #include <string.h>
 #include <assert.h>
 #include "plugin-runtime.h"
-#include "x86/jit_x86.h"
 #include "plugin-context.h"
 #include "environment.h"
+#include <smx/smx-v1-opcodes.h>
 
 #include "md5/md5.h"
 
@@ -149,7 +149,7 @@ unsigned
 PluginRuntime::GetNativeReplacement(size_t index)
 {
   if (!float_table_[index].found)
-    return OP_NOP;
+    return (unsigned)OP_NOP;
   return float_table_[index].index;
 }
 

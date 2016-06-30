@@ -14,7 +14,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
-#include "x86/jit_x86.h"
 #include "environment.h"
 #include "api.h"
 #include <zlib/zlib.h>

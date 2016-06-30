@@ -1193,13 +1193,8 @@ static void setconstants(void)
   add_constant("EOS",0,sGLOBAL,0);      /* End Of String, or '\0' */
   add_constant("INVALID_FUNCTION", -1, sGLOBAL, pc_tag_nullfunc_t);
   add_constant("cellbits",32,sGLOBAL,0);
-#if defined _I32_MAX
-  add_constant("cellmax",_I32_MAX,sGLOBAL,0);
-  add_constant("cellmin",_I32_MIN,sGLOBAL,0);
-#else
-  add_constant("cellmax",LONG_MAX,sGLOBAL,0);
-  add_constant("cellmin",LONG_MIN,sGLOBAL,0);
-#endif
+  add_constant("cellmax",INT_MAX,sGLOBAL,0);
+  add_constant("cellmin",INT_MIN,sGLOBAL,0);
   add_constant("charbits",sCHARBITS,sGLOBAL,0);
   add_constant("charmin",0,sGLOBAL,0);
   add_constant("charmax",~(-1UL << sCHARBITS) - 1,sGLOBAL,0);

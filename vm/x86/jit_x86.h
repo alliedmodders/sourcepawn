@@ -65,12 +65,9 @@ struct BackwardJump {
 
 #define JIT_INLINE_ERRORCHECKS  (1<<0)
 #define JIT_INLINE_NATIVES      (1<<1)
-#define STACK_MARGIN            64      //8 parameters of safety, I guess
 #define JIT_FUNCMAGIC           0x214D4148  //magic function offset
 
 #define JITVARS_PROFILER        2    //profiler
-
-#define sDIMEN_MAX              5    //this must mirror what the compiler has.
 
 struct CallThunk
 {
@@ -164,9 +161,6 @@ const Register stk = edi;
 const Register dat = esi;
 const Register tmp = ecx;
 const Register frm = ebx;
-
-CompiledFunction *
-CompileFunction(PluginRuntime *prt, cell_t pcode_offs, int *err);
 
 }
 

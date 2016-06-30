@@ -78,7 +78,7 @@ OpToCondition(OPCODE op)
 }
 
 CompiledFunction *
-sp::CompileFunction(PluginRuntime *prt, cell_t pcode_offs, int *err)
+CompiledFunction::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
 {
   Compiler cc(prt, pcode_offs);
   CompiledFunction *fun = cc.emit(err);
@@ -105,7 +105,7 @@ CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, char *
   CompiledFunction *fn = runtime->GetJittedFunctionByOffset(pcode_offs);
   if (!fn) {
     int err;
-    fn = CompileFunction(runtime, pcode_offs, &err);
+    fn = CompiledFunction::Compile(runtime, pcode_offs, &err);
     if (!fn)
       return err;
   }
