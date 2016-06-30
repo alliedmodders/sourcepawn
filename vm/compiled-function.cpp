@@ -11,7 +11,6 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "compiled-function.h"
-#include "x86/jit_x86.h"
 #include "environment.h"
 
 using namespace sp;
@@ -33,7 +32,7 @@ CompiledFunction::~CompiledFunction()
 
 static int cip_map_entry_cmp(const void *a1, const void *aEntry)
 {
-  uint32_t pcoffs = (uint32_t)a1;
+  uint32_t pcoffs = (uint32_t)(intptr_t)a1;
   const CipMapEntry *entry = reinterpret_cast<const CipMapEntry *>(aEntry);
   if (pcoffs < entry->pcoffs)
     return -1;
@@ -53,7 +52,7 @@ CompiledFunction::FindCipByPc(void *pc)
     return kInvalidCip;
 
   void *ptr = bsearch(
-    (void *)pcoffs,
+    (void *)(uintptr_t)pcoffs,
     cip_map_->buffer(),
     cip_map_->length(),
     sizeof(CipMapEntry),

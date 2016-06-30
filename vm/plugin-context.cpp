@@ -17,7 +17,6 @@
 #include <sp_vm_api.h>
 #include "plugin-context.h"
 #include "watchdog_timer.h"
-#include "x86/jit_x86.h"
 #include "environment.h"
 #include "compiled-function.h"
 
@@ -444,7 +443,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
       fn = m_pRuntime->GetJittedFunctionByOffset(cfun->Public()->code_offs);
       if (!fn) {
         int err = SP_ERROR_NONE;
-        if ((fn = CompileFunction(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
+        if ((fn = CompiledFunction::Compile(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
           ReportErrorNumber(err);
           return false;
         }

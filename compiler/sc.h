@@ -42,6 +42,7 @@
 #else
   #include <setjmp.h>
 #endif
+#include <sp_vm_types.h>
 #include "osdefs.h"
 #include "amx.h"
 
@@ -52,7 +53,6 @@
 #define sCHARBITS   8       /* size of a packed character */
 
 #define MAXTAGS 16
-#define sDIMEN_MAX     4    /* maximum number of array dimensions */
 #define sLINEMAX     4095   /* input line length (in characters) */
 #define sCOMP_STACK   32    /* maximum nesting of #if .. #endif sections */
 #define sDEF_LITMAX  500    /* initial size of the literal pool, in "cells" */

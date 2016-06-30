@@ -11,11 +11,11 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "environment.h"
-#include "x86/jit_x86.h"
 #include "watchdog_timer.h"
 #include "api.h"
 #include "code-stubs.h"
 #include "watchdog_timer.h"
+#include "plugin-context.h"
 #include <stdarg.h>
 
 using namespace sp;

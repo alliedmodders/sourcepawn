@@ -35,8 +35,13 @@ class Config(object):
         '-pipe',
         '-Wall',
         '-Werror',
-        '-msse',
+        '-Wno-switch',
       ]
+      if builder.options.arch == 'x86':
+        cfg.cflags += ['-msse']
+      else:
+        cfg.cflags += ['-fPIC']
+
       cfg.cxxflags += ['-std=c++11']
 
       have_gcc = cxx.name is 'gcc'

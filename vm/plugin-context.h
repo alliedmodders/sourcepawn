@@ -32,6 +32,7 @@ struct HeapTracker
 };
 
 static const size_t SP_MAX_RETURN_STACK = 1024;
+static const cell_t STACK_MARGIN = 64; // 16 parameters of safety, I guess
 
 class Environment;
 class PluginContext;
