@@ -40,7 +40,7 @@
 
 namespace sp {
 
-class MacroAssemblerX86 : public AssemblerX86
+class MacroAssembler : public Assembler
 {
  public:
   void enterFrame(FrameType type, uintptr_t function_id) {

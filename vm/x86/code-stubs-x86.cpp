@@ -24,12 +24,12 @@ using namespace SourcePawn;
 bool
 CodeStubs::InitializeFeatureDetection()
 {
-  MacroAssemblerX86 masm;
-  MacroAssemblerX86::GenerateFeatureDetection(masm);
+  MacroAssembler masm;
+  MacroAssembler::GenerateFeatureDetection(masm);
   CodeChunk code = LinkCode(env_, masm);
   if (!code.address())
     return false;
-  MacroAssemblerX86::RunFeatureDetection(code.address());
+  MacroAssembler::RunFeatureDetection(code.address());
   return true;
 }
 
@@ -37,7 +37,7 @@ CodeStubs::InitializeFeatureDetection()
 bool
 CodeStubs::CompileInvokeStub()
 {
-  MacroAssemblerX86 masm;
+  MacroAssembler masm;
   __ enterFrame(FrameType::Entry, 0);
 
   __ push(esi);
@@ -108,7 +108,7 @@ CodeStubs::CompileInvokeStub()
 SPVM_NATIVE_FUNC
 CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
 {
-  AssemblerX86 masm;
+  Assembler masm;
 
   __ push(ebx);
   __ push(edi);

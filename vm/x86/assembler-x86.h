@@ -195,7 +195,7 @@ enum Scale {
 
 struct Operand
 {
-  friend class AssemblerX86;
+  friend class Assembler;
 
  public:
   Operand(Register reg, int32_t disp) {
@@ -320,7 +320,7 @@ struct Operand
   uint8_t bytes_[6];
 };
 
-class AssemblerX86 : public Assembler
+class Assembler : public AssemblerBase
 {
  private:
   // List of processor features; to be used, this must be filled in at
@@ -895,7 +895,7 @@ class AssemblerX86 : public Assembler
       emit1(0xcc);
   }
 
-  static void GenerateFeatureDetection(AssemblerX86 &masm) {
+  static void GenerateFeatureDetection(Assembler& masm) {
     masm.push(ebp);
     masm.movl(ebp, esp);
     masm.push(ebx);

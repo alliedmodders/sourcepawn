@@ -24,7 +24,7 @@
 #include "plugin-context.h"
 #include "compiled-function.h"
 #include "opcodes.h"
-#include "macro-assembler-x86.h"
+#include "macro-assembler.h"
 
 using namespace SourcePawn;
 
@@ -130,7 +130,7 @@ class Compiler
   }
 
  private:
-  MacroAssemblerX86 masm;
+  MacroAssembler masm;
   Environment *env_;
   PluginRuntime *rt_;
   PluginContext *context_;

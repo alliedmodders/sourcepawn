@@ -37,7 +37,7 @@
 #include <stdint.h>
 #include <limits.h>
 
-class Assembler
+class AssemblerBase
 {
  public:
   static const size_t kMinBufferSize = 4096;
@@ -45,13 +45,13 @@ class Assembler
   static const size_t kMaxBufferSize = INT_MAX / 2;
 
  public:
-  Assembler() {
+  AssemblerBase() {
     buffer_ = (uint8_t *)malloc(kMinBufferSize);
     pos_ = buffer_;
     end_ = buffer_ + kMinBufferSize;
     outOfMemory_ = !buffer_;
   }
-  ~Assembler() {
+  ~AssemblerBase() {
     free(buffer_);
   }
 

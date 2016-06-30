@@ -16,7 +16,7 @@
 using namespace sp;
 
 CodeChunk
-sp::LinkCode(Environment *env, AssemblerX86 &masm)
+sp::LinkCode(Environment *env, Assembler &masm)
 {
   if (masm.outOfMemory())
     return CodeChunk();
@@ -30,7 +30,7 @@ sp::LinkCode(Environment *env, AssemblerX86 &masm)
 }
 
 uint8_t *
-sp::LinkCodeToLegacyPtr(Environment *env, AssemblerX86 &masm)
+sp::LinkCodeToLegacyPtr(Environment *env, Assembler &masm)
 {
   if (masm.outOfMemory())
     return nullptr;
