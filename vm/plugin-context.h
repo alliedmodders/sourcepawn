@@ -94,11 +94,17 @@ class PluginContext : public BasePluginContext
   static inline size_t offsetOfSp() {
     return offsetof(PluginContext, sp_);
   }
+  static inline size_t offsetOfHp() {
+    return offsetof(PluginContext, hp_);
+  }
   static inline size_t offsetOfRuntime() {
     return offsetof(PluginContext, m_pRuntime);
   }
   static inline size_t offsetOfMemory() {
     return offsetof(PluginContext, memory_);
+  }
+  static inline size_t offsetOfFrm() {
+    return offsetof(PluginContext, frm_);
   }
 
   int32_t *addressOfSp() {

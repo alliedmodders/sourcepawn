@@ -66,6 +66,13 @@ if SP.arch == 'x86':
     'x86/code-stubs-x86.cpp',
     'x86/jit_x86.cpp',
   ]
+elif builder.options.arch == 'x64':
+  library.sources += [
+    'x64/assembler-x64.cpp',
+    'x64/code-stubs-x64.cpp',
+    'x64/macro-assembler-x64.cpp',
+    'x64/jit_x64.cpp',
+  ]
 
 libsourcepawn = builder.Add(library)
 

@@ -17,6 +17,8 @@
 
 #if defined(KE_ARCH_X86)
 # include "x86/macro-assembler-x86.h"
+#elif defined(KE_ARCH_X64)
+# include "x64/macro-assembler-x64.h"
 #else
 # error "Unsupported architecture"
 #endif
