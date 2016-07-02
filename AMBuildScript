@@ -201,7 +201,7 @@ class SourcePawn(object):
       os.path.join(builder.currentSourceFolder, 'vm/AMBuilder'),
     ]
     self.test_scripts = [
-      os.path.join(builder.currentSourceFolder, 'testing/Testing.ambuild'),
+      os.path.join(builder.currentSourceFolder, 'tools/testing/Testing.ambuild'),
     ]
     self.exp_scripts = [
       os.path.join(builder.currentSourceFolder, 'exp/compiler/AMBuilder'),
