@@ -89,4 +89,4 @@ shell.sources += [
 
 if builder.target_platform == 'linux':
   shell.compiler.postlink += ['-lpthread', '-lrt']
-builder.Add(shell)
+SP.spshell = builder.Add(shell)

@@ -23,6 +23,7 @@ builder.SetBuildFolder('testing')
 
 Scripts = [
   'test-compiler',
+  'test-runtime',
   'test-all',
 ]
 
@@ -52,6 +53,7 @@ def gen_scripts(ext):
         os.path.join(builder.currentSourcePath, script + ext + '.in'),
         os.path.join(builder.buildPath, 'testing', script + ext),
         fixup_path(ext, os.path.join(builder.buildPath, SP.spcomp.binary.path)),
+        fixup_path(ext, os.path.join(builder.buildPath, SP.spshell.binary.path)),
       ],
       outputs = Outputs
     )

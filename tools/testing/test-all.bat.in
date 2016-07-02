@@ -1,3 +1,6 @@
 
 call {objdir}/testing/test-compiler.bat
 if %errorlevel% neq 0 exit /b %errorlevel%
+echo ""
+call {objdir}/testing/test-runtime.bat
+if %errorlevel% neq 0 exit /b %errorlevel%

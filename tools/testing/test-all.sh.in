@@ -1,3 +1,5 @@
 #!/bin/sh
 
 sh {objdir}/testing/test-compiler.sh
+echo ""
+sh {objdir}/testing/test-runtime.sh

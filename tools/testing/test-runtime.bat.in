@@ -1,0 +1,3 @@
+
+echo "Running shell tests..."
+python "{source}\tests\runtests.py" --spcomp "{spcomp}" --shell "{spshell}"
