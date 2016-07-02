@@ -25,6 +25,7 @@ static Environment *sEnvironment = nullptr;
 
 Environment::Environment()
  : debugger_(nullptr),
+   eh_top_(nullptr),
    exception_code_(SP_ERROR_NONE),
    profiler_(nullptr),
    jit_enabled_(true),
