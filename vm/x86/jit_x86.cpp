@@ -1486,7 +1486,7 @@ Compiler::emitSysreqC()
 bool
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 {
-  DataLabel return_address;
+  CodeLabel return_address;
   __ enterInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
 
   // Align the stack.
@@ -1625,7 +1625,7 @@ Compiler::emitSwitch()
     // Optimized table version. The tomfoolery below is because we only have
     // one free register... it seems unlikely pri or alt will be used given
     // that we're at the end of a control-flow point, but we'll play it safe.
-    DataLabel table;
+    CodeLabel table;
     __ push(eax);
     __ movl(eax, &table);
     __ movl(ecx, Operand(eax, ecx, ScaleFour));

@@ -251,22 +251,22 @@ class SilentLabel : public Label
   }
 };
 
-// A DataLabel is a special form of Label intended for absolute addresses that
+// A CodeLabel is a special form of Label intended for absolute that
 // are within the code buffer, and thus aren't known yet, and will be
-// automatically fixed up when calling emitToExecutableMemory().
+// automatically fixed up later.
 // 
 // Unlike normal Labels, these do not store a list of incoming uses.
-class DataLabel
+class CodeLabelBase
 {
   // If set on status_, the label is bound.
   static const int32_t kBound = (1 << 0);
 
  public:
-  DataLabel()
+  CodeLabelBase()
    : status_(0)
   {
   }
-  ~DataLabel()
+  ~CodeLabelBase()
   {
     assert(!used() || bound());
   }
@@ -304,5 +304,15 @@ class DataLabel
   uint32_t status_;
 };
 
-#endif // _include_sourcepawn_assembler_h__
+// Absolute address, any pointer size. These are fixed up when calling
+// emitToExecutableMemory().
+class CodeLabel : public CodeLabelBase
+{
+};
 
+// A 32-bit offset from the start of the code segment.
+class OffsetLabel : public CodeLabelBase
+{
+};
+
+#endif // _include_sourcepawn_assembler_h__
