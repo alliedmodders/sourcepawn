@@ -27,6 +27,7 @@ def main():
   parser.add_argument('file', type=str, help='Source file')
   parser.add_argument('out', type=str, help='Output file')
   parser.add_argument('spcomp', type=str, help='Path to spcomp')
+  parser.add_argument('spshell', type=str, help='Path to spshell')
   args = parser.parse_args()
 
   with open(args.file, 'r') as infp:
@@ -35,6 +36,7 @@ def main():
       outfp.write(text.format(
         source = args.source,
         spcomp = args.spcomp,
+        spshell = args.spshell,
         objdir = args.objdir,
       ))
   os.chmod(args.out, 0o755)
