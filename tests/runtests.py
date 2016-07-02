@@ -215,6 +215,7 @@ class TestRunner(object):
       expectedLines = [line.replace("\r\n", "\n") for line in fp]
 
     # Append "\n" to everything but the last line.
+    actual = actual.replace("\r\n", "\n")
     actualLines = [line + "\n" for line in actual.split("\n")]
     actualLines[-1] = actualLines[-1].replace("\n", "")
 
