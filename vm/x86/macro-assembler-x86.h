@@ -66,6 +66,25 @@ class MacroAssembler : public Assembler
     push(return_address);
     enterExitFrame(type, payload);
   }
+
+  void alignStack() {
+    andl(esp, 0xfffffff0);
+  }
+  void assertStackAligned() {
+#if defined(DEBUG)
+    Label ok;
+    testl(esp, 0xf);
+    j(equal, &ok);
+    breakpoint();
+    bind(&ok);
+#endif
+  }
+
+  template <typename T>
+  void callWithABI(const T& target) {
+    assertStackAligned();
+    call(target);
+  }
 };
 
 } // namespace sp

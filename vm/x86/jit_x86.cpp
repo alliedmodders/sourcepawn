@@ -994,7 +994,7 @@ Compiler::emitOp(OPCODE op)
 
       __ push(amount * 4);
       __ push(intptr_t(rt_->GetBaseContext()));
-      __ call(ExternalAddress((void *)InvokePushTracker));
+      __ callWithABI(ExternalAddress((void *)InvokePushTracker));
       __ addl(esp, 8);
       __ testl(eax, eax);
       jumpOnError(not_zero);
@@ -1012,7 +1012,7 @@ Compiler::emitOp(OPCODE op)
 
       // Get the context pointer and call the sanity checker.
       __ push(intptr_t(rt_->GetBaseContext()));
-      __ call(ExternalAddress((void *)InvokePopTrackerAndSetHeap));
+      __ callWithABI(ExternalAddress((void *)InvokePopTrackerAndSetHeap));
       __ addl(esp, 4);
       __ testl(eax, eax);
       jumpOnError(not_zero);
@@ -1144,7 +1144,7 @@ Compiler::emitGenArray(bool autozero)
     __ shll(tmp, 2);
     __ push(tmp);
     __ push(intptr_t(rt_->GetBaseContext()));
-    __ call(ExternalAddress((void *)InvokePushTracker));
+    __ callWithABI(ExternalAddress((void *)InvokePushTracker));
     __ addl(esp, 4);
     __ pop(tmp);
     __ shrl(tmp, 2);
@@ -1171,7 +1171,7 @@ Compiler::emitGenArray(bool autozero)
     __ push(stk);
     __ push(val);
     __ push(intptr_t(context_));
-    __ call(ExternalAddress((void *)InvokeGenerateFullArray));
+    __ callWithABI(ExternalAddress((void *)InvokeGenerateFullArray));
     __ addl(esp, 4 * sizeof(void *));
 
     // restore pri to tmp
@@ -1218,12 +1218,12 @@ Compiler::emitCall()
   if (!fun) {
     // Need to emit a delayed thunk.
     CallThunk* thunk = new CallThunk(offset);
-    __ call(thunk->label());
+    __ callWithABI(thunk->label());
     if (!ool_paths_.append(thunk))
       return false;
   } else {
     // Function is already emitted, we can do a direct call.
-    __ call(ExternalAddress(fun->GetEntryAddress()));
+    __ callWithABI(ExternalAddress(fun->GetEntryAddress()));
   }
 
   // Map the return address to the cip that started this call.
@@ -1255,7 +1255,7 @@ Compiler::emitCallThunk(CallThunk* thunk)
   __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk->pcode_offset));
   __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(rt_));
 
-  __ call(ExternalAddress((void *)CompileFromThunk));
+  __ callWithABI(ExternalAddress((void *)CompileFromThunk));
   __ movl(edx, Operand(esp, 4 * sizeof(void *)));
   __ leaveExitFrame();
 
@@ -1349,9 +1349,9 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 
   // Invoke the native.
   if (immutable)
-    __ call(ExternalAddress((void *)native->legacy_fn));
+    __ callWithABI(ExternalAddress((void *)native->legacy_fn));
   else
-    __ call(edx);
+    __ callWithABI(edx);
   __ bind(&return_address);
   // Map the return address to the cip that initiated this call.
   emitCipMapping(op_cip_);
@@ -1555,7 +1555,7 @@ Compiler::emitErrorHandlers()
     // Align the stack and call.
     __ subl(esp, 12);
     __ push(eax);
-    __ call(ExternalAddress((void *)InvokeReportError));
+    __ callWithABI(ExternalAddress((void *)InvokeReportError));
     __ leaveExitFrame();
     __ jmp(&return_to_invoke);
   }
@@ -1569,7 +1569,7 @@ Compiler::emitErrorHandlers()
 
     // Since the return stub wipes out the stack, we don't need to addl after
     // the call.
-    __ call(ExternalAddress((void *)InvokeReportTimeout));
+    __ callWithABI(ExternalAddress((void *)InvokeReportTimeout));
     __ leaveExitFrame();
     __ jmp(&return_reported_error_);
   }
@@ -1590,7 +1590,7 @@ Compiler::emitErrorHandlers()
     // We cannot jump to the return stub just yet. We could be multiple frames
     // deep, and our |ebp| does not match the initial frame. Find and restore
     // it now.
-    __ call(ExternalAddress((void *)find_entry_fp));
+    __ callWithABI(ExternalAddress((void *)find_entry_fp));
     __ leaveExitFrame();
 
     __ movl(ebp, eax);
