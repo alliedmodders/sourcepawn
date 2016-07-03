@@ -150,10 +150,11 @@ class Assembler
   bool outOfMemory_;
 };
 
-class ExternalAddress
+// A raw address value.
+class AddressValue
 {
  public:
-  explicit ExternalAddress(void *p)
+  explicit AddressValue(void *p)
     : p_(p)
   {
   }
@@ -161,12 +162,24 @@ class ExternalAddress
   void *address() const {
     return p_;
   }
-  uintptr_t value() const {
-    return uintptr_t(p_);
+  intptr_t value() const {
+    return intptr_t(p_);
+  }
+  bool has32BitEncoding() const {
+    return (uintptr_t(p_) & uintptr_t(0xffffffff)) == uintptr_t(p_);
   }
 
  private:
   void *p_;
+};
+
+// Deprecated; this should only be used on x86.
+class ExternalAddress : public AddressValue
+{
+ public:
+  explicit ExternalAddress(void *p)
+   : AddressValue(p)
+  {}
 };
 
 // A label is a lightweight object to assist in managing relative jumps. It
