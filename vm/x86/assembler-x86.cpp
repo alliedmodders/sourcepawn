@@ -30,4 +30,4 @@
  */
 #include "assembler-x86.h"
 
-CPUFeatures AssemblerX86::X86Features;
+CPUFeatures Assembler::X86Features;

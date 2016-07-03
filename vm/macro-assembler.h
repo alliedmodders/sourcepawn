@@ -10,19 +10,15 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#ifndef _include_sourcepawn_vm_x86_utils_h_
-#define _include_sourcepawn_vm_x86_utils_h_
+#ifndef _include_sourcepawn_macro_assembler_h__
+#define _include_sourcepawn_macro_assembler_h__
 
-#include <stdint.h>
-#include "macro-assembler-x86.h"
+#include <amtl/am-platform.h>
 
-namespace sp {
+#if defined(KE_ARCH_X86)
+# include "x86/macro-assembler-x86.h"
+#else
+# error "Unsupported architecture"
+#endif
 
-class Environment;
-
-CodeChunk LinkCode(Environment *env, Assembler& masm);
-uint8_t *LinkCodeToLegacyPtr(Environment *env, Assembler& masm);
-
-}
-
-#endif // _include_sourcepawn_vm_x86_utils_h_
+#endif // _include_sourcepawn_macro_assembler_h__

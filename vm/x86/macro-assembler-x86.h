@@ -40,7 +40,7 @@
 
 namespace sp {
 
-class MacroAssemblerX86 : public AssemblerX86
+class MacroAssembler : public Assembler
 {
  public:
   void enterFrame(FrameType type, uintptr_t function_id) {
@@ -62,7 +62,7 @@ class MacroAssemblerX86 : public AssemblerX86
 
   // Inline exit frames are not entered via a call; instead they simulate a
   // call by pushing a return address.
-  void enterInlineExitFrame(ExitFrameType type, uintptr_t payload, DataLabel* return_address) {
+  void enterInlineExitFrame(ExitFrameType type, uintptr_t payload, CodeLabel* return_address) {
     push(return_address);
     enterExitFrame(type, payload);
   }

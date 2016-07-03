@@ -37,7 +37,7 @@
 #include <stdint.h>
 #include <limits.h>
 
-class Assembler
+class AssemblerBase
 {
  public:
   static const size_t kMinBufferSize = 4096;
@@ -45,13 +45,13 @@ class Assembler
   static const size_t kMaxBufferSize = INT_MAX / 2;
 
  public:
-  Assembler() {
+  AssemblerBase() {
     buffer_ = (uint8_t *)malloc(kMinBufferSize);
     pos_ = buffer_;
     end_ = buffer_ + kMinBufferSize;
     outOfMemory_ = !buffer_;
   }
-  ~Assembler() {
+  ~AssemblerBase() {
     free(buffer_);
   }
 
@@ -150,10 +150,11 @@ class Assembler
   bool outOfMemory_;
 };
 
-class ExternalAddress
+// A raw address value.
+class AddressValue
 {
  public:
-  explicit ExternalAddress(void *p)
+  explicit AddressValue(void *p)
     : p_(p)
   {
   }
@@ -161,12 +162,24 @@ class ExternalAddress
   void *address() const {
     return p_;
   }
-  uintptr_t value() const {
-    return uintptr_t(p_);
+  intptr_t value() const {
+    return intptr_t(p_);
+  }
+  bool has32BitEncoding() const {
+    return (uintptr_t(p_) & uintptr_t(0xffffffff)) == uintptr_t(p_);
   }
 
  private:
   void *p_;
+};
+
+// Deprecated; this should only be used on x86.
+class ExternalAddress : public AddressValue
+{
+ public:
+  explicit ExternalAddress(void *p)
+   : AddressValue(p)
+  {}
 };
 
 // A label is a lightweight object to assist in managing relative jumps. It
@@ -251,22 +264,22 @@ class SilentLabel : public Label
   }
 };
 
-// A DataLabel is a special form of Label intended for absolute addresses that
+// A CodeLabel is a special form of Label intended for absolute that
 // are within the code buffer, and thus aren't known yet, and will be
-// automatically fixed up when calling emitToExecutableMemory().
+// automatically fixed up later.
 // 
 // Unlike normal Labels, these do not store a list of incoming uses.
-class DataLabel
+class CodeLabelBase
 {
   // If set on status_, the label is bound.
   static const int32_t kBound = (1 << 0);
 
  public:
-  DataLabel()
+  CodeLabelBase()
    : status_(0)
   {
   }
-  ~DataLabel()
+  ~CodeLabelBase()
   {
     assert(!used() || bound());
   }
@@ -304,5 +317,15 @@ class DataLabel
   uint32_t status_;
 };
 
-#endif // _include_sourcepawn_assembler_h__
+// Absolute address, any pointer size. These are fixed up when calling
+// emitToExecutableMemory().
+class CodeLabel : public CodeLabelBase
+{
+};
 
+// A 32-bit offset from the start of the code segment.
+class OffsetLabel : public CodeLabelBase
+{
+};
+
+#endif // _include_sourcepawn_assembler_h__

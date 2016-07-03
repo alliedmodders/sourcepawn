@@ -195,7 +195,7 @@ enum Scale {
 
 struct Operand
 {
-  friend class AssemblerX86;
+  friend class Assembler;
 
  public:
   Operand(Register reg, int32_t disp) {
@@ -320,7 +320,7 @@ struct Operand
   uint8_t bytes_[6];
 };
 
-class AssemblerX86 : public Assembler
+class Assembler : public AssemblerBase
 {
  private:
   // List of processor features; to be used, this must be filled in at
@@ -584,7 +584,7 @@ class AssemblerX86 : public Assembler
     emit1(0x68);
     writeInt32(imm);
   }
-  void push(DataLabel *src) {
+  void push(CodeLabel *src) {
     emit1(0x68);
     if (src->bound()) {
       writeInt32(int32_t(src->offset()) - (position() + 4));
@@ -741,16 +741,16 @@ class AssemblerX86 : public Assembler
     target->bind(pc());
   }
 
-  void bind(DataLabel *address) {
+  void bind(CodeLabel *address) {
     if (outOfMemory())
       return;
     if (address->used()) {
-      uint32_t offset = DataLabel::ToOffset(address->status());
+      uint32_t offset = CodeLabel::ToOffset(address->status());
       *reinterpret_cast<int32_t *>(buffer() + offset - 4) = position() - int32_t(offset);
     }
     address->bind(pc());
   }
-  void movl(Register dest, DataLabel *src) {
+  void movl(Register dest, CodeLabel *src) {
     emit1(0xb8 + dest.code);
     if (src->bound()) {
       writeInt32(int32_t(src->offset()) - (position() + 4));
@@ -881,7 +881,7 @@ class AssemblerX86 : public Assembler
 
     // Relocate everything we emitted as an abs32 with an internal offset. Note
     // that in the code stream, we use relative offsets so we can use both Label
-    // and DataLabel.
+    // and CodeLabel.
     for (size_t i = 0; i < local_refs_.length(); i++) {
       size_t offset = local_refs_[i];
       int32_t delta = *reinterpret_cast<int32_t *>(base + offset - 4);
@@ -895,7 +895,7 @@ class AssemblerX86 : public Assembler
       emit1(0xcc);
   }
 
-  static void GenerateFeatureDetection(AssemblerX86 &masm) {
+  static void GenerateFeatureDetection(Assembler& masm) {
     masm.push(ebp);
     masm.movl(ebp, esp);
     masm.push(ebx);

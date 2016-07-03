@@ -869,7 +869,7 @@ Compiler::emitOp(OPCODE op)
       break;
 
     case OP_FLOAT:
-      if (MacroAssemblerX86::Features().sse2) {
+      if (MacroAssembler::Features().sse2) {
         __ cvtsi2ss(xmm0, Operand(edi, 0));
         __ movd(pri, xmm0);
       } else {
@@ -885,7 +885,7 @@ Compiler::emitOp(OPCODE op)
     case OP_FLOATSUB:
     case OP_FLOATMUL:
     case OP_FLOATDIV:
-      if (MacroAssemblerX86::Features().sse2) {
+      if (MacroAssembler::Features().sse2) {
         __ movss(xmm0, Operand(stk, 0));
         if (op == OP_FLOATADD)
           __ addss(xmm0, Operand(stk, 4));
@@ -919,7 +919,7 @@ Compiler::emitOp(OPCODE op)
     {
       // Docs say that MXCSR must be preserved across function calls, so we
       // assume that we'll always get the defualt round-to-nearest.
-      if (MacroAssemblerX86::Features().sse) {
+      if (MacroAssembler::Features().sse) {
         __ cvtss2si(pri, Operand(stk, 0));
       } else {
         __ fld32(Operand(stk, 0));
@@ -963,7 +963,7 @@ Compiler::emitOp(OPCODE op)
     }
 
     case OP_RND_TO_ZERO:
-      if (MacroAssemblerX86::Features().sse) {
+      if (MacroAssembler::Features().sse) {
         __ cvttss2si(pri, Operand(stk, 0));
       } else {
         __ fld32(Operand(stk, 0));
@@ -999,7 +999,7 @@ Compiler::emitOp(OPCODE op)
     case OP_FLOATCMP:
     {
       Label bl, ab, done;
-      if (MacroAssemblerX86::Features().sse) {
+      if (MacroAssembler::Features().sse) {
         __ movss(xmm0, Operand(stk, 4));
         __ ucomiss(Operand(stk, 0), xmm0);
       } else {
@@ -1048,7 +1048,7 @@ Compiler::emitOp(OPCODE op)
 
     case OP_FLOAT_NOT:
     {
-      if (MacroAssemblerX86::Features().sse) {
+      if (MacroAssembler::Features().sse) {
         __ xorps(xmm0, xmm0);
         __ ucomiss(Operand(stk, 0), xmm0);
       } else {
@@ -1486,7 +1486,7 @@ Compiler::emitSysreqC()
 bool
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 {
-  DataLabel return_address;
+  CodeLabel return_address;
   __ enterInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
 
   // Align the stack.
@@ -1625,7 +1625,7 @@ Compiler::emitSwitch()
     // Optimized table version. The tomfoolery below is because we only have
     // one free register... it seems unlikely pri or alt will be used given
     // that we're at the end of a control-flow point, but we'll play it safe.
-    DataLabel table;
+    CodeLabel table;
     __ push(eax);
     __ movl(eax, &table);
     __ movl(ecx, Operand(eax, ecx, ScaleFour));
@@ -1672,7 +1672,7 @@ Compiler::emitFloatCmp(ConditionCode cc)
     lhs = 0;
   }
 
-  if (MacroAssemblerX86::Features().sse) {
+  if (MacroAssembler::Features().sse) {
     __ movss(xmm0, Operand(stk, rhs));
     __ ucomiss(Operand(stk, lhs), xmm0);
   } else {
