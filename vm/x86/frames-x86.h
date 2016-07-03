@@ -18,6 +18,10 @@
 #define _include_sourcepawn_jit_frames_x86_h_
 
 #include <sp_vm_types.h>
+#include <amtl/am-platform.h>
+#if !defined(KE_ARCH_X86)
+# error "Wrong platform!"
+#endif
 
 namespace sp {
 

@@ -46,6 +46,8 @@ library.sources += [
   'stack-frames.cpp',
   'smx-v1-image.cpp',
   'watchdog_timer.cpp',
+  'jit.cpp',
+  'linking.cpp',
 ]
 
 if builder.options.arch == 'x86':
@@ -53,7 +55,6 @@ if builder.options.arch == 'x86':
     'x86/assembler-x86.cpp',
     'x86/code-stubs-x86.cpp',
     'x86/jit_x86.cpp',
-    'x86/x86-utils.cpp',
   ]
 
 libsourcepawn = builder.Add(library)
