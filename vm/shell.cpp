@@ -24,6 +24,19 @@ using namespace SourcePawn;
 
 Environment *sEnv;
 
+static const char*
+BaseFilename(const char* path)
+{
+  size_t len = strlen(path);
+  if (len <= 1)
+    return path;
+  for (size_t i = len - 2; i < len; i--) {
+    if (path[i] == '/' || path[i] == '\\')
+      return &path[i + 1];
+  }
+  return path;
+}
+
 static void
 DumpStack(IFrameIterator &iter)
 {
@@ -42,6 +55,7 @@ DumpStack(IFrameIterator &iter)
       const char *file = iter.FilePath();
       if (!file)
         file = "<unknown>";
+      file = BaseFilename(file);
       fprintf(stdout, "  [%d] %s::%s, line %d\n", index, file, name, iter.LineNumber());
     } else {
       fprintf(stdout, "  [%d] %s()\n", index, name);

@@ -1,0 +1,4 @@
+  [0] dump_stack_trace()
+  [1] stack-trace-2.sp::frame2, line 15
+  [2] stack-trace-2.sp::frame1, line 10
+  [3] stack-trace-2.sp::main, line 5
