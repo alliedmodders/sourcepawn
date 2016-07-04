@@ -138,8 +138,20 @@ CompilerBase::emit(int* errp)
     emitCipMapping(jump.cip);
   }
 
-  // This has to come last.
-  emitErrorPaths();
+  // These have to come last.
+  emitThrowPathIfNeeded(SP_ERROR_DIVIDE_BY_ZERO);
+  emitThrowPathIfNeeded(SP_ERROR_STACKLOW);
+  emitThrowPathIfNeeded(SP_ERROR_STACKMIN);
+  emitThrowPathIfNeeded(SP_ERROR_ARRAY_BOUNDS);
+  emitThrowPathIfNeeded(SP_ERROR_MEMACCESS);
+  emitThrowPathIfNeeded(SP_ERROR_HEAPLOW);
+  emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
+  emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
+  emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
+
+  // This has to come very, very last, since it checks whether return paths
+  // are used.
+  emitErrorHandlers();
 
   CodeChunk code = LinkCode(env_, masm);
   if (!code.address()) {
@@ -163,7 +175,7 @@ CompilerBase::emit(int* errp)
 }
 
 void
-CompilerBase::emitErrorPaths()
+CompilerBase::emitErrorPath(ErrorPath* path)
 {
   // For each path that had an error check, bind it to an error routine and
   // add it to the cip map. What we'll get is something like:
@@ -183,31 +195,15 @@ CompilerBase::emitErrorPaths()
   //   push error-code-reg
   //   call InvokeReportError(int err)
   //
-  for (size_t i = 0; i < error_paths_.length(); i++) {
-    ErrorPath &path = error_paths_[i];
 
-    // If there's no error code, it should be in eax. Otherwise we'll jump to
-    // a path that sets eax to a hardcoded value.
-    __ bind(&path.label);
-    if (path.err == 0)
-      __ call(&report_error_);
-    else
-      __ call(&throw_error_code_[path.err]);
+  // If there's no error code, it should be in eax. Otherwise we'll jump to
+  // a path that sets eax to a hardcoded value.
+  if (path->err == 0)
+    __ call(&report_error_);
+  else
+    __ call(&throw_error_code_[path->err]);
 
-    emitCipMapping(path.cip);
-  }
-
-  emitThrowPathIfNeeded(SP_ERROR_DIVIDE_BY_ZERO);
-  emitThrowPathIfNeeded(SP_ERROR_STACKLOW);
-  emitThrowPathIfNeeded(SP_ERROR_STACKMIN);
-  emitThrowPathIfNeeded(SP_ERROR_ARRAY_BOUNDS);
-  emitThrowPathIfNeeded(SP_ERROR_MEMACCESS);
-  emitThrowPathIfNeeded(SP_ERROR_HEAPLOW);
-  emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
-  emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
-  emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
-
-  emitErrorHandlers();
+  emitCipMapping(path->cip);
 }
 
 void
@@ -293,6 +289,13 @@ CompilerBase::InvokeReportTimeout()
 {
   Environment::get()->watchdog()->NotifyTimeoutReceived();
   InvokeReportError(SP_ERROR_TIMEOUT);
+}
+
+bool
+ErrorPath::emit(Compiler* cc)
+{
+  cc->emitErrorPath(this);
+  return true;
 }
 
 } // namespace sp

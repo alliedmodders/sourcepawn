@@ -23,6 +23,7 @@
 #include "macro-assembler.h"
 #include "opcodes.h"
 #include "pool-allocator.h"
+#include "outofline-asm.h"
 
 namespace sp {
 
@@ -31,7 +32,6 @@ using namespace SourcePawn;
 class PluginRuntime;
 class PluginContext;
 class LegacyImage;
-class OutOfLinePath;
 
 struct BackwardJump {
   // The pc at the jump instruction (i.e. after it).
@@ -49,22 +49,24 @@ struct BackwardJump {
   {}
 };
 
-struct ErrorPath
+class ErrorPath : public OutOfLinePath
 {
-  SilentLabel label;
+ public:
+  ErrorPath(const cell_t* cip, int err)
+  : cip(cip),
+    err(err)
+  {}
+
+  bool emit(Compiler* cc) override;
+
   const cell_t *cip;
   int err;
-
-  ErrorPath(const cell_t *cip, int err)
-   : cip(cip),
-     err(err)
-  {}
-  ErrorPath()
-  {}
 };
 
 class CompilerBase
 {
+  friend class ErrorPath;
+
  public:
   CompilerBase(PluginRuntime *rt, cell_t pcode_offs);
   virtual ~CompilerBase();
@@ -98,11 +100,11 @@ class CompilerBase
     cip_map_.append(entry);
   }
 
- private:
-  void emitErrorPaths();
+ protected:
+  void emitErrorPath(ErrorPath* path);
   void emitThrowPathIfNeeded(int err);
 
-protected:
+ protected:
   Environment *env_;
   PluginRuntime *rt_;
   PluginContext *context_;
@@ -121,7 +123,6 @@ protected:
 
   ke::Vector<OutOfLinePath*> ool_paths_;
 
-  ke::Vector<ErrorPath> error_paths_;
   Label throw_timeout_;
   Label throw_error_code_[SP_MAX_ERROR_CODES];
   Label report_error_;

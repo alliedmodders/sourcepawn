@@ -59,7 +59,6 @@ class Compiler : public CompilerBase
   bool emitSwitch();
   void emitGenArray(bool autozero);
   void emitCheckAddress(Register reg);
-  void emitErrorPath(Label *dest, int code);
   void emitFloatCmp(ConditionCode cc);
   void emitCallThunk(CallThunk* thunk);
   void jumpOnError(ConditionCode cc, int err = 0);

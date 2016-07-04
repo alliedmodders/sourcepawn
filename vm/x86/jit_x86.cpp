@@ -1533,13 +1533,11 @@ void
 Compiler::jumpOnError(ConditionCode cc, int err)
 {
   // Note: we accept 0 for err. In this case we expect the error to be in eax.
-  {
-    ErrorPath path(op_cip_, err);
-    error_paths_.append(path);
-  }
+  // :TODO: handle OOM.
+  ErrorPath* path = new ErrorPath(op_cip_, err);
+  ool_paths_.append(path);
 
-  ErrorPath &path = error_paths_.back();
-  __ j(cc, &path.label);
+  __ j(cc, path->label());
 }
 
 void
