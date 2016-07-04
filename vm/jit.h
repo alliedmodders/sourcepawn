@@ -22,6 +22,7 @@
 #include <am-vector.h>
 #include "macro-assembler.h"
 #include "opcodes.h"
+#include "pool-allocator.h"
 
 namespace sp {
 
@@ -30,6 +31,7 @@ using namespace SourcePawn;
 class PluginRuntime;
 class PluginContext;
 class LegacyImage;
+class OutOfLinePath;
 
 struct BackwardJump {
   // The pc at the jump instruction (i.e. after it).
@@ -67,11 +69,12 @@ class CompilerBase
   CompilerBase(PluginRuntime *rt, cell_t pcode_offs);
   virtual ~CompilerBase();
 
-  CompiledFunction* emit(int* errp);
+  static CompiledFunction *Compile(PluginRuntime *prt, cell_t pcode_offs, int *err);
 
  protected:
+  CompiledFunction* emit(int* errp);
+
   virtual bool emitOp(sp::OPCODE op) = 0;
-  virtual void emitCallThunks() = 0;
   virtual void emitThrowPath(int err) = 0;
   virtual void emitErrorHandlers() = 0;
 
@@ -104,6 +107,7 @@ protected:
   PluginRuntime *rt_;
   PluginContext *context_;
   LegacyImage *image_;
+  PoolScope scope_;
   int error_;
   uint32_t pcode_start_;
   const cell_t *code_start_;
@@ -114,6 +118,8 @@ protected:
   MacroAssembler masm;
 
   Label *jump_map_;
+
+  ke::Vector<OutOfLinePath*> ool_paths_;
 
   ke::Vector<ErrorPath> error_paths_;
   Label throw_timeout_;

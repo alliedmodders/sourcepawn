@@ -125,6 +125,12 @@ class PoolScope
 class PoolObject
 {
  public:
+  void *operator new(size_t size) {
+    return PoolAllocator::DefaultForThread().rawAllocate(size);
+  }
+  void *operator new [](size_t size) {
+    return PoolAllocator::DefaultForThread().rawAllocate(size);
+  }
   void *operator new(size_t size, PoolAllocator &pool) {
     return pool.rawAllocate(size);
   }
@@ -133,6 +139,12 @@ class PoolObject
   }
   
   // Using delete on pool-allocated objects is illegal.
+  void operator delete(void *ptr) {
+    assert(false);
+  }
+  void operator delete [](void *ptr) {
+    assert(false);
+  }
   void operator delete(void *ptr, PoolAllocator &pool) {
     assert(false);
   }

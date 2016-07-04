@@ -19,6 +19,7 @@
 #include "watchdog_timer.h"
 #include "environment.h"
 #include "compiled-function.h"
+#include "jit.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -443,7 +444,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
       fn = m_pRuntime->GetJittedFunctionByOffset(cfun->Public()->code_offs);
       if (!fn) {
         int err = SP_ERROR_NONE;
-        if ((fn = CompiledFunction::Compile(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
+        if ((fn = CompilerBase::Compile(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
           ReportErrorNumber(err);
           return false;
         }

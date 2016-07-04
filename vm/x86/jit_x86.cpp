@@ -40,14 +40,15 @@
 #include "code-stubs.h"
 #include "linking.h"
 #include "frames-x86.h"
-
-using namespace sp;
+#include "outofline-asm.h"
 
 #if defined USE_UNGEN_OPCODES
 #include "ungen_opcodes.h"
 #endif
 
 #define __ masm.
+
+namespace sp {
 
 static inline ConditionCode
 OpToCondition(OPCODE op)
@@ -1185,6 +1186,22 @@ Compiler::emitGenArray(bool autozero)
   }
 }
 
+class CallThunk : public OutOfLinePath
+{
+ public:
+  CallThunk(cell_t pcode_offset)
+   : pcode_offset(pcode_offset)
+  {
+  }
+
+  bool emit(Compiler* cc) override {
+    cc->emitCallThunk(this);
+    return true;
+  }
+
+  cell_t pcode_offset;
+};
+
 bool
 Compiler::emitCall()
 {
@@ -1200,9 +1217,9 @@ Compiler::emitCall()
   CompiledFunction *fun = rt_->GetJittedFunctionByOffset(offset);
   if (!fun) {
     // Need to emit a delayed thunk.
-    CallThunk thunk(offset);
-    __ call(&thunk.call);
-    if (!call_thunks_.append(thunk))
+    CallThunk* thunk = new CallThunk(offset);
+    __ call(thunk->label());
+    if (!ool_paths_.append(thunk))
       return false;
   } else {
     // Function is already emitted, we can do a direct call.
@@ -1215,44 +1232,37 @@ Compiler::emitCall()
 }
 
 void
-Compiler::emitCallThunks()
+Compiler::emitCallThunk(CallThunk* thunk)
 {
-  for (size_t i = 0; i < call_thunks_.length(); i++) {
-    CallThunk& thunk = call_thunks_[i];
+  // Get the return address, since that is the call that we need to patch.
+  __ movl(eax, Operand(esp, 0));
 
-    Label error;
-    __ bind(&thunk.call);
+  // Enter the exit frame. This aligns the stack.
+  __ enterExitFrame(ExitFrameType::Helper, 0);
 
-    // Get the return address, since that is the call that we need to patch.
-    __ movl(eax, Operand(esp, 0));
+  // We need to push 4 arguments, and one of them will need an extra word
+  // on the stack. Allocate a big block so we're aligned.
+  //
+  // Note: we add 12 since the push above misaligned the stack.
+  static const size_t kStackNeeded = 5 * sizeof(void *);
+  static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+  __ subl(esp, kStackReserve);
 
-    // Enter the exit frame. This aligns the stack.
-    __ enterExitFrame(ExitFrameType::Helper, 0);
+  // Set arguments.
+  __ movl(Operand(esp, 3 * sizeof(void *)), eax);
+  __ lea(edx, Operand(esp, 4 * sizeof(void *)));
+  __ movl(Operand(esp, 2 * sizeof(void *)), edx);
+  __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk->pcode_offset));
+  __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(rt_));
 
-    // We need to push 4 arguments, and one of them will need an extra word
-    // on the stack. Allocate a big block so we're aligned.
-    //
-    // Note: we add 12 since the push above misaligned the stack.
-    static const size_t kStackNeeded = 5 * sizeof(void *);
-    static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
-    __ subl(esp, kStackReserve);
+  __ call(ExternalAddress((void *)CompileFromThunk));
+  __ movl(edx, Operand(esp, 4 * sizeof(void *)));
+  __ leaveExitFrame();
 
-    // Set arguments.
-    __ movl(Operand(esp, 3 * sizeof(void *)), eax);
-    __ lea(edx, Operand(esp, 4 * sizeof(void *)));
-    __ movl(Operand(esp, 2 * sizeof(void *)), edx);
-    __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk.pcode_offset));
-    __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(rt_));
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
 
-    __ call(ExternalAddress((void *)CompileFromThunk));
-    __ movl(edx, Operand(esp, 4 * sizeof(void *)));
-    __ leaveExitFrame();
-
-    __ testl(eax, eax);
-    jumpOnError(not_zero);
-
-    __ jmp(edx);
-  }
+  __ jmp(edx);
 }
 
 bool
@@ -1602,3 +1612,5 @@ CompilerBase::PatchCallThunk(uint8_t* pc, void* target)
 {
   *(intptr_t *)(pc - 4) = intptr_t(target) - intptr_t(pc);
 }
+
+} // namespace sp

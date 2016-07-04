@@ -33,20 +33,12 @@ namespace sp {
 class LegacyImage;
 class Environment;
 class CompiledFunction;
-
-struct CallThunk
-{
-  SilentLabel call;
-  cell_t pcode_offset;
-
-  CallThunk(cell_t pcode_offset)
-    : pcode_offset(pcode_offset)
-  {
-  }
-};
+class CallThunk;
 
 class Compiler : public CompilerBase
 {
+  friend class CallThunk;
+
  public:
   Compiler(PluginRuntime *rt, cell_t pcode_offs);
   ~Compiler();
@@ -56,7 +48,6 @@ class Compiler : public CompilerBase
   bool emitOp(sp::OPCODE op) override;
 
  private:
-  void emitCallThunks() override;
   void emitThrowPath(int err) override;
   void emitErrorHandlers() override;
 
@@ -70,6 +61,7 @@ class Compiler : public CompilerBase
   void emitCheckAddress(Register reg);
   void emitErrorPath(Label *dest, int code);
   void emitFloatCmp(ConditionCode cc);
+  void emitCallThunk(CallThunk* thunk);
   void jumpOnError(ConditionCode cc, int err = 0);
 
   ExternalAddress hpAddr() {
@@ -81,9 +73,6 @@ class Compiler : public CompilerBase
   ExternalAddress spAddr() {
     return ExternalAddress(context_->addressOfSp());
   }
-
- private:
-  ke::Vector<CallThunk> call_thunks_;
 };
 
 const Register pri = eax;

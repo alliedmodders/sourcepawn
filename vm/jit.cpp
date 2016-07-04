@@ -22,6 +22,10 @@
 #include "linking.h"
 #include "watchdog_timer.h"
 #include "stack-frames.h"
+#include "outofline-asm.h"
+#if defined(KE_ARCH_X86)
+# include "x86/jit_x86.h"
+#endif
 
 namespace sp {
 
@@ -48,6 +52,22 @@ CompilerBase::CompilerBase(PluginRuntime *rt, cell_t pcode_offs)
 CompilerBase::~CompilerBase()
 {
   delete [] jump_map_;
+}
+
+CompiledFunction *
+CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
+{
+  Compiler cc(prt, pcode_offs);
+  CompiledFunction *fun = cc.emit(err);
+  if (!fun)
+    return nullptr;
+
+  // Grab the lock before linking code in, since the watchdog timer will look
+  // at this list on another thread.
+  ke::AutoLock lock(Environment::get()->lock());
+
+  prt->AddJittedFunction(fun);
+  return fun;
 }
 
 CompiledFunction*
@@ -99,7 +119,15 @@ CompilerBase::emit(int* errp)
     }
   }
 
-  emitCallThunks();
+  for (size_t i = 0; i < ool_paths_.length(); i++) {
+    OutOfLinePath* path = ool_paths_[i];
+    __ bind(path->label());
+    if (!path->emit(static_cast<Compiler*>(this))) {
+      assert(error_ != SP_ERROR_NONE);
+      *errp = error_;
+      return NULL;
+    }
+  }
 
   // For each backward jump, emit a little thunk so we can exit from a timeout.
   // Track the offset of where the thunk is, so the watchdog timer can patch it.
@@ -216,7 +244,7 @@ CompilerBase::CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void *
   CompiledFunction *fn = runtime->GetJittedFunctionByOffset(pcode_offs);
   if (!fn) {
     int err;
-    fn = CompiledFunction::Compile(runtime, pcode_offs, &err);
+    fn = Compile(runtime, pcode_offs, &err);
     if (!fn)
       return err;
   }
