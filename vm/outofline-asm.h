@@ -42,6 +42,34 @@ private:
   Label label_;
 };
 
+class ErrorPath : public OutOfLinePath
+{
+ public:
+  ErrorPath(const cell_t* cip, int err)
+  : cip(cip),
+    err(err)
+  {}
+
+  bool emit(Compiler* cc) override;
+
+  const cell_t *cip;
+  int err;
+};
+
+class OutOfBoundsErrorPath : public OutOfLinePath
+{
+ public:
+  OutOfBoundsErrorPath(const cell_t* cip, cell_t bounds)
+   : cip(cip),
+     bounds(bounds)
+  {}
+
+  bool emit(Compiler* cc) override;
+
+  const cell_t* cip;
+  cell_t bounds;
+};
+
 } // namespace sp
 
 #endif // _include_sourcepawn_outofline_asm_h__

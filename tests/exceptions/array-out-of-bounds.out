@@ -1,0 +1,2 @@
+Exception thrown: Array index out-of-bounds (index 25, limit 22)
+  [1] array-out-of-bounds.sp::main, line 0

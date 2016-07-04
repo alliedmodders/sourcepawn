@@ -1124,8 +1124,14 @@ Compiler::visitHALT(cell_t value)
 bool
 Compiler::visitBOUNDS(uint32_t limit)
 {
+  OutOfBoundsErrorPath* bounds = new OutOfBoundsErrorPath(op_cip_, limit);
+  if (!ool_paths_.append(bounds)) {
+    reportError(SP_ERROR_OUT_OF_MEMORY);
+    return false;
+  }
+
   __ cmpl(eax, limit);
-  jumpOnError(above, SP_ERROR_ARRAY_BOUNDS);
+  __ j(above, bounds->label());
   return true;
 }
 
@@ -1507,6 +1513,18 @@ Compiler::jumpOnError(ConditionCode cc, int err)
     reportError(SP_ERROR_OUT_OF_MEMORY);
 
   __ j(cc, path->label());
+}
+
+void
+Compiler::emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path)
+{
+  __ enterExitFrame(ExitFrameType::Helper, 0);
+  __ subl(esp, 8);
+  __ push(path->bounds);
+  __ push(eax);
+  __ call(ExternalAddress((void *)ReportOutOfBoundsError));
+  __ leaveExitFrame();
+  __ jmp(&return_reported_error_);
 }
 
 void
