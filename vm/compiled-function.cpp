@@ -13,9 +13,6 @@
 #include "compiled-function.h"
 #include "environment.h"
 #include <amtl/am-platform.h>
-#if defined(KE_ARCH_X86)
-# include "x86/jit_x86.h"
-#endif
 
 using namespace sp;
 
@@ -32,22 +29,6 @@ CompiledFunction::CompiledFunction(const CodeChunk& code,
 
 CompiledFunction::~CompiledFunction()
 {
-}
-
-CompiledFunction *
-CompiledFunction::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
-{
-  Compiler cc(prt, pcode_offs);
-  CompiledFunction *fun = cc.emit(err);
-  if (!fun)
-    return nullptr;
-
-  // Grab the lock before linking code in, since the watchdog timer will look
-  // at this list on another thread.
-  ke::AutoLock lock(Environment::get()->lock());
-
-  prt->AddJittedFunction(fun);
-  return fun;
 }
 
 static int cip_map_entry_cmp(const void *a1, const void *aEntry)

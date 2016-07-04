@@ -22,6 +22,10 @@
 #include "linking.h"
 #include "watchdog_timer.h"
 #include "stack-frames.h"
+#include "outofline-asm.h"
+#if defined(KE_ARCH_X86)
+# include "x86/jit_x86.h"
+#endif
 
 namespace sp {
 
@@ -48,6 +52,22 @@ CompilerBase::CompilerBase(PluginRuntime *rt, cell_t pcode_offs)
 CompilerBase::~CompilerBase()
 {
   delete [] jump_map_;
+}
+
+CompiledFunction *
+CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
+{
+  Compiler cc(prt, pcode_offs);
+  CompiledFunction *fun = cc.emit(err);
+  if (!fun)
+    return nullptr;
+
+  // Grab the lock before linking code in, since the watchdog timer will look
+  // at this list on another thread.
+  ke::AutoLock lock(Environment::get()->lock());
+
+  prt->AddJittedFunction(fun);
+  return fun;
 }
 
 CompiledFunction*
@@ -99,7 +119,15 @@ CompilerBase::emit(int* errp)
     }
   }
 
-  emitCallThunks();
+  for (size_t i = 0; i < ool_paths_.length(); i++) {
+    OutOfLinePath* path = ool_paths_[i];
+    __ bind(path->label());
+    if (!path->emit(static_cast<Compiler*>(this))) {
+      assert(error_ != SP_ERROR_NONE);
+      *errp = error_;
+      return NULL;
+    }
+  }
 
   // For each backward jump, emit a little thunk so we can exit from a timeout.
   // Track the offset of where the thunk is, so the watchdog timer can patch it.
@@ -110,8 +138,20 @@ CompilerBase::emit(int* errp)
     emitCipMapping(jump.cip);
   }
 
-  // This has to come last.
-  emitErrorPaths();
+  // These have to come last.
+  emitThrowPathIfNeeded(SP_ERROR_DIVIDE_BY_ZERO);
+  emitThrowPathIfNeeded(SP_ERROR_STACKLOW);
+  emitThrowPathIfNeeded(SP_ERROR_STACKMIN);
+  emitThrowPathIfNeeded(SP_ERROR_ARRAY_BOUNDS);
+  emitThrowPathIfNeeded(SP_ERROR_MEMACCESS);
+  emitThrowPathIfNeeded(SP_ERROR_HEAPLOW);
+  emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
+  emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
+  emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
+
+  // This has to come very, very last, since it checks whether return paths
+  // are used.
+  emitErrorHandlers();
 
   CodeChunk code = LinkCode(env_, masm);
   if (!code.address()) {
@@ -135,7 +175,7 @@ CompilerBase::emit(int* errp)
 }
 
 void
-CompilerBase::emitErrorPaths()
+CompilerBase::emitErrorPath(ErrorPath* path)
 {
   // For each path that had an error check, bind it to an error routine and
   // add it to the cip map. What we'll get is something like:
@@ -155,31 +195,15 @@ CompilerBase::emitErrorPaths()
   //   push error-code-reg
   //   call InvokeReportError(int err)
   //
-  for (size_t i = 0; i < error_paths_.length(); i++) {
-    ErrorPath &path = error_paths_[i];
 
-    // If there's no error code, it should be in eax. Otherwise we'll jump to
-    // a path that sets eax to a hardcoded value.
-    __ bind(&path.label);
-    if (path.err == 0)
-      __ call(&report_error_);
-    else
-      __ call(&throw_error_code_[path.err]);
+  // If there's no error code, it should be in eax. Otherwise we'll jump to
+  // a path that sets eax to a hardcoded value.
+  if (path->err == 0)
+    __ call(&report_error_);
+  else
+    __ call(&throw_error_code_[path->err]);
 
-    emitCipMapping(path.cip);
-  }
-
-  emitThrowPathIfNeeded(SP_ERROR_DIVIDE_BY_ZERO);
-  emitThrowPathIfNeeded(SP_ERROR_STACKLOW);
-  emitThrowPathIfNeeded(SP_ERROR_STACKMIN);
-  emitThrowPathIfNeeded(SP_ERROR_ARRAY_BOUNDS);
-  emitThrowPathIfNeeded(SP_ERROR_MEMACCESS);
-  emitThrowPathIfNeeded(SP_ERROR_HEAPLOW);
-  emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
-  emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
-  emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
-
-  emitErrorHandlers();
+  emitCipMapping(path->cip);
 }
 
 void
@@ -216,7 +240,7 @@ CompilerBase::CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void *
   CompiledFunction *fn = runtime->GetJittedFunctionByOffset(pcode_offs);
   if (!fn) {
     int err;
-    fn = CompiledFunction::Compile(runtime, pcode_offs, &err);
+    fn = Compile(runtime, pcode_offs, &err);
     if (!fn)
       return err;
   }
@@ -265,6 +289,13 @@ CompilerBase::InvokeReportTimeout()
 {
   Environment::get()->watchdog()->NotifyTimeoutReceived();
   InvokeReportError(SP_ERROR_TIMEOUT);
+}
+
+bool
+ErrorPath::emit(Compiler* cc)
+{
+  cc->emitErrorPath(this);
+  return true;
 }
 
 } // namespace sp

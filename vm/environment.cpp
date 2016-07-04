@@ -16,6 +16,7 @@
 #include "code-stubs.h"
 #include "watchdog_timer.h"
 #include "plugin-context.h"
+#include "pool-allocator.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -64,6 +65,7 @@ Environment::get()
 bool
 Environment::Initialize()
 {
+  PoolAllocator::InitDefault();
   api_v1_ = new SourcePawnEngine();
   api_v2_ = new SourcePawnEngine2();
   code_stubs_ = new CodeStubs(this);
@@ -83,6 +85,7 @@ Environment::Shutdown()
   watchdog_timer_->Shutdown();
   code_stubs_ = nullptr;
   code_alloc_ = nullptr;
+  PoolAllocator::FreeDefault();
 
   assert(sEnvironment == this);
   sEnvironment = nullptr;

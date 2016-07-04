@@ -22,6 +22,8 @@
 #include <am-vector.h>
 #include "macro-assembler.h"
 #include "opcodes.h"
+#include "pool-allocator.h"
+#include "outofline-asm.h"
 
 namespace sp {
 
@@ -47,31 +49,34 @@ struct BackwardJump {
   {}
 };
 
-struct ErrorPath
+class ErrorPath : public OutOfLinePath
 {
-  SilentLabel label;
+ public:
+  ErrorPath(const cell_t* cip, int err)
+  : cip(cip),
+    err(err)
+  {}
+
+  bool emit(Compiler* cc) override;
+
   const cell_t *cip;
   int err;
-
-  ErrorPath(const cell_t *cip, int err)
-   : cip(cip),
-     err(err)
-  {}
-  ErrorPath()
-  {}
 };
 
 class CompilerBase
 {
+  friend class ErrorPath;
+
  public:
   CompilerBase(PluginRuntime *rt, cell_t pcode_offs);
   virtual ~CompilerBase();
 
-  CompiledFunction* emit(int* errp);
+  static CompiledFunction *Compile(PluginRuntime *prt, cell_t pcode_offs, int *err);
 
  protected:
+  CompiledFunction* emit(int* errp);
+
   virtual bool emitOp(sp::OPCODE op) = 0;
-  virtual void emitCallThunks() = 0;
   virtual void emitThrowPath(int err) = 0;
   virtual void emitErrorHandlers() = 0;
 
@@ -95,15 +100,16 @@ class CompilerBase
     cip_map_.append(entry);
   }
 
- private:
-  void emitErrorPaths();
+ protected:
+  void emitErrorPath(ErrorPath* path);
   void emitThrowPathIfNeeded(int err);
 
-protected:
+ protected:
   Environment *env_;
   PluginRuntime *rt_;
   PluginContext *context_;
   LegacyImage *image_;
+  PoolScope scope_;
   int error_;
   uint32_t pcode_start_;
   const cell_t *code_start_;
@@ -115,7 +121,8 @@ protected:
 
   Label *jump_map_;
 
-  ke::Vector<ErrorPath> error_paths_;
+  ke::Vector<OutOfLinePath*> ool_paths_;
+
   Label throw_timeout_;
   Label throw_error_code_[SP_MAX_ERROR_CODES];
   Label report_error_;

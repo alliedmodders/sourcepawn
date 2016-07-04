@@ -52,8 +52,6 @@ class CompiledFunction
                    FixedArray<CipMapEntry> *cip_map);
   ~CompiledFunction();
 
-  static CompiledFunction* Compile(PluginRuntime* prt, cell_t pcode_offs, int* err);
-
  public:
   void *GetEntryAddress() const {
     return code_.address();
