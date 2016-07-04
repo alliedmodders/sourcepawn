@@ -48,6 +48,7 @@ library.sources += [
   'watchdog_timer.cpp',
   'jit.cpp',
   'linking.cpp',
+  'pool-allocator.cpp',
 ]
 
 if builder.options.arch == 'x86':
