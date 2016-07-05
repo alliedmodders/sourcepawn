@@ -198,6 +198,7 @@ CompilerBase::emitErrorPath(ErrorPath* path)
 
   // If there's no error code, it should be in eax. Otherwise we'll jump to
   // a path that sets eax to a hardcoded value.
+  __ alignStack();
   if (path->err == 0)
     __ call(&report_error_);
   else

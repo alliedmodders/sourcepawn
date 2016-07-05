@@ -540,6 +540,13 @@ class Assembler : public AssemblerBase
   void testl(Register op1, Register op2) {
     emit1(0x85, op2.code, op1.code);
   }
+  void testl(Register op1, int32_t imm) {
+    if (op1 == eax)
+      emit1(0xa9);
+    else
+      emit1(0xf7, 0, op1.code);
+    writeInt32(imm);
+  }
   void set(ConditionCode cc, const Operand &dest) {
     emit2(0x0f, 0x90 + uint8_t(cc), 0, dest);
   }
@@ -776,7 +783,7 @@ class Assembler : public AssemblerBase
   void call(const Operand &target) {
     emit1(0xff, 2, target);
   }
-  void call(ExternalAddress address) {
+  void call(const AddressValue& address) {
     emit1(0xe8);
     writeInt32(address.value());
     if (!external_refs_.append(pc()))
