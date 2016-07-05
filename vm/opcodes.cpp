@@ -35,7 +35,7 @@ using namespace SourcePawn;
 
 const char *OpcodeNames[] = {
 #define _(op, text) text,
-  OPCODE_LIST(_)
+  OPCODE_LIST(_, _)
 #undef _
   NULL
 };
