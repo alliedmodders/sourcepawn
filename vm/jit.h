@@ -50,20 +50,6 @@ struct BackwardJump {
   {}
 };
 
-class ErrorPath : public OutOfLinePath
-{
- public:
-  ErrorPath(const cell_t* cip, int err)
-  : cip(cip),
-    err(err)
-  {}
-
-  bool emit(Compiler* cc) override;
-
-  const cell_t *cip;
-  int err;
-};
-
 class CompilerBase : public PcodeVisitor
 {
   friend class ErrorPath;
@@ -83,12 +69,14 @@ class CompilerBase : public PcodeVisitor
 
   virtual void emitThrowPath(int err) = 0;
   virtual void emitErrorHandlers() = 0;
+  virtual void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) = 0;
 
   // Helpers.
   static int CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, uint8_t* pc);
   static void* find_entry_fp();
   static void InvokeReportError(int err);
   static void InvokeReportTimeout();
+  static void ReportOutOfBoundsError(cell_t index, cell_t bounds);
   static void PatchCallThunk(uint8_t* pc, void* target);
 
  protected:

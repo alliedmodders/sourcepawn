@@ -38,6 +38,7 @@ class CallThunk;
 class Compiler : public CompilerBase
 {
   friend class CallThunk;
+  friend class OutOfBoundsErrorPath;
 
  public:
   Compiler(PluginRuntime *rt, cell_t pcode_offs);
@@ -144,6 +145,7 @@ class Compiler : public CompilerBase
  private:
   void emitThrowPath(int err) override;
   void emitErrorHandlers() override;
+  void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) override;
 
   void emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
   void emitGenArray(bool autozero);
