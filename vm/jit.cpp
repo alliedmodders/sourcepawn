@@ -22,6 +22,7 @@
 #include "linking.h"
 #include "watchdog_timer.h"
 #include "method-verifier.h"
+#include "pcode-reader.h"
 #include "stack-frames.h"
 #include "outofline-asm.h"
 #if defined(KE_ARCH_X86)
@@ -42,7 +43,7 @@ CompilerBase::CompilerBase(PluginRuntime *rt, cell_t pcode_offs)
    error_(SP_ERROR_NONE),
    pcode_start_(pcode_offs),
    code_start_(reinterpret_cast<const cell_t *>(rt_->code().bytes + pcode_start_)),
-   cip_(code_start_),
+   op_cip_(nullptr),
    code_end_(reinterpret_cast<const cell_t *>(rt_->code().bytes + rt_->code().length)),
    jump_map_(nullptr)
 {
@@ -65,9 +66,11 @@ CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
   }
 
   Compiler cc(prt, pcode_offs);
-  CompiledFunction *fun = cc.emit(err);
-  if (!fun)
+  CompiledFunction *fun = cc.emit();
+  if (!fun) {
+    *err = cc.error();
     return nullptr;
+  }
 
   // Grab the lock before linking code in, since the watchdog timer will look
   // at this list on another thread.
@@ -78,12 +81,9 @@ CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
 }
 
 CompiledFunction*
-CompilerBase::emit(int* errp)
+CompilerBase::emit()
 {
-  if (cip_ >= code_end_ || *cip_ != OP_PROC) {
-    *errp = SP_ERROR_INVALID_INSTRUCTION;
-    return NULL;
-  }
+  PcodeReader<CompilerBase> reader(rt_, pcode_start_, this);
 
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
@@ -91,49 +91,41 @@ CompilerBase::emit(int* errp)
       rt_->Name(),
       rt_->image()->LookupFunction(pcode_start_));
 
-  SpewOpcode(rt_, code_start_, cip_);
+  SpewOpcode(rt_, code_start_, reader.cip());
 #endif
 
   const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
 
-  cip_++;
-  if (!emitOp(OP_PROC)) {
-      *errp = (error_ == SP_ERROR_NONE) ? SP_ERROR_OUT_OF_MEMORY : error_;
-      return NULL;
-  }
+  if (!reader.visitNext())
+    return nullptr;
 
-  while (cip_ < code_end_) {
+  while (reader.more()) {
     // If we reach the end of this function, or the beginning of a new
     // procedure, then stop.
-    if (*cip_ == OP_PROC || *cip_ == OP_ENDPROC)
+    if (reader.peekOpcode() == OP_PROC || reader.peekOpcode() == OP_ENDPROC)
       break;
 
 #if defined JIT_SPEW
-    SpewOpcode(rt_, code_start_, cip_);
+    SpewOpcode(rt_, code_start_, reader.cip());
 #endif
 
     // We assume every instruction is a jump target, so before emitting
     // an opcode, we bind its corresponding label.
-    __ bind(&jump_map_[cip_ - codeseg]);
+    __ bind(&jump_map_[reader.cip() - codeseg]);
 
     // Save the start of the opcode for emitCipMap().
-    op_cip_ = cip_;
+    op_cip_ = reader.cip();
 
-    OPCODE op = (OPCODE)readCell();
-    if (!emitOp(op) || error_ != SP_ERROR_NONE) {
-      *errp = (error_ == SP_ERROR_NONE) ? SP_ERROR_OUT_OF_MEMORY : error_;
-      return NULL;
+    if (!reader.visitNext()) {
+      return nullptr;
     }
   }
 
   for (size_t i = 0; i < ool_paths_.length(); i++) {
     OutOfLinePath* path = ool_paths_[i];
     __ bind(path->label());
-    if (!path->emit(static_cast<Compiler*>(this))) {
-      assert(error_ != SP_ERROR_NONE);
-      *errp = error_;
-      return NULL;
-    }
+    if (!path->emit(static_cast<Compiler*>(this)))
+      return nullptr;
   }
 
   // For each backward jump, emit a little thunk so we can exit from a timeout.
@@ -162,8 +154,8 @@ CompilerBase::emit(int* errp)
 
   CodeChunk code = LinkCode(env_, masm);
   if (!code.address()) {
-    *errp = SP_ERROR_OUT_OF_MEMORY;
-    return NULL;
+    reportError(SP_ERROR_OUT_OF_MEMORY);
+    return nullptr;
   }
 
   AutoPtr<FixedArray<LoopEdge>> edges(
@@ -226,14 +218,11 @@ CompilerBase::emitThrowPathIfNeeded(int err)
   emitThrowPath(err);
 }
 
-cell_t
-CompilerBase::readCell()
+void
+CompilerBase::reportError(int err)
 {
-  if (cip_ >= code_end_) {
-    error_= SP_ERROR_INVALID_INSTRUCTION;
-    return 0;
-  }
-  return *cip_++;
+  // Break here to get an error report stack.
+  error_ = err;
 }
 
 int

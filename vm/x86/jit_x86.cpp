@@ -51,28 +51,22 @@
 namespace sp {
 
 static inline ConditionCode
-OpToCondition(OPCODE op)
+OpToCondition(CompareOp op)
 {
   switch (op) {
-   case OP_EQ:
-   case OP_JEQ:
+  case CompareOp::Eq:
     return equal;
-   case OP_NEQ:
-   case OP_JNEQ:
+  case CompareOp::Neq:
     return not_equal;
-   case OP_SLESS:
-   case OP_JSLESS:
+  case CompareOp::Sless:
     return less;
-   case OP_SLEQ:
-   case OP_JSLEQ:
+  case CompareOp::Sleq:
     return less_equal;
-   case OP_SGRTR:
-   case OP_JSGRTR:
+  case CompareOp::Sgrtr:
     return greater;
-   case OP_SGEQ:
-   case OP_JSGEQ:
+  case CompareOp::Sgeq:
     return greater_equal;
-   default:
+  default:
     assert(false);
     return negative;
   }
@@ -109,983 +103,1032 @@ InvokeGenerateFullArray(PluginContext *cx, uint32_t argc, cell_t *argv, int auto
 }
 
 bool
-Compiler::emitOp(OPCODE op)
+Compiler::visitMOVE(PawnReg reg)
 {
+  if (reg == PawnReg::Pri)
+    __ movl(pri, alt);
+  else
+    __ movl(alt, pri);
+  return true;
+}
+
+bool
+Compiler::visitXCHG()
+{
+  __ xchgl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitZERO(cell_t offset)
+{
+  __ movl(Operand(dat, offset), 0);
+  return true;
+}
+
+bool
+Compiler::visitZERO_S(cell_t offset)
+{
+  __ movl(Operand(frm, offset), 0);
+  return true;
+}
+
+bool
+Compiler::visitPUSH(PawnReg src)
+{
+  Register reg = (src == PawnReg::Pri) ? pri : alt;
+  __ movl(Operand(stk, -4), reg);
+  __ subl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitPUSH_C(const cell_t* vals, size_t nvals)
+{
+  for (size_t i = 1; i <= nvals; i++)
+    __ movl(Operand(stk, -(4 * int(i))), vals[i - 1]);
+  __ subl(stk, 4 * nvals);
+  return true;
+}
+
+bool
+Compiler::visitPUSH_ADR(const cell_t* offsets, size_t nvals)
+{
+  // We temporarily relocate FRM to be a local address instead of an
+  // absolute address.
+  __ subl(frm, dat);
+  for (size_t i = 1; i <= nvals; i++) {
+    __ lea(tmp, Operand(frm, offsets[i - 1]));
+    __ movl(Operand(stk, -(4 * int(i))), tmp);
+  }
+  __ subl(stk, 4 * nvals);
+  __ addl(frm, dat);
+  return true;
+}
+
+bool
+Compiler::visitPUSH_S(const cell_t* offsets, size_t nvals)
+{
+  for (size_t i = 1; i <= nvals; i++) {
+    __ movl(tmp, Operand(frm, offsets[i - 1]));
+    __ movl(Operand(stk, -(4 * int(i))), tmp);
+  }
+  __ subl(stk, 4 * nvals);
+  return true;
+}
+
+bool
+Compiler::visitPUSH(const cell_t* offsets, size_t nvals)
+{
+  for (size_t i = 1; i <= nvals; i++) {
+    __ movl(tmp, Operand(dat, offsets[i - 1]));
+    __ movl(Operand(stk, -(4 * int(i))), tmp);
+  }
+  __ subl(stk, 4 * nvals);
+  return true;
+}
+
+bool
+Compiler::visitZERO(PawnReg dest)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ xorl(reg, reg);
+  return true;
+}
+
+bool
+Compiler::visitADD()
+{
+  __ addl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitSUB()
+{
+  __ subl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitSUB_ALT()
+{
+  __ movl(tmp, alt);
+  __ subl(tmp, pri);
+  __ movl(pri, tmp);
+  return true;
+}
+
+bool
+Compiler::visitPROC()
+{
+  __ enterFrame(FrameType::Scripted, pcode_start_);
+
+  // Push the old frame onto the stack.
+  __ movl(tmp, Operand(frmAddr()));
+  __ movl(Operand(stk, -4), tmp);
+  __ subl(stk, 8);    // extra unused slot for non-existant CIP
+
+  // Get and store the new frame.
+  __ movl(tmp, stk);
+  __ movl(frm, stk);
+  __ subl(tmp, dat);
+  __ movl(Operand(frmAddr()), tmp);
+  return true;
+}
+
+bool
+Compiler::visitIDXADDR_B(cell_t width)
+{
+  __ shll(pri, width);
+  __ addl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitSHL()
+{
+  __ movl(ecx, alt);
+  __ shll_cl(pri);
+  return true;
+}
+
+bool
+Compiler::visitSHR()
+{
+  __ movl(ecx, alt);
+  __ shrl_cl(pri);
+  return true;
+}
+
+bool
+Compiler::visitSSHR()
+{
+  __ movl(ecx, alt);
+  __ sarl_cl(pri);
+  return true;
+}
+
+bool
+Compiler::visitSHL_C(PawnReg dest, cell_t amount)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ shll(reg, amount);
+  return true;
+}
+
+bool
+Compiler::visitSHR_C(PawnReg dest, cell_t amount)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ shrl(reg, amount);
+  return true;
+}
+
+bool
+Compiler::visitSMUL()
+{
+  __ imull(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitNOT()
+{
+  __ testl(eax, eax);
+  __ movl(eax, 0);
+  __ set(zero, r8_al);
+  return true;
+}
+
+bool
+Compiler::visitNEG()
+{
+  __ negl(eax);
+  return true;
+}
+
+bool
+Compiler::visitXOR()
+{
+  __ xorl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitOR()
+{
+  __ orl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitAND()
+{
+  __ andl(pri, alt);
+  return true;
+}
+
+bool
+Compiler::visitINVERT()
+{
+  __ notl(pri);
+  return true;
+}
+
+bool
+Compiler::visitADD_C(cell_t value)
+{
+  __ addl(pri, value);
+  return true;
+}
+
+bool
+Compiler::visitSMUL_C(cell_t value)
+{
+  __ imull(pri, pri, value);
+  return true;
+}
+
+bool
+Compiler::visitCompareOp(CompareOp op)
+{
+  ConditionCode cc = OpToCondition(op);
+  __ cmpl(pri, alt);
+  __ movl(pri, 0);
+  __ set(cc, r8_al);
+  return true;
+}
+
+bool
+Compiler::visitEQ_C(PawnReg src, cell_t value)
+{
+  Register reg = (src == PawnReg::Pri) ? pri : alt;
+  __ cmpl(reg, value);
+  __ movl(pri, 0);
+  __ set(equal, r8_al);
+  return true;
+}
+
+bool
+Compiler::visitINC(PawnReg dest)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ addl(reg, 1);
+  return true;
+}
+
+bool
+Compiler::visitINC(cell_t offset)
+{
+  __ addl(Operand(dat, offset), 1);
+  return true;
+}
+
+bool
+Compiler::visitINC_S(cell_t offset)
+{
+  __ addl(Operand(frm, offset), 1);
+  return true;
+}
+
+bool
+Compiler::visitINC_I()
+{
+  __ addl(Operand(dat, pri, NoScale), 1);
+  return true;
+}
+
+bool
+Compiler::visitDEC(PawnReg dest)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ subl(reg, 1);
+  return true;
+}
+
+bool
+Compiler::visitDEC(cell_t offset)
+{
+  __ subl(Operand(dat, offset), 1);
+  return true;
+}
+
+bool
+Compiler::visitDEC_S(cell_t offset)
+{
+  __ subl(Operand(frm, offset), 1);
+  return true;
+}
+
+bool
+Compiler::visitDEC_I()
+{
+  __ subl(Operand(dat, pri, NoScale), 1);
+  return true;
+}
+
+bool
+Compiler::visitLOAD(PawnReg dest, cell_t srcaddr)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(reg, Operand(dat, srcaddr));
+  return true;
+}
+
+bool
+Compiler::visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt)
+{
+  visitLOAD(PawnReg::Pri, offsetForPri);
+  visitLOAD(PawnReg::Alt, offsetForAlt);
+  return true;
+}
+
+bool
+Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(reg, Operand(frm, srcoffs));
+  return true;
+}
+
+bool
+Compiler::visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt)
+{
+  visitLOAD_S(PawnReg::Pri, offsetForPri);
+  visitLOAD_S(PawnReg::Alt, offsetForAlt);
+  return true;
+}
+
+bool
+Compiler::visitLREF_S(PawnReg dest, cell_t srcoffs)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(reg, Operand(frm, srcoffs));
+  __ movl(reg, Operand(dat, reg, NoScale));
+  return true;
+}
+
+bool
+Compiler::visitCONST(PawnReg dest, cell_t val)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(reg, val);
+  return true;
+}
+
+bool
+Compiler::visitADDR(PawnReg dest, cell_t offset)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(reg, Operand(frmAddr()));
+  __ addl(reg, offset);
+  return true;
+}
+
+bool
+Compiler::visitSTOR(cell_t offset, PawnReg src)
+{
+  Register reg = (src == PawnReg::Pri) ? pri : alt;
+  __ movl(Operand(dat, offset), reg);
+  return true;
+}
+
+bool
+Compiler::visitSTOR_S(cell_t offset, PawnReg src)
+{
+  Register reg = (src == PawnReg::Pri) ? pri : alt;
+  __ movl(Operand(frm, offset), reg);
+  return true;
+}
+
+bool
+Compiler::visitIDXADDR()
+{
+  __ lea(pri, Operand(alt, pri, ScaleFour));
+  return true;
+}
+
+bool
+Compiler::visitSREF_S(cell_t offset, PawnReg src)
+{
+  Register reg = (src == PawnReg::Pri) ? pri : alt;
+  __ movl(tmp, Operand(frm, offset));
+  __ movl(Operand(dat, tmp, NoScale), reg);
+  return true;
+}
+
+bool
+Compiler::visitPOP(PawnReg dest)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(reg, Operand(stk, 0));
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitSWAP(PawnReg dest)
+{
+  Register reg = (dest == PawnReg::Pri) ? pri : alt;
+  __ movl(tmp, Operand(stk, 0));
+  __ movl(Operand(stk, 0), reg);
+  __ movl(reg, tmp);
+  return true;
+}
+
+bool
+Compiler::visitLIDX()
+{
+  __ lea(pri, Operand(alt, pri, ScaleFour));
+  __ movl(pri, Operand(dat, pri, NoScale));
+  return true;
+}
+
+bool
+Compiler::visitLIDX_B(cell_t width)
+{
+  if (width >= 0 && width <= 3) {
+    __ lea(pri, Operand(alt, pri, Scale(width)));
+  } else {
+    __ shll(pri, width);
+    __ addl(pri, alt);
+  }
+  emitCheckAddress(pri);
+  __ movl(pri, Operand(dat, pri, NoScale));
+  return true;
+}
+
+bool
+Compiler::visitCONST(cell_t offset, cell_t value)
+{
+  __ movl(Operand(dat, offset), value);
+  return true;
+}
+
+bool
+Compiler::visitCONST_S(cell_t offset, cell_t value)
+{
+  __ movl(Operand(frm, offset), value);
+  return true;
+}
+
+bool
+Compiler::visitLOAD_I()
+{
+  emitCheckAddress(pri);
+  __ movl(pri, Operand(dat, pri, NoScale));
+  return true;
+}
+
+bool
+Compiler::visitSTOR_I()
+{
+  emitCheckAddress(alt);
+  __ movl(Operand(dat, alt, NoScale), pri);
+  return true;
+}
+
+bool
+Compiler::visitSDIV(PawnReg dest)
+{
+  Register dividend = (dest == PawnReg::Pri) ? pri : alt;
+  Register divisor = (dest == PawnReg::Pri) ? alt : pri;
+
+  // Guard against divide-by-zero.
+  __ testl(divisor, divisor);
+  jumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
+
+  // A more subtle case; -INT_MIN / -1 yields an overflow exception.
+  Label ok;
+  __ cmpl(divisor, -1);
+  __ j(not_equal, &ok);
+  __ cmpl(dividend, 0x80000000);
+  jumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
+  __ bind(&ok);
+
+  // Now we can actually perform the divide.
+  __ movl(tmp, divisor);
+  if (dest == PawnReg::Pri)
+    __ movl(edx, dividend);
+  else
+    __ movl(eax, dividend);
+  __ sarl(edx, 31);
+  __ idivl(tmp);
+  return true;
+}
+
+bool
+Compiler::visitLODB_I(cell_t width)
+{
+  emitCheckAddress(pri);
+  __ movl(pri, Operand(dat, pri, NoScale));
+  if (width == 1)
+    __ andl(pri, 0xff);
+  else if (width == 2)
+    __ andl(pri, 0xffff);
+  return true;
+}
+
+bool
+Compiler::visitSTRB_I(cell_t width)
+{
+  emitCheckAddress(alt);
+  if (width == 1)
+    __ movb(Operand(dat, alt, NoScale), pri);
+  else if (width == 2)
+    __ movw(Operand(dat, alt, NoScale), pri);
+  else if (width == 4)
+    __ movl(Operand(dat, alt, NoScale), pri);
+  return true;
+}
+
+bool
+Compiler::visitRETN()
+{
+  // Restore the old frame pointer.
+  __ movl(frm, Operand(stk, 4));              // get the old frm
+  __ addl(stk, 8);                            // pop stack
+  __ movl(Operand(frmAddr()), frm);           // store back old frm
+  __ addl(frm, dat);                          // relocate
+
+  // Remove parameters.
+  __ movl(tmp, Operand(stk, 0));
+  __ lea(stk, Operand(stk, tmp, ScaleFour, 4));
+
+  __ leaveFrame();
+  __ ret();
+  return true;
+}
+
+bool
+Compiler::visitMOVS(uint32_t amount)
+{
+  unsigned dwords = amount / 4;
+  unsigned bytes = amount % 4;
+
+  __ cld();
+  __ push(esi);
+  __ push(edi);
+  // Note: set edi first, since we need esi.
+  __ lea(edi, Operand(dat, alt, NoScale));
+  __ lea(esi, Operand(dat, pri, NoScale));
+  if (dwords) {
+    __ movl(ecx, dwords);
+    __ rep_movsd();
+  }
+  if (bytes) {
+    __ movl(ecx, bytes);
+    __ rep_movsb();
+  }
+  __ pop(edi);
+  __ pop(esi);
+  return true;
+}
+  
+
+bool
+Compiler::visitFILL(uint32_t amount)
+{
+  // eax/pri is used implicitly.
+  unsigned dwords = amount / 4;
+  __ push(edi);
+  __ lea(edi, Operand(dat, alt, NoScale));
+  __ movl(ecx, dwords);
+  __ cld();
+  __ rep_stosd();
+  __ pop(edi);
+  return true;
+}
+
+bool
+Compiler::visitSTRADJUST_PRI()
+{
+  __ addl(pri, 4);
+  __ sarl(pri, 2);
+  return true;
+}
+
+bool
+Compiler::visitFABS()
+{
+  __ movl(pri, Operand(stk, 0));
+  __ andl(pri, 0x7fffffff);
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitFLOAT()
+{
+  if (MacroAssembler::Features().sse2) {
+    __ cvtsi2ss(xmm0, Operand(edi, 0));
+    __ movd(pri, xmm0);
+  } else {
+    __ fild32(Operand(edi, 0));
+    __ subl(esp, 4);
+    __ fstp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitFLOATADD()
+{
+  if (MacroAssembler::Features().sse2) {
+    __ movss(xmm0, Operand(stk, 0));
+    __ addss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+  } else {
+    __ subl(esp, 4);
+    __ fld32(Operand(stk, 0));
+    __ fadd32(Operand(stk, 4));
+    __ fstp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+  __ addl(stk, 8);
+  return true;
+}
+
+bool
+Compiler::visitFLOATSUB()
+{
+  if (MacroAssembler::Features().sse2) {
+    __ movss(xmm0, Operand(stk, 0));
+    __ subss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+  } else {
+    __ subl(esp, 4);
+    __ fld32(Operand(stk, 0));
+    __ fsub32(Operand(stk, 4));
+    __ fstp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+  __ addl(stk, 8);
+  return true;
+}
+
+bool
+Compiler::visitFLOATMUL()
+{
+  if (MacroAssembler::Features().sse2) {
+    __ movss(xmm0, Operand(stk, 0));
+    __ mulss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+  } else {
+    __ subl(esp, 4);
+    __ fld32(Operand(stk, 0));
+    __ fmul32(Operand(stk, 4));
+    __ fstp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+  __ addl(stk, 8);
+  return true;
+}
+
+bool
+Compiler::visitFLOATDIV()
+{
+  if (MacroAssembler::Features().sse2) {
+    __ movss(xmm0, Operand(stk, 0));
+    __ divss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+  } else {
+    __ subl(esp, 4);
+    __ fld32(Operand(stk, 0));
+    __ fdiv32(Operand(stk, 4));
+    __ fstp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+  __ addl(stk, 8);
+  return true;
+}
+
+bool
+Compiler::visitRND_TO_NEAREST()
+{
+  // Docs say that MXCSR must be preserved across function calls, so we
+  // assume that we'll always get the defualt round-to-nearest.
+  if (MacroAssembler::Features().sse) {
+    __ cvtss2si(pri, Operand(stk, 0));
+  } else {
+    __ fld32(Operand(stk, 0));
+    __ subl(esp, 4);
+    __ fistp32(Operand(esp, 0));
+    __ pop(pri);
+  }
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitRND_TO_CEIL()
+{
+  // Adapted from http://wurstcaptures.untergrund.net/assembler_tricks.html#fastfloorf
+  // (the above does not support the full integer range)
+  static float kRoundToCeil = -0.5f;
+  __ fld32(Operand(stk, 0));
+  __ fadd32(st0, st0);
+  __ fsubr32(Operand(ExternalAddress(&kRoundToCeil)));
+  __ subl(esp, 8);
+  __ fistp64(Operand(esp, 0));
+  __ pop(eax); // low word
+  __ pop(ecx); // high word
+  // divide 64-bit integer by 2 (shift right by 1)
+  __ shrd(eax, ecx, 1);
+  __ sarl(ecx, 1);
+  // negate 64-bit integer in eax:ecx
+  __ negl(eax);
+  __ adcl(ecx, 0);
+  __ negl(ecx);
+  // did this overflow? if so, return 0x80000000
+  Label ok;
+  __ testl(ecx, ecx);
+  __ j(zero, &ok);
+  __ cmpl(ecx, -1);
+  __ j(equal, &ok);
+  __ movl(pri, 0x80000000);
+  __ bind(&ok);
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitRND_TO_ZERO() 
+{
+  if (MacroAssembler::Features().sse) {
+    __ cvttss2si(pri, Operand(stk, 0));
+  } else {
+    __ fld32(Operand(stk, 0));
+    __ subl(esp, 8);
+    __ fstcw(Operand(esp, 4));
+    __ movl(Operand(esp, 0), 0xfff);
+    __ fldcw(Operand(esp, 0));
+    __ fistp32(Operand(esp, 0));
+    __ pop(pri);
+    __ fldcw(Operand(esp, 0));
+    __ addl(esp, 4);
+  }
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitRND_TO_FLOOR()
+{
+  __ fld32(Operand(stk, 0));
+  __ subl(esp, 8);
+  __ fstcw(Operand(esp, 4));
+  __ movl(Operand(esp, 0), 0x7ff);
+  __ fldcw(Operand(esp, 0));
+  __ fistp32(Operand(esp, 0));
+  __ pop(eax);
+  __ fldcw(Operand(esp, 0));
+  __ addl(esp, 4);
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitFLOATCMP()
+{
+  // This is the old float cmp, which returns ordered results. In newly
+  // compiled code it should not be used or generated.
+  //
+  // Note that the checks here are inverted: the test is |rhs OP lhs|.
+  Label bl, ab, done;
+  if (MacroAssembler::Features().sse) {
+    __ movss(xmm0, Operand(stk, 4));
+    __ ucomiss(Operand(stk, 0), xmm0);
+  } else {
+    __ fld32(Operand(stk, 0));
+    __ fld32(Operand(stk, 4));
+    __ fucomip(st1);
+    __ fstp(st0);
+  }
+  __ j(above, &ab);
+  __ j(below, &bl);
+  __ xorl(pri, pri);
+  __ jmp(&done);
+  __ bind(&ab);
+  __ movl(pri, -1);
+  __ jmp(&done);
+  __ bind(&bl);
+  __ movl(pri, 1);
+  __ bind(&done);
+  __ addl(stk, 8);
+  return true;
+}
+
+bool
+Compiler::visitFLOAT_CMP_OP(CompareOp op)
+{
+  ConditionCode code;
   switch (op) {
-    case OP_MOVE_PRI:
-      __ movl(pri, alt);
-      break;
-
-    case OP_MOVE_ALT:
-      __ movl(alt, pri);
-      break;
-
-    case OP_XCHG:
-      __ xchgl(pri, alt);
-      break;
-
-    case OP_ZERO:
-    {
-      cell_t offset = readCell();
-      __ movl(Operand(dat, offset), 0);
-      break;
-    }
-
-    case OP_ZERO_S:
-    {
-      cell_t offset = readCell();
-      __ movl(Operand(frm, offset), 0);
-      break;
-    }
-
-    case OP_PUSH_PRI:
-    case OP_PUSH_ALT:
-    {
-      Register reg = (op == OP_PUSH_PRI) ? pri : alt;
-      __ movl(Operand(stk, -4), reg);
-      __ subl(stk, 4);
-      break;
-    }
-
-    case OP_PUSH_C:
-    case OP_PUSH2_C:
-    case OP_PUSH3_C:
-    case OP_PUSH4_C:
-    case OP_PUSH5_C:
-    {
-      int n = 1;
-      if (op >= OP_PUSH2_C)
-        n = ((op - OP_PUSH2_C) / 4) + 2;
-
-      int i = 1;
-      do {
-        cell_t val = readCell();
-        __ movl(Operand(stk, -(4 * i)), val);
-      } while (i++ < n);
-      __ subl(stk, 4 * n);
-      break;
-    }
-
-    case OP_PUSH_ADR:
-    case OP_PUSH2_ADR:
-    case OP_PUSH3_ADR:
-    case OP_PUSH4_ADR:
-    case OP_PUSH5_ADR:
-    {
-      int n = 1;
-      if (op >= OP_PUSH2_ADR)
-        n = ((op - OP_PUSH2_ADR) / 4) + 2;
-
-      int i = 1;
-
-      // We temporarily relocate FRM to be a local address instead of an
-      // absolute address.
-      __ subl(frm, dat);
-      do {
-        cell_t offset = readCell();
-        __ lea(tmp, Operand(frm, offset));
-        __ movl(Operand(stk, -(4 * i)), tmp);
-      } while (i++ < n);
-      __ subl(stk, 4 * n);
-      __ addl(frm, dat);
-      break;
-    }
-
-    case OP_PUSH_S:
-    case OP_PUSH2_S:
-    case OP_PUSH3_S:
-    case OP_PUSH4_S:
-    case OP_PUSH5_S:
-    {
-      int n = 1;
-      if (op >= OP_PUSH2_S)
-        n = ((op - OP_PUSH2_S) / 4) + 2;
-
-      int i = 1;
-      do {
-        cell_t offset = readCell();
-        __ movl(tmp, Operand(frm, offset));
-        __ movl(Operand(stk, -(4 * i)), tmp);
-      } while (i++ < n);
-      __ subl(stk, 4 * n);
-      break;
-    }
-
-    case OP_PUSH:
-    case OP_PUSH2:
-    case OP_PUSH3:
-    case OP_PUSH4:
-    case OP_PUSH5:
-    {
-      int n = 1;
-      if (op >= OP_PUSH2)
-        n = ((op - OP_PUSH2) / 4) + 2;
-
-      int i = 1;
-      do {
-        cell_t offset = readCell();
-        __ movl(tmp, Operand(dat, offset));
-        __ movl(Operand(stk, -(4 * i)), tmp);
-      } while (i++ < n);
-      __ subl(stk, 4 * n);
-      break;
-    }
-
-    case OP_ZERO_PRI:
-      __ xorl(pri, pri);
-      break;
-
-    case OP_ZERO_ALT:
-      __ xorl(alt, alt);
-      break;
-
-    case OP_ADD:
-      __ addl(pri, alt);
-      break;
-
-    case OP_SUB:
-      __ subl(pri, alt);
-      break;
-
-    case OP_SUB_ALT:
-      __ movl(tmp, alt);
-      __ subl(tmp, pri);
-      __ movl(pri, tmp);
-      break;
-
-    case OP_PROC:
-      __ enterFrame(FrameType::Scripted, pcode_start_);
-
-      // Push the old frame onto the stack.
-      __ movl(tmp, Operand(frmAddr()));
-      __ movl(Operand(stk, -4), tmp);
-      __ subl(stk, 8);    // extra unused slot for non-existant CIP
-
-      // Get and store the new frame.
-      __ movl(tmp, stk);
-      __ movl(frm, stk);
-      __ subl(tmp, dat);
-      __ movl(Operand(frmAddr()), tmp);
-      break;
-
-    case OP_IDXADDR_B:
-    {
-      cell_t val = readCell();
-      __ shll(pri, val);
-      __ addl(pri, alt);
-      break;
-    }
-
-    case OP_SHL:
-      __ movl(ecx, alt);
-      __ shll_cl(pri);
-      break;
-
-    case OP_SHR:
-      __ movl(ecx, alt);
-      __ shrl_cl(pri);
-      break;
-
-    case OP_SSHR:
-      __ movl(ecx, alt);
-      __ sarl_cl(pri);
-      break;
-
-    case OP_SHL_C_PRI:
-    case OP_SHL_C_ALT:
-    {
-      Register reg = (op == OP_SHL_C_PRI) ? pri : alt;
-      cell_t val = readCell();
-      __ shll(reg, val);
-      break;
-    }
-
-    case OP_SHR_C_PRI:
-    case OP_SHR_C_ALT:
-    {
-      Register reg = (op == OP_SHR_C_PRI) ? pri : alt;
-      cell_t val = readCell();
-      __ shrl(reg, val);
-      break;
-    }
-
-    case OP_SMUL:
-      __ imull(pri, alt);
-      break;
-
-    case OP_NOT:
-      __ testl(eax, eax);
-      __ movl(eax, 0);
-      __ set(zero, r8_al);
-      break;
-
-    case OP_NEG:
-      __ negl(eax);
-      break;
-
-    case OP_XOR:
-      __ xorl(pri, alt);
-      break;
-
-    case OP_OR:
-      __ orl(pri, alt);
-      break;
-
-    case OP_AND:
-      __ andl(pri, alt);
-      break;
-
-    case OP_INVERT:
-      __ notl(pri);
-      break;
-
-    case OP_ADD_C:
-    {
-      cell_t val = readCell();
-      __ addl(pri, val);
-      break;
-    }
-
-    case OP_SMUL_C:
-    {
-      cell_t val = readCell();
-      __ imull(pri, pri, val);
-      break;
-    }
-
-    case OP_EQ:
-    case OP_NEQ:
-    case OP_SLESS:
-    case OP_SLEQ:
-    case OP_SGRTR:
-    case OP_SGEQ:
-    {
-      ConditionCode cc = OpToCondition(op);
-      __ cmpl(pri, alt);
-      __ movl(pri, 0);
-      __ set(cc, r8_al);
-      break;
-    }
-
-    case OP_EQ_C_PRI:
-    case OP_EQ_C_ALT:
-    {
-      Register reg = (op == OP_EQ_C_PRI) ? pri : alt;
-      cell_t val = readCell();
-      __ cmpl(reg, val);
-      __ movl(pri, 0);
-      __ set(equal, r8_al);
-      break;
-    }
-
-    case OP_INC_PRI:
-    case OP_INC_ALT:
-    {
-      Register reg = (OP_INC_PRI) ? pri : alt;
-      __ addl(reg, 1);
-      break;
-    }
-
-    case OP_INC:
-    case OP_INC_S:
-    {
-      Register base = (op == OP_INC) ? dat : frm;
-      cell_t offset = readCell();
-      __ addl(Operand(base, offset), 1);
-      break;
-    }
-
-    case OP_INC_I:
-      __ addl(Operand(dat, pri, NoScale), 1);
-      break;
-
-    case OP_DEC_PRI:
-    case OP_DEC_ALT:
-    {
-      Register reg = (op == OP_DEC_PRI) ? pri : alt;
-      __ subl(reg, 1);
-      break;
-    }
-
-    case OP_DEC:
-    case OP_DEC_S:
-    {
-      Register base = (op == OP_DEC) ? dat : frm;
-      cell_t offset = readCell();
-      __ subl(Operand(base, offset), 1);
-      break;
-    }
-
-    case OP_DEC_I:
-      __ subl(Operand(dat, pri, NoScale), 1);
-      break;
-
-    case OP_LOAD_PRI:
-    case OP_LOAD_ALT:
-    {
-      Register reg = (op == OP_LOAD_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(reg, Operand(dat, offset));
-      break;
-    }
-
-    case OP_LOAD_BOTH:
-    {
-      cell_t offs1 = readCell();
-      cell_t offs2 = readCell();
-      __ movl(pri, Operand(dat, offs1));
-      __ movl(alt, Operand(dat, offs2));
-      break;
-    }
-
-    case OP_LOAD_S_PRI:
-    case OP_LOAD_S_ALT:
-    {
-      Register reg = (op == OP_LOAD_S_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(reg, Operand(frm, offset));
-      break;
-    }
-
-    case OP_LOAD_S_BOTH:
-    {
-      cell_t offs1 = readCell();
-      cell_t offs2 = readCell();
-      __ movl(pri, Operand(frm, offs1));
-      __ movl(alt, Operand(frm, offs2));
-      break;
-    }
-
-    case OP_LREF_S_PRI:
-    case OP_LREF_S_ALT:
-    {
-      Register reg = (op == OP_LREF_S_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(reg, Operand(frm, offset));
-      __ movl(reg, Operand(dat, reg, NoScale));
-      break;
-    }
-
-    case OP_CONST_PRI:
-    case OP_CONST_ALT:
-    {
-      Register reg = (op == OP_CONST_PRI) ? pri : alt;
-      cell_t val = readCell();
-      __ movl(reg, val);
-      break;
-    }
-
-    case OP_ADDR_PRI:
-    case OP_ADDR_ALT:
-    {
-      Register reg = (op == OP_ADDR_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(reg, Operand(frmAddr()));
-      __ addl(reg, offset);
-      break;
-    }
-
-    case OP_STOR_PRI:
-    case OP_STOR_ALT:
-    {
-      Register reg = (op == OP_STOR_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(Operand(dat, offset), reg);
-      break;
-    }
-
-    case OP_STOR_S_PRI:
-    case OP_STOR_S_ALT:
-    {
-      Register reg = (op == OP_STOR_S_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(Operand(frm, offset), reg);
-      break;
-    }
-
-    case OP_IDXADDR:
-      __ lea(pri, Operand(alt, pri, ScaleFour));
-      break;
-
-    case OP_SREF_S_PRI:
-    case OP_SREF_S_ALT:
-    {
-      Register reg = (op == OP_SREF_S_PRI) ? pri : alt;
-      cell_t offset = readCell();
-      __ movl(tmp, Operand(frm, offset));
-      __ movl(Operand(dat, tmp, NoScale), reg);
-      break;
-    }
-
-    case OP_POP_PRI:
-    case OP_POP_ALT:
-    {
-      Register reg = (op == OP_POP_PRI) ? pri : alt;
-      __ movl(reg, Operand(stk, 0));
-      __ addl(stk, 4);
-      break;
-    }
-
-    case OP_SWAP_PRI:
-    case OP_SWAP_ALT:
-    {
-      Register reg = (op == OP_SWAP_PRI) ? pri : alt;
-      __ movl(tmp, Operand(stk, 0));
-      __ movl(Operand(stk, 0), reg);
-      __ movl(reg, tmp);
-      break;
-    }
-
-    case OP_LIDX:
-      __ lea(pri, Operand(alt, pri, ScaleFour));
-      __ movl(pri, Operand(dat, pri, NoScale));
-      break;
-
-    case OP_LIDX_B:
-    {
-      cell_t val = readCell();
-      if (val >= 0 && val <= 3) {
-        __ lea(pri, Operand(alt, pri, Scale(val)));
-      } else {
-        __ shll(pri, val);
-        __ addl(pri, alt);
-      }
-      emitCheckAddress(pri);
-      __ movl(pri, Operand(dat, pri, NoScale));
-      break;
-    }
-
-    case OP_CONST:
-    case OP_CONST_S:
-    {
-      Register base = (op == OP_CONST) ? dat : frm;
-      cell_t offset = readCell();
-      cell_t val = readCell();
-      __ movl(Operand(base, offset), val);
-      break;
-    }
-
-    case OP_LOAD_I:
-      emitCheckAddress(pri);
-      __ movl(pri, Operand(dat, pri, NoScale));
-      break;
-
-    case OP_STOR_I:
-      emitCheckAddress(alt);
-      __ movl(Operand(dat, alt, NoScale), pri);
-      break;
-
-    case OP_SDIV:
-    case OP_SDIV_ALT:
-    {
-      Register dividend = (op == OP_SDIV) ? pri : alt;
-      Register divisor = (op == OP_SDIV) ? alt : pri;
-
-      // Guard against divide-by-zero.
-      __ testl(divisor, divisor);
-      jumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
-
-      // A more subtle case; -INT_MIN / -1 yields an overflow exception.
-      Label ok;
-      __ cmpl(divisor, -1);
-      __ j(not_equal, &ok);
-      __ cmpl(dividend, 0x80000000);
-      jumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
-      __ bind(&ok);
-
-      // Now we can actually perform the divide.
-      __ movl(tmp, divisor);
-      if (op == OP_SDIV)
-        __ movl(edx, dividend);
-      else
-        __ movl(eax, dividend);
-      __ sarl(edx, 31);
-      __ idivl(tmp);
-      break;
-    }
-
-    case OP_LODB_I:
-    {
-      cell_t val = readCell();
-      emitCheckAddress(pri);
-      __ movl(pri, Operand(dat, pri, NoScale));
-      if (val == 1)
-        __ andl(pri, 0xff);
-      else if (val == 2)
-        __ andl(pri, 0xffff);
-      break;
-    }
-
-    case OP_STRB_I:
-    {
-      cell_t val = readCell();
-      emitCheckAddress(alt);
-      if (val == 1)
-        __ movb(Operand(dat, alt, NoScale), pri);
-      else if (val == 2)
-        __ movw(Operand(dat, alt, NoScale), pri);
-      else if (val == 4)
-        __ movl(Operand(dat, alt, NoScale), pri);
-      break;
-    }
-
-    case OP_RETN:
-    {
-      // Restore the old frame pointer.
-      __ movl(frm, Operand(stk, 4));              // get the old frm
-      __ addl(stk, 8);                            // pop stack
-      __ movl(Operand(frmAddr()), frm);           // store back old frm
-      __ addl(frm, dat);                          // relocate
-
-      // Remove parameters.
-      __ movl(tmp, Operand(stk, 0));
-      __ lea(stk, Operand(stk, tmp, ScaleFour, 4));
-
-      __ leaveFrame();
-      __ ret();
-      break;
-    }
-
-    case OP_MOVS:
-    {
-      cell_t val = readCell();
-      unsigned dwords = val / 4;
-      unsigned bytes = val % 4;
-
-      __ cld();
-      __ push(esi);
-      __ push(edi);
-      // Note: set edi first, since we need esi.
-      __ lea(edi, Operand(dat, alt, NoScale));
-      __ lea(esi, Operand(dat, pri, NoScale));
-      if (dwords) {
-        __ movl(ecx, dwords);
-        __ rep_movsd();
-      }
-      if (bytes) {
-        __ movl(ecx, bytes);
-        __ rep_movsb();
-      }
-      __ pop(edi);
-      __ pop(esi);
-      break;
-    }
-
-    case OP_FILL:
-    {
-      // eax/pri is used implicitly.
-      unsigned dwords = readCell() / 4;
-      __ push(edi);
-      __ lea(edi, Operand(dat, alt, NoScale));
-      __ movl(ecx, dwords);
-      __ cld();
-      __ rep_stosd();
-      __ pop(edi);
-      break;
-    }
-
-    case OP_STRADJUST_PRI:
-      __ addl(pri, 4);
-      __ sarl(pri, 2);
-      break;
-
-    case OP_FABS:
-      __ movl(pri, Operand(stk, 0));
-      __ andl(pri, 0x7fffffff);
-      __ addl(stk, 4);
-      break;
-
-    case OP_FLOAT:
-      if (MacroAssembler::Features().sse2) {
-        __ cvtsi2ss(xmm0, Operand(edi, 0));
-        __ movd(pri, xmm0);
-      } else {
-        __ fild32(Operand(edi, 0));
-        __ subl(esp, 4);
-        __ fstp32(Operand(esp, 0));
-        __ pop(pri);
-      }
-      __ addl(stk, 4);
-      break;
-
-    case OP_FLOATADD:
-    case OP_FLOATSUB:
-    case OP_FLOATMUL:
-    case OP_FLOATDIV:
-      if (MacroAssembler::Features().sse2) {
-        __ movss(xmm0, Operand(stk, 0));
-        if (op == OP_FLOATADD)
-          __ addss(xmm0, Operand(stk, 4));
-        else if (op == OP_FLOATSUB)
-          __ subss(xmm0, Operand(stk, 4));
-        else if (op == OP_FLOATMUL)
-          __ mulss(xmm0, Operand(stk, 4));
-        else if (op == OP_FLOATDIV)
-          __ divss(xmm0, Operand(stk, 4));
-        __ movd(pri, xmm0);
-      } else {
-        __ subl(esp, 4);
-        __ fld32(Operand(stk, 0));
-
-        if (op == OP_FLOATADD)
-          __ fadd32(Operand(stk, 4));
-        else if (op == OP_FLOATSUB)
-          __ fsub32(Operand(stk, 4));
-        else if (op == OP_FLOATMUL)
-          __ fmul32(Operand(stk, 4));
-        else if (op == OP_FLOATDIV)
-          __ fdiv32(Operand(stk, 4));
-
-        __ fstp32(Operand(esp, 0));
-        __ pop(pri);
-      }
-      __ addl(stk, 8);
-      break;
-
-    case OP_RND_TO_NEAREST:
-    {
-      // Docs say that MXCSR must be preserved across function calls, so we
-      // assume that we'll always get the defualt round-to-nearest.
-      if (MacroAssembler::Features().sse) {
-        __ cvtss2si(pri, Operand(stk, 0));
-      } else {
-        __ fld32(Operand(stk, 0));
-        __ subl(esp, 4);
-        __ fistp32(Operand(esp, 0));
-        __ pop(pri);
-      }
-      __ addl(stk, 4);
-      break;
-    }
-
-    case OP_RND_TO_CEIL:
-    {
-      // Adapted from http://wurstcaptures.untergrund.net/assembler_tricks.html#fastfloorf
-      // (the above does not support the full integer range)
-      static float kRoundToCeil = -0.5f;
-      __ fld32(Operand(stk, 0));
-      __ fadd32(st0, st0);
-      __ fsubr32(Operand(ExternalAddress(&kRoundToCeil)));
-      __ subl(esp, 8);
-      __ fistp64(Operand(esp, 0));
-      __ pop(eax); // low word
-      __ pop(ecx); // high word
-      // divide 64-bit integer by 2 (shift right by 1)
-      __ shrd(eax, ecx, 1);
-      __ sarl(ecx, 1);
-      // negate 64-bit integer in eax:ecx
-      __ negl(eax);
-      __ adcl(ecx, 0);
-      __ negl(ecx);
-      // did this overflow? if so, return 0x80000000
-      Label ok;
-      __ testl(ecx, ecx);
-      __ j(zero, &ok);
-      __ cmpl(ecx, -1);
-      __ j(equal, &ok);
-      __ movl(pri, 0x80000000);
-      __ bind(&ok);
-      __ addl(stk, 4);
-      break;
-    }
-
-    case OP_RND_TO_ZERO:
-      if (MacroAssembler::Features().sse) {
-        __ cvttss2si(pri, Operand(stk, 0));
-      } else {
-        __ fld32(Operand(stk, 0));
-        __ subl(esp, 8);
-        __ fstcw(Operand(esp, 4));
-        __ movl(Operand(esp, 0), 0xfff);
-        __ fldcw(Operand(esp, 0));
-        __ fistp32(Operand(esp, 0));
-        __ pop(pri);
-        __ fldcw(Operand(esp, 0));
-        __ addl(esp, 4);
-      }
-      __ addl(stk, 4);
-      break;
-
-    case OP_RND_TO_FLOOR:
-      __ fld32(Operand(stk, 0));
-      __ subl(esp, 8);
-      __ fstcw(Operand(esp, 4));
-      __ movl(Operand(esp, 0), 0x7ff);
-      __ fldcw(Operand(esp, 0));
-      __ fistp32(Operand(esp, 0));
-      __ pop(eax);
-      __ fldcw(Operand(esp, 0));
-      __ addl(esp, 4);
-      __ addl(stk, 4);
-      break;
-
-    // This is the old float cmp, which returns ordered results. In newly
-    // compiled code it should not be used or generated.
-    //
-    // Note that the checks here are inverted: the test is |rhs OP lhs|.
-    case OP_FLOATCMP:
-    {
-      Label bl, ab, done;
-      if (MacroAssembler::Features().sse) {
-        __ movss(xmm0, Operand(stk, 4));
-        __ ucomiss(Operand(stk, 0), xmm0);
-      } else {
-        __ fld32(Operand(stk, 0));
-        __ fld32(Operand(stk, 4));
-        __ fucomip(st1);
-        __ fstp(st0);
-      }
-      __ j(above, &ab);
-      __ j(below, &bl);
-      __ xorl(pri, pri);
-      __ jmp(&done);
-      __ bind(&ab);
-      __ movl(pri, -1);
-      __ jmp(&done);
-      __ bind(&bl);
-      __ movl(pri, 1);
-      __ bind(&done);
-      __ addl(stk, 8);
-      break;
-    }
-
-    case OP_FLOAT_GT:
-      emitFloatCmp(above);
-      break;
-
-    case OP_FLOAT_GE:
-      emitFloatCmp(above_equal);
-      break;
-
-    case OP_FLOAT_LE:
-      emitFloatCmp(below_equal);
-      break;
-
-    case OP_FLOAT_LT:
-      emitFloatCmp(below);
-      break;
-
-    case OP_FLOAT_EQ:
-      emitFloatCmp(equal);
-      break;
-
-    case OP_FLOAT_NE:
-      emitFloatCmp(not_equal);
-      break;
-
-    case OP_FLOAT_NOT:
-    {
-      if (MacroAssembler::Features().sse) {
-        __ xorps(xmm0, xmm0);
-        __ ucomiss(Operand(stk, 0), xmm0);
-      } else {
-        __ fld32(Operand(stk, 0));
-        __ fldz();
-        __ fucomip(st1);
-        __ fstp(st0);
-      }
-
-      // See emitFloatCmp() - this is a shorter version.
-      Label done;
-      __ movl(eax, 1);
-      __ j(parity, &done);
-      __ set(zero, r8_al);
-      __ bind(&done);
-
-      __ addl(stk, 4);
-      break;
-    }
-
-    case OP_STACK:
-    {
-      cell_t amount = readCell();
-      __ addl(stk, amount);
-
-     if (amount > 0) {
-       // Check if the stack went beyond the stack top - usually a compiler error.
-       __ cmpl(stk, intptr_t(context_->memory() + context_->HeapSize()));
-      jumpOnError(not_below, SP_ERROR_STACKMIN);
-     } else {
-       // Check if the stack is going to collide with the heap.
-       __ movl(tmp, Operand(hpAddr()));
-       __ lea(tmp, Operand(dat, ecx, NoScale, STACK_MARGIN));
-       __ cmpl(stk, tmp);
-       jumpOnError(below, SP_ERROR_STACKLOW);
-     }
-     break;
-    }
-
-    case OP_HEAP:
-    {
-      cell_t amount = readCell();
-      __ movl(alt, Operand(hpAddr()));
-      __ addl(Operand(hpAddr()), amount);
-
-      if (amount < 0) {
-        __ cmpl(Operand(hpAddr()), context_->DataSize());
-        jumpOnError(below, SP_ERROR_HEAPMIN);
-      } else {
-        __ movl(tmp, Operand(hpAddr()));
-        __ lea(tmp, Operand(dat, ecx, NoScale, STACK_MARGIN));
-        __ cmpl(tmp, stk);
-        jumpOnError(above, SP_ERROR_HEAPLOW);
-      }
-      break;
-    }
-
-    case OP_JUMP:
-    {
-      Label *target = labelAt(readCell());
-      if (!target)
-        return false;
-      if (target->bound()) {
-        __ jmp32(target);
-        backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
-      } else {
-        __ jmp(target);
-      }
-      break;
-    }
-
-    case OP_JZER:
-    case OP_JNZ:
-    {
-      ConditionCode cc = (op == OP_JZER) ? zero : not_zero;
-      Label *target = labelAt(readCell());
-      if (!target)
-        return false;
-      __ testl(pri, pri);
-      if (target->bound()) {
-        __ j32(cc, target);
-        backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
-      } else {
-        __ j(cc, target);
-      }
-      break;
-    }
-
-    case OP_JEQ:
-    case OP_JNEQ:
-    case OP_JSLESS:
-    case OP_JSLEQ:
-    case OP_JSGRTR:
-    case OP_JSGEQ:
-    {
-      Label *target = labelAt(readCell());
-      if (!target)
-        return false;
-      ConditionCode cc = OpToCondition(op);
-      __ cmpl(pri, alt);
-      if (target->bound()) {
-        __ j32(cc, target);
-        backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
-      } else {
-        __ j(cc, target);
-      }
-      break;
-    }
-
-    case OP_TRACKER_PUSH_C:
-    {
-      cell_t amount = readCell();
-
-      __ push(pri);
-      __ push(alt);
-
-      __ push(amount * 4);
-      __ push(intptr_t(rt_->GetBaseContext()));
-      __ callWithABI(ExternalAddress((void *)InvokePushTracker));
-      __ addl(esp, 8);
-      __ testl(eax, eax);
-      jumpOnError(not_zero);
-
-      __ pop(alt);
-      __ pop(pri);
-      break;
-    }
-
-    case OP_TRACKER_POP_SETHEAP:
-    {
-      // Save registers.
-      __ push(pri);
-      __ push(alt);
-
-      // Get the context pointer and call the sanity checker.
-      __ push(intptr_t(rt_->GetBaseContext()));
-      __ callWithABI(ExternalAddress((void *)InvokePopTrackerAndSetHeap));
-      __ addl(esp, 4);
-      __ testl(eax, eax);
-      jumpOnError(not_zero);
-
-      __ pop(alt);
-      __ pop(pri);
-      break;
-    }
-
-    // This opcode is used to note where line breaks occur. We don't support
-    // live debugging, and if we did, we could build this map from the lines
-    // table. So we don't generate any code here.
-    case OP_BREAK:
-      break;
-
-    // This should never be hit.
-    case OP_HALT:
-      __ align(16);
-      __ movl(pri, readCell());
-      __ testl(eax, eax);
-      jumpOnError(not_zero);
-      break;
-
-    case OP_BOUNDS:
-    {
-      cell_t value = readCell();
-      __ cmpl(eax, value);
-      jumpOnError(above, SP_ERROR_ARRAY_BOUNDS);
-      break;
-    }
-
-    case OP_GENARRAY:
-    case OP_GENARRAY_Z:
-      emitGenArray(op == OP_GENARRAY_Z);
-      break;
-
-    case OP_CALL:
-      if (!emitCall())
-        return false;
-      break;
-
-    case OP_SYSREQ_C:
-      if (!emitSysreqC())
-        return false;
-      break;
-
-    case OP_SYSREQ_N:
-      if (!emitSysreqN())
-        return false;
-      break;
-
-    case OP_SWITCH:
-      if (!emitSwitch())
-        return false;
-      break;
-
-    case OP_CASETBL:
-    {
-      size_t ncases = readCell();
-
-      // Two cells per case, and one extra cell for the default address.
-      cip_ += (ncases * 2) + 1;
-      break;
-    }
-
-    case OP_NOP:
-      break;
-
-    default:
-      error_ = SP_ERROR_INVALID_INSTRUCTION;
-      return false;
+  case CompareOp::Sgrtr:
+    code = above;
+    break;
+  case CompareOp::Sgeq:
+    code = above_equal;
+    break;
+  case CompareOp::Sleq:
+    code = below_equal;
+    break;
+  case CompareOp::Sless:
+    code = below;
+    break;
+  case CompareOp::Eq:
+    code = equal;
+    break;
+  case CompareOp::Neq:
+    code = not_equal;
+    break;
+  default:
+    error_ = SP_ERROR_INVALID_INSTRUCTION;
+    return false;
+  }
+  emitFloatCmp(code);
+  return true;
+}
+
+bool
+Compiler::visitFLOAT_NOT()
+{
+  if (MacroAssembler::Features().sse) {
+    __ xorps(xmm0, xmm0);
+    __ ucomiss(Operand(stk, 0), xmm0);
+  } else {
+    __ fld32(Operand(stk, 0));
+    __ fldz();
+    __ fucomip(st1);
+    __ fstp(st0);
   }
 
+  // See emitFloatCmp() - this is a shorter version.
+  Label done;
+  __ movl(eax, 1);
+  __ j(parity, &done);
+  __ set(zero, r8_al);
+  __ bind(&done);
+
+  __ addl(stk, 4);
+  return true;
+}
+
+bool
+Compiler::visitSTACK(cell_t amount)
+{
+  __ addl(stk, amount);
+
+  if (amount > 0) {
+    // Check if the stack went beyond the stack top - usually a compiler error.
+    __ cmpl(stk, intptr_t(context_->memory() + context_->HeapSize()));
+   jumpOnError(not_below, SP_ERROR_STACKMIN);
+  } else {
+    // Check if the stack is going to collide with the heap.
+    __ movl(tmp, Operand(hpAddr()));
+    __ lea(tmp, Operand(dat, ecx, NoScale, STACK_MARGIN));
+    __ cmpl(stk, tmp);
+    jumpOnError(below, SP_ERROR_STACKLOW);
+  }
+  return true;
+}
+
+bool
+Compiler::visitHEAP(cell_t amount)
+{
+  __ movl(alt, Operand(hpAddr()));
+  __ addl(Operand(hpAddr()), amount);
+
+  if (amount < 0) {
+    __ cmpl(Operand(hpAddr()), context_->DataSize());
+    jumpOnError(below, SP_ERROR_HEAPMIN);
+  } else {
+    __ movl(tmp, Operand(hpAddr()));
+    __ lea(tmp, Operand(dat, ecx, NoScale, STACK_MARGIN));
+    __ cmpl(tmp, stk);
+    jumpOnError(above, SP_ERROR_HEAPLOW);
+  }
+  return true;
+}
+
+bool
+Compiler::visitJUMP(cell_t offset)
+{
+  Label *target = labelAt(offset);
+  if (!target)
+    return false;
+  if (target->bound()) {
+    __ jmp32(target);
+    backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
+  } else {
+    __ jmp(target);
+  }
+  return true;
+}
+
+bool
+Compiler::visitJcmp(CompareOp op, cell_t offset)
+{
+  Label *target = labelAt(offset);
+  if (!target)
+    return false;
+
+  switch (op) {
+  case CompareOp::Zero:
+  case CompareOp::NotZero:
+  {
+    ConditionCode cc = (op == CompareOp::Zero) ? zero : not_zero;
+    __ testl(pri, pri);
+    if (target->bound()) {
+      __ j32(cc, target);
+      backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
+    } else {
+      __ j(cc, target);
+    }
+    break;
+  }
+
+  case CompareOp::Eq:
+  case CompareOp::Neq:
+  case CompareOp::Sless:
+  case CompareOp::Sleq:
+  case CompareOp::Sgrtr:
+  case CompareOp::Sgeq:
+  {
+    ConditionCode cc = OpToCondition(op);
+    __ cmpl(pri, alt);
+    if (target->bound()) {
+      __ j32(cc, target);
+      backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
+    } else {
+      __ j(cc, target);
+    }
+    break;
+  }
+  default:
+    assert(false);
+    break;
+  }
+  return true;
+}
+
+
+bool
+Compiler::visitTRACKER_PUSH_C(cell_t amount)
+{
+  __ push(pri);
+  __ push(alt);
+
+  __ push(amount * 4);
+  __ push(intptr_t(rt_->GetBaseContext()));
+  __ callWithABI(ExternalAddress((void *)InvokePushTracker));
+  __ addl(esp, 8);
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
+
+  __ pop(alt);
+  __ pop(pri);
+  return true;
+}
+
+bool
+Compiler::visitTRACKER_POP_SETHEAP()
+{
+  // Save registers.
+  __ push(pri);
+  __ push(alt);
+
+  // Get the context pointer and call the sanity checker.
+  __ push(intptr_t(rt_->GetBaseContext()));
+  __ callWithABI(ExternalAddress((void *)InvokePopTrackerAndSetHeap));
+  __ addl(esp, 4);
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
+
+  __ pop(alt);
+  __ pop(pri);
+  return true;
+}
+
+bool
+Compiler::visitHALT(cell_t value)
+{
+  // This should never be hit.
+  __ align(16);
+  __ movl(pri, value);
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
+  return true;
+}
+
+bool
+Compiler::visitBOUNDS(uint32_t limit)
+{
+  __ cmpl(eax, limit);
+  jumpOnError(above, SP_ERROR_ARRAY_BOUNDS);
   return true;
 }
 
@@ -1101,7 +1144,7 @@ Compiler::labelAt(size_t offset)
     // test beyond the end of the function since we don't have a precursor
     // pass (yet).
     error_ = SP_ERROR_INSTRUCTION_PARAM;
-    return NULL;
+    return nullptr;
   }
 
   return &jump_map_[offset / sizeof(cell_t)];
@@ -1124,11 +1167,10 @@ Compiler::emitCheckAddress(Register reg)
   __ bind(&done);
 }
 
-void
-Compiler::emitGenArray(bool autozero)
+bool
+Compiler::visitGENARRAY(cell_t dims, bool autozero)
 {
-  cell_t val = readCell();
-  if (val == 1)
+  if (dims == 1)
   {
     // flat array; we can generate this without indirection tables.
     // Note that we can overwrite ALT because technically STACK should be destroying ALT
@@ -1169,7 +1211,7 @@ Compiler::emitGenArray(bool autozero)
     // int GenerateArray(cx, vars[], uint32_t, cell_t *, int, unsigned *);
     __ push(autozero ? 1 : 0);
     __ push(stk);
-    __ push(val);
+    __ push(dims);
     __ push(intptr_t(context_));
     __ callWithABI(ExternalAddress((void *)InvokeGenerateFullArray));
     __ addl(esp, 4 * sizeof(void *));
@@ -1182,8 +1224,9 @@ Compiler::emitGenArray(bool autozero)
 
     // Move tmp back to pri, remove pushed args.
     __ movl(pri, tmp);
-    __ addl(stk, (val - 1) * 4);
+    __ addl(stk, (dims - 1) * 4);
   }
+  return true;
 }
 
 class CallThunk : public OutOfLinePath
@@ -1203,10 +1246,8 @@ class CallThunk : public OutOfLinePath
 };
 
 bool
-Compiler::emitCall()
+Compiler::visitCALL(cell_t offset)
 {
-  cell_t offset = readCell();
-
   // If this offset looks crappy, i.e. not aligned or out of bounds, we just
   // abort.
   if (offset % 4 != 0 || uint32_t(offset) >= rt_->code().length) {
@@ -1219,6 +1260,7 @@ Compiler::emitCall()
     // Need to emit a delayed thunk.
     CallThunk* thunk = new CallThunk(offset);
     __ callWithABI(thunk->label());
+    // :TODO: error
     if (!ool_paths_.append(thunk))
       return false;
   } else {
@@ -1266,18 +1308,16 @@ Compiler::emitCallThunk(CallThunk* thunk)
 }
 
 bool
-Compiler::emitSysreqN()
+Compiler::visitSYSREQ_N(uint32_t native_index, uint32_t nparams)
 {
-  uint32_t native_index = readCell();
-
   if (native_index >= image_->NumNatives()) {
     error_ = SP_ERROR_INSTRUCTION_PARAM;
     return false;
   }
 
   NativeEntry* native = rt_->NativeAt(native_index);
-  uint32_t nparams = readCell();
 
+#if 0
   if (native->status == SP_NATIVE_BOUND &&
       !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL)))
   {
@@ -1285,31 +1325,29 @@ Compiler::emitSysreqN()
     if (replacement != OP_NOP)
       return emitOp((OPCODE)replacement);
   }
+#endif
 
   // Store the number of parameters on the stack.
   __ movl(Operand(stk, -4), nparams);
   __ subl(stk, 4);
-  if (!emitLegacyNativeCall(native_index, native))
-    return false;
+  emitLegacyNativeCall(native_index, native);
   __ addl(stk, (nparams + 1) * sizeof(cell_t));
-
   return true;
 }
 
 bool
-Compiler::emitSysreqC()
+Compiler::visitSYSREQ_C(uint32_t native_index)
 {
-  uint32_t native_index = readCell();
-
   if (native_index >= image_->NumNatives()) {
     error_ = SP_ERROR_INSTRUCTION_PARAM;
     return false;
   }
 
-  return emitLegacyNativeCall(native_index, rt_->NativeAt(native_index));
+  emitLegacyNativeCall(native_index, rt_->NativeAt(native_index));
+  return true;
 }
 
-bool
+void
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 {
   CodeLabel return_address;
@@ -1375,26 +1413,14 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   ExternalAddress exn_code(Environment::get()->addressOfExceptionCode());
   __ cmpl(Operand(exn_code), 0);
   __ j(not_zero, &return_reported_error_);
-  return true;
 }
 
 bool
-Compiler::emitSwitch()
+Compiler::visitSWITCH(cell_t defaultOffset,
+                      const CaseTableEntry* cases,
+                      size_t ncases)
 {
-  cell_t offset = readCell();
-  if (!labelAt(offset))
-    return false;
-
-  cell_t *tbl = (cell_t *)((char *)rt_->code().bytes + offset + sizeof(cell_t));
-
-  struct Entry {
-    cell_t val;
-    cell_t offset;
-  };
-
-  size_t ncases = *tbl++;
-
-  Label *defaultCase = labelAt(*tbl);
+  Label *defaultCase = labelAt(defaultOffset);
   if (!defaultCase)
     return false;
 
@@ -1404,14 +1430,12 @@ Compiler::emitSwitch()
     return true;
   }
 
-  Entry *cases = (Entry *)(tbl + 1);
-
   // Degenerate - 1 case.
   if (ncases == 1) {
-    Label *maybe = labelAt(cases[0].offset);
+    Label *maybe = labelAt(cases[0].address);
     if (!maybe)
       return false;
-    __ cmpl(pri, cases[0].val);
+    __ cmpl(pri, cases[0].value);
     __ j(equal, maybe);
     __ jmp(defaultCase);
     return true;
@@ -1422,10 +1446,10 @@ Compiler::emitSwitch()
   // the numbers are strictly sequential.
   bool sequential = true;
   {
-    cell_t first = cases[0].val;
+    cell_t first = cases[0].value;
     cell_t last = first;
     for (size_t i = 1; i < ncases; i++) {
-      if (cases[i].val != ++last) {
+      if (cases[i].value != ++last) {
         sequential = false;
         break;
       }
@@ -1434,7 +1458,7 @@ Compiler::emitSwitch()
 
   // First check whether the bounds are correct: if (a < LOW || a > HIGH);
   // this check is valid whether or not we emit a sequential-optimized switch.
-  cell_t low = cases[0].val;
+  cell_t low = cases[0].value;
   if (low != 0) {
     // negate it so we'll get a lower bound of 0.
     low = -low;
@@ -1443,7 +1467,7 @@ Compiler::emitSwitch()
     __ movl(tmp, pri);
   }
 
-  cell_t high = abs(cases[0].val - cases[ncases - 1].val);
+  cell_t high = abs(cases[0].value - cases[ncases - 1].value);
   __ cmpl(tmp, high);
   __ j(above, defaultCase);
 
@@ -1460,7 +1484,7 @@ Compiler::emitSwitch()
 
     __ bind(&table);
     for (size_t i = 0; i < ncases; i++) {
-      Label *label = labelAt(cases[i].offset);
+      Label *label = labelAt(cases[i].address);
       if (!label)
         return false;
       __ emit_absolute_address(label);
@@ -1468,10 +1492,10 @@ Compiler::emitSwitch()
   } else {
     // Slower version. Go through each case and generate a check.
     for (size_t i = 0; i < ncases; i++) {
-      Label *label = labelAt(cases[i].offset);
+      Label *label = labelAt(cases[i].address);
       if (!label)
         return false;
-      __ cmpl(pri, cases[i].val);
+      __ cmpl(pri, cases[i].value);
       __ j(equal, label);
     }
     __ jmp(defaultCase);
