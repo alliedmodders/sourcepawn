@@ -66,8 +66,10 @@ CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
   }
 
   Compiler cc(prt, pcode_offs);
+
   CompiledFunction *fun = cc.emit();
-  if (!fun) {
+  if (!fun || cc.error()) {
+    // Note: We have to check error() because some errors are not propagated.
     *err = cc.error();
     return nullptr;
   }
@@ -116,9 +118,8 @@ CompilerBase::emit()
     // Save the start of the opcode for emitCipMap().
     op_cip_ = reader.cip();
 
-    if (!reader.visitNext()) {
+    if (!reader.visitNext() || error_)
       return nullptr;
-    }
   }
 
   for (size_t i = 0; i < ool_paths_.length(); i++) {
@@ -151,6 +152,9 @@ CompilerBase::emit()
   // This has to come very, very last, since it checks whether return paths
   // are used.
   emitErrorHandlers();
+
+  if (error_)
+    return nullptr;
 
   CodeChunk code = LinkCode(env_, masm);
   if (!code.address()) {

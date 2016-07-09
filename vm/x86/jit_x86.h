@@ -145,7 +145,6 @@ class Compiler : public CompilerBase
   void emitThrowPath(int err) override;
   void emitErrorHandlers() override;
 
-  Label *labelAt(size_t offset);
   void emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
   void emitGenArray(bool autozero);
   void emitCheckAddress(Register reg);
@@ -161,6 +160,13 @@ class Compiler : public CompilerBase
   }
   ExternalAddress spAddr() {
     return ExternalAddress(context_->addressOfSp());
+  }
+
+  Label *labelAt(size_t offset) {
+    assert(ke::IsAligned(offset, sizeof(cell_t)));
+    assert(offset >= pcode_start_);
+    assert(offset < rt_->code().length); 
+    return &jump_map_[offset / sizeof(cell_t)];
   }
 };
 

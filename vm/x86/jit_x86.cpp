@@ -946,7 +946,8 @@ Compiler::visitFLOAT_CMP_OP(CompareOp op)
     code = not_equal;
     break;
   default:
-    error_ = SP_ERROR_INVALID_INSTRUCTION;
+    assert(false);
+    reportError(SP_ERROR_INVALID_INSTRUCTION);
     return false;
   }
   emitFloatCmp(code);
@@ -1018,8 +1019,6 @@ bool
 Compiler::visitJUMP(cell_t offset)
 {
   Label *target = labelAt(offset);
-  if (!target)
-    return false;
   if (target->bound()) {
     __ jmp32(target);
     backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
@@ -1033,8 +1032,6 @@ bool
 Compiler::visitJcmp(CompareOp op, cell_t offset)
 {
   Label *target = labelAt(offset);
-  if (!target)
-    return false;
 
   switch (op) {
   case CompareOp::Zero:
@@ -1130,24 +1127,6 @@ Compiler::visitBOUNDS(uint32_t limit)
   __ cmpl(eax, limit);
   jumpOnError(above, SP_ERROR_ARRAY_BOUNDS);
   return true;
-}
-
-Label *
-Compiler::labelAt(size_t offset)
-{
-  if (offset % 4 != 0 ||
-      offset > rt_->code().length ||
-      offset <= pcode_start_)
-  {
-    // If the jump target is misaligned, or out of pcode bounds, or is an
-    // address out of the function bounds, we abort. Unfortunately we can't
-    // test beyond the end of the function since we don't have a precursor
-    // pass (yet).
-    error_ = SP_ERROR_INSTRUCTION_PARAM;
-    return nullptr;
-  }
-
-  return &jump_map_[offset / sizeof(cell_t)];
 }
 
 void
@@ -1248,21 +1227,15 @@ class CallThunk : public OutOfLinePath
 bool
 Compiler::visitCALL(cell_t offset)
 {
-  // If this offset looks crappy, i.e. not aligned or out of bounds, we just
-  // abort.
-  if (offset % 4 != 0 || uint32_t(offset) >= rt_->code().length) {
-    error_ = SP_ERROR_INSTRUCTION_PARAM;
-    return false;
-  }
-
   CompiledFunction *fun = rt_->GetJittedFunctionByOffset(offset);
   if (!fun) {
     // Need to emit a delayed thunk.
     CallThunk* thunk = new CallThunk(offset);
     __ callWithABI(thunk->label());
-    // :TODO: error
-    if (!ool_paths_.append(thunk))
+    if (!ool_paths_.append(thunk)) {
+      reportError(SP_ERROR_OUT_OF_MEMORY);
       return false;
+    }
   } else {
     // Function is already emitted, we can do a direct call.
     __ callWithABI(ExternalAddress(fun->GetEntryAddress()));
@@ -1310,22 +1283,7 @@ Compiler::emitCallThunk(CallThunk* thunk)
 bool
 Compiler::visitSYSREQ_N(uint32_t native_index, uint32_t nparams)
 {
-  if (native_index >= image_->NumNatives()) {
-    error_ = SP_ERROR_INSTRUCTION_PARAM;
-    return false;
-  }
-
   NativeEntry* native = rt_->NativeAt(native_index);
-
-#if 0
-  if (native->status == SP_NATIVE_BOUND &&
-      !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL)))
-  {
-    uint32_t replacement = rt_->GetNativeReplacement(native_index);
-    if (replacement != OP_NOP)
-      return emitOp((OPCODE)replacement);
-  }
-#endif
 
   // Store the number of parameters on the stack.
   __ movl(Operand(stk, -4), nparams);
@@ -1338,11 +1296,6 @@ Compiler::visitSYSREQ_N(uint32_t native_index, uint32_t nparams)
 bool
 Compiler::visitSYSREQ_C(uint32_t native_index)
 {
-  if (native_index >= image_->NumNatives()) {
-    error_ = SP_ERROR_INSTRUCTION_PARAM;
-    return false;
-  }
-
   emitLegacyNativeCall(native_index, rt_->NativeAt(native_index));
   return true;
 }
@@ -1421,8 +1374,6 @@ Compiler::visitSWITCH(cell_t defaultOffset,
                       size_t ncases)
 {
   Label *defaultCase = labelAt(defaultOffset);
-  if (!defaultCase)
-    return false;
 
   // Degenerate - 0 cases.
   if (!ncases) {
@@ -1433,8 +1384,6 @@ Compiler::visitSWITCH(cell_t defaultOffset,
   // Degenerate - 1 case.
   if (ncases == 1) {
     Label *maybe = labelAt(cases[0].address);
-    if (!maybe)
-      return false;
     __ cmpl(pri, cases[0].value);
     __ j(equal, maybe);
     __ jmp(defaultCase);
@@ -1485,16 +1434,12 @@ Compiler::visitSWITCH(cell_t defaultOffset,
     __ bind(&table);
     for (size_t i = 0; i < ncases; i++) {
       Label *label = labelAt(cases[i].address);
-      if (!label)
-        return false;
       __ emit_absolute_address(label);
     }
   } else {
     // Slower version. Go through each case and generate a check.
     for (size_t i = 0; i < ncases; i++) {
       Label *label = labelAt(cases[i].address);
-      if (!label)
-        return false;
       __ cmpl(pri, cases[i].value);
       __ j(equal, label);
     }
@@ -1557,9 +1502,9 @@ void
 Compiler::jumpOnError(ConditionCode cc, int err)
 {
   // Note: we accept 0 for err. In this case we expect the error to be in eax.
-  // :TODO: handle OOM.
   ErrorPath* path = new ErrorPath(op_cip_, err);
-  ool_paths_.append(path);
+  if (!ool_paths_.append(path))
+    reportError(SP_ERROR_OUT_OF_MEMORY);
 
   __ j(cc, path->label());
 }
