@@ -49,6 +49,7 @@ library.sources += [
   'jit.cpp',
   'linking.cpp',
   'pool-allocator.cpp',
+  'method-verifier.cpp',
 ]
 
 if builder.options.arch == 'x86':
@@ -88,6 +89,20 @@ if shell.compiler.like('gcc'):
 shell.sources += [
   'shell.cpp'
 ]
+
+# Build the verifier.
+verifier = Root.Program(builder, 'verifier')
+verifier.compiler.includes += Includes
+verifier.compiler.linkflags[0:0] = [
+  libsourcepawn.binary,
+  SP.zlib,
+]
+if verifier.compiler.like('gcc'):
+  verifier.compiler.linkflags += ['-lstdc++']
+verifier.sources += [
+  '../tools/verifier/verifier.cpp',
+]
+builder.Add(verifier)
 
 if builder.target_platform == 'linux':
   shell.compiler.postlink += ['-lpthread', '-lrt']

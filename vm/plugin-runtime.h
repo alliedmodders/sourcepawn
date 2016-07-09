@@ -108,6 +108,10 @@ class PluginRuntime
     return name_.chars();
   }
 
+  static PluginRuntime* FromAPI(IPluginRuntime* rt) {
+    return static_cast<PluginRuntime*>(rt);
+  }
+
  public:
   typedef LegacyImage::Code Code;
   typedef LegacyImage::Data Data;
@@ -120,6 +124,9 @@ class PluginRuntime
   }
   LegacyImage *image() const {
     return image_;
+  }
+  PluginContext* context() const {
+    return context_;
   }
 
  private:
