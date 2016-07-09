@@ -21,6 +21,7 @@
 #include "opcodes.h"
 #include "linking.h"
 #include "watchdog_timer.h"
+#include "method-verifier.h"
 #include "stack-frames.h"
 #include "outofline-asm.h"
 #if defined(KE_ARCH_X86)
@@ -57,6 +58,12 @@ CompilerBase::~CompilerBase()
 CompiledFunction *
 CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
 {
+  MethodVerifier verifier(prt, pcode_offs);
+  if (!verifier.verify()) {
+    *err = verifier.error();
+    return nullptr;
+  }
+
   Compiler cc(prt, pcode_offs);
   CompiledFunction *fun = cc.emit(err);
   if (!fun)
