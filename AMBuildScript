@@ -25,6 +25,7 @@ def Normalize(path):
 class Config(object):
   def __init__(self):
     super(Config, self).__init__()
+    self.arch = getattr(builder.options, 'arch', 'x86')
 
   def configure(self):
     cfg = builder.DetectCompilers()
@@ -194,6 +195,7 @@ class SourcePawn(object):
     self.root = root
     self.amtl = amtl
     self.included_zlib = False
+    self.arch = getattr(root, 'arch', 'x86')
     self.spcomp_scripts = [
       os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
     ]
