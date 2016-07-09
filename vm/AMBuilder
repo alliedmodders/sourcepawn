@@ -50,6 +50,7 @@ library.sources += [
   'linking.cpp',
   'pool-allocator.cpp',
   'method-verifier.cpp',
+  'method-info.cpp',
 ]
 
 if SP.arch == 'x86':

@@ -15,14 +15,17 @@
 
 #include <sp_vm_api.h>
 #include <am-utility.h>
+#include <amtl/am-refcounting.h>
 
 namespace sp {
 
+using namespace ke;
 using namespace SourcePawn;
 
 class PluginRuntime;
 class PluginContext;
 class CompiledFunction;
+class MethodInfo;
 
 struct ParamInfo
 {
@@ -74,12 +77,8 @@ class ScriptedInvoker : public IPluginFunction
     return public_;
   }
 
-  CompiledFunction *cachedCompiledFunction() const {
-    return cc_function_;
-  }
-  void setCachedCompiledFunction(CompiledFunction *fn) {
-    cc_function_ = fn;
-  }
+  // Helper for pRuntime->AcquireMethod that caches the result.
+  RefPtr<MethodInfo> AcquireMethod();
 
  private:
   int _PushString(const char *string, int sz_flags, int cp_flags, size_t len);
@@ -95,7 +94,7 @@ class ScriptedInvoker : public IPluginFunction
   funcid_t m_FnId;
   ke::AutoArray<char> full_name_;
   sp_public_t *public_;
-  CompiledFunction *cc_function_;
+  RefPtr<MethodInfo> method_;
 };
 
 } // namespace sp

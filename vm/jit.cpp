@@ -16,15 +16,15 @@
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
 #include "jit.h"
-#include "plugin-runtime.h"
 #include "environment.h"
-#include "opcodes.h"
 #include "linking.h"
-#include "watchdog_timer.h"
-#include "method-verifier.h"
-#include "pcode-reader.h"
-#include "stack-frames.h"
+#include "method-info.h"
+#include "opcodes.h"
 #include "outofline-asm.h"
+#include "pcode-reader.h"
+#include "plugin-runtime.h"
+#include "stack-frames.h"
+#include "watchdog_timer.h"
 #if defined(KE_ARCH_X86)
 # include "x86/jit_x86.h"
 #endif
@@ -59,11 +59,14 @@ CompilerBase::~CompilerBase()
 CompiledFunction *
 CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
 {
-  MethodVerifier verifier(prt, pcode_offs);
-  if (!verifier.verify()) {
-    *err = verifier.error();
+  RefPtr<MethodInfo> method = prt->AcquireMethod(pcode_offs);
+  if (!method) {
+    *err = SP_ERROR_INVALID_ADDRESS;
     return nullptr;
   }
+
+  if ((*err = method->Validate()) != SP_ERROR_NONE)
+    return nullptr;
 
   Compiler cc(prt, pcode_offs);
 
@@ -74,11 +77,7 @@ CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
     return nullptr;
   }
 
-  // Grab the lock before linking code in, since the watchdog timer will look
-  // at this list on another thread.
-  ke::AutoLock lock(Environment::get()->lock());
-
-  prt->AddJittedFunction(fun);
+  method->setCompiledFunction(fun);
   return fun;
 }
 
@@ -238,7 +237,11 @@ CompilerBase::CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void *
   if (!Environment::get()->watchdog()->HandleInterrupt())
     return SP_ERROR_TIMEOUT;
 
-  CompiledFunction *fn = runtime->GetJittedFunctionByOffset(pcode_offs);
+  RefPtr<MethodInfo> method = runtime->AcquireMethod(pcode_offs);
+  if (!method)
+    return SP_ERROR_INVALID_ADDRESS;
+
+  CompiledFunction *fn = method->jit();
   if (!fn) {
     int err;
     fn = Compile(runtime, pcode_offs, &err);

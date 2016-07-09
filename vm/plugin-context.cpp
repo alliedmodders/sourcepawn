@@ -19,6 +19,7 @@
 #include "watchdog_timer.h"
 #include "environment.h"
 #include "compiled-function.h"
+#include "method-info.h"
 #include "jit.h"
 
 using namespace sp;
@@ -437,19 +438,21 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
   EnterProfileScope scriptScope("SourcePawn", cfun->DebugName());
 
   /* See if we have to compile the callee. */
+  RefPtr<MethodInfo> method = cfun->AcquireMethod();
+  if (!method) {
+    ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
+    return false;
+  }
+
   CompiledFunction *fn = nullptr;
   if (env_->IsJitEnabled()) {
     /* We might not have to - check pcode offset. */
-    if ((fn = cfun->cachedCompiledFunction()) == nullptr) {
-      fn = m_pRuntime->GetJittedFunctionByOffset(cfun->Public()->code_offs);
-      if (!fn) {
-        int err = SP_ERROR_NONE;
-        if ((fn = CompilerBase::Compile(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
-          ReportErrorNumber(err);
-          return false;
-        }
+    if ((fn = method->jit()) == nullptr) {
+      int err = SP_ERROR_NONE;
+      if ((fn = CompilerBase::Compile(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
+        ReportErrorNumber(err);
+        return false;
       }
-      cfun->setCachedCompiledFunction(fn);
     }
   } else {
     ReportError("JIT is not enabled!");

@@ -18,13 +18,16 @@
 #include <am-string.h>
 #include <am-inlinelist.h>
 #include <am-hashmap.h>
-#include "compiled-function.h"
+#include <amtl/am-refcounting.h>
 #include "scripted-invoker.h"
 #include "legacy-image.h"
 
 namespace sp {
 
+using namespace ke;
+
 class PluginContext;
+class MethodInfo;
 
 struct floattbl_t
 {
@@ -78,8 +81,6 @@ class PluginRuntime
   virtual size_t GetMemUsage() override;
   virtual unsigned char *GetCodeHash() override;
   virtual unsigned char *GetDataHash() override;
-  CompiledFunction *GetJittedFunctionByOffset(cell_t pcode_offset);
-  void AddJittedFunction(CompiledFunction *fn);
   void SetNames(const char *fullname, const char *name);
   unsigned GetNativeReplacement(size_t index);
   ScriptedInvoker *GetPublicFunction(size_t index);
@@ -92,18 +93,22 @@ class PluginRuntime
     return full_name_.chars();
   }
 
+  // Return the method if it was previously analyzed; null otherwise.
+  RefPtr<MethodInfo> GetMethod(cell_t pcode_offset) const;
+
+  // If there is no method at the given offset, return null. If there is a
+  // method, return it.
+  RefPtr<MethodInfo> AcquireMethod(cell_t pcode_offset);
+
+  // Return a list of all methods. The caller must own the environment lock.
+  const ke::Vector<RefPtr<MethodInfo>>& AllMethods() const;
+
   NativeEntry* NativeAt(size_t index) {
     return &natives_[index];
   }
 
   PluginContext *GetBaseContext();
 
-  size_t NumJitFunctions() const {
-    return m_JitFunctions.length();
-  }
-  CompiledFunction *GetJitFunction(size_t i) const {
-    return m_JitFunctions[i];
-  }
   const char *Name() const {
     return name_.chars();
   }
@@ -154,10 +159,10 @@ class PluginRuntime
       return a == b;
     }
   };
-  typedef ke::HashMap<ucell_t, CompiledFunction *, FunctionMapPolicy> FunctionMap;
+  typedef ke::HashMap<ucell_t, RefPtr<MethodInfo>, FunctionMapPolicy> FunctionMap;
 
   FunctionMap function_map_;
-  ke::Vector<CompiledFunction *> m_JitFunctions;
+  ke::Vector<RefPtr<MethodInfo>> methods_;;
 
   // Pause state.
   bool paused_;

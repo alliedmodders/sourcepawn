@@ -16,6 +16,7 @@
 #include "stack-frames.h"
 #include "x86/frames-x86.h"
 #include "compiled-function.h"
+#include "method-info.h"
 
 using namespace ke;
 using namespace sp;
@@ -96,7 +97,11 @@ FrameIterator::function_cip() const
 cell_t
 FrameIterator::findCip() const
 {
-  CompiledFunction *fn = runtime_->GetJittedFunctionByOffset(function_cip());
+  RefPtr<MethodInfo> method = runtime_->GetMethod(function_cip());
+  if (!method)
+    return 0;
+
+  CompiledFunction *fn = method->jit();
   if (!fn)
     return 0;
 

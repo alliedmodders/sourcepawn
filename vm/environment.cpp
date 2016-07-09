@@ -17,6 +17,8 @@
 #include "watchdog_timer.h"
 #include "plugin-context.h"
 #include "pool-allocator.h"
+#include "method-info.h"
+#include "compiled-function.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -201,8 +203,13 @@ Environment::PatchAllJumpsForTimeout()
   mutex_.AssertCurrentThreadOwns();
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
     PluginRuntime *rt = *iter;
-    for (size_t i = 0; i < rt->NumJitFunctions(); i++) {
-      CompiledFunction *fun = rt->GetJitFunction(i);
+
+    const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
+    for (size_t i = 0; i < methods.length(); i++) {
+      CompiledFunction *fun = methods[i]->jit();
+      if (!fun)
+        continue;
+
       uint8_t *base = reinterpret_cast<uint8_t *>(fun->GetEntryAddress());
 
       for (size_t j = 0; j < fun->NumLoopEdges(); j++)
@@ -217,8 +224,13 @@ Environment::UnpatchAllJumpsFromTimeout()
   mutex_.AssertCurrentThreadOwns();
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
     PluginRuntime *rt = *iter;
-    for (size_t i = 0; i < rt->NumJitFunctions(); i++) {
-      CompiledFunction *fun = rt->GetJitFunction(i);
+
+    const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
+    for (size_t i = 0; i < methods.length(); i++) {
+      CompiledFunction *fun = methods[i]->jit();
+      if (!fun)
+        continue;
+
       uint8_t *base = reinterpret_cast<uint8_t *>(fun->GetEntryAddress());
 
       for (size_t j = 0; j < fun->NumLoopEdges(); j++)

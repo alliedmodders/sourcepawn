@@ -41,6 +41,7 @@
 #include "linking.h"
 #include "frames-x86.h"
 #include "outofline-asm.h"
+#include "method-info.h"
 
 #if defined USE_UNGEN_OPCODES
 #include "ungen_opcodes.h"
@@ -1233,8 +1234,8 @@ class CallThunk : public OutOfLinePath
 bool
 Compiler::visitCALL(cell_t offset)
 {
-  CompiledFunction *fun = rt_->GetJittedFunctionByOffset(offset);
-  if (!fun) {
+  RefPtr<MethodInfo> method = rt_->GetMethod(offset);
+  if (!method || !method->jit()) {
     // Need to emit a delayed thunk.
     CallThunk* thunk = new CallThunk(offset);
     __ callWithABI(thunk->label());
@@ -1244,7 +1245,7 @@ Compiler::visitCALL(cell_t offset)
     }
   } else {
     // Function is already emitted, we can do a direct call.
-    __ callWithABI(ExternalAddress(fun->GetEntryAddress()));
+    __ callWithABI(ExternalAddress(method->jit()->GetEntryAddress()));
   }
 
   // Map the return address to the cip that started this call.

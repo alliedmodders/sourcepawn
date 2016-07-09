@@ -25,6 +25,7 @@
 #include "pool-allocator.h"
 #include "outofline-asm.h"
 #include "pcode-visitor.h"
+#include "compiled-function.h"
 
 namespace sp {
 
