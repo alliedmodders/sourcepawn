@@ -52,7 +52,7 @@ library.sources += [
   'method-verifier.cpp',
 ]
 
-if builder.options.arch == 'x86':
+if SP.arch == 'x86':
   library.sources += [
     'x86/assembler-x86.cpp',
     'x86/code-stubs-x86.cpp',
@@ -77,33 +77,29 @@ if builder.target_platform == 'linux':
 
 SP.libsourcepawn = builder.Add(dll)
 
+def configure_like_shell(name):
+  prog = Root.Program(builder, name)
+  prog.compiler.includes += Includes
+  prog.compiler.linkflags[0:0] = [
+    libsourcepawn.binary,
+    SP.zlib,
+  ]
+  if prog.compiler.like('gcc'):
+    prog.compiler.linkflags += ['-lstdc++']
+  if builder.target_platform == 'linux':
+    prog.compiler.postlink += ['-lpthread', '-lrt']
+  return prog
+
 # Build the debug shell.
-shell = Root.Program(builder, 'spshell')
-shell.compiler.includes += Includes
-shell.compiler.linkflags[0:0] = [
-  libsourcepawn.binary,
-  SP.zlib,
-]
-if shell.compiler.like('gcc'):
-  shell.compiler.linkflags += ['-lstdc++']
+shell = configure_like_shell('spshell')
 shell.sources += [
   'shell.cpp'
 ]
+SP.spshell = builder.Add(shell)
 
 # Build the verifier.
-verifier = Root.Program(builder, 'verifier')
-verifier.compiler.includes += Includes
-verifier.compiler.linkflags[0:0] = [
-  libsourcepawn.binary,
-  SP.zlib,
-]
-if verifier.compiler.like('gcc'):
-  verifier.compiler.linkflags += ['-lstdc++']
+verifier = configure_like_shell('verifier')
 verifier.sources += [
   '../tools/verifier/verifier.cpp',
 ]
 builder.Add(verifier)
-
-if builder.target_platform == 'linux':
-  shell.compiler.postlink += ['-lpthread', '-lrt']
-SP.spshell = builder.Add(shell)

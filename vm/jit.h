@@ -24,6 +24,7 @@
 #include "opcodes.h"
 #include "pool-allocator.h"
 #include "outofline-asm.h"
+#include "pcode-visitor.h"
 
 namespace sp {
 
@@ -63,7 +64,7 @@ class ErrorPath : public OutOfLinePath
   int err;
 };
 
-class CompilerBase
+class CompilerBase : public PcodeVisitor
 {
   friend class ErrorPath;
 
@@ -73,10 +74,13 @@ class CompilerBase
 
   static CompiledFunction *Compile(PluginRuntime *prt, cell_t pcode_offs, int *err);
 
- protected:
-  CompiledFunction* emit(int* errp);
+  int error() const {
+    return error_;
+  }
 
-  virtual bool emitOp(sp::OPCODE op) = 0;
+ protected:
+  CompiledFunction* emit();
+
   virtual void emitThrowPath(int err) = 0;
   virtual void emitErrorHandlers() = 0;
 
@@ -104,6 +108,8 @@ class CompilerBase
   void emitErrorPath(ErrorPath* path);
   void emitThrowPathIfNeeded(int err);
 
+  void reportError(int err);
+
  protected:
   Environment *env_;
   PluginRuntime *rt_;
@@ -113,7 +119,6 @@ class CompilerBase
   int error_;
   uint32_t pcode_start_;
   const cell_t *code_start_;
-  const cell_t *cip_;
   const cell_t *op_cip_;
   const cell_t *code_end_;
 
