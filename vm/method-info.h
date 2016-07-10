@@ -34,8 +34,11 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
     return validation_error_;
   }
 
-  void setCompiledFunction(CompiledFunction* fun);
+  uint32_t pcode_offset() const {
+    return pcode_offset_;
+  }
 
+  void setCompiledFunction(CompiledFunction* fun);
   CompiledFunction* jit() const {
     return jit_;
   }

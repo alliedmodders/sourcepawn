@@ -88,7 +88,7 @@ class Environment : public ISourcePawnEnvironment
     return &mutex_;
   }
 
-  int Invoke(PluginContext* cx, CompiledFunction* fn, cell_t* result);
+  bool Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t* result);
 
   // Helpers.
   void SetProfiler(IProfilingTool *profiler) {

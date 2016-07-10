@@ -18,11 +18,7 @@
 #include "plugin-context.h"
 #include "watchdog_timer.h"
 #include "environment.h"
-#include "compiled-function.h"
 #include "method-info.h"
-#if defined(SP_HAS_JIT)
-# include "jit.h"
-#endif
 
 using namespace sp;
 using namespace SourcePawn;
@@ -446,20 +442,9 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
     return false;
   }
 
-  CompiledFunction *fn = nullptr;
-  if (env_->IsJitEnabled()) {
-#if defined(SP_HAS_JIT)
-    /* We might not have to - check pcode offset. */
-    if ((fn = method->jit()) == nullptr) {
-      int err = SP_ERROR_NONE;
-      if ((fn = CompilerBase::Compile(m_pRuntime, cfun->Public()->code_offs, &err)) == NULL) {
-        ReportErrorNumber(err);
-        return false;
-      }
-    }
-#endif
-  } else {
-    ReportError("JIT is not enabled!");
+  int err = method->Validate();
+  if (err != SP_ERROR_NONE) {
+    ReportErrorNumber(err);
     return false;
   }
 
@@ -476,9 +461,9 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
     sp[i + 1] = params[i];
 
   // Enter the execution engine.
-  int ir = env_->Invoke(this, fn, result);
+  bool ok = env_->Invoke(this, method, result);
 
-  if (ir == SP_ERROR_NONE) {
+  if (ok) {
     // Verify that our state is still sane.
     if (sp_ != save_sp) {
       env_->ReportErrorFmt(
@@ -500,7 +485,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
 
   sp_ = save_sp;
   hp_ = save_hp;
-  return ir == SP_ERROR_NONE;
+  return ok;
 }
 
 IPluginRuntime *

@@ -59,7 +59,7 @@ class CompilerBase : public PcodeVisitor
   CompilerBase(PluginRuntime *rt, cell_t pcode_offs);
   virtual ~CompilerBase();
 
-  static CompiledFunction *Compile(PluginRuntime *prt, cell_t pcode_offs, int *err);
+  static CompiledFunction *Compile(PluginContext* cx, RefPtr<MethodInfo> method, int *err);
 
   int error() const {
     return error_;
@@ -73,7 +73,7 @@ class CompilerBase : public PcodeVisitor
   virtual void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) = 0;
 
   // Helpers.
-  static int CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, uint8_t* pc);
+  static int CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addrp, uint8_t* pc);
   static void* find_entry_fp();
   static void InvokeReportError(int err);
   static void InvokeReportTimeout();
