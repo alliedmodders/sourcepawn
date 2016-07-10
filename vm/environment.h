@@ -72,9 +72,12 @@ class Environment : public ISourcePawnEnvironment
 
   // Allocate and free executable memory.
   CodeChunk AllocateCode(size_t size);
+
+#if defined(SP_HAS_JIT)
   CodeStubs *stubs() {
     return code_stubs_;
   }
+#endif
 
   // Runtime management.
   void RegisterRuntime(PluginRuntime *rt);
@@ -84,7 +87,8 @@ class Environment : public ISourcePawnEnvironment
   ke::Mutex *lock() {
     return &mutex_;
   }
-  int Invoke(PluginRuntime *runtime, CompiledFunction *fn, cell_t *result);
+
+  int Invoke(PluginContext* cx, CompiledFunction* fn, cell_t* result);
 
   // Helpers.
   void SetProfiler(IProfilingTool *profiler) {
@@ -99,8 +103,7 @@ class Environment : public ISourcePawnEnvironment
   void EnableProfiling();
   void DisableProfiling();
 
-  void SetJitEnabled(bool enabled) {
-  }
+  void SetJitEnabled(bool enabled);
   bool IsJitEnabled() const {
     return jit_enabled_;
   }
@@ -126,15 +129,10 @@ class Environment : public ISourcePawnEnvironment
   bool RunningCode() const {
     return !!top_;
   }
-  void enterInvoke(InvokeFrame *frame) {
-    if (!top_)
-      frame_id_++;
-    top_ = frame;
-  }
-  void leaveInvoke() {
-    exit_fp_ = top_->prev_exit_fp();
-    top_ = top_->prev();
-  }
+
+  void enterInvoke(InvokeFrame *frame);
+  void leaveJitInvoke(JitInvokeFrame* frame);
+  void leaveInvoke();
 
   InvokeFrame *top() const {
     return top_;
@@ -178,11 +176,13 @@ class Environment : public ISourcePawnEnvironment
   bool profiling_enabled_;
 
   ke::AutoPtr<CodeAllocator> code_alloc_;
+#if defined(SP_HAS_JIT)
+  ke::AutoPtr<CodeStubs> code_stubs_;
+#endif
+
   ke::InlineList<PluginRuntime> runtimes_;
 
   uintptr_t frame_id_;
-
-  ke::AutoPtr<CodeStubs> code_stubs_;
 
   InvokeFrame *top_;
   intptr_t* exit_fp_;

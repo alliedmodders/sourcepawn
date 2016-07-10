@@ -13,10 +13,14 @@
 #include "environment.h"
 #include "watchdog_timer.h"
 #include "api.h"
-#include "code-stubs.h"
 #include "watchdog_timer.h"
 #include "plugin-context.h"
 #include "pool-allocator.h"
+#include "method-info.h"
+#include "compiled-function.h"
+#if defined(SP_HAS_JIT)
+# include "code-stubs.h"
+#endif
 #include <stdarg.h>
 
 using namespace sp;
@@ -29,7 +33,11 @@ Environment::Environment()
    eh_top_(nullptr),
    exception_code_(SP_ERROR_NONE),
    profiler_(nullptr),
+#if defined(SP_HAS_JIT)
    jit_enabled_(true),
+#else
+   jit_enabled_(false),
+#endif
    profiling_enabled_(false),
    top_(nullptr)
 {
@@ -68,13 +76,16 @@ Environment::Initialize()
   PoolAllocator::InitDefault();
   api_v1_ = new SourcePawnEngine();
   api_v2_ = new SourcePawnEngine2();
-  code_stubs_ = new CodeStubs(this);
   watchdog_timer_ = new WatchdogTimer(this);
   code_alloc_ = new CodeAllocator();
+
+#if defined(SP_HAS_JIT)
+  code_stubs_ = new CodeStubs(this);
 
   // Safe to initialize code now that we have the code cache.
   if (!code_stubs_->Initialize())
     return false;
+#endif
 
   return true;
 }
@@ -83,12 +94,19 @@ void
 Environment::Shutdown()
 {
   watchdog_timer_->Shutdown();
+#if defined(SP_HAS_JIT)
   code_stubs_ = nullptr;
+#endif
   code_alloc_ = nullptr;
   PoolAllocator::FreeDefault();
 
   assert(sEnvironment == this);
   sEnvironment = nullptr;
+}
+
+void
+Environment::SetJitEnabled(bool enabled)
+{
 }
 
 void
@@ -201,8 +219,13 @@ Environment::PatchAllJumpsForTimeout()
   mutex_.AssertCurrentThreadOwns();
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
     PluginRuntime *rt = *iter;
-    for (size_t i = 0; i < rt->NumJitFunctions(); i++) {
-      CompiledFunction *fun = rt->GetJitFunction(i);
+
+    const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
+    for (size_t i = 0; i < methods.length(); i++) {
+      CompiledFunction *fun = methods[i]->jit();
+      if (!fun)
+        continue;
+
       uint8_t *base = reinterpret_cast<uint8_t *>(fun->GetEntryAddress());
 
       for (size_t j = 0; j < fun->NumLoopEdges(); j++)
@@ -217,8 +240,13 @@ Environment::UnpatchAllJumpsFromTimeout()
   mutex_.AssertCurrentThreadOwns();
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
     PluginRuntime *rt = *iter;
-    for (size_t i = 0; i < rt->NumJitFunctions(); i++) {
-      CompiledFunction *fun = rt->GetJitFunction(i);
+
+    const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
+    for (size_t i = 0; i < methods.length(); i++) {
+      CompiledFunction *fun = methods[i]->jit();
+      if (!fun)
+        continue;
+
       uint8_t *base = reinterpret_cast<uint8_t *>(fun->GetEntryAddress());
 
       for (size_t j = 0; j < fun->NumLoopEdges(); j++)
@@ -228,15 +256,17 @@ Environment::UnpatchAllJumpsFromTimeout()
 }
 
 int
-Environment::Invoke(PluginRuntime *runtime, CompiledFunction *fn, cell_t *result)
+Environment::Invoke(PluginContext* cx, CompiledFunction* fn, cell_t* result)
 {
   // Must be in an invoke frame.
-  assert(top_ && top_->cx() == runtime->GetBaseContext());
+  JitInvokeFrame ivkframe(cx, fn->GetCodeOffset()); 
 
-  PluginContext *cx = runtime->GetBaseContext();
+  assert(top_ && top_->cx() == cx);
 
+#if defined(SP_HAS_JIT)
   InvokeStubFn invoke = code_stubs_->InvokeStub();
   invoke(cx, fn->GetEntryAddress(), result);
+#endif
 
   return exception_code_;
 }
@@ -418,4 +448,25 @@ int
 Environment::getPendingExceptionCode() const
 {
   return exception_code_;
+}
+
+void
+Environment::enterInvoke(InvokeFrame *frame)
+{
+  if (!top_)
+    frame_id_++;
+  top_ = frame;
+}
+
+void
+Environment::leaveJitInvoke(JitInvokeFrame* frame)
+{
+  assert(frame == top_);
+  exit_fp_ = frame->prev_exit_fp();
+}
+
+void
+Environment::leaveInvoke()
+{
+  top_ = top_->prev();
 }

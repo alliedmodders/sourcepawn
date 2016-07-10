@@ -10,14 +10,16 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
+#include "plugin-runtime.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "plugin-runtime.h"
-#include "plugin-context.h"
-#include "environment.h"
 #include <smx/smx-v1-opcodes.h>
+#include "compiled-function.h"
+#include "environment.h"
+#include "method-info.h"
+#include "plugin-context.h"
 
 #include "md5/md5.h"
 
@@ -51,9 +53,6 @@ PluginRuntime::~PluginRuntime()
 
   for (uint32_t i = 0; i < image_->NumPublics(); i++)
     delete entrypoints_[i];
-
-  for (size_t i = 0; i < m_JitFunctions.length(); i++)
-    delete m_JitFunctions[i];
 }
 
 bool
@@ -160,27 +159,55 @@ PluginRuntime::SetNames(const char *fullname, const char *name)
   full_name_ = name;
 }
 
-void
-PluginRuntime::AddJittedFunction(CompiledFunction *fn)
-{
-  m_JitFunctions.append(fn);
-
-  ucell_t pcode_offset = fn->GetCodeOffset();
-  {
-    FunctionMap::Insert p = function_map_.findForAdd(pcode_offset);
-    assert(!p.found());
-
-    function_map_.add(p, pcode_offset, fn);
-  }
-}
-
-CompiledFunction *
-PluginRuntime::GetJittedFunctionByOffset(cell_t pcode_offset)
+RefPtr<MethodInfo>
+PluginRuntime::GetMethod(cell_t pcode_offset) const
 {
   FunctionMap::Result r = function_map_.find(pcode_offset);
   if (!r.found())
     return nullptr;
   return r->value;
+}
+
+RefPtr<MethodInfo>
+PluginRuntime::AcquireMethod(cell_t pcode_offset)
+{
+  FunctionMap::Insert p = function_map_.findForAdd(pcode_offset);
+  if (p.found())
+    return p->value;
+
+  // Do some quick validation to make sure this is a valid offset. The only
+  // real reason to do this is so we don't fill the hash set with bogus
+  // methods.
+  if (pcode_offset < 0 ||
+      size_t(pcode_offset) >= code_.length ||
+      !IsAligned(pcode_offset, sizeof(cell_t)))
+  {
+    return nullptr;
+  }
+
+  const cell_t* address = reinterpret_cast<const cell_t*>(code_.bytes + pcode_offset);
+  if (*address != OP_PROC)
+    return nullptr;
+
+  RefPtr<MethodInfo> method = new MethodInfo(this, pcode_offset);
+  if (!function_map_.add(p, pcode_offset, method))
+    return nullptr;
+
+  // Grab the lock before linking code in, since the watchdog timer will look
+  // at this list on another thread.
+  {
+    ke::AutoLock lock(Environment::get()->lock());
+    if (!methods_.append(method))
+      return nullptr;
+  }
+  return method;
+}
+
+const ke::Vector<RefPtr<MethodInfo>>&
+PluginRuntime::AllMethods() const
+{
+  Environment::get()->lock()->AssertCurrentThreadOwns();
+  return methods_;
 }
 
 int

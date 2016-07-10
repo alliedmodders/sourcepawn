@@ -43,7 +43,7 @@ namespace sp {
 class MacroAssembler : public Assembler
 {
  public:
-  void enterFrame(FrameType type, uintptr_t function_id) {
+  void enterFrame(JitFrameType type, uintptr_t function_id) {
     push(ebp);
     movl(ebp, esp);
     push(uint32_t(type));
@@ -53,7 +53,7 @@ class MacroAssembler : public Assembler
     leave();
   }
   void enterExitFrame(ExitFrameType type, uintptr_t payload) {
-    enterFrame(FrameType::Exit, EncodeExitFrameId(type, payload));
+    enterFrame(JitFrameType::Exit, EncodeExitFrameId(type, payload));
     movl(Operand(ExternalAddress(Environment::get()->addressOfExit())), ebp);
   }
   void leaveExitFrame() {

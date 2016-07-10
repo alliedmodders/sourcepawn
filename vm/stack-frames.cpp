@@ -14,8 +14,13 @@
 #include "plugin-runtime.h"
 #include "plugin-context.h"
 #include "stack-frames.h"
-#include "x86/frames-x86.h"
 #include "compiled-function.h"
+#include "method-info.h"
+#if defined(KE_ARCH_X86)
+# include "x86/frames-x86.h"
+#elif !defined(SP_HAS_JIT)
+# include "null-frame-layout.h"
+#endif
 
 using namespace ke;
 using namespace sp;
@@ -24,7 +29,6 @@ using namespace SourcePawn;
 InvokeFrame::InvokeFrame(PluginContext *cx, ucell_t entry_cip)
  : prev_(Environment::get()->top()),
    cx_(cx),
-   prev_exit_fp_(Environment::get()->exit_fp()),
    entry_cip_(0)
 {
   Environment::get()->enterInvoke(this);
@@ -36,67 +40,81 @@ InvokeFrame::~InvokeFrame()
   Environment::get()->leaveInvoke();
 }
 
-FrameIterator::FrameIterator()
- : ivk_(Environment::get()->top()),
-   cur_frame_(nullptr),
-   runtime_(nullptr),
-   cip_(kInvalidCip),
-   pc_(nullptr)
+JitInvokeFrame::JitInvokeFrame(PluginContext *cx, ucell_t entry_cip)
+ : InvokeFrame(cx, entry_cip),
+   prev_exit_fp_(Environment::get()->exit_fp())
 {
-  if (!ivk_)
-    return;
-
-  nextInvokeFrame(Environment::get()->exit_fp());
 }
 
-void
-FrameIterator::nextInvokeFrame(intptr_t* exit_fp)
+JitInvokeFrame::~JitInvokeFrame()
 {
-  cur_frame_ = FrameLayout::FromFp(exit_fp);
-  assert(cur_frame_->frame_type == FrameType::Exit);
+  Environment::get()->leaveJitInvoke(this);
+}
+
+// This constructor is for find_entry_fp() in the JIT.
+JitFrameIterator::JitFrameIterator(Environment* env)
+ : JitFrameIterator(env->top()->cx()->runtime(), env->exit_fp())
+{
+}
+
+JitFrameIterator::JitFrameIterator(PluginRuntime* rt, intptr_t* exit_fp)
+ : rt_(rt),
+   cur_frame_(FrameLayout::FromFp(exit_fp))
+{
+  assert(cur_frame_->frame_type == JitFrameType::Exit);
   assert(cur_frame_->return_address);
   assert(cur_frame_->prev_fp);
 
-  runtime_ = ivk_->cx()->runtime();
   pc_ = nullptr;
   cip_ = kInvalidCip;
 }
 
-void
-FrameIterator::Next()
+bool
+JitFrameIterator::done() const
 {
-  if (cur_frame_->frame_type == FrameType::Entry) {
-    // Done with this InvokeFrame, so jump to the next.
-    intptr_t* next_fp = ivk_->prev_exit_fp();
-    ivk_ = ivk_->prev();
-    if (!ivk_)
-      return;
-    nextInvokeFrame(next_fp);
-    return;
-  }
+  return cur_frame_->frame_type == JitFrameType::Entry;
+}
+
+void
+JitFrameIterator::next()
+{
+  assert(!done());
 
   pc_ = cur_frame_->return_address;
   cip_ = kInvalidCip;
   cur_frame_ = FrameLayout::FromFp(cur_frame_->prev_fp);
 }
 
-void
-FrameIterator::Reset()
+FrameType
+JitFrameIterator::type() const
 {
-  *this = FrameIterator();
+  switch ((JitFrameType)cur_frame_->frame_type) {
+  case JitFrameType::Scripted:
+    return FrameType::Scripted;
+  case JitFrameType::Exit:
+    if (GetExitFrameType(cur_frame_->function_id) == ExitFrameType::Native)
+      return FrameType::Native;
+    return FrameType::Internal;
+  default:
+    return FrameType::Internal;
+  }
 }
 
 cell_t
-FrameIterator::function_cip() const
+JitFrameIterator::function_cip() const
 {
-  assert(cur_frame_->frame_type == FrameType::Scripted);
+  assert(cur_frame_->frame_type == JitFrameType::Scripted);
   return cur_frame_->function_id;
 }
 
 cell_t
-FrameIterator::findCip() const
+JitFrameIterator::cip() const
 {
-  CompiledFunction *fn = runtime_->GetJittedFunctionByOffset(function_cip());
+  RefPtr<MethodInfo> method = rt_->GetMethod(function_cip());
+  if (!method)
+    return 0;
+
+  CompiledFunction *fn = method->jit();
   if (!fn)
     return 0;
 
@@ -109,13 +127,65 @@ FrameIterator::findCip() const
   return cip_;
 }
 
+uint32_t
+JitFrameIterator::native_index() const
+{
+  assert(type() == FrameType::Native);
+  return GetExitFramePayload(cur_frame_->function_id);
+}
+
+FrameIterator::FrameIterator()
+ : ivk_(nullptr),
+   runtime_(nullptr),
+   next_exit_fp_(nullptr)
+{
+  Reset();
+}
+
+void
+FrameIterator::nextInvokeFrame()
+{
+  runtime_ = ivk_->cx()->runtime();
+  if (JitInvokeFrame* jvk = ivk_->AsJitInvokeFrame()) {
+    frame_cursor_ = new JitFrameIterator(runtime_, next_exit_fp_);
+    next_exit_fp_ = jvk->prev_exit_fp();
+  }
+}
+
+void
+FrameIterator::Next()
+{
+  if (frame_cursor_->done()) {
+    frame_cursor_ = nullptr;
+
+    ivk_ = ivk_->prev();
+    if (ivk_)
+      nextInvokeFrame();
+    return;
+  }
+
+  frame_cursor_->next();
+}
+
+void
+FrameIterator::Reset()
+{
+  ivk_ = Environment::get()->top();
+  runtime_ = nullptr;
+  next_exit_fp_ = Environment::get()->exit_fp();
+  frame_cursor_ = nullptr;
+
+  if (ivk_)
+    nextInvokeFrame();
+}
+
 unsigned
 FrameIterator::LineNumber() const
 {
   if (!IsScriptedFrame())
     return 0;
 
-  ucell_t cip = findCip();
+  ucell_t cip = frame_cursor_->cip();
   if (cip == kInvalidCip)
     return 0;
 
@@ -132,9 +202,9 @@ FrameIterator::FilePath() const
   if (!IsScriptedFrame())
     return nullptr;
 
-  ucell_t cip = findCip();
+  ucell_t cip = frame_cursor_->cip();
   if (cip == kInvalidCip)
-    return runtime_->image()->LookupFile(function_cip());
+    return runtime_->image()->LookupFile(frame_cursor_->function_cip());
 
   return runtime_->image()->LookupFile(cip);
 }
@@ -144,15 +214,17 @@ FrameIterator::FunctionName() const
 {
   assert(ivk_);
   if (IsNativeFrame()) {
-    uint32_t native_index = GetExitFramePayload(cur_frame_->function_id);
+    uint32_t native_index = frame_cursor_->native_index();
     const sp_native_t *native = runtime_->GetNative(native_index);
     if (!native)
       return nullptr;
     return native->name;
   }
 
-  if (IsScriptedFrame())
-    return runtime_->image()->LookupFunction(function_cip());
+  if (IsScriptedFrame()) {
+    cell_t function_cip = frame_cursor_->function_cip();
+    return runtime_->image()->LookupFunction(function_cip);
+  }
 
   return nullptr;
 }
@@ -160,26 +232,13 @@ FrameIterator::FunctionName() const
 bool
 FrameIterator::IsNativeFrame() const
 {
-  return cur_frame_->frame_type == FrameType::Exit &&
-         GetExitFrameType(cur_frame_->function_id) == ExitFrameType::Native;
+  return frame_cursor_->type() == FrameType::Native;
 }
 
 bool
 FrameIterator::IsScriptedFrame() const
 {
-  return cur_frame_->frame_type == FrameType::Scripted;
-}
-
-bool
-FrameIterator::IsEntryFrame() const
-{
-  return cur_frame_->frame_type == FrameType::Entry;
-}
-
-FrameLayout*
-FrameIterator::Frame() const
-{
-  return cur_frame_;
+  return frame_cursor_->type() == FrameType::Scripted;
 }
 
 IPluginContext *
@@ -193,5 +252,5 @@ FrameIterator::Context() const
 bool
 FrameIterator::IsInternalFrame() const
 {
-  return !(IsScriptedFrame() || IsNativeFrame());
+  return frame_cursor_->type() == FrameType::Internal;
 }

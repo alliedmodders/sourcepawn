@@ -17,6 +17,7 @@
 #include "plugin-runtime.h"
 #include "environment.h"
 #include "plugin-context.h"
+#include "method-info.h"
 
 /********************
 * FUNCTION CALLING *
@@ -30,8 +31,7 @@ ScriptedInvoker::ScriptedInvoker(PluginRuntime *runtime, funcid_t id, uint32_t p
    context_(runtime->GetBaseContext()),
    m_curparam(0),
    m_errorstate(SP_ERROR_NONE),
-   m_FnId(id),
-   cc_function_(nullptr)
+   m_FnId(id)
 {
   runtime->GetPublicByIndex(pub_id, &public_);
 
@@ -352,3 +352,10 @@ ScriptedInvoker::SetError(int err)
   return err;
 }
 
+RefPtr<MethodInfo>
+ScriptedInvoker::AcquireMethod()
+{
+  if (!method_)
+    method_ = context_->runtime()->AcquireMethod(public_->code_offs);
+  return method_;
+}
