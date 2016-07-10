@@ -223,7 +223,7 @@ Compiler::visitSUB_ALT()
 bool
 Compiler::visitPROC()
 {
-  __ enterFrame(FrameType::Scripted, pcode_start_);
+  __ enterFrame(JitFrameType::Scripted, pcode_start_);
 
   // Push the old frame onto the stack.
   __ movl(tmp, Operand(frmAddr()));

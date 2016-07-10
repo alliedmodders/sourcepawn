@@ -87,7 +87,8 @@ class Environment : public ISourcePawnEnvironment
   ke::Mutex *lock() {
     return &mutex_;
   }
-  int Invoke(PluginRuntime *runtime, CompiledFunction *fn, cell_t *result);
+
+  int Invoke(PluginContext* cx, CompiledFunction* fn, cell_t* result);
 
   // Helpers.
   void SetProfiler(IProfilingTool *profiler) {
@@ -128,15 +129,10 @@ class Environment : public ISourcePawnEnvironment
   bool RunningCode() const {
     return !!top_;
   }
-  void enterInvoke(InvokeFrame *frame) {
-    if (!top_)
-      frame_id_++;
-    top_ = frame;
-  }
-  void leaveInvoke() {
-    exit_fp_ = top_->prev_exit_fp();
-    top_ = top_->prev();
-  }
+
+  void enterInvoke(InvokeFrame *frame);
+  void leaveJitInvoke(JitInvokeFrame* frame);
+  void leaveInvoke();
 
   InvokeFrame *top() const {
     return top_;

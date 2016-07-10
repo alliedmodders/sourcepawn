@@ -256,14 +256,14 @@ Environment::UnpatchAllJumpsFromTimeout()
 }
 
 int
-Environment::Invoke(PluginRuntime *runtime, CompiledFunction *fn, cell_t *result)
+Environment::Invoke(PluginContext* cx, CompiledFunction* fn, cell_t* result)
 {
   // Must be in an invoke frame.
-  assert(top_ && top_->cx() == runtime->GetBaseContext());
+  JitInvokeFrame ivkframe(cx, fn->GetCodeOffset()); 
+
+  assert(top_ && top_->cx() == cx);
 
 #if defined(SP_HAS_JIT)
-  PluginContext *cx = runtime->GetBaseContext();
-
   InvokeStubFn invoke = code_stubs_->InvokeStub();
   invoke(cx, fn->GetEntryAddress(), result);
 #endif
@@ -448,4 +448,25 @@ int
 Environment::getPendingExceptionCode() const
 {
   return exception_code_;
+}
+
+void
+Environment::enterInvoke(InvokeFrame *frame)
+{
+  if (!top_)
+    frame_id_++;
+  top_ = frame;
+}
+
+void
+Environment::leaveJitInvoke(JitInvokeFrame* frame)
+{
+  assert(frame == top_);
+  exit_fp_ = frame->prev_exit_fp();
+}
+
+void
+Environment::leaveInvoke()
+{
+  top_ = top_->prev();
 }

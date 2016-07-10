@@ -476,12 +476,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
     sp[i + 1] = params[i];
 
   // Enter the execution engine.
-  int ir;
-  {
-    InvokeFrame ivkframe(this, fn->GetCodeOffset()); 
-    Environment *env = env_;
-    ir = env->Invoke(m_pRuntime, fn, result);
-  }
+  int ir = env_->Invoke(this, fn, result);
 
   if (ir == SP_ERROR_NONE) {
     // Verify that our state is still sane.

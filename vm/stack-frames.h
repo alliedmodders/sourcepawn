@@ -29,15 +29,17 @@ class PluginContext;
 class PluginRuntime;
 struct FrameLayout;
 
-enum class FrameType : intptr_t
+// These are specific to the JIT.
+enum class JitFrameType : intptr_t
 {
   None,
   Entry,
   Scripted,
   Exit
 };
-KE_DEFINE_ENUM_COMPARATORS(FrameType, intptr_t);
+KE_DEFINE_ENUM_COMPARATORS(JitFrameType, intptr_t);
 
+// These are specific to the JIT.
 enum class ExitFrameType : uintptr_t
 {
   Native,
@@ -62,13 +64,16 @@ static inline uintptr_t GetExitFramePayload(uintptr_t stack_val)
   return stack_val >> kExitFrameTypeBits;
 }
 
+class JitInvokeFrame;
+
 // An InvokeFrame represents one activation of Execute2().
 class InvokeFrame
 {
- public:
+ protected:
   InvokeFrame(PluginContext *cx, ucell_t cip);
   ~InvokeFrame();
 
+ public:
   InvokeFrame *prev() const {
     return prev_;
   }
@@ -76,18 +81,37 @@ class InvokeFrame
     return cx_;
   }
 
-  intptr_t* prev_exit_fp() const {
-    return prev_exit_fp_;
-  }
   ucell_t entry_cip() const {
     return entry_cip_;
   }
 
- private:
+  virtual JitInvokeFrame* AsJitInvokeFrame() {
+    return nullptr;
+  }
+
+ protected:
   InvokeFrame *prev_;
   PluginContext *cx_;
-  intptr_t* prev_exit_fp_;
   ucell_t entry_cip_;
+};
+
+// JIT frames are always contained within JitInvokeFrame.
+class JitInvokeFrame final : public InvokeFrame
+{
+ public:
+  JitInvokeFrame(PluginContext* cx, ucell_t cip);
+  ~JitInvokeFrame();
+
+  JitInvokeFrame* AsJitInvokeFrame() override {
+    return this;
+  }
+
+  intptr_t* prev_exit_fp() const {
+    return prev_exit_fp_;
+  }
+
+ private:
+  intptr_t* prev_exit_fp_;
 };
 
 class FrameIterator : public SourcePawn::IFrameIterator

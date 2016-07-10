@@ -29,7 +29,6 @@ using namespace SourcePawn;
 InvokeFrame::InvokeFrame(PluginContext *cx, ucell_t entry_cip)
  : prev_(Environment::get()->top()),
    cx_(cx),
-   prev_exit_fp_(Environment::get()->exit_fp()),
    entry_cip_(0)
 {
   Environment::get()->enterInvoke(this);
@@ -39,6 +38,17 @@ InvokeFrame::~InvokeFrame()
 {
   assert(Environment::get()->top() == this);
   Environment::get()->leaveInvoke();
+}
+
+JitInvokeFrame::JitInvokeFrame(PluginContext *cx, ucell_t entry_cip)
+ : InvokeFrame(cx, entry_cip),
+   prev_exit_fp_(Environment::get()->exit_fp())
+{
+}
+
+JitInvokeFrame::~JitInvokeFrame()
+{
+  Environment::get()->leaveJitInvoke(this);
 }
 
 FrameIterator::FrameIterator()
@@ -58,7 +68,7 @@ void
 FrameIterator::nextInvokeFrame(intptr_t* exit_fp)
 {
   cur_frame_ = FrameLayout::FromFp(exit_fp);
-  assert(cur_frame_->frame_type == FrameType::Exit);
+  assert(cur_frame_->frame_type == JitFrameType::Exit);
   assert(cur_frame_->return_address);
   assert(cur_frame_->prev_fp);
 
@@ -70,9 +80,9 @@ FrameIterator::nextInvokeFrame(intptr_t* exit_fp)
 void
 FrameIterator::Next()
 {
-  if (cur_frame_->frame_type == FrameType::Entry) {
+  if (cur_frame_->frame_type == JitFrameType::Entry) {
     // Done with this InvokeFrame, so jump to the next.
-    intptr_t* next_fp = ivk_->prev_exit_fp();
+    intptr_t* next_fp = ivk_->AsJitInvokeFrame()->prev_exit_fp();
     ivk_ = ivk_->prev();
     if (!ivk_)
       return;
@@ -94,7 +104,7 @@ FrameIterator::Reset()
 cell_t
 FrameIterator::function_cip() const
 {
-  assert(cur_frame_->frame_type == FrameType::Scripted);
+  assert(cur_frame_->frame_type == JitFrameType::Scripted);
   return cur_frame_->function_id;
 }
 
@@ -169,20 +179,20 @@ FrameIterator::FunctionName() const
 bool
 FrameIterator::IsNativeFrame() const
 {
-  return cur_frame_->frame_type == FrameType::Exit &&
+  return cur_frame_->frame_type == JitFrameType::Exit &&
          GetExitFrameType(cur_frame_->function_id) == ExitFrameType::Native;
 }
 
 bool
 FrameIterator::IsScriptedFrame() const
 {
-  return cur_frame_->frame_type == FrameType::Scripted;
+  return cur_frame_->frame_type == JitFrameType::Scripted;
 }
 
 bool
 FrameIterator::IsEntryFrame() const
 {
-  return cur_frame_->frame_type == FrameType::Entry;
+  return cur_frame_->frame_type == JitFrameType::Entry;
 }
 
 FrameLayout*
