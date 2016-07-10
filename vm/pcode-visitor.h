@@ -53,7 +53,7 @@ class PcodeVisitor
   virtual bool visitLODB_I(cell_t width) = 0;
   virtual bool visitCONST(PawnReg dest, cell_t imm) = 0;
   virtual bool visitADDR(PawnReg dest, cell_t offset) = 0;
-  virtual bool visitSTOR(cell_t offset, PawnReg src) = 0;
+  virtual bool visitSTOR(cell_t address, PawnReg src) = 0;
   virtual bool visitSTOR_S(cell_t offset, PawnReg src) = 0;
   virtual bool visitSREF_S(cell_t offset, PawnReg src) = 0;
   virtual bool visitSTOR_I() = 0;
@@ -64,7 +64,7 @@ class PcodeVisitor
   virtual bool visitXCHG() = 0;
   virtual bool visitPUSH(PawnReg src) = 0;
   virtual bool visitPUSH_C(const cell_t* vals, size_t nvals) = 0;
-  virtual bool visitPUSH(const cell_t* offsets, size_t nvals) = 0;
+  virtual bool visitPUSH(const cell_t* addresses, size_t nvals) = 0;
   virtual bool visitPUSH_S(const cell_t* offsets, size_t nvals) = 0;
   virtual bool visitPOP(PawnReg dest) = 0;
   virtual bool visitSTACK(cell_t amount) = 0;
@@ -78,7 +78,7 @@ class PcodeVisitor
   virtual bool visitSHR() = 0;
   virtual bool visitSSHR() = 0;
   virtual bool visitSHL_C(PawnReg dest, cell_t amount) = 0;
-  virtual bool visitSHR_C(PawnReg reg, cell_t amount) = 0;
+  virtual bool visitSHR_C(PawnReg dest, cell_t amount) = 0;
   virtual bool visitSMUL() = 0;
   virtual bool visitSDIV(PawnReg dest) = 0;
   virtual bool visitADD() = 0;
@@ -93,16 +93,16 @@ class PcodeVisitor
   virtual bool visitADD_C(cell_t value) = 0;
   virtual bool visitSMUL_C(cell_t value) = 0;
   virtual bool visitZERO(PawnReg dest) = 0;
-  virtual bool visitZERO(cell_t offset) = 0;
+  virtual bool visitZERO(cell_t address) = 0;
   virtual bool visitZERO_S(cell_t offset) = 0;
   virtual bool visitCompareOp(CompareOp op) = 0;
   virtual bool visitEQ_C(PawnReg src, cell_t value) = 0;
   virtual bool visitINC(PawnReg dest) = 0;
-  virtual bool visitINC(cell_t offset) = 0;
+  virtual bool visitINC(cell_t address) = 0;
   virtual bool visitINC_S(cell_t offset) = 0;
   virtual bool visitINC_I() = 0;
   virtual bool visitDEC(PawnReg dest) = 0;
-  virtual bool visitDEC(cell_t offset) = 0;
+  virtual bool visitDEC(cell_t address) = 0;
   virtual bool visitDEC_S(cell_t offset) = 0;
   virtual bool visitDEC_I() = 0;
   virtual bool visitMOVS(uint32_t amount) = 0;
@@ -112,13 +112,13 @@ class PcodeVisitor
   virtual bool visitSWAP(PawnReg dest) = 0;
   virtual bool visitPUSH_ADR(const cell_t* offsets, size_t nvals) = 0;
   virtual bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) = 0;
-  virtual bool visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt) = 0;
+  virtual bool visitLOAD_BOTH(cell_t addressForPri, cell_t addressForAlt) = 0;
   virtual bool visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) = 0;
-  virtual bool visitCONST(cell_t offset, cell_t value) = 0;
+  virtual bool visitCONST(cell_t address, cell_t value) = 0;
   virtual bool visitCONST_S(cell_t offset, cell_t value) = 0;
   virtual bool visitTRACKER_PUSH_C(cell_t amount) = 0;
   virtual bool visitTRACKER_POP_SETHEAP() = 0;
-  virtual bool visitGENARRAY(cell_t dims, bool autozero) = 0;
+  virtual bool visitGENARRAY(uint32_t dims, bool autozero) = 0;
   virtual bool visitSTRADJUST_PRI() = 0;
   virtual bool visitFABS() = 0;
   virtual bool visitFLOAT() = 0;
@@ -192,15 +192,7 @@ class IncompletePcodeVisitor : public PcodeVisitor
     assert(false);
     return false;
   }
-  virtual bool visitLIDX_B(cell_t width) override {
-    assert(false);
-    return false;
-  }
   virtual bool visitIDXADDR() override {
-    assert(false);
-    return false;
-  }
-  virtual bool visitIDXADDR_B(cell_t width) override {
     assert(false);
     return false;
   }
@@ -436,7 +428,7 @@ class IncompletePcodeVisitor : public PcodeVisitor
     assert(false);
     return false;
   }
-  virtual bool visitGENARRAY(cell_t dims, bool autozero) override {
+  virtual bool visitGENARRAY(uint32_t dims, bool autozero) override {
     assert(false);
     return false;
   }

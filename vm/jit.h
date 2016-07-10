@@ -77,7 +77,6 @@ class CompilerBase : public PcodeVisitor
   static void* find_entry_fp();
   static void InvokeReportError(int err);
   static void InvokeReportTimeout();
-  static void ReportOutOfBoundsError(cell_t index, cell_t bounds);
   static void PatchCallThunk(uint8_t* pc, void* target);
 
  protected:

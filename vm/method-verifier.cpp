@@ -302,6 +302,17 @@ MethodVerifier::verifyOp(OPCODE op)
   // Note - STACK and HEAP are verified at runtime.
   case OP_STACK:
   case OP_HEAP:
+  {
+    cell_t value;
+    if (!readCell(&value))
+      return false;
+    if (!ke::IsAligned(value, sizeof(cell_t))) {
+      reportError(SP_ERROR_INSTRUCTION_PARAM);
+      return false;
+    }
+    return true;
+  }
+
   case OP_CONST_PRI:
   case OP_CONST_ALT:
   case OP_BOUNDS:
@@ -382,9 +393,7 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_TRACKER_PUSH_C:
   {
     cell_t amount;
-    if (!readCell(&amount))
-      return false;
-    return verifyHeapAmount(amount);
+    return readCell(&amount);
   }
 
   case OP_GENARRAY:

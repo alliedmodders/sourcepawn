@@ -42,10 +42,7 @@
 #include "frames-x86.h"
 #include "outofline-asm.h"
 #include "method-info.h"
-
-#if defined USE_UNGEN_OPCODES
-#include "ungen_opcodes.h"
-#endif
+#include "runtime-helpers.h"
 
 #define __ masm.
 
@@ -1134,7 +1131,7 @@ Compiler::emitCheckAddress(Register reg)
 }
 
 bool
-Compiler::visitGENARRAY(cell_t dims, bool autozero)
+Compiler::visitGENARRAY(uint32_t dims, bool autozero)
 {
   if (dims == 1)
   {

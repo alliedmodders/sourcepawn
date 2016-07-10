@@ -1,0 +1,48 @@
+globals
+22
+24
+24
+22
+locals
+55
+57
+57
+55
+arrays
+5
+7
+7
+5
+char arrays
+98
+100
+100
+98
+refarrays, const index
+11
+13
+13
+11
+ref chararrays, const index
+98
+100
+100
+98
+refarrays, var index
+9
+11
+11
+9
+ref chararrays, var index
+98
+100
+100
+98
+ref
+55
+57
+57
+55
+0, 9, 0
+0, 0
+ab

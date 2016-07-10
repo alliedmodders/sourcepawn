@@ -22,6 +22,7 @@
 # include "code-stubs.h"
 # include "jit.h"
 #endif
+#include "interpreter.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -108,6 +109,7 @@ Environment::Shutdown()
 void
 Environment::SetJitEnabled(bool enabled)
 {
+  jit_enabled_ = enabled;
 }
 
 void
@@ -282,8 +284,7 @@ Environment::Invoke(PluginContext* cx,
   }
 #endif
 
-  cx->ReportErrorNumber(SP_ERROR_NOT_RUNNABLE);
-  return false;
+  return Interpreter::Run(cx, method, result);
 }
 
 void

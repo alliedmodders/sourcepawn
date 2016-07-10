@@ -40,6 +40,35 @@ InvokeFrame::~InvokeFrame()
   Environment::get()->leaveInvoke();
 }
 
+InterpInvokeFrame::InterpInvokeFrame(PluginContext* cx,
+                                     MethodInfo* method,
+                                     const cell_t* const& cip)
+ : InvokeFrame(cx, method->pcode_offset()),
+   method_(method),
+   cip_(cip),
+   native_index_(-1)
+{
+}
+
+InterpInvokeFrame::~InterpInvokeFrame()
+{
+  assert(native_index_ == -1);
+}
+
+void
+InterpInvokeFrame::enterNativeCall(uint32_t native_index)
+{
+  assert(native_index_ == -1);
+  native_index_ = native_index;
+}
+
+void
+InterpInvokeFrame::leaveNativeCall()
+{
+  assert(native_index_ != -1);
+  native_index_ = -1;
+}
+
 JitInvokeFrame::JitInvokeFrame(PluginContext *cx, ucell_t entry_cip)
  : InvokeFrame(cx, entry_cip),
    prev_exit_fp_(Environment::get()->exit_fp())
@@ -49,6 +78,60 @@ JitInvokeFrame::JitInvokeFrame(PluginContext *cx, ucell_t entry_cip)
 JitInvokeFrame::~JitInvokeFrame()
 {
   Environment::get()->leaveJitInvoke(this);
+}
+
+InterpFrameIterator::InterpFrameIterator(InterpInvokeFrame* ivk)
+ : ivk_(ivk)
+{
+  if (ivk_->native_index_ != -1)
+    current_ = FrameType::Native;
+  else
+    current_ = FrameType::Scripted;
+}
+
+bool
+InterpFrameIterator::done() const
+{
+  return current_ == FrameType::Scripted;
+}
+
+void
+InterpFrameIterator::next()
+{
+  assert(!done());
+  current_ = FrameType::Scripted;
+}
+
+FrameType
+InterpFrameIterator::type() const
+{
+  return current_;
+}
+
+cell_t
+InterpFrameIterator::function_cip() const
+{
+  assert(current_ == FrameType::Scripted);
+  return ivk_->method_->pcode_offset();
+}
+
+cell_t
+InterpFrameIterator::cip() const
+{
+  assert(current_ == FrameType::Scripted);
+  auto& code = ivk_->cx()->runtime()->code();
+
+  const uint8_t* ptr = reinterpret_cast<const uint8_t*>(ivk_->cip_);
+  assert(ptr >= code.bytes && ptr < code.bytes + code.length);
+
+  return ptr - code.bytes;
+}
+
+uint32_t
+InterpFrameIterator::native_index() const
+{
+  assert(current_ == FrameType::Native);
+  return ivk_->native_index_;
 }
 
 // This constructor is for find_entry_fp() in the JIT.
@@ -149,6 +232,11 @@ FrameIterator::nextInvokeFrame()
   if (JitInvokeFrame* jvk = ivk_->AsJitInvokeFrame()) {
     frame_cursor_ = new JitFrameIterator(runtime_, next_exit_fp_);
     next_exit_fp_ = jvk->prev_exit_fp();
+    return;
+  }
+  if (InterpInvokeFrame* ivk = ivk_->AsInterpInvokeFrame()) {
+    frame_cursor_ = new InterpFrameIterator(ivk);
+    return;
   }
 }
 

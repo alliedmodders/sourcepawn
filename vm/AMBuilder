@@ -48,6 +48,8 @@ library.sources += [
   'pool-allocator.cpp',
   'method-verifier.cpp',
   'method-info.cpp',
+  'interpreter.cpp',
+  'runtime-helpers.cpp',
 ]
 
 if SP.arch in ['x86']:

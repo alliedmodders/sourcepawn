@@ -40,10 +40,12 @@ BaseFilename(const char* path)
 static void
 DumpStack(IFrameIterator &iter)
 {
-  int index = 0;
-  for (; !iter.Done(); iter.Next(), index++) {
+  int index_count = 0;
+  for (; !iter.Done(); iter.Next()) {
     if (iter.IsInternalFrame())
       continue;
+
+    int index = index_count++;
 
     const char *name = iter.FunctionName();
     if (!name) {
@@ -129,6 +131,11 @@ static cell_t PrintFloat(IPluginContext *cx, const cell_t *params)
   return printf("%f\n", sp_ctof(params[1]));
 }
 
+static cell_t WriteFloat(IPluginContext *cx, const cell_t *params)
+{
+  return printf("%f", sp_ctof(params[1]));
+}
+
 static cell_t DoExecute(IPluginContext *cx, const cell_t *params)
 {
   int32_t ok = 0;
@@ -182,6 +189,7 @@ static int Execute(const char *file)
   BindNative(rt, "printnum", PrintNum);
   BindNative(rt, "printnums", PrintNums);
   BindNative(rt, "printfloat", PrintFloat);
+  BindNative(rt, "writefloat", WriteFloat);
   BindNative(rt, "donothing", DoNothing);
   BindNative(rt, "execute", DoExecute);
   BindNative(rt, "invoke", DoInvoke);

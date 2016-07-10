@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <am-cxx.h>
 #include <amtl/am-platform.h>
+#include <amtl/am-refcounting.h>
 #if defined(KE_ARCH_X86)
 # include "x86/frames-x86.h"
 #endif
@@ -27,6 +28,7 @@ using namespace SourcePawn;
 
 class PluginContext;
 class PluginRuntime;
+class MethodInfo;
 struct FrameLayout;
 
 enum class FrameType
@@ -72,6 +74,7 @@ static inline uintptr_t GetExitFramePayload(uintptr_t stack_val)
 }
 
 class JitInvokeFrame;
+class InterpInvokeFrame;
 
 // An InvokeFrame represents one activation of Execute2().
 class InvokeFrame
@@ -95,11 +98,38 @@ class InvokeFrame
   virtual JitInvokeFrame* AsJitInvokeFrame() {
     return nullptr;
   }
+  virtual InterpInvokeFrame* AsInterpInvokeFrame() {
+    return nullptr;
+  }
 
  protected:
   InvokeFrame *prev_;
   PluginContext *cx_;
   ucell_t entry_cip_;
+};
+
+// Created by the interpreter. These are 1:1 with interpreter frames, for now.
+class InterpInvokeFrame final : public InvokeFrame
+{
+  friend class InterpFrameIterator;
+
+ public:
+  InterpInvokeFrame(PluginContext* cx,
+                    MethodInfo* method,
+                    const cell_t* const& cip);
+  ~InterpInvokeFrame();
+
+  void enterNativeCall(uint32_t native_index);
+  void leaveNativeCall();
+
+  InterpInvokeFrame* AsInterpInvokeFrame() override {
+    return this;
+  }
+
+ private:
+  ke::RefPtr<MethodInfo> method_;
+  const cell_t* const& cip_;
+  int native_index_;
 };
 
 // JIT frames are always contained within JitInvokeFrame.
@@ -127,6 +157,8 @@ class InlineFrameIterator
   virtual ~InlineFrameIterator()
   {}
 
+  // "done" should return true if, after the current frame, there are no more
+  // frames to iterate.
   virtual bool done() const = 0;
   virtual void next() = 0;
   virtual FrameType type() const = 0;
@@ -135,7 +167,24 @@ class InlineFrameIterator
   virtual uint32_t native_index() const = 0;
 };
 
-class JitFrameIterator : public InlineFrameIterator
+class InterpFrameIterator final : public InlineFrameIterator
+{
+ public:
+  InterpFrameIterator(InterpInvokeFrame* ivk);
+
+  bool done() const override;
+  void next() override;
+  FrameType type() const override;
+  cell_t function_cip() const override;
+  cell_t cip() const override;
+  uint32_t native_index() const override;
+
+ private:
+  InterpInvokeFrame* ivk_;
+  FrameType current_;
+};
+
+class JitFrameIterator final : public InlineFrameIterator
 {
  public:
   explicit JitFrameIterator(Environment* env);

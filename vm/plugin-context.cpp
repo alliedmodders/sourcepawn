@@ -48,6 +48,7 @@ PluginContext::PluginContext(PluginRuntime *pRuntime)
 
   hp_ = data_size_;
   sp_ = mem_size_ - sizeof(cell_t);
+  stp_ = sp_;
   frm_ = sp_;
 
   tracker_.pBase = (ucell_t *)malloc(1024);
@@ -687,4 +688,179 @@ PluginContext::generateArray(cell_t dims, cell_t *stk, bool autozero)
     return err;
 
   return SP_ERROR_NONE;
+}
+
+bool
+PluginContext::pushAmxFrame()
+{
+  if (!pushStack(frm_))
+    return false;
+  if (!pushStack(0)) // unused cip
+    return false;
+  frm_ = sp_;
+  return true;
+}
+
+bool
+PluginContext::popAmxFrame()
+{
+  assert(sp_ == frm_);
+
+  cell_t ignore;
+  if (!popStack(&ignore))
+    return false;
+  if (!popStack(&frm_))
+    return false;
+
+  cell_t nargs;
+  if (!popStack(&nargs))
+    return false;
+
+  if (nargs < 0 || cell_t(sp_ + nargs * sizeof(cell_t)) > stp_)
+  {
+    ReportErrorNumber(SP_ERROR_STACKMIN);
+    return false;
+  }
+
+  sp_ += nargs * sizeof(cell_t);
+  return true;
+}
+
+bool
+PluginContext::pushStack(cell_t value)
+{
+  if (sp_ <= cell_t(hp_ + sizeof(cell_t))) {
+    ReportErrorNumber(SP_ERROR_STACKLOW);
+    return false;
+  }
+  sp_ -= sizeof(cell_t);
+
+  *reinterpret_cast<cell_t*>(memory_ + sp_) = value;
+  return true;
+}
+
+bool
+PluginContext::popStack(cell_t* out)
+{
+  if (sp_ >= stp_) {
+    ReportErrorNumber(SP_ERROR_STACKMIN);
+    return false;
+  }
+  *out = *reinterpret_cast<cell_t*>(memory_ + sp_);
+
+  sp_ += sizeof(cell_t);
+  return true;
+}
+
+bool
+PluginContext::getFrameValue(cell_t offset, cell_t* out)
+{
+  cell_t* addr = throwIfBadAddress(frm_ + offset);
+  if (!addr)
+    return false;
+
+  *out = *addr;
+  return true;
+}
+
+bool
+PluginContext::setFrameValue(cell_t offset, cell_t value)
+{
+  cell_t* addr = throwIfBadAddress(frm_ + offset);
+  if (!addr)
+    return false;
+
+  *addr = value;
+  return true;
+}
+
+bool
+PluginContext::getCellValue(cell_t address, cell_t* out)
+{
+  cell_t* ptr = throwIfBadAddress(address);
+  if (!ptr)
+    return false;
+
+  *out = *ptr;
+  return true;
+}
+
+bool
+PluginContext::setCellValue(cell_t address, cell_t value)
+{
+  cell_t* ptr = throwIfBadAddress(address);
+  if (!ptr)
+    return false;
+
+  *ptr = value;
+  return true;
+}
+
+bool
+PluginContext::heapAlloc(cell_t amount, cell_t* out)
+{
+  cell_t new_hp = hp_ + amount;
+
+  if (amount < 0) {
+    // Note: signed compare, in case new_hp is negative.
+    if (new_hp < cell_t(data_size_)) {
+      ReportErrorNumber(SP_ERROR_HEAPMIN);
+      return false;
+    }
+  } else {
+    if (new_hp + STACK_MARGIN > sp_) {
+      ReportErrorNumber(SP_ERROR_HEAPLOW);
+      return false;
+    }
+  }
+
+  *out = hp_;
+  hp_ = new_hp;
+  return true;
+}
+
+cell_t*
+PluginContext::acquireAddrRange(cell_t address, uint32_t bounds)
+{
+  cell_t* addr = throwIfBadAddress(address);
+  if (!addr)
+    return nullptr;
+  if (bounds && !throwIfBadAddress(address + bounds - 1))
+    return nullptr;
+  return addr;
+}
+
+cell_t*
+PluginContext::throwIfBadAddress(cell_t addr)
+{
+  if (addr < 0 ||
+      (addr >= hp_ && addr < sp_) ||
+      addr >= stp_)
+  {
+    ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
+    return nullptr;
+  }
+  return reinterpret_cast<cell_t*>(memory_ + addr);
+}
+
+bool
+PluginContext::addStack(cell_t amount)
+{
+  cell_t new_sp = sp_ + amount;
+
+  if (amount < 0) {
+    // Note: signed compare, in case new_sp is negative.
+    if (new_sp < hp_ + STACK_MARGIN) {
+      ReportErrorNumber(SP_ERROR_STACKLOW);
+      return false;
+    }
+  } else {
+    if (new_sp > stp_) {
+      ReportErrorNumber(SP_ERROR_STACKMIN);
+      return false;
+    }
+  }
+
+  sp_ = new_sp;
+  return true;
 }
