@@ -14,9 +14,13 @@
 #include "plugin-runtime.h"
 #include "plugin-context.h"
 #include "stack-frames.h"
-#include "x86/frames-x86.h"
 #include "compiled-function.h"
 #include "method-info.h"
+#if defined(KE_ARCH_X86)
+# include "x86/frames-x86.h"
+#elif !defined(SP_HAS_JIT)
+# include "null-frame-layout.h"
+#endif
 
 using namespace ke;
 using namespace sp;

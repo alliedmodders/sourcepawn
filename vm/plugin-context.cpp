@@ -20,7 +20,9 @@
 #include "environment.h"
 #include "compiled-function.h"
 #include "method-info.h"
-#include "jit.h"
+#if defined(SP_HAS_JIT)
+# include "jit.h"
+#endif
 
 using namespace sp;
 using namespace SourcePawn;
@@ -446,6 +448,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
 
   CompiledFunction *fn = nullptr;
   if (env_->IsJitEnabled()) {
+#if defined(SP_HAS_JIT)
     /* We might not have to - check pcode offset. */
     if ((fn = method->jit()) == nullptr) {
       int err = SP_ERROR_NONE;
@@ -454,6 +457,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
         return false;
       }
     }
+#endif
   } else {
     ReportError("JIT is not enabled!");
     return false;

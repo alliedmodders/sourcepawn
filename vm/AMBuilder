@@ -34,7 +34,6 @@ library.sources += [
   'api.cpp',
   'base-context.cpp',
   'code-allocator.cpp',
-  'code-stubs.cpp',
   'compiled-function.cpp',
   'environment.cpp',
   'file-utils.cpp',
@@ -46,12 +45,18 @@ library.sources += [
   'stack-frames.cpp',
   'smx-v1-image.cpp',
   'watchdog_timer.cpp',
-  'jit.cpp',
-  'linking.cpp',
   'pool-allocator.cpp',
   'method-verifier.cpp',
   'method-info.cpp',
 ]
+
+if SP.arch in ['x86']:
+  library.sources += [
+    'code-stubs.cpp',
+    'jit.cpp',
+    'linking.cpp',
+  ]
+  library.compiler.defines += ['SP_HAS_JIT']
 
 if SP.arch == 'x86':
   library.sources += [
