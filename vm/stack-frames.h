@@ -29,6 +29,13 @@ class PluginContext;
 class PluginRuntime;
 struct FrameLayout;
 
+enum class FrameType
+{
+  Internal,
+  Scripted,
+  Native
+};
+
 // These are specific to the JIT.
 enum class JitFrameType : intptr_t
 {
@@ -114,6 +121,44 @@ class JitInvokeFrame final : public InvokeFrame
   intptr_t* prev_exit_fp_;
 };
 
+class InlineFrameIterator
+{
+ public:
+  virtual ~InlineFrameIterator()
+  {}
+
+  virtual bool done() const = 0;
+  virtual void next() = 0;
+  virtual FrameType type() const = 0;
+  virtual cell_t function_cip() const = 0;
+  virtual cell_t cip() const = 0;
+  virtual uint32_t native_index() const = 0;
+};
+
+class JitFrameIterator : public InlineFrameIterator
+{
+ public:
+  explicit JitFrameIterator(Environment* env);
+  JitFrameIterator(PluginRuntime* rt, intptr_t* exit_fp);
+
+  bool done() const override;
+  void next() override;
+  FrameType type() const override;
+  cell_t function_cip() const override;
+  cell_t cip() const override;
+  uint32_t native_index() const override;
+
+  FrameLayout* frame() const {
+    return cur_frame_;
+  }
+
+ private:
+  PluginRuntime* rt_;
+  FrameLayout* cur_frame_;
+  mutable ucell_t cip_;
+  void* pc_;
+};
+
 class FrameIterator : public SourcePawn::IFrameIterator
 {
  public:
@@ -133,20 +178,14 @@ class FrameIterator : public SourcePawn::IFrameIterator
   IPluginContext *Context() const override;
   bool IsInternalFrame() const override;
 
-  bool IsEntryFrame() const;
-  FrameLayout* Frame() const;
-
  private:
-  void nextInvokeFrame(intptr_t* exit_fp);
-  cell_t findCip() const;
-  cell_t function_cip() const;
+  void nextInvokeFrame();
 
  private:
   InvokeFrame* ivk_;
-  FrameLayout* cur_frame_;
   PluginRuntime* runtime_;
-  mutable ucell_t cip_;
-  void* pc_;
+  intptr_t* next_exit_fp_;
+  ke::AutoPtr<InlineFrameIterator> frame_cursor_;
 };
 
 } // namespace sp

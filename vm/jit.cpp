@@ -269,10 +269,12 @@ void*
 CompilerBase::find_entry_fp()
 {
   void *fp = nullptr;
-  for (FrameIterator iter; !iter.Done(); iter.Next()) {
-    if (iter.IsEntryFrame())
+
+  for (JitFrameIterator iter(Environment::get()); !iter.done(); iter.next()) {
+    FrameLayout* frame = iter.frame();
+    if (frame->frame_type == JitFrameType::Entry)
       break;
-    fp = iter.Frame()->prev_fp;
+    fp = frame->prev_fp;
   }
 
   assert(fp);
