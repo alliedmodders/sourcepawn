@@ -1328,7 +1328,7 @@ long dynarray_from_heaplist(memuse_list_t *heap)
   }
   free(heap);
   if (total)
-    setheap_save(-total*sizeof(cell));
+    setheap_save(total*sizeof(cell));
   return total;
 }
 
