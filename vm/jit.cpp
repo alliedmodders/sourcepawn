@@ -57,22 +57,12 @@ CompilerBase::~CompilerBase()
 }
 
 CompiledFunction *
-CompilerBase::Compile(PluginRuntime *prt, cell_t pcode_offs, int *err)
+CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int *err)
 {
-  RefPtr<MethodInfo> method = prt->AcquireMethod(pcode_offs);
-  if (!method) {
-    *err = SP_ERROR_INVALID_ADDRESS;
-    return nullptr;
-  }
-
-  if ((*err = method->Validate()) != SP_ERROR_NONE)
-    return nullptr;
-
-  Compiler cc(prt, pcode_offs);
+  Compiler cc(cx->runtime(), method->pcode_offset());
 
   CompiledFunction *fun = cc.emit();
-  if (!fun || cc.error()) {
-    // Note: We have to check error() because some errors are not propagated.
+  if (!fun) {
     *err = cc.error();
     return nullptr;
   }
@@ -173,6 +163,7 @@ CompilerBase::emit()
     new FixedArray<CipMapEntry>(cip_map_.length()));
   memcpy(cipmap->buffer(), cip_map_.buffer(), cip_map_.length() * sizeof(CipMapEntry));
 
+  assert(error_ == SP_ERROR_NONE);
   return new CompiledFunction(code, pcode_start_, edges.take(), cipmap.take());
 }
 
@@ -229,7 +220,7 @@ CompilerBase::reportError(int err)
 }
 
 int
-CompilerBase::CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void **addrp, uint8_t* pc)
+CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addrp, uint8_t* pc)
 {
   // If the watchdog timer has declared a timeout, we must process it now,
   // and possibly refuse to compile, since otherwise we will compile a
@@ -237,14 +228,17 @@ CompilerBase::CompileFromThunk(PluginRuntime *runtime, cell_t pcode_offs, void *
   if (!Environment::get()->watchdog()->HandleInterrupt())
     return SP_ERROR_TIMEOUT;
 
-  RefPtr<MethodInfo> method = runtime->AcquireMethod(pcode_offs);
+  RefPtr<MethodInfo> method = cx->runtime()->AcquireMethod(pcode_offs);
   if (!method)
     return SP_ERROR_INVALID_ADDRESS;
 
+  int err = method->Validate();
+  if (err != SP_ERROR_NONE)
+    return err;
+
   CompiledFunction *fn = method->jit();
   if (!fn) {
-    int err;
-    fn = Compile(runtime, pcode_offs, &err);
+    fn = Compile(cx, method, &err);
     if (!fn)
       return err;
   }
@@ -295,16 +289,6 @@ CompilerBase::InvokeReportTimeout()
 {
   Environment::get()->watchdog()->NotifyTimeoutReceived();
   InvokeReportError(SP_ERROR_TIMEOUT);
-}
-
-void
-CompilerBase::ReportOutOfBoundsError(cell_t index, cell_t bounds)
-{
-  Environment::get()->ReportErrorFmt(
-    SP_ERROR_ARRAY_BOUNDS,
-    "Array index out-of-bounds (index %d, limit %d)",
-    index,
-    size_t(bounds) + 1);
 }
 
 bool

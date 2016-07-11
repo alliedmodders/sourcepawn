@@ -114,6 +114,9 @@ class PluginContext : public BasePluginContext
   cell_t frm() const {
     return frm_;
   }
+  cell_t sp() const {
+    return sp_;
+  }
   cell_t hp() const {
     return hp_;
   }
@@ -124,18 +127,20 @@ class PluginContext : public BasePluginContext
   int generateArray(cell_t dims, cell_t *stk, bool autozero);
   int generateFullArray(uint32_t argc, cell_t *argv, int autozero);
 
-  inline bool checkAddress(cell_t *stk, cell_t addr) {
-    if (uint32_t(addr) >= mem_size_)
-      return false;
+  // These functions will report an error on failure.
+  bool pushAmxFrame();
+  bool popAmxFrame();
+  bool pushStack(cell_t value);
+  bool popStack(cell_t* out);
+  bool addStack(cell_t amount);
+  bool getFrameValue(cell_t offset, cell_t* out);
+  bool setFrameValue(cell_t offset, cell_t value);
+  bool getCellValue(cell_t address, cell_t* out);
+  bool setCellValue(cell_t address, cell_t value);
+  bool heapAlloc(cell_t amount, cell_t* out);
+  cell_t* acquireAddrRange(cell_t address, uint32_t bounds);
 
-    if (addr < hp_)
-      return true;
-
-    if (reinterpret_cast<cell_t *>(memory_ + addr) < stk)
-      return false;
-
-    return true;
-  }
+  cell_t* throwIfBadAddress(cell_t addr);
 
  private:
   PluginRuntime *m_pRuntime;
@@ -148,6 +153,9 @@ class PluginContext : public BasePluginContext
 
   // Tracker for local HEA growth.
   HeapTracker tracker_;
+
+  // "Stack top", for convenience.
+  cell_t stp_;
 
   // Stack, heap, and frame pointer.
   cell_t sp_;

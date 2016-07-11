@@ -53,7 +53,7 @@ class PcodeVisitor
   virtual bool visitLODB_I(cell_t width) = 0;
   virtual bool visitCONST(PawnReg dest, cell_t imm) = 0;
   virtual bool visitADDR(PawnReg dest, cell_t offset) = 0;
-  virtual bool visitSTOR(cell_t offset, PawnReg src) = 0;
+  virtual bool visitSTOR(cell_t address, PawnReg src) = 0;
   virtual bool visitSTOR_S(cell_t offset, PawnReg src) = 0;
   virtual bool visitSREF_S(cell_t offset, PawnReg src) = 0;
   virtual bool visitSTOR_I() = 0;
@@ -64,7 +64,7 @@ class PcodeVisitor
   virtual bool visitXCHG() = 0;
   virtual bool visitPUSH(PawnReg src) = 0;
   virtual bool visitPUSH_C(const cell_t* vals, size_t nvals) = 0;
-  virtual bool visitPUSH(const cell_t* offsets, size_t nvals) = 0;
+  virtual bool visitPUSH(const cell_t* addresses, size_t nvals) = 0;
   virtual bool visitPUSH_S(const cell_t* offsets, size_t nvals) = 0;
   virtual bool visitPOP(PawnReg dest) = 0;
   virtual bool visitSTACK(cell_t amount) = 0;
@@ -78,7 +78,7 @@ class PcodeVisitor
   virtual bool visitSHR() = 0;
   virtual bool visitSSHR() = 0;
   virtual bool visitSHL_C(PawnReg dest, cell_t amount) = 0;
-  virtual bool visitSHR_C(PawnReg reg, cell_t amount) = 0;
+  virtual bool visitSHR_C(PawnReg dest, cell_t amount) = 0;
   virtual bool visitSMUL() = 0;
   virtual bool visitSDIV(PawnReg dest) = 0;
   virtual bool visitADD() = 0;
@@ -93,16 +93,16 @@ class PcodeVisitor
   virtual bool visitADD_C(cell_t value) = 0;
   virtual bool visitSMUL_C(cell_t value) = 0;
   virtual bool visitZERO(PawnReg dest) = 0;
-  virtual bool visitZERO(cell_t offset) = 0;
+  virtual bool visitZERO(cell_t address) = 0;
   virtual bool visitZERO_S(cell_t offset) = 0;
   virtual bool visitCompareOp(CompareOp op) = 0;
   virtual bool visitEQ_C(PawnReg src, cell_t value) = 0;
   virtual bool visitINC(PawnReg dest) = 0;
-  virtual bool visitINC(cell_t offset) = 0;
+  virtual bool visitINC(cell_t address) = 0;
   virtual bool visitINC_S(cell_t offset) = 0;
   virtual bool visitINC_I() = 0;
   virtual bool visitDEC(PawnReg dest) = 0;
-  virtual bool visitDEC(cell_t offset) = 0;
+  virtual bool visitDEC(cell_t address) = 0;
   virtual bool visitDEC_S(cell_t offset) = 0;
   virtual bool visitDEC_I() = 0;
   virtual bool visitMOVS(uint32_t amount) = 0;
@@ -112,13 +112,13 @@ class PcodeVisitor
   virtual bool visitSWAP(PawnReg dest) = 0;
   virtual bool visitPUSH_ADR(const cell_t* offsets, size_t nvals) = 0;
   virtual bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) = 0;
-  virtual bool visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt) = 0;
+  virtual bool visitLOAD_BOTH(cell_t addressForPri, cell_t addressForAlt) = 0;
   virtual bool visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) = 0;
-  virtual bool visitCONST(cell_t offset, cell_t value) = 0;
+  virtual bool visitCONST(cell_t address, cell_t value) = 0;
   virtual bool visitCONST_S(cell_t offset, cell_t value) = 0;
   virtual bool visitTRACKER_PUSH_C(cell_t amount) = 0;
   virtual bool visitTRACKER_POP_SETHEAP() = 0;
-  virtual bool visitGENARRAY(cell_t dims, bool autozero) = 0;
+  virtual bool visitGENARRAY(uint32_t dims, bool autozero) = 0;
   virtual bool visitSTRADJUST_PRI() = 0;
   virtual bool visitFABS() = 0;
   virtual bool visitFLOAT() = 0;
@@ -135,6 +135,367 @@ class PcodeVisitor
   virtual bool visitFLOAT_NOT() = 0;
   virtual bool visitHALT(cell_t value) = 0;
   virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) = 0;
+};
+
+class IncompletePcodeVisitor : public PcodeVisitor
+{
+ public:
+  virtual bool visitLOAD(PawnReg dest, cell_t srcaddr) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLREF_S(PawnReg dest, cell_t srcoffs) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLOAD_I() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLODB_I(cell_t width) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitCONST(PawnReg dest, cell_t imm) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitADDR(PawnReg dest, cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSTOR(cell_t offset, PawnReg src) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSTOR_S(cell_t offset, PawnReg src) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSREF_S(cell_t offset, PawnReg src) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSTOR_I() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSTRB_I(cell_t width) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLIDX() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitIDXADDR() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitMOVE(PawnReg reg) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitXCHG() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPUSH(PawnReg src) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPUSH_C(const cell_t* vals, size_t nvals) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPUSH(const cell_t* offsets, size_t nvals) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPUSH_S(const cell_t* offsets, size_t nvals) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPOP(PawnReg dest) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSTACK(cell_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitHEAP(cell_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPROC() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitRETN() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitCALL(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitJUMP(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitJcmp(CompareOp op, cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSHL() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSHR() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSSHR() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSHL_C(PawnReg dest, cell_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSHR_C(PawnReg reg, cell_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSMUL() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSDIV(PawnReg dest) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitADD() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSUB() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSUB_ALT() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitAND() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitOR() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitXOR() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitNOT() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitNEG() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitINVERT() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitADD_C(cell_t value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSMUL_C(cell_t value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitZERO(PawnReg dest) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitZERO(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitZERO_S(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitCompareOp(CompareOp op) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitEQ_C(PawnReg src, cell_t value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitINC(PawnReg dest) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitINC(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitINC_S(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitINC_I() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitDEC(PawnReg dest) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitDEC(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitDEC_S(cell_t offset) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitDEC_I() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitMOVS(uint32_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFILL(uint32_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitBOUNDS(uint32_t limit) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSYSREQ_C(uint32_t native_index) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSWAP(PawnReg dest) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPUSH_ADR(const cell_t* offsets, size_t nvals) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitCONST(cell_t offset, cell_t value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitCONST_S(cell_t offset, cell_t value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitTRACKER_PUSH_C(cell_t amount) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitTRACKER_POP_SETHEAP() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitGENARRAY(uint32_t dims, bool autozero) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSTRADJUST_PRI() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFABS() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOAT() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOATADD() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOATSUB() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOATMUL() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOATDIV() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitRND_TO_NEAREST() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitRND_TO_FLOOR() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitRND_TO_CEIL() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitRND_TO_ZERO() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOATCMP() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOAT_CMP_OP(CompareOp op) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitFLOAT_NOT() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitHALT(cell_t value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override {
+    assert(false);
+    return false;
+  }
 };
 
 } // namespace sp

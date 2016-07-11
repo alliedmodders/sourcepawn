@@ -1,0 +1,2 @@
+Exception thrown: Integer overflow
+  [0] divide-overflow.sp::main, line 6

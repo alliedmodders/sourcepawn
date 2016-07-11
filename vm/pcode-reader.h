@@ -62,8 +62,19 @@ class PcodeReader
   }
 
   // Return the current position in the code stream.
-  const cell_t* cip() const {
+  const cell_t* const& cip() const {
     return cip_;
+  }
+  cell_t cip_offset() const {
+    return (cip_ - code_) * sizeof(cell_t);
+  }
+
+  void jump(cell_t offset) {
+    assert(offset >= 0);
+    assert(ke::IsAligned(offset, sizeof(cell_t)));
+
+    cip_ = code_ + (offset / sizeof(cell_t));
+    assert(cip_ >= code_ && cip_ < stop_at_);
   }
 
  private:

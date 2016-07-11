@@ -298,13 +298,23 @@ SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
 }
 
 #if !defined(SOURCEPAWN_VERSION)
-# define SOURCEPAWN_VERSION "SourcePawn 1.8"
+# define SOURCEPAWN_VERSION "SourcePawn 1.9"
 #endif
 
 const char *
 SourcePawnEngine2::GetEngineName()
 {
-  return "SourcePawn 1.8, jit-x86";
+#if !defined(SP_HAS_JIT)
+  return SOURCEPAWN_VERSION ", interp-x86";
+#else
+  if (!Environment::get()->IsJitEnabled())
+    return SOURCEPAWN_VERSION ", interp-x86";
+# if defined(KE_ARCH_X86)
+  return SOURCEPAWN_VERSION ", jit-x86";
+# else
+  return SOURCEPAWN_VERSION ", unknown";
+# endif
+#endif
 }
 
 const char *

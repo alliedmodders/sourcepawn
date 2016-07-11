@@ -21,4 +21,13 @@ public main()
   int[][] notgarbage = new int[l1][l2];
   notgarbage[3][5] = garbage[4][5];
   printnums(notgarbage[0][0], notgarbage[3][5]);
+
+  char[] str = new char[l1];
+  str[0] = 'h';
+  str[1] = 'e';
+  str[2] = 'l';
+  str[3] = 'l';
+  str[4] = 'o';
+  str[5] = '\n';
+  print(str);
 }

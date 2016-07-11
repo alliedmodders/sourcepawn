@@ -20,7 +20,9 @@
 #include "compiled-function.h"
 #if defined(SP_HAS_JIT)
 # include "code-stubs.h"
+# include "jit.h"
 #endif
+#include "interpreter.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -107,6 +109,7 @@ Environment::Shutdown()
 void
 Environment::SetJitEnabled(bool enabled)
 {
+  jit_enabled_ = enabled;
 }
 
 void
@@ -255,20 +258,33 @@ Environment::UnpatchAllJumpsFromTimeout()
   }
 }
 
-int
-Environment::Invoke(PluginContext* cx, CompiledFunction* fn, cell_t* result)
+bool
+Environment::Invoke(PluginContext* cx,
+                    const RefPtr<MethodInfo>& method,
+                    cell_t* result)
 {
-  // Must be in an invoke frame.
-  JitInvokeFrame ivkframe(cx, fn->GetCodeOffset()); 
-
-  assert(top_ && top_->cx() == cx);
-
 #if defined(SP_HAS_JIT)
-  InvokeStubFn invoke = code_stubs_->InvokeStub();
-  invoke(cx, fn->GetEntryAddress(), result);
+  if (!method->jit()) {
+    int err = SP_ERROR_NONE;
+    if (!CompilerBase::Compile(cx, method, &err)) {
+      cx->ReportErrorNumber(err);
+      return false;
+    }
+  }
+
+  if (CompiledFunction* fn = method->jit()) {
+    JitInvokeFrame ivkframe(cx, fn->GetCodeOffset()); 
+
+    assert(top_ && top_->cx() == cx);
+
+    InvokeStubFn invoke = code_stubs_->InvokeStub();
+    invoke(cx, fn->GetEntryAddress(), result);
+
+    return exception_code_ == SP_ERROR_NONE;
+  }
 #endif
 
-  return exception_code_;
+  return Interpreter::Run(cx, method, result);
 }
 
 void

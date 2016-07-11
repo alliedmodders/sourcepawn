@@ -1,0 +1,2 @@
+Exception thrown: Divide by zero
+  [0] divide-by-zero.sp::main, line 6

@@ -42,10 +42,7 @@
 #include "frames-x86.h"
 #include "outofline-asm.h"
 #include "method-info.h"
-
-#if defined USE_UNGEN_OPCODES
-#include "ungen_opcodes.h"
-#endif
+#include "runtime-helpers.h"
 
 #define __ masm.
 
@@ -1134,7 +1131,7 @@ Compiler::emitCheckAddress(Register reg)
 }
 
 bool
-Compiler::visitGENARRAY(cell_t dims, bool autozero)
+Compiler::visitGENARRAY(uint32_t dims, bool autozero)
 {
   if (dims == 1)
   {
@@ -1257,7 +1254,7 @@ Compiler::emitCallThunk(CallThunk* thunk)
   __ lea(edx, Operand(esp, 4 * sizeof(void *)));
   __ movl(Operand(esp, 2 * sizeof(void *)), edx);
   __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk->pcode_offset));
-  __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(rt_));
+  __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(context_));
 
   __ callWithABI(ExternalAddress((void *)CompileFromThunk));
   __ movl(edx, Operand(esp, 4 * sizeof(void *)));
