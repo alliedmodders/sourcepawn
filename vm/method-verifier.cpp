@@ -271,8 +271,6 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_SHL_C_PRI:
   case OP_SHL_C_ALT:
-  case OP_SHR_C_PRI:
-  case OP_SHR_C_ALT:
   case OP_ADD_C:
   case OP_SMUL_C:
   case OP_EQ_C_PRI:

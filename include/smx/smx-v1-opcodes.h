@@ -139,8 +139,8 @@ namespace sp {
   _G(SSHR,           "sshr")           \
   _G(SHL_C_PRI,      "shl.c.pri")      \
   _G(SHL_C_ALT,      "shl.c.alt")      \
-  _G(SHR_C_PRI,      "shr.c.pri")      \
-  _G(SHR_C_ALT,      "shr.c.alt")      \
+  _U(SHR_C_PRI,      "shr.c.pri")      \
+  _U(SHR_C_ALT,      "shr.c.alt")      \
   _G(SMUL,           "smul")           \
   _G(SDIV,           "sdiv")           \
   _G(SDIV_ALT,       "sdiv.alt")       \

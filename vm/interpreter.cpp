@@ -583,16 +583,6 @@ Interpreter::visitSHL_C(PawnReg dest, cell_t amount)
 }
 
 bool
-Interpreter::visitSHR_C(PawnReg dest, cell_t amount)
-{
-  // This looks ungenerated, but it's basically the same as shl.c/shr.
-  uint32_t left = regs_.pri();
-  uint32_t right = amount;
-  regs_.pri() = left >> right;
-  return true;
-}
-
-bool
 Interpreter::visitEQ_C(PawnReg src, cell_t value)
 {
   regs_.pri() = (regs_[src] == value) ? 1 : 0;

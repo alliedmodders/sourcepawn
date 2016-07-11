@@ -109,7 +109,6 @@ class Interpreter final : public PcodeVisitor
   bool visitSHR() override;
   bool visitSSHR() override;
   bool visitSHL_C(PawnReg dest, cell_t amount) override;
-  bool visitSHR_C(PawnReg dest, cell_t amount) override;
   bool visitSUB() override;
   bool visitSUB_ALT() override;
   bool visitSMUL() override;

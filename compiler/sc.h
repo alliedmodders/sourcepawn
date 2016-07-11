@@ -762,7 +762,6 @@ void setheap_pri(void);
 void setheap(cell value);
 void cell2addr(void);
 void cell2addr_alt(void);
-void addr2cell(void);
 void char2addr(void);
 void addconst(cell value);
 void setheap_save(cell value);

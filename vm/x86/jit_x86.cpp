@@ -268,14 +268,6 @@ Compiler::visitSHL_C(PawnReg dest, cell_t amount)
 }
 
 bool
-Compiler::visitSHR_C(PawnReg dest, cell_t amount)
-{
-  Register reg = (dest == PawnReg::Pri) ? pri : alt;
-  __ shrl(reg, amount);
-  return true;
-}
-
-bool
 Compiler::visitSMUL()
 {
   __ imull(pri, alt);
