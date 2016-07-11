@@ -95,3 +95,15 @@ The virtual machine received many changes:
 SourcePawn 1.7 was released with SourceMod 1.7 on February 4th, 2015.
 
 The language has received a major (largely backwards compatible) overhaul called the ["Transitional Syntax"](https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax "Transitional Syntax"). This introduces more C-like type declarations, more formal type checking, and the ability to simulate object-oriented behavior via "methodmaps". In addition, the compiler was ported to C++ for maintainability.
+
+### SourcePawn 1.8.
+
+SourcePawn 1.8 was released with SourceMod 1.8 on June 5th, 2016.
+
+A few minor language bugs were fixed. Internally, the VM received a large overhaul to error-handling to improve stack frame dumps and future exception handling capabilities. The interpreter was removed.
+
+### SourcePawn 1.9
+
+SourcePawn 1.9 is the current development version.
+
+It now includes a new reference interpreter, and will officially build and run on platforms other than x86.
