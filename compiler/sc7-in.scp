@@ -370,6 +370,10 @@ static SEQUENCE sequences_cmp[] = {
   /* Array indexing can merit from special instructions.
    * Simple indexed array lookup can be optimized quite
    * a bit.
+   *
+   * NOTE: These are documented as using idxaddr.b/lidx.b
+   * variants which we no longer generate.
+   *
    *    addr.pri n1             addr.alt n1
    *    push.pri                load.s.pri n2
    *    load.s.pri n2           bounds n3
@@ -428,29 +432,6 @@ static SEQUENCE sequences_cmp[] = {
       "const.alt %1!load.s.pri %2!lidx!",
     seqsize(7,3) - seqsize(3,2)
   },
-#endif
-  /* loading from array, not "cell" shifted */
-  {
-      "addr.pri %1!push.pri!load.s.pri %2!bounds %3!shl.c.pri %4!pop.alt!add!load.i!",
-      "addr.alt %1!load.s.pri %2!bounds %3!lidx.b %4!",
-    seqsize(8,4) - seqsize(4,4)
-  },
-  {
-      "const.pri %1!push.pri!load.s.pri %2!bounds %3!shl.c.pri %4!pop.alt!add!load.i!",
-      "const.alt %1!load.s.pri %2!bounds %3!lidx.b %4!",
-    seqsize(8,4) - seqsize(4,4)
-  },
-  {
-      "addr.pri %1!push.pri!load.s.pri %2!shl.c.pri %3!pop.alt!add!load.i!",
-      "addr.alt %1!load.s.pri %2!lidx.b %3!",
-    seqsize(7,3) - seqsize(3,3)
-  },
-  {
-      "const.pri %1!push.pri!load.s.pri %2!shl.c.pri %3!pop.alt!add!load.i!",
-      "const.alt %1!load.s.pri %2!lidx.b %3!",
-    seqsize(7,3) - seqsize(3,3)
-  },
-#if !defined BIT16
   /* array index calculation for storing a value, "cell" aligned */
   {
       "addr.pri %1!push.pri!load.s.pri %2!bounds %3!shl.c.pri 2!pop.alt!add!",
@@ -472,29 +453,6 @@ static SEQUENCE sequences_cmp[] = {
       "const.alt %1!load.s.pri %2!idxaddr!",
     seqsize(6,3) - seqsize(3,2)
   },
-#endif
-  /* array index calculation for storing a value, not "cell" packed */
-  {
-      "addr.pri %1!push.pri!load.s.pri %2!bounds %3!shl.c.pri %4!pop.alt!add!",
-      "addr.alt %1!load.s.pri %2!bounds %3!idxaddr.b %4!",
-    seqsize(7,4) - seqsize(4,4)
-  },
-  {
-      "const.pri %1!push.pri!load.s.pri %2!bounds %3!shl.c.pri %4!pop.alt!add!",
-      "const.alt %1!load.s.pri %2!bounds %3!idxaddr.b %4!",
-    seqsize(7,4) - seqsize(4,4)
-  },
-  {
-      "addr.pri %1!push.pri!load.s.pri %2!shl.c.pri %3!pop.alt!add!",
-      "addr.alt %1!load.s.pri %2!idxaddr.b %3!",
-    seqsize(6,3) - seqsize(3,3)
-  },
-  {
-      "const.pri %1!push.pri!load.s.pri %2!shl.c.pri %3!pop.alt!add!",
-      "const.alt %1!load.s.pri %2!idxaddr.b %3!",
-    seqsize(6,3) - seqsize(3,3)
-  },
-#if !defined BIT16
   /* the shorter array indexing sequences, see above for comments */
   {
       "shl.c.pri 2!pop.alt!add!loadi!",
@@ -507,16 +465,6 @@ static SEQUENCE sequences_cmp[] = {
     seqsize(3,1) - seqsize(2,0)
   },
 #endif
-  {
-      "shl.c.pri %1!pop.alt!add!loadi!",
-      "pop.alt!lidx.b %1!",
-    seqsize(4,1) - seqsize(2,1)
-  },
-  {
-      "shl.c.pri %1!pop.alt!add!",
-      "pop.alt!idxaddr.b %1!",
-    seqsize(3,1) - seqsize(2,1)
-  },
   /* For packed arrays, there is another case (packed arrays
    * do not take advantage of the LIDX or IDXADDR instructions).
    *    addr.pri n1             addr.alt n1

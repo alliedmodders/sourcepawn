@@ -59,9 +59,7 @@ class PcodeVisitor
   virtual bool visitSTOR_I() = 0;
   virtual bool visitSTRB_I(cell_t width) = 0;
   virtual bool visitLIDX() = 0;
-  virtual bool visitLIDX_B(cell_t width) = 0;
   virtual bool visitIDXADDR() = 0;
-  virtual bool visitIDXADDR_B(cell_t width) = 0;
   virtual bool visitMOVE(PawnReg reg) = 0;
   virtual bool visitXCHG() = 0;
   virtual bool visitPUSH(PawnReg src) = 0;

@@ -239,14 +239,6 @@ Compiler::visitPROC()
 }
 
 bool
-Compiler::visitIDXADDR_B(cell_t width)
-{
-  __ shll(pri, width);
-  __ addl(pri, alt);
-  return true;
-}
-
-bool
 Compiler::visitSHL()
 {
   __ movl(ecx, alt);
@@ -542,20 +534,6 @@ bool
 Compiler::visitLIDX()
 {
   __ lea(pri, Operand(alt, pri, ScaleFour));
-  __ movl(pri, Operand(dat, pri, NoScale));
-  return true;
-}
-
-bool
-Compiler::visitLIDX_B(cell_t width)
-{
-  if (width >= 0 && width <= 3) {
-    __ lea(pri, Operand(alt, pri, Scale(width)));
-  } else {
-    __ shll(pri, width);
-    __ addl(pri, alt);
-  }
-  emitCheckAddress(pri);
   __ movl(pri, Operand(dat, pri, NoScale));
   return true;
 }
