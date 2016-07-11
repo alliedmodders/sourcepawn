@@ -6,7 +6,7 @@ A small and fast typed language for embedding in host applications.
 Status
 ------
 
-SourcePawn 1.8 is an independent project from SourceMod, however SourceMod is its largest and possibly only consumer. Changes tend to be geared toward compatibility and efficiency with SourceMod and typical SourceMod programs. Their version numbers are currently synchronized.
+SourcePawn is an independent project from SourceMod, however SourceMod is its largest and possibly only consumer. Changes tend to be geared toward compatibility and efficiency with SourceMod and typical SourceMod programs. Their version numbers are currently synchronized.
 
 There are two major development efforts in on/off progress:
  - "Transitional Syntax", which aims to add a basic C#-like type system to the language. The first iteration was released in SourcePawn 1.7, and is mostly a syntactic refactoring. The second iteration involves type safety in the API and runtime.
@@ -18,7 +18,7 @@ Overview
 SourcePawn requires the following dependencies:
  * [AMBuild](https://github.com/alliedmodders/ambuild)
  * [AMTL](https://github.com/alliedmodders/amtl)
- * A 32-bit x86 compiler with C++11 support. MSVC 2010+, GCC 4.5+, or Clang 3.0+ should work.
+ * A compiler with C++11 support. MSVC 2015+, GCC 4.8+, or Clang 3.0+ should work.
 
 The SourcePawn source tree is divided into the following folders:
  - `compiler` - The legacy compiler, currently used in SourceMod.
