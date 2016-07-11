@@ -155,7 +155,7 @@ class Config(object):
         cfg.linkflags += [gccarch]
 
     cfg.defines += ['KE_THREADSAFE']
-    cfg.defines += ['SOURCEPAWN_VERSION="1.8"']
+    cfg.defines += ['SOURCEPAWN_VERSION="1.9"']
 
     if builder.options.amtl:
       amtl_path = builder.options.amtl
