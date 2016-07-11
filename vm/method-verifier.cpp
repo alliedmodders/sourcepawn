@@ -173,19 +173,6 @@ MethodVerifier::verifyOp(OPCODE op)
     return true;
   }
 
-  case OP_LIDX_B:
-  case OP_IDXADDR_B:
-  {
-    cell_t val;
-    if (!readCell(&val))
-      return false;
-    if (val != 1 && val != 2) {
-      reportError(SP_ERROR_INVALID_INSTRUCTION);
-      return false;
-    }
-    return true;
-  }
-
   case OP_PUSH_C:
   case OP_PUSH2_C:
   case OP_PUSH3_C:

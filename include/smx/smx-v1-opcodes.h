@@ -95,9 +95,9 @@ namespace sp {
   _G(STOR_I,         "stor.i")         \
   _G(STRB_I,         "strb.i")         \
   _G(LIDX,           "lidx")           \
-  _G(LIDX_B,         "lidx.b")         \
+  _U(LIDX_B,         "lidx.b")         \
   _G(IDXADDR,        "idxaddr")        \
-  _G(IDXADDR_B,      "idxaddr.b")      \
+  _U(IDXADDR_B,      "idxaddr.b")      \
   _U(ALIGN_PRI,      "align.pri")      \
   _U(ALIGN_ALT,      "align.alt")      \
   _U(LCTRL,          "lctrl")          \

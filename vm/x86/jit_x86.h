@@ -57,9 +57,7 @@ class Compiler : public CompilerBase
   bool visitSTOR_I() override;
   bool visitSTRB_I(cell_t width) override;
   bool visitLIDX() override;
-  bool visitLIDX_B(cell_t width) override;
   bool visitIDXADDR() override;
-  bool visitIDXADDR_B(cell_t width) override;
   bool visitMOVE(PawnReg reg) override;
   bool visitXCHG() override;
   bool visitPUSH(PawnReg src) override;

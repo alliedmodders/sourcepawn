@@ -163,20 +163,8 @@ class PcodeReader
     case OP_LIDX:
       return visitor_->visitLIDX();
 
-    case OP_LIDX_B:
-    {
-      cell_t val = readCell();
-      return visitor_->visitLIDX_B(val);
-    }
-
     case OP_IDXADDR:
       return visitor_->visitIDXADDR();
-
-    case OP_IDXADDR_B:
-    {
-      cell_t val = readCell();
-      return visitor_->visitIDXADDR_B(val);
-    }
 
     case OP_MOVE_PRI:
       return visitor_->visitMOVE(PawnReg::Pri);
