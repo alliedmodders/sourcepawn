@@ -1096,6 +1096,7 @@ bool
 Compiler::visitTRACKER_POP_SETHEAP()
 {
   // Save registers.
+  __ subl(esp, 4);
   __ push(pri);
   __ push(alt);
 
@@ -1108,6 +1109,7 @@ Compiler::visitTRACKER_POP_SETHEAP()
 
   __ pop(alt);
   __ pop(pri);
+  __ addl(esp, 4);
   return true;
 }
 
@@ -1170,11 +1172,12 @@ Compiler::visitGENARRAY(cell_t dims, bool autozero)
     jumpOnError(not_below, SP_ERROR_HEAPLOW);
 
     __ shll(tmp, 2);
+    __ subl(esp, 8);
     __ push(tmp);
     __ push(intptr_t(rt_->GetBaseContext()));
     __ callWithABI(ExternalAddress((void *)InvokePushTracker));
-    __ addl(esp, 4);
-    __ pop(tmp);
+    __ movl(tmp, Operand(esp, 4));
+    __ addl(esp, 16);
     __ shrl(tmp, 2);
     __ testl(eax, eax);
     jumpOnError(not_zero);
@@ -1193,6 +1196,7 @@ Compiler::visitGENARRAY(cell_t dims, bool autozero)
     }
   } else {
     __ push(pri);
+    __ subl(esp, 12);
 
     // int GenerateArray(cx, vars[], uint32_t, cell_t *, int, unsigned *);
     __ push(autozero ? 1 : 0);
@@ -1200,7 +1204,7 @@ Compiler::visitGENARRAY(cell_t dims, bool autozero)
     __ push(dims);
     __ push(intptr_t(context_));
     __ callWithABI(ExternalAddress((void *)InvokeGenerateFullArray));
-    __ addl(esp, 4 * sizeof(void *));
+    __ addl(esp, 4 * sizeof(void *) + 12);
 
     // restore pri to tmp
     __ pop(tmp);
