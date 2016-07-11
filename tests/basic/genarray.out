@@ -1,0 +1,15 @@
+simple genarray
+0
+10
+20
+30
+40
+50
+60
+70
+80
+90
+decl complex genarray
+6
+new complex genarray
+0, 6

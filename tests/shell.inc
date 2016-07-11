@@ -8,3 +8,4 @@ native void printnum(int n);
 native void printnums(any:...);
 native void dump_stack_trace();
 native void unbound_native();
+native void print(const char[] str);
