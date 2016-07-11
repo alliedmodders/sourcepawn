@@ -26,6 +26,16 @@ before_script:
 script:
  - mkdir obj-release && cd obj-release
  - PATH="~/.local/bin:$PATH"
- - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize
+ - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize --arch=x86
+ - ambuild
+ - ./testing/test-all.sh
+ - cd ..
+ - mkdir x64-release && cd x64-release
+ - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize --arch=x64
+ - ambuild
+ - ./testing/test-all.sh
+ - cd ..
+ - mkdir x86-debug && cd x86-debug
+ - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-debug --arch=x86
  - ambuild
  - ./testing/test-all.sh
