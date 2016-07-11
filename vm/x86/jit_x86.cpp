@@ -1347,8 +1347,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   __ addl(stk, dat);
 
   // Note: no ret, the frame is inline. We add 4 to esp isntead.
-  __ leaveExitFrame();
-  __ addl(esp, 4);
+  __ leaveInlineExitFrame();
 
   // Check for errors. Note we jump directly to the return stub since the
   // error has already been reported.
@@ -1501,12 +1500,16 @@ Compiler::jumpOnError(ConditionCode cc, int err)
 void
 Compiler::emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path)
 {
-  __ enterExitFrame(ExitFrameType::Helper, 0);
+  CodeLabel return_address;
+  __ alignStack();
+  __ enterInlineExitFrame(ExitFrameType::Helper, 0, &return_address);
   __ subl(esp, 8);
   __ push(path->bounds);
   __ push(eax);
-  __ call(ExternalAddress((void *)ReportOutOfBoundsError));
-  __ leaveExitFrame();
+  __ callWithABI(ExternalAddress((void *)ReportOutOfBoundsError));
+  __ bind(&return_address);
+  emitCipMapping(path->cip);
+  __ leaveInlineExitFrame();
   __ jmp(&return_reported_error_);
 }
 

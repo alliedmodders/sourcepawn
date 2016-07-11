@@ -66,6 +66,11 @@ class MacroAssembler : public Assembler
     push(return_address);
     enterExitFrame(type, payload);
   }
+  void leaveInlineExitFrame() {
+    // Note: no ret, the frame is inline. We add 4 to esp isntead.
+    leaveExitFrame();
+    addl(esp, 4);
+  }
 
   void alignStack() {
     andl(esp, 0xfffffff0);
