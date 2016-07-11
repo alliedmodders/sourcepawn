@@ -78,7 +78,6 @@ class PcodeVisitor
   virtual bool visitSHR() = 0;
   virtual bool visitSSHR() = 0;
   virtual bool visitSHL_C(PawnReg dest, cell_t amount) = 0;
-  virtual bool visitSHR_C(PawnReg dest, cell_t amount) = 0;
   virtual bool visitSMUL() = 0;
   virtual bool visitSDIV(PawnReg dest) = 0;
   virtual bool visitADD() = 0;
@@ -265,10 +264,6 @@ class IncompletePcodeVisitor : public PcodeVisitor
     return false;
   }
   virtual bool visitSHL_C(PawnReg dest, cell_t amount) override {
-    assert(false);
-    return false;
-  }
-  virtual bool visitSHR_C(PawnReg reg, cell_t amount) override {
     assert(false);
     return false;
   }

@@ -1946,23 +1946,6 @@ static int hier2(value *lval)
         }
         sideeffect=TRUE;
         return FALSE;
-/* This is temporarily disabled because we detect it automatically.
- * Thus, it could be weird if both were used at once
- */
-#if 0
-      case tCHAR:               /* char (compute required # of cells */
-        if (lval->ident==iCONSTEXPR) {
-          lval->constval *= sCHARBITS/8;  /* from char to bytes */
-          lval->constval = (lval->constval + sizeof(cell)-1) / sizeof(cell);
-        } else {
-          if (lvalue)
-            rvalue(lval);       /* fetch value if not already in PRI */
-          char2addr();          /* from characters to bytes */
-          addconst(sizeof(cell)-1);     /* make sure the value is rounded up */
-          addr2cell();          /* truncate to number of cells */
-        } /* if */
-        return FALSE;
-#endif
       default:
         lexpush();
         return lvalue;

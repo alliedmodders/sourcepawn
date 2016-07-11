@@ -304,14 +304,6 @@ class PcodeReader
       return visitor_->visitSHL_C(reg, val);
     }
 
-    case OP_SHR_C_PRI:
-    case OP_SHR_C_ALT:
-    {
-      PawnReg reg = (op == OP_SHR_C_PRI) ? PawnReg::Pri : PawnReg::Alt;
-      cell_t val = readCell();
-      return visitor_->visitSHR_C(reg, val);
-    }
-
     case OP_SMUL:
       return visitor_->visitSMUL();
     case OP_SDIV:

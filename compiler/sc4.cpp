@@ -862,25 +862,6 @@ void cell2addr_alt(void)
   code_idx+=opcodes(1)+opargs(1);
 }
 
-/*
- *  Convert "distance of addresses" to "number of cells" in between.
- *  Or convert a number of packed characters to the number of cells (with
- *  truncation).
- */
-void addr2cell(void)
-{
-  #if PAWN_CELL_SIZE==16
-    stgwrite("\tshr.c.pri 1\n");
-  #elif PAWN_CELL_SIZE==32
-    stgwrite("\tshr.c.pri 2\n");
-  #elif PAWN_CELL_SIZE==64
-    stgwrite("\tshr.c.pri 3\n");
-  #else
-    #error Unsupported cell size
-  #endif
-  code_idx+=opcodes(1)+opargs(1);
-}
-
 /* Convert from character index to byte address. This routine does
  * nothing if a character has the size of a byte.
  */

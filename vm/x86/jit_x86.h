@@ -76,7 +76,6 @@ class Compiler : public CompilerBase
   bool visitSHR() override;
   bool visitSSHR() override;
   bool visitSHL_C(PawnReg dest, cell_t amount) override;
-  bool visitSHR_C(PawnReg reg, cell_t amount) override;
   bool visitSMUL() override;
   bool visitSDIV(PawnReg dest) override;
   bool visitADD() override;
