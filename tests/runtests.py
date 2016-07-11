@@ -10,6 +10,8 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('test', type=str, nargs='?', default=None,
                       help="Optional test folder or test file")
+  parser.add_argument('--disable-phopt', default=False, action='store_true',
+                      help="Disable the peephole optimizer when compiling")
   parser.add_argument('--spcomp', type=str, help="Path to spcomp", required=True)
   parser.add_argument('--shell', type=str, help="Path to shell", required=True)
   args = parser.parse_args()
@@ -82,6 +84,7 @@ class Test(object):
 class TestRunner(object):
   def __init__(self, args, tempFolder):
     super(TestRunner, self).__init__()
+    self.args = args
     self.spcomp = os.path.abspath(args.spcomp)
     self.shell = os.path.abspath(args.shell)
     self.tmp_folder = tempFolder
@@ -153,11 +156,17 @@ class TestRunner(object):
 
   def run_compiler(self, test):
     self.out("  [SMX] ")
+
     argv = [
       self.spcomp,
       '-i' + self.inc_folder,
+    ]
+    if self.args.disable_phopt:
+      argv += ['-O0']
+    argv += [
       test.path,
     ]
+
     p = subprocess.Popen(argv, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
     stdout, stderr = p.communicate()
     stdout = stdout.decode('utf-8')

@@ -169,12 +169,15 @@ static cell_t ReportError(IPluginContext* cx, const cell_t *params)
 static int Execute(const char *file)
 {
   char error[255];
-  AutoPtr<IPluginRuntime> rt(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
-  if (!rt) {
+  AutoPtr<IPluginRuntime> rtb(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
+  if (!rtb) {
     fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
     return 1;
   }
 
+  PluginRuntime* rt = PluginRuntime::FromAPI(rtb);
+
+  rt->InstallBuiltinNatives();
   BindNative(rt, "print", Print);
   BindNative(rt, "printnum", PrintNum);
   BindNative(rt, "printnums", PrintNums);

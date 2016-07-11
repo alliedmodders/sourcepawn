@@ -144,6 +144,24 @@ PluginRuntime::SetupFloatNativeRemapping()
   }
 }
 
+static cell_t
+NativeMustBeReplaced(IPluginContext* cx, const cell_t* params)
+{
+  cx->ThrowNativeError("This native was not replaced");
+  return 0;
+}
+
+void
+PluginRuntime::InstallBuiltinNatives()
+{
+  for (size_t i = 0; i < image_->NumNatives(); i++) {
+    if (!float_table_[i].found)
+      continue;
+
+    UpdateNativeBinding(i, NativeMustBeReplaced, 0, nullptr);
+  }
+}
+
 unsigned
 PluginRuntime::GetNativeReplacement(size_t index)
 {
