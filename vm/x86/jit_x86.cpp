@@ -1055,7 +1055,7 @@ Compiler::visitTRACKER_PUSH_C(cell_t amount)
   __ push(pri);
   __ push(alt);
 
-  __ push(amount * 4);
+  __ push(amount);
   __ push(intptr_t(rt_->GetBaseContext()));
   __ callWithABI(ExternalAddress((void *)InvokePushTracker));
   __ addl(esp, 8);

@@ -1,4 +1,3 @@
-// returnCode: 1
 #include <shell>
 
 String:blah()
