@@ -45,22 +45,13 @@ class Compiler : public CompilerBase
   ~Compiler();
 
  protected:
-  bool emitOp(sp::OPCODE op) override;
-  void emitCallThunks() override;
-  void emitErrorHandlers() override;
   void emitThrowPath(int err) override;
+  void emitErrorHandlers() override;
 
-  bool emitCall();
-  bool emitSysreqN();
   bool emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
   void emitCheckAddress(Register reg);
 
   void jumpOnError(ConditionCode cc, int err = 0);
-
-  void emitThrowPathIfNeeded(int err);
-
- private:
-  ke::Vector<CallThunk> call_thunks_;
 };
 
 }

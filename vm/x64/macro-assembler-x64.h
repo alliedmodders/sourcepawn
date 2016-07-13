@@ -32,7 +32,7 @@ class MacroAssembler : public Assembler
  public:
   MacroAssembler();
 
-  void enterFrame(FrameType type, uint32_t function_id);
+  void enterFrame(JitFrameType type, uint32_t function_id);
   void leaveFrame();
 
   // Inline exit frames are not entered via a call; instead they simulate a

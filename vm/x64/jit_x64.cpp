@@ -33,15 +33,7 @@ Compiler::~Compiler()
 {
 }
 
-bool
-Compiler::emitOp(sp::OPCODE op)
-{
-  switch (op) {
-  case OP_NOP:
-  case OP_BREAK:
-    break;
-
-  case OP_CONST_PRI:
+case OP_CONST_PRI:
   {
     Register reg = (op == OP_CONST_PRI) ? pri : alt;
     cell_t val = readCell();

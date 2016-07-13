@@ -31,7 +31,7 @@ bool
 CodeStubs::CompileInvokeStub()
 {
   MacroAssembler masm;
-  __ enterFrame(FrameType::Entry, 0);
+  __ enterFrame(JitFrameType::Entry, 0);
 
   __ push(rbx);
   __ push(r12);

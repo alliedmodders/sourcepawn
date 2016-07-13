@@ -21,7 +21,7 @@ MacroAssembler::MacroAssembler()
 }
 
 void
-MacroAssembler::enterFrame(FrameType type, uint32_t function_id)
+MacroAssembler::enterFrame(JitFrameType type, uint32_t function_id)
 {
   push(rbp);
   movq(rbp, rsp);
@@ -49,7 +49,7 @@ MacroAssembler::enterInlineExitFrame(ExitFrameType type, uintptr_t payload, Code
 void
 MacroAssembler::enterExitFrame(ExitFrameType type, uintptr_t payload)
 {
-  enterFrame(FrameType::Exit, EncodeExitFrameId(type, payload));
+  enterFrame(JitFrameType::Exit, EncodeExitFrameId(type, payload));
   movq(AddressOperand(Environment::get()->addressOfExit()), rbp);
 }
 
