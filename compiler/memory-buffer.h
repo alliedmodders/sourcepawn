@@ -19,7 +19,6 @@
 #define _include_sp_memory_buffer_h_
 
 #include <stdio.h>
-#include <am-utility.h>
 #include "smx-builder.h"
 
 // Interface for SmxBuilder to blit bytes.

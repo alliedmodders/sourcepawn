@@ -14,7 +14,7 @@
 #define _INCLUDE_SOURCEMOD_BASEFUNCTION_H_
 
 #include <sp_vm_api.h>
-#include <am-utility.h>
+#include <amtl/am-autoptr.h>
 #include <amtl/am-refcounting.h>
 
 namespace sp {

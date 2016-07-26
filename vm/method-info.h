@@ -15,7 +15,6 @@
 
 #include <sp_vm_types.h>
 #include <amtl/am-refcounting.h>
-#include <amtl/am-utility.h>
 
 namespace sp {
 

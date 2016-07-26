@@ -11,7 +11,7 @@
 #define _include_sourcepawn_file_parser_h_
 
 #include <stdio.h>
-#include <am-utility.h>
+#include <amtl/am-autoptr.h>
 
 namespace sp {
 

@@ -14,7 +14,6 @@
 #define _include_sourcepawn_vm_pcode_reader_h_
 
 #include <assert.h>
-#include <amtl/am-utility.h>
 #include <sp_vm_types.h>
 #include <smx/smx-v1-opcodes.h>
 #include <limits.h>

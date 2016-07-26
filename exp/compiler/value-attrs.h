@@ -18,7 +18,6 @@
 #ifndef _include_spcomp_expression_ops_h_
 #define _include_spcomp_expression_ops_h_
 
-#include <am-utility.h>
 #include "boxed-value.h"
 
 namespace sp {

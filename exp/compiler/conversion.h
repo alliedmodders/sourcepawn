@@ -20,7 +20,6 @@
 
 #include "ast.h"
 #include "reporting.h"
-#include <am-utility.h>
 
 namespace sp {
 

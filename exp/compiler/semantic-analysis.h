@@ -19,7 +19,6 @@
 #define _include_semantic_analysis_h_
 
 #include "ast.h"
-#include <am-utility.h>
 
 namespace sp {
 

@@ -14,9 +14,9 @@
 #define _include_sourcepawn_vm_environment_h_
 
 #include <sp_vm_api.h>
-#include <am-utility.h> // Replace with am-cxx later.
-#include <am-inlinelist.h>
-#include <am-thread-utils.h>
+#include <amtl/am-cxx.h>
+#include <amtl/am-inlinelist.h>
+#include <amtl/am-thread-utils.h>
 #include "code-allocator.h"
 #include "plugin-runtime.h"
 #include "stack-frames.h"
