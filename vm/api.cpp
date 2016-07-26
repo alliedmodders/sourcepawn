@@ -38,6 +38,7 @@
 #endif
 #include "code-stubs.h"
 #include "smx-v1-image.h"
+#include <amtl/am-string.h>
 
 using namespace sp;
 using namespace SourcePawn;
@@ -304,17 +305,28 @@ SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
 const char *
 SourcePawnEngine2::GetEngineName()
 {
+  const char* info = "";
 #if !defined(SP_HAS_JIT)
-  return SOURCEPAWN_VERSION ", interp-x86";
+  info = ", interp-x86";
 #else
-  if (!Environment::get()->IsJitEnabled())
-    return SOURCEPAWN_VERSION ", interp-x86";
+  if (!Environment::get()->IsJitEnabled()) {
+    info = ", interp-x86";
+  } else {
 # if defined(KE_ARCH_X86)
-  return SOURCEPAWN_VERSION ", jit-x86";
+    info = ", jit-x86";
 # else
-  return SOURCEPAWN_VERSION ", unknown";
+    info = ", unknown";
 # endif
+  }
 #endif
+
+  // This is not pretty, but the API is per-thread, and this only breaks if
+  // the caller observes the engine name, without requerying it, after
+  // changing the JIT status. We do this because the SourceMod build exposes
+  // the version as an extern, not a string literal.
+  ke::SafeSprintf(engine_name_, sizeof(engine_name_), "%s%s",
+    SOURCEPAWN_VERSION, info);
+  return engine_name_;
 }
 
 const char *
