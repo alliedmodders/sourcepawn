@@ -14,7 +14,7 @@
 #define _include_sourcepawn_vm_api_h_
 
 #include <sp_vm_api.h>
-#include <am-utility.h> // Replace with am-cxx later.
+#include <am-cxx.h> // Replace with am-cxx later.
 
 namespace sp {
 

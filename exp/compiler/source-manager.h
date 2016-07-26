@@ -18,7 +18,6 @@
 #ifndef _include_spcomp_source_cache_h_
 #define _include_spcomp_source_cache_h_
 
-#include <am-utility.h>
 #include <am-string.h>
 #include <am-refcounting.h>
 #include <am-vector.h>

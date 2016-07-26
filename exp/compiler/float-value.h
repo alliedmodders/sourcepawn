@@ -18,7 +18,8 @@
 #ifndef _include_spcomp_float_value_h_
 #define _include_spcomp_float_value_h_
 
-#include <am-utility.h>
+#include <assert.h>
+#include <stdint.h>
 
 namespace sp {
 

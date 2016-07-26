@@ -14,7 +14,6 @@
 #include "plugin-runtime.h"
 #include "plugin-context.h"
 #include <assert.h>
-#include <amtl/am-utility.h>
 #include <limits.h>
 
 namespace sp {

@@ -18,7 +18,6 @@
 #ifndef _include_spcomp_int_value_h_
 #define _include_spcomp_int_value_h_
 
-#include <am-utility.h>
 #include "tokens.h"
 
 namespace sp {

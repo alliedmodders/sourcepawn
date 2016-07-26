@@ -25,6 +25,7 @@
 # include <sys/stat.h>
 # include <unistd.h>
 #endif
+#include <amtl/am-utility.h>
 
 using namespace ke;
 using namespace sp;

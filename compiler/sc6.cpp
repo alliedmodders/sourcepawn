@@ -36,7 +36,6 @@
 #if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
 #endif
-#include <am-utility.h>
 #include <am-string.h>
 #include <smx/smx-v1.h>
 #include <smx/smx-v1-opcodes.h>

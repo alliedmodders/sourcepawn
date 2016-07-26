@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <smx/smx-headers.h>
 #include <smx/smx-v1.h>
-#include <am-utility.h>
 #include <am-string.h>
 #include <am-vector.h>
 #include "file-utils.h"

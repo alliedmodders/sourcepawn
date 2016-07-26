@@ -168,27 +168,63 @@ class PoolAllocationPolicy
 };
 
 template <typename T>
-class PoolList
- : public Vector<T, PoolAllocationPolicy>,
-   public PoolObject
+class PoolList : public PoolObject
 {
  public:
   PoolList()
-    : Vector<T, PoolAllocationPolicy>(PoolAllocationPolicy())
-  {
+  {}
+
+  template <typename U>
+  bool append(U&& item) {
+    return impl_.append(ke::Forward<U>(item));
   }
+  T& at(size_t index) {
+    return impl_.at(index);
+  }
+  const T& at(size_t index) const {
+    return impl_.at(index);
+  }
+  size_t length() const {
+    return impl_.length();
+  }
+  T& operator [](size_t index) {
+    return impl_[index];
+  }
+  const T& operator [](size_t index) const {
+    return impl_[index];
+  }
+
+ private:
+  Vector<T, PoolAllocationPolicy> impl_;
 };
 
 template <typename T>
-class FixedPoolList
- : public FixedArray<T, PoolAllocationPolicy>,
-   public PoolObject
+class FixedPoolList : public PoolObject
 {
  public:
   FixedPoolList(size_t length)
-    : FixedArray<T, PoolAllocationPolicy>(length, PoolAllocationPolicy())
+   : impl_(length, PoolAllocationPolicy())
   {
   }
+
+  T& at(size_t index) {
+    return impl_.at(index);
+  }
+  const T& at(size_t index) const {
+    return impl_.at(index);
+  }
+  T& back() {
+    return impl_.back();
+  }
+  const T& back() const {
+    return impl_.back();
+  }
+  size_t length() const {
+    return impl_.length();
+  }
+
+ private:
+  FixedArray<T, PoolAllocationPolicy> impl_;
 };
 
 } // namespace ke
