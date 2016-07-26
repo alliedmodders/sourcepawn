@@ -69,6 +69,9 @@ class SourcePawnEngine2 : public ISourcePawnEngine2
   void SetProfilingTool(IProfilingTool *tool) override;
   IPluginRuntime *LoadBinaryFromFile(const char *file, char *error, size_t maxlength) override;
   ISourcePawnEnvironment *Environment() override;
+
+ private:
+  char engine_name_[256];
 };
 
 extern size_t UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...);
