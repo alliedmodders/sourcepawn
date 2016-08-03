@@ -1619,40 +1619,6 @@ static int hier2(value *lval)
     callfunction(target, NULL, lval, TRUE);
     return FALSE;
   }
-  case tVIEW_AS:                /* newer tagname override */
-  {
-    needtoken('<');
-    int tag = 0;
-    {
-      token_t tok;
-      lextok(&tok);
-      if (!parse_new_typename(&tok, &tag))
-        tag = 0;
-    }
-    needtoken('>');
-
-    if (tag == pc_tag_void)
-      error(144);
-
-    int paren = needtoken('(');
-    lval->cmptag = tag;
-    lvalue = hier14(lval);
-    if (paren)
-      needtoken(')');
-    else
-      matchtoken(')');
-
-    if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
-      matchtag(tag, lval->tag, MATCHTAG_COERCE);
-    } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
-      // Warn: unsupported cast.
-      error(237);
-    } else if (lval->sym && lval->sym->tag == pc_tag_void) {
-      error(89);
-    }
-    lval->tag = tag;
-    return lvalue;
-  }
   case tLABEL:                  /* tagname override */
     tag=pc_addtag(st);
     if (sc_require_newdecls) {
@@ -2043,6 +2009,42 @@ field_expression(svalue &thisval, value *lval, symbol **target)
   return FER_CallMethod;
 }
 
+static int
+parse_view_as(value* lval)
+{
+  needtoken('<');
+  int tag = 0;
+  {
+    token_t tok;
+    lextok(&tok);
+    if (!parse_new_typename(&tok, &tag))
+      tag = 0;
+  }
+  needtoken('>');
+
+  if (tag == pc_tag_void)
+    error(144);
+
+  int paren = needtoken('(');
+  lval->cmptag = tag;
+  if (hier14(lval))
+    rvalue(lval);
+  if (paren)
+    needtoken(')');
+  else
+    matchtoken(')');
+
+  if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
+    matchtag(tag, lval->tag, MATCHTAG_COERCE);
+  } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
+    // Warn: unsupported cast.
+    error(237);
+  } else if (lval->sym && lval->sym->tag == pc_tag_void) {
+    error(89);
+  }
+  lval->tag = tag;
+  return FALSE;
+}
 
 /*  hier1
  *
@@ -2056,18 +2058,24 @@ field_expression(svalue &thisval, value *lval, symbol **target)
  */
 static int hier1(value *lval1)
 {
-  int lvalue,index,tok,symtok;
+  int lvalue,index,tok;
   cell val,cidx;
   value lval2={0};
   char *st;
   char close;
   symbol *sym;
   int magic_string=0;
-  symbol dummysymbol,*cursym;   /* for changing the index tags in case of enumerated pseudo-arrays */
+  symbol dummysymbol;   /* for changing the index tags in case of enumerated pseudo-arrays */
 
-  lvalue=primary(lval1);
-  symtok=tokeninfo(&val,&st);   /* get token read by primary() */
-  cursym=lval1->sym;
+  int symtok = 0;
+  symbol* cursym = nullptr;
+  if (matchtoken(tVIEW_AS)) {
+    lvalue = parse_view_as(lval1);
+  } else {
+    lvalue=primary(lval1);
+    symtok=tokeninfo(&val,&st);   /* get token read by primary() */
+    cursym=lval1->sym;
+  }
 
 restart:
   sym=cursym;
@@ -2090,15 +2098,15 @@ restart:
       lvalue = FALSE;
     }
     magic_string = (sym && (sym->tag == pc_tag_string && sym->dim.array.level == 0));
-    if (sym==NULL && symtok!=tSYMBOL) {
-      /* we do not have a valid symbol and we appear not to have read a valid
-       * symbol name (so it is unlikely that we would have read a name of an
-       * undefined symbol) */
-      error(29);                /* expression error, assumed 0 */
-      lexpush();                /* analyse '(', '{' or '[' again later */
-      return FALSE;
-    } /* if */
     if (tok=='[' || tok=='{') { /* subscript */
+      if (sym==NULL && symtok!=tSYMBOL) {
+        /* we do not have a valid symbol and we appear not to have read a valid
+         * symbol name (so it is unlikely that we would have read a name of an
+         * undefined symbol) */
+        error(29);                /* expression error, assumed 0 */
+        lexpush();                /* analyse '(', '{' or '[' again later */
+        return FALSE;
+      } /* if */
       close = (char)((tok=='[') ? ']' : '}');
       if (sym==NULL) {  /* sym==NULL if lval is a constant or a literal */
         error(28,"<no variable>");  /* cannot subscript */
