@@ -200,7 +200,10 @@ BasePluginContext::ThrowNativeErrorEx(int error, const char *msg, ...)
 {
   va_list ap;
   va_start(ap, msg);
-  env_->ReportErrorVA(error, msg, ap);
+  if (msg)
+    env_->ReportErrorVA(error, msg, ap);
+  else
+    env_->ReportError(error);
   va_end(ap);
   return 0;
 }
