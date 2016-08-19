@@ -534,9 +534,9 @@ class PcodeReader
     case OP_FLOAT:
       return visitor_->visitFLOAT();
     case OP_FLOATADD:
-      return visitor_->visitFLOATSUB();
-    case OP_FLOATSUB:
       return visitor_->visitFLOATADD();
+    case OP_FLOATSUB:
+      return visitor_->visitFLOATSUB();
     case OP_FLOATMUL:
       return visitor_->visitFLOATMUL();
     case OP_FLOATDIV:
