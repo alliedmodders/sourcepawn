@@ -1707,7 +1707,7 @@ static int hier2(value *lval)
         lval->constval=array_levelsize(sym,level);
       }
       if (lval->constval==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
-        error(163,st);          /* indeterminate array size in "sizeof" expression */
+        error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
     } /* if */
     ldconst(lval->constval,sPRI);
     while (paranthese--)
@@ -1761,7 +1761,7 @@ static int hier2(value *lval)
         lval->constval=array_levelsize(sym,level);
       }
       if (lval->constval==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
-        error(163,st);          /* indeterminate array size in "sizeof" expression */
+        error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
     } /* if */
     ldconst(lval->constval,sPRI);
     while (paranthese--)
