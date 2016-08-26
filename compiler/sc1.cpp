@@ -2286,26 +2286,24 @@ static void initials2(int ident,int tag,cell *size,int dim[],int numdim,
           err++;
         } /* if */
       } /* for */
-      if (numdim>1 && dim[numdim-1]==0) {
+      if (numdim>1 && dim[numdim-1]==0 && !errorfound && err==0) {
         /* also look whether, by any chance, all "counted" final dimensions are
-         * the same value; if so, we can store this
+         *  the same value; if so, we can store this
          */
         constvalue *ld=lastdim.next;
-        int d,match;
-        for (d=0; d<dim[numdim-2]; d++) {
-          if (!ld) {
-            error(108);
-            err++;
-            break;
-          }
-          assert(strtol(ld->name,NULL,16)==d);
-          if (d==0)
-            match=ld->value;
+        int count=0,match,total,d;
+        for (ld=lastdim.next; ld!=NULL; ld=ld->next) {
+          assert(strtol(ld->name,NULL,16)==count % dim[numdim-2]);  /* index is stored in the name, it should match the sequence */
+          if (count==0)
+            match=(int)ld->value;
           else if (match!=ld->value)
             break;
-          ld=ld->next;
-        } /* for */
-        if (d==dim[numdim-2])
+          count++;
+        }
+        total=dim[numdim-2];
+        for (d=numdim-3; d>=0; d--)
+          total*=dim[d];
+        if (count>0 && count==total)
           dim[numdim-1]=match;
       } /* if */
       /* after all arrays have been initalized, we know the (major) dimensions
