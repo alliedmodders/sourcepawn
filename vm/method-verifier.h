@@ -64,6 +64,7 @@ class MethodVerifier final
   const cell_t* method_;
   const cell_t* cip_;
   const cell_t* stop_at_;
+  const cell_t* highest_jump_target_;
   ExternalFuncRefCallback collect_func_refs_;
   int error_;
 };
