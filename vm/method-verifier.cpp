@@ -29,6 +29,7 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
    code_(nullptr),
    cip_(nullptr),
    stop_at_(nullptr),
+   highest_jump_target_(nullptr),
    error_(SP_ERROR_NONE)
 {
   assert(datSize_ < memSize_);
@@ -67,6 +68,12 @@ MethodVerifier::verify()
 
     if (!verifyOp(op))
       return false;
+  }
+
+  // Jumps past the method boundaries are invalid.
+  if (highest_jump_target_ && highest_jump_target_ >= cip_) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
   }
 
   return true;
@@ -527,6 +534,10 @@ MethodVerifier::verifyJumpOffset(cell_t offset)
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
+
+  if (!highest_jump_target_ || highest_jump_target_ < target)
+    highest_jump_target_ = target;
+
   return true;
 }
 
