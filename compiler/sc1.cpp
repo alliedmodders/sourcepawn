@@ -5921,8 +5921,10 @@ static int test(int label,int parens,int invert)
   if (endtok!=0)
     needtoken(endtok);
   if (ident==iARRAY || ident==iREFARRAY) {
-    const char *ptr=sym->name;
-    error(33,ptr);              /* array must be indexed */
+    if (sym)
+      error(33, sym->name); /* array must be indexed */
+    else
+      error(29);                /* invalid expression */
   } /* if */
   if (ident==iCONSTEXPR) {      /* constant expression */
     int testtype=0;
