@@ -21,6 +21,11 @@ namespace smxviewer
         public MainWindow()
         {
             InitializeComponent();
+
+            // Setup file drag and drop event listeners
+            this.AllowDrop = true;
+            this.DragEnter += new DragEventHandler(MainWindow_DragEnter);
+            this.DragDrop += new DragEventHandler(MainWindow_DragDrop);
         }
 
         private void MainWindow_Load(object sender, EventArgs e)
@@ -53,6 +58,11 @@ namespace smxviewer
                 return;
             }
 
+            openFile(stream);
+        }
+
+        private void openFile(Stream stream)
+        {
             try
             {
                 using (stream)
@@ -68,6 +78,57 @@ namespace smxviewer
             }
 
             renderFile();
+        }
+
+        private void MainWindow_DragEnter(object sender, DragEventArgs e)
+        {
+            try
+            {
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    e.Effect = DragDropEffects.Link;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+        }
+
+        private void MainWindow_DragDrop(object sender, DragEventArgs e)
+        {
+            try
+            {
+                string[] dropped = (string[])e.Data.GetData(DataFormats.FileDrop);
+                List<string> files = dropped.ToList();
+
+                if (!files.Any())
+                    return;
+
+                if (files.Count > 1)
+                {
+                    MessageBox.Show("Can't open multiple files at once.");
+                    return;
+                }
+
+                
+                Stream stream = null;
+                try
+                {
+                    stream = File.OpenRead(files[0]);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not open file: " + ex.Message, "File error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                openFile(stream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
         }
 
         private void renderFile()
