@@ -26,6 +26,32 @@ namespace smxviewer
             this.AllowDrop = true;
             this.DragEnter += new DragEventHandler(MainWindow_DragEnter);
             this.DragDrop += new DragEventHandler(MainWindow_DragDrop);
+
+            string[] args = Environment.GetCommandLineArgs();
+            List<string> files = args.ToList();
+
+            // First argument is the executable path itself
+            if (files.Count <= 1)
+                return;
+
+            if (files.Count > 2)
+            {
+                MessageBox.Show("Can't open multiple files at once.");
+                return;
+            }
+
+            Stream stream = null;
+            try
+            {
+                stream = File.OpenRead(files[1]);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not open file: " + ex.Message, "File error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            openFile(stream);
         }
 
         private void MainWindow_Load(object sender, EventArgs e)
