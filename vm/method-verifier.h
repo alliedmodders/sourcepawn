@@ -46,6 +46,7 @@ class MethodVerifier final
   bool verifyDatOffset(cell_t offset);
   bool verifyJumpOffset(cell_t offset);
   bool verifyParamCount(cell_t nparams);
+  bool verifyDimensionCount(cell_t ndims);
   bool verifyStackAmount(cell_t amount);
   bool verifyHeapAmount(cell_t amount);
   bool verifyMemAmount(cell_t amount);
