@@ -406,7 +406,7 @@ MethodVerifier::verifyOp(OPCODE op)
     cell_t ndims;
     if (!readCell(&ndims))
       return false;
-    return verifyParamCount(ndims);
+    return verifyDimensionCount(ndims);
   }
 
   case OP_SWITCH:
@@ -542,11 +542,19 @@ MethodVerifier::verifyJumpOffset(cell_t offset)
 }
 
 bool
+MethodVerifier::verifyDimensionCount(cell_t ndims)
+{
+  if (ndims <= 0 || ndims > sDIMEN_MAX) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+  return true;
+}
+
+bool
 MethodVerifier::verifyParamCount(cell_t nparams)
 {
-  // This is a rough estimate, we just make sure it definitely
-  // won't go out of the heap.
-  if (nparams < 0 || size_t(nparams) >= heapSize_) {
+  if (nparams < 0 || nparams > SP_MAX_EXEC_PARAMS) {
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
