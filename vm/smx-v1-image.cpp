@@ -70,13 +70,13 @@ SmxV1Image::validate()
 
       // Allocate the uncompressed image buffer.
       uint32_t compressedSize = hdr_->disksize - hdr_->dataoffs;
-      AutoArray<uint8_t> uncompressed(new uint8_t[hdr_->imagesize]);
+      UniquePtr<uint8_t[]> uncompressed = MakeUnique<uint8_t[]>(hdr_->imagesize);
       if (!uncompressed)
         return error("out of memory");
 
       // Decompress.
       const uint8_t *src = buffer() + hdr_->dataoffs;
-      uint8_t *dest = (uint8_t *)uncompressed + hdr_->dataoffs;
+      uint8_t *dest = uncompressed.get() + hdr_->dataoffs;
       uLongf destlen = hdr_->imagesize - hdr_->dataoffs;
       int rv = uncompress(
         (Bytef *)dest,
@@ -87,11 +87,11 @@ SmxV1Image::validate()
         return error("could not decode compressed region");
 
       // Copy the initial uncompressed region back in.
-      memcpy((uint8_t *)uncompressed, buffer(), hdr_->dataoffs);
+      memcpy(uncompressed.get(), buffer(), hdr_->dataoffs);
 
       // Replace the original buffer.
       length_ = hdr_->imagesize;
-      buffer_ = uncompressed.take();
+      buffer_ = Move(uncompressed);
       hdr_ = (sp_file_hdr_t *)buffer();
       break;
     }

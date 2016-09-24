@@ -53,7 +53,7 @@ class SourceFile : public Refcounted<SourceFile>
 
  public:
   const char *chars() const {
-    return chars_;
+    return chars_.get();
   }
   uint32_t length() const {
     return length_;
@@ -63,12 +63,12 @@ class SourceFile : public Refcounted<SourceFile>
   }
 
   LineExtents *lineCache() {
-    return line_cache_;
+    return line_cache_.get();
   }
   void computeLineCache();
 
  protected:
-  AutoArray<char> chars_;
+  AutoPtr<char[]> chars_;
   uint32_t length_;
   AutoPtr<LineExtents> line_cache_;
   AString path_;

@@ -69,7 +69,7 @@ class ScriptedInvoker : public IPluginFunction
     cell_t *result);
   IPluginRuntime *GetParentRuntime();
   const char *DebugName() {
-    return full_name_;
+    return full_name_.get();
   }
 
  public:
@@ -92,7 +92,7 @@ class ScriptedInvoker : public IPluginFunction
   unsigned int m_curparam;
   int m_errorstate;
   funcid_t m_FnId;
-  ke::AutoArray<char> full_name_;
+  ke::AutoPtr<char[]> full_name_;
   sp_public_t *public_;
   RefPtr<MethodInfo> method_;
 };

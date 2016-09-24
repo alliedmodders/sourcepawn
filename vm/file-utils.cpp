@@ -37,16 +37,16 @@ FileReader::FileReader(FILE *fp)
   if (fseek(fp, 0, SEEK_SET) != 0)
     return;
 
-  ke::AutoArray<uint8_t> bytes(new uint8_t[size]);
-  if (!bytes || fread(bytes, sizeof(uint8_t), size, fp) != (size_t)size)
+  ke::UniquePtr<uint8_t[]> bytes = ke::MakeUnique<uint8_t[]>(size);
+  if (!bytes || fread(bytes.get(), sizeof(uint8_t), size, fp) != (size_t)size)
     return;
 
-  buffer_ = bytes.take();
+  buffer_ = Move(bytes);
   length_ = size;
 }
 
-FileReader::FileReader(ke::AutoArray<uint8_t> &buffer, size_t length)
- : buffer_(buffer.take()),
+FileReader::FileReader(ke::UniquePtr<uint8_t[]>&& buffer, size_t length)
+ : buffer_(Move(buffer)),
    length_(length)
 {
 }
