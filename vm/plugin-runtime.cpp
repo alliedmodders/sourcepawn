@@ -60,32 +60,32 @@ PluginRuntime::Initialize()
 {
   if (!ke::IsAligned(code_.bytes, sizeof(cell_t))) {
     // Align the code section.
-    aligned_code_ = new uint8_t[code_.length];
+    aligned_code_ = MakeUnique<uint8_t[]>(code_.length);
     if (!aligned_code_)
       return false;
 
-    memcpy(aligned_code_, code_.bytes, code_.length);
-    code_.bytes = aligned_code_;
+    memcpy(aligned_code_.get(), code_.bytes, code_.length);
+    code_.bytes = aligned_code_.get();
   }
 
-  natives_ = new NativeEntry[image_->NumNatives()];
+  natives_ = MakeUnique<NativeEntry[]>(image_->NumNatives());
   if (!natives_)
     return false;
 
-  publics_ = new sp_public_t[image_->NumPublics()];
+  publics_ = MakeUnique<sp_public_t[]>(image_->NumPublics());
   if (!publics_)
     return false;
-  memset(publics_, 0, sizeof(sp_public_t) * image_->NumPublics());
+  memset(publics_.get(), 0, sizeof(sp_public_t) * image_->NumPublics());
 
-  pubvars_ = new sp_pubvar_t[image_->NumPubvars()];
+  pubvars_ = MakeUnique<sp_pubvar_t[]>(image_->NumPubvars());
   if (!pubvars_)
     return false;
-  memset(pubvars_, 0, sizeof(sp_pubvar_t) * image_->NumPubvars());
+  memset(pubvars_.get(), 0, sizeof(sp_pubvar_t) * image_->NumPubvars());
 
-  entrypoints_ = new ScriptedInvoker *[image_->NumPublics()];
+  entrypoints_ = MakeUnique<ScriptedInvoker *[]>(image_->NumPublics());
   if (!entrypoints_)
     return false;
-  memset(entrypoints_, 0, sizeof(ScriptedInvoker *) * image_->NumPublics());
+  memset(entrypoints_.get(), 0, sizeof(ScriptedInvoker *) * image_->NumPublics());
 
   context_ = new PluginContext(this);
   if (!context_->Initialize())
@@ -129,7 +129,7 @@ static const NativeMapping sNativeMap[] = {
 void
 PluginRuntime::SetupFloatNativeRemapping()
 {
-  float_table_ = new floattbl_t[image_->NumNatives()];
+  float_table_ = MakeUnique<floattbl_t[]>(image_->NumNatives());
   for (size_t i = 0; i < image_->NumNatives(); i++) {
     const char *name = image_->GetNative(i);
     const NativeMapping *iter = sNativeMap;

@@ -142,16 +142,16 @@ class PluginRuntime
 
  private:
   ke::AutoPtr<sp::LegacyImage> image_;
-  ke::AutoArray<uint8_t> aligned_code_;
-  ke::AutoArray<floattbl_t> float_table_;
+  ke::AutoPtr<uint8_t[]> aligned_code_;
+  ke::AutoPtr<floattbl_t[]> float_table_;
   ke::AString name_;
   ke::AString full_name_;
   Code code_;
   Data data_;
-  ke::AutoArray<NativeEntry> natives_;
-  ke::AutoArray<sp_public_t> publics_;
-  ke::AutoArray<sp_pubvar_t> pubvars_;
-  ke::AutoArray<ScriptedInvoker *> entrypoints_;
+  ke::AutoPtr<NativeEntry[]> natives_;
+  ke::AutoPtr<sp_public_t[]> publics_;
+  ke::AutoPtr<sp_pubvar_t[]> pubvars_;
+  ke::AutoPtr<ScriptedInvoker*[]> entrypoints_;
   ke::AutoPtr<PluginContext> context_;
 
   struct FunctionMapPolicy {

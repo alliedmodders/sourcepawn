@@ -60,18 +60,18 @@ class FileReader
       return false;
     }
 
-    AutoArray<char> buffer(new char[size + 1]);
+    UniquePtr<char[]> buffer = MakeUnique<char[]>(size + 1);
     if (!buffer) {
       cc_.reportFatal(rmsg::outofmemory);
       return false;
     }
 
-    if (fread((char *)buffer, 1, size, fp_) != size_t(size)) {
+    if (fread(buffer.get(), 1, size, fp_) != size_t(size)) {
       cc_.report(rmsg::file_read_error) << path_;
       return false;
     }
 
-    *ptr = buffer.forget();
+    *ptr = buffer.take();
     *lengthp = uint32_t(size);
     return true;
   }
@@ -130,11 +130,15 @@ SourceManager::open(ReportingContext &cc, const char *path)
     return nullptr;
 
   uint32_t length;
-  AutoArray<char> chars;
-  if (!reader.read(chars.address(), &length))
-    return nullptr;
+  UniquePtr<char[]> chars;
+  {
+    char* ptr;
+    if (!reader.read(&ptr, &length))
+      return nullptr;
+    chars.assign(ptr);
+  }
 
-  RefPtr<SourceFile> file = new SourceFile(chars.forget(), length, path);
+  RefPtr<SourceFile> file = new SourceFile(chars.take(), length, path);
   file_cache_.add(p, atom, file);
   return file;
 }

@@ -64,7 +64,7 @@ WatchdogTimer::Shutdown()
     cv_.Notify();
   }
   thread_->Join();
-  thread_ = NULL;
+  thread_ = nullptr;
 }
 
 void
