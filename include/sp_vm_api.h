@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0xB
-#define SOURCEPAWN_API_VERSION   0x020B
+#define SOURCEPAWN_ENGINE2_API_VERSION 0xC
+#define SOURCEPAWN_API_VERSION   0x020C
 
 namespace SourceMod {
   struct IdentityToken_t;
@@ -1002,6 +1002,13 @@ namespace SourcePawn
      * @return          Blamed function.
      */
     virtual IPluginFunction *Blame() const = 0;
+
+    /**
+    * @brief Return the error code of the error report.
+    *
+    * @return           SP_ERROR_* integer code.
+    */
+    virtual int Code() const = 0;
   };
 
   /**

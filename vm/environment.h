@@ -208,10 +208,10 @@ class ErrorReport : public SourcePawn::IErrorReport
 {
   public:
   ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf);
-  int Code() const;
 
   public: //IErrorReport
   const char *Message() const override;
+  int Code() const override;
   IPluginFunction *Blame() const override;
   bool IsFatal() const override;
   IPluginContext *Context() const override;
