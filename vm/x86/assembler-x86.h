@@ -379,6 +379,15 @@ class Assembler : public AssemblerBase
   void movzxw(Register dest, const Register src) {
     emit2(0x0f, 0xb7, dest.code, src.code);
   }
+  void movaps(FloatRegister dest, const FloatRegister src) {
+    emit2(0x0f, 0x28, dest.code, src.code);
+  }
+  void movaps(FloatRegister dest, const Operand &src) {
+    emit2(0x0f, 0x28, dest.code, src);
+  }
+  void movaps(const Operand &dest, FloatRegister src) {
+    emit2(0x0f, 0x29, src.code, dest);
+  }
 
   void lea(Register dest, const Operand &src) {
     emit1(0x8d, dest.code, src);
@@ -429,6 +438,12 @@ class Assembler : public AssemblerBase
     *pos_++ = imm;
   }
 
+  void cmpb(Register left, int8_t imm8) {
+    alu_imm8(7, imm8, Operand(left));
+  }
+  void cmpb(const Operand &left, int8_t imm8) {
+    alu_imm8(7, imm8, left);
+  }
   void cmpl(Register left, int32_t imm) {
     alu_imm(7, imm, Operand(left));
   }
@@ -575,6 +590,10 @@ class Assembler : public AssemblerBase
   void ret() {
     emit1(0xc3);
   }
+  void ret(int16_t imm) {
+    emit1(0xc2);
+    writeInt16(imm);
+  }
   void cld() {
     emit1(0xfc);
   }
@@ -652,6 +671,12 @@ class Assembler : public AssemblerBase
   }
   void fdiv32(const Operand &src) {
     emit1(0xd8, 6, src);
+  }
+  void fst32(const Operand &dest) {
+    emit1(0xd9, 2, dest);
+  }
+  void fst(FpuRegister src) {
+    emit2(0xd9, 0xd0 + src.code);
   }
   void fstp32(const Operand &dest) {
     emit1(0xd9, 3, dest);
@@ -1063,6 +1088,14 @@ class Assembler : public AssemblerBase
       emit1(0x81, r, operand);
       writeInt32(imm);
     }
+  }
+
+  void alu_imm8(uint8_t r, int8_t imm8, const Operand& operand) {
+    if (operand.isRegister(r8_al))
+      emit1(0x04 | (r << 3));
+    else
+      emit1(0x80, r, operand);
+    writeByte(imm8);
   }
 
  private:
