@@ -281,10 +281,18 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_SMUL_C:
   case OP_EQ_C_PRI:
   case OP_EQ_C_ALT:
-  case OP_HALT:
   {
     cell_t val;
     return readCell(&val);
+  }
+
+  case OP_HALT:
+  {
+    cell_t val;
+    if (!readCell(&val))
+      return false;
+    reportError(SP_ERROR_INVALID_INSTRUCTION);
+    return false;
   }
 
   case OP_MOVS:
