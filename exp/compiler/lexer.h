@@ -71,6 +71,10 @@ class Lexer : public ke::Refcounted<Lexer>
       return '\0';
     return *pos_;
   }
+  void skipChar() {
+    if (canRead())
+      pos_++;
+  }
   char readChar() {
     if (!canRead())
       return '\0';

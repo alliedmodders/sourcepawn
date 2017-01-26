@@ -103,7 +103,7 @@ const char *
 Lexer::skipSpaces()
 {
   while (IsSkipSpace(peekChar()))
-    readChar();
+    skipChar();
   return ptr();
 }
 
@@ -122,7 +122,7 @@ Lexer::readUntilEnd(const char **beginp, const char **endp)
   const char *begin = skipSpaces();
 
   while (!IsLineTerminator(peekChar()))
-    readChar();
+    skipChar();
 
   const char *end = ptr();
   while (end > begin) {
@@ -550,7 +550,7 @@ TokenKind
 Lexer::singleLineComment()
 {
   while (!IsLineTerminator(peekChar()))
-    readChar();
+    skipChar();
   return TOK_COMMENT;
 }
 
