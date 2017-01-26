@@ -171,6 +171,7 @@ Preprocessor::eval_next()
     // Macro expansion is disabled, so we manually expand the macro. If we
     // can't, it's not a valid identifier.
     const Token *tok = current();
+    SaveAndSet<bool> enableMacroExpansion(&allow_macro_expansion_, true);
     if (!enterMacro(tok->start.loc, tok->atom())) {
       cc_.report(tok->start.loc, rmsg::macro_not_found)
         << tok->atom();
@@ -291,7 +292,7 @@ Preprocessor::eval_unary(int *val)
     {
       const Token *tok = current();
       cc_.report(tok->start.loc, rmsg::unexpected_directive_token)
-        << tok->atom();
+        << TokenNames[tok->kind];
       return false;
     }
   }
