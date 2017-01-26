@@ -39,7 +39,8 @@ Lexer::Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
    line_number_(1),
    lexing_for_directive_(false),
    suppress_errors_(false),
-   lexed_tokens_on_line_(false)
+   lexed_tokens_on_line_(false),
+   scanned_eof_(false)
 {
 }
 
@@ -142,7 +143,7 @@ Lexer::hexLiteral()
   for (;;) {
     char c = readChar();
     if (!IsHexDigit(c)) {
-      pos_--;
+      putBack(c);
       break;
     }
     literal_.append(c);
@@ -174,7 +175,7 @@ Lexer::numberLiteral(char first)
   }
 
   if (c != '.') {
-    pos_--;
+    putBack(c);
     literal_.append('\0');
     return TOK_INTEGER_LITERAL;
   }
@@ -192,7 +193,7 @@ Lexer::numberLiteral(char first)
   for (;;) {
     c = readChar();
     if (!IsDigit(c)) {
-      pos_--;
+      putBack(c);
       break;
     }
     literal_.append(c);
@@ -210,7 +211,7 @@ Lexer::numberLiteral(char first)
     c = readChar();
   }
   if (!IsDigit(c)) {
-    pos_--;
+    putBack(c);
 
     char print[2] = {c, '\0'};
     cc_.report(pos(), rmsg::expected_digit_for_float)
@@ -221,7 +222,7 @@ Lexer::numberLiteral(char first)
   for (;;) {
     c = readChar();
     if (!IsDigit(c)) {
-      pos_--;
+      putBack(c);
       break;
     }
     literal_.append(c);
@@ -350,7 +351,7 @@ Lexer::name(char first)
   for (;;) {
     c = readChar();
     if (!IsIdentChar(c)) {
-      pos_--;
+      putBack(c);
       break;
     }
     literal_.append(c);
@@ -411,7 +412,7 @@ Lexer::readEscapeCode()
         
       // Swallow a trailing ';'
       if (c != ';')
-        pos_--;
+        putBack(c);
   
       return r;
     }
@@ -433,7 +434,7 @@ Lexer::readEscapeCode()
 
         // Swallow a trailing ;
         if (c != ';')
-          pos_--;
+          putBack(c);
 
         return r;
       }
@@ -468,7 +469,7 @@ Lexer::charLiteral(Token *tok)
     // If the user did something like '5", assume it was a typo and keep the
     // token. Otherwise, backtrack.
     if (c != '"')
-      pos_--;
+      putBack(c);
   }
 
   return tok->kind;
@@ -583,7 +584,7 @@ Lexer::advanceLine(char c)
 {
   assert(c == '\r' || c == '\n');
   if (c == '\r' && readChar() != '\n')
-    pos_--;
+    putBack(c);
 
   line_number_++;
   lexed_tokens_on_line_ = false;
@@ -600,7 +601,7 @@ Lexer::consumeWhitespace()
       case '\r':
         if (lexing_for_directive_) {
           // Back up - don't consume the newline.
-          pos_--;
+          putBack(c);
           return c;
         }
 
