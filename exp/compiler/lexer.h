@@ -71,19 +71,46 @@ class Lexer : public ke::Refcounted<Lexer>
       return '\0';
     return *pos_;
   }
+  void skipChar() {
+    if (canRead())
+      pos_++;
+  }
   char readChar() {
-    if (!canRead())
+    if (!canRead()) {
+      scanned_eof_ = true;
       return '\0';
+    }
     return *pos_++;
   }
   bool peekChar(char c) {
     return peekChar() == c;
   }
   bool matchChar(char c) {
-    if (!peekChar(c))
+    char got = readChar();
+    if (got != c) {
+      putBack(got);
       return false;
-    pos_++;
+    }
     return true;
+  }
+  void putBack(char c) {
+    // If the last character we consumed was an EOF, don't backtrack in the
+    // stream. If we did scan eof_, all of the following should be true:
+    //    pos_ == end_
+    //    scanned_eof_
+    //    c == '\0'
+    // If we did not scan EOF, then pos_ can be == end_, but scanned_eof_
+    // must be false.
+    if (pos_ == end_ && scanned_eof_) {
+      assert(c == '\0');
+      return;
+    }
+
+    pos_--;
+
+    assert(*pos_ == c);
+    assert(!scanned_eof_);
+    assert(canRead());
   }
 
   SourceLocation pos() const {
@@ -216,6 +243,9 @@ class Lexer : public ke::Refcounted<Lexer>
 
   // If true, we have already lexed at least one token on this line.
   bool lexed_tokens_on_line_;
+
+  // If true, the last character we scanned was EOF.
+  bool scanned_eof_;
 };
 
 int StringToInt32(const char *ptr);
