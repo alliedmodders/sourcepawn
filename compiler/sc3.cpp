@@ -1501,8 +1501,8 @@ static int hier2(value *lval)
         inc_pri();
       popreg(sALT);
       invoke_setter(lval->accessor, TRUE);
-      lval->ident = iEXPRESSION;
     }
+    lval->ident = iEXPRESSION;
     sideeffect=TRUE;
     return FALSE;               /* result is no longer lvalue */
   case tDEC:                    /* --lval */
@@ -1522,8 +1522,8 @@ static int hier2(value *lval)
         dec_pri();
       popreg(sALT);
       invoke_setter(lval->accessor, TRUE);
-      lval->ident = iEXPRESSION;
     }
+    lval->ident = iEXPRESSION;
     sideeffect=TRUE;
     return FALSE;               /* result is no longer lvalue */
   case '~':                     /* ~ (one's complement) */
@@ -1872,8 +1872,8 @@ static int hier2(value *lval)
           popreg(sALT);
           invoke_setter(lval->accessor, FALSE);
           popreg(sPRI);
-          lval->ident = iEXPRESSION;
         }
+        lval->ident = iEXPRESSION;
         sideeffect=TRUE;
         return FALSE;           /* result is no longer lvalue */
       case tDEC:                /* lval-- */
@@ -1908,8 +1908,8 @@ static int hier2(value *lval)
           popreg(sALT);
           invoke_setter(lval->accessor, FALSE);
           popreg(sPRI);
-          lval->ident = iEXPRESSION;
         }
+        lval->ident = iEXPRESSION;
         sideeffect=TRUE;
         return FALSE;
       default:
