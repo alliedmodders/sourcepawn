@@ -562,7 +562,7 @@ MethodVerifier::verifyDimensionCount(cell_t ndims)
 bool
 MethodVerifier::verifyParamCount(cell_t nparams)
 {
-  if (nparams < 0 || nparams > SP_MAX_EXEC_PARAMS) {
+  if (nparams < 0 || nparams > SP_MAX_CALL_ARGUMENTS) {
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }

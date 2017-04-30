@@ -3851,7 +3851,7 @@ static void parse_function_type(functag_t *type)
     matchtoken(tSYMBOL);
 
     // Error once when we're past max args.
-    if (type->argcount == sARGS_MAX) {
+    if (type->argcount == SP_MAX_EXEC_PARAMS) {
       error(45);
       continue;
     }
@@ -4056,7 +4056,7 @@ static void dofuncenum(int listmode)
         arg->tags[arg->tagcount++] = pc_addtag(str);
         l=tLABEL;
       } else if (l == tSYMBOL) {
-        if (func.argcount >= sARGS_MAX)
+        if (func.argcount >= SP_MAX_EXEC_PARAMS)
           error(45);
         if (str[0] == PUBLIC_CHAR)
           error(56, str);
@@ -5047,7 +5047,7 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
         continue;
       }
 
-      if (argcnt>=sMAXARGS)
+      if (argcnt>=SP_MAX_CALL_ARGUMENTS)
         error(45);
       if (decl.name[0] == PUBLIC_CHAR)
         error(56, decl.name); /* function arguments cannot be public */

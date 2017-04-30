@@ -34,7 +34,7 @@ typedef struct functag_s
   int usage;
   int argcount;
   int ommittable;
-  funcarg_t args[sARGS_MAX];
+  funcarg_t args[SP_MAX_EXEC_PARAMS];
   struct functag_s *next;
 } functag_t;
 
