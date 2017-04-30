@@ -563,7 +563,7 @@ bool
 MethodVerifier::verifyParamCount(cell_t nparams)
 {
   if (nparams < 0 || nparams > SP_MAX_EXEC_PARAMS) {
-    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    reportError(SP_ERROR_PARAMS_MAX);
     return false;
   }
   return true;
