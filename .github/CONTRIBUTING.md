@@ -13,9 +13,9 @@ Please refer to the [AlliedModders forum rules.](https://forums.alliedmods.net/m
 
 Firstly, thank you for considering to contribute changes to the project!
 
-However, if this is anything more than a small fix such an a gamedata update, a glaring code flaw, or a simple typo in a file like this one, please file an Issue first so that it can be discussed, unless you have already spoken to multiple members of the development team about it on IRC or the AlliedModders forums.
+Unless your request involves a glaring code flaw, or a simple typo in a file like this one, please file an Issue first so that it can be discussed, unless you have already spoken to members of the development team about it on IRC or the AlliedModders forums. 
 
-We don't like to have to reject pull requests, so we want to avoid those scenarios. We wouldn't want you to feel that you wasted your time writing something only for us to have it then be shot down.
+We don't like to have to reject pull requests, so we want to avoid those scenarios. We wouldn't want you to feel that you wasted your time writing something only for it to be lost.
 
 #### Rejection
 *Copied from Phabricator's [Contributing Code guidelines](https://secure.phabricator.com/book/phabcontrib/article/contributing_code/#rejecting-patches), as we largely feel the same way about this.*
