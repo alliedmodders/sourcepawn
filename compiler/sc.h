@@ -59,7 +59,6 @@
 #define sDEF_AMXSTACK 4096  /* default stack size for AMX files */
 #define PREPROC_TERM  '\x7f'/* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX   "sourcemod.inc" /* default prefix filename */
-#define sARGS_MAX		32	/* number of arguments a function can have, max */
 #define sTAGS_MAX		16  /* maximum number of tags on an argument */
 
 typedef union {
@@ -532,7 +531,6 @@ enum TokenKind {
 #define sSTARTREORDER 0x01
 #define sENDREORDER   0x02
 #define sEXPRSTART    0x80      /* top bit set, rest is free */
-#define sMAXARGS      127       /* relates to the bit pattern of sEXPRSTART */
 
 #define sDOCSEP       0x01      /* to separate documentation comments between functions */
 

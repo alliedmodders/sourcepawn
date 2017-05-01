@@ -2735,7 +2735,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
   int namedparams=FALSE;
   value lval = {0};
   arginfo *arg;
-  char arglist[sMAXARGS];
+  char arglist[SP_MAX_CALL_ARGUMENTS];
   constvalue arrayszlst = { NULL, "", 0, 0};/* array size list starts empty */
   constvalue taglst = { NULL, "", 0, 0};    /* tag list starts empty */
   symbol *symret;
@@ -2827,7 +2827,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
        * of the function; check it again for functions with a variable
        * argument list
        */
-      if (argpos>=sMAXARGS)
+      if (argpos>=SP_MAX_CALL_ARGUMENTS)
         error(45);                /* too many function arguments */
       stgmark((char)(sEXPRSTART+argpos));/* mark beginning of new expression in stage */
       if (arglist[argpos]!=ARG_UNHANDLED)

@@ -289,8 +289,8 @@ static int stgstring(char *start,char *end)
   while (start<end) {
     if (*start==sSTARTREORDER) {
       start+=1;         /* skip token */
-      /* allocate a argstack with sMAXARGS items */
-      stack=(argstack *)malloc(sMAXARGS*sizeof(argstack));
+      /* allocate a argstack with SP_MAX_CALL_ARGUMENTS items */
+      stack=(argstack *)malloc(SP_MAX_CALL_ARGUMENTS*sizeof(argstack));
       if (stack==NULL)
         error(103);     /* insufficient memory */
       reordered=1;      /* mark that the expression is reordered */
