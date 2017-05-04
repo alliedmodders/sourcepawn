@@ -1,0 +1,1 @@
+(8) : error 084: cannot call constructor for 'CrabPants' as static method

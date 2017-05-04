@@ -105,7 +105,7 @@ static const char *errmsg[] = {
 /*081*/  "cannot take a tag as a default value for an indexed array parameter (symbol \"%s\")\n",
 /*082*/  "properties cannot be arrays\n",
 /*083*/  "methodmap methods cannot return arrays\n",
-/*084*/  "unused84\n",
+/*084*/  "cannot call constructor for '%s' as static method\n",
 /*085*/  "unused85\n",
 /*086*/  "unused86\n",
 /*087*/  "unused87\n",

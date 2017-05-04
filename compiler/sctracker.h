@@ -82,6 +82,7 @@ typedef enum LayoutSpec_t
 typedef struct methodmap_method_s
 {
   char name[METHOD_NAMEMAX + 1];
+  methodmap_t* parent;
   symbol *target;
   symbol *getter;
   symbol *setter;
