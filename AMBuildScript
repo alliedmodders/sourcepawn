@@ -46,7 +46,7 @@ class Config(object):
       cfg.cxxflags += ['-std=c++11']
 
       have_gcc = cxx.name is 'gcc'
-      have_clang = cxx.name is 'clang'
+      have_clang = cxx.name is 'clang' or cxx.name is 'emscripten'
       if have_clang or (have_gcc and cxx.majorVersion >= 4):
         cfg.cflags += ['-fvisibility=hidden']
         cfg.cxxflags += ['-fvisibility-inlines-hidden']
@@ -109,6 +109,9 @@ class Config(object):
       cfg.defines += ['NDEBUG']
       if cxx.like('gcc'):
         cfg.cflags += ['-O3']
+        if cxx.like('emscripten'):
+          cfg.cflags += ['-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
+          cfg.linkflags += ['-O3', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
       elif cxx.like('msvc'):
         cfg.cflags += ['/Ox']
         cfg.linkflags += ['/OPT:ICF', '/OPT:REF']
@@ -125,7 +128,7 @@ class Config(object):
       cfg.cflags += ['/Oy-']
 
     # Platform-specifics
-    if builder.target_platform == 'linux':
+    if builder.target_platform == 'linux' and cxx.name != 'emscripten':
       if cxx.name == 'gcc':
         cfg.postlink += ['-static-libgcc']
       elif cxx.name == 'clang':
