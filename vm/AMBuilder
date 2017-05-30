@@ -52,7 +52,9 @@ library.sources += [
   'runtime-helpers.cpp',
 ]
 
-if SP.arch in ['x86']:
+has_jit = SP.arch in ['x86'] and builder.compiler.cxx.name != 'emscripten'
+
+if has_jit:
   library.sources += [
     'code-stubs.cpp',
     'jit.cpp',
@@ -60,7 +62,7 @@ if SP.arch in ['x86']:
   ]
   library.compiler.defines += ['SP_HAS_JIT']
 
-if SP.arch == 'x86':
+if has_jit and SP.arch == 'x86':
   library.sources += [
     'x86/assembler-x86.cpp',
     'x86/code-stubs-x86.cpp',
