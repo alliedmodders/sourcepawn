@@ -63,7 +63,7 @@ static short skiplevel; /* level at which we started skipping (including nested 
 static unsigned char term_expr[] = "";
 static int listline=-1; /* "current line" for the list file */
 
-#if defined DARWIN
+#if defined KE_MACOSX
 static double pow10(double d)
 {
   return pow(10, d);

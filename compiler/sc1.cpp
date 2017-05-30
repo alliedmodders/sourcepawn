@@ -1048,9 +1048,9 @@ static void setconfig(char *root)
     int len;
 
     /* add the default "include" directory */
-#if defined __WIN32__ || defined _WIN32
+#if defined KE_WINDOWS
       GetModuleFileNameA(NULL,path,_MAX_PATH);
-#elif defined LINUX || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#elif defined ENABLE_BINRELOC
       /* see www.autopackage.org for the BinReloc module */
       br_init_lib(NULL);
       ptr=br_find_exe("spcomp");
