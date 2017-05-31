@@ -110,8 +110,8 @@ class Config(object):
       if cxx.like('gcc'):
         cfg.cflags += ['-O3']
         if cxx.like('emscripten'):
-          cfg.cflags += ['-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
-          cfg.linkflags += ['-O3', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
+          cfg.cflags += ['--closure', '0', '--memory-init-file', '0', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
+          cfg.linkflags += ['-O3', '--closure', '0', '--memory-init-file', '0', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
       elif cxx.like('msvc'):
         cfg.cflags += ['/Ox']
         cfg.linkflags += ['/OPT:ICF', '/OPT:REF']
@@ -231,10 +231,6 @@ class SourcePawn(object):
   def BuildTests(self):
     builder.RunBuildScripts(self.test_scripts, self.vars)
 
-  def BuildCore(self):
-    self.BuildSpcomp()
-    self.BuildVM()
-
   def BuildSuite(self):
     self.BuildSpcomp()
     self.BuildVM()
@@ -252,18 +248,19 @@ if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  build = getattr(builder.options, 'build', '').split(',')
-  if not build:
+  build = getattr(builder.options, 'build', 'all').split(',')
+  if 'all' in build:
     sp.BuildSuite()
-  if 'spcomp' in build:
-    sp.BuildSpcomp()
-  if 'vm' in build:
-    sp.BuildVM()
-  if 'exp' in build:
-    sp.BuildExperimental()
-  if 'test' in build:
-    sp.BuildTests()
-  if 'core' in build:
-    sp.BuildCore()
+  else:
+    if 'core' in build:
+      build += ['spcomp', 'vm']
+    if 'spcomp' in build:
+      sp.BuildSpcomp()
+    if 'vm' in build:
+      sp.BuildVM()
+    if 'exp' in build:
+      sp.BuildExperimental()
+    if 'test' in build:
+      sp.BuildTests()
 else:
   rvalue = SourcePawn
