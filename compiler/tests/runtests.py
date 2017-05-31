@@ -32,7 +32,11 @@ def run_tests(args):
             extra_args = []
 
         try:
+            if os.path.isabs(infile) and  os.path.splitext(args.spcomp)[1] == '.js':
+              infile = '/fakeroot' + infile
             argv = [os.path.abspath(args.spcomp), infile] + extra_args
+            if os.path.splitext(args.spcomp)[1] == '.js':
+              argv = ['node'] + argv
             p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = p.communicate()
             stdout = stdout.decode('utf-8')

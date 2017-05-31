@@ -18,6 +18,10 @@
 #include "environment.h"
 #include "stack-frames.h"
 
+#ifdef __EMSCRIPTEN__
+# include <emscripten.h>
+#endif
+
 using namespace ke;
 using namespace sp;
 using namespace SourcePawn;
@@ -216,6 +220,16 @@ static int Execute(const char *file)
 
 int main(int argc, char **argv)
 {
+#ifdef __EMSCRIPTEN__
+  EM_ASM(
+    if (ENVIRONMENT_IS_NODE) {
+      FS.mkdir('/fakeroot');
+      FS.mount(NODEFS, { root: '/' }, '/fakeroot');
+      FS.chdir('/fakeroot/' + process.cwd());
+    }
+  );
+#endif
+
   if (argc != 2) {
     fprintf(stderr, "Usage: <file>\n");
     return 1;
