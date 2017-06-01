@@ -1073,7 +1073,7 @@ static void setconfig(char *root)
 #elif defined __EMSCRIPTEN__
       if (EM_ASM_INT({
         if (ENVIRONMENT_IS_NODE) {
-          stringToUTF8(__filename, $0, $1);
+          stringToUTF8('/fakeroot' + __filename, $0, $1);
           return 1;
         }
         return 0;
