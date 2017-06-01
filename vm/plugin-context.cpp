@@ -777,11 +777,20 @@ PluginContext::setFrameValue(cell_t offset, cell_t value)
 bool
 PluginContext::getCellValue(cell_t address, cell_t* out)
 {
+  assert((uintptr_t)(const void *)out % sizeof(cell_t) == 0);
+
   cell_t* ptr = throwIfBadAddress(address);
   if (!ptr)
     return false;
 
-  *out = *ptr;
+  if ((uintptr_t)(const void*)ptr % sizeof(cell_t) == 0) {
+    *out = *ptr;
+  } else {
+    for (size_t i = 0; i < sizeof(cell_t); ++i) {
+      ((unsigned char*)out)[i] = ((unsigned char*)ptr)[i];
+    }
+  }
+
   return true;
 }
 

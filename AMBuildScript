@@ -46,7 +46,7 @@ class Config(object):
       cfg.cxxflags += ['-std=c++11']
 
       have_gcc = cxx.name is 'gcc'
-      have_clang = cxx.name is 'clang'
+      have_clang = cxx.name is 'clang' or cxx.name is 'emscripten'
       if have_clang or (have_gcc and cxx.majorVersion >= 4):
         cfg.cflags += ['-fvisibility=hidden']
         cfg.cxxflags += ['-fvisibility-inlines-hidden']
@@ -67,6 +67,11 @@ class Config(object):
         cfg.cflags += ['-mfpmath=sse']
 
       cfg.postlink += ['-lm']
+
+      if cxx.like('emscripten'):
+        emflags = ['-s', 'PRECISE_F32=1']
+        cfg.cflags += emflags
+        cfg.linkflags += emflags
     elif cxx.name is 'msvc':
       if builder.options.debug == '1':
         cfg.cflags += ['/MTd']
@@ -102,13 +107,17 @@ class Config(object):
         'uuid.lib',
         'odbc32.lib',
         'odbccp32.lib',
-      ] 
+      ]
 
     # Optimization
     if builder.options.opt == '1':
       cfg.defines += ['NDEBUG']
       if cxx.like('gcc'):
         cfg.cflags += ['-O3']
+        if cxx.like('emscripten'):
+          emflags = ['--closure', '0', '--memory-init-file', '0', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
+          cfg.cflags += emflags
+          cfg.linkflags += ['-O3'] + emflags
       elif cxx.like('msvc'):
         cfg.cflags += ['/Ox']
         cfg.linkflags += ['/OPT:ICF', '/OPT:REF']
@@ -118,6 +127,10 @@ class Config(object):
       cfg.defines += ['DEBUG', '_DEBUG']
       if cxx.like('msvc'):
         cfg.cflags += ['/Od', '/RTC1']
+      elif cxx.like('emscripten'):
+        emflags = ['-s', 'ASSERTIONS=1', '-s', 'SAFE_HEAP=1', '-s', 'STACK_OVERFLOW_CHECK=1', '-s', 'WARN_UNALIGNED=0', '-s', 'DEMANGLE_SUPPORT=1']
+        cfg.cflags += emflags
+        cfg.linkflags += emflags
 
     # This needs to be after our optimization flags which could otherwise disable it.
     if cxx.name == 'msvc':
@@ -125,7 +138,7 @@ class Config(object):
       cfg.cflags += ['/Oy-']
 
     # Platform-specifics
-    if builder.target_platform == 'linux':
+    if builder.target_platform == 'linux' and cxx.name != 'emscripten':
       if cxx.name == 'gcc':
         cfg.postlink += ['-static-libgcc']
       elif cxx.name == 'clang':
@@ -228,10 +241,6 @@ class SourcePawn(object):
   def BuildTests(self):
     builder.RunBuildScripts(self.test_scripts, self.vars)
 
-  def BuildCore(self):
-    self.BuildSpcomp()
-    self.BuildVM()
-
   def BuildSuite(self):
     self.BuildSpcomp()
     self.BuildVM()
@@ -249,18 +258,19 @@ if builder.parent is None:
   root = Config()
   root.configure()
   sp = SourcePawn(root, root.amtl)
-  build = getattr(builder.options, 'build', None)
-  if build == 'spcomp':
-    sp.BuildSpcomp()
-  elif build == 'vm':
-    sp.BuildVM()
-  elif build == 'exp':
-    sp.BuildExperimental()
-  elif build == 'test':
-    sp.BuildTests()
-  elif build == 'core':
-    sp.BuildCore()
-  else:
+  build = getattr(builder.options, 'build', 'all').split(',')
+  if 'all' in build:
     sp.BuildSuite()
+  else:
+    if 'core' in build:
+      build += ['spcomp', 'vm']
+    if 'spcomp' in build:
+      sp.BuildSpcomp()
+    if 'vm' in build:
+      sp.BuildVM()
+    if 'exp' in build:
+      sp.BuildExperimental()
+    if 'test' in build:
+      sp.BuildTests()
 else:
   rvalue = SourcePawn

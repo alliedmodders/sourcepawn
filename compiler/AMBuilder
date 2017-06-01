@@ -33,14 +33,17 @@ if builder.target_platform == 'linux':
   compiler.defines += [
     'LINUX',
     'AMX_ANSIONLY',
-    'ENABLE_BINRELOC',
     '_GNU_SOURCE'
   ]
 elif builder.target_platform == 'mac':
   compiler.defines += [
     'DARWIN',
     'AMX_ANSIONLY',
-    'ENABLE_BINRELOC',
+    'HAVE_SAFESTR'
+  ]
+
+if compiler.like('emscripten'):
+  compiler.defines += [
     'HAVE_SAFESTR'
   ]
  
@@ -64,8 +67,11 @@ binary.sources += [
   'smx-builder.cpp',
   'sp_symhash.cpp',
 ]
-if builder.target_platform != 'windows':
+
+if builder.target_platform != 'windows' and not compiler.like('emscripten'):
+  compiler.defines += ['ENABLE_BINRELOC']
   binary.sources.append('binreloc.c')
+
 binary.compiler.linkflags[0:0] = [
   SP.zlib,
 ]

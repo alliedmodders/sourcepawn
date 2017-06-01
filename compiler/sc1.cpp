@@ -70,6 +70,10 @@
 # define SOURCEPAWN_VERSION SOURCEMOD_VERSION
 #endif
 
+#ifdef __EMSCRIPTEN__
+# include <emscripten.h>
+#endif
+
 #include "lstring.h"
 #include "sc.h"
 #include "sctracker.h"
@@ -193,6 +197,16 @@ char g_tmpfile[_MAX_PATH] = {0};
  */
 int pc_compile(int argc, char *argv[])
 {
+#ifdef __EMSCRIPTEN__
+  EM_ASM(
+    if (ENVIRONMENT_IS_NODE) {
+      FS.mkdir('/fakeroot');
+      FS.mount(NODEFS, { root: '/' }, '/fakeroot');
+      FS.chdir('/fakeroot/' + process.cwd());
+    }
+  );
+#endif
+
   int entry,i,jmpcode;
   int retcode;
   char incfname[_MAX_PATH];
@@ -561,7 +575,7 @@ static void inst_datetime_defines(void)
   time(&td);
   curtime = localtime(&td);
 
-#if defined EMSCRIPTEN
+#if defined __EMSCRIPTEN__
   snprintf(date, sizeof(date), "\"%02d/%02d/%04d\"", curtime->tm_mon + 1, curtime->tm_mday, curtime->tm_year + 1900);
   snprintf(ltime, sizeof(ltime), "\"%02d:%02d:%02d\"", curtime->tm_hour, curtime->tm_min, curtime->tm_sec);
 #else
@@ -1048,14 +1062,24 @@ static void setconfig(char *root)
     int len;
 
     /* add the default "include" directory */
-#if defined __WIN32__ || defined _WIN32
+#if defined KE_WINDOWS
       GetModuleFileNameA(NULL,path,_MAX_PATH);
-#elif defined LINUX || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#elif defined ENABLE_BINRELOC
       /* see www.autopackage.org for the BinReloc module */
       br_init_lib(NULL);
       ptr=br_find_exe("spcomp");
       strlcpy(path,ptr,sizeof path);
       free(ptr);
+#elif defined __EMSCRIPTEN__
+      if (EM_ASM_INT({
+        if (ENVIRONMENT_IS_NODE) {
+          stringToUTF8(__filename, $0, $1);
+          return 1;
+        }
+        return 0;
+      }, path, sizeof(path)) == 0 && root != NULL) {
+        strlcpy(path, root, sizeof(path));
+      }
 #else
       if (root!=NULL)
         strlcpy(path,root,sizeof path); /* path + filename (hopefully) */
@@ -1116,7 +1140,7 @@ static void setcaption(void)
 {
   pc_printf("SourcePawn Compiler %s\n", SOURCEPAWN_VERSION);
   pc_printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
-  pc_printf("Copyright (c) 2004-2015 AlliedModders LLC\n\n");
+  pc_printf("Copyright (c) 2004-2017 AlliedModders LLC\n\n");
 }
 
 static void about(void)

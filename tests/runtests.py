@@ -157,14 +157,22 @@ class TestRunner(object):
   def run_compiler(self, test):
     self.out("  [SMX] ")
 
+    test_path = test.path
+    inc_folder = self.inc_folder
+    if os.path.isabs(test_path) and os.path.splitext(self.spcomp)[1] == '.js':
+      test_path = '/fakeroot' + test_path
+      inc_folder = '/fakeroot' + inc_folder
+
     argv = [
       self.spcomp,
-      '-i' + self.inc_folder,
+      '-i' + inc_folder,
     ]
+    if os.path.splitext(self.spcomp)[1] == '.js':
+      argv = ['node'] + argv
     if self.args.disable_phopt:
       argv += ['-O0']
     argv += [
-      test.path,
+      test_path,
     ]
 
     p = subprocess.Popen(argv, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
@@ -189,10 +197,14 @@ class TestRunner(object):
 
   def run_shell(self, test, smx_path):
     self.out("  [RUN] ")
+    if os.path.isabs(smx_path) and os.path.splitext(self.shell)[1] == '.js':
+      smx_path = '/fakeroot' + smx_path
     argv = [
       self.shell,
       smx_path,
     ]
+    if os.path.splitext(self.shell)[1] == '.js':
+      argv = ['node'] + argv
     p = subprocess.Popen(argv, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
     stdout, stderr = p.communicate()
     stdout = stdout.decode('utf-8')
