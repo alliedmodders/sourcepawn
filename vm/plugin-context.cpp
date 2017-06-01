@@ -783,10 +783,13 @@ PluginContext::getCellValue(cell_t address, cell_t* out)
   if (!ptr)
     return false;
 
-  if ((uintptr_t)(const void*)ptr % sizeof(cell_t) == 0)
+  if ((uintptr_t)(const void*)ptr % sizeof(cell_t) == 0) {
     *out = *ptr;
-  for (size_t i = 0; i < sizeof(cell_t); ++i)
-    ((unsigned char*)out)[i] = ((unsigned char*)ptr)[i];
+  } else {
+    for (size_t i = 0; i < sizeof(cell_t); ++i) {
+      ((unsigned char*)out)[i] = ((unsigned char*)ptr)[i];
+    }
+  }
 
   return true;
 }
