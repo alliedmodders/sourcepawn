@@ -1,7 +1,7 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
+//
 // Copyright (C) 2006-2017 AlliedModders LLC
-// 
+//
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
 // License as published by the Free Software Foundation, either version 3 of
@@ -135,12 +135,29 @@ runtime_bind_native(IPluginRuntime *rt, const char *name, SPVM_NATIVE_FUNC fn) {
   return true;
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE bool
-runtime_invoke(IPluginRuntime *rt, const char *name, cell_t *retval, char *error, size_t errorLength) {
-  IPluginFunction *fun = rt->GetFunctionByName(name);
-  if (!fun)
-    return false;
+extern "C" EMSCRIPTEN_KEEPALIVE IPluginFunction *
+runtime_get_function(IPluginRuntime *rt, const char *name) {
+  return rt->GetFunctionByName(name);
+}
 
+extern "C" EMSCRIPTEN_KEEPALIVE bool
+function_push_cell(IPluginFunction *fun, cell_t cell) {
+  return fun->PushCell(cell) == SP_ERROR_NONE;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool
+function_push_float(IPluginFunction *fun, float number) {
+  return fun->PushFloat(number) == SP_ERROR_NONE;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool
+function_push_string(IPluginFunction *fun, const char *buffer) {
+  return fun->PushString(buffer) == SP_ERROR_NONE;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool
+function_invoke(IPluginFunction *fun, cell_t *retval, char *error, size_t errorLength) {
+  IPluginRuntime *rt = fun->GetParentRuntime();
   IPluginContext *cx = rt->GetDefaultContext();
 
   {
@@ -152,4 +169,18 @@ runtime_invoke(IPluginRuntime *rt, const char *name, cell_t *retval, char *error
   }
 
   return true;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE cell_t *
+context_local_to_physical_address(IPluginContext *ctx, cell_t local) {
+  cell_t *physical;
+  if (ctx->LocalToPhysAddr(local, &physical) != SP_ERROR_NONE) {
+    return nullptr;
+  }
+  return physical;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void
+context_throw_native_error(IPluginContext *ctx, const char *error) {
+  ctx->ThrowNativeError(error);
 }
