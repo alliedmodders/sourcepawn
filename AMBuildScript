@@ -138,18 +138,22 @@ class Config(object):
       cfg.cflags += ['/Oy-']
 
     # Platform-specifics
-    if builder.target_platform == 'linux' and cxx.name != 'emscripten':
-      if cxx.name == 'gcc':
-        cfg.postlink += ['-static-libgcc']
-      elif cxx.name == 'clang':
-        cfg.postlink += ['-lgcc_eh']
-      cfg.postlink += ['-lpthread', '-lrt']
-    elif builder.target_platform == 'mac':
-      cfg.linkflags += [
-        '-mmacosx-version-min=10.5',
-      ]
-    elif builder.target_platform == 'windows':
-      cfg.defines += ['WIN32', '_WINDOWS']
+    if not cxx.like('emscripten'):
+      if builder.target_platform == 'linux':
+        if cxx.name == 'gcc':
+          cfg.postlink += ['-static-libgcc']
+        elif cxx.name == 'clang':
+          cfg.postlink += ['-lgcc_eh']
+        cfg.postlink += ['-lpthread', '-lrt']
+      elif builder.target_platform == 'mac':
+        cfg.cflags += [
+          '-mmacosx-version-min=10.5',
+        ]
+        cfg.linkflags += [
+          '-mmacosx-version-min=10.5',
+        ]
+      elif builder.target_platform == 'windows':
+        cfg.defines += ['WIN32', '_WINDOWS']
 
     if builder.options.arch == 'x64':
       gccarch = '-m64'

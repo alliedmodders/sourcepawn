@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <amtl/am-unused.h>
+#include <amtl/am-platform.h>
 
 #if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
   #include <conio.h>

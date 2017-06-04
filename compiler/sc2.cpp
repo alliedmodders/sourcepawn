@@ -27,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <amtl/am-platform.h>
 #include <sp_typeutil.h>
 #include "lstring.h"
 #include "sc.h"
