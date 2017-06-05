@@ -1,6 +1,11 @@
+@echo off
+set status=0
 
 call {objdir}/testing/test-compiler.bat
-if %errorlevel% neq 0 exit /b %errorlevel%
+if %errorlevel% neq 0 set status=1
+
 echo ""
 call {objdir}/testing/test-runtime.bat
-if %errorlevel% neq 0 exit /b %errorlevel%
+if %errorlevel% neq 0 set status=1
+
+exit /b %status%

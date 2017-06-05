@@ -1,6 +1,10 @@
 #!/bin/sh
+status=0
 
 echo "Running shell tests..."
-python {source}/tests/runtests.py --spcomp "{spcomp}" --shell "{spshell}"
+python {source}/tests/runtests.py --spcomp "{spcomp}" --shell "{spshell}" || status=1
+
 echo "Running shell tests with no optimizer..."
-python {source}/tests/runtests.py --disable-phopt --spcomp "{spcomp}" --shell "{spshell}"
+python {source}/tests/runtests.py --disable-phopt --spcomp "{spcomp}" --shell "{spshell}" || status=1
+
+exit $status
