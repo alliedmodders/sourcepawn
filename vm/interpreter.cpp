@@ -47,6 +47,7 @@ Interpreter::Interpreter(PluginContext* cx, RefPtr<MethodInfo> method)
    cx_(cx),
    reader_(rt_, method->pcode_offset(), this),
    method_(method),
+   has_returned_(false),
    return_value_(0)
 {
 }
@@ -62,7 +63,7 @@ Interpreter::run()
   if (!reader_.visitNext())
     return false;
 
-  while (reader_.more()) {
+  while (!has_returned_ && reader_.more()) {
     if (reader_.peekOpcode() == OP_PROC || reader_.peekOpcode() == OP_ENDPROC)
       break;
     if (!reader_.visitNext())
@@ -105,6 +106,7 @@ Interpreter::visitRETN()
   if (!cx_->popAmxFrame())
     return false;
 
+  has_returned_ = true;
   return_value_ = regs_.pri();
   return true;
 }

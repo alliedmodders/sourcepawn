@@ -169,6 +169,7 @@ class Interpreter final : public PcodeVisitor
   PluginContext* cx_;
   PcodeReader<Interpreter> reader_;
   RefPtr<MethodInfo> method_;
+  bool has_returned_;
   cell_t return_value_;
   InterpRegs regs_;
   InterpInvokeFrame* ivk_;
