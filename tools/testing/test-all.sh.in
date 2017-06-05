@@ -1,5 +1,9 @@
 #!/bin/sh
+status=0
 
-sh {objdir}/testing/test-compiler.sh
+sh {objdir}/testing/test-compiler.sh || status=1
+
 echo ""
-sh {objdir}/testing/test-runtime.sh
+sh {objdir}/testing/test-runtime.sh || status=1
+
+exit $status
