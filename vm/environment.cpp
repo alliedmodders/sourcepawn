@@ -264,23 +264,25 @@ Environment::Invoke(PluginContext* cx,
                     cell_t* result)
 {
 #if defined(SP_HAS_JIT)
-  if (!method->jit()) {
-    int err = SP_ERROR_NONE;
-    if (!CompilerBase::Compile(cx, method, &err)) {
-      cx->ReportErrorNumber(err);
-      return false;
+  if (jit_enabled_) {
+    if (!method->jit()) {
+      int err = SP_ERROR_NONE;
+      if (!CompilerBase::Compile(cx, method, &err)) {
+        cx->ReportErrorNumber(err);
+        return false;
+      }
     }
-  }
 
-  if (CompiledFunction* fn = method->jit()) {
-    JitInvokeFrame ivkframe(cx, fn->GetCodeOffset()); 
+    if (CompiledFunction* fn = method->jit()) {
+      JitInvokeFrame ivkframe(cx, fn->GetCodeOffset()); 
 
-    assert(top_ && top_->cx() == cx);
+      assert(top_ && top_->cx() == cx);
 
-    InvokeStubFn invoke = code_stubs_->InvokeStub();
-    invoke(cx, fn->GetEntryAddress(), result);
+      InvokeStubFn invoke = code_stubs_->InvokeStub();
+      invoke(cx, fn->GetEntryAddress(), result);
 
-    return exception_code_ == SP_ERROR_NONE;
+      return exception_code_ == SP_ERROR_NONE;
+    }
   }
 #endif
 

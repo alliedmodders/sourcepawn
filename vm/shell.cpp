@@ -240,7 +240,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  if (getenv("DISABLE_JIT"))
+  if (getenv("DISABLE_JIT") && getenv("DISABLE_JIT")[0] == '1')
     sEnv->SetJitEnabled(false);
 
   ShellDebugListener debug;
