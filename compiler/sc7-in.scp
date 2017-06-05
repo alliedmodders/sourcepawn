@@ -1126,13 +1126,13 @@ static SEQUENCE sequences_cmp[] = {
    *    stor.s.pri n2           -
    */
   {
-      "const.pri %1!stor.pri %2!",
-      "const %2 %1!",
+      "const.pri %1!stor.pri %2!;$exp!",
+      "const %2 %1!;$exp!",
     seqsize(2,2) - seqsize(1,2)
   },
   {
-      "const.pri %1!stor.s.pri %2!",
-      "const.s %2 %1!",
+      "const.pri %1!stor.s.pri %2!;$exp!",
+      "const.s %2 %1!;$exp!",
     seqsize(2,2) - seqsize(1,2)
   },
   /* ----- */
