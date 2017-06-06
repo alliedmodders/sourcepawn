@@ -2383,6 +2383,7 @@ static cell initarray(int ident,int tag,int dim[],int numdim,int cur,
       litinsert(0,startlit);
     } else if (idx>=dim[cur]) {
       error(18);            /* initialization data exceeds array size */
+      *errorfound=TRUE;
       break;
     } /* if */
     if (cur+2<numdim) {
@@ -2410,10 +2411,13 @@ static cell initarray(int ident,int tag,int dim[],int numdim,int cur,
   needtoken('}');
   assert(counteddim!=NULL);
   if (counteddim[cur]>0) {
-    if (idx<counteddim[cur])
+    if (idx<counteddim[cur]) {
       error(52);                /* array is not fully initialized */
-    else if (idx>counteddim[cur])
+      *errorfound=TRUE;
+    } else if (idx>counteddim[cur]) {
       error(18);                /* initialization data exceeds declared size */
+      *errorfound=TRUE;
+    }
   } /* if */
   counteddim[cur]=idx;
 
@@ -2463,19 +2467,28 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
       /* if this array is based on an enumeration, fill the "field" up with
        * zeros, and toggle the tag
        */
-      if (enumroot!=NULL && enumfield==NULL)
+      if (enumroot!=NULL && enumfield==NULL) {
         error(227);             /* more initializers than enum fields */
+        if (errorfound!=NULL)
+          *errorfound=TRUE;
+      }
       rtag=tag;                 /* preset, may be overridden by enum field tag */
       if (enumfield!=NULL) {
         cell step;
         int cmptag=enumfield->index;
         symbol *symfield=findconst(enumfield->name,&cmptag);
-        if (cmptag>1)
+        if (cmptag>1) {
           error(91,enumfield->name); /* ambiguous constant, needs tag override */
+          if (errorfound!=NULL)
+            *errorfound=TRUE;
+        }
         assert(symfield!=NULL);
         assert(fieldlit<litidx);
-        if (litidx-fieldlit>symfield->dim.array.length)
+        if (litidx-fieldlit>symfield->dim.array.length) {
           error(228);           /* length of initializer exceeds size of the enum field */
+          if (errorfound!=NULL)
+            *errorfound=TRUE;
+        }
         if (ellips) {
           step=prev1-prev2;
         } else {
@@ -2502,10 +2515,15 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
   /* fill up the literal queue with a series */
   if (ellips) {
     cell step=((litidx-curlit)==1) ? (cell)0 : prev1-prev2;
-    if (size==0 || (litidx-curlit)==0)
+    if (size==0 || (litidx-curlit)==0) {
       error(41);                /* invalid ellipsis, array size unknown */
-    else if ((litidx-curlit)==(int)size)
+      if (errorfound!=NULL)
+        *errorfound=TRUE;
+    } else if ((litidx-curlit)==(int)size) {
       error(18);                /* initialization data exceeds declared size */
+      if (errorfound!=NULL)
+        *errorfound=TRUE;
+    }
     while ((litidx-curlit)<(int)size) {
       prev1+=step;
       litadd(prev1);
@@ -2519,6 +2537,8 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
     size=litidx-curlit;                 /* number of elements defined */
   } else if (litidx-curlit>(int)size) { /* e.g. "myvar[3]={1,2,3,4};" */
     error(18);                  /* initialization data exceeds declared size */
+    if (errorfound!=NULL)
+      *errorfound=TRUE;
     litidx=(int)size+curlit;    /* avoid overflow in memory moves */
   } /* if */
   return size;
@@ -2537,6 +2557,8 @@ static cell init(int ident,int *tag,int *errorfound)
      * increases "litidx") */
     if (ident==iVARIABLE) {
       error(6);         /* must be assigned to an array */
+      if (errorfound!=NULL)
+        *errorfound=TRUE;
       litidx=1;         /* reset literal queue */
     } /* if */
     *tag=pc_tag_string;
