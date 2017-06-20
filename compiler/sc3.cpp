@@ -2766,6 +2766,17 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
   } /* if */
   pushheaplist();
 
+  // If we're calling a stock in the 2nd pass, and it was never defined as
+  // read, then we're encountering some kind of compiler bug. If we're not
+  // supposed to emit this code than the status should be statSKIP - so
+  // we're generating code that will jump to the wrong address.
+  if ((sym->usage & uSTOCK) &&
+      !(sym->usage & uREAD) &&
+      sc_status == statWRITE)
+  {
+    error(195, sym->name);
+  }
+
   sc_allowproccall=FALSE;       /* parameters may not use procedure call syntax */
 
   if ((sym->flags & flgDEPRECATED)!=0) {

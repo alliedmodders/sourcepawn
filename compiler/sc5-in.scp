@@ -225,6 +225,7 @@ static const char *fatalmsg[] = {
 /*192*/  "invalid path: \"%s\"\n",
 /*193*/  "assertion failed: %s\n",
 /*194*/  "user error: %s\n",
+/*195*/  "compiler bug: calling stock \"%s\" that has no generated code\n",
 };
 
 static const char *warnmsg[] = {
