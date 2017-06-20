@@ -14,3 +14,9 @@ native void print(const char[] str);
 native void dump_stack_trace();
 native void unbound_native();
 native int donothing();
+
+typedef InvokeCallback = function void ();
+// Invoke |fn| up to |count| times, returning false immediately on failure.
+native bool invoke(int count, InvokeCallback fn);
+// Invoke |fn|, |count| times, returning the number of successful invocations.
+native int execute(int count, InvokeCallback fn);
