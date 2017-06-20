@@ -177,7 +177,6 @@ static int nestlevel  = 0;      /* number of active (open) compound statements *
 static int endlessloop= 0;      /* nesting level of endless loop */
 static int rettype    = 0;      /* the type that a "return" expression should have */
 static int skipinput  = 0;      /* number of lines to skip from the first input file */
-static int optproccall = TRUE;  /* support "procedure call" */
 static int verbosity  = 1;      /* verbosity level, 0=quiet, 1=normal, 2=verbose */
 static int sc_reparse = 0;      /* needs 3th parse because of changed prototypes? */
 static int sc_parsenum = 0;     /* number of the extra parses */
@@ -701,7 +700,6 @@ static void resetglobals(void)
   indent_nowarn=FALSE;  /* do not skip warning "217 loose indentation" */
   sc_allowtags=TRUE;    /* allow/detect tagnames */
   sc_status=statIDLE;
-  sc_allowproccall=FALSE;
   pc_addlibtable=TRUE;  /* by default, add a "library table" to the output file */
   pc_docexpr=FALSE;
   pc_deprecate=NULL;
@@ -719,7 +717,6 @@ static void initglobals(void)
   litmax=sDEF_LITMAX;   /* current size of the literal table */
   errnum=0;             /* number of errors */
   warnnum=0;            /* number of warnings */
-  optproccall=FALSE;    /* sourcemod: do not support "procedure call" */
   verbosity=1;          /* verbosity level, no copyright banner */
   sc_debug=sCHKBOUNDS|sSYMBOLIC;   /* sourcemod: full debug stuff */
   pc_optimize=sOPTIMIZE_DEFAULT;   /* sourcemod: full optimization */
@@ -930,11 +927,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
       case ';':
         sc_needsemicolon=toggle_option(ptr,sc_needsemicolon);
         break;
-#if 0 /* not allowed to change in SourceMod */
-      case '(':
-        optproccall=!toggle_option(ptr,!optproccall);
-        break;
-#endif
       default:                  /* wrong option */
         about();
       } /* switch */
@@ -1178,9 +1170,6 @@ static void about(void)
     pc_printf("         -\\       use '\\' for escape characters\n");
     pc_printf("         -^       use '^' for escape characters\n");
     pc_printf("         -;<+/->  require a semicolon to end each statement (default=%c)\n", sc_needsemicolon ? '+' : '-');
-#if 0 /* not allowed in SourceMod */
-    pc_printf("         -([+/-]  require parantheses for function invocation (default=%c)\n", optproccall ? '-' : '+');
-#endif
     pc_printf("         sym=val  define constant \"sym\" with value \"val\"\n");
     pc_printf("         sym=     define constant \"sym\" with value 0\n");
 #if defined __WIN32__ || defined _WIN32 || defined _Windows || defined __MSDOS__
@@ -5767,12 +5756,10 @@ static void statement(int *lastindent,int allow_decl)
     decl_enum(sLOCAL);
     break;
   default:          /* non-empty expression */
-    sc_allowproccall=optproccall;
     lexpush();      /* analyze token later */
     doexpr(TRUE,TRUE,TRUE,TRUE,NULL,NULL,FALSE);
     needtoken(tTERM);
     lastst=tEXPR;
-    sc_allowproccall=FALSE;
   } /* switch */
 }
 
@@ -5877,7 +5864,6 @@ static int doexpr2(int comma,int chkeffect,int allowarray,int mark_endexpr,
       error(33,"-unknown-");    /* array must be indexed */
     if (chkeffect && !sideeffect)
       error(215);               /* expression has no effect */
-    sc_allowproccall=FALSE;     /* cannot use "procedure call" syntax anymore */
   } while (comma && matchtoken(',')); /* more? */
   if (mark_endexpr)
     markexpr(sEXPR,NULL,0);     /* optionally, mark the end of the expression */

@@ -921,7 +921,6 @@ extern int sc_status;       /* read/write status */
 extern int sc_err_status;   /* TRUE if errors should be generated even if sc_status = SKIP */
 extern int sc_rationaltag;  /* tag for rational numbers */
 extern int rational_digits; /* number of fractional digits */
-extern int sc_allowproccall;/* allow/detect tagnames in lex() */
 extern short sc_is_utf8;    /* is this source file in UTF-8 encoding */
 extern char *pc_deprecate;  /* if non-NULL, mark next declaration as deprecated */
 extern int pc_optimize;     /* (peephole) optimization level */

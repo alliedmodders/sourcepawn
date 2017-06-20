@@ -95,15 +95,12 @@ static void user_dec(void) {}
  *
  *  If an operator is found in the expression, it cannot be used in a function
  *  call with omitted parantheses. Mark this...
- *
- *  Global references: sc_allowproccall   (modified)
  */
 static int nextop(int *opidx,int *list)
 {
   *opidx=0;
   while (*list){
     if (matchtoken(*list)){
-      sc_allowproccall=FALSE;
       return TRUE;      /* found! */
     } else {
       list+=1;
@@ -1027,7 +1024,6 @@ static cell array_levelsize(symbol *sym,int level)
  *  Lowest hierarchy level (except for the , operator).
  *
  *  Global references: sc_intest        (reffered to only)
- *                     sc_allowproccall (modified)
  */
 static int hier14(value *lval1)
 {
@@ -1127,7 +1123,6 @@ static int hier14(value *lval1)
   assert(lval1->sym || lval1->accessor);
   if (lval1->sym && (lval1->sym->usage & uCONST) != 0)
     return error(22);           /* assignment to const argument */
-  sc_allowproccall=FALSE;       /* may no longer use "procedure call" syntax */
 
   lval3=*lval1;         /* save symbol to enable storage of expresion result */
   lval1->arrayidx=org_arrayidx; /* restore array index pointer */
@@ -2354,6 +2349,8 @@ restart:
 
     funcenum_t *fe = funcenum_for_symbol(sym);
     markusage(sym, uCALLBACK);
+    if (sc_status!=statSKIP)
+      markusage(sym, uREAD);
 
     // Get address into pri.
     load_glbfn(sym);
@@ -2391,7 +2388,6 @@ static int primary(value *lval)
 
     sc_intest=FALSE;            /* no longer in "test" expression */
     sc_allowtags=TRUE;          /* allow tagnames to be used in parenthesized expressions */
-    sc_allowproccall=FALSE;
     do
       lvalue=hier14(lval);
     while (matchtoken(','));
@@ -2472,8 +2468,6 @@ static int primary(value *lval)
         } /* switch */
       } /* if */
     } else {
-      if (!sc_allowproccall)
-        return error(17,st);    /* undefined symbol */
       /* an unknown symbol, but used in a way compatible with the "procedure
        * call" syntax. So assume that the symbol refers to a function.
        */
@@ -2776,8 +2770,6 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
   {
     error(195, sym->name);
   }
-
-  sc_allowproccall=FALSE;       /* parameters may not use procedure call syntax */
 
   if ((sym->flags & flgDEPRECATED)!=0) {
     const char *ptr= (sym->documentation!=NULL) ? sym->documentation : "";
