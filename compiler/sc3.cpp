@@ -1941,7 +1941,7 @@ enum FieldExprResult
 };
 
 static FieldExprResult
-field_expression(svalue &thisval, value *lval, symbol **target)
+field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method_t **methodp)
 {
   // Catch invalid calls early so we don't compile with a tag mismatch.
   switch (thisval.val.ident) {
@@ -1997,6 +1997,7 @@ field_expression(svalue &thisval, value *lval, symbol **target)
     lval->ident = iACCESSOR;
     lval->tag = method->property_tag();
     lval->accessor = method;
+    *methodp = method;
     return FER_Accessor;
   }
 
@@ -2006,6 +2007,8 @@ field_expression(svalue &thisval, value *lval, symbol **target)
     error(177, method->name, map->name, method->name);
     return FER_CallFunction;
   }
+
+  *methodp = method;
   return FER_CallMethod;
 }
 
@@ -2278,9 +2281,10 @@ restart:
       thisval.val = *lval1;
       thisval.lvalue = lvalue;
 
-      svalue *implicitthis = NULL;
+      svalue *implicitthis = nullptr;
+      methodmap_method_t* method = nullptr;
       if (tok == '.') {
-        switch (field_expression(thisval, lval1, &sym)) {
+        switch (field_expression(thisval, lval1, &sym, &method)) {
           case FER_Fail:
           case FER_CallFunction:
             break;
@@ -2300,6 +2304,11 @@ restart:
           goto restart;
 
         tok = '(';
+      }
+
+      if (method && method->parent->ctor == method) {
+        implicitthis = nullptr;
+        error(84, method->parent->name);
       }
 
       assert(tok=='(');

@@ -527,6 +527,7 @@ void methodmap_add_method(methodmap_t* map, methodmap_method_t* method)
     error(FATAL_ERROR_OOM);
     return;
   }
+  method->parent = map;
   map->methods = methods;
   map->methods[map->nummethods++] = method;
 }
