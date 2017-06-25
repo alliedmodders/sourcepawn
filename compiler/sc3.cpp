@@ -2468,10 +2468,11 @@ static int primary(value *lval)
         } /* switch */
       } /* if */
     } else {
-      /* an unknown symbol, but used in a way compatible with the "procedure
-       * call" syntax. So assume that the symbol refers to a function.
-       */
-      assert(sc_status==statFIRST);
+      // We assume this is a function that hasn't been seen yet. We should
+      // either be in the first pass, or the second pass and skipping writes.
+      // If we're writing, then this is an error.
+      if (sc_status != statFIRST)
+        return error(17, st);
       sym=fetchfunc(st);
       if (sym==NULL)
         error(FATAL_ERROR_OOM);
