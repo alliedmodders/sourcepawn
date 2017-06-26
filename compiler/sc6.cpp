@@ -846,6 +846,13 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
         nativeList.append(sym);
         continue;
       }
+
+      // If a function is marked as missing it should not be a public function
+      // with a declaration.
+      if (sym->usage & uMISSING) {
+        assert((sym->usage & (uPUBLIC|uDEFINE)) != (uPUBLIC|uDEFINE));
+        continue;
+      }
       
       if ((sym->usage & (uPUBLIC|uDEFINE)) == (uPUBLIC|uDEFINE) ||
           (sym->usage & uREAD))
@@ -881,8 +888,8 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
     symbol *sym = f.sym;
 
     assert(sym->addr() > 0);
-    assert(sym->codeaddr > sym->addr());
     assert(sym->usage & uDEFINE);
+    assert(sym->codeaddr > sym->addr());
 
     sp_file_publics_t &pubfunc = publics->add();
     pubfunc.address = sym->addr();
