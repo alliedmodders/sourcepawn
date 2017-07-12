@@ -174,7 +174,7 @@ void
 PluginRuntime::SetNames(const char *fullname, const char *name)
 {
   name_ = name;
-  full_name_ = name;
+  full_name_ = fullname;
 }
 
 RefPtr<MethodInfo>
