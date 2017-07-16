@@ -2025,8 +2025,7 @@ parse_view_as(value* lval)
 
   int paren = needtoken('(');
   lval->cmptag = tag;
-  if (hier14(lval))
-    rvalue(lval);
+  int lvalue = hier14(lval);
   if (paren)
     needtoken(')');
   else
@@ -2041,7 +2040,7 @@ parse_view_as(value* lval)
     error(89);
   }
   lval->tag = tag;
-  return FALSE;
+  return lvalue;
 }
 
 /*  hier1
