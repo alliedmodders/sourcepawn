@@ -1,4 +1,5 @@
 @echo off
+setlocal
 set status=0
 
 call {objdir}/testing/test-compiler.bat

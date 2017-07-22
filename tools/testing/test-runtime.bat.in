@@ -1,4 +1,5 @@
 @echo off
+setlocal
 set status=0
 
 echo "Running shell tests..."
