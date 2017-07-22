@@ -53,6 +53,7 @@
 static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char */
 
 static int errflag;
+static int sErrFile;
 static int errstart;     /* line number at which the instruction started */
 static int sErrLine;     /* forced line number for the error message */
 
@@ -73,14 +74,16 @@ int error(int number,...)
 static const char *prefix[3]={ "error", "fatal error", "warning" };
 static int lastline,errorcount;
 static short lastfile;
-  const char *msg,*pre;
+  const char *msg,*pre,*filename;
   va_list argptr;
 
   // sErrLine is used to temporarily change the line number of reported errors.
   // Pawn has an upstream bug where this is not reset on early-return, which
   // can lead to broken line numbers in error messages.
   int errline = sErrLine;
+  int errfile = sErrFile;
   sErrLine = -1;
+  sErrFile = -1;
 
   bool is_warning = (number >= 200 && !sc_warnings_are_errors);
 
@@ -125,16 +128,22 @@ static short lastfile;
     }
   } /* if */
 
-  assert(errstart<=fline);
   if (errline>0)
-    errstart=errline;
+    errstart=errline;           /* forced error position, set single line destination */
   else
-    errline=fline;
-  assert(errstart<=errline);
+    errline=fline;              /* normal error, errstart may (or may not) have been marked, endpoint is current line */
+  if (errstart>errline)
+    errstart=errline;           /* special case: error found at end of included file */
+  if (errfile>=0)
+    filename=get_inputfile(errfile);/* forced filename */
+  else
+    filename=inpfname;          /* current file */
+  assert(filename != NULL);
+
   va_start(argptr,number);
   if (strlen(errfname)==0) {
     int start= (errstart==errline) ? -1 : errstart;
-    if (pc_error(number,msg,inpfname,start,errline,argptr)) {
+    if (pc_error(number,msg,filename,start,errline,argptr)) {
       if (outf!=NULL) {
         pc_closeasm(outf,TRUE);
         outf=NULL;
@@ -145,9 +154,9 @@ static short lastfile;
     FILE *fp=fopen(errfname,"a");
     if (fp!=NULL) {
       if (errstart>=0 && errstart!=errline)
-        fprintf(fp,"%s(%d -- %d) : %s %03d: ",inpfname,errstart,errline,pre,number);
+        fprintf(fp,"%s(%d -- %d) : %s %03d: ",filename,errstart,errline,pre,number);
       else
-        fprintf(fp,"%s(%d) : %s %03d: ",inpfname,errline,pre,number);
+        fprintf(fp,"%s(%d) : %s %03d: ",filename,errline,pre,number);
       vfprintf(fp,msg,argptr);
       fclose(fp);
     } /* if */
@@ -195,9 +204,14 @@ void errorset(int code,int line)
   case sEXPRRELEASE:
     errstart=-1;        /* forget start line number */
     sErrLine=-1;
+    sErrFile=-1;
     break;
-  case sSETPOS:
+  case sSETLINE:
+    errstart=-1;        /* force error line number, forget start line */
     sErrLine=line;
+    break;
+  case sSETFILE:
+    sErrFile=line;
     break;
   } /* switch */
 }

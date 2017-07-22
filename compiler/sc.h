@@ -559,7 +559,8 @@ enum TokenKind {
 #define sFORCESET       1       /* force error flag on */
 #define sEXPRMARK       2       /* mark start of expression */
 #define sEXPRRELEASE    3       /* mark end of expression */
-#define sSETPOS         4       /* set line number for the error */
+#define sSETLINE        4       /* set line number for the error */
+#define sSETFILE        5       /* set file number for the error */
 
 enum {
   sOPTIMIZE_NONE,               /* no optimization */
@@ -844,6 +845,9 @@ void delete_substtable(void);
 stringlist *insert_sourcefile(char *string);
 char *get_sourcefile(int index);
 void delete_sourcefiletable(void);
+stringlist *insert_inputfile(char *string);
+char *get_inputfile(int index);
+void delete_inputfiletable(void);
 stringlist *insert_docstring(char *string);
 char *get_docstring(int index);
 void delete_docstring(int index);
@@ -909,8 +913,8 @@ extern int curseg;          /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;     /* stack size */
 extern int freading;        /* is there an input file ready for reading? */
 extern int fline;           /* the line number in the current file */
-extern short fnumber;       /* number of files in the file table (debugging) */
-extern short fcurrent;      /* current file being processed (debugging) */
+extern short fnumber;       /* number of files in the input file table */
+extern short fcurrent;      /* current file being processed */
 extern short sc_intest;     /* true if inside a test */
 extern int sideeffect;      /* true if an expression causes a side-effect */
 extern int stmtindent;      /* current indent of the statement */

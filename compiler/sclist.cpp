@@ -368,7 +368,7 @@ void delete_substtable(void)
 #endif /* !defined NO_SUBST */
 
 
-/* ----- input file list ----------------------------------------- */
+/* ----- input file list (explicit files) ------------------------ */
 static stringlist sourcefiles;
 
 stringlist *insert_sourcefile(char *string)
@@ -385,6 +385,28 @@ void delete_sourcefiletable(void)
 {
   delete_stringtable(&sourcefiles);
   assert(sourcefiles.next==NULL);
+}
+
+
+/* ----- parsed file list (explicit + included files) ------------ */
+static stringlist inputfiles;
+
+stringlist *insert_inputfile(char *string)
+{
+  if (sc_status!=statFIRST)
+    return insert_string(&inputfiles,string);
+  return NULL;
+}
+
+char *get_inputfile(int index)
+{
+  return get_string(&inputfiles,index);
+}
+
+void delete_inputfiletable(void)
+{
+  delete_stringtable(&inputfiles);
+  assert(inputfiles.next==NULL);
 }
 
 
