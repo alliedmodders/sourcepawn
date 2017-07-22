@@ -1,7 +1,7 @@
 native Handle:CreateHandle();
 
 methodmap Handle {
-	public Handle() = CreateHandle;
+	public Handle() { return CreateHandle(); }
 };
 
 public main() {

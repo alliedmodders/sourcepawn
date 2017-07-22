@@ -187,14 +187,16 @@ int plungequalifiedfile(char *name)
   inpfname=duplicatestring(name);/* set name of include file */
   if (inpfname==NULL)
     error(FATAL_ERROR_OOM);
-  inpf=fp;                  /* set input file pointer to include file */
+  inpf=fp;                      /* set input file pointer to include file */
   fnumber++;
-  fline=0;                  /* set current line number to 0 */
+  fline=0;                      /* set current line number to 0 */
   fcurrent=fnumber;
-  icomment=0;               /* not in a comment */
-  insert_dbgfile(inpfname);
-  setfiledirect(inpfname);
-  listline=-1;              /* force a #line directive when changing the file */
+  icomment=0;                   /* not in a comment */
+  insert_dbgfile(inpfname);     /* attach to debug information */
+  insert_inputfile(inpfname);   /* save for the error system */
+  assert(sc_status==statFIRST || strcmp(get_inputfile(fcurrent), inpfname)==0);
+  setfiledirect(inpfname);      /* (optionally) set in the list file */
+  listline=-1;                  /* force a #line directive when changing the file */
   sc_is_utf8=(short)scan_utf8(inpf,name);
   return TRUE;
 }
@@ -345,6 +347,7 @@ static void readline(unsigned char *line)
       inpf=POPSTK_P();
       insert_dbgfile(inpfname);
       setfiledirect(inpfname);
+      assert(sc_status==statFIRST || strcmp(get_inputfile(fcurrent),inpfname)==0);
       listline=-1;              /* force a #line directive when changing the file */
     } /* if */
 

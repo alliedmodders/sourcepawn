@@ -423,7 +423,8 @@ int pc_compile(int argc, char *argv[])
   lexinit();                    /* clear internal flags of lex() */
   sc_status=statWRITE;          /* allow to write --this variable was reset by resetglobals() */
   writeleader(&glbtab);
-  insert_dbgfile(inpfname);
+  insert_dbgfile(inpfname);     /* attach to debug information */
+  insert_inputfile(inpfname);   /* save for the error system */
   if (strlen(incfname)>0) {
     if (strcmp(incfname,sDEF_PREFIX)==0)
       plungefile(incfname,FALSE,TRUE);  /* parse "default.inc" (again) */
@@ -488,6 +489,7 @@ cleanup:
   delete_aliastable();
   delete_pathtable();
   delete_sourcefiletable();
+  delete_inputfiletable();
   delete_dbgstringtable();
   funcenums_free();
   methodmaps_free();
@@ -5341,7 +5343,8 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
         if ((sym->usage & uDEFINE)==0) {
           error(19,sym->name);      /* not a label: ... */
         } else if ((sym->usage & uREAD)==0) {
-          errorset(sSETPOS,sym->lnumber);
+          errorset(sSETFILE,sym->fnumber);
+          errorset(sSETLINE,sym->lnumber);
           error(203,sym->name);     /* symbol isn't used: ... */
         } /* if */
       } /* if */
@@ -5349,8 +5352,11 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
     case iFUNCTN:
       if ((sym->usage & (uDEFINE | uREAD | uNATIVE | uSTOCK | uPUBLIC))==uDEFINE) {
         funcdisplayname(symname,sym->name);
-        if (strlen(symname)>0)
+        if (strlen(symname)>0) {
+          errorset(sSETFILE,sym->fnumber);
+          errorset(sSETLINE,sym->lnumber);
           error(203,symname);       /* symbol isn't used ... (and not public/native/stock) */
+        }
       } /* if */
       if ((sym->usage & uPUBLIC)!=0 || strcmp(sym->name,uMAINFUNC)==0)
         entry=TRUE;                 /* there is an entry point */
@@ -5360,7 +5366,8 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       break;
     case iCONSTEXPR:
       if (testconst && (sym->usage & uREAD)==0) {
-        errorset(sSETPOS,sym->lnumber);
+        errorset(sSETFILE,sym->fnumber);
+        errorset(sSETLINE,sym->lnumber);
         error(203,sym->name);       /* symbol isn't used: ... */
       } /* if */
       break;
@@ -5372,14 +5379,17 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       if (sym->parent!=NULL)
         break;                      /* hierarchical data type */
       if ((sym->usage & (uWRITTEN | uREAD | uSTOCK))==0) {
-        errorset(sSETPOS,sym->lnumber);
+        errorset(sSETFILE,sym->fnumber);
+        errorset(sSETLINE,sym->lnumber);
         error(203,sym->name);  /* symbol isn't used (and not stock) */
       } else if ((sym->usage & (uREAD | uSTOCK | uPUBLIC))==0) {
-        errorset(sSETPOS,sym->lnumber);
+        errorset(sSETFILE,sym->fnumber);
+        errorset(sSETLINE,sym->lnumber);
         error(204,sym->name);       /* value assigned to symbol is never used */
 #if 0 // ??? not sure whether it is a good idea to force people use "const"
       } else if ((sym->usage & (uWRITTEN | uPUBLIC | uCONST))==0 && sym->ident==iREFARRAY) {
-        errorset(sSETPOS,sym->lnumber);
+        errorset(sSETFILE,sym->fnumber);
+        errorset(sSETLINE,sym->lnumber);
         error(214,sym->name);       /* make array argument "const" */
 #endif
       } /* if */
@@ -5390,6 +5400,8 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
     sym=sym->next;
   } /* while */
 
+  errorset(sEXPRRELEASE, 0); /* clear error data */
+  errorset(sRESET, 0);
   return entry;
 }
 
