@@ -520,6 +520,9 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (formaltag == actualtag)
     return TRUE;
 
+  if (formaltag == pc_tag_string && actualtag == 0)
+	return TRUE;
+
   if ((formaltag & OBJECTTAG) || (actualtag & OBJECTTAG))
     return matchobjecttags(formaltag, actualtag, flags);
 
