@@ -159,16 +159,16 @@ namespace smxdasm
                 {
                     gz_reader.Read(header.Data, header.dataoffs, header.ImageSize - header.dataoffs);
                 }
-
-                // Swap out the reader.
-                var new_stream = new MemoryStream(header.Data, Size, header.ImageSize - Size);
-                rd = new BinaryReader(new_stream);
                 break;
             }
 
             default:
                 throw new Exception("unknown compression type");
             }
+
+            // Swap out the reader.
+            var new_stream = new MemoryStream(header.Data, Size, header.ImageSize - Size);
+            rd = new BinaryReader(new_stream);
 
             // Read section information.
             header.Sections = new SectionEntry[header.num_sections];
