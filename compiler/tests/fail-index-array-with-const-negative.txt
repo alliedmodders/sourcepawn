@@ -1,0 +1,1 @@
+(6) : error 032: array index out of bounds (variable "x")

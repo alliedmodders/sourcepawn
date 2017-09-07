@@ -1,0 +1,2 @@
+Exception thrown: Array index out-of-bounds (index -1, limit 4)
+  [0] negative-array-index-1.sp::main, line 8
