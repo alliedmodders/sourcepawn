@@ -752,6 +752,7 @@ void ffcall(symbol *sym,const char *label,int numargs);
 void ffret();
 void ffabort(int reason);
 void ffbounds(cell size);
+void ffbounds();
 void jumplabel(int number);
 void defstorage(void);
 void modstk(int delta);

@@ -2188,10 +2188,14 @@ restart:
         if (close==']' && !magic_string) {
           if (sym->dim.array.length!=0)
             ffbounds(sym->dim.array.length-1);  /* run time check for array bounds */
+          else
+            ffbounds();
           cell2addr();  /* normal array index */
         } else {
           if (sym->dim.array.length!=0)
             ffbounds(sym->dim.array.length*(32/sCHARBITS)-1);
+          else
+            ffbounds();
           char2addr();  /* character array index */
         } /* if */
         popreg(sALT);
