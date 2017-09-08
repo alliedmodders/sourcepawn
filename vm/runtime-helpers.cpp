@@ -24,11 +24,20 @@ using namespace SourcePawn;
 void
 ReportOutOfBoundsError(cell_t index, cell_t bounds)
 {
-  Environment::get()->ReportErrorFmt(
-    SP_ERROR_ARRAY_BOUNDS,
-    "Array index out-of-bounds (index %d, limit %d)",
-    index,
-    size_t(bounds) + 1);
+  if (bounds == INT_MAX) {
+    // This is an internal protection against negative indices on arrays with
+    // unknown size.
+    Environment::get()->ReportErrorFmt(
+      SP_ERROR_ARRAY_BOUNDS,
+      "Array index out-of-bounds (index %d)",
+      index);
+  } else {
+    Environment::get()->ReportErrorFmt(
+      SP_ERROR_ARRAY_BOUNDS,
+      "Array index out-of-bounds (index %d, limit %d)",
+      index,
+      size_t(bounds) + 1);
+  }
 }
 
 } // namespace sp

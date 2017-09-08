@@ -1,0 +1,3 @@
+Exception thrown: Array index out-of-bounds (index -1)
+  [0] negative-array-index-2.sp::bad, line 13
+  [1] negative-array-index-2.sp::main, line 8

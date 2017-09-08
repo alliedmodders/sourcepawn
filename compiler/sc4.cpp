@@ -749,11 +749,18 @@ void ffabort(int reason)
 
 void ffbounds(cell size)
 {
-  if ((sc_debug & sCHKBOUNDS)!=0) {
-    stgwrite("\tbounds ");
-    outval(size,TRUE);
-    code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  stgwrite("\tbounds ");
+  outval(size,TRUE);
+  code_idx+=opcodes(1)+opargs(1);
+}
+
+void ffbounds()
+{
+  // Since the VM uses an unsigned compare here, this effectively protects us
+  // from negative array indices.
+  stgwrite("\tbounds ");
+  outval(INT_MAX, TRUE);
+  code_idx += opcodes(1) + opargs(1);
 }
 
 /*
