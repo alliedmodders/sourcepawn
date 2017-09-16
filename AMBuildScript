@@ -71,7 +71,7 @@ class Config(object):
         emflags = ['-s', 'PRECISE_F32=1']
         cxx.cflags += emflags
         cxx.linkflags += emflags
-    elif cxx.name is 'msvc':
+    elif cxx.like('msvc'):
       if builder.options.debug == '1':
         cxx.cflags += ['/MTd']
         cxx.linkflags += ['/NODEFAULTLIB:libcmt']
@@ -139,9 +139,9 @@ class Config(object):
     # Platform-specifics
     if not cxx.like('emscripten'):
       if builder.target.platform == 'linux':
-        if cxx.name == 'gcc':
+        if cxx.family == 'gcc':
           cxx.postlink += ['-static-libgcc']
-        elif cxx.name == 'clang':
+        elif cxx.family == 'clang':
           cxx.postlink += ['-lgcc_eh']
         cxx.postlink += ['-lpthread', '-lrt']
       elif builder.target.platform == 'mac':
