@@ -17,7 +17,7 @@
 # SourcePawn. If not, see http://www.gnu.org/licenses/.
 import os
 
-binary = builder.compiler.Program('docparse')
+binary = builder.cxx.Program('docparse')
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath, 'exp'),
 ]

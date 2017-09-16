@@ -11,23 +11,23 @@ Includes = [
   os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
 ]
 
-if builder.compiler.like('gcc'):
-  builder.compiler.cflags += [
+if builder.cxx.like('gcc'):
+  builder.cxx.cflags += [
     '-Wno-invalid-offsetof',
   ]
-  builder.compiler.cxxflags += ['-fno-rtti']
-if builder.compiler.like('clang'):
-  builder.compiler.cxxflags += [
+  builder.cxx.cxxflags += ['-fno-rtti']
+if builder.cxx.like('clang'):
+  builder.cxx.cxxflags += [
     '-Wno-implicit-exception-spec-mismatch',
   ]
-if builder.compiler.cxx.name == 'gcc':
+if builder.cxx.family == 'gcc':
   # ABI restrictions...
   builder.compiler.cxxflags += [
     '-Wno-delete-non-virtual-dtor',
   ]
 
 # Build the static library.
-library = builder.compiler.StaticLibrary('sourcepawn')
+library = builder.cxx.StaticLibrary('sourcepawn')
 library.compiler.includes += Includes
 
 library.sources += [
@@ -52,7 +52,7 @@ library.sources += [
   'runtime-helpers.cpp',
 ]
 
-has_jit = SP.arch in ['x86'] and builder.compiler.cxx.name != 'emscripten'
+has_jit = SP.arch in ['x86'] and builder.cxx.family != 'emscripten'
 
 if has_jit:
   library.sources += [
@@ -82,7 +82,7 @@ dll.sources += [
   'dll_exports.cpp'
 ]
 
-if builder.target_platform == 'linux':
+if builder.target.platform == 'linux':
   dll.compiler.postlink += ['-lpthread', '-lrt']
 
 SP.libsourcepawn = builder.Add(dll)
@@ -96,7 +96,7 @@ def configure_like_shell(name):
   ]
   if prog.compiler.like('gcc'):
     prog.compiler.linkflags += ['-lstdc++']
-  if builder.target_platform == 'linux':
+  if builder.target.platform == 'linux':
     prog.compiler.postlink += ['-lpthread', '-lrt']
   return prog
 
