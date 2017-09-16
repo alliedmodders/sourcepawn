@@ -37,7 +37,7 @@ class Config(object):
         '-Werror',
         '-Wno-switch',
       ]
-      if builder.options.arch == 'x86':
+      if builder.target.arch == 'x86':
         cxx.cflags += ['-msse']
       else:
         cxx.cflags += ['-fPIC']
@@ -154,7 +154,7 @@ class Config(object):
       elif builder.target.platform == 'windows':
         cxx.defines += ['WIN32', '_WINDOWS']
 
-    if builder.options.arch == 'x64':
+    if builder.target.arch == 'x64':
       gccarch = '-m64'
       msvcarch = '/MACHINE:X64'
     else:
