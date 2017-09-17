@@ -492,6 +492,92 @@ namespace SourcePawn
     virtual const char *GetFilename() = 0;
   };
 
+  
+  /**
+   * @brief Allows inspecting the stack frames of the SourcePawn environment.
+   *
+   * Invoking VM functions while iterating frames will cause the iterator
+   * to become corrupt.
+   *
+   * Frames iterate in most-recent to least-recent order.
+   */
+  class IFrameIterator
+  {
+   public:
+    /**
+     * @brief Returns whether or not there are more frames to read.
+     *
+     * @return          True if there are more frames to read, false otherwise.
+     */
+    virtual bool Done() const = 0;
+
+    /**
+     * @brief Advances to the next frame.
+     *
+     * Note that the iterator starts at either a valid frame or no frame.
+     */
+    virtual void Next() = 0;
+
+    /**
+     * @brief Resets the iterator to the top of the stack.
+     */
+    virtual void Reset() = 0;
+
+    /**
+     * @brief Returns the context owning the current frame, if any.
+     *
+     * @return          Context, or null.
+     */
+    virtual IPluginContext *Context() const = 0;
+
+    /**
+     * @brief Returns whether or not the current frame is a native frame. If it
+     * is, line numbers and file paths are not available.
+     *
+     * @return          True if a native frame, false otherwise.
+     */
+    virtual bool IsNativeFrame() const = 0;
+
+    /**
+     * @brief Returns true if the frame is a scripted frame.
+     *
+     * @return          True if a scripted frame, false otherwise.
+     */
+    virtual bool IsScriptedFrame() const = 0;
+
+    /**
+     * @brief Returns the line number of the current frame, or 0 if none is
+     * available.
+     *
+     * @return          Line number on success, 0 on failure.
+     */
+    virtual unsigned LineNumber() const = 0;
+
+    /**
+     * @brief Returns the function name of the current frame, or null if
+     * none could be computed.
+     *
+     * @return          Function name on success, null on failure.
+     */
+    virtual const char *FunctionName() const = 0;
+
+    /**
+     * @brief Returns the file path of the function of the current frame,
+     * or none could be computed.
+     *
+     * @return          File path on success, null on failure.
+     */
+    virtual const char *FilePath() const = 0;
+
+    /**
+     * @brief Returns true if the frame is an internal frame and should not be
+     * used for display.
+     *
+     * @return          True if an internal frame, false otherwise.
+     */
+     virtual bool IsInternalFrame() const = 0;
+  };
+
   /**
    * @brief Interface to managing a context at runtime.
    */
@@ -961,6 +1047,18 @@ namespace SourcePawn
      * as the cause.  
      */
     virtual cell_t BlamePluginError(IPluginFunction *pf, const char *msg, ...) = 0;
+   	
+	/**
+     * @brief Returns an IFrameIterator for the current call stack. Must
+	 * be freed by FreeFrameIterator()
+     */
+    virtual IFrameIterator *GetFrameIterator() = 0;
+
+	/**
+     * @brief Frees a IFrameIterator object. Paired with GetFrameIterator() 
+     */
+    virtual void FreeFrameIterator(IFrameIterator *it) = 0;
+
   };
 
   /**
@@ -1011,90 +1109,6 @@ namespace SourcePawn
     virtual int Code() const = 0;
   };
 
-  /**
-   * @brief Allows inspecting the stack frames of the SourcePawn environment.
-   *
-   * Invoking VM functions while iterating frames will cause the iterator
-   * to become corrupt.
-   *
-   * Frames iterate in most-recent to least-recent order.
-   */
-  class IFrameIterator
-  {
-   public:
-    /**
-     * @brief Returns whether or not there are more frames to read.
-     *
-     * @return          True if there are more frames to read, false otherwise.
-     */
-    virtual bool Done() const = 0;
-
-    /**
-     * @brief Advances to the next frame.
-     *
-     * Note that the iterator starts at either a valid frame or no frame.
-     */
-    virtual void Next() = 0;
-
-    /**
-     * @brief Resets the iterator to the top of the stack.
-     */
-    virtual void Reset() = 0;
-
-    /**
-     * @brief Returns the context owning the current frame, if any.
-     *
-     * @return          Context, or null.
-     */
-    virtual IPluginContext *Context() const = 0;
-
-    /**
-     * @brief Returns whether or not the current frame is a native frame. If it
-     * is, line numbers and file paths are not available.
-     *
-     * @return          True if a native frame, false otherwise.
-     */
-    virtual bool IsNativeFrame() const = 0;
-
-    /**
-     * @brief Returns true if the frame is a scripted frame.
-     *
-     * @return          True if a scripted frame, false otherwise.
-     */
-    virtual bool IsScriptedFrame() const = 0;
-
-    /**
-     * @brief Returns the line number of the current frame, or 0 if none is
-     * available.
-     *
-     * @return          Line number on success, 0 on failure.
-     */
-    virtual unsigned LineNumber() const = 0;
-
-    /**
-     * @brief Returns the function name of the current frame, or null if
-     * none could be computed.
-     *
-     * @return          Function name on success, null on failure.
-     */
-    virtual const char *FunctionName() const = 0;
-
-    /**
-     * @brief Returns the file path of the function of the current frame,
-     * or none could be computed.
-     *
-     * @return          File path on success, null on failure.
-     */
-    virtual const char *FilePath() const = 0;
-
-    /**
-     * @brief Returns true if the frame is an internal frame and should not be
-     * used for display.
-     *
-     * @return          True if an internal frame, false otherwise.
-     */
-     virtual bool IsInternalFrame() const = 0;
-  };
 
   /**
    * @brief Provides callbacks for debug information.
