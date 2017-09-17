@@ -24,7 +24,7 @@
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0xC
-#define SOURCEPAWN_API_VERSION   0x020C
+#define SOURCEPAWN_API_VERSION   0x020D
 
 namespace SourceMod {
   struct IdentityToken_t;
