@@ -19,7 +19,7 @@
 import os
 
 ### CLI
-binary = builder.compiler.StaticLibrary('spcomp')
+binary = builder.cxx.StaticLibrary('spcomp')
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath, 'include'),
 ]
@@ -66,7 +66,7 @@ binary.sources += [
 ]
 SP.libspcomp = builder.Add(binary)
 
-binary = builder.compiler.Program('spcomp')
+binary = builder.cxx.Program('spcomp')
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath),
   os.path.join(builder.sourcePath, 'include'),

@@ -1,7 +1,7 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-library = builder.compiler.StaticLibrary('z')
+library = builder.cxx.StaticLibrary('z')
 library.compiler.includes += [
   os.path.join(builder.currentSourcePath, '..', 'third_party'),
 ]

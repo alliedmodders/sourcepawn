@@ -25,37 +25,36 @@ def Normalize(path):
 class Config(object):
   def __init__(self):
     super(Config, self).__init__()
-    self.arch = getattr(builder.options, 'arch', 'x86')
+    self.arch = builder.target.arch
 
   def configure(self):
-    cfg = builder.DetectCompilers()
-    cxx = cfg.cxx
+    cxx = builder.DetectCxx()
 
     if cxx.like('gcc'):
-      cfg.cflags += [
+      cxx.cflags += [
         '-pipe',
         '-Wall',
         '-Werror',
         '-Wno-switch',
       ]
-      if builder.options.arch == 'x86':
-        cfg.cflags += ['-msse']
+      if builder.target.arch == 'x86':
+        cxx.cflags += ['-msse']
       else:
-        cfg.cflags += ['-fPIC']
+        cxx.cflags += ['-fPIC']
 
-      cfg.cxxflags += ['-std=c++11']
+      cxx.cxxflags += ['-std=c++11']
 
-      have_gcc = cxx.name is 'gcc'
-      have_clang = cxx.name is 'clang' or cxx.name is 'emscripten'
+      have_gcc = cxx.family is 'gcc'
+      have_clang = cxx.family is 'clang' or cxx.family is 'emscripten'
       if have_clang or (have_gcc and cxx.majorVersion >= 4):
-        cfg.cflags += ['-fvisibility=hidden']
-        cfg.cxxflags += ['-fvisibility-inlines-hidden']
+        cxx.cflags += ['-fvisibility=hidden']
+        cxx.cxxflags += ['-fvisibility-inlines-hidden']
         if have_clang or (have_gcc and (cxx.majorVersion >= 5 or cxx.minorVersion >= 7)):
-          cfg.cxxflags += ['-Wno-delete-non-virtual-dtor']
+          cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
 
       # Disable some stuff we don't use, that gives us better binary
       # compatibility on Linux.
-      cfg.cxxflags += [
+      cxx.cxxflags += [
         '-fno-exceptions',
         '-fno-rtti',
         '-fno-threadsafe-statics',
@@ -64,36 +63,36 @@ class Config(object):
       ]
 
       if have_gcc:
-        cfg.cflags += ['-mfpmath=sse']
+        cxx.cflags += ['-mfpmath=sse']
 
-      cfg.postlink += ['-lm']
+      cxx.postlink += ['-lm']
 
       if cxx.like('emscripten'):
         emflags = ['-s', 'PRECISE_F32=1']
-        cfg.cflags += emflags
-        cfg.linkflags += emflags
-    elif cxx.name is 'msvc':
+        cxx.cflags += emflags
+        cxx.linkflags += emflags
+    elif cxx.like('msvc'):
       if builder.options.debug == '1':
-        cfg.cflags += ['/MTd']
-        cfg.linkflags += ['/NODEFAULTLIB:libcmt']
+        cxx.cflags += ['/MTd']
+        cxx.linkflags += ['/NODEFAULTLIB:libcmt']
       else:
-        cfg.cflags += ['/MT']
-      cfg.defines += [
+        cxx.cflags += ['/MT']
+      cxx.defines += [
         '_CRT_SECURE_NO_DEPRECATE',
         '_CRT_SECURE_NO_WARNINGS',
         '_CRT_NONSTDC_NO_DEPRECATE',
         '_ITERATOR_DEBUG_LEVEL=0',
       ]
-      cfg.cflags += [
+      cxx.cflags += [
         '/W3',
         '/wd4351',
       ]
-      cfg.cxxflags += [
+      cxx.cxxflags += [
         '/EHsc',
         '/GR-',
         '/TP',
       ]
-      cfg.linkflags += [
+      cxx.linkflags += [
         '/MACHINE:X86',
         'kernel32.lib',
         'user32.lib',
@@ -111,68 +110,68 @@ class Config(object):
 
     # Optimization
     if builder.options.opt == '1':
-      cfg.defines += ['NDEBUG']
+      cxx.defines += ['NDEBUG']
       if cxx.like('gcc'):
-        cfg.cflags += ['-O3']
+        cxx.cflags += ['-O3']
         if cxx.like('emscripten'):
           emflags = ['--closure', '0', '--memory-init-file', '0', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
-          cfg.cflags += emflags
-          cfg.linkflags += ['-O3'] + emflags
+          cxx.cflags += emflags
+          cxx.linkflags += ['-O3'] + emflags
       elif cxx.like('msvc'):
-        cfg.cflags += ['/Ox']
-        cfg.linkflags += ['/OPT:ICF', '/OPT:REF']
+        cxx.cflags += ['/Ox']
+        cxx.linkflags += ['/OPT:ICF', '/OPT:REF']
 
     # Debugging
     if builder.options.debug == '1':
-      cfg.defines += ['DEBUG', '_DEBUG']
+      cxx.defines += ['DEBUG', '_DEBUG']
       if cxx.like('msvc'):
-        cfg.cflags += ['/Od', '/RTC1']
+        cxx.cflags += ['/Od', '/RTC1']
       elif cxx.like('emscripten'):
         emflags = ['-s', 'ASSERTIONS=1', '-s', 'SAFE_HEAP=1', '-s', 'STACK_OVERFLOW_CHECK=1', '-s', 'WARN_UNALIGNED=0', '-s', 'DEMANGLE_SUPPORT=1']
-        cfg.cflags += emflags
-        cfg.linkflags += emflags
+        cxx.cflags += emflags
+        cxx.linkflags += emflags
 
     # This needs to be after our optimization flags which could otherwise disable it.
-    if cxx.name == 'msvc':
+    if cxx.like('msvc'):
       # Don't omit the frame pointer.
-      cfg.cflags += ['/Oy-']
+      cxx.cflags += ['/Oy-']
 
     # Platform-specifics
     if not cxx.like('emscripten'):
-      if builder.target_platform == 'linux':
-        if cxx.name == 'gcc':
-          cfg.postlink += ['-static-libgcc']
-        elif cxx.name == 'clang':
-          cfg.postlink += ['-lgcc_eh']
-        cfg.postlink += ['-lpthread', '-lrt']
-      elif builder.target_platform == 'mac':
-        cfg.cflags += [
+      if builder.target.platform == 'linux':
+        if cxx.family == 'gcc':
+          cxx.postlink += ['-static-libgcc']
+        elif cxx.family == 'clang':
+          cxx.postlink += ['-lgcc_eh']
+        cxx.postlink += ['-lpthread', '-lrt']
+      elif builder.target.platform == 'mac':
+        cxx.cflags += [
           '-mmacosx-version-min=10.5',
         ]
-        cfg.linkflags += [
+        cxx.linkflags += [
           '-mmacosx-version-min=10.5',
         ]
-      elif builder.target_platform == 'windows':
-        cfg.defines += ['WIN32', '_WINDOWS']
+      elif builder.target.platform == 'windows':
+        cxx.defines += ['WIN32', '_WINDOWS']
 
-    if builder.options.arch == 'x64':
+    if builder.target.arch == 'x64':
       gccarch = '-m64'
       msvcarch = '/MACHINE:X64'
     else:
       gccarch = '-m32'
       msvcarch = '/MACHINE:X86'
 
-    if cxx.name == 'msvc':
-      if msvcarch not in cfg.linkflags:    
-        cfg.linkflags += [msvcarch]
+    if cxx.like('msvc'):
+      if msvcarch not in cxx.linkflags:    
+        cxx.linkflags += [msvcarch]
     else:
-      if gccarch not in cfg.cflags:
-        cfg.cflags += [gccarch]
-      if gccarch not in cfg.linkflags:
-        cfg.linkflags += [gccarch]
+      if gccarch not in cxx.cflags:
+        cxx.cflags += [gccarch]
+      if gccarch not in cxx.linkflags:
+        cxx.linkflags += [gccarch]
 
-    cfg.defines += ['KE_THREADSAFE']
-    cfg.defines += ['SOURCEPAWN_VERSION="1.9"']
+    cxx.defines += ['KE_THREADSAFE']
+    cxx.defines += ['SOURCEPAWN_VERSION="1.9"']
 
     if builder.options.amtl:
       amtl_path = builder.options.amtl
@@ -184,23 +183,31 @@ class Config(object):
       raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
     self.amtl = amtl_path
 
-    cfg.cxxincludes += [
+    cxx.cxxincludes += [
       os.path.join(self.amtl, 'amtl'),
       os.path.join(self.amtl),
       os.path.join(builder.sourcePath, 'include'),
     ]
 
-  def Program(self, context, name):
-    binary = context.compiler.Program(name)
+  def ProgramBuilder(self, compiler, name):
+    binary = compiler.Program(name)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
     return binary
 
-  def Library(self, context, name):
-    binary = context.compiler.Library(name)
+  def LibraryBuilder(self, compiler, name):
+    binary = compiler.Library(name)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
     return binary
+
+  def Program(self, context, name):
+    compiler = context.cxx.clone()
+    return self.ProgramBuilder(compiler, name)
+
+  def Library(self, context, name):
+    compiler = context.cxx.clone()
+    return self.LibraryBuilder(compiler, name)
 
 ProjectScripts = [
   #'exp/tools/docparse/AMBuilder'
@@ -212,19 +219,19 @@ class SourcePawn(object):
     self.root = root
     self.amtl = amtl
     self.included_zlib = False
-    self.arch = getattr(root, 'arch', 'x86')
+    self.arch = builder.target.arch
     self.spcomp_scripts = [
-      os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
+      os.path.join('compiler', 'AMBuilder'),
     ]
     self.vm_scripts = [
-      os.path.join(builder.currentSourceFolder, 'vm/AMBuilder'),
+      os.path.join('vm', 'AMBuilder'),
     ]
     self.test_scripts = [
-      os.path.join(builder.currentSourceFolder, 'tools/testing/Testing.ambuild'),
+      os.path.join('tools', 'testing', 'Testing.ambuild'),
     ]
     self.exp_scripts = [
-      os.path.join(builder.currentSourceFolder, 'exp/compiler/AMBuilder'),
-      os.path.join(builder.currentSourceFolder, 'exp/tools/docparse/AMBuilder'),
+      os.path.join('exp', 'compiler', 'AMBuilder'),
+      os.path.join('exp', 'tools', 'docparse', 'AMBuilder'),
     ]
     self.vars = {
       'Root': self.root,
@@ -233,17 +240,17 @@ class SourcePawn(object):
 
   def BuildSpcomp(self):
     self.EnsureZlib()
-    builder.RunBuildScripts(self.spcomp_scripts, self.vars)
+    builder.Build(self.spcomp_scripts, self.vars)
 
   def BuildVM(self):
     self.EnsureZlib()
-    builder.RunBuildScripts(self.vm_scripts, self.vars)
+    builder.Build(self.vm_scripts, self.vars)
 
   def BuildExperimental(self):
-    builder.RunBuildScripts(self.exp_scripts, self.vars)
+    builder.Build(self.exp_scripts, self.vars)
 
   def BuildTests(self):
-    builder.RunBuildScripts(self.test_scripts, self.vars)
+    builder.Build(self.test_scripts, self.vars)
 
   def BuildSuite(self):
     self.BuildSpcomp()
@@ -254,8 +261,8 @@ class SourcePawn(object):
   def EnsureZlib(self):
     if self.included_zlib:
       return
-    zlib_dir = os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder')
-    builder.RunBuildScripts([zlib_dir], self.vars)
+    zlib_dir = os.path.join('third_party', 'zlib', 'AMBuilder')
+    builder.Build([zlib_dir], self.vars)
     self.included_zlib = True
 
 if builder.parent is None:
@@ -263,18 +270,23 @@ if builder.parent is None:
   root.configure()
   sp = SourcePawn(root, root.amtl)
   build = getattr(builder.options, 'build', 'all').split(',')
-  if 'all' in build:
-    sp.BuildSuite()
-  else:
-    if 'core' in build:
-      build += ['spcomp', 'vm']
-    if 'spcomp' in build:
-      sp.BuildSpcomp()
-    if 'vm' in build:
-      sp.BuildVM()
-    if 'exp' in build:
-      sp.BuildExperimental()
-    if 'test' in build:
-      sp.BuildTests()
 else:
-  rvalue = SourcePawn
+  sp = SourcePawn(external_root, external_amtl)
+  build = external_build
+
+if 'all' in build:
+  sp.BuildSuite()
+else:
+  if 'core' in build:
+    build += ['spcomp', 'vm']
+  if 'spcomp' in build:
+    sp.BuildSpcomp()
+  if 'vm' in build:
+    sp.BuildVM()
+  if 'exp' in build:
+    sp.BuildExperimental()
+  if 'test' in build:
+    sp.BuildTests()
+
+if builder.parent is not None:
+  rvalue = sp

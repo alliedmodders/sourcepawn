@@ -28,7 +28,7 @@ Scripts = [
 ]
 
 def fixup_path(mode, path):
-  if builder.target_platform == 'windows':
+  if builder.target.platform == 'windows':
     if mode == '.sh':
       return path.replace('\\', '\\\\')
   return path
