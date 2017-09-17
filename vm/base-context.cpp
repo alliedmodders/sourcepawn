@@ -237,13 +237,15 @@ BasePluginContext::BlamePluginError(SourcePawn::IPluginFunction *pf, const char 
   return 0;
 }
 
-IFrameIterator *BasePluginContext::GetFrameIterator()
+IFrameIterator *
+BasePluginContext::CreateFrameIterator()
 {
   FrameIterator *it = new FrameIterator();
   return it;
 }
 
-void BasePluginContext::FreeFrameIterator(IFrameIterator *it)
+void
+BasePluginContext::DestroyFrameIterator(IFrameIterator *it)
 {
-  delete it;
+  delete static_cast<FrameIterator*>(it);
 }

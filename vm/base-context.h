@@ -41,8 +41,8 @@ public:
   cell_t ThrowNativeError(const char *msg, ...) override;
   int GetLastNativeError() override;
   cell_t BlamePluginError(SourcePawn::IPluginFunction *pf, const char *msg, ...) override;
-  IFrameIterator *GetFrameIterator() override;
-  void FreeFrameIterator(IFrameIterator *it) override;
+  IFrameIterator *CreateFrameIterator() override;
+  void DestroyFrameIterator(IFrameIterator *it) override;
   
   // Removed functions.
   int PushCell(cell_t value) override;

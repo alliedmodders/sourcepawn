@@ -1048,16 +1048,20 @@ namespace SourcePawn
      */
     virtual cell_t BlamePluginError(IPluginFunction *pf, const char *msg, ...) = 0;
    	
-	/**
+    /**
      * @brief Returns an IFrameIterator for the current call stack. Must
-	 * be freed by FreeFrameIterator()
+     * be freed by DestroyFrameIterator()
+     *
+     * Note: It is illegal to re-enter the VM while a frame iterator is 
+     * active. The iterator must be processed and destroyed before continuing 
+     * to run SourcePawn plugins.
      */
-    virtual IFrameIterator *GetFrameIterator() = 0;
+    virtual IFrameIterator *CreateFrameIterator() = 0;
 
-	/**
-     * @brief Frees a IFrameIterator object. Paired with GetFrameIterator() 
+    /**
+     * @brief Frees an IFrameIterator object. Paired with CreateFrameIterator() 
      */
-    virtual void FreeFrameIterator(IFrameIterator *it) = 0;
+    virtual void DestroyFrameIterator(IFrameIterator *it) = 0;
 
   };
 
