@@ -3004,7 +3004,8 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
             } else if (arg[argidx].dim[0]!=0) {
               assert(arg[argidx].dim[0]>0);
               if (lval.ident==iARRAYCELL) {
-                error(47);        /* array sizes must match */
+                if (lval.constval==0 || arg[argidx].dim[0]!=lval.constval)
+                  error(47);        /* array sizes must match */
               } else {
                 assert(lval.constval!=0); /* literal array must have a size */
                 /* A literal array must have exactly the same size as the
@@ -3016,7 +3017,7 @@ static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_r
                   error(47);      /* array sizes must match */
               } /* if */
             } /* if */
-            if (lval.ident!=iARRAYCELL && lval.ident!=iARRAYCHAR) {
+            if ((lval.ident!=iARRAYCELL && lval.ident!=iARRAYCHAR) || lval.constval>0) {
               /* save array size, for default values with uSIZEOF flag */
               cell array_sz=lval.constval;
               assert(array_sz!=0);/* literal array must have a size */
