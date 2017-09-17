@@ -221,17 +221,17 @@ class SourcePawn(object):
     self.included_zlib = False
     self.arch = builder.target.arch
     self.spcomp_scripts = [
-      os.path.join(builder.currentSourceFolder, 'compiler/AMBuilder'),
+      os.path.join('compiler', 'AMBuilder'),
     ]
     self.vm_scripts = [
-      os.path.join(builder.currentSourceFolder, 'vm/AMBuilder'),
+      os.path.join('vm', 'AMBuilder'),
     ]
     self.test_scripts = [
-      os.path.join(builder.currentSourceFolder, 'tools/testing/Testing.ambuild'),
+      os.path.join('tools', 'testing', 'Testing.ambuild'),
     ]
     self.exp_scripts = [
-      os.path.join(builder.currentSourceFolder, 'exp/compiler/AMBuilder'),
-      os.path.join(builder.currentSourceFolder, 'exp/tools/docparse/AMBuilder'),
+      os.path.join('exp', 'compiler', 'AMBuilder'),
+      os.path.join('exp', 'tools', 'docparse', 'AMBuilder'),
     ]
     self.vars = {
       'Root': self.root,
@@ -261,7 +261,7 @@ class SourcePawn(object):
   def EnsureZlib(self):
     if self.included_zlib:
       return
-    zlib_dir = os.path.join(builder.currentSourceFolder, 'third_party/zlib/AMBuilder')
+    zlib_dir = os.path.join('third_party', 'zlib', 'AMBuilder')
     builder.Build([zlib_dir], self.vars)
     self.included_zlib = True
 
@@ -270,18 +270,23 @@ if builder.parent is None:
   root.configure()
   sp = SourcePawn(root, root.amtl)
   build = getattr(builder.options, 'build', 'all').split(',')
-  if 'all' in build:
-    sp.BuildSuite()
-  else:
-    if 'core' in build:
-      build += ['spcomp', 'vm']
-    if 'spcomp' in build:
-      sp.BuildSpcomp()
-    if 'vm' in build:
-      sp.BuildVM()
-    if 'exp' in build:
-      sp.BuildExperimental()
-    if 'test' in build:
-      sp.BuildTests()
 else:
-  rvalue = SourcePawn
+  sp = SourcePawn(external_root, external_amtl)
+  build = external_build
+
+if 'all' in build:
+  sp.BuildSuite()
+else:
+  if 'core' in build:
+    build += ['spcomp', 'vm']
+  if 'spcomp' in build:
+    sp.BuildSpcomp()
+  if 'vm' in build:
+    sp.BuildVM()
+  if 'exp' in build:
+    sp.BuildExperimental()
+  if 'test' in build:
+    sp.BuildTests()
+
+if builder.parent is not None:
+  rvalue = sp
