@@ -46,10 +46,10 @@ class Config(object):
 
       have_gcc = cxx.family is 'gcc'
       have_clang = cxx.family is 'clang' or cxx.family is 'emscripten'
-      if have_clang or (have_gcc and cxx.majorVersion >= 4):
+      if have_clang or have_gcc:
         cxx.cflags += ['-fvisibility=hidden']
         cxx.cxxflags += ['-fvisibility-inlines-hidden']
-        if have_clang or (have_gcc and (cxx.majorVersion >= 5 or cxx.minorVersion >= 7)):
+        if have_clang or (have_gcc and cxx.version >= '4.7'):
           cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
 
       # Disable some stuff we don't use, that gives us better binary
