@@ -17,19 +17,20 @@
 # SourcePawn. If not, see http://www.gnu.org/licenses/.
 import os
 
-binary = builder.cxx.Program('docparse')
-binary.compiler.cxxincludes += [
-  os.path.join(builder.sourcePath, 'exp'),
-]
+for arch in Root.archs:
+  binary = Root.Program(builder, 'docparse', arch)
+  binary.compiler.cxxincludes += [
+    os.path.join(builder.sourcePath, 'exp'),
+  ]
 
-if binary.compiler.like('msvc'):
-  binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
+  if binary.compiler.like('msvc'):
+    binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
 
-binary.sources += [
-  'docparse.cpp',
-]
-binary.compiler.linkflags += [
-  SP.libspcomp.binary
-]
-builder.Add(binary)
+  binary.sources += [
+    'docparse.cpp',
+  ]
+  binary.compiler.linkflags += [
+    SP.libspcomp[arch].binary
+  ]
+  builder.Add(binary)
 

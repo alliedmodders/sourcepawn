@@ -18,68 +18,70 @@
 #
 import os
 
-### CLI
-binary = builder.cxx.StaticLibrary('spcomp')
-binary.compiler.cxxincludes += [
-  os.path.join(builder.sourcePath, 'include'),
-]
-
-if binary.compiler.like('gcc'):
-  binary.compiler.cflags += [
-    '-Wno-error=switch',
-    '-Wno-invalid-offsetof',
-  ]
-  binary.compiler.cxxflags += ['-fno-rtti']
-if binary.compiler.like('clang'):
-  binary.compiler.cxxflags += [
-    '-Wno-implicit-exception-spec-mismatch',
-    '-Wno-error=unused-private-field',
-    '-Wno-unused-const-variable',
+SP.libspcomp = {}
+for arch in Root.archs:
+  ### CLI
+  binary = Root.StaticLibrary(builder, 'spcomp', arch)
+  binary.compiler.cxxincludes += [
+    os.path.join(builder.sourcePath, 'include'),
   ]
 
-binary.sources += [
-  'ast-printer.cpp',
-  'conversion.cpp',
-  'compile-context.cpp',
-  'constant-evaluator.cpp',
-  'dll_exports.cpp',
-  'float-value.cpp',
-  'int-value.cpp',
-  'json-tools.cpp',
-  'keyword-table.cpp',
-  'lexer.cpp',
-  'macro-lexer.cpp',
-  'name-resolver.cpp',
-  'parser.cpp',
-  'pool-allocator.cpp',
-  'preprocessor.cpp',
-  'scopes.cpp',
-  'semantic-analysis.cpp',
-  'smx-builder.cpp',
-  'source-manager.cpp',
-  'symbols.cpp',
-  'reporting.cpp',
-  'tk-evaluator.cpp',
-  'type-manager.cpp',
-  'type-resolver.cpp',
-  'types.cpp',
-]
-SP.libspcomp = builder.Add(binary)
+  if binary.compiler.like('gcc'):
+    binary.compiler.cflags += [
+      '-Wno-error=switch',
+      '-Wno-invalid-offsetof',
+    ]
+    binary.compiler.cxxflags += ['-fno-rtti']
+  if binary.compiler.like('clang'):
+    binary.compiler.cxxflags += [
+      '-Wno-implicit-exception-spec-mismatch',
+      '-Wno-error=unused-private-field',
+      '-Wno-unused-const-variable',
+    ]
 
-binary = builder.cxx.Program('spcomp')
-binary.compiler.cxxincludes += [
-  os.path.join(builder.sourcePath),
-  os.path.join(builder.sourcePath, 'include'),
-]
-if binary.compiler.like('msvc'):
-  binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
+  binary.sources += [
+    'ast-printer.cpp',
+    'conversion.cpp',
+    'compile-context.cpp',
+    'constant-evaluator.cpp',
+    'dll_exports.cpp',
+    'float-value.cpp',
+    'int-value.cpp',
+    'json-tools.cpp',
+    'keyword-table.cpp',
+    'lexer.cpp',
+    'macro-lexer.cpp',
+    'name-resolver.cpp',
+    'parser.cpp',
+    'pool-allocator.cpp',
+    'preprocessor.cpp',
+    'scopes.cpp',
+    'semantic-analysis.cpp',
+    'smx-builder.cpp',
+    'source-manager.cpp',
+    'symbols.cpp',
+    'reporting.cpp',
+    'tk-evaluator.cpp',
+    'type-manager.cpp',
+    'type-resolver.cpp',
+    'types.cpp',
+  ]
+  SP.libspcomp[arch] = builder.Add(binary)
 
-binary.sources += [
-  'main.cpp',
-]
-binary.compiler.linkflags += [
-  SP.libspcomp.binary
-]
-builder.Add(binary)
+  binary = Root.Program(builder, 'spcomp', arch)
+  binary.compiler.cxxincludes += [
+    os.path.join(builder.sourcePath),
+    os.path.join(builder.sourcePath, 'include'),
+  ]
+  if binary.compiler.like('msvc'):
+    binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']
+
+  binary.sources += [
+    'main.cpp',
+  ]
+  binary.compiler.linkflags += [
+    SP.libspcomp[arch].binary
+  ]
+  builder.Add(binary)
 
 

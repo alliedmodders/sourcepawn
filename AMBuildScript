@@ -22,13 +22,47 @@ import sys
 def Normalize(path):
   return os.path.abspath(os.path.normpath(path))
 
+def SetArchFlags(compiler, arch, platform):
+  if compiler.like('gcc'):
+    if arch == 'x86':
+      compiler.cflags += ['-msse']
+    else:
+      compiler.cflags += ['-fPIC']
+
+    if arch == 'x64' or arch == 'x86_64':
+      gccarch = '-m64'
+      msvcarch = '/MACHINE:X64'
+    else:
+      gccarch = '-m32'
+      msvcarch = '/MACHINE:X86'
+
+    if compiler.like('msvc'):
+      if msvcarch not in compiler.linkflags:
+        compiler.linkflags += [msvcarch]
+    else:
+      if gccarch not in compiler.cflags:
+        compiler.cflags += [gccarch]
+      if gccarch not in compiler.linkflags:
+        compiler.linkflags += [gccarch]
+
+def AppendArchSuffix(binary, name, arch):
+  if arch == 'x64' or arch == 'x86_64':
+    binary.localFolder = name + '.x64'
+
 class Config(object):
   def __init__(self):
     super(Config, self).__init__()
-    self.arch = builder.target.arch
+    self.archs = builder.target.arch.split(',')
 
   def configure(self):
     cxx = builder.DetectCxx()
+
+    if cxx.like('msvc') and len(self.archs) > 1:
+      raise Exception('Building multiple archs with MSVC with not currently supported')
+
+    archset = set(self.archs)
+    if not archset.issubset(['x86', 'x86_64']) and not archset.issubset(['x86', 'x64']):
+      raise Exception('Unknown target architecture: {0}'.format(builder.target.arch))
 
     if cxx.like('gcc'):
       cxx.cflags += [
@@ -37,11 +71,6 @@ class Config(object):
         '-Werror',
         '-Wno-switch',
       ]
-      if builder.target.arch == 'x86':
-        cxx.cflags += ['-msse']
-      else:
-        cxx.cflags += ['-fPIC']
-
       cxx.cxxflags += ['-std=c++11']
 
       if builder.options.debug == '1':
@@ -96,7 +125,6 @@ class Config(object):
         '/TP',
       ]
       cxx.linkflags += [
-        '/MACHINE:X86',
         'kernel32.lib',
         'user32.lib',
         'gdi32.lib',
@@ -157,22 +185,6 @@ class Config(object):
       elif builder.target.platform == 'windows':
         cxx.defines += ['WIN32', '_WINDOWS']
 
-    if builder.target.arch == 'x64':
-      gccarch = '-m64'
-      msvcarch = '/MACHINE:X64'
-    else:
-      gccarch = '-m32'
-      msvcarch = '/MACHINE:X86'
-
-    if cxx.like('msvc'):
-      if msvcarch not in cxx.linkflags:    
-        cxx.linkflags += [msvcarch]
-    else:
-      if gccarch not in cxx.cflags:
-        cxx.cflags += [gccarch]
-      if gccarch not in cxx.linkflags:
-        cxx.linkflags += [gccarch]
-
     cxx.defines += ['KE_THREADSAFE']
     cxx.defines += ['SOURCEPAWN_VERSION="1.10"']
 
@@ -195,25 +207,39 @@ class Config(object):
       os.path.join(builder.sourcePath, 'include'),
     ]
 
-  def ProgramBuilder(self, compiler, name):
+  def ProgramBuilder(self, compiler, name, arch):
     binary = compiler.Program(name)
+    AppendArchSuffix(binary, name, arch)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
     return binary
 
-  def LibraryBuilder(self, compiler, name):
+  def LibraryBuilder(self, compiler, name, arch):
     binary = compiler.Library(name)
+    AppendArchSuffix(binary, name, arch)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
     return binary
 
-  def Program(self, context, name):
-    compiler = context.cxx.clone()
-    return self.ProgramBuilder(compiler, name)
+  def StaticLibraryBuilder(self, compiler, name, arch):
+    binary = compiler.StaticLibrary(name)
+    AppendArchSuffix(binary, name, arch)
+    return binary
 
-  def Library(self, context, name):
+  def Program(self, context, name, arch):
     compiler = context.cxx.clone()
-    return self.LibraryBuilder(compiler, name)
+    SetArchFlags(compiler, arch, builder.target.platform)
+    return self.ProgramBuilder(compiler, name, arch)
+
+  def Library(self, context, name, arch):
+    compiler = context.cxx.clone()
+    SetArchFlags(compiler, arch, builder.target.platform)
+    return self.LibraryBuilder(compiler, name, arch)
+
+  def StaticLibrary(self, context, name, arch):
+    compiler = context.cxx.clone()
+    SetArchFlags(compiler, arch, builder.target.platform)
+    return self.StaticLibraryBuilder(compiler, name, arch)
 
 ProjectScripts = [
   #'exp/tools/docparse/AMBuilder'

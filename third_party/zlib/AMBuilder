@@ -1,26 +1,28 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-library = builder.cxx.StaticLibrary('z')
-library.compiler.includes += [
-  os.path.join(builder.currentSourcePath, '..', 'third_party'),
-]
-library.sources += [
-  'adler32.c',
-  'compress.c',
-  'crc32.c',
-  'deflate.c',
-  'gzclose.c',
-  'gzlib.c',
-  'gzread.c',
-  'gzwrite.c',
-  'infback.c',
-  'inffast.c',
-  'inflate.c',
-  'inftrees.c',
-  'trees.c',
-  'uncompr.c',
-  'zutil.c',
-]
+SP.zlib = {}
+for arch in Root.archs:
+  library = Root.StaticLibrary(builder, 'z', arch)
+  library.compiler.includes += [
+    os.path.join(builder.currentSourcePath, '..', 'third_party'),
+  ]
+  library.sources += [
+    'adler32.c',
+    'compress.c',
+    'crc32.c',
+    'deflate.c',
+    'gzclose.c',
+    'gzlib.c',
+    'gzread.c',
+    'gzwrite.c',
+    'infback.c',
+    'inffast.c',
+    'inflate.c',
+    'inftrees.c',
+    'trees.c',
+    'uncompr.c',
+    'zutil.c',
+  ]
 
-SP.zlib = builder.Add(library).binary
+  SP.zlib[arch] = builder.Add(library).binary
