@@ -22,7 +22,7 @@ if builder.cxx.like('clang'):
   ]
 if builder.cxx.family == 'gcc':
   # ABI restrictions...
-  builder.compiler.cxxflags += [
+  builder.cxx.cxxflags += [
     '-Wno-delete-non-virtual-dtor',
   ]
 
