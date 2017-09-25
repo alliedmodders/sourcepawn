@@ -69,7 +69,6 @@ class PcodeVisitor
   virtual bool visitPOP(PawnReg dest) = 0;
   virtual bool visitSTACK(cell_t amount) = 0;
   virtual bool visitHEAP(cell_t amount) = 0;
-  virtual bool visitPROC() = 0;
   virtual bool visitRETN() = 0;
   virtual bool visitCALL(cell_t offset) = 0;
   virtual bool visitJUMP(cell_t offset) = 0;
@@ -228,10 +227,6 @@ class IncompletePcodeVisitor : public PcodeVisitor
     return false;
   }
   virtual bool visitHEAP(cell_t amount) override {
-    assert(false);
-    return false;
-  }
-  virtual bool visitPROC() override {
     assert(false);
     return false;
   }

@@ -62,7 +62,6 @@ class Interpreter final : public PcodeVisitor
   static bool Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval);
 
  public:
-  bool visitPROC() override;
   bool visitPUSH_C(const cell_t* vals, size_t nvals) override;
   bool visitPUSH_ADR(const cell_t* offsets, size_t nvals) override;
   bool visitCALL(cell_t offset) override;

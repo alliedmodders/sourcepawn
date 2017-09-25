@@ -87,9 +87,9 @@ CompilerBase::emit()
 
   const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
 
-  if (!reader.visitNext())
-    return nullptr;
+  emitPrologue();
 
+  reader.begin();
   while (reader.more()) {
     // If we reach the end of this function, or the beginning of a new
     // procedure, then stop.
