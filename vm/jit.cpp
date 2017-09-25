@@ -246,8 +246,8 @@ CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addr
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
       "Patching thunk to %s::%s\n",
-      runtime->Name(),
-      runtime->image()->LookupFunction(pcode_offs));
+      cx->runtime()->Name(),
+      cx->runtime()->image()->LookupFunction(pcode_offs));
 #endif
 
   *addrp = fn->GetEntryAddress();

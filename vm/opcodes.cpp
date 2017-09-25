@@ -46,7 +46,7 @@ SourcePawn::SpewOpcode(PluginRuntime *runtime, const cell_t *start, const cell_t
 {
   fprintf(stdout, "  [%05d:%04d]", cip - (cell_t *)runtime->code().bytes, cip - start);
 
-  if (*cip >= OPCODES_TOTAL) {
+  if (*cip >= OPCODES_LAST) {
     fprintf(stdout, " unknown-opcode\n");
     return;
   }
@@ -59,8 +59,6 @@ SourcePawn::SpewOpcode(PluginRuntime *runtime, const cell_t *start, const cell_t
     case OP_PUSH_ADR:
     case OP_SHL_C_PRI:
     case OP_SHL_C_ALT:
-    case OP_SHR_C_PRI:
-    case OP_SHR_C_ALT:
     case OP_ADD_C:
     case OP_SMUL_C:
     case OP_EQ_C_PRI:
@@ -95,7 +93,7 @@ SourcePawn::SpewOpcode(PluginRuntime *runtime, const cell_t *start, const cell_t
     {
       uint32_t index = cip[1];
       if (index < runtime->image()->NumNatives())
-        fprintf(stdout, "%s", runtime->NativeAt(index)->name); 
+        fprintf(stdout, "%s", runtime->GetNative(index)->name);
       if (op == OP_SYSREQ_N)
         fprintf(stdout, " ; (%d args, index %d)", cip[2], index);
       else

@@ -42,4 +42,6 @@ parser.options.add_option('--enable-optimize', action='store_const', const='1', 
 parser.options.add_option('--amtl', type='string', dest='amtl', default=None, help='Custom AMTL path')
 parser.options.add_option('--build', type='string', dest='build', default='all', 
                        help='Build which components (all, spcomp, vm, exp, test, core)')
+parser.options.add_option('--enable-spew', action='store_true', default=False, dest='enable_spew',
+		                   help='Enable debug spew')
 parser.Configure()
