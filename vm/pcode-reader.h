@@ -43,6 +43,11 @@ class PcodeReader
     stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
   }
 
+  void begin() {
+    assert(peekOpcode() == OP_PROC);
+    readCell();
+  }
+
   // Read the next opcode, return true on success, false otherwise.
   bool visitNext() {
     OPCODE op = (OPCODE)readCell();
@@ -252,9 +257,6 @@ class PcodeReader
       cell_t amount = readCell();
       return visitor_->visitHEAP(amount);
     }
-
-    case OP_PROC:
-      return visitor_->visitPROC();
 
     case OP_RETN:
       return visitor_->visitRETN();

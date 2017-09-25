@@ -68,6 +68,7 @@ class CompilerBase : public PcodeVisitor
  protected:
   CompiledFunction* emit();
 
+  virtual void emitPrologue() = 0;
   virtual void emitThrowPath(int err) = 0;
   virtual void emitErrorHandlers() = 0;
   virtual void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) = 0;

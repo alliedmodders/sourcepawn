@@ -44,6 +44,9 @@ class Config(object):
 
       cxx.cxxflags += ['-std=c++11']
 
+      if builder.options.debug == '1':
+          cxx.cflags += ['-g3']
+
       have_gcc = cxx.family is 'gcc'
       have_clang = cxx.family is 'clang' or cxx.family is 'emscripten'
       if have_clang or have_gcc:
@@ -172,6 +175,9 @@ class Config(object):
 
     cxx.defines += ['KE_THREADSAFE']
     cxx.defines += ['SOURCEPAWN_VERSION="1.9"']
+
+    if getattr(builder.options, 'enable_spew', False):
+      cxx.defines += ['JIT_SPEW']
 
     if builder.options.amtl:
       amtl_path = builder.options.amtl

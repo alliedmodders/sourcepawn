@@ -217,8 +217,8 @@ Compiler::visitSUB_ALT()
   return true;
 }
 
-bool
-Compiler::visitPROC()
+void
+Compiler::emitPrologue()
 {
   __ enterFrame(JitFrameType::Scripted, pcode_start_);
 
@@ -232,7 +232,6 @@ Compiler::visitPROC()
   __ movl(frm, stk);
   __ subl(tmp, dat);
   __ movl(Operand(frmAddr()), tmp);
-  return true;
 }
 
 bool

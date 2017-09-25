@@ -87,9 +87,9 @@ CompilerBase::emit()
 
   const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
 
-  if (!reader.visitNext())
-    return nullptr;
+  emitPrologue();
 
+  reader.begin();
   while (reader.more()) {
     // If we reach the end of this function, or the beginning of a new
     // procedure, then stop.
@@ -246,8 +246,8 @@ CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addr
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
       "Patching thunk to %s::%s\n",
-      runtime->Name(),
-      runtime->image()->LookupFunction(pcode_offs));
+      cx->runtime()->Name(),
+      cx->runtime()->image()->LookupFunction(pcode_offs));
 #endif
 
   *addrp = fn->GetEntryAddress();

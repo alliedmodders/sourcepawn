@@ -60,7 +60,9 @@ Interpreter::run()
   InterpInvokeFrame ivk(cx_, method_, reader_.cip());
   ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
 
-  if (!reader_.visitNext())
+  reader_.begin();
+
+  if (!cx_->pushAmxFrame())
     return false;
 
   while (!has_returned_ && reader_.more()) {
@@ -92,12 +94,6 @@ Interpreter::invokeNative(uint32_t native_index)
   ivk_->leaveNativeCall();
 
   return !env_->hasPendingException();
-}
-
-bool
-Interpreter::visitPROC()
-{
-  return cx_->pushAmxFrame();
 }
 
 bool

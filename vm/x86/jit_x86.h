@@ -67,7 +67,6 @@ class Compiler : public CompilerBase
   bool visitPOP(PawnReg dest) override;
   bool visitSTACK(cell_t amount) override;
   bool visitHEAP(cell_t amount) override;
-  bool visitPROC() override;
   bool visitRETN() override;
   bool visitCALL(cell_t offset) override;
   bool visitJUMP(cell_t offset) override;
@@ -140,6 +139,7 @@ class Compiler : public CompilerBase
   bool setup(cell_t pcode_offs);
 
  private:
+  void emitPrologue() override;
   void emitThrowPath(int err) override;
   void emitErrorHandlers() override;
   void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) override;
