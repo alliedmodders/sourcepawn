@@ -229,19 +229,32 @@ static cell do_dump(Vector<cell> *buffer, char *params, cell opcode)
   return num * sizeof(cell);
 }
 
-static cell do_ldgfen(Vector<cell> *buffer, char *params, cell opcode)
+static symbol*
+extract_call_target(char *params)
 {
-  char name[sNAMEMAX+1];
+  char name[METHOD_NAMEMAX];
 
   int i;
   for (i=0; !isspace(*params); i++,params++) {
     assert(*params != '\0');
-    assert(i < sNAMEMAX);
+    assert(i < METHOD_NAMEMAX);
     name[i] = *params;
   }
   name[i]='\0';
 
-  symbol *sym = findglb(name);
+  symbol* sym = findglb(name);
+  if (!sym) {
+    return nullptr;
+  }
+
+  assert(sym->ident == iFUNCTN || sym->ident == iREFFUNC);
+  assert(sym->vclass == sGLOBAL);
+  return sym;
+}
+
+static cell do_ldgfen(Vector<cell> *buffer, char *params, cell opcode)
+{
+  symbol *sym = extract_call_target(params);
   assert(sym->ident == iFUNCTN);
   assert(!(sym->usage & uNATIVE));
   assert((sym->funcid & 1) == 1);
@@ -257,34 +270,11 @@ static cell do_ldgfen(Vector<cell> *buffer, char *params, cell opcode)
 
 static cell do_call(Vector<cell> *buffer, char *params, cell opcode)
 {
-  char name[sNAMEMAX+1];
-
-  int i;
-  for (i=0; !isspace(*params); i++,params++) {
-    assert(*params != '\0');
-    assert(i < sNAMEMAX);
-    name[i] = *params;
-  }
-  name[i]='\0';
-
-  cell p;
-  if (name[0] == 'l' && name[1] == '.') {
-    // Lookup the label address.
-    int val = (int)hex2long(name + 2, nullptr);
-    assert(val >= 0 && val < sc_labnum);
-    p = LabelTable[val];
-  } else {
-    // Look up the function address; note that the correct file number must
-    // already have been set (in order for static globals to be found).
-    symbol *sym = findglb(name);
-    assert(sym->ident == iFUNCTN || sym->ident == iREFFUNC);
-    assert(sym->vclass == sGLOBAL);
-    p = sym->addr();
-  }
+  symbol* sym = extract_call_target(params);
 
   if (buffer) {
     buffer->append(opcode);
-    buffer->append(p);
+    buffer->append(sym->addr());
   }
   return opcodes(1) + opargs(1);
 }
