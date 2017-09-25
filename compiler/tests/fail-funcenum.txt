@@ -1,0 +1,1 @@
+(1) : fatal error 196: deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs

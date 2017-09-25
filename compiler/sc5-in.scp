@@ -157,7 +157,7 @@ static const char *errmsg[] = {
 /*133*/  "cannot coerce unrelated object types %s and %s\n",
 /*134*/  "type mismatch (%s and %s)\n",
 /*135*/  "cannot use an object in a multi-tag selector\n",
-/*136*/  "unused\n",
+/*136*/  "unused136\n",
 /*137*/  "cannot mix reference and array types\n",
 /*138*/  "const was specified twice\n",
 /*139*/  "could not find type \"%s\"\n",
@@ -226,6 +226,7 @@ static const char *fatalmsg[] = {
 /*193*/  "assertion failed: %s\n",
 /*194*/  "user error: %s\n",
 /*195*/  "compiler bug: calling stock \"%s\" that has no generated code\n",
+/*196*/  "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
 };
 
 static const char *warnmsg[] = {
