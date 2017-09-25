@@ -15,6 +15,7 @@
 
 #include <sp_vm_api.h>
 
+using namespace SourcePawn;
 namespace sp {
 
 // Since the legacy API has a lot of cruft in it, we use a base class to handle common
@@ -40,7 +41,9 @@ public:
   cell_t ThrowNativeError(const char *msg, ...) override;
   int GetLastNativeError() override;
   cell_t BlamePluginError(SourcePawn::IPluginFunction *pf, const char *msg, ...) override;
-
+  IFrameIterator *CreateFrameIterator() override;
+  void DestroyFrameIterator(IFrameIterator *it) override;
+  
   // Removed functions.
   int PushCell(cell_t value) override;
   int PushCellArray(cell_t *local_addr, cell_t **phys_addr, cell_t array[], unsigned int numcells) override;
