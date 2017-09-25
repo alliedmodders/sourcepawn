@@ -50,20 +50,27 @@ class CellWriter
 {
  public:
   explicit CellWriter(Vector<cell>* buffer)
-   : buffer_(buffer)
+   : buffer_(buffer),
+     current_index_(0)
   {}
 
   void append(cell value) {
     if (buffer_) {
       buffer_->append(value);
     }
+    current_index_ += sizeof(value);
+  }
+
+  cell current_index() const {
+    return current_index_;
   }
 
  private:
   Vector<cell>* buffer_;
+  cell current_index_;
 };
 
-typedef cell (*OPCODE_PROC)(CellWriter* writer, char *params, cell opcode);
+typedef void (*OPCODE_PROC)(CellWriter* writer, char *params, cell opcode);
 
 typedef struct {
   cell opcode;
@@ -143,42 +150,37 @@ static char *stripcomment(char *str)
   return str;
 }
 
-static cell noop(CellWriter* writer, char *params, cell opcode)
+static void noop(CellWriter* writer, char *params, cell opcode)
 {
-  return 0;
 }
 
-static cell set_currentfile(CellWriter* writer, char *params, cell opcode)
+static void set_currentfile(CellWriter* writer, char *params, cell opcode)
 {
   fcurrent=(short)getparam(params,NULL);
-  return 0;
 }
 
-static cell parm0(CellWriter* writer, char *params, cell opcode)
+static void parm0(CellWriter* writer, char *params, cell opcode)
 {
   writer->append(opcode);
-  return opcodes(1);
 }
 
-static cell parm1(CellWriter* writer, char *params, cell opcode)
+static void parm1(CellWriter* writer, char *params, cell opcode)
 {
   ucell p = getparam(params, nullptr);
   writer->append(opcode);
   writer->append(p);
-  return opcodes(1) + opargs(1);
 }
 
-static cell parm2(CellWriter* writer, char *params, cell opcode)
+static void parm2(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, nullptr);
   writer->append(opcode);
   writer->append(p1);
   writer->append(p2);
-  return opcodes(1) + opargs(2);
 }
 
-static cell parm3(CellWriter* writer, char *params, cell opcode)
+static void parm3(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, &params);
@@ -187,10 +189,9 @@ static cell parm3(CellWriter* writer, char *params, cell opcode)
   writer->append(p1);
   writer->append(p2);
   writer->append(p3);
-  return opcodes(1) + opargs(3);
 }
 
-static cell parm4(CellWriter* writer, char *params, cell opcode)
+static void parm4(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, &params);
@@ -201,10 +202,9 @@ static cell parm4(CellWriter* writer, char *params, cell opcode)
   writer->append(p2);
   writer->append(p3);
   writer->append(p4);
-  return opcodes(1) + opargs(4);
 }
 
-static cell parm5(CellWriter* writer, char *params, cell opcode)
+static void parm5(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, &params);
@@ -217,10 +217,9 @@ static cell parm5(CellWriter* writer, char *params, cell opcode)
   writer->append(p3);
   writer->append(p4);
   writer->append(p5);
-  return opcodes(1) + opargs(5);
 }
 
-static cell do_dump(CellWriter* writer, char *params, cell opcode)
+static void do_dump(CellWriter* writer, char *params, cell opcode)
 {
   int num = 0;
 
@@ -231,7 +230,6 @@ static cell do_dump(CellWriter* writer, char *params, cell opcode)
     while (isspace(*params))
       params++;
   }
-  return num * sizeof(cell);
 }
 
 static symbol*
@@ -257,7 +255,7 @@ extract_call_target(char *params)
   return sym;
 }
 
-static cell do_ldgfen(CellWriter* writer, char *params, cell opcode)
+static void do_ldgfen(CellWriter* writer, char *params, cell opcode)
 {
   symbol *sym = extract_call_target(params);
   assert(sym->ident == iFUNCTN);
@@ -268,39 +266,35 @@ static cell do_ldgfen(CellWriter* writer, char *params, cell opcode)
   assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
   writer->append(sp::OP_CONST_PRI);
   writer->append(sym->funcid);
-  return opcodes(1) + opargs(1);
 }
 
-static cell do_call(CellWriter* writer, char *params, cell opcode)
+static void do_call(CellWriter* writer, char *params, cell opcode)
 {
   symbol* sym = extract_call_target(params);
 
   writer->append(opcode);
   writer->append(sym->addr());
-  return opcodes(1) + opargs(1);
 }
 
-static cell do_jump(CellWriter* writer, char *params, cell opcode)
+static void do_jump(CellWriter* writer, char *params, cell opcode)
 {
   int i = (int)hex2long(params, nullptr);
   assert(i >= 0 && i < sc_labnum);
 
   writer->append(opcode);
   writer->append(LabelTable[i]);
-  return opcodes(1) + opargs(1);
 }
 
-static cell do_switch(CellWriter* writer, char *params, cell opcode)
+static void do_switch(CellWriter* writer, char *params, cell opcode)
 {
   int i = (int)hex2long(params, nullptr);
   assert(i >= 0 && i < sc_labnum);
 
   writer->append(opcode);
   writer->append(LabelTable[i]);
-  return opcodes(1) + opargs(1);
 }
 
-static cell do_case(CellWriter* writer, char *params, cell opcode)
+static void do_case(CellWriter* writer, char *params, cell opcode)
 {
   cell v = hex2long(params ,&params);
   int i = (int)hex2long(params, nullptr);
@@ -308,7 +302,6 @@ static cell do_case(CellWriter* writer, char *params, cell opcode)
 
   writer->append(v);
   writer->append(LabelTable[i]);
-  return opcodes(0) + opargs(2);
 }
 
 static OPCODEC opcodelist[] = {
@@ -494,7 +487,6 @@ static void relocate_labels(void *fin)
   LabelTable = (cell *)calloc(sc_labnum, sizeof(cell));
 
   char line[256];
-  cell codeindex = 0;
 
   CellWriter writer(nullptr);
 
@@ -509,7 +501,7 @@ static void relocate_labels(void *fin)
     if (tolower(*instr) == 'l' && *(instr + 1) == '.') {
       int lindex = (int)hex2long(instr + 2, nullptr);
       assert(lindex >= 0 && lindex < sc_labnum);
-      LabelTable[lindex] = codeindex;
+      LabelTable[lindex] = writer.current_index();
     } else {
       // Get to the end of the instruction (make use of the '\n' that fgets()
       // added at the end of the line; this way we *always* drop on a whitespace
@@ -528,7 +520,7 @@ static void relocate_labels(void *fin)
       }
 
       if (op.segment == sIN_CSEG)
-        codeindex += op.func(&writer, skipwhitespace(params), op.opcode);
+        op.func(&writer, skipwhitespace(params), op.opcode);
     }
   }
 }
