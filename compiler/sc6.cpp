@@ -46,7 +46,24 @@
 using namespace sp;
 using namespace ke;
 
-typedef cell (*OPCODE_PROC)(Vector<cell> *buffer, char *params, cell opcode);
+class CellWriter
+{
+ public:
+  explicit CellWriter(Vector<cell>* buffer)
+   : buffer_(buffer)
+  {}
+
+  void append(cell value) {
+    if (buffer_) {
+      buffer_->append(value);
+    }
+  }
+
+ private:
+  Vector<cell>* buffer_;
+};
+
+typedef cell (*OPCODE_PROC)(CellWriter* writer, char *params, cell opcode);
 
 typedef struct {
   cell opcode;
@@ -126,102 +143,90 @@ static char *stripcomment(char *str)
   return str;
 }
 
-static cell noop(Vector<cell> *buffer, char *params, cell opcode)
+static cell noop(CellWriter* writer, char *params, cell opcode)
 {
   return 0;
 }
 
-static cell set_currentfile(Vector<cell> *buffer, char *params, cell opcode)
+static cell set_currentfile(CellWriter* writer, char *params, cell opcode)
 {
   fcurrent=(short)getparam(params,NULL);
   return 0;
 }
 
-static cell parm0(Vector<cell> *buffer, char *params, cell opcode)
+static cell parm0(CellWriter* writer, char *params, cell opcode)
 {
-  if (buffer)
-    buffer->append(opcode);
+  writer->append(opcode);
   return opcodes(1);
 }
 
-static cell parm1(Vector<cell> *buffer, char *params, cell opcode)
+static cell parm1(CellWriter* writer, char *params, cell opcode)
 {
   ucell p = getparam(params, nullptr);
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(p);
-  }
+  writer->append(opcode);
+  writer->append(p);
   return opcodes(1) + opargs(1);
 }
 
-static cell parm2(Vector<cell> *buffer, char *params, cell opcode)
+static cell parm2(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, nullptr);
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(p1);
-    buffer->append(p2);
-  }
+  writer->append(opcode);
+  writer->append(p1);
+  writer->append(p2);
   return opcodes(1) + opargs(2);
 }
 
-static cell parm3(Vector<cell> *buffer, char *params, cell opcode)
+static cell parm3(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, &params);
   ucell p3 = getparam(params, nullptr);
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(p1);
-    buffer->append(p2);
-    buffer->append(p3);
-  }
+  writer->append(opcode);
+  writer->append(p1);
+  writer->append(p2);
+  writer->append(p3);
   return opcodes(1) + opargs(3);
 }
 
-static cell parm4(Vector<cell> *buffer, char *params, cell opcode)
+static cell parm4(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, &params);
   ucell p3 = getparam(params, &params);
   ucell p4 = getparam(params, nullptr);
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(p1);
-    buffer->append(p2);
-    buffer->append(p3);
-    buffer->append(p4);
-  }
+  writer->append(opcode);
+  writer->append(p1);
+  writer->append(p2);
+  writer->append(p3);
+  writer->append(p4);
   return opcodes(1) + opargs(4);
 }
 
-static cell parm5(Vector<cell> *buffer, char *params, cell opcode)
+static cell parm5(CellWriter* writer, char *params, cell opcode)
 {
   ucell p1 = getparam(params, &params);
   ucell p2 = getparam(params, &params);
   ucell p3 = getparam(params, &params);
   ucell p4 = getparam(params, &params);
   ucell p5 = getparam(params, nullptr);
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(p1);
-    buffer->append(p2);
-    buffer->append(p3);
-    buffer->append(p4);
-    buffer->append(p5);
-  }
+  writer->append(opcode);
+  writer->append(p1);
+  writer->append(p2);
+  writer->append(p3);
+  writer->append(p4);
+  writer->append(p5);
   return opcodes(1) + opargs(5);
 }
 
-static cell do_dump(Vector<cell> *buffer, char *params, cell opcode)
+static cell do_dump(CellWriter* writer, char *params, cell opcode)
 {
   int num = 0;
 
   while (*params != '\0') {
     ucell p = getparam(params, &params);
-    if (buffer)
-      buffer->append(p);
+    writer->append(p);
     num++;
     while (isspace(*params))
       params++;
@@ -252,67 +257,57 @@ extract_call_target(char *params)
   return sym;
 }
 
-static cell do_ldgfen(Vector<cell> *buffer, char *params, cell opcode)
+static cell do_ldgfen(CellWriter* writer, char *params, cell opcode)
 {
   symbol *sym = extract_call_target(params);
   assert(sym->ident == iFUNCTN);
   assert(!(sym->usage & uNATIVE));
   assert((sym->funcid & 1) == 1);
 
-  if (buffer) {
-    // Note: we emit const.pri for backward compatibility.
-    assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
-    buffer->append(sp::OP_CONST_PRI);
-    buffer->append(sym->funcid);
-  }
+  // Note: we emit const.pri for backward compatibility.
+  assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
+  writer->append(sp::OP_CONST_PRI);
+  writer->append(sym->funcid);
   return opcodes(1) + opargs(1);
 }
 
-static cell do_call(Vector<cell> *buffer, char *params, cell opcode)
+static cell do_call(CellWriter* writer, char *params, cell opcode)
 {
   symbol* sym = extract_call_target(params);
 
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(sym->addr());
-  }
+  writer->append(opcode);
+  writer->append(sym->addr());
   return opcodes(1) + opargs(1);
 }
 
-static cell do_jump(Vector<cell> *buffer, char *params, cell opcode)
+static cell do_jump(CellWriter* writer, char *params, cell opcode)
 {
   int i = (int)hex2long(params, nullptr);
   assert(i >= 0 && i < sc_labnum);
 
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(LabelTable[i]);
-  }
+  writer->append(opcode);
+  writer->append(LabelTable[i]);
   return opcodes(1) + opargs(1);
 }
 
-static cell do_switch(Vector<cell> *buffer, char *params, cell opcode)
+static cell do_switch(CellWriter* writer, char *params, cell opcode)
 {
   int i = (int)hex2long(params, nullptr);
   assert(i >= 0 && i < sc_labnum);
 
-  if (buffer) {
-    buffer->append(opcode);
-    buffer->append(LabelTable[i]);
-  }
+  writer->append(opcode);
+  writer->append(LabelTable[i]);
   return opcodes(1) + opargs(1);
 }
 
-static cell do_case(Vector<cell> *buffer, char *params, cell opcode)
+static cell do_case(CellWriter* writer, char *params, cell opcode)
 {
   cell v = hex2long(params ,&params);
   int i = (int)hex2long(params, nullptr);
   assert(i >= 0 && i < sc_labnum);
 
-  if (buffer) {
-    buffer->append(v);
-    buffer->append(LabelTable[i]);
-  }
+  writer->append(v);
+  writer->append(LabelTable[i]);
   return opcodes(0) + opargs(2);
 }
 
@@ -501,6 +496,8 @@ static void relocate_labels(void *fin)
   char line[256];
   cell codeindex = 0;
 
+  CellWriter writer(nullptr);
+
   pc_resetasm(fin);
   while (pc_readasm(fin, line, sizeof(line))) {
     stripcomment(line);
@@ -531,7 +528,7 @@ static void relocate_labels(void *fin)
       }
 
       if (op.segment == sIN_CSEG)
-        codeindex += op.func(nullptr, skipwhitespace(params), op.opcode);
+        codeindex += op.func(&writer, skipwhitespace(params), op.opcode);
     }
   }
 }
@@ -566,7 +563,8 @@ static void generate_segment(Vector<cell> *buffer, void *fin, int pass)
     if (op.segment != pass)
       continue;
 
-    op.func(buffer, skipwhitespace(params), op.opcode);
+    CellWriter writer(buffer);
+    op.func(&writer, skipwhitespace(params), op.opcode);
   }
 }
 
