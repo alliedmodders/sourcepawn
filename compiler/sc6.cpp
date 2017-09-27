@@ -42,6 +42,7 @@
 #include <zlib/zlib.h>
 #include "smx-builder.h"
 #include "memory-buffer.h"
+#include "types.h"
 
 using namespace sp;
 using namespace ke;
@@ -742,13 +743,13 @@ static void append_debug_tables(SmxBuilder *builder, StringPool &pool, RefPtr<Sm
   }
 
   // Build the tags table.
-  for (constvalue *constptr = tagname_tab.next; constptr; constptr = constptr->next) {
-    assert(strlen(constptr->name)>0);
+  gTypes.forEachType([&](Type* type) -> void {
+    assert(strlen(type->name())>0);
 
     sp_file_tag_t &tag = tags->add();
-    tag.tag_id = constptr->value;
-    tag.name = names->add(pool, constptr->name);
-  }
+    tag.tag_id = type->value();
+    tag.name = names->add(pool, type->name());
+  });
 
   // Finish up debug header statistics.
   info->header().num_files = files->count();

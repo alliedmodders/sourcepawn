@@ -32,6 +32,7 @@
 #include <string.h>
 #include <amtl/am-unused.h>
 #include <amtl/am-platform.h>
+#include "types.h"
 
 #if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
   #include <conio.h>
@@ -128,7 +129,6 @@ static void doarg(symbol *sym, declinfo_t *decl, int offset, int chkshadow, argi
 static void reduce_referrers(symbol *root);
 static int testsymbols(symbol *root,int level,int testlabs,int testconst);
 static void destructsymbols(symbol *root,int level);
-static constvalue *find_constval_byval(constvalue *table,cell val);
 static void statement(int *lastindent,int allow_decl);
 static void compound(int stmt_sameline,int starttok);
 static int test(int label,int parens,int invert);
@@ -484,7 +484,7 @@ cleanup:
                                            * done (i.e. on a fatal error) */
   delete_symbols(&glbtab,0,TRUE,TRUE);
   DestroyHashTable(sp_Globals);
-  delete_consttable(&tagname_tab);
+  gTypes.reset();
   delete_consttable(&libname_tab);
   delete_aliastable();
   delete_pathtable();
@@ -602,31 +602,15 @@ const char *pc_typename(int tag)
 
 const char *pc_tagname(int tag)
 {
-  constvalue *ptr=tagname_tab.next;
-  for (; ptr; ptr=ptr->next) {
-    if (TAGID(ptr->value) == TAGID(tag))
-      return ptr->name;
-  }
+  if (Type* type = gTypes.find(tag))
+    return type->name();
   return "__unknown__";
-}
-
-constvalue *pc_tagptr(const char *name)
-{
-  constvalue *ptr=tagname_tab.next;
-  for (; ptr; ptr=ptr->next) {
-    if (strcmp(name, ptr->name)==0)
-      return ptr;
-  }
-  return NULL;
 }
 
 int pc_findtag(const char *name)
 {
-  constvalue *ptr=tagname_tab.next;
-  for (; ptr; ptr=ptr->next) {
-    if (strcmp(name,ptr->name)==0)
-      return ptr->value;
-  }
+  if (Type* type = gTypes.find(name))
+    return type->value();
   return -1;
 }
 
@@ -653,27 +637,8 @@ int pc_addtag(const char *name)
 
 int pc_addtag_flags(const char *name, int flags)
 {
-  constvalue *ptr;
-  int last;
-
   assert((flags & FUNCTAG) || strchr(name,':')==NULL); /* colon should already have been stripped */
-  last=0;
-  ptr=tagname_tab.next;
-  while (ptr!=NULL) {
-    if (strcmp(name,ptr->name)==0) {
-      // Update the flag set.
-      ptr->value |= flags;
-      return ptr->value;
-    }
-    if (TAGID(ptr->value) > last)
-      last = TAGID(ptr->value);
-    ptr = ptr->next;
-  } /* while */
-
-  /* tagname currently unknown, add it */
-  int tag = (last + 1) | flags;
-  append_constval(&tagname_tab, name, (cell)tag, 0);
-  return tag;
+  return gTypes.findOrAdd(name, flags)->value();
 }
 
 static void resetglobals(void)
@@ -739,7 +704,6 @@ static void initglobals(void)
   litq=NULL;            /* the literal queue */
   glbtab.next=NULL;     /* clear global variables/constants table */
   loctab.next=NULL;     /*   "   local      "    /    "       "   */
-  tagname_tab.next=NULL;/* tagname table */
   libname_tab.next=NULL;/* library table (#pragma library "..." syntax) */
 
   pline[0]='\0';        /* the line read from the input file */
@@ -1191,8 +1155,8 @@ static void setconstants(void)
   int debug;
 
   assert(sc_status==statIDLE);
-  append_constval(&tagname_tab,"_",0,0);/* "untagged" */
-  append_constval(&tagname_tab,"bool",1,0);
+
+  gTypes.init();
 
   pc_anytag = pc_addtag("any");
   pc_functag = pc_addtag_flags("Function", FIXEDTAG|FUNCTAG);
@@ -3971,7 +3935,6 @@ static void dofuncenum(int listmode)
   char *str;
   // char *ptr;
   char tagname[sNAMEMAX+1];
-  constvalue *cur;
   funcenum_t *fenum = NULL;
   int i;
   int newStyleTag = 0;
@@ -4021,17 +3984,6 @@ static void dofuncenum(int listmode)
     }
   }
 
-  /* This tag can't already exist! */
-  cur=tagname_tab.next;
-  while (cur) {
-    if (strcmp(cur->name, str) == 0) {
-      /* Another bad one... */
-      if (!(cur->value & FUNCTAG))
-        error(94);
-      break;
-    }
-    cur = cur->next;
-  }
   strcpy(tagname, str);
 
   fenum = funcenums_add(tagname);
@@ -4608,16 +4560,10 @@ static int parse_funcname(char *fname,int *tag1,int *tag2,char *opname)
   return unary;
 }
 
-constvalue *find_tag_byval(int tag)
-{
-  return find_constval_byval(&tagname_tab, tag);
-}
-
 char *funcdisplayname(char *dest,char *funcname)
 {
   int tags[2];
   char opname[10];
-  constvalue *tagsym[2];
   int unary;
 
   if (isalpha(*funcname) || *funcname=='_' || *funcname==PUBLIC_CHAR || *funcname=='\0') {
@@ -4627,18 +4573,18 @@ char *funcdisplayname(char *dest,char *funcname)
   } /* if */
 
   unary=parse_funcname(funcname,&tags[0],&tags[1],opname);
-  tagsym[1]=find_tag_byval(tags[1]);
-  assert(tagsym[1]!=NULL);
+  Type* rhsType = gTypes.findByValue(tags[1]);
+  assert(rhsType!=NULL);
   if (unary) {
-    sprintf(dest,"operator%s(%s:)",opname,tagsym[1]->name);
+    sprintf(dest,"operator%s(%s:)",opname,rhsType->name());
   } else {
-    tagsym[0]=find_tag_byval(tags[0]);
-    assert(tagsym[0]!=NULL);
+    Type* lhsType = gTypes.findByValue(tags[0]);
+    assert(lhsType!=NULL);
     /* special case: the assignment operator has the return value as the 2nd tag */
     if (opname[0]=='=' && opname[1]=='\0')
-      sprintf(dest,"%s:operator%s(%s:)",tagsym[0]->name,opname,tagsym[1]->name);
+      sprintf(dest,"%s:operator%s(%s:)",lhsType->name(),opname,rhsType->name());
     else
-      sprintf(dest,"operator%s(%s:,%s:)",opname,tagsym[0]->name,tagsym[1]->name);
+      sprintf(dest,"operator%s(%s:,%s:)",opname,lhsType->name(),rhsType->name());
   } /* if */
   return dest;
 }
@@ -5519,37 +5465,6 @@ constvalue *find_constval(constvalue *table,char *name,int index)
   return NULL;
 }
 
-static constvalue *find_constval_byval(constvalue *table,cell val)
-{
-  constvalue *ptr = table->next;
-
-  while (ptr!=NULL) {
-    if (ptr->value==val)
-      return ptr;
-    ptr=ptr->next;
-  } /* while */
-  return NULL;
-}
-
-#if 0   /* never used */
-static int delete_constval(constvalue *table,char *name)
-{
-  constvalue *prev = table;
-  constvalue *cur = prev->next;
-
-  while (cur!=NULL) {
-    if (strcmp(name,cur->name)==0) {
-      prev->next=cur->next;
-      free(cur);
-      return TRUE;
-    } /* if */
-    prev=cur;
-    cur=cur->next;
-  } /* while */
-  return FALSE;
-}
-#endif
-
 void delete_consttable(constvalue *table)
 {
   constvalue *cur=table->next, *next;
@@ -5582,15 +5497,14 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
       redef=1;                  /* redefinition a function/variable to a constant is not allowed */
     if ((sym->usage & uENUMFIELD)!=0) {
       /* enum field, special case if it has a different tag and the new symbol is also an enum field */
-      constvalue *tagid;
       symbol *tagsym;
       if (sym->tag==tag)
         redef=1;                /* enumeration field is redefined (same tag) */
-      tagid=find_tag_byval(tag);
-      if (tagid==NULL) {
+      Type* type = gTypes.findByValue(tag);
+      if (type==NULL) {
         redef=1;                /* new constant does not have a tag */
       } else {
-        tagsym=findconst(tagid->name,NULL);
+        tagsym=findconst(type->name(),NULL);
         if (tagsym==NULL || (tagsym->usage & uENUMROOT)==0)
           redef=1;              /* new constant is not an enumeration field */
       } /* if */

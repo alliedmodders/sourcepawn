@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include "sc.h"
 #include "sctracker.h"
+#include "types.h"
 
 memuse_list_t *heapusage = NULL;
 memuse_list_t *stackusage = NULL;

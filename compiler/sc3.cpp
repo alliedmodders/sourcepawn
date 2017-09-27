@@ -30,6 +30,7 @@
 #endif
 #include "sc.h"
 #include "sctracker.h"
+#include "types.h"
 
 static int skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
                 int (*hier)(value*),value *lval);
@@ -1773,8 +1774,8 @@ static int hier2(value *lval)
     if (tok!=tSYMBOL && tok!=tLABEL)
       return error(20,st);      /* illegal symbol name */
     if (tok==tLABEL) {
-      constvalue *tagsym=find_constval(&tagname_tab,st,0);
-      tag=(int)((tagsym!=NULL) ? tagsym->value : 0);
+      Type* type = gTypes.find(st);
+      tag = type ? type->value() : 0;
     } else {
       sym=findloc(st);
       if (sym==NULL)
