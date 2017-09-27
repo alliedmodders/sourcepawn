@@ -32,7 +32,8 @@ TypeDictionary gTypes;
 
 Type::Type(const char* name, cell value)
  : name_(name),
-   value_(value)
+   value_(value),
+   kind_(TypeKind::None)
 {
 }
 
@@ -89,6 +90,13 @@ void
 TypeDictionary::reset()
 {
   types_.clear();
+}
+
+void
+TypeDictionary::clearExtendedTypes()
+{
+  for (const auto& type : types_)
+    type->resetPtr();
 }
 
 void

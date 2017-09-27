@@ -59,13 +59,13 @@ typedef struct structarg_s
   int index;
 } structarg_t;
 
-typedef struct pstruct_s
+struct pstruct_t
 {
   int argcount;
   char name[sNAMEMAX+1];
   structarg_t **args;
-  struct pstruct_s *next;
-} pstruct_t;
+  pstruct_t *next;
+};
 
 // The ordering of these definitions should be preserved for
 // can_redef_layout_spec().

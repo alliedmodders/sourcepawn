@@ -36,10 +36,18 @@
 #define OBJECTTAG    0x10000000
 #define ENUMTAG      0x08000000
 #define METHODMAPTAG 0x04000000
-#define STRUCTTAG    0x02000000
-#define TAGTYPEMASK   (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG | STRUCTTAG)
+#define TAGTYPEMASK   (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG)
 #define TAGFLAGMASK   (FIXEDTAG | TAGTYPEMASK)
 #define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
+
+enum class TypeKind : uint32_t
+{
+  None,
+  Struct = 0x02000000
+};
+KE_DEFINE_ENUM_OPERATORS(TypeKind)
+
+struct pstruct_t;
 
 class Type
 {
@@ -49,19 +57,44 @@ public:
   const char* name() const {
     return name_.chars();
   }
+  TypeKind kind() const {
+    return kind_;
+  }
   cell& value() {
     return value_;
   }
   cell value() const {
-    return value_;
+    return value_ | int(kind_);
   }
   int tagid() const {
     return TAGID(value_);
   }
 
+  void resetPtr() {
+    kind_ = TypeKind::None;
+    private_ptr_ = nullptr;
+  }
+
+  pstruct_t* asStruct() const {
+    assert(kind_ == TypeKind::Struct);
+    return pstruct_ptr_;
+  }
+  void setStruct(pstruct_t* ptr) {
+    kind_ = TypeKind::Struct;
+    pstruct_ptr_ = ptr;
+  }
+
 private:
   ke::AString name_;
   cell value_;
+
+  // These are reset in between the first and second passes, since the
+  // underlying structures are reparsed.
+  TypeKind kind_;
+  union {
+    pstruct_t* pstruct_ptr_;
+    void* private_ptr_;
+  };
 };
 
 class TypeDictionary
@@ -73,6 +106,8 @@ public:
   Type* find(const char* name);
   Type* findOrAdd(const char* name, int flags);
   Type* findByValue(int tag);
+
+  void clearExtendedTypes();
 
   void reset();
   void init();

@@ -354,6 +354,7 @@ int pc_compile(int argc, char *argv[])
       inst_binary_name(binfname);
     #endif
     resetglobals();
+    gTypes.clearExtendedTypes();
     pstructs_free();
     funcenums_free();
     methodmaps_free();
@@ -400,6 +401,7 @@ int pc_compile(int argc, char *argv[])
   /* reset "defined" flag of all functions and global variables */
   reduce_referrers(&glbtab);
   delete_symbols(&glbtab,0,TRUE,FALSE);
+  gTypes.clearExtendedTypes();
   funcenums_free();
   methodmaps_free();
   pstructs_free();
@@ -484,13 +486,13 @@ cleanup:
                                            * done (i.e. on a fatal error) */
   delete_symbols(&glbtab,0,TRUE,TRUE);
   DestroyHashTable(sp_Globals);
-  gTypes.reset();
   delete_consttable(&libname_tab);
   delete_aliastable();
   delete_pathtable();
   delete_sourcefiletable();
   delete_inputfiletable();
   delete_dbgstringtable();
+  gTypes.reset();
   funcenums_free();
   methodmaps_free();
   pstructs_free();
@@ -1239,9 +1241,9 @@ static void dodecl(const token_t *tok)
   if (!decl.opertok && probablyVariable) {
     if (tok->id == tNEW && decl.type.is_new)
       error(143);
-    if (decl.type.tag & STRUCTTAG) {
-      pstruct_t *pstruct = pstructs_find(pc_tagname(decl.type.tag));
-      declstructvar(decl.name, fpublic, pstruct);
+    Type* type = gTypes.find(decl.type.tag);
+    if (type && type->kind() == TypeKind::Struct) {
+      declstructvar(decl.name, fpublic, type->asStruct());
     } else {
       declglb(&decl, fpublic, fstatic, fstock);
     }
@@ -2655,7 +2657,8 @@ static void declstruct(void)
 
   pstruct = pstructs_add(str);
 
-  pc_addtag_flags(pstruct->name, STRUCTTAG|FIXEDTAG);
+  Type* type = gTypes.findOrAdd(pstruct->name, FIXEDTAG);
+  type->setStruct(pstruct);
 
   needtoken('{');
   do {
