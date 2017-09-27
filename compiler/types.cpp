@@ -36,6 +36,10 @@ Type::Type(const char* name, cell value)
 {
 }
 
+TypeDictionary::TypeDictionary()
+{
+}
+
 Type*
 TypeDictionary::find(const char* name)
 {
@@ -49,37 +53,33 @@ TypeDictionary::find(const char* name)
 Type*
 TypeDictionary::find(int tag)
 {
-  for (const auto& type : types_) {
-    if (type->tagid() == TAGID(tag))
-      return type.get();
-  }
-  return nullptr;
+  int index = TAGID(tag);
+  assert(size_t(index) < types_.length());
+
+  return types_[index].get();
 }
 
 Type*
 TypeDictionary::findByValue(int tag)
 {
-  for (const auto& type : types_) {
-    if (type->value() == tag)
-      return type.get();
-  }
+  int tagid = TAGID(tag);
+  Type* type = find(tagid);
+  if (type && type->value() == tag)
+    return type;
   return nullptr;
 }
 
 Type*
 TypeDictionary::findOrAdd(const char* name, int flags)
 {
-  int last = 0;
   for (const auto& type : types_) {
     if (strcmp(type->name(), name) == 0) {
       type->value() |= flags;
       return type.get();
     }
-    if (type->tagid() > last)
-      last = type->tagid();
   }
 
-  int tag = (last + 1) | flags;
+  int tag = int(types_.length()) | flags;
   UniquePtr<Type> type = MakeUnique<Type>(name, tag);
   types_.append(Move(type));
   return types_.back().get();
@@ -94,9 +94,9 @@ TypeDictionary::reset()
 void
 TypeDictionary::init()
 {
-  UniquePtr<Type> intType = MakeUnique<Type>("_", 0);
-  types_.append(Move(intType));
+  Type* type = findOrAdd("_", 0);
+  assert(type->value() == 0);
 
-  Type* type = findOrAdd("bool", 0);
+  type = findOrAdd("bool", 0);
   assert(type->value() == 1);
 }

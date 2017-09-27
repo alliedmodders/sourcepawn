@@ -27,8 +27,8 @@
 #define _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_
 
 #include <amtl/am-string.h>
-#include <amtl/am-linkedlist.h>
 #include <amtl/am-uniqueptr.h>
+#include <amtl/am-vector.h>
 #include "amx.h"
 
 #define FIXEDTAG     0x40000000
@@ -67,6 +67,8 @@ private:
 class TypeDictionary
 {
 public:
+  TypeDictionary();
+
   Type* find(int tag);
   Type* find(const char* name);
   Type* findOrAdd(const char* name, int flags);
@@ -82,7 +84,7 @@ public:
   }
 
 private:
-  ke::LinkedList<ke::UniquePtr<Type>> types_;
+  ke::Vector<ke::UniquePtr<Type>> types_;
 };
 
 extern TypeDictionary gTypes;
