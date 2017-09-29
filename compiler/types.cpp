@@ -35,8 +35,28 @@ Type::Type(const char* name, cell value)
  : name_(name),
    value_(value),
    fixed_(0),
+   intrinsic_(false),
    kind_(TypeKind::None)
 {
+  private_ptr_ = nullptr;
+}
+
+void
+Type::resetPtr()
+{
+  // We try to persist tag information across passes, since globals are
+  // preserved and core types should be too. However user-defined types
+  // that attach extra structural information are cleared, as that
+  // data is not retained into the statWRITE pass.
+  if (intrinsic_)
+    return;
+
+  // We preserve funcenums across compilations, but not the private ptr,
+  // since dotypedef() and dotypeset() want to check that the type
+  // wasn't previously defined as something else.
+  if (kind_ != TypeKind::Function)
+    kind_ = TypeKind::None;
+  private_ptr_ = nullptr;
 }
 
 TypeDictionary::TypeDictionary()
@@ -107,6 +127,19 @@ TypeDictionary::init()
 
   type = findOrAdd("bool");
   assert(type->value() == 1);
+
+  pc_anytag = defineAny()->value();
+  pc_functag = defineFunction("Function", nullptr)->value();
+  pc_tag_string = defineString()->value();
+  sc_rationaltag = defineFloat()->value();
+  pc_tag_void = defineVoid()->value();
+  pc_tag_object = defineObject("object")->value();
+  pc_tag_bool = defineBool()->value();
+  pc_tag_null_t = defineObject("null_t")->value();
+  pc_tag_nullfunc_t = defineObject("nullfunc_t")->value();
+
+  for (const auto& type : types_)
+    type->setIntrinsic();
 }
 
 Type*
@@ -116,10 +149,10 @@ TypeDictionary::defineAny()
 }
 
 Type*
-TypeDictionary::defineFunction(const char* name)
+TypeDictionary::defineFunction(const char* name, funcenum_t* fe)
 {
   Type* type = findOrAdd(name);
-  type->setFunction();
+  type->setFunction(fe);
   return type;
 }
 

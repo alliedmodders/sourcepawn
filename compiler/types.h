@@ -31,25 +31,28 @@
 #include <amtl/am-vector.h>
 #include "amx.h"
 
-#define FUNCTAG      0x20000000
 #define OBJECTTAG    0x10000000
 #define ENUMTAG      0x08000000
 #define METHODMAPTAG 0x04000000
-#define TAGTYPEMASK   (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG | 0x02000000)
+#define TAGTYPEMASK   (0x20000000 | OBJECTTAG | ENUMTAG | METHODMAPTAG | 0x02000000)
 #define TAGFLAGMASK   (TAGTYPEMASK | 0x40000000)
 #define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
 
 enum class TypeKind : uint32_t
 {
   None,
-  Struct = 0x02000000
+  Struct   = 0x02000000,
+  Function = 0x20000000
 };
 KE_DEFINE_ENUM_OPERATORS(TypeKind)
 
 struct pstruct_t;
+struct funcenum_t;
 
 class Type
 {
+  friend class TypeDictionary;
+
 public:
   Type(const char* name, cell value);
 
@@ -66,55 +69,83 @@ public:
     return TAGID(value_);
   }
 
-  void resetPtr() {
-    kind_ = TypeKind::None;
-    private_ptr_ = nullptr;
+  bool isDefinedType() const {
+    return kind_ != TypeKind::None ||
+           (value() & TAGTYPEMASK) != 0;
   }
 
   bool isFixed() const {
     return !!fixed_;
   }
-  void setFixed() {
-    // This is separate from "kind_" because it persists across passes.
-    fixed_ = 0x40000000;
+
+  bool isStruct() const {
+    return kind_ == TypeKind::Struct;
+  }
+  pstruct_t* asStruct() const {
+    if (!isStruct())
+      return nullptr;
+    return pstruct_ptr_;
   }
 
-  pstruct_t* asStruct() const {
-    assert(kind_ == TypeKind::Struct);
-    return pstruct_ptr_;
+  void setMethodmap() {
+    setFixed();
+    value_ |= METHODMAPTAG;
+  }
+
+  bool isFunction() const {
+    return kind_ == TypeKind::Function;
+  }
+  funcenum_t* asFunction() const {
+    if (!isFunction())
+      return nullptr;
+    return funcenum_ptr_;
+  }
+  // This can return null if it's the Function type.
+  funcenum_t* toFunction() const {
+    assert(isFunction());
+    return funcenum_ptr_;
+  }
+
+private:
+  void setFunction(funcenum_t* func) {
+    setFixed();
+    kind_ = TypeKind::Function;
+    funcenum_ptr_ = func;
+  }
+  void setObject() {
+    setFixed();
+    value_ |= OBJECTTAG;
+  }
+  void setEnumTag() {
+    value_ |= ENUMTAG;
   }
   void setStruct(pstruct_t* ptr) {
     setFixed();
     kind_ = TypeKind::Struct;
     pstruct_ptr_ = ptr;
   }
+  void setFixed() {
+    // This is separate from "kind_" because it persists across passes.
+    fixed_ = 0x40000000;
+  }
+  void setIntrinsic() {
+    intrinsic_ = true;
+  }
 
-  void setEnumTag() {
-    value_ |= ENUMTAG;
-  }
-  void setMethodmap() {
-    setFixed();
-    value_ |= METHODMAPTAG;
-  }
-  void setObject() {
-    setFixed();
-    value_ |= OBJECTTAG;
-  }
-  void setFunction() {
-    setFixed();
-    value_ |= FUNCTAG;
-  }
+  void resetPtr();
 
 private:
   ke::AString name_;
   cell value_;
   int fixed_;
+  bool intrinsic_;
 
   // These are reset in between the first and second passes, since the
   // underlying structures are reparsed.
   TypeKind kind_;
   union {
     pstruct_t* pstruct_ptr_;
+    funcenum_t* funcenum_ptr_;
     void* private_ptr_;
   };
 };
@@ -134,7 +165,8 @@ public:
   void init();
 
   Type* defineAny();
-  Type* defineFunction(const char* name);
+  Type* defineFunction(const char* name, funcenum_t* fe);
+  Type* defineTypedef(const char* name, Type* other);
   Type* defineString();
   Type* defineFloat();
   Type* defineVoid();

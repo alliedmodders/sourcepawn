@@ -1150,16 +1150,6 @@ static void setconstants(void)
 
   gTypes.init();
 
-  pc_anytag = gTypes.defineAny()->value();
-  pc_functag = gTypes.defineFunction("Function")->value();
-  pc_tag_string = gTypes.defineString()->value();
-  sc_rationaltag = gTypes.defineFloat()->value();
-  pc_tag_void = gTypes.defineVoid()->value();
-  pc_tag_object = gTypes.defineObject("object")->value();
-  pc_tag_bool = gTypes.defineBool()->value();
-  pc_tag_null_t = gTypes.defineObject("null_t")->value();
-  pc_tag_nullfunc_t = gTypes.defineObject("nullfunc_t")->value();
-
   add_constant("true",1,sGLOBAL,1);     /* boolean flags */
   add_constant("false",0,sGLOBAL,1);
   add_constant("EOS",0,sGLOBAL,0);      /* End Of String, or '\0' */
@@ -2749,7 +2739,7 @@ static int parse_new_typename(const token_t *tok)
       } else if (tag != pc_anytag) {
         // Perform some basic filters so we can start narrowing down what can
         // be used as a type.
-        if (!(tag & TAGTYPEMASK))
+        if (!gTypes.find(tag)->isDefinedType())
           error(139, tok->str);
       }
       return tag;
@@ -3883,8 +3873,8 @@ static void dotypedef()
   if (!needsymbol(&ident))
     return;
 
-  int prev_tag = pc_findtag(ident.name);
-  if (prev_tag != -1 && !(prev_tag & FUNCTAG))
+  Type* prev_type = gTypes.find(ident.name);
+  if (prev_type && !prev_type->isFunction())
     error(94);
 
   needtoken('=');
@@ -3903,8 +3893,8 @@ static void dotypeset()
   if (!needsymbol(&ident))
     return;
 
-  int prev_tag = pc_findtag(ident.name);
-  if (prev_tag != -1 && !(prev_tag & FUNCTAG))
+  Type* prev_type = gTypes.find(ident.name);
+  if (prev_type && !prev_type->isFunction())
     error(94);
 
   funcenum_t *def = funcenums_add(ident.name);

@@ -38,14 +38,14 @@ typedef struct functag_s
   struct functag_s *next;
 } functag_t;
 
-typedef struct funcenum_s
+struct funcenum_t
 {
   int tag;
   char name[METHOD_NAMEMAX+1];
   functag_t *first;
   functag_t *last;
-  struct funcenum_s *next;
-} funcenum_t;
+  funcenum_t *next;
+};
 
 typedef struct structarg_s
 {
@@ -137,7 +137,6 @@ structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member);
  */
 void funcenums_free();
 funcenum_t *funcenums_add(const char *name);
-funcenum_t *funcenums_find_by_tag(int tag);
 functag_t *functags_add(funcenum_t *en, functag_t *src);
 funcenum_t *funcenum_for_symbol(symbol *sym);
 functag_t *functag_find_intrinsic(int tag);

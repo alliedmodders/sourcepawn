@@ -129,19 +129,6 @@ void funcenums_free()
   lastenum = NULL;
 }
 
-funcenum_t *funcenums_find_by_tag(int tag)
-{
-  funcenum_t *e = firstenum;
-
-  while (e) {
-    if (e->tag == tag)
-      return e;
-    e = e->next;
-  }
-
-  return NULL;
-}
-
 funcenum_t *funcenums_add(const char *name)
 {
   funcenum_t *e = (funcenum_t *)malloc(sizeof(funcenum_t));
@@ -157,7 +144,7 @@ funcenum_t *funcenums_add(const char *name)
   }
 
   strcpy(e->name, name);
-  e->tag = gTypes.defineFunction(name)->value();
+  e->tag = gTypes.defineFunction(name, e)->value();
 
   return e;
 }
@@ -197,7 +184,8 @@ funcenum_t *funcenum_for_symbol(symbol *sym)
 // Finds a functag that was created intrinsically.
 functag_t *functag_find_intrinsic(int tag)
 {
-  funcenum_t *fe = funcenums_find_by_tag(tag);
+  Type* type = gTypes.find(tag);
+  funcenum_t *fe = type->asFunction();
   if (!fe)
     return NULL;
 
@@ -550,18 +538,18 @@ void methodmaps_free()
 
 LayoutSpec deduce_layout_spec_by_tag(int tag)
 {
-  symbol *sym;
-  const char *name;
-  methodmap_t *map;
-  if ((map = methodmap_find_by_tag(tag)) != NULL)
+  if (methodmap_t* map = methodmap_find_by_tag(tag))
     return map->spec;
-  if (tag & FUNCTAG)
+
+  Type* type = gTypes.find(tag);
+  if (type && type->isFunction())
     return Layout_FuncTag;
 
-  name = pc_tagname(tag);
-  if (pstructs_find(name))
+  if (type && type->isStruct())
     return Layout_PawnStruct;
-  if ((sym = findglb(name)) != NULL)
+
+  const char* name = pc_tagname(tag);
+  if (findglb(name))
     return Layout_Enum;
 
   return Layout_None;
@@ -569,19 +557,11 @@ LayoutSpec deduce_layout_spec_by_tag(int tag)
 
 LayoutSpec deduce_layout_spec_by_name(const char *name)
 {
-  symbol *sym;
-  methodmap_t *map;
-  int tag = pc_findtag(name);
-  if (tag != -1 && (tag & FUNCTAG))
-    return Layout_FuncTag;
-  if (pstructs_find(name))
-    return Layout_PawnStruct;
-  if ((map = methodmap_find_by_name(name)) != NULL)
-    return map->spec;
-  if ((sym = findglb(name)) != NULL)
-    return Layout_Enum;
+  Type* type = gTypes.find(name);
+  if (!type)
+    return Layout_None;
 
-  return Layout_None;
+  return deduce_layout_spec_by_tag(type->tagid());
 }
 
 const char *layout_spec_name(LayoutSpec spec)

@@ -331,7 +331,8 @@ const char *type_to_name(int tag)
   if (name)
     return name;
 
-  if (tag & FUNCTAG)
+  Type* type = gTypes.find(tag);
+  if (type && type->isFunction())
     return "function";
   return "unknown";
 }
@@ -355,8 +356,11 @@ static int obj_typeerror(int id, int tag1, int tag2)
   return FALSE;
 }
 
-static int matchobjecttags(int formaltag, int actualtag, int flags)
+static int matchobjecttags(Type* formal, Type* actual, int flags)
 {
+  int formaltag = formal->value();
+  int actualtag = actual->value();
+
   if ((flags & MATCHTAG_COMMUTATIVE) &&
       (formaltag == pc_tag_null_t || formaltag == pc_tag_nullfunc_t))
   {
@@ -373,7 +377,7 @@ static int matchobjecttags(int formaltag, int actualtag, int flags)
   if (actualtag == pc_tag_nullfunc_t) {
     // All functions are nullable. We use a separate constant for backward
     // compatibility; plugins and extensions check -1, not 0.
-    if (formaltag & FUNCTAG)
+    if (formal->isFunction())
       return TRUE;
 
     error(154, pc_tagname(formaltag));
@@ -489,27 +493,30 @@ static int functag_compare(const functag_t *formal, const functag_t *actual)
   return TRUE;
 }
 
-static int matchfunctags(int formaltag, int actualtag)
+static int matchfunctags(Type* formal, Type* actual)
 {
-  if (formaltag == pc_functag && (actualtag & FUNCTAG))
+  int formaltag = formal->value();
+  int actualtag = actual->value();
+
+  if (formaltag == pc_functag && actual->isFunction())
     return TRUE;
 
   if (actualtag == pc_tag_nullfunc_t)
     return TRUE;
 
-  if (!(actualtag & FUNCTAG))
+  if (!actual->isFunction())
     return FALSE;
 
-  functag_t *actual = functag_find_intrinsic(actualtag);
-  if (!actual)
+  functag_t *actualfn = functag_find_intrinsic(actualtag);
+  if (!actualfn)
     return FALSE;
 
-  funcenum_t *e = funcenums_find_by_tag(formaltag);
+  funcenum_t *e = formal->toFunction();
   if (!e)
     return FALSE;
 
-  for (functag_t *formal = e->first; formal; formal = formal->next) {
-    if (functag_compare(formal, actual))
+  for (functag_t *formalfn = e->first; formalfn; formalfn = formalfn->next) {
+    if (functag_compare(formalfn, actualfn))
       return TRUE;
   }
 
@@ -522,14 +529,16 @@ int matchtag(int formaltag, int actualtag, int flags)
     return TRUE;
 
   Type* actual = gTypes.find(actualtag);
+  Type* formal = gTypes.find(formaltag);
+  assert(actual && formal);
 
   if (formaltag == pc_tag_string && actualtag == 0)
     return TRUE;
 
   if ((formaltag & OBJECTTAG) || (actualtag & OBJECTTAG))
-    return matchobjecttags(formaltag, actualtag, flags);
+    return matchobjecttags(formal, actual, flags);
 
-  if ((actualtag & FUNCTAG) && !(formaltag & FUNCTAG)) {
+  if (actual->isFunction() && !formal->isFunction()) {
     // We're being given a function, but the destination is not a function.
     error(130);
     return FALSE;
@@ -548,8 +557,8 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (formaltag == pc_anytag || actualtag == pc_anytag)
     return TRUE;
 
-  if (formaltag & FUNCTAG) {
-    if (!matchfunctags(formaltag, actualtag)) {
+  if (formal->isFunction()) {
+    if (!matchfunctags(formal, actual)) {
       error(100);
       return FALSE;
     }
@@ -1625,6 +1634,7 @@ static int hier2(value *lval)
     return FALSE;
   }
   case tLABEL:                  /* tagname override */
+  {
     tag=pc_addtag(st);
     if (sc_require_newdecls) {
       // Warn: old style cast used when newdecls pragma is enabled
@@ -1632,14 +1642,17 @@ static int hier2(value *lval)
     }
     lval->cmptag=tag;
     lvalue=hier2(lval);
+    Type* ltype = gTypes.find(lval->tag);
+    Type* atype = gTypes.find(tag);
     if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
       matchtag(tag, lval->tag, MATCHTAG_COERCE);
-    } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
+    } else if (ltype->isFunction() != atype->isFunction()) {
       // Warn: unsupported cast.
       error(237);
     }
     lval->tag=tag;
     return lvalue;
+  }
   case tDEFINED:
     paranthese=0;
     while (matchtoken('('))
@@ -2041,9 +2054,11 @@ parse_view_as(value* lval)
   else
     matchtoken(')');
 
+  Type* ltype = gTypes.find(lval->tag);
+  Type* atype = gTypes.find(tag);
   if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
     matchtag(tag, lval->tag, MATCHTAG_COERCE);
-  } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
+  } else if (ltype->isFunction() != atype->isFunction()) {
     // Warn: unsupported cast.
     error(237);
   } else if (lval->sym && lval->sym->tag == pc_tag_void) {
