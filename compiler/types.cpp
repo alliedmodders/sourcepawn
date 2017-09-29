@@ -54,7 +54,11 @@ Type::resetPtr()
   // We preserve funcenums across compilations, but not the private ptr,
   // since dotypedef() and dotypeset() want to check that the type
   // wasn't previously defined as something else.
-  if (kind_ != TypeKind::Function)
+  //
+  // Enums are also a special case, since they can be implicitly defined
+  // before they are used. This is ancient cruft that results from the
+  // 2-pass model, where initially errors are ignored.
+  if (kind_ != TypeKind::Function && kind_ != TypeKind::Enum)
     kind_ = TypeKind::None;
   private_ptr_ = nullptr;
 }

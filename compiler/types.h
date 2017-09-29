@@ -31,9 +31,8 @@
 #include <amtl/am-vector.h>
 #include "amx.h"
 
-#define ENUMTAG      0x08000000
 #define METHODMAPTAG 0x04000000
-#define TAGTYPEMASK   (0x32000000 | ENUMTAG | METHODMAPTAG)
+#define TAGTYPEMASK   (0x3A000000 | METHODMAPTAG)
 #define TAGFLAGMASK   (TAGTYPEMASK | 0x40000000)
 #define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
 
@@ -41,6 +40,7 @@ enum class TypeKind : uint32_t
 {
   None,
   Struct   = 0x02000000,
+  Enum     = 0x08000000,
   Object   = 0x10000000,
   Function = 0x20000000
 };
@@ -121,7 +121,7 @@ private:
     kind_ = TypeKind::Object;
   }
   void setEnumTag() {
-    value_ |= ENUMTAG;
+    kind_ = TypeKind::Enum;
   }
   void setStruct(pstruct_t* ptr) {
     setFixed();
