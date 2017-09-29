@@ -31,6 +31,7 @@
 #include "sc.h"
 #include "sctracker.h"
 #include "types.h"
+#include <amtl/am-algorithm.h>
 
 static int skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
                 int (*hier)(value*),value *lval);
@@ -365,13 +366,12 @@ static int matchobjecttags(Type* formal, Type* actual, int flags)
       (formaltag == pc_tag_null_t || formaltag == pc_tag_nullfunc_t))
   {
     // Bypass the check immediately after for non-object coercion.
-    int tmp = actualtag;
-    actualtag = formaltag;
-    formaltag = tmp;
+    ke::Swap(formaltag, actualtag);
+    ke::Swap(formal, actual);
   }
 
   // objects never coerce to non-objects, YET.
-  if ((formaltag & OBJECTTAG) && !(actualtag & OBJECTTAG))
+  if (formal->isObject() && !actual->isObject())
     return obj_typeerror(132, formaltag, actualtag);
 
   if (actualtag == pc_tag_nullfunc_t) {
@@ -386,7 +386,7 @@ static int matchobjecttags(Type* formal, Type* actual, int flags)
 
   if (actualtag == pc_tag_null_t) {
     // All objects are nullable.
-    if (formaltag & OBJECTTAG)
+    if (formal->isObject())
       return TRUE;
 
     // Some methodmaps are nullable. The nullable property is inherited
@@ -399,7 +399,7 @@ static int matchobjecttags(Type* formal, Type* actual, int flags)
     return FALSE;
   }
 
-  if (!(formaltag & OBJECTTAG) && (actualtag & OBJECTTAG))
+  if (!formal->isObject() && actual->isObject())
     return obj_typeerror(131, formaltag, actualtag);
 
   // Every object coerces to "object".
@@ -535,7 +535,7 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (formaltag == pc_tag_string && actualtag == 0)
     return TRUE;
 
-  if ((formaltag & OBJECTTAG) || (actualtag & OBJECTTAG))
+  if (formal->isObject() || actual->isObject())
     return matchobjecttags(formal, actual, flags);
 
   if (actual->isFunction() && !formal->isFunction()) {
@@ -1644,7 +1644,7 @@ static int hier2(value *lval)
     lvalue=hier2(lval);
     Type* ltype = gTypes.find(lval->tag);
     Type* atype = gTypes.find(tag);
-    if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
+    if (ltype->isObject() || atype->isObject()) {
       matchtag(tag, lval->tag, MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
       // Warn: unsupported cast.
@@ -2056,7 +2056,7 @@ parse_view_as(value* lval)
 
   Type* ltype = gTypes.find(lval->tag);
   Type* atype = gTypes.find(tag);
-  if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
+  if (ltype->isObject() || atype->isObject()) {
     matchtag(tag, lval->tag, MATCHTAG_COERCE);
   } else if (ltype->isFunction() != atype->isFunction()) {
     // Warn: unsupported cast.
