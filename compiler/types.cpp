@@ -25,6 +25,7 @@
  */
 #include "types.h"
 #include "sc.h"
+#include <ctype.h>
 
 using namespace ke;
 
@@ -107,4 +108,78 @@ TypeDictionary::init()
 
   type = findOrAdd("bool", 0);
   assert(type->value() == 1);
+}
+
+Type*
+TypeDictionary::defineAny()
+{
+  return findOrAdd("any", 0);
+}
+
+Type*
+TypeDictionary::defineFunction(const char* name)
+{
+  return findOrAdd(name, FIXEDTAG|FUNCTAG);
+}
+
+Type*
+TypeDictionary::defineString()
+{
+  return findOrAdd("String", FIXEDTAG);
+}
+
+Type*
+TypeDictionary::defineFloat()
+{
+  return findOrAdd("Float", FIXEDTAG);
+}
+
+Type*
+TypeDictionary::defineVoid()
+{
+  return findOrAdd("void", FIXEDTAG);
+}
+
+Type*
+TypeDictionary::defineObject(const char* name)
+{
+  return findOrAdd(name, FIXEDTAG|OBJECTTAG);
+}
+
+Type*
+TypeDictionary::defineBool()
+{
+  return findOrAdd("bool", 0);
+}
+
+Type*
+TypeDictionary::defineMethodmap(const char* name)
+{
+  return findOrAdd(name, FIXEDTAG|METHODMAPTAG);
+}
+
+Type*
+TypeDictionary::defineEnumTag(const char* name)
+{
+  int flags = ENUMTAG;
+  if (isupper(*name))
+    flags |= FIXEDTAG;
+  return findOrAdd(name, flags);
+}
+
+Type*
+TypeDictionary::defineTag(const char* name)
+{
+  int flags = 0;
+  if (isupper(*name))
+    flags |= FIXEDTAG;
+  return findOrAdd(name, flags);
+}
+
+Type*
+TypeDictionary::definePStruct(const char* name, pstruct_t* ps)
+{
+  Type* type = findOrAdd(name, FIXEDTAG);
+  type->setStruct(ps);
+  return type;
 }

@@ -157,7 +157,7 @@ funcenum_t *funcenums_add(const char *name)
   }
 
   strcpy(e->name, name);
-  e->tag = pc_addtag_flags((char *)name, FIXEDTAG|FUNCTAG);
+  e->tag = gTypes.defineFunction(name)->value();
 
   return e;
 }

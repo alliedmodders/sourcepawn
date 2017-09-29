@@ -104,7 +104,6 @@ public:
 
   Type* find(int tag);
   Type* find(const char* name);
-  Type* findOrAdd(const char* name, int flags);
   Type* findByValue(int tag);
 
   void clearExtendedTypes();
@@ -112,11 +111,26 @@ public:
   void reset();
   void init();
 
+  Type* defineAny();
+  Type* defineFunction(const char* name);
+  Type* defineString();
+  Type* defineFloat();
+  Type* defineVoid();
+  Type* defineObject(const char* name);
+  Type* defineBool();
+  Type* defineMethodmap(const char* name);
+  Type* defineEnumTag(const char* name);
+  Type* defineTag(const char* name);
+  Type* definePStruct(const char* name, pstruct_t* ps);
+
   template <typename T>
   void forEachType(const T& callback) {
     for (const auto& type : types_)
       callback(type.get());
   }
+
+private:
+  Type* findOrAdd(const char* name, int flags);
 
 private:
   ke::Vector<ke::UniquePtr<Type>> types_;

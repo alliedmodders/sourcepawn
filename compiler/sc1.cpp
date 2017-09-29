@@ -619,7 +619,6 @@ int pc_findtag(const char *name)
 int pc_addtag(const char *name)
 {
   int val;
-  int flags = 0;
 
   if (name==NULL) {
     /* no tagname was given, check for one */
@@ -631,16 +630,7 @@ int pc_addtag(const char *name)
     name = nameptr;
   } /* if */
 
-  if (isupper(*name))
-    flags |= FIXEDTAG;
-
-  return pc_addtag_flags(name, flags);
-}
-
-int pc_addtag_flags(const char *name, int flags)
-{
-  assert((flags & FUNCTAG) || strchr(name,':')==NULL); /* colon should already have been stripped */
-  return gTypes.findOrAdd(name, flags)->value();
+  return gTypes.defineTag(name)->value();
 }
 
 static void resetglobals(void)
@@ -1160,15 +1150,15 @@ static void setconstants(void)
 
   gTypes.init();
 
-  pc_anytag = pc_addtag("any");
-  pc_functag = pc_addtag_flags("Function", FIXEDTAG|FUNCTAG);
-  pc_tag_string = pc_addtag("String");
-  sc_rationaltag = pc_addtag("Float");
-  pc_tag_void = pc_addtag_flags("void", FIXEDTAG);
-  pc_tag_object = pc_addtag_flags("object", FIXEDTAG|OBJECTTAG);
-  pc_tag_bool = pc_addtag("bool");
-  pc_tag_null_t = pc_addtag_flags("null_t", FIXEDTAG|OBJECTTAG);
-  pc_tag_nullfunc_t = pc_addtag_flags("nullfunc_t", FIXEDTAG|OBJECTTAG);
+  pc_anytag = gTypes.defineAny()->value();
+  pc_functag = gTypes.defineFunction("Function")->value();
+  pc_tag_string = gTypes.defineString()->value();
+  sc_rationaltag = gTypes.defineFloat()->value();
+  pc_tag_void = gTypes.defineVoid()->value();
+  pc_tag_object = gTypes.defineObject("object")->value();
+  pc_tag_bool = gTypes.defineBool()->value();
+  pc_tag_null_t = gTypes.defineObject("null_t")->value();
+  pc_tag_nullfunc_t = gTypes.defineObject("nullfunc_t")->value();
 
   add_constant("true",1,sGLOBAL,1);     /* boolean flags */
   add_constant("false",0,sGLOBAL,1);
@@ -2657,8 +2647,7 @@ static void declstruct(void)
 
   pstruct = pstructs_add(str);
 
-  Type* type = gTypes.findOrAdd(pstruct->name, FIXEDTAG);
-  type->setStruct(pstruct);
+  gTypes.definePStruct(pstruct->name, pstruct);
 
   needtoken('{');
   do {
@@ -3557,7 +3546,7 @@ static void declare_handle_intrinsics()
     return;
   }
 
-  int tag = pc_addtag_flags("Handle", FIXEDTAG | METHODMAPTAG);
+  int tag = gTypes.defineMethodmap("Handle")->value();
   methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle", tag);
   map->nullable = true;
 
@@ -3641,9 +3630,9 @@ static void domethodmap(LayoutSpec spec)
 
   int tag = 0;
   if (spec == Layout_MethodMap)
-    tag = pc_addtag_flags(mapname, FIXEDTAG | METHODMAPTAG);
+    tag = gTypes.defineMethodmap(mapname)->value();
   else
-    tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
+    tag = gTypes.defineObject(mapname)->value();
   methodmap_t *map = methodmap_add(parent, spec, mapname, tag);
 
   if (old_nullable)
@@ -4138,10 +4127,7 @@ static void decl_enum(int vclass)
       tag = 0;
       explicittag = FALSE;
     } else {
-      int flags = ENUMTAG;
-      if (isupper(*str))
-        flags |= FIXEDTAG;
-      tag = pc_addtag_flags(str, flags);
+      tag = gTypes.defineEnumTag(str)->value();
       spec = deduce_layout_spec_by_tag(tag);
       if (!can_redef_layout_spec(spec, Layout_Enum))
         error(110, str, layout_spec_name(spec));
@@ -4157,10 +4143,7 @@ static void decl_enum(int vclass)
   if (lex(&val,&str)==tSYMBOL) {        /* read in (new) token */
     strcpy(enumname,str);               /* save enum name (last constant) */
     if (!explicittag) {
-      int flags = ENUMTAG;
-      if (isupper(*str))
-        flags |= FIXEDTAG;
-      tag=pc_addtag_flags(enumname, flags);
+      tag = gTypes.defineEnumTag(enumname)->value();
       spec = deduce_layout_spec_by_tag(tag);
       if (!can_redef_layout_spec(spec, Layout_Enum))
         error(110, enumname, layout_spec_name(spec));
