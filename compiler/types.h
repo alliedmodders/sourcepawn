@@ -31,23 +31,24 @@
 #include <amtl/am-vector.h>
 #include "amx.h"
 
-#define METHODMAPTAG 0x04000000
-#define TAGTYPEMASK   (0x3A000000 | METHODMAPTAG)
+#define TAGTYPEMASK   (0x3E000000)
 #define TAGFLAGMASK   (TAGTYPEMASK | 0x40000000)
 #define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
 
 enum class TypeKind : uint32_t
 {
   None,
-  Struct   = 0x02000000,
-  Enum     = 0x08000000,
-  Object   = 0x10000000,
-  Function = 0x20000000
+  Struct    = 0x02000000,
+  Methodmap = 0x04000000,
+  Enum      = 0x08000000,
+  Object    = 0x10000000,
+  Function  = 0x20000000
 };
 KE_DEFINE_ENUM_OPERATORS(TypeKind)
 
 struct pstruct_t;
 struct funcenum_t;
+struct methodmap_t;
 
 class Type
 {
@@ -87,9 +88,10 @@ public:
     return pstruct_ptr_;
   }
 
-  void setMethodmap() {
+  void setMethodmap(methodmap_t* map) {
     setFixed();
-    value_ |= METHODMAPTAG;
+    kind_ = TypeKind::Methodmap;
+    methodmap_ptr_ = map;
   }
 
   bool isObject() const {
@@ -108,6 +110,15 @@ public:
   funcenum_t* toFunction() const {
     assert(isFunction());
     return funcenum_ptr_;
+  }
+
+  bool isMethodmap() const {
+    return kind_ == TypeKind::Methodmap;
+  }
+  methodmap_t* asMethodmap() const {
+    if (!isMethodmap())
+      return nullptr;
+    return methodmap_ptr_;
   }
 
 private:
@@ -150,6 +161,7 @@ private:
   union {
     pstruct_t* pstruct_ptr_;
     funcenum_t* funcenum_ptr_;
+    methodmap_t* methodmap_ptr_;
     void* private_ptr_;
   };
 };
@@ -176,7 +188,7 @@ public:
   Type* defineVoid();
   Type* defineObject(const char* name);
   Type* defineBool();
-  Type* defineMethodmap(const char* name);
+  Type* defineMethodmap(const char* name, methodmap_t* map);
   Type* defineEnumTag(const char* name);
   Type* defineTag(const char* name);
   Type* definePStruct(const char* name, pstruct_t* ps);

@@ -391,7 +391,7 @@ static int matchobjecttags(Type* formal, Type* actual, int flags)
 
     // Some methodmaps are nullable. The nullable property is inherited
     // automatically.
-    methodmap_t *map = methodmap_find_by_tag(formaltag);
+    methodmap_t *map = formal->asMethodmap();
     if (map && map->nullable)
       return TRUE;
 
@@ -409,7 +409,7 @@ static int matchobjecttags(Type* formal, Type* actual, int flags)
   if (flags & MATCHTAG_COERCE)
     return obj_typeerror(134, formaltag, actualtag);
 
-  methodmap_t *map = methodmap_find_by_tag(actualtag);
+  methodmap_t *map = actual->asMethodmap();
   for (; map; map = map->parent) {
     if (map->tag == formaltag)
       return TRUE;
@@ -568,10 +568,9 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (flags & (MATCHTAG_COERCE|MATCHTAG_DEDUCE)) {
     // See if the tag has a methodmap associated with it. If so, see if the given
     // tag is anywhere on the inheritance chain.
-    methodmap_t *map = methodmap_find_by_tag(actualtag);
-    if (map) {
+    if (methodmap_t *map = actual->asMethodmap()) {
       for (; map; map = map->parent) {
-        if (map->tag == formaltag)
+        if (gTypes.find(map->tag) == formal)
           return TRUE;
       }
     }
@@ -1995,8 +1994,8 @@ field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method
     return FER_CallFunction;
   }
 
-  methodmap_t *map;
-  if ((map = methodmap_find_by_tag(thisval.val.tag)) == NULL) {
+  methodmap_t *map = gTypes.find(thisval.val.tag)->asMethodmap();
+  if (!map) {
     error(104, pc_tagname(thisval.val.tag));
     return FER_Fail;
   }

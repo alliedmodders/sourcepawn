@@ -3536,8 +3536,7 @@ static void declare_handle_intrinsics()
     return;
   }
 
-  int tag = gTypes.defineMethodmap("Handle")->value();
-  methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle", tag);
+  methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle");
   map->nullable = true;
 
   declare_methodmap_symbol(map, true);
@@ -3618,12 +3617,7 @@ static void domethodmap(LayoutSpec spec)
     }
   }
 
-  int tag = 0;
-  if (spec == Layout_MethodMap)
-    tag = gTypes.defineMethodmap(mapname)->value();
-  else
-    tag = gTypes.defineObject(mapname)->value();
-  methodmap_t *map = methodmap_add(parent, spec, mapname, tag);
+  methodmap_t *map = methodmap_add(parent, spec, mapname);
 
   if (old_nullable)
     map->keyword_nullable = old_nullable;
@@ -3724,7 +3718,7 @@ static void dodelete()
     return;
   }
 
-  methodmap_t *map = methodmap_find_by_tag(sval.val.tag);
+  methodmap_t *map = gTypes.find(sval.val.tag)->asMethodmap();
   if (!map) {
     error(115, "type", pc_tagname(sval.val.tag));
     return;
@@ -4263,7 +4257,7 @@ static void decl_enum(int vclass)
 // seen later than another instance of a tag.
 static int compare_tag(int tag1, int tag2)
 {
-  return (tag1 & (~METHODMAPTAG)) == (tag2 & (~METHODMAPTAG));
+  return gTypes.find(tag1) == gTypes.find(tag2);
 }
 
 /*

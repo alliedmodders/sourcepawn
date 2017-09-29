@@ -57,9 +57,16 @@ Type::resetPtr()
   //
   // Enums are also a special case, since they can be implicitly defined
   // before they are used. This is ancient cruft that results from the
-  // 2-pass model, where initially errors are ignored.
-  if (kind_ != TypeKind::Function && kind_ != TypeKind::Enum)
+  // 2-pass model, where initially errors are ignored. Similarly,
+  // methodmaps are protected since they are actually enums.
+  switch (kind_) {
+  case TypeKind::Function:
+  case TypeKind::Enum:
+  case TypeKind::Methodmap:
+    break;
+  default:
     kind_ = TypeKind::None;
+  }
   private_ptr_ = nullptr;
 }
 
@@ -199,10 +206,10 @@ TypeDictionary::defineBool()
 }
 
 Type*
-TypeDictionary::defineMethodmap(const char* name)
+TypeDictionary::defineMethodmap(const char* name, methodmap_t* map)
 {
   Type* type = findOrAdd(name);
-  type->setMethodmap();
+  type->setMethodmap(map);
   return type;
 }
 

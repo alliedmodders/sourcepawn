@@ -452,14 +452,12 @@ void resetheaplist()
 methodmap_t*
 methodmap_add(methodmap_t* parent,
               LayoutSpec spec,
-              const char* name,
-              int tag)
+              const char* name)
 {
   methodmap_t *map = (methodmap_t *)calloc(1, sizeof(methodmap_t));
   map->parent = parent;
   map->spec = spec;
   strcpy(map->name, name);
-  map->tag = tag;
 
   if (spec == Layout_MethodMap && parent) {
     if (parent->nullable)
@@ -475,17 +473,17 @@ methodmap_add(methodmap_t* parent,
     methodmap_last->next = map;
     methodmap_last = map;
   }
+
+  if (spec == Layout_MethodMap)
+    map->tag = gTypes.defineMethodmap(name, map)->value();
+  else
+    map->tag = gTypes.defineObject(name)->value();
   return map;
 }
 
 methodmap_t *methodmap_find_by_tag(int tag)
 {
-  methodmap_t *ptr = methodmap_first;
-  for (; ptr; ptr = ptr->next) {
-    if (ptr->tag == tag)
-      return ptr;
-  }
-  return NULL;
+  return gTypes.find(tag)->asMethodmap();
 }
 
 methodmap_t *methodmap_find_by_name(const char *name)
