@@ -521,8 +521,10 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (formaltag == actualtag)
     return TRUE;
 
+  Type* actual = gTypes.find(actualtag);
+
   if (formaltag == pc_tag_string && actualtag == 0)
-	return TRUE;
+    return TRUE;
 
   if ((formaltag & OBJECTTAG) || (actualtag & OBJECTTAG))
     return matchobjecttags(formaltag, actualtag, flags);
@@ -536,8 +538,12 @@ int matchtag(int formaltag, int actualtag, int flags)
   /* if the formal tag is zero and the actual tag is not "fixed", the actual
    * tag is "coerced" to zero
    */
-  if ((flags & MATCHTAG_COERCE) && !formaltag && !(actualtag & FIXEDTAG))
+  if ((flags & MATCHTAG_COERCE) &&
+      !formaltag &&
+      actual && !actual->isFixed())
+  {
     return TRUE;
+  }
 
   if (formaltag == pc_anytag || actualtag == pc_anytag)
     return TRUE;

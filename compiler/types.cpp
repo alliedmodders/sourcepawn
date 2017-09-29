@@ -34,6 +34,7 @@ TypeDictionary gTypes;
 Type::Type(const char* name, cell value)
  : name_(name),
    value_(value),
+   fixed_(0),
    kind_(TypeKind::None)
 {
 }
@@ -72,16 +73,14 @@ TypeDictionary::findByValue(int tag)
 }
 
 Type*
-TypeDictionary::findOrAdd(const char* name, int flags)
+TypeDictionary::findOrAdd(const char* name)
 {
   for (const auto& type : types_) {
-    if (strcmp(type->name(), name) == 0) {
-      type->value() |= flags;
+    if (strcmp(type->name(), name) == 0)
       return type.get();
-    }
   }
 
-  int tag = int(types_.length()) | flags;
+  int tag = int(types_.length());
   UniquePtr<Type> type = MakeUnique<Type>(name, tag);
   types_.append(Move(type));
   return types_.back().get();
@@ -103,83 +102,96 @@ TypeDictionary::clearExtendedTypes()
 void
 TypeDictionary::init()
 {
-  Type* type = findOrAdd("_", 0);
+  Type* type = findOrAdd("_");
   assert(type->value() == 0);
 
-  type = findOrAdd("bool", 0);
+  type = findOrAdd("bool");
   assert(type->value() == 1);
 }
 
 Type*
 TypeDictionary::defineAny()
 {
-  return findOrAdd("any", 0);
+  return findOrAdd("any");
 }
 
 Type*
 TypeDictionary::defineFunction(const char* name)
 {
-  return findOrAdd(name, FIXEDTAG|FUNCTAG);
+  Type* type = findOrAdd(name);
+  type->setFunction();
+  return type;
 }
 
 Type*
 TypeDictionary::defineString()
 {
-  return findOrAdd("String", FIXEDTAG);
+  Type* type = findOrAdd("String");
+  type->setFixed();
+  return type;
 }
 
 Type*
 TypeDictionary::defineFloat()
 {
-  return findOrAdd("Float", FIXEDTAG);
+  Type* type = findOrAdd("Float");
+  type->setFixed();
+  return type;
 }
 
 Type*
 TypeDictionary::defineVoid()
 {
-  return findOrAdd("void", FIXEDTAG);
+  Type* type = findOrAdd("void");
+  type->setFixed();
+  return type;
 }
 
 Type*
 TypeDictionary::defineObject(const char* name)
 {
-  return findOrAdd(name, FIXEDTAG|OBJECTTAG);
+  Type* type = findOrAdd(name);
+  type->setObject();
+  return type;
 }
 
 Type*
 TypeDictionary::defineBool()
 {
-  return findOrAdd("bool", 0);
+  return findOrAdd("bool");
 }
 
 Type*
 TypeDictionary::defineMethodmap(const char* name)
 {
-  return findOrAdd(name, FIXEDTAG|METHODMAPTAG);
+  Type* type = findOrAdd(name);
+  type->setMethodmap();
+  return type;
 }
 
 Type*
 TypeDictionary::defineEnumTag(const char* name)
 {
-  int flags = ENUMTAG;
+  Type* type = findOrAdd(name);
+  type->setEnumTag();
   if (isupper(*name))
-    flags |= FIXEDTAG;
-  return findOrAdd(name, flags);
+    type->setFixed();
+  return type;
 }
 
 Type*
 TypeDictionary::defineTag(const char* name)
 {
-  int flags = 0;
+  Type* type = findOrAdd(name);
   if (isupper(*name))
-    flags |= FIXEDTAG;
-  return findOrAdd(name, flags);
+    type->setFixed();
+  return type;
 }
 
 Type*
 TypeDictionary::definePStruct(const char* name, pstruct_t* ps)
 {
-  Type* type = findOrAdd(name, FIXEDTAG);
+  Type* type = findOrAdd(name);
   type->setStruct(ps);
   return type;
 }

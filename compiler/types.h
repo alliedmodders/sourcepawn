@@ -31,13 +31,12 @@
 #include <amtl/am-vector.h>
 #include "amx.h"
 
-#define FIXEDTAG     0x40000000
 #define FUNCTAG      0x20000000
 #define OBJECTTAG    0x10000000
 #define ENUMTAG      0x08000000
 #define METHODMAPTAG 0x04000000
-#define TAGTYPEMASK   (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG)
-#define TAGFLAGMASK   (FIXEDTAG | TAGTYPEMASK)
+#define TAGTYPEMASK   (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG | 0x02000000)
+#define TAGFLAGMASK   (TAGTYPEMASK | 0x40000000)
 #define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
 
 enum class TypeKind : uint32_t
@@ -60,11 +59,8 @@ public:
   TypeKind kind() const {
     return kind_;
   }
-  cell& value() {
-    return value_;
-  }
   cell value() const {
-    return value_ | int(kind_);
+    return value_ | int(kind_) | fixed_;
   }
   int tagid() const {
     return TAGID(value_);
@@ -75,18 +71,44 @@ public:
     private_ptr_ = nullptr;
   }
 
+  bool isFixed() const {
+    return !!fixed_;
+  }
+  void setFixed() {
+    // This is separate from "kind_" because it persists across passes.
+    fixed_ = 0x40000000;
+  }
+
   pstruct_t* asStruct() const {
     assert(kind_ == TypeKind::Struct);
     return pstruct_ptr_;
   }
   void setStruct(pstruct_t* ptr) {
+    setFixed();
     kind_ = TypeKind::Struct;
     pstruct_ptr_ = ptr;
+  }
+
+  void setEnumTag() {
+    value_ |= ENUMTAG;
+  }
+  void setMethodmap() {
+    setFixed();
+    value_ |= METHODMAPTAG;
+  }
+  void setObject() {
+    setFixed();
+    value_ |= OBJECTTAG;
+  }
+  void setFunction() {
+    setFixed();
+    value_ |= FUNCTAG;
   }
 
 private:
   ke::AString name_;
   cell value_;
+  int fixed_;
 
   // These are reset in between the first and second passes, since the
   // underlying structures are reparsed.
@@ -130,7 +152,7 @@ public:
   }
 
 private:
-  Type* findOrAdd(const char* name, int flags);
+  Type* findOrAdd(const char* name);
 
 private:
   ke::Vector<ke::UniquePtr<Type>> types_;
