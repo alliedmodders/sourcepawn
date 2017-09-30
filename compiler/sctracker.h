@@ -38,14 +38,14 @@ typedef struct functag_s
   struct functag_s *next;
 } functag_t;
 
-typedef struct funcenum_s
+struct funcenum_t
 {
   int tag;
   char name[METHOD_NAMEMAX+1];
   functag_t *first;
   functag_t *last;
-  struct funcenum_s *next;
-} funcenum_t;
+  funcenum_t *next;
+};
 
 typedef struct structarg_s
 {
@@ -59,13 +59,13 @@ typedef struct structarg_s
   int index;
 } structarg_t;
 
-typedef struct pstruct_s
+struct pstruct_t
 {
   int argcount;
   char name[sNAMEMAX+1];
   structarg_t **args;
-  struct pstruct_s *next;
-} pstruct_t;
+  pstruct_t *next;
+};
 
 // The ordering of these definitions should be preserved for
 // can_redef_layout_spec().
@@ -137,7 +137,6 @@ structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member);
  */
 void funcenums_free();
 funcenum_t *funcenums_add(const char *name);
-funcenum_t *funcenums_find_by_tag(int tag);
 functag_t *functags_add(funcenum_t *en, functag_t *src);
 funcenum_t *funcenum_for_symbol(symbol *sym);
 functag_t *functag_find_intrinsic(int tag);
@@ -183,9 +182,7 @@ void resetheaplist();
  */
 methodmap_t* methodmap_add(methodmap_t* parent,
                            LayoutSpec spec,
-                           const char* name,
-                           int tag);
-methodmap_t *methodmap_find_by_tag(int tag);
+                           const char* name);
 methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);
 void methodmap_add_method(methodmap_t* map, methodmap_method_t* method);

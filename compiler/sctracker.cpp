@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include "sc.h"
 #include "sctracker.h"
+#include "types.h"
 
 memuse_list_t *heapusage = NULL;
 memuse_list_t *stackusage = NULL;
@@ -128,19 +129,6 @@ void funcenums_free()
   lastenum = NULL;
 }
 
-funcenum_t *funcenums_find_by_tag(int tag)
-{
-  funcenum_t *e = firstenum;
-
-  while (e) {
-    if (e->tag == tag)
-      return e;
-    e = e->next;
-  }
-
-  return NULL;
-}
-
 funcenum_t *funcenums_add(const char *name)
 {
   funcenum_t *e = (funcenum_t *)malloc(sizeof(funcenum_t));
@@ -156,7 +144,7 @@ funcenum_t *funcenums_add(const char *name)
   }
 
   strcpy(e->name, name);
-  e->tag = pc_addtag_flags((char *)name, FIXEDTAG|FUNCTAG);
+  e->tag = gTypes.defineFunction(name, e)->tagid();
 
   return e;
 }
@@ -196,7 +184,8 @@ funcenum_t *funcenum_for_symbol(symbol *sym)
 // Finds a functag that was created intrinsically.
 functag_t *functag_find_intrinsic(int tag)
 {
-  funcenum_t *fe = funcenums_find_by_tag(tag);
+  Type* type = gTypes.find(tag);
+  funcenum_t *fe = type->asFunction();
   if (!fe)
     return NULL;
 
@@ -463,14 +452,12 @@ void resetheaplist()
 methodmap_t*
 methodmap_add(methodmap_t* parent,
               LayoutSpec spec,
-              const char* name,
-              int tag)
+              const char* name)
 {
   methodmap_t *map = (methodmap_t *)calloc(1, sizeof(methodmap_t));
   map->parent = parent;
   map->spec = spec;
   strcpy(map->name, name);
-  map->tag = tag;
 
   if (spec == Layout_MethodMap && parent) {
     if (parent->nullable)
@@ -486,17 +473,17 @@ methodmap_add(methodmap_t* parent,
     methodmap_last->next = map;
     methodmap_last = map;
   }
+
+  if (spec == Layout_MethodMap)
+    map->tag = gTypes.defineMethodmap(name, map)->tagid();
+  else
+    map->tag = gTypes.defineObject(name)->tagid();
   return map;
 }
 
 methodmap_t *methodmap_find_by_tag(int tag)
 {
-  methodmap_t *ptr = methodmap_first;
-  for (; ptr; ptr = ptr->next) {
-    if (ptr->tag == tag)
-      return ptr;
-  }
-  return NULL;
+  return gTypes.find(tag)->asMethodmap();
 }
 
 methodmap_t *methodmap_find_by_name(const char *name)
@@ -549,18 +536,18 @@ void methodmaps_free()
 
 LayoutSpec deduce_layout_spec_by_tag(int tag)
 {
-  symbol *sym;
-  const char *name;
-  methodmap_t *map;
-  if ((map = methodmap_find_by_tag(tag)) != NULL)
+  if (methodmap_t* map = methodmap_find_by_tag(tag))
     return map->spec;
-  if (tag & FUNCTAG)
+
+  Type* type = gTypes.find(tag);
+  if (type && type->isFunction())
     return Layout_FuncTag;
 
-  name = pc_tagname(tag);
-  if (pstructs_find(name))
+  if (type && type->isStruct())
     return Layout_PawnStruct;
-  if ((sym = findglb(name)) != NULL)
+
+  const char* name = pc_tagname(tag);
+  if (findglb(name))
     return Layout_Enum;
 
   return Layout_None;
@@ -568,19 +555,11 @@ LayoutSpec deduce_layout_spec_by_tag(int tag)
 
 LayoutSpec deduce_layout_spec_by_name(const char *name)
 {
-  symbol *sym;
-  methodmap_t *map;
-  int tag = pc_findtag(name);
-  if (tag != -1 && (tag & FUNCTAG))
-    return Layout_FuncTag;
-  if (pstructs_find(name))
-    return Layout_PawnStruct;
-  if ((map = methodmap_find_by_name(name)) != NULL)
-    return map->spec;
-  if ((sym = findglb(name)) != NULL)
-    return Layout_Enum;
+  Type* type = gTypes.find(name);
+  if (!type)
+    return Layout_None;
 
-  return Layout_None;
+  return deduce_layout_spec_by_tag(type->tagid());
 }
 
 const char *layout_spec_name(LayoutSpec spec)

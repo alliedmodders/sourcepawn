@@ -36,6 +36,7 @@
   #include "sclinux.h"
 #endif
 #include "sp_symhash.h"
+#include "types.h"
 
 #if defined FORTIFY
   #include <alloc/fortify.h>
@@ -2177,7 +2178,7 @@ int lex(cell *lexvalue,char **lexsym)
       if (sc_allowtags) {
         tok->id = tLABEL; /* it wasn't a normal symbol, it was a label/tagname */
         lptr+=1;        /* skip colon */
-      } else if (find_constval(&tagname_tab,tok->str,0)!=NULL) {
+      } else if (gTypes.find(tok->str)) {
         /* this looks like a tag override (because a tag with this name
          * exists), but tags are not allowed right now, so it is probably an
          * error

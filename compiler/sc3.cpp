@@ -30,6 +30,8 @@
 #endif
 #include "sc.h"
 #include "sctracker.h"
+#include "types.h"
+#include <amtl/am-algorithm.h>
 
 static int skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
                 int (*hier)(value*),value *lval);
@@ -330,7 +332,8 @@ const char *type_to_name(int tag)
   if (name)
     return name;
 
-  if (tag & FUNCTAG)
+  Type* type = gTypes.find(tag);
+  if (type && type->isFunction())
     return "function";
   return "unknown";
 }
@@ -354,25 +357,27 @@ static int obj_typeerror(int id, int tag1, int tag2)
   return FALSE;
 }
 
-static int matchobjecttags(int formaltag, int actualtag, int flags)
+static int matchobjecttags(Type* formal, Type* actual, int flags)
 {
+  int formaltag = formal->tagid();
+  int actualtag = actual->tagid();
+
   if ((flags & MATCHTAG_COMMUTATIVE) &&
       (formaltag == pc_tag_null_t || formaltag == pc_tag_nullfunc_t))
   {
     // Bypass the check immediately after for non-object coercion.
-    int tmp = actualtag;
-    actualtag = formaltag;
-    formaltag = tmp;
+    ke::Swap(formaltag, actualtag);
+    ke::Swap(formal, actual);
   }
 
   // objects never coerce to non-objects, YET.
-  if ((formaltag & OBJECTTAG) && !(actualtag & OBJECTTAG))
+  if (formal->isObject() && !actual->isObject())
     return obj_typeerror(132, formaltag, actualtag);
 
   if (actualtag == pc_tag_nullfunc_t) {
     // All functions are nullable. We use a separate constant for backward
     // compatibility; plugins and extensions check -1, not 0.
-    if (formaltag & FUNCTAG)
+    if (formal->isFunction())
       return TRUE;
 
     error(154, pc_tagname(formaltag));
@@ -381,12 +386,12 @@ static int matchobjecttags(int formaltag, int actualtag, int flags)
 
   if (actualtag == pc_tag_null_t) {
     // All objects are nullable.
-    if (formaltag & OBJECTTAG)
+    if (formal->isObject())
       return TRUE;
 
     // Some methodmaps are nullable. The nullable property is inherited
     // automatically.
-    methodmap_t *map = methodmap_find_by_tag(formaltag);
+    methodmap_t *map = formal->asMethodmap();
     if (map && map->nullable)
       return TRUE;
 
@@ -394,7 +399,7 @@ static int matchobjecttags(int formaltag, int actualtag, int flags)
     return FALSE;
   }
 
-  if (!(formaltag & OBJECTTAG) && (actualtag & OBJECTTAG))
+  if (!formal->isObject() && actual->isObject())
     return obj_typeerror(131, formaltag, actualtag);
 
   // Every object coerces to "object".
@@ -404,7 +409,7 @@ static int matchobjecttags(int formaltag, int actualtag, int flags)
   if (flags & MATCHTAG_COERCE)
     return obj_typeerror(134, formaltag, actualtag);
 
-  methodmap_t *map = methodmap_find_by_tag(actualtag);
+  methodmap_t *map = actual->asMethodmap();
   for (; map; map = map->parent) {
     if (map->tag == formaltag)
       return TRUE;
@@ -488,27 +493,30 @@ static int functag_compare(const functag_t *formal, const functag_t *actual)
   return TRUE;
 }
 
-static int matchfunctags(int formaltag, int actualtag)
+static int matchfunctags(Type* formal, Type* actual)
 {
-  if (formaltag == pc_functag && (actualtag & FUNCTAG))
+  int formaltag = formal->tagid();
+  int actualtag = actual->tagid();
+
+  if (formaltag == pc_functag && actual->isFunction())
     return TRUE;
 
   if (actualtag == pc_tag_nullfunc_t)
     return TRUE;
 
-  if (!(actualtag & FUNCTAG))
+  if (!actual->isFunction())
     return FALSE;
 
-  functag_t *actual = functag_find_intrinsic(actualtag);
-  if (!actual)
+  functag_t *actualfn = functag_find_intrinsic(actualtag);
+  if (!actualfn)
     return FALSE;
 
-  funcenum_t *e = funcenums_find_by_tag(formaltag);
+  funcenum_t *e = formal->toFunction();
   if (!e)
     return FALSE;
 
-  for (functag_t *formal = e->first; formal; formal = formal->next) {
-    if (functag_compare(formal, actual))
+  for (functag_t *formalfn = e->first; formalfn; formalfn = formalfn->next) {
+    if (functag_compare(formalfn, actualfn))
       return TRUE;
   }
 
@@ -520,13 +528,17 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (formaltag == actualtag)
     return TRUE;
 
+  Type* actual = gTypes.find(actualtag);
+  Type* formal = gTypes.find(formaltag);
+  assert(actual && formal);
+
   if (formaltag == pc_tag_string && actualtag == 0)
-	return TRUE;
+    return TRUE;
 
-  if ((formaltag & OBJECTTAG) || (actualtag & OBJECTTAG))
-    return matchobjecttags(formaltag, actualtag, flags);
+  if (formal->isObject() || actual->isObject())
+    return matchobjecttags(formal, actual, flags);
 
-  if ((actualtag & FUNCTAG) && !(formaltag & FUNCTAG)) {
+  if (actual->isFunction() && !formal->isFunction()) {
     // We're being given a function, but the destination is not a function.
     error(130);
     return FALSE;
@@ -535,14 +547,18 @@ int matchtag(int formaltag, int actualtag, int flags)
   /* if the formal tag is zero and the actual tag is not "fixed", the actual
    * tag is "coerced" to zero
    */
-  if ((flags & MATCHTAG_COERCE) && !formaltag && !(actualtag & FIXEDTAG))
+  if ((flags & MATCHTAG_COERCE) &&
+      !formaltag &&
+      actual && !actual->isFixed())
+  {
     return TRUE;
+  }
 
   if (formaltag == pc_anytag || actualtag == pc_anytag)
     return TRUE;
 
-  if (formaltag & FUNCTAG) {
-    if (!matchfunctags(formaltag, actualtag)) {
+  if (formal->isFunction()) {
+    if (!matchfunctags(formal, actual)) {
       error(100);
       return FALSE;
     }
@@ -552,8 +568,7 @@ int matchtag(int formaltag, int actualtag, int flags)
   if (flags & (MATCHTAG_COERCE|MATCHTAG_DEDUCE)) {
     // See if the tag has a methodmap associated with it. If so, see if the given
     // tag is anywhere on the inheritance chain.
-    methodmap_t *map = methodmap_find_by_tag(actualtag);
-    if (map) {
+    if (methodmap_t *map = actual->asMethodmap()) {
       for (; map; map = map->parent) {
         if (map->tag == formaltag)
           return TRUE;
@@ -1618,6 +1633,7 @@ static int hier2(value *lval)
     return FALSE;
   }
   case tLABEL:                  /* tagname override */
+  {
     tag=pc_addtag(st);
     if (sc_require_newdecls) {
       // Warn: old style cast used when newdecls pragma is enabled
@@ -1625,14 +1641,17 @@ static int hier2(value *lval)
     }
     lval->cmptag=tag;
     lvalue=hier2(lval);
-    if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
+    Type* ltype = gTypes.find(lval->tag);
+    Type* atype = gTypes.find(tag);
+    if (ltype->isObject() || atype->isObject()) {
       matchtag(tag, lval->tag, MATCHTAG_COERCE);
-    } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
+    } else if (ltype->isFunction() != atype->isFunction()) {
       // Warn: unsupported cast.
       error(237);
     }
     lval->tag=tag;
     return lvalue;
+  }
   case tDEFINED:
     paranthese=0;
     while (matchtoken('('))
@@ -1773,8 +1792,8 @@ static int hier2(value *lval)
     if (tok!=tSYMBOL && tok!=tLABEL)
       return error(20,st);      /* illegal symbol name */
     if (tok==tLABEL) {
-      constvalue *tagsym=find_constval(&tagname_tab,st,0);
-      tag=(int)((tagsym!=NULL) ? tagsym->value : 0);
+      Type* type = gTypes.find(st);
+      tag = type ? type->tagid() : 0;
     } else {
       sym=findloc(st);
       if (sym==NULL)
@@ -1975,8 +1994,8 @@ field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method
     return FER_CallFunction;
   }
 
-  methodmap_t *map;
-  if ((map = methodmap_find_by_tag(thisval.val.tag)) == NULL) {
+  methodmap_t *map = gTypes.find(thisval.val.tag)->asMethodmap();
+  if (!map) {
     error(104, pc_tagname(thisval.val.tag));
     return FER_Fail;
   }
@@ -2034,9 +2053,11 @@ parse_view_as(value* lval)
   else
     matchtoken(')');
 
-  if ((lval->tag & OBJECTTAG) || (tag & OBJECTTAG)) {
+  Type* ltype = gTypes.find(lval->tag);
+  Type* atype = gTypes.find(tag);
+  if (ltype->isObject() || atype->isObject()) {
     matchtag(tag, lval->tag, MATCHTAG_COERCE);
-  } else if ((tag & FUNCTAG) != (lval->tag & FUNCTAG)) {
+  } else if (ltype->isFunction() != atype->isFunction()) {
     // Warn: unsupported cast.
     error(237);
   } else if (lval->sym && lval->sym->tag == pc_tag_void) {

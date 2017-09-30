@@ -32,6 +32,7 @@
 #include <string.h>
 #include <amtl/am-unused.h>
 #include <amtl/am-platform.h>
+#include "types.h"
 
 #if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
   #include <conio.h>
@@ -128,7 +129,6 @@ static void doarg(symbol *sym, declinfo_t *decl, int offset, int chkshadow, argi
 static void reduce_referrers(symbol *root);
 static int testsymbols(symbol *root,int level,int testlabs,int testconst);
 static void destructsymbols(symbol *root,int level);
-static constvalue *find_constval_byval(constvalue *table,cell val);
 static void statement(int *lastindent,int allow_decl);
 static void compound(int stmt_sameline,int starttok);
 static int test(int label,int parens,int invert);
@@ -354,6 +354,7 @@ int pc_compile(int argc, char *argv[])
       inst_binary_name(binfname);
     #endif
     resetglobals();
+    gTypes.clearExtendedTypes();
     pstructs_free();
     funcenums_free();
     methodmaps_free();
@@ -400,6 +401,7 @@ int pc_compile(int argc, char *argv[])
   /* reset "defined" flag of all functions and global variables */
   reduce_referrers(&glbtab);
   delete_symbols(&glbtab,0,TRUE,FALSE);
+  gTypes.clearExtendedTypes();
   funcenums_free();
   methodmaps_free();
   pstructs_free();
@@ -484,13 +486,13 @@ cleanup:
                                            * done (i.e. on a fatal error) */
   delete_symbols(&glbtab,0,TRUE,TRUE);
   DestroyHashTable(sp_Globals);
-  delete_consttable(&tagname_tab);
   delete_consttable(&libname_tab);
   delete_aliastable();
   delete_pathtable();
   delete_sourcefiletable();
   delete_inputfiletable();
   delete_dbgstringtable();
+  gTypes.clear();
   funcenums_free();
   methodmaps_free();
   pstructs_free();
@@ -602,38 +604,21 @@ const char *pc_typename(int tag)
 
 const char *pc_tagname(int tag)
 {
-  constvalue *ptr=tagname_tab.next;
-  for (; ptr; ptr=ptr->next) {
-    if (TAGID(ptr->value) == TAGID(tag))
-      return ptr->name;
-  }
+  if (Type* type = gTypes.find(tag))
+    return type->name();
   return "__unknown__";
-}
-
-constvalue *pc_tagptr(const char *name)
-{
-  constvalue *ptr=tagname_tab.next;
-  for (; ptr; ptr=ptr->next) {
-    if (strcmp(name, ptr->name)==0)
-      return ptr;
-  }
-  return NULL;
 }
 
 int pc_findtag(const char *name)
 {
-  constvalue *ptr=tagname_tab.next;
-  for (; ptr; ptr=ptr->next) {
-    if (strcmp(name,ptr->name)==0)
-      return ptr->value;
-  }
+  if (Type* type = gTypes.find(name))
+    return type->tagid();
   return -1;
 }
 
 int pc_addtag(const char *name)
 {
   int val;
-  int flags = 0;
 
   if (name==NULL) {
     /* no tagname was given, check for one */
@@ -645,35 +630,7 @@ int pc_addtag(const char *name)
     name = nameptr;
   } /* if */
 
-  if (isupper(*name))
-    flags |= FIXEDTAG;
-
-  return pc_addtag_flags(name, flags);
-}
-
-int pc_addtag_flags(const char *name, int flags)
-{
-  constvalue *ptr;
-  int last;
-
-  assert((flags & FUNCTAG) || strchr(name,':')==NULL); /* colon should already have been stripped */
-  last=0;
-  ptr=tagname_tab.next;
-  while (ptr!=NULL) {
-    if (strcmp(name,ptr->name)==0) {
-      // Update the flag set.
-      ptr->value |= flags;
-      return ptr->value;
-    }
-    if (TAGID(ptr->value) > last)
-      last = TAGID(ptr->value);
-    ptr = ptr->next;
-  } /* while */
-
-  /* tagname currently unknown, add it */
-  int tag = (last + 1) | flags;
-  append_constval(&tagname_tab, name, (cell)tag, 0);
-  return tag;
+  return gTypes.defineTag(name)->tagid();
 }
 
 static void resetglobals(void)
@@ -739,7 +696,6 @@ static void initglobals(void)
   litq=NULL;            /* the literal queue */
   glbtab.next=NULL;     /* clear global variables/constants table */
   loctab.next=NULL;     /*   "   local      "    /    "       "   */
-  tagname_tab.next=NULL;/* tagname table */
   libname_tab.next=NULL;/* library table (#pragma library "..." syntax) */
 
   pline[0]='\0';        /* the line read from the input file */
@@ -1191,18 +1147,8 @@ static void setconstants(void)
   int debug;
 
   assert(sc_status==statIDLE);
-  append_constval(&tagname_tab,"_",0,0);/* "untagged" */
-  append_constval(&tagname_tab,"bool",1,0);
 
-  pc_anytag = pc_addtag("any");
-  pc_functag = pc_addtag_flags("Function", FIXEDTAG|FUNCTAG);
-  pc_tag_string = pc_addtag("String");
-  sc_rationaltag = pc_addtag("Float");
-  pc_tag_void = pc_addtag_flags("void", FIXEDTAG);
-  pc_tag_object = pc_addtag_flags("object", FIXEDTAG|OBJECTTAG);
-  pc_tag_bool = pc_addtag("bool");
-  pc_tag_null_t = pc_addtag_flags("null_t", FIXEDTAG|OBJECTTAG);
-  pc_tag_nullfunc_t = pc_addtag_flags("nullfunc_t", FIXEDTAG|OBJECTTAG);
+  gTypes.init();
 
   add_constant("true",1,sGLOBAL,1);     /* boolean flags */
   add_constant("false",0,sGLOBAL,1);
@@ -1275,9 +1221,9 @@ static void dodecl(const token_t *tok)
   if (!decl.opertok && probablyVariable) {
     if (tok->id == tNEW && decl.type.is_new)
       error(143);
-    if (decl.type.tag & STRUCTTAG) {
-      pstruct_t *pstruct = pstructs_find(pc_tagname(decl.type.tag));
-      declstructvar(decl.name, fpublic, pstruct);
+    Type* type = gTypes.find(decl.type.tag);
+    if (type && type->kind() == TypeKind::Struct) {
+      declstructvar(decl.name, fpublic, type->asStruct());
     } else {
       declglb(&decl, fpublic, fstatic, fstock);
     }
@@ -2691,7 +2637,7 @@ static void declstruct(void)
 
   pstruct = pstructs_add(str);
 
-  pc_addtag_flags(pstruct->name, STRUCTTAG|FIXEDTAG);
+  gTypes.definePStruct(pstruct->name, pstruct);
 
   needtoken('{');
   do {
@@ -2793,7 +2739,7 @@ static int parse_new_typename(const token_t *tok)
       } else if (tag != pc_anytag) {
         // Perform some basic filters so we can start narrowing down what can
         // be used as a type.
-        if (!(tag & TAGTYPEMASK))
+        if (!gTypes.find(tag)->isLikelyDefinedType())
           error(139, tok->str);
       }
       return tag;
@@ -3548,7 +3494,7 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
       // we're about to kill an enum definition and not something random.
       assert(sc_status == statFIRST);
       assert(sym->ident == iCONSTEXPR);
-      assert(TAGID(map->tag) == TAGID(sym->tag));
+      assert(map->tag == sym->tag);
 
       sym->ident = iMETHODMAP;
 
@@ -3590,8 +3536,7 @@ static void declare_handle_intrinsics()
     return;
   }
 
-  int tag = pc_addtag_flags("Handle", FIXEDTAG | METHODMAPTAG);
-  methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle", tag);
+  methodmap_t *map = methodmap_add(nullptr, Layout_MethodMap, "Handle");
   map->nullable = true;
 
   declare_methodmap_symbol(map, true);
@@ -3672,12 +3617,7 @@ static void domethodmap(LayoutSpec spec)
     }
   }
 
-  int tag = 0;
-  if (spec == Layout_MethodMap)
-    tag = pc_addtag_flags(mapname, FIXEDTAG | METHODMAPTAG);
-  else
-    tag = pc_addtag_flags(mapname, FIXEDTAG | OBJECTTAG);
-  methodmap_t *map = methodmap_add(parent, spec, mapname, tag);
+  methodmap_t *map = methodmap_add(parent, spec, mapname);
 
   if (old_nullable)
     map->keyword_nullable = old_nullable;
@@ -3778,7 +3718,7 @@ static void dodelete()
     return;
   }
 
-  methodmap_t *map = methodmap_find_by_tag(sval.val.tag);
+  methodmap_t *map = gTypes.find(sval.val.tag)->asMethodmap();
   if (!map) {
     error(115, "type", pc_tagname(sval.val.tag));
     return;
@@ -3927,9 +3867,13 @@ static void dotypedef()
   if (!needsymbol(&ident))
     return;
 
-  int prev_tag = pc_findtag(ident.name);
-  if (prev_tag != -1 && !(prev_tag & FUNCTAG))
+  Type* prev_type = gTypes.find(ident.name);
+  if (prev_type &&
+      prev_type->isDefinedType() &&
+      !prev_type->isFunction())
+  {
     error(94);
+  }
 
   needtoken('=');
 
@@ -3947,9 +3891,13 @@ static void dotypeset()
   if (!needsymbol(&ident))
     return;
 
-  int prev_tag = pc_findtag(ident.name);
-  if (prev_tag != -1 && !(prev_tag & FUNCTAG))
+  Type* prev_type = gTypes.find(ident.name);
+  if (prev_type &&
+      prev_type->isDefinedType() &&
+      !prev_type->isFunction())
+  {
     error(94);
+  }
 
   funcenum_t *def = funcenums_add(ident.name);
   needtoken('{');
@@ -3971,7 +3919,6 @@ static void dofuncenum(int listmode)
   char *str;
   // char *ptr;
   char tagname[sNAMEMAX+1];
-  constvalue *cur;
   funcenum_t *fenum = NULL;
   int i;
   int newStyleTag = 0;
@@ -4021,17 +3968,6 @@ static void dofuncenum(int listmode)
     }
   }
 
-  /* This tag can't already exist! */
-  cur=tagname_tab.next;
-  while (cur) {
-    if (strcmp(cur->name, str) == 0) {
-      /* Another bad one... */
-      if (!(cur->value & FUNCTAG))
-        error(94);
-      break;
-    }
-    cur = cur->next;
-  }
   strcpy(tagname, str);
 
   fenum = funcenums_add(tagname);
@@ -4183,10 +4119,7 @@ static void decl_enum(int vclass)
       tag = 0;
       explicittag = FALSE;
     } else {
-      int flags = ENUMTAG;
-      if (isupper(*str))
-        flags |= FIXEDTAG;
-      tag = pc_addtag_flags(str, flags);
+      tag = gTypes.defineEnumTag(str)->tagid();
       spec = deduce_layout_spec_by_tag(tag);
       if (!can_redef_layout_spec(spec, Layout_Enum))
         error(110, str, layout_spec_name(spec));
@@ -4202,10 +4135,7 @@ static void decl_enum(int vclass)
   if (lex(&val,&str)==tSYMBOL) {        /* read in (new) token */
     strcpy(enumname,str);               /* save enum name (last constant) */
     if (!explicittag) {
-      int flags = ENUMTAG;
-      if (isupper(*str))
-        flags |= FIXEDTAG;
-      tag=pc_addtag_flags(enumname, flags);
+      tag = gTypes.defineEnumTag(enumname)->tagid();
       spec = deduce_layout_spec_by_tag(tag);
       if (!can_redef_layout_spec(spec, Layout_Enum))
         error(110, enumname, layout_spec_name(spec));
@@ -4327,15 +4257,6 @@ static void decl_enum(int vclass)
     assert(enumroot!=NULL);
     enumsym->dim.enumlist=enumroot;
   } /* if */
-}
-
-// This simpler version of matchtag() only checks whether two tags represent
-// the same type. Because methodmaps are attached to types and are not actually
-// types themselves, we strip out the methodmap bit in case a methodmap was
-// seen later than another instance of a tag.
-static int compare_tag(int tag1, int tag2)
-{
-  return (tag1 & (~METHODMAPTAG)) == (tag2 & (~METHODMAPTAG));
 }
 
 /*
@@ -4608,16 +4529,10 @@ static int parse_funcname(char *fname,int *tag1,int *tag2,char *opname)
   return unary;
 }
 
-constvalue *find_tag_byval(int tag)
-{
-  return find_constval_byval(&tagname_tab, tag);
-}
-
 char *funcdisplayname(char *dest,char *funcname)
 {
   int tags[2];
   char opname[10];
-  constvalue *tagsym[2];
   int unary;
 
   if (isalpha(*funcname) || *funcname=='_' || *funcname==PUBLIC_CHAR || *funcname=='\0') {
@@ -4627,18 +4542,18 @@ char *funcdisplayname(char *dest,char *funcname)
   } /* if */
 
   unary=parse_funcname(funcname,&tags[0],&tags[1],opname);
-  tagsym[1]=find_tag_byval(tags[1]);
-  assert(tagsym[1]!=NULL);
+  Type* rhsType = gTypes.find(tags[1]);
+  assert(rhsType!=NULL);
   if (unary) {
-    sprintf(dest,"operator%s(%s:)",opname,tagsym[1]->name);
+    sprintf(dest,"operator%s(%s:)",opname,rhsType->name());
   } else {
-    tagsym[0]=find_tag_byval(tags[0]);
-    assert(tagsym[0]!=NULL);
+    Type* lhsType = gTypes.find(tags[0]);
+    assert(lhsType!=NULL);
     /* special case: the assignment operator has the return value as the 2nd tag */
     if (opname[0]=='=' && opname[1]=='\0')
-      sprintf(dest,"%s:operator%s(%s:)",tagsym[0]->name,opname,tagsym[1]->name);
+      sprintf(dest,"%s:operator%s(%s:)",lhsType->name(),opname,rhsType->name());
     else
-      sprintf(dest,"operator%s(%s:,%s:)",opname,tagsym[0]->name,tagsym[1]->name);
+      sprintf(dest,"operator%s(%s:,%s:)",opname,lhsType->name(),rhsType->name());
   } /* if */
   return dest;
 }
@@ -4681,7 +4596,7 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
   sym=fetchfunc(decl->name);
   if (sym==NULL)
     return NULL;
-  if ((sym->usage & uPROTOTYPED)!=0 && !compare_tag(sym->tag, decl->type.tag))
+  if ((sym->usage & uPROTOTYPED)!=0 && sym->tag != decl->type.tag)
     error(25);
   if ((sym->usage & uDEFINE) == 0) {
     // As long as the function stays undefined, update its address and tag.
@@ -4917,7 +4832,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   }
 
   // Check that return tags match.
-  if ((sym->usage & uPROTOTYPED) && !compare_tag(sym->tag, decl->type.tag)) {
+  if ((sym->usage & uPROTOTYPED) && sym->tag != decl->type.tag) {
     int old_fline = fline;
     fline = funcline;
     error(180, type_to_name(sym->tag), type_to_name(decl->type.tag));
@@ -4974,13 +4889,13 @@ static int argcompare(arginfo *a1,arginfo *a2)
   if (result)
     result= a1->usage==a2->usage;           /* "const" flag */
   if (result)
-    result= compare_tag(a1->tag, a2->tag);
+    result= a1->tag == a2->tag;
   if (result)
     result= a1->numdim==a2->numdim;         /* array dimensions & index tags */
   for (level=0; result && level<a1->numdim; level++)
     result= a1->dim[level]==a2->dim[level];
   for (level=0; result && level<a1->numdim; level++)
-    result= compare_tag(a1->idxtag[level], a2->idxtag[level]);
+    result= a1->idxtag[level] == a2->idxtag[level];
   if (result)
     result= a1->hasdefault==a2->hasdefault; /* availability of default value */
   if (a1->hasdefault) {
@@ -4998,7 +4913,7 @@ static int argcompare(arginfo *a1,arginfo *a2)
       } /* if */
     } /* if */
     if (result)
-      result= compare_tag(a1->defvalue_tag, a2->defvalue_tag);
+      result= a1->defvalue_tag == a2->defvalue_tag;
   } /* if */
   return result;
 }
@@ -5519,37 +5434,6 @@ constvalue *find_constval(constvalue *table,char *name,int index)
   return NULL;
 }
 
-static constvalue *find_constval_byval(constvalue *table,cell val)
-{
-  constvalue *ptr = table->next;
-
-  while (ptr!=NULL) {
-    if (ptr->value==val)
-      return ptr;
-    ptr=ptr->next;
-  } /* while */
-  return NULL;
-}
-
-#if 0   /* never used */
-static int delete_constval(constvalue *table,char *name)
-{
-  constvalue *prev = table;
-  constvalue *cur = prev->next;
-
-  while (cur!=NULL) {
-    if (strcmp(name,cur->name)==0) {
-      prev->next=cur->next;
-      free(cur);
-      return TRUE;
-    } /* if */
-    prev=cur;
-    cur=cur->next;
-  } /* while */
-  return FALSE;
-}
-#endif
-
 void delete_consttable(constvalue *table)
 {
   constvalue *cur=table->next, *next;
@@ -5582,15 +5466,14 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
       redef=1;                  /* redefinition a function/variable to a constant is not allowed */
     if ((sym->usage & uENUMFIELD)!=0) {
       /* enum field, special case if it has a different tag and the new symbol is also an enum field */
-      constvalue *tagid;
       symbol *tagsym;
       if (sym->tag==tag)
         redef=1;                /* enumeration field is redefined (same tag) */
-      tagid=find_tag_byval(tag);
-      if (tagid==NULL) {
+      Type* type = gTypes.find(tag);
+      if (type==NULL) {
         redef=1;                /* new constant does not have a tag */
       } else {
-        tagsym=findconst(tagid->name,NULL);
+        tagsym=findconst(type->name(),NULL);
         if (tagsym==NULL || (tagsym->usage & uENUMROOT)==0)
           redef=1;              /* new constant is not an enumeration field */
       } /* if */
@@ -5600,7 +5483,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
        */
       if (!redef)
         goto redef_enumfield;
-    } else if (!compare_tag(sym->tag, tag)) {
+    } else if (sym->tag != tag) {
       redef=1;                  /* redefinition of a constant (non-enum) to a different tag is not allowed */
     } /* if */
     if (redef) {

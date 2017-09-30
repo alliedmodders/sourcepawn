@@ -583,15 +583,6 @@ typedef enum s_optmark {
 
 #define suSLEEP_INSTR 0x01      /* the "sleep" instruction was used */
 
-#define FIXEDTAG     0x40000000
-#define FUNCTAG      0x20000000
-#define OBJECTTAG    0x10000000
-#define ENUMTAG      0x08000000
-#define METHODMAPTAG 0x04000000
-#define STRUCTTAG    0x02000000
-#define TAGTYPEMASK   (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG | STRUCTTAG)
-#define TAGFLAGMASK   (FIXEDTAG | TAGTYPEMASK)
-#define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
 #define CELL_MAX      (((ucell)1 << (sizeof(cell)*8-1)) - 1)
 
 
@@ -601,9 +592,7 @@ typedef enum s_optmark {
 int pc_compile(int argc, char **argv);
 int pc_addconstant(const char *name,cell value,int tag);
 int pc_addtag(const char *name);
-int pc_addtag_flags(const char *name, int flags);
 int pc_findtag(const char *name);
-constvalue *pc_tagptr(const char *name);
 int pc_enablewarning(int number,int enable);
 const char *pc_tagname(int tag);
 int parse_decl(declinfo_t *decl, int flags);
@@ -650,7 +639,6 @@ constvalue *append_constval(constvalue *table,const char *name,cell val,int inde
 constvalue *find_constval(constvalue *table,char *name,int index);
 void delete_consttable(constvalue *table);
 symbol *add_constant(const char *name,cell val,int vclass,int tag);
-constvalue *find_tag_byval(int tag);
 int get_actual_compound(symbol *sym);
 
 /* function prototypes in SC2.C */
@@ -880,7 +868,6 @@ extern symbol glbtab;       /* global symbol table */
 extern cell *litq;          /* the literal queue */
 extern unsigned char pline[]; /* the line read from the input file */
 extern const unsigned char *lptr;/* points to the current position in "pline" */
-extern constvalue tagname_tab;/* tagname table */
 extern constvalue libname_tab;/* library table (#pragma library "..." syntax) */
 extern constvalue *curlibrary;/* current library */
 extern int pc_addlibtable;  /* is the library table added to the AMX file? */
