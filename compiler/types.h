@@ -33,7 +33,6 @@
 
 #define TAGTYPEMASK   (0x3E000000)
 #define TAGFLAGMASK   (TAGTYPEMASK | 0x40000000)
-#define TAGID(tag)    ((tag) & ~(TAGFLAGMASK))
 
 enum class TypeKind : uint32_t
 {
@@ -63,16 +62,15 @@ public:
   TypeKind kind() const {
     return kind_;
   }
-  cell value() const {
+  cell smx_export_value() const {
     return value_ | int(kind_) | fixed_;
   }
   int tagid() const {
-    return TAGID(value_);
+    return value_;
   }
 
   bool isDefinedType() const {
-    return kind_ != TypeKind::None ||
-           (value() & TAGTYPEMASK) != 0;
+    return kind_ != TypeKind::None;
   }
 
   bool isFixed() const {
@@ -173,7 +171,6 @@ public:
 
   Type* find(int tag);
   Type* find(const char* name);
-  Type* findByValue(int tag);
 
   void clearExtendedTypes();
 

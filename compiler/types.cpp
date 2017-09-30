@@ -87,20 +87,9 @@ TypeDictionary::find(const char* name)
 Type*
 TypeDictionary::find(int tag)
 {
-  int index = TAGID(tag);
-  assert(size_t(index) < types_.length());
+  assert(size_t(tag) < types_.length());
 
-  return types_[index].get();
-}
-
-Type*
-TypeDictionary::findByValue(int tag)
-{
-  int tagid = TAGID(tag);
-  Type* type = find(tagid);
-  if (type && type->value() == tag)
-    return type;
-  return nullptr;
+  return types_[tag].get();
 }
 
 Type*
@@ -134,20 +123,20 @@ void
 TypeDictionary::init()
 {
   Type* type = findOrAdd("_");
-  assert(type->value() == 0);
+  assert(type->tagid() == 0);
 
   type = findOrAdd("bool");
-  assert(type->value() == 1);
+  assert(type->tagid() == 1);
 
-  pc_anytag = defineAny()->value();
-  pc_functag = defineFunction("Function", nullptr)->value();
-  pc_tag_string = defineString()->value();
-  sc_rationaltag = defineFloat()->value();
-  pc_tag_void = defineVoid()->value();
-  pc_tag_object = defineObject("object")->value();
-  pc_tag_bool = defineBool()->value();
-  pc_tag_null_t = defineObject("null_t")->value();
-  pc_tag_nullfunc_t = defineObject("nullfunc_t")->value();
+  pc_anytag = defineAny()->tagid();
+  pc_functag = defineFunction("Function", nullptr)->tagid();
+  pc_tag_string = defineString()->tagid();
+  sc_rationaltag = defineFloat()->tagid();
+  pc_tag_void = defineVoid()->tagid();
+  pc_tag_object = defineObject("object")->tagid();
+  pc_tag_bool = defineBool()->tagid();
+  pc_tag_null_t = defineObject("null_t")->tagid();
+  pc_tag_nullfunc_t = defineObject("nullfunc_t")->tagid();
 
   for (const auto& type : types_)
     type->setIntrinsic();

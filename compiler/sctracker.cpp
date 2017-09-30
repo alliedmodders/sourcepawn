@@ -144,7 +144,7 @@ funcenum_t *funcenums_add(const char *name)
   }
 
   strcpy(e->name, name);
-  e->tag = gTypes.defineFunction(name, e)->value();
+  e->tag = gTypes.defineFunction(name, e)->tagid();
 
   return e;
 }
@@ -475,9 +475,9 @@ methodmap_add(methodmap_t* parent,
   }
 
   if (spec == Layout_MethodMap)
-    map->tag = gTypes.defineMethodmap(name, map)->value();
+    map->tag = gTypes.defineMethodmap(name, map)->tagid();
   else
-    map->tag = gTypes.defineObject(name)->value();
+    map->tag = gTypes.defineObject(name)->tagid();
   return map;
 }
 

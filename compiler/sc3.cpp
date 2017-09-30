@@ -359,8 +359,8 @@ static int obj_typeerror(int id, int tag1, int tag2)
 
 static int matchobjecttags(Type* formal, Type* actual, int flags)
 {
-  int formaltag = formal->value();
-  int actualtag = actual->value();
+  int formaltag = formal->tagid();
+  int actualtag = actual->tagid();
 
   if ((flags & MATCHTAG_COMMUTATIVE) &&
       (formaltag == pc_tag_null_t || formaltag == pc_tag_nullfunc_t))
@@ -495,8 +495,8 @@ static int functag_compare(const functag_t *formal, const functag_t *actual)
 
 static int matchfunctags(Type* formal, Type* actual)
 {
-  int formaltag = formal->value();
-  int actualtag = actual->value();
+  int formaltag = formal->tagid();
+  int actualtag = actual->tagid();
 
   if (formaltag == pc_functag && actual->isFunction())
     return TRUE;
@@ -570,7 +570,7 @@ int matchtag(int formaltag, int actualtag, int flags)
     // tag is anywhere on the inheritance chain.
     if (methodmap_t *map = actual->asMethodmap()) {
       for (; map; map = map->parent) {
-        if (gTypes.find(map->tag) == formal)
+        if (map->tag == formaltag)
           return TRUE;
       }
     }
@@ -1793,7 +1793,7 @@ static int hier2(value *lval)
       return error(20,st);      /* illegal symbol name */
     if (tok==tLABEL) {
       Type* type = gTypes.find(st);
-      tag = type ? type->value() : 0;
+      tag = type ? type->tagid() : 0;
     } else {
       sym=findloc(st);
       if (sym==NULL)

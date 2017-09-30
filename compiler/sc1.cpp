@@ -612,7 +612,7 @@ const char *pc_tagname(int tag)
 int pc_findtag(const char *name)
 {
   if (Type* type = gTypes.find(name))
-    return type->value();
+    return type->tagid();
   return -1;
 }
 
@@ -630,7 +630,7 @@ int pc_addtag(const char *name)
     name = nameptr;
   } /* if */
 
-  return gTypes.defineTag(name)->value();
+  return gTypes.defineTag(name)->tagid();
 }
 
 static void resetglobals(void)
@@ -3494,7 +3494,7 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
       // we're about to kill an enum definition and not something random.
       assert(sc_status == statFIRST);
       assert(sym->ident == iCONSTEXPR);
-      assert(TAGID(map->tag) == TAGID(sym->tag));
+      assert(map->tag == sym->tag);
 
       sym->ident = iMETHODMAP;
 
@@ -4111,7 +4111,7 @@ static void decl_enum(int vclass)
       tag = 0;
       explicittag = FALSE;
     } else {
-      tag = gTypes.defineEnumTag(str)->value();
+      tag = gTypes.defineEnumTag(str)->tagid();
       spec = deduce_layout_spec_by_tag(tag);
       if (!can_redef_layout_spec(spec, Layout_Enum))
         error(110, str, layout_spec_name(spec));
@@ -4127,7 +4127,7 @@ static void decl_enum(int vclass)
   if (lex(&val,&str)==tSYMBOL) {        /* read in (new) token */
     strcpy(enumname,str);               /* save enum name (last constant) */
     if (!explicittag) {
-      tag = gTypes.defineEnumTag(enumname)->value();
+      tag = gTypes.defineEnumTag(enumname)->tagid();
       spec = deduce_layout_spec_by_tag(tag);
       if (!can_redef_layout_spec(spec, Layout_Enum))
         error(110, enumname, layout_spec_name(spec));
@@ -4249,15 +4249,6 @@ static void decl_enum(int vclass)
     assert(enumroot!=NULL);
     enumsym->dim.enumlist=enumroot;
   } /* if */
-}
-
-// This simpler version of matchtag() only checks whether two tags represent
-// the same type. Because methodmaps are attached to types and are not actually
-// types themselves, we strip out the methodmap bit in case a methodmap was
-// seen later than another instance of a tag.
-static int compare_tag(int tag1, int tag2)
-{
-  return gTypes.find(tag1) == gTypes.find(tag2);
 }
 
 /*
@@ -4543,12 +4534,12 @@ char *funcdisplayname(char *dest,char *funcname)
   } /* if */
 
   unary=parse_funcname(funcname,&tags[0],&tags[1],opname);
-  Type* rhsType = gTypes.findByValue(tags[1]);
+  Type* rhsType = gTypes.find(tags[1]);
   assert(rhsType!=NULL);
   if (unary) {
     sprintf(dest,"operator%s(%s:)",opname,rhsType->name());
   } else {
-    Type* lhsType = gTypes.findByValue(tags[0]);
+    Type* lhsType = gTypes.find(tags[0]);
     assert(lhsType!=NULL);
     /* special case: the assignment operator has the return value as the 2nd tag */
     if (opname[0]=='=' && opname[1]=='\0')
@@ -4597,7 +4588,7 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
   sym=fetchfunc(decl->name);
   if (sym==NULL)
     return NULL;
-  if ((sym->usage & uPROTOTYPED)!=0 && !compare_tag(sym->tag, decl->type.tag))
+  if ((sym->usage & uPROTOTYPED)!=0 && sym->tag != decl->type.tag)
     error(25);
   if ((sym->usage & uDEFINE) == 0) {
     // As long as the function stays undefined, update its address and tag.
@@ -4833,7 +4824,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   }
 
   // Check that return tags match.
-  if ((sym->usage & uPROTOTYPED) && !compare_tag(sym->tag, decl->type.tag)) {
+  if ((sym->usage & uPROTOTYPED) && sym->tag != decl->type.tag) {
     int old_fline = fline;
     fline = funcline;
     error(180, type_to_name(sym->tag), type_to_name(decl->type.tag));
@@ -4890,13 +4881,13 @@ static int argcompare(arginfo *a1,arginfo *a2)
   if (result)
     result= a1->usage==a2->usage;           /* "const" flag */
   if (result)
-    result= compare_tag(a1->tag, a2->tag);
+    result= a1->tag == a2->tag;
   if (result)
     result= a1->numdim==a2->numdim;         /* array dimensions & index tags */
   for (level=0; result && level<a1->numdim; level++)
     result= a1->dim[level]==a2->dim[level];
   for (level=0; result && level<a1->numdim; level++)
-    result= compare_tag(a1->idxtag[level], a2->idxtag[level]);
+    result= a1->idxtag[level] == a2->idxtag[level];
   if (result)
     result= a1->hasdefault==a2->hasdefault; /* availability of default value */
   if (a1->hasdefault) {
@@ -4914,7 +4905,7 @@ static int argcompare(arginfo *a1,arginfo *a2)
       } /* if */
     } /* if */
     if (result)
-      result= compare_tag(a1->defvalue_tag, a2->defvalue_tag);
+      result= a1->defvalue_tag == a2->defvalue_tag;
   } /* if */
   return result;
 }
@@ -5470,7 +5461,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
       symbol *tagsym;
       if (sym->tag==tag)
         redef=1;                /* enumeration field is redefined (same tag) */
-      Type* type = gTypes.findByValue(tag);
+      Type* type = gTypes.find(tag);
       if (type==NULL) {
         redef=1;                /* new constant does not have a tag */
       } else {
@@ -5484,7 +5475,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
        */
       if (!redef)
         goto redef_enumfield;
-    } else if (!compare_tag(sym->tag, tag)) {
+    } else if (sym->tag != tag) {
       redef=1;                  /* redefinition of a constant (non-enum) to a different tag is not allowed */
     } /* if */
     if (redef) {

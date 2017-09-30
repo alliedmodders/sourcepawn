@@ -747,7 +747,7 @@ static void append_debug_tables(SmxBuilder *builder, StringPool &pool, RefPtr<Sm
     assert(strlen(type->name())>0);
 
     sp_file_tag_t &tag = tags->add();
-    tag.tag_id = type->value();
+    tag.tag_id = type->smx_export_value();
     tag.name = names->add(pool, type->name());
   });
 
