@@ -69,6 +69,11 @@ public:
     return value_;
   }
 
+  // Returns true if this is, or ever was, defined as an actual type rather
+  // than an implicit tag.
+  bool isLikelyDefinedType() const {
+    return kind_ != TypeKind::None || was_defined_;
+  }
   bool isDefinedType() const {
     return kind_ != TypeKind::None;
   }
@@ -152,6 +157,7 @@ private:
   cell value_;
   int fixed_;
   bool intrinsic_;
+  bool was_defined_;
 
   // These are reset in between the first and second passes, since the
   // underlying structures are reparsed.
@@ -172,10 +178,9 @@ public:
   Type* find(int tag);
   Type* find(const char* name);
 
-  void clearExtendedTypes();
-
-  void reset();
   void init();
+  void clearExtendedTypes();
+  void clear();
 
   Type* defineAny();
   Type* defineFunction(const char* name, funcenum_t* fe);

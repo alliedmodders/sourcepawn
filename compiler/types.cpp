@@ -36,6 +36,7 @@ Type::Type(const char* name, cell value)
    value_(value),
    fixed_(0),
    intrinsic_(false),
+   was_defined_(false),
    kind_(TypeKind::None)
 {
   private_ptr_ = nullptr;
@@ -51,22 +52,8 @@ Type::resetPtr()
   if (intrinsic_)
     return;
 
-  // We preserve funcenums across compilations, but not the private ptr,
-  // since dotypedef() and dotypeset() want to check that the type
-  // wasn't previously defined as something else.
-  //
-  // Enums are also a special case, since they can be implicitly defined
-  // before they are used. This is ancient cruft that results from the
-  // 2-pass model, where initially errors are ignored. Similarly,
-  // methodmaps are protected since they are actually enums.
-  switch (kind_) {
-  case TypeKind::Function:
-  case TypeKind::Enum:
-  case TypeKind::Methodmap:
-    break;
-  default:
-    kind_ = TypeKind::None;
-  }
+  was_defined_ |= isLikelyDefinedType();
+  kind_ = TypeKind::None;
   private_ptr_ = nullptr;
 }
 
@@ -107,7 +94,7 @@ TypeDictionary::findOrAdd(const char* name)
 }
 
 void
-TypeDictionary::reset()
+TypeDictionary::clear()
 {
   types_.clear();
 }

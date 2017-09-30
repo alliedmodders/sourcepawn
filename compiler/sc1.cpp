@@ -492,7 +492,7 @@ cleanup:
   delete_sourcefiletable();
   delete_inputfiletable();
   delete_dbgstringtable();
-  gTypes.reset();
+  gTypes.clear();
   funcenums_free();
   methodmaps_free();
   pstructs_free();
@@ -2739,7 +2739,7 @@ static int parse_new_typename(const token_t *tok)
       } else if (tag != pc_anytag) {
         // Perform some basic filters so we can start narrowing down what can
         // be used as a type.
-        if (!gTypes.find(tag)->isDefinedType())
+        if (!gTypes.find(tag)->isLikelyDefinedType())
           error(139, tok->str);
       }
       return tag;
@@ -3868,8 +3868,12 @@ static void dotypedef()
     return;
 
   Type* prev_type = gTypes.find(ident.name);
-  if (prev_type && !prev_type->isFunction())
+  if (prev_type &&
+      prev_type->isDefinedType() &&
+      !prev_type->isFunction())
+  {
     error(94);
+  }
 
   needtoken('=');
 
@@ -3888,8 +3892,12 @@ static void dotypeset()
     return;
 
   Type* prev_type = gTypes.find(ident.name);
-  if (prev_type && !prev_type->isFunction())
+  if (prev_type &&
+      prev_type->isDefinedType() &&
+      !prev_type->isFunction())
+  {
     error(94);
+  }
 
   funcenum_t *def = funcenums_add(ident.name);
   needtoken('{');
