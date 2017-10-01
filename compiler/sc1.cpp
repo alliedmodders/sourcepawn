@@ -144,7 +144,6 @@ static int dodo(void);
 static int dofor(void);
 static void doswitch(void);
 static void doreturn(void);
-static void dofuncenum(int listmode);
 static void dotypedef();
 static void dotypeset();
 static void domethodmap(LayoutSpec spec);
@@ -1277,7 +1276,7 @@ static void parse(void)
       break;
     }
     case tFUNCTAG:
-      dofuncenum(FALSE);
+      error(FATAL_ERROR_FUNCENUM);
       break;
     case tTYPEDEF:
       dotypedef();
@@ -1295,7 +1294,7 @@ static void parse(void)
       decl_enum(sGLOBAL);
       break;
     case tFUNCENUM:
-      dofuncenum(TRUE);
+      error(FATAL_ERROR_FUNCENUM);
       break;
     case tMETHODMAP:
       domethodmap(Layout_MethodMap);
@@ -3908,191 +3907,6 @@ static void dotypeset()
   }
 
   require_newline(TRUE);
-}
-
-/**
- * dofuncenum - declare function enumerations
- */
-static void dofuncenum(int listmode)
-{
-  cell val;
-  char *str;
-  // char *ptr;
-  char tagname[sNAMEMAX+1];
-  funcenum_t *fenum = NULL;
-  int i;
-  int newStyleTag = 0;
-  int isNewStyle = 0;
-
-  /* get the explicit tag (required!) */
-  int l = lex(&val,&str);
-  if (l != tSYMBOL) {
-    if (listmode == FALSE && l == tPUBLIC) {
-      isNewStyle = TRUE;
-      switch (lex(&val, &str)) {
-      case tOBJECT:
-        newStyleTag = pc_tag_object;
-        break;
-      case tINT:
-        newStyleTag = 0;
-        break;
-      case tVOID:
-        newStyleTag = pc_tag_void;
-        break;
-      case tCHAR:
-        newStyleTag = pc_tag_string;
-        break;
-      case tLABEL:
-        newStyleTag = pc_addtag(str);
-        break;
-      case tSYMBOL:
-        // Check whether this is new-style declaration.
-        // we'll port this all to parse_decl() sometime.
-        if (lexpeek('('))
-          lexpush();
-        else
-          newStyleTag = pc_addtag(str);
-        break;
-      default:
-        error(93);
-      }
-
-      if (!needtoken(tSYMBOL)) {
-        lexclr(TRUE);
-        litidx = 0;
-        return;
-      }
-      l = tokeninfo(&val, &str);
-    } else {
-      error(93);
-    }
-  }
-
-  strcpy(tagname, str);
-
-  fenum = funcenums_add(tagname);
-
-  if (listmode)
-    needtoken('{');
-  do {
-    functag_t func;
-    if (listmode && matchtoken('}')) {
-      /* Quick exit */
-      lexpush();
-      break;
-    }
-    memset(&func, 0, sizeof(func));
-    if (!isNewStyle) {
-      func.ret_tag = pc_addtag(NULL);  /* Get the return tag */
-      l = lex(&val, &str);
-      /* :TODO:
-       * Right now, there is a problem.  We can't pass non-public function pointer addresses around,
-       * because the address isn't known until the final reparse.  Unfortunately, you can write code
-       * before the address is known, because Pawn's compiler isn't truly multipass.
-       *
-       * When you call a function, there's no problem, because it does not write the address.
-       * The assembly looks like this:
-       *   call MyFunction
-       * Then, only at assembly time (once all passes are done), does it know the address.
-       * I do not see any solution to this because there is no way I know to inject the function name
-       * rather than the constant value.  And even if we could, we'd have to change the assembler recognize that.
-       */
-      if (l == tPUBLIC) {
-        func.usage = uPUBLIC;
-      } else {
-        error(1, "-public-", str);
-      }
-    } else {
-      func.ret_tag = newStyleTag;
-      func.usage = uPUBLIC;
-    }
-    needtoken('(');
-    do {
-      funcarg_t *arg = &(func.args[func.argcount]);
-
-      /* Quick exit */
-      if (matchtoken(')')) {
-        lexpush();
-        break;
-      }
-      l = lex(&val, &str);
-      if (l == '&') {
-        if ((arg->ident != iVARIABLE && arg->ident != 0) || arg->tagcount > 0)
-          error(1, "-identifier-", "&");
-        arg->ident = iREFERENCE;
-      } else if (l == tCONST) {
-        if ((arg->ident != iVARIABLE && arg->ident != 0) || arg->tagcount > 0)
-          error(1, "-identifier-", "const");
-        arg->fconst=TRUE;
-      } else if (l == tLABEL) {
-        if (arg->tagcount > 0)
-          error(1, "-identifier-", "-tagname-");
-        arg->tags[arg->tagcount++] = pc_addtag(str);
-        l=tLABEL;
-      } else if (l == tSYMBOL) {
-        if (func.argcount >= SP_MAX_EXEC_PARAMS)
-          error(45);
-        if (str[0] == PUBLIC_CHAR)
-          error(56, str);
-        if (matchtoken('['))
-        {
-          cell size;
-          if (arg->ident == iREFERENCE)
-            error(67, str);
-          do {
-            constvalue *enumroot;
-            int ignore_tag;
-            if (arg->dimcount == sDIMEN_MAX) {
-              error(53);
-              break;
-            }
-            size = needsub(&ignore_tag, &enumroot);
-            arg->dims[arg->dimcount] = size;
-            arg->dimcount += 1;
-          } while (matchtoken('['));
-          /* Handle strings */
-          if ((arg->tagcount == 1 && arg->tags[0] == pc_tag_string)
-            && arg->dims[arg->dimcount-1])
-          {
-            arg->dims[arg->dimcount-1] = (size + sizeof(cell)-1) / sizeof(cell);
-          }
-          arg->ident=iREFARRAY;
-        } else if (arg->ident == 0) {
-          arg->ident = iVARIABLE;
-        }
-      
-        if (matchtoken('=')) {
-          needtoken('0');
-          arg->ommittable = TRUE;
-          func.ommittable = TRUE;
-        } else if (func.ommittable) {
-          error(95);
-        }
-        func.argcount++;
-      } else if (l == tELLIPS) {
-        if (arg->ident == iVARIABLE)
-          error(10);
-        arg->ident = iVARARGS;
-        func.argcount++;
-      } else {
-        error(10);
-      }
-    } while (l == '&' || l == tLABEL || l == tCONST || (l != tELLIPS && matchtoken(',')));
-    needtoken(')');
-    for (i=0; i<func.argcount; i++) {
-      if (func.args[i].tagcount == 0) {
-        func.args[i].tags[0] = 0;
-        func.args[i].tagcount = 1;
-      }
-    }
-    functags_add(fenum, &func);
-    if (!listmode)
-      break;
-  } while (matchtoken(','));
-  if (listmode)
-    needtoken('}');
-  matchtoken(';'); /* eat an optional semicolon.  nom nom nom */
-  errorset(sRESET, 0);
 }
 
 /*  decl_enum   - declare enumerated constants
