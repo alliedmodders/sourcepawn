@@ -31,35 +31,12 @@
 #include "sc.h"
 #include "sctracker.h"
 #include "types.h"
+#include "sc3.h"
 #include <amtl/am-algorithm.h>
 
-static int skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
-                int (*hier)(value*),value *lval);
 static void dropout(int lvalue,void (*testfunc)(int val),int exit1,value *lval);
-static int plnge(int *opstr,int opoff,int (*hier)(value *lval),value *lval,
-                 const char *forcetag,int chkbitwise);
-static int plnge1(int (*hier)(value *lval),value *lval);
-static void plnge2(void (*oper)(void),
-                   int (*hier)(value *lval),
-                   value *lval1,value *lval2);
 static cell calc(cell left,void (*oper)(),cell right,char *boolresult);
-static int hier14(value *lval);
-static int hier13(value *lval);
-static int hier12(value *lval);
-static int hier11(value *lval);
-static int hier10(value *lval);
-static int hier9(value *lval);
-static int hier8(value *lval);
-static int hier7(value *lval);
-static int hier6(value *lval);
-static int hier5(value *lval);
-static int hier4(value *lval);
-static int hier3(value *lval);
-static int hier2(value *lval);
-static int hier1(value *lval1);
-static int primary(value *lval);
 static void clear_value(value *lval);
-static void callfunction(symbol *sym, const svalue *implicitthis, value *lval_result, int matchparanthesis);
 static int dbltest(void (*oper)(),value *lval1,value *lval2);
 static int commutative(void (*oper)());
 static int constant(value *lval);
@@ -626,8 +603,9 @@ int matchtag(int formaltag, int actualtag, int flags)
  *            "or" expression, this happens when both the left hand and the
  *            right hand are FALSE, so endval must be 0 for "or" expressions.
  */
-static int skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
-                int (*hier)(value*),value *lval)
+int
+ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
+                       HierFn hier, value *lval)
 {
   int lvalue,hits,droplab,endlab,opidx;
   int allconst,foundop;
@@ -736,8 +714,10 @@ static void checkfunction(value *lval)
 /*
  *  Plunge to a lower level
  */
-static int plnge(int *opstr,int opoff,int (*hier)(value *lval),value *lval,
-                 const char *forcetag,int chkbitwise)
+int
+ExpressionParser::plnge(int *opstr,int opoff,
+                        HierFn hier, value *lval,
+                        const char *forcetag,int chkbitwise)
 {
   int lvalue,opidx;
   int count;
@@ -767,7 +747,8 @@ static int plnge(int *opstr,int opoff,int (*hier)(value *lval),value *lval,
  *  Binary plunge to lower level; this is very simular to plnge, but
  *  it has special code generation sequences for chained operations.
  */
-static int plnge_rel(int *opstr,int opoff,int (*hier)(value *lval),value *lval)
+int
+ExpressionParser::plnge_rel(int *opstr,int opoff,HierFn hier,value *lval)
 {
   int lvalue,opidx;
   value lval2={0};
@@ -808,13 +789,14 @@ static int plnge_rel(int *opstr,int opoff,int (*hier)(value *lval),value *lval)
  *  Unary plunge to lower level
  *  Called by: skim(), plnge(), plnge2(), plnge_rel(), hier14() and hier13()
  */
-static int plnge1(int (*hier)(value *lval),value *lval)
+int
+ExpressionParser::plnge1(HierFn hier, value *lval)
 {
   int lvalue,index;
   cell cidx;
 
   stgget(&index,&cidx); /* mark position in code generator */
-  lvalue=(*hier)(lval);
+  lvalue=(this->*hier)(lval);
   if (lval->ident==iCONSTEXPR)
     stgdel(index,cidx); /* load constant later */
   return lvalue;
@@ -825,9 +807,10 @@ static int plnge1(int (*hier)(value *lval),value *lval)
  *  Binary plunge to lower level
  *  Called by: plnge(), plnge_rel(), hier14() and hier1()
  */
-static void plnge2(void (*oper)(void),
-                   int (*hier)(value *lval),
-                   value *lval1,value *lval2)
+void
+ExpressionParser::plnge2(void (*oper)(void),
+                         HierFn hier,
+                         value *lval1,value *lval2)
 {
   int index;
   cell cidx;
@@ -978,7 +961,10 @@ int lvalexpr(svalue *sval)
 
   errorset(sEXPRMARK, 0);
   pushheaplist();
-  sval->lvalue = hier14(&sval->val);
+  {
+    ExpressionParser parser;
+    sval->lvalue = parser.evaluate(&sval->val);
+  }
   popheaplist();
   errorset(sEXPRRELEASE, 0);
 
@@ -990,7 +976,8 @@ int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval
   value lval={0};
   pushheaplist();
 
-  if (hier14(&lval))
+  ExpressionParser parser;
+  if (parser.evaluate(&lval))
     rvalue(&lval);
   /* scrap any arrays left on the heap */
   popheaplist();
@@ -1043,7 +1030,8 @@ static cell array_levelsize(symbol *sym,int level)
  *
  *  Global references: sc_intest        (reffered to only)
  */
-static int hier14(value *lval1)
+int
+ExpressionParser::hier14(value *lval1)
 {
   int lvalue;
   value lval2={0},lval3={0};
@@ -1067,7 +1055,7 @@ static int hier14(value *lval1)
   org_arrayidx=lval1->arrayidx; /* save current pointer, to reset later */
   if (lval1->arrayidx==NULL)
     lval1->arrayidx=arrayidx1;
-  lvalue=plnge1(hier13,lval1);
+  lvalue=plnge1(&ExpressionParser::hier13,lval1);
   if (lval1->ident!=iARRAYCELL && lval1->ident!=iARRAYCHAR)
     lval1->arrayidx=NULL;
   if (lval1->ident==iCONSTEXPR) /* load constant here */
@@ -1153,7 +1141,7 @@ static int hier14(value *lval1)
       rvalue(lval1);
     } /* if */
     lval2.arrayidx=arrayidx2;
-    plnge2(oper,hier14,lval1,&lval2);
+    plnge2(oper,&ExpressionParser::hier14,lval1,&lval2);
     if (lval2.ident!=iARRAYCELL && lval2.ident!=iARRAYCHAR)
       lval2.arrayidx=NULL;
     if (oper)
@@ -1172,7 +1160,7 @@ static int hier14(value *lval1)
     pushreg(sPRI);
     if (oper) {
       rvalue(lval1);
-      plnge2(oper,hier14,lval1,&lval2);
+      plnge2(oper,&ExpressionParser::hier14,lval1,&lval2);
     } else {
       if (hier14(&lval2))
         rvalue(&lval2);         /* instead of plnge2(). */
@@ -1184,7 +1172,7 @@ static int hier14(value *lval1)
   } else {
     if (oper){
       rvalue(lval1);
-      plnge2(oper,hier14,lval1,&lval2);
+      plnge2(oper,&ExpressionParser::hier14,lval1,&lval2);
     } else {
       /* if direct fetch and simple assignment: no "push"
        * and "pop" needed -> call hier14() directly, */
@@ -1345,9 +1333,10 @@ long dynarray_from_heaplist(memuse_list_t *heap)
   return total;
 }
 
-static int hier13(value *lval)
+int
+ExpressionParser::hier13(value *lval)
 {
-  int lvalue=plnge1(hier12,lval);
+  int lvalue=plnge1(&ExpressionParser::hier12,lval);
   if (matchtoken('?')) {
     int flab1=getlabel();
     int flab2=getlabel();
@@ -1435,65 +1424,74 @@ static int list10[] = {tlEQ,tlNE,0};
 static int list11[] = {tlAND,0};
 static int list12[] = {tlOR,0};
 
-static int hier12(value *lval)
+int
+ExpressionParser::hier12(value *lval)
 {
-  return skim(list12,jmp_ne0,1,0,hier11,lval);
+  return skim(list12,jmp_ne0,1,0,&ExpressionParser::hier11,lval);
 }
 
-static int hier11(value *lval)
+int
+ExpressionParser::hier11(value *lval)
 {
-  return skim(list11,jmp_eq0,0,1,hier10,lval);
+  return skim(list11,jmp_eq0,0,1,&ExpressionParser::hier10,lval);
 }
 
-static int hier10(value *lval)
+int
+ExpressionParser::hier10(value *lval)
 { /* ==, != */
-  return plnge(list10,15,hier9,lval,"bool",TRUE);
+  return plnge(list10,15,&ExpressionParser::hier9,lval,"bool",TRUE);
 }                  /* ^ this variable is the starting index in the op1[]
                     *   array of the operators of this hierarchy level */
-
-static int hier9(value *lval)
+int
+ExpressionParser::hier9(value *lval)
 { /* <=, >=, <, > */
-  return plnge_rel(list9,11,hier8,lval);
+  return plnge_rel(list9,11,&ExpressionParser::hier8,lval);
 }
 
-static int hier8(value *lval)
+int
+ExpressionParser::hier8(value *lval)
 { /* | */
-  return plnge(list8,10,hier7,lval,NULL,FALSE);
+  return plnge(list8,10,&ExpressionParser::hier7,lval,NULL,FALSE);
 }
 
-static int hier7(value *lval)
+int
+ExpressionParser::hier7(value *lval)
 { /* ^ */
-  return plnge(list7,9,hier6,lval,NULL,FALSE);
+  return plnge(list7,9,&ExpressionParser::hier6,lval,NULL,FALSE);
 }
 
-static int hier6(value *lval)
+int
+ExpressionParser::hier6(value *lval)
 { /* & */
-  return plnge(list6,8,hier5,lval,NULL,FALSE);
+  return plnge(list6,8,&ExpressionParser::hier5,lval,NULL,FALSE);
 }
 
-static int hier5(value *lval)
+int
+ExpressionParser::hier5(value *lval)
 { /* <<, >>, >>> */
-  return plnge(list5,5,hier4,lval,NULL,FALSE);
+  return plnge(list5,5,&ExpressionParser::hier4,lval,NULL,FALSE);
 }
 
-static int hier4(value *lval)
+int
+ExpressionParser::hier4(value *lval)
 { /* +, - */
-  return plnge(list4,3,hier3,lval,NULL,FALSE);
+  return plnge(list4,3,&ExpressionParser::hier3,lval,NULL,FALSE);
 }
 
-static int hier3(value *lval)
+int
+ExpressionParser::hier3(value *lval)
 { /* *, /, % */
-  return plnge(list3,0,hier2,lval,NULL,FALSE);
+  return plnge(list3,0,&ExpressionParser::hier2,lval,NULL,FALSE);
 }
 
-static int hier2(value *lval)
+int
+ExpressionParser::hier2(value *lval)
 {
   int lvalue,tok;
-  int tag,paranthese;
+  int tag;
   cell val;
   char *st;
   int saveresult;
-  symbol *sym = nullptr;
 
   tok=lex(&val,&st);
   switch (tok) {
@@ -1653,187 +1651,33 @@ static int hier2(value *lval)
     return lvalue;
   }
   case tDEFINED:
-    paranthese=0;
-    while (matchtoken('('))
-      paranthese++;
-    tok=lex(&val,&st);
-    if (tok!=tSYMBOL)
-      return error(20,st);      /* illegal symbol name */
-    sym=findloc(st);
-    if (sym==NULL)
-      sym=findglb(st);
-    if (sym!=NULL && sym->ident!=iFUNCTN && sym->ident!=iREFFUNC && (sym->usage & uDEFINE)==0)
-      sym=NULL;                 /* symbol is not a function, it is in the table, but not "defined" */
-    val= (sym!=NULL);
-    if (!val && find_subst(st,strlen(st))!=NULL)
-      val=1;
+    val = parse_defined();
     clear_value(lval);
     lval->ident=iCONSTEXPR;
     lval->constval= val;
     lval->tag=pc_addtag("bool");
     ldconst(lval->constval,sPRI);
-    while (paranthese--)
-      needtoken(')');
     return FALSE;
   case tSIZEOF:
-    paranthese=0;
-    while (matchtoken('('))
-      paranthese++;
-    tok=lex(&val,&st);
-    if (tok!=tSYMBOL)
-      return error(20,st);      /* illegal symbol name */
-    sym=findloc(st);
-    if (sym==NULL)
-      sym=findglb(st);
-    if (sym==NULL)
-      return error(17,st);      /* undefined symbol */
-    if (sym->ident==iCONSTEXPR)
-      error(39);                /* constant symbol has no size */
-    else if (sym->ident==iFUNCTN || sym->ident==iREFFUNC)
-      error(72);                /* "function" symbol has no size */
-    else if ((sym->usage & uDEFINE)==0)
-      return error(17,st);      /* undefined symbol (symbol is in the table, but it is "used" only) */
+    val = parse_sizeof();
     clear_value(lval);
     lval->ident=iCONSTEXPR;
-    lval->constval=1;           /* preset */
-    markusage(sym, uREAD);
-    if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
-      int level;
-      symbol *idxsym=NULL;
-      symbol *subsym=sym;
-      for (level=0; matchtoken('['); level++) {
-        idxsym=NULL;
-        if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
-          char *idxname;
-          int cmptag=subsym->x.tags.index;
-          tokeninfo(&val,&idxname);
-          if ((idxsym=findconst(idxname,&cmptag))==NULL)
-            error(80,idxname);  /* unknown symbol, or non-constant */
-          else if (cmptag>1)
-            error(91,idxname);  /* ambiguous constant */
-        } /* if */
-        needtoken(']');
-        if (subsym!=NULL)
-          subsym=finddepend(subsym);
-      } /* for */
-      if (level>sym->dim.array.level+1) {
-        error(28,sym->name);  /* invalid subscript */
-      } else if (level==sym->dim.array.level+1) {
-        lval->constval=(idxsym!=NULL && idxsym->dim.array.length>0) ? idxsym->dim.array.length : 1;
-      } else {
-        lval->constval=array_levelsize(sym,level);
-      }
-      if (lval->constval==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
-        error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
-    } /* if */
+    lval->constval=val;
     ldconst(lval->constval,sPRI);
-    while (paranthese--)
-      needtoken(')');
     return FALSE;
   case tCELLSOF:
-    paranthese=0;
-    while (matchtoken('('))
-      paranthese++;
-    tok=lex(&val,&st);
-    if (tok!=tSYMBOL)
-      return error(20,st);      /* illegal symbol name */
-    sym=findloc(st);
-    if (sym==NULL)
-      sym=findglb(st);
-    if (sym==NULL)
-      return error(17,st);      /* undefined symbol */
-    if (sym->ident==iCONSTEXPR)
-      error(39);                /* constant symbol has no size */
-    else if (sym->ident==iFUNCTN || sym->ident==iREFFUNC)
-      error(72);                /* "function" symbol has no size */
-    else if ((sym->usage & uDEFINE)==0)
-      return error(17,st);      /* undefined symbol (symbol is in the table, but it is "used" only) */
+    val = parse_cellsof();
     clear_value(lval);
     lval->ident=iCONSTEXPR;
-    lval->constval=1;           /* preset */
-    if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
-      int level;
-      symbol *idxsym=NULL;
-      symbol *subsym=sym;
-      for (level=0; matchtoken('['); level++) {
-        idxsym=NULL;
-        if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
-          char *idxname;
-          int cmptag=subsym->x.tags.index;
-          tokeninfo(&val,&idxname);
-          if ((idxsym=findconst(idxname,&cmptag))==NULL)
-            error(80,idxname);  /* unknown symbol, or non-constant */
-          else if (cmptag>1)
-            error(91,idxname);  /* ambiguous constant */
-        } /* if */
-        needtoken(']');
-        if (subsym!=NULL)
-          subsym=finddepend(subsym);
-      } /* for */
-      if (level>sym->dim.array.level+1) {
-        error(28,sym->name);  /* invalid subscript */
-      } else if (level==sym->dim.array.level+1) {
-        lval->constval= (idxsym!=NULL && idxsym->dim.array.length>0) ? idxsym->dim.array.length : 1;
-      } else {
-        lval->constval=array_levelsize(sym,level);
-      }
-      if (lval->constval==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
-        error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
-    } /* if */
+    lval->constval=val;
     ldconst(lval->constval,sPRI);
-    while (paranthese--)
-      needtoken(')');
     return FALSE;
   case tTAGOF:
-    paranthese=0;
-    while (matchtoken('('))
-      paranthese++;
-    tok=lex(&val,&st);
-    if (tok!=tSYMBOL && tok!=tLABEL)
-      return error(20,st);      /* illegal symbol name */
-    if (tok==tLABEL) {
-      Type* type = gTypes.find(st);
-      tag = type ? type->tagid() : 0;
-    } else {
-      sym=findloc(st);
-      if (sym==NULL)
-        sym=findglb(st);
-      if (sym==NULL)
-        return error(17,st);      /* undefined symbol */
-      if ((sym->usage & uDEFINE)==0)
-        return error(17,st);      /* undefined symbol (symbol is in the table, but it is "used" only) */
-      tag=sym->tag;
-    } /* if */
-    if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
-      int level;
-      symbol *idxsym=NULL;
-      symbol *subsym=sym;
-      for (level=0; matchtoken('['); level++) {
-        idxsym=NULL;
-        if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
-          char *idxname;
-          int cmptag=subsym->x.tags.index;
-          tokeninfo(&val,&idxname);
-          if ((idxsym=findconst(idxname,&cmptag))==NULL)
-            error(80,idxname);  /* unknown symbol, or non-constant */
-          else if (cmptag>1)
-            error(91,idxname);  /* ambiguous constant */
-        } /* if */
-        needtoken(']');
-        if (subsym!=NULL)
-          subsym=finddepend(subsym);
-      } /* for */
-      if (level>sym->dim.array.level+1)
-        error(28,sym->name);  /* invalid subscript */
-      else if (level==sym->dim.array.level+1 && idxsym!=NULL)
-        tag= idxsym->x.tags.index;
-    } /* if */
+    val = parse_tagof();
     clear_value(lval);
     lval->ident=iCONSTEXPR;
-    lval->constval=tag;
+    lval->constval=val;
     ldconst(lval->constval,sPRI);
-    while (paranthese--)
-      needtoken(')');
     return FALSE;
   default:
     lexpush();
@@ -1937,6 +1781,229 @@ static int hier2(value *lval)
   } /* switch */
 }
 
+cell
+ExpressionParser::parse_defined()
+{
+  cell val;
+  char* st;
+  int paranthese = 0;
+  while (matchtoken('('))
+    paranthese++;
+  int tok = lex(&val, &st);
+  if (tok != tSYMBOL) {
+    error(20,st);      /* illegal symbol name */
+    return 0;
+  }
+  symbol* sym = findloc(st);
+  if (!sym)
+    sym = findglb(st);
+  if (sym && sym->ident!=iFUNCTN && sym->ident!=iREFFUNC && (sym->usage & uDEFINE)==0)
+    sym = nullptr;     /* symbol is not a function, it is in the table, but not "defined" */
+  val = !!sym;
+  if (!val && find_subst(st, strlen(st)))
+    val = 1;
+  while (paranthese--)
+    needtoken(')');
+  return val;
+}
+
+cell
+ExpressionParser::parse_sizeof()
+{
+  int paranthese=0;
+  while (matchtoken('('))
+    paranthese++;
+
+  cell val;
+  char* st;
+  int tok=lex(&val,&st);
+  if (tok!=tSYMBOL) {
+    error(20,st);
+    return 0;
+  }
+
+  symbol* sym=findloc(st);
+  if (!sym)
+    sym=findglb(st);
+  if (!sym) {
+    error(17,st);
+    return 0;
+  }
+  if (sym->ident==iCONSTEXPR) {
+    error(39);                /* constant symbol has no size */
+  } else if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
+    error(72);                /* "function" symbol has no size */
+  } else if ((sym->usage & uDEFINE)==0) {
+    error(17,st);
+    return 0;
+  }
+
+  cell result = 1;
+  markusage(sym, uREAD);
+  if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
+    int level;
+    symbol *idxsym=NULL;
+    symbol *subsym=sym;
+    for (level=0; matchtoken('['); level++) {
+      idxsym=NULL;
+      if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
+        char *idxname;
+        int cmptag=subsym->x.tags.index;
+        tokeninfo(&val,&idxname);
+        if ((idxsym=findconst(idxname,&cmptag))==NULL)
+          error(80,idxname);  /* unknown symbol, or non-constant */
+        else if (cmptag>1)
+          error(91,idxname);  /* ambiguous constant */
+      } /* if */
+      needtoken(']');
+      if (subsym!=NULL)
+        subsym=finddepend(subsym);
+    } /* for */
+    if (level>sym->dim.array.level+1) {
+      error(28,sym->name);  /* invalid subscript */
+    } else if (level==sym->dim.array.level+1) {
+      result = (idxsym!=NULL && idxsym->dim.array.length>0) ? idxsym->dim.array.length : 1;
+    } else {
+      result = array_levelsize(sym,level);
+    }
+    if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
+      error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
+  } /* if */
+  while (paranthese--)
+    needtoken(')');
+  return result;
+}
+
+cell
+ExpressionParser::parse_cellsof()
+{
+  int paranthese=0;
+  while (matchtoken('('))
+    paranthese++;
+
+  cell val;
+  char* st;
+  int tok=lex(&val,&st);
+  if (tok!=tSYMBOL) {
+    error(20,st);
+    return 0;
+  }
+
+  symbol* sym=findloc(st);
+  if (!sym)
+    sym=findglb(st);
+  if (!sym) {
+    error(17,st);
+    return 0;
+  }
+  if (sym->ident==iCONSTEXPR) {
+    error(39);                /* constant symbol has no size */
+  } else if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
+    error(72);                /* "function" symbol has no size */
+  } else if ((sym->usage & uDEFINE)==0) {
+    error(17,st);      /* undefined symbol (symbol is in the table, but it is "used" only) */
+    return 0;
+  }
+
+  cell result = 1;
+  if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
+    int level;
+    symbol *idxsym=NULL;
+    symbol *subsym=sym;
+    for (level=0; matchtoken('['); level++) {
+      idxsym=NULL;
+      if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
+        char *idxname;
+        int cmptag=subsym->x.tags.index;
+        tokeninfo(&val,&idxname);
+        if ((idxsym=findconst(idxname,&cmptag))==NULL)
+          error(80,idxname);  /* unknown symbol, or non-constant */
+        else if (cmptag>1)
+          error(91,idxname);  /* ambiguous constant */
+      } /* if */
+      needtoken(']');
+      if (subsym!=NULL)
+        subsym=finddepend(subsym);
+    } /* for */
+    if (level>sym->dim.array.level+1) {
+      error(28,sym->name);  /* invalid subscript */
+    } else if (level==sym->dim.array.level+1) {
+      result = (idxsym!=NULL && idxsym->dim.array.length>0) ? idxsym->dim.array.length : 1;
+    } else {
+      result = array_levelsize(sym,level);
+    }
+    if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
+      error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
+  } /* if */
+
+  while (paranthese--)
+    needtoken(')');
+  return result;
+}
+
+cell
+ExpressionParser::parse_tagof()
+{
+  int paranthese=0;
+  while (matchtoken('('))
+    paranthese++;
+
+  cell val;
+  char* st;
+  int tok=lex(&val,&st);
+  if (tok!=tSYMBOL && tok!=tLABEL) {
+    error(20,st);               /* illegal symbol name */
+    return 0;
+  }
+
+  int tag;
+  symbol* sym = nullptr;
+  if (tok==tLABEL) {
+    Type* type = gTypes.find(st);
+    tag = type ? type->tagid() : 0;
+  } else {
+    sym=findloc(st);
+    if (sym==NULL)
+      sym=findglb(st);
+    if (sym==NULL) {
+      error(17,st);
+      return 0;
+    }
+    if ((sym->usage & uDEFINE)==0) {
+      error(17,st);
+      return 0;
+    }
+    tag=sym->tag;
+  } /* if */
+  if (sym && (sym->ident==iARRAY || sym->ident==iREFARRAY)) {
+    int level;
+    symbol *idxsym=NULL;
+    symbol *subsym=sym;
+    for (level=0; matchtoken('['); level++) {
+      idxsym=NULL;
+      if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
+        char *idxname;
+        int cmptag=subsym->x.tags.index;
+        tokeninfo(&val,&idxname);
+        if ((idxsym=findconst(idxname,&cmptag))==NULL)
+          error(80,idxname);  /* unknown symbol, or non-constant */
+        else if (cmptag>1)
+          error(91,idxname);  /* ambiguous constant */
+      } /* if */
+      needtoken(']');
+      if (subsym!=NULL)
+        subsym=finddepend(subsym);
+    } /* for */
+    if (level>sym->dim.array.level+1)
+      error(28,sym->name);  /* invalid subscript */
+    else if (level==sym->dim.array.level+1 && idxsym!=NULL)
+      tag= idxsym->x.tags.index;
+  } /* if */
+  while (paranthese--)
+    needtoken(')');
+  return tag;
+}
+
 static symbol *
 fake_function_for_method(methodmap_t *map, const char *lexstr)
 {
@@ -2029,8 +2096,8 @@ field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method
   return FER_CallMethod;
 }
 
-static int
-parse_view_as(value* lval)
+int
+ExpressionParser::parse_view_as(value* lval)
 {
   needtoken('<');
   int tag = 0;
@@ -2046,6 +2113,7 @@ parse_view_as(value* lval)
     error(144);
 
   int paren = needtoken('(');
+
   lval->cmptag = tag;
   int lvalue = hier14(lval);
   if (paren)
@@ -2077,7 +2145,8 @@ parse_view_as(value* lval)
  *  if that hasn't already been done at primary() (check lval[4]) and calls
  *  callfunction() to call the function.
  */
-static int hier1(value *lval1)
+int
+ExpressionParser::hier1(value *lval1)
 {
   int lvalue,index,tok;
   cell val,cidx;
@@ -2411,7 +2480,8 @@ restart:
  *
  *  Global references: sc_intest  (may be altered, but restored upon termination)
  */
-static int primary(value *lval)
+int
+ExpressionParser::primary(value *lval)
 {
   char *st;
   int lvalue,tok;
@@ -2757,7 +2827,8 @@ class CallArgPusher
  *  Generates code to call a function. This routine handles default arguments
  *  and positional as well as named parameters.
  */
-static void callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_result, int matchparanthesis)
+void
+ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_result, int matchparanthesis)
 {
   int close,lvalue;
   int argpos;       /* index in the output stream (argpos==nargs if positional parameters) */
