@@ -112,5 +112,6 @@ It now includes a new reference interpreter, and will officially build and run o
 
 SourcePawn 1.10 is the current development version.
 
-The following features have been removed:
- - `funcenum` and `functag` keywords
+The following legacy features have been removed:
+ - `funcenum` and `functag` keywords.
+ - Packed array indexing.

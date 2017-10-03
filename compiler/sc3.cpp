@@ -2181,33 +2181,29 @@ restart:
     lval1->constval = 0;
   }
 
-  if (matchtoken('[') || matchtoken('{') || matchtoken('(') || matchtoken('.')) {
+  if (matchtoken('[') || matchtoken('(') || matchtoken('.')) {
     tok=tokeninfo(&val,&st);    /* get token read by matchtoken() */
     if (lvalue && lval1->ident == iACCESSOR) {
       rvalue(lval1);
       lvalue = FALSE;
     }
     magic_string = (sym && (sym->tag == pc_tag_string && sym->dim.array.level == 0));
-    if (tok=='[' || tok=='{') { /* subscript */
+    if (tok=='[') { /* subscript */
       if (sym==NULL && symtok!=tSYMBOL) {
         /* we do not have a valid symbol and we appear not to have read a valid
          * symbol name (so it is unlikely that we would have read a name of an
          * undefined symbol) */
         error(29);                /* expression error, assumed 0 */
-        lexpush();                /* analyse '(', '{' or '[' again later */
+        lexpush();                /* analyse '(' or '[' again later */
         return FALSE;
       } /* if */
-      close = (char)((tok=='[') ? ']' : '}');
+      close = ']';
       if (sym==NULL) {  /* sym==NULL if lval is a constant or a literal */
         error(28,"<no variable>");  /* cannot subscript */
         needtoken(close);
         return FALSE;
       } else if (sym->ident!=iARRAY && sym->ident!=iREFARRAY){
         error(28,sym->name);    /* cannot subscript, variable is not an array */
-        needtoken(close);
-        return FALSE;
-      } else if (sym->dim.array.level>0 && close!=']') {
-        error(51);      /* invalid subscript, must use [ ] */
         needtoken(close);
         return FALSE;
       } /* if */
@@ -2228,7 +2224,7 @@ restart:
           assert(sym->dim.array.level>=0 && sym->dim.array.level<sDIMEN_MAX);
           lval1->arrayidx[sym->dim.array.level]=lval2.constval;
         } /* if */
-        if (close==']' && !(sym->tag == pc_tag_string && sym->dim.array.level == 0)) {
+        if (!(sym->tag == pc_tag_string && sym->dim.array.level == 0)) {
           /* normal array index */
           if (lval2.constval<0 || (sym->dim.array.length!=0 && sym->dim.array.length<=lval2.constval))
             error(32,sym->name);        /* array index out of bounds */
@@ -2275,7 +2271,7 @@ restart:
       } else {
         /* array index is not constant */
         lval1->arrayidx=NULL;           /* reset, so won't be checked */
-        if (close==']' && !magic_string) {
+        if (!magic_string) {
           if (sym->dim.array.length!=0)
             ffbounds(sym->dim.array.length-1);  /* run time check for array bounds */
           else
@@ -2294,7 +2290,6 @@ restart:
       /* the indexed item may be another array (multi-dimensional arrays) */
       assert(cursym==sym && sym!=NULL); /* should still be set */
       if (sym->dim.array.level>0) {
-        assert(close==']');     /* checked earlier */
         assert(cursym==lval1->sym);
         /* read the offset to the subarray and add it to the current address */
         lval1->ident=iARRAYCELL;
@@ -2317,7 +2312,7 @@ restart:
       if (sym->tag == pc_tag_string) {
         lval1->ident = iARRAYCHAR;
       } else {
-        lval1->ident= (char)((close==']') ? iARRAYCELL : iARRAYCHAR);
+        lval1->ident= iARRAYCELL;
       }
       /* if the array index is a field from an enumeration, get the tag name
        * from the field and save the size of the field too. Otherwise, the
