@@ -299,7 +299,7 @@ SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
 }
 
 #if !defined(SOURCEPAWN_VERSION)
-# define SOURCEPAWN_VERSION "SourcePawn 1.9"
+# define SOURCEPAWN_VERSION "SourcePawn 1.10"
 #endif
 
 const char *
