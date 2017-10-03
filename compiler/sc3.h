@@ -30,7 +30,7 @@
 struct value;
 struct svalue;
 
-class SC3ExpressionParser : public ExpressionParser
+class SC3ExpressionParser : public BaseExpressionParser
 {
 public:
   int evaluate(value* lval) {
@@ -65,11 +65,6 @@ private:
   int skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
            HierFn hier, value *lval);
   int parse_view_as(value* lval);
-
-  cell parse_defined();
-  cell parse_sizeof();
-  cell parse_cellsof();
-  cell parse_tagof();
 };
 
 #endif // am_sourcepawn_compiler_sc3_h
