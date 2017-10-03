@@ -170,7 +170,6 @@ typedef struct s_symbol {
 #define iEXPRESSION 7   /* expression result, has no address (rvalue) */
 #define iCONSTEXPR  8   /* constant expression (or constant symbol) */
 #define iFUNCTN     9
-#define iREFFUNC    10
 #define iVARARGS    11  /* function specified ... as argument(s) */
 #define iACCESSOR   13  /* property accessor via a methodmap_method_t */
 #define iMETHODMAP  14  /* symbol defining a methodmap */

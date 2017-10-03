@@ -3694,7 +3694,6 @@ static void dodelete()
 
   switch (ident) {
     case iFUNCTN:
-    case iREFFUNC:
       error(167, "functions");
       return;
 
