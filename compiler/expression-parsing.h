@@ -29,10 +29,10 @@
 struct arginfo;
 struct symbol;
 
-class ExpressionParser
+class BaseExpressionParser
 {
 public:
-  ExpressionParser();
+  BaseExpressionParser();
 
 protected:
   static int nextop(int *opidx,int *list);
@@ -40,6 +40,10 @@ protected:
 
   cell array_levelsize(symbol *sym,int level);
   cell array_totalsize(symbol *sym);
+  cell parse_defined();
+  cell parse_sizeof();
+  cell parse_cellsof();
+  cell parse_tagof();
 
   // Each of these lists is an operator precedence level, and each list is a
   // zero-terminated list of operators in that level (in precedence order).
