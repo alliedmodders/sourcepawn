@@ -604,7 +604,7 @@ int matchtag(int formaltag, int actualtag, int flags)
  *            right hand are FALSE, so endval must be 0 for "or" expressions.
  */
 int
-ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
+SC3ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endval,
                        HierFn hier, value *lval)
 {
   int lvalue,hits,droplab,endlab,opidx;
@@ -715,7 +715,7 @@ static void checkfunction(value *lval)
  *  Plunge to a lower level
  */
 int
-ExpressionParser::plnge(int *opstr,int opoff,
+SC3ExpressionParser::plnge(int *opstr,int opoff,
                         HierFn hier, value *lval,
                         const char *forcetag,int chkbitwise)
 {
@@ -748,7 +748,7 @@ ExpressionParser::plnge(int *opstr,int opoff,
  *  it has special code generation sequences for chained operations.
  */
 int
-ExpressionParser::plnge_rel(int *opstr,int opoff,HierFn hier,value *lval)
+SC3ExpressionParser::plnge_rel(int *opstr,int opoff,HierFn hier,value *lval)
 {
   int lvalue,opidx;
   value lval2={0};
@@ -790,7 +790,7 @@ ExpressionParser::plnge_rel(int *opstr,int opoff,HierFn hier,value *lval)
  *  Called by: skim(), plnge(), plnge2(), plnge_rel(), hier14() and hier13()
  */
 int
-ExpressionParser::plnge1(HierFn hier, value *lval)
+SC3ExpressionParser::plnge1(HierFn hier, value *lval)
 {
   int lvalue,index;
   cell cidx;
@@ -808,7 +808,7 @@ ExpressionParser::plnge1(HierFn hier, value *lval)
  *  Called by: plnge(), plnge_rel(), hier14() and hier1()
  */
 void
-ExpressionParser::plnge2(void (*oper)(void),
+SC3ExpressionParser::plnge2(void (*oper)(void),
                          HierFn hier,
                          value *lval1,value *lval2)
 {
@@ -962,7 +962,7 @@ int lvalexpr(svalue *sval)
   errorset(sEXPRMARK, 0);
   pushheaplist();
   {
-    ExpressionParser parser;
+    SC3ExpressionParser parser;
     sval->lvalue = parser.evaluate(&sval->val);
   }
   popheaplist();
@@ -976,7 +976,7 @@ int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval
   value lval={0};
   pushheaplist();
 
-  ExpressionParser parser;
+  SC3ExpressionParser parser;
   if (parser.evaluate(&lval))
     rvalue(&lval);
   /* scrap any arrays left on the heap */
@@ -1031,7 +1031,7 @@ static cell array_levelsize(symbol *sym,int level)
  *  Global references: sc_intest        (reffered to only)
  */
 int
-ExpressionParser::hier14(value *lval1)
+SC3ExpressionParser::hier14(value *lval1)
 {
   int lvalue;
   value lval2={0},lval3={0};
@@ -1055,7 +1055,7 @@ ExpressionParser::hier14(value *lval1)
   org_arrayidx=lval1->arrayidx; /* save current pointer, to reset later */
   if (lval1->arrayidx==NULL)
     lval1->arrayidx=arrayidx1;
-  lvalue=plnge1(&ExpressionParser::hier13,lval1);
+  lvalue=plnge1(&SC3ExpressionParser::hier13,lval1);
   if (lval1->ident!=iARRAYCELL && lval1->ident!=iARRAYCHAR)
     lval1->arrayidx=NULL;
   if (lval1->ident==iCONSTEXPR) /* load constant here */
@@ -1141,7 +1141,7 @@ ExpressionParser::hier14(value *lval1)
       rvalue(lval1);
     } /* if */
     lval2.arrayidx=arrayidx2;
-    plnge2(oper,&ExpressionParser::hier14,lval1,&lval2);
+    plnge2(oper,&SC3ExpressionParser::hier14,lval1,&lval2);
     if (lval2.ident!=iARRAYCELL && lval2.ident!=iARRAYCHAR)
       lval2.arrayidx=NULL;
     if (oper)
@@ -1160,7 +1160,7 @@ ExpressionParser::hier14(value *lval1)
     pushreg(sPRI);
     if (oper) {
       rvalue(lval1);
-      plnge2(oper,&ExpressionParser::hier14,lval1,&lval2);
+      plnge2(oper,&SC3ExpressionParser::hier14,lval1,&lval2);
     } else {
       if (hier14(&lval2))
         rvalue(&lval2);         /* instead of plnge2(). */
@@ -1172,7 +1172,7 @@ ExpressionParser::hier14(value *lval1)
   } else {
     if (oper){
       rvalue(lval1);
-      plnge2(oper,&ExpressionParser::hier14,lval1,&lval2);
+      plnge2(oper,&SC3ExpressionParser::hier14,lval1,&lval2);
     } else {
       /* if direct fetch and simple assignment: no "push"
        * and "pop" needed -> call hier14() directly, */
@@ -1334,9 +1334,9 @@ long dynarray_from_heaplist(memuse_list_t *heap)
 }
 
 int
-ExpressionParser::hier13(value *lval)
+SC3ExpressionParser::hier13(value *lval)
 {
-  int lvalue=plnge1(&ExpressionParser::hier12,lval);
+  int lvalue=plnge1(&SC3ExpressionParser::hier12,lval);
   if (matchtoken('?')) {
     int flab1=getlabel();
     int flab2=getlabel();
@@ -1425,67 +1425,67 @@ static int list11[] = {tlAND,0};
 static int list12[] = {tlOR,0};
 
 int
-ExpressionParser::hier12(value *lval)
+SC3ExpressionParser::hier12(value *lval)
 {
-  return skim(list12,jmp_ne0,1,0,&ExpressionParser::hier11,lval);
+  return skim(list12,jmp_ne0,1,0,&SC3ExpressionParser::hier11,lval);
 }
 
 int
-ExpressionParser::hier11(value *lval)
+SC3ExpressionParser::hier11(value *lval)
 {
-  return skim(list11,jmp_eq0,0,1,&ExpressionParser::hier10,lval);
+  return skim(list11,jmp_eq0,0,1,&SC3ExpressionParser::hier10,lval);
 }
 
 int
-ExpressionParser::hier10(value *lval)
+SC3ExpressionParser::hier10(value *lval)
 { /* ==, != */
-  return plnge(list10,15,&ExpressionParser::hier9,lval,"bool",TRUE);
+  return plnge(list10,15,&SC3ExpressionParser::hier9,lval,"bool",TRUE);
 }                  /* ^ this variable is the starting index in the op1[]
                     *   array of the operators of this hierarchy level */
 int
-ExpressionParser::hier9(value *lval)
+SC3ExpressionParser::hier9(value *lval)
 { /* <=, >=, <, > */
-  return plnge_rel(list9,11,&ExpressionParser::hier8,lval);
+  return plnge_rel(list9,11,&SC3ExpressionParser::hier8,lval);
 }
 
 int
-ExpressionParser::hier8(value *lval)
+SC3ExpressionParser::hier8(value *lval)
 { /* | */
-  return plnge(list8,10,&ExpressionParser::hier7,lval,NULL,FALSE);
+  return plnge(list8,10,&SC3ExpressionParser::hier7,lval,NULL,FALSE);
 }
 
 int
-ExpressionParser::hier7(value *lval)
+SC3ExpressionParser::hier7(value *lval)
 { /* ^ */
-  return plnge(list7,9,&ExpressionParser::hier6,lval,NULL,FALSE);
+  return plnge(list7,9,&SC3ExpressionParser::hier6,lval,NULL,FALSE);
 }
 
 int
-ExpressionParser::hier6(value *lval)
+SC3ExpressionParser::hier6(value *lval)
 { /* & */
-  return plnge(list6,8,&ExpressionParser::hier5,lval,NULL,FALSE);
+  return plnge(list6,8,&SC3ExpressionParser::hier5,lval,NULL,FALSE);
 }
 
 int
-ExpressionParser::hier5(value *lval)
+SC3ExpressionParser::hier5(value *lval)
 { /* <<, >>, >>> */
-  return plnge(list5,5,&ExpressionParser::hier4,lval,NULL,FALSE);
+  return plnge(list5,5,&SC3ExpressionParser::hier4,lval,NULL,FALSE);
 }
 
 int
-ExpressionParser::hier4(value *lval)
+SC3ExpressionParser::hier4(value *lval)
 { /* +, - */
-  return plnge(list4,3,&ExpressionParser::hier3,lval,NULL,FALSE);
+  return plnge(list4,3,&SC3ExpressionParser::hier3,lval,NULL,FALSE);
 }
 
 int
-ExpressionParser::hier3(value *lval)
+SC3ExpressionParser::hier3(value *lval)
 { /* *, /, % */
-  return plnge(list3,0,&ExpressionParser::hier2,lval,NULL,FALSE);
+  return plnge(list3,0,&SC3ExpressionParser::hier2,lval,NULL,FALSE);
 }
 
 int
-ExpressionParser::hier2(value *lval)
+SC3ExpressionParser::hier2(value *lval)
 {
   int lvalue,tok;
   int tag;
@@ -1782,7 +1782,7 @@ ExpressionParser::hier2(value *lval)
 }
 
 cell
-ExpressionParser::parse_defined()
+SC3ExpressionParser::parse_defined()
 {
   cell val;
   char* st;
@@ -1808,7 +1808,7 @@ ExpressionParser::parse_defined()
 }
 
 cell
-ExpressionParser::parse_sizeof()
+SC3ExpressionParser::parse_sizeof()
 {
   int paranthese=0;
   while (matchtoken('('))
@@ -1875,7 +1875,7 @@ ExpressionParser::parse_sizeof()
 }
 
 cell
-ExpressionParser::parse_cellsof()
+SC3ExpressionParser::parse_cellsof()
 {
   int paranthese=0;
   while (matchtoken('('))
@@ -1942,7 +1942,7 @@ ExpressionParser::parse_cellsof()
 }
 
 cell
-ExpressionParser::parse_tagof()
+SC3ExpressionParser::parse_tagof()
 {
   int paranthese=0;
   while (matchtoken('('))
@@ -2096,7 +2096,7 @@ field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method
 }
 
 int
-ExpressionParser::parse_view_as(value* lval)
+SC3ExpressionParser::parse_view_as(value* lval)
 {
   needtoken('<');
   int tag = 0;
@@ -2145,7 +2145,7 @@ ExpressionParser::parse_view_as(value* lval)
  *  callfunction() to call the function.
  */
 int
-ExpressionParser::hier1(value *lval1)
+SC3ExpressionParser::hier1(value *lval1)
 {
   int lvalue,index,tok;
   cell val,cidx;
@@ -2475,7 +2475,7 @@ restart:
  *  Global references: sc_intest  (may be altered, but restored upon termination)
  */
 int
-ExpressionParser::primary(value *lval)
+SC3ExpressionParser::primary(value *lval)
 {
   char *st;
   int lvalue,tok;
@@ -2822,7 +2822,7 @@ class CallArgPusher
  *  and positional as well as named parameters.
  */
 void
-ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_result, int matchparanthesis)
+SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, value *lval_result, int matchparanthesis)
 {
   int close,lvalue;
   int argpos;       /* index in the output stream (argpos==nargs if positional parameters) */

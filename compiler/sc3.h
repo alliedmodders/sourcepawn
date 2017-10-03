@@ -21,12 +21,15 @@
  *
  *  Version: $Id$
  */
-#ifndef am_sourcepawn_compiler_expression_parser_h
-#define am_sourcepawn_compiler_expression_parser_h
+#ifndef am_sourcepawn_compiler_sc3_h
+#define am_sourcepawn_compiler_sc3_h
 
-#include "sc.h"
+#include "amx.h"
 
-class ExpressionParser
+struct value;
+struct svalue;
+
+class SC3ExpressionParser
 {
 public:
   int evaluate(value* lval) {
@@ -34,7 +37,7 @@ public:
   }
 
 private:
-  typedef int (ExpressionParser::*HierFn)(value*);
+  typedef int (SC3ExpressionParser::*HierFn)(value*);
 
   int hier14(value* lval);
   int hier13(value *lval);
@@ -68,4 +71,4 @@ private:
   cell parse_tagof();
 };
 
-#endif // am_sourcepawn_compiler_expression_parser_h
+#endif // am_sourcepawn_compiler_sc3_h

@@ -238,7 +238,7 @@ typedef struct s_symbol {
 
 struct methodmap_method_s;
 
-typedef struct value_s {
+struct value {
   symbol *sym;          /* symbol in symbol table, NULL for (constant) expression */
   cell constval;        /* value of the constant expression (if ident==iCONSTEXPR)
                          * also used for the size of a literal array */
@@ -265,17 +265,17 @@ typedef struct value_s {
 
   /* when ident == iACCESSOR */
   struct methodmap_method_s *accessor;
-} value;
+};
 
 /* Wrapper around value + l/rvalue bit. */
-typedef struct svalue_s {
+struct svalue {
   value val;
   int lvalue;
 
   bool canRematerialize() const {
     return val.canRematerialize();
   }
-} svalue;
+};
 
 #define DECLFLAG_ARGUMENT        0x02 // The declaration is for an argument.
 #define DECLFLAG_VARIABLE        0x04 // The declaration is for a variable.
