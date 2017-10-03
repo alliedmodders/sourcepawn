@@ -24,4 +24,39 @@
 #ifndef am_sourcepawn_compiler_expression_parser_h
 #define am_sourcepawn_compiler_expression_parser_h
 
+#include "amx.h"
+
+struct arginfo;
+struct symbol;
+
+class ExpressionParser
+{
+public:
+  ExpressionParser();
+
+protected:
+  static int nextop(int *opidx,int *list);
+  static int findnamedarg(arginfo *arg,char *name);
+
+  cell array_levelsize(symbol *sym,int level);
+  cell array_totalsize(symbol *sym);
+
+  // Each of these lists is an operator precedence level, and each list is a
+  // zero-terminated list of operators in that level (in precedence order).
+  static int list3[];
+  static int list4[];
+  static int list5[];
+  static int list6[];
+  static int list7[];
+  static int list8[];
+  static int list9[];
+  static int list10[];
+  static int list11[];
+  static int list12[];
+
+protected:
+  // Count of bitwise operators in an expression.
+  int bitwise_opercount_;
+};
+
 #endif // am_sourcepawn_compiler_expression_parser_h

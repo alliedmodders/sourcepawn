@@ -42,7 +42,6 @@ static int commutative(void (*oper)());
 static int constant(value *lval);
 
 static char lastsymbol[sNAMEMAX+1]; /* name of last function/variable */
-static int bitwise_opercount;   /* count of bitwise operators in an expression */
 
 /* Function addresses of binary operators for signed operations */
 static void (*op1[17])(void) = {
@@ -64,30 +63,6 @@ static void (*op1[17])(void) = {
  */
 static void user_inc(void) {}
 static void user_dec(void) {}
-
-/*
- *  Searches for a binary operator a list of operators. The list is stored in
- *  the array "list". The last entry in the list should be set to 0.
- *
- *  The index of an operator in "list" (if found) is returned in "opidx". If
- *  no operator is found, nextop() returns 0.
- *
- *  If an operator is found in the expression, it cannot be used in a function
- *  call with omitted parantheses. Mark this...
- */
-static int nextop(int *opidx,int *list)
-{
-  *opidx=0;
-  while (*list){
-    if (matchtoken(*list)){
-      return TRUE;      /* found! */
-    } else {
-      list+=1;
-      *opidx+=1;
-    } /* if */
-  } /* while */
-  return FALSE;         /* entire list scanned, nothing found */
-}
 
 int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
                          value *lval,int *resulttag)
@@ -730,12 +705,12 @@ SC3ExpressionParser::plnge(int *opstr,int opoff,
     rvalue(lval);
   count=0;
   do {
-    if (chkbitwise && count++>0 && bitwise_opercount!=0)
+    if (chkbitwise && count++>0 && bitwise_opercount_!=0)
       error(212);
     opidx+=opoff;               /* add offset to index returned by nextop() */
     plnge2(op1[opidx],hier,lval,&lval2);
     if (op1[opidx]==ob_and || op1[opidx]==ob_or)
-      bitwise_opercount++;
+      bitwise_opercount_++;
     if (forcetag!=NULL)
       lval->tag=pc_addtag(forcetag);
   } while (nextop(&opidx,opstr)); /* do */
@@ -766,7 +741,7 @@ SC3ExpressionParser::plnge_rel(int *opstr,int opoff,HierFn hier,value *lval)
   lval->boolresult=TRUE;
   do {
     /* same check as in plnge(), but "chkbitwise" is always TRUE */
-    if (count>0 && bitwise_opercount!=0)
+    if (count>0 && bitwise_opercount_!=0)
       error(212);
     if (count>0) {
       relop_prefix();
@@ -995,35 +970,6 @@ int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval
   return lval.ident;
 }
 
-cell array_totalsize(symbol *sym)
-{
-  cell length;
-
-  assert(sym!=NULL);
-  assert(sym->ident==iARRAY || sym->ident==iREFARRAY);
-  length=sym->dim.array.length;
-  if (sym->dim.array.level > 0) {
-    cell sublength=array_totalsize(finddepend(sym));
-    if (sublength>0)
-      length=length+length*sublength;
-    else
-      length=0;
-  } /* if */
-  return length;
-}
-
-static cell array_levelsize(symbol *sym,int level)
-{
-  assert(sym!=NULL);
-  assert(sym->ident==iARRAY || sym->ident==iREFARRAY);
-  assert(level <= sym->dim.array.level);
-  while (level-- > 0) {
-    sym=finddepend(sym);
-    assert(sym!=NULL);
-  } /* if */
-  return (sym->dim.array.slength ? sym->dim.array.slength : sym->dim.array.length);
-}
-
 /*  hier14
  *
  *  Lowest hierarchy level (except for the , operator).
@@ -1039,12 +985,12 @@ SC3ExpressionParser::hier14(value *lval1)
   int tok,level,i;
   cell val;
   char *st;
-  int bwcount,leftarray;
+  int leftarray;
   cell arrayidx1[sDIMEN_MAX],arrayidx2[sDIMEN_MAX];  /* last used array indices */
   cell *org_arrayidx;
 
-  bwcount=bitwise_opercount;
-  bitwise_opercount=0;
+  ke::SaveAndSet<int> bitwise_opercount(&bitwise_opercount_, 0);
+
   /* initialize the index arrays with unlikely constant indices; note that
    * these indices will only be changed when the array is indexed with a
    * constant, and that negative array indices are invalid (so actually, any
@@ -1102,7 +1048,6 @@ SC3ExpressionParser::hier14(value *lval1)
       break;
     default:
       lexpush();
-      bitwise_opercount=bwcount;
       lval1->arrayidx=org_arrayidx; /* restore array index pointer */
       return lvalue;
   } /* switch */
@@ -1299,7 +1244,6 @@ SC3ExpressionParser::hier14(value *lval1)
   if (lval3.sym)
     markusage(lval3.sym,uWRITTEN);
   sideeffect=TRUE;
-  bitwise_opercount=bwcount;
   lval1->ident=iEXPRESSION;
   return FALSE;         /* expression result is never an lvalue */
 }
@@ -1409,20 +1353,6 @@ SC3ExpressionParser::hier13(value *lval)
     return lvalue;
   } /* if */
 }
-
-/* the order of the operators in these lists is important and must be
- * the same as the order of the operators in the array "op1"
- */
-static int list3[]  = {'*','/','%',0};
-static int list4[]  = {'+','-',0};
-static int list5[]  = {tSHL,tSHR,tSHRU,0};
-static int list6[]  = {'&',0};
-static int list7[]  = {'^',0};
-static int list8[]  = {'|',0};
-static int list9[]  = {tlLE,tlGE,'<','>',0};
-static int list10[] = {tlEQ,tlNE,0};
-static int list11[] = {tlAND,0};
-static int list12[] = {tlOR,0};
 
 int
 SC3ExpressionParser::hier12(value *lval)
@@ -2644,16 +2574,6 @@ static void setdefarray(cell *string,cell size,cell array_sz,cell *dataaddr,int 
     memcopy(size*sizeof(cell));
     moveto1();
   } /* if */
-}
-
-static int findnamedarg(arginfo *arg,char *name)
-{
-  int i;
-
-  for (i=0; arg[i].ident!=0 && arg[i].ident!=iVARARGS; i++)
-    if (strcmp(arg[i].name,name)==0)
-      return i;
-  return -1;
 }
 
 int checktag(int tag,int exprtag)

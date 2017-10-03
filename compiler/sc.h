@@ -66,7 +66,7 @@ typedef union {
   int i;
 } stkitem;                  /* type of items stored on the compiler stack */
 
-typedef struct s_arginfo {  /* function argument info */
+struct arginfo {  /* function argument info */
   char name[sNAMEMAX+1];
   char ident;           /* iVARIABLE, iREFERENCE, iREFARRAY or iVARARGS */
   char usage;           /* uCONST */
@@ -85,7 +85,7 @@ typedef struct s_arginfo {  /* function argument info */
     } array;
   } defvalue;           /* default value, or pointer to default array */
   int defvalue_tag;     /* tag of the default value */
-} arginfo;
+};
 
 /*  Equate table, tagname table, library table */
 typedef struct s_constvalue {
@@ -108,9 +108,9 @@ struct methodmap_t;
  *      label           generated hexadecimal number
  *      function        offset into code segment
  */
-typedef struct s_symbol {
-  struct s_symbol *next;
-  struct s_symbol *parent;  /* hierarchical types */
+struct symbol {
+  symbol *next;
+  symbol *parent;  /* hierarchical types */
   char name[sNAMEMAX+1];
   uint32_t hash;        /* value derived from name, for quicker searching */
   cell addr_;            /* address or offset (or value for constant, index for native function) */
@@ -141,7 +141,7 @@ typedef struct s_symbol {
   } dim;                /* for 'dimension', both functions and arrays */
   int fnumber;          /* static global variables: file number in which the declaration is visible */
   int lnumber;          /* line number (in the current source file) for the declaration */
-  struct s_symbol **refer;  /* referrer list, functions that "use" this symbol */
+  symbol **refer;       /* referrer list, functions that "use" this symbol */
   int numrefers;        /* number of entries in the referrer list */
   char *documentation;  /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
@@ -153,7 +153,7 @@ typedef struct s_symbol {
   void setAddr(int addr) {
     addr_ = addr;
   }
-} symbol;
+};
 
 /*  Possible entries for "ident". These are used in the "symbol", "value"
  *  and arginfo structures. Not every constant is valid for every use.

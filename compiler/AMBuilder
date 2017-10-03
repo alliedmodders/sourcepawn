@@ -67,6 +67,7 @@ binary.sources += [
   'smx-builder.cpp',
   'sp_symhash.cpp',
   'types.cpp',
+  'expression-parsing.cpp',
 ]
 
 if builder.target.platform != 'windows' and not compiler.like('emscripten'):
