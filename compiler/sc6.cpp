@@ -251,7 +251,7 @@ extract_call_target(char *params)
     return nullptr;
   }
 
-  assert(sym->ident == iFUNCTN || sym->ident == iREFFUNC);
+  assert(sym->ident == iFUNCTN);
   assert(sym->vclass == sGLOBAL);
   return sym;
 }

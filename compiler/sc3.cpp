@@ -692,7 +692,7 @@ static void checkfunction(value *lval)
 {
   symbol *sym=lval->sym;
 
-  if (sym==NULL || (sym->ident!=iFUNCTN && sym->ident!=iREFFUNC))
+  if (sym==NULL || (sym->ident!=iFUNCTN))
     return;             /* no known symbol, or not a function result */
 
   if ((sym->usage & uDEFINE)!=0) {
@@ -1797,7 +1797,7 @@ ExpressionParser::parse_defined()
   symbol* sym = findloc(st);
   if (!sym)
     sym = findglb(st);
-  if (sym && sym->ident!=iFUNCTN && sym->ident!=iREFFUNC && (sym->usage & uDEFINE)==0)
+  if (sym && sym->ident!=iFUNCTN && (sym->usage & uDEFINE)==0)
     sym = nullptr;     /* symbol is not a function, it is in the table, but not "defined" */
   val = !!sym;
   if (!val && find_subst(st, strlen(st)))
@@ -1831,7 +1831,7 @@ ExpressionParser::parse_sizeof()
   }
   if (sym->ident==iCONSTEXPR) {
     error(39);                /* constant symbol has no size */
-  } else if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
+  } else if (sym->ident==iFUNCTN) {
     error(72);                /* "function" symbol has no size */
   } else if ((sym->usage & uDEFINE)==0) {
     error(17,st);
@@ -1898,7 +1898,7 @@ ExpressionParser::parse_cellsof()
   }
   if (sym->ident==iCONSTEXPR) {
     error(39);                /* constant symbol has no size */
-  } else if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
+  } else if (sym->ident==iFUNCTN) {
     error(72);                /* "function" symbol has no size */
   } else if ((sym->usage & uDEFINE)==0) {
     error(17,st);      /* undefined symbol (symbol is in the table, but it is "used" only) */
@@ -2035,7 +2035,6 @@ field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method
       break;
 
     case iFUNCTN:
-    case iREFFUNC:
       error(107);
       break;
   }
@@ -2398,7 +2397,7 @@ restart:
       }
 
       assert(tok=='(');
-      if (sym==NULL || (sym->ident!=iFUNCTN && sym->ident!=iREFFUNC)) {
+      if (sym==NULL || (sym->ident!=iFUNCTN)) {
         if (sym && sym->ident == iMETHODMAP && sym->methodmap) {
           if (!sym->methodmap->ctor) {
             // Immediately fatal - no function to call.
@@ -2544,7 +2543,7 @@ ExpressionParser::primary(value *lval)
     } /* if */
     /* now try a global variable */
     if ((sym = findglb(st)) != 0) {
-      if (sym->ident==iFUNCTN || sym->ident==iREFFUNC) {
+      if (sym->ident==iFUNCTN) {
         /* if the function is only in the table because it was inserted as a
          * stub in the first pass (i.e. it was "used" but never declared or
          * implemented, issue an error
@@ -2579,7 +2578,7 @@ ExpressionParser::primary(value *lval)
         error(FATAL_ERROR_OOM);
     } /* if */
     assert(sym!=NULL);
-    assert(sym->ident==iFUNCTN || sym->ident==iREFFUNC);
+    assert(sym->ident==iFUNCTN);
     lval->sym=sym;
     lval->ident=sym->ident;
     lval->tag=sym->tag;
@@ -3019,9 +3018,11 @@ ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, value *
             error(213);
           break;
         case iVARIABLE:
-          if (lval.ident==iLABEL || lval.ident==iFUNCTN || lval.ident==iREFFUNC
-              || lval.ident==iARRAY || lval.ident==iREFARRAY)
+          if (lval.ident==iLABEL || lval.ident==iFUNCTN ||
+              lval.ident==iARRAY || lval.ident==iREFARRAY)
+          {
             error(35,argidx+1-firstArgOffset);   /* argument type mismatch */
+          }
 
           if (lvalue) {
             // Note: do not load anything if the implicit this was pre-evaluted
