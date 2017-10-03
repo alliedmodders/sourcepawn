@@ -104,6 +104,13 @@ A few minor language bugs were fixed. Internally, the VM received a large overha
 
 ### SourcePawn 1.9
 
-SourcePawn 1.9 is the current development version.
+SourcePawn 1.9 was declared stable on October 2nd, 2017.
 
 It now includes a new reference interpreter, and will officially build and run on platforms other than x86.
+
+### SourcePawn 1.10
+
+SourcePawn 1.10 is the current development version.
+
+The following features have been removed:
+ - `funcenum` and `functag` keywords

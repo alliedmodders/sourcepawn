@@ -174,7 +174,7 @@ class Config(object):
         cxx.linkflags += [gccarch]
 
     cxx.defines += ['KE_THREADSAFE']
-    cxx.defines += ['SOURCEPAWN_VERSION="1.9"']
+    cxx.defines += ['SOURCEPAWN_VERSION="1.10"']
 
     if getattr(builder.options, 'enable_spew', False):
       cxx.defines += ['JIT_SPEW']
