@@ -2185,7 +2185,7 @@ int
 SC3ExpressionParser::primary(value *lval)
 {
   char *st;
-  int lvalue,tok;
+  int tok;
   cell val;
   symbol *sym;
 
@@ -2195,14 +2195,23 @@ SC3ExpressionParser::primary(value *lval)
 
     sc_intest=FALSE;            /* no longer in "test" expression */
     sc_allowtags=TRUE;          /* allow tagnames to be used in parenthesized expressions */
-    do
-      lvalue=hier14(lval);
-    while (matchtoken(','));
+    
+    int lvalue = 0;
+    int count = 0;
+    do {
+      lvalue = hier14(lval);
+      count++;
+    } while (matchtoken(','));
     needtoken(')');
     lexclr(FALSE);              /* clear lex() push-back, it should have been
                                  * cleared already by needtoken() */
     sc_allowtags=(short)POPSTK_I();
     sc_intest=(short)POPSTK_I();
+
+    if (count > 1 && lvalue) {
+      rvalue(lval);
+      lvalue = FALSE;
+    }
     return lvalue;
   } /* if */
 
