@@ -69,7 +69,7 @@ unsigned sc_total_errors = 0;
  *    If the function returns 0, the parser attempts to continue compilation.
  *    On a non-zero return value, the parser aborts.
  */
-int pc_error(int number,const char *message,const char *filename,int firstline,int lastline,va_list argptr)
+int pc_error(int number,const char *message,const char *filename,int line,va_list argptr)
 {
 static const char *prefix[3]={ "error", "fatal error", "warning" };
 
@@ -87,10 +87,7 @@ static const char *prefix[3]={ "error", "fatal error", "warning" };
       sc_total_errors++;
 
     const char *pre=prefix[idx];
-    if (firstline>=0)
-      fprintf(stdout,"%s(%d -- %d) : %s %03d: ",filename,firstline,lastline,pre,number);
-    else
-      fprintf(stdout,"%s(%d) : %s %03d: ",filename,lastline,pre,number);
+    fprintf(stdout,"%s(%d) : %s %03d: ",filename,line,pre,number);
   } /* if */
   vfprintf(stdout,message,argptr);
   fflush(stdout);

@@ -54,7 +54,6 @@ static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char *
 
 static int errflag;
 static int sErrFile;
-static int errstart;     /* line number at which the instruction started */
 static int sErrLine;     /* forced line number for the error message */
 
 /*  error
@@ -128,12 +127,9 @@ static short lastfile;
     }
   } /* if */
 
-  if (errline>0)
-    errstart=errline;           /* forced error position, set single line destination */
-  else
-    errline=fline;              /* normal error, errstart may (or may not) have been marked, endpoint is current line */
-  if (errstart>errline)
-    errstart=errline;           /* special case: error found at end of included file */
+  if (errline <= 0)
+    errline = fline;
+
   if (errfile>=0)
     filename=get_inputfile(errfile);/* forced filename */
   else
@@ -142,8 +138,7 @@ static short lastfile;
 
   va_start(argptr,number);
   if (strlen(errfname)==0) {
-    int start= (errstart==errline) ? -1 : errstart;
-    if (pc_error(number,msg,filename,start,errline,argptr)) {
+    if (pc_error(number,msg,filename,errline,argptr)) {
       if (outf!=NULL) {
         pc_closeasm(outf,TRUE);
         outf=NULL;
@@ -153,10 +148,7 @@ static short lastfile;
   } else {
     FILE *fp=fopen(errfname,"a");
     if (fp!=NULL) {
-      if (errstart>=0 && errstart!=errline)
-        fprintf(fp,"%s(%d -- %d) : %s %03d: ",filename,errstart,errline,pre,number);
-      else
-        fprintf(fp,"%s(%d) : %s %03d: ",filename,errline,pre,number);
+      fprintf(fp,"%s(%d) : %s %03d: ",filename,errline,pre,number);
       vfprintf(fp,msg,argptr);
       fclose(fp);
     } /* if */
@@ -166,7 +158,7 @@ static short lastfile;
   if ((number>=FIRST_FATAL_ERROR && number<200) || errnum>25){
     if (strlen(errfname)==0) {
       va_start(argptr,number);
-      pc_error(0,"\nCompilation aborted.",NULL,0,0,argptr);
+      pc_error(0,"\nCompilation aborted.",NULL,0,argptr);
       va_end(argptr);
     } /* if */
     if (outf!=NULL) {
@@ -177,9 +169,9 @@ static short lastfile;
   } /* if */
 
   /* check whether we are seeing many errors on the same line */
-  if ((errstart<0 && lastline!=fline) || lastline<errstart || lastline>fline || fcurrent!=lastfile)
+  if (lastline != errline || fcurrent!=lastfile)
     errorcount=0;
-  lastline=fline;
+  lastline=errline;
   lastfile=fcurrent;
   if (!is_warning)
     errorcount++;
@@ -199,15 +191,12 @@ void errorset(int code,int line)
     errflag=TRUE;       /* stop reporting errors */
     break;
   case sEXPRMARK:
-    errstart=fline;     /* save start line number */
     break;
   case sEXPRRELEASE:
-    errstart=-1;        /* forget start line number */
     sErrLine=-1;
     sErrFile=-1;
     break;
   case sSETLINE:
-    errstart=-1;        /* force error line number, forget start line */
     sErrLine=line;
     break;
   case sSETFILE:

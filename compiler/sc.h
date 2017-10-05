@@ -606,7 +606,7 @@ bool parse_new_typename(const token_t *tok, int *tagp);
 int pc_printf(const char *message,...);
 
 /* error report function */
-int pc_error(int number,const char *message,const char *filename,int firstline,int lastline,va_list argptr);
+int pc_error(int number,const char *message,const char *filename,int line,va_list argptr);
 
 /* input from source file */
 void *pc_opensrc(char *filename); /* reading only */
