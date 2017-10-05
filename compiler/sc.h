@@ -558,8 +558,6 @@ enum TokenKind {
 #define sFORCESET       1       /* force error flag on */
 #define sEXPRMARK       2       /* mark start of expression */
 #define sEXPRRELEASE    3       /* mark end of expression */
-#define sSETLINE        4       /* set line number for the error */
-#define sSETFILE        5       /* set file number for the error */
 
 enum {
   sOPTIMIZE_NONE,               /* no optimization */
@@ -604,9 +602,6 @@ bool parse_new_typename(const token_t *tok, int *tagp);
 
 /* general console output */
 int pc_printf(const char *message,...);
-
-/* error report function */
-int pc_error(int number,const char *message,const char *filename,int firstline,int lastline,va_list argptr);
 
 /* input from source file */
 void *pc_opensrc(char *filename); /* reading only */
@@ -800,6 +795,7 @@ void outval(cell val,int newline);
 
 /* function prototypes in SC5.C */
 int error(int number,...);
+int error(symbol* sym, int number, ...);
 void errorset(int code,int line);
 
 /* function prototypes in SC6.C */

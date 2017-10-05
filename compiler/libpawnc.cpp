@@ -55,48 +55,6 @@ int pc_printf(const char *message,...)
 
 unsigned sc_total_errors = 0;
 
-/* pc_error()
- * Called for producing error output.
- *    number      the error number (as documented in the manual)
- *    message     a string describing the error with embedded %d and %s tokens
- *    filename    the name of the file currently being parsed
- *    firstline   the line number at which the expression started on which
- *                the error was found, or -1 if there is no "starting line"
- *    lastline    the line number at which the error was detected
- *    argptr      a pointer to the first of a series of arguments (for macro
- *                "va_arg")
- * Return:
- *    If the function returns 0, the parser attempts to continue compilation.
- *    On a non-zero return value, the parser aborts.
- */
-int pc_error(int number,const char *message,const char *filename,int firstline,int lastline,va_list argptr)
-{
-static const char *prefix[3]={ "error", "fatal error", "warning" };
-
-  if (number!=0) {
-    int idx;
-
-    if (number < FIRST_FATAL_ERROR || (number >= 200 && sc_warnings_are_errors))
-      idx = 0;
-    else if (number < 200)
-      idx = 1;
-    else
-      idx = 2;
-
-    if (idx == 0 || idx == 1)
-      sc_total_errors++;
-
-    const char *pre=prefix[idx];
-    if (firstline>=0)
-      fprintf(stdout,"%s(%d -- %d) : %s %03d: ",filename,firstline,lastline,pre,number);
-    else
-      fprintf(stdout,"%s(%d) : %s %03d: ",filename,lastline,pre,number);
-  } /* if */
-  vfprintf(stdout,message,argptr);
-  fflush(stdout);
-  return 0;
-}
-
 typedef struct src_file_s {
   FILE *fp;         // Set if writing.
   char *buffer;     // IO buffer.
