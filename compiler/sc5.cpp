@@ -37,6 +37,7 @@
   #include <alloc/fortify.h>
 #endif
 #include "sc.h"
+#include "sc5.h"
 
 #if defined _MSC_VER
   #pragma warning(push)
@@ -70,12 +71,100 @@ static int sErrLine;     /* forced line number for the error message */
  */
 int error(int number,...)
 {
-static const char *prefix[3]={ "error", "fatal error", "warning" };
-static int lastline,errorcount;
-static short lastfile;
-  const char *msg,*pre,*filename;
-  va_list argptr;
+  va_list ap;
+  va_start(ap, number);
+  ErrorReport report = ErrorReport::infer_va(number, ap);
+  va_end(ap);
 
+  report_error(&report);
+  return 0;
+}
+
+static void
+abort_compiler()
+{
+  if (strlen(errfname)==0) {
+    fprintf(stdout, "\nCompilation aborted.");
+  } /* if */
+  if (outf!=NULL) {
+    pc_closeasm(outf,TRUE);
+    outf=NULL;
+  } /* if */
+  longjmp(errbuf,2);          /* fatal error, quit */
+}
+
+ErrorReport
+ErrorReport::create_va(int number,
+                       int fileno,
+                       int lineno,
+                       va_list ap)
+{
+  ErrorReport report;
+  report.number = number;
+  report.fileno = fileno;
+  report.lineno = lineno;
+  if (report.fileno >= 0)
+    report.filename = get_inputfile(report.fileno);
+  else
+    report.filename = inpfname;
+
+  if (number < FIRST_FATAL_ERROR || (number >= 200 && sc_warnings_are_errors))
+    report.type = ErrorType::Error;
+  else if (number < 200)
+    report.type = ErrorType::Fatal;
+  else
+    report.type = ErrorType::Warning;
+
+  /* also check for disabled warnings */
+  if (report.type == ErrorType::Warning) {
+    int index=(report.number-200)/8;
+    int mask=1 << ((report.number-200)%8);
+    if ((warndisable[index] & mask)!=0)
+      report.type = ErrorType::Suppressed;
+  }
+
+  const char* prefix = "";
+  switch (report.type) {
+    case ErrorType::Error:
+      prefix = "error";
+      break;
+    case ErrorType::Fatal:
+      prefix = "fatal error";
+      break;
+    case ErrorType::Warning:
+    case ErrorType::Suppressed:
+      prefix = "warning";
+      break;
+  }
+
+  const char* format = nullptr;
+  if (report.number < FIRST_FATAL_ERROR)
+    format = errmsg[report.number - 1];
+  else if (report.number < 200)
+    format = fatalmsg[report.number - FIRST_FATAL_ERROR];
+  else
+    format = warnmsg[report.number - 200];
+
+  char msg[1024];
+  ke::SafeVsprintf(msg, sizeof(msg), format, ap);
+
+  char base[1024];
+  ke::SafeSprintf(base, sizeof(base), "%s(%d) : %s %03d: ",
+    report.filename,
+    report.lineno,
+    prefix,
+    report.number);
+
+  char full[2048];
+  ke::SafeSprintf(full, sizeof(full), "%s%s", base, msg);
+  report.message = full;
+
+  return report;
+}
+
+ErrorReport
+ErrorReport::infer_va(int number, va_list ap)
+{
   // sErrLine is used to temporarily change the line number of reported errors.
   // Pawn has an upstream bug where this is not reset on early-return, which
   // can lead to broken line numbers in error messages.
@@ -84,101 +173,71 @@ static short lastfile;
   sErrLine = -1;
   sErrFile = -1;
 
-  bool is_warning = (number >= 200 && !sc_warnings_are_errors);
+  if (errline <= 0)
+    errline = fline;
+
+  return create_va(number, errfile, errline, ap);
+}
+
+void
+report_error(ErrorReport* report)
+{
+  static int lastline,errorcount;
+  static short lastfile;
 
   /* errflag is reset on each semicolon.
    * In a two-pass compiler, an error should not be reported twice. Therefore
    * the error reporting is enabled only in the second pass (and only when
    * actually producing output). Fatal errors may never be ignored.
    */
-  int not_fatal = (number < FIRST_FATAL_ERROR || number >= 200);
-  if (errflag && not_fatal)
-    return 0;
-  if (sc_status != statWRITE && not_fatal) {
-    if (!sc_err_status)
-      return 0;
+  if (report->type != ErrorType::Fatal) {
+    if (errflag)
+      return;
+    if (sc_status != statWRITE && !sc_err_status)
+      return;
   }
 
-  /* also check for disabled warnings */
-  if (number>=200) {
-    int index=(number-200)/8;
-    int mask=1 << ((number-200)%8);
-    if ((warndisable[index] & mask)!=0)
-      return 0;
-  } /* if */
-
-  if (number<FIRST_FATAL_ERROR) {
-    msg=errmsg[number-1];
-    pre=prefix[0];
-    errflag=TRUE;       /* set errflag (skip rest of erroneous expression) */
-    errnum++;
-  } else if (number<200){
-    msg=fatalmsg[number-FIRST_FATAL_ERROR];
-    pre=prefix[1];
-    errnum++;           /* a fatal error also counts as an error */
-  } else {
-    msg=warnmsg[number-200];
-    if (sc_warnings_are_errors) {
-      pre=prefix[0];
-      errnum++;
-    } else {
-      pre=prefix[2];
+  switch (report->type) {
+    case ErrorType::Suppressed:
+      return;
+    case ErrorType::Warning:
       warnnum++;
-    }
-  } /* if */
+      break;
+    case ErrorType::Error:
+      errnum++;
+      sc_total_errors++;
+      errflag = TRUE;
+      break;
+  }
 
-  if (errline <= 0)
-    errline = fline;
+  FILE* fp = nullptr;
+  if (strlen(errfname) > 0)
+    fp = fopen(errfname, "a");
+  if (!fp)
+    fp = stdout;
 
-  if (errfile>=0)
-    filename=get_inputfile(errfile);/* forced filename */
-  else
-    filename=inpfname;          /* current file */
-  assert(filename != NULL);
+  fprintf(fp, "%s", report->message.chars());
+  fflush(fp);
 
-  va_start(argptr,number);
-  if (strlen(errfname)==0) {
-    if (pc_error(number,msg,filename,errline,argptr)) {
-      if (outf!=NULL) {
-        pc_closeasm(outf,TRUE);
-        outf=NULL;
-      } /* if */
-      longjmp(errbuf,3);        /* user abort */
-    } /* if */
-  } else {
-    FILE *fp=fopen(errfname,"a");
-    if (fp!=NULL) {
-      fprintf(fp,"%s(%d) : %s %03d: ",filename,errline,pre,number);
-      vfprintf(fp,msg,argptr);
-      fclose(fp);
-    } /* if */
-  } /* if */
-  va_end(argptr);
+  if (fp != stdout)
+    fclose(fp);
 
-  if ((number>=FIRST_FATAL_ERROR && number<200) || errnum>25){
-    if (strlen(errfname)==0) {
-      va_start(argptr,number);
-      pc_error(0,"\nCompilation aborted.",NULL,0,argptr);
-      va_end(argptr);
-    } /* if */
-    if (outf!=NULL) {
-      pc_closeasm(outf,TRUE);
-      outf=NULL;
-    } /* if */
-    longjmp(errbuf,2);          /* fatal error, quit */
-  } /* if */
+  if (report->type == ErrorType::Fatal || errnum > 25) {
+    abort_compiler();
+    return;
+  }
 
-  /* check whether we are seeing many errors on the same line */
-  if (lastline != errline || fcurrent!=lastfile)
+  // Count messages per line, reset if not the same line.
+  if (lastline != report->lineno || report->fileno != lastfile)
     errorcount=0;
-  lastline=errline;
-  lastfile=fcurrent;
-  if (!is_warning)
-    errorcount++;
-  if (errorcount>=3)
-    error(FATAL_ERROR_OVERWHELMED_BY_BAD);
 
-  return 0;
+  lastline = report->lineno;
+  lastfile = report->fileno;
+
+  if (report->type != ErrorType::Warning)
+    errorcount++;
+  if (errorcount >= 3)
+    error(FATAL_ERROR_OVERWHELMED_BY_BAD);
 }
 
 void errorset(int code,int line)
