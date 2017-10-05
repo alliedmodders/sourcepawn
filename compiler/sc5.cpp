@@ -54,8 +54,6 @@
 static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char */
 
 static int errflag;
-static int sErrFile;
-static int sErrLine;     /* forced line number for the error message */
 
 /*  error
  *
@@ -74,6 +72,21 @@ int error(int number,...)
   va_list ap;
   va_start(ap, number);
   ErrorReport report = ErrorReport::infer_va(number, ap);
+  va_end(ap);
+
+  report_error(&report);
+  return 0;
+}
+
+int error(symbol* sym, int number, ...)
+{
+  va_list ap;
+  va_start(ap, number);
+  ErrorReport report = ErrorReport::create_va(
+    number,
+    sym->fnumber,
+    sym->lnumber,
+    ap);
   va_end(ap);
 
   report_error(&report);
@@ -165,18 +178,7 @@ ErrorReport::create_va(int number,
 ErrorReport
 ErrorReport::infer_va(int number, va_list ap)
 {
-  // sErrLine is used to temporarily change the line number of reported errors.
-  // Pawn has an upstream bug where this is not reset on early-return, which
-  // can lead to broken line numbers in error messages.
-  int errline = sErrLine;
-  int errfile = sErrFile;
-  sErrLine = -1;
-  sErrFile = -1;
-
-  if (errline <= 0)
-    errline = fline;
-
-  return create_va(number, errfile, errline, ap);
+  return create_va(number, -1, fline, ap);
 }
 
 void
@@ -248,18 +250,6 @@ void errorset(int code,int line)
     break;
   case sFORCESET:
     errflag=TRUE;       /* stop reporting errors */
-    break;
-  case sEXPRMARK:
-    break;
-  case sEXPRRELEASE:
-    sErrLine=-1;
-    sErrFile=-1;
-    break;
-  case sSETLINE:
-    sErrLine=line;
-    break;
-  case sSETFILE:
-    sErrFile=line;
     break;
   } /* switch */
 }

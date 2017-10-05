@@ -5071,9 +5071,7 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
         if ((sym->usage & uDEFINE)==0) {
           error(19,sym->name);      /* not a label: ... */
         } else if ((sym->usage & uREAD)==0) {
-          errorset(sSETFILE,sym->fnumber);
-          errorset(sSETLINE,sym->lnumber);
-          error(203,sym->name);     /* symbol isn't used: ... */
+          error(sym,203,sym->name);     /* symbol isn't used: ... */
         } /* if */
       } /* if */
       break;
@@ -5081,9 +5079,7 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       if ((sym->usage & (uDEFINE | uREAD | uNATIVE | uSTOCK | uPUBLIC))==uDEFINE) {
         funcdisplayname(symname,sym->name);
         if (strlen(symname)>0) {
-          errorset(sSETFILE,sym->fnumber);
-          errorset(sSETLINE,sym->lnumber);
-          error(203,symname);       /* symbol isn't used ... (and not public/native/stock) */
+          error(sym,203,symname);       /* symbol isn't used ... (and not public/native/stock) */
         }
       } /* if */
       if ((sym->usage & uPUBLIC)!=0 || strcmp(sym->name,uMAINFUNC)==0)
@@ -5094,9 +5090,7 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       break;
     case iCONSTEXPR:
       if (testconst && (sym->usage & uREAD)==0) {
-        errorset(sSETFILE,sym->fnumber);
-        errorset(sSETLINE,sym->lnumber);
-        error(203,sym->name);       /* symbol isn't used: ... */
+        error(sym,203,sym->name);       /* symbol isn't used: ... */
       } /* if */
       break;
     case iMETHODMAP:
@@ -5107,13 +5101,9 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       if (sym->parent!=NULL)
         break;                      /* hierarchical data type */
       if ((sym->usage & (uWRITTEN | uREAD | uSTOCK))==0) {
-        errorset(sSETFILE,sym->fnumber);
-        errorset(sSETLINE,sym->lnumber);
-        error(203,sym->name);  /* symbol isn't used (and not stock) */
+        error(sym,203,sym->name);  /* symbol isn't used (and not stock) */
       } else if ((sym->usage & (uREAD | uSTOCK | uPUBLIC))==0) {
-        errorset(sSETFILE,sym->fnumber);
-        errorset(sSETLINE,sym->lnumber);
-        error(204,sym->name);       /* value assigned to symbol is never used */
+        error(sym,204,sym->name);       /* value assigned to symbol is never used */
 #if 0 // ??? not sure whether it is a good idea to force people use "const"
       } else if ((sym->usage & (uWRITTEN | uPUBLIC | uCONST))==0 && sym->ident==iREFARRAY) {
         errorset(sSETFILE,sym->fnumber);
