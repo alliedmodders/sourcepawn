@@ -1,0 +1,6 @@
+version: 1.0.{build}
+clone_folder: c:\projects\sourcepawn
+install:
+- cmd: .appveyor\setup_environment.bat
+build_script:
+- cmd: .appveyor\build.bat
