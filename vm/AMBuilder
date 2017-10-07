@@ -87,6 +87,15 @@ for arch in Root.archs:
       'x86/jit_x86.cpp',
     ]
 
+  if arch == 'x64':
+    library.sources += [
+      'code-stubs.cpp',
+      'linking.cpp',
+      'x64/assembler-x64.cpp',
+      'x64/code-stubs-x64.cpp',
+      'x64/macro-assembler-x64.cpp',
+    ]
+
   libsourcepawn[arch] = builder.Add(library)
 
   # Build the dynamically-linked library.

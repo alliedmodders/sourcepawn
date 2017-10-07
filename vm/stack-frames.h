@@ -21,6 +21,8 @@
 #include <amtl/am-refcounting.h>
 #if defined(KE_ARCH_X86)
 # include "x86/frames-x86.h"
+#elif defined(KE_ARCH_X64)
+# include "x64/frames-x64.h"
 #endif
 
 namespace sp {

@@ -18,7 +18,7 @@
 #include "pool-allocator.h"
 #include "method-info.h"
 #include "compiled-function.h"
-#if defined(SP_HAS_JIT)
+#if defined(SP_HAS_JIT) || defined(KE_ARCH_X64)
 # include "code-stubs.h"
 # include "jit.h"
 #endif
@@ -81,7 +81,7 @@ Environment::Initialize()
   watchdog_timer_ = new WatchdogTimer(this);
   code_alloc_ = new CodeAllocator();
 
-#if defined(SP_HAS_JIT)
+#if defined(SP_HAS_JIT) || defined(KE_ARCH_X64)
   code_stubs_ = new CodeStubs(this);
 
   // Safe to initialize code now that we have the code cache.
