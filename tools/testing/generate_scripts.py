@@ -28,6 +28,7 @@ def main():
   parser.add_argument('out', type=str, help='Output file')
   parser.add_argument('spcomp', type=str, help='Path to spcomp')
   parser.add_argument('spshell', type=str, help='Path to spshell')
+  parser.add_argument('arch', type=str, help='Binary architecture')
   args = parser.parse_args()
 
   with open(args.file, 'r') as infp:
@@ -38,6 +39,7 @@ def main():
         spcomp = args.spcomp,
         spshell = args.spshell,
         objdir = args.objdir,
+        arch = args.arch,
       ))
   os.chmod(args.out, 0o755)
 

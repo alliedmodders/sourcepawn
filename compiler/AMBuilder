@@ -1,6 +1,7 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
 import os
 
+SP.spcomp = {}
 for arch in Root.archs:
   binary = Root.Program(builder, 'spcomp', arch)
   compiler = binary.compiler
@@ -79,4 +80,4 @@ for arch in Root.archs:
     SP.zlib[arch],
   ]
 
-  SP.spcomp = builder.Add(binary)
+  SP.spcomp[arch] = builder.Add(binary)

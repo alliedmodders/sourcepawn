@@ -2,6 +2,8 @@
 import os
 
 libsourcepawn = {}
+SP.libsourcepawn = {}
+SP.spshell = {}
 
 def configure_like_shell(name, arch):
   prog = Root.Program(builder, name, arch)
@@ -101,14 +103,14 @@ for arch in Root.archs:
   if builder.target.platform == 'linux':
     dll.compiler.postlink += ['-lpthread', '-lrt']
 
-  SP.libsourcepawn = builder.Add(dll)
+  SP.libsourcepawn[arch] = builder.Add(dll)
 
   # Build the debug shell.
   shell = configure_like_shell('spshell', arch)
   shell.sources += [
     'shell.cpp'
   ]
-  SP.spshell = builder.Add(shell)
+  SP.spshell[arch] = builder.Add(shell)
 
   # Build the verifier.
   verifier = configure_like_shell('verifier', arch)
