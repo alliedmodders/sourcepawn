@@ -28,14 +28,14 @@ script:
  - PATH="~/.local/bin:$PATH"
  - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize --target-arch=x86
  - ambuild
- - ./testing/test-all.sh
+ - ./testing/test-all.x86.sh
  - cd ..
  - mkdir x64-release && cd x64-release
  - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize --target-arch=x64
  - ambuild
- - ./testing/test-all.sh
+ - ./testing/test-all.x64.sh
  - cd ..
  - mkdir x86-debug && cd x86-debug
  - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-debug --target-arch=x86
  - ambuild
- - ./testing/test-all.sh
+ - ./testing/test-all.x86.sh

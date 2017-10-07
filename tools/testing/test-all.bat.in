@@ -2,11 +2,11 @@
 setlocal
 set status=0
 
-call {objdir}/testing/test-compiler.bat
+call {objdir}/testing/test-compiler.{arch}.bat
 if %errorlevel% neq 0 set status=1
 
 echo ""
-call {objdir}/testing/test-runtime.bat
+call {objdir}/testing/test-runtime.{arch}.bat
 if %errorlevel% neq 0 set status=1
 
 exit /b %status%

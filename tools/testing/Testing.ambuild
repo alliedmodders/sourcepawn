@@ -34,28 +34,30 @@ def fixup_path(mode, path):
   return path
 
 def gen_scripts(ext):
-  for script in Scripts:
-    Inputs = [
-      os.path.join(builder.currentSourcePath, 'generate_scripts.py'),
-      script + ext + '.in',
-    ]
-    Outputs = [
-      script + ext,
-    ]
-  
-    builder.AddCommand(
-      inputs = Inputs,
-      argv = [
-        sys.executable,
+  for arch in Root.archs:
+    for script in Scripts:
+      Inputs = [
         os.path.join(builder.currentSourcePath, 'generate_scripts.py'),
-        fixup_path(ext, builder.sourcePath),
-        fixup_path(ext, builder.buildPath),
-        os.path.join(builder.currentSourcePath, script + ext + '.in'),
-        os.path.join(builder.buildPath, 'testing', script + ext),
-        fixup_path(ext, os.path.join(builder.buildPath, SP.spcomp.binary.path)),
-        fixup_path(ext, os.path.join(builder.buildPath, SP.spshell.binary.path)),
-      ],
-      outputs = Outputs
-    )
+        script + ext + '.in',
+      ]
+      Outputs = [
+        script + '.' + arch + ext,
+      ]
+  
+      builder.AddCommand(
+        inputs = Inputs,
+        argv = [
+          sys.executable,
+          os.path.join(builder.currentSourcePath, 'generate_scripts.py'),
+          fixup_path(ext, builder.sourcePath),
+          fixup_path(ext, builder.buildPath),
+          os.path.join(builder.currentSourcePath, script + ext + '.in'),
+          os.path.join(builder.buildPath, 'testing', script + '.' + arch + ext),
+          fixup_path(ext, os.path.join(builder.buildPath, SP.spcomp[arch].binary.path)),
+          fixup_path(ext, os.path.join(builder.buildPath, SP.spshell[arch].binary.path)),
+          arch,
+        ],
+        outputs = Outputs
+      )
 gen_scripts('.sh')
 gen_scripts('.bat')
