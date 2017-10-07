@@ -58,7 +58,7 @@ class Config(object):
     cxx = builder.DetectCxx()
 
     if cxx.like('msvc') and len(self.archs) > 1:
-      raise Exception('Building multiple archs with MSVC with not currently supported')
+      raise Exception('Building multiple archs with MSVC is not currently supported')
 
     archset = set(self.archs)
     if not archset.issubset(['x86', 'x86_64']) and not archset.issubset(['x86', 'x64']):
