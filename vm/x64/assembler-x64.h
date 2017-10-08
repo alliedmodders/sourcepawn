@@ -354,7 +354,7 @@ class Assembler : public AssemblerBase
 
       int32_t *p = reinterpret_cast<int32_t *>(buffer() + offset - 4);
       status = *p;
-      *p = delta;
+      *p = static_cast<int32_t>(delta);
     }
     target->bind(pc());
   }
@@ -474,7 +474,7 @@ class Assembler : public AssemblerBase
     writeInt32(value);
   }
   void movq(Register dest, const AddressValue& address) {
-    movq(dest, reinterpret_cast<intptr_t>(address.value()));
+    movq(dest, address.value());
   }
   void movl(Register dest, const Operand& src) {
     emit1(0x8b, dest, src);
@@ -583,14 +583,14 @@ class Assembler : public AssemblerBase
     ptrdiff_t delta = ptrdiff_t(dest->offset()) - (position() + 2);
     if (delta < SCHAR_MIN || delta > SCHAR_MAX)
       return false;
-    *deltap = delta;
+    *deltap = static_cast<int8_t>(delta);
     return true;
   }
   void emitJumpTarget(Label *dest) {
     if (dest->bound()) {
       ptrdiff_t delta = ptrdiff_t(dest->offset()) - (position() + 4);
       assert(delta >= INT_MIN && delta <= INT_MAX);
-      writeInt32(delta);
+      writeInt32(static_cast<int32_t>(delta));
     } else {
       writeUint32(dest->addPending(position() + 4));
     }
@@ -716,7 +716,7 @@ class Assembler : public AssemblerBase
   }
   // W=1, R=0, X=?, B=?
   void emit_rex_64(const Operand& rm) {
-    *pos_++ = (0x48 | rm.rex_bits());
+    *pos_++ = static_cast<uint8_t>(0x48 | rm.rex_bits());
   }
   // W=1, R=?, X=0, B=?
   void emit_rex_64(Register opreg, Register rm) {
@@ -724,7 +724,7 @@ class Assembler : public AssemblerBase
   }
   // W=1, R=?, X=?, B=?
   void emit_rex_64(Register opreg, const Operand& rm) {
-    *pos_++ = (0x48 | (opreg.rex_bit() << 2) | rm.rex_bits());
+    *pos_++ = static_cast<uint8_t>(0x48 | (opreg.rex_bit() << 2) | rm.rex_bits());
   }
   // W=0, R=?, X=0, B=?
   void maybe_emit_rex(Register opreg, Register rm) {
@@ -734,7 +734,7 @@ class Assembler : public AssemblerBase
   }
   // W=0, R=?, X=?, B=?
   void maybe_emit_rex(Register opreg, const Operand& rm) {
-    uint8_t bits = (opreg.rex_bit() << 2) | rm.rex_bits();
+    uint8_t bits = static_cast<uint8_t>((opreg.rex_bit() << 2) | rm.rex_bits());
     if (bits)
       *pos_++ = 0x40 | bits;
   }
@@ -746,7 +746,7 @@ class Assembler : public AssemblerBase
   // W=0, R=0, X=?, B=?
   void maybe_emit_rex(const Operand& rm) {
     if (rm.rex_bits())
-      *pos_++ = 0x40 | rm.rex_bits();
+      *pos_++ = static_cast<uint8_t>(0x40 | rm.rex_bits());
   }
 
   // ModR/M encoding.

@@ -53,8 +53,8 @@ CodeStubs::CompileInvokeStub()
   __ movq(rvalptr, ArgReg2);
   
   // Set up runtime registers.
-  __ movq(dat, Operand(context, PluginContext::offsetOfMemory()));
-  __ movq(stk, Operand(context, PluginContext::offsetOfSp()));
+  __ movq(dat, Operand(context, static_cast<int32_t>(PluginContext::offsetOfMemory())));
+  __ movq(stk, Operand(context, static_cast<int32_t>(PluginContext::offsetOfSp())));
   __ addq(stk, dat);
 
   // Align the stack.
@@ -71,7 +71,7 @@ CodeStubs::CompileInvokeStub()
   Label ret;
   __ bind(&ret);
   __ subq(stk, dat);
-  __ movq(Operand(context, PluginContext::offsetOfSp()), stk);
+  __ movq(Operand(context, static_cast<int32_t>(PluginContext::offsetOfSp())), stk);
 
   // Restore registers and leave.
   __ leaq(rsp, Operand(rbp, kFpOffsetToPreAlignedSp));
