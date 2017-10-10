@@ -292,8 +292,14 @@ ScriptedInvoker::Invoke(cell_t *result)
   }
 
   /* Make the call if we can */
-  if (ok)
+  if (ok) {
+    const char *debugName = this->DebugName();
+    size_t debugNameLength = strlen(debugName) + 1;
+    volatile char *debugNameForCrashDumps = (char *)alloca(debugNameLength);
+    SafeStrcpy(debugNameForCrashDumps, debugNameLength, debugName);
+
     ok = context_->Invoke(m_FnId, temp_params, numparams, result);
+  }
 
   /* i should be equal to the last valid parameter + 1 */
   bool docopies = ok;
