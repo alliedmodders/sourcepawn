@@ -100,6 +100,7 @@ SourcePawnEngine::SetReadWrite(void *ptr)
 void
 SourcePawnEngine::FreePageMemory(void *ptr)
 {
+  assert(ptr);
   CodeChunk* hidden = (CodeChunk*)((uint8_t*)ptr - sizeof(CodeChunk));
   hidden->~CodeChunk();
 }
@@ -285,11 +286,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char *file, char *error, size_t maxl
 SPVM_NATIVE_FUNC
 SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void *pData)
 {
-#if defined(SP_HAS_JIT)
   return Environment::get()->stubs()->CreateFakeNativeStub(callback, pData);
-#else
-  return nullptr;
-#endif
 }
 
 void

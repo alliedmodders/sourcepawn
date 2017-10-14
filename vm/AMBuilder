@@ -70,7 +70,7 @@ for arch in Root.archs:
     'runtime-helpers.cpp',
   ]
 
-  has_jit = SP.arch in ['x86'] and builder.cxx.family != 'emscripten'
+  has_jit = arch in ['x86'] and builder.cxx.family != 'emscripten'
 
   if has_jit:
     library.sources += [
@@ -80,11 +80,20 @@ for arch in Root.archs:
     ]
     library.compiler.defines += ['SP_HAS_JIT']
 
-  if has_jit and SP.arch == 'x86':
+  if has_jit and arch == 'x86':
     library.sources += [
       'x86/assembler-x86.cpp',
       'x86/code-stubs-x86.cpp',
       'x86/jit_x86.cpp',
+    ]
+
+  if arch == 'x64':
+    library.sources += [
+      'code-stubs.cpp',
+      'linking.cpp',
+      'x64/assembler-x64.cpp',
+      'x64/code-stubs-x64.cpp',
+      'x64/macro-assembler-x64.cpp',
     ]
 
   libsourcepawn[arch] = builder.Add(library)

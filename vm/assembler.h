@@ -85,6 +85,9 @@ class AssemblerBase
   void writePointer(void *ptr) {
     write<void *>(ptr);
   }
+  void writeInt64(int64_t value) {
+    write<int64_t>(value);
+  }
 
   template <typename T>
   void write(const T &t) {
@@ -313,13 +316,25 @@ class CodeLabelBase
     assert(this->offset() == offset);
   }
 
- private:
+ protected:
   uint32_t status_;
 };
 
 // Absolute address, any pointer size. These are fixed up when calling
 // emitToExecutableMemory().
 class CodeLabel : public CodeLabelBase
+{
+};
+
+class SilentCodeLabel : public CodeLabel
+{
+ public:
+  ~SilentCodeLabel() {
+    status_ = 0;
+  }
+};
+
+class PatchLabel : public SilentCodeLabel
 {
 };
 
