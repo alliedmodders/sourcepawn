@@ -286,11 +286,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char *file, char *error, size_t maxl
 SPVM_NATIVE_FUNC
 SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void *pData)
 {
-#if defined(SP_HAS_JIT) || defined(KE_ARCH_X64)
   return Environment::get()->stubs()->CreateFakeNativeStub(callback, pData);
-#else
-  return nullptr;
-#endif
 }
 
 void

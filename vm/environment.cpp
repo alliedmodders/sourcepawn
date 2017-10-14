@@ -18,10 +18,8 @@
 #include "pool-allocator.h"
 #include "method-info.h"
 #include "compiled-function.h"
-#if defined(SP_HAS_JIT) || defined(KE_ARCH_X64)
-# include "code-stubs.h"
-# include "jit.h"
-#endif
+#include "code-stubs.h"
+#include "jit.h"
 #include "interpreter.h"
 #include <stdarg.h>
 
@@ -80,14 +78,11 @@ Environment::Initialize()
   api_v2_ = new SourcePawnEngine2();
   watchdog_timer_ = new WatchdogTimer(this);
   code_alloc_ = new CodeAllocator();
-
-#if defined(SP_HAS_JIT) || defined(KE_ARCH_X64)
   code_stubs_ = new CodeStubs(this);
 
   // Safe to initialize code now that we have the code cache.
   if (!code_stubs_->Initialize())
     return false;
-#endif
 
   return true;
 }
@@ -96,9 +91,7 @@ void
 Environment::Shutdown()
 {
   watchdog_timer_->Shutdown();
-#if defined(SP_HAS_JIT)
   code_stubs_ = nullptr;
-#endif
   code_alloc_ = nullptr;
   PoolAllocator::FreeDefault();
 
