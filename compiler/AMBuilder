@@ -72,7 +72,7 @@ for arch in Root.archs:
     'expression-parsing.cpp',
   ]
 
-  if builder.target.platform != 'windows' and not compiler.like('emscripten'):
+  if builder.target.platform == 'linux' and not compiler.like('emscripten'):
     compiler.defines += ['ENABLE_BINRELOC']
     binary.sources.append('binreloc.c')
 
