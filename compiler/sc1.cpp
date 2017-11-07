@@ -5477,7 +5477,7 @@ static void compound(int stmt_sameline)
       assert(p>pline);
       p--;
     } /* while */
-    assert(*p=='}');  /* it should be found */
+    assert(*p=='{');  /* it should be found */
     /* go forward, skipping white-space */
     p++;
     while (*p<=' ' && *p!='\0')
