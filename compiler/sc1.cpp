@@ -5629,7 +5629,7 @@ static int test(int label,int parens,int invert)
   endtok=0;
   if (parens==TEST_PARENS) {
     endtok=')';
-	needtoken('(');
+    needtoken('(');
   }
   do {
     stgget(&index,&cidx);       /* mark position (of last expression) in
