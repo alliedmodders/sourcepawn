@@ -130,7 +130,7 @@ static void reduce_referrers(symbol *root);
 static int testsymbols(symbol *root,int level,int testlabs,int testconst);
 static void destructsymbols(symbol *root,int level);
 static void statement(int *lastindent,int allow_decl);
-static void compound(int stmt_sameline,int starttok);
+static void compound(int stmt_sameline);
 static int test(int label,int parens,int invert);
 static int doexpr(int comma,int chkeffect,int allowarray,int mark_endexpr,
                   int *tag,symbol **symptr,int chkfuncresult);
@@ -165,8 +165,7 @@ static void check_void_decl(const declinfo_t *decl, int variable);
 
 enum {
   TEST_PLAIN,           /* no parentheses */
-  TEST_THEN,            /* '(' <expr> ')' or <expr> 'then' */
-  TEST_DO,              /* '(' <expr> ')' or <expr> 'do' */
+  TEST_PARENS,          /* '(' <expr> ')' */
   TEST_OPT,             /* '(' <expr> ')' or <expr> */
 };
 static int norun      = 0;      /* the compiler never ran */
@@ -5390,10 +5389,9 @@ static void statement(int *lastindent,int allow_decl)
     lastst=tDELETE;
     break;
   case '{':
-  case tBEGIN:
     save=fline;
     if (!matchtoken('}')) {       /* {} is the empty statement */
-      compound(save==fline,tok);
+      compound(save==fline);
     } else {
       lastst = tEMPTYBLOCK;
     }
@@ -5461,13 +5459,12 @@ static void statement(int *lastindent,int allow_decl)
   } /* switch */
 }
 
-static void compound(int stmt_sameline,int starttok)
+static void compound(int stmt_sameline)
 {
   int indent=-1;
   cell save_decl=declared;
   int count_stmt=0;
   int block_start=fline;  /* save line where the compound block started */
-  int endtok;
 
   pushstacklist();
   pushheaplist();
@@ -5476,11 +5473,11 @@ static void compound(int stmt_sameline,int starttok)
     int i;
     const unsigned char *p=lptr;
     /* go back to the opening brace */
-    while (*p!=starttok) {
+    while (*p!='{') {
       assert(p>pline);
       p--;
     } /* while */
-    assert(*p==starttok);  /* it should be found */
+    assert(*p=='}');  /* it should be found */
     /* go forward, skipping white-space */
     p++;
     while (*p<=' ' && *p!='\0')
@@ -5494,9 +5491,8 @@ static void compound(int stmt_sameline,int starttok)
         stmtindent++;
   } /* if */
 
-  endtok=(starttok=='{') ? '}' : tEND;
   nestlevel+=1;                 /* increase compound statement level */
-  while (matchtoken(endtok)==0){/* repeat until compound statement is closed */
+  while (matchtoken('}')==0){/* repeat until compound statement is closed */
     if (!freading){
       error(30,block_start);    /* compound block not closed at end of file */
       break;
@@ -5631,14 +5627,10 @@ static int test(int label,int parens,int invert)
   PUSHSTK_I(sc_intest);
   sc_intest=TRUE;
   endtok=0;
-  if (parens!=TEST_PLAIN) {
-    if (matchtoken('('))
-      endtok=')';
-    else if (parens==TEST_THEN)
-      endtok=tTHEN;
-    else if (parens==TEST_DO)
-      endtok=tDO;
-  } /* if */
+  if (parens==TEST_PARENS) {
+    endtok=')';
+	needtoken('(');
+  }
   do {
     stgget(&index,&cidx);       /* mark position (of last expression) in
                                  * code generator */
@@ -5698,7 +5690,7 @@ static int doif(void)
 
   ifindent=stmtindent;          /* save the indent of the "if" instruction */
   flab1=getlabel();             /* get label number for false branch */
-  test(flab1,TEST_THEN,FALSE);  /* get expression, branch to flab1 if false */
+  test(flab1,TEST_PARENS,FALSE);  /* get expression, branch to flab1 if false */
   statement(NULL,FALSE);        /* if true, do a statement */
   if (!matchtoken(tELSE)) {     /* if...else ? */
     setlabel(flab1);            /* no, simple if..., print false label */
@@ -5737,7 +5729,7 @@ static int dowhile(void)
    * tiniest loop, set it below the top of the loop
    */
   setline(TRUE);
-  endlessloop=test(wq[wqEXIT],TEST_DO,FALSE);/* branch to wq[wqEXIT] if false */
+  endlessloop=test(wq[wqEXIT],TEST_PARENS,FALSE);/* branch to wq[wqEXIT] if false */
   statement(NULL,FALSE);        /* if so, do a statement */
   jumplabel(wq[wqLOOP]);        /* and loop to "while" start */
   setlabel(wq[wqEXIT]);         /* exit label */
@@ -5941,12 +5933,9 @@ static void doswitch(void)
   lbl_case=0;                   /* just to avoid a compiler warning */
   ffswitch(lbl_table);
 
-  if (matchtoken(tBEGIN)) {
-    endtok=tEND;
-  } else {
-    endtok='}';
-    needtoken('{');
-  } /* if */
+  endtok='}';
+  needtoken('{');
+
   lbl_exit=getlabel();          /* get label number for jumping out of switch */
   swdefault=FALSE;
   casecount=0;
