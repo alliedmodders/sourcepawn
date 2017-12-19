@@ -848,6 +848,32 @@ static SEQUENCE sequences_cmp[] = {
       "jnz %1!",
     seqsize(2,1) - seqsize(1,1)
   },
+  /* Array comparison has a NOT instruction that can sometimes be optimized away
+   *    not                     jnz n1
+   *    jzer n1                 -
+   *    --------------------------------------
+   *    not                     jzer n1
+   *    jnz n1                  -
+   * And especially the code below, that essentially does a double NOT before jumping
+   *    eq.c.pri 0              jzer n1
+   *    not                     -
+   *    jzer n1                 -
+   */
+  {
+      "eq.c.pri 0!not!jzer %1!",
+      "jzer %1!",
+    seqsize(3,2) - seqsize(1,1)
+  },
+  {
+      "not!jzer %1!",
+      "jnz %1!",
+    seqsize(2,1) - seqsize(1,1)
+  },
+  {
+      "not!jnz %1!",
+      "jzer %1!",
+    seqsize(2,1) - seqsize(1,1)
+  },
   /* Incrementing and decrementing leaves a value in
    * in PRI which may not be used (for example, as the
    * third expression in a "for" loop).
