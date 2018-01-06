@@ -370,12 +370,13 @@ int pc_compile(int argc, char *argv[])
     sc_reparse=FALSE;           /* assume no extra passes */
     sc_status=statFIRST;        /* resetglobals() resets it to IDLE */
 
+    /* look for default prefix (include) file in include paths,
+     * but only error if it was manually set on the command line
+     */
     if (strlen(incfname)>0) {
-      if (strcmp(incfname,sDEF_PREFIX)==0) {
-        plungefile(incfname,FALSE,TRUE);    /* parse "default.inc" */
-      } else {
-        if (!plungequalifiedfile(incfname)) /* parse "prefix" include file */
-          error(FATAL_ERROR_READ,incfname);
+      int defOK = plungefile(incfname,FALSE,TRUE);
+      if (!defOK && strcmp(incfname,sDEF_PREFIX)!=0) {
+        error(FATAL_ERROR_READ,incfname);
       } /* if */
     } /* if */
     preprocess();                       /* fetch first line */
@@ -426,10 +427,7 @@ int pc_compile(int argc, char *argv[])
   insert_dbgfile(inpfname);     /* attach to debug information */
   insert_inputfile(inpfname);   /* save for the error system */
   if (strlen(incfname)>0) {
-    if (strcmp(incfname,sDEF_PREFIX)==0)
-      plungefile(incfname,FALSE,TRUE);  /* parse "default.inc" (again) */
-    else
-      plungequalifiedfile(incfname);    /* parse implicit include file (again) */
+    plungefile(incfname,FALSE,TRUE);  /* parse "default.inc" (again) */
   } /* if */
   preprocess();                         /* fetch first line */
   parse();                              /* process all input */
