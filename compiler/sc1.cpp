@@ -1087,7 +1087,7 @@ static void setcaption(void)
 {
   pc_printf("SourcePawn Compiler %s\n", SOURCEPAWN_VERSION);
   pc_printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
-  pc_printf("Copyright (c) 2004-2017 AlliedModders LLC\n\n");
+  pc_printf("Copyright (c) 2004-2018 AlliedModders LLC\n\n");
 }
 
 static void about(void)
