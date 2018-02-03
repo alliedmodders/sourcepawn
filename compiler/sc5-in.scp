@@ -257,7 +257,7 @@ static const char *warnmsg[] = {
 /*221*/  "label name \"%s\" shadows tag name\n",
 /*222*/  "number of digits exceeds rational number precision\n",
 /*223*/  "redundant \"sizeof\": argument size is always 1 (symbol \"%s\")\n",
-/*224*/  "unused\n",
+/*224*/  "user warning: %s\n",
 /*225*/  "unreachable code\n",
 /*226*/  "a variable is assigned to itself (symbol \"%s\")\n",
 /*227*/  "more initializers than enum fields\n",
