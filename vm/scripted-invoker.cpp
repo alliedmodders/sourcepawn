@@ -296,7 +296,7 @@ ScriptedInvoker::Invoke(cell_t *result)
     const char *debugName = this->DebugName();
     size_t debugNameLength = strlen(debugName) + 1;
     volatile char *debugNameForCrashDumps = (char *)alloca(debugNameLength);
-    SafeStrcpy(debugNameForCrashDumps, debugNameLength, debugName);
+    SafeStrcpy((char *)debugNameForCrashDumps, debugNameLength, debugName);
 
     ok = context_->Invoke(m_FnId, temp_params, numparams, result);
   }
