@@ -1296,7 +1296,7 @@ static int command(void)
     while (*lptr<=' ' && *lptr!='\0')
       lptr++;
     if (!SKIPPING)
-      error(241,lptr);  /* user warning */
+      error(224,lptr);  /* user warning */
     break;
   default:
     error(31);          /* unknown compiler directive */
@@ -1953,7 +1953,7 @@ const char *sc_tokens[] = {
          "with",
          "#assert", "#define", "#else", "#elseif", "#endif", "#endinput",
          "#endscript", "#error", "#warning", "#file", "#if", "#include",
-		 "#line", "#pragma", "#tryinclude", "#undef",
+         "#line", "#pragma", "#tryinclude", "#undef",
          ";", ";", "-integer value-", "-rational value-", "-identifier-",
          "-label-", "-string-", "-string-"
 };

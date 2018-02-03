@@ -257,7 +257,7 @@ static const char *warnmsg[] = {
 /*221*/  "label name \"%s\" shadows tag name\n",
 /*222*/  "number of digits exceeds rational number precision\n",
 /*223*/  "redundant \"sizeof\": argument size is always 1 (symbol \"%s\")\n",
-/*224*/  "unused\n",
+/*224*/  "user warning: %s\n",
 /*225*/  "unreachable code\n",
 /*226*/  "a variable is assigned to itself (symbol \"%s\")\n",
 /*227*/  "more initializers than enum fields\n",
@@ -274,5 +274,4 @@ static const char *warnmsg[] = {
 /*238*/  "'%s:' is an illegal cast; use view_as<%s>(expression)\n",
 /*239*/  "'%s' is an illegal tag; use %s as a type\n",
 /*240*/  "'%s:' is an old-style tag operation; use view_as<%s>(expression) instead\n",
-/*241*/  "user warning: %s\n",
 };
