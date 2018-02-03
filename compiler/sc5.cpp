@@ -206,6 +206,7 @@ report_error(ErrorReport* report)
       warnnum++;
       break;
     case ErrorType::Error:
+    case ErrorType::Fatal:
       errnum++;
       sc_total_errors++;
       errflag = TRUE;
