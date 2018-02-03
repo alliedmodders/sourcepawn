@@ -294,9 +294,9 @@ ScriptedInvoker::Invoke(cell_t *result)
   /* Make the call if we can */
   if (ok) {
     const char *debugName = this->DebugName();
-    size_t debugNameLength = strlen(debugName) + 1;
-    volatile char *debugNameForCrashDumps = (char *)alloca(debugNameLength);
-    SafeStrcpy((char *)debugNameForCrashDumps, debugNameLength, debugName);
+    size_t debugNameLength = strlen(debugName) + 2;
+    volatile char * volatile debugNameForCrashDumps = (char *)alloca(debugNameLength);
+    SafeStrcpy((char *)debugNameForCrashDumps + 1, debugNameLength, debugName);
 
     ok = context_->Invoke(m_FnId, temp_params, numparams, result);
   }
