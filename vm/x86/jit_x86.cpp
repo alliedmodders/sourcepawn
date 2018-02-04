@@ -1082,12 +1082,10 @@ Compiler::visitTRACKER_POP_SETHEAP()
 bool
 Compiler::visitHALT(cell_t value)
 {
-  // This should never be hit.
-  __ align(16);
-  __ movl(pri, value);
-  __ testl(eax, eax);
-  jumpOnError(not_zero);
-  return true;
+  // We don't support this. It's included in the bytestream by default, but it
+  // must be unreachable.
+  reportError(SP_ERROR_INVALID_INSTRUCTION);
+  return false;
 }
 
 bool
