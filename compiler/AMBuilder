@@ -22,6 +22,7 @@ for arch in Root.archs:
     if builder.target.platform == 'linux':
       compiler.postlink += ['-lm']
     compiler.postlink += ['-lstdc++']
+  if compiler.family == 'clang':
     compiler.cxxflags += [
       '-Wno-implicit-exception-spec-mismatch',
     ]
@@ -29,6 +30,8 @@ for arch in Root.archs:
     compiler.cflags += [
       '-Wno-maybe-uninitialized',
     ]
+    if compiler.version >= '4.6':
+      compiler.cxxflags += ['-Wno-unused-but-set-variable']
 
   compiler.defines += ['HAVE_STDINT_H']
   if builder.target.platform == 'linux':

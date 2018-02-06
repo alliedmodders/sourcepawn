@@ -52,44 +52,47 @@ for arch in Root.archs:
     'api.cpp',
     'base-context.cpp',
     'code-allocator.cpp',
+    'code-stubs.cpp',
     'compiled-function.cpp',
     'environment.cpp',
     'file-utils.cpp',
+    'interpreter.cpp',
     'md5/md5.cpp',
+    'method-info.cpp',
+    'method-verifier.cpp',
     'opcodes.cpp',
     'plugin-context.cpp',
     'plugin-runtime.cpp',
-    'scripted-invoker.cpp',
-    'stack-frames.cpp',
-    'smx-v1-image.cpp',
-    'watchdog_timer.cpp',
     'pool-allocator.cpp',
-    'method-verifier.cpp',
-    'method-info.cpp',
-    'interpreter.cpp',
     'runtime-helpers.cpp',
+    'scripted-invoker.cpp',
+    'smx-v1-image.cpp',
+    'stack-frames.cpp',
+    'watchdog_timer.cpp',
   ]
 
-  has_jit = arch in ['x86'] and builder.cxx.family != 'emscripten'
+  is_emscripten = builder.cxx.family == 'emscripten'
+  has_jit = arch in ['x86'] and not is_emscripten
 
   if has_jit:
     library.sources += [
-      'code-stubs.cpp',
       'jit.cpp',
-      'linking.cpp',
     ]
     library.compiler.defines += ['SP_HAS_JIT']
 
-  if has_jit and arch == 'x86':
+  if is_emscripten:
     library.sources += [
+      'code-stubs-null.cpp',
+    ]
+  elif arch == 'x86':
+    library.sources += [
+      'linking.cpp',
       'x86/assembler-x86.cpp',
       'x86/code-stubs-x86.cpp',
       'x86/jit_x86.cpp',
     ]
-
-  if arch == 'x64':
+  elif arch == 'x64':
     library.sources += [
-      'code-stubs.cpp',
       'linking.cpp',
       'x64/assembler-x64.cpp',
       'x64/code-stubs-x64.cpp',

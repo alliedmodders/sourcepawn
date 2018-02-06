@@ -19,7 +19,9 @@
 #include "method-info.h"
 #include "compiled-function.h"
 #include "code-stubs.h"
+#ifndef KE_EMSCRIPTEN
 #include "jit.h"
+#endif
 #include "interpreter.h"
 #include <stdarg.h>
 
