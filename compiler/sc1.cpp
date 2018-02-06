@@ -1783,6 +1783,8 @@ static void declloc(int tokid)
       // literal. In other cases (such as a fixed-array literal), we error.
       //
       // For now, we only implement the string literal initializer.
+
+      cur_lit = litidx; /* save current index in the literal table */
       if (type->is_new && needtoken('=')) {
         if (type->isCharArray() && !lexpeek(tNEW)) {
           // Error if we're assigning something other than a string literal.

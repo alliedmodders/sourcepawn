@@ -30,4 +30,7 @@ public main()
   str[4] = 'o';
   str[5] = '\n';
   print(str);
+  
+  char[] strinit = "this is initialized\n";
+  print(strinit);
 }
