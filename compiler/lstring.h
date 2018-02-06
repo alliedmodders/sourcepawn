@@ -7,11 +7,6 @@
   #define HAVE_SAFESTR
 #endif
 
-#if defined __EMSCRIPTEN__
-  /* Emscripten always provides these functions */
-  #define HAVE_SAFESTR
-#endif
-
 #if !defined HAVE_SAFESTR
 
 #if defined(__cplusplus)
