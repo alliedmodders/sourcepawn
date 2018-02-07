@@ -16,19 +16,20 @@ compiler:
 env:
   global:
     - LLVM_ARCHIVE_URI=https://www.sourcemod.net/clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+    - EMSCRIPTEN_SDK_URI=https://s3.amazonaws.com/mozilla-games/emscripten/releases/emsdk-portable.tar.gz
   matrix:
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=optimize
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=debug
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x64 AM_TYPE=optimize
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x64 AM_TYPE=debug
-before_install:
-  - wget -nc $LLVM_ARCHIVE_URI -O $HOME/clang+llvm.tar.xz
-  - mkdir -p $HOME/clang+llvm
-  - tar -xf $HOME/clang+llvm.tar.xz -C $HOME/clang+llvm --strip-components 1
-  - export PATH=$HOME/clang+llvm/bin:$PATH
-before_script:
+    - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=optimize
+    - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=debug
+install:
+  - source ./tools/travis-download-compiler.sh
   - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/tools/checkout-deps.sh && cd $CHECKOUT_DIR
   - export PATH="~/.local/bin:$PATH"
+  - echo $PATH
+  - $AM_CC --version
 script:
   - mkdir $AM_CC-$AM_ARCH-$AM_TYPE && cd $AM_CC-$AM_ARCH-$AM_TYPE
   - CC=$AM_CC CXX=$AM_CXX python ../configure.py --enable-$AM_TYPE --target-arch=$AM_ARCH
