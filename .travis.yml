@@ -15,7 +15,8 @@ addons:
       - linux-libc-dev:i386
 env:
   global:
-    - EMSCRIPTEN_SDK_URI=https://s3.amazonaws.com/mozilla-games/emscripten/releases/emsdk-portable.tar.gz
+    - EMSCRIPTEN_SDK_BRANCH=incoming
+    - EMSCRIPTEN_SDK_URI=https://github.com/urho3d/emscripten-sdk.git
   matrix:
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=optimize
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=debug
