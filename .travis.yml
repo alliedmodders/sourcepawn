@@ -1,21 +1,20 @@
+language: cpp
+sudo: false
+dist: trusty
 addons:
   apt:
     packages:
+      - g++-4.8
+      - g++-4.8-multilib
+      - clang-3.8
+      - libstdc++6
       - lib32stdc++6
-      - lib32z1-dev
+      - libc6-dev
       - libc6-dev-i386
       - linux-libc-dev
-      - g++-multilib
-      - g++-4.8
-    sources:
-      - ubuntu-toolchain-r-test
-language: cpp
-sudo: false
-compiler:
-  - clang
+      - linux-libc-dev:i386
 env:
   global:
-    - LLVM_ARCHIVE_URI=https://www.sourcemod.net/clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz
     - EMSCRIPTEN_SDK_URI=https://s3.amazonaws.com/mozilla-games/emscripten/releases/emsdk-portable.tar.gz
   matrix:
     - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=optimize
