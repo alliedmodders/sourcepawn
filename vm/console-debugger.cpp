@@ -1810,13 +1810,13 @@ Debugger::DisplayVariable(SmxV1Image::Symbol *sym, uint32_t index[], int idxleve
       if (ptr != nullptr)
       {
         uint32_t i;
-        for (i = 0; i < MAXLINELENGTH - 1 && ptr[i] != '\0'; i++) {
+        for (i = 0; ptr[i] != '\0'; i++) {
           if ((ptr[i] < ' ' && ptr[i] != '\n' && ptr[i] != '\r' && ptr[i] != '\t'))
             break; // non-ASCII character
           if (i == 0 && !isalpha(ptr[i]))
             break; // want a letter at the start
         }
-        if (i > 0 && i < MAXLINELENGTH - 1 && ptr[i] == '\0')
+        if (i > 0 && ptr[i] == '\0')
           sym->setVClass(sym->vclass() | DISP_STRING);
       }
     }
