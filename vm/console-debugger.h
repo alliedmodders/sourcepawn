@@ -87,7 +87,7 @@ public:
 
 public:
   void HandleInput(cell_t cip, bool isBp);
-  void ListCommands(char *command);
+  void ListCommands(const char *command);
 
   // String/Path helpers
   static const char *SkipPath(const char *str);
@@ -95,7 +95,7 @@ public:
   static char *TrimString(char *string);
 
 private:
-  void HandleHelpCmd(char *line);
+  void HandleHelpCmd(const char *line);
   void HandleQuitCmd();
   bool HandleGoCmd(char *params);
   void HandleFunctionListCmd();

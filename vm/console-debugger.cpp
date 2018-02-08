@@ -429,10 +429,10 @@ Debugger::SkipPath(const char *str)
 }
 
 void
-Debugger::ListCommands(char *command)
+Debugger::ListCommands(const char *command)
 {
-  if (command == nullptr)
-    command = (char *)"";
+  if (!command)
+    command = "";
 
   if (strlen(command) == 0 || !strcmp(command, "?")) {
     printf("At the prompt, you can type debug commands. For example, the word \"step\" is a\n"
@@ -674,13 +674,13 @@ Debugger::HandleInput(cell_t cip, bool isBp)
 }
 
 void
-Debugger::HandleHelpCmd(char *line)
+Debugger::HandleHelpCmd(const char *line)
 {
   char command[32];
   // See if there is a command specified after the "?".
   int result = sscanf(line, "%*s %30s", command);
   // Display general or special help for the command.
-  ListCommands(result ? command : nullptr);
+  ListCommands(result == 1 ? command : nullptr);
 }
 
 void
@@ -1925,7 +1925,7 @@ Debugger::DumpStack()
     }
 
     if (iter.IsNativeFrame()) {
-      fprintf(stdout, "[%d] %s", index, name);
+      fprintf(stdout, "[%d] %s\n", index, name);
       continue;
     }
 
