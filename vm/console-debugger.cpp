@@ -18,16 +18,15 @@
 #include "sp_typeutil.h"
 #include "plugin-context.h"
 #include "environment.h"
-#include "jit.h"
 #include "watchdog_timer.h"
 
 #if defined __GNUC__
 #include <unistd.h>
 #endif
-#if defined __linux__
+#if defined KE_POSIX
 #include <termios.h>
 #endif
-#if defined WIN32
+#if defined KE_WINDOWS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
@@ -47,7 +46,7 @@ enum {
 
   // Convince debugging console to act more like an
   // interactive input.
-#if defined __linux__
+#if defined KE_POSIX
 tcflag_t GetTerminalLocalMode()
 {
   struct termios term;
@@ -76,9 +75,7 @@ void ResetTerminalEcho(tcflag_t flag)
 {
   SetTerminalLocalMode(flag);
 }
-#endif
-
-#if defined WIN32
+#elif defined KE_WINDOWS
 DWORD EnableTerminalEcho()
 {
   DWORD mode, old_mode;
@@ -857,7 +854,7 @@ Debugger::HandleBreakpointCmd(char *command, char *params)
       uint32_t bpline = 0;
       LegacyImage *image = selected_context_->runtime()->image();
       image->LookupLine(bp->addr(), &bpline);
-      printf("Set breakpoint %d in file %s on line %d", breakpoint_map_.elements(), SkipPath(filename), bpline);
+      printf("Set breakpoint %zu in file %s on line %d", breakpoint_map_.elements(), SkipPath(filename), bpline);
       if (bp->name() != nullptr)
         printf(" in function %s", bp->name());
       fputs("\n", stdout);
