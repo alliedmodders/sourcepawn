@@ -1,41 +1,36 @@
-addons:
- apt:
-   packages:
-    - lib32stdc++6
-    - lib32z1-dev
-    - libc6-dev-i386
-    - linux-libc-dev
-    - g++-multilib
-    - g++-4.8
-   sources:
-    - ubuntu-toolchain-r-test
 language: cpp
 sudo: false
-compiler:
- - clang
+dist: trusty
+addons:
+  apt:
+    packages:
+      - g++-4.8
+      - g++-4.8-multilib
+      - clang-3.8
+      - libstdc++6
+      - lib32stdc++6
+      - libc6-dev
+      - libc6-dev-i386
+      - linux-libc-dev
+      - linux-libc-dev:i386
 env:
   global:
-  - LLVM_ARCHIVE_URI=http://sourcemod.net/clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz
-before_install:
-  - wget -nc $LLVM_ARCHIVE_URI -O $HOME/clang+llvm.tar.xz
-  - mkdir -p $HOME/clang+llvm
-  - tar -xf $HOME/clang+llvm.tar.xz -C $HOME/clang+llvm --strip-components 1
-  - export PATH=$HOME/clang+llvm/bin:$PATH
-before_script:
- - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/tools/checkout-deps.sh && cd $CHECKOUT_DIR
+    - EMSCRIPTEN_SDK_BRANCH=incoming
+    - EMSCRIPTEN_SDK_URI=https://github.com/urho3d/emscripten-sdk.git
+  matrix:
+    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=optimize
+    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x64 AM_TYPE=optimize
+    - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=optimize
+    - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=debug
+    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=debug
+    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x64 AM_TYPE=debug
+install:
+  - source ./tools/travis-download-compiler.sh
+  - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/tools/checkout-deps.sh && cd $CHECKOUT_DIR
+  - export PATH="~/.local/bin:$PATH"
+  - $AM_CXX --version
 script:
- - mkdir obj-release && cd obj-release
- - PATH="~/.local/bin:$PATH"
- - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize --target-arch=x86
- - ambuild
- - ./testing/test-all.x86.sh
- - cd ..
- - mkdir x64-release && cd x64-release
- - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-optimize --target-arch=x64
- - ambuild
- - ./testing/test-all.x64.sh
- - cd ..
- - mkdir x86-debug && cd x86-debug
- - CC=clang-3.8 CXX=clang-3.8 python ../configure.py --enable-debug --target-arch=x86
- - ambuild
- - ./testing/test-all.x86.sh
+  - mkdir $AM_CC-$AM_ARCH-$AM_TYPE && cd $AM_CC-$AM_ARCH-$AM_TYPE
+  - CC=$AM_CC CXX=$AM_CXX python ../configure.py --enable-$AM_TYPE --target-arch=$AM_ARCH
+  - ambuild
+  - ./testing/test-all.$AM_ARCH.sh

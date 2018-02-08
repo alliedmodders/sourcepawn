@@ -68,13 +68,13 @@ Preprocessor::setup_builtin_macros()
     char datestring[64];
     char timestring[64];
 
-#if defined(EMSCRIPTEN)
+#if defined(KE_EMSCRIPTEN)
     snprintf(datestring, sizeof(datestring),
              "%02d/%02d/%04d",
-             curtime->tm_mon + 1, curtime->tm_mday, curtime->tm_year + 1900);
+             curtime.tm_mon + 1, curtime.tm_mday, curtime.tm_year + 1900);
     snprintf(timestring, sizeof(timestring),
              "%02d:%02d:%02d",
-             curtime->tm_hour, curtime->tm_min, curtime->tm_sec);
+             curtime.tm_hour, curtime.tm_min, curtime.tm_sec);
 #else
     strftime(datestring, sizeof(datestring), "%m/%d/%Y", &curtime);
     strftime(timestring, sizeof(timestring), "%H:%M:%S", &curtime);
