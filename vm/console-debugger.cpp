@@ -1036,14 +1036,15 @@ Debugger::HandleDisplayFormatChangeCmd(char *params)
     /* nothing */;
 
   int len = (int)(ptr - params);
-  if (len == 0 || len > 31) {
+  // TODO: Use sNAMEMAX
+  if (len == 0 || len > 63) {
     fputs("\tInvalid (or missing) symbol name\n", stdout);
   }
   else {
     // Copy the symbol name from the params.
-    char symname[32];
+    char symname[64];
     ke::SafeStrcpy(symname, len, params);
-    symname[len] = '\0';
+    symname[len+1] = '\0';
 
     // Skip to the desired display type.
     params = SkipWhitespace(ptr);
