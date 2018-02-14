@@ -389,9 +389,9 @@ static void readline(unsigned char *line)
       line+=strlen((char*)line);
     } /* if */
     fline+=1;
-    sym=findconst("__line",NULL);
+    sym=findconst("__LINE__",NULL);
     assert(sym!=NULL);
-    sym->addr_=fline;
+    sym->setAddr(fline);
   } while (num>=0 && cont);
 }
 
