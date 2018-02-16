@@ -1,11 +1,14 @@
 #include <shell>
 
+#define linedefine __LINE__
+#define linemacro() printnum(__LINE__)
+
 public main() {
-    int iLine = __LINE__;
+    int iLine = linedefine;
 
     printnum(
-        __LINE__
+        linedefine
     );
     printnum(iLine);
-    printnum(__LINE__);
+    linemacro(); linemacro();
 }
