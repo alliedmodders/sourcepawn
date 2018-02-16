@@ -310,6 +310,7 @@ static void readline(unsigned char *line)
 {
   int i,num,cont;
   unsigned char *ptr;
+  symbol *sym;
 
   if (lptr==term_expr)
     return;
@@ -388,6 +389,9 @@ static void readline(unsigned char *line)
       line+=strlen((char*)line);
     } /* if */
     fline+=1;
+    sym=findconst("__LINE__",NULL);
+    assert(sym!=NULL);
+    sym->setAddr(fline);
   } while (num>=0 && cont);
 }
 
