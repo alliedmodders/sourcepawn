@@ -191,22 +191,21 @@ static int filewrite(char *str)
 void stgwrite(const char *st)
 {
   int len;
+  int st_len = strlen(st);
 
   if (staging) {
     assert(stgidx==0 || stgbuf!=NULL);  /* staging buffer must be valid if there is (apparently) something in it */
     if (stgidx>=2 && stgbuf[stgidx-1]=='\0' && stgbuf[stgidx-2]!='\n')
       stgidx-=1;                       /* overwrite last '\0' */
-    while (*st!='\0') {                /* copy to staging buffer */
-      CHECK_STGBUFFER(stgidx);
-      stgbuf[stgidx++]=*st++;
-    } /* while */
-    CHECK_STGBUFFER(stgidx);
-    stgbuf[stgidx++]='\0';
+
+    CHECK_STGBUFFER(stgidx+st_len+1);
+    memcpy(stgbuf+stgidx, st, st_len+1);
+    stgidx+=st_len+1;
   } else {
     len=(stgbuf!=NULL) ? strlen(stgbuf) : 0;
-    CHECK_STGBUFFER(len+strlen(st)+1);
-    strcat(stgbuf,st);
-    len=strlen(stgbuf);
+    CHECK_STGBUFFER(len+st_len+1);
+    memcpy(stgbuf+len, st, st_len+1);
+    len+=st_len;
     if (len>0 && stgbuf[len-1]=='\n') {
       filewrite(stgbuf);
       stgbuf[0]='\0';
