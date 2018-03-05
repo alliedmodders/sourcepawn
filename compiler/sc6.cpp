@@ -233,6 +233,15 @@ static void do_dump(CellWriter* writer, char *params, cell opcode)
   }
 }
 
+static void do_dumpdup(CellWriter* writer, char *params, cell opcode)
+{
+  ucell value = getparam(params, &params);
+  ucell times = getparam(params, nullptr);
+  while(times-- > 0) {
+    writer->append(value);
+  }
+}
+
 static symbol*
 extract_call_target(char *params)
 {
@@ -331,6 +340,7 @@ static OPCODEC opcodelist[] = {
   {112, "dec.pri",    sIN_CSEG, parm0 },
   {115, "dec.s",      sIN_CSEG, parm1 },
   {  0, "dump",       sIN_DSEG, do_dump },
+  {  0, "dumpdup",    sIN_DSEG, do_dumpdup },
   {166, "endproc",    sIN_CSEG, parm0 },
   { 95, "eq",         sIN_CSEG, parm0 },
   {106, "eq.c.alt",   sIN_CSEG, parm1 },
