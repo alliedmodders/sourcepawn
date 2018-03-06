@@ -1359,20 +1359,14 @@ static void dumplits(void)
  */
 static void dumpzero(int count)
 {
-  int i;
-
   if (sc_status==statSKIP || count<=0)
     return;
   assert(curseg==2);
-  defstorage();
-  i=0;
-  while (count-- > 0) {
-    outval(0, FALSE);
-    i=(i+1) % 16;
-    stgwrite((i==0 || count==0) ? "\n" : " ");
-    if (i==0 && count>0)
-      defstorage();
-  } /* while */
+  
+  stgwrite("dumpfill ");
+  outval(0, FALSE);
+  stgwrite(" ");
+  outval(count, TRUE);
 }
 
 /* declstruct - declare global struct symbols
