@@ -1363,7 +1363,7 @@ static void dumpzero(int count)
     return;
   assert(curseg==2);
   
-  stgwrite("dumpdup ");
+  stgwrite("dumpfill ");
   outval(0, FALSE);
   stgwrite(" ");
   outval(count, TRUE);
