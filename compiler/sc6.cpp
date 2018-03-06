@@ -340,7 +340,7 @@ static OPCODEC opcodelist[] = {
   {112, "dec.pri",    sIN_CSEG, parm0 },
   {115, "dec.s",      sIN_CSEG, parm1 },
   {  0, "dump",       sIN_DSEG, do_dump },
-  {  0, "dumpfill",    sIN_DSEG, do_dumpfill },
+  {  0, "dumpfill",   sIN_DSEG, do_dumpfill },
   {166, "endproc",    sIN_CSEG, parm0 },
   { 95, "eq",         sIN_CSEG, parm0 },
   {106, "eq.c.alt",   sIN_CSEG, parm1 },
