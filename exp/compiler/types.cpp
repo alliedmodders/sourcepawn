@@ -18,7 +18,7 @@
 #include "types.h"
 #include "compile-context.h"
 #include "boxed-value.h"
-#include "ast.h"
+#include "parser/ast.h"
 
 using namespace ke;
 using namespace sp;

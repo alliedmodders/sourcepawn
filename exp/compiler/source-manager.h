@@ -22,16 +22,16 @@
 #include <am-refcounting.h>
 #include <am-vector.h>
 #include <am-fixedarray.h>
-#include "tokens.h"
 #include "macros.h"
+#include "token-kind.h"
 
 namespace sp {
 
 using namespace ke;
 
 struct ReportingContext;
-class SourceFile;
 class ReportManager;
+class SourceFile;
 
 // We place some kind of reasonable cap on the size of source files. This cap
 // also applies to the offsets we can allocate in the source manager. Capping

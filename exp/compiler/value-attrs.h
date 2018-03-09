@@ -22,21 +22,6 @@
 
 namespace sp {
 
-// Value kinds.
-enum class VK : int32_t
-{
-  none,
-
-  // An lvalue can be the left-hand side of an assignment. LValues in Pawn are:
-  //   NameProxies
-  //   FieldExprs
-  //   IndexExprs
-  lvalue,
-
-  // An rvalue is anything that is not an lvalue.
-  rvalue
-};
-
 // Storage class for variables.
 enum class StorageClass : int32_t
 {

@@ -83,6 +83,7 @@ class Config(object):
         cxx.cxxflags += ['-fvisibility-inlines-hidden']
         if have_clang or (have_gcc and cxx.version >= '4.7'):
           cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
+        cxx.cxxflags += ['-Wno-unused-private-field']
 
       # Disable some stuff we don't use, that gives us better binary
       # compatibility on Linux.

@@ -19,9 +19,10 @@
 #include "compiler/reporting.h"
 #include "compiler/source-manager.h"
 #include "compiler/compile-context.h"
-#include "compiler/preprocessor.h"
-#include "compiler/parser.h"
-#include "compiler/json-tools.h"
+#include "compiler/parser/preprocessor.h"
+#include "compiler/parser/parser.h"
+#include "compiler/parser/json-tools.h"
+#include "compiler/sema/name-resolver.h"
 #include <assert.h>
 
 using namespace ke;

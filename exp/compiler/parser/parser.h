@@ -23,10 +23,10 @@
 #include "ast.h"
 #include "scopes.h"
 #include "process-options.h"
-#include "name-resolver.h"
 
 namespace sp {
 
+class NameResolver;
 class Preprocessor;
 
 namespace DeclFlags

@@ -139,6 +139,11 @@ RMSG(function_has_no_impl,          type,              "function '%0' cannot be 
 RMSG(const_has_no_meaning,          type,              "const has no meaning on type '%0' in this context")
 RMSG(const_ref_has_no_meaning,      type,              "const reference has no meaning on type '%0' in this context")
 
+RMSG(need_return_value,             type,              "non-void function needs return value")
+RMSG(returned_in_void_function,     type,              "void function cannot return a value")
+
+RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
+
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")
 //MSG(CannotDeclareVoid,              TypeError,              "cannot declare void variables")

@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_coercion_h_
 #define _include_spcomp_coercion_h_
 
-#include "ast.h"
+#include "parser/ast.h"
 #include "reporting.h"
 
 namespace sp {

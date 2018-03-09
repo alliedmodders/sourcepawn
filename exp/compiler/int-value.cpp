@@ -17,6 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "int-value.h"
 #include "compile-context.h"
+#include "parser/tokens.h"
 
 using namespace ke;
 using namespace sp;

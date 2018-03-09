@@ -19,6 +19,7 @@
 #include "string-pool.h"
 #include "parser.h"
 #include "preprocessor.h"
+#include "sema/name-resolver.h"
 
 using namespace ke;
 using namespace sp;

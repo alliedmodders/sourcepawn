@@ -18,7 +18,9 @@
 #ifndef _include_spcomp_int_value_h_
 #define _include_spcomp_int_value_h_
 
-#include "tokens.h"
+#include "token-kind.h"
+#include <stdint.h>
+#include <limits.h>
 
 namespace sp {
 
@@ -34,9 +36,58 @@ struct ReportingContext;
   _(int64_t,  Int64,  1)          \
   _(uint64_t, Uint64, 0)
 
+namespace impl {
+  struct true_value { static const bool value = true; };
+  struct false_value { static const bool value = false; };
+
+  template <typename T> struct is_signed {};
+  template <> struct is_signed<int8_t> : public true_value {};
+  template <> struct is_signed<int16_t> : public true_value {};
+  template <> struct is_signed<int32_t> : public true_value {};
+  template <> struct is_signed<int64_t> : public true_value {};
+  template <> struct is_signed<uint8_t> : public false_value {};
+  template <> struct is_signed<uint16_t> : public false_value {};
+  template <> struct is_signed<uint32_t> : public false_value {};
+  template <> struct is_signed<uint64_t> : public false_value {};
+
+  template <typename T> struct limits {};
+  template <> struct limits<uint8_t> {
+    static const uint8_t max_value = UCHAR_MAX;
+    static const uint8_t min_value = 0;
+  };
+  template <> struct limits<uint16_t> {
+    static const uint16_t max_value = USHRT_MAX;
+    static const uint16_t min_value = 0;
+  };
+  template <> struct limits<uint32_t> {
+    static const uint32_t max_value = UINT_MAX;
+    static const uint32_t min_value = 0;
+  };
+  template <> struct limits<uint64_t> {
+    static const uint64_t max_value = ULLONG_MAX;
+    static const uint64_t min_value = 0;
+  };
+  template <> struct limits<int8_t> {
+    static const int8_t max_value = SCHAR_MAX;
+    static const int8_t min_value = SCHAR_MIN;
+  };
+  template <> struct limits<int16_t> {
+    static const int16_t max_value = SHRT_MAX;
+    static const int16_t min_value = SHRT_MIN;
+  };
+  template <> struct limits<int32_t> {
+    static const int32_t max_value = INT_MAX;
+    static const int32_t min_value = INT_MIN;
+  };
+  template <> struct limits<int64_t> {
+    static const int64_t max_value = LLONG_MAX;
+    static const int64_t min_value = LLONG_MIN;
+  };
+} // namespace impl
+
 struct IntValue
 {
-  static const uint32_t kMaxBits = 64;
+  static const uint32_t kMaxBits = sizeof(uint64_t) * 8;
 
  public:
   static IntValue FromRaw(uint64_t value, uint32_t bits, bool sign) {
@@ -55,6 +106,16 @@ struct IntValue
     return v;
   }
 
+  template <typename T>
+  static IntValue FromValue(T value) {
+    IntValue v;
+    if (impl::is_signed<T>::value)
+      v.setSigned(value, sizeof(T) * 8);
+    else
+      v.setUnsigned(value, sizeof(T) * 8);
+    return v;
+  }
+
   int64_t asSigned() const {
     return ivalue_;
   }
@@ -66,6 +127,23 @@ struct IntValue
   }
   bool isMaxBits() const {
     return numBits() == kMaxBits;
+  }
+
+  // :TODO: test.
+  template <typename T> bool safeCast(T* out) {
+    if (impl::is_signed<T>::value != isSigned() && numBits() >= sizeof(T) * 8)
+      return false;
+
+    *out = static_cast<T>(ivalue_);
+    return true;
+  }
+
+  template <typename T, typename V>
+  static inline bool SafeCast(T value, V* out) {
+    if (value < impl::limits<V>::min_value || value > impl::limits<V>::max_value)
+      return false;
+    *out = static_cast<V>(value);
+    return true;
   }
 
   uint32_t numBits() const {
@@ -161,6 +239,8 @@ struct IntValue
   static bool ValidateAluOp(ReportingContext &cc, TokenKind tok, IntValue *left, IntValue *right, bool *sign);
 
  private:
+  // Note: bits implicitly stores the type. We do not right-size the bitcount
+  // since this would lose type information.
   uint32_t bits_ : 31;
   uint32_t is_signed_ : 1;
   union {

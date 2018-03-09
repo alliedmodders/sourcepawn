@@ -21,6 +21,7 @@ for arch in Root.archs:
   binary = Root.Program(builder, 'docparse', arch)
   binary.compiler.cxxincludes += [
     os.path.join(builder.sourcePath, 'exp'),
+    os.path.join(builder.sourcePath, 'exp/compiler'),
   ]
 
   if binary.compiler.like('msvc'):
