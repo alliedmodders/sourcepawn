@@ -711,7 +711,7 @@ NameResolver::OnLeaveFunctionDecl(FunctionStatement *node)
 void
 NameResolver::OnReturnStmt(ReturnStatement *stmt)
 {
-  if (stmt->expression())
+  if (stmt->expr())
     encountered_return_value_ = true;
 }
 

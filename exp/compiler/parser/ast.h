@@ -82,8 +82,7 @@ class CompileContext;
   _(FieldDecl)            \
   _(ThisExpression)       \
   _(DeleteStatement)      \
-  _(FoldedExpr)           \
-  _(ConstructTypesetExpr)
+  _(FoldedExpr)
 
 // Forward declarations.
 #define _(name) class name;
@@ -93,29 +92,30 @@ ASTKINDS(_)
 class AstVisitor;
 class FileContext;
 
+enum class AstKind
+{
+#  define _(name) k##name,
+  ASTKINDS(_)
+#  undef _
+  AstKind_Invalid
+};
+
 // Interface for AST nodes.
 class AstNode : public PoolObject
 {
   SourceLocation location_;
 
  public:
-  enum Kind {
-#     define _(name) k##name,
-    ASTKINDS(_)
-#     undef _
-    AstKind_Invalid
-  };
-
   AstNode(const SourceLocation &location)
     : location_(location)
   {
   }
   
-  virtual Kind kind() const = 0;
+  virtual AstKind kind() const = 0;
   virtual const char *kindName() const = 0;
 
-#define _(name)   bool is##name() { return kind() == k##name; }           \
-          name *to##name() { assert(is##name()); return (name *)this; }   \
+#define _(name)   bool is##name() { return kind() == AstKind::k##name; }            \
+          name *to##name() { assert(is##name()); return (name *)this; }             \
           name *as##name() { if (!is##name()) return nullptr; return to##name(); }
   ASTKINDS(_)
 #undef _
@@ -128,8 +128,8 @@ class AstNode : public PoolObject
 };
 
 #define DECLARE_NODE(type)            \
-  Kind kind() const {                 \
-    return k##type;                   \
+  AstKind kind() const {              \
+    return AstKind::k##type;          \
   }                                   \
   void accept(AstVisitor *visitor) {  \
     visitor->visit##type(this);       \
@@ -178,40 +178,9 @@ class Expression : public AstNode
 {
  public:
   Expression(const SourceLocation &pos)
-   : AstNode(pos),
-     side_effects_(false),
-     valueKind_(VK::none)
+   : AstNode(pos)
   {
   }
-
-  bool hasSideEffects() const {
-    return side_effects_;
-  }
-  void setHasSideEffects() {
-    side_effects_ = true;
-  }
-
-  Type *type() const {
-    return type_;
-  }
-  VK vk() const {
-    assert(valueKind_ != VK::none);
-    return valueKind_;
-  }
-  void setOutput(Type *type, VK valueKind) {
-    assert(!type_);
-    type_ = type;
-    valueKind_ = valueKind;
-  }
-
- private:
-  Type *type_;
-  bool side_effects_ : 1;
-#if defined(__clang__)
-  VK valueKind_ : 2;
-#else
-  VK valueKind_;
-#endif
 };
 
 typedef PoolList<Statement *> StatementList;
@@ -855,36 +824,6 @@ class ForStatement : public Statement
   }
 };
 
-// Used when invoking a typeset constructor.
-class ConstructTypesetExpr : public Expression
-{
- public:
-  ConstructTypesetExpr(const SourceLocation &loc, Expression *expr, Type *typeset, size_t typeIndex)
-   : Expression(loc),
-     expr_(expr),
-     typeIndex_(typeIndex)
-  {
-    setOutput(typeset, VK::rvalue);
-  }
-
-  DECLARE_NODE(ConstructTypesetExpr);
-
-  Expression *expr() const {
-    return expr_;
-  }
-  TypesetType *typeset() const {
-    return type()->toTypeset();
-  }
-
-  size_t typeIndex() const {
-    return typeIndex_;
-  }
-
- private:
-  Expression *expr_;
-  size_t typeIndex_;
-};
-
 // FoldedExprs note that an expression has been constant-folded during semantic
 // analysis, but the original tree is still available if needed.
 class FoldedExpr : public Expression
@@ -940,20 +879,21 @@ class WhileStatement : public Statement
 
 class ReturnStatement : public Statement
 {
-  Expression *expression_;
-
  public:
-  ReturnStatement(const SourceLocation &pos, Expression *expression)
+  ReturnStatement(const SourceLocation &pos, Expression *expr)
     : Statement(pos),
-      expression_(expression)
+      expr_(expr)
   {
   }
 
   DECLARE_NODE(ReturnStatement);
 
-  Expression *expression() const {
-    return expression_;
+  Expression *expr() const {
+    return expr_;
   }
+
+ private:
+  Expression *expr_;
 };
 
 class BreakStatement : public Statement
@@ -1049,13 +989,6 @@ class BlockStatement : public Statement
 
   StatementList *statements() const {
     return statements_;
-  }
-  Scope *scope() const {
-    return scope_;
-  }
-  void setScope(Scope *scope) {
-    assert(!scope_);
-    scope_ = scope;
   }
   TokenKind type() const {
     return type_;

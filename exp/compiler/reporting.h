@@ -23,12 +23,13 @@
 #include <am-refcounting.h>
 #include <am-vector.h>
 #include <am-string.h>
-#include "source-manager.h"
 
 namespace sp {
 
 class CompileContext;
+class SourceManager;
 class Type;
+struct FullSourceRef;
 
 enum class rmsg_type
 {

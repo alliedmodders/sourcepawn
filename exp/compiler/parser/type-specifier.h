@@ -19,7 +19,7 @@
 #define _include_spcomp_type_specifier_h_
 
 #include "types.h"
-#include "tokens.h"
+#include "token-kind.h"
 #include "source-location.h"
 #include "pool-allocator.h"
 

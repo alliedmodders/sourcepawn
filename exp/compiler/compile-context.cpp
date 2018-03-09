@@ -18,10 +18,10 @@
 #include "compile-context.h"
 #include "compile-phases.h"
 #include "source-manager.h"
-#include "preprocessor.h"
-#include "parser.h"
-#include "name-resolver.h"
-#include "semantic-analysis.h"
+#include "parser/preprocessor.h"
+#include "parser/parser.h"
+#include "sema/name-resolver.h"
+#include "sema/semantic-analysis.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

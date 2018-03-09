@@ -141,13 +141,6 @@ class AstPrinter : public AstVisitor
     node->expression()->accept(this);
     unindent();
   }
-  void visitConstructTypesetExpr(ConstructTypesetExpr *node) override {
-    prefix();
-    fprintf(fp_, "[ ConstructTypesetExpr (%s)\n", node->typeset()->name()->chars());
-    indent();
-    node->expr()->accept(this);
-    unindent();
-  }
   void visitFoldedExpr(FoldedExpr *node) override {
     prefix();
     fprintf(fp_, "[ FoldedExpr\n");
@@ -183,8 +176,8 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ ReturnStatement\n");
     indent();
-    if (node->expression())
-      node->expression()->accept(this);
+    if (node->expr())
+      node->expr()->accept(this);
     unindent();
   }
   void visitDeleteStatement(DeleteStatement *node) override {

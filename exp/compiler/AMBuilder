@@ -24,6 +24,7 @@ for arch in Root.archs:
   binary = Root.StaticLibrary(builder, 'spcomp', arch)
   binary.compiler.cxxincludes += [
     os.path.join(builder.sourcePath, 'include'),
+    os.path.join(builder.sourcePath, builder.sourceFolder),
   ]
 
   if binary.compiler.like('gcc'):
@@ -40,31 +41,31 @@ for arch in Root.archs:
     ]
 
   binary.sources += [
-    'ast-printer.cpp',
-    'conversion.cpp',
     'compile-context.cpp',
     'constant-evaluator.cpp',
     'dll_exports.cpp',
     'float-value.cpp',
     'int-value.cpp',
-    'json-tools.cpp',
-    'keyword-table.cpp',
-    'lexer.cpp',
-    'macro-lexer.cpp',
-    'name-resolver.cpp',
-    'parser.cpp',
     'pool-allocator.cpp',
-    'preprocessor.cpp',
     'scopes.cpp',
-    'semantic-analysis.cpp',
     'smx-builder.cpp',
     'source-manager.cpp',
     'symbols.cpp',
     'reporting.cpp',
-    'tk-evaluator.cpp',
     'type-manager.cpp',
-    'type-resolver.cpp',
     'types.cpp',
+    'parser/ast-printer.cpp',
+    'parser/json-tools.cpp',
+    'parser/keyword-table.cpp',
+    'parser/lexer.cpp',
+    'parser/macro-lexer.cpp',
+    'parser/parser.cpp',
+    'parser/preprocessor.cpp',
+    'parser/tk-evaluator.cpp',
+    'sema/conversion.cpp',
+    'sema/name-resolver.cpp',
+    'sema/semantic-analysis.cpp',
+    'sema/type-resolver.cpp',
   ]
   SP.libspcomp[arch] = builder.Add(binary)
 
@@ -72,6 +73,7 @@ for arch in Root.archs:
   binary.compiler.cxxincludes += [
     os.path.join(builder.sourcePath),
     os.path.join(builder.sourcePath, 'include'),
+    os.path.join(builder.sourcePath, builder.sourceFolder),
   ]
   if binary.compiler.like('msvc'):
     binary.compiler.postlink += ['/SUBSYSTEM:CONSOLE']

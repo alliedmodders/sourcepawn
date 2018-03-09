@@ -1,6 +1,6 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set ts=2 sw=2 tw=99 et:
 // 
-// Copyright (C) 2012-2014 David Anderson
+// Copyright (C) 2012-2014 AlliedModders LLC and David Anderson
 // 
 // This file is part of SourcePawn.
 // 
@@ -15,19 +15,23 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
-#ifndef _include_spcomp_decl_map_h_
-#define _include_spcomp_decl_map_h_
+#ifndef _include_semantic_analysis_program_h_
+#define _include_semantic_analysis_program_h_
 
-#include <am-inlinelist.h>
+#include <amtl/am-vector.h>
+#include "pool-allocator.h"
 
-namespace ke {
+namespace sp {
+namespace sema {
 
-// DeclMaps are hash maps for lookups on declarations.
-class DeclMap : public InlineList<DeclMap>
+class FunctionDef;
+
+struct Program : public PoolObject
 {
- public:
+  ke::Vector<sema::FunctionDef*> functions;
 };
 
-}
+} // namespace sema
+} // namespace sp
 
-#endif // _include_spcomp_decl_map_h_
+#endif // _include_semantic_analysis_program_h_

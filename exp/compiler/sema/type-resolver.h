@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_type_resolver_h_
 #define _include_spcomp_type_resolver_h_
 
-#include "ast.h"
+#include "parser/ast.h"
 #include "scopes.h"
 #include "symbols.h"
 #include "constant-evaluator.h"
@@ -30,7 +30,6 @@ namespace sp {
 using namespace ke;
 
 class TranslationUnit;
-
 class TypeSpecHelper;
 
 class TypeResolver

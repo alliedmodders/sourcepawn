@@ -19,12 +19,13 @@
 #define _include_jitcraft_scopes_h_
 
 #include "pool-allocator.h"
-#include "ast.h"
 #include "scopes.h"
 
 namespace sp {
 
 class CompileContext;
+class FieldDecl;
+class Symbol;
 
 typedef PoolList<Symbol *> SymbolList;
 

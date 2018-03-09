@@ -18,7 +18,10 @@
 #ifndef _include_semantic_analysis_h_
 #define _include_semantic_analysis_h_
 
-#include "ast.h"
+#include "parser/ast.h"
+#include "sema/statements.h"
+#include "sema/expressions.h"
+#include "sema/program.h"
 
 namespace sp {
 
@@ -27,23 +30,25 @@ class PoolAllocator;
 class TranslationUnit;
 class TypeManager;
 
-class SemanticAnalysis : public StrictAstVisitor
+class SemanticAnalysis
 {
  public:
   SemanticAnalysis(CompileContext &cc, TranslationUnit *unit);
 
-  bool analyze();
+  sema::Program* analyze();
 
- public:
-  void visitFunctionStatement(FunctionStatement *node) override;
-  void visitBlockStatement(BlockStatement *node) override;
-  void visitExpressionStatement(ExpressionStatement *node) override;
-  void visitCallExpr(CallExpr *node) override;
-  void visitNameProxy(NameProxy *node) override;
-  void visitStringLiteral(StringLiteral *node) override;
-  void visitReturnStatement(ReturnStatement *node) override;
+ private:
+  bool walkAST();
 
-private:
+  sema::FunctionDef* visitFunctionStatement(FunctionStatement* node);
+  sema::Block* visitBlockStatement(BlockStatement* node);
+  sema::Statement* visitStatement(Statement* node);
+  sema::Return* visitReturnStatement(ReturnStatement* node);
+
+  sema::Expr* visitExpression(Expression* node);
+  sema::ConstValue* visitIntegerLiteral(IntegerLiteral* node);
+
+ private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
   void checkForwardedFunction(FunctionStatement *forward, FunctionStatement *impl); 
   bool matchForwardSignatures(FunctionSignature *fwdSig, FunctionSignature *implSig);
@@ -51,12 +56,10 @@ private:
 
   void checkCall(FunctionSignature *sig, ExpressionList *args);
 
-  // Visit for any kind of value. This is guaranteed to not rewrite the
-  // expression, so it returns a type instead.
-  Type *visitForValue(Expression *expr);
-
-  // Turn l-values into r-values.
-  Expression *visitForRValue(Expression *expr);
+  enum class Coercion {
+    Return
+  };
+  sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
 
  private:
   struct FuncState : StackLinked<FuncState>
@@ -78,8 +81,10 @@ private:
   TranslationUnit *tu_;
 
   FuncState *funcstate_;
+
+  ke::Vector<sema::FunctionDef*> global_functions_;
 };
 
-}
+} // namespace sp
 
 #endif // _include_semantic_analysis_h_

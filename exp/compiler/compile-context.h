@@ -26,7 +26,6 @@
 #include <string.h>
 #include "pool-allocator.h"
 #include "auto-string.h"
-#include "tokens.h"
 #include "string-pool.h"
 #include "type-manager.h"
 #include "process-options.h"
@@ -36,6 +35,7 @@ namespace sp {
 
 class ParseTree;
 class GlobalScope;
+class SourceFile;
 class SourceManager;
 
 class TranslationUnit : public PoolObject

@@ -18,6 +18,7 @@
 #include "symbols.h"
 #include "scopes.h"
 #include "compile-context.h"
+#include "parser/ast.h"
 
 using namespace ke;
 using namespace sp;

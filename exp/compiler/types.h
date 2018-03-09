@@ -20,7 +20,6 @@
 #define _include_jc_types_h_
 
 #include "assert.h"
-#include "tokens.h"
 #include "string-pool.h"
 #include "pool-allocator.h"
 
