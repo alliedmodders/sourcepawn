@@ -528,8 +528,10 @@ NameResolver::LeavePropertyDecl(PropertyDecl *decl)
 
   FunctionNode* getter = decl->getter();
   FunctionNode* setter = decl->setter();
-  if (!decl->te().resolved() ||
-      (!getter->signature()->isResolved() || !setter->signature()->isResolved()))
+  if (!decl->te().resolved() || (
+      (getter && !getter->signature()->isResolved()) ||
+      (setter && !setter->signature()->isResolved())
+     ))
   {
     tr_.addPending(decl);
   }
