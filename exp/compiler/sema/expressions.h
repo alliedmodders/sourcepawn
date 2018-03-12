@@ -23,15 +23,18 @@
 
 namespace sp {
 
-class Expression;
 class Type;
+
+namespace ast {
+class Expression;
+} // namespace ast
 
 namespace sema {
 
 class Expr : public PoolObject
 {
 public:
-  explicit Expr(sp::Expression* node, Type* type)
+  explicit Expr(ast::Expression* node, Type* type)
     : node_(node),
       type_(type)
   {}
@@ -41,14 +44,14 @@ public:
   }
 
 private:
-  sp::Expression* node_;
+  ast::Expression* node_;
   Type* type_;
 };
 
 class ConstValue : public Expr
 {
 public:
-  explicit ConstValue(sp::Expression* node, Type* type, const BoxedValue& value)
+  explicit ConstValue(ast::Expression* node, Type* type, const BoxedValue& value)
    : Expr(node, type),
      value_(value)
   {}

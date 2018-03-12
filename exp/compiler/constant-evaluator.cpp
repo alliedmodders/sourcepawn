@@ -21,8 +21,10 @@
 #include "constant-evaluator.h"
 #include "compile-context.h"
 
+namespace sp {
+
 using namespace ke;
-using namespace sp;
+using namespace ast;
 
 static inline void
 CoerceToBool(BoxedValue &in)
@@ -278,3 +280,5 @@ ConstantEvaluator::Evaluate(Expression *expr, BoxedValue *out)
 
   return NotConstant;
 }
+
+} // namespace sp

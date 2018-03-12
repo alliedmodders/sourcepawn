@@ -20,8 +20,10 @@
 #include "compile-context.h"
 #include "parser/ast.h"
 
+namespace sp {
+
 using namespace ke;
-using namespace sp;
+using namespace sp::ast;
 
 bool
 VariableSymbol::canUseInConstExpr() const
@@ -91,3 +93,5 @@ FunctionSymbol::impl() const
 
   return candidate;
 }
+
+} // namespace ast

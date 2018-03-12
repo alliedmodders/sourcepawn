@@ -19,8 +19,10 @@
 #include "compile-context.h"
 #include "compile-phases.h"
 
+namespace sp {
+
 using namespace ke;
-using namespace sp;
+using namespace ast;;
 
 const int TypeResolver::kRankUnvisited = INT_MIN;
 
@@ -980,3 +982,5 @@ VarDeclSpecHelper::arrayInitData() const
          ? array_init_
          : nullptr;
 }
+
+} // namespace sp

@@ -101,10 +101,10 @@ LayoutScope::New(PoolAllocator &pool)
 }
 
 void
-LayoutScope::addAnonymousField(FieldDecl *decl)
+LayoutScope::addAnonymousField(ast::FieldDecl *decl)
 {
   if (!anonymous_fields_)
-    anonymous_fields_ = new (POOL()) PoolList<FieldDecl *>();
+    anonymous_fields_ = new (POOL()) PoolList<ast::FieldDecl *>();
   anonymous_fields_->append(decl);
 }
 

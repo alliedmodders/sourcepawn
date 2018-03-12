@@ -22,7 +22,10 @@
 #include "sema/name-resolver.h"
 
 using namespace ke;
-using namespace sp;
+
+namespace sp {
+
+using namespace ast;
 
 Parser::Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver)
 : cc_(cc),
@@ -2280,3 +2283,5 @@ Parser::parse()
  err_out:
   return new (pool_) ParseTree(list);
 }
+
+} // namespace sp

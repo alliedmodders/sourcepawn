@@ -30,6 +30,8 @@ class PoolAllocator;
 class TranslationUnit;
 class TypeManager;
 
+using namespace ast;
+
 class SemanticAnalysis
 {
  public:

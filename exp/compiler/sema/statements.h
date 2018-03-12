@@ -26,12 +26,12 @@ class Expr;
 class Statement : public PoolObject
 {
 public:
-  explicit Statement(AstNode* node)
+  explicit Statement(ast::AstNode* node)
     : node_(node)
   {}
 
 private:
-  AstNode* node_;
+  ast::AstNode* node_;
 };
 
 typedef PoolList<Statement *> Statements;
@@ -39,7 +39,7 @@ typedef PoolList<Statement *> Statements;
 class Block : public Statement
 {
 public:
-  explicit Block(AstNode* node, Statements* statements)
+  explicit Block(ast::AstNode* node, Statements* statements)
     : Statement(node),
       statements_(statements)
   {}
@@ -51,7 +51,7 @@ private:
 class FunctionDef : public Statement
 {
 public:
-  explicit FunctionDef(AstNode* node, Block* body)
+  explicit FunctionDef(ast::AstNode* node, Block* body)
     : Statement(node),
       body_(body)
   {}
@@ -63,7 +63,7 @@ private:
 class Return : public Statement
 {
 public:
-  explicit Return(AstNode* node, Expr* expr)
+  explicit Return(ast::AstNode* node, Expr* expr)
     : Statement(node),
       expr_(expr)
   {}

@@ -27,8 +27,11 @@
 namespace sp {
 
 struct ReportingContext;
-class TypeSpecifier;
+
+namespace ast {
 class TypeExpr;
+class TypeSpecifier;
+} // namespace ast
 
 enum class PrimitiveType : uint32_t
 {
@@ -411,7 +414,10 @@ class Type : public PoolObject
   Type *canonical_;
 };
 
+namespace ast {
+// :TODO: breakdependence on ast
 class MethodmapDecl;
+} // namespace ast
 
 class EnumType : public Type
 {
@@ -428,17 +434,17 @@ class EnumType : public Type
     return name_;
   }
 
-  void setMethodmap(MethodmapDecl *methodmap) {
+  void setMethodmap(ast::MethodmapDecl *methodmap) {
     assert(!methodmap_);
     methodmap_ = methodmap;
   }
-  MethodmapDecl *methodmap() const {
+  ast::MethodmapDecl *methodmap() const {
     return methodmap_;
   }
 
  private:
   Atom *name_;
-  MethodmapDecl *methodmap_;
+  ast::MethodmapDecl *methodmap_;
 };
 
 class ArrayType : public Type
@@ -528,33 +534,39 @@ class TypedefType : public Type
   Type *actual_;
 };
 
+namespace ast {
 class FunctionSignature;
+} // namespace ast
 
+// :TODO: break dependence on ast
 class FunctionType : public Type
 {
-  FunctionType(FunctionSignature *signature)
+  FunctionType(ast::FunctionSignature *signature)
    : Type(Kind::Function),
      signature_(signature)
   {
   }
 
  public:
-  static FunctionType *New(FunctionSignature *sig);
+  static FunctionType *New(ast::FunctionSignature *sig);
 
-  FunctionSignature *signature() const {
+  ast::FunctionSignature *signature() const {
     return signature_;
   }
 
  private:
-  FunctionSignature *signature_;
+  ast::FunctionSignature *signature_;
 };
 
+// :TODO: break dependence on ast
+namespace ast {
 class RecordDecl;
+} // namespace ast
 
 class RecordType : public Type
 {
  public:
-  RecordType(Kind kind, RecordDecl *decl)
+  RecordType(Kind kind, ast::RecordDecl *decl)
    : Type(kind),
      decl_(decl)
   {}
@@ -562,37 +574,41 @@ class RecordType : public Type
   Atom *name() const;
 
  private:
-  RecordDecl *decl_;
+  ast::RecordDecl *decl_;
 };
 
+namespace ast {
 class TypesetDecl;
+} // namespace ast
 
+// :TODO: break dependence on ast by creating the TypesetType object lazily
+// in type resolution (why not?)
 class TypesetType : public Type
 {
-  TypesetType(TypesetDecl *decl)
+  TypesetType(ast::TypesetDecl *decl)
    : Type(Kind::Typeset),
      decl_(decl)
   {}
 
  public:
-  static TypesetType *New(TypesetDecl *decl);
+  static TypesetType *New(ast::TypesetDecl *decl);
 
   Atom *name() const;
   size_t numTypes() const;
   Type *typeAt(size_t i) const;
 
  private:
-  TypesetDecl *decl_;
+  ast::TypesetDecl *decl_;
 };
 
 class StructType : public RecordType
 {
-  StructType(RecordDecl *decl)
+  StructType(ast::RecordDecl *decl)
    : RecordType(Kind::Struct, decl)
   {}
 
  public:
-  static StructType *New(RecordDecl *decl);
+  static StructType *New(ast::RecordDecl *decl);
 };
 
 static inline size_t
@@ -736,8 +752,8 @@ KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
 // Build a type name for diagnostics, with an optional name for building a
 // declaration.
 AString BuildTypeName(Type *type, Atom *name = nullptr, TypeDiagFlags flags = TypeDiagFlags::None);
-AString BuildTypeName(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
-AString BuildTypeName(const TypeExpr &te, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(const ast::TypeSpecifier *spec, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(const ast::TypeExpr &te, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be
@@ -753,6 +769,6 @@ bool AreFunctionTypesEqual(FunctionType *a, FunctionType *b);
 // and casting. If |context| is const, both types are considered const.
 bool AreTypesEquivalent(Type *a, Type *b, Qualifiers context);
 
-}
+} // namespace sp
 
 #endif // _include_jc_types_h_

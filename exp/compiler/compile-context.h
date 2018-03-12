@@ -33,10 +33,13 @@
 
 namespace sp {
 
-class ParseTree;
 class GlobalScope;
 class SourceFile;
 class SourceManager;
+
+namespace ast {
+class ParseTree;
+} // namespace ast
 
 class TranslationUnit : public PoolObject
 {
@@ -51,7 +54,7 @@ class TranslationUnit : public PoolObject
   {
   }
 
-  ParseTree *tree() const {
+  ast::ParseTree *tree() const {
     return tree_;
   }
   GlobalScope *globalScope() const {
@@ -60,13 +63,13 @@ class TranslationUnit : public PoolObject
   void setGlobalScope(GlobalScope *scope) {
     globalScope_ = scope;
   }
-  void attach(ParseTree *tree) {
+  void attach(ast::ParseTree *tree) {
     assert(!tree_);
     tree_ = tree;
   }
 
  private:
-  ParseTree *tree_;
+  ast::ParseTree *tree_;
   GlobalScope *globalScope_;
 };
 

@@ -29,8 +29,12 @@ namespace sp {
 
 using namespace ke;
 
-class String;
+namespace ast {
 class AstNode;
+class FunctionStatement;
+} // namespace ast
+
+class String;
 
 #define SYMBOL_KINDS(_) \
   _(Variable)           \
@@ -59,7 +63,7 @@ class Symbol : public PoolObject
   };
 
  public:
-  Symbol(AstNode *node, Scope *scope, Atom *name)
+  Symbol(ast::AstNode *node, Scope *scope, Atom *name)
    : node_(node),
      scope_(scope),
      name_(name)
@@ -69,7 +73,7 @@ class Symbol : public PoolObject
   virtual Kind kind() const = 0;
   virtual const char *kindName() const = 0;
 
-  AstNode *node() const {
+  ast::AstNode *node() const {
     return node_;
   }
   Atom *name() const {
@@ -97,7 +101,7 @@ class Symbol : public PoolObject
 #undef _
 
  private:
-  AstNode *node_;
+  ast::AstNode *node_;
   Scope *scope_;
   Atom *name_;
 };
@@ -105,7 +109,7 @@ class Symbol : public PoolObject
 class VariableSymbol : public Symbol
 {
  public:
-  VariableSymbol(AstNode *node, Scope *scope, Atom *name)
+  VariableSymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
      storage_(StorageClass::Unknown),
      type_(nullptr)
@@ -210,7 +214,7 @@ class VariableSymbol : public Symbol
 class TypeSymbol : public Symbol
 {
  public:
-  TypeSymbol(AstNode *node, Scope *scope, Atom *name, Type *type = nullptr)
+  TypeSymbol(ast::AstNode *node, Scope *scope, Atom *name, Type *type = nullptr)
    : Symbol(node, scope, name),
      type_(type)
   {
@@ -234,13 +238,12 @@ class TypeSymbol : public Symbol
   Type *type_;
 };
 
-class FunctionStatement;
-typedef PoolList<FunctionStatement *> FuncStmtList;
+typedef PoolList<ast::FunctionStatement *> FuncStmtList;
 
 class FunctionSymbol : public Symbol
 {
  public:
-  FunctionSymbol(AstNode *node, Scope *scope, Atom *name)
+  FunctionSymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
      shadows_(nullptr)
   {
@@ -257,12 +260,12 @@ class FunctionSymbol : public Symbol
     return &address_;
   }
 
-  void addShadow(FunctionStatement *stmt);
+  void addShadow(ast::FunctionStatement *stmt);
   FuncStmtList *shadows() const {
     return shadows_;
   }
 
-  FunctionStatement *impl() const;
+  ast::FunctionStatement *impl() const;
 
  private:
   Label address_;
@@ -272,13 +275,13 @@ class FunctionSymbol : public Symbol
 class ConstantSymbol : public Symbol
 {
  public:
-  ConstantSymbol(AstNode *node, Scope *scope, Atom *name)
+  ConstantSymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name)
   {
     // Opaque == unresolved.
     value_.setOpaqueIntptr(0);
   }
-  ConstantSymbol(AstNode *node, Scope *scope, Atom *name,
+  ConstantSymbol(ast::AstNode *node, Scope *scope, Atom *name,
                  Type *type, const BoxedValue &value)
     : Symbol(node, scope, name),
       type_(type),
@@ -329,7 +332,7 @@ class ConstantSymbol : public Symbol
 class FieldSymbol : public Symbol
 {
  public:
-  FieldSymbol(AstNode *node, Scope *scope, Atom *name)
+  FieldSymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
      type_(nullptr)
   {
@@ -357,7 +360,7 @@ class FieldSymbol : public Symbol
 class PropertySymbol : public Symbol
 {
  public:
-  PropertySymbol(AstNode *node, Scope *scope, Atom *name)
+  PropertySymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
      type_(nullptr)
   {
@@ -385,7 +388,7 @@ class PropertySymbol : public Symbol
 class MethodSymbol : public Symbol
 {
  public:
-  MethodSymbol(AstNode *node, Scope *scope, Atom *name)
+  MethodSymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name)
   {
   }
@@ -398,6 +401,6 @@ class MethodSymbol : public Symbol
   }
 };
 
-}
+} // namespace sp
 
 #endif // _include_sp2_symbol_h_
