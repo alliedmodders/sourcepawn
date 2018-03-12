@@ -18,8 +18,10 @@
 #include "ast.h"
 #include <amtl/am-string.h>
 
+namespace sp {
+
 using namespace ke;
-using namespace sp;
+using namespace ast;
 
 class AstPrinter : public AstVisitor
 {
@@ -457,3 +459,5 @@ ParseTree::dump(FILE *fp)
   for (size_t i = 0; i < statements_->length(); i++)
     statements_->at(i)->accept(&printer);
 }
+
+} // namespace sp

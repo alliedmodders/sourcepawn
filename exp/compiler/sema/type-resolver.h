@@ -28,6 +28,7 @@
 namespace sp {
 
 using namespace ke;
+using namespace ast;
 
 class TranslationUnit;
 class TypeSpecHelper;
@@ -144,6 +145,6 @@ class VarDeclSpecHelper : public TypeSpecHelper
   const Vector<int> *array_init_;
 };
 
-}
+} // namespace sp
 
 #endif // _include_spcomp_type_resolver_h_

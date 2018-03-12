@@ -97,7 +97,7 @@ CompileContext::compile(RefPtr<SourceFile> file)
 
     NameResolver nr(*this);
     Parser p(*this, pp, nr);
-    ParseTree *tree = p.parse();
+    ast::ParseTree *tree = p.parse();
     if (!phasePassed())
       return false;
 

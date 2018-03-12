@@ -25,10 +25,13 @@
 namespace sp {
 
 class Scope;
-class Expression;
 class CompileContext;
+
+namespace ast {
+class Expression;
 class UnaryExpression;
 class BinaryExpression;
+} // namespace ast
 
 // We generally don't care about the ordering of constants in global scope, so
 // to make sure we resolve things like:
@@ -84,11 +87,11 @@ class ConstantEvaluator
       resolver_ = &default_resolver_;
   }
 
-  Result Evaluate(Expression *expr, BoxedValue *out);
+  Result Evaluate(ast::Expression *expr, BoxedValue *out);
 
  private:
-  Result unary(UnaryExpression *expr, BoxedValue &inner, BoxedValue *out);
-  Result binary(BinaryExpression *expr, BoxedValue &left, BoxedValue &right, BoxedValue *out);
+  Result unary(ast::UnaryExpression *expr, BoxedValue &inner, BoxedValue *out);
+  Result binary(ast::BinaryExpression *expr, BoxedValue &left, BoxedValue &right, BoxedValue *out);
 
  private:
   CompileContext &cc_;

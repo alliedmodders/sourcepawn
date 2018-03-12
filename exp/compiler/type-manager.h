@@ -26,6 +26,10 @@ namespace sp {
 
 class String;
 
+namespace ast {
+class TypesetDecl;
+} // namespace ast
+
 class TypeManager
 {
  public:
@@ -57,8 +61,8 @@ class TypeManager
   ArrayType *newArray(Type *contained, int elements);
   EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
-  TypesetType *newTypeset(TypesetDecl *decl);
-  StructType *newStruct(RecordDecl *decl);
+  TypesetType *newTypeset(ast::TypesetDecl *decl);
+  StructType *newStruct(ast::RecordDecl *decl);
   TypedefType *newTypedef(Atom *name);
 
   Type *typeForLabelAtom(Atom *atom);

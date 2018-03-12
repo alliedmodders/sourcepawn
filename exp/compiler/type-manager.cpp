@@ -128,13 +128,13 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
 }
 
 TypesetType *
-TypeManager::newTypeset(TypesetDecl *decl)
+TypeManager::newTypeset(ast::TypesetDecl *decl)
 {
   return TypesetType::New(decl);
 }
 
 StructType *
-TypeManager::newStruct(RecordDecl *decl)
+TypeManager::newStruct(ast::RecordDecl *decl)
 {
   return StructType::New(decl);
 }

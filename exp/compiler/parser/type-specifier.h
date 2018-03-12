@@ -25,10 +25,10 @@
 
 namespace sp {
 
-class FunctionSignature;
+namespace ast {
 class NameProxy;
 class Expression;
-
+class FunctionSignature;
 typedef PoolList<Expression *> ExpressionList;
 
 // Type specifiers are technically part of the AST, however they are quite
@@ -75,7 +75,7 @@ class TypeSpecifier : public PoolObject
   void setBuiltinType(TokenKind kind) {
     resolver_ = kind;
   }
-  void setNamedType(TokenKind kind, NameProxy *proxy) {
+  void setNamedType(TokenKind kind, ast::NameProxy *proxy) {
     resolver_ = kind;
     proxy_ = proxy;
   }
@@ -145,7 +145,7 @@ class TypeSpecifier : public PoolObject
     sigil_loc_ = sigil;
     assert(start_loc_.isSet());
   }
-  void setDimensionSizes(const SourceLocation &sigil, ExpressionList *dims) {
+  void setDimensionSizes(const SourceLocation &sigil, ast::ExpressionList *dims) {
     assert(!rank());
     dims_ = dims;
     attrs_ |= SizedArray;
@@ -160,12 +160,12 @@ class TypeSpecifier : public PoolObject
     return sigil_loc_;
   }
 
-  ExpressionList *dims() const {
+  ast::ExpressionList *dims() const {
     if (attrs_ & SizedArray)
       return dims_;
     return nullptr;
   }
-  Expression *sizeOfRank(uint32_t r) const {
+  ast::Expression *sizeOfRank(uint32_t r) const {
     assert(r < rank());
     if (attrs_ & SizedArray)
       return dims_->at(r);
@@ -180,7 +180,7 @@ class TypeSpecifier : public PoolObject
   TokenKind resolver() const {
     return resolver_;
   }
-  NameProxy *proxy() const {
+  ast::NameProxy *proxy() const {
     assert(resolver() == TOK_NAME || resolver() == TOK_LABEL);
     return proxy_;
   }
@@ -258,11 +258,11 @@ class TypeSpecifier : public PoolObject
   uint32_t attrs_;
   union {
     uint32_t rank_;
-    ExpressionList *dims_;
+    ast::ExpressionList *dims_;
   };
   TokenKind resolver_;
   union {
-    NameProxy *proxy_;
+    ast::NameProxy *proxy_;
     FunctionSignature *signature_;
     Type *resolved_;
   };
@@ -315,6 +315,7 @@ class TypeExpr
   TypeSpecifier *spec_;
 };
 
+} // namespace ast
 } // namespace sp
 
 #endif // _include_spcomp_type_specifier_h_

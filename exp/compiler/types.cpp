@@ -22,6 +22,7 @@
 
 using namespace ke;
 using namespace sp;
+using namespace sp::ast;
 
 Type sp::UnresolvableType(Type::Kind::Unresolvable);
 

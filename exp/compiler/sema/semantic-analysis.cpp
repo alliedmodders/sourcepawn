@@ -17,10 +17,11 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "compile-context.h"
 #include "semantic-analysis.h"
-#include "conversion.h"
+
+namespace sp {
 
 using namespace ke;
-using namespace sp;
+using namespace ast;
 
 SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *tu)
  : cc_(cc),
@@ -182,7 +183,7 @@ SemanticAnalysis::matchForwardSignatures(FunctionSignature *fwdSig, FunctionSign
 bool
 SemanticAnalysis::matchForwardReturnTypes(Type *fwdRetType, Type *implRetType)
 {
-  if (::AreTypesEquivalent(fwdRetType, implRetType, Qualifiers::None))
+  if (AreTypesEquivalent(fwdRetType, implRetType, Qualifiers::None))
     return true;
   if ((fwdRetType->isVoid() || fwdRetType->isImplicitInt()) && implRetType->isImplicitVoid())
     return true;
@@ -454,3 +455,5 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement *node)
   //if (retType->isVoid() || retType->isImplicitVoid())
 }
 #endif
+
+} // namespace sp

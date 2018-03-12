@@ -29,6 +29,8 @@ namespace sp {
 class NameResolver;
 class Preprocessor;
 
+using namespace ast;
+
 namespace DeclFlags
 {
   static const uint32_t MaybeFunction = 0x01;
@@ -161,6 +163,6 @@ class Parser
   Atom *atom_any_;
 };
 
-}
+} // namespace sp
 
 #endif // _include_sourcepawn_parser_h_

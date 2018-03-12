@@ -24,8 +24,11 @@
 namespace sp {
 
 class CompileContext;
-class FieldDecl;
 class Symbol;
+
+namespace ast {
+class FieldDecl;
+} // namespace ast
 
 typedef PoolList<Symbol *> SymbolList;
 
@@ -174,13 +177,13 @@ class LayoutScope : public Scope
   bool hasMixedAnonymousFields() const ;
 
   // Returns null if there are no anonymous fields.
-  PoolList<FieldDecl *> *anonymous_fields() const {
+  PoolList<ast::FieldDecl *> *anonymous_fields() const {
     return anonymous_fields_;
   }
-  void addAnonymousField(FieldDecl *decl);
+  void addAnonymousField(ast::FieldDecl *decl);
 
  private:
-  PoolList<FieldDecl *> *anonymous_fields_;
+  PoolList<ast::FieldDecl *> *anonymous_fields_;
 };
 
 }

@@ -84,13 +84,17 @@ class CompileContext;
   _(DeleteStatement)      \
   _(FoldedExpr)
 
+class FileContext;
+
+namespace ast {
+
 // Forward declarations.
+class AstVisitor;
+
+// Forward declarations of ast nodes.
 #define _(name) class name;
 ASTKINDS(_)
 #undef _
-
-class AstVisitor;
-class FileContext;
 
 enum class AstKind
 {
@@ -1738,7 +1742,6 @@ class TypedefDecl : public Statement
   TypeSymbol *sym_;
 };
 
-typedef PoolList<Atom *> NameList;
 typedef PoolList<NameProxy *> NameProxyList;
 
 #undef DECLARE_NODE
@@ -1802,6 +1805,7 @@ class ParseTree : public PoolObject
 //  void visitThisExpression(ThisExpression *node) override;
 //  void visitDeleteStatement(DeleteStatement *node) override;
 
-}
+} // namespace ast
+} // namespace sp
 
 #endif // _include_sourcepawn_ast_h_
