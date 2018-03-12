@@ -22,6 +22,7 @@
 #include "assert.h"
 #include "string-pool.h"
 #include "pool-allocator.h"
+#include <amtl/am-enum.h>
 
 namespace sp {
 

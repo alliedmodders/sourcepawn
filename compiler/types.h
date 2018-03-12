@@ -29,6 +29,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-uniqueptr.h>
 #include <amtl/am-vector.h>
+#include <amtl/am-enum.h>
 #include "amx.h"
 
 #define TAGTYPEMASK   (0x3E000000)
