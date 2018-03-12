@@ -19,6 +19,7 @@
 #include <amtl/am-autoptr.h>
 #include <amtl/am-platform.h>
 #include <amtl/am-refcounting.h>
+#include <amtl/am-enum.h>
 #if defined(KE_ARCH_X86)
 # include "x86/frames-x86.h"
 #elif defined(KE_ARCH_X64)
