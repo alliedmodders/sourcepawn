@@ -517,12 +517,26 @@ TypeResolver::visitTypesetDecl(TypesetDecl *decl)
     resolveTypeIfNeeded(te);
   }
 
-  verifyTypeset(decl);
+  if (!verifyTypeset(decl))
+    return;
+
+  TypesetType::TypeList* list = new (pool_) TypesetType::TypeList(decl->types()->length());
+  for (size_t i = 0; i < list->length(); i++) {
+    TypesetDecl::Entry &entry = decl->types()->at(i);
+    list->at(i) = entry.te.resolved();
+  }
+
+  TypesetType* type = decl->sym()->type()->toTypeset();
+  type->setTypes(list);
+
+  decl->setResolved();
 }
 
-void
+bool
 TypeResolver::verifyTypeset(TypesetDecl *decl)
 {
+  bool ok = true;
+
   // Verify that types aren't duplicated. This is an O(n^2) algorithm - we
   // assume N will be very small.
   TypesetDecl::Entries *types = decl->types();
@@ -541,12 +555,13 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
         cc_.report(entry.loc, rmsg::typeset_ambiguous_type)
           << current << decl->name()
           << (cc_.note(prevEntry.loc, rmsg::previous_location));
+        ok = false;
         break;
       }
     }
   }
 
-  decl->setResolved();
+  return ok;
 }
 
 // Returns true if it could be resolved to a constant integer; false

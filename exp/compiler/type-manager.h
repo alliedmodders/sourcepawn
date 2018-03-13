@@ -61,7 +61,7 @@ class TypeManager
   ArrayType *newArray(Type *contained, int elements);
   EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
-  TypesetType *newTypeset(ast::TypesetDecl *decl);
+  TypesetType *newTypeset(Atom *name);
   StructType *newStruct(ast::RecordDecl *decl);
   TypedefType *newTypedef(Atom *name);
 

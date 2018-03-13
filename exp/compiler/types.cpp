@@ -159,27 +159,9 @@ FunctionType::New(FunctionSignature *sig)
 }
 
 TypesetType *
-TypesetType::New(TypesetDecl *decl)
+TypesetType::New(Atom* name)
 {
-  return new (POOL()) TypesetType(decl);
-}
-
-Atom *
-TypesetType::name() const
-{
-  return decl_->name();
-}
-
-size_t
-TypesetType::numTypes() const
-{
-  return decl_->types()->length();
-}
-
-Type *
-TypesetType::typeAt(size_t i) const
-{
-  return decl_->types()->at(i).te.resolved();
+  return new (POOL()) TypesetType(name);
 }
 
 Atom *

@@ -128,9 +128,9 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
 }
 
 TypesetType *
-TypeManager::newTypeset(ast::TypesetDecl *decl)
+TypeManager::newTypeset(Atom* name)
 {
-  return TypesetType::New(decl);
+  return TypesetType::New(name);
 }
 
 StructType *
