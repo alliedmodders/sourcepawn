@@ -66,7 +66,7 @@ class TypeResolver
   Type *applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
   bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
 
-  void verifyTypeset(TypesetDecl *decl);
+  bool verifyTypeset(TypesetDecl *decl);
 
  private:
   EnumType *resolveMethodmapParentType(NameProxy *proxy);

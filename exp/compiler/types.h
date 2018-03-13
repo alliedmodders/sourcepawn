@@ -577,28 +577,37 @@ class RecordType : public Type
   ast::RecordDecl *decl_;
 };
 
-namespace ast {
-class TypesetDecl;
-} // namespace ast
-
-// :TODO: break dependence on ast by creating the TypesetType object lazily
-// in type resolution (why not?)
 class TypesetType : public Type
 {
-  TypesetType(ast::TypesetDecl *decl)
+  TypesetType(Atom* name)
    : Type(Kind::Typeset),
-     decl_(decl)
+     name_(name),
+     types_(nullptr)
   {}
 
  public:
-  static TypesetType *New(ast::TypesetDecl *decl);
+  static TypesetType *New(Atom* name);
 
-  Atom *name() const;
-  size_t numTypes() const;
-  Type *typeAt(size_t i) const;
+  Atom *name() const {
+    return name_;
+  }
+  size_t numTypes() const {
+    return types_->length();
+  }
+  Type *typeAt(size_t i) const {
+    return types_->at(i);
+  }
+
+  typedef FixedPoolList<Type*> TypeList;
+
+  void setTypes(TypeList* types) {
+    assert(!types_);
+    types_ = types;
+  }
 
  private:
-  ast::TypesetDecl *decl_;
+  Atom* name_;
+  TypeList* types_;
 };
 
 class StructType : public RecordType

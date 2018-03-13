@@ -784,7 +784,7 @@ NameResolver::EnterTypeset(const SourceLocation &loc, const NameToken &name)
   registerSymbol(sym);
   decl->setSymbol(sym);
 
-  TypesetType *type = cc_.types()->newTypeset(decl);
+  TypesetType *type = cc_.types()->newTypeset(name.atom);
   sym->setType(type);
 
   return decl;
