@@ -164,16 +164,10 @@ TypesetType::New(Atom* name)
   return new (POOL()) TypesetType(name);
 }
 
-Atom *
-RecordType::name() const
-{
-  return decl_->name();
-}
-
 StructType *
-StructType::New(RecordDecl *decl)
+StructType::New(Atom* name)
 {
-  return new (POOL()) StructType(decl);
+  return new (POOL()) StructType(name);
 }
 
 const char *
