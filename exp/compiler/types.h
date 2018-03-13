@@ -558,23 +558,20 @@ class FunctionType : public Type
   ast::FunctionSignature *signature_;
 };
 
-// :TODO: break dependence on ast
-namespace ast {
-class RecordDecl;
-} // namespace ast
-
 class RecordType : public Type
 {
  public:
-  RecordType(Kind kind, ast::RecordDecl *decl)
+  explicit RecordType(Kind kind, Atom* name)
    : Type(kind),
-     decl_(decl)
+     name_(name)
   {}
 
-  Atom *name() const;
+  Atom *name() const {
+    return name_;
+  }
 
  private:
-  ast::RecordDecl *decl_;
+  Atom* name_;
 };
 
 class TypesetType : public Type
@@ -612,12 +609,12 @@ class TypesetType : public Type
 
 class StructType : public RecordType
 {
-  StructType(ast::RecordDecl *decl)
-   : RecordType(Kind::Struct, decl)
+  StructType(Atom* name)
+   : RecordType(Kind::Struct, name)
   {}
 
  public:
-  static StructType *New(ast::RecordDecl *decl);
+  static StructType *New(Atom* name);
 };
 
 static inline size_t

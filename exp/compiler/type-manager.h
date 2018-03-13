@@ -62,7 +62,7 @@ class TypeManager
   EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
   TypesetType *newTypeset(Atom *name);
-  StructType *newStruct(ast::RecordDecl *decl);
+  StructType *newStruct(Atom* name);
   TypedefType *newTypedef(Atom *name);
 
   Type *typeForLabelAtom(Atom *atom);

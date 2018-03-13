@@ -463,7 +463,7 @@ NameResolver::OnEnterRecordDecl(RecordDecl *decl)
   RecordType *type = nullptr;
   switch (decl->token()) {
     case TOK_STRUCT:
-      type = cc_.types()->newStruct(decl);
+      type = cc_.types()->newStruct(decl->name());
       break;
 
     default:
