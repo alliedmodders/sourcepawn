@@ -18,8 +18,9 @@
 #include "compile-context.h"
 #include "name-resolver.h"
 
+namespace sp {
+
 using namespace ke;
-using namespace sp;
 
 NameResolver::NameResolver(CompileContext &cc)
  : cc_(cc),
@@ -923,3 +924,5 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
 
   return TypeExpr(type);
 }
+
+} // namespace sp

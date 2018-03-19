@@ -52,7 +52,7 @@ class AutoPush
 //   typedef B = int;
 //
 // In order to resolve "A", we will recursively resolve "B". If we have a
-// recursive type, we have to prevent infintie recursion and report an error.
+// recursive type, we have to prevent infinite recursion and report an error.
 // Recursive types always occur through name resolution, and there are many
 // patterns in which they can occur.
 //
@@ -128,7 +128,7 @@ TypeResolver::TypeResolver(CompileContext &cc)
 bool
 TypeResolver::analyze()
 {
-  printf("queue size: %d\n", int(work_queue_.length()));
+  printf("unresolved type queue size: %d\n", int(work_queue_.length()));
   while (!work_queue_.empty()) {
     AstNode *node = work_queue_.popFrontCopy();
     node->accept(this);

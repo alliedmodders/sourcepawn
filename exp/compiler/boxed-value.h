@@ -64,6 +64,10 @@ class BoxedValue
     intValue = v;
   }
 
+  Kind kind() const {
+    return kind_;
+  }
+
   bool isBool() const {
     return kind_ == Kind::Bool;
   }
@@ -84,7 +88,7 @@ class BoxedValue
   bool isInteger() const {
     return kind_ == Kind::Integer;
   }
-  const IntValue &toInteger() const {
+  const IntValue& toInteger() const {
     assert(isInteger());
     return intValue;
   }

@@ -105,6 +105,9 @@ CompileContext::compile(RefPtr<SourceFile> file)
   }
 
   ReportMemory(stderr);
+  fprintf(stderr, "\n");
+
+  unit->tree()->dump(stderr);
 
   if (options_.SkipSemanticAnalysis)
     return true;
@@ -112,14 +115,14 @@ CompileContext::compile(RefPtr<SourceFile> file)
   fprintf(stderr, "\n-- Semantic Analysis --\n");
 
   SemanticAnalysis sema(*this, unit);
-  if (!sema.analyze())
+  sema::Program* program = sema.analyze();
+  if (!program)
     return false;
 
   ReportMemory(stderr);
+  fprintf(stderr, "\n");
 
-  // ReportMemory(stderr);
-
-  // unit->tree()->dump(stdout);
+  program->dump(stderr);
 
   {
     //AmxEmitter sema(*this, units_[0]);

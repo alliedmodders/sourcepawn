@@ -42,8 +42,8 @@ class AstPrinter : public AstVisitor
 
  public:
   AstPrinter(FILE *fp)
-    : fp_(fp),
-    level_(0)
+   : fp_(fp),
+     level_(0)
   {
   }
 

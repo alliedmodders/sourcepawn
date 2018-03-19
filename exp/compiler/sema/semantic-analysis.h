@@ -47,7 +47,7 @@ class SemanticAnalysis
   void visitReturnStatement(ReturnStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
-  sema::ConstValue* visitIntegerLiteral(IntegerLiteral* node);
+  sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);

@@ -31,6 +31,22 @@ class Expression;
 
 namespace sema {
 
+#define SEMA_KIND_LIST(_) \
+  _(ConstValue)
+
+// Forward declarations.
+#define _(name) class name##Expr;
+SEMA_KIND_LIST(_)
+#undef _
+
+enum class ExprKind
+{
+#define _(name) name,
+  SEMA_KIND_LIST(_)
+#undef _
+  Sentinel
+};
+
 class Expr : public PoolObject
 {
 public:
@@ -42,23 +58,59 @@ public:
   Type* type() const {
     return type_;
   }
+  virtual ExprKind kind() const = 0;
+
+#define _(name)                                 \
+  virtual name##Expr* as##name##Expr() {        \
+    return nullptr;                             \
+  }                                             \
+  virtual name##Expr* to##name##Expr() {        \
+    assert(false);                              \
+    return nullptr;                             \
+  }                                             \
+  virtual const char* prettyName() const = 0;
+  SEMA_KIND_LIST(_)
+#undef _
 
 private:
   ast::Expression* node_;
   Type* type_;
 };
 
-class ConstValue : public Expr
+#define DECLARE_SEMA(name)                  \
+  ExprKind kind() const override {          \
+    return ExprKind::name;                  \
+  }                                         \
+  name##Expr* as##name##Expr() override {   \
+    return this;                            \
+  }                                         \
+  name##Expr* to##name##Expr() override {   \
+    return this;                            \
+  }                                         \
+  const char* prettyName() const override { \
+    return #name "Expr";                    \
+  }
+
+class ConstValueExpr : public Expr
 {
 public:
-  explicit ConstValue(ast::Expression* node, Type* type, const BoxedValue& value)
+  explicit ConstValueExpr(ast::Expression* node, Type* type, const BoxedValue& value)
    : Expr(node, type),
      value_(value)
   {}
 
+  DECLARE_SEMA(ConstValue)
+
+  const BoxedValue& value() const {
+    return value_;
+  }
+
 private:
   BoxedValue value_;
 };
+
+#undef DECLARE_SEMA
+#undef SEMA_KIND_LIST
 
 } // namespace sema
 } // namespace sp

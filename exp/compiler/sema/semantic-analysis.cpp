@@ -250,7 +250,7 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
   node->set_sema_expr(expr);
 }
 
-sema::ConstValue*
+sema::ConstValueExpr*
 SemanticAnalysis::visitIntegerLiteral(IntegerLiteral* node)
 {
   // :TODO: test overflow
@@ -263,7 +263,7 @@ SemanticAnalysis::visitIntegerLiteral(IntegerLiteral* node)
   BoxedValue b(IntValue::FromValue(value));
 
   Type* i32type = types_->getPrimitive(PrimitiveType::Int32);
-  return new (pool_) sema::ConstValue(node, i32type, b);
+  return new (pool_) sema::ConstValueExpr(node, i32type, b);
 }
 
 sema::Expr*
