@@ -1,6 +1,6 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2012-2014 David Anderson
+// Copyright (C) 2012-2014 AlliedModders LLC, David Anderson
 //
 // This file is part of SourcePawn.
 //
@@ -24,9 +24,11 @@
 #include <am-refcounting.h>
 #include <smx/smx-headers.h>
 #include "string-pool.h"
+#include "memory-buffer.h"
 
 namespace sp {
 
+// An SmxSection is a named blob of data.
 class SmxSection : public Refcounted<SmxSection>
 {
  public:
@@ -37,7 +39,7 @@ class SmxSection : public Refcounted<SmxSection>
   virtual ~SmxSection()
   {}
 
-  virtual bool write(FILE *fp) = 0;
+  virtual bool write(ISmxBuffer *buf) = 0;
   virtual size_t length() const = 0;
 
   const AString &name() const {
@@ -48,6 +50,71 @@ class SmxSection : public Refcounted<SmxSection>
   AString name_;
 };
 
+// An SmxBlobSection is a section that has some kind of header structure
+// (specified as a template parameter), and then an arbitrary run of bytes
+// immediately after.
+template <typename T>
+class SmxBlobSection : public SmxSection
+{
+ public:
+  SmxBlobSection(const char *name)
+   : SmxSection(name),
+     extra_(nullptr),
+     extra_len_(0)
+  {
+    memset(&t_, 0, sizeof(t_));
+  }
+
+  T &header() {
+    return t_;
+  }
+  void setBlob(uint8_t *blob, size_t len) {
+    extra_ = blob;
+    extra_len_ = len;
+  }
+  bool write(ISmxBuffer *buf) override {
+    if (!buf->write(&t_, sizeof(t_)))
+      return false;
+    if (!extra_len_)
+      return true;
+    return buf->write(extra_, extra_len_);
+  }
+  size_t length() const override {
+    return sizeof(t_) + extra_len_;
+  }
+
+ private:
+  T t_;
+  uint8_t *extra_;
+  size_t extra_len_;
+};
+
+// An SmxBlobSection without headers.
+template <>
+class SmxBlobSection<void> : public SmxSection
+{
+ public:
+  SmxBlobSection(const char *name)
+   : SmxSection(name)
+  {
+  }
+
+  void add(void *bytes, size_t len) {
+    buffer_.write(bytes, len);
+  }
+  bool write(ISmxBuffer *buf) override {
+    return buf->write(buffer_.bytes(), buffer_.size());
+  }
+  size_t length() const override {
+    return buffer_.size();
+  }
+
+ private:
+  MemoryBuffer buffer_;
+};
+
+// An SmxListSection is a section that is a simple table of uniformly-sized
+// structures. It has no header of its own.
 template <typename T>
 class SmxListSection : public SmxSection
 {
@@ -60,42 +127,58 @@ class SmxListSection : public SmxSection
   void append(const T &t) {
     list_.append(t);
   }
-  bool write(FILE *fp) override {
-    if (fwrite(list_.buffer(), sizeof(T), list_.length(), fp) != list_.length())
-      return false;
-    return true;
+  T &add() {
+    list_.append(T());
+    return list_.back();
+  }
+  void add(const T &t) {
+    list_.append(t);
+  }
+  bool write(ISmxBuffer *buf) override {
+    return buf->write(list_.buffer(), list_.length() * sizeof(T));
   }
   size_t length() const override {
-    return list_.length() * sizeof(T);
+    return count() * sizeof(T);
+  }
+  size_t count() const {
+    return list_.length();
   }
 
  private:
   Vector<T> list_;
 };
 
+// A name table is a blob of zero-terminated strings. Strings are entered
+// into the table as atoms, so duplicate stings are not emitted.
 class SmxNameTable : public SmxSection
 {
  public:
   SmxNameTable(const char *name)
-   : SmxSection(".names"),
+   : SmxSection(name),
      buffer_size_(0)
   {
     name_table_.init(64);
   }
 
-  size_t add(Atom *str) {
+  uint32_t add(StringPool &pool, const char *str) {
+    return add(pool.add(str));
+  }
+
+  uint32_t add(Atom *str) {
     NameTable::Insert i = name_table_.findForAdd(str);
     if (i.found())
       return i->value;
 
-    size_t index = buffer_size_;
+    assert(IsUint32AddSafe(buffer_size_, str->length() + 1));
+
+    uint32_t index = buffer_size_;
     name_table_.add(i, str, index);
     names_.append(str);
     buffer_size_ += str->length() + 1;
     return index;
   }
 
-  bool write(FILE *fp) override;
+  bool write(ISmxBuffer *buf) override;
   size_t length() const override {
     return buffer_size_;
   }
@@ -113,7 +196,7 @@ class SmxNameTable : public SmxSection
 
   NameTable name_table_;
   Vector<Atom *> names_;
-  size_t buffer_size_;
+  uint32_t buffer_size_;
 };
 
 class SmxBuilder
@@ -121,21 +204,16 @@ class SmxBuilder
  public:
   SmxBuilder();
 
-  bool write(FILE *fp);
+  bool write(ISmxBuffer *buf);
 
   void add(const RefPtr<SmxSection> &section) {
     sections_.append(section);
   }
 
-  const RefPtr<SmxNameTable>& names() {
-    return names_;
-  }
-
  private:
-  RefPtr<SmxNameTable> names_;
   Vector<RefPtr<SmxSection>> sections_;
 };
 
-} // namespace ke
+} // namespace sp
 
 #endif // _include_spcomp2_smx_builder_h_

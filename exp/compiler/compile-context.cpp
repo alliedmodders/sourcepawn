@@ -22,6 +22,7 @@
 #include "parser/parser.h"
 #include "sema/name-resolver.h"
 #include "sema/semantic-analysis.h"
+#include "smx/smx-compiler.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -125,9 +126,9 @@ CompileContext::compile(RefPtr<SourceFile> file)
   program->dump(stderr);
 
   {
-    //AmxEmitter sema(*this, units_[0]);
-    //if (!sema.compile())
-    //  return false;
+    SmxCompiler compiler(*this, program);
+    if (!compiler.compile())
+      return false;
   }
 
   if (reports_.HasErrors())

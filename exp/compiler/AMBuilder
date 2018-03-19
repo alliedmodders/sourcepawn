@@ -46,7 +46,6 @@ binary.sources += [
   'int-value.cpp',
   'pool-allocator.cpp',
   'scopes.cpp',
-  'smx-builder.cpp',
   'source-manager.cpp',
   'symbols.cpp',
   'reporting.cpp',
@@ -64,6 +63,8 @@ binary.sources += [
   'sema/program.cpp',
   'sema/semantic-analysis.cpp',
   'sema/type-resolver.cpp',
+  'smx/smx-builder.cpp',
+  'smx/smx-compiler.cpp',
 ]
 libspcomp2 = builder.Add(binary)
 
