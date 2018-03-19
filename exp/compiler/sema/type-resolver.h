@@ -32,6 +32,7 @@ using namespace ast;
 
 class TranslationUnit;
 class TypeSpecHelper;
+class VariableSymbol;
 
 class TypeResolver
  : public StrictAstVisitor,
@@ -64,9 +65,11 @@ class TypeResolver
   }
 
   Type *applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
+  Type *applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
   bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
-
   bool verifyTypeset(TypesetDecl *decl);
+
+  bool assignTypeToSymbol(VariableSymbol* sym, Type* type);
 
  private:
   EnumType *resolveMethodmapParentType(NameProxy *proxy);
@@ -130,6 +133,9 @@ class TypeSpecHelper
   virtual const Vector<int> *arrayInitData() const {
     return nullptr;
   }
+  virtual VarDecl* decl() const {
+    return nullptr;
+  }
 };
 
 class VarDeclSpecHelper : public TypeSpecHelper
@@ -139,6 +145,7 @@ class VarDeclSpecHelper : public TypeSpecHelper
 
   bool receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type) override;
   const Vector<int> *arrayInitData() const override;
+  VarDecl* decl() const override;
 
  private:
   VarDecl *decl_;

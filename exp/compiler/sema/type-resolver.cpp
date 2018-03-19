@@ -190,40 +190,44 @@ TypeResolver::visitVarDecl(VarDecl *node)
 {
   VariableSymbol *sym = node->sym();
 
-  if (!sym->type()) {
-    if (TypeSpecifier *spec = node->te().spec()) {
-      // We always infer sizes for postdims in variable scope. In argument
-      // scope, we don't want something like:
-      //
-      //    f(x[] = {}), or
-      //
-      // To infer as int[0]. However, this should be illegal:
-      //
-      //    f(int x[] = {})
-      //
-      // So we simply never infer dimensions for arguments.
-      //
-      // Note: we should not be able to recurse from inside this block. If it
-      // could, we'd have to mark spec as resolving earlier.
-      Vector<int> literal_dims;
-      if (Expression *init = node->initialization()) {
-        if (spec->hasPostDims() && !sym->isArgument()) {
-          // Compute the dimensions of initializers in case the declaration type
-          // requires inference.
-          if (ArrayLiteral *lit = init->asArrayLiteral()) {
-            literal_dims = fixedArrayLiteralDimensions(spec, lit);
-          } else if (StringLiteral *lit = init->asStringLiteral()) {
-            literal_dims.append(lit->arrayLength());
-          }
+  assert(!sym->type());
+
+  Type* type;
+  if (TypeSpecifier *spec = node->te().spec()) {
+    // We always infer sizes for postdims in variable scope. In argument
+    // scope, we don't want something like:
+    //
+    //    f(x[] = {}), or
+    //
+    // To infer as int[0]. However, this should be illegal:
+    //
+    //    f(int x[] = {})
+    //
+    // So we simply never infer dimensions for arguments.
+    //
+    // Note: we should not be able to recurse from inside this block. If it
+    // could, we'd have to mark spec as resolving earlier.
+    Vector<int> literal_dims;
+    if (Expression *init = node->initialization()) {
+      if (spec->hasPostDims() && !sym->isArgument()) {
+        // Compute the dimensions of initializers in case the declaration type
+        // requires inference.
+        if (ArrayLiteral *lit = init->asArrayLiteral()) {
+          literal_dims = fixedArrayLiteralDimensions(spec, lit);
+        } else if (StringLiteral *lit = init->asStringLiteral()) {
+          literal_dims.append(lit->arrayLength());
         }
       }
-
-      VarDeclSpecHelper helper(node, &literal_dims);
-      sym->setType(resolveType(node->te(), &helper));
-    } else {
-      sym->setType(node->te().resolved());
     }
+
+    VarDeclSpecHelper helper(node, &literal_dims);
+    type = resolveType(node->te(), &helper);
+  } else {
+    type = node->te().resolved();
   }
+
+  if (!assignTypeToSymbol(sym, type))
+    return;
 
   if (sym->isConstExpr() || !sym->canUseInConstExpr())
     return;
@@ -271,7 +275,7 @@ TypeResolver::visitVarDecl(VarDecl *node)
       assert(false);
   }
 
-  // :TODO: type check
+  // :TODO: type check box
 
   sym->setConstExpr(box);
 }
@@ -693,20 +697,7 @@ TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
   resolveType(sig->returnType());
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
     VarDecl *param = sig->parameters()->at(i);
-    VariableSymbol *sym = param->sym();
-
-    assert(!param->te().resolved() || sym->type());
-    if (!param->te().resolved()) {
-      TypeSpecifier *spec = param->te().spec();
-
-      VarDeclSpecHelper helper(param, nullptr);
-      sym->setType(resolveType(param->te(), &helper));
-
-      if (sym->isByRef() && sym->type()->passesByReference()) {
-        cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref)
-          << sym->type();
-      }
-    }
+    param->accept(this);
   }
 }
 
@@ -963,6 +954,39 @@ TypeResolver::resolveEnumConstantValue(EnumConstant *cs, int *outp)
   return true;
 }
 
+// Like applyConstQualifier, this must not return null (its callers do not
+// null check). Instead, return the input type on error.
+Type *
+TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper)
+{
+  if (!type->canBeUsedAsRefType()) {
+    cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref) << type;
+    return type;
+  }
+
+  VarDecl* decl = helper ? helper->decl() : nullptr;
+  if (decl) {
+    assert(decl->sym()->isByRef());
+    assert(decl->sym()->isArgument());
+  }
+
+  return cc_.types()->newReference(type);
+}
+
+bool
+TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
+{
+  if (!type)
+    return false;
+
+  assert(sym->isByRef() == type->isReference());
+  assert(!sym->isByRef() || sym->isArgument());
+  assert(type->isStorableType());
+
+  sym->setType(type);
+  return true;
+}
+
 VarDeclSpecHelper::VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData)
  : decl_(decl),
    array_init_(arrayInitData)
@@ -996,6 +1020,12 @@ VarDeclSpecHelper::arrayInitData() const
   return array_init_ && array_init_->length() > 0
          ? array_init_
          : nullptr;
+}
+
+VarDecl*
+VarDeclSpecHelper::decl() const
+{
+  return decl_;
 }
 
 } // namespace sp

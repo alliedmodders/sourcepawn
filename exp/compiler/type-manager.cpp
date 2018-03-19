@@ -83,6 +83,9 @@ TypeManager::initialize()
   float3_array_ = ArrayType::New(float_type_, 3);
   const_float3_array_ = Type::NewQualified(float3_array_, Qualifiers::Const);
 
+  if (!reftype_cache_.init(16))
+    return false;
+
   return true;
 }
 
@@ -143,6 +146,19 @@ TypedefType *
 TypeManager::newTypedef(Atom *name)
 {
   return TypedefType::New(name);
+}
+
+ReferenceType*
+TypeManager::newReference(Type* type)
+{
+  RefTypeCache::Insert p = reftype_cache_.findForAdd(type);
+  if (p.found())
+    return p->value;
+
+  ReferenceType* ref = ReferenceType::New(type);
+  if (!reftype_cache_.add(p, ref))
+    return nullptr;
+  return ref;
 }
 
 Type *
