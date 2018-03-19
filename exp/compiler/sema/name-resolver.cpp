@@ -720,8 +720,8 @@ NameResolver::HandleTypedefDecl(const SourceLocation &begin,
   registerSymbol(sym);
   node->setSymbol(sym);
 
-  if (te.resolved())
-    type->resolve(te.resolved());
+  if (Type* actual = te.resolved())
+    tr_.assignTypeToTypedef(node, type, actual);
   else
     tr_.addPending(node);
   return node;

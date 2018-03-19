@@ -54,8 +54,8 @@ SemanticAnalysis::walkAST()
       case AstKind::kFunctionStatement:
       {
         FunctionStatement* fun = stmt->toFunctionStatement();
-        if (sema::FunctionDef* def = visitFunctionStatement(fun))
-          global_functions_.append(def);
+        visitFunctionStatement(fun);
+        global_functions_.append(fun);
         break;
       }
       default:
@@ -67,7 +67,7 @@ SemanticAnalysis::walkAST()
   return cc_.phasePassed();
 }
 
-sema::FunctionDef*
+void
 SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
 {
   FunctionSymbol *sym = node->sym();
@@ -80,12 +80,10 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
   }
 
   if (!node->body())
-    return nullptr;
+    return;
 
   FuncState state(&funcstate_, node);
-  sema::Block* block = visitBlockStatement(node->body());
-
-  return new (pool_) sema::FunctionDef(node, block);
+  visitBlockStatement(node->body());
 }
 
 // :TODO: write tests for this.
@@ -190,33 +188,28 @@ SemanticAnalysis::matchForwardReturnTypes(Type *fwdRetType, Type *implRetType)
   return false;
 }
 
-sema::Block*
+void
 SemanticAnalysis::visitBlockStatement(BlockStatement* node)
 {
-  sema::Statements* stmts = new (pool_) sema::Statements();
-
   for (size_t i = 0; i < node->statements()->length(); i++) {
     Statement* ast_stmt = node->statements()->at(i);
-    if (sema::Statement* stmt = visitStatement(ast_stmt))
-      stmts->append(stmt);
+    visitStatement(ast_stmt);
   }
-
-  return new (pool_) sema::Block(node, stmts);
 }
 
-sema::Statement*
+void
 SemanticAnalysis::visitStatement(Statement* node)
 {
   switch (node->kind()) {
     case AstKind::kReturnStatement:
     {
       ReturnStatement* stmt = node->toReturnStatement();
-      return visitReturnStatement(stmt);
+      visitReturnStatement(stmt);
+      break;
     }
     default:
       assert(false);
   }
-  return nullptr;
 }
 
 sema::Expr*
@@ -234,7 +227,7 @@ SemanticAnalysis::visitExpression(Expression* node)
   return nullptr;
 }
 
-sema::Return*
+void
 SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
 {
   FunctionSignature* sig = funcstate_->sig;
@@ -243,7 +236,7 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
   if (returnType->isVoid()) {
     if (node->expr())
       cc_.report(node->loc(), rmsg::returned_in_void_function);
-    return new (pool_) sema::Return(node, nullptr);
+    return;
   }
 
   if (!node->expr())
@@ -252,9 +245,9 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
   sema::Expr* expr = visitExpression(node->expr());
 
   if (!(expr = coerce(expr, returnType, Coercion::Return)))
-    return nullptr;
+    return;
 
-  return new (pool_) sema::Return(node, expr);
+  node->set_sema_expr(expr);
 }
 
 sema::ConstValue*
@@ -442,17 +435,6 @@ SemanticAnalysis::visitStringLiteral(StringLiteral *node)
 
   // Returned value is always an rvalue.
   node->setOutput(litType, VK::rvalue);
-}
-#endif
-
-#if 0
-void
-SemanticAnalysis::visitReturnStatement(ReturnStatement *node)
-{
-  assert(funcstate_ && funcstate_->sig);
-
-  //Type *retType = funcstate_->sig->returnType().resolved();
-  //if (retType->isVoid() || retType->isImplicitVoid())
 }
 #endif
 

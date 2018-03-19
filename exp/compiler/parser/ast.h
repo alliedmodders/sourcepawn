@@ -34,6 +34,10 @@ namespace sp {
 
 using namespace ke;
 
+namespace sema {
+class Expr;
+} // namespace sema
+
 class Scope;
 class FunctionScope;
 class LayoutScope;
@@ -884,20 +888,29 @@ class WhileStatement : public Statement
 class ReturnStatement : public Statement
 {
  public:
-  ReturnStatement(const SourceLocation &pos, Expression *expr)
+  ReturnStatement(const SourceLocation& pos, Expression* expr)
     : Statement(pos),
-      expr_(expr)
+      expr_(expr),
+      sema_expr_(nullptr)
   {
   }
 
   DECLARE_NODE(ReturnStatement);
 
-  Expression *expr() const {
+  Expression* expr() const {
     return expr_;
+  }
+  sema::Expr* sema_expr() const {
+    return sema_expr_;
+  }
+  void set_sema_expr(sema::Expr* expr) {
+    assert(!sema_expr_);
+    sema_expr_ = expr;
   }
 
  private:
-  Expression *expr_;
+  Expression* expr_;
+  sema::Expr* sema_expr_;
 };
 
 class BreakStatement : public Statement

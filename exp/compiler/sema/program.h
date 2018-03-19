@@ -22,13 +22,18 @@
 #include "pool-allocator.h"
 
 namespace sp {
+
+namespace ast {
+class FunctionStatement;
+} // namespace ast
+
 namespace sema {
 
 class FunctionDef;
 
 struct Program : public PoolObject
 {
-  ke::Vector<sema::FunctionDef*> functions;
+  ke::Vector<ast::FunctionStatement*> functions;
 };
 
 } // namespace sema

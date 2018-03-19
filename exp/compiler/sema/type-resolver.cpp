@@ -507,7 +507,7 @@ TypeResolver::visitTypedefDecl(TypedefDecl *node)
     return;
   }
 
-  type->resolve(actual);
+  assignTypeToTypedef(node, type, actual);
 }
 
 void
@@ -563,6 +563,9 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
         break;
       }
     }
+
+    if (!current->isFunction())
+      cc_.report(entry.loc, rmsg::typeset_must_only_have_fun);
   }
 
   return ok;
@@ -988,6 +991,17 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 
   sym->setType(type);
   return true;
+}
+
+void
+TypeResolver::assignTypeToTypedef(TypedefDecl* decl, TypedefType* def, Type* actual)
+{
+  if (!actual->isFunction()) {
+    cc_.report(decl->loc(), rmsg::typedef_must_be_fun);
+    return;
+  }
+
+  def->resolve(actual);
 }
 
 VarDeclSpecHelper::VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData)

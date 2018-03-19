@@ -19,7 +19,6 @@
 #define _include_semantic_analysis_h_
 
 #include "parser/ast.h"
-#include "sema/statements.h"
 #include "sema/expressions.h"
 #include "sema/program.h"
 
@@ -42,10 +41,10 @@ class SemanticAnalysis
  private:
   bool walkAST();
 
-  sema::FunctionDef* visitFunctionStatement(FunctionStatement* node);
-  sema::Block* visitBlockStatement(BlockStatement* node);
-  sema::Statement* visitStatement(Statement* node);
-  sema::Return* visitReturnStatement(ReturnStatement* node);
+  void visitFunctionStatement(FunctionStatement* node);
+  void visitBlockStatement(BlockStatement* node);
+  void visitStatement(Statement* node);
+  void visitReturnStatement(ReturnStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValue* visitIntegerLiteral(IntegerLiteral* node);
@@ -84,7 +83,7 @@ class SemanticAnalysis
 
   FuncState *funcstate_;
 
-  ke::Vector<sema::FunctionDef*> global_functions_;
+  ke::Vector<ast::FunctionStatement*> global_functions_;
 };
 
 } // namespace sp

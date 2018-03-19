@@ -142,6 +142,8 @@ RMSG(cannot_use_type_in_decl,       type,              "cannot use type '%0' in 
 
 RMSG(need_return_value,             type,              "non-void function needs return value")
 RMSG(returned_in_void_function,     type,              "void function cannot return a value")
+RMSG(typedef_must_be_fun,           type,              "typedefs may only be used with function types")
+RMSG(typeset_must_only_have_fun,    type,              "typesets should only contain function types")
 
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
 
