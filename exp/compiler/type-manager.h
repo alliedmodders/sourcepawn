@@ -21,6 +21,7 @@
 
 #include "string-pool.h"
 #include "types.h"
+#include <amtl/am-hashmap.h>
 
 namespace sp {
 
@@ -64,6 +65,7 @@ class TypeManager
   TypesetType *newTypeset(Atom *name);
   StructType *newStruct(Atom* name);
   TypedefType *newTypedef(Atom *name);
+  ReferenceType* newReference(Type* type);
 
   Type *typeForLabelAtom(Atom *atom);
 
@@ -94,6 +96,11 @@ class TypeManager
   Atom *atom_any_;
   Atom *atom_Function_;
   Atom *atom_bool_;
+
+  typedef ke::HashMap<Type*,
+                      ReferenceType*,
+                      ke::PointerPolicy<Type>> RefTypeCache;
+  RefTypeCache reftype_cache_;
 };
 
 }

@@ -88,7 +88,8 @@ typedef FixedPoolList<Type *> TypeList;
   _(Array)                      \
   _(Function)                   \
   _(Typeset)                    \
-  _(Struct)
+  _(Struct)                     \
+  _(Reference)
 
 #define FORWARD_DECLARE(name) class name##Type;
 TYPE_ENUM_MAP(FORWARD_DECLARE)
@@ -136,6 +137,9 @@ class Type : public PoolObject
     // Unchecked is a magic type that has implicit, bitwise coercion to
     // int32, float, bool, or an enum.
     Unchecked,
+
+    // Reference of another type.
+    Reference,
 
     // An array is a fixed-length vector of any other type.
     Array,
@@ -211,6 +215,23 @@ class Type : public PoolObject
     return canonical()->kind_ == Kind::NullType;
   }
 
+  // Return true if a value of this type can be stored in a variable.
+  bool isStorableType() {
+    switch (canonicalKind()) {
+      case Kind::Primitive:
+      case Kind::Enum:
+      case Kind::Unchecked:
+      case Kind::Array:
+      case Kind::Reference:
+      case Kind::Typeset:
+      case Kind::Function:
+      case Kind::MetaFunction:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   Kind canonicalKind() {
     return canonical()->kind_;
   }
@@ -237,6 +258,18 @@ class Type : public PoolObject
   }
   bool canBeUsedInConstExpr() {
     return isPrimitive() || isEnum();
+  }
+  bool canBeUsedAsRefType() {
+    switch (canonical()->kind_) {
+      case Kind::Primitive:
+      case Kind::Enum:
+      case Kind::Unchecked:
+      case Kind::Function:
+      case Kind::MetaFunction:
+        return true;
+      default:
+        return false;
+    }
   }
 
   PrimitiveType primitive() {
@@ -615,6 +648,24 @@ class StructType : public RecordType
 
  public:
   static StructType *New(Atom* name);
+};
+
+class ReferenceType : public Type
+{
+  explicit ReferenceType(Type* inner)
+   : Type(Kind::Reference),
+     inner_(inner)
+  {}
+
+public:
+  static ReferenceType* New(Type* inner);
+
+  Type* inner() const {
+    return inner_;
+  }
+
+private:
+  Type* inner_;
 };
 
 static inline size_t

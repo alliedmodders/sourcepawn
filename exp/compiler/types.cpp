@@ -170,6 +170,13 @@ StructType::New(Atom* name)
   return new (POOL()) StructType(name);
 }
 
+ReferenceType*
+ReferenceType::New(Type* inner)
+{
+  assert(inner->canBeUsedAsRefType());
+  return new (POOL()) ReferenceType(inner);
+}
+
 const char *
 sp::GetPrimitiveName(PrimitiveType type)
 {
@@ -227,6 +234,8 @@ GetBaseTypeName(Type *type)
     return type->toRecord()->name()->chars();
   if (TypedefType *tdef = type->asTypedef())
     return tdef->name()->chars();
+  if (ReferenceType* rdef = type->asReference())
+    return GetBaseTypeName(rdef->inner());
   return GetPrimitiveName(type->primitive());
 }
 

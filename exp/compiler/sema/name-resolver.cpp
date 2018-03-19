@@ -346,22 +346,11 @@ NameResolver::HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *ini
     var->te() = resolve(spec, &helper);
   }
 
-  if (var->te().resolved()) {
-    sym->setType(var->te().resolved());
+  if (Type* resolved = var->te().resolved())
+    tr_.assignTypeToSymbol(sym, resolved);
 
-    // We need to check this both here and in lazy resolution, which is gross,
-    // but I don't see any obvious way to simplify it yet.
-    if (spec.isByRef() && sym->type()->passesByReference()) {
-      cc_.report(spec.byRefLoc(), rmsg::type_cannot_be_ref)
-        << sym->type();
-    }
-  }
-
-  // Even if we were able to resolve the type, if we have to resolve a constant
-  // value, we'll have to add it to the resolver queue.
-  if (!var->te().resolved() || sym->canUseInConstExpr())
+  if (!sym->type() || sym->canUseInConstExpr())
     tr_.addPending(var);
-
   return var;
 }
 
@@ -925,6 +914,10 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
       type = cc_.types()->newArray(type, ArrayType::kUnsized);
   }
 
+  if (spec.isByRef())
+    type = tr_.applyByRef(&spec, type, helper);
+
+  // :TODO: figure out what this means for structs, someday.
   if (spec.isConst())
     type = tr_.applyConstQualifier(&spec, type, helper);
 
