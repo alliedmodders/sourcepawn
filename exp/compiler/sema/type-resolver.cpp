@@ -981,7 +981,10 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 
   assert(sym->isByRef() == type->isReference());
   assert(!sym->isByRef() || sym->isArgument());
-  assert(type->isStorableType());
+  if (!type->isStorableType()) {
+    cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
+    return false;
+  }
 
   sym->setType(type);
   return true;

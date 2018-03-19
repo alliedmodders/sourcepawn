@@ -138,6 +138,7 @@ RMSG(cannot_resolve_function,       type,              "cannot resolve '%0' to a
 RMSG(function_has_no_impl,          type,              "function '%0' cannot be used as a value since it does not have a scripted body")
 RMSG(const_has_no_meaning,          type,              "const has no meaning on type '%0' in this context")
 RMSG(const_ref_has_no_meaning,      type,              "const reference has no meaning on type '%0' in this context")
+RMSG(cannot_use_type_in_decl,       type,              "cannot use type '%0' in a variable declaration")
 
 RMSG(need_return_value,             type,              "non-void function needs return value")
 RMSG(returned_in_void_function,     type,              "void function cannot return a value")
