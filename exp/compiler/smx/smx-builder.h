@@ -23,6 +23,8 @@
 #include <am-hashmap.h>
 #include <am-refcounting.h>
 #include <smx/smx-headers.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "string-pool.h"
 #include "memory-buffer.h"
 
@@ -169,7 +171,10 @@ class SmxNameTable : public SmxSection
     if (i.found())
       return i->value;
 
-    assert(IsUint32AddSafe(buffer_size_, str->length() + 1));
+    if (!IsUint32AddSafe(buffer_size_, str->length() + 1)) {
+      fprintf(stderr, "out of memory in nametable\n");
+      abort();
+    }
 
     uint32_t index = buffer_size_;
     name_table_.add(i, str, index);

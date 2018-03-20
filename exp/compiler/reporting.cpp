@@ -34,6 +34,7 @@ static const char *sMessageTypeStrings[] = {
   "note",
   "syntax error",
   "type error",
+  "internal error",
   "warning",
 };
 

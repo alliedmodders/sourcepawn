@@ -88,6 +88,9 @@ ArrayType::New(Type *contained, int elements)
   ArrayType *type = new (POOL()) ArrayType(Kind::Array);
   type->contained_ = contained;
   type->elements_ = elements;
+  type->nlevels_ = contained->isArray()
+                   ? contained->toArray()->nlevels_ + 1
+                   : 1;
   return type;
 }
 
@@ -158,16 +161,33 @@ FunctionType::New(FunctionSignature *sig)
   return new (POOL()) FunctionType(sig);
 }
 
+Type*
+FunctionType::returnType() const
+{
+  return signature_->returnType().resolved();
+}
+
 TypesetType *
 TypesetType::New(Atom* name)
 {
   return new (POOL()) TypesetType(name);
 }
 
-StructType *
-StructType::New(Atom* name)
+StructType::StructType(ast::RecordDecl* decl)
+ : RecordType(Kind::Struct, decl)
 {
-  return new (POOL()) StructType(name);
+}
+
+Atom*
+RecordType::name() const
+{
+  return decl_->name();
+}
+
+StructType *
+StructType::New(ast::RecordDecl* decl)
+{
+  return new (POOL()) StructType(decl);
 }
 
 ReferenceType*
@@ -187,6 +207,7 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "char";
     case PrimitiveType::Float:
       return "float";
+#if 0
     case PrimitiveType::Double:
       return "double";
     case PrimitiveType::Int8:
@@ -197,8 +218,10 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "int16";
     case PrimitiveType::Uint16:
       return "uint16";
+#endif
     case PrimitiveType::Int32:
       return "int";
+#if 0
     case PrimitiveType::Uint32:
       return "uint";
     case PrimitiveType::Int64:
@@ -209,6 +232,7 @@ sp::GetPrimitiveName(PrimitiveType type)
       return "intn";
     case PrimitiveType::NativeUint:
       return "uintn";
+#endif
     default:
       assert(false);
       return "unknown";

@@ -20,7 +20,7 @@
 #define _include_sourcepawn_ast_h_
 
 #include "pool-allocator.h"
-#include <am-vector.h>
+#include "label.h"
 #include "tokens.h"
 #include "types.h"
 #include "symbols.h"
@@ -28,6 +28,7 @@
 #include "tokens.h"
 #include "type-specifier.h"
 #include "value-attrs.h"
+#include <am-vector.h>
 #include <limits.h>
 
 namespace sp {
@@ -59,7 +60,7 @@ class CompileContext;
   _(FunctionStatement)    \
   _(CallNewExpr)          \
   _(NewArrayExpr)         \
-  _(CallExpr)             \
+  _(CallExpression)       \
   _(FieldExpression)      \
   _(IfStatement)          \
   _(IndexExpression)      \
@@ -195,21 +196,13 @@ typedef PoolList<Statement *> StatementList;
 typedef PoolList<Expression *> ExpressionList;
 typedef PoolList<VarDecl *> ParameterList;
 
-namespace DeclAttrs
-{
-  static const uint32_t None   = 0x0;
-  static const uint32_t Static = 0x1;
-  static const uint32_t Public = 0x2;
-  static const uint32_t Stock  = 0x4;
-};
-
 class FunctionSignature : public PoolObject
 {
  public:
   FunctionSignature()
   {}
 
-  FunctionSignature(const TypeExpr &returnType, ParameterList *parameters)
+  FunctionSignature(const TypeExpr& returnType, ParameterList* parameters)
    : returnType_(returnType),
      parameters_(parameters),
      destructor_(false),
@@ -218,13 +211,13 @@ class FunctionSignature : public PoolObject
   {
   }
 
-  TypeExpr &returnType() {
+  TypeExpr& returnType() {
     return returnType_;
   }
-  const TypeExpr &returnType() const {
+  const TypeExpr& returnType() const {
     return returnType_;
   }
-  ParameterList *parameters() const {
+  ParameterList* parameters() const {
     return parameters_;
   }
   bool destructor() const {
@@ -248,7 +241,7 @@ class FunctionSignature : public PoolObject
 
  private:
   TypeExpr returnType_;
-  ParameterList *parameters_;
+  ParameterList* parameters_;
   bool destructor_ : 1;
   bool native_ : 1;
   bool resolved_ : 1;
@@ -257,12 +250,14 @@ class FunctionSignature : public PoolObject
 class VarDecl : public Statement
 {
  public:
-  VarDecl(const NameToken &name, Expression *initialization)
+  VarDecl(const NameToken &name, TokenKind classifier, Expression *initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
+     sema_init_(nullptr),
      sym_(nullptr),
-     next_(nullptr)
+     next_(nullptr),
+     classifier_(classifier)
   {
   }
 
@@ -270,6 +265,12 @@ class VarDecl : public Statement
 
   Expression *initialization() const {
     return initialization_;
+  }
+  sema::Expr* sema_init() const {
+    return sema_init_;
+  }
+  void set_sema_init(sema::Expr* init) {
+    sema_init_ = init;
   }
   Atom *name() const {
     return name_;
@@ -287,6 +288,14 @@ class VarDecl : public Statement
   VariableSymbol *sym() const {
     return sym_;
   }
+  TokenKind classifier() const {
+    return classifier_;
+  }
+
+  // This is only valid after type resolution.
+  Type* type() const {
+    return te().resolved();
+  }
 
   // When parsed as a list of declarations, for example:
   //   int x, y, z
@@ -303,9 +312,11 @@ class VarDecl : public Statement
  private:
   Atom *name_;
   Expression *initialization_;
+  sema::Expr* sema_init_;
   TypeExpr te_;
   VariableSymbol *sym_;
   VarDecl *next_;
+  TokenKind classifier_;
 };
 
 class NameProxy : public Expression
@@ -431,22 +442,25 @@ class StringLiteral : public Expression
 class NameAndValue : public PoolObject
 {
  public:
-  NameAndValue(const Token &name, Expression *expr)
+  NameAndValue(const NameToken& name, Expression* expr)
    : name_(name),
      expr_(expr)
   {
   }
 
-  Atom *name() const {
-    return name_.atom();
+  Atom* name() const {
+    return name_.atom;
   }
-  Expression *expr() const {
+  Expression* expr() const {
     return expr_;
+  }
+  const SourceLocation& loc() const {
+    return name_.start;
   }
 
  private:
-  Token name_;
-  Expression *expr_;
+  NameToken name_;
+  Expression* expr_;
 };
 
 typedef PoolList<NameAndValue *> NameAndValueList;
@@ -454,7 +468,7 @@ typedef PoolList<NameAndValue *> NameAndValueList;
 class StructInitializer : public Expression
 {
  public:
-  StructInitializer(const SourceLocation &loc, NameAndValueList *pairs)
+  StructInitializer(const SourceLocation& loc, NameAndValueList* pairs)
    : Expression(loc),
      pairs_(pairs)
   {
@@ -462,12 +476,12 @@ class StructInitializer : public Expression
 
   DECLARE_NODE(StructInitializer);
 
-  NameAndValueList *pairs() const {
+  NameAndValueList* pairs() const {
     return pairs_;
   }
 
  private:
-  NameAndValueList *pairs_;
+  NameAndValueList* pairs_;
 };
 
 class ArrayLiteral : public Expression
@@ -760,17 +774,17 @@ class NewArrayExpr : public Expression
   ExpressionList *dims_;
 };
 
-class CallExpr : public Expression
+class CallExpression : public Expression
 {
  public:
-  CallExpr(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
+  CallExpression(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
     : Expression(pos),
       callee_(callee),
       arguments_(arguments)
   {
   }
 
-  DECLARE_NODE(CallExpr);
+  DECLARE_NODE(CallExpression);
 
   Expression *callee() const {
     return callee_;
@@ -800,12 +814,13 @@ class ForStatement : public Statement
   ForStatement(const SourceLocation &pos, Statement *initialization,
                Expression *condition, Statement *update, Statement *body,
                Scope *scope)
-    : Statement(pos),
-      initialization_(initialization),
-      condition_(condition),
-      update_(update),
-      body_(body),
-      scope_(scope)
+   : Statement(pos),
+     initialization_(initialization),
+     condition_(condition),
+     update_(update),
+     body_(body),
+     scope_(scope),
+     sema_cond_(nullptr)
   {
   }
 
@@ -830,6 +845,16 @@ class ForStatement : public Statement
     assert(!scope_);
     scope_ = scope;
   }
+
+  sema::Expr* sema_cond() const {
+    return sema_cond_;
+  }
+  void set_sema_cond(sema::Expr* expr) {
+    sema_cond_ = expr;
+  }
+
+ private:
+  sema::Expr* sema_cond_;
 };
 
 // FoldedExprs note that an expression has been constant-folded during semantic
@@ -868,7 +893,8 @@ class WhileStatement : public Statement
     : Statement(pos),
       token_(kind),
       condition_(condition),
-      body_(body)
+      body_(body),
+      sema_cond_(nullptr)
   {
   }
   
@@ -883,6 +909,16 @@ class WhileStatement : public Statement
   Statement *body() const {
     return body_;
   }
+
+  sema::Expr* sema_cond() const {
+    return sema_cond_;
+  }
+  void set_sema_cond(sema::Expr* expr) {
+    sema_cond_ = expr;
+  }
+
+ private:
+  sema::Expr* sema_cond_;
 };
 
 class ReturnStatement : public Statement
@@ -970,7 +1006,8 @@ class ExpressionStatement : public Statement
  public:
   ExpressionStatement(Expression *expression)
    : Statement(expression->loc()),
-     expression_(expression)
+     expression_(expression),
+     sema_expr_(nullptr)
   {
   }
 
@@ -979,6 +1016,16 @@ class ExpressionStatement : public Statement
   Expression *expr() const {
     return expression_;
   }
+
+  sema::Expr* sema_expr() const {
+    return sema_expr_;
+  }
+  void set_sema_expr(sema::Expr* expr) {
+    sema_expr_ = expr;
+  }
+
+ private:
+  sema::Expr* sema_expr_;
 };
 
 // Block statements have a "kind" denoting information about the block.
@@ -1019,7 +1066,9 @@ class FunctionNode : public PoolObject
    : kind_(kind),
      body_(nullptr),
      signature_(nullptr),
-     funScope_(nullptr)
+     funScope_(nullptr),
+     signature_type_(nullptr),
+     guaranteed_return_(false)
   {
   }
 
@@ -1057,12 +1106,33 @@ class FunctionNode : public PoolObject
     return shadowed_;
   }
 
+  Type* signature_type() const {
+    return signature_type_;
+  }
+  void set_signature_type(Type* type) {
+    signature_type_ = type;
+  }
+
+  void set_guaranteed_return() {
+    guaranteed_return_ = true;
+  }
+  bool guaranteed_return() const {
+    return guaranteed_return_;
+  }
+
+  Label* address() {
+    return &address_;
+  }
+
  private:
   TokenKind kind_;
   BlockStatement *body_;
   FunctionSignature *signature_;
   Scope *funScope_;
   FunctionSymbol *shadowed_;
+  Label address_;
+  Type* signature_type_;
+  bool guaranteed_return_;
 };
 
 class FunctionStatement :
@@ -1070,13 +1140,13 @@ class FunctionStatement :
   public FunctionNode
 {
  public:
-  FunctionStatement(const NameToken &name, TokenKind kind, uint32_t attrs)
+  FunctionStatement(const NameToken &name, TokenKind kind, SymAttrs flags)
    : Statement(name.start),
      FunctionNode(kind),
      name_(name),
-     attrs_(attrs),
      sym_(nullptr),
-     type_(nullptr)
+     type_(nullptr),
+     flags_(flags)
   {
   }
 
@@ -1092,8 +1162,8 @@ class FunctionStatement :
   FunctionSymbol *sym() const {
     return sym_;
   }
-  uint32_t attrs() const {
-    return attrs_;
+  Flags<SymAttrs> flags() const {
+    return flags_;
   }
 
   // These are used in the function -> value decay operation. Since most
@@ -1110,53 +1180,60 @@ class FunctionStatement :
       return "forward";
     if (token() == TOK_NATIVE)
       return "native";
-    if (attrs_ & DeclAttrs::Public)
+    if (token() == TOK_PUBLIC)
       return "public";
-    if (attrs_ & DeclAttrs::Stock)
-      return "stock";
-    if (attrs_ & DeclAttrs::Static)
+    if (token() == TOK_STATIC) {
+      if (flags_ & SymAttrs::Stock)
+        return "static stock";
       return "static";
-    if (attrs_ & (DeclAttrs::Static|DeclAttrs::Stock))
-      return "static stock";
+    }
+    if (flags_ & SymAttrs::Stock)
+      return "stock";
     return "function";
   }
 
  private:
   NameToken name_;
-  uint32_t attrs_;
   FunctionSymbol *sym_;
   FunctionType *type_;
+  Flags<SymAttrs> flags_;
+};
+
+struct IfClause
+{
+  IfClause(Expression* cond, Statement* body)
+   : cond(cond),
+     body(body),
+     sema_cond(nullptr)
+  {}
+
+  Expression* cond;
+  Statement* body;
+  sema::Expr* sema_cond;
 };
 
 class IfStatement : public Statement
 {
-  Expression *condition_;
-  Statement *ifTrue_;
-  Statement *ifFalse_;
-
  public:
-  IfStatement(const SourceLocation &pos, Expression *condition, Statement *ifTrue)
-    : Statement(pos),
-      condition_(condition),
-      ifTrue_(ifTrue),
-      ifFalse_(nullptr)
+  IfStatement(const SourceLocation &pos, PoolList<IfClause>* clauses, Statement* fallthrough)
+   : Statement(pos),
+     clauses_(clauses),
+     fallthrough_(fallthrough)
   {
   }
 
   DECLARE_NODE(IfStatement);
 
-  Expression *condition() const {
-    return condition_;
+  PoolList<IfClause>* clauses() const {
+    return clauses_;
   }
-  Statement *ifTrue() const {
-    return ifTrue_;
+  Statement* fallthrough() const {
+    return fallthrough_;
   }
-  Statement *ifFalse() const {
-    return ifFalse_;
-  }
-  void setIfFalse(Statement *ifFalse) {
-    ifFalse_ = ifFalse;
-  }
+
+ private:
+  PoolList<IfClause>* clauses_;
+  Statement* fallthrough_;
 };
 
 // There is one EnumConstant per entry in an EnumStatement. We need this to be
@@ -1300,77 +1377,76 @@ class Case : public PoolObject
 {
  public:
   Case(Expression *expression, ExpressionList *others, Statement *statement)
-    : expression_(expression),
-    others_(others),
-    statement_(statement)
+   : expression_(expression),
+     others_(others),
+     statement_(statement),
+     values_(nullptr)
   {
   }
 
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
-  PoolList<Expression *> *others() const {
+  PoolList<Expression*>* others() const {
     return others_;
   }
-  Statement *statement() const {
+  Statement* statement() const {
     return statement_;
   }
 
- private:
-  Expression *expression_;
-  PoolList <Expression *> *others_;
-  Statement *statement_;
-};
-
-struct CaseValue
-{
-  BoxedValue value;
-  size_t statement;
-
-  CaseValue(size_t statement)
-    : statement(statement)
-  {
+  void setValues(FixedPoolList<int32_t>* values) {
+    values_ = values;
   }
-};
+  const FixedPoolList<int32_t>* values() const {
+    return values_;
+  }
 
-typedef PoolList<CaseValue> CaseValueList;
+ private:
+  Expression* expression_;
+  PoolList<Expression*>* others_;
+  Statement* statement_;
+
+  // Filled in later by semantic analysis.
+  FixedPoolList<int32_t>* values_;
+};
 
 class SwitchStatement : public Statement
 {
  public:
-  SwitchStatement(const SourceLocation &pos, Expression *expression, PoolList<Case *> *cases,
-                  Statement *def)
+  SwitchStatement(const SourceLocation& pos, Expression* expression, PoolList<Case*>* cases,
+                  Statement* def)
    : Statement(pos),
      expression_(expression),
      cases_(cases),
      default_(def),
-     table_(nullptr)
+     sema_expr_(nullptr)
   {
   }
 
   DECLARE_NODE(SwitchStatement);
 
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
-  PoolList<Case *> *cases() const {
+  PoolList<Case*>* cases() const {
     return cases_;
   }
-  Statement *defaultCase() const {
+  Statement* defaultCase() const {
     return default_;
   }
-  void setCaseValueList(CaseValueList *list) {
-    table_ = list;
+
+  sema::Expr* sema_expr() const {
+    return sema_expr_;
   }
-  CaseValueList *caseValueList() const {
-    return table_;
+  void set_sema_expr(sema::Expr* expr) {
+    sema_expr_ = expr;
   }
 
  private:
-  Expression *expression_;
-  PoolList<Case *> *cases_;
-  Statement *default_;
-  CaseValueList *table_;
+  Expression* expression_;
+  PoolList<Case*>* cases_;
+  Statement* default_;
+  sema::Expr* sema_expr_;
 };
 
 class LayoutDecl : public Statement
@@ -1415,6 +1491,7 @@ class FieldDecl : public LayoutDecl
   NameToken name_;
   TypeExpr te_;
   FieldSymbol *sym_;
+  Type* type_;
 };
 
 class MethodDecl : public LayoutDecl
@@ -1765,7 +1842,8 @@ class ParseTree : public PoolObject
 
  public:
   ParseTree(StatementList *statements)
-    : statements_(statements)
+    : statements_(statements),
+      uses_handle_intrinsics_(false)
   {
   }
 
@@ -1775,6 +1853,16 @@ class ParseTree : public PoolObject
   StatementList *statements() const {
     return statements_;
   }
+
+  bool uses_handle_intrinsics() const {
+    return uses_handle_intrinsics_;
+  }
+  void set_uses_handle_intrinsics() {
+    uses_handle_intrinsics_ = true;
+  }
+
+ private:
+  bool uses_handle_intrinsics_;
 };
 
 // For new AstVisitors, copy-paste.
@@ -1791,7 +1879,7 @@ class ParseTree : public PoolObject
 //  void visitNameProxy(NameProxy *node) override;
 //  void visitExpressionStatement(ExpressionStatement *node) override;
 //  void visitFunctionStatement(FunctionStatement *node) override;
-//  void visitCallExpr(CallExpr *node) override;
+//  void visitCallExpression(CallExpression *node) override;
 //  void visitFieldExpression(FieldExpression *node) override;
 //  void visitIfStatement(IfStatement *node) override;
 //  void visitIndexExpression(IndexExpression *node) override;

@@ -39,7 +39,7 @@ class NameResolver
   void OnTagProxy(NameProxy *proxy);
   void OnEnumDecl(EnumStatement *node);
   void OnEnumValueDecl(EnumConstant *cs);
-  VarDecl *HandleVarDecl(NameToken name, TypeSpecifier &spec, Expression *init);
+  VarDecl *HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier &spec, Expression *init);
   void OnEnterMethodmap(MethodmapDecl *methodmap);
   void OnLeaveMethodmap(MethodmapDecl *methodmap);
   void OnEnterRecordDecl(RecordDecl *decl);
@@ -76,13 +76,28 @@ class NameResolver
   void EnterTypeIntoTypeset(TypesetDecl *decl, Vector<TypesetDecl::Entry> &types, TypeSpecifier &spec);
   void FinishTypeset(TypesetDecl *decl, const Vector<TypesetDecl::Entry> &types);
 
-  FunctionSignature *HandleFunctionSignature(
-    TypeSpecifier &spec,
-    ParameterList *params,
+  void HandleFunctionSignature(
+    TokenKind kind,
+    FunctionNode* node,
+    TypeSpecifier& spec,
+    ParameterList* params,
     bool canResolveEagerly);
-  FunctionSignature *HandleFunctionSignature(
-    const TypeExpr &te,
-    ParameterList *params,
+  void HandleFunctionSignature(
+    TokenKind kind,
+    FunctionNode* node,
+    const TypeExpr& te,
+    ParameterList* params,
+    bool canResolveEagerly);
+
+  FunctionSignature* HandleFunctionSignature(
+    TokenKind kind,
+    TypeSpecifier& spec,
+    ParameterList* params,
+    bool canResolveEagerly);
+  FunctionSignature* HandleFunctionSignature(
+    TokenKind kind,
+    const TypeExpr& te,
+    ParameterList* params,
     bool canResolveEagerly);
 
  private:

@@ -45,9 +45,23 @@ class SemanticAnalysis
   void visitBlockStatement(BlockStatement* node);
   void visitStatement(Statement* node);
   void visitReturnStatement(ReturnStatement* node);
+  void visitExpressionStatement(ExpressionStatement* node);
+  void visitVarDecl(VarDecl* node);
+  void visitWhileStatement(WhileStatement* node);
+  void visitForStatement(ForStatement* node);
+  void visitIfStatement(IfStatement* node);
+  void visitBreakStatement(BreakStatement* node);
+  void visitSwitchStatement(SwitchStatement* node);
 
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
+  sema::BinaryExpr* visitBinaryExpression(BinaryExpression* node);
+  sema::CallExpr* visitCallExpression(ast::CallExpression* node);
+  sema::Expr* visitNameProxy(ast::NameProxy* node);
+  sema::Expr* visitUnaryExpression(ast::UnaryExpression* node);
+  sema::Expr* visitStringLiteral(ast::StringLiteral* node);
+  sema::Expr* visitIncDec(ast::IncDecExpression* node);
+  sema::Expr* visitIndex(ast::IndexExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -55,24 +69,51 @@ class SemanticAnalysis
   bool matchForwardSignatures(FunctionSignature *fwdSig, FunctionSignature *implSig);
   bool matchForwardReturnTypes(Type *fwdRetType, Type *implRetType);
 
-  void checkCall(FunctionSignature *sig, ExpressionList *args);
+  // Same as visitExpression, but only returns l-values.
+  sema::Expr* visitLValue(Expression* node);
+
+  sema::Expr* check_arg(sema::Expr* arg, VarDecl* param);
+  sema::Expr* check_array_arg(sema::Expr* arg, VarDecl* param);
 
   enum class Coercion {
-    Return
+    Arg,
+    Assignment,
+    Return,
+    Test,
+    Expr
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
+  sema::Expr* coerce_inner(sema::Expr* from_expr,
+                           Type* from,
+                           Type* to,
+                           Coercion context);
+  sema::Expr* initializer(ast::Expression* expr, Type* type);
+  sema::Expr* struct_initializer(ast::StructInitializer* expr, Type* type);
+
+  // No-op function to breakpoint on type errors.
+  sema::Expr* no_conversion(sema::Expr* expr, Type* from, Type* to);
 
  private:
+  enum class ReturnStatus {
+    None,   // No return statements.
+    Mixed,  // Some returns.
+    All     // All paths return.
+  };
+
   struct FuncState : StackLinked<FuncState>
   {
-    FunctionNode *fun;
-    FunctionSignature *sig;
-
     FuncState(FuncState **prev, FunctionNode *node)
      : StackLinked<FuncState>(prev),
        fun(node),
-       sig(node->signature())
+       sig(node->signature()),
+       return_status(ReturnStatus::None)
     {}
+
+    FunctionNode *fun;
+    FunctionSignature *sig;
+
+    // This tracks how the current control-flow path returns.
+    ReturnStatus return_status;
   };
 
  private:
@@ -81,9 +122,12 @@ class SemanticAnalysis
   TypeManager *types_;
   TranslationUnit *tu_;
 
-  FuncState *funcstate_;
+  FuncState *fs_;
 
   ke::Vector<ast::FunctionStatement*> global_functions_;
+  ke::Vector<ast::VarDecl*> global_vars_;
+
+  size_t loop_depth_;
 };
 
 } // namespace sp

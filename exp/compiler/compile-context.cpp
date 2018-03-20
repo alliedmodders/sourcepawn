@@ -22,6 +22,7 @@
 #include "parser/parser.h"
 #include "sema/name-resolver.h"
 #include "sema/semantic-analysis.h"
+#include "smx/memory-buffer.h"
 #include "smx/smx-compiler.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,6 +85,24 @@ ReportMemory(FILE *fp)
   fprintf(fp, " -- %" KE_FMT_SIZET " bytes used for bookkeeping\n", bookkeeping);
 }
 
+class FpBuffer : public ISmxBuffer
+{
+ public:
+  explicit FpBuffer(FILE* fp)
+   : fp_(fp)
+  {}
+
+  bool write(const void* bytes, size_t len) override {
+    return fwrite(bytes, 1, len, fp_) == len;
+  }
+  size_t pos() const override {
+    return (size_t)ftell(fp_);
+  }
+
+ private:
+  FILE* fp_;
+};
+
 bool
 CompileContext::compile(RefPtr<SourceFile> file)
 {
@@ -129,10 +148,19 @@ CompileContext::compile(RefPtr<SourceFile> file)
     SmxCompiler compiler(*this, program);
     if (!compiler.compile())
       return false;
+    {
+      FILE* fp = fopen("/tmp/out.smx", "wt");
+      FpBuffer buf(fp);
+      if (!compiler.emit(&buf))
+        return false;
+      fclose(fp);
+    }
   }
 
   if (reports_.HasErrors())
     return false;
+
+  fprintf(stderr, "\n-- Ok! /tmp/out.smx --\n");
 
   return true;
 }

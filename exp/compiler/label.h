@@ -20,65 +20,131 @@
 
 namespace sp {
 
-// A label represents a local control-flow target in a stream. A label
-// may be in three states:
+// A label is a lightweight object to assist in managing relative jumps. It
+// exists in three states:
+//   * Unbound, Unused: The label has no incoming jumps, and its position has
+//     not yet been fixed in the instruction stream.
+//   * Unbound, Used: The label has not yet been fixed at a position in the
+//     instruction stream, but it has incoming jumps.
+//   * Bound: The label has been fixed at a position in the instruction stream.
 //
-// (1) Empty - the label is not used yet.
-// (2) Pending - the label has incoming jumps, but the actual location of
-//         is not yet known. The list of jumps is threaded through
-//         the four bytes reserved for each emitted jump target. In
-//         this case, the offset field is the location of the most
-//         recently emitted incoming jump.
-// (3) Bound   - the label's position has been pinned.
+// When a label is unbound and used, the offset stored in the Label is a linked
+// list threaded through each individual jump. When the label is bound, each
+// jump instruction in this list is immediately patched with the correctly
+// computed relative distance to the label.
 //
-// A jump can be emitted to a label in any state. Binding a label
-// immediately backpatches all pending incoming jumps. A label must be
-// bound if it is used.
+// We keep sizeof(Label) == 4 to make it embeddable within code streams if
+// need be (for example, SourcePawn mirrors the source code to maintain jump
+// maps).
 class Label
 {
-  int offset_ : 31;
-  bool bound_ : 1;
-
-  void setOffset(int offset) {
-    offset_ = offset;
-    assert(offset_ == offset);
-  }
-
- public:
-  static const int INVALID_OFFSET = -1;
+  // If set on status_, the label is bound.
+  static const int32_t kBound = (1 << 0);
 
  public:
   Label()
-    : offset_(INVALID_OFFSET),
-    bound_(false)
+   : status_(0)
   {
   }
   ~Label()
   {
-    assert(bound_ || offset_ == INVALID_OFFSET);
+    assert(!used() || bound());
   }
-  
+
+  static inline bool More(uint32_t status) {
+    return status != 0;
+  }
+  static inline uint32_t ToOffset(uint32_t status) {
+    return status >> 1;
+  }
+
+  bool used() const {
+    return bound() || !!(status_ >> 1);
+  }
   bool bound() const {
-    return bound_;
+    return !!(status_ & kBound);
   }
-  int offset() const {
-    return offset_;
-  }
-  int value() const {
+  uint32_t offset() const {
     assert(bound());
-    return offset_;
+    return ToOffset(status_);
   }
-  void bind(int offset) {
-    assert(!bound_);
-    setOffset(offset);
-    bound_ = true;
+  uint32_t status() const {
+    assert(!bound());
+    return status_;
   }
-  int link(int offset) {
-    assert(!bound_);
-    int old = offset_;
-    setOffset(offset);
-    return old;
+  uint32_t addPending(uint32_t pc) {
+    assert(pc <= INT_MAX / 2);
+    uint32_t prev = status_;
+    status_ = pc << 1;
+    return prev;
   }
+  void bind(uint32_t offset) {
+    assert(!bound());
+    status_ = (offset << 1) | kBound;
+    assert(this->offset() == offset);
+  }
+
+  void reset() {
+    assert(!used() || bound());
+    status_ = 0;
+  }
+
+ protected:
+  // Note that 0 as an invalid offset is okay, because the offset we save for
+  // pending jumps are after the jump opcode itself, and therefore 0 is never
+  // valid, since there are no 0-byte jumps.
+  uint32_t status_;
+};
+
+// Similar to Label, but used for mutating a single instruction to a value
+// that can only be computed later.
+class DataLabel
+{
+  static const int32_t kBound = (1 << 0);
+
+ public:
+  DataLabel()
+   : status_(0)
+  {}
+  ~DataLabel()
+  {
+    assert(!used() || bound());
+  }
+  static inline uint32_t ToOffset(uint32_t status) {
+    return status >> 1;
+  }
+
+  bool used() const {
+    return bound() || !!(status_ >> 1);
+  }
+  bool bound() const {
+    return !!(status_ & kBound);
+  }
+  uint32_t offset() const {
+    assert(bound());
+    return ToOffset(status_);
+  }
+  uint32_t status() const {
+    assert(!bound());
+    return status_;
+  }
+  void use(uint32_t pc) {
+    assert(!used() && !bound());
+    assert(pc <= INT_MAX / 2);
+    status_ = pc << 1;
+  }
+  void bind() {
+    assert(used() && !bound());
+    status_ |= kBound;
+  }
+
+  void reset() {
+    assert(!used() || bound());
+    status_ = 0;
+  }
+
+ private:
+  uint32_t status_;
 };
 
 } // namespace ke

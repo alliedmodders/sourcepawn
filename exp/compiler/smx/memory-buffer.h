@@ -19,7 +19,8 @@
 #define _include_sp_memory_buffer_h_
 
 #include <stdio.h>
-#include "smx-builder.h"
+
+namespace sp {
 
 // Interface for SmxBuilder to blit bytes.
 class ISmxBuffer
@@ -39,14 +40,25 @@ class MemoryBuffer : public ISmxBuffer
     buffer_ = (uint8_t *)calloc(kDefaultSize, 1);
     pos_ = buffer_;
     end_ = buffer_ + kDefaultSize;
+    oom_ = !buffer_;
   }
   ~MemoryBuffer() {
     free(buffer_);
   }
 
+  // :TODO: handle oom
+
+  template <typename T>
+  bool write(const T& value) {
+    return write(&value, sizeof(T));
+  }
+
   bool write(const void *bytes, size_t len) override {
-    if (pos_ + len > end_)
-      grow(len);
+    // :TODO: fix for overflow
+    if (pos_ + len > end_) {
+      if (!grow(len))
+        return false;
+    }
     memcpy(pos_, bytes, len);
     pos_ += len;
     return true;
@@ -62,41 +74,45 @@ class MemoryBuffer : public ISmxBuffer
   size_t size() const {
     return pos();
   }
-  void rewind(size_t newpos) {
-    assert(newpos < pos());
-    pos_ = buffer_ + newpos;
+  bool outOfMemory() const {
+    return oom_;
   }
 
  private:
-  void grow(size_t len) {
-    if (!ke::IsUintPtrAddSafe(pos(), len)) {
-      fprintf(stderr, "Allocation overflow!\n");
-      abort();
+  bool grow(size_t len) {
+    if (!grow_impl(len)) {
+      oom_ = true;
+      return false;
     }
+    return true;
+  }
+  bool grow_impl(size_t len) {
+    if (!ke::IsUintPtrAddSafe(pos(), len))
+      return false;
 
     size_t new_maxsize = end_ - buffer_;
     while (pos() + len > new_maxsize) {
-      if (!ke::IsUintPtrMultiplySafe(new_maxsize, 2)) {
-        fprintf(stderr, "Allocation overflow!\n");
-        abort();
-      }
+      if (!ke::IsUintPtrMultiplySafe(new_maxsize, 2))
+        return false;
       new_maxsize *= 2;
     }
 
     uint8_t *newbuffer = (uint8_t *)realloc(buffer_, new_maxsize);
-    if (!newbuffer) {
-      fprintf(stderr, "Out of memory!\n");
-      abort();
-    }
+    if (!newbuffer)
+      return false;
     pos_ = newbuffer + (pos_ - buffer_);
     end_ = newbuffer + new_maxsize;
     buffer_ = newbuffer;
+    return true;
   }
 
  private:
   uint8_t *buffer_;
   uint8_t *pos_;
   uint8_t *end_;
+  bool oom_;
 };
+
+} // namespace sp
 
 #endif // _include_sp_memory_buffer_h_

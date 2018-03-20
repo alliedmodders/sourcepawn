@@ -29,6 +29,7 @@ namespace sp {
 struct ReportingContext;
 
 namespace ast {
+class RecordDecl;
 class TypeExpr;
 class TypeSpecifier;
 } // namespace ast
@@ -49,20 +50,26 @@ enum class PrimitiveType : uint32_t
   // an internal marker.
   ImplicitIntDoNotUseDirectly,
 
+#if 0
   Int8,
   Uint8,
   Int16,
   Uint16,
+#endif
   Int32,
+#if 0
   Uint32,
   Int64,
   Uint64,
   NativeInt,
   NativeUint,
+#endif
 
   // Floating point values are IEEE-754 floats.
   Float,
+#if 0
   Double,
+#endif
 
   TOTAL
 };
@@ -214,6 +221,11 @@ class Type : public PoolObject
   bool isNullType() {
     return canonical()->kind_ == Kind::NullType;
   }
+  bool isPrimitive(PrimitiveType type) {
+    return isPrimitive() && primitive() == type;
+  }
+
+  bool isString();
 
   // Return true if a value of this type can be stored in a variable.
   bool isStorableType() {
@@ -530,6 +542,9 @@ class ArrayType : public Type
     assert(hasFixedLength());
     return elements_;
   }
+  uint32_t nlevels() const {
+    return nlevels_;
+  }
 
   bool equalTo(ArrayType *other) {
     return elements_ == other->elements_ &&
@@ -539,6 +554,7 @@ class ArrayType : public Type
  private:
   int32_t elements_;
   Type *contained_;
+  uint32_t nlevels_;
 };
 
 class TypedefType : public Type
@@ -587,6 +603,8 @@ class FunctionType : public Type
     return signature_;
   }
 
+  Type* returnType() const;
+
  private:
   ast::FunctionSignature *signature_;
 };
@@ -594,17 +612,18 @@ class FunctionType : public Type
 class RecordType : public Type
 {
  public:
-  explicit RecordType(Kind kind, Atom* name)
+  explicit RecordType(Kind kind, ast::RecordDecl* decl)
    : Type(kind),
-     name_(name)
+     decl_(decl)
   {}
 
-  Atom *name() const {
-    return name_;
+  Atom* name() const;
+  ast::RecordDecl* decl() const {
+    return decl_;
   }
 
  private:
-  Atom* name_;
+  ast::RecordDecl* decl_;
 };
 
 class TypesetType : public Type
@@ -642,12 +661,10 @@ class TypesetType : public Type
 
 class StructType : public RecordType
 {
-  StructType(Atom* name)
-   : RecordType(Kind::Struct, name)
-  {}
+  StructType(ast::RecordDecl* decl);
 
  public:
-  static StructType *New(Atom* name);
+  static StructType *New(ast::RecordDecl* decl);
 };
 
 class ReferenceType : public Type
@@ -668,86 +685,10 @@ private:
   Type* inner_;
 };
 
-static inline size_t
-SizeOfPrimitiveType(PrimitiveType type)
+inline bool
+Type::isString()
 {
-  switch (type) {
-    case PrimitiveType::Bool:
-    case PrimitiveType::Int8:
-    case PrimitiveType::Uint8:
-      return 1;
-    case PrimitiveType::Int16:
-    case PrimitiveType::Uint16:
-      return 2;
-    case PrimitiveType::Int32:
-    case PrimitiveType::Uint32:
-    case PrimitiveType::Float:
-      return 4;
-    case PrimitiveType::Int64:
-    case PrimitiveType::Uint64:
-    case PrimitiveType::Double:
-      return 8;
-    case PrimitiveType::NativeInt:
-    case PrimitiveType::NativeUint:
-      return sizeof(void *);
-    default:
-      assert(false);
-      return 0;
-  }
-}
-
-static inline bool
-IsPrimitiveTypeSigned(PrimitiveType type)
-{
-  switch (type) {
-    case PrimitiveType::Int8:
-    case PrimitiveType::Int16:
-    case PrimitiveType::Int32:
-    case PrimitiveType::Int64:
-    case PrimitiveType::NativeInt:
-      return true;
-    case PrimitiveType::Uint16:
-    case PrimitiveType::Uint8:
-    case PrimitiveType::Uint32:
-    case PrimitiveType::Uint64:
-    case PrimitiveType::NativeUint:
-      return false;
-    default:
-      assert(false);
-      return false;
-  }
-}
-
-static inline PrimitiveType
-SignedTypeForIntegerSize(size_t size)
-{
-  switch (size) {
-    case 1:
-      return PrimitiveType::Int8;
-    case 2:
-      return PrimitiveType::Int16;
-    case 4:
-      return PrimitiveType::Int32;
-    default:
-      assert(size == 8);
-      return PrimitiveType::Int64;
-  }
-}
-
-static inline PrimitiveType
-UnsignedTypeForIntegerSize(size_t size)
-{
-  switch (size) {
-    case 1:
-      return PrimitiveType::Uint8;
-    case 2:
-      return PrimitiveType::Uint16;
-    case 4:
-      return PrimitiveType::Uint32;
-    default:
-      assert(size == 8);
-      return PrimitiveType::Uint64;
-  }
+  return isArray() && toArray()->contained()->isPrimitive(PrimitiveType::Char);
 }
 
 // Types where "const" is allowed as a keyword.

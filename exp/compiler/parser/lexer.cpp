@@ -318,7 +318,7 @@ Lexer::handleNumber(Token *tok, char first)
       uint64_t val = 0;
       for (size_t i = 0; i < literal_length(); i++) {
         uint64_t digit = HexDigitToValue(literal_[i]);
-        if (!TryUint64Multiply(val, 10, &val)) {
+        if (!TryUint64Multiply(val, 16, &val)) {
           report(tok->start.loc, rmsg::int_literal_overflow);
           break;
         }

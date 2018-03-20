@@ -70,6 +70,7 @@ class TypeResolver
   bool verifyTypeset(TypesetDecl *decl);
 
   bool assignTypeToSymbol(VariableSymbol* sym, Type* type);
+  void assignTypeToFunction(FunctionNode* node);
   void assignTypeToTypedef(TypedefDecl* decl, TypedefType* def, Type* actual);
 
  private:

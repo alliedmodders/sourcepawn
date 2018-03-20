@@ -33,7 +33,8 @@ Parser::Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver)
   scanner_(pp),
   options_(cc_.options()),
   delegate_(resolver),
-  allowDeclarations_(true)
+  allowDeclarations_(true),
+  uses_handle_intrinsics_(false)
 {
   atom_Float_ = cc_.add("Float");
   atom_String_ = cc_.add("String");
@@ -214,7 +215,7 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   }
 
   FunctionSignature *sig =
-    delegate_.HandleFunctionSignature(returnType, params, canResolveEagerly);
+    delegate_.HandleFunctionSignature(TOK_PUBLIC, returnType, params, canResolveEagerly);
   spec->setFunctionType(sig);
 }
 
@@ -561,6 +562,7 @@ Parser::primitive()
       return new (pool_) ThisExpression(scanner_.begin());
 
     case TOK_LBRACE:
+      // :TODO: only allow this from initializers
       return parseCompoundLiteral();
 
     default:
@@ -583,7 +585,7 @@ Parser::parseStructInitializer(const SourceLocation &pos)
   while (!match(TOK_RBRACE)) {
     if (!expect(TOK_NAME))
       return nullptr;
-    const Token name = *scanner_.current();
+    NameToken name = *scanner_.current();
 
     if (!match(TOK_ASSIGN))
       return nullptr;
@@ -785,13 +787,12 @@ Parser::primary()
       case TOK_LPAREN:
       {
         expect(TOK_LPAREN);
-        SourceLocation loc = scanner_.begin();
 
         ExpressionList *args = callArgs();
         if (!args)
           return nullptr;
 
-        return new (pool_) CallExpr(loc, expr, args);
+        return new (pool_) CallExpression(expr->loc(), expr, args);
       }
 
       case TOK_DOT:
@@ -1217,9 +1218,7 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
     }
 
-    FunctionSignature *sig =
-      delegate_.HandleFunctionSignature(returnType, params, canEarlyResolve);
-    node->setSignature(sig);
+    delegate_.HandleFunctionSignature(kind, node, returnType, params, canEarlyResolve);
 
     // Hrm... should be complting the decl here instead? Right now it seems
     // fine not to, but in the future it could lead to weird ordering in the
@@ -1586,13 +1585,13 @@ Parser::dimensions()
 }
 
 Statement *
-Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
+Parser::variable(TokenKind tok, Declaration *decl, SymAttrs flags, uint32_t decl_flags)
 {
   Expression *init = nullptr;
   if (match(TOK_ASSIGN))
     init = expression();
 
-  VarDecl *first = delegate_.HandleVarDecl(decl->name, decl->spec, init);
+  VarDecl *first = delegate_.HandleVarDecl(decl->name, tok, flags, decl->spec, init);
 
   VarDecl *prev = first;
   while (scanner_.peekTokenSameLine() == TOK_COMMA) {
@@ -1607,13 +1606,13 @@ Parser::variable(TokenKind tok, Declaration *decl, uint32_t attrs)
     if (match(TOK_ASSIGN))
       init = expression();
 
-    VarDecl *var = delegate_.HandleVarDecl(decl->name, decl->spec, init);
+    VarDecl *var = delegate_.HandleVarDecl(decl->name, tok, flags, decl->spec, init);
 
     prev->setNext(var);
     prev = var;
   }
 
-  if (!(attrs & DeclFlags::Inline))
+  if (!(decl_flags & DeclFlags::Inline))
     requireTerminator();
 
   return first;
@@ -1632,7 +1631,7 @@ Parser::localVarDecl(TokenKind kind, uint32_t flags)
   if (!parse_decl(&decl, flags))
     return nullptr;
 
-  return variable(kind, &decl, flags);
+  return variable(kind, &decl, SymAttrs::None, flags);
 }
 
 Statement *
@@ -1743,20 +1742,18 @@ Parser::if_()
   if (!ifTrue)
     return nullptr;
 
-  IfStatement *outer = new (pool_) IfStatement(pos, cond, ifTrue);
+  PoolList<IfClause>* clauses = new (pool_) PoolList<IfClause>();
+  clauses->append(IfClause(cond, ifTrue));
 
-  IfStatement *last = outer;
+  Statement* fallthrough = nullptr;
+
   while (match(TOK_ELSE)) {
     if (!match(TOK_IF)) {
-      Statement *ifFalse = statementOrBlock();
-      if (!ifFalse)
+      if (!(fallthrough = statementOrBlock()))
         return nullptr;
-
-      last->setIfFalse(ifFalse);
       break;
     }
 
-    SourceLocation pos = scanner_.begin();
     if (!expect(TOK_LPAREN))
       return nullptr;
 
@@ -1771,14 +1768,11 @@ Parser::if_()
     if (!otherIfTrue)
       return nullptr;
 
-    IfStatement *inner = new (pool_) IfStatement(pos, otherCond, otherIfTrue);
-    last->setIfFalse(inner);
-    last = inner;
+    clauses->append(IfClause(otherCond, otherIfTrue));
   }
 
   requireNewline();
-
-  return outer;
+  return new (pool_) IfStatement(pos, clauses, fallthrough);
 }
 
 Statement *
@@ -1822,8 +1816,10 @@ Parser::statement()
       kind == TOK_STATIC ||
       kind == TOK_CONST)
   {
-    if (IsNewTypeToken(kind))
+    if (IsNewTypeToken(kind)) {
       scanner_.undo();
+      kind = TOK_NEW;
+    }
     return localVarDecl(kind);
   }
 
@@ -1978,7 +1974,7 @@ Parser::arguments(bool *canEarlyResolve)
       variadic = true;
     }
 
-    VarDecl *node = delegate_.HandleVarDecl(decl.name, decl.spec, init);
+    VarDecl *node = delegate_.HandleVarDecl(decl.name, TOK_NEW, SymAttrs::None, decl.spec, init);
 
     // Mark whether we eagerly resolved a type for this node.
     *canEarlyResolve &= !!node->sym()->type();
@@ -2024,10 +2020,9 @@ Parser::methodBody()
 }
 
 Statement *
-Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
+Parser::function(TokenKind kind, Declaration &decl, SymAttrs flags)
 {
-  FunctionStatement *stmt =
-    new (pool_) FunctionStatement(decl.name, kind, attrs);
+  FunctionStatement *stmt = new (pool_) FunctionStatement(decl.name, kind, flags);
 
   delegate_.OnEnterFunctionDecl(stmt);
 
@@ -2045,9 +2040,7 @@ Parser::function(TokenKind kind, Declaration &decl, uint32_t attrs)
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
     }
 
-    FunctionSignature *signature =
-      delegate_.HandleFunctionSignature(decl.spec, params, canEagerResolve);
-    stmt->setSignature(signature);
+    delegate_.HandleFunctionSignature(kind, stmt, decl.spec, params, canEagerResolve);
 
     BlockStatement *body = nullptr;
     if (kind != TOK_FORWARD && kind != TOK_NATIVE) {
@@ -2077,33 +2070,40 @@ Parser::global(TokenKind kind)
   if (kind == TOK_NATIVE || kind == TOK_FORWARD) {
     if (!parse_decl(&decl, DeclFlags::MaybeFunction))
       return nullptr;
-    return function(kind, decl, DeclAttrs::None);
+    return function(kind, decl, SymAttrs::None);
   }
 
-  uint32_t attrs = DeclAttrs::None;
-  if (kind == TOK_PUBLIC)
-    attrs |= DeclAttrs::Public;
+  SymAttrs flags = SymAttrs::None;
   if (kind == TOK_STOCK)
-    attrs |= DeclAttrs::Stock;
-  if (kind == TOK_STATIC)
-    attrs |= DeclAttrs::Static;
+    flags |= SymAttrs::Stock;
+  if (kind == TOK_STATIC && match(TOK_STOCK))
+    flags |= SymAttrs::Stock;
 
-  if ((attrs & DeclAttrs::Static) && match(TOK_STOCK))
-    attrs |= DeclAttrs::Stock;
-
-  uint32_t flags = DeclFlags::MaybeFunction | DeclFlags::Variable;
+  uint32_t decl_flags = DeclFlags::MaybeFunction | DeclFlags::Variable;
   if (kind == TOK_NEW)
-    flags |= DeclFlags::Old;
+    decl_flags |= DeclFlags::Old;
 
-  if (!parse_decl(&decl, flags))
+  if (!parse_decl(&decl, decl_flags))
     return nullptr;
 
-  if (kind == TOK_NEW || decl.spec.hasPostDims() || !peek(TOK_LPAREN)) {
+  bool is_var_decl = (kind == TOK_NEW) ||
+                      decl.spec.hasPostDims() ||
+                      !peek(TOK_LPAREN);
+
+  TokenKind spec;
+  if (kind == TOK_PUBLIC || kind == TOK_STATIC)
+    spec = kind;
+  else if (is_var_decl)
+    spec = TOK_NEW;
+  else
+    spec = TOK_FUNCTION;
+
+  if (is_var_decl) {
     if (kind == TOK_NEW && decl.spec.isNewDecl())
       cc_.report(scanner_.begin(), rmsg::newdecl_with_new);
-    return variable(TOK_NEW, &decl, attrs);
+    return variable(spec, &decl, flags, 0);
   }
-  return function(TOK_FUNCTION, decl, attrs);
+  return function(spec, decl, flags);
 }
 
 Statement *
@@ -2197,6 +2197,28 @@ Parser::typedef_()
   return delegate_.HandleTypedefDecl(begin, name, spec);
 }
 
+bool
+Parser::using_()
+{
+  if (!expect(TOK_INTRINSICS))
+    return false;
+  if (!expect(TOK_DOT))
+    return false;
+
+  Atom* name = expectName();
+  if (!name)
+    return false;
+
+  if (strcmp(name->chars(), "Handle") == 0) {
+    uses_handle_intrinsics_ = true;
+    return true;
+  }
+
+  cc_.report(scanner_.begin(), rmsg::intrinsic_not_found) <<
+    name;
+  return false;
+}
+
 ParseTree *
 Parser::parse()
 {
@@ -2262,6 +2284,13 @@ Parser::parse()
         scanner_.eatRestOfLine();
         break;
 
+      case TOK_USING:
+        if (using_())
+          requireNewlineOrSemi();
+        else
+          scanner_.eatRestOfLine();
+        break;
+
       default:
         if (kind != TOK_UNKNOWN) {
           cc_.report(scanner_.begin(), rmsg::expected_global_decl)
@@ -2281,7 +2310,10 @@ Parser::parse()
   delegate_.OnLeaveParser();
 
  err_out:
-  return new (pool_) ParseTree(list);
+  ParseTree* pt = new (pool_) ParseTree(list);
+  if (uses_handle_intrinsics_)
+    pt->set_uses_handle_intrinsics();
+  return pt;
 }
 
 } // namespace sp

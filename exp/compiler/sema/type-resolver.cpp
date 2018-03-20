@@ -190,7 +190,11 @@ TypeResolver::visitVarDecl(VarDecl *node)
 {
   VariableSymbol *sym = node->sym();
 
-  assert(!sym->type());
+  if (sym->type() && !sym->canUseInConstExpr()) {
+    // This was already resolved earlier - it's part of a function signature.
+    assert(sym->scope()->kind() == Scope::Argument);
+    return;
+  }
 
   Type* type;
   if (TypeSpecifier *spec = node->te().spec()) {
@@ -226,7 +230,7 @@ TypeResolver::visitVarDecl(VarDecl *node)
     type = node->te().resolved();
   }
 
-  if (!assignTypeToSymbol(sym, type))
+  if (!sym->type() && !assignTypeToSymbol(sym, type))
     return;
 
   if (sym->isConstExpr() || !sym->canUseInConstExpr())
@@ -438,8 +442,18 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
 void
 TypeResolver::visitFunction(FunctionNode *node)
 {
-  if (!node->signature()->isResolved())
+  if (!node->signature()->isResolved()) {
     resolveTypesInSignature(node->signature());
+    assignTypeToFunction(node);
+  }
+}
+
+void
+TypeResolver::assignTypeToFunction(FunctionNode* node)
+{
+  assert(!node->signature_type());
+  Type* type = cc_.types()->newFunction(node->signature());
+  node->set_signature_type(type);
 }
 
 void
@@ -976,6 +990,14 @@ TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper
   return cc_.types()->newReference(type);
 }
 
+static inline bool
+IsAllowableStructDecl(VariableSymbol* sym, Type *type)
+{
+  return type->isStruct() &&
+         sym->scope()->kind() == Scope::Global &&
+         sym->node()->toVarDecl()->classifier() == TOK_PUBLIC;
+}
+
 bool
 TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 {
@@ -984,9 +1006,14 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 
   assert(sym->isByRef() == type->isReference());
   assert(!sym->isByRef() || sym->isArgument());
+
+  // :TODO: why is this here? move it into sema.
   if (!type->isStorableType()) {
-    cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
-    return false;
+    // We make a very specific exception for public structs, which are barely supported.
+    if (!IsAllowableStructDecl(sym, type)) {
+      cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
+      return false;
+    }
   }
 
   sym->setType(type);

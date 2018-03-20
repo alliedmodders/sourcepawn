@@ -82,9 +82,9 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ NameProxy (%s)\n", name->name()->chars());
   }
-  void visitCallExpr(CallExpr *node) override {
+  void visitCallExpression(CallExpression *node) override {
     prefix();
-    fprintf(fp_, "[ CallExpr\n");
+    fprintf(fp_, "[ CallExpression\n");
     indent();
     node->callee()->accept(this);
     for (size_t i = 0; i < node->arguments()->length(); i++)
@@ -240,9 +240,25 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ IfStatement\n");
     indent();
-    node->ifTrue()->accept(this);
-    if (node->ifFalse())
-      node->ifFalse()->accept(this);
+    for (size_t i = 0; i < node->clauses()->length(); i++) {
+      const IfClause& clause = node->clauses()->at(i);
+      prefix();
+      fprintf(fp_, "clause:\n");
+      indent();
+      {
+        clause.cond->accept(this);
+        clause.body->accept(this);
+      }
+      unindent();
+    }
+    if (Statement* stmt = node->fallthrough()) {
+      fprintf(fp_, "fallthrough:\n");
+      indent();
+      {
+        stmt->accept(this);
+      }
+      unindent();
+    }
     unindent();
   }
   void visitFieldExpression(FieldExpression *node) override {

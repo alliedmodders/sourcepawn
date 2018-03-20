@@ -28,6 +28,7 @@ namespace sp {
 class String;
 
 namespace ast {
+class RecordDecl;
 class TypesetDecl;
 } // namespace ast
 
@@ -40,6 +41,9 @@ class TypeManager
 
   Type *getPrimitive(PrimitiveType type) const {
     return primitiveTypes_[size_t(type)];
+  }
+  Type *getBool() const {
+      return getPrimitive(PrimitiveType::Bool);
   }
   Type *getVoid() const {
     return voidType_;
@@ -63,9 +67,10 @@ class TypeManager
   EnumType *newEnum(Atom *name);
   Type *newQualified(Type *type, Qualifiers qualifiers);
   TypesetType *newTypeset(Atom *name);
-  StructType *newStruct(Atom* name);
+  StructType *newStruct(ast::RecordDecl* decl);
   TypedefType *newTypedef(Atom *name);
   ReferenceType* newReference(Type* type);
+  FunctionType* newFunction(ast::FunctionSignature* sig);
 
   Type *typeForLabelAtom(Atom *atom);
 

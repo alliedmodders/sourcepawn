@@ -69,6 +69,7 @@ namespace sp {
   _(TYPEDEF)                                          \
   _(TYPESET)                                          \
   _(UNION)                                            \
+  _(USING)                                            \
   _(WHILE)                                            \
   _(VIEW_AS)                                          \
   _(VOID)                                             \
@@ -88,6 +89,7 @@ namespace sp {
   _(M_REQUIRE_SEMI)                                   \
   _(M_TRYINCLUDE)                                     \
   _(M_UNDEF)                                          \
+  _(INTRINSICS)                                       \
   _(NULLABLE)
 
 // We need to test line positions very frequently during lexing. Rather than

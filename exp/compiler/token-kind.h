@@ -77,6 +77,7 @@ namespace sp {
   _(TYPEDEF,            "typedef")                    \
   _(TYPESET,            "typeset")                    \
   _(UNION,              "union")                      \
+  _(USING,              "using")                      \
   _(VIEW_AS,            "view_as")                    \
   _(VOID,               "void")                       \
   _(WHILE,              "while")                      \
@@ -97,6 +98,7 @@ namespace sp {
   _(M_REQUIRE_SEMI,     "#require_semicolons")        \
   _(M_TRYINCLUDE,       "#tryinclude")                \
   _(M_UNDEF,            "#undef")                     \
+  _(INTRINSICS,         "__intrinsics__")             \
   _(ELLIPSES,           "...")                        \
   _(PLUS,               "+")                          \
   _(MINUS,              "-")                          \

@@ -55,18 +55,21 @@ TypeManager::initialize()
 
   primitiveTypes_[size_t(PrimitiveType::ImplicitIntDoNotUseDirectly)] =
     Type::NewPrimitive(PrimitiveType::ImplicitIntDoNotUseDirectly);
+#if 0
   primitiveTypes_[size_t(PrimitiveType::Int8)] = Type::NewPrimitive(PrimitiveType::Int8);
   primitiveTypes_[size_t(PrimitiveType::Uint8)] = Type::NewPrimitive(PrimitiveType::Uint8);
   primitiveTypes_[size_t(PrimitiveType::Int16)] = Type::NewPrimitive(PrimitiveType::Int16);
   primitiveTypes_[size_t(PrimitiveType::Uint16)] = Type::NewPrimitive(PrimitiveType::Uint16);
-  primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32);
   primitiveTypes_[size_t(PrimitiveType::Uint32)] = Type::NewPrimitive(PrimitiveType::Uint32);
   primitiveTypes_[size_t(PrimitiveType::Int64)] = Type::NewPrimitive(PrimitiveType::Int64);
   primitiveTypes_[size_t(PrimitiveType::Uint64)] = Type::NewPrimitive(PrimitiveType::Uint64);
   primitiveTypes_[size_t(PrimitiveType::NativeInt)] = Type::NewPrimitive(PrimitiveType::NativeInt);
   primitiveTypes_[size_t(PrimitiveType::NativeUint)] = Type::NewPrimitive(PrimitiveType::NativeUint);
-  primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
   primitiveTypes_[size_t(PrimitiveType::Double)] = Type::NewPrimitive(PrimitiveType::Double);
+#endif
+
+  primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32);
+  primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
   primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);
   primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool);
 
@@ -137,9 +140,9 @@ TypeManager::newTypeset(Atom* name)
 }
 
 StructType *
-TypeManager::newStruct(Atom* name)
+TypeManager::newStruct(ast::RecordDecl* decl)
 {
-  return StructType::New(name);
+  return StructType::New(decl);
 }
 
 TypedefType *
@@ -159,6 +162,12 @@ TypeManager::newReference(Type* type)
   if (!reftype_cache_.add(p, ref))
     return nullptr;
   return ref;
+}
+
+FunctionType*
+TypeManager::newFunction(ast::FunctionSignature* sig)
+{
+  return FunctionType::New(sig);
 }
 
 Type *

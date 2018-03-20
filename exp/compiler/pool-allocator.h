@@ -194,6 +194,13 @@ class PoolList : public PoolObject
     return impl_[index];
   }
 
+  const T* begin() const {
+    return impl_.begin();
+  }
+  const T* end() const {
+    return impl_.end();
+  }
+
  private:
   Vector<T, PoolAllocationPolicy> impl_;
 };

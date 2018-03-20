@@ -32,6 +32,7 @@ using namespace ke;
 namespace ast {
 class AstNode;
 class FunctionStatement;
+class VarDecl;
 } // namespace ast
 
 class String;
@@ -109,7 +110,7 @@ class Symbol : public PoolObject
 class VariableSymbol : public Symbol
 {
  public:
-  VariableSymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  VariableSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name),
      storage_(StorageClass::Unknown),
      storage_flags_(StorageFlags::none),
@@ -124,26 +125,26 @@ class VariableSymbol : public Symbol
   Kind kind() const override {
     return kVariable;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "variable";
   }
 
-  void setType(Type *type) {
+  void setType(Type* type) {
     assert(!type_ || type_->isUnresolvable());
     type_ = type;
   }
-  void allocate(StorageClass storage, intptr_t address) {
+  void allocate(StorageClass storage, int32_t address) {
     storage_ = storage;
     address_ = address;
   }
   StorageClass storage() const {
     return storage_;
   }
-  intptr_t address() const {
+  int32_t address() const {
     assert(storage() != StorageClass::Unknown);
     return address_;
   }
-  Type *type() const {
+  Type* type() const {
     return type_;
   }
 
@@ -171,10 +172,10 @@ class VariableSymbol : public Symbol
     return !isConstExpr() && !failedToResolveConstExpr();
   }
 
-  StorageFlags& storage_flags() {
+  ke::Flags<StorageFlags>& storage_flags() {
     return storage_flags_;
   }
-  const StorageFlags storage_flags() const {
+  const ke::Flags<StorageFlags> storage_flags() const {
     return storage_flags_;
   }
   bool isByRef() const {
@@ -206,9 +207,9 @@ class VariableSymbol : public Symbol
 
  private:
   StorageClass storage_;
-  StorageFlags storage_flags_;
-  intptr_t address_;
-  Type *type_;
+  ke::Flags<StorageFlags> storage_flags_;
+  int32_t address_;
+  Type* type_;
   BoxedValue constant_;
 };
 
@@ -257,10 +258,6 @@ class FunctionSymbol : public Symbol
     return "function";
   }
 
-  Label *address() {
-    return &address_;
-  }
-
   void addShadow(ast::FunctionStatement *stmt);
   FuncStmtList *shadows() const {
     return shadows_;
@@ -269,7 +266,6 @@ class FunctionSymbol : public Symbol
   ast::FunctionStatement *impl() const;
 
  private:
-  Label address_;
   FuncStmtList *shadows_;
 };
 

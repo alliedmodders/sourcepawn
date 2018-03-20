@@ -43,12 +43,12 @@ class SemaPrinter : public ast::StrictAstVisitor
       prefix();
       dump(node->signature());
       if (node->body())
-        printBlock(node->body());
+        visitBlockStatement(node->body());
     }
     unindent();
   }
 
-  void printBlock(ast::BlockStatement* body) {
+  void visitBlockStatement(ast::BlockStatement* body) override {
     prefix();
     fprintf(fp_, "- BlockStatement\n");
     indent();
@@ -62,7 +62,18 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
-  void visitReturnStatement(ast::ReturnStatement* stmt) {
+  void visitVarDecl(ast::VarDecl* stmt) override {
+     prefix();
+     fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).chars());
+     indent();
+     {
+       if (sema::Expr* expr = stmt->sema_init())
+         printExpr(expr);
+     }
+     unindent();
+  }
+
+  void visitReturnStatement(ast::ReturnStatement* stmt) override {
     prefix();
     fprintf(fp_, "- ReturnStatement\n");
     indent();
@@ -76,10 +87,146 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
+  void visitWhileStatement(ast::WhileStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- WhileStatement\n");
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "%s\n", TokenNames[stmt->token()]);
+      printExpr(stmt->sema_cond());
+      stmt->body()->accept(this);
+    }
+    unindent();
+  }
+
+  void visitForStatement(ast::ForStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- ForStatement\n");
+    indent();
+    {
+      if (ast::Statement* init = stmt->initialization()) {
+        init->accept(this);
+      } else {
+        prefix();
+        fprintf(fp_, "(no init)\n");
+      }
+      if (sema::Expr* expr = stmt->sema_cond()) {
+        printExpr(expr);
+      } else {
+        prefix();
+        fprintf(fp_, "(no cond)\n");
+      }
+      if (ast::Statement* update = stmt->update()) {
+        update->accept(this);
+      } else {
+        prefix();
+        fprintf(fp_, "(no update)\n");
+      }
+      stmt->body()->accept(this);
+    }
+    unindent();
+  }
+
+  void visitBreakStatement(ast::BreakStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- BreakStatement\n");
+  }
+
+  void visitIfStatement(ast::IfStatement* node) override {
+    prefix();
+    fprintf(fp_, "- IfStatement\n");
+    indent();
+    {
+      for (size_t i = 0; i < node->clauses()->length(); i++) {
+        const ast::IfClause& clause = node->clauses()->at(i);
+        printExpr(clause.sema_cond);
+        clause.body->accept(this);
+      }
+      if (ast::Statement* stmt = node->fallthrough())
+        stmt->accept(this);
+    }
+    unindent();
+  }
+
+  void visitSwitchStatement(ast::SwitchStatement* node) override {
+    prefix();
+    fprintf(fp_, "- SwitchStatement\n");
+    indent();
+    {
+      for (size_t i = 0; i < node->cases()->length(); i++) {
+        ast::Case* entry = node->cases()->at(i);
+
+        prefix();
+        fprintf(fp_, "case: ");
+        for (size_t j = 0; j < entry->values()->length(); j++) {
+          fprintf(fp_, "%d", entry->values()->at(j));
+          if (j != entry->values()->length() - 1)
+            fprintf(fp_, ",");
+        }
+        fprintf(fp_, "\n");
+
+        indent();
+        {
+          entry->statement()->accept(this);
+        }
+        unindent();
+      }
+
+      if (ast::Statement* stmt = node->defaultCase()) {
+        prefix();
+        fprintf(fp_, "default:\n");
+        indent();
+        {
+          stmt->accept(this);
+        }
+        unindent();
+      }
+    }
+    unindent();
+  }
+
+  void visitExpressionStatement(ast::ExpressionStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- ExpressionStatement\n");
+    indent();
+    {
+      printExpr(stmt->sema_expr());
+    }
+    unindent();
+  }
+
   void printExpr(sema::Expr* expr) {
     switch (expr->kind()) {
       case sema::ExprKind::ConstValue:
         printConstValue(expr->toConstValueExpr());
+        break;
+      case sema::ExprKind::Binary:
+        printBinary(expr->toBinaryExpr());
+        break;
+      case sema::ExprKind::Unary:
+        printUnary(expr->toUnaryExpr());
+        break;
+      case sema::ExprKind::Call:
+        printCall(expr->toCallExpr());
+        break;
+      case sema::ExprKind::NamedFunction:
+        printNamedFunction(expr->toNamedFunctionExpr());
+        break;
+      case sema::ExprKind::Var:
+        printVar(expr->toVarExpr());
+        break;
+      case sema::ExprKind::IncDec:
+        printIncDec(expr->toIncDecExpr());
+        break;
+      case sema::ExprKind::TrivialCast:
+        printTrivialCast(expr->toTrivialCastExpr());
+        break;
+      case sema::ExprKind::String:
+        printString(expr->toStringExpr());
+        break;
+      case sema::ExprKind::Index:
+        printIndex(expr->toIndexExpr());
         break;
       default:
         assert(false);
@@ -94,6 +241,114 @@ class SemaPrinter : public ast::StrictAstVisitor
       prefix();
       dump(value);
       fprintf(fp_, "\n");
+    }
+    unindent();
+  }
+
+  void printCall(sema::CallExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->callee());
+      for (size_t i = 0; i < expr->args()->length(); i++)
+        printExpr(expr->args()->at(i));
+    }
+    unindent();
+  }
+
+  void printNamedFunction(sema::NamedFunctionExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "%s\n", expr->sym()->name()->chars());
+    }
+    unindent();
+  }
+
+  void printBinary(sema::BinaryExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "\"%s\"\n", TokenNames[expr->token()]);
+      printExpr(expr->left());
+      printExpr(expr->right());
+    }
+    unindent();
+  }
+
+  void printUnary(sema::UnaryExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "\"%s\"\n", TokenNames[expr->token()]);
+      printExpr(expr->expr());
+    }
+    unindent();
+  }
+
+  void printIndex(sema::IndexExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->base());
+      printExpr(expr->index());
+    }
+    unindent();
+  }
+
+  void printTrivialCast(sema::TrivialCastExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->expr());
+    }
+    unindent();
+  }
+
+  void printString(sema::StringExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      // Note: this is gross because we don't print \n or \t.
+      prefix();
+      fprintf(fp_, "\"");
+      const char* ptr = expr->literal()->chars();
+      while (*ptr) {
+        if (*ptr == '\n') {
+          fprintf(fp_, "\\n");
+        } else if (*ptr == '\t') {
+          fprintf(fp_, "\\t");
+        } else {
+          fprintf(fp_, "%c", *ptr);
+        }
+        ptr++;
+      }
+      fprintf(fp_, "\"\n");
+    }
+    unindent();
+  }
+
+  void printVar(sema::VarExpr* expr) {
+    prefix();
+    AString str = BuildTypeName(expr->type(), nullptr);
+    fprintf(fp_, "- %s %s (%s)\n",
+      expr->prettyName(),
+      expr->sym()->name()->chars(),
+      str.chars());
+  }
+
+  void printIncDec(sema::IncDecExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      prefix();
+      fprintf(fp_, "%s (%s)\n",
+        TokenNames[expr->token()],
+        (expr->postfix() ? "postfix" : "prefix"));
+      printExpr(expr->expr());
     }
     unindent();
   }

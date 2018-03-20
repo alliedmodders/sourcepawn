@@ -52,7 +52,6 @@ RMSG(unexpected_directive_token,    syntax,            "unexpected token '%0' in
 
 // Parser errors.
 RMSG(expected_expression,           syntax,            "expected expression, got '%0'")
-RMSG(expected_lvalue,               syntax,            "illegal assignment, expected an l-value")
 RMSG(expected_global_decl,          syntax,            "expected global declaration, got '%0'")
 RMSG(expected_semicolon,            syntax,            "expected a semicolon in semicolons-required mode")
 RMSG(expected_newline_or_semicolon, syntax,            "expected newline or semicolon")
@@ -76,6 +75,7 @@ RMSG(no_enum_structs,               syntax,            "type-sized enums ('enum 
 RMSG(no_single_line_functions,      syntax,            "function bodies must have braces")
 RMSG(expected_name_and_type,        syntax,            "function signature is missing either a name or a type")
 RMSG(need_view_as_operator,         syntax,            "to cast with a builtin type, use the new view_as<> operator")
+RMSG(intrinsic_not_found,           syntax,            "intrinsic set '%0' not found")
 RMSG(view_as_example,               note,              "example: view_as<%0>(value)")
 
 // Name binding errors.
@@ -139,13 +139,38 @@ RMSG(function_has_no_impl,          type,              "function '%0' cannot be 
 RMSG(const_has_no_meaning,          type,              "const has no meaning on type '%0' in this context")
 RMSG(const_ref_has_no_meaning,      type,              "const reference has no meaning on type '%0' in this context")
 RMSG(cannot_use_type_in_decl,       type,              "cannot use type '%0' in a variable declaration")
-
 RMSG(need_return_value,             type,              "non-void function needs return value")
 RMSG(returned_in_void_function,     type,              "void function cannot return a value")
 RMSG(typedef_must_be_fun,           type,              "typedefs may only be used with function types")
 RMSG(typeset_must_only_have_fun,    type,              "typesets should only contain function types")
+RMSG(callee_is_not_function,        type,              "callee must be a named global function")
+RMSG(cannot_coerce,                 type,              "cannot coerce type '%0' to '%1'")
+RMSG(global_non_const_init,         type,              "global variable '%0' has non-constant initializer")
+RMSG(illegal_lvalue,                type,              "expression must be an l-value")
+RMSG(lvalue_is_const,               type,              "l-value cannot be modified")
+RMSG(illegal_case,                  type,              "switch cases must be constant integer values")
+RMSG(illegal_64bit_case,            type,              "switch cases must be 32-bit values")
+RMSG(struct_init_needs_struct_type, type,              "cannot use a struct initializer with a non-struct type")
+RMSG(struct_init_appears_twice,     type,              "field '%0' has more than one initializer")
+RMSG(struct_init_needs_string_lit,  type,              "field '%0' can only be initialized with a string literal")
+RMSG(struct_init_needs_const_int,   type,              "field '%0' can only be initialized with a constant integer")
+RMSG(struct_unsupported_type,       type,              "field '%0' has unsupported type '%1'")
+RMSG(struct_field_not_found,        type,              "struct type '%0' has no field named '%1'")
+RMSG(cannot_index_type,             type,              "type '%0' does not have an index operator (did you want an array?)")
+RMSG(index_must_be_integer,         type,              "array index must be an integer")
+RMSG(index_must_be_positive,        type,              "array index cannot be negative")
+RMSG(index_out_of_bounds,           type,              "index is out of bounds")
+
+RMSG(too_many_cases,                impl,              "too many switch cases")
+RMSG(too_many_arguments,            impl,              "function takes too many arguments")
+RMSG(too_much_stack,                impl,              "function uses too much stack space")
 
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
+
+RMSG(non_public_not_supported,      impl,              "non-public functions are not yet supported")
+RMSG(argcount_not_supported,        impl,              "argument count not supported")
+RMSG(regalloc_error,                impl,              "regalloc internal error: %0")
+RMSG(unimpl_kind,                   impl,              "unimplemented %0: %1")
 
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")
