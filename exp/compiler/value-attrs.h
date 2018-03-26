@@ -35,16 +35,16 @@ enum class StorageClass : int32_t
 // L-value attribute flags.
 enum class StorageFlags : int32_t
 {
-  none,
+  none = 0,
 
   // This l-value is stored by-reference.
-  byref,
+  byref = (1 << 0),
 
   // This value can be interned at compile-time.
-  constval,
+  constval = (1 << 1),
 
   // This value cannot be modified.
-  readonly
+  readonly = (1 << 2)
 };
 KE_DEFINE_ENUM_OPERATORS(StorageFlags)
 

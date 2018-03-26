@@ -112,6 +112,7 @@ class VariableSymbol : public Symbol
   VariableSymbol(ast::AstNode *node, Scope *scope, Atom *name)
    : Symbol(node, scope, name),
      storage_(StorageClass::Unknown),
+     storage_flags_(StorageFlags::none),
      type_(nullptr)
   {
     address_ = 0;
