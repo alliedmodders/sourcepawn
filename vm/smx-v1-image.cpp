@@ -229,9 +229,9 @@ SmxV1Image::validateCode()
 
   const sp_file_code_t *code =
     reinterpret_cast<const sp_file_code_t *>(buffer() + section->dataoffs);
-  if (code->codeversion < SmxConsts::CODE_VERSION_SP1_MIN)
+  if (code->codeversion < SmxConsts::CODE_VERSION_MINIMUM)
     return error("code version is too old, no longer supported");
-  if (code->codeversion > SmxConsts::CODE_VERSION_SP1_MAX)
+  if (code->codeversion > SmxConsts::CODE_VERSION_CURRENT)
     return error("code version is too new, not supported");
   if (code->cellsize != 4)
     return error("unsupported cellsize");
@@ -424,18 +424,7 @@ SmxV1Image::DescribeCode() const -> Code
   Code code;
   code.bytes = code_.blob();
   code.length = code_.length();
-  switch (code_->codeversion) {
-    case SmxConsts::CODE_VERSION_JIT_1_0:
-      code.version = CodeVersion::SP_1_0;
-      break;
-    case SmxConsts::CODE_VERSION_JIT_1_1:
-      code.version = CodeVersion::SP_1_1;
-      break;
-    default:
-      assert(false);
-      code.version = CodeVersion::Unknown;
-      break;
-  }
+  code.version = code_->codeversion;
   return code;
 }
 

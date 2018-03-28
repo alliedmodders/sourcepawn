@@ -223,9 +223,11 @@ Compiler::emitPrologue()
   __ enterFrame(JitFrameType::Scripted, pcode_start_);
 
   // Push the old frame onto the stack.
+  __ subl(stk, 8);
   __ movl(tmp, Operand(frmAddr()));
-  __ movl(Operand(stk, -4), tmp);
-  __ subl(stk, 8);    // extra unused slot for non-existant CIP
+  __ movl(Operand(stk, 4), tmp);
+  __ movl(tmp, Operand(hpAddr()));
+  __ movl(Operand(stk, 0), tmp);
 
   // Get and store the new frame.
   __ movl(tmp, stk);
@@ -613,8 +615,11 @@ Compiler::visitSTRB_I(cell_t width)
 bool
 Compiler::visitRETN()
 {
-  // Restore the old frame pointer.
+  // Restore the old stack and frame pointer.
+  __ movl(stk, frm);
   __ movl(frm, Operand(stk, 4));              // get the old frm
+  __ movl(tmp, Operand(stk, 0));              // get the old hp
+  __ movl(Operand(hpAddr()), tmp);
   __ addl(stk, 8);                            // pop stack
   __ movl(Operand(frmAddr()), frm);           // store back old frm
   __ addl(frm, dat);                          // relocate

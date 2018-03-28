@@ -33,7 +33,7 @@ class FakeCodeSection : public SmxSection
 
     cod.codesize = sizeof(cod);
     cod.cellsize = 4;
-    cod.codeversion = SmxConsts::CODE_VERSION_REJECT;
+    cod.codeversion = SmxConsts::CODE_VERSION_ALWAYS_REJECT;
 
     return fwrite(&cod, sizeof(cod), 1, fp) == 1;
   }

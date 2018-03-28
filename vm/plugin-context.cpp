@@ -684,7 +684,7 @@ PluginContext::pushAmxFrame()
 {
   if (!pushStack(frm_))
     return false;
-  if (!pushStack(0)) // unused cip
+  if (!pushStack(hp_))
     return false;
   frm_ = sp_;
   return true;
@@ -693,10 +693,9 @@ PluginContext::pushAmxFrame()
 bool
 PluginContext::popAmxFrame()
 {
-  assert(sp_ == frm_);
+  sp_ = frm_;
 
-  cell_t ignore;
-  if (!popStack(&ignore))
+  if (!popStack(&hp_))
     return false;
   if (!popStack(&frm_))
     return false;
