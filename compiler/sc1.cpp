@@ -5516,13 +5516,10 @@ static void compound(int stmt_sameline)
   } /* while */
   if (lastst!=tRETURN)
     destructsymbols(&loctab,nestlevel);
-  if (lastst!=tRETURN) {
-    popheaplist(true);
-    popstacklist(true);
-  } else {
-    popheaplist(true);
-    popstacklist(false);
-  }
+
+  popheaplist(lastst != tRETURN);
+  popstacklist(lastst != tRETURN);
+
   testsymbols(&loctab,nestlevel,FALSE,TRUE);        /* look for unused block locals */
   declared=save_decl;
   delete_symbols(&loctab,nestlevel,FALSE,TRUE);     /* erase local symbols, but
