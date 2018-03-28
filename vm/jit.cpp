@@ -137,6 +137,9 @@ CompilerBase::emit()
   emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
   emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
   emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
+  
+  // Common path for invoking debugger.
+  emitDebugBreakHandler();
 
   // This has to come very, very last, since it checks whether return paths
   // are used.

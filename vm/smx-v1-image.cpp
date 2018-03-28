@@ -418,6 +418,18 @@ SmxV1Image::validateTags()
   return true;
 }
 
+SmxV1Image::SymbolIterator
+SmxV1Image::symboliterator() {
+  if (debug_syms_) {
+    SmxV1Image::SymbolIterator iter((uint8_t *)debug_syms_, debug_symbols_section_->size, true);
+    return iter;
+  }
+  else {
+    SmxV1Image::SymbolIterator iter((uint8_t *)debug_syms_unpacked_, debug_symbols_section_->size, false);
+    return iter;
+  }
+}
+
 auto
 SmxV1Image::DescribeCode() const -> Code
 {
@@ -645,4 +657,245 @@ SmxV1Image::LookupLine(uint32_t addr, uint32_t *line)
   // Since the CIP occurs BEFORE the line, we have to add one.
   *line = debug_lines_[low].line + 1;
   return true;
+}
+
+template <typename SymbolType, typename DimType>
+bool
+SmxV1Image::getFunctionAddress(const SymbolType *syms, const char *name, uint32_t *addr, uint32_t *index)
+{
+  unsigned int i = 0;
+  SymbolIterator iter = symboliterator();
+  while (!iter.Done()) {
+    Symbol sym = iter.Next();
+
+    if (i >= *index &&
+      sym.ident() == sp::IDENT_FUNCTION &&
+      sym.name() < debug_names_section_->size &&
+      !strcmp(debug_names_ + sym.name(), name))
+    {
+      *addr = sym.addr();
+      return true;
+    }
+
+    if (i == *index)
+      (*index)++;
+    i++;
+  }
+  return false;
+}
+
+bool
+SmxV1Image::GetFunctionAddress(const char *function, const char *file, uint32_t *funcaddr)
+{
+  uint32_t index = 0;
+  const char *tgtfile;
+  *funcaddr = 0;
+  for (;;) {
+    // find (next) matching function
+    if (debug_syms_) {
+      getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function, funcaddr, &index);
+    }
+    else {
+      getFunctionAddress<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, function, funcaddr, &index);
+    }
+
+    if (index >= debug_info_->num_syms)
+      return false;
+
+    // verify that this function is defined in the apprpriate file
+    tgtfile = LookupFile(*funcaddr);
+    if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
+      break;
+    index++;
+  }
+  assert(index < debug_info_->num_syms);
+
+  // now find the first line in the function where we can "break" on
+  for (index = 0; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
+    /* nothing */;
+
+  if (index >= debug_info_->num_lines)
+    return false;
+
+  *funcaddr = debug_lines_[index].addr;
+  return true;
+}
+
+bool
+SmxV1Image::GetLineAddress(const uint32_t line, const char *filename, uint32_t *addr)
+{
+  /* Find a suitable "breakpoint address" close to the indicated line (and in
+   * the specified file). The address is moved up to the next "breakable" line
+   * if no "breakpoint" is available on the specified line. You can use function
+   * LookupLine() to find out at which precise line the breakpoint was set.
+   *
+   * The filename comparison is strict (case sensitive and path sensitive).
+   */
+  *addr = 0;
+
+  uint32_t bottomaddr, topaddr;
+  uint32_t file;
+  uint32_t index = 0;
+  for (file = 0; file < debug_info_->num_files; file++) {
+    // find the (next) matching instance of the file
+    if (debug_files_[file].name >= debug_names_section_->size ||
+      strcmp(debug_names_ + debug_files_[file].name, filename) != 0)
+    {
+      continue;
+    }
+
+    // get address range for the current file
+    bottomaddr = debug_files_[file].addr;
+    topaddr = (file + 1 < debug_info_->num_files) ? debug_files_[file + 1].addr : (uint32_t)-1;
+    
+    // go to the starting address in the line table
+    while (index < debug_info_->num_lines && debug_lines_[index].addr < bottomaddr)
+      index++;
+
+    // browse until the line is found or until the top address is exceeded
+    while (index < debug_info_->num_lines &&
+      debug_lines_[index].line < line &&
+      debug_lines_[index].addr < topaddr)
+    {
+      index++;
+    }
+
+    if (index >= debug_info_->num_lines)
+      return false;
+    if (debug_lines_[index].line >= line)
+      break;
+
+    // if not found (and the line table is not yet exceeded) try the next
+    // instance of the same file (a file may appear twice in the file table)
+  }
+  if (file >= debug_info_->num_files)
+    return false;
+
+  assert(index < debug_info_->num_lines);
+  *addr = debug_lines_[index].addr;
+  return true;
+}
+
+const char *
+SmxV1Image::FindFileByPartialName(const char *partialname)
+{
+  // the user may have given a partial filename (e.g. without a path), so
+  // walk through all files to find a match.
+  int len = strlen(partialname);
+  int offs;
+  const char *filename;
+  for (uint32_t i = 0; i < debug_info_->num_files; i++) {
+    // Invalid name offset?
+    if (debug_files_[i].name >= debug_names_section_->size)
+      continue;
+
+    filename = debug_names_ + debug_files_[i].name;
+    offs = strlen(filename) - len;
+    if (offs >= 0 &&
+      !strncmp(filename + offs, partialname, len))
+    {
+      return filename;
+    }
+  }
+  return nullptr;
+}
+
+const char *
+SmxV1Image::GetTagName(uint32_t tag)
+{
+  unsigned int index;
+  for (index = 0; index < tags_.length() && tags_[index].tag_id != tag; index++)
+    /* nothing */;
+  if (index >= tags_.length())
+    return nullptr;
+
+  return names_ + tags_[index].name;
+}
+
+bool
+SmxV1Image::GetVariable(const char *symname, uint32_t scopeaddr, ke::AutoPtr<Symbol> &sym)
+{
+  uint32_t codestart = 0;
+  uint32_t codeend = 0;
+
+  sym = nullptr;
+
+  SymbolIterator iter = symboliterator();
+  while (!iter.Done()) {
+    ke::AutoPtr<Symbol> symbol;
+    // find (next) matching variable
+    while (!iter.Done()) {
+      symbol = iter.Next();
+      
+      if (symbol->codestart() <= scopeaddr &&
+        symbol->codeend() >= scopeaddr &&
+        symbol->ident() != sp::IDENT_FUNCTION &&
+        strcmp(debug_names_ + symbol->name(), symname) == 0)
+      {
+        break;
+      }
+    }
+
+    // check the range, keep a pointer to the symbol with the smallest range
+    if (!strcmp(debug_names_ + symbol->name(), symname) &&
+        ((codestart == 0 && codeend == 0) ||
+         (symbol->codestart() >= codestart &&
+          symbol->codeend() <= codeend)))
+    {
+      sym = new Symbol(symbol);
+      codestart = symbol->codestart();
+      codeend = symbol->codeend();
+    }
+  }
+
+  return *sym != nullptr;
+}
+
+const char *
+SmxV1Image::GetDebugName(uint32_t nameoffs)
+{
+  if (nameoffs >= debug_names_section_->size)
+    return nullptr;
+  return debug_names_ + nameoffs;
+}
+
+const char *
+SmxV1Image::GetFileName(uint32_t index)
+{
+  if (debug_files_[index].name >= debug_names_section_->size)
+    return nullptr;
+  return debug_names_ + debug_files_[index].name;
+}
+
+uint32_t
+SmxV1Image::GetFileCount()
+{
+  return debug_info_->num_files;
+}
+
+ke::Vector<SmxV1Image::ArrayDim *> *
+SmxV1Image::GetArrayDimensions(const Symbol *sym)
+{
+  if (sym->ident() != sp::IDENT_ARRAY && sym->ident() != IDENT_REFARRAY)
+    return nullptr;
+
+  assert(sym->dimcount() > 0); // array must have at least one dimension
+
+  // find he end of the symbol name
+  const char *ptr;
+  for (ptr = debug_names_ + sym->name(); *ptr != '\0'; ptr++)
+    /* nothing */;
+
+  ke::Vector<ArrayDim *> *dims = new ke::Vector<ArrayDim *>();
+  for (int i = 0; i < sym->dimcount(); i++) {
+    if (sym->packed()) {
+      dims->append(new ArrayDim((sp_fdbg_arraydim_t *)ptr));
+      ptr += sizeof(sp_fdbg_arraydim_t);
+    }
+    else {
+      dims->append(new ArrayDim((sp_u_fdbg_arraydim_t *)ptr));
+      ptr += sizeof(sp_u_fdbg_arraydim_t);
+    }
+  }
+  return dims;
 }

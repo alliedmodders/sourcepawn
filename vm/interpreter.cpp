@@ -22,6 +22,7 @@
 #include "pcode-reader.h"
 #include "runtime-helpers.h"
 #include "watchdog_timer.h"
+#include "console-debugger.h"
 #include <amtl/am-algorithm.h>
 #include <amtl/am-float.h>
 #include <fenv.h>
@@ -1029,6 +1030,20 @@ bool
 Interpreter::visitSTRADJUST_PRI()
 {
   regs_.pri() = (regs_.pri() + 4) >> 2;
+  return true;
+}
+
+bool
+Interpreter::visitBREAK()
+{
+  if (!env_->get()->consoledebugger()->IsEnabled())
+    return true;
+  
+  int err = InvokeDebugger(rt_->GetBaseContext());
+  if (err != SP_ERROR_NONE) {
+    cx_->ReportErrorNumber(err);
+    return false;
+  }
   return true;
 }
 

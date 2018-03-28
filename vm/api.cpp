@@ -39,6 +39,7 @@
 #include "code-stubs.h"
 #include "smx-v1-image.h"
 #include <amtl/am-string.h>
+#include "console-debugger.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -279,6 +280,13 @@ SourcePawnEngine2::LoadBinaryFromFile(const char *file, char *error, size_t maxl
 
   if (!pRuntime->Name())
     pRuntime->SetNames(file, file);
+
+  // Start debugging this new plugin right away!
+  ConsoleDebugger *debugger = (ConsoleDebugger *)Environment::get()->consoledebugger();
+  if (debugger->ShouldDebugNextLoadedPlugin()) {
+    debugger->ResetDebugNextLoadedPlugin();
+    pRuntime->GetBaseContext()->StartDebugger();
+  }
 
   return pRuntime;
 }

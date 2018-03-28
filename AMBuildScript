@@ -76,6 +76,15 @@ class Config(object):
       if builder.options.debug == '1':
           cxx.cflags += ['-g3']
 
+      cxx.defines += [
+        'stricmp=strcasecmp',
+        '_stricmp=strcasecmp',
+        '_snprintf=snprintf',
+        '_vsnprintf=vsnprintf',
+        'HAVE_STDINT_H',
+        'GNUC',
+      ]
+
       have_gcc = cxx.family is 'gcc'
       have_clang = cxx.family is 'clang' or cxx.family is 'emscripten'
       if have_clang or have_gcc:

@@ -24,6 +24,7 @@ WatchdogTimer::WatchdogTimer(Environment *env)
  : env_(env),
    terminate_(false),
    mainthread_(ke::GetCurrentThreadId()),
+   ignore_timeout_(false),
    last_frame_id_(0),
    second_timeout_(false),
    timedout_(false)
@@ -90,12 +91,13 @@ WatchdogTimer::Run()
     // frame, then we assume the server is still moving enough to process
     // frames. We also make sure JIT code is actually on the stack, since
     // our concept of frames won't move if JIT code is not running.
+	// If we're told to ignore timeouts, we do so.
     //
     // Note that it's okay if these two race: it's just a heuristic, and
     // worst case, we'll miss something that might have timed out but
     // ended up resuming.
     uintptr_t frame_id = env_->FrameId();
-    if (frame_id != last_frame_id_ || !env_->RunningCode()) {
+    if (frame_id != last_frame_id_ || !env_->RunningCode() || ignore_timeout_) {
       last_frame_id_ = frame_id;
       second_timeout_ = false;
       continue;
@@ -164,4 +166,10 @@ WatchdogTimer::HandleInterrupt()
   if (timedout_)
     return NotifyTimeoutReceived();
   return true;
+}
+
+void
+WatchdogTimer::SetIgnore(bool ignore)
+{
+	ignore_timeout_ = ignore;
 }
