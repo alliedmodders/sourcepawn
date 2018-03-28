@@ -393,7 +393,7 @@ Interpreter::visitINVERT()
 bool
 Interpreter::visitINC(PawnReg dest)
 {
-  regs_.pri() += 1;
+  regs_[dest] += 1;
   return true;
 }
 
@@ -429,7 +429,7 @@ Interpreter::visitINC_I()
 bool
 Interpreter::visitDEC(PawnReg dest)
 {
-  regs_.pri() -= 1;
+  regs_[dest] -= 1;
   return true;
 }
 
