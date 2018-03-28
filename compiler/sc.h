@@ -922,6 +922,7 @@ extern int glbstringread;	  /* last global string read */
 extern int sc_require_newdecls; /* only newdecls are allowed */
 extern bool sc_warnings_are_errors;
 extern unsigned sc_total_errors;
+extern int pc_code_version; /* override the code version */
 
 // Returns true if compilation is in its second phase (writing phase) and has
 // so far proceeded without error.

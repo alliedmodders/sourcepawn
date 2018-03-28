@@ -940,7 +940,7 @@ int lvalexpr(svalue *sval)
     SC3ExpressionParser parser;
     sval->lvalue = parser.evaluate(&sval->val);
   }
-  popheaplist();
+  popheaplist(true);
   errorset(sEXPRRELEASE, 0);
 
   return sval->val.ident;
@@ -955,7 +955,7 @@ int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval
   if (parser.evaluate(&lval))
     rvalue(&lval);
   /* scrap any arrays left on the heap */
-  popheaplist();
+  popheaplist(true);
 
   if (lval.ident==iCONSTEXPR && val!=NULL)    /* constant expression */
     *val=lval.constval;
@@ -2977,7 +2977,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
    * this function has as a result (in other words, scrap all arrays on the
    * heap that caused by expressions in the function arguments)
    */
-  popheaplist();
+  popheaplist(true);
 }
 
 /*  dbltest
