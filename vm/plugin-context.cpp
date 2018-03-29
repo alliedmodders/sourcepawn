@@ -50,15 +50,10 @@ PluginContext::PluginContext(PluginRuntime *pRuntime)
   sp_ = mem_size_ - sizeof(cell_t);
   stp_ = sp_;
   frm_ = sp_;
-
-  tracker_.pBase = (ucell_t *)malloc(1024);
-  tracker_.pCur = tracker_.pBase;
-  tracker_.size = 1024 / sizeof(cell_t);
 }
 
 PluginContext::~PluginContext()
 {
-  free(tracker_.pBase);
   delete[] memory_;
 }
 
@@ -504,15 +499,17 @@ PluginContext::GetLocalParams()
 int
 PluginContext::popTrackerAndSetHeap()
 {
-  assert(tracker_.pCur > tracker_.pBase);
+  assert(sp_ >= hp_);
+  assert(hp_ >= cell_t(data_size_));
 
-  tracker_.pCur--;
-  if (tracker_.pCur < tracker_.pBase)
+  if (hp_ - cell_t(data_size_) < sizeof(cell_t))
     return SP_ERROR_TRACKER_BOUNDS;
 
-  ucell_t amt = *tracker_.pCur;
-  if (amt > (hp_ - data_size_))
-    return SP_ERROR_HEAPMIN;
+  hp_ -= sizeof(cell_t);
+  cell_t amt = *reinterpret_cast<cell_t*>(memory_ + hp_);
+
+  if (amt < 0 || hp_ - cell_t(data_size_) < amt)
+    return SP_ERROR_TRACKER_BOUNDS;
 
   hp_ -= amt;
   return SP_ERROR_NONE;
@@ -521,21 +518,13 @@ PluginContext::popTrackerAndSetHeap()
 int
 PluginContext::pushTracker(uint32_t amount)
 {
-  if ((size_t)(tracker_.pCur - tracker_.pBase) >= tracker_.size)
+  if (amount > INT_MAX)
+    return SP_ERROR_TRACKER_BOUNDS;
+  if (sp_ - hp_ < STACK_MARGIN)
     return SP_ERROR_TRACKER_BOUNDS;
 
-  if (tracker_.pCur + 1 - (tracker_.pBase + tracker_.size) == 0) {
-    size_t disp = tracker_.size - 1;
-    tracker_.size *= 2;
-    tracker_.pBase = (ucell_t *)realloc(tracker_.pBase, tracker_.size * sizeof(cell_t));
-
-    if (!tracker_.pBase)
-      return SP_ERROR_TRACKER_BOUNDS;
-
-    tracker_.pCur = tracker_.pBase + disp;
-  }
-
-  *tracker_.pCur++ = amount;
+  *reinterpret_cast<cell_t*>(memory_ + hp_) = amount;
+  hp_ += sizeof(cell_t);
   return SP_ERROR_NONE;
 }
 
@@ -647,9 +636,6 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
   if (dat_hp >= argv - STACK_MARGIN)
     return SP_ERROR_HEAPLOW;
 
-  if (int err = pushTracker(bytes))
-    return err;
-
   cell_t *base = reinterpret_cast<cell_t *>(memory_ + hp_);
   cell_t offs = GenerateArrayIndirectionVectors(base, argv, argc, !!autozero);
   assert(size_t(offs) == cells);
@@ -657,6 +643,9 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
 
   argv[argc - 1] = hp_;
   hp_ = new_hp;
+
+  if (int err = pushTracker(bytes))
+    return err;
   return SP_ERROR_NONE;
 }
 
@@ -671,10 +660,10 @@ PluginContext::generateArray(cell_t dims, cell_t *stk, bool autozero)
 
     uint32_t bytes = size * 4;
 
-    hp_ += bytes;
-    if (uintptr_t(memory_ + hp_) >= uintptr_t(stk))
+    if (uintptr_t(memory_ + hp_ + bytes) >= uintptr_t(stk))
       return SP_ERROR_HEAPLOW;
 
+    hp_ += bytes;
     if (int err = pushTracker(bytes))
       return err;
 
@@ -695,7 +684,7 @@ PluginContext::pushAmxFrame()
 {
   if (!pushStack(frm_))
     return false;
-  if (!pushStack(0)) // unused cip
+  if (!pushStack(hp_))
     return false;
   frm_ = sp_;
   return true;
@@ -704,10 +693,9 @@ PluginContext::pushAmxFrame()
 bool
 PluginContext::popAmxFrame()
 {
-  assert(sp_ == frm_);
+  sp_ = frm_;
 
-  cell_t ignore;
-  if (!popStack(&ignore))
+  if (!popStack(&hp_))
     return false;
   if (!popStack(&frm_))
     return false;

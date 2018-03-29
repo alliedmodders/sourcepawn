@@ -915,7 +915,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
   // Set up the code section.
   code->header().codesize = code_buffer.length() * sizeof(cell);
   code->header().cellsize = sizeof(cell);
-  code->header().codeversion = SmxConsts::CODE_VERSION_JIT_1_1;
+  code->header().codeversion = (pc_code_version) ? pc_code_version : SmxConsts::CODE_VERSION_SM_LEGACY;
   code->header().flags = CODEFLAG_DEBUG;
   code->header().main = 0;
   code->header().code = sizeof(sp_file_code_t);

@@ -92,6 +92,9 @@ int pc_tag_bool = 0;
 int pc_tag_null_t = 0;
 int pc_tag_nullfunc_t = 0;
 
+int pc_code_version = 0;
+bool pc_must_drop_stack = true;
+
 static void resetglobals(void);
 static void initglobals(void);
 static char *get_extension(char *filename);
@@ -871,6 +874,18 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
           pc_enablewarning(i,1);
         else if (*ptr=='\0')
           pc_enablewarning(i,2);
+        break;
+      case 'x':
+        i=(int)strtol(option_value(ptr,argv,argc,&arg),(char **)&ptr,10);
+        switch (i) {
+          case 12:
+            pc_code_version = i;
+            pc_must_drop_stack = false;
+            break;
+          default:
+            fprintf(stderr, "unknown code version: %d\n", i);
+            exit(1);
+        }
         break;
       case '\\':                /* use \ instead for escape characters */
         sc_ctrlchar='\\';
@@ -4651,7 +4666,8 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
      * has only a single statement in its body (no compound block) and that
      * statement declares a new variable
      */
-    popstacklist(1);
+    popheaplist(pc_must_drop_stack);
+    popstacklist(pc_must_drop_stack);
     declared=0;
   } /* if */
   if (lastst!=tRETURN) {
@@ -5500,13 +5516,10 @@ static void compound(int stmt_sameline)
   } /* while */
   if (lastst!=tRETURN)
     destructsymbols(&loctab,nestlevel);
-  if (lastst!=tRETURN) {
-    popheaplist();
-    popstacklist(1);
-  } else {
-    popheaplist();
-    popstacklist(0);
-  }
+
+  popheaplist(lastst != tRETURN);
+  popstacklist(lastst != tRETURN);
+
   testsymbols(&loctab,nestlevel,FALSE,TRUE);        /* look for unused block locals */
   declared=save_decl;
   delete_symbols(&loctab,nestlevel,FALSE,TRUE);     /* erase local symbols, but
@@ -5873,7 +5886,7 @@ static int dofor(void)
   setlabel(wq[wqEXIT]);
   delwhile();
 
-  popheaplist();
+  popheaplist(true);
 
   assert(nestlevel>=save_nestlevel);
   if (nestlevel>save_nestlevel) {
@@ -5881,13 +5894,13 @@ static int dofor(void)
      * variable in "expr1".
      */
     destructsymbols(&loctab,nestlevel);
-    popstacklist(1);
+    popstacklist(true);
     testsymbols(&loctab,nestlevel,FALSE,TRUE);  /* look for unused block locals */
     declared=save_decl;
     delete_symbols(&loctab,nestlevel,FALSE,TRUE);
     nestlevel=save_nestlevel;     /* reset 'compound statement' nesting level */
   } else {
-    popstacklist(0);
+    popstacklist(false);
   } /* if */
 
   index=endlessloop ? tENDLESS : tFOR;
@@ -6201,8 +6214,10 @@ static void doreturn(void)
     rettype|=uRETNONE;                  /* function does not return anything */
   } /* if */
   destructsymbols(&loctab,0);           /* call destructor for *all* locals */
-  genheapfree(-1);
-  genstackfree(-1);                     /* free everything on the stack */
+  if (pc_must_drop_stack) {
+    genheapfree(-1);
+    genstackfree(-1);                   /* free everything on the stack */
+  }
   ffret();
 }
 

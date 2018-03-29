@@ -330,15 +330,17 @@ int markstack(int type, int size)
 /**
  * Generates code to free all heap allocations on a tracker
  */
-void _heap_freeusage(memuse_list_t *heap, int dofree)
+void _heap_freeusage(memuse_list_t *heap, bool dofree, bool codegen)
 {
   memuse_t *cur=heap->head;
   memuse_t *tmp;
   while (cur) {
-    if (cur->type == MEMUSE_STATIC) {
-      modheap((-1)*cur->size*sizeof(cell));
-    } else {
-      modheap_i();
+    if (codegen) {
+      if (cur->type == MEMUSE_STATIC) {
+        modheap((-1)*cur->size*sizeof(cell));
+      } else {
+        modheap_i();
+      }
     }
     if (dofree) {
       tmp=cur->prev;
@@ -383,12 +385,12 @@ void _stack_genusage(memuse_list_t *stack, int dofree)
 /**
  * Pops a heap list and frees it.
  */
-void popheaplist()
+void popheaplist(bool codegen)
 {
   memuse_list_t *oldlist;
   assert(heapusage!=NULL);
 
-  _heap_freeusage(heapusage, 1);
+  _heap_freeusage(heapusage, true, codegen);
   assert(heapusage->head==NULL);
 
   oldlist=heapusage->prev;
@@ -411,12 +413,12 @@ void genheapfree(int stop_id)
   memuse_list_t *curlist = heapusage;
   while (curlist && curlist->list_id > stop_id)
   {
-    _heap_freeusage(curlist, 0);
+    _heap_freeusage(curlist, false, true);
     curlist = curlist->prev;
   }
 }
 
-void popstacklist(int codegen)
+void popstacklist(bool codegen)
 {
   memuse_list_t *oldlist;
   assert(stackusage != NULL);

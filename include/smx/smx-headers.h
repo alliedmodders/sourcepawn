@@ -60,17 +60,14 @@ struct SmxConsts
   static const uint8_t FILE_COMPRESSION_NONE = 0;
   static const uint8_t FILE_COMPRESSION_GZ = 1;
 
-  // SourcePawn 1.
-  static const uint8_t CODE_VERSION_JIT_1_0 = 9;
-  static const uint8_t CODE_VERSION_JIT_1_1 = 10;
-  static const uint8_t CODE_VERSION_JIT_1_7 = 11;
-  static const uint8_t CODE_VERSION_SP1_MIN = CODE_VERSION_JIT_1_0;
-  static const uint8_t CODE_VERSION_SP1_MAX = CODE_VERSION_JIT_1_1;
-
-  // For SP1 consumers, the container version may not be checked, but usually
-  // the code version is. This constant allows newer containers to be rejected
-  // in those applications.
-  static const uint8_t CODE_VERSION_REJECT = 0x7F;
+  // Version 9: Initial version.
+  // Version 10: DEBUG code flag removed; no bytecode changes.
+  // Version 11: Not used; no changes.
+  // Version 12: PROC/RETN semantic changes.
+  static const uint8_t CODE_VERSION_MINIMUM = 9;
+  static const uint8_t CODE_VERSION_SM_LEGACY = 10;
+  static const uint8_t CODE_VERSION_CURRENT = 12;
+  static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
 };
 
 // These structures are byte-packed.

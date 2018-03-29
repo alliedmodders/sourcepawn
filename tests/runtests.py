@@ -12,7 +12,7 @@ def main():
                       help="Optional test folder or test file")
   parser.add_argument('--disable-phopt', default=False, action='store_true',
                       help="Disable the peephole optimizer when compiling")
-  parser.add_argument('--spcomp', type=str, help="Path to spcomp", required=True)
+  parser.add_argument('--spcomp', type=str, help="spcomp invocation string", required=True)
   parser.add_argument('--shell', type=str, help="Path to shell", required=True)
   args = parser.parse_args()
 
@@ -85,7 +85,8 @@ class TestRunner(object):
   def __init__(self, args, tempFolder):
     super(TestRunner, self).__init__()
     self.args = args
-    self.spcomp = os.path.abspath(args.spcomp)
+    self.spcomp = args.spcomp.split(' ')
+    self.spcomp[0] = os.path.abspath(self.spcomp[0])
     self.shell = os.path.abspath(args.shell)
     self.tmp_folder = tempFolder
     self.inc_folder = os.path.dirname(os.path.abspath(__file__))
@@ -159,15 +160,14 @@ class TestRunner(object):
 
     test_path = test.path
     inc_folder = self.inc_folder
-    if os.path.isabs(test_path) and os.path.splitext(self.spcomp)[1] == '.js':
+    if os.path.isabs(test_path) and os.path.splitext(self.spcomp[0])[1] == '.js':
       test_path = '/fakeroot' + test_path
       inc_folder = '/fakeroot' + inc_folder
 
-    argv = [
-      self.spcomp,
+    argv = self.spcomp + [
       '-i' + inc_folder,
     ]
-    if os.path.splitext(self.spcomp)[1] == '.js':
+    if os.path.splitext(self.spcomp[0])[1] == '.js':
       argv = ['node'] + argv
     if self.args.disable_phopt:
       argv += ['-O0']

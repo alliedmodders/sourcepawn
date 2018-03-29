@@ -19,18 +19,6 @@
 
 namespace sp {
 
-struct HeapTracker
-{
-  HeapTracker()
-   : size(0),
-     pBase(nullptr),
-     pCur(nullptr)
-  {}
-  size_t size; 
-  ucell_t *pBase; 
-  ucell_t *pCur;
-};
-
 static const size_t SP_MAX_RETURN_STACK = 1024;
 static const cell_t STACK_MARGIN = 64; // 16 parameters of safety, I guess
 
@@ -88,9 +76,6 @@ class PluginContext : public BasePluginContext
  public:
   bool IsInExec() override;
 
-  static inline size_t offsetOfTracker() {
-    return offsetof(PluginContext, tracker_);
-  }
   static inline size_t offsetOfSp() {
     return offsetof(PluginContext, sp_);
   }
@@ -132,6 +117,8 @@ class PluginContext : public BasePluginContext
   bool popAmxFrame();
   bool pushStack(cell_t value);
   bool popStack(cell_t* out);
+  bool pushHeap(cell_t value);
+  bool popHeap(cell_t* out);
   bool addStack(cell_t amount);
   bool getFrameValue(cell_t offset, cell_t* out);
   bool setFrameValue(cell_t offset, cell_t value);
@@ -150,9 +137,6 @@ class PluginContext : public BasePluginContext
 
   cell_t *m_pNullVec;
   cell_t *m_pNullString;
-
-  // Tracker for local HEA growth.
-  HeapTracker tracker_;
 
   // "Stack top", for convenience.
   cell_t stp_;

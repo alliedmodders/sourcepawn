@@ -154,14 +154,14 @@ bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
  */
 void pushheaplist();
 memuse_list_t *popsaveheaplist();
-void popheaplist();
+void popheaplist(bool codegen);
 int markheap(int type, int size);
 
 /**
  * Stack functions
  */
 void pushstacklist();
-void popstacklist(int codegen);
+void popstacklist(bool codegen);
 int markstack(int type, int size);
 /**
  * Generates code to free mem usage, but does not pop the list.  

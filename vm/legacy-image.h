@@ -14,6 +14,7 @@
 #define _include_sourcepawn_vm_legacy_image_h_
 
 #include <string.h>
+#include <smx/smx-headers.h>
 
 namespace sp {
 
@@ -25,16 +26,10 @@ class LegacyImage
   virtual ~LegacyImage()
   {}
 
-  enum class CodeVersion {
-    Unknown,
-    SP_1_0,
-    SP_1_1
-  };
-
   struct Code {
     const uint8_t *bytes;
     size_t length;
-    CodeVersion version;
+    int version;
   };
   struct Data {
     const uint8_t *bytes;
@@ -77,7 +72,7 @@ class EmptyImage : public LegacyImage
     Code out;
     out.bytes = code_;
     out.length = sizeof(code_);
-    out.version = CodeVersion::SP_1_1;
+    out.version = SmxConsts::CODE_VERSION_SM_LEGACY;
     return out;
   }
   Data DescribeData() const override {
