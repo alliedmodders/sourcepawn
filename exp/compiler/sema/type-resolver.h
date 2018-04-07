@@ -64,7 +64,7 @@ class TypeResolver
     work_queue_.append(node);
   }
 
-  Type *applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
+  Type *applyConstQualifier(TypeSpecifier *spec, Type *type);
   Type *applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
   bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
   bool verifyTypeset(TypesetDecl *decl);
@@ -121,17 +121,6 @@ class TypeResolver
 class TypeSpecHelper
 {
  public:
-  // Called when a const-qualifier might be ambiguous, i.e. when the provided
-  // type does not automatically assume responsibility for handling the meaning
-  // of "const". Currently, this applies to any use of "const" with a type
-  // other than an array.
-  //
-  // Return false to indicate that "const" has no meaning in this context
-  // and should be ignored. Otherwise, the provider is responsible for
-  // interpreting its meaning.
-  virtual bool receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type) {
-    return false;
-  }
   virtual const Vector<int> *arrayInitData() const {
     return nullptr;
   }
@@ -145,7 +134,6 @@ class VarDeclSpecHelper : public TypeSpecHelper
  public:
   VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData);
 
-  bool receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type) override;
   const Vector<int> *arrayInitData() const override;
   VarDecl* decl() const override;
 

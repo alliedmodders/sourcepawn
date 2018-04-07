@@ -1622,6 +1622,7 @@ Parser::variable(TokenKind tok, Declaration *decl, SymAttrs flags, uint32_t decl
 Statement *
 Parser::localVarDecl(TokenKind kind, uint32_t flags)
 {
+  // :TODO: reject CONST on arrays.
   Declaration decl;
 
   if (!allowDeclarations_)

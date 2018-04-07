@@ -927,6 +927,10 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
       return delay(spec);
   }
 
+  // See type-resolver - we apply const before applying array ranks.
+  if (spec.isConst())
+    type = tr_.applyConstQualifier(&spec, type);
+
   if (spec.dims()) {
     // If we have explicit dimension sizes, we have to bail out and wait for
     // type resolution (which also does constant resolution). We do special
@@ -948,10 +952,6 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
 
   if (spec.isByRef())
     type = tr_.applyByRef(&spec, type, helper);
-
-  // :TODO: figure out what this means for structs, someday.
-  if (spec.isConst())
-    type = tr_.applyConstQualifier(&spec, type, helper);
 
   return TypeExpr(type);
 }

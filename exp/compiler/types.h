@@ -710,20 +710,6 @@ HasValueAssignSemantics(Type *type)
   return true;
 }
 
-// Types where the "const" keyword becomes transitive.
-static inline bool
-TypeSupportsTransitiveConst(Type *type)
-{
-  switch (type->canonicalKind()) {
-    case Type::Kind::Array:
-    case Type::Kind::Struct:
-    case Type::Kind::Typeset:
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Types where values can be interned at compile-time if constant.
 static inline bool
 TypeSupportsCompileTimeInterning(Type *type)

@@ -75,8 +75,6 @@ Type *
 Type::NewQualified(Type *type, Qualifiers qualifiers)
 {
   assert(!type->isQualified());
-  assert(!(qualifiers & Qualifiers::Const) ||
-         TypeSupportsTransitiveConst(type));
   Type *qual = new (POOL()) Type(Kind::Qualifier, type);
   qual->qualifiers_ = qualifiers;
   return qual;
@@ -401,10 +399,10 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     }
 
     AutoString builder;
-    if (aType->isConst() || !!(flags & TypeDiagFlags::IsConst))
+    if (innermost->isConst() || !!(flags & TypeDiagFlags::IsConst))
       builder = "const ";
 
-    builder = builder + BuildTypeName(innermost, nullptr, flags & kDiagFlagsInnerMask);
+    builder = builder + BuildTypeName(innermost->unqualified(), nullptr, flags & kDiagFlagsInnerMask);
 
     bool hasFixedLengths = false;
     AutoString brackets;
@@ -430,13 +428,19 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
   }
 
   AutoString builder;
+
+  if (aType->isConst())
+    builder = "const ";
+
   if (FunctionType *type = aType->asFunction())
-    builder = BuildTypeFromSignature(type->signature(), flags & kDiagFlagsInnerMask);
+    builder = builder + BuildTypeFromSignature(type->signature(), flags & kDiagFlagsInnerMask);
   else
-    builder = GetBaseTypeName(aType);
+    builder = builder + GetBaseTypeName(aType);
+
   if (!!(flags & TypeDiagFlags::IsByRef)) {
     builder = builder + "&";
   }
+
   if (name)
     builder = builder + " " + name->chars();
   return AString(builder.ptr());

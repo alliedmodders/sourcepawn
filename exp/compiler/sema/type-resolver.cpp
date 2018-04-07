@@ -412,6 +412,7 @@ TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
   return type->toEnum();
 }
 
+// :TODO: test recursive definitions
 void
 TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
 {
@@ -562,8 +563,7 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
     TypesetDecl::Entry &entry = types->at(i);
     Type *current = entry.te.resolved();
 
-    // "const int" or something should have thrown an error here.
-    assert(!current->isConst() || TypeSupportsTransitiveConst(current));
+    // :TODO: handle const int vs int
 
     for (size_t j = 0; j < i; j++) {
       TypesetDecl::Entry &prevEntry = types->at(j);
@@ -764,11 +764,15 @@ TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int
   }
 
   Type *type = baseType;
+
+  // See the big note in applyConstQualifier. For array types, the const
+  // is applied to the inner type. The same is true for reference types.
+  if (spec->isConst())
+    type = applyConstQualifier(spec, type);
+
+  // Create types for each rank of an array.
   if (spec->rank())
     type = resolveArrayComponentTypes(spec, type, arrayInitData);
-
-  if (spec->isConst())
-    type = applyConstQualifier(spec, type, helper);
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -815,27 +819,45 @@ TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
 }
 
 Type *
-TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper)
+TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type)
 {
   // :TODO: spec ref
   //
-  // Pawn's "const" is transitive, and consistent in SP1 semantics. However
-  // for SP2, we want to be able to re-assign const array references that
-  // would not perform a copy. To this end, we split const into two concepts:
-  // 
-  // First, const as an l-value attribute makes the storage location readonly.
+  // Originally, we considered "const" to be transitive. This is no longer the
+  // case. Our Semantic Analysis understands a more flexible and maintainable
+  // view, that is backward compatible with SP1 and more forward-proof.
   //
-  // Second, const as a qualifier on Array/Struct/Typeset/compound types
-  // requires that any l-value computed into a value of that type, have the
-  // lvalue annotated as const. Additionally, if the type of that lvalue has
-  // a compound type, it must be const-qualified.
+  // "const" is a storage specifier, like in C/C++. It specifies that an
+  // l-value is not mutable. It has almost no meaning in other contexts. For
+  // example, a return type can be "const int" through a typedef, but the const
+  // has no purpose since return values cannot be l-values in SourcePawn.
   //
-  // This supports "const int" as being an immutable l-value, but something
-  // like "const int[]" as being re-assignable by reference.
+  // Consider the following cases:
   //
-  // We do this rather than burden ourselves with a very complex notion of
-  // const, such as in C++, which would probably require computing all
-  // l-values in the AST as reference types.
+  //    const int[] x = new int[500];
+  //    const int y[500];
+  //
+  // Reassigning |x| is currently not possible in SourcePawn, there are no
+  // semantics for copying or acquiring pointers to dynamic arrays. In fact,
+  // const does not work at all for this case in the SP1 compiler. However,
+  // assigning to the contents of an array declared as const is illegal,
+  // no matter its type or whether it is fixed-length.
+  //
+  // Reassigning |y| is the same as assigning to each element, so a const
+  // anywhere on |y| is effectively transitive.
+  //
+  // We can summarize these two cases across all types: |x| is a pointer type,
+  // and |y| is a value type. |y|'s case is quite straightforward, but |x|
+  // has no existing semantics. While (for arrays), we must prevent internal
+  // modifications, it is unknown whether "const" should also refer to the
+  // pointer value. For structs, and objects, it is even less clear.
+  //
+  // For now we simply preserve SP1 semantics, and we do this by making the
+  // *internal* type const, not the external type, similar to C++.
+  //
+  // I.e., in Pawn, "const int[] x" is really: an array of constant integers.
+  // In the future, we can make HandleVarDecl wrap a further const if we want
+  // it to, making the actual pointer immutable.
   assert(spec->isConst());
 
   if (!TypeSupportsConstKeyword(type)) {
@@ -844,24 +866,7 @@ TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelpe
     return type;
   }
 
-  if (TypeSupportsTransitiveConst(type))
-    type = cc_.types()->newQualified(type, Qualifiers::Const);
-
-  // The meaning of "const" is ambiguous for types with value assignment
-  // semantics. We let individual callers decide what they want to do.
-  if (HasValueAssignSemantics(type)) {
-    if (helper && helper->receiveConstQualifier(cc_, spec->constLoc(), type))
-      return type;
-
-    // Otherwise, if we have value semantics and are in a context where "const"
-    // has no meaning, it's an error.
-    if (!type->isConst()) {
-      cc_.report(spec->constLoc(), rmsg::const_has_no_meaning)
-        << type;
-    }
-  }
-
-  return type;
+  return cc_.types()->newQualified(type, Qualifiers::Const);
 }
 
 Type *
@@ -1007,6 +1012,12 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
   assert(sym->isByRef() == type->isReference());
   assert(!sym->isByRef() || sym->isArgument());
 
+  if (!sym->isArgument()) {
+    if (TypeSupportsCompileTimeInterning(type)) {
+      sym->storage_flags() |= StorageFlags::constval;
+    }
+  }
+
   // :TODO: why is this here? move it into sema.
   if (!type->isStorableType()) {
     // We make a very specific exception for public structs, which are barely supported.
@@ -1035,27 +1046,6 @@ VarDeclSpecHelper::VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInit
  : decl_(decl),
    array_init_(arrayInitData)
 {
-}
-
-bool
-VarDeclSpecHelper::receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type)
-{
-  VariableSymbol *sym = decl_->sym();
-  if (sym->isArgument()) {
-    if (!!(sym->storage_flags() & StorageFlags::byref)) {
-      cc.report(constLoc, rmsg::const_ref_has_no_meaning) << type;
-      return true;
-    }
-    if (!type->passesByReference()) {
-      cc.report(constLoc, rmsg::const_has_no_meaning) << type;
-      return true;
-    }
-  } else if (TypeSupportsCompileTimeInterning(type)) {
-    sym->storage_flags() |= StorageFlags::constval;
-  }
-
-  sym->storage_flags() |= StorageFlags::readonly;
-  return true;
 }
 
 const Vector<int> *
