@@ -702,20 +702,21 @@ SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
 sema::Expr*
 SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
 {
-  sema::Expr* expr = visitLValue(node->expression());
+  sema::LvalueExpr* expr = visitLValue(node->expression());
   if (!expr)
     return nullptr;
 
   return new (pool_) sema::IncDecExpr(node, expr->type(), node->token(), expr, node->postfix());
 }
 
-sema::Expr*
+sema::LvalueExpr*
 SemanticAnalysis::visitLValue(ast::Expression* node)
 {
   sema::Expr* expr = visitExpression(node);
   if (!expr)
     return nullptr;
 
+  sema::LvalueExpr* lv = nullptr;
   switch (expr->kind()) {
     case sema::ExprKind::Var:
     {
@@ -724,6 +725,7 @@ SemanticAnalysis::visitLValue(ast::Expression* node)
       sema::VarExpr* var = expr->toVarExpr();
       if (var->sym()->storage_flags() & StorageFlags::readonly)
         cc_.report(node->loc(), rmsg::lvalue_is_const);
+      lv = var;
       break;
     }
     default:
@@ -731,7 +733,7 @@ SemanticAnalysis::visitLValue(ast::Expression* node)
       return nullptr;
   }
 
-  return expr;
+  return lv;
 }
 
 sema::Expr*

@@ -103,6 +103,7 @@ private:
   Type* type_;
 };
 
+class LvalueExpr;
 typedef PoolList<Expr*> ExprList;
 
 #define DECLARE_SEMA(name)                  \
@@ -214,10 +215,10 @@ class IncDecExpr final : public Expr
 {
  public:
   explicit IncDecExpr(ast::Expression* node,
-                     Type* type,
-                     TokenKind tok,
-                     Expr* expr,
-                     bool postfix)
+                      Type* type,
+                      TokenKind tok,
+                      LvalueExpr* expr,
+                      bool postfix)
    : Expr(node, type),
      token_(tok),
      expr_(expr),
@@ -229,7 +230,7 @@ class IncDecExpr final : public Expr
   TokenKind token() const {
     return token_;
   }
-  Expr* expr() const {
+  LvalueExpr* expr() const {
     return expr_;
   }
   bool prefix() const {
@@ -241,7 +242,7 @@ class IncDecExpr final : public Expr
 
  private:
   TokenKind token_;
-  Expr* expr_;
+  LvalueExpr* expr_;
   bool postfix_;
 };
 
@@ -311,13 +312,23 @@ class CallExpr final : public Expr
   ExprList* args_;
 };
 
-class VarExpr final : public Expr
+// We declare a base type for l-values to restrict what flows into load and
+// store expressions.
+class LvalueExpr : public Expr
+{
+ public:
+  explicit LvalueExpr(ast::Expression* node, Type* type)
+   : Expr(node, type)
+  {}
+};
+
+class VarExpr final : public LvalueExpr
 {
  public:
   explicit VarExpr(ast::Expression* node,
                    Type* type,
                    VariableSymbol* sym)
-   : Expr(node, type),
+   : LvalueExpr(node, type),
      sym_(sym)
   {}
 
@@ -329,6 +340,32 @@ class VarExpr final : public Expr
 
  private:
   VariableSymbol* sym_;
+};
+
+class IndexExpr final : public LvalueExpr
+{
+ public:
+  explicit IndexExpr(ast::Expression* node,
+                      Type* type,
+                      Expr* base,
+                      Expr* index)
+   : LvalueExpr(node, type),
+     base_(base),
+     index_(index)
+  {}
+
+  DECLARE_SEMA(Index)
+
+  Expr* base() const {
+    return base_;
+  }
+  Expr* index() const {
+    return index_;
+  }
+
+ private:
+  Expr* base_;
+  Expr* index_;
 };
 
 class StringExpr final : public Expr
@@ -372,32 +409,6 @@ class StructInitExpr final : public Expr
 
  private:
   ExprList* exprs_;
-};
-
-class IndexExpr final : public Expr
-{
- public:
-  explicit IndexExpr(ast::Expression* node,
-                      Type* type,
-                      Expr* base,
-                      Expr* index)
-   : Expr(node, type),
-     base_(base),
-     index_(index)
-  {}
-
-  DECLARE_SEMA(Index)
-
-  Expr* base() const {
-    return base_;
-  }
-  Expr* index() const {
-    return index_;
-  }
-
- private:
-  Expr* base_;
-  Expr* index_;
 };
 
 #undef DECLARE_SEMA
