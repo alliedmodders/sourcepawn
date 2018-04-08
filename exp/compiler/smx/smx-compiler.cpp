@@ -1092,67 +1092,57 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
 
   will_kill(dest);
 
-  switch (lvalue->kind()) {
-    case sema::ExprKind::Var:
-    {
-      sema::VarExpr* var = lvalue->toVarExpr();
-      VariableSymbol* sym = var->sym();
-      assert(!sym->type()->isReference());
+  // We have all sorts of special cases for global variables.
+  sema::VarExpr* var = lvalue->toVarExpr();
+  if (var && !var->sym()->type()->isReference()) {
+    VariableSymbol* sym = var->sym();
 
-      if (expr->prefix())
-        emitVar(var, dest);
+    if (expr->prefix())
+      emitVar(var, dest);
 
-      switch (sym->storage()) {
-        case StorageClass::Argument:
-        case StorageClass::Local:
-          if (expr->token() == TOK_INCREMENT)
-            __ opcode(OP_INC_S, sym->address());
-          else
-            __ opcode(OP_DEC_S, sym->address());
-          break;
-        case StorageClass::Global:
-          if (expr->token() == TOK_INCREMENT)
-            __ opcode(OP_INC, sym->address());
-          else
-            __ opcode(OP_DEC, sym->address());
-          break;
-        default:
-          assert(false);
-      }
-
-      if (expr->postfix())
-        emitVar(var, dest);
-      return dest;
+    switch (sym->storage()) {
+      case StorageClass::Argument:
+      case StorageClass::Local:
+        if (expr->token() == TOK_INCREMENT)
+          __ opcode(OP_INC_S, sym->address());
+        else
+          __ opcode(OP_DEC_S, sym->address());
+        break;
+      case StorageClass::Global:
+        if (expr->token() == TOK_INCREMENT)
+          __ opcode(OP_INC, sym->address());
+        else
+          __ opcode(OP_DEC, sym->address());
+        break;
+      default:
+        assert(false);
     }
 
-    case sema::ExprKind::Index:
-    {
-      if (!emit_into(lvalue, ValueDest::Pri))
-        return ValueDest::Error;
-
-      OPCODE incdec = (expr->token() == TOK_INCREMENT)
-                      ? OP_INC_I
-                      : OP_DEC_I;
-
-      if (expr->prefix()) {
-        __ opcode(incdec);
-        __ opcode(OP_LOAD_I);
-        return ValueDest::Pri;
-      }
-
-      // Postfix is harder.
-      __ opcode(OP_MOVE_ALT);   // save addr in ALT
-      __ opcode(OP_LOAD_I);     // load previous value in PRI
-      __ opcode(OP_XCHG);       // PRI=addr, ALT=previous value
-      __ opcode(incdec);        // incdec PRI
-      return ValueDest::Alt;
-    }
-
-    default:
-      cc_.report(lvalue->src()->loc(), rmsg::unimpl_kind) <<
-        "smx-emit-incdec" << lvalue->prettyName();
-      return ValueDest::Error;
+    if (expr->postfix())
+      emitVar(var, dest);
+    return dest;
   }
+
+  // Otherwise, emit an address and use INC/DEC_I.
+  if (!emit_into(lvalue, ValueDest::Pri))
+    return ValueDest::Error;
+
+  OPCODE incdec = (expr->token() == TOK_INCREMENT)
+                  ? OP_INC_I
+                  : OP_DEC_I;
+
+  if (expr->prefix()) {
+    __ opcode(incdec);
+    __ opcode(OP_LOAD_I);
+    return ValueDest::Pri;
+  }
+
+  // Postfix is harder.
+  __ opcode(OP_MOVE_ALT);   // save addr in ALT
+  __ opcode(OP_LOAD_I);     // load previous value in PRI
+  __ opcode(OP_XCHG);       // PRI=addr, ALT=previous value
+  __ opcode(incdec);        // incdec PRI
+  return ValueDest::Alt;
 }
 
 // Note: this emits the address of the index.
@@ -1201,22 +1191,31 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
   // yet.
   if (type->isArray())
     assert(type->toArray()->hasFixedLength());
-  assert(!type->isReference());
 
   will_kill(dest);
 
   switch (sym->storage()) {
     case StorageClass::Argument:
     case StorageClass::Local:
-      if (dest == ValueDest::Pri)
-        __ opcode(OP_ADDR_PRI, sym->address());
-      else if (dest == ValueDest::Alt)
-        __ opcode(OP_ADDR_ALT, sym->address());
-      else if (dest == ValueDest::Stack)
-        __ opcode(OP_PUSH_ADR, sym->address());
+      if (type->isReference()) {
+        if (dest == ValueDest::Pri)
+          __ opcode(OP_LOAD_S_PRI, sym->address());
+        else if (dest == ValueDest::Alt)
+          __ opcode(OP_LOAD_S_ALT, sym->address());
+        else if (dest == ValueDest::Stack)
+          __ opcode(OP_PUSH_S, sym->address());
+      } else {
+        if (dest == ValueDest::Pri)
+          __ opcode(OP_ADDR_PRI, sym->address());
+        else if (dest == ValueDest::Alt)
+          __ opcode(OP_ADDR_ALT, sym->address());
+        else if (dest == ValueDest::Stack)
+          __ opcode(OP_PUSH_ADR, sym->address());
+      }
       return dest;
 
     case StorageClass::Global:
+      assert(!type->isReference());
       if (dest == ValueDest::Pri)
         __ opcode(OP_CONST_PRI, sym->address());
       else if (dest == ValueDest::Alt)
@@ -1241,22 +1240,33 @@ SmxCompiler::emit_load(sema::VarExpr* expr, ValueDest dest)
 
   if (type->isArray())
     assert(!type->toArray()->hasFixedLength());
-  assert(!type->isReference());
+
+  // There is no PUSHREF_S opcode, so we may have to use PRI as a temp.
+  if (type->isReference() && dest == ValueDest::Stack)
+    dest = ValueDest::Pri;
 
   will_kill(dest);
 
   switch (sym->storage()) {
     case StorageClass::Argument:
     case StorageClass::Local:
-      if (dest == ValueDest::Pri)
-        __ opcode(OP_LOAD_S_PRI, sym->address());
-      else if (dest == ValueDest::Alt)
-        __ opcode(OP_LOAD_S_ALT, sym->address());
-      else if (dest == ValueDest::Stack)
-        __ opcode(OP_PUSH_S, sym->address());
+      if (type->isReference()) {
+        if (dest == ValueDest::Pri)
+          __ opcode(OP_LREF_S_PRI, sym->address());
+        else if (dest == ValueDest::Alt)
+          __ opcode(OP_LREF_S_ALT, sym->address());
+      } else {
+        if (dest == ValueDest::Pri)
+          __ opcode(OP_LOAD_S_PRI, sym->address());
+        else if (dest == ValueDest::Alt)
+          __ opcode(OP_LOAD_S_ALT, sym->address());
+        else if (dest == ValueDest::Stack)
+          __ opcode(OP_PUSH_S, sym->address());
+      }
       return dest;
 
     case StorageClass::Global:
+      assert(!type->isReference());
       if (dest == ValueDest::Pri)
         __ opcode(OP_LOAD_PRI, sym->address());
       else if (dest == ValueDest::Alt)

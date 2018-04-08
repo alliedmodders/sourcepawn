@@ -437,7 +437,7 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
   else
     builder = builder + GetBaseTypeName(aType);
 
-  if (!!(flags & TypeDiagFlags::IsByRef)) {
+  if (!!(flags & TypeDiagFlags::IsByRef) || aType->isReference()) {
     builder = builder + "&";
   }
 

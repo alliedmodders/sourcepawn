@@ -273,9 +273,21 @@ SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
   if (!expr)
     return nullptr;
 
-  // :TODO: check const-ness
+  Type* type = expr->storedType();
+  Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
 
-  return new (pool_) sema::IncDecExpr(node, expr->type(), node->token(), expr, node->postfix());
+  if (type->isConst()) {
+    cc_.report(node->loc(), rmsg::lvalue_is_const);
+    return nullptr;
+  }
+  if (type != int32Type) {
+    cc_.report(node->loc(), rmsg::unimpl_kind) <<
+      "sema-incdec" << type;
+    return nullptr;
+  }
+
+  // :TODO: check const-ness
+  return new (pool_) sema::IncDecExpr(node, type, node->token(), expr, node->postfix());
 }
 
 sema::LValueExpr*

@@ -63,11 +63,10 @@ SemanticAnalysis::coerce(EvalContext& ec)
 
   // If we get here, we're coercing to a non-addressable type, so we should
   // force a load of any l-values.
-  if (sema::LValueExpr* lvalue = ec.result->asLValueExpr())
+  if (sema::LValueExpr* lvalue = ec.result->asLValueExpr()) {
     ec.result = lvalue_to_rvalue(lvalue);
-
-  // Nothing should have changed the type yet.
-  assert(ec.result->type() == from);
+    from = ec.result->type();
+  }
 
   switch (to->canonicalKind()) {
     case Type::Kind::Primitive:
@@ -158,6 +157,8 @@ SemanticAnalysis::coerce_array(EvalContext& ec)
   }
 
   // The innermost types must be identical.
+  from_iter = from_iter->unqualified();
+  to_iter = to_iter->unqualified();
   if (!CompareNonArrayTypesExactly(from_iter, to_iter))
     return no_conversion(ec);
 
@@ -223,7 +224,34 @@ SemanticAnalysis::arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out)
 bool
 SemanticAnalysis::coerce_ref(EvalContext& ec)
 {
-  // :TODO:
+  ReferenceType* to = ec.to->asReference();
+
+  Type* from = ec.result->type();
+  if (from->isReference())
+    from = from->toReference()->inner();
+
+  assert(!to->inner()->isArray());
+
+  // We will probably have to relax this for retagging.
+  bool equal = CompareNonArrayTypesExactly(
+    to->inner()->unqualified(),
+    from->unqualified());
+  if (!equal)
+    return no_conversion(ec);
+
+  if (ec.ck == CoercionKind::Arg) {
+    if (from->isConst() && !to->inner()->isConst())
+      return no_conversion(ec);
+
+    // Only an l-value can flow into an argument reference.
+    if (!ec.result->asLValueExpr()) {
+      cc_.report(ec.result->src()->loc(), rmsg::illegal_lvalue);
+      return false;
+    }
+    return true;
+  }
+
+  // :TODO: figure out when these cases come up.
   return no_conversion(ec);
 }
 
@@ -240,6 +268,11 @@ SemanticAnalysis::lvalue_to_rvalue(sema::LValueExpr* expr)
   Type* type = expr->type();
   if (type->isArray() && type->toArray()->hasFixedLength())
     return expr;
+
+  // Peel away reference types, which can only exist on argument symbols.
+  if (type->isReference())
+    type = type->toReference()->inner();
+
   return new (pool_) sema::LoadExpr(expr->src(), type, expr);
 }
 

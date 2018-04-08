@@ -108,7 +108,7 @@ public:
   SEMA_KIND_LIST(_)
 #undef _
 
-private:
+protected:
   ast::Expression* node_;
   Type* type_;
 };
@@ -385,6 +385,13 @@ class LValueExpr : public Expr
 
   LValueExpr* asLValueExpr() final {
     return this;
+  }
+
+  // Return the underlying type being stored, peeling away references.
+  Type* storedType() const {
+    return type_->isReference()
+           ? type_->toReference()->inner()
+           : type_;
   }
 };
 
