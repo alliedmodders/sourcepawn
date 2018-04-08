@@ -101,7 +101,7 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     assert(offset >= 4 && offset <= pc());
 
     int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
-    assert(*p == 0xb0b0b0b0);
+    assert(*p == int32_t(0xb0b0b0b0));
     *p = value;
 
     target->bind();

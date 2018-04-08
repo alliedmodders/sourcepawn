@@ -288,7 +288,7 @@ BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
     Atom *name = !!(flags & TypeDiagFlags::Names)
                  ? sig->parameters()->at(i)->name()
                  : nullptr;
-    if (sig->parameters()->at(i)->sym()->isByRef())
+    if (sig->parameters()->at(i)->sym()->type()->isReference())
       varFlags |= TypeDiagFlags::IsByRef;
     base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, varFlags);
     if (i != sig->parameters()->length() - 1)

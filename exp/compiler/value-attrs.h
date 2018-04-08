@@ -40,22 +40,6 @@ enum class StorageClass : int32_t
   Global
 };
 
-// L-value attribute flags.
-enum class StorageFlags : int32_t
-{
-  none = 0,
-
-  // This l-value is stored by-reference.
-  byref = (1 << 0),
-
-  // This value can be interned at compile-time.
-  constval = (1 << 1),
-
-  // This value cannot be modified.
-  readonly = (1 << 2)
-};
-KE_DEFINE_ENUM_OPERATORS(StorageFlags)
-
 } // namespace sp
 
 #endif // _include_spcomp_expression_ops_h_

@@ -323,12 +323,9 @@ NameResolver::HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, Type
   registerSymbol(sym);
   var->setSymbol(sym);
 
-  // Set this before we evaluate the type, since it determines whether or not
-  // a const on a parameter is meaningless.
-  if (spec.isByRef()) {
+  // The parser should only allow & on argument types.
+  if (spec.isByRef())
     assert(scope->kind() == Scope::Argument && sym->isArgument());
-    sym->storage_flags() |= StorageFlags::byref;
-  }
 
   // See the comment in TypeResolver::visitVarDecl for why we do not want to
   // infer sizes from literals for arguments.
@@ -931,6 +928,7 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
   if (spec.isConst())
     type = tr_.applyConstQualifier(&spec, type);
 
+  // :TODO: constify
   if (spec.dims()) {
     // If we have explicit dimension sizes, we have to bail out and wait for
     // type resolution (which also does constant resolution). We do special

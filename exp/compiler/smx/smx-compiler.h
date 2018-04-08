@@ -70,10 +70,19 @@ private:
   ValueDest emitBinary(sema::BinaryExpr* expr, ValueDest dest);
   ValueDest emitUnary(sema::UnaryExpr* expr, ValueDest dest);
   ValueDest emitCall(sema::CallExpr* expr, ValueDest dest);
-  ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
   ValueDest emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest);
   ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
   ValueDest emitIncDec(sema::IncDecExpr* expr, ValueDest dest);
+  ValueDest emitLoad(sema::LoadExpr* expr, ValueDest dest);
+
+  // l-value expressions always return the address of the l-value. For local
+  // variables, this is their stack address. For pointer types (references,
+  // dynamic arrays), it is the pointer. For fixed-length arrays, it is the
+  // array address.
+  //
+  // The idea is that after calling one of these functions, storing to |*dest|
+  // is equivalent to an assignment to the l-value.
+  ValueDest emitVar(sema::VarExpr* expr, ValueDest dest);
   ValueDest emitIndex(sema::IndexExpr* expr, ValueDest dest);
 
 private:
@@ -88,6 +97,9 @@ private:
 
   // Store a constant value. Calls will_kill().
   void emit_const(ValueDest dest, cell_t value);
+
+  // Helpers for l-values.
+  ValueDest emit_load(sema::VarExpr* var, ValueDest dest);
 
 private:
   // Signal that the given register is about to be clobbered.

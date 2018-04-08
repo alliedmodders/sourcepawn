@@ -46,6 +46,7 @@ namespace sema {
   _(StructInit)           \
   _(Index)                \
   _(Load)                 \
+  _(Slice)                \
   /* terminator */
 
 // Forward declarations.
@@ -335,8 +336,46 @@ class CallExpr final : public Expr
   ExprList* args_;
 };
 
-// We declare a base type for l-values to restrict what flows into load and
-// store expressions.
+// LValue expressions compute an address that can be used as the left-hand side
+// of an assignment. For local variables this is a stack address; for pointer
+// types (references, dynamic arrays), it is the pointer in question. For
+// fixed-length arrays, there is no difference between an l-value and r-value.
+//
+// Semantic Analysis uses l-values to express the complexity of SourcePawn's
+// many frontend and VM oddities, as well as allowing future emitters to use
+// a more simplified bytecode. For example, the current design allows the
+// emitter to simply return an address for any LValueExpr, and then perform
+// a load operation on that address. However, an emitter may also pattern-match
+// common scenarios (like loading a local variable) to avoid actually computing
+// an address.
+//
+// LValueExprs normally only appear in Loads, IncDecs, and Stores. However,
+// they can also occur when it is not possible to compute an indirect address.
+// For example a fixed-length array variable has no semantic indirection,
+// whereas a dynamic array does. The backend emitter may choose to make both
+// indirectly stored; however, semantically, the cases are different. Therefore
+// the backend emitter has to decide exactly how to procure an address for each
+// situation.
+//
+// To demonstrate,
+//    int x[10];
+//    int y[] = new int[10];
+//    use_arrays(x, y);
+//
+// Will generate a Var(x) and Load(Var(y)) respectively, since the latter case
+// has an lvalue-to-rvalue conversion.
+//
+// Note that in the above example, assigning to |y| is not supported. There
+// is no support in the VM for making this safe. However, it is easily
+// supported in our semantic analysis model, and:
+//
+//    Store(y, <Expr>)
+//
+// Would cause the emitter to store a pointer value at |y|, whereas:
+//
+//    Store(x, <Expr>)
+//
+// *Is* currently supported, and will emit a copy.
 class LValueExpr : public Expr
 {
  public:
@@ -441,7 +480,8 @@ class StructInitExpr final : public Expr
   ExprList* exprs_;
 };
 
-// Turn an l-value into an r-value.
+// Turn an l-value into an r-value. This can only be used on l-values for which
+// references exist.
 class LoadExpr : public Expr
 {
  public:
@@ -449,6 +489,8 @@ class LoadExpr : public Expr
    : Expr(node, type),
      lvalue_(expr)
   {}
+
+  DECLARE_SEMA(Load)
 
   LValueExpr* lvalue() const {
     return lvalue_;
@@ -459,6 +501,35 @@ class LoadExpr : public Expr
 
  private:
   LValueExpr* lvalue_;
+};
+
+// Create an array, valid for the duration of the current statement, that
+// offers a view into another array.
+class SliceExpr : public Expr
+{
+ public:
+  explicit SliceExpr(ast::Expression* node, Type* type,
+                     Expr* base, Expr* index)
+   : Expr(node, type),
+     base_(base),
+     index_(index)
+  {}
+
+  DECLARE_SEMA(Slice)
+
+  Expr* base() const {
+    return base_;
+  }
+  Expr* index() const {
+    return index_;
+  }
+  bool hasSideEffects() const override {
+    return base_->hasSideEffects() || index_->hasSideEffects();
+  }
+
+ private:
+  Expr* base_;
+  Expr* index_;
 };
 
 #undef DECLARE_SEMA

@@ -1,0 +1,300 @@
+// vim: set ts=2 sw=2 tw=99 et:
+// 
+// Copyright (C) 2012-2014 AlliedModders LLC and David Anderson
+// 
+// This file is part of SourcePawn.
+// 
+// SourcePawn is free software: you can redistribute it and/or modify it under
+// the terms of the GNU General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option)
+// any later version.
+// 
+// SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+
+#include "compile-context.h"
+#include "semantic-analysis.h"
+#include "coercion.h"
+#include <amtl/am-linkedlist.h>
+
+namespace sp {
+
+using namespace ke;
+using namespace ast;
+
+static bool CompareNonArrayTypesExactly(Type* a, Type* b);
+
+bool
+SemanticAnalysis::coerce(EvalContext& ec)
+{
+  // First evaluate from_src if needed. This is just a helper step to reduce
+  // boilerplate in callers.
+  if (!ec.from) {
+    assert(ec.from_src);
+    ec.from = visitExpression(ec.from_src);
+  }
+
+  // Our initial result starts from the given expression.
+  ec.result = ec.from;
+
+  Type* from = ec.result->type();
+  Type* to = ec.to;
+
+  // If types have the same identity, we can shortcut and return immediately,
+  // unless the coercion kind is RValue.
+  if (from == to) {
+    if (ec.ck == CoercionKind::RValue) {
+      if (sema::LValueExpr* lvalue = ec.result->asLValueExpr())
+        ec.result = lvalue_to_rvalue(lvalue);
+    }
+    return true;
+  }
+
+  // These checks occur before the lvalue-to-rvalue step, since whether or not
+  // we have an lvalue can change which instructions we emit.
+  if (to->isArray())
+    return coerce_array(ec);
+  if (to->isReference())
+    return coerce_ref(ec);
+
+  // If we get here, we're coercing to a non-addressable type, so we should
+  // force a load of any l-values.
+  if (sema::LValueExpr* lvalue = ec.result->asLValueExpr())
+    ec.result = lvalue_to_rvalue(lvalue);
+
+  // Nothing should have changed the type yet.
+  assert(ec.result->type() == from);
+
+  switch (to->canonicalKind()) {
+    case Type::Kind::Primitive:
+      if (!from->isPrimitive())
+        return no_conversion(ec);
+
+      if (from->primitive() == to->primitive())
+        return true;
+
+      if (to->primitive() == PrimitiveType::Int32) {
+        if (from->primitive() == PrimitiveType::Char ||
+            (from->primitive() == PrimitiveType::Bool && ec.ck == CoercionKind::Arg))
+        {
+          ec.result = new (pool_) sema::TrivialCastExpr(ec.from_src, to, ec.result);
+          return true;
+        }
+      }
+      if (to->primitive() == PrimitiveType::Bool) {
+        ec.result = new (pool_) sema::TrivialCastExpr(ec.from_src, to, ec.result);
+        return true;
+      }
+      return no_conversion(ec);
+
+    case Type::Kind::Void:
+      if (from->isVoid())
+        return true;
+      return no_conversion(ec);
+  }
+
+  return no_conversion(ec);
+}
+
+bool
+SemanticAnalysis::coerce_array(EvalContext& ec)
+{
+  ArrayType* to_array = ec.to->toArray();
+
+  // As a special case, a[n] coerces to type(a)[], an ancient feature that may
+  // or may not have originally been intentional. This will be non-null if we
+  // have to create a slice.
+  sema::IndexExpr* index_expr;
+  Type* from = arrayOrSliceType(ec, &index_expr);
+  if (!from)
+    return no_conversion(ec);
+
+  // Arrays should not appear in the |to| field of most coercion kinds, yet.
+  assert(ec.ck == CoercionKind::RValue ||
+         ec.ck == CoercionKind::Assignment ||
+         ec.ck == CoercionKind::Return);
+
+  // Assignment/return operators should never let multi-dimensional arrays enter here.
+  // :TODO: ensure
+  if (ec.ck == CoercionKind::Assignment || ec.ck == CoercionKind::Return)
+    assert(to_array->nlevels() == 1);
+
+  // Check that each level contains a matching size and const-qualifier.
+  Type* from_iter = from;
+  Type* to_iter = to_array;
+  while (from_iter->isArray() && to_iter->isArray()) {
+    ArrayType* from_iter_array = from_iter->toArray();
+    ArrayType* to_iter_array = to_iter->toArray();
+
+    // For passing to an argument, a fixed-length array can coerce to a non-
+    // fixed length array. I.e. int[2][3][4] should coerce to int[][][]. But,
+    // if the destination has a fixed size, it must always match.
+    if (to_iter_array->hasFixedLength()) {
+      if (!from_iter_array->hasFixedLength() ||
+          (from_iter_array->fixedLength() != to_iter_array->fixedLength()))
+      {
+        return no_conversion(ec);
+      }
+    }
+
+    from_iter = from_iter_array->contained();
+    to_iter = to_iter_array->contained();
+
+    if (ec.ck == CoercionKind::Arg) {
+      // If the source contents at this level are const, but the target wants
+      // something mutable, then no conversion is available.
+      if (from_iter->isConst() && !to_iter->isConst())
+        return no_conversion(ec);
+    } else if (ec.ck == CoercionKind::Assignment) {
+      // const int p[10] is not assignable. :TODO: handle this in assignment
+      // const int p[] has no semantics at all. :TODO: block this in assignment
+      assert(to_iter_array->hasFixedLength());
+      assert(!to_iter->isConst());
+    }
+  }
+
+  // The innermost types must be identical.
+  if (!CompareNonArrayTypesExactly(from_iter, to_iter))
+    return no_conversion(ec);
+
+  // Phew... everything is equal. If the destination type is fixed-length,
+  // there is nothing more to do.
+  if (to_array->hasFixedLength()) {
+    assert(!index_expr);
+    assert(from->toArray()->hasFixedLength());
+    return true;
+  }
+
+  // Create a slice if needed.
+  if (index_expr) {
+    sema::Expr* base = index_expr->base();
+    if (sema::LValueExpr* lval = base->asLValueExpr())
+      base = new (pool_) sema::LoadExpr(base->src(), base->type(), lval);
+    ec.result = new (pool_) sema::SliceExpr(base->src(), from, base, index_expr->index());
+    return true;
+  }
+
+  if (sema::LValueExpr* lval = ec.result->asLValueExpr())
+    ec.result = new (pool_) sema::LoadExpr(ec.result->src(), ec.result->type(), lval);
+  return true;
+}
+
+Type*
+SemanticAnalysis::arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out)
+{
+  Type* from = ec.result->type();
+  ArrayType* to = ec.to->toArray();
+
+  // Ideal case: expression ranks match as-is.
+  if (from->isArray() &&
+      from->toArray()->nlevels() == to->nlevels())
+  {
+    *out = nullptr;
+    return from;
+  }
+
+  // Only arguments can create implicit slices.
+  if (ec.ck != CoercionKind::Arg)
+    return nullptr;
+
+  // If the destination is fixed-length, then slices won't work.
+  if (to->hasFixedLength())
+    return nullptr;
+
+  sema::IndexExpr* index_expr = ec.result->toIndexExpr();
+  if (!index_expr)
+    return nullptr;
+
+  from = index_expr->base()->type();
+  if (from->toArray()->hasFixedLength()) {
+    // Implicit slices cannot create fixed-length arrays, so we need to rewrite
+    // the outgoing type.
+    from = types_->newArray(from->toArray()->contained(), ArrayType::kUnsized);
+  }
+
+  *out = index_expr;
+  return from;
+}
+
+bool
+SemanticAnalysis::coerce_ref(EvalContext& ec)
+{
+  // :TODO:
+  return no_conversion(ec);
+}
+
+sema::Expr*
+SemanticAnalysis::lvalue_to_rvalue(sema::LValueExpr* expr)
+{
+  // If the storage is indirectly addressable (i.e., it makes sense to take
+  // the address of the l-value, and assign a new value to that address), then
+  // we can perform a load operation to extract the actual value.
+  //
+  // If the storage is not indirectly addressable (such as fixed-length arrays),
+  // then the r-value is the storage itself. We cannot compute an r-value in
+  // this case, and what the caller probably wants is the array's address.
+  Type* type = expr->type();
+  if (type->isArray() && type->toArray()->hasFixedLength())
+    return expr;
+  return new (pool_) sema::LoadExpr(expr->src(), type, expr);
+}
+
+static bool
+CompareNonArrayTypesExactly(Type* a, Type* b)
+{
+  if (a->qualifiers() != b->qualifiers())
+    return false;
+
+  a = a->unqualified();
+  b = b->unqualified();
+
+  if (a == b)
+    return true;
+
+  switch (a->canonicalKind()) {
+    case Type::Kind::Function:
+      if (!b->isFunction())
+        return false;
+      return AreFunctionTypesEqual(a->toFunction(), b->toFunction());
+    case Type::Kind::Void:
+    case Type::Kind::Unchecked:
+    case Type::Kind::MetaFunction:
+    case Type::Kind::Struct:
+    case Type::Kind::Typeset:
+    case Type::Kind::Enum:
+    case Type::Kind::NullType:
+      // Handled by |a == b| above.
+      return false;
+    default:
+      assert(false);
+      return false;
+  }
+}
+
+bool
+SemanticAnalysis::no_conversion(EvalContext& ec)
+{
+  cc_.report(ec.from_src->loc(), rmsg::cannot_coerce) << ec.from->type() << ec.to;
+  ec.result = nullptr;
+  return false;
+}
+
+TestEvalContext::TestEvalContext(CompileContext& cc, sema::Expr* from)
+ : EvalContext(CoercionKind::Test,
+               from,
+               cc.types()->getBool())
+{
+}
+
+TestEvalContext::TestEvalContext(CompileContext& cc, ast::Expression* from_src)
+ : EvalContext(CoercionKind::Test,
+               from_src,
+               cc.types()->getBool())
+{
+}
+
+} // namespace sp

@@ -541,6 +541,38 @@ SmxCompiler::generateSwitch(ast::SwitchStatement* stmt)
   __ bind(&done);
 }
 
+ValueDest
+SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
+{
+  switch (expr->kind()) {
+  case sema::ExprKind::ConstValue:
+    return emitConstValue(expr->toConstValueExpr(), dest);
+  case sema::ExprKind::Binary:
+    return emitBinary(expr->toBinaryExpr(), dest);
+  case sema::ExprKind::Unary:
+    return emitUnary(expr->toUnaryExpr(), dest);
+  case sema::ExprKind::Call:
+    return emitCall(expr->toCallExpr(), dest);
+  case sema::ExprKind::Var:
+    return emitVar(expr->toVarExpr(), dest);
+  case sema::ExprKind::TrivialCast:
+    return emitTrivialCast(expr->toTrivialCastExpr(), dest);
+  case sema::ExprKind::String:
+    return emitString(expr->toStringExpr(), dest);
+  case sema::ExprKind::IncDec:
+    return emitIncDec(expr->toIncDecExpr(), dest);
+  case sema::ExprKind::Index:
+    return emitIndex(expr->toIndexExpr(), dest);
+  case sema::ExprKind::Load:
+    return emitLoad(expr->toLoadExpr(), dest);
+  default:
+    cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+      "smx-emit-expr" << expr->prettyName();
+    return ValueDest::Error;
+  }
+}
+
+// Emit an expression, ensuring it's in the desired location.
 bool
 SmxCompiler::emit_into(sema::Expr* expr, ValueDest dest)
 {
@@ -575,35 +607,6 @@ SmxCompiler::emit_into(sema::Expr* expr, ValueDest dest)
 }
 
 ValueDest
-SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
-{
-  switch (expr->kind()) {
-  case sema::ExprKind::ConstValue:
-    return emitConstValue(expr->toConstValueExpr(), dest);
-  case sema::ExprKind::Binary:
-    return emitBinary(expr->toBinaryExpr(), dest);
-  case sema::ExprKind::Unary:
-    return emitUnary(expr->toUnaryExpr(), dest);
-  case sema::ExprKind::Call:
-    return emitCall(expr->toCallExpr(), dest);
-  case sema::ExprKind::Var:
-    return emitVar(expr->toVarExpr(), dest);
-  case sema::ExprKind::TrivialCast:
-    return emitTrivialCast(expr->toTrivialCastExpr(), dest);
-  case sema::ExprKind::String:
-    return emitString(expr->toStringExpr(), dest);
-  case sema::ExprKind::IncDec:
-    return emitIncDec(expr->toIncDecExpr(), dest);
-  case sema::ExprKind::Index:
-    return emitIndex(expr->toIndexExpr(), dest);
-  default:
-    cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
-      "smx-emit-expr" << expr->prettyName();
-    return ValueDest::Error;
-  }
-}
-
-ValueDest
 SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest)
 {
   cell_t value = 0;
@@ -626,78 +629,28 @@ SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest)
 }
 
 ValueDest
-SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
+SmxCompiler::emitLoad(sema::LoadExpr* expr, ValueDest dest)
 {
-  VariableSymbol* sym = expr->sym();
-
-  if (sym->type()->isArray()) {
-    switch (sym->storage()) {
-      case StorageClass::Argument:
-      case StorageClass::Local:
-        will_kill(dest);
-        if (dest == ValueDest::Pri)
-          __ opcode(OP_ADDR_PRI, sym->address());
-        else if (dest == ValueDest::Alt)
-          __ opcode(OP_ADDR_ALT, sym->address());
-        else if (dest == ValueDest::Stack)
-          __ opcode(OP_PUSH_ADR, sym->address());
-        else
-          assert(false);
-        return dest;
-
-      case StorageClass::Global:
-        will_kill(dest);
-        if (dest == ValueDest::Pri)
-          __ opcode(OP_CONST_PRI, sym->address());
-        else if (dest == ValueDest::Alt)
-          __ opcode(OP_CONST_ALT, sym->address());
-        else if (dest == ValueDest::Stack)
-          __ opcode(OP_PUSH_C, sym->address());
-        else
-          assert(false);
-        return dest;
-
-      default:
-        cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
-          "emit-arr-sc-kind" << int32_t(sym->storage());
-        return ValueDest::Error;
+  sema::LValueExpr* lvalue = expr->lvalue()->asLValueExpr();
+  switch (lvalue->kind()) {
+    case sema::ExprKind::Var:
+    {
+      // :TODO: rm storage flags
+      sema::VarExpr* var_expr = lvalue->toVarExpr();
+      return emit_load(var_expr, dest);
     }
-  }
 
-  assert(sym->type()->isPrimitive());
-
-  // :TODO: inline these
-  assert(!sym->isConstExpr());
-
-  switch (sym->storage()) {
-    case StorageClass::Argument:
-    case StorageClass::Local:
-      will_kill(dest);
-      if (dest == ValueDest::Pri)
-        __ opcode(OP_LOAD_S_PRI, sym->address());
-      else if (dest == ValueDest::Alt)
-        __ opcode(OP_LOAD_S_ALT, sym->address());
-      else if (dest == ValueDest::Stack)
-        __ opcode(OP_PUSH_S, sym->address());
-      else
-        assert(false);
-      return dest;
-
-    case StorageClass::Global:
-      will_kill(dest);
-      if (dest == ValueDest::Pri)
-        __ opcode(OP_LOAD_PRI, sym->address());
-      else if (dest == ValueDest::Alt)
-        __ opcode(OP_LOAD_ALT, sym->address());
-      else if (dest == ValueDest::Stack)
-        __ opcode(OP_PUSH, sym->address());
-      else
-        assert(false);
-      return dest;
+    case sema::ExprKind::Index:
+    {
+      if (!emit_into(lvalue, ValueDest::Pri))
+        return ValueDest::Error;
+      __ opcode(OP_LOAD_I);
+      return ValueDest::Pri;
+    }
 
     default:
       cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
-        "emit-var-sc-kind" << int32_t(sym->storage());
+        "emit-load-kind" << lvalue->prettyName();
       return ValueDest::Error;
   }
 }
@@ -1087,7 +1040,7 @@ SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
   Atom* literal = expr->literal();
 
   // The array size should be bytes + 1, for the null terminator.
-  assert(expr->type()->toArray()->fixedLength() == literal->length() + 1);
+  assert(size_t(expr->type()->toArray()->fixedLength()) == literal->length() + 1);
 
   int32_t address = generateDataString(literal->chars(), literal->length());
   emit_const(dest, address);
@@ -1135,7 +1088,7 @@ pick_other(ValueDest reg)
 ValueDest
 SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
 {
-  sema::Expr* lvalue = expr->expr();
+  sema::LValueExpr* lvalue = expr->expr();
 
   will_kill(dest);
 
@@ -1171,6 +1124,30 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
         emitVar(var, dest);
       return dest;
     }
+
+    case sema::ExprKind::Index:
+    {
+      if (!emit_into(lvalue, ValueDest::Pri))
+        return ValueDest::Error;
+
+      OPCODE incdec = (expr->token() == TOK_INCREMENT)
+                      ? OP_INC_I
+                      : OP_DEC_I;
+
+      if (expr->prefix()) {
+        __ opcode(incdec);
+        __ opcode(OP_LOAD_I);
+        return ValueDest::Pri;
+      }
+
+      // Postfix is harder.
+      __ opcode(OP_MOVE_ALT);   // save addr in ALT
+      __ opcode(OP_LOAD_I);     // load previous value in PRI
+      __ opcode(OP_XCHG);       // PRI=addr, ALT=previous value
+      __ opcode(incdec);        // incdec PRI
+      return ValueDest::Alt;
+    }
+
     default:
       cc_.report(lvalue->src()->loc(), rmsg::unimpl_kind) <<
         "smx-emit-incdec" << lvalue->prettyName();
@@ -1178,6 +1155,7 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
   }
 }
 
+// Note: this emits the address of the index.
 ValueDest
 SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
 {
@@ -1210,11 +1188,90 @@ SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
       __ opcode(OP_IDXADDR);
   }
 
-  if (atype->isString())
-    __ opcode(OP_LODB_I);
-  else
-    __ opcode(OP_LOAD_I);
   return ValueDest::Pri;
+}
+
+ValueDest
+SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
+{
+  VariableSymbol* sym = expr->sym();
+  Type* type = sym->type();
+
+  // We should never be returning the addresses of dynamic arrays or references
+  // yet.
+  if (type->isArray())
+    assert(type->toArray()->hasFixedLength());
+  assert(!type->isReference());
+
+  will_kill(dest);
+
+  switch (sym->storage()) {
+    case StorageClass::Argument:
+    case StorageClass::Local:
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_ADDR_PRI, sym->address());
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_ADDR_ALT, sym->address());
+      else if (dest == ValueDest::Stack)
+        __ opcode(OP_PUSH_ADR, sym->address());
+      return dest;
+
+    case StorageClass::Global:
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_CONST_PRI, sym->address());
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_CONST_ALT, sym->address());
+      else if (dest == ValueDest::Stack)
+        __ opcode(OP_PUSH_C, sym->address());
+      return dest;
+
+    default:
+      cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+        "emit-var-sc-kind" << int32_t(sym->storage());
+      return ValueDest::Error;
+  }
+}
+
+
+ValueDest
+SmxCompiler::emit_load(sema::VarExpr* expr, ValueDest dest)
+{
+  VariableSymbol* sym = expr->sym();
+  Type* type = sym->type();
+
+  if (type->isArray())
+    assert(!type->toArray()->hasFixedLength());
+  assert(!type->isReference());
+
+  will_kill(dest);
+
+  switch (sym->storage()) {
+    case StorageClass::Argument:
+    case StorageClass::Local:
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_LOAD_S_PRI, sym->address());
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_LOAD_S_ALT, sym->address());
+      else if (dest == ValueDest::Stack)
+        __ opcode(OP_PUSH_S, sym->address());
+      return dest;
+
+    case StorageClass::Global:
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_LOAD_PRI, sym->address());
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_LOAD_ALT, sym->address());
+      else if (dest == ValueDest::Stack)
+        __ opcode(OP_PUSH, sym->address());
+      else
+        assert(false);
+      return dest;
+
+    default:
+      cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+        "emit-var-sc-kind" << int32_t(sym->storage());
+      return ValueDest::Error;
+  }
 }
 
 static inline OPCODE

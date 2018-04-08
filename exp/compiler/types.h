@@ -546,6 +546,9 @@ class ArrayType : public Type
     return nlevels_;
   }
 
+  bool isMutable() {
+    return !contained()->isConst();
+  }
   bool equalTo(ArrayType *other) {
     return elements_ == other->elements_ &&
            contained_ == other->contained_;

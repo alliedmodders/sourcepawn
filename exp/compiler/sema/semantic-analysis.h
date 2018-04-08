@@ -28,6 +28,7 @@ class CompileContext;
 class PoolAllocator;
 class TranslationUnit;
 class TypeManager;
+struct EvalContext;
 
 using namespace ast;
 
@@ -53,6 +54,7 @@ class SemanticAnalysis
   void visitBreakStatement(BreakStatement* node);
   void visitSwitchStatement(SwitchStatement* node);
 
+  // Expression handling.
   sema::Expr* visitExpression(Expression* node);
   sema::ConstValueExpr* visitIntegerLiteral(IntegerLiteral* node);
   sema::BinaryExpr* visitBinaryExpression(BinaryExpression* node);
@@ -72,27 +74,17 @@ class SemanticAnalysis
   // Same as visitExpression, but only returns l-values.
   sema::LValueExpr* visitLValue(Expression* node);
 
-  sema::Expr* check_arg(sema::Expr* arg, VarDecl* param);
-  sema::Expr* check_array_arg(sema::Expr* arg, VarDecl* param);
+  bool coerce(EvalContext& ec);
 
-  enum class Coercion {
-    Arg,
-    Assignment,
-    Return,
-    Test,
-    Expr,
-    Index
-  };
-  sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
-  sema::Expr* coerce_inner(sema::Expr* from_expr,
-                           Type* from,
-                           Type* to,
-                           Coercion context);
+  // Do not call any of these directly.
+  bool coerce_array(EvalContext& ec);
+  bool coerce_ref(EvalContext& ec);
+  bool no_conversion(EvalContext& ec);
+  Type* arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out);
+  sema::Expr* lvalue_to_rvalue(sema::LValueExpr* expr);
+
   sema::Expr* initializer(ast::Expression* expr, Type* type);
   sema::Expr* struct_initializer(ast::StructInitializer* expr, Type* type);
-
-  // No-op function to breakpoint on type errors.
-  sema::Expr* no_conversion(sema::Expr* expr, Type* from, Type* to);
 
  private:
   enum class ReturnStatus {

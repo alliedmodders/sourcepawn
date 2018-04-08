@@ -929,6 +929,7 @@ TypeResolver::resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const 
         cc_.report(spec->arrayLoc(), rmsg::array_size_too_large);
     }
 
+    // :TODO: constify
     type = cc_.types()->newArray(type, arraySize);
   } while (rank--);
   return type;
@@ -987,10 +988,8 @@ TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper
   }
 
   VarDecl* decl = helper ? helper->decl() : nullptr;
-  if (decl) {
-    assert(decl->sym()->isByRef());
+  if (decl)
     assert(decl->sym()->isArgument());
-  }
 
   return cc_.types()->newReference(type);
 }
@@ -1009,14 +1008,7 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
   if (!type)
     return false;
 
-  assert(sym->isByRef() == type->isReference());
-  assert(!sym->isByRef() || sym->isArgument());
-
-  if (!sym->isArgument()) {
-    if (TypeSupportsCompileTimeInterning(type)) {
-      sym->storage_flags() |= StorageFlags::constval;
-    }
-  }
+  assert(!type->isReference() || sym->isArgument());
 
   // :TODO: why is this here? move it into sema.
   if (!type->isStorableType()) {

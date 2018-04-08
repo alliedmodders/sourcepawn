@@ -332,12 +332,23 @@ class Analyzer : public PartialAstVisitor
     return toJson(te.resolved(), name);
   }
 
+  static inline bool isByRef(const TypeExpr& te) {
+    return te.resolved()
+           ? te.resolved()->isReference()
+           : te.spec()->isByRef();
+  }
+  static inline bool isConst(const TypeExpr& te) {
+    return te.resolved()
+           ? te.resolved()->isConst()
+           : te.spec()->isConst();
+  }
+
   JsonString *toJson(VarDecl *decl, bool named) {
     // :TODO: add a BuildTypeName(VarDecl) helper.
     TypeDiagFlags flags = TypeDiagFlags::Names;
-    if (!!(decl->sym()->storage_flags() & StorageFlags::byref))
+    if (isByRef(decl->te()))
       flags |= TypeDiagFlags::IsByRef;
-    if (!!(decl->sym()->storage_flags() & StorageFlags::constval))
+    if (isConst(decl->te()))
       flags |= TypeDiagFlags::IsConst;
     return toJson(BuildTypeName(
       decl->te(),

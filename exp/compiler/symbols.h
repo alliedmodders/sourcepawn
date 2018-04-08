@@ -113,7 +113,6 @@ class VariableSymbol : public Symbol
   VariableSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name),
      storage_(StorageClass::Unknown),
-     storage_flags_(StorageFlags::none),
      type_(nullptr)
   {
     address_ = 0;
@@ -172,16 +171,6 @@ class VariableSymbol : public Symbol
     return !isConstExpr() && !failedToResolveConstExpr();
   }
 
-  ke::Flags<StorageFlags>& storage_flags() {
-    return storage_flags_;
-  }
-  const ke::Flags<StorageFlags> storage_flags() const {
-    return storage_flags_;
-  }
-  bool isByRef() const {
-    return !!(storage_flags() & StorageFlags::byref);
-  }
-
  private:
   static const int kResolvingConstExpr = 1;
   static const int kFailedResolveConstExpr = 2;
@@ -207,7 +196,6 @@ class VariableSymbol : public Symbol
 
  private:
   StorageClass storage_;
-  ke::Flags<StorageFlags> storage_flags_;
   int32_t address_;
   Type* type_;
   BoxedValue constant_;

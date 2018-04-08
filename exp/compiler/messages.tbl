@@ -160,6 +160,7 @@ RMSG(cannot_index_type,             type,              "type '%0' does not have 
 RMSG(index_must_be_integer,         type,              "array index must be an integer")
 RMSG(index_must_be_positive,        type,              "array index cannot be negative")
 RMSG(index_out_of_bounds,           type,              "index is out of bounds")
+RMSG(complex_array_assignment,      type,              "cannot perform nested array assignment")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")
