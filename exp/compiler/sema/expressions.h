@@ -47,6 +47,7 @@ namespace sema {
   _(Index)                \
   _(Load)                 \
   _(Slice)                \
+  _(Store)                \
   /* terminator */
 
 // Forward declarations.
@@ -508,6 +509,34 @@ class LoadExpr : public Expr
 
  private:
   LValueExpr* lvalue_;
+};
+
+class StoreExpr : public Expr
+{
+ public:
+  explicit StoreExpr(ast::Expression* node, Type* type,
+                     LValueExpr* left,
+                     Expr* right)
+   : Expr(node, type),
+     left_(left),
+     right_(right)
+  {}
+
+  DECLARE_SEMA(Store)
+
+  LValueExpr* left() const {
+    return left_;
+  }
+  Expr* right() const {
+    return right_;
+  }
+  bool hasSideEffects() const override {
+    return true;
+  }
+
+ private:
+  LValueExpr* left_;
+  Expr* right_;
 };
 
 // Create an array, valid for the duration of the current statement, that

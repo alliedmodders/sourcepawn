@@ -565,6 +565,8 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitIndex(expr->toIndexExpr(), dest);
   case sema::ExprKind::Load:
     return emitLoad(expr->toLoadExpr(), dest);
+  case sema::ExprKind::Store:
+    return emitStore(expr->toStoreExpr(), dest);
   default:
     cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
       "smx-emit-expr" << expr->prettyName();
@@ -644,7 +646,10 @@ SmxCompiler::emitLoad(sema::LoadExpr* expr, ValueDest dest)
     {
       if (!emit_into(lvalue, ValueDest::Pri))
         return ValueDest::Error;
-      __ opcode(OP_LOAD_I);
+      if (lvalue->type()->isPrimitive(PrimitiveType::Char))
+        __ opcode(OP_LODB_I, (cell_t)1);
+      else
+        __ opcode(OP_LOAD_I);
       return ValueDest::Pri;
     }
 
@@ -653,6 +658,79 @@ SmxCompiler::emitLoad(sema::LoadExpr* expr, ValueDest dest)
         "emit-load-kind" << lvalue->prettyName();
       return ValueDest::Error;
   }
+}
+
+ValueDest
+SmxCompiler::emitStore(sema::StoreExpr* expr, ValueDest requested)
+{
+  sema::LValueExpr* lvalue = expr->left()->asLValueExpr();
+  sema::Expr* right = expr->right();
+
+  // Only non-composite types can occur here.
+  assert(HasSimpleCellStorage(UnwrapReference(lvalue->type())));
+  assert((size_t)compute_storage_size(UnwrapReference(lvalue->type())) <= sizeof(cell_t));
+
+  // There are many special case opcodes for assigning to variables.
+  if (sema::VarExpr* var = lvalue->asVarExpr()) {
+    VariableSymbol* sym = var->sym();
+
+    // We need a temporary register, so we have to ignore stack requests.
+    ValueDest dest = requested;
+    if (dest == ValueDest::Stack)
+      dest = ValueDest::Pri;
+
+    if (!emit_into(right, dest))
+      return ValueDest::Error;
+
+    switch (sym->storage()) {
+      case StorageClass::Argument:
+      case StorageClass::Local:
+        if (sym->type()->isReference()) {
+          if (dest == ValueDest::Pri)
+            __ opcode(OP_SREF_S_PRI, sym->address());
+          else
+            __ opcode(OP_SREF_S_ALT, sym->address());
+        } else {
+          if (dest == ValueDest::Pri)
+            __ opcode(OP_STOR_S_PRI, sym->address());
+          else
+            __ opcode(OP_STOR_S_ALT, sym->address());
+        }
+        return dest;
+
+      case StorageClass::Global:
+        if (dest == ValueDest::Pri)
+          __ opcode(OP_STOR_PRI, sym->address());
+        else
+          __ opcode(OP_STOR_ALT, sym->address());
+        return dest;
+
+      default:
+        assert(false);
+    }
+    return ValueDest::Error;
+  }
+
+  // No special cases are available for other l-value types. Use addresses.
+  if (!emit_into(lvalue, ValueDest::Alt))
+    return ValueDest::Error;
+
+  uint64_t saved_alt = preserve(ValueDest::Alt);
+  if (!emit_into(right, ValueDest::Pri))
+    return ValueDest::Error;
+  restore(saved_alt);
+
+  // Ideally, the VM would have enough type information to perform the correct
+  // kind of store. But it doesn't, so we need to detect the "magic string" hack
+  // the old compiler used. It's not really a hack here, except that IndexExpr
+  // is the only pointer-type for which this storage rule exists (rather than
+  // all addresses having a consistent storage type).
+  Type* type = lvalue->type();
+  if (type->isPrimitive(PrimitiveType::Char) && lvalue->asIndexExpr())
+    __ opcode(OP_STRB_I, (cell_t)1);
+  else
+    __ opcode(OP_STOR_I);
+  return ValueDest::Pri;
 }
 
 static inline ke::Maybe<int32_t>
@@ -727,7 +805,7 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
         return ValueDest::Pri;
       }
 
-      uint64_t saved_pri = save(ValueDest::Pri);
+      uint64_t saved_pri = preserve(ValueDest::Pri);
       if (!emit_into(right, ValueDest::Alt))
         return ValueDest::Error;
       restore(saved_pri);
@@ -1164,7 +1242,7 @@ SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
     if (!emit_into(expr->base(), ValueDest::Alt))
       return ValueDest::Error;
 
-    uint64_t saved_alt = save(ValueDest::Alt);
+    uint64_t saved_alt = preserve(ValueDest::Alt);
     if (!emit_into(expr->index(), ValueDest::Pri))
       return ValueDest::Error;
     restore(saved_alt);
@@ -1464,7 +1542,7 @@ SmxCompiler::load_both(sema::Expr* left, sema::Expr* right)
   if (!emit_into(left, ValueDest::Pri))
     return false;
 
-  uint64_t saved_pri = save(ValueDest::Pri);
+  uint64_t saved_pri = preserve(ValueDest::Pri);
   if (!emit_into(right, ValueDest::Alt))
     return false;
 
@@ -1520,7 +1598,7 @@ SmxCompiler::will_kill(ValueDest dest)
 }
 
 uint64_t
-SmxCompiler::save(ValueDest dest)
+SmxCompiler::preserve(ValueDest dest)
 {
   assert(dest == ValueDest::Pri || dest == ValueDest::Alt);
 

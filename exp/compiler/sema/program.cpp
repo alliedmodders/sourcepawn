@@ -231,6 +231,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::Load:
         printLoad(expr->toLoadExpr());
         break;
+      case sema::ExprKind::Store:
+        printStore(expr->toStoreExpr());
+        break;
       default:
         assert(false);
     }
@@ -361,6 +364,16 @@ class SemaPrinter : public ast::StrictAstVisitor
         TokenNames[expr->token()],
         (expr->postfix() ? "postfix" : "prefix"));
       printExpr(expr->expr());
+    }
+    unindent();
+  }
+
+  void printStore(sema::StoreExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->left());
+      printExpr(expr->right());
     }
     unindent();
   }

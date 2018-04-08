@@ -45,6 +45,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitStringLiteral(node->toStringLiteral());
     case AstKind::kIncDecExpression:
       return visitIncDec(node->toIncDecExpression());
+    case AstKind::kAssignment:
+      return visitAssignment(node->toAssignment());
     case AstKind::kIndexExpression:
       return visitIndex(node->toIndexExpression());
     default:
@@ -286,8 +288,42 @@ SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
     return nullptr;
   }
 
-  // :TODO: check const-ness
   return new (pool_) sema::IncDecExpr(node, type, node->token(), expr, node->postfix());
+}
+
+sema::Expr*
+SemanticAnalysis::visitAssignment(ast::Assignment* node)
+{
+  sema::LValueExpr* expr = visitLValue(node->lvalue());
+  if (!expr)
+    return nullptr;
+
+  Type* type = expr->storedType();
+  Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
+
+  // :TODO: handle str[n]++
+
+  if (type->isConst()) {
+    cc_.report(node->loc(), rmsg::lvalue_is_const);
+    return nullptr;
+  }
+  if (type != int32Type) {
+    cc_.report(node->loc(), rmsg::unimpl_kind) <<
+      "sema-incdec" << type;
+    return nullptr;
+  }
+  if (node->token() != TOK_ASSIGN) {
+    cc_.report(node->loc(), rmsg::unimpl_kind) <<
+      "sema-assign" << TokenNames[node->token()];
+    return nullptr;
+  }
+
+  ast::Expression* right = node->expression();
+  EvalContext ec(CoercionKind::Assignment, right, int32Type);
+  if (!coerce(ec))
+    return nullptr;
+
+  return new (pool_) sema::StoreExpr(node, type, expr, ec.result);
 }
 
 sema::LValueExpr*

@@ -74,6 +74,7 @@ private:
   ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
   ValueDest emitIncDec(sema::IncDecExpr* expr, ValueDest dest);
   ValueDest emitLoad(sema::LoadExpr* expr, ValueDest dest);
+  ValueDest emitStore(sema::StoreExpr* expr, ValueDest dest);
 
   // l-value expressions always return the address of the l-value. For local
   // variables, this is their stack address. For pointer types (references,
@@ -113,8 +114,8 @@ private:
   // means the compiler must take care not to cause any invalid save/restore
   // pairs, and we throw an error if such a situation arises. For example:
   //
-  //   save(pri)
-  //   save(alt)
+  //   preserve(pri)
+  //   preserve(alt)
   //   ... clobber alt ...
   //   ... clobber pri ...
   //   restore alt
@@ -126,7 +127,7 @@ private:
   // It may be that these situations are unavoidable... we'll probably have
   // to end up doing something clever (like flushing the pushes in-order,
   // or reserving spill space).
-  uint64_t save(ValueDest dest);
+  uint64_t preserve(ValueDest dest);
 
   // Restore a register that was previously saved.
   void restore(uint64_t id);

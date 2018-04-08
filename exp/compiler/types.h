@@ -713,12 +713,12 @@ HasValueAssignSemantics(Type *type)
   return true;
 }
 
-// Types where values can be interned at compile-time if constant.
-static inline bool
-TypeSupportsCompileTimeInterning(Type *type)
+static inline Type*
+UnwrapReference(Type* type)
 {
-  return type->canBeUsedInConstExpr() ||
-         (type->isArray() && type->toArray()->hasFixedLength());
+  if (type->isReference())
+    return type->toReference()->inner();
+  return type;
 }
 
 // This should probably be in the type manager... but it should never leak past
