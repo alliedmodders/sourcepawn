@@ -172,6 +172,8 @@ RMSG(argcount_not_supported,        impl,              "argument count not suppo
 RMSG(regalloc_error,                impl,              "regalloc internal error: %0")
 RMSG(unimpl_kind,                   impl,              "unimplemented %0: %1")
 
+RMSG(statement_has_no_effect,       warning,           "statement has no effect")
+
 //MSG(NotAllPathsReturnValue,         SyntaxError,            "not all paths through function return a value")
 //MSG(UsedVoidReturn,                 SyntaxError,            "value returned, but function is void")
 //MSG(CannotDeclareVoid,              TypeError,              "cannot declare void variables")

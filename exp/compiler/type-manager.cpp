@@ -80,11 +80,15 @@ TypeManager::initialize()
   //   const float[3]
   char_type_ = getPrimitive(PrimitiveType::Char);
   char_array_ = ArrayType::New(char_type_, ArrayType::kUnsized);
-  const_char_array_ = Type::NewQualified(char_array_, Qualifiers::Const);
+  const_char_array_ =
+    ArrayType::New(Type::NewQualified(char_type_, Qualifiers::Const),
+                   ArrayType::kUnsized);
 
   float_type_ = getPrimitive(PrimitiveType::Float);
   float3_array_ = ArrayType::New(float_type_, 3);
-  const_float3_array_ = Type::NewQualified(float3_array_, Qualifiers::Const);
+  const_float3_array_ =
+    ArrayType::New(Type::NewQualified(float_type_, Qualifiers::Const),
+                   3);
 
   if (!reftype_cache_.init(16))
     return false;

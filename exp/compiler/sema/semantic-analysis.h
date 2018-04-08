@@ -70,7 +70,7 @@ class SemanticAnalysis
   bool matchForwardReturnTypes(Type *fwdRetType, Type *implRetType);
 
   // Same as visitExpression, but only returns l-values.
-  sema::LvalueExpr* visitLValue(Expression* node);
+  sema::LValueExpr* visitLValue(Expression* node);
 
   sema::Expr* check_arg(sema::Expr* arg, VarDecl* param);
   sema::Expr* check_array_arg(sema::Expr* arg, VarDecl* param);
@@ -80,7 +80,8 @@ class SemanticAnalysis
     Assignment,
     Return,
     Test,
-    Expr
+    Expr,
+    Index
   };
   sema::Expr* coerce(sema::Expr* from, Type* to, Coercion context);
   sema::Expr* coerce_inner(sema::Expr* from_expr,

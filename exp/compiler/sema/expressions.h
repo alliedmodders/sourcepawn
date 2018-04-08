@@ -45,6 +45,7 @@ namespace sema {
   _(IncDec)               \
   _(StructInit)           \
   _(Index)                \
+  _(Load)                 \
   /* terminator */
 
 // Forward declarations.
@@ -59,6 +60,8 @@ enum class ExprKind
 #undef _
   Sentinel
 };
+
+class LValueExpr;
 
 class Expr : public PoolObject
 {
@@ -86,6 +89,12 @@ public:
   virtual bool getConstantInt32(int32_t* value) const {
     return false;
   }
+  virtual LValueExpr* asLValueExpr() {
+    return nullptr;
+  }
+  virtual bool hasSideEffects() const {
+    return false;
+  }
 
 #define _(name)                                 \
   virtual name##Expr* as##name##Expr() {        \
@@ -103,7 +112,6 @@ private:
   Type* type_;
 };
 
-class LvalueExpr;
 typedef PoolList<Expr*> ExprList;
 
 #define DECLARE_SEMA(name)                  \
@@ -178,6 +186,9 @@ class BinaryExpr final : public Expr
   Expr* right() const {
     return right_;
   }
+  bool hasSideEffects() const override {
+    return left_->hasSideEffects() || right_->hasSideEffects();
+  }
 
  private:
   TokenKind token_;
@@ -205,6 +216,9 @@ class UnaryExpr final : public Expr
   Expr* expr() const {
     return expr_;
   }
+  bool hasSideEffects() const override {
+    return expr_->hasSideEffects();
+  }
 
  private:
   TokenKind token_;
@@ -217,7 +231,7 @@ class IncDecExpr final : public Expr
   explicit IncDecExpr(ast::Expression* node,
                       Type* type,
                       TokenKind tok,
-                      LvalueExpr* expr,
+                      LValueExpr* expr,
                       bool postfix)
    : Expr(node, type),
      token_(tok),
@@ -230,7 +244,7 @@ class IncDecExpr final : public Expr
   TokenKind token() const {
     return token_;
   }
-  LvalueExpr* expr() const {
+  LValueExpr* expr() const {
     return expr_;
   }
   bool prefix() const {
@@ -239,10 +253,13 @@ class IncDecExpr final : public Expr
   bool postfix() const {
     return postfix_;
   }
+  bool hasSideEffects() const override {
+    return true;
+  }
 
  private:
   TokenKind token_;
-  LvalueExpr* expr_;
+  LValueExpr* expr_;
   bool postfix_;
 };
 
@@ -260,6 +277,9 @@ class TrivialCastExpr final : public Expr
 
   Expr* expr() const {
     return expr_;
+  }
+  bool hasSideEffects() const override {
+    return expr_->hasSideEffects();
   }
 
  private:
@@ -306,6 +326,9 @@ class CallExpr final : public Expr
   ExprList* args() const {
     return args_;
   }
+  bool hasSideEffects() const override {
+    return true;
+  }
 
  private:
   Expr* callee_;
@@ -314,21 +337,25 @@ class CallExpr final : public Expr
 
 // We declare a base type for l-values to restrict what flows into load and
 // store expressions.
-class LvalueExpr : public Expr
+class LValueExpr : public Expr
 {
  public:
-  explicit LvalueExpr(ast::Expression* node, Type* type)
+  explicit LValueExpr(ast::Expression* node, Type* type)
    : Expr(node, type)
   {}
+
+  LValueExpr* asLValueExpr() final {
+    return this;
+  }
 };
 
-class VarExpr final : public LvalueExpr
+class VarExpr final : public LValueExpr
 {
  public:
   explicit VarExpr(ast::Expression* node,
                    Type* type,
                    VariableSymbol* sym)
-   : LvalueExpr(node, type),
+   : LValueExpr(node, type),
      sym_(sym)
   {}
 
@@ -342,14 +369,14 @@ class VarExpr final : public LvalueExpr
   VariableSymbol* sym_;
 };
 
-class IndexExpr final : public LvalueExpr
+class IndexExpr final : public LValueExpr
 {
  public:
   explicit IndexExpr(ast::Expression* node,
                       Type* type,
                       Expr* base,
                       Expr* index)
-   : LvalueExpr(node, type),
+   : LValueExpr(node, type),
      base_(base),
      index_(index)
   {}
@@ -361,6 +388,9 @@ class IndexExpr final : public LvalueExpr
   }
   Expr* index() const {
     return index_;
+  }
+  bool hasSideEffects() const override {
+    return base_->hasSideEffects() || index_->hasSideEffects();
   }
 
  private:
@@ -409,6 +439,26 @@ class StructInitExpr final : public Expr
 
  private:
   ExprList* exprs_;
+};
+
+// Turn an l-value into an r-value.
+class LoadExpr : public Expr
+{
+ public:
+  explicit LoadExpr(ast::Expression* node, Type* type, LValueExpr* expr)
+   : Expr(node, type),
+     lvalue_(expr)
+  {}
+
+  LValueExpr* lvalue() const {
+    return lvalue_;
+  }
+  bool hasSideEffects() const override {
+    return lvalue_->hasSideEffects();
+  }
+
+ private:
+  LValueExpr* lvalue_;
 };
 
 #undef DECLARE_SEMA

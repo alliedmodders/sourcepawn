@@ -408,7 +408,6 @@ SemanticAnalysis::visitReturnStatement(ReturnStatement* node)
   }
 
   sema::Expr* expr = visitExpression(node->expr());
-
   if (!(expr = coerce(expr, returnType, Coercion::Return)))
     return;
 
@@ -428,6 +427,8 @@ void
 SemanticAnalysis::visitSwitchStatement(SwitchStatement* node)
 {
   Type* type = nullptr;
+
+  // :TODO: wrong
   sema::Expr* expr = visitExpression(node->expression());
   if (expr) {
     Type* boolType = types_->getBool();
@@ -491,10 +492,15 @@ SemanticAnalysis::visitExpressionStatement(ExpressionStatement* node)
   sema::Expr* expr = visitExpression(node->expr());
   if (!expr)
     return;
+
+  // We really want to peel away lvalues here...
+  if (!expr->hasSideEffects())
+    cc_.report(node->loc(), rmsg::statement_has_no_effect);
+
   node->set_sema_expr(expr);
 
-  // :TODO: side-effects
   // :TODO: eliminate load-after-stores, for example, i++.
+  // ^-- this comment should be in smx-compiler
 }
 
 sema::CallExpr*
@@ -526,6 +532,7 @@ SemanticAnalysis::visitCallExpression(CallExpression* node)
     return nullptr;
   }
 
+  // :TODO: coerce here.
   sema::ExprList* args = new (pool_) sema::ExprList();
   for (size_t i = 0; i < ast_args->length(); i++) {
     ast::Expression* ast_arg = ast_args->at(i);
@@ -590,6 +597,12 @@ SemanticAnalysis::visitBinaryExpression(BinaryExpression* node)
       return nullptr;
     if (!(right = coerce(right, boolType, Coercion::Test)))
       return nullptr;
+  } else {
+    Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
+    if (!(left = coerce(left, int32Type, Coercion::Expr)))
+      return nullptr;
+    if (!(right = coerce(right, int32Type, Coercion::Expr)))
+      return nullptr;
   }
 
   assert(left->type() == right->type());
@@ -641,7 +654,9 @@ SemanticAnalysis::visitUnaryExpression(ast::UnaryExpression* node)
     if (!(expr = coerce(expr, type, Coercion::Expr)))
       return nullptr;
   } else {
-    type = expr->type();
+    type = types_->getPrimitive(PrimitiveType::Int32);
+    if (!(expr = coerce(expr, type, Coercion::Expr)))
+        return nullptr;
     assert(type->primitive() == PrimitiveType::Int32);
   }
 
@@ -659,15 +674,17 @@ SemanticAnalysis::visitIndex(ast::IndexExpression* node)
   if (!index)
     return nullptr;
 
+  // :TODO: coerce base to r-value?
+
   if (!base->type()->isArray()) {
     cc_.report(base->src()->loc(), rmsg::cannot_index_type) <<
       base->type();
     return nullptr;
   }
-  if (!index->type()->isPrimitive(PrimitiveType::Int32)) {
-    cc_.report(index->src()->loc(), rmsg::index_must_be_integer);
+
+  Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
+  if (!(index = coerce(index, int32Type, Coercion::Index)))
     return nullptr;
-  }
 
   ArrayType* array = base->type()->toArray();
 
@@ -691,8 +708,8 @@ sema::Expr*
 SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
 {
   Type* charType = types_->getPrimitive(PrimitiveType::Char);
-  Type* strType = types_->newArray(charType, node->arrayLength());
-  Type* strLitType = types_->newQualified(strType, Qualifiers::Const);
+  Type* constCharType = types_->newQualified(charType, Qualifiers::Const);
+  Type* strLitType = types_->newArray(constCharType, node->arrayLength());
 
   return new (pool_) sema::StringExpr(node, strLitType, node->literal());
 }
@@ -702,35 +719,26 @@ SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
 sema::Expr*
 SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
 {
-  sema::LvalueExpr* expr = visitLValue(node->expression());
+  sema::LValueExpr* expr = visitLValue(node->expression());
   if (!expr)
     return nullptr;
+
+  // :TODO: check const-ness
 
   return new (pool_) sema::IncDecExpr(node, expr->type(), node->token(), expr, node->postfix());
 }
 
-sema::LvalueExpr*
+sema::LValueExpr*
 SemanticAnalysis::visitLValue(ast::Expression* node)
 {
   sema::Expr* expr = visitExpression(node);
   if (!expr)
     return nullptr;
 
-  sema::LvalueExpr* lv = nullptr;
-  switch (expr->kind()) {
-    case sema::ExprKind::Var:
-    {
-      // :TODO: test assign-to-const
-      // :TODO: test constval-implies-readonly
-      sema::VarExpr* var = expr->toVarExpr();
-      if (var->sym()->storage_flags() & StorageFlags::readonly)
-        cc_.report(node->loc(), rmsg::lvalue_is_const);
-      lv = var;
-      break;
-    }
-    default:
-      cc_.report(node->loc(), rmsg::illegal_lvalue);
-      return nullptr;
+  sema::LValueExpr* lv = expr->asLValueExpr();
+  if (!lv) {
+    cc_.report(node->loc(), rmsg::illegal_lvalue);
+    return nullptr;
   }
 
   return lv;
