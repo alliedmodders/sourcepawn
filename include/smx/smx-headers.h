@@ -64,11 +64,16 @@ struct SmxConsts
   // Version 10: DEBUG code flag removed; no bytecode changes.
   // Version 11: Not used; no changes.
   // Version 12: PROC/RETN semantic changes.
+  // Version 13: Feature flags in code headers.
   static const uint8_t CODE_VERSION_MINIMUM = 9;
   static const uint8_t CODE_VERSION_SM_LEGACY = 10;
   static const uint8_t CODE_VERSION_FEATURE_MASK = 13;
   static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_FEATURE_MASK;
   static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
+
+  // This feature adds the REBASE opcode, and requires that multi-dimensional
+  // arrays use direct internal addressing.
+  static const uint32_t kCodeFeatureDirectArrays = (1 << 0);
 };
 
 // These structures are byte-packed.

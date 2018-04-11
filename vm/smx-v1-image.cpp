@@ -618,6 +618,8 @@ SmxV1Image::LookupFunction(uint32_t code_offset)
     return lookupFunction<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(
       debug_syms_, code_offset);
   }
+  if (!debug_syms_unpacked_)
+    return nullptr;
   return lookupFunction<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(
       debug_syms_unpacked_, code_offset);
 }

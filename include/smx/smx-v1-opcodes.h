@@ -237,6 +237,7 @@ namespace sp {
   _U(STKADJUST,      "stackadjust")    \
   _G(ENDPROC,        "endproc")        \
   _U(LDGFN_PRI,      "ldgfn.pri")      \
+  _G(REBASE,         "rebase")         \
   /* Opcodes below this are pseudo-opcodes and are not part of the ABI */ \
   _G(FABS,           "fabs")           \
   _G(FLOAT,          "float")          \
@@ -256,6 +257,7 @@ namespace sp {
   _G(FLOAT_NE,       "float.ne")       \
   _G(FLOAT_EQ,       "float.eq")       \
   _G(FLOAT_NOT,      "float.not")
+
 
 enum OPCODE {
 #define _G(op, text) OP_##op,

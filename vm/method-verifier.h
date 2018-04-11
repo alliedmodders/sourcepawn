@@ -57,6 +57,7 @@ class MethodVerifier final
 
  private:
   PluginRuntime* rt_;
+  uint32_t code_features_;
   uint32_t startOffset_;
   size_t memSize_;
   size_t datSize_;

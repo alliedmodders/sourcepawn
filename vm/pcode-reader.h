@@ -623,6 +623,14 @@ class PcodeReader
       return true;
     }
 
+    case OP_REBASE:
+    {
+      cell_t addr = readCell();
+      cell_t iv_size = readCell();
+      cell_t data_size = readCell();
+      return visitor_->visitREBASE(addr, iv_size, data_size);
+    }
+
     default:
       assert(false);
       return false;

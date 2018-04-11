@@ -1041,4 +1041,15 @@ Interpreter::visitHALT(cell_t value)
   return false;
 }
 
+bool
+Interpreter::visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size)
+{
+  int err = cx_->rebaseArray(regs_.pri(), addr, iv_size, data_size);
+  if (err != SP_ERROR_NONE) {
+    cx_->ReportErrorNumber(err);
+    return false;
+  }
+  return true;
+}
+
 } // namespace sp

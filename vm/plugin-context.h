@@ -126,6 +126,10 @@ class PluginContext : public BasePluginContext
   bool setCellValue(cell_t address, cell_t value);
   bool heapAlloc(cell_t amount, cell_t* out);
   cell_t* acquireAddrRange(cell_t address, uint32_t bounds);
+  int rebaseArray(cell_t array_addr,
+                  cell_t dat_addr,
+                  cell_t iv_size,
+                  cell_t data_size);
 
   cell_t* throwIfBadAddress(cell_t addr);
 

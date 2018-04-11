@@ -100,6 +100,17 @@ InvokeGenerateFullArray(PluginContext *cx, uint32_t argc, cell_t *argv, int auto
   return cx->generateFullArray(argc, argv, autozero);
 }
 
+// No exit frame - error code is returned directly.
+static int
+InvokeRebaseArray(PluginContext *cx,
+                  cell_t base_addr,
+                  cell_t dat_addr,
+                  cell_t iv_size,
+                  cell_t data_size)
+{
+  return cx->rebaseArray(base_addr, dat_addr, iv_size, data_size);
+}
+
 bool
 Compiler::visitMOVE(PawnReg reg)
 {
@@ -1081,6 +1092,27 @@ Compiler::visitTRACKER_POP_SETHEAP()
   __ pop(alt);
   __ pop(pri);
   __ addl(esp, 4);
+  return true;
+}
+
+bool
+Compiler::visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size)
+{
+  // We need to sync |sp| first.
+  __ subl(stk, dat);
+  __ movl(Operand(spAddr()), stk);
+  __ addl(stk, dat);
+
+  __ subl(esp, 3 * sizeof(intptr_t));
+  __ push(data_size);
+  __ push(iv_size);
+  __ push(addr);
+  __ push(pri);
+  __ push(intptr_t(rt_->GetBaseContext()));
+  __ callWithABI(ExternalAddress((void *)InvokeRebaseArray));
+  __ addl(esp, 8 * sizeof(intptr_t));
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
   return true;
 }
 
