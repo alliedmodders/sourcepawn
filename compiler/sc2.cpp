@@ -1086,35 +1086,8 @@ static int command(void)
         } else if (strcmp(str,"dynamic")==0) {
           preproc_expr(&pc_stksize,NULL);
         } else if (strcmp(str,"rational")==0) {
-          char name[sNAMEMAX+1];
-          cell digits=0;
-          size_t i;
-          /* first gather all information, start with the tag name */
-          while (*lptr<=' ' && *lptr!='\0')
+          while (*lptr!='\0')
             lptr++;
-          for (i=0; i<sizeof name && alphanum(*lptr); i++,lptr++)
-            name[i]=*lptr;
-          name[i]='\0';
-          /* then the precision (for fixed point arithmetic) */
-          while (*lptr<=' ' && *lptr!='\0')
-            lptr++;
-          if (*lptr=='(') {
-            preproc_expr(&digits,NULL);
-            if (digits<=0 || digits>9) {
-              error(68);        /* invalid rational number precision */
-              digits=0;
-            } /* if */
-            if (*lptr==')')
-              lptr++;
-          } /* if */
-          /* add the tag (make it public) and check the values */
-          int tag=pc_addtag(name);
-          if (sc_rationaltag==0 || (sc_rationaltag==tag && rational_digits==(int)digits)) {
-            sc_rationaltag=tag;
-            rational_digits=(int)digits;
-          } else {
-            error(69);          /* rational number format already set, can only be set once */
-          } /* if */
         } else if (strcmp(str,"semicolon")==0) {
           cell val;
           preproc_expr(&val,NULL);

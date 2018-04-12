@@ -1160,6 +1160,7 @@ static void setconstants(void)
   assert(sc_status==statIDLE);
 
   gTypes.init();
+  assert(sc_rationaltag);
 
   add_constant("true",1,sGLOBAL,1);     /* boolean flags */
   add_constant("false",0,sGLOBAL,1);
