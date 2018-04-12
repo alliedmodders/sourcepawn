@@ -816,12 +816,12 @@ Parser::unary()
 {
   TokenKind token = scanner_.peek();
 
-  SourceLocation pos = scanner_.begin();
   switch (token) {
     case TOK_INCREMENT:
     case TOK_DECREMENT:
     {
       scanner_.next();
+      SourceLocation pos = scanner_.begin();
       Expression *expr = unary();
       if (!expr)
         return nullptr;
@@ -833,6 +833,7 @@ Parser::unary()
     case TOK_TILDE:
     {
       scanner_.next();
+      SourceLocation pos = scanner_.begin();
       Expression *expr = unary();
       if (!expr)
         return nullptr;
@@ -850,6 +851,7 @@ Parser::unary()
     case TOK_LABEL:
     {
       scanner_.next();
+      SourceLocation pos = scanner_.begin();
 
       TypeSpecifier spec;
       spec.setBaseLoc(scanner_.begin());
@@ -888,7 +890,7 @@ Parser::unary()
   token = scanner_.peek();
   if (token == TOK_INCREMENT || token == TOK_DECREMENT) {
     scanner_.next();
-    return new (pool_) IncDecExpression(pos, token, expr, true);
+    return new (pool_) IncDecExpression(scanner_.begin(), token, expr, true);
   }
 
   return expr;

@@ -1217,7 +1217,7 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
   will_kill(dest);
 
   // We have all sorts of special cases for global variables.
-  sema::VarExpr* var = lvalue->toVarExpr();
+  sema::VarExpr* var = lvalue->asVarExpr();
   if (var && !var->sym()->type()->isReference()) {
     VariableSymbol* sym = var->sym();
 
