@@ -234,6 +234,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::Store:
         printStore(expr->toStoreExpr());
         break;
+      case sema::ExprKind::ArrayInit:
+        printArrayInit(expr->toArrayInitExpr());
+        break;
       default:
         assert(false);
     }
@@ -374,6 +377,22 @@ class SemaPrinter : public ast::StrictAstVisitor
     {
       printExpr(expr->left());
       printExpr(expr->right());
+    }
+    unindent();
+  }
+
+  void printArrayInit(sema::ArrayInitExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      for (size_t i = 0; i < expr->exprs()->length(); i++) {
+        sema::Expr* e = expr->exprs()->at(i);
+        printExpr(e);
+      }
+      if (expr->repeat_last_element()) {
+        prefix();
+        fprintf(fp_, "(repeat)\n");
+      }
     }
     unindent();
   }

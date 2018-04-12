@@ -34,6 +34,36 @@ class TranslationUnit;
 class TypeSpecHelper;
 class VariableSymbol;
 
+enum class RankStatus
+{
+  // No literals were available for this rank.
+  Unvisited,
+
+  // Sizes did not match across literals.
+  Indeterminate,
+
+  // A size was already given by a constant expression, but it will be computed
+  // elsewhere.
+  Determinate,
+
+  // A size was computed via a fixed literal.
+  Computed
+};
+
+struct Rank
+{
+  Rank()
+   : status(RankStatus::Unvisited),
+     size(0)
+  {}
+  explicit Rank(RankStatus status, int size)
+   : status(status),
+     size(size)
+  {}
+  RankStatus status;
+  int size;
+};
+
 class TypeResolver
  : public StrictAstVisitor,
    public ConstantResolver
@@ -78,17 +108,15 @@ class TypeResolver
   void visitFunction(FunctionNode *node);
 
  private:
-  static const int kRankUnvisited;
-
   FunctionType *maybeResolveFunction(FunctionSignature *sig);
 
-  bool resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, int *outp);
-  void updateComputedRankSize(Vector<int> &out, size_t rank, int size);
-  void computeFixedArrayLiteralDimensions(ArrayLiteral *root,
-                                          size_t rank,
-                                          size_t highestUnknownRank,
-                                          Vector<int> &out);
-  Vector<int> fixedArrayLiteralDimensions(TypeSpecifier *spec, ArrayLiteral *lit);
+  bool resolveConstantArraySize(TypeSpecifier* spec, Expression* expr, int* outp);
+  void computeFixedArraySizes(TypeSpecifier* spec,
+                              Type* base,
+                              Vector<Rank>& ranks,
+                              size_t rank_index,
+                              ArrayLiteral* expr);
+  Vector<Rank> fixedArrayLiteralDimensions(TypeSpecifier* spec, Type* base, Expression* expr);
 
   Type *resolveTypeIfNeeded(TypeExpr &te) {
     if (te.resolved())
@@ -98,12 +126,12 @@ class TypeResolver
 
   void resolveTypesInSignature(FunctionSignature *sig);
   void resolveConstant(ConstantSymbol *sym);
-  Type *resolveType(TypeExpr &te, TypeSpecHelper *helper = nullptr, const Vector<int> *arrayInitData = nullptr);
+  Type *resolveType(TypeExpr &te, TypeSpecHelper *helper = nullptr);
   Type *resolveBaseType(TypeSpecifier *spec);
   Type *resolveNameToType(NameProxy *proxy);
-  Type *resolveArrayComponentTypes(TypeSpecifier *spec,
-                                   Type *type,
-                                   const Vector<int> *arrayInitData = nullptr);
+  Type *resolveArrayComponentTypes(TypeSpecifier* spec,
+                                   Type* type,
+                                   Expression* init);
   bool resolveEnumConstantValue(EnumConstant *cs, int *outp);
 
  private:
@@ -121,7 +149,7 @@ class TypeResolver
 class TypeSpecHelper
 {
  public:
-  virtual const Vector<int> *arrayInitData() const {
+  virtual Expression* initializer() const {
     return nullptr;
   }
   virtual VarDecl* decl() const {
@@ -132,14 +160,21 @@ class TypeSpecHelper
 class VarDeclSpecHelper : public TypeSpecHelper
 {
  public:
-  VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData);
+  VarDeclSpecHelper(VarDecl* decl, Expression* initializer)
+   : decl_(decl),
+     initializer_(initializer)
+  {}
 
-  const Vector<int> *arrayInitData() const override;
-  VarDecl* decl() const override;
+  VarDecl* decl() const override {
+    return decl_;
+  }
+  Expression* initializer() const override {
+    return initializer_;
+  }
 
  private:
-  VarDecl *decl_;
-  const Vector<int> *array_init_;
+  VarDecl* decl_;
+  Expression* initializer_;
 };
 
 } // namespace sp

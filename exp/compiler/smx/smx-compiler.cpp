@@ -19,8 +19,10 @@
 #include "parser/ast.h"
 #include "scopes.h"
 #include "smx-compiler.h"
+#include "array-helpers.h"
 #include <amtl/am-algorithm.h>
 #include <amtl/am-maybe.h>
+#include <amtl/am-string.h>
 #include <smx/smx-v1.h>
 #include <sp_vm_types.h>
 
@@ -29,6 +31,7 @@
 namespace sp {
 
 static bool HasSimpleCellStorage(Type* type);
+static cell_t GetCellFromBox(const BoxedValue& box);
 
 typedef SmxListSection<sp_file_natives_t> SmxNativeSection;
 typedef SmxListSection<sp_file_publics_t> SmxPublicSection;
@@ -95,7 +98,7 @@ SmxCompiler::add_code()
   RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
   code->header().codesize = masm_.buffer_length();
   code->header().cellsize = sizeof(cell_t);
-  code->header().codeversion = 12;
+  code->header().codeversion = 13;
   code->header().flags = CODEFLAG_DEBUG;
   code->header().main = 0;
   code->header().code = sizeof(sp_file_code_t);
@@ -330,7 +333,24 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
 {
   // :TODO: assert not const
   VariableSymbol* sym = stmt->sym();
-  int32_t size = compute_storage_size(sym->type());
+
+  int32_t size;
+
+  ArrayInfo array_info;
+  ArrayType* array_type = sym->type()->isArray()
+                          ? sym->type()->toArray()
+                          : nullptr;
+  if (array_type && array_type->hasFixedLength()) {
+    if (!ComputeArrayInfo(array_type, &array_info)) {
+      cc_.report(stmt->loc(), rmsg::array_too_big);
+      return;
+    }
+    size = array_info.bytes;
+  } else {
+    size = compute_storage_size(sym->type());
+  }
+
+  assert(ke::IsAligned(size_t(size), sizeof(cell_t)));
 
   switch (sym->scope()->kind()) {
     case Scope::Block:
@@ -350,17 +370,50 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
       break;
   }
 
-  if (sema::Expr* init = stmt->sema_init()) {
-    if (!HasSimpleCellStorage(sym->type())) {
-      cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
-        "var-decl-init", BuildTypeName(sym->type());
-      return;
-    }
+  sema::Expr* init = stmt->sema_init();
 
-    store_into(sym, init);
-  } else {
-    // assert(false);
-    // :TODO: store 0
+  if (sym->type()->isArray()) {
+    ArrayType* at = sym->type()->toArray();
+    if (at->hasFixedLength()) {
+      // If |init| is non-null, it should be an array literal.
+      sema::ArrayInitExpr* array_init = nullptr;
+      if (init)
+        array_init = init->toArrayInitExpr();
+
+      initialize_array(sym, array_init, array_info);
+    } else {
+      assert(false);
+    }
+    return;
+  }
+
+  // If we don't have an array, we should be assigning a simple type.
+  assert(HasSimpleCellStorage(sym->type()));
+
+  // Small optimization - treat constant zero as no initializer. We'll
+  // fallthrough below. :TODO: make sure this works for floats.
+  int32_t value;
+  if (init && init->getConstantInt32(&value) && !value)
+    init = nullptr;
+
+  if (init) {
+    if (!emit_into(init, ValueDest::Pri))
+      return;
+
+    emit_store(sym, ValueDest::Pri);
+    return;
+  }
+
+  // No initializer, do it manually.
+  switch (sym->storage()) {
+    case StorageClass::Argument:
+    case StorageClass::Local:
+      __ opcode(OP_ZERO_S, sym->address());
+      break;
+
+    default:
+      cc_.report(stmt->loc(), rmsg::unimpl_kind) <<
+        "unexpected storage class" << int32_t(sym->storage());
   }
 }
 
@@ -379,7 +432,7 @@ SmxCompiler::generateReturn(ast::ReturnStatement* stmt)
   if (sema::Expr* expr = stmt->sema_expr())
     emit_into(expr, ValueDest::Pri);
   else
-    __ opcode(OP_CONST_PRI, 0);
+    __ opcode(OP_ZERO_PRI);
   __ opcode(OP_RETN);
 }
 
@@ -615,15 +668,15 @@ SmxCompiler::emitConstValue(sema::ConstValueExpr* expr, ValueDest dest)
   const BoxedValue& box = expr->value();
 
   switch (box.kind()) {
-  case BoxedValue::Kind::Integer:
-  {
-    const IntValue& iv = box.toInteger();
-    assert(iv.valueFitsInInt32());
-    value = (int32_t)iv.asSigned();
-    break;
-  }
-  default:
-    assert(false);
+    case BoxedValue::Kind::Integer:
+    {
+      const IntValue& iv = box.toInteger();
+      assert(iv.valueFitsInInt32());
+      value = (int32_t)iv.asSigned();
+      break;
+    }
+    default:
+      assert(false);
   }
 
   emit_const(dest, value);
@@ -672,8 +725,6 @@ SmxCompiler::emitStore(sema::StoreExpr* expr, ValueDest requested)
 
   // There are many special case opcodes for assigning to variables.
   if (sema::VarExpr* var = lvalue->asVarExpr()) {
-    VariableSymbol* sym = var->sym();
-
     // We need a temporary register, so we have to ignore stack requests.
     ValueDest dest = requested;
     if (dest == ValueDest::Stack)
@@ -682,33 +733,8 @@ SmxCompiler::emitStore(sema::StoreExpr* expr, ValueDest requested)
     if (!emit_into(right, dest))
       return ValueDest::Error;
 
-    switch (sym->storage()) {
-      case StorageClass::Argument:
-      case StorageClass::Local:
-        if (sym->type()->isReference()) {
-          if (dest == ValueDest::Pri)
-            __ opcode(OP_SREF_S_PRI, sym->address());
-          else
-            __ opcode(OP_SREF_S_ALT, sym->address());
-        } else {
-          if (dest == ValueDest::Pri)
-            __ opcode(OP_STOR_S_PRI, sym->address());
-          else
-            __ opcode(OP_STOR_S_ALT, sym->address());
-        }
-        return dest;
-
-      case StorageClass::Global:
-        if (dest == ValueDest::Pri)
-          __ opcode(OP_STOR_PRI, sym->address());
-        else
-          __ opcode(OP_STOR_ALT, sym->address());
-        return dest;
-
-      default:
-        assert(false);
-    }
-    return ValueDest::Error;
+    emit_store(var->sym(), dest);
+    return dest;
   }
 
   // No special cases are available for other l-value types. Use addresses.
@@ -1038,7 +1064,26 @@ SmxCompiler::generateData(ast::VarDecl* decl)
   int32_t address = int32_t(data_.pos());
   sym->allocate(StorageClass::Global, address);
 
-  data_.write<cell_t>(0);
+  if (sym->type()->isArray()) {
+    ArrayType* array = sym->type()->toArray();
+    if (!array->hasFixedLength()) {
+      // This should never happen.
+      assert(false);
+      return;
+    }
+
+    ArrayInfo info;
+    if (!ComputeArrayInfo(array, &info)) {
+      cc_.report(sym->node()->loc(), rmsg::array_too_big);
+      return;
+    }
+
+    initialize_array(sym, decl->sema_init(), info);
+    return;
+  }
+
+  if (!data_.write<cell_t>(0))
+    return;
 
   sema::Expr* init = decl->sema_init();
   if (!init)
@@ -1048,6 +1093,7 @@ SmxCompiler::generateData(ast::VarDecl* decl)
   switch (init->kind()) {
     case sema::ExprKind::ConstValue:
     {
+      // :TODO: use getBoxedValue and getCellBox
       sema::ConstValueExpr* expr = init->toConstValueExpr();
       const BoxedValue& value = expr->value();
       if (value.isInteger()) {
@@ -1234,10 +1280,12 @@ SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
     if (!emit_into(expr->base(), ValueDest::Pri))
       return ValueDest::Error;
 
-    if (atype->isString())
-      __ opcode(OP_ADD_C, const_index);
-    else
-      __ opcode(OP_ADD_C, const_index * sizeof(cell_t));
+    if (const_index != 0) {
+      if (atype->isString())
+        __ opcode(OP_ADD_C, const_index);
+      else
+        __ opcode(OP_ADD_C, const_index * sizeof(cell_t));
+    }
   } else {
     if (!emit_into(expr->base(), ValueDest::Alt))
       return ValueDest::Error;
@@ -1255,6 +1303,12 @@ SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
     else
       __ opcode(OP_IDXADDR);
   }
+
+  // See the comment in SemanticAnalysis::visitIndex. We use indirection
+  // vectors and must force a load.
+  Type* contained = atype->contained();
+  if (contained->isArray() && contained->toArray()->hasFixedLength())
+    __ opcode(OP_LOAD_I);
 
   return ValueDest::Pri;
 }
@@ -1295,9 +1349,9 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
     case StorageClass::Global:
       assert(!type->isReference());
       if (dest == ValueDest::Pri)
-        __ opcode(OP_CONST_PRI, sym->address());
+        __ const_pri(sym->address());
       else if (dest == ValueDest::Alt)
-        __ opcode(OP_CONST_ALT, sym->address());
+        __ const_alt(sym->address());
       else if (dest == ValueDest::Stack)
         __ opcode(OP_PUSH_C, sym->address());
       return dest;
@@ -1308,7 +1362,6 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
       return ValueDest::Error;
   }
 }
-
 
 ValueDest
 SmxCompiler::emit_load(sema::VarExpr* expr, ValueDest dest)
@@ -1362,24 +1415,219 @@ SmxCompiler::emit_load(sema::VarExpr* expr, ValueDest dest)
   }
 }
 
+void
+SmxCompiler::emit_store(VariableSymbol* sym, ValueDest src)
+{
+  switch (sym->storage()) {
+    case StorageClass::Argument:
+    case StorageClass::Local:
+      if (sym->type()->isReference()) {
+        if (src == ValueDest::Pri)
+          __ opcode(OP_SREF_S_PRI, sym->address());
+        else
+          __ opcode(OP_SREF_S_ALT, sym->address());
+      } else {
+        if (src == ValueDest::Pri)
+          __ opcode(OP_STOR_S_PRI, sym->address());
+        else
+          __ opcode(OP_STOR_S_ALT, sym->address());
+      }
+      return;
+
+    case StorageClass::Global:
+      if (src == ValueDest::Pri)
+        __ opcode(OP_STOR_PRI, sym->address());
+      else
+        __ opcode(OP_STOR_ALT, sym->address());
+      return;
+
+    default:
+      assert(false);
+  }
+}
+
+void
+SmxCompiler::initialize_array(VariableSymbol* sym, sema::Expr* expr, const ArrayInfo& info)
+{
+  // Make sure we have enough space in DAT.
+  if (!ke::IsUint64AddSafe(data_.size(), info.bytes) ||
+      (uint64_t(data_.size()) + uint64_t(info.bytes)) > INT_MAX)
+  {
+    cc_.report(sym->node()->loc(), rmsg::array_too_big);
+    return;
+  }
+
+  int32_t base = int32_t(data_.pos());
+  if (!data_.preallocate(info.bytes)) {
+    cc_.report(sym->node()->loc(), rmsg::outofmemory);
+    return;
+  }
+
+  // Fill with zeroes to make gen_array_data simpler.
+  memset(data_.ptr<char>(base), 0, info.bytes);
+
+  // :TODO: static.
+  bool is_global = (sym->storage() == StorageClass::Global);
+
+  ArrayBuilder builder;
+  builder.info = &info;
+  builder.base_delta = (is_global ? 0 : base);
+  builder.iv_cursor = base;
+  builder.data_cursor = base + info.iv_size;
+
+  gen_array_iv(info.base_type, expr, builder);
+
+  // If we generated everything correctly, we should have filled up the IV
+  // space as well as the data space.
+  assert(builder.iv_cursor == base + info.iv_size);
+  assert(builder.data_cursor == base + info.bytes);
+
+  // Nothing more needed for global/static arrays.
+  if (is_global)
+    return;
+
+  // For local arrays, we need to copy over data and rebase the iv section.
+  if (info.iv_size) {
+    __ opcode(OP_ADDR_PRI, sym->address());
+    __ opcode(OP_REBASE, base, info.iv_size, info.data_size);
+  } else {
+    __ opcode(OP_ADDR_ALT, sym->address());
+    __ const_pri(base);
+    __ opcode(OP_MOVS, info.bytes);
+  }
+}
+
+// This function computes a template for an N-dimensional array. Let's take a
+// look at two examples:
+//
+//    int b[2][3] = { ... };
+//
+// This array should have the following cells:
+//
+//    &b[0][0]  &b[1][0]  b[0][0]  b[0][1]  b[0][2]
+//
+//     b[0][3]   b[1][0]  b[1][1]  b[1][2]
+//
+// The first two cells are an "indirection vector" - an array of pointers to
+// successive arrays. Without this model, it would be impossible to pass a
+// fixed-length multi-dimensional array into a dynamically sized array type.
+//
+// Another example:
+//    int b[2][3][4];
+//
+// Will contain:
+//
+//    &b[0][0]     &b[1][0]     &b[0][0][0]  &b[0][1][0]
+//
+//    &b[0][2][0]  &b[1][0][0]  &b[1][1][0]  &b[1][2][0]
+//
+//     b[0][0][0]   b[0][0][1]   b[0][0][2]   b[0][0][3]
+//
+// Etc. In this case, |b| contains a 2-entry indirection vector, and each
+// array it points to has a 3-entry indirection vector pointing to the final
+// dimension.
+//
+// We place all indirection vectors next to each other to simplify rebasing
+// the template data at runtime. It is, however, possible to interleave the
+// data. We don't specify how it must be constructed.
+//
+// The original Pawn did not require rebasing the template data. Instead,
+// each address was relative to the base of the vector. We move away from that
+// in SP2 for a few reasons. It's complicated and obscure, it does not reflect
+// how multi-dimensional arrays work in other languages, and it is unclear how
+// to make dynamic arrays and slices work in such a model.
+cell_t
+SmxCompiler::gen_array_iv(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
+{
+  Type* contained = type->contained();
+  if (!contained->isArray())
+    return gen_array_data(type, expr, b);
+
+  // This case is currently not possible, syntactically, because we will take
+  // the dynamic genarray path.
+  ArrayType* child = contained->toArray();
+  if (!child->hasFixedLength())
+    return gen_array_data(type, expr, b);
+
+  // We're an outer dimension in a multi-dimensional array. Reserve space for
+  // our indirection vector.
+  int32_t iv_addr = b.iv_cursor;
+  b.iv_cursor += type->fixedLength() * sizeof(cell_t);
+
+  sema::ArrayInitExpr* init = expr ? expr->toArrayInitExpr() : nullptr;
+  for (int32_t i = 0; i < type->fixedLength(); i++) {
+    sema::Expr* child_init = init && size_t(i) < init->exprs()->length()
+                             ? init->exprs()->at(i)
+                             : nullptr;
+    int32_t next_array = gen_array_iv(child, child_init, b);
+
+    int32_t iv_entry_addr = iv_addr + (i * sizeof(cell_t));
+    *data_.ptr<cell_t>(iv_entry_addr) = next_array - b.base_delta;
+  }
+  return iv_addr;
+}
+
+cell_t
+SmxCompiler::gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
+{
+  int32_t data_addr = b.data_cursor;
+  b.data_cursor += b.info->data_width;
+
+  // If there's no expr, we're done... we pre-filled everything to 0 already.
+  if (!expr)
+    return data_addr;
+
+  Type* contained = type->contained();
+  if (contained->isPrimitive(PrimitiveType::Char)) {
+    char* ptr = data_.ptr<char>(data_addr);
+
+    if (expr) {
+      if (sema::StringExpr* lit = expr->toStringExpr()) {
+        ke::SafeStrcpy(ptr, b.info->data_width, lit->literal()->chars());
+      } else {
+        // :TODO: test  = {'a', 'b', 'c', 0} ....
+        assert(false);
+      }
+    }
+    return data_addr;
+  }
+
+  cell_t value = 0;
+  sema::ArrayInitExpr* lit = expr->toArrayInitExpr();
+
+  for (size_t i = 0; i < size_t(type->fixedLength()); i++) {
+    if (i < lit->exprs()->length()) {
+      sema::Expr* ev = lit->exprs()->at(i);
+      BoxedValue box;
+      if (!ev->getBoxedValue(&box)) {
+        // This should never happen.
+        cc_.report(ev->src()->loc(), rmsg::unimpl_kind) <<
+          "smx-gen-array-data" << ev->prettyName();
+        continue;
+      }
+
+      // :TODO: test enums, floats, etc.
+      value = GetCellFromBox(box);
+    } else if (!lit->repeat_last_element()) {
+      break;
+    }
+    *data_.ptr<cell_t>(data_addr + i * sizeof(cell_t)) = value;
+  }
+
+  return data_addr;
+}
+
 static inline OPCODE
 BinaryOpHasInlineTest(TokenKind kind)
 {
   switch (kind) {
-    case TOK_EQUALS:
-      return OP_JEQ;
-    case TOK_NOTEQUALS:
-      return OP_JNEQ;
-    case TOK_GT:
-      return OP_JSGRTR;
-    case TOK_GE:
-      return OP_JSGEQ;
-    case TOK_LT:
-      return OP_JSLESS;
-    case TOK_LE:
-      return OP_JSLEQ;
-    default:
-      return OP_NOP;
+    case TOK_EQUALS: return OP_JEQ;
+    case TOK_NOTEQUALS: return OP_JNEQ;
+    case TOK_GT: return OP_JSGRTR;
+    case TOK_GE: return OP_JSGEQ;
+    case TOK_LT: return OP_JSLESS;
+    case TOK_LE: return OP_JSLEQ;
+    default: return OP_NOP;
   }
 }
 
@@ -1387,18 +1635,12 @@ static inline OPCODE
 InvertTestOp(OPCODE op)
 {
   switch (op) {
-    case OP_JEQ:
-      return OP_JNEQ;
-    case OP_JNEQ:
-      return OP_JEQ;
-    case OP_JSGRTR:
-      return OP_JSLEQ;
-    case OP_JSGEQ:
-      return OP_JSLESS;
-    case OP_JSLESS:
-      return OP_JSGEQ;
-    case OP_JSLEQ:
-      return OP_JSGRTR;
+    case OP_JEQ: return OP_JNEQ;
+    case OP_JNEQ: return OP_JEQ;
+    case OP_JSGRTR: return OP_JSLEQ;
+    case OP_JSGEQ: return OP_JSLESS;
+    case OP_JSLESS: return OP_JSGEQ;
+    case OP_JSLEQ: return OP_JSGRTR;
     default:
       assert(false);
       return OP_NOP;
@@ -1557,10 +1799,10 @@ SmxCompiler::emit_const(ValueDest dest, cell_t value)
 
   switch (dest) {
     case ValueDest::Pri:
-      __ opcode(OP_CONST_PRI, value);
+      __ const_pri(value);
       break;
     case ValueDest::Alt:
-      __ opcode(OP_CONST_ALT, value);
+      __ const_alt(value);
       break;
     case ValueDest::Stack:
       __ opcode(OP_PUSH_C, value);
@@ -1681,38 +1923,11 @@ HasSimpleCellStorage(Type* type)
   }
 }
 
-void
-SmxCompiler::store_into(VariableSymbol* sym, sema::Expr* init)
-{
-  Type* type = sym->type();
-  assert(HasSimpleCellStorage(type));
-
-  switch (sym->scope()->kind()) {
-    case Scope::Block:
-      emit_into(init, ValueDest::Pri);
-      __ opcode(OP_STOR_S_PRI, sym->address());
-      break;
-
-    default:
-      cc_.report(SourceLocation(), rmsg::unimpl_kind) <<
-        "store-int-scope-kind" << int32_t(sym->scope()->kind());
-  }
-}
-
 int32_t
 SmxCompiler::compute_storage_size(Type* type)
 {
   if (HasSimpleCellStorage(type))
     return sizeof(cell_t);
-
-  if (type->isArray()) {
-    ArrayType* atype = type->toArray();
-    assert(atype->hasFixedLength());
-
-    if (atype->isString())
-      return ke::Align(atype->fixedLength(), sizeof(cell_t));
-    return atype->fixedLength() * sizeof(cell_t);
-  }
 
   cc_.report(SourceLocation(), rmsg::unimpl_kind) <<
     "smx-storage-size" << int32_t(type->canonicalKind());
@@ -1725,6 +1940,20 @@ SmxCompiler::sort_functions(const void* a1, const void* a2)
   FunctionEntry& f1 = *(FunctionEntry *)a1;
   FunctionEntry& f2 = *(FunctionEntry *)a2;
   return strcmp(f1.name->chars(), f2.name->chars());
+}
+
+static cell_t
+GetCellFromBox(const BoxedValue& box)
+{
+  if (box.isBool())
+    return box.toBool() ? 1 : 0;
+  if (box.isInteger()) {
+    const IntValue& iv = box.toInteger();
+    assert(iv.valueFitsInInt32());
+    return (int32_t)iv.asSigned();
+  }
+  assert(false);
+  return 0;
 }
 
 } // namespace sp

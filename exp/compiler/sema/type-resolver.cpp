@@ -24,8 +24,6 @@ namespace sp {
 using namespace ke;
 using namespace ast;;
 
-const int TypeResolver::kRankUnvisited = INT_MIN;
-
 template <typename T>
 class AutoPush
 {
@@ -197,7 +195,7 @@ TypeResolver::visitVarDecl(VarDecl *node)
   }
 
   Type* type;
-  if (TypeSpecifier *spec = node->te().spec()) {
+  if (TypeSpecifier* spec = node->te().spec()) {
     // We always infer sizes for postdims in variable scope. In argument
     // scope, we don't want something like:
     //
@@ -211,20 +209,11 @@ TypeResolver::visitVarDecl(VarDecl *node)
     //
     // Note: we should not be able to recurse from inside this block. If it
     // could, we'd have to mark spec as resolving earlier.
-    Vector<int> literal_dims;
-    if (Expression *init = node->initialization()) {
-      if (spec->hasPostDims() && !sym->isArgument()) {
-        // Compute the dimensions of initializers in case the declaration type
-        // requires inference.
-        if (ArrayLiteral *lit = init->asArrayLiteral()) {
-          literal_dims = fixedArrayLiteralDimensions(spec, lit);
-        } else if (StringLiteral *lit = init->asStringLiteral()) {
-          literal_dims.append(lit->arrayLength());
-        }
-      }
-    }
+    Expression* initializer = nullptr;
+    if (!sym->isArgument() && spec->hasPostDims())
+      initializer = node->initialization();
 
-    VarDeclSpecHelper helper(node, &literal_dims);
+    VarDeclSpecHelper helper(node, initializer);
     type = resolveType(node->te(), &helper);
   } else {
     type = node->te().resolved();
@@ -636,76 +625,130 @@ TypeResolver::resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, in
 }
 
 void
-TypeResolver::updateComputedRankSize(Vector<int> &out, size_t rank, int size)
+TypeResolver::computeFixedArraySizes(TypeSpecifier* spec,
+                                     Type* base,
+                                     Vector<Rank>& ranks,
+                                     size_t rank_index,
+                                     ArrayLiteral* list)
 {
-  if (out[rank] == kRankUnvisited) {
-    // If we've never visited this rank before, give it whatever we're inputing
-    // as the initial size.
-    out[rank] = size;
-  } else if (out[rank] >= ArrayType::kUnsized && out[rank] != size) {
-    // If we previously detected a fixed size or dynamic size for this rank,
-    // and now are receiving a different size, mark the rank size as
-    // indeterminate.
-    out[rank] = ArrayType::kIndeterminate;
-  }
-}
-
-void
-TypeResolver::computeFixedArrayLiteralDimensions(ArrayLiteral *root, size_t rank, size_t highestUnknownRank, Vector<int> &out)
-{
-  if (rank >= highestUnknownRank) {
-    // Either we've reached the end of the [] sequences on the type, or all
-    // further ranks are known to have a size.
+  // :TODO: test when literals are too deeply nested
+  if (rank_index >= ranks.length())
     return;
-  }
 
-  for (size_t i = 0; i < root->expressions()->length(); i++) {
-    Expression *expr = root->expressions()->at(i);
-    if (ArrayLiteral *lit = expr->asArrayLiteral()) {
-      if (lit->isFixedArrayLiteral()) {
-        updateComputedRankSize(out, rank, lit->arrayLength());
-        computeFixedArrayLiteralDimensions(lit, rank + 1, highestUnknownRank, out);
-      } else {
-        updateComputedRankSize(out, rank, ArrayType::kUnsized);
-      }
-    } else if (StringLiteral *lit = expr->asStringLiteral()) {
-      updateComputedRankSize(out, rank, lit->arrayLength());
+  Rank& rank = ranks[rank_index];
+  for (size_t i = 0; i < list->expressions()->length(); i++) {
+    Expression* expr = list->expressions()->at(i);
+    int size = -1;
+    if (ArrayLiteral* lit = expr->asArrayLiteral()) {
+      size = lit->arrayLength();
+      computeFixedArraySizes(spec, base, ranks, rank_index + 1, lit);
+    } else if (StringLiteral* lit = expr->asStringLiteral()) {
+      // String literals are only valid in the last rank.
+      if (rank_index == spec->rank() - 1)
+        size = lit->arrayLength();
+      else
+        size = -1;
     } else {
       // If we get here, we either have an invalid construction that looks
       // something like:
       //  int a[][] = { 3 };
       //
       // I.e., the user has specified more array dimensions than there are
-      // arrays in the literal. We just mark as indeterminate since we'll
-      // error for real in the semantic analysis pass.
-      updateComputedRankSize(out, rank, ArrayType::kIndeterminate);
+      // arrays in the literal.
+    }
+
+    if (rank.status == RankStatus::Indeterminate ||
+        rank.status == RankStatus::Determinate)
+    {
+      continue;
+    }
+
+    if (size == -1) {
+      rank.status = RankStatus::Indeterminate;
+
+      cc_.report(expr->loc(), rmsg::incomplete_array_literal);
+    } else if (rank.status == RankStatus::Unvisited) {
+      rank.status = RankStatus::Computed;
+      rank.size = size;
+    } else {
+      assert(rank.status == RankStatus::Computed);
+      if (base->isPrimitive(PrimitiveType::Char)) {
+        // Strings are null-terminated, so we pick the maximum size of any
+        // entry in the last dimension.
+        rank.size = ke::Max(rank.size, size);
+      } else if (rank.size != size) {
+        rank.status = RankStatus::Indeterminate;
+
+        cc_.report(expr->loc(), rmsg::array_literal_size_mismatch);
+      }
     }
   }
 }
 
-Vector<int>
-TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier *spec, ArrayLiteral *lit)
+Vector<Rank>
+TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier* spec, Type* base, Expression* init)
 {
-  Vector<int> out;
-
-  size_t highestUnknownRank = 0;
+  Vector<Rank> ranks;
   for (size_t i = 0; i < spec->rank(); i++) {
-    if (!spec->sizeOfRank(i))
-      highestUnknownRank = i + 1;
-    out.append(kRankUnvisited);
+    Rank rank;
+    if (spec->sizeOfRank(i))
+      rank.status = RankStatus::Determinate;
+    ranks.append(rank);
   }
 
-  if (highestUnknownRank > 0) {
-    // Some dimensions were unsized. Compute fixed sizes (if possible) from
-    // the initializer. This is a recursive process so we can try to create
-    // uniform fixed lengths for each sub-array, as SourcePawn 1 did.
-    updateComputedRankSize(out, 0, lit->arrayLength());
-    computeFixedArrayLiteralDimensions(lit, 1, highestUnknownRank, out);
+  // Peel off dimensions where the size is already known.
+  while (!ranks.empty() && ranks.back().status == RankStatus::Determinate)
+    ranks.pop();
+
+  if (ranks.empty())
+    return ranks;
+
+  if (StringLiteral* str = init->asStringLiteral()) {
+    if (spec->rank() != 1) {
+      cc_.report(init->loc(), rmsg::incomplete_array_literal);
+      return ranks;
+    }
+
+    ranks[0].status = RankStatus::Computed;
+    ranks[0].size = str->arrayLength();
+    return ranks;
   }
+
+  ArrayLiteral* lit = init->asArrayLiteral();
+  if (!lit) {
+    cc_.report(init->loc(), rmsg::incomplete_array_literal);
+    return ranks;
+  }
+
+  // Some dimensions were unsized. Compute fixed sizes (if possible) from
+  // the initializer. This is a recursive process so we can try to create
+  // uniform fixed lengths for each sub-array, as SourcePawn 1 did.
+  if (ranks[0].status != RankStatus::Determinate) {
+    ranks[0].status = RankStatus::Computed;
+    ranks[0].size = lit->arrayLength();
+  }
+  if (ranks.length() > 1)
+    computeFixedArraySizes(spec, base, ranks, 1, lit);
+
+  // If we have no indeterminate arrays, then everything should have been
+  // visited. If we do have indeterminate arrays, an error has been reported.
+  // This assertion is to make sure we did indeed report an error.
+#if !defined(NDEBUG)
+  bool has_indeterminate = false;
+  bool has_unvisited = false;
+  for (size_t i = 0; i < ranks.length(); i++) {
+    if (ranks[i].status == RankStatus::Indeterminate)
+      has_indeterminate = true;
+    else if (ranks[i].status == RankStatus::Unvisited)
+      has_unvisited = true;
+  }
+  if (has_unvisited)
+    assert(has_indeterminate);
+#endif
 
   // Return the computed list unadultered - resolveArrayComponentTypes()
   // will correctly merge with the TypeSpecifier.
-  return out;
+  return ranks;
 } 
 
 void
@@ -739,13 +782,13 @@ TypeResolver::resolveConstant(ConstantSymbol *sym)
   assert(sym->hasValue());
 }
 
-Type *
-TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int> *arrayInitData)
+Type*
+TypeResolver::resolveType(TypeExpr& te, TypeSpecHelper* helper)
 {
   if (te.resolved())
     return te.resolved();
 
-  TypeSpecifier *spec = te.spec();
+  TypeSpecifier* spec = te.spec();
   if (spec->isResolving()) {
     cc_.report(spec->baseLoc(), rmsg::recursive_type);
 
@@ -756,14 +799,14 @@ TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int
 
   spec->setResolving();
 
-  Type *baseType = resolveBaseType(spec);
+  Type* baseType = resolveBaseType(spec);
   if (!baseType) {
     // Return a placeholder so we don't have to check null everywhere.
     te.setResolved(&UnresolvableType);
     return te.resolved();
   }
 
-  Type *type = baseType;
+  Type* type = baseType;
 
   // See the big note in applyConstQualifier. For array types, the const
   // is applied to the inner type. The same is true for reference types.
@@ -772,7 +815,7 @@ TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int
 
   // Create types for each rank of an array.
   if (spec->rank())
-    type = resolveArrayComponentTypes(spec, type, arrayInitData);
+    type = resolveArrayComponentTypes(spec, type, helper->initializer());
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -903,27 +946,37 @@ TypeResolver::resolveNameToType(NameProxy *proxy)
   return sym->type();
 }
 
-Type *
-TypeResolver::resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const Vector<int> *arrayInitData)
+Type*
+TypeResolver::resolveArrayComponentTypes(TypeSpecifier* spec, Type* type, Expression* initializer)
 {
   checkArrayInnerType(spec, type);
 
-  size_t rank = spec->rank() - 1;
+  Vector<Rank> ranks;
+  if (initializer)
+    ranks = fixedArrayLiteralDimensions(spec, type, initializer);
+
+  size_t rank_index = spec->rank() - 1;
   do {
     int arraySize = ArrayType::kUnsized;
-    Expression *expr = spec->sizeOfRank(rank);
+    Expression *expr = spec->sizeOfRank(rank_index);
     if (expr) {
       // Should either be old-style, or fixed-array style.
       assert(spec->isOldDecl() || spec->hasPostDims());
 
       resolveConstantArraySize(spec, expr, &arraySize);
-    } else if (arrayInitData && rank < arrayInitData->length()) {
+    } else if (rank_index < ranks.length()) {
       // Should either be old-style, or fixed-array style.
       assert(spec->isOldDecl() || spec->hasPostDims());
 
-      // Use an inferred length if one is available.
-      if (arrayInitData->at(rank) != kRankUnvisited)
-        arraySize = arrayInitData->at(rank);
+      // If the size had an Expr, 
+      const Rank& r = ranks[rank_index];
+      assert(r.status != RankStatus::Unvisited);
+      assert(r.status != RankStatus::Determinate);
+
+      // If the status is Indeterminate, then we already threw an error earlier,
+      // so we just keep going to gather any more errors.
+      if (r.status == RankStatus::Computed)
+        arraySize = r.size;
 
       if (arraySize > ArrayType::kMaxSize)
         cc_.report(spec->arrayLoc(), rmsg::array_size_too_large);
@@ -931,7 +984,7 @@ TypeResolver::resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const 
 
     // :TODO: constify
     type = cc_.types()->newArray(type, arraySize);
-  } while (rank--);
+  } while (rank_index--);
   return type;
 }
 
@@ -1032,26 +1085,6 @@ TypeResolver::assignTypeToTypedef(TypedefDecl* decl, TypedefType* def, Type* act
   }
 
   def->resolve(actual);
-}
-
-VarDeclSpecHelper::VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData)
- : decl_(decl),
-   array_init_(arrayInitData)
-{
-}
-
-const Vector<int> *
-VarDeclSpecHelper::arrayInitData() const
-{
-  return array_init_ && array_init_->length() > 0
-         ? array_init_
-         : nullptr;
-}
-
-VarDecl*
-VarDeclSpecHelper::decl() const
-{
-  return decl_;
 }
 
 } // namespace sp

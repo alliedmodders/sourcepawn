@@ -86,6 +86,7 @@ class SemanticAnalysis
 
   sema::Expr* initializer(ast::Expression* expr, Type* type);
   sema::Expr* struct_initializer(ast::StructInitializer* expr, Type* type);
+  sema::Expr* array_initializer(ast::ArrayLiteral* expr, Type* type);
 
  private:
   enum class ReturnStatus {

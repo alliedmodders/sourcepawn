@@ -36,6 +36,8 @@ SemanticAnalysis::coerce(EvalContext& ec)
   if (!ec.from) {
     assert(ec.from_src);
     ec.from = visitExpression(ec.from_src);
+    if (!ec.from)
+      return false;
   }
 
   // Our initial result starts from the given expression.
@@ -47,10 +49,8 @@ SemanticAnalysis::coerce(EvalContext& ec)
   // If types have the same identity, we can shortcut and return immediately,
   // unless the coercion kind is RValue.
   if (from == to) {
-    if (ec.ck == CoercionKind::RValue) {
-      if (sema::LValueExpr* lvalue = ec.result->asLValueExpr())
-        ec.result = lvalue_to_rvalue(lvalue);
-    }
+    if (sema::LValueExpr* lvalue = ec.result->asLValueExpr())
+      ec.result = lvalue_to_rvalue(lvalue);
     return true;
   }
 
@@ -115,7 +115,7 @@ SemanticAnalysis::coerce_array(EvalContext& ec)
   // Arrays should not appear in the |to| field of most coercion kinds, yet.
   assert(ec.ck == CoercionKind::RValue ||
          ec.ck == CoercionKind::Assignment ||
-         ec.ck == CoercionKind::Return);
+         ec.ck == CoercionKind::Arg);
 
   // Assignment/return operators should never let multi-dimensional arrays enter here.
   // :TODO: ensure
@@ -133,10 +133,17 @@ SemanticAnalysis::coerce_array(EvalContext& ec)
     // fixed length array. I.e. int[2][3][4] should coerce to int[][][]. But,
     // if the destination has a fixed size, it must always match.
     if (to_iter_array->hasFixedLength()) {
-      if (!from_iter_array->hasFixedLength() ||
-          (from_iter_array->fixedLength() != to_iter_array->fixedLength()))
-      {
+      if (!from_iter_array->hasFixedLength())
         return no_conversion(ec);
+
+      if (ec.ck == CoercionKind::Assignment) {
+        // As a special exception, we allow converting from char[N] to char[M]
+        // if N<=M, since strings are null-terminated.
+        if (from_iter_array->fixedLength() > to_iter_array->fixedLength())
+          return no_conversion(ec);
+      } else {
+        if (from_iter_array->fixedLength() != to_iter_array->fixedLength())
+          return no_conversion(ec);
       }
     }
 
@@ -180,7 +187,7 @@ SemanticAnalysis::coerce_array(EvalContext& ec)
   }
 
   if (sema::LValueExpr* lval = ec.result->asLValueExpr())
-    ec.result = new (pool_) sema::LoadExpr(ec.result->src(), ec.result->type(), lval);
+    ec.result = lvalue_to_rvalue(lval);
   return true;
 }
 

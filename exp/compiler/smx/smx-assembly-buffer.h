@@ -37,6 +37,12 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     write<cell_t>(static_cast<cell_t>(op));
     write<cell_t>(param);
   }
+  void opcode(OPCODE op, cell_t param1, cell_t param2, cell_t param3) {
+    write<cell_t>(static_cast<cell_t>(op));
+    write<cell_t>(param1);
+    write<cell_t>(param2);
+    write<cell_t>(param3);
+  }
   void opcode(OPCODE op, Label* address) {
     write<cell_t>(static_cast<cell_t>(op));
     encodeAbsoluteAddress(address);
@@ -45,6 +51,19 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     write<cell_t>(static_cast<cell_t>(op));
     write<cell_t>(static_cast<cell_t>(0xb0b0b0b0));
     value->use(pc());
+  }
+
+  void const_pri(cell_t value) {
+    if (value == 0)
+      opcode(OP_ZERO_PRI);
+    else
+      opcode(OP_CONST_PRI, value);
+  }
+  void const_alt(cell_t value) {
+    if (value == 0)
+      opcode(OP_ZERO_ALT);
+    else
+      opcode(OP_CONST_ALT, value);
   }
 
   void casetbl(cell_t ncases, Label* def) {

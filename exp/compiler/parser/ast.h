@@ -487,9 +487,8 @@ class StructInitializer : public Expression
 class ArrayLiteral : public Expression
 {
  public:
-  ArrayLiteral(const SourceLocation &pos, TokenKind token, ExpressionList *expressions, bool repeatLastElement)
+  ArrayLiteral(const SourceLocation &pos, ExpressionList *expressions, bool repeatLastElement)
     : Expression(pos),
-      token_(token),
       expressions_(expressions),
       repeatLastElement_(repeatLastElement)
   {
@@ -497,15 +496,9 @@ class ArrayLiteral : public Expression
 
   DECLARE_NODE(ArrayLiteral);
 
-  TokenKind token() const {
-    return token_;
-  }
   int32_t arrayLength() const {
     assert(expressions()->length() < INT_MAX);
     return int32_t(expressions()->length());
-  }
-  bool isFixedArrayLiteral() const {
-    return token() == TOK_LBRACE;
   }
   ExpressionList *expressions() const {
     return expressions_;
@@ -515,7 +508,6 @@ class ArrayLiteral : public Expression
   }
 
  private:
-  TokenKind token_;
   ExpressionList *expressions_;
   bool repeatLastElement_;
 };

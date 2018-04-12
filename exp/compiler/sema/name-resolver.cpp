@@ -331,8 +331,8 @@ NameResolver::HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, Type
   // infer sizes from literals for arguments.
   if (init &&
       !scope->isArgument() &&
-      ((init->isArrayLiteral() && init->asArrayLiteral()->isFixedArrayLiteral()) ||
-       (init->isStringLiteral())))
+      (init->isArrayLiteral() ||
+       init->isStringLiteral()))
   {
     // Wait until the type resolution pass to figure this out. We still have
     // to precompute the base though.

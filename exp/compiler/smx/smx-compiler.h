@@ -28,6 +28,7 @@
 namespace sp {
 
 class CompileContext;
+struct ArrayInfo;
 
 class SmxCompiler
 {
@@ -101,6 +102,18 @@ private:
 
   // Helpers for l-values.
   ValueDest emit_load(sema::VarExpr* var, ValueDest dest);
+  void emit_store(VariableSymbol* sym, ValueDest src);
+
+  void initialize_array(VariableSymbol* sym, sema::Expr* expr, const ArrayInfo& info);
+
+  struct ArrayBuilder {
+    const ArrayInfo* info;
+    int32_t base_delta;
+    int32_t iv_cursor;
+    int32_t data_cursor;
+  };
+  cell_t gen_array_iv(ArrayType* type, sema::Expr* expr, ArrayBuilder& b);
+  cell_t gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b);
 
 private:
   // Signal that the given register is about to be clobbered.
@@ -131,9 +144,6 @@ private:
 
   // Restore a register that was previously saved.
   void restore(uint64_t id);
-
-  // Simple assignment.
-  void store_into(VariableSymbol* sym, sema::Expr* init);
 
   int32_t compute_storage_size(Type* type);
 

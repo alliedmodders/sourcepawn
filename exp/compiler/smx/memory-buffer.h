@@ -19,6 +19,7 @@
 #define _include_sp_memory_buffer_h_
 
 #include <stdio.h>
+#include <string.h>
 
 namespace sp {
 
@@ -76,6 +77,22 @@ class MemoryBuffer : public ISmxBuffer
   }
   bool outOfMemory() const {
     return oom_;
+  }
+
+  template <typename T>
+  T* ptr(size_t where) {
+    assert(where < pos());
+    return reinterpret_cast<T*>(bytes() + where);
+  }
+
+  bool preallocate(size_t bytes) {
+    if (size_t(end_ - pos_) < bytes) {
+      if (!grow(bytes))
+        return false;
+    }
+    memset(pos_, 0xcd, bytes);
+    pos_ += bytes;
+    return true;
   }
 
  private:

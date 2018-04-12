@@ -44,6 +44,7 @@ namespace sema {
   _(String)               \
   _(IncDec)               \
   _(StructInit)           \
+  _(ArrayInit)            \
   _(Index)                \
   _(Load)                 \
   _(Slice)                \
@@ -115,6 +116,7 @@ protected:
 };
 
 typedef PoolList<Expr*> ExprList;
+typedef FixedPoolList<Expr*> FixedExprList;
 
 #define DECLARE_SEMA(name)                  \
   ExprKind kind() const override {          \
@@ -460,6 +462,9 @@ class StringExpr final : public Expr
   Atom* literal() const {
     return literal_;
   }
+  bool isConstant() const override {
+    return true;
+  }
 
  private:
   Atom* literal_;
@@ -486,6 +491,44 @@ class StructInitExpr final : public Expr
 
  private:
   ExprList* exprs_;
+};
+
+class ArrayInitExpr final : public Expr
+{
+ public:
+  explicit ArrayInitExpr(ast::Expression* node,
+                         Type* type,
+                         FixedExprList* exprs)
+   : Expr(node, type),
+     exprs_(exprs),
+     all_const_(false),
+     repeat_last_element_(false)
+  {}
+
+  DECLARE_SEMA(ArrayInit)
+
+  FixedExprList* exprs() const {
+    return exprs_;
+  }
+  bool repeat_last_element() const {
+    return repeat_last_element_;
+  }
+
+  bool isConstant() const override {
+    return all_const_;
+  }
+
+  void set_all_const() {
+    all_const_ = true;
+  }
+  void set_repeat_last_element() {
+    repeat_last_element_ = true;
+  }
+
+ private:
+  FixedExprList* exprs_;
+  bool all_const_;
+  bool repeat_last_element_;
 };
 
 // Turn an l-value into an r-value. This can only be used on l-values for which

@@ -66,6 +66,7 @@ binary.sources += [
   'sema/semantic-analysis.cpp',
   'sema/statements.cpp',
   'sema/type-resolver.cpp',
+  'smx/array-helpers.cpp',
   'smx/smx-builder.cpp',
   'smx/smx-compiler.cpp',
 ]

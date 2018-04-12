@@ -76,6 +76,8 @@ RMSG(no_single_line_functions,      syntax,            "function bodies must hav
 RMSG(expected_name_and_type,        syntax,            "function signature is missing either a name or a type")
 RMSG(need_view_as_operator,         syntax,            "to cast with a builtin type, use the new view_as<> operator")
 RMSG(intrinsic_not_found,           syntax,            "intrinsic set '%0' not found")
+RMSG(array_lit_not_array,           syntax,            "too many dimensions, expected an array or string literal")
+RMSG(array_lit_mixed_dims,          syntax,            "array size does not match the previous literal for this dimension")
 RMSG(view_as_example,               note,              "example: view_as<%0>(value)")
 
 // Name binding errors.
@@ -161,6 +163,13 @@ RMSG(index_must_be_integer,         type,              "array index must be an i
 RMSG(index_must_be_positive,        type,              "array index cannot be negative")
 RMSG(index_out_of_bounds,           type,              "index is out of bounds")
 RMSG(complex_array_assignment,      type,              "cannot perform nested array assignment")
+RMSG(array_literal_with_non_array,  type,              "array literal cannot be assigned to type '%0'")
+RMSG(array_literal_with_dynamic_array, type,           "array literals cannot be assigned to array '%0' with non-fixed length")
+RMSG(array_literal_too_many_exprs,  type,              "array literal cannot assign '%0' entries to array of length '%1'")
+RMSG(array_literal_must_be_const,   type,              "array literals can only contain constants")
+RMSG(array_too_big,                 type,              "total array size exceeds limit")
+RMSG(incomplete_array_literal,      type,              "array literal is incomplete for dimension count")
+RMSG(array_literal_size_mismatch,   type,              "array literal size does not match preceding literal in initializer")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")

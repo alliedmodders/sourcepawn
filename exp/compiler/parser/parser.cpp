@@ -638,7 +638,7 @@ Parser::parseCompoundLiteral()
   }
   expect(TOK_RBRACE);
 
-  return new (pool_) ArrayLiteral(pos, TOK_LBRACE, list, repeatLastElement);
+  return new (pool_) ArrayLiteral(pos, list, repeatLastElement);
 }
 
 Expression *

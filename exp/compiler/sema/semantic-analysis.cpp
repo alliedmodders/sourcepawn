@@ -84,43 +84,4 @@ SemanticAnalysis::walkAST()
   return cc_.phasePassed();
 }
 
-#if 0
-void
-SemanticAnalysis::visitExpressionStatement(ExpressionStatement *node)
-{
-  Expression *expr = node->expr();
-
-  expr->accept(this);
-
-  // if (!expr->hasSideEffects())
-  //   cc_.report(node->loc(), rmsg::expr_has_no_side_effects);
-}
-#endif
-
-#if 0
-void
-SemanticAnalysis::visitCallExpr(CallExpr *node)
-{
-  // :TODO: we must verify that the callee is an implemented scripted func.
-  Expression *callee = visitForRValue(node->callee());
-  if (!callee)
-    return;
-  if (!callee->type()->isFunction()) {
-    cc_.report(node->loc(), rmsg::callee_is_not_a_function)
-      << callee->type();
-    return;
-  }
-  node->setCallee(callee);
-
-  FunctionSignature *sig = callee->type()->toFunction()->signature();
-  checkCall(sig, node->arguments());
-
-  Type *returnType = sig->returnType().resolved();
-  node->setOutput(returnType, VK::rvalue);
-
-  // We mark calls as always having side effects.
-  node->setHasSideEffects();
-}
-#endif
-
 } // namespace sp

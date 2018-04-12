@@ -253,6 +253,21 @@ SemanticAnalysis::visitIndex(ast::IndexExpression* node)
     }
   }
 
+  // We let the backend decide the internal structure of a multi-dimensional
+  // array. Semantically, however, if an index operation yields an unsized
+  // array, then the l-value is a pointer to the array reference. If the
+  // operation yields a fixed-size array, then the l-value is the array
+  // reference itself.
+  //
+  // If the backend decides to treat both cases identically (for example,
+  // as smx-v1 does with indirection vectors), then it is responsible for
+  // emitting a load.
+  //
+  // Closer to release, when we can better future-proof array semantics,
+  // we may find that indirection vectors are a necessity and thus always
+  // insert a Load here.
+  //
+  // :TODO: tests.
   return new (pool_) sema::IndexExpr(node, array->contained(), base, index);
 }
 
@@ -347,6 +362,8 @@ SemanticAnalysis::initializer(ast::Expression* node, Type* type)
 {
   if (StructInitializer* init = node->asStructInitializer())
     return struct_initializer(init, type);
+  if (ArrayLiteral* init = node->asArrayLiteral())
+    return array_initializer(init, type);
 
   sema::Expr* expr = visitExpression(node);
   if (!expr)
@@ -357,6 +374,63 @@ SemanticAnalysis::initializer(ast::Expression* node, Type* type)
   if (!coerce(ec))
     return nullptr;
   return ec.result;
+}
+
+sema::Expr*
+SemanticAnalysis::array_initializer(ast::ArrayLiteral* expr, Type* type)
+{
+  if (!type->isArray()) {
+    cc_.report(expr->loc(), rmsg::array_literal_with_non_array) <<
+      type;
+    return nullptr;
+  }
+
+  ArrayType* array = type->toArray();
+  if (!array->hasFixedLength()) {
+    cc_.report(expr->loc(), rmsg::array_literal_with_dynamic_array) <<
+      type;
+    return nullptr;
+  }
+
+  if (expr->arrayLength() > array->fixedLength()) {
+    cc_.report(expr->loc(), rmsg::array_literal_too_many_exprs) <<
+      expr->arrayLength() << array->fixedLength();
+    return nullptr;
+  }
+
+  // We don't care about qualifiers for array initialization.
+  Type* contained = array->contained()->unqualified();
+
+  bool all_const = true;
+  FixedPoolList<sema::Expr*>* list = new (pool_) FixedPoolList<sema::Expr*>(expr->arrayLength());
+
+  for (size_t i = 0; i < expr->expressions()->length(); i++) {
+    ast::Expression* src = expr->expressions()->at(i);
+    sema::Expr* val;
+    if (src->isArrayLiteral()) {
+      val = array_initializer(src->toArrayLiteral(), contained);
+    } else {
+      EvalContext ec(CoercionKind::Assignment, src, contained);
+      if (!coerce(ec))
+        return nullptr;
+      val = ec.result;
+    }
+    if (!val)
+      return nullptr;
+    if (!val->isConstant()) {
+      // Currently, this is an error, but we could change this in the future.
+      cc_.report(src->loc(), rmsg::array_literal_must_be_const);
+      return nullptr;
+    }
+    list->at(i) = val;
+  }
+
+  sema::ArrayInitExpr* init = new (pool_) sema::ArrayInitExpr(expr, type, list);
+  if (all_const)
+    init->set_all_const();
+  if (expr->repeatLastElement())
+    init->set_repeat_last_element();
+  return init;
 }
 
 sema::Expr*
