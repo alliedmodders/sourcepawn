@@ -20,6 +20,7 @@
 #include "environment.h"
 #include "method-info.h"
 #include "plugin-context.h"
+#include "builtins.h"
 
 #include "md5/md5.h"
 
@@ -105,6 +106,7 @@ struct NativeMapping {
 };
 
 static const NativeMapping sNativeMap[] = {
+  // Older versions for SourceMod.
   { "FloatAbs",       OP_FABS },
   { "FloatAdd",       OP_FLOATADD },
   { "FloatSub",       OP_FLOATSUB },
@@ -123,6 +125,20 @@ static const NativeMapping sNativeMap[] = {
   { "__FLOAT_EQ__",   OP_FLOAT_EQ },
   { "__FLOAT_NE__",   OP_FLOAT_NE },
   { "__FLOAT_NOT__",  OP_FLOAT_NOT },
+
+  // Newer versions for spshell/sp2.
+  { "__float_add",    OP_FLOATADD },
+  { "__float_sub",    OP_FLOATSUB },
+  { "__float_mul",    OP_FLOATMUL },
+  { "__float_div",    OP_FLOATDIV },
+  { "__float_ctor",   OP_FLOAT },
+  { "__float_gt",     OP_FLOAT_GT },
+  { "__float_ge",     OP_FLOAT_GE },
+  { "__float_lt",     OP_FLOAT_LT },
+  { "__float_le",     OP_FLOAT_LE },
+  { "__float_eq",     OP_FLOAT_EQ },
+  { "__float_ne",     OP_FLOAT_NE },
+  { "__float_not",    OP_FLOAT_NOT },
   { NULL,             0 },
 };
 
@@ -154,11 +170,16 @@ NativeMustBeReplaced(IPluginContext* cx, const cell_t* params)
 void
 PluginRuntime::InstallBuiltinNatives()
 {
+  Environment* env = Environment::get();
   for (size_t i = 0; i < image_->NumNatives(); i++) {
     if (!float_table_[i].found)
       continue;
 
-    UpdateNativeBinding(i, NativeMustBeReplaced, 0, nullptr);
+    const char* name = image_->GetNative(i);
+    SPVM_NATIVE_FUNC func = env->builtins()->Lookup(name);
+    if (!func)
+      func = NativeMustBeReplaced;
+    UpdateNativeBinding(i, func, 0, nullptr);
   }
 }
 

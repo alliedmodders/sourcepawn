@@ -237,6 +237,7 @@ namespace sp {
   _U(STKADJUST,      "stackadjust")    \
   _G(ENDPROC,        "endproc")        \
   _U(LDGFN_PRI,      "ldgfn.pri")      \
+  /* Opcodes below this are pseudo-opcodes and are not part of the ABI */ \
   _G(FABS,           "fabs")           \
   _G(FLOAT,          "float")          \
   _G(FLOATADD,       "float.add")      \

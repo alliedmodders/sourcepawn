@@ -29,6 +29,7 @@ class PluginRuntime;
 class CodeStubs;
 class WatchdogTimer;
 class ErrorReport;
+class BuiltinNatives;
 
 // An Environment encapsulates everything that's needed to load and run
 // instances of plugins on a single thread. There can be at most one
@@ -75,6 +76,9 @@ class Environment : public ISourcePawnEnvironment
 
   CodeStubs *stubs() {
     return code_stubs_;
+  }
+  BuiltinNatives* builtins() {
+    return builtins_;
   }
 
   // Runtime management.
@@ -157,11 +161,13 @@ class Environment : public ISourcePawnEnvironment
  private:
   bool Initialize();
 
- private:
   void DispatchReport(const ErrorReport &report);
+
+ private:
   ke::AutoPtr<ISourcePawnEngine> api_v1_;
   ke::AutoPtr<ISourcePawnEngine2> api_v2_;
   ke::AutoPtr<WatchdogTimer> watchdog_timer_;
+  ke::AutoPtr<BuiltinNatives> builtins_;
   ke::Mutex mutex_;
 
   IDebugListener *debugger_;

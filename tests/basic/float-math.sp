@@ -25,4 +25,3 @@ public main()
   printfloat(FloatAbs(d));
   printfloat(FloatAbs(a));
 }
-

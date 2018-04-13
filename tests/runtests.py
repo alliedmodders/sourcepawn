@@ -99,6 +99,17 @@ class TestRunner(object):
     self.numRunFailures = 0
     self.failures = []
 
+    # Walk up the test path looking for an 'include' folder.
+    search_path, _ = os.path.split(self.testpath)
+    while True:
+      include_path = os.path.join(search_path, 'include')
+      if os.path.exists(include_path):
+        break
+      search_path, tail = os.path.split(search_path)
+      if not tail:
+        break
+    self.include_path = include_path
+
   def run(self):
     self.collect_tests()
 
@@ -166,6 +177,7 @@ class TestRunner(object):
 
     argv = self.spcomp + [
       '-i' + inc_folder,
+      '-i' + os.path.abspath(self.include_path),
     ]
     if os.path.splitext(self.spcomp[0])[1] == '.js':
       argv = ['node'] + argv
