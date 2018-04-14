@@ -51,6 +51,7 @@ for arch in Root.archs:
   library.sources += [
     'api.cpp',
     'base-context.cpp',
+    'builtins.cpp',
     'code-allocator.cpp',
     'code-stubs.cpp',
     'compiled-function.cpp',

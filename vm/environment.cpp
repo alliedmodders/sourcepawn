@@ -23,6 +23,7 @@
 #include "jit.h"
 #endif
 #include "interpreter.h"
+#include "builtins.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -79,11 +80,14 @@ Environment::Initialize()
   api_v1_ = new SourcePawnEngine();
   api_v2_ = new SourcePawnEngine2();
   watchdog_timer_ = new WatchdogTimer(this);
+  builtins_ = new BuiltinNatives();
   code_alloc_ = new CodeAllocator();
   code_stubs_ = new CodeStubs(this);
 
   // Safe to initialize code now that we have the code cache.
   if (!code_stubs_->Initialize())
+    return false;
+  if (!builtins_->Initialize())
     return false;
 
   return true;
@@ -93,6 +97,7 @@ void
 Environment::Shutdown()
 {
   watchdog_timer_->Shutdown();
+  builtins_ = nullptr;
   code_stubs_ = nullptr;
   code_alloc_ = nullptr;
   PoolAllocator::FreeDefault();
