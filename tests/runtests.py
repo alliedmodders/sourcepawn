@@ -148,6 +148,11 @@ class TestRunner(object):
   def add_test(self, name, path):
     self.tests.append(Test(name, path))
 
+  def fix_path(self, path):
+    if os.path.isabs(path) and os.path.splitext(self.spcomp[0])[1] == '.js':
+      return '/fakeroot' + path
+    return path
+
   def run_test(self, test):
     self.out("{0}:\n".format(test.name))
 
@@ -169,15 +174,12 @@ class TestRunner(object):
   def run_compiler(self, test):
     self.out("  [SMX] ")
 
-    test_path = test.path
-    inc_folder = self.inc_folder
-    if os.path.isabs(test_path) and os.path.splitext(self.spcomp[0])[1] == '.js':
-      test_path = '/fakeroot' + test_path
-      inc_folder = '/fakeroot' + inc_folder
+    test_path = self.fix_path(test.path)
+    inc_folder = self.fix_path(self.inc_folder)
 
     argv = self.spcomp + [
       '-i' + inc_folder,
-      '-i' + os.path.abspath(self.include_path),
+      '-i' + self.fix_path(os.path.abspath(self.include_path)),
     ]
     if os.path.splitext(self.spcomp[0])[1] == '.js':
       argv = ['node'] + argv
