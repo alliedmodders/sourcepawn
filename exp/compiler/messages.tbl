@@ -170,6 +170,7 @@ RMSG(array_literal_must_be_const,   type,              "array literals can only 
 RMSG(array_too_big,                 type,              "total array size exceeds limit")
 RMSG(incomplete_array_literal,      type,              "array literal is incomplete for dimension count")
 RMSG(array_literal_size_mismatch,   type,              "array literal size does not match preceding literal in initializer")
+RMSG(coercion_allows_illegal_assn,  type,              "array coercion from '%0 to '%1' would allow illegal assignment of fixed-length slots")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")

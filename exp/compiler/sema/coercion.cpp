@@ -150,6 +150,37 @@ SemanticAnalysis::coerce_array(EvalContext& ec)
     from_iter = from_iter_array->contained();
     to_iter = to_iter_array->contained();
 
+    // We disallow coercions when it would implicitly allow an illegal
+    // assignment. For example:
+    //   int x[10][20];
+    //
+    //   void function(int p[][]) {
+    //     p[1] = {...};
+    //   }
+    //
+    // Currently, this assignment is a type error. In the future it might not
+    // be, and want to leave open the possibility of garbage-collected,
+    // pointer-escaping arrays. In such a model, the assignment above must
+    // *still* be a type error , otherwise x[1] no longer points to an int[20].
+    //
+    // The only way to avoid making this a type error would be to change *all*
+    // array semantics, and remove the concept of fixed-length arrays. We are
+    // not yet prepared to go there.
+    //
+    // Note: from_iter and to_iter are now the contained variants, and
+    // |from_iter_array| and |to_iter_array| are the enclosing type.
+    if (from_iter->isArray() &&
+        to_iter->isArray() &&
+        from_iter->toArray()->hasFixedLength() &&
+        !to_iter->toArray()->hasFixedLength() &&
+        !to_iter->isConst())
+    {
+      cc_.report(ec.from_src->loc(), rmsg::coercion_allows_illegal_assn) <<
+        ec.from->type() << ec.to;
+      ec.result = nullptr;
+      return false;
+    }
+
     if (ec.ck == CoercionKind::Arg) {
       // If the source contents at this level are const, but the target wants
       // something mutable, then no conversion is available.
