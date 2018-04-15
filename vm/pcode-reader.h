@@ -106,11 +106,9 @@ class PcodeReader
     case OP_NOP:
       return true;
 
-    // This opcode is used to note where line breaks occur. We don't support
-    // live debugging, and if we did, we could build this map from the lines
-    // table. So we don't do any callbacks here.
+    // This opcode is used to note where line breaks occur.
     case OP_BREAK:
-      return true;
+      return visitor_->visitBREAK();
 
     case OP_LOAD_PRI:
     case OP_LOAD_ALT:

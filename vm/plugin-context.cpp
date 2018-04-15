@@ -33,6 +33,7 @@ PluginContext::PluginContext(PluginRuntime* pRuntime)
    memory_(nullptr),
    data_size_(m_pRuntime->data().length),
    mem_size_(m_pRuntime->image()->HeapSize()),
+   dbreak_(nullptr),
    m_pNullVec(nullptr),
    m_pNullString(nullptr)
 {
@@ -378,6 +379,18 @@ PluginContext::GetNullRef(SP_NULL_TYPE type)
     return m_pNullVec;
 
   return NULL;
+}
+
+int
+PluginContext::SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn)
+{
+  if (!IsDebugging())
+    return SP_ERROR_NOTDEBUGGING;
+
+  *oldpfn = dbreak_;
+  dbreak_ = newpfn;
+
+  return SP_ERROR_NONE;
 }
 
 bool

@@ -611,12 +611,15 @@ namespace SourcePawn
     virtual bool IsDebugging() =0;
 
     /**
-     * @brief Deprecated, does nothing.
+     * @brief Installs a debug break and returns the old one, if any.
+     * This will fail if the plugin is not debugging.
      *
-     * @param newpfn    Unused.
-     * @param oldpfn    Unused.
+     * @param newpfn   New function pointer.
+     * @param oldpfn   Pointer to retrieve old function pointer.
+     *
+     * @return         Error number.
      */
-    virtual int SetDebugBreak(void *newpfn, void *oldpfn) =0;
+    virtual int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn) =0;
 
     /**
      * @brief Deprecated, do not use.

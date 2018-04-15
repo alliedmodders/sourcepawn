@@ -242,6 +242,12 @@ FrameIterator::nextInvokeFrame()
   }
 }
 
+cell_t
+FrameIterator::cip() const
+{
+  return frame_cursor_->cip();
+}
+
 void
 FrameIterator::Next()
 {

@@ -24,6 +24,7 @@
 #endif
 #include "interpreter.h"
 #include "builtins.h"
+#include "debugging.h"
 #include <stdarg.h>
 
 using namespace sp;
@@ -417,6 +418,10 @@ Environment::DispatchReport(const ErrorReport& report)
   // For now, we always report exceptions even if they might be handled.
   if (debugger_)
     debugger_->ReportError(report, iter);
+
+  // See if the plugin is being debugged
+  if (top_)
+    InvokeDebugger(top_->cx(), &report);
 }
 
 void

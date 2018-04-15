@@ -148,6 +148,7 @@ class Interpreter final : public PcodeVisitor
   bool visitTRACKER_PUSH_C(cell_t amount) override;
   bool visitTRACKER_POP_SETHEAP() override;
   bool visitSTRADJUST_PRI() override;
+  bool visitBREAK() override;
   bool visitHALT(cell_t value) override;
   bool visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size) override;
 

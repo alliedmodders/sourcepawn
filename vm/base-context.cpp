@@ -74,7 +74,7 @@ BasePluginContext::IsDebugging()
 }
 
 int
-BasePluginContext::SetDebugBreak(void* newpfn, void* oldpfn)
+BasePluginContext::SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn)
 {
   return SP_ERROR_ABORTED;
 }

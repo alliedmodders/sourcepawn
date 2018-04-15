@@ -73,6 +73,7 @@ class CompilerBase : public PcodeVisitor
   virtual void emitThrowPath(int err) = 0;
   virtual void emitErrorHandlers() = 0;
   virtual void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) = 0;
+  virtual void emitDebugBreakHandler() = 0;
 
   // Helpers.
   static int CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addrp, uint8_t* pc);
@@ -129,6 +130,9 @@ class CompilerBase : public PcodeVisitor
   Label throw_error_code_[SP_MAX_ERROR_CODES];
   Label report_error_;
   Label return_reported_error_;
+
+  // Debugging.
+  Label debug_break_;
 
   ke::Vector<BackwardJump> backward_jumps_;
   ke::Vector<CipMapEntry> cip_map_;
