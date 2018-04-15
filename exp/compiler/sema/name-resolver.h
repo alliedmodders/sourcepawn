@@ -115,6 +115,7 @@ class NameResolver
   TypeExpr delay(const TypeSpecifier &spec);
   Type *resolveBase(TypeSpecifier &spec);
   TypeExpr resolve(TypeSpecifier &spec, TypeSpecHelper *helper = nullptr);
+  TypeExpr resolveReturnType(TypeSpecifier& spec);
 
  private:
   // Rather than create a Scope for every block we encounter, we place a

@@ -48,6 +48,8 @@ SmxCompiler::SmxCompiler(CompileContext& cc, sema::Program* program)
    alt_value_(0),
    max_var_stk_(0),
    cur_var_stk_(0),
+   heap_usage_(0),
+   max_heap_usage_(0),
    continue_to_(nullptr),
    break_to_(nullptr),
    last_stmt_pc_(0)
@@ -267,6 +269,8 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     last_stmt_pc_ = masm_.pc();
   }
 
+  assert(heap_usage_ == 0);
+
   // :TODO: track stack depth
   switch (stmt->kind()) {
     case ast::AstKind::kReturnStatement:
@@ -308,6 +312,12 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
   {
     cc_.report(SourceLocation(), rmsg::regalloc_error) <<
       "operand stack is not empty at end of statement";
+  }
+
+  if (heap_usage_) {
+    __ opcode(OP_HEAP, -heap_usage_);
+    max_heap_usage_ = ke::Max(heap_usage_, max_heap_usage_);
+    heap_usage_ = 0;
   }
 }
 
@@ -400,7 +410,7 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
     if (!emit_into(init, ValueDest::Pri))
       return;
 
-    emit_store(sym, ValueDest::Pri);
+    emit_var_store(sym, ValueDest::Pri);
     return;
   }
 
@@ -692,7 +702,7 @@ SmxCompiler::emitLoad(sema::LoadExpr* expr, ValueDest dest)
     {
       // :TODO: rm storage flags
       sema::VarExpr* var_expr = lvalue->toVarExpr();
-      return emit_load(var_expr, dest);
+      return emit_var_load(var_expr, dest);
     }
 
     case sema::ExprKind::Index:
@@ -733,7 +743,7 @@ SmxCompiler::emitStore(sema::StoreExpr* expr, ValueDest requested)
     if (!emit_into(right, dest))
       return ValueDest::Error;
 
-    emit_store(var->sym(), dest);
+    emit_var_store(var->sym(), dest);
     return dest;
   }
 
@@ -993,6 +1003,17 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
   FunctionSymbol* fun = callee->sym();
   ast::FunctionSignature* sig = fun->impl()->signature();
 
+  // SMX v1 requires that variadic arguments be passed by-reference, for no
+  // discernable reason.
+  bool variadic = false;
+  size_t formal_argc = sig->parameters()->length();
+  if (!sig->parameters()->empty() &&
+      sig->parameters()->back()->sym()->type()->isVariadic())
+  {
+    variadic = true;
+    formal_argc = sig->parameters()->length() - 1;
+  }
+
   // We have to kill pri/alt before entering the argument push sequence, since
   // otherwise we may misalign the arguments.
   will_kill(ValueDest::Pri);
@@ -1026,7 +1047,22 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
 
     size_t opstack_size = operand_stack_.length();
 
-    emit_into(expr, ValueDest::Stack);
+    if (i >= formal_argc &&
+        !expr->isAddressable() &&
+        !expr->type()->isAddressable())
+    {
+      assert(HasSimpleCellStorage(expr->type()));
+      if (!emit_into(expr, ValueDest::Pri))
+        return ValueDest::Error;
+
+      __ opcode(OP_HEAP, sizeof(cell_t));
+      __ opcode(OP_STOR_I);
+      __ opcode(OP_PUSH_ALT);
+      heap_usage_ += sizeof(cell_t);
+    } else {
+      if (!emit_into(expr, ValueDest::Stack))
+        return ValueDest::Error;
+    }
 
     // Make sure emit_into does not cause any spills (or, if it did, that the
     // spills were cleaned up internally). Otherwise the stack will be
@@ -1364,7 +1400,7 @@ SmxCompiler::emitVar(sema::VarExpr* expr, ValueDest dest)
 }
 
 ValueDest
-SmxCompiler::emit_load(sema::VarExpr* expr, ValueDest dest)
+SmxCompiler::emit_var_load(sema::VarExpr* expr, ValueDest dest)
 {
   VariableSymbol* sym = expr->sym();
   Type* type = sym->type();
@@ -1416,7 +1452,7 @@ SmxCompiler::emit_load(sema::VarExpr* expr, ValueDest dest)
 }
 
 void
-SmxCompiler::emit_store(VariableSymbol* sym, ValueDest src)
+SmxCompiler::emit_var_store(VariableSymbol* sym, ValueDest src)
 {
   switch (sym->storage()) {
     case StorageClass::Argument:

@@ -117,7 +117,8 @@ ReportManager::report(const RefPtr<TMessage> &msg)
   if (num_errors_ >= kErrorMessageLimit)
     return;
 
-  if (GetMessageInfo(msg->id()).type != rmsg_type::note) {
+  rmsg_type type = GetMessageInfo(msg->id()).type;
+  if (type != rmsg_type::note && type != rmsg_type::warning) {
     num_errors_++;
 
     if (num_errors_ >= kErrorMessageLimit)

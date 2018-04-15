@@ -96,6 +96,7 @@ class TypeResolver
 
   Type *applyConstQualifier(TypeSpecifier *spec, Type *type);
   Type *applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
+  Type *applyVariadic(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
   bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
   bool verifyTypeset(TypesetDecl *decl);
 

@@ -95,11 +95,20 @@ public:
   virtual LValueExpr* asLValueExpr() {
     return nullptr;
   }
+  virtual bool isLValueExpr() const {
+    return false;
+  }
   virtual bool hasSideEffects() const {
+    return false;
+  }
+  virtual bool isAddressable() const {
     return false;
   }
 
 #define _(name)                                 \
+  virtual bool is##name##Expr() const {         \
+    return false;                               \
+  }                                             \
   virtual name##Expr* as##name##Expr() {        \
     return nullptr;                             \
   }                                             \
@@ -121,6 +130,9 @@ typedef FixedPoolList<Expr*> FixedExprList;
 #define DECLARE_SEMA(name)                  \
   ExprKind kind() const override {          \
     return ExprKind::name;                  \
+  }                                         \
+  bool is##name##Expr() const override {    \
+    return true;                            \
   }                                         \
   name##Expr* as##name##Expr() override {   \
     return this;                            \
@@ -386,6 +398,9 @@ class LValueExpr : public Expr
    : Expr(node, type)
   {}
 
+  bool isLValueExpr() const final {
+    return true;
+  }
   LValueExpr* asLValueExpr() final {
     return this;
   }
@@ -412,6 +427,9 @@ class VarExpr final : public LValueExpr
 
   VariableSymbol* sym() const {
     return sym_;
+  }
+  bool isAddressable() const override {
+    return true;
   }
 
  private:
@@ -441,6 +459,9 @@ class IndexExpr final : public LValueExpr
   bool hasSideEffects() const override {
     return base_->hasSideEffects() || index_->hasSideEffects();
   }
+  bool isAddressable() const override {
+    return true;
+  }
 
  private:
   Expr* base_;
@@ -463,6 +484,9 @@ class StringExpr final : public Expr
     return literal_;
   }
   bool isConstant() const override {
+    return true;
+  }
+  bool isAddressable() const override {
     return true;
   }
 
@@ -549,6 +573,9 @@ class LoadExpr : public Expr
   bool hasSideEffects() const override {
     return lvalue_->hasSideEffects();
   }
+  bool isAddressable() const override {
+    return type()->isAddressable();
+  }
 
  private:
   LValueExpr* lvalue_;
@@ -604,6 +631,9 @@ class SliceExpr : public Expr
   }
   bool hasSideEffects() const override {
     return base_->hasSideEffects() || index_->hasSideEffects();
+  }
+  bool isAddressable() const override {
+    return true;
   }
 
  private:

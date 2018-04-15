@@ -1,3 +1,4 @@
+// vim: set sw=2 tw=200 et:
 RMSG(outofmemory,                   fatal,             "out of memory")
 RMSG(out_of_sourcelocs,             fatal,             "ran out of source locations")
 RMSG(too_many_errors,               fatal,             "too many errors")
@@ -66,6 +67,7 @@ RMSG(fixed_array_in_prefix,         syntax,            "new-style array types ca
 RMSG(double_array_dims,             syntax,            "array dimensions can only be specified once")
 RMSG(newdecl_with_new,              syntax,            "new-style declarations should not have 'new'")
 RMSG(multiple_varargs,              syntax,            "cannot have multiple variadic arguments")
+RMSG(varargs_must_be_last,          syntax,            "cannot have arguments after a variadic argument")
 RMSG(variable_without_block,        syntax,            "variables must be declared inside a block")
 RMSG(functags_not_supported,        syntax,            "functags are not supported; use typedef instead")
 RMSG(invalid_accessor_name,         syntax,            "accessor must be named 'get' or 'set'")
@@ -171,15 +173,19 @@ RMSG(array_too_big,                 type,              "total array size exceeds
 RMSG(incomplete_array_literal,      type,              "array literal is incomplete for dimension count")
 RMSG(array_literal_size_mismatch,   type,              "array literal size does not match preceding literal in initializer")
 RMSG(coercion_allows_illegal_assn,  type,              "array coercion from '%0 to '%1' would allow illegal assignment of fixed-length slots")
+RMSG(incorrect_argcount,            type,              "expected %0 arguments; got %1")
+RMSG(vararg_cannot_be_byref,        type,              "variadic arguments cannot have a by-reference type")
+RMSG(illegal_vararg_type,           type,              "cannot use type '%0' as a variadic argument")
+RMSG(vararg_losing_lvalue,          warning,           "coercing l-value of type '%0' to variadic argument of type '%1' creates an r-value conversion")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
+/* :TODO: do this */
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")
 RMSG(too_much_stack,                impl,              "function uses too much stack space")
 
 RMSG(int_literal_out_of_range,      syntax,            "integer literal is out of range")
 
 RMSG(non_public_not_supported,      impl,              "non-public functions are not yet supported")
-RMSG(argcount_not_supported,        impl,              "argument count not supported")
 RMSG(regalloc_error,                impl,              "regalloc internal error: %0")
 RMSG(unimpl_kind,                   impl,              "unimplemented %0: %1")
 

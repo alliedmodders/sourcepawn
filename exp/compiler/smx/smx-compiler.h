@@ -101,8 +101,8 @@ private:
   void emit_const(ValueDest dest, cell_t value);
 
   // Helpers for l-values.
-  ValueDest emit_load(sema::VarExpr* var, ValueDest dest);
-  void emit_store(VariableSymbol* sym, ValueDest src);
+  ValueDest emit_var_load(sema::VarExpr* var, ValueDest dest);
+  void emit_var_store(VariableSymbol* sym, ValueDest src);
 
   void initialize_array(VariableSymbol* sym, sema::Expr* expr, const ArrayInfo& info);
 
@@ -190,6 +190,10 @@ private:
   int32_t max_var_stk_;
   int32_t cur_var_stk_;
   DataLabel entry_stack_op_;
+
+  // Heap usage is reset each statement. We track the max used.
+  int32_t heap_usage_;
+  int32_t max_heap_usage_;
 
   // Current loop context. If we do nested functions, these have to be zapped
   // at function boundaries.

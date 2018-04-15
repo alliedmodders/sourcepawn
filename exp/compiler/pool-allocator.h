@@ -193,6 +193,15 @@ class PoolList : public PoolObject
   const T& operator [](size_t index) const {
     return impl_[index];
   }
+  T& back() {
+    return impl_.back();
+  }
+  const T& back() const {
+    return impl_.back();
+  }
+  bool empty() const {
+    return impl_.empty();
+  }
 
   const T* begin() const {
     return impl_.begin();

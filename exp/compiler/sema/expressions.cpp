@@ -78,26 +78,45 @@ SemanticAnalysis::visitCallExpression(CallExpression* node)
   FunctionType* fun_type = callee->type()->asFunction();
   ast::FunctionSignature* sig = fun_type->signature();
   ast::ParameterList* params = sig->parameters();
-
   ast::ExpressionList* ast_args = node->arguments();
 
-  if (params->length() != ast_args->length()) {
-    cc_.report(node->loc(), rmsg::argcount_not_supported);
-    return nullptr;
+  // If this function is variadic, extract the variadic parameter.
+  Type* vararg = nullptr;
+  size_t normal_argc = params->length();
+  if (params->length() > 0) {
+    VariableSymbol* sym = params->back()->sym();
+    if (sym->type()->isVariadic()) {
+      vararg = sym->type();
+      normal_argc = params->length() - 1;
+    }
   }
 
-  // :TODO: coerce here.
+  if ((vararg && ast_args->length() < params->length() - 1) ||
+      (!vararg && ast_args->length() != params->length()))
+  {
+    cc_.report(node->loc(), rmsg::incorrect_argcount) <<
+      params->length() << ast_args->length();
+  }
+
   sema::ExprList* args = new (pool_) sema::ExprList();
   for (size_t i = 0; i < ast_args->length(); i++) {
     ast::Expression* ast_arg = ast_args->at(i);
 
-    VarDecl* param = params->at(i);
-    VariableSymbol* sym = param->sym();
+    Type* arg_type = nullptr;
+    if (i < normal_argc) {
+      VarDecl* param = params->at(i);
+      VariableSymbol* sym = param->sym();
+      arg_type = sym->type();
+    } else {
+      if (!vararg)
+        break;
+      arg_type = vararg;
+    }
 
-    EvalContext ec(CoercionKind::Arg, ast_arg, sym->type());
-    if (!coerce(ec))
+    sema::Expr* result = coerce_arg(ast_arg, arg_type);
+    if (!result)
       return nullptr;
-    args->append(ec.result);
+    args->append(result);
   }
 
   return new (pool_) sema::CallExpr(node, fun_type->returnType(), callee, args);

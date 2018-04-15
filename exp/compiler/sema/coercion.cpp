@@ -294,6 +294,62 @@ SemanticAnalysis::coerce_ref(EvalContext& ec)
 }
 
 sema::Expr*
+SemanticAnalysis::coerce_arg(ast::Expression* ast_expr, Type* to)
+{
+  sema::Expr* expr = visitExpression(ast_expr);
+  if (!expr)
+    return nullptr;
+
+  if (VariadicType* vararg = to->asVariadic()) {
+    // Peel away to the inner type.
+    to = vararg->inner();
+
+    // If the inner type is "unchecked", we do not want any sort of coercion or
+    // even an lvalue-to-rvalue coercion unless it's for a pointer type.
+    Type* from = expr->type();
+    if (to->isUnchecked()) {
+      if (expr->isLValueExpr() && TypeHasIndirectLValue(from))
+        return lvalue_to_rvalue(expr->asLValueExpr());
+      return expr;
+    }
+
+    // The goal of coerce_vararg is to preserve addresses if possible. If that's
+    // not an issue (for example, the type is an r-value or an array), then we
+    // can use the normal coercion logic.
+    if (expr->isLValueExpr() && !to->isArray())
+      return coerce_vararg(expr, to);
+  }
+
+  EvalContext ec(CoercionKind::Arg, expr, to);
+  if (!coerce(ec))
+    return nullptr;
+  return ec.result;
+}
+
+sema::Expr*
+SemanticAnalysis::coerce_vararg(sema::Expr* expr, Type* to)
+{
+  Type* from = expr->type();
+  if (CompareNonArrayTypesExactly(from->unqualified(), to->unqualified()) &&
+      (!from->isConst() || to->isConst()))
+  {
+    // No conversion is needed, we can keep the l-value.
+    assert(!TypeHasIndirectLValue(from));
+    return expr;
+  }
+
+  // Otherwise, we have a const -> non-const coercion or something else. We
+  // can't use the l-value.
+  EvalContext ec(CoercionKind::Arg, expr, to);
+  if (!coerce(ec))
+    return nullptr;
+
+  cc_.report(expr->src()->loc(), rmsg::vararg_losing_lvalue) <<
+    from << to;
+  return ec.result;
+}
+
+sema::Expr*
 SemanticAnalysis::lvalue_to_rvalue(sema::LValueExpr* expr)
 {
   // If the storage is indirectly addressable (i.e., it makes sense to take
@@ -338,6 +394,7 @@ CompareNonArrayTypesExactly(Type* a, Type* b)
     case Type::Kind::Typeset:
     case Type::Kind::Enum:
     case Type::Kind::NullType:
+    case Type::Kind::Primitive:
       // Handled by |a == b| above.
       return false;
     default:

@@ -757,6 +757,16 @@ TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
   resolveType(sig->returnType());
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
     VarDecl *param = sig->parameters()->at(i);
+
+    // We should not have variadic arguments on anything but the last type. It
+    // is hard to assert this anywhere else in TypeResolver unfortunately.
+#if !defined(NDEBUG)
+    if (TypeSpecifier* spec = param->te().spec()) {
+      if (i != sig->parameters()->length() - 1)
+        assert(!spec->isVariadic());
+    }
+#endif
+
     param->accept(this);
   }
 }
@@ -1047,6 +1057,25 @@ TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper
   return cc_.types()->newReference(type);
 }
 
+Type*
+TypeResolver::applyVariadic(TypeSpecifier* spec, Type* type, TypeSpecHelper *helper)
+{
+  assert(!type->isVariadic());
+  assert(spec->isVariadic());
+
+  if (type->isReference()) {
+    SourceLocation pos = spec->isByRef() ? spec->byRefLoc() : spec->baseLoc();
+    cc_.report(pos, rmsg::vararg_cannot_be_byref);
+    return type;
+  }
+  if (type->isVoid()) {
+    cc_.report(spec->baseLoc(), rmsg::illegal_vararg_type) << type;
+    return type;
+  }
+
+  return cc_.types()->newVariadic(type);
+}
+
 static inline bool
 IsAllowableStructDecl(VariableSymbol* sym, Type *type)
 {
@@ -1063,8 +1092,8 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
 
   assert(!type->isReference() || sym->isArgument());
 
-  // :TODO: why is this here? move it into sema.
-  if (!type->isStorableType()) {
+  // :TODO: why is this here? move it into sema?
+  if (!type->isVariadic() && !type->isStorableType()) {
     // We make a very specific exception for public structs, which are barely supported.
     if (!IsAllowableStructDecl(sym, type)) {
       cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;

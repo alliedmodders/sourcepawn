@@ -71,6 +71,7 @@ class TypeManager
   TypedefType *newTypedef(Atom *name);
   ReferenceType* newReference(Type* type);
   FunctionType* newFunction(ast::FunctionSignature* sig);
+  VariadicType* newVariadic(Type* inner);
 
   Type *typeForLabelAtom(Atom *atom);
 
@@ -95,6 +96,8 @@ class TypeManager
   Type *float_type_;
   ArrayType *float3_array_;
   Type *const_float3_array_;
+
+  VariadicType* variadic_any_;
 
   Atom *atom_String_;
   Atom *atom_Float_;

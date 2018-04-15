@@ -77,9 +77,14 @@ class SemanticAnalysis
 
   bool coerce(EvalContext& ec);
 
+  // Arguments are so complicated in SP that we define a special coercion
+  // helper for them.
+  sema::Expr* coerce_arg(ast::Expression* expr, Type* to);
+
   // Do not call any of these directly.
   bool coerce_array(EvalContext& ec);
   bool coerce_ref(EvalContext& ec);
+  sema::Expr* coerce_vararg(sema::Expr* expr, Type* to);
   bool no_conversion(EvalContext& ec);
   Type* arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out);
   sema::Expr* lvalue_to_rvalue(sema::LValueExpr* expr);

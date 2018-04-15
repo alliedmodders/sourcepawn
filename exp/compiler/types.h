@@ -96,7 +96,8 @@ typedef FixedPoolList<Type *> TypeList;
   _(Function)                   \
   _(Typeset)                    \
   _(Struct)                     \
-  _(Reference)
+  _(Reference)                  \
+  _(Variadic)
 
 #define FORWARD_DECLARE(name) class name##Type;
 TYPE_ENUM_MAP(FORWARD_DECLARE)
@@ -166,6 +167,10 @@ class Type : public PoolObject
     // The type used for "null".
     NullType,
 
+    // Used to indicate that the contained type may indicate 0..N values of
+    // that type.
+    Variadic,
+
     // A temporary type used to indicate that an overloaded function was not
     // resolved to a specific address. This happens, for example, when a
     // NameProxy resolves to an overloaded function symbol. If the function
@@ -198,13 +203,15 @@ class Type : public PoolObject
   static Type *NewQualified(Type *type, Qualifiers quals);
   static Type *NewImportable();
   static Type *NewOverloadedFunction();
+  static Type* NewVariadic();
   static bool Compare(Type *left, Type *right);
 
   bool isPrimitive() {
     return canonical()->kind_ == Kind::Primitive;
   }
   bool isVoid() {
-    return canonical()->kind_ == Kind::Void;
+    return canonical()->kind_ == Kind::Void ||
+           canonical()->kind_ == Kind::ImplicitVoid;
   }
   bool isImplicitVoid() {
     return canonical()->kind_ == Kind::ImplicitVoid;
@@ -282,6 +289,11 @@ class Type : public PoolObject
       default:
         return false;
     }
+  }
+
+  // Return true if an address to an r-value of this type can be computed.
+  bool isAddressable() {
+    return isReference() || isArray();
   }
 
   PrimitiveType primitive() {
@@ -688,6 +700,24 @@ private:
   Type* inner_;
 };
 
+class VariadicType : public Type
+{
+  explicit VariadicType(Type* inner)
+   : Type(Kind::Variadic),
+     inner_(inner)
+  {}
+
+public:
+  static VariadicType* New(Type* inner);
+
+  Type* inner() const {
+    return inner_;
+  }
+
+private:
+  Type* inner_;
+};
+
 inline bool
 Type::isString()
 {
@@ -699,6 +729,17 @@ static inline bool
 TypeSupportsConstKeyword(Type *type)
 {
   return !type->isVoid();
+}
+
+// Returns true if an l-value of the given type is an address to an address.
+static inline bool
+TypeHasIndirectLValue(Type* type)
+{
+  if (type->isReference())
+    return true;
+  if (type->isArray())
+    return !type->toArray()->hasFixedLength();
+  return false;
 }
 
 // Types where assignment does not simply change a reference, but copies one

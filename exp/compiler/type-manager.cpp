@@ -35,7 +35,8 @@ TypeManager::TypeManager(StringPool &strings)
    const_char_array_(nullptr),
    float_type_(nullptr),
    float3_array_(nullptr),
-   const_float3_array_(nullptr)
+   const_float3_array_(nullptr),
+   variadic_any_(nullptr)
 {
   atom_String_ = strings.add("String");
   atom_Float_ = strings.add("Float");
@@ -89,6 +90,8 @@ TypeManager::initialize()
   const_float3_array_ =
     ArrayType::New(Type::NewQualified(float_type_, Qualifiers::Const),
                    3);
+
+  variadic_any_ = VariadicType::New(uncheckedType_);
 
   if (!reftype_cache_.init(16))
     return false;
@@ -172,6 +175,14 @@ FunctionType*
 TypeManager::newFunction(ast::FunctionSignature* sig)
 {
   return FunctionType::New(sig);
+}
+
+VariadicType*
+TypeManager::newVariadic(Type* inner)
+{
+  if (inner == uncheckedType_)
+    return variadic_any_;
+  return VariadicType::New(inner);
 }
 
 Type *

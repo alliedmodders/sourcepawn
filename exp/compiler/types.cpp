@@ -195,6 +195,15 @@ ReferenceType::New(Type* inner)
   return new (POOL()) ReferenceType(inner);
 }
 
+VariadicType*
+VariadicType::New(Type* inner)
+{
+  assert(!inner->isVariadic());
+  assert(!inner->isReference());
+  assert(!inner->isVoid());
+  return new (POOL()) VariadicType(inner);
+}
+
 const char *
 sp::GetPrimitiveName(PrimitiveType type)
 {
@@ -384,6 +393,12 @@ sp::BuildTypeName(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
 AString
 sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
 {
+  bool variadic = false;
+  if (aType->isVariadic()) {
+    aType = aType->toVariadic()->inner();
+    variadic = true;
+  }
+
   if (ArrayType *type = aType->asArray()) {
     Vector<ArrayType *> stack;
 
@@ -424,6 +439,8 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     } else {
       builder = builder + brackets;
     }
+    if (variadic)
+      builder = builder + "...";
     return AString(builder.ptr());
   }
 
@@ -437,12 +454,15 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
   else
     builder = builder + GetBaseTypeName(aType);
 
-  if (!!(flags & TypeDiagFlags::IsByRef) || aType->isReference()) {
+  if (!!(flags & TypeDiagFlags::IsByRef) || aType->isReference())
     builder = builder + "&";
-  }
 
   if (name)
     builder = builder + " " + name->chars();
+
+  if (variadic)
+    builder = builder + "...";
+
   return AString(builder.ptr());
 }
 

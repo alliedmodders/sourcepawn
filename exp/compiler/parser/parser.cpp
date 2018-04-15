@@ -1819,7 +1819,7 @@ Parser::statement()
       kind == TOK_STATIC ||
       kind == TOK_CONST)
   {
-    if (IsNewTypeToken(kind)) {
+    if (IsNewTypeToken(kind) || kind == TOK_CONST) {
       scanner_.undo();
       kind = TOK_NEW;
     }
@@ -1975,6 +1975,12 @@ Parser::arguments(bool *canEarlyResolve)
       if (variadic)
         cc_.report(decl.spec.variadicLoc(), rmsg::multiple_varargs);
       variadic = true;
+
+      // We don't have a name for this variable, but we want its name token to
+      // have a valid pos since that's what the AstNode uses as its base.
+      decl.name.start = decl.spec.baseLoc();
+    } else if (variadic) {
+      cc_.report(decl.spec.baseLoc(), rmsg::varargs_must_be_last);
     }
 
     VarDecl *node = delegate_.HandleVarDecl(decl.name, TOK_NEW, SymAttrs::None, decl.spec, init);

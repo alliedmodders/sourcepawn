@@ -306,6 +306,7 @@ NameResolver::OnEnumValueDecl(EnumConstant *cs)
   // parent enum.
 }
 
+// :TODO: test void vars/args
 VarDecl *
 NameResolver::HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier &spec, Expression *init)
 {
@@ -604,7 +605,7 @@ NameResolver::HandleFunctionSignature(TokenKind kind,
                                       ParameterList* params,
                                       bool canResolveEagerly)
 {
-  TypeExpr te = resolve(spec);
+  TypeExpr te = resolveReturnType(spec);
   HandleFunctionSignature(kind, node, te, params, canResolveEagerly);
 }
 
@@ -628,7 +629,7 @@ NameResolver::HandleFunctionSignature(TokenKind kind,
                                       ParameterList* params,
                                       bool canResolveEagerly)
 {
-  TypeExpr te = resolve(spec);
+  TypeExpr te = resolveReturnType(spec);
   return HandleFunctionSignature(kind, te, params, canResolveEagerly);
 }
 
@@ -652,6 +653,22 @@ NameResolver::HandleFunctionSignature(TokenKind kind,
   }
 
   return sig;
+}
+
+TypeExpr
+NameResolver::resolveReturnType(TypeSpecifier& spec)
+{
+  if (spec.resolver() == TOK_IMPLICIT_INT) {
+    assert(!spec.isArray());
+    assert(!spec.isConst());
+    assert(!spec.isVariadic());
+    assert(!spec.isByRef());
+    // :TODO: make sure this works and has any point at all. same with ImplicitVoid.
+    // Also make sure these don't flow into type identity comparisons.
+    return TypeExpr(cc_.types()->getImplicitInt());
+  }
+
+  return resolve(spec);
 }
 
 void
@@ -851,7 +868,6 @@ NameResolver::resolveBase(TypeSpecifier &spec)
     case TOK_VOID:
       return cc_.types()->getVoid();
     case TOK_IMPLICIT_INT:
-      return cc_.types()->getImplicitInt();
     case TOK_INT:
       return cc_.types()->getPrimitive(PrimitiveType::Int32);
     case TOK_BOOL:
@@ -902,6 +918,9 @@ NameResolver::resolveBase(TypeSpecifier &spec)
 // quite a large structure (48 bytes on x86, as of this writing, and it will
 // only get bigger). We want to eliminate it from the AST, as well as reduce
 // dependence on TypeResolver which is a rather expensive pass.
+//
+// NOTE: it's a big problem that this duplicates logic from TR. Can we move
+// early resolution over?
 TypeExpr
 NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
 {
@@ -928,7 +947,7 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
   if (spec.isConst())
     type = tr_.applyConstQualifier(&spec, type);
 
-  // :TODO: constify
+  // :TODO: constify!
   if (spec.dims()) {
     // If we have explicit dimension sizes, we have to bail out and wait for
     // type resolution (which also does constant resolution). We do special
@@ -950,6 +969,9 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
 
   if (spec.isByRef())
     type = tr_.applyByRef(&spec, type, helper);
+
+  if (spec.isVariadic())
+    type = tr_.applyVariadic(&spec, type, helper);
 
   return TypeExpr(type);
 }
