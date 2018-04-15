@@ -43,6 +43,7 @@ public:
   cell_t BlamePluginError(SourcePawn::IPluginFunction* pf, const char* msg, ...) override;
   IFrameIterator* CreateFrameIterator() override;
   void DestroyFrameIterator(IFrameIterator* it) override;
+  int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn) override;
   
   // Removed functions.
   int PushCell(cell_t value) override;
@@ -56,7 +57,6 @@ public:
   SourcePawn::IVirtualMachine* GetVirtualMachine() override;
   sp_context_t* GetContext() override;
   bool IsDebugging() override;
-  int SetDebugBreak(void* newpfn, void* oldpfn) override;
   SourcePawn::IPluginDebugInfo* GetDebugInfo() override;
   int Execute(uint32_t code_addr, cell_t* result) override;
   int Execute2(SourcePawn::IPluginFunction* function, const cell_t* params, unsigned int num_params, cell_t* result) override;

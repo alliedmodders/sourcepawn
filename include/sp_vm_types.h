@@ -109,6 +109,7 @@ namespace SourcePawn
 	class IPluginContext;
 	class IVirtualMachine;
 	class IProfiler;
+  class IErrorReport;
 };
 
 struct sp_context_s;
@@ -245,5 +246,16 @@ typedef struct sp_debug_symbol_s
 	sp_debug_arraydim_t   *dims; /**< Relocated dimension struct, if any */
 	sp_debug_symbol_raw_t *sym;	 /**< Pointer to original symbol */
 } sp_debug_symbol_t;
+
+/**
+ * Breaks into a debugger
+ * Params:
+ *  [0] - plugin context
+ *  [1] - frm
+ *  [2] - cip
+ *  [3] - memory
+ *  [4] - exception
+ */
+typedef void(*SPVM_DEBUGBREAK)(SourcePawn::IPluginContext *, cell_t, cell_t, void *, const SourcePawn::IErrorReport *);
 
 #endif //_INCLUDE_SOURCEPAWN_VM_TYPES_H

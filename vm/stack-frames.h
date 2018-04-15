@@ -231,6 +231,8 @@ class FrameIterator : public SourcePawn::IFrameIterator
   IPluginContext* Context() const override;
   bool IsInternalFrame() const override;
 
+  cell_t cip() const;
+
  private:
   void nextInvokeFrame();
 

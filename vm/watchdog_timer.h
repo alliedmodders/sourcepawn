@@ -21,14 +21,22 @@
 #include <stdint.h>
 #include <am-thread-utils.h>
 
+namespace SourcePawn {
+  class IErrorReport;
+}
+
 namespace sp {
 
 class Environment;
+class PluginContext;
 
 typedef bool (*WatchdogCallback)();
 
 class WatchdogTimer
 {
+  // Allow line debugger callback to disable timeouts.
+  friend void InvokeDebugger(PluginContext *ctx, const SourcePawn::IErrorReport *report);
+
  public:
   WatchdogTimer(Environment* env);
   ~WatchdogTimer();
@@ -50,6 +58,7 @@ class WatchdogTimer
   bool terminate_;
   size_t timeout_ms_;
   ke::ThreadId mainthread_;
+  bool ignore_timeout_;
 
   ke::AutoPtr<ke::Thread> thread_;
   ke::ConditionVariable cv_;

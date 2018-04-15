@@ -16,6 +16,7 @@
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
 #include "interpreter.h"
+#include "debugging.h"
 #include "environment.h"
 #include "method-info.h"
 #include "plugin-context.h"
@@ -1030,6 +1031,13 @@ Interpreter::visitSTRADJUST_PRI()
 {
   regs_.pri() = (regs_.pri() + 4) >> 2;
   return true;
+}
+
+bool
+Interpreter::visitBREAK()
+{
+  InvokeDebugger(cx_, nullptr);
+  return !env_->hasPendingException();
 }
 
 bool
