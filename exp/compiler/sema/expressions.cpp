@@ -49,6 +49,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitAssignment(node->toAssignment());
     case AstKind::kIndexExpression:
       return visitIndex(node->toIndexExpression());
+    case AstKind::kCharLiteral:
+      return visitCharLiteral(node->toCharLiteral());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -300,7 +302,26 @@ SemanticAnalysis::visitStringLiteral(ast::StringLiteral* node)
   return new (pool_) sema::StringExpr(node, strLitType, node->literal());
 }
 
+sema::Expr*
+SemanticAnalysis::visitCharLiteral(ast::CharLiteral* node)
+{
+  BoxedValue b(IntValue::FromSigned(node->value(), 32));
+  Type* charType = types_->getPrimitive(PrimitiveType::Char);
+  return new (pool_) sema::ConstValueExpr(node, charType, b);
+}
+
 // :TODO: write tests for weird operators on weird types, like ++function or function - function.
+static bool
+IsValidIncDecType(Type* type)
+{
+  switch (type->canonicalKind()) {
+    case Type::Kind::Primitive:
+      return type->primitive() == PrimitiveType::Int32 ||
+             type->primitive() == PrimitiveType::Char;
+    default:
+      return false;
+  }
+}
 
 sema::Expr*
 SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
@@ -310,15 +331,15 @@ SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
     return nullptr;
 
   Type* type = expr->storedType();
-  Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
-
   if (type->isConst()) {
     cc_.report(node->loc(), rmsg::lvalue_is_const);
     return nullptr;
   }
-  if (type != int32Type) {
-    cc_.report(node->loc(), rmsg::unimpl_kind) <<
-      "sema-incdec" << type;
+
+  // We define this operator for untagged integral types.
+  if (!IsValidIncDecType(type)) {
+    cc_.report(node->loc(), rmsg::operator_not_defined) <<
+      TokenNames[node->token()] << type;
     return nullptr;
   }
 
@@ -333,19 +354,22 @@ SemanticAnalysis::visitAssignment(ast::Assignment* node)
     return nullptr;
 
   Type* type = expr->storedType();
-  Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
-
-  // :TODO: handle str[n]++
 
   if (type->isConst()) {
     cc_.report(node->loc(), rmsg::lvalue_is_const);
     return nullptr;
   }
-  if (type != int32Type) {
-    cc_.report(node->loc(), rmsg::unimpl_kind) <<
-      "sema-incdec" << type;
-    return nullptr;
+
+  // Prevent deep copies if the interior is const.
+  if (ArrayType* array = type->asArray()) {
+    if (array->hasFixedLength() && array->contained()->isConst()) {
+      cc_.report(node->loc(), rmsg::lvalue_is_const);
+      return nullptr;
+    }
   }
+
+  assert(!type->isStruct());
+
   if (node->token() != TOK_ASSIGN) {
     cc_.report(node->loc(), rmsg::unimpl_kind) <<
       "sema-assign" << TokenNames[node->token()];
@@ -353,7 +377,7 @@ SemanticAnalysis::visitAssignment(ast::Assignment* node)
   }
 
   ast::Expression* right = node->expression();
-  EvalContext ec(CoercionKind::Assignment, right, int32Type);
+  EvalContext ec(CoercionKind::Assignment, right, type);
   if (!coerce(ec))
     return nullptr;
 

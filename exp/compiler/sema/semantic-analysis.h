@@ -62,6 +62,7 @@ class SemanticAnalysis
   sema::Expr* visitNameProxy(ast::NameProxy* node);
   sema::Expr* visitUnaryExpression(ast::UnaryExpression* node);
   sema::Expr* visitStringLiteral(ast::StringLiteral* node);
+  sema::Expr* visitCharLiteral(ast::CharLiteral* node);
   sema::Expr* visitIncDec(ast::IncDecExpression* node);
   sema::Expr* visitIndex(ast::IndexExpression* node);
   sema::Expr* visitAssignment(ast::Assignment* node);

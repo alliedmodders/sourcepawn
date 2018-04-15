@@ -364,8 +364,6 @@ class TokenLiteral : public Expression
 
 class CharLiteral : public Expression
 {
-  int32_t value_;
-
  public:
   CharLiteral(const SourceLocation &pos, int32_t value)
     : Expression(pos),
@@ -378,12 +376,13 @@ class CharLiteral : public Expression
   int32_t value() const {
     return value_;
   }
+
+ private:
+  int32_t value_;
 };
 
 class IntegerLiteral : public Expression
 {
-  int64_t value_;
-
  public:
   IntegerLiteral(const SourceLocation &pos, int64_t value)
     : Expression(pos),
@@ -396,6 +395,9 @@ class IntegerLiteral : public Expression
   int64_t value() const {
     return value_;
   }
+
+ private:
+  int64_t value_;
 };
 
 class FloatLiteral : public Expression

@@ -177,6 +177,7 @@ RMSG(incorrect_argcount,            type,              "expected %0 arguments; g
 RMSG(vararg_cannot_be_byref,        type,              "variadic arguments cannot have a by-reference type")
 RMSG(illegal_vararg_type,           type,              "cannot use type '%0' as a variadic argument")
 RMSG(vararg_losing_lvalue,          warning,           "coercing l-value of type '%0' to variadic argument of type '%1' creates an r-value conversion")
+RMSG(operator_not_defined,          type,              "operator '%0' is not defined for type '%1'")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 /* :TODO: do this */
