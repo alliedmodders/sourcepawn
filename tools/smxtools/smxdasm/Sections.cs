@@ -516,7 +516,7 @@ namespace smxdasm
             {
                 if (entry.Ident != SymKind.Function)
                     continue;
-                if (address >= entry.Address && address <= entry.Address)
+                if (address >= entry.CodeStart && address <= entry.CodeEnd)
                     return entry;
             }
             return null;
@@ -556,7 +556,7 @@ namespace smxdasm
                 if (i == symbols.Count - 1)
                     break;
 
-                var next_sym = symbols[i];
+                var next_sym = symbols[i + 1];
 
                 // Only arrays can be accessed out of their starting address.
                 if (sym.Ident != SymKind.Array)
@@ -586,7 +586,7 @@ namespace smxdasm
                 if (sym.Ident != SymKind.Array)
                     continue;
 
-                var next_sym = dat_refs_[i];
+                var next_sym = dat_refs_[i + 1];
                 if (address > sym.Address && address < next_sym.Address)
                     return sym;
             }
