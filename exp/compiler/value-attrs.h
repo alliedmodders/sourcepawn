@@ -26,8 +26,9 @@ namespace sp {
 
 enum class SymAttrs
 {
-  None  = 0x0,
-  Stock = 0x1
+  None          = 0x0,
+  Stock         = 0x1,
+  Uninitialized = 0x2
 };
 KE_DEFINE_ENUM_OPERATORS(SymAttrs)
 

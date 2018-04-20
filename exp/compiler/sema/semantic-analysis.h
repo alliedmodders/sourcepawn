@@ -66,6 +66,7 @@ class SemanticAnalysis
   sema::Expr* visitIncDec(ast::IncDecExpression* node);
   sema::Expr* visitIndex(ast::IndexExpression* node);
   sema::Expr* visitAssignment(ast::Assignment* node);
+  sema::Expr* visitNewArray(ast::NewArrayExpr* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -93,6 +94,10 @@ class SemanticAnalysis
   sema::Expr* initializer(ast::Expression* expr, Type* type);
   sema::Expr* struct_initializer(ast::StructInitializer* expr, Type* type);
   sema::Expr* array_initializer(ast::ArrayLiteral* expr, Type* type);
+  sema::Expr* infer_array_initializer(VarDecl* node);
+
+  bool isValidNewArrayInitializer(Type* from, Type* to);
+  static bool CompareNonArrayTypesExactly(Type* a, Type* b);
 
  private:
   enum class ReturnStatus {

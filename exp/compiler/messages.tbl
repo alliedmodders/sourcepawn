@@ -93,7 +93,7 @@ RMSG(methodmap_on_non_type,         type,              "methodmap cannot apply t
 RMSG(methodmap_on_non_enum,         type,              "methodmap cannot apply to a non-enum type '%0'")
 
 // Type resolution errors.
-RMSG(array_of_void,                 type,              "cannot create an array of void")
+RMSG(invalid_array_base,            type,              "cannot create an array of type '%0'")
 RMSG(enum_value_must_be_constant,   type,              "enumeration values must be constant")
 RMSG(enum_value_must_be_int,        type,              "enumeration values must be 32-bit signed integers")
 RMSG(array_size_must_be_constant,   type,              "array size must be a constant")
@@ -178,6 +178,14 @@ RMSG(vararg_cannot_be_byref,        type,              "variadic arguments canno
 RMSG(illegal_vararg_type,           type,              "cannot use type '%0' as a variadic argument")
 RMSG(vararg_losing_lvalue,          warning,           "coercing l-value of type '%0' to variadic argument of type '%1' creates an r-value conversion")
 RMSG(operator_not_defined,          type,              "operator '%0' is not defined for type '%1'")
+RMSG(decl_needs_array_type,         type,              "decl keyword can only be used on array types")
+RMSG(decl_with_initializer,         type,              "decl keyword with type '%' cannot have an initializer")
+RMSG(decl_with_const_array,         type,              "decl keyword cannot be used on const arrays")
+RMSG(new_array_illegal_array_base,  type,              "base type of a 'new' expression cannot be an array")
+RMSG(new_array_illegal_const_base,  type,              "base type of a 'new' expression cannot be const")
+RMSG(new_array_missing_dimension,   type,              "missing size expression in dimension %0")
+RMSG(dynamic_array_needs_new,        type,             "invalid dynamic array initializer - use 'new'")
+RMSG(dynamic_array_needs_new_or_str, type,             "invalid dynamic array initializer - use 'new' or a string literal")
 
 RMSG(too_many_cases,                impl,              "too many switch cases")
 /* :TODO: do this */

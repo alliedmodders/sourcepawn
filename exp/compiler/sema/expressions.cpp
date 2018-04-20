@@ -51,6 +51,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitIndex(node->toIndexExpression());
     case AstKind::kCharLiteral:
       return visitCharLiteral(node->toCharLiteral());
+    case AstKind::kNewArrayExpr:
+      return visitNewArray(node->toNewArrayExpr());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -412,6 +414,38 @@ SemanticAnalysis::initializer(ast::Expression* node, Type* type)
   if (!expr)
     return nullptr;
 
+  if (type->isArray() && !type->toArray()->hasFixedLength()) {
+    // Currently, assigning array pointers is invalid. We make an exception
+    // for two cases that SP1 can support. When we support fully dynamic
+    // arrays, none of this will matter.
+    if (type->isCharArray() && expr->asStringExpr())
+      return expr;
+    if (expr->asNewArrayExpr()) {
+      if (!isValidNewArrayInitializer(expr->type(), type)) {
+        cc_.report(node->loc(), rmsg::cannot_coerce) <<
+          expr->type() << type;
+        return nullptr;
+      }
+      return expr;
+    }
+
+    // No initializer will work.
+    rmsg::Id msg = type->isCharArray()
+                   ? rmsg::dynamic_array_needs_new_or_str
+                   : rmsg::dynamic_array_needs_new;
+    cc_.report(node->loc(), msg);
+    return nullptr;
+  }
+
+  // This is a very special exception in the SP1 compiler. When we support
+  // fully dynamic arrays, this won't matter.
+  if (expr->asStringExpr() &&
+      type->isCharArray() &&
+      !type->toArray()->hasFixedLength())
+  {
+    return expr;
+  }
+
   // :TODO: check overflow integers
   EvalContext ec(CoercionKind::Assignment, expr, type);
   if (!coerce(ec))
@@ -533,7 +567,7 @@ SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
     if (!value)
       continue;
 
-    if (sym->type()->isString()) {
+    if (sym->type()->isCharArray()) {
       sema::StringExpr* str = value->asStringExpr();
       if (!str) {
         cc_.report(value->src()->loc(), rmsg::struct_init_needs_string_lit) <<
@@ -570,5 +604,62 @@ SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
   return new (pool_) sema::StructInitExpr(expr, st, out);
 }
 
+bool
+SemanticAnalysis::isValidNewArrayInitializer(Type* from, Type* to)
+{
+  ArrayType* from_array = from->toArray();
+  ArrayType* to_array = to->toArray();
+  while (true) {
+    from = from_array->contained();
+    to = to_array->contained();
+
+    from_array = from->asArray();
+    to_array = to->asArray();
+    if (!from_array && !to_array)
+      break;
+
+    // If one is null but not the other, the assignment is invalid.
+    if (!from_array || !to_array)
+      return false;
+  }
+
+  return CompareNonArrayTypesExactly(from, to);
+}
+
+sema::Expr*
+SemanticAnalysis::visitNewArray(ast::NewArrayExpr* node)
+{
+  Type* base = node->te().resolved();
+  if (base->isArray()) {
+    cc_.report(node->loc(), rmsg::new_array_illegal_array_base);
+    return nullptr;
+  }
+  if (base->isConst()) {
+    cc_.report(node->loc(), rmsg::new_array_illegal_const_base);
+    return nullptr;
+  }
+
+  Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
+
+  sema::FixedExprList* exprs = new (pool_) sema::FixedExprList(node->dims()->length());
+  Type* type = base;
+  for (size_t i = 0; i < node->dims()->length(); i++) {
+    ast::Expression* ast_expr = node->dims()->at(i);
+    if (!ast_expr) {
+      cc_.report(node->loc(), rmsg::new_array_missing_dimension) << i;
+      return nullptr;
+    }
+
+    EvalContext ec(CoercionKind::Index, ast_expr, int32Type);
+    if (!coerce(ec))
+      return nullptr;
+    exprs->at(i) = ec.result;
+
+    type = types_->newArray(type, ArrayType::kUnsized);
+  }
+
+  // :TODO: test old syntax for genarray.
+  return new (pool_) sema::NewArrayExpr(node, type, exprs);
+}
 
 } // namespace sp

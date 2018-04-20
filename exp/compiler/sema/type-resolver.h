@@ -111,7 +111,7 @@ class TypeResolver
  private:
   FunctionType *maybeResolveFunction(FunctionSignature *sig);
 
-  bool resolveConstantArraySize(TypeSpecifier* spec, Expression* expr, int* outp);
+  bool resolveConstantArraySize(ConstantEvaluator::Mode, Expression* expr, int* outp);
   void computeFixedArraySizes(TypeSpecifier* spec,
                               Type* base,
                               Vector<Rank>& ranks,
@@ -132,7 +132,7 @@ class TypeResolver
   Type *resolveNameToType(NameProxy *proxy);
   Type *resolveArrayComponentTypes(TypeSpecifier* spec,
                                    Type* type,
-                                   Expression* init);
+                                   TypeSpecHelper* helper);
   bool resolveEnumConstantValue(EnumConstant *cs, int *outp);
 
  private:

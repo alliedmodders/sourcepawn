@@ -215,6 +215,27 @@ TypeResolver::visitVarDecl(VarDecl *node)
 
     VarDeclSpecHelper helper(node, initializer);
     type = resolveType(node->te(), &helper);
+
+    // If the array was an old-school declaration, like:
+    //   decl blah[expr];
+    //
+    // Then we need to preserve the dimensions from the type, and propagate
+    // them to an initializer. This is really out of scope for type resolution,
+    // but it's truly the only place we can do this (unless we always stash
+    // the dimensions in the AST node).
+    if (type->isArray() &&
+        !type->toArray()->hasFixedLength() &&
+        sym->scope()->kind() == Scope::Block &&
+        spec->dims() &&
+        !initializer)
+    {
+      Type* innermost = type->toArray()->innermost();
+      initializer = new (pool_) NewArrayExpr(
+        spec->arrayLoc(),
+        TypeExpr(innermost),
+        spec->dims());
+      node->set_initializer(initializer);
+    }
   } else {
     type = node->te().resolved();
   }
@@ -528,7 +549,8 @@ TypeResolver::visitTypesetDecl(TypesetDecl *decl)
   if (!verifyTypeset(decl))
     return;
 
-  TypesetType::TypeList* list = new (pool_) TypesetType::TypeList(decl->types()->length());
+  TypesetType::TypeList* list =
+    new (pool_) TypesetType::TypeList(decl->types()->length());
   for (size_t i = 0; i < list->length(); i++) {
     TypesetDecl::Entry &entry = decl->types()->at(i);
     list->at(i) = entry.te.resolved();
@@ -577,12 +599,10 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
 // Returns true if it could be resolved to a constant integer; false
 // otherwise. |outp| is unmodified on failure.
 bool
-TypeResolver::resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, int *outp)
+TypeResolver::resolveConstantArraySize(ConstantEvaluator::Mode mode,
+                                       Expression *expr,
+                                       int *outp)
 {
-  // With old-style decls, we have to speculatively parse for constants.
-  ConstantEvaluator::Mode mode = spec->isOldDecl()
-    ? ConstantEvaluator::Speculative
-    : ConstantEvaluator::Required;
   ConstantEvaluator ceval(cc_, this, mode);
 
   BoxedValue value;
@@ -825,7 +845,7 @@ TypeResolver::resolveType(TypeExpr& te, TypeSpecHelper* helper)
 
   // Create types for each rank of an array.
   if (spec->rank())
-    type = resolveArrayComponentTypes(spec, type, helper->initializer());
+    type = resolveArrayComponentTypes(spec, type, helper);
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -864,8 +884,8 @@ TypeResolver::resolveBaseType(TypeSpecifier *spec)
 bool
 TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
 {
-  if (type->isVoid()) {
-    cc_.report(spec->arrayLoc(), rmsg::array_of_void);
+  if (type->isVoid() || type->isStruct()) {
+    cc_.report(spec->arrayLoc(), rmsg::invalid_array_base) << type;
     return false;
   }
   return true;
@@ -957,43 +977,119 @@ TypeResolver::resolveNameToType(NameProxy *proxy)
 }
 
 Type*
-TypeResolver::resolveArrayComponentTypes(TypeSpecifier* spec, Type* type, Expression* initializer)
+TypeResolver::resolveArrayComponentTypes(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper)
 {
   checkArrayInnerType(spec, type);
 
-  Vector<Rank> ranks;
-  if (initializer)
-    ranks = fixedArrayLiteralDimensions(spec, type, initializer);
+  // For each rank, try to compute a constant size if one was given. There are
+  // two scenarios for how array dimensions are computed, when the type is
+  // for a variable declaration:
+  //
+  // 1. "old-style": pre-transitional syntax.
+  //   a. If any rank is unspecified, there must be an initializer to infer
+  //      dimensions from, and all specified dimensions must be constant.
+  //   b. If all ranks are specified, any non-constant rank will generate
+  //      a fully dynamic array.
+  // 2. "new-style": transitional syntax.
+  //   a. Ranks cuddling the type may not have any size specified. The size
+  //      is determined at runtime via an initializer (such as "new").
+  //   b. Ranks cuddling the variable name ("post dims") may only have
+  //      constant sizes. Any rank that is not specified must be inferred
+  //      by a literal.
+  //
+  // For anything other than block local variables, non-constant expressions
+  // are not allowed as dimension sizes, and sizes cannot be inferred.
+  VariableSymbol* sym = nullptr;
+  Expression* initializer = nullptr;
+  ConstantEvaluator::Mode mode = ConstantEvaluator::Required;
+  if (helper) {
+    if (VarDecl* decl = helper->decl()) {
+      sym = decl->sym();
+      if (!sym->isArgument())
+        initializer = helper->initializer();
+      if (spec->isOldDecl() && sym->scope()->kind() == Scope::Block)
+        mode = ConstantEvaluator::Speculative;
+    }
+  }
+
+  // For each rank that has a size expression, compute its constant value if
+  // any, and track whether any of the values were not constant. Note that
+  // if a rank is missing a size expression, we might still try to infer it
+  // later, so all_constant stays true even if no ranks have sizes.
+  ke::Vector<int> given_rank_sizes;
+  bool all_constant = true;
+  for (size_t i = 0; i < spec->rank(); i++) {
+    int rank_size = ArrayType::kUnsized;
+    Expression* expr = spec->sizeOfRank(i);
+    if (expr && !resolveConstantArraySize(mode, expr, &rank_size))
+      all_constant = false;
+    given_rank_sizes.append(rank_size);
+  }
+
+  // Try to also infer the sizes of ranks from an initializer. This is used
+  // only when the entire array is fixed-size, and only when the rank size
+  // was not specified.
+  Vector<Rank> inferred_sizes;
+  if (initializer && all_constant)
+    inferred_sizes = fixedArrayLiteralDimensions(spec, type, initializer);
+
+  bool reported_size_error = false;
 
   size_t rank_index = spec->rank() - 1;
   do {
-    int arraySize = ArrayType::kUnsized;
-    Expression *expr = spec->sizeOfRank(rank_index);
-    if (expr) {
+    int rank_size = ArrayType::kUnsized;
+    if (spec->sizeOfRank(rank_index)) {
       // Should either be old-style, or fixed-array style.
       assert(spec->isOldDecl() || spec->hasPostDims());
 
-      resolveConstantArraySize(spec, expr, &arraySize);
-    } else if (rank_index < ranks.length()) {
-      // Should either be old-style, or fixed-array style.
+      // If all ranks were constant, we can use the constant size for this
+      // rank. Otherwise, we must treat every slot as having an unknown size.
+      //
+      // Any errors at this point were reported by ConstantEvaluator, so we
+      // don't report any inconsistencies here.
+      if (all_constant)
+        rank_size = given_rank_sizes[rank_index];
+    } else if (rank_index < inferred_sizes.length()) {
+      // Should either be an old-style or fixed-array style local or global
+      // variable.
       assert(spec->isOldDecl() || spec->hasPostDims());
+      assert(!sym->isArgument());
+      assert(all_constant);
 
-      // If the size had an Expr, 
-      const Rank& r = ranks[rank_index];
+      const Rank& r = inferred_sizes[rank_index];
       assert(r.status != RankStatus::Unvisited);
       assert(r.status != RankStatus::Determinate);
 
       // If the status is Indeterminate, then we already threw an error earlier,
       // so we just keep going to gather any more errors.
       if (r.status == RankStatus::Computed)
-        arraySize = r.size;
+        rank_size = r.size;
+    } else if (all_constant &&
+               (sym && sym->isArgument()) &&
+               (spec->isOldDecl() || spec->hasPostDims()))
+    {
+      // This is a local variable declaration that is missing a size or the
+      // size could not be inferred. Currently, we do not allow 0-length or
+      // null arrays to be declared.
+      //
+      // Note that this rule doesn't apply to new-style array declarations.
+      // If the user forgot an initializer, they'll get an error in the
+      // SemA pass. Here we're only trying to catch variable types that are
+      // undeclarable.
+      if (!reported_size_error) {
+        cc_.report(spec->arrayLoc(), rmsg::new_array_missing_dimension) <<
+          rank_index;
+        reported_size_error = true;
+      }
+    }
 
-      if (arraySize > ArrayType::kMaxSize)
-        cc_.report(spec->arrayLoc(), rmsg::array_size_too_large);
+    if (!reported_size_error && rank_size > ArrayType::kMaxSize) {
+      cc_.report(spec->arrayLoc(), rmsg::array_size_too_large);
+      reported_size_error = true;
     }
 
     // :TODO: constify
-    type = cc_.types()->newArray(type, arraySize);
+    type = cc_.types()->newArray(type, rank_size);
   } while (rank_index--);
   return type;
 }

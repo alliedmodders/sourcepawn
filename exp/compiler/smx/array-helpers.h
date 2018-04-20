@@ -19,7 +19,10 @@
 #ifndef _include_sourcepawn_emit_array_size_helpers_h_
 #define _include_sourcepawn_emit_array_size_helpers_h_
 
+#include <amtl/am-bits.h>
 #include <amtl/am-vector.h>
+#include <limits.h>
+#include <sp_vm_types.h>
 
 namespace sp {
 
@@ -46,6 +49,13 @@ struct ArrayInfo
 
 // Compute fixed array size information; returns false if the size was too big.
 bool ComputeArrayInfo(ArrayType* array, ArrayInfo* out);
+
+static inline int32_t CellLengthOfString(size_t str_length)
+{
+  // :TODO: ensure this
+  assert(str_length < INT_MAX);
+  return (int32_t)(ke::Align(str_length + 1, sizeof(cell_t)) / sizeof(cell_t));
+}
 
 } // namespace sp
 

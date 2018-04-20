@@ -1634,7 +1634,13 @@ Parser::localVarDecl(TokenKind kind, uint32_t flags)
   if (!parse_decl(&decl, flags))
     return nullptr;
 
-  return variable(kind, &decl, SymAttrs::None, flags);
+  SymAttrs attrs = SymAttrs::None;
+  if (kind == TOK_DECL) {
+    attrs |= SymAttrs::Uninitialized;
+    kind = TOK_NEW;
+  }
+
+  return variable(kind, &decl, attrs, flags);
 }
 
 Statement *

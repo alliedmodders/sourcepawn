@@ -308,12 +308,21 @@ NameResolver::OnEnumValueDecl(EnumConstant *cs)
 
 // :TODO: test void vars/args
 VarDecl *
-NameResolver::HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier &spec, Expression *init)
+NameResolver::HandleVarDecl(NameToken name,
+                            TokenKind kind,
+                            SymAttrs flags,
+                            TypeSpecifier &spec,
+                            Expression *init)
 {
-  assert(flags == SymAttrs::None);
-
   Scope *scope = getOrCreateScope();
   VarDecl *var = new (pool_) VarDecl(name, kind, init);
+
+  if ((flags & SymAttrs::Uninitialized) != SymAttrs::None) {
+    var->set_must_zero_init(false);
+    flags = flags & ~SymAttrs::Uninitialized;
+  }
+
+  assert(flags == SymAttrs::None);
 
   // Note: the parser has already bound |var->init()| at this point, meaning
   // that aside from globals it should be impossible to self-initialize like:
@@ -946,6 +955,11 @@ NameResolver::resolve(TypeSpecifier &spec, TypeSpecHelper *helper)
   // See type-resolver - we apply const before applying array ranks.
   if (spec.isConst())
     type = tr_.applyConstQualifier(&spec, type);
+
+  if (spec.rank()) {
+    if (!tr_.checkArrayInnerType(&spec, type))
+      return delay(spec);
+  }
 
   // :TODO: constify!
   if (spec.dims()) {

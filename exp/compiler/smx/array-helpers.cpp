@@ -45,8 +45,8 @@ ComputeArrayInfo(ArrayType* array, ArrayInfo* out)
 
   // Compute the final level first.
   ArrayType* level = work.popCopy();
-  uint64_t bytes = level->isString()
-                   ? ke::Align(level->fixedLength(), int32_t(sizeof(cell_t)))
+  uint64_t bytes = level->isCharArray()
+                   ? CellLengthOfString(level->fixedLength()) * sizeof(cell_t)
                    : level->fixedLength() * sizeof(cell_t);
   if (bytes > INT_MAX)
     return false;

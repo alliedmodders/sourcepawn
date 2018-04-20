@@ -49,6 +49,7 @@ namespace sema {
   _(Load)                 \
   _(Slice)                \
   _(Store)                \
+  _(NewArray)             \
   /* terminator */
 
 // Forward declarations.
@@ -611,7 +612,7 @@ class StoreExpr : public Expr
 
 // Create an array, valid for the duration of the current statement, that
 // offers a view into another array.
-class SliceExpr : public Expr
+class SliceExpr final : public Expr
 {
  public:
   explicit SliceExpr(ast::Expression* node, Type* type,
@@ -639,6 +640,25 @@ class SliceExpr : public Expr
  private:
   Expr* base_;
   Expr* index_;
+};
+
+class NewArrayExpr final : public Expr
+{
+ public:
+  explicit NewArrayExpr(ast::Expression* node, Type* type,
+                        FixedExprList* exprs)
+   : Expr(node, type),
+     exprs_(exprs)
+  {}
+
+  DECLARE_SEMA(NewArray)
+
+  FixedExprList* exprs() const {
+    return exprs_;
+  }
+
+ private:
+  FixedExprList* exprs_;
 };
 
 #undef DECLARE_SEMA

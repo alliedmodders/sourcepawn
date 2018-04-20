@@ -257,7 +257,8 @@ class VarDecl : public Statement
      sema_init_(nullptr),
      sym_(nullptr),
      next_(nullptr),
-     classifier_(classifier)
+     classifier_(classifier),
+     must_zero_init_(true)
   {
   }
 
@@ -291,10 +292,23 @@ class VarDecl : public Statement
   TokenKind classifier() const {
     return classifier_;
   }
+  bool must_zero_init() const {
+    return must_zero_init_;
+  }
+  void set_must_zero_init(bool value) {
+    must_zero_init_ = value;
+  }
 
   // This is only valid after type resolution.
   Type* type() const {
     return te().resolved();
+  }
+
+  // This is used for old-style dynamic arrays, where we infer an initializer
+  // during type resolution.
+  void set_initializer(ast::Expression* expr) {
+    assert(!initialization_);
+    initialization_ = expr;
   }
 
   // When parsed as a list of declarations, for example:
@@ -317,6 +331,7 @@ class VarDecl : public Statement
   VariableSymbol *sym_;
   VarDecl *next_;
   TokenKind classifier_;
+  bool must_zero_init_;
 };
 
 class NameProxy : public Expression

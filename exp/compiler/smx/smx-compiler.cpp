@@ -341,8 +341,10 @@ SmxCompiler::generateBlock(ast::BlockStatement* block)
 void
 SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
 {
-  // :TODO: assert not const
+  // :TODO: assert not const, figure out what to do
   VariableSymbol* sym = stmt->sym();
+
+  // :TODO: obey decl if we can
 
   int32_t size;
 
@@ -392,7 +394,7 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
 
       initialize_array(sym, array_init, array_info);
     } else {
-      assert(false);
+      initialize_dynamic_array(stmt, init);
     }
     return;
   }
@@ -1169,7 +1171,7 @@ SmxCompiler::generateLegacyStructData(ast::VarDecl* stmt)
 
     FieldSymbol* sym = field->sym();
     int32_t value;
-    if (sym->type()->isString()) {
+    if (sym->type()->isCharArray()) {
       if (expr) {
         Atom* atom = expr->toStringExpr()->literal();
         value = generateDataString(atom->chars(), atom->length());
@@ -1317,7 +1319,7 @@ SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
       return ValueDest::Error;
 
     if (const_index != 0) {
-      if (atype->isString())
+      if (atype->isCharArray())
         __ opcode(OP_ADD_C, const_index);
       else
         __ opcode(OP_ADD_C, const_index * sizeof(cell_t));
@@ -1334,7 +1336,7 @@ SmxCompiler::emitIndex(sema::IndexExpr* expr, ValueDest dest)
     if (atype->hasFixedLength())
       __ opcode(OP_BOUNDS, atype->fixedLength() - 1);
 
-    if (atype->isString())
+    if (atype->isCharArray())
       __ opcode(OP_ADD);
     else
       __ opcode(OP_IDXADDR);
@@ -1653,6 +1655,41 @@ SmxCompiler::gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
   return data_addr;
 }
 
+void
+SmxCompiler::initialize_dynamic_array(ast::VarDecl* decl, sema::Expr* expr)
+{
+  // We must have an expression here - SemanticAnalysis should have guaranteed it.
+  assert(expr);
+
+  if (sema::StringExpr* str = expr->asStringExpr()) {
+    Atom* literal = str->literal();
+    int32_t arrayLength = CellLengthOfString(literal->length());
+    int32_t data = generateDataString(literal->chars(), literal->length());
+
+    __ opcode(OP_PUSH_C, arrayLength);
+    __ opcode(OP_GENARRAY, 1);
+    __ opcode(OP_POP_ALT);
+    __ const_pri(data);
+    __ opcode(OP_MOVS, arrayLength * sizeof(cell_t));
+  } else {
+    sema::NewArrayExpr* ctor = expr->toNewArrayExpr();
+    for (size_t i = 0; i < ctor->exprs()->length(); i++) {
+      sema::Expr* dim = ctor->exprs()->at(i);
+      if (!emit_into(dim, ValueDest::Stack))
+        return;
+    }
+
+    int32_t argc = int32_t(ctor->exprs()->length());
+    if (decl->must_zero_init())
+      __ opcode(OP_GENARRAY_Z, argc);
+    else
+      __ opcode(OP_GENARRAY, argc);
+    __ opcode(OP_POP_ALT);
+  }
+
+  emit_var_store(decl->sym(), ValueDest::Alt);
+}
+
 static inline OPCODE
 BinaryOpHasInlineTest(TokenKind kind)
 {
@@ -1954,6 +1991,8 @@ HasSimpleCellStorage(Type* type)
     case Type::Kind::Function:
     case Type::Kind::MetaFunction:
       return true;
+    case Type::Kind::Array:
+      return !type->toArray()->hasFixedLength();
     default:
       return false;
   }
@@ -1964,6 +2003,8 @@ SmxCompiler::compute_storage_size(Type* type)
 {
   if (HasSimpleCellStorage(type))
     return sizeof(cell_t);
+
+  assert(false);
 
   cc_.report(SourceLocation(), rmsg::unimpl_kind) <<
     "smx-storage-size" << int32_t(type->canonicalKind());

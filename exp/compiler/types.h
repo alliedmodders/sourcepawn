@@ -232,7 +232,7 @@ class Type : public PoolObject
     return isPrimitive() && primitive() == type;
   }
 
-  bool isString();
+  bool isCharArray();
 
   // Return true if a value of this type can be stored in a variable.
   bool isStorableType() {
@@ -719,7 +719,7 @@ private:
 };
 
 inline bool
-Type::isString()
+Type::isCharArray()
 {
   return isArray() && toArray()->contained()->isPrimitive(PrimitiveType::Char);
 }

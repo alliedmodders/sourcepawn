@@ -224,9 +224,49 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
 
     node->set_sema_init(init);
   } else {
-    // Initialize to 0!
-    // assert(false);
-    // :TODO:
+    if (ArrayType* type = node->type()->asArray()) {
+      uint32_t dynamic_levels = 0;
+      for (ArrayType* iter = type; iter; iter = iter->contained()->asArray()) {
+        if (!iter->hasFixedLength())
+          dynamic_levels++;
+      }
+
+      // There is currently no way to mix/match fixed and dynamic length
+      // arrays. We might get this someday via typedefs, but not today.
+      assert(!dynamic_levels || dynamic_levels == type->nlevels());
+
+      if (dynamic_levels) {
+        // We should have created an initializer during type resolution. If we
+        // didn't, something extremely weird happened, or the declaration is
+        // just invalid. Like "new int[]" or something.
+        if (type->isCharArray())
+          cc_.report(node->loc(), rmsg::dynamic_array_needs_new_or_str);
+        else
+          cc_.report(node->loc(), rmsg::dynamic_array_needs_new);
+        return;
+      }
+    }
+  }
+
+  if (!node->must_zero_init()) {
+    // :TODO: forbid static/global
+    if (!sym->type()->isArray()) {
+      cc_.report(node->loc(), rmsg::decl_needs_array_type);
+      return;
+    }
+
+    ArrayType* type = sym->type()->toArray();
+    if (type->hasFixedLength() && node->initialization()) {
+      cc_.report(node->initialization()->loc(), rmsg::decl_with_initializer) <<
+        sym->type();
+      return;
+    }
+    if (type->contained()->isConst()) {
+      cc_.report(node->loc(), rmsg::decl_with_const_array);
+      return;
+    }
+
+    assert(sym->scope()->kind() == Scope::Block);
   }
 
   if (sym->scope()->kind() == Scope::Global)

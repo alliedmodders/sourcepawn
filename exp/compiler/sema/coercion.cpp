@@ -26,8 +26,6 @@ namespace sp {
 using namespace ke;
 using namespace ast;
 
-static bool CompareNonArrayTypesExactly(Type* a, Type* b);
-
 bool
 SemanticAnalysis::coerce(EvalContext& ec)
 {
@@ -370,8 +368,8 @@ SemanticAnalysis::lvalue_to_rvalue(sema::LValueExpr* expr)
   return new (pool_) sema::LoadExpr(expr->src(), type, expr);
 }
 
-static bool
-CompareNonArrayTypesExactly(Type* a, Type* b)
+bool
+SemanticAnalysis::CompareNonArrayTypesExactly(Type* a, Type* b)
 {
   if (a->qualifiers() != b->qualifiers())
     return false;
