@@ -919,6 +919,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
   code->header().flags = CODEFLAG_DEBUG;
   code->header().main = 0;
   code->header().code = sizeof(sp_file_code_t);
+  code->header().features = 0;
   code->setBlob((uint8_t *)code_buffer.buffer(), code_buffer.length() * sizeof(cell));
 
   // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was

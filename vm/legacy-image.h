@@ -30,6 +30,7 @@ class LegacyImage
     const uint8_t *bytes;
     size_t length;
     int version;
+    uint32_t features;
   };
   struct Data {
     const uint8_t *bytes;

@@ -213,7 +213,7 @@ SmxV1Image::validateData()
 
   const uint8_t *blob =
     reinterpret_cast<const uint8_t *>(data) + data->data;
-  data_ = Blob<sp_file_data_t>(section, data, blob, data->datasize);
+  data_ = Blob<sp_file_data_t>(section, data, blob, data->datasize, 0);
   return true;
 }
 
@@ -242,9 +242,16 @@ SmxV1Image::validateCode()
   if (code->codesize > (section->size - code->code))
     return error("invalid code blob");
 
+  uint32_t features = 0;
+  if (code->codeversion >= SmxConsts::CODE_VERSION_FEATURE_MASK)
+    features = code->features;
+
+  if (features)
+    return error("unsupported feature set; code is too new");
+
   const uint8_t *blob =
     reinterpret_cast<const uint8_t *>(code) + code->code;
-  code_ = Blob<sp_file_code_t>(section, code, blob, code->codesize);
+  code_ = Blob<sp_file_code_t>(section, code, blob, code->codesize, features);
   return true;
 }
 
@@ -425,6 +432,7 @@ SmxV1Image::DescribeCode() const -> Code
   code.bytes = code_.blob();
   code.length = code_.length();
   code.version = code_->codeversion;
+  code.features = code_.features();
   return code;
 }
 

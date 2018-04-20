@@ -878,9 +878,12 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
       case 'x':
         i=(int)strtol(option_value(ptr,argv,argc,&arg),(char **)&ptr,10);
         switch (i) {
+          case 13:
           case 12:
-            pc_code_version = i;
             pc_must_drop_stack = false;
+            /* Fallthrough */
+          case 10:
+            pc_code_version = i;
             break;
           default:
             fprintf(stderr, "unknown code version: %d\n", i);
