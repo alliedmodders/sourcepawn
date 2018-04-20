@@ -178,6 +178,7 @@ namespace smxdasm
             Prep(V1Opcode.ZERO_ALT);
             Prep(V1Opcode.ZERO_PRI);
             Prep(V1Opcode.ZERO_S, V1Param.Stack);
+            Prep(V1Opcode.REBASE, V1Param.Address, V1Param.Constant, V1Param.Constant);
         }
 
         private byte[] data_;
