@@ -810,14 +810,21 @@ namespace smxviewer
             if (tag == null)
                 addDetailLine("tagid = 0x{0:x}", entry.tagid);
             else
-                addDetailLine("tagid = 0x{0:x} ; {1}", entry.tagid, entry.Name);
+                addDetailLine("tagid = 0x{0:x} ; {1}", entry.tagid, tag.Name);
             addDetailLine("index = {0}", entry.Index);
+            addDetailLine("nargs = {0}", entry.nargs);
             for (var i = 0; i < entry.Args.Length; i++)
             {
                 var arg = entry.Args[i];
                 addDetailLine("arg {0}", i);
                 addDetailLine("  nameoffs = 0x{0:x} ; {1}", arg.nameoffs, arg.Name);
                 addDetailLine("  kind = {0:d} ; {1}", arg.Ident, arg.Ident.ToString());
+                if (file_.Tags != null)
+                    tag = file_.Tags.FindTag(arg.tagid);
+                if (tag == null)
+                    addDetailLine("  tagid = 0x{0:x}", arg.tagid);
+                else
+                    addDetailLine("  tagid = 0x{0:x} ; {1}", arg.tagid, tag.Name);
 
                 if (arg.Dims != null)
                 {
