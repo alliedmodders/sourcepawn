@@ -34,6 +34,9 @@ namespace smxdasm
         // Offset to the code section.
         public int codeoffs;
 
+        // Feature set.
+        public int features;
+
         public static CodeV1Header From(BinaryReader rd)
         {
             var code = new CodeV1Header();
@@ -43,6 +46,8 @@ namespace smxdasm
             code.Flags = (CodeV1Flags)rd.ReadUInt16();
             code.main = rd.ReadInt32();
             code.codeoffs = rd.ReadInt32();
+            if (code.CodeVersion >= 13)
+              code.features = rd.ReadInt32();
             return code;
         }
     }

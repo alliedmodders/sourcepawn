@@ -66,7 +66,8 @@ struct SmxConsts
   // Version 12: PROC/RETN semantic changes.
   static const uint8_t CODE_VERSION_MINIMUM = 9;
   static const uint8_t CODE_VERSION_SM_LEGACY = 10;
-  static const uint8_t CODE_VERSION_CURRENT = 12;
+  static const uint8_t CODE_VERSION_FEATURE_MASK = 13;
+  static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_FEATURE_MASK;
   static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
 };
 
@@ -161,6 +162,13 @@ typedef struct sp_file_code_s
   uint16_t  flags;       /**< Flags. */
   uint32_t  main;        /**< Address to "main". */
   uint32_t  code;        /**< Offset to bytecode, relative to the start of this section. */
+
+  /* This field is only guaranteed to be present when codeversion >= 13 or
+   * higher. Note that newer spcomp versions will still include a 0-filled
+   * value. This is legal since anything between the end of the code header
+   * and the code buffer is undefined. The field should still be ignored.
+   */
+  uint32_t  features;    /**< List of features flags that this code requires. */
 } sp_file_code_t;
 
 #if defined __GNUC__

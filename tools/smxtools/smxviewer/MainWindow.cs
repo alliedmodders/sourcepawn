@@ -473,6 +473,7 @@ namespace smxviewer
                 addDetailLine("flags = 0x{0:x} ; {0}", code.Header.Flags, code.Header.Flags.ToString());
                 addDetailLine("main = 0x{0:x}", code.Header.main);
                 addDetailLine("codeoffs = 0x{0:x}", code.Header.codeoffs);
+                addDetailLine("features = 0x{0:x}", code.Header.features);
                 endDetailUpdate();
             }, code);
 

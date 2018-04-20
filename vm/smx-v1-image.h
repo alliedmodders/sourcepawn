@@ -74,16 +74,19 @@ class SmxV1Image
      : header_(nullptr),
        section_(nullptr),
        blob_(nullptr),
-       length_(0)
+       length_(0),
+       features_(0)
     {}
     Blob(const Section *header,
          const T *section,
          const uint8_t *blob,
-         size_t length)
+         size_t length,
+         uint32_t features)
      : header_(header),
        section_(section),
        blob_(blob),
-       length_(length)
+       length_(length),
+       features_(features)
     {}
 
     size_t size() const {
@@ -101,12 +104,16 @@ class SmxV1Image
     bool exists() const {
       return !!header_;
     }
+    uint32_t features() const {
+      return features_;
+    }
 
    private:
     const Section *header_;
     const T *section_;
     const uint8_t *blob_;
     size_t length_;
+    uint32_t features_;
   };
 
   template <typename T>
