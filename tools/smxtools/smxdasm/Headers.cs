@@ -143,8 +143,6 @@ namespace smxdasm
             {
                 // This case is easy... we can just read the rest of the file.
                 rd.Read(header.Data, Size, header.ImageSize - Size);
-                var new_stream = new MemoryStream(header.Data, Size, header.ImageSize - Size);
-                rd = new BinaryReader(new_stream);
                 break;
             }
 
