@@ -580,7 +580,7 @@ calc_indirection(const array_creation_t *ar, cell_t dim)
 }
 
 static cell_t
-GenerateArrayIndirectionVectors(cell_t *arraybase, cell_t dims[], cell_t _dimcount, bool autozero)
+GenerateArrayIndirectionVectors(cell_t *arraybase, cell_t dims[], cell_t _dimcount)
 {
   array_creation_t ar;
   cell_t data_offs;
@@ -601,6 +601,59 @@ GenerateArrayIndirectionVectors(cell_t *arraybase, cell_t dims[], cell_t _dimcou
   return data_offs;
 }
 
+struct abs_iv_data_t {
+  cell_t addr;
+  uint8_t* ptr;
+  cell_t iv_cursor;
+  cell_t data_cursor;
+  const cell_t* dims;
+  cell_t dimcount;
+};
+
+// We divide multi-dimensional arrays into two regions: the IV (indirection
+// vector) region, and the data region. The IV region contains all the
+// intermediate links to access the final dimension. The data region contains
+// every cell in the last dimension.
+//
+// We split things this way because, all the intermediate vectors must be
+// allocated up-front, and it is easier to memset() the data area in one
+// big block.
+//
+// For a 1D array, the IV space is 0.
+// For a 2D array of size [X][Y], the IV space is X cells.
+// For a 3D array of size [X][Y][Z], the IV space is:
+//    (X + (Y * X))
+// For a 4D array of size [X][Y][Z][A], the IV space is:
+//    (X + ((Y + (Z * Y)) * X))
+//
+// This function generates IV vectors recursively. When processing intermediate
+// dimensions, we reserve the indirection vector in |iv_cursor|, then for each
+// slot, recursively ask for the next array it should point to.
+//
+// If the next dimension is also intermediate, it will point into the IV space.
+// If the next dimension is terminal, we will instead allocate the array in the
+// data space, and return its base address.
+static cell_t
+GenerateAbsoluteIndirectionVectors(abs_iv_data_t& info, cell_t dim)
+{
+  if (dim == 0) {
+    cell_t next_addr = info.data_cursor;
+    info.data_cursor += info.dims[0] * sizeof(cell_t);
+    return next_addr;
+  }
+
+  cell_t iv_base_offset = info.iv_cursor;
+  info.iv_cursor += info.dims[dim] * sizeof(cell_t);
+
+  for (cell_t i = 0; i < info.dims[dim]; i++) {
+    cell_t next_array_offset = GenerateAbsoluteIndirectionVectors(info, dim - 1);
+    cell_t iv_cell = iv_base_offset + i * sizeof(cell_t);
+    cell_t next_array_addr = info.addr + next_array_offset;
+    *reinterpret_cast<cell_t*>(info.ptr + iv_cell) = next_array_addr;
+  }
+  return iv_base_offset;
+}
+
 int
 PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
 {
@@ -608,7 +661,11 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
   if (argv[0] <= 0)
     return SP_ERROR_ARRAY_TOO_BIG;
 
+  // cells is the total number of cells required.
+  // iv_size is the number of bytes needed to hold indirection vectors,
+  // and is a subset of cells*sizeof(cell).
   uint32_t cells = argv[0];
+  cell_t iv_size = 0;
 
   for (uint32_t dim = 1; dim < argc; dim++) {
     cell_t dimsize = argv[dim];
@@ -620,12 +677,14 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
     if (!ke::IsUint32AddSafe(cells, dimsize))
       return SP_ERROR_ARRAY_TOO_BIG;
     cells += uint32_t(dimsize);
+    iv_size *= dimsize;
+    iv_size += dimsize * sizeof(cell_t);
   }
 
-  if (!ke::IsUint32MultiplySafe(cells, 4))
+  if (!ke::IsUint32MultiplySafe(cells, sizeof(cell_t)))
     return SP_ERROR_ARRAY_TOO_BIG;
 
-  uint32_t bytes = cells * 4;
+  uint32_t bytes = cells * sizeof(cell_t);
   if (!ke::IsUint32AddSafe(hp_, bytes))
     return SP_ERROR_ARRAY_TOO_BIG;
 
@@ -637,9 +696,29 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
     return SP_ERROR_HEAPLOW;
 
   cell_t *base = reinterpret_cast<cell_t *>(memory_ + hp_);
-  cell_t offs = GenerateArrayIndirectionVectors(base, argv, argc, !!autozero);
-  assert(size_t(offs) == cells);
-  (void)offs;
+  LegacyImage* image = runtime()->image();
+
+  if (image->DescribeCode().features & SmxConsts::kCodeFeatureDirectArrays) {
+    abs_iv_data_t info;
+    info.addr = hp_;
+    info.ptr = reinterpret_cast<uint8_t*>(base);
+    info.iv_cursor = 0;
+    info.data_cursor = iv_size;
+    info.dims = argv;
+    info.dimcount = argc;
+    GenerateAbsoluteIndirectionVectors(info, argc - 1);
+
+    assert(info.iv_cursor == iv_size);
+    assert(info.data_cursor == (cell_t)bytes);
+
+    if (autozero) {
+      memset(info.ptr + iv_size, 0, bytes - iv_size);
+    }
+  } else {
+    cell_t offs = GenerateArrayIndirectionVectors(base, argv, argc);
+    assert(size_t(offs) == cells);
+    (void)offs;
+  }
 
   argv[argc - 1] = hp_;
   hp_ = new_hp;
@@ -860,4 +939,40 @@ PluginContext::addStack(cell_t amount)
 
   sp_ = new_sp;
   return true;
+}
+
+int
+PluginContext::rebaseArray(cell_t array_addr,
+                           cell_t dat_addr,
+                           cell_t iv_size,
+                           cell_t data_size)
+{
+  int err;
+
+  cell_t* iv_vec;
+  if ((err = LocalToPhysAddr(array_addr, &iv_vec)) != SP_ERROR_NONE)
+    return err;
+
+  cell_t* data_vec;
+  if ((err = LocalToPhysAddr(array_addr + iv_size, &data_vec)) != SP_ERROR_NONE)
+    return err;
+
+  cell_t* tpl_iv_vec;
+  if ((err = LocalToPhysAddr(dat_addr, &tpl_iv_vec)) != SP_ERROR_NONE)
+    return err;
+
+  cell_t* tpl_data_vec;
+  if ((err = LocalToPhysAddr(dat_addr + iv_size, &tpl_data_vec)) != SP_ERROR_NONE)
+    return err;
+
+  assert(iv_vec < data_vec);
+  assert(tpl_iv_vec < tpl_data_vec);
+
+  while (iv_vec < data_vec) {
+    *iv_vec = *tpl_iv_vec + array_addr;
+    iv_vec++;
+    tpl_iv_vec++;
+  }
+  memcpy(data_vec, tpl_data_vec, data_size);
+  return SP_ERROR_NONE;
 }

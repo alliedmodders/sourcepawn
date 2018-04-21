@@ -140,9 +140,11 @@ namespace smxdasm
             switch (header.Compression)
             {
             case CompressionType.None:
+            {
                 // This case is easy... we can just read the rest of the file.
                 rd.Read(header.Data, Size, header.ImageSize - Size);
                 break;
+            }
 
             case CompressionType.Gz:
             {

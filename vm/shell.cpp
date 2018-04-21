@@ -240,12 +240,14 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  if (getenv("DISABLE_JIT") && getenv("DISABLE_JIT")[0] == '1')
+  if (getenv("DISABLE_JIT"))
     sEnv->SetJitEnabled(false);
 
   ShellDebugListener debug;
   sEnv->SetDebugger(&debug);
-  sEnv->InstallWatchdogTimer(5000);
+
+  if (!getenv("DISABLE_WATCHDOG"))
+    sEnv->InstallWatchdogTimer(5000);
 
   int errcode = Execute(argv[1]);
 

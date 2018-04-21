@@ -35,6 +35,8 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
   assert(datSize_ < memSize_);
   assert(heapSize_ <= memSize_ - datSize_);
 
+  code_features_ = rt_->image()->DescribeCode().features;
+
   auto& code = rt_->code();
   code_ = reinterpret_cast<const cell_t*>(code.bytes);
   stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
@@ -415,6 +417,33 @@ MethodVerifier::verifyOp(OPCODE op)
     if (!readCell(&ndims))
       return false;
     return verifyDimensionCount(ndims);
+  }
+
+  case OP_REBASE:
+  {
+    if (!(code_features_ & SmxConsts::kCodeFeatureDirectArrays)) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+
+    cell_t addr, iv_size, data_size;
+    if (!readCell(&addr) || !readCell(&iv_size) || !readCell(&data_size))
+      return false;
+    if (iv_size <= 0 ||
+        data_size <= 0 ||
+        iv_size >= INT_MAX / 2 ||
+        data_size >= INT_MAX / 2 ||
+        !ke::IsUintAddSafe<uint32_t>(addr, iv_size + data_size) ||
+        !ke::IsAligned(addr, sizeof(cell_t)) ||
+        !ke::IsAligned(iv_size, sizeof(cell_t)) ||
+        !ke::IsAligned(data_size, sizeof(cell_t)))
+    {
+      reportError(SP_ERROR_INSTRUCTION_PARAM);
+      return false;
+    }
+    if (!verifyDatOffset(addr) || !verifyDatOffset(addr + iv_size + data_size - 1))
+      return false;
+    return true;
   }
 
   case OP_SWITCH:

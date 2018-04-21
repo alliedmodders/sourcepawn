@@ -133,6 +133,7 @@ class PcodeVisitor
   virtual bool visitFLOAT_NOT() = 0;
   virtual bool visitHALT(cell_t value) = 0;
   virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) = 0;
+  virtual bool visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size) = 0;
 };
 
 class IncompletePcodeVisitor : public PcodeVisitor
@@ -483,6 +484,10 @@ class IncompletePcodeVisitor : public PcodeVisitor
     return false;
   }
   virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size) override {
     assert(false);
     return false;
   }
