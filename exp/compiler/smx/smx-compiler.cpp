@@ -104,6 +104,7 @@ SmxCompiler::add_code()
   code->header().flags = CODEFLAG_DEBUG;
   code->header().main = 0;
   code->header().code = sizeof(sp_file_code_t);
+  code->header().features = SmxConsts::kCodeFeatureDirectArrays;
   code->setBlob(masm_.buffer(), masm_.buffer_length());
   builder_.add(code);
 }
