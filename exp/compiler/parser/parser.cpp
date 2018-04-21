@@ -540,6 +540,13 @@ Parser::primitive()
       return new (pool_) IntegerLiteral(scanner_.begin(), tok->int64Value());
     }
 
+    case TOK_M_LINE:
+    {
+      SourceLocation pos = scanner_.begin();
+      unsigned line = cc_.source().getLine(pos);
+      return new (pool_) IntegerLiteral(pos, line);
+    }
+
     case TOK_TRUE:
     case TOK_FALSE:
     case TOK_NULL:

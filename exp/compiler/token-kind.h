@@ -91,6 +91,7 @@ namespace sp {
   _(M_IF,               "#if")                        \
   _(M_INCLUDE,          "#include")                   \
   _(M_LEAVING,          "#leaving")                   \
+  _(M_LINE,             "__LINE__")                   \
   _(M_OPTIONAL_NEWDECLS, "#optional_newdecls")        \
   _(M_OPTIONAL_SEMI,    "#optional_semicolons")       \
   _(M_PRAGMA,           "#pragma")                    \

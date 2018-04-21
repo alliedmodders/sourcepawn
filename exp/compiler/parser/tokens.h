@@ -82,6 +82,7 @@ namespace sp {
   _(M_IF)                                             \
   _(M_INCLUDE)                                        \
   _(M_LEAVING)                                        \
+  _(M_LINE)                                           \
   _(M_OPTIONAL_NEWDECLS)                              \
   _(M_OPTIONAL_SEMI)                                  \
   _(M_PRAGMA)                                         \
