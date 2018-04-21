@@ -246,7 +246,8 @@ SmxV1Image::validateCode()
   if (code->codeversion >= SmxConsts::CODE_VERSION_FEATURE_MASK)
     features = code->features;
 
-  if (features)
+  uint32_t supported_features = SmxConsts::kCodeFeatureDirectArrays;
+  if (features & ~supported_features)
     return error("unsupported feature set; code is too new");
 
   const uint8_t *blob =
