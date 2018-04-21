@@ -433,6 +433,7 @@ MethodVerifier::verifyOp(OPCODE op)
         data_size <= 0 ||
         iv_size >= INT_MAX / 2 ||
         data_size >= INT_MAX / 2 ||
+        !ke::IsUintAddSafe<uint32_t>(addr, iv_size + data_size) ||
         !ke::IsAligned(addr, sizeof(cell_t)) ||
         !ke::IsAligned(iv_size, sizeof(cell_t)) ||
         !ke::IsAligned(data_size, sizeof(cell_t)))
@@ -440,7 +441,6 @@ MethodVerifier::verifyOp(OPCODE op)
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
     }
-    // :TODO: can this overflow?
     if (!verifyDatOffset(addr) || !verifyDatOffset(addr + iv_size + data_size - 1))
       return false;
     return true;
