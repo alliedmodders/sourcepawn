@@ -348,14 +348,46 @@ SemanticAnalysis::visitIncDec(ast::IncDecExpression* node)
   return new (pool_) sema::IncDecExpr(node, type, node->token(), expr, node->postfix());
 }
 
+static inline TokenKind
+AssignOpToNormalOp(TokenKind op)
+{
+  switch (op) {
+    case TOK_ASSIGN_ADD:
+      return TOK_PLUS;
+    case TOK_ASSIGN_SUB:
+      return TOK_MINUS;
+    case TOK_ASSIGN_MUL:
+      return TOK_STAR;
+    case TOK_ASSIGN_DIV:
+      return TOK_SLASH;
+    case TOK_ASSIGN_MOD:
+      return TOK_PERCENT;
+    case TOK_ASSIGN_BITAND:
+      return TOK_BITAND;
+    case TOK_ASSIGN_BITOR:
+      return TOK_BITOR;
+    case TOK_ASSIGN_BITXOR:
+      return TOK_BITXOR;
+    case TOK_ASSIGN_SHR:
+      return TOK_SHR;
+    case TOK_ASSIGN_USHR:
+      return TOK_USHR;
+    case TOK_ASSIGN_SHL:
+      return TOK_SHL;
+    default:
+      assert(false);
+      return TOK_NONE;
+  }
+}
+
 sema::Expr*
 SemanticAnalysis::visitAssignment(ast::Assignment* node)
 {
-  sema::LValueExpr* expr = visitLValue(node->lvalue());
-  if (!expr)
+  sema::LValueExpr* lhs = visitLValue(node->lvalue());
+  if (!lhs)
     return nullptr;
 
-  Type* type = expr->storedType();
+  Type* type = lhs->storedType();
 
   if (type->isConst()) {
     cc_.report(node->loc(), rmsg::lvalue_is_const);
@@ -368,22 +400,39 @@ SemanticAnalysis::visitAssignment(ast::Assignment* node)
       cc_.report(node->loc(), rmsg::lvalue_is_const);
       return nullptr;
     }
+
+    // :TODO:
+    assert(false);
   }
 
+  // :TODO: test
   assert(!type->isStruct());
 
+  sema::Expr* rhs = nullptr;
   if (node->token() != TOK_ASSIGN) {
-    cc_.report(node->loc(), rmsg::unimpl_kind) <<
-      "sema-assign" << TokenNames[node->token()];
-    return nullptr;
+    // :TODO: test with weird types like bool
+    EvalContext left_ec(CoercionKind::Expr, lhs, type);
+    if (!coerce(left_ec))
+      return nullptr;
+
+    EvalContext right_ec(CoercionKind::Expr, node->expression(), type);
+    if (!coerce(right_ec))
+      return nullptr;
+
+    rhs = new (pool_) sema::BinaryExpr(
+      node,
+      type,
+      AssignOpToNormalOp(node->token()),
+      left_ec.result,
+      right_ec.result);
+  } else {
+    EvalContext right_ec(CoercionKind::Assignment, node->expression(), type);
+    if (!coerce(right_ec))
+      return nullptr;
+    rhs = right_ec.result;
   }
 
-  ast::Expression* right = node->expression();
-  EvalContext ec(CoercionKind::Assignment, right, type);
-  if (!coerce(ec))
-    return nullptr;
-
-  return new (pool_) sema::StoreExpr(node, type, expr, ec.result);
+  return new (pool_) sema::StoreExpr(node, type, lhs, rhs);
 }
 
 sema::LValueExpr*
