@@ -40,7 +40,7 @@ namespace sema {
   _(ConstValue)           \
   _(NamedFunction)        \
   _(Var)                  \
-  _(TrivialCast)          \
+  _(ImplicitCast)          \
   _(String)               \
   _(IncDec)               \
   _(StructInit)           \
@@ -280,17 +280,33 @@ class IncDecExpr final : public Expr
   bool postfix_;
 };
 
-class TrivialCastExpr final : public Expr
+#define CAST_OP_MAP(_)    \
+  /* No operation needed. */    \
+  _(None)                       \
+  /* Truncate the value to the target number of bits. */ \
+  _(TruncateInt)                                         \
+  /* Terminator line */
+
+enum class CastOp
+{
+#define _(name) name,
+  CAST_OP_MAP(_)
+#undef _
+};
+
+class ImplicitCastExpr final : public Expr
 {
  public:
-  explicit TrivialCastExpr(ast::Expression* node,
+  explicit ImplicitCastExpr(ast::Expression* node,
                            Type* type,
+                           CastOp op,
                            Expr* expr)
    : Expr(node, type),
-     expr_(expr)
+     expr_(expr),
+     op_(op)
   {}
 
-  DECLARE_SEMA(TrivialCast)
+  DECLARE_SEMA(ImplicitCast)
 
   Expr* expr() const {
     return expr_;
@@ -298,9 +314,13 @@ class TrivialCastExpr final : public Expr
   bool hasSideEffects() const override {
     return expr_->hasSideEffects();
   }
+  CastOp op() const {
+    return op_;
+  }
 
  private:
   Expr* expr_;
+  CastOp op_;
 };
 
 class NamedFunctionExpr final : public Expr

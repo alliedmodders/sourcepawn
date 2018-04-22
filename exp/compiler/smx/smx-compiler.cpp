@@ -387,16 +387,10 @@ SmxCompiler::generateVarDecl(ast::VarDecl* stmt)
 
   if (sym->type()->isArray()) {
     ArrayType* at = sym->type()->toArray();
-    if (at->hasFixedLength()) {
-      // If |init| is non-null, it should be an array literal.
-      sema::ArrayInitExpr* array_init = nullptr;
-      if (init)
-        array_init = init->toArrayInitExpr();
-
-      initialize_array(sym, array_init, array_info);
-    } else {
+    if (at->hasFixedLength())
+      initialize_array(sym, init, array_info);
+    else
       initialize_dynamic_array(stmt, init);
-    }
     return;
   }
 
@@ -621,8 +615,8 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
     return emitCall(expr->toCallExpr(), dest);
   case sema::ExprKind::Var:
     return emitVar(expr->toVarExpr(), dest);
-  case sema::ExprKind::TrivialCast:
-    return emitTrivialCast(expr->toTrivialCastExpr(), dest);
+  case sema::ExprKind::ImplicitCast:
+    return emitImplicitCast(expr->toImplicitCastExpr(), dest);
   case sema::ExprKind::String:
     return emitString(expr->toStringExpr(), dest);
   case sema::ExprKind::IncDec:
@@ -988,11 +982,37 @@ SmxCompiler::emitUnary(sema::UnaryExpr* expr, ValueDest dest)
 }
 
 ValueDest
-SmxCompiler::emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest)
+SmxCompiler::emitImplicitCast(sema::ImplicitCastExpr* expr, ValueDest requested)
 {
-  // Pass-through - we don't generate code for trivial casts, since the
-  // bytecode is not typed.
-  return emit(expr->expr(), dest);
+  switch (expr->op()) {
+    case sema::CastOp::None:
+      return emit(expr->expr(), requested);
+
+    case sema::CastOp::TruncateInt:
+    {
+      if (!emit_into(expr->expr(), ValueDest::Pri))
+        return ValueDest::Error;
+
+      switch (expr->type()->primitive()) {
+        case PrimitiveType::Char:
+          // Right now, we do not implement this, because the storage type of
+          // a char is int32 when on the stack. We need to change this to be
+          // consistent with semantic analysis, but today's not the day.
+          // By leaving this unimplemented, we're preserving old behavior.
+          return ValueDest::Pri;
+
+        default:
+          cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+            "smx-cast-trunc" << expr->type();
+          return ValueDest::Error;
+      }
+    }
+
+    default:
+      cc_.report(expr->src()->loc(), rmsg::unimpl_kind) <<
+        "smx-cast-op" << unsigned(expr->op());
+      return ValueDest::Error;
+  }
 }
 
 ValueDest

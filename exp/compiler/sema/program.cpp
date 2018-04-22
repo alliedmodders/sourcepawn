@@ -21,6 +21,18 @@
 
 namespace sp {
 
+static const char*
+GetCastOpName(sema::CastOp op)
+{
+  switch (op) {
+#define _(name) case sema::CastOp::name: return #name;
+    CAST_OP_MAP(_)
+#undef _
+    default:
+      return "unknown";
+  }
+}
+
 class SemaPrinter : public ast::StrictAstVisitor
 {
  public:
@@ -219,8 +231,8 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::IncDec:
         printIncDec(expr->toIncDecExpr());
         break;
-      case sema::ExprKind::TrivialCast:
-        printTrivialCast(expr->toTrivialCastExpr());
+      case sema::ExprKind::ImplicitCast:
+        printImplicitCast(expr->toImplicitCastExpr());
         break;
       case sema::ExprKind::String:
         printString(expr->toStringExpr());
@@ -320,8 +332,8 @@ class SemaPrinter : public ast::StrictAstVisitor
     unindent();
   }
 
-  void printTrivialCast(sema::TrivialCastExpr* expr) {
-    enter(expr, expr->type());
+  void printImplicitCast(sema::ImplicitCastExpr* expr) {
+    enter(expr, expr->type(), GetCastOpName(expr->op()));
     indent();
     {
       printExpr(expr->expr());
@@ -431,10 +443,13 @@ class SemaPrinter : public ast::StrictAstVisitor
     }
   }
 
-  void enter(sema::Expr* expr, Type* type) {
+  void enter(sema::Expr* expr, Type* type, const char* extra = nullptr) {
     prefix();
     AString str = BuildTypeName(type, nullptr);
-    fprintf(fp_, "- %s (%s)\n", expr->prettyName(), str.chars());
+    if (extra)
+      fprintf(fp_, "- %s (%s) %s\n", expr->prettyName(), str.chars(), extra);
+    else
+      fprintf(fp_, "- %s (%s)\n", expr->prettyName(), str.chars());
   }
 
   void dump(const ast::TypeExpr& te, Atom *name) {

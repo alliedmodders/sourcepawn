@@ -71,7 +71,7 @@ private:
   ValueDest emitBinary(sema::BinaryExpr* expr, ValueDest dest);
   ValueDest emitUnary(sema::UnaryExpr* expr, ValueDest dest);
   ValueDest emitCall(sema::CallExpr* expr, ValueDest dest);
-  ValueDest emitTrivialCast(sema::TrivialCastExpr* expr, ValueDest dest);
+  ValueDest emitImplicitCast(sema::ImplicitCastExpr* expr, ValueDest dest);
   ValueDest emitString(sema::StringExpr* expr, ValueDest dest);
   ValueDest emitIncDec(sema::IncDecExpr* expr, ValueDest dest);
   ValueDest emitLoad(sema::LoadExpr* expr, ValueDest dest);

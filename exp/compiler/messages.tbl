@@ -187,6 +187,8 @@ RMSG(new_array_missing_dimension,   type,              "missing size expression 
 RMSG(dynamic_array_needs_new,        type,             "invalid dynamic array initializer - use 'new'")
 RMSG(dynamic_array_needs_new_or_str, type,             "invalid dynamic array initializer - use 'new' or a string literal")
 
+RMSG(constant_will_truncate,        warning,           "constant value will be truncated to fit in type '%0'")
+
 RMSG(too_many_cases,                impl,              "too many switch cases")
 /* :TODO: do this */
 RMSG(too_many_arguments,            impl,              "function takes too many arguments")

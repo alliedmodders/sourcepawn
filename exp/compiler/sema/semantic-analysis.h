@@ -86,6 +86,8 @@ class SemanticAnalysis
   // Do not call any of these directly.
   bool coerce_array(EvalContext& ec);
   bool coerce_ref(EvalContext& ec);
+  bool coerce_primitive(EvalContext& ec);
+  bool coerce_to_char(EvalContext& ec);
   sema::Expr* coerce_vararg(sema::Expr* expr, Type* to);
   bool no_conversion(EvalContext& ec);
   Type* arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out);

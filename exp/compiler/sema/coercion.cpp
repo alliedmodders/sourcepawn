@@ -68,25 +68,7 @@ SemanticAnalysis::coerce(EvalContext& ec)
 
   switch (to->canonicalKind()) {
     case Type::Kind::Primitive:
-      if (!from->isPrimitive())
-        return no_conversion(ec);
-
-      if (from->primitive() == to->primitive())
-        return true;
-
-      if (to->primitive() == PrimitiveType::Int32) {
-        if (from->primitive() == PrimitiveType::Char ||
-            (from->primitive() == PrimitiveType::Bool && ec.ck == CoercionKind::Arg))
-        {
-          ec.result = new (pool_) sema::TrivialCastExpr(ec.from_src, to, ec.result);
-          return true;
-        }
-      }
-      if (to->primitive() == PrimitiveType::Bool) {
-        ec.result = new (pool_) sema::TrivialCastExpr(ec.from_src, to, ec.result);
-        return true;
-      }
-      return no_conversion(ec);
+      return coerce_primitive(ec);
 
     case Type::Kind::Void:
       if (from->isVoid())
@@ -345,6 +327,88 @@ SemanticAnalysis::coerce_vararg(sema::Expr* expr, Type* to)
   cc_.report(expr->src()->loc(), rmsg::vararg_losing_lvalue) <<
     from << to;
   return ec.result;
+}
+
+bool
+SemanticAnalysis::coerce_primitive(EvalContext& ec)
+{
+  Type* from = ec.result->type();
+  Type* to = ec.to;
+
+  if (!from->isPrimitive())
+    return no_conversion(ec);
+
+  if (from->primitive() == to->primitive())
+    return true;
+
+  switch (to->primitive()) {
+    case PrimitiveType::Int32:
+      if (from->primitive() == PrimitiveType::Char ||
+          (from->primitive() == PrimitiveType::Bool && ec.ck == CoercionKind::Arg))
+      {
+        // :TODO: char should become a ZeroExtend operation.
+        ec.result = new (pool_) sema::ImplicitCastExpr(
+          ec.from_src,
+          to,
+          sema::CastOp::None,
+          ec.result);
+        return true;
+      }
+      return no_conversion(ec);
+
+    case PrimitiveType::Bool:
+      ec.result = new (pool_) sema::ImplicitCastExpr(
+        ec.from_src,
+        to,
+        sema::CastOp::None,
+        ec.result);
+      return true;
+    case PrimitiveType::Char:
+      return coerce_to_char(ec);
+  }
+  return no_conversion(ec);
+}
+
+bool
+SemanticAnalysis::coerce_to_char(EvalContext& ec)
+{
+  Type* from = ec.result->type();
+  Type* to = ec.to;
+
+  if (from->primitive() != PrimitiveType::Int32)
+    return no_conversion(ec);
+
+  assert(ec.ck == CoercionKind::Arg ||
+         ec.ck == CoercionKind::Assignment ||
+         ec.ck == CoercionKind::Return);
+
+  // We allow a truncating conversion from int to char. For literals, we warn
+  // first if the value is too big.
+  int32_t value;
+  if (ec.result->getConstantInt32(&value)) {
+    // Note that we allow the full signed and unsigned range.
+    if (value >= SCHAR_MIN && value <= UCHAR_MAX) {
+      IntValue iv = (value > SCHAR_MAX)
+                    ? IntValue::FromUnsigned(value, 8)
+                    : IntValue::FromSigned(value, 8);
+      ec.result = new (pool_) sema::ConstValueExpr(
+        ec.result->src(),
+        to,
+        BoxedValue(iv));
+      return true;
+    }
+
+    cc_.report(ec.result->src()->loc(), rmsg::constant_will_truncate)
+      << to;
+  }
+
+  // No implicit truncation needed.
+  ec.result = new (pool_) sema::ImplicitCastExpr(
+    ec.result->src(),
+    ec.to,
+    sema::CastOp::TruncateInt,
+    ec.result);
+  return true;
 }
 
 sema::Expr*
