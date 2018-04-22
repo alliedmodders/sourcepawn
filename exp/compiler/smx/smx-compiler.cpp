@@ -1074,6 +1074,7 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
         !expr->isAddressable() &&
         !expr->type()->isAddressable())
     {
+      // :TODO: write peephole optimization for f(n++) to not lose the lvalue.
       assert(HasSimpleCellStorage(expr->type()));
       if (!emit_into(expr, ValueDest::Pri))
         return ValueDest::Error;
@@ -1280,8 +1281,8 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
   if (var && !var->sym()->type()->isReference()) {
     VariableSymbol* sym = var->sym();
 
-    if (expr->prefix())
-      emitVar(var, dest);
+    if (expr->postfix())
+      emit_var_load(var, dest);
 
     switch (sym->storage()) {
       case StorageClass::Argument:
@@ -1301,8 +1302,8 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
         assert(false);
     }
 
-    if (expr->postfix())
-      emitVar(var, dest);
+    if (expr->prefix())
+      emit_var_load(var, dest);
     return dest;
   }
 
