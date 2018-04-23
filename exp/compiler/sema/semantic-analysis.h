@@ -84,7 +84,7 @@ class SemanticAnalysis
   // Arguments are so complicated in SP that we define a special coercion
   // helper for them.
   sema::Expr* coerce_arg(ast::Expression* expr, Type* to);
-  sema::Expr* coerce_vararg(sema::Expr* expr, Type* to);
+  sema::Expr* coerce_vararg(sema::LValueExpr* expr, Type* to);
 
   // Similarly, the dreaded ternary operator is also quite complicated.
   bool coerce_ternary(TernaryContext& tc);

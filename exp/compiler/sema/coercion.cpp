@@ -299,9 +299,10 @@ SemanticAnalysis::coerce_arg(ast::Expression* ast_expr, Type* to)
 
     // The goal of coerce_vararg is to preserve addresses if possible. If that's
     // not an issue (for example, the type is an r-value or an array), then we
-    // can use the normal coercion logic.
+    // can use the normal coercion logic. If there is an l-value we should
+    // preserve, we have special logic for that.
     if (expr->isLValueExpr() && !to->isArray())
-      return coerce_vararg(expr, to);
+      return coerce_vararg(expr->asLValueExpr(), to);
   }
 
   EvalContext ec(CoercionKind::Arg, expr, to);
@@ -311,9 +312,9 @@ SemanticAnalysis::coerce_arg(ast::Expression* ast_expr, Type* to)
 }
 
 sema::Expr*
-SemanticAnalysis::coerce_vararg(sema::Expr* expr, Type* to)
+SemanticAnalysis::coerce_vararg(sema::LValueExpr* expr, Type* to)
 {
-  Type* from = expr->type();
+  Type* from = expr->storedType();
   if (CompareNonArrayTypesExactly(from->unqualified(), to->unqualified()) &&
       (!from->isConst() || to->isConst()))
   {
