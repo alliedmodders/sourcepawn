@@ -228,7 +228,7 @@ SemanticAnalysis::arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out)
   if (to->hasFixedLength())
     return nullptr;
 
-  sema::IndexExpr* index_expr = ec.result->toIndexExpr();
+  sema::IndexExpr* index_expr = ec.result->asIndexExpr();
   if (!index_expr)
     return nullptr;
 
