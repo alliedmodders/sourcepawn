@@ -68,7 +68,8 @@ SmxCompiler::compile()
     if (!cc_.canContinueProcessing())
       return false;
 
-    generateData(decl);
+    for (; decl; decl = decl->next())
+      generateData(decl);
   }
 
   for (ast::FunctionStatement* fun : program_->functions) {
@@ -281,8 +282,11 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
       generateExprStatement(stmt->toExpressionStatement());
       break;
     case ast::AstKind::kVarDecl:
-      generateVarDecl(stmt->toVarDecl());
+    {
+      for (ast::VarDecl* decl = stmt->toVarDecl(); decl; decl = decl->next())
+        generateVarDecl(decl);
       break;
+    }
     case ast::AstKind::kWhileStatement:
       generateWhile(stmt->toWhileStatement());
       break;

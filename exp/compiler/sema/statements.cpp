@@ -176,8 +176,11 @@ SemanticAnalysis::visitStatement(Statement* node)
       visitExpressionStatement(node->toExpressionStatement());
       break;
     case AstKind::kVarDecl:
-      visitVarDecl(node->toVarDecl());
+    {
+      for (VarDecl* decl = node->toVarDecl(); decl; decl = decl->next())
+        visitVarDecl(decl);
       break;
+    }
     case AstKind::kWhileStatement:
       visitWhileStatement(node->toWhileStatement());
       break;

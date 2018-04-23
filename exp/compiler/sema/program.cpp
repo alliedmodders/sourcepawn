@@ -75,14 +75,16 @@ class SemaPrinter : public ast::StrictAstVisitor
   }
 
   void visitVarDecl(ast::VarDecl* stmt) override {
-     prefix();
-     fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).chars());
-     indent();
-     {
-       if (sema::Expr* expr = stmt->sema_init())
-         printExpr(expr);
-     }
-     unindent();
+    for (; stmt; stmt = stmt->next()) {
+      prefix();
+      fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).chars());
+      indent();
+      {
+        if (sema::Expr* expr = stmt->sema_init())
+          printExpr(expr);
+      }
+      unindent();
+    }
   }
 
   void visitReturnStatement(ast::ReturnStatement* stmt) override {
