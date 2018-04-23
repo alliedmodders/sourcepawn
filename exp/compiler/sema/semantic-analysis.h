@@ -29,6 +29,7 @@ class PoolAllocator;
 class TranslationUnit;
 class TypeManager;
 struct EvalContext;
+struct TernaryContext;
 
 using namespace ast;
 
@@ -67,6 +68,7 @@ class SemanticAnalysis
   sema::Expr* visitIndex(ast::IndexExpression* node);
   sema::Expr* visitAssignment(ast::Assignment* node);
   sema::Expr* visitNewArray(ast::NewArrayExpr* node);
+  sema::Expr* visitTernary(ast::TernaryExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol *sym);
@@ -82,13 +84,16 @@ class SemanticAnalysis
   // Arguments are so complicated in SP that we define a special coercion
   // helper for them.
   sema::Expr* coerce_arg(ast::Expression* expr, Type* to);
+  sema::Expr* coerce_vararg(sema::Expr* expr, Type* to);
+
+  // Similarly, the dreaded ternary operator is also quite complicated.
+  bool coerce_ternary(TernaryContext& tc);
 
   // Do not call any of these directly.
   bool coerce_array(EvalContext& ec);
   bool coerce_ref(EvalContext& ec);
   bool coerce_primitive(EvalContext& ec);
   bool coerce_to_char(EvalContext& ec);
-  sema::Expr* coerce_vararg(sema::Expr* expr, Type* to);
   bool no_conversion(EvalContext& ec);
   Type* arrayOrSliceType(EvalContext& ec, sema::IndexExpr** out);
   sema::Expr* lvalue_to_rvalue(sema::LValueExpr* expr);

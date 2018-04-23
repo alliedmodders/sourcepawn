@@ -607,6 +607,8 @@ SmxCompiler::emit(sema::Expr* expr, ValueDest dest)
   switch (expr->kind()) {
   case sema::ExprKind::ConstValue:
     return emitConstValue(expr->toConstValueExpr(), dest);
+  case sema::ExprKind::Ternary:
+    return emitTernary(expr->toTernaryExpr(), dest);
   case sema::ExprKind::Binary:
     return emitBinary(expr->toBinaryExpr(), dest);
   case sema::ExprKind::Unary:
@@ -979,6 +981,38 @@ SmxCompiler::emitUnary(sema::UnaryExpr* expr, ValueDest dest)
         "smx-unary-tok" << TokenNames[expr->token()];
       return ValueDest::Error;
   }
+}
+
+ValueDest
+SmxCompiler::emitTernary(sema::TernaryExpr* expr, ValueDest dest)
+{
+  // If the final destination is to the stack, we assert that the following
+  // kills will not cause any spills. Otherwise, the ordering of the stack
+  // would become corrupt. We can assert this is true since only function
+  // calls will use ValueDest::Stack, and they should be guaranteeing
+  // Pri and Alt are unused between arguments.
+  if (dest == ValueDest::Stack)
+    assert(pri_value_ == 0 && alt_value_ == 0);
+
+  // We kill pri and alt ahead of time, since it would be illegal to kill it on
+  // one branch and not the other. We need some more advanced tech to do better.
+  will_kill(ValueDest::Pri);
+  will_kill(ValueDest::Alt);
+
+  Label false_case, fallthrough, done;
+
+  test(expr->choose(), false, &false_case, &fallthrough);
+  __ bind(&fallthrough);
+  if (!emit_into(expr->left(), dest))
+    return ValueDest::Error;
+  __ opcode(OP_JUMP, &done);
+
+  __ bind(&false_case);
+  if (!emit_into(expr->right(), dest))
+    return ValueDest::Error;
+
+  __ bind(&done);
+  return dest;
 }
 
 ValueDest

@@ -252,6 +252,9 @@ class SemaPrinter : public ast::StrictAstVisitor
       case sema::ExprKind::NewArray:
         printNewArray(expr->toNewArrayExpr());
         break;
+      case sema::ExprKind::Ternary:
+        printTernary(expr->toTernaryExpr());
+        break;
       default:
         assert(false);
     }
@@ -286,6 +289,17 @@ class SemaPrinter : public ast::StrictAstVisitor
     {
       prefix();
       fprintf(fp_, "%s\n", expr->sym()->name()->chars());
+    }
+    unindent();
+  }
+
+  void printTernary(sema::TernaryExpr* expr) {
+    enter(expr, expr->type());
+    indent();
+    {
+      printExpr(expr->choose());
+      printExpr(expr->left());
+      printExpr(expr->right());
     }
     unindent();
   }

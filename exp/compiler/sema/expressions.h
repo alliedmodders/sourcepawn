@@ -40,7 +40,7 @@ namespace sema {
   _(ConstValue)           \
   _(NamedFunction)        \
   _(Var)                  \
-  _(ImplicitCast)          \
+  _(ImplicitCast)         \
   _(String)               \
   _(IncDec)               \
   _(StructInit)           \
@@ -50,6 +50,7 @@ namespace sema {
   _(Slice)                \
   _(Store)                \
   _(NewArray)             \
+  _(Ternary)              \
   /* terminator */
 
 // Forward declarations.
@@ -679,6 +680,36 @@ class NewArrayExpr final : public Expr
 
  private:
   FixedExprList* exprs_;
+};
+
+class TernaryExpr final : public Expr
+{
+ public:
+  TernaryExpr(ast::Expression* node,
+              Type* type,
+              Expr* choose, Expr* left, Expr* right)
+   : Expr(node, type),
+     choose_(choose),
+     left_(left),
+     right_(right)
+  {}
+
+  DECLARE_SEMA(Ternary)
+
+  Expr* choose() const {
+    return choose_;
+  }
+  Expr* left() const {
+    return left_;
+  }
+  Expr* right() const {
+    return right_;
+  }
+
+ private:
+  Expr* choose_;
+  Expr* left_;
+  Expr* right_;
 };
 
 #undef DECLARE_SEMA

@@ -186,6 +186,7 @@ RMSG(new_array_illegal_const_base,  type,              "base type of a 'new' exp
 RMSG(new_array_missing_dimension,   type,              "missing size expression in dimension %0")
 RMSG(dynamic_array_needs_new,        type,             "invalid dynamic array initializer - use 'new'")
 RMSG(dynamic_array_needs_new_or_str, type,             "invalid dynamic array initializer - use 'new' or a string literal")
+RMSG(no_common_conversion,          type,              "no common conversion found for types '%0' and '%1'")
 
 RMSG(constant_will_truncate,        warning,           "constant value will be truncated to fit in type '%0'")
 

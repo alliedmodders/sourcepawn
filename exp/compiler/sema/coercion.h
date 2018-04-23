@@ -83,6 +83,29 @@ struct TestEvalContext : EvalContext
   TestEvalContext(CompileContext& cc, ast::Expression* from);
 };
 
+struct LValueToRValueContext : EvalContext
+{
+  explicit LValueToRValueContext(ast::Expression* from);
+  explicit LValueToRValueContext(sema::Expr* from);
+};
+
+struct TernaryContext
+{
+  TernaryContext(ast::Expression* left, ast::Expression* right)
+   : left_src(left),
+     right_src(right),
+     left(nullptr),
+     right(nullptr),
+     type(nullptr)
+  {}
+
+  ast::Expression* left_src;
+  ast::Expression* right_src;
+  sema::Expr* left;
+  sema::Expr* right;
+  Type* type;
+};
+
 } // namespace sp
 
 #endif // _include_sema_eval_context_h_

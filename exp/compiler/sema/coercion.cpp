@@ -36,6 +36,10 @@ SemanticAnalysis::coerce(EvalContext& ec)
     ec.from = visitExpression(ec.from_src);
     if (!ec.from)
       return false;
+    if (!ec.to) {
+      assert(ec.ck == CoercionKind::RValue);
+      ec.to = ec.from->type();
+    }
   }
 
   // Our initial result starts from the given expression.
@@ -411,6 +415,122 @@ SemanticAnalysis::coerce_to_char(EvalContext& ec)
   return true;
 }
 
+// :TODO: test
+bool
+SemanticAnalysis::coerce_ternary(TernaryContext& tc)
+{
+  // Convert both the left and right-hand sides to rvalues.
+  {
+    LValueToRValueContext ec(tc.left_src);
+    if (!coerce(ec))
+      return false;
+    tc.left = ec.result;
+  }
+  {
+    LValueToRValueContext ec(tc.right_src);
+    if (!coerce(ec))
+      return false;
+    tc.right = ec.result;
+  }
+
+  ArrayType* left_array = tc.left->type()->asArray();
+  ArrayType* right_array = tc.right->type()->asArray();
+  if (left_array && right_array) {
+    bool match = false;
+    bool exact_match = true;
+    Type* innermost = nullptr;
+    size_t nlevels = 0;
+    while (left_array && right_array) {
+      if ((left_array->hasFixedLength() != right_array->hasFixedLength()) ||
+          (left_array->hasFixedLength() && right_array->hasFixedLength() &&
+           left_array->fixedLength() != right_array->fixedLength()))
+      {
+        exact_match = false;
+      }
+
+      nlevels++;
+
+      Type* left = left_array->contained();
+      Type* right = right_array->contained();
+
+      if (left->qualifiers() != right->qualifiers())
+        exact_match = false;
+
+      left_array = left->asArray();
+      right_array = right->asArray();
+
+      // Neither is an array, we've hit the innermost type.
+      if (!left_array && !right_array) {
+        match = CompareNonArrayTypesExactly(
+          left->unqualified(),
+          right->unqualified());
+        innermost = left;
+        break;
+      }
+
+      // One array type goes deeper than the other; mismatch.
+      if (left_array || right_array) {
+        match = false;
+        break;
+      }
+    }
+
+    // Types have no common conversion.
+    if (!match) {
+      cc_.report(tc.left_src->loc(), rmsg::no_common_conversion)
+        << tc.left->type() << tc.right->type();
+      return false;
+    }
+
+    // Common version is either type, they are identical.
+    if (exact_match) {
+      tc.type = tc.left->type();
+      return true;
+    }
+
+    // Create a new array type. For now it is always const, but we will relax
+    // this in the future. We'll need a second pass over the array types to
+    // deduce whether const is needed to avoid the edge case in coerce_array().
+    tc.type = innermost->unqualified();
+    for (size_t i = 0; i < nlevels; i++) {
+      if (innermost->isConst())
+        tc.type = types_->newQualified(innermost, Qualifiers::Const);
+      tc.type = types_->newArray(tc.type, ArrayType::kUnsized);
+    }
+    tc.left =
+      new (pool_) sema::ImplicitCastExpr(tc.left_src, tc.type, sema::CastOp::None, tc.left);
+    tc.right =
+      new (pool_) sema::ImplicitCastExpr(tc.right_src, tc.type, sema::CastOp::None, tc.right);
+    return true;
+  }
+
+  // If one type is an array and the other is not, abort.
+  Type* left = tc.left->type();
+  Type* right = tc.right->type();
+  if (left_array || right_array) {
+    cc_.report(tc.left_src->loc(), rmsg::no_common_conversion)
+      << left << right;
+    return false;
+  }
+
+  if (!CompareNonArrayTypesExactly(left->unqualified(),
+                                   right->unqualified()))
+  {
+    cc_.report(tc.left_src->loc(), rmsg::no_common_conversion)
+      << left << right;
+    return false;
+  }
+
+  // Pick the "most const" type.
+  if (left->isConst() && !right->isConst())
+    tc.type = left;
+  else if (right->isConst() && !left->isConst())
+    tc.type = right;
+  else
+    tc.type = left;
+  return true;
+}
+
 sema::Expr*
 SemanticAnalysis::lvalue_to_rvalue(sema::LValueExpr* expr)
 {
@@ -484,6 +604,16 @@ TestEvalContext::TestEvalContext(CompileContext& cc, ast::Expression* from_src)
  : EvalContext(CoercionKind::Test,
                from_src,
                cc.types()->getBool())
+{
+}
+
+LValueToRValueContext::LValueToRValueContext(ast::Expression* from_src)
+ : EvalContext(CoercionKind::RValue, from_src, nullptr)
+{
+}
+
+LValueToRValueContext::LValueToRValueContext(sema::Expr* from)
+ : EvalContext(CoercionKind::RValue, from, from->type())
 {
 }
 

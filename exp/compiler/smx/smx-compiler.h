@@ -76,6 +76,7 @@ private:
   ValueDest emitIncDec(sema::IncDecExpr* expr, ValueDest dest);
   ValueDest emitLoad(sema::LoadExpr* expr, ValueDest dest);
   ValueDest emitStore(sema::StoreExpr* expr, ValueDest dest);
+  ValueDest emitTernary(sema::TernaryExpr* expr, ValueDest dest);
 
   // l-value expressions always return the address of the l-value. For local
   // variables, this is their stack address. For pointer types (references,

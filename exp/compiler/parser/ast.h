@@ -656,10 +656,6 @@ class BinaryExpression : public Expression
 
 class TernaryExpression : public Expression
 {
-  Expression *condition_;
-  Expression *left_;
-  Expression *right_;
-
  public:
   TernaryExpression(const SourceLocation &pos, Expression *condition, Expression *left, Expression *right)
     : Expression(pos),
@@ -680,6 +676,11 @@ class TernaryExpression : public Expression
   Expression *right() const {
     return right_;
   }
+
+ private:
+  Expression *condition_;
+  Expression *left_;
+  Expression *right_;
 };
 
 class FieldExpression : public Expression

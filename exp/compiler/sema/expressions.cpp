@@ -53,6 +53,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitCharLiteral(node->toCharLiteral());
     case AstKind::kNewArrayExpr:
       return visitNewArray(node->toNewArrayExpr());
+    case AstKind::kTernaryExpression:
+      return visitTernary(node->toTernaryExpression());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -250,7 +252,7 @@ SemanticAnalysis::visitIndex(ast::IndexExpression* node)
   }
 
   // Convert the base to an r-value.
-  EvalContext base_ec(CoercionKind::RValue, base, base->type());
+  LValueToRValueContext base_ec(base);
   if (!coerce(base_ec))
     return nullptr;
   base = base_ec.result;
@@ -709,6 +711,25 @@ SemanticAnalysis::visitNewArray(ast::NewArrayExpr* node)
 
   // :TODO: test old syntax for genarray.
   return new (pool_) sema::NewArrayExpr(node, type, exprs);
+}
+
+sema::Expr*
+SemanticAnalysis::visitTernary(ast::TernaryExpression* node)
+{
+  TestEvalContext test_ec(cc_, node->condition());
+  if (!coerce(test_ec))
+    return nullptr;
+
+  TernaryContext tc(node->left(), node->right());
+  if (!coerce_ternary(tc))
+    return nullptr;
+
+  return new (pool_) sema::TernaryExpr(
+    node,
+    tc.type,
+    test_ec.result,
+    tc.left,
+    tc.right);
 }
 
 } // namespace sp
