@@ -13,7 +13,8 @@
 #include <sp_vm_api.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <am-cxx.h>
+#include <amtl/am-cxx.h>
+#include <amtl/experimental/am-argparser.h>
 #include "dll_exports.h"
 #include "environment.h"
 #include "stack-frames.h"
@@ -23,6 +24,7 @@
 #endif
 
 using namespace ke;
+using namespace ke::args;
 using namespace sp;
 using namespace SourcePawn;
 
@@ -230,8 +232,22 @@ int main(int argc, char **argv)
   );
 #endif
 
-  if (argc != 2) {
-    fprintf(stderr, "Usage: <file>\n");
+  Parser parser("SourcePawn standalone shell.");
+
+  BoolOption disable_jit(parser,
+    "i", "disable-jit",
+    Some(false),
+    "Disable the just-in-time compiler.");
+  BoolOption disable_watchdog(parser,
+    "w", "disable-watchdog",
+    Some(false),
+    "Disable the watchdog timer.");
+  StringOption filename(parser,
+    "file",
+    "SMX file to execute.");
+
+  if (!parser.parse(argc, argv)) {
+    parser.usage(stderr, argc, argv);
     return 1;
   }
 
@@ -240,16 +256,16 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  if (getenv("DISABLE_JIT"))
+  if (getenv("DISABLE_JIT") || disable_jit.value())
     sEnv->SetJitEnabled(false);
 
   ShellDebugListener debug;
   sEnv->SetDebugger(&debug);
 
-  if (!getenv("DISABLE_WATCHDOG"))
+  if (!getenv("DISABLE_WATCHDOG") && !disable_watchdog.value())
     sEnv->InstallWatchdogTimer(5000);
 
-  int errcode = Execute(argv[1]);
+  int errcode = Execute(filename.value().chars());
 
   sEnv->SetDebugger(NULL);
   sEnv->Shutdown();

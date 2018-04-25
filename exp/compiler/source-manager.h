@@ -18,10 +18,11 @@
 #ifndef _include_spcomp_source_cache_h_
 #define _include_spcomp_source_cache_h_
 
-#include <am-string.h>
-#include <am-refcounting.h>
-#include <am-vector.h>
-#include <am-fixedarray.h>
+#include <amtl/am-string.h>
+#include <amtl/am-refcounting.h>
+#include <amtl/am-vector.h>
+#include <amtl/am-fixedarray.h>
+#include <amtl/am-autoptr.h>
 #include "macros.h"
 #include "token-kind.h"
 

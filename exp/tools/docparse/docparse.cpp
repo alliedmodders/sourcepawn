@@ -24,6 +24,7 @@
 #include "compiler/parser/json-tools.h"
 #include "compiler/sema/name-resolver.h"
 #include <assert.h>
+#include <amtl/experimental/am-argparser.h>
 
 using namespace ke;
 using namespace sp;
@@ -438,12 +439,18 @@ Run(CompileContext &cc, const char *path)
 
 int main(int argc, char **argv)
 {
+  args::Parser parser("Documentation generator.");
+
+  args::StringOption filename(parser,
+    "filename",
+    "SourcePawn file to scan for documentation.");
+
   StringPool strings;
   ReportManager reports;
   SourceManager source(strings, reports);
 
-  if (argc != 2) {
-    fprintf(stderr, "Usage: docgen <file>\n");
+  if (!parser.parse(argc, argv)) {
+    parser.usage(stderr, argc, argv);
     return 1;
   }
 
@@ -455,7 +462,8 @@ int main(int argc, char **argv)
 
     cc.SkipResolution();
 
-    JsonObject *obj = Run(cc, argv[1]);
+    const char* file = filename.value().chars();
+    JsonObject *obj = Run(cc, file);
     if (!obj) {
       reports.PrintMessages();
       return 1;
