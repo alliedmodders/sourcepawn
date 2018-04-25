@@ -20,9 +20,10 @@
 
 #include "source-location.h"
 #include "string-pool.h"
-#include <am-refcounting.h>
-#include <am-vector.h>
-#include <am-string.h>
+#include <amtl/am-refcounting.h>
+#include <amtl/am-vector.h>
+#include <amtl/am-string.h>
+#include <amtl/am-autoptr.h>
 
 namespace sp {
 
