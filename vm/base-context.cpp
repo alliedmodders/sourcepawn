@@ -26,7 +26,7 @@ BasePluginContext::~BasePluginContext()
 }
 
 void
-BasePluginContext::SetKey(int k, void *value)
+BasePluginContext::SetKey(int k, void* value)
 {
   if (k < 1 || k > 4)
     return;
@@ -36,7 +36,7 @@ BasePluginContext::SetKey(int k, void *value)
 }
 
 bool
-BasePluginContext::GetKey(int k, void **value)
+BasePluginContext::GetKey(int k, void** value)
 {
   if (k < 1 || k > 4 || m_keys_set[k - 1] == false)
     return false;
@@ -45,26 +45,26 @@ BasePluginContext::GetKey(int k, void **value)
   return true;
 }
 
-SourceMod::IdentityToken_t *
+SourceMod::IdentityToken_t*
 BasePluginContext::GetIdentity()
 {
-  SourceMod::IdentityToken_t *tok;
+  SourceMod::IdentityToken_t* tok;
 
-  if (GetKey(1, (void **)&tok))
+  if (GetKey(1, (void**)&tok))
     return tok;
   return NULL;
 }
 
-IVirtualMachine *
+IVirtualMachine*
 BasePluginContext::GetVirtualMachine()
 {
   return NULL;
 }
 
-sp_context_t *
+sp_context_t*
 BasePluginContext::GetContext()
 {
-  return reinterpret_cast<sp_context_t *>((IPluginContext * )this);
+  return reinterpret_cast<sp_context_t*>((IPluginContext * )this);
 }
 
 bool
@@ -74,31 +74,31 @@ BasePluginContext::IsDebugging()
 }
 
 int
-BasePluginContext::SetDebugBreak(void *newpfn, void *oldpfn)
+BasePluginContext::SetDebugBreak(void* newpfn, void* oldpfn)
 {
   return SP_ERROR_ABORTED;
 }
 
-IPluginDebugInfo *
+IPluginDebugInfo*
 BasePluginContext::GetDebugInfo()
 {
   return NULL;
 }
 
 int
-BasePluginContext::Execute(uint32_t code_addr, cell_t *result)
+BasePluginContext::Execute(uint32_t code_addr, cell_t* result)
 {
   return SP_ERROR_ABORTED;
 }
 
 int
-BasePluginContext::BindNatives(const sp_nativeinfo_t *natives, unsigned int num, int overwrite)
+BasePluginContext::BindNatives(const sp_nativeinfo_t* natives, unsigned int num, int overwrite)
 {
   return SP_ERROR_ABORTED;
 }
 
 int
-BasePluginContext::BindNative(const sp_nativeinfo_t *native)
+BasePluginContext::BindNative(const sp_nativeinfo_t* native)
 {
   return SP_ERROR_ABORTED;
 }
@@ -128,32 +128,32 @@ BasePluginContext::PushCellsFromArray(cell_t array[], unsigned int numcells)
 }
 
 int
-BasePluginContext::PushCellArray(cell_t *local_addr, cell_t **phys_addr, cell_t array[], unsigned int numcells)
+BasePluginContext::PushCellArray(cell_t* local_addr, cell_t** phys_addr, cell_t array[], unsigned int numcells)
 {
   return SP_ERROR_ABORTED;
 }
 
 int
-BasePluginContext::PushString(cell_t *local_addr, char **phys_addr, const char *string)
+BasePluginContext::PushString(cell_t* local_addr, char** phys_addr, const char* string)
 {
   return SP_ERROR_ABORTED;
 }
 
 int
-BasePluginContext::Execute2(IPluginFunction *function, const cell_t *params, unsigned int num_params, cell_t *result)
+BasePluginContext::Execute2(IPluginFunction* function, const cell_t* params, unsigned int num_params, cell_t* result)
 {
   ReportErrorNumber(SP_ERROR_ABORTED);
   return SP_ERROR_ABORTED;
 }
 
-ISourcePawnEngine2 *
+ISourcePawnEngine2*
 BasePluginContext::APIv2()
 {
   return env_->APIv2();
 }
 
 void
-BasePluginContext::ReportError(const char *fmt, ...)
+BasePluginContext::ReportError(const char* fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
@@ -162,13 +162,13 @@ BasePluginContext::ReportError(const char *fmt, ...)
 }
 
 void
-BasePluginContext::ReportErrorVA(const char *fmt, va_list ap)
+BasePluginContext::ReportErrorVA(const char* fmt, va_list ap)
 {
   env_->ReportErrorVA(fmt, ap);
 }
 
 void
-BasePluginContext::ReportFatalError(const char *fmt, ...)
+BasePluginContext::ReportFatalError(const char* fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
@@ -177,7 +177,7 @@ BasePluginContext::ReportFatalError(const char *fmt, ...)
 }
 
 void
-BasePluginContext::ReportFatalErrorVA(const char *fmt, va_list ap)
+BasePluginContext::ReportFatalErrorVA(const char* fmt, va_list ap)
 {
   env_->ReportErrorVA(SP_ERROR_FATAL, fmt, ap);
 }
@@ -196,7 +196,7 @@ BasePluginContext::ClearLastNativeError()
 }
 
 cell_t
-BasePluginContext::ThrowNativeErrorEx(int error, const char *msg, ...)
+BasePluginContext::ThrowNativeErrorEx(int error, const char* msg, ...)
 {
   va_list ap;
   va_start(ap, msg);
@@ -209,7 +209,7 @@ BasePluginContext::ThrowNativeErrorEx(int error, const char *msg, ...)
 }
 
 cell_t
-BasePluginContext::ThrowNativeError(const char *msg, ...)
+BasePluginContext::ThrowNativeError(const char* msg, ...)
 {
   va_list ap;
   va_start(ap, msg);
@@ -221,14 +221,14 @@ BasePluginContext::ThrowNativeError(const char *msg, ...)
 int
 BasePluginContext::GetLastNativeError()
 {
-  Environment *env = env_;
+  Environment* env = env_;
   if (!env->hasPendingException())
     return SP_ERROR_NONE;
   return env->getPendingExceptionCode();
 }
 
 cell_t
-BasePluginContext::BlamePluginError(SourcePawn::IPluginFunction *pf, const char *msg, ...)
+BasePluginContext::BlamePluginError(SourcePawn::IPluginFunction* pf, const char* msg, ...)
 {
   va_list ap;
   va_start(ap, msg);
@@ -237,15 +237,15 @@ BasePluginContext::BlamePluginError(SourcePawn::IPluginFunction *pf, const char 
   return 0;
 }
 
-IFrameIterator *
+IFrameIterator*
 BasePluginContext::CreateFrameIterator()
 {
-  FrameIterator *it = new FrameIterator();
+  FrameIterator* it = new FrameIterator();
   return it;
 }
 
 void
-BasePluginContext::DestroyFrameIterator(IFrameIterator *it)
+BasePluginContext::DestroyFrameIterator(IFrameIterator* it)
 {
   delete static_cast<FrameIterator*>(it);
 }

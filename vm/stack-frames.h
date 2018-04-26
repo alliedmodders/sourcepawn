@@ -62,7 +62,7 @@ KE_DEFINE_ENUM_OPERATORS(ExitFrameType);
 KE_DEFINE_ENUM_COMPARATORS(ExitFrameType, intptr_t);
 
 static const uintptr_t kExitFrameTypeBits = 3;
-static const uintptr_t kExitFramePayloadBits = (sizeof(void *) * 8) - kExitFrameTypeBits;
+static const uintptr_t kExitFramePayloadBits = (sizeof(void*) * 8) - kExitFrameTypeBits;
 static inline uintptr_t EncodeExitFrameId(ExitFrameType type, uintptr_t payload)
 {
   assert(payload < (uintptr_t(1) << kExitFramePayloadBits));
@@ -84,14 +84,14 @@ class InterpInvokeFrame;
 class InvokeFrame
 {
  protected:
-  InvokeFrame(PluginContext *cx, ucell_t cip);
+  InvokeFrame(PluginContext* cx, ucell_t cip);
   ~InvokeFrame();
 
  public:
-  InvokeFrame *prev() const {
+  InvokeFrame* prev() const {
     return prev_;
   }
-  PluginContext *cx() const {
+  PluginContext* cx() const {
     return cx_;
   }
 
@@ -107,8 +107,8 @@ class InvokeFrame
   }
 
  protected:
-  InvokeFrame *prev_;
-  PluginContext *cx_;
+  InvokeFrame* prev_;
+  PluginContext* cx_;
   ucell_t entry_cip_;
 };
 
@@ -225,10 +225,10 @@ class FrameIterator : public SourcePawn::IFrameIterator
 
   bool IsNativeFrame() const override;
   bool IsScriptedFrame() const override;
-  const char *FunctionName() const override;
-  const char *FilePath() const override;
+  const char* FunctionName() const override;
+  const char* FilePath() const override;
   unsigned LineNumber() const override;
-  IPluginContext *Context() const override;
+  IPluginContext* Context() const override;
   bool IsInternalFrame() const override;
 
  private:

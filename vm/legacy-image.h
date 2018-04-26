@@ -27,13 +27,13 @@ class LegacyImage
   {}
 
   struct Code {
-    const uint8_t *bytes;
+    const uint8_t* bytes;
     size_t length;
     int version;
     uint32_t features;
   };
   struct Data {
-    const uint8_t *bytes;
+    const uint8_t* bytes;
     size_t length;
   };
 
@@ -41,19 +41,19 @@ class LegacyImage
   virtual Code DescribeCode() const = 0;
   virtual Data DescribeData() const = 0;
   virtual size_t NumNatives() const = 0;
-  virtual const char *GetNative(size_t index) const = 0;
-  virtual bool FindNative(const char *name, size_t *indexp) const = 0;
+  virtual const char* GetNative(size_t index) const = 0;
+  virtual bool FindNative(const char* name, size_t* indexp) const = 0;
   virtual size_t NumPublics() const = 0;
-  virtual void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const = 0;
-  virtual bool FindPublic(const char *name, size_t *indexp) const = 0;
+  virtual void GetPublic(size_t index, uint32_t* offsetp, const char** namep) const = 0;
+  virtual bool FindPublic(const char* name, size_t* indexp) const = 0;
   virtual size_t NumPubvars() const = 0;
-  virtual void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const = 0;
-  virtual bool FindPubvar(const char *name, size_t *indexp) const = 0;
+  virtual void GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const = 0;
+  virtual bool FindPubvar(const char* name, size_t* indexp) const = 0;
   virtual size_t HeapSize() const = 0;
   virtual size_t ImageSize() const = 0;
-  virtual const char *LookupFile(uint32_t code_offset) = 0;
-  virtual const char *LookupFunction(uint32_t code_offset) = 0;
-  virtual bool LookupLine(uint32_t code_offset, uint32_t *line) = 0;
+  virtual const char* LookupFile(uint32_t code_offset) = 0;
+  virtual const char* LookupFunction(uint32_t code_offset) = 0;
+  virtual bool LookupLine(uint32_t code_offset, uint32_t* line) = 0;
 };
 
 class EmptyImage : public LegacyImage
@@ -85,26 +85,26 @@ class EmptyImage : public LegacyImage
   size_t NumNatives() const override {
     return 0;
   }
-  const char *GetNative(size_t index) const override {
+  const char* GetNative(size_t index) const override {
     return nullptr;
   }
-  bool FindNative(const char *name, size_t *indexp) const override {
+  bool FindNative(const char* name, size_t* indexp) const override {
     return false;
   }
   size_t NumPublics() const override {
     return 0;
   }
-  void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const override {
+  void GetPublic(size_t index, uint32_t* offsetp, const char** namep) const override {
   }
-  bool FindPublic(const char *name, size_t *indexp) const override {
+  bool FindPublic(const char* name, size_t* indexp) const override {
     return false;
   }
   size_t NumPubvars() const override {
     return 0;
   }
-  void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const override {
+  void GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const override {
   }
-  bool FindPubvar(const char *name, size_t *indexp) const override {
+  bool FindPubvar(const char* name, size_t* indexp) const override {
     return false;
   }
   size_t HeapSize() const override {
@@ -113,13 +113,13 @@ class EmptyImage : public LegacyImage
   size_t ImageSize() const override {
     return 0;
   }
-  const char *LookupFile(uint32_t code_offset) override {
+  const char* LookupFile(uint32_t code_offset) override {
     return nullptr;
   }
-  const char *LookupFunction(uint32_t code_offset) override {
+  const char* LookupFunction(uint32_t code_offset) override {
     return nullptr;
   }
-  bool LookupLine(uint32_t code_offset, uint32_t *line) override {
+  bool LookupLine(uint32_t code_offset, uint32_t* line) override {
     return false;
   }
 

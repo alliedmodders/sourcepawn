@@ -52,7 +52,7 @@ class ErrorPath : public OutOfLinePath
 
   bool emit(Compiler* cc) override;
 
-  const cell_t *cip;
+  const cell_t* cip;
   int err;
 };
 

@@ -28,7 +28,7 @@ using namespace ke;
 using namespace sp;
 using namespace SourcePawn;
 
-InvokeFrame::InvokeFrame(PluginContext *cx, ucell_t entry_cip)
+InvokeFrame::InvokeFrame(PluginContext* cx, ucell_t entry_cip)
  : prev_(Environment::get()->top()),
    cx_(cx),
    entry_cip_(0)
@@ -71,7 +71,7 @@ InterpInvokeFrame::leaveNativeCall()
   native_index_ = -1;
 }
 
-JitInvokeFrame::JitInvokeFrame(PluginContext *cx, ucell_t entry_cip)
+JitInvokeFrame::JitInvokeFrame(PluginContext* cx, ucell_t entry_cip)
  : InvokeFrame(cx, entry_cip),
    prev_exit_fp_(Environment::get()->exit_fp())
 {
@@ -199,7 +199,7 @@ JitFrameIterator::cip() const
   if (!method)
     return 0;
 
-  CompiledFunction *fn = method->jit();
+  CompiledFunction* fn = method->jit();
   if (!fn)
     return 0;
 
@@ -286,7 +286,7 @@ FrameIterator::LineNumber() const
   return line;
 }
 
-const char *
+const char*
 FrameIterator::FilePath() const
 {
   if (!IsScriptedFrame())
@@ -299,13 +299,13 @@ FrameIterator::FilePath() const
   return runtime_->image()->LookupFile(cip);
 }
 
-const char *
+const char*
 FrameIterator::FunctionName() const
 {
   assert(ivk_);
   if (IsNativeFrame()) {
     uint32_t native_index = frame_cursor_->native_index();
-    const sp_native_t *native = runtime_->GetNative(native_index);
+    const sp_native_t* native = runtime_->GetNative(native_index);
     if (!native)
       return nullptr;
     return native->name;
@@ -331,7 +331,7 @@ FrameIterator::IsScriptedFrame() const
   return frame_cursor_->type() == FrameType::Scripted;
 }
 
-IPluginContext *
+IPluginContext*
 FrameIterator::Context() const
 {
   if (!ivk_)

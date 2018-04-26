@@ -15,7 +15,7 @@
 
 using namespace sp;
 
-CodeStubs::CodeStubs(Environment *env)
+CodeStubs::CodeStubs(Environment* env)
  : env_(env),
    return_stub_(nullptr)
 {

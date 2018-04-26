@@ -92,12 +92,12 @@ CodeStubs::CompileInvokeStub()
   if (!invoke_stub_.address())
     return false;
 
-  return_stub_ = reinterpret_cast<uint8_t *>(invoke_stub_.address()) + error.offset();
+  return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.address()) + error.offset();
   return true;
 }
 
 SPVM_NATIVE_FUNC
-CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
+CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void* pData)
 {
   MacroAssembler masm;
 

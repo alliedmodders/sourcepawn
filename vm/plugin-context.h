@@ -28,48 +28,48 @@ class PluginContext;
 class PluginContext : public BasePluginContext
 {
  public:
-  PluginContext(PluginRuntime *pRuntime);
+  PluginContext(PluginRuntime* pRuntime);
   ~PluginContext() override;
 
   bool Initialize();
 
  public: //IPluginContext
-  int HeapAlloc(unsigned int cells, cell_t *local_addr, cell_t **phys_addr) override;
+  int HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) override;
   int HeapPop(cell_t local_addr) override;
   int HeapRelease(cell_t local_addr) override;
-  int FindNativeByName(const char *name, uint32_t *index) override;
-  int GetNativeByIndex(uint32_t index, sp_native_t **native) override;
+  int FindNativeByName(const char* name, uint32_t* index) override;
+  int GetNativeByIndex(uint32_t index, sp_native_t** native) override;
   uint32_t GetNativesNum() override;
-  int FindPublicByName(const char *name, uint32_t *index) override;
-  int GetPublicByIndex(uint32_t index, sp_public_t **publicptr) override;
+  int FindPublicByName(const char* name, uint32_t* index) override;
+  int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) override;
   uint32_t GetPublicsNum() override;
-  int GetPubvarByIndex(uint32_t index, sp_pubvar_t **pubvar) override;
-  int FindPubvarByName(const char *name, uint32_t *index) override;
-  int GetPubvarAddrs(uint32_t index, cell_t *local_addr, cell_t **phys_addr) override;
+  int GetPubvarByIndex(uint32_t index, sp_pubvar_t** pubvar) override;
+  int FindPubvarByName(const char* name, uint32_t* index) override;
+  int GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) override;
   uint32_t GetPubVarsNum() override;
-  int LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr) override;
-  int LocalToString(cell_t local_addr, char **addr) override;
-  int StringToLocal(cell_t local_addr, size_t chars, const char *source) override;
-  int StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char *source, size_t *wrtnbytes) override;
-  IPluginFunction *GetFunctionByName(const char *public_name) override;
-  IPluginFunction *GetFunctionById(funcid_t func_id) override;
-  cell_t *GetNullRef(SP_NULL_TYPE type) override;
-  int LocalToStringNULL(cell_t local_addr, char **addr) override;
-  IPluginRuntime *GetRuntime() override;
-  cell_t *GetLocalParams() override;
+  int LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) override;
+  int LocalToString(cell_t local_addr, char** addr) override;
+  int StringToLocal(cell_t local_addr, size_t chars, const char* source) override;
+  int StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* source, size_t* wrtnbytes) override;
+  IPluginFunction* GetFunctionByName(const char* public_name) override;
+  IPluginFunction* GetFunctionById(funcid_t func_id) override;
+  cell_t* GetNullRef(SP_NULL_TYPE type) override;
+  int LocalToStringNULL(cell_t local_addr, char** addr) override;
+  IPluginRuntime* GetRuntime() override;
+  cell_t* GetLocalParams() override;
 
-  bool Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result);
+  bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
 
   size_t HeapSize() const {
     return mem_size_;
   }
-  uint8_t *memory() const {
+  uint8_t* memory() const {
     return memory_;
   }
   size_t DataSize() const {
     return data_size_;
   }
-  PluginRuntime *runtime() const {
+  PluginRuntime* runtime() const {
     return m_pRuntime;
   }
 
@@ -86,13 +86,13 @@ class PluginContext : public BasePluginContext
     return offsetof(PluginContext, memory_);
   }
 
-  int32_t *addressOfSp() {
+  int32_t* addressOfSp() {
     return &sp_;
   }
-  cell_t *addressOfFrm() {
+  cell_t* addressOfFrm() {
     return &frm_;
   }
-  cell_t *addressOfHp() {
+  cell_t* addressOfHp() {
     return &hp_;
   }
 
@@ -109,8 +109,8 @@ class PluginContext : public BasePluginContext
   int popTrackerAndSetHeap();
   int pushTracker(uint32_t amount);
 
-  int generateArray(cell_t dims, cell_t *stk, bool autozero);
-  int generateFullArray(uint32_t argc, cell_t *argv, int autozero);
+  int generateArray(cell_t dims, cell_t* stk, bool autozero);
+  int generateFullArray(uint32_t argc, cell_t* argv, int autozero);
 
   // These functions will report an error on failure.
   bool pushAmxFrame();
@@ -134,13 +134,13 @@ class PluginContext : public BasePluginContext
   cell_t* throwIfBadAddress(cell_t addr);
 
  private:
-  PluginRuntime *m_pRuntime;
-  uint8_t *memory_;
+  PluginRuntime* m_pRuntime;
+  uint8_t* memory_;
   uint32_t data_size_;
   uint32_t mem_size_;
 
-  cell_t *m_pNullVec;
-  cell_t *m_pNullString;
+  cell_t* m_pNullVec;
+  cell_t* m_pNullString;
 
   // "Stack top", for convenience.
   cell_t stp_;

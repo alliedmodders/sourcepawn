@@ -22,15 +22,15 @@ enum class FileType {
   SPFF
 };
 
-FileType DetectFileType(FILE *fp);
+FileType DetectFileType(FILE* fp);
 
 class FileReader
 {
  public:
-  FileReader(FILE *fp);
+  FileReader(FILE* fp);
   FileReader(ke::UniquePtr<uint8_t[]>&& buffer, size_t length);
 
-  const uint8_t *buffer() const {
+  const uint8_t* buffer() const {
     return buffer_.get();
   }
   size_t length() const {

@@ -20,7 +20,7 @@
 
 using namespace sp;
 
-WatchdogTimer::WatchdogTimer(Environment *env)
+WatchdogTimer::WatchdogTimer(Environment* env)
  : env_(env),
    terminate_(false),
    mainthread_(ke::GetCurrentThreadId()),

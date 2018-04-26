@@ -18,8 +18,8 @@ using namespace sp;
 
 CompiledFunction::CompiledFunction(const CodeChunk& code,
                                    cell_t pcode_offs,
-                                   FixedArray<LoopEdge> *edges,
-                                   FixedArray<CipMapEntry> *cipmap)
+                                   FixedArray<LoopEdge>* edges,
+                                   FixedArray<CipMapEntry>* cipmap)
   : code_(code),
     code_offset_(pcode_offs),
     edges_(edges),
@@ -31,10 +31,10 @@ CompiledFunction::~CompiledFunction()
 {
 }
 
-static int cip_map_entry_cmp(const void *a1, const void *aEntry)
+static int cip_map_entry_cmp(const void* a1, const void* aEntry)
 {
   uint32_t pcoffs = (uint32_t)(intptr_t)a1;
-  const CipMapEntry *entry = reinterpret_cast<const CipMapEntry *>(aEntry);
+  const CipMapEntry* entry = reinterpret_cast<const CipMapEntry*>(aEntry);
   if (pcoffs < entry->pcoffs)
     return -1;
   if (pcoffs == entry->pcoffs)
@@ -43,7 +43,7 @@ static int cip_map_entry_cmp(const void *a1, const void *aEntry)
 }
 
 ucell_t
-CompiledFunction::FindCipByPc(void *pc)
+CompiledFunction::FindCipByPc(void* pc)
 {
   if (uintptr_t(pc) < uintptr_t(code_.address()))
     return kInvalidCip;
@@ -52,8 +52,8 @@ CompiledFunction::FindCipByPc(void *pc)
   if (pcoffs > code_.bytes())
     return kInvalidCip;
 
-  void *ptr = bsearch(
-    (void *)(uintptr_t)pcoffs,
+  void* ptr = bsearch(
+    (void*)(uintptr_t)pcoffs,
     cip_map_->buffer(),
     cip_map_->length(),
     sizeof(CipMapEntry),
@@ -65,5 +65,5 @@ CompiledFunction::FindCipByPc(void *pc)
     return kInvalidCip;
   }
 
-  return code_offset_ + reinterpret_cast<CipMapEntry *>(ptr)->cipoffs;
+  return code_offset_ + reinterpret_cast<CipMapEntry*>(ptr)->cipoffs;
 }

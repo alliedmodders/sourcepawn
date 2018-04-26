@@ -30,7 +30,7 @@ typedef bool (*WatchdogCallback)();
 class WatchdogTimer
 {
  public:
-  WatchdogTimer(Environment *env);
+  WatchdogTimer(Environment* env);
   ~WatchdogTimer();
 
   bool Initialize(size_t timeout_ms);
@@ -45,7 +45,7 @@ class WatchdogTimer
   void Run();
 
  private:
-  Environment *env_;
+  Environment* env_;
 
   bool terminate_;
   size_t timeout_ms_;

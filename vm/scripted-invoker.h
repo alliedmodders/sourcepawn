@@ -32,8 +32,8 @@ struct ParamInfo
   int flags;      /* Copy-back flags */
   bool marked;    /* Whether this is marked as being used */
   cell_t local_addr;  /* Local address to free */
-  cell_t *phys_addr;  /* Physical address of our copy */
-  cell_t *orig_addr;  /* Original address to copy back to */
+  cell_t* phys_addr;  /* Physical address of our copy */
+  cell_t* orig_addr;  /* Original address to copy back to */
   ucell_t size;    /* Size of array in bytes */
   struct {
     bool is_sz;    /* is a string */
@@ -44,36 +44,36 @@ struct ParamInfo
 class ScriptedInvoker : public IPluginFunction
 {
  public:
-  ScriptedInvoker(PluginRuntime *pRuntime, funcid_t fnid, uint32_t pub_id);
+  ScriptedInvoker(PluginRuntime* pRuntime, funcid_t fnid, uint32_t pub_id);
   virtual ~ScriptedInvoker();
 
  public:
   int PushCell(cell_t cell);
-  int PushCellByRef(cell_t *cell, int flags);
+  int PushCellByRef(cell_t* cell, int flags);
   int PushFloat(float number);
-  int PushFloatByRef(float *number, int flags);
-  int PushArray(cell_t *inarray, unsigned int cells, int copyback);
-  int PushString(const char *string);
-  int PushStringEx(char *buffer, size_t length, int sz_flags, int cp_flags);
-  int Execute(cell_t *result);
+  int PushFloatByRef(float* number, int flags);
+  int PushArray(cell_t* inarray, unsigned int cells, int copyback);
+  int PushString(const char* string);
+  int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags);
+  int Execute(cell_t* result);
   void Cancel();
-  int CallFunction(const cell_t *params, unsigned int num_params, cell_t *result);
-  IPluginContext *GetParentContext();
-  bool Invoke(cell_t *result);
+  int CallFunction(const cell_t* params, unsigned int num_params, cell_t* result);
+  IPluginContext* GetParentContext();
+  bool Invoke(cell_t* result);
   bool IsRunnable();
   funcid_t GetFunctionID();
-  int Execute2(IPluginContext *ctx, cell_t *result);
-  int CallFunction2(IPluginContext *ctx, 
-    const cell_t *params, 
+  int Execute2(IPluginContext* ctx, cell_t* result);
+  int CallFunction2(IPluginContext* ctx, 
+    const cell_t* params, 
     unsigned int num_params, 
-    cell_t *result);
-  IPluginRuntime *GetParentRuntime();
-  const char *DebugName() {
+    cell_t* result);
+  IPluginRuntime* GetParentRuntime();
+  const char* DebugName() {
     return full_name_.get();
   }
 
  public:
-  sp_public_t *Public() const {
+  sp_public_t* Public() const {
     return public_;
   }
 
@@ -81,19 +81,19 @@ class ScriptedInvoker : public IPluginFunction
   RefPtr<MethodInfo> AcquireMethod();
 
  private:
-  int _PushString(const char *string, int sz_flags, int cp_flags, size_t len);
+  int _PushString(const char* string, int sz_flags, int cp_flags, size_t len);
   int SetError(int err);
 
  private:
-  Environment *env_;
-  PluginContext *context_;
+  Environment* env_;
+  PluginContext* context_;
   cell_t m_params[SP_MAX_EXEC_PARAMS];
   ParamInfo m_info[SP_MAX_EXEC_PARAMS];
   unsigned int m_curparam;
   int m_errorstate;
   funcid_t m_FnId;
   ke::AutoPtr<char[]> full_name_;
-  sp_public_t *public_;
+  sp_public_t* public_;
   RefPtr<MethodInfo> method_;
 };
 

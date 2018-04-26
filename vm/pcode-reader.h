@@ -609,7 +609,7 @@ class PcodeReader
 
       return visitor_->visitSWITCH(
         defaultOffset,
-        reinterpret_cast<const CaseTableEntry *>(table),
+        reinterpret_cast<const CaseTableEntry*>(table),
         ncases);
     }
 

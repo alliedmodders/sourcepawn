@@ -25,16 +25,16 @@ class SmxV1Image
     public LegacyImage
 {
  public:
-  SmxV1Image(FILE *fp);
+  SmxV1Image(FILE* fp);
 
   // This must be called to initialize the reader.
   bool validate();
 
-  const sp_file_hdr_t *hdr() const {
+  const sp_file_hdr_t* hdr() const {
     return hdr_;
   }
 
-  const char *errorMessage() const {
+  const char* errorMessage() const {
     return error_.chars();
   }
 
@@ -42,28 +42,28 @@ class SmxV1Image
   Code DescribeCode() const override;
   Data DescribeData() const override;
   size_t NumNatives() const override;
-  const char *GetNative(size_t index) const override;
-  bool FindNative(const char *name, size_t *indexp) const override;
+  const char* GetNative(size_t index) const override;
+  bool FindNative(const char* name, size_t* indexp) const override;
   size_t NumPublics() const override;
-  void GetPublic(size_t index, uint32_t *offsetp, const char **namep) const override;
-  bool FindPublic(const char *name, size_t *indexp) const override;
+  void GetPublic(size_t index, uint32_t* offsetp, const char** namep) const override;
+  bool FindPublic(const char* name, size_t* indexp) const override;
   size_t NumPubvars() const override;
-  void GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const override;
-  bool FindPubvar(const char *name, size_t *indexp) const override;
+  void GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const override;
+  bool FindPubvar(const char* name, size_t* indexp) const override;
   size_t HeapSize() const override;
   size_t ImageSize() const override;
-  const char *LookupFile(uint32_t code_offset) override;
-  const char *LookupFunction(uint32_t code_offset) override;
-  bool LookupLine(uint32_t code_offset, uint32_t *line) override;
+  const char* LookupFile(uint32_t code_offset) override;
+  const char* LookupFunction(uint32_t code_offset) override;
+  bool LookupLine(uint32_t code_offset, uint32_t* line) override;
 
  private:
    struct Section
    {
-     const char *name;
+     const char* name;
      uint32_t dataoffs;
      uint32_t size;
    };
-  const Section *findSection(const char *name);
+  const Section* findSection(const char* name);
 
  public:
   template <typename T>
@@ -77,9 +77,9 @@ class SmxV1Image
        length_(0),
        features_(0)
     {}
-    Blob(const Section *header,
-         const T *section,
-         const uint8_t *blob,
+    Blob(const Section* header,
+         const T* section,
+         const uint8_t* blob,
          size_t length,
          uint32_t features)
      : header_(header),
@@ -95,7 +95,7 @@ class SmxV1Image
     const T * operator ->() const {
       return section_;
     }
-    const uint8_t *blob() const {
+    const uint8_t* blob() const {
       return blob_;
     }
     size_t length() const {
@@ -109,9 +109,9 @@ class SmxV1Image
     }
 
    private:
-    const Section *header_;
-    const T *section_;
-    const uint8_t *blob_;
+    const Section* header_;
+    const T* section_;
+    const uint8_t* blob_;
     size_t length_;
     uint32_t features_;
   };
@@ -124,7 +124,7 @@ class SmxV1Image
      : section_(nullptr),
        length_(0)
     {}
-    List(const T *section, size_t length)
+    List(const T* section, size_t length)
      : section_(section),
        length_(length)
     {}
@@ -132,7 +132,7 @@ class SmxV1Image
     size_t length() const {
       return length_;
     }
-    const T &operator[](size_t index) const {
+    const T& operator[](size_t index) const {
       assert(index < length());
       return section_[index];
     }
@@ -141,34 +141,34 @@ class SmxV1Image
     }
 
    private:
-    const T *section_;
+    const T* section_;
     size_t length_;
   };
 
  public:
-  const Blob<sp_file_code_t> &code() const {
+  const Blob<sp_file_code_t>& code() const {
     return code_;
   }
-  const Blob<sp_file_data_t> &data() const {
+  const Blob<sp_file_data_t>& data() const {
     return data_;
   }
-  const List<sp_file_publics_t> &publics() const {
+  const List<sp_file_publics_t>& publics() const {
     return publics_;
   }
-  const List<sp_file_natives_t> &natives() const {
+  const List<sp_file_natives_t>& natives() const {
     return natives_;
   }
-  const List<sp_file_pubvars_t> &pubvars() const {
+  const List<sp_file_pubvars_t>& pubvars() const {
     return pubvars_;
   }
 
  protected:
-  bool error(const char *msg) {
+  bool error(const char* msg) {
     error_ = msg;
     return false;
   }
   bool validateName(size_t offset);
-  bool validateSection(const Section *section);
+  bool validateSection(const Section* section);
   bool validateCode();
   bool validateData();
   bool validatePublics();
@@ -179,16 +179,16 @@ class SmxV1Image
 
  private:
   template <typename SymbolType, typename DimType>
-  const char *lookupFunction(const SymbolType *syms, uint32_t addr);
+  const char* lookupFunction(const SymbolType* syms, uint32_t addr);
 
  private:
-  sp_file_hdr_t *hdr_;
+  sp_file_hdr_t* hdr_;
   ke::AString error_;
-  const char *header_strings_;
+  const char* header_strings_;
   ke::Vector<Section> sections_;
 
-  const Section *names_section_;
-  const char *names_;
+  const Section* names_section_;
+  const char* names_;
 
   Blob<sp_file_code_t> code_;
   Blob<sp_file_data_t> data_;
@@ -197,14 +197,14 @@ class SmxV1Image
   List<sp_file_pubvars_t> pubvars_;
   List<sp_file_tag_t> tags_;
 
-  const Section *debug_names_section_;
-  const char *debug_names_;
-  const sp_fdbg_info_t *debug_info_;
+  const Section* debug_names_section_;
+  const char* debug_names_;
+  const sp_fdbg_info_t* debug_info_;
   List<sp_fdbg_file_t> debug_files_;
   List<sp_fdbg_line_t> debug_lines_;
-  const Section *debug_symbols_section_;
-  const sp_fdbg_symbol_t *debug_syms_;
-  const sp_u_fdbg_symbol_t *debug_syms_unpacked_;
+  const Section* debug_symbols_section_;
+  const sp_fdbg_symbol_t* debug_syms_;
+  const sp_u_fdbg_symbol_t* debug_syms_unpacked_;
 };
 
 } // namespace sp

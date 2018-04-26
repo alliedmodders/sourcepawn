@@ -46,7 +46,7 @@ struct FrameLayout
   // This is -offsetof(FrameLayout, prev_ebp).
   static const intptr_t kOffsetFromFp = -2;
 
-  static inline FrameLayout* FromFp(intptr_t *fp) {
+  static inline FrameLayout* FromFp(intptr_t* fp) {
     return reinterpret_cast<FrameLayout*>(fp + kOffsetFromFp);
   }
 };

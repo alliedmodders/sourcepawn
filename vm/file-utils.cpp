@@ -14,7 +14,7 @@
 using namespace sp;
 
 FileType
-sp::DetectFileType(FILE *fp)
+sp::DetectFileType(FILE* fp)
 {
   uint32_t magic = 0;
   if (fread(&magic, sizeof(uint32_t), 1, fp) != 1)
@@ -26,7 +26,7 @@ sp::DetectFileType(FILE *fp)
   return FileType::UNKNOWN;
 }
 
-FileReader::FileReader(FILE *fp)
+FileReader::FileReader(FILE* fp)
  : length_(0)
 {
   if (fseek(fp, 0, SEEK_END) != 0)

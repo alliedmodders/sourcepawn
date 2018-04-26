@@ -38,7 +38,7 @@
 
 namespace SourcePawn {
 #ifdef JIT_SPEW
-	void SpewOpcode(sp::PluginRuntime *runtime, const cell_t *start, const cell_t *cip);
+	void SpewOpcode(sp::PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
 #endif
 }
 

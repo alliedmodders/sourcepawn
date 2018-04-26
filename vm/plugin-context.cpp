@@ -28,7 +28,7 @@ using namespace SourcePawn;
 
 static const size_t kMinHeapSize = 16384;
 
-PluginContext::PluginContext(PluginRuntime *pRuntime)
+PluginContext::PluginContext(PluginRuntime* pRuntime)
  : m_pRuntime(pRuntime),
    memory_(nullptr),
    data_size_(m_pRuntime->data().length),
@@ -69,7 +69,7 @@ PluginContext::Initialize()
   /* Initialize the null references */
   uint32_t index;
   if (FindPubvarByName("NULL_VECTOR", &index) == SP_ERROR_NONE) {
-    sp_pubvar_t *pubvar;
+    sp_pubvar_t* pubvar;
     GetPubvarByIndex(index, &pubvar);
     m_pNullVec = pubvar->offs;
   } else {
@@ -77,7 +77,7 @@ PluginContext::Initialize()
   }
 
   if (FindPubvarByName("NULL_STRING", &index) == SP_ERROR_NONE) {
-    sp_pubvar_t *pubvar;
+    sp_pubvar_t* pubvar;
     GetPubvarByIndex(index, &pubvar);
     m_pNullString = pubvar->offs;
   } else {
@@ -88,9 +88,9 @@ PluginContext::Initialize()
 }
 
 int
-PluginContext::HeapAlloc(unsigned int cells, cell_t *local_addr, cell_t **phys_addr)
+PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr)
 {
-  cell_t *addr;
+  cell_t* addr;
   ucell_t realmem;
 
 #if 0
@@ -110,7 +110,7 @@ PluginContext::HeapAlloc(unsigned int cells, cell_t *local_addr, cell_t **phys_a
   if ((cell_t)(sp_ - hp_ - realmem) < STACKMARGIN)
     return SP_ERROR_HEAPLOW;
 
-  addr = (cell_t *)(memory_ + hp_);
+  addr = (cell_t*)(memory_ + hp_);
   /* store size of allocation in cells */
   *addr = (cell_t)cells;
   addr++;
@@ -130,14 +130,14 @@ int
 PluginContext::HeapPop(cell_t local_addr)
 {
   cell_t cellcount;
-  cell_t *addr;
+  cell_t* addr;
 
   /* check the bounds of this address */
   local_addr -= sizeof(cell_t);
   if (local_addr < (cell_t)data_size_ || local_addr >= sp_)
     return SP_ERROR_INVALID_ADDRESS;
 
-  addr = (cell_t *)(memory_ + local_addr);
+  addr = (cell_t*)(memory_ + local_addr);
   cellcount = (*addr) * sizeof(cell_t);
   /* check if this memory count looks valid */
   if ((signed)(hp_ - cellcount - sizeof(cell_t)) != local_addr)
@@ -161,13 +161,13 @@ PluginContext::HeapRelease(cell_t local_addr)
 }
 
 int
-PluginContext::FindNativeByName(const char *name, uint32_t *index)
+PluginContext::FindNativeByName(const char* name, uint32_t* index)
 {
   return m_pRuntime->FindNativeByName(name, index);
 }
 
 int
-PluginContext::GetNativeByIndex(uint32_t index, sp_native_t **native)
+PluginContext::GetNativeByIndex(uint32_t index, sp_native_t** native)
 {
   return m_pRuntime->GetNativeByIndex(index, native);
 }
@@ -179,13 +179,13 @@ PluginContext::GetNativesNum()
 }
 
 int
-PluginContext::FindPublicByName(const char *name, uint32_t *index)
+PluginContext::FindPublicByName(const char* name, uint32_t* index)
 {
   return m_pRuntime->FindPublicByName(name, index);
 }
 
 int
-PluginContext::GetPublicByIndex(uint32_t index, sp_public_t **pblic)
+PluginContext::GetPublicByIndex(uint32_t index, sp_public_t** pblic)
 {
   return m_pRuntime->GetPublicByIndex(index, pblic);
 }
@@ -197,19 +197,19 @@ PluginContext::GetPublicsNum()
 }
 
 int
-PluginContext::GetPubvarByIndex(uint32_t index, sp_pubvar_t **pubvar)
+PluginContext::GetPubvarByIndex(uint32_t index, sp_pubvar_t** pubvar)
 {
   return m_pRuntime->GetPubvarByIndex(index, pubvar);
 }
 
 int
-PluginContext::FindPubvarByName(const char *name, uint32_t *index)
+PluginContext::FindPubvarByName(const char* name, uint32_t* index)
 {
   return m_pRuntime->FindPubvarByName(name, index);
 }
 
 int
-PluginContext::GetPubvarAddrs(uint32_t index, cell_t *local_addr, cell_t **phys_addr)
+PluginContext::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr)
 {
   return m_pRuntime->GetPubvarAddrs(index, local_addr, phys_addr);
 }
@@ -221,7 +221,7 @@ PluginContext::GetPubVarsNum()
 }
 
 int
-PluginContext::LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr)
+PluginContext::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr)
 {
   if (((local_addr >= hp_) && (local_addr < sp_)) ||
       (local_addr < 0) || ((ucell_t)local_addr >= mem_size_))
@@ -230,28 +230,28 @@ PluginContext::LocalToPhysAddr(cell_t local_addr, cell_t **phys_addr)
   }
 
   if (phys_addr)
-    *phys_addr = (cell_t *)(memory_ + local_addr);
+    *phys_addr = (cell_t*)(memory_ + local_addr);
 
   return SP_ERROR_NONE;
 }
 
 int
-PluginContext::LocalToString(cell_t local_addr, char **addr)
+PluginContext::LocalToString(cell_t local_addr, char** addr)
 {
   if (((local_addr >= hp_) && (local_addr < sp_)) ||
       (local_addr < 0) || ((ucell_t)local_addr >= mem_size_))
   {
     return SP_ERROR_INVALID_ADDRESS;
   }
-  *addr = (char *)(memory_ + local_addr);
+  *addr = (char*)(memory_ + local_addr);
 
   return SP_ERROR_NONE;
 }
 
 int
-PluginContext::StringToLocal(cell_t local_addr, size_t bytes, const char *source)
+PluginContext::StringToLocal(cell_t local_addr, size_t bytes, const char* source)
 {
-  char *dest;
+  char* dest;
   size_t len;
 
   if (((local_addr >= hp_) && (local_addr < sp_)) ||
@@ -264,7 +264,7 @@ PluginContext::StringToLocal(cell_t local_addr, size_t bytes, const char *source
     return SP_ERROR_NONE;
 
   len = strlen(source);
-  dest = (char *)(memory_ + local_addr);
+  dest = (char*)(memory_ + local_addr);
 
   if (len >= bytes)
     len = bytes - 1;
@@ -276,7 +276,7 @@ PluginContext::StringToLocal(cell_t local_addr, size_t bytes, const char *source
 }
 
 static inline int
-__CheckValidChar(char *c)
+__CheckValidChar(char* c)
 {
   int count;
   int bytecount = 0;
@@ -311,9 +311,9 @@ __CheckValidChar(char *c)
 }
 
 int
-PluginContext::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char *source, size_t *wrtnbytes)
+PluginContext::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* source, size_t* wrtnbytes)
 {
-  char *dest;
+  char* dest;
   size_t len;
   bool needtocheck = false;
 
@@ -328,7 +328,7 @@ PluginContext::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char 
     return SP_ERROR_NONE;
 
   len = strlen(source);
-  dest = (char *)(memory_ + local_addr);
+  dest = (char*)(memory_ + local_addr);
 
   if ((size_t)len >= maxbytes) {
     len = maxbytes - 1;
@@ -346,32 +346,32 @@ PluginContext::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char 
   return SP_ERROR_NONE;
 }
 
-IPluginFunction *
+IPluginFunction*
 PluginContext::GetFunctionById(funcid_t func_id)
 {
   return m_pRuntime->GetFunctionById(func_id);
 }
 
-IPluginFunction *
-PluginContext::GetFunctionByName(const char *public_name)
+IPluginFunction*
+PluginContext::GetFunctionByName(const char* public_name)
 {
   return m_pRuntime->GetFunctionByName(public_name);
 }
 
 int
-PluginContext::LocalToStringNULL(cell_t local_addr, char **addr)
+PluginContext::LocalToStringNULL(cell_t local_addr, char** addr)
 {
   int err;
   if ((err = LocalToString(local_addr, addr)) != SP_ERROR_NONE)
     return err;
 
-  if ((cell_t *)*addr == m_pNullString)
+  if ((cell_t*)*addr == m_pNullString)
     *addr = NULL;
 
   return SP_ERROR_NONE;
 }
 
-cell_t *
+cell_t*
 PluginContext::GetNullRef(SP_NULL_TYPE type)
 {
   if (type == SP_NULL_VECTOR)
@@ -383,7 +383,7 @@ PluginContext::GetNullRef(SP_NULL_TYPE type)
 bool
 PluginContext::IsInExec()
 {
-  for (InvokeFrame *ivk = env_->top(); ivk; ivk = ivk->prev()) {
+  for (InvokeFrame* ivk = env_->top(); ivk; ivk = ivk->prev()) {
     if (ivk->cx() == this)
       return true;
   }
@@ -391,7 +391,7 @@ PluginContext::IsInExec()
 }
 
 bool
-PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_params, cell_t *result)
+PluginContext::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result)
 {
   EnterProfileScope profileScope("SourcePawn", "EnterJIT");
 
@@ -403,7 +403,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
   assert((fnid & 1) != 0);
 
   unsigned public_id = fnid >> 1;
-  ScriptedInvoker *cfun = m_pRuntime->GetPublicFunction(public_id);
+  ScriptedInvoker* cfun = m_pRuntime->GetPublicFunction(public_id);
   if (!cfun) {
     ReportErrorNumber(SP_ERROR_NOT_FOUND);
     return false;
@@ -450,7 +450,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
 
   /* Push parameters */
   sp_ -= sizeof(cell_t) * (num_params + 1);
-  cell_t *sp = (cell_t *)(memory_ + sp_);
+  cell_t* sp = (cell_t*)(memory_ + sp_);
 
   sp[0] = num_params;
   for (unsigned int i = 0; i < num_params; i++)
@@ -484,16 +484,16 @@ PluginContext::Invoke(funcid_t fnid, const cell_t *params, unsigned int num_para
   return ok;
 }
 
-IPluginRuntime *
+IPluginRuntime*
 PluginContext::GetRuntime()
 {
   return m_pRuntime;
 }
 
-cell_t *
+cell_t*
 PluginContext::GetLocalParams()
 {
-  return (cell_t *)(memory_ + frm_ + (2 * sizeof(cell_t)));
+  return (cell_t*)(memory_ + frm_ + (2 * sizeof(cell_t)));
 }
 
 int
@@ -530,17 +530,17 @@ PluginContext::pushTracker(uint32_t amount)
 
 struct array_creation_t
 {
-  const cell_t *dim_list;     /* Dimension sizes */
+  const cell_t* dim_list;     /* Dimension sizes */
   cell_t dim_count;           /* Number of dimensions */
-  cell_t *data_offs;          /* Current offset AFTER the indirection vectors (data) */
-  cell_t *base;               /* array base */
+  cell_t* data_offs;          /* Current offset AFTER the indirection vectors (data) */
+  cell_t* base;               /* array base */
 };
 
 static cell_t
-GenerateInnerArrayIndirectionVectors(array_creation_t *ar, int dim, cell_t cur_offs)
+GenerateInnerArrayIndirectionVectors(array_creation_t* ar, int dim, cell_t cur_offs)
 {
   cell_t write_offs = cur_offs;
-  cell_t *data_offs = ar->data_offs;
+  cell_t* data_offs = ar->data_offs;
 
   cur_offs += ar->dim_list[dim];
 
@@ -571,7 +571,7 @@ GenerateInnerArrayIndirectionVectors(array_creation_t *ar, int dim, cell_t cur_o
 }
 
 static cell_t
-calc_indirection(const array_creation_t *ar, cell_t dim)
+calc_indirection(const array_creation_t* ar, cell_t dim)
 {
   cell_t size = ar->dim_list[dim];
   if (dim < ar->dim_count - 2)
@@ -580,7 +580,7 @@ calc_indirection(const array_creation_t *ar, cell_t dim)
 }
 
 static cell_t
-GenerateArrayIndirectionVectors(cell_t *arraybase, cell_t dims[], cell_t _dimcount)
+GenerateArrayIndirectionVectors(cell_t* arraybase, cell_t dims[], cell_t _dimcount)
 {
   array_creation_t ar;
   cell_t data_offs;
@@ -655,7 +655,7 @@ GenerateAbsoluteIndirectionVectors(abs_iv_data_t& info, cell_t dim)
 }
 
 int
-PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
+PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
 {
   // Calculate how many cells are needed.
   if (argv[0] <= 0)
@@ -689,13 +689,13 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
     return SP_ERROR_ARRAY_TOO_BIG;
 
   uint32_t new_hp = hp_ + bytes;
-  cell_t *dat_hp = reinterpret_cast<cell_t *>(memory_ + new_hp);
+  cell_t* dat_hp = reinterpret_cast<cell_t*>(memory_ + new_hp);
 
   // argv, coincidentally, is STK.
   if (dat_hp >= argv - STACK_MARGIN)
     return SP_ERROR_HEAPLOW;
 
-  cell_t *base = reinterpret_cast<cell_t *>(memory_ + hp_);
+  cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);
   LegacyImage* image = runtime()->image();
 
   if (image->DescribeCode().features & SmxConsts::kCodeFeatureDirectArrays) {
@@ -729,7 +729,7 @@ PluginContext::generateFullArray(uint32_t argc, cell_t *argv, int autozero)
 }
 
 int
-PluginContext::generateArray(cell_t dims, cell_t *stk, bool autozero)
+PluginContext::generateArray(cell_t dims, cell_t* stk, bool autozero)
 {
   if (dims == 1) {
     uint32_t size = *stk;
@@ -844,7 +844,7 @@ PluginContext::setFrameValue(cell_t offset, cell_t value)
 bool
 PluginContext::getCellValue(cell_t address, cell_t* out)
 {
-  assert((uintptr_t)(const void *)out % sizeof(cell_t) == 0);
+  assert((uintptr_t)(const void*)out % sizeof(cell_t) == 0);
 
   cell_t* ptr = throwIfBadAddress(address);
   if (!ptr)

@@ -33,7 +33,7 @@
 using namespace sp;
 using namespace SourcePawn;
 
-const char *OpcodeNames[] = {
+const char* OpcodeNames[] = {
 #define _(op, text) text,
   OPCODE_LIST(_, _)
 #undef _
@@ -42,9 +42,9 @@ const char *OpcodeNames[] = {
 
 #ifdef JIT_SPEW
 void
-SourcePawn::SpewOpcode(PluginRuntime *runtime, const cell_t *start, const cell_t *cip)
+SourcePawn::SpewOpcode(PluginRuntime* runtime, const cell_t* start, const cell_t* cip)
 {
-  fprintf(stdout, "  [%05d:%04d]", cip - (cell_t *)runtime->code().bytes, cip - start);
+  fprintf(stdout, "  [%05d:%04d]", cip - (cell_t*)runtime->code().bytes, cip - start);
 
   if (*cip >= OPCODES_LAST) {
     fprintf(stdout, " unknown-opcode\n");
@@ -85,7 +85,7 @@ SourcePawn::SpewOpcode(PluginRuntime *runtime, const cell_t *start, const cell_t
     case OP_JSLEQ:
       fprintf(stdout, "%05d:%04d",
         cip[1] / 4,
-        ((cell_t *)runtime->code().bytes + cip[1] / 4) - start);
+        ((cell_t*)runtime->code().bytes + cip[1] / 4) - start);
       break;
 
     case OP_SYSREQ_C:
