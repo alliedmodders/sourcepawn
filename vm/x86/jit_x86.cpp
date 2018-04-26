@@ -70,7 +70,7 @@ OpToCondition(CompareOp op)
   }
 }
 
-Compiler::Compiler(PluginRuntime *rt, cell_t pcode_offs)
+Compiler::Compiler(PluginRuntime* rt, cell_t pcode_offs)
  : CompilerBase(rt, pcode_offs)
 {
 }
@@ -81,28 +81,28 @@ Compiler::~Compiler()
 
 // No exit frame - error code is returned directly.
 static int
-InvokePushTracker(PluginContext *cx, uint32_t amount)
+InvokePushTracker(PluginContext* cx, uint32_t amount)
 {
   return cx->pushTracker(amount);
 }
 
 // No exit frame - error code is returned directly.
 static int
-InvokePopTrackerAndSetHeap(PluginContext *cx)
+InvokePopTrackerAndSetHeap(PluginContext* cx)
 {
   return cx->popTrackerAndSetHeap();
 }
 
 // No exit frame - error code is returned directly.
 static int
-InvokeGenerateFullArray(PluginContext *cx, uint32_t argc, cell_t *argv, int autozero)
+InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int autozero)
 {
   return cx->generateFullArray(argc, argv, autozero);
 }
 
 // No exit frame - error code is returned directly.
 static int
-InvokeRebaseArray(PluginContext *cx,
+InvokeRebaseArray(PluginContext* cx,
                   cell_t base_addr,
                   cell_t dat_addr,
                   cell_t iv_size,
@@ -1001,7 +1001,7 @@ Compiler::visitHEAP(cell_t amount)
 bool
 Compiler::visitJUMP(cell_t offset)
 {
-  Label *target = labelAt(offset);
+  Label* target = labelAt(offset);
   if (target->bound()) {
     __ jmp32(target);
     backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
@@ -1014,7 +1014,7 @@ Compiler::visitJUMP(cell_t offset)
 bool
 Compiler::visitJcmp(CompareOp op, cell_t offset)
 {
-  Label *target = labelAt(offset);
+  Label* target = labelAt(offset);
 
   switch (op) {
   case CompareOp::Zero:
@@ -1064,7 +1064,7 @@ Compiler::visitTRACKER_PUSH_C(cell_t amount)
 
   __ push(amount);
   __ push(intptr_t(rt_->GetBaseContext()));
-  __ callWithABI(ExternalAddress((void *)InvokePushTracker));
+  __ callWithABI(ExternalAddress((void*)InvokePushTracker));
   __ addl(esp, 8);
   __ testl(eax, eax);
   jumpOnError(not_zero);
@@ -1084,7 +1084,7 @@ Compiler::visitTRACKER_POP_SETHEAP()
 
   // Get the context pointer and call the sanity checker.
   __ push(intptr_t(rt_->GetBaseContext()));
-  __ callWithABI(ExternalAddress((void *)InvokePopTrackerAndSetHeap));
+  __ callWithABI(ExternalAddress((void*)InvokePopTrackerAndSetHeap));
   __ addl(esp, 4);
   __ testl(eax, eax);
   jumpOnError(not_zero);
@@ -1109,7 +1109,7 @@ Compiler::visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size)
   __ push(addr);
   __ push(pri);
   __ push(intptr_t(rt_->GetBaseContext()));
-  __ callWithABI(ExternalAddress((void *)InvokeRebaseArray));
+  __ callWithABI(ExternalAddress((void*)InvokeRebaseArray));
   __ addl(esp, 8 * sizeof(intptr_t));
   __ testl(eax, eax);
   jumpOnError(not_zero);
@@ -1176,7 +1176,7 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero)
     __ subl(esp, 8);
     __ push(tmp);
     __ push(intptr_t(rt_->GetBaseContext()));
-    __ callWithABI(ExternalAddress((void *)InvokePushTracker));
+    __ callWithABI(ExternalAddress((void*)InvokePushTracker));
     __ movl(tmp, Operand(esp, 4));
     __ addl(esp, 16);
     __ shrl(tmp, 2);
@@ -1199,13 +1199,13 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero)
     __ push(pri);
     __ subl(esp, 12);
 
-    // int GenerateArray(cx, vars[], uint32_t, cell_t *, int, unsigned *);
+    // int GenerateArray(cx, vars[], uint32_t, cell_t*, int, unsigned*);
     __ push(autozero ? 1 : 0);
     __ push(stk);
     __ push(dims);
     __ push(intptr_t(context_));
-    __ callWithABI(ExternalAddress((void *)InvokeGenerateFullArray));
-    __ addl(esp, 4 * sizeof(void *) + 12);
+    __ callWithABI(ExternalAddress((void*)InvokeGenerateFullArray));
+    __ addl(esp, 4 * sizeof(void*) + 12);
 
     // restore pri to tmp
     __ pop(tmp);
@@ -1271,19 +1271,19 @@ Compiler::emitCallThunk(CallThunk* thunk)
   // on the stack. Allocate a big block so we're aligned.
   //
   // Note: we add 12 since the push above misaligned the stack.
-  static const size_t kStackNeeded = 5 * sizeof(void *);
+  static const size_t kStackNeeded = 5 * sizeof(void*);
   static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
   __ subl(esp, kStackReserve);
 
   // Set arguments.
-  __ movl(Operand(esp, 3 * sizeof(void *)), eax);
-  __ lea(edx, Operand(esp, 4 * sizeof(void *)));
-  __ movl(Operand(esp, 2 * sizeof(void *)), edx);
-  __ movl(Operand(esp, 1 * sizeof(void *)), intptr_t(thunk->pcode_offset));
-  __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(context_));
+  __ movl(Operand(esp, 3 * sizeof(void*)), eax);
+  __ lea(edx, Operand(esp, 4 * sizeof(void*)));
+  __ movl(Operand(esp, 2 * sizeof(void*)), edx);
+  __ movl(Operand(esp, 1 * sizeof(void*)), intptr_t(thunk->pcode_offset));
+  __ movl(Operand(esp, 0 * sizeof(void*)), intptr_t(context_));
 
-  __ callWithABI(ExternalAddress((void *)CompileFromThunk));
-  __ movl(edx, Operand(esp, 4 * sizeof(void *)));
+  __ callWithABI(ExternalAddress((void*)CompileFromThunk));
+  __ movl(edx, Operand(esp, 4 * sizeof(void*)));
   __ leaveExitFrame();
 
   __ testl(eax, eax);
@@ -1352,7 +1352,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 
   // Invoke the native.
   if (immutable)
-    __ callWithABI(ExternalAddress((void *)native->legacy_fn));
+    __ callWithABI(ExternalAddress((void*)native->legacy_fn));
   else
     __ callWithABI(edx);
   __ bind(&return_address);
@@ -1384,7 +1384,7 @@ Compiler::visitSWITCH(cell_t defaultOffset,
                       const CaseTableEntry* cases,
                       size_t ncases)
 {
-  Label *defaultCase = labelAt(defaultOffset);
+  Label* defaultCase = labelAt(defaultOffset);
 
   // Degenerate - 0 cases.
   if (!ncases) {
@@ -1394,7 +1394,7 @@ Compiler::visitSWITCH(cell_t defaultOffset,
 
   // Degenerate - 1 case.
   if (ncases == 1) {
-    Label *maybe = labelAt(cases[0].address);
+    Label* maybe = labelAt(cases[0].address);
     __ cmpl(pri, cases[0].value);
     __ j(equal, maybe);
     __ jmp(defaultCase);
@@ -1444,13 +1444,13 @@ Compiler::visitSWITCH(cell_t defaultOffset,
 
     __ bind(&table);
     for (size_t i = 0; i < ncases; i++) {
-      Label *label = labelAt(cases[i].address);
+      Label* label = labelAt(cases[i].address);
       __ emit_absolute_address(label);
     }
   } else {
     // Slower version. Go through each case and generate a check.
     for (size_t i = 0; i < ncases; i++) {
-      Label *label = labelAt(cases[i].address);
+      Label* label = labelAt(cases[i].address);
       __ cmpl(pri, cases[i].value);
       __ j(equal, label);
     }
@@ -1529,7 +1529,7 @@ Compiler::emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path)
   __ subl(esp, 8);
   __ push(path->bounds);
   __ push(eax);
-  __ callWithABI(ExternalAddress((void *)ReportOutOfBoundsError));
+  __ callWithABI(ExternalAddress((void*)ReportOutOfBoundsError));
   __ bind(&return_address);
   emitCipMapping(path->cip);
   __ leaveInlineExitFrame();
@@ -1551,7 +1551,7 @@ Compiler::emitErrorHandlers()
     // Align the stack and call.
     __ subl(esp, 12);
     __ push(eax);
-    __ callWithABI(ExternalAddress((void *)InvokeReportError));
+    __ callWithABI(ExternalAddress((void*)InvokeReportError));
     __ leaveExitFrame();
     __ jmp(&return_to_invoke);
   }
@@ -1565,7 +1565,7 @@ Compiler::emitErrorHandlers()
 
     // Since the return stub wipes out the stack, we don't need to addl after
     // the call.
-    __ callWithABI(ExternalAddress((void *)InvokeReportTimeout));
+    __ callWithABI(ExternalAddress((void*)InvokeReportTimeout));
     __ leaveExitFrame();
     __ jmp(&return_reported_error_);
   }
@@ -1586,7 +1586,7 @@ Compiler::emitErrorHandlers()
     // We cannot jump to the return stub just yet. We could be multiple frames
     // deep, and our |ebp| does not match the initial frame. Find and restore
     // it now.
-    __ callWithABI(ExternalAddress((void *)find_entry_fp));
+    __ callWithABI(ExternalAddress((void*)find_entry_fp));
     __ leaveExitFrame();
 
     __ movl(ebp, eax);
@@ -1604,7 +1604,7 @@ Compiler::emitThrowPath(int err)
 void
 CompilerBase::PatchCallThunk(uint8_t* pc, void* target)
 {
-  *(intptr_t *)(pc - 4) = intptr_t(target) - intptr_t(pc);
+  *(intptr_t*)(pc - 4) = intptr_t(target) - intptr_t(pc);
 }
 
 } // namespace sp

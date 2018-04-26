@@ -20,8 +20,8 @@ namespace sp {
 
 class Environment;
 
-CodeChunk LinkCode(Environment *env, Assembler& masm);
-uint8_t *LinkCodeToLegacyPtr(Environment *env, Assembler& masm);
+CodeChunk LinkCode(Environment* env, Assembler& masm);
+uint8_t* LinkCodeToLegacyPtr(Environment* env, Assembler& masm);
 
 }
 

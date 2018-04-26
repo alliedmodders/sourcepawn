@@ -22,34 +22,34 @@ namespace sp {
 class PluginContext;
 class Environment;
 
-typedef int (*InvokeStubFn)(PluginContext *cx, void *code, cell_t *rval);
+typedef int (*InvokeStubFn)(PluginContext* cx, void* code, cell_t* rval);
 
 class CodeStubs
 {
  public:
-  CodeStubs(Environment *env);
+  CodeStubs(Environment* env);
 
  public:
   bool Initialize();
 
-  SPVM_NATIVE_FUNC CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *userData);
+  SPVM_NATIVE_FUNC CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void* userData);
 
   InvokeStubFn InvokeStub() const {
     return (InvokeStubFn)invoke_stub_.address();
   }
-  void *ReturnStub() const {
+  void* ReturnStub() const {
     return return_stub_;
   }
-  void *LegacyNativeStub();
+  void* LegacyNativeStub();
 
  private:
   bool InitializeFeatureDetection();
   bool CompileInvokeStub();
 
  private:
-  Environment *env_;
+  Environment* env_;
   CodeChunk invoke_stub_;
-  void *return_stub_;   // Owned by invoke_stub_.
+  void* return_stub_;   // Owned by invoke_stub_.
 };
 
 }

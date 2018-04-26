@@ -30,7 +30,7 @@ CodeStubs::CompileInvokeStub()
 }
 
 SPVM_NATIVE_FUNC
-CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void *pData)
+CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void* pData)
 {
   assert(false);
   return (SPVM_NATIVE_FUNC)nullptr;

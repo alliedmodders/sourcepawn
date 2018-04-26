@@ -51,22 +51,22 @@ SourcePawnEngine::SourcePawnEngine()
 {
 }
 
-const char *
+const char*
 SourcePawnEngine::GetErrorString(int error)
 {
   return Environment::get()->GetErrorString(error);
 }
 
-void *
+void*
 SourcePawnEngine::ExecAlloc(size_t size)
 {
 #if defined WIN32
   return VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 #elif defined __GNUC__
 # if defined __APPLE__
-  void *base = valloc(size);
+  void* base = valloc(size);
 # else
-  void *base = memalign(sysconf(_SC_PAGESIZE), size);
+  void* base = memalign(sysconf(_SC_PAGESIZE), size);
 # endif
   if (mprotect(base, size, PROT_READ|PROT_WRITE|PROT_EXEC) != 0) {
     free(base);
@@ -76,7 +76,7 @@ SourcePawnEngine::ExecAlloc(size_t size)
 #endif
 }
 
-void *
+void*
 SourcePawnEngine::AllocatePageMemory(size_t size)
 {
   CodeChunk chunk = Environment::get()->AllocateCode(size + sizeof(CodeChunk));
@@ -86,19 +86,19 @@ SourcePawnEngine::AllocatePageMemory(size_t size)
 }
 
 void
-SourcePawnEngine::SetReadExecute(void *ptr)
+SourcePawnEngine::SetReadExecute(void* ptr)
 {
   /* already re */
 }
 
 void
-SourcePawnEngine::SetReadWrite(void *ptr)
+SourcePawnEngine::SetReadWrite(void* ptr)
 {
   /* already rw */
 }
 
 void
-SourcePawnEngine::FreePageMemory(void *ptr)
+SourcePawnEngine::FreePageMemory(void* ptr)
 {
   assert(ptr);
   CodeChunk* hidden = (CodeChunk*)((uint8_t*)ptr - sizeof(CodeChunk));
@@ -106,7 +106,7 @@ SourcePawnEngine::FreePageMemory(void *ptr)
 }
 
 void
-SourcePawnEngine::ExecFree(void *address)
+SourcePawnEngine::ExecFree(void* address)
 {
 #if defined WIN32
   VirtualFree(address, 0, MEM_RELEASE);
@@ -116,26 +116,26 @@ SourcePawnEngine::ExecFree(void *address)
 }
 
 void
-SourcePawnEngine::SetReadWriteExecute(void *ptr)
+SourcePawnEngine::SetReadWriteExecute(void* ptr)
 {
   //:TODO:  g_ExeMemory.SetRWE(ptr);
   SetReadExecute(ptr);
 }
 
-void *
+void*
 SourcePawnEngine::BaseAlloc(size_t size)
 {
   return malloc(size);
 }
 
 void
-SourcePawnEngine::BaseFree(void *memory)
+SourcePawnEngine::BaseFree(void* memory)
 {
   free(memory);
 }
 
-sp_plugin_t *
-SourcePawnEngine::LoadFromFilePointer(FILE *fp, int *err)
+sp_plugin_t*
+SourcePawnEngine::LoadFromFilePointer(FILE* fp, int* err)
 {
   if (err != NULL)
     *err = SP_ERROR_ABORTED;
@@ -143,8 +143,8 @@ SourcePawnEngine::LoadFromFilePointer(FILE *fp, int *err)
   return NULL;
 }
 
-sp_plugin_t *
-SourcePawnEngine::LoadFromMemory(void *base, sp_plugin_t *plugin, int *err)
+sp_plugin_t*
+SourcePawnEngine::LoadFromMemory(void* base, sp_plugin_t* plugin, int* err)
 {
   if (err != NULL)
     *err = SP_ERROR_ABORTED;
@@ -153,15 +153,15 @@ SourcePawnEngine::LoadFromMemory(void *base, sp_plugin_t *plugin, int *err)
 }
 
 int
-SourcePawnEngine::FreeFromMemory(sp_plugin_t *plugin)
+SourcePawnEngine::FreeFromMemory(sp_plugin_t* plugin)
 {
   return SP_ERROR_ABORTED;
 }
 
-IDebugListener *
-SourcePawnEngine::SetDebugListener(IDebugListener *pListener)
+IDebugListener*
+SourcePawnEngine::SetDebugListener(IDebugListener* pListener)
 {
-  IDebugListener *old = Environment::get()->debugger();
+  IDebugListener* old = Environment::get()->debugger();
   Environment::get()->SetDebugger(pListener);
   return old;
 }
@@ -187,7 +187,7 @@ SourcePawnEngine2::SourcePawnEngine2()
 }
 
 size_t
-sp::UTIL_FormatVA(char *buffer, size_t maxlength, const char *fmt, va_list ap)
+sp::UTIL_FormatVA(char* buffer, size_t maxlength, const char* fmt, va_list ap)
 {
   size_t len = vsnprintf(buffer, maxlength, fmt, ap);
 
@@ -199,7 +199,7 @@ sp::UTIL_FormatVA(char *buffer, size_t maxlength, const char *fmt, va_list ap)
 }
 
 size_t
-sp::UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...)
+sp::UTIL_Format(char* buffer, size_t maxlength, const char* fmt, ...)
 {
   va_list ap;
 
@@ -210,8 +210,8 @@ sp::UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...)
   return len;
 }
 
-IPluginRuntime *
-SourcePawnEngine2::LoadPlugin(ICompilation *co, const char *file, int *err)
+IPluginRuntime*
+SourcePawnEngine2::LoadPlugin(ICompilation* co, const char* file, int* err)
 {
   if (co) {
     if (err)
@@ -219,10 +219,10 @@ SourcePawnEngine2::LoadPlugin(ICompilation *co, const char *file, int *err)
     return nullptr;
   }
 
-  IPluginRuntime *rt = LoadBinaryFromFile(file, nullptr, 0);
+  IPluginRuntime* rt = LoadBinaryFromFile(file, nullptr, 0);
   if (!rt) {
     if (err) {
-      if (FILE *fp = fopen(file, "rb")) {
+      if (FILE* fp = fopen(file, "rb")) {
         fclose(fp);
         *err = SP_ERROR_FILE_FORMAT;
       } else {
@@ -235,10 +235,10 @@ SourcePawnEngine2::LoadPlugin(ICompilation *co, const char *file, int *err)
   return rt;
 }
 
-IPluginRuntime *
-SourcePawnEngine2::LoadBinaryFromFile(const char *file, char *error, size_t maxlength)
+IPluginRuntime*
+SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxlength)
 {
-  FILE *fp = fopen(file, "rb");
+  FILE* fp = fopen(file, "rb");
 
   if (!fp) {
     UTIL_Format(error, maxlength, "file not found");
@@ -249,14 +249,14 @@ SourcePawnEngine2::LoadBinaryFromFile(const char *file, char *error, size_t maxl
   fclose(fp);
 
   if (!image->validate()) {
-    const char *errorMessage = image->errorMessage();
+    const char* errorMessage = image->errorMessage();
     if (!errorMessage)
       errorMessage = "file parse error";
     UTIL_Format(error, maxlength, "%s", errorMessage);
     return nullptr;
   }
 
-  PluginRuntime *pRuntime = new PluginRuntime(image.take());
+  PluginRuntime* pRuntime = new PluginRuntime(image.take());
   if (!pRuntime->Initialize()) {
     delete pRuntime;
 
@@ -284,7 +284,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char *file, char *error, size_t maxl
 }
 
 SPVM_NATIVE_FUNC
-SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void *pData)
+SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void* pData)
 {
   return Environment::get()->stubs()->CreateFakeNativeStub(callback, pData);
 }
@@ -292,14 +292,14 @@ SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void *pData)
 void
 SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
 {
-  return Environment::get()->APIv1()->FreePageMemory((void *)func);
+  return Environment::get()->APIv1()->FreePageMemory((void*)func);
 }
 
 #if !defined(SOURCEPAWN_VERSION)
 # define SOURCEPAWN_VERSION "SourcePawn 1.10"
 #endif
 
-const char *
+const char*
 SourcePawnEngine2::GetEngineName()
 {
   const char* info = "";
@@ -326,16 +326,16 @@ SourcePawnEngine2::GetEngineName()
   return engine_name_;
 }
 
-const char *
+const char*
 SourcePawnEngine2::GetVersionString()
 {
   return SOURCEPAWN_VERSION;
 }
 
-IDebugListener *
-SourcePawnEngine2::SetDebugListener(IDebugListener *listener)
+IDebugListener*
+SourcePawnEngine2::SetDebugListener(IDebugListener* listener)
 {
-  IDebugListener *old = Environment::get()->debugger();
+  IDebugListener* old = Environment::get()->debugger();
   Environment::get()->SetDebugger(listener);
   return old;
 }
@@ -346,13 +346,13 @@ SourcePawnEngine2::GetAPIVersion()
   return SOURCEPAWN_ENGINE2_API_VERSION;
 }
 
-ICompilation *
+ICompilation*
 SourcePawnEngine2::StartCompilation()
 {
   return nullptr;
 }
 
-const char *
+const char*
 SourcePawnEngine2::GetErrorString(int err)
 {
   return Environment::get()->GetErrorString(err);
@@ -369,12 +369,12 @@ SourcePawnEngine2::Shutdown()
 {
 }
 
-IPluginRuntime *
-SourcePawnEngine2::CreateEmptyRuntime(const char *name, uint32_t memory)
+IPluginRuntime*
+SourcePawnEngine2::CreateEmptyRuntime(const char* name, uint32_t memory)
 {
   ke::AutoPtr<EmptyImage> image(new EmptyImage(memory));
 
-  PluginRuntime *rt = new PluginRuntime(image.take());
+  PluginRuntime* rt = new PluginRuntime(image.take());
   if (!rt->Initialize()) {
     delete rt;
     return NULL;
@@ -406,7 +406,7 @@ SourcePawnEngine2::IsJitEnabled()
 }
 
 void
-SourcePawnEngine2::SetProfiler(IProfiler *profiler)
+SourcePawnEngine2::SetProfiler(IProfiler* profiler)
 {
   // Deprecated.
 }
@@ -424,12 +424,12 @@ SourcePawnEngine2::DisableProfiling()
 }
 
 void
-SourcePawnEngine2::SetProfilingTool(IProfilingTool *tool)
+SourcePawnEngine2::SetProfilingTool(IProfilingTool* tool)
 {
   Environment::get()->SetProfiler(tool);
 }
 
-ISourcePawnEnvironment *
+ISourcePawnEnvironment*
 SourcePawnEngine2::Environment()
 {
   return Environment::get();

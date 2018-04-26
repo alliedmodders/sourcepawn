@@ -46,7 +46,7 @@ class AssemblerBase
 
  public:
   AssemblerBase() {
-    buffer_ = (uint8_t *)malloc(kMinBufferSize);
+    buffer_ = (uint8_t*)malloc(kMinBufferSize);
     pos_ = buffer_;
     end_ = buffer_ + kMinBufferSize;
     outOfMemory_ = !buffer_;
@@ -82,17 +82,17 @@ class AssemblerBase
   void writeUint32(uint32_t word) {
     write<uint32_t>(word);
   }
-  void writePointer(void *ptr) {
-    write<void *>(ptr);
+  void writePointer(void* ptr) {
+    write<void*>(ptr);
   }
   void writeInt64(int64_t value) {
     write<int64_t>(value);
   }
 
   template <typename T>
-  void write(const T &t) {
+  void write(const T& t) {
     assertCanWrite(sizeof(T));
-    *reinterpret_cast<T *>(pos_) = t;
+    *reinterpret_cast<T*>(pos_) = t;
     pos_ += sizeof(T);
   }
 
@@ -115,7 +115,7 @@ class AssemblerBase
     }
 
     size_t oldpos = size_t(pos_ - buffer_);
-    uint8_t *newbuf = (uint8_t *)realloc(buffer_, oldlength * 2);
+    uint8_t* newbuf = (uint8_t*)realloc(buffer_, oldlength * 2);
     if (!newbuf) {
       // Writes will be safe, though we'll corrupt the instruction stream, so
       // actually using the buffer will be invalid and compilation should be
@@ -140,16 +140,16 @@ class AssemblerBase
   void assertCanWrite(size_t bytes) {
     assert(pos_ + bytes <= end_);
   }
-  uint8_t *buffer() const {
+  uint8_t* buffer() const {
     return buffer_;
   }
 
  private:
-  uint8_t *buffer_;
-  uint8_t *end_;
+  uint8_t* buffer_;
+  uint8_t* end_;
 
  protected:
-  uint8_t *pos_;
+  uint8_t* pos_;
   bool outOfMemory_;
 };
 
@@ -157,12 +157,12 @@ class AssemblerBase
 class AddressValue
 {
  public:
-  explicit AddressValue(void *p)
+  explicit AddressValue(void* p)
     : p_(p)
   {
   }
 
-  void *address() const {
+  void* address() const {
     return p_;
   }
   intptr_t value() const {
@@ -173,14 +173,14 @@ class AddressValue
   }
 
  private:
-  void *p_;
+  void* p_;
 };
 
 // Deprecated; this should only be used on x86.
 class ExternalAddress : public AddressValue
 {
  public:
-  explicit ExternalAddress(void *p)
+  explicit ExternalAddress(void* p)
    : AddressValue(p)
   {}
 };

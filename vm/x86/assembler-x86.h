@@ -37,8 +37,8 @@
 
 struct Register
 {
-  const char *name() const {
-    static const char *names[] = {
+  const char* name() const {
+    static const char* names[] = {
       "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"
     };
     return names[code];
@@ -46,10 +46,10 @@ struct Register
 
   int code;
 
-  bool operator == (const Register &other) const {
+  bool operator == (const Register& other) const {
     return code == other.code;
   }
-  bool operator != (const Register &other) const {
+  bool operator != (const Register& other) const {
     return code != other.code;
   }
 };
@@ -58,8 +58,8 @@ struct Register
 // numbered st0 through st7.
 struct FpuRegister
 {
-  const char *name() const {
-    static const char *names[] = {
+  const char* name() const {
+    static const char* names[] = {
       "st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"
     };
     return names[code];
@@ -67,18 +67,18 @@ struct FpuRegister
 
   int code;
 
-  bool operator == (const FpuRegister &other) const {
+  bool operator == (const FpuRegister& other) const {
     return code == other.code;
   }
-  bool operator != (const FpuRegister &other) const {
+  bool operator != (const FpuRegister& other) const {
     return code != other.code;
   }
 };
 
 struct FloatRegister
 {
-  const char *name() const {
-    static const char *names[] = {
+  const char* name() const {
+    static const char* names[] = {
       "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
     };
     return names[code];
@@ -86,10 +86,10 @@ struct FloatRegister
 
   int code;
 
-  bool operator == (const FloatRegister &other) const {
+  bool operator == (const FloatRegister& other) const {
     return code == other.code;
   }
-  bool operator != (const FloatRegister &other) const {
+  bool operator != (const FloatRegister& other) const {
     return code != other.code;
   }
 };
@@ -238,7 +238,7 @@ struct Operand
 
   explicit Operand(ExternalAddress address) {
     modrm(kModeDisp0, kRIP);
-    *reinterpret_cast<const void **>(bytes_ + 1) = address.address();
+    *reinterpret_cast<const void**>(bytes_ + 1) = address.address();
   }
 
   bool isRegister() const {
@@ -286,7 +286,7 @@ struct Operand
   }
   void modrm_disp32(uint8_t rm, int32_t disp) {
     modrm(kModeDisp32, rm);
-    *reinterpret_cast<int32_t *>(bytes_ + 1) = disp;
+    *reinterpret_cast<int32_t*>(bytes_ + 1) = disp;
   }
   void sib(uint8_t mode, Scale scale, uint8_t index, uint8_t base) {
     modrm(mode, kSIB);
@@ -305,7 +305,7 @@ struct Operand
   }
   void sib_disp32(Scale scale, uint8_t index, uint8_t base, int32_t disp) {
     sib(kModeDisp32, scale, index, base);
-    *reinterpret_cast<int32_t *>(bytes_ + 2) = disp;
+    *reinterpret_cast<int32_t*>(bytes_ + 2) = disp;
   }
 
  private:
@@ -328,52 +328,52 @@ class Assembler : public AssemblerBase
   static CPUFeatures X86Features; 
 
  public:
-  static void SetFeatures(const CPUFeatures &features) {
+  static void SetFeatures(const CPUFeatures& features) {
     X86Features = features;
   }
-  static const CPUFeatures &Features() {
+  static const CPUFeatures& Features() {
     return X86Features;
   }
 
   void movl(Register dest, Register src) {
     emit1(0x89, src.code, dest.code);
   }
-  void movl(Register dest, const Operand &src) {
+  void movl(Register dest, const Operand& src) {
     emit1(0x8b, dest.code, src);
   }
-  void movl(const Operand &dest, Register src) {
+  void movl(const Operand& dest, Register src) {
     emit1(0x89, src.code, dest);
   }
   void movl(Register dest, int32_t imm) {
     emit1(0xb8 + dest.code);
     writeInt32(imm);
   }
-  void movl(const Operand &dest, int32_t imm) {
+  void movl(const Operand& dest, int32_t imm) {
     if (dest.isRegister())
       emit1(0xb8 + dest.registerCode());
     else
       emit1(0xc7, 0, dest);
     writeInt32(imm);
   }
-  void movw(const Operand &dest, Register src) {
+  void movw(const Operand& dest, Register src) {
     emit1(0x89, src.code, dest);
   }
-  void movw(Register dest, const Operand &src) {
+  void movw(Register dest, const Operand& src) {
     emit1(0x8b, dest.code, src);
   }
-  void movb(const Operand &dest, Register src) {
+  void movb(const Operand& dest, Register src) {
     emit1(0x88, src.code, dest);
   }
-  void movb(Register dest, const Operand &src) {
+  void movb(Register dest, const Operand& src) {
     emit1(0x8a, dest.code, src);
   }
-  void movzxb(Register dest, const Operand &src) {
+  void movzxb(Register dest, const Operand& src) {
     emit2(0x0f, 0xb6, dest.code, src);
   }
   void movzxb(Register dest, const Register src) {
     emit2(0x0f, 0xb6, dest.code, src.code);
   }
-  void movzxw(Register dest, const Operand &src) {
+  void movzxw(Register dest, const Operand& src) {
     emit2(0x0f, 0xb7, dest.code, src);
   }
   void movzxw(Register dest, const Register src) {
@@ -382,14 +382,14 @@ class Assembler : public AssemblerBase
   void movaps(FloatRegister dest, const FloatRegister src) {
     emit2(0x0f, 0x28, dest.code, src.code);
   }
-  void movaps(FloatRegister dest, const Operand &src) {
+  void movaps(FloatRegister dest, const Operand& src) {
     emit2(0x0f, 0x28, dest.code, src);
   }
-  void movaps(const Operand &dest, FloatRegister src) {
+  void movaps(const Operand& dest, FloatRegister src) {
     emit2(0x0f, 0x29, src.code, dest);
   }
 
-  void lea(Register dest, const Operand &src) {
+  void lea(Register dest, const Operand& src) {
     emit1(0x8d, dest.code, src);
   }
 
@@ -408,7 +408,7 @@ class Assembler : public AssemblerBase
   void shll(Register dest, uint8_t imm) {
     shift_imm(dest.code, 4, imm);
   }
-  void shll(const Operand &dest, uint8_t imm) {
+  void shll(const Operand& dest, uint8_t imm) {
     shift_imm(dest, 4, imm);
   }
   void shrl_cl(Register dest) {
@@ -417,7 +417,7 @@ class Assembler : public AssemblerBase
   void shrl(Register dest, uint8_t imm) {
     shift_imm(dest.code, 5, imm);
   }
-  void shrl(const Operand &dest, uint8_t imm) {
+  void shrl(const Operand& dest, uint8_t imm) {
     shift_imm(dest, 5, imm);
   }
   void sarl_cl(Register dest) {
@@ -426,7 +426,7 @@ class Assembler : public AssemblerBase
   void sarl(Register dest, uint8_t imm) {
     shift_imm(dest.code, 7, imm);
   }
-  void sarl(const Operand &dest, uint8_t imm) {
+  void sarl(const Operand& dest, uint8_t imm) {
     shift_imm(dest, 7, imm);
   }
   void shrd(Register dest, Register src, uint8_t imm) {
@@ -441,86 +441,86 @@ class Assembler : public AssemblerBase
   void cmpb(Register left, int8_t imm8) {
     alu_imm8(7, imm8, Operand(left));
   }
-  void cmpb(const Operand &left, int8_t imm8) {
+  void cmpb(const Operand& left, int8_t imm8) {
     alu_imm8(7, imm8, left);
   }
   void cmpl(Register left, int32_t imm) {
     alu_imm(7, imm, Operand(left));
   }
-  void cmpl(const Operand &left, int32_t imm) {
+  void cmpl(const Operand& left, int32_t imm) {
     alu_imm(7, imm, left);
   }
   void cmpl(Register left, Register right) {
     emit1(0x39, right.code, left.code);
   }
-  void cmpl(const Operand &left, Register right) {
+  void cmpl(const Operand& left, Register right) {
     emit1(0x39, right.code, left);
   }
-  void cmpl(Register left, const Operand &right) {
+  void cmpl(Register left, const Operand& right) {
     emit1(0x3b, left.code, right);
   }
   void andl(Register dest, int32_t imm) {
     alu_imm(4, imm, Operand(dest));
   }
-  void andl(const Operand &dest, int32_t imm) {
+  void andl(const Operand& dest, int32_t imm) {
     alu_imm(4, imm, dest);
   }
   void andl(Register dest, Register src) {
     emit1(0x21, src.code, dest.code);
   }
-  void andl(const Operand &dest, Register src) {
+  void andl(const Operand& dest, Register src) {
     emit1(0x21, src.code, dest);
   }
-  void andl(Register dest, const Operand &src) {
+  void andl(Register dest, const Operand& src) {
     emit1(0x23, dest.code, src);
   }
   void orl(Register dest, Register src) {
     emit1(0x09, src.code, dest.code);
   }
-  void orl(const Operand &dest, Register src) {
+  void orl(const Operand& dest, Register src) {
     emit1(0x09, src.code, dest);
   }
-  void orl(Register dest, const Operand &src) {
+  void orl(Register dest, const Operand& src) {
     emit1(0x0b, dest.code, src);
   }
   void xorl(Register dest, Register src) {
     emit1(0x31, src.code, dest.code);
   }
-  void xorl(const Operand &dest, Register src) {
+  void xorl(const Operand& dest, Register src) {
     emit1(0x31, src.code, dest);
   }
-  void xorl(Register dest, const Operand &src) {
+  void xorl(Register dest, const Operand& src) {
     emit1(0x33, dest.code, src);
   }
 
   void subl(Register dest, Register src) {
     emit1(0x29, src.code, dest.code);
   }
-  void subl(const Operand &dest, Register src) {
+  void subl(const Operand& dest, Register src) {
     emit1(0x29, src.code, dest);
   }
-  void subl(Register dest, const Operand &src) {
+  void subl(Register dest, const Operand& src) {
     emit1(0x2b, dest.code, src);
   }
   void subl(Register dest, int32_t imm) {
     alu_imm(5, imm, Operand(dest));
   }
-  void subl(const Operand &dest, int32_t imm) {
+  void subl(const Operand& dest, int32_t imm) {
     alu_imm(5, imm, dest);
   }
   void addl(Register dest, Register src) {
     emit1(0x01, src.code, dest.code);
   }
-  void addl(const Operand &dest, Register src) {
+  void addl(const Operand& dest, Register src) {
     emit1(0x01, src.code, dest);
   }
-  void addl(Register dest, const Operand &src) {
+  void addl(Register dest, const Operand& src) {
     emit1(0x03, dest.code, src);
   }
   void addl(Register dest, int32_t imm) {
     alu_imm(0, imm, Operand(dest));
   }
-  void addl(const Operand &dest, int32_t imm) {
+  void addl(const Operand& dest, int32_t imm) {
     alu_imm(0, imm, dest);
   }
   void adcl(Register dest, int32_t imm) {
@@ -530,13 +530,13 @@ class Assembler : public AssemblerBase
     alu_imm(2, imm, dest);
   }
 
-  void imull(Register dest, const Operand &src) {
+  void imull(Register dest, const Operand& src) {
     emit2(0x0f, 0xaf, dest.code, src);
   }
   void imull(Register dest, Register src) {
     emit2(0x0f, 0xaf, dest.code, src.code);
   }
-  void imull(Register dest, const Operand &src, int32_t imm) {
+  void imull(Register dest, const Operand& src, int32_t imm) {
     if (imm >= SCHAR_MIN && imm <= SCHAR_MAX) {
       emit1(0x6b, dest.code, src);
       *pos_++ = imm;
@@ -549,7 +549,7 @@ class Assembler : public AssemblerBase
     imull(dest, Operand(src), imm);
   }
 
-  void testl(const Operand &op1, Register op2) {
+  void testl(const Operand& op1, Register op2) {
     emit1(0x85, op2.code, op1);
   }
   void testl(Register op1, Register op2) {
@@ -562,7 +562,7 @@ class Assembler : public AssemblerBase
       emit1(0xf7, 0, op1.code);
     writeInt32(imm);
   }
-  void set(ConditionCode cc, const Operand &dest) {
+  void set(ConditionCode cc, const Operand& dest) {
     emit2(0x0f, 0x90 + uint8_t(cc), 0, dest);
   }
   void set(ConditionCode cc, Register dest) {
@@ -571,19 +571,19 @@ class Assembler : public AssemblerBase
   void negl(Register srcdest) {
     emit1(0xf7, 3, srcdest.code);
   }
-  void negl(const Operand &srcdest) {
+  void negl(const Operand& srcdest) {
     emit1(0xf7, 3, srcdest);
   }
   void notl(Register srcdest) {
     emit1(0xf7, 2, srcdest.code);
   }
-  void notl(const Operand &srcdest) {
+  void notl(const Operand& srcdest) {
     emit1(0xf7, 2, srcdest);
   }
   void idivl(Register dividend) {
     emit1(0xf7, 7, dividend.code);
   }
-  void idivl(const Operand &dividend) {
+  void idivl(const Operand& dividend) {
     emit1(0xf7, 7, dividend);
   }
 
@@ -600,7 +600,7 @@ class Assembler : public AssemblerBase
   void push(Register reg) {
     emit1(0x50 + reg.code);
   }
-  void push(const Operand &src) {
+  void push(const Operand& src) {
     if (src.isRegister())
       emit1(0x50 + src.registerCode());
     else
@@ -610,7 +610,7 @@ class Assembler : public AssemblerBase
     emit1(0x68);
     writeInt32(imm);
   }
-  void push(CodeLabel *src) {
+  void push(CodeLabel* src) {
     emit1(0x68);
     if (src->bound()) {
       writeInt32(int32_t(src->offset()) - (position() + 4));
@@ -624,7 +624,7 @@ class Assembler : public AssemblerBase
   void pop(Register reg) {
     emit1(0x58 + reg.code);
   }
-  void pop(const Operand &src) {
+  void pop(const Operand& src) {
     if (src.isRegister())
       emit1(0x58 + src.registerCode());
     else
@@ -648,49 +648,49 @@ class Assembler : public AssemblerBase
     emit1(0xc9);
   }
 
-  void fld32(const Operand &src) {
+  void fld32(const Operand& src) {
     emit1(0xd9, 0, src);
   }
-  void fild32(const Operand &src) {
+  void fild32(const Operand& src) {
     emit1(0xdb, 0, src);
   }
-  void fistp32(const Operand &dest) {
+  void fistp32(const Operand& dest) {
     emit1(0xdb, 3, dest);
   }
-  void fistp64(const Operand &dest) {
+  void fistp64(const Operand& dest) {
     emit1(0xdf, 7, dest);
   }
-  void fadd32(const Operand &src) {
+  void fadd32(const Operand& src) {
     emit1(0xd8, 0, src);
   }
-  void fsub32(const Operand &src) {
+  void fsub32(const Operand& src) {
     emit1(0xd8, 4, src);
   }
-  void fmul32(const Operand &src) {
+  void fmul32(const Operand& src) {
     emit1(0xd8, 1, src);
   }
-  void fdiv32(const Operand &src) {
+  void fdiv32(const Operand& src) {
     emit1(0xd8, 6, src);
   }
-  void fst32(const Operand &dest) {
+  void fst32(const Operand& dest) {
     emit1(0xd9, 2, dest);
   }
   void fst(FpuRegister src) {
     emit2(0xd9, 0xd0 + src.code);
   }
-  void fstp32(const Operand &dest) {
+  void fstp32(const Operand& dest) {
     emit1(0xd9, 3, dest);
   }
   void fstp(FpuRegister src) {
     emit2(0xdd, 0xd8 + src.code);
   }
-  void fldcw(const Operand &src) {
+  void fldcw(const Operand& src) {
     emit1(0xd9, 5, src);
   }
-  void fstcw(const Operand &dest) {
+  void fstcw(const Operand& dest) {
     emit2(0x9b, 0xd9, 7, dest);
   }
-  void fsubr32(const Operand &src) {
+  void fsubr32(const Operand& src) {
     emit1(0xd8, 5, src);
   }
   void fldz() {
@@ -711,11 +711,11 @@ class Assembler : public AssemblerBase
       emit2(0xdc, 0xc0 + src.code);
   }
 
-  void jmp32(Label *dest) {
+  void jmp32(Label* dest) {
     emit1(0xe9);
     emitJumpTarget(dest);
   }
-  void jmp(Label *dest) {
+  void jmp(Label* dest) {
     int8_t d8;
     if (canEmitSmallJump(dest, &d8)) {
       emit2(0xeb, d8);
@@ -727,14 +727,14 @@ class Assembler : public AssemblerBase
   void jmp(Register target) {
     emit1(0xff, 4, target.code);
   }
-  void jmp(const Operand &target) {
+  void jmp(const Operand& target) {
     emit1(0xff, 4, target);
   }
-  void j32(ConditionCode cc, Label *dest) {
+  void j32(ConditionCode cc, Label* dest) {
     emit2(0x0f, 0x80 + uint8_t(cc));
     emitJumpTarget(dest);
   }
-  void j(ConditionCode cc, Label *dest) {
+  void j(ConditionCode cc, Label* dest) {
     int8_t d8;
     if (canEmitSmallJump(dest, &d8)) {
       emit2(0x70 + uint8_t(cc), d8);
@@ -743,11 +743,11 @@ class Assembler : public AssemblerBase
       emitJumpTarget(dest);
     }
   }
-  void call(Label *dest) {
+  void call(Label* dest) {
     emit1(0xe8);
     emitJumpTarget(dest);
   }
-  void bind(Label *target) {
+  void bind(Label* target) {
     if (outOfMemory()) {
       // If we ran out of memory, the code stream is potentially invalid and
       // we cannot use the embedded linked list.
@@ -766,23 +766,23 @@ class Assembler : public AssemblerBase
       ptrdiff_t delta = pos_ - (buffer() + offset);
       assert(delta >= INT_MIN && delta <= INT_MAX);
 
-      int32_t *p = reinterpret_cast<int32_t *>(buffer() + offset - 4);
+      int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
       status = *p;
       *p = delta;
     }
     target->bind(pc());
   }
 
-  void bind(CodeLabel *address) {
+  void bind(CodeLabel* address) {
     if (outOfMemory())
       return;
     if (address->used()) {
       uint32_t offset = CodeLabel::ToOffset(address->status());
-      *reinterpret_cast<int32_t *>(buffer() + offset - 4) = position() - int32_t(offset);
+      *reinterpret_cast<int32_t*>(buffer() + offset - 4) = position() - int32_t(offset);
     }
     address->bind(pc());
   }
-  void movl(Register dest, CodeLabel *src) {
+  void movl(Register dest, CodeLabel* src) {
     emit1(0xb8 + dest.code);
     if (src->bound()) {
       writeInt32(int32_t(src->offset()) - (position() + 4));
@@ -793,7 +793,7 @@ class Assembler : public AssemblerBase
     if (!local_refs_.append(pc()))
       outOfMemory_ = true;
   }
-  void emit_absolute_address(Label *address) {
+  void emit_absolute_address(Label* address) {
     if (address->bound())
       writeUint32(int32_t(address->offset()) - (position() + 4));
     else
@@ -805,7 +805,7 @@ class Assembler : public AssemblerBase
   void call(Register target) {
     emit1(0xff, 2, target.code);
   }
-  void call(const Operand &target) {
+  void call(const Operand& target) {
     emit1(0xff, 2, target);
   }
   void call(const AddressValue& address) {
@@ -829,7 +829,7 @@ class Assembler : public AssemblerBase
 
   // SSE operations can only be used if the feature detection function has
   // been run *and* detected the appropriate level of functionality.
-  void movss(FloatRegister dest, const Operand &src) {
+  void movss(FloatRegister dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x10, dest.code, src);
   }
@@ -837,7 +837,7 @@ class Assembler : public AssemblerBase
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x2c, dest.code, src.code);
   }
-  void cvttss2si(Register dest, const Operand &src) {
+  void cvttss2si(Register dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x2c, dest.code, src);
   }
@@ -845,7 +845,7 @@ class Assembler : public AssemblerBase
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x2d, dest.code, src.code);
   }
-  void cvtss2si(Register dest, const Operand &src) {
+  void cvtss2si(Register dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x2d, dest.code, src);
   }
@@ -853,23 +853,23 @@ class Assembler : public AssemblerBase
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x2a, dest.code, src.code);
   }
-  void cvtsi2ss(FloatRegister dest, const Operand &src) {
+  void cvtsi2ss(FloatRegister dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x2a, dest.code, src);
   }
-  void addss(FloatRegister dest, const Operand &src) {
+  void addss(FloatRegister dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x58, dest.code, src);
   }
-  void subss(FloatRegister dest, const Operand &src) {
+  void subss(FloatRegister dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x5c, dest.code, src);
   }
-  void mulss(FloatRegister dest, const Operand &src) {
+  void mulss(FloatRegister dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x59, dest.code, src);
   }
-  void divss(FloatRegister dest, const Operand &src) {
+  void divss(FloatRegister dest, const Operand& src) {
     assert(Features().sse);
     emit3(0xf3, 0x0f, 0x5e, dest.code, src);
   }
@@ -881,7 +881,7 @@ class Assembler : public AssemblerBase
   void ucomiss(FloatRegister left, FloatRegister right) {
     emit2(0x0f, 0x2e, right.code, left.code);
   }
-  void ucomiss(const Operand &left, FloatRegister right) {
+  void ucomiss(const Operand& left, FloatRegister right) {
     emit2(0x0f, 0x2e, right.code, left);
   }
 
@@ -890,25 +890,25 @@ class Assembler : public AssemblerBase
     assert(Features().sse2);
     emit3(0x66, 0x0f, 0x7e, dest.code, src.code);
   }
-  void movd(Register dest, const Operand &src) {
+  void movd(Register dest, const Operand& src) {
     assert(Features().sse2);
     emit3(0x66, 0x0f, 0x7e, dest.code, src);
   }
 
-  static void PatchRel32Absolute(uint8_t *ip, void *ptr) {
+  static void PatchRel32Absolute(uint8_t* ip, void* ptr) {
     int32_t delta = uint32_t(ptr) - uint32_t(ip);
-    *reinterpret_cast<int32_t *>(ip - 4) = delta;
+    *reinterpret_cast<int32_t*>(ip - 4) = delta;
   }
 
-  void emitToExecutableMemory(void *code) {
+  void emitToExecutableMemory(void* code) {
     assert(!outOfMemory());
 
     // Relocate anything we emitted as rel32 with an external pointer.
-    uint8_t *base = reinterpret_cast<uint8_t *>(code);
+    uint8_t* base = reinterpret_cast<uint8_t*>(code);
     memcpy(base, buffer(), length());
     for (size_t i = 0; i < external_refs_.length(); i++) {
       size_t offset = external_refs_[i];
-      PatchRel32Absolute(base + offset, *reinterpret_cast<void **>(base + offset - 4));
+      PatchRel32Absolute(base + offset, *reinterpret_cast<void**>(base + offset - 4));
     }
 
     // Relocate everything we emitted as an abs32 with an internal offset. Note
@@ -916,8 +916,8 @@ class Assembler : public AssemblerBase
     // and CodeLabel.
     for (size_t i = 0; i < local_refs_.length(); i++) {
       size_t offset = local_refs_[i];
-      int32_t delta = *reinterpret_cast<int32_t *>(base + offset - 4);
-      *reinterpret_cast<void **>(base + offset - 4) = base + offset + delta;
+      int32_t delta = *reinterpret_cast<int32_t*>(base + offset - 4);
+      *reinterpret_cast<void**>(base + offset - 4) = base + offset + delta;
     }
   }
 
@@ -965,8 +965,8 @@ class Assembler : public AssemblerBase
     masm.ret();
   }
 
-  static void RunFeatureDetection(void *code) {
-    typedef void (*fn_t)(int *reg_ecx, int *reg_edx, int *reg_ebx);
+  static void RunFeatureDetection(void* code) {
+    typedef void (*fn_t)(int* reg_ecx, int* reg_edx, int* reg_ebx);
 
     int reg_ecx, reg_edx, reg_ebx;
     ((fn_t)code)(&reg_ecx, &reg_edx, &reg_ebx);
@@ -986,7 +986,7 @@ class Assembler : public AssemblerBase
   }
 
  private:
-  bool canEmitSmallJump(Label *dest, int8_t *deltap) {
+  bool canEmitSmallJump(Label* dest, int8_t* deltap) {
     if (!dest->bound())
       return false;
 
@@ -997,7 +997,7 @@ class Assembler : public AssemblerBase
     *deltap = delta;
     return true;
   }
-  void emitJumpTarget(Label *dest) {
+  void emitJumpTarget(Label* dest) {
     if (dest->bound()) {
       ptrdiff_t delta = ptrdiff_t(dest->offset()) - (position() + 4);
       assert(delta >= INT_MIN && delta <= INT_MAX);
@@ -1007,7 +1007,7 @@ class Assembler : public AssemblerBase
     }
   }
 
-  void emit(uint8_t reg, const Operand &operand) {
+  void emit(uint8_t reg, const Operand& operand) {
     *pos_++ = operand.getByte(0) | (reg << 3);
     size_t length = operand.length();
     for (size_t i = 1; i < length; i++)
@@ -1025,7 +1025,7 @@ class Assembler : public AssemblerBase
     *pos_++ = opcode;
     *pos_++ = (kModeReg << 6) | (reg << 3) | opreg;
   }
-  void emit1(uint8_t opcode, uint8_t reg, const Operand &operand) {
+  void emit1(uint8_t opcode, uint8_t reg, const Operand& operand) {
     ensureSpace();
     assert(reg <= 7);
     *pos_++ = opcode;
@@ -1042,7 +1042,7 @@ class Assembler : public AssemblerBase
     assert(reg <= 7);
     *pos_++ = (kModeReg << 6) | (reg << 3) | opreg;
   }
-  void emit2(uint8_t prefix, uint8_t opcode, uint8_t reg, const Operand &operand) {
+  void emit2(uint8_t prefix, uint8_t opcode, uint8_t reg, const Operand& operand) {
     emit2(prefix, opcode);
     emit(reg, operand);
   }
@@ -1058,18 +1058,18 @@ class Assembler : public AssemblerBase
     assert(reg <= 7);
     *pos_++ = (kModeReg << 6) | (reg << 3) | opreg;
   }
-  void emit3(uint8_t prefix1, uint8_t prefix2, uint8_t opcode, uint8_t reg, const Operand &operand) {
+  void emit3(uint8_t prefix1, uint8_t prefix2, uint8_t opcode, uint8_t reg, const Operand& operand) {
     emit3(prefix1, prefix2, opcode);
     emit(reg, operand);
   }
 
   template <typename T>
-  void shift_cl(const T &t, uint8_t r) {
+  void shift_cl(const T& t, uint8_t r) {
     emit1(0xd3, r, t);
   }
 
   template <typename T>
-  void shift_imm(const T &t, uint8_t r, int32_t imm) {
+  void shift_imm(const T& t, uint8_t r, int32_t imm) {
     if (imm == 1) {
       emit1(0xd1, r, t);
     } else {
@@ -1077,7 +1077,7 @@ class Assembler : public AssemblerBase
       *pos_++ = imm & 0x1F;
     }
   }
-  void alu_imm(uint8_t r, int32_t imm, const Operand &operand) {
+  void alu_imm(uint8_t r, int32_t imm, const Operand& operand) {
     if (imm >= SCHAR_MIN && imm <= SCHAR_MAX) {
       emit1(0x83, r, operand);
       *pos_++ = uint8_t(imm & 0xff);

@@ -54,42 +54,42 @@ class PluginRuntime
     public ke::InlineListNode<PluginRuntime>
 {
  public:
-  PluginRuntime(LegacyImage *image);
+  PluginRuntime(LegacyImage* image);
   ~PluginRuntime();
 
   bool Initialize();
 
  public:
   virtual bool IsDebugging() override;
-  virtual IPluginDebugInfo *GetDebugInfo() override;
-  virtual int FindNativeByName(const char *name, uint32_t *index) override;
-  virtual int GetNativeByIndex(uint32_t index, sp_native_t **native) override;
+  virtual IPluginDebugInfo* GetDebugInfo() override;
+  virtual int FindNativeByName(const char* name, uint32_t* index) override;
+  virtual int GetNativeByIndex(uint32_t index, sp_native_t** native) override;
   virtual uint32_t GetNativesNum() override;
-  virtual int FindPublicByName(const char *name, uint32_t *index) override;
-  virtual int GetPublicByIndex(uint32_t index, sp_public_t **publicptr) override;
+  virtual int FindPublicByName(const char* name, uint32_t* index) override;
+  virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) override;
   virtual uint32_t GetPublicsNum() override;
-  virtual int GetPubvarByIndex(uint32_t index, sp_pubvar_t **pubvar) override;
-  virtual int FindPubvarByName(const char *name, uint32_t *index) override;
-  virtual int GetPubvarAddrs(uint32_t index, cell_t *local_addr, cell_t **phys_addr) override;
+  virtual int GetPubvarByIndex(uint32_t index, sp_pubvar_t** pubvar) override;
+  virtual int FindPubvarByName(const char* name, uint32_t* index) override;
+  virtual int GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) override;
   virtual uint32_t GetPubVarsNum() override;
-  virtual IPluginFunction *GetFunctionByName(const char *public_name) override;
-  virtual IPluginFunction *GetFunctionById(funcid_t func_id) override;
-  virtual IPluginContext *GetDefaultContext() override;
-  virtual int ApplyCompilationOptions(ICompilation *co) override;
+  virtual IPluginFunction* GetFunctionByName(const char* public_name) override;
+  virtual IPluginFunction* GetFunctionById(funcid_t func_id) override;
+  virtual IPluginContext* GetDefaultContext() override;
+  virtual int ApplyCompilationOptions(ICompilation* co) override;
   virtual void SetPauseState(bool paused) override;
   virtual bool IsPaused() override;
   virtual size_t GetMemUsage() override;
-  virtual unsigned char *GetCodeHash() override;
-  virtual unsigned char *GetDataHash() override;
-  void SetNames(const char *fullname, const char *name);
+  virtual unsigned char* GetCodeHash() override;
+  virtual unsigned char* GetDataHash() override;
+  void SetNames(const char* fullname, const char* name);
   unsigned GetNativeReplacement(size_t index);
-  ScriptedInvoker *GetPublicFunction(size_t index);
-  int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data) override;
-  const sp_native_t *GetNative(uint32_t index) override;
-  int LookupLine(ucell_t addr, uint32_t *line) override;
-  int LookupFunction(ucell_t addr, const char **name) override;
-  int LookupFile(ucell_t addr, const char **filename) override;
-  const char *GetFilename() override {
+  ScriptedInvoker* GetPublicFunction(size_t index);
+  int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void* data) override;
+  const sp_native_t* GetNative(uint32_t index) override;
+  int LookupLine(ucell_t addr, uint32_t* line) override;
+  int LookupFunction(ucell_t addr, const char** name) override;
+  int LookupFile(ucell_t addr, const char** filename) override;
+  const char* GetFilename() override {
     return full_name_.chars();
   }
 
@@ -110,9 +110,9 @@ class PluginRuntime
     return &natives_[index];
   }
 
-  PluginContext *GetBaseContext();
+  PluginContext* GetBaseContext();
 
-  const char *Name() const {
+  const char* Name() const {
     return name_.chars();
   }
 
@@ -124,13 +124,13 @@ class PluginRuntime
   typedef LegacyImage::Code Code;
   typedef LegacyImage::Data Data;
 
-  const Code &code() const {
+  const Code& code() const {
     return code_;
   }
-  const Data &data() const {
+  const Data& data() const {
     return data_;
   }
-  LegacyImage *image() const {
+  LegacyImage* image() const {
     return image_;
   }
   PluginContext* context() const {

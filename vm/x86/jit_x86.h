@@ -41,7 +41,7 @@ class Compiler : public CompilerBase
   friend class OutOfBoundsErrorPath;
 
  public:
-  Compiler(PluginRuntime *rt, cell_t pcode_offs);
+  Compiler(PluginRuntime* rt, cell_t pcode_offs);
   ~Compiler();
 
   bool visitLOAD(PawnReg dest, cell_t srcaddr) override;
@@ -162,7 +162,7 @@ class Compiler : public CompilerBase
     return ExternalAddress(context_->addressOfSp());
   }
 
-  Label *labelAt(size_t offset) {
+  Label* labelAt(size_t offset) {
     assert(ke::IsAligned(offset, sizeof(cell_t)));
     assert(offset >= pcode_start_);
     assert(offset < rt_->code().length); 

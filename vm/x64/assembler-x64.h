@@ -22,8 +22,8 @@ namespace sp {
 
 struct Register
 {
-  const char *name() const {
-    static const char *names[] = {
+  const char* name() const {
+    static const char* names[] = {
       "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
       "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
     };
@@ -32,10 +32,10 @@ struct Register
 
   int code;
 
-  bool operator == (const Register &other) const {
+  bool operator == (const Register& other) const {
     return code == other.code;
   }
-  bool operator != (const Register &other) const {
+  bool operator != (const Register& other) const {
     return code != other.code;
   }
 
@@ -53,8 +53,8 @@ struct Register
 
 struct FloatRegister
 {
-  const char *name() const {
-    static const char *names[] = {
+  const char* name() const {
+    static const char* names[] = {
       "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
       "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
     };
@@ -63,10 +63,10 @@ struct FloatRegister
 
   int code;
 
-  bool operator == (const FloatRegister &other) const {
+  bool operator == (const FloatRegister& other) const {
     return code == other.code;
   }
-  bool operator != (const FloatRegister &other) const {
+  bool operator != (const FloatRegister& other) const {
     return code != other.code;
   }
 
@@ -269,7 +269,7 @@ struct Operand
     // Callers must ensure this is encodable as a 32-bit address.
     KE_RELEASE_ASSERT(address.has32BitEncoding());
     sib(kModeDisp0, NoScale, kNoIndex, rbp);
-    *reinterpret_cast<int32_t *>(bytes_ + 2) = int32_t(address.value());
+    *reinterpret_cast<int32_t*>(bytes_ + 2) = int32_t(address.value());
     length_ = 6;
   }
 
@@ -289,7 +289,7 @@ struct Operand
   }
   void modrm_disp32(Register rm, int32_t disp) {
     modrm(kModeDisp32, rm);
-    *reinterpret_cast<int32_t *>(bytes_ + 1) = disp;
+    *reinterpret_cast<int32_t*>(bytes_ + 1) = disp;
     length_ = 5;
   }
   void sib(uint8_t mode, Scale scale, Register index, Register base) {
@@ -310,7 +310,7 @@ struct Operand
   }
   void sib_disp32(Scale scale, Register index, Register base, int32_t disp) {
     sib(kModeDisp32, scale, index, base);
-    *reinterpret_cast<int32_t *>(bytes_ + 2) = disp;
+    *reinterpret_cast<int32_t*>(bytes_ + 2) = disp;
     length_ = 6;
   }
 
@@ -331,9 +331,9 @@ struct Operand
 class Assembler : public AssemblerBase
 {
  public:
-  void emitToExecutableMemory(void *code);
+  void emitToExecutableMemory(void* code);
 
-  void bind(Label *target) {
+  void bind(Label* target) {
     if (outOfMemory()) {
       // If we ran out of memory, the code stream is potentially invalid and
       // we cannot use the embedded linked list.
@@ -352,7 +352,7 @@ class Assembler : public AssemblerBase
       ptrdiff_t delta = pos_ - (buffer() + offset);
       assert(delta >= INT_MIN && delta <= INT_MAX);
 
-      int32_t *p = reinterpret_cast<int32_t *>(buffer() + offset - 4);
+      int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
       status = *p;
       *p = static_cast<int32_t>(delta);
     }
@@ -368,7 +368,7 @@ class Assembler : public AssemblerBase
     label->bind(pc());
   }
 
-  void call(Label *dest) {
+  void call(Label* dest) {
     emit1(0xe8);
     emitJumpTarget(dest);
   }
@@ -386,7 +386,7 @@ class Assembler : public AssemblerBase
     emit1(0xcc);
   }
 
-  void jmp(Label *dest) {
+  void jmp(Label* dest) {
     int8_t d8;
     if (canEmitSmallJump(dest, &d8)) {
       emit2(0xeb, d8);
@@ -400,7 +400,7 @@ class Assembler : public AssemblerBase
     emit1(0xff, 4, target);
   }
 
-  void j(ConditionCode cc, Label *dest) {
+  void j(ConditionCode cc, Label* dest) {
     int8_t d8;
     if (canEmitSmallJump(dest, &d8)) {
       emit2(0x70 + uint8_t(cc), d8);
@@ -575,7 +575,7 @@ class Assembler : public AssemblerBase
   }
 
  private:
-  bool canEmitSmallJump(Label *dest, int8_t *deltap) {
+  bool canEmitSmallJump(Label* dest, int8_t* deltap) {
     if (!dest->bound())
       return false;
 
@@ -586,7 +586,7 @@ class Assembler : public AssemblerBase
     *deltap = static_cast<int8_t>(delta);
     return true;
   }
-  void emitJumpTarget(Label *dest) {
+  void emitJumpTarget(Label* dest) {
     if (dest->bound()) {
       ptrdiff_t delta = ptrdiff_t(dest->offset()) - (position() + 4);
       assert(delta >= INT_MIN && delta <= INT_MAX);

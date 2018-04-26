@@ -27,7 +27,7 @@
 using namespace sp;
 using namespace SourcePawn;
 
-PluginRuntime::PluginRuntime(LegacyImage *image)
+PluginRuntime::PluginRuntime(LegacyImage* image)
  : image_(image),
    paused_(false),
    computed_code_hash_(false),
@@ -83,10 +83,10 @@ PluginRuntime::Initialize()
     return false;
   memset(pubvars_.get(), 0, sizeof(sp_pubvar_t) * image_->NumPubvars());
 
-  entrypoints_ = MakeUnique<ScriptedInvoker *[]>(image_->NumPublics());
+  entrypoints_ = MakeUnique<ScriptedInvoker*[]>(image_->NumPublics());
   if (!entrypoints_)
     return false;
-  memset(entrypoints_.get(), 0, sizeof(ScriptedInvoker *) * image_->NumPublics());
+  memset(entrypoints_.get(), 0, sizeof(ScriptedInvoker*) * image_->NumPublics());
 
   context_ = new PluginContext(this);
   if (!context_->Initialize())
@@ -101,7 +101,7 @@ PluginRuntime::Initialize()
 }
 
 struct NativeMapping {
-  const char *name;
+  const char* name;
   unsigned opcode;
 };
 
@@ -147,8 +147,8 @@ PluginRuntime::SetupFloatNativeRemapping()
 {
   float_table_ = MakeUnique<floattbl_t[]>(image_->NumNatives());
   for (size_t i = 0; i < image_->NumNatives(); i++) {
-    const char *name = image_->GetNative(i);
-    const NativeMapping *iter = sNativeMap;
+    const char* name = image_->GetNative(i);
+    const NativeMapping* iter = sNativeMap;
     while (iter->name) {
       if (strcmp(name, iter->name) == 0) {
         float_table_[i].found = true;
@@ -192,7 +192,7 @@ PluginRuntime::GetNativeReplacement(size_t index)
 }
 
 void
-PluginRuntime::SetNames(const char *fullname, const char *name)
+PluginRuntime::SetNames(const char* fullname, const char* name)
 {
   name_ = name;
   full_name_ = fullname;
@@ -250,7 +250,7 @@ PluginRuntime::AllMethods() const
 }
 
 int
-PluginRuntime::FindNativeByName(const char *name, uint32_t *index)
+PluginRuntime::FindNativeByName(const char* name, uint32_t* index)
 {
   size_t idx;
   if (!image_->FindNative(name, &idx))
@@ -263,13 +263,13 @@ PluginRuntime::FindNativeByName(const char *name, uint32_t *index)
 }
 
 int
-PluginRuntime::GetNativeByIndex(uint32_t index, sp_native_t **native)
+PluginRuntime::GetNativeByIndex(uint32_t index, sp_native_t** native)
 {
   return SP_ERROR_PARAM;
 }
 
 int
-PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void *data)
+PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void* data)
 {
   if (index >= image_->NumNatives())
     return SP_ERROR_INDEX;
@@ -294,7 +294,7 @@ PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_
   return SP_ERROR_NONE;
 }
 
-const sp_native_t *
+const sp_native_t*
 PluginRuntime::GetNative(uint32_t index)
 {
   if (index >= image_->NumNatives())
@@ -313,7 +313,7 @@ PluginRuntime::GetNativesNum()
 }
 
 int
-PluginRuntime::FindPublicByName(const char *name, uint32_t *index)
+PluginRuntime::FindPublicByName(const char* name, uint32_t* index)
 {
   size_t idx;
   if (!image_->FindPublic(name, &idx))
@@ -325,12 +325,12 @@ PluginRuntime::FindPublicByName(const char *name, uint32_t *index)
 }
 
 int
-PluginRuntime::GetPublicByIndex(uint32_t index, sp_public_t **out)
+PluginRuntime::GetPublicByIndex(uint32_t index, sp_public_t** out)
 {
   if (index >= image_->NumPublics())
     return SP_ERROR_INDEX;
 
-  sp_public_t &entry = publics_[index];
+  sp_public_t& entry = publics_[index];
   if (!entry.name) {
     uint32_t offset;
     image_->GetPublic(index, &offset, &entry.name);
@@ -350,12 +350,12 @@ PluginRuntime::GetPublicsNum()
 }
 
 int
-PluginRuntime::GetPubvarByIndex(uint32_t index, sp_pubvar_t **out)
+PluginRuntime::GetPubvarByIndex(uint32_t index, sp_pubvar_t** out)
 {
   if (index >= image_->NumPubvars())
     return SP_ERROR_INDEX;
 
-  sp_pubvar_t *pubvar = &pubvars_[index];
+  sp_pubvar_t* pubvar = &pubvars_[index];
   if (!pubvar->name) {
     uint32_t offset;
     image_->GetPubvar(index, &offset, &pubvar->name);
@@ -369,7 +369,7 @@ PluginRuntime::GetPubvarByIndex(uint32_t index, sp_pubvar_t **out)
 }
 
 int
-PluginRuntime::FindPubvarByName(const char *name, uint32_t *index)
+PluginRuntime::FindPubvarByName(const char* name, uint32_t* index)
 {
   size_t idx;
   if (!image_->FindPubvar(name, &idx))
@@ -381,7 +381,7 @@ PluginRuntime::FindPubvarByName(const char *name, uint32_t *index)
 }
 
 int
-PluginRuntime::GetPubvarAddrs(uint32_t index, cell_t *local_addr, cell_t **phys_addr)
+PluginRuntime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr)
 {
   if (index >= image_->NumPubvars())
     return SP_ERROR_INDEX;
@@ -401,22 +401,22 @@ PluginRuntime::GetPubVarsNum()
   return image_->NumPubvars();
 }
 
-IPluginContext *
+IPluginContext*
 PluginRuntime::GetDefaultContext()
 {
   return context_;
 }
 
-IPluginDebugInfo *
+IPluginDebugInfo*
 PluginRuntime::GetDebugInfo()
 {
   return this;
 }
 
-IPluginFunction *
+IPluginFunction*
 PluginRuntime::GetFunctionById(funcid_t func_id)
 {
-  ScriptedInvoker *pFunc = NULL;
+  ScriptedInvoker* pFunc = NULL;
 
   if (func_id & 1) {
     func_id >>= 1;
@@ -432,13 +432,13 @@ PluginRuntime::GetFunctionById(funcid_t func_id)
   return pFunc;
 }
 
-ScriptedInvoker *
+ScriptedInvoker*
 PluginRuntime::GetPublicFunction(size_t index)
 {
   assert(index < image_->NumPublics());
-  ScriptedInvoker *pFunc = entrypoints_[index];
+  ScriptedInvoker* pFunc = entrypoints_[index];
   if (!pFunc) {
-    sp_public_t *pub = NULL;
+    sp_public_t* pub = NULL;
     GetPublicByIndex(index, &pub);
     if (pub)
       entrypoints_[index] = new ScriptedInvoker(this, (index << 1) | 1, index);
@@ -448,8 +448,8 @@ PluginRuntime::GetPublicFunction(size_t index)
   return pFunc;
 }
 
-IPluginFunction *
-PluginRuntime::GetFunctionByName(const char *public_name)
+IPluginFunction*
+PluginRuntime::GetFunctionByName(const char* public_name)
 {
   uint32_t index;
 
@@ -487,12 +487,12 @@ PluginRuntime::GetMemUsage()
          context_->HeapSize();
 }
 
-unsigned char *
+unsigned char*
 PluginRuntime::GetCodeHash()
 {
   if (!computed_code_hash_) {
     MD5 md5_pcode;
-    md5_pcode.update((const unsigned char *)code_.bytes, code_.length);
+    md5_pcode.update((const unsigned char*)code_.bytes, code_.length);
     md5_pcode.finalize();
     md5_pcode.raw_digest(code_hash_);
     computed_code_hash_ = true;
@@ -500,12 +500,12 @@ PluginRuntime::GetCodeHash()
   return code_hash_;
 }
 
-unsigned char *
+unsigned char*
 PluginRuntime::GetDataHash()
 {
   if (!computed_data_hash_) {
     MD5 md5_data;
-    md5_data.update((const unsigned char *)data_.bytes, data_.length);
+    md5_data.update((const unsigned char*)data_.bytes, data_.length);
     md5_data.finalize();
     md5_data.raw_digest(data_hash_);
     computed_data_hash_ = true;
@@ -513,20 +513,20 @@ PluginRuntime::GetDataHash()
   return data_hash_;
 }
 
-PluginContext *
+PluginContext*
 PluginRuntime::GetBaseContext()
 {
   return context_;
 }
 
 int
-PluginRuntime::ApplyCompilationOptions(ICompilation *co)
+PluginRuntime::ApplyCompilationOptions(ICompilation* co)
 {
   return SP_ERROR_NONE;
 }
 
 int
-PluginRuntime::LookupLine(ucell_t addr, uint32_t *line)
+PluginRuntime::LookupLine(ucell_t addr, uint32_t* line)
 {
   if (!image_->LookupLine(addr, line))
     return SP_ERROR_NOT_FOUND;
@@ -534,9 +534,9 @@ PluginRuntime::LookupLine(ucell_t addr, uint32_t *line)
 }
 
 int
-PluginRuntime::LookupFunction(ucell_t addr, const char **out)
+PluginRuntime::LookupFunction(ucell_t addr, const char** out)
 {
-  const char *name = image_->LookupFunction(addr);
+  const char* name = image_->LookupFunction(addr);
   if (!name)
     return SP_ERROR_NOT_FOUND;
   if (out)
@@ -545,9 +545,9 @@ PluginRuntime::LookupFunction(ucell_t addr, const char **out)
 }
 
 int
-PluginRuntime::LookupFile(ucell_t addr, const char **out)
+PluginRuntime::LookupFile(ucell_t addr, const char** out)
 {
-  const char *name = image_->LookupFile(addr);
+  const char* name = image_->LookupFile(addr);
   if (!name)
     return SP_ERROR_NOT_FOUND;
   if (out)

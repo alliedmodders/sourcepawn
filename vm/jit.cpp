@@ -35,16 +35,16 @@ using namespace SourcePawn;
 
 #define __ masm.
 
-CompilerBase::CompilerBase(PluginRuntime *rt, cell_t pcode_offs)
+CompilerBase::CompilerBase(PluginRuntime* rt, cell_t pcode_offs)
  : env_(Environment::get()),
    rt_(rt),
    context_(rt->GetBaseContext()),
    image_(rt_->image()),
    error_(SP_ERROR_NONE),
    pcode_start_(pcode_offs),
-   code_start_(reinterpret_cast<const cell_t *>(rt_->code().bytes + pcode_start_)),
+   code_start_(reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_)),
    op_cip_(nullptr),
-   code_end_(reinterpret_cast<const cell_t *>(rt_->code().bytes + rt_->code().length)),
+   code_end_(reinterpret_cast<const cell_t*>(rt_->code().bytes + rt_->code().length)),
    jump_map_(nullptr)
 {
   size_t nmaxops = rt_->code().length / sizeof(cell_t) + 1;
@@ -56,12 +56,12 @@ CompilerBase::~CompilerBase()
   delete [] jump_map_;
 }
 
-CompiledFunction *
-CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int *err)
+CompiledFunction*
+CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err)
 {
   Compiler cc(cx->runtime(), method->pcode_offset());
 
-  CompiledFunction *fun = cc.emit();
+  CompiledFunction* fun = cc.emit();
   if (!fun) {
     *err = cc.error();
     return nullptr;
@@ -85,7 +85,7 @@ CompilerBase::emit()
   SpewOpcode(rt_, code_start_, reader.cip());
 #endif
 
-  const cell_t *codeseg = reinterpret_cast<const cell_t *>(rt_->code().bytes);
+  const cell_t* codeseg = reinterpret_cast<const cell_t*>(rt_->code().bytes);
 
   emitPrologue();
 
@@ -121,7 +121,7 @@ CompilerBase::emit()
   // For each backward jump, emit a little thunk so we can exit from a timeout.
   // Track the offset of where the thunk is, so the watchdog timer can patch it.
   for (size_t i = 0; i < backward_jumps_.length(); i++) {
-    BackwardJump &jump = backward_jumps_[i];
+    BackwardJump& jump = backward_jumps_[i];
     jump.timeout_offset = masm.pc();
     __ call(&throw_timeout_);
     emitCipMapping(jump.cip);
@@ -154,7 +154,7 @@ CompilerBase::emit()
   AutoPtr<FixedArray<LoopEdge>> edges(
     new FixedArray<LoopEdge>(backward_jumps_.length()));
   for (size_t i = 0; i < backward_jumps_.length(); i++) {
-    const BackwardJump &jump = backward_jumps_[i];
+    const BackwardJump& jump = backward_jumps_[i];
     edges->at(i).offset = jump.pc;
     edges->at(i).disp32 = int32_t(jump.timeout_offset) - int32_t(jump.pc);
   }
@@ -220,7 +220,7 @@ CompilerBase::reportError(int err)
 }
 
 int
-CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addrp, uint8_t* pc)
+CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addrp, uint8_t* pc)
 {
   // If the watchdog timer has declared a timeout, we must process it now,
   // and possibly refuse to compile, since otherwise we will compile a
@@ -236,7 +236,7 @@ CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addr
   if (err != SP_ERROR_NONE)
     return err;
 
-  CompiledFunction *fn = method->jit();
+  CompiledFunction* fn = method->jit();
   if (!fn) {
     fn = Compile(cx, method, &err);
     if (!fn)
@@ -262,7 +262,7 @@ CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addr
 void*
 CompilerBase::find_entry_fp()
 {
-  void *fp = nullptr;
+  void* fp = nullptr;
 
   for (JitFrameIterator iter(Environment::get()); !iter.done(); iter.next()) {
     FrameLayout* frame = iter.frame();

@@ -16,11 +16,11 @@
 namespace sp {
 
 void
-Assembler::emitToExecutableMemory(void *code)
+Assembler::emitToExecutableMemory(void* code)
 {
   assert(!outOfMemory());
 
-  uint8_t *base = reinterpret_cast<uint8_t *>(code);
+  uint8_t* base = reinterpret_cast<uint8_t*>(code);
   memcpy(base, buffer(), length());
 
   for (size_t i = 0; i < absolute_code_refs_.length(); i++) {

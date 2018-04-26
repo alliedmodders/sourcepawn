@@ -28,17 +28,17 @@ public:
 	int ApiVersion() override {
 		return SOURCEPAWN_API_VERSION;
 	}
-	ISourcePawnEnvironment *NewEnvironment() override {
+	ISourcePawnEnvironment* NewEnvironment() override {
 		return Environment::New();
 	}
-	ISourcePawnEnvironment *CurrentEnvironment() override {
+	ISourcePawnEnvironment* CurrentEnvironment() override {
 		return Environment::get();
 	}
 } sFactory;
 
 #define MIN_API_VERSION 0x0207
 
-EXPORTFUNC ISourcePawnFactory *
+EXPORTFUNC ISourcePawnFactory*
 GetSourcePawnFactory(int apiVersion)
 {
 	if (apiVersion < MIN_API_VERSION || apiVersion > SOURCEPAWN_API_VERSION)
@@ -54,17 +54,17 @@ extern "C" void __cxa_pure_virtual(void)
 {
 }
 
-void *operator new(size_t size)
+void* operator new(size_t size)
 {
 	return malloc(size);
 }
 
-void *operator new[](size_t size) 
+void* operator new[](size_t size) 
 {
 	return malloc(size);
 }
 
-void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
+void operator delete(void* ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	free(ptr);
 }

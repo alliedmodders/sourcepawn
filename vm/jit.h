@@ -39,13 +39,13 @@ struct BackwardJump {
   // The pc at the jump instruction (i.e. after it).
   uint32_t pc;
   // The cip of the jump.
-  const cell_t *cip;
+  const cell_t* cip;
   // The offset of the timeout thunk. This is filled in at the end.
   uint32_t timeout_offset;
 
   BackwardJump()
   {}
-  BackwardJump(uint32_t pc, const cell_t *cip)
+  BackwardJump(uint32_t pc, const cell_t* cip)
    : pc(pc),
      cip(cip)
   {}
@@ -56,10 +56,10 @@ class CompilerBase : public PcodeVisitor
   friend class ErrorPath;
 
  public:
-  CompilerBase(PluginRuntime *rt, cell_t pcode_offs);
+  CompilerBase(PluginRuntime* rt, cell_t pcode_offs);
   virtual ~CompilerBase();
 
-  static CompiledFunction *Compile(PluginContext* cx, RefPtr<MethodInfo> method, int *err);
+  static CompiledFunction* Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err);
 
   int error() const {
     return error_;
@@ -74,7 +74,7 @@ class CompilerBase : public PcodeVisitor
   virtual void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) = 0;
 
   // Helpers.
-  static int CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void **addrp, uint8_t* pc);
+  static int CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addrp, uint8_t* pc);
   static void* find_entry_fp();
   static void InvokeReportError(int err);
   static void InvokeReportTimeout();
@@ -86,7 +86,7 @@ class CompilerBase : public PcodeVisitor
   // Map a return address (i.e. an exit point from a function) to its source
   // cip. This lets us avoid tracking the cip during runtime. These are
   // sorted by definition since we assemble and emit in forward order.
-  void emitCipMapping(const cell_t *cip) {
+  void emitCipMapping(const cell_t* cip) {
     CipMapEntry entry;
     entry.cipoffs = uintptr_t(cip) - uintptr_t(code_start_);
     entry.pcoffs = masm.pc();
@@ -100,20 +100,20 @@ class CompilerBase : public PcodeVisitor
   void reportError(int err);
 
  protected:
-  Environment *env_;
-  PluginRuntime *rt_;
-  PluginContext *context_;
-  LegacyImage *image_;
+  Environment* env_;
+  PluginRuntime* rt_;
+  PluginContext* context_;
+  LegacyImage* image_;
   PoolScope scope_;
   int error_;
   uint32_t pcode_start_;
-  const cell_t *code_start_;
-  const cell_t *op_cip_;
-  const cell_t *code_end_;
+  const cell_t* code_start_;
+  const cell_t* op_cip_;
+  const cell_t* code_end_;
 
   MacroAssembler masm;
 
-  Label *jump_map_;
+  Label* jump_map_;
 
   ke::Vector<OutOfLinePath*> ool_paths_;
 

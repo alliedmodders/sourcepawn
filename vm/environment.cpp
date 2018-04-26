@@ -29,7 +29,7 @@
 using namespace sp;
 using namespace SourcePawn;
 
-static Environment *sEnvironment = nullptr;
+static Environment* sEnvironment = nullptr;
 
 Environment::Environment()
  : debugger_(nullptr),
@@ -50,7 +50,7 @@ Environment::~Environment()
 {
 }
 
-Environment *
+Environment*
 Environment::New()
 {
   assert(!sEnvironment);
@@ -67,7 +67,7 @@ Environment::New()
   return sEnvironment;
 }
 
-Environment *
+Environment*
 Environment::get()
 {
   return sEnvironment;
@@ -130,19 +130,19 @@ Environment::InstallWatchdogTimer(int timeout_ms)
   return watchdog_timer_->Initialize(timeout_ms);
 }
 
-ISourcePawnEngine *
+ISourcePawnEngine*
 Environment::APIv1()
 {
   return api_v1_;
 }
 
-ISourcePawnEngine2 *
+ISourcePawnEngine2*
 Environment::APIv2()
 {
   return api_v2_;
 }
 
-static const char *sErrorMsgTable[] = 
+static const char* sErrorMsgTable[] = 
 {
   NULL,
   "Unrecognizable file format",
@@ -179,7 +179,7 @@ static const char *sErrorMsgTable[] =
   "Fatal error"
 };
 
-const char *
+const char*
 Environment::GetErrorString(int error)
 {
   if (error < 1 || error > int(sizeof(sErrorMsgTable) / sizeof(sErrorMsgTable[0])))
@@ -194,23 +194,23 @@ Environment::AllocateCode(size_t size)
 }
 
 void
-Environment::RegisterRuntime(PluginRuntime *rt)
+Environment::RegisterRuntime(PluginRuntime* rt)
 {
   mutex_.AssertCurrentThreadOwns();
   runtimes_.append(rt);
 }
 
 void
-Environment::DeregisterRuntime(PluginRuntime *rt)
+Environment::DeregisterRuntime(PluginRuntime* rt)
 {
   mutex_.AssertCurrentThreadOwns();
   runtimes_.remove(rt);
 }
 
 static inline void
-SwapLoopEdge(uint8_t *code, LoopEdge &e)
+SwapLoopEdge(uint8_t* code, LoopEdge& e)
 {
-  int32_t *loc = reinterpret_cast<int32_t *>(code + e.offset - 4);
+  int32_t* loc = reinterpret_cast<int32_t*>(code + e.offset - 4);
   int32_t new_disp32 = e.disp32;
   e.disp32 = *loc;
   *loc = new_disp32;
@@ -221,15 +221,15 @@ Environment::PatchAllJumpsForTimeout()
 {
   mutex_.AssertCurrentThreadOwns();
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
-    PluginRuntime *rt = *iter;
+    PluginRuntime* rt = *iter;
 
     const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
     for (size_t i = 0; i < methods.length(); i++) {
-      CompiledFunction *fun = methods[i]->jit();
+      CompiledFunction* fun = methods[i]->jit();
       if (!fun)
         continue;
 
-      uint8_t *base = reinterpret_cast<uint8_t *>(fun->GetEntryAddress());
+      uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
 
       for (size_t j = 0; j < fun->NumLoopEdges(); j++)
         SwapLoopEdge(base, fun->GetLoopEdge(j));
@@ -242,15 +242,15 @@ Environment::UnpatchAllJumpsFromTimeout()
 {
   mutex_.AssertCurrentThreadOwns();
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
-    PluginRuntime *rt = *iter;
+    PluginRuntime* rt = *iter;
 
     const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
     for (size_t i = 0; i < methods.length(); i++) {
-      CompiledFunction *fun = methods[i]->jit();
+      CompiledFunction* fun = methods[i]->jit();
       if (!fun)
         continue;
 
-      uint8_t *base = reinterpret_cast<uint8_t *>(fun->GetEntryAddress());
+      uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
 
       for (size_t j = 0; j < fun->NumLoopEdges(); j++)
         SwapLoopEdge(base, fun->GetLoopEdge(j));
@@ -292,7 +292,7 @@ Environment::Invoke(PluginContext* cx,
 void
 Environment::ReportError(int code)
 {
-  const char *message = GetErrorString(code);
+  const char* message = GetErrorString(code);
   if (!message) {
     char buffer[255];
     UTIL_Format(buffer, sizeof(buffer), "Unknown error code %d", code);
@@ -302,19 +302,19 @@ Environment::ReportError(int code)
   }
 }
 
-ErrorReport::ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf)
+ErrorReport::ErrorReport(int code, const char* message, PluginContext* cx, SourcePawn::IPluginFunction* pf)
    : code_(code),
      message_(message),
      context_(cx),
      blame_(pf)
   {}
 
-const char *
+const char*
 ErrorReport::Message() const {
   return message_;
 }
 
-IPluginFunction *
+IPluginFunction*
 ErrorReport::Blame() const {
   return blame_;
 }
@@ -343,7 +343,7 @@ ErrorReport::IsFatal() const {
   }
 }
 
-IPluginContext *
+IPluginContext*
 ErrorReport::Context() const {
   return context_;
 }
@@ -354,13 +354,13 @@ ErrorReport::Code() const {
 }
 
 void
-Environment::ReportErrorVA(const char *fmt, va_list ap)
+Environment::ReportErrorVA(const char* fmt, va_list ap)
 {
   ReportErrorVA(SP_ERROR_USER, fmt, ap);
 }
 
 void
-Environment::ReportErrorVA(int code, const char *fmt, va_list ap)
+Environment::ReportErrorVA(int code, const char* fmt, va_list ap)
 {
   // :TODO: right-size the string rather than rely on this buffer.
   char buffer[1024];
@@ -369,7 +369,7 @@ Environment::ReportErrorVA(int code, const char *fmt, va_list ap)
 }
 
 void
-Environment::ReportErrorFmt(int code, const char *message, ...)
+Environment::ReportErrorFmt(int code, const char* message, ...)
 {
   va_list ap;
   va_start(ap, message);
@@ -378,13 +378,13 @@ Environment::ReportErrorFmt(int code, const char *message, ...)
 }
 
 void
-Environment::ReportError(int code, const char *message)
+Environment::ReportError(int code, const char* message)
 {
   ErrorReport report(code, message, top_ ? top_->cx() : nullptr, nullptr);
   DispatchReport(report);
 }
 
-void Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char *fmt, va_list ap)
+void Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction* pf, const char* fmt, va_list ap)
 {
   // :TODO: right-size the string rather than rely on this buffer.
   char buffer[1024];
@@ -394,7 +394,7 @@ void Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char
 }
 
 void
-Environment::DispatchReport(const ErrorReport &report)
+Environment::DispatchReport(const ErrorReport& report)
 {
   FrameIterator iter;
 
@@ -413,14 +413,14 @@ Environment::DispatchReport(const ErrorReport &report)
 }
 
 void
-Environment::EnterExceptionHandlingScope(ExceptionHandler *handler)
+Environment::EnterExceptionHandlingScope(ExceptionHandler* handler)
 {
   handler->next_ = eh_top_;
   eh_top_ = handler;
 }
 
 void
-Environment::LeaveExceptionHandlingScope(ExceptionHandler *handler)
+Environment::LeaveExceptionHandlingScope(ExceptionHandler* handler)
 {
   assert(handler == eh_top_);
   eh_top_ = eh_top_->next_;
@@ -432,7 +432,7 @@ Environment::LeaveExceptionHandlingScope(ExceptionHandler *handler)
 }
 
 bool
-Environment::HasPendingException(const ExceptionHandler *handler)
+Environment::HasPendingException(const ExceptionHandler* handler)
 {
   // Note here and elsewhere - this is not a sanity assert. In the future, the
   // API may need to query the handler.
@@ -440,8 +440,8 @@ Environment::HasPendingException(const ExceptionHandler *handler)
   return hasPendingException();
 }
 
-const char *
-Environment::GetPendingExceptionMessage(const ExceptionHandler *handler)
+const char*
+Environment::GetPendingExceptionMessage(const ExceptionHandler* handler)
 {
   // Note here and elsewhere - this is not a sanity assert. In the future, the
   // API may need to query the handler.
@@ -469,7 +469,7 @@ Environment::getPendingExceptionCode() const
 }
 
 void
-Environment::enterInvoke(InvokeFrame *frame)
+Environment::enterInvoke(InvokeFrame* frame)
 {
   if (!top_)
     frame_id_++;

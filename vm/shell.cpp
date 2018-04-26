@@ -28,7 +28,7 @@ using namespace ke::args;
 using namespace sp;
 using namespace SourcePawn;
 
-Environment *sEnv;
+Environment* sEnv;
 
 static const char*
 BaseFilename(const char* path)
@@ -44,7 +44,7 @@ BaseFilename(const char* path)
 }
 
 static void
-DumpStack(IFrameIterator &iter)
+DumpStack(IFrameIterator& iter)
 {
   int index_count = 0;
   for (; !iter.Done(); iter.Next()) {
@@ -53,14 +53,14 @@ DumpStack(IFrameIterator &iter)
 
     int index = index_count++;
 
-    const char *name = iter.FunctionName();
+    const char* name = iter.FunctionName();
     if (!name) {
       fprintf(stdout, "  [%d] <unknown>\n", index);
       continue;
     }
 
     if (iter.IsScriptedFrame()) {
-      const char *file = iter.FilePath();
+      const char* file = iter.FilePath();
       if (!file)
         file = "<unknown>";
       file = BaseFilename(file);
@@ -74,12 +74,12 @@ DumpStack(IFrameIterator &iter)
 class ShellDebugListener : public IDebugListener
 {
 public:
-  void ReportError(const IErrorReport &report, IFrameIterator &iter) override {
+  void ReportError(const IErrorReport& report, IFrameIterator& iter) override {
     fprintf(stdout, "Exception thrown: %s\n", report.Message());
     DumpStack(iter);
   }
 
-  void OnDebugSpew(const char *msg, ...) override {
+  void OnDebugSpew(const char* msg, ...) override {
 #if !defined(NDEBUG) && defined(DEBUG)
     va_list ap;
     va_start(ap, msg);
@@ -89,24 +89,24 @@ public:
   }
 };
 
-static cell_t Print(IPluginContext *cx, const cell_t *params)
+static cell_t Print(IPluginContext* cx, const cell_t* params)
 {
-  char *p;
+  char* p;
   cx->LocalToString(params[1], &p);
 
   return printf("%s", p);
 }
 
-static cell_t PrintNum(IPluginContext *cx, const cell_t *params)
+static cell_t PrintNum(IPluginContext* cx, const cell_t* params)
 {
   return printf("%d\n", params[1]);
 }
 
-static cell_t PrintNums(IPluginContext *cx, const cell_t *params)
+static cell_t PrintNums(IPluginContext* cx, const cell_t* params)
 {
   for (size_t i = 1; i <= size_t(params[0]); i++) {
     int err;
-    cell_t *addr;
+    cell_t* addr;
     if ((err = cx->LocalToPhysAddr(params[i], &addr)) != SP_ERROR_NONE)
       return cx->ThrowNativeErrorEx(err, "Could not read argument");
     fprintf(stdout, "%d", *addr);
@@ -117,12 +117,12 @@ static cell_t PrintNums(IPluginContext *cx, const cell_t *params)
   return 1;
 }
 
-static cell_t DoNothing(IPluginContext *cx, const cell_t *params)
+static cell_t DoNothing(IPluginContext* cx, const cell_t* params)
 {
   return 1;
 }
 
-static void BindNative(IPluginRuntime *rt, const char *name, SPVM_NATIVE_FUNC fn)
+static void BindNative(IPluginRuntime* rt, const char* name, SPVM_NATIVE_FUNC fn)
 {
   int err;
   uint32_t index;
@@ -132,21 +132,21 @@ static void BindNative(IPluginRuntime *rt, const char *name, SPVM_NATIVE_FUNC fn
   rt->UpdateNativeBinding(index, fn, 0, nullptr);
 }
 
-static cell_t PrintFloat(IPluginContext *cx, const cell_t *params)
+static cell_t PrintFloat(IPluginContext* cx, const cell_t* params)
 {
   return printf("%f\n", sp_ctof(params[1]));
 }
 
-static cell_t WriteFloat(IPluginContext *cx, const cell_t *params)
+static cell_t WriteFloat(IPluginContext* cx, const cell_t* params)
 {
   return printf("%f", sp_ctof(params[1]));
 }
 
-static cell_t DoExecute(IPluginContext *cx, const cell_t *params)
+static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
   int32_t ok = 0;
   for (size_t i = 0; i < size_t(params[2]); i++) {
-    if (IPluginFunction *fn = cx->GetFunctionById(params[1])) {
+    if (IPluginFunction* fn = cx->GetFunctionById(params[1])) {
       if (fn->Execute(nullptr) != SP_ERROR_NONE)
         continue;
       ok++;
@@ -155,10 +155,10 @@ static cell_t DoExecute(IPluginContext *cx, const cell_t *params)
   return ok;
 }
 
-static cell_t DoInvoke(IPluginContext *cx, const cell_t *params)
+static cell_t DoInvoke(IPluginContext* cx, const cell_t* params)
 {
   for (size_t i = 0; i < size_t(params[2]); i++) {
-    if (IPluginFunction *fn = cx->GetFunctionById(params[1])) {
+    if (IPluginFunction* fn = cx->GetFunctionById(params[1])) {
       if (!fn->Invoke())
         return 0;
     }
@@ -166,20 +166,20 @@ static cell_t DoInvoke(IPluginContext *cx, const cell_t *params)
   return 1;
 }
 
-static cell_t DumpStackTrace(IPluginContext *cx, const cell_t *params)
+static cell_t DumpStackTrace(IPluginContext* cx, const cell_t* params)
 {
   FrameIterator iter;
   DumpStack(iter);
   return 0;
 }
 
-static cell_t ReportError(IPluginContext* cx, const cell_t *params)
+static cell_t ReportError(IPluginContext* cx, const cell_t* params)
 {
   cx->ReportError("What the crab?!");
   return 0;
 }
 
-static int Execute(const char *file)
+static int Execute(const char* file)
 {
   char error[255];
   AutoPtr<IPluginRuntime> rtb(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
@@ -202,11 +202,11 @@ static int Execute(const char *file)
   BindNative(rt, "dump_stack_trace", DumpStackTrace);
   BindNative(rt, "report_error", ReportError);
 
-  IPluginFunction *fun = rt->GetFunctionByName("main");
+  IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
     return 0;
 
-  IPluginContext *cx = rt->GetDefaultContext();
+  IPluginContext* cx = rt->GetDefaultContext();
 
   int result;
   {
@@ -220,7 +220,7 @@ static int Execute(const char *file)
   return result;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
 #ifdef __EMSCRIPTEN__
   EM_ASM(

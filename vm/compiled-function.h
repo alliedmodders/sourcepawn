@@ -49,12 +49,12 @@ class CompiledFunction
  public:
   CompiledFunction(const CodeChunk& code,
                    cell_t pcode_offs,
-                   FixedArray<LoopEdge> *edges,
-                   FixedArray<CipMapEntry> *cip_map);
+                   FixedArray<LoopEdge>* edges,
+                   FixedArray<CipMapEntry>* cip_map);
   ~CompiledFunction();
 
  public:
-  void *GetEntryAddress() const {
+  void* GetEntryAddress() const {
     return code_.address();
   }
   cell_t GetCodeOffset() const {
@@ -63,11 +63,11 @@ class CompiledFunction
   uint32_t NumLoopEdges() const {
     return edges_->length();
   }
-  LoopEdge &GetLoopEdge(size_t i) {
+  LoopEdge& GetLoopEdge(size_t i) {
     return edges_->at(i);
   }
 
-  ucell_t FindCipByPc(void *pc);
+  ucell_t FindCipByPc(void* pc);
 
  private:
   CodeChunk code_;

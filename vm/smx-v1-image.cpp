@@ -13,7 +13,7 @@
 using namespace ke;
 using namespace sp;
 
-SmxV1Image::SmxV1Image(FILE *fp)
+SmxV1Image::SmxV1Image(FILE* fp)
  : FileReader(fp),
    hdr_(nullptr),
    header_strings_(nullptr),
@@ -34,7 +34,7 @@ SmxV1Image::validate()
   if (length_ < sizeof(sp_file_hdr_t))
     return error("bad header");
 
-  hdr_ = (sp_file_hdr_t *)buffer();
+  hdr_ = (sp_file_hdr_t*)buffer();
   if (hdr_->magic != SmxConsts::FILE_MAGIC)
     return error("bad header");
 
@@ -75,11 +75,11 @@ SmxV1Image::validate()
         return error("out of memory");
 
       // Decompress.
-      const uint8_t *src = buffer() + hdr_->dataoffs;
-      uint8_t *dest = uncompressed.get() + hdr_->dataoffs;
+      const uint8_t* src = buffer() + hdr_->dataoffs;
+      uint8_t* dest = uncompressed.get() + hdr_->dataoffs;
       uLongf destlen = hdr_->imagesize - hdr_->dataoffs;
       int rv = uncompress(
-        (Bytef *)dest,
+        (Bytef*)dest,
         &destlen,
         src,
         compressedSize);
@@ -92,7 +92,7 @@ SmxV1Image::validate()
       // Replace the original buffer.
       length_ = hdr_->imagesize;
       buffer_ = Move(uncompressed);
-      hdr_ = (sp_file_hdr_t *)buffer();
+      hdr_ = (sp_file_hdr_t*)buffer();
       break;
     }
 
@@ -106,15 +106,15 @@ SmxV1Image::validate()
   // Validate the string table.
   if (hdr_->stringtab >= length_)
     return error("invalid string table");
-  header_strings_ = reinterpret_cast<const char *>(buffer() + hdr_->stringtab);
+  header_strings_ = reinterpret_cast<const char*>(buffer() + hdr_->stringtab);
 
   // Validate sections header.
   if ((sizeof(sp_file_hdr_t) + hdr_->sections * sizeof(sp_file_section_t)) > length_)
     return error("invalid section table");
 
   size_t last_header_string = 0;
-  const sp_file_section_t *sections =
-    reinterpret_cast<const sp_file_section_t *>(buffer() + sizeof(sp_file_hdr_t));
+  const sp_file_section_t* sections =
+    reinterpret_cast<const sp_file_section_t*>(buffer() + sizeof(sp_file_hdr_t));
   for (size_t i = 0; i < hdr_->sections; i++) {
     if (sections[i].nameoffs >= (hdr_->dataoffs - hdr_->stringtab))
       return error("invalid section name");
@@ -130,7 +130,7 @@ SmxV1Image::validate()
 
   // Validate sanity of section header strings.
   bool found_terminator = false;
-  for (const uint8_t *iter = buffer() + last_header_string;
+  for (const uint8_t* iter = buffer() + last_header_string;
        iter < buffer() + hdr_->dataoffs;
        iter++)
   {
@@ -147,7 +147,7 @@ SmxV1Image::validate()
     return error("could not find .names section");
   if (!validateSection(names_section_))
     return error("invalid names section");
-  names_ = reinterpret_cast<const char *>(buffer() + names_section_->dataoffs);
+  names_ = reinterpret_cast<const char*>(buffer() + names_section_->dataoffs);
 
   // The names section must be 0-length or be null-terminated.
   if (names_section_->size != 0 &&
@@ -174,8 +174,8 @@ SmxV1Image::validate()
   return true;
 }
 
-const SmxV1Image::Section *
-SmxV1Image::findSection(const char *name)
+const SmxV1Image::Section*
+SmxV1Image::findSection(const char* name)
 {
   for (size_t i = 0; i < sections_.length(); i++) {
     if (strcmp(sections_[i].name, name) == 0)
@@ -185,7 +185,7 @@ SmxV1Image::findSection(const char *name)
 }
 
 bool
-SmxV1Image::validateSection(const Section *section)
+SmxV1Image::validateSection(const Section* section)
 {
   if (section->dataoffs >= length_)
     return false;
@@ -198,21 +198,21 @@ bool
 SmxV1Image::validateData()
 {
   // .data is required.
-  const Section *section = findSection(".data");
+  const Section* section = findSection(".data");
   if (!section)
     return error("could not find data");
   if (!validateSection(section))
     return error("invalid data section");
 
-  const sp_file_data_t *data =
-    reinterpret_cast<const sp_file_data_t *>(buffer() + section->dataoffs);
+  const sp_file_data_t* data =
+    reinterpret_cast<const sp_file_data_t*>(buffer() + section->dataoffs);
   if (data->data > section->size)
     return error("invalid data blob");
   if (data->datasize > (section->size - data->data))
     return error("invalid data blob");
 
-  const uint8_t *blob =
-    reinterpret_cast<const uint8_t *>(data) + data->data;
+  const uint8_t* blob =
+    reinterpret_cast<const uint8_t*>(data) + data->data;
   data_ = Blob<sp_file_data_t>(section, data, blob, data->datasize, 0);
   return true;
 }
@@ -221,14 +221,14 @@ bool
 SmxV1Image::validateCode()
 {
   // .code is required.
-  const Section *section = findSection(".code");
+  const Section* section = findSection(".code");
   if (!section)
     return error("could not find code");
   if (!validateSection(section))
     return error("invalid code section");
 
-  const sp_file_code_t *code =
-    reinterpret_cast<const sp_file_code_t *>(buffer() + section->dataoffs);
+  const sp_file_code_t* code =
+    reinterpret_cast<const sp_file_code_t*>(buffer() + section->dataoffs);
   if (code->codeversion < SmxConsts::CODE_VERSION_MINIMUM)
     return error("code version is too old, no longer supported");
   if (code->codeversion > SmxConsts::CODE_VERSION_CURRENT)
@@ -250,8 +250,8 @@ SmxV1Image::validateCode()
   if (features & ~supported_features)
     return error("unsupported feature set; code is too new");
 
-  const uint8_t *blob =
-    reinterpret_cast<const uint8_t *>(code) + code->code;
+  const uint8_t* blob =
+    reinterpret_cast<const uint8_t*>(code) + code->code;
   code_ = Blob<sp_file_code_t>(section, code, blob, code->codesize, features);
   return true;
 }
@@ -259,7 +259,7 @@ SmxV1Image::validateCode()
 bool
 SmxV1Image::validatePublics()
 {
-  const Section *section = findSection(".publics");
+  const Section* section = findSection(".publics");
   if (!section)
     return true;
   if (!validateSection(section))
@@ -267,8 +267,8 @@ SmxV1Image::validatePublics()
   if ((section->size % sizeof(sp_file_publics_t)) != 0)
     return error("invalid .publics section");
 
-  const sp_file_publics_t *publics =
-    reinterpret_cast<const sp_file_publics_t *>(buffer() + section->dataoffs);
+  const sp_file_publics_t* publics =
+    reinterpret_cast<const sp_file_publics_t*>(buffer() + section->dataoffs);
   size_t length = section->size / sizeof(sp_file_publics_t);
 
   for (size_t i = 0; i < length; i++) {
@@ -283,7 +283,7 @@ SmxV1Image::validatePublics()
 bool
 SmxV1Image::validatePubvars()
 {
-  const Section *section = findSection(".pubvars");
+  const Section* section = findSection(".pubvars");
   if (!section)
     return true;
   if (!validateSection(section))
@@ -291,8 +291,8 @@ SmxV1Image::validatePubvars()
   if ((section->size % sizeof(sp_file_pubvars_t)) != 0)
     return error("invalid .pubvars section");
 
-  const sp_file_pubvars_t *pubvars =
-    reinterpret_cast<const sp_file_pubvars_t *>(buffer() + section->dataoffs);
+  const sp_file_pubvars_t* pubvars =
+    reinterpret_cast<const sp_file_pubvars_t*>(buffer() + section->dataoffs);
   size_t length = section->size / sizeof(sp_file_pubvars_t);
 
   for (size_t i = 0; i < length; i++) {
@@ -307,7 +307,7 @@ SmxV1Image::validatePubvars()
 bool
 SmxV1Image::validateNatives()
 {
-  const Section *section = findSection(".natives");
+  const Section* section = findSection(".natives");
   if (!section)
     return true;
   if (!validateSection(section))
@@ -315,8 +315,8 @@ SmxV1Image::validateNatives()
   if ((section->size % sizeof(sp_file_natives_t)) != 0)
     return error("invalid .natives section");
 
-  const sp_file_natives_t *natives =
-    reinterpret_cast<const sp_file_natives_t *>(buffer() + section->dataoffs);
+  const sp_file_natives_t* natives =
+    reinterpret_cast<const sp_file_natives_t*>(buffer() + section->dataoffs);
   size_t length = section->size / sizeof(sp_file_natives_t);
 
   for (size_t i = 0; i < length; i++) {
@@ -337,21 +337,21 @@ SmxV1Image::validateName(size_t offset)
 bool
 SmxV1Image::validateDebugInfo()
 {
-  const Section *dbginfo = findSection(".dbg.info");
+  const Section* dbginfo = findSection(".dbg.info");
   if (!dbginfo)
     return true;
   if (!validateSection(dbginfo))
     return error("invalid .dbg.info section");
 
   debug_info_ =
-    reinterpret_cast<const sp_fdbg_info_t *>(buffer() + dbginfo->dataoffs);
+    reinterpret_cast<const sp_fdbg_info_t*>(buffer() + dbginfo->dataoffs);
 
   debug_names_section_ = findSection(".dbg.strings");
   if (!debug_names_section_)
     return error("no debug string table");
   if (!validateSection(debug_names_section_))
     return error("invalid .dbg.strings section");
-  debug_names_ = reinterpret_cast<const char *>(buffer() + debug_names_section_->dataoffs);
+  debug_names_ = reinterpret_cast<const char*>(buffer() + debug_names_section_->dataoffs);
 
   // Name tables must be null-terminated.
   if (debug_names_section_->size != 0 &&
@@ -360,7 +360,7 @@ SmxV1Image::validateDebugInfo()
     return error("invalid .dbg.strings section");
   }
 
-  const Section *files = findSection(".dbg.files");
+  const Section* files = findSection(".dbg.files");
   if (!files)
     return error("no debug file table");
   if (!validateSection(files))
@@ -368,10 +368,10 @@ SmxV1Image::validateDebugInfo()
   if (files->size < sizeof(sp_fdbg_file_t) * debug_info_->num_files)
     return error("invalid debug file table");
   debug_files_ = List<sp_fdbg_file_t>(
-    reinterpret_cast<const sp_fdbg_file_t *>(buffer() + files->dataoffs),
+    reinterpret_cast<const sp_fdbg_file_t*>(buffer() + files->dataoffs),
     debug_info_->num_files);
 
-  const Section *lines = findSection(".dbg.lines");
+  const Section* lines = findSection(".dbg.lines");
   if (!lines)
     return error("no debug lines table");
   if (!validateSection(lines))
@@ -379,7 +379,7 @@ SmxV1Image::validateDebugInfo()
   if (lines->size < sizeof(sp_fdbg_line_t) * debug_info_->num_lines)
     return error("invalid debug lines table");
   debug_lines_ = List<sp_fdbg_line_t>(
-    reinterpret_cast<const sp_fdbg_line_t *>(buffer() + lines->dataoffs),
+    reinterpret_cast<const sp_fdbg_line_t*>(buffer() + lines->dataoffs),
     debug_info_->num_lines);
 
   debug_symbols_section_ = findSection(".dbg.symbols");
@@ -393,10 +393,10 @@ SmxV1Image::validateDebugInfo()
       !findSection(".dbg.natives"))
   {
     debug_syms_unpacked_ =
-      reinterpret_cast<const sp_u_fdbg_symbol_t *>(buffer() + debug_symbols_section_->dataoffs);
+      reinterpret_cast<const sp_u_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
   } else {
     debug_syms_ =
-      reinterpret_cast<const sp_fdbg_symbol_t *>(buffer() + debug_symbols_section_->dataoffs);
+      reinterpret_cast<const sp_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
   }
 
   return true;
@@ -405,7 +405,7 @@ SmxV1Image::validateDebugInfo()
 bool
 SmxV1Image::validateTags()
 {
-  const Section *section = findSection(".tags");
+  const Section* section = findSection(".tags");
   if (!section)
     return true;
   if (!validateSection(section))
@@ -413,8 +413,8 @@ SmxV1Image::validateTags()
   if ((section->size % sizeof(sp_file_tag_t)) != 0)
     return error("invalid .tags section");
 
-  const sp_file_tag_t *tags =
-    reinterpret_cast<const sp_file_tag_t *>(buffer() + section->dataoffs);
+  const sp_file_tag_t* tags =
+    reinterpret_cast<const sp_file_tag_t*>(buffer() + section->dataoffs);
   size_t length = section->size / sizeof(sp_file_tag_t);
 
   for (size_t i = 0; i < length; i++) {
@@ -452,7 +452,7 @@ SmxV1Image::NumNatives() const
   return natives_.length();
 }
 
-const char *
+const char*
 SmxV1Image::GetNative(size_t index) const
 {
   assert(index < natives_.length());
@@ -460,10 +460,10 @@ SmxV1Image::GetNative(size_t index) const
 }
 
 bool
-SmxV1Image::FindNative(const char *name, size_t *indexp) const
+SmxV1Image::FindNative(const char* name, size_t* indexp) const
 {
   for (size_t i = 0; i < natives_.length(); i++) {
-    const char *candidate = names_ + natives_[i].name;
+    const char* candidate = names_ + natives_[i].name;
     if (strcmp(candidate, name) == 0) {
       if (indexp)
         *indexp = i;
@@ -480,7 +480,7 @@ SmxV1Image::NumPublics() const
 }
 
 void
-SmxV1Image::GetPublic(size_t index, uint32_t *offsetp, const char **namep) const
+SmxV1Image::GetPublic(size_t index, uint32_t* offsetp, const char** namep) const
 {
   assert(index < publics_.length());
   if (offsetp)
@@ -490,13 +490,13 @@ SmxV1Image::GetPublic(size_t index, uint32_t *offsetp, const char **namep) const
 }
 
 bool
-SmxV1Image::FindPublic(const char *name, size_t *indexp) const
+SmxV1Image::FindPublic(const char* name, size_t* indexp) const
 {
   int high = publics_.length() - 1;
   int low = 0;
   while (low <= high) {
     int mid = (low + high) / 2;
-    const char *candidate = names_ + publics_[mid].name;
+    const char* candidate = names_ + publics_[mid].name;
     int diff = strcmp(candidate, name);
     if (diff == 0) {
       if (indexp) {
@@ -519,7 +519,7 @@ SmxV1Image::NumPubvars() const
 }
 
 void
-SmxV1Image::GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const
+SmxV1Image::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const
 {
   assert(index < pubvars_.length());
   if (offsetp)
@@ -529,13 +529,13 @@ SmxV1Image::GetPubvar(size_t index, uint32_t *offsetp, const char **namep) const
 }
 
 bool
-SmxV1Image::FindPubvar(const char *name, size_t *indexp) const
+SmxV1Image::FindPubvar(const char* name, size_t* indexp) const
 {
   int high = pubvars_.length() - 1;
   int low = 0;
   while (low <= high) {
     int mid = (low + high) / 2;
-    const char *candidate = names_ + pubvars_[mid].name;
+    const char* candidate = names_ + pubvars_[mid].name;
     int diff = strcmp(candidate, name);
     if (diff == 0) {
       if (indexp) {
@@ -563,7 +563,7 @@ SmxV1Image::ImageSize() const
   return length_;
 }
 
-const char *
+const char*
 SmxV1Image::LookupFile(uint32_t addr)
 {
   int high = debug_files_.length();
@@ -586,16 +586,16 @@ SmxV1Image::LookupFile(uint32_t addr)
 }
 
 template <typename SymbolType, typename DimType>
-const char *
-SmxV1Image::lookupFunction(const SymbolType *syms, uint32_t addr)
+const char*
+SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr)
 {
-  const uint8_t *cursor = reinterpret_cast<const uint8_t *>(syms);
-  const uint8_t *cursor_end = cursor + debug_symbols_section_->size;
+  const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
+  const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
   for (uint32_t i = 0; i < debug_info_->num_syms; i++) {
     if (cursor + sizeof(SymbolType) > cursor_end)
       break;
 
-    const SymbolType *sym = reinterpret_cast<const SymbolType *>(cursor);
+    const SymbolType* sym = reinterpret_cast<const SymbolType*>(cursor);
     if (sym->ident == sp::IDENT_FUNCTION &&
         sym->codestart <= addr &&
         sym->codeend > addr)
@@ -612,7 +612,7 @@ SmxV1Image::lookupFunction(const SymbolType *syms, uint32_t addr)
   return nullptr;
 }
 
-const char *
+const char*
 SmxV1Image::LookupFunction(uint32_t code_offset)
 {
   if (debug_syms_) {
@@ -626,7 +626,7 @@ SmxV1Image::LookupFunction(uint32_t code_offset)
 }
 
 bool
-SmxV1Image::LookupLine(uint32_t addr, uint32_t *line)
+SmxV1Image::LookupLine(uint32_t addr, uint32_t* line)
 {
   int high = debug_lines_.length();
   int low = -1;

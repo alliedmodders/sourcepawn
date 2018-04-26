@@ -16,7 +16,7 @@
 using namespace sp;
 
 CodeChunk
-sp::LinkCode(Environment *env, Assembler &masm)
+sp::LinkCode(Environment* env, Assembler& masm)
 {
   if (masm.outOfMemory())
     return CodeChunk();
@@ -29,16 +29,16 @@ sp::LinkCode(Environment *env, Assembler &masm)
   return code;
 }
 
-uint8_t *
-sp::LinkCodeToLegacyPtr(Environment *env, Assembler &masm)
+uint8_t*
+sp::LinkCodeToLegacyPtr(Environment* env, Assembler& masm)
 {
   if (masm.outOfMemory())
     return nullptr;
 
-  void *code = env->APIv1()->AllocatePageMemory(masm.length());
+  void* code = env->APIv1()->AllocatePageMemory(masm.length());
   if (!code)
     return nullptr;
 
   masm.emitToExecutableMemory(code);
-  return reinterpret_cast<uint8_t *>(code);
+  return reinterpret_cast<uint8_t*>(code);
 }

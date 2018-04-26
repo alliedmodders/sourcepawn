@@ -66,7 +66,7 @@ PoolAllocator::FreeDefault()
   sAllocatorTLS = nullptr;
 }
 
-char *
+char*
 PoolAllocator::enter()
 {
   scope_depth_++;
@@ -76,7 +76,7 @@ PoolAllocator::enter()
 }
 
 void
-PoolAllocator::leave(char *pos)
+PoolAllocator::leave(char* pos)
 {
   assert(scope_depth_);
   unwind(pos);
@@ -84,12 +84,12 @@ PoolAllocator::leave(char *pos)
 }
 
 void
-PoolAllocator::unwind(char *pos)
+PoolAllocator::unwind(char* pos)
 {
   while (last_) {
     if (pos && pos >= last_->base && pos < last_->end)
       break;
-    Pool *prev = last_->prev;
+    Pool* prev = last_->prev;
     {
       if (last_->size() <= kMaxReserveSize &&
         (!reserved_ || reserved_->size() < last_->size()))
@@ -112,26 +112,26 @@ PoolAllocator::unwind(char *pos)
   last_->ptr = pos;
 }
 
-void *
+void*
 PoolAllocator::slowAllocate(size_t actualBytes)
 {
   size_t bytesNeeded = actualBytes + sizeof(Pool);
   if (bytesNeeded < kDefaultPoolSize)
     bytesNeeded = kDefaultPoolSize;
 
-  Pool *pool;
+  Pool* pool;
   if (reserved_ && reserved_->size() >= bytesNeeded) {
     pool = reserved_;
     reserved_ = nullptr;
   } else {
-    pool = (Pool *)malloc(bytesNeeded);
+    pool = (Pool*)malloc(bytesNeeded);
     if (!pool) {
       fprintf(stderr, "OUT OF POOL MEMORY\n");
       abort();
       return nullptr;
     }
-    pool->base = (char *)(pool + 1);
-    pool->end = (char *)pool + bytesNeeded;
+    pool->base = (char*)(pool + 1);
+    pool->end = (char*)pool + bytesNeeded;
   }
   pool->ptr = pool->base + actualBytes;
   pool->prev = last_;
@@ -170,17 +170,17 @@ PoolAllocationPolicy::reportAllocationOverflow()
   abort();
 }
 
-void *
+void*
 PoolAllocationPolicy::am_malloc(size_t bytes)
 {
-  void *p = sAllocatorTLS.get()->rawAllocate(bytes);
+  void* p = sAllocatorTLS.get()->rawAllocate(bytes);
   if (!p)
     reportOutOfMemory();
   return p;
 }
 
 void
-PoolAllocationPolicy::am_free(void *ptr)
+PoolAllocationPolicy::am_free(void* ptr)
 {
 }
 

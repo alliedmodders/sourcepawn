@@ -20,13 +20,13 @@
 #include "method-info.h"
 
 /********************
-* FUNCTION CALLING *
+* FUNCTION CALLING*
 ********************/
 
 using namespace sp;
 using namespace SourcePawn;
 
-ScriptedInvoker::ScriptedInvoker(PluginRuntime *runtime, funcid_t id, uint32_t pub_id)
+ScriptedInvoker::ScriptedInvoker(PluginRuntime* runtime, funcid_t id, uint32_t pub_id)
  : env_(Environment::get()),
    context_(runtime->GetBaseContext()),
    m_curparam(0),
@@ -55,20 +55,20 @@ ScriptedInvoker::IsRunnable()
 }
 
 int
-ScriptedInvoker::CallFunction(const cell_t *params, unsigned int num_params, cell_t *result)
+ScriptedInvoker::CallFunction(const cell_t* params, unsigned int num_params, cell_t* result)
 {
   Environment::get()->ReportError(SP_ERROR_ABORTED);
   return SP_ERROR_ABORTED;
 }
 
 int
-ScriptedInvoker::CallFunction2(IPluginContext *pContext, const cell_t *params, unsigned int num_params, cell_t *result)
+ScriptedInvoker::CallFunction2(IPluginContext* pContext, const cell_t* params, unsigned int num_params, cell_t* result)
 {
   Environment::get()->ReportError(SP_ERROR_ABORTED);
   return SP_ERROR_ABORTED;
 }
 
-IPluginContext *
+IPluginContext*
 ScriptedInvoker::GetParentContext()
 {
   return context_;
@@ -87,7 +87,7 @@ int ScriptedInvoker::PushCell(cell_t cell)
 }
 
 int
-ScriptedInvoker::PushCellByRef(cell_t *cell, int flags)
+ScriptedInvoker::PushCellByRef(cell_t* cell, int flags)
 {
   return PushArray(cell, 1, flags);
 }
@@ -101,20 +101,20 @@ ScriptedInvoker::PushFloat(float number)
 }
 
 int
-ScriptedInvoker::PushFloatByRef(float *number, int flags)
+ScriptedInvoker::PushFloatByRef(float* number, int flags)
 {
-  return PushCellByRef((cell_t *)number, flags);
+  return PushCellByRef((cell_t*)number, flags);
 }
 
 int
-ScriptedInvoker::PushArray(cell_t *inarray, unsigned int cells, int copyback)
+ScriptedInvoker::PushArray(cell_t* inarray, unsigned int cells, int copyback)
 {
   if (m_curparam >= SP_MAX_EXEC_PARAMS)
   {
     return SetError(SP_ERROR_PARAMS_MAX);
   }
 
-  ParamInfo *info = &m_info[m_curparam];
+  ParamInfo* info = &m_info[m_curparam];
 
   info->flags = inarray ? copyback : 0;
   info->marked = true;
@@ -128,27 +128,27 @@ ScriptedInvoker::PushArray(cell_t *inarray, unsigned int cells, int copyback)
 }
 
 int
-ScriptedInvoker::PushString(const char *string)
+ScriptedInvoker::PushString(const char* string)
 {
   return _PushString(string, SM_PARAM_STRING_COPY, 0, strlen(string)+1);
 }
 
 int
-ScriptedInvoker::PushStringEx(char *buffer, size_t length, int sz_flags, int cp_flags)
+ScriptedInvoker::PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags)
 {
   return _PushString(buffer, sz_flags, cp_flags, length);
 }
 
 int
-ScriptedInvoker::_PushString(const char *string, int sz_flags, int cp_flags, size_t len)
+ScriptedInvoker::_PushString(const char* string, int sz_flags, int cp_flags, size_t len)
 {
   if (m_curparam >= SP_MAX_EXEC_PARAMS)
     return SetError(SP_ERROR_PARAMS_MAX);
 
-  ParamInfo *info = &m_info[m_curparam];
+  ParamInfo* info = &m_info[m_curparam];
 
   info->marked = true;
-  info->orig_addr = (cell_t *)string;
+  info->orig_addr = (cell_t*)string;
   info->flags = cp_flags;
   info->size = len;
   info->str.sz_flags = sz_flags;
@@ -170,9 +170,9 @@ ScriptedInvoker::Cancel()
 }
 
 int
-ScriptedInvoker::Execute(cell_t *result)
+ScriptedInvoker::Execute(cell_t* result)
 {
-  Environment *env = Environment::get();
+  Environment* env = Environment::get();
   env->clearPendingException();
 
   // For backward compatibility, we have to clear the exception state.
@@ -196,7 +196,7 @@ ScriptedInvoker::Execute(cell_t *result)
 }
 
 bool
-ScriptedInvoker::Invoke(cell_t *result)
+ScriptedInvoker::Invoke(cell_t* result)
 {
   if (!IsRunnable()) {
     Cancel();
@@ -265,7 +265,7 @@ ScriptedInvoker::Invoke(cell_t *result)
             context_->StringToLocalUTF8(
               temp_info[i].local_addr, 
               temp_info[i].size, 
-              (const char *)temp_info[i].orig_addr,
+              (const char*)temp_info[i].orig_addr,
               NULL);
           }
           /* Copy a binary blob */
@@ -279,7 +279,7 @@ ScriptedInvoker::Invoke(cell_t *result)
             context_->StringToLocal(
               temp_info[i].local_addr,
               temp_info[i].size,
-              (const char *)temp_info[i].orig_addr);
+              (const char*)temp_info[i].orig_addr);
           }
         }
       } /* End array/string calculation */
@@ -326,13 +326,13 @@ ScriptedInvoker::Invoke(cell_t *result)
 }
 
 int
-ScriptedInvoker::Execute2(IPluginContext *ctx, cell_t *result)
+ScriptedInvoker::Execute2(IPluginContext* ctx, cell_t* result)
 {
   Environment::get()->ReportError(SP_ERROR_ABORTED);
   return SP_ERROR_ABORTED;
 }
 
-IPluginRuntime *
+IPluginRuntime*
 ScriptedInvoker::GetParentRuntime()
 {
   return context_->runtime();

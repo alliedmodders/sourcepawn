@@ -50,7 +50,7 @@ BuiltinNatives::Lookup(const char* name)
 }
 
 static cell_t
-FloatCtor(IPluginContext *pCtx, const cell_t *params)
+FloatCtor(IPluginContext* pCtx, const cell_t* params)
 {
   float val = static_cast<float>(params[1]);
 
@@ -58,7 +58,7 @@ FloatCtor(IPluginContext *pCtx, const cell_t *params)
 }
 
 static cell_t
-FloatAdd(IPluginContext *pCtx, const cell_t *params)
+FloatAdd(IPluginContext* pCtx, const cell_t* params)
 {
   float val = sp_ctof(params[1]) + sp_ctof(params[2]);
 
@@ -66,7 +66,7 @@ FloatAdd(IPluginContext *pCtx, const cell_t *params)
 }
 
 static cell_t
-FloatSub(IPluginContext *pCtx, const cell_t *params)
+FloatSub(IPluginContext* pCtx, const cell_t* params)
 {
   float val = sp_ctof(params[1]) - sp_ctof(params[2]);
 
@@ -74,7 +74,7 @@ FloatSub(IPluginContext *pCtx, const cell_t *params)
 }
 
 static cell_t
-FloatMul(IPluginContext *pCtx, const cell_t *params)
+FloatMul(IPluginContext* pCtx, const cell_t* params)
 {
   float val = sp_ctof(params[1]) * sp_ctof(params[2]);
 
@@ -82,7 +82,7 @@ FloatMul(IPluginContext *pCtx, const cell_t *params)
 }
 
 static cell_t
-FloatDiv(IPluginContext *pCtx, const cell_t *params)
+FloatDiv(IPluginContext* pCtx, const cell_t* params)
 {
   float val = sp_ctof(params[1]) / sp_ctof(params[2]);
 
@@ -90,43 +90,43 @@ FloatDiv(IPluginContext *pCtx, const cell_t *params)
 }
 
 static cell_t
-FloatGt(IPluginContext *pCtx, const cell_t *params)
+FloatGt(IPluginContext* pCtx, const cell_t* params)
 {
   return !!(sp_ctof(params[1]) > sp_ctof(params[2]));
 }
 
 static cell_t
-FloatGe(IPluginContext *pCtx, const cell_t *params)
+FloatGe(IPluginContext* pCtx, const cell_t* params)
 {
   return !!(sp_ctof(params[1]) >= sp_ctof(params[2]));
 }
 
 static cell_t
-FloatLt(IPluginContext *pCtx, const cell_t *params)
+FloatLt(IPluginContext* pCtx, const cell_t* params)
 {
   return !!(sp_ctof(params[1]) < sp_ctof(params[2]));
 }
 
 static cell_t
-FloatLe(IPluginContext *pCtx, const cell_t *params)
+FloatLe(IPluginContext* pCtx, const cell_t* params)
 {
   return !!(sp_ctof(params[1]) <= sp_ctof(params[2]));
 }
 
 static cell_t
-FloatEq(IPluginContext *pCtx, const cell_t *params)
+FloatEq(IPluginContext* pCtx, const cell_t* params)
 {
   return !!(sp_ctof(params[1]) == sp_ctof(params[2]));
 }
 
 static cell_t
-FloatNe(IPluginContext *pCtx, const cell_t *params)
+FloatNe(IPluginContext* pCtx, const cell_t* params)
 {
   return !!(sp_ctof(params[1]) != sp_ctof(params[2]));
 }
 
 static cell_t
-FloatNot(IPluginContext *pCtx, const cell_t *params)
+FloatNot(IPluginContext* pCtx, const cell_t* params)
 {
   float val = sp_ctof(params[1]);
   if (ke::IsNaN(val))

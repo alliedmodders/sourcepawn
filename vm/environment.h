@@ -43,38 +43,38 @@ class Environment : public ISourcePawnEnvironment
   Environment();
   ~Environment();
 
-  static Environment *New();
+  static Environment* New();
 
   void Shutdown() override;
-  ISourcePawnEngine *APIv1() override;
-  ISourcePawnEngine2 *APIv2() override;
+  ISourcePawnEngine* APIv1() override;
+  ISourcePawnEngine2* APIv2() override;
   int ApiVersion() override {
     return SOURCEPAWN_API_VERSION;
   }
 
   // Access the current Environment.
-  static Environment *get();
+  static Environment* get();
 
   bool InstallWatchdogTimer(int timeout_ms);
 
-  void EnterExceptionHandlingScope(ExceptionHandler *handler) override;
-  void LeaveExceptionHandlingScope(ExceptionHandler *handler) override;
-  bool HasPendingException(const ExceptionHandler *handler) override;
-  const char *GetPendingExceptionMessage(const ExceptionHandler *handler) override;
+  void EnterExceptionHandlingScope(ExceptionHandler* handler) override;
+  void LeaveExceptionHandlingScope(ExceptionHandler* handler) override;
+  bool HasPendingException(const ExceptionHandler* handler) override;
+  const char* GetPendingExceptionMessage(const ExceptionHandler* handler) override;
 
   // Runtime functions.
-  const char *GetErrorString(int err);
+  const char* GetErrorString(int err);
   void ReportError(int code);
-  void ReportError(int code, const char *message);
-  void ReportErrorFmt(int code, const char *message, ...);
-  void ReportErrorVA(const char *fmt, va_list ap);
-  void ReportErrorVA(int code, const char *fmt, va_list ap);
-  void BlamePluginErrorVA(SourcePawn::IPluginFunction *pf, const char *fmt, va_list ap);
+  void ReportError(int code, const char* message);
+  void ReportErrorFmt(int code, const char* message, ...);
+  void ReportErrorVA(const char* fmt, va_list ap);
+  void ReportErrorVA(int code, const char* fmt, va_list ap);
+  void BlamePluginErrorVA(SourcePawn::IPluginFunction* pf, const char* fmt, va_list ap);
 
   // Allocate and free executable memory.
   CodeChunk AllocateCode(size_t size);
 
-  CodeStubs *stubs() {
+  CodeStubs* stubs() {
     return code_stubs_;
   }
   BuiltinNatives* builtins() {
@@ -82,21 +82,21 @@ class Environment : public ISourcePawnEnvironment
   }
 
   // Runtime management.
-  void RegisterRuntime(PluginRuntime *rt);
-  void DeregisterRuntime(PluginRuntime *rt);
+  void RegisterRuntime(PluginRuntime* rt);
+  void DeregisterRuntime(PluginRuntime* rt);
   void PatchAllJumpsForTimeout();
   void UnpatchAllJumpsFromTimeout();
-  ke::Mutex *lock() {
+  ke::Mutex* lock() {
     return &mutex_;
   }
 
   bool Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t* result);
 
   // Helpers.
-  void SetProfiler(IProfilingTool *profiler) {
+  void SetProfiler(IProfilingTool* profiler) {
     profiler_ = profiler;
   }
-  IProfilingTool *profiler() const {
+  IProfilingTool* profiler() const {
     return profiler_;
   }
   bool IsProfilingEnabled() const {
@@ -109,14 +109,14 @@ class Environment : public ISourcePawnEnvironment
   bool IsJitEnabled() const {
     return jit_enabled_;
   }
-  void SetDebugger(IDebugListener *debugger) {
+  void SetDebugger(IDebugListener* debugger) {
     debugger_ = debugger;
   }
-  IDebugListener *debugger() const {
+  IDebugListener* debugger() const {
     return debugger_;
   }
 
-  WatchdogTimer *watchdog() const {
+  WatchdogTimer* watchdog() const {
     return watchdog_timer_;
   }
 
@@ -132,11 +132,11 @@ class Environment : public ISourcePawnEnvironment
     return !!top_;
   }
 
-  void enterInvoke(InvokeFrame *frame);
+  void enterInvoke(InvokeFrame* frame);
   void leaveJitInvoke(JitInvokeFrame* frame);
   void leaveInvoke();
 
-  InvokeFrame *top() const {
+  InvokeFrame* top() const {
     return top_;
   }
   intptr_t* exit_fp() const {
@@ -161,7 +161,7 @@ class Environment : public ISourcePawnEnvironment
  private:
   bool Initialize();
 
-  void DispatchReport(const ErrorReport &report);
+  void DispatchReport(const ErrorReport& report);
 
  private:
   ke::AutoPtr<ISourcePawnEngine> api_v1_;
@@ -170,12 +170,12 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<BuiltinNatives> builtins_;
   ke::Mutex mutex_;
 
-  IDebugListener *debugger_;
-  ExceptionHandler *eh_top_;
+  IDebugListener* debugger_;
+  ExceptionHandler* eh_top_;
   int exception_code_;
   char exception_message_[1024];
 
-  IProfilingTool *profiler_;
+  IProfilingTool* profiler_;
   bool jit_enabled_;
   bool profiling_enabled_;
 
@@ -186,14 +186,14 @@ class Environment : public ISourcePawnEnvironment
 
   uintptr_t frame_id_;
 
-  InvokeFrame *top_;
+  InvokeFrame* top_;
   intptr_t* exit_fp_;
 };
 
 class EnterProfileScope
 {
  public:
-  EnterProfileScope(const char *group, const char *name)
+  EnterProfileScope(const char* group, const char* name)
   {
     if (Environment::get()->IsProfilingEnabled())
       Environment::get()->profiler()->EnterScope(group, name);
@@ -209,20 +209,20 @@ class EnterProfileScope
 class ErrorReport : public SourcePawn::IErrorReport
 {
   public:
-  ErrorReport(int code, const char *message, PluginContext *cx, SourcePawn::IPluginFunction *pf);
+  ErrorReport(int code, const char* message, PluginContext* cx, SourcePawn::IPluginFunction* pf);
 
   public: //IErrorReport
-  const char *Message() const override;
+  const char* Message() const override;
   int Code() const override;
-  IPluginFunction *Blame() const override;
+  IPluginFunction* Blame() const override;
   bool IsFatal() const override;
-  IPluginContext *Context() const override;
+  IPluginContext* Context() const override;
 
  private:
   int code_;
-  const char *message_;
-  PluginContext *context_;
-  IPluginFunction *blame_;
+  const char* message_;
+  PluginContext* context_;
+  IPluginFunction* blame_;
 };
 
 } // namespace sp
