@@ -35,17 +35,17 @@ class Preprocessor;
 class MacroLexer : public ke::Refcounted<MacroLexer>
 {
  public:
-  MacroLexer(CompileContext &cc, Preprocessor &pp,
-             Macro *macro, const LREntry &range);
+  MacroLexer(CompileContext& cc, Preprocessor& pp,
+             Macro* macro, const LREntry& range);
 
-  void Reuse(Macro *macro, const LREntry &range);
+  void Reuse(Macro* macro, const LREntry& range);
 
-  TokenKind next(Token *tok);
+  TokenKind next(Token* tok);
 
  private:
-  CompileContext &cc_;
-  Preprocessor &pp_;
-  Macro *macro_;
+  CompileContext& cc_;
+  Preprocessor& pp_;
+  Macro* macro_;
   SourceLocation insertion_loc_;
   size_t cursor_;
   LREntry range_;

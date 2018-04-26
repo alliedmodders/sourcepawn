@@ -69,47 +69,47 @@ class TypeResolver
    public ConstantResolver
 {
  public:
-  TypeResolver(CompileContext &cc);
+  TypeResolver(CompileContext& cc);
 
   bool analyze();
 
-  Type *resolveTypeOfVar(VariableSymbol *sym) override;
-  bool resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out) override;
-  BoxedValue resolveValueOfConstant(ConstantSymbol *sym) override;
-  void visitVarDecl(VarDecl *node) override;
-  void visitEnumConstant(EnumConstant *node) override;
-  void visitEnumStatement(EnumStatement *node) override;
-  void visitMethodmapDecl(MethodmapDecl *methodmap) override;
-  void visitFieldDecl(FieldDecl *decl) override;
-  void visitPropertyDecl(PropertyDecl *decl) override;
-  void visitMethodDecl(MethodDecl *decl) override;
-  void visitFunctionStatement(FunctionStatement *node) override;
-  void visitTypedefDecl(TypedefDecl *node) override;
-  void visitUnsafeCastExpr(UnsafeCastExpr *expr) override;
-  void visitCallNewExpr(CallNewExpr *expr) override;
-  void visitNewArrayExpr(NewArrayExpr *expr) override;
-  void visitTypesetDecl(TypesetDecl *decl) override;
+  Type* resolveTypeOfVar(VariableSymbol* sym) override;
+  bool resolveVarAsConstant(VariableSymbol* sym, BoxedValue* out) override;
+  BoxedValue resolveValueOfConstant(ConstantSymbol* sym) override;
+  void visitVarDecl(VarDecl* node) override;
+  void visitEnumConstant(EnumConstant* node) override;
+  void visitEnumStatement(EnumStatement* node) override;
+  void visitMethodmapDecl(MethodmapDecl* methodmap) override;
+  void visitFieldDecl(FieldDecl* decl) override;
+  void visitPropertyDecl(PropertyDecl* decl) override;
+  void visitMethodDecl(MethodDecl* decl) override;
+  void visitFunctionStatement(FunctionStatement* node) override;
+  void visitTypedefDecl(TypedefDecl* node) override;
+  void visitUnsafeCastExpr(UnsafeCastExpr* expr) override;
+  void visitCallNewExpr(CallNewExpr* expr) override;
+  void visitNewArrayExpr(NewArrayExpr* expr) override;
+  void visitTypesetDecl(TypesetDecl* decl) override;
 
-  void addPending(AstNode *node) {
+  void addPending(AstNode* node) {
     work_queue_.append(node);
   }
 
-  Type *applyConstQualifier(TypeSpecifier *spec, Type *type);
-  Type *applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
-  Type *applyVariadic(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper);
-  bool checkArrayInnerType(TypeSpecifier *spec, Type *type);
-  bool verifyTypeset(TypesetDecl *decl);
+  Type* applyConstQualifier(TypeSpecifier* spec, Type* type);
+  Type* applyByRef(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper);
+  Type* applyVariadic(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper);
+  bool checkArrayInnerType(TypeSpecifier* spec, Type* type);
+  bool verifyTypeset(TypesetDecl* decl);
 
   bool assignTypeToSymbol(VariableSymbol* sym, Type* type);
   void assignTypeToFunction(FunctionNode* node);
   void assignTypeToTypedef(TypedefDecl* decl, TypedefType* def, Type* actual);
 
  private:
-  EnumType *resolveMethodmapParentType(NameProxy *proxy);
-  void visitFunction(FunctionNode *node);
+  EnumType* resolveMethodmapParentType(NameProxy* proxy);
+  void visitFunction(FunctionNode* node);
 
  private:
-  FunctionType *maybeResolveFunction(FunctionSignature *sig);
+  FunctionType* maybeResolveFunction(FunctionSignature* sig);
 
   bool resolveConstantArraySize(ConstantEvaluator::Mode, Expression* expr, int* outp);
   void computeFixedArraySizes(TypeSpecifier* spec,
@@ -119,29 +119,29 @@ class TypeResolver
                               ArrayLiteral* expr);
   Vector<Rank> fixedArrayLiteralDimensions(TypeSpecifier* spec, Type* base, Expression* expr);
 
-  Type *resolveTypeIfNeeded(TypeExpr &te) {
+  Type* resolveTypeIfNeeded(TypeExpr& te) {
     if (te.resolved())
       return te.resolved();
     return resolveType(te);
   }
 
-  void resolveTypesInSignature(FunctionSignature *sig);
-  void resolveConstant(ConstantSymbol *sym);
-  Type *resolveType(TypeExpr &te, TypeSpecHelper *helper = nullptr);
-  Type *resolveBaseType(TypeSpecifier *spec);
-  Type *resolveNameToType(NameProxy *proxy);
-  Type *resolveArrayComponentTypes(TypeSpecifier* spec,
+  void resolveTypesInSignature(FunctionSignature* sig);
+  void resolveConstant(ConstantSymbol* sym);
+  Type* resolveType(TypeExpr& te, TypeSpecHelper* helper = nullptr);
+  Type* resolveBaseType(TypeSpecifier* spec);
+  Type* resolveNameToType(NameProxy* proxy);
+  Type* resolveArrayComponentTypes(TypeSpecifier* spec,
                                    Type* type,
                                    TypeSpecHelper* helper);
-  bool resolveEnumConstantValue(EnumConstant *cs, int *outp);
+  bool resolveEnumConstantValue(EnumConstant* cs, int* outp);
 
  private:
-  PoolAllocator &pool_;
-  CompileContext &cc_;
+  PoolAllocator& pool_;
+  CompileContext& cc_;
 
-  Deque<AstNode *> work_queue_;
+  Deque<AstNode*> work_queue_;
 
-  Vector<EnumConstant *> enum_constant_stack_;
+  Vector<EnumConstant*> enum_constant_stack_;
 };
 
 // Certain keywords, like "const", may need contextual information to finish

@@ -150,7 +150,7 @@ private:
   int32_t compute_storage_size(Type* type);
 
 private:
-  static int sort_functions(const void *a1, const void *a2);
+  static int sort_functions(const void* a1, const void* a2);
 
   void add_code();
   void add_data();

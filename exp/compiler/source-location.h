@@ -58,10 +58,10 @@ class SourceLocation
   bool isSet() const {
     return id_ != 0;
   }
-  bool operator ==(const SourceLocation &other) {
+  bool operator ==(const SourceLocation& other) {
     return id_ == other.id_;
   }
-  bool operator !=(const SourceLocation &other) {
+  bool operator !=(const SourceLocation& other) {
     return id_ != other.id_;
   }
 
@@ -89,7 +89,7 @@ struct SourceRange
 
   SourceRange()
   {}
-  SourceRange(const SourceLocation &start, const SourceLocation &end)
+  SourceRange(const SourceLocation& start, const SourceLocation& end)
    : start(start),
      end(end)
   {}

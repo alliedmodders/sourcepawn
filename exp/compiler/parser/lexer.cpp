@@ -26,8 +26,8 @@
 using namespace ke;
 using namespace sp;
 
-Lexer::Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
-             RefPtr<SourceFile> buffer, const LREntry &range)
+Lexer::Lexer(CompileContext& cc, Preprocessor& pp, const LexOptions& options,
+             RefPtr<SourceFile> buffer, const LREntry& range)
  : cc_(cc),
    pp_(pp),
    options_(options),
@@ -45,7 +45,7 @@ Lexer::Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
 }
 
 MessageBuilder
-Lexer::report(const SourceLocation &loc, rmsg::Id id)
+Lexer::report(const SourceLocation& loc, rmsg::Id id)
 {
   if (suppress_errors_)
     return MessageBuilder(nullptr);
@@ -88,7 +88,7 @@ static inline bool IsIdentChar(char c)
 }
 
 int
-sp::StringToInt32(const char *ptr)
+sp::StringToInt32(const char* ptr)
 {
   int v = 0;
   while (IsDigit(*ptr) || *ptr == '_') {
@@ -100,7 +100,7 @@ sp::StringToInt32(const char *ptr)
 }
 
 
-const char *
+const char*
 Lexer::skipSpaces()
 {
   while (IsSkipSpace(peekChar()))
@@ -118,14 +118,14 @@ Lexer::firstNonSpaceChar()
 }
 
 void
-Lexer::readUntilEnd(const char **beginp, const char **endp)
+Lexer::readUntilEnd(const char** beginp, const char** endp)
 {
-  const char *begin = skipSpaces();
+  const char* begin = skipSpaces();
 
   while (!IsLineTerminator(peekChar()))
     skipChar();
 
-  const char *end = ptr();
+  const char* end = ptr();
   while (end > begin) {
     if (!IsSkipSpace(*end) && !IsLineTerminator(*end))
       break;
@@ -247,9 +247,9 @@ HexDigitToValue(char c)
 
 // Based off the logic in sc2.c's ftoi()...
 static double
-ParseDouble(const char *string)
+ParseDouble(const char* string)
 {
-  const char *ptr = string;
+  const char* ptr = string;
 
   double number = 0.0;
   while (IsDigit(*ptr)) {
@@ -291,7 +291,7 @@ ParseDouble(const char *string)
 }
 
 TokenKind
-Lexer::handleNumber(Token *tok, char first)
+Lexer::handleNumber(Token* tok, char first)
 {
   TokenKind kind = numberLiteral(first);
   switch (kind) {
@@ -365,7 +365,7 @@ Lexer::maybeKeyword(char first)
 {
   name(first);
 
-  Atom *atom = cc_.add(literal(), literal_length());
+  Atom* atom = cc_.add(literal(), literal_length());
   return pp_.findKeyword(atom);
 }
 
@@ -448,7 +448,7 @@ Lexer::readEscapeCode()
 }
 
 TokenKind
-Lexer::charLiteral(Token *tok)
+Lexer::charLiteral(Token* tok)
 {
   char c = readChar();
   if (c == '\'') {
@@ -476,7 +476,7 @@ Lexer::charLiteral(Token *tok)
 }
 
 TokenKind
-Lexer::stringLiteral(Token *tok)
+Lexer::stringLiteral(Token* tok)
 {
   literal_.clear();
 
@@ -491,11 +491,11 @@ Lexer::stringLiteral(Token *tok)
     if (c == '\\') {
       // Peek ahead - if this is the last non-whitespace character on the line,
       // we have to act as if the line was concatenated.
-      const char *ptr = pos_;
+      const char* ptr = pos_;
       while (*ptr && IsSkipSpace(*ptr))
         ptr++;
       if (*ptr == '\n' || *ptr == '\r') {
-        // Just move to the next line. Note, advanceLine expects *pos_-1 == c.
+        // Just move to the next line. Note, advanceLine expects* pos_-1 == c.
         pos_ = ptr + 1;
         advanceLine(*ptr);
         continue;
@@ -516,11 +516,11 @@ Lexer::stringLiteral(Token *tok)
 }
 
 TokenKind
-Lexer::handleIdentifier(Token *tok, char first)
+Lexer::handleIdentifier(Token* tok, char first)
 {
   name(first);
 
-  Atom *atom = cc_.add(literal(), literal_length());
+  Atom* atom = cc_.add(literal(), literal_length());
   tok->setAtom(atom);
 
   // Strictly speaking, it is not safe to handle macro expansion directly
@@ -556,7 +556,7 @@ Lexer::singleLineComment()
 }
 
 TokenKind
-Lexer::multiLineComment(const SourceLocation &begin)
+Lexer::multiLineComment(const SourceLocation& begin)
 {
   while (true) {
     char c = readChar();
@@ -668,7 +668,7 @@ Lexer::handleDirectiveWhileInactive()
     {
       // Only check and update the context if we're not inside a dead
       // context.
-      IfContext *ix = currentIf();
+      IfContext* ix = currentIf();
       if (ix->state == IfContext::Dead)
         return;
 
@@ -704,7 +704,7 @@ Lexer::handleDirectiveWhileInactive()
 void
 Lexer::checkIfStackAtEndOfFile()
 {
-  if (IfContext *ix = currentIf()) {
+  if (IfContext* ix = currentIf()) {
     if (ix->elseloc.isSet())
       cc_.report(ix->elseloc, rmsg::unterminated_else);
     else
@@ -746,7 +746,7 @@ Lexer::handleIfContext()
   }
 }
 
-TokenList *
+TokenList*
 Lexer::getMacroTokens()
 {
   Vector<Token> tokens;
@@ -764,7 +764,7 @@ Lexer::getMacroTokens()
     tokens.append(tok);
   }
 
-  TokenList *list = new (cc_.pool()) TokenList(tokens.length());
+  TokenList* list = new (cc_.pool()) TokenList(tokens.length());
   for (size_t i = 0; i < tokens.length(); i++)
     list->at(i) = tokens[i];
   return list;
@@ -794,7 +794,7 @@ Lexer::handlePreprocessorDirective()
 
       // :TODO: do we want to track #defines for AST printing?
 
-      TokenList *tokens = getMacroTokens();
+      TokenList* tokens = getMacroTokens();
       pp_.defineMacro(tok.atom(), tok.start.loc, tokens);
       return false;
     }
@@ -810,7 +810,7 @@ Lexer::handlePreprocessorDirective()
 
     case TOK_M_ELSE:
     {
-      IfContext *ix = currentIf();
+      IfContext* ix = currentIf();
       if (!ix) {
         report(begin, rmsg::else_without_if);
         return false;
@@ -831,7 +831,7 @@ Lexer::handlePreprocessorDirective()
 
     case TOK_M_ENDIF:
     {
-      IfContext *ix = currentIf();
+      IfContext* ix = currentIf();
       if (!ix) {
         report(begin, rmsg::endif_without_if);
         return false;
@@ -893,7 +893,7 @@ Lexer::handlePreprocessorDirective()
       }
       literal_.append('\0');
 
-      const char *where = nullptr;
+      const char* where = nullptr;
       if (match == '"') {
         // We have to be in a file to be seeing #include.
         where = buffer_->path();
@@ -919,7 +919,7 @@ Lexer::handlePreprocessorDirective()
         return false;
       }
       if (strcmp(tok.atom()->chars(), "deprecated") == 0) {
-        const char *begin, *end;
+        const char* begin, *end;
         readUntilEnd(&begin, &end);
 
         pp_.setNextDeprecationMessage(begin, end - begin);
@@ -1008,7 +1008,7 @@ Lexer::enterPreprocessorDirective()
 }
 
 TokenKind
-Lexer::scan(Token *tok)
+Lexer::scan(Token* tok)
 {
   char c = consumeWhitespace();
 
@@ -1251,7 +1251,7 @@ Lexer::scan(Token *tok)
 // Lex for a token while inside a preprocessor directive. This is the same as
 // next() but makes it clearer where we're coming from.
 TokenKind
-Lexer::directive_next(Token *tok)
+Lexer::directive_next(Token* tok)
 {
   assert(lexing_for_directive_);
 
@@ -1266,7 +1266,7 @@ Lexer::directive_next(Token *tok)
 // A front comment is a sequence of comments at most one line away from a non-
 // comment token that is the first token on its line.
 TokenKind
-Lexer::processFrontCommentBlock(Token *tok)
+Lexer::processFrontCommentBlock(Token* tok)
 {
   TokenPos start = tok->start;
   TokenPos end;
@@ -1315,7 +1315,7 @@ Lexer::processFrontCommentBlock(Token *tok)
 // A tail comment is a sequence of comments appearing after a token, ending
 // after a blank line or a non-comment token.
 TokenKind
-Lexer::processTailCommentBlock(Token *tok)
+Lexer::processTailCommentBlock(Token* tok)
 {
   TokenPos start = tok->start;
   TokenPos end = tok->end;
@@ -1333,7 +1333,7 @@ Lexer::processTailCommentBlock(Token *tok)
 
 // Note: this calls back into scan(), so we should only call it from next().
 TokenKind
-Lexer::handleComments(Token *tok)
+Lexer::handleComments(Token* tok)
 {
   // We don't bother inserting comments from macros, or if we're not parsing
   // for an AST dump.
@@ -1359,7 +1359,7 @@ Lexer::handleComments(Token *tok)
 }
 
 TokenKind
-Lexer::next(Token *tok)
+Lexer::next(Token* tok)
 {
   TokenKind kind = scan(tok);
   if (kind == TOK_COMMENT) {

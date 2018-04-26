@@ -54,31 +54,31 @@ class TranslationUnit : public PoolObject
   {
   }
 
-  ast::ParseTree *tree() const {
+  ast::ParseTree* tree() const {
     return tree_;
   }
-  GlobalScope *globalScope() const {
+  GlobalScope* globalScope() const {
     return globalScope_;
   }
-  void setGlobalScope(GlobalScope *scope) {
+  void setGlobalScope(GlobalScope* scope) {
     globalScope_ = scope;
   }
-  void attach(ast::ParseTree *tree) {
+  void attach(ast::ParseTree* tree) {
     assert(!tree_);
     tree_ = tree;
   }
 
  private:
-  ast::ParseTree *tree_;
-  GlobalScope *globalScope_;
+  ast::ParseTree* tree_;
+  GlobalScope* globalScope_;
 };
 
 class CompileContext
 {
  public:
-  CompileContext(PoolAllocator &pool, StringPool &strings,
-                 ReportManager &reports,
-                 SourceManager &source);
+  CompileContext(PoolAllocator& pool, StringPool& strings,
+                 ReportManager& reports,
+                 SourceManager& source);
   ~CompileContext();
 
   bool compile(RefPtr<SourceFile> file);
@@ -90,64 +90,64 @@ class CompileContext
     return !reports_.HasFatalError();
   }
 
-  PoolAllocator &pool() {
+  PoolAllocator& pool() {
     return pool_;
   }
-  TypeManager *types() {
+  TypeManager* types() {
     return &types_;
   }
-  SourceManager &source() {
+  SourceManager& source() {
     return source_;
   }
-  CompileOptions &options() {
+  CompileOptions& options() {
     return options_;
   }
 
   // String interning.
-  Atom *add(const char *str) {
+  Atom* add(const char* str) {
     return strings_.add(str);
   }
-  Atom *add(const char *str, size_t length) {
+  Atom* add(const char* str, size_t length) {
     return strings_.add(str, length);
   }
 
   // Option changing.
-  bool ChangePragmaDynamic(ReportingContext &rc, int64_t value);
+  bool ChangePragmaDynamic(ReportingContext& rc, int64_t value);
   void SkipResolution() {
     options_.SkipResolution = true;
   }
 
   // Error reporting.
-  ReportManager &reporting() {
+  ReportManager& reporting() {
     return reports_;
   }
   void reportFatal(rmsg::Id msg) {
     reports_.reportFatal(msg);
   }
-  void reportFatal(const SourceLocation &loc, rmsg::Id msg) {
+  void reportFatal(const SourceLocation& loc, rmsg::Id msg) {
     reports_.reportFatal(loc, msg);
   }
-  MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id) {
+  MessageBuilder report(const SourceLocation& loc, rmsg::Id msg_id) {
     return reports_.report(loc, msg_id);
   }
-  MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id) {
+  MessageBuilder note(const SourceLocation& loc, rmsg::Id msg_id) {
     return reports_.note(loc, msg_id);
   }
 
-  Atom *createAnonymousName(const SourceLocation &loc);
+  Atom* createAnonymousName(const SourceLocation& loc);
 
  private:
-  PoolAllocator &pool_;
-  StringPool &strings_;
-  ReportManager &reports_;
-  SourceManager &source_;
+  PoolAllocator& pool_;
+  StringPool& strings_;
+  ReportManager& reports_;
+  SourceManager& source_;
   TypeManager types_;
   CompileOptions options_;
 };
 
-extern ke::ThreadLocal<CompileContext *> CurrentCompileContext;
+extern ke::ThreadLocal<CompileContext*> CurrentCompileContext;
 
-static inline PoolAllocator &POOL()
+static inline PoolAllocator& POOL()
 {
   return CurrentCompileContext->pool();
 }

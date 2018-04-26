@@ -28,9 +28,9 @@ using namespace ke;
 using namespace ast;
 
 void
-SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
+SemanticAnalysis::visitFunctionStatement(FunctionStatement* node)
 {
-  FunctionSymbol *sym = node->sym();
+  FunctionSymbol* sym = node->sym();
 
   assert(!fs_);
 
@@ -56,17 +56,17 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement *node)
 
 // :TODO: write tests for this.
 void
-SemanticAnalysis::analyzeShadowedFunctions(FunctionSymbol *sym)
+SemanticAnalysis::analyzeShadowedFunctions(FunctionSymbol* sym)
 {
   // We do not yet support overloading, so two functions with the same name
   // and a body are illegal. We consider natives to be implemented.
-  FunctionStatement *impl = nullptr;
+  FunctionStatement* impl = nullptr;
 
   // We support non-native implementations of a forwarded function.
-  FunctionStatement *forward = nullptr;
+  FunctionStatement* forward = nullptr;
 
   for (size_t i = 0; i < sym->shadows()->length(); i++) {
-    FunctionStatement *stmt = sym->shadows()->at(i);
+    FunctionStatement* stmt = sym->shadows()->at(i);
     switch (stmt->token()) {
       case TOK_FORWARD:
         if (forward) {
@@ -99,7 +99,7 @@ SemanticAnalysis::analyzeShadowedFunctions(FunctionSymbol *sym)
 }
 
 void
-SemanticAnalysis::checkForwardedFunction(FunctionStatement *forward, FunctionStatement *impl)
+SemanticAnalysis::checkForwardedFunction(FunctionStatement* forward, FunctionStatement* impl)
 {
   // SP1 didn't check these. We tighten up the semantics a bit for SP2.
   if (impl->token() == TOK_NATIVE) {
@@ -116,8 +116,8 @@ SemanticAnalysis::checkForwardedFunction(FunctionStatement *forward, FunctionSta
     return;
   }
 
-  FunctionSignature *fwdSig = forward->signature();
-  FunctionSignature *implSig = impl->signature();
+  FunctionSignature* fwdSig = forward->signature();
+  FunctionSignature* implSig = impl->signature();
 
   if (!matchForwardSignatures(fwdSig, implSig)) {
     cc_.report(impl->loc(), rmsg::forward_signature_mismatch)
@@ -128,7 +128,7 @@ SemanticAnalysis::checkForwardedFunction(FunctionStatement *forward, FunctionSta
 }
 
 bool
-SemanticAnalysis::matchForwardSignatures(FunctionSignature *fwdSig, FunctionSignature *implSig)
+SemanticAnalysis::matchForwardSignatures(FunctionSignature* fwdSig, FunctionSignature* implSig)
 {
   // Due to SourceMod oddness, and the implementation detail that arguments are
   // pushed in reverse order, the impl function is allowed to leave off any
@@ -138,8 +138,8 @@ SemanticAnalysis::matchForwardSignatures(FunctionSignature *fwdSig, FunctionSign
 
   // We allow return types to differ iff the forward's type is void and the
   // impl function is implicit-int.
-  Type *fwdRetType = fwdSig->returnType().resolved();
-  Type *implRetType = implSig->returnType().resolved();
+  Type* fwdRetType = fwdSig->returnType().resolved();
+  Type* implRetType = implSig->returnType().resolved();
   if (!matchForwardReturnTypes(fwdRetType, implRetType))
     return false;
 
@@ -147,7 +147,7 @@ SemanticAnalysis::matchForwardSignatures(FunctionSignature *fwdSig, FunctionSign
 }
 
 bool
-SemanticAnalysis::matchForwardReturnTypes(Type *fwdRetType, Type *implRetType)
+SemanticAnalysis::matchForwardReturnTypes(Type* fwdRetType, Type* implRetType)
 {
   if (AreTypesEquivalent(fwdRetType, implRetType, Qualifiers::None))
     return true;

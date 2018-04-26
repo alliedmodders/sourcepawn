@@ -21,24 +21,24 @@
 using namespace ke;
 using namespace sp;
 
-JsonRenderer::JsonRenderer(FILE *fp)
+JsonRenderer::JsonRenderer(FILE* fp)
  : fp_(fp),
    indent_(0)
 {
 }
 
 void
-JsonRenderer::Render(JsonValue *value)
+JsonRenderer::Render(JsonValue* value)
 {
   value->Render(this);
 }
 
-void JsonRenderer::RenderNull(JsonNull *val)
+void JsonRenderer::RenderNull(JsonNull* val)
 {
   fprintf(fp_, "null");
 }
 
-void JsonRenderer::RenderBool(JsonBool *val)
+void JsonRenderer::RenderBool(JsonBool* val)
 {
   if (val->value())
     fprintf(fp_, "true");
@@ -46,12 +46,12 @@ void JsonRenderer::RenderBool(JsonBool *val)
     fprintf(fp_, "false");
 }
 
-void JsonRenderer::RenderInt(JsonInt *val)
+void JsonRenderer::RenderInt(JsonInt* val)
 {
   fprintf(fp_, "%d", val->value());
 }
 
-void JsonRenderer::RenderString(JsonString *val)
+void JsonRenderer::RenderString(JsonString* val)
 {
   fprintf(fp_, "\"");
   for (size_t i = 0; i < val->atom()->length(); i++) {
@@ -94,7 +94,7 @@ JsonRenderer::prefix()
     fprintf(fp_, " ");
 }
 
-void JsonRenderer::RenderList(JsonList *val)
+void JsonRenderer::RenderList(JsonList* val)
 {
   if (!val->items().length()) {
     fprintf(fp_, "[]");
@@ -115,7 +115,7 @@ void JsonRenderer::RenderList(JsonList *val)
   fprintf(fp_, "]");
 }
 
-void JsonRenderer::RenderObject(JsonObject *val)
+void JsonRenderer::RenderObject(JsonObject* val)
 {
   if (!val->keys().length()) {
     fprintf(fp_, "{}");

@@ -31,12 +31,12 @@
 using namespace ke;
 using namespace sp;
 
-ThreadLocal<CompileContext *> sp::CurrentCompileContext;
+ThreadLocal<CompileContext*> sp::CurrentCompileContext;
 
-CompileContext::CompileContext(PoolAllocator &pool,
-                               StringPool &strings,
-                               ReportManager &reports,
-                               SourceManager &source)
+CompileContext::CompileContext(PoolAllocator& pool,
+                               StringPool& strings,
+                               ReportManager& reports,
+                               SourceManager& source)
  : pool_(pool),
    strings_(strings),
    reports_(reports),
@@ -59,7 +59,7 @@ CompileContext::~CompileContext()
 }
 
 bool
-CompileContext::ChangePragmaDynamic(ReportingContext &rc, int64_t value)
+CompileContext::ChangePragmaDynamic(ReportingContext& rc, int64_t value)
 {
   if (value < 0) {
     rc.report(rmsg::pragma_dynamic_negative);
@@ -75,7 +75,7 @@ CompileContext::ChangePragmaDynamic(ReportingContext &rc, int64_t value)
 }
 
 static void
-ReportMemory(FILE *fp)
+ReportMemory(FILE* fp)
 {
   size_t allocated, reserved, bookkeeping;
   POOL().memoryUsage(&allocated, &reserved, &bookkeeping);
@@ -110,14 +110,14 @@ CompileContext::compile(RefPtr<SourceFile> file)
 
   fprintf(stderr, "-- Parsing --\n");
 
-  TranslationUnit *unit = new (pool()) TranslationUnit();
+  TranslationUnit* unit = new (pool()) TranslationUnit();
   {
     if (!pp.enter(file))
       return false;
 
     NameResolver nr(*this);
     Parser p(*this, pp, nr);
-    ast::ParseTree *tree = p.parse();
+    ast::ParseTree* tree = p.parse();
     if (!phasePassed())
       return false;
 
@@ -165,8 +165,8 @@ CompileContext::compile(RefPtr<SourceFile> file)
   return true;
 }
 
-Atom *
-CompileContext::createAnonymousName(const SourceLocation &loc)
+Atom*
+CompileContext::createAnonymousName(const SourceLocation& loc)
 {
   // :SRCLOC: include file name
   AutoString builder = "anonymous at ";

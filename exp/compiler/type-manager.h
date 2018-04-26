@@ -35,75 +35,75 @@ class TypesetDecl;
 class TypeManager
 {
  public:
-  TypeManager(StringPool &pool);
+  TypeManager(StringPool& pool);
 
   bool initialize();
 
-  Type *getPrimitive(PrimitiveType type) const {
+  Type* getPrimitive(PrimitiveType type) const {
     return primitiveTypes_[size_t(type)];
   }
-  Type *getBool() const {
+  Type* getBool() const {
       return getPrimitive(PrimitiveType::Bool);
   }
-  Type *getVoid() const {
+  Type* getVoid() const {
     return voidType_;
   }
-  Type *getImplicitVoid() const {
+  Type* getImplicitVoid() const {
     return implicitVoidType_;
   }
-  Type *getUnchecked() const {
+  Type* getUnchecked() const {
     return uncheckedType_;
   }
-  Type *getMetaFunction() const {
+  Type* getMetaFunction() const {
     return metaFunctionType_;
   }
-  Type *getNullType() const {
+  Type* getNullType() const {
     return nullType_;
   }
-  Type *getOverloadedFunction() const {
+  Type* getOverloadedFunction() const {
     return overloadedFunctionType_;
   }
-  ArrayType *newArray(Type *contained, int elements);
-  EnumType *newEnum(Atom *name);
-  Type *newQualified(Type *type, Qualifiers qualifiers);
-  TypesetType *newTypeset(Atom *name);
-  StructType *newStruct(ast::RecordDecl* decl);
-  TypedefType *newTypedef(Atom *name);
+  ArrayType* newArray(Type* contained, int elements);
+  EnumType* newEnum(Atom* name);
+  Type* newQualified(Type* type, Qualifiers qualifiers);
+  TypesetType* newTypeset(Atom* name);
+  StructType* newStruct(ast::RecordDecl* decl);
+  TypedefType* newTypedef(Atom* name);
   ReferenceType* newReference(Type* type);
   FunctionType* newFunction(ast::FunctionSignature* sig);
   VariadicType* newVariadic(Type* inner);
 
-  Type *typeForLabelAtom(Atom *atom);
+  Type* typeForLabelAtom(Atom* atom);
 
-  Type *getImplicitInt() {
+  Type* getImplicitInt() {
     return primitiveTypes_[int(PrimitiveType::ImplicitIntDoNotUseDirectly)];
   }
 
  private:
-  StringPool &strings_;
-  Type *voidType_;
-  Type *implicitVoidType_;
-  Type *uncheckedType_;
-  Type *metaFunctionType_;
-  Type *overloadedFunctionType_;
-  Type *nullType_;
-  Type *primitiveTypes_[kTotalPrimitiveTypes];
+  StringPool& strings_;
+  Type* voidType_;
+  Type* implicitVoidType_;
+  Type* uncheckedType_;
+  Type* metaFunctionType_;
+  Type* overloadedFunctionType_;
+  Type* nullType_;
+  Type* primitiveTypes_[kTotalPrimitiveTypes];
 
-  Type *char_type_;
-  ArrayType *char_array_;
-  Type *const_char_array_;
+  Type* char_type_;
+  ArrayType* char_array_;
+  Type* const_char_array_;
 
-  Type *float_type_;
-  ArrayType *float3_array_;
-  Type *const_float3_array_;
+  Type* float_type_;
+  ArrayType* float3_array_;
+  Type* const_float3_array_;
 
   VariadicType* variadic_any_;
 
-  Atom *atom_String_;
-  Atom *atom_Float_;
-  Atom *atom_any_;
-  Atom *atom_Function_;
-  Atom *atom_bool_;
+  Atom* atom_String_;
+  Atom* atom_Float_;
+  Atom* atom_any_;
+  Atom* atom_Function_;
+  Atom* atom_bool_;
 
   typedef ke::HashMap<Type*,
                       ReferenceType*,

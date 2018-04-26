@@ -2074,8 +2074,8 @@ SmxCompiler::compute_storage_size(Type* type)
 int
 SmxCompiler::sort_functions(const void* a1, const void* a2)
 {
-  FunctionEntry& f1 = *(FunctionEntry *)a1;
-  FunctionEntry& f2 = *(FunctionEntry *)a2;
+  FunctionEntry& f1 = *(FunctionEntry*)a1;
+  FunctionEntry& f2 = *(FunctionEntry*)a2;
   return strcmp(f1.name->chars(), f2.name->chars());
 }
 

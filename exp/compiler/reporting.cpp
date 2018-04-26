@@ -28,7 +28,7 @@
 using namespace ke;
 using namespace sp;
 
-static const char *sMessageTypeStrings[] = {
+static const char* sMessageTypeStrings[] = {
   "fatal",
   "system",
   "note",
@@ -40,7 +40,7 @@ static const char *sMessageTypeStrings[] = {
 
 struct rmsg_info {
   rmsg_type type;
-  const char *text;
+  const char* text;
 };
 
 static const rmsg_info sMessageTable[] =
@@ -52,13 +52,13 @@ static const rmsg_info sMessageTable[] =
 #undef RMSG
 };
 
-static inline const char *
+static inline const char*
 PrintableMessageType(rmsg_type type)
 {
   return sMessageTypeStrings[(int)type];
 }
 
-static inline const rmsg_info &
+static inline const rmsg_info&
 GetMessageInfo(rmsg::Id id)
 {
   assert(id > rmsg::none && id < rmsg::sentinel);
@@ -66,7 +66,7 @@ GetMessageInfo(rmsg::Id id)
 }
 
 void
-TMessage::addArg(Type *type)
+TMessage::addArg(Type* type)
 {
   addArg(BuildTypeName(type));
 }
@@ -86,7 +86,7 @@ ReportManager::ReportManager()
 {
 }
 
-ReportingContext::ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError)
+ReportingContext::ReportingContext(CompileContext& cc, const SourceLocation& loc, bool shouldError)
  : rr_(cc.reporting()),
    loc_(loc),
    should_error_(shouldError)
@@ -96,7 +96,7 @@ ReportingContext::ReportingContext(CompileContext &cc, const SourceLocation &loc
 static const size_t kErrorMessageLimit = 100;
 
 MessageBuilder
-ReportManager::note(const SourceLocation &loc, rmsg::Id msg_id)
+ReportManager::note(const SourceLocation& loc, rmsg::Id msg_id)
 {
   assert(GetMessageInfo(msg_id).type == rmsg_type::note);
 
@@ -109,7 +109,7 @@ ReportManager::note(const SourceLocation &loc, rmsg::Id msg_id)
 }
 
 void
-ReportManager::report(const RefPtr<TMessage> &msg)
+ReportManager::report(const RefPtr<TMessage>& msg)
 {
   assert(GetMessageInfo(msg->id()).type != rmsg_type::fatal);
 
@@ -129,14 +129,14 @@ ReportManager::report(const RefPtr<TMessage> &msg)
 }
 
 MessageBuilder
-ReportManager::build(const SourceLocation &loc, rmsg::Id msg_id)
+ReportManager::build(const SourceLocation& loc, rmsg::Id msg_id)
 {
   RefPtr<TMessage> message = new TMessage(loc, msg_id);
   return MessageBuilder(message);
 }
 
 MessageBuilder
-ReportManager::report(const SourceLocation &loc, rmsg::Id msg_id)
+ReportManager::report(const SourceLocation& loc, rmsg::Id msg_id)
 {
   if (num_errors_ >= kErrorMessageLimit)
     return MessageBuilder(nullptr);
@@ -193,7 +193,7 @@ GetTerminalWidth()
 }
 
 static AString
-ExpandTabsInLine(const char *line, size_t length)
+ExpandTabsInLine(const char* line, size_t length)
 {
   AutoString builder;
 
@@ -214,10 +214,10 @@ ExpandTabsInLine(const char *line, size_t length)
 }
 
 void
-ReportManager::printSourceLine(const FullSourceRef &ref)
+ReportManager::printSourceLine(const FullSourceRef& ref)
 {
-  static const char *long_prefix = " ... ";
-  static const char *long_suffix = " ... ";
+  static const char* long_prefix = " ... ";
+  static const char* long_suffix = " ... ";
   const size_t prefix_len = strlen(long_prefix);
   const size_t suffix_len = strlen(long_suffix);
   const unsigned min_cols = suffix_len + prefix_len + 12;
@@ -226,8 +226,8 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
   const unsigned max_cols = ke::Max(GetTerminalWidth(), min_cols);
 
   const unsigned line_index = ref.line - 1;
-  LineExtents *lines = ref.file->lineCache();
-  const char *lineptr = ref.file->chars() + lines->at(line_index);
+  LineExtents* lines = ref.file->lineCache();
+  const char* lineptr = ref.file->chars() + lines->at(line_index);
   unsigned line_length = ref.line >= lines->length() - 1
                          ? ref.file->length() - lines->at(line_index)
                          : lines->at(line_index + 1) - lines->at(line_index);
@@ -245,7 +245,7 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
 
   AString expanded = ExpandTabsInLine(lineptr, line_length);
 
-  const char *line_print = expanded.chars();
+  const char* line_print = expanded.chars();
 
   // Recompute the column number if we expanded tabs.
   unsigned col = ref.col;
@@ -258,8 +258,8 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
 
   line_length = expanded.length();
 
-  const char *prefix = "";
-  const char *suffix = "";
+  const char* prefix = "";
+  const char* suffix = "";
   if (line_length > max_cols) {
     if (col > max_cols) {
       // Try to reposition everything so we're printing the desired column
@@ -291,9 +291,9 @@ ReportManager::printSourceLine(const FullSourceRef &ref)
 }
 
 AString
-ReportManager::renderMessage(rmsg::Id id, const AutoPtr<TMessage::Arg> *args, size_t argc)
+ReportManager::renderMessage(rmsg::Id id, const AutoPtr<TMessage::Arg>* args, size_t argc)
 {
-  const rmsg_info &info = GetMessageInfo(id);
+  const rmsg_info& info = GetMessageInfo(id);
 
   size_t last_insertion = 0;
   size_t text_length = strlen(info.text);
@@ -321,7 +321,7 @@ ReportManager::renderMessage(rmsg::Id id, const AutoPtr<TMessage::Arg> *args, si
 }
 
 AString
-ReportManager::renderSourceRef(const FullSourceRef &ref)
+ReportManager::renderSourceRef(const FullSourceRef& ref)
 {
   if (!ref.file)
     return AString(":0");
@@ -357,7 +357,7 @@ ReportManager::printMessage(RefPtr<TMessage> message)
     AutoString note = renderSourceRef(ref);
     note = note + ": ";
 
-    Atom *name = history.macros[i].macro->name;
+    Atom* name = history.macros[i].macro->name;
     AutoPtr<TMessage::Arg> arg(new TMessage::AtomArg(name));
 
     note = note + renderMessage(rmsg::from_macro, &arg, 1);

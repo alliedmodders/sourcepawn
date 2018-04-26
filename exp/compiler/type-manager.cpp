@@ -22,7 +22,7 @@
 using namespace ke;
 using namespace sp;
 
-TypeManager::TypeManager(StringPool &strings)
+TypeManager::TypeManager(StringPool& strings)
  : strings_(strings),
    voidType_(nullptr),
    implicitVoidType_(nullptr),
@@ -99,8 +99,8 @@ TypeManager::initialize()
   return true;
 }
 
-ArrayType *
-TypeManager::newArray(Type *contained, int elements)
+ArrayType*
+TypeManager::newArray(Type* contained, int elements)
 {
   if (contained == char_type_) {
     if (elements == ArrayType::kUnsized)
@@ -113,14 +113,14 @@ TypeManager::newArray(Type *contained, int elements)
   return ArrayType::New(contained, elements);
 }
 
-EnumType *
-TypeManager::newEnum(Atom *name)
+EnumType*
+TypeManager::newEnum(Atom* name)
 {
   return EnumType::New(name);
 }
 
-Type *
-TypeManager::newQualified(Type *type, Qualifiers qualifiers)
+Type*
+TypeManager::newQualified(Type* type, Qualifiers qualifiers)
 {
   if (qualifiers == Qualifiers::Const) {
     if (type == char_array_)
@@ -140,20 +140,20 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
   return Type::NewQualified(type, qualifiers);
 }
 
-TypesetType *
+TypesetType*
 TypeManager::newTypeset(Atom* name)
 {
   return TypesetType::New(name);
 }
 
-StructType *
+StructType*
 TypeManager::newStruct(ast::RecordDecl* decl)
 {
   return StructType::New(decl);
 }
 
-TypedefType *
-TypeManager::newTypedef(Atom *name)
+TypedefType*
+TypeManager::newTypedef(Atom* name)
 {
   return TypedefType::New(name);
 }
@@ -185,8 +185,8 @@ TypeManager::newVariadic(Type* inner)
   return VariadicType::New(inner);
 }
 
-Type *
-TypeManager::typeForLabelAtom(Atom *atom)
+Type*
+TypeManager::typeForLabelAtom(Atom* atom)
 {
   if (atom == atom_String_)
     return getPrimitive(PrimitiveType::Char);

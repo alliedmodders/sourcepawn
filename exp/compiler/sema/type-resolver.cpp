@@ -28,7 +28,7 @@ template <typename T>
 class AutoPush
 {
  public:
-  AutoPush(Vector<T> &stack, const T &item)
+  AutoPush(Vector<T>& stack, const T& item)
    : stack_(stack)
   {
     stack_.append(item);
@@ -37,7 +37,7 @@ class AutoPush
     stack_.pop();
   }
  private:
-  Vector<T> &stack_;
+  Vector<T>& stack_;
 };
 
 // Type Resolution ensures that any type specifier has a bound type, and that
@@ -117,7 +117,7 @@ class AutoPush
 // dependencies, and in the case of typedefs, as long as we can resolve them to
 // a canonical type that is not a typedef.
 //
-TypeResolver::TypeResolver(CompileContext &cc)
+TypeResolver::TypeResolver(CompileContext& cc)
  : pool_(cc.pool()),
    cc_(cc)
 {
@@ -128,7 +128,7 @@ TypeResolver::analyze()
 {
   printf("unresolved type queue size: %d\n", int(work_queue_.length()));
   while (!work_queue_.empty()) {
-    AstNode *node = work_queue_.popFrontCopy();
+    AstNode* node = work_queue_.popFrontCopy();
     node->accept(this);
 
     if (!cc_.canContinueProcessing())
@@ -140,8 +140,8 @@ TypeResolver::analyze()
 
 // Override for ConstantEvaluator. For simplicity, and to prevent extra
 // errors, we always give ConstantEvaluator a type pointer back.
-Type *
-TypeResolver::resolveTypeOfVar(VariableSymbol *sym)
+Type*
+TypeResolver::resolveTypeOfVar(VariableSymbol* sym)
 {
   if (!sym->type())
     sym->node()->accept(this);
@@ -149,7 +149,7 @@ TypeResolver::resolveTypeOfVar(VariableSymbol *sym)
 }
 
 bool
-TypeResolver::resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out)
+TypeResolver::resolveVarAsConstant(VariableSymbol* sym, BoxedValue* out)
 {
   // If we don't have a type, resolve the node right now. This will also
   // resolve any constexpr, if any.
@@ -175,7 +175,7 @@ TypeResolver::resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out)
 // Override for ConstantEvaluator. If a constant fails to resolve, it must
 // be set to contain a bogus value (preferably 0 in whatever type is needed).
 BoxedValue
-TypeResolver::resolveValueOfConstant(ConstantSymbol *sym)
+TypeResolver::resolveValueOfConstant(ConstantSymbol* sym)
 {
   if (!sym->hasValue())
     resolveConstant(sym);
@@ -184,9 +184,9 @@ TypeResolver::resolveValueOfConstant(ConstantSymbol *sym)
 }
 
 void
-TypeResolver::visitVarDecl(VarDecl *node)
+TypeResolver::visitVarDecl(VarDecl* node)
 {
-  VariableSymbol *sym = node->sym();
+  VariableSymbol* sym = node->sym();
 
   if (sym->type() && !sym->canUseInConstExpr()) {
     // This was already resolved earlier - it's part of a function signature.
@@ -295,13 +295,13 @@ TypeResolver::visitVarDecl(VarDecl *node)
 }
 
 void
-TypeResolver::visitEnumConstant(EnumConstant *node)
+TypeResolver::visitEnumConstant(EnumConstant* node)
 {
   if (node->sym()->hasValue())
     return;
 
-  EnumStatement *parent = node->parent();
-  Type *type = node->parent()->sym()->type();
+  EnumStatement* parent = node->parent();
+  Type* type = node->parent()->sym()->type();
 
   // If we don't have an initializer, or our parent type hasn't been
   // instantiated yet, we upcall to resolve our parent Enum instead.
@@ -340,25 +340,25 @@ TypeResolver::visitEnumConstant(EnumConstant *node)
 }
 
 void
-TypeResolver::visitUnsafeCastExpr(UnsafeCastExpr *expr)
+TypeResolver::visitUnsafeCastExpr(UnsafeCastExpr* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }
 
 void
-TypeResolver::visitCallNewExpr(CallNewExpr *expr)
+TypeResolver::visitCallNewExpr(CallNewExpr* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }
 
 void
-TypeResolver::visitNewArrayExpr(NewArrayExpr *expr)
+TypeResolver::visitNewArrayExpr(NewArrayExpr* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }
 
 void
-TypeResolver::visitEnumStatement(EnumStatement *node)
+TypeResolver::visitEnumStatement(EnumStatement* node)
 {
   // This should only happen if we resolved the enum before visiting it in
   // the statement list.
@@ -367,11 +367,11 @@ TypeResolver::visitEnumStatement(EnumStatement *node)
 
   node->setResolving();
 
-  Type *type = node->sym()->type();
+  Type* type = node->sym()->type();
 
   int value = 0;
   for (size_t i = 0; i < node->entries()->length(); i++) {
-    EnumConstant *cs = node->entries()->at(i);
+    EnumConstant* cs = node->entries()->at(i);
     if (cs->expression()) {
       // We may have already resolved a value, for example:
       //    enum X {
@@ -397,11 +397,11 @@ TypeResolver::visitEnumStatement(EnumStatement *node)
   node->setResolved();
 }
 
-EnumType *
-TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
+EnumType*
+TypeResolver::resolveMethodmapParentType(NameProxy* proxy)
 {
   // The parent must be a methodmap.
-  TypeSymbol *parentSymbol = proxy->sym()->asType();
+  TypeSymbol* parentSymbol = proxy->sym()->asType();
   if (!parentSymbol) {
     cc_.report(proxy->loc(), rmsg::bad_methodmap_parent)
       << proxy->name();
@@ -409,7 +409,7 @@ TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
   }
 
   // Don't error twice if we get an unresolved type.
-  Type *type = resolveNameToType(proxy);
+  Type* type = resolveNameToType(proxy);
   if (type->isUnresolvable())
     return nullptr;
 
@@ -424,9 +424,9 @@ TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
 
 // :TODO: test recursive definitions
 void
-TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
+TypeResolver::visitMethodmapDecl(MethodmapDecl* methodmap)
 {
-  EnumType *type = methodmap->sym()->type()->toEnum();
+  EnumType* type = methodmap->sym()->type()->toEnum();
   if (type->methodmap())
     return;
 
@@ -434,12 +434,12 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
   type->setMethodmap(methodmap);
 
   // Our parent must be resolved first.
-  EnumType *parent = nullptr;
+  EnumType* parent = nullptr;
   if (methodmap->parent())
     parent = resolveMethodmapParentType(methodmap->parent());
 
   // Check that we do not appear in the parent chain.
-  for (EnumType *cursor = parent; cursor; cursor = cursor->methodmap()->extends()) {
+  for (EnumType* cursor = parent; cursor; cursor = cursor->methodmap()->extends()) {
     if (cursor->methodmap() == methodmap) {
       cc_.report(methodmap->parent()->loc(), rmsg::circular_methodmap)
         << methodmap->name();
@@ -451,7 +451,7 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
 }
 
 void
-TypeResolver::visitFunction(FunctionNode *node)
+TypeResolver::visitFunction(FunctionNode* node)
 {
   if (!node->signature()->isResolved()) {
     resolveTypesInSignature(node->signature());
@@ -468,59 +468,59 @@ TypeResolver::assignTypeToFunction(FunctionNode* node)
 }
 
 void
-TypeResolver::visitFieldDecl(FieldDecl *decl)
+TypeResolver::visitFieldDecl(FieldDecl* decl)
 {
-  Type *type = resolveTypeIfNeeded(decl->te());
+  Type* type = resolveTypeIfNeeded(decl->te());
   decl->sym()->setType(type);
 }
 
 void
-TypeResolver::visitPropertyDecl(PropertyDecl *decl)
+TypeResolver::visitPropertyDecl(PropertyDecl* decl)
 {
   // It is impossible to use property decl types in constant exprs or
   // type resolvers. I don't anticipate this ever being a thing either.
   if (!decl->sym()->type())
     decl->sym()->setType(resolveTypeIfNeeded(decl->te()));
 
-  if (FunctionNode *getter = decl->getter())
+  if (FunctionNode* getter = decl->getter())
     visitFunction(getter);
-  if (FunctionNode *setter = decl->setter())
+  if (FunctionNode* setter = decl->setter())
     visitFunction(setter);
 }
 
 void
-TypeResolver::visitMethodDecl(MethodDecl *decl)
+TypeResolver::visitMethodDecl(MethodDecl* decl)
 {
   // It is not possible to refer to methods as part of a constant or type
   // expression - no re-entrancy or upward-resolving needed.
-  if (FunctionNode *node = decl->method())
+  if (FunctionNode* node = decl->method())
     visitFunction(node);
 }
 
 void
-TypeResolver::visitFunctionStatement(FunctionStatement *node)
+TypeResolver::visitFunctionStatement(FunctionStatement* node)
 {
   visitFunction(node);
 }
 
 void
-TypeResolver::visitTypedefDecl(TypedefDecl *node)
+TypeResolver::visitTypedefDecl(TypedefDecl* node)
 {
   // Re-entrancy guard.
   if (node->te().resolved())
     return;
 
-  TypedefType *type = node->sym()->type()->toTypedef();
-  const SourceLocation &baseLoc = node->te().spec()->baseLoc();
+  TypedefType* type = node->sym()->type()->toTypedef();
+  const SourceLocation& baseLoc = node->te().spec()->baseLoc();
 
   // This is our recursion guard.
-  Type *actual = resolveType(node->te());
+  Type* actual = resolveType(node->te());
   
   // Check for a recursive type. There might be a better way to do this, but
   // for now this is what we've got: just manually check any compound type
   // that wouldn't be able to handle a self-reference.
-  Type *base = actual;
-  if (ArrayType *array = base->asArray()) {
+  Type* base = actual;
+  if (ArrayType* array = base->asArray()) {
     while (array->contained()->isArray())
       array = array->contained()->toArray();
     base = array->contained();
@@ -536,13 +536,13 @@ TypeResolver::visitTypedefDecl(TypedefDecl *node)
 }
 
 void
-TypeResolver::visitTypesetDecl(TypesetDecl *decl)
+TypeResolver::visitTypesetDecl(TypesetDecl* decl)
 {
   if (!decl->isResolved())
     return;
 
   for (size_t i = 0; i < decl->types()->length(); i++) {
-    TypeExpr &te = decl->types()->at(i).te;
+    TypeExpr& te = decl->types()->at(i).te;
     resolveTypeIfNeeded(te);
   }
 
@@ -552,7 +552,7 @@ TypeResolver::visitTypesetDecl(TypesetDecl *decl)
   TypesetType::TypeList* list =
     new (pool_) TypesetType::TypeList(decl->types()->length());
   for (size_t i = 0; i < list->length(); i++) {
-    TypesetDecl::Entry &entry = decl->types()->at(i);
+    TypesetDecl::Entry& entry = decl->types()->at(i);
     list->at(i) = entry.te.resolved();
   }
 
@@ -563,22 +563,22 @@ TypeResolver::visitTypesetDecl(TypesetDecl *decl)
 }
 
 bool
-TypeResolver::verifyTypeset(TypesetDecl *decl)
+TypeResolver::verifyTypeset(TypesetDecl* decl)
 {
   bool ok = true;
 
   // Verify that types aren't duplicated. This is an O(n^2) algorithm - we
   // assume N will be very small.
-  TypesetDecl::Entries *types = decl->types();
+  TypesetDecl::Entries* types = decl->types();
   for (size_t i = 0; i < types->length(); i++) {
-    TypesetDecl::Entry &entry = types->at(i);
-    Type *current = entry.te.resolved();
+    TypesetDecl::Entry& entry = types->at(i);
+    Type* current = entry.te.resolved();
 
     // :TODO: handle const int vs int
 
     for (size_t j = 0; j < i; j++) {
-      TypesetDecl::Entry &prevEntry = types->at(j);
-      Type *prev = prevEntry.te.resolved();
+      TypesetDecl::Entry& prevEntry = types->at(j);
+      Type* prev = prevEntry.te.resolved();
 
       if (AreTypesEquivalent(prev, current, Qualifiers::None)) {
         cc_.report(entry.loc, rmsg::typeset_ambiguous_type)
@@ -600,8 +600,8 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
 // otherwise. |outp| is unmodified on failure.
 bool
 TypeResolver::resolveConstantArraySize(ConstantEvaluator::Mode mode,
-                                       Expression *expr,
-                                       int *outp)
+                                       Expression* expr,
+                                       int* outp)
 {
   ConstantEvaluator ceval(cc_, this, mode);
 
@@ -626,7 +626,7 @@ TypeResolver::resolveConstantArraySize(ConstantEvaluator::Mode mode,
     return false;
   }
 
-  const IntValue &iv = value.toInteger();
+  const IntValue& iv = value.toInteger();
   if (iv.isNegativeOrZero()) {
     cc_.report(expr->loc(), rmsg::array_size_must_be_positive);
     return false;
@@ -772,11 +772,11 @@ TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier* spec, Type* base, Expre
 } 
 
 void
-TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
+TypeResolver::resolveTypesInSignature(FunctionSignature* sig)
 {
   resolveType(sig->returnType());
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
-    VarDecl *param = sig->parameters()->at(i);
+    VarDecl* param = sig->parameters()->at(i);
 
     // We should not have variadic arguments on anything but the last type. It
     // is hard to assert this anywhere else in TypeResolver unfortunately.
@@ -793,7 +793,7 @@ TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
 
 // The main entrypoint for resolving ConstantSymbols.
 void
-TypeResolver::resolveConstant(ConstantSymbol *sym)
+TypeResolver::resolveConstant(ConstantSymbol* sym)
 {
   // Since we're only called from resolveValueOfConstant, we should never
   // arrive here with a constant already set.
@@ -855,8 +855,8 @@ TypeResolver::resolveType(TypeExpr& te, TypeSpecHelper* helper)
   return type;
 }
 
-Type *
-TypeResolver::resolveBaseType(TypeSpecifier *spec)
+Type*
+TypeResolver::resolveBaseType(TypeSpecifier* spec)
 {
   switch (spec->resolver()) {
     case TOK_LABEL:
@@ -868,7 +868,7 @@ TypeResolver::resolveBaseType(TypeSpecifier *spec)
 
     case TOK_FUNCTION:
     {
-      FunctionSignature *sig = spec->signature();
+      FunctionSignature* sig = spec->signature();
       if (!sig->isResolved())
         resolveTypesInSignature(sig);
       return FunctionType::New(sig);
@@ -882,7 +882,7 @@ TypeResolver::resolveBaseType(TypeSpecifier *spec)
 }
 
 bool
-TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
+TypeResolver::checkArrayInnerType(TypeSpecifier* spec, Type* type)
 {
   if (type->isVoid() || type->isStruct()) {
     cc_.report(spec->arrayLoc(), rmsg::invalid_array_base) << type;
@@ -891,8 +891,8 @@ TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
   return true;
 }
 
-Type *
-TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type)
+Type*
+TypeResolver::applyConstQualifier(TypeSpecifier* spec, Type* type)
 {
   // :TODO: spec ref
   //
@@ -942,12 +942,12 @@ TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type)
   return cc_.types()->newQualified(type, Qualifiers::Const);
 }
 
-Type *
-TypeResolver::resolveNameToType(NameProxy *proxy)
+Type*
+TypeResolver::resolveNameToType(NameProxy* proxy)
 {
   assert(proxy->sym());
 
-  TypeSymbol *sym = proxy->sym()->asType();
+  TypeSymbol* sym = proxy->sym()->asType();
   if (!sym) {
     // It's okay to return null here - our caller will massage it into
     // UnresolvableType.
@@ -1095,9 +1095,9 @@ TypeResolver::resolveArrayComponentTypes(TypeSpecifier* spec, Type* type, TypeSp
 }
 
 bool
-TypeResolver::resolveEnumConstantValue(EnumConstant *cs, int *outp)
+TypeResolver::resolveEnumConstantValue(EnumConstant* cs, int* outp)
 {
-  AutoPush<EnumConstant *> track(enum_constant_stack_, cs);
+  AutoPush<EnumConstant*> track(enum_constant_stack_, cs);
 
   BoxedValue out;
   ConstantEvaluator ceval(cc_, this, ConstantEvaluator::Required);
@@ -1138,8 +1138,8 @@ TypeResolver::resolveEnumConstantValue(EnumConstant *cs, int *outp)
 
 // Like applyConstQualifier, this must not return null (its callers do not
 // null check). Instead, return the input type on error.
-Type *
-TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper)
+Type*
+TypeResolver::applyByRef(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper)
 {
   if (!type->canBeUsedAsRefType()) {
     cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref) << type;
@@ -1154,7 +1154,7 @@ TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper
 }
 
 Type*
-TypeResolver::applyVariadic(TypeSpecifier* spec, Type* type, TypeSpecHelper *helper)
+TypeResolver::applyVariadic(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper)
 {
   assert(!type->isVariadic());
   assert(spec->isVariadic());
@@ -1173,7 +1173,7 @@ TypeResolver::applyVariadic(TypeSpecifier* spec, Type* type, TypeSpecHelper *hel
 }
 
 static inline bool
-IsAllowableStructDecl(VariableSymbol* sym, Type *type)
+IsAllowableStructDecl(VariableSymbol* sym, Type* type)
 {
   return type->isStruct() &&
          sym->scope()->kind() == Scope::Global &&

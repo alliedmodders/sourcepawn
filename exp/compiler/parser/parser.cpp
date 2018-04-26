@@ -27,7 +27,7 @@ namespace sp {
 
 using namespace ast;
 
-Parser::Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver)
+Parser::Parser(CompileContext& cc, Preprocessor& pp, NameResolver& resolver)
 : cc_(cc),
   pool_(cc_.pool()),
   scanner_(pp),
@@ -59,7 +59,7 @@ Parser::expect(TokenKind kind)
   return scanner_.expect(kind);
 }
 
-Atom *
+Atom*
 Parser::maybeName()
 {
   if (!match(TOK_NAME))
@@ -67,7 +67,7 @@ Parser::maybeName()
   return scanner_.current_name();
 }
 
-Atom *
+Atom*
 Parser::expectName()
 {
   if (!expect(TOK_NAME))
@@ -121,7 +121,7 @@ Parser::requireNewlineOrSemi()
 class AutoEnterScope
 {
  public:
-  AutoEnterScope(NameResolver &delegate, Scope::Kind kind, Scope **ptr)
+  AutoEnterScope(NameResolver& delegate, Scope::Kind kind, Scope** ptr)
    : delegate_(delegate),
      kind_(kind),
      ptr_(ptr)
@@ -133,37 +133,37 @@ class AutoEnterScope
   }
 
  private:
-  NameResolver &delegate_;
+  NameResolver& delegate_;
   Scope::Kind kind_;
-  Scope **ptr_;
+  Scope** ptr_;
 };
 
-NameProxy *
-Parser::nameref(const Token *tok)
+NameProxy*
+Parser::nameref(const Token* tok)
 {
   if (!tok)
     tok = scanner_.current();
 
-  NameProxy *proxy = new (pool_) NameProxy(tok->start.loc, tok->atom());
+  NameProxy* proxy = new (pool_) NameProxy(tok->start.loc, tok->atom());
 
   delegate_.OnNameProxy(proxy);
   return proxy;
 }
 
-NameProxy *
-Parser::tagref(const Token *tok)
+NameProxy*
+Parser::tagref(const Token* tok)
 {
   if (!tok)
     tok = scanner_.current();
 
-  NameProxy *proxy = new (pool_) NameProxy(tok->start.loc, tok->atom());
+  NameProxy* proxy = new (pool_) NameProxy(tok->start.loc, tok->atom());
 
   delegate_.OnTagProxy(proxy);
   return proxy;
 }
 
 void
-Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
+Parser::parse_new_typename(TypeSpecifier* spec, const Token* tok)
 {
   spec->setBaseLoc(tok->start.loc);
 
@@ -173,7 +173,7 @@ Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
   }
 
   if (tok->kind == TOK_LABEL) {
-    NameProxy *proxy = nameref();
+    NameProxy* proxy = nameref();
     spec->setNamedType(TOK_LABEL, proxy);
     cc_.report(scanner_.begin(), rmsg::label_in_newdecl);
     return;
@@ -184,7 +184,7 @@ Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
     return;
   }
 
-  NameProxy *proxy = nameref();
+  NameProxy* proxy = nameref();
   spec->setNamedType(TOK_NAME, proxy);
 
   if (proxy->name() == atom_Float_)
@@ -196,7 +196,7 @@ Parser::parse_new_typename(TypeSpecifier *spec, const Token *tok)
 }
 
 void
-Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
+Parser::parse_function_type(TypeSpecifier* spec, uint32_t flags)
 {
   // Current token is TOK_FUNCTION.
   spec->setBaseLoc(scanner_.begin());
@@ -205,7 +205,7 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
   parse_new_type_expr(&returnType, 0);
 
   // :TODO: only allow new-style arguments.
-  ParameterList *params;
+  ParameterList* params;
   bool canResolveEagerly = true;
   {
     delegate_.OnEnterScope(Scope::Argument);
@@ -214,13 +214,13 @@ Parser::parse_function_type(TypeSpecifier *spec, uint32_t flags)
     delegate_.OnLeaveOrphanScope();
   }
 
-  FunctionSignature *sig =
+  FunctionSignature* sig =
     delegate_.HandleFunctionSignature(TOK_PUBLIC, returnType, params, canResolveEagerly);
   spec->setFunctionType(sig);
 }
 
 void
-Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
+Parser::parse_new_type_expr(TypeSpecifier* spec, uint32_t flags)
 {
   if (match(TOK_CONST)) {
     if (spec->isConst())
@@ -270,7 +270,7 @@ Parser::parse_new_type_expr(TypeSpecifier *spec, uint32_t flags)
 }
 
 bool
-Parser::parse_new_decl(Declaration *decl, uint32_t flags)
+Parser::parse_new_decl(Declaration* decl, uint32_t flags)
 {
   parse_new_type_expr(&decl->spec, flags);
 
@@ -301,14 +301,14 @@ Parser::parse_new_decl(Declaration *decl, uint32_t flags)
 }
 
 void
-Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
+Parser::parse_old_array_dims(Declaration* decl, uint32_t flags)
 {
-  TypeSpecifier *spec = &decl->spec;
+  TypeSpecifier* spec = &decl->spec;
 
   SourceLocation loc = scanner_.begin();
 
   uint32_t rank = 0;
-  ExpressionList *dims = nullptr;
+  ExpressionList* dims = nullptr;
   do {
     rank++;
 
@@ -327,7 +327,7 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
         dims->append(nullptr);
     }
 
-    Expression *expr = expression();
+    Expression* expr = expression();
     if (!expr)
       break;
     dims->append(expr);
@@ -350,9 +350,9 @@ Parser::parse_old_array_dims(Declaration *decl, uint32_t flags)
 }
 
 bool
-Parser::parse_old_decl(Declaration *decl, uint32_t flags)
+Parser::parse_old_decl(Declaration* decl, uint32_t flags)
 {
-  TypeSpecifier *spec = &decl->spec;
+  TypeSpecifier* spec = &decl->spec;
 
   if (match(TOK_CONST)) {
     if (spec->isConst())
@@ -368,8 +368,8 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
   if (match(TOK_LABEL)) {
     spec->setBaseLoc(scanner_.begin());
 
-    Atom *atom = scanner_.current_name();
-    if (Type *type = cc_.types()->typeForLabelAtom(atom))
+    Atom* atom = scanner_.current_name();
+    if (Type* type = cc_.types()->typeForLabelAtom(atom))
       spec->setResolvedBaseType(type);
     else
       spec->setNamedType(TOK_LABEL, tagref());
@@ -413,7 +413,7 @@ Parser::parse_old_decl(Declaration *decl, uint32_t flags)
 }
 
 bool
-Parser::reparse_decl(Declaration *decl, uint32_t flags)
+Parser::reparse_decl(Declaration* decl, uint32_t flags)
 {
   if (!decl->spec.isNewDecl()) {
     decl->spec.resetWithAttrs(TypeSpecifier::Const);
@@ -450,7 +450,7 @@ Parser::reparse_decl(Declaration *decl, uint32_t flags)
 
 // The infamous parse_decl() from spcomp1.
 bool
-Parser::parse_decl(Declaration *decl, uint32_t flags)
+Parser::parse_decl(Declaration* decl, uint32_t flags)
 {
   // Match early varargs as old decls.
   if ((flags & DeclFlags::Argument) && peek(TOK_ELLIPSES))
@@ -518,25 +518,25 @@ Parser::parse_decl(Declaration *decl, uint32_t flags)
   return parse_new_decl(decl, flags);
 }
 
-Expression *
+Expression*
 Parser::primitive()
 {
   switch (scanner_.next()) {
     case TOK_FLOAT_LITERAL:
     {
-      const Token *tok = scanner_.current();
+      const Token* tok = scanner_.current();
       return new (pool_) FloatLiteral(scanner_.begin(), tok->doubleValue());
     }
 
     case TOK_HEX_LITERAL:
     {
-      const Token *tok = scanner_.current();
+      const Token* tok = scanner_.current();
       return new (pool_) IntegerLiteral(scanner_.begin(), tok->int64Value());
     }
 
     case TOK_INTEGER_LITERAL:
     {
-      const Token *tok = scanner_.current();
+      const Token* tok = scanner_.current();
       return new (pool_) IntegerLiteral(scanner_.begin(), tok->int64Value());
     }
 
@@ -555,13 +555,13 @@ Parser::primitive()
 
     case TOK_STRING_LITERAL:
     {
-      Atom *literal = scanner_.current_name();
+      Atom* literal = scanner_.current_name();
       return new (pool_) StringLiteral(scanner_.begin(), literal);
     }
 
     case TOK_CHAR_LITERAL:
     {
-      const Token *tok = scanner_.current();
+      const Token* tok = scanner_.current();
       return new (pool_) CharLiteral(scanner_.begin(), tok->charValue());
     }
 
@@ -584,10 +584,10 @@ Parser::primitive()
   }
 }
 
-Expression *
-Parser::parseStructInitializer(const SourceLocation &pos)
+Expression*
+Parser::parseStructInitializer(const SourceLocation& pos)
 {
-  NameAndValueList *pairs = new (pool_) NameAndValueList();
+  NameAndValueList* pairs = new (pool_) NameAndValueList();
 
   while (!match(TOK_RBRACE)) {
     if (!expect(TOK_NAME))
@@ -597,7 +597,7 @@ Parser::parseStructInitializer(const SourceLocation &pos)
     if (!match(TOK_ASSIGN))
       return nullptr;
 
-    Expression *expr = expression();
+    Expression* expr = expression();
     if (!expr)
       return nullptr;
 
@@ -610,7 +610,7 @@ Parser::parseStructInitializer(const SourceLocation &pos)
   return new (pool_) StructInitializer(pos, pairs);
 }
 
-Expression *
+Expression*
 Parser::parseCompoundLiteral()
 {
   SourceLocation pos = scanner_.begin();
@@ -627,7 +627,7 @@ Parser::parseCompoundLiteral()
   }
 
   // Otherwise, we need to build a list.
-  ExpressionList *list = new (pool_) ExpressionList();
+  ExpressionList* list = new (pool_) ExpressionList();
   bool repeatLastElement = false;
   while (!peek(TOK_RBRACE)) {
     if (match(TOK_ELLIPSES)) {
@@ -635,7 +635,7 @@ Parser::parseCompoundLiteral()
       break;
     }
 
-    Expression *item = expression();
+    Expression* item = expression();
     if (!item)
       return nullptr;
     list->append(item);
@@ -648,13 +648,13 @@ Parser::parseCompoundLiteral()
   return new (pool_) ArrayLiteral(pos, list, repeatLastElement);
 }
 
-Expression *
+Expression*
 Parser::prefix()
 {
   switch (scanner_.next()) {
     case TOK_LPAREN:
     {
-      Expression *expr = expression();
+      Expression* expr = expression();
       if (!expr)
         return nullptr;
       if (!expect(TOK_RPAREN))
@@ -671,7 +671,7 @@ Parser::prefix()
 
       if (peek(TOK_LBRACKET)) {
         // :TODO: this is not the final grammar. Match C++?
-        ExpressionList *dims = dimensions();
+        ExpressionList* dims = dimensions();
         if (!dims)
           return nullptr;
         return delegate_.HandleNewArrayExpr(loc, spec, dims);
@@ -679,7 +679,7 @@ Parser::prefix()
 
       if (!expect(TOK_LPAREN))
         return nullptr;
-      ExpressionList *args = callArgs();
+      ExpressionList* args = callArgs();
       if (!args)
         return nullptr;
 
@@ -700,7 +700,7 @@ Parser::prefix()
         return nullptr;
       if (!expect(TOK_LPAREN))
         return nullptr;
-      Expression *expr = expression();
+      Expression* expr = expression();
       if (!expr)
         return nullptr;
       if (!expect(TOK_RPAREN))
@@ -714,7 +714,7 @@ Parser::prefix()
 
     default:
     {
-      const Token *tok = scanner_.current();
+      const Token* tok = scanner_.current();
       if (IsNewTypeToken(tok->kind)) {
         // Treat the type as a name, even though it's a keyword.
         return nameref(tok);
@@ -727,14 +727,14 @@ Parser::prefix()
 }
 
 // Caller must lex '('.
-ExpressionList *
+ExpressionList*
 Parser::callArgs()
 {
-  ExpressionList *arguments = new (pool_) ExpressionList();
+  ExpressionList* arguments = new (pool_) ExpressionList();
   
   if (!match(TOK_RPAREN)) {
     while (true) {
-      Expression *expr = expression();
+      Expression* expr = expression();
       if (!expr)
         return nullptr;
 
@@ -752,8 +752,8 @@ Parser::callArgs()
   return arguments;
 }
 
-Expression *
-Parser::dotfield(Expression *base)
+Expression*
+Parser::dotfield(Expression* base)
 {
   expect(TOK_DOT);
 
@@ -766,13 +766,13 @@ Parser::dotfield(Expression *base)
   return new (pool_) FieldExpression(pos, base, name);
 }
 
-Expression *
-Parser::index(Expression *left)
+Expression*
+Parser::index(Expression* left)
 {
   expect(TOK_LBRACKET);
   
   SourceLocation pos = scanner_.begin();
-  Expression *expr = expression();
+  Expression* expr = expression();
   if (!expr)
     return nullptr;
 
@@ -782,10 +782,10 @@ Parser::index(Expression *left)
   return new (pool_) IndexExpression(pos, left, expr);
 }
 
-Expression *
+Expression*
 Parser::primary()
 {
-  Expression *expr = prefix();
+  Expression* expr = prefix();
   if (!expr)
     return nullptr;
 
@@ -795,7 +795,7 @@ Parser::primary()
       {
         expect(TOK_LPAREN);
 
-        ExpressionList *args = callArgs();
+        ExpressionList* args = callArgs();
         if (!args)
           return nullptr;
 
@@ -818,7 +818,7 @@ Parser::primary()
   }
 }
 
-Expression *
+Expression*
 Parser::unary()
 {
   TokenKind token = scanner_.peek();
@@ -829,7 +829,7 @@ Parser::unary()
     {
       scanner_.next();
       SourceLocation pos = scanner_.begin();
-      Expression *expr = unary();
+      Expression* expr = unary();
       if (!expr)
         return nullptr;
       return new (pool_) IncDecExpression(pos, token, expr, false);
@@ -841,7 +841,7 @@ Parser::unary()
     {
       scanner_.next();
       SourceLocation pos = scanner_.begin();
-      Expression *expr = unary();
+      Expression* expr = unary();
       if (!expr)
         return nullptr;
       if (token == TOK_MINUS)
@@ -863,13 +863,13 @@ Parser::unary()
       TypeSpecifier spec;
       spec.setBaseLoc(scanner_.begin());
 
-      Atom *atom = scanner_.current_name();
-      if (Type *type = cc_.types()->typeForLabelAtom(atom))
+      Atom* atom = scanner_.current_name();
+      if (Type* type = cc_.types()->typeForLabelAtom(atom))
         spec.setResolvedBaseType(type);
       else
         spec.setNamedType(TOK_LABEL, tagref());
 
-      Expression *expr = unary();
+      Expression* expr = unary();
       if (!expr)
         return nullptr;
       return delegate_.HandleUnsafeCast(pos, spec, expr);
@@ -892,7 +892,7 @@ Parser::unary()
       break;
   }
 
-  Expression *expr = primary();
+  Expression* expr = primary();
 
   token = scanner_.peek();
   if (token == TOK_INCREMENT || token == TOK_DECREMENT) {
@@ -903,7 +903,7 @@ Parser::unary()
   return expr;
 }
 
-Expression *
+Expression*
 Parser::parseSizeof()
 {
   SourceLocation loc = scanner_.begin();
@@ -914,7 +914,7 @@ Parser::parseSizeof()
 
   if (!expectName())
     return nullptr;
-  NameProxy *proxy = nameref();
+  NameProxy* proxy = nameref();
 
   size_t level = 0;
   while (match(TOK_LBRACKET)) {
@@ -931,16 +931,16 @@ Parser::parseSizeof()
   return new (pool_) SizeofExpression(loc, proxy, level);
 }
 
-Expression *
+Expression*
 Parser::multiplication()
 {
-  Expression *left = unary();
+  Expression* left = unary();
   do {
     if (!match(TOK_SLASH) && !match(TOK_STAR) && !match(TOK_PERCENT))
       break;
     SourceLocation pos = scanner_.begin();
     TokenKind kind = scanner_.current()->kind;
-    Expression *right = unary();
+    Expression* right = unary();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, kind, left, right);
@@ -948,16 +948,16 @@ Parser::multiplication()
   return left;
 }
 
-Expression *
+Expression*
 Parser::addition()
 {
-  Expression *left = multiplication();
+  Expression* left = multiplication();
   while (left) {
     if (!match(TOK_PLUS) && !match(TOK_MINUS))
       break;
     SourceLocation pos = scanner_.begin();
     TokenKind kind = scanner_.current()->kind;
-    Expression *right = multiplication();
+    Expression* right = multiplication();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, kind, left, right);
@@ -965,16 +965,16 @@ Parser::addition()
   return left;
 }
 
-Expression *
+Expression*
 Parser::shift()
 {
-  Expression *left = addition();
+  Expression* left = addition();
   while (left) {
     if (!match(TOK_SHL) && !match(TOK_SHR) && !match(TOK_USHR))
       break;
     SourceLocation pos = scanner_.begin();
     TokenKind kind = scanner_.current()->kind;
-    Expression *right = addition();
+    Expression* right = addition();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, kind, left, right);
@@ -982,15 +982,15 @@ Parser::shift()
   return left;
 }
 
-Expression *
+Expression*
 Parser::bitand_()
 {
-  Expression *left = shift();
+  Expression* left = shift();
   while (left) {
     if (!match(TOK_BITAND))
       break;
     SourceLocation pos = scanner_.begin();
-    Expression *right = shift();
+    Expression* right = shift();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, TOK_BITAND, left, right);
@@ -998,15 +998,15 @@ Parser::bitand_()
   return left;
 }
 
-Expression *
+Expression*
 Parser::bitxor()
 {
-  Expression *left = bitand_();
+  Expression* left = bitand_();
   while (left) {
     if (!match(TOK_BITXOR))
       break;
     SourceLocation pos = scanner_.begin();
-    Expression *right = shift();
+    Expression* right = shift();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, TOK_BITXOR, left, right);
@@ -1014,15 +1014,15 @@ Parser::bitxor()
   return left;
 }
 
-Expression *
+Expression*
 Parser::bitor_()
 {
-  Expression *left = bitxor();
+  Expression* left = bitxor();
   while (left) {
     if (!match(TOK_BITOR))
       break;
     SourceLocation pos = scanner_.begin();
-    Expression *right = bitxor();
+    Expression* right = bitxor();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, TOK_BITOR, left, right);
@@ -1030,10 +1030,10 @@ Parser::bitor_()
   return left;
 }
 
-Expression *
+Expression*
 Parser::relational()
 {
-  Expression *left = bitor_();
+  Expression* left = bitor_();
   size_t count = 0;
   while (left) {
     TokenKind kind = scanner_.peek();
@@ -1041,7 +1041,7 @@ Parser::relational()
       break;
     scanner_.next();
     SourceLocation pos = scanner_.begin();
-    Expression *right = shift();
+    Expression* right = shift();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, kind, left, right);
@@ -1053,16 +1053,16 @@ Parser::relational()
   return left;
 }
 
-Expression *
+Expression*
 Parser::equals()
 {
-  Expression *left = relational();
+  Expression* left = relational();
   while (left) {
     if (!match(TOK_EQUALS) && !match(TOK_NOTEQUALS))
       break;
     TokenKind kind = scanner_.current()->kind;
     SourceLocation pos = scanner_.begin();
-    Expression *right = relational();
+    Expression* right = relational();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, kind, left, right);
@@ -1070,15 +1070,15 @@ Parser::equals()
   return left;
 }
 
-Expression *
+Expression*
 Parser::and_()
 {
-  Expression *left = equals();
+  Expression* left = equals();
   while (left) {
     if (!match(TOK_AND))
       break;
     SourceLocation pos = scanner_.begin();
-    Expression *right = equals();
+    Expression* right = equals();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, TOK_AND, left, right);
@@ -1086,15 +1086,15 @@ Parser::and_()
   return left;
 }
 
-Expression *
+Expression*
 Parser::or_()
 {
-  Expression *left = and_();
+  Expression* left = and_();
   while (left) {
     if (!match(TOK_OR))
       break;
     SourceLocation pos = scanner_.begin();
-    Expression *right = and_();
+    Expression* right = and_();
     if (!right)
       return nullptr;
     left = new (pool_) BinaryExpression(pos, TOK_OR, left, right);
@@ -1102,17 +1102,17 @@ Parser::or_()
   return left;
 }
 
-Expression *
+Expression*
 Parser::ternary()
 {
-  Expression *cond = or_();
+  Expression* cond = or_();
   if (!cond)
     return nullptr;
   
   if (!match(TOK_QMARK))
     return cond;
 
-  Expression *left;
+  Expression* left;
   SourceLocation pos = scanner_.begin();
   if (match(TOK_LABEL)) {
     // A ? B:C would normally get evaluated as NAME QMARK LABEL NAME, but we
@@ -1126,24 +1126,24 @@ Parser::ternary()
       return nullptr;
   }
 
-  Expression *right = expression();
+  Expression* right = expression();
   if (!right)
     return nullptr;
 
   return new (pool_) TernaryExpression(pos, cond, left, right);
 }
 
-Expression *
+Expression*
 Parser::assignment()
 {
-  Expression *left = ternary();
+  Expression* left = ternary();
   while (left) {
     TokenKind token = scanner_.peek();
     if (token != TOK_ASSIGN && (token < TOK_ASSIGN_ADD || token > TOK_ASSIGN_SHL))
       break;
     scanner_.next();
     SourceLocation pos = scanner_.begin();
-    Expression *expr = assignment();
+    Expression* expr = assignment();
     if (!expr)
       return nullptr;
 
@@ -1152,13 +1152,13 @@ Parser::assignment()
   return left;
 }
 
-Expression *
+Expression*
 Parser::expression()
 {
   return assignment();
 }
 
-Statement *
+Statement*
 Parser::while_()
 {
   // while ::= "while" "(" expr ")" statement
@@ -1167,14 +1167,14 @@ Parser::while_()
   if (!expect(TOK_LPAREN))
     return nullptr;
 
-  Expression *condition = expression();
+  Expression* condition = expression();
   if (!condition)
     return nullptr;
 
   if (!expect(TOK_RPAREN))
     return nullptr;
 
-  Statement *body = statementOrBlock();
+  Statement* body = statementOrBlock();
   if (!body)
     return nullptr;
 
@@ -1183,13 +1183,13 @@ Parser::while_()
   return new (pool_) WhileStatement(pos, TOK_WHILE, condition, body);
 }
 
-Statement *
+Statement*
 Parser::do_()
 {
   // do ::= "do" block "while" "(" expr ")"
   SourceLocation pos = scanner_.begin();
 
-  Statement *body = block();
+  Statement* body = block();
   if (!body)
     return nullptr;
 
@@ -1198,7 +1198,7 @@ Parser::do_()
 
   if (!expect(TOK_LPAREN))
     return nullptr;
-  Expression *condition = expression();
+  Expression* condition = expression();
   if (!condition)
     return nullptr;
   if (!expect(TOK_RPAREN))
@@ -1209,19 +1209,19 @@ Parser::do_()
   return new (pool_) WhileStatement(pos, TOK_DO, condition, body);
 }
 
-FunctionNode *
-Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
+FunctionNode*
+Parser::parseFunctionBase(const TypeExpr& returnType, TokenKind kind)
 {
-  FunctionNode *node = new (pool_) FunctionNode(kind);
+  FunctionNode* node = new (pool_) FunctionNode(kind);
 
   // If our return type and arguments are all eagerly resolvable, we can mark
   // the signature as resolved.
-  Scope *argScope = nullptr;
+  Scope* argScope = nullptr;
   {
     AutoEnterScope argEnv(delegate_, Scope::Argument, &argScope);
 
     bool canEarlyResolve = true;
-    ParameterList *params = arguments(&canEarlyResolve);
+    ParameterList* params = arguments(&canEarlyResolve);
     if (!params) {
       params = new (pool_) ParameterList();
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
@@ -1232,7 +1232,7 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
     // Hrm... should be complting the decl here instead? Right now it seems
     // fine not to, but in the future it could lead to weird ordering in the
     // type resolver's queue.
-    BlockStatement *body = nullptr;
+    BlockStatement* body = nullptr;
     if (kind != TOK_NATIVE) {
       if ((body = methodBody()) == nullptr)
         return nullptr;
@@ -1247,7 +1247,7 @@ Parser::parseFunctionBase(const TypeExpr &returnType, TokenKind kind)
   return node;
 }
 
-PropertyDecl *
+PropertyDecl*
 Parser::parseAccessor()
 {
   SourceLocation begin = scanner_.begin();
@@ -1262,7 +1262,7 @@ Parser::parseAccessor()
   if (!expect(TOK_LBRACE))
     return nullptr;
 
-  PropertyDecl *decl = delegate_.EnterPropertyDecl(begin, name, spec);
+  PropertyDecl* decl = delegate_.EnterPropertyDecl(begin, name, spec);
 
   while (!match(TOK_RBRACE)) {
     expect(TOK_PUBLIC);
@@ -1271,7 +1271,7 @@ Parser::parseAccessor()
     if (match(TOK_NATIVE))
       kind = TOK_NATIVE;
 
-    Atom *name = expectName();
+    Atom* name = expectName();
     if (!name) {
       scanner_.skipUntil(TOK_RBRACE, SkipFlags::StartAtCurrent);
       break;
@@ -1286,7 +1286,7 @@ Parser::parseAccessor()
     else
       cc_.report(scanner_.begin(), rmsg::invalid_accessor_name);
 
-    FunctionNode *node = parseFunctionBase(decl->te(), kind);
+    FunctionNode* node = parseFunctionBase(decl->te(), kind);
     if (!node)
       break;
 
@@ -1300,8 +1300,8 @@ Parser::parseAccessor()
   return decl;
 }
 
-MethodDecl *
-Parser::parseMethod(Atom *layoutName)
+MethodDecl*
+Parser::parseMethod(Atom* layoutName)
 {
   SourceLocation begin = scanner_.begin();
 
@@ -1344,9 +1344,9 @@ Parser::parseMethod(Atom *layoutName)
   }
 
   TypeExpr te;
-  MethodDecl *decl = delegate_.EnterMethodDecl(begin, name, &spec, &te, isStatic);
+  MethodDecl* decl = delegate_.EnterMethodDecl(begin, name, &spec, &te, isStatic);
 
-  FunctionNode *node = parseFunctionBase(te, kind);
+  FunctionNode* node = parseFunctionBase(te, kind);
   if (!node) {
     delegate_.LeaveMethodDecl(decl);
     return nullptr;
@@ -1357,7 +1357,7 @@ Parser::parseMethod(Atom *layoutName)
   return decl;
 }
 
-Statement *
+Statement*
 Parser::methodmap(TokenKind kind)
 {
   SourceLocation begin = scanner_.begin();
@@ -1368,22 +1368,22 @@ Parser::methodmap(TokenKind kind)
 
   bool nullable = match(TOK_NULLABLE);
 
-  NameProxy *extends = nullptr;
+  NameProxy* extends = nullptr;
   if (match(TOK_LT) && expect(TOK_NAME))
     extends = nameref();
 
   if (!expect(TOK_LBRACE))
     return nullptr;
 
-  MethodmapDecl *methodmap = new (pool_) MethodmapDecl(begin, name, extends);
+  MethodmapDecl* methodmap = new (pool_) MethodmapDecl(begin, name, extends);
   if (nullable)
     methodmap->setNullable();
 
   delegate_.OnEnterMethodmap(methodmap);
 
-  LayoutDecls *decls = new (pool_) LayoutDecls();
+  LayoutDecls* decls = new (pool_) LayoutDecls();
   while (!match(TOK_RBRACE)) {
-    LayoutDecl *decl = nullptr;
+    LayoutDecl* decl = nullptr;
     if (match(TOK_PROPERTY)) {
       decl = parseAccessor();
     } else {
@@ -1407,7 +1407,7 @@ Parser::methodmap(TokenKind kind)
   return methodmap;
 }
 
-Statement *
+Statement*
 Parser::switch_()
 {
   // switch ::= "switch" "(" expr ")" "{" case* defaultcase? "}"
@@ -1418,7 +1418,7 @@ Parser::switch_()
 
   if (!expect(TOK_LPAREN))
     return nullptr;
-  Expression *expr = expression();
+  Expression* expr = expression();
   if (!expr)
     return nullptr;
   if (!expect(TOK_RPAREN))
@@ -1428,13 +1428,13 @@ Parser::switch_()
     return nullptr;
 
   SourceLocation defaultPos;
-  PoolList<Case *> *cases = new (pool_) PoolList<Case *>();
+  PoolList<Case*>* cases = new (pool_) PoolList<Case*>();
 
-  Statement *defaultCase = nullptr;
+  Statement* defaultCase = nullptr;
 
   while (!peek(TOK_RBRACE)) {
-    Expression *expr = nullptr;
-    ExpressionList *others = nullptr;
+    Expression* expr = nullptr;
+    ExpressionList* others = nullptr;
 
     bool need_colon = true;
     if (match(TOK_DEFAULT)) {
@@ -1466,13 +1466,13 @@ Parser::switch_()
           others = new (pool_) ExpressionList();
           while (need_colon && match(TOK_COMMA)) {
             if (match(TOK_LABEL)) {
-              NameProxy *proxy = nameref();
+              NameProxy* proxy = nameref();
               others->append(proxy);
               need_colon = false;
               break;
             }
 
-            Expression *other = expression();
+            Expression* other = expression();
             if (!other)
               return nullptr;
             others->append(other);
@@ -1484,7 +1484,7 @@ Parser::switch_()
     if (need_colon && !expect(TOK_COLON))
       return nullptr;
 
-    Statement *stmt = statementOrBlock();
+    Statement* stmt = statementOrBlock();
     if (!stmt)
       return nullptr;
 
@@ -1496,7 +1496,7 @@ Parser::switch_()
     }
 
     if (expr) {
-      Case *caze = new (pool_) Case(expr, others, stmt);
+      Case* caze = new (pool_) Case(expr, others, stmt);
       if (!cases->append(caze))
         return nullptr;
     } else {
@@ -1512,7 +1512,7 @@ Parser::switch_()
   return new (pool_) SwitchStatement(pos, expr, cases, defaultCase);
 }
 
-Statement *
+Statement*
 Parser::for_()
 {
   // for ::= "for" "(" forinit? ";" forcond? ";" forstep ")" statement
@@ -1525,11 +1525,11 @@ Parser::for_()
   if (!expect(TOK_LPAREN))
     return nullptr;
 
-  Scope *scope = nullptr;
-  Statement *decl = nullptr;
-  Expression *condition = nullptr;
-  Statement *update = nullptr;
-  Statement *body = nullptr;
+  Scope* scope = nullptr;
+  Statement* decl = nullptr;
+  Expression* condition = nullptr;
+  Statement* update = nullptr;
+  Statement* body = nullptr;
   {
     AutoEnterScope env(delegate_, Scope::Block, &scope);
 
@@ -1574,14 +1574,14 @@ Parser::for_()
   return new (pool_) ForStatement(pos, decl, condition, update, body, scope);
 }
 
-ExpressionList *
+ExpressionList*
 Parser::dimensions()
 {
   // dimensions ::= ("[" expr? "]")*
 
-  ExpressionList *postDimensions = new (pool_) ExpressionList();
+  ExpressionList* postDimensions = new (pool_) ExpressionList();
   while (match(TOK_LBRACKET)) {
-    Expression *dim = nullptr;
+    Expression* dim = nullptr;
     if (!match(TOK_RBRACKET)) {
       if ((dim = expression()) == nullptr)
         return nullptr;
@@ -1593,16 +1593,16 @@ Parser::dimensions()
   return postDimensions;
 }
 
-Statement *
-Parser::variable(TokenKind tok, Declaration *decl, SymAttrs flags, uint32_t decl_flags)
+Statement*
+Parser::variable(TokenKind tok, Declaration* decl, SymAttrs flags, uint32_t decl_flags)
 {
-  Expression *init = nullptr;
+  Expression* init = nullptr;
   if (match(TOK_ASSIGN))
     init = expression();
 
-  VarDecl *first = delegate_.HandleVarDecl(decl->name, tok, flags, decl->spec, init);
+  VarDecl* first = delegate_.HandleVarDecl(decl->name, tok, flags, decl->spec, init);
 
-  VarDecl *prev = first;
+  VarDecl* prev = first;
   while (scanner_.peekTokenSameLine() == TOK_COMMA) {
     scanner_.next();
 
@@ -1611,11 +1611,11 @@ Parser::variable(TokenKind tok, Declaration *decl, SymAttrs flags, uint32_t decl
     if (!reparse_decl(decl, DeclFlags::Variable))
       break;
 
-    Expression *init = nullptr;
+    Expression* init = nullptr;
     if (match(TOK_ASSIGN))
       init = expression();
 
-    VarDecl *var = delegate_.HandleVarDecl(decl->name, tok, flags, decl->spec, init);
+    VarDecl* var = delegate_.HandleVarDecl(decl->name, tok, flags, decl->spec, init);
 
     prev->setNext(var);
     prev = var;
@@ -1628,7 +1628,7 @@ Parser::variable(TokenKind tok, Declaration *decl, SymAttrs flags, uint32_t decl
 }
 
 // Wrapper around variable() for locals.
-Statement *
+Statement*
 Parser::localVarDecl(TokenKind kind, uint32_t flags)
 {
   // :TODO: reject CONST on arrays.
@@ -1650,13 +1650,13 @@ Parser::localVarDecl(TokenKind kind, uint32_t flags)
   return variable(kind, &decl, attrs, flags);
 }
 
-Statement *
+Statement*
 Parser::delete_()
 {
   // delete ::= "delete" expr
   SourceLocation pos = scanner_.begin();
 
-  Expression *expr = expression();
+  Expression* expr = expression();
   if (!expr)
     return nullptr;
 
@@ -1664,14 +1664,14 @@ Parser::delete_()
   return new (pool_) DeleteStatement(pos, expr);
 }
 
-Statement *
+Statement*
 Parser::return_()
 {
   // return ::= "return" term |
   //      "return" "expr"
   SourceLocation pos = scanner_.begin();
 
-  Expression *expr = nullptr;
+  Expression* expr = nullptr;
   TokenKind next = scanner_.peekTokenSameLine();
   if (next != TOK_EOL && next != TOK_EOF && next != TOK_SEMICOLON) {
     if ((expr = expression()) == nullptr) {
@@ -1682,16 +1682,16 @@ Parser::return_()
 
   requireTerminator();
 
-  ReturnStatement *stmt = new (pool_) ReturnStatement(pos, expr);
+  ReturnStatement* stmt = new (pool_) ReturnStatement(pos, expr);
   delegate_.OnReturnStmt(stmt);
   return stmt;
 }
 
-Statement *
+Statement*
 Parser::expressionStatement()
 {
   // exprstmt ::= expr
-  Expression *left = assignment();
+  Expression* left = assignment();
   if (!left) {
     scanner_.skipUntil(TOK_SEMICOLON, SkipFlags::StopAtLine);
     return nullptr;
@@ -1701,13 +1701,13 @@ Parser::expressionStatement()
 }
 
 // Parses statements, expecting the "{" to have already been parsed.
-StatementList *
+StatementList*
 Parser::statements()
 {
-  StatementList *list = new (pool_) StatementList();
+  StatementList* list = new (pool_) StatementList();
   while (!match(TOK_RBRACE)) {
     // Call statement() directly, so we don't set allowDeclaratiosn to false.
-    if (Statement *stmt = statement())
+    if (Statement* stmt = statement())
       list->append(stmt);
 
     // Note: we keep looping, since statement() will always consume a token.
@@ -1715,7 +1715,7 @@ Parser::statements()
   return list;
 }
 
-Statement *
+Statement*
 Parser::block()
 {
   // block ::= "{" statement* "}"
@@ -1724,8 +1724,8 @@ Parser::block()
 
   SourceLocation pos = scanner_.begin();
 
-  Scope *scope = nullptr;
-  StatementList *list = nullptr;
+  Scope* scope = nullptr;
+  StatementList* list = nullptr;
   {
     AutoEnterScope env(delegate_, Scope::Block, &scope);
 
@@ -1737,7 +1737,7 @@ Parser::block()
   return new (pool_) BlockStatement(pos, list, TOK_LBRACE, scope);
 }
 
-Statement *
+Statement*
 Parser::if_()
 {
   // if ::= "if" "(" expr ")" statement elseif* else?
@@ -1747,14 +1747,14 @@ Parser::if_()
   if (!expect(TOK_LPAREN))
     return nullptr;
 
-  Expression *cond = expression();
+  Expression* cond = expression();
   if (!cond)
     return nullptr;
 
   if (!expect(TOK_RPAREN))
     return nullptr;
 
-  Statement *ifTrue = statementOrBlock();
+  Statement* ifTrue = statementOrBlock();
   if (!ifTrue)
     return nullptr;
 
@@ -1773,14 +1773,14 @@ Parser::if_()
     if (!expect(TOK_LPAREN))
       return nullptr;
 
-    Expression *otherCond = expression();
+    Expression* otherCond = expression();
     if (!otherCond)
       return nullptr;
 
     if (!expect(TOK_RPAREN))
       return nullptr;
 
-    Statement *otherIfTrue = statementOrBlock();
+    Statement* otherIfTrue = statementOrBlock();
     if (!otherIfTrue)
       return nullptr;
 
@@ -1791,14 +1791,14 @@ Parser::if_()
   return new (pool_) IfStatement(pos, clauses, fallthrough);
 }
 
-Statement *
+Statement*
 Parser::statement()
 {
   // statement ::= stmt term
   // stmt ::= do | for | if | while | struct | enum |
   //      localvars | return | switch | break | continue
 
-  Statement *stmt = nullptr;
+  Statement* stmt = nullptr;
 
   // Shortcut out early for block, since it wants to expect(TOK_LBRACE).
   if (peek(TOK_LBRACE))
@@ -1896,14 +1896,14 @@ Parser::statement()
   return stmt;
 }
 
-Statement *
+Statement*
 Parser::statementOrBlock()
 {
   SaveAndSet<bool> save(&allowDeclarations_, false);
   return statement();
 }
 
-Statement *
+Statement*
 Parser::enum_()
 {
   // enum ::= "enum" name? { enum_members? }
@@ -1912,16 +1912,16 @@ Parser::enum_()
   // enum_member ::= ident ("=" constexpr)?
   SourceLocation pos = scanner_.begin();
 
-  Atom *name = nullptr;
+  Atom* name = nullptr;
   if (match(TOK_NAME) || match(TOK_LABEL))
     name = scanner_.current_name();
 
-  EnumConstantList *entries = new (pool_) EnumConstantList();
+  EnumConstantList* entries = new (pool_) EnumConstantList();
 
   if (!expect(TOK_LBRACE))
     return nullptr;
 
-  EnumStatement *stmt = new (pool_) EnumStatement(pos, name);
+  EnumStatement* stmt = new (pool_) EnumStatement(pos, name);
   delegate_.OnEnumDecl(stmt);
 
   do {
@@ -1931,7 +1931,7 @@ Parser::enum_()
     if (match(TOK_LABEL))
       cc_.report(scanner_.begin(), rmsg::no_enum_structs);
 
-    Atom *name = expectName();
+    Atom* name = expectName();
     SourceLocation loc = scanner_.begin();
 
     if (peek(TOK_LBRACKET)) {
@@ -1939,13 +1939,13 @@ Parser::enum_()
         cc_.report(scanner_.begin(), rmsg::no_enum_structs);
     }
 
-    Expression *expr = nullptr;
+    Expression* expr = nullptr;
     if (match(TOK_ASSIGN)) {
       if ((expr = expression()) == nullptr)
         return nullptr;
     }
 
-    EnumConstant *cs = new (pool_) EnumConstant(loc, stmt, name, expr);
+    EnumConstant* cs = new (pool_) EnumConstant(loc, stmt, name, expr);
     delegate_.OnEnumValueDecl(cs);
     entries->append(cs);
   } while (match(TOK_COMMA));
@@ -1958,10 +1958,10 @@ Parser::enum_()
   return stmt;
 }
 
-ParameterList *
-Parser::arguments(bool *canEarlyResolve)
+ParameterList*
+Parser::arguments(bool* canEarlyResolve)
 {
-  ParameterList *params = new (pool_) ParameterList;
+  ParameterList* params = new (pool_) ParameterList;
 
   // Note: though our callers 
   if (!expect(TOK_LPAREN)) {
@@ -1980,7 +1980,7 @@ Parser::arguments(bool *canEarlyResolve)
       break;
     }
 
-    Expression *init = nullptr;
+    Expression* init = nullptr;
     if (match(TOK_ASSIGN))
       init = expression();
 
@@ -1996,7 +1996,7 @@ Parser::arguments(bool *canEarlyResolve)
       cc_.report(decl.spec.baseLoc(), rmsg::varargs_must_be_last);
     }
 
-    VarDecl *node = delegate_.HandleVarDecl(decl.name, TOK_NEW, SymAttrs::None, decl.spec, init);
+    VarDecl* node = delegate_.HandleVarDecl(decl.name, TOK_NEW, SymAttrs::None, decl.spec, init);
 
     // Mark whether we eagerly resolved a type for this node.
     *canEarlyResolve &= !!node->sym()->type();
@@ -2012,15 +2012,15 @@ Parser::arguments(bool *canEarlyResolve)
   return params;
 }
 
-BlockStatement *
+BlockStatement*
 Parser::methodBody()
 {
   // Enter a new scope to parse the method body.
   bool lbrace = match(TOK_LBRACE);
   SourceLocation pos = scanner_.begin();
 
-  Scope *scope = nullptr;
-  StatementList *list = nullptr;
+  Scope* scope = nullptr;
+  StatementList* list = nullptr;
   if (lbrace) {
     SaveAndSet<bool> saveDeclState(&allowDeclarations_, true);
     AutoEnterScope varEnv(delegate_, Scope::Block, &scope);
@@ -2030,7 +2030,7 @@ Parser::methodBody()
   } else {
     cc_.report(pos, rmsg::no_single_line_functions);
 
-    Statement *stmt = statement();
+    Statement* stmt = statement();
     if (!stmt)
       return nullptr;
     list = new (pool_) StatementList();
@@ -2041,14 +2041,14 @@ Parser::methodBody()
   return new (pool_) BlockStatement(pos, list, TOK_FUNCTION, scope);
 }
 
-Statement *
-Parser::function(TokenKind kind, Declaration &decl, SymAttrs flags)
+Statement*
+Parser::function(TokenKind kind, Declaration& decl, SymAttrs flags)
 {
-  FunctionStatement *stmt = new (pool_) FunctionStatement(decl.name, kind, flags);
+  FunctionStatement* stmt = new (pool_) FunctionStatement(decl.name, kind, flags);
 
   delegate_.OnEnterFunctionDecl(stmt);
 
-  Scope *argScope = nullptr;
+  Scope* argScope = nullptr;
   {
     // Enter a new scope for arguments. We have to do this even for functions
     // that don't have bodies, unfortunately, since they could contain default
@@ -2056,7 +2056,7 @@ Parser::function(TokenKind kind, Declaration &decl, SymAttrs flags)
     AutoEnterScope argEnv(delegate_, Scope::Argument, &argScope);
 
     bool canEagerResolve = true;
-    ParameterList *params = arguments(&canEagerResolve);
+    ParameterList* params = arguments(&canEagerResolve);
     if (!params) {
       params = new (pool_) ParameterList();
       scanner_.skipUntil(TOK_LBRACE, SkipFlags::StopAtLine | SkipFlags::StopBeforeMatch);
@@ -2064,7 +2064,7 @@ Parser::function(TokenKind kind, Declaration &decl, SymAttrs flags)
 
     delegate_.HandleFunctionSignature(kind, stmt, decl.spec, params, canEagerResolve);
 
-    BlockStatement *body = nullptr;
+    BlockStatement* body = nullptr;
     if (kind != TOK_FORWARD && kind != TOK_NATIVE) {
       if ((body = methodBody()) == nullptr) {
         delegate_.OnLeaveFunctionDecl(stmt);
@@ -2084,7 +2084,7 @@ Parser::function(TokenKind kind, Declaration &decl, SymAttrs flags)
   return stmt;
 }
 
-Statement *
+Statement*
 Parser::global(TokenKind kind)
 {
   Declaration decl;
@@ -2128,7 +2128,7 @@ Parser::global(TokenKind kind)
   return function(spec, decl, flags);
 }
 
-Statement *
+Statement*
 Parser::typeset_()
 {
   SourceLocation loc = scanner_.begin();
@@ -2140,7 +2140,7 @@ Parser::typeset_()
   if (!expect(TOK_LBRACE))
     return nullptr;
 
-  TypesetDecl *decl = delegate_.EnterTypeset(loc, name);
+  TypesetDecl* decl = delegate_.EnterTypeset(loc, name);
 
   Vector<TypesetDecl::Entry> types;
   while (!match(TOK_RBRACE)) {
@@ -2157,7 +2157,7 @@ Parser::typeset_()
   return decl;
 }
 
-Statement *
+Statement*
 Parser::struct_(TokenKind kind)
 {
   SourceLocation loc = scanner_.begin();
@@ -2173,10 +2173,10 @@ Parser::struct_(TokenKind kind)
   if (kind == TOK_UNION)
     flags |= DeclFlags::MaybeNamed;
 
-  RecordDecl *decl = new (pool_) RecordDecl(loc, kind, name);
+  RecordDecl* decl = new (pool_) RecordDecl(loc, kind, name);
   delegate_.OnEnterRecordDecl(decl);
 
-  LayoutDecls *decls = new (pool_) LayoutDecls();
+  LayoutDecls* decls = new (pool_) LayoutDecls();
   while (!match(TOK_RBRACE)) {
     Declaration decl;
 
@@ -2187,7 +2187,7 @@ Parser::struct_(TokenKind kind)
       break;
 
     SourceLocation begin = decl.spec.startLoc();
-    FieldDecl *field = delegate_.HandleFieldDecl(begin, decl.name, decl.spec);
+    FieldDecl* field = delegate_.HandleFieldDecl(begin, decl.name, decl.spec);
     decls->append(field);
 
     requireNewlineOrSemi();
@@ -2200,12 +2200,12 @@ Parser::struct_(TokenKind kind)
   return decl;
 }
 
-Statement *
+Statement*
 Parser::typedef_()
 {
   SourceLocation begin = scanner_.begin();
 
-  Atom *name = expectName();
+  Atom* name = expectName();
   if (!name)
     return nullptr;
 
@@ -2241,15 +2241,15 @@ Parser::using_()
   return false;
 }
 
-ParseTree *
+ParseTree*
 Parser::parse()
 {
-  StatementList *list = new (pool_) StatementList();
+  StatementList* list = new (pool_) StatementList();
 
   delegate_.OnEnterParser();
 
   for (;;) {
-    Statement *statement = nullptr;
+    Statement* statement = nullptr;
 
     TokenKind kind = scanner_.next();
     switch (kind) {

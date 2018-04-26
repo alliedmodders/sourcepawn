@@ -115,23 +115,23 @@ class AstNode : public PoolObject
   SourceLocation location_;
 
  public:
-  AstNode(const SourceLocation &location)
+  AstNode(const SourceLocation& location)
     : location_(location)
   {
   }
   
   virtual AstKind kind() const = 0;
-  virtual const char *kindName() const = 0;
+  virtual const char* kindName() const = 0;
 
 #define _(name)   bool is##name() { return kind() == AstKind::k##name; }            \
-          name *to##name() { assert(is##name()); return (name *)this; }             \
-          name *as##name() { if (!is##name()) return nullptr; return to##name(); }
+          name* to##name() { assert(is##name()); return (name*)this; }             \
+          name* as##name() { if (!is##name()) return nullptr; return to##name(); }
   ASTKINDS(_)
 #undef _
 
-  virtual void accept(AstVisitor *visitor) = 0;
+  virtual void accept(AstVisitor* visitor) = 0;
 
-  const SourceLocation &loc() const {
+  const SourceLocation& loc() const {
     return location_;
   }
 };
@@ -140,17 +140,17 @@ class AstNode : public PoolObject
   AstKind kind() const {              \
     return AstKind::k##type;          \
   }                                   \
-  void accept(AstVisitor *visitor) {  \
+  void accept(AstVisitor* visitor) {  \
     visitor->visit##type(this);       \
   }                                   \
-  const char *kindName() const {      \
+  const char* kindName() const {      \
     return #type;                     \
   }
 
 class AstVisitor
 {
  public:
-#define _(name) virtual void visit##name(name *node) = 0;
+#define _(name) virtual void visit##name(name* node) = 0;
   ASTKINDS(_)
 #undef _
 };
@@ -159,7 +159,7 @@ class AstVisitor
 class PartialAstVisitor : public AstVisitor
 {
  public:
-#define _(name) virtual void visit##name(name *node) { }
+#define _(name) virtual void visit##name(name* node) { }
   ASTKINDS(_)
 #undef _
 };
@@ -169,7 +169,7 @@ class PartialAstVisitor : public AstVisitor
 class StrictAstVisitor : public AstVisitor
 {
  public:
-#define _(name) virtual void visit##name(name *node) { assert(false); }
+#define _(name) virtual void visit##name(name* node) { assert(false); }
   ASTKINDS(_)
 #undef _
 };
@@ -177,7 +177,7 @@ class StrictAstVisitor : public AstVisitor
 class Statement : public AstNode
 {
  public:
-  Statement(const SourceLocation &pos)
+  Statement(const SourceLocation& pos)
     : AstNode(pos)
   {
   }
@@ -186,15 +186,15 @@ class Statement : public AstNode
 class Expression : public AstNode
 {
  public:
-  Expression(const SourceLocation &pos)
+  Expression(const SourceLocation& pos)
    : AstNode(pos)
   {
   }
 };
 
-typedef PoolList<Statement *> StatementList;
-typedef PoolList<Expression *> ExpressionList;
-typedef PoolList<VarDecl *> ParameterList;
+typedef PoolList<Statement*> StatementList;
+typedef PoolList<Expression*> ExpressionList;
+typedef PoolList<VarDecl*> ParameterList;
 
 class FunctionSignature : public PoolObject
 {
@@ -250,7 +250,7 @@ class FunctionSignature : public PoolObject
 class VarDecl : public Statement
 {
  public:
-  VarDecl(const NameToken &name, TokenKind classifier, Expression *initialization)
+  VarDecl(const NameToken& name, TokenKind classifier, Expression* initialization)
    : Statement(name.start),
      name_(name.atom),
      initialization_(initialization),
@@ -264,7 +264,7 @@ class VarDecl : public Statement
 
   DECLARE_NODE(VarDecl);
 
-  Expression *initialization() const {
+  Expression* initialization() const {
     return initialization_;
   }
   sema::Expr* sema_init() const {
@@ -273,20 +273,20 @@ class VarDecl : public Statement
   void set_sema_init(sema::Expr* init) {
     sema_init_ = init;
   }
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
-  void setSymbol(VariableSymbol *sym) {
+  void setSymbol(VariableSymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  VariableSymbol *sym() const {
+  VariableSymbol* sym() const {
     return sym_;
   }
   TokenKind classifier() const {
@@ -315,32 +315,32 @@ class VarDecl : public Statement
   //   int x, y, z
   //
   // The declarations are chained together in a linked list.
-  void setNext(VarDecl *next) {
+  void setNext(VarDecl* next) {
     assert(!next_);
     next_ = next;
   }
-  VarDecl *next() const {
+  VarDecl* next() const {
     return next_;
   }
 
  private:
-  Atom *name_;
-  Expression *initialization_;
+  Atom* name_;
+  Expression* initialization_;
   sema::Expr* sema_init_;
   TypeExpr te_;
-  VariableSymbol *sym_;
-  VarDecl *next_;
+  VariableSymbol* sym_;
+  VarDecl* next_;
   TokenKind classifier_;
   bool must_zero_init_;
 };
 
 class NameProxy : public Expression
 {
-  Atom *name_;
-  Symbol *binding_;
+  Atom* name_;
+  Symbol* binding_;
 
  public:
-  NameProxy(const SourceLocation &pos, Atom *name)
+  NameProxy(const SourceLocation& pos, Atom* name)
     : Expression(pos),
       name_(name),
       binding_(nullptr)
@@ -349,13 +349,13 @@ class NameProxy : public Expression
 
   DECLARE_NODE(NameProxy);
   
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
-  Symbol *sym() const {
+  Symbol* sym() const {
     return binding_;
   }
-  void bind(Symbol *sym) {
+  void bind(Symbol* sym) {
     binding_ = sym;
   }
 };
@@ -365,7 +365,7 @@ class TokenLiteral : public Expression
   TokenKind token_;
 
  public:
-  TokenLiteral(const SourceLocation &pos, TokenKind token)
+  TokenLiteral(const SourceLocation& pos, TokenKind token)
     : Expression(pos),
     token_(token)
   {
@@ -380,7 +380,7 @@ class TokenLiteral : public Expression
 class CharLiteral : public Expression
 {
  public:
-  CharLiteral(const SourceLocation &pos, int32_t value)
+  CharLiteral(const SourceLocation& pos, int32_t value)
     : Expression(pos),
       value_(value)
   {
@@ -399,7 +399,7 @@ class CharLiteral : public Expression
 class IntegerLiteral : public Expression
 {
  public:
-  IntegerLiteral(const SourceLocation &pos, int64_t value)
+  IntegerLiteral(const SourceLocation& pos, int64_t value)
     : Expression(pos),
       value_(value)
   {
@@ -420,7 +420,7 @@ class FloatLiteral : public Expression
   double value_;
 
  public:
-  FloatLiteral(const SourceLocation &pos, double value)
+  FloatLiteral(const SourceLocation& pos, double value)
     : Expression(pos),
       value_(value)
   {
@@ -436,7 +436,7 @@ class FloatLiteral : public Expression
 class StringLiteral : public Expression
 {
  public:
-  StringLiteral(const SourceLocation &pos, Atom *literal)
+  StringLiteral(const SourceLocation& pos, Atom* literal)
     : Expression(pos),
       literal_(literal)
   {
@@ -444,7 +444,7 @@ class StringLiteral : public Expression
 
   DECLARE_NODE(StringLiteral);
 
-  Atom *literal() const {
+  Atom* literal() const {
     return literal_;
   }
   int32_t arrayLength() const {
@@ -453,7 +453,7 @@ class StringLiteral : public Expression
   }
 
  private:
-  Atom *literal_;
+  Atom* literal_;
 };
 
 class NameAndValue : public PoolObject
@@ -480,7 +480,7 @@ class NameAndValue : public PoolObject
   Expression* expr_;
 };
 
-typedef PoolList<NameAndValue *> NameAndValueList;
+typedef PoolList<NameAndValue*> NameAndValueList;
 
 class StructInitializer : public Expression
 {
@@ -504,7 +504,7 @@ class StructInitializer : public Expression
 class ArrayLiteral : public Expression
 {
  public:
-  ArrayLiteral(const SourceLocation &pos, ExpressionList *expressions, bool repeatLastElement)
+  ArrayLiteral(const SourceLocation& pos, ExpressionList* expressions, bool repeatLastElement)
     : Expression(pos),
       expressions_(expressions),
       repeatLastElement_(repeatLastElement)
@@ -517,7 +517,7 @@ class ArrayLiteral : public Expression
     assert(expressions()->length() < INT_MAX);
     return int32_t(expressions()->length());
   }
-  ExpressionList *expressions() const {
+  ExpressionList* expressions() const {
     return expressions_;
   }
   bool repeatLastElement() const {
@@ -525,14 +525,14 @@ class ArrayLiteral : public Expression
   }
 
  private:
-  ExpressionList *expressions_;
+  ExpressionList* expressions_;
   bool repeatLastElement_;
 };
 
 class SizeofExpression : public Expression
 {
  public:
-  SizeofExpression(const SourceLocation &pos, NameProxy *proxy, size_t level)
+  SizeofExpression(const SourceLocation& pos, NameProxy* proxy, size_t level)
    : Expression(pos),
      proxy_(proxy),
      level_(level)
@@ -540,7 +540,7 @@ class SizeofExpression : public Expression
 
   DECLARE_NODE(SizeofExpression);
 
-  NameProxy *proxy() const {
+  NameProxy* proxy() const {
     return proxy_;
   }
   size_t level() const {
@@ -548,14 +548,14 @@ class SizeofExpression : public Expression
   }
 
  private:
-  NameProxy *proxy_;
+  NameProxy* proxy_;
   size_t level_;
 };
 
 class UnsafeCastExpr : public Expression
 {
  public:
-  UnsafeCastExpr(const SourceLocation &pos, const TypeExpr &te, Expression *expr)
+  UnsafeCastExpr(const SourceLocation& pos, const TypeExpr& te, Expression* expr)
    : Expression(pos),
      te_(te),
      expr_(expr)
@@ -563,25 +563,25 @@ class UnsafeCastExpr : public Expression
 
   DECLARE_NODE(UnsafeCastExpr);
 
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
-  Expression *expr() const {
+  Expression* expr() const {
     return expr_;
   }
 
  private:
   TypeExpr te_;
-  Expression *expr_;
+  Expression* expr_;
 };
 
 class UnaryExpression : public Expression
 {
  public:
-  UnaryExpression(const SourceLocation &pos, TokenKind token, Expression *expr)
+  UnaryExpression(const SourceLocation& pos, TokenKind token, Expression* expr)
    : Expression(pos),
      expression_(expr),
      token_(token),
@@ -589,8 +589,8 @@ class UnaryExpression : public Expression
   {
   }
 
-  UnaryExpression(const SourceLocation &pos, TokenKind token, Expression *expr,
-          NameProxy *tag)
+  UnaryExpression(const SourceLocation& pos, TokenKind token, Expression* expr,
+          NameProxy* tag)
     : Expression(pos),
       expression_(expr),
       token_(token),
@@ -600,26 +600,26 @@ class UnaryExpression : public Expression
 
   DECLARE_NODE(UnaryExpression);
 
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
   TokenKind token() const {
     return token_;
   }
-  NameProxy *tag() const {
+  NameProxy* tag() const {
     return tag_;
   }
 
  private:
-  Expression *expression_;
+  Expression* expression_;
   TokenKind token_;
-  NameProxy *tag_;
+  NameProxy* tag_;
 };
 
 class ThisExpression : public Expression
 {
  public:
-  ThisExpression(const SourceLocation &pos)
+  ThisExpression(const SourceLocation& pos)
    : Expression(pos)
   {}
 
@@ -628,12 +628,12 @@ class ThisExpression : public Expression
 
 class BinaryExpression : public Expression
 {
-  Expression *left_;
-  Expression *right_;
+  Expression* left_;
+  Expression* right_;
   TokenKind token_;
 
  public:
-  BinaryExpression(const SourceLocation &pos, TokenKind token, Expression *left, Expression *right)
+  BinaryExpression(const SourceLocation& pos, TokenKind token, Expression* left, Expression* right)
    : Expression(pos),
      left_(left),
      right_(right),
@@ -643,10 +643,10 @@ class BinaryExpression : public Expression
 
   DECLARE_NODE(BinaryExpression);
 
-  Expression *left() const {
+  Expression* left() const {
     return left_;
   }
-  Expression *right() const {
+  Expression* right() const {
     return right_;
   }
   TokenKind token() const {
@@ -657,7 +657,7 @@ class BinaryExpression : public Expression
 class TernaryExpression : public Expression
 {
  public:
-  TernaryExpression(const SourceLocation &pos, Expression *condition, Expression *left, Expression *right)
+  TernaryExpression(const SourceLocation& pos, Expression* condition, Expression* left, Expression* right)
     : Expression(pos),
       condition_(condition),
       left_(left),
@@ -667,26 +667,26 @@ class TernaryExpression : public Expression
 
   DECLARE_NODE(TernaryExpression);
 
-  Expression *condition() const {
+  Expression* condition() const {
     return condition_;
   }
-  Expression *left() const {
+  Expression* left() const {
     return left_;
   }
-  Expression *right() const {
+  Expression* right() const {
     return right_;
   }
 
  private:
-  Expression *condition_;
-  Expression *left_;
-  Expression *right_;
+  Expression* condition_;
+  Expression* left_;
+  Expression* right_;
 };
 
 class FieldExpression : public Expression
 {
  public:
-  FieldExpression(const SourceLocation &pos, Expression *base, const NameToken &field)
+  FieldExpression(const SourceLocation& pos, Expression* base, const NameToken& field)
    : Expression(pos),
      base_(base),
      field_(field)
@@ -694,22 +694,22 @@ class FieldExpression : public Expression
 
   DECLARE_NODE(FieldExpression);
 
-  Expression *base() const {
+  Expression* base() const {
     return base_;
   }
-  Atom *field() const {
+  Atom* field() const {
     return field_.atom;
   }
 
  private:
-  Expression *base_;
+  Expression* base_;
   NameToken field_;
 };
 
 class IndexExpression : public Expression
 {
  public:
-  IndexExpression(const SourceLocation &pos, Expression *left, Expression *right)
+  IndexExpression(const SourceLocation& pos, Expression* left, Expression* right)
    : Expression(pos),
      left_(left),
      right_(right)
@@ -718,22 +718,22 @@ class IndexExpression : public Expression
 
   DECLARE_NODE(IndexExpression);
 
-  Expression *left() const {
+  Expression* left() const {
     return left_;
   }
-  Expression *right() const {
+  Expression* right() const {
     return right_;
   }
 
  private:
-  Expression *left_;
-  Expression *right_;
+  Expression* left_;
+  Expression* right_;
 };
 
 class CallNewExpr : public Expression
 {
  public:
-  CallNewExpr(const SourceLocation &pos, const TypeExpr &te, ExpressionList *arguments)
+  CallNewExpr(const SourceLocation& pos, const TypeExpr& te, ExpressionList* arguments)
    : Expression(pos),
      te_(te),
      arguments_(arguments)
@@ -742,25 +742,25 @@ class CallNewExpr : public Expression
 
   DECLARE_NODE(CallNewExpr);
 
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
-  ExpressionList *arguments() const {
+  ExpressionList* arguments() const {
     return arguments_;
   }
 
  private:
   TypeExpr te_;
-  ExpressionList *arguments_;
+  ExpressionList* arguments_;
 };
 
 class NewArrayExpr : public Expression
 {
  public:
-  NewArrayExpr(const SourceLocation &pos, const TypeExpr &te, ExpressionList *dims)
+  NewArrayExpr(const SourceLocation& pos, const TypeExpr& te, ExpressionList* dims)
    : Expression(pos),
      te_(te),
      dims_(dims)
@@ -769,25 +769,25 @@ class NewArrayExpr : public Expression
 
   DECLARE_NODE(NewArrayExpr);
 
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
-  ExpressionList *dims() const {
+  ExpressionList* dims() const {
     return dims_;
   }
 
  private:
   TypeExpr te_;
-  ExpressionList *dims_;
+  ExpressionList* dims_;
 };
 
 class CallExpression : public Expression
 {
  public:
-  CallExpression(const SourceLocation &pos, Expression *callee, ExpressionList *arguments)
+  CallExpression(const SourceLocation& pos, Expression* callee, ExpressionList* arguments)
     : Expression(pos),
       callee_(callee),
       arguments_(arguments)
@@ -796,34 +796,34 @@ class CallExpression : public Expression
 
   DECLARE_NODE(CallExpression);
 
-  Expression *callee() const {
+  Expression* callee() const {
     return callee_;
   }
-  ExpressionList *arguments() const {
+  ExpressionList* arguments() const {
     return arguments_;
   }
 
-  void setCallee(Expression *expr) {
+  void setCallee(Expression* expr) {
     callee_ = expr;
   }
 
  private:
-  Expression *callee_;
-  ExpressionList *arguments_;
+  Expression* callee_;
+  ExpressionList* arguments_;
 };
 
 class ForStatement : public Statement
 {
-  Statement *initialization_;
-  Expression *condition_;
-  Statement *update_;
-  Statement *body_;
-  Scope *scope_;
+  Statement* initialization_;
+  Expression* condition_;
+  Statement* update_;
+  Statement* body_;
+  Scope* scope_;
 
  public:
-  ForStatement(const SourceLocation &pos, Statement *initialization,
-               Expression *condition, Statement *update, Statement *body,
-               Scope *scope)
+  ForStatement(const SourceLocation& pos, Statement* initialization,
+               Expression* condition, Statement* update, Statement* body,
+               Scope* scope)
    : Statement(pos),
      initialization_(initialization),
      condition_(condition),
@@ -836,22 +836,22 @@ class ForStatement : public Statement
 
   DECLARE_NODE(ForStatement);
 
-  Statement *initialization() const {
+  Statement* initialization() const {
     return initialization_;
   }
-  Expression *condition() const {
+  Expression* condition() const {
     return condition_;
   }
-  Statement *update() const {
+  Statement* update() const {
     return update_;
   }
-  Statement *body() const {
+  Statement* body() const {
     return body_;
   }
-  Scope *scope() const {
+  Scope* scope() const {
     return scope_;
   }
-  void setScope(Scope *scope) {
+  void setScope(Scope* scope) {
     assert(!scope_);
     scope_ = scope;
   }
@@ -872,7 +872,7 @@ class ForStatement : public Statement
 class FoldedExpr : public Expression
 {
  public:
-  FoldedExpr(const SourceRange &range, Expression *original, const BoxedValue &value)
+  FoldedExpr(const SourceRange& range, Expression* original, const BoxedValue& value)
    : Expression(range.start),
      original_(original),
      value_(value)
@@ -880,26 +880,26 @@ class FoldedExpr : public Expression
 
   DECLARE_NODE(FoldedExpr);
 
-  Expression *original() const {
+  Expression* original() const {
     return original_;
   }
-  const BoxedValue &value() const {
+  const BoxedValue& value() const {
     return value_;
   }
 
  private:
-  Expression *original_;
+  Expression* original_;
   BoxedValue value_;
 };
 
 class WhileStatement : public Statement
 {
   TokenKind token_;
-  Expression *condition_;
-  Statement *body_;
+  Expression* condition_;
+  Statement* body_;
 
  public:
-  WhileStatement(const SourceLocation &pos, TokenKind kind, Expression *condition, Statement *body)
+  WhileStatement(const SourceLocation& pos, TokenKind kind, Expression* condition, Statement* body)
     : Statement(pos),
       token_(kind),
       condition_(condition),
@@ -913,10 +913,10 @@ class WhileStatement : public Statement
   TokenKind token() const {
     return token_;
   }
-  Expression *condition() const {
+  Expression* condition() const {
     return condition_;
   }
-  Statement *body() const {
+  Statement* body() const {
     return body_;
   }
 
@@ -962,7 +962,7 @@ class ReturnStatement : public Statement
 class BreakStatement : public Statement
 {
  public:
-  BreakStatement(const SourceLocation &pos)
+  BreakStatement(const SourceLocation& pos)
     : Statement(pos)
   {
   }
@@ -973,7 +973,7 @@ class BreakStatement : public Statement
 class ContinueStatement : public Statement
 {
  public:
-  ContinueStatement(const SourceLocation &pos)
+  ContinueStatement(const SourceLocation& pos)
     : Statement(pos)
   {
   }
@@ -984,11 +984,11 @@ class ContinueStatement : public Statement
 class Assignment : public Expression
 {
   TokenKind token_;
-  Expression *lvalue_;
-  Expression *expression_;
+  Expression* lvalue_;
+  Expression* expression_;
 
  public:
-  Assignment(const SourceLocation &pos, TokenKind token, Expression *left, Expression *right)
+  Assignment(const SourceLocation& pos, TokenKind token, Expression* left, Expression* right)
     : Expression(pos),
       token_(token),
       lvalue_(left),
@@ -1001,20 +1001,20 @@ class Assignment : public Expression
   TokenKind token() const {
     return token_;
   }
-  Expression *lvalue() const {
+  Expression* lvalue() const {
     return lvalue_;
   }
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
 };
 
 class ExpressionStatement : public Statement
 {
-  Expression *expression_;
+  Expression* expression_;
 
  public:
-  ExpressionStatement(Expression *expression)
+  ExpressionStatement(Expression* expression)
    : Statement(expression->loc()),
      expression_(expression),
      sema_expr_(nullptr)
@@ -1023,7 +1023,7 @@ class ExpressionStatement : public Statement
 
   DECLARE_NODE(ExpressionStatement);
 
-  Expression *expr() const {
+  Expression* expr() const {
     return expression_;
   }
 
@@ -1043,15 +1043,15 @@ class ExpressionStatement : public Statement
 //   TOK_FUNCTION - A function body.
 class BlockStatement : public Statement
 {
-  StatementList *statements_;
-  Scope *scope_;
+  StatementList* statements_;
+  Scope* scope_;
   TokenKind type_;
 
  public:
-  BlockStatement(const SourceLocation &pos,
-                 StatementList *statements,
+  BlockStatement(const SourceLocation& pos,
+                 StatementList* statements,
                  TokenKind kind,
-                 Scope *scope)
+                 Scope* scope)
     : Statement(pos),
       statements_(statements),
       scope_(scope),
@@ -1061,7 +1061,7 @@ class BlockStatement : public Statement
 
   DECLARE_NODE(BlockStatement);
 
-  StatementList *statements() const {
+  StatementList* statements() const {
     return statements_;
   }
   TokenKind type() const {
@@ -1086,33 +1086,33 @@ class FunctionNode : public PoolObject
     return kind_;
   }
 
-  void setBody(BlockStatement *body) {
+  void setBody(BlockStatement* body) {
     body_ = body;
   }
-  BlockStatement *body() const {
+  BlockStatement* body() const {
     return body_;
   }
 
-  void setSignature(FunctionSignature *signature) {
+  void setSignature(FunctionSignature* signature) {
     signature_ = signature;
   }
-  FunctionSignature *signature() {
+  FunctionSignature* signature() {
     return signature_;
   }
 
-  void setArgScope(Scope *funScope) {
+  void setArgScope(Scope* funScope) {
     assert(!funScope_);
     funScope_ = funScope;
   }
-  Scope *funScope() const {
+  Scope* funScope() const {
     return funScope_;
   }
 
   // Set if we're shadowing another symbol.
-  void setShadowed(FunctionSymbol *shadowed) {
+  void setShadowed(FunctionSymbol* shadowed) {
     shadowed_ = shadowed;
   }
-  FunctionSymbol *shadowed() const {
+  FunctionSymbol* shadowed() const {
     return shadowed_;
   }
 
@@ -1136,10 +1136,10 @@ class FunctionNode : public PoolObject
 
  private:
   TokenKind kind_;
-  BlockStatement *body_;
-  FunctionSignature *signature_;
-  Scope *funScope_;
-  FunctionSymbol *shadowed_;
+  BlockStatement* body_;
+  FunctionSignature* signature_;
+  Scope* funScope_;
+  FunctionSymbol* shadowed_;
   Label address_;
   Type* signature_type_;
   bool guaranteed_return_;
@@ -1150,7 +1150,7 @@ class FunctionStatement :
   public FunctionNode
 {
  public:
-  FunctionStatement(const NameToken &name, TokenKind kind, SymAttrs flags)
+  FunctionStatement(const NameToken& name, TokenKind kind, SymAttrs flags)
    : Statement(name.start),
      FunctionNode(kind),
      name_(name),
@@ -1162,14 +1162,14 @@ class FunctionStatement :
 
   DECLARE_NODE(FunctionStatement);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
-  void setSymbol(FunctionSymbol *sym) {
+  void setSymbol(FunctionSymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  FunctionSymbol *sym() const {
+  FunctionSymbol* sym() const {
     return sym_;
   }
   Flags<SymAttrs> flags() const {
@@ -1178,14 +1178,14 @@ class FunctionStatement :
 
   // These are used in the function -> value decay operation. Since most
   // functions are not used as values, this is an optional cache.
-  FunctionType *type() const {
+  FunctionType* type() const {
     return type_;
   }
-  void setType(FunctionType *type) {
+  void setType(FunctionType* type) {
     type_ = type;
   }
 
-  const char *decoration() const {
+  const char* decoration() const {
     if (token() == TOK_FORWARD)
       return "forward";
     if (token() == TOK_NATIVE)
@@ -1204,8 +1204,8 @@ class FunctionStatement :
 
  private:
   NameToken name_;
-  FunctionSymbol *sym_;
-  FunctionType *type_;
+  FunctionSymbol* sym_;
+  FunctionType* type_;
   Flags<SymAttrs> flags_;
 };
 
@@ -1225,7 +1225,7 @@ struct IfClause
 class IfStatement : public Statement
 {
  public:
-  IfStatement(const SourceLocation &pos, PoolList<IfClause>* clauses, Statement* fallthrough)
+  IfStatement(const SourceLocation& pos, PoolList<IfClause>* clauses, Statement* fallthrough)
    : Statement(pos),
      clauses_(clauses),
      fallthrough_(fallthrough)
@@ -1251,7 +1251,7 @@ class IfStatement : public Statement
 class EnumConstant : public Statement
 {
  public:
-  EnumConstant(const SourceLocation &loc, EnumStatement *parent, Atom *name, Expression *expr)
+  EnumConstant(const SourceLocation& loc, EnumStatement* parent, Atom* name, Expression* expr)
    : Statement(loc),
      parent_(parent),
      name_(name),
@@ -1261,37 +1261,37 @@ class EnumConstant : public Statement
 
   DECLARE_NODE(EnumConstant);
 
-  EnumStatement *parent() const {
+  EnumStatement* parent() const {
     return parent_;
   }
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
-  Expression *expression() const {
+  Expression* expression() const {
     return expr_;
   }
 
-  void setSymbol(ConstantSymbol *sym) {
+  void setSymbol(ConstantSymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  ConstantSymbol *sym() const {
+  ConstantSymbol* sym() const {
     return sym_;
   }
 
  private:
-  EnumStatement *parent_;
-  Atom *name_;
-  Expression *expr_;
-  ConstantSymbol *sym_;
+  EnumStatement* parent_;
+  Atom* name_;
+  Expression* expr_;
+  ConstantSymbol* sym_;
 };
 
-typedef PoolList<EnumConstant *> EnumConstantList;
+typedef PoolList<EnumConstant*> EnumConstantList;
 
 class EnumStatement : public Statement
 {
  public:
-  EnumStatement(const SourceLocation &pos, Atom *name)
+  EnumStatement(const SourceLocation& pos, Atom* name)
    : Statement(pos),
      name_(name),
      sym_(nullptr),
@@ -1303,23 +1303,23 @@ class EnumStatement : public Statement
 
   DECLARE_NODE(EnumStatement);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
 
-  void setEntries(EnumConstantList *entries) {
+  void setEntries(EnumConstantList* entries) {
     assert(!entries_);
     entries_ = entries;
   }
-  EnumConstantList *entries() const {
+  EnumConstantList* entries() const {
     return entries_;
   }
 
-  void setSymbol(TypeSymbol *sym) {
+  void setSymbol(TypeSymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  TypeSymbol *sym() const {
+  TypeSymbol* sym() const {
     return sym_;
   }
 
@@ -1339,18 +1339,18 @@ class EnumStatement : public Statement
     resolved_ = true;
   }
 
-  void setMethodmap(MethodmapDecl *methodmap) {
+  void setMethodmap(MethodmapDecl* methodmap) {
     methodmap_ = methodmap;
   }
-  MethodmapDecl *methodmap() const {
+  MethodmapDecl* methodmap() const {
     return methodmap_;
   }
 
  private:
-  Atom *name_;
-  TypeSymbol *sym_;
-  EnumConstantList *entries_;
-  MethodmapDecl *methodmap_;
+  Atom* name_;
+  TypeSymbol* sym_;
+  EnumConstantList* entries_;
+  MethodmapDecl* methodmap_;
   bool resolved_ : 1;
   bool resolving_ : 1;
 };
@@ -1358,11 +1358,11 @@ class EnumStatement : public Statement
 class IncDecExpression : public Expression
 {
   TokenKind token_;
-  Expression *expression_;
+  Expression* expression_;
   bool postfix_;
 
  public:
-  IncDecExpression(const SourceLocation &pos, TokenKind token, Expression *expression, bool postfix)
+  IncDecExpression(const SourceLocation& pos, TokenKind token, Expression* expression, bool postfix)
     : Expression(pos),
     token_(token),
     expression_(expression),
@@ -1375,7 +1375,7 @@ class IncDecExpression : public Expression
   TokenKind token() const {
     return token_;
   }
-  Expression *expression() const {
+  Expression* expression() const {
     return expression_;
   }
   bool postfix() const {
@@ -1386,7 +1386,7 @@ class IncDecExpression : public Expression
 class Case : public PoolObject
 {
  public:
-  Case(Expression *expression, ExpressionList *others, Statement *statement)
+  Case(Expression* expression, ExpressionList* others, Statement* statement)
    : expression_(expression),
      others_(others),
      statement_(statement),
@@ -1462,7 +1462,7 @@ class SwitchStatement : public Statement
 class LayoutDecl : public Statement
 {
  public:
-  LayoutDecl(const SourceLocation &loc)
+  LayoutDecl(const SourceLocation& loc)
    : Statement(loc)
   {}
 };
@@ -1470,7 +1470,7 @@ class LayoutDecl : public Statement
 class FieldDecl : public LayoutDecl
 {
  public:
-  FieldDecl(const SourceLocation &loc, const NameToken &name, const TypeExpr &te)
+  FieldDecl(const SourceLocation& loc, const NameToken& name, const TypeExpr& te)
    : LayoutDecl(loc),
      name_(name),
      te_(te),
@@ -1479,35 +1479,35 @@ class FieldDecl : public LayoutDecl
 
   DECLARE_NODE(FieldDecl);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
 
-  void setSymbol(FieldSymbol *sym) {
+  void setSymbol(FieldSymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  FieldSymbol *sym() const {
+  FieldSymbol* sym() const {
     return sym_;
   }
 
  private:
   NameToken name_;
   TypeExpr te_;
-  FieldSymbol *sym_;
+  FieldSymbol* sym_;
   Type* type_;
 };
 
 class MethodDecl : public LayoutDecl
 {
  public:
-  MethodDecl(const SourceLocation &loc, const NameToken &name, bool isStatic)
+  MethodDecl(const SourceLocation& loc, const NameToken& name, bool isStatic)
    : LayoutDecl(loc),
      name_(name),
      method_(nullptr),
@@ -1517,7 +1517,7 @@ class MethodDecl : public LayoutDecl
 
   DECLARE_NODE(MethodDecl);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
   FunctionNode* method() {
@@ -1531,25 +1531,25 @@ class MethodDecl : public LayoutDecl
     return static_;
   }
 
-  void setSymbol(MethodSymbol *sym) {
+  void setSymbol(MethodSymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  MethodSymbol *sym() const {
+  MethodSymbol* sym() const {
     return sym_;
   }
 
  private:
   NameToken name_;
   FunctionNode* method_;
-  MethodSymbol *sym_;
+  MethodSymbol* sym_;
   bool static_;
 };
 
 class PropertyDecl : public LayoutDecl
 {
  public:
-  PropertyDecl(const SourceLocation &loc, const NameToken &name, const TypeExpr &spec)
+  PropertyDecl(const SourceLocation& loc, const NameToken& name, const TypeExpr& spec)
    : LayoutDecl(loc),
      name_(name),
      te_(spec),
@@ -1560,34 +1560,34 @@ class PropertyDecl : public LayoutDecl
 
   DECLARE_NODE(PropertyDecl);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
-  FunctionNode *getter() {
+  FunctionNode* getter() {
     return getter_;
   }
-  FunctionNode *setter() {
+  FunctionNode* setter() {
     return setter_;
   }
 
-  void setGetter(FunctionNode *get) {
+  void setGetter(FunctionNode* get) {
     getter_ = get;
   }
-  void setSetter(FunctionNode *set) {
+  void setSetter(FunctionNode* set) {
     setter_ = set;
   }
 
-  void setSymbol(PropertySymbol *sym) {
+  void setSymbol(PropertySymbol* sym) {
     assert(!sym_);
     sym_ = sym;
   }
-  PropertySymbol *sym() const {
+  PropertySymbol* sym() const {
     return sym_;
   }
 
@@ -1596,13 +1596,13 @@ class PropertyDecl : public LayoutDecl
   TypeExpr te_;
   FunctionNode* getter_;
   FunctionNode* setter_;
-  PropertySymbol *sym_;
+  PropertySymbol* sym_;
 };
 
 class TypesetDecl : public Statement
 {
  public:
-  TypesetDecl(const SourceLocation &loc, const NameToken &name)
+  TypesetDecl(const SourceLocation& loc, const NameToken& name)
    : Statement(loc),
      name_(name),
      types_(nullptr),
@@ -1620,27 +1620,27 @@ class TypesetDecl : public Statement
 
     Entry()
     {}
-    Entry(const SourceLocation &loc, const TypeExpr &te)
+    Entry(const SourceLocation& loc, const TypeExpr& te)
      : loc(loc), te(te)
     {}
   };
   typedef FixedPoolList<Entry> Entries;
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
 
-  void setTypes(Entries *types) {
+  void setTypes(Entries* types) {
     types_ = types;
   }
-  Entries *types() const {
+  Entries* types() const {
     return types_;
   }
 
-  void setSymbol(TypeSymbol *sym) {
+  void setSymbol(TypeSymbol* sym) {
     sym_ = sym;
   }
-  TypeSymbol *sym() const {
+  TypeSymbol* sym() const {
     return sym_;
   }
 
@@ -1659,18 +1659,18 @@ class TypesetDecl : public Statement
 
  private:
   NameToken name_;
-  Entries *types_;
-  TypeSymbol *sym_;
+  Entries* types_;
+  TypeSymbol* sym_;
   bool can_eagerly_resolve_ : 1;
   bool is_resolved_ : 1;
 };
 
-typedef PoolList<LayoutDecl *> LayoutDecls;
+typedef PoolList<LayoutDecl*> LayoutDecls;
 
 class RecordDecl : public Statement
 {
  public:
-  RecordDecl(const SourceLocation &loc, TokenKind token, const NameToken &name)
+  RecordDecl(const SourceLocation& loc, TokenKind token, const NameToken& name)
    : Statement(loc),
      name_(name),
      token_(token),
@@ -1682,47 +1682,47 @@ class RecordDecl : public Statement
 
   DECLARE_NODE(RecordDecl);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
   TokenKind token() const {
     return token_;
   }
 
-  void setBody(LayoutDecls *body) {
+  void setBody(LayoutDecls* body) {
     body_ = body;
   }
-  LayoutDecls *body() const {
+  LayoutDecls* body() const {
     return body_;
   }
 
-  void setSymbol(TypeSymbol *sym) {
+  void setSymbol(TypeSymbol* sym) {
     sym_ = sym;
   }
-  TypeSymbol *sym() const {
+  TypeSymbol* sym() const {
     return sym_;
   }
 
-  void setScope(LayoutScope *scope) {
+  void setScope(LayoutScope* scope) {
     assert(!scope_);
     scope_ = scope;
   }
-  LayoutScope *scope() const {
+  LayoutScope* scope() const {
     return scope_;
   }
 
  private:
   NameToken name_;
   TokenKind token_;
-  LayoutDecls *body_;
-  TypeSymbol *sym_;
-  LayoutScope *scope_;
+  LayoutDecls* body_;
+  TypeSymbol* sym_;
+  LayoutScope* scope_;
 };
 
 class MethodmapDecl : public Statement
 {
  public:
-  MethodmapDecl(const SourceLocation &loc, const NameToken &name, NameProxy *parent)
+  MethodmapDecl(const SourceLocation& loc, const NameToken& name, NameProxy* parent)
    : Statement(loc),
      name_(name),
      parent_(parent),
@@ -1736,10 +1736,10 @@ class MethodmapDecl : public Statement
 
   DECLARE_NODE(MethodmapDecl);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_.atom;
   }
-  NameProxy *parent() const {
+  NameProxy* parent() const {
     return parent_;
   }
   bool nullable() const {
@@ -1749,67 +1749,67 @@ class MethodmapDecl : public Statement
     nullable_ = true;
   }
 
-  void setBody(LayoutDecls *body) {
+  void setBody(LayoutDecls* body) {
     body_ = body;
   }
-  LayoutDecls *body() const {
+  LayoutDecls* body() const {
     return body_;
   }
 
-  EnumType *extends() const {
+  EnumType* extends() const {
     return extends_;
   }
-  void setExtends(EnumType *extends) {
+  void setExtends(EnumType* extends) {
     extends_ = extends;
   }
 
-  void setSymbol(TypeSymbol *sym) {
+  void setSymbol(TypeSymbol* sym) {
     sym_ = sym;
   }
-  TypeSymbol *sym() const {
+  TypeSymbol* sym() const {
     return sym_;
   }
 
-  void setScope(LayoutScope *scope) {
+  void setScope(LayoutScope* scope) {
     assert(!scope_);
     scope_ = scope;
   }
-  LayoutScope *scope() const {
+  LayoutScope* scope() const {
     return scope_;
   }
 
  private:
   NameToken name_;
-  NameProxy *parent_;
-  LayoutDecls *body_;
-  TypeSymbol *sym_;
-  LayoutScope *scope_;
-  EnumType *extends_;
+  NameProxy* parent_;
+  LayoutDecls* body_;
+  TypeSymbol* sym_;
+  LayoutScope* scope_;
+  EnumType* extends_;
   bool nullable_;
 };
 
 class DeleteStatement : public Statement
 {
  public:
-  DeleteStatement(const SourceLocation &pos, Expression *expr)
+  DeleteStatement(const SourceLocation& pos, Expression* expr)
    : Statement(pos),
      expr_(expr)
   {}
 
   DECLARE_NODE(DeleteStatement);
 
-  Expression *expression() const {
+  Expression* expression() const {
     return expr_;
   }
 
  private:
-  Expression *expr_;
+  Expression* expr_;
 };
 
 class TypedefDecl : public Statement
 {
  public:
-  TypedefDecl(const SourceLocation &pos, Atom *name, const TypeExpr &spec)
+  TypedefDecl(const SourceLocation& pos, Atom* name, const TypeExpr& spec)
    : Statement(pos),
      name_(name),
      te_(spec),
@@ -1819,48 +1819,48 @@ class TypedefDecl : public Statement
 
   DECLARE_NODE(TypedefDecl);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
-  TypeExpr &te() {
+  TypeExpr& te() {
     return te_;
   }
-  const TypeExpr &te() const {
+  const TypeExpr& te() const {
     return te_;
   }
 
-  TypeSymbol *sym() const {
+  TypeSymbol* sym() const {
     return sym_;
   }
-  void setSymbol(TypeSymbol *sym) {
+  void setSymbol(TypeSymbol* sym) {
     sym_ = sym;
   }
 
  private:
-  Atom *name_;
+  Atom* name_;
   TypeExpr te_;
-  TypeSymbol *sym_;
+  TypeSymbol* sym_;
 };
 
-typedef PoolList<NameProxy *> NameProxyList;
+typedef PoolList<NameProxy*> NameProxyList;
 
 #undef DECLARE_NODE
 
 class ParseTree : public PoolObject
 {
-  StatementList *statements_;
+  StatementList* statements_;
 
  public:
-  ParseTree(StatementList *statements)
+  ParseTree(StatementList* statements)
     : statements_(statements),
       uses_handle_intrinsics_(false)
   {
   }
 
-  void dump(FILE *fp);
-  void toJson(CompileContext &cc, FILE *fp);
+  void dump(FILE* fp);
+  void toJson(CompileContext& cc, FILE* fp);
 
-  StatementList *statements() const {
+  StatementList* statements() const {
     return statements_;
   }
 
@@ -1876,45 +1876,45 @@ class ParseTree : public PoolObject
 };
 
 // For new AstVisitors, copy-paste.
-//  void visitVarDecl(VarDecl *node) override;
-//  void visitForStatement(ForStatement *node) override;
-//  void visitReturnStatement(ReturnStatement *node) override;
-//  void visitIntegerLiteral(IntegerLiteral *node) override;
-//  void visitFloatLiteral(FloatLiteral *node) override;
-//  void visitStringLiteral(StringLiteral *node) override;
-//  void visitCharLiteral(CharLiteral *node) override;
-//  void visitBinaryExpression(BinaryExpression *node) override;
-//  void visitBlockStatement(BlockStatement *node) override;
-//  void visitAssignment(Assignment *node) override;
-//  void visitNameProxy(NameProxy *node) override;
-//  void visitExpressionStatement(ExpressionStatement *node) override;
-//  void visitFunctionStatement(FunctionStatement *node) override;
-//  void visitCallExpression(CallExpression *node) override;
-//  void visitFieldExpression(FieldExpression *node) override;
-//  void visitIfStatement(IfStatement *node) override;
-//  void visitIndexExpression(IndexExpression *node) override;
-//  void visitEnumConstant(EnumConstant *node) override;
-//  void visitEnumStatement(EnumStatement *node) override;
-//  void visitWhileStatement(WhileStatement *node) override;
-//  void visitBreakStatement(BreakStatement *node) override;
-//  void visitContinueStatement(ContinueStatement *node) override;
-//  void visitIncDecExpression(IncDecExpression *node) override;
-//  void visitUnaryExpression(UnaryExpression *node) override;
-//  void visitUnsafeCastExpr(UnsafeCastExpr *node) override;
-//  void visitSizeofExpression(SizeofExpression *node) override;
-//  void visitTernaryExpression(TernaryExpression *node) override;
-//  void visitTokenLiteral(TokenLiteral *node) override;
-//  void visitSwitchStatement(SwitchStatement *node) override;
-//  void visitArrayLiteral(ArrayLiteral *node) override;
-//  void visitTypedefDecl(TypedefDecl *node) override;
-//  void visitStructInitializer(StructInitializer *node) override;
-//  void visitRecordDecl(RecordDecl *node) override;
-//  void visitMethodmapDecl(MethodmapDecl *node) override;
-//  void visitMethodDecl(MethodDecl *node) override;
-//  void visitPropertyDecl(PropertyDecl *node) override;
-//  void visitFieldDecl(FieldDecl *node) override;
-//  void visitThisExpression(ThisExpression *node) override;
-//  void visitDeleteStatement(DeleteStatement *node) override;
+//  void visitVarDecl(VarDecl* node) override;
+//  void visitForStatement(ForStatement* node) override;
+//  void visitReturnStatement(ReturnStatement* node) override;
+//  void visitIntegerLiteral(IntegerLiteral* node) override;
+//  void visitFloatLiteral(FloatLiteral* node) override;
+//  void visitStringLiteral(StringLiteral* node) override;
+//  void visitCharLiteral(CharLiteral* node) override;
+//  void visitBinaryExpression(BinaryExpression* node) override;
+//  void visitBlockStatement(BlockStatement* node) override;
+//  void visitAssignment(Assignment* node) override;
+//  void visitNameProxy(NameProxy* node) override;
+//  void visitExpressionStatement(ExpressionStatement* node) override;
+//  void visitFunctionStatement(FunctionStatement* node) override;
+//  void visitCallExpression(CallExpression* node) override;
+//  void visitFieldExpression(FieldExpression* node) override;
+//  void visitIfStatement(IfStatement* node) override;
+//  void visitIndexExpression(IndexExpression* node) override;
+//  void visitEnumConstant(EnumConstant* node) override;
+//  void visitEnumStatement(EnumStatement* node) override;
+//  void visitWhileStatement(WhileStatement* node) override;
+//  void visitBreakStatement(BreakStatement* node) override;
+//  void visitContinueStatement(ContinueStatement* node) override;
+//  void visitIncDecExpression(IncDecExpression* node) override;
+//  void visitUnaryExpression(UnaryExpression* node) override;
+//  void visitUnsafeCastExpr(UnsafeCastExpr* node) override;
+//  void visitSizeofExpression(SizeofExpression* node) override;
+//  void visitTernaryExpression(TernaryExpression* node) override;
+//  void visitTokenLiteral(TokenLiteral* node) override;
+//  void visitSwitchStatement(SwitchStatement* node) override;
+//  void visitArrayLiteral(ArrayLiteral* node) override;
+//  void visitTypedefDecl(TypedefDecl* node) override;
+//  void visitStructInitializer(StructInitializer* node) override;
+//  void visitRecordDecl(RecordDecl* node) override;
+//  void visitMethodmapDecl(MethodmapDecl* node) override;
+//  void visitMethodDecl(MethodDecl* node) override;
+//  void visitPropertyDecl(PropertyDecl* node) override;
+//  void visitFieldDecl(FieldDecl* node) override;
+//  void visitThisExpression(ThisExpression* node) override;
+//  void visitDeleteStatement(DeleteStatement* node) override;
 
 } // namespace ast
 } // namespace sp

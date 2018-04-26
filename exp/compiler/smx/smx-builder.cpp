@@ -24,7 +24,7 @@ SmxBuilder::SmxBuilder()
 }
 
 bool
-SmxBuilder::write(ISmxBuffer *buf)
+SmxBuilder::write(ISmxBuffer* buf)
 {
   sp_file_hdr_t header;
   header.magic = SmxConsts::FILE_MAGIC;
@@ -77,7 +77,7 @@ SmxBuilder::write(ISmxBuffer *buf)
   assert(current_offset == header.stringtab);
   
   for (size_t i = 0; i < sections_.length(); i++) {
-    const AString &name = sections_[i]->name();
+    const AString& name = sections_[i]->name();
     if (!buf->write(name.chars(), name.length() + 1))
       return false;
   }
@@ -98,10 +98,10 @@ SmxBuilder::write(ISmxBuffer *buf)
 }
 
 bool
-SmxNameTable::write(ISmxBuffer *buf)
+SmxNameTable::write(ISmxBuffer* buf)
 {
   for (size_t i = 0; i < names_.length(); i++) {
-    Atom *str = names_[i];
+    Atom* str = names_[i];
     if (!buf->write(str->chars(), str->length() + 1))
       return false;
   }

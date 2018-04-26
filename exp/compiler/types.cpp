@@ -26,64 +26,64 @@ using namespace sp::ast;
 
 Type sp::UnresolvableType(Type::Kind::Unresolvable);
 
-Type *
+Type*
 Type::NewVoid()
 {
   return new (POOL()) Type(Kind::Void);
 }
 
-Type *
+Type*
 Type::NewImplicitVoid()
 {
   return new (POOL()) Type(Kind::ImplicitVoid);
 }
 
-Type *
+Type*
 Type::NewNullType()
 {
   return new (POOL()) Type(Kind::NullType);
 }
 
-Type *
+Type*
 Type::NewUnchecked()
 {
-  Type *type = new (POOL()) Type(Kind::Unchecked);
+  Type* type = new (POOL()) Type(Kind::Unchecked);
   return type;
 }
 
-Type *
+Type*
 Type::NewMetaFunction()
 {
   return new (POOL()) Type(Kind::MetaFunction);
 }
 
-Type *
+Type*
 Type::NewOverloadedFunction()
 {
   return new (POOL()) Type(Kind::OverloadedFunction);
 }
 
-Type *
+Type*
 Type::NewPrimitive(PrimitiveType prim)
 {
-  Type *type = new (POOL()) Type(Kind::Primitive);
+  Type* type = new (POOL()) Type(Kind::Primitive);
   type->primitive_ = prim;
   return type;
 }
 
-Type *
-Type::NewQualified(Type *type, Qualifiers qualifiers)
+Type*
+Type::NewQualified(Type* type, Qualifiers qualifiers)
 {
   assert(!type->isQualified());
-  Type *qual = new (POOL()) Type(Kind::Qualifier, type);
+  Type* qual = new (POOL()) Type(Kind::Qualifier, type);
   qual->qualifiers_ = qualifiers;
   return qual;
 }
 
-ArrayType *
-ArrayType::New(Type *contained, int elements)
+ArrayType*
+ArrayType::New(Type* contained, int elements)
 {
-  ArrayType *type = new (POOL()) ArrayType(Kind::Array);
+  ArrayType* type = new (POOL()) ArrayType(Kind::Array);
   type->contained_ = contained;
   type->elements_ = elements;
   type->nlevels_ = contained->isArray()
@@ -92,32 +92,32 @@ ArrayType::New(Type *contained, int elements)
   return type;
 }
 
-EnumType *
-EnumType::New(Atom *name)
+EnumType*
+EnumType::New(Atom* name)
 {
-  EnumType *type = new (POOL()) EnumType();
+  EnumType* type = new (POOL()) EnumType();
   type->kind_ = Kind::Enum;
   type->name_ = name;
   return type;
 }
 
-TypedefType *
-TypedefType::New(Atom *name)
+TypedefType*
+TypedefType::New(Atom* name)
 {
-  TypedefType *tdef = new (POOL()) TypedefType(name);
+  TypedefType* tdef = new (POOL()) TypedefType(name);
   tdef->actual_ = nullptr;
   return tdef;
 }
 
 void
-TypedefType::resolve(Type *actual)
+TypedefType::resolve(Type* actual)
 {
   canonical_ = actual;
   actual_ = actual;
 }
 
 bool
-Type::Compare(Type *left, Type *right)
+Type::Compare(Type* left, Type* right)
 {
   if (left == right)
     return true;
@@ -131,8 +131,8 @@ Type::Compare(Type *left, Type *right)
 
     case Kind::Array:
     {
-      ArrayType *aleft = left->toArray();
-      ArrayType *aright = right->toArray();
+      ArrayType* aleft = left->toArray();
+      ArrayType* aright = right->toArray();
       return aleft->equalTo(aright);
     }
 
@@ -153,8 +153,8 @@ Type::Compare(Type *left, Type *right)
   }
 }
 
-FunctionType *
-FunctionType::New(FunctionSignature *sig)
+FunctionType*
+FunctionType::New(FunctionSignature* sig)
 {
   return new (POOL()) FunctionType(sig);
 }
@@ -165,7 +165,7 @@ FunctionType::returnType() const
   return signature_->returnType().resolved();
 }
 
-TypesetType *
+TypesetType*
 TypesetType::New(Atom* name)
 {
   return new (POOL()) TypesetType(name);
@@ -182,7 +182,7 @@ RecordType::name() const
   return decl_->name();
 }
 
-StructType *
+StructType*
 StructType::New(ast::RecordDecl* decl)
 {
   return new (POOL()) StructType(decl);
@@ -204,7 +204,7 @@ VariadicType::New(Type* inner)
   return new (POOL()) VariadicType(inner);
 }
 
-const char *
+const char*
 sp::GetPrimitiveName(PrimitiveType type)
 {
   switch (type) {
@@ -246,8 +246,8 @@ sp::GetPrimitiveName(PrimitiveType type)
   }
 }
 
-static const char *
-GetBaseTypeName(Type *type)
+static const char*
+GetBaseTypeName(Type* type)
 {
   if (type->isUnresolvable())
     return "<unresolved>";
@@ -263,22 +263,22 @@ GetBaseTypeName(Type *type)
     return type->toEnum()->name()->chars();
   if (type->isRecord())
     return type->toRecord()->name()->chars();
-  if (TypedefType *tdef = type->asTypedef())
+  if (TypedefType* tdef = type->asTypedef())
     return tdef->name()->chars();
   if (ReferenceType* rdef = type->asReference())
     return GetBaseTypeName(rdef->inner());
   return GetPrimitiveName(type->primitive());
 }
 
-static AString BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags);
-static AString BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags);
+static AString BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags);
+static AString BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags);
 
 // When building inner typenames, only include these flags.
 static const TypeDiagFlags kDiagFlagsInnerMask =
   TypeDiagFlags::Names;
 
 static AString
-BuildTypeFromTypeExpr(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
+BuildTypeFromTypeExpr(const TypeExpr& te, Atom* name, TypeDiagFlags flags)
 {
   if (te.spec())
     return BuildTypeFromSpecifier(te.spec(), name, flags);
@@ -286,7 +286,7 @@ BuildTypeFromTypeExpr(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
 }
 
 static AString
-BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
+BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags)
 {
   AutoString base = "function ";
   base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags & kDiagFlagsInnerMask);
@@ -294,7 +294,7 @@ BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
 
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
     TypeDiagFlags varFlags = flags & kDiagFlagsInnerMask;
-    Atom *name = !!(flags & TypeDiagFlags::Names)
+    Atom* name = !!(flags & TypeDiagFlags::Names)
                  ? sig->parameters()->at(i)->name()
                  : nullptr;
     if (sig->parameters()->at(i)->sym()->type()->isReference())
@@ -308,7 +308,7 @@ BuildTypeFromSignature(const FunctionSignature *sig, TypeDiagFlags flags)
 }
 
 static AString
-BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
+BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags)
 {
   AutoString base;
   if (spec->isConst() || !!(flags & TypeDiagFlags::IsConst))
@@ -318,7 +318,7 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flag
     case TOK_LABEL:
     {
       // HACK: we should move these atoms into the context.
-      const char *chars = spec->proxy()->name()->chars();
+      const char* chars = spec->proxy()->name()->chars();
       if (strcmp(chars, "Float") == 0)
         base = base + "float";
       else if (strcmp(chars, "String") == 0)
@@ -355,8 +355,8 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flag
     base = base + " " + name->chars();
 
   for (size_t i = 0; i < spec->rank(); i++) {
-    if (Expression *expr = spec->sizeOfRank(i)) {
-      if (IntegerLiteral *lit = expr->asIntegerLiteral()) {
+    if (Expression* expr = spec->sizeOfRank(i)) {
+      if (IntegerLiteral* lit = expr->asIntegerLiteral()) {
         char value[24];
         SafeSprintf(value, sizeof(value), "%d", (int)lit->value());
         base = base + "[" + value + "]";
@@ -385,13 +385,13 @@ BuildTypeFromSpecifier(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flag
 }
 
 AString
-sp::BuildTypeName(const TypeSpecifier *spec, Atom *name, TypeDiagFlags flags)
+sp::BuildTypeName(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags)
 {
   return BuildTypeFromSpecifier(spec, name, flags);
 }
 
 AString
-sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
+sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
 {
   bool variadic = false;
   if (aType->isVariadic()) {
@@ -399,11 +399,11 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
     variadic = true;
   }
 
-  if (ArrayType *type = aType->asArray()) {
-    Vector<ArrayType *> stack;
+  if (ArrayType* type = aType->asArray()) {
+    Vector<ArrayType*> stack;
 
-    Type *cursor = type;
-    Type *innermost = nullptr;
+    Type* cursor = type;
+    Type* innermost = nullptr;
     for (;;) {
       if (!cursor->isArray()) {
         innermost = cursor;
@@ -449,7 +449,7 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
   if (aType->isConst())
     builder = "const ";
 
-  if (FunctionType *type = aType->asFunction())
+  if (FunctionType* type = aType->asFunction())
     builder = builder + BuildTypeFromSignature(type->signature(), flags & kDiagFlagsInnerMask);
   else
     builder = builder + GetBaseTypeName(aType);
@@ -467,7 +467,7 @@ sp::BuildTypeName(Type *aType, Atom *name, TypeDiagFlags flags)
 }
 
 AString
-sp::BuildTypeName(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
+sp::BuildTypeName(const TypeExpr& te, Atom* name, TypeDiagFlags flags)
 {
   if (te.spec())
     return BuildTypeName(te.spec(), name, flags);
@@ -475,7 +475,7 @@ sp::BuildTypeName(const TypeExpr &te, Atom *name, TypeDiagFlags flags)
 }
 
 BoxedValue
-sp::DefaultValueForPlainType(Type *type)
+sp::DefaultValueForPlainType(Type* type)
 {
   if (type->isUnresolvable())
     return BoxedValue(IntValue::FromInt32(0));
@@ -496,7 +496,7 @@ sp::DefaultValueForPlainType(Type *type)
 }
 
 int32_t
-sp::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
+sp::ComputeSizeOfType(ReportingContext& cc, Type* aType, size_t level)
 {
   if (aType->isUnresolvedTypedef()) {
     cc.report(rmsg::recursive_type);
@@ -507,7 +507,7 @@ sp::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
     return 0;
   }
 
-  ArrayType *type = aType->toArray();
+  ArrayType* type = aType->toArray();
   for (size_t i = 1; i <= level; i++) {
     if (!type->contained()->isArray()) {
       cc.report(rmsg::sizeof_invalid_rank);
@@ -525,10 +525,10 @@ sp::ComputeSizeOfType(ReportingContext &cc, Type *aType, size_t level)
 }
 
 bool
-sp::AreFunctionTypesEqual(FunctionType *a, FunctionType *b)
+sp::AreFunctionTypesEqual(FunctionType* a, FunctionType* b)
 {
-  FunctionSignature *af = a->signature();
-  FunctionSignature *bf = b->signature();
+  FunctionSignature* af = a->signature();
+  FunctionSignature* bf = b->signature();
   if (!AreTypesEquivalent(af->returnType().resolved(),
                           bf->returnType().resolved(),
                           Qualifiers::None))
@@ -536,14 +536,14 @@ sp::AreFunctionTypesEqual(FunctionType *a, FunctionType *b)
     return false;
   }
 
-  ParameterList *ap = af->parameters();
-  ParameterList *bp = bf->parameters();
+  ParameterList* ap = af->parameters();
+  ParameterList* bp = bf->parameters();
   if (ap->length() != bp->length())
     return false;
 
   for (size_t i = 0; i < ap->length(); i++) {
-    VarDecl *arga = ap->at(i);
-    VarDecl *argb = bp->at(i);
+    VarDecl* arga = ap->at(i);
+    VarDecl* argb = bp->at(i);
     if (!AreTypesEquivalent(arga->te().resolved(),
                             argb->te().resolved(),
                             Qualifiers::None))
@@ -557,7 +557,7 @@ sp::AreFunctionTypesEqual(FunctionType *a, FunctionType *b)
 // Since const is transitive, we require it to be threaded through type
 // equivalence tests.
 bool
-sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
+sp::AreTypesEquivalent(Type* a, Type* b, Qualifiers context)
 {
   Qualifiers qa = (a->qualifiers() | context);
   Qualifiers qb = (b->qualifiers() | context);
@@ -588,8 +588,8 @@ sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
       if (!b->isArray())
         return false;
 
-      ArrayType *aa = a->toArray();
-      ArrayType *ba = b->toArray();
+      ArrayType* aa = a->toArray();
+      ArrayType* ba = b->toArray();
       while (true) {
         // Both arrays must be either dynamic or have the same fixed size.
         if (aa->hasFixedLength() != ba->hasFixedLength())
@@ -598,8 +598,8 @@ sp::AreTypesEquivalent(Type *a, Type *b, Qualifiers context)
           return false;
 
         // Both contained types must be the same type.
-        Type *innerA = aa->contained();
-        Type *innerB = ba->contained();
+        Type* innerA = aa->contained();
+        Type* innerB = ba->contained();
         if (innerA->isArray() != innerB->isArray())
           return false;
         if (!innerA->isArray()) {

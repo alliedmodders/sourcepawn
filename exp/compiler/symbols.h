@@ -64,7 +64,7 @@ class Symbol : public PoolObject
   };
 
  public:
-  Symbol(ast::AstNode *node, Scope *scope, Atom *name)
+  Symbol(ast::AstNode* node, Scope* scope, Atom* name)
    : node_(node),
      scope_(scope),
      name_(name)
@@ -72,15 +72,15 @@ class Symbol : public PoolObject
   }
 
   virtual Kind kind() const = 0;
-  virtual const char *kindName() const = 0;
+  virtual const char* kindName() const = 0;
 
-  ast::AstNode *node() const {
+  ast::AstNode* node() const {
     return node_;
   }
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
-  Scope *scope() const {
+  Scope* scope() const {
     return scope_;
   }
 
@@ -89,22 +89,22 @@ class Symbol : public PoolObject
   bool is##name() const {                               \
     return (kind() == k##name);                         \
   }                                                     \
-  name##Symbol *as##name() {                            \
+  name##Symbol* as##name() {                            \
     if (is##name())                                     \
       return to##name();                                \
     return nullptr;                                     \
   }                                                     \
-  name##Symbol *to##name() {                            \
+  name##Symbol* to##name() {                            \
     assert(is##name());                                 \
-    return reinterpret_cast<name##Symbol *>(this);      \
+    return reinterpret_cast<name##Symbol*>(this);      \
   }
   SYMBOL_KINDS(_)
 #undef _
 
  private:
-  ast::AstNode *node_;
-  Scope *scope_;
-  Atom *name_;
+  ast::AstNode* node_;
+  Scope* scope_;
+  Atom* name_;
 };
 
 class VariableSymbol : public Symbol
@@ -157,11 +157,11 @@ class VariableSymbol : public Symbol
   bool isConstExpr() const {
     return !constant_.isOpaque();
   }
-  const BoxedValue &constExpr() const {
+  const BoxedValue& constExpr() const {
     assert(isConstExpr());
     return constant_;
   }
-  void setConstExpr(const BoxedValue &value) {
+  void setConstExpr(const BoxedValue& value) {
     // We're allowed to overwrite this if the original value was set to stop
     // infinite recursion, so no assert here.
     constant_ = value;
@@ -204,7 +204,7 @@ class VariableSymbol : public Symbol
 class TypeSymbol : public Symbol
 {
  public:
-  TypeSymbol(ast::AstNode *node, Scope *scope, Atom *name, Type *type = nullptr)
+  TypeSymbol(ast::AstNode* node, Scope* scope, Atom* name, Type* type = nullptr)
    : Symbol(node, scope, name),
      type_(type)
   {
@@ -213,27 +213,27 @@ class TypeSymbol : public Symbol
   Kind kind() const override {
     return kType;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "type";
   }
 
-  Type *type() const {
+  Type* type() const {
     return type_;
   }
-  void setType(Type *type) {
+  void setType(Type* type) {
     type_ = type;
   }
 
  private:
-  Type *type_;
+  Type* type_;
 };
 
-typedef PoolList<ast::FunctionStatement *> FuncStmtList;
+typedef PoolList<ast::FunctionStatement*> FuncStmtList;
 
 class FunctionSymbol : public Symbol
 {
  public:
-  FunctionSymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  FunctionSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name),
      shadows_(nullptr)
   {
@@ -242,32 +242,32 @@ class FunctionSymbol : public Symbol
   Kind kind() const override {
     return kFunction;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "function";
   }
 
-  void addShadow(ast::FunctionStatement *stmt);
-  FuncStmtList *shadows() const {
+  void addShadow(ast::FunctionStatement* stmt);
+  FuncStmtList* shadows() const {
     return shadows_;
   }
 
-  ast::FunctionStatement *impl() const;
+  ast::FunctionStatement* impl() const;
 
  private:
-  FuncStmtList *shadows_;
+  FuncStmtList* shadows_;
 };
 
 class ConstantSymbol : public Symbol
 {
  public:
-  ConstantSymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  ConstantSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name)
   {
     // Opaque == unresolved.
     value_.setOpaqueIntptr(0);
   }
-  ConstantSymbol(ast::AstNode *node, Scope *scope, Atom *name,
-                 Type *type, const BoxedValue &value)
+  ConstantSymbol(ast::AstNode* node, Scope* scope, Atom* name,
+                 Type* type, const BoxedValue& value)
     : Symbol(node, scope, name),
       type_(type),
       value_(value)
@@ -277,22 +277,22 @@ class ConstantSymbol : public Symbol
   Kind kind() const override {
     return kConstant;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "constant";
   }
 
-  Type *type() const {
+  Type* type() const {
     return type_;
   }
 
-  const BoxedValue &value() const {
+  const BoxedValue& value() const {
     assert(hasValue());
     return value_;
   }
   bool hasValue() const {
     return !value_.isOpaque();
   }
-  void setTypeAndValue(Type *type, const BoxedValue &value) {
+  void setTypeAndValue(Type* type, const BoxedValue& value) {
     type_ = type;
     value_ = value;
   }
@@ -310,14 +310,14 @@ class ConstantSymbol : public Symbol
   }
 
  private:
-  Type *type_;
+  Type* type_;
   BoxedValue value_;
 };
 
 class FieldSymbol : public Symbol
 {
  public:
-  FieldSymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  FieldSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name),
      type_(nullptr)
   {
@@ -326,26 +326,26 @@ class FieldSymbol : public Symbol
   Kind kind() const override {
     return kField;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "field";
   }
 
-  void setType(Type *type) {
+  void setType(Type* type) {
     assert(!type_);
     type_ = type;
   }
-  Type *type() const {
+  Type* type() const {
     return type_;
   }
 
  private:
-  Type *type_;
+  Type* type_;
 };
 
 class PropertySymbol : public Symbol
 {
  public:
-  PropertySymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  PropertySymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name),
      type_(nullptr)
   {
@@ -354,26 +354,26 @@ class PropertySymbol : public Symbol
   Kind kind() const override {
     return kProperty;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "property";
   }
 
-  void setType(Type *type) {
+  void setType(Type* type) {
     assert(!type_);
     type_ = type;
   }
-  Type *type() const {
+  Type* type() const {
     return type_;
   }
 
  private:
-  Type *type_;
+  Type* type_;
 };
 
 class MethodSymbol : public Symbol
 {
  public:
-  MethodSymbol(ast::AstNode *node, Scope *scope, Atom *name)
+  MethodSymbol(ast::AstNode* node, Scope* scope, Atom* name)
    : Symbol(node, scope, name)
   {
   }
@@ -381,7 +381,7 @@ class MethodSymbol : public Symbol
   Kind kind() const override {
     return kMethod;
   }
-  const char *kindName() const override {
+  const char* kindName() const override {
     return "method";
   }
 };

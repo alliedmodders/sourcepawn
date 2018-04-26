@@ -27,7 +27,7 @@ namespace sp {
 class ISmxBuffer
 {
  public:
-  virtual bool write(const void *bytes, size_t len) = 0;
+  virtual bool write(const void* bytes, size_t len) = 0;
   virtual size_t pos() const = 0;
 };
 
@@ -38,7 +38,7 @@ class MemoryBuffer : public ISmxBuffer
 
  public:
   MemoryBuffer() {
-    buffer_ = (uint8_t *)calloc(kDefaultSize, 1);
+    buffer_ = (uint8_t*)calloc(kDefaultSize, 1);
     pos_ = buffer_;
     end_ = buffer_ + kDefaultSize;
     oom_ = !buffer_;
@@ -54,7 +54,7 @@ class MemoryBuffer : public ISmxBuffer
     return write(&value, sizeof(T));
   }
 
-  bool write(const void *bytes, size_t len) override {
+  bool write(const void* bytes, size_t len) override {
     // :TODO: fix for overflow
     if (pos_ + len > end_) {
       if (!grow(len))
@@ -69,7 +69,7 @@ class MemoryBuffer : public ISmxBuffer
     return pos_ - buffer_;
   }
 
-  uint8_t *bytes() const {
+  uint8_t* bytes() const {
     return buffer_;
   }
   size_t size() const {
@@ -114,7 +114,7 @@ class MemoryBuffer : public ISmxBuffer
       new_maxsize *= 2;
     }
 
-    uint8_t *newbuffer = (uint8_t *)realloc(buffer_, new_maxsize);
+    uint8_t* newbuffer = (uint8_t*)realloc(buffer_, new_maxsize);
     if (!newbuffer)
       return false;
     pos_ = newbuffer + (pos_ - buffer_);
@@ -124,9 +124,9 @@ class MemoryBuffer : public ISmxBuffer
   }
 
  private:
-  uint8_t *buffer_;
-  uint8_t *pos_;
-  uint8_t *end_;
+  uint8_t* buffer_;
+  uint8_t* pos_;
+  uint8_t* end_;
   bool oom_;
 };
 

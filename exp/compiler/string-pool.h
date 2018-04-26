@@ -37,7 +37,7 @@ class Atom
   friend class StringPool;
 
  private:
-  Atom(const char *str, size_t len)
+  Atom(const char* str, size_t len)
    : str_(str, len)
   {
   }
@@ -46,7 +46,7 @@ class Atom
   size_t length() const {
     return str_.length();
   }
-  const char *chars() const {
+  const char* chars() const {
     return str_.chars();
   }
 
@@ -63,13 +63,13 @@ class CharsAndLength
     {
     }
 
-    CharsAndLength(const char *str, size_t length)
+    CharsAndLength(const char* str, size_t length)
       : str_(str),
         length_(length)
     {
     }
 
-    const char *str() const {
+    const char* str() const {
         return str_;
     }
     size_t length() const {
@@ -77,7 +77,7 @@ class CharsAndLength
     }
 
   private:
-    const char *str_;
+    const char* str_;
     size_t length_;
 };
 
@@ -95,10 +95,10 @@ class StringPool
       if (!table_.elements())
         return;
       for (Table::iterator i(&table_); !i.empty(); i.next())
-        delete *i;
+        delete* i;
     }
 
-    Atom *add(const char *str, size_t length) {
+    Atom* add(const char* str, size_t length) {
       CharsAndLength chars(str, length);
       Table::Insert p = table_.findForAdd(chars);
       if (!p.found() && !table_.add(p, new Atom(str, length)))
@@ -106,23 +106,23 @@ class StringPool
       return *p;
     }
 
-    Atom *add(const char *str) {
+    Atom* add(const char* str) {
       return add(str, strlen(str));
     }
 
   private:
     struct Policy {
-      typedef Atom *Payload;
+      typedef Atom* Payload;
 
-      static uint32_t hash(const char *key) {
+      static uint32_t hash(const char* key) {
         return HashCharSequence(key, strlen(key));
       }
 
-      static uint32_t hash(const CharsAndLength &key) {
+      static uint32_t hash(const CharsAndLength& key) {
         return HashCharSequence(key.str(), key.length());
       }
 
-      static bool matches(const CharsAndLength &key, const Payload &e) {
+      static bool matches(const CharsAndLength& key, const Payload& e) {
         if (key.length() != e->length())
           return false;
         return strcmp(key.str(), e->chars()) == 0;
@@ -137,18 +137,18 @@ class StringPool
 
 template <typename T>
 struct PointerHashPolicy {
-  static uint32_t hash(T *p) {
+  static uint32_t hash(T* p) {
     return HashPointer(p);
   }
-  static bool matches(T *a, T *b) {
+  static bool matches(T* a, T* b) {
     return a == b;
   }
 };
 
 template <typename T>
-class PointerSet : public HashSet<T *, PointerHashPolicy<T>>
+class PointerSet : public HashSet<T*, PointerHashPolicy<T>>
 {
-  typedef HashSet<T *, PointerHashPolicy<T>> Base;
+  typedef HashSet<T*, PointerHashPolicy<T>> Base;
 
  public:
   typedef typename Base::Insert Insert;
@@ -157,13 +157,13 @@ class PointerSet : public HashSet<T *, PointerHashPolicy<T>>
     this->init(16);
   }
 
-  void add(T *ptr) {
+  void add(T* ptr) {
     Insert p = findForAdd(ptr);
     if (!p.found())
       add(p, ptr);
   }
 
-  void add(Insert p, T *ptr) {
+  void add(Insert p, T* ptr) {
     Base::add(p, ptr);
   }
 };
@@ -171,7 +171,7 @@ class PointerSet : public HashSet<T *, PointerHashPolicy<T>>
 typedef PointerSet<Atom> AtomSet;
 
 template <typename T>
-class AtomMap : public HashMap<Atom *, T, PointerHashPolicy<Atom>>
+class AtomMap : public HashMap<Atom*, T, PointerHashPolicy<Atom>>
 {
  public:
   AtomMap() {

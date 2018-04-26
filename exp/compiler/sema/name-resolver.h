@@ -28,53 +28,53 @@ using namespace ke;
 class NameResolver
 {
  public:
-  NameResolver(CompileContext &cc);
+  NameResolver(CompileContext& cc);
 
   void OnEnterParser();
   void OnLeaveParser();
   void OnEnterScope(Scope::Kind kind);
-  Scope *OnLeaveScope();
+  Scope* OnLeaveScope();
   void OnLeaveOrphanScope();
-  void OnNameProxy(NameProxy *proxy);
-  void OnTagProxy(NameProxy *proxy);
-  void OnEnumDecl(EnumStatement *node);
-  void OnEnumValueDecl(EnumConstant *cs);
-  VarDecl *HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier &spec, Expression *init);
-  void OnEnterMethodmap(MethodmapDecl *methodmap);
-  void OnLeaveMethodmap(MethodmapDecl *methodmap);
-  void OnEnterRecordDecl(RecordDecl *decl);
-  void OnLeaveRecordDecl(RecordDecl *decl);
-  void OnEnterFunctionDecl(FunctionStatement *stmt);
-  void OnLeaveFunctionDecl(FunctionStatement *node);
-  void OnReturnStmt(ReturnStatement *stmt);
-  FieldDecl *HandleFieldDecl(const SourceLocation &pos,
-                             const NameToken &name,
-                             TypeSpecifier &spec);
-  MethodDecl *EnterMethodDecl(const SourceLocation &begin,
-                              const NameToken &nameToken,
-                              TypeSpecifier *spec,
-                              TypeExpr *te,
+  void OnNameProxy(NameProxy* proxy);
+  void OnTagProxy(NameProxy* proxy);
+  void OnEnumDecl(EnumStatement* node);
+  void OnEnumValueDecl(EnumConstant* cs);
+  VarDecl* HandleVarDecl(NameToken name, TokenKind kind, SymAttrs flags, TypeSpecifier& spec, Expression* init);
+  void OnEnterMethodmap(MethodmapDecl* methodmap);
+  void OnLeaveMethodmap(MethodmapDecl* methodmap);
+  void OnEnterRecordDecl(RecordDecl* decl);
+  void OnLeaveRecordDecl(RecordDecl* decl);
+  void OnEnterFunctionDecl(FunctionStatement* stmt);
+  void OnLeaveFunctionDecl(FunctionStatement* node);
+  void OnReturnStmt(ReturnStatement* stmt);
+  FieldDecl* HandleFieldDecl(const SourceLocation& pos,
+                             const NameToken& name,
+                             TypeSpecifier& spec);
+  MethodDecl* EnterMethodDecl(const SourceLocation& begin,
+                              const NameToken& nameToken,
+                              TypeSpecifier* spec,
+                              TypeExpr* te,
                               bool isStatic);
-  void LeaveMethodDecl(MethodDecl *decl);
-  PropertyDecl *EnterPropertyDecl(const SourceLocation &begin,
-                                  const NameToken &nameToken,
-                                  TypeSpecifier &spec);
-  void LeavePropertyDecl(PropertyDecl *decl);
-  TypedefDecl *HandleTypedefDecl(const SourceLocation &begin,
-                                 Atom *name,
-                                 TypeSpecifier &spec);
-  UnsafeCastExpr *HandleUnsafeCast(const SourceLocation &pos,
-                                   TypeSpecifier &spec,
-                                   Expression *expr);
-  CallNewExpr *HandleCallNewExpr(const SourceLocation &pos,
-                                 TypeSpecifier &spec,
-                                 ExpressionList *args);
-  NewArrayExpr *HandleNewArrayExpr(const SourceLocation &pos,
-                                   TypeSpecifier &spec,
-                                   ExpressionList *args);
-  TypesetDecl *EnterTypeset(const SourceLocation &loc, const NameToken &name);
-  void EnterTypeIntoTypeset(TypesetDecl *decl, Vector<TypesetDecl::Entry> &types, TypeSpecifier &spec);
-  void FinishTypeset(TypesetDecl *decl, const Vector<TypesetDecl::Entry> &types);
+  void LeaveMethodDecl(MethodDecl* decl);
+  PropertyDecl* EnterPropertyDecl(const SourceLocation& begin,
+                                  const NameToken& nameToken,
+                                  TypeSpecifier& spec);
+  void LeavePropertyDecl(PropertyDecl* decl);
+  TypedefDecl* HandleTypedefDecl(const SourceLocation& begin,
+                                 Atom* name,
+                                 TypeSpecifier& spec);
+  UnsafeCastExpr* HandleUnsafeCast(const SourceLocation& pos,
+                                   TypeSpecifier& spec,
+                                   Expression* expr);
+  CallNewExpr* HandleCallNewExpr(const SourceLocation& pos,
+                                 TypeSpecifier& spec,
+                                 ExpressionList* args);
+  NewArrayExpr* HandleNewArrayExpr(const SourceLocation& pos,
+                                   TypeSpecifier& spec,
+                                   ExpressionList* args);
+  TypesetDecl* EnterTypeset(const SourceLocation& loc, const NameToken& name);
+  void EnterTypeIntoTypeset(TypesetDecl* decl, Vector<TypesetDecl::Entry>& types, TypeSpecifier& spec);
+  void FinishTypeset(TypesetDecl* decl, const Vector<TypesetDecl::Entry>& types);
 
   void HandleFunctionSignature(
     TokenKind kind,
@@ -101,20 +101,20 @@ class NameResolver
     bool canResolveEagerly);
 
  private:
-  void declareSystemTypes(Scope *scope);
-  void declareSystemType(Scope *scope, const char *name, PrimitiveType prim);
-  void declareSystemType(Scope *scope, const char *name, Type *type);
-  Scope *getOrCreateScope();
-  Symbol *lookup(Atom *name);
-  bool registerSymbol(Symbol *sym);
-  void registerFunction(FunctionSymbol *sym);
-  void reportRedeclaration(Symbol *sym, Symbol *other);
-  bool canDefineMethodmap(MethodmapDecl *methodmap);
+  void declareSystemTypes(Scope* scope);
+  void declareSystemType(Scope* scope, const char* name, PrimitiveType prim);
+  void declareSystemType(Scope* scope, const char* name, Type* type);
+  Scope* getOrCreateScope();
+  Symbol* lookup(Atom* name);
+  bool registerSymbol(Symbol* sym);
+  void registerFunction(FunctionSymbol* sym);
+  void reportRedeclaration(Symbol* sym, Symbol* other);
+  bool canDefineMethodmap(MethodmapDecl* methodmap);
   void resolveUnknownTags();
   void resolveUnboundNames();
-  TypeExpr delay(const TypeSpecifier &spec);
-  Type *resolveBase(TypeSpecifier &spec);
-  TypeExpr resolve(TypeSpecifier &spec, TypeSpecHelper *helper = nullptr);
+  TypeExpr delay(const TypeSpecifier& spec);
+  Type* resolveBase(TypeSpecifier& spec);
+  TypeExpr resolve(TypeSpecifier& spec, TypeSpecHelper* helper = nullptr);
   TypeExpr resolveReturnType(TypeSpecifier& spec);
 
  private:
@@ -131,7 +131,7 @@ class NameResolver
    public:
     SymbolEnv()
     {}
-    SymbolEnv(Scope *scope)
+    SymbolEnv(Scope* scope)
      : scope_(scope),
        kind_(scope->kind())
     {}
@@ -139,30 +139,30 @@ class NameResolver
      : scope_(nullptr),
        kind_(kind)
     {}
-    SymbolEnv(SymbolEnv &&other)
+    SymbolEnv(SymbolEnv&& other)
      : scope_(other.scope_),
        kind_(other.kind_),
        children_(Move(other.children_))
     {
     }
 
-    Scope *scope() const {
+    Scope* scope() const {
       return scope_;
     }
     Scope::Kind kind() const {
       return kind_;
     }
-    Vector<Scope *> &children() {
+    Vector<Scope*>& children() {
       return children_;
     }
 
-    void setScope(Scope *scope) {
+    void setScope(Scope* scope) {
       assert(!scope_);
       assert(scope->kind() == kind_);
       scope_ = scope;
     }
 
-    void addChild(Scope *child) {
+    void addChild(Scope* child) {
       if (scope_) {
         // We've got a scope already, so just add the child.
         child->setParent(scope_);
@@ -173,35 +173,35 @@ class NameResolver
     }
 
    private:
-    SymbolEnv(const SymbolEnv &other) = delete;
-    SymbolEnv &operator =(const SymbolEnv &other) = delete;
+    SymbolEnv(const SymbolEnv& other) = delete;
+    SymbolEnv& operator =(const SymbolEnv& other) = delete;
     
    private:
-    Scope *scope_;
+    Scope* scope_;
     Scope::Kind kind_;
-    Vector<Scope *> children_;
+    Vector<Scope*> children_;
   };
 
  private:
-  CompileContext &cc_;
-  PoolAllocator &pool_;
+  CompileContext& cc_;
+  PoolAllocator& pool_;
   TypeResolver tr_;
-  GlobalScope *globals_;
+  GlobalScope* globals_;
   Vector<SymbolEnv> env_;
 
-  LayoutScope *layout_scope_;
-  Vector<LayoutScope *> saved_layout_scopes_;
+  LayoutScope* layout_scope_;
+  Vector<LayoutScope*> saved_layout_scopes_;
 
   bool encountered_return_value_;
 
-  Atom *atom_String_;
-  Atom *atom_Float_;
-  Atom *atom_any_;
-  Atom *atom_Function_;
-  Atom *atom_bool_;
+  Atom* atom_String_;
+  Atom* atom_Float_;
+  Atom* atom_any_;
+  Atom* atom_Function_;
+  Atom* atom_bool_;
 
-  AtomMap<NameProxy *> user_tags_;
-  Vector<NameProxy *> unresolved_names_;
+  AtomMap<NameProxy*> user_tags_;
+  Vector<NameProxy*> unresolved_names_;
 };
 
 }

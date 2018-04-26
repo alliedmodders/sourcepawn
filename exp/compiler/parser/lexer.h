@@ -35,13 +35,13 @@ typedef FixedPoolList<Token> TokenList;
 class Lexer : public ke::Refcounted<Lexer>
 {
  public:
-  Lexer(CompileContext &cc, Preprocessor &pp, const LexOptions &options,
-        RefPtr<SourceFile> buffer, const LREntry &range);
+  Lexer(CompileContext& cc, Preprocessor& pp, const LexOptions& options,
+        RefPtr<SourceFile> buffer, const LREntry& range);
 
   const RefPtr<SourceFile>& buffer() const {
     return buffer_;
   }
-  const LexOptions &options() const {
+  const LexOptions& options() const {
     return options_;
   }
   unsigned current_line() const {
@@ -53,7 +53,7 @@ class Lexer : public ke::Refcounted<Lexer>
   }
 
   // Lex one token.
-  TokenKind next(Token *token);
+  TokenKind next(Token* token);
 
   bool more() const {
     return canRead();
@@ -63,7 +63,7 @@ class Lexer : public ke::Refcounted<Lexer>
   void checkIfStackAtEndOfFile();
 
  private:
-  const char *ptr() const {
+  const char* ptr() const {
     return pos_;
   }
   char peekChar() {
@@ -137,25 +137,25 @@ class Lexer : public ke::Refcounted<Lexer>
     SourceLocation elseloc;
     State state;
 
-    IfContext(const SourceLocation &first, State state)
+    IfContext(const SourceLocation& first, State state)
      : first(first),
        state(state)
     {}
   };
 
-  IfContext *currentIf() {
+  IfContext* currentIf() {
     return ifstack_.empty() ? nullptr : &ifstack_.back();
   }
 
  private:
   // The next readChar() will return the first non-space char.
-  const char *skipSpaces();
+  const char* skipSpaces();
 
   // Same as skipSpaces(), but performs a final read().
   char firstNonSpaceChar();
 
   // Read until the end of the line and trim any whitespace from the edges.
-  void readUntilEnd(const char **beginp, const char **endp);
+  void readUntilEnd(const char** beginp, const char** endp);
 
   // Lex the remainder of a hex literal.
   TokenKind hexLiteral();
@@ -169,51 +169,51 @@ class Lexer : public ke::Refcounted<Lexer>
   int readEscapeCode();
 
   // Lex the remainder of a character literal.
-  TokenKind charLiteral(Token *tok);
+  TokenKind charLiteral(Token* tok);
 
   // Lex the remainder of a string literal.
-  TokenKind stringLiteral(Token *tok);
+  TokenKind stringLiteral(Token* tok);
 
   // Lex the remainder of a number.
   TokenKind numberLiteral(char first);
-  TokenKind handleNumber(Token *tok, char first);
+  TokenKind handleNumber(Token* tok, char first);
 
   // Lex the remainder of a name, identifier, label, or macro.
-  TokenKind handleIdentifier(Token *tok, char first);
+  TokenKind handleIdentifier(Token* tok, char first);
 
   // Comment handling.
   TokenKind singleLineComment();
-  TokenKind multiLineComment(const SourceLocation &begin);
-  TokenKind processFrontCommentBlock(Token *tok);
-  TokenKind processTailCommentBlock(Token *tok);
-  TokenKind handleComments(Token *tok);
+  TokenKind multiLineComment(const SourceLocation& begin);
+  TokenKind processFrontCommentBlock(Token* tok);
+  TokenKind processTailCommentBlock(Token* tok);
+  TokenKind handleComments(Token* tok);
 
   // Consume whitespace and newlines, and then process the first token found.
   // This sets tok->start. If TOK_COMMENT is returned, tok->end is set as well.
-  TokenKind scan(Token *tok);
+  TokenKind scan(Token* tok);
   
   // This is the same as next(), except it can only be used inside a
   // preprocessor directive.
-  TokenKind directive_next(Token *tok);
+  TokenKind directive_next(Token* tok);
 
   void advanceLine(char c);
   char consumeWhitespace();
 
-  TokenList *getMacroTokens();
+  TokenList* getMacroTokens();
   void chewLineAfterDirective(bool warn);
   void handleDirectiveWhileInactive();
   void handleIfContext();
   bool handlePreprocessorDirective();
   void enterPreprocessorDirective();
 
-  MessageBuilder report(const SourceLocation &loc, rmsg::Id id);
+  MessageBuilder report(const SourceLocation& loc, rmsg::Id id);
 
  private:
   // Internal helpers.
   bool canRead() const {
     return pos_ < end_;
   }
-  const char *literal() const {
+  const char* literal() const {
     return literal_.buffer();
   }
   size_t literal_length() const {
@@ -221,14 +221,14 @@ class Lexer : public ke::Refcounted<Lexer>
   }
 
  private:
-  CompileContext &cc_;
-  Preprocessor &pp_;
+  CompileContext& cc_;
+  Preprocessor& pp_;
   LexOptions options_;
   RefPtr<SourceFile> buffer_;
   LREntry range_;
-  const char *chars_;
-  const char *pos_;
-  const char *end_;
+  const char* chars_;
+  const char* pos_;
+  const char* end_;
   Vector<char> literal_;
   Vector<IfContext> ifstack_;
 
@@ -248,7 +248,7 @@ class Lexer : public ke::Refcounted<Lexer>
   bool scanned_eof_;
 };
 
-int StringToInt32(const char *ptr);
+int StringToInt32(const char* ptr);
 
 }
 

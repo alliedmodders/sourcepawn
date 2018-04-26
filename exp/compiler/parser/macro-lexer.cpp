@@ -21,8 +21,8 @@
 using namespace ke;
 using namespace sp;
 
-MacroLexer::MacroLexer(CompileContext &cc, Preprocessor &pp,
-                       Macro *macro, const LREntry &range)
+MacroLexer::MacroLexer(CompileContext& cc, Preprocessor& pp,
+                       Macro* macro, const LREntry& range)
  : cc_(cc),
    pp_(pp)
 {
@@ -30,7 +30,7 @@ MacroLexer::MacroLexer(CompileContext &cc, Preprocessor &pp,
 }
 
 void
-MacroLexer::Reuse(Macro *macro, const LREntry &range)
+MacroLexer::Reuse(Macro* macro, const LREntry& range)
 {
   macro_ = macro;
   macro_->active = true;
@@ -39,7 +39,7 @@ MacroLexer::Reuse(Macro *macro, const LREntry &range)
 }
 
 TokenKind
-MacroLexer::next(Token *tok)
+MacroLexer::next(Token* tok)
 {
   if (cursor_ >= macro_->tokens->length()) {
     macro_->active = false;
@@ -47,8 +47,8 @@ MacroLexer::next(Token *tok)
     return TOK_NONE;
   }
 
-  const Token &first = macro_->tokens->at(0);
-  const Token &current = macro_->tokens->at(cursor_);
+  const Token& first = macro_->tokens->at(0);
+  const Token& current = macro_->tokens->at(cursor_);
 
   // Sanity checks.
   assert(cc_.source().sameSourceId(first.start.loc, current.start.loc));

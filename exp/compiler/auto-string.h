@@ -32,26 +32,26 @@ class AutoString
     AutoString() : ptr_(NULL), length_(0)
     {
     }
-    AutoString(AutoString &&other)
+    AutoString(AutoString&& other)
      : ptr_(other.ptr_),
        length_(other.length_)
     {
       other.ptr_ = nullptr;
       other.length_ = 0;
     }
-    AutoString(const char *ptr)
+    AutoString(const char* ptr)
     {
       assign(ptr);
     }
-    AutoString(const AString &str)
+    AutoString(const AString& str)
     {
       assign(str.chars(), str.length());
     }
-    AutoString(const char *ptr, size_t len)
+    AutoString(const char* ptr, size_t len)
     {
       assign(ptr, len);
     }
-    AutoString(const AutoString &other)
+    AutoString(const AutoString& other)
     {
       assign(other.ptr(), other.length());
     }
@@ -68,25 +68,25 @@ class AutoString
       free(ptr_);
     }
 
-    AutoString &operator =(const char *ptr) {
+    AutoString& operator =(const char* ptr) {
       free(ptr_);
       assign(ptr);
       return *this;
     }
-    AutoString &operator =(const AutoString &other) {
+    AutoString& operator =(const AutoString& other) {
       free(ptr_);
       assign(other.ptr(), other.length());
       return *this;
     }
-    AutoString &operator =(AutoString &&other) {
+    AutoString& operator =(AutoString&& other) {
       Swap(other.ptr_, ptr_);
       Swap(other.length_, length_);
       return *this;
     }
 
-    AutoString operator +(const AutoString &other) const {
+    AutoString operator +(const AutoString& other) const {
       size_t len = length() + other.length();
-      char *buf = (char *)malloc(len + 1);
+      char* buf = (char*)malloc(len + 1);
       memcpy(buf, ptr(), length());
       memcpy(buf + length(), other.ptr(), other.length());
       buf[len] = '\0';
@@ -97,10 +97,10 @@ class AutoString
       return r;
     }
 
-    AutoString operator +(const char *other) const {
+    AutoString operator +(const char* other) const {
       size_t other_length = strlen(other);
       size_t len = length() + other_length;
-      char *buf = (char *)malloc(len + 1);
+      char* buf = (char*)malloc(len + 1);
       memcpy(buf, ptr(), length());
       memcpy(buf + length(), other, other_length);
       buf[len] = '\0';
@@ -119,15 +119,15 @@ class AutoString
       return !length_;
     }
 
-    const char *ptr() const {
+    const char* ptr() const {
       return ptr_ ? ptr_ : "";
     }
-    operator const char *() const {
+    operator const char*() const {
       return ptr();
     }
 
   private:
-    void assign(const char *ptr) {
+    void assign(const char* ptr) {
       if (!ptr) {
         ptr_ = NULL;
         length_ = 0;
@@ -135,20 +135,20 @@ class AutoString
       }
       assign(ptr, strlen(ptr));
     }
-    void assign(const char *ptr, size_t length) {
+    void assign(const char* ptr, size_t length) {
       if (!ptr) {
         ptr_ = NULL;
         length_ = 0;
         return;
       }
       length_ = length;
-      ptr_ = (char *)malloc(length_ + 1);
+      ptr_ = (char*)malloc(length_ + 1);
       memcpy(ptr_, ptr, length_);
       ptr_[length_] = '\0';
     }
 
   private:
-    char *ptr_;
+    char* ptr_;
     size_t length_;
 };
 

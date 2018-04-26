@@ -34,15 +34,15 @@ struct Macro : public PoolObject
   SourceLocation definedAt;
 
   // The name of this macro.
-  Atom *name;
+  Atom* name;
 
   // The token buffer this macro expands to.
-  TokenList *tokens;
+  TokenList* tokens;
 
   // True if this macro is currently being expanded.
   bool active;
 
-  Macro(const SourceLocation &loc, Atom *name, TokenList *tokens)
+  Macro(const SourceLocation& loc, Atom* name, TokenList* tokens)
    : definedAt(loc),
      name(name),
      tokens(tokens),
@@ -50,7 +50,7 @@ struct Macro : public PoolObject
   {}
 
   // Return the location of the first token from the parent file.
-  const SourceLocation &start() const {
+  const SourceLocation& start() const {
     if (!tokens->length())
       return definedAt;
     return tokens->at(0).start.loc;

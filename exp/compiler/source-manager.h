@@ -46,24 +46,24 @@ class SourceFile : public Refcounted<SourceFile>
 {
   friend class SourceManager;
 
-  SourceFile(char *chars, uint32_t length, const char *path)
+  SourceFile(char* chars, uint32_t length, const char* path)
    : chars_(chars),
      length_(length),
      path_(path)
   {}
 
  public:
-  const char *chars() const {
+  const char* chars() const {
     return chars_.get();
   }
   uint32_t length() const {
     return length_;
   }
-  const char *path() const {
+  const char* path() const {
     return path_.chars();
   }
 
-  LineExtents *lineCache() {
+  LineExtents* lineCache() {
     return line_cache_.get();
   }
   void computeLineCache();
@@ -77,14 +77,14 @@ class SourceFile : public Refcounted<SourceFile>
 
 struct FullMacroRef
 {
-  Macro *macro;
+  Macro* macro;
   unsigned offset;
 
   FullMacroRef()
    : macro(nullptr),
      offset(0)
   {}
-  FullMacroRef(Macro *macro, unsigned offset)
+  FullMacroRef(Macro* macro, unsigned offset)
    : macro(macro),
      offset(offset)
   {}
@@ -102,7 +102,7 @@ struct FullSourceRef
      col(0),
      offset(0)
   {}
-  FullSourceRef(SourceFile *buffer, unsigned line, unsigned col, unsigned offset)
+  FullSourceRef(SourceFile* buffer, unsigned line, unsigned col, unsigned offset)
    : file(buffer),
      line(line),
      col(col),
@@ -143,7 +143,7 @@ struct LREntry
   RefPtr<SourceFile> file;
 
   // If we included from a macro, this is is the macro definition.
-  Macro *macro;
+  Macro* macro;
 
  public:
   bool isFile() const {
@@ -156,24 +156,24 @@ struct LREntry
     return id != 0;
   }
 
-  void init(const SourceLocation &parent, SourceFile *file) {
+  void init(const SourceLocation& parent, SourceFile* file) {
     this->parent = parent;
     this->file = file;
   }
-  void init(const SourceLocation &parent, Macro *macro) {
+  void init(const SourceLocation& parent, Macro* macro) {
     this->parent = parent;
     this->macro = macro;
   }
 
-  SourceFile *getFile() const {
+  SourceFile* getFile() const {
     assert(isFile());
     return *file;
   }
-  Macro *getMacro() const {
+  Macro* getMacro() const {
     assert(isMacro());
     return macro;
   }
-  const SourceLocation &getParent() const {
+  const SourceLocation& getParent() const {
     return parent;
   }
 
@@ -186,7 +186,7 @@ struct LREntry
     return isFile() ? file->length() : macro->length();
   }
 
-  bool owns(const SourceLocation &loc) const {
+  bool owns(const SourceLocation& loc) const {
     if (loc.offset() >= id && loc.offset() <= id + length()) {
       assert(isMacro() == loc.isInMacro());
       return true;
@@ -209,27 +209,27 @@ struct LREntry
 class SourceManager
 {
  public:
-  SourceManager(StringPool &strings, ReportManager &reports);
+  SourceManager(StringPool& strings, ReportManager& reports);
 
-  RefPtr<SourceFile> open(ReportingContext &cc, const char *path);
+  RefPtr<SourceFile> open(ReportingContext& cc, const char* path);
 
   // Returns whether two source locations ultimately originate from the same
   // file (i.e., ignoring macros).
-  bool sameFiles(const SourceLocation &a, const SourceLocation &b);
+  bool sameFiles(const SourceLocation& a, const SourceLocation& b);
 
   // Returns whether two source locations are in the same token buffer.
-  bool sameSourceId(const SourceLocation &a, const SourceLocation &b);
+  bool sameSourceId(const SourceLocation& a, const SourceLocation& b);
 
   // Returns whether two locations were inserted from the same line.
-  bool areLocationsInsertedOnSameLine(const SourceLocation &a, const SourceLocation &b);
+  bool areLocationsInsertedOnSameLine(const SourceLocation& a, const SourceLocation& b);
 
   // Create a location tracker for a file. If out of bits, returns an invalid
   // tracker and reports an error;
-  LREntry trackFile(const SourceLocation &from, RefPtr<SourceFile> file);
+  LREntry trackFile(const SourceLocation& from, RefPtr<SourceFile> file);
 
   // Create a location tracker for a macro. If out of bits, returns an invalid
   // tracker and reports an error;
-  LREntry trackMacro(const SourceLocation &from, Macro *macro);
+  LREntry trackMacro(const SourceLocation& from, Macro* macro);
 
   // Computes the full file origin of a location - that is, this skips past
   // any macro expansions that caused the location to be generated.
@@ -240,37 +240,37 @@ class SourceManager
   // Computing a full source location is mildly expensive - it requires a
   // O(log n) binary search where n is the number of lines in the file and
   // number of files.
-  FullSourceRef decode(const SourceLocation &loc);
+  FullSourceRef decode(const SourceLocation& loc);
 
   // These will be removed once we overhaul error reporting.
-  RefPtr<SourceFile> getSource(const SourceLocation &loc);
-  unsigned getLine(const SourceLocation &loc);
-  unsigned getCol(const SourceLocation &loc);
+  RefPtr<SourceFile> getSource(const SourceLocation& loc);
+  unsigned getLine(const SourceLocation& loc);
+  unsigned getCol(const SourceLocation& loc);
 
-  void getTokenHistory(const SourceLocation &loc, TokenHistory *history);
+  void getTokenHistory(const SourceLocation& loc, TokenHistory* history);
 
-  FullSourceRef getOrigin(const FullMacroRef &ref);
-
- private:
-  unsigned getLine(const LREntry &range, const SourceLocation &loc);
-  unsigned getCol(const LREntry &range, const SourceLocation &loc, unsigned line);
-
-  FullSourceRef fullSourceRef(const LREntry &range, const SourceLocation &loc);
+  FullSourceRef getOrigin(const FullMacroRef& ref);
 
  private:
-  bool trackExtents(uint32_t length, size_t *index);
+  unsigned getLine(const LREntry& range, const SourceLocation& loc);
+  unsigned getCol(const LREntry& range, const SourceLocation& loc, unsigned line);
+
+  FullSourceRef fullSourceRef(const LREntry& range, const SourceLocation& loc);
+
+ private:
+  bool trackExtents(uint32_t length, size_t* index);
 
   // Find the LREntry for a source location.
-  bool findLocation(const SourceLocation &loc, size_t *index);
+  bool findLocation(const SourceLocation& loc, size_t* index);
 
   // Normalizes a macro SourceLocation to its first insertion point. For a
   // file, this returns the file. For a macro, it finds the nearest file that
   // caused the macro to expand.
-  SourceLocation normalize(const SourceLocation &loc);
+  SourceLocation normalize(const SourceLocation& loc);
 
  private:
-  StringPool &strings_;
-  ReportManager &rr_;
+  StringPool& strings_;
+  ReportManager& rr_;
   AtomMap<RefPtr<SourceFile>> file_cache_;
   Vector<LREntry> locations_;
 

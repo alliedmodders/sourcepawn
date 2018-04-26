@@ -25,7 +25,7 @@
 using namespace ke;
 using namespace sp;
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
   if (argc != 2) {
     fprintf(stderr, "Usage: <file>\n");

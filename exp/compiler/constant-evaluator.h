@@ -41,16 +41,16 @@ class BinaryExpression;
 class ConstantResolver
 {
  public:
-  virtual Type *resolveTypeOfVar(VariableSymbol *sym) {
+  virtual Type* resolveTypeOfVar(VariableSymbol* sym) {
     return sym->type();
   }
-  virtual bool resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out) {
+  virtual bool resolveVarAsConstant(VariableSymbol* sym, BoxedValue* out) {
     if (!sym->isConstExpr())
       return false;
     *out = sym->constExpr();
     return true;
   }
-  virtual BoxedValue resolveValueOfConstant(ConstantSymbol *sym) {
+  virtual BoxedValue resolveValueOfConstant(ConstantSymbol* sym) {
     return sym->value();
   }
 };
@@ -78,7 +78,7 @@ class ConstantEvaluator
     Required
   };
 
-  ConstantEvaluator(CompileContext &cc, ConstantResolver *resolver, Mode mode)
+  ConstantEvaluator(CompileContext& cc, ConstantResolver* resolver, Mode mode)
    : cc_(cc),
      resolver_(resolver),
      mode_(mode)
@@ -87,15 +87,15 @@ class ConstantEvaluator
       resolver_ = &default_resolver_;
   }
 
-  Result Evaluate(ast::Expression *expr, BoxedValue *out);
+  Result Evaluate(ast::Expression* expr, BoxedValue* out);
 
  private:
-  Result unary(ast::UnaryExpression *expr, BoxedValue &inner, BoxedValue *out);
-  Result binary(ast::BinaryExpression *expr, BoxedValue &left, BoxedValue &right, BoxedValue *out);
+  Result unary(ast::UnaryExpression* expr, BoxedValue& inner, BoxedValue* out);
+  Result binary(ast::BinaryExpression* expr, BoxedValue& left, BoxedValue& right, BoxedValue* out);
 
  private:
-  CompileContext &cc_;
-  ConstantResolver *resolver_;
+  CompileContext& cc_;
+  ConstantResolver* resolver_;
   ConstantResolver default_resolver_;
   Mode mode_;
 };

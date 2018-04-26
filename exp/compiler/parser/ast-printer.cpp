@@ -25,7 +25,7 @@ using namespace ast;
 
 class AstPrinter : public AstVisitor
 {
-  FILE *fp_;
+  FILE* fp_;
   size_t level_;
 
  private:
@@ -41,18 +41,18 @@ class AstPrinter : public AstVisitor
   }
 
  public:
-  AstPrinter(FILE *fp)
+  AstPrinter(FILE* fp)
    : fp_(fp),
      level_(0)
   {
   }
 
-  void dump(const TypeExpr &te, Atom *name) {
+  void dump(const TypeExpr& te, Atom* name) {
     AString str = BuildTypeName(te, name);
     fprintf(fp_, "%s", str.chars());
   }
 
-  void dump(FunctionSignature *sig) {
+  void dump(FunctionSignature* sig) {
     dump(sig->returnType(), nullptr);
     if (!sig->parameters()->length()) {
       fprintf(fp_, " ()\n");
@@ -62,7 +62,7 @@ class AstPrinter : public AstVisitor
     indent();
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
       prefix();
-      VarDecl *param = sig->parameters()->at(i);
+      VarDecl* param = sig->parameters()->at(i);
       dump(param->te(), param->name());
       fprintf(fp_, "\n");
     }
@@ -70,7 +70,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, ")");
   }
-  void dump(Atom *name, FunctionNode* node, const char *prefix) {
+  void dump(Atom* name, FunctionNode* node, const char* prefix) {
     if (prefix)
       fprintf(fp_, "%s method ", prefix);
     else
@@ -78,11 +78,11 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "%s ", name->chars());
     dump(node->signature());
   }
-  void visitNameProxy(NameProxy *name) override {
+  void visitNameProxy(NameProxy* name) override {
     prefix();
     fprintf(fp_, "[ NameProxy (%s)\n", name->name()->chars());
   }
-  void visitCallExpression(CallExpression *node) override {
+  void visitCallExpression(CallExpression* node) override {
     prefix();
     fprintf(fp_, "[ CallExpression\n");
     indent();
@@ -91,7 +91,7 @@ class AstPrinter : public AstVisitor
       node->arguments()->at(i)->accept(this);
     unindent();
   }
-  void visitFunctionStatement(FunctionStatement *node) override {
+  void visitFunctionStatement(FunctionStatement* node) override {
     prefix();
     fprintf(fp_, "[ FunctionStatement (%s)\n", node->name()->chars());
     indent();
@@ -104,14 +104,14 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitExpressionStatement(ExpressionStatement *node) override {
+  void visitExpressionStatement(ExpressionStatement* node) override {
     prefix();
     fprintf(fp_, "[ ExpressionStatement\n");
     indent();
     node->expr()->accept(this);
     unindent();
   }
-  void visitAssignment(Assignment *node) override {
+  void visitAssignment(Assignment* node) override {
     prefix();
     fprintf(fp_, "[ Assignment\n");
     indent();
@@ -119,7 +119,7 @@ class AstPrinter : public AstVisitor
     node->expression()->accept(this);
     unindent();
   }
-  void visitTernaryExpression(TernaryExpression *node) override {
+  void visitTernaryExpression(TernaryExpression* node) override {
     prefix();
     fprintf(fp_, "[ TernaryExpression\n");
     indent();
@@ -128,7 +128,7 @@ class AstPrinter : public AstVisitor
     node->right()->accept(this);
     unindent();
   }
-  void visitBinaryExpression(BinaryExpression *node) override {
+  void visitBinaryExpression(BinaryExpression* node) override {
     prefix();
     fprintf(fp_, "[ BinaryExpression (%s)\n", TokenNames[node->token()]);
     indent();
@@ -136,27 +136,27 @@ class AstPrinter : public AstVisitor
     node->right()->accept(this);
     unindent();
   }
-  void visitUnaryExpression(UnaryExpression *node) override {
+  void visitUnaryExpression(UnaryExpression* node) override {
     prefix();
     fprintf(fp_, "[ UnaryExpression (%s)\n", TokenNames[node->token()]);
     indent();
     node->expression()->accept(this);
     unindent();
   }
-  void visitFoldedExpr(FoldedExpr *node) override {
+  void visitFoldedExpr(FoldedExpr* node) override {
     prefix();
     fprintf(fp_, "[ FoldedExpr\n");
     node->original()->accept(this);
     unindent();
   }
-  void visitUnsafeCastExpr(UnsafeCastExpr *node) override {
+  void visitUnsafeCastExpr(UnsafeCastExpr* node) override {
     prefix();
     fprintf(fp_, "[ UnsafeCastExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
     indent();
     node->expr()->accept(this);
     unindent();
   }
-  void visitCallNewExpr(CallNewExpr *node) override {
+  void visitCallNewExpr(CallNewExpr* node) override {
     prefix();
     fprintf(fp_, "[ CallNewExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
     indent();
@@ -164,7 +164,7 @@ class AstPrinter : public AstVisitor
       node->arguments()->at(i)->accept(this);
     unindent();
   }
-  void visitNewArrayExpr(NewArrayExpr *node) override {
+  void visitNewArrayExpr(NewArrayExpr* node) override {
     prefix();
     fprintf(fp_, "[ NewArrayeExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
     indent();
@@ -174,7 +174,7 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitReturnStatement(ReturnStatement *node) override {
+  void visitReturnStatement(ReturnStatement* node) override {
     prefix();
     fprintf(fp_, "[ ReturnStatement\n");
     indent();
@@ -182,14 +182,14 @@ class AstPrinter : public AstVisitor
       node->expr()->accept(this);
     unindent();
   }
-  void visitDeleteStatement(DeleteStatement *node) override {
+  void visitDeleteStatement(DeleteStatement* node) override {
     prefix();
     fprintf(fp_, "[ DeleteStatement\n");
     indent();
     node->expression()->accept(this);
     unindent();
   }
-  void visitForStatement(ForStatement *node) override {
+  void visitForStatement(ForStatement* node) override {
     prefix();
     fprintf(fp_, "[ ForStatement\n");
     indent();
@@ -202,7 +202,7 @@ class AstPrinter : public AstVisitor
     node->body()->accept(this);
     unindent();
   }
-  void visitBlockStatement(BlockStatement *node) override {
+  void visitBlockStatement(BlockStatement* node) override {
     prefix();
     fprintf(fp_, "[ BlockStatement\n");
     indent();
@@ -210,7 +210,7 @@ class AstPrinter : public AstVisitor
       node->statements()->at(i)->accept(this);
     unindent();
   }
-  void visitVarDecl(VarDecl *node) override {
+  void visitVarDecl(VarDecl* node) override {
     prefix();
     fprintf(fp_, "[ VarDecl (%s)\n", BuildTypeName(node->te(), node->name()).chars());
     indent();
@@ -220,23 +220,23 @@ class AstPrinter : public AstVisitor
     if (node->next())
       node->next()->accept(this);
   }
-  void visitCharLiteral(CharLiteral *node) override {
+  void visitCharLiteral(CharLiteral* node) override {
     prefix();
     fprintf(fp_, "[ CharLiteral (%c)\n", (char)node->value());
   }
-  void visitIntegerLiteral(IntegerLiteral *node) override {
+  void visitIntegerLiteral(IntegerLiteral* node) override {
     prefix();
     fprintf(fp_, "[ IntegerLiteral (%" KE_FMT_I64 ")\n", node->value());
   }
-  void visitTokenLiteral(TokenLiteral *node) override {
+  void visitTokenLiteral(TokenLiteral* node) override {
     prefix();
     fprintf(fp_, "[ TokenLiteral (%s)\n", TokenNames[node->token()]);
   }
-  void visitFloatLiteral(FloatLiteral *node) override {
+  void visitFloatLiteral(FloatLiteral* node) override {
     prefix();
     fprintf(fp_, "[ FloatLiteral (%f)\n", node->value());
   }
-  void visitIfStatement(IfStatement *node) override {
+  void visitIfStatement(IfStatement* node) override {
     prefix();
     fprintf(fp_, "[ IfStatement\n");
     indent();
@@ -261,14 +261,14 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitFieldExpression(FieldExpression *node) override {
+  void visitFieldExpression(FieldExpression* node) override {
     prefix();
     fprintf(fp_, "[ FieldExpression (%s)\n", node->field()->chars());
     indent();
     node->base()->accept(this);
     unindent();
   }
-  void visitIndexExpression(IndexExpression *node) override {
+  void visitIndexExpression(IndexExpression* node) override {
     prefix();
     fprintf(fp_, "[ IndexExpression\n");
     indent();
@@ -276,7 +276,7 @@ class AstPrinter : public AstVisitor
     node->right()->accept(this);
     unindent();
   }
-  void visitEnumStatement(EnumStatement *node) override {
+  void visitEnumStatement(EnumStatement* node) override {
     prefix();
     fprintf(fp_, "[ EnumStatement (%s)\n", node->name() ? node->name()->chars() : "<anonymous>");
     indent();
@@ -284,7 +284,7 @@ class AstPrinter : public AstVisitor
       node->entries()->at(i)->accept(this);
     unindent();
   }
-  void visitEnumConstant(EnumConstant *node) override {
+  void visitEnumConstant(EnumConstant* node) override {
     prefix();
     fprintf(fp_, "[ EnumConstant (%s)\n", node->name()->chars());
     if (node->expression()) {
@@ -293,14 +293,14 @@ class AstPrinter : public AstVisitor
       unindent();
     }
   }
-  void visitSizeofExpression(SizeofExpression *node) override {
+  void visitSizeofExpression(SizeofExpression* node) override {
     prefix();
     fprintf(fp_, "[ SizeofExpression (level=%d)\n", (int)node->level());
     indent();
     node->proxy()->accept(this);
     unindent();
   }
-  void visitWhileStatement(WhileStatement *node) override {
+  void visitWhileStatement(WhileStatement* node) override {
     prefix();
     fprintf(fp_, "[ WhileStatement (%s)\n",
         (node->token() == TOK_DO) ? "do" : "while");
@@ -314,36 +314,36 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitBreakStatement(BreakStatement *node) override {
+  void visitBreakStatement(BreakStatement* node) override {
     prefix();
     fprintf(fp_, "[ BreakStatement\n");
   }
-  void visitContinueStatement(ContinueStatement *node) override {
+  void visitContinueStatement(ContinueStatement* node) override {
     prefix();
     fprintf(fp_, "[ ContinueStatement\n");
   }
-  void visitStringLiteral(StringLiteral *node) override {
+  void visitStringLiteral(StringLiteral* node) override {
     prefix();
     fprintf(fp_, "[ StringLiteral\n");
   }
-  void visitIncDecExpression(IncDecExpression *node) override {
+  void visitIncDecExpression(IncDecExpression* node) override {
     prefix();
     fprintf(fp_, "[ IncDecExpression (postfix=%d)\n", node->postfix());
     indent();
     node->expression()->accept(this);
     unindent();
   }
-  void visitThisExpression(ThisExpression *node) override {
+  void visitThisExpression(ThisExpression* node) override {
     prefix();
     fprintf(fp_, "[ ThisExpression\n");
   }
-  void visitSwitchStatement(SwitchStatement *node) override {
+  void visitSwitchStatement(SwitchStatement* node) override {
     prefix();
     fprintf(fp_, "[ SwitchStatement\n");
     indent();
     node->expression()->accept(this);
     for (size_t i = 0; i < node->cases()->length(); i++) {
-      Case *c = node->cases()->at(i);
+      Case* c = node->cases()->at(i);
       c->expression()->accept(this);
       if (c->others()) {
         for (size_t j = 0; j < c->others()->length(); j++)
@@ -357,12 +357,12 @@ class AstPrinter : public AstVisitor
       node->defaultCase()->accept(this);
     unindent();
   }
-  void visitArrayLiteral(ArrayLiteral *node) override {
+  void visitArrayLiteral(ArrayLiteral* node) override {
     prefix();
     fprintf(fp_, "[ ArrayLiteral\n");
     indent();
     for (size_t i = 0; i < node->expressions()->length(); i++) {
-      Expression *expr = node->expressions()->at(i);
+      Expression* expr = node->expressions()->at(i);
       indent();
       expr->accept(this);
       unindent();
@@ -374,12 +374,12 @@ class AstPrinter : public AstVisitor
       unindent();
     }
   }
-  void visitStructInitializer(StructInitializer *node) override {
+  void visitStructInitializer(StructInitializer* node) override {
     prefix();
     fprintf(fp_, "[ StructInitializer\n");
     indent();
     for (size_t i = 0; i < node->pairs()->length(); i++) {
-      NameAndValue *pair = node->pairs()->at(i);
+      NameAndValue* pair = node->pairs()->at(i);
       prefix();
       fprintf(fp_, "%s = \n", pair->name()->chars());
       indent();
@@ -388,7 +388,7 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitTypedefDecl(TypedefDecl *node) override {
+  void visitTypedefDecl(TypedefDecl* node) override {
     prefix();
     fprintf(fp_, "[ TypedefDecl\n");
     indent();
@@ -398,24 +398,24 @@ class AstPrinter : public AstVisitor
     unindent();
   }
 
-  void dumpLayout(LayoutDecls *body) {
+  void dumpLayout(LayoutDecls* body) {
     for (size_t i = 0; i < body->length(); i++)
       body->at(i)->accept(this);
   }
 
-  void visitFieldDecl(FieldDecl *decl) override {
+  void visitFieldDecl(FieldDecl* decl) override {
     prefix();
     fprintf(fp_, "[ FieldDecl ");
     dump(decl->te(), decl->name());
     fprintf(fp_, "\n");
   }
-  void visitMethodDecl(MethodDecl *decl) override {
+  void visitMethodDecl(MethodDecl* decl) override {
     prefix();
     fprintf(fp_, "[ MethodDecl ");
     dump(decl->name(), decl->method(), nullptr);
     fprintf(fp_, "\n");
   }
-  void visitPropertyDecl(PropertyDecl *decl) override {
+  void visitPropertyDecl(PropertyDecl* decl) override {
     prefix();
     fprintf(fp_, "[ PropertyDecl ");
     indent();
@@ -432,7 +432,7 @@ class AstPrinter : public AstVisitor
     unindent();
   }
 
-  void visitTypesetDecl(TypesetDecl *node) override {
+  void visitTypesetDecl(TypesetDecl* node) override {
     prefix();
     fprintf(fp_, "[ TypesetDecl %s\n", node->name()->chars());
     indent();
@@ -443,7 +443,7 @@ class AstPrinter : public AstVisitor
     }
     unindent();
   }
-  void visitRecordDecl(RecordDecl *node) override {
+  void visitRecordDecl(RecordDecl* node) override {
     prefix();
     fprintf(fp_, "[ LayoutStatement %s %s\n",
       TokenNames[node->token()],
@@ -453,7 +453,7 @@ class AstPrinter : public AstVisitor
     dumpLayout(node->body());
     unindent();
   }
-  void visitMethodmapDecl(MethodmapDecl *node) override {
+  void visitMethodmapDecl(MethodmapDecl* node) override {
     prefix();
     fprintf(fp_, "[ MethodmapDecl %s", node->name()->chars());
     if (node->parent())
@@ -468,7 +468,7 @@ class AstPrinter : public AstVisitor
 };
 
 void
-ParseTree::dump(FILE *fp)
+ParseTree::dump(FILE* fp)
 {
   AstPrinter printer(fp);
 

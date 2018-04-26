@@ -468,12 +468,12 @@ class SemaPrinter : public ast::StrictAstVisitor
       fprintf(fp_, "- %s (%s)\n", expr->prettyName(), str.chars());
   }
 
-  void dump(const ast::TypeExpr& te, Atom *name) {
+  void dump(const ast::TypeExpr& te, Atom* name) {
     AString str = BuildTypeName(te.resolved(), name);
     fprintf(fp_, "%s", str.chars());
   }
 
-  void dump(ast::FunctionSignature *sig) {
+  void dump(ast::FunctionSignature* sig) {
     dump(sig->returnType(), nullptr);
     if (!sig->parameters()->length()) {
       fprintf(fp_, " ()\n");
@@ -483,7 +483,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     indent();
     for (size_t i = 0; i < sig->parameters()->length(); i++) {
       prefix();
-      ast::VarDecl *param = sig->parameters()->at(i);
+      ast::VarDecl* param = sig->parameters()->at(i);
       dump(param->te(), param->name());
       fprintf(fp_, "\n");
     }

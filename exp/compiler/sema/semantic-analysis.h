@@ -36,7 +36,7 @@ using namespace ast;
 class SemanticAnalysis
 {
  public:
-  SemanticAnalysis(CompileContext &cc, TranslationUnit *unit);
+  SemanticAnalysis(CompileContext& cc, TranslationUnit* unit);
 
   sema::Program* analyze();
 
@@ -71,10 +71,10 @@ class SemanticAnalysis
   sema::Expr* visitTernary(ast::TernaryExpression* node);
 
  private:
-  void analyzeShadowedFunctions(FunctionSymbol *sym);
-  void checkForwardedFunction(FunctionStatement *forward, FunctionStatement *impl); 
-  bool matchForwardSignatures(FunctionSignature *fwdSig, FunctionSignature *implSig);
-  bool matchForwardReturnTypes(Type *fwdRetType, Type *implRetType);
+  void analyzeShadowedFunctions(FunctionSymbol* sym);
+  void checkForwardedFunction(FunctionStatement* forward, FunctionStatement* impl);
+  bool matchForwardSignatures(FunctionSignature* fwdSig, FunctionSignature* implSig);
+  bool matchForwardReturnTypes(Type* fwdRetType, Type* implRetType);
 
   // Same as visitExpression, but only returns l-values.
   sema::LValueExpr* visitLValue(Expression* node);
@@ -115,27 +115,27 @@ class SemanticAnalysis
 
   struct FuncState : StackLinked<FuncState>
   {
-    FuncState(FuncState **prev, FunctionNode *node)
+    FuncState(FuncState** prev, FunctionNode* node)
      : StackLinked<FuncState>(prev),
        fun(node),
        sig(node->signature()),
        return_status(ReturnStatus::None)
     {}
 
-    FunctionNode *fun;
-    FunctionSignature *sig;
+    FunctionNode* fun;
+    FunctionSignature* sig;
 
     // This tracks how the current control-flow path returns.
     ReturnStatus return_status;
   };
 
  private:
-  CompileContext &cc_;
-  PoolAllocator &pool_;
-  TypeManager *types_;
-  TranslationUnit *tu_;
+  CompileContext& cc_;
+  PoolAllocator& pool_;
+  TypeManager* types_;
+  TranslationUnit* tu_;
 
-  FuncState *fs_;
+  FuncState* fs_;
 
   ke::Vector<ast::FunctionStatement*> global_functions_;
   ke::Vector<ast::VarDecl*> global_vars_;

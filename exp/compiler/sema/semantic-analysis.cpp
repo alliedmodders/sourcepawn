@@ -28,7 +28,7 @@ using namespace ast;
 
 // :TODO: constant folding
 
-SemanticAnalysis::SemanticAnalysis(CompileContext &cc, TranslationUnit *tu)
+SemanticAnalysis::SemanticAnalysis(CompileContext& cc, TranslationUnit* tu)
  : cc_(cc),
    pool_(cc.pool()),
    types_(cc.types()),
@@ -53,10 +53,10 @@ SemanticAnalysis::analyze()
 bool
 SemanticAnalysis::walkAST()
 {
-  ParseTree *tree = tu_->tree();
-  StatementList *statements = tree->statements();
+  ParseTree* tree = tu_->tree();
+  StatementList* statements = tree->statements();
   for (size_t i = 0; i < statements->length(); i++) {
-    Statement *stmt = statements->at(i);
+    Statement* stmt = statements->at(i);
     switch (stmt->kind()) {
       case AstKind::kFunctionStatement:
       {
