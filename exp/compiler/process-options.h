@@ -20,6 +20,7 @@
 
 #include <am-vector.h>
 #include <am-string.h>
+#include <am-maybe.h>
 
 namespace sp {
 
@@ -46,17 +47,32 @@ struct CompileOptions
   // Skip semantic analysis (type checking).
   bool SkipSemanticAnalysis;
 
+  // Print the AST to stderr.
+  bool ShowAST;
+
+  // Print the Sema tree to stderr.
+  bool ShowSema;
+
+  // Show memory stats.
+  bool ShowPoolStats;
+
   // Memory size for v1 pcode.
   uint32_t PragmaDynamic;
 
   // Search paths.
   Vector<AString> SearchPaths;
 
+  // Override output file.
+  Maybe<AString> OutputFile;
+
   CompileOptions()
    : RequireNewdecls(false),
      RequireSemicolons(false),
      SkipResolution(false),
      SkipSemanticAnalysis(false),
+     ShowAST(false),
+     ShowSema(false),
+     ShowPoolStats(false),
      PragmaDynamic(0)
   {
   }

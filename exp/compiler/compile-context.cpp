@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <amtl/os/am-fsutil.h>
 
 using namespace ke;
 using namespace sp;
@@ -103,6 +104,69 @@ class FpBuffer : public ISmxBuffer
   FILE* fp_;
 };
 
+template <typename T> static inline T
+LastMatch(T ptr, const char* search)
+{
+  T ext = strstr(ptr, search);
+  while (ext) {
+    T next_ext = strstr(ext + strlen(search), search);
+    if (!next_ext)
+      break;
+    ext = next_ext;
+  }
+  return ext;
+}
+
+static AString
+GetOutputFilename(const char* output_file, const char* input_file)
+{
+  // :TODO: add a Strdup to amtl.
+  size_t buffer_len = strlen(input_file) + 1;
+  UniquePtr<char[]> buffer = MakeUnique<char[]>(buffer_len);
+  SafeStrcpy(buffer.get(), buffer_len, input_file);
+
+  if (!output_file) {
+    // blah.sp -> blah.smx
+    // .sp -> .sp.smx
+    char* ext = LastMatch(buffer.get(), ".sp");
+    if (ext && ext != buffer.get())
+      *ext = '\0';
+
+    AString new_file;
+    new_file.format("%s.smx", buffer.get());
+    return new_file;
+  }
+
+  // /folder/crab, /blah/tmp.sp -> /folder/crab/tmp.smx
+  if (ke::file::IsDirectory(output_file)) {
+    AString path(input_file);
+    path = Join(path.split("\\"), "/");
+
+    Vector<AString> parts = path.split("/");
+    while (!parts.empty() && parts.back().length() == 0)
+      parts.pop();
+    if (!parts.empty()) {
+      AString smx_name = GetOutputFilename(nullptr, parts.back().chars());
+      AString new_file;
+      new_file.format("%s/%s", output_file, smx_name.chars());
+      return new_file;
+    }
+
+    assert(false);
+    return GetOutputFilename(nullptr, input_file);
+  }
+
+  // crab.smx -> crab.smx
+  // crab -> crab.smx
+  const char* ext = LastMatch(output_file, ".smx");
+  if (ext && ext[4] == '\0')
+    return AString(output_file);
+
+  AString new_file;
+  new_file.format("%s.smx", output_file);
+  return new_file;
+}
+
 bool
 CompileContext::compile(RefPtr<SourceFile> file)
 {
@@ -124,10 +188,13 @@ CompileContext::compile(RefPtr<SourceFile> file)
     unit->attach(tree);
   }
 
-  ReportMemory(stderr);
-  fprintf(stderr, "\n");
+  if (options_.ShowPoolStats) {
+    ReportMemory(stderr);
+    fprintf(stderr, "\n");
+  }
 
-  unit->tree()->dump(stderr);
+  if (options_.ShowAST)
+    unit->tree()->dump(stderr);
 
   if (options_.SkipSemanticAnalysis)
     return true;
@@ -139,17 +206,25 @@ CompileContext::compile(RefPtr<SourceFile> file)
   if (!program)
     return false;
 
-  ReportMemory(stderr);
-  fprintf(stderr, "\n");
+  if (options_.ShowPoolStats) {
+    ReportMemory(stderr);
+    fprintf(stderr, "\n");
+  }
 
-  program->dump(stderr);
+  if (options_.ShowSema)
+    program->dump(stderr);
 
+  AString output_path = GetOutputFilename(
+    options_.OutputFile ? (*options_.OutputFile).chars() : nullptr,
+    file->path());
+
+  // Code generation.
   {
     SmxCompiler compiler(*this, program);
     if (!compiler.compile())
       return false;
     {
-      FILE* fp = fopen("/tmp/out.smx", "wt");
+      FILE* fp = fopen(output_path.chars(), "wt");
       FpBuffer buf(fp);
       if (!compiler.emit(&buf))
         return false;
@@ -160,7 +235,7 @@ CompileContext::compile(RefPtr<SourceFile> file)
   if (reports_.HasErrors())
     return false;
 
-  fprintf(stderr, "\n-- Ok! /tmp/out.smx --\n");
+  fprintf(stderr, "\n-- Ok! %s --\n", output_path.chars());
 
   return true;
 }
