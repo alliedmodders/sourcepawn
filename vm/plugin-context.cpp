@@ -502,7 +502,7 @@ PluginContext::popTrackerAndSetHeap()
   assert(sp_ >= hp_);
   assert(hp_ >= cell_t(data_size_));
 
-  if (hp_ - cell_t(data_size_) < sizeof(cell_t))
+  if (hp_ - cell_t(data_size_) < (cell_t)sizeof(cell_t))
     return SP_ERROR_TRACKER_BOUNDS;
 
   hp_ -= sizeof(cell_t);
