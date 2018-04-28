@@ -1,86 +1,84 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
 import os
 
-SP.spcomp = {}
-for arch in Root.archs:
-  binary = Root.Program(builder, 'spcomp', arch)
-  compiler = binary.compiler
-  compiler.includes += [
-    os.path.join(SP.amtl, 'amtl'),
-    os.path.join(SP.amtl),
-    os.path.join(builder.currentSourcePath, '..', 'include'),
-    os.path.join(builder.currentSourcePath, '..', 'third_party'),
-    os.path.join(builder.buildPath, 'includes'),
-    os.path.join(builder.buildPath, builder.buildFolder),
+binary = Root.Program(builder, 'spcomp', arch)
+compiler = binary.compiler
+compiler.includes += [
+  os.path.join(SP.amtl, 'amtl'),
+  os.path.join(SP.amtl),
+  os.path.join(builder.currentSourcePath, '..', 'include'),
+  os.path.join(builder.currentSourcePath, '..', 'third_party'),
+  os.path.join(builder.buildPath, 'includes'),
+  os.path.join(builder.buildPath, builder.buildFolder),
+]
+
+if compiler.like('gcc'):
+  compiler.cflags += [
+    '-Wno-format',
   ]
-
-  if compiler.like('gcc'):
-    compiler.cflags += [
-      '-Wno-format',
-    ]
-    compiler.c_only_flags += ['-std=c99']
-    if builder.target.platform == 'linux':
-      compiler.postlink += ['-lm']
-    compiler.postlink += ['-lstdc++']
-  if compiler.family == 'clang':
-    compiler.cxxflags += [
-      '-Wno-implicit-exception-spec-mismatch',
-    ]
-  if compiler.family == 'gcc':
-    compiler.cflags += [
-      '-Wno-maybe-uninitialized',
-    ]
-    if compiler.version >= '4.6':
-      compiler.cxxflags += ['-Wno-unused-but-set-variable']
-
-  compiler.defines += ['HAVE_STDINT_H']
+  compiler.c_only_flags += ['-std=c99']
   if builder.target.platform == 'linux':
-    compiler.defines += [
-      'LINUX',
-      'AMX_ANSIONLY',
-      '_GNU_SOURCE'
-    ]
-  elif builder.target.platform == 'mac':
-    compiler.defines += [
-      'DARWIN',
-      'AMX_ANSIONLY',
-      'HAVE_SAFESTR'
-    ]
+    compiler.postlink += ['-lm']
+  compiler.postlink += ['-lstdc++']
+if compiler.family == 'clang':
+  compiler.cxxflags += [
+    '-Wno-implicit-exception-spec-mismatch',
+  ]
+if compiler.family == 'gcc':
+  compiler.cflags += [
+    '-Wno-maybe-uninitialized',
+  ]
+  if compiler.version >= '4.6':
+    compiler.cxxflags += ['-Wno-unused-but-set-variable']
 
-  if compiler.like('emscripten'):
-    compiler.defines += [
-      'HAVE_SAFESTR'
-    ]
-
-  binary.sources += [
-    'libpawnc.cpp',
-    'lstring.cpp',
-    'memfile.cpp',
-    'pawncc.cpp',
-    'sc1.cpp',
-    'sc2.cpp',
-    'sc3.cpp',
-    'sc4.cpp',
-    'sc5.cpp',
-    'sc6.cpp',
-    'sc7.cpp',
-    'sci18n.cpp',
-    'sclist.cpp',
-    'scmemfil.cpp',
-    'sctracker.cpp',
-    'scvars.cpp',
-    'smx-builder.cpp',
-    'sp_symhash.cpp',
-    'types.cpp',
-    'expression-parsing.cpp',
+compiler.defines += ['HAVE_STDINT_H']
+if builder.target.platform == 'linux':
+  compiler.defines += [
+    'LINUX',
+    'AMX_ANSIONLY',
+    '_GNU_SOURCE'
+  ]
+elif builder.target.platform == 'mac':
+  compiler.defines += [
+    'DARWIN',
+    'AMX_ANSIONLY',
+    'HAVE_SAFESTR'
   ]
 
-  if builder.target.platform == 'linux' and not compiler.like('emscripten'):
-    compiler.defines += ['ENABLE_BINRELOC']
-    binary.sources.append('binreloc.c')
-
-  binary.compiler.linkflags[0:0] = [
-    SP.zlib[arch],
+if compiler.like('emscripten'):
+  compiler.defines += [
+    'HAVE_SAFESTR'
   ]
 
-  SP.spcomp[arch] = builder.Add(binary)
+binary.sources += [
+  'libpawnc.cpp',
+  'lstring.cpp',
+  'memfile.cpp',
+  'pawncc.cpp',
+  'sc1.cpp',
+  'sc2.cpp',
+  'sc3.cpp',
+  'sc4.cpp',
+  'sc5.cpp',
+  'sc6.cpp',
+  'sc7.cpp',
+  'sci18n.cpp',
+  'sclist.cpp',
+  'scmemfil.cpp',
+  'sctracker.cpp',
+  'scvars.cpp',
+  'smx-builder.cpp',
+  'sp_symhash.cpp',
+  'types.cpp',
+  'expression-parsing.cpp',
+]
+
+if builder.target.platform == 'linux' and not compiler.like('emscripten'):
+  compiler.defines += ['ENABLE_BINRELOC']
+  binary.sources.append('binreloc.c')
+
+binary.compiler.linkflags[0:0] = [
+  SP.zlib[arch],
+]
+
+rvalue = builder.Add(binary)

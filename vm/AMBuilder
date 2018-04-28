@@ -1,15 +1,13 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-libsourcepawn = {}
-SP.libsourcepawn = {}
-SP.spshell = {}
+libsourcepawn_a = None
 
 def configure_like_shell(name, arch):
   prog = Root.Program(builder, name, arch)
   prog.compiler.includes += Includes
   prog.compiler.linkflags[0:0] = [
-    libsourcepawn[arch].binary,
+    libsourcepawn_a.binary,
     SP.zlib[arch],
   ]
   if prog.compiler.like('gcc'):
@@ -18,116 +16,117 @@ def configure_like_shell(name, arch):
     prog.compiler.postlink += ['-lpthread', '-lrt']
   return prog
 
-for arch in Root.archs:
-  Includes = [
-    os.path.join(SP.amtl, 'amtl'),
-    os.path.join(SP.amtl),
-    os.path.join(builder.currentSourcePath),
-    os.path.join(builder.currentSourcePath, '..', 'third_party'),
+Includes = [
+  os.path.join(SP.amtl, 'amtl'),
+  os.path.join(SP.amtl),
+  os.path.join(builder.currentSourcePath),
+  os.path.join(builder.currentSourcePath, '..', 'third_party'),
 
-    # The include path for SP v2 stuff.
-    os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
+  # The include path for SP v2 stuff.
+  os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
+]
+
+if builder.cxx.like('gcc'):
+  builder.cxx.cflags += [
+    '-Wno-invalid-offsetof',
+  ]
+  builder.cxx.cxxflags += ['-fno-rtti']
+if builder.cxx.like('clang'):
+  builder.cxx.cxxflags += [
+    '-Wno-implicit-exception-spec-mismatch',
+  ]
+if builder.cxx.family == 'gcc':
+  # ABI restrictions...
+  builder.cxx.cxxflags += [
+    '-Wno-delete-non-virtual-dtor',
   ]
 
-  if builder.cxx.like('gcc'):
-    builder.cxx.cflags += [
-      '-Wno-invalid-offsetof',
-    ]
-    builder.cxx.cxxflags += ['-fno-rtti']
-  if builder.cxx.like('clang'):
-    builder.cxx.cxxflags += [
-      '-Wno-implicit-exception-spec-mismatch',
-    ]
-  if builder.cxx.family == 'gcc':
-    # ABI restrictions...
-    builder.cxx.cxxflags += [
-      '-Wno-delete-non-virtual-dtor',
-    ]
+# Build the static library.
+library = Root.StaticLibrary(builder, 'sourcepawn', arch)
+library.compiler.includes += Includes
 
-  # Build the static library.
-  library = Root.StaticLibrary(builder, 'sourcepawn', arch)
-  library.compiler.includes += Includes
+library.sources += [
+  'api.cpp',
+  'base-context.cpp',
+  'builtins.cpp',
+  'code-allocator.cpp',
+  'code-stubs.cpp',
+  'compiled-function.cpp',
+  'environment.cpp',
+  'file-utils.cpp',
+  'interpreter.cpp',
+  'md5/md5.cpp',
+  'method-info.cpp',
+  'method-verifier.cpp',
+  'opcodes.cpp',
+  'plugin-context.cpp',
+  'plugin-runtime.cpp',
+  'pool-allocator.cpp',
+  'runtime-helpers.cpp',
+  'scripted-invoker.cpp',
+  'smx-v1-image.cpp',
+  'stack-frames.cpp',
+  'watchdog_timer.cpp',
+]
 
+is_emscripten = builder.cxx.family == 'emscripten'
+has_jit = arch in ['x86'] and not is_emscripten
+
+if has_jit:
   library.sources += [
-    'api.cpp',
-    'base-context.cpp',
-    'builtins.cpp',
-    'code-allocator.cpp',
-    'code-stubs.cpp',
-    'compiled-function.cpp',
-    'environment.cpp',
-    'file-utils.cpp',
-    'interpreter.cpp',
-    'md5/md5.cpp',
-    'method-info.cpp',
-    'method-verifier.cpp',
-    'opcodes.cpp',
-    'plugin-context.cpp',
-    'plugin-runtime.cpp',
-    'pool-allocator.cpp',
-    'runtime-helpers.cpp',
-    'scripted-invoker.cpp',
-    'smx-v1-image.cpp',
-    'stack-frames.cpp',
-    'watchdog_timer.cpp',
+    'jit.cpp',
+  ]
+  library.compiler.defines += ['SP_HAS_JIT']
+
+if is_emscripten:
+  library.sources += [
+    'code-stubs-null.cpp',
+  ]
+elif arch == 'x86':
+  library.sources += [
+    'linking.cpp',
+    'x86/assembler-x86.cpp',
+    'x86/code-stubs-x86.cpp',
+    'x86/jit_x86.cpp',
+  ]
+elif arch == 'x64':
+  library.sources += [
+    'linking.cpp',
+    'x64/assembler-x64.cpp',
+    'x64/code-stubs-x64.cpp',
+    'x64/macro-assembler-x64.cpp',
   ]
 
-  is_emscripten = builder.cxx.family == 'emscripten'
-  has_jit = arch in ['x86'] and not is_emscripten
+libsourcepawn_a = builder.Add(library)
 
-  if has_jit:
-    library.sources += [
-      'jit.cpp',
-    ]
-    library.compiler.defines += ['SP_HAS_JIT']
+# Build the dynamically-linked library.
+dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+dll.compiler.includes += Includes
+dll.compiler.linkflags[0:0] = [
+  libsourcepawn_a.binary,
+  SP.zlib[arch],
+]
+dll.sources += [
+  'dll_exports.cpp'
+]
 
-  if is_emscripten:
-    library.sources += [
-      'code-stubs-null.cpp',
-    ]
-  elif arch == 'x86':
-    library.sources += [
-      'linking.cpp',
-      'x86/assembler-x86.cpp',
-      'x86/code-stubs-x86.cpp',
-      'x86/jit_x86.cpp',
-    ]
-  elif arch == 'x64':
-    library.sources += [
-      'linking.cpp',
-      'x64/assembler-x64.cpp',
-      'x64/code-stubs-x64.cpp',
-      'x64/macro-assembler-x64.cpp',
-    ]
+if builder.target.platform == 'linux':
+  dll.compiler.postlink += ['-lpthread', '-lrt']
 
-  libsourcepawn[arch] = builder.Add(library)
+libsourcepawn = builder.Add(dll)
 
-  # Build the dynamically-linked library.
-  dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
-  dll.compiler.includes += Includes
-  dll.compiler.linkflags[0:0] = [
-    libsourcepawn[arch].binary,
-    SP.zlib[arch],
-  ]
-  dll.sources += [
-    'dll_exports.cpp'
-  ]
+# Build the debug shell.
+shell = configure_like_shell('spshell', arch)
+shell.sources += [
+  'shell.cpp'
+]
+spshell = builder.Add(shell)
 
-  if builder.target.platform == 'linux':
-    dll.compiler.postlink += ['-lpthread', '-lrt']
+# Build the verifier.
+verifier = configure_like_shell('verifier', arch)
+verifier.sources += [
+  '../tools/verifier/verifier.cpp',
+]
+builder.Add(verifier)
 
-  SP.libsourcepawn[arch] = builder.Add(dll)
-
-  # Build the debug shell.
-  shell = configure_like_shell('spshell', arch)
-  shell.sources += [
-    'shell.cpp'
-  ]
-  SP.spshell[arch] = builder.Add(shell)
-
-  # Build the verifier.
-  verifier = configure_like_shell('verifier', arch)
-  verifier.sources += [
-    '../tools/verifier/verifier.cpp',
-  ]
-  builder.Add(verifier)
+rvalue = spshell

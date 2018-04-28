@@ -18,6 +18,7 @@
 #
 import os
 import sys
+import copy
 
 def Normalize(path):
   return os.path.abspath(os.path.normpath(path))
@@ -256,31 +257,35 @@ class SourcePawn(object):
     self.spcomp_scripts = [
       os.path.join('compiler', 'AMBuilder'),
     ]
-    self.vm_scripts = [
-      os.path.join('vm', 'AMBuilder'),
-    ]
     self.test_scripts = [
       os.path.join('tools', 'testing', 'Testing.ambuild'),
-    ]
-    self.exp_scripts = [
-      os.path.join('exp', 'compiler', 'AMBuilder'),
-      os.path.join('exp', 'tools', 'docparse', 'AMBuilder'),
     ]
     self.vars = {
       'Root': self.root,
       'SP': self,
     }
+    self.spshell = {}
+    self.spcomp = {}
+    self.libspcomp2 = {}
 
   def BuildSpcomp(self):
     self.EnsureZlib()
-    builder.Build(self.spcomp_scripts, self.vars)
+    for arch in self.root.archs:
+      spcomp = self.BuildForArch('compiler/AMBuilder', arch)
+      self.spcomp[arch] = spcomp
 
   def BuildVM(self):
     self.EnsureZlib()
-    builder.Build(self.vm_scripts, self.vars)
+    for arch in self.root.archs:
+      spshell = self.BuildForArch('vm/AMBuilder', arch)
+      self.spshell[arch] = spshell
 
   def BuildExperimental(self):
-    builder.Build(self.exp_scripts, self.vars)
+    for arch in self.root.archs:
+      libspcomp2 = self.BuildForArch('exp/compiler/AMBuilder', arch)
+      self.libspcomp2[arch] = libspcomp2
+
+      self.BuildForArch('exp/tools/docparse/AMBuilder', arch)
 
   def BuildTests(self):
     builder.Build(self.test_scripts, self.vars)
@@ -297,6 +302,11 @@ class SourcePawn(object):
     zlib_dir = os.path.join('third_party', 'zlib', 'AMBuilder')
     builder.Build([zlib_dir], self.vars)
     self.included_zlib = True
+
+  def BuildForArch(self, scripts, arch):
+    new_vars = copy.copy(self.vars)
+    new_vars['arch'] = arch
+    return builder.Build(scripts, new_vars)
 
 if builder.parent is None:
   root = Config()
