@@ -245,10 +245,23 @@ int main(int argc, char** argv)
   StringOption filename(parser,
     "file",
     "SMX file to execute.");
+  StopOption show_version(parser,
+    "-v", "--version",
+    Some(false),
+    "Print version information and exit.");
 
   if (!parser.parse(argc, argv)) {
     parser.usage(stderr, argc, argv);
     return 1;
+  }
+
+  if (show_version.value()) {
+    fprintf(stdout, "SourcePawn version: %s\n", SOURCEPAWN_VERSION);
+    fprintf(stdout, "API version: %x/%x\n", SOURCEPAWN_API_VERSION, SOURCEPAWN_ENGINE2_API_VERSION);
+#if defined(SP_HAS_JIT)
+    fprintf(stdout, "Just-in-time (JIT) compiler available.\n");
+#endif
+    return 0;
   }
 
   if ((sEnv = Environment::New()) == nullptr) {
