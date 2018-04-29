@@ -1,4 +1,4 @@
-// sp: -E
+// warnings_are_errors: true
 
 public main()
 {

@@ -35,5 +35,6 @@ obj-*/
 *.orig
 *.smx
 *.swp
+*.pyc
 
 .gdb_history

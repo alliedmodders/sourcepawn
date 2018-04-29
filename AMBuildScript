@@ -243,10 +243,6 @@ class Config(object):
     SetArchFlags(compiler, arch, builder.target.platform)
     return self.StaticLibraryBuilder(compiler, name, arch)
 
-ProjectScripts = [
-  #'exp/tools/docparse/AMBuilder'
-]
-
 class SourcePawn(object):
   def __init__(self, root, amtl):
     super(SourcePawn, self).__init__()
