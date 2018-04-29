@@ -117,6 +117,8 @@ libsourcepawn = builder.Add(dll)
 
 # Build the debug shell.
 shell = configure_like_shell('spshell', arch)
+if has_jit:
+  shell.compiler.defines += ['SP_HAS_JIT']
 shell.sources += [
   'shell.cpp'
 ]

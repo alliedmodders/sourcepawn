@@ -267,6 +267,7 @@ class SourcePawn(object):
     self.spshell = {}
     self.spcomp = {}
     self.libspcomp2 = {}
+    self.zlib = {}
 
   def BuildSpcomp(self):
     self.EnsureZlib()
@@ -299,8 +300,8 @@ class SourcePawn(object):
   def EnsureZlib(self):
     if self.included_zlib:
       return
-    zlib_dir = os.path.join('third_party', 'zlib', 'AMBuilder')
-    builder.Build([zlib_dir], self.vars)
+    for arch in self.root.archs:
+      self.zlib[arch] = self.BuildForArch("third_party/zlib/AMBuilder", arch)
     self.included_zlib = True
 
   def BuildForArch(self, scripts, arch):
