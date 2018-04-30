@@ -59,3 +59,5 @@ Medium       High            Debug info.
 Low          Low             Eliminate "stack 0" in short functions.
 
 Low          Low             Ban passing 2d arrays to natives.
+
+Low          Low             Make default .smx location cwd instead of source path.

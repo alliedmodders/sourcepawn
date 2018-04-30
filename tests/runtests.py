@@ -15,6 +15,8 @@ def main():
                       help="Force testing a specific arch on dual-arch builds.")
   parser.add_argument('--show-cli', default=False, action='store_true',
                       help='Show the command-line invocation of each test.')
+  parser.add_argument('--spcomp2', default=False, action='store_true',
+                      help="Only test using spcomp2.")
   args = parser.parse_args()
 
   plan = TestPlan(args)
@@ -101,7 +103,8 @@ class TestPlan(object):
       })
 
   def find_compilers(self):
-    self.find_spcomp()
+    if not self.args.spcomp2:
+      self.find_spcomp()
     self.find_spcomp2()
 
   def find_spcomp(self):
@@ -117,7 +120,6 @@ class TestPlan(object):
 
       spcomp = {
         'path': os.path.abspath(path),
-        'version': 1,
         'arch': arch,
         'name': 'spcomp',
         'args': [],
@@ -159,7 +161,6 @@ class TestPlan(object):
 
       spcomp2 = {
         'path': os.path.abspath(path),
-        'version': 2,
         'arch': arch,
         'name': 'spcomp2',
         'args': [
@@ -400,6 +401,8 @@ class TestRunner(object):
     argv += mode['args']
     if test.warnings_are_errors:
       argv += ['-E']
+    if mode['spcomp']['name'] == 'spcomp2':
+      argv += ['-o', test.smx_path]
     argv += [self.fix_path(spcomp_path, test.path)]
 
     # Run and return output.
