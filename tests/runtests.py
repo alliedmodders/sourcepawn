@@ -43,7 +43,7 @@ class TestPlan(object):
     self.shells = []
     self.tests = []
     self.modes = []
-    self.spcomp1_tests = []
+    self.tests_path = os.path.split(__file__)[0]
 
   @property
   def show_cli(self):
@@ -133,15 +133,14 @@ class TestPlan(object):
       })
 
   def find_tests(self):
-    base_path, _ = os.path.split(__file__)
-
-    for folder in os.listdir(base_path):
-      sub_folder = os.path.join(base_path, folder)
+    for folder in os.listdir(self.tests_path):
+      sub_folder = os.path.join(self.tests_path, folder)
       if not os.path.isdir(sub_folder):
         continue
-      self.find_tests_impl(sub_folder, {})
+      self.find_tests_impl(folder, {})
 
-  def find_tests_impl(self, folder, manifest):
+  def find_tests_impl(self, local_folder, manifest):
+    folder = os.path.join(self.tests_path, local_folder)
     manifest_path = os.path.join(folder, 'manifest.ini')
     if os.path.exists(manifest_path):
       manifest = manifest.copy()
@@ -150,11 +149,12 @@ class TestPlan(object):
         return
 
     for name in os.listdir(folder):
-      path = os.path.join(folder, name)
+      local_path = os.path.join(local_folder, name)
+      path = os.path.join(self.tests_path, local_path)
       if os.path.isdir(path):
-        self.find_tests_impl(path, manifest)
+        self.find_tests_impl(local_path, manifest)
       elif path.endswith('.sp'):
-        if self.args.test is not None and not path.startswith(self.args.test):
+        if self.args.test is not None and not local_path.startswith(self.args.test):
           continue
         self.tests.append(Test(**{
           'path': os.path.abspath(path),
