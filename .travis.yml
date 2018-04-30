@@ -33,4 +33,4 @@ script:
   - mkdir $AM_CC-$AM_ARCH-$AM_TYPE && cd $AM_CC-$AM_ARCH-$AM_TYPE
   - CC=$AM_CC CXX=$AM_CXX python ../configure.py --enable-$AM_TYPE --target-arch=$AM_ARCH
   - ambuild
-  - ./testing/test-all.$AM_ARCH.sh
+  - python $CHECKOUT_DIR/tests/runtests.py .
