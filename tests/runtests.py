@@ -102,6 +102,7 @@ class TestPlan(object):
 
   def find_compilers(self):
     self.find_spcomp()
+    self.find_spcomp2()
 
   def find_spcomp(self):
     for arch in self.arch_suffixes:
@@ -119,6 +120,7 @@ class TestPlan(object):
         'version': 1,
         'arch': arch,
         'name': 'spcomp',
+        'args': [],
       }
 
       self.modes.append({
@@ -141,6 +143,36 @@ class TestPlan(object):
         'name': 'pcode12',
         'spcomp': spcomp,
         'args': ['-x12'],
+      })
+
+  def find_spcomp2(self):
+    for arch in self.arch_suffixes:
+      if not self.match_arch(arch):
+        continue
+
+      path = os.path.join(self.args.objdir, 'exp', 'compiler', 'spcomp2' + arch, 'spcomp2')
+
+      if not os.path.exists(path):
+        if not os.path.exists(path + '.js'):
+          continue
+        path += '.js'
+
+      spcomp2 = {
+        'path': os.path.abspath(path),
+        'version': 2,
+        'arch': arch,
+        'name': 'spcomp2',
+        'args': [
+          '--show-ast=false',
+          '--show-sema=false',
+          '--pool-stats=false',
+        ],
+      }
+
+      self.modes.append({
+        'name': 'default',
+        'spcomp': spcomp2,
+        'args': [],
       })
 
   def find_tests(self):
@@ -248,6 +280,14 @@ class Test(object):
       return int(self.local_manifest_['returnCode'])
     return 0
 
+  def should_run(self, mode):
+    compiler = self.local_manifest_.get('compiler', None)
+    if compiler is None:
+      compiler = self.manifest_.get('compiler', None)
+    if compiler is None:
+      return True
+    return mode['spcomp']['name'] == compiler
+
   def read_local_manifest(self):
     self.local_manifest_ = {}
     with open(self.path, 'r') as fp:
@@ -316,6 +356,8 @@ class TestRunner(object):
 
     for test in self.plan.tests:
       test.prepare()
+      if not test.should_run(mode):
+        continue
       if not self.run_test(mode, test):
         self.failures_.add(test)
 
@@ -354,6 +396,7 @@ class TestRunner(object):
       '-i', self.fix_path(spcomp_path, self.core_include_path),
       '-i', self.fix_path(spcomp_path, self.include_path),
     ]
+    argv += mode['spcomp']['args']
     argv += mode['args']
     if test.warnings_are_errors:
       argv += ['-E']
