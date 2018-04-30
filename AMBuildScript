@@ -253,9 +253,6 @@ class SourcePawn(object):
     self.spcomp_scripts = [
       os.path.join('compiler', 'AMBuilder'),
     ]
-    self.test_scripts = [
-      os.path.join('tools', 'testing', 'Testing.ambuild'),
-    ]
     self.vars = {
       'Root': self.root,
       'SP': self,
@@ -284,14 +281,10 @@ class SourcePawn(object):
 
       self.BuildForArch('exp/tools/docparse/AMBuilder', arch)
 
-  def BuildTests(self):
-    builder.Build(self.test_scripts, self.vars)
-
   def BuildSuite(self):
     self.BuildSpcomp()
     self.BuildVM()
     self.BuildExperimental()
-    self.BuildTests()
 
   def EnsureZlib(self):
     if self.included_zlib:
@@ -325,8 +318,6 @@ else:
     sp.BuildVM()
   if 'exp' in build:
     sp.BuildExperimental()
-  if 'test' in build:
-    sp.BuildTests()
 
 if builder.parent is not None:
   rvalue = sp

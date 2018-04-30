@@ -1,4 +1,0 @@
-#!/bin/sh
-
-echo "Running compiler tests..."
-python {source}/compiler/tests/runtests.py {spcomp}

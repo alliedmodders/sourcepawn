@@ -1,9 +1,0 @@
-#!/bin/sh
-status=0
-
-sh {objdir}/testing/test-compiler.{arch}.sh || status=1
-
-echo ""
-sh {objdir}/testing/test-runtime.{arch}.sh || status=1
-
-exit $status
