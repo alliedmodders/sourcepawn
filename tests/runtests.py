@@ -212,6 +212,7 @@ class Test(object):
   ManifestKeys = set([
     'returnCode',
     'warnings_are_errors',
+    'compiler',
   ])
 
   def __init__(self, **kwargs):
@@ -305,7 +306,7 @@ class Test(object):
       return False
 
     key = m.group(1)
-    value = m.group(2)
+    value = m.group(2).strip()
     if key not in Test.ManifestKeys:
       raise Exception("Test {0} contains unsupported manifest key {1}".format(
         self.name, key))
