@@ -69,6 +69,7 @@ class SemanticAnalysis
   sema::Expr* visitAssignment(ast::Assignment* node);
   sema::Expr* visitNewArray(ast::NewArrayExpr* node);
   sema::Expr* visitTernary(ast::TernaryExpression* node);
+  sema::Expr* visitSizeof(ast::SizeofExpression* node);
 
  private:
   void analyzeShadowedFunctions(FunctionSymbol* sym);

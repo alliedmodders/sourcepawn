@@ -55,6 +55,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitNewArray(node->toNewArrayExpr());
     case AstKind::kTernaryExpression:
       return visitTernary(node->toTernaryExpression());
+    case AstKind::kSizeofExpression:
+      return visitSizeof(node->toSizeofExpression());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -730,6 +732,61 @@ SemanticAnalysis::visitTernary(ast::TernaryExpression* node)
     test_ec.result,
     tc.left,
     tc.right);
+}
+
+sema::Expr*
+SemanticAnalysis::visitSizeof(ast::SizeofExpression* node)
+{
+  VariableSymbol* sym = node->proxy()->sym()->asVariable();
+  if (!sym) {
+    cc_.report(node->loc(), rmsg::sizeof_needs_variable);
+    return nullptr;
+  }
+
+  Type* type = UnwrapReference(sym->type());
+  for (size_t i = 1; i <= node->level(); i++) {
+    if (!type->isArray()) {
+      if (i == 1)
+        cc_.report(node->loc(), rmsg::sizeof_needs_array);
+      else
+        cc_.report(node->loc(), rmsg::sizeof_invalid_rank);
+      return nullptr;
+    }
+    type = type->toArray()->contained();
+  }
+
+  int32_t result = 1;
+  switch (type->canonicalKind()) {
+    case Type::Kind::Array:
+    {
+      ArrayType* array = type->asArray();
+      if (!array) {
+        cc_.report(node->loc(), rmsg::sizeof_indeterminate);
+        return nullptr;
+      }
+      result = array->fixedLength();
+      break;
+    }
+    case Type::Kind::Primitive:
+    case Type::Kind::Typeset:
+    case Type::Kind::Function:
+    case Type::Kind::MetaFunction:
+    case Type::Kind::Enum:
+    case Type::Kind::Unchecked:
+    case Type::Kind::NullType:
+      result = 1;
+      break;
+    default:
+      cc_.report(node->loc(), rmsg::sizeof_unsupported_type) <<
+        type;
+      return nullptr;
+  }
+
+  IntValue iv = IntValue::FromValue<int32_t>(result);
+  return new (pool_) sema::ConstValueExpr(
+    node,
+    types_->getPrimitive(PrimitiveType::Int32),
+    BoxedValue(iv));
 }
 
 } // namespace sp
