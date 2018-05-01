@@ -380,8 +380,10 @@ SemanticAnalysis::visitSwitchStatement(SwitchStatement* node)
   sema::Expr* expr = visitExpression(node->expression());
   if (expr) {
     EvalContext ec(CoercionKind::RValue, expr, expr->type());
-    if (coerce(ec))
+    if (coerce(ec)) {
       node->set_sema_expr(ec.result);
+      type = expr->type();
+    }
   }
 
   auto get_value = [&, this](Expression* case_expr) -> int32_t {
@@ -393,7 +395,7 @@ SemanticAnalysis::visitSwitchStatement(SwitchStatement* node)
       return 0;
 
     BoxedValue box;
-    if (!expr->getBoxedValue(&box) || !box.isInteger()) {
+    if (!ec.from->getBoxedValue(&box) || !box.isInteger()) {
       cc_.report(case_expr->loc(), rmsg::illegal_case);
       return 0;
     }
