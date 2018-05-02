@@ -1715,28 +1715,31 @@ SmxCompiler::gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
     return data_addr;
   }
 
-  cell_t value = 0;
   sema::ArrayInitExpr* lit = expr->toArrayInitExpr();
 
-  for (size_t i = 0; i < size_t(type->fixedLength()); i++) {
-    if (i < lit->exprs()->length()) {
-      sema::Expr* ev = lit->exprs()->at(i);
-      BoxedValue box;
-      if (!ev->getBoxedValue(&box)) {
-        // This should never happen.
-        cc_.report(ev->src()->loc(), rmsg::unimpl_kind) <<
-          "smx-gen-array-data" << ev->prettyName();
-        continue;
-      }
-
-      // :TODO: test enums, floats, etc.
-      value = GetCellFromBox(box);
-    } else if (!lit->repeat_last_element()) {
-      break;
+  assert(lit->exprs()->length() <= size_t(type->fixedLength()));
+  cell_t prev2 = 0, prev1 = 0;
+  for (size_t i = 0; i < lit->exprs()->length(); i++) {
+    sema::Expr* ev = lit->exprs()->at(i);
+    BoxedValue box;
+    if (!ev->getBoxedValue(&box)) {
+      cc_.report(ev->src()->loc(), rmsg::unimpl_kind) <<
+        "smx-gen-array-data" << ev->prettyName();
+      continue;
     }
-    *data_.ptr<cell_t>(data_addr + i * sizeof(cell_t)) = value;
+    prev2 = prev1;
+    prev1 = GetCellFromBox(box);
+    *data_.ptr<cell_t>(data_addr + i * sizeof(cell_t)) = prev1;
   }
 
+  // 1, 2, 3 ... should yield 1, 2, 3, 4, 5 etc
+  cell_t step = prev1 - prev2;
+  if (!contained->isPrimitive(PrimitiveType::Int32))
+    step = 0;
+  for (int32_t i = int32_t(lit->exprs()->length()); i < type->fixedLength(); i++) {
+    prev1 += step;
+    *data_.ptr<cell_t>(data_addr + i * sizeof(cell_t)) = prev1;
+  }
   return data_addr;
 }
 
