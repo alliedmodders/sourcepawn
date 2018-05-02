@@ -1312,8 +1312,6 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
 {
   sema::LValueExpr* lvalue = expr->expr();
 
-  will_kill(dest);
-
   // We have all sorts of special cases for global variables.
   sema::VarExpr* var = lvalue->asVarExpr();
   if (var && !var->sym()->type()->isReference()) {
@@ -1343,6 +1341,33 @@ SmxCompiler::emitIncDec(sema::IncDecExpr* expr, ValueDest dest)
     if (expr->prefix())
       emit_var_load(var, dest);
     return dest;
+  }
+
+  will_kill(ValueDest::Pri);
+  will_kill(ValueDest::Alt);
+
+  if (lvalue->type()->isPrimitive(PrimitiveType::Char)) {
+    if (!emit_into(lvalue, ValueDest::Pri))
+      return ValueDest::Error;
+
+    OPCODE incdec_op = (expr->token() == TOK_INCREMENT)
+                       ? OP_INC_PRI
+                       : OP_DEC_PRI;
+    __ opcode(OP_MOVE_ALT);
+    __ opcode(OP_LODB_I, (cell_t)1);
+    if (expr->postfix())
+      __ opcode(OP_PUSH_PRI);
+    __ opcode(incdec_op);
+    __ opcode(OP_STRB_I, (cell_t)1);
+    if (expr->postfix()) {
+      // Note: ValueDest::Stack is implicitly handled by the push above.
+      if (dest == ValueDest::Pri)
+        __ opcode(OP_POP_PRI);
+      else if (dest == ValueDest::Alt)
+        __ opcode(OP_POP_ALT);
+      return dest;
+    }
+    return ValueDest::Pri;
   }
 
   // Otherwise, emit an address and use INC/DEC_I.
