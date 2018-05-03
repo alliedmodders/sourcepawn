@@ -293,6 +293,20 @@ namespace SourcePawn
      * @param line    Pointer to store line number in.
      */
     virtual int LookupLine(ucell_t addr, uint32_t *line) =0;
+
+    /**
+     * @brief Returns the number of source files compiled into this plugin.
+     */
+    virtual size_t NumFiles() =0;
+
+    /**
+     * @brief Returns the full file name and path of the source file
+     * at the given index.
+     *
+     * @param index   Index of selected file in the list of source files.
+     * @return        Full file name of source file or NULL if not found.
+     */
+    virtual const char* GetFileName(size_t index) =0;
   };
 
   class ICompilation;

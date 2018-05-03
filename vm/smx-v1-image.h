@@ -57,6 +57,8 @@ class SmxV1Image
   const char* LookupFile(uint32_t code_offset) override;
   const char* LookupFunction(uint32_t code_offset) override;
   bool LookupLine(uint32_t code_offset, uint32_t* line) override;
+  size_t NumFiles() const override;
+  const char* GetFileName(size_t index) const override;
 
  private:
    struct Section

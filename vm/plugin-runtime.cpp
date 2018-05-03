@@ -554,3 +554,15 @@ PluginRuntime::LookupFile(ucell_t addr, const char** out)
     *out = name;
   return SP_ERROR_NONE;
 }
+
+size_t
+PluginRuntime::NumFiles()
+{
+  return image_->NumFiles();
+}
+
+const char*
+PluginRuntime::GetFileName(size_t index)
+{
+  return image_->GetFileName(index);
+}

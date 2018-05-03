@@ -54,6 +54,8 @@ class LegacyImage
   virtual const char* LookupFile(uint32_t code_offset) = 0;
   virtual const char* LookupFunction(uint32_t code_offset) = 0;
   virtual bool LookupLine(uint32_t code_offset, uint32_t* line) = 0;
+  virtual size_t NumFiles() const = 0;
+  virtual const char* GetFileName(size_t index) const = 0;
 };
 
 class EmptyImage : public LegacyImage
@@ -121,6 +123,12 @@ class EmptyImage : public LegacyImage
   }
   bool LookupLine(uint32_t code_offset, uint32_t* line) override {
     return false;
+  }
+  size_t NumFiles() const override {
+    return 0;
+  }
+  const char* GetFileName(size_t index) const override {
+    return nullptr;
   }
 
  private:
