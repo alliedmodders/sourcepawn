@@ -871,6 +871,7 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
     case TOK_LT:
     case TOK_LE:
     case TOK_SLASH:
+    case TOK_PERCENT:
     {
       if (!load_both(left, right))
         return ValueDest::Error;
@@ -913,12 +914,15 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
           __ opcode(OP_SLEQ);
           break;
         case TOK_SLASH:
+        case TOK_PERCENT:
           __ opcode(OP_SDIV);
           break;
         default:
           assert(false);
           break;
       }
+      if (expr->token() == TOK_PERCENT)
+        return ValueDest::Alt;
       return ValueDest::Pri;
     }
 
