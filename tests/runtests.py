@@ -526,8 +526,9 @@ class TestRunner(object):
 
   def print_failures(self):
     self.out("Failures were detected in the following tests:")
-    for test in self.failures_:
-      self.out("  {0}".format(test.unique_name))
+    failures = sorted([test.unique_name for test in self.failures_])
+    for test in failures:
+      self.out("  {0}".format(test))
 
   def out(self, text):
     when = (datetime.datetime.now() - self.start_time_).total_seconds()
