@@ -51,6 +51,7 @@ SmxCompiler::SmxCompiler(CompileContext& cc, sema::Program* program)
    heap_usage_(0),
    max_heap_usage_(0),
    loop_(nullptr),
+   scope_info_(nullptr),
    last_stmt_pc_(0)
 {
   names_ = new SmxNameTable(".names");
@@ -331,6 +332,8 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
 void
 SmxCompiler::generateBlock(ast::BlockStatement* block)
 {
+  ScopeInfo scope_info(this, &scope_info_);
+
   // :TODO: raii this, so for loops can use it for the init scope
   int32_t stk_usage = cur_var_stk_;
 
@@ -454,9 +457,12 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
 {
   sema::Expr* cond = stmt->sema_cond();
 
+  LoopScope loop(&loop_, scope_info_);
+
   Label taken, fallthrough;
   if (stmt->token() == TOK_WHILE) {
-    LoopScope loop(&loop_, &fallthrough, &taken);
+    loop.continue_to = &fallthrough;
+    loop.break_to = &taken;
 
     // if !<cond> goto done
     // repeat:
@@ -469,10 +475,10 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
     __ opcode(OP_JUMP, &fallthrough);
     __ bind(&taken);
   } else {
-    LoopScope loop(&loop_, &fallthrough, &taken);
+    loop.continue_to = &taken;
+    loop.break_to = &fallthrough;
 
     // repeat:
-    //
     //   <body>
     //   if <cond> goto repeat
     // done:
@@ -487,6 +493,7 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
 void
 SmxCompiler::generateFor(ast::ForStatement* stmt)
 {
+  ScopeInfo scope_info(this, &scope_info_);
   if (ast::Statement* init = stmt->initialization())
     generateStatement(init);
 
@@ -507,7 +514,9 @@ SmxCompiler::generateFor(ast::ForStatement* stmt)
     test(cond_expr, false, &done, &body);
   __ bind(&body);
   {
-    LoopScope loop(&loop_, &update, &done);
+    LoopScope loop(&loop_, scope_info_);
+    loop.continue_to = &update;
+    loop.break_to = &done;
 
     ast::Statement* body = stmt->body();
     generateStatement(body);
@@ -545,12 +554,14 @@ SmxCompiler::generateIf(ast::IfStatement* stmt)
 void
 SmxCompiler::generateBreak(ast::BreakStatement* stmt)
 {
+  jump_to_scope(loop_->scope_info);
   __ opcode(OP_JUMP, loop_->break_to);
 }
 
 void
 SmxCompiler::generateContinue(ast::ContinueStatement* stmt)
 {
+  jump_to_scope(loop_->scope_info);
   __ opcode(OP_JUMP, loop_->continue_to);
 }
 
@@ -1784,7 +1795,24 @@ SmxCompiler::initialize_dynamic_array(ast::VarDecl* decl, sema::Expr* expr)
     __ opcode(OP_POP_ALT);
   }
 
+  // Make sure the variable gets released when we leave scope.
+  scope_info_->heap_vars++;
+
   emit_var_store(decl->sym(), ValueDest::Alt);
+}
+
+void
+SmxCompiler::leave_scope(ScopeInfo& scope_info)
+{
+  for (size_t i = 0; i < scope_info.heap_vars; i++)
+    __ opcode(OP_TRACKER_POP_SETHEAP);
+}
+
+void
+SmxCompiler::jump_to_scope(ScopeInfo* stop_at)
+{
+  for (ScopeInfo* iter = scope_info_; iter != stop_at; iter = iter->prev())
+    leave_scope(*iter);
 }
 
 static inline OPCODE

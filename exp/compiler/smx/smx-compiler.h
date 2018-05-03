@@ -119,6 +119,11 @@ private:
   cell_t gen_array_iv(ArrayType* type, sema::Expr* expr, ArrayBuilder& b);
   cell_t gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b);
 
+  // Called when ScopeInfo is destroyed.
+  struct ScopeInfo;
+  void leave_scope(ScopeInfo& scope_info);
+  void jump_to_scope(ScopeInfo* scope_info);
+
 private:
   // Signal that the given register is about to be clobbered.
   void will_kill(ValueDest dest);
@@ -199,18 +204,39 @@ private:
   int32_t heap_usage_;
   int32_t max_heap_usage_;
 
+  // Track where continue/break should go to, and how many scopes to destroy.
   struct LoopScope : public ke::StackLinked<LoopScope> {
-    LoopScope(LoopScope** parent, Label* continue_to, Label* break_to)
+    LoopScope(LoopScope** parent, ScopeInfo* scope)
      : StackLinked(parent),
-       continue_to(continue_to),
-       break_to(break_to)
+       scope_info(scope),
+       continue_to(nullptr),
+       break_to(nullptr)
     {}
     // Current loop context. If we do nested functions, these have to be zapped
     // at function boundaries.
+    ScopeInfo* scope_info;
     Label* continue_to;
     Label* break_to;
   };
   LoopScope* loop_;
+
+  // Track how many heap-allocated variables are created in each scope.
+  struct ScopeInfo : public ke::StackLinked<ScopeInfo> {
+    explicit ScopeInfo(SmxCompiler* smx_cc, ScopeInfo** parent)
+      : StackLinked(parent),
+        smx_cc(*smx_cc),
+        heap_vars(0)
+    {}
+    ~ScopeInfo() override {
+      smx_cc.leave_scope(*this);
+    }
+    ScopeInfo* prev() const {
+      return prev_;
+    }
+    SmxCompiler& smx_cc;
+    size_t heap_vars;
+  };
+  ScopeInfo* scope_info_;
 
   uint32_t last_stmt_pc_;
 };
