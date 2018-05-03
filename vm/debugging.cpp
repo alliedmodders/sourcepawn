@@ -54,9 +54,6 @@ void InvokeDebugger(PluginContext* ctx, const IErrorReport* report)
   dbginfo.version = DEBUG_BREAK_INFO_VERSION;
   dbginfo.cip = cip;
   dbginfo.frm = ctx->frm();
-  dbginfo.sp = ctx->sp();
-  dbginfo.memory = ctx->memory();
-  dbginfo.mem_size = ctx->HeapSize();
 
   // Call debug callback.
   ctx->debugbreak()(ctx, dbginfo, report);

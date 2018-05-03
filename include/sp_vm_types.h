@@ -258,9 +258,6 @@ typedef struct sp_debug_break_info_s
   uint16_t  version;   /**< Version of this struct */
   cell_t    cip;       /**< Current virtual instruction pointer */
   cell_t    frm;       /**< Current virtual frame pointer */
-  cell_t    sp;        /**< Current virtual stack pointer */
-  uint8_t*  memory;    /**< Pointer to raw plugin image in memory */
-  size_t    mem_size;  /**< Total size of the plugin image in memory */
 } sp_debug_break_info_t;
 
 /**
