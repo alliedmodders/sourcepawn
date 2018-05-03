@@ -756,3 +756,21 @@ SmxV1Image::LookupLine(uint32_t addr, uint32_t* line)
   *line = debug_lines_[low].line + 1;
   return true;
 }
+
+size_t
+SmxV1Image::NumFiles() const
+{
+  return debug_files_.length();
+}
+
+const char*
+SmxV1Image::GetFileName(size_t index) const
+{
+  if (index >= debug_files_.length())
+    return nullptr;
+
+  if (debug_files_[index].name >= debug_names_section_->size)
+    return nullptr;
+
+  return debug_names_ + debug_files_[index].name;
+}

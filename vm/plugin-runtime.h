@@ -89,6 +89,8 @@ class PluginRuntime
   int LookupLine(ucell_t addr, uint32_t* line) override;
   int LookupFunction(ucell_t addr, const char** name) override;
   int LookupFile(ucell_t addr, const char** filename) override;
+  size_t NumFiles() override;
+  const char* GetFileName(size_t index) override;
   const char* GetFilename() override {
     return full_name_.chars();
   }
