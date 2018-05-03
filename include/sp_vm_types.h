@@ -55,6 +55,8 @@ typedef uint32_t	funcid_t;			/**< Function index code */
 #define SP_PROF_CALLBACKS		(1<<1)		/**< Profile callbacks. */
 #define SP_PROF_FUNCTIONS		(1<<2)		/**< Profile functions. */
 
+#define DEBUG_BREAK_INFO_VERSION 0x0001 /**< Version of the sp_debug_break_info_t struct. */
+
 /**
  * @brief Error codes for SourcePawn routines.
  */
@@ -248,14 +250,28 @@ typedef struct sp_debug_symbol_s
 } sp_debug_symbol_t;
 
 /**
- * Breaks into a debugger
+ * @brief Context describing the VM state when the SPVM_DEBUGBREAK
+ * callback is called.
+ */
+typedef struct sp_debug_break_info_s
+{
+  uint16_t  version;   /**< Version of this struct */
+  cell_t    cip;       /**< Current virtual instruction pointer */
+  cell_t    frm;       /**< Current virtual frame pointer */
+  cell_t    sp;        /**< Current virtual stack pointer */
+  uint8_t*  memory;    /**< Pointer to raw plugin image in memory */
+  size_t    mem_size;  /**< Total size of the plugin image in memory */
+} sp_debug_break_info_t;
+
+/**
+ * Breaks into a debugger.
+ * If the exception parameter is not null, 
+ * the function is called with the location of the error.
  * Params:
  *  [0] - plugin context
- *  [1] - frm
- *  [2] - cip
- *  [3] - memory
- *  [4] - exception
+ *  [1] - debug info
+ *  [2] - exception
  */
-typedef void(*SPVM_DEBUGBREAK)(SourcePawn::IPluginContext *, cell_t, cell_t, void *, const SourcePawn::IErrorReport *);
+typedef void(*SPVM_DEBUGBREAK)(SourcePawn::IPluginContext*, sp_debug_break_info_t&, const SourcePawn::IErrorReport*);
 
 #endif //_INCLUDE_SOURCEPAWN_VM_TYPES_H

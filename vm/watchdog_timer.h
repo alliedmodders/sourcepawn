@@ -35,7 +35,7 @@ typedef bool (*WatchdogCallback)();
 class WatchdogTimer
 {
   // Allow line debugger callback to disable timeouts.
-  friend void InvokeDebugger(PluginContext *ctx, const SourcePawn::IErrorReport *report);
+  friend void InvokeDebugger(PluginContext* ctx, const SourcePawn::IErrorReport* report);
 
  public:
   WatchdogTimer(Environment* env);

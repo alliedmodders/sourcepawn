@@ -43,7 +43,7 @@ public:
   cell_t BlamePluginError(SourcePawn::IPluginFunction* pf, const char* msg, ...) override;
   IFrameIterator* CreateFrameIterator() override;
   void DestroyFrameIterator(IFrameIterator* it) override;
-  int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn) override;
+  int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK* oldpfn) override;
   
   // Removed functions.
   int PushCell(cell_t value) override;
