@@ -5391,11 +5391,13 @@ static void statement(int *lastindent,int allow_decl)
   case tDECL:
   case tSTATIC:
   case tNEW:
-    if (matchtoken(tSYMBOL) && lexpeek('(')) {
-      lexpush();
-      goto doxpr_jmp;
+    if (matchtoken(tSYMBOL)) {
+        if (lexpeek('(')) {
+          lexpush();
+          goto doxpr_jmp;
+        }
+      lexpush(); // we matchtoken'ed, give it back to lex for declloc
     }
-
     if (!allow_decl) {
       error(3);
       break;

@@ -1,4 +1,4 @@
-methodmap MyMethodMap < Handle {
+methodmap MyMethodMap __nullable__ {
 	public native MyMethodMap();
 }
 
