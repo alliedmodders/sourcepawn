@@ -382,7 +382,7 @@ PluginContext::GetNullRef(SP_NULL_TYPE type)
 }
 
 int
-PluginContext::SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn)
+PluginContext::SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK* oldpfn)
 {
   if (!IsDebugging())
     return SP_ERROR_NOTDEBUGGING;

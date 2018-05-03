@@ -24,7 +24,7 @@
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0xC
-#define SOURCEPAWN_API_VERSION   0x020D
+#define SOURCEPAWN_API_VERSION   0x020E
 
 namespace SourceMod {
   struct IdentityToken_t;
@@ -619,7 +619,7 @@ namespace SourcePawn
      *
      * @return         Error number.
      */
-    virtual int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK *oldpfn) =0;
+    virtual int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK* oldpfn) =0;
 
     /**
      * @brief Deprecated, do not use.

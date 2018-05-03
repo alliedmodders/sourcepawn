@@ -18,7 +18,7 @@
 
 namespace sp {
 
-void InvokeDebugger(PluginContext *ctx, const IErrorReport *report)
+void InvokeDebugger(PluginContext* ctx, const IErrorReport* report)
 {
   // Continue normal execution, if this plugin isn't being debugged.
   if (!ctx->debugbreak())
@@ -49,8 +49,17 @@ void InvokeDebugger(PluginContext *ctx, const IErrorReport *report)
   // continueing with execution.
   ke::SaveAndSet<bool>(&Environment::get()->watchdog()->ignore_timeout_, true);
 
+  // Fill in the debug info struct.
+  sp_debug_break_info_t dbginfo;
+  dbginfo.version = DEBUG_BREAK_INFO_VERSION;
+  dbginfo.cip = cip;
+  dbginfo.frm = ctx->frm();
+  dbginfo.sp = ctx->sp();
+  dbginfo.memory = ctx->memory();
+  dbginfo.mem_size = ctx->HeapSize();
+
   // Call debug callback.
-  ctx->debugbreak()(ctx, ctx->frm(), cip, ctx->memory(), report);
+  ctx->debugbreak()(ctx, dbginfo, report);
 }
 
 } // namespace sp
