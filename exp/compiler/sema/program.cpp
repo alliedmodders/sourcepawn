@@ -147,6 +147,11 @@ class SemaPrinter : public ast::StrictAstVisitor
     fprintf(fp_, "- BreakStatement\n");
   }
 
+  void visitContinueStatement(ast::ContinueStatement* stmt) override {
+    prefix();
+    fprintf(fp_, "- ContinueStatement\n");
+  }
+
   void visitIfStatement(ast::IfStatement* node) override {
     prefix();
     fprintf(fp_, "- IfStatement\n");

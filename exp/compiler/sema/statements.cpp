@@ -196,6 +196,9 @@ SemanticAnalysis::visitStatement(Statement* node)
     case AstKind::kBreakStatement:
       visitBreakStatement(node->toBreakStatement());
       break;
+    case AstKind::kContinueStatement:
+      visitContinueStatement(node->toContinueStatement());
+      break;
     case AstKind::kSwitchStatement:
       visitSwitchStatement(node->toSwitchStatement());
       break;
@@ -368,6 +371,15 @@ SemanticAnalysis::visitBreakStatement(BreakStatement* node)
 {
   if (!loop_depth_) {
     cc_.report(node->loc(), rmsg::break_outside_loop);
+    return;
+  }
+}
+
+void
+SemanticAnalysis::visitContinueStatement(ContinueStatement* node)
+{
+  if (!loop_depth_) {
+    cc_.report(node->loc(), rmsg::continue_outside_loop);
     return;
   }
 }

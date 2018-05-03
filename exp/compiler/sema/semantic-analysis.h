@@ -53,6 +53,7 @@ class SemanticAnalysis
   void visitForStatement(ForStatement* node);
   void visitIfStatement(IfStatement* node);
   void visitBreakStatement(BreakStatement* node);
+  void visitContinueStatement(ContinueStatement* node);
   void visitSwitchStatement(SwitchStatement* node);
 
   // Expression handling.

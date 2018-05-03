@@ -50,8 +50,7 @@ SmxCompiler::SmxCompiler(CompileContext& cc, sema::Program* program)
    cur_var_stk_(0),
    heap_usage_(0),
    max_heap_usage_(0),
-   continue_to_(nullptr),
-   break_to_(nullptr),
+   loop_(nullptr),
    last_stmt_pc_(0)
 {
   names_ = new SmxNameTable(".names");
@@ -302,6 +301,9 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
     case ast::AstKind::kBreakStatement:
       generateBreak(stmt->toBreakStatement());
       break;
+    case ast::AstKind::kContinueStatement:
+      generateContinue(stmt->toContinueStatement());
+      break;
     case ast::AstKind::kSwitchStatement:
       generateSwitch(stmt->toSwitchStatement());
       break;
@@ -454,8 +456,7 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
 
   Label taken, fallthrough;
   if (stmt->token() == TOK_WHILE) {
-    ke::SaveAndSet<Label*> save_break(&break_to_, &taken);
-    ke::SaveAndSet<Label*> save_continue(&continue_to_, &fallthrough);
+    LoopScope loop(&loop_, &fallthrough, &taken);
 
     // if !<cond> goto done
     // repeat:
@@ -468,8 +469,7 @@ SmxCompiler::generateWhile(ast::WhileStatement* stmt)
     __ opcode(OP_JUMP, &fallthrough);
     __ bind(&taken);
   } else {
-    ke::SaveAndSet<Label*> save_break(&break_to_, &taken);
-    ke::SaveAndSet<Label*> save_continue(&continue_to_, &fallthrough);
+    LoopScope loop(&loop_, &fallthrough, &taken);
 
     // repeat:
     //
@@ -507,8 +507,7 @@ SmxCompiler::generateFor(ast::ForStatement* stmt)
     test(cond_expr, false, &done, &body);
   __ bind(&body);
   {
-    ke::SaveAndSet<Label*> save_break(&break_to_, &done);
-    ke::SaveAndSet<Label*> save_continue(&continue_to_, &update);
+    LoopScope loop(&loop_, &update, &done);
 
     ast::Statement* body = stmt->body();
     generateStatement(body);
@@ -546,7 +545,13 @@ SmxCompiler::generateIf(ast::IfStatement* stmt)
 void
 SmxCompiler::generateBreak(ast::BreakStatement* stmt)
 {
-  __ opcode(OP_JUMP, break_to_);
+  __ opcode(OP_JUMP, loop_->break_to);
+}
+
+void
+SmxCompiler::generateContinue(ast::ContinueStatement* stmt)
+{
+  __ opcode(OP_JUMP, loop_->continue_to);
 }
 
 void

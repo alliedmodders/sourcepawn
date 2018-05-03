@@ -24,6 +24,7 @@
 #include "smx-assembly-buffer.h"
 #include "smx-builder.h"
 #include "smx-ssa.h"
+#include <amtl/am-raii.h>
 
 namespace sp {
 
@@ -49,6 +50,7 @@ private:
   void generateFor(ast::ForStatement* stmt);
   void generateIf(ast::IfStatement* stmt);
   void generateBreak(ast::BreakStatement* stmt);
+  void generateContinue(ast::ContinueStatement* stmt);
   void generateSwitch(ast::SwitchStatement* stmt);
 
   // Allocate space and generate data for a local variable.
@@ -197,10 +199,18 @@ private:
   int32_t heap_usage_;
   int32_t max_heap_usage_;
 
-  // Current loop context. If we do nested functions, these have to be zapped
-  // at function boundaries.
-  Label* continue_to_;
-  Label* break_to_;
+  struct LoopScope : public ke::StackLinked<LoopScope> {
+    LoopScope(LoopScope** parent, Label* continue_to, Label* break_to)
+     : StackLinked(parent),
+       continue_to(continue_to),
+       break_to(break_to)
+    {}
+    // Current loop context. If we do nested functions, these have to be zapped
+    // at function boundaries.
+    Label* continue_to;
+    Label* break_to;
+  };
+  LoopScope* loop_;
 
   uint32_t last_stmt_pc_;
 };
