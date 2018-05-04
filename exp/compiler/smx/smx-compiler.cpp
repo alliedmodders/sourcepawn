@@ -1804,6 +1804,11 @@ SmxCompiler::initialize_dynamic_array(ast::VarDecl* decl, sema::Expr* expr)
 void
 SmxCompiler::leave_scope(ScopeInfo& scope_info)
 {
+  // Don't generate heap pops for the top-level scope, since it will be killed
+  // on function return.
+  if (!scope_info.prev())
+    return;
+
   for (size_t i = 0; i < scope_info.heap_vars; i++)
     __ opcode(OP_TRACKER_POP_SETHEAP);
 }
