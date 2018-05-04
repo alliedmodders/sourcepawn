@@ -5391,6 +5391,13 @@ static void statement(int *lastindent,int allow_decl)
   case tDECL:
   case tSTATIC:
   case tNEW:
+    if (tok == tNEW && matchtoken(tSYMBOL)) {
+        if (lexpeek('(')) {
+          lexpush();
+          goto doexpr_jump;
+        }
+      lexpush(); // we matchtoken'ed, give it back to lex for declloc
+    }
     if (!allow_decl) {
       error(3);
       break;
@@ -5467,6 +5474,7 @@ static void statement(int *lastindent,int allow_decl)
     decl_enum(sLOCAL);
     break;
   default:          /* non-empty expression */
+doexpr_jump:
     lexpush();      /* analyze token later */
     doexpr(TRUE,TRUE,TRUE,TRUE,NULL,NULL,FALSE);
     needtoken(tTERM);
