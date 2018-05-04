@@ -6244,6 +6244,7 @@ static void dobreak(void)
     return;
   destructsymbols(&loctab,nestlevel);
   genstackfree(ptr[wqBRK]);
+  genheapfree(ptr[wqBRK]);
   jumplabel(ptr[wqEXIT]);
 }
 
