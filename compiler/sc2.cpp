@@ -65,13 +65,6 @@ static short skiplevel; /* level at which we started skipping (including nested 
 static unsigned char term_expr[] = "";
 static int listline=-1; /* "current line" for the list file */
 
-#if defined KE_MACOSX
-static double pow10(double d)
-{
-  return pow(10, d);
-}
-#endif
-
 static bool sLiteralQueueDisabled = false;
 
 AutoDisableLiteralQueue::AutoDisableLiteralQueue()
@@ -717,11 +710,7 @@ static int ftoi(cell *val,const unsigned char *curptr)
       exp=(exp*10)+(*ptr-'0');
       ptr++;
     } /* while */
-#if defined __GNUC__
-    fmult=pow10(exp*sign);
-#else
     fmult=pow(10.0,exp*sign);
-#endif
     fnum *= fmult;
     dnum *= (unsigned long)(fmult+0.5);
   } /* if */
