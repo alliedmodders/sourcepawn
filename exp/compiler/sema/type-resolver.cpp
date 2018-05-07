@@ -340,7 +340,7 @@ TypeResolver::visitEnumConstant(EnumConstant* node)
 }
 
 void
-TypeResolver::visitUnsafeCastExpr(UnsafeCastExpr* expr)
+TypeResolver::visitViewAsExpression(ViewAsExpression* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }

@@ -706,7 +706,7 @@ Parser::prefix()
       if (!expect(TOK_RPAREN))
         return nullptr;
 
-      return delegate_.HandleUnsafeCast(pos, spec, expr);
+      return delegate_.HandleViewAs(pos, spec, expr);
     }
 
     case TOK_NAME:
@@ -872,7 +872,7 @@ Parser::unary()
       Expression* expr = unary();
       if (!expr)
         return nullptr;
-      return delegate_.HandleUnsafeCast(pos, spec, expr);
+      return delegate_.HandleViewAs(pos, spec, expr);
     }
 
     default:

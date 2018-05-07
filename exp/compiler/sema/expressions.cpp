@@ -57,6 +57,8 @@ SemanticAnalysis::visitExpression(Expression* node)
       return visitTernary(node->toTernaryExpression());
     case AstKind::kSizeofExpression:
       return visitSizeof(node->toSizeofExpression());
+    case AstKind::kViewAsExpression:
+      return visitViewAs(node->toViewAsExpression());
     default:
       cc_.report(node->loc(), rmsg::unimpl_kind) <<
         "sema-visit-expr" << node->kindName();
@@ -787,6 +789,33 @@ SemanticAnalysis::visitSizeof(ast::SizeofExpression* node)
     node,
     types_->getPrimitive(PrimitiveType::Int32),
     BoxedValue(iv));
+}
+
+sema::Expr*
+SemanticAnalysis::visitViewAs(ast::ViewAsExpression* node)
+{
+  sema::Expr* expr = visitExpression(node->expr());
+  if (!expr)
+    return nullptr;
+
+  // This will not let us cast addresses, we'll have to fix that eventually.
+  EvalContext ec(CoercionKind::RValue, expr, expr->type());
+  if (!coerce(ec))
+    return nullptr;
+
+  Type* to = node->te().resolved();
+  Type* from = ec.result->type();
+  if (!IsLegacyCellType(to) || !IsLegacyCellType(from)) {
+    cc_.report(node->loc(), rmsg::cannot_view_as_to) <<
+      from << to;
+    return nullptr;
+  }
+
+  return new (pool_) sema::ImplicitCastExpr(
+    node,
+    to,
+    sema::CastOp::None,
+    ec.result);
 }
 
 } // namespace sp

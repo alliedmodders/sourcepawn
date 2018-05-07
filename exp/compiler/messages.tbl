@@ -81,6 +81,7 @@ RMSG(intrinsic_not_found,           syntax,            "intrinsic set '%0' not f
 RMSG(array_lit_not_array,           syntax,            "too many dimensions, expected an array or string literal")
 RMSG(array_lit_mixed_dims,          syntax,            "array size does not match the previous literal for this dimension")
 RMSG(view_as_example,               note,              "example: view_as<%0>(value)")
+RMSG(cannot_view_as_to,             syntax,            "cannot view_as type '%0' to '%1'")
 
 // Name binding errors.
 RMSG(redeclared_name,               syntax,            "name '%0' was redeclared")

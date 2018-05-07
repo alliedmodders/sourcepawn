@@ -762,6 +762,16 @@ UnwrapReference(Type* type)
   return type;
 }
 
+static inline bool
+IsLegacyCellType(Type* type)
+{
+  return type->isPrimitive(PrimitiveType::Int32) ||
+         type->isPrimitive(PrimitiveType::Float) ||
+         type->isPrimitive(PrimitiveType::Bool) ||
+         type->isEnum() ||
+         type->isUnchecked();
+}
+
 // This should probably be in the type manager... but it should never leak past
 // type resolution.
 extern Type UnresolvableType;

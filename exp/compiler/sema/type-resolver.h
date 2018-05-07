@@ -85,7 +85,7 @@ class TypeResolver
   void visitMethodDecl(MethodDecl* decl) override;
   void visitFunctionStatement(FunctionStatement* node) override;
   void visitTypedefDecl(TypedefDecl* node) override;
-  void visitUnsafeCastExpr(UnsafeCastExpr* expr) override;
+  void visitViewAsExpression(ViewAsExpression* expr) override;
   void visitCallNewExpr(CallNewExpr* expr) override;
   void visitNewArrayExpr(NewArrayExpr* expr) override;
   void visitTypesetDecl(TypesetDecl* decl) override;

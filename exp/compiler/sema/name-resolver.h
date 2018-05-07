@@ -63,9 +63,9 @@ class NameResolver
   TypedefDecl* HandleTypedefDecl(const SourceLocation& begin,
                                  Atom* name,
                                  TypeSpecifier& spec);
-  UnsafeCastExpr* HandleUnsafeCast(const SourceLocation& pos,
-                                   TypeSpecifier& spec,
-                                   Expression* expr);
+  ViewAsExpression* HandleViewAs(const SourceLocation& pos,
+                                 TypeSpecifier& spec,
+                                 Expression* expr);
   CallNewExpr* HandleCallNewExpr(const SourceLocation& pos,
                                  TypeSpecifier& spec,
                                  ExpressionList* args);

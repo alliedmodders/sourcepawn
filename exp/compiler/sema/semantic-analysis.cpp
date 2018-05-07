@@ -72,6 +72,7 @@ SemanticAnalysis::walkAST()
       }
       case AstKind::kRecordDecl:
       case AstKind::kTypedefDecl:
+      case AstKind::kEnumStatement:
         // Type declarations don't have semantic checks.
         continue;
       default:

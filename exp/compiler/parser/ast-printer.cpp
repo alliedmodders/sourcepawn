@@ -149,9 +149,9 @@ class AstPrinter : public AstVisitor
     node->original()->accept(this);
     unindent();
   }
-  void visitUnsafeCastExpr(UnsafeCastExpr* node) override {
+  void visitViewAsExpression(ViewAsExpression* node) override {
     prefix();
-    fprintf(fp_, "[ UnsafeCastExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    fprintf(fp_, "[ ViewAsExpression (%s)\n", BuildTypeName(node->te(), nullptr).chars());
     indent();
     node->expr()->accept(this);
     unindent();

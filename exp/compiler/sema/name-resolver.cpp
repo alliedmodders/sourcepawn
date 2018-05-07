@@ -782,11 +782,11 @@ NameResolver::HandleTypedefDecl(const SourceLocation& begin,
   return node;
 }
 
-UnsafeCastExpr*
-NameResolver::HandleUnsafeCast(const SourceLocation& pos, TypeSpecifier& spec, Expression* expr)
+ViewAsExpression*
+NameResolver::HandleViewAs(const SourceLocation& pos, TypeSpecifier& spec, Expression* expr)
 {
   TypeExpr te = resolve(spec);
-  UnsafeCastExpr* node = new (pool_) UnsafeCastExpr(pos, te, expr);
+  ViewAsExpression* node = new (pool_) ViewAsExpression(pos, te, expr);
 
   if (!te.resolved())
     tr_.addPending(node);

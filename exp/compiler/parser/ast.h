@@ -71,7 +71,7 @@ class CompileContext;
   _(ContinueStatement)    \
   _(IncDecExpression)     \
   _(UnaryExpression)      \
-  _(UnsafeCastExpr)       \
+  _(ViewAsExpression)       \
   _(SizeofExpression)     \
   _(TernaryExpression)    \
   _(TokenLiteral)         \
@@ -552,16 +552,16 @@ class SizeofExpression : public Expression
   size_t level_;
 };
 
-class UnsafeCastExpr : public Expression
+class ViewAsExpression : public Expression
 {
  public:
-  UnsafeCastExpr(const SourceLocation& pos, const TypeExpr& te, Expression* expr)
+  ViewAsExpression(const SourceLocation& pos, const TypeExpr& te, Expression* expr)
    : Expression(pos),
      te_(te),
      expr_(expr)
   {}
 
-  DECLARE_NODE(UnsafeCastExpr);
+  DECLARE_NODE(ViewAsExpression);
 
   TypeExpr& te() {
     return te_;
@@ -1900,7 +1900,7 @@ class ParseTree : public PoolObject
 //  void visitContinueStatement(ContinueStatement* node) override;
 //  void visitIncDecExpression(IncDecExpression* node) override;
 //  void visitUnaryExpression(UnaryExpression* node) override;
-//  void visitUnsafeCastExpr(UnsafeCastExpr* node) override;
+//  void visitViewAsExpression(ViewAsExpression* node) override;
 //  void visitSizeofExpression(SizeofExpression* node) override;
 //  void visitTernaryExpression(TernaryExpression* node) override;
 //  void visitTokenLiteral(TokenLiteral* node) override;
