@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_keyword_table_h_
 #define _include_spcomp_keyword_table_h_
 
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "tokens.h"
 
 namespace sp {

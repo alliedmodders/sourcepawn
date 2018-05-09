@@ -22,7 +22,7 @@
 #include "parser/parser.h"
 #include "sema/name-resolver.h"
 #include "sema/semantic-analysis.h"
-#include "smx/memory-buffer.h"
+#include "shared/byte-buffer.h"
 #include "smx/smx-compiler.h"
 #include <stdio.h>
 #include <stdlib.h>

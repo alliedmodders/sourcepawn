@@ -19,10 +19,10 @@
 #ifndef _include_sourcepawn_emit_emitter_h_
 #define _include_sourcepawn_emit_emitter_h_
 
+#include "libsmx/smx-builder.h"
 #include "sema/expressions.h"
 #include "sema/program.h"
 #include "smx-assembly-buffer.h"
-#include "smx-builder.h"
 #include "smx-ssa.h"
 #include <amtl/am-raii.h>
 
@@ -170,7 +170,7 @@ private:
   sema::Program* program_;
 
   SmxAssemblyBuffer masm_;
-  MemoryBuffer data_;
+  ByteBuffer data_;
 
   SmxBuilder builder_;
   RefPtr<SmxNameTable> names_;

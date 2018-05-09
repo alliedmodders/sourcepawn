@@ -24,9 +24,9 @@
 #include <am-threadlocal.h>
 #include <stdarg.h>
 #include <string.h>
+#include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include "auto-string.h"
-#include "string-pool.h"
 #include "type-manager.h"
 #include "process-options.h"
 #include "reporting.h"

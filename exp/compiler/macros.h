@@ -18,9 +18,9 @@
 #ifndef _include_spcomp_macros_h_
 #define _include_spcomp_macros_h_
 
+#include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include "source-location.h"
-#include "string-pool.h"
 #include "parser/tokens.h"
 #include <stddef.h>
 

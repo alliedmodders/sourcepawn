@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_json_tools_h_
 #define _include_spcomp_json_tools_h_
 
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include "boxed-value.h"
 #include <stdio.h>

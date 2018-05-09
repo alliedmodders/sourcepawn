@@ -19,6 +19,7 @@ import os
 
 binary = Root.Program(builder, 'docparse', arch)
 binary.compiler.cxxincludes += [
+  os.path.join(builder.sourcePath),
   os.path.join(builder.sourcePath, 'exp'),
   os.path.join(builder.sourcePath, 'exp/compiler'),
 ]
@@ -30,6 +31,7 @@ binary.sources += [
   'docparse.cpp',
 ]
 binary.compiler.linkflags += [
-  SP.libspcomp2[arch].binary
+  SP.libspcomp2[arch].binary,
+  SP.libsmx[arch].binary,
 ]
 builder.Add(binary)

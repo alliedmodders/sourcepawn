@@ -19,7 +19,7 @@
 #ifndef _include_jitcraft_type_manager_h_
 #define _include_jitcraft_type_manager_h_
 
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "types.h"
 #include <amtl/am-hashmap.h>
 

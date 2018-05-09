@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include <string.h>
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "parser.h"
 #include "preprocessor.h"
 #include "sema/name-resolver.h"

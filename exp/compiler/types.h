@@ -20,7 +20,7 @@
 #define _include_jc_types_h_
 
 #include "assert.h"
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include <amtl/am-enum.h>
 

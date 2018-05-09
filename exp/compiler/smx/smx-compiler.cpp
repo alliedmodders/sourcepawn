@@ -1179,7 +1179,7 @@ SmxCompiler::generateData(ast::VarDecl* decl)
     return;
   }
 
-  int32_t address = int32_t(data_.pos());
+  int32_t address = int32_t(data_.position());
   sym->allocate(StorageClass::Global, address);
 
   if (sym->type()->isArray()) {
@@ -1269,7 +1269,7 @@ SmxCompiler::generateLegacyStructData(ast::VarDecl* stmt)
     field_index++;
   }
 
-  int32_t address = int32_t(data_.pos());
+  int32_t address = int32_t(data_.position());
   sym->allocate(StorageClass::Global, address);
 
   for (int32_t value : values)
@@ -1292,7 +1292,7 @@ SmxCompiler::emitString(sema::StringExpr* expr, ValueDest dest)
 int32_t
 SmxCompiler::generateDataString(const char* str, size_t length)
 {
-  int32_t address = int32_t(data_.pos());
+  int32_t address = int32_t(data_.position());
 
   // Allocations must be in increments of cells.
   size_t leftover = Align(length + 1, sizeof(cell_t)) - (length + 1);
@@ -1306,7 +1306,7 @@ SmxCompiler::generateDataString(const char* str, size_t length)
   // In this case we need to guarantee a new literal copy each time the
   // default argument is used. We should be able to mark the StringExpr
   // as coalescable and fix this in the future.
-  data_.write(str, length);
+  data_.writeBytes(str, length);
   data_.write<uint8_t>(0);
   for (size_t i = 0; i < leftover; i++)
     data_.write<uint8_t>(0);
@@ -1600,7 +1600,7 @@ SmxCompiler::initialize_array(VariableSymbol* sym, sema::Expr* expr, const Array
     return;
   }
 
-  int32_t base = int32_t(data_.pos());
+  int32_t base = int32_t(data_.position());
   if (!data_.preallocate(info.bytes)) {
     cc_.report(sym->node()->loc(), rmsg::outofmemory);
     return;
