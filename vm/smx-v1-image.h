@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <smx/smx-headers.h>
+#include <smx/smx-typeinfo.h>
 #include <smx/smx-v1.h>
 #include <am-string.h>
 #include <am-vector.h>
@@ -169,11 +170,13 @@ class SmxV1Image
   }
   bool validateName(size_t offset);
   bool validateSection(const Section* section);
+  bool validateRttiSection(const Section* section);
   bool validateCode();
   bool validateData();
   bool validatePublics();
   bool validatePubvars();
   bool validateNatives();
+  bool validateRtti();
   bool validateDebugInfo();
   bool validateTags();
 

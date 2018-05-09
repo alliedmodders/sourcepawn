@@ -9,6 +9,7 @@
 //
 #include "smx-v1-image.h"
 #include "zlib/zlib.h"
+#include <amtl/am-string.h>
 
 using namespace ke;
 using namespace sp;
@@ -166,6 +167,8 @@ SmxV1Image::validate()
     return false;
   if (!validateNatives())
     return false;
+  if (!validateRtti())
+    return false;
   if (!validateDebugInfo())
     return false;
   if (!validateTags())
@@ -190,6 +193,29 @@ SmxV1Image::validateSection(const Section* section)
   if (section->dataoffs >= length_)
     return false;
   if (section->size > length_ - section->dataoffs)
+    return false;
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiSection(const Section* section)
+{
+  if (!validateSection(section))
+    return false;
+
+  const smx_rtti_table_header* header =
+    reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
+  if (section->size < sizeof(smx_rtti_table_header))
+    return false;
+  if (section->size < header->header_size)
+    return false;
+  if (!IsUint32MultiplySafe(header->row_size, header->row_count))
+    return false;
+
+  uint32_t table_size = header->row_size * header->row_count;
+  if (!IsUint32AddSafe(table_size, header->header_size))
+    return false;
+  if (section->size != header->header_size + table_size)
     return false;
   return true;
 }
@@ -332,6 +358,33 @@ bool
 SmxV1Image::validateName(size_t offset)
 {
   return offset < names_section_->size;
+}
+
+bool
+SmxV1Image::validateRtti()
+{
+  const Section* rtti_data = findSection("rtti.data");
+  if (!rtti_data)
+    return true;
+  if (!validateSection(rtti_data))
+    return error("invalid rtti.data section");
+
+  const char* tables[] = {
+    "rtti.enums",
+    "rtti.methods",
+    "rtti.natives",
+    "rtti.typedefs",
+    "rtti.typesets",
+  };
+  for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
+    const char* table_name = tables[i];
+    const Section* section = findSection(table_name);
+    if (!validateRttiSection(section)) {
+      error_.format("could not validate %s section", table_name);
+      return false;
+    }
+  }
+  return true;
 }
 
 bool

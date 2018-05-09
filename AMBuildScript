@@ -248,7 +248,6 @@ class SourcePawn(object):
     super(SourcePawn, self).__init__()
     self.root = root
     self.amtl = amtl
-    self.included_zlib = False
     self.arch = builder.target.arch
     self.spcomp_scripts = [
       os.path.join('compiler', 'AMBuilder'),
@@ -260,7 +259,7 @@ class SourcePawn(object):
     self.spshell = {}
     self.spcomp = {}
     self.libspcomp2 = {}
-    self.zlib = {}
+    self.zlib = None
     self.libsmx = None
 
   def BuildSpcomp(self):
@@ -289,8 +288,9 @@ class SourcePawn(object):
     self.BuildExperimental()
 
   def EnsureZlib(self):
-    if self.included_zlib:
+    if self.zlib is not None:
       return
+    self.zlib = {}
     for arch in self.root.archs:
       self.zlib[arch] = self.BuildForArch("third_party/zlib/AMBuilder", arch)
     self.included_zlib = True

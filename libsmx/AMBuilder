@@ -22,6 +22,7 @@ binary.compiler.cxxincludes += [
   builder.sourcePath,
 ]
 binary.sources += [
+  'data-pool.cpp',
   'smx-builder.cpp',
 ]
 
