@@ -40,8 +40,9 @@
 #include <smx/smx-v1.h>
 #include <smx/smx-v1-opcodes.h>
 #include <zlib/zlib.h>
-#include "smx-builder.h"
-#include "memory-buffer.h"
+#include "libsmx/smx-builder.h"
+#include "shared/byte-buffer.h"
+#include "shared/string-pool.h"
 #include "types.h"
 
 using namespace sp;
@@ -815,7 +816,7 @@ typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
 typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
-static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
+static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
 {
   StringPool pool;
   SmxBuilder builder;
@@ -949,7 +950,7 @@ static void assemble_to_buffer(MemoryBuffer *buffer, void *fin)
   builder.write(buffer);
 }
 
-static void splat_to_binary(const char *binfname, void *bytes, size_t size)
+static void splat_to_binary(const char *binfname, const void *bytes, size_t size)
 {
   // Note: error 161 will setjmp(), which skips destructors :(
   FILE *fp = fopen(binfname, "wb");
@@ -967,25 +968,24 @@ static void splat_to_binary(const char *binfname, void *bytes, size_t size)
 
 void assemble(const char *binfname, void *fin)
 {
-  MemoryBuffer buffer;
+  SmxByteBuffer buffer;
   assemble_to_buffer(&buffer, fin);
 
   // Buffer compression logic. 
   sp_file_hdr_t *header = (sp_file_hdr_t *)buffer.bytes();
   size_t region_size = header->imagesize - header->dataoffs;
   size_t zbuf_max = compressBound(region_size);
-  Bytef *zbuf = (Bytef *)malloc(zbuf_max);
+  UniquePtr<Bytef[]> zbuf = MakeUnique<Bytef[]>(zbuf_max);
 
   uLong new_disksize = zbuf_max;
   int err = compress2(
-    zbuf, 
+    zbuf.get(), 
     &new_disksize,
     (Bytef *)(buffer.bytes() + header->dataoffs),
     region_size,
     Z_BEST_COMPRESSION
   );
   if (err != Z_OK) {
-    free(zbuf);
     pc_printf("Unable to compress, error %d\n", err);
     pc_printf("Falling back to no compression.\n");
     splat_to_binary(binfname, buffer.bytes(), buffer.size());
@@ -995,9 +995,9 @@ void assemble(const char *binfname, void *fin)
   header->disksize = new_disksize + header->dataoffs;
   header->compression = SmxConsts::FILE_COMPRESSION_GZ;
 
-  buffer.rewind(header->dataoffs);
-  buffer.write(zbuf, new_disksize);
-  free(zbuf);
+  ByteBuffer new_buffer;
+  new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
+  new_buffer.writeBytes(zbuf.get(), new_disksize);
 
-  splat_to_binary(binfname, buffer.bytes(), buffer.size());
+  splat_to_binary(binfname, new_buffer.bytes(), new_buffer.size());
 }

@@ -261,9 +261,11 @@ class SourcePawn(object):
     self.spcomp = {}
     self.libspcomp2 = {}
     self.zlib = {}
+    self.libsmx = None
 
   def BuildSpcomp(self):
     self.EnsureZlib()
+    self.EnsureLibSmx()
     for arch in self.root.archs:
       spcomp = self.BuildForArch('compiler/AMBuilder', arch)
       self.spcomp[arch] = spcomp
@@ -292,6 +294,14 @@ class SourcePawn(object):
     for arch in self.root.archs:
       self.zlib[arch] = self.BuildForArch("third_party/zlib/AMBuilder", arch)
     self.included_zlib = True
+
+  def EnsureLibSmx(self):
+    if self.libsmx is not None:
+      return
+    self.libsmx = {}
+    for arch in self.root.archs:
+      lib = self.BuildForArch('libsmx/AMBuilder', arch)
+      self.libsmx[arch] = lib
 
   def BuildForArch(self, scripts, arch):
     new_vars = copy.copy(self.vars)

@@ -10,6 +10,7 @@ compiler.includes += [
   os.path.join(builder.currentSourcePath, '..', 'third_party'),
   os.path.join(builder.buildPath, 'includes'),
   os.path.join(builder.buildPath, builder.buildFolder),
+  os.path.join(builder.currentSourcePath, '..'),
 ]
 
 if compiler.like('gcc'):
@@ -67,7 +68,6 @@ binary.sources += [
   'scmemfil.cpp',
   'sctracker.cpp',
   'scvars.cpp',
-  'smx-builder.cpp',
   'sp_symhash.cpp',
   'types.cpp',
   'expression-parsing.cpp',
@@ -78,6 +78,7 @@ if builder.target.platform == 'linux' and not compiler.like('emscripten'):
   binary.sources.append('binreloc.c')
 
 binary.compiler.linkflags[0:0] = [
+  SP.libsmx[arch].binary,
   SP.zlib[arch],
 ]
 
