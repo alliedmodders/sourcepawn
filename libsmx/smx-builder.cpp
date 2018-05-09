@@ -16,16 +16,18 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "smx-builder.h"
+#include "shared/string-pool.h"
+
+namespace sp {
 
 using namespace ke;
-using namespace sp;
 
 SmxBuilder::SmxBuilder()
 {
 }
 
 bool
-SmxBuilder::write(ISmxBuffer *buf)
+SmxBuilder::write(ISmxBuffer* buf)
 {
   sp_file_hdr_t header;
   header.magic = SmxConsts::FILE_MAGIC;
@@ -78,7 +80,7 @@ SmxBuilder::write(ISmxBuffer *buf)
   assert(current_offset == header.stringtab);
   
   for (size_t i = 0; i < sections_.length(); i++) {
-    const AString &name = sections_[i]->name();
+    const AString& name = sections_[i]->name();
     if (!buf->write(name.chars(), name.length() + 1))
       return false;
   }
@@ -98,14 +100,21 @@ SmxBuilder::write(ISmxBuffer *buf)
   return true;
 }
 
+uint32_t
+SmxNameTable::add(StringPool& pool, const char* str)
+{
+  return add(pool.add(str));
+}
+
 bool
-SmxNameTable::write(ISmxBuffer *buf)
+SmxNameTable::write(ISmxBuffer* buf)
 {
   for (size_t i = 0; i < names_.length(); i++) {
-    Atom *str = names_[i];
+    Atom* str = names_[i];
     if (!buf->write(str->chars(), str->length() + 1))
       return false;
   }
   return true;
 }
 
+} // namespace sp
