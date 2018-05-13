@@ -653,165 +653,6 @@ class DebugString
 typedef SmxBlobSection<sp_fdbg_info_t> SmxDebugInfoSection;
 typedef SmxListSection<sp_fdbg_line_t> SmxDebugLineSection;
 typedef SmxListSection<sp_fdbg_file_t> SmxDebugFileSection;
-typedef SmxListSection<sp_file_tag_t> SmxTagSection;
-typedef SmxBlobSection<void> SmxDebugSymbolsSection;
-typedef SmxBlobSection<void> SmxDebugNativesSection;
-typedef Vector<symbol *> SymbolList;
-
-static void append_debug_tables(SmxBuilder *builder, StringPool &pool, RefPtr<SmxNameTable> names, SymbolList &nativeList)
-{
-  // We use a separate name table for historical reasons that are no longer
-  // necessary. In the future we should just alias this to ".names".
-  RefPtr<SmxNameTable> dbgnames = new SmxNameTable(".dbg.strings");
-  RefPtr<SmxDebugInfoSection> info = new SmxDebugInfoSection(".dbg.info");
-  RefPtr<SmxDebugLineSection> lines = new SmxDebugLineSection(".dbg.lines");
-  RefPtr<SmxDebugFileSection> files = new SmxDebugFileSection(".dbg.files");
-  RefPtr<SmxDebugSymbolsSection> symbols = new SmxDebugSymbolsSection(".dbg.symbols");
-  RefPtr<SmxDebugNativesSection> natives = new SmxDebugNativesSection(".dbg.natives");
-  RefPtr<SmxTagSection> tags = new SmxTagSection(".tags");
-
-  stringlist *dbgstrs = get_dbgstrings();
-
-  // State for tracking which file we're on. We replicate the original AMXDBG
-  // behavior here which excludes duplicate addresses.
-  ucell prev_file_addr = 0;
-  const char *prev_file_name = nullptr;
-
-  // Add debug data.
-  for (stringlist *iter = dbgstrs; iter; iter = iter->next) {
-    if (iter->line[0] == '\0')
-      continue;
-
-    DebugString str(iter->line);
-    switch (str.kind()) {
-      case 'F':
-      {
-        ucell codeidx = str.parse();
-        if (codeidx != prev_file_addr) {
-          if (prev_file_name) {
-            sp_fdbg_file_t &entry = files->add();
-            entry.addr = prev_file_addr;
-            entry.name = dbgnames->add(pool, prev_file_name);
-          }
-          prev_file_addr = codeidx;
-        }
-        prev_file_name = str.skipspaces();
-        break;
-      }
-
-      case 'L':
-      {
-        sp_fdbg_line_t &entry = lines->add();
-        entry.addr = str.parse();
-        entry.line = str.parse();
-        break;
-      }
-
-      case 'S':
-      {
-        sp_fdbg_symbol_t sym;
-        sp_fdbg_arraydim_t dims[sDIMEN_MAX];
-
-        sym.addr = str.parse();
-        sym.tagid = str.parse();
-
-        str.skipspaces();
-        str.expect(':');
-        char *name = str.skipspaces();
-        char *nameend = str.skipto(' ');
-        Atom *atom = pool.add(name, nameend - name);
-
-        sym.codestart = str.parse();
-        sym.codeend = str.parse();
-        sym.ident = (char)str.parse();
-        sym.vclass = (char)str.parse();
-        sym.dimcount = 0;
-        sym.name = dbgnames->add(atom);
-
-        info->header().num_syms++;
-
-        str.skipspaces();
-        if (str.getc() == '[') {
-          info->header().num_arrays++;
-          for (char *ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
-            dims[sym.dimcount].tagid = str.parse();
-            str.skipspaces();
-            str.expect(':');
-            dims[sym.dimcount].size = str.parse();
-            sym.dimcount++;
-          }
-        }
-
-        symbols->add(&sym, sizeof(sym));
-        symbols->add(dims, sizeof(dims[0]) * sym.dimcount);
-        break;
-      }
-    }
-  }
-
-  // Add the last file.
-  if (prev_file_name) {
-    sp_fdbg_file_t &entry = files->add();
-    entry.addr = prev_file_addr;
-    entry.name = dbgnames->add(pool, prev_file_name);
-  }
-
-  // Build the tags table.
-  gTypes.forEachType([&](Type* type) -> void {
-    assert(strlen(type->name())>0);
-
-    sp_file_tag_t &tag = tags->add();
-    tag.tag_id = type->smx_export_value();
-    tag.name = names->add(pool, type->name());
-  });
-
-  // Finish up debug header statistics.
-  info->header().num_files = files->count();
-  info->header().num_lines = lines->count();
-
-  // Write natives.
-  sp_fdbg_ntvtab_t natives_header;
-  natives_header.num_entries = nativeList.length();
-  natives->add(&natives_header, sizeof(natives_header));
-
-  for (size_t i = 0; i < nativeList.length(); i++) {
-    symbol *sym = nativeList[i];
-
-    sp_fdbg_native_t info;
-    info.index = i;
-    info.name = dbgnames->add(pool, sym->name);
-    info.tagid = sym->tag;
-    info.nargs = 0;
-    for (arginfo *arg = sym->dim.arglist; arg->ident; arg++)
-      info.nargs++;
-    natives->add(&info, sizeof(info));
-
-    for (arginfo *arg = sym->dim.arglist; arg->ident; arg++) {
-      sp_fdbg_ntvarg_t argout;
-      argout.ident = arg->ident;
-      argout.tagid = arg->tag;
-      argout.dimcount = arg->numdim;
-      argout.name = dbgnames->add(pool, arg->name);
-      natives->add(&argout, sizeof(argout));
-
-      for (int j = 0; j < argout.dimcount; j++) {
-        sp_fdbg_arraydim_t dim;
-        dim.tagid = arg->idxtag[j];
-        dim.size = arg->dim[j];
-        natives->add(&dim, sizeof(dim));
-      }
-    }
-  }
-
-  // Add these in the same order SourceMod 1.6 added them.
-  builder->add(files);
-  builder->add(symbols);
-  builder->add(lines);
-  builder->add(natives);
-  builder->add(dbgnames);
-  builder->add(info);
-  builder->add(tags);
-}
 
 struct variable_type_t {
   int tag;
@@ -841,6 +682,11 @@ class RttiBuilder
   void encode_funcenum_into(Vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
   void encode_var_type(Vector<uint8_t>& bytes, const variable_type_t& info);
 
+  uint32_t to_typeid(const Vector<uint8_t>& bytes);
+
+  void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
+  void build_debuginfo();
+
  private:
   StringPool& strings_;
   RefPtr<SmxNameTable> names_;
@@ -851,6 +697,12 @@ class RttiBuilder
   RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
   RefPtr<SmxRttiTable<smx_rtti_typedef>> typedefs_;
   RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;
+  RefPtr<SmxDebugInfoSection> dbg_info_;
+  RefPtr<SmxDebugLineSection> dbg_lines_;
+  RefPtr<SmxDebugFileSection> dbg_files_;
+  RefPtr<SmxRttiTable<smx_rtti_debug_method>> dbg_methods_;
+  RefPtr<SmxRttiTable<smx_rtti_debug_var>> dbg_globals_;
+  RefPtr<SmxRttiTable<smx_rtti_debug_var>> dbg_locals_;
 
   typedef ke::HashMap<Type*,
                       uint32_t,
@@ -869,11 +721,19 @@ RttiBuilder::RttiBuilder(StringPool& pool, SmxNameTable* names)
   enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
   typedefs_ = new SmxRttiTable<smx_rtti_typedef>("rtti.typedefs");
   typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
+  dbg_info_ = new SmxDebugInfoSection(".dbg.info");
+  dbg_lines_ = new SmxDebugLineSection(".dbg.lines");
+  dbg_files_ = new SmxDebugFileSection(".dbg.files");
+  dbg_methods_ = new SmxRttiTable<smx_rtti_debug_method>(".dbg.methods");
+  dbg_globals_ = new SmxRttiTable<smx_rtti_debug_var>(".dbg.globals");
+  dbg_locals_ = new SmxRttiTable<smx_rtti_debug_var>(".dbg.locals");
 }
 
 void
 RttiBuilder::finish(SmxBuilder& builder)
 {
+  build_debuginfo();
+
   const ByteBuffer& buffer = type_pool_.buffer();
   data_->add(buffer.bytes(), buffer.size());
 
@@ -883,16 +743,172 @@ RttiBuilder::finish(SmxBuilder& builder)
   builder.add(enums_);
   builder.add(typedefs_);
   builder.add(typesets_);
+  builder.add(dbg_files_);
+  builder.add(dbg_lines_);
+  builder.add(dbg_info_);
+  builder.add(dbg_methods_);
+  builder.add(dbg_globals_);
+  builder.add(dbg_locals_);
+}
+
+void
+RttiBuilder::build_debuginfo()
+{
+  stringlist* dbgstrs = get_dbgstrings();
+
+  // State for tracking which file we're on. We replicate the original AMXDBG
+  // behavior here which excludes duplicate addresses.
+  ucell prev_file_addr = 0;
+  const char *prev_file_name = nullptr;
+
+  // Add debug data.
+  for (stringlist* iter = dbgstrs; iter; iter = iter->next) {
+    if (iter->line[0] == '\0')
+      continue;
+
+    DebugString str(iter->line);
+    switch (str.kind()) {
+      case 'F':
+      {
+        ucell codeidx = str.parse();
+        if (codeidx != prev_file_addr) {
+          if (prev_file_name) {
+            sp_fdbg_file_t& entry = dbg_files_->add();
+            entry.addr = prev_file_addr;
+            entry.name = names_->add(strings_, prev_file_name);
+          }
+          prev_file_addr = codeidx;
+        }
+        prev_file_name = str.skipspaces();
+        break;
+      }
+
+      case 'L':
+      {
+        sp_fdbg_line_t& entry = dbg_lines_->add();
+        entry.addr = str.parse();
+        entry.line = str.parse();
+        break;
+      }
+
+      case 'S':
+        add_debug_var(dbg_globals_, str);
+        break;
+    }
+  }
+
+  // Add the last file.
+  if (prev_file_name) {
+    sp_fdbg_file_t& entry = dbg_files_->add();
+    entry.addr = prev_file_addr;
+    entry.name = names_->add(strings_, prev_file_name);
+  }
+
+  // Finish up debug header statistics.
+  dbg_info_->header().num_files = dbg_files_->count();
+  dbg_info_->header().num_lines = dbg_lines_->count();
+  dbg_info_->header().num_syms = 0;
+  dbg_info_->header().num_arrays = 0;
+}
+
+void
+RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str)
+{
+  int address = str.parse();
+  int tag = str.parse();
+  str.skipspaces();
+  str.expect(':');
+  char* name_start = str.skipspaces();
+  char* name_end = str.skipto(' ');
+  uint32_t code_start = str.parse();
+  uint32_t code_end = str.parse();
+  int ident = str.parse();
+  int vclass = str.parse();
+  int usage = str.parse();
+
+  // We don't care about the ident type, we derive it from the tag.
+  (void)ident;
+
+  str.skipspaces();
+
+  int dims[sDIMEN_MAX];
+  int dimcount = 0;
+  if (str.getc() == '[') {
+    for (char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
+      // Ignore the tagid.
+      str.parse();
+      str.skipspaces();
+      str.expect(':');
+      dims[dimcount++] = str.parse();
+    }
+  }
+
+  // Encode the type.
+  uint32_t type_id;
+  {
+    variable_type_t type = {
+      tag,
+      dims,
+      dimcount,
+      (usage & uCONST) == uCONST
+    };
+    Vector<uint8_t> encoding;
+    encode_var_type(encoding, type);
+
+    type_id = to_typeid(encoding);
+  }
+
+  smx_rtti_debug_var& var = table->add();
+  var.address = address;
+  switch (vclass) {
+    case sLOCAL:
+      var.vclass = address < 0 ? kVarClass_Local : kVarClass_Arg;
+      break;
+    case sGLOBAL:
+      var.vclass = kVarClass_Global;
+      break;
+    case sSTATIC:
+      var.vclass = kVarClass_Static;
+      break;
+    default:
+      var.vclass = 0;
+      assert(false);
+  }
+  var.name = names_->add(strings_.add(name_start, name_end - name_start));
+  var.code_start = code_start;
+  var.code_end = code_end;
+  var.type_id = type_id;
 }
 
 void
 RttiBuilder::add_method(symbol* sym)
 {
+  uint32_t index = methods_->count();
   smx_rtti_method& method = methods_->add();
   method.name = names_->add(strings_, sym->name);
   method.pcode_start = sym->addr();
   method.pcode_end = sym->codeaddr;
   method.signature = encode_signature(sym);
+
+  if (!sym->dbgstrs)
+    return;
+
+  smx_rtti_debug_method debug;
+  debug.method_index = index;
+  debug.first_local = dbg_locals_->count();
+
+  for (stringlist* iter = sym->dbgstrs; iter; iter = iter->next) {
+    if (iter->line[0] == '\0')
+      continue;
+
+    DebugString str(iter->line);
+    if (str.kind() == 'S')
+      add_debug_var(dbg_locals_, str);
+  }
+
+  // Only add a method table entry if we actually had locals.
+  if (debug.first_local != dbg_locals_->count())
+    dbg_methods_->add(debug);
 }
 
 void
@@ -901,6 +917,21 @@ RttiBuilder::add_native(symbol* sym)
   smx_rtti_native& native = natives_->add();
   native.name = names_->add(strings_, sym->name);
   native.signature = encode_signature(sym);
+}
+
+uint32_t
+RttiBuilder::to_typeid(const Vector<uint8_t>& bytes)
+{
+  if (bytes.length() <= 4) {
+    uint32_t payload = 0;
+    for (size_t i = 0; i < bytes.length(); i++)
+      payload |= bytes[i] << (i * 8);
+    if (payload <= kMaxTypeIdPayload)
+      return MakeTypeId(payload, kTypeId_Inline);
+  }
+
+  uint32_t offset = type_pool_.add(bytes);
+  return MakeTypeId(offset, kTypeId_Complex);
 }
 
 uint32_t
@@ -1056,7 +1087,12 @@ RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
 
   Type* type = gTypes.find(tag);
   assert(!type->isObject());
-  assert(!type->isStruct());
+
+  if (type->isStruct()) {
+    // :TODO: We should enumerate structs properly.
+    bytes.append(cb::kAny);
+    return;
+  }
 
   if (type->isFunction()) {
     if (funcenum_t* fe = type->toFunction())
@@ -1274,7 +1310,6 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
   builder.add(natives);
   builder.add(names);
   rtti.finish(builder);
-  append_debug_tables(&builder, pool, names, nativeList);
 
   builder.write(buffer);
 }

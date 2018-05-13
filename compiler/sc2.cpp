@@ -2748,6 +2748,10 @@ static void free_symbol(symbol *sym)
   free(sym->refer);
   if (sym->documentation!=NULL)
     free(sym->documentation);
+  if (sym->dbgstrs) {
+    delete_stringtable(sym->dbgstrs);
+    free(sym->dbgstrs);
+  }
   free(sym);
 }
 

@@ -134,11 +134,13 @@ static const uint8_t kTypeId_Inline  = 0x0;
 // The payload is an index into the rtti.data section.
 static const uint8_t kTypeId_Complex = 0x1;
 
+static const uint32_t kMaxTypeIdPayload = 0xfffffff;
+static const uint32_t kMaxTypeIdKind = 0xf;
+
 static inline uint32_t MakeTypeId(uint32_t payload, uint8_t kind) {
-  uint32_t adjusted_payload = payload << 4;
-  assert((adjusted_payload >> 4) == payload);
-  assert(kind < (1 << 4));
-  return adjusted_payload | kind;
+  assert(payload <= kMaxTypeIdPayload);
+  assert(kind <= kMaxTypeIdKind);
+  return (payload << 4) | kind;
 }
 
 // These are control bytes for type signatures.
@@ -192,6 +194,62 @@ static const uint8_t kByRef  = 0x72;
 static const uint8_t kConst = 0x73;
 
 } // namespace cb
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// The following tables are extension tables; the VM does not depend on them
+// to function correctly.
+//
+// The new debug tables are:
+//    .dbg.methods
+//    .dbg.locals
+//    .dbg.globals
+//
+// The methods table only exists to partition the locals table. Each method
+// entry owns a contiguous group of rows in the locals table. The locals table
+// contains both static and non-static variables.
+//
+// To find the owner of a global address when in function scope, first static
+// methods in debug.methods should be traversed, then the .globals table.
+
+// The ".dbg.methods" describes how to find local variable debug info.
+struct smx_rtti_debug_method {
+  // Index into the rtti.methods table.
+  uint32_t method_index;
+
+  // Index into .dbg.locals of the first local in this method. The number of
+  // rows owned by this method can be determined by either:
+  //   (1) The next method's first_local value, or
+  //   (2) The end of the .locals table if this is the last method.
+  uint32_t first_local;
+};
+
+// The ".dbg.locals" and ".dbg.globals" table rows are of the following type:
+struct smx_rtti_debug_var {
+  // Address, the meaning of which depends on the pcode version and method
+  // scope (local, static, global).
+  int32_t address;
+
+  // Bits 0-1 encode what kind of variable this is; see kVarClass below.
+  uint8_t vclass;
+
+  // Variable name (index into the name table).
+  uint32_t name;
+
+  // Scope visibility, [code_start, code_end].
+  uint32_t code_start;
+  uint32_t code_end;
+
+  // Variable type id.
+  uint32_t type_id;
+};
+
+// Values for smx_rtti_debug_var::vclass.
+static const uint8_t kVarClass_Global = 0x0;
+static const uint8_t kVarClass_Local  = 0x1;
+static const uint8_t kVarClass_Static = 0x2;
+static const uint8_t kVarClass_Arg    = 0x3;
 
 #pragma pack(pop)
 

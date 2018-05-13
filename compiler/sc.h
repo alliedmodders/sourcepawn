@@ -97,6 +97,7 @@ typedef struct s_constvalue {
 } constvalue;
 
 struct methodmap_t;
+struct stringlist;
 
 /*  Symbol table format
  *
@@ -146,6 +147,7 @@ struct symbol {
   char *documentation;  /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
   int funcid;           /* set for functions during codegen */
+  stringlist *dbgstrs;  /* debug strings - functions only */
 
   int addr() const {
     return addr_;
@@ -330,13 +332,13 @@ enum {
   statSKIP,     /* skipping output */
 };
 
-typedef struct s_stringlist {
-  struct s_stringlist *next;
+struct stringlist {
+  stringlist *next;
   union {
     char *line;
-    struct s_stringlist *tail;
+    stringlist *tail;
   };
-} stringlist;
+};
 
 typedef struct s_stringpair {
   struct s_stringpair *next;
@@ -843,6 +845,7 @@ stringlist *insert_dbgsymbol(symbol *sym);
 char *get_dbgstring(int index);
 void delete_dbgstringtable(void);
 stringlist *get_dbgstrings();
+void delete_stringtable(stringlist *root);
 
 /* function prototypes in SCI18N.C */
 #define MAXCODEPAGE 12

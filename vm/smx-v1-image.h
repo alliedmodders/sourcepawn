@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <smx/smx-headers.h>
+#include <smx/smx-legacy-debuginfo.h>
 #include <smx/smx-typeinfo.h>
 #include <smx/smx-v1.h>
 #include <am-string.h>
@@ -108,6 +109,9 @@ class SmxV1Image
     uint32_t features() const {
       return features_;
     }
+    const Section* header() const {
+      return header_;
+    }
 
    private:
     const Section* header_;
@@ -170,19 +174,34 @@ class SmxV1Image
   }
   bool validateName(size_t offset);
   bool validateSection(const Section* section);
-  bool validateRttiSection(const Section* section);
+  bool validateRttiHeader(const Section* section);
   bool validateCode();
   bool validateData();
   bool validatePublics();
   bool validatePubvars();
   bool validateNatives();
   bool validateRtti();
+  bool validateRttiMethods();
   bool validateDebugInfo();
   bool validateTags();
 
  private:
   template <typename SymbolType, typename DimType>
   const char* lookupFunction(const SymbolType* syms, uint32_t addr);
+
+  const smx_rtti_table_header* findRttiSection(const char* name) {
+    const Section* section = findSection(name);
+    if (!section)
+      return nullptr;
+    return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
+  }
+
+  template <typename T>
+  const T* getRttiRow(const smx_rtti_table_header* header, size_t index) {
+    assert(index < header->row_count);
+    const uint8_t* base = reinterpret_cast<const uint8_t*>(header) + header->header_size;
+    return reinterpret_cast<const T*>(base + header->row_size * index);
+  }
 
  private:
   sp_file_hdr_t* hdr_;
@@ -208,6 +227,9 @@ class SmxV1Image
   const Section* debug_symbols_section_;
   const sp_fdbg_symbol_t* debug_syms_;
   const sp_u_fdbg_symbol_t* debug_syms_unpacked_;
+
+  const Section* rtti_data_;
+  const smx_rtti_table_header* rtti_methods_;
 };
 
 } // namespace sp
