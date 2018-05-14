@@ -108,7 +108,8 @@ struct smx_rtti_typedef {
   // Index into the name table.
   uint32_t name;
 
-  // Type identifier.
+  // Type identifier. The type must be a concrete type, not an entry in the
+  // typedef table.
   uint32_t type_id;
 };
 
@@ -122,6 +123,39 @@ struct smx_rtti_typeset {
   //    Types*        type
   uint32_t signature;
 };
+
+// The rtti.classdef table has the following row structure:
+struct smx_rtti_classdef {
+  // Bits 0-1 indicate the definition type.
+  uint32_t flags;
+
+  // Index into the name table.
+  uint32_t name;
+
+  // First row in the rtti.fields table. Rows up to the next classdef's first
+  // row, or the end of the fields table, are owned by this classdef.
+  uint32_t first_field;
+
+  // Unused, currently 0.
+  uint32_t reserved0;
+  uint32_t reserved1;
+  uint32_t reserved2;
+  uint32_t reserved3;
+};
+
+// The rtti.fields table has the following row structure:
+struct smx_rtti_field {
+  // Currently 0.
+  uint16_t flags;
+
+  // Index into the name table.
+  uint32_t name;
+
+  // Type id.
+  uint32_t type_id;
+};
+
+static const uint32_t kClassDefType_Struct = 0x0;
 
 // A type identifier is a 32-bit value encoding a type. It is encoded as
 // follows:
@@ -180,6 +214,7 @@ static const uint8_t kFunction   = 0x32;
 static const uint8_t kEnum       = 0x42; // rtti.enums
 static const uint8_t kTypedef    = 0x43; // rtti.typedefs
 static const uint8_t kTypeset    = 0x44; // rtti.typesets
+static const uint8_t kStruct     = 0x45; // rtti.structs
 
 // This section encodes special indicator bytes that can appear within multi-
 // byte types.

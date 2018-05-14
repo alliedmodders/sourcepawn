@@ -674,6 +674,7 @@ class RttiBuilder
   uint32_t add_enum(Type* type);
   uint32_t add_funcenum(Type* type, funcenum_t* fe);
   uint32_t add_typeset(Type* type, funcenum_t* fe);
+  uint32_t add_struct(Type* type);
   uint32_t encode_signature(symbol* sym);
   void encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft);
   void encode_enum_into(Vector<uint8_t>& bytes, Type* type);
@@ -681,6 +682,7 @@ class RttiBuilder
   void encode_ret_array_into(Vector<uint8_t>& bytes, symbol* sym);
   void encode_funcenum_into(Vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
   void encode_var_type(Vector<uint8_t>& bytes, const variable_type_t& info);
+  void encode_struct_into(Vector<uint8_t>& bytes, Type* type);
 
   uint32_t to_typeid(const Vector<uint8_t>& bytes);
 
@@ -697,6 +699,8 @@ class RttiBuilder
   RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
   RefPtr<SmxRttiTable<smx_rtti_typedef>> typedefs_;
   RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;
+  RefPtr<SmxRttiTable<smx_rtti_classdef>> classdefs_;
+  RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
   RefPtr<SmxDebugInfoSection> dbg_info_;
   RefPtr<SmxDebugLineSection> dbg_lines_;
   RefPtr<SmxDebugFileSection> dbg_files_;
@@ -721,6 +725,8 @@ RttiBuilder::RttiBuilder(StringPool& pool, SmxNameTable* names)
   enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
   typedefs_ = new SmxRttiTable<smx_rtti_typedef>("rtti.typedefs");
   typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
+  classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
+  fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
   dbg_info_ = new SmxDebugInfoSection(".dbg.info");
   dbg_lines_ = new SmxDebugLineSection(".dbg.lines");
   dbg_files_ = new SmxDebugFileSection(".dbg.files");
@@ -743,6 +749,8 @@ RttiBuilder::finish(SmxBuilder& builder)
   builder.add(enums_);
   builder.add(typedefs_);
   builder.add(typesets_);
+  builder.add(classdefs_);
+  builder.add(fields_);
   builder.add(dbg_files_);
   builder.add(dbg_lines_);
   builder.add(dbg_info_);
@@ -920,6 +928,45 @@ RttiBuilder::add_native(symbol* sym)
 }
 
 uint32_t
+RttiBuilder::add_struct(Type* type)
+{
+  pstruct_t* ps = type->asStruct();
+
+  uint32_t struct_index = classdefs_->count();
+
+  smx_rtti_classdef classdef;
+  memset(&classdef, 0, sizeof(classdef));
+  classdef.flags = kClassDefType_Struct;
+  classdef.name = names_->add(strings_, ps->name);
+  classdef.first_field = fields_->count();
+  classdefs_->add(classdef);
+
+  // Pre-reserve space in case we recursively add structs.
+  for (int i = 0; i < ps->argcount; i++)
+    fields_->add();
+
+  for (int i = 0; i < ps->argcount; i++) {
+    const structarg_t* arg = ps->args[i];
+
+    variable_type_t type = {
+      arg->tag,
+      arg->dims,
+      arg->dimcount,
+      !!arg->fconst
+    };
+    Vector<uint8_t> encoding;
+    encode_var_type(encoding, type);
+
+    smx_rtti_field field;
+    field.flags = 0;
+    field.name = names_->add(strings_, arg->name);
+    field.type_id = to_typeid(encoding);
+    fields_->at(classdef.first_field + i) = field;
+  }
+  return struct_index;
+}
+
+uint32_t
 RttiBuilder::to_typeid(const Vector<uint8_t>& bytes)
 {
   if (bytes.length() <= 4) {
@@ -1044,6 +1091,13 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
 }
 
 void
+RttiBuilder::encode_struct_into(Vector<uint8_t>& bytes, Type* type)
+{
+  bytes.append(cb::kStruct);
+  CompactEncodeUint32(bytes, add_struct(type));
+}
+
+void
 RttiBuilder::encode_enum_into(Vector<uint8_t>& bytes, Type* type)
 {
   bytes.append(cb::kEnum);
@@ -1089,8 +1143,7 @@ RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
   assert(!type->isObject());
 
   if (type->isStruct()) {
-    // :TODO: We should enumerate structs properly.
-    bytes.append(cb::kAny);
+    encode_struct_into(bytes, type);
     return;
   }
 
