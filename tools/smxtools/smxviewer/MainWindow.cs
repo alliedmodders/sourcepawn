@@ -194,16 +194,42 @@ namespace smxviewer
                 renderDataList(roots[".data"], file_.Data);
             if (roots.ContainsKey(".names"))
                 renderNamesList(roots[".names"], file_.Names);
+
+            if (roots.ContainsKey("rtti.data"))
+                renderRttiData(roots["rtti.data"], file_.RttiData);
+            if (roots.ContainsKey("rtti.classdefs"))
+                renderClassDefs(roots["rtti.classdefs"], file_.RttiClassDefs);
+            if (roots.ContainsKey("rtti.fields"))
+                renderFields(roots["rtti.fields"], file_.RttiFields);
+            if (roots.ContainsKey("rtti.methods"))
+                renderMethods(roots["rtti.methods"], file_.RttiMethods);
+            if (roots.ContainsKey("rtti.natives"))
+                renderNatives(roots["rtti.natives"], file_.RttiNatives);
+            if (roots.ContainsKey("rtti.enums"))
+                renderEnums(roots["rtti.enums"], file_.RttiEnums);
+            if (roots.ContainsKey("rtti.typedefs"))
+                renderTypedefs(roots["rtti.typedefs"], file_.RttiTypedefs);
+            if (roots.ContainsKey("rtti.typesets"))
+                renderTypesets(roots["rtti.typesets"], file_.RttiTypesets);
+
             if (roots.ContainsKey(".dbg.files"))
                 renderDebugFiles(roots[".dbg.files"], file_.DebugFiles);
             if (roots.ContainsKey(".dbg.lines"))
                 renderDebugLines(roots[".dbg.lines"], file_.DebugLines);
             if (roots.ContainsKey(".dbg.info"))
                 renderDebugInfo(roots[".dbg.info"], file_.DebugInfo);
+            if (roots.ContainsKey(".dbg.globals"))
+                renderDebugGlobals(roots[".dbg.globals"], file_.DebugGlobals);
+            if (roots.ContainsKey(".dbg.methods"))
+            {
+                if (roots.ContainsKey(".dbg.locals"))
+                    renderDebugLocals(roots[".dbg.locals"], file_.DebugMethods);
+            }
+
             if (roots.ContainsKey(".dbg.strings"))
                 renderNamesList(roots[".dbg.strings"], file_.DebugNames);
             if (roots.ContainsKey(".dbg.symbols"))
-                renderDebugSymbols(roots[".dbg.symbols"], file_.DebugSymbols);
+                renderLegacyDebugSymbols(roots[".dbg.symbols"], file_.DebugSymbols);
             if (roots.ContainsKey(".dbg.natives"))
                 renderDebugNatives(roots[".dbg.natives"], file_.DebugNatives);
 
@@ -262,7 +288,6 @@ namespace smxviewer
 
             var chars = new StringBuilder();
 
-            startDetailUpdate();
             for (int i = 0; i < size; i++)
             {
                 if (i % 16 == 0)
@@ -293,8 +318,6 @@ namespace smxviewer
             detail_buffer_.Append("  ");
             detail_buffer_.Append(chars);
             detail_buffer_.Append("\r\n");
-
-            endDetailUpdate();
         }
 
         private void renderHexView(BinaryReader reader, int size)
@@ -525,7 +548,9 @@ namespace smxviewer
 
             root.Nodes.Add("byte view").Tag = new NodeData(delegate()
             {
+                startDetailUpdate();
                 renderByteView(data.Reader(), (int)data.Header.DataSize);
+                endDetailUpdate();
             }, null);
             root.Nodes.Add("cell view").Tag = new NodeData(delegate()
             {
@@ -679,7 +704,38 @@ namespace smxviewer
             return str;
         }
 
-        private void renderSymbolDetail(DebugSymbolEntry entry)
+        private void renderSymbolDetail(DebugVarEntry sym)
+        {
+            startDetail("; {0}", file_.Names.StringAt(sym.name_offset));
+            if (sym.address < 0)
+                addDetailLine("address = -0x{0:x}", -sym.address);
+            else
+                addDetailLine("address = 0x{0:x}", sym.address);
+            addDetailLine("codestart = 0x{0:x}", sym.code_start);
+            addDetailLine("codeend = 0x{0:x}", sym.code_end);
+            addDetailLine("nameoffs = 0x{0:x}", sym.name_offset);
+            addDetailLine("scope = {0:d} ; {1}", sym.scope, sym.scope.ToString());
+            addDetailLine("typeid = 0x{0:x}", sym.type_id);
+
+            string file = null;
+            if (file_.DebugFiles != null)
+                file = file_.DebugFiles.FindFile((uint)sym.code_start);
+            if (file != null)
+                addDetailLine("file: \"{0}\"", (string)file);
+
+            uint? line = null;
+            if (file_.DebugLines != null)
+                line = file_.DebugLines.FindLine((uint)sym.code_end);
+            if (line != null)
+                addDetailLine("line: \"{0}\"", (uint)line);
+
+            string type = file_.RttiData.TypeFromTypeId(sym.type_id);
+            addDetailLine("type: {0}", type);
+
+            endDetailUpdate();
+        }
+
+        private void renderLegacySymbolDetail(DebugSymbolEntry entry)
         {
             Tag tag = null;
             if (file_.Tags != null)
@@ -719,11 +775,11 @@ namespace smxviewer
             endDetailUpdate();
         }
 
-        private void renderDebugFunction(SmxDebugSymbolsTable syms, TreeNode root, DebugSymbolEntry fun)
+        private void renderLegacyDebugFunction(SmxDebugSymbolsTable syms, TreeNode root, DebugSymbolEntry fun)
         {
             root.Tag = new NodeData(delegate()
             {
-                renderSymbolDetail(fun);
+                renderLegacySymbolDetail(fun);
             }, null);
 
             var args = new List<DebugSymbolEntry>();
@@ -751,7 +807,7 @@ namespace smxviewer
                 var node = root.Nodes.Add(sym.Name);
                 node.Tag = new NodeData(delegate()
                 {
-                    renderSymbolDetail(sym);
+                    renderLegacySymbolDetail(sym);
                 }, null);
             }
 
@@ -765,12 +821,72 @@ namespace smxviewer
                 var node = root.Nodes.Add(sym.Name);
                 node.Tag = new NodeData(delegate()
                 {
+                    renderLegacySymbolDetail(sym);
+                }, null);
+            }
+        }
+
+        private void renderDebugGlobals(TreeNode root, SmxDebugGlobals table)
+        {
+            foreach (var sym_ in table.Entries)
+            {
+                var sym = sym_;
+                string name = file_.Names.StringAt(sym.name_offset);
+                var node = root.Nodes.Add(name);
+                node.Tag = new NodeData(delegate ()
+                {
                     renderSymbolDetail(sym);
                 }, null);
             }
         }
 
-        private void renderDebugSymbols(TreeNode root, SmxDebugSymbolsTable syms)
+        private void renderDebugLocals(TreeNode root, SmxDebugMethods table)
+        {
+            for (int i = 0; i < table.Entries.Length; i++)
+            {
+                var entry = table.Entries[i];
+                var method = file_.RttiMethods.Methods[entry.method_index];
+                var node = root.Nodes.Add(method.name);
+                int stop_at;
+                if (i == table.Entries.Length - 1)
+                    stop_at = file_.DebugLocals.Entries.Length;
+                else
+                    stop_at = table.Entries[i + 1].first_local;
+                renderDebugLocals(node, method, entry.first_local, stop_at);
+            }
+        }
+
+        private void renderDebugLocals(TreeNode root, RttiMethod method, int first_local, int stop_at)
+        {
+            root.Tag = new NodeData(delegate () { }, null);
+
+            List<DebugVarEntry> entries = new List<DebugVarEntry>();
+            for (int i = first_local; i < stop_at; i++)
+                entries.Add(file_.DebugLocals.Entries[i]);
+
+            entries.Sort(delegate (DebugVarEntry e1, DebugVarEntry e2)
+            {
+                if (e1.scope == e2.scope)
+                    return e1.address.CompareTo(e2.address);
+                if (e1.scope == SymScope.Arg)
+                    return -1;
+                if (e2.scope == SymScope.Arg)
+                    return 1;
+                return e1.scope.CompareTo(e2.scope);
+            });
+
+            foreach (var entry_ in entries)
+            {
+                var entry = entry_;
+                var node = root.Nodes.Add(file_.Names.StringAt(entry.name_offset));
+                node.Tag = new NodeData(delegate ()
+                {
+                    renderSymbolDetail(entry);
+                }, null);
+            }
+        }
+
+        private void renderLegacyDebugSymbols(TreeNode root, SmxDebugSymbolsTable syms)
         {
             var globals = root.Nodes.Add("globals");
             foreach (var sym_ in syms.Entries)
@@ -783,7 +899,7 @@ namespace smxviewer
                 var node = globals.Nodes.Add(sym.Name);
                 node.Tag = new NodeData(delegate()
                 {
-                    renderSymbolDetail(sym);
+                    renderLegacySymbolDetail(sym);
                 }, null);
             }
 
@@ -796,7 +912,236 @@ namespace smxviewer
                 if (sym.Ident != SymKind.Function)
                     continue;
                 var node = functions.Nodes.Add(sym.Name);
-                renderDebugFunction(syms, node, sym);
+                renderLegacyDebugFunction(syms, node, sym);
+            }
+        }
+
+        private void renderRttiData(TreeNode root, SmxRttiData data)
+        {
+            root.Tag = new NodeData(delegate()
+            {
+                var reader = new BinaryReader(data.GetReader());
+                renderSectionHeaderDetail(data.SectionHeader);
+                addDetailLine("---");
+                renderByteView(reader, data.SectionHeader.Size);
+                endDetailUpdate();
+            }, data);
+        }
+
+        private void renderClassDefs(TreeNode root, SmxRttiClassDefTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Defs.Length; i++)
+                {
+                    var def = table.Defs[i];
+                    addDetailLine("{0}: {1}", i, def.name);
+                }
+                endDetailUpdate();
+            }, null);
+
+            for (int i = 0; i < table.Defs.Length; i++)
+            {
+                var def = table.Defs[i];
+                var index = i;
+                var node = root.Nodes.Add(def.name);
+                node.Tag = new NodeData(delegate ()
+                {
+                    startDetailUpdate();
+                    addDetailLine("index = {0}", index);
+                    addDetailLine("name = 0x{0:x} ; {1}", def.name_offset, def.name);
+                    addDetailLine("flags = 0x{0:x}", def.flags);
+                    addDetailLine("first_field = {0}", def.first_field);
+                    endDetailUpdate();
+                }, null);
+
+                int stop_at = (i == table.Defs.Length - 1)
+                              ? file_.RttiFields.Fields.Length
+                              : table.Defs[i + 1].first_field;
+                for (int field_index = def.first_field; field_index < stop_at; field_index++)
+                {
+                    var field = file_.RttiFields.Fields[field_index];
+                    var subnode = node.Nodes.Add(field.name);
+                    subnode.Tag = new NodeData(delegate ()
+                    {
+                        renderFieldDetail(field);
+                    }, null);
+                }
+            }
+        }
+
+        private void renderFields(TreeNode root, SmxRttiFieldTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Fields.Length; i++)
+                {
+                    var field = table.Fields[i];
+                    string type = file_.RttiData.TypeFromTypeId(field.type_id);
+                    addDetailLine("{0}: {1} ; {2}", i, field.name, type);
+                }
+                endDetailUpdate();
+            }, null);
+        }
+
+        private void renderFieldDetail(RttiField field)
+        {
+            string type = file_.RttiData.TypeFromTypeId(field.type_id);
+            startDetailUpdate();
+            addDetailLine("name = 0x{0:x} ; {1}", field.name_offset, field.name);
+            addDetailLine("flags = 0x{0:x}", field.flags);
+            addDetailLine("typeid = 0x{0:x}", field.type_id);
+            addDetailLine("type = {0}", type);
+            endDetailUpdate();
+        }
+
+        private void renderMethods(TreeNode root, SmxRttiMethodTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Methods.Length; i++)
+                {
+                    var def = table.Methods[i];
+                    addDetailLine("{0}: {1}", i, def.name);
+                }
+                endDetailUpdate();
+            }, null);
+
+            foreach (var method in table.Methods)
+            {
+                var node = root.Nodes.Add(method.name);
+                node.Tag = new NodeData(delegate ()
+                {
+                    string signature = file_.RttiData.FunctionTypeFromOffset(method.signature);
+                    startDetailUpdate();
+                    addDetailLine("name = {0}", method.name);
+                    addDetailLine("pcode_start = 0x{0:x}", method.pcode_start);
+                    addDetailLine("pcode_end = 0x{0:x}", method.pcode_end);
+                    addDetailLine("signature = 0x{0:x}", method.signature);
+                    addDetailLine("---");
+                    addDetailLine("{0}", signature);
+                    endDetailUpdate();
+                }, null);
+            }
+        }
+
+        private void renderNatives(TreeNode root, SmxRttiNativeTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Natives.Length; i++)
+                {
+                    var def = table.Natives[i];
+                    addDetailLine("{0}: {1}", i, def.name);
+                }
+                endDetailUpdate();
+            }, null);
+
+            foreach (var native in table.Natives)
+            {
+                var node = root.Nodes.Add(native.name);
+                node.Tag = new NodeData(delegate ()
+                {
+                    string signature = file_.RttiData.FunctionTypeFromOffset(native.signature);
+                    startDetailUpdate();
+                    addDetailLine("name = {0}", native.name);
+                    addDetailLine("signature = 0x{0:x}", native.signature);
+                    addDetailLine("---");
+                    addDetailLine("{0}", signature);
+                    endDetailUpdate();
+                }, null);
+            }
+        }
+
+        private void renderEnums(TreeNode root, SmxRttiEnumTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Enums.Length; i++)
+                {
+                    var def = table.Enums[i];
+                    addDetailLine("{0}: {1}", i, def);
+                }
+                endDetailUpdate();
+            }, null);
+
+            foreach (var enum_name in table.Enums)
+            {
+                root.Nodes.Add(enum_name).Tag = new NodeData(delegate ()
+                {
+                }, null);
+            }
+        }
+
+        private void renderTypedefs(TreeNode root, SmxRttiTypedefTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Typedefs.Length; i++)
+                {
+                    var def = table.Typedefs[i];
+                    string type = file_.RttiData.TypeFromTypeId(def.type_id);
+                    addDetailLine("{0}: {1} ; {2}", i, def.name, type);
+                }
+                endDetailUpdate();
+            }, null);
+
+            foreach (var typedef in table.Typedefs)
+            {
+                var node = root.Nodes.Add(typedef.name);
+                node.Tag = new NodeData(delegate ()
+                {
+                    string type = file_.RttiData.TypeFromTypeId(typedef.type_id);
+                    startDetailUpdate();
+                    addDetailLine("name = {0}", typedef.name);
+                    addDetailLine("typeid = 0x{0:x}", typedef.type_id);
+                    addDetailLine("---");
+                    addDetailLine(type);
+                    endDetailUpdate();
+                }, null);
+            }
+        }
+
+        private void renderTypesets(TreeNode root, SmxRttiTypesetTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Typesets.Length; i++)
+                {
+                    var def = table.Typesets[i];
+                    addDetailLine("{0}: {1}", i, def.name);
+                }
+                endDetailUpdate();
+            }, null);
+
+            foreach (var typeset in table.Typesets)
+            {
+                var node = root.Nodes.Add(typeset.name);
+                node.Tag = new NodeData(delegate ()
+                {
+                    string[] types = file_.RttiData.TypesetTypesFromOffset(typeset.signature);
+                    startDetailUpdate();
+                    addDetailLine("name = {0}", typeset.name);
+                    addDetailLine("signature = 0x{0:x}", typeset.signature);
+                    addDetailLine("---");
+                    foreach (string type in types)
+                        addDetailLine(" {0}", type);
+                    endDetailUpdate();
+                }, null);
             }
         }
 

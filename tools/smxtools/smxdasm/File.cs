@@ -21,6 +21,17 @@ namespace smxdasm
         public SmxDebugLinesTable DebugLines;
         public SmxDebugNativesTable DebugNatives;
         public SmxDebugSymbolsTable DebugSymbols;
+        public SmxRttiData RttiData;
+        public SmxRttiEnumTable RttiEnums;
+        public SmxRttiClassDefTable RttiClassDefs;
+        public SmxRttiFieldTable RttiFields;
+        public SmxRttiMethodTable RttiMethods;
+        public SmxRttiNativeTable RttiNatives;
+        public SmxRttiTypedefTable RttiTypedefs;
+        public SmxRttiTypesetTable RttiTypesets;
+        public SmxDebugMethods DebugMethods;
+        public SmxDebugGlobals DebugGlobals;
+        public SmxDebugLocals DebugLocals;
 
         public SmxFile(BinaryReader br)
         {
@@ -36,6 +47,10 @@ namespace smxdasm
                 else if (section.Name == ".dbg.info")
                     DebugInfo = new SmxDebugInfoSection(Header, section);
             }
+
+            // .dbg.names was removed when RTTI was added.
+            if (DebugNames == null)
+                DebugNames = Names;
             
             // Parse out other sections.
             var unknown = new List<SectionEntry>();
@@ -76,6 +91,39 @@ namespace smxdasm
                     break;
                 case ".dbg.symbols":
                     DebugSymbols = new SmxDebugSymbolsTable(Header, section, DebugInfo, DebugNames);
+                    break;
+                case ".dbg.methods":
+                    DebugMethods = new SmxDebugMethods(Header, section, Names);
+                    break;
+                case ".dbg.globals":
+                    DebugGlobals = new SmxDebugGlobals(Header, section, Names);
+                    break;
+                case ".dbg.locals":
+                    DebugLocals = new SmxDebugLocals(Header, section, Names);
+                    break;
+                case "rtti.data":
+                    RttiData = new SmxRttiData(this, Header, section);
+                    break;
+                case "rtti.classdefs":
+                    RttiClassDefs = new SmxRttiClassDefTable(Header, section, Names);
+                    break;
+                case "rtti.fields":
+                    RttiFields = new SmxRttiFieldTable(Header, section, Names);
+                    break;
+                case "rtti.methods":
+                    RttiMethods = new SmxRttiMethodTable(Header, section, Names);
+                    break;
+                case "rtti.natives":
+                    RttiNatives = new SmxRttiNativeTable(Header, section, Names);
+                    break;
+                case "rtti.enums":
+                    RttiEnums = new SmxRttiEnumTable(Header, section, Names);
+                    break;
+                case "rtti.typedefs":
+                    RttiTypedefs = new SmxRttiTypedefTable(Header, section, Names);
+                    break;
+                case "rtti.typesets":
+                    RttiTypesets = new SmxRttiTypesetTable(Header, section, Names);
                     break;
                 default:
                     unknown.Add(section);
