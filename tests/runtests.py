@@ -62,16 +62,27 @@ class TestPlan(object):
       return arch == '.x64'
     return False
 
+  def find_executable(self, path):
+    if os.path.exists(path):
+      pass
+    elif os.path.exists(path + '.js'):
+      path += '.js'
+    elif os.path.exists(path + '.exe'):
+      path += '.exe'
+    else:
+      return None
+    return path
+
   def find_shells(self):
     for arch in self.arch_suffixes:
       if not self.match_arch(arch):
         continue
 
       path = os.path.join(self.args.objdir, 'vm', 'spshell' + arch, 'spshell')
-      if not os.path.exists(path):
-        if not os.path.exists(path + '.js'):
-          continue
-        path += '.js'
+      path = self.find_executable(path)
+
+      if not path:
+        continue
 
       path = os.path.abspath(path)
 
@@ -81,7 +92,7 @@ class TestPlan(object):
           'path': path,
           'args': [],
           'name': 'default' + arch,
-        })
+          })
 
       self.shells.append({
         'path': path,
@@ -98,11 +109,10 @@ class TestPlan(object):
         continue
 
       path = os.path.join(self.args.objdir, 'compiler', 'spcomp' + arch, 'spcomp')
+      path = self.find_executable(path)
 
-      if not os.path.exists(path):
-        if not os.path.exists(path + '.js'):
-          continue
-        path += '.js'
+      if not path:
+        continue
 
       spcomp = {
         'path': os.path.abspath(path),
