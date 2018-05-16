@@ -214,7 +214,7 @@ static const uint8_t kFunction   = 0x32;
 static const uint8_t kEnum       = 0x42; // rtti.enums
 static const uint8_t kTypedef    = 0x43; // rtti.typedefs
 static const uint8_t kTypeset    = 0x44; // rtti.typesets
-static const uint8_t kStruct     = 0x45; // rtti.structs
+static const uint8_t kClassdef   = 0x45; // rtti.classdefs
 
 // This section encodes special indicator bytes that can appear within multi-
 // byte types.

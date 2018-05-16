@@ -930,9 +930,14 @@ RttiBuilder::add_native(symbol* sym)
 uint32_t
 RttiBuilder::add_struct(Type* type)
 {
-  pstruct_t* ps = type->asStruct();
+  TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
+  if (p.found())
+    return p->value;
 
   uint32_t struct_index = classdefs_->count();
+  typeid_cache_.add(p, type, struct_index);
+
+  pstruct_t* ps = type->asStruct();
 
   smx_rtti_classdef classdef;
   memset(&classdef, 0, sizeof(classdef));
@@ -1093,7 +1098,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
 void
 RttiBuilder::encode_struct_into(Vector<uint8_t>& bytes, Type* type)
 {
-  bytes.append(cb::kStruct);
+  bytes.append(cb::kClassdef);
   CompactEncodeUint32(bytes, add_struct(type));
 }
 
