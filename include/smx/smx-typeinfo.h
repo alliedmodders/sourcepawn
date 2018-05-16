@@ -59,7 +59,8 @@ struct smx_rtti_table_header {
 
 // In some cases, a row will index another table, but that index may be
 // optional. Rather than define all tables as 1-indexed, we declare a sentinel
-// value kNoTableIndex for optional entries.
+// value kNoTableIndex for optional entries. No index may be equal to or larger
+// than this value.
 static const uint32_t kNoTableIndex = 0x7fffffff;
 
 // The rtti.enums table has the following row structure:
