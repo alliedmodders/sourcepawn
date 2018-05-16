@@ -468,9 +468,9 @@ class TestRunner(object):
         expected_lines.append(line.strip())
 
     for expected_line in expected_lines:
-      if line not in actual_stdout:
+      if expected_line not in actual_stdout:
         self.out("FAIL: Expected to find the following line in stdout:")
-        self.out(line)
+        self.out(expected_line)
         return False
     return True
 
