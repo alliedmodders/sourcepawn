@@ -126,10 +126,11 @@ class TestPlan(object):
         'spcomp': spcomp,
         'args': [],
       })
+
       if path.endswith('.js'):
         # Emscripten takes a long time to run, so we only test the default
         # configuration.
-        pass
+        continue
 
       self.modes.append({
         'name': 'no_phopt',
@@ -411,9 +412,6 @@ class TestRunner(object):
     return self.compare_spcomp_output(test, stdout)
 
   def do_exec(self, argv):
-    if argv[0].endswith('.js'):
-      argv = ['node'] + argv
-
     if self.plan.show_cli:
       self.out(' '.join(argv))
 
