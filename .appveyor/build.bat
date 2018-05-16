@@ -1,14 +1,16 @@
-"%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86
+@echo on
+call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
 mkdir opt32 && cd opt32
-C:\python27\python.exe ..\configure.py --enable-optimize --amtl=..\..\amtl
-C:\python27\Scripts\ambuild
+C:\python27\python.exe ..\configure.py --enable-optimize
+C:\python27\python.exe C:\python27\Scripts\ambuild
 cd ..
 C:\python27\python.exe tests\runtests.py opt32
 
 
-"%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" amd64
+call "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x64
+call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86_amd64
 mkdir opt64 && cd opt64
-C:\python27\python.exe ..\configure.py --enable-optimize --amtl=..\..\amtl --target-arch=x64
-C:\python27\Scripts\ambuild
+C:\python27\python.exe ..\configure.py --enable-optimize --target-arch=x64
+C:\python27\python.exe C:\python27\Scripts\ambuild
 cd ..
 C:\python27\python.exe tests\runtests.py opt64

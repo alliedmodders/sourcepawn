@@ -62,16 +62,27 @@ class TestPlan(object):
       return arch == '.x64'
     return False
 
+  def find_executable(self, path):
+    if os.path.exists(path):
+      pass
+    elif os.path.exists(path + '.js'):
+      path += '.js'
+    elif os.path.exists(path + '.exe'):
+      path += '.exe'
+    else:
+      return None
+    return path
+
   def find_shells(self):
     for arch in self.arch_suffixes:
       if not self.match_arch(arch):
         continue
 
       path = os.path.join(self.args.objdir, 'vm', 'spshell' + arch, 'spshell')
-      if not os.path.exists(path):
-        if not os.path.exists(path + '.js'):
-          continue
-        path += '.js'
+      path = self.find_executable(path)
+
+      if not path:
+        continue
 
       path = os.path.abspath(path)
 
@@ -81,7 +92,7 @@ class TestPlan(object):
           'path': path,
           'args': [],
           'name': 'default' + arch,
-        })
+          })
 
       self.shells.append({
         'path': path,
@@ -98,11 +109,10 @@ class TestPlan(object):
         continue
 
       path = os.path.join(self.args.objdir, 'compiler', 'spcomp' + arch, 'spcomp')
+      path = self.find_executable(path)
 
-      if not os.path.exists(path):
-        if not os.path.exists(path + '.js'):
-          continue
-        path += '.js'
+      if not path:
+        continue
 
       spcomp = {
         'path': os.path.abspath(path),
@@ -116,10 +126,11 @@ class TestPlan(object):
         'spcomp': spcomp,
         'args': [],
       })
+
       if path.endswith('.js'):
         # Emscripten takes a long time to run, so we only test the default
         # configuration.
-        pass
+        continue
 
       self.modes.append({
         'name': 'no_phopt',
@@ -401,9 +412,6 @@ class TestRunner(object):
     return self.compare_spcomp_output(test, stdout)
 
   def do_exec(self, argv):
-    if argv[0].endswith('.js'):
-      argv = ['node'] + argv
-
     if self.plan.show_cli:
       self.out(' '.join(argv))
 
@@ -458,9 +466,9 @@ class TestRunner(object):
         expected_lines.append(line.strip())
 
     for expected_line in expected_lines:
-      if line not in actual_stdout:
+      if expected_line not in actual_stdout:
         self.out("FAIL: Expected to find the following line in stdout:")
-        self.out(line)
+        self.out(expected_line)
         return False
     return True
 
