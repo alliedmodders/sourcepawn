@@ -443,24 +443,20 @@ namespace smxviewer
                             break;
                         case V1Param.Address:
                         {
-                            DebugSymbolEntry sym = null;
-                            if (file_.DebugSymbols != null)
-                                sym = file_.DebugSymbols.FindDataRef(value);
+                            string sym_name = file_.FindGlobalName(value);
                             buffer.Append(string.Format(" 0x{0:x}", value));
-                            if (sym != null)
-                                comment.Append(string.Format(" {0}", sym.Name));
+                            if (sym_name != null)
+                                comment.Append(string.Format(" {0}", sym_name));
                             else
                                 comment.Append(string.Format(" {0}", value));
                             break;
                         }
                         case V1Param.Stack:
                         {
-                            DebugSymbolEntry sym = null;
-                            if (file_.DebugSymbols != null)
-                                sym = file_.DebugSymbols.FindStackRef(insn.Address, value);
+                            var sym_name = file_.FindLocalName(insn.Address, value);
                             buffer.Append(string.Format(" 0x{0:x}", value));
-                            if (sym != null)
-                                comment.Append(string.Format(" {0}", sym.Name));
+                            if (sym_name != null)
+                                comment.Append(string.Format(" {0}", sym_name));
                             else
                                 comment.Append(string.Format(" {0}", value));
                             break;

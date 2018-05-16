@@ -99,7 +99,7 @@ namespace smxdasm
                     DebugGlobals = new SmxDebugGlobals(Header, section, Names);
                     break;
                 case ".dbg.locals":
-                    DebugLocals = new SmxDebugLocals(Header, section, Names);
+                    DebugLocals = new SmxDebugLocals(this, Header, section, Names);
                     break;
                 case "rtti.data":
                     RttiData = new SmxRttiData(this, Header, section);
@@ -131,6 +131,40 @@ namespace smxdasm
                 }
             }
             UnknownSections = unknown.ToArray();
+        }
+
+        public string FindGlobalName(int address)
+        {
+            if (DebugGlobals != null)
+            {
+                var sym = DebugGlobals.FindGlobal(address);
+                if (sym != null)
+                    return Names.StringAt(sym.name_offset);
+            }
+            if (DebugSymbols != null)
+            {
+                var sym = DebugSymbols.FindDataRef(address);
+                if (sym != null)
+                    return sym.Name;
+            }
+            return null;
+        }
+
+        public string FindLocalName(int codeaddr, int address)
+        {
+            if (DebugLocals != null)
+            {
+                var entry = DebugLocals.FindLocal(codeaddr, address);
+                if (entry != null)
+                    return Names.StringAt(entry.name_offset);
+            }
+            if (DebugSymbols != null)
+            {
+                var entry = DebugSymbols.FindStackRef(codeaddr, address);
+                if (entry != null)
+                    return entry.Name;
+            }
+            return null;
         }
 
         public string FindFunctionName(int address)

@@ -467,35 +467,112 @@ namespace smxdasm
         public DebugMethodEntry[] Entries { get; }
     }
 
-    public class SmxDebugGlobals : SmxRttiListTable
+    public class SmxDebugSymbols : SmxRttiListTable
+    {
+        public SmxDebugSymbols(FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
+        {
+            var reader = file.SectionReader(header);
+            base.init(reader);
+
+            Entries = new DebugVarEntry[row_count_];
+            for (uint i = 0; i < row_count_; i++)
+                Entries[i] = DebugVarEntry.From(reader);
+        }
+
+        protected void EnsureSortedAddresses()
+        {
+            if (address_sorted_ != null)
+                return;
+            address_sorted_ = new List<DebugVarEntry>(Entries);
+            address_sorted_.Sort(delegate (DebugVarEntry a, DebugVarEntry b)
+            {
+                return a.address.CompareTo(b.address);
+            });
+        }
+
+        public DebugVarEntry[] Entries { get; }
+        protected List<DebugVarEntry> address_sorted_;
+    }
+
+    public class SmxDebugGlobals : SmxDebugSymbols
     {
         public SmxDebugGlobals(FileHeader file, SectionEntry header, SmxNameTable names)
             : base(file, header, names)
         {
-            var reader = file.SectionReader(header);
-            base.init(reader);
-
-            Entries = new DebugVarEntry[row_count_];
-            for (uint i = 0; i < row_count_; i++)
-                Entries[i] = DebugVarEntry.From(reader);
         }
 
-        public DebugVarEntry[] Entries { get; }
+        public DebugVarEntry FindGlobal(int address)
+        {
+            EnsureSortedAddresses();
+            for (int i = 0; i < address_sorted_.Count; i++)
+            {
+                var sym = address_sorted_[i];
+                if (sym.address == address)
+                    return sym;
+                if (address < sym.address)
+                    break;
+                if (i == address_sorted_.Count - 1)
+                    break;
+                var next_sym = address_sorted_[i + 1];
+                if (address > sym.address && address < next_sym.address)
+                    return sym;
+            }
+            return null;
+        }
     }
 
-    public class SmxDebugLocals : SmxRttiListTable
+    public class SmxDebugLocals : SmxDebugSymbols
     {
-        public SmxDebugLocals(FileHeader file, SectionEntry header, SmxNameTable names)
+        private SmxFile smx_file_;
+
+        public SmxDebugLocals(SmxFile smx_file, FileHeader file, SectionEntry header, SmxNameTable names)
             : base(file, header, names)
         {
-            var reader = file.SectionReader(header);
-            base.init(reader);
-
-            Entries = new DebugVarEntry[row_count_];
-            for (uint i = 0; i < row_count_; i++)
-                Entries[i] = DebugVarEntry.From(reader);
+             smx_file_ = smx_file;
         }
 
-        public DebugVarEntry[] Entries { get; }
+        public DebugVarEntry FindLocal(int codeaddr, int address)
+        {
+            int start_at = 0;
+            int stop_at = smx_file_.DebugMethods.Entries.Length;
+            if (smx_file_.DebugMethods != null && smx_file_.RttiMethods != null)
+            {
+                int? index = null;
+                for (int i = 0; i < smx_file_.DebugMethods.Entries.Length; i++)
+                {
+                    int method_index = smx_file_.DebugMethods.Entries[i].method_index;
+                    var method = smx_file_.RttiMethods.Methods[method_index];
+                    if (codeaddr >= method.pcode_start && codeaddr < method.pcode_end)
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+
+                if (index != null)
+                {
+                    var i = (int)index;
+                    start_at = smx_file_.DebugMethods.Entries[i].first_local;
+                    if (i != smx_file_.DebugMethods.Entries.Length - 1)
+                        stop_at = smx_file_.DebugMethods.Entries[i + 1].first_local;
+                }
+            }
+
+            for (int i = start_at; i < stop_at; i++)
+            {
+                var sym = Entries[i];
+                if (codeaddr < sym.code_start || codeaddr >= sym.code_end)
+                    continue;
+                if (sym.address == address)
+                    return sym;
+                if (i == stop_at - 1)
+                    break;
+                var next_sym = Entries[stop_at + 1];
+                if (address > sym.address && address < next_sym.address)
+                    return sym;
+            }
+            return null;
+        }
     }
 }
