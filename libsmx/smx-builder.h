@@ -23,6 +23,7 @@
 #include <am-hashmap.h>
 #include <am-refcounting.h>
 #include <smx/smx-headers.h>
+#include <smx/smx-typeinfo.h>
 #include <stdlib.h>
 #include "shared/string-atom.h"
 #include "smx-buffer.h"
@@ -137,10 +138,13 @@ class SmxListSection : public SmxSection
   void add(const T& t) {
     list_.append(t);
   }
-  bool write(ISmxBuffer* buf) override {
+  T& at(size_t index) {
+    return list_[index];
+  }
+  virtual bool write(ISmxBuffer* buf) override {
     return buf->write(list_.buffer(), list_.length() * sizeof(T));
   }
-  size_t length() const override {
+  virtual size_t length() const override {
     return count() * sizeof(T);
   }
   size_t count() const {
@@ -149,6 +153,34 @@ class SmxListSection : public SmxSection
 
  private:
   ke::Vector<T> list_;
+};
+
+// An SmxRttiTable is an SmxListSection that is preceded by an RTTI header.
+template <typename T>
+class SmxRttiTable : public SmxListSection<T>
+{
+  typedef SmxListSection<T> Base;
+
+ public:
+  SmxRttiTable(const char* name)
+   : SmxListSection<T>(name)
+  {
+    header_.header_size = sizeof(header_);
+    header_.row_size = sizeof(T);
+  }
+
+  bool write(ISmxBuffer* buf) override {
+    header_.row_count = (uint32_t)Base::count();
+    if (!buf->write(&header_, sizeof(header_)))
+      return false;
+    return Base::write(buf);
+  }
+  size_t length() const override {
+    return sizeof(header_) + Base::length();
+  }
+
+ private:
+  smx_rtti_table_header header_;
 };
 
 // A name table is a blob of zero-terminated strings. Strings are entered

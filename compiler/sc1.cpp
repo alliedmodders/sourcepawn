@@ -5098,9 +5098,6 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       } /* if */
       if ((sym->usage & uPUBLIC)!=0 || strcmp(sym->name,uMAINFUNC)==0)
         entry=TRUE;                 /* there is an entry point */
-      /* also mark the function to the debug information */
-      if (((sym->usage & uREAD)!=0 || (sym->usage & uPUBLIC)!=0) && (sym->usage & uNATIVE)==0)
-        insert_dbgsymbol(sym);
       break;
     case iCONSTEXPR:
       if (testconst && (sym->usage & uREAD)==0) {

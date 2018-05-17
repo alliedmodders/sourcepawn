@@ -511,13 +511,9 @@ stringlist *insert_dbgsymbol(symbol *sym)
 
     funcdisplayname(symname,sym->name);
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
-    if (sym->ident==iFUNCTN) {
-      sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x",
-              sym->addr(),sym->tag,symname,sym->addr(),sym->codeaddr,sym->ident,sym->vclass);
-    } else {
-      sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x",
-              sym->addr(),sym->tag,symname,sym->codeaddr,code_idx,sym->ident,sym->vclass);
-    } /* if */
+    assert(sym->ident != iFUNCTN);
+    sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x",
+            sym->addr(),sym->tag,symname,sym->codeaddr,code_idx,sym->ident,sym->vclass,sym->usage);
     if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
       #if !defined NDEBUG
         int count=sym->dim.array.level;
@@ -531,7 +527,12 @@ stringlist *insert_dbgsymbol(symbol *sym)
       strcat(string,"]");
     } /* if */
 
-    return insert_string(&dbgstrings,string);
+    if (curfunc) {
+      if (!curfunc->dbgstrs)
+        curfunc->dbgstrs = (stringlist*)calloc(1, sizeof(stringlist));
+      return insert_string(curfunc->dbgstrs, string);
+    }
+    return insert_string(&dbgstrings, string);
   } /* if */
   return NULL;
 }

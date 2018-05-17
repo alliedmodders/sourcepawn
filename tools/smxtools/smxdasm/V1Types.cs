@@ -288,160 +288,49 @@ namespace smxdasm
         }
     }
 
-    public enum SymKind : byte
-    {
-        Variable = 1,
-        Reference = 2,
-        Array = 3,
-        RefArray = 4,
-        Function = 9,
-        VarArgs = 11,
-    }
-
     public enum SymScope : byte
     {
         Global = 0,
         Local = 1,
         Static = 2,
+        Arg = 3
     }
 
-    // The ".dbg.symbols" table.
-    public class DebugSymbolEntry
+    // The ".dbg.methods" section.
+    public class DebugMethodEntry
     {
-        public int Address;            // Address relative to DAT or STK.
-        public ushort TagId;        // Tag id (unmasked).
-        public uint CodeStart;      // Live in region >= codestart.
-        public uint CodeEnd;        // Live in region < codeend.
-        public SymKind Ident;          // An IDENT value.
-        public SymScope Scope;         // A VCLASS value.
-        public ushort dimcount;     // Number of dimensions (see DebugSymbolDimEntry).
-        public int nameoffs;        // Name (offset into .dbg.names).
-        
-        // Computed
-        public string Name;
-        public DebugSymbolDimEntry[] Dims;
+        public int method_index;
+        public int first_local;
 
-        public static DebugSymbolEntry[] From(FileHeader hdr, BinaryReader rd, SmxDebugInfoSection info, SmxNameTable names)
+        public static DebugMethodEntry From(BinaryReader rd)
         {
-            var entries = new DebugSymbolEntry[info.NumSymbols];
-            for (var i = 0; i < info.NumSymbols; i++)
-            {
-                var entry = new DebugSymbolEntry();
-                entry.Address = rd.ReadInt32();
-                entry.TagId = rd.ReadUInt16();
-                // There's a padding of 2 bytes after this short.
-                if (hdr.debugUnpacked)
-                    rd.ReadBytes(2);
-                entry.CodeStart = rd.ReadUInt32();
-                entry.CodeEnd = rd.ReadUInt32();
-                entry.Ident = (SymKind)rd.ReadByte();
-                entry.Scope = (SymScope)rd.ReadByte();
-                entry.dimcount = rd.ReadUInt16();
-                entry.nameoffs = rd.ReadInt32();
-                entry.Name = names.StringAt(entry.nameoffs);
-                if (entry.dimcount > 0)
-                    entry.Dims = DebugSymbolDimEntry.From(hdr, rd, entry.dimcount);
-                entries[i] = entry;
-            }
-            return entries;
+            DebugMethodEntry entry = new DebugMethodEntry();
+            entry.method_index = rd.ReadInt32();
+            entry.first_local = rd.ReadInt32();
+            return entry;
         }
     }
 
-    // Occurs after a DebugSymbolEntry for each dimcount.
-    public class DebugSymbolDimEntry
+    // The ".dbg.globals"  and ".dbg.locals" section.
+    public class DebugVarEntry
     {
-        public ushort tagid;        // Tag id (unmasked).
-        public int Size;           // Size of the dimension.
+        public int address;
+        public SymScope scope;
+        public int name_offset;
+        public int code_start;
+        public int code_end;
+        public int type_id;
 
-        public static DebugSymbolDimEntry[] From(FileHeader hdr, BinaryReader rd, int count)
+        public static DebugVarEntry From(BinaryReader rd)
         {
-            var entries = new DebugSymbolDimEntry[count];
-            for (var i = 0; i < count; i++)
-            {
-                var entry = new DebugSymbolDimEntry();
-                // There's a padding of 2 bytes before this short.
-                if (hdr != null && hdr.debugUnpacked)
-                    rd.ReadBytes(2);
-                entry.tagid = rd.ReadUInt16();
-                entry.Size = rd.ReadInt32();
-                entries[i] = entry;
-            }
-            return entries;
-        }
-    }
-
-    // ".dbg.natives" section header.
-    public class DebugNativesHeader
-    {
-        public uint num_entries;
-
-        public static DebugNativeEntry[] From(BinaryReader rd, SmxNameTable names)
-        {
-            var header = new DebugNativesHeader();
-            header.num_entries = rd.ReadUInt32();
-            return DebugNativeEntry.From(rd, header, names);
-        }
-    }
-
-    public class DebugNativeEntry
-    {
-        public int Index;           // Native index.
-        public int nameoffs;        // Offset into .dbg.natives.
-        public ushort tagid;        // Tag id (unmasked).
-        public ushort nargs;        // Number of formal arguments.
-
-        // Computed.
-        public string Name;
-        public DebugNativeArgEntry[] Args;
-
-        public static DebugNativeEntry[] From(BinaryReader rd, DebugNativesHeader header, SmxNameTable names)
-        {
-            var entries = new DebugNativeEntry[header.num_entries];
-            for (var i = 0; i < header.num_entries; i++)
-            {
-                var entry = new DebugNativeEntry();
-                entry.Index = rd.ReadInt32();
-                entry.nameoffs = rd.ReadInt32();
-                entry.tagid = rd.ReadUInt16();
-                entry.nargs = rd.ReadUInt16();
-                entry.Name = names.StringAt(entry.nameoffs);
-                if (entry.nargs > 0)
-                    entry.Args = DebugNativeArgEntry.From(rd, names, entry.nargs);
-                else
-                    entry.Args = new DebugNativeArgEntry[0];
-                entries[i] = entry;
-            }
-            return entries;
-        }
-    }
-
-    public class DebugNativeArgEntry
-    {
-        public SymKind Ident;          // DebugSymbolEntry IDENT value.
-        public ushort tagid;        // Tag id (unmasked).
-        public ushort dimcount;     // Number of dimensions (and DebugSymbolDimEntries).
-        public int nameoffs;       // Offset into .dbg.names.
-
-        // Computed.
-        public string Name;
-        public DebugSymbolDimEntry[] Dims;
-
-        public static DebugNativeArgEntry[] From(BinaryReader rd, SmxNameTable names, int count)
-        {
-            var entries = new DebugNativeArgEntry[count];
-            for (var i = 0; i < count; i++)
-            {
-                var entry = new DebugNativeArgEntry();
-                entry.Ident = (SymKind)rd.ReadByte();
-                entry.tagid = rd.ReadUInt16();
-                entry.dimcount = rd.ReadUInt16();
-                entry.nameoffs = rd.ReadInt32();
-                if (entry.dimcount > 0)
-                    entry.Dims = DebugSymbolDimEntry.From(null, rd, entry.dimcount);
-                entry.Name = names.StringAt(entry.nameoffs);
-                entries[i] = entry;
-            }
-            return entries;
+            DebugVarEntry entry = new DebugVarEntry();
+            entry.address = rd.ReadInt32();
+            entry.scope = (SymScope)(rd.ReadByte() & 3);
+            entry.name_offset = rd.ReadInt32();
+            entry.code_start = rd.ReadInt32();
+            entry.code_end = rd.ReadInt32();
+            entry.type_id = rd.ReadInt32();
+            return entry;
         }
     }
 }

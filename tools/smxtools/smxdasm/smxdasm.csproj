@@ -40,6 +40,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Headers.cs" />
+    <Compile Include="LegacyDebug.cs" />
+    <Compile Include="Rtti.cs" />
     <Compile Include="Sections.cs" />
     <Compile Include="File.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

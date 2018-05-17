@@ -9,6 +9,7 @@
 //
 #include "smx-v1-image.h"
 #include "zlib/zlib.h"
+#include <amtl/am-string.h>
 
 using namespace ke;
 using namespace sp;
@@ -22,7 +23,9 @@ SmxV1Image::SmxV1Image(FILE* fp)
    debug_names_section_(nullptr),
    debug_names_(nullptr),
    debug_syms_(nullptr),
-   debug_syms_unpacked_(nullptr)
+   debug_syms_unpacked_(nullptr),
+   rtti_data_(nullptr),
+   rtti_methods_(nullptr)
 {
 }
 
@@ -166,6 +169,8 @@ SmxV1Image::validate()
     return false;
   if (!validateNatives())
     return false;
+  if (!validateRtti())
+    return false;
   if (!validateDebugInfo())
     return false;
   if (!validateTags())
@@ -190,6 +195,29 @@ SmxV1Image::validateSection(const Section* section)
   if (section->dataoffs >= length_)
     return false;
   if (section->size > length_ - section->dataoffs)
+    return false;
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiHeader(const Section* section)
+{
+  if (!validateSection(section))
+    return false;
+
+  const smx_rtti_table_header* header =
+    reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
+  if (section->size < sizeof(smx_rtti_table_header))
+    return false;
+  if (section->size < header->header_size)
+    return false;
+  if (!IsUint32MultiplySafe(header->row_size, header->row_count))
+    return false;
+
+  uint32_t table_size = header->row_size * header->row_count;
+  if (!IsUint32AddSafe(table_size, header->header_size))
+    return false;
+  if (section->size != header->header_size + table_size)
     return false;
   return true;
 }
@@ -335,6 +363,57 @@ SmxV1Image::validateName(size_t offset)
 }
 
 bool
+SmxV1Image::validateRtti()
+{
+  rtti_data_ = findSection("rtti.data");
+  if (!rtti_data_)
+    return true;
+  if (!validateSection(rtti_data_))
+    return error("invalid rtti.data section");
+
+  const char* tables[] = {
+    "rtti.enums",
+    "rtti.methods",
+    "rtti.natives",
+    "rtti.typedefs",
+    "rtti.typesets",
+  };
+  for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
+    const char* table_name = tables[i];
+    const Section* section = findSection(table_name);
+    if (!validateRttiHeader(section)) {
+      error_.format("could not validate %s section", table_name);
+      return false;
+    }
+  }
+
+  rtti_methods_ = findRttiSection("rtti.methods");
+  if (rtti_methods_ && !validateRttiMethods())
+    return false;
+
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiMethods()
+{
+  for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
+    const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+    if (!validateName(method->name))
+      return error("invalid method name");
+    if (method->signature >= rtti_data_->size)
+      return error("invalid method signature type offset");
+    if (method->pcode_start > method->pcode_end)
+      return error("invalid method code range");
+    if (method->pcode_start >= code_.header()->size)
+      return error("invalid method code start");
+    if (method->pcode_end > code_.header()->size)
+      return error("invalid method code end");
+  }
+  return true;
+}
+
+bool
 SmxV1Image::validateDebugInfo()
 {
   const Section* dbginfo = findSection(".dbg.info");
@@ -346,18 +425,23 @@ SmxV1Image::validateDebugInfo()
   debug_info_ =
     reinterpret_cast<const sp_fdbg_info_t*>(buffer() + dbginfo->dataoffs);
 
+  // Pre-RTTI, the debug tables used a separate string table. That is no longer
+  // the case, but we support both scenarios.
   debug_names_section_ = findSection(".dbg.strings");
-  if (!debug_names_section_)
-    return error("no debug string table");
-  if (!validateSection(debug_names_section_))
-    return error("invalid .dbg.strings section");
-  debug_names_ = reinterpret_cast<const char*>(buffer() + debug_names_section_->dataoffs);
+  if (debug_names_section_) {
+    if (!validateSection(debug_names_section_))
+      return error("invalid .dbg.strings section");
+    debug_names_ = reinterpret_cast<const char*>(buffer() + debug_names_section_->dataoffs);
 
-  // Name tables must be null-terminated.
-  if (debug_names_section_->size != 0 &&
-      *(debug_names_ + debug_names_section_->size - 1) != '\0')
-  {
-    return error("invalid .dbg.strings section");
+    // Name tables must be null-terminated.
+    if (debug_names_section_->size != 0 &&
+        *(debug_names_ + debug_names_section_->size - 1) != '\0')
+    {
+      return error("invalid .dbg.strings section");
+    }
+  } else {
+    debug_names_section_ = names_section_;
+    debug_names_ = names_;
   }
 
   const Section* files = findSection(".dbg.files");
@@ -383,20 +467,37 @@ SmxV1Image::validateDebugInfo()
     debug_info_->num_lines);
 
   debug_symbols_section_ = findSection(".dbg.symbols");
-  if (!debug_symbols_section_)
-    return error("no debug symbol table");
-  if (!validateSection(debug_symbols_section_))
-    return error("invalid debug symbol table");
-
-  // See the note about unpacked debug sections in smx-headers.h.
-  if (hdr_->version == SmxConsts::SP1_VERSION_1_0 &&
-      !findSection(".dbg.natives"))
-  {
-    debug_syms_unpacked_ =
-      reinterpret_cast<const sp_u_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
+  if (debug_symbols_section_) {
+    if (!validateSection(debug_symbols_section_))
+      return error("invalid debug symbol table");
   } else {
-    debug_syms_ =
-      reinterpret_cast<const sp_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
+    // New debug symbol tables are optional, but if present, they need to be
+    // coherent.
+    if (const Section* globals = findSection(".dbg.globals")) {
+      if (!validateRttiHeader(globals))
+        return error("invalid debug globals table");
+    }
+    if (const Section* locals = findSection(".dbg.locals")) {
+      if (!validateRttiHeader(locals))
+        return error("invalid debug locals table");
+    }
+    if (const Section* methods = findSection(".dbg.methods")) {
+      if (!validateRttiHeader(methods))
+        return error("invalid debug methods table");
+    }
+  }
+
+  if (debug_symbols_section_) {
+    // See the note about unpacked debug sections in smx-headers.h.
+    if (hdr_->version == SmxConsts::SP1_VERSION_1_0 &&
+        !findSection(".dbg.natives"))
+    {
+      debug_syms_unpacked_ =
+        reinterpret_cast<const sp_u_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
+    } else {
+      debug_syms_ =
+        reinterpret_cast<const sp_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
+    }
   }
 
   return true;
@@ -615,6 +716,15 @@ SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr)
 const char*
 SmxV1Image::LookupFunction(uint32_t code_offset)
 {
+  if (rtti_methods_) {
+    for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
+      const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+      if (method->pcode_start <= code_offset && method->pcode_end > code_offset)
+        return names_ + method->name;
+    }
+    return nullptr;
+  }
+
   if (debug_syms_) {
     return lookupFunction<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(
       debug_syms_, code_offset);

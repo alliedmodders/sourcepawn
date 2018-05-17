@@ -451,159 +451,128 @@ namespace smxdasm
         }
     }
 
-    // The .dbg.natives table.
-    public class SmxDebugNativesTable : SmxSection
+    public class SmxDebugMethods : SmxRttiListTable
     {
-        private DebugNativeEntry[] entries_;
+        public SmxDebugMethods(FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
+        {
+            var reader = file.SectionReader(header);
+            base.init(reader);
 
-        public SmxDebugNativesTable(FileHeader file, SectionEntry header, SmxNameTable names)
-            : base(file, header)
-        {
-            entries_ = DebugNativesHeader.From(file.SectionReader(header), names);
+            Entries = new DebugMethodEntry[row_count_];
+            for (uint i = 0; i < row_count_; i++)
+                Entries[i] = DebugMethodEntry.From(reader);
         }
 
-        public DebugNativeEntry[] Entries
+        public DebugMethodEntry[] Entries { get; }
+    }
+
+    public class SmxDebugSymbols : SmxRttiListTable
+    {
+        public SmxDebugSymbols(FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
         {
-            get { return entries_; }
+            var reader = file.SectionReader(header);
+            base.init(reader);
+
+            Entries = new DebugVarEntry[row_count_];
+            for (uint i = 0; i < row_count_; i++)
+                Entries[i] = DebugVarEntry.From(reader);
         }
-        public int Length
+
+        protected void EnsureSortedAddresses()
         {
-            get { return entries_.Length; }
+            if (address_sorted_ != null)
+                return;
+            address_sorted_ = new List<DebugVarEntry>(Entries);
+            address_sorted_.Sort(delegate (DebugVarEntry a, DebugVarEntry b)
+            {
+                return a.address.CompareTo(b.address);
+            });
         }
-        public DebugNativeEntry this[int index]
+
+        public DebugVarEntry[] Entries { get; }
+        protected List<DebugVarEntry> address_sorted_;
+    }
+
+    public class SmxDebugGlobals : SmxDebugSymbols
+    {
+        public SmxDebugGlobals(FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
         {
-            get { return entries_[index]; }
+        }
+
+        public DebugVarEntry FindGlobal(int address)
+        {
+            EnsureSortedAddresses();
+            for (int i = 0; i < address_sorted_.Count; i++)
+            {
+                var sym = address_sorted_[i];
+                if (sym.address == address)
+                    return sym;
+                if (address < sym.address)
+                    break;
+                if (i == address_sorted_.Count - 1)
+                    break;
+                var next_sym = address_sorted_[i + 1];
+                if (address > sym.address && address < next_sym.address)
+                    return sym;
+            }
+            return null;
         }
     }
 
-    // The .dbg.symbols table.
-    public class SmxDebugSymbolsTable : SmxSection
+    public class SmxDebugLocals : SmxDebugSymbols
     {
-        private DebugSymbolEntry[] entries_;
-        private DebugSymbolEntry[] dat_refs_;
+        private SmxFile smx_file_;
 
-        public SmxDebugSymbolsTable(FileHeader file, SectionEntry header, SmxDebugInfoSection info, SmxNameTable names)
-            : base(file, header)
+        public SmxDebugLocals(SmxFile smx_file, FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
         {
-            entries_ = DebugSymbolEntry.From(file, file.SectionReader(header), info, names);
+             smx_file_ = smx_file;
         }
 
-        private void buildDatRefs()
+        public DebugVarEntry FindLocal(int codeaddr, int address)
         {
-            if (dat_refs_ != null)
-                return;
-
-            var dat_refs = new List<DebugSymbolEntry>();
-            foreach (var sym in entries_)
+            int start_at = 0;
+            int stop_at = smx_file_.DebugMethods.Entries.Length;
+            if (smx_file_.DebugMethods != null && smx_file_.RttiMethods != null)
             {
-                if (sym.Scope == SymScope.Local)
-                    continue;
-                if (sym.Ident == SymKind.Function)
-                    continue;
-                dat_refs.Add(sym);
+                int? index = null;
+                for (int i = 0; i < smx_file_.DebugMethods.Entries.Length; i++)
+                {
+                    int method_index = smx_file_.DebugMethods.Entries[i].method_index;
+                    var method = smx_file_.RttiMethods.Methods[method_index];
+                    if (codeaddr >= method.pcode_start && codeaddr < method.pcode_end)
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+
+                if (index != null)
+                {
+                    var i = (int)index;
+                    start_at = smx_file_.DebugMethods.Entries[i].first_local;
+                    if (i != smx_file_.DebugMethods.Entries.Length - 1)
+                        stop_at = smx_file_.DebugMethods.Entries[i + 1].first_local;
+                }
             }
 
-            dat_refs.Sort(delegate(DebugSymbolEntry e1, DebugSymbolEntry e2)
+            for (int i = start_at; i < stop_at; i++)
             {
-                return e1.Address.CompareTo(e2.Address);
-            });
-            dat_refs_ = dat_refs.ToArray();
-        }
-
-        public DebugSymbolEntry FindFunction(int address)
-        {
-            foreach (var entry in entries_)
-            {
-                if (entry.Ident != SymKind.Function)
+                var sym = Entries[i];
+                if (codeaddr < sym.code_start || codeaddr >= sym.code_end)
                     continue;
-                if (address >= entry.CodeStart && address <= entry.CodeEnd)
-                    return entry;
-            }
-            return null;
-        }
-
-        public DebugSymbolEntry FindStackRef(int codeaddr, int stackaddr)
-        {
-            // Find symbols belonging to this address range.
-            var symbols = new List<DebugSymbolEntry>();
-            foreach (var sym in entries_)
-            {
-                if (sym.Scope != SymScope.Local)
-                    continue;
-                if (sym.Ident == SymKind.Function || sym.Ident == SymKind.VarArgs)
-                    continue;
-                if (codeaddr >= sym.CodeStart && codeaddr <= sym.CodeEnd)
-                    symbols.Add(sym);
-            }
-
-            // We sort locals in reverse order, since the stack grows down.
-            symbols.Sort(delegate(DebugSymbolEntry e1, DebugSymbolEntry e2)
-            {
-                return e2.Address.CompareTo(e1.Address);
-            });
-
-            for (var i = 0; i < symbols.Count; i++)
-            {
-                var sym = symbols[i];
-                if (sym.Address == stackaddr)
+                if (sym.address == address)
                     return sym;
-
-                // Ignore parameters if the offset isn't identical.
-                if (sym.Address > 0)
-                    continue;
-
-                // No next symbol... just bail.
-                if (i == symbols.Count - 1)
+                if (i == stop_at - 1)
                     break;
-
-                var next_sym = symbols[i + 1];
-
-                // Only arrays can be accessed out of their starting address.
-                if (sym.Ident != SymKind.Array)
-                    continue;
-                if (stackaddr > sym.Address && stackaddr < next_sym.Address)
+                var next_sym = Entries[stop_at + 1];
+                if (address > sym.address && address < next_sym.address)
                     return sym;
             }
             return null;
-        }
-
-        public DebugSymbolEntry FindDataRef(int address)
-        {
-            buildDatRefs();
-            for (var i = 0; i < dat_refs_.Length; i++)
-            {
-                var sym = dat_refs_[i];
-                if (sym.Address == address)
-                    return sym;
-                if (address < sym.Address)
-                    break;
-
-                // No next symbol... just bail.
-                if (i == dat_refs_.Length - 1)
-                    break;
-
-                // Only arrays can be accessed out of their starting address.
-                if (sym.Ident != SymKind.Array)
-                    continue;
-
-                var next_sym = dat_refs_[i + 1];
-                if (address > sym.Address && address < next_sym.Address)
-                    return sym;
-            }
-            return null;
-        }
-
-        public DebugSymbolEntry[] Entries
-        {
-            get { return entries_; }
-        }
-        public int Length
-        {
-            get { return entries_.Length; }
-        }
-        public DebugSymbolEntry this[int index]
-        {
-            get { return entries_[index]; }
         }
     }
 }
