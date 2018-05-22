@@ -14,6 +14,7 @@
 #include "compiled-function.h"
 #include "method-info.h"
 #include "method-verifier.h"
+#include "graph-builder.h"
 
 namespace sp {
 

@@ -34,25 +34,44 @@ using namespace sp;
 using namespace SourcePawn;
 
 const char* OpcodeNames[] = {
-#define _(op, text) text,
-  OPCODE_LIST(_, _)
-#undef _
+#define G(op, text, cells) text,
+#define U(op, text) text,
+  OPCODE_LIST(G, U)
+#undef U
+#undef G
   NULL
 };
 
-#ifdef JIT_SPEW
-void
-SourcePawn::SpewOpcode(PluginRuntime* runtime, const cell_t* start, const cell_t* cip)
+namespace sp {
+
+const int kOpcodeSizes[] = {
+#define G(op, text, cells) cells,
+#define U(op, text) 0,
+  OPCODE_LIST(G, U)
+#undef U
+#undef G
+};
+
+int
+GetCaseTableSize(const uint8_t* cip)
 {
-  fprintf(stdout, "  [%05d:%04d]", cip - (cell_t*)runtime->code().bytes, cip - start);
+  assert((OPCODE)*reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
+  cip += sizeof(cell_t);
+  return (*reinterpret_cast<const cell_t*>(cip) * 2) + 1;
+}
+
+void
+SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip)
+{
+  fprintf(fp, "  [%05d:%04d]", int(cip - (cell_t*)runtime->code().bytes), int(cip - start));
 
   if (*cip >= OPCODES_LAST) {
-    fprintf(stdout, " unknown-opcode\n");
+    fprintf(fp, " unknown-opcode\n");
     return;
   }
 
   OPCODE op = (OPCODE)*cip;
-  fprintf(stdout, " %s ", OpcodeNames[op]);
+  fprintf(fp, " %s ", OpcodeNames[op]);
 
   switch (op) {
     case OP_PUSH_C:
@@ -71,7 +90,7 @@ SourcePawn::SpewOpcode(PluginRuntime* runtime, const cell_t* start, const cell_t
     case OP_GENARRAY_Z:
     case OP_CONST_PRI:
     case OP_CONST_ALT:
-      fprintf(stdout, "%d", cip[1]);
+      fprintf(fp, "%d", cip[1]);
       break;
 
     case OP_JUMP:
@@ -83,9 +102,9 @@ SourcePawn::SpewOpcode(PluginRuntime* runtime, const cell_t* start, const cell_t
     case OP_JSGRTR:
     case OP_JSGEQ:
     case OP_JSLEQ:
-      fprintf(stdout, "%05d:%04d",
+      fprintf(fp, "%05d:%04d",
         cip[1] / 4,
-        ((cell_t*)runtime->code().bytes + cip[1] / 4) - start);
+        int(((cell_t*)runtime->code().bytes + cip[1] / 4) - start));
       break;
 
     case OP_SYSREQ_C:
@@ -93,11 +112,11 @@ SourcePawn::SpewOpcode(PluginRuntime* runtime, const cell_t* start, const cell_t
     {
       uint32_t index = cip[1];
       if (index < runtime->image()->NumNatives())
-        fprintf(stdout, "%s", runtime->GetNative(index)->name);
+        fprintf(fp, "%s", runtime->GetNative(index)->name);
       if (op == OP_SYSREQ_N)
-        fprintf(stdout, " ; (%d args, index %d)", cip[2], index);
+        fprintf(fp, " ; (%d args, index %d)", cip[2], index);
       else
-        fprintf(stdout, " ; (index %d)", index);
+        fprintf(fp, " ; (index %d)", index);
       break;
     }
 
@@ -105,35 +124,35 @@ SourcePawn::SpewOpcode(PluginRuntime* runtime, const cell_t* start, const cell_t
     case OP_PUSH2:
     case OP_PUSH2_S:
     case OP_PUSH2_ADR:
-      fprintf(stdout, "%d, %d", cip[1], cip[2]);
+      fprintf(fp, "%d, %d", cip[1], cip[2]);
       break;
 
     case OP_PUSH3_C:
     case OP_PUSH3:
     case OP_PUSH3_S:
     case OP_PUSH3_ADR:
-      fprintf(stdout, "%d, %d, %d", cip[1], cip[2], cip[3]);
+      fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
       break;
 
     case OP_PUSH4_C:
     case OP_PUSH4:
     case OP_PUSH4_S:
     case OP_PUSH4_ADR:
-      fprintf(stdout, "%d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4]);
+      fprintf(fp, "%d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4]);
       break;
 
     case OP_PUSH5_C:
     case OP_PUSH5:
     case OP_PUSH5_S:
     case OP_PUSH5_ADR:
-      fprintf(stdout, "%d, %d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
+      fprintf(fp, "%d, %d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
       break;
 
     default:
       break;
   }
 
-  fprintf(stdout, "\n");
+  fprintf(fp, "\n");
 }
-#endif
 
+} // namespace sp
