@@ -11,6 +11,8 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "method-verifier.h"
+#include "graph-builder.h"
+#include "opcodes.h"
 #include "plugin-runtime.h"
 #include "plugin-context.h"
 #include <assert.h>
@@ -29,7 +31,6 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
    code_(nullptr),
    cip_(nullptr),
    stop_at_(nullptr),
-   highest_jump_target_(nullptr),
    error_(SP_ERROR_NONE)
 {
   assert(datSize_ < memSize_);
@@ -50,13 +51,18 @@ MethodVerifier::verify()
     return false;
   }
 
+  GraphBuilder gb(rt_, startOffset_);
+  graph_ = gb.build();
+  if (!graph_) {
+    reportError(gb.error_code());
+    return false;
+  }
+
   method_ = code_ + (startOffset_ / sizeof(cell_t));
   cip_ = method_;
 
   {
-    cell_t op;
-    if (!readCell(&op))
-      return false;
+    cell_t op = readCell();
     if (op != OP_PROC) {
       reportError(SP_ERROR_INVALID_INSTRUCTION);
       return false;
@@ -64,18 +70,14 @@ MethodVerifier::verify()
   }
 
   while (more()) {
+    insn_ = cip_;
+
     OPCODE op = (OPCODE)*cip_++;
     if (op == OP_PROC || op == OP_ENDPROC)
       break;
 
     if (!verifyOp(op))
       return false;
-  }
-
-  // Jumps past the method boundaries are invalid.
-  if (highest_jump_target_ && highest_jump_target_ >= cip_) {
-    reportError(SP_ERROR_INSTRUCTION_PARAM);
-    return false;
   }
 
   return true;
@@ -148,9 +150,7 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_DEC_S:
   case OP_ZERO_S:
   {
-    cell_t offset;
-    if (!readCell(&offset))
-      return false;
+    cell_t offset = readCell();
     return verifyStackOffset(offset);
   }
 
@@ -162,18 +162,14 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_DEC:
   case OP_ZERO:
   {
-    cell_t offset;
-    if (!readCell(&offset))
-      return false;
+    cell_t offset = readCell();
     return verifyDatOffset(offset);
   }
 
   case OP_LODB_I:
   case OP_STRB_I:
   {
-    cell_t val;
-    if (!readCell(&val))
-      return false;
+    cell_t val = readCell();
     if (val != 1 && val != 2 && val != 4) {
       reportError(SP_ERROR_INVALID_INSTRUCTION);
       return false;
@@ -191,8 +187,8 @@ MethodVerifier::verifyOp(OPCODE op)
     if (op >= OP_PUSH2_C)
       n = ((op - OP_PUSH2_C) / 4) + 2;
 
-    const cell_t* vec;
-    return getCells(&vec, n);
+    cip_ += n;
+    return true;
   }
 
   case OP_PUSH:
@@ -206,8 +202,8 @@ MethodVerifier::verifyOp(OPCODE op)
       n = ((op - OP_PUSH2) / 4) + 2;
     
     for (size_t i = 0; i < n; i++) {
-      cell_t offset;
-      if (!readCell(&offset) || !verifyDatOffset(offset))
+      cell_t offset = readCell();
+      if (!verifyDatOffset(offset))
         return false;
     }
     return true;
@@ -224,8 +220,8 @@ MethodVerifier::verifyOp(OPCODE op)
       n = ((op - OP_PUSH2_S) / 4) + 2;
 
     for (size_t i = 0; i < n; i++) {
-      cell_t offset;
-      if (!readCell(&offset) || !verifyStackOffset(offset))
+      cell_t offset = readCell();
+      if (!verifyStackOffset(offset))
         return false;
     }
     return true;
@@ -242,8 +238,8 @@ MethodVerifier::verifyOp(OPCODE op)
       n = ((op - OP_PUSH2_ADR) / 4) + 2;
 
     for (size_t i = 0; i < n; i++) {
-      cell_t offset;
-      if (!readCell(&offset) || !verifyStackOffset(offset))
+      cell_t offset = readCell();
+      if (!verifyStackOffset(offset))
         return false;
     }
     return true;
@@ -251,9 +247,7 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_CALL:
   {
-    cell_t offset;
-    if (!readCell(&offset))
-      return false;
+    cell_t offset = readCell();
     if (!verifyCallOffset(offset))
       return false;
     if (collect_func_refs_)
@@ -270,46 +264,37 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_JSLEQ:
   case OP_JSGRTR:
   case OP_JSGEQ:
-  {
-    cell_t offset;
-    if (!readCell(&offset))
-      return false;
-    return verifyJumpOffset(offset);
-  }
-
   case OP_SHL_C_PRI:
   case OP_SHL_C_ALT:
   case OP_ADD_C:
   case OP_SMUL_C:
   case OP_EQ_C_PRI:
   case OP_EQ_C_ALT:
+  case OP_CONST_PRI:
+  case OP_CONST_ALT:
+  case OP_BOUNDS:
+  case OP_SWITCH:
+  case OP_TRACKER_PUSH_C:
   {
-    cell_t val;
-    return readCell(&val);
+    cip_++;
+    return true;
   }
 
   case OP_HALT:
   {
-    cell_t val;
-    if (!readCell(&val))
-      return false;
     reportError(SP_ERROR_INVALID_INSTRUCTION);
     return false;
   }
 
   case OP_MOVS:
   {
-    cell_t val;
-    if (!readCell(&val))
-      return false;
+    cell_t val = readCell();
     return verifyMemAmount(val);
   }
 
   case OP_FILL:
   {
-    cell_t val;
-    if (!readCell(&val))
-      return false;
+    cell_t val = readCell();
     return verifyMemAmount(val);
   }
 
@@ -317,9 +302,7 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_STACK:
   case OP_HEAP:
   {
-    cell_t value;
-    if (!readCell(&value))
-      return false;
+    cell_t value = readCell();
     if (!ke::IsAligned(value, sizeof(cell_t))) {
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
@@ -327,19 +310,9 @@ MethodVerifier::verifyOp(OPCODE op)
     return true;
   }
 
-  case OP_CONST_PRI:
-  case OP_CONST_ALT:
-  case OP_BOUNDS:
-  {
-    cell_t value;
-    return readCell(&value);
-  }
-
   case OP_SYSREQ_C:
   {
-    cell_t index;
-    if (!readCell(&index))
-      return false;
+    cell_t index = readCell();
     if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
@@ -349,25 +322,20 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_SYSREQ_N:
   {
-    cell_t index;
-    if (!readCell(&index))
-      return false;
+    cell_t index = readCell();
     if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
     }
-    cell_t nparams;
-    if (!readCell(&nparams))
-      return false;
+    cell_t nparams = readCell();
     return verifyParamCount(nparams);
   }
 
   case OP_LOAD_BOTH:
   {
-    cell_t offs1, offs2;
-    if (!readCell(&offs1) ||
-        !readCell(&offs2) ||
-        !verifyDatOffset(offs1) ||
+    cell_t offs1 = readCell();
+    cell_t offs2 = readCell();
+    if (!verifyDatOffset(offs1) ||
         !verifyDatOffset(offs2))
     {
       return false;
@@ -377,10 +345,9 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_LOAD_S_BOTH:
   {
-    cell_t offs1, offs2;
-    if (!readCell(&offs1) ||
-        !readCell(&offs2) ||
-        !verifyStackOffset(offs1) ||
+    cell_t offs1 = readCell();
+    cell_t offs2 = readCell();
+    if (!verifyStackOffset(offs1) ||
         !verifyStackOffset(offs2))
     {
       return false;
@@ -390,32 +357,22 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_CONST:
   {
-    cell_t offset, value;
-    if (!readCell(&offset) || !readCell(&value))
-      return false;
+    cell_t offset = readCell();
+    cip_++;
     return verifyDatOffset(offset);
   }
 
   case OP_CONST_S:
   {
-    cell_t offset, value;
-    if (!readCell(&offset) || !readCell(&value))
-      return false;
+    cell_t offset = readCell();
+    cip_++;
     return verifyStackOffset(offset);
-  }
-
-  case OP_TRACKER_PUSH_C:
-  {
-    cell_t amount;
-    return readCell(&amount);
   }
 
   case OP_GENARRAY:
   case OP_GENARRAY_Z:
   {
-    cell_t ndims;
-    if (!readCell(&ndims))
-      return false;
+    cell_t ndims = readCell();
     return verifyDimensionCount(ndims);
   }
 
@@ -426,9 +383,9 @@ MethodVerifier::verifyOp(OPCODE op)
       return false;
     }
 
-    cell_t addr, iv_size, data_size;
-    if (!readCell(&addr) || !readCell(&iv_size) || !readCell(&data_size))
-      return false;
+    cell_t addr = readCell();
+    cell_t iv_size = readCell();
+    cell_t data_size = readCell();
     if (iv_size <= 0 ||
         data_size <= 0 ||
         iv_size >= INT_MAX / 2 ||
@@ -446,61 +403,9 @@ MethodVerifier::verifyOp(OPCODE op)
     return true;
   }
 
-  case OP_SWITCH:
-  {
-    cell_t tableOffset;
-    if (!readCell(&tableOffset) || !verifyJumpOffset(tableOffset))
-      return false;
-
-    const cell_t* casetbl = code_ + (tableOffset / sizeof(cell_t));
-    assert(casetbl >= code_ && casetbl < stop_at_);
-
-    cell_t ncases, defaultOffset;
-    {
-      ke::SaveAndSet<const cell_t*> saved_pos(&cip_, casetbl);
-
-      cell_t op;
-      if (!readCell(&op))
-      if (op != OP_CASETBL) {
-        reportError(SP_ERROR_INVALID_INSTRUCTION);
-        return false;
-      }
-
-      if (!readCell(&ncases))
-        return false;
-      if (!readCell(&defaultOffset) || !verifyJumpOffset(defaultOffset))
-        return false;
-      if (ncases >= INT_MAX || ncases < 0) {
-        reportError(SP_ERROR_INVALID_INSTRUCTION);
-        return false;
-      }
-
-      for (cell_t i = 0; i < ncases; i++) {
-        cell_t value, offset;
-        if (!readCell(&value) ||
-            !readCell(&offset) ||
-            !verifyJumpOffset(offset))
-        {
-          return true;
-        }
-      }
-    }
-    return true;
-  }
-
   case OP_CASETBL:
-  {
-    cell_t ncases;
-    if (!readCell(&ncases))
-      return false;
-
-    const cell_t* vec;
-    if (!getCells(&vec, (ncases * 2) + 1))
-      return false;
-
-    // Nothing to do here. This is handled in OP_SWITCH.
+    cip_ = insn_ + GetCaseTableSize(reinterpret_cast<const uint8_t*>(insn_));
     return true;
-  }
 
   default:
     // Should have been caught earlier.
@@ -510,27 +415,11 @@ MethodVerifier::verifyOp(OPCODE op)
   }
 }
 
-bool
-MethodVerifier::readCell(cell_t* out)
+cell_t
+MethodVerifier::readCell()
 {
-  if (cip_ >= stop_at_) {
-    reportError(SP_ERROR_INVALID_INSTRUCTION);
-    return false;
-  }
-  *out = *cip_++;
-  return true;
-}
-
-bool
-MethodVerifier::getCells(const cell_t** out, size_t ncells)
-{
-  if (cip_ + ncells > stop_at_) {
-    reportError(SP_ERROR_INVALID_INSTRUCTION);
-    return false;
-  }
-  *out = cip_;
-  cip_ += ncells;
-  return true;
+  assert(cip_ < stop_at_);
+  return *cip_++;
 }
 
 bool
@@ -553,28 +442,6 @@ MethodVerifier::verifyDatOffset(cell_t offset)
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
-  return true;
-}
-
-bool
-MethodVerifier::verifyJumpOffset(cell_t offset)
-{
-  if (offset < 0 || !IsAligned(offset, sizeof(cell_t))) {
-    reportError(SP_ERROR_INSTRUCTION_PARAM);
-    return false;
-  }
-
-  // We do not allow jumping outside the method, or to the start of the method.
-  // Note we don't know the actual endpoint of the method yet :(
-  const cell_t* target = code_ + (offset / sizeof(cell_t));
-  if (target <= method_ || target >= stop_at_) {
-    reportError(SP_ERROR_INSTRUCTION_PARAM);
-    return false;
-  }
-
-  if (!highest_jump_target_ || highest_jump_target_ < target)
-    highest_jump_target_ = target;
-
   return true;
 }
 

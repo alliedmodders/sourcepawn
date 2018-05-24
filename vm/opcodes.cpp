@@ -57,7 +57,7 @@ GetCaseTableSize(const uint8_t* cip)
 {
   assert((OPCODE)*reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
   cip += sizeof(cell_t);
-  return (*reinterpret_cast<const cell_t*>(cip) * 2) + 1;
+  return (*reinterpret_cast<const cell_t*>(cip) * 2) + 3;
 }
 
 void
