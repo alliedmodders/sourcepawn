@@ -128,6 +128,7 @@ GraphBuilder::scanFlow() -> FlowState
     RefPtr<Block> block = getOrAddBlock(cip_);
     current_->endWithJump(cip_, block);
     current_ = nullptr;
+    enqueueBlock(block);
     return FlowState::Ended;
   }
 
