@@ -13,6 +13,7 @@
 #ifndef _include_sourcepawn_vm_control_flow_h_
 #define _include_sourcepawn_vm_control_flow_h_
 
+#include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
 #include <amtl/am-vector.h>
 #include <stdio.h>
@@ -28,7 +29,9 @@ enum class BlockEnd {
   Jump
 };
 
-class Block : public ke::Refcounted<Block>
+class Block :
+  public ke::Refcounted<Block>,
+  public ke::InlineListNode<Block>
 {
   friend class ControlFlowGraph;
 
@@ -53,6 +56,12 @@ class Block : public ke::Refcounted<Block>
   }
   const ke::Vector<ke::RefPtr<Block>>& successors() const {
     return successors_;
+  }
+  uint32_t id() const {
+    return id_;
+  }
+  void setId(uint32_t id) {
+    id_ = id;
   }
 
   ~Block() {
@@ -82,9 +91,15 @@ class Block : public ke::Refcounted<Block>
   const uint8_t* end_;
   BlockEnd end_type_;
 
+  // Reverse post-order index.
+  uint32_t id_;
+
   // Counter for fast already-visited testing.
   uint32_t epoch_;
 };
+
+typedef ke::InlineList<Block>::iterator RpoIterator;
+typedef ke::InlineList<Block>::reverse_iterator PostorderIterator;
 
 class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
 {
@@ -97,6 +112,23 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
   }
 
   ke::RefPtr<Block> newBlock(const uint8_t* start);
+
+  // Compute reverse/postorder traversal of the graph. This re-orders blocks.
+  void computeOrdering();
+
+  // Iterators for blocks - reverse postorder, and postorder.
+  RpoIterator rpoBegin() {
+    return blocks_.begin();
+  }
+  RpoIterator rpoEnd() {
+    return blocks_.end();
+  }
+  PostorderIterator poBegin() {
+    return blocks_.rbegin();
+  }
+  PostorderIterator poEnd() {
+    return blocks_.rend();
+  }
 
   // Increase the epoch number, effectively resetting which blcoks have been
   // visited.
@@ -112,7 +144,7 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
  private:
   PluginRuntime* rt_;
   ke::RefPtr<Block> entry_;
-  ke::Vector<ke::RefPtr<Block>> blocks_;
+  ke::InlineList<Block> blocks_;
   uint32_t epoch_;
 };
 

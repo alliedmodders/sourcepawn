@@ -28,22 +28,106 @@ ControlFlowGraph::ControlFlowGraph(PluginRuntime* rt, const uint8_t* start_offse
 ControlFlowGraph::~ControlFlowGraph()
 {
   // This is necessary because blocks contain cycles between each other.
-  for (const auto& block : blocks_)
-    block->unlink();
+  auto iter = blocks_.begin();
+  while (iter != blocks_.end()) {
+    Block* block = *iter;
+    iter = blocks_.erase(iter);
+    block->Release();
+  }
 }
 
-ke::RefPtr<Block>
+RefPtr<Block>
 ControlFlowGraph::newBlock(const uint8_t* start)
 {
-  ke::RefPtr<Block> block = new Block(*this, start);
+  Block* block = new Block(*this, start);
+  block->AddRef();
   blocks_.append(block);
   return block;
+}
+
+// By default, we want to store blocks in reverse postorder, which is the
+// easiest form for forward flow analysis.
+void
+ControlFlowGraph::computeOrdering()
+{
+  // Note, the following graphs might look similar but they are *not*
+  // ambiguous:
+  //
+  // A -> B -> D -> E
+  // A -> C
+  // B -> C
+  //
+  // And its mirror,
+  //
+  // A -> C -> E
+  // A -> B -> D
+  // B -> C
+  //
+  // In both cases the correct traversal order is A, B, C, D, E. The only way
+  // to get this is to compute a post-order traversal, left-to-right and
+  // reverse it. This will guarantee the critical condition that a predecessor
+  // always appears before its successor in the reverse postordering, unless
+  // there is a backedge. (In fact, this will be our definition of a backedge).
+  struct Entry {
+    // All blocks will stay alive during this time, so we don't store RefPtrs.
+    Block* block;
+    size_t index;
+  };
+  Vector<Entry> work;
+
+#if !defined(NDEBUG)
+  size_t block_count = blocks_.length();
+#endif
+
+  // Clear the old block list.
+  auto iter = blocks_.begin();
+  while (iter != blocks_.end())
+    iter = blocks_.erase(iter);
+
+  Vector<Block*> postordering;
+
+  // Compute the postorder traversal.
+  newEpoch();
+  work.append(Entry{entry_, 0});
+  while (!work.empty()) {
+    Block* block = work.back().block;
+    size_t successor_index = work.back().index;
+
+    if (successor_index >= block->successors().length()) {
+      postordering.append(block);
+      work.pop();
+      continue;
+    }
+    work.back().index++;
+
+    Block* child = block->successors()[successor_index];
+    if (child->visited())
+      continue;
+    child->setVisited();
+
+    if (!child->successors().empty())
+      work.append(Entry{child, 0});
+    else
+      postordering.append(child);
+  }
+  assert(postordering.length() == block_count);
+
+  // Add and number everything in RPO.
+  uint32_t id = 1;
+  for (size_t i = postordering.length() - 1; i < postordering.length(); i--) {
+    Block* block = postordering[i];
+
+    assert(!block->id());
+    block->setId(id++);
+    blocks_.append(block);
+  }
 }
 
 void
 ControlFlowGraph::dump(FILE* fp)
 {
-  for (const auto& block : blocks_) {
+  for (RpoIterator iter = rpoBegin(); iter != rpoEnd(); iter++) {
+    RefPtr<Block> block = *iter;
     fprintf(fp, "Block %p:\n", block.get());
     for (const auto& pred : block->predecessors())
       fprintf(fp, "  predecessor: %p\n", pred.get());
@@ -71,6 +155,7 @@ Block::Block(ControlFlowGraph& graph, const uint8_t* start)
    start_(start),
    end_(nullptr),
    end_type_(BlockEnd::Unknown),
+   id_(0),
    epoch_(0)
 {
 }

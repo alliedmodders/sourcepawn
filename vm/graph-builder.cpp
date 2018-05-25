@@ -39,8 +39,9 @@ GraphBuilder::build()
   if (!scan())
     return nullptr;
 
-  assert(graph_);
   assert(!error_code_);
+
+  graph_->computeOrdering();
   return graph_;
 }
 
