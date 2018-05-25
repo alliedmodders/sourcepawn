@@ -68,199 +68,200 @@ namespace sp {
 //    sign.pri/alt
 //
 // _G - generated, _U - ungenerated
-#define OPCODE_LIST(_G, _U)            \
-  _G(NONE,           "none")           \
-  _G(LOAD_PRI,       "load.pri")       \
-  _G(LOAD_ALT,       "load.alt")       \
-  _G(LOAD_S_PRI,     "load.s.pri")     \
-  _G(LOAD_S_ALT,     "load.s.alt")     \
-  _U(LREF_PRI,       "lref.pri")       \
-  _U(LREF_ALT,       "lref.alt")       \
-  _G(LREF_S_PRI,     "lref.s.pri")     \
-  _G(LREF_S_ALT,     "lref.s.alt")     \
-  _G(LOAD_I,         "load.i")         \
-  _G(LODB_I,         "lodb.i")         \
-  _G(CONST_PRI,      "const.pri")      \
-  _G(CONST_ALT,      "const.alt")      \
-  _G(ADDR_PRI,       "addr.pri")       \
-  _G(ADDR_ALT,       "addr.alt")       \
-  _G(STOR_PRI,       "stor.pri")       \
-  _G(STOR_ALT,       "stor.alt")       \
-  _G(STOR_S_PRI,     "stor.s.pri")     \
-  _G(STOR_S_ALT,     "stor.s.alt")     \
-  _U(SREF_PRI,       "sref.pri")       \
-  _U(SREF_ALT,       "sref.alt")       \
-  _G(SREF_S_PRI,     "sref.s.pri")     \
-  _G(SREF_S_ALT,     "sref.s.alt")     \
-  _G(STOR_I,         "stor.i")         \
-  _G(STRB_I,         "strb.i")         \
-  _G(LIDX,           "lidx")           \
-  _U(LIDX_B,         "lidx.b")         \
-  _G(IDXADDR,        "idxaddr")        \
-  _U(IDXADDR_B,      "idxaddr.b")      \
-  _U(ALIGN_PRI,      "align.pri")      \
-  _U(ALIGN_ALT,      "align.alt")      \
-  _U(LCTRL,          "lctrl")          \
-  _U(SCTRL,          "sctrl")          \
-  _G(MOVE_PRI,       "move.pri")       \
-  _G(MOVE_ALT,       "move.alt")       \
-  _G(XCHG,           "xchg")           \
-  _G(PUSH_PRI,       "push.pri")       \
-  _G(PUSH_ALT,       "push.alt")       \
-  _U(PUSH_R,         "push.r")         \
-  _G(PUSH_C,         "push.c")         \
-  _G(PUSH,           "push")           \
-  _G(PUSH_S,         "push.s")         \
-  _G(POP_PRI,        "pop.pri")        \
-  _G(POP_ALT,        "pop.alt")        \
-  _G(STACK,          "stack")          \
-  _G(HEAP,           "heap")           \
-  _G(PROC,           "proc")           \
-  _U(RET,            "ret")            \
-  _G(RETN,           "retn")           \
-  _G(CALL,           "call")           \
-  _U(CALL_PRI,       "call.pri")       \
-  _G(JUMP,           "jump")           \
-  _U(JREL,           "jrel")           \
-  _G(JZER,           "jzer")           \
-  _G(JNZ,            "jnz")            \
-  _G(JEQ,            "jeq")            \
-  _G(JNEQ,           "jneq")           \
-  _U(JLESS,          "jsless")         \
-  _U(JLEQ,           "jleq")           \
-  _U(JGRTR,          "jgrtr")          \
-  _U(JGEQ,           "jgeq")           \
-  _G(JSLESS,         "jsless")         \
-  _G(JSLEQ,          "jsleq")          \
-  _G(JSGRTR,         "jsgrtr")         \
-  _G(JSGEQ,          "jsgeq")          \
-  _G(SHL,            "shl")            \
-  _G(SHR,            "shr")            \
-  _G(SSHR,           "sshr")           \
-  _G(SHL_C_PRI,      "shl.c.pri")      \
-  _G(SHL_C_ALT,      "shl.c.alt")      \
-  _U(SHR_C_PRI,      "shr.c.pri")      \
-  _U(SHR_C_ALT,      "shr.c.alt")      \
-  _G(SMUL,           "smul")           \
-  _G(SDIV,           "sdiv")           \
-  _G(SDIV_ALT,       "sdiv.alt")       \
-  _U(UMUL,           "umul")           \
-  _U(UDIV,           "udiv")           \
-  _U(UDIV_ALT,       "udiv.alt")       \
-  _G(ADD,            "add")            \
-  _G(SUB,            "sub")            \
-  _G(SUB_ALT,        "sub.alt")        \
-  _G(AND,            "and")            \
-  _G(OR,             "or")             \
-  _G(XOR,            "xor")            \
-  _G(NOT,            "not")            \
-  _G(NEG,            "neg")            \
-  _G(INVERT,         "invert")         \
-  _G(ADD_C,          "add.c")          \
-  _G(SMUL_C,         "smul.c")         \
-  _G(ZERO_PRI,       "zero.pri")       \
-  _G(ZERO_ALT,       "zero.alt")       \
-  _G(ZERO,           "zero")           \
-  _G(ZERO_S,         "zero.s")         \
-  _U(SIGN_PRI,       "sign.pri")       \
-  _U(SIGN_ALT,       "sign.alt")       \
-  _G(EQ,             "eq")             \
-  _G(NEQ,            "neq")            \
-  _U(LESS,           "less")           \
-  _U(LEQ,            "leq")            \
-  _U(GRTR,           "grtr")           \
-  _U(GEQ,            "geq")            \
-  _G(SLESS,          "sless")          \
-  _G(SLEQ,           "sleq")           \
-  _G(SGRTR,          "sgrtr")          \
-  _G(SGEQ,           "sgeq")           \
-  _G(EQ_C_PRI,       "eq.c.pri")       \
-  _G(EQ_C_ALT,       "eq.c.alt")       \
-  _G(INC_PRI,        "inc.pri")        \
-  _G(INC_ALT,        "inc.alt")        \
-  _G(INC,            "inc")            \
-  _G(INC_S,          "inc.s")          \
-  _G(INC_I,          "inc.i")          \
-  _G(DEC_PRI,        "dec.pri")        \
-  _G(DEC_ALT,        "dec.alt")        \
-  _G(DEC,            "dec")            \
-  _G(DEC_S,          "dec.s")          \
-  _G(DEC_I,          "dec.i")          \
-  _G(MOVS,           "movs")           \
-  _U(CMPS,           "cmps")           \
-  _G(FILL,           "fill")           \
-  _G(HALT,           "halt")           \
-  _G(BOUNDS,         "bounds")         \
-  _U(SYSREQ_PRI,     "sysreq.pri")     \
-  _G(SYSREQ_C,       "sysreq.c")       \
-  _U(FILE,           "file")           \
-  _U(LINE,           "line")           \
-  _U(SYMBOL,         "symbol")         \
-  _U(SRANGE,         "srange")         \
-  _U(JUMP_PRI,       "jump.pri")       \
-  _G(SWITCH,         "switch")         \
-  _G(CASETBL,        "casetbl")        \
-  _G(SWAP_PRI,       "swap.pri")       \
-  _G(SWAP_ALT,       "swap.alt")       \
-  _G(PUSH_ADR,       "push.adr")       \
-  _G(NOP,            "nop")            \
-  _G(SYSREQ_N,       "sysreq.n")       \
-  _U(SYMTAG,         "symtag")         \
-  _G(BREAK,          "break")          \
-  _G(PUSH2_C,        "push2.c")        \
-  _G(PUSH2,          "push2")          \
-  _G(PUSH2_S,        "push2.s")        \
-  _G(PUSH2_ADR,      "push2.adr")      \
-  _G(PUSH3_C,        "push3.c")        \
-  _G(PUSH3,          "push3")          \
-  _G(PUSH3_S,        "push3.s")        \
-  _G(PUSH3_ADR,      "push3.adr")      \
-  _G(PUSH4_C,        "push4.c")        \
-  _G(PUSH4,          "push4")          \
-  _G(PUSH4_S,        "push4.s")        \
-  _G(PUSH4_ADR,      "push4.adr")      \
-  _G(PUSH5_C,        "push5.c")        \
-  _G(PUSH5,          "push5")          \
-  _G(PUSH5_S,        "push5.s")        \
-  _G(PUSH5_ADR,      "push5.adr")      \
-  _G(LOAD_BOTH,      "load.both")      \
-  _G(LOAD_S_BOTH,    "load.s.both")    \
-  _G(CONST,          "const")          \
-  _G(CONST_S,        "const.s")        \
-  _U(SYSREQ_D,       "sysreq.d")       \
+#define OPCODE_LIST(_G, _U)             \
+  _G(NONE,           "none",        1)  \
+  _G(LOAD_PRI,       "load.pri",    2)  \
+  _G(LOAD_ALT,       "load.alt",    2)  \
+  _G(LOAD_S_PRI,     "load.s.pri",  2)  \
+  _G(LOAD_S_ALT,     "load.s.alt",  2)  \
+  _U(LREF_PRI,       "lref.pri")        \
+  _U(LREF_ALT,       "lref.alt")        \
+  _G(LREF_S_PRI,     "lref.s.pri",  2)  \
+  _G(LREF_S_ALT,     "lref.s.alt",  2)  \
+  _G(LOAD_I,         "load.i",      1)  \
+  _G(LODB_I,         "lodb.i",      2)  \
+  _G(CONST_PRI,      "const.pri",   2)  \
+  _G(CONST_ALT,      "const.alt",   2)  \
+  _G(ADDR_PRI,       "addr.pri",    2)  \
+  _G(ADDR_ALT,       "addr.alt",    2)  \
+  _G(STOR_PRI,       "stor.pri",    2)  \
+  _G(STOR_ALT,       "stor.alt",    2)  \
+  _G(STOR_S_PRI,     "stor.s.pri",  2)  \
+  _G(STOR_S_ALT,     "stor.s.alt",  2)  \
+  _U(SREF_PRI,       "sref.pri")        \
+  _U(SREF_ALT,       "sref.alt")        \
+  _G(SREF_S_PRI,     "sref.s.pri",  2)  \
+  _G(SREF_S_ALT,     "sref.s.alt",  2)  \
+  _G(STOR_I,         "stor.i",      1)  \
+  _G(STRB_I,         "strb.i",      2)  \
+  _G(LIDX,           "lidx",        1)  \
+  _U(LIDX_B,         "lidx.b")          \
+  _G(IDXADDR,        "idxaddr",     1)  \
+  _U(IDXADDR_B,      "idxaddr.b")       \
+  _U(ALIGN_PRI,      "align.pri")       \
+  _U(ALIGN_ALT,      "align.alt")       \
+  _U(LCTRL,          "lctrl")           \
+  _U(SCTRL,          "sctrl")           \
+  _G(MOVE_PRI,       "move.pri",    1)  \
+  _G(MOVE_ALT,       "move.alt",    1)  \
+  _G(XCHG,           "xchg",        1)  \
+  _G(PUSH_PRI,       "push.pri",    1)  \
+  _G(PUSH_ALT,       "push.alt",    1)  \
+  _U(PUSH_R,         "push.r")          \
+  _G(PUSH_C,         "push.c",      2)  \
+  _G(PUSH,           "push",        2)  \
+  _G(PUSH_S,         "push.s",      2)  \
+  _G(POP_PRI,        "pop.pri",     1)  \
+  _G(POP_ALT,        "pop.alt",     1)  \
+  _G(STACK,          "stack",       2)  \
+  _G(HEAP,           "heap",        2)  \
+  _G(PROC,           "proc",        1)  \
+  _U(RET,            "ret")             \
+  _G(RETN,           "retn",        1)  \
+  _G(CALL,           "call",        2)  \
+  _U(CALL_PRI,       "call.pri")        \
+  _G(JUMP,           "jump",        2)  \
+  _U(JREL,           "jrel")            \
+  _G(JZER,           "jzer",        2)  \
+  _G(JNZ,            "jnz",         2)  \
+  _G(JEQ,            "jeq",         2)  \
+  _G(JNEQ,           "jneq",        2)  \
+  _U(JLESS,          "jsless")          \
+  _U(JLEQ,           "jleq")            \
+  _U(JGRTR,          "jgrtr")           \
+  _U(JGEQ,           "jgeq")            \
+  _G(JSLESS,         "jsless",      2)  \
+  _G(JSLEQ,          "jsleq",       2)  \
+  _G(JSGRTR,         "jsgrtr",      2)  \
+  _G(JSGEQ,          "jsgeq",       2)  \
+  _G(SHL,            "shl",         1)  \
+  _G(SHR,            "shr",         1)  \
+  _G(SSHR,           "sshr",        1)  \
+  _G(SHL_C_PRI,      "shl.c.pri",   2)  \
+  _G(SHL_C_ALT,      "shl.c.alt",   2)  \
+  _U(SHR_C_PRI,      "shr.c.pri")       \
+  _U(SHR_C_ALT,      "shr.c.alt")       \
+  _G(SMUL,           "smul",        1)  \
+  _G(SDIV,           "sdiv",        1)  \
+  _G(SDIV_ALT,       "sdiv.alt",    1)  \
+  _U(UMUL,           "umul")            \
+  _U(UDIV,           "udiv")            \
+  _U(UDIV_ALT,       "udiv.alt")        \
+  _G(ADD,            "add",         1)  \
+  _G(SUB,            "sub",         1)  \
+  _G(SUB_ALT,        "sub.alt",     1)  \
+  _G(AND,            "and",         1)  \
+  _G(OR,             "or",          1)  \
+  _G(XOR,            "xor",         1)  \
+  _G(NOT,            "not",         1)  \
+  _G(NEG,            "neg",         1)  \
+  _G(INVERT,         "invert",      1)  \
+  _G(ADD_C,          "add.c",       2)  \
+  _G(SMUL_C,         "smul.c",      2)  \
+  _G(ZERO_PRI,       "zero.pri",    1)  \
+  _G(ZERO_ALT,       "zero.alt",    1)  \
+  _G(ZERO,           "zero",        2)  \
+  _G(ZERO_S,         "zero.s",      2)  \
+  _U(SIGN_PRI,       "sign.pri")        \
+  _U(SIGN_ALT,       "sign.alt")        \
+  _G(EQ,             "eq",          1)  \
+  _G(NEQ,            "neq",         1)  \
+  _U(LESS,           "less")            \
+  _U(LEQ,            "leq")             \
+  _U(GRTR,           "grtr")            \
+  _U(GEQ,            "geq")             \
+  _G(SLESS,          "sless",       1)  \
+  _G(SLEQ,           "sleq",        1)  \
+  _G(SGRTR,          "sgrtr",       1)  \
+  _G(SGEQ,           "sgeq",        1)  \
+  _G(EQ_C_PRI,       "eq.c.pri",    2)  \
+  _G(EQ_C_ALT,       "eq.c.alt",    2)  \
+  _G(INC_PRI,        "inc.pri",     1)  \
+  _G(INC_ALT,        "inc.alt",     1)  \
+  _G(INC,            "inc",         2)  \
+  _G(INC_S,          "inc.s",       2)  \
+  _G(INC_I,          "inc.i",       1)  \
+  _G(DEC_PRI,        "dec.pri",     1)  \
+  _G(DEC_ALT,        "dec.alt",     1)  \
+  _G(DEC,            "dec",         2)  \
+  _G(DEC_S,          "dec.s",       2)  \
+  _G(DEC_I,          "dec.i",       1)  \
+  _G(MOVS,           "movs",        2)  \
+  _U(CMPS,           "cmps")            \
+  _G(FILL,           "fill",        2)  \
+  _G(HALT,           "halt",        2)  \
+  _G(BOUNDS,         "bounds",      2)  \
+  _U(SYSREQ_PRI,     "sysreq.pri")      \
+  _G(SYSREQ_C,       "sysreq.c",    2)  \
+  _U(FILE,           "file")            \
+  _U(LINE,           "line")            \
+  _U(SYMBOL,         "symbol")          \
+  _U(SRANGE,         "srange")          \
+  _U(JUMP_PRI,       "jump.pri")        \
+  _G(SWITCH,         "switch",      2)  \
+  _G(CASETBL,        "casetbl",    -1)  \
+  _G(SWAP_PRI,       "swap.pri",    1)  \
+  _G(SWAP_ALT,       "swap.alt",    1)  \
+  _G(PUSH_ADR,       "push.adr",    2)  \
+  _G(NOP,            "nop",         1)  \
+  _G(SYSREQ_N,       "sysreq.n",    3)  \
+  _U(SYMTAG,         "symtag")          \
+  _G(BREAK,          "break",       1)  \
+  _G(PUSH2_C,        "push2.c",     3)  \
+  _G(PUSH2,          "push2",       3)  \
+  _G(PUSH2_S,        "push2.s",     3)  \
+  _G(PUSH2_ADR,      "push2.adr",   3)  \
+  _G(PUSH3_C,        "push3.c",     4)  \
+  _G(PUSH3,          "push3",       4)  \
+  _G(PUSH3_S,        "push3.s",     4)  \
+  _G(PUSH3_ADR,      "push3.adr",   4)  \
+  _G(PUSH4_C,        "push4.c",     5)  \
+  _G(PUSH4,          "push4",       5)  \
+  _G(PUSH4_S,        "push4.s",     5)  \
+  _G(PUSH4_ADR,      "push4.adr",   5)  \
+  _G(PUSH5_C,        "push5.c",     6)  \
+  _G(PUSH5,          "push5",       6)  \
+  _G(PUSH5_S,        "push5.s",     6)  \
+  _G(PUSH5_ADR,      "push5.adr",   6)  \
+  _G(LOAD_BOTH,      "load.both",   3)  \
+  _G(LOAD_S_BOTH,    "load.s.both", 3)  \
+  _G(CONST,          "const",       3)  \
+  _G(CONST_S,        "const.s",     3)  \
+  _U(SYSREQ_D,       "sysreq.d")        \
   _U(SYSREQ_ND,      "sysreq.nd")       \
-  _G(TRACKER_PUSH_C, "trk.push.c")     \
-  _G(TRACKER_POP_SETHEAP,"trk.pop")    \
-  _G(GENARRAY,       "genarray")       \
-  _G(GENARRAY_Z,     "genarray.z")     \
-  _G(STRADJUST_PRI,  "stradjust.pri")  \
-  _U(STKADJUST,      "stackadjust")    \
-  _G(ENDPROC,        "endproc")        \
-  _U(LDGFN_PRI,      "ldgfn.pri")      \
-  _G(REBASE,         "rebase")         \
+  _G(TRACKER_PUSH_C, "trk.push.c",  2)  \
+  _G(TRACKER_POP_SETHEAP,"trk.pop", 1)  \
+  _G(GENARRAY,       "genarray",    2)  \
+  _G(GENARRAY_Z,     "genarray.z",  2)  \
+  _G(STRADJUST_PRI,  "stradjust.pri", 1)\
+  _U(STKADJUST,      "stackadjust")     \
+  _G(ENDPROC,        "endproc",     1)  \
+  _U(LDGFN_PRI,      "ldgfn.pri")       \
+  _G(REBASE,         "rebase",      4)  \
   /* Opcodes below this are pseudo-opcodes and are not part of the ABI */ \
-  _G(FABS,           "fabs")           \
-  _G(FLOAT,          "float")          \
-  _G(FLOATADD,       "float.add")      \
-  _G(FLOATSUB,       "float.sub")      \
-  _G(FLOATMUL,       "float.mul")      \
-  _G(FLOATDIV,       "float.div")      \
-  _G(RND_TO_NEAREST, "round")          \
-  _G(RND_TO_FLOOR,   "floor")          \
-  _G(RND_TO_CEIL,    "ceil")           \
-  _G(RND_TO_ZERO,    "rndtozero")      \
-  _G(FLOATCMP,       "float.cmp")      \
-  _G(FLOAT_GT,       "float.gt")       \
-  _G(FLOAT_GE,       "float.ge")       \
-  _G(FLOAT_LT,       "float.lt")       \
-  _G(FLOAT_LE,       "float.le")       \
-  _G(FLOAT_NE,       "float.ne")       \
-  _G(FLOAT_EQ,       "float.eq")       \
-  _G(FLOAT_NOT,      "float.not")
+  _U(FIRST_FAKE,     "firstfake")       \
+  _G(FABS,           "fabs",        1)  \
+  _G(FLOAT,          "float",       1)  \
+  _G(FLOATADD,       "float.add",   1)  \
+  _G(FLOATSUB,       "float.sub",   1)  \
+  _G(FLOATMUL,       "float.mul",   1)  \
+  _G(FLOATDIV,       "float.div",   1)  \
+  _G(RND_TO_NEAREST, "round",       1)  \
+  _G(RND_TO_FLOOR,   "floor",       1)  \
+  _G(RND_TO_CEIL,    "ceil",        1)  \
+  _G(RND_TO_ZERO,    "rndtozero",   1)  \
+  _G(FLOATCMP,       "float.cmp",   1)  \
+  _G(FLOAT_GT,       "float.gt",    1)  \
+  _G(FLOAT_GE,       "float.ge",    1)  \
+  _G(FLOAT_LT,       "float.lt",    1)  \
+  _G(FLOAT_LE,       "float.le",    1)  \
+  _G(FLOAT_NE,       "float.ne",    1)  \
+  _G(FLOAT_EQ,       "float.eq",    1)  \
+  _G(FLOAT_NOT,      "float.not",   1)
 
 
 enum OPCODE {
-#define _G(op, text) OP_##op,
+#define _G(op, text, cells) OP_##op,
 #define _U(op, text) OP_UNGEN_##op,
   OPCODE_LIST(_G, _U)
 #undef _G

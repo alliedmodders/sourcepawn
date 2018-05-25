@@ -82,7 +82,7 @@ CompilerBase::emit()
       rt_->Name(),
       rt_->image()->LookupFunction(pcode_start_));
 
-  SpewOpcode(rt_, code_start_, reader.cip());
+  SpewOpcode(stdout, rt_, code_start_, reader.cip());
 #endif
 
   const cell_t* codeseg = reinterpret_cast<const cell_t*>(rt_->code().bytes);

@@ -36,10 +36,23 @@
 #include <sp_vm_types.h>
 #include "plugin-runtime.h"
 
-namespace SourcePawn {
-#ifdef JIT_SPEW
-	void SpewOpcode(sp::PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
-#endif
+namespace sp {
+
+void SpewOpcode(FILE* fp, sp::PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
+
+// These count opcodes in # of cells, not bytes.
+int GetCaseTableSize(const uint8_t* cip);
+extern const int kOpcodeSizes[];
+
+static inline const uint8_t*
+NextInstruction(const uint8_t* cip)
+{
+  OPCODE op = (OPCODE)*reinterpret_cast<const cell_t*>(cip);
+  if (op == OP_CASETBL)
+    return cip + GetCaseTableSize(cip) * sizeof(cell_t);
+  return cip + kOpcodeSizes[op] * sizeof(cell_t);
 }
+
+} // namespace sp
 
 #endif //_INCLUDE_SOURCEPAWN_JIT_X86_OPCODES_H_

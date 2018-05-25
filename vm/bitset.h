@@ -1,0 +1,73 @@
+// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// 
+// Copyright (C) 2006-2015 AlliedModders LLC
+// 
+// This file is part of SourcePawn. SourcePawn is free software: you can
+// redistribute it and/or modify it under the terms of the GNU General Public
+// License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+//
+
+#include <amtl/am-bits.h>
+#include <amtl/am-maybe.h>
+#include <amtl/am-function.h>
+#include <amtl/am-vector.h>
+#include <stddef.h>
+
+namespace sp {
+
+class BitSet
+{
+ public:
+  BitSet()
+  {}
+  explicit BitSet(size_t max_bits)
+   : max_bits_(ke::Some(max_bits))
+  {}
+
+  bool test(uintptr_t bit) {
+    size_t word = word_for_bit(bit);
+    if (word >= words_.length())
+      return false;
+    return !!(words_[word] & (uintptr_t(1) << pos_in_word(bit)));
+  }
+
+  void set(uintptr_t bit) {
+    assert(!max_bits_ || bit <= *max_bits_);
+    size_t word = word_for_bit(bit);
+    if (word >= words_.length())
+      words_.resize(word + 1);
+    words_[word] |= (uintptr_t(1) << pos_in_word(bit));
+  }
+
+  void for_each(const ke::Function<void(uintptr_t)>& callback) {
+    for (size_t i = 0; i < words_.length(); i++) {
+      uintptr_t word = words_[i];
+
+      while (word) {
+        size_t bit = ke::FindRightmostBit(word);
+        word &= ~(uintptr_t(1) << bit);
+        callback(i * kBitsPerWord + bit);
+      }
+    }
+  }
+
+ private:
+  static const size_t kBitsPerWord = sizeof(uintptr_t) * 8;
+
+  static inline size_t word_for_bit(uintptr_t bit) {
+    return bit / kBitsPerWord;
+  }
+  static inline size_t pos_in_word(uintptr_t bit) {
+    return bit % kBitsPerWord;
+  }
+
+ private:
+  ke::Vector<uintptr_t> words_;
+  ke::Maybe<size_t> max_bits_;
+};
+
+} // namespace sp

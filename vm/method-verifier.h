@@ -16,6 +16,7 @@
 #include <sp_vm_types.h>
 #include <smx/smx-v1-opcodes.h>
 #include <amtl/am-function.h>
+#include "control-flow.h"
 
 namespace sp {
 
@@ -51,12 +52,12 @@ class MethodVerifier final
   bool verifyHeapAmount(cell_t amount);
   bool verifyMemAmount(cell_t amount);
   bool verifyCallOffset(cell_t offset);
-  bool readCell(cell_t* out);
-  bool getCells(const cell_t** out, size_t ncells);
   void reportError(int err);
+  cell_t readCell();
 
  private:
   PluginRuntime* rt_;
+  ke::RefPtr<ControlFlowGraph> graph_;
   uint32_t code_features_;
   uint32_t startOffset_;
   size_t memSize_;
@@ -64,9 +65,9 @@ class MethodVerifier final
   size_t heapSize_;
   const cell_t* code_;
   const cell_t* method_;
+  const cell_t* insn_;
   const cell_t* cip_;
   const cell_t* stop_at_;
-  const cell_t* highest_jump_target_;
   ExternalFuncRefCallback collect_func_refs_;
   int error_;
 };
