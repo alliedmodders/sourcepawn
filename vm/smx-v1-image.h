@@ -17,6 +17,7 @@
 #include <smx/smx-v1.h>
 #include <am-string.h>
 #include <am-vector.h>
+#include <sp_vm_types.h>
 #include "file-utils.h"
 #include "legacy-image.h"
 
@@ -57,6 +58,8 @@ class SmxV1Image
   const char* LookupFile(uint32_t code_offset) override;
   const char* LookupFunction(uint32_t code_offset) override;
   bool LookupLine(uint32_t code_offset, uint32_t* line) override;
+  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override;
+  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
 
@@ -190,6 +193,8 @@ class SmxV1Image
  private:
   template <typename SymbolType, typename DimType>
   const char* lookupFunction(const SymbolType* syms, uint32_t addr);
+  template <typename SymbolType, typename DimType>
+  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index);
 
   const smx_rtti_table_header* findRttiSection(const char* name) {
     const Section* section = findSection(name);

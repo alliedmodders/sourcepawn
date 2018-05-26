@@ -295,6 +295,25 @@ namespace SourcePawn
     virtual int LookupLine(ucell_t addr, uint32_t *line) =0;
 
     /**
+     * @brief Given the name of a function and a source file, finds the code pointer
+     * of the start of the function.
+     *
+     * @param function  Name of the function to lookup.
+     * @param file      Name of the file containing the function to lookup.
+     * @param addr      Output pointer to store address of function in.
+     */
+    virtual int LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) =0;
+
+    /**
+     * @brief Given a line number and a source file, finds the code pointer of the line.
+     *
+     * @param line    The line number.
+     * @param file    Name of the file containing the line to lookup.
+     * @param addr    Output pointer to store address of line in.
+     */
+    virtual int LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) =0;
+
+    /**
      * @brief Returns the number of source files compiled into this plugin.
      */
     virtual size_t NumFiles() =0;
