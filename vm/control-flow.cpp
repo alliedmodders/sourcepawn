@@ -13,6 +13,7 @@
 
 #include "control-flow.h"
 #include "opcodes.h"
+#include <amtl/am-string.h>
 
 namespace sp {
 
@@ -123,12 +124,83 @@ ControlFlowGraph::computeOrdering()
   }
 }
 
+// "A Simple, Fast Dominance Algorithm" by Keith D. Cooper, Timothy J. HArvey,
+// and Ken Kennedy.
+//
+// Iterative solution with a two-finger intersection algorithm. Note the paper
+// uses postordered numbers, whereas we use RPO. The id comparisons are
+// therefore inverted.
+static Block*
+IntersectDominators(Block* block1, Block* block2)
+{
+  Block* finger1 = block1;
+  Block* finger2 = block2;
+  while (finger1 != finger2) {
+    while (finger1->id() > finger2->id())
+      finger1 = finger1->idom();
+    while (finger2->id() > finger1->id())
+      finger2 = finger2->idom();
+  }
+  return finger1;
+}
+
+void
+ControlFlowGraph::computeDominators()
+{
+  // The entry block dominates itself.
+  entry_->setImmediateDominator(entry_);
+
+  // Compute immediate dominators. This is technically an O(n^2) algorithm,
+  // with a worst case being that every block is a join point. In practice
+  // it is nowhere near that bad. In addition, since we traverse the graph
+  // in RPO, the maximum number of iterations is 2.
+  //
+  // This is not technically true, if the graph is irreducible. Irreducible
+  // graphs will fail to validate in the computeLoopHeaders pass.
+  bool changed = false;
+  do {
+    changed = false;
+
+    for (auto iter = rpoBegin(); iter != rpoEnd(); iter++) {
+      Block* block = *iter;
+
+      if (block->predecessors().empty()) {
+        // There is only one entry block.
+        assert(block == entry_);
+        continue;
+      }
+
+      // Pick a candidate for this node's dominator.
+      Block* idom = nullptr;
+      for (size_t i = 0; i < block->predecessors().length(); i++) {
+        Block* pred = block->predecessors()[i];
+        if (!pred->idom())
+          continue;
+        if (idom)
+          idom = IntersectDominators(idom, pred);
+        else
+          idom = pred;
+        assert(idom);
+      }
+
+      // We should always get one candidate dominator, since RPO order
+      // guarantees we've processed at least one predecessor.
+      assert(idom);
+
+      if (idom != block->idom()) {
+        block->setImmediateDominator(idom);
+        changed = true;
+      }
+    }
+  } while (changed);
+}
+
 void
 ControlFlowGraph::dump(FILE* fp)
 {
   for (RpoIterator iter = rpoBegin(); iter != rpoEnd(); iter++) {
-    RefPtr<Block> block = *iter;
-    fprintf(fp, "Block %p:\n", block.get());
+    Block* block = *iter;
+    fprintf(fp, "Block %p (%d):\n", block, block->id());
     for (const auto& pred : block->predecessors())
       fprintf(fp, "  predecessor: %p\n", pred.get());
     for (const auto& child : block->successors())
@@ -148,6 +220,29 @@ ControlFlowGraph::dump(FILE* fp)
     }
     fprintf(fp, "\n");
   }
+}
+
+static AString
+MakeDotBlockname(Block* block)
+{
+  AString name;
+  name.format("block%d_%p", block->id(), block);
+  return name;
+}
+
+void
+ControlFlowGraph::dumpDot(FILE* fp)
+{
+  fprintf(fp, "digraph cfg {\n");
+  for (RpoIterator iter = rpoBegin(); iter != rpoEnd(); iter++) {
+    Block* block = *iter;
+    for (const auto& successor : block->successors()) {
+      fprintf(fp, "  %s -> %s;\n",
+        MakeDotBlockname(block).chars(),
+        MakeDotBlockname(successor).chars());
+    }
+  }
+  fprintf(fp, "}\n");
 }
 
 Block::Block(ControlFlowGraph& graph, const uint8_t* start)
@@ -195,10 +290,17 @@ Block::setVisited()
 }
 
 void
+Block::setImmediateDominator(Block* block)
+{
+  idom_ = block;
+}
+
+void
 Block::unlink()
 {
   predecessors_.clear();
   successors_.clear();
+  idom_ = nullptr;
 }
 
 } // namespace sp

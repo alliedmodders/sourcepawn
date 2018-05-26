@@ -39,6 +39,11 @@ class Block :
   Block(ControlFlowGraph& graph, const uint8_t* start);
 
  public:
+  ~Block() {
+    assert(!predecessors_.length());
+    assert(!successors_.length());
+  }
+
   const uint8_t* start() const {
     return start_;
   }
@@ -63,15 +68,15 @@ class Block :
   void setId(uint32_t id) {
     id_ = id;
   }
-
-  ~Block() {
-    assert(!predecessors_.length());
-    assert(!successors_.length());
+  Block* idom() const {
+    return idom_.get();
   }
 
   void addTarget(Block* target);
   void endWithJump(const uint8_t* cip, Block* target);
   void end(const uint8_t* end_at, BlockEnd end_type);
+
+  void setImmediateDominator(Block* block);
 
   bool visited() const;
   void setVisited();
@@ -94,6 +99,9 @@ class Block :
   // Reverse post-order index.
   uint32_t id_;
 
+  // Immediate dominator.
+  ke::RefPtr<Block> idom_;
+
   // Counter for fast already-visited testing.
   uint32_t epoch_;
 };
@@ -115,6 +123,9 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
 
   // Compute reverse/postorder traversal of the graph. This re-orders blocks.
   void computeOrdering();
+
+  // Compute dominance. This should be called after the graph is finalized.
+  void computeDominators();
 
   // Iterators for blocks - reverse postorder, and postorder.
   RpoIterator rpoBegin() {
@@ -140,6 +151,7 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
   }
 
   void dump(FILE* fp);
+  void dumpDot(FILE* fp);
 
  private:
   PluginRuntime* rt_;
