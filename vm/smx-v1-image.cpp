@@ -774,3 +774,121 @@ SmxV1Image::GetFileName(size_t index) const
 
   return debug_names_ + debug_files_[index].name;
 }
+
+template <typename SymbolType, typename DimType>
+bool
+SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index)
+{
+  const uint8_t* cursor = reinterpret_cast<const uint8_t *>(syms);
+  const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
+  for (uint32_t i = index; i < debug_info_->num_syms; i++) {
+    if (cursor + sizeof(SymbolType) > cursor_end)
+      break;
+
+    const SymbolType *sym = reinterpret_cast<const SymbolType *>(cursor);
+    if (sym->ident == sp::IDENT_FUNCTION &&
+      sym->name < debug_names_section_->size &&
+      !strcmp(debug_names_ + sym->name, function))
+    {
+      *funcaddr = sym->addr;
+      return true;
+    }
+
+    if (sym->dimcount > 0)
+      cursor += sizeof(DimType) * sym->dimcount;
+    cursor += sizeof(SymbolType);
+  }
+  return false;
+}
+
+bool
+SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr)
+{
+  uint32_t index = 0;
+  const char* tgtfile;
+  *funcaddr = 0;
+  for (;;) {
+    // find (next) matching function
+    if (debug_syms_) {
+      getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function, funcaddr, index);
+    }
+    else {
+      getFunctionAddress<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, function, funcaddr, index);
+    }
+
+    if (index >= debug_info_->num_syms)
+      return false;
+
+    // verify that this function is defined in the apprpriate file
+    tgtfile = LookupFile(*funcaddr);
+    if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
+      break;
+    index++;
+  }
+  assert(index < debug_info_->num_syms);
+
+  // now find the first line in the function where we can "break" on
+  for (index = 0; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
+    /* nothing */;
+
+  if (index >= debug_info_->num_lines)
+    return false;
+
+  *funcaddr = debug_lines_[index].addr;
+  return true;
+}
+
+bool
+SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr)
+{
+  /* Find a suitable "breakpoint address" close to the indicated line (and in
+  * the specified file). The address is moved up to the next "breakable" line
+  * if no "breakpoint" is available on the specified line. You can use function
+  * LookupLine() to find out at which precise line the breakpoint was set.
+  *
+  * The filename comparison is strict (case sensitive and path sensitive).
+  */
+  *addr = 0;
+
+  uint32_t bottomaddr, topaddr;
+  uint32_t file;
+  uint32_t index = 0;
+  for (file = 0; file < debug_info_->num_files; file++) {
+    // find the (next) matching instance of the file
+    if (debug_files_[file].name >= debug_names_section_->size ||
+      strcmp(debug_names_ + debug_files_[file].name, filename) != 0)
+    {
+      continue;
+    }
+
+    // get address range for the current file
+    bottomaddr = debug_files_[file].addr;
+    topaddr = (file + 1 < debug_info_->num_files) ? debug_files_[file + 1].addr : (uint32_t)-1;
+
+    // go to the starting address in the line table
+    while (index < debug_info_->num_lines && debug_lines_[index].addr < bottomaddr)
+      index++;
+
+    // browse until the line is found or until the top address is exceeded
+    while (index < debug_info_->num_lines &&
+      debug_lines_[index].line < line &&
+      debug_lines_[index].addr < topaddr)
+    {
+      index++;
+    }
+
+    if (index >= debug_info_->num_lines)
+      return false;
+    if (debug_lines_[index].line >= line)
+      break;
+
+    // if not found (and the line table is not yet exceeded) try the next
+    // instance of the same file (a file may appear twice in the file table)
+  }
+  if (file >= debug_info_->num_files)
+    return false;
+
+  assert(index < debug_info_->num_lines);
+  *addr = debug_lines_[index].addr;
+  return true;
+}

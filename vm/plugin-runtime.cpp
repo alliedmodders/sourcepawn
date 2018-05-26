@@ -566,3 +566,19 @@ PluginRuntime::GetFileName(size_t index)
 {
   return image_->GetFileName(index);
 }
+
+int
+PluginRuntime::LookupFunctionAddress(const char* function, const char* file, ucell_t* addr)
+{
+  if (!image_->LookupFunctionAddress(function, file, addr))
+    return SP_ERROR_NOT_FOUND;
+  return SP_ERROR_NONE;
+}
+
+int
+PluginRuntime::LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr)
+{
+  if (!image_->LookupLineAddress(line, file, addr))
+    return SP_ERROR_NOT_FOUND;
+  return SP_ERROR_NONE;
+}
