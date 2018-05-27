@@ -41,7 +41,7 @@ class Compiler : public CompilerBase
   friend class OutOfBoundsErrorPath;
 
  public:
-  Compiler(PluginRuntime* rt, cell_t pcode_offs);
+  Compiler(PluginRuntime* rt, MethodInfo* method);
   ~Compiler();
 
   bool visitLOAD(PawnReg dest, cell_t srcaddr) override;

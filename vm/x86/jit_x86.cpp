@@ -70,8 +70,8 @@ OpToCondition(CompareOp op)
   }
 }
 
-Compiler::Compiler(PluginRuntime* rt, cell_t pcode_offs)
- : CompilerBase(rt, pcode_offs)
+Compiler::Compiler(PluginRuntime* rt, MethodInfo* method)
+ : CompilerBase(rt, method)
 {
 }
 

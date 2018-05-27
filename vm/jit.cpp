@@ -35,31 +35,28 @@ using namespace SourcePawn;
 
 #define __ masm.
 
-CompilerBase::CompilerBase(PluginRuntime* rt, cell_t pcode_offs)
+CompilerBase::CompilerBase(PluginRuntime* rt, MethodInfo* method)
  : env_(Environment::get()),
    rt_(rt),
    context_(rt->GetBaseContext()),
    image_(rt_->image()),
+   method_info_(method),
    error_(SP_ERROR_NONE),
-   pcode_start_(pcode_offs),
-   code_start_(reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_)),
+   pcode_start_(0),
+   code_start_(nullptr),
    op_cip_(nullptr),
-   code_end_(reinterpret_cast<const cell_t*>(rt_->code().bytes + rt_->code().length)),
-   jump_map_(nullptr)
+   code_end_(nullptr)
 {
-  size_t nmaxops = rt_->code().length / sizeof(cell_t) + 1;
-  jump_map_ = new Label[nmaxops];
 }
 
 CompilerBase::~CompilerBase()
 {
-  delete [] jump_map_;
 }
 
 CompiledFunction*
 CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err)
 {
-  Compiler cc(cx->runtime(), method->pcode_offset());
+  Compiler cc(cx->runtime(), method);
 
   CompiledFunction* fun = cc.emit();
   if (!fun) {
@@ -74,6 +71,19 @@ CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err)
 CompiledFunction*
 CompilerBase::emit()
 {
+  graph_ = method_info_->ValidateWithGraph();
+  if (!graph_) {
+    reportError(method_info_->validationError());
+    return nullptr;
+  }
+
+  pcode_start_ = method_info_->pcode_offset();
+  code_start_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_);
+  code_end_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + rt_->code().length);
+
+  size_t nmaxops = rt_->code().length / sizeof(cell_t) + 1;
+  jump_map_ = ke::MakeUnique<Label[]>(nmaxops);
+
   PcodeReader<CompilerBase> reader(rt_, pcode_start_, this);
 
 #if defined JIT_SPEW
@@ -232,12 +242,9 @@ CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addr
   if (!method)
     return SP_ERROR_INVALID_ADDRESS;
 
-  int err = method->Validate();
-  if (err != SP_ERROR_NONE)
-    return err;
-
   CompiledFunction* fn = method->jit();
   if (!fn) {
+    int err;
     fn = Compile(cx, method, &err);
     if (!fn)
       return err;

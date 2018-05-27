@@ -26,6 +26,7 @@
 #include "outofline-asm.h"
 #include "pcode-visitor.h"
 #include "compiled-function.h"
+#include "control-flow.h"
 
 namespace sp {
 
@@ -56,7 +57,7 @@ class CompilerBase : public PcodeVisitor
   friend class ErrorPath;
 
  public:
-  CompilerBase(PluginRuntime* rt, cell_t pcode_offs);
+  CompilerBase(PluginRuntime* rt, MethodInfo* method);
   virtual ~CompilerBase();
 
   static CompiledFunction* Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err);
@@ -105,6 +106,8 @@ class CompilerBase : public PcodeVisitor
   PluginContext* context_;
   LegacyImage* image_;
   PoolScope scope_;
+  ke::RefPtr<MethodInfo> method_info_;
+  ke::RefPtr<ControlFlowGraph> graph_;
   int error_;
   uint32_t pcode_start_;
   const cell_t* code_start_;
@@ -113,7 +116,7 @@ class CompilerBase : public PcodeVisitor
 
   MacroAssembler masm;
 
-  Label* jump_map_;
+  ke::UniquePtr<Label[]> jump_map_;
 
   ke::Vector<OutOfLinePath*> ool_paths_;
 

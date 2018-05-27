@@ -45,7 +45,8 @@ void
 MethodInfo::InternalValidate()
 {
   MethodVerifier verifier(rt_, pcode_offset_);
-  if (!verifier.verify())
+  graph_ = verifier.verify();
+  if (!graph_)
     validation_error_ = verifier.error();
 
   checked_ = true;

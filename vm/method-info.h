@@ -15,6 +15,7 @@
 
 #include <sp_vm_types.h>
 #include <amtl/am-refcounting.h>
+#include "control-flow.h"
 
 namespace sp {
 
@@ -28,8 +29,19 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
   ~MethodInfo();
 
   int Validate() {
-    if (!checked_)
+    if (!checked_) {
       InternalValidate();
+      graph_ = nullptr;
+    }
+    return validation_error_;
+  }
+  ke::RefPtr<ControlFlowGraph> ValidateWithGraph() {
+    if (!checked_ || !graph_)
+      InternalValidate();
+    return graph_.take();
+  }
+
+  int validationError() const {
     return validation_error_;
   }
 
@@ -49,6 +61,7 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
   PluginRuntime* rt_;
   uint32_t pcode_offset_;
   ke::AutoPtr<CompiledFunction> jit_;
+  ke::RefPtr<ControlFlowGraph> graph_;
 
   bool checked_;
   int validation_error_;

@@ -438,12 +438,6 @@ PluginContext::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
     return false;
   }
 
-  int err = method->Validate();
-  if (err != SP_ERROR_NONE) {
-    ReportErrorNumber(err);
-    return false;
-  }
-
   /* Save our previous state. */
   cell_t save_sp = sp_;
   cell_t save_hp = hp_;
