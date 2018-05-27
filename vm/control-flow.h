@@ -25,7 +25,12 @@ class ControlFlowGraph;
 
 enum class BlockEnd {
   Unknown,
+
+  // The end cip for the block is the final instruction.
   Insn,
+
+  // The end cip for the block is not part of the block; instead there is an
+  // implicit jump.
   Jump
 };
 
