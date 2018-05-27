@@ -39,8 +39,14 @@ GraphBuilder::build()
   if (!scan())
     return nullptr;
 
-  assert(graph_);
   assert(!error_code_);
+
+  graph_->computeOrdering();
+  graph_->computeDominance();
+  if (!graph_->computeLoopHeaders()) {
+    error(SP_ERROR_INVALID_INSTRUCTION);
+    return nullptr;
+  }
   return graph_;
 }
 
@@ -128,6 +134,7 @@ GraphBuilder::scanFlow() -> FlowState
     RefPtr<Block> block = getOrAddBlock(cip_);
     current_->endWithJump(cip_, block);
     current_ = nullptr;
+    enqueueBlock(block);
     return FlowState::Ended;
   }
 

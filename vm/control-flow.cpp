@@ -13,6 +13,7 @@
 
 #include "control-flow.h"
 #include "opcodes.h"
+#include <amtl/am-string.h>
 
 namespace sp {
 
@@ -28,23 +29,239 @@ ControlFlowGraph::ControlFlowGraph(PluginRuntime* rt, const uint8_t* start_offse
 ControlFlowGraph::~ControlFlowGraph()
 {
   // This is necessary because blocks contain cycles between each other.
-  for (const auto& block : blocks_)
-    block->unlink();
+  auto iter = blocks_.begin();
+  while (iter != blocks_.end()) {
+    Block* block = *iter;
+    iter = blocks_.erase(iter);
+    block->Release();
+  }
 }
 
-ke::RefPtr<Block>
+RefPtr<Block>
 ControlFlowGraph::newBlock(const uint8_t* start)
 {
-  ke::RefPtr<Block> block = new Block(*this, start);
+  Block* block = new Block(*this, start);
+  block->AddRef();
   blocks_.append(block);
   return block;
+}
+
+// By default, we want to store blocks in reverse postorder, which is the
+// easiest form for forward flow analysis.
+void
+ControlFlowGraph::computeOrdering()
+{
+  // Note, the following graphs might look similar but they are *not*
+  // ambiguous:
+  //
+  // A -> B -> D -> E
+  // A -> C
+  // B -> C
+  //
+  // And its mirror,
+  //
+  // A -> C -> E
+  // A -> B -> D
+  // B -> C
+  //
+  // In both cases the correct traversal order is A, B, C, D, E. The only way
+  // to get this is to compute a post-order traversal, left-to-right and
+  // reverse it. This will guarantee the critical condition that a predecessor
+  // always appears before its successor in the reverse postordering, unless
+  // there is a backedge. (In fact, this will be our definition of a backedge).
+  struct Entry {
+    // All blocks will stay alive during this time, so we don't store RefPtrs.
+    Block* block;
+    size_t index;
+  };
+  Vector<Entry> work;
+
+#if !defined(NDEBUG)
+  size_t block_count = blocks_.length();
+#endif
+
+  // Clear the old block list.
+  auto iter = blocks_.begin();
+  while (iter != blocks_.end())
+    iter = blocks_.erase(iter);
+
+  Vector<Block*> postordering;
+
+  // Compute the postorder traversal.
+  newEpoch();
+  work.append(Entry{entry_, 0});
+  while (!work.empty()) {
+    Block* block = work.back().block;
+    size_t successor_index = work.back().index;
+
+    if (successor_index >= block->successors().length()) {
+      postordering.append(block);
+      work.pop();
+      continue;
+    }
+    work.back().index++;
+
+    Block* child = block->successors()[successor_index];
+    if (child->visited())
+      continue;
+    child->setVisited();
+
+    if (!child->successors().empty())
+      work.append(Entry{child, 0});
+    else
+      postordering.append(child);
+  }
+  assert(postordering.length() == block_count);
+
+  // Add and number everything in RPO.
+  uint32_t id = 1;
+  for (size_t i = postordering.length() - 1; i < postordering.length(); i--) {
+    Block* block = postordering[i];
+
+    assert(!block->id());
+    block->setId(id++);
+    blocks_.append(block);
+  }
+}
+
+// "A Simple, Fast Dominance Algorithm" by Keith D. Cooper, Timothy J. HArvey,
+// and Ken Kennedy.
+//
+// Iterative solution with a two-finger intersection algorithm. Note the paper
+// uses postordered numbers, whereas we use RPO. The id comparisons are
+// therefore inverted.
+static Block*
+IntersectDominators(Block* block1, Block* block2)
+{
+  Block* finger1 = block1;
+  Block* finger2 = block2;
+  while (finger1 != finger2) {
+    while (finger1->id() > finger2->id())
+      finger1 = finger1->idom();
+    while (finger2->id() > finger1->id())
+      finger2 = finger2->idom();
+  }
+  return finger1;
+}
+
+void
+ControlFlowGraph::computeDominance()
+{
+  // The entry block dominates itself.
+  entry_->setImmediateDominator(entry_);
+
+  // Compute immediate dominators. This is technically an O(n^2) algorithm,
+  // with a worst case being that every block is a join point. In practice
+  // it is nowhere near that bad. In addition, since we traverse the graph
+  // in RPO, the maximum number of iterations is 2.
+  //
+  // This is not technically true, if the graph is irreducible. Irreducible
+  // graphs will fail to validate in the computeLoopHeaders pass.
+  bool changed = false;
+  do {
+    changed = false;
+
+    for (auto iter = rpoBegin(); iter != rpoEnd(); iter++) {
+      Block* block = *iter;
+
+      if (block->predecessors().empty()) {
+        // There is only one entry block.
+        assert(block == entry_);
+        continue;
+      }
+
+      // Pick a candidate for this node's dominator.
+      Block* idom = nullptr;
+      for (size_t i = 0; i < block->predecessors().length(); i++) {
+        Block* pred = block->predecessors()[i];
+        if (!pred->idom())
+          continue;
+        if (idom)
+          idom = IntersectDominators(idom, pred);
+        else
+          idom = pred;
+        assert(idom);
+      }
+
+      // We should always get one candidate dominator, since RPO order
+      // guarantees we've processed at least one predecessor.
+      assert(idom);
+
+      if (idom != block->idom()) {
+        block->setImmediateDominator(idom);
+        changed = true;
+      }
+    }
+  } while (changed);
+
+  // Build the dominator tree, walking the graph bottom-up.
+  for (auto iter = poBegin(); iter != poEnd(); iter++) {
+    Block* block = *iter;
+    Block* idom = block->idom();
+
+    // Only the entry should have itself as an immediate dominator.
+    if (block == idom) {
+      assert(block == entry_);
+      continue;
+    }
+
+    idom->addImmediatelyDominated(block);
+  }
+  assert(entry_->numDominated() == blocks_.length());
+
+  // Process the dominator tree. Note that it is acyclic, so we do not need a
+  // visited marker. We walk the tree and assign a pre-order index to each
+  // dominator.
+  Vector<Block*> work;
+  work.append(entry_);
+
+  uint32_t id = 0;
+  while (!work.empty()) {
+    Block* block = work.popCopy();
+
+    // We should never visit the same block twice.
+    assert(!block->domTreeId());
+
+    block->setDomTreeId(id++);
+    for (const auto& child : block->immediatelyDominated())
+      work.append(child);
+  }
+
+#if !defined(NDEBUG)
+  // Every node should have an index in the dominator tree.
+  for (auto iter = rpoBegin(); iter != rpoEnd(); iter++)
+    assert(iter->domTreeId() || *iter == entry_);
+#endif
+}
+
+bool
+ControlFlowGraph::computeLoopHeaders()
+{
+  // This algorithm is O(E), where E is the number of edges in the graph.
+  for (auto iter = rpoBegin(); iter != rpoEnd(); iter++) {
+    Block* block = *iter;
+    for (const auto& child : iter->successors()) {
+      // Since we number blocks in RPO, any backedge will precede this block
+      // in the graph.
+      if (child->id() <= block->id()) {
+        child->setIsLoopHeader();
+
+        // If the loop header does not dominate the contained block, then
+        // the graph is not reducible. We want this to be invalid for now.
+        if (!child->dominates(block))
+          return false;
+      }
+    }
+  }
+  return true;
 }
 
 void
 ControlFlowGraph::dump(FILE* fp)
 {
-  for (const auto& block : blocks_) {
-    fprintf(fp, "Block %p:\n", block.get());
+  for (RpoIterator iter = rpoBegin(); iter != rpoEnd(); iter++) {
+    Block* block = *iter;
+    fprintf(fp, "Block %p (%d):\n", block, block->id());
     for (const auto& pred : block->predecessors())
       fprintf(fp, "  predecessor: %p\n", pred.get());
     for (const auto& child : block->successors())
@@ -66,11 +283,57 @@ ControlFlowGraph::dump(FILE* fp)
   }
 }
 
+static AString
+MakeDotBlockname(Block* block)
+{
+  AString name;
+  name.format("block%d_%p", block->id(), block);
+  return name;
+}
+
+void
+ControlFlowGraph::dumpDot(FILE* fp)
+{
+  fprintf(fp, "digraph cfg {\n");
+  for (RpoIterator iter = rpoBegin(); iter != rpoEnd(); iter++) {
+    Block* block = *iter;
+    for (const auto& successor : block->successors()) {
+      fprintf(fp, "  %s -> %s;\n",
+        MakeDotBlockname(block).chars(),
+        MakeDotBlockname(successor).chars());
+    }
+  }
+  fprintf(fp, "}\n");
+}
+
+void
+ControlFlowGraph::dumpDomTreeDot(FILE* fp)
+{
+  fprintf(fp, "digraph domtree {\n");
+
+  Vector<Block*> work;
+  work.append(entry_);
+  while (!work.empty()) {
+    Block* block = work.popCopy();
+    for (const auto& child : block->immediatelyDominated()) {
+      fprintf(fp, "  %s -> %s;\n",
+        MakeDotBlockname(block).chars(),
+        MakeDotBlockname(child).chars());
+      work.append(child);
+    }
+  }
+
+  fprintf(fp, "}\n");
+}
+
 Block::Block(ControlFlowGraph& graph, const uint8_t* start)
  : graph_(graph),
    start_(start),
    end_(nullptr),
    end_type_(BlockEnd::Unknown),
+   id_(0),
+   domtree_id_(0),
+   num_dominated_(1),
    epoch_(0)
 {
 }
@@ -110,10 +373,25 @@ Block::setVisited()
 }
 
 void
+Block::setImmediateDominator(Block* block)
+{
+  idom_ = block;
+}
+
+void
+Block::addImmediatelyDominated(Block* child)
+{
+  immediately_dominated_.append(child);
+  num_dominated_ += child->numDominated();
+}
+
+void
 Block::unlink()
 {
   predecessors_.clear();
   successors_.clear();
+  idom_ = nullptr;
+  immediately_dominated_.clear();
 }
 
 } // namespace sp
