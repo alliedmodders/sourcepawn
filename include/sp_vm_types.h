@@ -111,7 +111,7 @@ namespace SourcePawn
 	class IPluginContext;
 	class IVirtualMachine;
 	class IProfiler;
-  class IErrorReport;
+	class IErrorReport;
 };
 
 struct sp_context_s;
