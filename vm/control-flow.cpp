@@ -145,7 +145,7 @@ IntersectDominators(Block* block1, Block* block2)
 }
 
 void
-ControlFlowGraph::computeDominators()
+ControlFlowGraph::computeDominance()
 {
   // The entry block dominates itself.
   entry_->setImmediateDominator(entry_);
@@ -193,6 +193,45 @@ ControlFlowGraph::computeDominators()
       }
     }
   } while (changed);
+
+  // Build the dominator tree, walking the graph bottom-up.
+  for (auto iter = poBegin(); iter != poEnd(); iter++) {
+    Block* block = *iter;
+    Block* idom = block->idom();
+
+    // Only the entry should have itself as an immediate dominator.
+    if (block == idom) {
+      assert(block == entry_);
+      continue;
+    }
+
+    idom->addImmediatelyDominated(block);
+  }
+  assert(entry_->numDominated() == blocks_.length());
+
+  // Process the dominator tree. Note that it is acyclic, so we do not need a
+  // visited marker. We walk the tree and assign a pre-order index to each
+  // dominator.
+  Vector<Block*> work;
+  work.append(entry_);
+
+  uint32_t id = 0;
+  while (!work.empty()) {
+    Block* block = work.popCopy();
+
+    // We should never visit the same block twice.
+    assert(!block->domTreeId());
+
+    block->setDomTreeId(id++);
+    for (const auto& child : block->immediatelyDominated())
+      work.append(child);
+  }
+
+#if !defined(NDEBUG)
+  // Every node should have an index in the dominator tree.
+  for (auto iter = rpoBegin(); iter != rpoEnd(); iter++)
+    assert(iter->domTreeId() || *iter == entry_);
+#endif
 }
 
 void
@@ -245,12 +284,34 @@ ControlFlowGraph::dumpDot(FILE* fp)
   fprintf(fp, "}\n");
 }
 
+void
+ControlFlowGraph::dumpDomTreeDot(FILE* fp)
+{
+  fprintf(fp, "digraph domtree {\n");
+
+  Vector<Block*> work;
+  work.append(entry_);
+  while (!work.empty()) {
+    Block* block = work.popCopy();
+    for (const auto& child : block->immediatelyDominated()) {
+      fprintf(fp, "  %s -> %s;\n",
+        MakeDotBlockname(block).chars(),
+        MakeDotBlockname(child).chars());
+      work.append(child);
+    }
+  }
+
+  fprintf(fp, "}\n");
+}
+
 Block::Block(ControlFlowGraph& graph, const uint8_t* start)
  : graph_(graph),
    start_(start),
    end_(nullptr),
    end_type_(BlockEnd::Unknown),
    id_(0),
+   domtree_id_(0),
+   num_dominated_(1),
    epoch_(0)
 {
 }
@@ -296,11 +357,19 @@ Block::setImmediateDominator(Block* block)
 }
 
 void
+Block::addImmediatelyDominated(Block* child)
+{
+  immediately_dominated_.append(child);
+  num_dominated_ += child->numDominated();
+}
+
+void
 Block::unlink()
 {
   predecessors_.clear();
   successors_.clear();
   idom_ = nullptr;
+  immediately_dominated_.clear();
 }
 
 } // namespace sp

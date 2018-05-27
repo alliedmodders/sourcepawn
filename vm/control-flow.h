@@ -71,12 +71,33 @@ class Block :
   Block* idom() const {
     return idom_.get();
   }
+  uint32_t domTreeId() const {
+    return domtree_id_;
+  }
+  void setDomTreeId(uint32_t id) {
+    domtree_id_ = id;
+  }
+  uint32_t numDominated() const {
+    return num_dominated_;
+  }
+  const ke::Vector<ke::RefPtr<Block>>& immediatelyDominated() const {
+    return immediately_dominated_;
+  }
+  bool dominates(const Block* other) const {
+    // The dominator tree is numbered in pre-order, and num_dominated_ is total
+    // number of children in our position in the tree. Therefore, we can check
+    // if we dominate a node by seeing if its index is within the range of
+    // indices under this node.
+    return other->domtree_id_ >= domtree_id_ &&
+           other->domtree_id_ < (domtree_id_ + num_dominated_);
+  }
 
   void addTarget(Block* target);
   void endWithJump(const uint8_t* cip, Block* target);
   void end(const uint8_t* end_at, BlockEnd end_type);
 
   void setImmediateDominator(Block* block);
+  void addImmediatelyDominated(Block* block);
 
   bool visited() const;
   void setVisited();
@@ -99,8 +120,13 @@ class Block :
   // Reverse post-order index.
   uint32_t id_;
 
-  // Immediate dominator.
+  // Immediate dominator, and list of dominated blocks.
   ke::RefPtr<Block> idom_;
+  ke::Vector<ke::RefPtr<Block>> immediately_dominated_;
+  // Dominator tree index.
+  uint32_t domtree_id_;
+  // The number of nodes this block dominates, including itself.
+  uint32_t num_dominated_;
 
   // Counter for fast already-visited testing.
   uint32_t epoch_;
@@ -125,7 +151,7 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
   void computeOrdering();
 
   // Compute dominance. This should be called after the graph is finalized.
-  void computeDominators();
+  void computeDominance();
 
   // Iterators for blocks - reverse postorder, and postorder.
   RpoIterator rpoBegin() {
@@ -152,6 +178,7 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
 
   void dump(FILE* fp);
   void dumpDot(FILE* fp);
+  void dumpDomTreeDot(FILE* fp);
 
  private:
   PluginRuntime* rt_;

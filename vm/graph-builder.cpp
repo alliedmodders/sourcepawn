@@ -42,6 +42,7 @@ GraphBuilder::build()
   assert(!error_code_);
 
   graph_->computeOrdering();
+  graph_->computeDominance();
   return graph_;
 }
 
