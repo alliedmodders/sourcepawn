@@ -47,7 +47,7 @@ void InvokeDebugger(PluginContext* ctx, const IErrorReport* report)
   // We might stay in the debugger callback for a while,
   // so don't let the watchdog hit immediately after
   // continueing with execution.
-  ke::SaveAndSet<bool>(&Environment::get()->watchdog()->ignore_timeout_, true);
+  ke::SaveAndSet<bool> disableWatchdog(&Environment::get()->watchdog()->ignore_timeout_, true);
 
   // Fill in the debug info struct.
   sp_debug_break_info_t dbginfo;
