@@ -807,25 +807,39 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
   uint32_t index = 0;
   const char* tgtfile;
   *funcaddr = 0;
-  for (;;) {
-    // find (next) matching function
-    if (debug_syms_) {
-      getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function, funcaddr, index);
-    }
-    else {
-      getFunctionAddress<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, function, funcaddr, index);
-    }
+  if (rtti_methods_) {
+    for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
+      const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+      const char* name = names_ + method->name;
+      if (strcmp(name, function) != 0)
+        continue;
 
-    if (index >= debug_info_->num_syms)
-      return false;
+      *funcaddr = method->pcode_start;
+      // verify that this function is defined in the appropriate file
+      tgtfile = LookupFile(*funcaddr);
+      if (tgtfile != nullptr && !strcmp(file, tgtfile))
+        break;
+    }
+  } else {
+    for (;;) {
+      // find (next) matching function
+      if (debug_syms_) {
+        getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function, funcaddr, index);
+      } else {
+        getFunctionAddress<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, function, funcaddr, index);
+      }
 
-    // verify that this function is defined in the apprpriate file
-    tgtfile = LookupFile(*funcaddr);
-    if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
-      break;
-    index++;
+      if (index >= debug_info_->num_syms)
+        return false;
+
+      // verify that this function is defined in the appropriate file
+      tgtfile = LookupFile(*funcaddr);
+      if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
+        break;
+      index++;
+    }
+    assert(index < debug_info_->num_syms);
   }
-  assert(index < debug_info_->num_syms);
 
   // now find the first line in the function where we can "break" on
   for (index = 0; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
