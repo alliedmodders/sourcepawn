@@ -35,6 +35,8 @@
 #include <am-vector.h>
 #include <string.h>
 
+namespace sp {
+
 struct Register
 {
   const char* name() const {
@@ -1102,6 +1104,8 @@ class Assembler : public AssemblerBase
   ke::Vector<uint32_t> external_refs_;
   ke::Vector<uint32_t> local_refs_;
 };
+
+} // namespace sp
 
 #endif // _include_sourcepawn_assembler_x86_h__
 

@@ -30,4 +30,8 @@
  */
 #include "assembler-x86.h"
 
+namespace sp {
+
 CPUFeatures Assembler::X86Features;
+
+} // namespace sp
