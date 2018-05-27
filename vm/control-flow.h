@@ -91,6 +91,12 @@ class Block :
     return other->domtree_id_ >= domtree_id_ &&
            other->domtree_id_ < (domtree_id_ + num_dominated_);
   }
+  void setIsLoopHeader() {
+    is_loop_header_ = true;
+  }
+  bool isLoopHeader() const {
+    return is_loop_header_;
+  }
 
   void addTarget(Block* target);
   void endWithJump(const uint8_t* cip, Block* target);
@@ -128,6 +134,9 @@ class Block :
   // The number of nodes this block dominates, including itself.
   uint32_t num_dominated_;
 
+  // Set to true if this is a loop header.
+  bool is_loop_header_;
+
   // Counter for fast already-visited testing.
   uint32_t epoch_;
 };
@@ -152,6 +161,9 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
 
   // Compute dominance. This should be called after the graph is finalized.
   void computeDominance();
+
+  // Compute validity of loops.
+  bool computeLoopHeaders();
 
   // Iterators for blocks - reverse postorder, and postorder.
   RpoIterator rpoBegin() {

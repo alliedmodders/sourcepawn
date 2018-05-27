@@ -234,6 +234,28 @@ ControlFlowGraph::computeDominance()
 #endif
 }
 
+bool
+ControlFlowGraph::computeLoopHeaders()
+{
+  // This algorithm is O(E), where E is the number of edges in the graph.
+  for (auto iter = rpoBegin(); iter != rpoEnd(); iter++) {
+    Block* block = *iter;
+    for (const auto& child : iter->successors()) {
+      // Since we number blocks in RPO, any backedge will precede this block
+      // in the graph.
+      if (child->id() <= block->id()) {
+        child->setIsLoopHeader();
+
+        // If the loop header does not dominate the contained block, then
+        // the graph is not reducible. We want this to be invalid for now.
+        if (!child->dominates(block))
+          return false;
+      }
+    }
+  }
+  return true;
+}
+
 void
 ControlFlowGraph::dump(FILE* fp)
 {

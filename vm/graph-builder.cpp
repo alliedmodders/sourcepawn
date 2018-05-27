@@ -43,6 +43,10 @@ GraphBuilder::build()
 
   graph_->computeOrdering();
   graph_->computeDominance();
+  if (!graph_->computeLoopHeaders()) {
+    error(SP_ERROR_INVALID_INSTRUCTION);
+    return nullptr;
+  }
   return graph_;
 }
 
