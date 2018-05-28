@@ -20,15 +20,27 @@ CompiledFunction::CompiledFunction(const CodeChunk& code,
                                    cell_t pcode_offs,
                                    FixedArray<LoopEdge>* edges,
                                    FixedArray<CipMapEntry>* cipmap)
-  : code_(code),
-    code_offset_(pcode_offs),
-    edges_(edges),
-    cip_map_(cipmap)
+ : code_(code),
+   code_offset_(pcode_offs),
+   edges_(edges),
+   cip_map_(cipmap),
+   cip_map_sorted_(false)
 {
 }
 
 CompiledFunction::~CompiledFunction()
 {
+}
+
+static int cip_map_entry_sort_cmp(const void* a1, const void* a2)
+{
+  const CipMapEntry* c1 = reinterpret_cast<const CipMapEntry*>(a1);
+  const CipMapEntry* c2 = reinterpret_cast<const CipMapEntry*>(a2);
+  if (c1->pcoffs < c2->pcoffs)
+    return -1;
+  if (c1->pcoffs == c2->pcoffs)
+    return 0;
+  return 1;
 }
 
 static int cip_map_entry_cmp(const void* a1, const void* aEntry)
@@ -51,6 +63,14 @@ CompiledFunction::FindCipByPc(void* pc)
   uint32_t pcoffs = intptr_t(pc) - intptr_t(code_.address());
   if (pcoffs > code_.bytes())
     return kInvalidCip;
+
+  if (!cip_map_sorted_) {
+    qsort(cip_map_->buffer(),
+          cip_map_->length(),
+          sizeof(CipMapEntry),
+          cip_map_entry_sort_cmp);
+    cip_map_sorted_ = true;
+  }
 
   void* ptr = bsearch(
     (void*)(uintptr_t)pcoffs,

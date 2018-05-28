@@ -30,7 +30,7 @@ class MethodVerifier final
   typedef ke::Lambda<void(cell_t)> ExternalFuncRefCallback;
   void collectExternalFuncRefs(const ExternalFuncRefCallback& callback);
 
-  bool verify();
+  ke::RefPtr<ControlFlowGraph> verify();
 
   int error() const {
     return error_;

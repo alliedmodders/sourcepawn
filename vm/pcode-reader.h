@@ -18,6 +18,8 @@
 #include <smx/smx-v1-opcodes.h>
 #include <limits.h>
 #include "plugin-runtime.h"
+#include "control-flow.h"
+#include "opcodes.h"
 
 namespace sp {
 
@@ -42,10 +44,27 @@ class PcodeReader
     cip_ = code_ + (startOffset / sizeof(cell_t));
     stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
   }
+  PcodeReader(PluginRuntime* rt, Block* block, T* visitor)
+   : rt_(rt),
+     visitor_(visitor),
+     code_(nullptr),
+     cip_(nullptr),
+     stop_at_(nullptr)
+  {
+    auto& code = rt->code();
+    code_ = reinterpret_cast<const cell_t*>(code.bytes);
+    cip_ = reinterpret_cast<const cell_t*>(block->start());
 
+    const uint8_t* end = block->end();
+    if (block->endType() == BlockEnd::Insn)
+      end = NextInstruction(end);
+    stop_at_ = reinterpret_cast<const cell_t*>(end);
+  }
+
+  // We skip the first OP_PROC; it should be handled before parsing bytecode.
   void begin() {
-    assert(peekOpcode() == OP_PROC);
-    readCell();
+    if (peekOpcode() == OP_PROC)
+      readCell();
   }
 
   // Read the next opcode, return true on success, false otherwise.
@@ -589,22 +608,19 @@ class PcodeReader
       cell_t tableOffset = readCell();
 
       const cell_t* casetbl = code_ + (tableOffset / sizeof(cell_t));
-      assert(casetbl >= code_ && casetbl < stop_at_);
 
       const cell_t* table;
       cell_t ncases, defaultOffset;
       {
         ke::SaveAndSet<const cell_t*> saved_pos(&cip_, casetbl);
 
-#if !defined(NDEBUG)
-        cell_t op =
-#endif
-          readCell();
-        assert(op == OP_CASETBL);
+        assert((OPCODE)*cip_ == OP_CASETBL);
+        cip_++;
 
-        ncases = readCell();
-        defaultOffset = readCell();
-        table = getCells(ncases * 2);
+        ncases = *cip_++;
+        defaultOffset = *cip_++;
+        table = cip_;
+        cip_ += ncases * 2;
       }
 
       return visitor_->visitSWITCH(

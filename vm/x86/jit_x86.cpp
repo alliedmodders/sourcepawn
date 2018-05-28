@@ -70,8 +70,8 @@ OpToCondition(CompareOp op)
   }
 }
 
-Compiler::Compiler(PluginRuntime* rt, cell_t pcode_offs)
- : CompilerBase(rt, pcode_offs)
+Compiler::Compiler(PluginRuntime* rt, MethodInfo* method)
+ : CompilerBase(rt, method)
 {
 }
 
@@ -1001,8 +1001,18 @@ Compiler::visitHEAP(cell_t amount)
 bool
 Compiler::visitJUMP(cell_t offset)
 {
-  Label* target = labelAt(offset);
-  if (target->bound()) {
+  assert(block_->successors().length() == 1);
+
+  Block* successor = block_->successors()[0];
+  if (isNextBlock(successor)) {
+    // We'll visit this block next, and this terminates the block, so there's
+    // no need to emit a jump instruction.
+    assert(!isBackedge(successor));
+    return true;
+  }
+
+  Label* target = successor->label();
+  if (isBackedge(successor)) {
     __ jmp32(target);
     backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
   } else {
@@ -1014,43 +1024,49 @@ Compiler::visitJUMP(cell_t offset)
 bool
 Compiler::visitJcmp(CompareOp op, cell_t offset)
 {
-  Label* target = labelAt(offset);
-
+  ConditionCode cc;
   switch (op) {
-  case CompareOp::Zero:
-  case CompareOp::NotZero:
-  {
-    ConditionCode cc = (op == CompareOp::Zero) ? zero : not_zero;
-    __ testl(pri, pri);
-    if (target->bound()) {
-      __ j32(cc, target);
-      backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
-    } else {
-      __ j(cc, target);
-    }
-    break;
+    case CompareOp::Zero:
+    case CompareOp::NotZero:
+      cc = (op == CompareOp::Zero) ? zero : not_zero;
+      __ testl(pri, pri);
+      break;
+    case CompareOp::Eq:
+    case CompareOp::Neq:
+    case CompareOp::Sless:
+    case CompareOp::Sleq:
+    case CompareOp::Sgrtr:
+    case CompareOp::Sgeq:
+      cc = OpToCondition(op);
+      __ cmpl(pri, alt);
+      break;
+    default:
+      assert(false);
+      return false;
   }
 
-  case CompareOp::Eq:
-  case CompareOp::Neq:
-  case CompareOp::Sless:
-  case CompareOp::Sleq:
-  case CompareOp::Sgrtr:
-  case CompareOp::Sgeq:
-  {
-    ConditionCode cc = OpToCondition(op);
-    __ cmpl(pri, alt);
-    if (target->bound()) {
-      __ j32(cc, target);
-      backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
-    } else {
-      __ j(cc, target);
-    }
-    break;
+  assert(block_->successors().length() == 2);
+  Block* fallthrough = block_->successors()[0];
+  Block* target = block_->successors()[1];
+
+  assert(!isBackedge(fallthrough));
+
+  if (isBackedge(target)) {
+    __ j32(cc, target->label());
+    backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
+
+    if (!isNextBlock(fallthrough))
+      __ jmp(fallthrough->label());
+    return true;
   }
-  default:
-    assert(false);
-    break;
+
+  if (isNextBlock(target)) {
+    // Invert the condition so we can fallthrough to the target instead.
+    __ j(InvertConditionCode(cc), fallthrough->label());
+  } else {
+    __ j(cc, target->label());
+    if (!isNextBlock(fallthrough))
+      __ jmp(fallthrough->label());
   }
   return true;
 }
@@ -1384,20 +1400,23 @@ Compiler::visitSWITCH(cell_t defaultOffset,
                       const CaseTableEntry* cases,
                       size_t ncases)
 {
-  Label* defaultCase = labelAt(defaultOffset);
+  assert(block_->successors().length() == ncases + 1);
+  Block* defaultCase = block_->successors()[0];
 
   // Degenerate - 0 cases.
   if (!ncases) {
-    __ jmp(defaultCase);
+    if (!isNextBlock(defaultCase))
+      __ jmp(defaultCase->label());
     return true;
   }
 
   // Degenerate - 1 case.
   if (ncases == 1) {
-    Label* maybe = labelAt(cases[0].address);
+    Block* maybe = block_->successors()[1];
     __ cmpl(pri, cases[0].value);
-    __ j(equal, maybe);
-    __ jmp(defaultCase);
+    __ j(equal, maybe->label());
+    if (!isNextBlock(defaultCase))
+      __ jmp(defaultCase->label());
     return true;
   }
 
@@ -1429,7 +1448,7 @@ Compiler::visitSWITCH(cell_t defaultOffset,
 
   cell_t high = abs(cases[0].value - cases[ncases - 1].value);
   __ cmpl(tmp, high);
-  __ j(above, defaultCase);
+  __ j(above, defaultCase->label());
 
   if (sequential) {
     // Optimized table version. The tomfoolery below is because we only have
@@ -1444,17 +1463,17 @@ Compiler::visitSWITCH(cell_t defaultOffset,
 
     __ bind(&table);
     for (size_t i = 0; i < ncases; i++) {
-      Label* label = labelAt(cases[i].address);
-      __ emit_absolute_address(label);
+      Block* target = block_->successors()[i + 1];
+      __ emit_absolute_address(target->label());
     }
   } else {
     // Slower version. Go through each case and generate a check.
     for (size_t i = 0; i < ncases; i++) {
-      Label* label = labelAt(cases[i].address);
+      Block* target = block_->successors()[i + 1];
       __ cmpl(pri, cases[i].value);
-      __ j(equal, label);
+      __ j(equal, target->label());
     }
-    __ jmp(defaultCase);
+    __ jmp(defaultCase->label());
   }
   return true;
 }

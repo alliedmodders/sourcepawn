@@ -35,6 +35,8 @@
 #include <am-vector.h>
 #include <string.h>
 
+namespace sp {
+
 struct Register
 {
   const char* name() const {
@@ -1102,6 +1104,34 @@ class Assembler : public AssemblerBase
   ke::Vector<uint32_t> external_refs_;
   ke::Vector<uint32_t> local_refs_;
 };
+
+static inline ConditionCode
+InvertConditionCode(ConditionCode cc)
+{
+  switch (cc) {
+    case overflow: return no_overflow;
+    case no_overflow: return overflow;
+    case below: return not_below;
+    case not_below: return below;
+    case equal: return not_equal;
+    case not_equal: return equal;
+    case not_above: return above;
+    case above: return not_above;
+    case negative: return not_negative;
+    case not_negative: return negative;
+    case even_parity: return odd_parity;
+    case odd_parity: return even_parity;
+    case less: return not_less;
+    case not_less: return less;
+    case not_greater: return greater;
+    case greater: return not_greater;
+    default:
+      assert(false);
+      return zero;
+  }
+}
+
+} // namespace sp
 
 #endif // _include_sourcepawn_assembler_x86_h__
 

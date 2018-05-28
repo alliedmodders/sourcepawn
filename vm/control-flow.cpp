@@ -268,16 +268,18 @@ ControlFlowGraph::dump(FILE* fp)
       fprintf(fp, "  successor: %p\n", child.get());
     fprintf(fp, "  ---\n");
     const uint8_t* cip = block->start();
-    while (true) {
-      if (block->endType() == BlockEnd::Jump && cip >= block->end())
-        break;
+    while (cip < block->end()) {
       SpewOpcode(fp,
                  rt_,
                  reinterpret_cast<const cell_t*>(block->start()),
                  reinterpret_cast<const cell_t*>(cip));
       cip = NextInstruction(cip);
-      if (block->endType() == BlockEnd::Insn && cip > block->end())
-        break;
+    }
+    if (block->endType() == BlockEnd::Insn) {
+      SpewOpcode(fp,
+                 rt_,
+                 reinterpret_cast<const cell_t*>(block->start()),
+                 reinterpret_cast<const cell_t*>(cip));
     }
     fprintf(fp, "\n");
   }

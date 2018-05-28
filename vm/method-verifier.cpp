@@ -43,50 +43,40 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
   stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
 }
 
-bool
+ke::RefPtr<ControlFlowGraph>
 MethodVerifier::verify()
 {
   if (!IsAligned(startOffset_, sizeof(cell_t))) {
     reportError(SP_ERROR_INVALID_ADDRESS);
-    return false;
+    return nullptr;
   }
 
   GraphBuilder gb(rt_, startOffset_);
   graph_ = gb.build();
   if (!graph_) {
     reportError(gb.error_code());
-    return false;
+    return nullptr;
   }
 
   method_ = code_ + (startOffset_ / sizeof(cell_t));
-  cip_ = method_;
 
-  {
-    cell_t op = readCell();
-    if (op != OP_PROC) {
-      reportError(SP_ERROR_INVALID_INSTRUCTION);
-      return false;
+  for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
+    Block* block = *iter;
+    cip_ = reinterpret_cast<const cell_t*>(block->start());
+    while (cip_ < reinterpret_cast<const cell_t*>(block->end())) {
+      OPCODE op = (OPCODE)*cip_++;
+      if (!verifyOp(op))
+        return nullptr;
     }
   }
-
-  while (more()) {
-    insn_ = cip_;
-
-    OPCODE op = (OPCODE)*cip_++;
-    if (op == OP_PROC || op == OP_ENDPROC)
-      break;
-
-    if (!verifyOp(op))
-      return false;
-  }
-
-  return true;
+  return graph_;
 }
 
 bool
 MethodVerifier::verifyOp(OPCODE op)
 {
   switch (op) {
+  case OP_PROC:
   case OP_NOP:
   case OP_BREAK:
   case OP_LOAD_I:

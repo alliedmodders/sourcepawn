@@ -134,7 +134,6 @@ GraphBuilder::scanFlow() -> FlowState
     RefPtr<Block> block = getOrAddBlock(cip_);
     current_->endWithJump(cip_, block);
     current_ = nullptr;
-    enqueueBlock(block);
     return FlowState::Ended;
   }
 
@@ -185,7 +184,6 @@ GraphBuilder::scanFlow() -> FlowState
       }
 
       RefPtr<Block> target_block = getOrAddBlock(target);
-      enqueueBlock(target_block);
 
       // If this is an unconditional jump, there is only one target, so end.
       if (op == OP_JUMP) {
@@ -210,8 +208,6 @@ GraphBuilder::scanFlow() -> FlowState
       current_->addTarget(target_block);
       current_->end(insn, BlockEnd::Insn);
       current_ = nullptr;
-      
-      enqueueBlock(next_block);
       return FlowState::Ended;
     }
 
@@ -255,8 +251,6 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState
     assert(jump_targets_.test(getCellNumber(target)));
 
     RefPtr<Block> target_block = getOrAddBlock(target);
-    enqueueBlock(target_block);
-
     current_->addTarget(target_block);
   }
 
@@ -272,6 +266,7 @@ GraphBuilder::getOrAddBlock(const uint8_t* cip)
   uint32_t cell_number = getCellNumber(cip);
   if (!block_bitmap_.test(cell_number)) {
     RefPtr<Block> block = graph_->newBlock(cip);
+    enqueueBlock(block);
 
     BlockMap::Insert p = block_map_.findForAdd(cip);
     assert(!p.found());
