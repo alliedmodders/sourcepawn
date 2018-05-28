@@ -35,6 +35,13 @@ enum class BlockEnd {
   Jump
 };
 
+class IBlockData
+{
+ public:
+  virtual ~IBlockData()
+  {}
+};
+
 class Block :
   public ke::Refcounted<Block>,
   public ke::InlineListNode<Block>
@@ -104,6 +111,15 @@ class Block :
     return is_loop_header_;
   }
 
+  template <typename T>
+  T* data() const {
+    return static_cast<T*>(data_.get());
+  }
+  void setData(IBlockData* data) {
+    ke::UniquePtr<IBlockData> ptr(data);
+    data_ = ke::Move(ptr);
+  }
+
   void addTarget(Block* target);
   void endWithJump(const uint8_t* cip, Block* target);
   void end(const uint8_t* end_at, BlockEnd end_type);
@@ -126,6 +142,7 @@ class Block :
   ControlFlowGraph& graph_;
   ke::Vector<ke::RefPtr<Block>> predecessors_;
   ke::Vector<ke::RefPtr<Block>> successors_;
+  ke::UniquePtr<IBlockData> data_;
 
   // Note that |end| is dependent on end_type. If it's Insn, then end_ should
   // be the |start| of the last instruction, since that is the terminating
@@ -211,6 +228,25 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
   ke::RefPtr<Block> entry_;
   ke::InlineList<Block> blocks_;
   uint32_t epoch_;
+};
+
+template <typename T>
+class AutoClearBlockData
+{
+ public:
+  AutoClearBlockData(ControlFlowGraph* graph)
+   : graph_(graph)
+  {
+    for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++)
+      iter->setData(new T());
+  }
+  ~AutoClearBlockData() {
+    for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++)
+      iter->setData(nullptr);
+  }
+
+ private:
+  ControlFlowGraph* graph_;
 };
 
 } // namespace sp
