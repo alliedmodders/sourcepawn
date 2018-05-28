@@ -607,3 +607,15 @@ PluginRuntime::LookupLineAddress(const uint32_t line, const char* file, ucell_t*
     return SP_ERROR_NOT_FOUND;
   return SP_ERROR_NONE;
 }
+
+IDebugSymbolIterator*
+PluginRuntime::CreateSymbolIterator(ucell_t addr)
+{
+  return image_->SymbolIterator(addr);
+}
+
+void
+PluginRuntime::DestroySymbolIterator(IDebugSymbolIterator* iter)
+{
+  delete iter;
+}

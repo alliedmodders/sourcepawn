@@ -20,6 +20,7 @@
 #include <sp_vm_types.h>
 #include "file-utils.h"
 #include "legacy-image.h"
+#include "smx-v1-debug-symbols.h"
 
 namespace sp {
 
@@ -27,6 +28,7 @@ class SmxV1Image
   : public FileReader,
     public LegacyImage
 {
+ friend SmxV1SymbolIterator;
  public:
   SmxV1Image(FILE* fp);
 
@@ -62,6 +64,9 @@ class SmxV1Image
   bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
+  SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) const override;
+  const char* GetTagName(uint32_t tagid) const;
+  const char* GetDebugName(uint32_t nameoffs) const;
 
  private:
    struct Section

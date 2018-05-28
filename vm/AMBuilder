@@ -68,6 +68,7 @@ library.sources += [
   'runtime-helpers.cpp',
   'scripted-invoker.cpp',
   'smx-v1-image.cpp',
+  'smx-v1-debug-symbols.cpp',
   'stack-frames.cpp',
   'watchdog_timer.cpp',
 ]

@@ -96,6 +96,8 @@ class PluginRuntime
   const char* GetFileName(size_t index) override;
   int LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override;
   int LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
+  IDebugSymbolIterator* CreateSymbolIterator(ucell_t addr) override;
+  void DestroySymbolIterator(IDebugSymbolIterator* iter) override;
   const char* GetFilename() override {
     return full_name_.c_str();
   }

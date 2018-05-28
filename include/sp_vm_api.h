@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include "sp_vm_types.h"
+#include "sp_vm_debug_api.h"
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0xD
@@ -351,7 +352,23 @@ class IPluginDebugInfo
      * @return        Full file name of source file or NULL if not found.
      */
     virtual const char* GetFileName(size_t index) = 0;
-};
+
+    /**
+     * @brief Returns an iterator for all debug symbols visible at
+     * the given address.
+     * The returned iterator must be freed by DestroySymbolIterator().
+     *
+     * @param addr   Code address offset.
+     * @return       Debug symbol iterator.
+     */
+    virtual IDebugSymbolIterator* CreateSymbolIterator(ucell_t addr) = 0;
+
+    /**
+     * @brief Frees an IDebugSymbolIterator object.
+     * Paired with CreateSymbolIterator().
+     */
+    virtual void DestroySymbolIterator(IDebugSymbolIterator* iter) = 0;
+  };
 
 class ICompilation;
 
