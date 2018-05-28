@@ -74,6 +74,7 @@ class CompiledFunction
   cell_t code_offset_;
   AutoPtr<FixedArray<LoopEdge>> edges_;
   AutoPtr<FixedArray<CipMapEntry>> cip_map_;
+  bool cip_map_sorted_;
 };
 
 }

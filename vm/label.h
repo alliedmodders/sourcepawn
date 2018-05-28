@@ -31,6 +31,9 @@
 #ifndef _include_sourcepawn_label_h__
 #define _include_sourcepawn_label_h__
 
+#include <assert.h>
+#include <stdint.h>
+
 namespace sp {
 
 // A label is a lightweight object to assist in managing relative jumps. It

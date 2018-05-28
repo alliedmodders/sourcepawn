@@ -161,13 +161,6 @@ class Compiler : public CompilerBase
   ExternalAddress spAddr() {
     return ExternalAddress(context_->addressOfSp());
   }
-
-  Label* labelAt(size_t offset) {
-    assert(ke::IsAligned(offset, sizeof(cell_t)));
-    assert(offset >= pcode_start_);
-    assert(offset < rt_->code().length); 
-    return &jump_map_[offset / sizeof(cell_t)];
-  }
 };
 
 const Register pri = eax;

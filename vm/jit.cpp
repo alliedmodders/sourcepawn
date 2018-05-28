@@ -44,8 +44,7 @@ CompilerBase::CompilerBase(PluginRuntime* rt, MethodInfo* method)
    error_(SP_ERROR_NONE),
    pcode_start_(0),
    code_start_(nullptr),
-   op_cip_(nullptr),
-   code_end_(nullptr)
+   op_cip_(nullptr)
 {
 }
 
@@ -79,12 +78,6 @@ CompilerBase::emit()
 
   pcode_start_ = method_info_->pcode_offset();
   code_start_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_);
-  code_end_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + rt_->code().length);
-
-  size_t nmaxops = rt_->code().length / sizeof(cell_t) + 1;
-  jump_map_ = ke::MakeUnique<Label[]>(nmaxops);
-
-  PcodeReader<CompilerBase> reader(rt_, pcode_start_, this);
 
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
@@ -95,30 +88,30 @@ CompilerBase::emit()
   SpewOpcode(stdout, rt_, code_start_, reader.cip());
 #endif
 
-  const cell_t* codeseg = reinterpret_cast<const cell_t*>(rt_->code().bytes);
-
   emitPrologue();
 
-  reader.begin();
-  while (reader.more()) {
-    // If we reach the end of this function, or the beginning of a new
-    // procedure, then stop.
-    if (reader.peekOpcode() == OP_PROC || reader.peekOpcode() == OP_ENDPROC)
-      break;
+  for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
+    block_ = *iter;
+    __ bind(block_->label());
 
+    PcodeReader<CompilerBase> reader(rt_, block_, this);
+    reader.begin();
+
+    while (reader.more()) {
 #if defined JIT_SPEW
-    SpewOpcode(rt_, code_start_, reader.cip());
+      SpewOpcode(rt_, code_start_, reader.cip());
 #endif
 
-    // We assume every instruction is a jump target, so before emitting
-    // an opcode, we bind its corresponding label.
-    __ bind(&jump_map_[reader.cip() - codeseg]);
+      // Save the start of the opcode for emitCipMap().
+      op_cip_ = reader.cip();
 
-    // Save the start of the opcode for emitCipMap().
-    op_cip_ = reader.cip();
+      if (!reader.visitNext() || error_)
+        return nullptr;
+    }
 
-    if (!reader.visitNext() || error_)
-      return nullptr;
+    // Note: the offset is ignored.
+    if (block_->endType() == BlockEnd::Jump)
+      visitJUMP(0);
   }
 
   for (size_t i = 0; i < ool_paths_.length(); i++) {

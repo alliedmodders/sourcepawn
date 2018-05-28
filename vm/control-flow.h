@@ -18,6 +18,7 @@
 #include <amtl/am-vector.h>
 #include <stdio.h>
 #include "plugin-runtime.h"
+#include "label.h"
 
 namespace sp {
 
@@ -113,6 +114,11 @@ class Block :
   bool visited() const;
   void setVisited();
 
+  // The JIT uses this to manage jump targets.
+  Label* label() {
+    return &label_;
+  }
+
   // Zap all references so the block has no cycles.
   void unlink();
 
@@ -141,6 +147,9 @@ class Block :
 
   // Set to true if this is a loop header.
   bool is_loop_header_;
+
+  // Label, for the JIT.
+  Label label_;
 
   // Counter for fast already-visited testing.
   uint32_t epoch_;
