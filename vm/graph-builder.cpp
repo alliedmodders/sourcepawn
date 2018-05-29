@@ -337,7 +337,12 @@ GraphBuilder::prescan()
         return error(SP_ERROR_INVALID_INSTRUCTION);
       opcode_params = (ncases * 2) + 1;
     } else {
-      opcode_params = kOpcodeSizes[op] - 1;
+      int opcode_size = kOpcodeSizes[op];
+      if (opcode_size == 0) {
+        // This opcode is not generated, and is therefore illegal.
+        return error(SP_ERROR_INVALID_INSTRUCTION);
+      }
+      opcode_params = opcode_size - 1;
     }
     assert(opcode_params >= 0);
 
