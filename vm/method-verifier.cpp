@@ -161,9 +161,14 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_DEC_I:
   case OP_TRACKER_POP_SETHEAP:
   case OP_STRADJUST_PRI:
+    return true;
+
   case OP_SWAP_PRI:
   case OP_SWAP_ALT:
-    return true;
+    // Simulate the swap operation.
+    if (!popStack(1))
+      return false;
+    return pushStack(1);
 
   case OP_PUSH_PRI:
   case OP_PUSH_ALT:
@@ -598,10 +603,24 @@ MethodVerifier::popStack(uint32_t num_cells)
 bool
 MethodVerifier::verifyStackOffset(cell_t offset)
 {
-  // This is a rough estimate, we just make sure it definitely
-  // won't go out of the heap.
-  size_t estimate = size_t((offset < 0) ? -offset : offset);
-  if (estimate >= heapSize_) {
+  if (offset >= 0) {
+    // This is a rough estimate, we just make sure it definitely won't go out of
+    // the heap. We can verify this better later with RTTI tables, which store
+    // parameter counts.
+    size_t estimate = size_t((offset < 0) ? -offset : offset);
+    if (estimate >= heapSize_) {
+      reportError(SP_ERROR_INSTRUCTION_PARAM);
+      return false;
+    }
+    return true;
+  }
+
+  uint32_t addr = abs(offset);
+
+  // This is not a rough estimate. We know exactly how much stack space is
+  // available.
+  VerifyData* data = block_->data<VerifyData>();
+  if (addr > data->stack_balance * sizeof(cell_t)) {
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
