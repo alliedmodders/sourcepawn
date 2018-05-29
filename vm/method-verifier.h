@@ -55,18 +55,35 @@ class MethodVerifier final
   void reportError(int err);
   cell_t readCell();
 
+  struct VerifyData : public IBlockData {
+    VerifyData()
+     : stack_balance(0)
+    {}
+    uint32_t stack_balance;
+  };
+
+  bool handleJoins();
+  bool verifyJoin(VerifyData* a, VerifyData* b);
+  bool verifyJoins(Block* block);
+  bool pushStack(uint32_t num_cells);
+  bool popStack(uint32_t num_cells);
+
  private:
   PluginRuntime* rt_;
   ke::RefPtr<ControlFlowGraph> graph_;
+  Block* block_;
+  ke::Vector<Block*> verify_joins_;
   uint32_t code_features_;
   uint32_t startOffset_;
   size_t memSize_;
   size_t datSize_;
   size_t heapSize_;
+  uint32_t max_stack_;
   const cell_t* code_;
   const cell_t* method_;
   const cell_t* insn_;
   const cell_t* cip_;
+  const cell_t* prev_cip_;
   const cell_t* stop_at_;
   ExternalFuncRefCallback collect_func_refs_;
   int error_;

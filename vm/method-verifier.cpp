@@ -24,12 +24,15 @@ using namespace ke;
 
 MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
  : rt_(rt),
+   block_(nullptr),
    startOffset_(startOffset),
    memSize_(rt_->context()->HeapSize()),
    datSize_(rt_->image()->DescribeData().length),
    heapSize_(memSize_ - datSize_),
+   max_stack_(0),
    code_(nullptr),
    cip_(nullptr),
+   prev_cip_(nullptr),
    stop_at_(nullptr),
    error_(SP_ERROR_NONE)
 {
@@ -58,18 +61,58 @@ MethodVerifier::verify()
     return nullptr;
   }
 
+  AutoClearBlockData<VerifyData> acbd(graph_);
+
   method_ = code_ + (startOffset_ / sizeof(cell_t));
 
   for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
-    Block* block = *iter;
-    cip_ = reinterpret_cast<const cell_t*>(block->start());
-    while (cip_ < reinterpret_cast<const cell_t*>(block->end())) {
+    block_ = *iter;
+    if (!handleJoins())
+      return nullptr;
+
+    prev_cip_ = nullptr;
+
+    cip_ = reinterpret_cast<const cell_t*>(block_->start());
+    while (cip_ < reinterpret_cast<const cell_t*>(block_->end())) {
+      const cell_t* insn = cip_;
       OPCODE op = (OPCODE)*cip_++;
       if (!verifyOp(op))
         return nullptr;
+      prev_cip_ = insn;
     }
   }
+
+  // Verify loop headers.
+  for (const auto& block : verify_joins_) {
+    if (!verifyJoins(block))
+      return nullptr;
+  }
+
   return graph_;
+}
+
+static inline bool
+ExtractPushConstant(const cell_t* cip, cell_t* value)
+{
+  switch (*cip) {
+    case OP_PUSH_C:
+      *value = cip[1];
+      return true;
+    case OP_PUSH2_C:
+      *value = cip[2];
+      return true;
+    case OP_PUSH3_C:
+      *value = cip[3];
+      return true;
+    case OP_PUSH4_C:
+      *value = cip[4];
+      return true;
+    case OP_PUSH5_C:
+      *value = cip[5];
+      return true;
+    default:
+      return false;
+  }
 }
 
 bool
@@ -118,13 +161,17 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_DEC_I:
   case OP_TRACKER_POP_SETHEAP:
   case OP_STRADJUST_PRI:
-  case OP_PUSH_PRI:
-  case OP_PUSH_ALT:
-  case OP_POP_PRI:
-  case OP_POP_ALT:
   case OP_SWAP_PRI:
   case OP_SWAP_ALT:
     return true;
+
+  case OP_PUSH_PRI:
+  case OP_PUSH_ALT:
+    return pushStack(1);
+
+  case OP_POP_PRI:
+  case OP_POP_ALT:
+    return popStack(1);
 
   case OP_ADDR_ALT:
   case OP_ADDR_PRI:
@@ -178,7 +225,7 @@ MethodVerifier::verifyOp(OPCODE op)
       n = ((op - OP_PUSH2_C) / 4) + 2;
 
     cip_ += n;
-    return true;
+    return pushStack(n);
   }
 
   case OP_PUSH:
@@ -196,7 +243,7 @@ MethodVerifier::verifyOp(OPCODE op)
       if (!verifyDatOffset(offset))
         return false;
     }
-    return true;
+    return pushStack(n);
   }
 
   case OP_PUSH_S:
@@ -214,7 +261,7 @@ MethodVerifier::verifyOp(OPCODE op)
       if (!verifyStackOffset(offset))
         return false;
     }
-    return true;
+    return pushStack(n);
   }
 
   case OP_PUSH_ADR:
@@ -232,13 +279,22 @@ MethodVerifier::verifyOp(OPCODE op)
       if (!verifyStackOffset(offset))
         return false;
     }
-    return true;
+    return pushStack(n);
   }
 
   case OP_CALL:
   {
+    // An OP_CALL must be preceded by a PUSH_C variant, and it must be in the
+    // same block.
+    cell_t nparams;
+    if (!prev_cip_ || !ExtractPushConstant(prev_cip_, &nparams)) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
     cell_t offset = readCell();
     if (!verifyCallOffset(offset))
+      return false;
+    if (!popStack(nparams + 1))
       return false;
     if (collect_func_refs_)
       collect_func_refs_(offset);
@@ -297,6 +353,12 @@ MethodVerifier::verifyOp(OPCODE op)
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
     }
+    cell_t num_cells = abs(value / (cell_t)sizeof(cell_t));
+    if (op == OP_STACK) {
+      if (value < 0)
+        return pushStack(num_cells);
+      return popStack(num_cells);
+    }
     return true;
   }
 
@@ -318,6 +380,10 @@ MethodVerifier::verifyOp(OPCODE op)
       return false;
     }
     cell_t nparams = readCell();
+    if (!pushStack(1))
+      return false;
+    if (!popStack(nparams + 1))
+      return false;
     return verifyParamCount(nparams);
   }
 
@@ -363,7 +429,9 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_GENARRAY_Z:
   {
     cell_t ndims = readCell();
-    return verifyDimensionCount(ndims);
+    if (!verifyDimensionCount(ndims))
+      return false;
+    return popStack(ndims - 1);
   }
 
   case OP_REBASE:
@@ -410,6 +478,121 @@ MethodVerifier::readCell()
 {
   assert(cip_ < stop_at_);
   return *cip_++;
+}
+
+bool
+MethodVerifier::verifyJoin(VerifyData* a, VerifyData* b)
+{
+  if (a->stack_balance != b->stack_balance) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+  return true;
+}
+
+bool
+MethodVerifier::handleJoins()
+{
+  if (block_->predecessors().empty())
+    return true;
+
+  bool verify_later = false;
+
+  VerifyData* pred_data = nullptr;
+  for (size_t i = 0; i < block_->predecessors().length(); i++) {
+    Block* pred = block_->predecessors()[i];
+
+    // Backedges won't have been visited yet, so we'll have to verify this
+    // block again later. However, we keep going to get at least one
+    // predecessor to use for our initial stack balance.
+    if (pred->id() >= block_->id()) {
+      verify_later = true;
+      continue;
+    }
+
+    VerifyData* other_pred_data = pred->data<VerifyData>();
+    if (!pred_data) {
+      pred_data = other_pred_data;
+    } else {
+      if (!verifyJoin(pred_data, other_pred_data))
+        return false;
+    }
+  }
+
+  if (verify_later)
+    verify_joins_.append(block_);
+
+  // If the block had no incoming edges other than backedges, then this would
+  // be an illegal backedge to the entry block. While this is not allowed
+  // currently, because of OP_PROC, it may be allowed in the future, so we
+  // handle it.
+  if (!pred_data) {
+    assert(verify_later);
+    return true;
+  }
+
+  VerifyData* data = block_->data<VerifyData>();
+  data->stack_balance = pred_data->stack_balance;
+  return true;
+}
+
+bool
+MethodVerifier::verifyJoins(Block* block)
+{
+  Block* first_pred = block->predecessors()[0];
+  VerifyData* first_edge = first_pred->data<VerifyData>();
+
+  // If this is a self-loop, and it's the entry block, verify the exit stack
+  // depth is 0.
+  if (block->predecessors().length() == 1) {
+    if (first_edge->stack_balance != 0) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+    return true;
+  }
+
+  // Otherwise, verify the balance is the same across all incoming edges.
+  for (size_t i = 1; i < block->predecessors().length(); i++) {
+    Block* other_pred = block->predecessors()[1];
+    VerifyData* other_edge = other_pred->data<VerifyData>();
+    if (!verifyJoin(first_edge, other_edge))
+      return false;
+  }
+  return true;
+}
+
+bool
+MethodVerifier::pushStack(uint32_t num_cells)
+{
+  VerifyData* v = block_->data<VerifyData>();
+  if (!ke::IsUint32AddSafe(v->stack_balance, num_cells)) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+
+  v->stack_balance += num_cells;
+  if (v->stack_balance > INT_MAX / sizeof(cell_t)) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+
+  if (v->stack_balance > max_stack_)
+    max_stack_ = v->stack_balance;
+  return true;
+}
+
+bool
+MethodVerifier::popStack(uint32_t num_cells)
+{
+  VerifyData* v = block_->data<VerifyData>();
+  if (num_cells > v->stack_balance) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+
+  v->stack_balance -= num_cells;
+  return true;
 }
 
 bool
