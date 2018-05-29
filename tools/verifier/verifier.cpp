@@ -78,8 +78,10 @@ Analyze(const char* file)
 {
   char error[255];
   AutoPtr<IPluginRuntime> rt(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
-  if (!rt)
+  if (!rt) {
+    fprintf(stdout, "Could not load .smx file: %s\n", error);
     return false;
+  }
 
   if (sVerbose) {
     uint32_t index;
