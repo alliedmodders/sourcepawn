@@ -110,6 +110,9 @@ class Block :
   bool isLoopHeader() const {
     return is_loop_header_;
   }
+  ControlFlowGraph* graph() const {
+    return &graph_;
+  }
 
   template <typename T>
   T* data() const {
