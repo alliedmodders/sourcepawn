@@ -1086,12 +1086,10 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
 
   // SMX v1 requires that variadic arguments be passed by-reference, for no
   // discernable reason.
-  bool variadic = false;
   size_t formal_argc = sig->parameters()->length();
   if (!sig->parameters()->empty() &&
       sig->parameters()->back()->sym()->type()->isVariadic())
   {
-    variadic = true;
     formal_argc = sig->parameters()->length() - 1;
   }
 
