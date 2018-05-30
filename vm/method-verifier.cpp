@@ -159,9 +159,19 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_DEC_PRI:
   case OP_DEC_ALT:
   case OP_DEC_I:
-  case OP_TRACKER_POP_SETHEAP:
   case OP_STRADJUST_PRI:
     return true;
+
+  case OP_TRACKER_POP_SETHEAP:
+  {
+    VerifyData* v = block_->data<VerifyData>();
+    if (v->heap_balance.empty() || v->heap_balance.back() != -1) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+    v->heap_balance.pop();
+    return true;
+  }
 
   case OP_SWAP_PRI:
   case OP_SWAP_ALT:
@@ -325,11 +335,15 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_CONST_ALT:
   case OP_BOUNDS:
   case OP_SWITCH:
-  case OP_TRACKER_PUSH_C:
   {
     cip_++;
     return true;
   }
+
+  case OP_TRACKER_PUSH_C:
+    block_->data<VerifyData>()->heap_balance.append(-1);
+    cip_++;
+    return true;
 
   case OP_HALT:
   {
@@ -363,6 +377,10 @@ MethodVerifier::verifyOp(OPCODE op)
       if (value < 0)
         return pushStack(num_cells);
       return popStack(num_cells);
+    } else if (op == OP_HEAP) {
+      if (value >= 0)
+        return pushHeap(num_cells);
+      return popHeap(num_cells);
     }
     return true;
   }
@@ -436,7 +454,10 @@ MethodVerifier::verifyOp(OPCODE op)
     cell_t ndims = readCell();
     if (!verifyDimensionCount(ndims))
       return false;
-    return popStack(ndims - 1);
+    if (!popStack(ndims - 1))
+      return false;
+    block_->data<VerifyData>()->heap_balance.append(-1);
+    return true;
   }
 
   case OP_REBASE:
@@ -485,10 +506,67 @@ MethodVerifier::readCell()
   return *cip_++;
 }
 
+// spcomp had a long standing bug where "break" in a loop would not correctly
+// free dynamic arrays. This bug was extremely rare, and probably never
+// manifested in noticeable behavior. Nonetheless it did occur and we need to
+// make sure validation does not get confused.
+static inline bool
+DetectCompilerBreakBug(Block* block)
+{
+  // First, walk up the dominator tree until we find a loop header.
+  Block* dom = block->idom();
+  while (!dom->isLoopHeader() && !dom->predecessors().empty())
+    dom = dom->idom();
+
+  // If no loop was found, this is not the bug we're looking for.
+  if (!dom->isLoopHeader())
+    return false;
+
+  block->graph()->newEpoch();
+
+  // To figure out whether or not this block is "leaving" the loop, we need to
+  // compute the set of blocks owned by the loop. We do this by computing
+  // the predecessors of each backedge.
+  Vector<Block*> worklist;
+  for (const auto& pred : dom->predecessors()) {
+    if (pred->id() >= dom->id()) {
+      pred->setVisited();
+      worklist.append(pred);
+    }
+  }
+
+  while (!worklist.empty()) {
+    Block* block = worklist.popCopy();
+    for (const auto& pred : block->predecessors()) {
+      // Note: we need to make sure we don't predecessors beyond the initial
+      // loop header.
+      if (pred->visited() || pred->id() < dom->id())
+        continue;
+
+      // This node should be dominated by the loop header.
+      assert(dom->dominates(pred));
+
+      // Keep walking up nodes.
+      pred->setVisited();
+      worklist.append(pred);
+    }
+  }
+
+  // If we never visited the original block, that means it is not in the
+  // predecessor set of of any backedge. It could be a break.
+  return !block->visited();
+}
+
 bool
-MethodVerifier::verifyJoin(VerifyData* a, VerifyData* b)
+MethodVerifier::verifyJoin(Block* block, VerifyData* a, VerifyData* b)
 {
   if (a->stack_balance != b->stack_balance) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+  if (a->heap_balance.length() != b->heap_balance.length()) {
+    if (DetectCompilerBreakBug(block))
+      return true;
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
@@ -519,7 +597,7 @@ MethodVerifier::handleJoins()
     if (!pred_data) {
       pred_data = other_pred_data;
     } else {
-      if (!verifyJoin(pred_data, other_pred_data))
+      if (!verifyJoin(block_, pred_data, other_pred_data))
         return false;
     }
   }
@@ -538,6 +616,8 @@ MethodVerifier::handleJoins()
 
   VerifyData* data = block_->data<VerifyData>();
   data->stack_balance = pred_data->stack_balance;
+  for (const auto& item : pred_data->heap_balance)
+    data->heap_balance.append(item);
   return true;
 }
 
@@ -561,7 +641,7 @@ MethodVerifier::verifyJoins(Block* block)
   for (size_t i = 1; i < block->predecessors().length(); i++) {
     Block* other_pred = block->predecessors()[1];
     VerifyData* other_edge = other_pred->data<VerifyData>();
-    if (!verifyJoin(first_edge, other_edge))
+    if (!verifyJoin(block, first_edge, other_edge))
       return false;
   }
   return true;
@@ -597,6 +677,38 @@ MethodVerifier::popStack(uint32_t num_cells)
   }
 
   v->stack_balance -= num_cells;
+  return true;
+}
+
+bool
+MethodVerifier::pushHeap(uint32_t num_cells)
+{
+  VerifyData* v = block_->data<VerifyData>();
+  if (!num_cells || num_cells > INT_MAX / 4) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+  if (v->heap_balance.empty() || v->heap_balance.back() == -1)
+    v->heap_balance.append(num_cells);
+  else
+    v->heap_balance.back() += num_cells;
+  return true;
+}
+
+bool
+MethodVerifier::popHeap(uint32_t num_cells)
+{
+  VerifyData* v = block_->data<VerifyData>();
+  if (v->heap_balance.empty() ||
+      v->heap_balance.back() == -1 ||
+      uint32_t(v->heap_balance.back()) < num_cells)
+  {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
+  v->heap_balance.back() -= num_cells;
+  if (v->heap_balance.back() == 0)
+    v->heap_balance.pop();
   return true;
 }
 

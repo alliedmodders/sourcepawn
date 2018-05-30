@@ -60,13 +60,16 @@ class MethodVerifier final
      : stack_balance(0)
     {}
     uint32_t stack_balance;
+    ke::Vector<int32_t> heap_balance;
   };
 
   bool handleJoins();
-  bool verifyJoin(VerifyData* a, VerifyData* b);
+  bool verifyJoin(Block* block, VerifyData* a, VerifyData* b);
   bool verifyJoins(Block* block);
   bool pushStack(uint32_t num_cells);
   bool popStack(uint32_t num_cells);
+  bool pushHeap(uint32_t num_cells);
+  bool popHeap(uint32_t num_cells);
 
  private:
   PluginRuntime* rt_;
