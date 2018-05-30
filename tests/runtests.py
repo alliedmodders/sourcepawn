@@ -103,9 +103,10 @@ class TestPlan(object):
       })
 
   def find_compilers(self):
-    if not self.args.spcomp2:
+    if self.args.spcomp2:
+      self.find_spcomp2()
+    else:
       self.find_spcomp()
-    self.find_spcomp2()
 
   def find_spcomp(self):
     for arch in self.arch_suffixes:
