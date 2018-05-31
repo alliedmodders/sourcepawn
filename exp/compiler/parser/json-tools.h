@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_json_tools_h_
 #define _include_spcomp_json_tools_h_
 
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include "boxed-value.h"
 #include <stdio.h>
@@ -32,7 +32,7 @@ class JsonRenderer;
 class JsonValue : public PoolObject
 {
  public:
-  virtual void Render(JsonRenderer *renderer) = 0;
+  virtual void Render(JsonRenderer* renderer) = 0;
 };
 
 class JsonNull;
@@ -45,20 +45,20 @@ class JsonObject;
 class JsonRenderer
 {
  public:
-  JsonRenderer(FILE *fp);
+  JsonRenderer(FILE* fp);
 
-  void Render(JsonValue *value);
+  void Render(JsonValue* value);
 
-  FILE *fp() const {
+  FILE* fp() const {
     return fp_;
   }
 
-  void RenderNull(JsonNull *val);
-  void RenderBool(JsonBool *val);
-  void RenderInt(JsonInt *val);
-  void RenderString(JsonString *val);
-  void RenderList(JsonList *val);
-  void RenderObject(JsonObject *val);
+  void RenderNull(JsonNull* val);
+  void RenderBool(JsonBool* val);
+  void RenderInt(JsonInt* val);
+  void RenderString(JsonString* val);
+  void RenderList(JsonList* val);
+  void RenderObject(JsonObject* val);
 
  private:
   void indent();
@@ -66,14 +66,14 @@ class JsonRenderer
   void prefix();
 
  private:
-  FILE *fp_;
+  FILE* fp_;
   size_t indent_;
 };
 
 class JsonNull : public JsonValue
 {
  public:
-  void Render(JsonRenderer *renderer) override {
+  void Render(JsonRenderer* renderer) override {
     renderer->RenderNull(this);
   }
 };
@@ -85,7 +85,7 @@ class JsonBool : public JsonValue
    : value_(value)
   {}
 
-  void Render(JsonRenderer *renderer) override {
+  void Render(JsonRenderer* renderer) override {
     renderer->RenderBool(this);
   }
 
@@ -104,7 +104,7 @@ class JsonInt : public JsonValue
    : value_(value)
   {}
 
-  void Render(JsonRenderer *renderer) override {
+  void Render(JsonRenderer* renderer) override {
     renderer->RenderInt(this);
   }
 
@@ -119,65 +119,65 @@ class JsonInt : public JsonValue
 class JsonString : public JsonValue
 {
  public:
-  JsonString(Atom *atom)
+  JsonString(Atom* atom)
    : atom_(atom)
    {}
 
-  void Render(JsonRenderer *renderer) override {
+  void Render(JsonRenderer* renderer) override {
     renderer->RenderString(this);
   }
 
-  Atom *atom() const {
+  Atom* atom() const {
     return atom_;
   }
 
  private:
-  Atom *atom_;
+  Atom* atom_;
 };
 
 class JsonObject : public JsonValue
 {
  public:
-  PoolList<Atom *> &keys() {
+  PoolList<Atom*>& keys() {
     return keys_;
   }
-  PoolList<JsonValue *> &values() {
+  PoolList<JsonValue*>& values() {
     return values_;
   }
 
-  void add(Atom *key, JsonValue *value) {
+  void add(Atom* key, JsonValue* value) {
     keys_.append(key);
     values_.append(value);
   }
 
-  void Render(JsonRenderer *renderer) override {
+  void Render(JsonRenderer* renderer) override {
     renderer->RenderObject(this);
   }
 
  private:
-  PoolList<Atom *> keys_;
-  PoolList<JsonValue *> values_;
+  PoolList<Atom*> keys_;
+  PoolList<JsonValue*> values_;
 };
 
 class JsonList : public JsonValue
 {
  public:
-  PoolList<JsonValue *> &items() {
+  PoolList<JsonValue*>& items() {
     return items_;
   }
-  void add(JsonValue *value) {
+  void add(JsonValue* value) {
     items_.append(value);
   }
   size_t length() const {
     return items_.length();
   }
 
-  void Render(JsonRenderer *renderer) override {
+  void Render(JsonRenderer* renderer) override {
     renderer->RenderList(this);
   }
 
  private:
-  PoolList<JsonValue *> items_;
+  PoolList<JsonValue*> items_;
 };
 
 } // namespace ke

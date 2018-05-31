@@ -129,7 +129,7 @@ class ByteBuffer
  private:
   static const size_t kInitialSize = 256;
 
- private:
+ protected:
   ke::UniquePtr<uint8_t[]> buffer_;
   uint8_t* buffer_pos_;
   uint8_t* buffer_end_;

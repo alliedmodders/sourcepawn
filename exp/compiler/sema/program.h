@@ -19,16 +19,26 @@
 #define _include_semantic_analysis_program_h_
 
 #include <amtl/am-vector.h>
+#include <stdio.h>
 #include "pool-allocator.h"
 
 namespace sp {
+
+namespace ast {
+class FunctionStatement;
+class VarDecl;
+} // namespace ast
+
 namespace sema {
 
 class FunctionDef;
 
 struct Program : public PoolObject
 {
-  ke::Vector<sema::FunctionDef*> functions;
+  ke::Vector<ast::FunctionStatement*> functions;
+  ke::Vector<ast::VarDecl*> globals;
+
+  void dump(FILE* fp);
 };
 
 } // namespace sema

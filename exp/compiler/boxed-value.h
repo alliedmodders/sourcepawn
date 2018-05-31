@@ -45,23 +45,27 @@ class BoxedValue
   {
     boolValue = b;
   }
-  explicit BoxedValue(const IntValue &v)
+  explicit BoxedValue(const IntValue& v)
    : kind_(Kind::Integer),
      type_(nullptr)
   {
     intValue = v;
   }
-  explicit BoxedValue(const FloatValue &v)
+  explicit BoxedValue(const FloatValue& v)
    : kind_(Kind::Float),
      type_(nullptr)
   {
     floatValue = v;
   }
-  BoxedValue(Type *type, const IntValue &v)
+  BoxedValue(Type* type, const IntValue& v)
    : kind_(Kind::Integer),
      type_(type)
   {
     intValue = v;
+  }
+
+  Kind kind() const {
+    return kind_;
   }
 
   bool isBool() const {
@@ -76,7 +80,7 @@ class BoxedValue
   bool hasType() const {
     return !!type_;
   }
-  Type *type() const {
+  Type* type() const {
     assert(hasType());
     return type_;
   }
@@ -84,7 +88,7 @@ class BoxedValue
   bool isInteger() const {
     return kind_ == Kind::Integer;
   }
-  const IntValue &toInteger() const {
+  const IntValue& toInteger() const {
     assert(isInteger());
     return intValue;
   }
@@ -92,7 +96,7 @@ class BoxedValue
   bool isFloat() const {
     return kind_ == Kind::Float;
   }
-  const FloatValue &toFloat() const {
+  const FloatValue& toFloat() const {
     assert(isFloat());
     return floatValue;
   }
@@ -109,7 +113,7 @@ class BoxedValue
     return intptrValue;
   }
 
-  const char *getTypename() const {
+  const char* getTypename() const {
     switch (kind_) {
       case Kind::Enum:
         return "enum";
@@ -127,7 +131,7 @@ class BoxedValue
 
  private:
   Kind kind_;
-  Type *type_;
+  Type* type_;
   union {
     bool boolValue;
     char charValue;
@@ -138,7 +142,7 @@ class BoxedValue
   };
 };
 
-BoxedValue DefaultValueForPlainType(Type *type);
+BoxedValue DefaultValueForPlainType(Type* type);
 
 }
 

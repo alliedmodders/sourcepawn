@@ -22,19 +22,22 @@
 #include "parser/parser.h"
 #include "sema/name-resolver.h"
 #include "sema/semantic-analysis.h"
+#include "shared/byte-buffer.h"
+#include "smx/smx-compiler.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <amtl/os/am-fsutil.h>
 
 using namespace ke;
 using namespace sp;
 
-ThreadLocal<CompileContext *> sp::CurrentCompileContext;
+ThreadLocal<CompileContext*> sp::CurrentCompileContext;
 
-CompileContext::CompileContext(PoolAllocator &pool,
-                               StringPool &strings,
-                               ReportManager &reports,
-                               SourceManager &source)
+CompileContext::CompileContext(PoolAllocator& pool,
+                               StringPool& strings,
+                               ReportManager& reports,
+                               SourceManager& source)
  : pool_(pool),
    strings_(strings),
    reports_(reports),
@@ -57,7 +60,7 @@ CompileContext::~CompileContext()
 }
 
 bool
-CompileContext::ChangePragmaDynamic(ReportingContext &rc, int64_t value)
+CompileContext::ChangePragmaDynamic(ReportingContext& rc, int64_t value)
 {
   if (value < 0) {
     rc.report(rmsg::pragma_dynamic_negative);
@@ -73,7 +76,7 @@ CompileContext::ChangePragmaDynamic(ReportingContext &rc, int64_t value)
 }
 
 static void
-ReportMemory(FILE *fp)
+ReportMemory(FILE* fp)
 {
   size_t allocated, reserved, bookkeeping;
   POOL().memoryUsage(&allocated, &reserved, &bookkeeping);
@@ -83,6 +86,87 @@ ReportMemory(FILE *fp)
   fprintf(fp, " -- %" KE_FMT_SIZET " bytes used for bookkeeping\n", bookkeeping);
 }
 
+class FpBuffer : public ISmxBuffer
+{
+ public:
+  explicit FpBuffer(FILE* fp)
+   : fp_(fp)
+  {}
+
+  bool write(const void* bytes, size_t len) override {
+    return fwrite(bytes, 1, len, fp_) == len;
+  }
+  size_t pos() const override {
+    return (size_t)ftell(fp_);
+  }
+
+ private:
+  FILE* fp_;
+};
+
+template <typename T> static inline T
+LastMatch(T ptr, const char* search)
+{
+  T ext = strstr(ptr, search);
+  while (ext) {
+    T next_ext = strstr(ext + strlen(search), search);
+    if (!next_ext)
+      break;
+    ext = next_ext;
+  }
+  return ext;
+}
+
+static AString
+GetOutputFilename(const char* output_file, const char* input_file)
+{
+  // :TODO: add a Strdup to amtl.
+  size_t buffer_len = strlen(input_file) + 1;
+  UniquePtr<char[]> buffer = MakeUnique<char[]>(buffer_len);
+  SafeStrcpy(buffer.get(), buffer_len, input_file);
+
+  if (!output_file) {
+    // blah.sp -> blah.smx
+    // .sp -> .sp.smx
+    char* ext = LastMatch(buffer.get(), ".sp");
+    if (ext && ext != buffer.get())
+      *ext = '\0';
+
+    AString new_file;
+    new_file.format("%s.smx", buffer.get());
+    return new_file;
+  }
+
+  // /folder/crab, /blah/tmp.sp -> /folder/crab/tmp.smx
+  if (ke::file::IsDirectory(output_file)) {
+    AString path(input_file);
+    path = Join(path.split("\\"), "/");
+
+    Vector<AString> parts = path.split("/");
+    while (!parts.empty() && parts.back().length() == 0)
+      parts.pop();
+    if (!parts.empty()) {
+      AString smx_name = GetOutputFilename(nullptr, parts.back().chars());
+      AString new_file;
+      new_file.format("%s/%s", output_file, smx_name.chars());
+      return new_file;
+    }
+
+    assert(false);
+    return GetOutputFilename(nullptr, input_file);
+  }
+
+  // crab.smx -> crab.smx
+  // crab -> crab.smx
+  const char* ext = LastMatch(output_file, ".smx");
+  if (ext && ext[4] == '\0')
+    return AString(output_file);
+
+  AString new_file;
+  new_file.format("%s.smx", output_file);
+  return new_file;
+}
+
 bool
 CompileContext::compile(RefPtr<SourceFile> file)
 {
@@ -90,21 +174,27 @@ CompileContext::compile(RefPtr<SourceFile> file)
 
   fprintf(stderr, "-- Parsing --\n");
 
-  TranslationUnit *unit = new (pool()) TranslationUnit();
+  TranslationUnit* unit = new (pool()) TranslationUnit();
   {
     if (!pp.enter(file))
       return false;
 
     NameResolver nr(*this);
     Parser p(*this, pp, nr);
-    ast::ParseTree *tree = p.parse();
+    ast::ParseTree* tree = p.parse();
     if (!phasePassed())
       return false;
 
     unit->attach(tree);
   }
 
-  ReportMemory(stderr);
+  if (options_.ShowPoolStats) {
+    ReportMemory(stderr);
+    fprintf(stderr, "\n");
+  }
+
+  if (options_.ShowAST)
+    unit->tree()->dump(stderr);
 
   if (options_.SkipSemanticAnalysis)
     return true;
@@ -112,29 +202,46 @@ CompileContext::compile(RefPtr<SourceFile> file)
   fprintf(stderr, "\n-- Semantic Analysis --\n");
 
   SemanticAnalysis sema(*this, unit);
-  if (!sema.analyze())
+  sema::Program* program = sema.analyze();
+  if (!program)
     return false;
 
-  ReportMemory(stderr);
+  if (options_.ShowPoolStats) {
+    ReportMemory(stderr);
+    fprintf(stderr, "\n");
+  }
 
-  // ReportMemory(stderr);
+  if (options_.ShowSema)
+    program->dump(stderr);
 
-  // unit->tree()->dump(stdout);
+  AString output_path = GetOutputFilename(
+    options_.OutputFile ? (*options_.OutputFile).chars() : nullptr,
+    file->path());
 
+  // Code generation.
   {
-    //AmxEmitter sema(*this, units_[0]);
-    //if (!sema.compile())
-    //  return false;
+    SmxCompiler compiler(*this, program);
+    if (!compiler.compile())
+      return false;
+    {
+      FILE* fp = fopen(output_path.chars(), "wt");
+      FpBuffer buf(fp);
+      if (!compiler.emit(&buf))
+        return false;
+      fclose(fp);
+    }
   }
 
   if (reports_.HasErrors())
     return false;
 
+  fprintf(stderr, "\n-- Ok! %s --\n", output_path.chars());
+
   return true;
 }
 
-Atom *
-CompileContext::createAnonymousName(const SourceLocation &loc)
+Atom*
+CompileContext::createAnonymousName(const SourceLocation& loc)
 {
   // :SRCLOC: include file name
   AutoString builder = "anonymous at ";

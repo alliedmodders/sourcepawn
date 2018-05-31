@@ -1,3 +1,4 @@
+// compiler: spcomp
 #include <shell>
 
 #define linedefine __LINE__

@@ -23,13 +23,13 @@
 using namespace ke;
 using namespace sp;
 
-Scope::Scope(PoolAllocator &pool, Scope *enclosing)
+Scope::Scope(PoolAllocator& pool, Scope* enclosing)
  : pool_(pool),
    enclosing_(enclosing)
 {
 }
 
-Symbol *
+Symbol*
 Scope::localLookup(Atom * name)
 {
   for (size_t i = 0; i < names_.length(); i++) {
@@ -39,72 +39,72 @@ Scope::localLookup(Atom * name)
   return nullptr;
 }
 
-Symbol *
-Scope::lookup(Atom *name)
+Symbol*
+Scope::lookup(Atom* name)
 {
-  for (Scope *scope = this; scope; scope = scope->enclosing()) {
-    if (Symbol *bound = scope->localLookup(name))
+  for (Scope* scope = this; scope; scope = scope->enclosing()) {
+    if (Symbol* bound = scope->localLookup(name))
       return bound;
   }
   return nullptr;
 }
 
 bool
-Scope::addSymbol(Symbol *sym)
+Scope::addSymbol(Symbol* sym)
 {
   return names_.append(sym);
 }
 
-BlockScope::BlockScope(PoolAllocator &pool)
+BlockScope::BlockScope(PoolAllocator& pool)
  : Scope(pool, nullptr)
 {
 }
 
-BlockScope *
-BlockScope::New(PoolAllocator &pool)
+BlockScope*
+BlockScope::New(PoolAllocator& pool)
 {
   return new (pool) BlockScope(pool);
 }
 
-ArgumentScope::ArgumentScope(PoolAllocator &pool)
+ArgumentScope::ArgumentScope(PoolAllocator& pool)
   : Scope(pool, nullptr)
 {
 }
 
-ArgumentScope *
-ArgumentScope::New(PoolAllocator &pool)
+ArgumentScope*
+ArgumentScope::New(PoolAllocator& pool)
 {
   return new (pool) ArgumentScope(pool);
 }
 
-GlobalScope::GlobalScope(PoolAllocator &pool)
+GlobalScope::GlobalScope(PoolAllocator& pool)
  : Scope(pool, nullptr)
 {
 }
 
-GlobalScope *
-GlobalScope::New(PoolAllocator &pool)
+GlobalScope*
+GlobalScope::New(PoolAllocator& pool)
 {
   return new (pool) GlobalScope(pool);
 }
 
-LayoutScope::LayoutScope(PoolAllocator &pool)
+LayoutScope::LayoutScope(PoolAllocator& pool)
  : Scope(pool, nullptr),
    anonymous_fields_(nullptr)
 {
 }
 
-LayoutScope *
-LayoutScope::New(PoolAllocator &pool)
+LayoutScope*
+LayoutScope::New(PoolAllocator& pool)
 {
   return new (pool) LayoutScope(pool);
 }
 
 void
-LayoutScope::addAnonymousField(ast::FieldDecl *decl)
+LayoutScope::addAnonymousField(ast::FieldDecl* decl)
 {
   if (!anonymous_fields_)
-    anonymous_fields_ = new (POOL()) PoolList<ast::FieldDecl *>();
+    anonymous_fields_ = new (POOL()) PoolList<ast::FieldDecl*>();
   anonymous_fields_->append(decl);
 }
 

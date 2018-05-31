@@ -15,6 +15,8 @@ def main():
                       help="Force testing a specific arch on dual-arch builds.")
   parser.add_argument('--show-cli', default=False, action='store_true',
                       help='Show the command-line invocation of each test.')
+  parser.add_argument('--spcomp2', default=False, action='store_true',
+                      help="Only test using spcomp2.")
   args = parser.parse_args()
 
   plan = TestPlan(args)
@@ -101,7 +103,10 @@ class TestPlan(object):
       })
 
   def find_compilers(self):
-    self.find_spcomp()
+    if self.args.spcomp2:
+      self.find_spcomp2()
+    else:
+      self.find_spcomp()
 
   def find_spcomp(self):
     for arch in self.arch_suffixes:
@@ -116,9 +121,9 @@ class TestPlan(object):
 
       spcomp = {
         'path': os.path.abspath(path),
-        'version': 1,
         'arch': arch,
         'name': 'spcomp',
+        'args': [],
       }
 
       self.modes.append({
@@ -141,6 +146,35 @@ class TestPlan(object):
         'name': 'pcode12',
         'spcomp': spcomp,
         'args': ['-x12'],
+      })
+
+  def find_spcomp2(self):
+    for arch in self.arch_suffixes:
+      if not self.match_arch(arch):
+        continue
+
+      path = os.path.join(self.args.objdir, 'exp', 'compiler', 'spcomp2' + arch, 'spcomp2')
+
+      if not os.path.exists(path):
+        if not os.path.exists(path + '.js'):
+          continue
+        path += '.js'
+
+      spcomp2 = {
+        'path': os.path.abspath(path),
+        'arch': arch,
+        'name': 'spcomp2',
+        'args': [
+          '--show-ast=false',
+          '--show-sema=false',
+          '--pool-stats=false',
+        ],
+      }
+
+      self.modes.append({
+        'name': 'default',
+        'spcomp': spcomp2,
+        'args': [],
       })
 
   def find_tests(self):
@@ -179,6 +213,7 @@ class Test(object):
   ManifestKeys = set([
     'returnCode',
     'warnings_are_errors',
+    'compiler',
   ])
 
   def __init__(self, **kwargs):
@@ -248,6 +283,14 @@ class Test(object):
       return int(self.local_manifest_['returnCode'])
     return 0
 
+  def should_run(self, mode):
+    compiler = self.local_manifest_.get('compiler', None)
+    if compiler is None:
+      compiler = self.manifest_.get('compiler', None)
+    if compiler is None:
+      return True
+    return mode['spcomp']['name'] == compiler
+
   def read_local_manifest(self):
     self.local_manifest_ = {}
     with open(self.path, 'r') as fp:
@@ -264,7 +307,7 @@ class Test(object):
       return False
 
     key = m.group(1)
-    value = m.group(2)
+    value = m.group(2).strip()
     if key not in Test.ManifestKeys:
       raise Exception("Test {0} contains unsupported manifest key {1}".format(
         self.name, key))
@@ -316,6 +359,8 @@ class TestRunner(object):
 
     for test in self.plan.tests:
       test.prepare()
+      if not test.should_run(mode):
+        continue
       if not self.run_test(mode, test):
         self.failures_.add(test)
 
@@ -354,9 +399,12 @@ class TestRunner(object):
       '-i', self.fix_path(spcomp_path, self.core_include_path),
       '-i', self.fix_path(spcomp_path, self.include_path),
     ]
+    argv += mode['spcomp']['args']
     argv += mode['args']
     if test.warnings_are_errors:
       argv += ['-E']
+    if mode['spcomp']['name'] == 'spcomp2':
+      argv += ['-o', test.smx_path]
     argv += [self.fix_path(spcomp_path, test.path)]
 
     # Run and return output.
@@ -479,8 +527,9 @@ class TestRunner(object):
 
   def print_failures(self):
     self.out("Failures were detected in the following tests:")
-    for test in self.failures_:
-      self.out("  {0}".format(test.unique_name))
+    failures = sorted([test.unique_name for test in self.failures_])
+    for test in failures:
+      self.out("  {0}".format(test))
 
   def out(self, text):
     when = (datetime.datetime.now() - self.start_time_).total_seconds()

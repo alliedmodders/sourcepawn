@@ -26,7 +26,7 @@ using namespace sp;
 class FileReader
 {
  public:
-  FileReader(ReportingContext &cc, const char *path)
+  FileReader(ReportingContext& cc, const char* path)
    : cc_(cc),
      path_(path),
      fp_(nullptr)
@@ -43,7 +43,7 @@ class FileReader
     return !!fp_;
   }
 
-  bool read(char **ptr, uint32_t *lengthp) {
+  bool read(char** ptr, uint32_t* lengthp) {
     if (fseek(fp_, 0, SEEK_END) == -1) {
       cc_.report(rmsg::file_read_error) << path_;
       return false;
@@ -77,9 +77,9 @@ class FileReader
   }
 
  private:
-  ReportingContext &cc_;
-  const char *path_;
-  FILE *fp_;
+  ReportingContext& cc_;
+  const char* path_;
+  FILE* fp_;
 };
 
 void
@@ -108,7 +108,7 @@ SourceFile::computeLineCache()
   memcpy(line_cache_->buffer(), lines.buffer(), sizeof(uint32_t) * lines.length());
 }
 
-SourceManager::SourceManager(StringPool &strings, ReportManager &reports)
+SourceManager::SourceManager(StringPool& strings, ReportManager& reports)
  : strings_(strings),
    rr_(reports),
    next_source_id_(1),
@@ -118,9 +118,9 @@ SourceManager::SourceManager(StringPool &strings, ReportManager &reports)
 }
 
 RefPtr<SourceFile>
-SourceManager::open(ReportingContext &cc, const char *path)
+SourceManager::open(ReportingContext& cc, const char* path)
 {
-  Atom *atom = strings_.add(path);
+  Atom* atom = strings_.add(path);
   AtomMap<RefPtr<SourceFile>>::Insert p = file_cache_.findForAdd(atom);
   if (p.found())
     return p->value;
@@ -144,7 +144,7 @@ SourceManager::open(ReportingContext &cc, const char *path)
 }
 
 bool
-SourceManager::trackExtents(uint32_t length, size_t *index)
+SourceManager::trackExtents(uint32_t length, size_t* index)
 {
   // We allocate an extra 2 so we can refer to the end-of-file position without
   // colling with the next range.
@@ -167,7 +167,7 @@ SourceManager::trackExtents(uint32_t length, size_t *index)
 }
 
 LREntry
-SourceManager::trackFile(const SourceLocation &from, RefPtr<SourceFile> file)
+SourceManager::trackFile(const SourceLocation& from, RefPtr<SourceFile> file)
 {
   size_t loc_index;
   if (!trackExtents(file->length(), &loc_index)) {
@@ -180,7 +180,7 @@ SourceManager::trackFile(const SourceLocation &from, RefPtr<SourceFile> file)
 }
 
 LREntry
-SourceManager::trackMacro(const SourceLocation &from, Macro *macro)
+SourceManager::trackMacro(const SourceLocation& from, Macro* macro)
 {
   size_t loc_index;
   if (!trackExtents(macro->length(), &loc_index)) {
@@ -193,7 +193,7 @@ SourceManager::trackMacro(const SourceLocation &from, Macro *macro)
 }
 
 bool
-SourceManager::findLocation(const SourceLocation &loc, size_t *aIndex)
+SourceManager::findLocation(const SourceLocation& loc, size_t* aIndex)
 {
   if (!loc.isSet())
     return false;
@@ -212,7 +212,7 @@ SourceManager::findLocation(const SourceLocation &loc, size_t *aIndex)
   while (lower < upper) {
     size_t index = (lower + upper) / 2;
 
-    LREntry &range = locations_[index];
+    LREntry& range = locations_[index];
     if (loc.offset() < range.id) {
       upper = index;
     } else if (loc.offset() > range.id + range.length() + 1) {
@@ -235,7 +235,7 @@ SourceManager::findLocation(const SourceLocation &loc, size_t *aIndex)
 }
 
 SourceLocation
-SourceManager::normalize(const SourceLocation &aLoc)
+SourceManager::normalize(const SourceLocation& aLoc)
 {
   SourceLocation loc = aLoc;
   while (loc.isInMacro()) {
@@ -248,7 +248,7 @@ SourceManager::normalize(const SourceLocation &aLoc)
 }
 
 RefPtr<SourceFile>
-SourceManager::getSource(const SourceLocation &aLoc)
+SourceManager::getSource(const SourceLocation& aLoc)
 {
   SourceLocation loc = normalize(aLoc);
 
@@ -260,7 +260,7 @@ SourceManager::getSource(const SourceLocation &aLoc)
 }
 
 unsigned
-SourceManager::getLine(const SourceLocation &aLoc)
+SourceManager::getLine(const SourceLocation& aLoc)
 {
   SourceLocation loc = normalize(aLoc);
 
@@ -272,9 +272,9 @@ SourceManager::getLine(const SourceLocation &aLoc)
 }
 
 unsigned
-SourceManager::getLine(const LREntry &range, const SourceLocation &loc)
+SourceManager::getLine(const LREntry& range, const SourceLocation& loc)
 {
-  SourceFile *file = range.getFile();
+  SourceFile* file = range.getFile();
 
   // Note: we don't OOM check this, since we don't oom check anything.
   if (!file->lineCache())
@@ -284,7 +284,7 @@ SourceManager::getLine(const LREntry &range, const SourceLocation &loc)
   assert(pos <= file->length());
 
   // If the position is at end-of-file, return the last line number.
-  LineExtents *lines = file->lineCache();
+  LineExtents* lines = file->lineCache();
   if (pos == file->length())
     return lines->length();
 
@@ -319,7 +319,7 @@ SourceManager::getLine(const LREntry &range, const SourceLocation &loc)
 }
 
 unsigned
-SourceManager::getCol(const SourceLocation &aLoc)
+SourceManager::getCol(const SourceLocation& aLoc)
 {
   SourceLocation loc = normalize(aLoc);
 
@@ -327,7 +327,7 @@ SourceManager::getCol(const SourceLocation &aLoc)
   if (!findLocation(loc, &loc_index))
     return 0;
 
-  const LREntry &range = locations_[loc_index];
+  const LREntry& range = locations_[loc_index];
   unsigned line = getLine(range, loc);
   if (!line)
     return 0;
@@ -335,14 +335,14 @@ SourceManager::getCol(const SourceLocation &aLoc)
 }
 
 unsigned
-SourceManager::getCol(const LREntry &range, const SourceLocation &loc, unsigned line)
+SourceManager::getCol(const LREntry& range, const SourceLocation& loc, unsigned line)
 {
   if (!line) {
     if ((line = getLine(range, loc)) == 0)
       return 0;
   }
 
-  SourceFile *file = range.getFile();
+  SourceFile* file = range.getFile();
 
   // Cached and returned lines are + 1, but the line cache starts at 0.
   line = line - 1;
@@ -362,7 +362,7 @@ SourceManager::getCol(const LREntry &range, const SourceLocation &loc, unsigned 
 }
 
 FullSourceRef
-SourceManager::decode(const SourceLocation &aLoc)
+SourceManager::decode(const SourceLocation& aLoc)
 {
   SourceLocation loc = normalize(aLoc);
   size_t loc_index;
@@ -372,9 +372,9 @@ SourceManager::decode(const SourceLocation &aLoc)
 }
 
 FullSourceRef
-SourceManager::getOrigin(const FullMacroRef &ref)
+SourceManager::getOrigin(const FullMacroRef& ref)
 {
-  Macro *macro = ref.macro;
+  Macro* macro = ref.macro;
   if (!macro->definedAt.isSet())
     return FullSourceRef();
 
@@ -389,7 +389,7 @@ SourceManager::getOrigin(const FullMacroRef &ref)
 }
 
 bool
-SourceManager::sameSourceId(const SourceLocation &a, const SourceLocation &b)
+SourceManager::sameSourceId(const SourceLocation& a, const SourceLocation& b)
 {
   if (!a.isSet() && !b.isSet())
     return true;
@@ -401,8 +401,8 @@ SourceManager::sameSourceId(const SourceLocation &a, const SourceLocation &b)
 }
 
 bool
-SourceManager::areLocationsInsertedOnSameLine(const SourceLocation &aLocA,
-                                              const SourceLocation &aLocB)
+SourceManager::areLocationsInsertedOnSameLine(const SourceLocation& aLocA,
+                                              const SourceLocation& aLocB)
 {
   SourceLocation a = normalize(aLocA);
   SourceLocation b = normalize(aLocB);
@@ -423,7 +423,7 @@ SourceManager::areLocationsInsertedOnSameLine(const SourceLocation &aLocA,
 }
 
 FullSourceRef
-SourceManager::fullSourceRef(const LREntry &range, const SourceLocation &loc)
+SourceManager::fullSourceRef(const LREntry& range, const SourceLocation& loc)
 {
   FullSourceRef ref;
   ref.file = range.getFile();
@@ -434,7 +434,7 @@ SourceManager::fullSourceRef(const LREntry &range, const SourceLocation &loc)
 }
 
 void
-SourceManager::getTokenHistory(const SourceLocation &aLoc, TokenHistory *history)
+SourceManager::getTokenHistory(const SourceLocation& aLoc, TokenHistory* history)
 {
   SourceLocation loc = aLoc;
   while (loc.isSet()) {
@@ -442,7 +442,7 @@ SourceManager::getTokenHistory(const SourceLocation &aLoc, TokenHistory *history
     if (!findLocation(loc, &loc_index))
       return;
 
-    const LREntry &range = locations_[loc_index];
+    const LREntry& range = locations_[loc_index];
     if (loc.isInMacro()) {
       history->macros.append(FullMacroRef(range.getMacro(), loc.offset() - range.id));
     } else {

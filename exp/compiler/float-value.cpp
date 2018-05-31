@@ -22,7 +22,7 @@ using namespace ke;
 using namespace sp;
 
 bool
-FloatValue::UpcastForOp(FloatValue *aLeft, FloatValue *aRight)
+FloatValue::UpcastForOp(FloatValue* aLeft, FloatValue* aRight)
 {
   if (aLeft->isDouble() != aRight->isDouble()) {
     *aLeft = FromDouble(aLeft->asDouble());
@@ -33,7 +33,7 @@ FloatValue::UpcastForOp(FloatValue *aLeft, FloatValue *aRight)
 }
 
 FloatValue 
-FloatValue::Add(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Add(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -42,7 +42,7 @@ FloatValue::Add(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 FloatValue 
-FloatValue::Sub(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Sub(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -51,7 +51,7 @@ FloatValue::Sub(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 FloatValue
-FloatValue::Mul(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Mul(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -60,7 +60,7 @@ FloatValue::Mul(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 FloatValue
-FloatValue::Div(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Div(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -69,7 +69,7 @@ FloatValue::Div(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 FloatValue
-FloatValue::Mod(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Mod(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -78,7 +78,7 @@ FloatValue::Mod(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 bool
-FloatValue::Ge(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Ge(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -87,7 +87,7 @@ FloatValue::Ge(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 bool
-FloatValue::Gt(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Gt(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -96,7 +96,7 @@ FloatValue::Gt(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 bool
-FloatValue::Le(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Le(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -105,7 +105,7 @@ FloatValue::Le(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 bool
-FloatValue::Lt(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Lt(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -114,7 +114,7 @@ FloatValue::Lt(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 bool
-FloatValue::Eq(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Eq(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -123,7 +123,7 @@ FloatValue::Eq(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 bool
-FloatValue::Ne(const FloatValue &aLeft, const FloatValue &aRight)
+FloatValue::Ne(const FloatValue& aLeft, const FloatValue& aRight)
 {
   FloatValue left = aLeft, right = aRight;
   if (UpcastForOp(&left, &right))
@@ -132,7 +132,7 @@ FloatValue::Ne(const FloatValue &aLeft, const FloatValue &aRight)
 }
 
 FloatValue
-FloatValue::Neg(const FloatValue &in)
+FloatValue::Neg(const FloatValue& in)
 {
   if (in.isDouble())
     return FromDouble(-in.toDouble());

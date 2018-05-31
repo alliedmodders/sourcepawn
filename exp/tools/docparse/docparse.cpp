@@ -15,7 +15,7 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
-#include "compiler/string-pool.h"
+#include "shared/string-pool.h"
 #include "compiler/reporting.h"
 #include "compiler/source-manager.h"
 #include "compiler/compile-context.h"
@@ -332,12 +332,23 @@ class Analyzer : public PartialAstVisitor
     return toJson(te.resolved(), name);
   }
 
+  static inline bool isByRef(const TypeExpr& te) {
+    return te.resolved()
+           ? te.resolved()->isReference()
+           : te.spec()->isByRef();
+  }
+  static inline bool isConst(const TypeExpr& te) {
+    return te.resolved()
+           ? te.resolved()->isConst()
+           : te.spec()->isConst();
+  }
+
   JsonString *toJson(VarDecl *decl, bool named) {
     // :TODO: add a BuildTypeName(VarDecl) helper.
     TypeDiagFlags flags = TypeDiagFlags::Names;
-    if (!!(decl->sym()->storage_flags() & StorageFlags::byref))
+    if (isByRef(decl->te()))
       flags |= TypeDiagFlags::IsByRef;
-    if (!!(decl->sym()->storage_flags() & StorageFlags::constval))
+    if (isConst(decl->te()))
       flags |= TypeDiagFlags::IsConst;
     return toJson(BuildTypeName(
       decl->te(),

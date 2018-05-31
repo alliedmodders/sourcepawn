@@ -24,17 +24,17 @@ extern "C" void __cxa_pure_virtual(void)
 {
 }
 
-void *operator new(size_t size)
+void* operator new(size_t size)
 {
 	return malloc(size);
 }
 
-void *operator new[](size_t size) 
+void* operator new[](size_t size) 
 {
 	return malloc(size);
 }
 
-void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
+void operator delete(void* ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	free(ptr);
 }

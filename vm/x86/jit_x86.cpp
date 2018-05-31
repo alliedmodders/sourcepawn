@@ -983,6 +983,7 @@ Compiler::visitSTACK(cell_t amount)
 bool
 Compiler::visitHEAP(cell_t amount)
 {
+  // Note: this must not clobber PRI.
   __ movl(alt, Operand(hpAddr()));
   __ addl(Operand(hpAddr()), amount);
 

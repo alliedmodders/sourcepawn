@@ -77,6 +77,7 @@ namespace sp {
   _(TYPEDEF,            "typedef")                    \
   _(TYPESET,            "typeset")                    \
   _(UNION,              "union")                      \
+  _(USING,              "using")                      \
   _(VIEW_AS,            "view_as")                    \
   _(VOID,               "void")                       \
   _(WHILE,              "while")                      \
@@ -90,6 +91,7 @@ namespace sp {
   _(M_IF,               "#if")                        \
   _(M_INCLUDE,          "#include")                   \
   _(M_LEAVING,          "#leaving")                   \
+  _(M_LINE,             "__LINE__")                   \
   _(M_OPTIONAL_NEWDECLS, "#optional_newdecls")        \
   _(M_OPTIONAL_SEMI,    "#optional_semicolons")       \
   _(M_PRAGMA,           "#pragma")                    \
@@ -97,6 +99,7 @@ namespace sp {
   _(M_REQUIRE_SEMI,     "#require_semicolons")        \
   _(M_TRYINCLUDE,       "#tryinclude")                \
   _(M_UNDEF,            "#undef")                     \
+  _(INTRINSICS,         "__intrinsics__")             \
   _(ELLIPSES,           "...")                        \
   _(PLUS,               "+")                          \
   _(MINUS,              "-")                          \

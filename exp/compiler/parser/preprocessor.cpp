@@ -32,7 +32,7 @@ using namespace sp;
 
 static const size_t kMaxIncludeDepth = 50;
 
-Preprocessor::Preprocessor(CompileContext &cc)
+Preprocessor::Preprocessor(CompileContext& cc)
  : cc_(cc),
    options_(cc_.options()),
    keywords_(cc),
@@ -56,7 +56,7 @@ Preprocessor::setup_builtin_macros()
     struct tm curtime;
     time_t td = time(nullptr);
 #if defined(KE_WINDOWS)
-    if (struct tm *rv = _localtime64(&td)) {
+    if (struct tm* rv = _localtime64(&td)) {
       curtime = *rv;
     } else {
       MemsetZero(&curtime);
@@ -86,13 +86,13 @@ Preprocessor::setup_builtin_macros()
 }
 
 void
-Preprocessor::define_builtin_int(const char *name, int64_t value)
+Preprocessor::define_builtin_int(const char* name, int64_t value)
 {
-  Atom *id = cc_.add(name);
-  AtomMap<Macro *>::Insert p = macros_.findForAdd(id);
+  Atom* id = cc_.add(name);
+  AtomMap<Macro*>::Insert p = macros_.findForAdd(id);
   assert(!p.found());
 
-  TokenList *tokens = new (cc_.pool()) TokenList(1);
+  TokenList* tokens = new (cc_.pool()) TokenList(1);
   tokens->at(0) = Token(TOK_INTEGER_LITERAL);
   tokens->at(0).setIntValue(value);
 
@@ -100,13 +100,13 @@ Preprocessor::define_builtin_int(const char *name, int64_t value)
 }
 
 void
-Preprocessor::define_builtin_string(const char *name, const char *str)
+Preprocessor::define_builtin_string(const char* name, const char* str)
 {
-  Atom *id = cc_.add(name);
-  AtomMap<Macro *>::Insert p = macros_.findForAdd(id);
+  Atom* id = cc_.add(name);
+  AtomMap<Macro*>::Insert p = macros_.findForAdd(id);
   assert(!p.found());
 
-  TokenList *tokens = new (cc_.pool()) TokenList(1);
+  TokenList* tokens = new (cc_.pool()) TokenList(1);
   tokens->at(0) = Token(TOK_STRING_LITERAL);
   tokens->at(0).setAtom(cc_.add(str));
 
@@ -135,7 +135,7 @@ Preprocessor::enter(RefPtr<SourceFile> file)
 TokenKind
 Preprocessor::next()
 {
-  if (Token *buffered = tokens_->maybePop())
+  if (Token* buffered = tokens_->maybePop())
     return buffered->kind;
   return scan();
 }
@@ -221,8 +221,8 @@ Preprocessor::peekTokenSameLine()
     undo();
   }
 
-  const Token *cur = current();
-  const Token *next = tokens_->peek();
+  const Token* cur = current();
+  const Token* next = tokens_->peek();
 
   // If both tokens are in the same source file, this becomes very easy.
   if (cur->source_id == next->source_id) {
@@ -239,7 +239,7 @@ Preprocessor::peekTokenSameLine()
 }
 
 static inline bool
-FileExists(const AutoString &path)
+FileExists(const AutoString& path)
 {
 #if defined(KE_WINDOWS)
   DWORD type = GetFileAttributesA(path);
@@ -265,7 +265,7 @@ IsPathSeparator(char c)
 }
 
 AutoString
-Preprocessor::searchPaths(const char *file, const char *where)
+Preprocessor::searchPaths(const char* file, const char* where)
 {
   // If the path is absolute, we perform no searching.
 #if defined(KE_WINDOWS)
@@ -283,10 +283,10 @@ Preprocessor::searchPaths(const char *file, const char *where)
   if (where) {
     // Find the position of the last path separator in the current file context.
 #if defined(KE_WINDOWS)
-    const char *e1 = strrchr(where, '\\');
-    const char *e2 = strrchr(where, '/');
+    const char* e1 = strrchr(where, '\\');
+    const char* e2 = strrchr(where, '/');
     
-    const char *end;
+    const char* end;
     if ((e1 && e2 && (e1 > e2)) || (e1 && !e2))
       end = e1;
     else if ((e1 && e2 && (e1 < e2)) || (e2 && !e1))
@@ -294,7 +294,7 @@ Preprocessor::searchPaths(const char *file, const char *where)
     else
       end = NULL;
 #else
-    const char *end = strrchr(where, '/');
+    const char* end = strrchr(where, '/');
 #endif
 
     if (!end) {
@@ -319,9 +319,9 @@ Preprocessor::searchPaths(const char *file, const char *where)
 
 bool
 Preprocessor::enterFile(TokenKind directive,
-                        const SourceLocation &from,
-                        const char *file,
-                        const char *where)
+                        const SourceLocation& from,
+                        const char* file,
+                        const char* where)
 {
   if (disable_includes_)
     return false;
@@ -370,9 +370,9 @@ Preprocessor::enterFile(TokenKind directive,
 }
 
 void
-Preprocessor::defineMacro(Atom *name, const SourceLocation &nameLoc, TokenList *tokens)
+Preprocessor::defineMacro(Atom* name, const SourceLocation& nameLoc, TokenList* tokens)
 {
-  AtomMap<Macro *>::Insert p = macros_.findForAdd(name);
+  AtomMap<Macro*>::Insert p = macros_.findForAdd(name);
   if (p.found()) {
     if (p->value->definedAt.isSet()) {
       cc_.report(nameLoc, rmsg::macro_redefinition)
@@ -385,14 +385,14 @@ Preprocessor::defineMacro(Atom *name, const SourceLocation &nameLoc, TokenList *
     return;
   }
 
-  Macro *macro = new (cc_.pool()) Macro(nameLoc, name, tokens);
+  Macro* macro = new (cc_.pool()) Macro(nameLoc, name, tokens);
   macros_.add(p, name, macro);
 }
 
 bool
-Preprocessor::removeMacro(const SourceLocation &loc, Atom *name)
+Preprocessor::removeMacro(const SourceLocation& loc, Atom* name)
 {
-  AtomMap<Macro *>::Result p = macros_.find(name);
+  AtomMap<Macro*>::Result p = macros_.find(name);
   if (!p.found()) {
     cc_.report(loc, rmsg::macro_not_found)
       << name;
@@ -409,16 +409,16 @@ Preprocessor::removeMacro(const SourceLocation &loc, Atom *name)
 }
 
 bool
-Preprocessor::enterMacro(const SourceLocation &nameLoc, Atom *name)
+Preprocessor::enterMacro(const SourceLocation& nameLoc, Atom* name)
 {
   if (!allow_macro_expansion_)
     return false;
 
-  AtomMap<Macro *>::Result p = macros_.find(name);
+  AtomMap<Macro*>::Result p = macros_.find(name);
   if (!p.found())
     return false;
 
-  Macro *macro = p->value;
+  Macro* macro = p->value;
   
   // If this macro is active, then we're currently expanding it, and we must make sure not to
   // expand it again and potentially infinitely recurse.
@@ -473,7 +473,7 @@ Preprocessor::handleEndOfFile()
   }
 
   {
-    SavedLexer &saved = lexer_stack_.back();
+    SavedLexer& saved = lexer_stack_.back();
     lexer_ = saved.lexer;
     macro_lexer_ = saved.macro_lexer;
     lexer_stack_.pop();
@@ -484,7 +484,7 @@ Preprocessor::handleEndOfFile()
 }
 
 void
-Preprocessor::addComment(CommentPos where, const SourceRange &extends)
+Preprocessor::addComment(CommentPos where, const SourceRange& extends)
 {
   if (comment_handler_)
     comment_handler_->HandleComment(where, extends);

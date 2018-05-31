@@ -29,7 +29,7 @@ namespace ast {
 class NameProxy;
 class Expression;
 class FunctionSignature;
-typedef PoolList<Expression *> ExpressionList;
+typedef PoolList<Expression*> ExpressionList;
 
 // Type specifiers are technically part of the AST, however they are quite
 // critical both to parsing and type resolution so we define them separately
@@ -61,29 +61,29 @@ class TypeSpecifier : public PoolObject
     assert(rank_ == 0);
   }
 
-  const SourceLocation &startLoc() const {
+  const SourceLocation& startLoc() const {
     return start_loc_;
   }
 
-  void setBaseLoc(const SourceLocation &loc) {
+  void setBaseLoc(const SourceLocation& loc) {
     setLocation(base_loc_, loc);
   }
-  const SourceLocation &baseLoc() const {
+  const SourceLocation& baseLoc() const {
     return base_loc_;
   }
 
   void setBuiltinType(TokenKind kind) {
     resolver_ = kind;
   }
-  void setNamedType(TokenKind kind, ast::NameProxy *proxy) {
+  void setNamedType(TokenKind kind, ast::NameProxy* proxy) {
     resolver_ = kind;
     proxy_ = proxy;
   }
-  void setFunctionType(FunctionSignature *signature) {
+  void setFunctionType(FunctionSignature* signature) {
     resolver_ = TOK_FUNCTION;
     signature_ = signature;
   }
-  void setResolvedBaseType(Type *type) {
+  void setResolvedBaseType(Type* type) {
     resolver_ = TOK_DEFINED;
     resolved_ = type;
   }
@@ -99,38 +99,38 @@ class TypeSpecifier : public PoolObject
     }
   }
 
-  void setVariadic(const SourceLocation &loc) {
+  void setVariadic(const SourceLocation& loc) {
     attrs_ |= Variadic;
     setLocation(variadic_loc_, loc);
   }
   bool isVariadic() const {
     return !!(attrs_ & Variadic);
   }
-  const SourceLocation &variadicLoc() const {
+  const SourceLocation& variadicLoc() const {
     assert(isVariadic());
     return variadic_loc_;
   }
 
-  void setConst(const SourceLocation &loc) {
+  void setConst(const SourceLocation& loc) {
     attrs_ |= Const;
     setLocation(const_loc_, loc);
   }
   bool isConst() const {
     return !!(attrs_ & Const);
   }
-  const SourceLocation &constLoc() const {
+  const SourceLocation& constLoc() const {
     assert(isConst());
     return const_loc_;
   }
 
-  void setByRef(const SourceLocation &loc) {
+  void setByRef(const SourceLocation& loc) {
     attrs_ |= ByRef;
     setLocation(sigil_loc_, loc);
   }
   bool isByRef() const {
     return !!(attrs_ & ByRef);
   }
-  const SourceLocation &byRefLoc() const {
+  const SourceLocation& byRefLoc() const {
     assert(isByRef());
     return sigil_loc_;
   }
@@ -139,13 +139,13 @@ class TypeSpecifier : public PoolObject
   // cases the array will have no sized ranks and we'll save allocating a
   // list of nulls - or, in the vast majority of cases - we'll have no arrays
   // at all and we save an extra word on the very common TypeSpecifier.
-  void setRank(const SourceLocation &sigil, uint32_t aRank) {
+  void setRank(const SourceLocation& sigil, uint32_t aRank) {
     assert(!rank());
     rank_ = aRank;
     sigil_loc_ = sigil;
     assert(start_loc_.isSet());
   }
-  void setDimensionSizes(const SourceLocation &sigil, ast::ExpressionList *dims) {
+  void setDimensionSizes(const SourceLocation& sigil, ast::ExpressionList* dims) {
     assert(!rank());
     dims_ = dims;
     attrs_ |= SizedArray;
@@ -155,17 +155,17 @@ class TypeSpecifier : public PoolObject
   bool isArray() const {
     return rank() > 0;
   }
-  const SourceLocation &arrayLoc() const {
+  const SourceLocation& arrayLoc() const {
     assert(isArray());
     return sigil_loc_;
   }
 
-  ast::ExpressionList *dims() const {
+  ast::ExpressionList* dims() const {
     if (attrs_ & SizedArray)
       return dims_;
     return nullptr;
   }
-  ast::Expression *sizeOfRank(uint32_t r) const {
+  ast::Expression* sizeOfRank(uint32_t r) const {
     assert(r < rank());
     if (attrs_ & SizedArray)
       return dims_->at(r);
@@ -180,15 +180,15 @@ class TypeSpecifier : public PoolObject
   TokenKind resolver() const {
     return resolver_;
   }
-  ast::NameProxy *proxy() const {
+  ast::NameProxy* proxy() const {
     assert(resolver() == TOK_NAME || resolver() == TOK_LABEL);
     return proxy_;
   }
-  FunctionSignature *signature() const {
+  FunctionSignature* signature() const {
     assert(resolver() == TOK_FUNCTION);
     return signature_;
   }
-  Type *getResolvedBase() const {
+  Type* getResolvedBase() const {
     assert(resolver() == TOK_DEFINED);
     return resolved_;
   }
@@ -243,7 +243,7 @@ class TypeSpecifier : public PoolObject
   }
 
  private:
-  void setLocation(SourceLocation &where, const SourceLocation &loc) {
+  void setLocation(SourceLocation& where, const SourceLocation& loc) {
     where = loc;
     if (!start_loc_.isSet())
       start_loc_ = loc;
@@ -258,13 +258,13 @@ class TypeSpecifier : public PoolObject
   uint32_t attrs_;
   union {
     uint32_t rank_;
-    ast::ExpressionList *dims_;
+    ast::ExpressionList* dims_;
   };
   TokenKind resolver_;
   union {
-    ast::NameProxy *proxy_;
-    FunctionSignature *signature_;
-    Type *resolved_;
+    ast::NameProxy* proxy_;
+    FunctionSignature* signature_;
+    Type* resolved_;
   };
 };
 
@@ -279,11 +279,11 @@ class TypeExpr
    : type_(nullptr),
      spec_(nullptr)
   {}
-  explicit TypeExpr(TypeSpecifier *spec)
+  explicit TypeExpr(TypeSpecifier* spec)
    : type_(nullptr),
      spec_(spec)
   {}
-  explicit TypeExpr(Type *type)
+  explicit TypeExpr(Type* type)
    : type_(type),
      spec_(nullptr)
   {}
@@ -294,25 +294,25 @@ class TypeExpr
   bool isResolving() const {
     return spec_ && spec_->isResolving();
   }
-  void setResolved(Type *type) {
+  void setResolved(Type* type) {
     assert(!type_ || type_->isUnresolvable() || type_->isImplicitInt());
     if (spec_)
       spec_->setResolved();
     type_ = type;
     spec_ = nullptr;
   }
-  Type *resolved() const {
+  Type* resolved() const {
     assert(type_ || spec_);
     return type_;
   }
-  TypeSpecifier *spec() const {
+  TypeSpecifier* spec() const {
     assert(type_ || spec_);
     return spec_;
   }
 
  private:
-  Type *type_;
-  TypeSpecifier *spec_;
+  Type* type_;
+  TypeSpecifier* spec_;
 };
 
 } // namespace ast

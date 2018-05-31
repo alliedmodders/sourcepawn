@@ -1,3 +1,4 @@
+// compiler: spcomp
 #include <shell>
 
 enum Test {

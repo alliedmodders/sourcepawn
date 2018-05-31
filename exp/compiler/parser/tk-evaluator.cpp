@@ -21,7 +21,7 @@ using namespace ke;
 using namespace sp;
 
 bool
-Preprocessor::eval(int *out)
+Preprocessor::eval(int* out)
 {
   // We must be in a file, processing the text of a directive. This ensures
   // that any newline or EOF we get becomes an EOL token, and the lexing stack
@@ -34,7 +34,7 @@ Preprocessor::eval(int *out)
 
   // Switch to the preprocessing token buffer. Since we're lexing a directive
   // from within the Preprocessor, we cannot mix the token streams.
-  SaveAndSet<TokenRing *> switchTokenRings(&tokens_, &pp_tokens_);
+  SaveAndSet<TokenRing*> switchTokenRings(&tokens_, &pp_tokens_);
 
   // We must disable macro expansion, since we could predictively expand an
   // identifier token when we don't want to do that for the "defined"
@@ -62,7 +62,7 @@ Preprocessor::eval(int *out)
 }
 
 bool
-Preprocessor::eval_inner(int *out)
+Preprocessor::eval_inner(int* out)
 {
   int e;
   if (!eval_binary(12, &e))
@@ -101,7 +101,7 @@ static Op Operators[] = {
   { TOK_NONE, -1, -1, -1 }
 };
 
-static inline const Op *
+static inline const Op*
 FindOperator(TokenKind tok)
 {
   switch (tok) {
@@ -170,7 +170,7 @@ Preprocessor::eval_next()
   while (next() == TOK_NAME) {
     // Macro expansion is disabled, so we manually expand the macro. If we
     // can't, it's not a valid identifier.
-    const Token *tok = current();
+    const Token* tok = current();
     SaveAndSet<bool> enableMacroExpansion(&allow_macro_expansion_, true);
     if (!enterMacro(tok->start.loc, tok->atom())) {
       cc_.report(tok->start.loc, rmsg::macro_not_found)
@@ -215,7 +215,7 @@ Preprocessor::eval_expect(TokenKind kind)
 }
 
 bool
-Preprocessor::eval_unary(int *val)
+Preprocessor::eval_unary(int* val)
 {
   TokenKind kind = eval_next();
 
@@ -267,15 +267,15 @@ Preprocessor::eval_unary(int *val)
           return false;
       }
 
-      Atom *atom = current()->atom();
-      AtomMap<Macro *>::Result r = macros_.find(atom);
+      Atom* atom = current()->atom();
+      AtomMap<Macro*>::Result r = macros_.find(atom);
       *val = r.found() ? 1 : 0;
       return true;
     }
 
     case TOK_INTEGER_LITERAL:
     {
-      const Token *tok = current();
+      const Token* tok = current();
       if (tok->int64Value() > INT_MAX || tok->int64Value() < INT_MIN) {
         cc_.report(tok->start.loc, rmsg::int_literal_overflow);
         return false;
@@ -290,7 +290,7 @@ Preprocessor::eval_unary(int *val)
 
     default:
     {
-      const Token *tok = current();
+      const Token* tok = current();
       cc_.report(tok->start.loc, rmsg::unexpected_directive_token)
         << TokenNames[tok->kind];
       return false;
@@ -299,7 +299,7 @@ Preprocessor::eval_unary(int *val)
 }
 
 bool
-Preprocessor::eval_binary(int prec, int *val)
+Preprocessor::eval_binary(int prec, int* val)
 {
   assert(prec <= 12);
   assert(prec >= 2);
@@ -313,13 +313,13 @@ Preprocessor::eval_binary(int prec, int *val)
 
   while (true) {
     TokenKind kind = eval_peek();
-    const Op *op = FindOperator(kind);
+    const Op* op = FindOperator(kind);
     if (!op || op->prec != prec)
       break;
 
     SourceLocation loc;
     {
-      Token *tok = tokens_->pop();
+      Token* tok = tokens_->pop();
       assert(tok->kind == kind);
 
       loc = tok->start.loc;

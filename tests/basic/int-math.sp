@@ -15,7 +15,7 @@ public main()
   printnum(c / b);
   printnum(c / a);
   printnum(a << b);
-  printnum(0x5e5e5e5e5e >> a);
+  printnum(0x5e5e5e5e >> a);
   printnum(-1 >>> a);
   printnum(d >> 2);
   printnum(d >>> 2);

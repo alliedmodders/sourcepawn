@@ -22,7 +22,7 @@
 using namespace ke;
 using namespace sp;
 
-TypeManager::TypeManager(StringPool &strings)
+TypeManager::TypeManager(StringPool& strings)
  : strings_(strings),
    voidType_(nullptr),
    implicitVoidType_(nullptr),
@@ -35,7 +35,8 @@ TypeManager::TypeManager(StringPool &strings)
    const_char_array_(nullptr),
    float_type_(nullptr),
    float3_array_(nullptr),
-   const_float3_array_(nullptr)
+   const_float3_array_(nullptr),
+   variadic_any_(nullptr)
 {
   atom_String_ = strings.add("String");
   atom_Float_ = strings.add("Float");
@@ -55,18 +56,21 @@ TypeManager::initialize()
 
   primitiveTypes_[size_t(PrimitiveType::ImplicitIntDoNotUseDirectly)] =
     Type::NewPrimitive(PrimitiveType::ImplicitIntDoNotUseDirectly);
+#if 0
   primitiveTypes_[size_t(PrimitiveType::Int8)] = Type::NewPrimitive(PrimitiveType::Int8);
   primitiveTypes_[size_t(PrimitiveType::Uint8)] = Type::NewPrimitive(PrimitiveType::Uint8);
   primitiveTypes_[size_t(PrimitiveType::Int16)] = Type::NewPrimitive(PrimitiveType::Int16);
   primitiveTypes_[size_t(PrimitiveType::Uint16)] = Type::NewPrimitive(PrimitiveType::Uint16);
-  primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32);
   primitiveTypes_[size_t(PrimitiveType::Uint32)] = Type::NewPrimitive(PrimitiveType::Uint32);
   primitiveTypes_[size_t(PrimitiveType::Int64)] = Type::NewPrimitive(PrimitiveType::Int64);
   primitiveTypes_[size_t(PrimitiveType::Uint64)] = Type::NewPrimitive(PrimitiveType::Uint64);
   primitiveTypes_[size_t(PrimitiveType::NativeInt)] = Type::NewPrimitive(PrimitiveType::NativeInt);
   primitiveTypes_[size_t(PrimitiveType::NativeUint)] = Type::NewPrimitive(PrimitiveType::NativeUint);
-  primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
   primitiveTypes_[size_t(PrimitiveType::Double)] = Type::NewPrimitive(PrimitiveType::Double);
+#endif
+
+  primitiveTypes_[size_t(PrimitiveType::Int32)] = Type::NewPrimitive(PrimitiveType::Int32);
+  primitiveTypes_[size_t(PrimitiveType::Float)] = Type::NewPrimitive(PrimitiveType::Float);
   primitiveTypes_[size_t(PrimitiveType::Char)] = Type::NewPrimitive(PrimitiveType::Char);
   primitiveTypes_[size_t(PrimitiveType::Bool)] = Type::NewPrimitive(PrimitiveType::Bool);
 
@@ -77,11 +81,17 @@ TypeManager::initialize()
   //   const float[3]
   char_type_ = getPrimitive(PrimitiveType::Char);
   char_array_ = ArrayType::New(char_type_, ArrayType::kUnsized);
-  const_char_array_ = Type::NewQualified(char_array_, Qualifiers::Const);
+  const_char_array_ =
+    ArrayType::New(Type::NewQualified(char_type_, Qualifiers::Const),
+                   ArrayType::kUnsized);
 
   float_type_ = getPrimitive(PrimitiveType::Float);
   float3_array_ = ArrayType::New(float_type_, 3);
-  const_float3_array_ = Type::NewQualified(float3_array_, Qualifiers::Const);
+  const_float3_array_ =
+    ArrayType::New(Type::NewQualified(float_type_, Qualifiers::Const),
+                   3);
+
+  variadic_any_ = VariadicType::New(uncheckedType_);
 
   if (!reftype_cache_.init(16))
     return false;
@@ -89,8 +99,8 @@ TypeManager::initialize()
   return true;
 }
 
-ArrayType *
-TypeManager::newArray(Type *contained, int elements)
+ArrayType*
+TypeManager::newArray(Type* contained, int elements)
 {
   if (contained == char_type_) {
     if (elements == ArrayType::kUnsized)
@@ -103,14 +113,14 @@ TypeManager::newArray(Type *contained, int elements)
   return ArrayType::New(contained, elements);
 }
 
-EnumType *
-TypeManager::newEnum(Atom *name)
+EnumType*
+TypeManager::newEnum(Atom* name)
 {
   return EnumType::New(name);
 }
 
-Type *
-TypeManager::newQualified(Type *type, Qualifiers qualifiers)
+Type*
+TypeManager::newQualified(Type* type, Qualifiers qualifiers)
 {
   if (qualifiers == Qualifiers::Const) {
     if (type == char_array_)
@@ -130,20 +140,20 @@ TypeManager::newQualified(Type *type, Qualifiers qualifiers)
   return Type::NewQualified(type, qualifiers);
 }
 
-TypesetType *
+TypesetType*
 TypeManager::newTypeset(Atom* name)
 {
   return TypesetType::New(name);
 }
 
-StructType *
-TypeManager::newStruct(Atom* name)
+StructType*
+TypeManager::newStruct(ast::RecordDecl* decl)
 {
-  return StructType::New(name);
+  return StructType::New(decl);
 }
 
-TypedefType *
-TypeManager::newTypedef(Atom *name)
+TypedefType*
+TypeManager::newTypedef(Atom* name)
 {
   return TypedefType::New(name);
 }
@@ -161,8 +171,22 @@ TypeManager::newReference(Type* type)
   return ref;
 }
 
-Type *
-TypeManager::typeForLabelAtom(Atom *atom)
+FunctionType*
+TypeManager::newFunction(ast::FunctionSignature* sig)
+{
+  return FunctionType::New(sig);
+}
+
+VariadicType*
+TypeManager::newVariadic(Type* inner)
+{
+  if (inner == uncheckedType_)
+    return variadic_any_;
+  return VariadicType::New(inner);
+}
+
+Type*
+TypeManager::typeForLabelAtom(Atom* atom)
 {
   if (atom == atom_String_)
     return getPrimitive(PrimitiveType::Char);

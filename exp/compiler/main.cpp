@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License along with
  * SourcePawn. If not, see http://www.gnu.org/licenses/.
  */
+#include <amtl/experimental/am-argparser.h>
 #include <stdio.h>
 #include <string.h>
 #include "compile-context.h"
@@ -23,12 +24,33 @@
 #include "type-manager.h"
 
 using namespace ke;
+using namespace ke::args;
 using namespace sp;
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: <file>\n");
+  Parser parser("SourcePawn compiler.");
+
+  StringOption input_file(parser, "file", "Input file.");
+  StringOption output_file(parser, "o", "output", Nothing(),
+    "SMX output file.");
+  RepeatOption<AString> includes(parser, "-i", nullptr,
+    "Add a folder to the include path.");
+
+  // :TODO: Turn these off by default once we're closer to release.
+  BoolOption show_ast(parser, nullptr, "show-ast", Some(true),
+    "Print the AST to stderr.");
+  BoolOption show_sema(parser, nullptr, "show-sema", Some(true),
+    "Print the semantic analysis tree to stderr.");
+  BoolOption pool_stats(parser, nullptr, "pool-stats", Some(true),
+    "Show pool memory usage after each phase.");
+  ToggleOption parse_only(parser, nullptr, "parse-only", Some(false),
+    "Skip name binding and type resolution.");
+  ToggleOption bind_only(parser, nullptr, "bind-only", Some(false),
+    "Skip type-checking and code generation.");
+
+  if (!parser.parse(argc, argv)) {
+    parser.usage(stderr, argc, argv);
     return 1;
   }
 
@@ -40,11 +62,20 @@ int main(int argc, char **argv)
   {
     PoolScope scope(pool);
     CompileContext cc(pool, strings, reports, source);
+
+    cc.options().SkipResolution = parse_only.value();
+    cc.options().SkipSemanticAnalysis = bind_only.value();
+    cc.options().ShowSema = show_sema.value();
+    cc.options().ShowPoolStats = pool_stats.value();
+    cc.options().OutputFile = output_file.maybeValue();
+    cc.options().SearchPaths = Move(includes.values());
     
     ReportingContext rc(cc, SourceLocation(), false);
-    RefPtr<SourceFile> file = source.open(rc, argv[1]);
+
+    const char* filename = input_file.value().chars();
+    RefPtr<SourceFile> file = source.open(rc, filename);
     if (!file) {
-      fprintf(stderr, "cannot open file '%s'\n", argv[1]);
+      fprintf(stderr, "cannot open file '%s'\n", filename);
       return 1;
     }
 

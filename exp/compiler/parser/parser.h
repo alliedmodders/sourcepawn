@@ -57,9 +57,9 @@ struct Declaration
 class Parser
 {
  public:
-  Parser(CompileContext &cc, Preprocessor &pp, NameResolver &resolver);
+  Parser(CompileContext& cc, Preprocessor& pp, NameResolver& resolver);
 
-  ParseTree *parse();
+  ParseTree* parse();
 
  private:
   bool peek(TokenKind kind);
@@ -76,91 +76,93 @@ class Parser
   };
 
   // Guts of the declaration parsing logic.
-  bool reparse_decl(Declaration *decl, uint32_t flags);
-  void parse_old_array_dims(Declaration *decl, uint32_t flags);
-  bool parse_old_decl(Declaration *decl, uint32_t flags);
-  void parse_function_type(TypeSpecifier *spec, uint32_t flags);
-  void parse_new_typename(TypeSpecifier *spec, const Token *tok);
-  void parse_new_type_expr(TypeSpecifier *spec, uint32_t flags);
-  bool parse_new_decl(Declaration *decl, uint32_t flags);
+  bool reparse_decl(Declaration* decl, uint32_t flags);
+  void parse_old_array_dims(Declaration* decl, uint32_t flags);
+  bool parse_old_decl(Declaration* decl, uint32_t flags);
+  void parse_function_type(TypeSpecifier* spec, uint32_t flags);
+  void parse_new_typename(TypeSpecifier* spec, const Token* tok);
+  void parse_new_type_expr(TypeSpecifier* spec, uint32_t flags);
+  bool parse_new_decl(Declaration* decl, uint32_t flags);
 
   // Returns false only if a name could not be parsed. Other errors allow
   // parsing to continue.
-  bool parse_decl(Declaration *decl, uint32_t flags);
+  bool parse_decl(Declaration* decl, uint32_t flags);
 
-  ExpressionList *dimensions();
-  Atom *maybeName();
-  Atom *expectName();
+  ExpressionList* dimensions();
+  Atom* maybeName();
+  Atom* expectName();
 
-  ExpressionList *callArgs();
+  ExpressionList* callArgs();
 
-  Expression *parseCompoundLiteral();
-  Expression *parseStructInitializer(const SourceLocation &pos);
-  Expression *parseSizeof();
+  Expression* parseCompoundLiteral();
+  Expression* parseStructInitializer(const SourceLocation& pos);
+  Expression* parseSizeof();
 
-  Expression *primitive();
-  Expression *dotfield(Expression *base);
-  Expression *index(Expression *left);
-  Expression *prefix();
-  Expression *primary();
-  Expression *unary();
-  Expression *multiplication();
-  Expression *addition();
-  Expression *shift();
-  Expression *bitand_();
-  Expression *bitxor();
-  Expression *bitor_();
-  Expression *relational();
-  Expression *equals();
-  Expression *and_();
-  Expression *or_();
-  Expression *ternary();
-  Expression *assignment();
-  Expression *expression();
+  Expression* primitive();
+  Expression* dotfield(Expression* base);
+  Expression* index(Expression* left);
+  Expression* prefix();
+  Expression* primary();
+  Expression* unary();
+  Expression* multiplication();
+  Expression* addition();
+  Expression* shift();
+  Expression* bitand_();
+  Expression* bitxor();
+  Expression* bitor_();
+  Expression* relational();
+  Expression* equals();
+  Expression* and_();
+  Expression* or_();
+  Expression* ternary();
+  Expression* assignment();
+  Expression* expression();
 
-  MethodDecl *parseMethod(Atom *layoutName);
-  PropertyDecl *parseAccessor();
+  MethodDecl* parseMethod(Atom* layoutName);
+  PropertyDecl* parseAccessor();
 
-  ParameterList *arguments(bool *canEarlyResolve);
-  FunctionNode *parseFunctionBase(const TypeExpr &te, TokenKind kind);
+  ParameterList* arguments(bool* canEarlyResolve);
+  FunctionNode* parseFunctionBase(const TypeExpr& te, TokenKind kind);
 
-  NameProxy *nameref(const Token *tok = nullptr);
-  NameProxy *tagref(const Token *tok = nullptr);
-  Statement *localVarDecl(TokenKind kind, uint32_t flags = 0);
-  Statement *methodmap(TokenKind kind);
-  Statement *delete_();
-  Statement *switch_();
-  Statement *enum_();
-  Statement *if_();
-  Statement *block();
-  BlockStatement *methodBody();
-  Statement *variable(TokenKind tok, Declaration *decl, uint32_t flags);
-  Statement *function(TokenKind tok, Declaration &decl, uint32_t attrs);
-  Statement *expressionStatement();
-  Statement *while_();
-  Statement *do_();
-  Statement *for_();
-  Statement *statementOrBlock();
-  Statement *statement();
-  StatementList *statements();
-  Statement *return_();
-  Statement *typedef_();
-  Statement *struct_(TokenKind tok);
-  Statement *typeset_();
-  Statement *global(TokenKind tok);
+  NameProxy* nameref(const Token* tok = nullptr);
+  NameProxy* tagref(const Token* tok = nullptr);
+  Statement* localVarDecl(TokenKind kind, uint32_t flags = 0);
+  Statement* methodmap(TokenKind kind);
+  Statement* delete_();
+  Statement* switch_();
+  Statement* enum_();
+  Statement* if_();
+  Statement* block();
+  BlockStatement* methodBody();
+  Statement* variable(TokenKind tok, Declaration* decl, SymAttrs flags, uint32_t decl_flags);
+  Statement* function(TokenKind tok, Declaration& decl, SymAttrs flags);
+  Statement* expressionStatement();
+  Statement* while_();
+  Statement* do_();
+  Statement* for_();
+  Statement* statementOrBlock();
+  Statement* statement();
+  StatementList* statements();
+  Statement* return_();
+  Statement* typedef_();
+  Statement* struct_(TokenKind tok);
+  Statement* typeset_();
+  Statement* global(TokenKind tok);
+  bool using_();
 
  private:
-  CompileContext &cc_;
-  PoolAllocator &pool_;
-  Preprocessor &scanner_;
-  const CompileOptions &options_;
-  NameResolver &delegate_;
+  CompileContext& cc_;
+  PoolAllocator& pool_;
+  Preprocessor& scanner_;
+  const CompileOptions& options_;
+  NameResolver& delegate_;
   bool allowDeclarations_;
+  bool uses_handle_intrinsics_;
 
-  Atom *atom_Float_;
-  Atom *atom_String_;
-  Atom *atom_underbar_;
-  Atom *atom_any_;
+  Atom* atom_Float_;
+  Atom* atom_String_;
+  Atom* atom_underbar_;
+  Atom* atom_any_;
 };
 
 } // namespace sp

@@ -36,10 +36,10 @@ class PoolAllocator
   friend class PoolAllocationScope;
 
   struct Pool {
-    char *base;
-    char *ptr;
-    char *end;
-    Pool *prev;
+    char* base;
+    char* ptr;
+    char* end;
+    Pool* prev;
 
     size_t size() const {
       return size_t(end - base);
@@ -50,22 +50,22 @@ class PoolAllocator
   static const size_t kMaxReserveSize = 64 * 1024;
 
  private:
-  Pool *reserved_;
-  Pool *last_;
+  Pool* reserved_;
+  Pool* last_;
 
  private:
-  void unwind(char *pos);
-  void *slowAllocate(size_t actualBytes);
+  void unwind(char* pos);
+  void* slowAllocate(size_t actualBytes);
 
  public:
   PoolAllocator();
   ~PoolAllocator();
 
-  void memoryUsage(size_t *allocated, size_t *reserved, size_t *bookkeeping) const {
+  void memoryUsage(size_t* allocated, size_t* reserved, size_t* bookkeeping) const {
     *allocated = 0;
     *reserved = 0;
     *bookkeeping = 0;
-    for (Pool *cursor = last_; cursor; cursor = cursor->prev) {
+    for (Pool* cursor = last_; cursor; cursor = cursor->prev) {
       *allocated += size_t(cursor->ptr - cursor->base);
       *reserved += size_t(cursor->end - cursor->base);
       *bookkeeping += sizeof(Pool);
@@ -76,37 +76,37 @@ class PoolAllocator
     }
   }
 
-  void *rawAllocate(size_t bytes) {
+  void* rawAllocate(size_t bytes) {
     // Guarantee malloc alignment.
     size_t actualBytes = Align(bytes, kMallocAlignment);
     if (!last_ || (size_t(last_->end - last_->ptr) < actualBytes))
       return slowAllocate(actualBytes);
-    char *ptr = last_->ptr;
+    char* ptr = last_->ptr;
     last_->ptr += actualBytes;
     return ptr;
   }
 
   template <typename T>
-  T *alloc(size_t count = 1) {
+  T* alloc(size_t count = 1) {
     if (!IsUintPtrMultiplySafe(count, sizeof(T))) {
       fprintf(stderr, "allocation overflow\n");
       return NULL;
     }
-    void *ptr = rawAllocate(count * sizeof(T));
+    void* ptr = rawAllocate(count * sizeof(T));
     if (!ptr)
       return NULL;
 
-    return reinterpret_cast<T *>(ptr);
+    return reinterpret_cast<T*>(ptr);
   }
 
-  char *enter();
-  void leave(char *position);
+  char* enter();
+  void leave(char* position);
 };
 
 class PoolScope
 {
-  PoolAllocator *pool_;
-  char *position_;
+  PoolAllocator* pool_;
+  char* position_;
 
  public:
   PoolScope()
@@ -114,7 +114,7 @@ class PoolScope
      position_(nullptr)
   {
   }
-  PoolScope(PoolAllocator &allocator)
+  PoolScope(PoolAllocator& allocator)
    : pool_(&allocator),
      position_(allocator.enter())
   {
@@ -125,7 +125,7 @@ class PoolScope
       pool_->leave(position_);
   }
 
-  void enter(PoolAllocator &pool)
+  void enter(PoolAllocator& pool)
   {
     assert(!pool_);
     pool_ = &pool;
@@ -133,25 +133,25 @@ class PoolScope
   }
 
  private:
-  PoolScope(const PoolScope &other) = delete;
-  PoolScope &operator =(const PoolScope &other) = delete;
+  PoolScope(const PoolScope& other) = delete;
+  PoolScope& operator =(const PoolScope& other) = delete;
 };
 
 class PoolObject
 {
  public:
-  void *operator new(size_t size, PoolAllocator &pool) {
+  void* operator new(size_t size, PoolAllocator& pool) {
     return pool.rawAllocate(size);
   }
-  void *operator new [](size_t size, PoolAllocator &pool) {
+  void* operator new [](size_t size, PoolAllocator& pool) {
     return pool.rawAllocate(size);
   }
   
   // Using delete on pool-allocated objects is illegal.
-  void operator delete(void *ptr, PoolAllocator &pool) {
+  void operator delete(void* ptr, PoolAllocator& pool) {
     assert(false);
   }
-  void operator delete [](void *ptr, PoolAllocator &pool) {
+  void operator delete [](void* ptr, PoolAllocator& pool) {
     assert(false);
   }
 };
@@ -163,8 +163,8 @@ class PoolAllocationPolicy
   void reportOutOfMemory();
 
  public:
-  void *am_malloc(size_t bytes);
-  void am_free(void *ptr);
+  void* am_malloc(size_t bytes);
+  void am_free(void* ptr);
 };
 
 template <typename T>
@@ -192,6 +192,22 @@ class PoolList : public PoolObject
   }
   const T& operator [](size_t index) const {
     return impl_[index];
+  }
+  T& back() {
+    return impl_.back();
+  }
+  const T& back() const {
+    return impl_.back();
+  }
+  bool empty() const {
+    return impl_.empty();
+  }
+
+  const T* begin() const {
+    return impl_.begin();
+  }
+  const T* end() const {
+    return impl_.end();
   }
 
  private:

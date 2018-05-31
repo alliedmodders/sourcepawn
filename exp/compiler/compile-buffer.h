@@ -33,7 +33,7 @@ class CompileBuffer : public SystemAllocatorPolicy
     end_(NULL),
     pos_(NULL)
   {
-    begin_ = (char *)malloc(kInitialLength);
+    begin_ = (char*)malloc(kInitialLength);
     end_ = begin_ + kInitialLength;
     pos_ = begin_;
   }
@@ -49,11 +49,11 @@ class CompileBuffer : public SystemAllocatorPolicy
     *pos_++ = c;
   }
 
-  void append(const char *text) {
+  void append(const char* text) {
     append(text, strlen(text));
   }
 
-  void append(const char *text, size_t length) {
+  void append(const char* text, size_t length) {
     if (pos_ + length >= end_)
       grow(length);
     memcpy(pos_, text, length);
@@ -64,8 +64,8 @@ class CompileBuffer : public SystemAllocatorPolicy
     return pos_ - begin_;
   }
 
-  char *finish() {
-    char *copy = (char *)malloc(length() + 1);
+  char* finish() {
+    char* copy = (char*)malloc(length() + 1);
     memcpy(copy, begin_, length());
     copy[length()] = '\0';
     return copy;
@@ -83,14 +83,14 @@ class CompileBuffer : public SystemAllocatorPolicy
       }
       requested *= 2;
     }
-    char *newbegin = (char *)realloc(begin_, requested);
+    char* newbegin = (char*)realloc(begin_, requested);
     if (!newbegin) {
       reportOutOfMemory();
       abort();
     }
     if (newbegin != begin_) {
-      char *newend = newbegin + requested;
-      char *newpos = newbegin + (pos_ - begin_);
+      char* newend = newbegin + requested;
+      char* newpos = newbegin + (pos_ - begin_);
 
       begin_ = newbegin;
       end_ = newend;
@@ -101,9 +101,9 @@ class CompileBuffer : public SystemAllocatorPolicy
   }
 
  private:
-  char *begin_;
-  char *end_;
-  char *pos_;
+  char* begin_;
+  char* end_;
+  char* pos_;
 };
 
 }

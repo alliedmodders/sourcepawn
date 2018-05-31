@@ -30,7 +30,7 @@ namespace sp {
 class CommentDelegate
 {
  public:
-  virtual void HandleComment(CommentPos where, const SourceRange &extends) = 0;
+  virtual void HandleComment(CommentPos where, const SourceRange& extends) = 0;
 };
 
 enum class SkipFlags
@@ -64,7 +64,7 @@ class Preprocessor
   friend class MacroLexer;
 
  public:
-  Preprocessor(CompileContext &cc);
+  Preprocessor(CompileContext& cc);
 
   // Start preprocessing a file. This blows away any existing lexer state.
   bool enter(RefPtr<SourceFile> file);
@@ -81,7 +81,7 @@ class Preprocessor
   void disableIncludes() {
     disable_includes_ = true;
   }
-  void setCommentDelegate(CommentDelegate *handler) {
+  void setCommentDelegate(CommentDelegate* handler) {
     comment_handler_ = handler;
   }
   bool traceComments() const {
@@ -94,28 +94,28 @@ class Preprocessor
   TokenKind peekTokenSameLine();
 
   // Retrieves the most recently scanned, unbuffered token.
-  const Token *current() const {
+  const Token* current() const {
     return tokens_->current();
   }
-  const SourceLocation &begin() const {
+  const SourceLocation& begin() const {
     return current()->start.loc;
   }
-  const SourceLocation &end() const {
+  const SourceLocation& end() const {
     return current()->end.loc;
   }
-  Atom *current_name() const {
+  Atom* current_name() const {
     return current()->atom();
   }
 
   // Advances the token stream by one token, returning the new token kind.
   TokenKind next();
-  const Token *nextToken() {
+  const Token* nextToken() {
     next();
     return current();
   }
 
   // Injects a token. See TokenRing::inject.
-  void injectBack(const Token &tok) {
+  void injectBack(const Token& tok) {
     tokens_->inject(tok);
   }
 
@@ -131,44 +131,44 @@ class Preprocessor
   TokenKind scan();
 
   void setup_builtin_macros();
-  void define_builtin_int(const char *name, int64_t value);
-  void define_builtin_string(const char *name, const char *str);
+  void define_builtin_int(const char* name, int64_t value);
+  void define_builtin_string(const char* name, const char* str);
 
  private: // Interfaces for Lexer and MacroLexer.
   // #include and #try_include support.
   bool enterFile(TokenKind directive,
-                 const SourceLocation &from,
-                 const char *file,
-                 const char *where);
+                 const SourceLocation& from,
+                 const char* file,
+                 const char* where);
 
   // Defines a new macro, reporting an error if one already exists with the
   // same name.
-  void defineMacro(Atom *name,
-                   const SourceLocation &nameLoc,
-                   TokenList *tokens);
+  void defineMacro(Atom* name,
+                   const SourceLocation& nameLoc,
+                   TokenList* tokens);
 
   // Returns true if the name is a macro and the macro was entered; false
   // otherwise.
-  bool enterMacro(const SourceLocation &loc, Atom *name);
+  bool enterMacro(const SourceLocation& loc, Atom* name);
 
   // Returns false if an error was reported.
-  bool removeMacro(const SourceLocation &loc, Atom *name);
+  bool removeMacro(const SourceLocation& loc, Atom* name);
 
   // Leaves a lexer. If this returns true, the lexer is finished, and it should
   // return TOK_NONE instead of TOK_EOF.
   bool handleEndOfFile();
 
-  void setNextDeprecationMessage(const char *buffer, size_t length) {
+  void setNextDeprecationMessage(const char* buffer, size_t length) {
     next_deprecation_message_ = AString(buffer, length);
   }
 
   // Nasty business of evaluating a preprocessor expression. Implemented in
   // tk-evaluator.cpp. Returns false if an error occurred, in which case val
   // is left unchanged.
-  bool eval(int *val);
-  bool eval_inner(int *val);
-  bool eval_unary(int *val);
-  bool eval_binary(int prec, int *val);
+  bool eval(int* val);
+  bool eval_inner(int* val);
+  bool eval_unary(int* val);
+  bool eval_binary(int prec, int* val);
 
   // These variants handle macro expansion inside evals.
   TokenKind eval_next();
@@ -177,19 +177,19 @@ class Preprocessor
   bool eval_expect(TokenKind kind);
 
   // Track comment ranges so we can piece together documentation afterward.
-  void addComment(CommentPos where, const SourceRange &extends);
+  void addComment(CommentPos where, const SourceRange& extends);
 
-  TokenKind findKeyword(Atom *name) {
+  TokenKind findKeyword(Atom* name) {
     return keywords_.findKeyword(name);
   }
 
-  bool &macro_expansion() {
+  bool& macro_expansion() {
     return allow_macro_expansion_;
   }
 
  private:
   // Internal functions.
-  AutoString searchPaths(const char *file, const char *where);
+  AutoString searchPaths(const char* file, const char* where);
 
  private:
   struct SavedLexer {
@@ -205,12 +205,12 @@ class Preprocessor
   };
 
  private:
-  CompileContext &cc_;
-  const CompileOptions &options_;
+  CompileContext& cc_;
+  const CompileOptions& options_;
   LexOptions lex_options_;
   KeywordTable keywords_;
 
-  AtomMap<Macro *> macros_;
+  AtomMap<Macro*> macros_;
 
   Vector<RefPtr<MacroLexer>> recycled_macro_lexers_;
   Vector<SavedLexer> lexer_stack_;
@@ -228,7 +228,7 @@ class Preprocessor
   // eval().
   TokenRing pp_tokens_;
   TokenRing normal_tokens_;
-  TokenRing *tokens_;
+  TokenRing* tokens_;
 
   // The next deprecation message.
   AString next_deprecation_message_;
@@ -243,7 +243,7 @@ class Preprocessor
   size_t include_depth_;
 
   // Handler for comments.
-  CommentDelegate *comment_handler_;
+  CommentDelegate* comment_handler_;
 };
 
 }

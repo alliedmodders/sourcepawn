@@ -22,7 +22,7 @@
 using namespace ke;
 using namespace sp;
 
-const char *
+const char*
 IntValue::getTypename() const
 {
   switch (numBits()) {
@@ -42,7 +42,7 @@ IntValue::getTypename() const
 }
 
 bool
-IntValue::ValidateAluOp(ReportingContext &cc, TokenKind kind, IntValue *aLeft, IntValue *aRight, bool *aSign)
+IntValue::ValidateAluOp(ReportingContext& cc, TokenKind kind, IntValue* aLeft, IntValue* aRight, bool* aSign)
 {
   if (aLeft->isSigned() == aRight->isSigned()) {
     *aSign = aLeft->isSigned();
@@ -75,7 +75,7 @@ IntValue::ValidateAluOp(ReportingContext &cc, TokenKind kind, IntValue *aLeft, I
 }
 
 bool
-IntValue::Add(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Add(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -110,7 +110,7 @@ IntValue::Add(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Sub(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Sub(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -139,7 +139,7 @@ IntValue::Sub(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Mul(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Mul(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -182,7 +182,7 @@ IntValue::Mul(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Div(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Div(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -210,7 +210,7 @@ IntValue::Div(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Mod(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Mod(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -238,7 +238,7 @@ IntValue::Mod(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Shl(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp)
+IntValue::Shl(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp)
 {
   if (left.isSigned())
     *outp = FromSigned(left.asSigned() << right.asSigned(), left.numBits());
@@ -248,7 +248,7 @@ IntValue::Shl(ReportingContext &cc, const IntValue &left, const IntValue &right,
 }
 
 bool
-IntValue::Shr(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp)
+IntValue::Shr(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp)
 {
   if (left.isSigned())
     *outp = FromSigned(left.asSigned() >> right.asSigned(), left.numBits());
@@ -258,7 +258,7 @@ IntValue::Shr(ReportingContext &cc, const IntValue &left, const IntValue &right,
 }
 
 bool
-IntValue::Ushr(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp)
+IntValue::Ushr(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp)
 {
   // >>> does unsigned shift against either signed or unsigned. Signedness of
   // rhs shouldn't matter, but we keep the whole thing unsigned just to be sure.
@@ -267,7 +267,7 @@ IntValue::Ushr(ReportingContext &cc, const IntValue &left, const IntValue &right
 }
 
 bool
-IntValue::Or(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Or(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -279,7 +279,7 @@ IntValue::Or(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::And(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::And(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -291,7 +291,7 @@ IntValue::And(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Xor(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, IntValue *outp)
+IntValue::Xor(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, IntValue* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -303,7 +303,7 @@ IntValue::Xor(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRigh
 }
 
 bool
-IntValue::Ge(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, bool *outp)
+IntValue::Ge(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, bool* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -319,7 +319,7 @@ IntValue::Ge(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::Gt(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, bool *outp)
+IntValue::Gt(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, bool* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -335,7 +335,7 @@ IntValue::Gt(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::Le(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, bool *outp)
+IntValue::Le(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, bool* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -351,7 +351,7 @@ IntValue::Le(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::Lt(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, bool *outp)
+IntValue::Lt(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, bool* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -367,7 +367,7 @@ IntValue::Lt(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::Eq(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, bool *outp)
+IntValue::Eq(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, bool* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -379,7 +379,7 @@ IntValue::Eq(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::Ne(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight, bool *outp)
+IntValue::Ne(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRight, bool* outp)
 {
   bool sign;
   IntValue left = aLeft;
@@ -391,7 +391,7 @@ IntValue::Ne(ReportingContext &cc, const IntValue &aLeft, const IntValue &aRight
 }
 
 bool
-IntValue::Neg(ReportingContext &cc, const IntValue &in, IntValue *outp)
+IntValue::Neg(ReportingContext& cc, const IntValue& in, IntValue* outp)
 {
   if (in.isUnsigned() && in.numBits() == kMaxBits) {
     cc.report(rmsg::implicit_overflow)
@@ -411,7 +411,7 @@ IntValue::Neg(ReportingContext &cc, const IntValue &in, IntValue *outp)
 }
 
 IntValue
-IntValue::Invert(const IntValue &in)
+IntValue::Invert(const IntValue& in)
 {
   if (in.isSigned())
     return FromSigned(~in.asSigned(), in.numBits());

@@ -20,7 +20,7 @@
 #define _include_jc_types_h_
 
 #include "assert.h"
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include <amtl/am-enum.h>
 
@@ -29,6 +29,7 @@ namespace sp {
 struct ReportingContext;
 
 namespace ast {
+class RecordDecl;
 class TypeExpr;
 class TypeSpecifier;
 } // namespace ast
@@ -49,20 +50,26 @@ enum class PrimitiveType : uint32_t
   // an internal marker.
   ImplicitIntDoNotUseDirectly,
 
+#if 0
   Int8,
   Uint8,
   Int16,
   Uint16,
+#endif
   Int32,
+#if 0
   Uint32,
   Int64,
   Uint64,
   NativeInt,
   NativeUint,
+#endif
 
   // Floating point values are IEEE-754 floats.
   Float,
+#if 0
   Double,
+#endif
 
   TOTAL
 };
@@ -81,7 +88,7 @@ KE_DEFINE_ENUM_OPERATORS(Qualifiers);
 
 class Type;
 class TypedefType;
-typedef FixedPoolList<Type *> TypeList;
+typedef FixedPoolList<Type*> TypeList;
 
 #define TYPE_ENUM_MAP(_)        \
   _(Enum)                       \
@@ -89,7 +96,8 @@ typedef FixedPoolList<Type *> TypeList;
   _(Function)                   \
   _(Typeset)                    \
   _(Struct)                     \
-  _(Reference)
+  _(Reference)                  \
+  _(Variadic)
 
 #define FORWARD_DECLARE(name) class name##Type;
 TYPE_ENUM_MAP(FORWARD_DECLARE)
@@ -159,6 +167,10 @@ class Type : public PoolObject
     // The type used for "null".
     NullType,
 
+    // Used to indicate that the contained type may indicate 0..N values of
+    // that type.
+    Variadic,
+
     // A temporary type used to indicate that an overloaded function was not
     // resolved to a specific address. This happens, for example, when a
     // NameProxy resolves to an overloaded function symbol. If the function
@@ -167,7 +179,7 @@ class Type : public PoolObject
     OverloadedFunction
   };
 
-  void init(Kind kind, Type *root = NULL);
+  void init(Kind kind, Type* root = NULL);
 
  public:
   Type(Kind kind)
@@ -175,29 +187,31 @@ class Type : public PoolObject
   {
     canonical_ = this;
   }
-  Type(Kind kind, Type *canonical)
+  Type(Kind kind, Type* canonical)
    : kind_(kind),
      canonical_(canonical)
   {
   }
 
  public:
-  static Type *NewVoid();
-  static Type *NewImplicitVoid();
-  static Type *NewMetaFunction();
-  static Type *NewUnchecked();
-  static Type *NewNullType();
-  static Type *NewPrimitive(PrimitiveType type);
-  static Type *NewQualified(Type *type, Qualifiers quals);
-  static Type *NewImportable();
-  static Type *NewOverloadedFunction();
-  static bool Compare(Type *left, Type *right);
+  static Type* NewVoid();
+  static Type* NewImplicitVoid();
+  static Type* NewMetaFunction();
+  static Type* NewUnchecked();
+  static Type* NewNullType();
+  static Type* NewPrimitive(PrimitiveType type);
+  static Type* NewQualified(Type* type, Qualifiers quals);
+  static Type* NewImportable();
+  static Type* NewOverloadedFunction();
+  static Type* NewVariadic();
+  static bool Compare(Type* left, Type* right);
 
   bool isPrimitive() {
     return canonical()->kind_ == Kind::Primitive;
   }
   bool isVoid() {
-    return canonical()->kind_ == Kind::Void;
+    return canonical()->kind_ == Kind::Void ||
+           canonical()->kind_ == Kind::ImplicitVoid;
   }
   bool isImplicitVoid() {
     return canonical()->kind_ == Kind::ImplicitVoid;
@@ -214,6 +228,11 @@ class Type : public PoolObject
   bool isNullType() {
     return canonical()->kind_ == Kind::NullType;
   }
+  bool isPrimitive(PrimitiveType type) {
+    return isPrimitive() && primitive() == type;
+  }
+
+  bool isCharArray();
 
   // Return true if a value of this type can be stored in a variable.
   bool isStorableType() {
@@ -243,14 +262,14 @@ class Type : public PoolObject
   bool isUnresolvedTypedef() const {
     return kind_ == Kind::Typedef && canonical_ == this;
   }
-  TypedefType *toTypedef() {
+  TypedefType* toTypedef() {
     assert(kind_ == Kind::Typedef);
-    return (TypedefType *)this;
+    return (TypedefType*)this;
   }
-  TypedefType *asTypedef() {
+  TypedefType* asTypedef() {
     if (kind_ != Kind::Typedef)
       return nullptr;
-    return (TypedefType *)this;
+    return (TypedefType*)this;
   }
 
   bool passesByReference() {
@@ -270,6 +289,11 @@ class Type : public PoolObject
       default:
         return false;
     }
+  }
+
+  // Return true if an address to an r-value of this type can be computed.
+  bool isAddressable() {
+    return isReference() || isArray();
   }
 
   PrimitiveType primitive() {
@@ -324,7 +348,7 @@ class Type : public PoolObject
   }
 
   Qualifiers qualifiers() {
-    Type *norm = normalized();
+    Type* norm = normalized();
     if (norm->kind_ != Kind::Qualifier)
       return Qualifiers::None;
     return norm->qualifiers_;
@@ -335,7 +359,7 @@ class Type : public PoolObject
   bool isConst() {
     return (qualifiers() & Qualifiers::Const) == Qualifiers::Const;
   }
-  Type *unqualified() {
+  Type* unqualified() {
     return canonical();
   }
 
@@ -343,11 +367,11 @@ class Type : public PoolObject
   bool is##name() {                               \
     return canonical()->kind_ == Kind::name;      \
   }                                               \
-  name##Type *to##name() {                        \
+  name##Type* to##name() {                        \
     assert(is##name());                           \
-    return (name##Type *)canonical();             \
+    return (name##Type*)canonical();             \
   }                                               \
-  name##Type *as##name() {                        \
+  name##Type* as##name() {                        \
     if (!is##name())                              \
       return nullptr;                             \
     return to##name();                            \
@@ -359,11 +383,11 @@ class Type : public PoolObject
   bool isRecord() {
     return isStruct();
   }
-  RecordType *toRecord() {
+  RecordType* toRecord() {
     assert(isRecord());
-    return (RecordType *)this;
+    return (RecordType*)this;
   }
-  RecordType *asRecord() {
+  RecordType* asRecord() {
     if (!isRecord())
       return nullptr;
     return toRecord();
@@ -377,7 +401,7 @@ class Type : public PoolObject
  public:
   // Return the underlying canonical type, meaning, the current type
   // normalized and without its wrappings.
-  Type *canonical() {
+  Type* canonical() {
     // Keep canonical bits up to date.
     if (isWrapped() && canonical_->isResolvedTypedef())
       normalize();
@@ -387,7 +411,7 @@ class Type : public PoolObject
  protected:
   // Desugar typedefs until we reach a valid type or a typedef that has not
   // been resolved.
-  Type *normalized() {
+  Type* normalized() {
     if (isResolvedTypedef()) {
       if (canonical_->isResolvedTypedef())
         normalize();
@@ -444,7 +468,7 @@ class Type : public PoolObject
   // points to the unqualified original type.
   //
   // For typedefs, it points to |this| until the actual canonical is known.
-  Type *canonical_;
+  Type* canonical_;
 };
 
 namespace ast {
@@ -461,23 +485,23 @@ class EnumType : public Type
   }
 
  public:
-  static EnumType *New(Atom *name);
+  static EnumType* New(Atom* name);
 
-  Atom *name() {
+  Atom* name() {
     return name_;
   }
 
-  void setMethodmap(ast::MethodmapDecl *methodmap) {
+  void setMethodmap(ast::MethodmapDecl* methodmap) {
     assert(!methodmap_);
     methodmap_ = methodmap;
   }
-  ast::MethodmapDecl *methodmap() const {
+  ast::MethodmapDecl* methodmap() const {
     return methodmap_;
   }
 
  private:
-  Atom *name_;
-  ast::MethodmapDecl *methodmap_;
+  Atom* name_;
+  ast::MethodmapDecl* methodmap_;
 };
 
 class ArrayType : public Type
@@ -511,16 +535,16 @@ class ArrayType : public Type
 
   // Maximum size of an array. We choose this value because we can compute
   // addresses as multiples of an index without overflowing.
-  static ArrayType *New(Type *contained, int elements);
+  static ArrayType* New(Type* contained, int elements);
 
-  Type *innermost() const {
-    Type *temp = contained();
+  Type* innermost() const {
+    Type* temp = contained();
     while (temp->isArray())
       temp = temp->toArray()->contained();
     return temp;
   }
 
-  Type *contained() const {
+  Type* contained() const {
     return contained_;
   }
   bool hasFixedLength() const {
@@ -530,41 +554,48 @@ class ArrayType : public Type
     assert(hasFixedLength());
     return elements_;
   }
+  uint32_t nlevels() const {
+    return nlevels_;
+  }
 
-  bool equalTo(ArrayType *other) {
+  bool isMutable() {
+    return !contained()->isConst();
+  }
+  bool equalTo(ArrayType* other) {
     return elements_ == other->elements_ &&
            contained_ == other->contained_;
   }
 
  private:
   int32_t elements_;
-  Type *contained_;
+  Type* contained_;
+  uint32_t nlevels_;
 };
 
 class TypedefType : public Type
 {
-  TypedefType(Atom *name)
+  TypedefType(Atom* name)
    : Type(Kind::Typedef),
      name_(name)
   {}
 
  public:
-  static TypedefType *New(Atom *name);
+  static TypedefType* New(Atom* name);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
 
   // The actual type may be null if it is unresolved. It is only guaranteed to
   // be set if the TypeResolver phase passes.
-  Type *actual() const {
+  Type* actual() const {
     return actual_;
   }
-  void resolve(Type *actual);
+  void resolve(Type* actual);
 
  private:
-  Atom *name_;
-  Type *actual_;
+  Atom* name_;
+  Type* actual_;
 };
 
 namespace ast {
@@ -574,37 +605,40 @@ class FunctionSignature;
 // :TODO: break dependence on ast
 class FunctionType : public Type
 {
-  FunctionType(ast::FunctionSignature *signature)
+  FunctionType(ast::FunctionSignature* signature)
    : Type(Kind::Function),
      signature_(signature)
   {
   }
 
  public:
-  static FunctionType *New(ast::FunctionSignature *sig);
+  static FunctionType* New(ast::FunctionSignature* sig);
 
-  ast::FunctionSignature *signature() const {
+  ast::FunctionSignature* signature() const {
     return signature_;
   }
 
+  Type* returnType() const;
+
  private:
-  ast::FunctionSignature *signature_;
+  ast::FunctionSignature* signature_;
 };
 
 class RecordType : public Type
 {
  public:
-  explicit RecordType(Kind kind, Atom* name)
+  explicit RecordType(Kind kind, ast::RecordDecl* decl)
    : Type(kind),
-     name_(name)
+     decl_(decl)
   {}
 
-  Atom *name() const {
-    return name_;
+  Atom* name() const;
+  ast::RecordDecl* decl() const {
+    return decl_;
   }
 
  private:
-  Atom* name_;
+  ast::RecordDecl* decl_;
 };
 
 class TypesetType : public Type
@@ -616,15 +650,15 @@ class TypesetType : public Type
   {}
 
  public:
-  static TypesetType *New(Atom* name);
+  static TypesetType* New(Atom* name);
 
-  Atom *name() const {
+  Atom* name() const {
     return name_;
   }
   size_t numTypes() const {
     return types_->length();
   }
-  Type *typeAt(size_t i) const {
+  Type* typeAt(size_t i) const {
     return types_->at(i);
   }
 
@@ -642,12 +676,10 @@ class TypesetType : public Type
 
 class StructType : public RecordType
 {
-  StructType(Atom* name)
-   : RecordType(Kind::Struct, name)
-  {}
+  StructType(ast::RecordDecl* decl);
 
  public:
-  static StructType *New(Atom* name);
+  static StructType* New(ast::RecordDecl* decl);
 };
 
 class ReferenceType : public Type
@@ -668,99 +700,52 @@ private:
   Type* inner_;
 };
 
-static inline size_t
-SizeOfPrimitiveType(PrimitiveType type)
+class VariadicType : public Type
 {
-  switch (type) {
-    case PrimitiveType::Bool:
-    case PrimitiveType::Int8:
-    case PrimitiveType::Uint8:
-      return 1;
-    case PrimitiveType::Int16:
-    case PrimitiveType::Uint16:
-      return 2;
-    case PrimitiveType::Int32:
-    case PrimitiveType::Uint32:
-    case PrimitiveType::Float:
-      return 4;
-    case PrimitiveType::Int64:
-    case PrimitiveType::Uint64:
-    case PrimitiveType::Double:
-      return 8;
-    case PrimitiveType::NativeInt:
-    case PrimitiveType::NativeUint:
-      return sizeof(void *);
-    default:
-      assert(false);
-      return 0;
-  }
-}
+  explicit VariadicType(Type* inner)
+   : Type(Kind::Variadic),
+     inner_(inner)
+  {}
 
-static inline bool
-IsPrimitiveTypeSigned(PrimitiveType type)
-{
-  switch (type) {
-    case PrimitiveType::Int8:
-    case PrimitiveType::Int16:
-    case PrimitiveType::Int32:
-    case PrimitiveType::Int64:
-    case PrimitiveType::NativeInt:
-      return true;
-    case PrimitiveType::Uint16:
-    case PrimitiveType::Uint8:
-    case PrimitiveType::Uint32:
-    case PrimitiveType::Uint64:
-    case PrimitiveType::NativeUint:
-      return false;
-    default:
-      assert(false);
-      return false;
-  }
-}
+public:
+  static VariadicType* New(Type* inner);
 
-static inline PrimitiveType
-SignedTypeForIntegerSize(size_t size)
-{
-  switch (size) {
-    case 1:
-      return PrimitiveType::Int8;
-    case 2:
-      return PrimitiveType::Int16;
-    case 4:
-      return PrimitiveType::Int32;
-    default:
-      assert(size == 8);
-      return PrimitiveType::Int64;
+  Type* inner() const {
+    return inner_;
   }
-}
 
-static inline PrimitiveType
-UnsignedTypeForIntegerSize(size_t size)
+private:
+  Type* inner_;
+};
+
+inline bool
+Type::isCharArray()
 {
-  switch (size) {
-    case 1:
-      return PrimitiveType::Uint8;
-    case 2:
-      return PrimitiveType::Uint16;
-    case 4:
-      return PrimitiveType::Uint32;
-    default:
-      assert(size == 8);
-      return PrimitiveType::Uint64;
-  }
+  return isArray() && toArray()->contained()->isPrimitive(PrimitiveType::Char);
 }
 
 // Types where "const" is allowed as a keyword.
 static inline bool
-TypeSupportsConstKeyword(Type *type)
+TypeSupportsConstKeyword(Type* type)
 {
   return !type->isVoid();
+}
+
+// Returns true if an l-value of the given type is an address to an address.
+static inline bool
+TypeHasIndirectLValue(Type* type)
+{
+  if (type->isReference())
+    return true;
+  if (type->isArray())
+    return !type->toArray()->hasFixedLength();
+  return false;
 }
 
 // Types where assignment does not simply change a reference, but copies one
 // or more interior values.
 static inline bool
-HasValueAssignSemantics(Type *type)
+HasValueAssignSemantics(Type* type)
 {
   if (type->isArray())
     return type->toArray()->hasFixedLength();
@@ -769,33 +754,29 @@ HasValueAssignSemantics(Type *type)
   return true;
 }
 
-// Types where the "const" keyword becomes transitive.
-static inline bool
-TypeSupportsTransitiveConst(Type *type)
+static inline Type*
+UnwrapReference(Type* type)
 {
-  switch (type->canonicalKind()) {
-    case Type::Kind::Array:
-    case Type::Kind::Struct:
-    case Type::Kind::Typeset:
-      return true;
-    default:
-      return false;
-  }
+  if (type->isReference())
+    return type->toReference()->inner();
+  return type;
 }
 
-// Types where values can be interned at compile-time if constant.
 static inline bool
-TypeSupportsCompileTimeInterning(Type *type)
+IsLegacyCellType(Type* type)
 {
-  return type->canBeUsedInConstExpr() ||
-         (type->isArray() && type->toArray()->hasFixedLength());
+  return type->isPrimitive(PrimitiveType::Int32) ||
+         type->isPrimitive(PrimitiveType::Float) ||
+         type->isPrimitive(PrimitiveType::Bool) ||
+         type->isEnum() ||
+         type->isUnchecked();
 }
 
 // This should probably be in the type manager... but it should never leak past
 // type resolution.
 extern Type UnresolvableType;
 
-const char *GetPrimitiveName(PrimitiveType type);
+const char* GetPrimitiveName(PrimitiveType type);
 
 enum class TypeDiagFlags
 {
@@ -808,23 +789,23 @@ KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
 
 // Build a type name for diagnostics, with an optional name for building a
 // declaration.
-AString BuildTypeName(Type *type, Atom *name = nullptr, TypeDiagFlags flags = TypeDiagFlags::None);
-AString BuildTypeName(const ast::TypeSpecifier *spec, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
-AString BuildTypeName(const ast::TypeExpr &te, Atom *name, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(Type* type, Atom* name = nullptr, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(const ast::TypeSpecifier* spec, Atom* name, TypeDiagFlags flags = TypeDiagFlags::None);
+AString BuildTypeName(const ast::TypeExpr& te, Atom* name, TypeDiagFlags flags = TypeDiagFlags::None);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be
 // determinate (fixed).
 //
 // On failure, returns 0 and an error will have been reported.
-int32_t ComputeSizeOfType(ReportingContext &cc, Type *type, size_t level);
+int32_t ComputeSizeOfType(ReportingContext& cc, Type* type, size_t level);
 
 // Test whether two function types are equivalent.
-bool AreFunctionTypesEqual(FunctionType *a, FunctionType *b);
+bool AreFunctionTypesEqual(FunctionType* a, FunctionType* b);
 
 // Test whether two types are equivalent for the purpose of signature matching
 // and casting. If |context| is const, both types are considered const.
-bool AreTypesEquivalent(Type *a, Type *b, Qualifiers context);
+bool AreTypesEquivalent(Type* a, Type* b, Qualifiers context);
 
 } // namespace sp
 

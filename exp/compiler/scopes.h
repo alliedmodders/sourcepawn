@@ -30,7 +30,7 @@ namespace ast {
 class FieldDecl;
 } // namespace ast
 
-typedef PoolList<Symbol *> SymbolList;
+typedef PoolList<Symbol*> SymbolList;
 
 #define SCOPE_KIND_MAP(_)         \
   _(Global)                       \
@@ -53,9 +53,9 @@ class LayoutScope;
 class Scope : public PoolObject
 {
  protected:
-  PoolAllocator &pool_;
-  PoolList<Symbol *> names_;
-  PoolList<Scope *> children_;
+  PoolAllocator& pool_;
+  PoolList<Symbol*> names_;
+  PoolList<Scope*> children_;
   
   bool empty() const {
     return names_.length() == 0;
@@ -73,26 +73,26 @@ class Scope : public PoolObject
   };
 
  public:
-  Scope(PoolAllocator &pool, Scope *enclosing);
+  Scope(PoolAllocator& pool, Scope* enclosing);
 
   virtual Kind kind() const = 0;
 
-  Scope *enclosing() const {
+  Scope* enclosing() const {
     return enclosing_;
   }
 
-  bool addSymbol(Symbol *symbol);
+  bool addSymbol(Symbol* symbol);
 
-  Scope *unlinkIfEmpty();
-  Symbol *localLookup(Atom *name);
-  Symbol *lookup(Atom *name);
+  Scope* unlinkIfEmpty();
+  Symbol* localLookup(Atom* name);
+  Symbol* lookup(Atom* name);
 
-  void setParent(Scope *parent) {
+  void setParent(Scope* parent) {
     assert(!enclosing_ || enclosing_ == parent);
     enclosing_ = parent;
   }
 
-  const PoolList<Symbol *> *symbols() const {
+  const PoolList<Symbol*>* symbols() const {
     return &names_;
   }
 
@@ -100,75 +100,75 @@ class Scope : public PoolObject
   bool is##name() {                                                           \
     return kind() == name;                                                    \
   }                                                                           \
-  name##Scope *as##name() {                                                   \
+  name##Scope* as##name() {                                                   \
     if (is##name())                                                           \
-      return (name##Scope *)this;                                             \
+      return (name##Scope*)this;                                             \
     return nullptr;                                                           \
   }                                                                           \
-  name##Scope *to##name() {                                                   \
+  name##Scope* to##name() {                                                   \
     assert(is##name());                                                       \
-    return (name##Scope *)this;                                               \
+    return (name##Scope*)this;                                               \
   }
   SCOPE_KIND_MAP(_)
 #undef _
 
  private:
-  Scope *enclosing_;
+  Scope* enclosing_;
 };
 
 class ArgumentScope : public Scope
 {
  public:
-  static ArgumentScope *New(PoolAllocator &pool);
+  static ArgumentScope* New(PoolAllocator& pool);
 
   virtual Kind kind() const override {
     return Argument;
   }
 
  private:
-  ArgumentScope(PoolAllocator &pool);
+  ArgumentScope(PoolAllocator& pool);
 };
 
 class BlockScope : public Scope
 {
  public:
-  static BlockScope *New(PoolAllocator &pool);
+  static BlockScope* New(PoolAllocator& pool);
 
   virtual Kind kind() const override {
     return Block;
   }
 
  private:
-  BlockScope(PoolAllocator &pool);
+  BlockScope(PoolAllocator& pool);
 };
 
 class GlobalScope : public Scope
 {
  public:
-  static GlobalScope *New(PoolAllocator &pool);
+  static GlobalScope* New(PoolAllocator& pool);
 
   virtual Kind kind() const override {
     return Global;
   }
 
-  PoolList<Symbol *> *exported() {
+  PoolList<Symbol*>* exported() {
     return &exported_;
   }
-  void addPublic(Symbol *symbol) {
+  void addPublic(Symbol* symbol) {
     exported_.append(symbol);
   }
 
  private:
-  GlobalScope(PoolAllocator &pool);
-  PoolList<Symbol *> exported_;
+  GlobalScope(PoolAllocator& pool);
+  PoolList<Symbol*> exported_;
 };
 
 class LayoutScope : public Scope
 {
-  LayoutScope(PoolAllocator &pool);
+  LayoutScope(PoolAllocator& pool);
 
  public:
-  static LayoutScope *New(PoolAllocator &pool);
+  static LayoutScope* New(PoolAllocator& pool);
 
   virtual Kind kind() const override {
     return Layout;
@@ -177,13 +177,13 @@ class LayoutScope : public Scope
   bool hasMixedAnonymousFields() const ;
 
   // Returns null if there are no anonymous fields.
-  PoolList<ast::FieldDecl *> *anonymous_fields() const {
+  PoolList<ast::FieldDecl*>* anonymous_fields() const {
     return anonymous_fields_;
   }
-  void addAnonymousField(ast::FieldDecl *decl);
+  void addAnonymousField(ast::FieldDecl* decl);
 
  private:
-  PoolList<ast::FieldDecl *> *anonymous_fields_;
+  PoolList<ast::FieldDecl*>* anonymous_fields_;
 };
 
 }

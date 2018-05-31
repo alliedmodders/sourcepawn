@@ -18,8 +18,8 @@
 #ifndef _include_spcomp_reporting_h_
 #define _include_spcomp_reporting_h_
 
+#include "shared/string-pool.h"
 #include "source-location.h"
-#include "string-pool.h"
 #include <amtl/am-refcounting.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-string.h>
@@ -39,6 +39,7 @@ enum class rmsg_type
   note,
   syntax,
   type,
+  impl,
   warning
 };
 
@@ -56,7 +57,7 @@ namespace rmsg
 class TMessage : public ke::Refcounted<TMessage>
 {
  public: 
-  TMessage(const SourceLocation &origin, rmsg::Id msgid)
+  TMessage(const SourceLocation& origin, rmsg::Id msgid)
    : origin_(origin),
      message_id_(msgid)
   {}
@@ -71,13 +72,13 @@ class TMessage : public ke::Refcounted<TMessage>
   class StringArg : public Arg
   {
    public:
-    explicit StringArg(const char *str)
+    explicit StringArg(const char* str)
      : str_(str)
     {}
-    explicit StringArg(const AString &str)
+    explicit StringArg(const AString& str)
      : str_(str)
     {}
-    explicit StringArg(AString &&str)
+    explicit StringArg(AString&& str)
      : str_(str)
     {}
 
@@ -92,33 +93,33 @@ class TMessage : public ke::Refcounted<TMessage>
   class AtomArg : public Arg
   {
    public:
-    explicit AtomArg(Atom *atom)
+    explicit AtomArg(Atom* atom)
      : atom_(atom)
     {}
 
     AString Render() override;
 
    private:
-    Atom *atom_;
+    Atom* atom_;
   };
 
-  void addArg(Arg *arg) {
+  void addArg(Arg* arg) {
     args_.append(arg);
   }
-  void addArg(Atom *atom) {
+  void addArg(Atom* atom) {
     addArg(new AtomArg(atom));
   }
-  void addArg(const char *str) {
+  void addArg(const char* str) {
     addArg(new StringArg(str));
   }
-  void addArg(const AString &str) {
+  void addArg(const AString& str) {
     addArg(new StringArg(str));
   }
-  void addArg(AString &&str) {
+  void addArg(AString&& str) {
     addArg(new StringArg(str));
   }
   void addArg(size_t value);
-  void addArg(Type *type);
+  void addArg(Type* type);
 
   void addNote(RefPtr<TMessage> note) {
     if (note) {
@@ -127,7 +128,7 @@ class TMessage : public ke::Refcounted<TMessage>
     }
   }
 
-  const SourceLocation &origin() const {
+  const SourceLocation& origin() const {
     return origin_;
   }
   const rmsg::Id id() const {
@@ -139,7 +140,7 @@ class TMessage : public ke::Refcounted<TMessage>
   RefPtr<TMessage> note(size_t i) const {
     return notes_[i];
   }
-  const Vector<AutoPtr<Arg>> &args() const {
+  const Vector<AutoPtr<Arg>>& args() const {
     return args_;
   }
 
@@ -156,21 +157,21 @@ class MessageBuilder
   explicit MessageBuilder(RefPtr<TMessage> report)
    : report_(report)
   {}
-  MessageBuilder(const MessageBuilder &other)
+  MessageBuilder(const MessageBuilder& other)
    : report_(other.report_)
   {}
-  MessageBuilder(MessageBuilder &&other)
+  MessageBuilder(MessageBuilder&& other)
    : report_(other.report_.forget())
   {}
 
   template <typename T>
-  MessageBuilder &operator <<(const T &other) {
+  MessageBuilder& operator <<(const T& other) {
     if (!report_)
       return *this;
     report_->addArg(other);
     return *this;
   }
-  MessageBuilder &operator <<(const MessageBuilder &other) {
+  MessageBuilder& operator <<(const MessageBuilder& other) {
     if (!report_)
       return *this;
     if (!other.report_)
@@ -208,7 +209,7 @@ class ReportManager
   void PrintMessages();
 
  // Internal API.
-  void setSourceManager(SourceManager *srcmgr) {
+  void setSourceManager(SourceManager* srcmgr) {
     source_ = srcmgr;
   }
 
@@ -216,29 +217,29 @@ class ReportManager
     if (!fatal_error_)
       fatal_error_ = msg;
   }
-  void reportFatal(const SourceLocation &loc, rmsg::Id msg) {
+  void reportFatal(const SourceLocation& loc, rmsg::Id msg) {
     if (!fatal_error_) {
       fatal_error_ = msg;
       fatal_loc_ = loc;
     }
   }
 
-  MessageBuilder report(const SourceLocation &loc, rmsg::Id msg_id);
-  MessageBuilder note(const SourceLocation &loc, rmsg::Id msg_id);
-  MessageBuilder build(const SourceLocation &loc, rmsg::Id msg_id);
-  void report(const RefPtr<TMessage> &msg);
+  MessageBuilder report(const SourceLocation& loc, rmsg::Id msg_id);
+  MessageBuilder note(const SourceLocation& loc, rmsg::Id msg_id);
+  MessageBuilder build(const SourceLocation& loc, rmsg::Id msg_id);
+  void report(const RefPtr<TMessage>& msg);
 
  private:
   void printMessage(RefPtr<TMessage> message);
-  void printSourceLine(const FullSourceRef &ref);
+  void printSourceLine(const FullSourceRef& ref);
 
-  AString renderSourceRef(const FullSourceRef &ref);
+  AString renderSourceRef(const FullSourceRef& ref);
   AString renderMessage(rmsg::Id id,
-                        const AutoPtr<TMessage::Arg> *args,
+                        const AutoPtr<TMessage::Arg>* args,
                         size_t len);
 
  private:
-  SourceManager *source_;
+  SourceManager* source_;
   rmsg::Id fatal_error_;
   SourceLocation fatal_loc_;
 
@@ -249,8 +250,8 @@ class ReportManager
 struct ReportingContext
 {
  public:
-  ReportingContext(CompileContext &cc, const SourceLocation &loc, bool shouldError = true);
-  ReportingContext(ReportManager &rr, const SourceLocation &loc, bool shouldError = true)
+  ReportingContext(CompileContext& cc, const SourceLocation& loc, bool shouldError = true);
+  ReportingContext(ReportManager& rr, const SourceLocation& loc, bool shouldError = true)
    : rr_(rr),
      loc_(loc),
      should_error_(shouldError)
@@ -270,8 +271,8 @@ struct ReportingContext
   }
 
  private:
-  ReportManager &rr_;
-  const SourceLocation &loc_;
+  ReportManager& rr_;
+  const SourceLocation& loc_;
   bool should_error_;
 };
 

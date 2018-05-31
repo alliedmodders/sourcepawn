@@ -27,7 +27,7 @@ using namespace ke;
 using namespace ast;
 
 static inline void
-CoerceToBool(BoxedValue &in)
+CoerceToBool(BoxedValue& in)
 {
   if (in.isInteger())
     in = BoxedValue(!in.toInteger().isZero());
@@ -37,7 +37,7 @@ CoerceToBool(BoxedValue &in)
 }
 
 static inline bool
-CoerceToFloat(const FloatValue &ref, BoxedValue &in)
+CoerceToFloat(const FloatValue& ref, BoxedValue& in)
 {
   assert(!in.isFloat());
   if (in.isInteger()) {
@@ -58,7 +58,7 @@ CoerceToFloat(const FloatValue &ref, BoxedValue &in)
 }
 
 static inline bool
-CoerceForBinaryFloat(BoxedValue &left, BoxedValue &right)
+CoerceForBinaryFloat(BoxedValue& left, BoxedValue& right)
 {
   if (!(left.isFloat() || right.isFloat()))
     return false;
@@ -132,7 +132,7 @@ CoerceForBinaryFloat(BoxedValue &left, BoxedValue &right)
     return TypeError;
 
 ConstantEvaluator::Result
-ConstantEvaluator::binary(BinaryExpression *expr, BoxedValue &left, BoxedValue &right, BoxedValue *out)
+ConstantEvaluator::binary(BinaryExpression* expr, BoxedValue& left, BoxedValue& right, BoxedValue* out)
 {
   ReportingContext cc(cc_, expr->loc(), mode_ == Required);
 
@@ -163,7 +163,7 @@ ConstantEvaluator::binary(BinaryExpression *expr, BoxedValue &left, BoxedValue &
 }
 
 ConstantEvaluator::Result
-ConstantEvaluator::unary(UnaryExpression *expr, BoxedValue &inner, BoxedValue *out)
+ConstantEvaluator::unary(UnaryExpression* expr, BoxedValue& inner, BoxedValue* out)
 {
   ReportingContext cc(cc_, expr->loc(), mode_ == Required);
   switch (expr->token()) {
@@ -206,10 +206,10 @@ ConstantEvaluator::unary(UnaryExpression *expr, BoxedValue &inner, BoxedValue *o
 }
 
 ConstantEvaluator::Result
-ConstantEvaluator::Evaluate(Expression *expr, BoxedValue *out)
+ConstantEvaluator::Evaluate(Expression* expr, BoxedValue* out)
 {
   Result rv;
-  if (BinaryExpression *b = expr->asBinaryExpression()) {
+  if (BinaryExpression* b = expr->asBinaryExpression()) {
     BoxedValue left;
     BoxedValue right;
     if ((rv = Evaluate(b->left(), &left)) != Ok)
@@ -219,57 +219,57 @@ ConstantEvaluator::Evaluate(Expression *expr, BoxedValue *out)
     return binary(b, left, right, out);
   }
 
-  if (UnaryExpression *u = expr->asUnaryExpression()) {
+  if (UnaryExpression* u = expr->asUnaryExpression()) {
     BoxedValue inner;
     if ((rv = Evaluate(u->expression(), &inner)) != Ok)
       return rv;
     return unary(u, inner, out);
   }
 
-  if (TernaryExpression *t = expr->asTernaryExpression()) {
+  if (TernaryExpression* t = expr->asTernaryExpression()) {
     BoxedValue cond;
     if ((rv = Evaluate(t->condition(), &cond)) != Ok)
       return rv;
     if (!cond.isBool())
       CoerceToBool(cond);
-    Expression *result = cond.toBool() ? t->left() : t->right();
+    Expression* result = cond.toBool() ? t->left() : t->right();
     return Evaluate(result, out);
   }
 
-  if (IntegerLiteral *lit = expr->asIntegerLiteral()) {
+  if (IntegerLiteral* lit = expr->asIntegerLiteral()) {
     if (lit->value() >= INT_MIN && lit->value() <= INT_MAX)
       *out = BoxedValue(IntValue::FromInt32((int32_t)lit->value()));
     else
       *out = BoxedValue(IntValue::FromInt64(lit->value()));
     return Ok;
   }
-  if (FloatLiteral *lit = expr->asFloatLiteral()) {
+  if (FloatLiteral* lit = expr->asFloatLiteral()) {
     *out = BoxedValue(FloatValue::FromFloat((float)lit->value()));
     return Ok;
   }
-  if (NameProxy *proxy = expr->asNameProxy()) {
-    if (ConstantSymbol *cs = proxy->sym()->asConstant()) {
+  if (NameProxy* proxy = expr->asNameProxy()) {
+    if (ConstantSymbol* cs = proxy->sym()->asConstant()) {
       *out = resolver_->resolveValueOfConstant(cs);
       return Ok;
     }
-    if (VariableSymbol *sym = proxy->sym()->asVariable()) {
+    if (VariableSymbol* sym = proxy->sym()->asVariable()) {
       if (resolver_->resolveVarAsConstant(sym, out))
         return Ok;
       return NotConstant;
     }
     return NotConstant;
   }
-  if (SizeofExpression *so = expr->asSizeofExpression()) {
+  if (SizeofExpression* so = expr->asSizeofExpression()) {
     ReportingContext cc(cc_, so->loc(), mode_ == Required);
 
     // Resolve to a variable - not a var or type like C++.
-    VariableSymbol *sym = so->proxy()->sym()->asVariable();
+    VariableSymbol* sym = so->proxy()->sym()->asVariable();
     if (!sym) {
       cc.report(rmsg::sizeof_needs_variable);
       return TypeError;
     }
 
-    Type *type = resolver_->resolveTypeOfVar(sym);
+    Type* type = resolver_->resolveTypeOfVar(sym);
     int32_t value = ComputeSizeOfType(cc, type, so->level());
     if (!value)
       return TypeError;

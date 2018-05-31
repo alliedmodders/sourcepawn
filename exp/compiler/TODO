@@ -1,0 +1,61 @@
+Priority     Difficulty      Description
+----------------------------------------------------------------------------------
+Medium       Medium          Default arguments.
+
+High         Low             Handle intrinsic methodmap.
+
+High         Medium          Float operations.
+
+Low          Low             Do a better job at guessing global stack needs.
+
+Low          Low             Implement #pragma dynamic.
+
+Low          Low             Implement fixed-array copying.
+
+Low          Medium          Implement static.
+
+Low          Medium          Implement stock.
+
+Low          Medium          Implement array returns.
+
+High         High            Free heap usage in block scope.
+
+Low          Low             Pass inc/dec ops as l-values to varargs. (Do this in smx, not sema.)
+
+Low          Medium          Unused var warning.
+
+Low          Medium          Unused function warning.
+
+Medium       Medium          Implement constant folding in sema.
+
+High         High            Unify TypeResolver and NameResolver.
+
+High         Medium          Implement clang-style testing for sema.
+
+Low          Medium          Remove assert(false).
+
+Low          Medium          Audit TODOs.
+
+Low          High            Audit messages for missing tests.
+
+Low          Low             Get tests/* passing (may need SP1-only hint on some).
+
+Low          Low             Pretty-ify and unify AST/Sema printing.
+
+Low          Low             Lowercase enums.
+
+Low          Low             Implement + test + harden function-as-values.
+
+Low          Low             Add test for array slices.
+
+Low          Low             Unintended assignment warning.
+
+Low          Low             Infinite loop warning?
+
+Medium       High            Debug info.
+
+Low          Low             Eliminate "stack 0" in short functions.
+
+Low          Low             Ban passing 2d arrays to natives.
+
+Low          Low             Make default .smx location cwd instead of source path.

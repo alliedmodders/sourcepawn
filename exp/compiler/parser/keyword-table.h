@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_keyword_table_h_
 #define _include_spcomp_keyword_table_h_
 
-#include "string-pool.h"
+#include "shared/string-pool.h"
 #include "tokens.h"
 
 namespace sp {
@@ -28,9 +28,9 @@ class CompileContext;
 class KeywordTable
 {
  public:
-  KeywordTable(CompileContext &cc);
+  KeywordTable(CompileContext& cc);
 
-  TokenKind findKeyword(Atom *id) {
+  TokenKind findKeyword(Atom* id) {
     Impl::Result r = impl_.find(id);
     if (!r.found())
       return TOK_NONE;
@@ -38,7 +38,7 @@ class KeywordTable
   }
 
  private:
-  void defineKeyword(Atom *atom, TokenKind tok);
+  void defineKeyword(Atom* atom, TokenKind tok);
 
  private:
   typedef AtomMap<TokenKind> Impl;

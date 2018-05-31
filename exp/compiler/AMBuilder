@@ -23,6 +23,7 @@ binary = Root.StaticLibrary(builder, 'spcomp2', arch)
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath, 'include'),
   os.path.join(builder.sourcePath, builder.sourceFolder),
+  os.path.join(builder.sourcePath),
 ]
 
 if binary.compiler.like('gcc'):
@@ -46,7 +47,6 @@ binary.sources += [
   'int-value.cpp',
   'pool-allocator.cpp',
   'scopes.cpp',
-  'smx-builder.cpp',
   'source-manager.cpp',
   'symbols.cpp',
   'reporting.cpp',
@@ -60,9 +60,15 @@ binary.sources += [
   'parser/parser.cpp',
   'parser/preprocessor.cpp',
   'parser/tk-evaluator.cpp',
+  'sema/coercion.cpp',
+  'sema/expressions.cpp',
   'sema/name-resolver.cpp',
+  'sema/program.cpp',
   'sema/semantic-analysis.cpp',
+  'sema/statements.cpp',
   'sema/type-resolver.cpp',
+  'smx/array-helpers.cpp',
+  'smx/smx-compiler.cpp',
 ]
 libspcomp2 = builder.Add(binary)
 
@@ -79,7 +85,8 @@ binary.sources += [
   'main.cpp',
 ]
 binary.compiler.linkflags += [
-  libspcomp2.binary
+  libspcomp2.binary,
+  SP.libsmx[arch].binary,
 ]
 builder.Add(binary)
 

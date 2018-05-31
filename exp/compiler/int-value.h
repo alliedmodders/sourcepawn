@@ -167,7 +167,7 @@ struct IntValue
     is_signed_ = 1;
   }
 
-  const char *getTypename() const;
+  const char* getTypename() const;
 
   static inline int64_t MaxSigned(unsigned bits) {
     return ((int64_t(1) << (bits - 1)) - 1);
@@ -215,28 +215,28 @@ struct IntValue
   SIGNED_INT_TYPE_MAP(_)
 #undef _
 
-  static bool Add(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Sub(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Mul(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Div(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Mod(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Shl(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Shr(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Ushr(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Or(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool And(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Xor(ReportingContext &cc, const IntValue &left, const IntValue &right, IntValue *outp);
-  static bool Ge(ReportingContext &cc, const IntValue &left, const IntValue &right, bool *outp);
-  static bool Gt(ReportingContext &cc, const IntValue &left, const IntValue &right, bool *outp);
-  static bool Le(ReportingContext &cc, const IntValue &left, const IntValue &right, bool *outp);
-  static bool Lt(ReportingContext &cc, const IntValue &left, const IntValue &right, bool *outp);
-  static bool Eq(ReportingContext &cc, const IntValue &left, const IntValue &right, bool *outp);
-  static bool Ne(ReportingContext &cc, const IntValue &left, const IntValue &right, bool *outp);
-  static bool Neg(ReportingContext &cc, const IntValue &in, IntValue *outp);
-  static IntValue Invert(const IntValue &in);
+  static bool Add(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Sub(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Mul(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Div(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Mod(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Shl(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Shr(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Ushr(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Or(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool And(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Xor(ReportingContext& cc, const IntValue& left, const IntValue& right, IntValue* outp);
+  static bool Ge(ReportingContext& cc, const IntValue& left, const IntValue& right, bool* outp);
+  static bool Gt(ReportingContext& cc, const IntValue& left, const IntValue& right, bool* outp);
+  static bool Le(ReportingContext& cc, const IntValue& left, const IntValue& right, bool* outp);
+  static bool Lt(ReportingContext& cc, const IntValue& left, const IntValue& right, bool* outp);
+  static bool Eq(ReportingContext& cc, const IntValue& left, const IntValue& right, bool* outp);
+  static bool Ne(ReportingContext& cc, const IntValue& left, const IntValue& right, bool* outp);
+  static bool Neg(ReportingContext& cc, const IntValue& in, IntValue* outp);
+  static IntValue Invert(const IntValue& in);
 
  private:
-  static bool ValidateAluOp(ReportingContext &cc, TokenKind tok, IntValue *left, IntValue *right, bool *sign);
+  static bool ValidateAluOp(ReportingContext& cc, TokenKind tok, IntValue* left, IntValue* right, bool* sign);
 
  private:
   // Note: bits implicitly stores the type. We do not right-size the bitcount

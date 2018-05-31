@@ -69,6 +69,7 @@ namespace sp {
   _(TYPEDEF)                                          \
   _(TYPESET)                                          \
   _(UNION)                                            \
+  _(USING)                                            \
   _(WHILE)                                            \
   _(VIEW_AS)                                          \
   _(VOID)                                             \
@@ -81,6 +82,7 @@ namespace sp {
   _(M_IF)                                             \
   _(M_INCLUDE)                                        \
   _(M_LEAVING)                                        \
+  _(M_LINE)                                           \
   _(M_OPTIONAL_NEWDECLS)                              \
   _(M_OPTIONAL_SEMI)                                  \
   _(M_PRAGMA)                                         \
@@ -88,6 +90,7 @@ namespace sp {
   _(M_REQUIRE_SEMI)                                   \
   _(M_TRYINCLUDE)                                     \
   _(M_UNDEF)                                          \
+  _(INTRINSICS)                                       \
   _(NULLABLE)
 
 // We need to test line positions very frequently during lexing. Rather than
@@ -102,7 +105,7 @@ struct TokenPos
     : line(0)
   {
   }
-  TokenPos(const SourceLocation &loc, unsigned line)
+  TokenPos(const SourceLocation& loc, unsigned line)
    : loc(loc),
      line(line)
   {
@@ -131,15 +134,15 @@ struct Token
     memset(&u, 0, sizeof(u));
   }
 
-  void init(const TokenPos &startPos, uint32_t sourceId) {
+  void init(const TokenPos& startPos, uint32_t sourceId) {
     start = startPos;
     source_id = sourceId;
   }
 
-  void setAtom(Atom *atom) {
+  void setAtom(Atom* atom) {
     u.atom_ = atom;
   }
-  Atom *atom() const {
+  Atom* atom() const {
     assert(u.atom_);
     return u.atom_;
   }
@@ -172,7 +175,7 @@ struct Token
 
  private:
   union {
-    Atom *atom_;
+    Atom* atom_;
     int64_t int_value_;
     double double_value_;
   } u;
@@ -182,16 +185,16 @@ struct Token
 struct NameToken
 {
   SourceLocation start;
-  Atom *atom;
+  Atom* atom;
 
   NameToken()
    : atom(nullptr)
   { }
-  NameToken(const Token *tok)
+  NameToken(const Token* tok)
    : start(tok->start.loc),
      atom(tok->atom())
   { }
-  NameToken(const Token &tok)
+  NameToken(const Token& tok)
    : start(tok.start.loc),
      atom(tok.atom())
   {
@@ -276,13 +279,13 @@ class TokenRing
   }
 
   // Get the most recent token that has been lexed or popped.
-  Token *current() {
+  Token* current() {
     assert(num_tokens_ > 0);
     return &tokens_[cursor_];
   }
 
   // Move to and return the next token pointer to lex into.
-  Token *moveNext() {
+  Token* moveNext() {
     assert(depth_ == 0);
     num_tokens_++;
     if (++cursor_ == kMaxLookahead)
@@ -295,7 +298,7 @@ class TokenRing
   }
 
   // Peek at the most recently buffered token.
-  Token *peek() {
+  Token* peek() {
     assert(depth_ > 0);
     size_t cursor = cursor_ + 1;
     if (cursor == kMaxLookahead)
@@ -305,14 +308,14 @@ class TokenRing
 
   // Unbuffers one buffered token, and returns it. If no token could be
   // unbuffered, returns null.
-  Token *maybePop() {
+  Token* maybePop() {
     if (depth_ == 0)
       return nullptr;
     return pop();
   }
 
   // Unbuffers one buffered token, and returns it.
-  Token *pop() {
+  Token* pop() {
     assert(depth_ > 0);
     depth_--;
     cursor_++;
@@ -334,7 +337,7 @@ class TokenRing
   // that will be seen by the following call to peek(). Calls to push() are
   // preserved, but further calls to push() will not be able to look past the
   // injected token.
-  void inject(const Token &tok) {
+  void inject(const Token& tok) {
     if (depth_ == 0)
       *moveNext() = tok;
     else
@@ -360,7 +363,7 @@ class TokenRing
   size_t num_tokens_;
 };
 
-extern const char *TokenNames[];
+extern const char* TokenNames[];
 
 } // namespace ke
 

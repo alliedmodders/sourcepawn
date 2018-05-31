@@ -21,7 +21,7 @@
 using namespace ke;
 using namespace sp;
 
-const char *sp::TokenNames[] =
+const char* sp::TokenNames[] =
 {
 #define _(name, str) str,
   TOKENMAP(_)
@@ -29,13 +29,13 @@ const char *sp::TokenNames[] =
   nullptr
 };
 
-KeywordTable::KeywordTable(CompileContext &cc)
+KeywordTable::KeywordTable(CompileContext& cc)
 {
   impl_.init(128);
 
 #define _(name)                                   \
   do {                                            \
-    Atom *atom = cc.add(TokenNames[TOK_##name]);  \
+    Atom* atom = cc.add(TokenNames[TOK_##name]);  \
     defineKeyword(atom, TOK_##name);              \
   } while (0);
   KEYWORDMAP(_)
@@ -43,7 +43,7 @@ KeywordTable::KeywordTable(CompileContext &cc)
 }
 
 void
-KeywordTable::defineKeyword(Atom *atom, TokenKind kind)
+KeywordTable::defineKeyword(Atom* atom, TokenKind kind)
 {
   Impl::Insert p = impl_.findForAdd(atom);
   assert(!p.found());

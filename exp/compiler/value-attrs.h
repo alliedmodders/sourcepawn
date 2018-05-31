@@ -19,9 +19,18 @@
 #define _include_spcomp_expression_ops_h_
 
 #include <amtl/am-enum.h>
+#include <amtl/am-flags.h>
 #include "boxed-value.h"
 
 namespace sp {
+
+enum class SymAttrs
+{
+  None          = 0x0,
+  Stock         = 0x1,
+  Uninitialized = 0x2
+};
+KE_DEFINE_ENUM_OPERATORS(SymAttrs)
 
 // Storage class for variables.
 enum class StorageClass : int32_t
@@ -31,22 +40,6 @@ enum class StorageClass : int32_t
   Argument,
   Global
 };
-
-// L-value attribute flags.
-enum class StorageFlags : int32_t
-{
-  none = 0,
-
-  // This l-value is stored by-reference.
-  byref = (1 << 0),
-
-  // This value can be interned at compile-time.
-  constval = (1 << 1),
-
-  // This value cannot be modified.
-  readonly = (1 << 2)
-};
-KE_DEFINE_ENUM_OPERATORS(StorageFlags)
 
 } // namespace sp
 

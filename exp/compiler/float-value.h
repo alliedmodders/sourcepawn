@@ -79,25 +79,25 @@ struct FloatValue
     return float_;
   }
 
-  const char *getTypename() const {
+  const char* getTypename() const {
     return isFloat() ? "float" : "double";
   }
 
-  static FloatValue Add(const FloatValue &left, const FloatValue &right);
-  static FloatValue Sub(const FloatValue &left, const FloatValue &right);
-  static FloatValue Mul(const FloatValue &left, const FloatValue &right);
-  static FloatValue Div(const FloatValue &left, const FloatValue &right);
-  static FloatValue Mod(const FloatValue &left, const FloatValue &right);
-  static bool Ge(const FloatValue &left, const FloatValue &right);
-  static bool Gt(const FloatValue &left, const FloatValue &right);
-  static bool Le(const FloatValue &left, const FloatValue &right);
-  static bool Lt(const FloatValue &left, const FloatValue &right);
-  static bool Eq(const FloatValue &left, const FloatValue &right);
-  static bool Ne(const FloatValue &left, const FloatValue &right);
-  static FloatValue Neg(const FloatValue &in);
+  static FloatValue Add(const FloatValue& left, const FloatValue& right);
+  static FloatValue Sub(const FloatValue& left, const FloatValue& right);
+  static FloatValue Mul(const FloatValue& left, const FloatValue& right);
+  static FloatValue Div(const FloatValue& left, const FloatValue& right);
+  static FloatValue Mod(const FloatValue& left, const FloatValue& right);
+  static bool Ge(const FloatValue& left, const FloatValue& right);
+  static bool Gt(const FloatValue& left, const FloatValue& right);
+  static bool Le(const FloatValue& left, const FloatValue& right);
+  static bool Lt(const FloatValue& left, const FloatValue& right);
+  static bool Eq(const FloatValue& left, const FloatValue& right);
+  static bool Ne(const FloatValue& left, const FloatValue& right);
+  static FloatValue Neg(const FloatValue& in);
 
  private:
-  static bool UpcastForOp(FloatValue *left, FloatValue *right);
+  static bool UpcastForOp(FloatValue* left, FloatValue* right);
 
  private:
   uint32_t bits_;

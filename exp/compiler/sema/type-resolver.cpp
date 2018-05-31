@@ -24,13 +24,11 @@ namespace sp {
 using namespace ke;
 using namespace ast;;
 
-const int TypeResolver::kRankUnvisited = INT_MIN;
-
 template <typename T>
 class AutoPush
 {
  public:
-  AutoPush(Vector<T> &stack, const T &item)
+  AutoPush(Vector<T>& stack, const T& item)
    : stack_(stack)
   {
     stack_.append(item);
@@ -39,7 +37,7 @@ class AutoPush
     stack_.pop();
   }
  private:
-  Vector<T> &stack_;
+  Vector<T>& stack_;
 };
 
 // Type Resolution ensures that any type specifier has a bound type, and that
@@ -52,7 +50,7 @@ class AutoPush
 //   typedef B = int;
 //
 // In order to resolve "A", we will recursively resolve "B". If we have a
-// recursive type, we have to prevent infintie recursion and report an error.
+// recursive type, we have to prevent infinite recursion and report an error.
 // Recursive types always occur through name resolution, and there are many
 // patterns in which they can occur.
 //
@@ -119,7 +117,7 @@ class AutoPush
 // dependencies, and in the case of typedefs, as long as we can resolve them to
 // a canonical type that is not a typedef.
 //
-TypeResolver::TypeResolver(CompileContext &cc)
+TypeResolver::TypeResolver(CompileContext& cc)
  : pool_(cc.pool()),
    cc_(cc)
 {
@@ -128,9 +126,9 @@ TypeResolver::TypeResolver(CompileContext &cc)
 bool
 TypeResolver::analyze()
 {
-  printf("queue size: %d\n", int(work_queue_.length()));
+  printf("unresolved type queue size: %d\n", int(work_queue_.length()));
   while (!work_queue_.empty()) {
-    AstNode *node = work_queue_.popFrontCopy();
+    AstNode* node = work_queue_.popFrontCopy();
     node->accept(this);
 
     if (!cc_.canContinueProcessing())
@@ -142,8 +140,8 @@ TypeResolver::analyze()
 
 // Override for ConstantEvaluator. For simplicity, and to prevent extra
 // errors, we always give ConstantEvaluator a type pointer back.
-Type *
-TypeResolver::resolveTypeOfVar(VariableSymbol *sym)
+Type*
+TypeResolver::resolveTypeOfVar(VariableSymbol* sym)
 {
   if (!sym->type())
     sym->node()->accept(this);
@@ -151,7 +149,7 @@ TypeResolver::resolveTypeOfVar(VariableSymbol *sym)
 }
 
 bool
-TypeResolver::resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out)
+TypeResolver::resolveVarAsConstant(VariableSymbol* sym, BoxedValue* out)
 {
   // If we don't have a type, resolve the node right now. This will also
   // resolve any constexpr, if any.
@@ -177,7 +175,7 @@ TypeResolver::resolveVarAsConstant(VariableSymbol *sym, BoxedValue *out)
 // Override for ConstantEvaluator. If a constant fails to resolve, it must
 // be set to contain a bogus value (preferably 0 in whatever type is needed).
 BoxedValue
-TypeResolver::resolveValueOfConstant(ConstantSymbol *sym)
+TypeResolver::resolveValueOfConstant(ConstantSymbol* sym)
 {
   if (!sym->hasValue())
     resolveConstant(sym);
@@ -186,14 +184,18 @@ TypeResolver::resolveValueOfConstant(ConstantSymbol *sym)
 }
 
 void
-TypeResolver::visitVarDecl(VarDecl *node)
+TypeResolver::visitVarDecl(VarDecl* node)
 {
-  VariableSymbol *sym = node->sym();
+  VariableSymbol* sym = node->sym();
 
-  assert(!sym->type());
+  if (sym->type() && !sym->canUseInConstExpr()) {
+    // This was already resolved earlier - it's part of a function signature.
+    assert(sym->scope()->kind() == Scope::Argument);
+    return;
+  }
 
   Type* type;
-  if (TypeSpecifier *spec = node->te().spec()) {
+  if (TypeSpecifier* spec = node->te().spec()) {
     // We always infer sizes for postdims in variable scope. In argument
     // scope, we don't want something like:
     //
@@ -207,26 +209,38 @@ TypeResolver::visitVarDecl(VarDecl *node)
     //
     // Note: we should not be able to recurse from inside this block. If it
     // could, we'd have to mark spec as resolving earlier.
-    Vector<int> literal_dims;
-    if (Expression *init = node->initialization()) {
-      if (spec->hasPostDims() && !sym->isArgument()) {
-        // Compute the dimensions of initializers in case the declaration type
-        // requires inference.
-        if (ArrayLiteral *lit = init->asArrayLiteral()) {
-          literal_dims = fixedArrayLiteralDimensions(spec, lit);
-        } else if (StringLiteral *lit = init->asStringLiteral()) {
-          literal_dims.append(lit->arrayLength());
-        }
-      }
-    }
+    Expression* initializer = nullptr;
+    if (!sym->isArgument() && spec->hasPostDims())
+      initializer = node->initialization();
 
-    VarDeclSpecHelper helper(node, &literal_dims);
+    VarDeclSpecHelper helper(node, initializer);
     type = resolveType(node->te(), &helper);
+
+    // If the array was an old-school declaration, like:
+    //   decl blah[expr];
+    //
+    // Then we need to preserve the dimensions from the type, and propagate
+    // them to an initializer. This is really out of scope for type resolution,
+    // but it's truly the only place we can do this (unless we always stash
+    // the dimensions in the AST node).
+    if (type->isArray() &&
+        !type->toArray()->hasFixedLength() &&
+        sym->scope()->kind() == Scope::Block &&
+        spec->dims() &&
+        !initializer)
+    {
+      Type* innermost = type->toArray()->innermost();
+      initializer = new (pool_) NewArrayExpr(
+        spec->arrayLoc(),
+        TypeExpr(innermost),
+        spec->dims());
+      node->set_initializer(initializer);
+    }
   } else {
     type = node->te().resolved();
   }
 
-  if (!assignTypeToSymbol(sym, type))
+  if (!sym->type() && !assignTypeToSymbol(sym, type))
     return;
 
   if (sym->isConstExpr() || !sym->canUseInConstExpr())
@@ -281,13 +295,13 @@ TypeResolver::visitVarDecl(VarDecl *node)
 }
 
 void
-TypeResolver::visitEnumConstant(EnumConstant *node)
+TypeResolver::visitEnumConstant(EnumConstant* node)
 {
   if (node->sym()->hasValue())
     return;
 
-  EnumStatement *parent = node->parent();
-  Type *type = node->parent()->sym()->type();
+  EnumStatement* parent = node->parent();
+  Type* type = node->parent()->sym()->type();
 
   // If we don't have an initializer, or our parent type hasn't been
   // instantiated yet, we upcall to resolve our parent Enum instead.
@@ -326,25 +340,25 @@ TypeResolver::visitEnumConstant(EnumConstant *node)
 }
 
 void
-TypeResolver::visitUnsafeCastExpr(UnsafeCastExpr *expr)
+TypeResolver::visitViewAsExpression(ViewAsExpression* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }
 
 void
-TypeResolver::visitCallNewExpr(CallNewExpr *expr)
+TypeResolver::visitCallNewExpr(CallNewExpr* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }
 
 void
-TypeResolver::visitNewArrayExpr(NewArrayExpr *expr)
+TypeResolver::visitNewArrayExpr(NewArrayExpr* expr)
 {
   resolveTypeIfNeeded(expr->te());
 }
 
 void
-TypeResolver::visitEnumStatement(EnumStatement *node)
+TypeResolver::visitEnumStatement(EnumStatement* node)
 {
   // This should only happen if we resolved the enum before visiting it in
   // the statement list.
@@ -353,11 +367,11 @@ TypeResolver::visitEnumStatement(EnumStatement *node)
 
   node->setResolving();
 
-  Type *type = node->sym()->type();
+  Type* type = node->sym()->type();
 
   int value = 0;
   for (size_t i = 0; i < node->entries()->length(); i++) {
-    EnumConstant *cs = node->entries()->at(i);
+    EnumConstant* cs = node->entries()->at(i);
     if (cs->expression()) {
       // We may have already resolved a value, for example:
       //    enum X {
@@ -383,11 +397,11 @@ TypeResolver::visitEnumStatement(EnumStatement *node)
   node->setResolved();
 }
 
-EnumType *
-TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
+EnumType*
+TypeResolver::resolveMethodmapParentType(NameProxy* proxy)
 {
   // The parent must be a methodmap.
-  TypeSymbol *parentSymbol = proxy->sym()->asType();
+  TypeSymbol* parentSymbol = proxy->sym()->asType();
   if (!parentSymbol) {
     cc_.report(proxy->loc(), rmsg::bad_methodmap_parent)
       << proxy->name();
@@ -395,7 +409,7 @@ TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
   }
 
   // Don't error twice if we get an unresolved type.
-  Type *type = resolveNameToType(proxy);
+  Type* type = resolveNameToType(proxy);
   if (type->isUnresolvable())
     return nullptr;
 
@@ -408,10 +422,11 @@ TypeResolver::resolveMethodmapParentType(NameProxy *proxy)
   return type->toEnum();
 }
 
+// :TODO: test recursive definitions
 void
-TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
+TypeResolver::visitMethodmapDecl(MethodmapDecl* methodmap)
 {
-  EnumType *type = methodmap->sym()->type()->toEnum();
+  EnumType* type = methodmap->sym()->type()->toEnum();
   if (type->methodmap())
     return;
 
@@ -419,12 +434,12 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
   type->setMethodmap(methodmap);
 
   // Our parent must be resolved first.
-  EnumType *parent = nullptr;
+  EnumType* parent = nullptr;
   if (methodmap->parent())
     parent = resolveMethodmapParentType(methodmap->parent());
 
   // Check that we do not appear in the parent chain.
-  for (EnumType *cursor = parent; cursor; cursor = cursor->methodmap()->extends()) {
+  for (EnumType* cursor = parent; cursor; cursor = cursor->methodmap()->extends()) {
     if (cursor->methodmap() == methodmap) {
       cc_.report(methodmap->parent()->loc(), rmsg::circular_methodmap)
         << methodmap->name();
@@ -436,66 +451,76 @@ TypeResolver::visitMethodmapDecl(MethodmapDecl *methodmap)
 }
 
 void
-TypeResolver::visitFunction(FunctionNode *node)
+TypeResolver::visitFunction(FunctionNode* node)
 {
-  if (!node->signature()->isResolved())
+  if (!node->signature()->isResolved()) {
     resolveTypesInSignature(node->signature());
+    assignTypeToFunction(node);
+  }
 }
 
 void
-TypeResolver::visitFieldDecl(FieldDecl *decl)
+TypeResolver::assignTypeToFunction(FunctionNode* node)
 {
-  Type *type = resolveTypeIfNeeded(decl->te());
+  assert(!node->signature_type());
+  Type* type = cc_.types()->newFunction(node->signature());
+  node->set_signature_type(type);
+}
+
+void
+TypeResolver::visitFieldDecl(FieldDecl* decl)
+{
+  Type* type = resolveTypeIfNeeded(decl->te());
   decl->sym()->setType(type);
 }
 
 void
-TypeResolver::visitPropertyDecl(PropertyDecl *decl)
+TypeResolver::visitPropertyDecl(PropertyDecl* decl)
 {
   // It is impossible to use property decl types in constant exprs or
   // type resolvers. I don't anticipate this ever being a thing either.
   if (!decl->sym()->type())
     decl->sym()->setType(resolveTypeIfNeeded(decl->te()));
 
-  if (FunctionNode *getter = decl->getter())
+  if (FunctionNode* getter = decl->getter())
     visitFunction(getter);
-  if (FunctionNode *setter = decl->setter())
+  if (FunctionNode* setter = decl->setter())
     visitFunction(setter);
 }
 
 void
-TypeResolver::visitMethodDecl(MethodDecl *decl)
+TypeResolver::visitMethodDecl(MethodDecl* decl)
 {
   // It is not possible to refer to methods as part of a constant or type
   // expression - no re-entrancy or upward-resolving needed.
-  if (FunctionNode *node = decl->method())
+  if (FunctionNode* node = decl->method())
     visitFunction(node);
 }
 
 void
-TypeResolver::visitFunctionStatement(FunctionStatement *node)
+TypeResolver::visitFunctionStatement(FunctionStatement* node)
 {
   visitFunction(node);
 }
 
 void
-TypeResolver::visitTypedefDecl(TypedefDecl *node)
+TypeResolver::visitTypedefDecl(TypedefDecl* node)
 {
   // Re-entrancy guard.
   if (node->te().resolved())
     return;
 
-  TypedefType *type = node->sym()->type()->toTypedef();
-  const SourceLocation &baseLoc = node->te().spec()->baseLoc();
+  TypedefType* type = node->sym()->type()->toTypedef();
+  const SourceLocation& baseLoc = node->te().spec()->baseLoc();
 
   // This is our recursion guard.
-  Type *actual = resolveType(node->te());
+  Type* actual = resolveType(node->te());
   
   // Check for a recursive type. There might be a better way to do this, but
   // for now this is what we've got: just manually check any compound type
   // that wouldn't be able to handle a self-reference.
-  Type *base = actual;
-  if (ArrayType *array = base->asArray()) {
+  Type* base = actual;
+  if (ArrayType* array = base->asArray()) {
     while (array->contained()->isArray())
       array = array->contained()->toArray();
     base = array->contained();
@@ -507,26 +532,27 @@ TypeResolver::visitTypedefDecl(TypedefDecl *node)
     return;
   }
 
-  type->resolve(actual);
+  assignTypeToTypedef(node, type, actual);
 }
 
 void
-TypeResolver::visitTypesetDecl(TypesetDecl *decl)
+TypeResolver::visitTypesetDecl(TypesetDecl* decl)
 {
   if (!decl->isResolved())
     return;
 
   for (size_t i = 0; i < decl->types()->length(); i++) {
-    TypeExpr &te = decl->types()->at(i).te;
+    TypeExpr& te = decl->types()->at(i).te;
     resolveTypeIfNeeded(te);
   }
 
   if (!verifyTypeset(decl))
     return;
 
-  TypesetType::TypeList* list = new (pool_) TypesetType::TypeList(decl->types()->length());
+  TypesetType::TypeList* list =
+    new (pool_) TypesetType::TypeList(decl->types()->length());
   for (size_t i = 0; i < list->length(); i++) {
-    TypesetDecl::Entry &entry = decl->types()->at(i);
+    TypesetDecl::Entry& entry = decl->types()->at(i);
     list->at(i) = entry.te.resolved();
   }
 
@@ -537,23 +563,22 @@ TypeResolver::visitTypesetDecl(TypesetDecl *decl)
 }
 
 bool
-TypeResolver::verifyTypeset(TypesetDecl *decl)
+TypeResolver::verifyTypeset(TypesetDecl* decl)
 {
   bool ok = true;
 
   // Verify that types aren't duplicated. This is an O(n^2) algorithm - we
   // assume N will be very small.
-  TypesetDecl::Entries *types = decl->types();
+  TypesetDecl::Entries* types = decl->types();
   for (size_t i = 0; i < types->length(); i++) {
-    TypesetDecl::Entry &entry = types->at(i);
-    Type *current = entry.te.resolved();
+    TypesetDecl::Entry& entry = types->at(i);
+    Type* current = entry.te.resolved();
 
-    // "const int" or something should have thrown an error here.
-    assert(!current->isConst() || TypeSupportsTransitiveConst(current));
+    // :TODO: handle const int vs int
 
     for (size_t j = 0; j < i; j++) {
-      TypesetDecl::Entry &prevEntry = types->at(j);
-      Type *prev = prevEntry.te.resolved();
+      TypesetDecl::Entry& prevEntry = types->at(j);
+      Type* prev = prevEntry.te.resolved();
 
       if (AreTypesEquivalent(prev, current, Qualifiers::None)) {
         cc_.report(entry.loc, rmsg::typeset_ambiguous_type)
@@ -563,6 +588,9 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
         break;
       }
     }
+
+    if (!current->isFunction())
+      cc_.report(entry.loc, rmsg::typeset_must_only_have_fun);
   }
 
   return ok;
@@ -571,12 +599,10 @@ TypeResolver::verifyTypeset(TypesetDecl *decl)
 // Returns true if it could be resolved to a constant integer; false
 // otherwise. |outp| is unmodified on failure.
 bool
-TypeResolver::resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, int *outp)
+TypeResolver::resolveConstantArraySize(ConstantEvaluator::Mode mode,
+                                       Expression* expr,
+                                       int* outp)
 {
-  // With old-style decls, we have to speculatively parse for constants.
-  ConstantEvaluator::Mode mode = spec->isOldDecl()
-    ? ConstantEvaluator::Speculative
-    : ConstantEvaluator::Required;
   ConstantEvaluator ceval(cc_, this, mode);
 
   BoxedValue value;
@@ -600,7 +626,7 @@ TypeResolver::resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, in
     return false;
   }
 
-  const IntValue &iv = value.toInteger();
+  const IntValue& iv = value.toInteger();
   if (iv.isNegativeOrZero()) {
     cc_.report(expr->loc(), rmsg::array_size_must_be_positive);
     return false;
@@ -619,91 +645,155 @@ TypeResolver::resolveConstantArraySize(TypeSpecifier *spec, Expression *expr, in
 }
 
 void
-TypeResolver::updateComputedRankSize(Vector<int> &out, size_t rank, int size)
+TypeResolver::computeFixedArraySizes(TypeSpecifier* spec,
+                                     Type* base,
+                                     Vector<Rank>& ranks,
+                                     size_t rank_index,
+                                     ArrayLiteral* list)
 {
-  if (out[rank] == kRankUnvisited) {
-    // If we've never visited this rank before, give it whatever we're inputing
-    // as the initial size.
-    out[rank] = size;
-  } else if (out[rank] >= ArrayType::kUnsized && out[rank] != size) {
-    // If we previously detected a fixed size or dynamic size for this rank,
-    // and now are receiving a different size, mark the rank size as
-    // indeterminate.
-    out[rank] = ArrayType::kIndeterminate;
-  }
-}
-
-void
-TypeResolver::computeFixedArrayLiteralDimensions(ArrayLiteral *root, size_t rank, size_t highestUnknownRank, Vector<int> &out)
-{
-  if (rank >= highestUnknownRank) {
-    // Either we've reached the end of the [] sequences on the type, or all
-    // further ranks are known to have a size.
+  // :TODO: test when literals are too deeply nested
+  if (rank_index >= ranks.length())
     return;
-  }
 
-  for (size_t i = 0; i < root->expressions()->length(); i++) {
-    Expression *expr = root->expressions()->at(i);
-    if (ArrayLiteral *lit = expr->asArrayLiteral()) {
-      if (lit->isFixedArrayLiteral()) {
-        updateComputedRankSize(out, rank, lit->arrayLength());
-        computeFixedArrayLiteralDimensions(lit, rank + 1, highestUnknownRank, out);
-      } else {
-        updateComputedRankSize(out, rank, ArrayType::kUnsized);
-      }
-    } else if (StringLiteral *lit = expr->asStringLiteral()) {
-      updateComputedRankSize(out, rank, lit->arrayLength());
+  Rank& rank = ranks[rank_index];
+  for (size_t i = 0; i < list->expressions()->length(); i++) {
+    Expression* expr = list->expressions()->at(i);
+    int size = -1;
+    if (ArrayLiteral* lit = expr->asArrayLiteral()) {
+      size = lit->arrayLength();
+      computeFixedArraySizes(spec, base, ranks, rank_index + 1, lit);
+    } else if (StringLiteral* lit = expr->asStringLiteral()) {
+      // String literals are only valid in the last rank.
+      if (rank_index == spec->rank() - 1)
+        size = lit->arrayLength();
+      else
+        size = -1;
     } else {
       // If we get here, we either have an invalid construction that looks
       // something like:
       //  int a[][] = { 3 };
       //
       // I.e., the user has specified more array dimensions than there are
-      // arrays in the literal. We just mark as indeterminate since we'll
-      // error for real in the semantic analysis pass.
-      updateComputedRankSize(out, rank, ArrayType::kIndeterminate);
+      // arrays in the literal.
+    }
+
+    if (rank.status == RankStatus::Indeterminate ||
+        rank.status == RankStatus::Determinate)
+    {
+      continue;
+    }
+
+    if (size == -1) {
+      rank.status = RankStatus::Indeterminate;
+
+      cc_.report(expr->loc(), rmsg::incomplete_array_literal);
+    } else if (rank.status == RankStatus::Unvisited) {
+      rank.status = RankStatus::Computed;
+      rank.size = size;
+    } else {
+      assert(rank.status == RankStatus::Computed);
+      if (base->isPrimitive(PrimitiveType::Char)) {
+        // Strings are null-terminated, so we pick the maximum size of any
+        // entry in the last dimension.
+        rank.size = ke::Max(rank.size, size);
+      } else if (rank.size != size) {
+        rank.status = RankStatus::Indeterminate;
+
+        cc_.report(expr->loc(), rmsg::array_literal_size_mismatch);
+      }
     }
   }
 }
 
-Vector<int>
-TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier *spec, ArrayLiteral *lit)
+Vector<Rank>
+TypeResolver::fixedArrayLiteralDimensions(TypeSpecifier* spec, Type* base, Expression* init)
 {
-  Vector<int> out;
-
-  size_t highestUnknownRank = 0;
+  Vector<Rank> ranks;
   for (size_t i = 0; i < spec->rank(); i++) {
-    if (!spec->sizeOfRank(i))
-      highestUnknownRank = i + 1;
-    out.append(kRankUnvisited);
+    Rank rank;
+    if (spec->sizeOfRank(i))
+      rank.status = RankStatus::Determinate;
+    ranks.append(rank);
   }
 
-  if (highestUnknownRank > 0) {
-    // Some dimensions were unsized. Compute fixed sizes (if possible) from
-    // the initializer. This is a recursive process so we can try to create
-    // uniform fixed lengths for each sub-array, as SourcePawn 1 did.
-    updateComputedRankSize(out, 0, lit->arrayLength());
-    computeFixedArrayLiteralDimensions(lit, 1, highestUnknownRank, out);
+  // Peel off dimensions where the size is already known.
+  while (!ranks.empty() && ranks.back().status == RankStatus::Determinate)
+    ranks.pop();
+
+  if (ranks.empty())
+    return ranks;
+
+  if (StringLiteral* str = init->asStringLiteral()) {
+    if (spec->rank() != 1) {
+      cc_.report(init->loc(), rmsg::incomplete_array_literal);
+      return ranks;
+    }
+
+    ranks[0].status = RankStatus::Computed;
+    ranks[0].size = str->arrayLength();
+    return ranks;
   }
+
+  ArrayLiteral* lit = init->asArrayLiteral();
+  if (!lit) {
+    cc_.report(init->loc(), rmsg::incomplete_array_literal);
+    return ranks;
+  }
+
+  // Some dimensions were unsized. Compute fixed sizes (if possible) from
+  // the initializer. This is a recursive process so we can try to create
+  // uniform fixed lengths for each sub-array, as SourcePawn 1 did.
+  if (ranks[0].status != RankStatus::Determinate) {
+    ranks[0].status = RankStatus::Computed;
+    ranks[0].size = lit->arrayLength();
+  }
+  if (ranks.length() > 1)
+    computeFixedArraySizes(spec, base, ranks, 1, lit);
+
+  // If we have no indeterminate arrays, then everything should have been
+  // visited. If we do have indeterminate arrays, an error has been reported.
+  // This assertion is to make sure we did indeed report an error.
+#if !defined(NDEBUG)
+  bool has_indeterminate = false;
+  bool has_unvisited = false;
+  for (size_t i = 0; i < ranks.length(); i++) {
+    if (ranks[i].status == RankStatus::Indeterminate)
+      has_indeterminate = true;
+    else if (ranks[i].status == RankStatus::Unvisited)
+      has_unvisited = true;
+  }
+  if (has_unvisited)
+    assert(has_indeterminate);
+#endif
 
   // Return the computed list unadultered - resolveArrayComponentTypes()
   // will correctly merge with the TypeSpecifier.
-  return out;
+  return ranks;
 } 
 
 void
-TypeResolver::resolveTypesInSignature(FunctionSignature *sig)
+TypeResolver::resolveTypesInSignature(FunctionSignature* sig)
 {
   resolveType(sig->returnType());
   for (size_t i = 0; i < sig->parameters()->length(); i++) {
-    VarDecl *param = sig->parameters()->at(i);
+    VarDecl* param = sig->parameters()->at(i);
+
+    // We should not have variadic arguments on anything but the last type. It
+    // is hard to assert this anywhere else in TypeResolver unfortunately.
+#if !defined(NDEBUG)
+    if (TypeSpecifier* spec = param->te().spec()) {
+      if (i != sig->parameters()->length() - 1)
+        assert(!spec->isVariadic());
+    }
+#endif
+
     param->accept(this);
   }
 }
 
 // The main entrypoint for resolving ConstantSymbols.
 void
-TypeResolver::resolveConstant(ConstantSymbol *sym)
+TypeResolver::resolveConstant(ConstantSymbol* sym)
 {
   // Since we're only called from resolveValueOfConstant, we should never
   // arrive here with a constant already set.
@@ -722,13 +812,13 @@ TypeResolver::resolveConstant(ConstantSymbol *sym)
   assert(sym->hasValue());
 }
 
-Type *
-TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int> *arrayInitData)
+Type*
+TypeResolver::resolveType(TypeExpr& te, TypeSpecHelper* helper)
 {
   if (te.resolved())
     return te.resolved();
 
-  TypeSpecifier *spec = te.spec();
+  TypeSpecifier* spec = te.spec();
   if (spec->isResolving()) {
     cc_.report(spec->baseLoc(), rmsg::recursive_type);
 
@@ -739,19 +829,23 @@ TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int
 
   spec->setResolving();
 
-  Type *baseType = resolveBaseType(spec);
+  Type* baseType = resolveBaseType(spec);
   if (!baseType) {
     // Return a placeholder so we don't have to check null everywhere.
     te.setResolved(&UnresolvableType);
     return te.resolved();
   }
 
-  Type *type = baseType;
-  if (spec->rank())
-    type = resolveArrayComponentTypes(spec, type, arrayInitData);
+  Type* type = baseType;
 
+  // See the big note in applyConstQualifier. For array types, the const
+  // is applied to the inner type. The same is true for reference types.
   if (spec->isConst())
-    type = applyConstQualifier(spec, type, helper);
+    type = applyConstQualifier(spec, type);
+
+  // Create types for each rank of an array.
+  if (spec->rank())
+    type = resolveArrayComponentTypes(spec, type, helper);
 
   // If we already had a type here, we must have seen a recursive type. It's
   // okay to rewrite it since we already reported an error somewhere.
@@ -761,8 +855,8 @@ TypeResolver::resolveType(TypeExpr &te, TypeSpecHelper *helper, const Vector<int
   return type;
 }
 
-Type *
-TypeResolver::resolveBaseType(TypeSpecifier *spec)
+Type*
+TypeResolver::resolveBaseType(TypeSpecifier* spec)
 {
   switch (spec->resolver()) {
     case TOK_LABEL:
@@ -774,7 +868,7 @@ TypeResolver::resolveBaseType(TypeSpecifier *spec)
 
     case TOK_FUNCTION:
     {
-      FunctionSignature *sig = spec->signature();
+      FunctionSignature* sig = spec->signature();
       if (!sig->isResolved())
         resolveTypesInSignature(sig);
       return FunctionType::New(sig);
@@ -788,37 +882,55 @@ TypeResolver::resolveBaseType(TypeSpecifier *spec)
 }
 
 bool
-TypeResolver::checkArrayInnerType(TypeSpecifier *spec, Type *type)
+TypeResolver::checkArrayInnerType(TypeSpecifier* spec, Type* type)
 {
-  if (type->isVoid()) {
-    cc_.report(spec->arrayLoc(), rmsg::array_of_void);
+  if (type->isVoid() || type->isStruct()) {
+    cc_.report(spec->arrayLoc(), rmsg::invalid_array_base) << type;
     return false;
   }
   return true;
 }
 
-Type *
-TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper)
+Type*
+TypeResolver::applyConstQualifier(TypeSpecifier* spec, Type* type)
 {
   // :TODO: spec ref
   //
-  // Pawn's "const" is transitive, and consistent in SP1 semantics. However
-  // for SP2, we want to be able to re-assign const array references that
-  // would not perform a copy. To this end, we split const into two concepts:
-  // 
-  // First, const as an l-value attribute makes the storage location readonly.
+  // Originally, we considered "const" to be transitive. This is no longer the
+  // case. Our Semantic Analysis understands a more flexible and maintainable
+  // view, that is backward compatible with SP1 and more forward-proof.
   //
-  // Second, const as a qualifier on Array/Struct/Typeset/compound types
-  // requires that any l-value computed into a value of that type, have the
-  // lvalue annotated as const. Additionally, if the type of that lvalue has
-  // a compound type, it must be const-qualified.
+  // "const" is a storage specifier, like in C/C++. It specifies that an
+  // l-value is not mutable. It has almost no meaning in other contexts. For
+  // example, a return type can be "const int" through a typedef, but the const
+  // has no purpose since return values cannot be l-values in SourcePawn.
   //
-  // This supports "const int" as being an immutable l-value, but something
-  // like "const int[]" as being re-assignable by reference.
+  // Consider the following cases:
   //
-  // We do this rather than burden ourselves with a very complex notion of
-  // const, such as in C++, which would probably require computing all
-  // l-values in the AST as reference types.
+  //    const int[] x = new int[500];
+  //    const int y[500];
+  //
+  // Reassigning |x| is currently not possible in SourcePawn, there are no
+  // semantics for copying or acquiring pointers to dynamic arrays. In fact,
+  // const does not work at all for this case in the SP1 compiler. However,
+  // assigning to the contents of an array declared as const is illegal,
+  // no matter its type or whether it is fixed-length.
+  //
+  // Reassigning |y| is the same as assigning to each element, so a const
+  // anywhere on |y| is effectively transitive.
+  //
+  // We can summarize these two cases across all types: |x| is a pointer type,
+  // and |y| is a value type. |y|'s case is quite straightforward, but |x|
+  // has no existing semantics. While (for arrays), we must prevent internal
+  // modifications, it is unknown whether "const" should also refer to the
+  // pointer value. For structs, and objects, it is even less clear.
+  //
+  // For now we simply preserve SP1 semantics, and we do this by making the
+  // *internal* type const, not the external type, similar to C++.
+  //
+  // I.e., in Pawn, "const int[] x" is really: an array of constant integers.
+  // In the future, we can make HandleVarDecl wrap a further const if we want
+  // it to, making the actual pointer immutable.
   assert(spec->isConst());
 
   if (!TypeSupportsConstKeyword(type)) {
@@ -827,32 +939,15 @@ TypeResolver::applyConstQualifier(TypeSpecifier *spec, Type *type, TypeSpecHelpe
     return type;
   }
 
-  if (TypeSupportsTransitiveConst(type))
-    type = cc_.types()->newQualified(type, Qualifiers::Const);
-
-  // The meaning of "const" is ambiguous for types with value assignment
-  // semantics. We let individual callers decide what they want to do.
-  if (HasValueAssignSemantics(type)) {
-    if (helper && helper->receiveConstQualifier(cc_, spec->constLoc(), type))
-      return type;
-
-    // Otherwise, if we have value semantics and are in a context where "const"
-    // has no meaning, it's an error.
-    if (!type->isConst()) {
-      cc_.report(spec->constLoc(), rmsg::const_has_no_meaning)
-        << type;
-    }
-  }
-
-  return type;
+  return cc_.types()->newQualified(type, Qualifiers::Const);
 }
 
-Type *
-TypeResolver::resolveNameToType(NameProxy *proxy)
+Type*
+TypeResolver::resolveNameToType(NameProxy* proxy)
 {
   assert(proxy->sym());
 
-  TypeSymbol *sym = proxy->sym()->asType();
+  TypeSymbol* sym = proxy->sym()->asType();
   if (!sym) {
     // It's okay to return null here - our caller will massage it into
     // UnresolvableType.
@@ -881,41 +976,128 @@ TypeResolver::resolveNameToType(NameProxy *proxy)
   return sym->type();
 }
 
-Type *
-TypeResolver::resolveArrayComponentTypes(TypeSpecifier *spec, Type *type, const Vector<int> *arrayInitData)
+Type*
+TypeResolver::resolveArrayComponentTypes(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper)
 {
   checkArrayInnerType(spec, type);
 
-  size_t rank = spec->rank() - 1;
+  // For each rank, try to compute a constant size if one was given. There are
+  // two scenarios for how array dimensions are computed, when the type is
+  // for a variable declaration:
+  //
+  // 1. "old-style": pre-transitional syntax.
+  //   a. If any rank is unspecified, there must be an initializer to infer
+  //      dimensions from, and all specified dimensions must be constant.
+  //   b. If all ranks are specified, any non-constant rank will generate
+  //      a fully dynamic array.
+  // 2. "new-style": transitional syntax.
+  //   a. Ranks cuddling the type may not have any size specified. The size
+  //      is determined at runtime via an initializer (such as "new").
+  //   b. Ranks cuddling the variable name ("post dims") may only have
+  //      constant sizes. Any rank that is not specified must be inferred
+  //      by a literal.
+  //
+  // For anything other than block local variables, non-constant expressions
+  // are not allowed as dimension sizes, and sizes cannot be inferred.
+  VariableSymbol* sym = nullptr;
+  Expression* initializer = nullptr;
+  ConstantEvaluator::Mode mode = ConstantEvaluator::Required;
+  if (helper) {
+    if (VarDecl* decl = helper->decl()) {
+      sym = decl->sym();
+      if (!sym->isArgument())
+        initializer = helper->initializer();
+      if (spec->isOldDecl() && sym->scope()->kind() == Scope::Block)
+        mode = ConstantEvaluator::Speculative;
+    }
+  }
+
+  // For each rank that has a size expression, compute its constant value if
+  // any, and track whether any of the values were not constant. Note that
+  // if a rank is missing a size expression, we might still try to infer it
+  // later, so all_constant stays true even if no ranks have sizes.
+  ke::Vector<int> given_rank_sizes;
+  bool all_constant = true;
+  for (size_t i = 0; i < spec->rank(); i++) {
+    int rank_size = ArrayType::kUnsized;
+    Expression* expr = spec->sizeOfRank(i);
+    if (expr && !resolveConstantArraySize(mode, expr, &rank_size))
+      all_constant = false;
+    given_rank_sizes.append(rank_size);
+  }
+
+  // Try to also infer the sizes of ranks from an initializer. This is used
+  // only when the entire array is fixed-size, and only when the rank size
+  // was not specified.
+  Vector<Rank> inferred_sizes;
+  if (initializer && all_constant)
+    inferred_sizes = fixedArrayLiteralDimensions(spec, type, initializer);
+
+  bool reported_size_error = false;
+
+  size_t rank_index = spec->rank() - 1;
   do {
-    int arraySize = ArrayType::kUnsized;
-    Expression *expr = spec->sizeOfRank(rank);
-    if (expr) {
+    int rank_size = ArrayType::kUnsized;
+    if (spec->sizeOfRank(rank_index)) {
       // Should either be old-style, or fixed-array style.
       assert(spec->isOldDecl() || spec->hasPostDims());
 
-      resolveConstantArraySize(spec, expr, &arraySize);
-    } else if (arrayInitData && rank < arrayInitData->length()) {
-      // Should either be old-style, or fixed-array style.
+      // If all ranks were constant, we can use the constant size for this
+      // rank. Otherwise, we must treat every slot as having an unknown size.
+      //
+      // Any errors at this point were reported by ConstantEvaluator, so we
+      // don't report any inconsistencies here.
+      if (all_constant)
+        rank_size = given_rank_sizes[rank_index];
+    } else if (rank_index < inferred_sizes.length()) {
+      // Should either be an old-style or fixed-array style local or global
+      // variable.
       assert(spec->isOldDecl() || spec->hasPostDims());
+      assert(!sym->isArgument());
+      assert(all_constant);
 
-      // Use an inferred length if one is available.
-      if (arrayInitData->at(rank) != kRankUnvisited)
-        arraySize = arrayInitData->at(rank);
+      const Rank& r = inferred_sizes[rank_index];
+      assert(r.status != RankStatus::Unvisited);
+      assert(r.status != RankStatus::Determinate);
 
-      if (arraySize > ArrayType::kMaxSize)
-        cc_.report(spec->arrayLoc(), rmsg::array_size_too_large);
+      // If the status is Indeterminate, then we already threw an error earlier,
+      // so we just keep going to gather any more errors.
+      if (r.status == RankStatus::Computed)
+        rank_size = r.size;
+    } else if (all_constant &&
+               (sym && sym->isArgument()) &&
+               (spec->isOldDecl() || spec->hasPostDims()))
+    {
+      // This is a local variable declaration that is missing a size or the
+      // size could not be inferred. Currently, we do not allow 0-length or
+      // null arrays to be declared.
+      //
+      // Note that this rule doesn't apply to new-style array declarations.
+      // If the user forgot an initializer, they'll get an error in the
+      // SemA pass. Here we're only trying to catch variable types that are
+      // undeclarable.
+      if (!reported_size_error) {
+        cc_.report(spec->arrayLoc(), rmsg::new_array_missing_dimension) <<
+          rank_index;
+        reported_size_error = true;
+      }
     }
 
-    type = cc_.types()->newArray(type, arraySize);
-  } while (rank--);
+    if (!reported_size_error && rank_size > ArrayType::kMaxSize) {
+      cc_.report(spec->arrayLoc(), rmsg::array_size_too_large);
+      reported_size_error = true;
+    }
+
+    // :TODO: constify
+    type = cc_.types()->newArray(type, rank_size);
+  } while (rank_index--);
   return type;
 }
 
 bool
-TypeResolver::resolveEnumConstantValue(EnumConstant *cs, int *outp)
+TypeResolver::resolveEnumConstantValue(EnumConstant* cs, int* outp)
 {
-  AutoPush<EnumConstant *> track(enum_constant_stack_, cs);
+  AutoPush<EnumConstant*> track(enum_constant_stack_, cs);
 
   BoxedValue out;
   ConstantEvaluator ceval(cc_, this, ConstantEvaluator::Required);
@@ -956,8 +1138,8 @@ TypeResolver::resolveEnumConstantValue(EnumConstant *cs, int *outp)
 
 // Like applyConstQualifier, this must not return null (its callers do not
 // null check). Instead, return the input type on error.
-Type *
-TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper)
+Type*
+TypeResolver::applyByRef(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper)
 {
   if (!type->canBeUsedAsRefType()) {
     cc_.report(spec->byRefLoc(), rmsg::type_cannot_be_ref) << type;
@@ -965,12 +1147,37 @@ TypeResolver::applyByRef(TypeSpecifier *spec, Type *type, TypeSpecHelper *helper
   }
 
   VarDecl* decl = helper ? helper->decl() : nullptr;
-  if (decl) {
-    assert(decl->sym()->isByRef());
+  if (decl)
     assert(decl->sym()->isArgument());
-  }
 
   return cc_.types()->newReference(type);
+}
+
+Type*
+TypeResolver::applyVariadic(TypeSpecifier* spec, Type* type, TypeSpecHelper* helper)
+{
+  assert(!type->isVariadic());
+  assert(spec->isVariadic());
+
+  if (type->isReference()) {
+    SourceLocation pos = spec->isByRef() ? spec->byRefLoc() : spec->baseLoc();
+    cc_.report(pos, rmsg::vararg_cannot_be_byref);
+    return type;
+  }
+  if (type->isVoid()) {
+    cc_.report(spec->baseLoc(), rmsg::illegal_vararg_type) << type;
+    return type;
+  }
+
+  return cc_.types()->newVariadic(type);
+}
+
+static inline bool
+IsAllowableStructDecl(VariableSymbol* sym, Type* type)
+{
+  return type->isStruct() &&
+         sym->scope()->kind() == Scope::Global &&
+         sym->node()->toVarDecl()->classifier() == TOK_PUBLIC;
 }
 
 bool
@@ -979,56 +1186,30 @@ TypeResolver::assignTypeToSymbol(VariableSymbol* sym, Type* type)
   if (!type)
     return false;
 
-  assert(sym->isByRef() == type->isReference());
-  assert(!sym->isByRef() || sym->isArgument());
-  if (!type->isStorableType()) {
-    cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
-    return false;
+  assert(!type->isReference() || sym->isArgument());
+
+  // :TODO: why is this here? move it into sema?
+  if (!type->isVariadic() && !type->isStorableType()) {
+    // We make a very specific exception for public structs, which are barely supported.
+    if (!IsAllowableStructDecl(sym, type)) {
+      cc_.report(sym->node()->loc(), rmsg::cannot_use_type_in_decl) << type;
+      return false;
+    }
   }
 
   sym->setType(type);
   return true;
 }
 
-VarDeclSpecHelper::VarDeclSpecHelper(VarDecl *decl, const Vector<int> *arrayInitData)
- : decl_(decl),
-   array_init_(arrayInitData)
+void
+TypeResolver::assignTypeToTypedef(TypedefDecl* decl, TypedefType* def, Type* actual)
 {
-}
-
-bool
-VarDeclSpecHelper::receiveConstQualifier(CompileContext &cc, const SourceLocation &constLoc, Type *type)
-{
-  VariableSymbol *sym = decl_->sym();
-  if (sym->isArgument()) {
-    if (!!(sym->storage_flags() & StorageFlags::byref)) {
-      cc.report(constLoc, rmsg::const_ref_has_no_meaning) << type;
-      return true;
-    }
-    if (!type->passesByReference()) {
-      cc.report(constLoc, rmsg::const_has_no_meaning) << type;
-      return true;
-    }
-  } else if (TypeSupportsCompileTimeInterning(type)) {
-    sym->storage_flags() |= StorageFlags::constval;
+  if (!actual->isFunction()) {
+    cc_.report(decl->loc(), rmsg::typedef_must_be_fun);
+    return;
   }
 
-  sym->storage_flags() |= StorageFlags::readonly;
-  return true;
-}
-
-const Vector<int> *
-VarDeclSpecHelper::arrayInitData() const
-{
-  return array_init_ && array_init_->length() > 0
-         ? array_init_
-         : nullptr;
-}
-
-VarDecl*
-VarDeclSpecHelper::decl() const
-{
-  return decl_;
+  def->resolve(actual);
 }
 
 } // namespace sp
