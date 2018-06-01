@@ -27,6 +27,10 @@ class BitSet
   explicit BitSet(size_t max_bits)
    : max_bits_(ke::Some(max_bits))
   {}
+  explicit BitSet(BitSet&& other)
+   : words_(ke::Move(other.words_)),
+     max_bits_(ke::Move(other.max_bits_))
+  {}
 
   bool test(uintptr_t bit) {
     size_t word = word_for_bit(bit);
@@ -53,6 +57,12 @@ class BitSet
         callback(i * kBitsPerWord + bit);
       }
     }
+  }
+
+  BitSet& operator =(BitSet&& other) {
+    words_ = ke::Move(other.words_);
+    max_bits_ = ke::Move(other.max_bits_);
+    return *this;
   }
 
  private:
