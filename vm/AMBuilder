@@ -133,4 +133,4 @@ verifier.sources += [
 ]
 builder.Add(verifier)
 
-rvalue = spshell
+rvalue = spshell, libsourcepawn

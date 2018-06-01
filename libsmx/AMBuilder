@@ -16,10 +16,13 @@
 # You should have received a copy of the GNU General Public License along with
 # SourcePawn. If not, see http://www.gnu.org/licenses/.
 #
+import os
 
 binary = Root.StaticLibrary(builder, 'smx', arch)
 binary.compiler.cxxincludes += [
-  builder.sourcePath,
+  os.path.join(builder.currentSourcePath, '..'),
+  os.path.join(builder.currentSourcePath, '..', 'include'),
+  os.path.join(SP.amtl),
 ]
 binary.sources += [
   'data-pool.cpp',

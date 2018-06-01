@@ -18,10 +18,10 @@
 #ifndef _include_spcomp2_smx_builder_h_
 #define _include_spcomp2_smx_builder_h_
 
-#include <am-string.h>
-#include <am-vector.h>
-#include <am-hashmap.h>
-#include <am-refcounting.h>
+#include <amtl/am-string.h>
+#include <amtl/am-vector.h>
+#include <amtl/am-hashmap.h>
+#include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <smx/smx-typeinfo.h>
 #include <stdlib.h>

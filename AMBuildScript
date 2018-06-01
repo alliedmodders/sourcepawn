@@ -259,6 +259,7 @@ class SourcePawn(object):
     self.spshell = {}
     self.spcomp = {}
     self.libspcomp2 = {}
+    self.libsourcepawn = {}
     self.zlib = None
     self.libsmx = None
 
@@ -272,8 +273,9 @@ class SourcePawn(object):
   def BuildVM(self):
     self.EnsureZlib()
     for arch in self.root.archs:
-      spshell = self.BuildForArch('vm/AMBuilder', arch)
+      spshell, libsourcepawn = self.BuildForArch('vm/AMBuilder', arch)
       self.spshell[arch] = spshell
+      self.libsourcepawn[arch] = libsourcepawn
 
   def BuildExperimental(self):
     for arch in self.root.archs:

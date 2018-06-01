@@ -18,10 +18,10 @@
 #ifndef _include_jitcraft_string_pool_h_
 #define _include_jitcraft_string_pool_h_
 
-#include <am-hashtable.h>
-#include <am-hashset.h>
-#include <am-hashmap.h>
-#include <am-string.h>
+#include <amtl/am-hashtable.h>
+#include <amtl/am-hashset.h>
+#include <amtl/am-hashmap.h>
+#include <amtl/am-string.h>
 #include <string.h>
 #include "string-atom.h"
 
