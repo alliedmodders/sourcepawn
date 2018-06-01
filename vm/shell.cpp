@@ -23,6 +23,11 @@
 # include <emscripten.h>
 #endif
 
+#if defined(SOURCEMOD_BUILD)
+# include <sourcemod_version.h>
+# define SOURCEPAWN_VERSION SOURCEMOD_VERSION
+#endif
+
 using namespace ke;
 using namespace ke::args;
 using namespace sp;
