@@ -44,9 +44,11 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
   int validationError() const {
     return validation_error_;
   }
-
   uint32_t pcode_offset() const {
     return pcode_offset_;
+  }
+  int32_t max_stack() const {
+    return max_stack_;
   }
 
   void setCompiledFunction(CompiledFunction* fun);
@@ -65,6 +67,7 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
 
   bool checked_;
   int validation_error_;
+  int32_t max_stack_;
 };
 
 } // namespace sp
