@@ -88,6 +88,12 @@ MethodVerifier::verify()
       return nullptr;
   }
 
+  if (max_stack_ > INT_MAX / 4) {
+    reportError(SP_ERROR_STACKLOW);
+    return nullptr;
+  }
+  max_stack_ *= sizeof(cell_t);
+
   return graph_;
 }
 

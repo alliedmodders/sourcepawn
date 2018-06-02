@@ -32,6 +32,9 @@ class MethodVerifier final
 
   ke::RefPtr<ControlFlowGraph> verify();
 
+  int32_t max_stack() const {
+    return max_stack_;
+  }
   int error() const {
     return error_;
   }

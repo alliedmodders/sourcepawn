@@ -245,6 +245,17 @@ Compiler::emitPrologue()
   __ movl(frm, stk);
   __ subl(tmp, dat);
   __ movl(Operand(frmAddr()), tmp);
+
+  int32_t max_stack = method_info_->max_stack();
+  assert(max_stack >= 0);
+
+  if (max_stack) {
+    __ movl(eax, Operand(hpAddr()));
+    __ lea(eax, Operand(dat, eax, NoScale, STACK_MARGIN));
+    __ lea(ecx, Operand(stk, -max_stack));
+    __ cmpl(ecx, eax);
+    jumpOnError(below, SP_ERROR_STACKLOW);
+  }
 }
 
 bool
@@ -965,18 +976,6 @@ bool
 Compiler::visitSTACK(cell_t amount)
 {
   __ addl(stk, amount);
-
-  if (amount > 0) {
-    // Check if the stack went beyond the stack top - usually a compiler error.
-    __ cmpl(stk, intptr_t(context_->memory() + context_->HeapSize()));
-   jumpOnError(not_below, SP_ERROR_STACKMIN);
-  } else {
-    // Check if the stack is going to collide with the heap.
-    __ movl(tmp, Operand(hpAddr()));
-    __ lea(tmp, Operand(dat, ecx, NoScale, STACK_MARGIN));
-    __ cmpl(stk, tmp);
-    jumpOnError(below, SP_ERROR_STACKLOW);
-  }
   return true;
 }
 

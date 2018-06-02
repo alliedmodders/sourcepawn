@@ -22,7 +22,8 @@ MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t codeOffset)
  : rt_(rt),
    pcode_offset_(codeOffset),
    checked_(false),
-   validation_error_(SP_ERROR_NONE)
+   validation_error_(SP_ERROR_NONE),
+   max_stack_(0)
 {
 }
 
@@ -46,8 +47,11 @@ MethodInfo::InternalValidate()
 {
   MethodVerifier verifier(rt_, pcode_offset_);
   graph_ = verifier.verify();
-  if (!graph_)
+  if (graph_) {
+    max_stack_ = verifier.max_stack();
+  } else {
     validation_error_ = verifier.error();
+  }
 
   checked_ = true;
 }
