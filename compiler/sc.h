@@ -110,6 +110,9 @@ struct stringlist;
  *      function        offset into code segment
  */
 struct symbol {
+  symbol();
+  symbol(const char* name, cell addr, int ident, int vclass, int tag, int usage);
+
   symbol *next;
   symbol *parent;  /* hierarchical types */
   char name[sNAMEMAX+1];

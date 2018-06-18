@@ -28,6 +28,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <amtl/am-platform.h>
+#include <amtl/am-string.h>
 #include <sp_typeutil.h>
 #include "lstring.h"
 #include "sc.h"
@@ -2702,23 +2703,17 @@ int isoctal(char c)
  */
 static symbol *add_symbol(symbol *root,symbol *entry,int sort)
 {
-  symbol *newsym;
   int global = root==&glbtab;
 
   if (sort)
     while (root->next!=NULL && strcmp(entry->name,root->next->name)>0)
       root=root->next;
 
-  if ((newsym=(symbol *)malloc(sizeof(symbol)))==NULL) {
-    error(FATAL_ERROR_OOM);
-    return NULL;
-  } /* if */
-  memcpy(newsym,entry,sizeof(symbol));
-  newsym->next=root->next;
-  root->next=newsym;
+  entry->next=root->next;
+  root->next=entry;
   if (global)
-    AddToHashTable(sp_Globals, newsym);
-  return newsym;
+    AddToHashTable(sp_Globals, entry);
+  return entry;
 }
 
 static void free_symbol(symbol *sym)
@@ -2752,7 +2747,7 @@ static void free_symbol(symbol *sym)
     delete_stringtable(sym->dbgstrs);
     free(sym->dbgstrs);
   }
-  free(sym);
+  delete sym;
 }
 
 void delete_symbol(symbol *root,symbol *sym)
@@ -3028,6 +3023,38 @@ symbol *finddepend(const symbol *parent)
   return sym;
 }
 
+symbol::symbol()
+ : symbol("", 0, 0, 0, 0, 0)
+{
+  memset(name, 0, sizeof(name));
+}
+
+symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag, int symusage)
+ : next(nullptr),
+   parent(nullptr),
+   hash(NameHash(symname)),
+   addr_(symaddr),
+   codeaddr(code_idx),
+   vclass((char)symvclass),
+   ident((char)symident),
+   usage((char)symusage),
+   flags(0),
+   compound(0),
+   tag(symtag),
+   fnumber(-1), /* assume global visibility (ignored for local symbols) */
+   lnumber(fline),
+   refer(nullptr),
+   numrefers(0),
+   documentation(nullptr),
+   methodmap(nullptr),
+   funcid(0),
+   dbgstrs(nullptr)
+{
+  ke::SafeStrcpy(name, sizeof(name), symname);
+  memset(&x, 0, sizeof(x));
+  memset(&dim, 0, sizeof(dim));
+}
+
 /*  addsym
  *
  *  Adds a symbol to the symbol table (either global or local variables,
@@ -3035,7 +3062,7 @@ symbol *finddepend(const symbol *parent)
  */
 symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag,int usage)
 {
-  symbol entry, **refer;
+  symbol **refer;
 
   /* labels may only be defined once */
   assert(ident!=iLABEL || findloc(name)==NULL);
@@ -3048,25 +3075,14 @@ symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag,int usage
   *refer=NULL;
 
   /* first fill in the entry */
-  memset(&entry,0,sizeof entry);
-  strcpy(entry.name,name);
-  entry.hash=NameHash(name);
-  entry.addr_=addr;
-  entry.codeaddr=code_idx;
-  entry.vclass=(char)vclass;
-  entry.ident=(char)ident;
-  entry.tag=tag;
-  entry.usage=(char)usage;
-  entry.fnumber=-1;     /* assume global visibility (ignored for local symbols) */
-  entry.lnumber=fline;
-  entry.numrefers=1;
-  entry.refer=refer;
-  entry.funcid=0;
+  symbol* sym = new symbol(name, addr, ident, vclass, tag, usage);
+  sym->numrefers=1;
+  sym->refer=refer;
 
   /* then insert it in the list */
   if (vclass==sGLOBAL)
-    return add_symbol(&glbtab,&entry,TRUE);
-  return add_symbol(&loctab,&entry,FALSE);
+    return add_symbol(&glbtab,sym,TRUE);
+  return add_symbol(&loctab,sym,FALSE);
 }
 
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,
