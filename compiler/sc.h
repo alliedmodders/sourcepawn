@@ -114,6 +114,7 @@ struct symbol {
   symbol();
   symbol(const symbol& other);
   symbol(const char* name, cell addr, int ident, int vclass, int tag, int usage);
+  ~symbol();
 
   symbol *next;
   symbol *parent;  /* hierarchical types */
