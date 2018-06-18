@@ -2739,8 +2739,6 @@ static void free_symbol(symbol *sym)
     delete_consttable(sym->dim.enumlist);
     free(sym->dim.enumlist);
   } /* if */
-  assert(sym->refer!=NULL);
-  free(sym->refer);
   if (sym->documentation!=NULL)
     free(sym->documentation);
   if (sym->dbgstrs) {
@@ -2916,43 +2914,26 @@ static symbol *find_symbol_child(const symbol *root,const symbol *sym)
  */
 int refer_symbol(symbol *entry,symbol *bywhom)
 {
-  int count;
-
   assert(bywhom!=NULL);         /* it makes no sense to add a "void" referrer */
   assert(entry!=NULL);
-  assert(entry->refer!=NULL);
+
+  size_t count;
 
   /* see if it is already there */
-  for (count=0; count<entry->numrefers && entry->refer[count]!=bywhom; count++)
+  for (count=0; count<entry->refers.length() && entry->refers[count]!=bywhom; count++)
     /* nothing */;
-  if (count<entry->numrefers) {
-    assert(entry->refer[count]==bywhom);
+  if (count<entry->refers.length()) {
+    assert(entry->refers[count]==bywhom);
     return TRUE;
   } /* if */
 
   /* see if there is an empty spot in the referrer list */
-  for (count=0; count<entry->numrefers && entry->refer[count]!=NULL; count++)
+  for (count=0; count<entry->refers.length() && entry->refers[count]; count++)
     /* nothing */;
-  assert(count <= entry->numrefers);
-  if (count==entry->numrefers) {
-    symbol **refer;
-    int newsize=2*entry->numrefers;
-    assert(newsize>0);
-    /* grow the referrer list */
-    refer=(symbol**)realloc(entry->refer,newsize*sizeof(symbol*));
-    if (refer==NULL)
-      return FALSE;             /* insufficient memory */
-    /* initialize the new entries */
-    entry->refer=refer;
-    for (count=entry->numrefers; count<newsize; count++)
-      entry->refer[count]=NULL;
-    count=entry->numrefers;     /* first empty spot */
-    entry->numrefers=newsize;
-  } /* if */
-
-  /* add the referrer */
-  assert(entry->refer[count]==NULL);
-  entry->refer[count]=bywhom;
+  if (count < entry->refers.length())
+    entry->refers[count] = bywhom;
+  else
+    entry->refers.append(bywhom);
   return TRUE;
 }
 
@@ -3043,8 +3024,6 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    tag(symtag),
    fnumber(-1), /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
-   refer(nullptr),
-   numrefers(0),
    documentation(nullptr),
    methodmap(nullptr),
    funcid(0),
@@ -3055,6 +3034,11 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
   memset(&dim, 0, sizeof(dim));
 }
 
+symbol::symbol(const symbol& other)
+ : symbol(other.name, other.addr_, other.ident, other.vclass, other.tag, other.usage)
+{
+}
+
 /*  addsym
  *
  *  Adds a symbol to the symbol table (either global or local variables,
@@ -3062,22 +3046,11 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
  */
 symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag,int usage)
 {
-  symbol **refer;
-
   /* labels may only be defined once */
   assert(ident!=iLABEL || findloc(name)==NULL);
 
-  /* create an empty referrer list */
-  if ((refer=(symbol**)malloc(sizeof(symbol*)))==NULL) {
-    error(FATAL_ERROR_OOM);
-    return NULL;
-  } /* if */
-  *refer=NULL;
-
   /* first fill in the entry */
   symbol* sym = new symbol(name, addr, ident, vclass, tag, usage);
-  sym->numrefers=1;
-  sym->refer=refer;
 
   /* then insert it in the list */
   if (vclass==sGLOBAL)
