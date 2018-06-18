@@ -2718,33 +2718,6 @@ static symbol *add_symbol(symbol *root,symbol *entry,int sort)
 
 static void free_symbol(symbol *sym)
 {
-  arginfo *arg;
-
-  /* free all sub-symbol allocated memory blocks, depending on the
-   * kind of the symbol
-   */
-  assert(sym!=NULL);
-  if (sym->ident==iFUNCTN) {
-    /* run through the argument list; "default array" arguments
-     * must be freed explicitly; the tag list must also be freed */
-    assert(sym->dim.arglist!=NULL);
-    for (arg=sym->dim.arglist; arg->ident!=0; arg++) {
-      if (arg->ident==iREFARRAY && arg->hasdefault)
-        free(arg->defvalue.array.data);
-    } /* for */
-    free(sym->dim.arglist);
-  } else if (sym->ident==iCONSTEXPR && (sym->usage & uENUMROOT)==uENUMROOT) {
-    /* free the constant list of an enum root */
-    assert(sym->dim.enumlist!=NULL);
-    delete_consttable(sym->dim.enumlist);
-    free(sym->dim.enumlist);
-  } /* if */
-  if (sym->documentation!=NULL)
-    free(sym->documentation);
-  if (sym->dbgstrs) {
-    delete_stringtable(sym->dbgstrs);
-    free(sym->dbgstrs);
-  }
   delete sym;
 }
 
@@ -3037,6 +3010,31 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
 symbol::symbol(const symbol& other)
  : symbol(other.name, other.addr_, other.ident, other.vclass, other.tag, other.usage)
 {
+}
+
+symbol::~symbol()
+{
+  if (ident==iFUNCTN) {
+    /* run through the argument list; "default array" arguments
+     * must be freed explicitly; the tag list must also be freed */
+    assert(dim.arglist!=NULL);
+    for (arginfo* arg=dim.arglist; arg->ident!=0; arg++) {
+      if (arg->ident==iREFARRAY && arg->hasdefault)
+        free(arg->defvalue.array.data);
+    } /* for */
+    free(dim.arglist);
+  } else if (ident==iCONSTEXPR && (usage & uENUMROOT)==uENUMROOT) {
+    /* free the constant list of an enum root */
+    assert(dim.enumlist!=NULL);
+    delete_consttable(dim.enumlist);
+    free(dim.enumlist);
+  } /* if */
+  if (documentation!=NULL)
+    free(documentation);
+  if (dbgstrs) {
+    delete_stringtable(dbgstrs);
+    free(dbgstrs);
+  }
 }
 
 /*  addsym
