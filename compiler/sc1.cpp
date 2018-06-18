@@ -4257,16 +4257,16 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
   assert(strlen(opername)>0);
   operator_symname(tmpname,opername,tags[0],tags[1],count,resulttag);
   if ((oldsym=findglb(tmpname))!=NULL) {
-    int i;
     if ((oldsym->usage & uDEFINE)!=0) {
       char errname[2*sNAMEMAX+16];
       funcdisplayname(errname,tmpname);
       error(21,errname);        /* symbol already defined */
     } /* if */
     sym->usage|=oldsym->usage;  /* copy flags from the previous definition */
-    for (i=0; i<oldsym->numrefers; i++)
-      if (oldsym->refer[i]!=NULL)
-        refer_symbol(sym,oldsym->refer[i]);
+    for (symbol* refer : oldsym->refers) {
+      if (refer)
+        refer_symbol(sym,refer);
+    }
     delete_symbol(&glbtab,oldsym);
   } /* if */
   RemoveFromHashTable(sp_Globals, sym);
@@ -4991,12 +4991,11 @@ static void doarg(symbol *fun, declinfo_t *decl, int offset, int chkshadow, argi
 
 static int count_referrers(symbol *entry)
 {
-  int i,count;
-
-  count=0;
-  for (i=0; i<entry->numrefers; i++)
-    if (entry->refer[i]!=NULL)
+  int count=0;
+  for (symbol* refer : entry->refers) {
+    if (refer)
       count++;
+  }
   return count;
 }
 
@@ -5007,7 +5006,7 @@ static int count_referrers(symbol *entry)
  */
 static void reduce_referrers(symbol *root)
 {
-  int i,restart;
+  int restart;
   symbol *sym,*ref;
 
   do {
@@ -5025,12 +5024,12 @@ static void reduce_referrers(symbol *root)
         for (ref=root->next; ref!=NULL; ref=ref->next) {
           if (ref->parent!=NULL)
             continue;             /* hierarchical data type */
-          assert(ref->refer!=NULL);
-          for (i=0; i<ref->numrefers && ref->refer[i]!=sym; i++)
+          size_t i;
+          for (i=0; i<ref->refers.length() && ref->refers[i]!=sym; i++)
             /* nothing */;
-          if (i<ref->numrefers) {
-            assert(ref->refer[i]==sym);
-            ref->refer[i]=NULL;
+          if (i<ref->refers.length()) {
+            assert(ref->refers[i]==sym);
+            ref->refers[i]=nullptr;
             restart++;
           } /* if */
         } /* for */

@@ -43,6 +43,7 @@
   #include <setjmp.h>
 #endif
 #include <sp_vm_types.h>
+#include <amtl/am-vector.h>
 #include "osdefs.h"
 #include "amx.h"
 
@@ -111,6 +112,7 @@ struct stringlist;
  */
 struct symbol {
   symbol();
+  symbol(const symbol& other);
   symbol(const char* name, cell addr, int ident, int vclass, int tag, int usage);
 
   symbol *next;
@@ -145,8 +147,7 @@ struct symbol {
   } dim;                /* for 'dimension', both functions and arrays */
   int fnumber;          /* static global variables: file number in which the declaration is visible */
   int lnumber;          /* line number (in the current source file) for the declaration */
-  symbol **refer;       /* referrer list, functions that "use" this symbol */
-  int numrefers;        /* number of entries in the referrer list */
+  ke::Vector<symbol*> refers; /* referrer list, functions that "use" this symbol */
   char *documentation;  /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
   int funcid;           /* set for functions during codegen */

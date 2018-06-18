@@ -2041,7 +2041,7 @@ restart:
            * but with an adjusted index tag
            */
           assert(sym!=NULL);
-          dummysymbol=*sym;
+          new (&dummysymbol) symbol(*sym);
           /* get the tag of the root of the enumeration */
           assert(lval2.sym!=NULL);
           dummysymbol.x.tags.index=lval2.sym->x.tags.field;
