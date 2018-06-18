@@ -120,7 +120,6 @@ struct symbol {
   symbol *parent;  /* hierarchical types */
   char name[sNAMEMAX+1];
   uint32_t hash;        /* value derived from name, for quicker searching */
-  cell addr_;            /* address or offset (or value for constant, index for native function) */
   cell codeaddr;        /* address (in the code segment) where the symbol declaration starts */
   char vclass;          /* sLOCAL if "addr" refers to a local symbol */
   char ident;           /* see below for possible values */
@@ -160,6 +159,9 @@ struct symbol {
   void setAddr(int addr) {
     addr_ = addr;
   }
+
+ private:
+  cell addr_;            /* address or offset (or value for constant, index for native function) */
 };
 
 /*  Possible entries for "ident". These are used in the "symbol", "value"

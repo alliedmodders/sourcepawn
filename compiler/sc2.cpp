@@ -2987,7 +2987,6 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
  : next(nullptr),
    parent(nullptr),
    hash(NameHash(symname)),
-   addr_(symaddr),
    codeaddr(code_idx),
    vclass((char)symvclass),
    ident((char)symident),
@@ -3000,7 +2999,8 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    documentation(nullptr),
    methodmap(nullptr),
    funcid(0),
-   dbgstrs(nullptr)
+   dbgstrs(nullptr),
+   addr_(symaddr)
 {
   ke::SafeStrcpy(name, sizeof(name), symname);
   memset(&x, 0, sizeof(x));
