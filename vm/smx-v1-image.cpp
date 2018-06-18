@@ -804,8 +804,6 @@ SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, uce
 bool
 SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr)
 {
-  uint32_t index = 0;
-  const char* tgtfile;
   *funcaddr = 0;
   if (rtti_methods_) {
     for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
@@ -816,13 +814,14 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
 
       *funcaddr = method->pcode_start;
       // verify that this function is defined in the appropriate file
-      tgtfile = LookupFile(*funcaddr);
+      const char* tgtfile = LookupFile(*funcaddr);
       if (tgtfile != nullptr && !strcmp(file, tgtfile))
         break;
     }
   } else {
     for (;;) {
       // find (next) matching function
+      uint32_t index = 0;
       if (debug_syms_) {
         getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function, funcaddr, index);
       } else {
@@ -833,16 +832,17 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
         return false;
 
       // verify that this function is defined in the appropriate file
-      tgtfile = LookupFile(*funcaddr);
+      const char* tgtfile = LookupFile(*funcaddr);
       if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
         break;
       index++;
+      assert(index < debug_info_->num_syms);
     }
-    assert(index < debug_info_->num_syms);
   }
 
   // now find the first line in the function where we can "break" on
-  for (index = 0; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
+  uint32_t index = 0;
+  for (; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
     /* nothing */;
 
   if (index >= debug_info_->num_lines)
