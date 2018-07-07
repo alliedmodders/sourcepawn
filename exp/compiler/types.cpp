@@ -19,6 +19,7 @@
 #include "compile-context.h"
 #include "boxed-value.h"
 #include "parser/ast.h"
+#include "source-manager.h"
 
 using namespace ke;
 using namespace sp;
@@ -297,8 +298,13 @@ BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags)
     Atom* name = !!(flags & TypeDiagFlags::Names)
                  ? sig->parameters()->at(i)->name()
                  : nullptr;
-    if (sig->parameters()->at(i)->sym()->type()->isReference())
+    VarDecl* decl = sig->parameters()->at(i);
+    // If the type was not resolved, use the te instead.
+    if ((decl->type() && decl->type()->isReference()) ||
+        (decl->te().spec() && decl->te().spec()->isByRef()))
+    {
       varFlags |= TypeDiagFlags::IsByRef;
+    }
     base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, varFlags);
     if (i != sig->parameters()->length() - 1)
       base = base + ", ";
@@ -387,6 +393,8 @@ BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flag
 AString
 sp::BuildTypeName(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags)
 {
+  CompileContext* cc = CurrentCompileContext.get();
+  printf("line number: %d\n", cc->source().getLine(spec->baseLoc()));
   return BuildTypeFromSpecifier(spec, name, flags);
 }
 
