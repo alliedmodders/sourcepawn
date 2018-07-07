@@ -393,8 +393,6 @@ BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flag
 AString
 sp::BuildTypeName(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags)
 {
-  CompileContext* cc = CurrentCompileContext.get();
-  printf("line number: %d\n", cc->source().getLine(spec->baseLoc()));
   return BuildTypeFromSpecifier(spec, name, flags);
 }
 
