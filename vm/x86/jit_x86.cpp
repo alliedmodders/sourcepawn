@@ -1624,11 +1624,15 @@ Compiler::emitDebugBreakHandler()
   // Enter the exit frame. This aligns the stack.
   __ enterExitFrame(ExitFrameType::Helper, 0);
 
+  // Allocate enough memory to keep the stack aligned.
+  static const size_t kStackNeeded = 2 * sizeof(void *);
+  static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+  __ subl(esp, kStackReserve);
+
   // Get the context pointer and call the debugging break handler.
-  __ push(0); // IErrorReport*
-  __ push(intptr_t(rt_->GetBaseContext()));
+  __ movl(Operand(esp, 1 * sizeof(void *)), 0); // IErrorReport*
+  __ movl(Operand(esp, 0 * sizeof(void *)), intptr_t(rt_->GetBaseContext()));
   __ call(ExternalAddress((void *)InvokeDebugger));
-  __ addl(esp, 8);
   __ leaveExitFrame();
   __ testl(eax, eax);
   jumpOnError(not_zero);
