@@ -126,7 +126,7 @@ namespace sp {
   _G(JNZ,            "jnz",         2)  \
   _G(JEQ,            "jeq",         2)  \
   _G(JNEQ,           "jneq",        2)  \
-  _U(JLESS,          "jsless")          \
+  _U(JLESS,          "jless")           \
   _U(JLEQ,           "jleq")            \
   _U(JGRTR,          "jgrtr")           \
   _U(JGEQ,           "jgeq")            \
