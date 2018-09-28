@@ -166,10 +166,20 @@ SourcePawnEngine::SetDebugListener(IDebugListener* pListener)
   return old;
 }
 
+int
+SourcePawnEngine::SetDebugBreakHandler(SPVM_DEBUGBREAK handler)
+{
+  if (!Environment::get()->IsDebugBreakEnabled())
+    return SP_ERROR_NOTDEBUGGING;
+
+  Environment::get()->SetDebugBreakHandler(handler);
+  return SP_ERROR_NONE;
+}
+
 unsigned int
 SourcePawnEngine::GetEngineAPIVersion()
 {
-  return 4;
+  return 5;
 }
 
 unsigned int
