@@ -33,7 +33,8 @@ using namespace SourcePawn;
 static Environment* sEnvironment = nullptr;
 
 Environment::Environment()
- : debug_break_handler_(nullptr),
+ : debug_break_enabled_(false),
+   debug_break_handler_(nullptr),
    debugger_(nullptr),
    eh_top_(nullptr),
    exception_code_(SP_ERROR_NONE),
@@ -112,6 +113,17 @@ void
 Environment::SetJitEnabled(bool enabled)
 {
   jit_enabled_ = enabled;
+}
+
+bool
+Environment::EnableDebugBreak()
+{
+  // Can't change this after any plugins are loaded.
+  if (!runtimes_.empty())
+    return false;
+
+  debug_break_enabled_ = true;
+  return true;
 }
 
 void
