@@ -56,78 +56,86 @@ namespace smxdasm
             var unknown = new List<SectionEntry>();
             foreach (var section in Header.Sections)
             {
-                switch (section.Name)
+                try
                 {
-                case ".names":
-                case ".dbg.strings":
-                case ".dbg.info":
-                    break;
-                case ".natives":
-                    Natives = new SmxNativeTable(Header, section, Names);
-                    break;
-                case ".publics":
-                    Publics = new SmxPublicTable(Header, section, Names);
-                    break;
-                case ".pubvars":
-                    Pubvars = new SmxPubvarTable(Header, section, Names);
-                    break;
-                case ".tags":
-                    Tags = new SmxTagTable(Header, section, Names);
-                    break;
-                case ".data":
-                    Data = new SmxDataSection(Header, section);
-                    break;
-                case ".code":
-                    CodeV1 = new SmxCodeV1Section(Header, section);
-                    break;
-                case ".dbg.files":
-                    DebugFiles = new SmxDebugFilesTable(Header, section, DebugNames);
-                    break;
-                case ".dbg.lines":
-                    DebugLines = new SmxDebugLinesTable(Header, section);
-                    break;
-                case ".dbg.natives":
-                    DebugNatives = new SmxDebugNativesTable(Header, section, DebugNames);
-                    break;
-                case ".dbg.symbols":
-                    DebugSymbols = new SmxDebugSymbolsTable(Header, section, DebugInfo, DebugNames);
-                    break;
-                case ".dbg.methods":
-                    DebugMethods = new SmxDebugMethods(Header, section, Names);
-                    break;
-                case ".dbg.globals":
-                    DebugGlobals = new SmxDebugGlobals(Header, section, Names);
-                    break;
-                case ".dbg.locals":
-                    DebugLocals = new SmxDebugLocals(this, Header, section, Names);
-                    break;
-                case "rtti.data":
-                    RttiData = new SmxRttiData(this, Header, section);
-                    break;
-                case "rtti.classdefs":
-                    RttiClassDefs = new SmxRttiClassDefTable(Header, section, Names);
-                    break;
-                case "rtti.fields":
-                    RttiFields = new SmxRttiFieldTable(Header, section, Names);
-                    break;
-                case "rtti.methods":
-                    RttiMethods = new SmxRttiMethodTable(Header, section, Names);
-                    break;
-                case "rtti.natives":
-                    RttiNatives = new SmxRttiNativeTable(Header, section, Names);
-                    break;
-                case "rtti.enums":
-                    RttiEnums = new SmxRttiEnumTable(Header, section, Names);
-                    break;
-                case "rtti.typedefs":
-                    RttiTypedefs = new SmxRttiTypedefTable(Header, section, Names);
-                    break;
-                case "rtti.typesets":
-                    RttiTypesets = new SmxRttiTypesetTable(Header, section, Names);
-                    break;
-                default:
+                    switch (section.Name)
+                    {
+                        case ".names":
+                        case ".dbg.strings":
+                        case ".dbg.info":
+                            break;
+                        case ".natives":
+                            Natives = new SmxNativeTable(Header, section, Names);
+                            break;
+                        case ".publics":
+                            Publics = new SmxPublicTable(Header, section, Names);
+                            break;
+                        case ".pubvars":
+                            Pubvars = new SmxPubvarTable(Header, section, Names);
+                            break;
+                        case ".tags":
+                            Tags = new SmxTagTable(Header, section, Names);
+                            break;
+                        case ".data":
+                            Data = new SmxDataSection(Header, section);
+                            break;
+                        case ".code":
+                            CodeV1 = new SmxCodeV1Section(Header, section);
+                            break;
+                        case ".dbg.files":
+                            DebugFiles = new SmxDebugFilesTable(Header, section, DebugNames);
+                            break;
+                        case ".dbg.lines":
+                            DebugLines = new SmxDebugLinesTable(Header, section);
+                            break;
+                        case ".dbg.natives":
+                            DebugNatives = new SmxDebugNativesTable(Header, section, DebugNames);
+                            break;
+                        case ".dbg.symbols":
+                            DebugSymbols = new SmxDebugSymbolsTable(Header, section, DebugInfo, DebugNames);
+                            break;
+                        case ".dbg.methods":
+                            DebugMethods = new SmxDebugMethods(Header, section, Names);
+                            break;
+                        case ".dbg.globals":
+                            DebugGlobals = new SmxDebugGlobals(Header, section, Names);
+                            break;
+                        case ".dbg.locals":
+                            DebugLocals = new SmxDebugLocals(this, Header, section, Names);
+                            break;
+                        case "rtti.data":
+                            RttiData = new SmxRttiData(this, Header, section);
+                            break;
+                        case "rtti.classdefs":
+                            RttiClassDefs = new SmxRttiClassDefTable(Header, section, Names);
+                            break;
+                        case "rtti.fields":
+                            RttiFields = new SmxRttiFieldTable(Header, section, Names);
+                            break;
+                        case "rtti.methods":
+                            RttiMethods = new SmxRttiMethodTable(Header, section, Names);
+                            break;
+                        case "rtti.natives":
+                            RttiNatives = new SmxRttiNativeTable(Header, section, Names);
+                            break;
+                        case "rtti.enums":
+                            RttiEnums = new SmxRttiEnumTable(Header, section, Names);
+                            break;
+                        case "rtti.typedefs":
+                            RttiTypedefs = new SmxRttiTypedefTable(Header, section, Names);
+                            break;
+                        case "rtti.typesets":
+                            RttiTypesets = new SmxRttiTypesetTable(Header, section, Names);
+                            break;
+                        default:
+                            unknown.Add(section);
+                            break;
+                    }
+                }
+                catch
+                {
+                    // Set a breakpoint here to see why the section failed to be parsed.
                     unknown.Add(section);
-                    break;
                 }
             }
             UnknownSections = unknown.ToArray();
