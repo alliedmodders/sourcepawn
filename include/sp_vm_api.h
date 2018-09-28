@@ -1600,6 +1600,10 @@ namespace SourcePawn
 
     // @brief Returns the message of the pending exception.
     virtual const char *GetPendingExceptionMessage(const ExceptionHandler *handler) = 0;
+
+    // @brief Enables the line debugger callbacks. This must be called
+    // before any plugins are loaded.
+    virtual bool EnableDebugBreak() = 0;
   };
 
   // @brief This class is the entry-point to using SourcePawn from a DLL.

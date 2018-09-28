@@ -20,6 +20,10 @@ namespace sp {
 
 void InvokeDebugger(PluginContext* ctx, const IErrorReport* report)
 {
+  // Ignore any calls if this isn't enabled.
+  if (!Environment::get()->IsDebugBreakEnabled())
+    return;
+
   // Continue normal execution, if there is no listener registered.
   if (!Environment::get()->debugbreak())
     return;

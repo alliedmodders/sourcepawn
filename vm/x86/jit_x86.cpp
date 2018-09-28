@@ -1136,6 +1136,9 @@ Compiler::visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size)
 bool
 Compiler::visitBREAK()
 {
+  if (!Environment::get()->IsDebugBreakEnabled())
+    return true;
+
   __ call(&debug_break_);
   emitCipMapping(op_cip_);
   return true;

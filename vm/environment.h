@@ -61,6 +61,7 @@ class Environment : public ISourcePawnEnvironment
   void LeaveExceptionHandlingScope(ExceptionHandler* handler) override;
   bool HasPendingException(const ExceptionHandler* handler) override;
   const char* GetPendingExceptionMessage(const ExceptionHandler* handler) override;
+  bool EnableDebugBreak() override;
 
   // Runtime functions.
   const char* GetErrorString(int err);
@@ -116,6 +117,9 @@ class Environment : public ISourcePawnEnvironment
     return debugger_;
   }
 
+  bool IsDebugBreakEnabled() const {
+    return debug_break_enabled_;
+  }
   void SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
     debug_break_handler_ = handler;
   }
@@ -177,6 +181,7 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<BuiltinNatives> builtins_;
   ke::Mutex mutex_;
 
+  bool debug_break_enabled_;
   SPVM_DEBUGBREAK debug_break_handler_;
 
   IDebugListener* debugger_;
