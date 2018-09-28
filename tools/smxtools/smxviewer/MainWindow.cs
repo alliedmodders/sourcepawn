@@ -519,6 +519,13 @@ namespace smxviewer
                     functionMap[sym.Name] = sym.CodeStart;
                 }
             }
+            if (file_.CalledFunctions != null)
+            {
+                foreach (var fun in file_.CalledFunctions.Entries)
+                {
+                    functionMap[fun.Name] = fun.Address;
+                }
+            }
 
             foreach (var pair in functionMap)
             {
