@@ -180,13 +180,13 @@ namespace smxviewer
             }
 
             // Add specific sections.
-            if (roots.ContainsKey(".natives"))
+            if (roots.ContainsKey(".natives") && file_.Natives != null)
                 renderNativeList(roots[".natives"], file_.Natives);
-            if (roots.ContainsKey(".tags"))
+            if (roots.ContainsKey(".tags") && file_.Tags != null)
                 renderTagList(roots[".tags"], file_.Tags);
-            if (roots.ContainsKey(".pubvars"))
+            if (roots.ContainsKey(".pubvars") && file_.Pubvars != null)
                 renderPubvarList(roots[".pubvars"], file_.Pubvars);
-            if (roots.ContainsKey(".publics"))
+            if (roots.ContainsKey(".publics") && file_.Publics != null)
                 renderPublicsList(roots[".publics"], file_.Publics);
             if (roots.ContainsKey(".code"))
                 renderCodeSection(roots[".code"], file_.CodeV1);
@@ -195,42 +195,42 @@ namespace smxviewer
             if (roots.ContainsKey(".names"))
                 renderNamesList(roots[".names"], file_.Names);
 
-            if (roots.ContainsKey("rtti.data"))
+            if (roots.ContainsKey("rtti.data") && file_.RttiData != null)
                 renderRttiData(roots["rtti.data"], file_.RttiData);
-            if (roots.ContainsKey("rtti.classdefs"))
+            if (roots.ContainsKey("rtti.classdefs") && file_.RttiClassDefs != null)
                 renderClassDefs(roots["rtti.classdefs"], file_.RttiClassDefs);
-            if (roots.ContainsKey("rtti.fields"))
+            if (roots.ContainsKey("rtti.fields") && file_.RttiFields != null)
                 renderFields(roots["rtti.fields"], file_.RttiFields);
-            if (roots.ContainsKey("rtti.methods"))
+            if (roots.ContainsKey("rtti.methods") && file_.RttiMethods != null)
                 renderMethods(roots["rtti.methods"], file_.RttiMethods);
-            if (roots.ContainsKey("rtti.natives"))
+            if (roots.ContainsKey("rtti.natives") && file_.RttiNatives != null)
                 renderNatives(roots["rtti.natives"], file_.RttiNatives);
-            if (roots.ContainsKey("rtti.enums"))
+            if (roots.ContainsKey("rtti.enums") && file_.RttiEnums != null)
                 renderEnums(roots["rtti.enums"], file_.RttiEnums);
-            if (roots.ContainsKey("rtti.typedefs"))
+            if (roots.ContainsKey("rtti.typedefs") && file_.RttiTypedefs != null)
                 renderTypedefs(roots["rtti.typedefs"], file_.RttiTypedefs);
-            if (roots.ContainsKey("rtti.typesets"))
+            if (roots.ContainsKey("rtti.typesets") && file_.RttiTypesets != null)
                 renderTypesets(roots["rtti.typesets"], file_.RttiTypesets);
 
-            if (roots.ContainsKey(".dbg.files"))
+            if (roots.ContainsKey(".dbg.files") && file_.DebugFiles != null)
                 renderDebugFiles(roots[".dbg.files"], file_.DebugFiles);
-            if (roots.ContainsKey(".dbg.lines"))
+            if (roots.ContainsKey(".dbg.lines") && file_.DebugLines != null)
                 renderDebugLines(roots[".dbg.lines"], file_.DebugLines);
-            if (roots.ContainsKey(".dbg.info"))
+            if (roots.ContainsKey(".dbg.info") && file_.DebugInfo != null)
                 renderDebugInfo(roots[".dbg.info"], file_.DebugInfo);
-            if (roots.ContainsKey(".dbg.globals"))
+            if (roots.ContainsKey(".dbg.globals") && file_.DebugGlobals != null)
                 renderDebugGlobals(roots[".dbg.globals"], file_.DebugGlobals);
-            if (roots.ContainsKey(".dbg.methods"))
+            if (roots.ContainsKey(".dbg.methods") && file_.DebugMethods != null)
             {
                 if (roots.ContainsKey(".dbg.locals"))
                     renderDebugLocals(roots[".dbg.locals"], file_.DebugMethods);
             }
 
-            if (roots.ContainsKey(".dbg.strings"))
+            if (roots.ContainsKey(".dbg.strings") && file_.DebugNames != null)
                 renderNamesList(roots[".dbg.strings"], file_.DebugNames);
-            if (roots.ContainsKey(".dbg.symbols"))
+            if (roots.ContainsKey(".dbg.symbols") && file_.DebugSymbols != null)
                 renderLegacyDebugSymbols(roots[".dbg.symbols"], file_.DebugSymbols);
-            if (roots.ContainsKey(".dbg.natives"))
+            if (roots.ContainsKey(".dbg.natives") && file_.DebugNatives != null)
                 renderDebugNatives(roots[".dbg.natives"], file_.DebugNatives);
 
             treeview_.EndUpdate();
