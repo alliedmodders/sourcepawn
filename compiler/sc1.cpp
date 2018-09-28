@@ -1088,14 +1088,16 @@ static void setconfig(char *root)
 
       /* same for the codepage root */
 # if !defined NO_CODEPAGE
-        *ptr='\0';
+        if(ptr)
+          *ptr='\0';
         if (!cp_path(path,"codepage"))
           error(FATAL_ERROR_INVALID_PATH,path);
 # endif /* !NO_CODEPAGE */
 
       /* also copy the root path (for the XML documentation) */
 # if !defined SC_LIGHT
-        *ptr='\0';
+        if(ptr)
+          *ptr='\0';
         strcpy(sc_rootpath,path);
 # endif /* !SC_LIGHT */
     } /* if */
