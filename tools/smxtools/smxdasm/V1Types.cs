@@ -108,6 +108,13 @@ namespace smxdasm
         }
     }
 
+    // Called functions that weren't in the .publics or .dbg.symbols sections.
+    public class CalledFunctionEntry
+    {
+        public uint Address;
+        public string Name;
+    }
+
     // The ".natives" section.
     public class NativeEntry
     {

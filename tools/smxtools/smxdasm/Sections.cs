@@ -142,6 +142,37 @@ namespace smxdasm
         }
     }
 
+    public class SmxCalledFunctionsTable
+    {
+        private List<CalledFunctionEntry> functions_;
+        
+        public SmxCalledFunctionsTable()
+        {
+            functions_ = new List<CalledFunctionEntry>();
+        }
+
+        public CalledFunctionEntry[] Entries
+        {
+            get { return functions_.ToArray(); }
+        }
+
+        public int Length
+        {
+            get { return functions_.Count; }
+        }
+        public CalledFunctionEntry this[int index]
+        {
+            get { return functions_[index]; }
+        }
+        public void AddFunction(uint addr)
+        {
+            var entry = new CalledFunctionEntry();
+            entry.Address = addr;
+            entry.Name = String.Format("sub_{0:x}", addr);
+            functions_.Add(entry);
+        }
+    }
+
     // The .pubvars table.
     public class SmxPubvarTable : SmxSection
     {

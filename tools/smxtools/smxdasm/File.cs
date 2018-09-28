@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Collections.Generic;
+using System;
 
 namespace smxdasm
 {
@@ -16,6 +17,7 @@ namespace smxdasm
         public SmxTagTable Tags;
         public SmxDataSection Data;
         public SmxCodeV1Section CodeV1;
+        public SmxCalledFunctionsTable CalledFunctions;
         public SmxDebugInfoSection DebugInfo;
         public SmxDebugFilesTable DebugFiles;
         public SmxDebugLinesTable DebugLines;
@@ -47,6 +49,8 @@ namespace smxdasm
                 else if (section.Name == ".dbg.info")
                     DebugInfo = new SmxDebugInfoSection(Header, section);
             }
+
+            CalledFunctions = new SmxCalledFunctionsTable();
 
             // .dbg.names was removed when RTTI was added.
             if (DebugNames == null)
@@ -139,6 +143,52 @@ namespace smxdasm
                 }
             }
             UnknownSections = unknown.ToArray();
+
+            // Disassemble all functions right away to find all called functions.
+            if (DebugSymbols != null)
+            {
+                foreach (var entry in DebugSymbols.Entries)
+                {
+                    if (entry.Ident != SymKind.Function)
+                        continue;
+                    try
+                    {
+                        V1Disassembler.Disassemble(this, CodeV1, entry.Address);
+                    }
+                    catch (Exception)
+                    {
+                        continue;
+                    }
+                }
+            }
+            if (Publics != null)
+            {
+                foreach (var pubfun in Publics.Entries)
+                {
+                    try
+                    {
+                        V1Disassembler.Disassemble(this, CodeV1, (int)pubfun.Address);
+                    }
+                    catch (Exception)
+                    {
+                        continue;
+                    }
+                }
+            }
+            if (CalledFunctions != null)
+            {
+                foreach (var fun in CalledFunctions.Entries)
+                {
+                    try
+                    {
+                        V1Disassembler.Disassemble(this, CodeV1, (int)fun.Address);
+                    }
+                    catch (Exception)
+                    {
+                        continue;
+                    }
+                }
+            }
         }
 
         public string FindGlobalName(int address)
@@ -191,7 +241,41 @@ namespace smxdasm
                         return pubfun.Name;
                 }
             }
+            if (CalledFunctions != null)
+            {
+                foreach (var fun in CalledFunctions.Entries)
+                {
+                    if (fun.Address == address)
+                        return fun.Name;
+                }
+            }
             return "(unknown)";
+        }
+
+        public bool IsFunctionAtAddress(int address)
+        {
+            if (DebugSymbols != null)
+            {
+                if (DebugSymbols.FindFunction(address) != null)
+                    return true;
+            }
+            if (Publics != null)
+            {
+                foreach (var pubfun in Publics.Entries)
+                {
+                    if (pubfun.Address == address)
+                        return true;
+                }
+            }
+            if (CalledFunctions != null)
+            {
+                foreach (var fun in CalledFunctions.Entries)
+                {
+                    if (fun.Address == address)
+                        return true;
+                }
+            }
+            return false;
         }
     }
 }
