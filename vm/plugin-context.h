@@ -57,7 +57,6 @@ class PluginContext : public BasePluginContext
   int LocalToStringNULL(cell_t local_addr, char** addr) override;
   IPluginRuntime* GetRuntime() override;
   cell_t* GetLocalParams() override;
-  int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK* oldpfn) override;
 
   bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
 
@@ -72,9 +71,6 @@ class PluginContext : public BasePluginContext
   }
   PluginRuntime* runtime() const {
     return m_pRuntime;
-  }
-  SPVM_DEBUGBREAK debugbreak() const {
-    return dbreak_;
   }
 
  public:
@@ -142,8 +138,6 @@ class PluginContext : public BasePluginContext
   uint8_t* memory_;
   uint32_t data_size_;
   uint32_t mem_size_;
-
-  SPVM_DEBUGBREAK dbreak_;
 
   cell_t* m_pNullVec;
   cell_t* m_pNullString;

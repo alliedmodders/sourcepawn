@@ -116,6 +116,13 @@ class Environment : public ISourcePawnEnvironment
     return debugger_;
   }
 
+  void SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
+    debug_break_handler_ = handler;
+  }
+  SPVM_DEBUGBREAK debugbreak() const {
+    return debug_break_handler_;
+  }
+
   WatchdogTimer* watchdog() const {
     return watchdog_timer_;
   }
@@ -169,6 +176,8 @@ class Environment : public ISourcePawnEnvironment
   ke::AutoPtr<WatchdogTimer> watchdog_timer_;
   ke::AutoPtr<BuiltinNatives> builtins_;
   ke::Mutex mutex_;
+
+  SPVM_DEBUGBREAK debug_break_handler_;
 
   IDebugListener* debugger_;
   ExceptionHandler* eh_top_;

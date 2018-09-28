@@ -20,8 +20,8 @@ namespace sp {
 
 void InvokeDebugger(PluginContext* ctx, const IErrorReport* report)
 {
-  // Continue normal execution, if this plugin isn't being debugged.
-  if (!ctx->debugbreak())
+  // Continue normal execution, if there is no listener registered.
+  if (!Environment::get()->debugbreak())
     return;
 
   if (!ctx->IsDebugging()) {
@@ -56,7 +56,7 @@ void InvokeDebugger(PluginContext* ctx, const IErrorReport* report)
   dbginfo.frm = ctx->frm();
 
   // Call debug callback.
-  ctx->debugbreak()(ctx, dbginfo, report);
+  Environment::get()->debugbreak()(ctx, dbginfo, report);
 }
 
 } // namespace sp

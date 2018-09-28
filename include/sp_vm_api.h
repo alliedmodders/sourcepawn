@@ -644,15 +644,12 @@ namespace SourcePawn
     virtual bool IsDebugging() =0;
 
     /**
-     * @brief Installs a debug break and returns the old one, if any.
-     * This will fail if the plugin is not debugging.
+     * @brief Deprecated, does nothing.
      *
-     * @param newpfn   New function pointer.
-     * @param oldpfn   Pointer to retrieve old function pointer.
-     *
-     * @return         Error number.
+     * @param newpfn   Unused.
+     * @param oldpfn   Unused.
      */
-    virtual int SetDebugBreak(SPVM_DEBUGBREAK newpfn, SPVM_DEBUGBREAK* oldpfn) =0;
+    virtual int SetDebugBreak(void *newpfn, void *oldpfn) =0;
 
     /**
      * @brief Deprecated, do not use.
@@ -1378,6 +1375,17 @@ namespace SourcePawn
      * @param ptr    Address to free.
      */
     virtual void FreePageMemory(void *ptr) =0;
+
+
+    /*
+     * @brief Installs a debug break handler.
+     *
+     * This should be called once on application startup.
+     *
+     * @param handler  Function pointer to debug break handler.
+     * @return         SP_ERROR_* code.
+     */
+    virtual int SetDebugBreakHandler(SPVM_DEBUGBREAK handler) =0;
   };
 
   class ExceptionHandler;
