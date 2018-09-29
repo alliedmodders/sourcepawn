@@ -1,0 +1,2 @@
+(22) : error 209: function "funct" should return a value
+(30) : error 209: function "funcg" should return a value
