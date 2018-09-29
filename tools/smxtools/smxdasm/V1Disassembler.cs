@@ -267,5 +267,17 @@ namespace smxdasm
             var disassembler = new V1Disassembler(file, code, proc_offset);
             return disassembler.disassemble();
         }
+
+        public static V1Instruction[] TryDisassemble(SmxFile file, SmxCodeV1Section code, int proc_offset)
+        {
+            try
+            {
+                return Disassemble(file, code, proc_offset);
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }
