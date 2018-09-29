@@ -145,7 +145,7 @@ static int doif(void);
 static int dowhile(void);
 static int dodo(void);
 static int dofor(void);
-static void doswitch(void);
+static int doswitch(void);
 static void doreturn(void);
 static void dotypedef();
 static void dotypeset();
@@ -5432,8 +5432,7 @@ static void statement(int *lastindent,int allow_decl)
     lastst=dofor();
     break;
   case tSWITCH:
-    doswitch();
-    lastst=tSWITCH;
+    lastst=doswitch();
     break;
   case tCASE:
   case tDEFAULT:
@@ -5928,7 +5927,7 @@ static int dofor(void)
  *   param = table offset (code segment)
  *
  */
-static void doswitch(void)
+static int doswitch(void)
 {
   int lbl_table,lbl_exit,lbl_case;
   int swdefault,casecount;
@@ -5938,6 +5937,7 @@ static void doswitch(void)
   constvalue caselist = { NULL, "", 0, 0};   /* case list starts empty */
   constvalue *cse,*csp;
   char labelname[sNAMEMAX+1];
+  bool all_cases_return = true;
 
   endtok= matchtoken('(') ? ')' : tDO;
   doexpr(TRUE,FALSE,FALSE,FALSE,NULL,NULL,TRUE);/* evaluate switch expression */
@@ -6005,6 +6005,8 @@ static void doswitch(void)
       sc_allowtags=(short)POPSTK_I();   /* reset */
       setlabel(lbl_case);
       statement(NULL,FALSE);
+      if (lastst != tRETURN)
+        all_cases_return = false;
       jumplabel(lbl_exit);
       break;
     case tDEFAULT:
@@ -6015,6 +6017,8 @@ static void doswitch(void)
       needtoken(':');
       swdefault=TRUE;
       statement(NULL,FALSE);
+      if (lastst != tRETURN)
+        all_cases_return = false;
       /* Jump to lbl_exit, even thouh this is the last clause in the
        * switch, because the jump table is generated between the last
        * clause of the switch and the exit label.
@@ -6054,6 +6058,9 @@ static void doswitch(void)
 
   setlabel(lbl_exit);
   delete_consttable(&caselist); /* clear list of case labels */
+  if (all_cases_return && swdefault)
+    return tRETURN;
+  return tSWITCH;
 }
 
 static void doassert(void)
