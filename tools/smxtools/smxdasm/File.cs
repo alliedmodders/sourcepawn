@@ -151,42 +151,21 @@ namespace smxdasm
                 {
                     if (entry.Ident != SymKind.Function)
                         continue;
-                    try
-                    {
-                        V1Disassembler.Disassemble(this, CodeV1, entry.Address);
-                    }
-                    catch (Exception)
-                    {
-                        continue;
-                    }
+                    V1Disassembler.TryDisassemble(this, CodeV1, entry.Address);
                 }
             }
             if (Publics != null)
             {
                 foreach (var pubfun in Publics.Entries)
                 {
-                    try
-                    {
-                        V1Disassembler.Disassemble(this, CodeV1, (int)pubfun.Address);
-                    }
-                    catch (Exception)
-                    {
-                        continue;
-                    }
+                    V1Disassembler.TryDisassemble(this, CodeV1, (int)pubfun.Address);
                 }
             }
             if (CalledFunctions != null)
             {
                 foreach (var fun in CalledFunctions.Entries)
                 {
-                    try
-                    {
-                        V1Disassembler.Disassemble(this, CodeV1, (int)fun.Address);
-                    }
-                    catch (Exception)
-                    {
-                        continue;
-                    }
+                    V1Disassembler.TryDisassemble(this, CodeV1, (int)fun.Address);
                 }
             }
         }
