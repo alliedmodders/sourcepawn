@@ -216,7 +216,7 @@ void markexpr(optmark type,const char *name,cell offset)
  *
  *  Global references: funcstatus  (referred to only)
  */
-void startfunc(char *fname)
+void startfunc(const char *fname)
 {
   stgwrite("\tproc");
   if (sc_asmfile) {

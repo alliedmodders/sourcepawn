@@ -4302,9 +4302,10 @@ char *operator_symname(char *symname,const char *opername,int tag1,int tag2,int 
   return symname;
 }
 
-static int parse_funcname(char *fname,int *tag1,int *tag2,char *opname)
+static int parse_funcname(const char *fname,int *tag1,int *tag2,char *opname)
 {
-  char *ptr,*name;
+  const char* ptr;
+  char* name;
   int unary;
 
   /* tags are only positive, so if the function name starts with a '-',
@@ -4315,7 +4316,7 @@ static int parse_funcname(char *fname,int *tag1,int *tag2,char *opname)
     unary=TRUE;
     ptr=fname;
   } else {
-    *tag1=(int)strtol(fname,&ptr,16);
+    *tag1=(int)strtol(fname,(char**)&ptr,16);
     unary= ptr==fname;  /* unary operator if it doesn't start with a tag name */
   } /* if */
   assert(!unary || *tag1==0);
@@ -4327,7 +4328,7 @@ static int parse_funcname(char *fname,int *tag1,int *tag2,char *opname)
   return unary;
 }
 
-char *funcdisplayname(char *dest,char *funcname)
+char *funcdisplayname(char *dest,const char *funcname)
 {
   int tags[2];
   char opname[10];

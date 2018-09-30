@@ -97,7 +97,7 @@ static void delete_stringpairtable(stringpair *root)
   memset(root,0,sizeof(stringpair));
 }
 
-static stringpair *find_stringpair(stringpair *cur,char *first,int matchlength)
+static stringpair *find_stringpair(stringpair *cur,const char *first,int matchlength)
 {
   int result=0;
 
@@ -210,7 +210,7 @@ void delete_stringtable(stringlist *root)
 /* ----- alias table --------------------------------------------- */
 static stringpair alias_tab = {NULL, NULL, NULL};   /* alias table */
 
-stringpair *insert_alias(char *name,char *alias)
+stringpair *insert_alias(const char *name,const char *alias)
 {
   stringpair *cur;
 
@@ -223,7 +223,7 @@ stringpair *insert_alias(char *name,char *alias)
   return cur;
 }
 
-int lookup_alias(char *target,char *name)
+int lookup_alias(char *target,const char *name)
 {
   stringpair *cur=find_stringpair(alias_tab.next,name,strlen(name));
   if (cur!=NULL) {
