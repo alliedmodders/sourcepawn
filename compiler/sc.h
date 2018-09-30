@@ -855,10 +855,6 @@ stringlist *get_dbgstrings();
 void delete_stringtable(stringlist *root);
 
 /* function prototypes in SCI18N.C */
-#define MAXCODEPAGE 12
-int cp_path(const char *root,const char *directory);
-int cp_set(const char *name);
-cell cp_translate(const unsigned char *string,const unsigned char **endptr);
 cell get_utf8_char(const unsigned char *string,const unsigned char **endptr);
 int scan_utf8(void *fp,const char *filename);
 
