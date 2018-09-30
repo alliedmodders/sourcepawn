@@ -1042,21 +1042,7 @@ static int command(void)
   case tpPRAGMA:
     if (!SKIPPING) {
       if (lex(&val,&str)==tSYMBOL) {
-        if (strcmp(str,"codepage")==0) {
-          char name[sNAMEMAX+1];
-          while (*lptr<=' ' && *lptr!='\0')
-            lptr++;
-          if (*lptr=='"') {
-            lptr=getstring((unsigned char*)name,sizeof name,lptr);
-          } else {
-            size_t i;
-            for (i=0; i<sizeof name && alphanum(*lptr); i++,lptr++)
-              name[i]=*lptr;
-            name[i]='\0';
-          } /* if */
-          if (!cp_set(name))
-            error(FATAL_ERROR_NO_CODEPAGE);
-        } else if (strcmp(str,"ctrlchar")==0) {
+        if (strcmp(str,"ctrlchar")==0) {
           while (*lptr<=' ' && *lptr!='\0')
             lptr++;
           if (*lptr=='\0') {
@@ -2569,12 +2555,8 @@ static cell litchar(const unsigned char **lptr,int flags)
         assert(c>=0);   /* file was already scanned for conformance to UTF-8 */
       } else {
     #endif
-      #if !defined NO_CODEPAGE
-        c=cp_translate(cptr,&cptr);
-      #else
         c=*cptr;
         cptr+=1;
-      #endif
     #if !defined NO_UTF8
       } /* if */
     #endif

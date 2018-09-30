@@ -98,8 +98,7 @@ bool pc_must_drop_stack = true;
 static void resetglobals(void);
 static void initglobals(void);
 static char *get_extension(char *filename);
-static void setopt(int argc,char **argv,char *oname,char *ename,char *pname,
-                   char *codepage);
+static void setopt(int argc,char **argv,char *oname,char *ename,char *pname);
 static void setconfig(char *root);
 static void setcaption(void);
 static void about(void);
@@ -184,7 +183,6 @@ static int sc_parsenum = 0;     /* number of the extra parses */
 static int wq[wqTABSZ];         /* "while queue", internal stack for nested loops */
 static int *wqptr;              /* pointer to next entry */
 #if !defined SC_LIGHT
-  static char sc_rootpath[_MAX_PATH];
   static char *sc_documentation=NULL;/* main documentation */
 #endif
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
@@ -211,7 +209,6 @@ int pc_compile(int argc, char *argv[])
   int entry,i,jmpcode;
   int retcode;
   char incfname[_MAX_PATH];
-  char codepage[MAXCODEPAGE+1];
   void *inpfmark;
   int lcl_packstr,lcl_needsemicolon,lcl_tabsize,lcl_require_newdecls;
   char *ptr;
@@ -241,7 +238,7 @@ int pc_compile(int argc, char *argv[])
   if (!phopt_init())
     error(FATAL_ERROR_OOM);         /* insufficient memory */
 
-  setopt(argc,argv,outfname,errfname,incfname,codepage);
+  setopt(argc,argv,outfname,errfname,incfname);
   strcpy(binfname,outfname);
   ptr=get_extension(binfname);
   if (ptr!=NULL && stricmp(ptr,".asm")==0)
@@ -257,16 +254,13 @@ int pc_compile(int argc, char *argv[])
     remove(errfname);   /* delete file on startup */
   else if (verbosity>0)
     setcaption();
-  setconfig(argv[0]);   /* the path to the include and codepage files */
+  setconfig(argv[0]);   /* the path to the include files */
   sc_ctrlchar_org=sc_ctrlchar;
   lcl_packstr=sc_packstr;
   lcl_needsemicolon=sc_needsemicolon;
   lcl_require_newdecls=sc_require_newdecls;
   lcl_tabsize=sc_tabsize;
-  #if !defined NO_CODEPAGE
-    if (!cp_set(codepage))      /* set codepage */
-      error(FATAL_ERROR_NO_CODEPAGE);
-  #endif
+
   /* optionally create a temporary input file that is a collection of all
    * input files
    */
@@ -775,11 +769,9 @@ static int toggle_option(const char *optptr,int option)
  * parserespf() calls parseoptions() at its turn after having created
  * an "option list" from the contents of the file.
  */
-static void parserespf(char *filename,char *oname,char *ename,char *pname,
-                       char *codepage);
+static void parserespf(char *filename,char *oname,char *ename,char *pname);
 
-static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pname,
-                         char *codepage)
+static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pname)
 {
   char str[_MAX_PATH];
   const char *ptr;
@@ -800,9 +792,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         sc_asmfile=TRUE;        /* skip last pass of making binary file */
         if (verbosity>1)
           verbosity=1;
-        break;
-      case 'c':
-        strlcpy(codepage,option_value(ptr,argv,argc,&arg),MAXCODEPAGE);  /* set name of codepage */
         break;
 #if defined dos_setdrive
       case 'D':                 /* set active directory */
@@ -904,7 +893,7 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
       } /* switch */
     } else if (argv[arg][0]=='@') {
       #if !defined SC_LIGHT
-        parserespf(&argv[arg][1],oname,ename,pname,codepage);
+        parserespf(&argv[arg][1],oname,ename,pname);
       #endif
     } else if ((ptr=strchr(argv[arg],'='))!=NULL) {
       i=(int)(ptr-argv[arg]);
@@ -936,8 +925,7 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
 }
 
 #if !defined SC_LIGHT
-static void parserespf(char *filename,char *oname,char *ename,char *pname,
-                       char *codepage)
+static void parserespf(char *filename,char *oname,char *ename,char *pname)
 {
 #define MAX_OPTIONS     100
   FILE *fp;
@@ -973,21 +961,19 @@ static void parserespf(char *filename,char *oname,char *ename,char *pname,
   if (ptr!=NULL)
     error(FATAL_ERROR_ALLOC_OVERFLOW,"option table");
   /* parse the option table */
-  parseoptions(argc,argv,oname,ename,pname,codepage);
+  parseoptions(argc,argv,oname,ename,pname);
   /* free allocated memory */
   free(argv);
   free(string);
 }
 #endif
 
-static void setopt(int argc,char **argv,char *oname,char *ename,char *pname,
-                   char *codepage)
+static void setopt(int argc,char **argv,char *oname,char *ename,char *pname)
 {
   delete_sourcefiletable(); /* make sure it is empty */
   *oname='\0';
   *ename='\0';
   *pname='\0';
-  *codepage='\0';
   strcpy(pname,sDEF_PREFIX);
 
   #if 0 /* needed to test with BoundsChecker for DOS (it does not pass
@@ -1009,10 +995,10 @@ static void setopt(int argc,char **argv,char *oname,char *ename,char *pname,
         strcpy(cfgfile,"pawn.cfg");
       } /* if */
       if (access(cfgfile,4)==0)
-        parserespf(cfgfile,oname,ename,pname,codepage);
+        parserespf(cfgfile,oname,ename,pname);
     } /* if */
   #endif
-  parseoptions(argc,argv,oname,ename,pname,codepage);
+  parseoptions(argc,argv,oname,ename,pname);
   if (get_sourcefile(0)==NULL)
     about();
 }
@@ -1085,19 +1071,6 @@ static void setconfig(char *root)
         } /* if */
       } /* if */
       insert_path(path);
-
-      /* same for the codepage root */
-# if !defined NO_CODEPAGE
-        *ptr='\0';
-        if (!cp_path(path,"codepage"))
-          error(FATAL_ERROR_INVALID_PATH,path);
-# endif /* !NO_CODEPAGE */
-
-      /* also copy the root path (for the XML documentation) */
-# if !defined SC_LIGHT
-        *ptr='\0';
-        strcpy(sc_rootpath,path);
-# endif /* !SC_LIGHT */
     } /* if */
 }
 
@@ -1115,7 +1088,6 @@ static void about(void)
     pc_printf("Usage:   spcomp <filename> [filename...] [options]\n\n");
     pc_printf("Options:\n");
     pc_printf("         -a       output assembler code\n");
-    pc_printf("         -c<name> codepage name or number; e.g. 1252 for Windows Latin-1\n");
 #if defined dos_setdrive
     pc_printf("         -Dpath   active directory path\n");
 #endif
