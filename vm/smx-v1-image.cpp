@@ -787,8 +787,8 @@ SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, uce
 
     const SymbolType *sym = reinterpret_cast<const SymbolType *>(cursor);
     if (sym->ident == sp::IDENT_FUNCTION &&
-      sym->name < debug_names_section_->size &&
-      !strcmp(debug_names_ + sym->name, function))
+        sym->name < debug_names_section_->size &&
+        !strcmp(debug_names_ + sym->name, function))
     {
       *funcaddr = sym->addr;
       return true;
@@ -843,7 +843,7 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
   // now find the first line in the function where we can "break" on
   uint32_t index = 0;
   for (; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
-    /* nothing */;
+    continue;
 
   if (index >= debug_info_->num_lines)
     return false;
@@ -855,13 +855,12 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
 bool
 SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr)
 {
-  /* Find a suitable "breakpoint address" close to the indicated line (and in
-  * the specified file). The address is moved up to the next "breakable" line
-  * if no "breakpoint" is available on the specified line. You can use function
-  * LookupLine() to find out at which precise line the breakpoint was set.
-  *
-  * The filename comparison is strict (case sensitive and path sensitive).
-  */
+  // Find a suitable "breakpoint address" close to the indicated line (and in
+  // the specified file). The address is moved up to the next "breakable" line
+  // if no "breakpoint" is available on the specified line. You can use function
+  // LookupLine() to find out at which precise line the breakpoint was set.
+
+  // The filename comparison is strict (case sensitive and path sensitive).
   *addr = 0;
 
   uint32_t bottomaddr, topaddr;
@@ -870,7 +869,7 @@ SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_
   for (file = 0; file < debug_info_->num_files; file++) {
     // find the (next) matching instance of the file
     if (debug_files_[file].name >= debug_names_section_->size ||
-      strcmp(debug_names_ + debug_files_[file].name, filename) != 0)
+        strcmp(debug_names_ + debug_files_[file].name, filename) != 0)
     {
       continue;
     }
@@ -885,8 +884,8 @@ SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_
 
     // browse until the line is found or until the top address is exceeded
     while (index < debug_info_->num_lines &&
-      debug_lines_[index].line < line &&
-      debug_lines_[index].addr < topaddr)
+           debug_lines_[index].line < line &&
+           debug_lines_[index].addr < topaddr)
     {
       index++;
     }
