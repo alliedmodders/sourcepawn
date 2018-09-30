@@ -1036,6 +1036,10 @@ Interpreter::visitSTRADJUST_PRI()
 bool
 Interpreter::visitBREAK()
 {
+  // Ignore opcode if this isn't enabled.
+  if (!Environment::get()->IsDebugBreakEnabled())
+    return true;
+
   InvokeDebugger(cx_, nullptr);
   return !env_->hasPendingException();
 }
