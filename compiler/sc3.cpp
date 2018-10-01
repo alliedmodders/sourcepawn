@@ -221,8 +221,6 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
   ffcall(sym,NULL,paramspassed);
   if (sc_status!=statSKIP)
     markusage(sym,uREAD);       /* do not mark as "used" when this call itself is skipped */
-  if ((sym->usage & uNATIVE)!=0 && sym->x.lib!=NULL)
-    sym->x.lib->value += 1;     /* increment "usage count" of the library */
   sideeffect=TRUE;              /* assume functions carry out a side-effect */
   assert(resulttag!=NULL);
   *resulttag=sym->tag;          /* save tag of the called function */
@@ -2944,8 +2942,6 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
   ffcall(sym,NULL,nargs);
   if (sc_status!=statSKIP)
     markusage(sym,uREAD);       /* do not mark as "used" when this call itself is skipped */
-  if ((sym->usage & uNATIVE)!=0 &&sym->x.lib!=NULL)
-    sym->x.lib->value += 1;     /* increment "usage count" of the library */
   if (symret!=NULL)
     popreg(sPRI);               /* pop hidden parameter as function result */
   sideeffect=TRUE;              /* assume functions carry out a side-effect */
