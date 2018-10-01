@@ -150,7 +150,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
   /* check existance and the proper declaration of this function */
   if ((sym->usage & uMISSING)!=0 || (sym->usage & uPROTOTYPED)==0) {
     char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
-    funcdisplayname(symname,sym->name);
+    funcdisplayname(symname,sym->name());
     if ((sym->usage & uMISSING)!=0)
       error(4,symname);           /* function not defined */
     if ((sym->usage & uPROTOTYPED)==0)
@@ -610,7 +610,7 @@ SC3ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endva
 
     foundop=nextop(&opidx,opstr);
     if ((foundop || hits) && (lval->ident==iARRAY || lval->ident==iREFARRAY))
-      error(33, lval->sym ? lval->sym->name : "-unknown-");  /* array was not indexed in an expression */
+      error(33, lval->sym ? lval->sym->name() : "-unknown-");  /* array was not indexed in an expression */
     if (foundop) {
       if (!hits) {
         /* this is the first operator in the list */
@@ -676,7 +676,7 @@ static void checkfunction(value *lval)
      */
     if (sym!=curfunc && (sym->usage & uRETVALUE)==0) {
       char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
-      funcdisplayname(symname,sym->name);
+      funcdisplayname(symname,sym->name());
       error(209,symname);       /* function should return a value */
     } /* if */
   } else {
@@ -838,10 +838,10 @@ SC3ExpressionParser::plnge2(void (*oper)(void),
     checkfunction(lval1);
     checkfunction(lval2);
     if (lval1->ident==iARRAY || lval1->ident==iREFARRAY) {
-      const char *ptr=(lval1->sym!=NULL) ? lval1->sym->name : "-unknown-";
+      const char *ptr=(lval1->sym!=NULL) ? lval1->sym->name() : "-unknown-";
       error(33,ptr);                    /* array must be indexed */
     } else if (lval2->ident==iARRAY || lval2->ident==iREFARRAY) {
-      const char *ptr=(lval2->sym!=NULL) ? lval2->sym->name : "-unknown-";
+      const char *ptr=(lval2->sym!=NULL) ? lval2->sym->name() : "-unknown-";
       error(33,ptr);                    /* array must be indexed */
     } /* if */
     /* ??? ^^^ should do same kind of error checking with functions */
@@ -1063,7 +1063,7 @@ SC3ExpressionParser::hier14(value *lval1)
       return error(23); /* array assignment must be simple assigment */
     assert(lval1->sym!=NULL);
     if (array_totalsize(lval1->sym)==0)
-      return error(46,lval1->sym->name);        /* unknown array size */
+      return error(46,lval1->sym->name());        /* unknown array size */
     lvalue=TRUE;
   } /* if */
 
@@ -1099,7 +1099,7 @@ SC3ExpressionParser::hier14(value *lval1)
       for (i=0; i<sDIMEN_MAX; i++)
         same=same && (lval3.arrayidx[i]==lval2.arrayidx[i]);
       if (same)
-        error(226,lval3.sym->name);   /* self-assignment */
+        error(226,lval3.sym->name());   /* self-assignment */
     } /* if */
   } else if (lval1->ident == iACCESSOR) {
     pushreg(sPRI);
@@ -1129,7 +1129,7 @@ SC3ExpressionParser::hier14(value *lval1)
       /* check whether lval2 and lval3 (old lval1) refer to the same variable */
       if (lval2.ident==iVARIABLE && lval3.ident==lval2.ident && lval3.sym==lval2.sym) {
         assert(lval3.sym!=NULL);
-        error(226,lval3.sym->name);     /* self-assignment */
+        error(226,lval3.sym->name());     /* self-assignment */
       } /* if */
     } /* if */
   } /* if */
@@ -1160,14 +1160,14 @@ SC3ExpressionParser::hier14(value *lval1)
     } /* if */
     if (lval2.ident!=iARRAY && lval2.ident!=iREFARRAY
         && (lval2.sym==NULL || lval2.constval<=0))
-      error(33,lval3.sym->name);        /* array must be indexed */
+      error(33,lval3.sym->name());        /* array must be indexed */
     if (lval2.sym!=NULL) {
       if (lval2.constval==0) {
         val=lval2.sym->dim.array.length;/* array variable */
       } else {
         val=lval2.constval;
         if (lval2.sym->dim.array.level!=0)
-          error(28,lval2.sym->name);
+          error(28,lval2.sym->name());
       } /* if */
       level=lval2.sym->dim.array.level;
       idxtag=lval2.sym->x.tags.index;
@@ -1192,7 +1192,7 @@ SC3ExpressionParser::hier14(value *lval1)
     else if (ltlength<val || (exactmatch && ltlength>val) || val==0)
       return error(47); /* array sizes must match */
     else if (lval3.ident!=iARRAYCELL && !matchtag(lval3.sym->x.tags.index,idxtag,MATCHTAG_COERCE|MATCHTAG_SILENT))
-      error(229,(lval2.sym!=NULL) ? lval2.sym->name : lval3.sym->name); /* index tag mismatch */
+      error(229,(lval2.sym!=NULL) ? lval2.sym->name() : lval3.sym->name()); /* index tag mismatch */
     if (level>0) {
       /* check the sizes of all sublevels too */
       symbol *sym1 = lval3.sym;
@@ -1215,7 +1215,7 @@ SC3ExpressionParser::hier14(value *lval1)
         if (sym1->dim.array.length!=sym2->dim.array.length)
           error(47);    /* array sizes must match */
         else if (!matchtag(sym1->x.tags.index,sym2->x.tags.index,MATCHTAG_COERCE|MATCHTAG_SILENT))
-          error(229,sym2->name);  /* index tag mismatch */
+          error(229,sym2->name());  /* index tag mismatch */
       } /* for */
       /* get the total size in cells of the multi-dimensional array */
       val=array_totalsize(lval3.sym);
@@ -1319,12 +1319,12 @@ SC3ExpressionParser::hier13(value *lval)
     if (!array1 && array2) {
       const char *ptr = "-unknown-";
       if (lval->sym != NULL)
-        ptr = lval->sym->name;
+        ptr = lval->sym->name();
       error(33,ptr);            /* array must be indexed */
     } else if (array1 && !array2) {
       const char *ptr = "-unknown-";
       if (lval2.sym != NULL)
-        ptr = lval2.sym->name;
+        ptr = lval2.sym->name();
       error(33,ptr);            /* array must be indexed */
     } /* if */
     /* ??? if both are arrays, should check dimensions */
@@ -1880,7 +1880,7 @@ restart:
       !(lexpeek('.') || lexpeek('(')))
   {
     // Cannot use methodmap as an rvalue/lvalue.
-    error(174, sym ? sym->name : "(unknown)");
+    error(174, sym ? sym->name() : "(unknown)");
 
     lval1->ident = iCONSTEXPR;
     lval1->tag = 0;
@@ -1909,7 +1909,7 @@ restart:
         needtoken(close);
         return FALSE;
       } else if (sym->ident!=iARRAY && sym->ident!=iREFARRAY){
-        error(28,sym->name);    /* cannot subscript, variable is not an array */
+        error(28,sym->name());    /* cannot subscript, variable is not an array */
         needtoken(close);
         return FALSE;
       } /* if */
@@ -1920,7 +1920,7 @@ restart:
       if (hier14(&lval2))       /* create expression for the array index */
         rvalue(&lval2);
       if (lval2.ident==iARRAY || lval2.ident==iREFARRAY)
-        error(33,lval2.sym->name);      /* array must be indexed */
+        error(33,lval2.sym->name());      /* array must be indexed */
       needtoken(close);
       if ((sym->usage & uENUMROOT))
         matchtag(sym->x.tags.index,lval2.tag,TRUE);
@@ -1933,7 +1933,7 @@ restart:
         if (!(sym->tag == pc_tag_string && sym->dim.array.level == 0)) {
           /* normal array index */
           if (lval2.constval<0 || (sym->dim.array.length!=0 && sym->dim.array.length<=lval2.constval))
-            error(32,sym->name);        /* array index out of bounds */
+            error(32,sym->name());        /* array index out of bounds */
           if (lval2.constval!=0) {
             /* don't add offsets for zero subscripts */
             #if PAWN_CELL_SIZE==16
@@ -1951,7 +1951,7 @@ restart:
           /* character index */
           if (lval2.constval<0 || (sym->dim.array.length!=0
               && sym->dim.array.length*((8*sizeof(cell))/sCHARBITS)<=(ucell)lval2.constval))
-            error(32,sym->name);        /* array index out of bounds */
+            error(32,sym->name());        /* array index out of bounds */
           if (lval2.constval!=0) {
             /* don't add offsets for zero subscripts */
             #if sCHARBITS==16
@@ -2108,7 +2108,7 @@ restart:
         if (sym && sym->ident == iMETHODMAP && sym->methodmap) {
           if (!sym->methodmap->ctor) {
             // Immediately fatal - no function to call.
-            return error(172, sym->name);
+            return error(172, sym->name());
           }
           if (sym->methodmap->must_construct_with_new()) {
             // Keep going, this is basically a style thing.
@@ -2129,7 +2129,7 @@ restart:
         }
       } else if ((sym->usage & uMISSING)!=0) {
         char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
-        funcdisplayname(symname,sym->name);
+        funcdisplayname(symname,sym->name());
         error(4,symname);             /* function not defined */
       } /* if */
 
@@ -2576,12 +2576,12 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
       !(sym->usage & uREAD) &&
       sc_status == statWRITE)
   {
-    error(195, sym->name);
+    error(195, sym->name());
   }
 
   if ((sym->flags & flgDEPRECATED)!=0) {
     const char *ptr= (sym->documentation!=NULL) ? sym->documentation : "";
-    error(234,sym->name,ptr);   /* deprecated (probably a native function) */
+    error(234,sym->name(),ptr);   /* deprecated (probably a native function) */
   } /* if */
 
   CallArgPusher args(aImplicitThis);
@@ -2833,7 +2833,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
               if (arg[argidx].dim[level]!=0 && sym->dim.array.length!=arg[argidx].dim[level])
                 error(47);        /* array sizes must match */
               else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,TRUE))
-                error(229,sym->name);   /* index tag mismatch */
+                error(229,sym->name());   /* index tag mismatch */
               append_constval(&arrayszlst,arg[argidx].name,sym->dim.array.length,level);
               sym=finddepend(sym);
               assert(sym!=NULL);
@@ -2845,7 +2845,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
             if (arg[argidx].dim[level]!=0 && sym->dim.array.length!=arg[argidx].dim[level])
               error(47);          /* array sizes must match */
             else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,TRUE))
-              error(229,sym->name);   /* index tag mismatch */
+              error(229,sym->name());   /* index tag mismatch */
             append_constval(&arrayszlst,arg[argidx].name,sym->dim.array.length,level);
           } /* if */
           /* address already in PRI */
@@ -3043,7 +3043,7 @@ static int constant(value *lval)
   tok=lex(&val,&st);
   if (tok==tSYMBOL && (sym=findconst(st,&cmptag))!=0) {
     if (cmptag>1)
-      error(91,sym->name);  /* ambiguity: multiple matching constants (different tags) */
+      error(91,sym->name());  /* ambiguity: multiple matching constants (different tags) */
     lval->constval=sym->addr();
     ldconst(lval->constval,sPRI);
     lval->ident=iCONSTEXPR;

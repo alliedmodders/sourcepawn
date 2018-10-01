@@ -2688,7 +2688,7 @@ static symbol *add_symbol(symbol *root,symbol *entry,int sort)
   int global = root==&glbtab;
 
   if (sort)
-    while (root->next!=NULL && strcmp(entry->name,root->next->name)>0)
+    while (root->next!=NULL && strcmp(entry->name(),root->next->name())>0)
       root=root->next;
 
   entry->next=root->next;
@@ -2814,7 +2814,7 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
       /* for user defined operators, also remove the "prototyped" flag, as
        * user-defined operators *must* be declared before use
        */
-      if (sym->ident==iFUNCTN && !alpha(*sym->name))
+      if (sym->ident==iFUNCTN && !alpha(*sym->name()))
         sym->usage &= ~uPROTOTYPED;
       root=sym;                 /* skip the symbol */
     } /* if */
@@ -2826,9 +2826,9 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *
   symbol *firstmatch=NULL;
   symbol *sym=root->next;
   int count=0;
-  unsigned long hash=NameHash(name);
+  sp::Atom* atom = gAtoms.add(name);
   while (sym!=NULL) {
-    if (hash==sym->hash && strcmp(name,sym->name)==0        /* check name */
+    if (atom == sym->nameAtom()
         && (sym->parent==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
         && (sym->fnumber<0 || sym->fnumber==fnumber))       /* check file number for scope */
     {
@@ -2962,13 +2962,11 @@ symbol *finddepend(const symbol *parent)
 symbol::symbol()
  : symbol("", 0, 0, 0, 0, 0)
 {
-  memset(name, 0, sizeof(name));
 }
 
 symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag, int symusage)
  : next(nullptr),
    parent(nullptr),
-   hash(NameHash(symname)),
    codeaddr(code_idx),
    vclass((char)symvclass),
    ident((char)symident),
@@ -2982,16 +2980,19 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    methodmap(nullptr),
    funcid(0),
    dbgstrs(nullptr),
-   addr_(symaddr)
+   addr_(symaddr),
+   name_(nullptr)
 {
-  ke::SafeStrcpy(name, sizeof(name), symname);
+  if (symname)
+    name_ = gAtoms.add(symname);
   memset(&x, 0, sizeof(x));
   memset(&dim, 0, sizeof(dim));
 }
 
 symbol::symbol(const symbol& other)
- : symbol(other.name, other.addr_, other.ident, other.vclass, other.tag, other.usage)
+ : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag, other.usage)
 {
+  name_ = other.name_;
 }
 
 symbol::~symbol()

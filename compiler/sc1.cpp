@@ -95,6 +95,8 @@ int pc_tag_nullfunc_t = 0;
 int pc_code_version = 0;
 bool pc_must_drop_stack = true;
 
+sp::StringPool gAtoms;
+
 static void resetglobals(void);
 static void initglobals(void);
 static char *get_extension(char *filename);
@@ -1366,7 +1368,6 @@ static void dumpzero(int count)
  */
 static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
 {
-  char name[sNAMEMAX+1];
   int tok,i;
   cell val;
   char *str;
@@ -1375,7 +1376,7 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
   int usage;
   symbol *mysym,*sym;
 
-  strcpy(name, firstname);
+  sp::Atom* name = gAtoms.add(firstname);
 
   values = (cell *)malloc(pstruct->argcount * sizeof(cell));
   found = (cell *)malloc(pstruct->argcount * sizeof(cell));
@@ -1393,23 +1394,23 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
     usage |= uPUBLIC;
   mysym = NULL;
   for (sym=glbtab.next; sym!=NULL; sym=sym->next) {
-    if (strcmp(name, sym->name) == 0) {
+    if (sym->nameAtom() == name) {
       if ((sym->usage & uSTRUCT) && sym->vclass == sGLOBAL) {
         if (sym->usage & uDEFINE) {
-          error(21, name);
+          error(21, name->chars());
         } else {
           if (sym->usage & uPUBLIC && !fpublic)
              error(42);
         }
       } else {
-        error(21, name);
+        error(21, name->chars());
       }
       mysym = sym;
       break;
     }
   }
   if (!mysym)
-    mysym=addsym(name, 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name), usage);
+    mysym=addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name), usage);
 
   if (!matchtoken('=')) {
     matchtoken(';');
@@ -1437,7 +1438,7 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
     }
     arg=pstructs_getarg(pstruct,str);
     if (arg == NULL)
-      error(96, str, sym->name);
+      error(96, str, sym->name());
     needtoken('=');
     cur_litidx = litidx;
     tok=lex(&val,&str);
@@ -1477,10 +1478,11 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
         found[arg->index] = 1;
       }
     } else if (tok == tSYMBOL) {
+      sp::Atom* str_atom = gAtoms.add(str);
       for (sym=glbtab.next; sym!=NULL; sym=sym->next) {
         if (sym->vclass != sGLOBAL)
           continue;
-        if (strcmp(sym->name, str) == 0) {
+        if (sym->nameAtom() == str_atom) {
           if (arg->ident == iREFERENCE && sym->ident != iVARIABLE) {
             error(97, str);
           } else if (arg->ident == iARRAY) {
@@ -4115,7 +4117,7 @@ static void define_args(void)
   while (sym!=NULL) {
     assert(sym->ident!=iLABEL);
     assert(sym->vclass==sLOCAL);
-    markexpr(sLDECL,sym->name,sym->addr()); /* mark for better optimization */
+    markexpr(sLDECL,sym->name(),sym->addr()); /* mark for better optimization */
     sym=sym->next;
   } /* while */
 }
@@ -4242,8 +4244,7 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
     delete_symbol(&glbtab,oldsym);
   } /* if */
   RemoveFromHashTable(sp_Globals, sym);
-  strcpy(sym->name,tmpname);
-  sym->hash=NameHash(sym->name);/* calculate new hash */
+  sym->setName(gAtoms.add(tmpname));
   AddToHashTable(sp_Globals, sym);
 
   /* operators should return a value, except the '~' operator */
@@ -4428,7 +4429,7 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
       /* allow number or symbol */
       if (matchtoken(tSYMBOL)) {
         tokeninfo(&val,&str);
-        insert_alias(sym->name,str);
+        insert_alias(sym->name(),str);
       } else {
         exprconst(&val,NULL,NULL);
         sym->setAddr(val);
@@ -4555,7 +4556,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   } /* if */
 
   if ((sym->usage & uDEFINE)!=0)
-    error(21, sym->name);
+    error(21, sym->name());
 
   /* "declargs()" found the ")"; if a ";" appears after this, it was a
    * prototype */
@@ -4593,7 +4594,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
     sym->usage|=uSTOCK;
   if (decl->opertok != 0 && opererror)
     sym->usage &= ~uDEFINE;
-  startfunc(sym->name); /* creates stack frame */
+  startfunc(sym->name()); /* creates stack frame */
   insert_dbgline(funcline);
   setline(FALSE);
   declared=0;           /* number of local cells */
@@ -4652,7 +4653,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
     ffret();
     if ((sym->usage & uRETVALUE)!=0) {
       char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
-      funcdisplayname(symname,sym->name);
+      funcdisplayname(symname,sym->name());
       error(209,symname);       /* function should return a value */
     } /* if */
   } /* if */
@@ -4989,7 +4990,7 @@ static void reduce_referrers(symbol *root)
         continue;                 /* hierarchical data type */
       if (sym->ident==iFUNCTN
           && (sym->usage & uNATIVE)==0
-          && (sym->usage & uPUBLIC)==0 && strcmp(sym->name,uMAINFUNC)!=0
+          && (sym->usage & uPUBLIC)==0 && strcmp(sym->name(),uMAINFUNC)!=0
           && count_referrers(sym)==0)
       {
         sym->usage&=~(uREAD | uWRITTEN);  /* erase usage bits if there is no referrer */
@@ -5055,25 +5056,25 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
     case iLABEL:
       if (testlabs) {
         if ((sym->usage & uDEFINE)==0) {
-          error(19,sym->name);      /* not a label: ... */
+          error(19,sym->name());      /* not a label: ... */
         } else if ((sym->usage & uREAD)==0) {
-          error(sym,203,sym->name);     /* symbol isn't used: ... */
+          error(sym,203,sym->name());     /* symbol isn't used: ... */
         } /* if */
       } /* if */
       break;
     case iFUNCTN:
       if ((sym->usage & (uDEFINE | uREAD | uNATIVE | uSTOCK | uPUBLIC))==uDEFINE) {
-        funcdisplayname(symname,sym->name);
+        funcdisplayname(symname,sym->name());
         if (strlen(symname)>0) {
           error(sym,203,symname);       /* symbol isn't used ... (and not public/native/stock) */
         }
       } /* if */
-      if ((sym->usage & uPUBLIC)!=0 || strcmp(sym->name,uMAINFUNC)==0)
+      if ((sym->usage & uPUBLIC)!=0 || strcmp(sym->name(),uMAINFUNC)==0)
         entry=TRUE;                 /* there is an entry point */
       break;
     case iCONSTEXPR:
       if (testconst && (sym->usage & uREAD)==0) {
-        error(sym,203,sym->name);       /* symbol isn't used: ... */
+        error(sym,203,sym->name());       /* symbol isn't used: ... */
       } /* if */
       break;
     case iMETHODMAP:
@@ -5084,9 +5085,9 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       if (sym->parent!=NULL)
         break;                      /* hierarchical data type */
       if ((sym->usage & (uWRITTEN | uREAD | uSTOCK))==0) {
-        error(sym,203,sym->name);  /* symbol isn't used (and not stock) */
+        error(sym,203,sym->name());  /* symbol isn't used (and not stock) */
       } else if ((sym->usage & (uREAD | uSTOCK | uPUBLIC))==0) {
-        error(sym,204,sym->name);       /* value assigned to symbol is never used */
+        error(sym,204,sym->name());       /* value assigned to symbol is never used */
 #if 0 // ??? not sure whether it is a good idea to force people use "const"
       } else if ((sym->usage & (uWRITTEN | uPUBLIC | uCONST))==0 && sym->ident==iREFARRAY) {
         errorset(sSETFILE,sym->fnumber);
@@ -5154,7 +5155,7 @@ static void destructsymbols(symbol *root,int level)
            * one should declare all dimensions!
            */
           if (elements==0)
-            error(46,sym->name);        /* array size is unknown */
+            error(46,sym->name());        /* array size is unknown */
         } else {
           elements=1;
           offset=0;
@@ -5631,7 +5632,7 @@ static int test(int label,int parens,int invert)
     needtoken(endtok);
   if (ident==iARRAY || ident==iREFARRAY) {
     if (sym)
-      error(33, sym->name); /* array must be indexed */
+      error(33, sym->name()); /* array must be indexed */
     else
       error(29);                /* invalid expression */
   } /* if */
@@ -6103,7 +6104,7 @@ static void doreturn(void)
       if ((sub==NULL && retarray) || (sub!=NULL && !retarray))
         error(79);                      /* mixing "return array;" and "return value;" */
       if (retarray && (curfunc->usage & uPUBLIC)!=0)
-        error(90,curfunc->name);        /* public function may not return array */
+        error(90,curfunc->name());        /* public function may not return array */
     } /* if */
     rettype|=uRETVALUE;                 /* function returns a value */
     /* check tagname with function tagname */
@@ -6155,7 +6156,7 @@ static void doreturn(void)
           } /* if */
           /* check that all dimensions are known */
           if (dim[numdim]<=0)
-            error(46,sym->name);
+            error(46,sym->name());
         } /* for */
         if (sym->tag==pc_tag_string && numdim!=0)
           slength=dim[numdim-1];
@@ -6174,7 +6175,8 @@ static void doreturn(void)
         assert(curfunc->dim.arglist!=NULL);
         for (argcount=0; curfunc->dim.arglist[argcount].ident!=0; argcount++)
           /* nothing */;
-        sub=addvariable2(curfunc->name,(argcount+3)*sizeof(cell),iREFARRAY,sGLOBAL,curfunc->tag,dim,numdim,idxtag,slength);
+        sub=addvariable2(curfunc->name(),(argcount+3)*sizeof(cell),iREFARRAY,sGLOBAL,
+                         curfunc->tag,dim,numdim,idxtag,slength);
         sub->parent=curfunc;
       } /* if */
       /* get the hidden parameter, copy the array (the array is on the heap;
@@ -6196,7 +6198,7 @@ static void doreturn(void)
     if ((rettype & uRETVALUE)!=0) {
       char symname[2*sNAMEMAX+16];      /* allow space for user defined operators */
       assert(curfunc!=NULL);
-      funcdisplayname(symname,curfunc->name);
+      funcdisplayname(symname,curfunc->name());
       error(209,symname);               /* function should return a value */
     } /* if */
     rettype|=uRETNONE;                  /* function does not return anything */

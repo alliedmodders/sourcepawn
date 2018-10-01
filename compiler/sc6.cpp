@@ -45,7 +45,6 @@
 #include "libsmx/smx-builder.h"
 #include "libsmx/smx-encoding.h"
 #include "shared/byte-buffer.h"
-#include "shared/string-pool.h"
 #include "types.h"
 
 using namespace sp;
@@ -664,7 +663,7 @@ struct variable_type_t {
 class RttiBuilder
 {
  public:
-  RttiBuilder(StringPool& pool, SmxNameTable* names);
+  explicit RttiBuilder(SmxNameTable* names);
 
   void finish(SmxBuilder& builder);
   void add_method(symbol* sym);
@@ -690,7 +689,6 @@ class RttiBuilder
   void build_debuginfo();
 
  private:
-  StringPool& strings_;
   RefPtr<SmxNameTable> names_;
   DataPool type_pool_;
   RefPtr<SmxBlobSection<void>> data_;
@@ -714,9 +712,8 @@ class RttiBuilder
   TypeIdCache typeid_cache_;
 };
 
-RttiBuilder::RttiBuilder(StringPool& pool, SmxNameTable* names)
- : strings_(pool),
-   names_(names)
+RttiBuilder::RttiBuilder(SmxNameTable* names)
+ : names_(names)
 {
   typeid_cache_.init(128);
   data_ = new SmxBlobSection<void>("rtti.data");
@@ -783,7 +780,7 @@ RttiBuilder::build_debuginfo()
           if (prev_file_name) {
             sp_fdbg_file_t& entry = dbg_files_->add();
             entry.addr = prev_file_addr;
-            entry.name = names_->add(strings_, prev_file_name);
+            entry.name = names_->add(gAtoms, prev_file_name);
           }
           prev_file_addr = codeidx;
         }
@@ -809,7 +806,7 @@ RttiBuilder::build_debuginfo()
   if (prev_file_name) {
     sp_fdbg_file_t& entry = dbg_files_->add();
     entry.addr = prev_file_addr;
-    entry.name = names_->add(strings_, prev_file_name);
+    entry.name = names_->add(gAtoms, prev_file_name);
   }
 
   // Finish up debug header statistics.
@@ -882,7 +879,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
       var.vclass = 0;
       assert(false);
   }
-  var.name = names_->add(strings_.add(name_start, name_end - name_start));
+  var.name = names_->add(gAtoms.add(name_start, name_end - name_start));
   var.code_start = code_start;
   var.code_end = code_end;
   var.type_id = type_id;
@@ -893,7 +890,7 @@ RttiBuilder::add_method(symbol* sym)
 {
   uint32_t index = methods_->count();
   smx_rtti_method& method = methods_->add();
-  method.name = names_->add(strings_, sym->name);
+  method.name = names_->add(sym->nameAtom());
   method.pcode_start = sym->addr();
   method.pcode_end = sym->codeaddr;
   method.signature = encode_signature(sym);
@@ -923,7 +920,7 @@ void
 RttiBuilder::add_native(symbol* sym)
 {
   smx_rtti_native& native = natives_->add();
-  native.name = names_->add(strings_, sym->name);
+  native.name = names_->add(sym->nameAtom());
   native.signature = encode_signature(sym);
 }
 
@@ -942,7 +939,7 @@ RttiBuilder::add_struct(Type* type)
   smx_rtti_classdef classdef;
   memset(&classdef, 0, sizeof(classdef));
   classdef.flags = kClassDefType_Struct;
-  classdef.name = names_->add(strings_, ps->name);
+  classdef.name = names_->add(gAtoms, ps->name);
   classdef.first_field = fields_->count();
   classdefs_->add(classdef);
 
@@ -964,7 +961,7 @@ RttiBuilder::add_struct(Type* type)
 
     smx_rtti_field field;
     field.flags = 0;
-    field.name = names_->add(strings_, arg->name);
+    field.name = names_->add(gAtoms, arg->name);
     field.type_id = to_typeid(encoding);
     fields_->at(classdef.first_field + i) = field;
   }
@@ -1041,7 +1038,7 @@ RttiBuilder::add_enum(Type* type)
 
   smx_rtti_enum entry;
   memset(&entry, 0, sizeof(entry));
-  entry.name = names_->add(strings_, type->name());
+  entry.name = names_->add(gAtoms, type->name());
   enums_->add(entry);
   return index;
 }
@@ -1063,7 +1060,7 @@ RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
   uint32_t signature = type_pool_.add(bytes);
 
   smx_rtti_typedef& def = typedefs_->at(index);
-  def.name = names_->add(strings_, type->name());
+  def.name = names_->add(gAtoms, type->name());
   def.type_id = MakeTypeId(signature, kTypeId_Complex);
   return index;
 }
@@ -1090,7 +1087,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
     encode_signature_into(bytes, iter);
 
   smx_rtti_typeset& entry = typesets_->at(index);
-  entry.name = names_->add(strings_, type->name());
+  entry.name = names_->add(gAtoms, type->name());
   entry.signature = type_pool_.add(bytes);
   return index;
 }
@@ -1234,7 +1231,6 @@ typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
 static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
 {
-  StringPool pool;
   SmxBuilder builder;
   RefPtr<SmxNativeSection> natives = new SmxNativeSection(".natives");
   RefPtr<SmxPublicSection> publics = new SmxPublicSection(".publics");
@@ -1243,7 +1239,7 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
   RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
   RefPtr<SmxNameTable> names = new SmxNameTable(".names");
 
-  RttiBuilder rtti(pool, names);
+  RttiBuilder rtti(names);
 
   Vector<symbol *> nativeList;
   Vector<function_entry> functions;
@@ -1270,11 +1266,11 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
         function_entry entry;
         entry.sym = sym;
         if (sym->usage & uPUBLIC) {
-          entry.name = sym->name;
+          entry.name = sym->name();
         } else {
           // Create a private name.
           char private_name[sNAMEMAX*3 + 1];
-          snprintf(private_name, sizeof(private_name), ".%d.%s", sym->addr(), sym->name);
+          snprintf(private_name, sizeof(private_name), ".%d.%s", sym->addr(), sym->name());
 
           entry.name = private_name;
         }
@@ -1286,7 +1282,7 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
       if ((sym->usage & uPUBLIC)!=0 && (sym->usage & (uREAD | uWRITTEN))!=0) {
         sp_file_pubvars_t &pubvar = pubvars->add();
         pubvar.address = sym->addr();
-        pubvar.name = names->add(pool, sym->name);
+        pubvar.name = names->add(sym->nameAtom());
       }
     }
   }
@@ -1303,7 +1299,7 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
 
     sp_file_publics_t &pubfunc = publics->add();
     pubfunc.address = sym->addr();
-    pubfunc.name = names->add(pool, f.name.chars());
+    pubfunc.name = names->add(gAtoms, f.name.chars());
 
     sym->funcid = (uint32_t(i) << 1) | 1;
 
@@ -1319,10 +1315,10 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
     sp_file_natives_t &entry = natives->add();
 
     char testalias[sNAMEMAX + 1];
-    if (lookup_alias(testalias, sym->name))
-      entry.name = names->add(pool, "@");
+    if (lookup_alias(testalias, sym->name()))
+      entry.name = names->add(gAtoms, "@");
     else
-      entry.name = names->add(pool, sym->name);
+      entry.name = names->add(sym->nameAtom());
 
     rtti.add_native(sym);
   }

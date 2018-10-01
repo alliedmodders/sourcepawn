@@ -682,7 +682,7 @@ void ffcall(symbol *sym,const char *label,int numargs)
   assert(sym!=NULL);
   assert(sym->ident==iFUNCTN);
   if (sc_asmfile)
-    funcdisplayname(symname,sym->name);
+    funcdisplayname(symname,sym->name());
   if ((sym->usage & uNATIVE)!=0) {
     /* reserve a SYSREQ id if called for the first time */
     assert(label==NULL);
@@ -690,7 +690,7 @@ void ffcall(symbol *sym,const char *label,int numargs)
     if (sc_status==statWRITE && (sym->usage & uREAD)==0 && sym->addr()>=0)
       sym->setAddr(ntv_funcid++);
     /* Look for an alias */
-    if (lookup_alias(aliasname, sym->name)) {
+    if (lookup_alias(aliasname, sym->name())) {
       symbol *asym = findglb(aliasname);
       if (asym && asym->ident==iFUNCTN && ((sym->usage & uNATIVE) != 0)) {
         sym = asym;
@@ -710,6 +710,7 @@ void ffcall(symbol *sym,const char *label,int numargs)
     stgwrite("\n"); /* write on a separate line, to mark a sequence point for the peephole optimizer */
     code_idx+=opcodes(1)+opargs(2);
   } else {
+    const char* symname = sym->name();
     pushval(numargs);
     /* normal function */
     stgwrite("\tcall ");
@@ -717,10 +718,9 @@ void ffcall(symbol *sym,const char *label,int numargs)
       stgwrite("l.");
       stgwrite(label);
     } else {
-      stgwrite(sym->name);
+      stgwrite(symname);
     } /* if */
-    if (sc_asmfile
-        && (label!=NULL || (!isalpha(sym->name[0]) && sym->name[0]!='_'  && sym->name[0]!=sc_ctrlchar)))
+    if (sc_asmfile && (label!=NULL || (!isalpha(symname[0]) && symname[0]!='_'  && symname[0]!=sc_ctrlchar)))
     {
       stgwrite("\t; ");
       stgwrite(symname);
@@ -1313,7 +1313,7 @@ void load_glbfn(symbol *sym)
   assert(sym->ident == iFUNCTN);
   assert(!(sym->usage & uNATIVE));
   stgwrite("\tldgfn.pri ");
-  stgwrite(sym->name);
+  stgwrite(sym->name());
   stgwrite("\n");
   code_idx += opcodes(1) + opargs(1);
 

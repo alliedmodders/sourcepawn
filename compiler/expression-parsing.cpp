@@ -191,14 +191,14 @@ BaseExpressionParser::parse_sizeof()
         subsym=finddepend(subsym);
     } /* for */
     if (level>sym->dim.array.level+1) {
-      error(28,sym->name);  /* invalid subscript */
+      error(28,sym->name());  /* invalid subscript */
     } else if (level==sym->dim.array.level+1) {
       result = (idxsym!=NULL && idxsym->dim.array.length>0) ? idxsym->dim.array.length : 1;
     } else {
       result = array_levelsize(sym,level);
     }
     if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
-      error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
+      error(163,sym->name());          /* indeterminate array size in "sizeof" expression */
   } /* if */
   while (paranthese--)
     needtoken(')');
@@ -257,14 +257,14 @@ BaseExpressionParser::parse_cellsof()
         subsym=finddepend(subsym);
     } /* for */
     if (level>sym->dim.array.level+1) {
-      error(28,sym->name);  /* invalid subscript */
+      error(28,sym->name());  /* invalid subscript */
     } else if (level==sym->dim.array.level+1) {
       result = (idxsym!=NULL && idxsym->dim.array.length>0) ? idxsym->dim.array.length : 1;
     } else {
       result = array_levelsize(sym,level);
     }
     if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
-      error(163,sym->name);          /* indeterminate array size in "sizeof" expression */
+      error(163,sym->name());          /* indeterminate array size in "sizeof" expression */
   } /* if */
 
   while (paranthese--)
@@ -326,7 +326,7 @@ BaseExpressionParser::parse_tagof()
         subsym=finddepend(subsym);
     } /* for */
     if (level>sym->dim.array.level+1)
-      error(28,sym->name);  /* invalid subscript */
+      error(28,sym->name());  /* invalid subscript */
     else if (level==sym->dim.array.level+1 && idxsym!=NULL)
       tag= idxsym->x.tags.index;
   } /* if */
