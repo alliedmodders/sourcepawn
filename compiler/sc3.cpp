@@ -2959,8 +2959,8 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
       totalsize++;                    /* add "call" opcode */
     totalsize+=sCallStackUsage;
     if (curfunc != NULL) {
-      if (curfunc->x.stacksize<totalsize)
-        curfunc->x.stacksize=totalsize;
+      if (curfunc->function()->stacksize<totalsize)
+        curfunc->function()->stacksize=totalsize;
     } else {
       error(10);
     }

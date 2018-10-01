@@ -2957,6 +2957,21 @@ symbol *finddepend(const symbol *parent)
   return sym;
 }
 
+FunctionData::FunctionData()
+ : stacksize(0),
+   funcid(0),
+   dbgstrs(nullptr)
+{
+}
+
+FunctionData::~FunctionData()
+{
+  if (dbgstrs) {
+    delete_stringtable(dbgstrs);
+    free(dbgstrs);
+  }
+}
+
 symbol::symbol()
  : symbol("", 0, 0, 0, 0, 0)
 {
@@ -2976,13 +2991,13 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    lnumber(fline),
    documentation(nullptr),
    methodmap(nullptr),
-   funcid(0),
-   dbgstrs(nullptr),
    addr_(symaddr),
    name_(nullptr)
 {
   if (symname)
     name_ = gAtoms.add(symname);
+  if (symident == iFUNCTN)
+    data_.assign(new FunctionData);
   memset(&x, 0, sizeof(x));
   memset(&dim, 0, sizeof(dim));
 }
@@ -3012,10 +3027,6 @@ symbol::~symbol()
   } /* if */
   if (documentation!=NULL)
     free(documentation);
-  if (dbgstrs) {
-    delete_stringtable(dbgstrs);
-    free(dbgstrs);
-  }
 }
 
 /*  addsym

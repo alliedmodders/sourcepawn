@@ -273,12 +273,12 @@ static void do_ldgfen(CellWriter* writer, char *params, cell opcode)
   symbol *sym = extract_call_target(params);
   assert(sym->ident == iFUNCTN);
   assert(!(sym->usage & uNATIVE));
-  assert((sym->funcid & 1) == 1);
+  assert((sym->function()->funcid & 1) == 1);
 
   // Note: we emit const.pri for backward compatibility.
   assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
   writer->append(sp::OP_CONST_PRI);
-  writer->append(sym->funcid);
+  writer->append(sym->function()->funcid);
 }
 
 static void do_call(CellWriter* writer, char *params, cell opcode)
@@ -895,14 +895,14 @@ RttiBuilder::add_method(symbol* sym)
   method.pcode_end = sym->codeaddr;
   method.signature = encode_signature(sym);
 
-  if (!sym->dbgstrs)
+  if (!sym->function()->dbgstrs)
     return;
 
   smx_rtti_debug_method debug;
   debug.method_index = index;
   debug.first_local = dbg_locals_->count();
 
-  for (stringlist* iter = sym->dbgstrs; iter; iter = iter->next) {
+  for (stringlist* iter = sym->function()->dbgstrs; iter; iter = iter->next) {
     if (iter->line[0] == '\0')
       continue;
 
@@ -1301,7 +1301,7 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
     pubfunc.address = sym->addr();
     pubfunc.name = names->add(gAtoms, f.name.chars());
 
-    sym->funcid = (uint32_t(i) << 1) | 1;
+    sym->function()->funcid = (uint32_t(i) << 1) | 1;
 
     rtti.add_method(sym);
   }

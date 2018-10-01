@@ -43,6 +43,7 @@
   #include <setjmp.h>
 #endif
 #include <sp_vm_types.h>
+#include <amtl/am-uniqueptr.h>
 #include <amtl/am-vector.h>
 #include "shared/string-pool.h"
 #include "osdefs.h"
@@ -101,6 +102,43 @@ typedef struct s_constvalue {
 struct methodmap_t;
 struct stringlist;
 
+/*  Possible entries for "ident". These are used in the "symbol", "value"
+ *  and arginfo structures. Not every constant is valid for every use.
+ *  In an argument list, the list is terminated with a "zero" ident; labels
+ *  cannot be passed as function arguments, so the value 0 is overloaded.
+ */
+#define iLABEL      0
+#define iVARIABLE   1   /* cell that has an address and that can be fetched directly (lvalue) */
+#define iREFERENCE  2   /* iVARIABLE, but must be dereferenced */
+#define iARRAY      3
+#define iREFARRAY   4   /* an array passed by reference (i.e. a pointer) */
+#define iARRAYCELL  5   /* array element, cell that must be fetched indirectly */
+#define iARRAYCHAR  6   /* array element, character from cell from array */
+#define iEXPRESSION 7   /* expression result, has no address (rvalue) */
+#define iCONSTEXPR  8   /* constant expression (or constant symbol) */
+#define iFUNCTN     9
+#define iVARARGS    11  /* function specified ... as argument(s) */
+#define iACCESSOR   13  /* property accessor via a methodmap_method_t */
+#define iMETHODMAP  14  /* symbol defining a methodmap */
+
+class FunctionData;
+class SymbolData {
+ public:
+  virtual ~SymbolData() {}
+  virtual FunctionData* asFunction() { return nullptr; }
+};
+
+class FunctionData : public SymbolData {
+ public:
+  FunctionData();
+  ~FunctionData();
+  virtual FunctionData* asFunction() { return this; }
+
+  long stacksize;       /* label: how many local variables are declared */
+  int funcid;           /* set for functions during codegen */
+  stringlist *dbgstrs;  /* debug strings - functions only */
+};
+
 /*  Symbol table format
  *
  *  The symbol name read from the input file is stored in "name", the
@@ -131,7 +169,6 @@ struct symbol {
       int index;        /* array & enum: tag of array indices or the enum item */
       int field;        /* enumeration fields, where a size is attached to the field */
     } tags;             /* extra tags */
-    long stacksize;     /* normal/public function: stack requirements */
   } x;                  /* 'x' for 'extra' */
   union {
     arginfo *arglist;   /* types of all parameters for functions */
@@ -147,8 +184,6 @@ struct symbol {
   ke::Vector<symbol*> refers; /* referrer list, functions that "use" this symbol */
   char *documentation;  /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
-  int funcid;           /* set for functions during codegen */
-  stringlist *dbgstrs;  /* debug strings - functions only */
 
   int addr() const {
     return addr_;
@@ -165,30 +200,16 @@ struct symbol {
   void setName(sp::Atom* name) {
     name_ = name;
   }
+  FunctionData* function() const {
+    assert(ident == iFUNCTN);
+    return data_->asFunction();
+  }
 
  private:
   cell addr_;            /* address or offset (or value for constant, index for native function) */
   sp::Atom* name_;
+  ke::UniquePtr<SymbolData> data_;
 };
-
-/*  Possible entries for "ident". These are used in the "symbol", "value"
- *  and arginfo structures. Not every constant is valid for every use.
- *  In an argument list, the list is terminated with a "zero" ident; labels
- *  cannot be passed as function arguments, so the value 0 is overloaded.
- */
-#define iLABEL      0
-#define iVARIABLE   1   /* cell that has an address and that can be fetched directly (lvalue) */
-#define iREFERENCE  2   /* iVARIABLE, but must be dereferenced */
-#define iARRAY      3
-#define iREFARRAY   4   /* an array passed by reference (i.e. a pointer) */
-#define iARRAYCELL  5   /* array element, cell that must be fetched indirectly */
-#define iARRAYCHAR  6   /* array element, character from cell from array */
-#define iEXPRESSION 7   /* expression result, has no address (rvalue) */
-#define iCONSTEXPR  8   /* constant expression (or constant symbol) */
-#define iFUNCTN     9
-#define iVARARGS    11  /* function specified ... as argument(s) */
-#define iACCESSOR   13  /* property accessor via a methodmap_method_t */
-#define iMETHODMAP  14  /* symbol defining a methodmap */
 
 /*  Possible entries for "usage"
  *
