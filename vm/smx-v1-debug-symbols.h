@@ -12,6 +12,7 @@
 
 #include <sp_vm_debug_api.h>
 #include <smx/smx-legacy-debuginfo.h>
+#include <smx/smx-typeinfo.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-autoptr.h>
 
@@ -25,8 +26,9 @@ namespace sp {
     : public ISymbolType
   {
   public:
-    SmxV1SymbolType(const SmxV1Image* const image, const sp_fdbg_symbol_t* sym);
-    SmxV1SymbolType(const SmxV1Image* const image, const sp_u_fdbg_symbol_t* sym);
+    SmxV1SymbolType(const SmxV1Image* image, const smx_rtti_debug_var* sym);
+    SmxV1SymbolType(const SmxV1Image* image, const sp_fdbg_symbol_t* sym);
+    SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym);
   public:
     virtual int ApiVersion() {
       return SOURCEPAWN_DEBUG_TYPE_VERSION;
@@ -41,7 +43,7 @@ namespace sp {
       return type_ == Boolean;
     }
     virtual bool isEnum() {
-      return false;
+      return type_ == Enum;
     }
     virtual bool isString() {
       return type_ == String;
@@ -60,14 +62,15 @@ namespace sp {
 
   private:
     template <typename SymbolType, typename DimType>
-    void guessLegacyType(const SmxV1Image* const image, const SymbolType* sym);
+    void guessLegacyType(const SmxV1Image* image, const SymbolType* sym);
 
   private:
     enum BaseType {
       Integer,
       Float,
       Boolean,
-      String
+      String,
+      Enum
     };
     BaseType type_;
     uint32_t dimcount_;
@@ -78,8 +81,9 @@ namespace sp {
     : public IDebugSymbol
   {
   public:
-    SmxV1DebugSymbol(const SmxV1Image* const image, const sp_fdbg_symbol_t* sym);
-    SmxV1DebugSymbol(const SmxV1Image* const image, const sp_u_fdbg_symbol_t* sym);
+    SmxV1DebugSymbol(const SmxV1Image* image, const smx_rtti_debug_var* sym);
+    SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol_t* sym);
+    SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym);
   public:
     virtual ~SmxV1DebugSymbol() {}
     virtual int ApiVersion() {
@@ -113,11 +117,12 @@ namespace sp {
     SmxV1SymbolType type_;
   };
 
+  // .dbg.globals and .dbg.locals iteration
   class SmxV1SymbolIterator
     : public IDebugSymbolIterator
   {
   public:
-    SmxV1SymbolIterator(const SmxV1Image* const image, ucell_t address);
+    SmxV1SymbolIterator(SmxV1Image* image, ucell_t scope_addr);
 
     // IDebugSymbolIterator
   public:
@@ -126,20 +131,54 @@ namespace sp {
     virtual void Reset();
 
   private:
+    enum RttiIteratorState {
+      Globals,
+      Locals,
+      End
+    };
+    bool validateScopeOfRow();
+    bool findFirstLocal();
+
+  private:
+    SmxV1Image* image_;
+    ucell_t scope_address_;
+    ke::Vector<ke::AutoPtr<SmxV1DebugSymbol>> symbols_;
+
+    RttiIteratorState state_;
+    const smx_rtti_table_header* rtti_section_;
+    size_t rtti_row_index_;
+    size_t rtti_end_index_;
+  };
+
+  // Legacy .dbg.symbols iteration
+  class SmxV1LegacySymbolIterator
+    : public IDebugSymbolIterator
+  {
+  public:
+    SmxV1LegacySymbolIterator(SmxV1Image* image, ucell_t scope_addr);
+
+    // IDebugSymbolIterator
+  public:
+    virtual bool Done();
+    virtual IDebugSymbol* Next();
+    virtual void Reset();
+    
+  private:
     template <typename SymbolType, typename DimType>
     IDebugSymbol* nextSymbol();
     template <typename SymbolType, typename DimType>
     void advanceCursor();
     template <typename SymbolType, typename DimType>
-    void skipFunctions();
+    void findFirstSymbol();
 
   private:
-    const SmxV1Image* const image_;
-    ucell_t address_;
+    SmxV1Image* image_;
+    ucell_t scope_address_;
+    ke::Vector<ke::AutoPtr<SmxV1DebugSymbol>> symbols_;
+
     const uint8_t* start_;
     const uint8_t* cursor_;
     const uint8_t* cursor_end_;
-    ke::Vector<ke::AutoPtr<SmxV1DebugSymbol>> symbols_;
   };
 }
 

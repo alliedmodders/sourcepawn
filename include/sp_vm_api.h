@@ -358,10 +358,10 @@ class IPluginDebugInfo
      * the given address.
      * The returned iterator must be freed by DestroySymbolIterator().
      *
-     * @param addr   Code address offset.
-     * @return       Debug symbol iterator.
+     * @param scope_addr   Code address offset.
+     * @return             Debug symbol iterator.
      */
-    virtual IDebugSymbolIterator* CreateSymbolIterator(ucell_t addr) = 0;
+    virtual IDebugSymbolIterator* CreateSymbolIterator(ucell_t scope_addr) = 0;
 
     /**
      * @brief Frees an IDebugSymbolIterator object.

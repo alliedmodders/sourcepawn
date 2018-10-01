@@ -27,7 +27,10 @@ SmxV1Image::SmxV1Image(FILE* fp)
    debug_syms_(nullptr),
    debug_syms_unpacked_(nullptr),
    rtti_data_(nullptr),
-   rtti_methods_(nullptr)
+   rtti_methods_(nullptr),
+   rtti_dbg_globals_(nullptr),
+   rtti_dbg_methods_(nullptr),
+   rtti_dbg_locals_(nullptr)
 {
 }
 
@@ -479,14 +482,17 @@ SmxV1Image::validateDebugInfo()
     if (const Section* globals = findSection(".dbg.globals")) {
       if (!validateRttiHeader(globals))
         return error("invalid debug globals table");
+      rtti_dbg_globals_ = findRttiSection(".dbg.globals");
     }
     if (const Section* locals = findSection(".dbg.locals")) {
       if (!validateRttiHeader(locals))
         return error("invalid debug locals table");
+      rtti_dbg_locals_ = findRttiSection(".dbg.locals");
     }
     if (const Section* methods = findSection(".dbg.methods")) {
       if (!validateRttiHeader(methods))
         return error("invalid debug methods table");
+      rtti_dbg_methods_ = findRttiSection(".dbg.methods");
     }
   }
 
@@ -930,7 +936,9 @@ SmxV1Image::GetTagName(uint32_t tag) const
 }
 
 SourcePawn::IDebugSymbolIterator*
-SmxV1Image::SymbolIterator(ucell_t addr) const
+SmxV1Image::SymbolIterator(ucell_t addr)
 {
+  if (debug_symbols_section_)
+    return new SmxV1LegacySymbolIterator(this, addr);
   return new SmxV1SymbolIterator(this, addr);
 }

@@ -29,6 +29,7 @@ class SmxV1Image
     public LegacyImage
 {
  friend SmxV1SymbolIterator;
+ friend SmxV1LegacySymbolIterator;
  public:
   SmxV1Image(FILE* fp);
 
@@ -64,7 +65,7 @@ class SmxV1Image
   bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
-  SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) const override;
+  SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) override;
   const char* GetTagName(uint32_t tagid) const;
   const char* GetDebugName(uint32_t nameoffs) const;
 
@@ -242,6 +243,9 @@ class SmxV1Image
 
   const Section* rtti_data_;
   const smx_rtti_table_header* rtti_methods_;
+  const smx_rtti_table_header* rtti_dbg_globals_;
+  const smx_rtti_table_header* rtti_dbg_methods_;
+  const smx_rtti_table_header* rtti_dbg_locals_;
 };
 
 } // namespace sp
