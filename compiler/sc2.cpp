@@ -2962,6 +2962,7 @@ FunctionData::FunctionData()
    funcid(0),
    dbgstrs(nullptr)
 {
+  resizeArgs(0);
 }
 
 FunctionData::~FunctionData()
@@ -2970,6 +2971,16 @@ FunctionData::~FunctionData()
     delete_stringtable(dbgstrs);
     free(dbgstrs);
   }
+}
+
+void
+FunctionData::resizeArgs(size_t nargs)
+{
+  arginfo null_arg;
+  memset(&null_arg, 0, sizeof(null_arg));
+
+  args.resize(nargs);
+  args.append(null_arg);
 }
 
 symbol::symbol()
@@ -3013,12 +3024,10 @@ symbol::~symbol()
   if (ident==iFUNCTN) {
     /* run through the argument list; "default array" arguments
      * must be freed explicitly; the tag list must also be freed */
-    assert(dim.arglist!=NULL);
-    for (arginfo* arg=dim.arglist; arg->ident!=0; arg++) {
+    for (arginfo* arg=&function()->args[0]; arg->ident!=0; arg++) {
       if (arg->ident==iREFARRAY && arg->hasdefault)
         free(arg->defvalue.array.data);
     } /* for */
-    free(dim.arglist);
   } else if (ident==iCONSTEXPR && (usage & uENUMROOT)==uENUMROOT) {
     /* free the constant list of an enum root */
     assert(dim.enumlist!=NULL);

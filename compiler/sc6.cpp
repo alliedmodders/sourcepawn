@@ -990,7 +990,7 @@ RttiBuilder::encode_signature(symbol* sym)
 
   uint32_t argc = 0;
   bool is_variadic = false;
-  for (arginfo* arg = sym->dim.arglist; arg->ident; arg++) {
+  for (arginfo* arg = &sym->function()->args[0]; arg->ident; arg++) {
     if (arg->ident == iVARARGS)
       is_variadic = true;
     argc++;
@@ -1011,7 +1011,7 @@ RttiBuilder::encode_signature(symbol* sym)
     encode_tag_into(bytes, sym->tag);
   }
 
-  for (arginfo* arg = sym->dim.arglist; arg->ident; arg++) {
+  for (arginfo* arg = &sym->function()->args[0]; arg->ident; arg++) {
     if (arg->ident == iREFERENCE)
       bytes.append(cb::kByRef);
     variable_type_t info = {

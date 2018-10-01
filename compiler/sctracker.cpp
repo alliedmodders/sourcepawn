@@ -158,17 +158,20 @@ funcenum_t *funcenum_for_symbol(symbol *sym)
   ft.usage = uPUBLIC & (sym->usage & uRETVALUE);
   ft.argcount = 0;
   ft.ommittable = FALSE;
-  for (arginfo *arg = sym->dim.arglist; arg->ident; arg++) {
+  for (arginfo& arg : sym->function()->args) {
+    if (!arg.ident)
+      break;
+
     funcarg_t *dest = &ft.args[ft.argcount++];
 
     dest->tagcount = 1;
-    dest->tags[0] = arg->tag;
+    dest->tags[0] = arg.tag;
 
-    dest->dimcount = arg->numdim;
-    memcpy(dest->dims, arg->dim, arg->numdim * sizeof(int));
+    dest->dimcount = arg.numdim;
+    memcpy(dest->dims, arg.dim, arg.numdim * sizeof(int));
 
-    dest->ident = arg->ident;
-    dest->fconst = !!(arg->usage & uCONST);
+    dest->ident = arg.ident;
+    dest->fconst = !!(arg.usage & uCONST);
     dest->ommittable = FALSE;
   }
 

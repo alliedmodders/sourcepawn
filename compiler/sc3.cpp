@@ -2588,7 +2588,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
   args.prepare();
 
   /* run through the arguments */
-  arg=sym->dim.arglist;
+  arg=&sym->function()->args[0];
   assert(arg!=NULL);
   stgmark(sSTARTREORDER);
   memset(arglist,ARG_UNHANDLED,sizeof arglist);

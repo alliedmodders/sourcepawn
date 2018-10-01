@@ -92,10 +92,10 @@ typedef struct methodmap_method_s
     assert(getter || setter);
     if (getter)
       return getter->tag;
-    arginfo *thisp = &setter->dim.arglist[0];
+    arginfo *thisp = &setter->function()->args[0];
     if (thisp->ident == 0)
       return pc_tag_void;
-    arginfo *valp = &setter->dim.arglist[1];
+    arginfo *valp = &setter->function()->args[1];
     if (valp->ident != iVARIABLE)
       return pc_tag_void;
     return valp->tag;

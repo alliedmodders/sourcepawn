@@ -134,9 +134,12 @@ class FunctionData : public SymbolData {
   ~FunctionData();
   virtual FunctionData* asFunction() { return this; }
 
+  void resizeArgs(size_t nargs);
+
   long stacksize;       /* label: how many local variables are declared */
   int funcid;           /* set for functions during codegen */
   stringlist *dbgstrs;  /* debug strings - functions only */
+  ke::Vector<arginfo> args;
 };
 
 /*  Symbol table format
@@ -171,7 +174,6 @@ struct symbol {
     } tags;             /* extra tags */
   } x;                  /* 'x' for 'extra' */
   union {
-    arginfo *arglist;   /* types of all parameters for functions */
     constvalue *enumlist;/* list of names for the "root" of an enumeration */
     struct {
       cell length;      /* arrays: length (size) */
