@@ -515,9 +515,9 @@ stringlist *insert_dbgsymbol(symbol *sym)
     } /* if */
 
     if (curfunc) {
-      if (!curfunc->dbgstrs)
-        curfunc->dbgstrs = (stringlist*)calloc(1, sizeof(stringlist));
-      return insert_string(curfunc->dbgstrs, string);
+      if (!curfunc->function()->dbgstrs)
+        curfunc->function()->dbgstrs = (stringlist*)calloc(1, sizeof(stringlist));
+      return insert_string(curfunc->function()->dbgstrs, string);
     }
     return insert_string(&dbgstrings, string);
   } /* if */

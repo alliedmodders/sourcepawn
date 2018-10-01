@@ -1756,8 +1756,8 @@ static void declloc(int tokid)
       markstack(MEMUSE_STATIC, type->size);
       assert(curfunc!=NULL);
       assert((curfunc->usage & uNATIVE)==0);
-      if (curfunc->x.stacksize<declared+1)
-        curfunc->x.stacksize=declared+1;  /* +1 for PROC opcode */
+      if (curfunc->function()->stacksize<declared+1)
+        curfunc->function()->stacksize=declared+1;  /* +1 for PROC opcode */
     } else if (type->ident == iREFARRAY) {
       // Generate the symbol so we can access its stack address during initialization.
       declared+=1; /* one cell for address */
@@ -1846,8 +1846,8 @@ static void declloc(int tokid)
       markheap(MEMUSE_DYNAMIC, 0);
       markstack(MEMUSE_STATIC, 1);
       assert(curfunc != NULL && ((curfunc->usage & uNATIVE) == 0));
-      if (curfunc->x.stacksize<declared+1)
-        curfunc->x.stacksize=declared+1;  /* +1 for PROC opcode */
+      if (curfunc->function()->stacksize<declared+1)
+        curfunc->function()->stacksize=declared+1;  /* +1 for PROC opcode */
     } /* if */
     /* now that we have reserved memory for the variable, we can proceed
      * to initialize it */
@@ -4081,7 +4081,7 @@ symbol *fetchfunc(char *name)
     /* assume no arguments */
     sym->dim.arglist=(arginfo*)calloc(1, sizeof(arginfo));
     /* set the required stack size to zero (only for non-native functions) */
-    sym->x.stacksize=1;         /* 1 for PROC opcode */
+    sym->function()->stacksize=1;         /* 1 for PROC opcode */
   } /* if */
   if (pc_deprecate!=NULL) {
     assert(sym!=NULL);
