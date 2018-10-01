@@ -127,7 +127,6 @@ struct symbol {
   int compound;         /* compound level (braces nesting level) */
   int tag;              /* tagname id */
   union {
-    int declared;       /* label: how many local variables are declared */
     struct {
       int index;        /* array & enum: tag of array indices or the enum item */
       int field;        /* enumeration fields, where a size is attached to the field */
