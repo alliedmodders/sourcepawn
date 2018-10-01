@@ -132,7 +132,6 @@ struct symbol {
       int index;        /* array & enum: tag of array indices or the enum item */
       int field;        /* enumeration fields, where a size is attached to the field */
     } tags;             /* extra tags */
-    constvalue *lib;    /* native function: library it is part of */
     long stacksize;     /* normal/public function: stack requirements */
   } x;                  /* 'x' for 'extra' */
   union {
@@ -877,7 +876,6 @@ extern cell *litq;          /* the literal queue */
 extern unsigned char pline[]; /* the line read from the input file */
 extern const unsigned char *lptr;/* points to the current position in "pline" */
 extern constvalue libname_tab;/* library table (#pragma library "..." syntax) */
-extern constvalue *curlibrary;/* current library */
 extern int pc_addlibtable;  /* is the library table added to the AMX file? */
 extern symbol *curfunc;     /* pointer to current function */
 extern char *inpfname;      /* name of the file currently read from */

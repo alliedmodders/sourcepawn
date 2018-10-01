@@ -171,7 +171,6 @@ int plungequalifiedfile(char *name)
   }
   PUSHSTK_P(inpf);
   PUSHSTK_P(inpfname);          /* pointer to current file name */
-  PUSHSTK_P(curlibrary);
   PUSHSTK_I(iflevel);
   assert(!SKIPPING);
   assert(skiplevel==iflevel);   /* these two are always the same when "parsing" */
@@ -337,7 +336,6 @@ static void readline(unsigned char *line)
       iflevel=(short)POPSTK_I();
       skiplevel=iflevel;        /* this condition held before including the file */
       assert(!SKIPPING);        /* idem ditto */
-      curlibrary=(constvalue *)POPSTK_P();
       free(inpfname);           /* return memory allocated for the include file name */
       inpfname=(char *)POPSTK_P();
       inpf=POPSTK_P();

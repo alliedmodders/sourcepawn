@@ -695,7 +695,6 @@ static void initglobals(void)
 
   pline[0]='\0';        /* the line read from the input file */
   lptr=NULL;            /* points to the current position in "pline" */
-  curlibrary=NULL;      /* current library */
   inpf_org=NULL;        /* main source file */
 
   wqptr=wq;             /* initialize while queue pointer */
@@ -4081,8 +4080,6 @@ symbol *fetchfunc(char *name)
     assert(sym!=NULL);          /* fatal error 103 must be given on error */
     /* assume no arguments */
     sym->dim.arglist=(arginfo*)calloc(1, sizeof(arginfo));
-    /* set library ID to NULL (only for native functions) */
-    sym->x.lib=NULL;
     /* set the required stack size to zero (only for non-native functions) */
     sym->x.stacksize=1;         /* 1 for PROC opcode */
   } /* if */
@@ -4406,7 +4403,6 @@ static symbol *funcstub(int tokid, declinfo_t *decl, const int *thistag)
 
   if (fnative) {
     sym->usage=(char)(uNATIVE | uRETVALUE | uDEFINE | (sym->usage & uPROTOTYPED));
-    sym->x.lib=curlibrary;
   } else if (fpublic) {
     sym->usage|=uPUBLIC;
   } /* if */
@@ -5169,8 +5165,6 @@ static void destructsymbols(symbol *root,int level)
         ffcall(opsym,NULL,2);
         if (sc_status!=statSKIP)
           markusage(opsym,uREAD);   /* do not mark as "used" when this call itself is skipped */
-        if ((opsym->usage & uNATIVE)!=0 && opsym->x.lib!=NULL)
-          opsym->x.lib->value += 1; /* increment "usage count" of the library */
       } /* if */
     } /* if */
     sym=sym->next;
