@@ -3313,17 +3313,19 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
     return FALSE;
   }
 
+  auto& arglist = target->function()->args;
+
   if (getter) {
     method->getter = target;
 
     // Cannot have extra arguments.
-    if (target->dim.arglist[0].ident && target->dim.arglist[1].ident)
+    if (arglist[0].ident && arglist[1].ident)
       error(127);
   } else {
     method->setter = target;
 
     // Must have one extra argument taking the return type.
-    arginfo *arg = &target->dim.arglist[1];
+    arginfo *arg = &arglist[1];
     if (arg->ident != iVARIABLE ||
         arg->hasdefault ||
         arg->tag != type->tag)
@@ -3331,7 +3333,7 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
       error(150, pc_tagname(type->tag));
       return FALSE;
     }
-    if (target->dim.arglist[2].ident) {
+    if (arglist[2].ident) {
       error(150, pc_tagname(type->tag));
       return FALSE;
     }
@@ -4078,8 +4080,6 @@ symbol *fetchfunc(char *name)
     /* don't set the "uDEFINE" flag; it may be a prototype */
     sym=addsym(name,code_idx,iFUNCTN,sGLOBAL,0,0);
     assert(sym!=NULL);          /* fatal error 103 must be given on error */
-    /* assume no arguments */
-    sym->dim.arglist=(arginfo*)calloc(1, sizeof(arginfo));
     /* set the required stack size to zero (only for non-native functions) */
     sym->function()->stacksize=1;         /* 1 for PROC opcode */
   } /* if */
@@ -4181,9 +4181,9 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
   if (opertok==0)
     return TRUE;
 
-  assert(sym!=NULL && sym->ident==iFUNCTN && sym->dim.arglist!=NULL);
+  assert(sym!=NULL && sym->ident==iFUNCTN);
   /* count arguments and save (first two) tags */
-  while (arg=&sym->dim.arglist[count], arg->ident!=0) {
+  while (arg=&sym->function()->args[count], arg->ident!=0) {
     if (count<2) {
       tags[count]=arg->tag;
     } /* if */
@@ -4725,30 +4725,30 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
   int argcnt,oldargcnt;
   arginfo arg;
 
+  ke::Vector<arginfo>& arglist = sym->function()->args;
+
   /* if the function is already defined earlier, get the number of arguments
    * of the existing definition
    */
   oldargcnt=0;
   if ((sym->usage & uPROTOTYPED)!=0)
-    while (sym->dim.arglist[oldargcnt].ident!=0)
+    while (arglist[oldargcnt].ident!=0)
       oldargcnt++;
   argcnt=0;                             /* zero aruments up to now */
 
   if (thistag && *thistag != -1) {
     arginfo *argptr;
     if ((sym->usage & uPROTOTYPED) == 0) {
-      // Allocate space for a new argument, then terminate.
-      sym->dim.arglist = (arginfo *)realloc(sym->dim.arglist, (argcnt + 2) * sizeof(arginfo));
-      memset(&sym->dim.arglist[argcnt + 1], 0, sizeof(arginfo));
+      // Push a copy of the terminal argument.
+      sym->function()->resizeArgs(argcnt + 1);
 
-      argptr = &sym->dim.arglist[argcnt];
-      memset(argptr, 0, sizeof(*argptr));
+      argptr = &arglist[argcnt];
       strcpy(argptr->name, "this");
       argptr->ident = iVARIABLE;
       argptr->tag = *thistag;
       argptr->usage = uCONST;
     } else {
-      argptr = &sym->dim.arglist[0];
+      argptr = &arglist[0];
     }
 
     symbol *sym = addvariable2(
@@ -4780,17 +4780,15 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       if (decl.type.ident == iVARARGS) {
         if ((sym->usage & uPROTOTYPED)==0) {
           /* redimension the argument list, add the entry iVARARGS */
-          sym->dim.arglist=(arginfo*)realloc(sym->dim.arglist,(argcnt+2)*sizeof(arginfo));
-          if (sym->dim.arglist==0)
-            error(FATAL_ERROR_OOM);                 /* insufficient memory */
-          memset(&sym->dim.arglist[argcnt+1],0,sizeof(arginfo));  /* keep the list terminated */
-          sym->dim.arglist[argcnt].ident=iVARARGS;
-          sym->dim.arglist[argcnt].hasdefault=FALSE;
-          sym->dim.arglist[argcnt].defvalue.val=0;
-          sym->dim.arglist[argcnt].defvalue_tag=0;
-          sym->dim.arglist[argcnt].tag = decl.type.tag;
+          sym->function()->resizeArgs(argcnt + 1);
+
+          arglist[argcnt].ident=iVARARGS;
+          arglist[argcnt].hasdefault=FALSE;
+          arglist[argcnt].defvalue.val=0;
+          arglist[argcnt].defvalue_tag=0;
+          arglist[argcnt].tag = decl.type.tag;
         } else {
-          if (argcnt>oldargcnt || sym->dim.arglist[argcnt].ident!=iVARARGS)
+          if (argcnt>oldargcnt || arglist[argcnt].ident!=iVARARGS)
             error(25);          /* function definition does not match prototype */
         } /* if */
         argcnt++;
@@ -4818,14 +4816,11 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
 
       if ((sym->usage & uPROTOTYPED)==0) {
         /* redimension the argument list, add the entry */
-        sym->dim.arglist=(arginfo*)realloc(sym->dim.arglist,(argcnt+2)*sizeof(arginfo));
-        if (sym->dim.arglist==0)
-          error(FATAL_ERROR_OOM);                 /* insufficient memory */
-        memset(&sym->dim.arglist[argcnt+1],0,sizeof(arginfo));  /* keep the list terminated */
-        sym->dim.arglist[argcnt]=arg;
+        sym->function()->resizeArgs(argcnt + 1);
+        arglist[argcnt]=arg;
       } else {
         /* check the argument with the earlier definition */
-        if (argcnt>oldargcnt || !argcompare(&sym->dim.arglist[argcnt],&arg))
+        if (argcnt>oldargcnt || !argcompare(&arglist[argcnt],&arg))
           error(181, arg.name);          /* function argument does not match prototype */
         /* may need to free default array argument and the tag list */
         if (arg.ident==iREFARRAY && arg.hasdefault)
@@ -6057,7 +6052,7 @@ static void doassert(void)
 static int is_variadic(symbol *sym)
 {
   assert(sym->ident==iFUNCTN);
-  arginfo *arg = sym->dim.arglist;
+  arginfo *arg = &sym->function()->args[0];
   while (arg->ident) {
     if (arg->ident == iVARARGS)
       return TRUE;
@@ -6166,8 +6161,7 @@ static void doreturn(void)
          *   base + (n+3)*sizeof(cell)     == hidden parameter with array address
          */
         assert(curfunc!=NULL);
-        assert(curfunc->dim.arglist!=NULL);
-        for (argcount=0; curfunc->dim.arglist[argcount].ident!=0; argcount++)
+        for (argcount=0; curfunc->function()->args[argcount].ident!=0; argcount++)
           /* nothing */;
         sub=addvariable2(curfunc->name(),(argcount+3)*sizeof(cell),iREFARRAY,sGLOBAL,
                          curfunc->tag,dim,numdim,idxtag,slength);
