@@ -8,14 +8,14 @@
 
 struct NameAndScope
 {
-  const char *name;
+  sp::Atom* name;
   int fnumber;
   int *cmptag;
   mutable symbol *matched;
   mutable int count;
 
   NameAndScope(const char *name, int fnumber, int *cmptag)
-   : name(name),
+   : name(gAtoms.add(name)),
      fnumber(fnumber),
      cmptag(cmptag),
      matched(nullptr),
@@ -33,10 +33,10 @@ struct SymbolHashPolicy
   // so, we can't be that accurate, since we might match the right symbol
   // very early.
   static uint32_t hash(const NameAndScope &key) {
-    return ke::HashCharSequence(key.name, strlen(key.name));
+    return ke::HashPointer(key.name);
   }
   static uint32_t hash(const symbol *s) {
-    return ke::HashCharSequence(s->name, strlen(s->name));
+    return ke::HashPointer(s->nameAtom());
   }
 
   static bool matches(const NameAndScope &key, symbol *sym) {
@@ -44,7 +44,7 @@ struct SymbolHashPolicy
       return false;
     if (sym->fnumber >= 0 && sym->fnumber != key.fnumber)
       return false;
-    if (strcmp(key.name, sym->name) != 0)
+    if (key.name != sym->nameAtom())
       return false;
     if (key.cmptag) {
       key.count++;

@@ -44,6 +44,7 @@
 #endif
 #include <sp_vm_types.h>
 #include <amtl/am-vector.h>
+#include "shared/string-pool.h"
 #include "osdefs.h"
 #include "amx.h"
 
@@ -118,8 +119,6 @@ struct symbol {
 
   symbol *next;
   symbol *parent;  /* hierarchical types */
-  char name[sNAMEMAX+1];
-  uint32_t hash;        /* value derived from name, for quicker searching */
   cell codeaddr;        /* address (in the code segment) where the symbol declaration starts */
   char vclass;          /* sLOCAL if "addr" refers to a local symbol */
   char ident;           /* see below for possible values */
@@ -159,9 +158,19 @@ struct symbol {
   void setAddr(int addr) {
     addr_ = addr;
   }
+  sp::Atom* nameAtom() const {
+    return name_;
+  }
+  const char* name() const {
+    return name_ ? name_->chars() : "";
+  }
+  void setName(sp::Atom* name) {
+    name_ = name;
+  }
 
  private:
   cell addr_;            /* address or offset (or value for constant, index for native function) */
+  sp::Atom* name_;
 };
 
 /*  Possible entries for "ident". These are used in the "symbol", "value"
@@ -993,5 +1002,7 @@ struct AutoDisableLiteralQueue
  private:
   bool prev_value_;
 };
+
+extern sp::StringPool gAtoms;
 
 #endif /* SC_H_INCLUDED */

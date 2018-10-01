@@ -30,6 +30,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include "sc.h"
 #include "lstring.h"
 
@@ -459,20 +460,6 @@ void delete_autolisttable(void)
 
 /* ----- debug information --------------------------------------- */
 
-/* These macros are adapted from LibDGG libdgg-int64.h, see
- * http://www.dennougedougakkai-ndd.org/pub/libdgg/
- */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__>=199901L
-  #define __STDC_FORMAT_MACROS
-  #define __STDC_CONSTANT_MACROS
-  #include <inttypes.h>         /* automatically includes stdint.h */
-#elif (defined _MSC_VER || defined __BORLANDC__) && (defined _I64_MAX || defined HAVE_I64)
-  #define PRId64 "I64d"
-  #define PRIx64 "I64x"
-#else
-  #define PRId64 "lld"
-  #define PRIx64 "llx"
-#endif
 #define PRIdC  "d"
 #define PRIxC  "x"
 
@@ -509,7 +496,7 @@ stringlist *insert_dbgsymbol(symbol *sym)
     char string[2*sNAMEMAX+128];
     char symname[2*sNAMEMAX+16];
 
-    funcdisplayname(symname,sym->name);
+    funcdisplayname(symname,sym->name());
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
     assert(sym->ident != iFUNCTN);
     sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x",
