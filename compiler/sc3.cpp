@@ -1246,35 +1246,6 @@ SC3ExpressionParser::hier14(value *lval1)
   return FALSE;         /* expression result is never an lvalue */
 }
 
-/**
- * Sums up array usage in the current heap tracer and convert it into a dynamic array.
- * This is used for the ternary operator, which needs to convert its array usage into
- * something dynamically managed.
- * !Note:
- * This might break if expressions can ever return dynamic arrays.
- * Thus, we assert() if something is non-static here.
- * Right now, this poses no problem because this type of expression is impossible:
- *   (a() ? return_array() : return_array()) ? return_array() : return_array()
- */
-
-long dynarray_from_heaplist(memuse_list_t *heap)
-{
-  memuse_t *use=heap->head;
-  memuse_t *tmp;
-  long total=0;
-  while (use) {
-    assert(use->type==MEMUSE_STATIC);
-    total+=use->size;
-    tmp=use->prev;
-    free(use);
-    use=tmp;
-  }
-  free(heap);
-  if (total)
-    setheap_save(total*sizeof(cell));
-  return total;
-}
-
 int
 SC3ExpressionParser::hier13(value *lval)
 {
@@ -1284,8 +1255,8 @@ SC3ExpressionParser::hier13(value *lval)
     int flab2=getlabel();
     value lval2={0};
     int array1,array2;
-    long total1,total2;
-    memuse_list_t *heap;
+    cell_t total1 = 0;
+    cell_t total2 = 0;
     
     pushheaplist();
     if (lvalue) {
@@ -1302,8 +1273,9 @@ SC3ExpressionParser::hier13(value *lval)
     if (lval->ident==iCONSTEXPR)        /* load constant here */
       ldconst(lval->constval,sPRI);
     sc_allowtags=(short)POPSTK_I();     /* restore */
-    heap=popsaveheaplist();
-    total1=dynarray_from_heaplist(heap);
+    if ((total1 = pop_static_heaplist())) {
+      setheap_save(total1 * sizeof(cell));
+    }
     pushheaplist();
     jumplabel(flab2);
     setlabel(flab1);
@@ -1327,8 +1299,9 @@ SC3ExpressionParser::hier13(value *lval)
     } /* if */
     /* ??? if both are arrays, should check dimensions */
     matchtag(lval->tag,lval2.tag,FALSE);
-    heap=popsaveheaplist();
-    total2=dynarray_from_heaplist(heap);
+    if ((total2 = pop_static_heaplist())) {
+      setheap_save(total2 * sizeof(cell));
+    }
     setlabel(flab2);
     if ((array1 && array2) && (total1 && total2)) {
       markheap(MEMUSE_DYNAMIC, 0);
