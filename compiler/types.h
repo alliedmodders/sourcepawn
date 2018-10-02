@@ -30,6 +30,7 @@
 #include <amtl/am-uniqueptr.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-enum.h>
+#include <sp_vm_types.h>
 #include "amx.h"
 
 #define TAGTYPEMASK   (0x3E000000)
@@ -49,6 +50,25 @@ KE_DEFINE_ENUM_OPERATORS(TypeKind)
 struct pstruct_t;
 struct funcenum_t;
 struct methodmap_t;
+struct constvalue;
+
+struct typeinfo_t {
+  // Array information.
+  int numdim;
+  int dim[sDIMEN_MAX];
+  int idxtag[sDIMEN_MAX];
+  cell size;
+  constvalue *enumroot;
+
+  // Type information.
+  int tag;           // Same as tags[0].
+  int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
+  char usage;        // Usage flags.
+  bool is_new;       // New-style declaration.
+  bool has_postdims; // Dimensions, if present, were in postfix position.
+
+  bool isCharArray() const;
+};
 
 class Type
 {
