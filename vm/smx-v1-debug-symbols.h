@@ -48,6 +48,9 @@ namespace sp {
     virtual bool isString() {
       return type_ == String;
     }
+    virtual bool isReference() {
+      return reference_;
+    }
     virtual bool isArray() {
       return dimcount_ > 0;
     }
@@ -73,6 +76,7 @@ namespace sp {
       Enum
     };
     BaseType type_;
+    bool reference_;
     uint32_t dimcount_;
     ke::AutoPtr<uint32_t> dimensions_;
   };

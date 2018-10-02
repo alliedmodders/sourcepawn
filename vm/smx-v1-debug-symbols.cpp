@@ -306,7 +306,8 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
 }
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const smx_rtti_debug_var* sym)
-  : type_(Integer)
+  : type_(Integer),
+    reference_(false)
 {
   dimcount_ = 0;
   // TODO: Parse type info from .rtti.data
@@ -314,21 +315,23 @@ SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const smx_rtti_debug_v
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_fdbg_symbol_t* sym)
   : dimcount_(sym->dimcount),
-    type_(Integer)
+    type_(Integer),
+    reference_(false)
 {
   guessLegacyType<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(image, sym);
 }
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym)
   : dimcount_(sym->dimcount),
-    type_(Integer)
+    type_(Integer),
+    reference_(false)
 {
   guessLegacyType<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(image, sym);
 }
 
 template <typename SymbolType, typename DimType>
 void
-SmxV1SymbolType::guessLegacyType(const SmxV1Image* const image, const SymbolType* sym)
+SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
 {
   // Save the dimension sizes first.
   assert(sym->dimcount <= sDIMEN_MAX);
@@ -339,6 +342,9 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* const image, const SymbolType
     dimensions_[i] = dim->size;
     dim++;
   }
+
+  if (sym->ident == IDENT_REFERENCE || sym->ident == IDENT_REFARRAY)
+    reference_ = true;
 
   // Try to guess the type from the tag.
   const char *tagname = image->GetTagName(sym->tagid);
@@ -366,10 +372,10 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* const image, const SymbolType
       uint32_t i = 0;
       for (; str[i] != '\0'; i++) {
         // TODO: Better heuristics for utf8 strings.
-        if ((str[i] < ' ' && str[i] != '\n' && str[i] != '\r' && str[i] != '\t'))
+        if (str[i] < ' ' && str[i] != '\n' && str[i] != '\r' && str[i] != '\t')
           break; // non-ASCII character
 
-                 // Require a letter at the start.
+        // Require a letter at the start.
         if (i == 0 && !isalpha(str[i]))
           break;
       }
