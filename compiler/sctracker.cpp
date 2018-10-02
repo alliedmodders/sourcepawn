@@ -3,24 +3,29 @@
 #include <string.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <amtl/am-vector.h>
 #include "sc.h"
 #include "sctracker.h"
 #include "types.h"
 
-typedef struct memuse_s {
+struct MemoryUse {
+  MemoryUse(int type, int size)
+   : type(type), size(size)
+  {}
   int type;   /* MEMUSE_STATIC or MEMUSE_DYNAMIC */
   int size;   /* size of array for static (0 for dynamic) */
-  struct memuse_s *prev; /* previous block on the list */
-} memuse_t;
+};
 
-typedef struct memuse_list_s {
-  struct memuse_list_s *prev;   /* last used list */
-  int list_id;
-  memuse_t *head;               /* head of the current list */
-} memuse_list_t;
+struct MemoryScope {
+  explicit MemoryScope(int scope_id)
+   : scope_id(scope_id)
+  {}
+  int scope_id;
+  ke::Vector<MemoryUse> usage;
+};
 
-memuse_list_t *heapusage = NULL;
-memuse_list_t *stackusage = NULL;
+ke::Vector<MemoryScope> sStackScopes;
+ke::Vector<MemoryScope> sHeapScopes;
 funcenum_t *firstenum = NULL;
 funcenum_t *lastenum = NULL;
 pstruct_t *firststruct = NULL;
@@ -230,83 +235,32 @@ functag_t *functags_add(funcenum_t *en, functag_t *src)
   return t;
 }
 
-/**
- * Creates a new mem usage tracker entry
- */
-void _push_memlist(memuse_list_t **head)
+static void
+EnterMemoryScope(ke::Vector<MemoryScope>& frame)
 {
-  memuse_list_t *newlist = (memuse_list_t *)malloc(sizeof(memuse_list_t));
-  if (*head != NULL)
+  if (frame.empty())
+    frame.append(MemoryScope{0});
+  else
+    frame.append(MemoryScope{frame.back().scope_id + 1});
+}
+
+static void
+AllocInScope(MemoryScope& scope, int type, int size)
+{
+  if (type == MEMUSE_STATIC &&
+      !scope.usage.empty() &&
+      scope.usage.back().type == MEMUSE_STATIC)
   {
-    newlist->list_id = (*head)->list_id + 1;
+    scope.usage.back().size += size;
   } else {
-    newlist->list_id = 0;
+    scope.usage.append(MemoryUse{type, size});
   }
-  newlist->prev = *head;
-  newlist->head = NULL;
-  *head = newlist;
 }
 
-/**
- * Pops a heap list but does not free it.
- */
-memuse_list_t *_pop_save_memlist(memuse_list_t **head)
+void
+pushheaplist()
 {
-  memuse_list_t *oldlist = *head;
-  *head = (*head)->prev;
-  return oldlist;
-}
-
-/**
- * Marks a memory usage on a memory list
- */
-int _mark_memlist(memuse_list_t *head, int type, int size)
-{
-  memuse_t *use;
-  if (type==MEMUSE_STATIC && size==0)
-  {
-    return 0;
-  }
-  use=head->head;
-  if (use && (type==MEMUSE_STATIC) 
-      && (use->type == type))
-  {
-    use->size += size;
-  } else {
-    use=(memuse_t *)malloc(sizeof(memuse_t));
-    use->type=type;
-    use->size=size;
-    use->prev=head->head;
-    head->head=use;
-  }
-  return size;
-}
-
-void _reset_memlist(memuse_list_t **head)
-{
-  memuse_list_t *curlist = *head;
-  memuse_list_t *tmplist;
-  while (curlist) {
-    memuse_t *curuse = curlist->head;
-    memuse_t *tmpuse;
-    while (curuse) {
-      tmpuse = curuse->prev;
-      free(curuse);
-      curuse = tmpuse;
-    }
-    tmplist = curlist->prev;
-    free(curlist);
-    curlist = tmplist;
-  }
-  *head = NULL;
-}
-
-/**
- * Wrapper for pushing the heap list
- */
-void pushheaplist()
-{
-  _push_memlist(&heapusage);
+  EnterMemoryScope(sHeapScopes);
 }
 
 // Sums up array usage in the current heap tracer and convert it into a dynamic array.
@@ -320,174 +274,114 @@ void pushheaplist()
 cell_t
 pop_static_heaplist()
 {
-  memuse_list_t* heap = _pop_save_memlist(&heapusage);
-  memuse_t *use=heap->head;
-  memuse_t *tmp;
-  cell_t total=0;
-  while (use) {
-    assert(use->type==MEMUSE_STATIC);
-    total+=use->size;
-    tmp=use->prev;
-    free(use);
-    use=tmp;
+  cell_t total = 0;
+  for (const auto& use : sHeapScopes.back().usage) {
+    assert(use.type == MEMUSE_STATIC);
+    total += use.size;
   }
-  free(heap);
+  sHeapScopes.pop();
   return total;
 }
 
-
-/**
- * Wrapper for marking the heap
- */
-int markheap(int type, int size)
+int
+markheap(int type, int size)
 {
-  return _mark_memlist(heapusage, type, size);
+  AllocInScope(sHeapScopes.back(), type, size);
+  return size;
 }
 
-/**
- * Wrapper for pushing the stack list
- */
-void pushstacklist()
+void
+pushstacklist()
 {
-  _push_memlist(&stackusage);
+  EnterMemoryScope(sStackScopes);
 }
 
-/**
- * Wrapper for marking the stack
- */
-int markstack(int type, int size)
+int
+markstack(int type, int size)
 {
-  return _mark_memlist(stackusage, type, size);
+  AllocInScope(sStackScopes.back(), type, size);
+  return size;
 }
 
-/**
- * Generates code to free all heap allocations on a tracker
- */
-void _heap_freeusage(memuse_list_t *heap, bool dofree, bool codegen)
+// Generates code to free all heap allocations on a tracker
+static void
+modheap_for_scope(const MemoryScope& scope)
 {
-  memuse_t *cur=heap->head;
-  memuse_t *tmp;
-  while (cur) {
-    if (codegen) {
-      if (cur->type == MEMUSE_STATIC) {
-        modheap((-1)*cur->size*sizeof(cell));
-      } else {
-        modheap_i();
-      }
-    }
-    if (dofree) {
-      tmp=cur->prev;
-      free(cur);
-      cur=tmp;
+  for (size_t i = scope.usage.length() - 1; i < scope.usage.length(); i--) {
+    const MemoryUse& use = scope.usage[i];
+    if (use.type == MEMUSE_STATIC) {
+      modheap((-1) * use.size * sizeof(cell));
     } else {
-      cur=cur->prev;
+      modheap_i();
     }
   }
-  if (dofree)
-    heap->head=NULL;
 }
 
-void _stack_genusage(memuse_list_t *stack, int dofree)
+void
+modstk_for_scope(const MemoryScope& scope)
 {
-  memuse_t *cur = stack->head;
-  memuse_t *tmp;
-  while (cur)
-  {
-    if (cur->type == MEMUSE_DYNAMIC)
-    {
-      /* no idea yet */
-      assert(0);
-    } else {
-      modstk(cur->size * sizeof(cell));
-    }
-    if (dofree)
-    {
-      tmp = cur->prev;
-      free(cur);
-      cur = tmp;
-    } else {
-      cur = cur->prev;
-    }
+  cell_t total = 0;
+  for (const auto& use : scope.usage) {
+    assert(use.type == MEMUSE_STATIC);
+    total += use.size;
   }
-  if (dofree)
-  {
-    stack->head = NULL;
-  }
+  modstk(total * sizeof(cell));
 }
 
-/**
- * Pops a heap list and frees it.
- */
-void popheaplist(bool codegen)
+void
+popheaplist(bool codegen)
 {
-  memuse_list_t *oldlist;
-  assert(heapusage!=NULL);
-
-  _heap_freeusage(heapusage, true, codegen);
-  assert(heapusage->head==NULL);
-
-  oldlist=heapusage->prev;
-  free(heapusage);
-  heapusage=oldlist;
-}
-
-void genstackfree(int stop_id)
-{
-  memuse_list_t *curlist = stackusage;
-  while (curlist && curlist->list_id > stop_id)
-  {
-    _stack_genusage(curlist, 0);
-    curlist = curlist->prev;
-  }
-}
-
-void genheapfree(int stop_id)
-{
-  memuse_list_t *curlist = heapusage;
-  while (curlist && curlist->list_id > stop_id)
-  {
-    _heap_freeusage(curlist, false, true);
-    curlist = curlist->prev;
-  }
-}
-
-void popstacklist(bool codegen)
-{
-  memuse_list_t *oldlist;
-  assert(stackusage != NULL);
-
   if (codegen)
-  {
-    _stack_genusage(stackusage, 1);
-    assert(stackusage->head==NULL);
-  } else {
-    memuse_t *use = stackusage->head;
-    while (use) {
-      memuse_t *temp = use->prev;
-      free(use);
-      use = temp;
-    }
+    modheap_for_scope(sHeapScopes.back());
+  sHeapScopes.pop();
+}
+
+void
+genstackfree(int stop_id)
+{
+  for (size_t i = sStackScopes.length() - 1; i < sStackScopes.length(); i--) {
+    const MemoryScope& scope = sStackScopes[i];
+    if (scope.scope_id <= stop_id)
+      break;
+    modstk_for_scope(scope);
   }
-
-  oldlist = stackusage->prev;
-  free(stackusage);
-  stackusage = oldlist;
 }
 
-void resetstacklist()
+void
+genheapfree(int stop_id)
 {
-  _reset_memlist(&stackusage);
+  for (size_t i = sHeapScopes.length() - 1; i < sHeapScopes.length(); i--) {
+    const MemoryScope& scope = sHeapScopes[i];
+    if (scope.scope_id <= stop_id)
+      break;
+    modheap_for_scope(scope);
+  }
 }
 
-void resetheaplist()
+void
+popstacklist(bool codegen)
 {
-  _reset_memlist(&heapusage);
+  if (codegen)
+    modstk_for_scope(sStackScopes.back());
+  sStackScopes.pop();
+}
+
+void
+resetstacklist()
+{
+  sStackScopes.clear();
+}
+
+void
+resetheaplist()
+{
+  sHeapScopes.clear();
 }
 
 int
 stack_scope_id()
 {
-  return stackusage->list_id;
+  return sStackScopes.back().scope_id;
 }
 
 methodmap_t*
