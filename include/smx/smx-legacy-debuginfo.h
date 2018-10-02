@@ -44,6 +44,11 @@ static const uint8_t IDENT_REFARRAY = 4;  // Array with unknown dimensions.
 static const uint8_t IDENT_FUNCTION = 9;  // Symbolic function.
 static const uint8_t IDENT_VARARGS = 11;  // Variadic argument (...).
 
+static const uint8_t VCLASS_GLOBAL = 0;     // global variable/constant class (no states)
+static const uint8_t VCLASS_LOCAL  = 1;     // local variable/constant
+static const uint8_t VCLASS_STATIC = 2;     // global life, local scope 
+static const uint8_t VCLASS_MAX    = VCLASS_STATIC;
+
 // The ".dbg.symbols" table.
 typedef struct sp_fdbg_symbol_s {
     int32_t addr;       /**< Address rel to DAT or stack frame */

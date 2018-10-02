@@ -195,7 +195,15 @@ class SmxV1Image
   bool validateRtti();
   bool validateRttiMethods();
   bool validateDebugInfo();
+  bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
+  bool validateDebugMethods();
+  bool validateSymbolAddress(int32_t address, uint8_t vclass);
+  bool validateDebugName(size_t offset);
+  template<typename SymbolType, typename DimType>
+  bool validateLegacyDebugSymbols();
+  bool validateLegacySymbolAddress(int32_t address, uint8_t vclass);
   bool validateTags();
+  bool validateTag(int16_t tagid);
 
  private:
   template <typename SymbolType, typename DimType>
@@ -207,6 +215,10 @@ class SmxV1Image
     const Section* section = findSection(name);
     if (!section)
       return nullptr;
+    return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
+  }
+
+  const smx_rtti_table_header* toRttiTable(const Section* section) {
     return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
   }
 

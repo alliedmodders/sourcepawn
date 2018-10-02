@@ -251,10 +251,6 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const smx_rtti_debug
   name_ = image->GetDebugName(sym->name);
 }
 
-#define sGLOBAL   0     /* global variable/constant class (no states) */
-#define sLOCAL    1     /* local variable/constant */
-#define sSTATIC   2     /* global life, local scope */
-
 SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol_t* sym)
   : address_(sym->addr),
     codestart_(sym->codestart),
@@ -263,13 +259,13 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol
 {
   switch (sym->vclass)
   {
-  case sGLOBAL:
+  case VCLASS_GLOBAL:
     scope_ = Global;
     break;
-  case sLOCAL:
+  case VCLASS_LOCAL:
     scope_ = Local;
     break;
-  case sSTATIC:
+  case VCLASS_STATIC:
     scope_ = Static;
     break;
   }
@@ -288,13 +284,13 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
 {
   switch (sym->vclass)
   {
-  case sGLOBAL:
+  case VCLASS_GLOBAL:
     scope_ = Global;
     break;
-  case sLOCAL:
+  case VCLASS_LOCAL:
     scope_ = Local;
     break;
-  case sSTATIC:
+  case VCLASS_STATIC:
     scope_ = Static;
     break;
   }
