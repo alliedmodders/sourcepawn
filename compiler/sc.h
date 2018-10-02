@@ -48,6 +48,7 @@
 #include "shared/string-pool.h"
 #include "osdefs.h"
 #include "amx.h"
+#include "types.h"
 
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
@@ -91,13 +92,13 @@ struct arginfo {  /* function argument info */
 };
 
 /*  Equate table, tagname table, library table */
-typedef struct s_constvalue {
-  struct s_constvalue *next;
+struct constvalue {
+  constvalue *next;
   char name[sNAMEMAX+1];
   cell value;
   int index;            /* index level, for constants referring to array sizes/tags
                          * tag for enumeration lists */
-} constvalue;
+};
 
 struct methodmap_t;
 struct stringlist;
@@ -325,24 +326,6 @@ struct svalue {
 #define DECLFLAG_FIELD           0x80 // Struct field.
 #define DECLFLAG_NEW            0x100 // Known new-style declaration.
 #define DECLMASK_NAMED_DECL      (DECLFLAG_ARGUMENT | DECLFLAG_VARIABLE | DECLFLAG_MAYBE_FUNCTION | DECLFLAG_FIELD)
-
-typedef struct {
-  // Array information.
-  int numdim;
-  int dim[sDIMEN_MAX];
-  int idxtag[sDIMEN_MAX];
-  cell size;
-  constvalue *enumroot;
-
-  // Type information.
-  int tag;           // Same as tags[0].
-  int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
-  char usage;        // Usage flags.
-  bool is_new;       // New-style declaration.
-  bool has_postdims; // Dimensions, if present, were in postfix position.
-
-  bool isCharArray() const;
-} typeinfo_t;
 
 /* For parsing declarations. */
 typedef struct {
