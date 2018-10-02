@@ -7,6 +7,18 @@
 #include "sctracker.h"
 #include "types.h"
 
+typedef struct memuse_s {
+  int type;   /* MEMUSE_STATIC or MEMUSE_DYNAMIC */
+  int size;   /* size of array for static (0 for dynamic) */
+  struct memuse_s *prev; /* previous block on the list */
+} memuse_t;
+
+typedef struct memuse_list_s {
+  struct memuse_list_s *prev;   /* last used list */
+  int list_id;
+  memuse_t *head;               /* head of the current list */
+} memuse_list_t;
+
 memuse_list_t *heapusage = NULL;
 memuse_list_t *stackusage = NULL;
 funcenum_t *firstenum = NULL;
@@ -289,7 +301,6 @@ void _reset_memlist(memuse_list_t **head)
   *head = NULL;
 }
 
-
 /**
  * Wrapper for pushing the heap list
  */
@@ -298,13 +309,32 @@ void pushheaplist()
   _push_memlist(&heapusage);
 }
 
-/**
- * Wrapper for popping and saving the heap list
- */
-memuse_list_t *popsaveheaplist()
+// Sums up array usage in the current heap tracer and convert it into a dynamic array.
+// This is used for the ternary operator, which needs to convert its array usage into
+// something dynamically managed.
+// !Note:
+// This might break if expressions can ever return dynamic arrays.
+// Thus, we assert() if something is non-static here.
+// Right now, this poses no problem because this type of expression is impossible:
+//   (a() ? return_array() : return_array()) ? return_array() : return_array()
+cell_t
+pop_static_heaplist()
 {
-  return _pop_save_memlist(&heapusage);
+  memuse_list_t* heap = _pop_save_memlist(&heapusage);
+  memuse_t *use=heap->head;
+  memuse_t *tmp;
+  cell_t total=0;
+  while (use) {
+    assert(use->type==MEMUSE_STATIC);
+    total+=use->size;
+    tmp=use->prev;
+    free(use);
+    use=tmp;
+  }
+  free(heap);
+  return total;
 }
+
 
 /**
  * Wrapper for marking the heap
@@ -452,6 +482,12 @@ void resetstacklist()
 void resetheaplist()
 {
   _reset_memlist(&heapusage);
+}
+
+int
+stack_scope_id()
+{
+  return stackusage->list_id;
 }
 
 methodmap_t*

@@ -5821,8 +5821,8 @@ static int dofor(void)
   /*ptr[wqBRK]=(int)declared;
    *ptr[wqCONT]=(int)declared;
    */
-  ptr[wqBRK] = stackusage->list_id;
-  ptr[wqCONT] = stackusage->list_id;
+  ptr[wqBRK] = stack_scope_id();
+  ptr[wqCONT] = stack_scope_id();
   jumplabel(skiplab);               /* skip expression 3 1st time */
   setlabel(wq[wqLOOP]);             /* "continue" goes to this label: expr3 */
   setline(TRUE);
@@ -6264,8 +6264,8 @@ static void addwhile(int *ptr)
 {
   int k;
 
-  ptr[wqBRK]=stackusage->list_id;     /* stack pointer (for "break") */
-  ptr[wqCONT]=stackusage->list_id;    /* for "continue", possibly adjusted later */
+  ptr[wqBRK]=stack_scope_id();        /* stack pointer (for "break") */
+  ptr[wqCONT]=stack_scope_id();       /* for "continue", possibly adjusted later */
   ptr[wqLOOP]=getlabel();
   ptr[wqEXIT]=getlabel();
   if (wqptr>=(wq+wqTABSZ-wqSIZE))

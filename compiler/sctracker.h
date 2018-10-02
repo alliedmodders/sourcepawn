@@ -5,18 +5,6 @@
 #define MEMUSE_STATIC      0
 #define MEMUSE_DYNAMIC     1
 
-typedef struct memuse_s {
-  int type;   /* MEMUSE_STATIC or MEMUSE_DYNAMIC */
-  int size;   /* size of array for static (0 for dynamic) */
-  struct memuse_s *prev; /* previous block on the list */
-} memuse_t;
-
-typedef struct memuse_list_s {
-  struct memuse_list_s *prev;   /* last used list */
-  int list_id;
-  memuse_t *head;               /* head of the current list */
-} memuse_list_t;
-
 typedef struct funcarg_s
 {
   int tagcount;
@@ -153,9 +141,12 @@ bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
  * Heap functions
  */
 void pushheaplist();
-memuse_list_t *popsaveheaplist();
 void popheaplist(bool codegen);
 int markheap(int type, int size);
+
+// Remove the current heap scope, requiring that all alocations within be
+// static. Then return that static size.
+cell_t pop_static_heaplist();
 
 /**
  * Stack functions
@@ -163,6 +154,8 @@ int markheap(int type, int size);
 void pushstacklist();
 void popstacklist(bool codegen);
 int markstack(int type, int size);
+int stack_scope_id();
+
 /**
  * Generates code to free mem usage, but does not pop the list.  
  *  This is used for code like dobreak()/docont()/doreturn().
@@ -187,9 +180,6 @@ methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);
 void methodmap_add_method(methodmap_t* map, methodmap_method_t* method);
 void methodmaps_free();
-
-extern memuse_list_t *heapusage;
-extern memuse_list_t *stackusage;
 
 size_t UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...);
 
