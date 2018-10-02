@@ -329,6 +329,14 @@ SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol
   guessLegacyType<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(image, sym);
 }
 
+// Tag masks from pre-rtti compiler.
+#define FIXEDTAG     0x40000000
+#define FUNCTAG      0x20000000
+#define OBJECTTAG    0x10000000
+#define ENUMTAG      0x08000000
+#define METHODMAPTAG 0x04000000
+#define STRUCTTAG    0x02000000
+
 template <typename SymbolType, typename DimType>
 void
 SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
@@ -347,43 +355,41 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
     reference_ = true;
 
   // Try to guess the type from the tag.
-  const char *tagname = image->GetTagName(sym->tagid);
-  if (tagname != nullptr) {
+  const sp_file_tag_t* tag = image->GetTagById(sym->tagid);
+  if (tag) {
+    const char* tagname = image->GetName(tag->name);
     if (!stricmp(tagname, "bool")) {
       type_ = Boolean;
       return;
     }
-
     if (!stricmp(tagname, "float")) {
       type_ = Float;
       return;
     }
-
     if (!stricmp(tagname, "String")) {
       type_ = String;
       return;
     }
-  }
-  // Untagged array with a single dimension, walk through all elements
-  // and check whether this could be a string.
-  if ((sym->ident == IDENT_ARRAY || sym->ident == IDENT_REFARRAY) && sym->dimcount == 1) {
-    const char* str = nullptr; //GetString(sym); // FIXME
-    if (str) {
-      uint32_t i = 0;
-      for (; str[i] != '\0'; i++) {
-        // TODO: Better heuristics for utf8 strings.
-        if (str[i] < ' ' && str[i] != '\n' && str[i] != '\r' && str[i] != '\t')
-          break; // non-ASCII character
-
-        // Require a letter at the start.
-        if (i == 0 && !isalpha(str[i]))
-          break;
-      }
-
-      if (i > 0 && str[i] == '\0') {
-        type_ = String;
-        return;
-      }
+    if ((tag->tag_id & FUNCTAG) > 0) {
+      type_ = Function;
+      return;
+    }
+    if ((tag->tag_id & OBJECTTAG) > 0) {
+      type_ = Object;
+      return;
+    }
+    // TODO: A tag can be a methodmap AND an enum at the same time.
+    if ((tag->tag_id & METHODMAPTAG) > 0) {
+      type_ = Methodmap;
+      return;
+    }
+    if ((tag->tag_id & ENUMTAG) > 0) {
+      type_ = Enum;
+      return;
+    }
+    if ((tag->tag_id & STRUCTTAG) > 0) {
+      type_ = Struct;
+      return;
     }
   }
 }

@@ -42,11 +42,23 @@ namespace sp {
     virtual bool isBoolean() {
       return type_ == Boolean;
     }
+    virtual bool isString() {
+      return type_ == String;
+    }
     virtual bool isEnum() {
       return type_ == Enum;
     }
-    virtual bool isString() {
-      return type_ == String;
+    virtual bool isMethodmap() {
+      return type_ == Methodmap;
+    }
+    virtual bool isFunction() {
+      return type_ == Function;
+    }
+    virtual bool isStruct() {
+      return type_ == Struct;
+    }
+    virtual bool isObject() {
+      return type_ == Object;
     }
     virtual bool isReference() {
       return reference_;
@@ -73,7 +85,11 @@ namespace sp {
       Float,
       Boolean,
       String,
-      Enum
+      Enum,
+      Methodmap,
+      Function,
+      Struct,
+      Object
     };
     BaseType type_;
     bool reference_;

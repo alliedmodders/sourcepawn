@@ -916,6 +916,14 @@ SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, ucell_t
 }
 
 const char*
+SmxV1Image::GetName(uint32_t nameoffs) const
+{
+  if (nameoffs >= names_section_->size)
+    return nullptr;
+  return names_ + nameoffs;
+}
+
+const char*
 SmxV1Image::GetDebugName(uint32_t nameoffs) const
 {
   if (nameoffs >= debug_names_section_->size)
@@ -923,16 +931,16 @@ SmxV1Image::GetDebugName(uint32_t nameoffs) const
   return debug_names_ + nameoffs;
 }
 
-const char *
-SmxV1Image::GetTagName(uint32_t tag) const
+const sp_file_tag_t*
+SmxV1Image::GetTagById(uint32_t tag) const
 {
   unsigned int index;
   for (index = 0; index < tags_.length() && tags_[index].tag_id != tag; index++)
-    /* nothing */;
+    continue;
   if (index >= tags_.length())
     return nullptr;
 
-  return names_ + tags_[index].name;
+  return &tags_[index];
 }
 
 SourcePawn::IDebugSymbolIterator*

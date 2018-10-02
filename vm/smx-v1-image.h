@@ -66,7 +66,8 @@ class SmxV1Image
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
   SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) override;
-  const char* GetTagName(uint32_t tagid) const;
+  const sp_file_tag_t* GetTagById(uint32_t tagid) const;
+  const char* GetName(uint32_t nameoffs) const;
   const char* GetDebugName(uint32_t nameoffs) const;
 
  private:

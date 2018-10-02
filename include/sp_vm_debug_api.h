@@ -28,8 +28,12 @@ namespace SourcePawn
     virtual bool isInt32() = 0;
     virtual bool isFloat() = 0;
     virtual bool isBoolean() = 0;
-    virtual bool isEnum() = 0;
     virtual bool isString() = 0;
+    virtual bool isEnum() = 0;
+    virtual bool isMethodmap() = 0;
+    virtual bool isFunction() = 0;
+    virtual bool isStruct() = 0;
+    virtual bool isObject() = 0;
     virtual bool isReference() = 0;
     virtual bool isArray() = 0;
     virtual uint32_t dimcount() = 0;
