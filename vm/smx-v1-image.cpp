@@ -12,6 +12,7 @@
 #include <amtl/am-string.h>
 #include "smx-v1-image.h"
 #include "zlib/zlib.h"
+#include "environment.h"
 
 using namespace ke;
 using namespace sp;
@@ -483,21 +484,21 @@ SmxV1Image::validateDebugInfo()
       if (!validateRttiHeader(globals))
         return error("invalid debug globals table");
       rtti_dbg_globals_ = toRttiTable(globals);
-      if (!validateDebugVariables(rtti_dbg_globals_))
+      if (Environment::get()->IsDebugBreakEnabled() && !validateDebugVariables(rtti_dbg_globals_))
         return false;
     }
     if (const Section* locals = findSection(".dbg.locals")) {
       if (!validateRttiHeader(locals))
         return error("invalid debug locals table");
       rtti_dbg_locals_ = toRttiTable(locals);
-      if (!validateDebugVariables(rtti_dbg_locals_))
+      if (Environment::get()->IsDebugBreakEnabled() && !validateDebugVariables(rtti_dbg_locals_))
         return false;
     }
     if (const Section* methods = findSection(".dbg.methods")) {
       if (!validateRttiHeader(methods))
         return error("invalid debug methods table");
       rtti_dbg_methods_ = toRttiTable(methods);
-      if (!validateDebugMethods())
+      if (Environment::get()->IsDebugBreakEnabled() && !validateDebugMethods())
         return false;
     }
   }
@@ -509,12 +510,12 @@ SmxV1Image::validateDebugInfo()
     {
       debug_syms_unpacked_ =
         reinterpret_cast<const sp_u_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
-      if (!validateLegacyDebugSymbols<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_s>())
+      if (Environment::get()->IsDebugBreakEnabled() && !validateLegacyDebugSymbols<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_s>())
         return false;
     } else {
       debug_syms_ =
         reinterpret_cast<const sp_fdbg_symbol_t*>(buffer() + debug_symbols_section_->dataoffs);
-      if (!validateLegacyDebugSymbols<sp_fdbg_symbol_t, sp_fdbg_arraydim_s>())
+      if (Environment::get()->IsDebugBreakEnabled() && !validateLegacyDebugSymbols<sp_fdbg_symbol_t, sp_fdbg_arraydim_s>())
         return false;
     }
   }
