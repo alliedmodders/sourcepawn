@@ -3343,11 +3343,11 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
   return TRUE;
 }
 
-methodmap_method_t *parse_property(methodmap_t *map)
+static ke::UniquePtr<methodmap_method_t>
+parse_property(methodmap_t *map)
 {
   typeinfo_t type;
   token_ident_t ident;
-  methodmap_method_t *method;
 
   memset(&type, 0, sizeof(type));
   if (!parse_new_typeexpr(&type, NULL, 0))
@@ -3358,7 +3358,7 @@ methodmap_method_t *parse_property(methodmap_t *map)
   if (!needsymbol(&ident))
     return NULL;
 
-  method = (methodmap_method_t *)calloc(1, sizeof(methodmap_method_t));
+  auto method = ke::MakeUnique<methodmap_method_t>(map);
   strcpy(method->name, ident.name);
   method->target = NULL;
   method->getter = NULL;
@@ -3366,7 +3366,7 @@ methodmap_method_t *parse_property(methodmap_t *map)
 
   if (matchtoken('{')) {
     while (!matchtoken('}')) {
-      if (!parse_property_accessor(&type, map,method))
+      if (!parse_property_accessor(&type, map, method.get()))
         lexclr(TRUE);
     }
 
@@ -3376,7 +3376,8 @@ methodmap_method_t *parse_property(methodmap_t *map)
   return method;
 }
 
-methodmap_method_t *parse_method(methodmap_t *map)
+static ke::UniquePtr<methodmap_method_t>
+parse_method(methodmap_t *map)
 {
   int maybe_ctor = 0;
   int is_ctor = 0;
@@ -3413,16 +3414,16 @@ methodmap_method_t *parse_method(methodmap_t *map)
     // The first token of the type expression is either the symbol we
     // predictively parsed earlier, or it's been pushed back into the
     // lex buffer.
-    const token_t *first = got_symbol ? &ident.tok : NULL;
+    const token_t *first = got_symbol ? &ident.tok : nullptr;
 
     // Parse for type expression, priming it with the token we predicted
     // would be an identifier.
     if (!parse_new_typeexpr(&type, first, 0))
-      return NULL;
+      return nullptr;
 
     // Now, we should get an identifier.
     if (!needsymbol(&ident))
-      return NULL;
+      return nullptr;
 
     // If the identifier is a constructor, error, since the user specified
     // a type.
@@ -3451,13 +3452,13 @@ methodmap_method_t *parse_method(methodmap_t *map)
   symbol* target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_static);
 
   if (!target)
-    return NULL;
+    return nullptr;
 
-  methodmap_method_t *method = (methodmap_method_t *)calloc(1, sizeof(methodmap_method_t));
+  auto method = ke::MakeUnique<methodmap_method_t>(map);
   strcpy(method->name, ident.name);
   method->target = target;
-  method->getter = NULL;
-  method->setter = NULL;
+  method->getter = nullptr;
+  method->setter = nullptr;
   method->is_static = is_static;
 
   // If the symbol is a constructor, we bypass the initial argument checks.
@@ -3465,7 +3466,7 @@ methodmap_method_t *parse_method(methodmap_t *map)
     if (map->ctor)
       error(113, map->name);
 
-    map->ctor = method;
+    map->ctor = method.get();
   }
 
   require_newline(target->usage & uNATIVE);
@@ -3533,11 +3534,11 @@ static void declare_handle_intrinsics()
     map->dtor->target = sym;
     strcpy(map->dtor->name, "~Handle");
 
-    methodmap_method_t* close = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
+    auto close = ke::MakeUnique<methodmap_method_t>(map);
     close->target = sym;
     strcpy(close->name, "Close");
 
-    methodmap_add_method(map, close);
+    map->methods.append(ke::Move(close));
   }
 }
 
@@ -3614,7 +3615,7 @@ static void domethodmap(LayoutSpec spec)
   needtoken('{');
   while (!matchtoken('}')) {
     token_t tok;
-    methodmap_method_t *method = NULL;
+    ke::UniquePtr<methodmap_method_t> method;
 
     if (lextok(&tok) == tPUBLIC) {
       method = parse_method(map);
@@ -3626,10 +3627,10 @@ static void domethodmap(LayoutSpec spec)
 
     if (method) {
       // Check that a method with this name doesn't already exist.
-      for (size_t i = 0; i < map->nummethods; i++) {
-        if (strcmp(map->methods[i]->name, method->name) == 0) {
+      for (const auto& other : map->methods) {
+        if (strcmp(other->name, method->name) == 0) {
           error(103, method->name, spectype);
-          method = NULL;
+          method = nullptr;
           break;
         }
       }
@@ -3641,7 +3642,7 @@ static void domethodmap(LayoutSpec spec)
       continue;
     }
 
-    methodmap_add_method(map, method);
+    map->methods.append(ke::Move(method));
   }
 
   require_newline(TRUE);
