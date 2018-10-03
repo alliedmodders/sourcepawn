@@ -192,7 +192,7 @@ funcenum_t *funcenum_for_symbol(symbol *sym)
   }
 
   char name[METHOD_NAMEMAX+1];
-  UTIL_Format(name, sizeof(name), "::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
+  ke::SafeSprintf(name, sizeof(name), "::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
 
   funcenum_t *fe = funcenums_add(name);
   functags_add(fe, &ft);
@@ -520,17 +520,3 @@ can_redef_layout_spec(LayoutSpec def1, LayoutSpec def2)
   return false;
 }
 
-size_t UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...)
-{
-  va_list ap;
-
-  va_start(ap, fmt);
-  size_t len = vsnprintf(buffer, maxlength, fmt, ap);
-  va_end(ap);
-
-  if (len >= maxlength) {
-    buffer[maxlength - 1] = '\0';
-    return maxlength - 1;
-  }
-  return len;
-}
