@@ -28,11 +28,16 @@ ke::Vector<MemoryScope> sStackScopes;
 ke::Vector<MemoryScope> sHeapScopes;
 funcenum_t *firstenum = NULL;
 funcenum_t *lastenum = NULL;
-pstruct_t *firststruct = NULL;
-pstruct_t *laststruct = NULL;
+ke::Vector<ke::UniquePtr<pstruct_t>> sStructs;
 ke::Vector<ke::UniquePtr<methodmap_t>> sMethodmaps;
 
-structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member)
+pstruct_t::pstruct_t(const char* name)
+{
+  ke::SafeStrcpy(this->name, sizeof(this->name), name);
+}
+
+structarg_t*
+pstructs_getarg(pstruct_t *pstruct, const char *member)
 {
   for (const auto& arg : pstruct->args) {
     if (strcmp(arg->name, member) == 0)
@@ -41,52 +46,32 @@ structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member)
   return nullptr;
 }
 
-pstruct_t *pstructs_add(const char *name)
+pstruct_t*
+pstructs_add(const char *name)
 {
-  pstruct_t *p = (pstruct_t *)malloc(sizeof(pstruct_t));
-  
-  memset(p, 0, sizeof(pstruct_t));
-  strcpy(p->name, name);
-  
-  if (!firststruct) {
-    firststruct = p;
-    laststruct = p;
-  } else {
-    laststruct->next = p;
-    laststruct = p;
-  }
-
-  return p;
+  auto p = ke::MakeUnique<pstruct_t>(name);
+  sStructs.append(ke::Move(p));
+  return sStructs.back().get();
 }
 
-void pstructs_free()
+void
+pstructs_free()
 {
-  pstruct_t *p, *next;
-
-  p = firststruct;
-  while (p) {
-    next = p->next;
-    free(p);
-    p = next;
-  }
-  firststruct = NULL;
-  laststruct = NULL;
+  sStructs.clear();
 }
 
-pstruct_t *pstructs_find(const char *name)
+pstruct_t*
+pstructs_find(const char *name)
 {
-  pstruct_t *p = firststruct;
-
-  while (p) {
+  for (const auto& p : sStructs) {
     if (strcmp(p->name, name) == 0)
-      return p;
-    p = p->next;
+      return p.get();
   }
-
-  return NULL;
+  return nullptr;
 }
 
-structarg_t *pstructs_addarg(pstruct_t *pstruct, const structarg_t *arg)
+structarg_t*
+pstructs_addarg(pstruct_t *pstruct, const structarg_t *arg)
 {
   if (pstructs_getarg(pstruct, arg->name))
     return nullptr;
