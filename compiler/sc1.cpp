@@ -1377,10 +1377,10 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
 
   sp::Atom* name = gAtoms.add(firstname);
 
-  values = (cell *)malloc(pstruct->argcount * sizeof(cell));
-  found = (cell *)malloc(pstruct->argcount * sizeof(cell));
+  values = (cell *)malloc(pstruct->args.length() * sizeof(cell));
+  found = (cell *)malloc(pstruct->args.length() * sizeof(cell));
   
-  memset(found, 0, sizeof(cell) * pstruct->argcount);
+  memset(found, 0, sizeof(cell) * pstruct->args.length());
 
   //:TODO: Make this work with stock
 
@@ -1515,9 +1515,9 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
   needtoken('}');
   matchtoken(';');  /* eat up optional semicolon */
 
-  for (i=0; i<pstruct->argcount; i++) {
+  for (size_t i = 0; i < pstruct->args.length(); i++) {
     if (!found[i]) {
-      structarg_t *arg = pstruct->args[i];
+      structarg_t *arg = pstruct->args[i].get();
       if (arg->ident == iREFARRAY) {
         values[arg->index] = glb_declared * sizeof(cell);
         glb_declared += 1;
@@ -1532,9 +1532,9 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
   }
 
   mysym->setAddr(glb_declared * sizeof(cell));
-  glb_declared += pstruct->argcount;
+  glb_declared += pstruct->args.length();
 
-  for (i=0; i<pstruct->argcount; i++)
+  for (i=0; i<pstruct->args.length(); i++)
     litadd(values[i]);
 
   begdseg();
