@@ -67,7 +67,11 @@ Verify(IPluginRuntime* rt)
     verifier.collectExternalFuncRefs(onExternFuncRef);
 
     if (!verifier.verify()) {
-      fprintf(stdout, "Failed verification: %d\n", verifier.error());
+      const char* name;
+      int err = rt->GetDebugInfo()->LookupFunction(offset, &name);
+      if (err != SP_ERROR_NONE)
+        name = "<unknown>";
+      fprintf(stdout, "Failed verification: %s (%d) in %s\n", sEnv->GetErrorString(verifier.error()), verifier.error(), name);
       return false;
     }
   }
