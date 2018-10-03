@@ -30,8 +30,7 @@ funcenum_t *firstenum = NULL;
 funcenum_t *lastenum = NULL;
 pstruct_t *firststruct = NULL;
 pstruct_t *laststruct = NULL;
-methodmap_t *methodmap_first = NULL;
-methodmap_t *methodmap_last = NULL;
+ke::Vector<ke::UniquePtr<methodmap_t>> sMethodmaps;
 
 structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member)
 {
@@ -384,15 +383,22 @@ stack_scope_id()
   return sStackScopes.back().scope_id;
 }
 
-methodmap_t*
-methodmap_add(methodmap_t* parent,
-              LayoutSpec spec,
-              const char* name)
+methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, const char* name)
+ : parent(parent),
+   tag(0),
+   nullable(false),
+   keyword_nullable(false),
+   spec(spec),
+   dtor(nullptr),
+   ctor(nullptr)
 {
-  methodmap_t *map = (methodmap_t *)calloc(1, sizeof(methodmap_t));
-  map->parent = parent;
-  map->spec = spec;
-  strcpy(map->name, name);
+  ke::SafeStrcpy(this->name, sizeof(this->name), name);
+}
+
+methodmap_t*
+methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name)
+{
+  auto map = ke::MakeUnique<methodmap_t>(parent, spec, name);
 
   if (spec == Layout_MethodMap && parent) {
     if (parent->nullable)
@@ -401,19 +407,13 @@ methodmap_add(methodmap_t* parent,
       map->keyword_nullable = parent->keyword_nullable;
   }
 
-  if (!methodmap_first) {
-    methodmap_first = map;
-    methodmap_last = map;
-  } else {
-    methodmap_last->next = map;
-    methodmap_last = map;
-  }
-
   if (spec == Layout_MethodMap)
-    map->tag = gTypes.defineMethodmap(name, map)->tagid();
+    map->tag = gTypes.defineMethodmap(name, map.get())->tagid();
   else
     map->tag = gTypes.defineObject(name)->tagid();
-  return map;
+  sMethodmaps.append(ke::Move(map));
+
+  return sMethodmaps.back().get();
 }
 
 methodmap_t *methodmap_find_by_tag(int tag)
@@ -442,14 +442,7 @@ methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name)
 
 void methodmaps_free()
 {
-  methodmap_t *ptr = methodmap_first;
-  while (ptr) {
-    methodmap_t *next = ptr->next;
-    free(ptr);
-    ptr = next;
-  }
-  methodmap_first = NULL;
-  methodmap_last = NULL;
+  sMethodmaps.clear();
 }
 
 LayoutSpec deduce_layout_spec_by_tag(int tag)

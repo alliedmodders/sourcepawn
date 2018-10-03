@@ -3457,8 +3457,6 @@ parse_method(methodmap_t *map)
   auto method = ke::MakeUnique<methodmap_method_t>(map);
   strcpy(method->name, ident.name);
   method->target = target;
-  method->getter = nullptr;
-  method->setter = nullptr;
   method->is_static = is_static;
 
   // If the symbol is a constructor, we bypass the initial argument checks.

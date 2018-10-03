@@ -101,7 +101,8 @@ struct methodmap_method_t
 
 struct methodmap_t
 {
-  methodmap_t *next;
+  methodmap_t(methodmap_t* parent, LayoutSpec spec, const char* name);
+
   methodmap_t *parent;
   int tag;
   bool nullable;
