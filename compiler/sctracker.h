@@ -60,9 +60,10 @@ struct structarg_t
 
 struct pstruct_t
 {
+  explicit pstruct_t(const char* name);
+
   char name[sNAMEMAX+1];
   ke::Vector<ke::UniquePtr<structarg_t>> args;
-  pstruct_t *next;
 };
 
 // The ordering of these definitions should be preserved for
