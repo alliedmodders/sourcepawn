@@ -431,27 +431,13 @@ methodmap_t *methodmap_find_by_name(const char *name)
 
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name)
 {
-  size_t i;
-  for (i = 0; i < map->nummethods; i++) {
-    if (strcmp(map->methods[i]->name, name) == 0)
-      return map->methods[i];
+  for (const auto& method : map->methods) {
+    if (strcmp(method->name, name) == 0)
+      return method.get();
   }
   if (map->parent)
     return methodmap_find_method(map->parent, name);
-  return NULL;
-}
-
-void methodmap_add_method(methodmap_t* map, methodmap_method_t* method)
-{
-  methodmap_method_t** methods =
-    (methodmap_method_t**)realloc(map->methods, sizeof(methodmap_method_t*) * (map->nummethods + 1));
-  if (!methods) {
-    error(FATAL_ERROR_OOM);
-    return;
-  }
-  method->parent = map;
-  map->methods = methods;
-  map->methods[map->nummethods++] = method;
+  return nullptr;
 }
 
 void methodmaps_free()
@@ -459,9 +445,6 @@ void methodmaps_free()
   methodmap_t *ptr = methodmap_first;
   while (ptr) {
     methodmap_t *next = ptr->next;
-    for (size_t i = 0; i < ptr->nummethods; i++)
-      free(ptr->methods[i]);
-    free(ptr->methods);
     free(ptr);
     ptr = next;
   }

@@ -276,7 +276,7 @@ struct symbol {
 #define sLOCAL    1     /* local variable/constant */
 #define sSTATIC   2     /* global life, local scope */
 
-struct methodmap_method_s;
+struct methodmap_method_t;
 
 struct value {
   symbol *sym;          /* symbol in symbol table, NULL for (constant) expression */
@@ -304,7 +304,7 @@ struct value {
   }
 
   /* when ident == iACCESSOR */
-  struct methodmap_method_s *accessor;
+  methodmap_method_t *accessor;
 };
 
 /* Wrapper around value + l/rvalue bit. */
@@ -768,8 +768,8 @@ void char2addr(void);
 void addconst(cell value);
 void setheap_save(cell value);
 void stradjust(regid reg);
-void invoke_getter(struct methodmap_method_s *method);
-void invoke_setter(struct methodmap_method_s *method, int save);
+void invoke_getter(methodmap_method_t *method);
+void invoke_setter(methodmap_method_t *method, int save);
 void inc_pri();
 void dec_pri();
 void load_hidden_arg();

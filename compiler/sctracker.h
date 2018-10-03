@@ -67,8 +67,17 @@ typedef enum LayoutSpec_t
   Layout_Class
 } LayoutSpec;
 
-typedef struct methodmap_method_s
+struct methodmap_method_t
 {
+  explicit methodmap_method_t(methodmap_t* parent)
+   : name(),
+     parent(parent),
+     target(nullptr),
+     getter(nullptr),
+     setter(nullptr),
+     is_static(false)
+  {}
+
   char name[METHOD_NAMEMAX + 1];
   methodmap_t* parent;
   symbol *target;
@@ -88,7 +97,7 @@ typedef struct methodmap_method_s
       return pc_tag_void;
     return valp->tag;
   }
-} methodmap_method_t;
+};
 
 struct methodmap_t
 {
@@ -99,8 +108,7 @@ struct methodmap_t
   bool keyword_nullable;
   LayoutSpec spec;
   char name[sNAMEMAX+1];
-  methodmap_method_t **methods;
-  size_t nummethods;
+  ke::Vector<ke::UniquePtr<methodmap_method_t>> methods;
 
   bool must_construct_with_new() const {
     return nullable || keyword_nullable;
@@ -178,7 +186,6 @@ methodmap_t* methodmap_add(methodmap_t* parent,
                            const char* name);
 methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);
-void methodmap_add_method(methodmap_t* map, methodmap_method_t* method);
 void methodmaps_free();
 
 size_t UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...);
