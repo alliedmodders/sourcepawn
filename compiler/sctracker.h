@@ -189,6 +189,4 @@ methodmap_t *methodmap_find_by_name(const char *name);
 methodmap_method_t *methodmap_find_method(methodmap_t *map, const char *name);
 void methodmaps_free();
 
-size_t UTIL_Format(char *buffer, size_t maxlength, const char *fmt, ...);
-
 #endif //_INCLUDE_SOURCEPAWN_COMPILER_TRACKER_H_
