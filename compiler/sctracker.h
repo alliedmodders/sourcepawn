@@ -35,8 +35,19 @@ struct funcenum_t
   funcenum_t *next;
 };
 
-typedef struct structarg_s
+struct structarg_t
 {
+  structarg_t()
+   : tag(0),
+     dimcount(0),
+     dims(),
+     name(),
+     fconst(0),
+     ident(0),
+     offs(0),
+     index(0)
+  {}
+
   int tag;
   int dimcount;
   int dims[sDIMEN_MAX];
@@ -45,13 +56,12 @@ typedef struct structarg_s
   int ident;
   unsigned int offs;
   int index;
-} structarg_t;
+};
 
 struct pstruct_t
 {
-  int argcount;
   char name[sNAMEMAX+1];
-  structarg_t **args;
+  ke::Vector<ke::UniquePtr<structarg_t>> args;
   pstruct_t *next;
 };
 

@@ -944,11 +944,11 @@ RttiBuilder::add_struct(Type* type)
   classdefs_->add(classdef);
 
   // Pre-reserve space in case we recursively add structs.
-  for (int i = 0; i < ps->argcount; i++)
+  for (size_t i = 0; i < ps->args.length(); i++)
     fields_->add();
 
-  for (int i = 0; i < ps->argcount; i++) {
-    const structarg_t* arg = ps->args[i];
+  for (size_t i = 0; i < ps->args.length(); i++) {
+    const structarg_t* arg = ps->args[i].get();
 
     variable_type_t type = {
       arg->tag,

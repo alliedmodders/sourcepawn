@@ -34,14 +34,11 @@ ke::Vector<ke::UniquePtr<methodmap_t>> sMethodmaps;
 
 structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member)
 {
-  int i;
-
-  for (i=0; i<pstruct->argcount; i++) {
-    if (strcmp(pstruct->args[i]->name, member) == 0)
-      return pstruct->args[i];
+  for (const auto& arg : pstruct->args) {
+    if (strcmp(arg->name, member) == 0)
+      return arg.get();
   }
-
-  return NULL;
+  return nullptr;
 }
 
 pstruct_t *pstructs_add(const char *name)
@@ -68,9 +65,6 @@ void pstructs_free()
 
   p = firststruct;
   while (p) {
-    while (p->argcount--)
-      free(p->args[p->argcount]);
-    free(p->args);
     next = p->next;
     free(p);
     p = next;
@@ -94,33 +88,16 @@ pstruct_t *pstructs_find(const char *name)
 
 structarg_t *pstructs_addarg(pstruct_t *pstruct, const structarg_t *arg)
 {
-  structarg_t *newarg;
-  int i;
+  if (pstructs_getarg(pstruct, arg->name))
+    return nullptr;
 
-  for (i=0; i<pstruct->argcount; i++) {
-    if (strcmp(pstruct->args[i]->name, arg->name) == 0) {
-      /* Don't allow dup names */
-      return NULL;
-    }
-  }
-  
-  newarg = (structarg_t *)malloc(sizeof(structarg_t));
+  auto newarg = ke::UniquePtr<structarg_t>();
+  memcpy(newarg.get(), arg, sizeof(structarg_t));
+  newarg->offs = pstruct->args.length() * sizeof(cell);
+  newarg->index = pstruct->args.length();
+  pstruct->args.append(ke::Move(newarg));
 
-  memcpy(newarg, arg, sizeof(structarg_t));
-
-  if (pstruct->argcount == 0) {
-    pstruct->args = (structarg_t **)malloc(sizeof(structarg_t *) * 1);
-  } else {
-    pstruct->args = (structarg_t **)realloc(
-              pstruct->args,
-              sizeof(structarg_t *) * (pstruct->argcount + 1));
-  }
-
-  newarg->offs = pstruct->argcount * sizeof(cell);
-  newarg->index = pstruct->argcount;
-  pstruct->args[pstruct->argcount++] = newarg;
-
-  return newarg;
+  return pstruct->args.back().get();
 }
 
 void funcenums_free()
