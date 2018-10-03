@@ -349,7 +349,7 @@ SmxV1Image::validateNatives()
 
   for (size_t i = 0; i < length; i++) {
     if (!validateName(natives[i].name))
-      return error("invalid pubvar name");
+      return error("invalid native name");
   }
 
   natives_ = List<sp_file_natives_t>(natives, length);
@@ -381,6 +381,10 @@ SmxV1Image::validateRtti()
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
     const char* table_name = tables[i];
     const Section* section = findSection(table_name);
+    if (!section) {
+      error_.format("missing %s section", table_name);
+      return false;
+    }
     if (!validateRttiHeader(section)) {
       error_.format("could not validate %s section", table_name);
       return false;
