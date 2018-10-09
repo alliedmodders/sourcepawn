@@ -33,6 +33,7 @@ ControlFlowGraph::~ControlFlowGraph()
   while (iter != blocks_.end()) {
     Block* block = *iter;
     iter = blocks_.erase(iter);
+    block->unlink();
     block->Release();
   }
 }
