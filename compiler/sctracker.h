@@ -16,23 +16,31 @@ typedef struct funcarg_s
   int ommittable;
 } funcarg_t;
 
-typedef struct functag_s
+struct functag_t
 {
+  functag_t()
+   : ret_tag(0),
+     usage(0),
+     argcount(0),
+     ommittable(0),
+     args()
+  {}
   int ret_tag;
   int usage;
   int argcount;
   int ommittable;
   funcarg_t args[SP_MAX_EXEC_PARAMS];
-  struct functag_s *next;
-} functag_t;
+};
 
 struct funcenum_t
 {
+  funcenum_t()
+   : tag(0),
+     name()
+  {}
   int tag;
   char name[METHOD_NAMEMAX+1];
-  functag_t *first;
-  functag_t *last;
-  funcenum_t *next;
+  ke::Vector<ke::UniquePtr<functag_t>> entries;
 };
 
 struct structarg_t

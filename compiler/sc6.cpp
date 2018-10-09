@@ -1056,7 +1056,7 @@ RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
   typedefs_->add();
 
   Vector<uint8_t> bytes;
-  encode_signature_into(bytes, fe->first);
+  encode_signature_into(bytes, fe->entries.back().get());
   uint32_t signature = type_pool_.add(bytes);
 
   smx_rtti_typedef& def = typedefs_->at(index);
@@ -1077,14 +1077,12 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
   typeid_cache_.add(p, type, index);
   typesets_->add();
 
-  uint32_t typecount = 0;
-  for (functag_t* iter = fe->first; iter; iter = iter->next)
-    typecount++;
+  uint32_t typecount = (uint32_t)fe->entries.length();
 
   Vector<uint8_t> bytes;
   CompactEncodeUint32(bytes, typecount);
-  for (functag_t* iter = fe->first; iter; iter = iter->next)
-    encode_signature_into(bytes, iter);
+  for (const auto& iter : fe->entries)
+    encode_signature_into(bytes, iter.get());
 
   smx_rtti_typeset& entry = typesets_->at(index);
   entry.name = names_->add(gAtoms, type->name());
@@ -1163,7 +1161,7 @@ RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
 void
 RttiBuilder::encode_funcenum_into(Vector<uint8_t>& bytes, Type* type, funcenum_t* fe)
 {
-  if (fe->first == fe->last) {
+  if (fe->entries.length() == 1) {
     uint32_t index = add_funcenum(type, fe);
     bytes.append(cb::kTypedef);
     CompactEncodeUint32(bytes, index);
