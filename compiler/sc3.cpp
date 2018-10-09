@@ -465,8 +465,8 @@ static int matchfunctags(Type* formal, Type* actual)
   if (!e)
     return FALSE;
 
-  for (functag_t *formalfn = e->first; formalfn; formalfn = formalfn->next) {
-    if (functag_compare(formalfn, actualfn))
+  for (const auto& formalfn : e->entries) {
+    if (functag_compare(formalfn.get(), actualfn))
       return TRUE;
   }
 

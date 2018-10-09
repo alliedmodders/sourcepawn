@@ -26,8 +26,7 @@ struct MemoryScope {
 
 ke::Vector<MemoryScope> sStackScopes;
 ke::Vector<MemoryScope> sHeapScopes;
-funcenum_t *firstenum = NULL;
-funcenum_t *lastenum = NULL;
+ke::Vector<ke::UniquePtr<funcenum_t>> sFuncEnums;
 ke::Vector<ke::UniquePtr<pstruct_t>> sStructs;
 ke::Vector<ke::UniquePtr<methodmap_t>> sMethodmaps;
 
@@ -87,44 +86,18 @@ pstructs_addarg(pstruct_t *pstruct, const structarg_t *arg)
 
 void funcenums_free()
 {
-  funcenum_t *e, *next;
-
-  e = firstenum;
-  while (e) {
-    functag_t *tag, *nexttag;
-    tag = e->first;
-    while (tag) {
-      nexttag = tag->next;
-      free(tag);
-      tag = nexttag;
-    }
-    next = e->next;
-    free(e);
-    e = next;
-  }
-
-  firstenum = NULL;
-  lastenum = NULL;
+  sFuncEnums.clear();
 }
 
 funcenum_t *funcenums_add(const char *name)
 {
-  funcenum_t *e = (funcenum_t *)malloc(sizeof(funcenum_t));
-
-  memset(e, 0, sizeof(funcenum_t));
-
-  if (!firstenum) {
-    firstenum = e;
-    lastenum = e;
-  } else {
-    lastenum->next = e;
-    lastenum = e;
-  }
+  auto e = ke::MakeUnique<funcenum_t>();
 
   strcpy(e->name, name);
-  e->tag = gTypes.defineFunction(name, e)->tagid();
+  e->tag = gTypes.defineFunction(name, e.get())->tagid();
 
-  return e;
+  sFuncEnums.append(ke::Move(e));
+  return sFuncEnums.back().get();
 }
 
 funcenum_t *funcenum_for_symbol(symbol *sym)
@@ -168,32 +141,19 @@ functag_t *functag_find_intrinsic(int tag)
   Type* type = gTypes.find(tag);
   funcenum_t *fe = type->asFunction();
   if (!fe)
-    return NULL;
-
+    return nullptr;
   if (strncmp(fe->name, "::ft:", 5) != 0)
-    return NULL;
-
-  assert(fe->first && fe->first == fe->last);
-  return fe->first;
+    return nullptr;
+  if (fe->entries.empty())
+    return nullptr;
+  return fe->entries.back().get();
 }
 
 functag_t *functags_add(funcenum_t *en, functag_t *src)
 {
-  functag_t *t = (functag_t *)malloc(sizeof(functag_t));
-  
-  memcpy(t, src, sizeof(functag_t));
-
-  t->next = NULL;
-
-  if (en->first == NULL) {
-    en->first = t;
-    en->last = t;
-  } else {
-    en->last->next = t;
-    en->last = t;
-  }
-
-  return t;
+  auto t = ke::MakeUnique<functag_t>(*src);
+  en->entries.append(ke::Move(t));
+  return en->entries.back().get();
 }
 
 static void
