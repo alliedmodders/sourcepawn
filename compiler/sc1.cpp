@@ -1367,7 +1367,7 @@ static void dumpzero(int count)
  */
 static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
 {
-  int tok,i;
+  int tok;
   cell val;
   char *str;
   int cur_litidx = 0;
@@ -1534,7 +1534,7 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
   mysym->setAddr(glb_declared * sizeof(cell));
   glb_declared += pstruct->args.length();
 
-  for (i=0; i<pstruct->args.length(); i++)
+  for (size_t i = 0; i < pstruct->args.length(); i++)
     litadd(values[i]);
 
   begdseg();
