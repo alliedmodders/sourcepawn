@@ -75,7 +75,7 @@ pstructs_addarg(pstruct_t *pstruct, const structarg_t *arg)
   if (pstructs_getarg(pstruct, arg->name))
     return nullptr;
 
-  auto newarg = ke::UniquePtr<structarg_t>();
+  auto newarg = ke::MakeUnique<structarg_t>();
   memcpy(newarg.get(), arg, sizeof(structarg_t));
   newarg->offs = pstruct->args.length() * sizeof(cell);
   newarg->index = pstruct->args.length();
