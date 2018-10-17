@@ -1,0 +1,1 @@
+(10) : error 011: symbol 'A' already defined - did you use a methodmap before its declaration?

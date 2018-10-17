@@ -35,7 +35,7 @@ static const char *errmsg[] = {
 /*008*/  "must be a constant expression; assumed zero\n",
 /*009*/  "invalid array size (negative, zero or out of bounds)\n",
 /*010*/  "invalid function or declaration\n",
-/*011*/  "unused11\n",
+/*011*/  "symbol '%s' already defined - did you use a methodmap before its declaration?\n",
 /*012*/  "invalid function call, not a valid address\n",
 /*013*/  "no entry point (no public functions)\n",
 /*014*/  "invalid statement; not in switch\n",

@@ -3473,9 +3473,12 @@ parse_method(methodmap_t *map)
 
 void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
 {
-  if (can_redef) {
-    symbol *sym = findglb(map->name);
-    if (sym && sym->ident != iMETHODMAP) {
+  if (!can_redef)
+    return;
+
+  symbol *sym = findglb(map->name);
+  if (sym && sym->ident != iMETHODMAP) {
+    if (sym->ident == iCONSTEXPR) {
       // We should only hit this on the first pass. Assert really hard that
       // we're about to kill an enum definition and not something random.
       assert(sc_status == statFIRST);
@@ -3501,17 +3504,22 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
         free(sym->dim.enumlist);
         sym->dim.enumlist = NULL;
       }
-    } else if (!sym) {
-      sym = addsym(
-        map->name,    // name
-        0,            // addr
-        iMETHODMAP,   // ident
-        sGLOBAL,      // vclass
-        map->tag,     // tag
-        uDEFINE);     // usage
+    } else {
+      error(11, map->name);
+      sym = nullptr;
     }
-    sym->methodmap = map;
   }
+
+  if (!sym) {
+    sym = addsym(
+      map->name,    // name
+      0,            // addr
+      iMETHODMAP,   // ident
+      sGLOBAL,      // vclass
+      map->tag,     // tag
+      uDEFINE);     // usage
+  }
+  sym->methodmap = map;
 }
 
 static void declare_handle_intrinsics()
