@@ -10,16 +10,10 @@ struct NameAndScope
 {
   sp::Atom* name;
   int fnumber;
-  int *cmptag;
-  mutable symbol *matched;
-  mutable int count;
 
-  NameAndScope(const char *name, int fnumber, int *cmptag)
+  NameAndScope(const char *name, int fnumber)
    : name(gAtoms.add(name)),
-     fnumber(fnumber),
-     cmptag(cmptag),
-     matched(nullptr),
-     count(0)
+     fnumber(fnumber)
   {
   }
 };
@@ -46,12 +40,6 @@ struct SymbolHashPolicy
       return false;
     if (key.name != sym->nameAtom())
       return false;
-    if (key.cmptag) {
-      key.count++;
-      key.matched = sym;
-      if (*key.cmptag != sym->tag)
-        return false;
-    }
     return true;
   }
   static bool matches(const symbol *key, symbol *sym) {
@@ -86,26 +74,9 @@ DestroyHashTable(HashTable *ht)
 }
 
 symbol *
-FindTaggedInHashTable(HashTable *ht, const char *name, int fnumber, int *cmptag)
-{
-  NameAndScope nas(name, fnumber, cmptag);
-  HashTable::Result r = ht->find(nas);
-  if (!r.found()) {
-    if (nas.matched) {
-      *cmptag = nas.count;
-      return nas.matched;
-    }
-    return nullptr;
-  }
-
-  *cmptag = 1;
-  return *r;
-}
-
-symbol *
 FindInHashTable(HashTable *ht, const char *name, int fnumber)
 {
-  NameAndScope nas(name, fnumber, nullptr);
+  NameAndScope nas(name, fnumber);
   HashTable::Result r = ht->find(nas);
   if (!r.found())
     return nullptr;

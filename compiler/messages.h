@@ -74,7 +74,7 @@ static const char *errmsg[] = {
 /*047*/  "array sizes do not match, or destination array is too small\n",
 /*048*/  "array (s do not match\n",
 /*049*/  "invalid line continuation\n",
-/*050*/  "unused50\n",
+/*050*/  "constant '%s' already defined\n",
 /*051*/  "invalid subscript, use \"[ ]\" operators on major dimensions\n",
 /*052*/  "multi-dimensional arrays must be fully initialized\n",
 /*053*/  "exceeding maximum number of dimensions\n",

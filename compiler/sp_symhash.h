@@ -27,8 +27,6 @@ void DestroyHashTable(HashTable *ht);
 void AddToHashTable(HashTable *ht, symbol *sym);
 void RemoveFromHashTable(HashTable *ht, symbol *sym);
 symbol *FindInHashTable(HashTable *ht, const char *name, int fnumber);
-symbol *FindTaggedInHashTable(HashTable *ht, const char *name, int fnumber,
-                                      int *cmptag);
 
 #endif /* _INCLUDE_SPCOMP_SYMHASH_H_ */
 

@@ -1556,7 +1556,7 @@ static void declglb(declinfo_t *decl,int fpublic,int fstatic,int fstock)
       assert(!fstatic);
     }
     slength = fix_char_size(decl);
-    sym=findconst(decl->name,NULL);
+    sym=findconst(decl->name);
     if (sym==NULL) {
       sym=findglb(decl->name);
     } /* if */
@@ -2375,13 +2375,13 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
       if (enumfield!=NULL) {
         cell step;
         int cmptag=enumfield->index;
-        symbol *symfield=findconst(enumfield->name,&cmptag);
-        if (cmptag>1) {
+        symbol *symfield=findconst(enumfield->name);
+        assert(symfield);
+        if (symfield->tag!=cmptag) {
           error(91,enumfield->name); /* ambiguous constant, needs tag override */
           if (errorfound!=NULL)
             *errorfound=TRUE;
         }
-        assert(symfield!=NULL);
         assert(fieldlit<litidx);
         if (litidx-fieldlit>symfield->dim.array.length) {
           error(228);           /* length of initializer exceeds size of the enum field */
@@ -4006,6 +4006,9 @@ static void decl_enum(int vclass)
     /* :TODO: do we need a size modifier here for pc_tag_string? */
     if (matchtoken('='))
       exprconst(&value,NULL,NULL);      /* get value */
+    // Cannot shadow names; they must be prefixed.
+    if (findconst(constname))
+      error(50, constname);
     /* add_constant() checks whether a variable (global or local) or
      * a constant with the same name already exists
      */
@@ -5212,7 +5215,7 @@ symbol *add_constant(const char *name,cell val,int vclass,int tag)
       if (type==NULL) {
         redef=1;                /* new constant does not have a tag */
       } else {
-        tagsym=findconst(type->name(),NULL);
+        tagsym=findconst(type->name());
         if (tagsym==NULL || (tagsym->usage & uENUMROOT)==0)
           redef=1;              /* new constant is not an enumeration field */
       } /* if */
