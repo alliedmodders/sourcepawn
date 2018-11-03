@@ -794,14 +794,14 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         if (verbosity>1)
           verbosity=1;
         break;
-#if defined dos_setdrive
       case 'D':                 /* set active directory */
         ptr=option_value(ptr,argv,argc,&arg);
+#if defined dos_setdrive
         if (ptr[1]==':')
           dos_setdrive(toupper(*ptr)-'A'+1);    /* set active drive */
+#endif
         chdir(ptr);
         break;
-#endif
       case 'e':
         strlcpy(ename,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of error file */
         break;
@@ -1089,9 +1089,7 @@ static void about(void)
     pc_printf("Usage:   spcomp <filename> [filename...] [options]\n\n");
     pc_printf("Options:\n");
     pc_printf("         -a       output assembler code\n");
-#if defined dos_setdrive
     pc_printf("         -Dpath   active directory path\n");
-#endif
     pc_printf("         -e<name> set name of error file (quiet compile)\n");
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     pc_printf("         -H<hwnd> window handle to send a notification message on finish\n");
