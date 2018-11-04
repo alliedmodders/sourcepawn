@@ -41,13 +41,34 @@ def exec_argv(argv):
   stderr = stderr.decode('utf-8')
   return p.returncode, stdout, stderr
 
-def parse_manifest(path, manifest = {}):
+def parse_manifest(path, local_folder, source = {}):
+  manifest = {}
+  manifest['folder'] = source.get('folder', {}).copy()
+
   with open(path, 'r') as fp:
     cfg = configparser.ConfigParser()
     cfg.readfp(fp)
 
-  inherit = ['type', 'compiler', 'skip']
-  for key in inherit:
-    if cfg.has_option('folder', key):
-      manifest[key] = cfg.get('folder', key)
+  for section in cfg.sections():
+    if section not in manifest:
+      manifest[section] = {}
+    for key, val in cfg.items(section):
+      manifest[section][key] = val
+
+  for entry in manifest:
+    includes = manifest[entry].get('includes', None)
+    if includes and isinstance(includes, basestring):
+      includes = [include.strip() for include in includes.split(',')]
+      includes = [os.path.join(local_folder, include) for include in includes]
+      manifest[entry]['includes'] = includes
+
   return manifest
+
+def manifest_get(manifest, filename, key, default_value = None):
+  if filename in manifest:
+    if key in manifest[filename]:
+      return manifest[filename][key]
+  if 'folder' in manifest:
+    if key in manifest['folder']:
+      return manifest['folder'][key]
+  return default_value
