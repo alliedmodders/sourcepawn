@@ -5113,7 +5113,7 @@ static cell calc_array_datasize(symbol *sym, cell *offset)
   assert(sym->ident==iARRAY || sym->ident==iREFARRAY);
   length=sym->dim.array.length;
   if (sym->dim.array.level > 0) {
-    cell sublength=calc_array_datasize(finddepend(sym),offset);
+    cell sublength=calc_array_datasize(sym->array_child(),offset);
     if (offset!=NULL)
       *offset=length*(*offset+sizeof(cell));
     if (sublength>0)
@@ -6092,7 +6092,7 @@ static void doreturn(void)
       ident=iCONSTEXPR;                 /* avoid handling an "array" case */
     } /* if */
     /* see if this function already has a sub type (an array attached) */
-    sub=finddepend(curfunc);
+    sub=curfunc->array_return();
     assert(sub==NULL || sub->ident==iREFARRAY);
     if ((rettype & uRETVALUE)!=0) {
       int retarray=(ident==iARRAY || ident==iREFARRAY);
@@ -6125,8 +6125,8 @@ static void doreturn(void)
             if (sym->dim.array.length!=dim[numdim])
               error(47);    /* array sizes must match */
             if (numdim<level) {
-              sym=finddepend(sym);
-              sub=finddepend(sub);
+              sym=sym->array_child();
+              sub=sub->array_child();
               assert(sym!=NULL && sub!=NULL);
               /* ^^^ both arrays have the same dimensions (this was checked
                *     earlier) so the dependend should always be found
@@ -6147,7 +6147,7 @@ static void doreturn(void)
           dim[numdim]=(int)sub->dim.array.length;
           idxtag[numdim]=sub->x.tags.index;
           if (numdim<level) {
-            sub=finddepend(sub);
+            sub=sub->array_child();
             assert(sub!=NULL);
           } /* if */
           /* check that all dimensions are known */
@@ -6173,6 +6173,7 @@ static void doreturn(void)
         sub=addvariable2(curfunc->name(),(argcount+3)*sizeof(cell),iREFARRAY,sGLOBAL,
                          curfunc->tag,dim,numdim,idxtag,slength);
         sub->set_parent(curfunc);
+        curfunc->set_array_return(sub);
       } /* if */
       /* get the hidden parameter, copy the array (the array is on the heap;
        * it stays on the heap for the moment, and it is removed -usually- at

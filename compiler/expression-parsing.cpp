@@ -90,7 +90,7 @@ BaseExpressionParser::array_totalsize(symbol *sym)
   assert(sym->ident==iARRAY || sym->ident==iREFARRAY);
   length=sym->dim.array.length;
   if (sym->dim.array.level > 0) {
-    cell sublength=array_totalsize(finddepend(sym));
+    cell sublength=array_totalsize(sym->array_child());
     if (sublength>0)
       length=length+length*sublength;
     else
@@ -106,7 +106,7 @@ BaseExpressionParser::array_levelsize(symbol *sym,int level)
   assert(sym->ident==iARRAY || sym->ident==iREFARRAY);
   assert(level <= sym->dim.array.level);
   while (level-- > 0) {
-    sym=finddepend(sym);
+    sym=sym->array_child();
     assert(sym!=NULL);
   } /* if */
   return (sym->dim.array.slength ? sym->dim.array.slength : sym->dim.array.length);
@@ -188,7 +188,7 @@ BaseExpressionParser::parse_sizeof()
       } /* if */
       needtoken(']');
       if (subsym!=NULL)
-        subsym=finddepend(subsym);
+        subsym=subsym->array_child();
     } /* for */
     if (level>sym->dim.array.level+1) {
       error(28,sym->name());  /* invalid subscript */
@@ -254,7 +254,7 @@ BaseExpressionParser::parse_cellsof()
       } /* if */
       needtoken(']');
       if (subsym!=NULL)
-        subsym=finddepend(subsym);
+        subsym=subsym->array_child();
     } /* for */
     if (level>sym->dim.array.level+1) {
       error(28,sym->name());  /* invalid subscript */
@@ -323,7 +323,7 @@ BaseExpressionParser::parse_tagof()
       } /* if */
       needtoken(']');
       if (subsym!=NULL)
-        subsym=finddepend(subsym);
+        subsym=subsym->array_child();
     } /* for */
     if (level>sym->dim.array.level+1)
       error(28,sym->name());  /* invalid subscript */

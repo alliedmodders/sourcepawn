@@ -1002,7 +1002,7 @@ RttiBuilder::encode_signature(symbol* sym)
   if (is_variadic)
     bytes.append(cb::kVariadic);
 
-  symbol* child = finddepend(sym);
+  symbol* child = sym->array_return();
   if (child && child->dim.array.length) {
     encode_ret_array_into(bytes, child);
   } else if (sym->tag == pc_tag_void) {

@@ -2850,17 +2850,6 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *
   return firstmatch;
 }
 
-static symbol *find_symbol_child(const symbol *root,const symbol *sym)
-{
-  symbol *ptr=root->next;
-  while (ptr!=NULL) {
-    if (ptr->parent()==sym)
-      return ptr;
-    ptr=ptr->next;
-  } /* while */
-  return NULL;
-}
-
 /* Adds "bywhom" to the list of referrers of "entry". Typically,
  * bywhom will be the function that uses a variable or that calls
  * the function.
@@ -2947,16 +2936,6 @@ symbol *findconst(const char *name,int *cmptag)
   return sym;
 }
 
-symbol *finddepend(const symbol *parent)
-{
-  symbol *sym;
-
-  sym=find_symbol_child(&loctab,parent);    /* try local symbols first */
-  if (sym==NULL)                            /* not found */
-    sym=find_symbol_child(&glbtab,parent);
-  return sym;
-}
-
 FunctionData::FunctionData()
  : stacksize(0),
    funcid(0),
@@ -3003,7 +2982,8 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    methodmap(nullptr),
    addr_(symaddr),
    name_(nullptr),
-   parent_(nullptr)
+   parent_(nullptr),
+   child_(nullptr)
 {
   if (symname)
     name_ = gAtoms.add(symname);
@@ -3112,6 +3092,9 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
       top->dim.array.level=(short)(numdim-level-1);
       top->x.tags.index=idxtag[level];
       top->set_parent(parent);
+      if (parent) {
+        parent->set_array_child(top);
+      }
       parent=top;
       if (level==0)
         sym=top;

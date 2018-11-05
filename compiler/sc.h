@@ -213,11 +213,31 @@ struct symbol {
     parent_ = parent;
   }
 
+  symbol* array_return() const {
+    assert(ident == iFUNCTN);
+    return child_;
+  }
+  void set_array_return(symbol* child) {
+    assert(ident == iFUNCTN);
+    assert(!child_);
+    child_ = child;
+  }
+  symbol* array_child() const {
+    assert(ident == iARRAY || ident == iREFARRAY);
+    return child_;
+  }
+  void set_array_child(symbol* child) {
+    assert(ident == iARRAY || ident == iREFARRAY);
+    assert(!child_);
+    child_ = child;
+  }
+
  private:
   cell addr_;            /* address or offset (or value for constant, index for native function) */
   sp::Atom* name_;
   ke::UniquePtr<SymbolData> data_;
   symbol* parent_;
+  symbol* child_;
 };
 
 /*  Possible entries for "usage"
@@ -699,7 +719,6 @@ void markusage(symbol *sym,int usage);
 symbol *findglb(const char *name);
 symbol *findloc(const char *name);
 symbol *findconst(const char *name,int *matchtag);
-symbol *finddepend(const symbol *parent);
 symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag, int usage);
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,
                             int dim[],int numdim,int idxtag[]);
