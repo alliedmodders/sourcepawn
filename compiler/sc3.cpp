@@ -1938,7 +1938,7 @@ restart:
          */
         assert(lval2.sym==NULL || lval2.sym->dim.array.level==0);
         if (lval2.sym &&
-            lval2.sym->parent &&
+            lval2.sym->parent() &&
             lval2.sym->dim.array.length > 0 &&
             sym->dim.array.level==0)
         {
@@ -1997,7 +1997,7 @@ restart:
        */
       if (lval2.ident==iCONSTEXPR &&
           lval2.sym &&
-          lval2.sym->parent &&
+          lval2.sym->parent() &&
           lval2.sym->dim.array.length > 0 &&
           sym->dim.array.level == 0)
       {

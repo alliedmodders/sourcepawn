@@ -3491,11 +3491,11 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef)
           symbol *csym = findglb(cv->name);
           if (csym &&
               csym->ident == iCONSTEXPR &&
-              csym->parent == sym &&
+              csym->parent() == sym &&
               (csym->usage & uENUMFIELD))
           {
             csym->usage &= ~uENUMFIELD;
-            csym->parent = NULL;
+            csym->set_parent(nullptr);
           }
         }
         delete_consttable(sym->dim.enumlist);
@@ -4041,7 +4041,7 @@ static void decl_enum(int vclass)
     sym->dim.array.length=size;
     sym->dim.array.level=0;
     sym->dim.array.slength=0;
-    sym->parent=enumsym;
+    sym->set_parent(enumsym);
     /* add the constant to a separate list as well */
     if (enumroot!=NULL) {
       sym->usage |= uENUMFIELD;
@@ -4982,7 +4982,7 @@ static void reduce_referrers(symbol *root)
   do {
     restart=0;
     for (sym=root->next; sym!=NULL; sym=sym->next) {
-      if (sym->parent!=NULL)
+      if (sym->parent()!=NULL)
         continue;                 /* hierarchical data type */
       if (sym->ident==iFUNCTN
           && (sym->usage & uNATIVE)==0
@@ -4992,7 +4992,7 @@ static void reduce_referrers(symbol *root)
         sym->usage&=~(uREAD | uWRITTEN);  /* erase usage bits if there is no referrer */
         /* find all symbols that are referred by this symbol */
         for (ref=root->next; ref!=NULL; ref=ref->next) {
-          if (ref->parent!=NULL)
+          if (ref->parent()!=NULL)
             continue;             /* hierarchical data type */
           size_t i;
           for (i=0; i<ref->refers.length() && ref->refers[i]!=sym; i++)
@@ -5005,7 +5005,7 @@ static void reduce_referrers(symbol *root)
         } /* for */
       } else if ((sym->ident==iVARIABLE || sym->ident==iARRAY)
                  && (sym->usage & uPUBLIC)==0
-                 && sym->parent==NULL
+                 && sym->parent()==NULL
                  && count_referrers(sym)==0)
       {
         sym->usage&=~(uREAD | uWRITTEN);  /* erase usage bits if there is no referrer */
@@ -5037,12 +5037,14 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
   symbol *parent;
   while (sym!=NULL) {
     if (sym->compound < level) {
-      parent = sym->parent;
+      parent = sym->parent();
       if (parent == NULL || (parent->ident != iARRAY && parent->ident != iREFARRAY))
         break;
       /* This is one dimension of a multidimensional array. Find the top symbol. */
-      while (parent->parent != NULL && (parent->parent->ident == iARRAY || parent->parent->ident == iREFARRAY)) {
-        parent = parent->parent;
+      while (parent->parent() != NULL &&
+             (parent->parent()->ident == iARRAY || parent->parent()->ident == iREFARRAY))
+      {
+        parent = parent->parent();
       }
       /* Only the top symbol gets the compound level set. */
       if (parent->compound < level)
@@ -5078,7 +5080,7 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       break;
     default:
       /* a variable */
-      if (sym->parent!=NULL)
+      if (sym->parent()!=NULL)
         break;                      /* hierarchical data type */
       if ((sym->usage & (uWRITTEN | uREAD | uSTOCK))==0) {
         error(sym,203,sym->name());  /* symbol isn't used (and not stock) */
@@ -6170,7 +6172,7 @@ static void doreturn(void)
           /* nothing */;
         sub=addvariable2(curfunc->name(),(argcount+3)*sizeof(cell),iREFARRAY,sGLOBAL,
                          curfunc->tag,dim,numdim,idxtag,slength);
-        sub->parent=curfunc;
+        sub->set_parent(curfunc);
       } /* if */
       /* get the hidden parameter, copy the array (the array is on the heap;
        * it stays on the heap for the moment, and it is removed -usually- at

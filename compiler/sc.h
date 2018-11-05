@@ -160,7 +160,6 @@ struct symbol {
   ~symbol();
 
   symbol *next;
-  symbol *parent;  /* hierarchical types */
   cell codeaddr;        /* address (in the code segment) where the symbol declaration starts */
   char vclass;          /* sLOCAL if "addr" refers to a local symbol */
   char ident;           /* see below for possible values */
@@ -207,11 +206,18 @@ struct symbol {
     assert(ident == iFUNCTN);
     return data_->asFunction();
   }
+  symbol* parent() const {
+    return parent_;
+  }
+  void set_parent(symbol* parent) {
+    parent_ = parent;
+  }
 
  private:
   cell addr_;            /* address or offset (or value for constant, index for native function) */
   sp::Atom* name_;
   ke::UniquePtr<SymbolData> data_;
+  symbol* parent_;
 };
 
 /*  Possible entries for "usage"
