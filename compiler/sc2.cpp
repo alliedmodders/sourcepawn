@@ -2681,17 +2681,11 @@ int isoctal(char c)
  * In the global list, the symbols are kept in sorted order, so that the
  * public functions are written in sorted order.
  */
-static symbol *add_symbol(symbol *root,symbol *entry,int sort)
+static symbol *add_symbol(symbol *root,symbol *entry)
 {
-  int global = root==&glbtab;
-
-  if (sort)
-    while (root->next!=NULL && strcmp(entry->name(),root->next->name())>0)
-      root=root->next;
-
   entry->next=root->next;
   root->next=entry;
-  if (global)
+  if (root == &glbtab)
     AddToHashTable(sp_Globals, entry);
   return entry;
 }
@@ -3033,8 +3027,8 @@ symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag,int usage
 
   /* then insert it in the list */
   if (vclass==sGLOBAL)
-    return add_symbol(&glbtab,sym,TRUE);
-  return add_symbol(&loctab,sym,FALSE);
+    return add_symbol(&glbtab,sym);
+  return add_symbol(&loctab,sym);
 }
 
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,

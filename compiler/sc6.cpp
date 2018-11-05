@@ -596,6 +596,13 @@ static int sort_by_addr(const void *a1, const void *a2)
   return s1->addr() - s2->addr();
 }
 
+static int sort_by_name(const void* a1, const void* a2)
+{
+  symbol *s1 = *(symbol **)a1;
+  symbol *s2 = *(symbol **)a2;
+  return strcmp(s1->name(), s2->name());
+}
+
 struct function_entry {
   symbol *sym;
   AString name;
@@ -1242,8 +1249,14 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
   Vector<symbol *> nativeList;
   Vector<function_entry> functions;
 
+  // Sort globals.
+  Vector<symbol*> global_symbols;
+  for (symbol *sym=glbtab.next; sym; sym=sym->next)
+    global_symbols.append(sym);
+  qsort(global_symbols.buffer(), global_symbols.length(), sizeof(symbol *), sort_by_name);
+
   // Build the easy symbol tables.
-  for (symbol *sym=glbtab.next; sym; sym=sym->next) {
+  for (const auto& sym : global_symbols) {
     if (sym->ident==iFUNCTN) {
       if ((sym->usage & uNATIVE)!=0 && (sym->usage & uREAD)!=0 && sym->addr() >= 0) {
         // Natives require special handling, so we save them for later.
