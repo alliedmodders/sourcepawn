@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <amtl/am-unused.h>
 #include <amtl/am-platform.h>
 #include "types.h"
@@ -655,7 +656,6 @@ static void resetglobals(void)
   sc_allowtags=TRUE;    /* allow/detect tagnames */
   sc_status=statIDLE;
   pc_addlibtable=TRUE;  /* by default, add a "library table" to the output file */
-  pc_docexpr=FALSE;
   pc_deprecate=NULL;
   pc_memflags=0;
 }
@@ -800,7 +800,10 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         if (ptr[1]==':')
           dos_setdrive(toupper(*ptr)-'A'+1);    /* set active drive */
 #endif
-        chdir(ptr);
+        if (chdir(ptr)) {
+          fprintf(stderr, "chdir failed: %s\n", strerror(errno));
+          exit(1);
+        }
         break;
       case 'e':
         strlcpy(ename,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of error file */
