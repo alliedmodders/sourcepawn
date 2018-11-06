@@ -1204,8 +1204,8 @@ SC3ExpressionParser::hier14(value *lval1)
        */
       assert(exactmatch);
       for (i=0; i<level; i++) {
-        sym1=finddepend(sym1);
-        sym2=finddepend(sym2);
+        sym1=sym1->array_child();
+        sym2=sym2->array_child();
         assert(sym1!=NULL && sym2!=NULL);
         /* ^^^ both arrays have the same dimensions (this was checked
          *     earlier) so the dependend should always be found
@@ -1938,7 +1938,7 @@ restart:
          */
         assert(lval2.sym==NULL || lval2.sym->dim.array.level==0);
         if (lval2.sym &&
-            lval2.sym->parent &&
+            lval2.sym->parent() &&
             lval2.sym->dim.array.length > 0 &&
             sym->dim.array.level==0)
         {
@@ -1976,7 +1976,7 @@ restart:
         ob_add();
         /* adjust the "value" structure and find the referenced array */
         lval1->ident=iREFARRAY;
-        lval1->sym=finddepend(sym);
+        lval1->sym=sym->array_child();
         assert(lval1->sym!=NULL);
         assert(lval1->sym->dim.array.level==sym->dim.array.level-1);
         cursym=lval1->sym;
@@ -1997,7 +1997,7 @@ restart:
        */
       if (lval2.ident==iCONSTEXPR &&
           lval2.sym &&
-          lval2.sym->parent &&
+          lval2.sym->parent() &&
           lval2.sym->dim.array.length > 0 &&
           sym->dim.array.level == 0)
       {
@@ -2119,7 +2119,7 @@ restart:
       error(76);
       return FALSE;
     }
-    if (finddepend(sym)) {
+    if (sym->array_return()) {
       error(182);
       return FALSE;
     }
@@ -2521,7 +2521,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
   lval_result->constval=0;
   lval_result->tag=sym->tag;
   /* check whether this is a function that returns an array */
-  symret=finddepend(sym);
+  symret=sym->array_return();
   assert(symret==NULL || symret->ident==iREFARRAY);
   if (symret!=NULL) {
     int retsize;
@@ -2806,7 +2806,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
               else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,TRUE))
                 error(229,sym->name());   /* index tag mismatch */
               append_constval(&arrayszlst,arg[argidx].name,sym->dim.array.length,level);
-              sym=finddepend(sym);
+              sym=sym->array_child();
               assert(sym!=NULL);
               level++;
             } /* if */

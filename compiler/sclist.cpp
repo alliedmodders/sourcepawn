@@ -507,7 +507,7 @@ stringlist *insert_dbgsymbol(symbol *sym)
       #endif
       symbol *sub;
       strcat(string," [ ");
-      for (sub=sym; sub!=NULL; sub=finddepend(sub)) {
+      for (sub=sym; sub!=NULL; sub=sub->array_child()) {
         assert(sub->dim.array.level==count--);
         sprintf(string+strlen(string),"%x:%x ",sub->x.tags.index,sub->dim.array.length);
       } /* for */

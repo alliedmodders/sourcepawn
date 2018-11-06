@@ -2681,17 +2681,11 @@ int isoctal(char c)
  * In the global list, the symbols are kept in sorted order, so that the
  * public functions are written in sorted order.
  */
-static symbol *add_symbol(symbol *root,symbol *entry,int sort)
+static symbol *add_symbol(symbol *root,symbol *entry)
 {
-  int global = root==&glbtab;
-
-  if (sort)
-    while (root->next!=NULL && strcmp(entry->name(),root->next->name())>0)
-      root=root->next;
-
   entry->next=root->next;
   root->next=entry;
-  if (global)
+  if (root == &glbtab)
     AddToHashTable(sp_Globals, entry);
   return entry;
 }
@@ -2725,8 +2719,8 @@ void delete_symbol(symbol *root,symbol *sym)
 int get_actual_compound(symbol *sym)
 {
   if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
-    while (sym->parent)
-      sym = sym->parent;
+    while (sym->parent())
+      sym = sym->parent();
   }
 
   return sym->compound;
@@ -2763,9 +2757,9 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
        * (locals) are also deleted
        */
       mustdelete=delete_functions;
-      for (parent_sym=sym->parent; parent_sym!=NULL && parent_sym->ident!=iFUNCTN; parent_sym=parent_sym->parent)
+      for (parent_sym=sym->parent(); parent_sym!=NULL && parent_sym->ident!=iFUNCTN; parent_sym=parent_sym->parent())
         assert(parent_sym->ident==iREFARRAY);
-      assert(parent_sym==NULL || (parent_sym->ident==iFUNCTN && parent_sym->parent==NULL));
+      assert(parent_sym==NULL || (parent_sym->ident==iFUNCTN && parent_sym->parent()==NULL));
       if (parent_sym==NULL || parent_sym->ident!=iFUNCTN)
         mustdelete=TRUE;
       break;
@@ -2778,14 +2772,14 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
        * NOT native functions
        */
       mustdelete=delete_functions || (sym->usage & uNATIVE)!=0;
-      assert(sym->parent==NULL);
+      assert(sym->parent()==NULL);
       break;
     case iMETHODMAP:
       // We delete methodmap symbols at the end, but since methodmaps
       // themselves get wiped, we null the pointer.
       sym->methodmap = nullptr;
       mustdelete = delete_functions;
-      assert(!sym->parent);
+      assert(!sym->parent());
       break;
     case iARRAYCELL:
     case iARRAYCHAR:
@@ -2827,7 +2821,7 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *
   sp::Atom* atom = gAtoms.add(name);
   while (sym!=NULL) {
     if (atom == sym->nameAtom()
-        && (sym->parent==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
+        && (sym->parent()==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
         && (sym->fnumber<0 || sym->fnumber==fnumber))       /* check file number for scope */
     {
       if (cmptag==NULL)
@@ -2848,17 +2842,6 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *
   if (cmptag!=NULL && firstmatch!=NULL)
     *cmptag=count;
   return firstmatch;
-}
-
-static symbol *find_symbol_child(const symbol *root,const symbol *sym)
-{
-  symbol *ptr=root->next;
-  while (ptr!=NULL) {
-    if (ptr->parent==sym)
-      return ptr;
-    ptr=ptr->next;
-  } /* while */
-  return NULL;
 }
 
 /* Adds "bywhom" to the list of referrers of "entry". Typically,
@@ -2942,18 +2925,8 @@ symbol *findconst(const char *name,int *cmptag)
   }
   if (sym==NULL || sym->ident!=iCONSTEXPR)
     return NULL;
-  assert(sym->parent==NULL || (sym->usage & uENUMFIELD)!=0);
+  assert(sym->parent()==NULL || (sym->usage & uENUMFIELD)!=0);
   /* ^^^ constants have no hierarchy, but enumeration fields may have a parent */
-  return sym;
-}
-
-symbol *finddepend(const symbol *parent)
-{
-  symbol *sym;
-
-  sym=find_symbol_child(&loctab,parent);    /* try local symbols first */
-  if (sym==NULL)                            /* not found */
-    sym=find_symbol_child(&glbtab,parent);
   return sym;
 }
 
@@ -2990,7 +2963,6 @@ symbol::symbol()
 
 symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag, int symusage)
  : next(nullptr),
-   parent(nullptr),
    codeaddr(code_idx),
    vclass((char)symvclass),
    ident((char)symident),
@@ -3003,7 +2975,9 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    documentation(nullptr),
    methodmap(nullptr),
    addr_(symaddr),
-   name_(nullptr)
+   name_(nullptr),
+   parent_(nullptr),
+   child_(nullptr)
 {
   if (symname)
     name_ = gAtoms.add(symname);
@@ -3053,8 +3027,8 @@ symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag,int usage
 
   /* then insert it in the list */
   if (vclass==sGLOBAL)
-    return add_symbol(&glbtab,sym,TRUE);
-  return add_symbol(&loctab,sym,FALSE);
+    return add_symbol(&glbtab,sym);
+  return add_symbol(&loctab,sym);
 }
 
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,
@@ -3111,7 +3085,10 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
       }
       top->dim.array.level=(short)(numdim-level-1);
       top->x.tags.index=idxtag[level];
-      top->parent=parent;
+      top->set_parent(parent);
+      if (parent) {
+        parent->set_array_child(top);
+      }
       parent=top;
       if (level==0)
         sym=top;
