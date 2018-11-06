@@ -1989,7 +1989,6 @@ static void lexpop()
 int lex(cell *lexvalue,char **lexsym)
 {
   int i,toolong,newline;
-  const unsigned char *starttoken;
 
   if (sTokenBuffer->depth > 0) {
     lexpop();
@@ -2043,8 +2042,6 @@ int lex(cell *lexvalue,char **lexsym)
   while (i<=tMIDDLE) {  /* match multi-character operators */
     if (*lptr==**tokptr && match(*tokptr,FALSE)) {
       tok->id = i;
-      if (pc_docexpr)   /* optionally concatenate to documentation string */
-        insert_autolist(*tokptr);
       tok->end.line = fline;
       tok->end.col = (int)(lptr - pline);
       return tok->id;
@@ -2082,8 +2079,6 @@ int lex(cell *lexvalue,char **lexsym)
       } else {
         tok->id = i;
         errorset(sRESET,0); /* reset error flag (clear the "panic mode")*/
-        if (pc_docexpr)   /* optionally concatenate to documentation string */
-          insert_autolist(*tokptr);
       }
       tok->end.line = fline;
       tok->end.col = (int)(lptr - pline);
@@ -2093,7 +2088,6 @@ int lex(cell *lexvalue,char **lexsym)
     tokptr+=1;
   } /* while */
 
-  starttoken=lptr;      /* save start pointer (for concatenating to documentation string) */
   if ((i=number(&tok->value, lptr))!=0) {   /* number */
     tok->id = tNUMBER;
     *lexvalue = tok->value;
@@ -2235,14 +2229,6 @@ int lex(cell *lexvalue,char **lexsym)
     lptr+=1;            /* increase the "lptr" pointer */
   } /* if */
 
-  if (pc_docexpr) {     /* optionally concatenate to documentation string */
-    char *docstr=(char*)malloc(((int)(lptr-starttoken)+1)*sizeof(char));
-    if (docstr!=NULL) {
-      strlcpy(docstr,(char*)starttoken,(int)(lptr-starttoken)+1);
-      insert_autolist(docstr);
-      free(docstr);
-    } /* if */
-  } /* if */
   tok->end.line = fline;
   tok->end.col = (int)(lptr - pline);
   return tok->id;

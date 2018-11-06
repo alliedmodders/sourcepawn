@@ -656,7 +656,6 @@ static void resetglobals(void)
   sc_allowtags=TRUE;    /* allow/detect tagnames */
   sc_status=statIDLE;
   pc_addlibtable=TRUE;  /* by default, add a "library table" to the output file */
-  pc_docexpr=FALSE;
   pc_deprecate=NULL;
   pc_memflags=0;
 }
