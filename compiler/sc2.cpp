@@ -1325,7 +1325,7 @@ static const unsigned char *skippgroup(const unsigned char *string)
     break;
   default:
     assert(0);
-	close='\0';         /* only to avoid a compiler warning */
+    close='\0';         /* only to avoid a compiler warning */
   }/* switch */
 
   string++;
@@ -1407,7 +1407,7 @@ static int substpattern(unsigned char *line,size_t buffersize,char *pattern,char
         /* store the parameter (overrule any earlier) */
         if (args[arg]!=NULL)
           free(args[arg]);
-		else
+        else
           argsnum++;
         len=(int)(e-s);
         args[arg]=(unsigned char*)malloc(len+1);
@@ -1561,7 +1561,7 @@ static void substallpatterns(unsigned char *line,int buffersize)
     if (*start=='\0')
       break;            /* abort loop on error */
     /* if matching the operator "defined", skip it plus the symbol behind it */
-	if (strncmp((char*)start,"defined",7)==0 && !isalpha((char)*(start+7))) {
+    if (strncmp((char*)start,"defined",7)==0 && !isalpha((char)*(start+7))) {
       start+=7;         /* skip "defined" */
       /* skip white space & parantheses */
       while ((*start<=' ' && *start!='\0') || *start=='(')
@@ -2140,15 +2140,7 @@ int lex(cell *lexvalue,char **lexsym)
         error(220);
       } /* if */
     } /* if */
-  } else if (*lptr=='\"'                                 /* unpacked string literal */
-#if 0
-             || (*lptr==sc_ctrlchar && *(lptr+1)=='\"')  /* unpacked raw string */
-             || (*lptr=='!' && *(lptr+1)=='\"')          /* packed string */
-             || (*lptr=='!' && *(lptr+1)==sc_ctrlchar && *(lptr+2)=='\"')  /* packed raw string */
-             || (*lptr==sc_ctrlchar && *(lptr+1)=='!' && *(lptr+2)=='\"') /* packed raw string */
-#endif
-             )
-  {
+  } else if (*lptr=='\"') {
     if (sLiteralQueueDisabled) {
       tok->id = tPENDING_STRING;
       tok->end = tok->start;
@@ -2182,9 +2174,9 @@ int lex(cell *lexvalue,char **lexsym)
       while (*lptr!='\"' && *lptr!='\0' && (cat-tok->str)<sLINEMAX) {
         if (*lptr!='\a') {  /* ignore '\a' (which was inserted at a line concatenation) */
           *cat++=*lptr;
-					if (*lptr==sc_ctrlchar && *(lptr+1)!='\0')
-						*cat++=*++lptr; /* skip escape character plus the escaped character */
-				} /* if */
+          if (*lptr==sc_ctrlchar && *(lptr+1)!='\0')
+            *cat++=*++lptr; /* skip escape character plus the escaped character */
+          } /* if */
         lptr++;
       } /* while */
       *cat='\0';          /* terminate string */
@@ -2215,15 +2207,7 @@ int lex(cell *lexvalue,char **lexsym)
           lptr++;
         } /* if */
       } /* while */
-      if (!freading || !(*lptr=='\"'
-#if 0
-                         || *lptr==sc_ctrlchar && *(lptr+1)=='\"'
-                         || *lptr=='!' && *(lptr+1)=='\"'
-                         || *lptr=='!' && *(lptr+1)==sc_ctrlchar && *(lptr+2)=='\"'
-                         || *lptr==sc_ctrlchar && *(lptr+1)=='!' && *(lptr+2)=='\"'
-#endif
-                         ))
-      {
+      if (!freading || !(*lptr=='\"')) {
         error(37);                /* invalid string concatenation */
         break;
       } /* if */
