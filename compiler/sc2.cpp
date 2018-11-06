@@ -1909,6 +1909,25 @@ const char *sc_tokens[] = {
          "-label-", "-string-", "-string-"
 };
 
+static const char*
+get_token_string(int tok_id)
+{
+  assert(tok_id >= tFIRST && tok_id <= tLAST);
+  return sc_tokens[tok_id - tFIRST];
+}
+
+static int
+lex_keyword_impl()
+{
+  const int kStart = tMIDDLE + 1;
+  const char** tokptr = &sc_tokens[kStart - tFIRST];
+  for (int i = kStart; i <= tLAST; i++, tokptr++) {
+    if (*lptr == **tokptr && match(*tokptr, TRUE))
+      return i;
+  }
+  return 0;
+}
+
 static inline bool
 IsUnimplementedKeyword(int token)
 {
@@ -1986,9 +2005,16 @@ static void lexpop()
     sTokenBuffer->cursor = 0;
 }
 
+static void lex_once(full_token_t* tok, cell* lexvalue);
+static bool lex_match_char(char c);
+static void lex_string_literal(full_token_t* tok, cell* lexvalue);
+static bool lex_number(full_token_t* tok, cell* lexvalue);
+static bool lex_keyword(full_token_t* tok);
+static void lex_symbol(full_token_t* tok);
+
 int lex(cell *lexvalue,char **lexsym)
 {
-  int i,toolong,newline;
+  int newline;
 
   if (sTokenBuffer->depth > 0) {
     lexpop();
@@ -2027,7 +2053,7 @@ int lex(cell *lexvalue,char **lexsym)
   } /* while */
   if (newline) {
     stmtindent=0;
-    for (i=0; i<(int)(lptr-pline); i++)
+    for (int i=0; i<(int)(lptr-pline); i++)
       if (pline[i]=='\t' && sc_tabsize>0)
         stmtindent += (int)(sc_tabsize - (stmtindent+sc_tabsize) % sc_tabsize);
       else
@@ -2037,201 +2063,391 @@ int lex(cell *lexvalue,char **lexsym)
   tok->start.line = fline;
   tok->start.col = (int)(lptr - pline);
 
-  i=tFIRST;
-  const char **tokptr=sc_tokens;
-  while (i<=tMIDDLE) {  /* match multi-character operators */
-    if (*lptr==**tokptr && match(*tokptr,FALSE)) {
-      tok->id = i;
-      tok->end.line = fline;
-      tok->end.col = (int)(lptr - pline);
-      return tok->id;
-    } /* if */
-    i+=1;
-    tokptr+=1;
-  } /* while */
-  while (i<=tLAST) {    /* match reserved words and compiler directives */
-    if (*lptr==**tokptr && match(*tokptr,TRUE)) {
-      if (IsUnimplementedKeyword(i)) {
-        // Try to gracefully error.
-        error(173, sc_tokens[i - tFIRST]);
-        tok->id = tSYMBOL;
-        strcpy(tok->str, sc_tokens[i - tFIRST]);
-        tok->len = strlen(tok->str);
-      } else if (*lptr == ':' &&
-                 (i == tINT ||
-                  i == tVOID))
-      {
-        // Special case 'int:' to its old behavior: an implicit view_as<> cast
-        // with Pawn's awful lowercase coercion semantics.
-        const char *token = sc_tokens[i - tFIRST];
-        switch (i) {
-          case tINT:
-            error(238, token, token);
-            break;
-          case tVOID:
-            error(239, token, token);
-            break;
-        }
-        lptr++;
-        tok->id = tLABEL;
-        strcpy(tok->str, token);
-        tok->len = strlen(tok->str);
-      } else {
-        tok->id = i;
-        errorset(sRESET,0); /* reset error flag (clear the "panic mode")*/
-      }
-      tok->end.line = fline;
-      tok->end.col = (int)(lptr - pline);
-      return tok->id;
-    } /* if */
-    i+=1;
-    tokptr+=1;
-  } /* while */
-
-  if ((i=number(&tok->value, lptr))!=0) {   /* number */
-    tok->id = tNUMBER;
-    *lexvalue = tok->value;
-    lptr+=i;
-  } else if ((i=ftoi(&tok->value, lptr))!=0) {
-    tok->id = tRATIONAL;
-    *lexvalue = tok->value;
-    lptr+=i;
-  } else if (alpha(*lptr)) {            /* symbol or label */
-    /*  Note: only sNAMEMAX characters are significant. The compiler
-     *        generates a warning if a symbol exceeds this length.
-     */
-    tok->id = tSYMBOL;
-    i=0;
-    toolong=0;
-    while (alphanum(*lptr)){
-      tok->str[i]=*lptr;
-      lptr+=1;
-      if (i<sNAMEMAX)
-        i+=1;
-      else
-        toolong=1;
-    } /* while */
-    tok->str[i]='\0';
-    tok->len = i;
-    if (toolong) {
-      /* symbol too long, truncated to sNAMEMAX chars */
-      error(200, tok->str, sNAMEMAX);  
-    }
-    if (tok->str[0]==PUBLIC_CHAR && tok->str[1]=='\0') {
-      tok->id = PUBLIC_CHAR;  /* '@' all alone is not a symbol, it is an operator */
-    } else if (tok->str[0]=='_' && tok->str[1]=='\0') {
-      tok->id = '_';      /* '_' by itself is not a symbol, it is a placeholder */
-    } /* if */
-    if (*lptr==':' && *(lptr+1)!=':' && tok->id != PUBLIC_CHAR) {
-      if (sc_allowtags) {
-        tok->id = tLABEL; /* it wasn't a normal symbol, it was a label/tagname */
-        lptr+=1;        /* skip colon */
-      } else if (gTypes.find(tok->str)) {
-        /* this looks like a tag override (because a tag with this name
-         * exists), but tags are not allowed right now, so it is probably an
-         * error
-         */
-        error(220);
-      } /* if */
-    } /* if */
-  } else if (*lptr=='\"') {
-    if (sLiteralQueueDisabled) {
-      tok->id = tPENDING_STRING;
-      tok->end = tok->start;
-      return tok->id;
-    }
-    int stringflags,segmentflags;
-    char *cat;
-    tok->id = tSTRING;
-    *lexvalue = tok->value = litidx;
-    tok->str[0]='\0';
-    stringflags=-1;       /* to mark the first segment */
-    for ( ;; ) {
-      if(*lptr=='!')
-        segmentflags= (*(lptr+1)==sc_ctrlchar) ? RAWMODE | ISPACKED : ISPACKED;
-      else if (*lptr==sc_ctrlchar)
-        segmentflags= (*(lptr+1)=='!') ? RAWMODE | ISPACKED : RAWMODE;
-      else
-        segmentflags=0;
-      if ((segmentflags & ISPACKED)!=0)
-        lptr+=1;          /* skip '!' character */
-      if ((segmentflags & RAWMODE)!=0)
-        lptr+=1;          /* skip "escape" character too */
-      assert(*lptr=='\"');
-      lptr+=1;
-      if (stringflags==-1)
-        stringflags=segmentflags;
-      else if (stringflags!=segmentflags)
-        error(238);       /* mixing packed/unpacked/raw strings in concatenation */
-      cat=strchr(tok->str,'\0');
-      assert(cat!=NULL);
-      while (*lptr!='\"' && *lptr!='\0' && (cat-tok->str)<sLINEMAX) {
-        if (*lptr!='\a') {  /* ignore '\a' (which was inserted at a line concatenation) */
-          *cat++=*lptr;
-          if (*lptr==sc_ctrlchar && *(lptr+1)!='\0')
-            *cat++=*++lptr; /* skip escape character plus the escaped character */
-          } /* if */
-        lptr++;
-      } /* while */
-      *cat='\0';          /* terminate string */
-      tok->len = (size_t)(cat - tok->str);
-      if (*lptr=='\"')
-        lptr+=1;          /* skip final quote */
-      else
-        error(37);        /* invalid (non-terminated) string */
-      /* see whether an ellipsis is following the string */
-      if (!scanellipsis(lptr))
-        break;            /* no concatenation of string literals */
-      /* there is an ellipses, go on parsing (this time with full preprocessing) */
-      while (*lptr<=' ') {
-        if (*lptr=='\0') {
-          preprocess_in_lex();
-          assert(freading && lptr!=term_expr);
-        } else {
-          lptr++;
-        } /* if */
-      } /* while */
-      assert(freading && lptr[0]=='.' && lptr[1]=='.' && lptr[2]=='.');
-      lptr+=3;
-      while (*lptr<=' ') {
-        if (*lptr=='\0') {
-          preprocess_in_lex();
-          assert(freading && lptr!=term_expr);
-        } else {
-          lptr++;
-        } /* if */
-      } /* while */
-      if (!freading || !(*lptr=='\"')) {
-        error(37);                /* invalid string concatenation */
-        break;
-      } /* if */
-    } /* for */
-    if (sc_packstr)
-      stringflags ^= ISPACKED;    /* invert packed/unpacked parameters */
-    if ((stringflags & ISPACKED)!=0)
-      packedstring((unsigned char *)tok->str,stringflags);
-    else
-      unpackedstring((unsigned char *)tok->str,stringflags);
-  } else if (*lptr=='\'') {             /* character literal */
-    lptr+=1;            /* skip quote */
-    tok->id = tNUMBER;
-    *lexvalue = tok->value = litchar(&lptr,UTF8MODE);
-    if (*lptr=='\'')
-      lptr+=1;          /* skip final quote */
-    else
-      error(27);        /* invalid character constant (must be one character) */
-  } else if (*lptr==';') {      /* semicolumn resets "error" flag */
-    tok->id = ';';
-    lptr+=1;
-    errorset(sRESET,0); /* reset error flag (clear the "panic mode")*/
-  } else {
-    tok->id = *lptr;    /* if every match fails, return the character */
-    lptr+=1;            /* increase the "lptr" pointer */
-  } /* if */
+  lex_once(tok, lexvalue);
 
   tok->end.line = fline;
   tok->end.col = (int)(lptr - pline);
   return tok->id;
+}
+
+static void
+lex_once(full_token_t* tok, cell* lexvalue)
+{
+  switch (*lptr) {
+    case '0': case '1':
+    case '2': case '3':
+    case '4': case '5':
+    case '6': case '7':
+    case '8': case '9':
+    {
+      if (lex_number(tok, lexvalue))
+        return;
+      break;
+    }
+
+    case '*':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taMULT;
+      else
+        tok->id = '*';
+      return;
+
+    case '/':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taDIV;
+      else
+        tok->id = '/';
+      return;
+
+    case '%':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taMOD;
+      else
+        tok->id = '%';
+      return;
+
+    case '+':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taADD;
+      else if (lex_match_char('+'))
+        tok->id = tINC;
+      else
+        tok->id = '+';
+      return;
+
+    case '-':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taSUB;
+      else if (lex_match_char('-'))
+        tok->id = tDEC;
+      else
+        tok->id = '-';
+      return;
+
+    case '<':
+      lptr++;
+      if (lex_match_char('<')) {
+        if (lex_match_char('='))
+          tok->id = taSHL;
+        else
+          tok->id = tSHL;
+      } else if (lex_match_char('=')) {
+        tok->id = tlLE;
+      } else {
+        tok->id = '<';
+      }
+      return;
+
+    case '>':
+      lptr++;
+      if (lex_match_char('>')) {
+        if (lex_match_char('>')) {
+          if (lex_match_char('='))
+            tok->id = taSHRU;
+          else
+            tok->id = tSHRU;
+        } else if (lex_match_char('=')) {
+          tok->id = taSHR;
+        } else {
+          tok->id = tSHR;
+        }
+      } else if (lex_match_char('=')) {
+        tok->id = tlGE;
+      } else {
+        tok->id = '>';
+      }
+      return;
+
+    case '&':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taAND;
+      else if (lex_match_char('&'))
+        tok->id = tlAND;
+      else
+        tok->id = '&';
+      return;
+
+    case '^':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taXOR;
+      else
+        tok->id = '^';
+      return;
+
+    case '|':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = taOR;
+      else if (lex_match_char('|'))
+        tok->id = tlOR;
+      else
+        tok->id = '|';
+      return;
+
+    case '=':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = tlEQ;
+      else
+        tok->id = '=';
+      return;
+
+    case '!':
+      lptr++;
+      if (lex_match_char('='))
+        tok->id = tlNE;
+      else
+        tok->id = '!';
+      return;
+
+    case '.':
+      lptr++;
+      if (lex_match_char('.')) {
+        if (lex_match_char('.'))
+          tok->id = tELLIPS;
+        else
+          tok->id = tDBLDOT;
+      } else {
+        tok->id = '.';
+      }
+      return;
+
+    case ':':
+      lptr++;
+      if (lex_match_char(':'))
+        tok->id = tDBLCOLON;
+      else
+        tok->id = ':';
+      return;
+
+    case '"':
+      lex_string_literal(tok, lexvalue);
+      return;
+
+    case '\'':
+      lptr+=1;            /* skip quote */
+      tok->id = tNUMBER;
+      *lexvalue = tok->value = litchar(&lptr,UTF8MODE);
+      if (*lptr=='\'')
+        lptr+=1;          /* skip final quote */
+      else
+        error(27);        /* invalid character constant (must be one character) */
+      return;
+
+    case ';':
+      // semicolon resets the error state.
+      tok->id = ';';
+      lptr++;
+      errorset(sRESET, 0);
+      return;
+  }
+
+  char c = *lptr;
+  if (isalpha(c) || c == '#' || c == '_') {
+    if (lex_keyword(tok))
+      return;
+  }
+  if (alpha(c)) {
+    lex_symbol(tok);
+    return;
+  }
+
+  // Unmatched, return the next character.
+  tok->id = *lptr++;
+}
+
+static bool
+lex_match_char(char c)
+{
+  if (*lptr != c)
+    return false;
+  lptr++;
+  return true;
+}
+
+static bool
+lex_number(full_token_t* tok, cell* lexvalue)
+{
+  if (int i = number(&tok->value, lptr)) {
+    tok->id = tNUMBER;
+    *lexvalue = tok->value;
+    lptr+=i;
+    return true;
+  }
+  if (int i = ftoi(&tok->value, lptr)) {
+    tok->id = tRATIONAL;
+    *lexvalue = tok->value;
+    lptr+=i;
+    return true;
+  }
+  return false;
+}
+
+static void
+lex_string_literal(full_token_t* tok, cell* lexvalue)
+{
+  if (sLiteralQueueDisabled) {
+    tok->id = tPENDING_STRING;
+    tok->end = tok->start;
+    return;
+  }
+  int stringflags,segmentflags;
+  char *cat;
+  tok->id = tSTRING;
+  *lexvalue = tok->value = litidx;
+  tok->str[0]='\0';
+  stringflags=-1;       /* to mark the first segment */
+  for ( ;; ) {
+    if(*lptr=='!')
+      segmentflags= (*(lptr+1)==sc_ctrlchar) ? RAWMODE | ISPACKED : ISPACKED;
+    else if (*lptr==sc_ctrlchar)
+      segmentflags= (*(lptr+1)=='!') ? RAWMODE | ISPACKED : RAWMODE;
+    else
+      segmentflags=0;
+    if ((segmentflags & ISPACKED)!=0)
+      lptr+=1;          /* skip '!' character */
+    if ((segmentflags & RAWMODE)!=0)
+      lptr+=1;          /* skip "escape" character too */
+    assert(*lptr=='\"');
+    lptr+=1;
+    if (stringflags==-1)
+      stringflags=segmentflags;
+    else if (stringflags!=segmentflags)
+      error(238);       /* mixing packed/unpacked/raw strings in concatenation */
+    cat=strchr(tok->str,'\0');
+    assert(cat!=NULL);
+    while (*lptr!='\"' && *lptr!='\0' && (cat-tok->str)<sLINEMAX) {
+      if (*lptr!='\a') {  /* ignore '\a' (which was inserted at a line concatenation) */
+        *cat++=*lptr;
+        if (*lptr==sc_ctrlchar && *(lptr+1)!='\0')
+          *cat++=*++lptr; /* skip escape character plus the escaped character */
+        } /* if */
+      lptr++;
+    } /* while */
+    *cat='\0';          /* terminate string */
+    tok->len = (size_t)(cat - tok->str);
+    if (*lptr=='\"')
+      lptr+=1;          /* skip final quote */
+    else
+      error(37);        /* invalid (non-terminated) string */
+    /* see whether an ellipsis is following the string */
+    if (!scanellipsis(lptr))
+      break;            /* no concatenation of string literals */
+    /* there is an ellipses, go on parsing (this time with full preprocessing) */
+    while (*lptr<=' ') {
+      if (*lptr=='\0') {
+        preprocess_in_lex();
+        assert(freading && lptr!=term_expr);
+      } else {
+        lptr++;
+      } /* if */
+    } /* while */
+    assert(freading && lptr[0]=='.' && lptr[1]=='.' && lptr[2]=='.');
+    lptr+=3;
+    while (*lptr<=' ') {
+      if (*lptr=='\0') {
+        preprocess_in_lex();
+        assert(freading && lptr!=term_expr);
+      } else {
+        lptr++;
+      } /* if */
+    } /* while */
+    if (!freading || !(*lptr=='\"')) {
+      error(37);                /* invalid string concatenation */
+      break;
+    } /* if */
+  } /* for */
+  if (sc_packstr)
+    stringflags ^= ISPACKED;    /* invert packed/unpacked parameters */
+  if ((stringflags & ISPACKED)!=0)
+    packedstring((unsigned char *)tok->str,stringflags);
+  else
+    unpackedstring((unsigned char *)tok->str,stringflags);
+}
+
+static bool
+lex_keyword(full_token_t* tok)
+{
+  int tok_id = lex_keyword_impl();
+  if (!tok_id)
+    return false;
+
+  if (IsUnimplementedKeyword(tok_id)) {
+    // Try to gracefully error.
+    error(173, get_token_string(tok_id));
+    tok->id = tSYMBOL;
+    strcpy(tok->str, get_token_string(tok_id));
+    tok->len = strlen(tok->str);
+  } else if (*lptr == ':' && (tok_id == tINT || tok_id == tVOID)) {
+    // Special case 'int:' to its old behavior: an implicit view_as<> cast
+    // with Pawn's awful lowercase coercion semantics.
+    const char *token = get_token_string(tok_id);
+    switch (tok_id) {
+      case tINT:
+        error(238, token, token);
+        break;
+      case tVOID:
+        error(239, token, token);
+        break;
+    }
+    lptr++;
+    tok->id = tLABEL;
+    strcpy(tok->str, token);
+    tok->len = strlen(tok->str);
+  } else {
+    tok->id = tok_id;
+    errorset(sRESET,0); /* reset error flag (clear the "panic mode")*/
+  }
+  return true;
+}
+
+static void
+lex_symbol(full_token_t* tok)
+{
+  /*  Note: only sNAMEMAX characters are significant. The compiler
+   *        generates a warning if a symbol exceeds this length.
+   */
+  tok->id = tSYMBOL;
+  int i=0;
+  bool toolong = false;
+  while (alphanum(*lptr)){
+    tok->str[i]=*lptr;
+    lptr+=1;
+    if (i<sNAMEMAX)
+      i+=1;
+    else
+      toolong = true;
+  } /* while */
+  tok->str[i]='\0';
+  tok->len = i;
+  if (toolong) {
+    /* symbol too long, truncated to sNAMEMAX chars */
+    error(200, tok->str, sNAMEMAX);
+  }
+  if (tok->str[0]==PUBLIC_CHAR && tok->str[1]=='\0') {
+    tok->id = PUBLIC_CHAR;  /* '@' all alone is not a symbol, it is an operator */
+  } else if (tok->str[0]=='_' && tok->str[1]=='\0') {
+    tok->id = '_';      /* '_' by itself is not a symbol, it is a placeholder */
+  } /* if */
+  if (*lptr==':' && *(lptr+1)!=':' && tok->id != PUBLIC_CHAR) {
+    if (sc_allowtags) {
+      tok->id = tLABEL; /* it wasn't a normal symbol, it was a label/tagname */
+      lptr+=1;        /* skip colon */
+    } else if (gTypes.find(tok->str)) {
+      /* this looks like a tag override (because a tag with this name
+       * exists), but tags are not allowed right now, so it is probably an
+       * error
+       */
+      error(220);
+    } /* if */
+  } /* if */
 }
 
 /*  lexpush
