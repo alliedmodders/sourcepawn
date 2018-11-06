@@ -5,6 +5,7 @@ import argparse
 import subprocess
 import testutil
 import datetime
+from testutil import manifest_get
 
 def main():
   parser = argparse.ArgumentParser()
@@ -188,9 +189,8 @@ class TestPlan(object):
     folder = os.path.join(self.tests_path, local_folder)
     manifest_path = os.path.join(folder, 'manifest.ini')
     if os.path.exists(manifest_path):
-      manifest = manifest.copy()
-      manifest = testutil.parse_manifest(manifest_path, manifest)
-      if manifest.get('skip', None) == 'true':
+      manifest = testutil.parse_manifest(manifest_path, local_folder, manifest)
+      if manifest_get(manifest, 'folder', 'skip') == 'true':
         return
 
     for name in os.listdir(folder):
@@ -201,10 +201,14 @@ class TestPlan(object):
       elif path.endswith('.sp'):
         if self.args.test is not None and not local_path.startswith(self.args.test):
           continue
-        self.tests.append(Test(**{
+
+        test = Test(**{
           'path': os.path.abspath(path),
           'manifest': manifest,
-        }))
+        })
+        if manifest_get(manifest, test.name, 'skip') == 'true':
+          continue
+        self.tests.append(test)
 
 ###
 # This is a helper class instantiated for each test file in the tree.
@@ -269,9 +273,11 @@ class Test(object):
 
   @property
   def type(self):
-    if 'type' in self.manifest_:
-      return self.manifest_['type']
-    return 'runtime'
+    return manifest_get(self.manifest_, self.name, 'type', 'runtime')
+
+  @property
+  def includes(self):
+    return manifest_get(self.manifest_, self.name, 'includes', [])
 
   @property
   def warnings_are_errors(self):
@@ -286,7 +292,7 @@ class Test(object):
   def should_run(self, mode):
     compiler = self.local_manifest_.get('compiler', None)
     if compiler is None:
-      compiler = self.manifest_.get('compiler', None)
+      compiler = manifest_get(self.manifest_, self.name, 'compiler')
     if compiler is None:
       return True
     return mode['spcomp']['name'] == compiler
@@ -369,7 +375,7 @@ class TestRunner(object):
 
     # First run the compiler.
     rc, stdout, stderr = self.run_compiler(mode, test)
-    if test.type == 'compile-only':
+    if test.type == 'compiler-output' or test.type == 'compile-only':
       if not self.compile_ok(mode, test, rc, stdout, stderr):
         self.out_io(stderr, stdout)
         return False
@@ -394,11 +400,19 @@ class TestRunner(object):
 
     # Build |argv| for the compiler.
     spcomp_path = mode['spcomp']['path']
-    argv = [
-      spcomp_path,
+    argv = [spcomp_path]
+
+    # Add test-specific includes.
+    for include in test.includes:
+      include_path = self.fix_path(spcomp_path, os.path.join(self.include_path, include))
+      argv += ['-i', include_path]
+
+    # Add harness includes.
+    argv += [
       '-i', self.fix_path(spcomp_path, self.core_include_path),
       '-i', self.fix_path(spcomp_path, self.include_path),
     ]
+
     argv += mode['spcomp']['args']
     argv += mode['args']
     if test.warnings_are_errors:
@@ -439,7 +453,10 @@ class TestRunner(object):
     return True
 
   def compile_ok(self, mode, test, rc, stdout, stderr):
-    assert test.type == 'compile-only'
+    if test.type == 'compile-only':
+      return rc == 0
+
+    assert test.type == 'compiler-output'
     test_prefix = test.name.split('-')[0]
     if test_prefix == 'ok' or test_prefix == 'warn':
       if rc != 0:
