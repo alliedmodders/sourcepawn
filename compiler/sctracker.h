@@ -153,7 +153,7 @@ structarg_t *pstructs_getarg(pstruct_t *pstruct, const char *member);
  */
 void funcenums_free();
 funcenum_t *funcenums_add(const char *name);
-functag_t *functags_add(funcenum_t *en, functag_t *src);
+functag_t *functags_add(funcenum_t *en, ke::UniquePtr<functag_t> &&src);
 funcenum_t *funcenum_for_symbol(symbol *sym);
 functag_t *functag_find_intrinsic(int tag);
 
