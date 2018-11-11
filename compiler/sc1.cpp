@@ -3797,7 +3797,7 @@ static void dodelete()
  *                 | function-type-inner
  * function-type-inner ::= "function" type-expr "(" new-style-args ")"
  */
-static void parse_function_type(ke::UniquePtr<functag_t> &type)
+static void parse_function_type(const ke::UniquePtr<functag_t> &type)
 {
   int lparen = matchtoken('(');
   needtoken(tFUNCTION);
