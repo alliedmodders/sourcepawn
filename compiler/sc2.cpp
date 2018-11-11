@@ -51,7 +51,6 @@ static cell litchar(const unsigned char **lptr,int flags);
 static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag);
 
 static void substallpatterns(unsigned char *line,int buffersize);
-static int match(const char *st,int end);
 static int alpha(char c);
 
 #define SKIPMODE      1 /* bit field in "#if" stack */
@@ -1917,12 +1916,12 @@ get_token_string(int tok_id)
 }
 
 static int
-lex_keyword_impl()
+lex_keyword_impl(const char* match, size_t length)
 {
   const int kStart = tMIDDLE + 1;
   const char** tokptr = &sc_tokens[kStart - tFIRST];
   for (int i = kStart; i <= tLAST; i++, tokptr++) {
-    if (*lptr == **tokptr && match(*tokptr, TRUE))
+    if (strlen(*tokptr) == length && !strncmp(*tokptr, match, length))
       return i;
   }
   return 0;
@@ -2009,8 +2008,9 @@ static void lex_once(full_token_t* tok, cell* lexvalue);
 static bool lex_match_char(char c);
 static void lex_string_literal(full_token_t* tok, cell* lexvalue);
 static bool lex_number(full_token_t* tok, cell* lexvalue);
-static bool lex_keyword(full_token_t* tok);
-static void lex_symbol(full_token_t* tok);
+static bool lex_keyword(full_token_t* tok, const char* token_start);
+static void lex_symbol(full_token_t* tok, const char* token_start);
+static bool lex_symbol_or_keyword(full_token_t* tok);
 
 int lex(cell *lexvalue,char **lexsym)
 {
@@ -2249,14 +2249,9 @@ lex_once(full_token_t* tok, cell* lexvalue)
       return;
   }
 
-  char c = *lptr;
-  if (isalpha(c) || c == '#' || c == '_') {
-    if (lex_keyword(tok))
+  if (alpha(*lptr) || *lptr == '#') {
+    if (lex_symbol_or_keyword(tok))
       return;
-  }
-  if (alpha(c)) {
-    lex_symbol(tok);
-    return;
   }
 
   // Unmatched, return the next character.
@@ -2373,9 +2368,9 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
 }
 
 static bool
-lex_keyword(full_token_t* tok)
+lex_keyword(full_token_t* tok, const char* token_start)
 {
-  int tok_id = lex_keyword_impl();
+  int tok_id = lex_keyword_impl(token_start, tok->len);
   if (!tok_id)
     return false;
 
@@ -2408,46 +2403,73 @@ lex_keyword(full_token_t* tok)
   return true;
 }
 
-static void
-lex_symbol(full_token_t* tok)
+static bool
+lex_symbol_or_keyword(full_token_t* tok)
 {
-  /*  Note: only sNAMEMAX characters are significant. The compiler
-   *        generates a warning if a symbol exceeds this length.
-   */
-  tok->id = tSYMBOL;
-  int i=0;
-  bool toolong = false;
-  while (alphanum(*lptr)){
-    tok->str[i]=*lptr;
-    lptr+=1;
-    if (i<sNAMEMAX)
-      i+=1;
-    else
-      toolong = true;
-  } /* while */
-  tok->str[i]='\0';
-  tok->len = i;
-  if (toolong) {
-    /* symbol too long, truncated to sNAMEMAX chars */
+  unsigned char const* token_start = lptr;
+  char first_char = *lptr;
+  assert(alpha(first_char) || first_char == '#');
+
+  bool maybe_keyword = (first_char != PUBLIC_CHAR);
+  while (true) {
+    char c = *++lptr;
+    if (isdigit(c)) {
+      // Only symbols have numbers, so this terminates a keyword if we
+      // started with '#".
+      if (first_char == '#')
+        break;
+      maybe_keyword = false;
+    } else if (!isalpha(c) && c != '_') {
+      break;
+    }
+  }
+
+  tok->len = lptr - token_start;
+  if (tok->len == 1 && first_char == PUBLIC_CHAR) {
+    tok->id = PUBLIC_CHAR;
+    return true;
+  }
+  if (maybe_keyword) {
+    if (lex_keyword(tok, (const char*)token_start))
+      return true;
+  }
+  if (first_char != '#') {
+    lex_symbol(tok, (const char*)token_start);
+    return true;
+  }
+
+  // Failed to find anything, reset lptr.
+  lptr = token_start;
+  return false;
+}
+
+static void
+lex_symbol(full_token_t* tok, const char* token_start)
+{
+  ke::SafeStrcpyN(tok->str, sizeof(tok->str), token_start, tok->len);
+  if (tok->len > sNAMEMAX) {
+    static_assert(sNAMEMAX < sizeof(tok->str), "sLINEMAX should be > sNAMEMAX");
+    tok->str[sNAMEMAX] = '\0';
+    tok->len = sNAMEMAX;
     error(200, tok->str, sNAMEMAX);
   }
-  if (tok->str[0]==PUBLIC_CHAR && tok->str[1]=='\0') {
-    tok->id = PUBLIC_CHAR;  /* '@' all alone is not a symbol, it is an operator */
-  } else if (tok->str[0]=='_' && tok->str[1]=='\0') {
-    tok->id = '_';      /* '_' by itself is not a symbol, it is a placeholder */
-  } /* if */
-  if (*lptr==':' && *(lptr+1)!=':' && tok->id != PUBLIC_CHAR) {
+
+  tok->id = tSYMBOL;
+
+  if (*lptr == ':' && *(lptr + 1) != ':') {
     if (sc_allowtags) {
-      tok->id = tLABEL; /* it wasn't a normal symbol, it was a label/tagname */
-      lptr+=1;        /* skip colon */
+      tok->id = tLABEL;
+      lptr++;
     } else if (gTypes.find(tok->str)) {
-      /* this looks like a tag override (because a tag with this name
-       * exists), but tags are not allowed right now, so it is probably an
-       * error
-       */
+      // This looks like a tag override (a tag with this name exists), but
+      // tags are not allowed right now, so it is probably an error.
       error(220);
-    } /* if */
-  } /* if */
+    }
+  } else if (tok->len == 1 && *token_start == '_') {
+    // By itself, '_' is not a symbol but a placeholder. However, '_:' is
+    // a label which is why we handle this after the label check.
+    tok->id = '_';
+  }
 }
 
 /*  lexpush
@@ -2634,39 +2656,6 @@ int require_newline(int allow_semi)
     strcpy(s, sc_tokens[tokid - tFIRST]);
   error(155, s);
   return FALSE;
-}
-
-/*  match
- *
- *  Compares a series of characters from the input file with the characters
- *  in "st" (that contains a token). If the token on the input file matches
- *  "st", the input file pointer "lptr" is adjusted to point to the next
- *  token, otherwise "lptr" remains unaltered.
- *
- *  If the parameter "end: is true, match() requires that the first character
- *  behind the recognized token is non-alphanumeric.
- *
- *  Global references: lptr   (altered)
- */
-static int match(const char *st,int end)
-{
-  int k;
-  const unsigned char *ptr;
-
-  k=0;
-  ptr=lptr;
-  while (st[k]) {
-    if ((unsigned char)st[k]!=*ptr)
-      return 0;
-    k+=1;
-    ptr+=1;
-  } /* while */
-  if (end) {            /* symbol must terminate with non-alphanumeric char */
-    if (alphanum(*ptr))
-      return 0;
-  } /* if */
-  lptr=ptr;     /* match found, skip symbol */
-  return 1;
 }
 
 static void chk_grow_litq(void)
