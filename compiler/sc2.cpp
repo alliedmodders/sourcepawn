@@ -27,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
 #include <amtl/am-string.h>
 #include <sp_typeutil.h>
@@ -66,6 +67,23 @@ static unsigned char term_expr[] = "";
 static int listline=-1; /* "current line" for the list file */
 
 static bool sLiteralQueueDisabled = false;
+
+struct CharsAndLength {
+  const char* str;
+  size_t len;
+};
+
+struct KeywordTablePolicy {
+  static bool matches(const CharsAndLength& a, const CharsAndLength& b) {
+    if (a.len != b.len)
+      return false;
+    return strncmp(a.str, b.str, a.len) == 0;
+  }
+  static uint32_t hash(const CharsAndLength& key) {
+    return ke::HashCharSequence(key.str, key.len);
+  }
+};
+ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sKeywords;
 
 AutoDisableLiteralQueue::AutoDisableLiteralQueue()
  : prev_value_(sLiteralQueueDisabled)
@@ -1800,18 +1818,6 @@ static full_token_t *next_token()
   return &sTokenBuffer->tokens[cursor];
 }
 
-void lexinit(void)
-{
-  stkidx=0;             /* index for pushstk() and popstk() */
-  iflevel=0;            /* preprocessor: nesting of "#if" is currently 0 */
-  skiplevel=0;          /* preprocessor: not currently skipping */
-  icomment=0;           /* currently not in a multiline comment */
-  _lexnewline=FALSE;
-  memset(&sNormalBuffer, 0, sizeof(sNormalBuffer));
-  memset(&sPreprocessBuffer, 0, sizeof(sPreprocessBuffer));
-  sTokenBuffer = &sNormalBuffer;
-}
-
 const char *sc_tokens[] = {
          "*=", "/=", "%=", "+=", "-=", "<<=", ">>>=", ">>=", "&=", "^=", "|=",
          "||", "&&", "==", "!=", "<=", ">=", "<<", ">>>", ">>", "++", "--",
@@ -1908,6 +1914,32 @@ const char *sc_tokens[] = {
          "-label-", "-string-", "-string-"
 };
 
+void
+lexinit()
+{
+  stkidx=0;             /* index for pushstk() and popstk() */
+  iflevel=0;            /* preprocessor: nesting of "#if" is currently 0 */
+  skiplevel=0;          /* preprocessor: not currently skipping */
+  icomment=0;           /* currently not in a multiline comment */
+  _lexnewline=FALSE;
+  memset(&sNormalBuffer, 0, sizeof(sNormalBuffer));
+  memset(&sPreprocessBuffer, 0, sizeof(sPreprocessBuffer));
+  sTokenBuffer = &sNormalBuffer;
+
+  if (!sKeywords.elements()) {
+    sKeywords.init(128);
+
+    const int kStart = tMIDDLE + 1;
+    const char** tokptr = &sc_tokens[kStart - tFIRST];
+    for (int i = kStart; i <= tLAST; i++, tokptr++) {
+      CharsAndLength key = { *tokptr, strlen(*tokptr) };
+      auto p = sKeywords.findForAdd(key);
+      assert(!p.found());
+      sKeywords.add(p, key, i);
+    }
+  }
+}
+
 static const char*
 get_token_string(int tok_id)
 {
@@ -1918,13 +1950,11 @@ get_token_string(int tok_id)
 static int
 lex_keyword_impl(const char* match, size_t length)
 {
-  const int kStart = tMIDDLE + 1;
-  const char** tokptr = &sc_tokens[kStart - tFIRST];
-  for (int i = kStart; i <= tLAST; i++, tokptr++) {
-    if (strlen(*tokptr) == length && !strncmp(*tokptr, match, length))
-      return i;
-  }
-  return 0;
+  CharsAndLength key = { match, length };
+  auto p = sKeywords.find(key);
+  if (!p.found())
+    return 0;
+  return p->value;
 }
 
 static inline bool
