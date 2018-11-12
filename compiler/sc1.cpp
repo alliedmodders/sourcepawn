@@ -2645,7 +2645,6 @@ static void declstruct(void)
     }
 
     structarg_t arg;
-    memset(&arg, 0, sizeof(arg));
 
     arg.tag = decl.type.tag;
     arg.dimcount = decl.type.numdim;
@@ -3798,10 +3797,8 @@ static void dodelete()
  *                 | function-type-inner
  * function-type-inner ::= "function" type-expr "(" new-style-args ")"
  */
-static void parse_function_type(functag_t *type)
+static void parse_function_type(const ke::UniquePtr<functag_t> &type)
 {
-  memset(type, 0, sizeof(*type));
-
   int lparen = matchtoken('(');
   needtoken(tFUNCTION);
 
@@ -3873,9 +3870,9 @@ static void dotypedef()
 
   funcenum_t *def = funcenums_add(ident.name);
 
-  functag_t type;
-  parse_function_type(&type);
-  functags_add(def, &type);
+  auto type = ke::MakeUnique<functag_t>();
+  parse_function_type(type);
+  functags_add(def, ke::Move(type));
 }
 
 // Unsafe typeset - only supports function types. This is a transition hack for SP2.
@@ -3896,9 +3893,9 @@ static void dotypeset()
   funcenum_t *def = funcenums_add(ident.name);
   needtoken('{');
   while (!matchtoken('}')) {
-    functag_t type;
-    parse_function_type(&type);
-    functags_add(def, &type);
+    auto type = ke::MakeUnique<functag_t>();
+    parse_function_type(type);
+    functags_add(def, ke::Move(type));
   }
 
   require_newline(TRUE);
