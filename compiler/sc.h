@@ -138,6 +138,8 @@ class FunctionData : public SymbolData {
   ke::Vector<arginfo> args;
 };
 
+struct symbol;
+
 /*  Symbol table format
  *
  *  The symbol name read from the input file is stored in "name", the
@@ -178,7 +180,6 @@ struct symbol {
   } dim;                /* for 'dimension', both functions and arrays */
   int fnumber;          /* static global variables: file number in which the declaration is visible */
   int lnumber;          /* line number (in the current source file) for the declaration */
-  ke::Vector<symbol*> refers; /* referrer list, functions that "use" this symbol */
   char *documentation;  /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
 
@@ -227,10 +228,32 @@ struct symbol {
     child_ = child;
   }
 
+  void add_reference_to(symbol* other);
+  void drop_reference_from(symbol* from);
+
+  ke::Vector<symbol*>& refers_to() {
+    return refers_to_;
+  }
+  bool is_unreferenced() const {
+    return referred_from_count_ == 0;
+  }
+  void clear_refers() {
+    refers_to_.clear();
+    referred_from_.clear();
+  }
+
  private:
   cell addr_;            /* address or offset (or value for constant, index for native function) */
   sp::Atom* name_;
   ke::UniquePtr<SymbolData> data_;
+
+  // Other symbols that this symbol refers to.
+  ke::Vector<symbol*> refers_to_;
+
+  // All the symbols that refer to this symbol.
+  ke::Vector<symbol*> referred_from_;
+  size_t referred_from_count_;
+
   symbol* parent_;
   symbol* child_;
 };
@@ -290,6 +313,7 @@ struct symbol {
 #define uRETNONE  0x10
 
 #define flgDEPRECATED 0x01  /* symbol is deprecated (avoid use) */
+#define flgQUEUED     0x02  /* symbol is queued for a local work algorithm */
 
 #define uMAINFUNC "main"
 

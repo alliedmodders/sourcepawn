@@ -3019,6 +3019,8 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
        */
       if (sym->ident==iFUNCTN && !alpha(*sym->name()))
         sym->usage &= ~uPROTOTYPED;
+      if (origRoot == &glbtab)
+        sym->clear_refers();
       root=sym;                 /* skip the symbol */
     } /* if */
   } /* if */
@@ -3055,35 +3057,6 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *
   return firstmatch;
 }
 
-/* Adds "bywhom" to the list of referrers of "entry". Typically,
- * bywhom will be the function that uses a variable or that calls
- * the function.
- */
-int refer_symbol(symbol *entry,symbol *bywhom)
-{
-  assert(bywhom!=NULL);         /* it makes no sense to add a "void" referrer */
-  assert(entry!=NULL);
-
-  size_t count;
-
-  /* see if it is already there */
-  for (count=0; count<entry->refers.length() && entry->refers[count]!=bywhom; count++)
-    /* nothing */;
-  if (count<entry->refers.length()) {
-    assert(entry->refers[count]==bywhom);
-    return TRUE;
-  } /* if */
-
-  /* see if there is an empty spot in the referrer list */
-  for (count=0; count<entry->refers.length() && entry->refers[count]; count++)
-    /* nothing */;
-  if (count < entry->refers.length())
-    entry->refers[count] = bywhom;
-  else
-    entry->refers.append(bywhom);
-  return TRUE;
-}
-
 void markusage(symbol *sym,int usage)
 {
   assert(sym!=NULL);
@@ -3099,8 +3072,8 @@ void markusage(symbol *sym,int usage)
        * compiler may arrive through this function
        */
       if (curfunc!=NULL)
-        refer_symbol(sym,curfunc);
-    } /* if */
+        curfunc->add_reference_to(sym);
+    } /*if */
   } /* if */
 }
 
@@ -3187,6 +3160,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    methodmap(nullptr),
    addr_(symaddr),
    name_(nullptr),
+   referred_from_count_(0),
    parent_(nullptr),
    child_(nullptr)
 {
@@ -3221,6 +3195,31 @@ symbol::~symbol()
   } /* if */
   if (documentation!=NULL)
     free(documentation);
+}
+
+void symbol::add_reference_to(symbol* other) {
+  for (symbol* sym : refers_to_) {
+    if (sym == other)
+      return;
+  }
+  refers_to_.append(other);
+  other->referred_from_.append(this);
+  other->referred_from_count_++;
+}
+
+void symbol::drop_reference_from(symbol* from) {
+#if !defined(NDEBUG)
+  bool found = false;
+  for (size_t i = 0; i < referred_from_.length(); i++) {
+    if (referred_from_[i] == from) {
+      referred_from_[i] = nullptr;
+      found = true;
+      break;
+    }
+  }
+  assert(found);
+#endif
+  referred_from_count_--;
 }
 
 /*  addsym
