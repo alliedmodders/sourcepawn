@@ -38,6 +38,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sc.h"
+#include "scvars.h"
+#include "errors.h"
+#include "libpawnc.h"
 
 #if !defined TRUE
   #define FALSE         0

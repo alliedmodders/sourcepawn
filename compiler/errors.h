@@ -50,6 +50,32 @@ struct ErrorReport
   ErrorType type;
 };
 
+enum FatalError {
+  FIRST_FATAL_ERROR = 183,
+
+  FATAL_ERROR_READ  = FIRST_FATAL_ERROR,
+  FATAL_ERROR_WRITE,
+  FATAL_ERROR_ALLOC_OVERFLOW,
+  FATAL_ERROR_OOM,
+  FATAL_ERROR_INVALID_INSN,
+  FATAL_ERROR_INT_OVERFLOW,
+  FATAL_ERROR_SCRIPT_OVERFLOW,
+  FATAL_ERROR_OVERWHELMED_BY_BAD,
+  FATAL_ERROR_NO_CODEPAGE,
+  FATAL_ERROR_INVALID_PATH,
+  FATAL_ERROR_ASSERTION_FAILED,
+  FATAL_ERROR_USER_ERROR,
+  FATAL_ERROR_NO_GENERATED_CODE,
+  FATAL_ERROR_FUNCENUM,
+
+  FATAL_ERRORS_TOTAL
+};
+
+int error(int number,...);
+int error(symbol* sym, int number, ...);
+void errorset(int code,int line);
 void report_error(ErrorReport* report);
+
+int pc_enablewarning(int number,int enable);
 
 #endif // am_sourcepawn_compiler_sc5_h

@@ -56,6 +56,11 @@
   #include <alloc/fortify.h>
 #endif
 #include "sc.h"
+#include "scvars.h"
+#include "errors.h"
+#include "lexer.h"
+#include "codegen.h"
+#include "libpawnc.h"
 
 #if defined _MSC_VER
   #pragma warning(push)

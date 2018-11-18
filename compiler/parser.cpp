@@ -79,8 +79,17 @@
 
 #include "lstring.h"
 #include "sc.h"
+#include "scvars.h"
+#include "errors.h"
 #include "sctracker.h"
+#include "codegen.h"
+#include "sclist.h"
+#include "lexer.h"
 #include "sp_symhash.h"
+#include "optimizer.h"
+#include "assembler.h"
+#include "expressions.h"
+#include "libpawnc.h"
 #define VERSION_STR "3.2.3636"
 #define VERSION_INT 0x0302
 
@@ -155,7 +164,6 @@ static void domethodmap(LayoutSpec spec);
 static bool dousing();
 static void dobreak(void);
 static void docont(void);
-static void dosleep(void);
 static void addwhile(int *ptr);
 static void delwhile(void);
 static int *readwhile(void);
@@ -5428,10 +5436,6 @@ static void statement(int *lastindent,int allow_decl)
     doassert();
     lastst=tASSERT;
     break;
-  case tSLEEP:
-    dosleep();
-    lastst=tSLEEP;
-    break;
   case tCONST:
     decl_const(sLOCAL);
     break;
@@ -6249,23 +6253,6 @@ static void doexit(void)
   ldconst(tag,sALT);
   destructsymbols(&loctab,0);           /* call destructor for *all* locals */
   ffabort(xEXIT);
-}
-
-static void dosleep(void)
-{
-  int tag=0;
-
-  if (matchtoken(tTERM)==0){
-    doexpr(TRUE,FALSE,FALSE,TRUE,&tag,NULL,TRUE);
-    needtoken(tTERM);
-  } else {
-    ldconst(0,sPRI);
-  } /* if */
-  ldconst(tag,sALT);
-  ffabort(xSLEEP);
-
-  /* for stack usage checking, mark the use of the sleep instruction */
-  pc_memflags |= suSLEEP_INSTR;
 }
 
 static void addwhile(int *ptr)

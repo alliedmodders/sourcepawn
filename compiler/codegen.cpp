@@ -30,7 +30,14 @@
   #include <alloc/fortify.h>
 #endif
 #include "sc.h"
+#include "scvars.h"
+#include "errors.h"
+#include "codegen.h"
 #include "sctracker.h"
+#include "sclist.h"
+#include "lexer.h"
+#include "libpawnc.h"
+#include "optimizer.h"
 
 static int fcurseg;     /* the file number (fcurrent) for the active segment */
 

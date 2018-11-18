@@ -32,6 +32,9 @@
 #endif
 #include "lstring.h"
 #include "sc.h"
+#include "scvars.h"
+#include "sclist.h"
+#include "errors.h"
 #include "amxdbg.h"
 #if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
@@ -46,6 +49,8 @@
 #include "libsmx/smx-encoding.h"
 #include "shared/byte-buffer.h"
 #include "types.h"
+#include "lexer.h"
+#include "libpawnc.h"
 
 using namespace sp;
 using namespace ke;

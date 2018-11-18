@@ -23,7 +23,11 @@
  */
 #include "parse-expr.h"
 #include "sc.h"
+#include "errors.h"
+#include "scvars.h"
 #include "types.h"
+#include "sclist.h"
+#include "lexer.h"
 #include <assert.h>
 #include <string.h>
 

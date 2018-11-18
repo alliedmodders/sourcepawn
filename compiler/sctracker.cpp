@@ -6,7 +6,9 @@
 #include <amtl/am-vector.h>
 #include "sc.h"
 #include "sctracker.h"
+#include "codegen.h"
 #include "types.h"
+#include "lexer.h"
 
 struct MemoryUse {
   MemoryUse(int type, int size)

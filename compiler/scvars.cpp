@@ -26,6 +26,7 @@
 #include <stdlib.h>     /* for _MAX_PATH */
 #include "sc.h"
 #include "sp_symhash.h"
+#include "codegen.h"
 
 /*  global variables
  *

@@ -25,6 +25,7 @@
  */
 #include "types.h"
 #include "sc.h"
+#include "scvars.h"
 #include <ctype.h>
 
 using namespace ke;
