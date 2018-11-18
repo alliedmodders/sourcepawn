@@ -37,14 +37,14 @@
   #include <alloc/fortify.h>
 #endif
 #include "sc.h"
-#include "sc5.h"
+#include "errors.h"
 
 #if defined _MSC_VER
   #pragma warning(push)
   #pragma warning(disable:4125)  /* decimal digit terminates octal escape sequence */
 #endif
 
-#include "sc5-in.scp"
+#include "messages.h"
 
 #if defined _MSC_VER
   #pragma warning(pop)
