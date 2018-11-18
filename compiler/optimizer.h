@@ -1,8 +1,5 @@
 // vim: set ts=8 sts=2 sw=2 tw=99 et:
 //
-//  Pawn compiler - Error message system
-//  In fact a very simple system, using only 'panic mode'.
-//
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
 //  This software is provided "as-is", without any express or implied warranty.

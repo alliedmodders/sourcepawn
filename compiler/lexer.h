@@ -1,8 +1,5 @@
 // vim: set ts=8 sts=2 sw=2 tw=99 et:
 //
-//  Pawn compiler - Error message system
-//  In fact a very simple system, using only 'panic mode'.
-//
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
 //  This software is provided "as-is", without any express or implied warranty.
@@ -261,7 +258,6 @@ int ishex(char c);
 int isoctal(char c);
 void delete_symbol(symbol *root,symbol *sym);
 void delete_symbols(symbol *root,int level,int del_labels,int delete_functions);
-int refer_symbol(symbol *entry,symbol *bywhom);
 void markusage(symbol *sym,int usage);
 symbol *findglb(const char *name);
 symbol *findloc(const char *name);

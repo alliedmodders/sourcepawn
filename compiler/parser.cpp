@@ -1511,7 +1511,7 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
           sym->usage |= uREAD;
           values[arg->index] = sym->addr();
           found[arg->index] = 1;
-          refer_symbol(sym, mysym);
+          mysym->add_reference_to(sym);
           break;
         }
       }
@@ -4247,9 +4247,8 @@ static int operatoradjust(int opertok,symbol *sym,char *opername,int resulttag)
       error(21,errname);        /* symbol already defined */
     } /* if */
     sym->usage|=oldsym->usage;  /* copy flags from the previous definition */
-    for (symbol* refer : oldsym->refers) {
-      if (refer)
-        refer_symbol(sym,refer);
+    for (const auto& other : oldsym->refers_to()) {
+      sym->add_reference_to(other);
     }
     delete_symbol(&glbtab,oldsym);
   } /* if */
@@ -4967,60 +4966,47 @@ static void doarg(symbol *fun, declinfo_t *decl, int offset, int chkshadow, argi
   errorset(sEXPRRELEASE,0);
 }
 
-static int count_referrers(symbol *entry)
+static inline bool
+is_symbol_unused(symbol* sym)
 {
-  int count=0;
-  for (symbol* refer : entry->refers) {
-    if (refer)
-      count++;
-  }
-  return count;
+  if (sym->parent())
+    return false;
+  if (!sym->is_unreferenced())
+    return false;
+  if (sym->usage & uPUBLIC)
+    return false;
+  if (sym->ident == iVARIABLE || sym->ident == iARRAY)
+    return true;
+  return sym->ident == iFUNCTN &&
+         (sym->usage & uNATIVE) == 0 &&
+         strcmp(sym->name(), uMAINFUNC) != 0;
 }
 
-/* Every symbol has a referrer list, that contains the functions that use
- * the symbol. Now, if function "apple" is accessed by functions "banana" and
- * "citron", but neither function "banana" nor "citron" are used by anyone
- * else, then, by inference, function "apple" is not used either.
- */
-static void reduce_referrers(symbol *root)
+static void
+reduce_referrers(symbol* root)
 {
-  int restart;
-  symbol *sym,*ref;
+  ke::Vector<symbol*> work;
 
-  do {
-    restart=0;
-    for (sym=root->next; sym!=NULL; sym=sym->next) {
-      if (sym->parent()!=NULL)
-        continue;                 /* hierarchical data type */
-      if (sym->ident==iFUNCTN
-          && (sym->usage & uNATIVE)==0
-          && (sym->usage & uPUBLIC)==0 && strcmp(sym->name(),uMAINFUNC)!=0
-          && count_referrers(sym)==0)
-      {
-        sym->usage&=~(uREAD | uWRITTEN);  /* erase usage bits if there is no referrer */
-        /* find all symbols that are referred by this symbol */
-        for (ref=root->next; ref!=NULL; ref=ref->next) {
-          if (ref->parent()!=NULL)
-            continue;             /* hierarchical data type */
-          size_t i;
-          for (i=0; i<ref->refers.length() && ref->refers[i]!=sym; i++)
-            /* nothing */;
-          if (i<ref->refers.length()) {
-            assert(ref->refers[i]==sym);
-            ref->refers[i]=nullptr;
-            restart++;
-          } /* if */
-        } /* for */
-      } else if ((sym->ident==iVARIABLE || sym->ident==iARRAY)
-                 && (sym->usage & uPUBLIC)==0
-                 && sym->parent()==NULL
-                 && count_referrers(sym)==0)
-      {
-        sym->usage&=~(uREAD | uWRITTEN);  /* erase usage bits if there is no referrer */
-      } /* if */
-    } /* for */
-    /* after removing a symbol, check whether more can be removed */
-  } while (restart>0);
+  // Enqueue all unreferred symbols.
+  for (symbol* sym = root->next; sym; sym = sym->next) {
+    if (is_symbol_unused(sym)) {
+      sym->flags |= flgQUEUED;
+      work.append(sym);
+    }
+  }
+
+  while (!work.empty()) {
+    symbol* dead = work.popCopy();
+    dead->usage &= ~(uREAD | uWRITTEN);
+
+    for (symbol* sym : dead->refers_to()) {
+      sym->drop_reference_from(dead);
+      if (is_symbol_unused(sym) && !(sym->flags & flgQUEUED)) {
+        sym->flags |= flgQUEUED;
+        work.append(sym);
+      }
+    }
+  }
 }
 
 /*  testsymbols - test for unused local or global variables
