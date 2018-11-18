@@ -31,7 +31,7 @@
 #include "sc.h"
 #include "sctracker.h"
 #include "types.h"
-#include "sc3.h"
+#include "expressions.h"
 #include <amtl/am-algorithm.h>
 
 static void dropout(int lvalue,void (*testfunc)(int val),int exit1,value *lval);

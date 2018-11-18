@@ -25,7 +25,7 @@
 #define am_sourcepawn_compiler_sc3_h
 
 #include "amx.h"
-#include "expression-parsing.h"
+#include "parse-expr.h"
 
 struct value;
 struct svalue;

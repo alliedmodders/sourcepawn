@@ -62,7 +62,7 @@
   #pragma warning(disable:4125)  /* decimal digit terminates octal escape sequence */
 #endif
 
-#include "sc7-in.scp"
+#include "patterns.h"
 
 #if defined _MSC_VER
   #pragma warning(pop)
