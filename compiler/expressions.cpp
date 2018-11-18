@@ -29,7 +29,12 @@
   #include <alloc/fortify.h>
 #endif
 #include "sc.h"
+#include "scvars.h"
+#include "codegen.h"
+#include "errors.h"
 #include "sctracker.h"
+#include "lexer.h"
+#include "optimizer.h"
 #include "types.h"
 #include "expressions.h"
 #include <amtl/am-algorithm.h>

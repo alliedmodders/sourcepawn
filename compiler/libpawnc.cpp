@@ -30,6 +30,7 @@
 #include <string.h>
 #include "sc.h"
 #include "memfile.h"
+#include "libpawnc.h"
 
 #if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
 #include <sys/types.h>

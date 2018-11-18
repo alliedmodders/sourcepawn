@@ -67,4 +67,19 @@ private:
   int parse_view_as(value* lval);
 };
 
+#define MATCHTAG_COERCE       0x1 // allow coercion
+#define MATCHTAG_SILENT       0x2 // silence the error(213) warning
+#define MATCHTAG_COMMUTATIVE  0x4 // order does not matter
+#define MATCHTAG_DEDUCE       0x8 // correct coercion
+
+int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
+                         value *lval,int *resulttag);
+int matchtag(int formaltag,int actualtag,int allowcoerce);
+int expression(cell *val,int *tag,symbol **symptr,int chkfuncresult,value *_lval);
+cell array_totalsize(symbol *sym);
+int matchtag_string(int ident, int tag);
+int checkval_string(value *sym1, value *sym2);
+int checktag_string(int tag, value *sym1);
+int lvalexpr(svalue *sval);
+
 #endif // am_sourcepawn_compiler_sc3_h

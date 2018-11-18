@@ -32,7 +32,10 @@
 #include <string.h>
 #include <inttypes.h>
 #include "sc.h"
+#include "scvars.h"
 #include "lstring.h"
+#include "errors.h"
+#include "sclist.h"
 
 #if defined FORTIFY
   #include <alloc/fortify.h>

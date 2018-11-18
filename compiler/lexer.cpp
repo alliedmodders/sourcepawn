@@ -33,7 +33,14 @@
 #include <sp_typeutil.h>
 #include "lstring.h"
 #include "sc.h"
-#include "tokenbuffer.h"
+#include "errors.h"
+#include "scvars.h"
+#include "codegen.h"
+#include "sclist.h"
+#include "lexer.h"
+#include "libpawnc.h"
+#include "optimizer.h"
+#include "sci18n.h"
 #if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
 #endif
@@ -1880,7 +1887,6 @@ const char *sc_tokens[] = {
          "return",
          "sealed",
          "sizeof",
-         "sleep",
          "static",
          "stock",
          "struct",
