@@ -193,9 +193,7 @@ static int sc_reparse = 0;      /* needs 3th parse because of changed prototypes
 static int sc_parsenum = 0;     /* number of the extra parses */
 static int wq[wqTABSZ];         /* "while queue", internal stack for nested loops */
 static int *wqptr;              /* pointer to next entry */
-#if !defined SC_LIGHT
-  static char *sc_documentation=NULL;/* main documentation */
-#endif
+static char *sc_documentation=NULL;/* main documentation */
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
   static HWND hwndFinish = 0;
 #endif
@@ -458,16 +456,14 @@ cleanup:
     outf=NULL;
   } /* if */
 
-#if !defined SC_LIGHT
-    if (errnum==0 && strlen(errfname)==0) {
-      if ((!norun && (sc_debug & sSYMBOLIC)!=0) || verbosity>=2) {
-        pc_printf("Code size:         %8ld bytes\n", (long)code_idx);
-        pc_printf("Data size:         %8ld bytes\n", (long)glb_declared*sizeof(cell));
-        pc_printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize*sizeof(cell));
-        pc_printf("Total requirements:%8ld bytes\n", (long)code_idx+(long)glb_declared*sizeof(cell)+(long)pc_stksize*sizeof(cell));
-      } /* if */
+  if (errnum==0 && strlen(errfname)==0) {
+    if ((!norun && (sc_debug & sSYMBOLIC)!=0) || verbosity>=2) {
+      pc_printf("Code size:         %8ld bytes\n", (long)code_idx);
+      pc_printf("Data size:         %8ld bytes\n", (long)glb_declared*sizeof(cell));
+      pc_printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize*sizeof(cell));
+      pc_printf("Total requirements:%8ld bytes\n", (long)code_idx+(long)glb_declared*sizeof(cell)+(long)pc_stksize*sizeof(cell));
     } /* if */
-#endif
+  } /* if */
 
   if (g_tmpfile[0] != '\0') {
     remove(g_tmpfile);
@@ -499,11 +495,9 @@ cleanup:
   #if !defined NO_DEFINE
     delete_substtable();
   #endif
-  #if !defined SC_LIGHT
-    delete_docstringtable();
-    if (sc_documentation!=NULL)
-      free(sc_documentation);
-  #endif
+  delete_docstringtable();
+  if (sc_documentation!=NULL)
+    free(sc_documentation);
   delete_autolisttable();
   if (errnum!=0) {
     if (strlen(errfname)==0)
@@ -701,10 +695,7 @@ static void initglobals(void)
   inpf_org=NULL;        /* main source file */
 
   wqptr=wq;             /* initialize while queue pointer */
-
-#if !defined SC_LIGHT
   sc_documentation=NULL;
-#endif
 }
 
 static char *get_extension(char *filename)
@@ -896,9 +887,7 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         about();
       } /* switch */
     } else if (argv[arg][0]=='@') {
-      #if !defined SC_LIGHT
-        parserespf(&argv[arg][1],oname,ename,pname);
-      #endif
+      parserespf(&argv[arg][1],oname,ename,pname);
     } else if ((ptr=strchr(argv[arg],'='))!=NULL) {
       i=(int)(ptr-argv[arg]);
       if (i>sNAMEMAX) {
@@ -928,7 +917,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
   } /* for */
 }
 
-#if !defined SC_LIGHT
 static void parserespf(char *filename,char *oname,char *ename,char *pname)
 {
 #define MAX_OPTIONS     100
@@ -970,7 +958,6 @@ static void parserespf(char *filename,char *oname,char *ename,char *pname)
   free(argv);
   free(string);
 }
-#endif
 
 static void setopt(int argc,char **argv,char *oname,char *ename,char *pname)
 {
@@ -980,28 +967,21 @@ static void setopt(int argc,char **argv,char *oname,char *ename,char *pname)
   *pname='\0';
   strcpy(pname,sDEF_PREFIX);
 
-  #if 0 /* needed to test with BoundsChecker for DOS (it does not pass
-         * through arguments) */
-    insert_sourcefile("test.p");
-    strcpy(oname,"test.asm");
-  #endif
-
-  #if !defined SC_LIGHT
-    /* first parse a "config" file with default options */
-    if (argv[0]!=NULL) {
-      char cfgfile[_MAX_PATH];
-      char *ext;
-      strcpy(cfgfile,argv[0]);
-      if ((ext=strrchr(cfgfile,DIRSEP_CHAR))!=NULL) {
-        *(ext+1)='\0';          /* strip the program filename */
-        strcat(cfgfile,"pawn.cfg");
-      } else {
-        strcpy(cfgfile,"pawn.cfg");
-      } /* if */
-      if (access(cfgfile,4)==0)
-        parserespf(cfgfile,oname,ename,pname);
+  /* first parse a "config" file with default options */
+  if (argv[0]!=NULL) {
+    char cfgfile[_MAX_PATH];
+    char *ext;
+    strcpy(cfgfile,argv[0]);
+    if ((ext=strrchr(cfgfile,DIRSEP_CHAR))!=NULL) {
+      *(ext+1)='\0';          /* strip the program filename */
+      strcat(cfgfile,"pawn.cfg");
+    } else {
+      strcpy(cfgfile,"pawn.cfg");
     } /* if */
-  #endif
+    if (access(cfgfile,4)==0)
+      parserespf(cfgfile,oname,ename,pname);
+  } /* if */
+
   parseoptions(argc,argv,oname,ename,pname);
   if (get_sourcefile(0)==NULL)
     about();
@@ -4602,15 +4582,13 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   rettype=(sym->usage & uRETVALUE);      /* set "return type" variable */
   curfunc=sym;
   define_args();        /* add the symbolic info for the function arguments */
-  #if !defined SC_LIGHT
-    if (matchtoken('{')) {
-      lexpush();
-    } else {
-      // We require '{' for new methods.
-      if (decl->type.is_new)
-        needtoken('{');
-    } /* if */
-  #endif
+  if (matchtoken('{')) {
+    lexpush();
+  } else {
+    // We require '{' for new methods.
+    if (decl->type.is_new)
+      needtoken('{');
+  } /* if */
   statement(NULL,FALSE);
 
   if ((rettype & uRETVALUE)!=0) {
