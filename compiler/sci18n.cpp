@@ -63,7 +63,6 @@
   #define ELEMENTS(array)       (sizeof(array) / sizeof(array[0]))
 #endif
 
-#if !defined NO_UTF8
 cell get_utf8_char(const unsigned char *string,const unsigned char **endptr)
 {
   int follow=0;
@@ -141,41 +140,18 @@ cell get_utf8_char(const unsigned char *string,const unsigned char **endptr)
     *endptr=string;
   return result;
 }
-#endif
 
-int scan_utf8(void *fp,const char *filename)
+void skip_utf8_bom(void *fp)
 {
-  #if defined NO_UTF8
-    return 0;
-  #else
-    static void *resetpos=NULL;
-    int utf8=TRUE;
-    int firstchar=TRUE,bom_found=FALSE;
-    const unsigned char *ptr;
+  void* resetpos = pc_getpossrc(fp);
 
-    resetpos=pc_getpossrc(fp,resetpos);
-    while (utf8 && pc_readsrc(fp,pline,sLINEMAX)!=NULL) {
-      ptr=pline;
-      if (firstchar) {
-        /* check whether the very first character on the very first line
-         * starts with a BYTE order mark
-         */
-        cell c=get_utf8_char(ptr,&ptr);
-        bom_found= (c==0xfeff);
-        utf8= (c>=0);
-        firstchar=FALSE;
-      } /* if */
-      while (utf8 && *ptr!='\0')
-        utf8= (get_utf8_char(ptr,&ptr)>=0);
-    } /* while */
-    pc_resetsrc(fp,resetpos);
-    if (bom_found) {
-      unsigned char bom[3];
-      if (!utf8)
-        error(77,filename);     /* malformed UTF-8 encoding */
-      pc_readsrc(fp,bom,3);
-      assert(bom[0]==0xef && bom[1]==0xbb && bom[2]==0xbf);
-    } /* if */
-    return utf8;
-  #endif  /* NO_UTF8 */
+  static const size_t kBomSize = 3;
+  unsigned char bom[kBomSize + 1];
+  if (!pc_readsrc(fp, bom, kBomSize))
+    return;
+
+  if (bom[0] == 0xef && bom[1] == 0xbb && bom[2] == 0xbf)
+    return;
+
+  pc_resetsrc(fp, resetpos);
 }

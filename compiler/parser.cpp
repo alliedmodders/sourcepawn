@@ -90,6 +90,7 @@
 #include "assembler.h"
 #include "expressions.h"
 #include "libpawnc.h"
+#include "sci18n.h"
 #define VERSION_STR "3.2.3636"
 #define VERSION_INT 0x0302
 
@@ -308,6 +309,7 @@ int pc_compile(int argc, char *argv[])
       pc_writesrc(ftmp,(unsigned char*)"#file \"");
       pc_writesrc(ftmp,(unsigned char*)sname);
       pc_writesrc(ftmp,(unsigned char*)"\"\n");
+      skip_utf8_bom(fsrc);
       while (!pc_eofsrc(fsrc) && pc_readsrc(fsrc,tstring,sizeof tstring)) {
         pc_writesrc(ftmp,tstring);
       } /* while */
@@ -323,6 +325,7 @@ int pc_compile(int argc, char *argv[])
   inpf_org=pc_opensrc(inpfname);
   if (inpf_org==NULL)
     error(FATAL_ERROR_READ,inpfname);
+  skip_utf8_bom(inpf_org);
   freading=TRUE;
   outf=(FILE*)pc_openasm(outfname); /* first write to assembler file (may be temporary) */
   if (outf==NULL)
@@ -349,7 +352,7 @@ int pc_compile(int argc, char *argv[])
   } /* if */
   /* do the first pass through the file (or possibly two or more "first passes") */
   sc_parsenum=0;
-  inpfmark=pc_getpossrc(inpf_org,NULL);
+  inpfmark=pc_getpossrc(inpf_org);
   do {
     /* reset "defined" flag of all functions and global variables */
     reduce_referrers(&glbtab);

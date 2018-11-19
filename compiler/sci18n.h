@@ -20,4 +20,4 @@
 #pragma once
 
 cell get_utf8_char(const unsigned char *string,const unsigned char **endptr);
-int scan_utf8(void *fp,const char *filename);
+void skip_utf8_bom(void *fp);

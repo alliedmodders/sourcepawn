@@ -247,7 +247,7 @@ int pc_writesrc(void *handle,unsigned char *source)
   return 0;
 }
 
-void *pc_getpossrc(void *handle,void *position)
+void *pc_getpossrc(void *handle)
 {
   src_file_t *src = (src_file_t *)handle;
 

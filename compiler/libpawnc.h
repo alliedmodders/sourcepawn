@@ -24,7 +24,7 @@ void *pc_createsrc(char *filename);
 void pc_closesrc(void *handle);   /* never delete */
 char *pc_readsrc(void *handle,unsigned char *target,int maxchars);
 int pc_writesrc(void *handle,unsigned char *source);
-void *pc_getpossrc(void *handle,void *position); /* mark the current position */
+void *pc_getpossrc(void *handle);
 void pc_resetsrc(void *handle,void *position);  /* reset to a position marked earlier */
 int  pc_eofsrc(void *handle);
 
