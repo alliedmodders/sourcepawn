@@ -425,25 +425,21 @@ static void readline(unsigned char *line)
 static void stripcom(unsigned char *line)
 {
   char c;
-  #if !defined SC_LIGHT
-    #define COMMENT_LIMIT 100
-    #define COMMENT_MARGIN 40   /* length of the longest word */
-    char comment[COMMENT_LIMIT+COMMENT_MARGIN];
-    int commentidx=0;
-    int skipstar=TRUE;
-  #endif
+  #define COMMENT_LIMIT 100
+  #define COMMENT_MARGIN 40   /* length of the longest word */
+  char comment[COMMENT_LIMIT+COMMENT_MARGIN];
+  int commentidx=0;
+  int skipstar=TRUE;
 
   while (*line){
     if (icomment!=0) {
       if (*line=='*' && *(line+1)=='/') {
-        #if !defined SC_LIGHT
-          if (icomment==2) {
-            assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
-            comment[commentidx]='\0';
-            if (strlen(comment)>0)
-              insert_docstring(comment);
-          } /* if */
-        #endif
+        if (icomment==2) {
+          assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
+          comment[commentidx]='\0';
+          if (strlen(comment)>0)
+            insert_docstring(comment);
+        } /* if */
         icomment=0;     /* comment has ended */
         *line=' ';      /* replace '*' and '/' characters by spaces */
         *(line+1)=' ';
@@ -451,7 +447,6 @@ static void stripcom(unsigned char *line)
       } else {
         if (*line=='/' && *(line+1)=='*')
           error(216);   /* nested comment */
-        #if !defined SC_LIGHT
           /* collect the comment characters in a string */
           if (icomment==2) {
             if (skipstar && ((*line!='\0' && *line<=' ') || *line=='*')) {
@@ -466,21 +461,18 @@ static void stripcom(unsigned char *line)
               skipstar=FALSE;
             } /* if */
           } /* if */
-        #endif
         *line=' ';      /* replace comments by spaces */
         line+=1;
       } /* if */
     } else {
       if (*line=='/' && *(line+1)=='*'){
         icomment=1;     /* start comment */
-        #if !defined SC_LIGHT
-          /* there must be two "*" behind the slash and then white space */
-          if (*(line+2)=='*' && *(line+3)<=' ') {
-            icomment=2; /* documentation comment */
-          } /* if */
-          commentidx=0;
-          skipstar=TRUE;
-        #endif
+        /* there must be two "*" behind the slash and then white space */
+        if (*(line+2)=='*' && *(line+3)<=' ') {
+          icomment=2; /* documentation comment */
+        } /* if */
+        commentidx=0;
+        skipstar=TRUE;
         *line=' ';      /* replace '/' and '*' characters by spaces */
         *(line+1)=' ';
         line+=2;
@@ -489,18 +481,16 @@ static void stripcom(unsigned char *line)
       } else if (*line=='/' && *(line+1)=='/'){  /* comment to end of line */
         if (strchr((char*)line,'\a')!=NULL)
           error(49);    /* invalid line continuation */
-        #if !defined SC_LIGHT
-          if (*(line+2)=='/' && *(line+3)<=' ') {
-            /* documentation comment */
-            char *str=(char*)line+3;
-            char *end;
-            while (*str<=' ' && *str!='\0')
-              str++;    /* skip leading whitespace */
-            if ((end=strrchr(str,'\n'))!=NULL)
-              *end='\0';/* erase trailing '\n' */
-            insert_docstring(str);
-          } /* if */
-        #endif
+        if (*(line+2)=='/' && *(line+3)<=' ') {
+          /* documentation comment */
+          char *str=(char*)line+3;
+          char *end;
+          while (*str<=' ' && *str!='\0')
+            str++;    /* skip leading whitespace */
+          if ((end=strrchr(str,'\n'))!=NULL)
+            *end='\0';/* erase trailing '\n' */
+          insert_docstring(str);
+        } /* if */
         *line++='\n';   /* put "newline" at first slash */
         *line='\0';     /* put "zero-terminator" at second slash */
       } else {
@@ -519,14 +509,12 @@ static void stripcom(unsigned char *line)
       } /* if */
     } /* if */
   } /* while */
-  #if !defined SC_LIGHT
-    if (icomment==2) {
-      assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
-      comment[commentidx]='\0';
-      if (strlen(comment)>0)
-        insert_docstring(comment);
-    } /* if */
-  #endif
+  if (icomment==2) {
+    assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
+    comment[commentidx]='\0';
+    if (strlen(comment)>0)
+      insert_docstring(comment);
+  } /* if */
 }
 
 /*  btoi
