@@ -198,7 +198,6 @@ int plungequalifiedfile(char *name)
   PUSHSTK_I(iflevel);
   assert(!SKIPPING);
   assert(skiplevel==iflevel);   /* these two are always the same when "parsing" */
-  PUSHSTK_I(sc_is_utf8);
   PUSHSTK_I(icomment);
   PUSHSTK_I(fcurrent);
   PUSHSTK_I(fline);
@@ -215,7 +214,7 @@ int plungequalifiedfile(char *name)
   assert(sc_status==statFIRST || strcmp(get_inputfile(fcurrent), inpfname)==0);
   setfiledirect(inpfname);      /* (optionally) set in the list file */
   listline=-1;                  /* force a #line directive when changing the file */
-  sc_is_utf8=(short)scan_utf8(inpf,name);
+  skip_utf8_bom(inpf);
   return TRUE;
 }
 
@@ -356,7 +355,6 @@ static void readline(unsigned char *line)
       fline=i;
       fcurrent=(short)POPSTK_I();
       icomment=(short)POPSTK_I();
-      sc_is_utf8=(short)POPSTK_I();
       iflevel=(short)POPSTK_I();
       skiplevel=iflevel;        /* this condition held before including the file */
       assert(!SKIPPING);        /* idem ditto */
@@ -1650,7 +1648,7 @@ static int scanellipsis(const unsigned char *lptr)
     return 0;           /* quick exit: cannot read after EOF */
   if ((localbuf=(unsigned char*)malloc((sLINEMAX+1)*sizeof(unsigned char)))==NULL)
     return 0;
-  inpfmark=pc_getpossrc(inpf,inpfmark);
+  inpfmark=pc_getpossrc(inpf);
   localcomment=icomment;
 
   found=0;
@@ -2758,17 +2756,13 @@ static cell litchar(const unsigned char **lptr,int flags)
 
   cptr=*lptr;
   if ((flags & RAWMODE)!=0 || *cptr!=sc_ctrlchar) {  /* no escape character */
-    #if !defined NO_UTF8
-      if (sc_is_utf8 && (flags & UTF8MODE)!=0) {
+      if ((flags & UTF8MODE)!=0) {
         c=get_utf8_char(cptr,&cptr);
         assert(c>=0);   /* file was already scanned for conformance to UTF-8 */
       } else {
-    #endif
         c=*cptr;
         cptr+=1;
-    #if !defined NO_UTF8
       } /* if */
-    #endif
   } else {
     cptr+=1;
     if (*cptr==sc_ctrlchar) {
