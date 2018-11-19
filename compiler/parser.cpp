@@ -188,7 +188,6 @@ static int lastst     = 0;      /* last executed statement type */
 static int nestlevel  = 0;      /* number of active (open) compound statements */
 static int endlessloop= 0;      /* nesting level of endless loop */
 static int rettype    = 0;      /* the type that a "return" expression should have */
-static int skipinput  = 0;      /* number of lines to skip from the first input file */
 static int verbosity  = 1;      /* verbosity level, 0=quiet, 1=normal, 2=verbose */
 static int sc_reparse = 0;      /* needs 3th parse because of changed prototypes? */
 static int sc_parsenum = 0;     /* number of the extra parses */
@@ -218,7 +217,7 @@ int pc_compile(int argc, char *argv[])
   );
 #endif
 
-  int entry,i,jmpcode;
+  int entry,jmpcode;
   int retcode;
   char incfname[_MAX_PATH];
   void *inpfmark;
@@ -331,10 +330,6 @@ int pc_compile(int argc, char *argv[])
   if (outf==NULL)
     error(FATAL_ERROR_WRITE,outfname);
   setconstants();               /* set predefined constants and tagnames */
-  for (i=0; i<skipinput; i++)   /* skip lines in the input file */
-    if (pc_readsrc(inpf_org,pline,sLINEMAX)!=NULL)
-      fline++;                  /* keep line number up to date */
-  skipinput=fline;
   sc_status=statFIRST;
   /* write starting options (from the command line or the configuration file) */
   if (sc_listing) {
@@ -377,7 +372,6 @@ int pc_compile(int argc, char *argv[])
     inpf=inpf_org;
     freading=TRUE;
     pc_resetsrc(inpf,inpfmark); /* reset file position */
-    fline=skipinput;            /* reset line number */
     sc_reparse=FALSE;           /* assume no extra passes */
     sc_status=statFIRST;        /* resetglobals() resets it to IDLE */
 
@@ -431,7 +425,6 @@ int pc_compile(int argc, char *argv[])
   inpf=inpf_org;
   freading=TRUE;
   pc_resetsrc(inpf,inpfmark);   /* reset file position */
-  fline=skipinput;              /* reset line number */
   lexinit();                    /* clear internal flags of lex() */
   sc_status=statWRITE;          /* allow to write --this variable was reset by resetglobals() */
   writeleader(&glbtab);
@@ -677,7 +670,6 @@ static void initglobals(void)
 
   sc_asmfile=FALSE;     /* do not create .ASM file */
   sc_listing=FALSE;     /* do not create .LST file */
-  skipinput=0;          /* number of lines to skip from the first input file */
   sc_ctrlchar=CTRL_CHAR;/* the escape character */
   litmax=sDEF_LITMAX;   /* current size of the literal table */
   errnum=0;             /* number of errors */
@@ -858,9 +850,6 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
         break;
       case 'p':
         strlcpy(pname,option_value(ptr,argv,argc,&arg),_MAX_PATH); /* set name of implicit include file */
-        break;
-      case 's':
-        skipinput=atoi(option_value(ptr,argv,argc,&arg));
         break;
       case 't':
         sc_tabsize=atoi(option_value(ptr,argv,argc,&arg));
@@ -1119,7 +1108,6 @@ static void about(void)
 #endif
     pc_printf("             2    full optimizations\n");
     pc_printf("         -p<name> set name of \"prefix\" file\n");
-    pc_printf("         -s<num>  skip lines from the input file\n");
     pc_printf("         -t<num>  TAB indent size (in character positions, default=%d)\n",sc_tabsize);
     pc_printf("         -v<num>  verbosity level; 0=quiet, 1=normal, 2=verbose (default=%d)\n",verbosity);
     pc_printf("         -w<num>  disable a specific warning by its number\n");
