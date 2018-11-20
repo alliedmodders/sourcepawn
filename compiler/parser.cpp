@@ -324,7 +324,7 @@ int pc_compile(int argc, char *argv[])
     error(FATAL_ERROR_READ,inpfname);
   skip_utf8_bom(inpf_org);
   freading=TRUE;
-  outf=(FILE*)pc_openasm(outfname); /* first write to assembler file (may be temporary) */
+  outf=pc_openasm(outfname); /* first write to assembler file (may be temporary) */
   if (outf==NULL)
     error(FATAL_ERROR_WRITE,outfname);
   setconstants();               /* set predefined constants and tagnames */

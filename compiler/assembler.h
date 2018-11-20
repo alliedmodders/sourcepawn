@@ -19,4 +19,6 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-void assemble(const char *outname, void *fin);
+struct memfile_t;
+
+void assemble(const char *outname, memfile_t* fin);

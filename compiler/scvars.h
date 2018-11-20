@@ -21,6 +21,8 @@
 
 #include <setjmp.h>
 
+struct memfile_t;
+
 typedef struct HashTable HashTable;
 extern struct HashTable *sp_Globals;
 extern symbol loctab;       /* local symbol table */
@@ -92,7 +94,7 @@ extern int sc_compression_level;
 
 extern void *inpf;          /* file read from (source or include) */
 extern void *inpf_org;      /* main source file */
-extern void *outf;          /* file written to */
+extern memfile_t* outf;          /* file written to */
 
 extern jmp_buf errbuf;      /* target of longjmp() on a fatal error */
 
