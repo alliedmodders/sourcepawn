@@ -495,7 +495,6 @@ cleanup:
   #if !defined NO_DEFINE
     delete_substtable();
   #endif
-  delete_docstringtable();
   if (sc_documentation!=NULL)
     free(sc_documentation);
   delete_autolisttable();

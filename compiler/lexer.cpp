@@ -437,8 +437,6 @@ static void stripcom(unsigned char *line)
         if (icomment==2) {
           assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
           comment[commentidx]='\0';
-          if (strlen(comment)>0)
-            insert_docstring(comment);
         } /* if */
         icomment=0;     /* comment has ended */
         *line=' ';      /* replace '*' and '/' characters by spaces */
@@ -455,7 +453,6 @@ static void stripcom(unsigned char *line)
               comment[commentidx++]=(char)((*line!='\n') ? *line : ' ');
               if (commentidx>COMMENT_LIMIT && *line!='\0' && *line<=' ') {
                 comment[commentidx]='\0';
-                insert_docstring(comment);
                 commentidx=0;
               } /* if */
               skipstar=FALSE;
@@ -489,7 +486,6 @@ static void stripcom(unsigned char *line)
             str++;    /* skip leading whitespace */
           if ((end=strrchr(str,'\n'))!=NULL)
             *end='\0';/* erase trailing '\n' */
-          insert_docstring(str);
         } /* if */
         *line++='\n';   /* put "newline" at first slash */
         *line='\0';     /* put "zero-terminator" at second slash */
@@ -512,8 +508,6 @@ static void stripcom(unsigned char *line)
   if (icomment==2) {
     assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
     comment[commentidx]='\0';
-    if (strlen(comment)>0)
-      insert_docstring(comment);
   } /* if */
 }
 
