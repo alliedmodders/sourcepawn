@@ -174,26 +174,6 @@ static char *get_string(stringlist *root,int index)
   return NULL;
 }
 
-static int delete_string(stringlist *root,int index)
-{
-  stringlist *cur,*item;
-
-  assert(root!=NULL);
-  for (cur=root; cur->next!=NULL && index>0; cur=cur->next,index--)
-    /* nothing */;
-  if (cur->next!=NULL) {
-    item=cur->next;
-    if (root->tail == cur->next)
-      root->tail = cur;
-    cur->next=item->next;       /* unlink from list */
-    assert(item->line!=NULL);
-    free(item->line);
-    free(item);
-    return TRUE;
-  } /* if */
-  return FALSE;
-}
-
 void delete_stringtable(stringlist *root)
 {
   stringlist *cur,*next;
@@ -413,32 +393,6 @@ void delete_inputfiletable(void)
   assert(inputfiles.next==NULL);
 }
 
-
-/* ----- documentation tags -------------------------------------- */
-#if !defined SC_LIGHT
-static stringlist docstrings;
-
-stringlist *insert_docstring(char *string)
-{
-  return insert_string(&docstrings,string);
-}
-
-char *get_docstring(int index)
-{
-  return get_string(&docstrings,index);
-}
-
-void delete_docstring(int index)
-{
-  delete_string(&docstrings,index);
-}
-
-void delete_docstringtable(void)
-{
-  delete_stringtable(&docstrings);
-  assert(docstrings.next==NULL);
-}
-#endif /* !defined SC_LIGHT */
 
 
 /* ----- autolisting --------------------------------------------- */
