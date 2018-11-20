@@ -1407,31 +1407,37 @@ void assemble(const char *binfname, void *fin)
 
   // Buffer compression logic. 
   sp_file_hdr_t *header = (sp_file_hdr_t *)buffer.bytes();
-  size_t region_size = header->imagesize - header->dataoffs;
-  size_t zbuf_max = compressBound(region_size);
-  UniquePtr<Bytef[]> zbuf = MakeUnique<Bytef[]>(zbuf_max);
 
-  uLong new_disksize = zbuf_max;
-  int err = compress2(
-    zbuf.get(), 
-    &new_disksize,
-    (Bytef *)(buffer.bytes() + header->dataoffs),
-    region_size,
-    Z_BEST_COMPRESSION
-  );
-  if (err != Z_OK) {
+  if (sc_compression_level) {
+    size_t region_size = header->imagesize - header->dataoffs;
+    size_t zbuf_max = compressBound(region_size);
+    UniquePtr<Bytef[]> zbuf = MakeUnique<Bytef[]>(zbuf_max);
+
+    uLong new_disksize = zbuf_max;
+    int err = compress2(
+      zbuf.get(), 
+      &new_disksize,
+      (Bytef *)(buffer.bytes() + header->dataoffs),
+      region_size,
+      sc_compression_level);
+    if (err == Z_OK) {
+      header->disksize = new_disksize + header->dataoffs;
+      header->compression = SmxConsts::FILE_COMPRESSION_GZ;
+
+      ByteBuffer new_buffer;
+      new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
+      new_buffer.writeBytes(zbuf.get(), new_disksize);
+
+      splat_to_binary(binfname, new_buffer.bytes(), new_buffer.size());
+      return;
+    }
+
     pc_printf("Unable to compress, error %d\n", err);
     pc_printf("Falling back to no compression.\n");
-    splat_to_binary(binfname, buffer.bytes(), buffer.size());
-    return;
   }
 
-  header->disksize = new_disksize + header->dataoffs;
-  header->compression = SmxConsts::FILE_COMPRESSION_GZ;
+  header->disksize = 0;
+  header->compression = SmxConsts::FILE_COMPRESSION_NONE;
 
-  ByteBuffer new_buffer;
-  new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
-  new_buffer.writeBytes(zbuf.get(), new_disksize);
-
-  splat_to_binary(binfname, new_buffer.bytes(), new_buffer.size());
+  splat_to_binary(binfname, buffer.bytes(), buffer.size());
 }

@@ -415,6 +415,7 @@ class TestRunner(object):
 
     argv += mode['spcomp']['args']
     argv += mode['args']
+    argv += ['-z', '1'] # Fast compilation for tests.
     if test.warnings_are_errors:
       argv += ['-E']
     if mode['spcomp']['name'] == 'spcomp2':

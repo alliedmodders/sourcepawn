@@ -874,6 +874,9 @@ static void parseoptions(int argc,char **argv,char *oname,char *ename,char *pnam
             exit(1);
         }
         break;
+      case 'z':
+        sc_compression_level=atoi(option_value(ptr,argv,argc,&arg));
+        break;
       case '\\':                /* use \ instead for escape characters */
         sc_ctrlchar='\\';
         break;
@@ -1091,6 +1094,7 @@ static void about(void)
     pc_printf("         -t<num>  TAB indent size (in character positions, default=%d)\n",sc_tabsize);
     pc_printf("         -v<num>  verbosity level; 0=quiet, 1=normal, 2=verbose (default=%d)\n",verbosity);
     pc_printf("         -w<num>  disable a specific warning by its number\n");
+    pc_printf("         -z<num>  compression level, default=9 (0=none, 1=worst, 9=best)\n");
     pc_printf("         -E       treat warnings as errors\n");
     pc_printf("         -\\       use '\\' for escape characters\n");
     pc_printf("         -^       use '^' for escape characters\n");

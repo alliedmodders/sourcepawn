@@ -90,6 +90,7 @@ int pc_memflags=0;      /* special flags for the stack/heap usage */
 int sc_showincludes=0;  /* show include files */
 int sc_require_newdecls=0; /* Require new-style declarations */
 bool sc_warnings_are_errors=false;
+int sc_compression_level=9;
 
 void *inpf    = NULL;   /* file read from (source or include) */
 void *inpf_org= NULL;   /* main source file */
