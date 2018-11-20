@@ -280,31 +280,36 @@ int pc_eofsrc(void *handle)
 /* should return a pointer, which is used as a "magic cookie" to all I/O
  * functions; return NULL for failure
  */
-void *pc_openasm(char *filename)
+memfile_t *pc_openasm(char *filename)
 {
-  return mfcreate(filename);
+  return memfile_creat(filename, 4096);
 }
 
-void pc_closeasm(void *handle, int deletefile)
+void pc_closeasm(memfile_t* handle, int deletefile)
 {
-  if (handle!=NULL) {
-    if (!deletefile)
-      mfdump((MEMFILE*)handle);
-    mfclose((MEMFILE*)handle);
+  if (handle) {
+    if (!deletefile) {
+      if (FILE* fp = fopen(handle->name, "wb")) {
+        fwrite(handle->base, handle->usedoffs, 1, fp);
+        fclose(fp);
+      }
+    }
+    memfile_destroy(handle);
   } /* if */
 }
 
-void pc_resetasm(void *handle)
+void pc_resetasm(memfile_t* handle)
 {
-  mfseek((MEMFILE*)handle,0,SEEK_SET);
+  memfile_seek(handle, 0, SEEK_SET);
 }
 
-int pc_writeasm(void *handle,const char *string)
+int pc_writeasm(memfile_t* handle, const char* string)
 {
-  return mfputs((MEMFILE*)handle,string);
+  size_t bytes = strlen(string);
+  return memfile_write(handle, string, bytes);
 }
 
-char *pc_readasm(void *handle, char *string, int maxchars)
+char* pc_readasm(memfile_t* handle, char* string, int maxchars)
 {
-  return mfgets((MEMFILE*)handle,string,maxchars);
+  return memfile_gets(handle, string, maxchars);
 }

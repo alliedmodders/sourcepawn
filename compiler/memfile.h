@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-typedef struct memfile_s
+struct memfile_t
 {
 	char *name;
 	char *base;
@@ -11,7 +11,7 @@ typedef struct memfile_s
 	long usedoffs;
 	size_t size;
 	int _static;
-} memfile_t;
+};
 
 /**
  * Creates a new memory file
@@ -27,7 +27,7 @@ void memfile_destroy(memfile_t *mf);
 /**
  * Seeks to a given offset (always from start)
  */
-void memfile_seek(memfile_t *mf, long seek);
+long memfile_seek(memfile_t *mf, long seek, int whence);
 
 /**
  * Writes to a memory buffer (expands as necessary).
@@ -52,15 +52,6 @@ long memfile_tell(memfile_t *mf);
  */
 void memfile_reset(memfile_t *mf);
 
-typedef memfile_t MEMFILE;
-MEMFILE *mfcreate(const char *filename);
-void mfclose(MEMFILE *mf);
-int mfdump(MEMFILE *mf);
-long mflength(const MEMFILE *mf);
-long mfseek(MEMFILE *mf,long offset,int whence);
-unsigned int mfwrite(MEMFILE *mf,const unsigned char *buffer,unsigned int size);
-unsigned int mfread(MEMFILE *mf,unsigned char *buffer,unsigned int size);
-char *mfgets(MEMFILE *mf,char *string,unsigned int size);
-int mfputs(MEMFILE *mf,const char *string);
+char *memfile_gets(memfile_t* mf, char* string, unsigned int size);
 
 #endif //_INCLUDE_MEMFILE_H

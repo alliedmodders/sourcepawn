@@ -65,7 +65,6 @@ binary.sources += [
   'optimizer.cpp',
   'sci18n.cpp',
   'sclist.cpp',
-  'scmemfil.cpp',
   'sctracker.cpp',
   'scvars.cpp',
   'sp_symhash.cpp',

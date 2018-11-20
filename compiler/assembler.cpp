@@ -497,7 +497,7 @@ static int findopcode(char *instr,int maxlen)
 // This pass is necessary because the code addresses of labels is only known
 // after the peephole optimization flag. Labels can occur inside expressions
 // (e.g. the conditional operator), which are optimized.
-static void relocate_labels(void *fin)
+static void relocate_labels(memfile_t* fin)
 {
   if (sc_labnum <= 0)
     return;
@@ -545,7 +545,7 @@ static void relocate_labels(void *fin)
 }
 
 // Generate code or data into a buffer.
-static void generate_segment(Vector<cell> *buffer, void *fin, int pass)
+static void generate_segment(Vector<cell> *buffer, memfile_t* fin, int pass)
 {
   pc_resetasm(fin);
 
@@ -1239,7 +1239,7 @@ typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
 typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
-static void assemble_to_buffer(SmxByteBuffer *buffer, void *fin)
+static void assemble_to_buffer(SmxByteBuffer *buffer, memfile_t* fin)
 {
   SmxBuilder builder;
   RefPtr<SmxNativeSection> natives = new SmxNativeSection(".natives");
@@ -1400,7 +1400,7 @@ static void splat_to_binary(const char *binfname, const void *bytes, size_t size
   fclose(fp);
 }
 
-void assemble(const char *binfname, void *fin)
+void assemble(const char *binfname, memfile_t* fin)
 {
   SmxByteBuffer buffer;
   assemble_to_buffer(&buffer, fin);

@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>     /* for _MAX_PATH */
 #include "sc.h"
+#include "scvars.h"
 #include "sp_symhash.h"
 #include "codegen.h"
 
@@ -94,7 +95,7 @@ int sc_compression_level=9;
 
 void *inpf    = NULL;   /* file read from (source or include) */
 void *inpf_org= NULL;   /* main source file */
-void *outf    = NULL;   /* (intermediate) text file written to */
+memfile_t* outf = NULL; /* (intermediate) text file written to */
 
 jmp_buf errbuf;
 
