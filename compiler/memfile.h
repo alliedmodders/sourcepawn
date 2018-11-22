@@ -5,12 +5,12 @@
 
 struct memfile_t
 {
-	char *name;
-	char *base;
-	long offs;
-	long usedoffs;
-	size_t size;
-	int _static;
+  char *name;
+  char *base;
+  long offs;
+  long usedoffs;
+  size_t size;
+  int _static;
 };
 
 /**
