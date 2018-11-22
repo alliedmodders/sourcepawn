@@ -27,37 +27,20 @@
 
 memfile_t *memfile_creat(const char *name, size_t init)
 {
-  memfile_t mf;
-  memfile_t *pmf;
-
-  mf.size = init;
-  mf.base = (char *)malloc(init);
-  mf.usedoffs = 0;
-  if (!mf.base)
-  {
-    return NULL;
-  }
-
-  mf.offs = 0;
-
-  pmf = (memfile_t *)malloc(sizeof(memfile_t));
-  memcpy(pmf, &mf, sizeof(memfile_t));
-
-  pmf->name = strdup(name);
-
-  return pmf;
+  auto pmf = ke::MakeUnique<memfile_t>();
+  pmf->size = init;
+  pmf->base = ke::MakeUnique<char[]>(init);
+  if (!pmf->base)
+    return nullptr;
+  pmf->name = name;
+  pmf->usedoffs = 0;
+  pmf->offs = 0;
+  return pmf.take();
 }
 
 void memfile_destroy(memfile_t *mf)
 {
-  if (!mf)
-  {
-    return;
-  }
-
-  free(mf->name);
-  free(mf->base);
-  free(mf);
+  delete mf;
 }
 
 long memfile_seek(memfile_t *mf, long offset, int whence)
@@ -114,7 +97,7 @@ size_t memfile_read(memfile_t *mf, void *buffer, size_t maxsize)
     }
   }
 
-  memcpy(buffer, mf->base + mf->offs, maxsize);
+  memcpy(buffer, mf->base.get() + mf->offs, maxsize);
 
   mf->offs += maxsize;
 
@@ -126,12 +109,14 @@ int memfile_write(memfile_t *mf, const void *buffer, size_t size)
   if (mf->offs + size > mf->size)
   {
     size_t newsize = (mf->size + size) * 2;
-    mf->base = (char *)realloc(mf->base, newsize);
-    if (!mf->base)
+    auto new_base = ke::MakeUnique<char[]>(newsize);
+    if (!new_base)
       return 0;
+    memcpy(new_base.get(), mf->base.get(), mf->usedoffs);
     mf->size = newsize;
+    mf->base = ke::Move(new_base);
   }
-  memcpy(mf->base + mf->offs, buffer, size);
+  memcpy(mf->base.get() + mf->offs, buffer, size);
   mf->offs += size;
 
   if (mf->offs > mf->usedoffs)

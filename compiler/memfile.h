@@ -2,11 +2,13 @@
 #define _INCLUDE_MEMFILE_H
 
 #include <stdlib.h>
+#include <amtl/am-string.h>
+#include <amtl/am-uniqueptr.h>
 
 struct memfile_t
 {
-  char *name;
-  char *base;
+  ke::AString name;
+  ke::UniquePtr<char[]> base;
   long offs;
   long usedoffs;
   size_t size;
