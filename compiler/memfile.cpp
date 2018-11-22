@@ -39,7 +39,6 @@ memfile_t *memfile_creat(const char *name, size_t init)
   }
 
   mf.offs = 0;
-  mf._static = 0;
 
   pmf = (memfile_t *)malloc(sizeof(memfile_t));
   memcpy(pmf, &mf, sizeof(memfile_t));
@@ -56,12 +55,9 @@ void memfile_destroy(memfile_t *mf)
     return;
   }
 
-  if (!mf->_static)
-  {
-    free(mf->name);
-    free(mf->base);
-    free(mf);
-  }
+  free(mf->name);
+  free(mf->base);
+  free(mf);
 }
 
 long memfile_seek(memfile_t *mf, long offset, int whence)
@@ -130,23 +126,9 @@ int memfile_write(memfile_t *mf, const void *buffer, size_t size)
   if (mf->offs + size > mf->size)
   {
     size_t newsize = (mf->size + size) * 2;
-    if (mf->_static)
-    {
-      char *oldbase = mf->base;
-      mf->base = (char *)malloc(newsize);
-      if (!mf->base)
-      {
-        return 0;
-      }
-      memcpy(mf->base, oldbase, mf->size);
-    } else {
-      mf->base = (char *)realloc(mf->base, newsize);
-      if (!mf->base)
-      {
-        return 0;
-      }
-    }
-    mf->_static = 0;
+    mf->base = (char *)realloc(mf->base, newsize);
+    if (!mf->base)
+      return 0;
     mf->size = newsize;
   }
   memcpy(mf->base + mf->offs, buffer, size);
