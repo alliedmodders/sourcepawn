@@ -10,7 +10,6 @@ struct memfile_t
   long offs;
   long usedoffs;
   size_t size;
-  int _static;
 };
 
 /**
