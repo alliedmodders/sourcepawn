@@ -354,6 +354,9 @@ static void do_case(CellWriter* writer, AsmReader* reader, cell opcode)
 static OPCODEC opcodelist[] = {
   /* node for "invalid instruction" */
   {  0, NULL,         0,        noop },
+  {  0, "CODE",       sIN_CSEG, set_currentfile },
+  {  0, "DATA",       sIN_DSEG, set_currentfile },
+  {  0, "STKSIZE",    0,        noop },
   /* opcodes in sorted order */
   { 78, "add",        sIN_CSEG, parm0 },
   { 87, "add.c",      sIN_CSEG, parm1 },
@@ -365,12 +368,10 @@ static OPCODEC opcodelist[] = {
   { 49, "call",       sIN_CSEG, do_call },
   {  0, "case",       sIN_CSEG, do_case },
   {130, "casetbl",    sIN_CSEG, parm0 },  /* version 1 */
-  {  0, "code",       sIN_CSEG, set_currentfile },
   {156, "const",      sIN_CSEG, parm2 },  /* version 9 */
   { 12, "const.alt",  sIN_CSEG, parm1 },
   { 11, "const.pri",  sIN_CSEG, parm1 },
   {157, "const.s",    sIN_CSEG, parm2 },  /* version 9 */
-  {  0, "data",       sIN_DSEG, set_currentfile },
   {114, "dec",        sIN_CSEG, parm1 },
   {113, "dec.alt",    sIN_CSEG, parm0 },
   {116, "dec.i",      sIN_CSEG, parm0 },
@@ -468,7 +469,6 @@ static OPCODEC opcodelist[] = {
   { 21, "sref.s.pri", sIN_CSEG, parm1 },
   { 67, "sshr",       sIN_CSEG, parm0 },
   { 44, "stack",      sIN_CSEG, parm1 },
-  {  0, "stksize",    0,        noop },
   { 16, "stor.alt",   sIN_CSEG, parm1 },
   { 23, "stor.i",     sIN_CSEG, parm0 },
   { 15, "stor.pri",   sIN_CSEG, parm1 },
@@ -510,7 +510,7 @@ static int findopcode(char *instr,int maxlen)
   while (low<high) {
     mid=(low+high)/2;
     assert(opcodelist[mid].name!=NULL);
-    cmp=stricmp(str,opcodelist[mid].name);
+    cmp=strcmp(str,opcodelist[mid].name);
     if (cmp>0)
       low=mid+1;
     else
@@ -518,7 +518,7 @@ static int findopcode(char *instr,int maxlen)
   } /* while */
 
   assert(low==high);
-  if (stricmp(str,opcodelist[low].name)==0)
+  if (strcmp(str,opcodelist[low].name)==0)
     return low;         /* found */
   return 0;             /* not found, return special index */
 }
@@ -624,7 +624,7 @@ class VerifyOpcodeSorting
     assert(opcodelist[1].name!=NULL);
     for (size_t i = 2; i<(sizeof opcodelist / sizeof opcodelist[0]); i++) {
       assert(opcodelist[i].name!=NULL);
-      assert(stricmp(opcodelist[i].name,opcodelist[i-1].name)>0);
+      assert(strcmp(opcodelist[i].name,opcodelist[i-1].name)>0);
     } /* for */
   }
 } sVerifyOpcodeSorting;
