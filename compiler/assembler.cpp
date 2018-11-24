@@ -79,7 +79,9 @@ class CellWriter
   cell current_index_;
 };
 
-typedef void (*OPCODE_PROC)(CellWriter* writer, char *params, cell opcode);
+class AsmReader;
+
+typedef void (*OPCODE_PROC)(CellWriter* writer, AsmReader* reader, cell opcode);
 
 typedef struct {
   cell opcode;
@@ -159,53 +161,79 @@ static char *stripcomment(char *str)
   return str;
 }
 
-static void noop(CellWriter* writer, char *params, cell opcode)
+class AsmReader
+{
+public:
+  explicit AsmReader(char* params)
+   : params_(params)
+  {}
+
+  ucell getparam() {
+    return ::getparam(params_, &params_);
+  }
+  ucell hex2long() {
+    return ::hex2long(params_, &params_);
+  }
+  bool more() const {
+    return *params_ != '\0';
+  }
+  void skipspaces() {
+    params_ = ::skipwhitespace(params_);
+  }
+
+  char* pos() const { return params_; }
+
+private:
+  char* params_;
+};
+
+static void noop(CellWriter* writer, AsmReader* reader, cell opcode)
 {
 }
 
-static void set_currentfile(CellWriter* writer, char *params, cell opcode)
+static void set_currentfile(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  fcurrent=(short)getparam(params,NULL);
+  fcurrent=(short)reader->getparam();
 }
 
-static void parm0(CellWriter* writer, char *params, cell opcode)
+static void parm0(CellWriter* writer, AsmReader* reader, cell opcode)
 {
   writer->append(opcode);
 }
 
-static void parm1(CellWriter* writer, char *params, cell opcode)
+static void parm1(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  ucell p = getparam(params, nullptr);
+  ucell p = reader->getparam();
   writer->append(opcode);
   writer->append(p);
 }
 
-static void parm2(CellWriter* writer, char *params, cell opcode)
+static void parm2(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  ucell p1 = getparam(params, &params);
-  ucell p2 = getparam(params, nullptr);
+  ucell p1 = reader->getparam();
+  ucell p2 = reader->getparam();
   writer->append(opcode);
   writer->append(p1);
   writer->append(p2);
 }
 
-static void parm3(CellWriter* writer, char *params, cell opcode)
+static void parm3(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  ucell p1 = getparam(params, &params);
-  ucell p2 = getparam(params, &params);
-  ucell p3 = getparam(params, nullptr);
+  ucell p1 = reader->getparam();
+  ucell p2 = reader->getparam();
+  ucell p3 = reader->getparam();
   writer->append(opcode);
   writer->append(p1);
   writer->append(p2);
   writer->append(p3);
 }
 
-static void parm4(CellWriter* writer, char *params, cell opcode)
+static void parm4(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  ucell p1 = getparam(params, &params);
-  ucell p2 = getparam(params, &params);
-  ucell p3 = getparam(params, &params);
-  ucell p4 = getparam(params, nullptr);
+  ucell p1 = reader->getparam();
+  ucell p2 = reader->getparam();
+  ucell p3 = reader->getparam();
+  ucell p4 = reader->getparam();
   writer->append(opcode);
   writer->append(p1);
   writer->append(p2);
@@ -213,13 +241,13 @@ static void parm4(CellWriter* writer, char *params, cell opcode)
   writer->append(p4);
 }
 
-static void parm5(CellWriter* writer, char *params, cell opcode)
+static void parm5(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  ucell p1 = getparam(params, &params);
-  ucell p2 = getparam(params, &params);
-  ucell p3 = getparam(params, &params);
-  ucell p4 = getparam(params, &params);
-  ucell p5 = getparam(params, nullptr);
+  ucell p1 = reader->getparam();
+  ucell p2 = reader->getparam();
+  ucell p3 = reader->getparam();
+  ucell p4 = reader->getparam();
+  ucell p5 = reader->getparam();
   writer->append(opcode);
   writer->append(p1);
   writer->append(p2);
@@ -228,32 +256,33 @@ static void parm5(CellWriter* writer, char *params, cell opcode)
   writer->append(p5);
 }
 
-static void do_dump(CellWriter* writer, char *params, cell opcode)
+static void do_dump(CellWriter* writer, AsmReader* reader, cell opcode)
 {
   int num = 0;
 
-  while (*params != '\0') {
-    ucell p = getparam(params, &params);
+  while (reader->more()) {
+    ucell p = reader->getparam();
     writer->append(p);
     num++;
-    while (isspace(*params))
-      params++;
+    reader->skipspaces();
   }
 }
 
-static void do_dumpfill(CellWriter* writer, char *params, cell opcode)
+static void do_dumpfill(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  ucell value = getparam(params, &params);
-  ucell times = getparam(params, nullptr);
+  ucell value = reader->getparam();
+  ucell times = reader->getparam();
   while(times-- > 0) {
     writer->append(value);
   }
 }
 
 static symbol*
-extract_call_target(char *params)
+extract_call_target(AsmReader* reader)
 {
   char name[METHOD_NAMEMAX];
+
+  char* params = reader->pos();
 
   int i;
   for (i=0; !isspace(*params); i++,params++) {
@@ -273,9 +302,9 @@ extract_call_target(char *params)
   return sym;
 }
 
-static void do_ldgfen(CellWriter* writer, char *params, cell opcode)
+static void do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  symbol *sym = extract_call_target(params);
+  symbol *sym = extract_call_target(reader);
   assert(sym->ident == iFUNCTN);
   assert(!(sym->usage & uNATIVE));
   assert((sym->function()->funcid & 1) == 1);
@@ -286,36 +315,36 @@ static void do_ldgfen(CellWriter* writer, char *params, cell opcode)
   writer->append(sym->function()->funcid);
 }
 
-static void do_call(CellWriter* writer, char *params, cell opcode)
+static void do_call(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  symbol* sym = extract_call_target(params);
+  symbol* sym = extract_call_target(reader);
 
   writer->append(opcode);
   writer->append(sym->addr());
 }
 
-static void do_jump(CellWriter* writer, char *params, cell opcode)
+static void do_jump(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  int i = (int)hex2long(params, nullptr);
+  int i = reader->hex2long();
   assert(i >= 0 && i < sc_labnum);
 
   writer->append(opcode);
   writer->append(LabelTable[i]);
 }
 
-static void do_switch(CellWriter* writer, char *params, cell opcode)
+static void do_switch(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  int i = (int)hex2long(params, nullptr);
+  int i = reader->hex2long();
   assert(i >= 0 && i < sc_labnum);
 
   writer->append(opcode);
   writer->append(LabelTable[i]);
 }
 
-static void do_case(CellWriter* writer, char *params, cell opcode)
+static void do_case(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-  cell v = hex2long(params ,&params);
-  int i = (int)hex2long(params, nullptr);
+  cell v = reader->hex2long();
+  int i = reader->hex2long();
   assert(i >= 0 && i < sc_labnum);
 
   writer->append(v);
@@ -538,8 +567,12 @@ static void relocate_labels(memfile_t* fin)
         error(104, instr);
       }
 
-      if (op.segment == sIN_CSEG)
-        op.func(&writer, skipwhitespace(params), op.opcode);
+      if (op.segment == sIN_CSEG) {
+        AsmReader reader(params);
+        reader.skipspaces();
+
+        op.func(&writer, &reader, op.opcode);
+      }
     }
   }
 }
@@ -575,7 +608,10 @@ static void generate_segment(Vector<cell> *buffer, memfile_t* fin, int pass)
       continue;
 
     CellWriter writer(buffer);
-    op.func(&writer, skipwhitespace(params), op.opcode);
+    AsmReader reader(params);
+    reader.skipspaces();
+
+    op.func(&writer, &reader, op.opcode);
   }
 }
 
