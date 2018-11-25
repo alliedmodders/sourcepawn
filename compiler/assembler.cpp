@@ -39,7 +39,8 @@
 #if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
 #endif
-#include <am-string.h>
+#include <amtl/am-string.h>
+#include <amtl/am-hashmap.h>
 #include <smx/smx-v1.h>
 #include <smx/smx-v1-opcodes.h>
 #include <zlib/zlib.h>
@@ -52,6 +53,7 @@
 #include "lexer.h"
 #include "libpawnc.h"
 #include "memfile.h"
+#include "sp_symhash.h"
 
 using namespace sp;
 using namespace ke;
@@ -551,37 +553,33 @@ static OPCODEC opcodelist[] = {
   { 92, "zero.s",     sIN_CSEG, parm1 },
 };
 
-#define MAX_INSTR_LEN   30
+static ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sOpcodeLookup;
+
+static void
+init_opcode_lookup()
+{
+  if (sOpcodeLookup.elements())
+    return;
+
+  sOpcodeLookup.init(512);
+
+  static const int kNumOpcodes = size_t(sizeof(opcodelist) / sizeof(*opcodelist));
+  for (int i = 1; i < kNumOpcodes; i++) {
+    const auto& entry = opcodelist[i];
+    CharsAndLength key(entry.name, strlen(entry.name));
+    auto p = sOpcodeLookup.findForAdd(key);
+    assert(!p.found());
+    sOpcodeLookup.add(p, key, i);
+  }
+}
+
 static int findopcode(const char *instr, size_t maxlen)
 {
-  int low,high,mid,cmp;
-
-  if (maxlen>=MAX_INSTR_LEN)
+  CharsAndLength key(instr, maxlen);
+  auto p = sOpcodeLookup.find(key);
+  if (!p.found())
     return 0;
-
-  /* look up the instruction with a binary search
-   * the assembler is case insensitive to instructions (but case sensitive
-   * to symbols)
-   */
-  low=1;                /* entry 0 is reserved (for "not found") */
-  high=(sizeof opcodelist / sizeof opcodelist[0])-1;
-  while (low<high) {
-    mid=(low+high)/2;
-    assert(opcodelist[mid].name!=NULL);
-    cmp=strncmp(instr, opcodelist[mid].name, maxlen);
-    if (cmp>0)
-      low=mid+1;
-    else
-      high=mid;
-  } /* while */
-
-  assert(low==high);
-  if (strncmp(instr, opcodelist[low].name, maxlen)==0 &&
-      strlen(opcodelist[low].name) == maxlen)
-  {
-    return low;         /* found */
-  }
-  return 0;             /* not found, return special index */
+  return p->value;
 }
 
 // This pass is necessary because the code addresses of labels is only known
@@ -1474,6 +1472,8 @@ static void splat_to_binary(const char *binfname, const void *bytes, size_t size
 
 void assemble(const char *binfname, memfile_t* fin)
 {
+  init_opcode_lookup();
+
   SmxByteBuffer buffer;
   assemble_to_buffer(&buffer, fin);
 

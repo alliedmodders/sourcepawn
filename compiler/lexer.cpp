@@ -51,6 +51,8 @@
   #include <alloc/fortify.h>
 #endif
 
+using namespace sp;
+
 /* flags for litchar() */
 #define RAWMODE         0x1
 #define UTF8MODE        0x2
@@ -75,21 +77,6 @@ static int listline=-1; /* "current line" for the list file */
 
 static bool sLiteralQueueDisabled = false;
 
-struct CharsAndLength {
-  const char* str;
-  size_t len;
-};
-
-struct KeywordTablePolicy {
-  static bool matches(const CharsAndLength& a, const CharsAndLength& b) {
-    if (a.len != b.len)
-      return false;
-    return strncmp(a.str, b.str, a.len) == 0;
-  }
-  static uint32_t hash(const CharsAndLength& key) {
-    return ke::HashCharSequence(key.str, key.len);
-  }
-};
 ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sKeywords;
 
 AutoDisableLiteralQueue::AutoDisableLiteralQueue()
@@ -1918,7 +1905,7 @@ lexinit()
     const int kStart = tMIDDLE + 1;
     const char** tokptr = &sc_tokens[kStart - tFIRST];
     for (int i = kStart; i <= tLAST; i++, tokptr++) {
-      CharsAndLength key = { *tokptr, strlen(*tokptr) };
+      CharsAndLength key(*tokptr, strlen(*tokptr));
       auto p = sKeywords.findForAdd(key);
       assert(!p.found());
       sKeywords.add(p, key, i);
@@ -1936,7 +1923,7 @@ get_token_string(int tok_id)
 static int
 lex_keyword_impl(const char* match, size_t length)
 {
-  CharsAndLength key = { match, length };
+  CharsAndLength key(match, length);
   auto p = sKeywords.find(key);
   if (!p.found())
     return 0;
