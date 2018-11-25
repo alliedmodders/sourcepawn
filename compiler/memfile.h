@@ -12,6 +12,13 @@ struct memfile_t
   long offs;
   long usedoffs;
   size_t size;
+
+  const char* pos() const {
+    return base.get() + offs;
+  }
+  const char* end() const {
+    return base.get() + usedoffs;
+  }
 };
 
 /**
@@ -52,7 +59,5 @@ long memfile_tell(memfile_t *mf);
  * (does not actually free or zero memory)
  */
 void memfile_reset(memfile_t *mf);
-
-char *memfile_gets(memfile_t* mf, char* string, unsigned int size);
 
 #endif //_INCLUDE_MEMFILE_H
