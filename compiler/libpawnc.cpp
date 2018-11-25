@@ -308,8 +308,3 @@ int pc_writeasm(memfile_t* handle, const char* string)
   size_t bytes = strlen(string);
   return memfile_write(handle, string, bytes);
 }
-
-char* pc_readasm(memfile_t* handle, char* string, int maxchars)
-{
-  return memfile_gets(handle, string, maxchars);
-}

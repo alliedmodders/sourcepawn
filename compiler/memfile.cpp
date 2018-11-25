@@ -132,36 +132,3 @@ void memfile_reset(memfile_t *mf)
   mf->usedoffs = 0;
   mf->offs = 0;
 }
-
-char *memfile_gets(memfile_t* mf, char* string, unsigned int size)
-{
-  assert(mf!=NULL);
-
-  unsigned int read = memfile_read(mf, string, size);
-  if (read==0)
-    return NULL;
-  long seek=0L;
-
-  /* make sure that the string is zero-terminated */
-  assert(read<=size);
-  if (read<size) {
-    string[read]='\0';
-  } else {
-    string[size-1]='\0';
-    seek=-1;            /* undo reading the character that gets overwritten */
-  } /* if */
-
-  /* find the first '\n' */
-  char* ptr=strchr(string,'\n');
-  if (ptr!=NULL) {
-    *(ptr+1)='\0';
-    seek=(long)(ptr-string)+1-(long)read;
-  } /* if */
-
-  /* undo over-read */
-  assert(seek<=0);      /* should seek backward only */
-  if (seek!=0)
-    memfile_seek(mf, seek, SEEK_CUR);
-
-  return string;
-}

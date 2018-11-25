@@ -51,6 +51,7 @@
 #include "types.h"
 #include "lexer.h"
 #include "libpawnc.h"
+#include "memfile.h"
 
 using namespace sp;
 using namespace ke;
@@ -94,7 +95,7 @@ static cell *LabelTable;    /* label table */
 
 /* apparently, strtol() does not work correctly on very large (unsigned)
  * hexadecimal values */
-static ucell hex2long(const char *s,char **n)
+static ucell hex2long(const char *s, const char **n)
 {
   ucell result=0L;
   int negate=FALSE;
@@ -124,68 +125,127 @@ static ucell hex2long(const char *s,char **n)
     s++;
   } /* for */
   if (n!=NULL)
-    *n=(char*)s;
+    *n=s;
   if (negate)
     result=(~result)+1; /* take two's complement of the result */
   return (ucell)result;
 }
 
-static ucell getparam(const char *s,char **n)
+static ucell getparam(const char *s, const char **n)
 {
   ucell result=0;
   for ( ;; ) {
-    result+=hex2long(s,(char**)&s);
+    result+=hex2long(s, &s);
     if (*s!='+')
       break;
     s++;
   } /* for */
   if (n!=NULL)
-    *n=(char*)s;
+    *n=s;
   return result;
 }
 
-static char *skipwhitespace(char *str)
+static const char *skipwhitespace(const char *str)
 {
   while (isspace(*str))
     str++;
   return str;
 }
 
-static char *stripcomment(char *str)
-{
-  char *ptr=strchr(str,';');
-  if (ptr!=NULL) {
-    *ptr++='\n';        /* terminate the line, but leave the '\n' */
-    *ptr='\0';
-  } /* if */
-  return str;
-}
-
-class AsmReader
+class AsmReader final
 {
 public:
-  explicit AsmReader(char* params)
-   : params_(params)
-  {}
+  explicit AsmReader(memfile_t* fp)
+   : fp_(fp)
+  {
+    pc_resetasm(fp_);
+    pos_ = fp_->pos();
+    end_ = fp_->end();
+  }
+
+  // Find the next token that is immediately proceeded by a newline.
+  const char* next_line();
+
+  // Process characters until non-whitespace is encountered, up to the next
+  // newline. If the position is currently not whitespace then the position
+  // will remain unchanged.
+  const char* next_token_on_line();
+
+  // Advance the stream to the end of the current token, and return the new
+  // position (which should only be used for pointer arithmetic, since it may
+  // point beyond the end of the stream).
+  const char* end_of_token();
 
   ucell getparam() {
-    return ::getparam(params_, &params_);
+    return ::getparam(pos_, &pos_);
   }
   ucell hex2long() {
-    return ::hex2long(params_, &params_);
+    return ::hex2long(pos_, &pos_);
   }
-  bool more() const {
-    return *params_ != '\0';
+  const char* pos() const {
+    assert(pos_ < end_);
+    return pos_;
   }
-  void skipspaces() {
-    params_ = ::skipwhitespace(params_);
-  }
-
-  char* pos() const { return params_; }
 
 private:
-  char* params_;
+  template <bool StopAtLine>
+  inline const char* advance();
+
+private:
+ memfile_t* fp_;
+ const char* pos_;
+ const char* end_;
 };
+
+const char*
+AsmReader::next_line()
+{
+  while (true) {
+    if (pos_ >= end_)
+      return nullptr;
+    if (*pos_ == '\n') {
+      pos_++;
+      break;
+    }
+    pos_++;
+  }
+  if (pos_ >= end_)
+    return nullptr;
+  return pos_;
+}
+
+const char*
+AsmReader::next_token_on_line()
+{
+  for (; pos_ < end_; pos_++) {
+    // Ignore spaces/tabs, stop on newline.
+    if (isspace(*pos_)) {
+      if (*pos_ == '\n')
+        return nullptr;
+      continue;
+    }
+    // Eat comments until the newline.
+    if (*pos_ == ';') {
+      while (pos_ < end_ && *pos_ != '\n')
+        pos_++;
+      return nullptr;
+    }
+    // Probably a token, stop and return.
+    return pos_;
+  }
+  return nullptr;
+}
+
+const char*
+AsmReader::end_of_token()
+{
+  assert(!isspace(*pos_) && *pos_ != ';');
+  for (; pos_ < end_; pos_++) {
+    if (isspace(*pos_) || *pos_ == ';')
+      return pos_;
+  }
+  return pos_;
+}
 
 static void noop(CellWriter* writer, AsmReader* reader, cell opcode)
 {
@@ -260,11 +320,10 @@ static void do_dump(CellWriter* writer, AsmReader* reader, cell opcode)
 {
   int num = 0;
 
-  while (reader->more()) {
+  while (reader->next_token_on_line()) {
     ucell p = reader->getparam();
     writer->append(p);
     num++;
-    reader->skipspaces();
   }
 }
 
@@ -282,7 +341,7 @@ extract_call_target(AsmReader* reader)
 {
   char name[METHOD_NAMEMAX];
 
-  char* params = reader->pos();
+  const char* params = reader->pos();
 
   int i;
   for (i=0; !isspace(*params); i++,params++) {
@@ -493,14 +552,13 @@ static OPCODEC opcodelist[] = {
 };
 
 #define MAX_INSTR_LEN   30
-static int findopcode(char *instr,int maxlen)
+static int findopcode(const char *instr, size_t maxlen)
 {
   int low,high,mid,cmp;
-  char str[MAX_INSTR_LEN];
 
   if (maxlen>=MAX_INSTR_LEN)
     return 0;
-  strlcpy(str,instr,maxlen+1);
+
   /* look up the instruction with a binary search
    * the assembler is case insensitive to instructions (but case sensitive
    * to symbols)
@@ -510,7 +568,7 @@ static int findopcode(char *instr,int maxlen)
   while (low<high) {
     mid=(low+high)/2;
     assert(opcodelist[mid].name!=NULL);
-    cmp=strcmp(str,opcodelist[mid].name);
+    cmp=strncmp(instr, opcodelist[mid].name, maxlen);
     if (cmp>0)
       low=mid+1;
     else
@@ -518,8 +576,11 @@ static int findopcode(char *instr,int maxlen)
   } /* while */
 
   assert(low==high);
-  if (strcmp(str,opcodelist[low].name)==0)
+  if (strncmp(instr, opcodelist[low].name, maxlen)==0 &&
+      strlen(opcodelist[low].name) == maxlen)
+  {
     return low;         /* found */
+  }
   return 0;             /* not found, return special index */
 }
 
@@ -534,73 +595,49 @@ static void relocate_labels(memfile_t* fin)
   assert(!LabelTable);
   LabelTable = (cell *)calloc(sc_labnum, sizeof(cell));
 
-  char line[256];
-
+  AsmReader reader(fin);
   CellWriter writer(nullptr);
 
-  pc_resetasm(fin);
-  while (pc_readasm(fin, line, sizeof(line))) {
-    stripcomment(line);
-
-    char *instr = skipwhitespace(line);
-    if (*instr == '\0') // Ignore empty lines.
+  do {
+    const char* ptr = reader.next_token_on_line();
+    if (!ptr)
       continue;
 
-    if (tolower(*instr) == 'l' && *(instr + 1) == '.') {
-      int lindex = (int)hex2long(instr + 2, nullptr);
+    if (tolower(*ptr) == 'l' && *(ptr + 1) == '.') {
+      int lindex = (int)hex2long(ptr + 2, nullptr);
       assert(lindex >= 0 && lindex < sc_labnum);
       LabelTable[lindex] = writer.current_index();
     } else {
-      // Get to the end of the instruction (make use of the '\n' that fgets()
-      // added at the end of the line; this way we *always* drop on a whitespace
-      // character.
-      char *params;
-      for (params = instr; *params != '\0' && !isspace(*params); params++) {
-        // Nothing.
-      }
-      assert(params > instr);
-
-      int op_index = findopcode(instr, (int)(params - instr));
+      const char* pos = reader.end_of_token();
+      int op_index = findopcode(ptr, (pos - ptr));
       OPCODEC &op = opcodelist[op_index];
       if (!op.name) {
-        *params = '\0';
-        error(104, instr);
+        error(104, ke::AString(ptr, pos - ptr).chars());
       }
 
       if (op.segment == sIN_CSEG) {
-        AsmReader reader(params);
-        reader.skipspaces();
-
+        reader.next_token_on_line();
         op.func(&writer, &reader, op.opcode);
       }
     }
-  }
+  } while (reader.next_line());
 }
 
 // Generate code or data into a buffer.
 static void generate_segment(Vector<cell> *buffer, memfile_t* fin, int pass)
 {
-  pc_resetasm(fin);
+  AsmReader reader(fin);
 
-  char line[255];
-  while (pc_readasm(fin, line, sizeof(line))) {
-    stripcomment(line);
-    char *instr = skipwhitespace(line);
-    
+  do {
+    const char* instr = reader.next_token_on_line();
+
     // Ignore empty lines and labels.
-    if (*instr=='\0' || (tolower(*instr) == 'l' && *(instr + 1)=='.'))
+    if (!instr || (tolower(*instr) == 'l' && *(instr + 1)=='.'))
       continue;
 
-    // Get to the end of the instruction (make use of the '\n' that fgets()
-    // added at the end of the line; this way we will *always* drop on a
-    // whitespace character) */
-    char *params;
-    for (params=instr; *params != '\0' && !isspace(*params); params++) {
-      // Do nothing.
-    }
-    assert(params > instr);
+    const char* pos = reader.end_of_token();
 
-    int op_index = findopcode(instr, (int)(params-instr));
+    int op_index = findopcode(instr, (pos - instr));
     OPCODEC &op = opcodelist[op_index];
     assert(op.name != nullptr);
 
@@ -608,11 +645,10 @@ static void generate_segment(Vector<cell> *buffer, memfile_t* fin, int pass)
       continue;
 
     CellWriter writer(buffer);
-    AsmReader reader(params);
-    reader.skipspaces();
 
+    reader.next_token_on_line();
     op.func(&writer, &reader, op.opcode);
-  }
+  } while (reader.next_line());
 }
 
 #if !defined NDEBUG
@@ -676,7 +712,7 @@ class DebugString
   ucell parse() {
     return hex2long(str_, &str_);
   }
-  char *skipspaces() {
+  const char *skipspaces() {
     str_ = ::skipwhitespace(str_);
     return str_;
   }
@@ -684,7 +720,7 @@ class DebugString
     assert(*str_ == c);
     str_++;
   }
-  char *skipto(char c) {
+  const char *skipto(char c) {
     str_ = strchr(str_, c);
     return str_;
   }
@@ -694,7 +730,7 @@ class DebugString
 
  private:
   char kind_;
-  char *str_;
+  const char *str_;
 };
 
 typedef SmxBlobSection<sp_fdbg_info_t> SmxDebugInfoSection;
@@ -871,8 +907,8 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
   int tag = str.parse();
   str.skipspaces();
   str.expect(':');
-  char* name_start = str.skipspaces();
-  char* name_end = str.skipto(' ');
+  const char* name_start = str.skipspaces();
+  const char* name_end = str.skipto(' ');
   uint32_t code_start = str.parse();
   uint32_t code_end = str.parse();
   int ident = str.parse();
@@ -887,7 +923,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
   int dims[sDIMEN_MAX];
   int dimcount = 0;
   if (str.getc() == '[') {
-    for (char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
+    for (const char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
       // Ignore the tagid.
       str.parse();
       str.skipspaces();
