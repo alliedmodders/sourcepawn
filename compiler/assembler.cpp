@@ -58,31 +58,8 @@
 using namespace sp;
 using namespace ke;
 
-class CellWriter
-{
- public:
-  explicit CellWriter(Vector<cell>* buffer)
-   : buffer_(buffer),
-     current_index_(0)
-  {}
-
-  void append(cell value) {
-    if (buffer_) {
-      buffer_->append(value);
-    }
-    current_index_ += sizeof(value);
-  }
-
-  cell current_index() const {
-    return current_index_;
-  }
-
- private:
-  Vector<cell>* buffer_;
-  cell current_index_;
-};
-
 class AsmReader;
+class CellWriter;
 
 typedef void (*OPCODE_PROC)(CellWriter* writer, AsmReader* reader, cell opcode);
 
@@ -93,7 +70,48 @@ typedef struct {
   OPCODE_PROC func;
 } OPCODEC;
 
-static cell *LabelTable;    /* label table */
+struct BackpatchEntry {
+  size_t index;
+  cell target;
+};
+
+static ke::Vector<cell> sLabelTable;
+static ke::Vector<BackpatchEntry> sBackpatchList;
+
+class CellWriter
+{
+ public:
+  explicit CellWriter(Vector<cell>& buffer)
+   : buffer_(buffer),
+     current_address_(0)
+  {}
+
+  void append(cell value) {
+    buffer_.append(value);
+    current_address_ += sizeof(value);
+  }
+  void write_label(int index) {
+    assert(index >= 0 && index < sc_labnum);
+    if (sLabelTable[index] < 0) {
+      BackpatchEntry entry = { current_index(), index };
+      sBackpatchList.append(entry);
+      append(-1);
+    } else {
+      append(sLabelTable[index]);
+    }
+  }
+
+  cell current_address() const {
+    return current_address_;
+  }
+  size_t current_index() const {
+    return buffer_.length();
+  }
+
+ private:
+  Vector<cell>& buffer_;
+  cell current_address_;
+};
 
 /* apparently, strtol() does not work correctly on very large (unsigned)
  * hexadecimal values */
@@ -387,29 +405,26 @@ static void do_call(CellWriter* writer, AsmReader* reader, cell opcode)
 static void do_jump(CellWriter* writer, AsmReader* reader, cell opcode)
 {
   int i = reader->hex2long();
-  assert(i >= 0 && i < sc_labnum);
 
   writer->append(opcode);
-  writer->append(LabelTable[i]);
+  writer->write_label(i);
 }
 
 static void do_switch(CellWriter* writer, AsmReader* reader, cell opcode)
 {
   int i = reader->hex2long();
-  assert(i >= 0 && i < sc_labnum);
 
   writer->append(opcode);
-  writer->append(LabelTable[i]);
+  writer->write_label(i);
 }
 
 static void do_case(CellWriter* writer, AsmReader* reader, cell opcode)
 {
   cell v = reader->hex2long();
   int i = reader->hex2long();
-  assert(i >= 0 && i < sc_labnum);
 
   writer->append(v);
-  writer->append(LabelTable[i]);
+  writer->write_label(i);
 }
 
 static OPCODEC opcodelist[] = {
@@ -582,71 +597,47 @@ static int findopcode(const char *instr, size_t maxlen)
   return p->value;
 }
 
-// This pass is necessary because the code addresses of labels is only known
-// after the peephole optimization flag. Labels can occur inside expressions
-// (e.g. the conditional operator), which are optimized.
-static void relocate_labels(memfile_t* fin)
-{
-  if (sc_labnum <= 0)
-    return;
-
-  assert(!LabelTable);
-  LabelTable = (cell *)calloc(sc_labnum, sizeof(cell));
-
-  AsmReader reader(fin);
-  CellWriter writer(nullptr);
-
-  do {
-    const char* ptr = reader.next_token_on_line();
-    if (!ptr)
-      continue;
-
-    if (tolower(*ptr) == 'l' && *(ptr + 1) == '.') {
-      int lindex = (int)hex2long(ptr + 2, nullptr);
-      assert(lindex >= 0 && lindex < sc_labnum);
-      LabelTable[lindex] = writer.current_index();
-    } else {
-      const char* pos = reader.end_of_token();
-      int op_index = findopcode(ptr, (pos - ptr));
-      OPCODEC &op = opcodelist[op_index];
-      if (!op.name) {
-        error(104, ke::AString(ptr, pos - ptr).chars());
-      }
-
-      if (op.segment == sIN_CSEG) {
-        reader.next_token_on_line();
-        op.func(&writer, &reader, op.opcode);
-      }
-    }
-  } while (reader.next_line());
-}
-
 // Generate code or data into a buffer.
-static void generate_segment(Vector<cell> *buffer, memfile_t* fin, int pass)
+static void generate_segment(Vector<cell>* code_buffer, Vector<cell>* data_buffer, memfile_t* fin)
 {
   AsmReader reader(fin);
+  CellWriter code_writer(*code_buffer);
+  CellWriter data_writer(*data_buffer);
 
   do {
     const char* instr = reader.next_token_on_line();
 
-    // Ignore empty lines and labels.
-    if (!instr || (tolower(*instr) == 'l' && *(instr + 1)=='.'))
+    // Ignore empty lines.
+    if (!instr)
       continue;
 
-    const char* pos = reader.end_of_token();
+    if (tolower(instr[0]) == 'l' && instr[1] == '.') {
+      int lindex = (int)hex2long(instr + 2, nullptr);
+      assert(lindex >= 0 && lindex < sc_labnum);
+      assert(sLabelTable[lindex] == -1);
+      sLabelTable[lindex] = code_writer.current_address();
+      continue;
+    }
 
+    const char* pos = reader.end_of_token();
     int op_index = findopcode(instr, (pos - instr));
     OPCODEC &op = opcodelist[op_index];
     assert(op.name != nullptr);
 
-    if (op.segment != pass)
-      continue;
-
-    CellWriter writer(buffer);
-
     reader.next_token_on_line();
-    op.func(&writer, &reader, op.opcode);
+    if (op.segment == sIN_CSEG)
+      op.func(&code_writer, &reader, op.opcode);
+    else if (op.segment == sIN_DSEG)
+      op.func(&data_writer, &reader, op.opcode);
   } while (reader.next_line());
+
+  // Fix up backpatches.
+  for (const auto& patch : sBackpatchList) {
+    assert(patch.index < code_buffer->length());
+    assert(patch.target >= 0 && patch.target < sc_labnum);
+    assert(sLabelTable[patch.target] >= 0);
+    code_buffer->at(patch.index) = sLabelTable[patch.target];
+  }
 }
 
 #if !defined NDEBUG
@@ -1409,13 +1400,13 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, memfile_t* fin)
     rtti.add_native(sym);
   }
 
-  // Relocate all labels in the assembly buffer.
-  relocate_labels(fin);
+  for (int i = 1; i <= sc_labnum; i++)
+    sLabelTable.append(-1);
+  assert(sLabelTable.length() == size_t(sc_labnum));
 
   // Generate buffers.
   Vector<cell> code_buffer, data_buffer;
-  generate_segment(&code_buffer, fin, sIN_CSEG);
-  generate_segment(&data_buffer, fin, sIN_DSEG);
+  generate_segment(&code_buffer, &data_buffer, fin);
 
   // Set up the code section.
   code->header().codesize = code_buffer.length() * sizeof(cell);
@@ -1438,9 +1429,6 @@ static void assemble_to_buffer(SmxByteBuffer *buffer, memfile_t* fin)
     pc_stksize * sizeof(cell);
   data->header().data = sizeof(sp_file_data_t);
   data->setBlob((uint8_t *)data_buffer.buffer(), data_buffer.length() * sizeof(cell));
-
-  free(LabelTable);
-  LabelTable = nullptr;
 
   // Add tables in the same order SourceMod 1.6 added them.
   builder.add(code);
