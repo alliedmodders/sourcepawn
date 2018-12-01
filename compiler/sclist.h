@@ -27,17 +27,29 @@ struct stringlist {
   };
 };
 
-char* duplicatestring(const char* sourcestring);
+struct stringpair {
+  stringpair *next;
+  char *first;
+  char *second;
+  int matchlength;
+  char flags;
+  char *documentation;
+};
+
+struct macro_t {
+  const char* first;
+  const char* second;
+};
+
 void insert_alias(const char *name,const char *alias);
 bool lookup_alias(char *target,const char *name);
 void delete_aliastable(void);
 stringlist *insert_path(char *path);
 char *get_path(int index);
 void delete_pathtable(void);
-stringpair *insert_subst(const char *pattern,const char *substitution,int prefixlen);
-int get_subst(int index,char **pattern,char **substitution);
-stringpair *find_subst(char *name,int length);
-int delete_subst(char *name,int length);
+void insert_subst(const char *pattern, const char *substitution, int prefixlen);
+bool find_subst(const char *name, int length, macro_t* result);
+int delete_subst(const char *name, int length);
 void delete_substtable(void);
 stringlist *insert_sourcefile(char *string);
 char *get_sourcefile(int index);

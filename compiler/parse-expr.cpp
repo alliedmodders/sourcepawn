@@ -135,7 +135,7 @@ BaseExpressionParser::parse_defined()
   if (sym && sym->ident!=iFUNCTN && (sym->usage & uDEFINE)==0)
     sym = nullptr;     /* symbol is not a function, it is in the table, but not "defined" */
   val = !!sym;
-  if (!val && find_subst(st, strlen(st)))
+  if (!val && find_subst(st, strlen(st), nullptr))
     val = 1;
   while (paranthese--)
     needtoken(')');

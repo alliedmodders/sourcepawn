@@ -188,7 +188,7 @@ int plungequalifiedfile(char *name)
   PUSHSTK_I(icomment);
   PUSHSTK_I(fcurrent);
   PUSHSTK_I(fline);
-  inpfname=duplicatestring(name);/* set name of include file */
+  inpfname=strdup(name);/* set name of include file */
   if (inpfname==NULL)
     error(FATAL_ERROR_OOM);
   inpf=fp;                      /* set input file pointer to include file */
@@ -1000,7 +1000,7 @@ static int command(void)
       lptr=getstring((unsigned char*)pathname,sizeof pathname,lptr);
       if (strlen(pathname)>0) {
         free(inpfname);
-        inpfname=duplicatestring(pathname);
+        inpfname=strdup(pathname);
         if (inpfname==NULL)
           error(FATAL_ERROR_OOM);
         fline=0;
@@ -1123,7 +1123,6 @@ static int command(void)
       char *pattern,*substitution;
       const unsigned char *start,*end;
       int count,prefixlen;
-      stringpair *def;
       /* find the pattern to match */
       while (*lptr<=' ' && *lptr!='\0')
         lptr++;
@@ -1189,8 +1188,10 @@ static int command(void)
       for (prefixlen=0,start=(unsigned char*)pattern; alphanum(*start); prefixlen++,start++)
         /* nothing */;
       assert(prefixlen>0);
-      if ((def=find_subst(pattern,prefixlen))!=NULL) {
-        if (strcmp(def->first,pattern)!=0 || strcmp(def->second,substitution)!=0)
+
+      macro_t def;
+      if (find_subst(pattern, prefixlen, &def)) {
+        if (strcmp(def.first,pattern)!=0 || strcmp(def.second,substitution)!=0)
           error(201,pattern);   /* redefinition of macro (non-identical) */
         delete_subst(pattern,prefixlen);
       } /* if */
@@ -1345,7 +1346,8 @@ static char *strins(char *dest,const char *src,size_t srclen)
   return dest;
 }
 
-static int substpattern(unsigned char *line,size_t buffersize,char *pattern,char *substitution)
+static int substpattern(unsigned char *line, size_t buffersize, const char *pattern,
+                        const char *substitution)
 {
   int prefixlen;
   const unsigned char *p,*s,*e;
@@ -1526,7 +1528,6 @@ static void substallpatterns(unsigned char *line,int buffersize)
 {
   unsigned char *start, *end;
   int prefixlen;
-  stringpair *subst;
 
   start=line;
   while (*start!='\0') {
@@ -1564,10 +1565,11 @@ static void substallpatterns(unsigned char *line,int buffersize)
       end++;
     } /* while */
     assert(prefixlen>0);
-    subst=find_subst((char*)start,prefixlen);
-    if (subst!=NULL) {
+
+    macro_t subst;
+    if (find_subst((const char*)start, prefixlen, &subst)) {
       /* properly match the pattern and substitute */
-      if (!substpattern(start,buffersize-(int)(start-line),subst->first,subst->second))
+      if (!substpattern(start, buffersize-(int)(start-line), subst.first, subst.second))
         start=end;      /* match failed, skip this prefix */
       /* match succeeded: do not update "start", because the substitution text
        * may be matched by other macros

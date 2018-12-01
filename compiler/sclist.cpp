@@ -47,18 +47,6 @@
 static bool sAliasTableInitialized;
 static ke::HashMap<sp::CharsAndLength, ke::AString, KeywordTablePolicy> sAliases;
 
-/* a "private" implementation of strdup(), so that porting
- * to other memory allocators becomes easier.
- * By Søren Hannibal.
- */
-char* duplicatestring(const char* sourcestring)
-{
-  char* result=(char*)malloc(strlen(sourcestring)+1);
-  strcpy(result,sourcestring);
-  return result;
-}
-
-
 static stringpair *insert_stringpair(stringpair *root,const char *first,const char *second,int matchlength)
 {
   stringpair *cur,*pred;
@@ -69,8 +57,8 @@ static stringpair *insert_stringpair(stringpair *root,const char *first,const ch
   /* create a new node, and check whether all is okay */
   if ((cur=(stringpair*)malloc(sizeof(stringpair)))==NULL)
     return NULL;
-  cur->first=duplicatestring(first);
-  cur->second=duplicatestring(second);
+  cur->first=strdup(first);
+  cur->second=strdup(second);
   cur->matchlength=matchlength;
   cur->documentation=NULL;
   if (cur->first==NULL || cur->second==NULL) {
@@ -155,7 +143,7 @@ static stringlist *insert_string(stringlist *root,const char *string)
   assert(string!=NULL);
   if ((cur=(stringlist*)malloc(sizeof(stringlist)))==NULL)
     error(103);       /* insufficient memory (fatal error) */
-  if ((cur->line=duplicatestring(string))==NULL)
+  if ((cur->line=strdup(string))==NULL)
     error(103);       /* insufficient memory (fatal error) */
   cur->next=NULL;
   if (root->tail)
@@ -266,7 +254,7 @@ static void adjustindex(char c)
   substindex[(int)c-PUBLIC_CHAR]=cur;
 }
 
-stringpair *insert_subst(const char *pattern,const char *substitution,int prefixlen)
+void insert_subst(const char *pattern,const char *substitution,int prefixlen)
 {
   stringpair *cur;
 
@@ -289,11 +277,9 @@ stringpair *insert_subst(const char *pattern,const char *substitution,int prefix
 	  cur->flags = 0;
 	  cur->documentation = NULL;
   } /* if */
-
-  return cur;
 }
 
-stringpair *find_subst(char *name,int length)
+bool find_subst(const char *name, int length, macro_t* macro)
 {
   stringpair *item;
   assert(name!=NULL);
@@ -302,6 +288,9 @@ stringpair *find_subst(char *name,int length)
   item=substindex[(int)*name-PUBLIC_CHAR];
   if (item!=NULL)
     item=find_stringpair(item,name,length);
+
+  if (!item)
+    return false;
 
   if (item && (item->flags & flgDEPRECATED) != 0)
   {
@@ -320,10 +309,15 @@ stringpair *find_subst(char *name,int length)
 
     error(234, macro, msg);  /* deprecated (macro/constant) */
   }
-  return item;
+
+  if (macro) {
+    macro->first = item->first;
+    macro->second = item->second;
+  }
+  return true;
 }
 
-int delete_subst(char *name,int length)
+int delete_subst(const char* name, int length)
 {
   stringpair *item;
   assert(name!=NULL);
