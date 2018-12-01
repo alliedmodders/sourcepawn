@@ -809,11 +809,9 @@ static int preproc_expr(cell *val,int *tag)
     stgset(FALSE);
   } /* if */
   assert((lptr-pline)<(int)strlen((char*)pline));   /* lptr must point inside the string */
-  #if !defined NO_DEFINE
-    /* preprocess the string */
-    substallpatterns(pline,sLINEMAX);
-    assert((lptr-pline)<(int)strlen((char*)pline)); /* lptr must STILL point inside the string */
-  #endif
+  /* preprocess the string */
+  substallpatterns(pline,sLINEMAX);
+  assert((lptr-pline)<(int)strlen((char*)pline)); /* lptr must STILL point inside the string */
   /* append a special symbol to the string, so the expression
    * analyzer won't try to read a next line when it encounters
    * an end-of-line
@@ -1044,9 +1042,7 @@ static int command(void)
         } else if (strcmp(str,"deprecated")==0) {
           while (*lptr<=' ' && *lptr!='\0')
             lptr++;
-          pc_deprecate=(char*)malloc(strlen((char*)lptr)+1);
-          if (pc_deprecate!=NULL)
-            strcpy(pc_deprecate,(char*)lptr);
+          pc_deprecate = (char*)lptr;
           lptr=(unsigned char*)strchr((char*)lptr,'\0'); /* skip to end (ignore "extra characters on line") */
         } else if (strcmp(str,"dynamic")==0) {
           preproc_expr(&pc_stksize,NULL);
@@ -1121,7 +1117,6 @@ static int command(void)
       inpf=NULL;
     } /* if */
     break;
-#if !defined NO_DEFINE
   case tpDEFINE: {
     ret=CMD_DEFINE;
     if (!SKIPPING) {
@@ -1227,7 +1222,6 @@ static int command(void)
       check_empty(lptr);
     } /* if */
     break;
-#endif
   case tpERROR:
     while (*lptr<=' ' && *lptr!='\0')
       lptr++;
@@ -1247,7 +1241,6 @@ static int command(void)
   return ret;
 }
 
-#if !defined NO_DEFINE
 static int is_startstring(const unsigned char *string)
 {
   if (*string=='\"' || *string=='\'')
@@ -1584,7 +1577,6 @@ static void substallpatterns(unsigned char *line,int buffersize)
     } /* if */
   } /* while */
 }
-#endif
 
 /*  scanellipsis
  *  Look for ... in the string and (if not there) in the remainder of the file,
@@ -1666,13 +1658,11 @@ void preprocess(void)
     iscommand=command();
     if (iscommand!=CMD_NONE)
       errorset(sRESET,0); /* reset error flag ("panic mode") on empty line or directive */
-    #if !defined NO_DEFINE
-      if (iscommand==CMD_NONE) {
-        assert(lptr!=term_expr);
-        substallpatterns(pline,sLINEMAX);
-        lptr=pline;       /* reset "line pointer" to start of the parsing buffer */
-      } /* if */
-    #endif
+    if (iscommand==CMD_NONE) {
+      assert(lptr!=term_expr);
+      substallpatterns(pline,sLINEMAX);
+      lptr=pline;       /* reset "line pointer" to start of the parsing buffer */
+    } /* if */
     if (sc_status==statFIRST && sc_listing && freading
         && (iscommand==CMD_NONE || iscommand==CMD_EMPTYLINE || iscommand==CMD_DIRECTIVE))
     {
@@ -3156,8 +3146,6 @@ symbol::~symbol()
     delete_consttable(dim.enumlist);
     free(dim.enumlist);
   } /* if */
-  if (documentation!=NULL)
-    free(documentation);
 }
 
 void symbol::add_reference_to(symbol* other) {

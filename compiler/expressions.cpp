@@ -2556,7 +2556,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
   }
 
   if ((sym->flags & flgDEPRECATED)!=0) {
-    const char *ptr= (sym->documentation!=NULL) ? sym->documentation : "";
+    const char *ptr= sym->documentation.chars();
     error(234,sym->name(),ptr);   /* deprecated (probably a native function) */
   } /* if */
 

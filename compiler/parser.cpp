@@ -350,11 +350,9 @@ int pc_compile(int argc, char *argv[])
     /* reset "defined" flag of all functions and global variables */
     reduce_referrers(&glbtab);
     delete_symbols(&glbtab,0,TRUE,FALSE);
-    #if !defined NO_DEFINE
-      delete_substtable();
-      inst_datetime_defines();
-      inst_binary_name(binfname);
-    #endif
+    delete_substtable();
+    inst_datetime_defines();
+    inst_binary_name(binfname);
     resetglobals();
     gTypes.clearExtendedTypes();
     pstructs_free();
@@ -407,11 +405,9 @@ int pc_compile(int argc, char *argv[])
   funcenums_free();
   methodmaps_free();
   pstructs_free();
-  #if !defined NO_DEFINE
-    delete_substtable();
-    inst_datetime_defines();
-    inst_binary_name(binfname);
-  #endif
+  delete_substtable();
+  inst_datetime_defines();
+  inst_binary_name(binfname);
   resetglobals();
   sc_ctrlchar=sc_ctrlchar_org;
   sc_packstr=lcl_packstr;
@@ -492,9 +488,7 @@ cleanup:
   funcenums_free();
   methodmaps_free();
   pstructs_free();
-  #if !defined NO_DEFINE
-    delete_substtable();
-  #endif
+  delete_substtable();
   if (sc_documentation!=NULL)
     free(sc_documentation);
   delete_autolisttable();
@@ -653,7 +647,7 @@ static void resetglobals(void)
   sc_allowtags=TRUE;    /* allow/detect tagnames */
   sc_status=statIDLE;
   pc_addlibtable=TRUE;  /* by default, add a "library table" to the output file */
-  pc_deprecate=NULL;
+  pc_deprecate="";
   pc_memflags=0;
 }
 
@@ -3518,14 +3512,15 @@ static void declare_handle_intrinsics()
   declare_methodmap_symbol(map, true);
 
   if (symbol* sym = findglb("CloseHandle")) {
-    map->dtor = (methodmap_method_t*)calloc(1, sizeof(methodmap_method_t));
-    map->dtor->target = sym;
-    strcpy(map->dtor->name, "~Handle");
+    auto dtor = ke::MakeUnique<methodmap_method_t>(map);
+    dtor->target = sym;
+    strcpy(dtor->name, "~Handle");
+    map->dtor = dtor.get();
+    map->methods.append(ke::Move(dtor));
 
     auto close = ke::MakeUnique<methodmap_method_t>(map);
     close->target = sym;
     strcpy(close->name, "Close");
-
     map->methods.append(ke::Move(close));
   }
 }
@@ -4070,19 +4065,14 @@ symbol *fetchfunc(char *name)
     /* set the required stack size to zero (only for non-native functions) */
     sym->function()->stacksize=1;         /* 1 for PROC opcode */
   } /* if */
-  if (pc_deprecate!=NULL) {
+  if (pc_deprecate.length() > 0) {
     assert(sym!=NULL);
     sym->flags|=flgDEPRECATED;
     if (sc_status==statWRITE) {
-      if (sym->documentation!=NULL) {
-        free(sym->documentation);
-        sym->documentation=NULL;
-      } /* if */
-      sym->documentation=pc_deprecate;
+      sym->documentation = ke::Move(pc_deprecate);
     } else {
-      free(pc_deprecate);
+      pc_deprecate = "";
     } /* if */
-    pc_deprecate=NULL;
   } /* if */
 
   return sym;
@@ -4567,7 +4557,7 @@ static int newfunc(declinfo_t *decl, const int *thistag, int fpublic, int fstati
   } /* if */
 
   if ((sym->flags & flgDEPRECATED) != 0 && (sym->usage & uSTOCK) == 0) {
-    const char *ptr= (sym->documentation!=NULL) ? sym->documentation : "";
+    const char *ptr = sym->documentation.chars();
     error(234, decl->name, ptr);  /* deprecated (probably a public function) */
   } /* if */
   begcseg();

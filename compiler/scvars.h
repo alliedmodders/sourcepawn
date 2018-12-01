@@ -20,6 +20,7 @@
 #pragma once
 
 #include <setjmp.h>
+#include <amtl/am-string.h>
 
 struct memfile_t;
 
@@ -74,7 +75,6 @@ extern int sc_status;       /* read/write status */
 extern int sc_err_status;   /* TRUE if errors should be generated even if sc_status = SKIP */
 extern int sc_rationaltag;  /* tag for rational numbers */
 extern int rational_digits; /* number of fractional digits */
-extern char *pc_deprecate;  /* if non-NULL, mark next declaration as deprecated */
 extern int pc_optimize;     /* (peephole) optimization level */
 extern int pc_memflags;     /* special flags for the stack/heap usage */
 extern int pc_functag;      /* global function tag */
@@ -97,6 +97,8 @@ extern void *inpf_org;      /* main source file */
 extern memfile_t* outf;          /* file written to */
 
 extern jmp_buf errbuf;      /* target of longjmp() on a fatal error */
+
+extern ke::AString pc_deprecate;
 
 // Returns true if compilation is in its second phase (writing phase) and has
 // so far proceeded without error.
