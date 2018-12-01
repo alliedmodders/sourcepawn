@@ -36,10 +36,16 @@
 #include "lstring.h"
 #include "errors.h"
 #include "sclist.h"
+#include "sp_symhash.h"
+#include <amtl/am-hashmap.h>
+#include <amtl/am-string.h>
 
 #if defined FORTIFY
   #include <alloc/fortify.h>
 #endif
+
+static bool sAliasTableInitialized;
+static ke::HashMap<sp::CharsAndLength, ke::AString, KeywordTablePolicy> sAliases;
 
 /* a "private" implementation of strdup(), so that porting
  * to other memory allocators becomes easier.
@@ -190,36 +196,38 @@ void delete_stringtable(stringlist *root)
   memset(root,0,sizeof(stringlist));
 }
 
-
-/* ----- alias table --------------------------------------------- */
-static stringpair alias_tab = {NULL, NULL, NULL};   /* alias table */
-
-stringpair *insert_alias(const char *name,const char *alias)
+void insert_alias(const char *name, const char *alias)
 {
-  stringpair *cur;
+  if (!sAliasTableInitialized) {
+    sAliases.init(128);
+    sAliasTableInitialized = true;
+  }
 
-  assert(name!=NULL);
-  assert(strlen(name)<=sNAMEMAX);
-  assert(alias!=NULL);
-  assert(strlen(alias)<=sNAMEMAX);
-  if ((cur=insert_stringpair(&alias_tab,name,alias,strlen(name)))==NULL)
-    error(103);       /* insufficient memory (fatal error) */
-  return cur;
+  sp::CharsAndLength key(name, strlen(name));
+  auto p = sAliases.findForAdd(key);
+  if (p.found())
+    p->value = alias;
+  else
+    sAliases.add(p, key, alias);
 }
 
-int lookup_alias(char *target,const char *name)
+bool lookup_alias(char *target,const char *name)
 {
-  stringpair *cur=find_stringpair(alias_tab.next,name,strlen(name));
-  if (cur!=NULL) {
-    assert(strlen(cur->second)<=sNAMEMAX);
-    strcpy(target,cur->second);
-  } /* if */
-  return cur!=NULL;
+  if (!sAliasTableInitialized)
+    return false;
+
+  sp::CharsAndLength key(name, strlen(name));
+  auto p = sAliases.find(key);
+  if (!p.found())
+    return false;
+  ke::SafeStrcpy(target, sNAMEMAX + 1, p->value.chars());
+  return true;
 }
 
 void delete_aliastable(void)
 {
-  delete_stringpairtable(&alias_tab);
+  if (sAliasTableInitialized)
+    sAliases.clear();
 }
 
 /* ----- include paths list -------------------------------------- */
