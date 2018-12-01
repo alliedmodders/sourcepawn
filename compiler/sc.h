@@ -397,15 +397,6 @@ enum {
   statSKIP,     /* skipping output */
 };
 
-typedef struct s_stringpair {
-  struct s_stringpair *next;
-  char *first;
-  char *second;
-  int matchlength;
-  char flags;
-  char *documentation;
-} stringpair;
-
 /* (reversed) evaluation of staging buffer */
 #define sSTARTREORDER 0x01
 #define sENDREORDER   0x02
