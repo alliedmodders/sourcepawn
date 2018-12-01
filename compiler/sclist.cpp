@@ -138,6 +138,7 @@ static int delete_stringpair(stringpair *root,stringpair *item)
       assert(item->second!=NULL);
       free(item->first);
       free(item->second);
+      free(item->documentation);
       free(item);
       return TRUE;
     } /* if */
@@ -251,8 +252,6 @@ void delete_pathtable(void)
 
 
 /* ----- text substitution patterns ------------------------------ */
-#if !defined NO_DEFINE
-
 static stringpair substpair = { NULL, NULL, NULL};  /* list of substitution pairs */
 
 static stringpair *substindex['z'-PUBLIC_CHAR+1]; /* quick index to first character */
@@ -277,19 +276,15 @@ stringpair *insert_subst(const char *pattern,const char *substitution,int prefix
     error(103);       /* insufficient memory (fatal error) */
   adjustindex(*pattern);
 
-  if (pc_deprecate!=NULL) {
+  if (pc_deprecate.length() > 0) {
 	  assert(cur!=NULL);
 	  cur->flags|=flgDEPRECATED;
 	  if (sc_status==statWRITE) {
-		  if (cur->documentation!=NULL) {
-			  free(cur->documentation);
-			  cur->documentation=NULL;
-		  } /* if */
-		  cur->documentation=pc_deprecate;
-	  } else {
-		  free(pc_deprecate);
-	  } /* if */
-	  pc_deprecate=NULL;
+      if (cur->documentation)
+        free(cur->documentation);
+      cur->documentation = strdup(pc_deprecate.chars());
+    }
+    pc_deprecate = "";
   } else {
 	  cur->flags = 0;
 	  cur->documentation = NULL;
@@ -356,8 +351,6 @@ void delete_substtable(void)
   for (i=0; i<sizeof substindex/sizeof substindex[0]; i++)
     substindex[i]=NULL;
 }
-
-#endif /* !defined NO_SUBST */
 
 
 /* ----- input file list (explicit files) ------------------------ */

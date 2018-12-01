@@ -180,7 +180,7 @@ struct symbol {
   } dim;                /* for 'dimension', both functions and arrays */
   int fnumber;          /* static global variables: file number in which the declaration is visible */
   int lnumber;          /* line number (in the current source file) for the declaration */
-  char *documentation;  /* optional documentation string */
+  ke::AString documentation; /* optional documentation string */
   methodmap_t *methodmap; /* if ident == iMETHODMAP */
 
   int addr() const {
