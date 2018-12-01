@@ -28,9 +28,8 @@ struct stringlist {
 };
 
 char* duplicatestring(const char* sourcestring);
-stringpair *insert_alias(const char *name,const char *alias);
-stringpair *find_alias(char *name);
-int lookup_alias(char *target,const char *name);
+void insert_alias(const char *name,const char *alias);
+bool lookup_alias(char *target,const char *name);
 void delete_aliastable(void);
 stringlist *insert_path(char *path);
 char *get_path(int index);
