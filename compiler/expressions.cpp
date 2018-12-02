@@ -985,12 +985,10 @@ SC3ExpressionParser::hier14(value *lval1)
   int lvalue;
   value lval2={0},lval3={0};
   void (*oper)(void);
-  int tok,level,i;
+  int tok,level;
   cell val;
   char *st;
   int leftarray;
-  cell arrayidx1[sDIMEN_MAX],arrayidx2[sDIMEN_MAX];  /* last used array indices */
-  cell *org_arrayidx;
 
   ke::SaveAndSet<int> bitwise_opercount(&bitwise_opercount_, 0);
 
@@ -999,14 +997,7 @@ SC3ExpressionParser::hier14(value *lval1)
    * constant, and that negative array indices are invalid (so actually, any
    * negative value would do).
    */
-  for (i=0; i<sDIMEN_MAX; i++)
-    arrayidx1[i]=arrayidx2[i]=(cell)(-1UL << (sizeof(cell)*8-1));
-  org_arrayidx=lval1->arrayidx; /* save current pointer, to reset later */
-  if (lval1->arrayidx==NULL)
-    lval1->arrayidx=arrayidx1;
   lvalue=plnge1(&SC3ExpressionParser::hier13,lval1);
-  if (lval1->ident!=iARRAYCELL && lval1->ident!=iARRAYCHAR)
-    lval1->arrayidx=NULL;
   if (lval1->ident==iCONSTEXPR) /* load constant here */
     ldconst(lval1->constval,sPRI);
   tok=lex(&val,&st);
@@ -1051,7 +1042,6 @@ SC3ExpressionParser::hier14(value *lval1)
       break;
     default:
       lexpush();
-      lval1->arrayidx=org_arrayidx; /* restore array index pointer */
       return lvalue;
   } /* switch */
 
@@ -1079,7 +1069,6 @@ SC3ExpressionParser::hier14(value *lval1)
     return error(22);           /* assignment to const argument */
 
   lval3=*lval1;         /* save symbol to enable storage of expresion result */
-  lval1->arrayidx=org_arrayidx; /* restore array index pointer */
   if (lval1->ident==iARRAYCELL || lval1->ident==iARRAYCHAR
       || lval1->ident==iARRAY || lval1->ident==iREFARRAY)
   {
@@ -1088,22 +1077,9 @@ SC3ExpressionParser::hier14(value *lval1)
       pushreg(sPRI);
       rvalue(lval1);
     } /* if */
-    lval2.arrayidx=arrayidx2;
     plnge2(oper,&SC3ExpressionParser::hier14,lval1,&lval2);
-    if (lval2.ident!=iARRAYCELL && lval2.ident!=iARRAYCHAR)
-      lval2.arrayidx=NULL;
     if (oper)
       popreg(sALT);
-    if (!oper && lval3.arrayidx!=NULL && lval2.arrayidx!=NULL
-        && lval3.ident==lval2.ident && lval3.sym==lval2.sym)
-    {
-      int same=TRUE;
-      assert(lval2.arrayidx==arrayidx2);
-      for (i=0; i<sDIMEN_MAX; i++)
-        same=same && (lval3.arrayidx[i]==lval2.arrayidx[i]);
-      if (same)
-        error(226,lval3.sym->name());   /* self-assignment */
-    } /* if */
   } else if (lval1->ident == iACCESSOR) {
     pushreg(sPRI);
     if (oper) {
@@ -1899,10 +1875,6 @@ restart:
         matchtag(sym->x.tags.index,lval2.tag,TRUE);
       if (lval2.ident==iCONSTEXPR) {    /* constant expression */
         stgdel(index,cidx);             /* scratch generated code */
-        if (lval1->arrayidx!=NULL) {    /* keep constant index, for checking */
-          assert(sym->dim.array.level>=0 && sym->dim.array.level<sDIMEN_MAX);
-          lval1->arrayidx[sym->dim.array.level]=lval2.constval;
-        } /* if */
         if (!(sym->tag == pc_tag_string && sym->dim.array.level == 0)) {
           /* normal array index */
           if (lval2.constval<0 || (sym->dim.array.length!=0 && sym->dim.array.length<=lval2.constval))
@@ -1949,7 +1921,6 @@ restart:
         } /* if */
       } else {
         /* array index is not constant */
-        lval1->arrayidx=NULL;           /* reset, so won't be checked */
         if (!magic_string) {
           if (sym->dim.array.length!=0)
             ffbounds(sym->dim.array.length-1);  /* run time check for array bounds */
@@ -2289,7 +2260,6 @@ static void clear_value(value *lval)
   lval->ident=0;
   lval->boolresult=FALSE;
   lval->accessor=NULL;
-  /* do not clear lval->arrayidx, it is preset in hier14() */
 }
 
 static void setdefarray(cell *string,cell size,cell array_sz,cell *dataaddr,int fconst)
