@@ -27,15 +27,6 @@ struct stringlist {
   };
 };
 
-struct stringpair {
-  stringpair *next;
-  char *first;
-  char *second;
-  int matchlength;
-  char flags;
-  char *documentation;
-};
-
 struct macro_t {
   const char* first;
   const char* second;
@@ -47,9 +38,9 @@ void delete_aliastable(void);
 stringlist *insert_path(char *path);
 char *get_path(int index);
 void delete_pathtable(void);
-void insert_subst(const char *pattern, const char *substitution, int prefixlen);
-bool find_subst(const char *name, int length, macro_t* result);
-int delete_subst(const char *name, int length);
+void insert_subst(const char *pattern, size_t pattern_length, const char *substitution);
+bool find_subst(const char *name, size_t length, macro_t* result);
+bool delete_subst(const char *name, size_t length);
 void delete_substtable(void);
 stringlist *insert_sourcefile(char *string);
 char *get_sourcefile(int index);

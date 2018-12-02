@@ -1197,7 +1197,7 @@ static int command(void)
       } /* if */
       /* add the pattern/substitution pair to the list */
       assert(strlen(pattern)>0);
-      insert_subst(pattern,substitution,prefixlen);
+      insert_subst(pattern, prefixlen, substitution);
       free(pattern);
       free(substitution);
     } /* if */
@@ -1206,13 +1206,11 @@ static int command(void)
   case tpUNDEF:
     if (!SKIPPING) {
       if (lex(&val,&str)==tSYMBOL) {
-        ret=delete_subst(str,strlen(str));
-        if (!ret) {
+        if (delete_subst(str, strlen(str))) {
           /* also undefine normal constants */
           symbol *sym=findconst(str,NULL);
           if (sym!=NULL && (sym->usage & (uENUMROOT | uENUMFIELD))==0) {
             delete_symbol(&glbtab,sym);
-            ret=TRUE;
           } /* if */
         } /* if */
         if (!ret)

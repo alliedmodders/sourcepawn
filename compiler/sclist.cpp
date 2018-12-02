@@ -47,93 +47,31 @@
 static bool sAliasTableInitialized;
 static ke::HashMap<sp::CharsAndLength, ke::AString, KeywordTablePolicy> sAliases;
 
-static stringpair *insert_stringpair(stringpair *root,const char *first,const char *second,int matchlength)
-{
-  stringpair *cur,*pred;
+struct MacroTablePolicy {
+  static bool matches(const ke::AString& a, const ke::AString& b) {
+    return a == b;
+  }
+  static bool matches(const sp::CharsAndLength& a, const ke::AString& b) {
+    if (a.length() != b.length())
+      return false;
+    return strncmp(a.str(), b.chars(), a.length()) == 0;
+  }
+  static uint32_t hash(const ke::AString& key) {
+    return ke::HashCharSequence(key.chars(), key.length());
+  }
+  static uint32_t hash(const sp::CharsAndLength& key) {
+    return ke::HashCharSequence(key.str(), key.length());
+  }
+};
 
-  assert(root!=NULL);
-  assert(first!=NULL);
-  assert(second!=NULL);
-  /* create a new node, and check whether all is okay */
-  if ((cur=(stringpair*)malloc(sizeof(stringpair)))==NULL)
-    return NULL;
-  cur->first=strdup(first);
-  cur->second=strdup(second);
-  cur->matchlength=matchlength;
-  cur->documentation=NULL;
-  if (cur->first==NULL || cur->second==NULL) {
-    if (cur->first!=NULL)
-      free(cur->first);
-    if (cur->second!=NULL)
-      free(cur->second);
-    free(cur);
-    return NULL;
-  } /* if */
-  /* link the node to the tree, find the position */
-  for (pred=root; pred->next!=NULL && strcmp(pred->next->first,first)<0; pred=pred->next)
-    /* nothing */;
-  cur->next=pred->next;
-  pred->next=cur;
-  return cur;
-}
-
-static void delete_stringpairtable(stringpair *root)
-{
-  stringpair *cur, *next;
-
-  assert(root!=NULL);
-  cur=root->next;
-  while (cur!=NULL) {
-    next=cur->next;
-    assert(cur->first!=NULL);
-    assert(cur->second!=NULL);
-    free(cur->first);
-    free(cur->second);
-    free(cur);
-    cur=next;
-  } /* while */
-  memset(root,0,sizeof(stringpair));
-}
-
-static stringpair *find_stringpair(stringpair *cur,const char *first,int matchlength)
-{
-  int result=0;
-
-  assert(matchlength>0);  /* the function cannot handle zero-length comparison */
-  assert(first!=NULL);
-  while (cur!=NULL && result<=0) {
-    result=(int)*cur->first - (int)*first;
-    if (result==0 && matchlength==cur->matchlength) {
-      result=strncmp(cur->first,first,matchlength);
-      if (result==0)
-        return cur;
-    } /* if */
-    cur=cur->next;
-  } /* while */
-  return NULL;
-}
-
-static int delete_stringpair(stringpair *root,stringpair *item)
-{
-  stringpair *cur;
-
-  assert(root!=NULL);
-  cur=root;
-  while (cur->next!=NULL) {
-    if (cur->next==item) {
-      cur->next=item->next;     /* unlink from list */
-      assert(item->first!=NULL);
-      assert(item->second!=NULL);
-      free(item->first);
-      free(item->second);
-      free(item->documentation);
-      free(item);
-      return TRUE;
-    } /* if */
-    cur=cur->next;
-  } /* while */
-  return FALSE;
-}
+struct MacroEntry {
+  ke::AString first;
+  ke::AString second;
+  ke::AString documentation;
+  int flags;
+};
+static bool sMacroTableInitialized;
+static ke::HashMap<ke::AString, MacroEntry, MacroTablePolicy> sMacros;
 
 /* ----- string list functions ----------------------------------- */
 static stringlist *insert_string(stringlist *root,const char *string)
@@ -238,112 +176,67 @@ void delete_pathtable(void)
   assert(includepaths.next==NULL);
 }
 
+/* ----- substitutions (macros) -------------------------------------- */
 
-/* ----- text substitution patterns ------------------------------ */
-static stringpair substpair = { NULL, NULL, NULL};  /* list of substitution pairs */
-
-static stringpair *substindex['z'-PUBLIC_CHAR+1]; /* quick index to first character */
-static void adjustindex(char c)
+void insert_subst(const char *pattern, size_t pattern_length, const char *substitution)
 {
-  stringpair *cur;
-  assert((c>='A' && c<='Z') || (c>='a' && c<='z') || c=='_' || c==PUBLIC_CHAR);
-  assert(PUBLIC_CHAR<'A' && 'A'<'_' && '_'<'z');
-
-  for (cur=substpair.next; cur!=NULL && cur->first[0]!=c; cur=cur->next)
-    /* nothing */;
-  substindex[(int)c-PUBLIC_CHAR]=cur;
-}
-
-void insert_subst(const char *pattern,const char *substitution,int prefixlen)
-{
-  stringpair *cur;
-
-  assert(pattern!=NULL);
-  assert(substitution!=NULL);
-  if ((cur=insert_stringpair(&substpair,pattern,substitution,prefixlen))==NULL)
-    error(103);       /* insufficient memory (fatal error) */
-  adjustindex(*pattern);
-
-  if (pc_deprecate.length() > 0) {
-	  assert(cur!=NULL);
-	  cur->flags|=flgDEPRECATED;
-	  if (sc_status==statWRITE) {
-      if (cur->documentation)
-        free(cur->documentation);
-      cur->documentation = strdup(pc_deprecate.chars());
-    }
-    pc_deprecate = "";
-  } else {
-	  cur->flags = 0;
-	  cur->documentation = NULL;
-  } /* if */
-}
-
-bool find_subst(const char *name, int length, macro_t* macro)
-{
-  stringpair *item;
-  assert(name!=NULL);
-  assert(length>0);
-  assert((*name>='A' && *name<='Z') || (*name>='a' && *name<='z') || *name=='_' || *name==PUBLIC_CHAR);
-  item=substindex[(int)*name-PUBLIC_CHAR];
-  if (item!=NULL)
-    item=find_stringpair(item,name,length);
-
-  if (!item)
-    return false;
-
-  if (item && (item->flags & flgDEPRECATED) != 0)
-  {
-    static char macro[128];
-    const char *msg = (item->documentation != NULL) ? item->documentation : "";
-    strlcpy(macro, item->first, sizeof(macro));
-
-    /* If macro contains an opening parentheses and a percent sign, then assume that
-     * it takes arguments and remove them from the warning message.
-     */
-    char *rem;
-    if ((rem = strchr(macro, '(')) != NULL && strchr(macro, '%') > rem)
-    {
-      *rem = '\0';
-    }
-
-    error(234, macro, msg);  /* deprecated (macro/constant) */
+  if (!sMacroTableInitialized) {
+    sMacros.init(1024);
+    sMacroTableInitialized = true;
   }
 
+  MacroEntry macro;
+  macro.first = pattern;
+  macro.second = substitution;
+  macro.flags = 0;
+  if (pc_deprecate.length() > 0) {
+    macro.flags |= flgDEPRECATED;
+    if (sc_status == statWRITE)
+      macro.documentation = ke::Move(pc_deprecate);
+    else
+      pc_deprecate = "";
+  }
+
+  ke::AString key(pattern, pattern_length);
+  auto p = sMacros.findForAdd(key);
+  if (p.found())
+    p->value = macro;
+  else
+    sMacros.add(p, ke::Move(key), macro);
+}
+
+bool find_subst(const char *name, size_t length, macro_t* macro)
+{
+  sp::CharsAndLength key(name, length);
+  auto p = sMacros.find(key);
+  if (!p.found())
+    return false;
+
+  MacroEntry& entry = p->value;
+  if (entry.flags & flgDEPRECATED)
+    error(234, p->key.chars(), entry.documentation.chars());
+
   if (macro) {
-    macro->first = item->first;
-    macro->second = item->second;
+    macro->first = entry.first.chars();
+    macro->second = entry.second.chars();
   }
   return true;
 }
 
-int delete_subst(const char* name, int length)
+bool delete_subst(const char* name, size_t length)
 {
-  stringpair *item;
-  assert(name!=NULL);
-  assert(length>0);
-  assert((*name>='A' && *name<='Z') || (*name>='a' && *name<='z') || *name=='_' || *name==PUBLIC_CHAR);
-  item=substindex[(int)*name-PUBLIC_CHAR];
-  if (item!=NULL)
-    item=find_stringpair(item,name,length);
-  if (item==NULL)
-    return FALSE;
-  if (item->documentation)
-  {
-    free(item->documentation);
-    item->documentation=NULL;
-  }
-  delete_stringpair(&substpair,item);
-  adjustindex(*name);
-  return TRUE;
+  sp::CharsAndLength key(name, length);
+  auto p = sMacros.find(key);
+  if (!p.found())
+    return false;
+
+  sMacros.remove(p);
+  return true;
 }
 
 void delete_substtable(void)
 {
-  size_t i;
-  delete_stringpairtable(&substpair);
-  for (i=0; i<sizeof substindex/sizeof substindex[0]; i++)
-    substindex[i]=NULL;
+  sMacros.clear();
 }
 
 
