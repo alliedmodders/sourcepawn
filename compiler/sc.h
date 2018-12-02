@@ -331,7 +331,6 @@ struct value {
   char ident;           /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
                          * iEXPRESSION or iREFERENCE */
   char boolresult;      /* boolean result for relational operators */
-  cell *arrayidx;       /* last used array indices, for checking self assignment */
 
   // Returns whether the value can be rematerialized based on static
   // information, or whether it is the result of an expression.
