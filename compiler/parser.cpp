@@ -552,8 +552,8 @@ static void inst_binary_name(char *binfname)
   snprintf(newpath, sizeof(newpath), "\"%s\"", binfname);
   snprintf(newname, sizeof(newname), "\"%s\"", binptr);
 
-  insert_subst("__BINARY_PATH__", newpath, 15);
-  insert_subst("__BINARY_NAME__", newname, 15);
+  insert_subst("__BINARY_PATH__", 15, newpath);
+  insert_subst("__BINARY_NAME__", 15, newname);
 }
 
 static void inst_datetime_defines(void)
@@ -574,8 +574,8 @@ static void inst_datetime_defines(void)
   strftime(ltime, 31, "\"%H:%M:%S\"", curtime);
 #endif
 
-  insert_subst("__DATE__", date, 8);
-  insert_subst("__TIME__", ltime, 8);
+  insert_subst("__DATE__", 8, date);
+  insert_subst("__TIME__", 8, ltime);
 }
 
 const char *pc_typename(int tag)
