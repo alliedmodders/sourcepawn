@@ -1869,7 +1869,7 @@ restart:
       if (hier14(&lval2))       /* create expression for the array index */
         rvalue(&lval2);
       if (lval2.ident==iARRAY || lval2.ident==iREFARRAY)
-        error(33,lval2.sym->name());      /* array must be indexed */
+        error(33, lval2.sym ? lval2.sym->name() : "-unknown-");      /* array must be indexed */
       needtoken(close);
       if ((sym->usage & uENUMROOT))
         matchtag(sym->x.tags.index,lval2.tag,TRUE);
