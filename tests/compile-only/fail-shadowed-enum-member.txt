@@ -1,0 +1,1 @@
+(4) : error 050: constant 'b' already defined

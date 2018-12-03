@@ -185,9 +185,9 @@ BaseExpressionParser::parse_sizeof()
         char *idxname;
         int cmptag=subsym->x.tags.index;
         tokeninfo(&val,&idxname);
-        if ((idxsym=findconst(idxname,&cmptag))==NULL)
+        if ((idxsym=findconst(idxname))==NULL)
           error(80,idxname);  /* unknown symbol, or non-constant */
-        else if (cmptag>1)
+        else if (cmptag!=idxsym->tag)
           error(91,idxname);  /* ambiguous constant */
       } /* if */
       needtoken(']');
@@ -251,9 +251,9 @@ BaseExpressionParser::parse_cellsof()
         char *idxname;
         int cmptag=subsym->x.tags.index;
         tokeninfo(&val,&idxname);
-        if ((idxsym=findconst(idxname,&cmptag))==NULL)
+        if ((idxsym=findconst(idxname))==NULL)
           error(80,idxname);  /* unknown symbol, or non-constant */
-        else if (cmptag>1)
+        else if (cmptag!=idxsym->tag)
           error(91,idxname);  /* ambiguous constant */
       } /* if */
       needtoken(']');
@@ -320,9 +320,9 @@ BaseExpressionParser::parse_tagof()
         char *idxname;
         int cmptag=subsym->x.tags.index;
         tokeninfo(&val,&idxname);
-        if ((idxsym=findconst(idxname,&cmptag))==NULL)
+        if ((idxsym=findconst(idxname))==NULL)
           error(80,idxname);  /* unknown symbol, or non-constant */
-        else if (cmptag>1)
+        else if (cmptag!=idxsym->tag)
           error(91,idxname);  /* ambiguous constant */
       } /* if */
       needtoken(']');

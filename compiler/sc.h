@@ -328,7 +328,6 @@ struct value {
   cell constval;        /* value of the constant expression (if ident==iCONSTEXPR)
                          * also used for the size of a literal array */
   int tag;              /* tag (of the expression) */
-  int cmptag;           /* for searching symbols: choose the one with the matching tag */
   char ident;           /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
                          * iEXPRESSION or iREFERENCE */
   char boolresult;      /* boolean result for relational operators */

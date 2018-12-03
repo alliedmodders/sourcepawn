@@ -58,7 +58,7 @@ using namespace sp;
 #define UTF8MODE        0x2
 #define ISPACKED        0x4
 static cell litchar(const unsigned char **lptr,int flags);
-static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag);
+static symbol *find_symbol(const symbol *root,const char *name,int fnumber);
 
 static void substallpatterns(unsigned char *line,int buffersize);
 static int alpha(char c);
@@ -390,7 +390,7 @@ static void readline(unsigned char *line)
       line+=strlen((char*)line);
     } /* if */
     fline+=1;
-    sym=findconst("__LINE__",NULL);
+    sym=findconst("__LINE__");
     assert(sym!=NULL);
     sym->setAddr(fline);
   } while (num>=0 && cont);
@@ -1208,7 +1208,7 @@ static int command(void)
       if (lex(&val,&str)==tSYMBOL) {
         if (delete_subst(str, strlen(str))) {
           /* also undefine normal constants */
-          symbol *sym=findconst(str,NULL);
+          symbol *sym=findconst(str);
           if (sym!=NULL && (sym->usage & (uENUMROOT | uENUMFIELD))==0) {
             delete_symbol(&glbtab,sym);
           } /* if */
@@ -2979,35 +2979,20 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
   } /* if */
 }
 
-static symbol *find_symbol(const symbol *root,const char *name,int fnumber,int *cmptag)
+static symbol *find_symbol(const symbol *root,const char *name,int fnumber)
 {
-  symbol *firstmatch=NULL;
   symbol *sym=root->next;
-  int count=0;
   sp::Atom* atom = gAtoms.add(name);
   while (sym!=NULL) {
     if (atom == sym->nameAtom()
         && (sym->parent()==NULL || sym->ident==iCONSTEXPR)    /* sub-types (hierarchical types) are skipped, except for enum fields */
         && (sym->fnumber<0 || sym->fnumber==fnumber))       /* check file number for scope */
     {
-      if (cmptag==NULL)
-        return sym;   /* return first match */
-      /* return closest match or first match; count number of matches */
-      if (firstmatch==NULL)
-        firstmatch=sym;
-      assert(cmptag!=NULL);
-      if (*cmptag==0)
-        count++;
-      if (*cmptag==sym->tag) {
-        *cmptag=1;    /* good match found, set number of matches to 1 */
-        return sym;
-      } /* if */
+      return sym;   /* return first match */
     } /*  */
     sym=sym->next;
   } /* while */
-  if (cmptag!=NULL && firstmatch!=NULL)
-    *cmptag=count;
-  return firstmatch;
+  return nullptr;
 }
 
 void markusage(symbol *sym,int usage)
@@ -3046,19 +3031,16 @@ symbol *findglb(const char *name)
  */
 symbol *findloc(const char *name)
 {
-  return find_symbol(&loctab,name,-1,NULL);
+  return find_symbol(&loctab,name,-1);
 }
 
-symbol *findconst(const char *name,int *cmptag)
+symbol *findconst(const char *name)
 {
   symbol *sym;
 
-  sym=find_symbol(&loctab,name,-1,cmptag);  /* try local symbols first */
+  sym=find_symbol(&loctab,name,-1);  /* try local symbols first */
   if (sym==NULL || sym->ident!=iCONSTEXPR) {   /* not found, or not a constant */
-    if (cmptag)
-      sym=FindTaggedInHashTable(sp_Globals,name,fcurrent,cmptag);
-    else
-      sym=FindInHashTable(sp_Globals,name,fcurrent);
+    sym=FindInHashTable(sp_Globals,name,fcurrent);
   }
   if (sym==NULL || sym->ident!=iCONSTEXPR)
     return NULL;

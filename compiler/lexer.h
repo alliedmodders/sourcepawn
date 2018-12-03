@@ -261,7 +261,7 @@ void delete_symbols(symbol *root,int level,int del_labels,int delete_functions);
 void markusage(symbol *sym,int usage);
 symbol *findglb(const char *name);
 symbol *findloc(const char *name);
-symbol *findconst(const char *name,int *matchtag);
+symbol *findconst(const char *name);
 symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag, int usage);
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,
                             int dim[],int numdim,int idxtag[]);
