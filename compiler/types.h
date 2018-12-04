@@ -39,11 +39,12 @@
 enum class TypeKind : uint32_t
 {
   None,
-  Struct    = 0x02000000,
-  Methodmap = 0x04000000,
-  Enum      = 0x08000000,
-  Object    = 0x10000000,
-  Function  = 0x20000000
+  EnumStruct = 0x01000000,
+  Struct     = 0x02000000,
+  Methodmap  = 0x04000000,
+  Enum       = 0x08000000,
+  Object     = 0x10000000,
+  Function   = 0x20000000
 };
 KE_DEFINE_ENUM_OPERATORS(TypeKind)
 
@@ -51,6 +52,7 @@ struct pstruct_t;
 struct funcenum_t;
 struct methodmap_t;
 struct constvalue;
+struct symbol;
 
 struct typeinfo_t {
   // Array information.
@@ -61,12 +63,19 @@ struct typeinfo_t {
   constvalue *enumroot;
 
   // Type information.
-  int tag;           // Same as tags[0].
+  int tag;           // Effective tag.
   int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
   char usage;        // Usage flags.
   bool is_new;       // New-style declaration.
   bool has_postdims; // Dimensions, if present, were in postfix position.
 
+  // If non-zero, this type was originally declared with this type, but was
+  // rewritten for desugaring.
+  int declared_tag;
+
+  int semantic_tag() const {
+    return tag ? tag : declared_tag;
+  }
   bool isCharArray() const;
 };
 
@@ -145,6 +154,15 @@ public:
     return methodmap_ptr_;
   }
 
+  bool isEnumStruct() const {
+    return kind_ == TypeKind::EnumStruct;
+  }
+  symbol* asEnumStruct() const {
+    if (!isEnumStruct())
+      return nullptr;
+    return enumstruct_ptr_;
+  }
+
 private:
   void setFunction(funcenum_t* func) {
     setFixed();
@@ -157,6 +175,11 @@ private:
   }
   void setEnumTag() {
     kind_ = TypeKind::Enum;
+  }
+  void setEnumStruct(symbol* sym) {
+    setFixed();
+    kind_ = TypeKind::EnumStruct;
+    enumstruct_ptr_ = sym;
   }
   void setStruct(pstruct_t* ptr) {
     setFixed();
@@ -187,6 +210,7 @@ private:
     pstruct_t* pstruct_ptr_;
     funcenum_t* funcenum_ptr_;
     methodmap_t* methodmap_ptr_;
+    symbol* enumstruct_ptr_;
     void* private_ptr_;
   };
 };
@@ -213,6 +237,7 @@ public:
   Type* defineBool();
   Type* defineMethodmap(const char* name, methodmap_t* map);
   Type* defineEnumTag(const char* name);
+  Type* defineEnumStruct(const char* name, symbol* sym);
   Type* defineTag(const char* name);
   Type* definePStruct(const char* name, pstruct_t* ps);
 

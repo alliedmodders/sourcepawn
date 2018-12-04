@@ -1,0 +1,1 @@
+(8) : error 174: symbol 'Sample' is a type and cannot be used as a value

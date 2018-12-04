@@ -28,6 +28,7 @@
 
 struct arginfo;
 struct symbol;
+class Type;
 
 class BaseExpressionParser
 {
@@ -57,6 +58,8 @@ protected:
   static int list10[];
   static int list11[];
   static int list12[];
+
+  cell sizeof_impl();
 
 protected:
   // Count of bitwise operators in an expression.

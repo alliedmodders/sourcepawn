@@ -201,6 +201,14 @@ TypeDictionary::defineEnumTag(const char* name)
 }
 
 Type*
+TypeDictionary::defineEnumStruct(const char* name, symbol* sym)
+{
+  Type* type = findOrAdd(name);
+  type->setEnumStruct(sym);
+  return type;
+}
+
+Type*
 TypeDictionary::defineTag(const char* name)
 {
   Type* type = findOrAdd(name);

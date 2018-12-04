@@ -116,6 +116,7 @@ struct stringlist;
 #define iVARARGS    11  /* function specified ... as argument(s) */
 #define iACCESSOR   13  /* property accessor via a methodmap_method_t */
 #define iMETHODMAP  14  /* symbol defining a methodmap */
+#define iENUMSTRUCT 15  /* symbol defining an enumstruct */
 
 class FunctionData;
 class SymbolData {
@@ -371,11 +372,11 @@ struct svalue {
 #define DECLMASK_NAMED_DECL      (DECLFLAG_ARGUMENT | DECLFLAG_VARIABLE | DECLFLAG_MAYBE_FUNCTION | DECLFLAG_FIELD)
 
 /* For parsing declarations. */
-typedef struct {
+struct declinfo_t {
   char name[sNAMEMAX + 1];
   typeinfo_t type;
   int opertok;       // Operator token, if applicable.
-} declinfo_t;
+};
 
 /*  "while" statement queue (also used for "for" and "do - while" loops) */
 enum {

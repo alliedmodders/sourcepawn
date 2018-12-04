@@ -1,0 +1,2 @@
+(13) : error 117: enum structs cannot be indexed as arrays
+(14) : error 117: enum structs cannot be indexed as arrays

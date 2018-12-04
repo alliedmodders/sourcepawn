@@ -25,6 +25,8 @@ namespace smxdasm
         public SmxDebugSymbolsTable DebugSymbols;
         public SmxRttiData RttiData;
         public SmxRttiEnumTable RttiEnums;
+        public SmxRttiEnumStructTable RttiEnumStructs;
+        public SmxRttiEnumStructFieldTable RttiEnumStructFields;
         public SmxRttiClassDefTable RttiClassDefs;
         public SmxRttiFieldTable RttiFields;
         public SmxRttiMethodTable RttiMethods;
@@ -112,6 +114,12 @@ namespace smxdasm
                             break;
                         case "rtti.classdefs":
                             RttiClassDefs = new SmxRttiClassDefTable(Header, section, Names);
+                            break;
+                        case "rtti.enumstructs":
+                            RttiEnumStructs = new SmxRttiEnumStructTable(Header, section, Names);
+                            break;
+                        case "rtti.enumstruct_fields":
+                            RttiEnumStructFields = new SmxRttiEnumStructFieldTable(Header, section, Names);
                             break;
                         case "rtti.fields":
                             RttiFields = new SmxRttiFieldTable(Header, section, Names);

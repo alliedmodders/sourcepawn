@@ -211,6 +211,10 @@ namespace smxviewer
                 renderTypedefs(roots["rtti.typedefs"], file_.RttiTypedefs);
             if (roots.ContainsKey("rtti.typesets") && file_.RttiTypesets != null)
                 renderTypesets(roots["rtti.typesets"], file_.RttiTypesets);
+            if (roots.ContainsKey("rtti.enumstructs") && file_.RttiEnumStructs != null)
+                renderEnumStructs(roots["rtti.enumstructs"], file_.RttiEnumStructs);
+            if (roots.ContainsKey("rtti.enumstruct_fields") && file_.RttiEnumStructFields != null)
+                renderEnumStructFields(roots["rtti.enumstruct_fields"], file_.RttiEnumStructFields);
 
             if (roots.ContainsKey(".dbg.files") && file_.DebugFiles != null)
                 renderDebugFiles(roots[".dbg.files"], file_.DebugFiles);
@@ -929,6 +933,75 @@ namespace smxviewer
                 renderByteView(reader, data.SectionHeader.Size);
                 endDetailUpdate();
             }, data);
+        }
+
+        private void renderEnumStructs(TreeNode root, SmxRttiEnumStructTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Entries.Length; i++)
+                {
+                    var def = table.Entries[i];
+                    addDetailLine("{0}: {1} ({2} cells)", i, def.name, def.size);
+                }
+                endDetailUpdate();
+            }, null);
+
+            for (int i = 0; i < table.Entries.Length; i++)
+            {
+                var entry = table.Entries[i];
+                var index = i;
+                var node = root.Nodes.Add(entry.name);
+                node.Tag = new NodeData(delegate ()
+                {
+                    startDetailUpdate();
+                    addDetailLine("name = 0x{0:x} ; {1}", entry.name_offset, entry.name);
+                    addDetailLine("size = {0} cells", entry.size);
+                    endDetailUpdate();
+                }, null);
+
+                int stop_at = (i == table.Entries.Length - 1)
+                              ? file_.RttiEnumStructs.Entries.Length
+                              : table.Entries[i + 1].first_field;
+                for (int field_index = entry.first_field; field_index < stop_at; field_index++)
+                {
+                    var field = file_.RttiEnumStructFields.Entries[field_index];
+                    var subnode = node.Nodes.Add(field.name);
+                    subnode.Tag = new NodeData(delegate ()
+                    {
+                        renderEnumStructFieldDetail(field);
+                    }, null);
+                }
+            }
+        }
+
+        private void renderEnumStructFieldDetail(RttiEnumStructField field)
+        {
+            string type = file_.RttiData.TypeFromTypeId(field.type_id);
+            startDetailUpdate();
+            addDetailLine("name = 0x{0:x} ; {1}", field.name_offset, field.name);
+            addDetailLine("typeid = 0x{0:x}", field.type_id);
+            addDetailLine("type = {0}", type);
+            addDetailLine("offset = {0}", field.offset);
+            endDetailUpdate();
+        }
+
+        private void renderEnumStructFields(TreeNode root, SmxRttiEnumStructFieldTable table)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(table.SectionHeader);
+                addDetailLine("---");
+                for (int i = 0; i < table.Entries.Length; i++)
+                {
+                    var field = table.Entries[i];
+                    string type = file_.RttiData.TypeFromTypeId(field.type_id);
+                    addDetailLine("{0}: {1} ; {2}", i, field.name, type);
+                }
+                endDetailUpdate();
+            }, null);
         }
 
         private void renderClassDefs(TreeNode root, SmxRttiClassDefTable table)

@@ -126,6 +126,7 @@ static void dodelete();
 static void decl_const(int table);
 static void declstruct();
 static void decl_enum(int table);
+static void decl_enumstruct();
 static cell needsub(int *tag,constvalue **enumroot);
 static void initials(int ident,int tag,cell *size,int dim[],int numdim,
                      constvalue *enumroot);
@@ -176,6 +177,7 @@ static int parse_new_decl(declinfo_t *decl, const token_t *first, int flags);
 static int reparse_old_decl(declinfo_t *decl, int flags);
 static int reparse_new_decl(declinfo_t *decl, int flags);
 static void check_void_decl(const declinfo_t *decl, int variable);
+static void rewrite_type_for_enum_struct(typeinfo_t* info);
 
 enum {
   TEST_PLAIN,           /* no parentheses */
@@ -1769,12 +1771,17 @@ static void declloc(int tokid)
           copyarray(sym, cells * sizeof(cell));
         } else if (matchtoken(tNEW)) {
           int tag = 0;
+          int explicit_dims = type->numdim;
           if (parse_new_typename(NULL, &tag)) {
-            if (tag != type->tag)
+            if (tag != type->semantic_tag())
               error(164, pc_typename(tag), pc_typename(type->tag));
+            if (gTypes.find(tag)->isEnumStruct()) {
+              assert(explicit_dims > 0);
+              explicit_dims--;
+            }
           }
 
-          for (int i = 0; i < type->numdim; i++) {
+          for (int i = 0; i < explicit_dims; i++) {
             if (!needtoken('['))
               break;
 
@@ -1802,6 +1809,10 @@ static void declloc(int tokid)
 
             if (!needtoken(']'))
               break;
+          }
+          if (explicit_dims < type->numdim) {
+            assert(explicit_dims + 1 == type->numdim);
+            pushval(type->dim[type->numdim - 1]);
           }
           
           genarray(type->numdim, true);
@@ -2376,6 +2387,11 @@ static cell initvector(int ident,int tag,cell size,int fillzero,
         cell step;
         int cmptag=enumfield->index;
         symbol *symfield=findconst(enumfield->name);
+        if (!symfield) {
+          Type* type = gTypes.find(enumfield->index);
+          if (type->isEnumStruct())
+            symfield = find_enumstruct_field(type, enumfield->name);
+        }
         assert(symfield);
         if (symfield->tag!=cmptag) {
           error(91,enumfield->name); /* ambiguous constant, needs tag override */
@@ -2660,6 +2676,11 @@ static int consume_line()
   return TRUE;
 }
 
+constexpr cell char_array_cells(cell size)
+{
+  return (size + sizeof(cell) - 1) / sizeof(cell);
+}
+
 static int parse_new_typename(const token_t *tok)
 {
   token_t tmp;
@@ -2739,6 +2760,7 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
 
   if (!parse_new_typename(&tok, &type->tag))
     return FALSE;
+  type->declared_tag = type->tag;
 
   // Note: we could have already filled in the prefix array bits, so we check
   // that ident != iARRAY before looking for an open bracket.
@@ -2767,6 +2789,11 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
       type->ident = iREFERENCE;
     }
   }
+
+  // We're not getting another chance to do enum struct desugaring, since our
+  // caller is not looking for a declaration. Do it now.
+  if (!flags)
+    rewrite_type_for_enum_struct(type);
 
   return TRUE;
 }
@@ -2801,7 +2828,7 @@ static void parse_old_array_dims(declinfo_t *decl, int flags)
     do {
       if (type->numdim == sDIMEN_MAX) {
         error(53);
-        return;
+        break;
       }
 
       if (type->numdim > 0) {
@@ -2859,7 +2886,9 @@ static void parse_old_array_dims(declinfo_t *decl, int flags)
       type->ident = iREFARRAY;
       type->size = 0;
       if (type->is_new) {
-        // Fixed array with dynamic size.
+        // Fixed array with dynamic size. Note that this protects this code
+        // from not supporting new-style enum structs (it is called before
+        // rewriting happens).
         error(161, pc_typename(type->tag));
       }
     }
@@ -2935,6 +2964,11 @@ static int parse_old_decl(declinfo_t *decl, int flags)
 
   // All finished with tag stuff.
   type->tag = tags[0];
+  type->declared_tag = type->tag;
+
+  Type* type_obj = gTypes.find(type->tag);
+  if (type_obj->isEnumStruct())
+    error(85, type_obj->name());
 
   // Look for varargs and end early.
   if (matchtoken(tELLIPS)) {
@@ -2997,6 +3031,37 @@ static int reparse_old_decl(declinfo_t *decl, int flags)
   return parse_old_decl(decl, flags);
 }
 
+static void rewrite_type_for_enum_struct(typeinfo_t* info)
+{
+  Type* type = gTypes.find(info->declared_tag);
+  symbol* enum_type = type->asEnumStruct();
+  if (!enum_type)
+    return;
+
+  if (info->numdim >= sDIMEN_MAX) {
+    error(86, type->name());
+    return;
+  }
+
+  info->tag = 0;
+  info->dim[info->numdim] = enum_type->addr();
+  info->idxtag[info->numdim] = enum_type->tag;
+  info->enumroot = enum_type->dim.enumlist;
+
+  // Note that the size here is incorrect. It's fixed up in initials() by
+  // declloc and declglb. Unfortunately type->size is difficult to remove
+  // because it can't be recomputed from array sizes (yet), in the case of
+  // initializers with inconsistent final arrays. We could set it to
+  // anything here, but we follow what parse_old_array_dims() does.
+  info->size = info->dim[info->numdim];
+  info->numdim++;
+
+  if (info->ident != iARRAY && info->ident != iREFARRAY) {
+    info->ident = iARRAY;
+    info->has_postdims = true;
+  }
+}
+
 static int parse_new_decl(declinfo_t *decl, const token_t *first, int flags)
 {
   token_t tok;
@@ -3034,6 +3099,7 @@ static int parse_new_decl(declinfo_t *decl, const token_t *first, int flags)
     }
   }
 
+  rewrite_type_for_enum_struct(&decl->type);
   return TRUE;
 }
 
@@ -3042,6 +3108,13 @@ static int reparse_new_decl(declinfo_t *decl, int flags)
   token_t tok;
   if (expecttoken(tSYMBOL, &tok))
     strcpy(decl->name, tok.str);
+
+  if (decl->type.declared_tag && !decl->type.tag) {
+    assert(decl->type.numdim > 0);
+    assert(decl->type.enumroot);
+    decl->type.numdim--;
+    decl->type.enumroot = nullptr;
+  }
 
   if (decl->type.has_postdims) {
     // We have something like:
@@ -3066,6 +3139,7 @@ static int reparse_new_decl(declinfo_t *decl, int flags)
     }
   }
 
+  rewrite_type_for_enum_struct(&decl->type);
   return TRUE;
 }
 
@@ -3892,6 +3966,11 @@ static void decl_enum(int vclass)
   symbol *enumsym = nullptr;
   constvalue *enumroot = nullptr;
 
+  if (vclass == sGLOBAL && matchtoken(tSTRUCT)) {
+    decl_enumstruct();
+    return;
+  }
+
   /* get an explicit tag, if any (we need to remember whether an explicit
    * tag was passed, even if that explicit tag was "_:", so we cannot call
    * pc_addtag() here
@@ -4043,6 +4122,90 @@ static void decl_enum(int vclass)
     assert(enumroot!=NULL);
     enumsym->dim.enumlist=enumroot;
   } /* if */
+}
+
+static void decl_enumstruct()
+{
+  token_ident_t struct_name = {};
+  needsymbol(&struct_name);
+
+  symbol* root = nullptr;
+  constvalue* values = (constvalue*)calloc(1, sizeof(constvalue));
+
+  if (struct_name.tok.id) {
+    if (findglb(struct_name.name) || findconst(struct_name.name)) {
+      error(21, struct_name.name);
+    } else {
+      root = add_constant(struct_name.name, 0, sGLOBAL, 0);
+      root->tag = gTypes.defineEnumStruct(struct_name.name, root)->tagid();
+      root->usage |= uENUMROOT;
+      root->ident = iENUMSTRUCT;
+    }
+  }
+
+  int root_tag = root ? root->tag : 0;
+  cell position = 0;
+
+  needtoken('{');
+  while (!matchtoken('}')) {
+    declinfo_t decl = {};
+    if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD)) {
+      lexclr(TRUE);
+      continue;
+    }
+
+    // It's not possible to have circular references other than this, because
+    // Pawn is inherently forward-pass only.
+    if (decl.type.semantic_tag() == root_tag) {
+      error(87, struct_name.name);
+    } else if (decl.type.numdim) {
+      if (decl.type.numdim > 1)
+        error(65);
+      else if (!decl.type.has_postdims)
+        error(81);
+      else if (decl.type.dim[0] < 1)
+        error(81);
+    }
+
+    char const_name[METHOD_NAMEMAX + 1];
+    size_t full_name_length =
+      ke::SafeSprintf(const_name, sizeof(const_name), "%s::%s", struct_name.name, decl.name);
+    if (full_name_length > sNAMEMAX) {
+      const_name[sNAMEMAX] = '\0';
+      error(123, decl.name, const_name);
+    }
+
+    // Note: Take the declared tag so we consume nested enums properly.
+    symbol* sym = add_constant(const_name, position, sGLOBAL, root_tag);
+    if (!sym)
+      continue;
+    sym->x.tags.index = decl.type.semantic_tag();
+    sym->x.tags.field = 0;
+    sym->dim.array.length = decl.type.numdim ? decl.type.dim[0] : 0;
+    sym->dim.array.level = 0;
+    sym->dim.array.slength = 0;
+    if (sym->x.tags.index == pc_tag_string) {
+      sym->dim.array.slength = sym->dim.array.length;
+      sym->dim.array.length = char_array_cells(sym->dim.array.slength);
+    }
+    sym->set_parent(root);
+    if (values) {
+      sym->usage |= uENUMFIELD;
+      append_constval(values, decl.name, position, root_tag);
+    }
+    position += decl.type.numdim ? decl.type.dim[0] : 1;
+    require_newline(TRUE);
+  }
+  require_newline(TRUE);
+
+  if (!position)
+    error(119, struct_name.name);
+
+  if (root) {
+    assert(root->usage & uENUMROOT);
+    root->setAddr(position);
+    root->dim.enumlist = values;
+  }
 }
 
 /*
@@ -4332,11 +4495,6 @@ char *funcdisplayname(char *dest,const char *funcname)
       sprintf(dest,"operator%s(%s:,%s:)",opname,lhsType->name(),rhsType->name());
   } /* if */
   return dest;
-}
-
-static cell char_array_cells(cell size)
-{
-  return (size + sizeof(cell) - 1) / sizeof(cell);
 }
 
 static cell fix_char_size(declinfo_t *decl)
@@ -4777,6 +4935,11 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       if (decl.name[0] == PUBLIC_CHAR)
         error(56, decl.name); /* function arguments cannot be public */
 
+      if (gTypes.find(decl.type.semantic_tag())->isEnumStruct()) {
+        if (sym->usage & uNATIVE)
+          error(135, sym->name());
+      }
+
       if (decl.type.ident == iARRAY)
         decl.type.ident = iREFARRAY;
       /* Stack layout:
@@ -5035,7 +5198,8 @@ static int testsymbols(symbol *root,int level,int testlabs,int testconst)
       } /* if */
       break;
     case iMETHODMAP:
-      // Ignore usage on methodmaps.
+    case iENUMSTRUCT:
+      // Ignore usage on methodmaps and enumstructs.
       break;
     default:
       /* a variable */

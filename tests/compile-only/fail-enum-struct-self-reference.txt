@@ -1,0 +1,1 @@
+(4) : error 087: enum struct "X" cannot refer to itself

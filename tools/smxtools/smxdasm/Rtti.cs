@@ -43,6 +43,7 @@ namespace smxdasm
         public const byte kTypedef = 0x43;
         public const byte kTypeset = 0x44;
         public const byte kStruct = 0x45;
+        public const byte kEnumStruct = 0x46;
 
         public const byte kVoid = 0x70;
         public const byte kVariadic = 0x71;
@@ -199,6 +200,11 @@ namespace smxdasm
                     }
                     case cb.kFunction:
                         return DecodeFunction();
+                    case cb.kEnumStruct:
+                    {
+                        var index = cb.DecodeUint32(bytes_, ref offset_);
+                        return file_.RttiEnumStructs.Entries[index].name;
+                    }
                 }
                 throw new Exception("unknown type code: " + b);
             }
@@ -378,6 +384,64 @@ namespace smxdasm
         }
 
         public RttiTypeset[] Typesets { get; }
+    }
+
+    public class RttiEnumStruct
+    {
+        public int name_offset;
+        public int first_field;
+        public int size;
+        public string name;
+    }
+
+    public class SmxRttiEnumStructTable : SmxRttiListTable
+    {
+        public SmxRttiEnumStructTable(FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
+        {
+            var reader = file.SectionReader(header);
+            base.init(reader);
+
+            Entries = new RttiEnumStruct[row_count_];
+            for (uint i = 0; i < row_count_; i++) {
+                Entries[i] = new RttiEnumStruct();
+                Entries[i].name_offset = reader.ReadInt32();
+                Entries[i].first_field = reader.ReadInt32();
+                Entries[i].size = reader.ReadInt32();
+                Entries[i].name = names.StringAt(Entries[i].name_offset);
+            }
+        }
+
+        public RttiEnumStruct[] Entries { get; }
+    }
+
+    public class RttiEnumStructField
+    {
+        public int name_offset;
+        public int type_id;
+        public int offset;
+        public string name;
+    }
+
+    public class SmxRttiEnumStructFieldTable : SmxRttiListTable
+    {
+        public SmxRttiEnumStructFieldTable(FileHeader file, SectionEntry header, SmxNameTable names)
+            : base(file, header, names)
+        {
+            var reader = file.SectionReader(header);
+            base.init(reader);
+
+            Entries = new RttiEnumStructField[row_count_];
+            for (uint i = 0; i < row_count_; i++) {
+                Entries[i] = new RttiEnumStructField();
+                Entries[i].name_offset = reader.ReadInt32();
+                Entries[i].type_id = reader.ReadInt32();
+                Entries[i].offset = reader.ReadInt32();
+                Entries[i].name = names.StringAt(Entries[i].name_offset);
+            }
+        }
+
+        public RttiEnumStructField[] Entries { get; }
     }
 
     public class RttiClassDef

@@ -1,0 +1,2 @@
+(12) : error 095: type "X" cannot be applied as a tag
+(13) : error 095: type "X" cannot be applied as a tag

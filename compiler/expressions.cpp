@@ -1527,6 +1527,8 @@ SC3ExpressionParser::hier2(value *lval)
     } else if (ltype->isFunction() != atype->isFunction()) {
       // Warn: unsupported cast.
       error(237);
+    } else if (atype->isEnumStruct()) {
+      error(95, atype->name());
     }
     lval->tag=tag;
     return lvalue;
@@ -1682,6 +1684,97 @@ enum FieldExprResult
   FER_CallMethod
 };
 
+static int
+static_enumstruct_field_expr(value* lval)
+{
+  int tag = lval->tag;
+  int ident = lval->ident;
+
+  clear_value(lval);
+  lval->ident = iCONSTEXPR;
+
+  if (ident != iENUMSTRUCT) {
+    error(108);
+    return FALSE;
+  }
+
+  token_ident_t tok;
+  if (!needsymbol(&tok))
+    return FALSE;
+
+  Type* type = gTypes.find(tag);
+  symbol* field = find_enumstruct_field(type, tok.name);
+  if (!field) {
+    error(105, type->name(), tok.name);
+    return FALSE;
+  }
+  assert(field->parent() == type->asEnumStruct());
+
+  lval->constval = field->addr();
+  return FALSE;
+}
+
+static bool
+enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
+{
+  // Arrays can only be derived from symbols.
+  symbol* var = *cursym;
+  if (!var || (var->ident != iARRAY && var->ident != iREFARRAY))
+    return false;
+  if (var->dim.array.level > 0)
+    return false;
+
+  Type* type = gTypes.find(var->x.tags.index);
+  symbol* root = type->asEnumStruct();
+  if (!root)
+    return false;
+
+  token_ident_t ident;
+  if (!needsymbol(&ident))
+    return true;
+
+  symbol* field = find_enumstruct_field(type, ident.name);
+  if (!field) {
+    error(105, type->name(), ident.name);
+
+    lval->ident = iARRAYCELL;
+    return true;
+  }
+  assert(field->parent() == root);
+
+  if (field->addr()) {
+    ldconst(field->addr() << 2, sALT);
+    ob_add();
+  }
+  lval->tag = field->x.tags.index;
+
+  // As a huge hack, we rewrite the current symbol within hier1() to look like
+  // a subfield of the array. This allows all the internal machinery that looks
+  // at symbol properties to continue working.
+  new (dummy) symbol(*var);
+  if (gTypes.find(lval->tag)->isEnumStruct()) {
+    dummy->x.tags.index = field->x.tags.index;
+  } else {
+    dummy->tag = lval->tag;
+    dummy->x.tags.index = 0;
+  }
+
+  // If the next operation will be an index operation, then make the symbol
+  // look like an iREFARRAY. The peek is critical since we otherwise want to
+  // resolve to an iARRAYCELL/CHAR.
+  if (field->dim.array.length > 0 && (lexpeek('[') || lexpeek('.'))) {
+    dummy->dim.array.length = field->dim.array.length;
+    dummy->dim.array.slength = field->dim.array.slength;
+    lval->ident = iREFARRAY;
+    lval->constval = field->dim.array.length;
+  } else {
+    lval->ident = (lval->tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
+    lval->constval = 0;
+  }
+  *cursym = dummy;
+  return true;
+}
+
 static FieldExprResult
 field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method_t **methodp)
 {
@@ -1786,6 +1879,8 @@ SC3ExpressionParser::parse_view_as(value* lval)
     error(237);
   } else if (lval->sym && lval->sym->tag == pc_tag_void) {
     error(89);
+  } else if (atype->isEnumStruct()) {
+    error(95, atype->name());
   }
   lval->tag = tag;
   return lvalue;
@@ -1826,8 +1921,8 @@ SC3ExpressionParser::hier1(value *lval1)
 restart:
   sym=cursym;
 
-  if (lval1->ident == iMETHODMAP &&
-      !(lexpeek('.') || lexpeek('(')))
+  if ((lval1->ident == iMETHODMAP && !(lexpeek('.') || lexpeek('('))) ||
+      (lval1->ident == iENUMSTRUCT && !lexpeek(tDBLCOLON)))
   {
     // Cannot use methodmap as an rvalue/lvalue.
     error(174, sym ? sym->name() : "(unknown)");
@@ -1837,7 +1932,7 @@ restart:
     lval1->constval = 0;
   }
 
-  if (matchtoken('[') || matchtoken('(') || matchtoken('.')) {
+  if (matchtoken('[') || matchtoken('(') || matchtoken('.') || matchtoken(tDBLCOLON)) {
     tok=tokeninfo(&val,&st);    /* get token read by matchtoken() */
     if (lvalue && lval1->ident == iACCESSOR) {
       rvalue(lval1);
@@ -1873,6 +1968,7 @@ restart:
       needtoken(close);
       if ((sym->usage & uENUMROOT))
         matchtag(sym->x.tags.index,lval2.tag,TRUE);
+      /* ---- */
       if (lval2.ident==iCONSTEXPR) {    /* constant expression */
         stgdel(index,cidx);             /* scratch generated code */
         if (!(sym->tag == pc_tag_string && sym->dim.array.level == 0)) {
@@ -1881,15 +1977,7 @@ restart:
             error(32,sym->name());        /* array index out of bounds */
           if (lval2.constval!=0) {
             /* don't add offsets for zero subscripts */
-            #if PAWN_CELL_SIZE==16
-              ldconst(lval2.constval<<1,sALT);
-            #elif PAWN_CELL_SIZE==32
-              ldconst(lval2.constval<<2,sALT);
-            #elif PAWN_CELL_SIZE==64
-              ldconst(lval2.constval<<3,sALT);
-            #else
-              #error Unsupported cell size
-            #endif
+            ldconst(lval2.constval<<2,sALT);
             ob_add();
           } /* if */
         } else {
@@ -1899,11 +1987,7 @@ restart:
             error(32,sym->name());        /* array index out of bounds */
           if (lval2.constval!=0) {
             /* don't add offsets for zero subscripts */
-            #if sCHARBITS==16
-              ldconst(lval2.constval<<1,sALT);/* 16-bit character */
-            #else
-              ldconst(lval2.constval,sALT);   /* 8-bit character */
-            #endif
+            ldconst(lval2.constval,sALT);   /* 8-bit character */
             ob_add();
           } /* if */
         } /* if */
@@ -1919,6 +2003,7 @@ restart:
           lval1->tag=lval2.sym->x.tags.index;
           lval1->constval=lval2.sym->dim.array.length;
         } /* if */
+      /* ---- */
       } else {
         /* array index is not constant */
         if (!magic_string) {
@@ -1964,6 +2049,8 @@ restart:
       } else {
         lval1->ident= iARRAYCELL;
       }
+      if (gTypes.find(sym->x.tags.index)->isEnumStruct())
+        error(117);
       /* if the array index is a field from an enumeration, get the tag name
        * from the field and save the size of the field too. Otherwise, the
        * tag is the one from the array symbol.
@@ -2016,6 +2103,16 @@ restart:
       svalue thisval;
       thisval.val = *lval1;
       thisval.lvalue = lvalue;
+
+      if (tok == tDBLCOLON)
+        return static_enumstruct_field_expr(lval1);
+
+      if (tok == '.' && enumstruct_field_expr(lval1, &cursym, &dummysymbol)) {
+        lvalue = (lval1->ident == iREFARRAY) ? FALSE : TRUE;
+        if (lexpeek('.') || lexpeek('['))
+          goto restart;
+        return lvalue;
+      }
 
       svalue *implicitthis = nullptr;
       methodmap_method_t* method = nullptr;
@@ -2772,7 +2869,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
               assert(level<sDIMEN_MAX);
               if (arg[argidx].dim[level]!=0 && sym->dim.array.length!=arg[argidx].dim[level])
                 error(47);        /* array sizes must match */
-              else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,TRUE))
+              else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,MATCHTAG_SILENT))
                 error(229,sym->name());   /* index tag mismatch */
               append_constval(&arrayszlst,arg[argidx].name,sym->dim.array.length,level);
               sym=sym->array_child();
@@ -2782,10 +2879,13 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
             /* the last dimension is checked too, again, unless it is zero */
             assert(level<sDIMEN_MAX);
             assert(sym!=NULL);
-            if (arg[argidx].dim[level]!=0 && sym->dim.array.length!=arg[argidx].dim[level])
+            if (arg[argidx].dim[level]!=0 && sym->dim.array.length!=arg[argidx].dim[level]) {
               error(47);          /* array sizes must match */
-            else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,TRUE))
-              error(229,sym->name());   /* index tag mismatch */
+            } else if (!matchtag(arg[argidx].idxtag[level],sym->x.tags.index,MATCHTAG_SILENT)) {
+              // We allow enum struct -> any[].
+              if (arg[argidx].tag != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
+                error(229,sym->name());   /* index tag mismatch */
+            }
             append_constval(&arrayszlst,arg[argidx].name,sym->dim.array.length,level);
           } /* if */
           /* address already in PRI */

@@ -20,6 +20,9 @@ def main():
                       help="Only test using spcomp2.")
   args = parser.parse_args()
 
+  if args.test and args.test.startswith('tests/'):
+    args.test = args.test[6:]
+
   plan = TestPlan(args)
   plan.find_compilers()
   plan.find_shells()
