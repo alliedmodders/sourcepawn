@@ -372,11 +372,8 @@ SmxV1Image::validateRtti()
     return error("invalid rtti.data section");
 
   const char* tables[] = {
-    "rtti.enums",
     "rtti.methods",
     "rtti.natives",
-    "rtti.typedefs",
-    "rtti.typesets",
   };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
     const char* table_name = tables[i];
