@@ -2500,7 +2500,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
      * reserved memory block as a hidden parameter
      */
     retsize=(int)array_totalsize(symret);
-    assert(retsize>0);
+    assert(retsize>0 || !cc_ok());
     modheap(retsize*sizeof(cell));/* address is in ALT */
     pushreg(sALT);                /* pass ALT as the last (hidden) parameter */
     markheap(MEMUSE_STATIC, retsize);

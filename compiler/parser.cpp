@@ -6088,6 +6088,8 @@ static void doreturn(void)
                */
             } /* if */
           } /* for */
+          if (!sub->dim.array.length)
+            error(128);
         } /* if */
       } else {
         int idxtag[sDIMEN_MAX];
@@ -6109,6 +6111,8 @@ static void doreturn(void)
           if (dim[numdim]<=0)
             error(46,sym->name());
         } /* for */
+        if (!sub->dim.array.length)
+          error(128);
         if (sym->tag==pc_tag_string && numdim!=0)
           slength=dim[numdim-1];
         /* the address of the array is stored in a hidden parameter; the address
