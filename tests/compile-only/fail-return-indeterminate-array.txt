@@ -1,0 +1,1 @@
+(6) : error 128: cannot return an array of indeterminate length

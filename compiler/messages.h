@@ -152,7 +152,7 @@ static const char *errmsg[] = {
 /*125*/  "expected \"native\", \"get\", or \"set\"\n",
 /*126*/  "%s for %s already exists\n",
 /*127*/  "property getters cannot accept extra arguments\n",
-/*128*/  "unused128\n",
+/*128*/  "cannot return an array of indeterminate length\n",
 /*129*/  "cannot mix methodmaps and classes with inheritance\n",
 /*130*/  "cannot coerce functions to values\n",
 /*131*/  "cannot coerce object type %s to non-object type %s\n",
