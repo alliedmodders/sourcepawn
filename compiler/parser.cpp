@@ -3293,11 +3293,8 @@ symbol *parse_inline_function(methodmap_t *map,
   if (is_native) {
     target = funcstub(tMETHODMAP, &decl, thistag);
   } else {
-    int lcl_require_newdecls = sc_require_newdecls;
-
-    sc_require_newdecls = TRUE;
+    ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
     int ok = newfunc(&decl, thistag, FALSE, FALSE, TRUE, &target);
-    sc_require_newdecls = lcl_require_newdecls;
 
     if (!ok)
       return NULL;
@@ -4127,6 +4124,7 @@ static void decl_enum(int vclass)
 static void decl_enumstruct()
 {
   token_ident_t struct_name = {};
+  strcpy(struct_name.name, "__unknown__");
   needsymbol(&struct_name);
 
   symbol* root = nullptr;
@@ -4149,10 +4147,8 @@ static void decl_enumstruct()
   needtoken('{');
   while (!matchtoken('}')) {
     declinfo_t decl = {};
-    if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD)) {
-      lexclr(TRUE);
+    if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
       continue;
-    }
 
     // It's not possible to have circular references other than this, because
     // Pawn is inherently forward-pass only.
@@ -4173,6 +4169,18 @@ static void decl_enumstruct()
     if (full_name_length > sNAMEMAX) {
       const_name[sNAMEMAX] = '\0';
       error(123, decl.name, const_name);
+    }
+
+    if (findconst(const_name))
+      error(103, decl.name, "enum struct");
+
+    if (!decl.type.has_postdims && lexpeek('(')) {
+      // This is probably a function. Give it the decorated name.
+      ke::SafeStrcpy(decl.name, sizeof(decl.name), const_name);
+
+      ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
+      newfunc(&decl, &root_tag, FALSE, FALSE, TRUE, nullptr);
+      continue;
     }
 
     // Note: Take the declared tag so we consume nested enums properly.
@@ -4879,9 +4887,17 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
 
       argptr = &arglist[argcnt];
       strcpy(argptr->name, "this");
-      argptr->ident = iVARIABLE;
-      argptr->tag = *thistag;
-      argptr->usage = uCONST;
+      if (symbol* enum_type = gTypes.find(*thistag)->asEnumStruct()) {
+        argptr->ident = iREFARRAY;
+        argptr->tag = 0;
+        argptr->dim[0] = enum_type->addr();
+        argptr->idxtag[0] = *thistag;
+        argptr->numdim = 1;
+      } else {
+        argptr->ident = iVARIABLE;
+        argptr->usage = uCONST;
+        argptr->tag = *thistag;
+      }
     } else {
       argptr = &arglist[0];
     }
@@ -4895,9 +4911,9 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       argptr->dim,
       argptr->numdim,
       argptr->idxtag,
-      0
-    );
-    sym->usage |= uCONST;
+      0);
+    if (argptr->usage & uCONST)
+      sym->usage |= uCONST;
     markusage(sym, uREAD);
 
     argcnt++;
@@ -4907,9 +4923,7 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
   if (!matchtoken(')')){
     do {                                /* there are arguments; process them */
       declinfo_t decl;
-
       parse_decl(&decl, DECLFLAG_ARGUMENT|DECLFLAG_ENUMROOT);
-
       check_void_decl(&decl, TRUE);
 
       if (decl.type.ident == iVARARGS) {

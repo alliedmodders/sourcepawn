@@ -1740,9 +1740,9 @@ enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
     lval->ident = iARRAYCELL;
     return true;
   }
-  assert(field->parent() == root);
+  assert(field->ident == iFUNCTN || field->parent() == root);
 
-  if (field->addr()) {
+  if (field->ident != iFUNCTN && field->addr()) {
     ldconst(field->addr() << 2, sALT);
     ob_add();
   }
@@ -1759,9 +1759,9 @@ enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
     dummy->x.tags.index = 0;
   }
 
-  // If the next operation will be an index operation, then make the symbol
-  // look like an iREFARRAY. The peek is critical since we otherwise want to
-  // resolve to an iARRAYCELL/CHAR.
+  // If the next operation can be chained, then make the symbol look like an
+  // iREFARRAY. The peek is critical since we otherwise want to resolve to an
+  // iARRAYCELL/CHAR.
   if (field->dim.array.length > 0 && (lexpeek('[') || lexpeek('.'))) {
     dummy->dim.array.length = field->dim.array.length;
     dummy->dim.array.slength = field->dim.array.slength;
@@ -1771,7 +1771,10 @@ enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
     lval->ident = (lval->tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
     lval->constval = 0;
   }
-  *cursym = dummy;
+  if (field->ident == iFUNCTN)
+    *cursym = field;
+  else
+    *cursym = dummy;
   return true;
 }
 
@@ -2111,6 +2114,20 @@ restart:
         lvalue = (lval1->ident == iREFARRAY) ? FALSE : TRUE;
         if (lexpeek('.') || lexpeek('['))
           goto restart;
+        if (matchtoken('(')) {
+          if (cursym->ident != iFUNCTN)
+            return error(12);
+
+          assert(!(cursym->usage & uMISSING));
+
+          svalue* implicitthis = &thisval;
+          callfunction(cursym, implicitthis, lval1, TRUE);
+
+          if (lexpeek('.')) {
+            lvalue = FALSE;
+            goto restart;
+          }
+        }
         return lvalue;
       }
 
@@ -2266,11 +2283,15 @@ SC3ExpressionParser::primary(value *lval)
       ldconst(0, sPRI);
       return FALSE;
     }
-    
-    assert(sym->ident == iVARIABLE);
+
     lval->sym = sym;
     lval->ident = sym->ident;
     lval->tag = sym->tag;
+    if (lval->ident == iREFARRAY) {
+      address(sym, sPRI);
+      return FALSE;
+    }
+    assert(lval->ident == iVARIABLE);
     return TRUE;
   }
 
@@ -2813,10 +2834,6 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
             markusage(lval.sym,uWRITTEN);
           break;
         case iREFARRAY:
-          // hier13() should filter non-methodmap functions, and |this| is
-          // always an iVARIABLE.
-          assert(!args.handling_this());
-
           if (lval.ident!=iARRAY && lval.ident!=iREFARRAY
               && lval.ident!=iARRAYCELL && lval.ident!=iARRAYCHAR)
           {

@@ -3348,5 +3348,7 @@ find_enumstruct_field(Type* type, const char* name)
 
   char const_name[METHOD_NAMEMAX + 1];
   ke::SafeSprintf(const_name, sizeof(const_name), "%s::%s", type->name(), name);
-  return findconst(const_name);
+  if (symbol* sym = findconst(const_name))
+    return sym;
+  return findglb(const_name);
 }
