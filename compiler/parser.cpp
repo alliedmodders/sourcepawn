@@ -2786,7 +2786,10 @@ static int parse_new_typeexpr(typeinfo_t *type, const token_t *first, int flags)
         error(137);
         return FALSE;
       }
-      type->ident = iREFERENCE;
+      if (gTypes.find(type->semantic_tag())->isEnumStruct())
+        error(136);
+      else
+        type->ident = iREFERENCE;
     }
   }
 

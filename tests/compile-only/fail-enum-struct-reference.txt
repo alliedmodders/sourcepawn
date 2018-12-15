@@ -1,0 +1,1 @@
+(7) : error 136: reference is redundant, enum struct types are array-like
