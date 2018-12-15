@@ -1,0 +1,1 @@
+(6) : error 103: y was already defined on this enum struct
