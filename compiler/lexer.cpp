@@ -432,19 +432,19 @@ static void stripcom(unsigned char *line)
       } else {
         if (*line=='/' && *(line+1)=='*')
           error(216);   /* nested comment */
-          /* collect the comment characters in a string */
-          if (icomment==2) {
-            if (skipstar && ((*line!='\0' && *line<=' ') || *line=='*')) {
-              /* ignore leading whitespace and '*' characters */
-            } else if (commentidx<COMMENT_LIMIT+COMMENT_MARGIN-1) {
-              comment[commentidx++]=(char)((*line!='\n') ? *line : ' ');
-              if (commentidx>COMMENT_LIMIT && *line!='\0' && *line<=' ') {
-                comment[commentidx]='\0';
-                commentidx=0;
-              } /* if */
-              skipstar=FALSE;
+        /* collect the comment characters in a string */
+        if (icomment==2) {
+          if (skipstar && ((*line!='\0' && *line<=' ') || *line=='*')) {
+            /* ignore leading whitespace and '*' characters */
+          } else if (commentidx<COMMENT_LIMIT+COMMENT_MARGIN-1) {
+            comment[commentidx++]=(char)((*line!='\n') ? *line : ' ');
+            if (commentidx>COMMENT_LIMIT && *line!='\0' && *line<=' ') {
+              comment[commentidx]='\0';
+              commentidx=0;
             } /* if */
+            skipstar=FALSE;
           } /* if */
+        } /* if */
         *line=' ';      /* replace comments by spaces */
         line+=1;
       } /* if */
