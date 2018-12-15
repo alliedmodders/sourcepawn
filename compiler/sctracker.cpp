@@ -19,9 +19,14 @@ struct MemoryUse {
 };
 
 struct MemoryScope {
+  MemoryScope(MemoryScope&& other)
+   : scope_id(other.scope_id),
+     usage(ke::Move(other.usage))
+  {}
   explicit MemoryScope(int scope_id)
    : scope_id(scope_id)
   {}
+
   int scope_id;
   ke::Vector<MemoryUse> usage;
 };
