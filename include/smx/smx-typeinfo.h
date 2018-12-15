@@ -125,6 +125,32 @@ struct smx_rtti_typeset {
   uint32_t signature;
 };
 
+// The rtti.enumstructs table has the following row structure:
+struct smx_rtti_enumstruct {
+  // Index into the name table.
+  uint32_t name;
+
+  // First row in the rtti.es_fields table. Rows up to the next
+  // enumstruct's first row, or the end of the enumstruct table, are
+  // owned by this entry.
+  uint32_t first_field;
+
+  // Size of the enum struct in cells.
+  uint32_t size;
+};
+
+// The rtti.es_fields table has the following row structure:
+struct smx_rtti_es_field {
+  // Index into the name table.
+  uint32_t name;
+
+  // Type id.
+  uint32_t type_id;
+
+  // Offset from the base address, in bytes.
+  uint32_t offset;
+};
+
 // The rtti.classdef table has the following row structure:
 struct smx_rtti_classdef {
   // Bits 0-1 indicate the definition type.
@@ -216,6 +242,7 @@ static const uint8_t kEnum       = 0x42; // rtti.enums
 static const uint8_t kTypedef    = 0x43; // rtti.typedefs
 static const uint8_t kTypeset    = 0x44; // rtti.typesets
 static const uint8_t kClassdef   = 0x45; // rtti.classdefs
+static const uint8_t kEnumStruct = 0x46; // rtti.enumstructs
 
 // This section encodes special indicator bytes that can appear within multi-
 // byte types.

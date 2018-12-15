@@ -45,6 +45,9 @@ class SmxSection : public ke::Refcounted<SmxSection>
 
   virtual bool write(ISmxBuffer* buf) = 0;
   virtual size_t length() const = 0;
+  virtual bool empty() const {
+    return false;
+  }
 
   const ke::AString& name() const {
     return name_;
@@ -150,6 +153,9 @@ class SmxListSection : public SmxSection
   size_t count() const {
     return list_.length();
   }
+  bool empty() const override {
+    return list_.empty();
+  }
 
  private:
   ke::Vector<T> list_;
@@ -244,6 +250,10 @@ class SmxBuilder
 
   void add(const ke::RefPtr<SmxSection>& section) {
     sections_.append(section);
+  }
+  void addIfNotEmpty(const ke::RefPtr<SmxSection>& section) {
+    if (!section->empty())
+      sections_.append(section);
   }
 
  private:

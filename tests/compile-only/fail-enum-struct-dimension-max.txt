@@ -1,0 +1,1 @@
+(10) : error 086: using enum struct "Sample" exceeds maximum dimension count

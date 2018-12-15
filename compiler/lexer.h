@@ -24,6 +24,8 @@
 // accessors.
 #define METHOD_NAMEMAX sNAMEMAX * 2 + 6
 
+class Type;
+
 struct token_pos_t {
   int line;
   int col;
@@ -262,6 +264,7 @@ void markusage(symbol *sym,int usage);
 symbol *findglb(const char *name);
 symbol *findloc(const char *name);
 symbol *findconst(const char *name);
+symbol* find_enumstruct_field(Type* type, const char* name);
 symbol *addsym(const char *name,cell addr,int ident,int vclass,int tag, int usage);
 symbol *addvariable(const char *name,cell addr,int ident,int vclass,int tag,
                             int dim[],int numdim,int idxtag[]);

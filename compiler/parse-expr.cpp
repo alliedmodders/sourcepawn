@@ -149,6 +149,16 @@ BaseExpressionParser::parse_sizeof()
   while (matchtoken('('))
     paranthese++;
 
+  cell result = sizeof_impl();
+
+  while (paranthese--)
+    needtoken(')');
+  return result;
+}
+
+cell
+BaseExpressionParser::sizeof_impl()
+{
   cell val;
   char* st;
   int tok=lex(&val,&st);
@@ -161,6 +171,11 @@ BaseExpressionParser::parse_sizeof()
   if (!sym)
     sym=findglb(st);
   if (!sym) {
+    Type* type = gTypes.find(st);
+    if (type) {
+      if (symbol* sym = type->asEnumStruct())
+        return sym->addr();
+    }
     error(17,st);
     return 0;
   }
@@ -175,11 +190,15 @@ BaseExpressionParser::parse_sizeof()
 
   cell result = 1;
   markusage(sym, uREAD);
-  if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
+  if (sym->ident==iARRAY || sym->ident==iREFARRAY || sym->ident==iENUMSTRUCT) {
     int level;
     symbol *idxsym=NULL;
     symbol *subsym=sym;
     for (level=0; matchtoken('['); level++) {
+      // Forbid index operations on enum structs.
+      if (sym->ident == iENUMSTRUCT || gTypes.find(sym->x.tags.index)->isEnumStruct())
+        error(111, sym->name());
+
       idxsym=NULL;
       if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
         char *idxname;
@@ -194,6 +213,43 @@ BaseExpressionParser::parse_sizeof()
       if (subsym!=NULL)
         subsym=subsym->array_child();
     } /* for */
+
+    Type* enum_type = nullptr;
+    if (matchtoken(tDBLCOLON)) {
+      if (subsym->ident != iENUMSTRUCT) {
+        error(112, subsym->name());
+        return 0;
+      }
+      enum_type = gTypes.find(subsym->tag);
+    } else if (matchtoken('.')) {
+      enum_type = gTypes.find(subsym->x.tags.index);
+      if (!enum_type->asEnumStruct()) {
+        error(116, sym->name());
+        return 0;
+      }
+    }
+
+    if (enum_type) {
+      assert(enum_type->asEnumStruct());
+
+      token_ident_t tok;
+      if (!needsymbol(&tok))
+        return 0;
+      symbol* field = find_enumstruct_field(enum_type, tok.name);
+      if (!field) {
+        error(105, enum_type->name(), tok.name);
+        return 0;
+      }
+      if (int string_size = field->dim.array.slength)
+        return string_size;
+      if (int array_size = field->dim.array.length)
+        return array_size;
+      return 1;
+    }
+
+    if (sym->ident == iENUMSTRUCT)
+      return sym->addr();
+
     if (level>sym->dim.array.level+1) {
       error(28,sym->name());  /* invalid subscript */
     } else if (level==sym->dim.array.level+1) {
@@ -204,8 +260,6 @@ BaseExpressionParser::parse_sizeof()
     if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
       error(163,sym->name());          /* indeterminate array size in "sizeof" expression */
   } /* if */
-  while (paranthese--)
-    needtoken(')');
   return result;
 }
 
@@ -246,6 +300,10 @@ BaseExpressionParser::parse_cellsof()
     symbol *idxsym=NULL;
     symbol *subsym=sym;
     for (level=0; matchtoken('['); level++) {
+      // Forbid index operations on enum structs.
+      if (gTypes.find(sym->x.tags.index)->isEnumStruct())
+        error(111, sym->name());
+
       idxsym=NULL;
       if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
         char *idxname;
@@ -315,6 +373,10 @@ BaseExpressionParser::parse_tagof()
     symbol *idxsym=NULL;
     symbol *subsym=sym;
     for (level=0; matchtoken('['); level++) {
+      // Forbid index operations on enum structs.
+      if (gTypes.find(sym->x.tags.index)->isEnumStruct())
+        error(111, sym->name());
+
       idxsym=NULL;
       if (subsym!=NULL && level==subsym->dim.array.level && matchtoken(tSYMBOL)) {
         char *idxname;
@@ -338,4 +400,3 @@ BaseExpressionParser::parse_tagof()
     needtoken(')');
   return tag;
 }
-

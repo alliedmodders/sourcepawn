@@ -1,0 +1,1 @@
+(3) : error 108: resolution operator (::) can only resolve field offsets of enum structs

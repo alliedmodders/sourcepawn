@@ -2928,6 +2928,7 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
         mustdelete=TRUE;
       break;
     case iCONSTEXPR:
+    case iENUMSTRUCT:
       /* delete constants, except predefined constants */
       mustdelete=delete_functions || (sym->usage & uPREDEF)==0;
       break;
@@ -3089,6 +3090,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    flags(0),
    compound(0),
    tag(symtag),
+   x({}),
    fnumber(-1), /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
    documentation(nullptr),
@@ -3103,7 +3105,6 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
     name_ = gAtoms.add(symname);
   if (symident == iFUNCTN)
     data_.assign(new FunctionData);
-  memset(&x, 0, sizeof(x));
   memset(&dim, 0, sizeof(dim));
 }
 
@@ -3111,6 +3112,7 @@ symbol::symbol(const symbol& other)
  : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag, other.usage)
 {
   name_ = other.name_;
+  x = other.x;
 }
 
 symbol::~symbol()
@@ -3337,4 +3339,16 @@ int needsymbol(token_ident_t *ident)
   strcpy(ident->name, ident->tok.str);
   ident->tok.str = ident->name;
   return TRUE;
+}
+
+symbol*
+find_enumstruct_field(Type* type, const char* name)
+{
+  assert(type->asEnumStruct());
+
+  char const_name[METHOD_NAMEMAX + 1];
+  ke::SafeSprintf(const_name, sizeof(const_name), "%s::%s", type->name(), name);
+  if (symbol* sym = findconst(const_name))
+    return sym;
+  return findglb(const_name);
 }

@@ -747,6 +747,7 @@ class RttiBuilder
   uint32_t add_funcenum(Type* type, funcenum_t* fe);
   uint32_t add_typeset(Type* type, funcenum_t* fe);
   uint32_t add_struct(Type* type);
+  uint32_t add_enumstruct(Type* type);
   uint32_t encode_signature(symbol* sym);
   void encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft);
   void encode_enum_into(Vector<uint8_t>& bytes, Type* type);
@@ -755,6 +756,7 @@ class RttiBuilder
   void encode_funcenum_into(Vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
   void encode_var_type(Vector<uint8_t>& bytes, const variable_type_t& info);
   void encode_struct_into(Vector<uint8_t>& bytes, Type* type);
+  void encode_enumstruct_into(Vector<uint8_t>& bytes, Type* type);
 
   uint32_t to_typeid(const Vector<uint8_t>& bytes);
 
@@ -772,6 +774,8 @@ class RttiBuilder
   RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;
   RefPtr<SmxRttiTable<smx_rtti_classdef>> classdefs_;
   RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
+  RefPtr<SmxRttiTable<smx_rtti_enumstruct>> enumstructs_;
+  RefPtr<SmxRttiTable<smx_rtti_es_field>> es_fields_;
   RefPtr<SmxDebugInfoSection> dbg_info_;
   RefPtr<SmxDebugLineSection> dbg_lines_;
   RefPtr<SmxDebugFileSection> dbg_files_;
@@ -797,6 +801,8 @@ RttiBuilder::RttiBuilder(SmxNameTable* names)
   typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
   classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
   fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
+  enumstructs_= new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
+  es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
   dbg_info_ = new SmxDebugInfoSection(".dbg.info");
   dbg_lines_ = new SmxDebugLineSection(".dbg.lines");
   dbg_files_ = new SmxDebugFileSection(".dbg.files");
@@ -816,11 +822,13 @@ RttiBuilder::finish(SmxBuilder& builder)
   builder.add(data_);
   builder.add(methods_);
   builder.add(natives_);
-  builder.add(enums_);
-  builder.add(typedefs_);
-  builder.add(typesets_);
-  builder.add(classdefs_);
-  builder.add(fields_);
+  builder.addIfNotEmpty(enums_);
+  builder.addIfNotEmpty(typedefs_);
+  builder.addIfNotEmpty(typesets_);
+  builder.addIfNotEmpty(classdefs_);
+  builder.addIfNotEmpty(fields_);
+  builder.addIfNotEmpty(enumstructs_);
+  builder.addIfNotEmpty(es_fields_);
   builder.add(dbg_files_);
   builder.add(dbg_lines_);
   builder.add(dbg_info_);
@@ -911,14 +919,21 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
 
   int dims[sDIMEN_MAX];
   int dimcount = 0;
+  int last_tag = 0;
   if (str.getc() == '[') {
     for (const char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
-      // Ignore the tagid.
-      str.parse();
+      last_tag = str.parse();
       str.skipspaces();
       str.expect(':');
       dims[dimcount++] = str.parse();
     }
+  }
+
+  // Rewrite enum structs to look less like arrays.
+  if (gTypes.find(last_tag)->asEnumStruct()) {
+    assert(dimcount > 0);
+    dimcount--;
+    tag = last_tag;
   }
 
   // Encode the type.
@@ -995,6 +1010,60 @@ RttiBuilder::add_native(symbol* sym)
   smx_rtti_native& native = natives_->add();
   native.name = names_->add(sym->nameAtom());
   native.signature = encode_signature(sym);
+}
+
+uint32_t
+RttiBuilder::add_enumstruct(Type* type)
+{
+  TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
+  if (p.found())
+    return p->value;
+
+  symbol* sym = type->asEnumStruct();
+  uint32_t es_index = enumstructs_->count();
+  typeid_cache_.add(p, type, es_index);
+
+  smx_rtti_enumstruct es = {};
+  es.name = names_->add(gAtoms, type->name());
+  es.first_field = es_fields_->count();
+  es.size = sym->addr();
+  enumstructs_->add(es);
+
+  // Pre-allocate storage in case of nested types.
+  constvalue* table = sym->dim.enumlist;
+  for (auto iter = table->next; iter; iter = iter->next)
+    es_fields_->add() = smx_rtti_es_field{};
+
+  // Add all fields.
+  size_t index = 0;
+  for (auto iter = table->next; iter; iter = iter->next, index++) {
+    symbol* field = find_enumstruct_field(type, iter->name);
+    if (!field) {
+      error(105, type->name(), iter->name);
+      continue;
+    }
+
+    int dims[1], dimcount = 0;
+    if (field->dim.array.length)
+      dims[dimcount++] = field->dim.array.length;
+
+    variable_type_t type = {
+      field->x.tags.index,
+      dims,
+      dimcount,
+      false
+    };
+    Vector<uint8_t> encoding;
+    encode_var_type(encoding, type);
+
+    smx_rtti_es_field info;
+    info.name = names_->add(gAtoms, iter->name);
+    info.type_id = to_typeid(encoding);
+    info.offset = field->addr();
+    es_fields_->at(es.first_field + index) = info;
+  }
+
+  return es_index;
 }
 
 uint32_t
@@ -1085,12 +1154,23 @@ RttiBuilder::encode_signature(symbol* sym)
   }
 
   for (arginfo* arg = &sym->function()->args[0]; arg->ident; arg++) {
+    int tag = arg->tag;
+    int numdim = arg->numdim;
+    if (arg->numdim && arg->idxtag[numdim - 1]) {
+      int last_tag = arg->idxtag[numdim - 1];
+      Type* last_type = gTypes.find(last_tag);
+      if (last_type->isEnumStruct()) {
+        tag = last_tag;
+        numdim--;
+      }
+    }
+
     if (arg->ident == iREFERENCE)
       bytes.append(cb::kByRef);
     variable_type_t info = {
-      arg->tag,
+      tag,
       arg->dim,
-      arg->numdim,
+      numdim,
       (arg->usage & uCONST) == uCONST
     };
     encode_var_type(bytes, info);
@@ -1178,6 +1258,13 @@ RttiBuilder::encode_enum_into(Vector<uint8_t>& bytes, Type* type)
 }
 
 void
+RttiBuilder::encode_enumstruct_into(Vector<uint8_t>& bytes, Type* type)
+{
+  bytes.append(cb::kEnumStruct);
+  CompactEncodeUint32(bytes, add_enumstruct(type));
+}
+
+void
 RttiBuilder::encode_ret_array_into(Vector<uint8_t>& bytes, symbol* sym)
 {
   bytes.append(cb::kFixedArray);
@@ -1225,6 +1312,11 @@ RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
       encode_funcenum_into(bytes, type, fe);
     else
       bytes.append(cb::kTopFunction);
+    return;
+  }
+
+  if (type->isEnumStruct()) {
+    encode_enumstruct_into(bytes, type);
     return;
   }
 
