@@ -2676,7 +2676,7 @@ static int consume_line()
   return TRUE;
 }
 
-constexpr cell char_array_cells(cell size)
+KE_CONSTEXPR cell char_array_cells(cell size)
 {
   return (size + sizeof(cell) - 1) / sizeof(cell);
 }
