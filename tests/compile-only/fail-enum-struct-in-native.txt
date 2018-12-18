@@ -1,1 +1,1 @@
-(6) : error 135: cannot use enum struct type "Invalid" in natives
+(6) : error 135: cannot use enum struct type "Point" in natives
