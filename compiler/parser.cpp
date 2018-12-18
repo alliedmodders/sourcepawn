@@ -4952,9 +4952,10 @@ static int declargs(symbol *sym, int chkshadow, const int *thistag)
       if (decl.name[0] == PUBLIC_CHAR)
         error(56, decl.name); /* function arguments cannot be public */
 
-      if (gTypes.find(decl.type.semantic_tag())->isEnumStruct()) {
+	  Type *type = gTypes.find(decl.type.semantic_tag());
+      if (type->isEnumStruct()) {
         if (sym->usage & uNATIVE)
-          error(135, sym->name());
+          error(135, type->name());
       }
 
       if (decl.type.ident == iARRAY)
