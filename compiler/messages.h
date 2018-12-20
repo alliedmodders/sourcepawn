@@ -175,7 +175,7 @@ static const char *errmsg[] = {
 /*148*/  "cannot assign null to a non-nullable type\n",
 /*149*/  "no getter found for property %s\n",
 /*150*/  "setter must take exactly one extra argument with type %s\n",
-/*151*/  "unused151\n",
+/*151*/  "unmatched opening brace ('{') (line %d)\n",
 /*152*/  "no setter found for property %s\n",
 /*153*/  "unused153\n",
 /*154*/  "cannot assign INVALID_FUNCTION to a non-function type\n",

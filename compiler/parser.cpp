@@ -4147,8 +4147,18 @@ static void decl_enumstruct()
   int root_tag = root ? root->tag : 0;
   cell position = 0;
 
-  needtoken('{');
+  if (!matchtoken('{')) {
+    needtoken('{');
+    return;
+  }
+
+  int opening_line = fline;
   while (!matchtoken('}')) {
+    if (!freading) {
+      error(151, opening_line);
+      break;
+    }
+
     declinfo_t decl = {};
     if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
       continue;
