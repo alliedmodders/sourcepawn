@@ -1054,7 +1054,8 @@ SC3ExpressionParser::hier14(value *lval1)
     /* array assignment is permitted too (with restrictions) */
     if (oper)
       return error(23); /* array assignment must be simple assigment */
-    assert(lval1->sym!=NULL);
+    if (!lval1->sym)
+      return error(142);
     if (array_totalsize(lval1->sym)==0)
       return error(46,lval1->sym->name());        /* unknown array size */
     lvalue=TRUE;
