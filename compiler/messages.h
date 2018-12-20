@@ -166,7 +166,7 @@ static const char *errmsg[] = {
 /*139*/  "could not find type \"%s\"\n",
 /*140*/  "new-style array types cannot specify dimension sizes as part of their type\n",
 /*141*/  "natives, forwards, and public functions cannot return arrays\n",
-/*142*/  "unused142\n",
+/*142*/  "unexpected array expression\n",
 /*143*/  "new-style declarations should not have \"new\"\n",
 /*144*/  "void cannot be used as a variable type\n",
 /*145*/  "invalid type expression\n",
