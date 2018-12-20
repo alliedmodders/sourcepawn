@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import subprocess
+from threading import Timer
 try:
   import configparser
 except:
@@ -31,15 +32,30 @@ class ChangeFolder(object):
     if self.cwd is not None:
       os.chdir(self.cwd)
 
-def exec_argv(argv):
+def exec_argv(argv, timeout = None, logger = None):
   if argv[0].endswith('.js'):
     argv = ['node'] + argv
 
   p = subprocess.Popen(argv, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-  stdout, stderr = p.communicate()
-  stdout = stdout.decode('utf-8')
-  stderr = stderr.decode('utf-8')
-  return p.returncode, stdout, stderr
+
+  def on_timeout():
+    logger.out("Killing process due to timeout")
+    p.kill()
+
+  timer = None
+  if timeout is not None:
+    timer = Timer(timeout, on_timeout)
+    timer.start()
+
+  try:
+    stdout, stderr = p.communicate()
+    stdout = stdout.decode('utf-8')
+    stderr = stderr.decode('utf-8')
+    return p.returncode, stdout, stderr
+  finally:
+    if timer is not None:
+      timer.cancel()
+  return -9, '', 'process killed due to timeout'
 
 def parse_manifest(path, local_folder, source = {}):
   manifest = {}

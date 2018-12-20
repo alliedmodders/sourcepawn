@@ -484,7 +484,12 @@ class TestRunner(object):
     if self.plan.show_cli:
       self.out(' '.join(argv))
 
-    return testutil.exec_argv(argv)
+    if argv[0].endswith('.js'):
+      timeout = 60
+    else:
+      timeout = 5
+
+    return testutil.exec_argv(argv, timeout, logger = self)
 
   def compare_output(self, test, pipe_name, actual):
     expected_lines = test.get_expected_output(pipe_name)
