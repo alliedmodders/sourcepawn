@@ -4217,10 +4217,11 @@ static void decl_enumstruct()
     position += decl.type.numdim ? decl.type.dim[0] : 1;
     require_newline(TRUE);
   }
-  require_newline(TRUE);
 
   if (!position)
     error(119, struct_name.name);
+
+  require_newline(TRUE);
 
   if (root) {
     assert(root->usage & uENUMROOT);
