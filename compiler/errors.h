@@ -50,6 +50,8 @@ struct ErrorReport
   ErrorType type;
 };
 
+struct token_pos_t;
+
 enum FatalError {
   FIRST_FATAL_ERROR = 183,
 
@@ -73,6 +75,7 @@ enum FatalError {
 
 int error(int number,...);
 int error(symbol* sym, int number, ...);
+int error(const token_pos_t& where, int number, ...);
 void errorset(int code,int line);
 void report_error(ErrorReport* report);
 

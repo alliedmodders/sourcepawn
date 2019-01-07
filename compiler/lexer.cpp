@@ -1903,11 +1903,19 @@ lexinit()
   }
 }
 
-static const char*
+static ke::AString
 get_token_string(int tok_id)
 {
-  assert(tok_id >= tFIRST && tok_id <= tLAST);
-  return sc_tokens[tok_id - tFIRST];
+  ke::AString str;
+  if (tok_id < 256) {
+    str.format("%c", tok_id);
+  } else if (tok_id == tEOL) {
+    str.format("<newline>");
+  } else {
+    assert(tok_id >= tFIRST && tok_id <= tLAST);
+    str.format("%s", sc_tokens[tok_id - tFIRST]);
+  }
+  return str;
 }
 
 static int
@@ -2369,14 +2377,15 @@ lex_keyword(full_token_t* tok, const char* token_start)
 
   if (IsUnimplementedKeyword(tok_id)) {
     // Try to gracefully error.
-    error(173, get_token_string(tok_id));
+    error(173, get_token_string(tok_id).chars());
     tok->id = tSYMBOL;
-    strcpy(tok->str, get_token_string(tok_id));
+    strcpy(tok->str, get_token_string(tok_id).chars());
     tok->len = strlen(tok->str);
   } else if (*lptr == ':' && (tok_id == tINT || tok_id == tVOID)) {
     // Special case 'int:' to its old behavior: an implicit view_as<> cast
     // with Pawn's awful lowercase coercion semantics.
-    const char *token = get_token_string(tok_id);
+    ke::AString token_str = get_token_string(tok_id);
+    const char* token = token_str.chars();
     switch (tok_id) {
       case tINT:
         error(238, token, token);
@@ -2634,8 +2643,13 @@ int require_newline(int allow_semi)
 {
   if (allow_semi) {
     // Semicolon must be on the same line.
-    if (peek_same_line() == ';')
+    auto pos = current_token()->start;
+    int next_tok_id = peek_same_line();
+    if (next_tok_id == ';') {
       lexpop();
+    } else if (sc_needsemicolon) {
+      error(pos, 1, ";", get_token_string(next_tok_id).chars());
+    }
   }
 
   int tokid = peek_same_line();
