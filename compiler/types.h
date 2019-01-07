@@ -99,11 +99,7 @@ public:
     return value_;
   }
 
-  // Returns true if this is, or ever was, defined as an actual type rather
-  // than an implicit tag.
-  bool isLikelyDefinedType() const {
-    return kind_ != TypeKind::None || was_defined_;
-  }
+  bool isDeclaredButNotDefined() const;
   bool isDefinedType() const {
     return kind_ != TypeKind::None;
   }
@@ -201,7 +197,7 @@ private:
   cell value_;
   int fixed_;
   bool intrinsic_;
-  bool was_defined_;
+  TypeKind first_pass_kind_;
 
   // These are reset in between the first and second passes, since the
   // underlying structures are reparsed.

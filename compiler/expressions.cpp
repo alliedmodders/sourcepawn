@@ -1817,7 +1817,7 @@ field_expression(svalue &thisval, value *lval, symbol **target, methodmap_method
 
   methodmap_t *map = gTypes.find(thisval.val.tag)->asMethodmap();
   if (!map) {
-    error(104, pc_tagname(thisval.val.tag));
+    error(104, pc_typename(thisval.val.tag));
     return FER_Fail;
   }
 

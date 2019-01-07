@@ -1,1 +1,1 @@
-(4) : error 119: enum struct "X" must have at least one field
+(2) : error 119: enum struct "X" must have at least one field

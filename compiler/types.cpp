@@ -37,7 +37,7 @@ Type::Type(const char* name, cell value)
    value_(value),
    fixed_(0),
    intrinsic_(false),
-   was_defined_(false),
+   first_pass_kind_(TypeKind::None),
    kind_(TypeKind::None)
 {
   private_ptr_ = nullptr;
@@ -53,9 +53,23 @@ Type::resetPtr()
   if (intrinsic_)
     return;
 
-  was_defined_ |= isLikelyDefinedType();
+  if (kind_ != TypeKind::None)
+    first_pass_kind_ = kind_;
   kind_ = TypeKind::None;
   private_ptr_ = nullptr;
+}
+
+bool
+Type::isDeclaredButNotDefined() const
+{
+  if (kind_ != TypeKind::None)
+    return false;
+  if (first_pass_kind_ == TypeKind::None ||
+      first_pass_kind_ == TypeKind::EnumStruct)
+  {
+    return true;
+  }
+  return false;
 }
 
 TypeDictionary::TypeDictionary()
