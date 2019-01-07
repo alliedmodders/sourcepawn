@@ -41,6 +41,7 @@
 #include "errors.h"
 #include "sclist.h"
 #include "libpawnc.h"
+#include "lexer.h"
 
 #if defined _MSC_VER
   #pragma warning(push)
@@ -77,6 +78,18 @@ int error(int number,...)
   ErrorReport report = ErrorReport::infer_va(number, ap);
   va_end(ap);
 
+  report_error(&report);
+  return 0;
+}
+
+int error(const token_pos_t& where, int number, ...)
+{
+  va_list ap;
+  va_start(ap, number);
+  ErrorReport report = ErrorReport::create_va(number, -1, where.line, ap);
+  va_end(ap);
+
+  report.lineno = where.line;
   report_error(&report);
   return 0;
 }

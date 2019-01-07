@@ -1,0 +1,2 @@
+(5) : error 001: expected token: ";", but found "<newline>"
+(6) : error 001: expected token: ";", but found "<newline>"
