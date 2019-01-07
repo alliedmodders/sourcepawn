@@ -2719,9 +2719,10 @@ static int parse_new_typename(const token_t *tok)
         error(139, tok->str);
         tag = 0;
       } else if (tag != pc_anytag) {
+        Type* type = gTypes.find(tag);
         // Perform some basic filters so we can start narrowing down what can
         // be used as a type.
-        if (!gTypes.find(tag)->isLikelyDefinedType())
+        if (type->isDeclaredButNotDefined())
           error(139, tok->str);
       }
       return tag;

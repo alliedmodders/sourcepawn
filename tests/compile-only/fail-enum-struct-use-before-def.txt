@@ -1,0 +1,2 @@
+(8) : error 139: could not find type "Effector"
+(29) : error 104: cannot find any methods for int
