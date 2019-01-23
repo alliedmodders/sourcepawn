@@ -566,7 +566,7 @@ namespace smxdasm
         public DebugVarEntry FindLocal(int codeaddr, int address)
         {
             int start_at = 0;
-            int stop_at = smx_file_.DebugMethods.Entries.Length;
+            int stop_at = Entries.Length;
             if (smx_file_.DebugMethods != null && smx_file_.RttiMethods != null)
             {
                 int? index = null;
@@ -599,7 +599,7 @@ namespace smxdasm
                     return sym;
                 if (i == stop_at - 1)
                     break;
-                var next_sym = Entries[stop_at + 1];
+                var next_sym = Entries[i + 1];
                 if (address > sym.address && address < next_sym.address)
                     return sym;
             }
