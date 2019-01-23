@@ -313,7 +313,6 @@ namespace smxdasm
     public struct RttiNative
     {
         public string name;
-        public int pcode_offset;
         public int signature;
     }
 
