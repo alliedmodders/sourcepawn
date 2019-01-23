@@ -364,6 +364,7 @@ namespace smxviewer
                 {
                     addDetailLine("0x{0:x6}: {1}", i, current.ToString());
                     current.Clear();
+                    continue;
                 }
 
                 if (b < 0x20 || b > 0x7f)
@@ -732,7 +733,7 @@ namespace smxviewer
 
             uint? line = null;
             if (file_.DebugLines != null)
-                line = file_.DebugLines.FindLine((uint)sym.code_end);
+                line = file_.DebugLines.FindLine((uint)sym.code_start);
             if (line != null)
                 addDetailLine("line: \"{0}\"", (uint)line);
 
