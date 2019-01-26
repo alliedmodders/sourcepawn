@@ -27,7 +27,6 @@ SmxV1Image::SmxV1Image(FILE* fp)
    debug_names_(nullptr),
    debug_syms_(nullptr),
    debug_syms_unpacked_(nullptr),
-   rtti_data_(nullptr),
    rtti_methods_(nullptr),
    rtti_dbg_globals_(nullptr),
    rtti_dbg_methods_(nullptr),
@@ -371,11 +370,15 @@ SmxV1Image::validateName(size_t offset)
 bool
 SmxV1Image::validateRtti()
 {
-  rtti_data_ = findSection("rtti.data");
-  if (!rtti_data_)
+  const Section* rtti_data = findSection("rtti.data");
+  if (!rtti_data)
     return true;
-  if (!validateSection(rtti_data_))
+  if (!validateSection(rtti_data))
     return error("invalid rtti.data section");
+
+  const uint8_t* blob =
+    reinterpret_cast<const uint8_t*>(buffer() + rtti_data->dataoffs);
+  rtti_data_ = new RttiData(this, blob, rtti_data->size);
 
   const char* tables[] = {
     "rtti.methods",
@@ -408,7 +411,7 @@ SmxV1Image::validateRttiMethods()
     const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
     if (!validateName(method->name))
       return error("invalid method name");
-    if (method->signature >= rtti_data_->size)
+    if (method->signature >= rtti_data_->size())
       return error("invalid method signature type offset");
     if (method->pcode_start > method->pcode_end)
       return error("invalid method code range");
@@ -540,10 +543,25 @@ SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table)
       return error("invalid debug variable code start");
     if (debug_var->code_end > code_.header()->size)
       return error("invalid debug variable code end");
-    if (debug_var->type_id >= rtti_data_->size)
-      return error("invalid debug variable type offset");
+    if (!validateRttiType(debug_var->type_id))
+      return error("invalid debug variable type");
   }
   return true;
+}
+
+bool
+SmxV1Image::validateRttiType(uint32_t type_id)
+{
+  uint8_t kind = type_id & kMaxTypeIdKind;
+  uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+  switch (kind) {
+  case kTypeId_Inline:
+    return true;
+  case kTypeId_Complex:
+    return payload < rtti_data_->size();
+  default:
+    return false;
+  }
 }
 
 bool

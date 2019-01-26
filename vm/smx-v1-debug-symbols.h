@@ -21,12 +21,13 @@ using namespace SourcePawn;
 namespace sp {
   class SmxV1Image;
   class SmxV1DebugSymbol;
+  class Rtti;
 
   class SmxV1SymbolType
     : public ISymbolType
   {
   public:
-    SmxV1SymbolType(const SmxV1Image* image, const smx_rtti_debug_var* sym);
+    SmxV1SymbolType(SmxV1Image* image, const smx_rtti_debug_var* sym);
     SmxV1SymbolType(const SmxV1Image* image, const sp_fdbg_symbol_t* sym);
     SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym);
   public:
@@ -64,44 +65,53 @@ namespace sp {
       return reference_;
     }
     virtual bool isArray() {
-      return dimcount_ > 0;
+      return !dimensions_.empty();
     }
-    virtual uint32_t dimcount() {
-      return dimcount_;
+    virtual size_t dimcount() {
+      return dimensions_.length();
     }
     virtual uint32_t dimension(uint32_t dim) {
-      if (dim >= dimcount_)
+      if (dim >= dimensions_.length())
         return 0;
       return dimensions_[dim];
     }
-
-  private:
-    template <typename SymbolType, typename DimType>
-    void guessLegacyType(const SmxV1Image* image, const SymbolType* sym);
+    virtual const char* name() {
+      return name_;
+    }
 
   private:
     enum BaseType {
       Integer,
       Float,
       Boolean,
+      Character,
+      Any,
       String,
       Enum,
-      Methodmap,
-      Function,
+      Typedef,
+      Typeset,
       Struct,
-      Object
+      Object,
+      Function,
+      EnumStruct,
+      Methodmap
     };
+    BaseType fromRttiType(SmxV1Image* image, Rtti* type);
+    template <typename SymbolType, typename DimType>
+    void guessLegacyType(const SmxV1Image* image, const SymbolType* sym);
+
+  private:
     BaseType type_;
     bool reference_;
-    uint32_t dimcount_;
-    ke::AutoPtr<uint32_t> dimensions_;
+    const char* name_;
+    ke::Vector<uint32_t> dimensions_;
   };
 
   class SmxV1DebugSymbol
     : public IDebugSymbol
   {
   public:
-    SmxV1DebugSymbol(const SmxV1Image* image, const smx_rtti_debug_var* sym);
+    SmxV1DebugSymbol(SmxV1Image* image, const smx_rtti_debug_var* sym);
     SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol_t* sym);
     SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym);
   public:

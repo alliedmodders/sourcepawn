@@ -9,6 +9,7 @@
 //
 #include "smx-v1-debug-symbols.h"
 #include "smx-v1-image.h"
+#include "rtti.h"
 
 using namespace ke;
 using namespace sp;
@@ -226,7 +227,7 @@ SmxV1LegacySymbolIterator::findFirstSymbol()
     advanceCursor<SymbolType, DimType>();
 }
 
-SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const smx_rtti_debug_var* sym)
+SmxV1DebugSymbol::SmxV1DebugSymbol(SmxV1Image* image, const smx_rtti_debug_var* sym)
   : address_(sym->address),
     codestart_(sym->code_start),
     codeend_(sym->code_end),
@@ -301,28 +302,81 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
   name_ = image->GetDebugName(sym->name);
 }
 
-SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const smx_rtti_debug_var* sym)
+SmxV1SymbolType::SmxV1SymbolType(SmxV1Image* image, const smx_rtti_debug_var* sym)
   : type_(Integer),
     reference_(false)
 {
-  dimcount_ = 0;
-  // TODO: Parse type info from .rtti.data
+  AutoPtr<Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
+  reference_ = type->isByRef();
+  type_ = fromRttiType(image, type);
 }
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_fdbg_symbol_t* sym)
-  : dimcount_(sym->dimcount),
-    type_(Integer),
+  : type_(Integer),
     reference_(false)
 {
   guessLegacyType<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(image, sym);
 }
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym)
-  : dimcount_(sym->dimcount),
-    type_(Integer),
+  : type_(Integer),
     reference_(false)
 {
   guessLegacyType<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(image, sym);
+}
+
+SmxV1SymbolType::BaseType
+SmxV1SymbolType::fromRttiType(SmxV1Image* image, Rtti* type)
+{
+  switch (type->type()) {
+  case cb::kBool:
+    return Boolean;
+  case cb::kInt32:
+    return Integer;
+  case cb::kFloat32:
+    return Float;
+  case cb::kChar8:
+    return Character;
+  case cb::kAny:
+    return Any;
+  case cb::kTopFunction:
+    return Function;
+  case cb::kFixedArray:
+  {
+    Rtti* inner = type;
+    while (inner->inner()) {
+      assert(inner->type() == cb::kFixedArray);
+      dimensions_.insert(0, inner->index());
+      inner = inner->inner();
+    }
+    return fromRttiType(image, inner);
+  }
+  case cb::kArray:
+  {
+    Rtti* inner = type;
+    while (inner->inner()) {
+      assert(inner->type() == cb::kArray);
+      dimensions_.append(0);
+    }
+    return fromRttiType(image, inner);
+  }
+  case cb::kEnum:
+    // TODO: Fetch details like name.
+    return Enum;
+  case cb::kTypedef:
+    return Typedef;
+  case cb::kTypeset:
+    return Typeset;
+  case cb::kClassdef:
+    // TODO: Check for structs?
+    return Object;
+  case cb::kFunction:
+    // TODO: Expose argument type information and return type.
+    return Function;
+  case cb::kEnumStruct:
+    return EnumStruct;
+  }
+  return Any;
 }
 
 // Tag masks from pre-rtti compiler.
@@ -340,10 +394,9 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
   // Save the dimension sizes first.
   assert(sym->dimcount <= sDIMEN_MAX);
   assert(sym->dimcount == 0 || sym->ident == IDENT_ARRAY || sym->ident == IDENT_REFARRAY);
-  dimensions_ = new uint32_t[sym->dimcount];
   const DimType* dim = (const DimType*)(sym + 1);
   for (int i = 0; i < sym->dimcount; i++) {
-    dimensions_[i] = dim->size;
+    dimensions_.append(dim->size);
     dim++;
   }
 
@@ -368,23 +421,28 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
     }
     if ((tag->tag_id & FUNCTAG) > 0) {
       type_ = Function;
+      name_ = tagname;
       return;
     }
     if ((tag->tag_id & OBJECTTAG) > 0) {
       type_ = Object;
+      name_ = tagname;
       return;
     }
     // TODO: A tag can be a methodmap AND an enum at the same time.
     if ((tag->tag_id & METHODMAPTAG) > 0) {
       type_ = Methodmap;
+      name_ = tagname;
       return;
     }
     if ((tag->tag_id & ENUMTAG) > 0) {
       type_ = Enum;
+      name_ = tagname;
       return;
     }
     if ((tag->tag_id & STRUCTTAG) > 0) {
       type_ = Struct;
+      name_ = tagname;
       return;
     }
   }

@@ -21,6 +21,7 @@
 #include "file-utils.h"
 #include "legacy-image.h"
 #include "smx-v1-debug-symbols.h"
+#include "rtti.h"
 
 namespace sp {
 
@@ -178,6 +179,9 @@ class SmxV1Image
   const List<sp_file_pubvars_t>& pubvars() const {
     return pubvars_;
   }
+  RttiData* rttidata() {
+    return rtti_data_;
+  }
 
  protected:
   bool error(const char* msg) {
@@ -196,6 +200,7 @@ class SmxV1Image
   bool validateRttiMethods();
   bool validateDebugInfo();
   bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
+  bool validateRttiType(uint32_t type_id);
   bool validateDebugMethods();
   bool validateSymbolAddress(int32_t address, uint8_t vclass);
   bool validateDebugName(size_t offset);
@@ -254,7 +259,7 @@ class SmxV1Image
   const sp_fdbg_symbol_t* debug_syms_;
   const sp_u_fdbg_symbol_t* debug_syms_unpacked_;
 
-  const Section* rtti_data_;
+  RttiData* rtti_data_;
   const smx_rtti_table_header* rtti_methods_;
   const smx_rtti_table_header* rtti_dbg_globals_;
   const smx_rtti_table_header* rtti_dbg_methods_;

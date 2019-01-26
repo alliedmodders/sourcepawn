@@ -38,6 +38,7 @@ namespace SourcePawn
     virtual bool isArray() = 0;
     virtual uint32_t dimcount() = 0;
     virtual uint32_t dimension(uint32_t dim) = 0;
+    virtual const char* name() = 0;
   };
 
   enum SymbolScope {
