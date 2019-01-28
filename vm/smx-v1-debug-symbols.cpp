@@ -361,20 +361,47 @@ SmxV1SymbolType::fromRttiType(SmxV1Image* image, Rtti* type)
     return fromRttiType(image, inner);
   }
   case cb::kEnum:
-    // TODO: Fetch details like name.
+  {
+    const smx_rtti_enum* enumType = image->GetRttiEnum(type->index());
+    if (enumType)
+      name_ = image->GetName(enumType->name);
     return Enum;
+  }
   case cb::kTypedef:
+  {
+    const smx_rtti_typedef* typedefType = image->GetRttiTypedef(type->index());
+    if (typedefType)
+      name_ = image->GetName(typedefType->name);
     return Typedef;
+  }
   case cb::kTypeset:
+  {
+    const smx_rtti_typeset* typesetType = image->GetRttiTypeset(type->index());
+    if (typesetType)
+      name_ = image->GetName(typesetType->name);
     return Typeset;
+  }
   case cb::kClassdef:
-    // TODO: Check for structs?
+  {
+    const smx_rtti_classdef* classdef = image->GetRttiClassdef(type->index());
+    if (classdef) {
+      name_ = image->GetName(classdef->name);
+      uint8_t type = classdef->flags & kClassDefFlags_TypeMask;
+      if (type == kClassDefType_Struct)
+        return Struct;
+    }
     return Object;
+  }
   case cb::kFunction:
     // TODO: Expose argument type information and return type.
     return Function;
   case cb::kEnumStruct:
+  {
+    const smx_rtti_enumstruct* enumstruct = image->GetRttiEnumStruct(type->index());
+    if (enumstruct)
+      name_ = image->GetName(enumstruct->name);
     return EnumStruct;
+  }
   }
   return Any;
 }

@@ -131,7 +131,7 @@ struct smx_rtti_enumstruct {
     // Index into the name table.
     uint32_t name;
 
-    // First row in the rtti.es_fields table. Rows up to the next
+    // First row in the rtti.enumstruct_fields table. Rows up to the next
     // enumstruct's first row, or the end of the enumstruct table, are
     // owned by this entry.
     uint32_t first_field;
@@ -140,7 +140,7 @@ struct smx_rtti_enumstruct {
     uint32_t size;
 };
 
-// The rtti.es_fields table has the following row structure:
+// The rtti.enumstruct_fields table has the following row structure:
 struct smx_rtti_es_field {
     // Index into the name table.
     uint32_t name;
@@ -182,6 +182,8 @@ struct smx_rtti_field {
     // Type id.
     uint32_t type_id;
 };
+
+static const uint32_t kClassDefFlags_TypeMask = 0x3;
 
 static const uint32_t kClassDefType_Struct = 0x0;
 

@@ -71,6 +71,13 @@ class SmxV1Image
   const char* GetName(uint32_t nameoffs) const;
   const char* GetDebugName(uint32_t nameoffs) const;
 
+  const smx_rtti_classdef* GetRttiClassdef(uint32_t index) const;
+  const smx_rtti_enum* GetRttiEnum(uint32_t index) const;
+  const smx_rtti_enumstruct* GetRttiEnumStruct(uint32_t index) const;
+  const smx_rtti_native* GetRttiNative(uint32_t index) const;
+  const smx_rtti_typedef* GetRttiTypedef(uint32_t index) const;
+  const smx_rtti_typeset* GetRttiTypeset(uint32_t index) const;
+
  private:
    struct Section
    {
@@ -78,7 +85,7 @@ class SmxV1Image
      uint32_t dataoffs;
      uint32_t size;
    };
-  const Section* findSection(const char* name);
+  const Section* findSection(const char* name) const;
 
  public:
   template <typename T>
@@ -197,10 +204,18 @@ class SmxV1Image
   bool validatePubvars();
   bool validateNatives();
   bool validateRtti();
+  bool validateRttiClassdefs();
+  bool validateRttiEnums();
+  bool validateRttiEnumStructs();
+  bool validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index);
+  bool validateRttiField(uint32_t index);
   bool validateRttiMethods();
+  bool validateRttiNatives();
+  bool validateRttiTypedefs();
+  bool validateRttiTypesets();
+  bool validateRttiType(uint32_t type_id);
   bool validateDebugInfo();
   bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
-  bool validateRttiType(uint32_t type_id);
   bool validateDebugMethods();
   bool validateSymbolAddress(int32_t address, uint8_t vclass);
   bool validateDebugName(size_t offset);
@@ -216,19 +231,19 @@ class SmxV1Image
   template <typename SymbolType, typename DimType>
   bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index);
 
-  const smx_rtti_table_header* findRttiSection(const char* name) {
+  const smx_rtti_table_header* findRttiSection(const char* name) const {
     const Section* section = findSection(name);
     if (!section)
       return nullptr;
     return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
   }
 
-  const smx_rtti_table_header* toRttiTable(const Section* section) {
+  const smx_rtti_table_header* toRttiTable(const Section* section) const {
     return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
   }
 
   template <typename T>
-  const T* getRttiRow(const smx_rtti_table_header* header, size_t index) {
+  const T* getRttiRow(const smx_rtti_table_header* header, size_t index) const {
     assert(index < header->row_count);
     const uint8_t* base = reinterpret_cast<const uint8_t*>(header) + header->header_size;
     return reinterpret_cast<const T*>(base + header->row_size * index);
@@ -260,7 +275,15 @@ class SmxV1Image
   const sp_u_fdbg_symbol_t* debug_syms_unpacked_;
 
   RttiData* rtti_data_;
+  const smx_rtti_table_header* rtti_classdefs_;
+  const smx_rtti_table_header* rtti_enums_;
+  const smx_rtti_table_header* rtti_enumstructs_;
+  const smx_rtti_table_header* rtti_enumstruct_fields_;
+  const smx_rtti_table_header* rtti_fields_;
   const smx_rtti_table_header* rtti_methods_;
+  const smx_rtti_table_header* rtti_natives_;
+  const smx_rtti_table_header* rtti_typedefs_;
+  const smx_rtti_table_header* rtti_typesets_;
   const smx_rtti_table_header* rtti_dbg_globals_;
   const smx_rtti_table_header* rtti_dbg_methods_;
   const smx_rtti_table_header* rtti_dbg_locals_;
