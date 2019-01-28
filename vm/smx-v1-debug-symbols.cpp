@@ -306,7 +306,7 @@ SmxV1SymbolType::SmxV1SymbolType(SmxV1Image* image, const smx_rtti_debug_var* sy
   : type_(Integer),
     reference_(false)
 {
-  AutoPtr<Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
+  Rtti* type(image->rttidata()->typeFromTypeId(sym->type_id));
   reference_ = type->isByRef();
   type_ = fromRttiType(image, type);
 }

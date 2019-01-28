@@ -33,7 +33,7 @@ namespace sp {
     }
   };
 
-  typedef ke::HashMap<uint32_t, Rtti*, IntegerPolicy<uint32_t>> TypeCacheMap;
+  typedef ke::HashMap<uint32_t, ke::AutoPtr<Rtti>, IntegerPolicy<uint32_t>> TypeCacheMap;
   class RttiData {
   public:
     RttiData();
@@ -109,14 +109,14 @@ namespace sp {
   private:
     uint8_t type_;
     uint32_t index_;
-    Rtti* inner_;
+    ke::AutoPtr<Rtti> inner_;
     bool is_const_;
 
     // Arguments
     bool is_by_ref_;
 
     // Function type only
-    ke::Vector<Rtti*> args_;
+    ke::Vector<ke::AutoPtr<Rtti>> args_;
     bool is_variadic_;
   };
 
