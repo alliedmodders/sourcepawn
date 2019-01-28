@@ -49,9 +49,6 @@ namespace sp {
     virtual bool isEnum() {
       return type_ == Enum;
     }
-    virtual bool isMethodmap() {
-      return type_ == Methodmap;
-    }
     virtual bool isFunction() {
       return type_ == Function;
     }
@@ -93,8 +90,7 @@ namespace sp {
       Struct,
       Object,
       Function,
-      EnumStruct,
-      Methodmap
+      EnumStruct
     };
     BaseType fromRttiType(SmxV1Image* image, Rtti* type);
     template <typename SymbolType, typename DimType>

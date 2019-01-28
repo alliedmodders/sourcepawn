@@ -30,7 +30,6 @@ namespace SourcePawn
     virtual bool isBoolean() = 0;
     virtual bool isString() = 0;
     virtual bool isEnum() = 0;
-    virtual bool isMethodmap() = 0;
     virtual bool isFunction() = 0;
     virtual bool isStruct() = 0;
     virtual bool isObject() = 0;

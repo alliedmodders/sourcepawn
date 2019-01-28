@@ -458,7 +458,7 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
     }
     // TODO: A tag can be a methodmap AND an enum at the same time.
     if ((tag->tag_id & METHODMAPTAG) > 0) {
-      type_ = Methodmap;
+      type_ = Enum;
       name_ = tagname;
       return;
     }
