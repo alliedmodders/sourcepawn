@@ -386,7 +386,7 @@ SmxV1Image::validateRtti()
 
   const uint8_t* blob =
     reinterpret_cast<const uint8_t*>(buffer() + rtti_data->dataoffs);
-  rtti_data_ = new RttiData(this, blob, rtti_data->size);
+  rtti_data_ = new RttiData(blob, rtti_data->size);
 
   const char* mandatory_tables[] = {
     "rtti.methods",

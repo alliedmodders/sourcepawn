@@ -92,7 +92,7 @@ namespace sp {
       Function,
       EnumStruct
     };
-    BaseType fromRttiType(SmxV1Image* image, Rtti* type);
+    BaseType fromRttiType(SmxV1Image* image, const Rtti* type);
     template <typename SymbolType, typename DimType>
     void guessLegacyType(const SmxV1Image* image, const SymbolType* sym);
 

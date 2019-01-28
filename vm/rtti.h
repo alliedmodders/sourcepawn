@@ -1,6 +1,6 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2004-2015 AlliedModers LLC
+// Copyright (C) 2004-2019 AlliedModers LLC
 //
 // This file is part of SourcePawn. SourcePawn is licensed under the GNU
 // General Public License, version 3.0 (GPL). If a copy of the GPL was not
@@ -20,37 +20,21 @@ namespace sp {
   class Rtti;
   class SmxV1Image;
 
-  template <typename T>
-  struct IntegerPolicy
-  {
-    static inline uint32_t hash(const T key)
-    {
-      return ke::HashInt32(key);
-    }
-    static inline bool matches(const T find, const T &key)
-    {
-      return (key == find);
-    }
-  };
-
-  typedef ke::HashMap<uint32_t, ke::AutoPtr<Rtti>, IntegerPolicy<uint32_t>> TypeCacheMap;
   class RttiData {
   public:
     RttiData();
-    RttiData(SmxV1Image* image, const uint8_t* blob, size_t size);
+    RttiData(const uint8_t* blob, size_t size);
 
-    Rtti* typeFromTypeId(uint32_t type_id);
-    Rtti* functionTypeFromOffset(uint32_t offset);
-    Rtti* typesetTypeFromOffset(uint32_t offset);
+    const Rtti* typeFromTypeId(uint32_t type_id);
+    const Rtti* functionTypeFromOffset(uint32_t offset);
+    const Rtti* typesetTypeFromOffset(uint32_t offset);
 
     const uint8_t* blob();
     size_t size();
 
   private:
-    TypeCacheMap rtti_cache_;
     const uint8_t* rtti_data_;
     size_t rtti_data_size_;
-    SmxV1Image* image_;
   };
 
   class RttiParser {
@@ -87,22 +71,22 @@ namespace sp {
     void addSignature(Rtti* signature);
 
   public:
-    bool isConst() {
+    bool isConst() const {
       return is_const_;
     }
-    bool isByRef() {
+    bool isByRef() const {
       return is_by_ref_;
     }
-    uint8_t type() {
+    uint8_t type() const {
       return type_;
     }
-    const uint32_t index() {
+    const uint32_t index() const {
       return index_;
     }
-    Rtti* inner() {
+    const Rtti* inner() const {
       return inner_;
     }
-    bool isVariadic() {
+    bool isVariadic() const {
       return is_variadic_;
     }
 

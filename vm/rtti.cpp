@@ -1,6 +1,6 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2004-2015 AlliedModers LLC
+// Copyright (C) 2004-2019 AlliedModers LLC
 //
 // This file is part of SourcePawn. SourcePawn is licensed under the GNU
 // General Public License, version 3.0 (GPL). If a copy of the GPL was not
@@ -14,32 +14,22 @@ using namespace ke;
 using namespace sp;
 
 RttiData::RttiData()
- : image_(nullptr),
-   rtti_data_(nullptr),
+ : rtti_data_(nullptr),
    rtti_data_size_(0)
 {
-  rtti_cache_.init();
 }
 
-RttiData::RttiData(SmxV1Image* image, const uint8_t* blob, size_t size)
- : image_(image),
-   rtti_data_(blob),
+RttiData::RttiData(const uint8_t* blob, size_t size)
+ : rtti_data_(blob),
    rtti_data_size_(size)
 {
-  rtti_cache_.init();
 }
 
-Rtti*
+const Rtti*
 RttiData::typeFromTypeId(uint32_t type_id)
 {
   if (!rtti_data_)
     return nullptr;
-
-  // See if that type was already decoded before.
-  TypeCacheMap::Insert r = rtti_cache_.findForAdd(type_id);
-  if (r.found()) {
-    return r->value;
-  }
 
   uint8_t kind = type_id & kMaxTypeIdKind;
   uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
@@ -52,52 +42,32 @@ RttiData::typeFromTypeId(uint32_t type_id)
     bytes[3] = (payload >> 24) & 0xff;
 
     AutoPtr<RttiParser> parser(new RttiParser(bytes, 4, 0));
-    Rtti* rtti_type = parser->decodeNew();
-    rtti_cache_.add(r, type_id, rtti_type);
-    return rtti_type;
+    return parser->decodeNew();
   } else if (kind == kTypeId_Complex) {
     AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, payload));
-    Rtti* rtti_type = parser->decodeNew();
-    rtti_cache_.add(r, type_id, rtti_type);
-    return rtti_type;
+    return parser->decodeNew();
   }
   return nullptr;
 }
 
-Rtti*
+const Rtti*
 RttiData::functionTypeFromOffset(uint32_t offset)
 {
   if (!rtti_data_)
     return nullptr;
 
-  // See if that type was already decoded before.
-  TypeCacheMap::Insert r = rtti_cache_.findForAdd(offset);
-  if (r.found()) {
-    return r->value;
-  }
-
   AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
-  Rtti* rtti_type = parser->decodeFunction();
-  rtti_cache_.add(r, offset, rtti_type);
-  return rtti_type;
+  return parser->decodeFunction();
 }
 
-Rtti*
+const Rtti*
 RttiData::typesetTypeFromOffset(uint32_t offset)
 {
   if (!rtti_data_)
     return nullptr;
 
-  // See if that type was already decoded before.
-  TypeCacheMap::Insert r = rtti_cache_.findForAdd(offset);
-  if (r.found()) {
-    return r->value;
-  }
-
   AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
-  Rtti* rtti_type = parser->decodeTypeset();
-  rtti_cache_.add(r, offset, rtti_type);
-  return rtti_type;
+  return parser->decodeTypeset();
 }
 
 const uint8_t*

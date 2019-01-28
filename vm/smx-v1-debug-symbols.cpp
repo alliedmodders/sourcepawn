@@ -306,7 +306,7 @@ SmxV1SymbolType::SmxV1SymbolType(SmxV1Image* image, const smx_rtti_debug_var* sy
   : type_(Integer),
     reference_(false)
 {
-  Rtti* type(image->rttidata()->typeFromTypeId(sym->type_id));
+  AutoPtr<const Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
   reference_ = type->isByRef();
   type_ = fromRttiType(image, type);
 }
@@ -326,7 +326,7 @@ SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol
 }
 
 SmxV1SymbolType::BaseType
-SmxV1SymbolType::fromRttiType(SmxV1Image* image, Rtti* type)
+SmxV1SymbolType::fromRttiType(SmxV1Image* image, const Rtti* type)
 {
   switch (type->type()) {
   case cb::kBool:
@@ -343,7 +343,7 @@ SmxV1SymbolType::fromRttiType(SmxV1Image* image, Rtti* type)
     return Function;
   case cb::kFixedArray:
   {
-    Rtti* inner = type;
+    const Rtti* inner = type;
     while (inner->inner()) {
       assert(inner->type() == cb::kFixedArray);
       dimensions_.insert(0, inner->index());
@@ -353,7 +353,7 @@ SmxV1SymbolType::fromRttiType(SmxV1Image* image, Rtti* type)
   }
   case cb::kArray:
   {
-    Rtti* inner = type;
+    const Rtti* inner = type;
     while (inner->inner()) {
       assert(inner->type() == cb::kArray);
       dimensions_.append(0);
