@@ -32,6 +32,10 @@ namespace sp {
     const uint8_t* blob();
     size_t size();
 
+    bool validateType(uint32_t type_id);
+    bool validateFunctionOffset(uint32_t offset);
+    bool validateTypesetOffset(uint32_t offset);
+
   private:
     const uint8_t* rtti_data_;
     size_t rtti_data_size_;
@@ -45,10 +49,15 @@ namespace sp {
     Rtti* decodeFunction();
     Rtti* decodeTypeset();
 
+    bool validate();
+    bool validateFunction();
+    bool validateTypeset();
+
   private:
     Rtti* decode();
     bool match(uint8_t b);
     uint32_t decodeUint32();
+    bool tryDecodeUint32();
 
   private:
     const uint8_t* bytes_;

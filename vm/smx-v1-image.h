@@ -213,7 +213,6 @@ class SmxV1Image
   bool validateRttiNatives();
   bool validateRttiTypedefs();
   bool validateRttiTypesets();
-  bool validateRttiType(uint32_t type_id);
   bool validateDebugInfo();
   bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
   bool validateDebugMethods();

@@ -507,7 +507,7 @@ SmxV1Image::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, u
     return error("invalid enum struct field name");
   if (field->offset >= enumstruct->size * 4)
     return error("invalid enum struct field offset");
-  if (!validateRttiType(field->type_id))
+  if (!rtti_data_->validateType(field->type_id))
     return error("invalid enum struct field type");
   return true;
 }
@@ -550,7 +550,7 @@ SmxV1Image::validateRttiField(uint32_t index)
   const smx_rtti_field* field = getRttiRow<smx_rtti_field>(rtti_fields_, index);
   if (!validateName(field->name))
     return error("invalid classdef field name");
-  if (!validateRttiType(field->type_id))
+  if (!rtti_data_->validateType(field->type_id))
     return error("invalid classdef field type");
   return true;
 }
@@ -562,7 +562,7 @@ SmxV1Image::validateRttiMethods()
     const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
     if (!validateName(method->name))
       return error("invalid method name");
-    if (method->signature >= rtti_data_->size())
+    if (!rtti_data_->validateFunctionOffset(method->signature))
       return error("invalid method signature type offset");
     if (method->pcode_start > method->pcode_end)
       return error("invalid method code range");
@@ -581,7 +581,7 @@ SmxV1Image::validateRttiNatives()
     const smx_rtti_native* native = getRttiRow<smx_rtti_native>(rtti_natives_, i);
     if (!validateName(native->name))
       return error("invalid native name");
-    if (native->signature >= rtti_data_->size())
+    if (!rtti_data_->validateFunctionOffset(native->signature))
       return error("invalid native type offset");
   }
   return true;
@@ -594,7 +594,7 @@ SmxV1Image::validateRttiTypedefs()
     const smx_rtti_typedef* typedefType = getRttiRow<smx_rtti_typedef>(rtti_typedefs_, i);
     if (!validateName(typedefType->name))
       return error("invalid typedef name");
-    if (!validateRttiType(typedefType->type_id))
+    if (!rtti_data_->validateType(typedefType->type_id))
       return error("invalid typedef type");
   }
   return true;
@@ -607,27 +607,10 @@ SmxV1Image::validateRttiTypesets()
     const smx_rtti_typeset* typesetType = getRttiRow<smx_rtti_typeset>(rtti_typesets_, i);
     if (!validateName(typesetType->name))
       return error("invalid typeset name");
-    if (typesetType->signature >= rtti_data_->size())
-      return error("invalid typset signatures offset");
-    // TODO: Validate signatures.
+    if (!rtti_data_->validateTypesetOffset(typesetType->signature))
+      return error("invalid typeset signatures");
   }
   return true;
-}
-
-bool
-SmxV1Image::validateRttiType(uint32_t type_id)
-{
-  // TODO: Do proper validation on the rtti.data.
-  uint8_t kind = type_id & kMaxTypeIdKind;
-  uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
-  switch (kind) {
-  case kTypeId_Inline:
-    return true;
-  case kTypeId_Complex:
-    return payload < rtti_data_->size();
-  default:
-    return false;
-  }
 }
 
 bool
@@ -750,7 +733,7 @@ SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table)
       return error("invalid debug variable code start");
     if (debug_var->code_end > code_.header()->size)
       return error("invalid debug variable code end");
-    if (!validateRttiType(debug_var->type_id))
+    if (!rtti_data_->validateType(debug_var->type_id))
       return error("invalid debug variable type");
   }
   return true;

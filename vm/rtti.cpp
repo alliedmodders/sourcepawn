@@ -82,6 +82,46 @@ RttiData::size()
   return rtti_data_size_;
 }
 
+bool
+RttiData::validateType(uint32_t type_id)
+{
+  uint8_t kind = type_id & kMaxTypeIdKind;
+  uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+  if (kind == kTypeId_Inline) {
+    uint8_t bytes[4];
+    bytes[0] = (payload >> 0) & 0xff;
+    bytes[1] = (payload >> 8) & 0xff;
+    bytes[2] = (payload >> 16) & 0xff;
+    bytes[3] = (payload >> 24) & 0xff;
+
+    AutoPtr<RttiParser> parser(new RttiParser(bytes, 4, 0));
+    return parser->validate();
+  }
+  else if (kind == kTypeId_Complex) {
+    if (payload >= rtti_data_size_)
+      return false;
+
+    AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, payload));
+    return parser->validate();
+  }
+  else
+    return false;
+}
+
+bool
+RttiData::validateFunctionOffset(uint32_t offset)
+{
+  AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
+  return parser->validateFunction();
+}
+
+bool
+RttiData::validateTypesetOffset(uint32_t offset)
+{
+  AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
+  return parser->validateTypeset();
+}
+
 RttiParser::RttiParser(const uint8_t* bytes, uint32_t length, uint32_t offset)
  : bytes_(bytes),
    length_(length),
@@ -111,7 +151,6 @@ RttiParser::decode()
 {
   is_const_ = match(cb::kConst) || is_const_;
 
-  // TODO: error on offset_ >= length_
   uint8_t type = bytes_[offset_++];
   switch (type) {
   case cb::kBool:
@@ -151,7 +190,6 @@ RttiParser::decode()
 Rtti*
 RttiParser::decodeFunction()
 {
-  // TODO: error on offset_ >= length_
   uint8_t argc = bytes_[offset_++];
 
   bool variadic = false;
@@ -192,12 +230,102 @@ RttiParser::decodeTypeset()
 }
 
 bool
-RttiParser::match(uint8_t b)
+RttiParser::validate()
 {
-  // TODO: error on offset_ >= length_
+  if (offset_ >= length_)
+    return false;
+  // A type can start with a |const| indicator.
+  match(cb::kConst);
+  if (offset_ >= length_)
+    return false;
+  uint8_t type = bytes_[offset_++];
+  switch (type) {
+  case cb::kBool:
+  case cb::kInt32:
+  case cb::kFloat32:
+  case cb::kChar8:
+  case cb::kAny:
+  case cb::kTopFunction:
+    return true;
+
+  case cb::kFixedArray:
+  {
+    // Skip the size.
+    if (!tryDecodeUint32())
+      return false;
+    return validate();
+  }
+  case cb::kArray:
+    return validate();
+
+  case cb::kEnum:
+  case cb::kTypedef:
+  case cb::kTypeset:
+  case cb::kClassdef:
+  case cb::kEnumStruct:
+    // Skip the index.
+    return tryDecodeUint32();
+
+  case cb::kFunction:
+    return validateFunction();
+  }
+  return false;
+}
+
+bool
+RttiParser::validateFunction()
+{
+  // argc available?
   if (offset_ >= length_)
     return false;
 
+  uint8_t argc = bytes_[offset_++];
+  if (offset_ >= length_)
+    return false;
+
+  if (bytes_[offset_] == cb::kVariadic)
+    offset_++;
+  if (offset_ >= length_)
+    return false;
+
+  // Validate return type.
+  if (bytes_[offset_] == cb::kVoid)
+    offset_++;
+  else if (!validate())
+    return false;
+
+  for (uint8_t i = 0; i < argc; i++) {
+    if (offset_ >= length_)
+      return false;
+    // A by_ref indicator is allowed here.
+    match(cb::kByRef);
+    if (!validate())
+      return false;
+  }
+  return true;
+}
+
+bool
+RttiParser::validateTypeset()
+{
+  // See if we can decode the count of signatures in this typset.
+  uint32_t old_offset = offset_;
+  if (!tryDecodeUint32())
+    return false;
+
+  // Decode the count now.
+  offset_ = old_offset;
+  uint32_t count = decodeUint32();
+  for (uint32_t i = 0; i < count; i++) {
+    if (!validate())
+      return false;
+  }
+  return true;
+}
+
+bool
+RttiParser::match(uint8_t b)
+{
   if (bytes_[offset_] != b)
     return false;
 
@@ -210,8 +338,7 @@ RttiParser::decodeUint32()
 {
   uint32_t value = 0;
   uint32_t shift = 0;
-  // TODO: error on offset_ >= length_
-  while (offset_ < length_) {
+  while (true) {
     uint8_t b = bytes_[offset_++];
     value |= (b & 0x7f) << shift;
     if ((b & 0x80) == 0)
@@ -219,6 +346,19 @@ RttiParser::decodeUint32()
     shift += 7;
   }
   return value;
+}
+
+bool
+RttiParser::tryDecodeUint32()
+{
+  while (true) {
+    if (offset_ >= length_)
+      return false;
+    uint8_t b = bytes_[offset_++];
+    if ((b & 0x80) == 0)
+      break;
+  }
+  return true;
 }
 
 Rtti::Rtti(uint8_t type)
