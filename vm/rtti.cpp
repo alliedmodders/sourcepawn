@@ -351,14 +351,12 @@ RttiParser::decodeUint32()
 bool
 RttiParser::tryDecodeUint32()
 {
-  while (true) {
-    if (offset_ >= length_)
-      return false;
+  while (offset_ < length_) {
     uint8_t b = bytes_[offset_++];
     if ((b & 0x80) == 0)
-      break;
+      return true;
   }
-  return true;
+  return false;
 }
 
 Rtti::Rtti(uint8_t type)

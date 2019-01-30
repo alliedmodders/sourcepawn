@@ -44,7 +44,7 @@ namespace SourcePawn
     Global,
     Local,
     Static,
-    Arg
+    Argument
   };
 
   class IDebugSymbol {

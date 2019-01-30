@@ -245,7 +245,7 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(SmxV1Image* image, const smx_rtti_debug_var* 
     scope_ = Static;
     break;
   case kVarClass_Arg:
-    scope_ = Arg;
+    scope_ = Argument;
     break;
   }
 
@@ -272,7 +272,7 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol
   }
 
   if (scope_ == Local && address_ > 0)
-    scope_ = Arg;
+    scope_ = Argument;
 
   name_ = image->GetDebugName(sym->name);
 }
@@ -297,7 +297,7 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
   }
 
   if (scope_ == Local && address_ > 0)
-    scope_ = Arg;
+    scope_ = Argument;
 
   name_ = image->GetDebugName(sym->name);
 }
