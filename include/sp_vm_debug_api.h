@@ -22,24 +22,55 @@
 
 namespace SourcePawn
 {
+  // Represents a the type of a variable.
   class ISymbolType {
   public:
+    // @brief Returns the version of the type interface. (SOURCEPAWN_DEBUG_TYPE_VERSION)
     virtual int ApiVersion() = 0;
+
+    // @brief Returns whether the type represents an integer.
     virtual bool isInt32() = 0;
+
+    // @brief Returns whether the type represents a float.
     virtual bool isFloat() = 0;
+
+    // @brief Returns whether the type represents a boolean.
     virtual bool isBoolean() = 0;
+
+    // @brief Returns whether the type represents a string.
     virtual bool isString() = 0;
+
+    // @brief Returns whether the type represents an enum.
     virtual bool isEnum() = 0;
+
+    // @brief Returns whether the type represents a function.
     virtual bool isFunction() = 0;
+
+    // @brief Returns whether the type represents a struct.
     virtual bool isStruct() = 0;
+
+    // @brief Returns whether the type represents a class object.
     virtual bool isObject() = 0;
+
+    // @brief Returns whether the argument is passed by reference.
+    // Only valid for argument types in a function signature.
     virtual bool isReference() = 0;
+
+    // @brief Returns whether the symbol is an array.
     virtual bool isArray() = 0;
+
+    // @brief Returns the number of dimensions of the array.
     virtual uint32_t dimcount() = 0;
+
+    // @brief Returns the size of a dimension.
     virtual uint32_t dimension(uint32_t dim) = 0;
+
+    // @brief Returns the name of the type.
+    // Only valid for non-primitive types.
     virtual const char* name() = 0;
   };
 
+  // Visibility scope of a symbol.
   enum SymbolScope {
     Global,
     Local,
