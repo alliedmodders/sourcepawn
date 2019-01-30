@@ -1389,6 +1389,8 @@ static void declstructvar(char *firstname,int fpublic, pstruct_t *pstruct)
   }
   if (!mysym)
     mysym=addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name), usage);
+  else
+    mysym->codeaddr = code_idx;
 
   if (!matchtoken('=')) {
     matchtoken(';');
