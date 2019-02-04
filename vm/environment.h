@@ -209,15 +209,20 @@ class EnterProfileScope
  public:
   EnterProfileScope(const char* group, const char* name)
   {
-    if (Environment::get()->IsProfilingEnabled())
+    if (Environment::get()->IsProfilingEnabled()) {
       Environment::get()->profiler()->EnterScope(group, name);
+      scope_entered_ = true;
+    }
   }
 
   ~EnterProfileScope()
   {
-    if (Environment::get()->IsProfilingEnabled())
+    if (scope_entered_ && Environment::get()->IsProfilingEnabled())
       Environment::get()->profiler()->LeaveScope();
   }
+
+ private:
+  bool scope_entered_;
 };
 
 class ErrorReport : public SourcePawn::IErrorReport
