@@ -4,11 +4,11 @@ methodmap T {
   public void print() {
     printnum(view_as<int>(this));
   }
-};
+}
 
 enum struct X {
   T t;
-};
+}
 
 public main()
 {

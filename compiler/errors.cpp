@@ -86,7 +86,7 @@ int error(const token_pos_t& where, int number, ...)
 {
   va_list ap;
   va_start(ap, number);
-  ErrorReport report = ErrorReport::create_va(number, -1, where.line, ap);
+  ErrorReport report = ErrorReport::create_va(number, where.file, where.line, ap);
   va_end(ap);
 
   report.lineno = where.line;

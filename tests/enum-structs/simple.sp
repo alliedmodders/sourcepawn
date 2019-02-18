@@ -5,7 +5,7 @@ enum struct Sample {
   int x;
   int y;
   char message[32];
-};
+}
 
 public main() {
   Sample s;
