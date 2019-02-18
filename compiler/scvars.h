@@ -21,6 +21,7 @@
 
 #include <setjmp.h>
 #include <amtl/am-string.h>
+#include <amtl/am-vector.h>
 
 struct memfile_t;
 
@@ -63,14 +64,10 @@ extern cell pc_stksize;     /* stack size */
 extern int freading;        /* is there an input file ready for reading? */
 extern int fline;           /* the line number in the current file */
 extern short fnumber;       /* number of files in the input file table */
-extern short fcurrent;      /* current file being processed */
-extern short sc_intest;     /* true if inside a test */
-extern short sc_intest;     /* true if inside a test */
 extern int sideeffect;      /* true if an expression causes a side-effect */
 extern int stmtindent;      /* current indent of the statement */
 extern int indent_nowarn;   /* skip warning "217 loose indentation" */
 extern int sc_tabsize;      /* number of spaces that a TAB represents */
-extern short sc_allowtags;  /* allow/detect tagnames in lex() */
 extern int sc_status;       /* read/write status */
 extern int sc_err_status;   /* TRUE if errors should be generated even if sc_status = SKIP */
 extern int sc_rationaltag;  /* tag for rational numbers */
@@ -99,6 +96,15 @@ extern memfile_t* outf;          /* file written to */
 extern jmp_buf errbuf;      /* target of longjmp() on a fatal error */
 
 extern ke::AString pc_deprecate;
+
+extern bool sc_intest;
+extern bool sc_allowtags;
+extern short fcurrent;      /* current file being processed */
+
+extern ke::Vector<short> gCurrentFileStack;
+extern ke::Vector<int> gCurrentLineStack;
+extern ke::Vector<void*> gInputFileStack;
+extern ke::Vector<char*> gInputFilenameStack;
 
 // Returns true if compilation is in its second phase (writing phase) and has
 // so far proceeded without error.

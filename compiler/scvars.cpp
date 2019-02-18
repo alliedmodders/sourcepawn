@@ -72,13 +72,10 @@ cell pc_stksize=sDEF_AMXSTACK;/* default stack size */
 int freading  = FALSE;  /* Is there an input file ready for reading? */
 int fline     = 0;      /* the line number in the current file */
 short fnumber = 0;      /* the file number in the file table (debugging) */
-short fcurrent= 0;      /* current file being processed (debugging) */
-short sc_intest=FALSE;  /* true if inside a test */
 int sideeffect= 0;      /* true if an expression causes a side-effect */
 int stmtindent= 0;      /* current indent of the statement */
 int indent_nowarn=FALSE;/* skip warning "217 loose indentation" */
 int sc_tabsize=8;       /* number of spaces that a TAB represents */
-short sc_allowtags=TRUE;  /* allow/detect tagnames in lex() */
 int sc_status;          /* read/write status */
 int sc_err_status;
 int sc_rationaltag=0;   /* tag for rational numbers */
@@ -96,6 +93,15 @@ int sc_compression_level=9;
 void *inpf    = NULL;   /* file read from (source or include) */
 void *inpf_org= NULL;   /* main source file */
 memfile_t* outf = NULL; /* (intermediate) text file written to */
+
+bool sc_intest;
+bool sc_allowtags;
+short fcurrent;         /* current file being processed */
+
+ke::Vector<short> gCurrentFileStack;
+ke::Vector<int> gCurrentLineStack;
+ke::Vector<void*> gInputFileStack;
+ke::Vector<char*> gInputFilenameStack;
 
 jmp_buf errbuf;
 

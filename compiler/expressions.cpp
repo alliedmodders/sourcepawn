@@ -1248,13 +1248,14 @@ SC3ExpressionParser::hier13(value *lval)
       error(lval->constval ? 206 : 205);        /* redundant test */
     } /* if */
     jmp_eq0(flab1);             /* go to second expression if primary register==0 */
-    PUSHSTK_I(sc_allowtags);
-    sc_allowtags=FALSE;         /* do not allow tagnames here (colon is a special token) */
-    if (hier13(lval))
-      rvalue(lval);
+    {
+      /* do not allow tagnames here (colon is a special token) */
+      ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
+      if (hier13(lval))
+        rvalue(lval);
+    }
     if (lval->ident==iCONSTEXPR)        /* load constant here */
       ldconst(lval->constval,sPRI);
-    sc_allowtags=(short)POPSTK_I();     /* restore */
     if ((total1 = pop_static_heaplist())) {
       setheap_save(total1 * sizeof(cell));
     }
@@ -2249,11 +2250,10 @@ SC3ExpressionParser::primary(value *lval)
   symbol *sym;
 
   if (matchtoken('(')){         /* sub-expression - (expression,...) */
-    PUSHSTK_I(sc_intest);
-    PUSHSTK_I(sc_allowtags);
-
-    sc_intest=FALSE;            /* no longer in "test" expression */
-    sc_allowtags=TRUE;          /* allow tagnames to be used in parenthesized expressions */
+    /* no longer in "test" expression */
+    ke::SaveAndSet<bool> in_test(&sc_intest, false);
+    /* allow tagnames to be used in parenthesized expressions */
+    ke::SaveAndSet<bool> allowtags(&sc_allowtags, true);
     
     int lvalue = 0;
     int count = 0;
@@ -2264,9 +2264,6 @@ SC3ExpressionParser::primary(value *lval)
     needtoken(')');
     lexclr(FALSE);              /* clear lex() push-back, it should have been
                                  * cleared already by needtoken() */
-    sc_allowtags=(short)POPSTK_I();
-    sc_intest=(short)POPSTK_I();
-
     if (count > 1 && lvalue) {
       rvalue(lval);
       lvalue = FALSE;

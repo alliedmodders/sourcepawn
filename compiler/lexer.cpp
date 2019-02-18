@@ -69,6 +69,8 @@ static int alpha(char c);
 #define SKIPPING      (skiplevel>0 && (ifstack[skiplevel-1] & SKIPMODE)==SKIPMODE)
 
 static short icomment;  /* currently in multiline comment? */
+static ke::Vector<short> sCommentStack;
+static ke::Vector<short> sPreprocIfStack;
 static char ifstack[sCOMP_STACK]; /* "#if" stack */
 static short iflevel;   /* nesting level if #if/#else/#endif */
 static short skiplevel; /* level at which we started skipping (including nested #if .. #endif) */
@@ -88,68 +90,6 @@ AutoDisableLiteralQueue::AutoDisableLiteralQueue()
 AutoDisableLiteralQueue::~AutoDisableLiteralQueue()
 {
   sLiteralQueueDisabled = prev_value_;
-}
-
-/*  pushstk & popstk
- *
- *  Uses a LIFO stack to store information. The stack is used by doinclude(),
- *  doswitch() (to hold the state of "swactive") and some other routines.
- *
- *  Porting note: I made the bold assumption that an integer will not be
- *  larger than a pointer (it may be smaller). That is, the stack element
- *  is typedef'ed as a pointer type, but I also store integers on it. See
- *  SC.H for "stkitem"
- *
- *  Global references: stack,stkidx,stktop (private to pushstk(), popstk()
- *                     and clearstk())
- */
-static stkitem *stack=NULL;
-static int stkidx=0,stktop=0;
-
-void pushstk(stkitem val)
-{
-  assert(stkidx<=stktop);
-  if (stkidx==stktop) {
-    stkitem *newstack;
-    int newsize= (stktop==0) ? 16 : 2*stktop;
-    /* try to resize the stack */
-    assert(newsize>stktop);
-    newstack=(stkitem*)malloc(newsize*sizeof(stkitem));
-    if (newstack==NULL)
-      error(FATAL_ERROR_ALLOC_OVERFLOW,"parser stack");
-    /* swap the stacks */
-    memcpy(newstack,stack,stkidx*sizeof(stkitem));
-    if (stack!=NULL)
-      free(stack);
-    stack=newstack;
-    stktop=newsize;
-  } /* if */
-  assert(stkidx<stktop);
-  stack[stkidx]=val;
-  stkidx+=1;
-}
-
-stkitem popstk(void)
-{
-  if (stkidx==0) {
-    stkitem s;
-    s.i=-1;             /* stack is empty */
-    return s;
-  } /* if */
-  stkidx--;
-  assert(stack!=NULL);
-  return stack[stkidx];
-}
-
-void clearstk(void)
-{
-  assert(stack!=NULL || stktop==0);
-  if (stack!=NULL) {
-    free(stack);
-    stack=NULL;
-    stktop=0;
-  } /* if */
-  assert(stktop==0);
 }
 
 int plungequalifiedfile(char *name)
@@ -180,14 +120,14 @@ int plungequalifiedfile(char *name)
   if (sc_showincludes && sc_status==statFIRST) {
     fprintf(stdout, "Note: including file: %s\n", name);
   }
-  PUSHSTK_P(inpf);
-  PUSHSTK_P(inpfname);          /* pointer to current file name */
-  PUSHSTK_I(iflevel);
+  gInputFileStack.append(inpf);
+  gInputFilenameStack.append(inpfname);
+  sPreprocIfStack.append(iflevel);
   assert(!SKIPPING);
   assert(skiplevel==iflevel);   /* these two are always the same when "parsing" */
-  PUSHSTK_I(icomment);
-  PUSHSTK_I(fcurrent);
-  PUSHSTK_I(fline);
+  sCommentStack.append(icomment);
+  gCurrentFileStack.append(fcurrent);
+  gCurrentLineStack.append(fline);
   inpfname=strdup(name);/* set name of include file */
   if (inpfname==NULL)
     error(FATAL_ERROR_OOM);
@@ -311,7 +251,7 @@ static void doinclude(int silent)
  */
 static void readline(unsigned char *line)
 {
-  int i,num,cont;
+  int num,cont;
   unsigned char *ptr;
   symbol *sym;
 
@@ -325,8 +265,7 @@ static void readline(unsigned char *line)
         error(49);        /* invalid line continuation */
       if (inpf!=NULL && inpf!=inpf_org)
         pc_closesrc(inpf);
-      i=POPSTK_I();
-      if (i==-1) {        /* All's done; popstk() returns "stack is empty" */
+      if (gCurrentLineStack.empty()) {
         freading=FALSE;
         *line='\0';
         /* when there is nothing more to read, the #if/#else stack should
@@ -339,15 +278,15 @@ static void readline(unsigned char *line)
           error(1,"*/","-end of file-");
         return;
       } /* if */
-      fline=i;
-      fcurrent=(short)POPSTK_I();
-      icomment=(short)POPSTK_I();
-      iflevel=(short)POPSTK_I();
+      fline=gCurrentLineStack.popCopy();
+      fcurrent=gCurrentFileStack.popCopy();
+      icomment=sCommentStack.popCopy();
+      iflevel=sPreprocIfStack.popCopy();
       skiplevel=iflevel;        /* this condition held before including the file */
       assert(!SKIPPING);        /* idem ditto */
       free(inpfname);           /* return memory allocated for the include file name */
-      inpfname=(char *)POPSTK_P();
-      inpf=POPSTK_P();
+      inpfname=gInputFilenameStack.popCopy();
+      inpf=gInputFileStack.popCopy();
       insert_dbgfile(inpfname);
       setfiledirect(inpfname);
       assert(sc_status==statFIRST || strcmp(get_inputfile(fcurrent),inpfname)==0);
@@ -1880,7 +1819,6 @@ const char *sc_tokens[] = {
 void
 lexinit()
 {
-  stkidx=0;             /* index for pushstk() and popstk() */
   iflevel=0;            /* preprocessor: nesting of "#if" is currently 0 */
   skiplevel=0;          /* preprocessor: not currently skipping */
   icomment=0;           /* currently not in a multiline comment */
