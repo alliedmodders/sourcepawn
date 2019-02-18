@@ -3,17 +3,17 @@
 enum struct Inner {
   int x;
   char message[32];
-};
+}
 
 enum struct Middle {
   Inner inner;
-};
+}
 
 enum struct Sample {
   float a;
   Middle m;
   int y;
-};
+}
 
 public main() {
   Sample s;

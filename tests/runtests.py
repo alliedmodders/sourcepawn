@@ -555,7 +555,8 @@ class TestRunner(object):
     self.out("Failures were detected in the following tests:")
     failures = sorted([test.unique_name for test in self.failures_])
     for test in failures:
-      self.out("  {0}".format(test))
+      test_path = os.path.join(os.path.split(__file__)[0], test)
+      self.out("  {0}".format(os.path.relpath(test_path)))
 
   def out(self, text):
     when = (datetime.datetime.now() - self.start_time_).total_seconds()

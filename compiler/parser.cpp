@@ -2652,7 +2652,7 @@ static void declstruct(void)
     if (pstructs_addarg(pstruct, &arg) == NULL)
       error(103, arg.name, layout_spec_name(Layout_PawnStruct));
 
-    require_newline(TRUE);
+    require_newline(TerminatorPolicy::NewlineOrSemicolon);
   } while (!lexpeek('}'));
   needtoken('}');
   matchtoken(';');  /* eat up optional semicolon */
@@ -3390,7 +3390,10 @@ int parse_property_accessor(const typeinfo_t *type, methodmap_t *map, methodmap_
     }
   }
 
-  require_newline(target->usage & uNATIVE);
+  if (target->usage & uNATIVE)
+    require_newline(TerminatorPolicy::Semicolon);
+  else
+    require_newline(TerminatorPolicy::Newline);
   return TRUE;
 }
 
@@ -3421,7 +3424,7 @@ parse_property(methodmap_t *map)
         lexclr(TRUE);
     }
 
-    require_newline(FALSE);
+    require_newline(TerminatorPolicy::Newline);
   }
 
   return method;
@@ -3518,7 +3521,10 @@ parse_method(methodmap_t *map)
     map->ctor = method.get();
   }
 
-  require_newline(target->usage & uNATIVE);
+  if (target->usage & uNATIVE)
+    require_newline(TerminatorPolicy::Semicolon);
+  else
+    require_newline(TerminatorPolicy::Newline);
   return method;
 }
 
@@ -3619,7 +3625,7 @@ static bool dousing()
   }
 
   declare_handle_intrinsics();
-  require_newline(TRUE);
+  require_newline(TerminatorPolicy::Semicolon);
   return true;
 }
 
@@ -3703,7 +3709,7 @@ static void domethodmap(LayoutSpec spec)
     map->methods.append(ke::Move(method));
   }
 
-  require_newline(TRUE);
+  require_newline(TerminatorPolicy::Semicolon);
 }
 
 class AutoStage
@@ -3900,7 +3906,7 @@ static void parse_function_type(const ke::UniquePtr<functag_t> &type)
   if (lparen)
     needtoken(')');
 
-  require_newline(TRUE);
+  require_newline(TerminatorPolicy::Semicolon);
   errorset(sRESET, 0);
 }
 
@@ -3950,7 +3956,7 @@ static void dotypeset()
     functags_add(def, ke::Move(type));
   }
 
-  require_newline(TRUE);
+  require_newline(TerminatorPolicy::NewlineOrSemicolon);
 }
 
 /*  decl_enum   - declare enumerated constants
@@ -4216,13 +4222,13 @@ static void decl_enumstruct()
       append_constval(values, decl.name, position, root_tag);
     }
     position += decl.type.numdim ? decl.type.dim[0] : 1;
-    require_newline(TRUE);
+    require_newline(TerminatorPolicy::Semicolon);
   }
 
   if (!position)
     error(119, struct_name.name);
 
-  require_newline(TRUE);
+  require_newline(TerminatorPolicy::Newline);
 
   if (root) {
     assert(root->usage & uENUMROOT);

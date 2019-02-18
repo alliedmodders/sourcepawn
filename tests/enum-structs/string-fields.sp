@@ -4,7 +4,7 @@
 enum struct X {
   char message[20];
   int a;
-};
+}
 
 public main() {
   X x;

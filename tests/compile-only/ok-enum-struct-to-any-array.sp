@@ -7,7 +7,7 @@ dostuff(any[] array) {
 
 enum struct X {
   int inner[5];
-};
+}
 
 public main()
 {

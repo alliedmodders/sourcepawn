@@ -2063,11 +2063,13 @@ int lex(cell *lexvalue,char **lexsym)
 
   tok->start.line = fline;
   tok->start.col = (int)(lptr - pline);
+  tok->start.file = fnumber;
 
   lex_once(tok, lexvalue);
 
   tok->end.line = fline;
   tok->end.col = (int)(lptr - pline);
+  tok->end.file = tok->start.file;
   return tok->id;
 }
 
@@ -2639,15 +2641,15 @@ int peek_same_line()
   return tEOL;
 }
 
-int require_newline(int allow_semi)
+int require_newline(TerminatorPolicy policy)
 {
-  if (allow_semi) {
+  if (policy != TerminatorPolicy::Newline) {
     // Semicolon must be on the same line.
     auto pos = current_token()->start;
     int next_tok_id = peek_same_line();
     if (next_tok_id == ';') {
       lexpop();
-    } else if (sc_needsemicolon) {
+    } else if (policy == TerminatorPolicy::Semicolon && sc_needsemicolon) {
       error(pos, 1, ";", get_token_string(next_tok_id).chars());
     }
   }

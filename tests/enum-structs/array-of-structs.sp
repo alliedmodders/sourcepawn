@@ -4,7 +4,7 @@ enum struct Sample {
   int x;
   int y;
   int data[5];
-};
+}
 
 public main() {
   Sample s[5];

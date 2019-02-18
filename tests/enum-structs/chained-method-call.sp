@@ -4,7 +4,7 @@ methodmap X {
   public void dump() {
     printnum(view_as<int>(this));
   }
-};
+}
 
 enum struct Point {
   int x;
@@ -15,7 +15,7 @@ enum struct Point {
     this.y = y;
     return view_as<X>(this.y);
   }
-};
+}
 
 public main()
 {

@@ -27,6 +27,7 @@
 class Type;
 
 struct token_pos_t {
+  int file;
   int line;
   int col;
 };
@@ -252,7 +253,6 @@ int expecttoken(int id, token_t *tok);
 int matchsymbol(token_ident_t *ident);
 int needsymbol(token_ident_t *ident);
 int peek_same_line();
-int require_newline(int allow_semi);
 void litadd(cell value);
 void litinsert(cell value,int pos);
 int alphanum(char c);
@@ -273,3 +273,11 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
 symbol *addvariable3(declinfo_t *decl,cell addr,int vclass,int slength);
 int getlabel(void);
 char *itoh(ucell val);
+
+enum class TerminatorPolicy {
+  Newline,
+  NewlineOrSemicolon,
+  Semicolon
+};
+
+int require_newline(TerminatorPolicy policy);

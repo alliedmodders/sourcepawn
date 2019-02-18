@@ -8,7 +8,7 @@ enum struct Point {
     this.x = x;
     this.y = y;
   }
-};
+}
 
 void Set(Point p, int x, int y) {
   p.x = x;
