@@ -473,7 +473,12 @@ cleanup:
     free(litq);
   phopt_cleanup();
   stgbuffer_cleanup();
-  clearstk();
+
+  gCurrentFileStack.clear();
+  gCurrentLineStack.clear();
+  gInputFileStack.clear();
+  gInputFilenameStack.clear();
+
   assert(jmpcode!=0 || loctab.next==NULL);/* on normal flow, local symbols
                                            * should already have been deleted */
   delete_symbols(&loctab,0,TRUE,TRUE);    /* delete local variables if not yet
@@ -641,16 +646,17 @@ static void resetglobals(void)
   freading=FALSE;       /* no input file ready yet */
   fline=0;              /* the line number in the current file */
   fnumber=0;            /* the file number in the file table (debugging) */
-  fcurrent=0;           /* current file being processed (debugging) */
-  sc_intest=FALSE;      /* true if inside a test */
   sideeffect=0;         /* true if an expression causes a side-effect */
   stmtindent=0;         /* current indent of the statement */
   indent_nowarn=FALSE;  /* do not skip warning "217 loose indentation" */
-  sc_allowtags=TRUE;    /* allow/detect tagnames */
   sc_status=statIDLE;
   pc_addlibtable=TRUE;  /* by default, add a "library table" to the output file */
   pc_deprecate="";
   pc_memflags=0;
+
+  sc_intest = false;
+  sc_allowtags = true;
+  fcurrent = 0;
 }
 
 static void initglobals(void)
@@ -5764,8 +5770,8 @@ static int test(int label,int parens,int invert)
     #endif
   } /* if */
 
-  PUSHSTK_I(sc_intest);
-  sc_intest=TRUE;
+  ke::SaveAndSet<bool> in_test(&sc_intest, true);
+
   endtok=0;
   if (parens==TEST_PARENS) {
     endtok=')';
@@ -5789,7 +5795,6 @@ static int test(int label,int parens,int invert)
   } /* if */
   if (ident==iCONSTEXPR) {      /* constant expression */
     int testtype=0;
-    sc_intest=(short)POPSTK_I();/* restore stack */
     stgdel(index,cidx);
     if (constval) {             /* code always executed */
       error(206);               /* redundant test: always non-zero */
@@ -5813,7 +5818,6 @@ static int test(int label,int parens,int invert)
   else
     jmp_eq0(label);             /* jump to label if false (equal to 0) */
   markexpr(sEXPR,NULL,0);       /* end expression (give optimizer a chance) */
-  sc_intest=(short)POPSTK_I();  /* double typecast to avoid warning with Microsoft C */
   if (localstaging) {
     stgout(0);                  /* output queue from the very beginning (see
                                  * assert() when localstaging is set to TRUE) */
@@ -6087,9 +6091,9 @@ static int doswitch(void)
       if (swdefault!=FALSE)
         error(15);        /* "default" case must be last in switch statement */
       lbl_case=getlabel();
-      PUSHSTK_I(sc_allowtags);
-      sc_allowtags=FALSE; /* do not allow tagnames here */
       do {
+        /* do not allow tagnames here */
+        ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
         casecount++;
 
         /* ??? enforce/document that, in a switch, a statement cannot start
@@ -6127,7 +6131,6 @@ static int doswitch(void)
         } /* if */
       } while (matchtoken(','));
       needtoken(':');                   /* ':' ends the case */
-      sc_allowtags=(short)POPSTK_I();   /* reset */
       setlabel(lbl_case);
       statement(NULL,FALSE);
       if (lastst != tRETURN)

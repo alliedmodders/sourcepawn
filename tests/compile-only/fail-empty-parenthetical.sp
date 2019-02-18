@@ -1,0 +1,4 @@
+public void OnPluginStart()
+{
+	v = () + ()
+}

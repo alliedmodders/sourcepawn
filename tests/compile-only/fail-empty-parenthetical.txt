@@ -1,0 +1,2 @@
+(3) : error 029: invalid expression, assumed zero
+(4) : error 001: expected token: ")", but found "-end of file-"

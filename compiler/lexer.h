@@ -224,18 +224,6 @@ enum TokenKind {
   tLAST_TOKEN_ID
 };
 
-typedef union {
-  void *pv;                 /* e.g. a name */
-  int i;
-} stkitem;                  /* type of items stored on the compiler stack */
-
-#define PUSHSTK_P(v)  { stkitem s_; s_.pv=(v); pushstk(s_); }
-#define PUSHSTK_I(v)  { stkitem s_; s_.i=(v); pushstk(s_); }
-#define POPSTK_P()    (popstk().pv)
-#define POPSTK_I()    (popstk().i)
-void pushstk(stkitem val);
-stkitem popstk(void);
-void clearstk(void);
 int plungequalifiedfile(char *name);  /* explicit path included */
 int plungefile(char *name,int try_currentpath,int try_includepaths);   /* search through "include" paths */
 void preprocess(void);
