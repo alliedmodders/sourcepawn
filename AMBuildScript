@@ -178,12 +178,21 @@ class Config(object):
           cxx.postlink += ['-lgcc_eh']
         cxx.postlink += ['-lpthread', '-lrt']
       elif builder.target.platform == 'mac':
-        cxx.cflags += [
-          '-mmacosx-version-min=10.5',
-        ]
-        cxx.linkflags += [
-          '-mmacosx-version-min=10.5',
-        ]
+        if cxx.version >= 'apple-clang-10.0':
+          cxx.cflags += [
+            '-stdlib=libc++',
+            '-mmacosx-version-min=10.9',
+          ]
+          cxx.linkflags += [
+            '-mmacosx-version-min=10.9',
+          ]
+        else:
+          cxx.cflags += [
+            '-mmacosx-version-min=10.5',
+          ]
+          cxx.linkflags += [
+            '-mmacosx-version-min=10.5',
+          ]
       elif builder.target.platform == 'windows':
         cxx.defines += ['WIN32', '_WINDOWS']
 
