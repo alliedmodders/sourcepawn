@@ -329,6 +329,7 @@ else:
   if 'vm' in build:
     sp.BuildVM()
   if 'exp' in build:
+    sp.EnsureLibSmx()
     sp.BuildExperimental()
 
 if builder.parent is not None:
