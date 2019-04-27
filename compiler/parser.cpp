@@ -4232,7 +4232,7 @@ static void decl_enumstruct()
     if (decl.type.numdim) {
 		size = decl.type.tag == pc_tag_string ? char_array_cells(decl.type.dim[0]) : decl.type.dim[0];
     }
-    position += csize;
+    position += size;
 
     require_newline(TerminatorPolicy::Semicolon);
   }
