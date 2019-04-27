@@ -4227,7 +4227,13 @@ static void decl_enumstruct()
       sym->usage |= uENUMFIELD;
       append_constval(values, decl.name, position, root_tag);
     }
-    position += decl.type.numdim ? decl.type.dim[0] : 1;
+
+    cell size = 1;
+    if (decl.type.numdim) {
+		size = decl.type.tag == pc_tag_string ? char_array_cells(decl.type.dim[0]) : decl.type.dim[0];
+    }
+    position += csize;
+
     require_newline(TerminatorPolicy::Semicolon);
   }
 
