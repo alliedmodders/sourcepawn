@@ -2001,7 +2001,7 @@ int lex(cell *lexvalue,char **lexsym)
 
   tok->start.line = fline;
   tok->start.col = (int)(lptr - pline);
-  tok->start.file = fnumber;
+  tok->start.file = fcurrent;
 
   lex_once(tok, lexvalue);
 

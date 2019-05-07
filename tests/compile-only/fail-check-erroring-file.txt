@@ -1,0 +1,1 @@
+fail-check-erroring-file.sp(5) : error 001: expected token: ";", but found "<newline>"
