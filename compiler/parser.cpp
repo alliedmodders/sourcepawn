@@ -3715,7 +3715,7 @@ static void domethodmap(LayoutSpec spec)
     map->methods.append(ke::Move(method));
   }
 
-  require_newline(TerminatorPolicy::Semicolon);
+  require_newline(TerminatorPolicy::NewlineOrSemicolon);
 }
 
 class AutoStage
