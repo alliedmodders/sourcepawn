@@ -2124,9 +2124,9 @@ restart:
 
           svalue* implicitthis = &thisval;
           callfunction(cursym, implicitthis, lval1, TRUE);
+          lvalue = FALSE;
 
           if (lexpeek('.')) {
-            lvalue = FALSE;
             goto restart;
           }
         }
