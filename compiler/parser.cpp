@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <amtl/am-string.h>
 #include <amtl/am-unused.h>
 #include <amtl/am-platform.h>
 #include "types.h"
@@ -3641,16 +3642,18 @@ static bool dousing()
  */
 static void domethodmap(LayoutSpec spec)
 {
-  int val;
-  char *str;
+  token_ident_t ident;
   methodmap_t *parent = NULL;
   const char *spectype = layout_spec_name(spec);
 
   // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
   char mapname[sNAMEMAX + 1];
-  if (lex(&val, &str) != tSYMBOL)
-    error(93);
-  strcpy(mapname, str);
+  if (needsymbol(&ident)) {
+    strcpy(mapname, ident.name);
+  } else {
+    static int unknown_methodmap_num = 0;
+    ke::SafeSprintf(mapname, sizeof(mapname), "methodmap_%d", ++unknown_methodmap_num);
+  }
 
   if (!isupper(*mapname))
     error(109, spectype);
@@ -3662,14 +3665,9 @@ static void domethodmap(LayoutSpec spec)
 
   int old_nullable = matchtoken(tNULLABLE);
 
-  if (matchtoken('<')) {
-    if (lex(&val, &str) != tSYMBOL) {
-      error(93);
-      return;
-    }
-
-    if ((parent = methodmap_find_by_name(str)) == NULL) {
-      error(102, spectype, str);
+  if (matchtoken('<') && needsymbol(&ident)) {
+    if ((parent = methodmap_find_by_name(ident.name)) == NULL) {
+      error(102, spectype, ident.name);
     } else if (parent->spec != spec) {
       error(129);
     }
@@ -4483,10 +4481,9 @@ char *operator_symname(char *symname,const char *opername,int tag1,int tag2,int 
   return symname;
 }
 
-static int parse_funcname(const char *fname,int *tag1,int *tag2,char *opname)
+static int parse_funcname(const char *fname,int *tag1,int *tag2,char *opname,size_t opname_len)
 {
   const char* ptr;
-  char* name;
   int unary;
 
   /* tags are only positive, so if the function name starts with a '-',
@@ -4502,10 +4499,11 @@ static int parse_funcname(const char *fname,int *tag1,int *tag2,char *opname)
   } /* if */
   assert(!unary || *tag1==0);
   assert(*ptr!='\0');
-  for (name=opname; !isdigit(*ptr); )
-    *name++ = *ptr++;
-  *name='\0';
-  *tag2=(int)strtol(ptr,NULL,16);
+  size_t chars_to_copy = 0;
+  for (const char* iter = ptr; !isdigit(*iter); iter++)
+    chars_to_copy++;
+  ke::SafeStrcpyN(opname, opname_len, ptr, chars_to_copy);
+  *tag2=(int)strtol(&ptr[chars_to_copy],NULL,16);
   return unary;
 }
 
@@ -4521,7 +4519,7 @@ char *funcdisplayname(char *dest,const char *funcname)
     return dest;
   } /* if */
 
-  unary=parse_funcname(funcname,&tags[0],&tags[1],opname);
+  unary=parse_funcname(funcname,&tags[0],&tags[1],opname,sizeof(opname));
   Type* rhsType = gTypes.find(tags[1]);
   assert(rhsType!=NULL);
   if (unary) {
