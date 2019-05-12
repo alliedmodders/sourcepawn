@@ -112,6 +112,10 @@ It now includes a new reference interpreter, and will officially build and run o
 
 SourcePawn 1.10 is the current development version.
 
-The following legacy features have been removed:
- - `funcenum` and `functag` keywords.
- - Packed array indexing.
+The biggest change in this release is an improved syntax for "enum structs" that works with Transitional Syntax. More information can be found [here](https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs).
+
+Other changes:
+ - Removed `funcenum` and `functag` keywords.
+ - Removed packed array indexing.
+ - Improved compilation speed.
+ - Added a control-flow verifier to the VM.
