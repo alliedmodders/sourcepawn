@@ -114,11 +114,11 @@ abort_compiler()
 {
   if (strlen(errfname)==0) {
     fprintf(stdout, "\nCompilation aborted.");
-  } /* if */
+  } 
   if (outf!=NULL) {
     pc_closeasm(outf,TRUE);
     outf=NULL;
-  } /* if */
+  } 
   longjmp(errbuf,2);          /* fatal error, quit */
 }
 
@@ -268,7 +268,7 @@ void errorset(int code,int line)
   case sFORCESET:
     errflag=TRUE;       /* stop reporting errors */
     break;
-  } /* switch */
+  } 
 }
 
 /* sc_enablewarning()
@@ -304,7 +304,7 @@ int pc_enablewarning(int number,int enable)
   case 2:
     warndisable[index] ^= mask;
     break;
-  } /* switch */
+  } 
 
   return TRUE;
 }

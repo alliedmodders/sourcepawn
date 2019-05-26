@@ -77,7 +77,7 @@ void writetrailer(void)
     begcseg();
     while ((code_idx % sc_dataalign)!=0)
       nooperation();
-  } /* if */
+  } 
 
   /* pad data segment to align the stack and the heap */
   assert(litidx==0 || !cc_ok());            /* literal queue should have been emptied */
@@ -88,8 +88,8 @@ void writetrailer(void)
     while (((glb_declared*sizeof(cell)) % sc_dataalign)!=0) {
       stgwrite("0 ");
       glb_declared++;
-    } /* while */
-  } /* if */
+    } 
+  } 
 
   stgwrite("\nSTKSIZE ");       /* write stack size (align stack top) */
   outval(pc_stksize - (pc_stksize % sc_dataalign), TRUE);
@@ -134,7 +134,7 @@ void begdseg(void)
     outval((glb_declared-litidx)*sizeof(cell),TRUE);
     curseg=sIN_DSEG;
     fcurseg=fcurrent;
-  } /* if */
+  } 
 }
 
 void setline(int chkbounds)
@@ -142,7 +142,7 @@ void setline(int chkbounds)
   if (sc_asmfile) {
     stgwrite("\t; line ");
     outval(fline,TRUE);
-  } /* if */
+  } 
   if ((sc_debug & sSYMBOLIC)!=0 || (chkbounds && (sc_debug & sCHKBOUNDS)!=0)) {
     /* generate a "break" (start statement) opcode rather than a "line" opcode
      * because earlier versions of Small/Pawn have an incompatible version of the
@@ -151,7 +151,7 @@ void setline(int chkbounds)
     stgwrite("\tbreak\t; ");
     outval(code_idx,TRUE);
     code_idx+=opcodes(1);
-  } /* if */
+  } 
 }
 
 void setfiledirect(char *name)
@@ -161,7 +161,7 @@ void setfiledirect(char *name)
     pc_writeasm(outf,"#file ");
     pc_writeasm(outf,name);
     pc_writeasm(outf,"\n");
-  } /* if */
+  } 
 }
 
 void setlinedirect(int line)
@@ -170,7 +170,7 @@ void setlinedirect(int line)
     char string[40];
     sprintf(string,"#line %d\n",line);
     pc_writeasm(outf,string);
-  } /* if */
+  } 
 }
 
 /*  setlabel
@@ -190,7 +190,7 @@ void setlabel(int number)
   if (!staging) {
     stgwrite("\t\t; ");
     outval(code_idx,FALSE);
-  } /* if */
+  } 
   stgwrite("\n");
 }
 
@@ -216,7 +216,7 @@ void markexpr(optmark type,const char *name,cell offset)
     break;
   default:
     assert(0);
-  } /* switch */
+  } 
 }
 
 /*  startfunc   - declare a CODE entry point (function start)
@@ -231,7 +231,7 @@ void startfunc(const char *fname)
     funcdisplayname(symname,fname);
     stgwrite("\t; ");
     stgwrite(symname);
-  } /* if */
+  } 
   stgwrite("\n");
   code_idx+=opcodes(1);
 }
@@ -284,7 +284,7 @@ void rvalue(value *lval)
     outval(sym->addr(),TRUE);
     markusage(sym,uREAD);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 // Wrapper that automatically markes lvalues as decayed if they are accessors,
@@ -317,7 +317,7 @@ void address(symbol *sym,regid reg)
     case sALT:
       stgwrite("\tload.s.alt ");
       break;
-    } /* switch */
+    } 
   } else {
     /* a local array or local variable */
     switch (reg) {
@@ -333,8 +333,8 @@ void address(symbol *sym,regid reg)
       else
         stgwrite("\tconst.alt ");
       break;
-    } /* switch */
-  } /* if */
+    } 
+  } 
   outval(sym->addr(),TRUE);
   markusage(sym,uREAD);
   code_idx+=opcodes(1)+opargs(1);
@@ -435,7 +435,7 @@ void store(value *lval)
       stgwrite("\tstor.pri ");
     outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 /* Get a cell from a fixed address in memory */
@@ -492,7 +492,7 @@ void copyarray(symbol *sym,cell size)
       stgwrite("\taddr.alt ");
     else
       stgwrite("\tconst.alt ");
-  } /* if */
+  } 
   outval(sym->addr(),TRUE);
   markusage(sym,uWRITTEN);
 
@@ -518,7 +518,7 @@ void fillarray(symbol *sym,cell size,cell value)
       stgwrite("\taddr.alt ");
     else
       stgwrite("\tconst.alt ");
-  } /* if */
+  } 
   outval(sym->addr(),TRUE);
   markusage(sym,uWRITTEN);
 
@@ -551,7 +551,7 @@ void ldconst(cell val,regid reg)
       stgwrite("\tconst.pri ");
       outval(val, TRUE);
       code_idx+=opcodes(1)+opargs(1);
-    } /* if */
+    } 
     break;
   case sALT:
     if (val==0) {
@@ -561,9 +561,9 @@ void ldconst(cell val,regid reg)
       stgwrite("\tconst.alt ");
       outval(val, TRUE);
       code_idx+=opcodes(1)+opargs(1);
-    } /* if */
+    } 
     break;
-  } /* switch */
+  } 
 }
 
 /* Copy value in alternate register to the primary register */
@@ -591,7 +591,7 @@ void pushreg(regid reg)
   case sALT:
     stgwrite("\tpush.alt\n");
     break;
-  } /* switch */
+  } 
   code_idx+=opcodes(1);
 }
 
@@ -617,7 +617,7 @@ void popreg(regid reg)
   case sALT:
     stgwrite("\tpop.alt\n");
     break;
-  } /* switch */
+  } 
   code_idx+=opcodes(1);
 }
 
@@ -669,7 +669,7 @@ void ffcase(cell value,char *labelname,int newtable)
   if (newtable) {
     stgwrite("\tcasetbl\n");
     code_idx+=opcodes(1);
-  } /* if */
+  } 
   stgwrite("\tcase ");
   outval(value,FALSE);
   stgwrite(" ");
@@ -713,7 +713,7 @@ void ffcall(symbol *sym,const char *label,int numargs)
     if (sc_asmfile) {
       stgwrite("\t; ");
       stgwrite(symname);
-    } /* if */
+    } 
     stgwrite("\n"); /* write on a separate line, to mark a sequence point for the peephole optimizer */
     code_idx+=opcodes(1)+opargs(2);
   } else {
@@ -726,15 +726,15 @@ void ffcall(symbol *sym,const char *label,int numargs)
       stgwrite(label);
     } else {
       stgwrite(symname);
-    } /* if */
+    } 
     if (sc_asmfile && (label!=NULL || (!isalpha(symname[0]) && symname[0]!='_'  && symname[0]!=sc_ctrlchar)))
     {
       stgwrite("\t; ");
       stgwrite(symname);
-    } /* if */
+    } 
     stgwrite("\n");
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 /*  Return from function
@@ -798,7 +798,7 @@ void modstk(int delta)
     stgwrite("\tstack ");
     outval(delta, TRUE);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 void modheap(int delta)
@@ -807,7 +807,7 @@ void modheap(int delta)
     stgwrite("\theap ");
     outval(delta, TRUE);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 void modheap_i()
@@ -896,7 +896,7 @@ void addconst(cell value)
     stgwrite("\tadd.c ");
     outval(value,TRUE);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 /*
@@ -1196,7 +1196,7 @@ void inc(value *lval)
       stgwrite("\tinc ");
     outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 /*  decrement symbol
@@ -1248,7 +1248,7 @@ void dec(value *lval)
       stgwrite("\tdec ");
     outval(sym->addr(),TRUE);
     code_idx+=opcodes(1)+opargs(1);
-  } /* if */
+  } 
 }
 
 /*

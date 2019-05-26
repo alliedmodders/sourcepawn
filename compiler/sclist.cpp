@@ -103,7 +103,7 @@ static char *get_string(stringlist *root,int index)
   if (cur!=NULL) {
     assert(cur->line!=NULL);
     return cur->line;
-  } /* if */
+  } 
   return NULL;
 }
 
@@ -119,7 +119,7 @@ void delete_stringtable(stringlist *root)
     free(cur->line);
     free(cur);
     cur=next;
-  } /* while */
+  } 
   memset(root,0,sizeof(stringlist));
 }
 
@@ -319,7 +319,7 @@ stringlist *insert_dbgfile(const char *filename)
     assert(strlen(filename)+40<sizeof string);
     sprintf(string,"F:%" PRIxC " %s",code_idx,filename);
     return insert_string(&dbgstrings,string);
-  } /* if */
+  } 
   return NULL;
 }
 
@@ -331,7 +331,7 @@ stringlist *insert_dbgline(int linenr)
       linenr--;         /* line numbers are zero-based in the debug information */
     sprintf(string,"L:%" PRIxC " %x",code_idx,linenr);
     return insert_string(&dbgstrings,string);
-  } /* if */
+  } 
   return NULL;
 }
 
@@ -355,9 +355,9 @@ stringlist *insert_dbgsymbol(symbol *sym)
       for (sub=sym; sub!=NULL; sub=sub->array_child()) {
         assert(sub->dim.array.level==count--);
         sprintf(string+strlen(string),"%x:%x ",sub->x.tags.index,sub->dim.array.length);
-      } /* for */
+      } 
       strcat(string,"]");
-    } /* if */
+    } 
 
     if (curfunc) {
       if (!curfunc->function()->dbgstrs)
@@ -365,7 +365,7 @@ stringlist *insert_dbgsymbol(symbol *sym)
       return insert_string(curfunc->function()->dbgstrs, string);
     }
     return insert_string(&dbgstrings, string);
-  } /* if */
+  } 
   return NULL;
 }
 

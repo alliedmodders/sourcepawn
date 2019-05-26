@@ -110,13 +110,13 @@ int plungequalifiedfile(char *name)
       fp=pc_opensrc(name);
       if (fp==NULL)
         *ext='\0';              /* on failure, restore filename */
-    } /* if */
+    } 
     ext_idx++;
   } while (fp==NULL && ext_idx<(sizeof extensions / sizeof extensions[0]));
   if (fp==NULL) {
     *ext='\0';                  /* restore filename */
     return FALSE;
-  } /* if */
+  } 
   if (sc_showincludes && sc_status==statFIRST) {
     fprintf(stdout, "Note: including file: %s\n", name);
   }
@@ -164,10 +164,10 @@ int plungefile(char *name,int try_currentpath,int try_includepaths)
           strlcpy(path,inpfname,len+1);
           strlcat(path,name,sizeof path);
           result=plungequalifiedfile(path);
-        } /* if */
-      } /* if */
-    } /* if */
-  } /* if */
+        } 
+      } 
+    } 
+  } 
 
   if (try_includepaths && name[0]!=DIRSEP_CHAR) {
     int i;
@@ -177,8 +177,8 @@ int plungefile(char *name,int try_currentpath,int try_includepaths)
       strlcpy(path,ptr,sizeof path);
       strlcat(path,name,sizeof path);
       result=plungequalifiedfile(path);
-    } /* while */
-  } /* if */
+    } 
+  } 
   return result;
 }
 
@@ -218,7 +218,7 @@ static void doinclude(int silent)
       lptr++;
   } else {
     c='\0';
-  } /* if */
+  } 
 
   i=0;
   while (*lptr!=c && *lptr!='\0' && i<sizeof name - 1)  /* find the end of the string */
@@ -231,7 +231,7 @@ static void doinclude(int silent)
   if (*lptr!=c) {               /* verify correct string termination */
     error(37);                  /* invalid string */
     return;
-  } /* if */
+  } 
   if (c!='\0')
     check_empty(lptr+1);        /* verify that the rest of the line is whitespace */
 
@@ -277,7 +277,7 @@ static void readline(unsigned char *line)
         else if (icomment!=0)
           error(1,"*/","-end of file-");
         return;
-      } /* if */
+      } 
       fline=gCurrentLineStack.popCopy();
       fcurrent=gCurrentFileStack.popCopy();
       icomment=sCommentStack.popCopy();
@@ -291,7 +291,7 @@ static void readline(unsigned char *line)
       setfiledirect(inpfname);
       assert(sc_status==statFIRST || strcmp(get_inputfile(fcurrent),inpfname)==0);
       listline=-1;              /* force a #line directive when changing the file */
-    } /* if */
+    } 
 
     if (pc_readsrc(inpf,line,num)==NULL) {
       *line='\0';     /* delete line */
@@ -304,7 +304,7 @@ static void readline(unsigned char *line)
           ptr++;
         if (ptr!=line)
           memmove(line,ptr,strlen((char*)ptr)+1);
-      } /* if */
+      } 
       cont=FALSE;
       /* check whether a full line was read */
       if (strchr((char*)line,'\n')==NULL && !pc_eofsrc(inpf))
@@ -323,11 +323,11 @@ static void readline(unsigned char *line)
            */
           *ptr++='\a';
           *ptr='\0';    /* erase '\n' (and any trailing whitespace) */
-        } /* if */
-      } /* if */
+        } 
+      } 
       num-=strlen((char*)line);
       line+=strlen((char*)line);
-    } /* if */
+    } 
     fline+=1;
     sym=findconst("__LINE__");
     assert(sym!=NULL);
@@ -363,7 +363,7 @@ static void stripcom(unsigned char *line)
         if (icomment==2) {
           assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
           comment[commentidx]='\0';
-        } /* if */
+        } 
         icomment=0;     /* comment has ended */
         *line=' ';      /* replace '*' and '/' characters by spaces */
         *(line+1)=' ';
@@ -380,20 +380,20 @@ static void stripcom(unsigned char *line)
             if (commentidx>COMMENT_LIMIT && *line!='\0' && *line<=' ') {
               comment[commentidx]='\0';
               commentidx=0;
-            } /* if */
+            } 
             skipstar=FALSE;
-          } /* if */
-        } /* if */
+          } 
+        } 
         *line=' ';      /* replace comments by spaces */
         line+=1;
-      } /* if */
+      } 
     } else {
       if (*line=='/' && *(line+1)=='*'){
         icomment=1;     /* start comment */
         /* there must be two "*" behind the slash and then white space */
         if (*(line+2)=='*' && *(line+3)<=' ') {
           icomment=2; /* documentation comment */
-        } /* if */
+        } 
         commentidx=0;
         skipstar=TRUE;
         *line=' ';      /* replace '/' and '*' characters by spaces */
@@ -412,7 +412,7 @@ static void stripcom(unsigned char *line)
             str++;    /* skip leading whitespace */
           if ((end=strrchr(str,'\n'))!=NULL)
             *end='\0';/* erase trailing '\n' */
-        } /* if */
+        } 
         *line++='\n';   /* put "newline" at first slash */
         *line='\0';     /* put "zero-terminator" at second slash */
       } else {
@@ -423,18 +423,18 @@ static void stripcom(unsigned char *line)
             if (*line==sc_ctrlchar && *(line+1)!='\0')
               line+=1;  /* skip escape character (but avoid skipping past '\0' */
             line+=1;
-          } /* while */
+          } 
           line+=1;      /* skip final quote */
         } else {
           line+=1;
-        } /* if */
-      } /* if */
-    } /* if */
-  } /* while */
+        } 
+      } 
+    } 
+  } 
   if (icomment==2) {
     assert(commentidx<COMMENT_LIMIT+COMMENT_MARGIN);
     comment[commentidx]='\0';
-  } /* if */
+  } 
 }
 
 /*  btoi
@@ -458,10 +458,10 @@ static int btoi(cell *val,const unsigned char *curptr)
       if (*ptr!='_')
         *val=(*val<<1) | (*ptr-'0');
       ptr++;
-    } /* while */
+    } 
   } else {
     return 0;
-  } /* if */
+  } 
   if (alphanum(*ptr))   /* number must be delimited by non-alphanumeric char */
     return 0;
   else
@@ -490,12 +490,12 @@ static int otoi(cell *val,const unsigned char *curptr)
       if (*ptr!='_') {
         assert(isoctal(*ptr));
         *val= (*val<<3) + (*ptr-'0');
-      } /* if */
+      } 
       ptr++;
-    } /* while */
+    } 
   } else {
     return 0;
-  } /* if */
+  } 
   if (alphanum(*ptr))   /* number must be delimited by non-alphanumeric char */
     return 0;
   else
@@ -520,7 +520,7 @@ static int dtoi(cell *val,const unsigned char *curptr)
     if (*ptr!='_')
       *val=(*val*10)+(*ptr-'0');
     ptr++;
-  } /* while */
+  } 
   if (alphanum(*ptr))   /* number must be delimited by non-alphanumerical */
     return 0;
   if (*ptr=='.' && isdigit(*(ptr+1)))
@@ -552,12 +552,12 @@ static int htoi(cell *val,const unsigned char *curptr)
           *val+= (*ptr-'0');
         else
           *val+= (tolower(*ptr)-'a'+10);
-      } /* if */
+      } 
       ptr++;
-    } /* while */
+    } 
   } else {
     return 0;
-  } /* if */
+  } 
   if (alphanum(*ptr))
     return 0;
   else
@@ -598,9 +598,9 @@ static int ftoi(cell *val,const unsigned char *curptr)
     if (*ptr!='_') {
       fnum=(fnum*10.0)+(*ptr-'0');
       dnum=(dnum*10L)+(*ptr-'0')*dbase;
-    } /* if */
+    } 
     ptr++;
-  } /* while */
+  } 
   if (*ptr!='.')
     return 0;           /* there must be a period */
   ptr++;
@@ -618,10 +618,10 @@ static int ftoi(cell *val,const unsigned char *curptr)
       if (dbase==0L && sc_rationaltag && rational_digits>0 && !ignore) {
         error(222);     /* number of digits exceeds rational number precision */
         ignore=TRUE;
-      } /* if */
-    } /* if */
+      } 
+    } 
     ptr++;
-  } /* while */
+  } 
   fnum += ffrac*fmult;  /* form the number so far */
   if (*ptr=='e') {      /* optional fractional part */
     int exp,sign;
@@ -631,18 +631,18 @@ static int ftoi(cell *val,const unsigned char *curptr)
       ptr++;
     } else {
       sign=1;
-    } /* if */
+    } 
     if (!isdigit(*ptr)) /* 'e' should be followed by a digit */
       return 0;
     exp=0;
     while (isdigit(*ptr)) {
       exp=(exp*10)+(*ptr-'0');
       ptr++;
-    } /* while */
+    } 
     fmult=pow(10.0,exp*sign);
     fnum *= fmult;
     dnum *= (unsigned long)(fmult+0.5);
-  } /* if */
+  } 
 
   /* decide how to store the number */
   if (sc_rationaltag==0) {
@@ -689,7 +689,7 @@ static int ftoi(cell *val,const unsigned char *curptr)
   } else {
     /* fixed point */
     *val=(cell)dnum;
-  } /* if */
+  } 
 
   return (int)(ptr-curptr);
 }
@@ -720,7 +720,7 @@ static int number(cell *val,const unsigned char *curptr)
     return i;
   } else {
     return 0;                      /* else not a number */
-  } /* if */
+  } 
 }
 
 static void chrcat(char *str,char chr)
@@ -746,7 +746,7 @@ static int preproc_expr(cell *val,int *tag)
     error(57);                          /* unfinished expression */
     stgdel(0,code_index);
     stgset(FALSE);
-  } /* if */
+  } 
   assert((lptr-pline)<(int)strlen((char*)pline));   /* lptr must point inside the string */
   /* preprocess the string */
   substallpatterns(pline,sLINEMAX);
@@ -782,7 +782,7 @@ static const unsigned char *getstring(unsigned char *dest,int max,const unsigned
       if (len<max-1)
         dest[len++]=*line;
       line++;
-    } /* if */
+    } 
     dest[len]='\0';
     if (*line=='"')
       line++;           /* skip closing " */
@@ -790,7 +790,7 @@ static const unsigned char *getstring(unsigned char *dest,int max,const unsigned
       error(37);        /* invalid string */
   } else {
     error(37);          /* invalid string */
-  } /* if */
+  } 
   return line;
 }
 
@@ -844,7 +844,7 @@ static int command(void)
   if (!sc_needsemicolon && stgget(&index,&code_index)) {
     lptr=term_expr;
     return CMD_TERM;
-  } /* if */
+  } 
   tok=lex(&val,&str);
   ret=SKIPPING ? CMD_CONDFALSE : CMD_DIRECTIVE;  /* preset 'ret' to CMD_DIRECTIVE (most common case) */
   switch (tok) {
@@ -892,7 +892,7 @@ static int command(void)
               preproc_expr(&val,NULL);  /* get, but ignore the expression */
             else
               lptr=(unsigned char*)strchr((char*)lptr,'\0');
-          } /* if */
+          } 
         } else {
           /* previous conditions were all FALSE */
           if (tok==tpELSEIF) {
@@ -904,15 +904,15 @@ static int command(void)
             } else {
               lptr=(unsigned char*)strchr((char*)lptr,'\0');
               val=0;
-            } /* if */
+            } 
             ifstack[iflevel-1]=(char)(val ? PARSEMODE : SKIPMODE);
           } else {
             /* a simple #else, clear skip mode */
             ifstack[iflevel-1] &= (char)~SKIPMODE;
-          } /* if */
-        } /* if */
-      } /* if */
-    } /* if */
+          } 
+        } 
+      } 
+    } 
     check_empty(lptr);
     break;
   case tpENDIF:
@@ -924,7 +924,7 @@ static int command(void)
       iflevel--;
       if (iflevel<skiplevel)
         skiplevel=iflevel;
-    } /* if */
+    } 
     check_empty(lptr);
     break;
   case tINCLUDE:                /* #include directive */
@@ -943,8 +943,8 @@ static int command(void)
         if (inpfname==NULL)
           error(FATAL_ERROR_OOM);
         fline=0;
-      } /* if */
-    } /* if */
+      } 
+    } 
     check_empty(lptr);
     break;
   case tpLINE:
@@ -952,7 +952,7 @@ static int command(void)
       if (lex(&val,&str)!=tNUMBER)
         error(8);               /* invalid/non-constant expression */
       fline=(int)val;
-    } /* if */
+    } 
     check_empty(lptr);
     break;
   case tpASSERT:
@@ -963,7 +963,7 @@ static int command(void)
       if (!val)
         error(FATAL_ERROR_ASSERTION_FAILED,str);         /* assertion failed */
       check_empty(lptr);
-    } /* if */
+    } 
     break;
   case tpPRAGMA:
     if (!SKIPPING) {
@@ -977,7 +977,7 @@ static int command(void)
             if (lex(&val,&str)!=tNUMBER)
               error(27);          /* invalid character constant */
             sc_ctrlchar=(char)val;
-          } /* if */
+          } 
         } else if (strcmp(str,"deprecated")==0) {
           while (*lptr<=' ' && *lptr!='\0')
             lptr++;
@@ -1029,7 +1029,7 @@ static int command(void)
                 sym->usage |= uWRITTEN;
             } else {
               error(17,name);     /* undefined symbol */
-            } /* if */
+            } 
             /* see if a comma follows the name */
             while (*lptr<=' ' && *lptr!='\0')
               lptr++;
@@ -1039,12 +1039,12 @@ static int command(void)
           } while (comma);
         } else {
           error(207);           /* unknown #pragma */
-        } /* if */
+        } 
       } else {
         error(207);             /* unknown #pragma */
-      } /* if */
+      } 
       check_empty(lptr);
-    } /* if */
+    } 
     break;
   case tpENDINPUT:
   case tpENDSCRPT:
@@ -1054,7 +1054,7 @@ static int command(void)
       if (inpf!=inpf_org)
         pc_closesrc(inpf);
       inpf=NULL;
-    } /* if */
+    } 
     break;
   case tpDEFINE: {
     ret=CMD_DEFINE;
@@ -1070,13 +1070,13 @@ static int command(void)
       while (*lptr>' ' && *lptr!='\0') {
         litchar(&lptr,0); /* litchar() advances "lptr" and handles escape characters */
         count++;
-      } /* while */
+      } 
       end=lptr;
       /* check pattern to match */
       if (!alpha(*start)) {
         error(74);      /* pattern must start with an alphabetic character */
         break;
-      } /* if */
+      } 
       /* store matched pattern */
       pattern=(char*)malloc(count+1);
       if (pattern==NULL)
@@ -1087,7 +1087,7 @@ static int command(void)
         assert(lptr<end);
         assert(*lptr!='\0');
         pattern[count++]=(char)litchar(&lptr,0);
-      } /* while */
+      } 
       pattern[count]='\0';
       /* special case, erase trailing variable, because it could match anything */
       if (count>=2 && isdigit(pattern[count-1]) && pattern[count-2]=='%')
@@ -1105,10 +1105,10 @@ static int command(void)
             end=lptr;
         } else {
           end=NULL;
-        } /* if */
+        } 
         count++;
         lptr++;
-      } /* while */
+      } 
       if (end==NULL)
         end=lptr;
       /* store matched substitution */
@@ -1121,7 +1121,7 @@ static int command(void)
         assert(lptr<end);
         assert(*lptr!='\0');
         substitution[count++]=*lptr++;
-      } /* while */
+      } 
       substitution[count]='\0';
       /* check whether the definition already exists */
       for (prefixlen=0,start=(unsigned char*)pattern; alphanum(*start); prefixlen++,start++)
@@ -1133,13 +1133,13 @@ static int command(void)
         if (strcmp(def.first,pattern)!=0 || strcmp(def.second,substitution)!=0)
           error(201,pattern);   /* redefinition of macro (non-identical) */
         delete_subst(pattern,prefixlen);
-      } /* if */
+      } 
       /* add the pattern/substitution pair to the list */
       assert(strlen(pattern)>0);
       insert_subst(pattern, prefixlen, substitution);
       free(pattern);
       free(substitution);
-    } /* if */
+    } 
     break;
   } /* case */
   case tpUNDEF:
@@ -1150,15 +1150,15 @@ static int command(void)
           symbol *sym=findconst(str);
           if (sym!=NULL && (sym->usage & (uENUMROOT | uENUMFIELD))==0) {
             delete_symbol(&glbtab,sym);
-          } /* if */
-        } /* if */
+          } 
+        } 
         if (!ret)
           error(17,str);        /* undefined symbol */
       } else {
         error(20,str);          /* invalid symbol name */
-      } /* if */
+      } 
       check_empty(lptr);
-    } /* if */
+    } 
     break;
   case tpERROR:
     while (*lptr<=' ' && *lptr!='\0')
@@ -1175,7 +1175,7 @@ static int command(void)
   default:
     error(31);          /* unknown compiler directive */
     ret=SKIPPING ? CMD_CONDFALSE : CMD_NONE;  /* process as normal line */
-  } /* switch */
+  } 
   return ret;
 }
 
@@ -1192,7 +1192,7 @@ static int is_startstring(const unsigned char *string)
       string++;
       if (*string=='\"' || *string=='\'')
         return TRUE;                    /* !\"..." */
-    } /* if */
+    } 
   } else if (*string==sc_ctrlchar) {
     string++;
     if (*string=='\"' || *string=='\'')
@@ -1201,8 +1201,8 @@ static int is_startstring(const unsigned char *string)
       string++;
       if (*string=='\"' || *string=='\'')
         return TRUE;                    /* \!"..." */
-    } /* if */
-  } /* if */
+    } 
+  } 
 
   return FALSE;
 }
@@ -1216,7 +1216,7 @@ static const unsigned char *skipstring(const unsigned char *string)
     if (*string==sc_ctrlchar)
       flags=RAWMODE;
     string++;
-  } /* while */
+  } 
 
   endquote=*string;
   assert(endquote=='"' || endquote=='\'');
@@ -1248,7 +1248,7 @@ static const unsigned char *skippgroup(const unsigned char *string)
   default:
     assert(0);
     close='\0';         /* only to avoid a compiler warning */
-  }/* switch */
+  }
 
   string++;
   while (*string!=close || nest>0) {
@@ -1261,7 +1261,7 @@ static const unsigned char *skippgroup(const unsigned char *string)
     if (*string=='\0')
       break;
     string++;
-  } /* while */
+  } 
   return string;
 }
 
@@ -1326,7 +1326,7 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
           if (*e!='\0')
             e++;      /* skip non-alphapetic character (or closing quote of
                        * a string, or the closing paranthese of a group) */
-        } /* while */
+        } 
         /* store the parameter (overrule any earlier) */
         if (args[arg]!=NULL)
           free(args[arg]);
@@ -1346,11 +1346,11 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
           assert(*e=='\0' || *e=='\n');
           match=FALSE;
           s=e;
-        } /* if */
+        } 
         p++;
       } else {
         match=FALSE;
-      } /* if */
+      } 
     } else if (*p==';' && *(p+1)=='\0' && !sc_needsemicolon) {
       /* source may be ';' or end of the line */
       while (*s<=' ' && *s!='\0')
@@ -1372,8 +1372,8 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
         match=FALSE;
       else
         s++;                    /* this character matches */
-    } /* if */
-  } /* while */
+    } 
+  } 
 
   if (match && *p=='\0') {
     /* if the last character to match is an alphanumeric character, the
@@ -1382,7 +1382,7 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
     assert(p>(unsigned char*)pattern);
     if (alphanum(*(p-1)) && alphanum(*s))
       match=FALSE;
-  } /* if */
+  } 
 
   if (match) {
     /* calculate the length of the substituted string */
@@ -1392,7 +1392,7 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
           e++;           /* skip '#' */
       } else {
         stringize=0;
-      } /* if */
+      } 
       if (*e=='%' && isdigit(*(e+1)) && argsnum) {
         arg=*(e+1)-'0';
         assert(arg>=0 && arg<=9);
@@ -1405,8 +1405,8 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
         }
       } else {
         len++;
-      } /* if */
-    } /* for */
+      } 
+    } 
     /* check length of the string after substitution */
     if (strlen((char*)line) + len - (int)(s-line) > buffersize) {
       error(75);      /* line too long */
@@ -1419,7 +1419,7 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
           e++;         /* skip '#' */
         } else {
           stringize=0;
-        } /* if */
+        } 
         if (*e=='%' && isdigit(*(e+1))) {
           arg=*(e+1)-'0';
           assert(arg>=0 && arg<=9);
@@ -1434,7 +1434,7 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
             error(236); /* parameter does not exist, incorrect #define pattern */
             strins((char*)s,(char*)e,2);
             s+=2;
-          } /* if */
+          } 
           e++;          /* skip %, digit is skipped later */
         } else if (*e == '"') {
           p=e;
@@ -1449,10 +1449,10 @@ static int substpattern(unsigned char *line, size_t buffersize, const char *patt
         } else {
           strins((char*)s,(char*)e,1);
           s++;
-        } /* if */
-      } /* for */
-    } /* if */
-  } /* if */
+        } 
+      } 
+    } 
+  } 
 
   for (arg=0; arg<10; arg++)
     if (args[arg]!=NULL)
@@ -1477,9 +1477,9 @@ static void substallpatterns(unsigned char *line,int buffersize)
         start=(unsigned char *)skipstring(start);
         if (*start=='\0')
           break;        /* abort loop on error */
-      } /* if */
+      } 
       start++;          /* skip non-alphapetic character (or closing quote of a string) */
-    } /* while */
+    } 
     if (*start=='\0')
       break;            /* abort loop on error */
     /* if matching the operator "defined", skip it plus the symbol behind it */
@@ -1493,14 +1493,14 @@ static void substallpatterns(unsigned char *line,int buffersize)
         start++;
       /* drop back into the main loop */
       continue;
-    } /* if */
+    } 
     /* get the prefix (length), look for a matching definition */
     prefixlen=0;
     end=start;
     while (alphanum(*end)) {
       prefixlen++;
       end++;
-    } /* while */
+    } 
     assert(prefixlen>0);
 
     macro_t subst;
@@ -1513,8 +1513,8 @@ static void substallpatterns(unsigned char *line,int buffersize)
        */
     } else {
       start=end;        /* no macro with this prefix, skip this prefix */
-    } /* if */
-  } /* while */
+    } 
+  } 
 }
 
 /*  scanellipsis
@@ -1563,7 +1563,7 @@ static int scanellipsis(const unsigned char *lptr)
       found=1;
     else if (*lptr!='\0')
       break;                       /* stumbled on something that is not an ellipsis and not white-space */
-  } /* while */
+  } 
 
   /* clean up & reset */
   free(localbuf);
@@ -1601,7 +1601,7 @@ void preprocess(void)
       assert(lptr!=term_expr);
       substallpatterns(pline,sLINEMAX);
       lptr=pline;       /* reset "line pointer" to start of the parsing buffer */
-    } /* if */
+    } 
     if (sc_status==statFIRST && sc_listing && freading
         && (iscommand==CMD_NONE || iscommand==CMD_EMPTYLINE || iscommand==CMD_DIRECTIVE))
     {
@@ -1609,12 +1609,12 @@ void preprocess(void)
       if (fline!=listline) {
         listline=fline;
         setlinedirect(fline);
-      } /* if */
+      } 
       if (iscommand==CMD_EMPTYLINE)
         pc_writeasm(outf,"\n");
       else
         pc_writeasm(outf,(char*)pline);
-    } /* if */
+    } 
   } while (iscommand!=CMD_NONE && iscommand!=CMD_TERM && freading); /* enddo */
 }
 
@@ -1624,9 +1624,9 @@ static const unsigned char *unpackedstring(const unsigned char *lptr,int flags)
     if (*lptr=='\a') {          /* ignore '\a' (which was inserted at a line concatenation) */
       lptr++;
       continue;
-    } /* if */
+    } 
     litadd(litchar(&lptr,flags | UTF8MODE));  /* litchar() alters "lptr" */
-  } /* while */
+  } 
   litadd(0);                    /* terminate string */
   return lptr;
 }
@@ -1643,7 +1643,7 @@ static const unsigned char *packedstring(const unsigned char *lptr,int flags)
     if (*lptr=='\a') {          /* ignore '\a' (which was inserted at a line concatenation) */
       lptr++;
       continue;
-    } /* if */
+    } 
     c=litchar(&lptr,flags);     /* litchar() alters "lptr" */
     if (c>=(ucell)(1 << sCHARBITS))
       error(43);                /* character constant exceeds range */
@@ -1656,7 +1656,7 @@ static const unsigned char *packedstring(const unsigned char *lptr,int flags)
     } else {
       i=i+1;
     }
-  } /* if */
+  } 
   /* save last code; make sure there is at least one terminating zero character */
   if (i!=0)
     litadd(val);        /* at least one zero character in "val" */
@@ -1988,8 +1988,8 @@ int lex(cell *lexvalue,char **lexsym)
       newline=TRUE;
     } else {
       lptr+=1;
-    } /* if */
-  } /* while */
+    } 
+  } 
   if (newline) {
     stmtindent=0;
     for (int i=0; i<(int)(lptr-pline); i++)
@@ -1997,7 +1997,7 @@ int lex(cell *lexvalue,char **lexsym)
         stmtindent += (int)(sc_tabsize - (stmtindent+sc_tabsize) % sc_tabsize);
       else
         stmtindent++;
-  } /* if */
+  } 
 
   tok->start.line = fline;
   tok->start.col = (int)(lptr - pline);
@@ -2264,9 +2264,9 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         *cat++=*lptr;
         if (*lptr==sc_ctrlchar && *(lptr+1)!='\0')
           *cat++=*++lptr; /* skip escape character plus the escaped character */
-        } /* if */
+        } 
       lptr++;
-    } /* while */
+    } 
     *cat='\0';          /* terminate string */
     tok->len = (size_t)(cat - tok->str);
     if (*lptr=='\"')
@@ -2283,8 +2283,8 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         assert(freading && lptr!=term_expr);
       } else {
         lptr++;
-      } /* if */
-    } /* while */
+      } 
+    } 
     assert(freading && lptr[0]=='.' && lptr[1]=='.' && lptr[2]=='.');
     lptr+=3;
     while (*lptr<=' ') {
@@ -2293,13 +2293,13 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         assert(freading && lptr!=term_expr);
       } else {
         lptr++;
-      } /* if */
-    } /* while */
+      } 
+    } 
     if (!freading || !(*lptr=='\"')) {
       error(37);                /* invalid string concatenation */
       break;
-    } /* if */
-  } /* for */
+    } 
+  } 
   if (sc_packstr)
     stringflags ^= ISPACKED;    /* invert packed/unpacked parameters */
   if ((stringflags & ISPACKED)!=0)
@@ -2454,7 +2454,7 @@ void lexclr(int clreol)
   if (clreol) {
     lptr=(unsigned char*)strchr((char*)pline,'\0');
     assert(lptr!=NULL);
-  } /* if */
+  } 
 }
 
 // Return true if the symbol is ahead, false otherwise.
@@ -2546,7 +2546,7 @@ int needtoken(int token)
       strcpy(s2, sc_tokens[next_token()->id - tFIRST]);
     error(1,s1,s2);     /* expected ..., but found ... */
     return FALSE;
-  } /* if */
+  } 
 }
 
 // If the next token is on the current line, return that token. Otherwise,
@@ -2615,7 +2615,7 @@ static void chk_grow_litq(void)
     if (p==NULL)
       error(FATAL_ERROR_ALLOC_OVERFLOW,"literal table");
     litq=p;
-  } /* if */
+  } 
 }
 
 /*  litadd
@@ -2675,7 +2675,7 @@ static cell litchar(const unsigned char **lptr,int flags)
       } else {
         c=*cptr;
         cptr+=1;
-      } /* if */
+      } 
   } else {
     cptr+=1;
     if (*cptr==sc_ctrlchar) {
@@ -2727,7 +2727,7 @@ static cell litchar(const unsigned char **lptr,int flags)
             c=(c<<4)+(tolower(*cptr)-'a'+10);
           cptr++;
           digits++;
-        } /* while */
+        } 
         if (*cptr==';')
           cptr++;       /* swallow a trailing ';' */
         break;
@@ -2747,10 +2747,10 @@ static cell litchar(const unsigned char **lptr,int flags)
             cptr++;     /* swallow a trailing ';' */
         } else {
           error(27);    /* invalid character constant */
-        } /* if */
-      } /* switch */
-    } /* if */
-  } /* if */
+        } 
+      } 
+    } 
+  } 
   *lptr=cptr;
   assert(c>=0);
   return c;
@@ -2824,7 +2824,7 @@ void delete_symbol(symbol *root,symbol *sym)
   while (root->next!=sym) {
     root=root->next;
     assert(root!=NULL);
-  } /* while */
+  } 
 
   if (origRoot==&glbtab)
     RemoveFromHashTable(sp_Globals, sym);
@@ -2908,7 +2908,7 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
     default:
       assert(0);
       break;
-    } /* switch */
+    } 
     if (mustdelete) {
       if (origRoot == &glbtab)
         RemoveFromHashTable(sp_Globals, sym);
@@ -2930,8 +2930,8 @@ void delete_symbols(symbol *root,int level,int delete_labels,int delete_function
       if (origRoot == &glbtab)
         sym->clear_refers();
       root=sym;                 /* skip the symbol */
-    } /* if */
-  } /* if */
+    } 
+  } 
 }
 
 static symbol *find_symbol(const symbol *root,const char *name,int fnumber)
@@ -2946,7 +2946,7 @@ static symbol *find_symbol(const symbol *root,const char *name,int fnumber)
       return sym;   /* return first match */
     } /*  */
     sym=sym->next;
-  } /* while */
+  } 
   return nullptr;
 }
 
@@ -2967,7 +2967,7 @@ void markusage(symbol *sym,int usage)
       if (curfunc!=NULL)
         curfunc->add_reference_to(sym);
     } /*if */
-  } /* if */
+  } 
 }
 
 /*  findglb
@@ -3077,13 +3077,13 @@ symbol::~symbol()
     for (arginfo* arg=&function()->args[0]; arg->ident!=0; arg++) {
       if (arg->ident==iREFARRAY && arg->hasdefault)
         free(arg->defvalue.array.data);
-    } /* for */
+    } 
   } else if (ident==iCONSTEXPR && (usage & uENUMROOT)==uENUMROOT) {
     /* free the constant list of an enum root */
     assert(dim.enumlist!=NULL);
     delete_consttable(dim.enumlist);
     free(dim.enumlist);
-  } /* if */
+  } 
 }
 
 void symbol::add_reference_to(symbol* other) {
@@ -3191,10 +3191,10 @@ symbol *addvariable2(const char *name,cell addr,int ident,int vclass,int tag,
       parent=top;
       if (level==0)
         sym=top;
-    } /* for */
+    } 
   } else {
     sym=addsym(name,addr,ident,vclass,tag,uDEFINE);
-  } /* if */
+  } 
   return sym;
 }
 
@@ -3243,7 +3243,7 @@ static char itohstr[30];
     else
       *ptr++=(char)('0'+nibble[i]);
     i-=1;
-  } /* while */
+  } 
   *ptr='\0';            /* and a zero-terminator */
   return itohstr;
 }

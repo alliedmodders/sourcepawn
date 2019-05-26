@@ -111,9 +111,9 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
           strcpy(opername,binoperstr[i]);
           savepri=binoper_savepri[i];
           break;
-        } /* if */
-      } /* for */
-    } /* if */
+        } 
+      } 
+    } 
   } else {
     assert(oper!=NULL);
     assert(numparam==1);
@@ -124,10 +124,10 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
         if (oper==unopers[i]) {
           strcpy(opername,unoperstr[i]);
           break;
-        } /* if */
-      } /* for */
-    } /* if */
-  } /* if */
+        } 
+      } 
+    } 
+  } 
   /* if not found, quit */
   if (opername[0]=='\0')
     return FALSE;
@@ -150,7 +150,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
     sym=findglb(symbolname);
     if (sym==NULL /*|| (sym->usage & uDEFINE)==0*/)
       return FALSE;
-  } /* if */
+  } 
 
   /* check existance and the proper declaration of this function */
   if ((sym->usage & uMISSING)!=0 || (sym->usage & uPROTOTYPED)==0) {
@@ -160,7 +160,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
       error(4,symname);           /* function not defined */
     if ((sym->usage & uPROTOTYPED)==0)
       error(71,symname);          /* operator must be declared before use */
-  } /* if */
+  } 
 
   /* we don't want to use the redefined operator in the function that
    * redefines the operator itself, otherwise the snippet below gives
@@ -181,7 +181,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
       pushreg(sPRI);            /* save current address in PRI */
     if (lval->ident!=iACCESSOR)
       rvalue(lval);               /* get the symbol's value in PRI */
-  } /* if */
+  } 
 
   assert(!savepri || !savealt); /* either one MAY be set, but not both */
   if (savepri) {
@@ -198,7 +198,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
     assert(lval!=NULL);         /* this was checked earlier */
     assert(lval->ident==iARRAYCELL || lval->ident==iARRAYCHAR); /* checked earlier */
     pushreg(sALT);
-  } /* if */
+  } 
 
   /* push parameters, call the function */
   paramspassed= (oper==NULL) ? 1 : numparam;
@@ -216,11 +216,11 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
     } else {
       pushreg(sPRI);
       pushreg(sALT);
-    } /* if */
+    } 
     break;
   default:
     assert(0);
-  } /* switch */
+  } 
   markexpr(sPARM,NULL,0);       /* mark the end of a sub-expression */
   assert(sym->ident==iFUNCTN);
   ffcall(sym,NULL,paramspassed);
@@ -240,7 +240,7 @@ int check_userop(void (*oper)(void),int tag1,int tag2,int numparam,
       store(lval);                /* store PRI in the symbol */
       moveto1();                  /* make sure PRI is restored on exit */
     }
-  } /* if */
+  } 
   return TRUE;
 }
 
@@ -607,9 +607,9 @@ SC3ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endva
           lval->constval= lval->constval || constval;
         else
           lval->constval= lval->constval && constval;
-      } /* if */
+      } 
       constval=lval->constval;  /* save result accumulated so far */
-    } /* if */
+    } 
 
     foundop=nextop(&opidx,opstr);
     if ((foundop || hits) && (lval->ident==iARRAY || lval->ident==iREFARRAY))
@@ -619,7 +619,7 @@ SC3ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endva
         /* this is the first operator in the list */
         hits=TRUE;
         droplab=getlabel();
-      } /* if */
+      } 
       dropout(lvalue,testfunc,droplab,lval);
     } else if (hits) {                       /* no (more) identical operators */
       dropout(lvalue,testfunc,droplab,lval); /* found at least one operator! */
@@ -637,13 +637,13 @@ SC3ExpressionParser::skim(int *opstr,void (*testfunc)(int),int dropval,int endva
       } else {
         lval->ident=iEXPRESSION;
         lval->constval=0;
-      } /* if */
+      } 
       return FALSE;
     } else {
       return lvalue;            /* none of the operators in "opstr" were found */
-    } /* if */
+    } 
 
-  } /* while */
+  } 
 }
 
 /*
@@ -681,12 +681,12 @@ static void checkfunction(value *lval)
       char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
       funcdisplayname(symname,sym->name());
       error(209,symname);       /* function should return a value */
-    } /* if */
+    } 
   } else {
     /* function not yet defined, set */
     sym->usage|=uRETVALUE;      /* make sure that a future implementation of
                                  * the function uses "return <value>" */
-  } /* if */
+  } 
 }
 
 /*
@@ -716,7 +716,7 @@ SC3ExpressionParser::plnge(int *opstr,int opoff,
       bitwise_opercount_++;
     if (forcetag!=NULL)
       lval->tag=pc_addtag(forcetag);
-  } while (nextop(&opidx,opstr)); /* do */
+  } while (nextop(&opidx,opstr)); 
   return FALSE;         /* result of expression is not an lvalue */
 }
 
@@ -751,7 +751,7 @@ SC3ExpressionParser::plnge_rel(int *opstr,int opoff,HierFn hier,value *lval)
       boolresult=lval->boolresult;
       *lval=lval2;      /* copy right hand expression of the previous iteration */
       lval->boolresult=boolresult;
-    } /* if */
+    } 
     opidx+=opoff;
     plnge2(op1[opidx],hier,lval,&lval2);
     if (count++>0)
@@ -823,15 +823,15 @@ SC3ExpressionParser::plnge2(void (*oper)(void),
       } else {
         ldconst(lval2->constval<<dbltest(oper,lval1,lval2),sPRI);
         popreg(sALT);   /* pop result of left operand into secondary register */
-      } /* if */
+      } 
     } else {            /* non-constants on both sides */
       popreg(sALT);
       if (dbltest(oper,lval1,lval2))
         cell2addr();                    /* double primary register */
       if (dbltest(oper,lval2,lval1))
         cell2addr_alt();                /* double secondary register */
-    } /* if */
-  } /* if */
+    } 
+  } 
   if (oper) {
     /* If used in an expression, a function should return a value.
      * If the function has been defined, we can check this. If the
@@ -846,7 +846,7 @@ SC3ExpressionParser::plnge2(void (*oper)(void),
     } else if (lval2->ident==iARRAY || lval2->ident==iREFARRAY) {
       const char *ptr=(lval2->sym!=NULL) ? lval2->sym->name() : "-unknown-";
       error(33,ptr);                    /* array must be indexed */
-    } /* if */
+    } 
     /* ??? ^^^ should do same kind of error checking with functions */
 
     /* check whether an "operator" function is defined for the tag names
@@ -866,8 +866,8 @@ SC3ExpressionParser::plnge2(void (*oper)(void),
         matchtag(lval1->tag, lval2->tag, MATCHTAG_COMMUTATIVE|MATCHTAG_DEDUCE);
       (*oper)();                /* do the (signed) operation */
       lval1->ident=iEXPRESSION;
-    } /* if */
-  } /* if */
+    } 
+  } 
 }
 
 static cell flooreddiv(cell a,cell b,int return_remainder)
@@ -877,7 +877,7 @@ static cell flooreddiv(cell a,cell b,int return_remainder)
   if (b==0) {
     error(29);
     return 0;
-  } /* if */
+  } 
   /* first implement truncated division in a portable way */
   #define IABS(a)       ((a)>=0 ? (a) : (-a))
   q=IABS(a)/IABS(b);
@@ -888,7 +888,7 @@ static cell flooreddiv(cell a,cell b,int return_remainder)
   if (r!=0 && (cell)(r ^ b)<0) {
     q--;
     r+=b;
-  } /* if */
+  } 
   return return_remainder ? r : q;
 }
 
@@ -1043,7 +1043,7 @@ SC3ExpressionParser::hier14(value *lval1)
     default:
       lexpush();
       return lvalue;
-  } /* switch */
+  } 
 
   /* if we get here, it was an assignment; first check a few special cases
    * and then the general */
@@ -1059,7 +1059,7 @@ SC3ExpressionParser::hier14(value *lval1)
     if (array_totalsize(lval1->sym)==0)
       return error(46,lval1->sym->name());        /* unknown array size */
     lvalue=TRUE;
-  } /* if */
+  } 
 
   /* operand on left side of assignment must be lvalue */
   if (!lvalue)
@@ -1077,7 +1077,7 @@ SC3ExpressionParser::hier14(value *lval1)
     if (oper) {
       pushreg(sPRI);
       rvalue(lval1);
-    } /* if */
+    } 
     plnge2(oper,&SC3ExpressionParser::hier14,lval1,&lval2);
     if (oper)
       popreg(sALT);
@@ -1110,9 +1110,9 @@ SC3ExpressionParser::hier14(value *lval1)
       if (lval2.ident==iVARIABLE && lval3.ident==lval2.ident && lval3.sym==lval2.sym) {
         assert(lval3.sym!=NULL);
         error(226,lval3.sym->name());     /* self-assignment */
-      } /* if */
-    } /* if */
-  } /* if */
+      } 
+    } 
+  } 
   /* Array elements are sometimes considered as sub-arrays --when the
    * array index is an enumeration field and the enumeration size is greater
    * than 1. If the expression on the right side of the assignment is a cell,
@@ -1137,7 +1137,7 @@ SC3ExpressionParser::hier14(value *lval1)
         && lval3.constval>0 && lval3.sym->dim.array.level==0)
     {
       ltlength=(int)lval3.constval;
-    } /* if */
+    } 
     if (lval2.ident!=iARRAY && lval2.ident!=iREFARRAY
         && (lval2.sym==NULL || lval2.constval<=0))
       error(33,lval3.sym->name());        /* array must be indexed */
@@ -1148,7 +1148,7 @@ SC3ExpressionParser::hier14(value *lval1)
         val=lval2.constval;
         if (lval2.sym->dim.array.level!=0)
           error(28,lval2.sym->name());
-      } /* if */
+      } 
       level=lval2.sym->dim.array.level;
       idxtag=lval2.sym->x.tags.index;
       if (level==0 && idxtag==0 && lval3.sym->x.tags.index==0)
@@ -1165,8 +1165,8 @@ SC3ExpressionParser::hier14(value *lval1)
         val=-val;
         if (lval3.sym->x.tags.index==0)
           exactmatch=FALSE;
-      } /* if */
-    } /* if */
+      } 
+    } 
     if (lval3.sym->dim.array.level!=level)
       return error(47); /* array dimensions must match */
     else if (ltlength<val || (exactmatch && ltlength>val) || val==0)
@@ -1196,22 +1196,22 @@ SC3ExpressionParser::hier14(value *lval1)
           error(47);    /* array sizes must match */
         else if (!matchtag(sym1->x.tags.index,sym2->x.tags.index,MATCHTAG_COERCE|MATCHTAG_SILENT))
           error(229,sym2->name());  /* index tag mismatch */
-      } /* for */
+      } 
       /* get the total size in cells of the multi-dimensional array */
       val=array_totalsize(lval3.sym);
       assert(val>0);    /* already checked */
-    } /* if */
+    } 
   } else {
     /* left operand is not an array, right operand should then not be either */
     if (lval2.ident==iARRAY || lval2.ident==iREFARRAY)
       error(6);         /* must be assigned to an array */
-  } /* if */
+  } 
   if (leftarray) {
     memcopy(val*sizeof(cell));
   } else {
     check_userop(NULL,lval2.tag,lval3.tag,2,&lval3,&lval2.tag);
     store(&lval3);      /* now, store the expression result */
-  } /* if */
+  } 
   if (!oper && !checkval_string(&lval3, &lval2)) {
     if ((lval3.tag == pc_tag_string && lval2.tag != pc_tag_string) ||
         (lval3.tag != pc_tag_string && lval2.tag == pc_tag_string))
@@ -1246,7 +1246,7 @@ SC3ExpressionParser::hier13(value *lval)
     } else if (lval->ident==iCONSTEXPR) {
       ldconst(lval->constval,sPRI);
       error(lval->constval ? 206 : 205);        /* redundant test */
-    } /* if */
+    } 
     jmp_eq0(flab1);             /* go to second expression if primary register==0 */
     {
       /* do not allow tagnames here (colon is a special token) */
@@ -1279,7 +1279,7 @@ SC3ExpressionParser::hier13(value *lval)
       if (lval2.sym != NULL)
         ptr = lval2.sym->name();
       error(33,ptr);            /* array must be indexed */
-    } /* if */
+    } 
     /* ??? if both are arrays, should check dimensions */
     matchtag(lval->tag,lval2.tag,FALSE);
     if ((total2 = pop_static_heaplist())) {
@@ -1305,7 +1305,7 @@ SC3ExpressionParser::hier13(value *lval)
     return FALSE;               /* conditional expression is no lvalue */
   } else {
     return lvalue;
-  } /* if */
+  } 
 }
 
 int
@@ -1441,7 +1441,7 @@ SC3ExpressionParser::hier2(value *lval)
       if (lval->ident != iCONSTEXPR)
         lval->ident = iEXPRESSION;
       lval->tag=pc_addtag("bool");
-    } /* if */
+    } 
     return FALSE;
   case '-':                     /* unary - (two's complement) */
     if (hier2(lval))
@@ -1462,7 +1462,7 @@ SC3ExpressionParser::hier2(value *lval)
       } else {
         /* the negation of a fixed point number is just an integer negation */
         lval->constval=-lval->constval;
-      } /* if */
+      } 
     } else if (check_userop(neg,lval->tag,0,1,NULL,&lval->tag)) {
       lval->ident=iEXPRESSION;
       lval->constval=0;
@@ -1471,7 +1471,7 @@ SC3ExpressionParser::hier2(value *lval)
       lval->constval=-lval->constval;
       if (lval->ident != iCONSTEXPR)
         lval->ident = iEXPRESSION;
-    } /* if */
+    } 
     return FALSE;
   case tNEW:                    /* call nullable methodmap constructor */
   {
@@ -1661,9 +1661,9 @@ SC3ExpressionParser::hier2(value *lval)
       default:
         lexpush();
         return lvalue;
-      } /* switch */
-    } /* if */
-  } /* switch */
+      } 
+    } 
+  } 
 }
 
 static symbol *
@@ -1952,7 +1952,7 @@ restart:
         error(29);                /* expression error, assumed 0 */
         lexpush();                /* analyse '(' or '[' again later */
         return FALSE;
-      } /* if */
+      } 
       close = ']';
       if (sym==NULL) {  /* sym==NULL if lval is a constant or a literal */
         error(28,"<no variable>");  /* cannot subscript */
@@ -1962,7 +1962,7 @@ restart:
         error(28,sym->name());    /* cannot subscript, variable is not an array */
         needtoken(close);
         return FALSE;
-      } /* if */
+      } 
       /* set the tag to match (enumeration fields as indices) */
       stgget(&index,&cidx);     /* mark position in code generator */
       pushreg(sPRI);            /* save base address of the array */
@@ -1984,7 +1984,7 @@ restart:
             /* don't add offsets for zero subscripts */
             ldconst(lval2.constval<<2,sALT);
             ob_add();
-          } /* if */
+          } 
         } else {
           /* character index */
           if (lval2.constval<0 || (sym->dim.array.length!=0
@@ -1994,8 +1994,8 @@ restart:
             /* don't add offsets for zero subscripts */
             ldconst(lval2.constval,sALT);   /* 8-bit character */
             ob_add();
-          } /* if */
-        } /* if */
+          } 
+        } 
         /* if the array index is a field from an enumeration, get the tag name
          * from the field and save the size of the field too.
          */
@@ -2007,7 +2007,7 @@ restart:
         {
           lval1->tag=lval2.sym->x.tags.index;
           lval1->constval=lval2.sym->dim.array.length;
-        } /* if */
+        } 
       /* ---- */
       } else {
         /* array index is not constant */
@@ -2023,10 +2023,10 @@ restart:
           else
             ffbounds();
           char2addr();  /* character array index */
-        } /* if */
+        } 
         popreg(sALT);
         ob_add();       /* base address was popped into secondary register */
-      } /* if */
+      } 
       /* the indexed item may be another array (multi-dimensional arrays) */
       assert(cursym==sym && sym!=NULL); /* should still be set */
       if (sym->dim.array.level>0) {
@@ -2046,7 +2046,7 @@ restart:
         /* try to parse subsequent array indices */
         lvalue=FALSE;   /* for now, a iREFARRAY is no lvalue */
         goto restart;
-      } /* if */
+      } 
       assert(sym->dim.array.level==0);
       /* set type to fetch... INDIRECTLY */
       if (sym->tag == pc_tag_string) {
@@ -2085,13 +2085,13 @@ restart:
           cursym=&dummysymbol;
           /* recurse */
           goto restart;
-        } /* if */
+        } 
       } else {
         assert(sym!=NULL);
         if (cursym!=&dummysymbol)
           lval1->tag=sym->tag;
         lval1->constval=0;
-      } /* if */
+      } 
 
       /* a cell in an array is an lvalue, a character in an array is not
        * always a *valid* lvalue */
@@ -2191,7 +2191,7 @@ restart:
         char symname[2*sNAMEMAX+16];  /* allow space for user defined operators */
         funcdisplayname(symname,sym->name());
         error(4,symname);             /* function not defined */
-      } /* if */
+      } 
 
       callfunction(sym,implicitthis,lval1,TRUE);
       if (lexpeek('.')) {
@@ -2199,8 +2199,8 @@ restart:
         goto restart;
       }
       return FALSE;             /* result of function call is no lvalue */
-    } /* if */
-  } /* if */
+    } 
+  } 
   if (sym!=NULL && lval1->ident==iFUNCTN) {
     assert(sym->ident==iFUNCTN);
 
@@ -2227,7 +2227,7 @@ restart:
     lval1->constval = 0;
     lval1->tag = fe->tag;
     return FALSE;
-  } /* if */
+  } 
   return lvalue;
 }
 
@@ -2269,7 +2269,7 @@ SC3ExpressionParser::primary(value *lval)
       lvalue = FALSE;
     }
     return lvalue;
-  } /* if */
+  } 
 
   clear_value(lval);    /* clear lval */
   tok=lex(&val,&st);
@@ -2306,7 +2306,7 @@ SC3ExpressionParser::primary(value *lval)
         error(29);          /* expression error, assumed 0 */
         ldconst(0,sPRI);    /* load 0 */
         return FALSE;       /* return 0 for labels (expression error) */
-      } /* if */
+      } 
       lval->sym=sym;
       lval->ident=sym->ident;
       lval->tag=sym->tag;
@@ -2315,8 +2315,8 @@ SC3ExpressionParser::primary(value *lval)
         return FALSE;       /* return 0 for array (not lvalue) */
       } else {
         return TRUE;        /* return 1 if lvalue (not label or array) */
-      } /* if */
-    } /* if */
+      } 
+    } 
     /* now try a global variable */
     if ((sym = findglb(st)) != 0) {
       if (sym->ident==iFUNCTN) {
@@ -2341,8 +2341,8 @@ SC3ExpressionParser::primary(value *lval)
             return FALSE;
           default:
             return TRUE;          /* return 1 if lvalue (not function or array) */
-        } /* switch */
-      } /* if */
+        } 
+      } 
     } else {
       // We assume this is a function that hasn't been seen yet. We should
       // either be in the first pass, or the second pass and skipping writes.
@@ -2352,19 +2352,19 @@ SC3ExpressionParser::primary(value *lval)
       sym=fetchfunc(st);
       if (sym==NULL)
         error(FATAL_ERROR_OOM);
-    } /* if */
+    } 
     assert(sym!=NULL);
     assert(sym->ident==iFUNCTN);
     lval->sym=sym;
     lval->ident=sym->ident;
     lval->tag=sym->tag;
     return FALSE;       /* return 0 for function (not an lvalue) */
-  } /* if */
+  } 
   lexpush();            /* push the token, it is analyzed by constant() */
   if (constant(lval)==0) {
     error(29);          /* expression error, assumed 0 */
     ldconst(0,sPRI);    /* load 0 */
-  } /* if */
+  } 
   return FALSE;         /* return 0 for constants (or errors) */
 }
 
@@ -2392,7 +2392,7 @@ static void setdefarray(cell *string,cell size,cell array_sz,cell *dataaddr,int 
     *dataaddr=(litidx+glb_declared)*sizeof(cell);
     for (i=0; i<size; i++)
       litadd(*string++);
-  } /* if */
+  } 
 
   /* if the function is known not to modify the array (meaning that it also
    * does not modify the default value), directly pass the address of the
@@ -2417,7 +2417,7 @@ static void setdefarray(cell *string,cell size,cell array_sz,cell *dataaddr,int 
     /* ??? should perhaps fill with zeros first */
     memcopy(size*sizeof(cell));
     moveto1();
-  } /* if */
+  } 
 }
 
 int checktag(int tag,int exprtag)
@@ -2623,7 +2623,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
     /* also mark the ident of the result as "array" */
     lval_result->ident=iREFARRAY;
     lval_result->sym=symret;
-  } /* if */
+  } 
   pushheaplist();
 
   // If we're calling a stock in the 2nd pass, and it was never defined as
@@ -2640,7 +2640,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
   if ((sym->flags & flgDEPRECATED)!=0) {
     const char *ptr= sym->documentation.chars();
     error(234,sym->name(),ptr);   /* deprecated (probably a native function) */
-  } /* if */
+  } 
 
   CallArgPusher args(aImplicitThis);
 
@@ -2668,8 +2668,8 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
       close=!matchtoken('.');
       if (!close)
         lexpush();                /* reset the '.' */
-    } /* if */
-  } /* if */
+    } 
+  } 
 
   unsigned nargs = 0;
   if (args.handling_this() || !close) {
@@ -2684,14 +2684,14 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
         if (argpos<0) {
           error(17,lexstr);       /* undefined symbol */
           break;                  /* exit loop, argpos is invalid */
-        } /* if */
+        } 
         needtoken('=');
         argidx=argpos;
       } else {
         if (namedparams)
           error(44);   /* positional parameters must precede named parameters */
         argpos=nargs;
-      } /* if */
+      } 
       /* the number of arguments this was already checked at the declaration
        * of the function; check it again for functions with a variable
        * argument list
@@ -2707,7 +2707,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
           error(92);             /* argument count mismatch */
         } else if (!arg[argidx].hasdefault) {
           error(34,nargs+1);      /* argument has no default value */
-        } /* if */
+        } 
         if (arg[argidx].ident!=0 && arg[argidx].ident!=iVARARGS)
           argidx++;
         /* The rest of the code to handle default values is at the bottom
@@ -2756,14 +2756,14 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
                 setheap_pri();    /* address of the value on the heap in PRI */
                 heapalloc+=markheap(MEMUSE_STATIC, 1);
                 sCallStackUsage++;
-              } /* if */
+              } 
             } else if (lvalue) {
               address(lval.sym,sPRI);
             } else {
               setheap_pri();      /* address of the value on the heap in PRI */
               heapalloc+=markheap(MEMUSE_STATIC, 1);
               sCallStackUsage++;
-            } /* if */
+            } 
           } else if (lval.ident==iCONSTEXPR || lval.ident==iEXPRESSION) {
             /* allocate a cell on the heap and store the
              * value (already in PRI) there */
@@ -2821,8 +2821,8 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
               setheap_pri();      /* address of the value on the heap in PRI */
               heapalloc+=markheap(MEMUSE_STATIC, 1);
               sCallStackUsage++;
-            } /* if */
-          } /* if */
+            } 
+          } 
           /* otherwise, the address is already in PRI */
           checktag(arg[argidx].tag,lval.tag);
           if (lval.tag!=0)
@@ -2837,7 +2837,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
           {
             error(35,argidx+1-firstArgOffset);   /* argument type mismatch */
             break;
-          } /* if */
+          } 
           if (lval.sym!=NULL && (lval.sym->usage & uCONST)!=0 && (arg[argidx].usage & uCONST)==0)
             error(35,argidx+1); /* argument type mismatch */
           /* Verify that the dimensions match with those in arg[argidx].
@@ -2861,8 +2861,8 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
                 if ((lval.constval>0 && arg[argidx].dim[0]!=lval.constval)
                     || (lval.constval<0 && arg[argidx].dim[0] < -lval.constval))
                   error(47);      /* array sizes must match */
-              } /* if */
-            } /* if */
+              } 
+            } 
             if ((lval.ident!=iARRAYCELL && lval.ident!=iARRAYCHAR) || lval.constval>0) {
               /* save array size, for default values with uSIZEOF flag */
               cell array_sz=lval.constval;
@@ -2870,7 +2870,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
               if (array_sz<0)
                 array_sz= -array_sz;
               append_constval(&arrayszlst,arg[argidx].name,array_sz,0);
-            }/* if */
+            }
           } else {
             symbol *sym=lval.sym;
             short level=0;
@@ -2890,7 +2890,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
               sym=sym->array_child();
               assert(sym!=NULL);
               level++;
-            } /* if */
+            } 
             /* the last dimension is checked too, again, unless it is zero */
             assert(level<sDIMEN_MAX);
             assert(sym!=NULL);
@@ -2902,7 +2902,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
                 error(229,sym->name());   /* index tag mismatch */
             }
             append_constval(&arrayszlst,arg[argidx].name,sym->dim.array.length,level);
-          } /* if */
+          } 
           /* address already in PRI */
 
           checktag(arg[argidx].tag,lval.tag);
@@ -2918,10 +2918,10 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
           // ??? set uWRITTEN?
           argidx++;               /* argument done */
           break;
-        } /* switch */
+        } 
 
         args.next_arg();
-      } /* if */
+      } 
       assert(arglist[argpos]!=ARG_UNHANDLED);
       nargs++;
 
@@ -2940,11 +2940,11 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
         if (close) {              /* if not comma... */
           if (needtoken(tTERM)==1)/* ...must be end of statement */
             lexpush();            /* push again, because end of statement is analised later */
-        } /* if */
-      } /* if */
+        } 
+      } 
 
-    } while (!close && freading && !matchtoken(tENDEXPR)); /* do */
-  } /* if */
+    } while (!close && freading && !matchtoken(tENDEXPR)); 
+  } 
   /* check remaining function arguments (they may have default values) */
   for (argidx=0; arg[argidx].ident!=0 && arg[argidx].ident!=iVARARGS; argidx++) {
     if (arglist[argidx]==ARG_DONE)
@@ -2962,7 +2962,7 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
           if ((arg[argidx].usage & uCONST)==0) {
             heapalloc+=arg[argidx].defvalue.array.arraysize;
             sCallStackUsage+=arg[argidx].defvalue.array.arraysize;
-          } /* if */
+          } 
           /* keep the lengths of all dimensions of a multi-dimensional default array */
           assert(arg[argidx].numdim>0);
           if (arg[argidx].numdim==1) {
@@ -2971,8 +2971,8 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
             for (level=0; level<arg[argidx].numdim; level++) {
               assert(level<sDIMEN_MAX);
               append_constval(&arrayszlst,arg[argidx].name,arg[argidx].dim[level],level);
-            } /* for */
-          } /* if */
+            } 
+          } 
         }
       } else if (arg[argidx].ident==iREFERENCE) {
         setheap(arg[argidx].defvalue.val);
@@ -2984,15 +2984,15 @@ SC3ExpressionParser::callfunction(symbol *sym, const svalue *aImplicitThis, valu
         ldconst(arg[argidx].defvalue.val,sPRI);
         check_userop(NULL,arg[argidx].defvalue_tag,arg[argidx].tag,2,NULL,&dummytag);
         assert(dummytag==arg[argidx].tag);
-      } /* if */
+      } 
       args.next_arg();
     } else {
       error(92,argidx);        /* argument count mismatch */
-    } /* if */
+    } 
     if (arglist[argidx]==ARG_UNHANDLED)
       nargs++;
     arglist[argidx]=ARG_DONE;
-  } /* for */
+  } 
   stgmark(sENDREORDER);         /* mark end of reversed evaluation */
 
   sCallStackUsage++;
@@ -3149,7 +3149,7 @@ static int constant(value *lval)
     lval->constval=litidx-val;  /* constval == the size of the literal array */
   } else {
     return FALSE;               /* no, it cannot be interpreted as a constant */
-  } /* if */
+  } 
   return TRUE;                  /* yes, it was a constant value */
 }
 

@@ -119,13 +119,13 @@ void stgbuffer_cleanup(void)
     free(stgbuf);
     stgbuf=NULL;
     stgmax=0;
-  } /* if */
+  } 
   if (stgpipe!=NULL) {
     free(stgpipe);
     stgpipe=NULL;
     pipemax=0;
     pipeidx=0;
-  } /* if */
+  } 
 }
 
 /* the variables "stgidx" and "staging" are declared in "scvars.c" */
@@ -151,7 +151,7 @@ void stgmark(char mark)
   if (staging) {
     CHECK_STGBUFFER(stgidx);
     stgbuf[stgidx++]=mark;
-  } /* if */
+  } 
 }
 
 static int rebuffer(char *str)
@@ -162,10 +162,10 @@ static int rebuffer(char *str)
     while (*str!='\0') {               /* copy to staging buffer */
       CHECK_STGPIPE(pipeidx);
       stgpipe[pipeidx++]=*str++;
-    } /* while */
+    } 
     CHECK_STGPIPE(pipeidx);
     stgpipe[pipeidx++]='\0';
-  } /* if */
+  } 
   return TRUE;
 }
 
@@ -214,8 +214,8 @@ void stgwrite(const char *st)
     if (len>0 && stgbuf[len-1]=='\n') {
       filewrite(stgbuf);
       stgbuf[0]='\0';
-    } /* if */
-  } /* if */
+    } 
+  } 
 }
 
 /*  stgout
@@ -252,8 +252,8 @@ void stgout(int index)
        */
       for (idx=0; idx<pipeidx; idx+=strlen(stgpipe+idx)+1)
         filewrite(stgpipe+idx);
-    } /* if */
-  } /* if */
+    } 
+  } 
   pipeidx=0;  /* reset second pipe */
 }
 
@@ -320,19 +320,19 @@ static int stgstring(char *start,char *end)
               stack[arg].start=start+1;
               if (arg>=argc)
                 argc=arg+1;
-            } /* if */
+            } 
             start++;
           } else {
             start+=strlen(start)+1;
-          } /* if */
-        } /* switch */
+          } 
+        } 
       } while (nest); /* enddo */
       if (arg>=0)
         stack[arg].end=start-1;   /* finish previous argument */
       while (argc>0) {
         argc--;
         stgstring(stack[argc].start,stack[argc].end);
-      } /* while */
+      } 
       free(stack);
     } else {
       ptr=start;
@@ -340,8 +340,8 @@ static int stgstring(char *start,char *end)
         ptr+=strlen(ptr)+1;
       stgopt(start,ptr,rebuffer);
       start=ptr;
-    } /* if */
-  } /* while */
+    } 
+  } 
   return reordered;
 }
 
@@ -357,7 +357,7 @@ void stgdel(int index,cell code_index)
   if (staging) {
     stgidx=index;
     code_idx=code_index;
-  } /* if */
+  } 
 }
 
 int stgget(int *index,cell *code_index)
@@ -365,7 +365,7 @@ int stgget(int *index,cell *code_index)
   if (staging) {
     *index=stgidx;
     *code_index=code_idx;
-  } /* if */
+  } 
   return staging;
 }
 
@@ -391,7 +391,7 @@ void stgset(int onoff)
      */
     if (strlen(stgbuf)>0)
       filewrite(stgbuf);
-  } /* if */
+  } 
   stgbuf[0]='\0';
 }
 
@@ -449,14 +449,14 @@ static int matchsequence(const char *start,const char *end,const char *pattern,
       for (i=0; start<end && (*start=='-' || *start=='+' || alphanum(*start)); i++,start++) {
         assert(i<=MAX_ALIAS);
         str[i]=*start;
-      } /* for */
+      } 
       str[i]='\0';
       if (symbols[var][0]!='\0') {
         if (strcmp(symbols[var],str)!=0)
           return FALSE; /* symbols should be identical */
       } else {
         strcpy(symbols[var],str);
-      } /* if */
+      } 
       break;
     case '-':
       value=-strtol(pattern+1,(char **)&pattern,16);
@@ -466,7 +466,7 @@ static int matchsequence(const char *start,const char *end,const char *pattern,
           return FALSE;
         start++;
         ptr++;
-      } /* while */
+      } 
       pattern--;  /* there is an increment following at the end of the loop */
       break;
     case ' ':
@@ -493,9 +493,9 @@ static int matchsequence(const char *start,const char *end,const char *pattern,
       if (tolower(*start) != tolower(*pattern))
         return FALSE;
       start++;
-    } /* switch */
+    } 
     pattern++;
-  } /* while */
+  } 
 
   *match_length=(int)(start-start_org);
   return TRUE;
@@ -530,9 +530,9 @@ static char *replacesequence(const char *pattern,char symbols[MAX_OPT_VARS][MAX_
       break;
     default:
       *repl_length+=1;
-    } /* switch */
+    } 
     lptr++;
-  } /* while */
+  } 
 
   /* allocate a buffer to replace the sequence in */
   if ((buffer=(char*)malloc(*repl_length))==NULL) {
@@ -565,9 +565,9 @@ static char *replacesequence(const char *pattern,char symbols[MAX_OPT_VARS][MAX_
       break;
     default:
       *ptr++=*pattern;
-    } /* switch */
+    } 
     pattern++;
-  } /* while */
+  } 
 
   assert((int)(ptr-buffer)==*repl_length);
   return buffer;
@@ -581,7 +581,7 @@ static void strreplace(char *dest,char *replace,int sub_length,int repl_length,i
     memset(dest+dest_length-offset,0xcc,offset); /* not needed, but for cleanlyness */
   } else if (offset<0) {        /* insert a section */
     memmove(dest-offset, dest, dest_length);
-  } /* if */
+  } 
   memcpy(dest, replace, repl_length);
 }
 
@@ -617,8 +617,8 @@ static void stgopt(char *start,char *end,int (*outputfunc)(char *str))
             } else {
               seq++;    /* continue with next string */
               continue;
-            } /* if */
-          } /* if */
+            } 
+          } 
           if (matchsequence(start,end,sequences[seq].find,symbols,&match_length)) {
             char *replace=replacesequence(sequences[seq].replace,symbols,&repl_length);
             /* If the replacement is bigger than the original section, we may need
@@ -641,11 +641,11 @@ static void stgopt(char *start,char *end,int (*outputfunc)(char *str))
               /* actually, we should never get here (match_length<repl_length) */
               assert(0);
               seq++;
-            } /* if */
+            } 
           } else {
             seq++;
-          } /* if */
-        } /* while */
+          } 
+        } 
         assert(sequences[seq].find==NULL || (*sequences[seq].find=='\0' && pc_optimize==sOPTIMIZE_NOMACRO));
         start += strlen(start) + 1;       /* to next string */
       } /* while (start<end) */
