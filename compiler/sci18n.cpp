@@ -92,7 +92,7 @@ cell get_utf8_char(const unsigned char *string,const unsigned char **endptr)
          */
         if ((result>=0xd800 && result<=0xdfff) || result==0xfffe || result==0xffff)
           return -1;
-      } /* if */
+      } 
       break;
     } else if (follow==0 && (ch & 0x80)==0x80) {
       /* UTF-8 leader code */
@@ -124,7 +124,7 @@ cell get_utf8_char(const unsigned char *string,const unsigned char **endptr)
       } else {
         /* this is invalid UTF-8 */
         return -1;
-      } /* if */
+      } 
     } else if (follow==0 && (ch & 0x80)==0x00) {
       /* 0xxxxxxx (US-ASCII) */
       result=ch;
@@ -132,9 +132,9 @@ cell get_utf8_char(const unsigned char *string,const unsigned char **endptr)
     } else {
       /* this is invalid UTF-8 */
       return -1;
-    } /* if */
+    } 
 
-  } /* for */
+  } 
 
   if (endptr!=NULL)
     *endptr=string;

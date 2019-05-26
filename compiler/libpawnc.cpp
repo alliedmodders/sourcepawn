@@ -295,7 +295,7 @@ void pc_closeasm(memfile_t* handle, int deletefile)
       }
     }
     memfile_destroy(handle);
-  } /* if */
+  } 
 }
 
 void pc_resetasm(memfile_t* handle)

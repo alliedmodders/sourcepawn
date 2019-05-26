@@ -63,7 +63,7 @@ long memfile_seek(memfile_t *mf, long offset, int whence)
     assert(offset<=0);
     offset+=length;
     break;
-  } /* switch */
+  } 
 
   /* clamp to the file length limit */
   if (offset<0)

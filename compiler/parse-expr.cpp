@@ -69,8 +69,8 @@ BaseExpressionParser::nextop(int *opidx,int *list)
     } else {
       list+=1;
       *opidx+=1;
-    } /* if */
-  } /* while */
+    } 
+  } 
   return FALSE;         /* entire list scanned, nothing found */
 }
 
@@ -99,7 +99,7 @@ BaseExpressionParser::array_totalsize(symbol *sym)
       length=length+length*sublength;
     else
       length=0;
-  } /* if */
+  } 
   return length;
 }
 
@@ -112,7 +112,7 @@ BaseExpressionParser::array_levelsize(symbol *sym,int level)
   while (level-- > 0) {
     sym=sym->array_child();
     assert(sym!=NULL);
-  } /* if */
+  } 
   return (sym->dim.array.slength ? sym->dim.array.slength : sym->dim.array.length);
 }
 
@@ -208,11 +208,11 @@ BaseExpressionParser::sizeof_impl()
           error(80,idxname);  /* unknown symbol, or non-constant */
         else if (cmptag!=idxsym->tag)
           error(91,idxname);  /* ambiguous constant */
-      } /* if */
+      } 
       needtoken(']');
       if (subsym!=NULL)
         subsym=subsym->array_child();
-    } /* for */
+    } 
 
     Type* enum_type = nullptr;
     if (matchtoken(tDBLCOLON)) {
@@ -259,7 +259,7 @@ BaseExpressionParser::sizeof_impl()
     }
     if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
       error(163,sym->name());          /* indeterminate array size in "sizeof" expression */
-  } /* if */
+  } 
   return result;
 }
 
@@ -313,11 +313,11 @@ BaseExpressionParser::parse_cellsof()
           error(80,idxname);  /* unknown symbol, or non-constant */
         else if (cmptag!=idxsym->tag)
           error(91,idxname);  /* ambiguous constant */
-      } /* if */
+      } 
       needtoken(']');
       if (subsym!=NULL)
         subsym=subsym->array_child();
-    } /* for */
+    } 
     if (level>sym->dim.array.level+1) {
       error(28,sym->name());  /* invalid subscript */
     } else if (level==sym->dim.array.level+1) {
@@ -327,7 +327,7 @@ BaseExpressionParser::parse_cellsof()
     }
     if (result==0 && strchr((char *)lptr,PREPROC_TERM)==NULL)
       error(163,sym->name());          /* indeterminate array size in "sizeof" expression */
-  } /* if */
+  } 
 
   while (paranthese--)
     needtoken(')');
@@ -367,7 +367,7 @@ BaseExpressionParser::parse_tagof()
       return 0;
     }
     tag=sym->tag;
-  } /* if */
+  } 
   if (sym && (sym->ident==iARRAY || sym->ident==iREFARRAY)) {
     int level;
     symbol *idxsym=NULL;
@@ -386,16 +386,16 @@ BaseExpressionParser::parse_tagof()
           error(80,idxname);  /* unknown symbol, or non-constant */
         else if (cmptag!=idxsym->tag)
           error(91,idxname);  /* ambiguous constant */
-      } /* if */
+      } 
       needtoken(']');
       if (subsym!=NULL)
         subsym=subsym->array_child();
-    } /* for */
+    } 
     if (level>sym->dim.array.level+1)
       error(28,sym->name());  /* invalid subscript */
     else if (level==sym->dim.array.level+1 && idxsym!=NULL)
       tag= idxsym->x.tags.index;
-  } /* if */
+  } 
   while (paranthese--)
     needtoken(')');
   return tag;

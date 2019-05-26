@@ -129,7 +129,7 @@ static ucell hex2long(const char *s, const char **n)
   if (*s=='-') {
     negate=TRUE;
     s++;
-  } /* if */
+  } 
 
   assert((*s>='0' && *s<='9') || (*s>='a' && *s<='f') || (*s>='a' && *s<='f'));
   for ( ;; ) {
@@ -143,7 +143,7 @@ static ucell hex2long(const char *s, const char **n)
       break;    /* probably whitespace */
     result=(result<<4) | digit;
     s++;
-  } /* for */
+  } 
   if (n!=NULL)
     *n=s;
   if (negate)
@@ -159,7 +159,7 @@ static ucell getparam(const char *s, const char **n)
     if (*s!='+')
       break;
     s++;
-  } /* for */
+  } 
   if (n!=NULL)
     *n=s;
   return result;
@@ -650,7 +650,7 @@ class VerifyOpcodeSorting
     for (size_t i = 2; i<(sizeof opcodelist / sizeof opcodelist[0]); i++) {
       assert(opcodelist[i].name!=NULL);
       assert(strcmp(opcodelist[i].name,opcodelist[i-1].name)>0);
-    } /* for */
+    } 
   }
 } sVerifyOpcodeSorting;
 #endif
