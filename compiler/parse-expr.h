@@ -32,38 +32,38 @@ class Type;
 
 class BaseExpressionParser
 {
-public:
-  BaseExpressionParser();
+  public:
+    BaseExpressionParser();
 
-protected:
-  static int nextop(int *opidx,int *list);
-  static int findnamedarg(arginfo *arg,char *name);
+  protected:
+    static int nextop(int* opidx, int* list);
+    static int findnamedarg(arginfo* arg, char* name);
 
-  cell array_levelsize(symbol *sym,int level);
-  cell array_totalsize(symbol *sym);
-  cell parse_defined();
-  cell parse_sizeof();
-  cell parse_cellsof();
-  cell parse_tagof();
+    cell array_levelsize(symbol* sym, int level);
+    cell array_totalsize(symbol* sym);
+    cell parse_defined();
+    cell parse_sizeof();
+    cell parse_cellsof();
+    cell parse_tagof();
 
-  // Each of these lists is an operator precedence level, and each list is a
-  // zero-terminated list of operators in that level (in precedence order).
-  static int list3[];
-  static int list4[];
-  static int list5[];
-  static int list6[];
-  static int list7[];
-  static int list8[];
-  static int list9[];
-  static int list10[];
-  static int list11[];
-  static int list12[];
+    // Each of these lists is an operator precedence level, and each list is a
+    // zero-terminated list of operators in that level (in precedence order).
+    static int list3[];
+    static int list4[];
+    static int list5[];
+    static int list6[];
+    static int list7[];
+    static int list8[];
+    static int list9[];
+    static int list10[];
+    static int list11[];
+    static int list12[];
 
-  cell sizeof_impl();
+    cell sizeof_impl();
 
-protected:
-  // Count of bitwise operators in an expression.
-  int bitwise_opercount_;
+  protected:
+    // Count of bitwise operators in an expression.
+    int bitwise_opercount_;
 };
 
 #endif // am_sourcepawn_compiler_expression_parser_h

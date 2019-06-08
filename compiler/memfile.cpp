@@ -25,110 +25,112 @@
 
 #include "osdefs.h"
 
-memfile_t *memfile_creat(const char *name, size_t init)
+memfile_t*
+memfile_creat(const char* name, size_t init)
 {
-  auto pmf = ke::MakeUnique<memfile_t>();
-  pmf->size = init;
-  pmf->base = ke::MakeUnique<char[]>(init);
-  if (!pmf->base)
-    return nullptr;
-  pmf->name = name;
-  pmf->usedoffs = 0;
-  pmf->offs = 0;
-  return pmf.take();
+    auto pmf = ke::MakeUnique<memfile_t>();
+    pmf->size = init;
+    pmf->base = ke::MakeUnique<char[]>(init);
+    if (!pmf->base)
+        return nullptr;
+    pmf->name = name;
+    pmf->usedoffs = 0;
+    pmf->offs = 0;
+    return pmf.take();
 }
 
-void memfile_destroy(memfile_t *mf)
+void
+memfile_destroy(memfile_t* mf)
 {
-  delete mf;
+    delete mf;
 }
 
-long memfile_seek(memfile_t *mf, long offset, int whence)
+long
+memfile_seek(memfile_t* mf, long offset, int whence)
 {
-  assert(mf!=NULL);
-  if (mf->usedoffs == 0)
-    return 0L;          /* early exit: not a single byte in the file */
+    assert(mf != NULL);
+    if (mf->usedoffs == 0)
+        return 0L; /* early exit: not a single byte in the file */
 
-  /* find the size of the memory file */
-  long length = mf->usedoffs;
+    /* find the size of the memory file */
+    long length = mf->usedoffs;
 
-  /* convert the offset to an absolute position */
-  switch (whence) {
-  case SEEK_SET:
-    break;
-  case SEEK_CUR:
-    offset+=mf->offs;
-    break;
-  case SEEK_END:
-    assert(offset<=0);
-    offset+=length;
-    break;
-  } 
-
-  /* clamp to the file length limit */
-  if (offset<0)
-    offset=0;
-  else if (offset>length)
-    offset=length;
-
-  /* set new position and return it */
-  mf->offs = offset;
-  return offset;
-}
-
-long memfile_tell(memfile_t *mf)
-{
-  return mf->offs;
-}
-
-size_t memfile_read(memfile_t *mf, void *buffer, size_t maxsize)
-{
-  if (!maxsize || mf->offs >= mf->usedoffs)
-  {
-    return 0;
-  }
-
-  if (mf->usedoffs - mf->offs < (long)maxsize)
-  {
-    maxsize = mf->usedoffs - mf->offs;
-    if (!maxsize)
-    {
-      return 0;
+    /* convert the offset to an absolute position */
+    switch (whence) {
+        case SEEK_SET:
+            break;
+        case SEEK_CUR:
+            offset += mf->offs;
+            break;
+        case SEEK_END:
+            assert(offset <= 0);
+            offset += length;
+            break;
     }
-  }
 
-  memcpy(buffer, mf->base.get() + mf->offs, maxsize);
+    /* clamp to the file length limit */
+    if (offset < 0)
+        offset = 0;
+    else if (offset > length)
+        offset = length;
 
-  mf->offs += maxsize;
-
-  return maxsize;
+    /* set new position and return it */
+    mf->offs = offset;
+    return offset;
 }
 
-int memfile_write(memfile_t *mf, const void *buffer, size_t size)
+long
+memfile_tell(memfile_t* mf)
 {
-  if (mf->offs + size > mf->size)
-  {
-    size_t newsize = (mf->size + size) * 2;
-    auto new_base = ke::MakeUnique<char[]>(newsize);
-    if (!new_base)
-      return 0;
-    memcpy(new_base.get(), mf->base.get(), mf->usedoffs);
-    mf->size = newsize;
-    mf->base = ke::Move(new_base);
-  }
-  memcpy(mf->base.get() + mf->offs, buffer, size);
-  mf->offs += size;
-
-  if (mf->offs > mf->usedoffs)
-  {
-    mf->usedoffs = mf->offs;
-  }
-
-  return 1;
+    return mf->offs;
 }
 
-void memfile_reset(memfile_t *mf)
+size_t
+memfile_read(memfile_t* mf, void* buffer, size_t maxsize)
 {
-  mf->usedoffs = 0;
-  mf->offs = 0;
+    if (!maxsize || mf->offs >= mf->usedoffs) {
+        return 0;
+    }
+
+    if (mf->usedoffs - mf->offs < (long)maxsize) {
+        maxsize = mf->usedoffs - mf->offs;
+        if (!maxsize) {
+            return 0;
+        }
+    }
+
+    memcpy(buffer, mf->base.get() + mf->offs, maxsize);
+
+    mf->offs += maxsize;
+
+    return maxsize;
+}
+
+int
+memfile_write(memfile_t* mf, const void* buffer, size_t size)
+{
+    if (mf->offs + size > mf->size) {
+        size_t newsize = (mf->size + size) * 2;
+        auto new_base = ke::MakeUnique<char[]>(newsize);
+        if (!new_base)
+            return 0;
+        memcpy(new_base.get(), mf->base.get(), mf->usedoffs);
+        mf->size = newsize;
+        mf->base = ke::Move(new_base);
+    }
+    memcpy(mf->base.get() + mf->offs, buffer, size);
+    mf->offs += size;
+
+    if (mf->offs > mf->usedoffs) {
+        mf->usedoffs = mf->offs;
+    }
+
+    return 1;
+}
+
+void
+memfile_reset(memfile_t* mf)
+{
+    mf->usedoffs = 0;
+    mf->offs = 0;
 }

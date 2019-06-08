@@ -22,41 +22,41 @@
 #include "sc.h"
 
 struct stringlist {
-  stringlist *next;
-  union {
-    char *line;
-    stringlist *tail;
-  };
+    stringlist* next;
+    union {
+        char* line;
+        stringlist* tail;
+    };
 };
 
 struct macro_t {
-  const char* first;
-  const char* second;
+    const char* first;
+    const char* second;
 };
 
-void insert_alias(const char *name,const char *alias);
-bool lookup_alias(char *target,const char *name);
+void insert_alias(const char* name, const char* alias);
+bool lookup_alias(char* target, const char* name);
 void delete_aliastable(void);
-stringlist *insert_path(char *path);
-char *get_path(int index);
+stringlist* insert_path(char* path);
+char* get_path(int index);
 void delete_pathtable(void);
-void insert_subst(const char *pattern, size_t pattern_length, const char *substitution);
-bool find_subst(const char *name, size_t length, macro_t* result);
-bool delete_subst(const char *name, size_t length);
+void insert_subst(const char* pattern, size_t pattern_length, const char* substitution);
+bool find_subst(const char* name, size_t length, macro_t* result);
+bool delete_subst(const char* name, size_t length);
 void delete_substtable(void);
-stringlist *insert_sourcefile(char *string);
-char *get_sourcefile(int index);
+stringlist* insert_sourcefile(char* string);
+char* get_sourcefile(int index);
 void delete_sourcefiletable(void);
-stringlist *insert_inputfile(char *string);
-char *get_inputfile(int index);
+stringlist* insert_inputfile(char* string);
+char* get_inputfile(int index);
 void delete_inputfiletable(void);
-stringlist *insert_autolist(const char *string);
-char *get_autolist(int index);
+stringlist* insert_autolist(const char* string);
+char* get_autolist(int index);
 void delete_autolisttable(void);
-stringlist *insert_dbgfile(const char *filename);
-stringlist *insert_dbgline(int linenr);
-stringlist *insert_dbgsymbol(symbol *sym);
-char *get_dbgstring(int index);
+stringlist* insert_dbgfile(const char* filename);
+stringlist* insert_dbgline(int linenr);
+stringlist* insert_dbgsymbol(symbol* sym);
+char* get_dbgstring(int index);
 void delete_dbgstringtable(void);
-stringlist *get_dbgstrings();
-void delete_stringtable(stringlist *root);
+stringlist* get_dbgstrings();
+void delete_stringtable(stringlist* root);

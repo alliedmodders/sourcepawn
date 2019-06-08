@@ -40,16 +40,18 @@
 #include "sp_vm_types.h"
 
 namespace sp {
-  union FloatCellUnion {
-    FloatCellUnion(float f32) : f32(f32)
+union FloatCellUnion {
+    FloatCellUnion(float f32)
+     : f32(f32)
     {}
-    FloatCellUnion(cell_t cell) : cell(cell)
+    FloatCellUnion(cell_t cell)
+     : cell(cell)
     {}
 
     float f32;
     cell_t cell;
-  };
-}
+};
+} // namespace sp
 
 /**
  * @brief Reinterpret-casts a float to a cell.
@@ -57,9 +59,10 @@ namespace sp {
  * @param val		Float value.
  * @return			Cell typed version.
  */
-static inline cell_t sp_ftoc(float val)
+static inline cell_t
+sp_ftoc(float val)
 {
-	return sp::FloatCellUnion(val).cell;
+    return sp::FloatCellUnion(val).cell;
 }
 
 /**
@@ -68,10 +71,10 @@ static inline cell_t sp_ftoc(float val)
  * @param val		Cell-packed float value.
  * @return			Float typed version.
  */
-static inline float sp_ctof(cell_t val)
+static inline float
+sp_ctof(cell_t val)
 {
-	return sp::FloatCellUnion(val).f32;
+    return sp::FloatCellUnion(val).f32;
 }
 
 #endif //_INCLUDE_SOURCEPAWN_VM_TYPEUTIL_H_
-

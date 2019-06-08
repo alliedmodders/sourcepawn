@@ -21,4 +21,4 @@
 
 struct memfile_t;
 
-void assemble(const char *outname, memfile_t* fin);
+void assemble(const char* outname, memfile_t* fin);

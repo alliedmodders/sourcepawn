@@ -48,84 +48,89 @@
  *  Version: $Id$
  */
 #include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>     /* for atoi() */
-#include <string.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h> /* for atoi() */
+#include <string.h>
 #if defined FORTIFY
-  #include <alloc/fortify.h>
+#    include <alloc/fortify.h>
 #endif
-#include "sc.h"
-#include "scvars.h"
+#include "codegen.h"
 #include "errors.h"
 #include "lexer.h"
-#include "codegen.h"
 #include "libpawnc.h"
+#include "sc.h"
+#include "scvars.h"
 
 #if defined _MSC_VER
-  #pragma warning(push)
-  #pragma warning(disable:4125)  /* decimal digit terminates octal escape sequence */
+#    pragma warning(push)
+#    pragma warning(disable : 4125) /* decimal digit terminates octal escape sequence */
 #endif
 
 #include "patterns.h"
 
 #if defined _MSC_VER
-  #pragma warning(pop)
+#    pragma warning(pop)
 #endif
 
-static int stgstring(char *start,char *end);
-static void stgopt(char *start,char *end,int (*outputfunc)(char *str));
+static int stgstring(char* start, char* end);
+static void stgopt(char* start, char* end, int (*outputfunc)(char* str));
 
+#define sSTG_GROW 512
+#define sSTG_MAX 20480
 
-#define sSTG_GROW   512
-#define sSTG_MAX    20480
+static char* stgbuf = NULL;
+static int stgmax = 0; /* current size of the staging buffer */
 
-static char *stgbuf=NULL;
-static int stgmax=0;    /* current size of the staging buffer */
+static char* stgpipe = NULL;
+static int pipemax = 0; /* current size of the stage pipe, a second staging buffer */
+static int pipeidx = 0;
 
-static char *stgpipe=NULL;
-static int pipemax=0;   /* current size of the stage pipe, a second staging buffer */
-static int pipeidx=0;
+#define CHECK_STGBUFFER(index)  \
+    if ((int)(index) >= stgmax) \
+    grow_stgbuffer(&stgbuf, &stgmax, (index) + 1)
+#define CHECK_STGPIPE(index)     \
+    if ((int)(index) >= pipemax) \
+    grow_stgbuffer(&stgpipe, &pipemax, (index) + 1)
 
-#define CHECK_STGBUFFER(index) if ((int)(index)>=stgmax)  grow_stgbuffer(&stgbuf, &stgmax, (index)+1)
-#define CHECK_STGPIPE(index)   if ((int)(index)>=pipemax) grow_stgbuffer(&stgpipe, &pipemax, (index)+1)
-
-static void grow_stgbuffer(char **buffer, int *curmax, int requiredsize)
+static void
+grow_stgbuffer(char** buffer, int* curmax, int requiredsize)
 {
-  char *p;
-  int clear= (*buffer==NULL); /* if previously none, empty buffer explicitly */
+    char* p;
+    int clear = (*buffer == NULL); /* if previously none, empty buffer explicitly */
 
-  assert(*curmax<requiredsize);
-  /* if the staging buffer (holding intermediate code for one line) grows
+    assert(*curmax < requiredsize);
+    /* if the staging buffer (holding intermediate code for one line) grows
    * over a few kBytes, there is probably a run-away expression
    */
-  if (requiredsize>sSTG_MAX)
-    error(FATAL_ERROR_OOM);
-  *curmax=requiredsize+sSTG_GROW;
-  if (*buffer!=NULL)
-    p=(char *)realloc(*buffer,*curmax*sizeof(char));
-  else
-    p=(char *)malloc(*curmax*sizeof(char));
-  if (p==NULL)
-    error(FATAL_ERROR_OOM);
-  *buffer=p;
-  if (clear)
-    **buffer='\0';
+    if (requiredsize > sSTG_MAX)
+        error(FATAL_ERROR_OOM);
+    *curmax = requiredsize + sSTG_GROW;
+    if (*buffer != NULL)
+        p = (char*)realloc(*buffer, *curmax * sizeof(char));
+    else
+        p = (char*)malloc(*curmax * sizeof(char));
+    if (p == NULL)
+        error(FATAL_ERROR_OOM);
+    *buffer = p;
+    if (clear)
+        **buffer = '\0';
 }
 
-void stgbuffer_cleanup(void)
+void
+stgbuffer_cleanup(void)
 {
-  if (stgbuf!=NULL) {
-    free(stgbuf);
-    stgbuf=NULL;
-    stgmax=0;
-  } 
-  if (stgpipe!=NULL) {
-    free(stgpipe);
-    stgpipe=NULL;
-    pipemax=0;
-    pipeidx=0;
-  } 
+    if (stgbuf != NULL) {
+        free(stgbuf);
+        stgbuf = NULL;
+        stgmax = 0;
+    }
+    if (stgpipe != NULL) {
+        free(stgpipe);
+        stgpipe = NULL;
+        pipemax = 0;
+        pipeidx = 0;
+    }
 }
 
 /* the variables "stgidx" and "staging" are declared in "scvars.c" */
@@ -146,34 +151,37 @@ void stgbuffer_cleanup(void)
  *                     stgbuf  (altered)
  *                     staging (referred to only)
  */
-void stgmark(char mark)
+void
+stgmark(char mark)
 {
-  if (staging) {
-    CHECK_STGBUFFER(stgidx);
-    stgbuf[stgidx++]=mark;
-  } 
+    if (staging) {
+        CHECK_STGBUFFER(stgidx);
+        stgbuf[stgidx++] = mark;
+    }
 }
 
-static int rebuffer(char *str)
+static int
+rebuffer(char* str)
 {
-  if (sc_status==statWRITE) {
-    if (pipeidx>=2 && stgpipe[pipeidx-1]=='\0' && stgpipe[pipeidx-2]!='\n')
-      pipeidx-=1;                      /* overwrite last '\0' */
-    while (*str!='\0') {               /* copy to staging buffer */
-      CHECK_STGPIPE(pipeidx);
-      stgpipe[pipeidx++]=*str++;
-    } 
-    CHECK_STGPIPE(pipeidx);
-    stgpipe[pipeidx++]='\0';
-  } 
-  return TRUE;
+    if (sc_status == statWRITE) {
+        if (pipeidx >= 2 && stgpipe[pipeidx - 1] == '\0' && stgpipe[pipeidx - 2] != '\n')
+            pipeidx -= 1;      /* overwrite last '\0' */
+        while (*str != '\0') { /* copy to staging buffer */
+            CHECK_STGPIPE(pipeidx);
+            stgpipe[pipeidx++] = *str++;
+        }
+        CHECK_STGPIPE(pipeidx);
+        stgpipe[pipeidx++] = '\0';
+    }
+    return TRUE;
 }
 
-static int filewrite(char *str)
+static int
+filewrite(char* str)
 {
-  if (sc_status==statWRITE)
-    return pc_writeasm(outf,str);
-  return TRUE;
+    if (sc_status == statWRITE)
+        return pc_writeasm(outf, str);
+    return TRUE;
 }
 
 /*  stgwrite
@@ -193,29 +201,33 @@ static int filewrite(char *str)
  *                     stgbuf  (altered)
  *                     staging (referred to only)
  */
-void stgwrite(const char *st)
+void
+stgwrite(const char* st)
 {
-  int len;
-  int st_len = strlen(st);
+    int len;
+    int st_len = strlen(st);
 
-  if (staging) {
-    assert(stgidx==0 || stgbuf!=NULL);  /* staging buffer must be valid if there is (apparently) something in it */
-    if (stgidx>=2 && stgbuf[stgidx-1]=='\0' && stgbuf[stgidx-2]!='\n')
-      stgidx-=1;                       /* overwrite last '\0' */
+    if (staging) {
+        assert(
+            stgidx == 0 ||
+            stgbuf !=
+                NULL); /* staging buffer must be valid if there is (apparently) something in it */
+        if (stgidx >= 2 && stgbuf[stgidx - 1] == '\0' && stgbuf[stgidx - 2] != '\n')
+            stgidx -= 1; /* overwrite last '\0' */
 
-    CHECK_STGBUFFER(stgidx+st_len+1);
-    memcpy(stgbuf+stgidx, st, st_len+1);
-    stgidx+=st_len+1;
-  } else {
-    len=(stgbuf!=NULL) ? strlen(stgbuf) : 0;
-    CHECK_STGBUFFER(len+st_len+1);
-    memcpy(stgbuf+len, st, st_len+1);
-    len+=st_len;
-    if (len>0 && stgbuf[len-1]=='\n') {
-      filewrite(stgbuf);
-      stgbuf[0]='\0';
-    } 
-  } 
+        CHECK_STGBUFFER(stgidx + st_len + 1);
+        memcpy(stgbuf + stgidx, st, st_len + 1);
+        stgidx += st_len + 1;
+    } else {
+        len = (stgbuf != NULL) ? strlen(stgbuf) : 0;
+        CHECK_STGBUFFER(len + st_len + 1);
+        memcpy(stgbuf + len, st, st_len + 1);
+        len += st_len;
+        if (len > 0 && stgbuf[len - 1] == '\n') {
+            filewrite(stgbuf);
+            stgbuf[0] = '\0';
+        }
+    }
 }
 
 /*  stgout
@@ -228,37 +240,38 @@ void stgwrite(const char *st)
  *                     stgbuf  (referred to only)
  *                     staging (referred to only)
  */
-void stgout(int index)
+void
+stgout(int index)
 {
-  int reordered=0;
-  int idx;
+    int reordered = 0;
+    int idx;
 
-  if (!staging)
-    return;
-  assert(pipeidx==0);
+    if (!staging)
+        return;
+    assert(pipeidx == 0);
 
-  /* first pass: sub-expressions */
-  if (sc_status==statWRITE)
-    reordered=stgstring(&stgbuf[index],&stgbuf[stgidx]);
-  stgidx=index;
+    /* first pass: sub-expressions */
+    if (sc_status == statWRITE)
+        reordered = stgstring(&stgbuf[index], &stgbuf[stgidx]);
+    stgidx = index;
 
-  /* second pass: optimize the buffer created in the first pass */
-  if (sc_status==statWRITE) {
-    if (reordered) {
-      stgopt(stgpipe,stgpipe+pipeidx,filewrite);
-    } else {
-      /* there is no sense in re-optimizing if the order of the sub-expressions
+    /* second pass: optimize the buffer created in the first pass */
+    if (sc_status == statWRITE) {
+        if (reordered) {
+            stgopt(stgpipe, stgpipe + pipeidx, filewrite);
+        } else {
+            /* there is no sense in re-optimizing if the order of the sub-expressions
        * did not change; so output directly
        */
-      for (idx=0; idx<pipeidx; idx+=strlen(stgpipe+idx)+1)
-        filewrite(stgpipe+idx);
-    } 
-  } 
-  pipeidx=0;  /* reset second pipe */
+            for (idx = 0; idx < pipeidx; idx += strlen(stgpipe + idx) + 1)
+                filewrite(stgpipe + idx);
+        }
+    }
+    pipeidx = 0; /* reset second pipe */
 }
 
 typedef struct {
-  char *start,*end;
+    char *start, *end;
 } argstack;
 
 /*  stgstring
@@ -283,66 +296,67 @@ typedef struct {
  *     '[...|...]  invalid, first string doesn't start with '|'
  *     '[|...|]    invalid
  */
-static int stgstring(char *start,char *end)
+static int
+stgstring(char* start, char* end)
 {
-  char *ptr;
-  int nest,argc,arg;
-  argstack *stack;
-  int reordered=0;
+    char* ptr;
+    int nest, argc, arg;
+    argstack* stack;
+    int reordered = 0;
 
-  while (start<end) {
-    if (*start==sSTARTREORDER) {
-      start+=1;         /* skip token */
-      /* allocate a argstack with SP_MAX_CALL_ARGUMENTS items */
-      stack=(argstack *)malloc(SP_MAX_CALL_ARGUMENTS*sizeof(argstack));
-      if (stack==NULL)
-        error(103);     /* insufficient memory */
-      reordered=1;      /* mark that the expression is reordered */
-      nest=1;           /* nesting counter */
-      argc=0;           /* argument counter */
-      arg=-1;           /* argument index; no valid argument yet */
-      do {
-        switch (*start) {
-        case sSTARTREORDER:
-          nest++;
-          start++;
-          break;
-        case sENDREORDER:
-          nest--;
-          start++;
-          break;
-        default:
-          if ((*start & sEXPRSTART)==sEXPRSTART) {
-            if (nest==1) {
-              if (arg>=0)
-                stack[arg].end=start-1; /* finish previous argument */
-              arg=(unsigned char)*start - sEXPRSTART;
-              stack[arg].start=start+1;
-              if (arg>=argc)
-                argc=arg+1;
-            } 
-            start++;
-          } else {
-            start+=strlen(start)+1;
-          } 
-        } 
-      } while (nest); /* enddo */
-      if (arg>=0)
-        stack[arg].end=start-1;   /* finish previous argument */
-      while (argc>0) {
-        argc--;
-        stgstring(stack[argc].start,stack[argc].end);
-      } 
-      free(stack);
-    } else {
-      ptr=start;
-      while (ptr<end && *ptr!=sSTARTREORDER)
-        ptr+=strlen(ptr)+1;
-      stgopt(start,ptr,rebuffer);
-      start=ptr;
-    } 
-  } 
-  return reordered;
+    while (start < end) {
+        if (*start == sSTARTREORDER) {
+            start += 1; /* skip token */
+            /* allocate a argstack with SP_MAX_CALL_ARGUMENTS items */
+            stack = (argstack*)malloc(SP_MAX_CALL_ARGUMENTS * sizeof(argstack));
+            if (stack == NULL)
+                error(103); /* insufficient memory */
+            reordered = 1;  /* mark that the expression is reordered */
+            nest = 1;       /* nesting counter */
+            argc = 0;       /* argument counter */
+            arg = -1;       /* argument index; no valid argument yet */
+            do {
+                switch (*start) {
+                    case sSTARTREORDER:
+                        nest++;
+                        start++;
+                        break;
+                    case sENDREORDER:
+                        nest--;
+                        start++;
+                        break;
+                    default:
+                        if ((*start & sEXPRSTART) == sEXPRSTART) {
+                            if (nest == 1) {
+                                if (arg >= 0)
+                                    stack[arg].end = start - 1; /* finish previous argument */
+                                arg = (unsigned char)*start - sEXPRSTART;
+                                stack[arg].start = start + 1;
+                                if (arg >= argc)
+                                    argc = arg + 1;
+                            }
+                            start++;
+                        } else {
+                            start += strlen(start) + 1;
+                        }
+                }
+            } while (nest); /* enddo */
+            if (arg >= 0)
+                stack[arg].end = start - 1; /* finish previous argument */
+            while (argc > 0) {
+                argc--;
+                stgstring(stack[argc].start, stack[argc].end);
+            }
+            free(stack);
+        } else {
+            ptr = start;
+            while (ptr < end && *ptr != sSTARTREORDER)
+                ptr += strlen(ptr) + 1;
+            stgopt(start, ptr, rebuffer);
+            start = ptr;
+        }
+    }
+    return reordered;
 }
 
 /*  stgdel
@@ -352,21 +366,23 @@ static int stgstring(char *start,char *end)
  *  Global references: stgidx (altered)
  *                     staging (reffered to only)
  */
-void stgdel(int index,cell code_index)
+void
+stgdel(int index, cell code_index)
 {
-  if (staging) {
-    stgidx=index;
-    code_idx=code_index;
-  } 
+    if (staging) {
+        stgidx = index;
+        code_idx = code_index;
+    }
 }
 
-int stgget(int *index,cell *code_index)
+int
+stgget(int* index, cell* code_index)
 {
-  if (staging) {
-    *index=stgidx;
-    *code_index=code_idx;
-  } 
-  return staging;
+    if (staging) {
+        *index = stgidx;
+        *code_index = code_idx;
+    }
+    return staging;
 }
 
 /*  stgset
@@ -379,20 +395,21 @@ int stgget(int *index,cell *code_index)
  *                     stgidx   (altered)
  *                     stgbuf   (contents altered)
  */
-void stgset(int onoff)
+void
+stgset(int onoff)
 {
-  staging=onoff;
-  if (staging){
-    assert(stgidx==0);
-    stgidx=0;
-    CHECK_STGBUFFER(stgidx);
-    /* write any contents that may be put in the buffer by stgwrite()
+    staging = onoff;
+    if (staging) {
+        assert(stgidx == 0);
+        stgidx = 0;
+        CHECK_STGBUFFER(stgidx);
+        /* write any contents that may be put in the buffer by stgwrite()
      * when "staging" was 0
      */
-    if (strlen(stgbuf)>0)
-      filewrite(stgbuf);
-  } 
-  stgbuf[0]='\0';
+        if (strlen(stgbuf) > 0)
+            filewrite(stgbuf);
+    }
+    stgbuf[0] = '\0';
 }
 
 /* phopt_init
@@ -400,189 +417,195 @@ void stgset(int onoff)
  * are embedded in the .EXE file in compressed format, here we expand
  * them (and allocate memory for the sequences).
  */
-static SEQUENCE *sequences = sequences_cmp;
+static SEQUENCE* sequences = sequences_cmp;
 
-int phopt_init(void)
+int
+phopt_init(void)
 {
-  return TRUE;
+    return TRUE;
 }
 
-int phopt_cleanup(void)
+int
+phopt_cleanup(void)
 {
-  return FALSE;
+    return FALSE;
 }
 
-#define MAX_OPT_VARS    5
-#define MAX_OPT_CAT     5       /* max. values that are concatenated */
-#if sNAMEMAX > (PAWN_CELL_SIZE/4) * MAX_OPT_CAT
-  #define MAX_ALIAS       sNAMEMAX
+#define MAX_OPT_VARS 5
+#define MAX_OPT_CAT 5 /* max. values that are concatenated */
+#if sNAMEMAX > (PAWN_CELL_SIZE / 4) * MAX_OPT_CAT
+#    define MAX_ALIAS sNAMEMAX
 #else
-  #define MAX_ALIAS       (PAWN_CELL_SIZE/4) * MAX_OPT_CAT
+#    define MAX_ALIAS (PAWN_CELL_SIZE / 4) * MAX_OPT_CAT
 #endif
 
-static int matchsequence(const char *start,const char *end,const char *pattern,
-                         char symbols[MAX_OPT_VARS][MAX_ALIAS+1],
-                         int *match_length)
+static int
+matchsequence(const char* start, const char* end, const char* pattern,
+              char symbols[MAX_OPT_VARS][MAX_ALIAS + 1], int* match_length)
 {
-  int var,i;
-  char str[MAX_ALIAS+1];
-  const char *start_org=start;
-  cell value;
-  char *ptr;
+    int var, i;
+    char str[MAX_ALIAS + 1];
+    const char* start_org = start;
+    cell value;
+    char* ptr;
 
-  *match_length=0;
-  for (var=0; var<MAX_OPT_VARS; var++)
-    symbols[var][0]='\0';
+    *match_length = 0;
+    for (var = 0; var < MAX_OPT_VARS; var++)
+        symbols[var][0] = '\0';
 
-  while (*start=='\t' || *start==' ')
-    start++;
-  while (*pattern) {
-    if (start>=end)
-      return FALSE;
-    switch (*pattern) {
-    case '%':   /* new "symbol" */
-      pattern++;
-      assert(isdigit(*pattern));
-      var=atoi(pattern) - 1;
-      assert(var>=0 && var<MAX_OPT_VARS);
-      assert(*start=='-' || alphanum(*start));
-      for (i=0; start<end && (*start=='-' || *start=='+' || alphanum(*start)); i++,start++) {
-        assert(i<=MAX_ALIAS);
-        str[i]=*start;
-      } 
-      str[i]='\0';
-      if (symbols[var][0]!='\0') {
-        if (strcmp(symbols[var],str)!=0)
-          return FALSE; /* symbols should be identical */
-      } else {
-        strcpy(symbols[var],str);
-      } 
-      break;
-    case '-':
-      value=-strtol(pattern+1,(char **)&pattern,16);
-      ptr=itoh((ucell)value);
-      while (*ptr!='\0') {
-        if (tolower(*start) != tolower(*ptr))
-          return FALSE;
+    while (*start == '\t' || *start == ' ')
         start++;
-        ptr++;
-      } 
-      pattern--;  /* there is an increment following at the end of the loop */
-      break;
-    case ' ':
-      if (*start!='\t' && *start!=' ')
-        return FALSE;
-      while (start<end && (*start=='\t' || *start==' '))
-        start++;
-      break;
-    case '!':
-      while (start<end && (*start=='\t' || *start==' '))
-        start++;                /* skip trailing white space */
-      if (*start==';')
-        while (start<end && *start!='\n')
-          start++;              /* skip trailing comment */
-      if (*start!='\n')
-        return FALSE;
-      assert(*(start+1)=='\0');
-      start+=2;                 /* skip '\n' and '\0' */
-      if (*(pattern+1)!='\0')
-        while ((start<end && *start=='\t') || *start==' ')
-          start++;              /* skip leading white space of next instruction */
-      break;
-    default:
-      if (tolower(*start) != tolower(*pattern))
-        return FALSE;
-      start++;
-    } 
-    pattern++;
-  } 
+    while (*pattern) {
+        if (start >= end)
+            return FALSE;
+        switch (*pattern) {
+            case '%': /* new "symbol" */
+                pattern++;
+                assert(isdigit(*pattern));
+                var = atoi(pattern) - 1;
+                assert(var >= 0 && var < MAX_OPT_VARS);
+                assert(*start == '-' || alphanum(*start));
+                for (i = 0; start < end && (*start == '-' || *start == '+' || alphanum(*start));
+                     i++, start++)
+                {
+                    assert(i <= MAX_ALIAS);
+                    str[i] = *start;
+                }
+                str[i] = '\0';
+                if (symbols[var][0] != '\0') {
+                    if (strcmp(symbols[var], str) != 0)
+                        return FALSE; /* symbols should be identical */
+                } else {
+                    strcpy(symbols[var], str);
+                }
+                break;
+            case '-':
+                value = -strtol(pattern + 1, (char**)&pattern, 16);
+                ptr = itoh((ucell)value);
+                while (*ptr != '\0') {
+                    if (tolower(*start) != tolower(*ptr))
+                        return FALSE;
+                    start++;
+                    ptr++;
+                }
+                pattern--; /* there is an increment following at the end of the loop */
+                break;
+            case ' ':
+                if (*start != '\t' && *start != ' ')
+                    return FALSE;
+                while (start < end && (*start == '\t' || *start == ' '))
+                    start++;
+                break;
+            case '!':
+                while (start < end && (*start == '\t' || *start == ' '))
+                    start++; /* skip trailing white space */
+                if (*start == ';')
+                    while (start < end && *start != '\n')
+                        start++; /* skip trailing comment */
+                if (*start != '\n')
+                    return FALSE;
+                assert(*(start + 1) == '\0');
+                start += 2; /* skip '\n' and '\0' */
+                if (*(pattern + 1) != '\0')
+                    while ((start < end && *start == '\t') || *start == ' ')
+                        start++; /* skip leading white space of next instruction */
+                break;
+            default:
+                if (tolower(*start) != tolower(*pattern))
+                    return FALSE;
+                start++;
+        }
+        pattern++;
+    }
 
-  *match_length=(int)(start-start_org);
-  return TRUE;
+    *match_length = (int)(start - start_org);
+    return TRUE;
 }
 
-static char *replacesequence(const char *pattern,char symbols[MAX_OPT_VARS][MAX_ALIAS+1],int *repl_length)
+static char*
+replacesequence(const char* pattern, char symbols[MAX_OPT_VARS][MAX_ALIAS + 1], int* repl_length)
 {
-  const char *lptr;
-  int var;
-  char *buffer;
+    const char* lptr;
+    int var;
+    char* buffer;
 
-  /* calculate the length of the new buffer
+    /* calculate the length of the new buffer
    * this is the length of the pattern plus the length of all symbols (note
    * that the same symbol may occur multiple times in the pattern) plus
    * line endings and startings ('\t' to start a line and '\n\0' to end one)
    */
-  assert(repl_length!=NULL);
-  *repl_length=0;
-  lptr=pattern;
-  while (*lptr) {
-    switch (*lptr) {
-    case '%':
-      lptr++;           /* skip '%' */
-      assert(isdigit(*lptr));
-      var=atoi(lptr) - 1;
-      assert(var>=0 && var<MAX_OPT_VARS);
-      assert(symbols[var][0]!='\0');    /* variable should be defined */
-      *repl_length+=strlen(symbols[var]);
-      break;
-    case '!':
-      *repl_length+=3;  /* '\t', '\n' & '\0' */
-      break;
-    default:
-      *repl_length+=1;
-    } 
-    lptr++;
-  } 
+    assert(repl_length != NULL);
+    *repl_length = 0;
+    lptr = pattern;
+    while (*lptr) {
+        switch (*lptr) {
+            case '%':
+                lptr++; /* skip '%' */
+                assert(isdigit(*lptr));
+                var = atoi(lptr) - 1;
+                assert(var >= 0 && var < MAX_OPT_VARS);
+                assert(symbols[var][0] != '\0'); /* variable should be defined */
+                *repl_length += strlen(symbols[var]);
+                break;
+            case '!':
+                *repl_length += 3; /* '\t', '\n' & '\0' */
+                break;
+            default:
+                *repl_length += 1;
+        }
+        lptr++;
+    }
 
-  /* allocate a buffer to replace the sequence in */
-  if ((buffer=(char*)malloc(*repl_length))==NULL) {
-    error(103);
-    return NULL;
-  }
+    /* allocate a buffer to replace the sequence in */
+    if ((buffer = (char*)malloc(*repl_length)) == NULL) {
+        error(103);
+        return NULL;
+    }
 
-  /* replace the pattern into this temporary buffer */
-  char *ptr=buffer;
-  *ptr++='\t';         /* the "replace" patterns do not have tabs */
-  while (*pattern) {
-    assert((int)(ptr-buffer)<*repl_length);
-    switch (*pattern) {
-    case '%':
-      /* write out the symbol */
-      pattern++;
-      assert(isdigit(*pattern));
-      var=atoi(pattern) - 1;
-      assert(var>=0 && var<MAX_OPT_VARS);
-      assert(symbols[var][0]!='\0');    /* variable should be defined */
-      strcpy(ptr,symbols[var]);
-      ptr+=strlen(symbols[var]);
-      break;
-    case '!':
-      /* finish the line, optionally start the next line with an indent */
-      *ptr++='\n';
-      *ptr++='\0';
-      if (*(pattern+1)!='\0')
-        *ptr++='\t';
-      break;
-    default:
-      *ptr++=*pattern;
-    } 
-    pattern++;
-  } 
+    /* replace the pattern into this temporary buffer */
+    char* ptr = buffer;
+    *ptr++ = '\t'; /* the "replace" patterns do not have tabs */
+    while (*pattern) {
+        assert((int)(ptr - buffer) < *repl_length);
+        switch (*pattern) {
+            case '%':
+                /* write out the symbol */
+                pattern++;
+                assert(isdigit(*pattern));
+                var = atoi(pattern) - 1;
+                assert(var >= 0 && var < MAX_OPT_VARS);
+                assert(symbols[var][0] != '\0'); /* variable should be defined */
+                strcpy(ptr, symbols[var]);
+                ptr += strlen(symbols[var]);
+                break;
+            case '!':
+                /* finish the line, optionally start the next line with an indent */
+                *ptr++ = '\n';
+                *ptr++ = '\0';
+                if (*(pattern + 1) != '\0')
+                    *ptr++ = '\t';
+                break;
+            default:
+                *ptr++ = *pattern;
+        }
+        pattern++;
+    }
 
-  assert((int)(ptr-buffer)==*repl_length);
-  return buffer;
+    assert((int)(ptr - buffer) == *repl_length);
+    return buffer;
 }
 
-static void strreplace(char *dest,char *replace,int sub_length,int repl_length,int dest_length)
+static void
+strreplace(char* dest, char* replace, int sub_length, int repl_length, int dest_length)
 {
-  int offset=sub_length-repl_length;
-  if (offset>0) {               /* delete a section */
-    memmove(dest,dest+offset,dest_length-offset);
-    memset(dest+dest_length-offset,0xcc,offset); /* not needed, but for cleanlyness */
-  } else if (offset<0) {        /* insert a section */
-    memmove(dest-offset, dest, dest_length);
-  } 
-  memcpy(dest, replace, repl_length);
+    int offset = sub_length - repl_length;
+    if (offset > 0) { /* delete a section */
+        memmove(dest, dest + offset, dest_length - offset);
+        memset(dest + dest_length - offset, 0xcc, offset); /* not needed, but for cleanlyness */
+    } else if (offset < 0) {                               /* insert a section */
+        memmove(dest - offset, dest, dest_length);
+    }
+    memcpy(dest, replace, repl_length);
 }
 
 /*  stgopt
@@ -594,34 +617,36 @@ static void strreplace(char *dest,char *replace,int sub_length,int repl_length,i
  *  The longest sequences should probably be checked first.
  */
 
-static void stgopt(char *start,char *end,int (*outputfunc)(char *str))
+static void
+stgopt(char* start, char* end, int (*outputfunc)(char* str))
 {
-  char symbols[MAX_OPT_VARS][MAX_ALIAS+1];
-  int seq,match_length,repl_length;
-  int matches;
-  char *debut=start;  /* save original start of the buffer */
+    char symbols[MAX_OPT_VARS][MAX_ALIAS + 1];
+    int seq, match_length, repl_length;
+    int matches;
+    char* debut = start; /* save original start of the buffer */
 
-  assert(sequences!=NULL);
-  /* do not match anything if debug-level is maximum */
-  if (pc_optimize>sOPTIMIZE_NONE && sc_status==statWRITE) {
-    do {
-      matches=0;
-      start=debut;
-      while (start<end) {
-        seq=0;
-        while (sequences[seq].find!=NULL) {
-          assert(seq>=0);
-          if (*sequences[seq].find=='\0') {
-            if (pc_optimize==sOPTIMIZE_NOMACRO) {
-              break;    /* don't look further */
-            } else {
-              seq++;    /* continue with next string */
-              continue;
-            } 
-          } 
-          if (matchsequence(start,end,sequences[seq].find,symbols,&match_length)) {
-            char *replace=replacesequence(sequences[seq].replace,symbols,&repl_length);
-            /* If the replacement is bigger than the original section, we may need
+    assert(sequences != NULL);
+    /* do not match anything if debug-level is maximum */
+    if (pc_optimize > sOPTIMIZE_NONE && sc_status == statWRITE) {
+        do {
+            matches = 0;
+            start = debut;
+            while (start < end) {
+                seq = 0;
+                while (sequences[seq].find != NULL) {
+                    assert(seq >= 0);
+                    if (*sequences[seq].find == '\0') {
+                        if (pc_optimize == sOPTIMIZE_NOMACRO) {
+                            break; /* don't look further */
+                        } else {
+                            seq++; /* continue with next string */
+                            continue;
+                        }
+                    }
+                    if (matchsequence(start, end, sequences[seq].find, symbols, &match_length)) {
+                        char* replace =
+                            replacesequence(sequences[seq].replace, symbols, &repl_length);
+                        /* If the replacement is bigger than the original section, we may need
              * to "grow" the staging buffer. This is quite complex, due to the
              * re-ordering of expressions that can also happen in the staging
              * buffer. In addition, it should not happen: the peephole optimizer
@@ -629,31 +654,33 @@ static void stgopt(char *start,char *end,int (*outputfunc)(char *str))
              * So, I simply forbid sequences that are longer than the ones they
              * are meant to replace.
              */
-            assert(match_length>=repl_length);
-            if (match_length>=repl_length) {
-              strreplace(start,replace,match_length,repl_length,(int)(end-start));
-              end-=match_length-repl_length;
-              free(replace);
-              code_idx-=sequences[seq].savesize;
-              seq=0;                      /* restart search for matches */
-              matches++;
-            } else {
-              /* actually, we should never get here (match_length<repl_length) */
-              assert(0);
-              seq++;
-            } 
-          } else {
-            seq++;
-          } 
-        } 
-        assert(sequences[seq].find==NULL || (*sequences[seq].find=='\0' && pc_optimize==sOPTIMIZE_NOMACRO));
-        start += strlen(start) + 1;       /* to next string */
-      } /* while (start<end) */
-    } while (matches>0);
-  } /* if (pc_optimize>sOPTIMIZE_NONE && sc_status==statWRITE) */
+                        assert(match_length >= repl_length);
+                        if (match_length >= repl_length) {
+                            strreplace(start, replace, match_length, repl_length,
+                                       (int)(end - start));
+                            end -= match_length - repl_length;
+                            free(replace);
+                            code_idx -= sequences[seq].savesize;
+                            seq = 0; /* restart search for matches */
+                            matches++;
+                        } else {
+                            /* actually, we should never get here (match_length<repl_length) */
+                            assert(0);
+                            seq++;
+                        }
+                    } else {
+                        seq++;
+                    }
+                }
+                assert(sequences[seq].find == NULL ||
+                       (*sequences[seq].find == '\0' && pc_optimize == sOPTIMIZE_NOMACRO));
+                start += strlen(start) + 1; /* to next string */
+            }                               /* while (start<end) */
+        } while (matches > 0);
+    } /* if (pc_optimize>sOPTIMIZE_NONE && sc_status==statWRITE) */
 
-  for (start=debut; start<end; start+=strlen(start)+1)
-    outputfunc(start);
+    for (start = debut; start < end; start += strlen(start) + 1)
+        outputfunc(start);
 }
 
 #undef SCPACK_TABLE
