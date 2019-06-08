@@ -78,20 +78,24 @@ typedef struct tagAMX_DBG_HDR {
 #define AMX_DBG_MAGIC   0xf1ef
 
 typedef struct tagAMX_DBG_FILE {
-  ucell   address       PACKED; /* address in the code segment where generated code (for this file) starts */
+  ucell   address       PACKED; /* address in the code segment where generated code (for this file)
+                                   starts */
   char    name[1];           /* ASCII string, zero-terminated */
 } PACKED AMX_DBG_FILE;
 
 typedef struct tagAMX_DBG_LINE {
-  ucell   address       PACKED; /* address in the code segment where generated code (for this line) starts */
+  ucell   address       PACKED; /* address in the code segment where generated code (for this line)
+                                   starts */
   int32_t line          PACKED; /* line number */
 } PACKED AMX_DBG_LINE;
 
 typedef struct tagAMX_DBG_SYMBOL {
   ucell   address       PACKED; /* address in the data segment or relative to the frame */
   int16_t tag           PACKED; /* tag for the symbol */
-  ucell   codestart     PACKED; /* address in the code segment from which this symbol is valid (in scope) */
-  ucell   codeend       PACKED; /* address in the code segment until which this symbol is valid (in scope) */
+  ucell   codestart     PACKED; /* address in the code segment from which this symbol is valid (in
+                                   scope) */
+  ucell   codeend       PACKED; /* address in the code segment until which this symbol is valid
+                                   (in scope) */
   char    ident;                /* kind of symbol (function/variable) */
   char    vclass;               /* class of symbol (global/local) */
   int16_t dim           PACKED; /* number of dimensions */
