@@ -427,6 +427,7 @@ static void do_case(CellWriter* writer, AsmReader* reader, cell opcode)
   writer->write_label(i);
 }
 
+// clang-format off
 static OPCODEC opcodelist[] = {
   /* node for "invalid instruction" */
   {  0, NULL,         0,        noop },
@@ -567,6 +568,7 @@ static OPCODEC opcodelist[] = {
   { 89, "zero.pri",   sIN_CSEG, parm0 },
   { 92, "zero.s",     sIN_CSEG, parm1 },
 };
+// clang-format on
 
 static ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sOpcodeLookup;
 
