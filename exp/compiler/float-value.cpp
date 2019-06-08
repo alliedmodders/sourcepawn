@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "float-value.h"
-#include <am-float.h>
+#include <amtl/am-float.h>
 
 using namespace ke;
 using namespace sp;

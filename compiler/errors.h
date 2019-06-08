@@ -26,6 +26,7 @@
 #define am_sourcepawn_compiler_sc5_h
 
 #include <amtl/am-string.h>
+#include "sc.h"
 
 enum class ErrorType {
   Suppressed,

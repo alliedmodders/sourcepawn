@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include "amx.h"
+
 void stgbuffer_cleanup(void);
 void stgmark(char mark);
 void stgwrite(const char *st);

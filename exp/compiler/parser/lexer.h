@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_lexer_h_
 #define _include_spcomp_lexer_h_
 
-#include <am-refcounting.h>
+#include <amtl/am-refcounting.h>
 #include "tokens.h"
 #include "source-manager.h"
 #include "process-options.h"

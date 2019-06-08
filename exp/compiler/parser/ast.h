@@ -28,7 +28,7 @@
 #include "tokens.h"
 #include "type-specifier.h"
 #include "value-attrs.h"
-#include <am-vector.h>
+#include <amtl/am-vector.h>
 #include <limits.h>
 
 namespace sp {

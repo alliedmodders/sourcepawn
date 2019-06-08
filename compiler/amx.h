@@ -24,6 +24,7 @@
 #ifndef AMX_H_INCLUDED
 #define AMX_H_INCLUDED
 
+#include <stdint.h>
 #include <stdlib.h>   /* for size_t */
 #include <limits.h>
 

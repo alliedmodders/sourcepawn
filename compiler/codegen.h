@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include "sc.h"
+
 enum {
   sOPTIMIZE_NONE,               /* no optimization */
   sOPTIMIZE_NOMACRO,            /* no macro instructions */

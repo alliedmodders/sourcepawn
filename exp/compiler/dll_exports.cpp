@@ -14,7 +14,7 @@
 #include <sp_vm_api.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <am-cxx.h>
+#include <amtl/am-cxx.h>
 
 #if defined __linux__ || defined __APPLE__
 # if !defined(_GLIBCXX_USE_NOEXCEPT)

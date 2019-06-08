@@ -18,9 +18,9 @@
 #ifndef _include_spcomp_process_options_
 #define _include_spcomp_process_options_
 
-#include <am-vector.h>
-#include <am-string.h>
-#include <am-maybe.h>
+#include <amtl/am-vector.h>
+#include <amtl/am-string.h>
+#include <amtl/am-maybe.h>
 
 namespace sp {
 

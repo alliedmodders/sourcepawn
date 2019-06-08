@@ -18,7 +18,7 @@
 #ifndef _include_spcomp_macro_lexer_h_
 #define _include_spcomp_macro_lexer_h_
 
-#include <am-refcounting.h>
+#include <amtl/am-refcounting.h>
 #include "shared/string-pool.h"
 #include "source-location.h"
 #include "tokens.h"

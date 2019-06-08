@@ -26,6 +26,7 @@
 
 #include "amx.h"
 #include "parse-expr.h"
+#include "sc.h"
 
 struct value;
 struct svalue;

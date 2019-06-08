@@ -4,7 +4,7 @@
 #include <assert.h>
 #include "sc.h"
 #include "sp_symhash.h"
-#include <am-hashtable.h>
+#include <amtl/am-hashtable.h>
 
 struct NameAndScope
 {
