@@ -101,7 +101,7 @@ class ICallable
      *       two different values to come out.
      *
      * @param number  Parameter value to push.
-     & @param flags    Copy-back flags.
+     * @param flags    Copy-back flags.
      * @return      Error code, if any.
      */
     virtual int PushFloatByRef(float* number, int flags = SM_PARAM_COPYBACK) = 0;
@@ -252,8 +252,8 @@ class IPluginFunction : public ICallable
 
     /**
      * @brief Returns a name to identify this function for debugging purposes.
-	 *
-	 * @return       String name.
+	    *
+	    * @return       String name.
      */
     virtual const char* DebugName() = 0;
 };
@@ -1127,10 +1127,10 @@ class IErrorReport
     virtual IPluginFunction* Blame() const = 0;
 
     /**
-    * @brief Return the error code of the error report.
-    *
-    * @return           SP_ERROR_* integer code.
-    */
+     * @brief Return the error code of the error report.
+     *
+     * @return           SP_ERROR_* integer code.
+     */
     virtual int Code() const = 0;
 };
 

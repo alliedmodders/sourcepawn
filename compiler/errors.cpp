@@ -197,10 +197,10 @@ report_error(ErrorReport* report)
     static short lastfile;
 
     /* errflag is reset on each semicolon.
-   * In a two-pass compiler, an error should not be reported twice. Therefore
-   * the error reporting is enabled only in the second pass (and only when
-   * actually producing output). Fatal errors may never be ignored.
-   */
+     * In a two-pass compiler, an error should not be reported twice. Therefore
+     * the error reporting is enabled only in the second pass (and only when
+     * actually producing output). Fatal errors may never be ignored.
+     */
     if (report->type != ErrorType::Fatal) {
         if (errflag)
             return;

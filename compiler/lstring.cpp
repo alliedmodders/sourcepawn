@@ -28,7 +28,7 @@
  */
 
 /*
-  #include <sys/types.h>  already included through lstring.h
+   #include <sys/types.h>  already included through lstring.h
  */
 #    include <string.h> /* for strlen() */
 
@@ -82,9 +82,9 @@ strlcpy(char* dst, const char* src, size_t siz)
  */
 
 /*
-  #include <string.h>       already included
-  #include <sys/types.h>    already included
-*/
+   #include <string.h>       already included
+   #include <sys/types.h>    already included
+ */
 
 /*
  * Appends src to string dst of size siz (unlike strncat, siz is the

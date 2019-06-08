@@ -150,9 +150,9 @@ setline(int chkbounds)
     }
     if ((sc_debug & sSYMBOLIC) != 0 || (chkbounds && (sc_debug & sCHKBOUNDS) != 0)) {
         /* generate a "break" (start statement) opcode rather than a "line" opcode
-     * because earlier versions of Small/Pawn have an incompatible version of the
-     * line opcode
-     */
+         * because earlier versions of Small/Pawn have an incompatible version of the
+         * line opcode
+         */
         stgwrite("\tbreak\t; ");
         outval(code_idx, TRUE);
         code_idx += opcodes(1);
@@ -191,10 +191,10 @@ setlabel(int number)
     stgwrite("l.");
     stgwrite((char*)itoh(number));
     /* To assist verification of the assembled code, put the address of the
-   * label as a comment. However, labels that occur inside an expression
-   * may move (through optimization or through re-ordering). So write the
-   * address only if it is known to accurate.
-   */
+     * label as a comment. However, labels that occur inside an expression
+     * may move (through optimization or through re-ordering). So write the
+     * address only if it is known to accurate.
+     */
     if (!staging) {
         stgwrite("\t\t; ");
         outval(code_idx, FALSE);
@@ -319,11 +319,11 @@ address(symbol* sym, regid reg)
     assert(sym != NULL);
     assert(reg == sPRI || reg == sALT);
     /* the symbol can be a local array, a global array, or an array
-   * that is passed by reference.
-   */
+     * that is passed by reference.
+     */
     if (sym->ident == iREFARRAY || sym->ident == iREFERENCE) {
         /* reference to a variable or to an array; currently this is
-     * always a local variable */
+         * always a local variable */
         switch (reg) {
             case sPRI:
                 stgwrite("\tload.s.pri ");
@@ -504,8 +504,8 @@ copyarray(symbol* sym, cell size)
 {
     assert(sym != NULL);
     /* the symbol can be a local array, a global array, or an array
-   * that is passed by reference.
-   */
+     * that is passed by reference.
+     */
     if (sym->ident == iREFARRAY) {
         /* reference to an array; currently this is always a local variable */
         assert(sym->vclass == sLOCAL); /* symbol must be stack relative */
@@ -531,8 +531,8 @@ fillarray(symbol* sym, cell size, cell value)
 
     assert(sym != NULL);
     /* the symbol can be a local array, a global array, or an array
-   * that is passed by reference.
-   */
+     * that is passed by reference.
+     */
     if (sym->ident == iREFARRAY) {
         /* reference to an array; currently this is always a local variable */
         assert(sym->vclass == sLOCAL); /* symbol must be stack relative */

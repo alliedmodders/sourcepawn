@@ -82,15 +82,15 @@ get_utf8_char(const unsigned char* string, const unsigned char** endptr)
             result = (result << 6) | (ch & 0x3f);
             if (--follow == 0) {
                 /* encoding a character in more bytes than is strictly needed,
-         * is not really valid UTF-8; we are strict here to increase
-         * the chance of heuristic dectection of non-UTF-8 text
-         * (JAVA writes zero bytes as a 2-byte code UTF-8, which is invalid)
-         */
+                 * is not really valid UTF-8; we are strict here to increase
+                 * the chance of heuristic dectection of non-UTF-8 text
+                 * (JAVA writes zero bytes as a 2-byte code UTF-8, which is invalid)
+                 */
                 if (result < lowmark)
                     return -1;
                 /* the code positions 0xd800--0xdfff and 0xfffe & 0xffff do not
-         * exist in UCS-4 (and hence, they do not exist in Unicode)
-         */
+                 * exist in UCS-4 (and hence, they do not exist in Unicode)
+                 */
                 if ((result >= 0xd800 && result <= 0xdfff) || result == 0xfffe || result == 0xffff)
                     return -1;
             }

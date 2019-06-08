@@ -92,8 +92,8 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
     symbol* sym;
 
     /* since user-defined operators on untagged operands are forbidden, we have
-   * a quick exit.
-   */
+     * a quick exit.
+     */
     assert(numparam == 1 || numparam == 2);
     if (tag1 == 0 && (numparam == 1 || tag2 == 0))
         return FALSE;
@@ -146,8 +146,8 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
         if (tag1 == tag2 || oper == NULL || !commutative(oper))
             return FALSE; /* not commutative, cannot swap operands */
         /* if arrived here, the operator is commutative and the tags are different,
-     * swap tags and try again
-     */
+         * swap tags and try again
+         */
         assert(numparam == 2); /* commutative operator must be a binary operator */
         operator_symname(symbolname, opername, tag2, tag1, numparam, tag1);
         swapparams = TRUE;
@@ -167,17 +167,17 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
     }
 
     /* we don't want to use the redefined operator in the function that
-   * redefines the operator itself, otherwise the snippet below gives
-   * an unexpected recursion:
-   *    fixed:operator+(fixed:a, fixed:b)
-   *        return a + b
-   */
+     * redefines the operator itself, otherwise the snippet below gives
+     * an unexpected recursion:
+     *    fixed:operator+(fixed:a, fixed:b)
+     *        return a + b
+     */
     if (sym == curfunc)
         return FALSE;
 
     /* for increment and decrement operators, the symbol must first be loaded
-   * (and stored back afterwards)
-   */
+     * (and stored back afterwards)
+     */
     if (oper == user_inc || oper == user_dec) {
         assert(!savepri);
         assert(lval != NULL);
@@ -190,15 +190,15 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
     assert(!savepri || !savealt); /* either one MAY be set, but not both */
     if (savepri) {
         /* the chained comparison operators require that the ALT register is
-     * unmodified, so we save it here; actually, we save PRI because the normal
-     * instruction sequence (without user operator) swaps PRI and ALT
-     */
+         * unmodified, so we save it here; actually, we save PRI because the normal
+         * instruction sequence (without user operator) swaps PRI and ALT
+         */
         pushreg(sPRI); /* right-hand operand is in PRI */
     } else if (savealt) {
         /* for the assignment operator, ALT may contain an address at which the
-     * result must be stored; this address must be preserved accross the
-     * call
-     */
+         * result must be stored; this address must be preserved accross the
+         * call
+         */
         assert(lval != NULL); /* this was checked earlier */
         assert(lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR); /* checked earlier */
         pushreg(sALT);
@@ -212,8 +212,8 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
             break;
         case 2:
             /* note that 1) a function expects that the parameters are pushed
-     * in reversed order, and 2) the left operand is in the secondary register
-     * and the right operand is in the primary register */
+             * in reversed order, and 2) the left operand is in the secondary register
+             * and the right operand is in the primary register */
             if (swapparams) {
                 pushreg(sALT);
                 pushreg(sPRI);
@@ -513,8 +513,8 @@ matchtag(int formaltag, int actualtag, int flags)
     }
 
     /* if the formal tag is zero and the actual tag is not "fixed", the actual
-   * tag is "coerced" to zero
-   */
+     * tag is "coerced" to zero
+     */
     if ((flags & MATCHTAG_COERCE) && !formaltag && actual && !actual->isFixed()) {
         return TRUE;
     }
@@ -687,8 +687,8 @@ checkfunction(value* lval)
 
     if ((sym->usage & uDEFINE) != 0) {
         /* function is defined, can now check the return value (but make an
-     * exception for directly recursive functions)
-     */
+         * exception for directly recursive functions)
+         */
         if (sym != curfunc && (sym->usage & uRETVALUE) == 0) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym->name());
@@ -697,7 +697,7 @@ checkfunction(value* lval)
     } else {
         /* function not yet defined, set */
         sym->usage |= uRETVALUE; /* make sure that a future implementation of
-                                 * the function uses "return <value>" */
+                                  * the function uses "return <value>" */
     }
 }
 
@@ -819,13 +819,13 @@ SC3ExpressionParser::plnge2(void (*oper)(void), HierFn hier, value* lval1, value
             if (commutative(oper)) {      /* test for commutative operators */
                 value lvaltmp = {0};
                 stgdel(index, cidx); /* scratch pushreg() and constant fetch (then
-                                     * fetch the constant again */
+                                      * fetch the constant again */
                 ldconst(lval2->constval << dbltest(oper, lval1, lval2), sALT);
                 /* now, the primary register has the left operand and the secondary
-         * register the right operand; swap the "lval" variables so that lval1
-         * is associated with the secondary register and lval2 with the
-         * primary register, as is the "normal" case.
-         */
+                 * register the right operand; swap the "lval" variables so that lval1
+                 * is associated with the secondary register and lval2 with the
+                 * primary register, as is the "normal" case.
+                 */
                 lvaltmp = *lval1;
                 *lval1 = *lval2;
                 *lval2 = lvaltmp;
@@ -843,10 +843,10 @@ SC3ExpressionParser::plnge2(void (*oper)(void), HierFn hier, value* lval1, value
     }
     if (oper) {
         /* If used in an expression, a function should return a value.
-     * If the function has been defined, we can check this. If the
-     * function was not defined, we can set this requirement (so that
-     * a future function definition can check this bit.
-     */
+         * If the function has been defined, we can check this. If the
+         * function was not defined, we can set this requirement (so that
+         * a future function definition can check this bit.
+         */
         checkfunction(lval1);
         checkfunction(lval2);
         if (lval1->ident == iARRAY || lval1->ident == iREFARRAY) {
@@ -859,8 +859,8 @@ SC3ExpressionParser::plnge2(void (*oper)(void), HierFn hier, value* lval1, value
         /* ??? ^^^ should do same kind of error checking with functions */
 
         /* check whether an "operator" function is defined for the tag names
-     * (a constant expression cannot be optimized in that case)
-     */
+         * (a constant expression cannot be optimized in that case)
+         */
         if (check_userop(oper, lval1->tag, lval2->tag, 2, NULL, &lval1->tag)) {
             lval1->ident = iEXPRESSION;
             lval1->constval = 0;
@@ -1006,10 +1006,10 @@ SC3ExpressionParser::hier14(value* lval1)
     ke::SaveAndSet<int> bitwise_opercount(&bitwise_opercount_, 0);
 
     /* initialize the index arrays with unlikely constant indices; note that
-   * these indices will only be changed when the array is indexed with a
-   * constant, and that negative array indices are invalid (so actually, any
-   * negative value would do).
-   */
+     * these indices will only be changed when the array is indexed with a
+     * constant, and that negative array indices are invalid (so actually, any
+     * negative value would do).
+     */
     lvalue = plnge1(&SC3ExpressionParser::hier13, lval1);
     if (lval1->ident == iCONSTEXPR) /* load constant here */
         ldconst(lval1->constval, sPRI);
@@ -1059,7 +1059,7 @@ SC3ExpressionParser::hier14(value* lval1)
     }
 
     /* if we get here, it was an assignment; first check a few special cases
-   * and then the general */
+     * and then the general */
     if (lval1->ident == iARRAYCHAR) {
         /* special case, assignment to packed character in a cell is permitted */
         lvalue = TRUE;
@@ -1113,7 +1113,7 @@ SC3ExpressionParser::hier14(value* lval1)
             plnge2(oper, &SC3ExpressionParser::hier14, lval1, &lval2);
         } else {
             /* if direct fetch and simple assignment: no "push"
-       * and "pop" needed -> call hier14() directly, */
+             * and "pop" needed -> call hier14() directly, */
             if (hier14(&lval2))
                 rvalue(&lval2); /* instead of plnge2(). */
             else if (lval2.ident == iVARIABLE)
@@ -1127,22 +1127,22 @@ SC3ExpressionParser::hier14(value* lval1)
         }
     }
     /* Array elements are sometimes considered as sub-arrays --when the
-   * array index is an enumeration field and the enumeration size is greater
-   * than 1. If the expression on the right side of the assignment is a cell,
-   * or if an operation is in effect, this does not apply.
-   */
+     * array index is an enumeration field and the enumeration size is greater
+     * than 1. If the expression on the right side of the assignment is a cell,
+     * or if an operation is in effect, this does not apply.
+     */
     leftarray = lval3.ident == iARRAY || lval3.ident == iREFARRAY ||
                 ((lval3.ident == iARRAYCELL || lval3.ident == iARRAYCHAR) && lval3.constval > 1 &&
                  lval3.sym->dim.array.level == 0 && !oper &&
                  (lval2.ident == iARRAY || lval2.ident == iREFARRAY));
     if (leftarray) {
         /* Left operand is an array, right operand should be an array variable
-     * of the same size and the same dimension, an array literal (of the
-     * same size) or a literal string. For single-dimensional arrays without
-     * tag for the index, it is permitted to assign a smaller array into a
-     * larger one (without warning). This is to make it easier to work with
-     * strings.
-     */
+         * of the same size and the same dimension, an array literal (of the
+         * same size) or a literal string. For single-dimensional arrays without
+         * tag for the index, it is permitted to assign a smaller array into a
+         * larger one (without warning). This is to make it easier to work with
+         * strings.
+         */
         int exactmatch = TRUE;
         int idxtag = 0;
         int ltlength = (int)lval3.sym->dim.array.length;
@@ -1170,10 +1170,10 @@ SC3ExpressionParser::hier14(value* lval1)
             val = lval2.constval; /* literal array */
             level = 0;
             /* If val is negative, it means that lval2 is a literal string.
-       * The string array size may be smaller than the destination
-       * array, provided that the destination array does not have an
-       * index tag.
-       */
+             * The string array size may be smaller than the destination
+             * array, provided that the destination array does not have an
+             * index tag.
+             */
             if (val < 0) {
                 val = -val;
                 if (lval3.sym->x.tags.index == 0)
@@ -1196,17 +1196,17 @@ SC3ExpressionParser::hier14(value* lval1)
             error(23);
             assert(sym1 != NULL && sym2 != NULL);
             /* ^^^ sym2 must be valid, because only variables can be
-       *     multi-dimensional (there are no multi-dimensional literals),
-       *     sym1 must be valid because it must be an lvalue
-       */
+             *     multi-dimensional (there are no multi-dimensional literals),
+             *     sym1 must be valid because it must be an lvalue
+             */
             assert(exactmatch);
             for (i = 0; i < level; i++) {
                 sym1 = sym1->array_child();
                 sym2 = sym2->array_child();
                 assert(sym1 != NULL && sym2 != NULL);
                 /* ^^^ both arrays have the same dimensions (this was checked
-         *     earlier) so the dependend should always be found
-         */
+                 *     earlier) so the dependend should always be found
+                 */
                 if (sym1->dim.array.length != sym2->dim.array.length)
                     error(47); /* array sizes must match */
                 else if (!matchtag(sym1->x.tags.index, sym2->x.tags.index,
@@ -1306,9 +1306,9 @@ SC3ExpressionParser::hier13(value* lval)
             markheap(MEMUSE_DYNAMIC, 0);
         }
         /* If both sides are arrays, we should return the maximal as the lvalue.
-     * Otherwise we could buffer overflow and the compiler is too stupid.
-     * Literal strings have a constval == -(num_cells) so the cmp is flipped.
-     */
+         * Otherwise we could buffer overflow and the compiler is too stupid.
+         * Literal strings have a constval == -(num_cells) so the cmp is flipped.
+         */
         if (lval->ident == iARRAY && lval2.ident == iARRAY && lval->constval < 0 &&
             lval->constval > lval2.constval)
         {
@@ -1455,8 +1455,8 @@ SC3ExpressionParser::hier2(value* lval)
             if (hier2(lval))
                 rvalue(lval);
             /* make a special check for a constant expression with the tag of a
-     * rational number, so that we can simple swap the sign of that constant.
-     */
+             * rational number, so that we can simple swap the sign of that constant.
+             */
             if (lval->ident == iCONSTEXPR && lval->tag == sc_rationaltag && sc_rationaltag != 0) {
                 if (rational_digits == 0) {
 #if PAWN_CELL_SIZE == 32
@@ -1582,10 +1582,10 @@ SC3ExpressionParser::hier2(value* lval)
                 return lvalue;
             } else if (matchtoken(tTERM)) {
                 /* Found a newline that ends a statement (this is the case when
-       * semicolons are optional). Note that an explicit semicolon was
-       * handled above. This case is similar, except that the token must
-       * not be pushed back.
-       */
+                 * semicolons are optional). Note that an explicit semicolon was
+                 * handled above. This case is similar, except that the token must
+                 * not be pushed back.
+                 */
                 return lvalue;
             } else {
                 tok = lex(&val, &st);
@@ -1598,9 +1598,9 @@ SC3ExpressionParser::hier2(value* lval)
                             if ((lval->sym->usage & uCONST) != 0)
                                 return error(22); /* assignment to const argument */
                             /* on incrementing array cells, the address in PRI must be saved for
-           * incremening the value, whereas the current value must be in PRI
-           * on exit.
-           */
+                             * incremening the value, whereas the current value must be in PRI
+                             * on exit.
+                             */
                             saveresult = (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR);
                             if (saveresult)
                                 pushreg(sPRI); /* save address in PRI */
@@ -1949,8 +1949,8 @@ restart:
         if (tok == '[') { /* subscript */
             if (sym == NULL && symtok != tSYMBOL) {
                 /* we do not have a valid symbol and we appear not to have read a valid
-         * symbol name (so it is unlikely that we would have read a name of an
-         * undefined symbol) */
+                 * symbol name (so it is unlikely that we would have read a name of an
+                 * undefined symbol) */
                 error(29); /* expression error, assumed 0 */
                 lexpush(); /* analyse '(' or '[' again later */
                 return FALSE;
@@ -2002,8 +2002,8 @@ restart:
                     }
                 }
                 /* if the array index is a field from an enumeration, get the tag name
-         * from the field and save the size of the field too.
-         */
+                 * from the field and save the size of the field too.
+                 */
                 assert(lval2.sym == NULL || lval2.sym->dim.array.level == 0);
                 if (lval2.sym && lval2.sym->parent() && lval2.sym->dim.array.length > 0 &&
                     sym->dim.array.level == 0)
@@ -2060,9 +2060,9 @@ restart:
             if (gTypes.find(sym->x.tags.index)->isEnumStruct())
                 error(117);
             /* if the array index is a field from an enumeration, get the tag name
-       * from the field and save the size of the field too. Otherwise, the
-       * tag is the one from the array symbol.
-       */
+             * from the field and save the size of the field too. Otherwise, the
+             * tag is the one from the array symbol.
+             */
             if (lval2.ident == iCONSTEXPR && lval2.sym && lval2.sym->parent() &&
                 lval2.sym->dim.array.length > 0 && sym->dim.array.level == 0)
             {
@@ -2074,8 +2074,8 @@ restart:
                     lvalue = FALSE; /* for now, a iREFARRAY is no lvalue */
                     lval1->ident = iREFARRAY;
                     /* initialize a dummy symbol, which is a copy of the current symbol,
-           * but with an adjusted index tag
-           */
+                     * but with an adjusted index tag
+                     */
                     assert(sym != NULL);
                     new (&dummysymbol) symbol(*sym);
                     /* get the tag of the root of the enumeration */
@@ -2094,7 +2094,7 @@ restart:
             }
 
             /* a cell in an array is an lvalue, a character in an array is not
-       * always a *valid* lvalue */
+             * always a *valid* lvalue */
             lvalue = TRUE;
 
             // If there's a call/fetch coming up, keep parsing.
@@ -2178,8 +2178,8 @@ restart:
                     sym = sym->methodmap->ctor->target;
                 } else if (sym == NULL && sc_status == statFIRST) {
                     /* could be a "use before declaration"; in that case, create a stub
-           * function so that the usage can be marked.
-           */
+                     * function so that the usage can be marked.
+                     */
                     sym = fetchfunc(lastsymbol);
                     if (sym == NULL)
                         error(FATAL_ERROR_OOM);
@@ -2295,7 +2295,7 @@ SC3ExpressionParser::primary(value* lval)
 
     if (tok == tSYMBOL) {
         /* lastsymbol is char[sNAMEMAX+1], lex() should have truncated any symbol
-     * to sNAMEMAX significant characters */
+         * to sNAMEMAX significant characters */
         assert(strlen(st) < sizeof lastsymbol);
         strcpy(lastsymbol, st);
     }
@@ -2321,9 +2321,9 @@ SC3ExpressionParser::primary(value* lval)
         if ((sym = findglb(st)) != 0) {
             if (sym->ident == iFUNCTN) {
                 /* if the function is only in the table because it was inserted as a
-         * stub in the first pass (i.e. it was "used" but never declared or
-         * implemented, issue an error
-         */
+                 * stub in the first pass (i.e. it was "used" but never declared or
+                 * implemented, issue an error
+                 */
                 if ((sym->usage & uPROTOTYPED) == 0)
                     error(17, st);
             } else {
@@ -2383,10 +2383,10 @@ static void
 setdefarray(cell* string, cell size, cell array_sz, cell* dataaddr, int fconst)
 {
     /* The routine must copy the default array data onto the heap, as to avoid
-   * that a function can change the default value. An optimization is that
-   * the default array data is "dumped" into the data segment only once (on the
-   * first use).
-   */
+     * that a function can change the default value. An optimization is that
+     * the default array data is "dumped" into the data segment only once (on the
+     * first use).
+     */
     /* check whether to dump the default array */
     assert(dataaddr != NULL);
     if (sc_status == statWRITE && *dataaddr < 0) {
@@ -2397,22 +2397,22 @@ setdefarray(cell* string, cell size, cell array_sz, cell* dataaddr, int fconst)
     }
 
     /* if the function is known not to modify the array (meaning that it also
-   * does not modify the default value), directly pass the address of the
-   * array in the data segment.
-   */
+     * does not modify the default value), directly pass the address of the
+     * array in the data segment.
+     */
     if (fconst || !string) {
         ldconst(*dataaddr, sPRI);
     } else {
         /* Generate the code:
-     *  CONST.pri dataaddr                ;address of the default array data
-     *  HEAP      array_sz*sizeof(cell)   ;heap address in ALT
-     *  MOVS      size*sizeof(cell)       ;copy data from PRI to ALT
-     *  MOVE.PRI                          ;PRI = address on the heap
-     */
+         *  CONST.pri dataaddr                ;address of the default array data
+         *  HEAP      array_sz*sizeof(cell)   ;heap address in ALT
+         *  MOVS      size*sizeof(cell)       ;copy data from PRI to ALT
+         *  MOVE.PRI                          ;PRI = address on the heap
+         */
         ldconst(*dataaddr, sPRI);
         /* "array_sz" is the size of the argument (the value between the brackets
-     * in the declaration), "size" is the size of the default array data.
-     */
+         * in the declaration), "size" is the size of the default array data.
+         */
         assert(array_sz >= size);
         modheap((int)array_sz * sizeof(cell));
         markheap(MEMUSE_STATIC, array_sz);
@@ -2617,8 +2617,8 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     if (symret != NULL) {
         int retsize;
         /* allocate space on the heap for the array, and pass the pointer to the
-     * reserved memory block as a hidden parameter
-     */
+         * reserved memory block as a hidden parameter
+         */
         retsize = (int)array_totalsize(symret);
         assert(retsize > 0 || !cc_ok());
         modheap(retsize * sizeof(cell)); /* address is in ALT */
@@ -2655,15 +2655,15 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     memset(arglist, ARG_UNHANDLED, sizeof arglist);
     if (matchparanthesis) {
         /* Opening brace was already parsed, if closing brace follows, this
-     * call passes no parameters.
-     */
+         * call passes no parameters.
+         */
         close = matchtoken(')');
     } else {
         /* When we find an end of line here, it may be a function call passing
-     * no parameters, or it may be that the first parameter is on a line
-     * below. But as a parameter can be anything, this is difficult to check.
-     * The only simple check that we have is the use of "named parameters".
-     */
+         * no parameters, or it may be that the first parameter is on a line
+         * below. But as a parameter can be anything, this is difficult to check.
+         * The only simple check that we have is the use of "named parameters".
+         */
         close = matchtoken(tTERM);
         if (close) {
             close = !matchtoken('.');
@@ -2694,9 +2694,9 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                 argpos = nargs;
             }
             /* the number of arguments this was already checked at the declaration
-       * of the function; check it again for functions with a variable
-       * argument list
-       */
+             * of the function; check it again for functions with a variable
+             * argument list
+             */
             if (argpos >= SP_MAX_CALL_ARGUMENTS)
                 error(45);                        /* too many function arguments */
             stgmark((char)(sEXPRSTART + argpos)); /* mark beginning of new expression in stage */
@@ -2712,10 +2712,10 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                 if (arg[argidx].ident != 0 && arg[argidx].ident != iVARARGS)
                     argidx++;
                 /* The rest of the code to handle default values is at the bottom
-         * of this routine where default values for unspecified parameters
-         * are (also) handled. Note that above, the argument is flagged as
-         * ARG_IGNORED.
-         */
+                 * of this routine where default values for unspecified parameters
+                 * are (also) handled. Note that above, the argument is flagged as
+                 * ARG_IGNORED.
+                 */
             } else {
                 arglist[argpos] = ARG_DONE; /* flag argument as "present" */
                 if (args.handling_this()) {
@@ -2731,10 +2731,10 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                 switch (arg[argidx].ident) {
                     case 0:
                         /* On the first pass, we donm't have all of the parameter info.
-           * However, use information must be marked anyway, otherwise vars
-           * declared previously will be omitted in the second psas. See
-           * SourceMod bug 4643.
-           */
+                         * However, use information must be marked anyway, otherwise vars
+                         * declared previously will be omitted in the second psas. See
+                         * SourceMod bug 4643.
+                         */
                         error(92); /* argument count mismatch */
                         if (lval.sym)
                             markusage(lval.sym, uREAD);
@@ -2751,7 +2751,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                                 (arg[argidx].usage & uCONST) == 0)
                             {
                                 /* treat a "const" variable passed to a function with a non-const
-               * "variable argument list" as a constant here */
+                                 * "variable argument list" as a constant here */
                                 if (!lvalue) {
                                     error(22); /* need lvalue */
                                 } else {
@@ -2769,7 +2769,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                             }
                         } else if (lval.ident == iCONSTEXPR || lval.ident == iEXPRESSION) {
                             /* allocate a cell on the heap and store the
-             * value (already in PRI) there */
+                             * value (already in PRI) there */
                             setheap_pri(); /* address of the value on the heap in PRI */
                             heapalloc += markheap(MEMUSE_STATIC, 1);
                             sCallStackUsage++;
@@ -2846,9 +2846,9 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                             (arg[argidx].usage & uCONST) == 0)
                             error(35, argidx + 1); /* argument type mismatch */
                         /* Verify that the dimensions match with those in arg[argidx].
-           * A literal array always has a single dimension.
-           * An iARRAYCELL parameter is also assumed to have a single dimension.
-           */
+                         * A literal array always has a single dimension.
+                         * An iARRAYCELL parameter is also assumed to have a single dimension.
+                         */
                         if (lval.sym == NULL || lval.ident == iARRAYCELL ||
                             lval.ident == iARRAYCHAR)
                         {
@@ -2862,9 +2862,9 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                                 } else {
                                     assert(lval.constval != 0); /* literal array must have a size */
                                     /* A literal array must have exactly the same size as the
-                 * function argument; a literal string may be smaller than
-                 * the function argument.
-                 */
+                                     * function argument; a literal string may be smaller than
+                                     * the function argument.
+                                     */
                                     if ((lval.constval > 0 &&
                                          arg[argidx].dim[0] != lval.constval) ||
                                         (lval.constval < 0 && arg[argidx].dim[0] < -lval.constval))
@@ -2888,8 +2888,8 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                             if (sym->dim.array.level + 1 != arg[argidx].numdim)
                                 error(48); /* array dimensions must match */
                             /* the lengths for all dimensions must match, unless the dimension
-             * length was defined at zero (which means "undefined")
-             */
+                             * length was defined at zero (which means "undefined")
+                             */
                             while (sym->dim.array.level > 0) {
                                 assert(level < sDIMEN_MAX);
                                 if (arg[argidx].dim[level] != 0 &&
@@ -3028,7 +3028,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     {
         long totalsize;
         totalsize = declared + heapalloc + 1; /* local variables & return value size,
-                                       * +1 for PROC opcode */
+                                               * +1 for PROC opcode */
         if (lval_result->ident == iREFARRAY)
             totalsize++; /* add hidden parameter (on the stack) */
         if ((sym->usage & uNATIVE) == 0)
@@ -3046,9 +3046,9 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     }
 
     /* scrap any arrays left on the heap, with the exception of the array that
-   * this function has as a result (in other words, scrap all arrays on the
-   * heap that caused by expressions in the function arguments)
-   */
+     * this function has as a result (in other words, scrap all arrays on the
+     * heap that caused by expressions in the function arguments)
+     */
     popheaplist(true);
 }
 
@@ -3140,17 +3140,17 @@ constant(value* lval)
         ldconst((val + glb_declared) * sizeof(cell), sPRI);
         lval->ident = iARRAY;          /* pretend this is a global array */
         lval->constval = val - litidx; /* constval == the negative value of the
-                                 * size of the literal array; using a negative
-                                 * value distinguishes between literal arrays
-                                 * and literal strings (this was done for
-                                 * array assignment). */
+                                        * size of the literal array; using a negative
+                                        * value distinguishes between literal arrays
+                                        * and literal strings (this was done for
+                                        * array assignment). */
         lval->tag = pc_tag_string;
     } else if (tok == '{') {
         int tag, lasttag = -1;
         val = litidx;
         do {
             /* cannot call constexpr() here, because "staging" is already turned
-       * on at this point */
+             * on at this point */
             assert(staging);
             stgget(&index, &cidx); /* mark position in code generator */
             ident = expression(&item, &tag, NULL, FALSE, NULL);

@@ -229,7 +229,7 @@ pc_compile(int argc, char* argv[]) {
     lexinit();
 
     /* make sure that we clean up on a fatal error; do this before the first
-   * call to error(). */
+     * call to error(). */
     if ((jmpcode = setjmp(errbuf)) != 0)
         goto cleanup;
 
@@ -271,8 +271,8 @@ pc_compile(int argc, char* argv[]) {
     lcl_tabsize = sc_tabsize;
 
     /* optionally create a temporary input file that is a collection of all
-   * input files
-   */
+     * input files
+     */
     assert(get_sourcefile(0) != NULL); /* there must be at least one source file */
     if (get_sourcefile(1) != NULL) {
         /* there are at least two or more source files */
@@ -371,8 +371,8 @@ pc_compile(int argc, char* argv[]) {
         sc_status = statFIRST;       /* resetglobals() resets it to IDLE */
 
         /* look for default prefix (include) file in include paths,
-     * but only error if it was manually set on the command line
-     */
+         * but only error if it was manually set on the command line
+         */
         if (strlen(incfname) > 0) {
             int defOK = plungefile(incfname, FALSE, TRUE);
             if (!defOK && strcmp(incfname, sDEF_PREFIX) != 0) {
@@ -391,11 +391,11 @@ pc_compile(int argc, char* argv[]) {
         goto cleanup;
 
     /* ??? for re-parsing the listing file instead of the original source
-   * file (and doing preprocessing twice):
-   * - close input file, close listing file
-   * - re-open listing file for reading (inpf)
-   * - open assembler file (outf)
-   */
+     * file (and doing preprocessing twice):
+     * - close input file, close listing file
+     * - re-open listing file for reading (inpf)
+     * - open assembler file (outf)
+     */
 
     /* reset "defined" flag of all functions and global variables */
     reduce_referrers(&glbtab);
@@ -432,7 +432,7 @@ pc_compile(int argc, char* argv[]) {
     writetrailer(); /* write remaining stuff */
 
     entry = testsymbols(&glbtab, 0, TRUE, FALSE); /* test for unused or undefined
-                                             * functions and variables */
+                                                   * functions and variables */
     if (!entry)
         error(13); /* no entry point (no public functions) */
 
@@ -479,9 +479,9 @@ cleanup:
     gInputFilenameStack.clear();
 
     assert(jmpcode != 0 || loctab.next == NULL); /* on normal flow, local symbols
-                                           * should already have been deleted */
+                                                  * should already have been deleted */
     delete_symbols(&loctab, 0, TRUE, TRUE);      /* delete local variables if not yet
-                                           * done (i.e. on a fatal error) */
+                                                  * done (i.e. on a fatal error) */
     delete_symbols(&glbtab, 0, TRUE, TRUE);
     DestroyHashTable(sp_Globals);
     delete_consttable(&libname_tab);
@@ -911,8 +911,8 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname) {
             set_extension(str, ".sp", FALSE);
             insert_sourcefile(str);
             /* The output name is the first input name with a different extension,
-       * but it is stored in a different directory
-       */
+             * but it is stored in a different directory
+             */
             if (strlen(oname) == 0) {
                 if ((ptr = strrchr(str, DIRSEP_CHAR)) != NULL)
                     ptr++; /* strip path */
@@ -944,8 +944,8 @@ parserespf(char* filename, char* oname, char* ename, char* pname) {
     if ((string = (char*)malloc((int)size + 1)) == NULL)
         error(FATAL_ERROR_OOM); /* insufficient memory */
     /* fill with zeros; in MS-DOS, fread() may collapse CR/LF pairs to
-   * a single '\n', so the string size may be smaller than the file
-   * size. */
+     * a single '\n', so the string size may be smaller than the file
+     * size. */
     memset(string, 0, (int)size + 1);
     ke::Unused() << fread(string, 1, (int)size, fp);
     fclose(fp);
@@ -1041,8 +1041,8 @@ setconfig(char* root) {
     /* terminate just behind last \ or : */
     if ((ptr = strrchr(path, DIRSEP_CHAR)) != NULL || (ptr = strchr(path, ':')) != NULL) {
         /* If there is no "\" or ":", the string probably does not contain the
-       * path; so we just don't add it to the list in that case
-       */
+         * path; so we just don't add it to the list in that case
+         */
         *(ptr + 1) = '\0';
         base = ptr;
         strcat(path, "include");
@@ -1052,9 +1052,9 @@ setconfig(char* root) {
         /* see if it exists */
         if (access(path, 0) != 0 && *base == DIRSEP_CHAR) {
             /* There is no "include" directory below the directory where the compiler
-         * is found. This typically means that the compiler is in a "bin" sub-directory
-         * and the "include" is below the *parent*. So find the parent...
-         */
+             * is found. This typically means that the compiler is in a "bin" sub-directory
+             * and the "include" is below the *parent*. So find the parent...
+             */
             *base = '\0';
             if ((ptr = strrchr(path, DIRSEP_CHAR)) != NULL) {
                 *(ptr + 1) = '\0';
@@ -1337,9 +1337,9 @@ dumplits(void) {
             if (j == 0 || k >= litidx)
                 stgwrite("\n"); /* force a newline after 10 dumps */
             /* Note: stgwrite() buffers a line until it is complete. It recognizes
-       * the end of line as a sequence of "\n\0", so something like "\n\t"
-       * so should not be passed to stgwrite().
-       */
+             * the end of line as a sequence of "\n\0", so something like "\n\t"
+             * so should not be passed to stgwrite().
+             */
         }
     }
 }
@@ -1384,9 +1384,9 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     //:TODO: Make this work with stock
 
     /**
-   * Lastly, very lastly, we will insert a copy of this variable.
-   * This is soley to expose the pubvar.
-   */
+     * Lastly, very lastly, we will insert a copy of this variable.
+     * This is soley to expose the pubvar.
+     */
     usage = uREAD | uCONST | uSTRUCT;
     if (fpublic)
         usage |= uPUBLIC;
@@ -1583,14 +1583,14 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
             sym = findglb(decl->name);
         }
         /* we have either:
-     * a) not found a matching variable (or rejected it, because it was a shadow)
-     * b) found a global variable and we were looking for that global variable
-     */
+         * a) not found a matching variable (or rejected it, because it was a shadow)
+         * b) found a global variable and we were looking for that global variable
+         */
         if (sym != NULL && (sym->usage & uDEFINE) != 0)
             error(21, decl->name); /* symbol already defined */
         /* if this variable is never used (which can be detected only in the
-     * second stage), shut off code generation
-     */
+         * second stage), shut off code generation
+         */
         cidx = 0; /* only to avoid a compiler warning */
         if (sc_status == statWRITE && sym != NULL && (sym->usage & (uREAD | uWRITTEN)) == 0) {
             sc_status = statSKIP;
@@ -1707,17 +1707,17 @@ declloc(int tokid) {
             error(56, decl.name); /* local variables cannot be public */
 
         /* Note: block locals may be named identical to locals at higher
-     * compound blocks (as with standard C); so we must check (and add)
-     * the "nesting level" of local variables to verify the
-     * multi-definition of symbols.
-     */
+         * compound blocks (as with standard C); so we must check (and add)
+         * the "nesting level" of local variables to verify the
+         * multi-definition of symbols.
+         */
         if ((sym = findloc(decl.name)) != NULL && sym->compound == nestlevel)
             error(21, decl.name); /* symbol already defined */
 
         /* Although valid, a local variable whose name is equal to that
-     * of a global variable or to that of a local variable at a lower
-     * level might indicate a bug.
-     */
+         * of a global variable or to that of a local variable at a lower
+         * level might indicate a bug.
+         */
         if (((sym = findloc(decl.name)) != NULL && sym->compound != nestlevel) ||
             findglb(decl.name) != NULL) {
             error(219, decl.name); /* variable shadows another symbol */
@@ -1857,7 +1857,7 @@ declloc(int tokid) {
                 curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         }
         /* now that we have reserved memory for the variable, we can proceed
-     * to initialize it */
+         * to initialize it */
         assert(sym != NULL);       /* we declared it, it must be there */
         sym->compound = nestlevel; /* for multiple declaration/shadowing check */
         if (type->usage & uCONST)
@@ -1893,7 +1893,7 @@ declloc(int tokid) {
                 if (!matchtag_string(cident, ctag))
                     matchtag(type->tag, ctag, TRUE);
                 /* if the variable was not explicitly initialized, reset the
-         * "uWRITTEN" flag that store() set */
+                 * "uWRITTEN" flag that store() set */
                 if (!explicit_init)
                     sym->usage &= ~uWRITTEN;
             } else if (type->ident != iREFARRAY) {
@@ -1903,9 +1903,9 @@ declloc(int tokid) {
                 assert(type->numdim > 1 || type->size == sym->dim.array.length);
                 if (autozero) {
                     /* final literal values that are zero make no sense to put in the literal
-           * pool, because values get zero-initialized anyway; we check for this,
-           * because users often explicitly initialize strings to ""
-           */
+                     * pool, because values get zero-initialized anyway; we check for this,
+                     * because users often explicitly initialize strings to ""
+                     */
                     while (litidx > cur_lit && litq[litidx - 1] == 0)
                         litidx--;
                     /* if the array is not completely filled, set all values to zero first */
@@ -1914,7 +1914,7 @@ declloc(int tokid) {
                 }
                 if (cur_lit < litidx) {
                     /* check whether the complete array is set to a single value; if
-           * it is, more compact code can be generated */
+                     * it is, more compact code can be generated */
                     cell first = litq[cur_lit];
                     int i;
                     for (i = cur_lit; i < litidx && litq[i] == first; i++)
@@ -1972,15 +1972,15 @@ gen_indirection_vecs(array_info_t* ar, int dim, cell cur_offs) {
     cur_offs += ar->dim_list[dim];
 
     /**
-   * Dimension n-x where x > 2 will have sub-vectors.  
-   * Otherwise, we just need to reference the data section.
-   */
+     * Dimension n-x where x > 2 will have sub-vectors.  
+     * Otherwise, we just need to reference the data section.
+     */
     if (ar->dim_count > 2 && dim < ar->dim_count - 2) {
         /**
-     * For each index at this dimension, write offstes to our sub-vectors.
-     * After we write one sub-vector, we generate its sub-vectors recursively.
-     * At the end, we're given the next offset we can use.
-     */
+         * For each index at this dimension, write offstes to our sub-vectors.
+         * After we write one sub-vector, we generate its sub-vectors recursively.
+         * At the end, we're given the next offset we can use.
+         */
         for (i = 0; i < ar->dim_list[dim]; i++) {
             ar->base[write_offs] = (cur_offs - write_offs) * sizeof(cell);
             write_offs++;
@@ -1989,30 +1989,30 @@ gen_indirection_vecs(array_info_t* ar, int dim, cell cur_offs) {
         }
     } else if (ar->dim_count > 1) {
         /**
-     * In this section, there are no sub-vectors, we need to write offsets 
-     * to the data.  This is separate so the data stays in one big chunk.
-     * The data offset will increment by the size of the last dimension, 
-     * because that is where the data is finally computed as.  But the last 
-     * dimension can be of variable size, so we have to detect that.
-     */
+         * In this section, there are no sub-vectors, we need to write offsets 
+         * to the data.  This is separate so the data stays in one big chunk.
+         * The data offset will increment by the size of the last dimension, 
+         * because that is where the data is finally computed as.  But the last 
+         * dimension can be of variable size, so we have to detect that.
+         */
         if (ar->dim_list[dim + 1] == 0) {
             int vec_start = 0;
 
             /**
-       * Using the precalculated offsets, compute an index into the last 
-       * dimension array.
-       */
+             * Using the precalculated offsets, compute an index into the last 
+             * dimension array.
+             */
             for (i = 0; i < dim; i++) {
                 vec_start += ar->cur_dims[i] * ar->dim_offs_precalc[i];
             }
 
             /**
-       * Now, vec_start points to a vector of last dimension offsets for 
-       * the preceding dimension combination(s).
-       * I.e. (1,2,i,j) in [3][4][5][] will be:
-       *  j = 1*(4*5) + 2*(5) + i, and the parenthetical expressions are 
-       * precalculated for us so we can easily generalize here.
-       */
+             * Now, vec_start points to a vector of last dimension offsets for 
+             * the preceding dimension combination(s).
+             * I.e. (1,2,i,j) in [3][4][5][] will be:
+             *  j = 1*(4*5) + 2*(5) + i, and the parenthetical expressions are 
+             * precalculated for us so we can easily generalize here.
+             */
             for (i = 0; i < ar->dim_list[dim]; i++) {
                 ar->base[write_offs] = (*data_offs - write_offs) * sizeof(cell);
                 write_offs++;
@@ -2020,9 +2020,9 @@ gen_indirection_vecs(array_info_t* ar, int dim, cell cur_offs) {
             }
         } else {
             /**
-       * The last dimension size is constant.  There's no extra work to 
-       * compute the last dimension size.
-       */
+             * The last dimension size is constant.  There's no extra work to 
+             * compute the last dimension size.
+             */
             for (i = 0; i < ar->dim_list[dim]; i++) {
                 ar->base[write_offs] = (*data_offs - write_offs) * sizeof(cell);
                 write_offs++;
@@ -2063,9 +2063,9 @@ adjust_indirectiontables(int dim[], int numdim, int cur, cell increment, int sta
     memset(cur_dims, 0, sizeof(cur_dims));
 
     /**
-   * Flatten the last dimension array list -- this makes 
-   * things MUCH easier in the indirection calculator.
-   */
+     * Flatten the last dimension array list -- this makes 
+     * things MUCH easier in the indirection calculator.
+     */
     if (lastdim) {
         int i;
         constvalue* ld = lastdim->next;
@@ -2081,21 +2081,21 @@ adjust_indirectiontables(int dim[], int numdim, int cur, cell increment, int sta
         }
 
         /**
-     * Pre-calculate all of the offsets.  This speeds up and simplifies 
-     * the indirection process.  For example, if we have an array like:
-     * [a][b][c][d][], and given (A,B,C), we want to find the size of 
-     * the last dimension [A][B][C][i], we must do:
-     *
-     * list[A*(b*c*d) + B*(c*d) + C*(d) + i]
-     *
-     * Generalizing this algorithm in the indirection process is expensive, 
-     * so we lessen the need for nested loops by pre-computing the parts:
-     * (b*c*d), (c*d), and (d).
-     *
-     * In other words, finding the offset to dimension N at index I is 
-     * I * (S[N+1] * S[N+2] ... S[N+n-1]) where S[] is the size of dimension
-     * function, and n is the index of the last dimension.
-     */
+         * Pre-calculate all of the offsets.  This speeds up and simplifies 
+         * the indirection process.  For example, if we have an array like:
+         * [a][b][c][d][], and given (A,B,C), we want to find the size of 
+         * the last dimension [A][B][C][i], we must do:
+         *
+         * list[A*(b*c*d) + B*(c*d) + C*(d) + i]
+         *
+         * Generalizing this algorithm in the indirection process is expensive, 
+         * so we lessen the need for nested loops by pre-computing the parts:
+         * (b*c*d), (c*d), and (d).
+         *
+         * In other words, finding the offset to dimension N at index I is 
+         * I * (S[N+1] * S[N+2] ... S[N+n-1]) where S[] is the size of dimension
+         * function, and n is the index of the last dimension.
+         */
         for (i = 0; i < numdim - 1; i++) {
             int j;
 
@@ -2153,8 +2153,8 @@ initials2(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enu
         if (hasEmpty && hasEmpty < numdim - 1 && dim[numdim - 1]) {
             error(101);
             /* This will assert with something like [2][][256] from a separate bug.
-       * To prevent this assert, automatically wipe the rest of the dims.
-       */
+             * To prevent this assert, automatically wipe the rest of the dims.
+             */
             for (d = 0; d < numdim - 1; d++)
                 dim[d] = 0;
         }
@@ -2164,8 +2164,8 @@ initials2(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enu
         assert(ident != iARRAY || numdim > 0);
         if (ident == iARRAY && dim[numdim - 1] == 0) {
             /* declared as "myvar[];" which is senseless (note: this *does* make
-       * sense in the case of a iREFARRAY, which is a function parameter)
-       */
+             * sense in the case of a iREFARRAY, which is a function parameter)
+             */
             error(9); /* array has zero length -> invalid size */
         }
         if (ident == iARRAY) {
@@ -2176,9 +2176,9 @@ initials2(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enu
                 return;
             }
             /* first reserve space for the indirection vectors of the array, then
-       * adjust it to contain the proper values
-       * (do not use dumpzero(), as it bypasses the literal queue)
-       */
+             * adjust it to contain the proper values
+             * (do not use dumpzero(), as it bypasses the literal queue)
+             */
             for (tablesize = calc_arraysize(dim, numdim - 1, 0); tablesize > 0; tablesize--)
                 litadd(0);
             if (dim[numdim - 1] != 0) /* error 9 has already been given */
@@ -2205,9 +2205,9 @@ initials2(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enu
             if (dim[numdim - 1] != 0)
                 *size = calc_arraysize(dim, numdim, 0); /* calc. full size, if known */
             /* already reserve space for the indirection tables (for an array with
-       * known dimensions)
-       * (do not use dumpzero(), as it bypasses the literal queue)
-       */
+             * known dimensions)
+             * (do not use dumpzero(), as it bypasses the literal queue)
+             */
             for (tablesize = calc_arraysize(dim, numdim - 1, 0); tablesize > 0; tablesize--)
                 litadd(0);
             /* now initialize the sub-arrays */
@@ -2228,8 +2228,8 @@ initials2(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enu
             }
             if (numdim > 1 && dim[numdim - 1] == 0 && !errorfound && err == 0) {
                 /* also look whether, by any chance, all "counted" final dimensions are
-         *  the same value; if so, we can store this
-         */
+                 *  the same value; if so, we can store this
+                 */
                 constvalue* ld = lastdim.next;
                 int count = 0, match, total, d;
                 for (ld = lastdim.next; ld != NULL; ld = ld->next) {
@@ -2251,8 +2251,8 @@ initials2(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enu
                     dim[numdim - 1] = match;
             }
             /* after all arrays have been initalized, we know the (major) dimensions
-       * of the array and we can properly adjust the indirection vectors
-       */
+             * of the array and we can properly adjust the indirection vectors
+             */
             if (err == 0)
                 adjust_indirectiontables(dim, numdim, 0, 0, curlit, &lastdim, &skipdim);
             delete_consttable(&lastdim); /* clear list of minor dimension sizes */
@@ -2288,13 +2288,13 @@ initarray(int ident, int tag, int dim[], int numdim, int cur, int startlit, int 
     needtoken('{');
     for (idx = 0, abortparse = FALSE; !abortparse; idx++) {
         /* In case the major dimension is zero, we need to store the offset
-     * to the newly detected sub-array into the indirection table; i.e.
-     * this table needs to be expanded and updated.
-     * In the current design, the indirection vectors for a multi-dimensional
-     * array are adjusted after parsing all initializers. Hence, it is only
-     * necessary at this point to reserve space for an extra cell in the
-     * indirection vector.
-     */
+         * to the newly detected sub-array into the indirection table; i.e.
+         * this table needs to be expanded and updated.
+         * In the current design, the indirection vectors for a multi-dimensional
+         * array are adjusted after parsing all initializers. Hence, it is only
+         * necessary at this point to reserve space for an extra cell in the
+         * indirection vector.
+         */
         if (dim[cur] == 0) {
             litinsert(0, startlit);
         } else if (idx >= dim[cur]) {
@@ -2308,9 +2308,9 @@ initarray(int ident, int tag, int dim[], int numdim, int cur, int startlit, int 
         } else {
             dsize = initvector(ident, tag, dim[cur + 1], TRUE, enumroot, errorfound);
             /* The final dimension may be variable length. We need to keep the
-       * lengths of the final dimensions in order to set the indirection
-       * vectors for the next-to-last dimension.
-       */
+             * lengths of the final dimensions in order to set the indirection
+             * vectors for the next-to-last dimension.
+             */
             append_constval(lastdim, itoh(idx), dsize, 0);
         }
         totalsize += dsize;
@@ -2380,8 +2380,8 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
                 }
             }
             /* if this array is based on an enumeration, fill the "field" up with
-       * zeros, and toggle the tag
-       */
+             * zeros, and toggle the tag
+             */
             if (enumroot != NULL && enumfield == NULL) {
                 error(227); /* more initializers than enum fields */
                 if (errorfound != NULL)
@@ -2473,7 +2473,7 @@ init(int ident, int* tag, int* errorfound) {
 
     if (matchtoken(tSTRING)) {
         /* lex() automatically stores strings in the literal table (and
-     * increases "litidx") */
+         * increases "litidx") */
         if (ident == iVARIABLE) {
             error(6); /* must be assigned to an array */
             if (errorfound != NULL)
@@ -3951,9 +3951,9 @@ decl_enum(int vclass) {
     }
 
     /* get an explicit tag, if any (we need to remember whether an explicit
-   * tag was passed, even if that explicit tag was "_:", so we cannot call
-   * pc_addtag() here
-   */
+     * tag was passed, even if that explicit tag was "_:", so we cannot call
+     * pc_addtag() here
+     */
     if (lex(&val, &str) == tLABEL) {
         if (pc_findtag(str) == 0) {
             error(169);
@@ -4068,8 +4068,8 @@ decl_enum(int vclass) {
         if (findconst(constname))
             error(50, constname);
         /* add_constant() checks whether a variable (global or local) or
-     * a constant with the same name already exists
-     */
+         * a constant with the same name already exists
+         */
         sym = add_constant(constname, value, vclass, tag);
         if (sym == NULL)
             continue; /* error message already given */
@@ -4259,8 +4259,8 @@ define_args(void) {
     symbol* sym;
 
     /* At this point, no local variables have been declared. All
-   * local symbols are function arguments.
-   */
+     * local symbols are function arguments.
+     */
     sym = loctab.next;
     while (sym != NULL) {
         assert(sym->ident != iLABEL);
@@ -4351,10 +4351,10 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
     }
 
     /* for '!', '++' and '--', count must be 1
-   * for '-', count may be 1 or 2
-   * for '=', count must be 1, and the resulttag is also important
-   * for all other (binary) operators and the special '~' operator, count must be 2
-   */
+     * for '-', count may be 1 or 2
+     * for '=', count must be 1, and the resulttag is also important
+     * for all other (binary) operators and the special '~' operator, count must be 2
+     */
     switch (opertok) {
         case '!':
         case '=':
@@ -4457,8 +4457,8 @@ parse_funcname(const char* fname, int* tag1, int* tag2, char* opname, size_t opn
     int unary;
 
     /* tags are only positive, so if the function name starts with a '-',
-   * the operator is an unary '-' or '--' operator.
-   */
+     * the operator is an unary '-' or '--' operator.
+     */
     if (*fname == '-') {
         *tag1 = 0;
         unary = TRUE;
@@ -4560,8 +4560,8 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
         sym->usage &= ~uDEFINE;
 
     /* for a native operator, also need to specify an "exported" function name;
-   * for a native function, this is optional
-   */
+     * for a native function, this is optional
+     */
     if (fnative) {
         if (decl->opertok != 0) {
             needtoken('=');
@@ -4576,12 +4576,12 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
                 exprconst(&val, NULL, NULL);
                 sym->setAddr(val);
                 /* At the moment, I have assumed that this syntax is only valid if
-         * val < 0. To properly mix "normal" native functions and indexed
-         * native functions, one should use negative indices anyway.
-         * Special code for a negative index in sym->addr() exists in SC4.C
-         * (ffcall()) and in SC6.C (the loops for counting the number of native
-         * variables and for writing them).
-         */
+                 * val < 0. To properly mix "normal" native functions and indexed
+                 * native functions, one should use negative indices anyway.
+                 * Special code for a negative index in sym->addr() exists in SC4.C
+                 * (ffcall()) and in SC6.C (the loops for counting the number of native
+                 * variables and for writing them).
+                 */
             }
         }
     }
@@ -4673,11 +4673,11 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     }
 
     /* if the function was used before being declared, and it has a tag for the
-   * result, add a third pass (as second "skimming" parse) because the function
-   * result may have been used with user-defined operators, which have now
-   * been incorrectly flagged (as the return tag was unknown at the time of
-   * the call)
-   */
+     * result, add a third pass (as second "skimming" parse) because the function
+     * result may have been used with user-defined operators, which have now
+     * been incorrectly flagged (as the return tag was unknown at the time of
+     * the call)
+     */
     if ((sym->usage & (uPROTOTYPED | uREAD)) == uREAD && sym->tag != 0) {
         int curstatus = sc_status;
         sc_status = statWRITE; /* temporarily set status to WRITE, so the warning isn't blocked */
@@ -4701,7 +4701,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         error(21, sym->name());
 
     /* "declargs()" found the ")"; if a ";" appears after this, it was a
-   * prototype */
+     * prototype */
     if (matchtoken(';')) {
         if (sym->usage & uPUBLIC)
             error(10);
@@ -4714,7 +4714,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     /* so it is not a prototype, proceed */
 
     /* if this is a function that is not referred to (this can only be detected
-   * in the second stage), shut code generation off */
+     * in the second stage), shut code generation off */
     if (sc_status == statWRITE && (sym->usage & uREAD) == 0 && !fpublic) {
         cidx = code_idx;
         glbdecl = glb_declared;
@@ -4778,9 +4778,9 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
 
     if (declared != 0) {
         /* This happens only in a very special (and useless) case, where a function
-     * has only a single statement in its body (no compound block) and that
-     * statement declares a new variable
-     */
+         * has only a single statement in its body (no compound block) and that
+         * statement declares a new variable
+         */
         popheaplist(pc_must_drop_stack);
         popstacklist(pc_must_drop_stack);
         declared = 0;
@@ -4843,8 +4843,8 @@ argcompare(arginfo* a1, arginfo* a2) {
             if (result)
                 result = a1->defvalue.array.arraysize == a2->defvalue.array.arraysize;
             /* ??? should also check contents of the default array (these troubles
-       * go away in a 2-pass compiler that forbids double declarations, but
-       * Pawn currently does not forbid them) */
+             * go away in a 2-pass compiler that forbids double declarations, but
+             * Pawn currently does not forbid them) */
         } else {
             if (result) {
                 result = a1->defvalue.val == a2->defvalue.val;
@@ -4869,8 +4869,8 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
     ke::Vector<arginfo>& arglist = sym->function()->args;
 
     /* if the function is already defined earlier, get the number of arguments
-   * of the existing definition
-   */
+     * of the existing definition
+     */
     oldargcnt = 0;
     if ((sym->usage & uPROTOTYPED) != 0)
         while (arglist[oldargcnt].ident != 0)
@@ -4948,12 +4948,12 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
             if (decl.type.ident == iARRAY)
                 decl.type.ident = iREFARRAY;
             /* Stack layout:
-       *   base + 0*sizeof(cell)  == previous "base"
-       *   base + 1*sizeof(cell)  == function return address
-       *   base + 2*sizeof(cell)  == number of arguments
-       *   base + 3*sizeof(cell)  == first argument of the function
-       * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
-       */
+             *   base + 0*sizeof(cell)  == previous "base"
+             *   base + 1*sizeof(cell)  == function return address
+             *   base + 2*sizeof(cell)  == number of arguments
+             *   base + 3*sizeof(cell)  == first argument of the function
+             * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
+             */
             doarg(sym, &decl, (argcnt + 3) * sizeof(cell), chkshadow, &arg);
 
             if ((sym->usage & uPUBLIC) && arg.hasdefault)
@@ -5276,9 +5276,9 @@ destructsymbols(symbol* root, int level) {
                 if (sym->ident == iARRAY) {
                     elements = calc_array_datasize(sym, &offset);
                     /* "elements" can be zero when the variable is declared like
-           *    new mytag: myvar[2][] = { {1, 2}, {3, 4} }
-           * one should declare all dimensions!
-           */
+                     *    new mytag: myvar[2][] = { {1, 2}, {3, 4} }
+                     * one should declare all dimensions!
+                     */
                     if (elements == 0)
                         error(46, sym->name()); /* array size is unknown */
                 } else {
@@ -5365,8 +5365,8 @@ add_constant(const char* name, cell val, int vclass, int tag) {
     symbol* sym;
 
     /* Test whether a global or local symbol with the same name exists. Since
-   * constants are stored in the symbols table, this also finds previously
-   * defind constants. */
+     * constants are stored in the symbols table, this also finds previously
+     * defind constants. */
     sym = findglb(name);
     if (!sym)
         sym = findloc(name);
@@ -5388,9 +5388,9 @@ add_constant(const char* name, cell val, int vclass, int tag) {
                     redef = 1; /* new constant is not an enumeration field */
             }
             /* in this particular case (enumeration field that is part of a different
-       * enum, and non-conflicting with plain constants) we want to be able to
-       * redefine it
-       */
+             * enum, and non-conflicting with plain constants) we want to be able to
+             * redefine it
+             */
             if (!redef)
                 goto redef_enumfield;
         } else if (sym->tag != tag) {
@@ -5511,7 +5511,7 @@ statement(int* lastindent, int allow_decl) {
                 lastst = tEMPTYBLOCK;
             }
             /* lastst (for "last statement") does not change 
-       you're not my father, don't tell me what to do */
+               you're not my father, don't tell me what to do */
             break;
         case ';':
             error(36); /* empty statement */
@@ -5624,8 +5624,8 @@ compound(int stmt_sameline) {
     testsymbols(&loctab, nestlevel, FALSE, TRUE); /* look for unused block locals */
     declared = save_decl;
     delete_symbols(&loctab, nestlevel, FALSE, TRUE); /* erase local symbols, but
-                                                     * retain block local labels
-                                                     * (within the function) */
+                                                      * retain block local labels
+                                                      * (within the function) */
     nestlevel -= 1;                                  /* decrease compound statement level */
 }
 
@@ -5804,7 +5804,7 @@ doif(void) {
     } else {
         lastst_true = lastst; /* save last statement of the "true" branch */
         /* to avoid the "dangling else" error, we want a warning if the "else"
-     * has a lower indent than the matching "if" */
+         * has a lower indent than the matching "if" */
         if (stmtindent < ifindent && sc_tabsize > 0)
             error(217); /* loose indentation */
         flab2 = getlabel();
@@ -5815,9 +5815,9 @@ doif(void) {
         statement(NULL, FALSE); /* do "else" clause */
         setlabel(flab2);        /* print true label */
         /* if both the "true" branch and the "false" branch ended with the same
-     * kind of statement, set the last statement id to that kind, rather than
-     * to the generic tIF; this allows for better "unreachable code" checking
-     */
+         * kind of statement, set the last statement id to that kind, rather than
+         * to the generic tIF; this allows for better "unreachable code" checking
+         */
         if (lastst == lastst_true)
             return lastst;
     }
@@ -5833,9 +5833,9 @@ dowhile(void) {
     addwhile(wq);         /* add entry to queue for "break" */
     setlabel(wq[wqLOOP]); /* loop label */
     /* The debugger uses the "break" opcode to be able to "break" out of
-   * a loop. To make sure that each loop has a break opcode, even for the
-   * tiniest loop, set it below the top of the loop
-   */
+     * a loop. To make sure that each loop has a break opcode, even for the
+     * tiniest loop, set it below the top of the loop
+     */
     setline(TRUE);
     endlessloop = test(wq[wqEXIT], TEST_PARENS, FALSE); /* branch to wq[wqEXIT] if false */
     statement(NULL, FALSE);                             /* if so, do a statement */
@@ -5906,8 +5906,8 @@ dofor(void) {
                 // Fallthrough.
             case tNEW:
                 /* The variable in expr1 of the for loop is at a
-         * 'compound statement' level of it own.
-         */
+                 * 'compound statement' level of it own.
+                 */
                 nestlevel++;
                 autozero = 1;
                 declloc(tok.id); /* declare local variable */
@@ -5941,24 +5941,24 @@ dofor(void) {
         }
     }
     /* Adjust the "declared" field in the "while queue", in case that
-   * local variables were declared in the first expression of the
-   * "for" loop. These are deleted in separately, so a "break" or a "continue"
-   * must ignore these fields.
-   */
+     * local variables were declared in the first expression of the
+     * "for" loop. These are deleted in separately, so a "break" or a "continue"
+     * must ignore these fields.
+     */
     ptr = readwhile();
     assert(ptr != NULL);
     /*ptr[wqBRK]=(int)declared;
-   *ptr[wqCONT]=(int)declared;
-   */
+     *ptr[wqCONT]=(int)declared;
+     */
     ptr[wqBRK] = stack_scope_id();
     ptr[wqCONT] = stack_scope_id();
     jumplabel(skiplab);   /* skip expression 3 1st time */
     setlabel(wq[wqLOOP]); /* "continue" goes to this label: expr3 */
     setline(TRUE);
     /* Expressions 2 and 3 are reversed in the generated code: expression 3
-   * precedes expression 2. When parsing, the code is buffered and marks for
-   * the start of each expression are insterted in the buffer.
-   */
+     * precedes expression 2. When parsing, the code is buffered and marks for
+     * the start of each expression are insterted in the buffer.
+     */
     assert(!staging);
     stgset(TRUE); /* start staging */
     assert(stgidx == 0);
@@ -5991,8 +5991,8 @@ dofor(void) {
     assert(nestlevel >= save_nestlevel);
     if (nestlevel > save_nestlevel) {
         /* Clean up the space and the symbol table for the local
-     * variable in "expr1".
-     */
+         * variable in "expr1".
+         */
         destructsymbols(&loctab, nestlevel);
         popstacklist(true);
         testsymbols(&loctab, nestlevel, FALSE, TRUE); /* look for unused block locals */
@@ -6036,8 +6036,8 @@ doswitch(void) {
     doexpr(TRUE, FALSE, FALSE, FALSE, NULL, NULL, TRUE); /* evaluate switch expression */
     needtoken(endtok);
     /* generate the code for the switch statement, the label is the address
-   * of the case table (to be generated later).
-   */
+     * of the case table (to be generated later).
+     */
     lbl_table = getlabel();
     lbl_case = 0; /* just to avoid a compiler warning */
     ffswitch(lbl_table);
@@ -6061,19 +6061,19 @@ doswitch(void) {
                     casecount++;
 
                     /* ??? enforce/document that, in a switch, a statement cannot start
-         *     with a label. Then, you can search for:
-         *     * the first semicolon (marks the end of a statement)
-         *     * an opening brace (marks the start of a compound statement)
-         *     and search for the right-most colon before that statement
-         *     Now, by replacing the ':' by a special COLON token, you can
-         *     parse all expressions until that special token.
-         */
+                     *     with a label. Then, you can search for:
+                     *     * the first semicolon (marks the end of a statement)
+                     *     * an opening brace (marks the start of a compound statement)
+                     *     and search for the right-most colon before that statement
+                     *     Now, by replacing the ':' by a special COLON token, you can
+                     *     parse all expressions until that special token.
+                     */
 
                     exprconst(&val, NULL, NULL);
                     /* Search the insertion point (the table is kept in sorted order, so
-         * that advanced abstract machines can sift the case table with a
-         * binary search). Check for duplicate case values at the same time.
-         */
+                     * that advanced abstract machines can sift the case table with a
+                     * binary search). Check for duplicate case values at the same time.
+                     */
                     for (csp = &caselist, cse = caselist.next; cse != NULL && cse->value < val;
                          csp = cse, cse = cse->next)
                         /* nothing */;
@@ -6111,9 +6111,9 @@ doswitch(void) {
                 if (lastst != tRETURN)
                     all_cases_return = false;
                 /* Jump to lbl_exit, even thouh this is the last clause in the
-       * switch, because the jump table is generated between the last
-       * clause of the switch and the exit label.
-       */
+                 * switch, because the jump table is generated between the last
+                 * clause of the switch and the exit label.
+                 */
                 jumplabel(lbl_exit);
                 break;
             default:
@@ -6235,8 +6235,8 @@ doreturn(void) {
             if (sub != NULL) {
                 assert(sub->ident == iREFARRAY);
                 /* this function has an array attached already; check that the current
-         * "return" statement returns exactly the same array
-         */
+                 * "return" statement returns exactly the same array
+                 */
                 level = sym->dim.array.level;
                 if (sub->dim.array.level != level) {
                     error(48); /* array dimensions must match */
@@ -6250,8 +6250,8 @@ doreturn(void) {
                             sub = sub->array_child();
                             assert(sym != NULL && sub != NULL);
                             /* ^^^ both arrays have the same dimensions (this was checked
-               *     earlier) so the dependend should always be found
-               */
+                             *     earlier) so the dependend should always be found
+                             */
                         }
                     }
                     if (!sub->dim.array.length)
@@ -6261,8 +6261,8 @@ doreturn(void) {
                 int idxtag[sDIMEN_MAX];
                 int argcount, slength = 0;
                 /* this function does not yet have an array attached; clone the
-         * returned symbol beneath the current function
-         */
+                 * returned symbol beneath the current function
+                 */
                 sub = sym;
                 assert(sub != NULL);
                 level = sub->dim.array.level;
@@ -6282,16 +6282,16 @@ doreturn(void) {
                 if (sym->tag == pc_tag_string && numdim != 0)
                     slength = dim[numdim - 1];
                 /* the address of the array is stored in a hidden parameter; the address
-         * of this parameter is 1 + the number of parameters (times the size of
-         * a cell) + the size of the stack frame and the return address
-         *   base + 0*sizeof(cell)         == previous "base"
-         *   base + 1*sizeof(cell)         == function return address
-         *   base + 2*sizeof(cell)         == number of arguments
-         *   base + 3*sizeof(cell)         == first argument of the function
-         *   ...
-         *   base + ((n-1)+3)*sizeof(cell) == last argument of the function
-         *   base + (n+3)*sizeof(cell)     == hidden parameter with array address
-         */
+                 * of this parameter is 1 + the number of parameters (times the size of
+                 * a cell) + the size of the stack frame and the return address
+                 *   base + 0*sizeof(cell)         == previous "base"
+                 *   base + 1*sizeof(cell)         == function return address
+                 *   base + 2*sizeof(cell)         == number of arguments
+                 *   base + 3*sizeof(cell)         == first argument of the function
+                 *   ...
+                 *   base + ((n-1)+3)*sizeof(cell) == last argument of the function
+                 *   base + (n+3)*sizeof(cell)     == hidden parameter with array address
+                 */
                 assert(curfunc != NULL);
                 for (argcount = 0; curfunc->function()->args[argcount].ident != 0; argcount++)
                     /* nothing */;
@@ -6301,9 +6301,9 @@ doreturn(void) {
                 curfunc->set_array_return(sub);
             }
             /* get the hidden parameter, copy the array (the array is on the heap;
-       * it stays on the heap for the moment, and it is removed -usually- at
-       * the end of the expression/statement, see expression() in SC3.C)
-       */
+             * it stays on the heap for the moment, and it is removed -usually- at
+             * the end of the expression/statement, see expression() in SC3.C)
+             */
             if (is_variadic(curfunc)) {
                 load_hidden_arg();
             } else {

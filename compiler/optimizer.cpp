@@ -101,8 +101,8 @@ grow_stgbuffer(char** buffer, int* curmax, int requiredsize)
 
     assert(*curmax < requiredsize);
     /* if the staging buffer (holding intermediate code for one line) grows
-   * over a few kBytes, there is probably a run-away expression
-   */
+     * over a few kBytes, there is probably a run-away expression
+     */
     if (requiredsize > sSTG_MAX)
         error(FATAL_ERROR_OOM);
     *curmax = requiredsize + sSTG_GROW;
@@ -261,8 +261,8 @@ stgout(int index)
             stgopt(stgpipe, stgpipe + pipeidx, filewrite);
         } else {
             /* there is no sense in re-optimizing if the order of the sub-expressions
-       * did not change; so output directly
-       */
+             * did not change; so output directly
+             */
             for (idx = 0; idx < pipeidx; idx += strlen(stgpipe + idx) + 1)
                 filewrite(stgpipe + idx);
         }
@@ -404,8 +404,8 @@ stgset(int onoff)
         stgidx = 0;
         CHECK_STGBUFFER(stgidx);
         /* write any contents that may be put in the buffer by stgwrite()
-     * when "staging" was 0
-     */
+         * when "staging" was 0
+         */
         if (strlen(stgbuf) > 0)
             filewrite(stgbuf);
     }
@@ -530,10 +530,10 @@ replacesequence(const char* pattern, char symbols[MAX_OPT_VARS][MAX_ALIAS + 1], 
     char* buffer;
 
     /* calculate the length of the new buffer
-   * this is the length of the pattern plus the length of all symbols (note
-   * that the same symbol may occur multiple times in the pattern) plus
-   * line endings and startings ('\t' to start a line and '\n\0' to end one)
-   */
+     * this is the length of the pattern plus the length of all symbols (note
+     * that the same symbol may occur multiple times in the pattern) plus
+     * line endings and startings ('\t' to start a line and '\n\0' to end one)
+     */
     assert(repl_length != NULL);
     *repl_length = 0;
     lptr = pattern;
@@ -647,13 +647,13 @@ stgopt(char* start, char* end, int (*outputfunc)(char* str))
                         char* replace =
                             replacesequence(sequences[seq].replace, symbols, &repl_length);
                         /* If the replacement is bigger than the original section, we may need
-             * to "grow" the staging buffer. This is quite complex, due to the
-             * re-ordering of expressions that can also happen in the staging
-             * buffer. In addition, it should not happen: the peephole optimizer
-             * must replace sequences with *shorter* sequences, not longer ones.
-             * So, I simply forbid sequences that are longer than the ones they
-             * are meant to replace.
-             */
+                         * to "grow" the staging buffer. This is quite complex, due to the
+                         * re-ordering of expressions that can also happen in the staging
+                         * buffer. In addition, it should not happen: the peephole optimizer
+                         * must replace sequences with *shorter* sequences, not longer ones.
+                         * So, I simply forbid sequences that are longer than the ones they
+                         * are meant to replace.
+                         */
                         assert(match_length >= repl_length);
                         if (match_length >= repl_length) {
                             strreplace(start, replace, match_length, repl_length,

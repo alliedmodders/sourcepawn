@@ -154,9 +154,9 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         result = plungequalifiedfile(name);
         if (!result) {
             /* failed to open the file in the active directory, try to open the file
-       * in the same directory as the current file --but first check whether
-       * there is a (relative) path for the current file
-       */
+             * in the same directory as the current file --but first check whether
+             * there is a (relative) path for the current file
+             */
             char* ptr;
             if ((ptr = strrchr(inpfname, DIRSEP_CHAR)) != 0) {
                 int len = (int)(ptr - inpfname) + 1;
@@ -273,8 +273,8 @@ readline(unsigned char* line)
                 freading = FALSE;
                 *line = '\0';
                 /* when there is nothing more to read, the #if/#else stack should
-         * be empty and we should not be in a comment
-         */
+                 * be empty and we should not be in a comment
+                 */
                 assert(iflevel >= 0);
                 if (iflevel > 0)
                     error(1, "#endif", "-end of file-");
@@ -323,8 +323,8 @@ readline(unsigned char* line)
                 if (*ptr == '\\') {
                     cont = TRUE;
                     /* set '\a' at the position of '\\' to make it possible to check
-           * for a line continuation in a single line comment (error 49)
-           */
+                     * for a line continuation in a single line comment (error 49)
+                     */
                     *ptr++ = '\a';
                     *ptr = '\0'; /* erase '\n' (and any trailing whitespace) */
                 }
@@ -751,10 +751,10 @@ preproc_expr(cell* val, int* tag)
     char* term;
 
     /* Disable staging; it should be disabled already because
-   * expressions may not be cut off half-way between conditional
-   * compilations. Reset the staging index, but keep the code
-   * index.
-   */
+     * expressions may not be cut off half-way between conditional
+     * compilations. Reset the staging index, but keep the code
+     * index.
+     */
     if (stgget(&index, &code_index)) {
         error(57); /* unfinished expression */
         stgdel(0, code_index);
@@ -766,9 +766,9 @@ preproc_expr(cell* val, int* tag)
     assert((lptr - pline) <
            (int)strlen((char*)pline)); /* lptr must STILL point inside the string */
     /* append a special symbol to the string, so the expression
-   * analyzer won't try to read a next line when it encounters
-   * an end-of-line
-   */
+     * analyzer won't try to read a next line when it encounters
+     * an end-of-line
+     */
     assert(strlen((char*)pline) < sLINEMAX);
     term = strchr((char*)pline, '\0');
     assert(term != NULL);
@@ -855,8 +855,8 @@ command(void)
     indent_nowarn = TRUE; /* allow loose indentation" */
     lexclr(FALSE);        /* clear any "pushed" tokens */
     /* on a pending expression, force to return a silent ';' token and force to
-   * re-read the line
-   */
+     * re-read the line
+     */
     if (!sc_needsemicolon && stgget(&index, &code_index)) {
         lptr = term_expr;
         return CMD_TERM;
@@ -896,14 +896,14 @@ command(void)
                 } else {
                     assert(iflevel > 0);
                     /* if there has been a "parse mode" on this level, set "skip mode",
-         * otherwise, clear "skip mode"
-         */
+                     * otherwise, clear "skip mode"
+                     */
                     if ((ifstack[iflevel - 1] & PARSEMODE) == PARSEMODE) {
                         /* there has been a parse mode already on this level, so skip the rest */
                         ifstack[iflevel - 1] |= (char)SKIPMODE;
                         /* if we were already skipping this section, allow expressions with
-           * undefined symbols; otherwise check the expression to catch errors
-           */
+                         * undefined symbols; otherwise check the expression to catch errors
+                         */
                         if (tok == tpELSEIF) {
                             if (skiplevel == iflevel)
                                 preproc_expr(&val, NULL); /* get, but ignore the expression */
@@ -914,8 +914,8 @@ command(void)
                         /* previous conditions were all FALSE */
                         if (tok == tpELSEIF) {
                             /* if we were already skipping this section, allow expressions with
-             * undefined symbols; otherwise check the expression to catch errors
-             */
+                             * undefined symbols; otherwise check the expression to catch errors
+                             */
                             if (skiplevel == iflevel) {
                                 preproc_expr(&val, NULL); /* get value (or 0 on error) */
                             } else {
@@ -1329,8 +1329,8 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     assert(strncmp((char*)line, pattern, prefixlen) == 0);
 
     /* pattern prefix matches; match the rest of the pattern, gather
-   * the parameters
-   */
+     * the parameters
+     */
     s = line + prefixlen;
     p = (unsigned char*)pattern + prefixlen;
     match = TRUE; /* so far, pattern matches */
@@ -1343,8 +1343,8 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                 p++; /* skip parameter id */
                 assert(*p != '\0');
                 /* match the source string up to the character after the digit
-         * (skipping strings in the process
-         */
+                 * (skipping strings in the process
+                 */
                 e = s;
                 while (*e != *p && *e != '\0' && *e != '\n') {
                     if (is_startstring(e)) /* skip strings */
@@ -1353,7 +1353,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                         e = skippgroup(e);
                     if (*e != '\0')
                         e++; /* skip non-alphapetic character (or closing quote of
-                       * a string, or the closing paranthese of a group) */
+                              * a string, or the closing paranthese of a group) */
                 }
                 /* store the parameter (overrule any earlier) */
                 if (args[arg] != NULL)
@@ -1389,8 +1389,8 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
         } else {
             cell ch;
             /* skip whitespace between two non-alphanumeric characters, except
-       * for two identical symbols
-       */
+             * for two identical symbols
+             */
             assert((char*)p > pattern);
             if (!alphanum(*p) && *(p - 1) != *p)
                 while (*s <= ' ' && *s != '\0')
@@ -1405,8 +1405,8 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
 
     if (match && *p == '\0') {
         /* if the last character to match is an alphanumeric character, the
-     * current character in the source may not be alphanumeric
-     */
+         * current character in the source may not be alphanumeric
+         */
         assert(p > (unsigned char*)pattern);
         if (alphanum(*(p - 1)) && alphanum(*s))
             match = FALSE;
@@ -1498,8 +1498,8 @@ substallpatterns(unsigned char* line, int buffersize)
     start = line;
     while (*start != '\0') {
         /* find the start of a prefix (skip all non-alphabetic characters),
-     * also skip strings
-     */
+         * also skip strings
+         */
         while (!alpha(*start) && *start != '\0') {
             /* skip strings */
             if (is_startstring(start)) {
@@ -1538,8 +1538,8 @@ substallpatterns(unsigned char* line, int buffersize)
             if (!substpattern(start, buffersize - (int)(start - line), subst.first, subst.second))
                 start = end; /* match failed, skip this prefix */
             /* match succeeded: do not update "start", because the substitution text
-       * may be matched by other macros
-       */
+             * may be matched by other macros
+             */
         } else {
             start = end; /* no macro with this prefix, skip this prefix */
         }
@@ -1572,8 +1572,8 @@ scanellipsis(const unsigned char* lptr)
         return 0; /* stumbled on something that is not an ellipsis and not white-space */
 
     /* the ellipsis was not on the active line, read more lines from the current
-   * file (but save its position first)
-   */
+     * file (but save its position first)
+     */
     if (inpf == NULL || pc_eofsrc(inpf))
         return 0; /* quick exit: cannot read after EOF */
     if ((localbuf = (unsigned char*)malloc((sLINEMAX + 1) * sizeof(unsigned char))) == NULL)
@@ -2579,8 +2579,8 @@ matchtoken(int token)
 
     if (!sc_needsemicolon && token == tTERM && (_lexnewline || !freading)) {
         /* Push "tok" back, because it is the token following the implicit statement
-     * termination (newline) token.
-     */
+         * termination (newline) token.
+         */
         lexpush();
         return 2;
     }
@@ -2918,9 +2918,9 @@ delete_symbol(symbol* root, symbol* sym)
 {
     symbol* origRoot = root;
     /* find the symbol and its predecessor
-   * (this function assumes that you will never delete a symbol that is not
-   * in the table pointed at by "root")
-   */
+     * (this function assumes that you will never delete a symbol that is not
+     * in the table pointed at by "root")
+     */
     assert(root != sym);
     while (root->next != sym) {
         root = root->next;
@@ -2954,7 +2954,7 @@ delete_symbols(symbol* root, int level, int delete_labels, int delete_functions)
     int mustdelete;
 
     /* erase only the symbols with a deeper nesting level than the
-   * specified nesting level */
+     * specified nesting level */
     while (root->next != NULL) {
         sym = root->next;
         if (get_actual_compound(sym) < level)
@@ -2974,9 +2974,9 @@ delete_symbols(symbol* root, int level, int delete_labels, int delete_functions)
                 break;
             case iREFARRAY:
                 /* a global iREFARRAY symbol is the return value of a function: delete
-       * this only if "globals" must be deleted; other iREFARRAY instances
-       * (locals) are also deleted
-       */
+                 * this only if "globals" must be deleted; other iREFARRAY instances
+                 * (locals) are also deleted
+                 */
                 mustdelete = delete_functions;
                 for (parent_sym = sym->parent(); parent_sym != NULL && parent_sym->ident != iFUNCTN;
                      parent_sym = parent_sym->parent())
@@ -2993,8 +2993,8 @@ delete_symbols(symbol* root, int level, int delete_labels, int delete_functions)
                 break;
             case iFUNCTN:
                 /* optionally preserve globals (variables & functions), but
-       * NOT native functions
-       */
+                 * NOT native functions
+                 */
                 mustdelete = delete_functions || (sym->usage & uNATIVE) != 0;
                 assert(sym->parent() == NULL);
                 break;
@@ -3021,15 +3021,15 @@ delete_symbols(symbol* root, int level, int delete_labels, int delete_functions)
             free_symbol(sym);
         } else {
             /* if the function was prototyped, but not implemented in this source,
-       * mark it as such, so that its use can be flagged
-       */
+             * mark it as such, so that its use can be flagged
+             */
             if (sym->ident == iFUNCTN && (sym->usage & uDEFINE) == 0)
                 sym->usage |= uMISSING;
             if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
                 sym->usage &= ~uDEFINE; /* clear "defined" flag */
             /* for user defined operators, also remove the "prototyped" flag, as
-       * user-defined operators *must* be declared before use
-       */
+             * user-defined operators *must* be declared before use
+             */
             if (sym->ident == iFUNCTN && !alpha(*sym->name()))
                 sym->usage &= ~uPROTOTYPED;
             if (origRoot == &glbtab)
@@ -3070,9 +3070,9 @@ markusage(symbol* sym, int usage)
         /* only do this for global symbols */
         if (sym->vclass == sGLOBAL) {
             /* "curfunc" should always be valid, since statements may not occurs
-       * outside functions; in the case of syntax errors, however, the
-       * compiler may arrive through this function
-       */
+             * outside functions; in the case of syntax errors, however, the
+             * compiler may arrive through this function
+             */
             if (curfunc != NULL)
                 curfunc->add_reference_to(sym);
         } /*if */
@@ -3184,7 +3184,7 @@ symbol::symbol(const symbol& other)
 symbol::~symbol() {
     if (ident == iFUNCTN) {
         /* run through the argument list; "default array" arguments
-     * must be freed explicitly; the tag list must also be freed */
+         * must be freed explicitly; the tag list must also be freed */
         for (arginfo* arg = &function()->args[0]; arg->ident != 0; arg++) {
             if (arg->ident == iREFARRAY && arg->hasdefault)
                 free(arg->defvalue.array.data);
@@ -3268,12 +3268,12 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
     symbol* sym;
 
     /* global variables may only be defined once
-   * One complication is that functions returning arrays declare an array
-   * with the same name as the function, so the assertion must allow for
-   * this special case. Another complication is that variables may be
-   * "redeclared" if they are local to an automaton (and findglb() will find
-   * the symbol without states if no symbol with states exists).
-   */
+     * One complication is that functions returning arrays declare an array
+     * with the same name as the function, so the assertion must allow for
+     * this special case. Another complication is that variables may be
+     * "redeclared" if they are local to an automaton (and findglb() will find
+     * the symbol without states if no symbol with states exists).
+     */
     assert(vclass != sGLOBAL || (sym = findglb(name)) == NULL || (sym->usage & uDEFINE) == 0 ||
            (sym->ident == iFUNCTN && sym == curfunc));
 

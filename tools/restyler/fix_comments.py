@@ -1,5 +1,6 @@
 # vim: set sts=2 ts=2 sw=2 tw=99 et:
 import argparse
+import subprocess
 from collections import deque
 from collections import namedtuple
 from pygments.token import Token as TokenKind
@@ -20,9 +21,11 @@ def process_file(path, args):
   with open(path, 'rb') as fp:
     text = fp.read().decode('utf-8')
 
+  nl_style = determine_nl_style(path)
+
   lexer = CppLexer()
   tokens = lexer.get_tokens_unprocessed(text)
-  fixup_tool = FixupTool(tokens)
+  fixup_tool = FixupTool(path, tokens, nl_style)
   changes = fixup_tool.parse()
   new_text = change_text(text, changes)
 
@@ -32,30 +35,32 @@ def process_file(path, args):
   else:
     print(new_text)
 
+def determine_nl_style(path):
+  output = subprocess.check_output(['file', path])
+  output = output.decode('utf-8')
+  if 'CRLF' in output:
+    return '\r\n'
+  return '\n'
+
 Token = namedtuple('Token', ['pos', 'kind', 'text', 'line', 'col'])
 
 def change_text(text, changes):
   characters = list(text)
   additions = []
-  for cmd, tok, c in changes:
-    if cmd == 'replace':
-      characters[tok.pos] = c
-    elif cmd == 'insert':
-      additions.append((tok.pos, c))
-    elif cmd == 'insert-before':
-      additions.append((tok.pos - 1, c))
-    elif cmd == 'delete':
-      for i in range(len(tok.text)):
-        characters[tok.pos + i] = ''
-    elif cmd == 'truncate-line-at':
-      # Remove the given character and all preceding whitespace.
-      characters[tok.pos] = ''
-      pos = tok.pos - 1
-      while pos >= 0 and characters[pos] == ' ':
-        characters[pos] = ''
-        pos -= 1
+  for cmd, start_pos, count, text in changes:
+    if cmd == 'delete':
+      for i in range(count):
+        print(cmd, start_pos + i, count, characters[start_pos + i])
+        characters[start_pos + i] = ''
+    elif cmd == 'insert-after':
+      additions.append((start_pos, text))
+    elif cmd == 'delete-ws':
+      for i in reversed(range(start_pos, start_pos + count)):
+        if not characters[i].isspace():
+          break
+        characters[i] = ''
     else:
-      raise Exception('not yet implemented')
+      raise Exception('unknown command: {0}'.format(cmd))
 
   # Process additions in reverse to make this algorithm easier.
   additions = sorted(additions, key=lambda entry: entry[0])
@@ -65,7 +70,8 @@ def change_text(text, changes):
   return ''.join(characters)
 
 class FixupTool(object):
-  def __init__(self, tokens):
+  def __init__(self, file, tokens, nl_style):
+    self.file_ = file
     self.tokens_ = tokens
     self.raw_readahead_ = deque()
     self.changes_ = []
@@ -73,7 +79,8 @@ class FixupTool(object):
     self.line_indent_ = ''
     self.line_pos_ = 0
     self.determined_indent_ = False
-    self.prev_comment_ = None
+    self.root_comment_ = None
+    self.nl_style_ = nl_style
 
   def parse(self):
     while True:
@@ -95,24 +102,47 @@ class FixupTool(object):
   ])
   def analyze_comment(self, tok):
     if tok.text in FixupTool.kPointlessComments:
-      assert self.prev_comment_ is None
+      assert self.root_comment_ is None
       self.delete(tok)
       return
 
-    if not tok.text.endswith('*/'):
-      self.prev_comment_ = tok
-      return
-    if not self.prev_comment_:
+    if tok.text.startswith('/*'):
+      self.root_comment_ = tok
       return
 
-    prev_comment = self.prev_comment_
-    self.prev_comment_ = None
+    # For some unknown reason, clang-format is unable to properly format
+    # multi-line comments, and leaves them a misaligned mess. Fix that up here.
+    maybe_asterisk = self.find_first_non_whitespace(tok.text)
+    if maybe_asterisk is None:
+      return
+    delta = self.root_comment_.col + 1 - maybe_asterisk
+    if tok.text[maybe_asterisk] != '*':
+      delta += 2
+    if delta == 0:
+      return
+    if delta > 0:
+      extra_spaces = delta * ' '
+      self.insert_after(tok.pos + maybe_asterisk - 1, extra_spaces)
+    else:
+      self.delete_ws(maybe_asterisk - delta - 1, 0-delta)
 
-    #if tok.text.startswith(' '):
-    #  return
+  def find_first_non_whitespace(self, text):
+    index = 0
+    while index < len(text):
+      if text[index].isspace():
+        index += 1
+        continue
+      return index
 
   def delete(self, tok):
-    self.changes_.append(('delete', tok, None))
+    self.changes_.append(('delete', tok.pos, len(tok.text), None))
+
+  def delete_ws(self, pos, len):
+    self.changes_.append(('delete-ws', pos, len, None))
+
+  def insert_after(self, pos, text):
+    assert pos >= 0
+    self.changes_.append(('insert-after', pos, None, text))
 
   # Read the next raw token from the lexer, potentially splitting it into
   # multiple tokens if needed.

@@ -1,5 +1,5 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-/*  Pawn compiler
+/* Pawn compiler
  *
  *  Drafted after the Small-C compiler Version 2.01, originally created
  *  by Ron Cain, july 1980, and enhanced by James E. Hendrix.

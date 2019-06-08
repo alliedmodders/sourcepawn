@@ -165,10 +165,10 @@ typedef struct sp_file_code_s {
     uint32_t code;       /**< Offset to bytecode, relative to the start of this section. */
 
     /* This field is only guaranteed to be present when codeversion >= 13 or
-   * higher. Note that newer spcomp versions will still include a 0-filled
-   * value. This is legal since anything between the end of the code header
-   * and the code buffer is undefined. The field should still be ignored.
-   */
+     * higher. Note that newer spcomp versions will still include a 0-filled
+     * value. This is legal since anything between the end of the code header
+     * and the code buffer is undefined. The field should still be ignored.
+     */
     uint32_t features; /**< List of features flags that this code requires. */
 } sp_file_code_t;
 

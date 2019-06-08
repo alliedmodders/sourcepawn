@@ -196,7 +196,7 @@ typedef int(AMXAPI* AMX_IDLE)(struct tagAMX* amx, int AMXAPI Exec(struct tagAMX*
 
 #if defined _MSC_VER
 #    pragma warning(disable : 4103) /* disable warning message 4103 that complains
-                                  * about pragma pack in a header file */
+                                     * about pragma pack in a header file */
 #    pragma warning(disable : 4100) /* "'%$S' : unreferenced formal parameter" */
 #endif
 
