@@ -41,7 +41,7 @@
   #include <io.h>
 #endif
 
-#if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
   #include "sclinux.h"
   #include "binreloc.h" /* from BinReloc, see www.autopackage.org */
   #include <unistd.h>

@@ -50,7 +50,7 @@
   #define _MAX_PATH     250
 #endif
 #if !defined DIRSEP_CHAR
-  #if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
+  #if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
     #define DIRSEP_CHAR '/'
   #elif defined macintosh
     #define DIRSEP_CHAR ':'

@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include "sc.h"
+
 // The method name buffer is larger since we can include our parent class's
 // name, a "." to separate it, a "~" for constructors, or a ".get/.set" for
 // accessors.

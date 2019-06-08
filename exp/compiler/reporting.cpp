@@ -19,7 +19,7 @@
 #include "compile-context.h"
 #include "source-manager.h"
 #include "auto-string.h"
-#include <am-platform.h>
+#include <amtl/am-platform.h>
 #if defined(KE_POSIX)
 # include <unistd.h>
 # include <sys/ioctl.h>

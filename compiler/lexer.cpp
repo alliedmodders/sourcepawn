@@ -41,7 +41,7 @@
 #include "libpawnc.h"
 #include "optimizer.h"
 #include "sci18n.h"
-#if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
 #endif
 #include "sp_symhash.h"

@@ -54,7 +54,7 @@
    #include <sys/endian.h>
 #elif defined __APPLE__
    #include <machine/endian.h>
-#elif defined LINUX
+#elif defined __linux__
    #include <endian.h>
 #endif
 

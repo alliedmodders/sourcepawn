@@ -4,7 +4,7 @@
 #include <string.h>
 #include "memfile.h"
 #include "osdefs.h"
-#if defined LINUX || defined DARWIN
+#if defined __linux__ || defined DARWIN
 #include <unistd.h>
 #elif defined WIN32
 #include <io.h>

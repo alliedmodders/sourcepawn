@@ -18,7 +18,7 @@
 #include "source-manager.h"
 #include "compile-context.h"
 #include <stdio.h>
-#include <am-arithmetic.h>
+#include <amtl/am-arithmetic.h>
 
 using namespace ke;
 using namespace sp;

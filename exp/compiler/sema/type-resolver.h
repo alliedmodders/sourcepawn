@@ -23,7 +23,7 @@
 #include "symbols.h"
 #include "constant-evaluator.h"
 #include "types.h"
-#include <am-deque.h>
+#include <amtl/am-deque.h>
 
 namespace sp {
 

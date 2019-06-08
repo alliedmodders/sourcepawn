@@ -36,7 +36,7 @@
 #include "sclist.h"
 #include "errors.h"
 #include "amxdbg.h"
-#if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
 #endif
 #include <amtl/am-string.h>

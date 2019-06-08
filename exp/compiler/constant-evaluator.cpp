@@ -17,7 +17,7 @@
  * SourcePawn. If not, see http://www.gnu.org/licenses/.
  */
 #include "parser/ast.h"
-#include "am-float.h"
+#include <amtl/am-float.h>
 #include "constant-evaluator.h"
 #include "compile-context.h"
 

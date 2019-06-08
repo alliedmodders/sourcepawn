@@ -22,8 +22,8 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <limits.h>
-#include <am-vector.h>
-#include <am-fixedarray.h>
+#include <amtl/am-vector.h>
+#include <amtl/am-fixedarray.h>
 
 namespace sp {
 
