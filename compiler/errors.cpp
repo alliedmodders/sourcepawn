@@ -26,7 +26,7 @@
 #if defined	__WIN32__ || defined _WIN32 || defined __MSDOS__
   #include <io.h>
 #endif
-#if defined LINUX || defined __GNUC__
+#if defined __linux__ || defined __GNUC__
   #include <unistd.h>
 #endif
 #include <stdio.h>

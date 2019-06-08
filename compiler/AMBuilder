@@ -35,7 +35,6 @@ if compiler.family == 'gcc':
 compiler.defines += ['HAVE_STDINT_H']
 if builder.target.platform == 'linux':
   compiler.defines += [
-    'LINUX',
     'AMX_ANSIONLY',
     '_GNU_SOURCE'
   ]

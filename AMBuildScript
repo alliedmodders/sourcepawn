@@ -105,6 +105,7 @@ class Config(object):
         emflags = ['-s', 'PRECISE_F32=1']
         cxx.cflags += emflags
         cxx.linkflags += emflags
+        cxx.defines += ['__linux__']
     elif cxx.like('msvc'):
       if builder.options.debug == '1':
         cxx.cflags += ['/MTd']

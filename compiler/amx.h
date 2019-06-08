@@ -31,7 +31,7 @@
 #if defined FREEBSD && !defined __FreeBSD__
   #define __FreeBSD__
 #endif
-#if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
   #include "sclinux.h"
 #endif
 
@@ -45,7 +45,7 @@
     #define HAVE_STDINT_H
   #endif
 #elif !defined HAVE_STDINT_H
-  #if defined __LCC__ || defined __DMC__ || defined LINUX || (defined __WATCOMC__ && __WATCOMC__ >= 1200)
+  #if defined __LCC__ || defined __DMC__ || defined __linux__ || (defined __WATCOMC__ && __WATCOMC__ >= 1200)
     #if defined HAVE_INTTYPES_H
       #include <inttypes.h>
     #else
@@ -208,7 +208,7 @@ typedef int (AMXAPI *AMX_IDLE)(struct tagAMX *amx, int AMXAPI Exec(struct tagAMX
 #endif
 
 #if !defined AMX_NO_ALIGN
-  #if defined LINUX || defined __FreeBSD__
+  #if defined __linux__ || defined __FreeBSD__
     #pragma pack(1)         /* structures must be packed (byte-aligned) */
   #elif defined MACOS && defined __MWERKS__
 	#pragma options align=mac68k
@@ -445,7 +445,7 @@ int AMXAPI amx_UTF8Put(char *string, char **endptr, int maxchars, cell value);
   amx_Register((amx), amx_NativeInfo((name),(func)), 1);
 
 #if !defined AMX_NO_ALIGN
-  #if defined LINUX || defined __FreeBSD__
+  #if defined __linux__ || defined __FreeBSD__
     #pragma pack()    /* reset default packing */
   #elif defined MACOS && defined __MWERKS__
     #pragma options align=reset

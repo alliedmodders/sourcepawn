@@ -32,7 +32,7 @@
 #include "memfile.h"
 #include "libpawnc.h"
 
-#if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
 #include <sys/types.h>
 #include <sys/stat.h>
 #endif
@@ -82,7 +82,7 @@ void *pc_opensrc(char *filename)
   long length;
   src_file_t *src = NULL;
 
-#if defined LINUX || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
   struct stat fileInfo;
   if (stat(filename, &fileInfo) != 0) {
     return NULL;
