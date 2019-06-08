@@ -29,6 +29,7 @@
 #define _include_sourcepawn_smx_typeinfo_h
 
 #include <assert.h>
+#include <stdint.h>
 
 namespace sp {
 

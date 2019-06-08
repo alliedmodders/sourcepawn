@@ -28,6 +28,8 @@
 #ifndef _include_sourcepawn_smx_legacy_debuginfo_h
 #define _include_sourcepawn_smx_legacy_debuginfo_h
 
+#include <stdint.h>
+
 // This entire file defines legacy data structures that may be present in SMX
 // files. If the compiler supports RTTI, these sections are not emitted.
 
