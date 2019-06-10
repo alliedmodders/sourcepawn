@@ -3,19 +3,19 @@
 // SourcePawn
 // Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
 // =============================================================================
-// 
+//
 // This program is free software; you can redistribute it and/or modify it under
 // the terms of the GNU General Public License, version 3.0, as published by the
 // Free Software Foundation.
-// 
+//
 // This program is distributed in the hope that it will be useful, but WITHOUT
 // ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 // FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
 // details.
-// 
+//
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
-// 
+//
 // As a special exception, AlliedModders LLC gives you permission to link the
 // code of this program (as well as its derivative works) to "Half-Life 2," the
 // "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
@@ -33,55 +33,54 @@
 
 namespace sp {
 
-struct SmxConsts
-{
-  // SourcePawn File Format (SPFF) magic number.
-  static const uint32_t FILE_MAGIC = 0x53504646;
+struct SmxConsts {
+    // SourcePawn File Format (SPFF) magic number.
+    static const uint32_t FILE_MAGIC = 0x53504646;
 
-  // File format verison number.
-  // 0x0101 - SourcePawn 1.0; initial version used by SourceMod 1.0.
-  // 0x0102 - SourcePawn 1.1; used by SourceMod 1.1+.
-  // 0x0200 - Used by spcomp2.
-  //
-  // The major version bits (8-15) indicate a product number. Consumers should
-  // reject any version for a different product.
-  //
-  // The minor version bits (0-7) indicate a compatibility revision. Any minor
-  // version higher than the current version should be rejected.
-  static const uint16_t SP1_VERSION_1_0 = 0x0101;
-  static const uint16_t SP1_VERSION_1_1 = 0x0102;
-  static const uint16_t SP1_VERSION_1_7 = 0x0107;
-  static const uint16_t SP1_VERSION_MIN = SP1_VERSION_1_0;
-  static const uint16_t SP1_VERSION_MAX = SP1_VERSION_1_7;
-  static const uint16_t SP2_VERSION_MIN = 0x0200;
-  static const uint16_t SP2_VERSION_MAX = 0x0200;
+    // File format verison number.
+    // 0x0101 - SourcePawn 1.0; initial version used by SourceMod 1.0.
+    // 0x0102 - SourcePawn 1.1; used by SourceMod 1.1+.
+    // 0x0200 - Used by spcomp2.
+    //
+    // The major version bits (8-15) indicate a product number. Consumers should
+    // reject any version for a different product.
+    //
+    // The minor version bits (0-7) indicate a compatibility revision. Any minor
+    // version higher than the current version should be rejected.
+    static const uint16_t SP1_VERSION_1_0 = 0x0101;
+    static const uint16_t SP1_VERSION_1_1 = 0x0102;
+    static const uint16_t SP1_VERSION_1_7 = 0x0107;
+    static const uint16_t SP1_VERSION_MIN = SP1_VERSION_1_0;
+    static const uint16_t SP1_VERSION_MAX = SP1_VERSION_1_7;
+    static const uint16_t SP2_VERSION_MIN = 0x0200;
+    static const uint16_t SP2_VERSION_MAX = 0x0200;
 
-  // Compression types.
-  static const uint8_t FILE_COMPRESSION_NONE = 0;
-  static const uint8_t FILE_COMPRESSION_GZ = 1;
+    // Compression types.
+    static const uint8_t FILE_COMPRESSION_NONE = 0;
+    static const uint8_t FILE_COMPRESSION_GZ = 1;
 
-  // Version 9: Initial version.
-  // Version 10: DEBUG code flag removed; no bytecode changes.
-  // Version 11: Not used; no changes.
-  // Version 12: PROC/RETN semantic changes.
-  // Version 13: Feature flags in code headers.
-  static const uint8_t CODE_VERSION_MINIMUM = 9;
-  static const uint8_t CODE_VERSION_SM_LEGACY = 10;
-  static const uint8_t CODE_VERSION_FEATURE_MASK = 13;
-  static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_FEATURE_MASK;
-  static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
+    // Version 9: Initial version.
+    // Version 10: DEBUG code flag removed; no bytecode changes.
+    // Version 11: Not used; no changes.
+    // Version 12: PROC/RETN semantic changes.
+    // Version 13: Feature flags in code headers.
+    static const uint8_t CODE_VERSION_MINIMUM = 9;
+    static const uint8_t CODE_VERSION_SM_LEGACY = 10;
+    static const uint8_t CODE_VERSION_FEATURE_MASK = 13;
+    static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_FEATURE_MASK;
+    static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
 
-  // This feature adds the REBASE opcode, and requires that multi-dimensional
-  // arrays use direct internal addressing.
-  static const uint32_t kCodeFeatureDirectArrays = (1 << 0);
+    // This feature adds the REBASE opcode, and requires that multi-dimensional
+    // arrays use direct internal addressing.
+    static const uint32_t kCodeFeatureDirectArrays = (1 << 0);
 };
 
 // These structures are byte-packed.
 #if defined __GNUC__
-# pragma pack(1)
+#    pragma pack(1)
 #else
-# pragma pack(push)
-# pragma pack(1)
+#    pragma pack(push)
+#    pragma pack(1)
 #endif
 
 // The very first bytes in a .smx file. The .smx file format is a container for
@@ -94,92 +93,89 @@ struct SmxConsts
 //
 // Although any part of the file after the header can be compressed, by default
 // only the section contents are, and the section list and string table are not.
-typedef struct sp_file_hdr_s
-{
-  // Magic number and version number.
-  uint32_t  magic;
-  uint16_t  version;
+typedef struct sp_file_hdr_s {
+    // Magic number and version number.
+    uint32_t magic;
+    uint16_t version;
 
-  // disksize, imagesize, and dataoffs (at the end) describe a region of the
-  // file that may be compressed. The region must occur after the initial
-  // sp_file_hdr_t header. For SourceMod compatibility, the meanings are as
-  // follows.
-  //
-  // Without compression:
-  //   imagesize is the amount of bytes that must be read into memory to parse
-  //             the SMX container, starting from the first byte of the file.
-  //   disksize is undefined.
-  //   dataoffs is undefined.
-  //
-  // With compression:
-  //   dataoffs is an offset to the start of the compression region.
-  //   disksize is the length of the compressed region, in bytes, plus dataoffs.
-  //   imagesize is the size of the entire SMX container after decompression.
-  //
-  //   This means that at least |imagesize-dataoffs| must be allocated to
-  //   decompress, and the compressed region's length is |datasize-dataoffs|.
-  //
-  // The compressed region should always be expanded "in-place". That is, to
-  // parse the container, the compressed bytes should be replaced with
-  // decompressed bytes.
-  //
-  // Note: This scheme may seem odd. It's a combination of historical debt and
-  // previously unspecified behavior. The original .amx file format contained
-  // an on-disk structure that supported an endian-agnostic variable-length 
-  // encoding of its data section, and this structure was loaded directly into
-  // memory and used as the VM context. AMX Mod X later developed a container
-  // format called ".amxx" as a "universal binary" for 32-bit and 64-bit
-  // plugins. This format dropped compact encoding, but supported gzip. The
-  // disksize/imagesize oddness made its way to this file format. When .smx
-  // was created for SourceMod, it persisted even though AMX was dropped
-  // entirely. So it goes.
-  uint8_t   compression;
-  uint32_t  disksize;
-  uint32_t  imagesize;
+    // disksize, imagesize, and dataoffs (at the end) describe a region of the
+    // file that may be compressed. The region must occur after the initial
+    // sp_file_hdr_t header. For SourceMod compatibility, the meanings are as
+    // follows.
+    //
+    // Without compression:
+    //   imagesize is the amount of bytes that must be read into memory to parse
+    //             the SMX container, starting from the first byte of the file.
+    //   disksize is undefined.
+    //   dataoffs is undefined.
+    //
+    // With compression:
+    //   dataoffs is an offset to the start of the compression region.
+    //   disksize is the length of the compressed region, in bytes, plus dataoffs.
+    //   imagesize is the size of the entire SMX container after decompression.
+    //
+    //   This means that at least |imagesize-dataoffs| must be allocated to
+    //   decompress, and the compressed region's length is |datasize-dataoffs|.
+    //
+    // The compressed region should always be expanded "in-place". That is, to
+    // parse the container, the compressed bytes should be replaced with
+    // decompressed bytes.
+    //
+    // Note: This scheme may seem odd. It's a combination of historical debt and
+    // previously unspecified behavior. The original .amx file format contained
+    // an on-disk structure that supported an endian-agnostic variable-length
+    // encoding of its data section, and this structure was loaded directly into
+    // memory and used as the VM context. AMX Mod X later developed a container
+    // format called ".amxx" as a "universal binary" for 32-bit and 64-bit
+    // plugins. This format dropped compact encoding, but supported gzip. The
+    // disksize/imagesize oddness made its way to this file format. When .smx
+    // was created for SourceMod, it persisted even though AMX was dropped
+    // entirely. So it goes.
+    uint8_t compression;
+    uint32_t disksize;
+    uint32_t imagesize;
 
-  // Number of named file sections.
-  uint8_t   sections;
+    // Number of named file sections.
+    uint8_t sections;
 
-  // Offset to the string table. Each string is null-terminated. The string
-  // table is only used for strings related to parsing the container itself.
-  // For SourcePawn, a separate ".names" section exists for Pawn-specific data.
-  uint32_t  stringtab;
+    // Offset to the string table. Each string is null-terminated. The string
+    // table is only used for strings related to parsing the container itself.
+    // For SourcePawn, a separate ".names" section exists for Pawn-specific data.
+    uint32_t stringtab;
 
-  // Offset to where compression begins.
-  uint32_t  dataoffs;
+    // Offset to where compression begins.
+    uint32_t dataoffs;
 } sp_file_hdr_t;
 
 // Each section is written immediately after the header.
-typedef struct sp_file_section_s
-{
-  uint32_t  nameoffs;  /**< Offset into the string table. */
-  uint32_t  dataoffs;  /**< Offset into the file for the section contents. */
-  uint32_t  size;      /**< Size of this section's contents. */
+typedef struct sp_file_section_s {
+    uint32_t nameoffs; /**< Offset into the string table. */
+    uint32_t dataoffs; /**< Offset into the file for the section contents. */
+    uint32_t size;     /**< Size of this section's contents. */
 } sp_file_section_t;
 
 // Code section. This is used only in SP1, but is emitted by default for legacy
 // systems which check |codeversion| but not the SMX file version.
-typedef struct sp_file_code_s
-{
-  uint32_t  codesize;    /**< Size of the code section. */
-  uint8_t   cellsize;    /**< Cellsize in bytes. */
-  uint8_t   codeversion; /**< Version of opcodes supported. */
-  uint16_t  flags;       /**< Flags. */
-  uint32_t  main;        /**< Address to "main". */
-  uint32_t  code;        /**< Offset to bytecode, relative to the start of this section. */
+typedef struct sp_file_code_s {
+    uint32_t codesize;   /**< Size of the code section. */
+    uint8_t cellsize;    /**< Cellsize in bytes. */
+    uint8_t codeversion; /**< Version of opcodes supported. */
+    uint16_t flags;      /**< Flags. */
+    uint32_t main;       /**< Address to "main". */
+    uint32_t code;       /**< Offset to bytecode, relative to the start of this section. */
 
-  /* This field is only guaranteed to be present when codeversion >= 13 or
-   * higher. Note that newer spcomp versions will still include a 0-filled
-   * value. This is legal since anything between the end of the code header
-   * and the code buffer is undefined. The field should still be ignored.
-   */
-  uint32_t  features;    /**< List of features flags that this code requires. */
+    /* This field is only guaranteed to be present when codeversion >= 13 or
+     * higher. Note that newer spcomp versions will still include a 0-filled
+     * value. This is legal since anything between the end of the code header
+     * and the code buffer is undefined. The field should still be ignored.
+     */
+    uint32_t features; /**< List of features flags that this code requires. */
 } sp_file_code_t;
 
 #if defined __GNUC__
-# pragma pack()
+#    pragma pack()
 #else
-# pragma pack(pop)
+#    pragma pack(pop)
 #endif
 
 } // namespace sp

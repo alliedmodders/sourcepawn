@@ -21,5 +21,5 @@
 
 #include "amx.h"
 
-cell get_utf8_char(const unsigned char *string,const unsigned char **endptr);
-void skip_utf8_bom(void *fp);
+cell get_utf8_char(const unsigned char* string, const unsigned char** endptr);
+void skip_utf8_bom(void* fp);

@@ -28,58 +28,49 @@
 #include <amtl/am-string.h>
 #include "sc.h"
 
-enum class ErrorType {
-  Suppressed,
-  Warning,
-  Error,
-  Fatal
-};
+enum class ErrorType { Suppressed, Warning, Error, Fatal };
 
-struct ErrorReport
-{
-  static ErrorReport infer_va(int number, va_list ap);
-  static ErrorReport create_va(int number,
-                               int fileno,
-                               int lineno,
-                               va_list ap);
+struct ErrorReport {
+    static ErrorReport infer_va(int number, va_list ap);
+    static ErrorReport create_va(int number, int fileno, int lineno, va_list ap);
 
-  int number;
-  int fileno;
-  int lineno;
-  const char* filename;
-  ke::AString message;
-  ErrorType type;
+    int number;
+    int fileno;
+    int lineno;
+    const char* filename;
+    ke::AString message;
+    ErrorType type;
 };
 
 struct token_pos_t;
 
 enum FatalError {
-  FIRST_FATAL_ERROR = 183,
+    FIRST_FATAL_ERROR = 183,
 
-  FATAL_ERROR_READ  = FIRST_FATAL_ERROR,
-  FATAL_ERROR_WRITE,
-  FATAL_ERROR_ALLOC_OVERFLOW,
-  FATAL_ERROR_OOM,
-  FATAL_ERROR_INVALID_INSN,
-  FATAL_ERROR_INT_OVERFLOW,
-  FATAL_ERROR_SCRIPT_OVERFLOW,
-  FATAL_ERROR_OVERWHELMED_BY_BAD,
-  FATAL_ERROR_NO_CODEPAGE,
-  FATAL_ERROR_INVALID_PATH,
-  FATAL_ERROR_ASSERTION_FAILED,
-  FATAL_ERROR_USER_ERROR,
-  FATAL_ERROR_NO_GENERATED_CODE,
-  FATAL_ERROR_FUNCENUM,
+    FATAL_ERROR_READ = FIRST_FATAL_ERROR,
+    FATAL_ERROR_WRITE,
+    FATAL_ERROR_ALLOC_OVERFLOW,
+    FATAL_ERROR_OOM,
+    FATAL_ERROR_INVALID_INSN,
+    FATAL_ERROR_INT_OVERFLOW,
+    FATAL_ERROR_SCRIPT_OVERFLOW,
+    FATAL_ERROR_OVERWHELMED_BY_BAD,
+    FATAL_ERROR_NO_CODEPAGE,
+    FATAL_ERROR_INVALID_PATH,
+    FATAL_ERROR_ASSERTION_FAILED,
+    FATAL_ERROR_USER_ERROR,
+    FATAL_ERROR_NO_GENERATED_CODE,
+    FATAL_ERROR_FUNCENUM,
 
-  FATAL_ERRORS_TOTAL
+    FATAL_ERRORS_TOTAL
 };
 
-int error(int number,...);
+int error(int number, ...);
 int error(symbol* sym, int number, ...);
 int error(const token_pos_t& where, int number, ...);
-void errorset(int code,int line);
+void errorset(int code, int line);
 void report_error(ErrorReport* report);
 
-int pc_enablewarning(int number,int enable);
+int pc_enablewarning(int number, int enable);
 
 #endif // am_sourcepawn_compiler_sc5_h

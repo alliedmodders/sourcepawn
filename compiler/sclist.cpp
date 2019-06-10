@@ -26,361 +26,384 @@
  *
  *  Version: $Id$
  */
+#include "sclist.h"
+#include <amtl/am-hashmap.h>
+#include <amtl/am-string.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
+#include "errors.h"
+#include "lstring.h"
 #include "sc.h"
 #include "scvars.h"
-#include "lstring.h"
-#include "errors.h"
-#include "sclist.h"
 #include "sp_symhash.h"
-#include <amtl/am-hashmap.h>
-#include <amtl/am-string.h>
 
 #if defined FORTIFY
-  #include <alloc/fortify.h>
+#    include <alloc/fortify.h>
 #endif
 
 static bool sAliasTableInitialized;
 static ke::HashMap<sp::CharsAndLength, ke::AString, KeywordTablePolicy> sAliases;
 
 struct MacroTablePolicy {
-  static bool matches(const ke::AString& a, const ke::AString& b) {
-    return a == b;
-  }
-  static bool matches(const sp::CharsAndLength& a, const ke::AString& b) {
-    if (a.length() != b.length())
-      return false;
-    return strncmp(a.str(), b.chars(), a.length()) == 0;
-  }
-  static uint32_t hash(const ke::AString& key) {
-    return ke::HashCharSequence(key.chars(), key.length());
-  }
-  static uint32_t hash(const sp::CharsAndLength& key) {
-    return ke::HashCharSequence(key.str(), key.length());
-  }
+    static bool matches(const ke::AString& a, const ke::AString& b) {
+        return a == b;
+    }
+    static bool matches(const sp::CharsAndLength& a, const ke::AString& b) {
+        if (a.length() != b.length())
+            return false;
+        return strncmp(a.str(), b.chars(), a.length()) == 0;
+    }
+    static uint32_t hash(const ke::AString& key) {
+        return ke::HashCharSequence(key.chars(), key.length());
+    }
+    static uint32_t hash(const sp::CharsAndLength& key) {
+        return ke::HashCharSequence(key.str(), key.length());
+    }
 };
 
 struct MacroEntry {
-  ke::AString first;
-  ke::AString second;
-  ke::AString documentation;
-  int flags;
+    ke::AString first;
+    ke::AString second;
+    ke::AString documentation;
+    int flags;
 };
 static bool sMacroTableInitialized;
 static ke::HashMap<ke::AString, MacroEntry, MacroTablePolicy> sMacros;
 
 /* ----- string list functions ----------------------------------- */
-static stringlist *insert_string(stringlist *root,const char *string)
+static stringlist*
+insert_string(stringlist* root, const char* string)
 {
-  stringlist *cur;
+    stringlist* cur;
 
-  assert(string!=NULL);
-  if ((cur=(stringlist*)malloc(sizeof(stringlist)))==NULL)
-    error(103);       /* insufficient memory (fatal error) */
-  if ((cur->line=strdup(string))==NULL)
-    error(103);       /* insufficient memory (fatal error) */
-  cur->next=NULL;
-  if (root->tail)
-    root->tail->next=cur;
-  else
-    root->next=cur;
-  root->tail=cur;
-  return cur;
+    assert(string != NULL);
+    if ((cur = (stringlist*)malloc(sizeof(stringlist))) == NULL)
+        error(103); /* insufficient memory (fatal error) */
+    if ((cur->line = strdup(string)) == NULL)
+        error(103); /* insufficient memory (fatal error) */
+    cur->next = NULL;
+    if (root->tail)
+        root->tail->next = cur;
+    else
+        root->next = cur;
+    root->tail = cur;
+    return cur;
 }
 
-static char *get_string(stringlist *root,int index)
+static char*
+get_string(stringlist* root, int index)
 {
-  stringlist *cur;
+    stringlist* cur;
 
-  assert(root!=NULL);
-  cur=root->next;
-  while (cur!=NULL && index-->0)
-    cur=cur->next;
-  if (cur!=NULL) {
-    assert(cur->line!=NULL);
-    return cur->line;
-  } 
-  return NULL;
+    assert(root != NULL);
+    cur = root->next;
+    while (cur != NULL && index-- > 0)
+        cur = cur->next;
+    if (cur != NULL) {
+        assert(cur->line != NULL);
+        return cur->line;
+    }
+    return NULL;
 }
 
-void delete_stringtable(stringlist *root)
+void
+delete_stringtable(stringlist* root)
 {
-  stringlist *cur,*next;
+    stringlist *cur, *next;
 
-  assert(root!=NULL);
-  cur=root->next;
-  while (cur!=NULL) {
-    next=cur->next;
-    assert(cur->line!=NULL);
-    free(cur->line);
-    free(cur);
-    cur=next;
-  } 
-  memset(root,0,sizeof(stringlist));
+    assert(root != NULL);
+    cur = root->next;
+    while (cur != NULL) {
+        next = cur->next;
+        assert(cur->line != NULL);
+        free(cur->line);
+        free(cur);
+        cur = next;
+    }
+    memset(root, 0, sizeof(stringlist));
 }
 
-void insert_alias(const char *name, const char *alias)
+void
+insert_alias(const char* name, const char* alias)
 {
-  if (!sAliasTableInitialized) {
-    sAliases.init(128);
-    sAliasTableInitialized = true;
-  }
+    if (!sAliasTableInitialized) {
+        sAliases.init(128);
+        sAliasTableInitialized = true;
+    }
 
-  sp::CharsAndLength key(name, strlen(name));
-  auto p = sAliases.findForAdd(key);
-  if (p.found())
-    p->value = alias;
-  else
-    sAliases.add(p, key, alias);
+    sp::CharsAndLength key(name, strlen(name));
+    auto p = sAliases.findForAdd(key);
+    if (p.found())
+        p->value = alias;
+    else
+        sAliases.add(p, key, alias);
 }
 
-bool lookup_alias(char *target,const char *name)
+bool
+lookup_alias(char* target, const char* name)
 {
-  if (!sAliasTableInitialized)
-    return false;
+    if (!sAliasTableInitialized)
+        return false;
 
-  sp::CharsAndLength key(name, strlen(name));
-  auto p = sAliases.find(key);
-  if (!p.found())
-    return false;
-  ke::SafeStrcpy(target, sNAMEMAX + 1, p->value.chars());
-  return true;
+    sp::CharsAndLength key(name, strlen(name));
+    auto p = sAliases.find(key);
+    if (!p.found())
+        return false;
+    ke::SafeStrcpy(target, sNAMEMAX + 1, p->value.chars());
+    return true;
 }
 
-void delete_aliastable(void)
+void
+delete_aliastable(void)
 {
-  if (sAliasTableInitialized)
-    sAliases.clear();
+    if (sAliasTableInitialized)
+        sAliases.clear();
 }
 
 /* ----- include paths list -------------------------------------- */
-static stringlist includepaths;  /* directory list for include files */
+static stringlist includepaths; /* directory list for include files */
 
-stringlist *insert_path(char *path)
+stringlist*
+insert_path(char* path)
 {
-  return insert_string(&includepaths,path);
+    return insert_string(&includepaths, path);
 }
 
-char *get_path(int index)
+char*
+get_path(int index)
 {
-  return get_string(&includepaths,index);
+    return get_string(&includepaths, index);
 }
 
-void delete_pathtable(void)
+void
+delete_pathtable(void)
 {
-  delete_stringtable(&includepaths);
-  assert(includepaths.next==NULL);
+    delete_stringtable(&includepaths);
+    assert(includepaths.next == NULL);
 }
 
 /* ----- substitutions (macros) -------------------------------------- */
 
-void insert_subst(const char *pattern, size_t pattern_length, const char *substitution)
+void
+insert_subst(const char* pattern, size_t pattern_length, const char* substitution)
 {
-  if (!sMacroTableInitialized) {
-    sMacros.init(1024);
-    sMacroTableInitialized = true;
-  }
+    if (!sMacroTableInitialized) {
+        sMacros.init(1024);
+        sMacroTableInitialized = true;
+    }
 
-  MacroEntry macro;
-  macro.first = pattern;
-  macro.second = substitution;
-  macro.flags = 0;
-  if (pc_deprecate.length() > 0) {
-    macro.flags |= flgDEPRECATED;
-    if (sc_status == statWRITE)
-      macro.documentation = ke::Move(pc_deprecate);
+    MacroEntry macro;
+    macro.first = pattern;
+    macro.second = substitution;
+    macro.flags = 0;
+    if (pc_deprecate.length() > 0) {
+        macro.flags |= flgDEPRECATED;
+        if (sc_status == statWRITE)
+            macro.documentation = ke::Move(pc_deprecate);
+        else
+            pc_deprecate = "";
+    }
+
+    ke::AString key(pattern, pattern_length);
+    auto p = sMacros.findForAdd(key);
+    if (p.found())
+        p->value = macro;
     else
-      pc_deprecate = "";
-  }
-
-  ke::AString key(pattern, pattern_length);
-  auto p = sMacros.findForAdd(key);
-  if (p.found())
-    p->value = macro;
-  else
-    sMacros.add(p, ke::Move(key), macro);
+        sMacros.add(p, ke::Move(key), macro);
 }
 
-bool find_subst(const char *name, size_t length, macro_t* macro)
+bool
+find_subst(const char* name, size_t length, macro_t* macro)
 {
-  sp::CharsAndLength key(name, length);
-  auto p = sMacros.find(key);
-  if (!p.found())
-    return false;
+    sp::CharsAndLength key(name, length);
+    auto p = sMacros.find(key);
+    if (!p.found())
+        return false;
 
-  MacroEntry& entry = p->value;
-  if (entry.flags & flgDEPRECATED)
-    error(234, p->key.chars(), entry.documentation.chars());
+    MacroEntry& entry = p->value;
+    if (entry.flags & flgDEPRECATED)
+        error(234, p->key.chars(), entry.documentation.chars());
 
-  if (macro) {
-    macro->first = entry.first.chars();
-    macro->second = entry.second.chars();
-  }
-  return true;
+    if (macro) {
+        macro->first = entry.first.chars();
+        macro->second = entry.second.chars();
+    }
+    return true;
 }
 
-bool delete_subst(const char* name, size_t length)
+bool
+delete_subst(const char* name, size_t length)
 {
-  sp::CharsAndLength key(name, length);
-  auto p = sMacros.find(key);
-  if (!p.found())
-    return false;
+    sp::CharsAndLength key(name, length);
+    auto p = sMacros.find(key);
+    if (!p.found())
+        return false;
 
-  sMacros.remove(p);
-  return true;
+    sMacros.remove(p);
+    return true;
 }
 
-void delete_substtable(void)
+void
+delete_substtable(void)
 {
-  sMacros.clear();
+    sMacros.clear();
 }
-
 
 /* ----- input file list (explicit files) ------------------------ */
 static stringlist sourcefiles;
 
-stringlist *insert_sourcefile(char *string)
+stringlist*
+insert_sourcefile(char* string)
 {
-  return insert_string(&sourcefiles,string);
+    return insert_string(&sourcefiles, string);
 }
 
-char *get_sourcefile(int index)
+char*
+get_sourcefile(int index)
 {
-  return get_string(&sourcefiles,index);
+    return get_string(&sourcefiles, index);
 }
 
-void delete_sourcefiletable(void)
+void
+delete_sourcefiletable(void)
 {
-  delete_stringtable(&sourcefiles);
-  assert(sourcefiles.next==NULL);
+    delete_stringtable(&sourcefiles);
+    assert(sourcefiles.next == NULL);
 }
-
 
 /* ----- parsed file list (explicit + included files) ------------ */
 static stringlist inputfiles;
 
-stringlist *insert_inputfile(char *string)
+stringlist*
+insert_inputfile(char* string)
 {
-  if (sc_status!=statFIRST)
-    return insert_string(&inputfiles,string);
-  return NULL;
+    if (sc_status != statFIRST)
+        return insert_string(&inputfiles, string);
+    return NULL;
 }
 
-char *get_inputfile(int index)
+char*
+get_inputfile(int index)
 {
-  return get_string(&inputfiles,index);
+    return get_string(&inputfiles, index);
 }
 
-void delete_inputfiletable(void)
+void
+delete_inputfiletable(void)
 {
-  delete_stringtable(&inputfiles);
-  assert(inputfiles.next==NULL);
+    delete_stringtable(&inputfiles);
+    assert(inputfiles.next == NULL);
 }
-
-
 
 /* ----- autolisting --------------------------------------------- */
 static stringlist autolist;
 
-stringlist *insert_autolist(const char *string)
+stringlist*
+insert_autolist(const char* string)
 {
-  return insert_string(&autolist,string);
+    return insert_string(&autolist, string);
 }
 
-char *get_autolist(int index)
+char*
+get_autolist(int index)
 {
-  return get_string(&autolist,index);
+    return get_string(&autolist, index);
 }
 
-void delete_autolisttable(void)
+void
+delete_autolisttable(void)
 {
-  delete_stringtable(&autolist);
-  assert(autolist.next==NULL);
+    delete_stringtable(&autolist);
+    assert(autolist.next == NULL);
 }
-
 
 /* ----- debug information --------------------------------------- */
 
-#define PRIdC  "d"
-#define PRIxC  "x"
+#define PRIdC "d"
+#define PRIxC "x"
 
 static stringlist dbgstrings;
 
-stringlist *insert_dbgfile(const char *filename)
+stringlist*
+insert_dbgfile(const char* filename)
 {
-
-  if (sc_status==statWRITE && (sc_debug & sSYMBOLIC)!=0) {
-    char string[_MAX_PATH+40];
-    assert(filename!=NULL);
-    assert(strlen(filename)+40<sizeof string);
-    sprintf(string,"F:%" PRIxC " %s",code_idx,filename);
-    return insert_string(&dbgstrings,string);
-  } 
-  return NULL;
-}
-
-stringlist *insert_dbgline(int linenr)
-{
-  if (sc_status==statWRITE && (sc_debug & sSYMBOLIC)!=0) {
-    char string[40];
-    if (linenr>0)
-      linenr--;         /* line numbers are zero-based in the debug information */
-    sprintf(string,"L:%" PRIxC " %x",code_idx,linenr);
-    return insert_string(&dbgstrings,string);
-  } 
-  return NULL;
-}
-
-stringlist *insert_dbgsymbol(symbol *sym)
-{
-  if (sc_status==statWRITE && (sc_debug & sSYMBOLIC)!=0) {
-    char string[2*sNAMEMAX+128];
-    char symname[2*sNAMEMAX+16];
-
-    funcdisplayname(symname,sym->name());
-    /* address tag:name codestart codeend ident vclass [tag:dim ...] */
-    assert(sym->ident != iFUNCTN);
-    sprintf(string,"S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x",
-            sym->addr(),sym->tag,symname,sym->codeaddr,code_idx,sym->ident,sym->vclass,sym->usage);
-    if (sym->ident==iARRAY || sym->ident==iREFARRAY) {
-      #if !defined NDEBUG
-        int count=sym->dim.array.level;
-      #endif
-      symbol *sub;
-      strcat(string," [ ");
-      for (sub=sym; sub!=NULL; sub=sub->array_child()) {
-        assert(sub->dim.array.level==count--);
-        sprintf(string+strlen(string),"%x:%x ",sub->x.tags.index,sub->dim.array.length);
-      } 
-      strcat(string,"]");
-    } 
-
-    if (curfunc) {
-      if (!curfunc->function()->dbgstrs)
-        curfunc->function()->dbgstrs = (stringlist*)calloc(1, sizeof(stringlist));
-      return insert_string(curfunc->function()->dbgstrs, string);
+    if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
+        char string[_MAX_PATH + 40];
+        assert(filename != NULL);
+        assert(strlen(filename) + 40 < sizeof string);
+        sprintf(string, "F:%" PRIxC " %s", code_idx, filename);
+        return insert_string(&dbgstrings, string);
     }
-    return insert_string(&dbgstrings, string);
-  } 
-  return NULL;
+    return NULL;
 }
 
-stringlist *get_dbgstrings()
+stringlist*
+insert_dbgline(int linenr)
 {
-  return &dbgstrings;
+    if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
+        char string[40];
+        if (linenr > 0)
+            linenr--; /* line numbers are zero-based in the debug information */
+        sprintf(string, "L:%" PRIxC " %x", code_idx, linenr);
+        return insert_string(&dbgstrings, string);
+    }
+    return NULL;
 }
 
-char *get_dbgstring(int index)
+stringlist*
+insert_dbgsymbol(symbol* sym)
 {
-  return get_string(&dbgstrings,index);
+    if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
+        char string[2 * sNAMEMAX + 128];
+        char symname[2 * sNAMEMAX + 16];
+
+        funcdisplayname(symname, sym->name());
+        /* address tag:name codestart codeend ident vclass [tag:dim ...] */
+        assert(sym->ident != iFUNCTN);
+        sprintf(string, "S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x", sym->addr(), sym->tag,
+                symname, sym->codeaddr, code_idx, sym->ident, sym->vclass, sym->usage);
+        if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
+#if !defined NDEBUG
+            int count = sym->dim.array.level;
+#endif
+            symbol* sub;
+            strcat(string, " [ ");
+            for (sub = sym; sub != NULL; sub = sub->array_child()) {
+                assert(sub->dim.array.level == count--);
+                sprintf(string + strlen(string), "%x:%x ", sub->x.tags.index,
+                        sub->dim.array.length);
+            }
+            strcat(string, "]");
+        }
+
+        if (curfunc) {
+            if (!curfunc->function()->dbgstrs)
+                curfunc->function()->dbgstrs = (stringlist*)calloc(1, sizeof(stringlist));
+            return insert_string(curfunc->function()->dbgstrs, string);
+        }
+        return insert_string(&dbgstrings, string);
+    }
+    return NULL;
 }
 
-void delete_dbgstringtable(void)
+stringlist*
+get_dbgstrings()
 {
-  delete_stringtable(&dbgstrings);
-  assert(dbgstrings.next==NULL);
+    return &dbgstrings;
+}
+
+char*
+get_dbgstring(int index)
+{
+    return get_string(&dbgstrings, index);
+}
+
+void
+delete_dbgstringtable(void)
+{
+    delete_stringtable(&dbgstrings);
+    assert(dbgstrings.next == NULL);
 }

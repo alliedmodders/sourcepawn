@@ -22,45 +22,45 @@
 #include "sc.h"
 
 enum {
-  sOPTIMIZE_NONE,               /* no optimization */
-  sOPTIMIZE_NOMACRO,            /* no macro instructions */
-  sOPTIMIZE_DEFAULT,            /* full optimization */
-  /* ----- */
-  sOPTIMIZE_NUMBER
+    sOPTIMIZE_NONE,    /* no optimization */
+    sOPTIMIZE_NOMACRO, /* no macro instructions */
+    sOPTIMIZE_DEFAULT, /* full optimization */
+    /* ----- */
+    sOPTIMIZE_NUMBER
 };
 
 typedef enum s_regid {
-  sPRI,                         /* indicates the primary register */
-  sALT,                         /* indicates the secundary register */
+    sPRI, /* indicates the primary register */
+    sALT, /* indicates the secundary register */
 } regid;
 
 typedef enum s_optmark {
-  sEXPR,                        /* end of expression (for expressions that form a statement) */
-  sPARM,                        /* end of parameter (in a function parameter list) */
-  sLDECL,                       /* start of local declaration (variable) */
+    sEXPR,  /* end of expression (for expressions that form a statement) */
+    sPARM,  /* end of parameter (in a function parameter list) */
+    sLDECL, /* start of local declaration (variable) */
 } optmark;
 
-void writeleader(symbol *root);
+void writeleader(symbol* root);
 void writetrailer(void);
 void begcseg(void);
 void begdseg(void);
 void setline(int chkbounds);
-void setfiledirect(char *name);
+void setfiledirect(char* name);
 void setlinedirect(int line);
 void setlabel(int index);
-void markexpr(optmark type,const char *name,cell offset);
-void startfunc(const char *fname);
+void markexpr(optmark type, const char* name, cell offset);
+void startfunc(const char* fname);
 void endfunc(void);
-void rvalue(value *lval);
-void rvalue(svalue *sval);
-void address(symbol *ptr,regid reg);
-void store(value *lval);
-void loadreg(cell address,regid reg);
-void storereg(cell address,regid reg);
+void rvalue(value* lval);
+void rvalue(svalue* sval);
+void address(symbol* ptr, regid reg);
+void store(value* lval);
+void loadreg(cell address, regid reg);
+void storereg(cell address, regid reg);
 void memcopy(cell size);
-void copyarray(symbol *sym,cell size);
-void fillarray(symbol *sym,cell size,cell value);
-void ldconst(cell val,regid reg);
+void copyarray(symbol* sym, cell size);
+void fillarray(symbol* sym, cell size, cell value);
+void ldconst(cell val, regid reg);
 void moveto1(void);
 void move_alt(void);
 void pushreg(regid reg);
@@ -69,8 +69,8 @@ void popreg(regid reg);
 void genarray(int dims, int _autozero);
 void swap1(void);
 void ffswitch(int label);
-void ffcase(cell value,char *labelname,int newtable);
-void ffcall(symbol *sym,const char *label,int numargs);
+void ffcase(cell value, char* labelname, int newtable);
+void ffcall(symbol* sym, const char* label, int numargs);
 void ffret();
 void ffabort(int reason);
 void ffbounds(cell size);
@@ -88,12 +88,12 @@ void char2addr(void);
 void addconst(cell value);
 void setheap_save(cell value);
 void stradjust(regid reg);
-void invoke_getter(methodmap_method_t *method);
-void invoke_setter(methodmap_method_t *method, int save);
+void invoke_getter(methodmap_method_t* method);
+void invoke_setter(methodmap_method_t* method, int save);
 void inc_pri();
 void dec_pri();
 void load_hidden_arg();
-void load_glbfn(symbol *sym);
+void load_glbfn(symbol* sym);
 
 /*  Code generation functions for arithmetic operators.
  *
@@ -118,21 +118,21 @@ void ob_eq(void);   /* equality */
 void ob_ne(void);   /* inequality */
 void relop_prefix(void);
 void relop_suffix(void);
-void os_le(void);   /* less or equal (signed) */
-void os_ge(void);   /* greater or equal (signed) */
-void os_lt(void);   /* less (signed) */
-void os_gt(void);   /* greater (signed) */
+void os_le(void); /* less or equal (signed) */
+void os_ge(void); /* greater or equal (signed) */
+void os_lt(void); /* less (signed) */
+void os_gt(void); /* greater (signed) */
 
 void lneg(void);
 void neg(void);
 void invert(void);
 void nooperation(void);
-void inc(value *lval);
-void dec(value *lval);
+void inc(value* lval);
+void dec(value* lval);
 void jmp_ne0(int number);
 void jmp_eq0(int number);
-void outval(cell val,int newline);
+void outval(cell val, int newline);
 
 /* macros for code generation */
-#define opcodes(n)      ((n)*sizeof(cell))      /* opcode size */
-#define opargs(n)       ((n)*sizeof(cell))      /* size of typical argument */
+#define opcodes(n) ((n) * sizeof(cell)) /* opcode size */
+#define opargs(n) ((n) * sizeof(cell))  /* size of typical argument */

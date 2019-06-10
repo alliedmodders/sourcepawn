@@ -42,10 +42,9 @@
 /* :TODO: rename this to sp_vm_linkage.h */
 
 #if defined WIN32
-#define EXPORT_LINK		extern "C" __declspec(dllexport)
+#    define EXPORT_LINK extern "C" __declspec(dllexport)
 #elif defined __GNUC__
-#define EXPORT_LINK		extern "C" __attribute__((visibility("default")))
+#    define EXPORT_LINK extern "C" __attribute__((visibility("default")))
 #endif
 
 #endif //_INCLUDE_SOURCEPAWN_VM_BASE_H_
-
