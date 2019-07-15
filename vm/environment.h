@@ -222,7 +222,7 @@ class EnterProfileScope
   }
 
  private:
-  bool scope_entered_;
+  bool scope_entered_ = false;
 };
 
 class ErrorReport : public SourcePawn::IErrorReport
