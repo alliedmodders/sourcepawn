@@ -12,8 +12,6 @@ def configure_like_shell(name, arch):
   ]
   if prog.compiler.like('gcc'):
     prog.compiler.linkflags += ['-lstdc++']
-  if builder.target.platform == 'linux':
-    prog.compiler.postlink += ['-lpthread', '-lrt']
   return prog
 
 Includes = [
@@ -112,9 +110,6 @@ dll.compiler.linkflags[0:0] = [
 dll.sources += [
   'dll_exports.cpp'
 ]
-
-if builder.target.platform == 'linux':
-  dll.compiler.postlink += ['-lpthread', '-lrt']
 
 libsourcepawn = builder.Add(dll)
 

@@ -26,25 +26,26 @@ def Normalize(path):
 def SetArchFlags(compiler, arch, platform):
   if compiler.like('gcc'):
     if arch == 'x86':
-      compiler.cflags += ['-msse']
+      if not compiler.like('emscripten'):
+        compiler.cflags += ['-msse']
     else:
       compiler.cflags += ['-fPIC']
 
-    if arch == 'x64':
-      gccarch = '-m64'
-      msvcarch = '/MACHINE:X64'
-    else:
-      gccarch = '-m32'
-      msvcarch = '/MACHINE:X86'
+  if arch == 'x64':
+    gccarch = '-m64'
+    msvcarch = '/MACHINE:X64'
+  else:
+    gccarch = '-m32'
+    msvcarch = '/MACHINE:X86'
 
-    if compiler.like('msvc'):
-      if msvcarch not in compiler.linkflags:
-        compiler.linkflags += [msvcarch]
-    else:
-      if gccarch not in compiler.cflags:
-        compiler.cflags += [gccarch]
-      if gccarch not in compiler.linkflags:
-        compiler.linkflags += [gccarch]
+  if compiler.like('msvc'):
+    if msvcarch not in compiler.linkflags:
+      compiler.linkflags += [msvcarch]
+  else:
+    if gccarch not in compiler.cflags:
+      compiler.cflags += [gccarch]
+    if gccarch not in compiler.linkflags:
+      compiler.linkflags += [gccarch]
 
 def AppendArchSuffix(binary, name, arch):
   if arch == 'x64':

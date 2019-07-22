@@ -20,6 +20,15 @@
 
 using namespace sp;
 
+#ifdef __EMSCRIPTEN__
+// When using emscripten's pthread stubs, prctl is missing and causes a link error.
+extern "C" int __attribute__((weak)) prctl(int, ...)
+{
+  errno = EINVAL;
+  return -1;
+}
+#endif
+
 WatchdogTimer::WatchdogTimer(Environment* env)
  : env_(env),
    terminate_(false),
