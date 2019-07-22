@@ -35,10 +35,6 @@ class MacroAssembler : public Assembler
   void enterFrame(JitFrameType type, uint32_t function_id);
   void leaveFrame();
 
-  // Inline exit frames are not entered via a call; instead they simulate a
-  // call by pushing a return address.
-  void enterInlineExitFrame(ExitFrameType type, uintptr_t payload, CodeLabel* return_address);
-
   void enterExitFrame(ExitFrameType type, uintptr_t payload);
   void leaveExitFrame();
 

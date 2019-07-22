@@ -40,4 +40,10 @@ ReportOutOfBoundsError(cell_t index, cell_t bounds)
   }
 }
 
+void
+ReportUnboundNative()
+{
+  Environment::get()->ReportError(SP_ERROR_INVALID_NATIVE);
+}
+
 } // namespace sp

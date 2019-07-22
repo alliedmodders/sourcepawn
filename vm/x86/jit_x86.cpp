@@ -1344,13 +1344,7 @@ void
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 {
   CodeLabel return_address;
-  __ enterInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
-
-  // Align the stack.
-  static const uint32_t stack_use = 4 * sizeof(intptr_t);
-  static const uint32_t misalignment = Align(stack_use, sizeof(intptr_t)) - stack_use;
-  if (misalignment)
-    __ addl(esp, misalignment);
+  __ pushInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
 
   // Save registers.
   __ push(edx);
@@ -1361,7 +1355,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   if (!immutable) {
     __ movl(edx, Operand(ExternalAddress(&native->legacy_fn)));
     __ testl(edx, edx);
-    jumpOnError(zero, SP_ERROR_INVALID_NATIVE);
+    __ j(zero, &unbound_native_error_);
   }
 
   // Save the old heap pointer.
@@ -1397,8 +1391,8 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   // Restore SP.
   __ addl(stk, dat);
 
-  // Note: no ret, the frame is inline. We add 4 to esp isntead.
-  __ leaveInlineExitFrame();
+  // Remove the inline frame, + our four arguments.
+  __ popInlineExitFrame(4);
 
   // Check for errors. Note we jump directly to the return stub since the
   // error has already been reported.
@@ -1556,14 +1550,14 @@ Compiler::emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path)
 {
   CodeLabel return_address;
   __ alignStack();
-  __ enterInlineExitFrame(ExitFrameType::Helper, 0, &return_address);
+  __ pushInlineExitFrame(ExitFrameType::Helper, 0, &return_address);
   __ subl(esp, 8);
   __ push(path->bounds);
   __ push(eax);
   __ callWithABI(ExternalAddress((void*)ReportOutOfBoundsError));
   __ bind(&return_address);
   emitCipMapping(path->cip);
-  __ leaveInlineExitFrame();
+  __ popInlineExitFrame(4);
   __ jmp(&return_reported_error_);
 }
 
@@ -1585,6 +1579,15 @@ Compiler::emitErrorHandlers()
     __ callWithABI(ExternalAddress((void*)InvokeReportError));
     __ leaveExitFrame();
     __ jmp(&return_to_invoke);
+  }
+
+  // The unbound native path re-uses the native exit frame so the stack trace
+  // looks as if the native was bound.
+  if (unbound_native_error_.used()) {
+    __ bind(&unbound_native_error_);
+    __ alignStack();
+    __ callWithABI(ExternalAddress((void*)ReportUnboundNative));
+    __ jmp(&return_reported_error_);
   }
 
   // The timeout uses a special stub.

@@ -130,6 +130,7 @@ class CompilerBase : public PcodeVisitor
   Label throw_error_code_[SP_MAX_ERROR_CODES];
   Label report_error_;
   Label return_reported_error_;
+  Label unbound_native_error_;
 
   // Debugging.
   Label debug_break_;
