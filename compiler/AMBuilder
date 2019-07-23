@@ -18,8 +18,6 @@ if compiler.like('gcc'):
     '-Wno-format',
   ]
   compiler.c_only_flags += ['-std=c99']
-  if builder.target.platform == 'linux':
-    compiler.postlink += ['-lm']
   compiler.postlink += ['-lstdc++']
 if compiler.family == 'clang':
   compiler.cxxflags += [

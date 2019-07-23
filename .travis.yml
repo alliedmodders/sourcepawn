@@ -1,12 +1,10 @@
 language: cpp
-sudo: false
-dist: trusty
+dist: xenial
 addons:
   apt:
     packages:
-      - g++-4.8
-      - g++-4.8-multilib
-      - clang-3.8
+      - gcc-multilib
+      - g++-multilib
       - libstdc++6
       - lib32stdc++6
       - libc6-dev
@@ -14,16 +12,13 @@ addons:
       - linux-libc-dev
       - linux-libc-dev:i386
 env:
-  global:
-    - EMSCRIPTEN_SDK_BRANCH=master
-    - EMSCRIPTEN_SDK_URI=https://github.com/urho3d/emscripten-sdk.git
   matrix:
-    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=optimize
-    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x64 AM_TYPE=optimize
+    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86 AM_TYPE=optimize
+    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x64 AM_TYPE=optimize
     - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=optimize
     - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=debug
-    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x86 AM_TYPE=debug
-    - AM_CC=clang-3.8 AM_CXX=clang++-3.8 AM_ARCH=x64 AM_TYPE=debug
+    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86 AM_TYPE=debug
+    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x64 AM_TYPE=debug
 install:
   - source ./tools/travis-download-compiler.sh
   - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/tools/checkout-deps.sh && cd $CHECKOUT_DIR

@@ -3,10 +3,15 @@
 set -e
 
 if [ "$AM_CC" == "emcc" ]; then
-  git clone --depth 1 --branch $EMSCRIPTEN_SDK_BRANCH $EMSCRIPTEN_SDK_URI $HOME/emscripten-sdk
-  $HOME/emscripten-sdk/emsdk activate --build=Release sdk-$EMSCRIPTEN_SDK_BRANCH-64bit
+  git clone --depth 1 https://github.com/emscripten-core/emsdk.git $HOME/emsdk
 
-  source $HOME/emscripten-sdk/emsdk_env.sh
+  $HOME/emsdk/emsdk install latest
+  $HOME/emsdk/emsdk activate latest
+
+  source $HOME/emsdk/emsdk_env.sh
+
+  # The SDK no longer sets this envvar, but ambuild expects it.
+  export EMSCRIPTEN=$HOME/emsdk/fastcomp/emscripten
 
   for compiler in $EMSCRIPTEN/{emcc,em++}; do
     touch -d "2017-01-01 00:00:00 +0800" $compiler
