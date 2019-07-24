@@ -60,16 +60,16 @@ class MacroAssembler : public Assembler
     leaveFrame();
   }
 
-  // Inline exit frames are not entered via a call; instead they simulate a
-  // call by pushing a return address.
-  void enterInlineExitFrame(ExitFrameType type, uintptr_t payload, CodeLabel* return_address) {
+  void pushInlineExitFrame(ExitFrameType type, uintptr_t payload, CodeLabel* return_address) {
     push(return_address);
-    enterExitFrame(type, payload);
+    push(ebp);
+    movl(Operand(ExternalAddress(Environment::get()->addressOfExit())), esp);
+    push(uint32_t(JitFrameType::Exit));
+    push(EncodeExitFrameId(type, payload));
   }
-  void leaveInlineExitFrame() {
-    // Note: no ret, the frame is inline. We add 4 to esp isntead.
-    leaveExitFrame();
-    addl(esp, 4);
+
+  void popInlineExitFrame(uint32_t extra_argc) {
+    addl(esp, (4 + extra_argc) * sizeof(uintptr_t));
   }
 
   void alignStack() {

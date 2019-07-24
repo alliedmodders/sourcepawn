@@ -36,17 +36,6 @@ MacroAssembler::leaveFrame()
 }
 
 void
-MacroAssembler::enterInlineExitFrame(ExitFrameType type, uintptr_t payload, CodeLabel* return_address)
-{
-  {
-    ReserveScratch scratch(this);
-    movq(scratch.reg(), return_address);
-    push(scratch.reg());
-  }
-  enterExitFrame(type, payload);
-}
-
-void
 MacroAssembler::enterExitFrame(ExitFrameType type, uintptr_t payload)
 {
   enterFrame(JitFrameType::Exit, EncodeExitFrameId(type, payload));

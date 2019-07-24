@@ -22,6 +22,7 @@
 namespace sp {
 
 void ReportOutOfBoundsError(cell_t index, cell_t bounds);
+void ReportUnboundNative();
 
 } // namespace sp
 
