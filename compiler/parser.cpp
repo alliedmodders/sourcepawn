@@ -1,4 +1,4 @@
-/* vim: set sts=2 ts=8 sw=2 tw=99 et: */
+/* vim: set sts=4 ts=8 sw=4 tw=99 et: */
 /*  Pawn compiler
  *
  *  Function and variable definition and declaration, statement parser.
@@ -6079,7 +6079,7 @@ doswitch(void) {
                         /* nothing */;
                     if (cse != NULL && cse->value == val)
                         error(40, val); /* duplicate "case" label */
-/* Since the label is stored as a string in the "constvalue", the
+        /* Since the label is stored as a string in the "constvalue", the
          * size of an identifier must be at least 8, as there are 8
          * hexadecimal digits in a 32-bit number.
          */
@@ -6149,8 +6149,14 @@ doswitch(void) {
 
     setlabel(lbl_exit);
     delete_consttable(&caselist); /* clear list of case labels */
-    if (all_cases_return && swdefault)
+    if (all_cases_return && swdefault) {
+        // This is the end of the function; insert a return just so lbl_exit
+        // doesn't point to something outside the function, which will trigger
+        // an error in the graph builder if it's the last function (since there
+        // are no more instructions to read).
+        ffret();
         return tRETURN;
+    }
     return tSWITCH;
 }
 
