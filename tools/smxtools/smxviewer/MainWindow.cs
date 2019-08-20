@@ -429,7 +429,6 @@ namespace smxviewer
                     switch (kind)
                     {
                         case V1Param.Constant:
-                        case V1Param.CaseTable:
                             buffer.Append(string.Format(" 0x{0:x}", value));
                             comment.Append(string.Format(" {0}", value));
                             break;
@@ -481,6 +480,20 @@ namespace smxviewer
                     detail_buffer_.Append(string.Format(" ;{1}", buffer, comment));
                 }
                 detail_buffer_.Append("\r\n");
+
+                if (insn.Info.Opcode == V1Opcode.CASETBL)
+                {
+                    for (var i = 2; i < insn.Params.Length; i += 2)
+                    {
+                        var defval = insn.Params[i];
+                        var label = insn.Params[i + 1];
+                        var case_addr = string.Format(addrfmt, insn.Address + (i + 1) * 4);
+                        var desc = string.Format("case {0:d} 0x{0:x}", defval, label);
+                        detail_buffer_.Append(case_addr);
+                        detail_buffer_.Append(desc);
+                        detail_buffer_.Append("\r\n");
+                    }
+                }
             }
 
             endDetailUpdate();

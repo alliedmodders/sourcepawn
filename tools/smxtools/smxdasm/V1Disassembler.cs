@@ -14,8 +14,7 @@ namespace smxdasm
         Jump,
         Function,
         Native,
-        Address,
-        CaseTable
+        Address
     }
 
     public class V1OpcodeInfo
@@ -57,7 +56,7 @@ namespace smxdasm
             Prep(V1Opcode.BOUNDS, V1Param.Constant);
             Prep(V1Opcode.BREAK);
             Prep(V1Opcode.CALL, V1Param.Function);
-            Prep(V1Opcode.CASETBL, V1Param.CaseTable);
+            Prep(V1Opcode.CASETBL, V1Param.Constant, V1Param.Address);
             Prep(V1Opcode.CONST, V1Param.Address, V1Param.Constant);
             Prep(V1Opcode.CONST_ALT, V1Param.Constant);
             Prep(V1Opcode.CONST_PRI, V1Param.Constant);
@@ -167,7 +166,7 @@ namespace smxdasm
             Prep(V1Opcode.SUB_ALT);
             Prep(V1Opcode.SWAP_ALT);
             Prep(V1Opcode.SWAP_PRI);
-            Prep(V1Opcode.SWITCH, V1Param.CaseTable);
+            Prep(V1Opcode.SWITCH, V1Param.Address);
             Prep(V1Opcode.SYSREQ_C, V1Param.Native);
             Prep(V1Opcode.SYSREQ_N, V1Param.Native, V1Param.Constant);
             Prep(V1Opcode.TRACKER_POP_SETHEAP);
