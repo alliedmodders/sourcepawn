@@ -1,8 +1,11 @@
 // warnings_are_errors: true
-int main() {
-  funct(2);
-  funcu(1);
+#include <shell>
+
+public int main() {
+  printnum(funct(2));
+  printnum(funcu(1));
 }
+
 int funct(int input) {
   switch (input) {
     case 0:
@@ -13,6 +16,7 @@ int funct(int input) {
       return 3;
   }
 }
+
 int funcu(int input) {
   switch (input) {
     default:
