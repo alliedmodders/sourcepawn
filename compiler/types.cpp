@@ -26,6 +26,7 @@
 #include "types.h"
 #include <ctype.h>
 #include "sc.h"
+#include "sctracker.h"
 #include "scvars.h"
 
 using namespace ke;
@@ -68,6 +69,32 @@ Type::isDeclaredButNotDefined() const
         return true;
     }
     return false;
+}
+
+const char*
+Type::kindName() const
+{
+  switch (kind_) {
+    case TypeKind::EnumStruct:
+      return "enum struct";
+    case TypeKind::Struct:
+      return "struct";
+    case TypeKind::Methodmap:
+      return "methodmap";
+    case TypeKind::Enum:
+      return "enum";
+    case TypeKind::Object:
+      return "object";
+    case TypeKind::Function:
+      if (funcenum_ptr_) {
+        if (funcenum_ptr_->entries.length() > 1)
+          return "typeset";
+        return "typedef";
+      }
+      return "function";
+    default:
+      return "type";
+  }
 }
 
 TypeDictionary::TypeDictionary() {}

@@ -118,7 +118,7 @@ static const char* errmsg[] = {
     /*091*/ "ambiguous constant; tag override is required (symbol \"%s\")\n",
     /*092*/ "number of arguments does not match definition\n",
     /*093*/ "expected tag name identifier\n",
-    /*094*/ "function enumeration requires unique tag\n",
+    /*094*/ "unused94\n",
     /*095*/ "type \"%s\" cannot be applied as a tag\n",
     /*096*/ "could not find member \"%s\" in struct \"%s\"\n",
     /*097*/ "symbol \"%s\" does not have a matching type\n",

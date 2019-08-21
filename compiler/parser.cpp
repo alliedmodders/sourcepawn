@@ -3895,9 +3895,8 @@ dotypedef() {
         return;
 
     Type* prev_type = gTypes.find(ident.name);
-    if (prev_type && prev_type->isDefinedType() && !prev_type->isFunction()) {
-        error(94);
-    }
+    if (prev_type && prev_type->isDefinedType())
+        error(110, ident.name, prev_type->kindName());
 
     needtoken('=');
 
@@ -3916,9 +3915,8 @@ dotypeset() {
         return;
 
     Type* prev_type = gTypes.find(ident.name);
-    if (prev_type && prev_type->isDefinedType() && !prev_type->isFunction()) {
-        error(94);
-    }
+    if (prev_type && prev_type->isDefinedType())
+        error(110, ident.name, prev_type->kindName());
 
     funcenum_t* def = funcenums_add(ident.name);
     needtoken('{');
