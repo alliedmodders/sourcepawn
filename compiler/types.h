@@ -91,6 +91,7 @@ class Type
     TypeKind kind() const {
         return kind_;
     }
+    const char* kindName() const;
     cell smx_export_value() const {
         return value_ | int(kind_) | fixed_;
     }

@@ -1,0 +1,1 @@
+(2) : error 110: Bar has already been defined (previously seen as typedef)
