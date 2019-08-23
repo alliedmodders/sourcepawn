@@ -5132,6 +5132,13 @@ reduce_referrers(symbol* root) {
         for (symbol* sym : dead->refers_to()) {
             sym->drop_reference_from(dead);
             if (is_symbol_unused(sym) && !(sym->flags & flgQUEUED)) {
+                // During compilation, anything marked as stock will be omitted from
+                // the final binary *without warning*. If a stock calls a non-stock
+                // function, we want to avoid warnings on that function as well, so
+                // we propagate the stock bit.
+                if (dead->usage & uSTOCK)
+                    sym->usage |= uSTOCK;
+
                 sym->flags |= flgQUEUED;
                 work.append(sym);
             }
