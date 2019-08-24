@@ -1757,7 +1757,7 @@ enumstruct_field_expr(value* lval, symbol** cursym)
         ldconst(field->addr() << 2, sALT);
         ob_add();
     }
-    lval->tag = field->x.tags.index;
+    int tag = field->x.tags.index;
 
     if (!var->data())
         var->set_data(ke::MakeUnique<EnumStructVarData>());
@@ -1769,10 +1769,13 @@ enumstruct_field_expr(value* lval, symbol** cursym)
     child->setName(gAtoms.add(ident.name));
     child->vclass = var->vclass;
 
-    if (gTypes.find(lval->tag)->isEnumStruct()) {
-        child->x.tags.index = field->x.tags.index;
+    if (gTypes.find(tag)->isEnumStruct()) {
+        lval->tag = 0;
+        child->tag = 0;
+        child->x.tags.index = tag;
     } else {
-        child->tag = lval->tag;
+        lval->tag = tag;
+        child->tag = tag;
         child->x.tags.index = 0;
     }
 
@@ -1783,7 +1786,7 @@ enumstruct_field_expr(value* lval, symbol** cursym)
         child->ident = iREFARRAY;
         lval->constval = field->dim.array.length;
     } else {
-        child->ident = (lval->tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
+        child->ident = (tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
         lval->constval = 0;
     }
     lval->ident = child->ident;
