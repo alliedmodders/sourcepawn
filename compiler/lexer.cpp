@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 /*  Pawn compiler - File input, preprocessing and lexical analysis functions
  *
  *  Copyright (c) ITB CompuPhase, 1997-2006
@@ -3158,7 +3158,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
- lnumber(fline),
+   lnumber(fline),
    documentation(nullptr),
    methodmap(nullptr),
    addr_(symaddr),
@@ -3284,13 +3284,12 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
         for (level = 0; level < numdim; level++) {
             top = addsym(name, addr, ident, vclass, tag, uDEFINE);
             top->dim.array.length = dim[level];
-            if (tag == pc_tag_string && level == numdim - 1) {
+            top->dim.array.slength = 0;
+            if (level == numdim - 1 && tag == pc_tag_string) {
                 if (slength == 0)
                     top->dim.array.length = dim[level] * sizeof(cell);
                 else
                     top->dim.array.slength = slength;
-            } else {
-                top->dim.array.slength = 0;
             }
             top->dim.array.level = (short)(numdim - level - 1);
             top->x.tags.index = idxtag[level];
