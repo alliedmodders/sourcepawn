@@ -1,4 +1,4 @@
-/* vim: set ts=8 sts=2 sw=2 tw=99 et: */
+/* vim: set ts=8 sts=4 sw=4 tw=99 et: */
 /*  Pawn compiler - Recursive descend expresion parser
  *
  *  Copyright (c) ITB CompuPhase, 1997-2005
@@ -1719,7 +1719,7 @@ static_enumstruct_field_expr(value* lval)
 }
 
 static bool
-enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
+enumstruct_field_expr(value* lval, symbol** cursym)
 {
     // Arrays can only be derived from symbols.
     symbol* var = *cursym;
@@ -1744,41 +1744,51 @@ enumstruct_field_expr(value* lval, symbol** cursym, symbol* dummy)
         lval->ident = iARRAYCELL;
         return true;
     }
-    assert(field->ident == iFUNCTN || field->parent() == root);
+    if (field->ident == iFUNCTN) {
+        lval->ident = iARRAYCELL;
+        lval->constval = 0;
+        *cursym = field;
+        return true;
+    }
 
-    if (field->ident != iFUNCTN && field->addr()) {
+    assert(field->parent() == root);
+
+    if (field->addr()) {
         ldconst(field->addr() << 2, sALT);
         ob_add();
     }
     lval->tag = field->x.tags.index;
 
-    // As a huge hack, we rewrite the current symbol within hier1() to look like
-    // a subfield of the array. This allows all the internal machinery that looks
-    // at symbol properties to continue working.
-    new (dummy) symbol(*var);
+    if (!var->data())
+        var->set_data(ke::MakeUnique<EnumStructVarData>());
+
+    EnumStructVarData* es_var = var->data()->asEnumStructVar();
+    es_var->children.append(ke::MakeUnique<symbol>(*field));
+
+    symbol* child = es_var->children.back().get();
+    child->setName(gAtoms.add(ident.name));
+    child->vclass = var->vclass;
+
     if (gTypes.find(lval->tag)->isEnumStruct()) {
-        dummy->x.tags.index = field->x.tags.index;
+        child->x.tags.index = field->x.tags.index;
     } else {
-        dummy->tag = lval->tag;
-        dummy->x.tags.index = 0;
+        child->tag = lval->tag;
+        child->x.tags.index = 0;
     }
 
-    // If the next operation can be chained, then make the symbol look like an
-    // iREFARRAY. The peek is critical since we otherwise want to resolve to an
-    // iARRAYCELL/CHAR.
-    if (field->dim.array.length > 0 && (lexpeek('[') || lexpeek('.'))) {
-        dummy->dim.array.length = field->dim.array.length;
-        dummy->dim.array.slength = field->dim.array.slength;
-        lval->ident = iREFARRAY;
+    if (field->dim.array.length > 0) {
+        child->dim.array.length = field->dim.array.length;
+        child->dim.array.slength = field->dim.array.slength;
+        child->dim.array.level = 0;
+        child->ident = iREFARRAY;
         lval->constval = field->dim.array.length;
     } else {
-        lval->ident = (lval->tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
+        child->ident = (lval->tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
         lval->constval = 0;
     }
-    if (field->ident == iFUNCTN)
-        *cursym = field;
-    else
-        *cursym = dummy;
+    lval->ident = child->ident;
+    lval->sym = child;
+    *cursym = child;
     return true;
 }
 
@@ -2112,7 +2122,7 @@ restart:
             if (tok == tDBLCOLON)
                 return static_enumstruct_field_expr(lval1);
 
-            if (tok == '.' && enumstruct_field_expr(lval1, &cursym, &dummysymbol)) {
+            if (tok == '.' && enumstruct_field_expr(lval1, &cursym)) {
                 lvalue = (lval1->ident == iREFARRAY) ? FALSE : TRUE;
                 if (lexpeek('.') || lexpeek('['))
                     goto restart;

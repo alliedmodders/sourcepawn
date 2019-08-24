@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 /* Pawn compiler
  *
  *  Drafted after the Small-C compiler Version 2.01, originally created
@@ -119,6 +119,7 @@ struct stringlist;
 #define iMETHODMAP 14  /* symbol defining a methodmap */
 #define iENUMSTRUCT 15 /* symbol defining an enumstruct */
 
+class EnumStructVarData;
 class FunctionData;
 class SymbolData
 {
@@ -127,14 +128,17 @@ class SymbolData
     virtual FunctionData* asFunction() {
         return nullptr;
     }
+    virtual EnumStructVarData* asEnumStructVar() {
+        return nullptr;
+    }
 };
 
-class FunctionData : public SymbolData
+class FunctionData final : public SymbolData
 {
   public:
     FunctionData();
-    ~FunctionData();
-    virtual FunctionData* asFunction() {
+    ~FunctionData() override;
+    FunctionData* asFunction() override {
         return this;
     }
 
@@ -144,6 +148,16 @@ class FunctionData : public SymbolData
     int funcid;          /* set for functions during codegen */
     stringlist* dbgstrs; /* debug strings - functions only */
     ke::Vector<arginfo> args;
+};
+
+class EnumStructVarData final : public SymbolData
+{
+  public:
+    EnumStructVarData* asEnumStructVar() override {
+        return this;
+    }
+
+    ke::Vector<ke::UniquePtr<symbol>> children;
 };
 
 struct symbol;
@@ -234,6 +248,12 @@ struct symbol {
         assert(ident == iARRAY || ident == iREFARRAY);
         assert(!child_);
         child_ = child;
+    }
+    SymbolData* data() const {
+        return data_.get();
+    }
+    void set_data(ke::UniquePtr<SymbolData>&& data) {
+        data_ = ke::Move(data);
     }
 
     void add_reference_to(symbol* other);
