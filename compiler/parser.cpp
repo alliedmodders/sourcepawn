@@ -1144,13 +1144,8 @@ setconstants(void) {
     add_constant("false", 0, sGLOBAL, 1);
     add_constant("EOS", 0, sGLOBAL, 0); /* End Of String, or '\0' */
     add_constant("INVALID_FUNCTION", -1, sGLOBAL, pc_tag_nullfunc_t);
-    add_constant("cellbits", 32, sGLOBAL, 0);
     add_constant("cellmax", INT_MAX, sGLOBAL, 0);
     add_constant("cellmin", INT_MIN, sGLOBAL, 0);
-    add_constant("charbits", sCHARBITS, sGLOBAL, 0);
-    add_constant("charmin", 0, sGLOBAL, 0);
-    add_constant("charmax", ~(-1UL << sCHARBITS) - 1, sGLOBAL, 0);
-    add_constant("ucharmax", (1 << (sizeof(cell) - 1) * 8) - 1, sGLOBAL, 0);
 
     add_constant("__Pawn", VERSION_INT, sGLOBAL, 0);
     add_constant("__LINE__", 0, sGLOBAL, 0);
