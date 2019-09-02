@@ -488,7 +488,7 @@ namespace smxviewer
                         var defval = insn.Params[i];
                         var label = insn.Params[i + 1];
                         var case_addr = string.Format(addrfmt, insn.Address + (i + 1) * 4);
-                        var desc = string.Format("case {0:d} 0x{0:x}", defval, label);
+                        var desc = string.Format("case {0:d} 0x{1:x}", defval, label);
                         detail_buffer_.Append(case_addr);
                         detail_buffer_.Append(desc);
                         detail_buffer_.Append("\r\n");
