@@ -468,7 +468,6 @@ int pc_compile(int argc, char** argv);
 int pc_addconstant(const char* name, cell value, int tag);
 int pc_addtag(const char* name);
 int pc_findtag(const char* name);
-const char* pc_typename(int tag);
 const char* pc_tagname(int tag);
 int parse_decl(declinfo_t* decl, int flags);
 const char* type_to_name(int tag);

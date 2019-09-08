@@ -288,14 +288,10 @@ type_to_name(int tag)
     if (tag == pc_anytag)
         return "any";
 
-    const char* name = pc_tagname(tag);
-    if (name)
-        return name;
-
     Type* type = gTypes.find(tag);
-    if (type && type->isFunction())
-        return "function";
-    return "unknown";
+    if (!type)
+        return "unknown";
+    return type->prettyName();
 }
 
 int
@@ -1833,7 +1829,7 @@ field_expression(svalue& thisval, value* lval, symbol** target, methodmap_method
 
     methodmap_t* map = gTypes.find(thisval.val.tag)->asMethodmap();
     if (!map) {
-        error(104, pc_typename(thisval.val.tag));
+        error(104, type_to_name(thisval.val.tag));
         return FER_Fail;
     }
 
