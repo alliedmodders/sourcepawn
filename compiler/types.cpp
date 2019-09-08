@@ -72,6 +72,14 @@ Type::isDeclaredButNotDefined() const
 }
 
 const char*
+Type::prettyName() const
+{
+  if (kind_ == TypeKind::Function)
+    return kindName();
+  return name();
+}
+
+const char*
 Type::kindName() const
 {
   switch (kind_) {
@@ -89,6 +97,8 @@ Type::kindName() const
       if (funcenum_ptr_) {
         if (funcenum_ptr_->entries.length() > 1)
           return "typeset";
+        if (name_.startsWith("::"))
+          return "function";
         return "typedef";
       }
       return "function";

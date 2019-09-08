@@ -391,9 +391,10 @@ deduce_layout_spec_by_tag(int tag)
     if (type && type->isStruct())
         return Layout_PawnStruct;
 
-    const char* name = pc_tagname(tag);
-    if (findglb(name))
-        return Layout_Enum;
+    if (Type* type = gTypes.find(tag)) {
+      if (findglb(type->name()))
+          return Layout_Enum;
+    }
 
     return Layout_None;
 }

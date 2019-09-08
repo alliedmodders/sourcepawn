@@ -584,17 +584,6 @@ inst_datetime_defines(void) {
 }
 
 const char*
-pc_typename(int tag) {
-    if (tag == 0)
-        return "int";
-    if (tag == sc_rationaltag)
-        return "float";
-    if (tag == pc_tag_string)
-        return "char";
-    return pc_tagname(tag);
-}
-
-const char*
 pc_tagname(int tag) {
     if (Type* type = gTypes.find(tag))
         return type->name();
@@ -1790,7 +1779,7 @@ declloc(int tokid) {
                     int explicit_dims = type->numdim;
                     if (parse_new_typename(NULL, &tag)) {
                         if (tag != type->semantic_tag())
-                            error(164, pc_typename(tag), pc_typename(type->tag));
+                            error(164, type_to_name(tag), type_to_name(type->tag));
                         if (gTypes.find(tag)->isEnumStruct()) {
                             assert(explicit_dims > 0);
                             explicit_dims--;
@@ -2887,7 +2876,7 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
                 // Fixed array with dynamic size. Note that this protects this code
                 // from not supporting new-style enum structs (it is called before
                 // rewriting happens).
-                error(161, pc_typename(type->tag));
+                error(161, type_to_name(type->tag));
             }
         }
 
@@ -3744,7 +3733,7 @@ dodelete() {
 
     methodmap_t* map = gTypes.find(sval.val.tag)->asMethodmap();
     if (!map) {
-        error(115, "type", pc_tagname(sval.val.tag));
+        error(115, "type", type_to_name(sval.val.tag));
         return;
     }
 
