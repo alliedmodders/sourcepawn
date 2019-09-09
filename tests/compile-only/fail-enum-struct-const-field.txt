@@ -1,1 +1,1 @@
-(2) : error 094: cannot assign const qualifier to enum struct field "x"
+(2) : error 094: cannot apply const qualifier to enum struct field "x"
