@@ -4124,6 +4124,9 @@ decl_enumstruct() {
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 
+        if (decl.type.usage & uCONST)
+            error(94, decl.name);
+
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
         if (decl.type.semantic_tag() == root_tag) {
