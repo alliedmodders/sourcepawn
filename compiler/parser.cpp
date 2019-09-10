@@ -143,6 +143,7 @@ static int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstati
 static int declargs(symbol* sym, int chkshadow, const int* thistag);
 static void doarg(symbol* sym, declinfo_t* decl, int offset, int chkshadow, arginfo* arg);
 static void reduce_referrers(symbol* root);
+static void deduce_liveness(symbol* root);
 static int testsymbols(symbol* root, int level, int testlabs, int testconst);
 static void destructsymbols(symbol* root, int level);
 static void statement(int* lastindent, int allow_decl);
@@ -399,6 +400,7 @@ pc_compile(int argc, char* argv[]) {
 
     /* reset "defined" flag of all functions and global variables */
     reduce_referrers(&glbtab);
+    deduce_liveness(&glbtab);
     delete_symbols(&glbtab, 0, TRUE, FALSE);
     gTypes.clearExtendedTypes();
     funcenums_free();
@@ -5130,6 +5132,49 @@ reduce_referrers(symbol* root) {
                 work.append(sym);
             }
         }
+    }
+}
+
+// Determine the set of live functions. Note that this must run before delete_symbols,
+// since that resets referrer lists.
+static void
+deduce_liveness(symbol* root) {
+    ke::Vector<symbol*> work;
+
+    // The root set is all public functions.
+    for (symbol* sym = root->next; sym; sym = sym->next) {
+        if (sym->ident != iFUNCTN)
+            continue;
+        if (sym->usage & uNATIVE)
+            continue;
+
+        if (sym->usage & uPUBLIC) {
+            sym->flags |= flgQUEUED;
+            work.append(sym);
+        } else {
+            sym->flags &= ~flgQUEUED;
+        }
+    }
+
+    // Traverse referrers to find the transitive set of live functions.
+    while (!work.empty()) {
+        symbol* live = work.popCopy();
+
+        for (const auto& other : live->refers_to()) {
+            if (other->ident != iFUNCTN || (other->flags & flgQUEUED))
+                continue;
+            other->flags |= flgQUEUED;
+            work.append(other);
+        }
+    }
+
+    // Remove the liveness flags for anything we did not visit.
+    for (symbol* sym = root->next; sym; sym = sym->next) {
+        if (sym->ident != iFUNCTN || (sym->flags & flgQUEUED))
+            continue;
+        if (sym->usage & uNATIVE)
+            continue;
+        sym->usage &= ~(uWRITTEN | uREAD);
     }
 }
 

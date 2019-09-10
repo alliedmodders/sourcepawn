@@ -1428,7 +1428,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
                 continue;
             }
 
-            if ((sym->usage & (uPUBLIC | uDEFINE)) == (uPUBLIC | uDEFINE) || (sym->usage & uREAD)) {
+            if (sym->usage & (uPUBLIC | uREAD)) {
                 function_entry entry;
                 entry.sym = sym;
                 if (sym->usage & uPUBLIC) {
