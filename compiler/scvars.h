@@ -50,7 +50,6 @@ extern int staging;               /* true if staging output */
 extern cell declared;             /* number of local cells declared */
 extern cell glb_declared;         /* number of global cells declared */
 extern cell code_idx;             /* number of bytes with generated code */
-extern int ntv_funcid;            /* incremental number of native function */
 extern int errnum;                /* number of errors */
 extern int warnnum;               /* number of warnings */
 extern int sc_debug;              /* debug/optimization options (bit field) */

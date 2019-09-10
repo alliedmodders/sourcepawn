@@ -630,7 +630,6 @@ resetglobals(void) {
     declared = 0;          /* number of local cells declared */
     glb_declared = 0;      /* number of global cells declared */
     code_idx = 0;          /* number of bytes with generated code */
-    ntv_funcid = 0;        /* incremental number of native function */
     curseg = 0;            /* 1 if currently parsing CODE, 2 if parsing DATA */
     freading = FALSE;      /* no input file ready yet */
     fline = 0;             /* the line number in the current file */
@@ -3792,7 +3791,7 @@ dodelete() {
     // stack 8
     pushreg(sPRI);
     {
-        ffcall(map->dtor->target, NULL, 1);
+        ffcall(map->dtor->target, 1);
 
         // Only mark usage if we're not skipping codegen.
         if (sc_status != statSKIP)
@@ -5328,7 +5327,7 @@ destructsymbols(symbol* root, int level) {
                 addconst(offset); /* add offset to array data to the address */
                 pushreg(sPRI);
                 assert(opsym->ident == iFUNCTN);
-                ffcall(opsym, NULL, 2);
+                ffcall(opsym, 2);
                 if (sc_status != statSKIP)
                     markusage(opsym,
                               uREAD); /* do not mark as "used" when this call itself is skipped */

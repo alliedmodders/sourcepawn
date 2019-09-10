@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 /*  Pawn compiler - code generation (unoptimized "assembler" code)
  *
  *  Copyright (c) ITB CompuPhase, 1997-2006
@@ -718,7 +718,7 @@ ffcase(cell value, char* labelname, int newtable)
  *  Call specified function
  */
 void
-ffcall(symbol* sym, const char* label, int numargs)
+ffcall(symbol* sym, int numargs)
 {
     char symname[2 * sNAMEMAX + 16];
     char aliasname[sNAMEMAX + 1];
@@ -729,44 +729,29 @@ ffcall(symbol* sym, const char* label, int numargs)
         funcdisplayname(symname, sym->name());
     if ((sym->usage & uNATIVE) != 0) {
         /* reserve a SYSREQ id if called for the first time */
-        assert(label == NULL);
         stgwrite("\tsysreq.n ");
-        if (sc_status == statWRITE && (sym->usage & uREAD) == 0 && sym->addr() >= 0)
-            sym->setAddr(ntv_funcid++);
+
         /* Look for an alias */
+        symbol* target = sym;
         if (lookup_alias(aliasname, sym->name())) {
             symbol* asym = findglb(aliasname);
             if (asym && asym->ident == iFUNCTN && ((sym->usage & uNATIVE) != 0)) {
-                sym = asym;
-                if (sc_status == statWRITE && (sym->usage & uREAD) == 0 && sym->addr() >= 0) {
-                    sym->setAddr(ntv_funcid++);
-                    markusage(sym, uREAD);
-                }
+                target = asym;
             }
         }
-        outval(sym->addr(), FALSE);
+        stgwrite(target->name());
         stgwrite(" ");
         outval(numargs, FALSE);
-        if (sc_asmfile) {
-            stgwrite("\t; ");
-            stgwrite(symname);
-        }
-        stgwrite(
-            "\n"); /* write on a separate line, to mark a sequence point for the peephole optimizer */
+        stgwrite("\n");
         code_idx += opcodes(1) + opargs(2);
     } else {
         const char* symname = sym->name();
         pushval(numargs);
         /* normal function */
         stgwrite("\tcall ");
-        if (label != NULL) {
-            stgwrite("l.");
-            stgwrite(label);
-        } else {
-            stgwrite(symname);
-        }
-        if (sc_asmfile && (label != NULL || (!isalpha(symname[0]) && symname[0] != '_' &&
-                                             symname[0] != sc_ctrlchar)))
+        stgwrite(symname);
+        if (sc_asmfile &&
+            ((!isalpha(symname[0]) && symname[0] != '_' && symname[0] != sc_ctrlchar)))
         {
             stgwrite("\t; ");
             stgwrite(symname);
@@ -1375,7 +1360,7 @@ invoke_getter(methodmap_method_t* method)
     // sysreq.n N 1
     // stack 8
     pushreg(sPRI);
-    ffcall(method->getter, NULL, 1);
+    ffcall(method->getter, 1);
 
     if (sc_status != statSKIP)
         markusage(method->getter, uREAD);
@@ -1393,7 +1378,7 @@ invoke_setter(methodmap_method_t* method, int save)
         pushreg(sPRI);
     pushreg(sPRI);
     pushreg(sALT);
-    ffcall(method->setter, NULL, 2);
+    ffcall(method->setter, 2);
     if (save)
         popreg(sPRI);
 

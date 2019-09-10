@@ -70,7 +70,7 @@ void genarray(int dims, int _autozero);
 void swap1(void);
 void ffswitch(int label);
 void ffcase(cell value, char* labelname, int newtable);
-void ffcall(symbol* sym, const char* label, int numargs);
+void ffcall(symbol* sym, int numargs);
 void ffret();
 void ffabort(int reason);
 void ffbounds(cell size);

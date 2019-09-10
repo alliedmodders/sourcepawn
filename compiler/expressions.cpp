@@ -227,7 +227,7 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
     }
     markexpr(sPARM, NULL, 0); /* mark the end of a sub-expression */
     assert(sym->ident == iFUNCTN);
-    ffcall(sym, NULL, paramspassed);
+    ffcall(sym, paramspassed);
     if (sc_status != statSKIP)
         markusage(sym, uREAD); /* do not mark as "used" when this call itself is skipped */
     sideeffect = TRUE;         /* assume functions carry out a side-effect */
@@ -3024,7 +3024,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     stgmark(sENDREORDER); /* mark end of reversed evaluation */
 
     sCallStackUsage++;
-    ffcall(sym, NULL, nargs);
+    ffcall(sym, nargs);
     if (sc_status != statSKIP)
         markusage(sym, uREAD); /* do not mark as "used" when this call itself is skipped */
     if (symret != NULL)
