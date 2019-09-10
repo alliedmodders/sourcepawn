@@ -58,7 +58,6 @@ int staging = 0;                           /* true if staging output */
 cell declared = 0;                         /* number of local cells declared */
 cell glb_declared = 0;                     /* number of global cells declared */
 cell code_idx = 0;                         /* number of bytes with generated code */
-int ntv_funcid = 0;                        /* incremental number of native function */
 int errnum = 0;                            /* number of errors */
 int warnnum = 0;                           /* number of warnings */
 int sc_debug = sCHKBOUNDS;                 /* by default: bounds checking+assertions */

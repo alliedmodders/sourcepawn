@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 /*  Pawn compiler - Binary code generation (the "assembler")
  *
  *  Copyright (c) ITB CompuPhase, 1997-2006
@@ -209,6 +209,10 @@ class AsmReader final
         assert(pos_ < end_);
         return pos_;
     }
+    Vector<symbol*>& native_list() {
+        return native_list_;
+    }
+    symbol* extract_call_target();
 
   private:
     template <bool StopAtLine>
@@ -218,6 +222,7 @@ class AsmReader final
     memfile_t* fp_;
     const char* pos_;
     const char* end_;
+    Vector<symbol*> native_list_;
 };
 
 const char*
@@ -268,6 +273,32 @@ AsmReader::end_of_token()
             return pos_;
     }
     return pos_;
+}
+
+symbol*
+AsmReader::extract_call_target()
+{
+    char name[METHOD_NAMEMAX];
+
+    const char* params = pos();
+
+    int i;
+    for (i = 0; !isspace(*params); i++, params++) {
+        assert(*params != '\0');
+        assert(i < METHOD_NAMEMAX);
+        name[i] = *params;
+    }
+    name[i] = '\0';
+    pos_ += i;
+
+    symbol* sym = findglb(name);
+    if (!sym) {
+        return nullptr;
+    }
+
+    assert(sym->ident == iFUNCTN);
+    assert(sym->vclass == sGLOBAL);
+    return sym;
 }
 
 static void
@@ -369,35 +400,10 @@ do_dumpfill(CellWriter* writer, AsmReader* reader, cell opcode)
     }
 }
 
-static symbol*
-extract_call_target(AsmReader* reader)
-{
-    char name[METHOD_NAMEMAX];
-
-    const char* params = reader->pos();
-
-    int i;
-    for (i = 0; !isspace(*params); i++, params++) {
-        assert(*params != '\0');
-        assert(i < METHOD_NAMEMAX);
-        name[i] = *params;
-    }
-    name[i] = '\0';
-
-    symbol* sym = findglb(name);
-    if (!sym) {
-        return nullptr;
-    }
-
-    assert(sym->ident == iFUNCTN);
-    assert(sym->vclass == sGLOBAL);
-    return sym;
-}
-
 static void
 do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-    symbol* sym = extract_call_target(reader);
+    symbol* sym = reader->extract_call_target();
     assert(sym->ident == iFUNCTN);
     assert(!(sym->usage & uNATIVE));
     assert((sym->function()->funcid & 1) == 1);
@@ -411,10 +417,27 @@ do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
 static void
 do_call(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-    symbol* sym = extract_call_target(reader);
+    symbol* sym = reader->extract_call_target();
 
     writer->append(opcode);
     writer->append(sym->addr());
+}
+
+static void
+do_sysreq(CellWriter* writer, AsmReader* reader, cell opcode)
+{
+    symbol* sym = reader->extract_call_target();
+    ucell nargs = reader->getparam();
+
+    assert(sym->usage & uNATIVE);
+    if (sym->addr() < 0) {
+      sym->setAddr(reader->native_list().length());
+      reader->native_list().append(sym);
+    }
+
+    writer->append(opcode);
+    writer->append(sym->addr());
+    writer->append(nargs);
 }
 
 static void
@@ -573,10 +596,10 @@ static OPCODEC opcodelist[] = {
   { 24, "strb.i",     sIN_CSEG, parm1 },
   { 79, "sub",        sIN_CSEG, parm0 },
   { 80, "sub.alt",    sIN_CSEG, parm0 },
-  {132, "swap.alt",   sIN_CSEG, parm0 },  /* version 4 */
-  {131, "swap.pri",   sIN_CSEG, parm0 },  /* version 4 */
-  {129, "switch",     sIN_CSEG, do_switch }, /* version 1 */
-  {135, "sysreq.n",   sIN_CSEG, parm2 },  /* version 9 (replaces SYSREQ.d from earlier version) */
+  {132, "swap.alt",   sIN_CSEG, parm0 },
+  {131, "swap.pri",   sIN_CSEG, parm0 },
+  {129, "switch",     sIN_CSEG, do_switch },
+  {135, "sysreq.n",   sIN_CSEG, do_sysreq },
   {161, "tracker.pop.setheap", sIN_CSEG, parm0 },
   {160, "tracker.push.c", sIN_CSEG, parm1 },
   { 35, "xchg",       sIN_CSEG, parm0 },
@@ -620,9 +643,8 @@ findopcode(const char* instr, size_t maxlen)
 
 // Generate code or data into a buffer.
 static void
-generate_segment(Vector<cell>* code_buffer, Vector<cell>* data_buffer, memfile_t* fin)
+generate_segment(AsmReader& reader, Vector<cell>* code_buffer, Vector<cell>* data_buffer)
 {
-    AsmReader reader(fin);
     CellWriter code_writer(*code_buffer);
     CellWriter data_writer(*data_buffer);
 
@@ -676,14 +698,6 @@ class VerifyOpcodeSorting
     }
 } sVerifyOpcodeSorting;
 #endif
-
-static int
-sort_by_addr(const void* a1, const void* a2)
-{
-    symbol* s1 = *(symbol**)a1;
-    symbol* s2 = *(symbol**)a2;
-    return s1->addr() - s2->addr();
-}
 
 static int
 sort_by_name(const void* a1, const void* a2)
@@ -1403,7 +1417,6 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
 
     RttiBuilder rtti(names);
 
-    Vector<symbol*> nativeList;
     Vector<function_entry> functions;
 
     // Sort globals.
@@ -1415,9 +1428,10 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     // Build the easy symbol tables.
     for (const auto& sym : global_symbols) {
         if (sym->ident == iFUNCTN) {
-            if ((sym->usage & uNATIVE) != 0 && (sym->usage & uREAD) != 0 && sym->addr() >= 0) {
-                // Natives require special handling, so we save them for later.
-                nativeList.append(sym);
+            if (sym->usage & uNATIVE) {
+                // Set native addresses to -1 to indicate whether we've seen
+                // them in the assembly yet.
+                sym->setAddr(-1);
                 continue;
             }
 
@@ -1473,10 +1487,18 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
         rtti.add_method(sym);
     }
 
-    // Shuffle natives to be in address order.
-    qsort(nativeList.buffer(), nativeList.length(), sizeof(symbol*), sort_by_addr);
-    for (size_t i = 0; i < nativeList.length(); i++) {
-        symbol* sym = nativeList[i];
+    for (int i = 1; i <= sc_labnum; i++)
+        sLabelTable.append(-1);
+    assert(sLabelTable.length() == size_t(sc_labnum));
+
+    // Generate buffers.
+    AsmReader reader(fin);
+    Vector<cell> code_buffer, data_buffer;
+    generate_segment(reader, &code_buffer, &data_buffer);
+
+    // Populate the native table.
+    for (size_t i = 0; i < reader.native_list().length(); i++) {
+        symbol* sym = reader.native_list()[i];
         assert(size_t(sym->addr()) == i);
 
         sp_file_natives_t& entry = natives->add();
@@ -1489,14 +1511,6 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
 
         rtti.add_native(sym);
     }
-
-    for (int i = 1; i <= sc_labnum; i++)
-        sLabelTable.append(-1);
-    assert(sLabelTable.length() == size_t(sc_labnum));
-
-    // Generate buffers.
-    Vector<cell> code_buffer, data_buffer;
-    generate_segment(&code_buffer, &data_buffer, fin);
 
     // Set up the code section.
     code->header().codesize = code_buffer.length() * sizeof(cell);
