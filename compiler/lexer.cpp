@@ -3068,14 +3068,8 @@ markusage(symbol* sym, int usage)
     /* check if (global) reference must be added to the symbol */
     if ((usage & (uREAD | uWRITTEN)) != 0) {
         /* only do this for global symbols */
-        if (sym->vclass == sGLOBAL) {
-            /* "curfunc" should always be valid, since statements may not occurs
-             * outside functions; in the case of syntax errors, however, the
-             * compiler may arrive through this function
-             */
-            if (curfunc != NULL)
-                curfunc->add_reference_to(sym);
-        } /*if */
+        if (sym->vclass == sGLOBAL && curfunc)
+            curfunc->add_reference_to(sym);
     }
 }
 
