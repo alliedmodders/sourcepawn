@@ -1455,14 +1455,8 @@ SC3ExpressionParser::hier2(value* lval)
              */
             if (lval->ident == iCONSTEXPR && lval->tag == sc_rationaltag && sc_rationaltag != 0) {
                 if (rational_digits == 0) {
-#if PAWN_CELL_SIZE == 32
-                    float* f = (float*)&lval->constval;
-#elif PAWN_CELL_SIZE == 64
-                    double* f = (double*)&lval->constval;
-#else
-#    error Unsupported cell size
-#endif
-                    *f = -*f; /* this modifies lval->constval */
+                    float f = sp::FloatCellUnion(lval->constval).f32;
+                    lval->constval = sp::FloatCellUnion(-f).cell;
                 } else {
                     /* the negation of a fixed point number is just an integer negation */
                     lval->constval = -lval->constval;
