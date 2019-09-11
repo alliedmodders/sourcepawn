@@ -659,43 +659,9 @@ ftoi(cell* val, const unsigned char* curptr)
         error(70); /* rational number support was not enabled */
         *val = 0;
     } else if (rational_digits == 0) {
-/* floating point */
-#if PAWN_CELL_SIZE == 32
+        /* floating point */
         float value = (float)fnum;
         *val = sp::FloatCellUnion(value).cell;
-#    if 0 /* SourceMod - not needed */
-        /* I assume that the C/C++ compiler stores "float" values in IEEE 754
-         * format (as mandated in the ANSI standard). Test this assumption
-         * anyway.
-         * Note: problems have been reported with GCC 3.2.x, version 3.3.x works.
-         */
-        { float test1 = 0.0, test2 = 50.0, test3 = -50.0;
-          uint32_t bit = 1;
-          /* test 0.0 == all bits 0 */
-          assert(*(uint32_t*)&test1==0x00000000L);
-          /* test sign & magnitude format */
-          assert(((*(uint32_t*)&test2) ^ (*(uint32_t*)&test3)) == (bit << (PAWN_CELL_SIZE-1)));
-          /* test a known value */
-          assert(*(uint32_t*)&test2==0x42480000L);
-        }
-#    endif
-#elif PAWN_CELL_SIZE == 64
-        *val = *((cell*)&fnum);
-#    if 0 /* SourceMod - not needed */
-        /* I assume that the C/C++ compiler stores "double" values in IEEE 754
-         * format (as mandated in the ANSI standard).
-         */
-        { float test1 = 0.0, test2 = 50.0, test3 = -50.0;
-          uint64_t bit = 1;
-          /* test 0.0 == all bits 0 */
-          assert(*(uint64_t*)&test1==0x00000000L);
-          /* test sign & magnitude format */
-          assert(((*(uint64_t*)&test2) ^ (*(uint64_t*)&test3)) == (bit << (PAWN_CELL_SIZE-1)));
-        }
-#    endif
-#else
-#    error Unsupported cell size
-#endif
     } else {
         /* fixed point */
         *val = (cell)dnum;
@@ -3323,17 +3289,7 @@ itoh(ucell val)
     static char itohstr[30];
     char* ptr;
     int i, nibble[16]; /* a 64-bit hexadecimal cell has 16 nibbles */
-    int max;
-
-#if PAWN_CELL_SIZE == 16
-    max = 4;
-#elif PAWN_CELL_SIZE == 32
-    max = 8;
-#elif PAWN_CELL_SIZE == 64
-    max = 16;
-#else
-#    error Unsupported cell size
-#endif
+    int max = 8;
     ptr = itohstr;
     for (i = 0; i < max; i += 1) {
         nibble[i] = (int)(val & 0x0f); /* nibble 0 is lowest nibble */

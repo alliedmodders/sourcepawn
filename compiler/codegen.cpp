@@ -884,15 +884,7 @@ setheap(cell value)
 void
 cell2addr(void)
 {
-#if PAWN_CELL_SIZE == 16
-    stgwrite("\tshl.c.pri 1\n");
-#elif PAWN_CELL_SIZE == 32
     stgwrite("\tshl.c.pri 2\n");
-#elif PAWN_CELL_SIZE == 64
-    stgwrite("\tshl.c.pri 3\n");
-#else
-#    error Unsupported cell size
-#endif
     code_idx += opcodes(1) + opargs(1);
 }
 
@@ -902,15 +894,7 @@ cell2addr(void)
 void
 cell2addr_alt(void)
 {
-#if PAWN_CELL_SIZE == 16
-    stgwrite("\tshl.c.alt 1\n");
-#elif PAWN_CELL_SIZE == 32
     stgwrite("\tshl.c.alt 2\n");
-#elif PAWN_CELL_SIZE == 64
-    stgwrite("\tshl.c.alt 3\n");
-#else
-#    error Unsupported cell size
-#endif
     code_idx += opcodes(1) + opargs(1);
 }
 
