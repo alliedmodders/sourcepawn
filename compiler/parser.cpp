@@ -1656,6 +1656,19 @@ parse_local_array_initializer(typeinfo_t* type, int* curlit, int* slength) {
     return true;
 }
 
+static bool
+is_shadowed_name(const char* name)
+{
+    if (symbol* sym = findloc(name)) {
+        if (sym->compound != nestlevel)
+            return true;
+    }
+    // ignore implicitly prototyped names.
+    if (symbol* sym = findglb(name))
+        return !(sym->ident == iFUNCTN && !(sym->usage & uDEFINE));
+    return false;
+}
+
 /*  declloc     - declare local symbols
  *
  *  Declare local (automatic) variables. Since these variables are relative
@@ -1703,10 +1716,8 @@ declloc(int tokid) {
          * of a global variable or to that of a local variable at a lower
          * level might indicate a bug.
          */
-        if (((sym = findloc(decl.name)) != NULL && sym->compound != nestlevel) ||
-            findglb(decl.name) != NULL) {
+        if (is_shadowed_name(decl.name))
             error(219, decl.name); /* variable shadows another symbol */
-        }
 
         slength = fix_char_size(&decl);
 
