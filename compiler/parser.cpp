@@ -349,7 +349,7 @@ pc_compile(int argc, char* argv[]) {
     do {
         /* reset "defined" flag of all functions and global variables */
         reduce_referrers(&glbtab);
-        delete_symbols(&glbtab, 0, TRUE, FALSE);
+        delete_symbols(&glbtab, 0, FALSE);
         delete_substtable();
         inst_datetime_defines();
         inst_binary_name(binfname);
@@ -401,7 +401,7 @@ pc_compile(int argc, char* argv[]) {
     /* reset "defined" flag of all functions and global variables */
     reduce_referrers(&glbtab);
     deduce_liveness(&glbtab);
-    delete_symbols(&glbtab, 0, TRUE, FALSE);
+    delete_symbols(&glbtab, 0, FALSE);
     gTypes.clearExtendedTypes();
     funcenums_free();
     methodmaps_free();
@@ -482,9 +482,9 @@ cleanup:
 
     assert(jmpcode != 0 || loctab.next == NULL); /* on normal flow, local symbols
                                                   * should already have been deleted */
-    delete_symbols(&loctab, 0, TRUE, TRUE);      /* delete local variables if not yet
+    delete_symbols(&loctab, 0, TRUE);            /* delete local variables if not yet
                                                   * done (i.e. on a fatal error) */
-    delete_symbols(&glbtab, 0, TRUE, TRUE);
+    delete_symbols(&glbtab, 0, TRUE);
     DestroyHashTable(sp_Globals);
     delete_consttable(&libname_tab);
     delete_aliastable();
@@ -4260,7 +4260,6 @@ define_args(void) {
      */
     sym = loctab.next;
     while (sym != NULL) {
-        assert(sym->ident != iLABEL);
         assert(sym->vclass == sLOCAL);
         markexpr(sLDECL, sym->name(), sym->addr()); /* mark for better optimization */
         sym = sym->next;
@@ -4592,7 +4591,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
         error(141);
 
     litidx = 0;                             /* clear the literal pool */
-    delete_symbols(&loctab, 0, TRUE, TRUE); /* clear local variables queue */
+    delete_symbols(&loctab, 0, TRUE);       /* clear local variables queue */
 
     return sym;
 }
@@ -4705,7 +4704,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         sym->usage |= uFORWARD;
         if (!sc_needsemicolon)
             error(10); /* old style prototypes used with optional semicolumns */
-        delete_symbols(&loctab, 0, TRUE, TRUE); /* prototype is done; forget everything */
+        delete_symbols(&loctab, 0, TRUE); /* prototype is done; forget everything */
         return TRUE;
     }
     /* so it is not a prototype, proceed */
@@ -4800,7 +4799,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         litidx = 0;
     }
     testsymbols(&loctab, 0, TRUE, TRUE);    /* test for unused arguments and labels */
-    delete_symbols(&loctab, 0, TRUE, TRUE); /* clear local variables queue */
+    delete_symbols(&loctab, 0, TRUE);       /* clear local variables queue */
     assert(loctab.next == NULL);
     curfunc = NULL;
     if (sc_status == statSKIP) {
@@ -5223,15 +5222,6 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                 break;
         }
         switch (sym->ident) {
-            case iLABEL:
-                if (testlabs) {
-                    if ((sym->usage & uDEFINE) == 0) {
-                        error(19, sym->name()); /* not a label: ... */
-                    } else if ((sym->usage & uREAD) == 0) {
-                        error(sym, 203, sym->name()); /* symbol isn't used: ... */
-                    }
-                }
-                break;
             case iFUNCTN:
                 if ((sym->usage & (uDEFINE | uREAD | uNATIVE | uSTOCK | uPUBLIC)) == uDEFINE) {
                     funcdisplayname(symname, sym->name());
@@ -5670,10 +5660,10 @@ compound(int stmt_sameline) {
 
     testsymbols(&loctab, nestlevel, FALSE, TRUE); /* look for unused block locals */
     declared = save_decl;
-    delete_symbols(&loctab, nestlevel, FALSE, TRUE); /* erase local symbols, but
-                                                      * retain block local labels
-                                                      * (within the function) */
-    nestlevel -= 1;                                  /* decrease compound statement level */
+    delete_symbols(&loctab, nestlevel, TRUE); /* erase local symbols, but
+                                               * retain block local labels
+                                               * (within the function) */
+    nestlevel -= 1;                           /* decrease compound statement level */
 }
 
 /*  doexpr
@@ -6044,7 +6034,7 @@ dofor(void) {
         popstacklist(true);
         testsymbols(&loctab, nestlevel, FALSE, TRUE); /* look for unused block locals */
         declared = save_decl;
-        delete_symbols(&loctab, nestlevel, FALSE, TRUE);
+        delete_symbols(&loctab, nestlevel, TRUE);
         nestlevel = save_nestlevel; /* reset 'compound statement' nesting level */
     } else {
         popstacklist(false);
