@@ -5660,9 +5660,7 @@ compound(int stmt_sameline) {
 
     testsymbols(&loctab, nestlevel, FALSE, TRUE); /* look for unused block locals */
     declared = save_decl;
-    delete_symbols(&loctab, nestlevel, TRUE); /* erase local symbols, but
-                                               * retain block local labels
-                                               * (within the function) */
+    delete_symbols(&loctab, nestlevel, TRUE);
     nestlevel -= 1;                           /* decrease compound statement level */
 }
 
