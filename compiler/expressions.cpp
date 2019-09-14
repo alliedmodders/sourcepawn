@@ -2305,11 +2305,6 @@ SC3ExpressionParser::primary(value* lval)
     if (tok == tSYMBOL && !findconst(st)) {
         /* first look for a local variable */
         if ((sym = findloc(st)) != 0) {
-            if (sym->ident == iLABEL) {
-                error(29);        /* expression error, assumed 0 */
-                ldconst(0, sPRI); /* load 0 */
-                return FALSE;     /* return 0 for labels (expression error) */
-            }
             lval->sym = sym;
             lval->ident = sym->ident;
             lval->tag = sym->tag;
@@ -2786,7 +2781,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                             error(213);
                         break;
                     case iVARIABLE:
-                        if (lval.ident == iLABEL || lval.ident == iFUNCTN || lval.ident == iARRAY ||
+                        if (lval.ident == iFUNCTN || lval.ident == iARRAY ||
                             lval.ident == iREFARRAY)
                         {
                             error(35, argidx + 1 - firstArgOffset); /* argument type mismatch */

@@ -250,7 +250,7 @@ int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
 void delete_symbol(symbol* root, symbol* sym);
-void delete_symbols(symbol* root, int level, int del_labels, int delete_functions);
+void delete_symbols(symbol* root, int level, int delete_functions);
 void markusage(symbol* sym, int usage);
 symbol* findglb(const char* name);
 symbol* findloc(const char* name);

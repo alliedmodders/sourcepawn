@@ -2913,7 +2913,7 @@ get_actual_compound(symbol* sym)
 }
 
 void
-delete_symbols(symbol* root, int level, int delete_labels, int delete_functions)
+delete_symbols(symbol* root, int level, int delete_functions)
 {
     symbol* origRoot = root;
     symbol *sym, *parent_sym;
@@ -2926,9 +2926,6 @@ delete_symbols(symbol* root, int level, int delete_labels, int delete_functions)
         if (get_actual_compound(sym) < level)
             break;
         switch (sym->ident) {
-            case iLABEL:
-                mustdelete = delete_labels;
-                break;
             case iVARIABLE:
             case iARRAY:
                 /* do not delete global variables if functions are preserved */
@@ -3194,9 +3191,6 @@ symbol::drop_reference_from(symbol* from)
 symbol*
 addsym(const char* name, cell addr, int ident, int vclass, int tag, int usage)
 {
-    /* labels may only be defined once */
-    assert(ident != iLABEL || findloc(name) == NULL);
-
     /* first fill in the entry */
     symbol* sym = new symbol(name, addr, ident, vclass, tag, usage);
 

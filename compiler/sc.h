@@ -104,7 +104,6 @@ struct stringlist;
  *  In an argument list, the list is terminated with a "zero" ident; labels
  *  cannot be passed as function arguments, so the value 0 is overloaded.
  */
-#define iLABEL 0
 #define iVARIABLE 1  /* cell that has an address and that can be fetched directly (lvalue) */
 #define iREFERENCE 2 /* iVARIABLE, but must be dereferenced */
 #define iARRAY 3
