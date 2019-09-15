@@ -110,7 +110,7 @@ It now includes a new reference interpreter, and will officially build and run o
 
 ### SourcePawn 1.10
 
-SourcePawn 1.10 is the current development version.
+SourcePawn 1.10 was declared stable on September 15th, 2019.
 
 The biggest change in this release is an improved syntax for "enum structs" that works with Transitional Syntax. More information can be found [here](https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs).
 
@@ -119,3 +119,7 @@ Other changes:
  - Removed packed array indexing.
  - Improved compilation speed.
  - Added a control-flow verifier to the VM.
+
+### SourcePawn 1.11
+
+SourcePawn 1.11 is the current development version.
