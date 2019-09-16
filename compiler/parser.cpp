@@ -128,7 +128,7 @@ static void decl_const(int table);
 static void declstruct();
 static void decl_enum(int table);
 static void decl_enumstruct();
-static cell needsub(int* tag, constvalue** enumroot);
+static cell needsub();
 static void initials(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enumroot);
 static cell initarray(int ident, int tag, int dim[], int numdim, int cur, int startlit,
                       int counteddim[], constvalue* lastdim, constvalue* enumroot, int* errorfound);
@@ -1641,6 +1641,16 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
 }
 
 static bool
+is_legacy_enum_tag(int tag)
+{
+    Type* type = gTypes.find(tag);
+    if (!type->isEnum())
+        return false;
+    symbol* sym = findconst(type->name());
+    return sym->dim.enumlist != nullptr;
+}
+
+static bool
 parse_local_array_initializer(typeinfo_t* type, int* curlit, int* slength) {
     *curlit = litidx; /* save current index in the literal table */
     if (type->numdim && !type->dim[type->numdim - 1])
@@ -1820,6 +1830,9 @@ declloc(int tokid) {
                                 error(29);
                                 break;
                         }
+
+                        if (is_legacy_enum_tag(type->idxtag[i]))
+                            error(153);
 
                         if (!needtoken(']'))
                             break;
@@ -2490,33 +2503,20 @@ init(int ident, int* tag, int* errorfound) {
  *  Get required array size
  */
 static cell
-needsub(int* tag, constvalue** enumroot) {
-    cell val;
-    symbol* sym;
-
-    assert(tag != NULL);
-    *tag = 0;
-    if (enumroot != NULL)
-        *enumroot = NULL; /* preset */
+needsub()
+{
     if (matchtoken(']'))  /* we have already seen "[" */
         return 0;         /* zero size (like "char msg[]") */
 
-    exprconst(&val, tag, &sym); /* get value (must be constant expression) */
+    int tag;
+    cell val;
+    symbol* sym;
+    exprconst(&val, &tag, &sym); /* get value (must be constant expression) */
     if (val < 0) {
         error(9); /* negative array size is invalid; assumed zero */
         val = 0;
     }
     needtoken(']');
-
-    if (enumroot != NULL) {
-        /* get the field list for an enumeration */
-        assert(*enumroot == NULL); /* should have been preset */
-        assert(sym == NULL || sym->ident == iCONSTEXPR);
-        if (sym != NULL && (sym->usage & uENUMROOT) == uENUMROOT) {
-            assert(sym->dim.enumlist != NULL);
-            *enumroot = sym->dim.enumlist;
-        }
-    }
 
     return val; /* return array size */
 }
@@ -2836,18 +2836,22 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
                 pushreg(sPRI);
             }
 
+            type->idxtag[type->numdim] = 0;
+
             if (matchtoken(']')) {
                 ldconst(0, sPRI);
-                type->idxtag[type->numdim] = 0;
                 type->dim[type->numdim] = 0;
                 type->numdim++;
                 continue;
             }
 
+            int tag;
             value val;
             symbol* sym;
-            int ident =
-                doexpr2(TRUE, FALSE, FALSE, FALSE, &type->idxtag[type->numdim], &sym, 0, &val);
+            int ident = doexpr2(TRUE, FALSE, FALSE, FALSE, &tag, &sym, 0, &val);
+
+            if (!is_valid_index_tag(tag))
+                error(77, gTypes.find(tag)->prettyName());
 
             if (ident == iVARIABLE || ident == iEXPRESSION || ident == iARRAYCELL ||
                 ident == iREFERENCE) {
@@ -2858,12 +2862,11 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
                     if (type->size != -1)
                         type->size = val.constval;
                     type->dim[type->numdim] = val.constval;
-                } else {
+                } else if (is_legacy_enum_tag(tag)) {
+                    error(153);
+                } else if (is_valid_index_tag(tag)) {
                     error(9);
                 }
-                if (sym && sym->usage & uENUMROOT)
-                    type->enumroot = sym->dim.enumlist;
-                type->idxtag[type->numdim] = sym ? sym->tag : 0;
             } else {
                 error(29);
             }
@@ -2901,7 +2904,7 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
                 return;
             }
 
-            type->size = needsub(&type->idxtag[type->numdim], enumrootp);
+            type->size = needsub();
             if (type->size > INT_MAX)
                 error(FATAL_ERROR_INT_OVERFLOW);
 
@@ -4035,13 +4038,13 @@ decl_enum(int vclass) {
     /* go through all constants */
     value = 0; /* default starting value */
     do {
-        int idxtag, fieldtag;
         symbol* sym;
         if (matchtoken('}')) { /* quick exit if '}' follows ',' */
             lexpush();
             break;
         }
-        idxtag = pc_addtag(NULL);   /* optional explicit item tag */
+        if (matchtoken(tLABEL))
+            error(153);
         if (needtoken(tSYMBOL)) {   /* read in (new) token */
             tokeninfo(&val, &str);  /* get the information */
             strcpy(constname, str); /* save symbol name */
@@ -4049,9 +4052,9 @@ decl_enum(int vclass) {
             constname[0] = '\0';
         }
         size = increment; /* default increment of 'val' */
-        fieldtag = 0;     /* default field tag */
         if (matchtoken('[')) {
-            exprconst(&size, &fieldtag, NULL); /* get size */
+            error(153);
+            exprconst(&size, NULL, NULL); /* get size */
             needtoken(']');
         }
         /* :TODO: do we need a size modifier here for pc_tag_string? */
@@ -4067,11 +4070,6 @@ decl_enum(int vclass) {
         if (sym == NULL)
             continue; /* error message already given */
         /* set the item tag and the item size, for use in indexing arrays */
-        sym->x.tags.index = idxtag;
-        sym->x.tags.field = fieldtag;
-        sym->dim.array.length = size;
-        sym->dim.array.level = 0;
-        sym->dim.array.slength = 0;
         sym->set_parent(enumsym);
         /* add the constant to a separate list as well */
         if (enumroot != NULL) {
@@ -4089,7 +4087,7 @@ decl_enum(int vclass) {
     /* set the enum name to the "next" value (typically the last value plus one) */
     if (enumsym) {
         assert((enumsym->usage & uENUMROOT) != 0);
-        enumsym->setAddr(value);
+        enumsym->setAddr(0);
         /* assign the constant list */
         assert(enumroot != NULL);
         enumsym->dim.enumlist = enumroot;

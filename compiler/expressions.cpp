@@ -1891,6 +1891,16 @@ SC3ExpressionParser::parse_view_as(value* lval)
     return lvalue;
 }
 
+bool
+is_valid_index_tag(int tag)
+{
+    if (tag == 0)
+        return true;
+
+    Type* idx_type = gTypes.find(tag);
+    return idx_type->isEnum();
+}
+
 /*  hier1
  *
  *  The highest hierarchy level: it looks for pointer and array indices
@@ -1911,7 +1921,6 @@ SC3ExpressionParser::hier1(value* lval1)
     char close;
     symbol* sym;
     int magic_string = 0;
-    symbol dummysymbol; /* for changing the index tags in case of enumerated pseudo-arrays */
 
     int symtok = 0;
     symbol* cursym = nullptr;
@@ -1971,8 +1980,10 @@ restart:
             if (lval2.ident == iARRAY || lval2.ident == iREFARRAY)
                 error(33, lval2.sym ? lval2.sym->name() : "-unknown-"); /* array must be indexed */
             needtoken(close);
-            if ((sym->usage & uENUMROOT))
-                matchtag(sym->x.tags.index, lval2.tag, TRUE);
+
+            if (!is_valid_index_tag(lval2.tag))
+                error(77, gTypes.find(lval2.tag)->prettyName());
+
             /* ---- */
             if (lval2.ident == iCONSTEXPR) { /* constant expression */
                 stgdel(index, cidx);         /* scratch generated code */
@@ -1998,16 +2009,6 @@ restart:
                         ldconst(lval2.constval, sALT); /* 8-bit character */
                         ob_add();
                     }
-                }
-                /* if the array index is a field from an enumeration, get the tag name
-                 * from the field and save the size of the field too.
-                 */
-                assert(lval2.sym == NULL || lval2.sym->dim.array.level == 0);
-                if (lval2.sym && lval2.sym->parent() && lval2.sym->dim.array.length > 0 &&
-                    sym->dim.array.level == 0)
-                {
-                    lval1->tag = lval2.sym->x.tags.index;
-                    lval1->constval = lval2.sym->dim.array.length;
                 }
                 /* ---- */
             } else {
@@ -2057,39 +2058,10 @@ restart:
             }
             if (gTypes.find(sym->x.tags.index)->isEnumStruct())
                 error(117);
-            /* if the array index is a field from an enumeration, get the tag name
-             * from the field and save the size of the field too. Otherwise, the
-             * tag is the one from the array symbol.
-             */
-            if (lval2.ident == iCONSTEXPR && lval2.sym && lval2.sym->parent() &&
-                lval2.sym->dim.array.length > 0 && sym->dim.array.level == 0)
-            {
-                lval1->tag = lval2.sym->x.tags.index;
-                lval1->constval = lval2.sym->dim.array.length;
-                if (lval2.tag == sym->x.tags.index && lval1->constval > 1 && matchtoken('[')) {
-                    /* an array indexed with an enumeration field may be considered a sub-array */
-                    lexpush();
-                    lvalue = FALSE; /* for now, a iREFARRAY is no lvalue */
-                    lval1->ident = iREFARRAY;
-                    /* initialize a dummy symbol, which is a copy of the current symbol,
-                     * but with an adjusted index tag
-                     */
-                    assert(sym != NULL);
-                    new (&dummysymbol) symbol(*sym);
-                    /* get the tag of the root of the enumeration */
-                    assert(lval2.sym != NULL);
-                    dummysymbol.x.tags.index = lval2.sym->x.tags.field;
-                    dummysymbol.dim.array.length = lval2.sym->dim.array.length;
-                    cursym = &dummysymbol;
-                    /* recurse */
-                    goto restart;
-                }
-            } else {
-                assert(sym != NULL);
-                if (cursym != &dummysymbol)
-                    lval1->tag = sym->tag;
-                lval1->constval = 0;
-            }
+
+            assert(sym != NULL);
+            lval1->tag = sym->tag;
+            lval1->constval = 0;
 
             /* a cell in an array is an lvalue, a character in an array is not
              * always a *valid* lvalue */

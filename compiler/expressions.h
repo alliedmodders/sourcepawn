@@ -72,6 +72,7 @@ class SC3ExpressionParser : public BaseExpressionParser
 #define MATCHTAG_COMMUTATIVE 0x4 // order does not matter
 #define MATCHTAG_DEDUCE 0x8      // correct coercion
 
+bool is_valid_index_tag(int tag);
 int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag);
 int matchtag(int formaltag, int actualtag, int allowcoerce);
 int expression(cell* val, int* tag, symbol** symptr, int chkfuncresult, value* _lval);

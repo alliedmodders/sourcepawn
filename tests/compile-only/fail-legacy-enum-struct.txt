@@ -1,0 +1,1 @@
+(10) : error 153: Array-based enum structs have been removed. See https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs
