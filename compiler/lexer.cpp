@@ -593,12 +593,9 @@ ftoi(cell* val, const unsigned char* curptr)
 {
     const unsigned char* ptr;
     double fnum, ffrac, fmult;
-    unsigned long dnum, dbase;
-    int i, ignore;
+    unsigned long dnum, dbase = 1;
+    int ignore;
 
-    assert(rational_digits >= 0 && rational_digits < 9);
-    for (i = 0, dbase = 1; i < rational_digits; i++)
-        dbase *= 10;
     fnum = 0.0;
     dnum = 0L;
     ptr = curptr;
@@ -625,10 +622,6 @@ ftoi(cell* val, const unsigned char* curptr)
             fmult = fmult / 10.0;
             dbase /= 10L;
             dnum += (*ptr - '0') * dbase;
-            if (dbase == 0L && sc_rationaltag && rational_digits > 0 && !ignore) {
-                error(222); /* number of digits exceeds rational number precision */
-                ignore = TRUE;
-            }
         }
         ptr++;
     }
@@ -654,19 +647,9 @@ ftoi(cell* val, const unsigned char* curptr)
         dnum *= (unsigned long)(fmult + 0.5);
     }
 
-    /* decide how to store the number */
-    if (sc_rationaltag == 0) {
-        error(70); /* rational number support was not enabled */
-        *val = 0;
-    } else if (rational_digits == 0) {
-        /* floating point */
-        float value = (float)fnum;
-        *val = sp::FloatCellUnion(value).cell;
-    } else {
-        /* fixed point */
-        *val = (cell)dnum;
-    }
-
+    /* floating point */
+    float value = (float)fnum;
+    *val = sp::FloatCellUnion(value).cell;
     return (int)(ptr - curptr);
 }
 
