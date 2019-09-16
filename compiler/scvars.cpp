@@ -78,7 +78,6 @@ int sc_tabsize = 8;                        /* number of spaces that a TAB repres
 int sc_status;                             /* read/write status */
 int sc_err_status;
 int sc_rationaltag = 0;              /* tag for rational numbers */
-int rational_digits = 0;             /* number of fractional digits */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
 ke::AString pc_deprecate;            /* if non-empty, mark next declaration as deprecated */

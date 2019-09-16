@@ -667,7 +667,6 @@ initglobals(void) {
     pc_stksize = sDEF_AMXSTACK; /* default stack size */
     sc_tabsize = 8;             /* assume a TAB is 8 spaces */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
-    rational_digits = 0;        /* number of fractional digits */
 
     outfname[0] = '\0';      /* output file name */
     errfname[0] = '\0';      /* error file name */

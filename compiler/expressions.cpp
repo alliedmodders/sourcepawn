@@ -1453,14 +1453,9 @@ SC3ExpressionParser::hier2(value* lval)
             /* make a special check for a constant expression with the tag of a
              * rational number, so that we can simple swap the sign of that constant.
              */
-            if (lval->ident == iCONSTEXPR && lval->tag == sc_rationaltag && sc_rationaltag != 0) {
-                if (rational_digits == 0) {
-                    float f = sp::FloatCellUnion(lval->constval).f32;
-                    lval->constval = sp::FloatCellUnion(-f).cell;
-                } else {
-                    /* the negation of a fixed point number is just an integer negation */
-                    lval->constval = -lval->constval;
-                }
+            if (lval->ident == iCONSTEXPR && lval->tag == sc_rationaltag) {
+                float f = sp::FloatCellUnion(lval->constval).f32;
+                lval->constval = sp::FloatCellUnion(-f).cell;
             } else if (check_userop(neg, lval->tag, 0, 1, NULL, &lval->tag)) {
                 lval->ident = iEXPRESSION;
                 lval->constval = 0;
