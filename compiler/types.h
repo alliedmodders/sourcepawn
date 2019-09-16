@@ -1,4 +1,4 @@
-/* vim: set sts=2 ts=8 sw=2 tw=99 et: */
+/* vim: set sts=4 ts=8 sw=4 tw=99 et: */
 /*  Pawn compiler
  *
  *  Function and variable definition and declaration, statement parser.
@@ -149,6 +149,10 @@ class Type
         if (!isMethodmap())
             return nullptr;
         return methodmap_ptr_;
+    }
+
+    bool isEnum() const {
+        return kind_ == TypeKind::Enum;
     }
 
     bool isEnumStruct() const {

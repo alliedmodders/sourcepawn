@@ -1,0 +1,2 @@
+(5) : error 077: arrays cannot be indexed by non-integral type 'function'
+(6) : error 077: arrays cannot be indexed by non-integral type 'Float'
