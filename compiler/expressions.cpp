@@ -2561,8 +2561,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     value lval = {0};
     arginfo* arg;
     char arglist[SP_MAX_CALL_ARGUMENTS];
-    constvalue arrayszlst = {NULL, "", 0, 0}; /* array size list starts empty */
-    constvalue taglst = {NULL, "", 0, 0};     /* tag list starts empty */
     symbol* symret;
     cell lexval;
     char* lexstr;
@@ -2764,8 +2762,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                             check_userop(NULL, lval.tag, arg[argidx].tag, 2, NULL, &lval.tag);
                         if (!checktag_string(arg[argidx].tag, &lval))
                             checktag(arg[argidx].tag, lval.tag);
-                        if (lval.tag != 0)
-                            append_constval(&taglst, arg[argidx].name, lval.tag, 0);
                         argidx++; /* argument done */
                         break;
                     case iREFERENCE:
@@ -2790,8 +2786,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                         }
                         /* otherwise, the address is already in PRI */
                         checktag(arg[argidx].tag, lval.tag);
-                        if (lval.tag != 0)
-                            append_constval(&taglst, arg[argidx].name, lval.tag, 0);
                         argidx++; /* argument done */
                         if (lval.sym != NULL)
                             markusage(lval.sym, uWRITTEN);
@@ -2832,16 +2826,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                                         error(47); /* array sizes must match */
                                 }
                             }
-                            if ((lval.ident != iARRAYCELL && lval.ident != iARRAYCHAR) ||
-                                lval.constval > 0)
-                            {
-                                /* save array size, for default values with uSIZEOF flag */
-                                cell array_sz = lval.constval;
-                                assert(array_sz != 0); /* literal array must have a size */
-                                if (array_sz < 0)
-                                    array_sz = -array_sz;
-                                append_constval(&arrayszlst, arg[argidx].name, array_sz, 0);
-                            }
                         } else {
                             symbol* sym = lval.sym;
                             short level = 0;
@@ -2859,8 +2843,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                                 else if (!matchtag(arg[argidx].idxtag[level], sym->x.tags.index,
                                                    MATCHTAG_SILENT))
                                     error(229, sym->name()); /* index tag mismatch */
-                                append_constval(&arrayszlst, arg[argidx].name,
-                                                sym->dim.array.length, level);
                                 sym = sym->array_child();
                                 assert(sym != NULL);
                                 level++;
@@ -2880,8 +2862,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                                     !gTypes.find(sym->x.tags.index)->asEnumStruct())
                                     error(229, sym->name()); /* index tag mismatch */
                             }
-                            append_constval(&arrayszlst, arg[argidx].name, sym->dim.array.length,
-                                            level);
                         }
                         /* address already in PRI */
 
@@ -2892,9 +2872,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                         {
                             error(178, type_to_name(lval.tag), type_to_name(arg[argidx].tag));
                         }
-
-                        if (lval.tag != 0)
-                            append_constval(&taglst, arg[argidx].name, lval.tag, 0);
                         // ??? set uWRITTEN?
                         argidx++; /* argument done */
                         break;
@@ -2932,7 +2909,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
         stgmark((char)(sEXPRSTART + argidx)); /* mark beginning of new expression in stage */
         if (arg[argidx].hasdefault) {
             if (arg[argidx].ident == iREFARRAY) {
-                short level;
                 setdefarray(arg[argidx].defvalue.array.data, arg[argidx].defvalue.array.size,
                             arg[argidx].defvalue.array.arraysize, &arg[argidx].defvalue.array.addr,
                             (arg[argidx].usage & uCONST) != 0);
@@ -2943,16 +2919,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                     }
                     /* keep the lengths of all dimensions of a multi-dimensional default array */
                     assert(arg[argidx].numdim > 0);
-                    if (arg[argidx].numdim == 1) {
-                        append_constval(&arrayszlst, arg[argidx].name,
-                                        arg[argidx].defvalue.array.arraysize, 0);
-                    } else {
-                        for (level = 0; level < arg[argidx].numdim; level++) {
-                            assert(level < sDIMEN_MAX);
-                            append_constval(&arrayszlst, arg[argidx].name, arg[argidx].dim[level],
-                                            level);
-                        }
-                    }
                 }
             } else if (arg[argidx].ident == iREFERENCE) {
                 setheap(arg[argidx].defvalue.val);
@@ -2982,8 +2948,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
     if (symret != NULL)
         popreg(sPRI);               /* pop hidden parameter as function result */
     sideeffect = TRUE;              /* assume functions carry out a side-effect */
-    delete_consttable(&arrayszlst); /* clear list of array sizes */
-    delete_consttable(&taglst);     /* clear list of parameter tags */
 
     /* maintain max. amount of memory used */
     {
