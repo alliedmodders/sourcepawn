@@ -42,7 +42,6 @@
 static void dropout(int lvalue, void (*testfunc)(int val), int exit1, value* lval);
 static cell calc(cell left, void (*oper)(), cell right, char* boolresult);
 static void clear_value(value* lval);
-static int dbltest(void (*oper)(), value* lval1, value* lval2);
 static int commutative(void (*oper)());
 static int constant(value* lval);
 
@@ -803,8 +802,8 @@ SC3ExpressionParser::plnge2(void (*oper)(void), HierFn hier, value* lval1, value
         if (plnge1(hier, lval2))
             rvalue(lval2); /* load lvalue now */
         else if (lval2->ident == iCONSTEXPR)
-            ldconst(lval2->constval << dbltest(oper, lval2, lval1), sPRI);
-        ldconst(lval1->constval << dbltest(oper, lval2, lval1), sALT);
+            ldconst(lval2->constval, sPRI);
+        ldconst(lval1->constval, sALT);
         /* ^ doubling of constants operating on integer addresses */
         /*   is restricted to "add" and "subtract" operators */
     } else { /* non-constant on left side */
@@ -816,7 +815,7 @@ SC3ExpressionParser::plnge2(void (*oper)(void), HierFn hier, value* lval1, value
                 value lvaltmp = {0};
                 stgdel(index, cidx); /* scratch pushreg() and constant fetch (then
                                       * fetch the constant again */
-                ldconst(lval2->constval << dbltest(oper, lval1, lval2), sALT);
+                ldconst(lval2->constval, sALT);
                 /* now, the primary register has the left operand and the secondary
                  * register the right operand; swap the "lval" variables so that lval1
                  * is associated with the secondary register and lval2 with the
@@ -826,17 +825,14 @@ SC3ExpressionParser::plnge2(void (*oper)(void), HierFn hier, value* lval1, value
                 *lval1 = *lval2;
                 *lval2 = lvaltmp;
             } else {
-                ldconst(lval2->constval << dbltest(oper, lval1, lval2), sPRI);
+                ldconst(lval2->constval, sPRI);
                 popreg(sALT); /* pop result of left operand into secondary register */
             }
         } else { /* non-constants on both sides */
             popreg(sALT);
-            if (dbltest(oper, lval1, lval2))
-                cell2addr(); /* double primary register */
-            if (dbltest(oper, lval2, lval1))
-                cell2addr_alt(); /* double secondary register */
         }
     }
+
     if (oper) {
         /* If used in an expression, a function should return a value.
          * If the function has been defined, we can check this. If the
@@ -3015,26 +3011,6 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
      * heap that caused by expressions in the function arguments)
      */
     popheaplist(true);
-}
-
-/*  dbltest
- *
- *  Returns a non-zero value if lval1 an array and lval2 is not an array and
- *  the operation is addition or subtraction.
- *
- *  Returns the "shift" count (1 for 16-bit, 2 for 32-bit) to align a cell
- *  to an array offset.
- */
-static int
-dbltest(void (*oper)(), value* lval1, value* lval2)
-{
-    if ((oper != ob_add) && (oper != ob_sub))
-        return 0;
-    if (lval1->ident != iARRAY)
-        return 0;
-    if (lval2->ident == iARRAY)
-        return 0;
-    return sizeof(cell) / 2; /* 1 for 16-bit, 2 for 32-bit */
 }
 
 /*  commutative
