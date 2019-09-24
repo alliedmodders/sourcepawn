@@ -18,6 +18,8 @@ def main():
                       help='Show the command-line invocation of each test.')
   parser.add_argument('--spcomp2', default=False, action='store_true',
                       help="Only test using spcomp2.")
+  parser.add_argument('--compile-only', default=False, action='store_true',
+                      help="Skip execution on tests with runtime components.")
   args = parser.parse_args()
 
   if args.test and args.test.startswith('tests/'):
@@ -25,14 +27,15 @@ def main():
 
   plan = TestPlan(args)
   plan.find_compilers()
-  plan.find_shells()
+  if not args.compile_only:
+    plan.find_shells()
   plan.find_tests()
 
   if not len(plan.modes):
     raise Exception('No compiler binaries were found in {0}'.format(args.objdir))
   if not len(plan.tests):
     raise Exception('No matching tests were found.')
-  if not len(plan.shells):
+  if not len(plan.shells) and not args.compile_only:
     raise Exception('No spshell binaries were found in {0}'.format(args.objdir))
 
   with testutil.TempFolder() as tempFolder:
@@ -373,12 +376,17 @@ class TestRunner(object):
       if not self.run_test(mode, test):
         self.failures_.add(test)
 
+  def should_compile_only(self, test):
+    if test.type == 'compiler-output' or test.type == 'compile-only':
+      return True
+    return self.plan.args.compile_only
+
   def run_test(self, mode, test):
     self.out('Begin test {0}'.format(test.path))
 
     # First run the compiler.
     rc, stdout, stderr = self.run_compiler(mode, test)
-    if test.type == 'compiler-output' or test.type == 'compile-only':
+    if self.should_compile_only(test):
       if not self.compile_ok(mode, test, rc, stdout, stderr):
         self.out_io(stderr, stdout)
         return False
@@ -457,7 +465,7 @@ class TestRunner(object):
     return True
 
   def compile_ok(self, mode, test, rc, stdout, stderr):
-    if test.type == 'compile-only':
+    if test.type != 'compiler-output':
       return rc == 0
 
     assert test.type == 'compiler-output'
