@@ -2775,14 +2775,8 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                             (arg[argidx].usage & uCONST) == 0)
                             error(35, argidx + 1 - firstArgOffset); /* argument type mismatch */
                         if (lval.ident == iVARIABLE || lval.ident == iREFERENCE) {
-                            if (lvalue) {
-                                assert(lval.sym != NULL);
-                                address(lval.sym, sPRI);
-                            } else {
-                                setheap_pri(); /* address of the value on the heap in PRI */
-                                heapalloc += markheap(MEMUSE_STATIC, 1);
-                                sCallStackUsage++;
-                            }
+                            assert(lval.sym != NULL);
+                            address(lval.sym, sPRI);
                         }
                         /* otherwise, the address is already in PRI */
                         checktag(arg[argidx].tag, lval.tag);
