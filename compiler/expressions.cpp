@@ -2769,7 +2769,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
                         // always an iVARIABLE.
                         assert(!args.handling_this());
 
-                        if (!lvalue)
+                        if (!lvalue || lval.ident == iARRAYCHAR)
                             error(35, argidx + 1 - firstArgOffset); /* argument type mismatch */
                         if (lval.sym != NULL && (lval.sym->usage & uCONST) != 0 &&
                             (arg[argidx].usage & uCONST) == 0)
