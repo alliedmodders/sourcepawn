@@ -43,5 +43,7 @@ parser.options.add_option('--amtl', type='string', dest='amtl', default=None, he
 parser.options.add_option('--build', type='string', dest='build', default='all', 
                        help='Build which components (all, spcomp, vm, exp, test, core)')
 parser.options.add_option('--enable-spew', action='store_true', default=False, dest='enable_spew',
-		                   help='Enable debug spew')
+                       help='Enable debug spew')
+parser.options.add_option("--enable-coverage", action='store_true', default=False,
+                       dest='enable_coverage', help='Enable code coverage support.')
 parser.Configure()

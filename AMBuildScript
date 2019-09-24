@@ -55,6 +55,7 @@ class Config(object):
   def __init__(self):
     super(Config, self).__init__()
     self.archs = builder.target.arch.replace('x86_64', 'x64').split(',')
+    self.enable_coverage = getattr(builder.options, 'enable_coverage', False)
 
   def configure(self):
     cxx = builder.DetectCxx()
@@ -86,6 +87,17 @@ class Config(object):
         if have_clang or (have_gcc and cxx.version >= '4.7'):
           cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
         cxx.cxxflags += ['-Wno-unused-private-field']
+
+      if self.enable_coverage:
+        if cxx.family == 'clang':
+          coverage_argv = [
+            '-fprofile-instr-generate',
+            '-fcoverage-mapping',
+          ]
+          cxx.cflags += coverage_argv
+          cxx.linkflags += coverage_argv
+        else:
+          raise Exception('Code coverage support is not implemented for {0}.'.format(cxx.family))
 
       # Disable some stuff we don't use, that gives us better binary
       # compatibility on Linux.
