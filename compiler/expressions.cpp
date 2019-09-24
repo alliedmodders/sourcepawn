@@ -1539,20 +1539,6 @@ SC3ExpressionParser::hier2(value* lval)
             lval->constval = val;
             ldconst(lval->constval, sPRI);
             return FALSE;
-        case tCELLSOF:
-            val = parse_cellsof();
-            clear_value(lval);
-            lval->ident = iCONSTEXPR;
-            lval->constval = val;
-            ldconst(lval->constval, sPRI);
-            return FALSE;
-        case tTAGOF:
-            val = parse_tagof();
-            clear_value(lval);
-            lval->ident = iCONSTEXPR;
-            lval->constval = val;
-            ldconst(lval->constval, sPRI);
-            return FALSE;
         default:
             lexpush();
             lvalue = hier1(lval);
