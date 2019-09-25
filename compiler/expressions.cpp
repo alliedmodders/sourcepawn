@@ -716,23 +716,12 @@ SC3ExpressionParser::sizeof_impl()
     markusage(sym, uREAD);
     if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
         int level;
-        symbol* idxsym = NULL;
         symbol* subsym = sym;
         for (level = 0; matchtoken('['); level++) {
             // Forbid index operations on enum structs.
             if (sym->ident == iENUMSTRUCT || gTypes.find(sym->x.tags.index)->isEnumStruct())
                 error(111, sym->name());
 
-            idxsym = NULL;
-            if (subsym != NULL && level == subsym->dim.array.level && matchtoken(tSYMBOL)) {
-                char* idxname;
-                int cmptag = subsym->x.tags.index;
-                tokeninfo(&val, &idxname);
-                if ((idxsym = findconst(idxname)) == NULL)
-                    error(80, idxname); /* unknown symbol, or non-constant */
-                else if (cmptag != idxsym->tag)
-                    error(91, idxname); /* ambiguous constant */
-            }
             needtoken(']');
             if (subsym != NULL)
                 subsym = subsym->array_child();
@@ -777,8 +766,7 @@ SC3ExpressionParser::sizeof_impl()
         if (level > sym->dim.array.level + 1) {
             error(28, sym->name()); /* invalid subscript */
         } else if (level == sym->dim.array.level + 1) {
-            result =
-                (idxsym != NULL && idxsym->dim.array.length > 0) ? idxsym->dim.array.length : 1;
+            result = 1;
         } else {
             result = array_levelsize(sym, level);
         }
