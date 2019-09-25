@@ -170,11 +170,6 @@ BaseExpressionParser::sizeof_impl()
     if (!sym)
         sym = findglb(st);
     if (!sym) {
-        Type* type = gTypes.find(st);
-        if (type) {
-            if (symbol* sym = type->asEnumStruct())
-                return sym->addr();
-        }
         error(17, st);
         return 0;
     }
