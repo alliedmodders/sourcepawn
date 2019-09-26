@@ -1529,6 +1529,26 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     free(values);
 }
 
+static bool
+is_legacy_enum_tag(int tag)
+{
+    Type* type = gTypes.find(tag);
+    if (!type->isEnum())
+        return false;
+    symbol* sym = findconst(type->name());
+    return sym->dim.enumlist != nullptr;
+}
+
+static bool
+is_legacy_enum_decl(typeinfo_t* type)
+{
+    if (type->ident != iARRAY && type->ident != iREFARRAY)
+        return false;
+
+    assert(type->numdim >= 1);
+    return is_legacy_enum_tag(type->idxtag[type->numdim - 1]);
+}
+
 /*  declglb     - declare global symbols
  *
  *  Declare a static (global) variable. Global variables are stored in
@@ -1554,6 +1574,9 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
 
     for (;;) {
         typeinfo_t* type = &decl->type;
+
+        if (is_legacy_enum_decl(type))
+            error(241);
 
         check_void_decl(decl, TRUE);
 
@@ -1698,6 +1721,9 @@ declloc(int tokid) {
 
     for (;;) {
         typeinfo_t* type = &decl.type;
+
+        if (is_legacy_enum_decl(type))
+            error(241);
 
         slength = 0;
 
@@ -4995,6 +5021,9 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
 
     // Otherwise we get very weird line number ranges, anything to the current fline.
     errorset(sEXPRMARK, 0);
+
+    if (is_legacy_enum_decl(type))
+        error(241);
 
     strcpy(arg->name, decl->name);
     arg->hasdefault = FALSE; /* preset (most common case) */

@@ -288,4 +288,6 @@ static const char* warnmsg[] = {
     /*238*/ "'%s:' is an illegal cast; use view_as<%s>(expression)\n",
     /*239*/ "'%s' is an illegal tag; use %s as a type\n",
     /*240*/ "'%s:' is an old-style tag operation; use view_as<%s>(expression) instead\n",
+    /*241*/
+    "Array-based enum structs will be removed in 1.11. See https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs\n",
 };

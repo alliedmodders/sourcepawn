@@ -1,0 +1,3 @@
+(7) : error 241: Array-based enum structs will be removed in 1.11. See https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs
+(9) : error 241: Array-based enum structs will be removed in 1.11. See https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs
+(11) : error 241: Array-based enum structs will be removed in 1.11. See https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs

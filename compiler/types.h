@@ -160,6 +160,10 @@ class Type
         return enumstruct_ptr_;
     }
 
+    bool isEnum() const {
+      return kind_ == TypeKind::Enum;
+    }
+
   private:
     void setFunction(funcenum_t* func) {
         setFixed();
