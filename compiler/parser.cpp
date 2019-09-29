@@ -1536,7 +1536,7 @@ is_legacy_enum_tag(int tag)
     if (!type->isEnum())
         return false;
     symbol* sym = findconst(type->name());
-    return sym->dim.enumlist != nullptr;
+    return sym && sym->dim.enumlist != nullptr;
 }
 
 static bool
