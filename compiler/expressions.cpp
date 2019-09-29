@@ -74,20 +74,19 @@ user_dec(void)
 {
 }
 
-int
-check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag)
+bool
+find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op)
 {
     static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
                                        "",  "",  "<=", ">=", "<", ">", "==", "!="};
-    static int binoper_savepri[] = {FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,
-                                    FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE, FALSE};
+    static bool binoper_savepri[] = {false, false, false, false, false, false, false, false, false,
+                                     false, false, true,  true,  true,  true,  false, false};
     static const char* unoperstr[] = {"!", "-", "++", "--"};
     static void (*unopers[])(void) = {lneg, neg, user_inc, user_dec};
 
     char opername[4] = "", symbolname[sNAMEMAX + 1];
     size_t i;
-    int swapparams, savepri, savealt;
-    int paramspassed;
+    bool swapparams, savepri, savealt;
     symbol* sym;
 
     /* since user-defined operators on untagged operands are forbidden, we have
@@ -95,16 +94,16 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
      */
     assert(numparam == 1 || numparam == 2);
     if (tag1 == 0 && (numparam == 1 || tag2 == 0))
-        return FALSE;
+        return false;
 
-    savepri = savealt = FALSE;
+    savepri = savealt = false;
     /* find the name with the operator */
     if (numparam == 2) {
         if (oper == NULL) {
             /* assignment operator: a special case */
             strcpy(opername, "=");
             if (lval != NULL && (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR))
-                savealt = TRUE;
+                savealt = true;
         } else {
             assert((sizeof binoperstr / sizeof binoperstr[0]) == (sizeof op1 / sizeof op1[0]));
             for (i = 0; i < sizeof op1 / sizeof op1[0]; i++) {
@@ -131,28 +130,27 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
     }
     /* if not found, quit */
     if (opername[0] == '\0')
-        return FALSE;
+        return false;
 
     /* create a symbol name from the tags and the operator name */
     assert(numparam == 1 || numparam == 2);
     operator_symname(symbolname, opername, tag1, tag2, numparam, tag2);
-    swapparams = FALSE;
+    swapparams = false;
     sym = findglb(symbolname);
-    if (sym ==
-        NULL /*|| (sym->usage & uDEFINE)==0*/)
+    if (sym == NULL /*|| (sym->usage & uDEFINE)==0*/)
     { /* ??? should not check uDEFINE; first pass clears these bits */
         /* check for commutative operators */
         if (tag1 == tag2 || oper == NULL || !commutative(oper))
-            return FALSE; /* not commutative, cannot swap operands */
+            return false; /* not commutative, cannot swap operands */
         /* if arrived here, the operator is commutative and the tags are different,
          * swap tags and try again
          */
         assert(numparam == 2); /* commutative operator must be a binary operator */
         operator_symname(symbolname, opername, tag2, tag1, numparam, tag1);
-        swapparams = TRUE;
+        swapparams = true;
         sym = findglb(symbolname);
         if (sym == NULL /*|| (sym->usage & uDEFINE)==0*/)
-            return FALSE;
+            return false;
     }
 
     /* check existance and the proper declaration of this function */
@@ -172,13 +170,28 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
      *        return a + b
      */
     if (sym == curfunc)
-        return FALSE;
+        return false;
 
+    if (sc_status != statSKIP)
+        markusage(sym, uREAD); /* do not mark as "used" when this call itself is skipped */
+
+    op->sym = sym;
+    op->oper = oper;
+    op->paramspassed = (oper == NULL) ? 1 : numparam;
+    op->savepri = savepri;
+    op->savealt = savealt;
+    op->swapparams = swapparams;
+    return true;
+}
+
+void
+emit_userop(const UserOperation& user_op, value* lval)
+{
     /* for increment and decrement operators, the symbol must first be loaded
      * (and stored back afterwards)
      */
-    if (oper == user_inc || oper == user_dec) {
-        assert(!savepri);
+    if (user_op.oper == user_inc || user_op.oper == user_dec) {
+        assert(!user_op.savepri);
         assert(lval != NULL);
         if (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR)
             pushreg(sPRI); /* save current address in PRI */
@@ -186,14 +199,14 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
             rvalue(lval); /* get the symbol's value in PRI */
     }
 
-    assert(!savepri || !savealt); /* either one MAY be set, but not both */
-    if (savepri) {
+    assert(!user_op.savepri || !user_op.savealt); /* either one MAY be set, but not both */
+    if (user_op.savepri) {
         /* the chained comparison operators require that the ALT register is
          * unmodified, so we save it here; actually, we save PRI because the normal
          * instruction sequence (without user operator) swaps PRI and ALT
          */
         pushreg(sPRI); /* right-hand operand is in PRI */
-    } else if (savealt) {
+    } else if (user_op.savealt) {
         /* for the assignment operator, ALT may contain an address at which the
          * result must be stored; this address must be preserved accross the
          * call
@@ -204,8 +217,7 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
     }
 
     /* push parameters, call the function */
-    paramspassed = (oper == NULL) ? 1 : numparam;
-    switch (paramspassed) {
+    switch (user_op.paramspassed) {
         case 1:
             pushreg(sPRI);
             break;
@@ -213,7 +225,7 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
             /* note that 1) a function expects that the parameters are pushed
              * in reversed order, and 2) the left operand is in the secondary register
              * and the right operand is in the primary register */
-            if (swapparams) {
+            if (user_op.swapparams) {
                 pushreg(sALT);
                 pushreg(sPRI);
             } else {
@@ -225,17 +237,12 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
             assert(0);
     }
     markexpr(sPARM, NULL, 0); /* mark the end of a sub-expression */
-    assert(sym->ident == iFUNCTN);
-    ffcall(sym, paramspassed);
-    if (sc_status != statSKIP)
-        markusage(sym, uREAD); /* do not mark as "used" when this call itself is skipped */
-    sideeffect = TRUE;         /* assume functions carry out a side-effect */
-    assert(resulttag != NULL);
-    *resulttag = sym->tag; /* save tag of the called function */
+    assert(user_op.sym->ident == iFUNCTN);
+    ffcall(user_op.sym, user_op.paramspassed);
 
-    if (savepri || savealt)
+    if (user_op.savepri || user_op.savealt)
         popreg(sALT); /* restore the saved PRI/ALT that into ALT */
-    if (oper == user_inc || oper == user_dec) {
+    if (user_op.oper == user_inc || user_op.oper == user_dec) {
         assert(lval != NULL);
         if (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR)
             popreg(sALT); /* restore address (in ALT) */
@@ -244,6 +251,21 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
             moveto1();   /* make sure PRI is restored on exit */
         }
     }
+}
+
+int
+check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag)
+{
+    UserOperation user_op;
+    if (!find_userop(oper, tag1, tag2, numparam, lval, &user_op))
+        return FALSE;
+
+    sideeffect = TRUE;         /* assume functions carry out a side-effect */
+
+    assert(resulttag != NULL);
+    *resulttag = user_op.sym->tag; /* save tag of the called function */
+
+    emit_userop(user_op, lval);
     return TRUE;
 }
 
