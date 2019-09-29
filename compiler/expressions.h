@@ -1,4 +1,4 @@
-/* vim: set ts=8 sts=2 sw=2 tw=99 et: */
+/* vim: set ts=8 sts=4 sw=4 tw=99 et: */
 /*  Pawn compiler - Recursive descend expresion parser
  *
  *  Copyright (c) ITB CompuPhase, 1997-2005
@@ -71,6 +71,21 @@ class SC3ExpressionParser : public BaseExpressionParser
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning
 #define MATCHTAG_COMMUTATIVE 0x4 // order does not matter
 #define MATCHTAG_DEDUCE 0x8      // correct coercion
+
+struct UserOperation
+{
+    UserOperation() {}
+
+    symbol* sym = nullptr;
+    void (*oper)() = nullptr;
+    int paramspassed;
+    bool savepri;
+    bool savealt;
+    int swapparams;
+};
+
+bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
+void emit_userop(const UserOperation& user_op, value* lval);
 
 bool is_valid_index_tag(int tag);
 int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag);
