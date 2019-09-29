@@ -474,7 +474,7 @@ bool parse_new_typename(const token_t* tok, int* tagp);
 
 /* function prototypes in SC1.C */
 void set_extension(char* filename, const char* extension, int force);
-symbol* fetchfunc(char* name);
+symbol* fetchfunc(const char* name);
 char* operator_symname(char* symname, const char* opername, int tag1, int tag2, int numtags,
                        int resulttag);
 char* funcdisplayname(char* dest, const char* funcname);

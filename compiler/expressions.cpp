@@ -35,14 +35,13 @@
 #include "lexer.h"
 #include "optimizer.h"
 #include "sc.h"
+#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "types.h"
 
-static void dropout(int lvalue, void (*testfunc)(int val), int exit1, value* lval);
-static cell calc(cell left, void (*oper)(), cell right, char* boolresult);
 static void clear_value(value* lval);
-static int commutative(void (*oper)());
+static void dropout(int lvalue, void (*testfunc)(int val), int exit1, value* lval);
 static int constant(value* lval);
 
 static char lastsymbol[sNAMEMAX + 1]; /* name of last function/variable */
@@ -58,6 +57,21 @@ static void (*op1[17])(void) = {
     os_le,   os_ge,  os_lt,  os_gt, /* hier9, index 11 */
     ob_eq,   ob_ne,                 /* hier10, index 15 */
 };
+
+// The "op1" array in sc3.cpp must have the same ordering as if these lists
+// were flattened.
+int ExpressionParser::list3[] = {'*', '/', '%', 0};
+int ExpressionParser::list4[] = {'+', '-', 0};
+int ExpressionParser::list5[] = {tSHL, tSHR, tSHRU, 0};
+int ExpressionParser::list6[] = {'&', 0};
+int ExpressionParser::list7[] = {'^', 0};
+int ExpressionParser::list8[] = {'|', 0};
+int ExpressionParser::list9[] = {tlLE, tlGE, '<', '>', 0};
+int ExpressionParser::list10[] = {tlEQ, tlNE, 0};
+int ExpressionParser::list11[] = {tlAND, 0};
+int ExpressionParser::list12[] = {tlOR, 0};
+
+
 /* These two functions are defined because the functions inc() and dec() in
  * SC4.C have a different prototype than the other code generation functions.
  * The arrays for user-defined functions use the function pointers for
@@ -65,11 +79,11 @@ static void (*op1[17])(void) = {
  * have the same prototype. As inc() and dec() are special cases already, it
  * is simplest to add two "do-nothing" functions.
  */
-static void
+void
 user_inc(void)
 {
 }
-static void
+void
 user_dec(void)
 {
 }
@@ -270,7 +284,7 @@ check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, 
 }
 
 int
-checktag_string(int tag, value* sym1)
+checktag_string(int tag, const value* sym1)
 {
     if (sym1->ident == iARRAY || sym1->ident == iREFARRAY)
         return FALSE;
@@ -281,7 +295,7 @@ checktag_string(int tag, value* sym1)
 }
 
 int
-checkval_string(value* sym1, value* sym2)
+checkval_string(const value* sym1, const value* sym2)
 {
     if (sym1->ident == iARRAY || sym2->ident == iARRAY || sym1->ident == iREFARRAY ||
         sym2->ident == iREFARRAY)
@@ -564,6 +578,217 @@ matchtag(int formaltag, int actualtag, int flags)
 }
 
 /*
+ *  Searches for a binary operator a list of operators. The list is stored in
+ *  the array "list". The last entry in the list should be set to 0.
+ *
+ *  The index of an operator in "list" (if found) is returned in "opidx". If
+ *  no operator is found, nextop() returns 0.
+ *
+ *  If an operator is found in the expression, it cannot be used in a function
+ *  call with omitted parantheses. Mark this...
+ */
+int
+ExpressionParser::nextop(int* opidx, int* list)
+{
+    *opidx = 0;
+    while (*list) {
+        if (matchtoken(*list)) {
+            return TRUE; /* found! */
+        } else {
+            list += 1;
+            *opidx += 1;
+        }
+    }
+    return FALSE; /* entire list scanned, nothing found */
+}
+
+int
+findnamedarg(arginfo* arg, const char* name)
+{
+    int i;
+
+    for (i = 0; arg[i].ident != 0 && arg[i].ident != iVARARGS; i++)
+        if (strcmp(arg[i].name, name) == 0)
+            return i;
+    return -1;
+}
+
+cell
+array_totalsize(symbol* sym)
+{
+    cell length;
+
+    assert(sym != NULL);
+    assert(sym->ident == iARRAY || sym->ident == iREFARRAY);
+    length = sym->dim.array.length;
+    if (sym->dim.array.level > 0) {
+        cell sublength = array_totalsize(sym->array_child());
+        if (sublength > 0)
+            length = length + length * sublength;
+        else
+            length = 0;
+    }
+    return length;
+}
+
+cell
+array_levelsize(symbol* sym, int level)
+{
+    assert(sym != NULL);
+    assert(sym->ident == iARRAY || sym->ident == iREFARRAY);
+    assert(level <= sym->dim.array.level);
+    while (level-- > 0) {
+        sym = sym->array_child();
+        assert(sym != NULL);
+    }
+    return (sym->dim.array.slength ? sym->dim.array.slength : sym->dim.array.length);
+}
+
+cell
+SC3ExpressionParser::parse_defined()
+{
+    cell val;
+    char* st;
+    int paranthese = 0;
+    while (matchtoken('('))
+        paranthese++;
+    int tok = lex(&val, &st);
+    if (tok != tSYMBOL) {
+        error(20, st); /* illegal symbol name */
+        return 0;
+    }
+    symbol* sym = findloc(st);
+    if (!sym)
+        sym = findglb(st);
+    if (sym && sym->ident != iFUNCTN && (sym->usage & uDEFINE) == 0)
+        sym = nullptr; /* symbol is not a function, it is in the table, but not "defined" */
+    val = !!sym;
+    if (!val && find_subst(st, strlen(st), nullptr))
+        val = 1;
+    while (paranthese--)
+        needtoken(')');
+    return val;
+}
+
+cell
+SC3ExpressionParser::parse_sizeof()
+{
+    int paranthese = 0;
+    while (matchtoken('('))
+        paranthese++;
+
+    cell result = sizeof_impl();
+
+    while (paranthese--)
+        needtoken(')');
+    return result;
+}
+
+cell
+SC3ExpressionParser::sizeof_impl()
+{
+    cell val;
+    char* st;
+    int tok = lex(&val, &st);
+    if (tok != tSYMBOL) {
+        error(20, st);
+        return 0;
+    }
+
+    symbol* sym = findloc(st);
+    if (!sym)
+        sym = findglb(st);
+    if (!sym) {
+        error(17, st);
+        return 0;
+    }
+    if (sym->ident == iCONSTEXPR) {
+        error(39); /* constant symbol has no size */
+    } else if (sym->ident == iFUNCTN) {
+        error(72); /* "function" symbol has no size */
+    } else if ((sym->usage & uDEFINE) == 0) {
+        error(17, st);
+        return 0;
+    }
+
+    cell result = 1;
+    markusage(sym, uREAD);
+    if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
+        int level;
+        symbol* idxsym = NULL;
+        symbol* subsym = sym;
+        for (level = 0; matchtoken('['); level++) {
+            // Forbid index operations on enum structs.
+            if (sym->ident == iENUMSTRUCT || gTypes.find(sym->x.tags.index)->isEnumStruct())
+                error(111, sym->name());
+
+            idxsym = NULL;
+            if (subsym != NULL && level == subsym->dim.array.level && matchtoken(tSYMBOL)) {
+                char* idxname;
+                int cmptag = subsym->x.tags.index;
+                tokeninfo(&val, &idxname);
+                if ((idxsym = findconst(idxname)) == NULL)
+                    error(80, idxname); /* unknown symbol, or non-constant */
+                else if (cmptag != idxsym->tag)
+                    error(91, idxname); /* ambiguous constant */
+            }
+            needtoken(']');
+            if (subsym != NULL)
+                subsym = subsym->array_child();
+        }
+
+        Type* enum_type = nullptr;
+        if (matchtoken(tDBLCOLON)) {
+            if (subsym->ident != iENUMSTRUCT) {
+                error(112, subsym->name());
+                return 0;
+            }
+            enum_type = gTypes.find(subsym->tag);
+        } else if (matchtoken('.')) {
+            enum_type = gTypes.find(subsym->x.tags.index);
+            if (!enum_type->asEnumStruct()) {
+                error(116, sym->name());
+                return 0;
+            }
+        }
+
+        if (enum_type) {
+            assert(enum_type->asEnumStruct());
+
+            token_ident_t tok;
+            if (!needsymbol(&tok))
+                return 0;
+            symbol* field = find_enumstruct_field(enum_type, tok.name);
+            if (!field) {
+                error(105, enum_type->name(), tok.name);
+                return 0;
+            }
+            if (int string_size = field->dim.array.slength)
+                return string_size;
+            if (int array_size = field->dim.array.length)
+                return array_size;
+            return 1;
+        }
+
+        if (sym->ident == iENUMSTRUCT)
+            return sym->addr();
+
+        if (level > sym->dim.array.level + 1) {
+            error(28, sym->name()); /* invalid subscript */
+        } else if (level == sym->dim.array.level + 1) {
+            result =
+                (idxsym != NULL && idxsym->dim.array.length > 0) ? idxsym->dim.array.length : 1;
+        } else {
+            result = array_levelsize(sym, level);
+        }
+        if (result == 0 && strchr((char*)lptr, PREPROC_TERM) == NULL)
+            error(163, sym->name()); /* indeterminate array size in "sizeof" expression */
+    }
+    return result;
+}
+
+
+/*
  *  The AMX pseudo-processor has no direct support for logical (boolean)
  *  operations. These have to be done via comparing and jumping. Since we are
  *  already jumping through the code, we might as well implement an "early
@@ -694,8 +919,8 @@ dropout(int lvalue, void (*testfunc)(int val), int exit1, value* lval)
     (*testfunc)(exit1);
 }
 
-static void
-checkfunction(value* lval)
+void
+checkfunction(const value* lval)
 {
     symbol* sym = lval->sym;
 
@@ -916,7 +1141,7 @@ flooreddiv(cell a, cell b, int return_remainder)
     return return_remainder ? r : q;
 }
 
-static cell
+cell
 calc(cell left, void (*oper)(), cell right, char* boolresult)
 {
     if (oper == ob_or)
@@ -2348,7 +2573,7 @@ clear_value(value* lval)
     lval->accessor = NULL;
 }
 
-static void
+void
 setdefarray(cell* string, cell size, cell array_sz, cell* dataaddr, int fconst)
 {
     /* The routine must copy the default array data onto the heap, as to avoid
@@ -2995,7 +3220,7 @@ SC3ExpressionParser::callfunction(symbol* sym, const svalue* aImplicitThis, valu
  *  precautionary "push" of the primary register is scrapped and the constant
  *  is read into the secondary register immediately.
  */
-static int
+int
 commutative(void (*oper)())
 {
     return oper == ob_add || oper == os_mult || oper == ob_eq || oper == ob_ne || oper == ob_and ||
