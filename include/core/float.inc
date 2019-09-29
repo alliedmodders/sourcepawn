@@ -74,7 +74,7 @@ stock float operator--(float oper)
 
 stock float operator-(float oper)
 {
-  return oper^float cellmin;               /* IEEE values are sign/magnitude */
+  return oper^view_as<float>(cellmin);          /* IEEE values are sign/magnitude */
 }
 
 stock float operator*(float oper1, oper2)
