@@ -407,6 +407,7 @@ do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
     assert(sym->ident == iFUNCTN);
     assert(!(sym->usage & uNATIVE));
     assert((sym->function()->funcid & 1) == 1);
+    assert(sym->usage & uREAD);
 
     // Note: we emit const.pri for backward compatibility.
     assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
@@ -418,6 +419,7 @@ static void
 do_call(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     symbol* sym = reader->extract_call_target();
+    assert(sym->usage & uREAD);
 
     writer->append(opcode);
     writer->append(sym->addr());
