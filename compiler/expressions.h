@@ -25,6 +25,7 @@
 #define am_sourcepawn_compiler_sc3_h
 
 #include "amx.h"
+#include "parse-node.h"
 #include "sc.h"
 
 struct value;
@@ -96,18 +97,6 @@ class SC3ExpressionParser : public ExpressionParser
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning
 #define MATCHTAG_COMMUTATIVE 0x4 // order does not matter
 #define MATCHTAG_DEDUCE 0x8      // correct coercion
-
-struct UserOperation
-{
-    UserOperation() {}
-
-    symbol* sym = nullptr;
-    void (*oper)() = nullptr;
-    int paramspassed;
-    bool savepri;
-    bool savealt;
-    int swapparams;
-};
 
 bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);

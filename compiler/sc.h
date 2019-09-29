@@ -351,12 +351,13 @@ struct symbol {
 struct methodmap_method_t;
 
 struct value {
-    symbol* sym;     /* symbol in symbol table, NULL for (constant) expression */
+    char ident;      /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
+                         * iEXPRESSION or iREFERENCE */
+    /* symbol in symbol table, NULL for (constant) expression */
+    symbol* sym;
     cell constval;   /* value of the constant expression (if ident==iCONSTEXPR)
                          * also used for the size of a literal array */
     int tag;         /* tag (of the expression) */
-    char ident;      /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
-                         * iEXPRESSION or iREFERENCE */
     char boolresult; /* boolean result for relational operators */
 
     // Returns whether the value can be rematerialized based on static
@@ -375,6 +376,12 @@ struct value {
 
     /* when ident == iACCESSOR */
     methodmap_method_t* accessor;
+
+    static value ErrorValue() {
+        value v = {};
+        v.ident = iCONSTEXPR;
+        return v;
+    }
 };
 
 /* Wrapper around value + l/rvalue bit. */

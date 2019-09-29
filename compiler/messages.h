@@ -96,7 +96,7 @@ static const char* errmsg[] = {
     /*069*/ "unused\n",
     /*070*/ "unused\n",
     /*071*/ "user-defined operator must be declared before use (function \"%s\")\n",
-    /*072*/ "\"sizeof\" operator is invalid on \"function\" symbols\n",
+    /*072*/ "\"sizeof\" operator is only valid on variables\n",
     /*073*/ "function argument must be an array (argument \"%s\")\n",
     /*074*/ "#define pattern must start with an alphabetic character\n",
     /*075*/ "input line too long (after substitutions)\n",

@@ -20,6 +20,13 @@ def main():
                       help="Only test using spcomp2.")
   parser.add_argument('--compile-only', default=False, action='store_true',
                       help="Skip execution on tests with runtime components.")
+  parser.add_argument('--runtime-only', default=False, action='store_true',
+                      help="Skip tests that are marked as compile-only.")
+  parser.add_argument('--coverage', default=None, type=str,
+                      help="Path to store code coverage data.")
+  parser.add_argument('--spcomp-arg', default=None, type=str, action='append',
+                      dest='spcomp_args',
+                      help="Add an extra argument to all spcomp invocations.")
   args = parser.parse_args()
 
   if args.test and args.test.startswith('tests/'):
@@ -53,6 +60,10 @@ class TestPlan(object):
     self.tests = []
     self.modes = []
     self.tests_path = os.path.split(__file__)[0]
+    self.env_ = None
+
+    if self.args.coverage:
+      self.env_ = os.environ.copy()
 
   @property
   def show_cli(self):
@@ -93,6 +104,11 @@ class TestPlan(object):
       if not path:
         continue
 
+      env = None
+      if self.args.coverage:
+        env = self.env_.copy()
+        env['LLVM_PROFILE_FILE'] = '{0}/spshell-%9m'.format(self.args.coverage)
+
       path = os.path.abspath(path)
 
       rc, stdout, stderr = testutil.exec_argv([path, '--version'])
@@ -101,12 +117,14 @@ class TestPlan(object):
           'path': path,
           'args': [],
           'name': 'default' + arch,
+          'env': env,
           })
 
       self.shells.append({
         'path': path,
         'args': ['--disable-jit'],
         'name': 'interpreter' + arch,
+        'env': env,
       })
 
   def find_compilers(self):
@@ -126,12 +144,21 @@ class TestPlan(object):
       if not path:
         continue
 
+      env = None
+      if self.args.coverage:
+        env = self.env_.copy()
+        env['LLVM_PROFILE_FILE'] = '{0}/spcomp-%9m'.format(self.args.coverage)
+
       spcomp = {
         'path': os.path.abspath(path),
         'arch': arch,
         'name': 'spcomp',
         'args': [],
+        'env': env,
       }
+
+      if self.args.spcomp_args:
+        spcomp['args'].extend(self.args.spcomp_args)
 
       self.modes.append({
         'name': 'default',
@@ -224,6 +251,7 @@ class Test(object):
     'returnCode',
     'warnings_are_errors',
     'compiler',
+    'force_old_parser',
   ])
 
   def __init__(self, **kwargs):
@@ -288,6 +316,10 @@ class Test(object):
   @property
   def warnings_are_errors(self):
     return self.local_manifest_.get('warnings_are_errors', None) == 'true'
+
+  @property
+  def force_old_parser(self):
+    return self.local_manifest_.get('force_old_parser', None) == 'true'
 
   @property
   def expectedReturnCode(self):
@@ -382,11 +414,15 @@ class TestRunner(object):
     return self.plan.args.compile_only
 
   def run_test(self, mode, test):
+    compile_only = self.should_compile_only(test)
+    if compile_only and self.plan.args.runtime_only:
+      return True
+
     self.out('Begin test {0}'.format(test.path))
 
     # First run the compiler.
     rc, stdout, stderr = self.run_compiler(mode, test)
-    if self.should_compile_only(test):
+    if compile_only:
       if not self.compile_ok(mode, test, rc, stdout, stderr):
         self.out_io(stderr, stdout)
         return False
@@ -429,12 +465,14 @@ class TestRunner(object):
     argv += ['-z', '1'] # Fast compilation for tests.
     if test.warnings_are_errors:
       argv += ['-E']
+    if test.force_old_parser and '-N' in argv:
+      argv.remove('-N')
     if mode['spcomp']['name'] == 'spcomp2':
       argv += ['-o', test.smx_path]
     argv += [self.fix_path(spcomp_path, test.path)]
 
     # Run and return output.
-    return self.do_exec(argv)
+    return self.do_exec(argv, env = mode['spcomp']['env'])
 
   def run_shells(self, mode, test):
     for shell in self.plan.shells:
@@ -447,7 +485,7 @@ class TestRunner(object):
     argv = [shell['path']] + shell['args']
     argv += [self.fix_path(shell['path'], test.smx_path)]
 
-    rc, stdout, stderr = self.do_exec(argv)
+    rc, stdout, stderr = self.do_exec(argv, shell['env'])
     if test.expectedReturnCode != rc:
       self.out("FAIL: Shell '{0}' returned {1}, expected {2}.".format(
         shell['name'], rc, test.expectedReturnCode))
@@ -488,7 +526,7 @@ class TestRunner(object):
       return True
     return self.compare_spcomp_output(test, stdout)
 
-  def do_exec(self, argv):
+  def do_exec(self, argv, env = None):
     if self.plan.show_cli:
       self.out(' '.join(argv))
 
@@ -497,7 +535,7 @@ class TestRunner(object):
     else:
       timeout = 5
 
-    return testutil.exec_argv(argv, timeout, logger = self)
+    return testutil.exec_argv(argv, timeout, logger = self, env = env)
 
   def compare_output(self, test, pipe_name, actual):
     expected_lines = test.get_expected_output(pipe_name)

@@ -29,9 +29,10 @@
 #    include <alloc/fortify.h>
 #endif
 #include <amtl/am-algorithm.h>
-#include "codegen.h"
+#include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
+#include "new-parser.h"
 #include "lexer.h"
 #include "optimizer.h"
 #include "sc.h"
@@ -1190,7 +1191,10 @@ lvalexpr(svalue* sval)
 
     errorset(sEXPRMARK, 0);
     pushheaplist();
-    {
+    if (sc_use_new_parser) {
+        Parser parser;
+        sval->lvalue = parser.expression(&sval->val);
+    } else {
         SC3ExpressionParser parser;
         sval->lvalue = parser.evaluate(&sval->val);
     }
@@ -1206,8 +1210,15 @@ expression(cell* val, int* tag, symbol** symptr, int chkfuncresult, value* _lval
     value lval = {0};
     pushheaplist();
 
-    SC3ExpressionParser parser;
-    if (parser.evaluate(&lval))
+    int lvalue;
+    if (sc_use_new_parser) {
+        Parser parser;
+        lvalue = parser.expression(&lval);
+    } else {
+        SC3ExpressionParser parser;
+        lvalue = parser.evaluate(&lval);
+    }
+    if (lvalue)
         rvalue(&lval);
     /* scrap any arrays left on the heap */
     popheaplist(true);
@@ -2555,7 +2566,7 @@ SC3ExpressionParser::primary(value* lval)
         return FALSE; /* return 0 for function (not an lvalue) */
     }
     lexpush(); /* push the token, it is analyzed by constant() */
-    if (constant(lval) == 0) {
+    if (::constant(lval) == 0) {
         error(29);        /* expression error, assumed 0 */
         ldconst(0, sPRI); /* load 0 */
     }

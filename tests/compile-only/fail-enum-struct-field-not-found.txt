@@ -1,1 +1,1 @@
-(9) : error 105: cannot find method or property Sample.b
+(7) : error 105: cannot find method or property Sample.b

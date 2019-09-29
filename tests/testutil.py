@@ -32,11 +32,12 @@ class ChangeFolder(object):
     if self.cwd is not None:
       os.chdir(self.cwd)
 
-def exec_argv(argv, timeout = None, logger = None):
+def exec_argv(argv, timeout = None, logger = None, env = None):
   if argv[0].endswith('.js'):
     argv = ['node'] + argv
 
-  p = subprocess.Popen(argv, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+  p = subprocess.Popen(argv, stdout = subprocess.PIPE, stderr = subprocess.PIPE,
+                       env = env)
 
   def on_timeout():
     logger.out("Killing process due to timeout")

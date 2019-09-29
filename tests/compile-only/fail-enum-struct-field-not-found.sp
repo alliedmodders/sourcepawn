@@ -1,8 +1,6 @@
-#include <shell>
-
 enum struct Sample {
   float a;
-};
+}
 
 public main() {
   Sample s;
