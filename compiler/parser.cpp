@@ -79,7 +79,7 @@ static unsigned total_drives; /* dummy variable */
 #endif
 
 #include "assembler.h"
-#include "codegen.h"
+#include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
@@ -820,6 +820,9 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname) {
                     if (*(ptr + 1) != '\0')
                         about();
                     sc_listing = TRUE; /* skip second pass & code generation */
+                    break;
+                case 'N':
+                    sc_use_new_parser = true;
                     break;
                 case 'o':
                     strlcpy(oname, option_value(ptr, argv, argc, &arg),

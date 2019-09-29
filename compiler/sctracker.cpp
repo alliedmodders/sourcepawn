@@ -5,7 +5,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include "codegen.h"
+#include "emitter.h"
 #include "lexer.h"
 #include "sc.h"
 #include "types.h"

@@ -32,7 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "codegen.h"
+#include "emitter.h"
 #include "errors.h"
 #include "libpawnc.h"
 #include "lstring.h"
@@ -2498,6 +2498,11 @@ lexpeek(int id)
         return TRUE;
     }
     return FALSE;
+}
+
+const token_pos_t& current_pos()
+{
+    return current_token()->start;
 }
 
 /*  matchtoken

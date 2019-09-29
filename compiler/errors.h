@@ -25,7 +25,10 @@
 #ifndef am_sourcepawn_compiler_sc5_h
 #define am_sourcepawn_compiler_sc5_h
 
+#include <stdarg.h>
+
 #include <amtl/am-string.h>
+#include "lexer.h"
 #include "sc.h"
 
 enum class ErrorType { Suppressed, Warning, Error, Fatal };
@@ -41,8 +44,6 @@ struct ErrorReport {
     ke::AString message;
     ErrorType type;
 };
-
-struct token_pos_t;
 
 enum FatalError {
     FIRST_FATAL_ERROR = 183,
@@ -65,9 +66,25 @@ enum FatalError {
     FATAL_ERRORS_TOTAL
 };
 
+class AutoErrorPos final
+{
+  public:
+    explicit AutoErrorPos(const token_pos_t& pos);
+    ~AutoErrorPos();
+
+    const token_pos_t& pos() const {
+        return pos_;
+    }
+
+  private:
+    token_pos_t pos_;
+    AutoErrorPos* prev_;
+};
+
 int error(int number, ...);
 int error(symbol* sym, int number, ...);
 int error(const token_pos_t& where, int number, ...);
+int error_va(const token_pos_t& where, int number, va_list ap);
 void errorset(int code, int line);
 void report_error(ErrorReport* report);
 

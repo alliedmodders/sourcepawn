@@ -77,7 +77,7 @@ class Expr : public ParseNode
     virtual void FlattenLogical(int token, ke::Vector<Expr*>* out);
 
     virtual void EmitTest(bool jump_on_true, int taken, int fallthrough);
-    virtual symbol* BindCallTarget(Expr** implicit_this) {
+    virtual symbol* BindCallTarget(int token, Expr** implicit_this) {
         return nullptr;
     }
     virtual symbol* BindNewTarget() {
@@ -101,6 +101,9 @@ class Expr : public ParseNode
         return nullptr;
     }
     virtual DefaultArgExpr* AsDefaultArgExpr() {
+        return nullptr;
+    }
+    virtual SymbolExpr* AsSymbolExpr() {
         return nullptr;
     }
 
@@ -384,8 +387,13 @@ class SymbolExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
-    symbol* BindCallTarget(Expr** implicit_this) override;
+    symbol* BindCallTarget(int token, Expr** implicit_this) override;
     symbol* BindNewTarget() override;
+    SymbolExpr* AsSymbolExpr() override {
+        return this;
+    }
+
+    bool AnalyzeWithOptions(bool allow_types);
 
   private:
     sp::Atom* name_;
@@ -492,7 +500,7 @@ class FieldAccessExpr final : public Expr
     bool Bind() override {
         return base_->Bind();
     }
-    symbol* BindCallTarget(Expr** implicit_this) override;
+    symbol* BindCallTarget(int token, Expr** implicit_this) override;
     bool Analyze() override;
     bool HasSideEffects() override;
     void DoEmit() override;

@@ -224,6 +224,42 @@ enum TokenKind {
     tLAST_TOKEN_ID
 };
 
+static inline bool
+IsChainedOp(int token)
+{
+    switch (token) {
+        case tlGE:
+        case tlLE:
+        case '>':
+        case '<':
+            return true;
+        default:
+            return false;
+    }
+}
+
+static inline bool
+IsAssignOp(int token)
+{
+    switch (token) {
+        case taMULT:
+        case taDIV:
+        case taMOD:
+        case taADD:
+        case taSUB:
+        case taSHL:
+        case taSHR:
+        case taSHRU:
+        case taAND:
+        case taXOR:
+        case taOR:
+        case '=':
+            return true;
+        default:
+            return false;
+    }
+}
+
 int plungequalifiedfile(char* name); /* explicit path included */
 int plungefile(char* name, int try_currentpath,
                int try_includepaths); /* search through "include" paths */
@@ -234,6 +270,7 @@ int lextok(token_t* tok);
 int lexpeek(int id);
 void lexpush(void);
 void lexclr(int clreol);
+const token_pos_t& current_pos();
 int matchtoken(int token);
 int tokeninfo(cell* val, char** str);
 int needtoken(int token);

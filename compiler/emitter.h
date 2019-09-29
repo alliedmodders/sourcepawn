@@ -53,6 +53,7 @@ void startfunc(const char* fname);
 void endfunc(void);
 void rvalue(value* lval);
 void rvalue(svalue* sval);
+void rvalue(const value& val);
 void address(symbol* ptr, regid reg);
 void store(value* lval);
 void loadreg(cell address, regid reg);

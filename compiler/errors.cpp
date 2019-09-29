@@ -58,6 +58,20 @@
 static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char */
 
 static int errflag;
+static AutoErrorPos* sPosOverride = nullptr;
+
+AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
+  : pos_(pos),
+    prev_(sPosOverride)
+{
+    sPosOverride = this;
+}
+
+AutoErrorPos::~AutoErrorPos()
+{
+    assert(sPosOverride == this);
+    sPosOverride = prev_;
+}
 
 /*  error
  *
@@ -74,6 +88,14 @@ static int errflag;
 int
 error(int number, ...)
 {
+    if (sPosOverride) {
+        va_list ap;
+        va_start(ap, number);
+        error_va(sPosOverride->pos(), number, ap);
+        va_end(ap);
+        return 0;
+    }
+
     va_list ap;
     va_start(ap, number);
     ErrorReport report = ErrorReport::infer_va(number, ap);
@@ -90,6 +112,16 @@ error(const token_pos_t& where, int number, ...)
     va_start(ap, number);
     ErrorReport report = ErrorReport::create_va(number, where.file, where.line, ap);
     va_end(ap);
+
+    report.lineno = where.line;
+    report_error(&report);
+    return 0;
+}
+
+int
+error_va(const token_pos_t& where, int number, va_list ap)
+{
+    ErrorReport report = ErrorReport::create_va(number, where.file, where.line, ap);
 
     report.lineno = where.line;
     report_error(&report);

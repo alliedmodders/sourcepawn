@@ -25,7 +25,7 @@
 #include "scvars.h"
 #include <stdio.h>
 #include <stdlib.h> /* for _MAX_PATH */
-#include "codegen.h"
+#include "emitter.h"
 #include "sc.h"
 #include "sp_symhash.h"
 
@@ -87,6 +87,7 @@ int sc_showincludes = 0;             /* show include files */
 int sc_require_newdecls = 0;         /* Require new-style declarations */
 bool sc_warnings_are_errors = false;
 int sc_compression_level = 9;
+bool sc_use_new_parser = false;
 
 void* inpf = NULL;      /* file read from (source or include) */
 void* inpf_org = NULL;  /* main source file */

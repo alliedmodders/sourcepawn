@@ -1,5 +1,3 @@
-#include <shell>
-
 enum struct Sample {
   float a;
 };

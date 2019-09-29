@@ -55,7 +55,7 @@
 #if defined FORTIFY
 #    include <alloc/fortify.h>
 #endif
-#include "codegen.h"
+#include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"

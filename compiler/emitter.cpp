@@ -29,7 +29,7 @@
 #if defined FORTIFY
 #    include <alloc/fortify.h>
 #endif
-#include "codegen.h"
+#include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"
@@ -308,6 +308,14 @@ rvalue(svalue* sval)
     rvalue(&sval->val);
     if (ident == iACCESSOR)
         sval->lvalue = FALSE;
+}
+
+// Wrapper for new codegen, where we don't usually have a mutable value.
+void
+rvalue(const value& val)
+{
+    value tmp = val;
+    rvalue(&tmp);
 }
 
 /* Get the address of a symbol into the primary or alternate register (used
