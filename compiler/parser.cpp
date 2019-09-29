@@ -4215,7 +4215,7 @@ decl_enumstruct() {
  *  It does some basic processing and error checking.
  */
 symbol*
-fetchfunc(char* name) {
+fetchfunc(const char* name) {
     symbol* sym;
 
     if ((sym = findglb(name)) != 0) { /* already in symbol table? */

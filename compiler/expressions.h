@@ -25,13 +25,31 @@
 #define am_sourcepawn_compiler_sc3_h
 
 #include "amx.h"
-#include "parse-expr.h"
 #include "sc.h"
 
 struct value;
 struct svalue;
 
-class SC3ExpressionParser : public BaseExpressionParser
+class ExpressionParser
+{
+  protected:
+    static int nextop(int* opidx, int* list);
+
+    // Each of these lists is an operator precedence level, and each list is a
+    // zero-terminated list of operators in that level (in precedence order).
+    static int list3[];
+    static int list4[];
+    static int list5[];
+    static int list6[];
+    static int list7[];
+    static int list8[];
+    static int list9[];
+    static int list10[];
+    static int list11[];
+    static int list12[];
+};
+
+class SC3ExpressionParser : public ExpressionParser
 {
   public:
     int evaluate(value* lval) {
@@ -65,6 +83,13 @@ class SC3ExpressionParser : public BaseExpressionParser
     int primary(value* lval);
     int skim(int* opstr, void (*testfunc)(int), int dropval, int endval, HierFn hier, value* lval);
     int parse_view_as(value* lval);
+    cell parse_defined();
+    cell parse_sizeof();
+    cell sizeof_impl();
+
+  private:
+    // Count of bitwise operators in an expression.
+    int bitwise_opercount_ = 0;
 };
 
 #define MATCHTAG_COERCE 0x1      // allow coercion
@@ -87,14 +112,23 @@ struct UserOperation
 bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);
 
+int findnamedarg(arginfo* arg, const char* name);
+cell array_totalsize(symbol* sym);
+cell array_levelsize(symbol* sym, int level);
+int commutative(void (*oper)());
+cell calc(cell left, void (*oper)(), cell right, char* boolresult);
+void checkfunction(const value* lval);
 bool is_valid_index_tag(int tag);
 int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag);
 int matchtag(int formaltag, int actualtag, int allowcoerce);
 int expression(cell* val, int* tag, symbol** symptr, int chkfuncresult, value* _lval);
-cell array_totalsize(symbol* sym);
 int matchtag_string(int ident, int tag);
-int checkval_string(value* sym1, value* sym2);
-int checktag_string(int tag, value* sym1);
+int checkval_string(const value* sym1, const value* sym2);
+int checktag_string(int tag, const value* sym1);
 int lvalexpr(svalue* sval);
+void user_inc();
+void user_dec();
+int checktag(int tag, int exprtag);
+void setdefarray(cell* string, cell size, cell array_sz, cell* dataaddr, int fconst);
 
 #endif // am_sourcepawn_compiler_sc3_h
