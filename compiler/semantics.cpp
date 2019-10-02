@@ -201,6 +201,12 @@ IncDecExpr::Analyze()
             error(pos_, 22); /* assignment to const argument */
             return false;
         }
+    } else {
+        if (!expr_val.accessor->setter) {
+            error(pos_, 152, expr_val.accessor->name);
+            return false;
+        }
+        markusage(expr_val.accessor->setter, uREAD);
     }
 
     auto op = (token_ == tINC) ? user_inc : user_dec;
@@ -257,8 +263,11 @@ BinaryExpr::Analyze()
         if (symbol* sym = left_->val().sym) {
             markusage(sym, uWRITTEN);
         } else if (auto* accessor = left_->val().accessor) {
-            if (accessor->setter)
-                markusage(accessor->setter, uREAD);
+            if (!accessor->setter) {
+                error(pos_, 152, accessor->name);
+                return false;
+            }
+            markusage(accessor->setter, uREAD);
         }
 
         if (!ValidateAssignmentLHS())
