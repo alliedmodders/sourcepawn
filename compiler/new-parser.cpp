@@ -119,6 +119,27 @@ Parser::plnge(int* opstr, NewHierFn hier)
 }
 
 Expr*
+Parser::plnge_rel(int* opstr, NewHierFn hier)
+{
+    int opidx;
+
+    Expr* first = (this->*hier)();
+    if (nextop(&opidx, opstr) == 0)
+        return first;
+
+    ChainedCompareExpr* chain = new ChainedCompareExpr(current_pos(), first);
+
+    do {
+        auto pos = current_pos();
+        Expr* right = (this->*hier)();
+
+        chain->ops().append(CompareOp(pos, opstr[opidx], right));
+    } while (nextop(&opidx, opstr));
+
+    return chain;
+}
+
+Expr*
 Parser::new_hier13()
 {
     Expr* node = new_hier12();
@@ -158,7 +179,7 @@ Parser::new_hier10()
 Expr*
 Parser::new_hier9()
 {
-    return plnge(list9, &Parser::new_hier8);
+    return plnge_rel(list9, &Parser::new_hier8);
 }
 
 Expr*

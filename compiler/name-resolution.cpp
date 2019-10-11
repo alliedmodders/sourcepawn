@@ -160,3 +160,13 @@ SizeofExpr::Bind()
     return true;
 }
 
+bool
+ChainedCompareExpr::Bind()
+{
+    AutoErrorPos aep(pos_);
+
+    bool ok = first_->Bind();
+    for (const auto& op : ops_)
+        ok &= op.expr->Bind();
+    return ok;
+}

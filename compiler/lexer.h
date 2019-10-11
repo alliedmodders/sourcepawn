@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <amtl/am-string.h>
+
 #include "sc.h"
 
 // The method name buffer is larger since we can include our parent class's
@@ -299,6 +301,7 @@ symbol* addvariable2(const char* name, cell addr, int ident, int vclass, int tag
 symbol* addvariable3(declinfo_t* decl, cell addr, int vclass, int slength);
 int getlabel(void);
 char* itoh(ucell val);
+ke::AString get_token_string(int tok_id);
 
 enum class TerminatorPolicy { Newline, NewlineOrSemicolon, Semicolon };
 
