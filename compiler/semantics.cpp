@@ -24,6 +24,7 @@
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
+#include "lexer.h"
 #include "parse-node.h"
 #include "sctracker.h"
 #include "scvars.h"
@@ -83,6 +84,14 @@ static inline OpFunc TokenToOpFunc(int token) {
             assert(false);
             return nullptr;
     }
+}
+
+CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
+  : pos(pos),
+    token(token),
+    expr(expr),
+    oper(TokenToOpFunc(token))
+{
 }
 
 void
@@ -319,9 +328,10 @@ BinaryExpr::Analyze()
         if (find_userop(oper_, left_val.tag, right_val.tag, 2, nullptr, &userop_)) {
             val_.tag = userop_.sym->tag;
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
+            char boolresult = FALSE;
             matchtag(left_val.tag, right_val.tag, FALSE);
             val_.ident = iCONSTEXPR;
-            val_.constval = Calc(this);
+            val_.constval = calc(left_val.constval, oper_, right_val.constval, &boolresult);
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
@@ -501,97 +511,6 @@ BinaryExpr::ValidateAssignmentRHS()
     return true;
 }
 
-cell
-BinaryExpr::Calc(BinaryExpr* root)
-{
-    if (!IsChainedOp(root->token())) {
-        char boolresult = FALSE;
-        Expr* left = root->left();
-        Expr* right = root->right();
-        return calc(left->val().constval, root->oper(), right->val().constval, &boolresult);
-    }
-
-    auto exprs = FlattenChainedCompares(root);
-    assert(!exprs.empty());
-
-    Expr* left = exprs.back()->left();
-    assert(left->val().ident == iCONSTEXPR);
-
-    while (!exprs.empty()) {
-        BinaryExpr* new_root = exprs.popBackCopy();
-        Expr* right = new_root->right();
-        assert(right->val().ident == iCONSTEXPR);
-
-        // When everything is constant, there are no side-effects, and we can
-        // safely early-terminate if any comparison fails. This is because there
-        // is an implicit logical AND: (a < b < c < d) expands to:
-        //      (a < b) && (b < c) && (c < d)
-        //
-        // But, the language does not actually define short-cut semantics, so
-        // in a normal context we must evaluate everything exactly once.
-        cell left_val = left->val().constval;
-        cell right_val = right->val().constval;
-        switch (new_root->token()) {
-            case tlLE:
-                if (left_val > right_val)
-                    return 0;
-                break;
-            case tlGE:
-                if (left_val < right_val)
-                    return 0;
-                break;
-            case '>':
-                if (left_val <= right_val)
-                    return 0;
-                break;
-            case '<':
-                if (left_val >= right_val)
-                    return 0;
-                break;
-            default:
-                assert(false);
-        }
-
-        left = right;
-    }
-
-    // Everything passed.
-    return 1;
-}
-
-// Due to how the AST is built, we only traverse down the left side. A chain such
-// as (a < b < c < d) will yield:
-//      (< (< (< a b) c) d)
-//
-// Whereas a < b < (c < d) will not chain and yields a tag mismatch:
-//      (< (< a b) (< c d))
-//
-// The result of calling this on the first example will be, front-to-back:
-//
-//      < * d
-//      < * c
-//      < a b
-//
-// Where * indicates that we chained on the left side, so there is no value
-// to process. back()->left() will begin the chaining.
-ke::Deque<BinaryExpr*>
-BinaryExpr::FlattenChainedCompares(BinaryExpr* root)
-{
-    assert(IsChainedOp(root->token()));
-
-    ke::Deque<BinaryExpr*> exprs;
-    exprs.append(root);
-
-    for (;;) {
-        Expr* next = exprs.back()->left();
-        BinaryExpr* expr = next->AsBinaryExpr();
-        if (!expr || !IsChainedOp(expr->token()))
-            break;
-        exprs.append(expr);
-    }
-    return exprs;
-}
-
 void
 LogicalExpr::FlattenLogical(int token, ke::Vector<Expr*>* out)
 {
@@ -631,6 +550,104 @@ LogicalExpr::Analyze()
     }
     val_.sym = nullptr;
     val_.tag = pc_addtag("bool");
+    return true;
+}
+
+bool
+ChainedCompareExpr::HasSideEffects()
+{
+    if (first_->HasSideEffects())
+        return true;
+    for (const auto& op : ops_) {
+        if (op.userop.sym || op.expr->HasSideEffects())
+            return true;
+    }
+    return false;
+}
+
+bool
+ChainedCompareExpr::Analyze()
+{
+    if (!first_->Analyze())
+        return false;
+    if (first_->lvalue())
+        first_ = new RvalueExpr(first_);
+
+    for (auto& op : ops_) {
+        if (!op.expr->Analyze())
+            return false;
+        if (op.expr->lvalue())
+            op.expr = new RvalueExpr(op.expr);
+    }
+
+    Expr* left = first_;
+    bool all_const = (left->val().ident == iCONSTEXPR);
+    bool constval = true;
+
+    val_.ident = iEXPRESSION;
+    val_.tag = pc_tag_bool;
+
+    for (auto& op : ops_) {
+        Expr* right = op.expr;
+        const auto& left_val = left->val();
+        const auto& right_val = right->val();
+
+        checkfunction(&left_val);
+        checkfunction(&right_val);
+
+        if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
+            const char* ptr = (left_val.sym != NULL) ? left_val.sym->name() : "-unknown-";
+            error(pos_, 33, ptr); /* array must be indexed */
+            return false;
+        }
+        if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
+            const char* ptr = (right_val.sym != NULL) ? right_val.sym->name() : "-unknown-";
+            error(pos_, 33, ptr); /* array must be indexed */
+            return false;
+        }
+
+        if (find_userop(op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
+            if (op.userop.sym->tag != pc_tag_bool) {
+                error(op.pos, 51, get_token_string(op.token).chars());
+                return false;
+            }
+        } else {
+            // For the purposes of tag matching, we consider the order to be irrelevant.
+            if (!checkval_string(&left_val, &right_val))
+                matchtag(left_val.tag, right_val.tag, MATCHTAG_COMMUTATIVE | MATCHTAG_DEDUCE);
+        }
+
+        if (right_val.ident != iCONSTEXPR || op.userop.sym)
+            all_const = false;
+
+        // Fold constants as we go.
+        if (all_const) {
+            switch (op.token) {
+                case tlLE:
+                    constval &= left_val.constval <= right_val.constval;
+                    break;
+                case tlGE:
+                    constval &= left_val.constval >= right_val.constval;
+                    break;
+                case '>':
+                    constval &= left_val.constval > right_val.constval;
+                    break;
+                case '<':
+                    constval &= left_val.constval < right_val.constval;
+                    break;
+                default:
+                    assert(false);
+                    break;
+            }
+        }
+
+        left = right;
+    }
+
+    if (all_const) {
+        val_.ident = iCONSTEXPR;
+        val_.constval = constval ? 1 :0;
+    }
     return true;
 }
 

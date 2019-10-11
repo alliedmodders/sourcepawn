@@ -38,6 +38,7 @@ class Parser : public ExpressionParser
     Expr* hier14();
     Expr* parse_view_as();
     Expr* plnge(int* opstr, NewHierFn hier);
+    Expr* plnge_rel(int* opstr, NewHierFn hier);
     Expr* new_hier13();
     Expr* new_hier12();
     Expr* new_hier11();

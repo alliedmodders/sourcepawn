@@ -225,14 +225,11 @@ class BinaryExpr final : public BinaryExprBase
         return userop_;
     }
 
+    static void EmitInner(OpFunc oper, const UserOperation& userop, Expr* left, Expr* right);
+
   private:
     bool ValidateAssignmentLHS();
     bool ValidateAssignmentRHS();
-    void EmitChainedCompare();
-
-    static ke::Deque<BinaryExpr*> FlattenChainedCompares(BinaryExpr* root);
-    static cell Calc(BinaryExpr* root);
-    static void EmitInner(BinaryExpr* root, Expr* left, Expr* right);
 
   private:
     UserOperation userop_;
@@ -252,6 +249,39 @@ class LogicalExpr final : public BinaryExprBase
     void DoEmit() override;
     void EmitTest(bool jump_on_true, int taken, int fallthrough) override;
     void FlattenLogical(int token, ke::Vector<Expr*>* out) override;
+};
+
+struct CompareOp
+{
+    CompareOp(const token_pos_t& pos, int token, Expr* expr);
+
+    token_pos_t pos;
+    int token;
+    Expr* expr;
+    OpFunc oper;
+    UserOperation userop = {};
+};
+
+class ChainedCompareExpr final : public Expr
+{
+  public:
+    explicit ChainedCompareExpr(const token_pos_t& pos, Expr* first)
+      : Expr(pos),
+        first_(first)
+    {}
+
+    PoolList<CompareOp>& ops() {
+        return ops_;
+    }
+
+    bool Bind() override;
+    bool Analyze() override;
+    void DoEmit() override;
+    bool HasSideEffects() override;
+
+  private:
+    Expr* first_;
+    PoolList<CompareOp> ops_;
 };
 
 class TernaryExpr final : public Expr

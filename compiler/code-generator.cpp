@@ -169,10 +169,7 @@ PostIncExpr::DoEmit()
 void
 BinaryExpr::DoEmit()
 {
-    if (IsChainedOp(token_)) {
-        EmitChainedCompare();
-        return;
-    }
+    assert(!IsChainedOp(token_));
 
     // We emit constexprs in the |oper_| handler below.
     const auto& left_val = left_->val();
@@ -220,7 +217,7 @@ BinaryExpr::DoEmit()
     assert(!array_copy_length_);
     assert(left_val.ident != iARRAY && left_val.ident != iREFARRAY);
 
-    EmitInner(this, left_, right_);
+    EmitInner(oper_, userop_, left_, right_);
 
     if (IsAssignOp(token_)) {
         if (saved_lhs)
@@ -234,42 +231,13 @@ BinaryExpr::DoEmit()
 }
 
 void
-BinaryExpr::EmitChainedCompare()
-{
-    auto exprs = FlattenChainedCompares(this);
-
-    Expr* left = exprs.back()->left();
-    if (left->val().ident != iCONSTEXPR)
-        left->Emit();
-
-    int count = 0;
-    while (!exprs.empty()) {
-        BinaryExpr* root = exprs.popBackCopy();
-        Expr* right = root->right();
-
-        // EmitInner() guarantees the right-hand side will be preserved in ALT.
-        // emit_userop implicitly guarantees this, as do os_less etc which
-        // use XCHG to swap the LHS/RHS expressions.
-        if (count)
-            relop_prefix();
-        EmitInner(root, left, right);
-        if (count)
-            relop_suffix();
-
-        left = right;
-        count++;
-    }
-}
-
-void
-BinaryExpr::EmitInner(BinaryExpr* root, Expr* left, Expr* right)
+BinaryExpr::EmitInner(OpFunc oper, const UserOperation& userop, Expr* left, Expr* right)
 {
     const auto& left_val = left->val();
     const auto& right_val = right->val();
 
     // left goes into ALT, right goes into PRI, though we can swap them for
     // commutative operations.
-    auto oper = root->oper();
     if (left_val.ident == iCONSTEXPR) {
         if (right_val.ident == iCONSTEXPR)
             ldconst(right_val.constval, sPRI);
@@ -301,7 +269,6 @@ BinaryExpr::EmitInner(BinaryExpr* root, Expr* left, Expr* right)
     }
 
     if (oper) {
-        const auto& userop = root->userop();
         if (userop.sym)
             emit_userop(userop, nullptr);
         else
@@ -390,6 +357,29 @@ LogicalExpr::EmitTest(bool jump_on_true, int taken, int fallthrough)
 
     Expr* last = sequence.back();
     last->EmitTest(jump_on_true, taken, fallthrough);
+}
+
+void
+ChainedCompareExpr::DoEmit()
+{
+    first_->Emit();
+
+    Expr* left = first_;
+
+    int count = 0;
+    for (const auto& op : ops_) {
+        // EmitInner() guarantees the right-hand side will be preserved in ALT.
+        // emit_userop implicitly guarantees this, as do os_less etc which
+        // use XCHG to swap the LHS/RHS expressions.
+        if (count)
+            relop_prefix();
+        BinaryExpr::EmitInner(op.oper, op.userop, left, op.expr);
+        if (count)
+            relop_suffix();
+
+        left = op.expr;
+        count++;
+    }
 }
 
 void

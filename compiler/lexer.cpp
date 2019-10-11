@@ -1863,7 +1863,7 @@ lexinit()
     }
 }
 
-static ke::AString
+ke::AString
 get_token_string(int tok_id)
 {
     ke::AString str;
