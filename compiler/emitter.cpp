@@ -432,7 +432,7 @@ load_hidden_arg()
  *  or indirectly (at the address given in the alternate register).
  */
 void
-store(value* lval)
+store(const value* lval)
 {
     symbol* sym;
 
@@ -1209,7 +1209,7 @@ dec_pri()
 /*  increment symbol
  */
 void
-inc(value* lval)
+inc(const value* lval)
 {
     symbol* sym;
 
@@ -1245,6 +1245,9 @@ inc(value* lval)
         outval(sym->addr(), TRUE);
         stgwrite("\tpop.pri\n");
         code_idx += opcodes(5) + opargs(2);
+    } else if (lval->ident == iACCESSOR) {
+        inc_pri();
+        invoke_setter(lval->accessor, FALSE);
     } else {
         /* local or global variable */
         assert(sym != NULL);
@@ -1262,7 +1265,7 @@ inc(value* lval)
  *  in case of an integer pointer, the symbol must be incremented by 2.
  */
 void
-dec(value* lval)
+dec(const value* lval)
 {
     symbol* sym;
 
@@ -1298,6 +1301,9 @@ dec(value* lval)
         outval(sym->addr(), TRUE);
         stgwrite("\tpop.pri\n");
         code_idx += opcodes(5) + opargs(2);
+    } else if (lval->ident == iACCESSOR) {
+        dec_pri();
+        invoke_setter(lval->accessor, FALSE);
     } else {
         /* local or global variable */
         assert(sym != NULL);

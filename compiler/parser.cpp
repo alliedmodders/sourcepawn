@@ -5686,6 +5686,11 @@ doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sy
     int localstaging = FALSE;
     cell val;
 
+    // Disable the optimizer since it is wildly inaccurate for certain
+    // patterns in the new code generator.
+    int opt_level = sc_use_new_parser ? sOPTIMIZE_NONE : pc_optimize;
+    ke::SaveAndSet<int> disable_phopt(&pc_optimize, opt_level);
+
     if (!staging) {
         stgset(TRUE); /* start stage-buffering */
         localstaging = TRUE;
@@ -5768,6 +5773,9 @@ test(int label, int parens, int invert) {
         assert(index == 0);
 #endif
     }
+
+    int opt_level = sc_use_new_parser ? sOPTIMIZE_NONE : pc_optimize;
+    ke::SaveAndSet<int> disable_phopt(&pc_optimize, opt_level);
 
     ke::SaveAndSet<bool> in_test(&sc_intest, true);
 

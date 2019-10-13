@@ -120,48 +120,48 @@ PostIncExpr::DoEmit()
     expr_->Emit();
 
     const auto& val = expr_->val();
-    value tmp = val;
 
-    if (val.ident != iACCESSOR) {
-        /* on incrementing array cells, the address in PRI must be saved for
-         * incremening the value, whereas the current value must be in PRI
-         * on exit.
-         */
-        int saveresult = (val.ident == iARRAYCELL || val.ident == iARRAYCHAR);
-        if (saveresult)
-            pushreg(sPRI); /* save address in PRI */
-        rvalue(&tmp);      /* read current value into PRI */
-        if (saveresult)
-            swap1(); /* save PRI on the stack, restore address in PRI */
+    if (val.ident == iARRAYCELL || val.ident == iARRAYCHAR || val.ident == iACCESSOR) {
+        // Save base address. Stack: [addr]
+        pushreg(sPRI);
+        // Get pre-inc value.
+        rvalue(val);
+        // Save pre-inc value, but swap its position with the address.
+        popreg(sALT);       // Stack: []
+        pushreg(sPRI);      // Stack: [val]
         if (userop_.sym) {
-            emit_userop(userop_, &tmp);
+            pushreg(sALT);      // Stack: [val addr]
+            // Call the overload.
+            pushreg(sPRI);
+            markexpr(sPARM, nullptr, 0);
+            ffcall(userop_.sym, 1);
+            // Restore the address and emit the store.
+            popreg(sALT);       // Stack: [val]
+            store(&val);
         } else {
+            if (val.ident != iACCESSOR)
+                moveto1();
             if (token_ == tINC)
-                inc(&tmp);
+                inc(&val);
             else
-                dec(&tmp);
+                dec(&val);
         }
-        if (saveresult)
-            popreg(sPRI); /* restore PRI (result of rvalue()) */
+        popreg(sPRI);
     } else {
-        pushreg(sPRI); // save obj
-        invoke_getter(val.accessor);
-        move_alt();    // alt = oldval
-        swap1();       // pri = saved obj, stack = [oldval]
-        pushreg(sPRI); // pri = obj, alt = oldval, stack = [obj, oldval]
-        moveto1();     // pri = oldval, stack = [obj, oldval]
-
+        // Much simpler case when we don't have to save the base address.
+        rvalue(val);
+        pushreg(sPRI);
         if (userop_.sym) {
-            emit_userop(userop_, &tmp);
+            pushreg(sPRI);
+            markexpr(sPARM, nullptr, 0);
+            ffcall(userop_.sym, 1);
+            store(&val);
         } else {
             if (token_ == tINC)
-                inc_pri();
+                inc(&val);
             else
-                dec_pri();
+                dec(&val);
         }
-
-        popreg(sALT);
-        invoke_setter(val.accessor, FALSE);
         popreg(sPRI);
     }
 }

@@ -252,6 +252,7 @@ class Test(object):
     'warnings_are_errors',
     'compiler',
     'force_old_parser',
+    'force_new_parser',
   ])
 
   def __init__(self, **kwargs):
@@ -320,6 +321,10 @@ class Test(object):
   @property
   def force_old_parser(self):
     return self.local_manifest_.get('force_old_parser', None) == 'true'
+
+  @property
+  def force_new_parser(self):
+    return self.local_manifest_.get('force_new_parser', None) == 'true'
 
   @property
   def expectedReturnCode(self):
@@ -467,6 +472,8 @@ class TestRunner(object):
       argv += ['-E']
     if test.force_old_parser and '-N' in argv:
       argv.remove('-N')
+    if test.force_new_parser and '-N' not in argv:
+      argv.append('-N')
     if mode['spcomp']['name'] == 'spcomp2':
       argv += ['-o', test.smx_path]
     argv += [self.fix_path(spcomp_path, test.path)]

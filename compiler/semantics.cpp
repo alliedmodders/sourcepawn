@@ -215,11 +215,16 @@ IncDecExpr::Analyze()
             error(pos_, 152, expr_val.accessor->name);
             return false;
         }
+        if (!expr_val.accessor->getter) {
+            error(pos_, 149, expr_val.accessor->name);
+            return false;
+        }
+        markusage(expr_val.accessor->getter, uREAD);
         markusage(expr_val.accessor->setter, uREAD);
     }
 
     auto op = (token_ == tINC) ? user_inc : user_dec;
-    find_userop(op, val_.tag, 0, 1, &val_, &userop_);
+    find_userop(op, expr_val.tag, 0, 1, &expr_val, &userop_);
 
     // :TODO: more type checks
     val_.ident = iEXPRESSION;
