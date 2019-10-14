@@ -82,6 +82,10 @@ void TestAccessor()
   printfloat(o.val);
   o.val /= c;
   printfloat(o.val);
+
+  float vec[3] = {3.0, 4.0, 5.0};
+  vec[1] += vec[2];
+  printfloat(vec[1]);
 }
 
 public main()
