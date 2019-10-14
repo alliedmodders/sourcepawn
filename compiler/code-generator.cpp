@@ -425,9 +425,6 @@ void
 SymbolExpr::DoEmit()
 {
     switch (sym_->ident) {
-        case iCONSTEXPR:
-            ldconst(sym_->addr(), sPRI);
-            break;
         case iARRAY:
         case iREFARRAY:
             address(sym_, sPRI);
@@ -440,6 +437,7 @@ SymbolExpr::DoEmit()
         case iREFERENCE:
             break;
         default:
+            // Note: constexprs are handled in Expr::Emit().
             assert(false);
     }
 }
