@@ -422,11 +422,6 @@ BinaryExpr::ValidateAssignmentRHS()
     if (leftarray) {
         bool exact_match = true;
         int left_length = left_val.sym->dim.array.length;
-        if ((left_val.ident == iARRAYCELL || left_val.ident == iARRAYCHAR) && left_val.constval > 0 &&
-            left_val.sym->dim.array.level == 0)
-        {
-            left_length = left_val.constval;
-        }
         if (right_val.ident != iARRAY && right_val.ident != iREFARRAY &&
             (right_val.sym == nullptr || right_val.constval <= 0))
         {
