@@ -24,4 +24,5 @@ public main()
   printnum(!b);
   printfloat(FloatAbs(d));
   printfloat(FloatAbs(a));
+  printfloat(-d);
 }

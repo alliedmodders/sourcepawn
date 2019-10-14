@@ -76,6 +76,7 @@ Parser::hier14()
         case taMOD:
         case taSHRU:
         case taSHR:
+        case taSHL:
             break;
         case '=': /* simple assignment */
             if (sc_intest)
