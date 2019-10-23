@@ -33,5 +33,6 @@ binary.sources += [
 binary.compiler.linkflags += [
   SP.libspcomp2[arch].binary,
   SP.libsmx[arch].binary,
+  SP.libamtl[arch],
 ]
 builder.Add(binary)

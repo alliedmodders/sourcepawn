@@ -80,6 +80,7 @@ if builder.target.platform == 'linux' and not compiler.like('emscripten'):
 binary.compiler.linkflags[0:0] = [
   SP.libsmx[arch].binary,
   SP.zlib[arch],
+  SP.libamtl[arch],
 ]
 
 rvalue = builder.Add(binary)

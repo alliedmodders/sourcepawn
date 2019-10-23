@@ -15,7 +15,7 @@ env:
   matrix:
     - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86 AM_TYPE=optimize
     - AM_CC=clang AM_CXX=clang++ AM_ARCH=x64 AM_TYPE=optimize
-    - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=optimize
+#   - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=optimize
 #   - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=debug
     - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86 AM_TYPE=debug
     - AM_CC=clang AM_CXX=clang++ AM_ARCH=x64 AM_TYPE=debug
