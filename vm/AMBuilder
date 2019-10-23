@@ -120,6 +120,9 @@ if has_jit:
 shell.sources += [
   'shell.cpp'
 ]
+shell.compiler.linkflags[0:0] = [
+  SP.libamtl[arch],
+]
 spshell = builder.Add(shell)
 
 # Build the verifier.

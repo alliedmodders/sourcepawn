@@ -23,9 +23,6 @@
  *
  *  Version: $Id$
  */
-#include <amtl/am-platform.h>
-#include <amtl/am-string.h>
-#include <amtl/am-unused.h>
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -34,6 +31,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <amtl/am-platform.h>
+#include <amtl/am-string.h>
+#include <amtl/am-unused.h>
+#include <amtl/experimental/am-argparser.h>
+
 #include "types.h"
 
 #if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
@@ -95,6 +98,8 @@ static unsigned total_drives; /* dummy variable */
 #define VERSION_STR "3.2.3636"
 #define VERSION_INT 0x0302
 
+using namespace ke;
+
 int pc_anytag = 0;
 int pc_functag = 0;
 int pc_tag_string = 0;
@@ -115,7 +120,6 @@ static char* get_extension(char* filename);
 static void setopt(int argc, char** argv, char* oname, char* ename, char* pname);
 static void setconfig(char* root);
 static void setcaption(void);
-static void about(void);
 static void setconstants(void);
 static void parse(void);
 static void dumplits(void);
@@ -717,189 +721,181 @@ set_extension(char* filename, const char* extension, int force) {
         strcat(filename, extension);
 }
 
-static const char*
-option_value(const char* optptr, char** argv, int argc, int* arg) {
-    const char* ptr;
-
-    if (*(optptr + 1) == '=' || *(optptr + 1) == ':')
-        ptr = optptr + 2;
-    else
-        ptr = optptr + 1;
-
-    if (strlen(ptr) == 0 && *arg != argc - 1)
-        ptr = argv[++*arg];
-
-    return ptr;
-}
-
-static int
-toggle_option(const char* optptr, int option) {
-    switch ((*(optptr + 1) == '=' || *(optptr + 1) == ':') ? *(optptr + 2) : *(optptr + 1)) {
-        case '-':
-            option = FALSE;
-            break;
-        case '+':
-            option = TRUE;
-            break;
-        default:
-            about();
-    }
-    return option;
-}
-
-/* Parsing command line options is indirectly recursive: parseoptions()
- * calls parserespf() to handle options in a a response file and
- * parserespf() calls parseoptions() at its turn after having created
- * an "option list" from the contents of the file.
- */
-static void parserespf(char* filename, char* oname, char* ename, char* pname);
+args::BoolOption opt_assembly("-a", "--assembly-only", Some(false), "Output assembler code");
+args::StringOption opt_active_dir("-D", "--active-dir", {}, "Active directory path");
+args::StringOption opt_error_file("-e", "--error-file", {}, "Error file path");
+#if defined __WIN32__ || defined _WIN32 || defined _Windows
+args::StringOption opt_hwnd("-H", "--hwnd", {},
+                            "Window handle to send a notification message on finish");
+#endif
+args::ToggleOption opt_warnings_as_errors("-E", "--warnings-as-errors", Some(false),
+                                          "Treat warnings as errors");
+args::ToggleOption opt_showincludes("-h", "--show-includes", Some(false),
+                                    "Show included file paths");
+args::ToggleOption opt_listing("-l", "--listing", Some(false),
+                               "Create list file (preprocess only)");
+args::IntOption opt_compression("-z", "--compress-level", Some(9),
+                                "Compression level, default 9 (0=none, 1=worst, 9=best)");
+args::IntOption opt_tabsize("-t", "--tabsize", Some(8),
+                            "TAB indent size (in character positions, default=8)");
+args::StringOption opt_verbosity("-v", "--verbose", {},
+                                 "Verbosity level; 0=quiet, 1=normal, 2=verbose");
+args::IntOption opt_codeversion("-x", "--code-version", {},
+                                 "Code version level (testing only)");
+args::StringOption opt_prefixfile("-p", "--prefix", {}, "Set name of \"prefix\" file");
+args::StringOption opt_outputfile("-o", "--output", {},
+                                  "Set base name of (P-code) output file");
+args::IntOption opt_optlevel("-O", "--opt-level", Some(2),
+                             "Optimization level (0=none, 2=full)");
+args::RepeatOption<AString> opt_includes("-i", "--include", "Path for include files");
+args::RepeatOption<AString> opt_warnings("-w", "--warning",
+                                         "Disable a specific warning by its number.");
+args::EnableOption opt_new_parser("-N", "--new-parser", false, "Use the new parser.");
+args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
+                                  "Require a semicolon to end each statement.");
 
 static void
-parseoptions(int argc, char** argv, char* oname, char* ename, char* pname) {
-    char str[_MAX_PATH];
-    const char* ptr;
-    int arg, i, isoption;
+Usage(args::Parser& parser, int argc, char** argv)
+{
+    if (strlen(errfname) == 0) {
+        setcaption();
+        parser.usage(stdout, argc, argv);
+    }
+    exit(1);
+}
 
-    for (arg = 1; arg < argc; arg++) {
-#if DIRSEP_CHAR == '/'
-        isoption = argv[arg][0] == '-';
-#else
-        isoption = argv[arg][0] == '/' || argv[arg][0] == '-';
+static void
+parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
+{
+    args::Parser parser;
+    parser.enable_inline_values();
+    parser.collect_extra_args();
+#if DIRSEP_CHAR != '/'
+    parser.allow_slashes();
 #endif
-        if (isoption) {
-            ptr = &argv[arg][1];
-            switch (*ptr) {
-                case 'a':
-                    if (*(ptr + 1) != '\0')
-                        about();
-                    sc_asmfile = TRUE; /* skip last pass of making binary file */
-                    if (verbosity > 1)
-                        verbosity = 1;
-                    break;
-                case 'D': /* set active directory */
-                    ptr = option_value(ptr, argv, argc, &arg);
+
+    parser.add_usage_line("sym=val", "Define constant \"sym\" with value \"val\".");
+    parser.add_usage_line("sym=", "Define constant \"sym\" with value 0.");
+
+    auto usage = "[options] <filename> [filename...]";
+    parser.set_usage_line(usage);
+
+    if (!parser.parse(argc, argv)) {
+        Usage(parser, argc, argv);
+    }
+
+    sc_warnings_are_errors = opt_warnings_as_errors.value();
+    sc_showincludes = opt_showincludes.value();
+    sc_listing = opt_listing.value();
+    sc_compression_level = opt_compression.value();
+    sc_tabsize = opt_tabsize.value();
+    sc_use_new_parser = opt_new_parser.value();
+    sc_needsemicolon = opt_semicolons.value();
+
+    if (opt_codeversion.hasValue()) {
+        switch (opt_codeversion.value()) {
+            case 13:
+            case 12:
+                pc_must_drop_stack = false;
+                /* Fallthrough */
+            case 10:
+                pc_code_version = opt_codeversion.value();
+                break;
+            default:
+                fprintf(stderr, "unknown code version: %d\n", opt_codeversion.value());
+                exit(1);
+        }
+    }
+
+    pc_optimize = opt_optlevel.value();
+    if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER ||
+        pc_optimize == sOPTIMIZE_NOMACRO)
+    {
+        Usage(parser, argc, argv);
+    }
+
+    if (opt_prefixfile.hasValue())
+        strlcpy(pname, opt_prefixfile.value().chars(), _MAX_PATH);
+    if (opt_outputfile.hasValue())
+        strlcpy(oname, opt_outputfile.value().chars(), _MAX_PATH);
+
+    if (opt_verbosity.hasValue()) {
+        if (isdigit(*opt_verbosity.value().chars()))
+            verbosity = atoi(opt_verbosity.value().chars());
+        else
+            verbosity = 2;
+    }
+
+    sc_asmfile = opt_assembly.value();
+    if (sc_asmfile && verbosity > 1)
+        verbosity = 1;
+
+    if (opt_active_dir.hasValue()) {
+        const char* ptr = opt_active_dir.value().chars();
 #if defined dos_setdrive
-                    if (ptr[1] == ':')
-                        dos_setdrive(toupper(*ptr) - 'A' + 1); /* set active drive */
+        if (ptr[1] == ':')
+            dos_setdrive(toupper(*ptr) - 'A' + 1); /* set active drive */
 #endif
-                    if (chdir(ptr)) {
-                        fprintf(stderr, "chdir failed: %s\n", strerror(errno));
-                        exit(1);
-                    }
-                    break;
-                case 'e':
-                    strlcpy(ename, option_value(ptr, argv, argc, &arg),
-                            _MAX_PATH); /* set name of error file */
-                    break;
-                case 'E':
-                    sc_warnings_are_errors = true;
-                    break;
-#if defined __WIN32__ || defined _WIN32 || defined _Windows
-                case 'H':
-                    hwndFinish = (HWND)atoi(option_value(ptr, argv, argc, &arg));
-                    if (!IsWindow(hwndFinish))
-                        hwndFinish = (HWND)0;
-                    break;
-#endif
-                case 'h':
-                    sc_showincludes = 1;
-                    break;
-                case 'i':
-                    strlcpy(str, option_value(ptr, argv, argc, &arg),
-                            sizeof str); /* set name of include directory */
-                    i = strlen(str);
-                    if (i > 0) {
-                        if (str[i - 1] != DIRSEP_CHAR) {
-                            str[i] = DIRSEP_CHAR;
-                            str[i + 1] = '\0';
-                        }
-                        insert_path(str);
-                    }
-                    break;
-                case 'l':
-                    if (*(ptr + 1) != '\0')
-                        about();
-                    sc_listing = TRUE; /* skip second pass & code generation */
-                    break;
-                case 'N':
-                    sc_use_new_parser = true;
-                    break;
-                case 'o':
-                    strlcpy(oname, option_value(ptr, argv, argc, &arg),
-                            _MAX_PATH); /* set name of (binary) output file */
-                    break;
-                case 'O':
-                    pc_optimize = *option_value(ptr, argv, argc, &arg) - '0';
-                    if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER ||
-                        pc_optimize == sOPTIMIZE_NOMACRO)
-                        about();
-                    break;
-                case 'p':
-                    strlcpy(pname, option_value(ptr, argv, argc, &arg),
-                            _MAX_PATH); /* set name of implicit include file */
-                    break;
-                case 't':
-                    sc_tabsize = atoi(option_value(ptr, argv, argc, &arg));
-                    break;
-                case 'v':
-                    verbosity = isdigit(*option_value(ptr, argv, argc, &arg))
-                                    ? atoi(option_value(ptr, argv, argc, &arg))
-                                    : 2;
-                    if (sc_asmfile && verbosity > 1)
-                        verbosity = 1;
-                    break;
-                case 'w':
-                    i = (int)strtol(option_value(ptr, argv, argc, &arg), (char**)&ptr, 10);
-                    if (*ptr == '-')
-                        pc_enablewarning(i, 0);
-                    else if (*ptr == '+')
-                        pc_enablewarning(i, 1);
-                    else if (*ptr == '\0')
-                        pc_enablewarning(i, 2);
-                    break;
-                case 'x':
-                    i = (int)strtol(option_value(ptr, argv, argc, &arg), (char**)&ptr, 10);
-                    switch (i) {
-                        case 13:
-                        case 12:
-                            pc_must_drop_stack = false;
-                            /* Fallthrough */
-                        case 10:
-                            pc_code_version = i;
-                            break;
-                        default:
-                            fprintf(stderr, "unknown code version: %d\n", i);
-                            exit(1);
-                    }
-                    break;
-                case 'z':
-                    sc_compression_level = atoi(option_value(ptr, argv, argc, &arg));
-                    break;
-                case '\\': /* use \ instead for escape characters */
-                    sc_ctrlchar = '\\';
-                    break;
-                case '^': /* use ^ instead for escape characters */
-                    sc_ctrlchar = '^';
-                    break;
-                case ';':
-                    sc_needsemicolon = toggle_option(ptr, sc_needsemicolon);
-                    break;
-                default: /* wrong option */
-                    about();
+            if (chdir(ptr)) {
+                fprintf(stderr, "chdir failed: %s\n", strerror(errno));
+                exit(1);
             }
-        } else if (argv[arg][0] == '@') {
-            parserespf(&argv[arg][1], oname, ename, pname);
-        } else if ((ptr = strchr(argv[arg], '=')) != NULL) {
-            i = (int)(ptr - argv[arg]);
+    }
+
+    if (opt_error_file.hasValue())
+        strlcpy(ename, opt_error_file.value().chars(), _MAX_PATH);
+
+#if defined __WIN32__ || defined _WIN32 || defined _Windows
+    if (opt_hwnd.hasValue()) {
+        hwndFinish = (HWND)atoi(opt_hwnd.value().chars());
+        if (!IsWindow(hwndFinish))
+            hwndFinish = (HWND)0;
+    }
+#endif
+
+    for (const auto& inc_path : opt_includes.values()) {
+        char str[_MAX_PATH];
+        ke::SafeStrcpy(str, sizeof(str), inc_path.chars());
+
+        size_t i = strlen(str);
+        if (i > 0) {
+            if (str[i - 1] != DIRSEP_CHAR) {
+                str[i] = DIRSEP_CHAR;
+                str[i + 1] = '\0';
+            }
+            insert_path(str);
+        }
+    }
+
+    for (const auto& warning : opt_warnings.values()) {
+        char* ptr;
+        int i = (int)strtol(warning.chars(), (char**)&ptr, 10);
+        if (*ptr == '-')
+            pc_enablewarning(i, 0);
+        else if (*ptr == '+')
+            pc_enablewarning(i, 1);
+        else if (*ptr == '\0')
+            pc_enablewarning(i, 2);
+    }
+
+    for (const auto& option : parser.extra_args()) {
+        char str[_MAX_PATH];
+        const char* ptr = nullptr;
+        const char* arg = option.chars();
+        if (arg[0] == '@') {
+            fprintf(stderr, "Response files (@ prefix) are no longer supported.");
+            exit(1);
+        } else if ((ptr = strchr(arg, '=')) != NULL) {
+            int i = (int)(ptr - arg);
             if (i > sNAMEMAX) {
                 i = sNAMEMAX;
-                error(200, argv[arg], sNAMEMAX); /* symbol too long, truncated to sNAMEMAX chars */
+                error(200, arg, sNAMEMAX); /* symbol too long, truncated to sNAMEMAX chars */
             }
-            strlcpy(str, argv[arg], i + 1); /* str holds symbol name */
+            strlcpy(str, arg, i + 1); /* str holds symbol name */
             i = atoi(ptr + 1);
             add_constant(str, i, sGLOBAL, 0);
         } else {
-            strlcpy(str, argv[arg], sizeof(str) - 5); /* -5 because default extension is ".sp" */
+            strlcpy(str, arg, sizeof(str) - 5); /* -5 because default extension is ".sp" */
             set_extension(str, ".sp", FALSE);
             insert_sourcefile(str);
             /* The output name is the first input name with a different extension,
@@ -916,48 +912,9 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname) {
             set_extension(oname, ".asm", TRUE);
         }
     }
-}
 
-static void
-parserespf(char* filename, char* oname, char* ename, char* pname) {
-#define MAX_OPTIONS 100
-    FILE* fp;
-    char *string, *ptr, **argv;
-    int argc;
-    long size;
-
-    if ((fp = fopen(filename, "r")) == NULL)
-        error(FATAL_ERROR_READ, filename);
-    /* load the complete file into memory */
-    fseek(fp, 0L, SEEK_END);
-    size = ftell(fp);
-    fseek(fp, 0L, SEEK_SET);
-    assert(size < INT_MAX);
-    if ((string = (char*)malloc((int)size + 1)) == NULL)
-        error(FATAL_ERROR_OOM); /* insufficient memory */
-    /* fill with zeros; in MS-DOS, fread() may collapse CR/LF pairs to
-     * a single '\n', so the string size may be smaller than the file
-     * size. */
-    memset(string, 0, (int)size + 1);
-    ke::Unused() << fread(string, 1, (int)size, fp);
-    fclose(fp);
-    /* allocate table for option pointers */
-    if ((argv = (char**)malloc(MAX_OPTIONS * sizeof(char*))) == NULL)
-        error(FATAL_ERROR_OOM); /* insufficient memory */
-    /* fill the options table */
-    ptr = strtok(string, " \t\r\n");
-    for (argc = 1; argc < MAX_OPTIONS && ptr != NULL; argc++) {
-        /* note: the routine skips argv[0], for compatibility with main() */
-        argv[argc] = ptr;
-        ptr = strtok(NULL, " \t\r\n");
-    }
-    if (ptr != NULL)
-        error(FATAL_ERROR_ALLOC_OVERFLOW, "option table");
-    /* parse the option table */
-    parseoptions(argc, argv, oname, ename, pname);
-    /* free allocated memory */
-    free(argv);
-    free(string);
+    if (get_sourcefile(0) == NULL)
+        Usage(parser, argc, argv);
 }
 
 static void
@@ -968,24 +925,7 @@ setopt(int argc, char** argv, char* oname, char* ename, char* pname) {
     *pname = '\0';
     strcpy(pname, sDEF_PREFIX);
 
-    /* first parse a "config" file with default options */
-    if (argv[0] != NULL) {
-        char cfgfile[_MAX_PATH];
-        char* ext;
-        strcpy(cfgfile, argv[0]);
-        if ((ext = strrchr(cfgfile, DIRSEP_CHAR)) != NULL) {
-            *(ext + 1) = '\0'; /* strip the program filename */
-            strcat(cfgfile, "pawn.cfg");
-        } else {
-            strcpy(cfgfile, "pawn.cfg");
-        }
-        if (access(cfgfile, 4) == 0)
-            parserespf(cfgfile, oname, ename, pname);
-    }
-
     parseoptions(argc, argv, oname, ename, pname);
-    if (get_sourcefile(0) == NULL)
-        about();
 }
 
 #if defined __BORLANDC__ || defined __WATCOMC__
@@ -1067,60 +1007,6 @@ setcaption(void) {
     pc_printf("SourcePawn Compiler %s\n", SOURCEPAWN_VERSION);
     pc_printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
     pc_printf("Copyright (c) 2004-2018 AlliedModders LLC\n\n");
-}
-
-static void
-about(void) {
-    if (strlen(errfname) == 0) {
-        setcaption();
-        pc_printf("Usage:   spcomp <filename> [filename...] [options]\n\n");
-        pc_printf("Options:\n");
-        pc_printf("         -a       output assembler code\n");
-        pc_printf("         -Dpath   active directory path\n");
-        pc_printf("         -e<name> set name of error file (quiet compile)\n");
-#if defined __WIN32__ || defined _WIN32 || defined _Windows
-        pc_printf("         -H<hwnd> window handle to send a notification message on finish\n");
-#endif
-        pc_printf("         -h       show included file paths\n");
-        pc_printf("         -i<name> path for include files\n");
-        pc_printf("         -l       create list file (preprocess only)\n");
-        pc_printf("         -o<name> set base name of (P-code) output file\n");
-        pc_printf("         -O<num>  optimization level (default=-O%d)\n", pc_optimize);
-        pc_printf("             0    no optimization\n");
-#if 0 /* not used for SourceMod */
-    pc_printf("             1    JIT-compatible optimizations only\n");
-#endif
-        pc_printf("             2    full optimizations\n");
-        pc_printf("         -p<name> set name of \"prefix\" file\n");
-        pc_printf("         -t<num>  TAB indent size (in character positions, default=%d)\n",
-                  sc_tabsize);
-        pc_printf("         -v<num>  verbosity level; 0=quiet, 1=normal, 2=verbose (default=%d)\n",
-                  verbosity);
-        pc_printf("         -w<num>  disable a specific warning by its number\n");
-        pc_printf("         -z<num>  compression level, default=9 (0=none, 1=worst, 9=best)\n");
-        pc_printf("         -E       treat warnings as errors\n");
-        pc_printf("         -\\       use '\\' for escape characters\n");
-        pc_printf("         -^       use '^' for escape characters\n");
-        pc_printf("         -;<+/->  require a semicolon to end each statement (default=%c)\n",
-                  sc_needsemicolon ? '+' : '-');
-        pc_printf("         sym=val  define constant \"sym\" with value \"val\"\n");
-        pc_printf("         sym=     define constant \"sym\" with value 0\n");
-#if defined __WIN32__ || defined _WIN32 || defined _Windows || defined __MSDOS__
-        pc_printf(
-            "\nOptions may start with a dash or a slash; the options \"-d0\" and \"/d0\" are\n");
-        pc_printf("equivalent.\n");
-#endif
-        pc_printf(
-            "\nOptions with a value may optionally separate the value from the option letter\n");
-        pc_printf(
-            "with a colon (\":\"), an equal sign (\"=\"), or a space (\" \"). That is, the options "
-            "\"-d0\", \"-d=0\",\n");
-        pc_printf(
-            "\"-d:0\", and \"-d 0\" are all equivalent. \"-;\" is an exception to this and cannot "
-            "use a space.\n");
-    }
-    norun = 1;
-    longjmp(errbuf, 3); /* user abort */
 }
 
 static void
