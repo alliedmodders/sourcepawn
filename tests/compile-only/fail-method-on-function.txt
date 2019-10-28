@@ -1,1 +1,1 @@
-cannot call methods on a function
+(11) : error 104: cannot find any methods for function

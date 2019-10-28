@@ -753,7 +753,7 @@ args::IntOption opt_optlevel("-O", "--opt-level", Some(2),
 args::RepeatOption<AString> opt_includes("-i", "--include", "Path for include files");
 args::RepeatOption<AString> opt_warnings("-w", "--warning",
                                          "Disable a specific warning by its number.");
-args::EnableOption opt_new_parser("-N", "--new-parser", false, "Use the new parser.");
+args::EnableOption opt_new_parser("-N", "--new-parser", true, "Use the new parser.");
 args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
 
