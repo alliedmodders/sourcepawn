@@ -360,8 +360,7 @@ BinaryExpr::ValidateAssignmentLHS()
         return true;
     }
 
-    int right_ident = right_->val().ident;
-    if (left_ident == iARRAY || right_ident == iREFARRAY) {
+    if (left_ident == iARRAY || left_ident == iREFARRAY) {
         // array assignment is permitted too (with restrictions)
         if (oper_) {
             error(pos_, 23);
