@@ -724,7 +724,7 @@ set_extension(char* filename, const char* extension, int force) {
         strcat(filename, extension);
 }
 
-args::BoolOption opt_assembly("-a", "--assembly-only", Some(false), "Output assembler code");
+args::ToggleOption opt_assembly("-a", "--assembly-only", Some(false), "Output assembler code");
 args::StringOption opt_active_dir("-D", "--active-dir", {}, "Active directory path");
 args::StringOption opt_error_file("-e", "--error-file", {}, "Error file path");
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
