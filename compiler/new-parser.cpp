@@ -47,6 +47,7 @@ Parser::expression(value* lval)
         *lval = value::ErrorValue();
         return FALSE;
     }
+    expr->ProcessUses();
 
     *lval = expr->val();
     if (cc_ok())

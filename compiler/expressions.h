@@ -106,7 +106,6 @@ cell array_totalsize(symbol* sym);
 cell array_levelsize(symbol* sym, int level);
 int commutative(void (*oper)());
 cell calc(cell left, void (*oper)(), cell right, char* boolresult);
-void checkfunction(const value* lval);
 bool is_valid_index_tag(int tag);
 int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag);
 int matchtag(int formaltag, int actualtag, int allowcoerce);

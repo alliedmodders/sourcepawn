@@ -124,6 +124,11 @@ RvalueExpr::RvalueExpr(Expr* expr)
     }
 }
 
+void
+RvalueExpr::ProcessUses()
+{
+    expr_->MarkAndProcessUses();
+}
 
 bool
 IsDefinedExpr::Analyze()
@@ -192,6 +197,12 @@ UnaryExpr::HasSideEffects()
     return expr_->HasSideEffects();
 }
 
+void
+UnaryExpr::ProcessUses()
+{
+    expr_->MarkAndProcessUses();
+}
+
 bool
 IncDecExpr::Analyze()
 {
@@ -232,6 +243,12 @@ IncDecExpr::Analyze()
     return true;
 }
 
+void
+IncDecExpr::ProcessUses()
+{
+    expr_->MarkAndProcessUses();
+}
+
 BinaryExprBase::BinaryExprBase(const token_pos_t& pos, int token, Expr* left, Expr* right)
   : Expr(pos),
     token_(token),
@@ -247,6 +264,13 @@ BinaryExprBase::HasSideEffects()
     return left_->HasSideEffects() ||
            right_->HasSideEffects() ||
            IsAssignOp(token_);
+}
+
+void
+BinaryExprBase::ProcessUses()
+{
+    left_->MarkAndProcessUses();
+    right_->MarkAndProcessUses();
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
@@ -300,9 +324,6 @@ BinaryExpr::Analyze()
 
     if (oper_) {
         assert(token_ != '=');
-
-        checkfunction(&left_val);
-        checkfunction(&right_val);
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
             const char* ptr = (left_val.sym != NULL) ? left_val.sym->name() : "-unknown-";
@@ -486,18 +507,6 @@ BinaryExpr::ValidateAssignmentRHS()
         find_userop(nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
     }
 
-    switch (left_val.ident) {
-        case iARRAYCELL:
-        case iARRAYCHAR:
-        case iARRAY:
-        case iREFARRAY:
-            break;
-        default:
-            if (!oper_)
-                checkfunction(&left_val);
-            break;
-    }
-
     if (!oper_ && !checkval_string(&left_val, &right_val)) {
         if ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
             (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string))
@@ -591,9 +600,6 @@ ChainedCompareExpr::Analyze()
         const auto& left_val = left->val();
         const auto& right_val = right->val();
 
-        checkfunction(&left_val);
-        checkfunction(&right_val);
-
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
             const char* ptr = (left_val.sym != NULL) ? left_val.sym->name() : "-unknown-";
             error(pos_, 33, ptr); /* array must be indexed */
@@ -648,6 +654,14 @@ ChainedCompareExpr::Analyze()
         val_.constval = constval ? 1 :0;
     }
     return true;
+}
+
+void
+ChainedCompareExpr::ProcessUses()
+{
+    first_->ProcessUses();
+    for (const auto& op : ops_)
+        op.expr->ProcessUses();
 }
 
 bool
@@ -705,6 +719,14 @@ TernaryExpr::Analyze()
     return true;
 }
 
+void
+TernaryExpr::ProcessUses()
+{
+    first_->MarkAndProcessUses();
+    second_->MarkAndProcessUses();
+    third_->MarkAndProcessUses();
+}
+
 bool
 CastExpr::Analyze()
 {
@@ -735,6 +757,12 @@ CastExpr::Analyze()
     }
     val_.tag = tag_;
     return true;
+}
+
+void
+CastExpr::ProcessUses()
+{
+    expr_->MarkAndProcessUses();
 }
 
 bool
@@ -845,6 +873,14 @@ CommaExpr::Analyze()
     if (exprs_.length() > 1 && val_.ident == iCONSTEXPR)
         val_.ident = iEXPRESSION;
     return true;
+}
+
+void
+CommaExpr::ProcessUses()
+{
+    for (const auto& expr : exprs_)
+        expr->ProcessUses();
+    exprs_.back()->MarkUsed();
 }
 
 bool
@@ -971,6 +1007,13 @@ IndexExpr::Analyze()
 
     lvalue_ = true;
     return true;
+}
+
+void
+IndexExpr::ProcessUses()
+{
+    base_->MarkAndProcessUses();
+    expr_->MarkAndProcessUses();
 }
 
 bool
@@ -1103,6 +1146,12 @@ FieldAccessExpr::Analyze()
     val_.sym = method_->target;
     markusage(method_->target, uREAD);
     return true;
+}
+
+void
+FieldAccessExpr::ProcessUses()
+{
+    base_->MarkAndProcessUses();
 }
 
 symbol*
@@ -1361,6 +1410,12 @@ CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
 {
     val_.ident = iEXPRESSION;
     val_.tag = userop_.sym->tag;
+}
+
+void
+CallUserOpExpr::ProcessUses()
+{
+    expr_->MarkAndProcessUses();
 }
 
 DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, arginfo* arg)
@@ -1670,4 +1725,32 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
     argv_[pos].expr = param;
     argv_[pos].arg = arg;
     return true;
+}
+
+void
+CallExpr::ProcessUses()
+{
+    for (const auto& arg : argv_) {
+        if (!arg.expr)
+            continue;
+        arg.expr->MarkAndProcessUses();
+    }
+}
+
+void
+CallExpr::MarkUsed()
+{
+    if ((sym_->usage & uDEFINE) != 0) {
+        /* function is defined, can now check the return value (but make an
+         * exception for directly recursive functions)
+         */
+        if (sym_ != curfunc && (sym_->usage & uRETVALUE) == 0) {
+            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
+            funcdisplayname(symname, sym_->name());
+            error(pos_, 209, symname); /* function should return a value */
+        }
+    } else {
+        /* function not yet defined, set */
+        sym_->usage |= uRETVALUE;
+    }
 }

@@ -84,6 +84,12 @@ class Expr : public ParseNode
         return nullptr;
     }
 
+    // Process any child nodes whose value is consumed.
+    virtual void ProcessUses() = 0;
+
+    // Mark the node's value as consumed.
+    virtual void MarkUsed() {}
+
     void Emit() override;
 
     const value& val() const {
@@ -94,6 +100,11 @@ class Expr : public ParseNode
     }
     const token_pos_t& pos() const {
         return pos_;
+    }
+
+    void MarkAndProcessUses() {
+        MarkUsed();
+        ProcessUses();
     }
 
     // Casts.
@@ -137,6 +148,7 @@ class ErrorExpr final : public Expr
         return false;
     }
     void DoEmit() override {}
+    void ProcessUses() override {}
 };
 
 class IsDefinedExpr final : public Expr
@@ -150,6 +162,7 @@ class IsDefinedExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     cell value_ = 0;
@@ -171,6 +184,7 @@ class UnaryExpr final : public Expr
     bool Analyze() override;
     void DoEmit() override;
     bool HasSideEffects() override;
+    void ProcessUses() override;
 
   private:
     int token_;
@@ -189,6 +203,7 @@ class BinaryExprBase : public Expr
         return ok;
     }
     bool HasSideEffects() override;
+    void ProcessUses() override;
 
     int token() const {
         return token_;
@@ -278,6 +293,7 @@ class ChainedCompareExpr final : public Expr
     bool Analyze() override;
     void DoEmit() override;
     bool HasSideEffects() override;
+    void ProcessUses() override;
 
   private:
     Expr* first_;
@@ -305,6 +321,7 @@ class TernaryExpr final : public Expr
     bool HasSideEffects() override {
         return first_->HasSideEffects() || second_->HasSideEffects() || third_->HasSideEffects();
     }
+    void ProcessUses() override;
 
   private:
     Expr* first_;
@@ -328,6 +345,7 @@ class IncDecExpr : public Expr
     bool HasSideEffects() override {
         return true;
     }
+    void ProcessUses() override;
 
   protected:
     int token_;
@@ -373,6 +391,7 @@ class CastExpr final : public Expr
     bool HasSideEffects() override {
         return expr_->HasSideEffects();
     }
+    void ProcessUses() override;
 
   private:
     int token_;
@@ -394,6 +413,7 @@ class SizeofExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     // :TODO: switch more things to atoms.
@@ -417,6 +437,7 @@ class SymbolExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
     symbol* BindCallTarget(int token, Expr** implicit_this) override;
     symbol* BindNewTarget() override;
     SymbolExpr* AsSymbolExpr() override {
@@ -452,6 +473,8 @@ class CallExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void MarkUsed() override;
+    void ProcessUses() override;
     bool HasSideEffects() override {
         return true;
     }
@@ -497,6 +520,7 @@ class CallUserOpExpr final : public EmitOnlyExpr
         return true;
     }
     void DoEmit() override;
+    void ProcessUses() override;
 
   private:
     UserOperation userop_;
@@ -512,6 +536,7 @@ class DefaultArgExpr final : public EmitOnlyExpr
         return this;
     }
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     arginfo* arg_;
@@ -534,6 +559,7 @@ class FieldAccessExpr final : public Expr
     bool Analyze() override;
     bool HasSideEffects() override;
     void DoEmit() override;
+    void ProcessUses() override;
 
   private:
     bool AnalyzeStaticAccess();
@@ -563,6 +589,7 @@ class IndexExpr final : public Expr
     }
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override;
     bool HasSideEffects() override {
         return base_->HasSideEffects() || expr_->HasSideEffects();
     }
@@ -578,6 +605,7 @@ class RvalueExpr final : public EmitOnlyExpr
     explicit RvalueExpr(Expr* expr);
 
     void DoEmit() override;
+    void ProcessUses() override;
 
   private:
     Expr* expr_;
@@ -597,6 +625,7 @@ class CommaExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override;
     bool HasSideEffects() override {
         return has_side_effects_;
     }
@@ -617,6 +646,7 @@ class ThisExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     symbol* sym_;
@@ -631,6 +661,7 @@ class NullExpr final : public Expr
 
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 };
 
 class NumberExpr final : public Expr
@@ -643,6 +674,7 @@ class NumberExpr final : public Expr
 
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     cell value_;
@@ -658,6 +690,7 @@ class FloatExpr final : public Expr
 
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     cell value_;
@@ -674,6 +707,7 @@ class StringExpr final : public Expr
 
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
   private:
     cell lit_addr_;
@@ -690,6 +724,7 @@ class ArrayExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void ProcessUses() override {}
 
     PoolList<Expr*>& exprs() {
         return exprs_;
