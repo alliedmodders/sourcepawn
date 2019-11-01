@@ -908,7 +908,7 @@ dropout(int lvalue, void (*testfunc)(int val), int exit1, value* lval)
     (*testfunc)(exit1);
 }
 
-void
+static void
 checkfunction(const value* lval)
 {
     symbol* sym = lval->sym;
