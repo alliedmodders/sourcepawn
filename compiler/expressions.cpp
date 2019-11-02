@@ -2122,7 +2122,7 @@ SC3ExpressionParser::parse_view_as(value* lval)
 bool
 is_valid_index_tag(int tag)
 {
-    if (tag == 0)
+    if (tag == 0 || tag == pc_anytag)
         return true;
 
     Type* idx_type = gTypes.find(tag);
