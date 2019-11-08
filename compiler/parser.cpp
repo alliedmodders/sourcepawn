@@ -2404,9 +2404,12 @@ needsub()
     cell val;
     symbol* sym;
     exprconst(&val, &tag, &sym); /* get value (must be constant expression) */
-    if (val < 0) {
+    if (!is_valid_index_tag(tag)) {
+        error(77, gTypes.find(tag)->prettyName());
+        val = 1;
+    } else if (val < 0) {
         error(9); /* negative array size is invalid; assumed zero */
-        val = 0;
+        val = 1;
     }
     needtoken(']');
 

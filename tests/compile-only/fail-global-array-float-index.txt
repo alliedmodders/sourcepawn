@@ -1,0 +1,1 @@
+(1) : error 077: arrays cannot be indexed by non-integral type 'Float'
