@@ -3010,7 +3010,11 @@ find_symbol(const symbol* root, const char* name, int fnumber)
 void
 markusage(symbol* sym, int usage)
 {
-    assert(sym != NULL);
+    // When compiling a skipped function, do not accumulate liveness information
+    // for referenced functions.
+    if (sc_status == statSKIP && sym->ident == iFUNCTN)
+        return;
+
     sym->usage |= usage;
     if ((usage & uWRITTEN) != 0)
         sym->lnumber = fline;
