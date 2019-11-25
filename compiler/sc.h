@@ -191,8 +191,9 @@ struct symbol {
     // Constant: the symbol is defined in the source file.
     bool defined : 1;
 
-    // Function: prototyped, implicitly via a definition or explicitly
-    bool prototyped : 1;
+    // Functions only.
+    bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
+    bool missing : 1;       // the function is not implemented in this source file
 
     union {
         struct {
@@ -314,7 +315,6 @@ struct symbol {
  *        4     (uPUBLIC) the function is public
  *        5     (uNATIVE) the function is native
  *        6     (uSTOCK) the function is discardable (without warning)
- *        7     (uMISSING) the function is not implemented in this source file
  *        8     (uFORWARD) the function is explicitly forwardly declared
  *
  *  CONSTANT
@@ -335,7 +335,6 @@ struct symbol {
 #define uENUMROOT 0x020
 #define uSTOCK 0x040
 #define uENUMFIELD 0x040
-#define uMISSING 0x080
 #define uFORWARD 0x100
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
 #define uCALLBACK 0x400 /* Used as a callback */

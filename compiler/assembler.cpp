@@ -1441,7 +1441,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
 
             // If a function is marked as missing it should not be a public function
             // with a declaration.
-            if (sym->usage & uMISSING) {
+            if (sym->missing) {
                 assert(!((sym->usage & uPUBLIC) && sym->defined));
                 continue;
             }

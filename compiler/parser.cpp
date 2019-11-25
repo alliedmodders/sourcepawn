@@ -4566,15 +4566,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
      * been incorrectly flagged (as the return tag was unknown at the time of
      * the call)
      */
-    if ((sym->usage & (uPROTOTYPED | uREAD)) == uREAD && sym->tag != 0) {
-        int curstatus = sc_status;
-        sc_status = statWRITE; /* temporarily set status to WRITE, so the warning isn't blocked */
-#if 0                          /* SourceMod - silly, should be removed in first pass, so removed */
-    error(208);
-#endif
-        sc_status = curstatus;
+    if (!sym->prototyped && (sym->usage & uREAD) && sym->tag != 0)
         sc_reparse = TRUE; /* must add another pass to "initial scan" phase */
-    }
 
     /* declare all arguments */
     argcnt = declargs(sym, TRUE, thistag);
@@ -4658,7 +4651,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     }
 
     // Check that return tags match.
-    if ((sym->usage & uPROTOTYPED) && sym->tag != decl->type.tag) {
+    if (sym->prototyped && sym->tag != decl->type.tag) {
         int old_fline = fline;
         fline = funcline;
         error(180, type_to_name(sym->tag), type_to_name(decl->type.tag));

@@ -2973,7 +2973,7 @@ delete_symbols(symbol* root, int level, int delete_functions)
              * mark it as such, so that its use can be flagged
              */
             if (sym->ident == iFUNCTN && !sym->defined)
-                sym->usage |= uMISSING;
+                sym->missing = true;
             if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
                 sym->defined = false;
             /* for user defined operators, also remove the "prototyped" flag, as
@@ -3104,6 +3104,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    tag(symtag),
    defined(false),
    prototyped(false),
+   missing(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3129,6 +3130,7 @@ symbol::symbol(const symbol& other)
     name_ = other.name_;
     defined = other.defined;
     prototyped = other.prototyped;
+    missing = other.missing;
     x = other.x;
 }
 
