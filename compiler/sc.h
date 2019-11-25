@@ -196,6 +196,7 @@ struct symbol {
     bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback
     bool skipped : 1;       // skipped in codegen
+    bool retvalue : 1;      // function returns (or should return) a value
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
@@ -318,7 +319,6 @@ struct symbol {
  *  FUNCTION
  *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
  *        1     (uREAD) the function is invoked in the source file
- *        2     (uRETVALUE) the function returns a value (or should return a value)
  *        4     (uPUBLIC) the function is public
  *        5     (uNATIVE) the function is native
  *        6     (uSTOCK) the function is discardable (without warning)
@@ -331,18 +331,12 @@ struct symbol {
  */
 #define uREAD 0x002
 #define uWRITTEN 0x004
-#define uRETVALUE 0x004 /* function returns (or should return) a value */
 #define uCONST 0x008
 #define uPUBLIC 0x010
 #define uNATIVE 0x020
 #define uSTOCK 0x040
 #define uFORWARD 0x100
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
-/* uRETNONE is not stored in the "usage" field of a symbol. It is
- * used during parsing a function, to detect a mix of "return;" and
- * "return value;" in a few special cases.
- */
-#define uRETNONE 0x10
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
 #define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */

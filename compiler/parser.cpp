@@ -185,6 +185,12 @@ static void check_void_decl(const declinfo_t* decl, int variable);
 static void rewrite_type_for_enum_struct(typeinfo_t* info);
 
 enum {
+    RETURN_NONE = 0,
+    RETURN_NO_VALUE = 0x1,
+    RETURN_VALUE = 0x2,
+};
+
+enum {
     TEST_PLAIN,  /* no parentheses */
     TEST_PARENS, /* '(' <expr> ')' */
     TEST_OPT,    /* '(' <expr> ')' or <expr> */
@@ -194,13 +200,13 @@ static int autozero = 1;              /* if 1 will zero out the variable, if 0 o
 static int lastst = 0;                /* last executed statement type */
 static int nestlevel = 0;             /* number of active (open) compound statements */
 static int endlessloop = 0;           /* nesting level of endless loop */
-static int rettype = 0;               /* the type that a "return" expression should have */
 static int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
 static int sc_reparse = 0;            /* needs 3th parse because of changed prototypes? */
 static int sc_parsenum = 0;           /* number of the extra parses */
 static int wq[wqTABSZ];               /* "while queue", internal stack for nested loops */
 static int* wqptr;                    /* pointer to next entry */
 static char* sc_documentation = NULL; /* main documentation */
+static int sReturnType = RETURN_NONE;
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 static HWND hwndFinish = 0;
 #endif
@@ -629,7 +635,6 @@ resetglobals(void) {
     curfunc = NULL;        /* pointer to current function */
     lastst = 0;            /* last executed statement type */
     nestlevel = 0;         /* number of active (open) compound statements */
-    rettype = 0;           /* the type that a "return" expression should have */
     litidx = 0;            /* index to literal table */
     stgidx = 0;            /* index to the staging buffer */
     sc_labnum = 0;         /* top value of (internal) labels */
@@ -652,6 +657,8 @@ resetglobals(void) {
     sc_intest = false;
     sc_allowtags = true;
     fcurrent = 0;
+
+    sReturnType = RETURN_NONE;
 }
 
 static void
@@ -3732,7 +3739,6 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
     needtoken(tFUNCTION);
 
     parse_new_typename(NULL, &type->ret_tag);
-    type->usage = uPUBLIC;
 
     needtoken('(');
 
@@ -4284,7 +4290,7 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
 
     /* operators should return a value, except the '~' operator */
     if (opertok != '~')
-        sym->usage |= uRETVALUE;
+        sym->retvalue = true;
 
     return TRUE;
 }
@@ -4436,8 +4442,9 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     }
 
     if (fnative) {
-        sym->usage = (char)(uNATIVE | uRETVALUE);
+        sym->usage = (char)(uNATIVE);
         sym->defined = true;
+        sym->retvalue = true;
     } else if (fpublic) {
         sym->usage |= uPUBLIC;
     }
@@ -4495,7 +4502,6 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
  *  out of the following text
  *
  *  Global references: funcstatus,lastst,litidx
- *                     rettype  (altered)
  *                     curfunc  (altered)
  *                     declared (altered)
  *                     glb_declared (altered)
@@ -4625,7 +4631,10 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     declared = 0; /* number of local cells */
     resetstacklist();
     resetheaplist();
-    rettype = (sym->usage & uRETVALUE); /* set "return type" variable */
+    if (sym->retvalue)
+        sReturnType = RETURN_VALUE;
+    else
+        sReturnType = RETURN_NONE;
     curfunc = sym;
     define_args(); /* add the symbolic info for the function arguments */
     if (matchtoken('{')) {
@@ -4637,8 +4646,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     }
     statement(NULL, FALSE);
 
-    if ((rettype & uRETVALUE) != 0) {
-        sym->usage |= uRETVALUE;
+    if (sReturnType & RETURN_VALUE) {
+        sym->retvalue = true;
     } else {
         if (sym->tag == pc_tag_void && (sym->usage & uFORWARD) && !decl->type.tag &&
             !decl->type.is_new) {
@@ -4671,7 +4680,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (lastst != tRETURN) {
         ldconst(0, sPRI);
         ffret();
-        if ((sym->usage & uRETVALUE) != 0) {
+        if (sym->retvalue) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym->name());
             error(209, symname); /* function should return a value */
@@ -6111,7 +6120,8 @@ doassert(void) {
 }
 
 static int
-is_variadic(symbol* sym) {
+is_variadic(symbol* sym)
+{
     assert(sym->ident == iFUNCTN);
     arginfo* arg = &sym->function()->args[0];
     while (arg->ident) {
@@ -6122,12 +6132,9 @@ is_variadic(symbol* sym) {
     return FALSE;
 }
 
-/*  doreturn
- *
- *  Global references: rettype  (altered)
- */
 static void
-doreturn(void) {
+doreturn(void)
+{
     int tag, ident;
     int level;
     symbol *sym, *sub;
@@ -6136,7 +6143,7 @@ doreturn(void) {
         if (curfunc->tag == pc_tag_void)
             error(88);
         /* "return <value>" */
-        if ((rettype & uRETNONE) != 0)
+        if (sReturnType & RETURN_NONE)
             error(78); /* mix "return;" and "return value;" */
         ident = doexpr(TRUE, FALSE, TRUE, FALSE, &tag, &sym, TRUE);
         needtoken(tTERM);
@@ -6148,7 +6155,7 @@ doreturn(void) {
         /* see if this function already has a sub type (an array attached) */
         sub = curfunc->array_return();
         assert(sub == NULL || sub->ident == iREFARRAY);
-        if ((rettype & uRETVALUE) != 0) {
+        if (sReturnType & RETURN_VALUE) {
             int retarray = (ident == iARRAY || ident == iREFARRAY);
             /* there was an earlier "return" statement in this function */
             if ((sub == NULL && retarray) || (sub != NULL && !retarray))
@@ -6156,7 +6163,7 @@ doreturn(void) {
             if (retarray && (curfunc->usage & uPUBLIC) != 0)
                 error(90, curfunc->name()); /* public function may not return array */
         }
-        rettype |= uRETVALUE; /* function returns a value */
+        sReturnType |= RETURN_VALUE;
         /* check tagname with function tagname */
         assert(curfunc != NULL);
         if (!matchtag_string(ident, tag))
@@ -6249,13 +6256,13 @@ doreturn(void) {
     } else {
         /* this return statement contains no expression */
         ldconst(0, sPRI);
-        if ((rettype & uRETVALUE) != 0) {
+        if (sReturnType & RETURN_VALUE) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             assert(curfunc != NULL);
             funcdisplayname(symname, curfunc->name());
             error(209, symname); /* function should return a value */
         }
-        rettype |= uRETNONE; /* function does not return anything */
+        sReturnType |= RETURN_NO_VALUE;
     }
     destructsymbols(&loctab, 0); /* call destructor for *all* locals */
     if (pc_must_drop_stack) {

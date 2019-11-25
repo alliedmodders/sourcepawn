@@ -411,7 +411,7 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
     if (formal->ret_tag == actual->ret_tag)
         return TRUE;
     if (formal->ret_tag == pc_tag_void) {
-        if (actual->ret_tag == 0 && !(actual->usage & uRETVALUE))
+        if (actual->ret_tag == 0)
             return TRUE;
     }
     return FALSE;
@@ -649,14 +649,14 @@ checkfunction(const value* lval)
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */
-        if (sym != curfunc && (sym->usage & uRETVALUE) == 0) {
+        if (sym != curfunc && !sym->retvalue) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym->name());
             error(209, symname); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
-        sym->usage |= uRETVALUE; /* make sure that a future implementation of
+        sym->retvalue = true;    /* make sure that a future implementation of
                                   * the function uses "return <value>" */
     }
 }

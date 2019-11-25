@@ -115,7 +115,6 @@ funcenum_for_symbol(symbol* sym)
     auto ft = ke::MakeUnique<functag_t>();
 
     ft->ret_tag = sym->tag;
-    ft->usage = uPUBLIC & (sym->usage & uRETVALUE);
     ft->argcount = 0;
     ft->ommittable = FALSE;
     for (arginfo& arg : sym->function()->args) {

@@ -1741,13 +1741,13 @@ CallExpr::MarkUsed()
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */
-        if (sym_ != curfunc && (sym_->usage & uRETVALUE) == 0) {
+        if (sym_ != curfunc && !sym_->retvalue) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym_->name());
             error(pos_, 209, symname); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
-        sym_->usage |= uRETVALUE;
+        sym_->retvalue = true;
     }
 }

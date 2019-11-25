@@ -3107,6 +3107,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    missing(false),
    callback(false),
    skipped(false),
+   retvalue(false),
    enumroot(false),
    enumfield(false),
    predefined(false),
@@ -3142,6 +3143,7 @@ symbol::symbol(const symbol& other)
     predefined = other.predefined;
     callback = other.callback;
     skipped = other.skipped;
+    retvalue = other.retvalue;
 
     x = other.x;
 }
