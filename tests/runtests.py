@@ -470,10 +470,6 @@ class TestRunner(object):
     argv += ['-z', '1'] # Fast compilation for tests.
     if test.warnings_are_errors:
       argv += ['-E']
-    if test.force_old_parser and '-N' in argv:
-      argv.remove('-N')
-    if test.force_new_parser and '-N' not in argv:
-      argv.append('-N')
     if mode['spcomp']['name'] == 'spcomp2':
       argv += ['-o', test.smx_path]
     argv += [self.fix_path(spcomp_path, test.path)]

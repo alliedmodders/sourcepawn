@@ -359,7 +359,6 @@ struct value {
     cell constval;   /* value of the constant expression (if ident==iCONSTEXPR)
                          * also used for the size of a literal array */
     int tag;         /* tag (of the expression) */
-    char boolresult; /* boolean result for relational operators */
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.

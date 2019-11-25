@@ -753,7 +753,6 @@ args::IntOption opt_optlevel("-O", "--opt-level", Some(2),
 args::RepeatOption<AString> opt_includes("-i", "--include", "Path for include files");
 args::RepeatOption<AString> opt_warnings("-w", "--warning",
                                          "Disable a specific warning by its number.");
-args::EnableOption opt_new_parser("-N", "--new-parser", true, "Use the new parser.");
 args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
 
@@ -792,7 +791,6 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     sc_listing = opt_listing.value();
     sc_compression_level = opt_compression.value();
     sc_tabsize = opt_tabsize.value();
-    sc_use_new_parser = opt_new_parser.value();
     sc_needsemicolon = opt_semicolons.value();
 
     if (opt_codeversion.hasValue()) {
@@ -5580,8 +5578,7 @@ doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sy
 
     // Disable the optimizer since it is wildly inaccurate for certain
     // patterns in the new code generator.
-    int opt_level = sc_use_new_parser ? sOPTIMIZE_NONE : pc_optimize;
-    ke::SaveAndSet<int> disable_phopt(&pc_optimize, opt_level);
+    ke::SaveAndSet<int> disable_phopt(&pc_optimize, sOPTIMIZE_NONE);
 
     if (!staging) {
         stgset(TRUE); /* start stage-buffering */
@@ -5666,9 +5663,7 @@ test(int label, int parens, int invert) {
 #endif
     }
 
-    int opt_level = sc_use_new_parser ? sOPTIMIZE_NONE : pc_optimize;
-    ke::SaveAndSet<int> disable_phopt(&pc_optimize, opt_level);
-
+    ke::SaveAndSet<int> disable_phopt(&pc_optimize, sOPTIMIZE_NONE);
     ke::SaveAndSet<bool> in_test(&sc_intest, true);
 
     endtok = 0;
