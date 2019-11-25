@@ -440,18 +440,15 @@ BinaryExpr::ValidateAssignmentRHS()
                        !oper_ &&
                        (right_val.ident == iARRAY || right_val.ident == iREFARRAY));
     if (leftarray) {
-        bool exact_match = true;
-        int left_length = left_val.sym->dim.array.length;
-        if (right_val.ident != iARRAY && right_val.ident != iREFARRAY &&
-            (right_val.sym == nullptr || right_val.constval <= 0))
-        {
-            error(pos_, 33, right_val.sym ? right_val.sym->name() : "-unknown-");
+        if (right_val.ident != iARRAY && right_val.ident != iREFARRAY) {
+            error(pos_, 47);
             return false;
         }
 
-        // A lot of this looks overcomplicated or suspect. Audit it.
+        bool exact_match = true;
         cell right_length = 0;
         int right_idxtag = 0;
+        int left_length = left_val.sym->dim.array.length;
         if (right_val.sym) {
             // Change from the old logic - we immediately reject multi-dimensional
             // arrays in assignment and don't bother validating subarray assignment.
