@@ -4975,7 +4975,7 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
         argsym->compound = 0;
         if (type->ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (fun->usage & (uPUBLIC | uSTOCK | uCALLBACK))
+        if (fun->callback || (fun->usage & (uPUBLIC | uSTOCK)))
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
         if (type->usage & uCONST)
             argsym->usage |= uCONST;

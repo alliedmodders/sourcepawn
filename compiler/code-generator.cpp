@@ -431,7 +431,7 @@ SymbolExpr::DoEmit()
             break;
         case iFUNCTN:
             load_glbfn(sym_);
-            markusage(sym_, uCALLBACK);
+            sym_->callback = true;
             break;
         case iVARIABLE:
         case iREFERENCE:
