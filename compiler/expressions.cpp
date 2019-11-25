@@ -145,8 +145,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     operator_symname(symbolname, opername, tag1, tag2, numparam, tag2);
     swapparams = false;
     sym = findglb(symbolname);
-    if (sym == NULL /*|| (sym->usage & uDEFINE)==0*/)
-    { /* ??? should not check uDEFINE; first pass clears these bits */
+    if (!sym) {
         /* check for commutative operators */
         if (tag1 == tag2 || oper == NULL || !commutative(oper))
             return false; /* not commutative, cannot swap operands */
@@ -157,7 +156,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
         operator_symname(symbolname, opername, tag2, tag1, numparam, tag1);
         swapparams = true;
         sym = findglb(symbolname);
-        if (sym == NULL /*|| (sym->usage & uDEFINE)==0*/)
+        if (!sym)
             return false;
     }
 
@@ -646,7 +645,7 @@ checkfunction(const value* lval)
     if (sym == NULL || (sym->ident != iFUNCTN))
         return; /* no known symbol, or not a function result */
 
-    if ((sym->usage & uDEFINE) != 0) {
+    if (sym->defined) {
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */

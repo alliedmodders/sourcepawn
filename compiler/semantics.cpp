@@ -792,7 +792,7 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
     }
 
     if (sym_->vclass == sGLOBAL && sym_->ident != iFUNCTN) {
-        if ((sym_->usage & uDEFINE) == 0) {
+        if (!sym_->defined) {
             error(pos_, 17, sym_->name());
             return false;
         }
@@ -1326,7 +1326,7 @@ SizeofExpr::Analyze()
     } else if (sym->ident == iFUNCTN) {
         error(pos_, 72); // "function" symbol has no size
         return false;
-    } else if ((sym->usage & uDEFINE) == 0) {
+    } else if (!sym->defined) {
         error(pos_, 17, ident_->chars());
         return false;
     }
@@ -1737,7 +1737,7 @@ CallExpr::ProcessUses()
 void
 CallExpr::MarkUsed()
 {
-    if ((sym_->usage & uDEFINE) != 0) {
+    if (sym_->defined) {
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */

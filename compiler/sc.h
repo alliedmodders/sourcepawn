@@ -185,6 +185,12 @@ struct symbol {
     char flags;    /* see below for possible values */
     int compound;  /* compound level (braces nesting level) */
     int tag;       /* tagname id */
+
+    // Variable: the variable is defined in the source file.
+    // Function: the function is defined ("implemented") in the source file
+    // Constant: the symbol is defined in the source file.
+    bool defined : 1;
+
     union {
         struct {
             int index; /* array & enum: tag of array indices or the enum item */
@@ -317,7 +323,6 @@ struct symbol {
  *        5     (uENUMROOT) the constant is the "root" of an enumeration
  *        6     (uENUMFIELD) the constant is a field in a named enumeration
  */
-#define uDEFINE 0x001
 #define uREAD 0x002
 #define uWRITTEN 0x004
 #define uRETVALUE 0x004 /* function returns (or should return) a value */

@@ -1268,7 +1268,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     for (sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
             if ((sym->usage & uSTRUCT) && sym->vclass == sGLOBAL) {
-                if (sym->usage & uDEFINE) {
+                if (sym->defined) {
                     error(21, name->chars());
                 } else {
                     if (sym->usage & uPUBLIC && !fpublic)
@@ -1460,7 +1460,7 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
          * a) not found a matching variable (or rejected it, because it was a shadow)
          * b) found a global variable and we were looking for that global variable
          */
-        if (sym != NULL && (sym->usage & uDEFINE) != 0)
+        if (sym != NULL && sym->defined)
             error(21, decl->name); /* symbol already defined */
         /* if this variable is never used (which can be detected only in the
          * second stage), shut off code generation
@@ -1500,7 +1500,7 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
         } else { /* if declared but not yet defined, adjust the variable's address */
             sym->setAddr(address);
             sym->codeaddr = code_idx;
-            sym->usage |= uDEFINE;
+            sym->defined = true;
         }
         assert(sym != NULL);
         if (ispublic)
@@ -1564,7 +1564,7 @@ is_shadowed_name(const char* name)
     }
     // ignore implicitly prototyped names.
     if (symbol* sym = findglb(name))
-        return !(sym->ident == iFUNCTN && !(sym->usage & uDEFINE));
+        return !(sym->ident == iFUNCTN && !sym->defined);
     return false;
 }
 
@@ -3447,7 +3447,8 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef) {
                      iMETHODMAP, // ident
                      sGLOBAL,    // vclass
                      map->tag,   // tag
-                     uDEFINE);   // usage
+                     0);   // usage
+        sym->defined = true;
     }
     sym->methodmap = map;
 }
@@ -4265,7 +4266,7 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
     assert(strlen(opername) > 0);
     operator_symname(tmpname, opername, tags[0], tags[1], count, resulttag);
     if ((oldsym = findglb(tmpname)) != NULL) {
-        if ((oldsym->usage & uDEFINE) != 0) {
+        if (oldsym->defined) {
             char errname[2 * sNAMEMAX + 16];
             funcdisplayname(errname, tmpname);
             error(21, errname); /* symbol already defined */
@@ -4427,14 +4428,15 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
         return NULL;
     if ((sym->usage & uPROTOTYPED) != 0 && sym->tag != decl->type.tag)
         error(25);
-    if ((sym->usage & uDEFINE) == 0) {
+    if (!sym->defined) {
         // As long as the function stays undefined, update its address and tag.
         sym->setAddr(code_idx);
         sym->tag = decl->type.tag;
     }
 
     if (fnative) {
-        sym->usage = (char)(uNATIVE | uRETVALUE | uDEFINE | (sym->usage & uPROTOTYPED));
+        sym->usage = (char)(uNATIVE | uRETVALUE | (sym->usage & uPROTOTYPED));
+        sym->defined = true;
     } else if (fpublic) {
         sym->usage |= uPUBLIC;
     }
@@ -4443,7 +4445,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     declargs(sym, FALSE, thistag);
     /* "declargs()" found the ")" */
     if (!operatoradjust(decl->opertok, sym, decl->name, decl->type.tag))
-        sym->usage &= ~uDEFINE;
+        sym->defined = false;
 
     /* for a native operator, also need to specify an "exported" function name;
      * for a native function, this is optional
@@ -4545,7 +4547,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         sym->tag = decl->type.tag;
 
     // As long as the function stays undefined, update its address.
-    if (!(sym->usage & uDEFINE))
+    if (!sym->defined)
         sym->setAddr(code_idx);
 
     if (fpublic)
@@ -4583,7 +4585,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         sym->usage |= uREAD; /* "main()" is the program's entry point: always used */
     }
 
-    if ((sym->usage & uDEFINE) != 0)
+    if (sym->defined)
         error(21, sym->name());
 
     /* "declargs()" found the ")"; if a ";" appears after this, it was a
@@ -4618,11 +4620,11 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         error(234, decl->name, ptr); /* deprecated (probably a public function) */
     }
     begcseg();
-    sym->usage |= uDEFINE; /* set the definition flag */
+    sym->defined = true;
     if (stock)
         sym->usage |= uSTOCK;
     if (decl->opertok != 0 && opererror)
-        sym->usage &= ~uDEFINE;
+        sym->defined = false;
     startfunc(sym->name()); /* creates stack frame */
     insert_dbgline(funcline);
     setline(FALSE);
@@ -5114,7 +5116,7 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
         }
         switch (sym->ident) {
             case iFUNCTN:
-                if ((sym->usage & (uDEFINE | uREAD | uNATIVE | uSTOCK | uPUBLIC)) == uDEFINE) {
+                if ((sym->usage & (uREAD | uNATIVE | uSTOCK | uPUBLIC)) == 0 && sym->defined) {
                     funcdisplayname(symname, sym->name());
                     if (strlen(symname) > 0) {
                         error(sym, 203,
@@ -5337,8 +5339,8 @@ add_constant(const char* name, cell val, int vclass, int tag) {
 
     /* constant doesn't exist yet (or is allowed to be redefined) */
 redef_enumfield:
-    sym = addsym(name, val, iCONSTEXPR, vclass, tag, uDEFINE);
-    assert(sym != NULL); /* fatal error 103 must be given on error */
+    sym = addsym(name, val, iCONSTEXPR, vclass, tag, 0);
+    sym->defined = true;
     if (sc_status == statIDLE)
         sym->usage |= uPREDEF;
     return sym;

@@ -2972,10 +2972,10 @@ delete_symbols(symbol* root, int level, int delete_functions)
             /* if the function was prototyped, but not implemented in this source,
              * mark it as such, so that its use can be flagged
              */
-            if (sym->ident == iFUNCTN && (sym->usage & uDEFINE) == 0)
+            if (sym->ident == iFUNCTN && !sym->defined)
                 sym->usage |= uMISSING;
             if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
-                sym->usage &= ~uDEFINE; /* clear "defined" flag */
+                sym->defined = false;
             /* for user defined operators, also remove the "prototyped" flag, as
              * user-defined operators *must* be declared before use
              */
@@ -3102,6 +3102,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    flags(0),
    compound(0),
    tag(symtag),
+   defined(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3125,10 +3126,12 @@ symbol::symbol(const symbol& other)
  : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag, other.usage)
 {
     name_ = other.name_;
+    defined = other.defined;
     x = other.x;
 }
 
-symbol::~symbol() {
+symbol::~symbol()
+{
     if (ident == iFUNCTN) {
         /* run through the argument list; "default array" arguments
          * must be freed explicitly; the tag list must also be freed */
@@ -3218,7 +3221,7 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
      * "redeclared" if they are local to an automaton (and findglb() will find
      * the symbol without states if no symbol with states exists).
      */
-    assert(vclass != sGLOBAL || (sym = findglb(name)) == NULL || (sym->usage & uDEFINE) == 0 ||
+    assert(vclass != sGLOBAL || (sym = findglb(name)) == NULL || !sym->defined ||
            (sym->ident == iFUNCTN && sym == curfunc));
 
     if (ident == iARRAY || ident == iREFARRAY) {
@@ -3226,7 +3229,8 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
         int level;
         sym = NULL; /* to avoid a compiler warning */
         for (level = 0; level < numdim; level++) {
-            top = addsym(name, addr, ident, vclass, tag, uDEFINE);
+            top = addsym(name, addr, ident, vclass, tag, 0);
+            top->defined = true;
             top->dim.array.length = dim[level];
             top->dim.array.slength = 0;
             if (level == numdim - 1 && tag == pc_tag_string) {
@@ -3246,7 +3250,8 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
                 sym = top;
         }
     } else {
-        sym = addsym(name, addr, ident, vclass, tag, uDEFINE);
+        sym = addsym(name, addr, ident, vclass, tag, 0);
+        sym->defined = true;
     }
     return sym;
 }

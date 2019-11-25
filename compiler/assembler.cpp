@@ -1442,7 +1442,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
             // If a function is marked as missing it should not be a public function
             // with a declaration.
             if (sym->usage & uMISSING) {
-                assert((sym->usage & (uPUBLIC | uDEFINE)) != (uPUBLIC | uDEFINE));
+                assert(!((sym->usage & uPUBLIC) && sym->defined));
                 continue;
             }
 
@@ -1479,7 +1479,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
         symbol* sym = f.sym;
 
         assert(sym->addr() > 0);
-        assert(sym->usage & uDEFINE);
+        assert(sym->defined);
         assert(sym->codeaddr > sym->addr());
 
         sp_file_publics_t& pubfunc = publics->add();

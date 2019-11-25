@@ -136,7 +136,7 @@ IsDefinedExpr::Bind()
     symbol* sym = findloc(name_->chars());
     if (!sym)
         sym = findglb(name_->chars());
-    if (sym && sym->ident == iFUNCTN && (sym->usage & uDEFINE) == 0)
+    if (sym && sym->ident == iFUNCTN && !sym->defined)
         sym = nullptr;
     value_ = sym ? 1 : 0;
     if (!value_ && find_subst(name_->chars(), name_->length(), nullptr))
