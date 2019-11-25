@@ -1269,8 +1269,6 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
      * This is soley to expose the pubvar.
      */
     usage = uREAD | uCONST;
-    if (fpublic)
-        usage |= uPUBLIC;
     mysym = NULL;
     for (sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
@@ -1278,7 +1276,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
                 if (sym->defined) {
                     error(21, name->chars());
                 } else {
-                    if (sym->usage & uPUBLIC && !fpublic)
+                    if (sym->is_public && !fpublic)
                         error(42);
                 }
             } else {
@@ -1305,6 +1303,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
 
     mysym->usage = usage;
     mysym->is_struct = true;
+    mysym->is_public = !!fpublic;
     needtoken('{');
 
     do {
@@ -1512,8 +1511,10 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
             sym->defined = true;
         }
         assert(sym != NULL);
-        if (ispublic)
-            sym->usage |= uPUBLIC | uREAD;
+        if (ispublic) {
+            sym->usage |= uREAD;
+            sym->is_public = true;
+        }
         if (decl->type.usage & uCONST)
             sym->usage |= uCONST;
         if (fstock)
@@ -4448,7 +4449,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
         sym->defined = true;
         sym->retvalue = true;
     } else if (fpublic) {
-        sym->usage |= uPUBLIC;
+        sym->is_public = true;
     }
     sym->forward = true;
 
@@ -4560,11 +4561,11 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         sym->setAddr(code_idx);
 
     if (fpublic)
-        sym->usage |= uPUBLIC;
+        sym->is_public = true;
     if (fstatic)
         sym->fnumber = filenum;
 
-    if ((sym->usage & uPUBLIC) || sym->forward) {
+    if (sym->is_public || sym->forward) {
         if (decl->type.numdim > 0)
             error(141);
     }
@@ -4593,7 +4594,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     /* "declargs()" found the ")"; if a ";" appears after this, it was a
      * prototype */
     if (matchtoken(';')) {
-        if (sym->usage & uPUBLIC)
+        if (sym->is_public)
             error(10);
         sym->forward = true;
         if (!sc_needsemicolon)
@@ -4850,7 +4851,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
              */
             doarg(sym, &decl, (argcnt + 3) * sizeof(cell), chkshadow, &arg);
 
-            if ((sym->usage & uPUBLIC) && arg.hasdefault)
+            if (sym->is_public && arg.hasdefault)
                 error(59,
                       decl.name); /* arguments of a public function may not have a default value */
 
@@ -4986,7 +4987,7 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
         argsym->compound = 0;
         if (type->ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (fun->callback || fun->stock || (fun->usage & uPUBLIC))
+        if (fun->callback || fun->stock || fun->is_public)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
         if (type->usage & uCONST)
             argsym->usage |= uCONST;
@@ -5001,7 +5002,7 @@ is_symbol_unused(symbol* sym) {
         return false;
     if (!sym->is_unreferenced())
         return false;
-    if (sym->usage & uPUBLIC)
+    if (sym->is_public)
         return false;
     if (sym->ident == iVARIABLE || sym->ident == iARRAY)
         return true;
@@ -5055,7 +5056,7 @@ deduce_liveness(symbol* root) {
         if (sym->native)
             continue;
 
-        if (sym->usage & uPUBLIC) {
+        if (sym->is_public) {
             sym->flags |= flgQUEUED;
             work.append(sym);
         } else {
@@ -5121,7 +5122,7 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
         }
         switch (sym->ident) {
             case iFUNCTN:
-                if ((sym->usage & (uREAD | uPUBLIC)) == 0 && !(sym->native || sym->stock) &&
+                if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
                     sym->defined)
                 {
                     funcdisplayname(symname, sym->name());
@@ -5130,7 +5131,7 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                               symname); /* symbol isn't used ... (and not public/native/stock) */
                     }
                 }
-                if ((sym->usage & uPUBLIC) != 0 || strcmp(sym->name(), uMAINFUNC) == 0)
+                if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
                     entry = TRUE; /* there is an entry point */
                 break;
             case iCONSTEXPR:
@@ -5148,7 +5149,7 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                     break; /* hierarchical data type */
                 if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0) {
                     error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
-                } else if (!sym->stock && (sym->usage & (uREAD | uPUBLIC)) == 0) {
+                } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
                     error(sym, 204, sym->name()); /* value assigned to symbol is never used */
                 }
                 /* also mark the variable (local or global) to the debug information */
@@ -6158,7 +6159,7 @@ doreturn(void)
             /* there was an earlier "return" statement in this function */
             if ((sub == NULL && retarray) || (sub != NULL && !retarray))
                 error(79); /* mixing "return array;" and "return value;" */
-            if (retarray && (curfunc->usage & uPUBLIC) != 0)
+            if (retarray && curfunc->is_public)
                 error(90, curfunc->name()); /* public function may not return array */
         }
         sReturnType |= RETURN_VALUE;

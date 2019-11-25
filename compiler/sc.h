@@ -191,8 +191,9 @@ struct symbol {
     // Constant: the symbol is defined in the source file.
     bool defined : 1;
 
-    // Variables and functions: discardable without warning
-    bool stock : 1;
+    // Variables and functions.
+    bool stock : 1;         // discardable without warning
+    bool is_public : 1;     // publicly exposed
 
     // TODO: make this an ident.
     bool is_struct : 1;
@@ -321,12 +322,10 @@ struct symbol {
  *        1     (uREAD) the variable is "read" (accessed) in the source file
  *        2     (uWRITTEN) the variable is altered (assigned a value)
  *        3     (uCONST) the variable is constant (may not be assigned to)
- *        4     (uPUBLIC) the variable is public
  *
  *  FUNCTION
  *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
  *        1     (uREAD) the function is invoked in the source file
- *        4     (uPUBLIC) the function is public
  *
  *  CONSTANT
  *  bits: 0     (uDEFINE) the symbol is defined in the source file
@@ -336,7 +335,6 @@ struct symbol {
 #define uREAD 0x002
 #define uWRITTEN 0x004
 #define uCONST 0x008
-#define uPUBLIC 0x010
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
 #define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */

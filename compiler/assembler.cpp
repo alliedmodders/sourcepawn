@@ -1442,14 +1442,14 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
             // If a function is marked as missing it should not be a public function
             // with a declaration.
             if (sym->missing) {
-                assert(!((sym->usage & uPUBLIC) && sym->defined));
+                assert(!(sym->is_public && sym->defined));
                 continue;
             }
 
-            if (sym->usage & (uPUBLIC | uREAD)) {
+            if (sym->is_public || (sym->usage & uREAD)) {
                 function_entry entry;
                 entry.sym = sym;
-                if (sym->usage & uPUBLIC) {
+                if (sym->is_public) {
                     entry.name = sym->name();
                 } else {
                     // Create a private name.
@@ -1464,7 +1464,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
                 continue;
             }
         } else if (sym->ident == iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
-            if ((sym->usage & uPUBLIC) != 0 && (sym->usage & (uREAD | uWRITTEN)) != 0) {
+            if (sym->is_public && (sym->usage & (uREAD | uWRITTEN)) != 0) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
                 pubvar.address = sym->addr();
                 pubvar.name = names->add(sym->nameAtom());
