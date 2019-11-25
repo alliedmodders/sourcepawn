@@ -161,12 +161,12 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     }
 
     /* check existance and the proper declaration of this function */
-    if ((sym->usage & uMISSING) != 0 || (sym->usage & uPROTOTYPED) == 0) {
+    if ((sym->usage & uMISSING) != 0 || !sym->prototyped) {
         char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
         funcdisplayname(symname, sym->name());
         if ((sym->usage & uMISSING) != 0)
             error(4, symname); /* function not defined */
-        if ((sym->usage & uPROTOTYPED) == 0)
+        if (!sym->prototyped)
             error(71, symname); /* operator must be declared before use */
     }
 

@@ -4426,7 +4426,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     sym = fetchfunc(decl->name);
     if (sym == NULL)
         return NULL;
-    if ((sym->usage & uPROTOTYPED) != 0 && sym->tag != decl->type.tag)
+    if (sym->prototyped && sym->tag != decl->type.tag)
         error(25);
     if (!sym->defined) {
         // As long as the function stays undefined, update its address and tag.
@@ -4435,7 +4435,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     }
 
     if (fnative) {
-        sym->usage = (char)(uNATIVE | uRETVALUE | (sym->usage & uPROTOTYPED));
+        sym->usage = (char)(uNATIVE | uRETVALUE);
         sym->defined = true;
     } else if (fpublic) {
         sym->usage |= uPUBLIC;
@@ -4543,7 +4543,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         return TRUE;
 
     // If the function has not been prototyed, set its tag.
-    if (!(sym->usage & uPROTOTYPED))
+    if (!sym->prototyped)
         sym->tag = decl->type.tag;
 
     // As long as the function stays undefined, update its address.
@@ -4761,14 +4761,14 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
      * of the existing definition
      */
     oldargcnt = 0;
-    if ((sym->usage & uPROTOTYPED) != 0)
+    if (sym->prototyped)
         while (arglist[oldargcnt].ident != 0)
             oldargcnt++;
     argcnt = 0; /* zero aruments up to now */
 
     if (thistag && *thistag != -1) {
         arginfo* argptr;
-        if ((sym->usage & uPROTOTYPED) == 0) {
+        if (!sym->prototyped) {
             // Push a copy of the terminal argument.
             sym->function()->resizeArgs(argcnt + 1);
 
@@ -4806,7 +4806,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
             check_void_decl(&decl, TRUE);
 
             if (decl.type.ident == iVARARGS) {
-                if ((sym->usage & uPROTOTYPED) == 0) {
+                if (!sym->prototyped) {
                     /* redimension the argument list, add the entry iVARARGS */
                     sym->function()->resizeArgs(argcnt + 1);
 
@@ -4849,7 +4849,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
                 error(59,
                       decl.name); /* arguments of a public function may not have a default value */
 
-            if ((sym->usage & uPROTOTYPED) == 0) {
+            if (!sym->prototyped) {
                 /* redimension the argument list, add the entry */
                 sym->function()->resizeArgs(argcnt + 1);
                 arglist[argcnt] = arg;
@@ -4867,7 +4867,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
         needtoken(')');
     }
 
-    sym->usage |= uPROTOTYPED;
+    sym->prototyped = true;
     errorset(sRESET, 0); /* reset error flag (clear the "panic mode")*/
     return argcnt;
 }

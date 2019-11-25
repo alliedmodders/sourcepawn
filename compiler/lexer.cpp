@@ -2980,7 +2980,7 @@ delete_symbols(symbol* root, int level, int delete_functions)
              * user-defined operators *must* be declared before use
              */
             if (sym->ident == iFUNCTN && !alpha(*sym->name()))
-                sym->usage &= ~uPROTOTYPED;
+                sym->prototyped = false;
             if (origRoot == &glbtab)
                 sym->clear_refers();
             root = sym; /* skip the symbol */
@@ -3103,6 +3103,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    compound(0),
    tag(symtag),
    defined(false),
+   prototyped(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3127,6 +3128,7 @@ symbol::symbol(const symbol& other)
 {
     name_ = other.name_;
     defined = other.defined;
+    prototyped = other.prototyped;
     x = other.x;
 }
 

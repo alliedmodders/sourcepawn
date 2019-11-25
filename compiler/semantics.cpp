@@ -801,7 +801,7 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
         // If the function is only in the table because it was inserted as
         // a stub in the first pass (used but never declared or implemented),
         // issue an error.
-        if ((sym_->usage & uPROTOTYPED) == 0)
+        if (!sym_->prototyped)
             error(pos_, 17, sym_->name());
 
         if (sym_->usage & uNATIVE) {

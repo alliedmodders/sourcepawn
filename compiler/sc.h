@@ -191,6 +191,9 @@ struct symbol {
     // Constant: the symbol is defined in the source file.
     bool defined : 1;
 
+    // Function: prototyped, implicitly via a definition or explicitly
+    bool prototyped : 1;
+
     union {
         struct {
             int index; /* array & enum: tag of array indices or the enum item */
@@ -308,7 +311,6 @@ struct symbol {
  *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
  *        1     (uREAD) the function is invoked in the source file
  *        2     (uRETVALUE) the function returns a value (or should return a value)
- *        3     (uPROTOTYPED) the function was prototyped (implicitly via a definition or explicitly)
  *        4     (uPUBLIC) the function is public
  *        5     (uNATIVE) the function is native
  *        6     (uSTOCK) the function is discardable (without warning)
@@ -327,7 +329,6 @@ struct symbol {
 #define uWRITTEN 0x004
 #define uRETVALUE 0x004 /* function returns (or should return) a value */
 #define uCONST 0x008
-#define uPROTOTYPED 0x008
 #define uPREDEF 0x008 /* constant is pre-defined */
 #define uPUBLIC 0x010
 #define uNATIVE 0x020
