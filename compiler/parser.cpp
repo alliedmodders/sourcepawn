@@ -1656,7 +1656,7 @@ declloc(int tokid) {
             modstk(-type->size * sizeof(cell));
             markstack(MEMUSE_STATIC, type->size);
             assert(curfunc != NULL);
-            assert((curfunc->usage & uNATIVE) == 0);
+            assert(!curfunc->native);
             if (curfunc->function()->stacksize < declared + 1)
                 curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         } else if (type->ident == iREFARRAY) {
@@ -1757,7 +1757,7 @@ declloc(int tokid) {
             /* genarray() pushes the address onto the stack, so we don't need to call modstk() here! */
             markheap(MEMUSE_DYNAMIC, 0);
             markstack(MEMUSE_STATIC, 1);
-            assert(curfunc != NULL && ((curfunc->usage & uNATIVE) == 0));
+            assert(curfunc != NULL && !curfunc->native);
             if (curfunc->function()->stacksize < declared + 1)
                 curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         }
@@ -3276,7 +3276,7 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
         }
     }
 
-    if (target->usage & uNATIVE)
+    if (target->native)
         require_newline(TerminatorPolicy::Semicolon);
     else
         require_newline(TerminatorPolicy::Newline);
@@ -3405,7 +3405,7 @@ parse_method(methodmap_t* map) {
         map->ctor = method.get();
     }
 
-    if (target->usage & uNATIVE)
+    if (target->native)
         require_newline(TerminatorPolicy::Semicolon);
     else
         require_newline(TerminatorPolicy::Newline);
@@ -4123,7 +4123,7 @@ fetchfunc(const char* name) {
         if (sym->ident != iFUNCTN) {
             error(21, name); /* yes, but not as a function */
             return NULL;     /* make sure the old symbol is not damaged */
-        } else if ((sym->usage & uNATIVE) != 0) {
+        } else if (sym->native) {
             error(21, name); /* yes, and it is a native */
         }
         assert(sym->vclass == sGLOBAL);
@@ -4442,7 +4442,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     }
 
     if (fnative) {
-        sym->usage = (char)(uNATIVE);
+        sym->native = true;
         sym->defined = true;
         sym->retvalue = true;
     } else if (fpublic) {
@@ -4546,7 +4546,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         return TRUE;
 
     // Not a valid function declaration if native.
-    if (sym->usage & uNATIVE)
+    if (sym->native)
         return TRUE;
 
     // If the function has not been prototyed, set its tag.
@@ -4833,7 +4833,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
 
             Type* type = gTypes.find(decl.type.semantic_tag());
             if (type->isEnumStruct()) {
-                if (sym->usage & uNATIVE)
+                if (sym->native)
                     error(135, type->name());
             }
 
@@ -5003,7 +5003,7 @@ is_symbol_unused(symbol* sym) {
         return false;
     if (sym->ident == iVARIABLE || sym->ident == iARRAY)
         return true;
-    return sym->ident == iFUNCTN && (sym->usage & uNATIVE) == 0 &&
+    return sym->ident == iFUNCTN && !sym->native &&
            strcmp(sym->name(), uMAINFUNC) != 0;
 }
 
@@ -5050,7 +5050,7 @@ deduce_liveness(symbol* root) {
     for (symbol* sym = root->next; sym; sym = sym->next) {
         if (sym->ident != iFUNCTN)
             continue;
-        if (sym->usage & uNATIVE)
+        if (sym->native)
             continue;
 
         if (sym->usage & uPUBLIC) {
@@ -5077,7 +5077,7 @@ deduce_liveness(symbol* root) {
     for (symbol* sym = root->next; sym; sym = sym->next) {
         if (sym->ident != iFUNCTN || (sym->flags & flgQUEUED))
             continue;
-        if (sym->usage & uNATIVE)
+        if (sym->native)
             continue;
         sym->usage &= ~(uWRITTEN | uREAD);
     }
@@ -5119,7 +5119,7 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
         }
         switch (sym->ident) {
             case iFUNCTN:
-                if ((sym->usage & (uREAD | uNATIVE | uSTOCK | uPUBLIC)) == 0 && sym->defined) {
+                if ((sym->usage & (uREAD | uSTOCK | uPUBLIC)) == 0 && !sym->native && sym->defined) {
                     funcdisplayname(symname, sym->name());
                     if (strlen(symname) > 0) {
                         error(sym, 203,
@@ -5154,7 +5154,7 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
 #endif
                 }
                 /* also mark the variable (local or global) to the debug information */
-                if ((sym->usage & (uWRITTEN | uREAD)) != 0 && (sym->usage & uNATIVE) == 0)
+                if ((sym->usage & (uWRITTEN | uREAD)) != 0 && !sym->native)
                     insert_dbgsymbol(sym);
         }
         sym = sym->next;

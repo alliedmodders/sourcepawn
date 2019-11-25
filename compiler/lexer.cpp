@@ -2944,7 +2944,7 @@ delete_symbols(symbol* root, int level, int delete_functions)
                 /* optionally preserve globals (variables & functions), but
                  * NOT native functions
                  */
-                mustdelete = delete_functions || (sym->usage & uNATIVE) != 0;
+                mustdelete = delete_functions || sym->native;
                 assert(sym->parent() == NULL);
                 break;
             case iMETHODMAP:
@@ -3109,6 +3109,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    skipped(false),
    retvalue(false),
    forward(false),
+   native(false),
    enumroot(false),
    enumfield(false),
    predefined(false),
@@ -3146,6 +3147,7 @@ symbol::symbol(const symbol& other)
     skipped = other.skipped;
     retvalue = other.retvalue;
     forward = other.forward;
+    native = other.native;
 
     x = other.x;
 }

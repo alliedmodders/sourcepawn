@@ -735,7 +735,7 @@ ffcall(symbol* sym, int numargs)
     assert(sym->ident == iFUNCTN);
     if (sc_asmfile)
         funcdisplayname(symname, sym->name());
-    if ((sym->usage & uNATIVE) != 0) {
+    if (sym->native) {
         /* reserve a SYSREQ id if called for the first time */
         stgwrite("\tsysreq.n ");
 
@@ -743,9 +743,8 @@ ffcall(symbol* sym, int numargs)
         symbol* target = sym;
         if (lookup_alias(aliasname, sym->name())) {
             symbol* asym = findglb(aliasname);
-            if (asym && asym->ident == iFUNCTN && ((sym->usage & uNATIVE) != 0)) {
+            if (asym && asym->ident == iFUNCTN && sym->native)
                 target = asym;
-            }
         }
         stgwrite(target->name());
         stgwrite(" ");
@@ -1389,7 +1388,7 @@ void
 load_glbfn(symbol* sym)
 {
     assert(sym->ident == iFUNCTN);
-    assert(!(sym->usage & uNATIVE));
+    assert(!sym->native);
     stgwrite("\tldgfn.pri ");
     stgwrite(sym->name());
     stgwrite("\n");

@@ -804,7 +804,7 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
         if (!sym_->prototyped)
             error(pos_, 17, sym_->name());
 
-        if (sym_->usage & uNATIVE) {
+        if (sym_->native) {
             error(pos_, 76);
             return false;
         }

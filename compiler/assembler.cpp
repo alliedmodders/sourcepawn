@@ -405,7 +405,7 @@ do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     symbol* sym = reader->extract_call_target();
     assert(sym->ident == iFUNCTN);
-    assert(!(sym->usage & uNATIVE));
+    assert(!sym->native);
     assert((sym->function()->funcid & 1) == 1);
     assert(sym->usage & uREAD);
     assert(!sym->skipped);
@@ -433,7 +433,7 @@ do_sysreq(CellWriter* writer, AsmReader* reader, cell opcode)
     symbol* sym = reader->extract_call_target();
     ucell nargs = reader->getparam();
 
-    assert(sym->usage & uNATIVE);
+    assert(sym->native);
     if (sym->addr() < 0) {
       sym->setAddr(reader->native_list().length());
       reader->native_list().append(sym);
@@ -1432,7 +1432,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     // Build the easy symbol tables.
     for (const auto& sym : global_symbols) {
         if (sym->ident == iFUNCTN) {
-            if (sym->usage & uNATIVE) {
+            if (sym->native) {
                 // Set native addresses to -1 to indicate whether we've seen
                 // them in the assembly yet.
                 sym->setAddr(-1);

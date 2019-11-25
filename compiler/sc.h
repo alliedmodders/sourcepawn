@@ -198,6 +198,7 @@ struct symbol {
     bool skipped : 1;       // skipped in codegen
     bool retvalue : 1;      // function returns (or should return) a value
     bool forward : 1;       // the function is explicitly forwardly declared
+    bool native : 1;        // the function is native
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
@@ -321,7 +322,6 @@ struct symbol {
  *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
  *        1     (uREAD) the function is invoked in the source file
  *        4     (uPUBLIC) the function is public
- *        5     (uNATIVE) the function is native
  *        6     (uSTOCK) the function is discardable (without warning)
  *
  *  CONSTANT
@@ -333,7 +333,6 @@ struct symbol {
 #define uWRITTEN 0x004
 #define uCONST 0x008
 #define uPUBLIC 0x010
-#define uNATIVE 0x020
 #define uSTOCK 0x040
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
 
