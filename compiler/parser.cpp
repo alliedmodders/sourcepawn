@@ -3191,7 +3191,7 @@ parse_inline_function(methodmap_t* map, const typeinfo_t* type, const char* name
 
         if (!ok)
             return NULL;
-        if (!target || (target->usage & uFORWARD)) {
+        if (!target || target->forward) {
             error(10);
             return NULL;
         }
@@ -4448,7 +4448,7 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     } else if (fpublic) {
         sym->usage |= uPUBLIC;
     }
-    sym->usage |= uFORWARD;
+    sym->forward = true;
 
     declargs(sym, FALSE, thistag);
     /* "declargs()" found the ")" */
@@ -4562,7 +4562,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (fstatic)
         sym->fnumber = filenum;
 
-    if (sym->usage & (uPUBLIC | uFORWARD)) {
+    if ((sym->usage & uPUBLIC) || sym->forward) {
         if (decl->type.numdim > 0)
             error(141);
     }
@@ -4593,7 +4593,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (matchtoken(';')) {
         if (sym->usage & uPUBLIC)
             error(10);
-        sym->usage |= uFORWARD;
+        sym->forward = true;
         if (!sc_needsemicolon)
             error(10); /* old style prototypes used with optional semicolumns */
         delete_symbols(&loctab, 0, TRUE); /* prototype is done; forget everything */
@@ -4649,7 +4649,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (sReturnType & RETURN_VALUE) {
         sym->retvalue = true;
     } else {
-        if (sym->tag == pc_tag_void && (sym->usage & uFORWARD) && !decl->type.tag &&
+        if (sym->tag == pc_tag_void && sym->forward && !decl->type.tag &&
             !decl->type.is_new) {
             // We got something like:
             //    forward void X();

@@ -197,6 +197,7 @@ struct symbol {
     bool callback : 1;      // used as a callback
     bool skipped : 1;       // skipped in codegen
     bool retvalue : 1;      // function returns (or should return) a value
+    bool forward : 1;       // the function is explicitly forwardly declared
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
@@ -322,7 +323,6 @@ struct symbol {
  *        4     (uPUBLIC) the function is public
  *        5     (uNATIVE) the function is native
  *        6     (uSTOCK) the function is discardable (without warning)
- *        8     (uFORWARD) the function is explicitly forwardly declared
  *
  *  CONSTANT
  *  bits: 0     (uDEFINE) the symbol is defined in the source file
@@ -335,7 +335,6 @@ struct symbol {
 #define uPUBLIC 0x010
 #define uNATIVE 0x020
 #define uSTOCK 0x040
-#define uFORWARD 0x100
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
