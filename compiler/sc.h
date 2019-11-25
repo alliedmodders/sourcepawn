@@ -198,6 +198,7 @@ struct symbol {
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
     bool enumfield : 1;     // the constant is a field in a named enumeration
+    bool predefined : 1;    // the constant is pre-defined and should be kept between passes
 
     union {
         struct {
@@ -325,13 +326,11 @@ struct symbol {
  *  bits: 0     (uDEFINE) the symbol is defined in the source file
  *        1     (uREAD) the constant is "read" (accessed) in the source file
  *        2     (uWRITTEN) redundant, but may be set for constants passed by reference
- *        3     (uPREDEF) the constant is pre-defined and should be kept between passes
  */
 #define uREAD 0x002
 #define uWRITTEN 0x004
 #define uRETVALUE 0x004 /* function returns (or should return) a value */
 #define uCONST 0x008
-#define uPREDEF 0x008 /* constant is pre-defined */
 #define uPUBLIC 0x010
 #define uNATIVE 0x020
 #define uSTOCK 0x040

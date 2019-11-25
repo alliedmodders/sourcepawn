@@ -5336,7 +5336,7 @@ redef_enumfield:
     sym = addsym(name, val, iCONSTEXPR, vclass, tag, 0);
     sym->defined = true;
     if (sc_status == statIDLE)
-        sym->usage |= uPREDEF;
+        sym->predefined = true;
     return sym;
 }
 

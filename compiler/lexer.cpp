@@ -2938,7 +2938,7 @@ delete_symbols(symbol* root, int level, int delete_functions)
             case iCONSTEXPR:
             case iENUMSTRUCT:
                 /* delete constants, except predefined constants */
-                mustdelete = delete_functions || (sym->usage & uPREDEF) == 0;
+                mustdelete = delete_functions || !sym->predefined;
                 break;
             case iFUNCTN:
                 /* optionally preserve globals (variables & functions), but
@@ -3107,6 +3107,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    missing(false),
    enumroot(false),
    enumfield(false),
+   predefined(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3135,6 +3136,7 @@ symbol::symbol(const symbol& other)
     missing = other.missing;
     enumroot = other.enumroot;
     enumfield = other.enumfield;
+    predefined = other.predefined;
     x = other.x;
 }
 
