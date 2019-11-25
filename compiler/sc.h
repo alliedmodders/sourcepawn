@@ -194,6 +194,9 @@ struct symbol {
     // Variables and functions: discardable without warning
     bool stock : 1;
 
+    // TODO: make this an ident.
+    bool is_struct : 1;
+
     // Functions only.
     bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
     bool missing : 1;       // the function is not implemented in this source file
@@ -334,7 +337,6 @@ struct symbol {
 #define uWRITTEN 0x004
 #define uCONST 0x008
 #define uPUBLIC 0x010
-#define uSTRUCT 0x200   /* :TODO: make this an ident */
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
 #define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */

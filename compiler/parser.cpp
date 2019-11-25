@@ -1268,13 +1268,13 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
      * Lastly, very lastly, we will insert a copy of this variable.
      * This is soley to expose the pubvar.
      */
-    usage = uREAD | uCONST | uSTRUCT;
+    usage = uREAD | uCONST;
     if (fpublic)
         usage |= uPUBLIC;
     mysym = NULL;
     for (sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
-            if ((sym->usage & uSTRUCT) && sym->vclass == sGLOBAL) {
+            if (sym->is_struct && sym->vclass == sGLOBAL) {
                 if (sym->defined) {
                     error(21, name->chars());
                 } else {
@@ -1296,7 +1296,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     if (!matchtoken('=')) {
         matchtoken(';');
         /* Mark it as undefined instead */
-        mysym->usage = uSTRUCT;
+        mysym->is_struct = true;
         mysym->stock = true;
         free(found);
         free(values);
@@ -1304,6 +1304,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     }
 
     mysym->usage = usage;
+    mysym->is_struct = true;
     needtoken('{');
 
     do {
