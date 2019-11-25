@@ -1139,6 +1139,11 @@ SC3ExpressionParser::hier14(value* lval1)
          * larger one (without warning). This is to make it easier to work with
          * strings.
          */
+        if (lval2.ident != iARRAY && lval2.ident != iREFARRAY) {
+            error(47);
+            return false;
+        }
+
         int exactmatch = TRUE;
         int idxtag = 0;
         int ltlength = (int)lval3.sym->dim.array.length;
