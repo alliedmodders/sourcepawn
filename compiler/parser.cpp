@@ -3422,12 +3422,13 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef) {
             sym->ident = iMETHODMAP;
 
             // Kill previous enumstruct properties, if any.
-            if (sym->usage & uENUMROOT) {
+            if (sym->enumroot) {
                 for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
                     symbol* csym = findglb(cv->name);
                     if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
-                        (csym->usage & uENUMFIELD)) {
-                        csym->usage &= ~uENUMFIELD;
+                        csym->enumfield)
+                    {
+                        csym->enumfield = false;
                         csym->set_parent(nullptr);
                     }
                 }
@@ -3912,7 +3913,7 @@ decl_enum(int vclass) {
             /* create the root symbol, so the fields can have it as their "parent" */
             enumsym = add_constant(enumname, 0, vclass, tag);
             if (enumsym != NULL)
-                enumsym->usage |= uENUMROOT;
+                enumsym->enumroot = true;
             /* start a new list for the element names */
             if ((enumroot = (constvalue*)malloc(sizeof(constvalue))) == NULL)
                 error(FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
@@ -3967,7 +3968,7 @@ decl_enum(int vclass) {
         sym->set_parent(enumsym);
         /* add the constant to a separate list as well */
         if (enumroot != NULL) {
-            sym->usage |= uENUMFIELD;
+            sym->enumfield = true;
             append_constval(enumroot, constname, value, tag);
         }
         if (multiplier == 1)
@@ -3980,7 +3981,7 @@ decl_enum(int vclass) {
 
     /* set the enum name to the "next" value (typically the last value plus one) */
     if (enumsym) {
-        assert((enumsym->usage & uENUMROOT) != 0);
+        assert(enumsym->enumroot);
         enumsym->setAddr(0);
         /* assign the constant list */
         assert(enumroot != NULL);
@@ -4003,7 +4004,7 @@ decl_enumstruct() {
         } else {
             root = add_constant(struct_name.name, 0, sGLOBAL, 0);
             root->tag = gTypes.defineEnumStruct(struct_name.name, root)->tagid();
-            root->usage |= uENUMROOT;
+            root->enumroot = true;
             root->ident = iENUMSTRUCT;
         }
     }
@@ -4078,7 +4079,7 @@ decl_enumstruct() {
         }
         sym->set_parent(root);
         if (values) {
-            sym->usage |= uENUMFIELD;
+            sym->enumfield = true;
             append_constval(values, decl.name, position, root_tag);
         }
 
@@ -4098,7 +4099,7 @@ decl_enumstruct() {
     require_newline(TerminatorPolicy::Newline);
 
     if (root) {
-        assert(root->usage & uENUMROOT);
+        assert(root->enumroot);
         root->setAddr(position);
         root->dim.enumlist = values;
     }
@@ -5297,7 +5298,7 @@ add_constant(const char* name, cell val, int vclass, int tag) {
         int redef = 0;
         if (sym->ident != iCONSTEXPR)
             redef = 1; /* redefinition a function/variable to a constant is not allowed */
-        if ((sym->usage & uENUMFIELD) != 0) {
+        if (sym->enumfield) {
             /* enum field, special case if it has a different tag and the new symbol is also an enum field */
             symbol* tagsym;
             if (sym->tag == tag)
@@ -5307,7 +5308,7 @@ add_constant(const char* name, cell val, int vclass, int tag) {
                 redef = 1; /* new constant does not have a tag */
             } else {
                 tagsym = findconst(type->name());
-                if (tagsym == NULL || (tagsym->usage & uENUMROOT) == 0)
+                if (tagsym == NULL || !tagsym->enumroot)
                     redef = 1; /* new constant is not an enumeration field */
             }
             /* in this particular case (enumeration field that is part of a different

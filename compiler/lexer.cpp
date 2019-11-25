@@ -1119,7 +1119,7 @@ command(void)
                     if (delete_subst(str, strlen(str))) {
                         /* also undefine normal constants */
                         symbol* sym = findconst(str);
-                        if (sym != NULL && (sym->usage & (uENUMROOT | uENUMFIELD)) == 0) {
+                        if (sym != NULL && !(sym->enumroot && sym->enumfield)) {
                             delete_symbol(&glbtab, sym);
                         }
                     }
@@ -3058,7 +3058,7 @@ findconst(const char* name)
     }
     if (sym == NULL || sym->ident != iCONSTEXPR)
         return NULL;
-    assert(sym->parent() == NULL || (sym->usage & uENUMFIELD) != 0);
+    assert(sym->parent() == NULL || sym->enumfield);
     /* ^^^ constants have no hierarchy, but enumeration fields may have a parent */
     return sym;
 }
@@ -3105,6 +3105,8 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    defined(false),
    prototyped(false),
    missing(false),
+   enumroot(false),
+   enumfield(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3131,6 +3133,8 @@ symbol::symbol(const symbol& other)
     defined = other.defined;
     prototyped = other.prototyped;
     missing = other.missing;
+    enumroot = other.enumroot;
+    enumfield = other.enumfield;
     x = other.x;
 }
 
@@ -3143,7 +3147,7 @@ symbol::~symbol()
             if (arg->ident == iREFARRAY && arg->hasdefault)
                 free(arg->defvalue.array.data);
         }
-    } else if (ident == iCONSTEXPR && (usage & uENUMROOT) == uENUMROOT) {
+    } else if (ident == iCONSTEXPR && enumroot) {
         /* free the constant list of an enum root */
         assert(dim.enumlist != NULL);
         delete_consttable(dim.enumlist);

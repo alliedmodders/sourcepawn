@@ -195,6 +195,10 @@ struct symbol {
     bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
     bool missing : 1;       // the function is not implemented in this source file
 
+    // Constants only.
+    bool enumroot : 1;      // the constant is the "root" of an enumeration
+    bool enumfield : 1;     // the constant is a field in a named enumeration
+
     union {
         struct {
             int index; /* array & enum: tag of array indices or the enum item */
@@ -322,8 +326,6 @@ struct symbol {
  *        1     (uREAD) the constant is "read" (accessed) in the source file
  *        2     (uWRITTEN) redundant, but may be set for constants passed by reference
  *        3     (uPREDEF) the constant is pre-defined and should be kept between passes
- *        5     (uENUMROOT) the constant is the "root" of an enumeration
- *        6     (uENUMFIELD) the constant is a field in a named enumeration
  */
 #define uREAD 0x002
 #define uWRITTEN 0x004
@@ -332,9 +334,7 @@ struct symbol {
 #define uPREDEF 0x008 /* constant is pre-defined */
 #define uPUBLIC 0x010
 #define uNATIVE 0x020
-#define uENUMROOT 0x020
 #define uSTOCK 0x040
-#define uENUMFIELD 0x040
 #define uFORWARD 0x100
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
 #define uCALLBACK 0x400 /* Used as a callback */

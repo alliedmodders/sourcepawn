@@ -933,7 +933,7 @@ IndexExpr::Analyze()
         return false;
     }
 
-    if ((base.sym->usage & uENUMROOT)) {
+    if (base.sym->enumroot) {
         if (!matchtag(base.sym->x.tags.index, expr_->val().tag, TRUE))
             return false;
     }
