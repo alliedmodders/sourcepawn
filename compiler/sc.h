@@ -195,6 +195,7 @@ struct symbol {
     bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
     bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback
+    bool skipped : 1;       // skipped in codegen
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
@@ -337,7 +338,6 @@ struct symbol {
 #define uSTOCK 0x040
 #define uFORWARD 0x100
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
-#define uSKIPPED 0x800  /* Not generated */
 /* uRETNONE is not stored in the "usage" field of a symbol. It is
  * used during parsing a function, to detect a mix of "return;" and
  * "return value;" in a few special cases.

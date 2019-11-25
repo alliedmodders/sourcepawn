@@ -4602,7 +4602,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         glbdecl = glb_declared;
 
         sc_status = statSKIP;
-        sym->usage |= uSKIPPED;
+        sym->skipped = true;
 
         // If this is a method, output errors even if it's unused.
         if (thistag && *thistag != -1)

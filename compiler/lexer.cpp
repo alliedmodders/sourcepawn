@@ -3106,6 +3106,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    prototyped(false),
    missing(false),
    callback(false),
+   skipped(false),
    enumroot(false),
    enumfield(false),
    predefined(false),
@@ -3132,6 +3133,7 @@ symbol::symbol(const symbol& other)
  : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag, other.usage)
 {
     name_ = other.name_;
+
     defined = other.defined;
     prototyped = other.prototyped;
     missing = other.missing;
@@ -3139,6 +3141,8 @@ symbol::symbol(const symbol& other)
     enumfield = other.enumfield;
     predefined = other.predefined;
     callback = other.callback;
+    skipped = other.skipped;
+
     x = other.x;
 }
 
