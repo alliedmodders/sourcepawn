@@ -619,7 +619,7 @@ CallExpr::DoEmit()
                     assert(lvalue);
                     /* treat a "const" variable passed to a function with a non-const
                      * "variable argument list" as a constant here */
-                    if ((val.sym->usage & uCONST) && !(arg->usage & uCONST)) {
+                    if (val.sym->is_const && !arg->is_const) {
                         rvalue(val);
                         setheap_pri();
                     } else if (lvalue) {
@@ -671,7 +671,7 @@ DefaultArgExpr::DoEmit()
         case iREFARRAY:
         {
             auto& def = arg_->defvalue.array;
-            bool is_const = (arg_->usage & uCONST) != 0;
+            bool is_const = arg_->is_const;
 
             setdefarray(def.data, def.size, def.arraysize, &def.addr, is_const);
             if (def.data)

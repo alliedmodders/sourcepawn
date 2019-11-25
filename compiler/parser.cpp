@@ -1086,7 +1086,7 @@ dodecl(const token_t* tok) {
 
     // Hacky bag o' hints as to whether this is a variable decl.
     bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexpeek('(') ||
-                            ((decl.type.usage & uCONST) == uCONST);
+                            decl.type.is_const;
 
     if (!decl.opertok && probablyVariable) {
         if (tok->id == tNEW && decl.type.is_new)
@@ -1268,7 +1268,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
      * Lastly, very lastly, we will insert a copy of this variable.
      * This is soley to expose the pubvar.
      */
-    usage = uREAD | uCONST;
+    usage = uREAD;
     mysym = NULL;
     for (sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
@@ -1304,6 +1304,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     mysym->usage = usage;
     mysym->is_struct = true;
     mysym->is_public = !!fpublic;
+    mysym->is_const = true;
     needtoken('{');
 
     do {
@@ -1515,8 +1516,8 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
             sym->usage |= uREAD;
             sym->is_public = true;
         }
-        if (decl->type.usage & uCONST)
-            sym->usage |= uCONST;
+        if (decl->type.is_const)
+            sym->is_const = true;
         if (fstock)
             sym->stock = true;
         if (fstatic)
@@ -1768,8 +1769,8 @@ declloc(int tokid) {
          * to initialize it */
         assert(sym != NULL);       /* we declared it, it must be there */
         sym->compound = nestlevel; /* for multiple declaration/shadowing check */
-        if (type->usage & uCONST)
-            sym->usage |= uCONST;
+        if (type->is_const)
+            sym->is_const = true;
         if (!fstatic) { /* static variables already initialized */
             if (type->ident == iVARIABLE) {
                 /* simple variable, also supports initialization */
@@ -2544,7 +2545,7 @@ declstruct(void) {
         arg.dimcount = decl.type.numdim;
         memcpy(arg.dims, decl.type.dim, sizeof(int) * arg.dimcount);
         strcpy(arg.name, decl.name);
-        arg.fconst = !!(decl.type.usage & uCONST);
+        arg.fconst = decl.type.is_const;
         arg.ident = decl.type.ident;
         if (arg.ident == iARRAY)
             arg.ident = iREFARRAY;
@@ -2654,9 +2655,9 @@ parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags) {
         lextok(&tok);
 
     if (tok.id == tCONST) {
-        if (type->usage & uCONST)
+        if (type->is_const)
             error(138);
-        type->usage |= uCONST;
+        type->is_const = true;
         lextok(&tok);
     }
 
@@ -2826,9 +2827,9 @@ parse_old_decl(declinfo_t* decl, int flags) {
     typeinfo_t* type = &decl->type;
 
     if (matchtoken(tCONST)) {
-        if (type->usage & uCONST)
+        if (type->is_const)
             error(138);
-        type->usage |= uCONST;
+        type->is_const = true;
     }
 
     int tags[MAXTAGS], numtags = 0;
@@ -2925,12 +2926,12 @@ parse_old_decl(declinfo_t* decl, int flags) {
 
 static int
 reparse_old_decl(declinfo_t* decl, int flags) {
-    int usage = decl->type.usage & uCONST;
+    bool is_const = decl->type.is_const;
 
     memset(decl, 0, sizeof(*decl));
     decl->type.ident = iVARIABLE;
     decl->type.size = 1;
-    decl->type.usage |= usage;
+    decl->type.is_const = is_const;
 
     return parse_old_decl(decl, flags);
 }
@@ -3068,7 +3069,7 @@ parse_decl(declinfo_t* decl, int flags) {
 
     // Must attempt to match const first, since it's a common prefix.
     if (matchtoken(tCONST))
-        decl->type.usage |= uCONST;
+        decl->type.is_const = true;
 
     // Sometimes we know ahead of time whether the declaration will be old, for
     // example, if preceded by tNEW or tDECL.
@@ -3674,7 +3675,7 @@ dodelete() {
 
     // Only zap non-const lvalues.
     int zap = sval.lvalue;
-    if (zap && sval.val.sym && (sval.val.sym->usage & uCONST))
+    if (zap && sval.val.sym && sval.val.sym->is_const)
         zap = FALSE;
 
     int popaddr = FALSE;
@@ -3771,7 +3772,7 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
         arg->tags[0] = decl.type.tag;
         arg->dimcount = decl.type.numdim;
         memcpy(arg->dims, decl.type.dim, arg->dimcount * sizeof(decl.type.dim[0]));
-        arg->fconst = (decl.type.usage & uCONST) ? TRUE : FALSE;
+        arg->fconst = decl.type.is_const;
         if (decl.type.ident == iARRAY)
             arg->ident = iREFARRAY;
         else
@@ -4037,7 +4038,7 @@ decl_enumstruct() {
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 
-        if (decl.type.usage & uCONST)
+        if (decl.type.is_const)
             error(94, decl.name);
 
         // It's not possible to have circular references other than this, because
@@ -4720,7 +4721,7 @@ argcompare(arginfo* a1, arginfo* a2) {
     if (result)
         result = a1->ident == a2->ident; /* type/class */
     if (result)
-        result = a1->usage == a2->usage; /* "const" flag */
+        result = a1->is_const == a2->is_const; /* "const" flag */
     if (result)
         result = a1->tag == a2->tag;
     if (result)
@@ -4788,7 +4789,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
                 argptr->numdim = 1;
             } else {
                 argptr->ident = iVARIABLE;
-                argptr->usage = uCONST;
+                argptr->is_const = true;
                 argptr->tag = *thistag;
             }
         } else {
@@ -4797,8 +4798,8 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
 
         symbol* sym = addvariable2(argptr->name, (argcnt + 3) * sizeof(cell), argptr->ident, sLOCAL,
                                    argptr->tag, argptr->dim, argptr->numdim, argptr->idxtag, 0);
-        if (argptr->usage & uCONST)
-            sym->usage |= uCONST;
+        if (argptr->is_const)
+            sym->is_const = true;
         markusage(sym, uREAD);
 
         argcnt++;
@@ -4973,7 +4974,7 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
         }
     }
     arg->ident = (char)type->ident;
-    arg->usage = type->usage;
+    arg->is_const = type->is_const;
     arg->tag = type->tag;
     argsym = findloc(decl->name);
     if (argsym != NULL) {
@@ -4989,8 +4990,8 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
             argsym->usage |= uREAD; /* because references are passed back */
         if (fun->callback || fun->stock || fun->is_public)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
-        if (type->usage & uCONST)
-            argsym->usage |= uCONST;
+        if (type->is_const)
+            argsym->is_const = true;
     }
 
     errorset(sEXPRRELEASE, 0);

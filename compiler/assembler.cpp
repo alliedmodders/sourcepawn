@@ -951,7 +951,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     uint32_t code_end = str.parse();
     int ident = str.parse();
     int vclass = str.parse();
-    int usage = str.parse();
+    bool is_const = !!str.parse();
 
     // We don't care about the ident type, we derive it from the tag.
     (void)ident;
@@ -980,7 +980,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     // Encode the type.
     uint32_t type_id;
     {
-        variable_type_t type = {tag, dims, dimcount, (usage & uCONST) == uCONST};
+        variable_type_t type = {tag, dims, dimcount, is_const};
         Vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -1193,7 +1193,7 @@ RttiBuilder::encode_signature(symbol* sym)
 
         if (arg->ident == iREFERENCE)
             bytes.append(cb::kByRef);
-        variable_type_t info = {tag, arg->dim, numdim, (arg->usage & uCONST) == uCONST};
+        variable_type_t info = {tag, arg->dim, numdim, arg->is_const};
         encode_var_type(bytes, info);
     }
 

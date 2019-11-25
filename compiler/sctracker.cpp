@@ -130,7 +130,7 @@ funcenum_for_symbol(symbol* sym)
         memcpy(dest->dims, arg.dim, arg.numdim * sizeof(int));
 
         dest->ident = arg.ident;
-        dest->fconst = !!(arg.usage & uCONST);
+        dest->fconst = arg.is_const;
         dest->ommittable = FALSE;
     }
 

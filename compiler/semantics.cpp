@@ -217,7 +217,7 @@ IncDecExpr::Analyze()
 
     const auto& expr_val = expr_->val();
     if (expr_val.ident != iACCESSOR) {
-        if ((expr_val.sym->usage & uCONST) != 0) {
+        if (expr_val.sym->is_const) {
             error(pos_, 22); /* assignment to const argument */
             return false;
         }
@@ -407,7 +407,7 @@ BinaryExpr::ValidateAssignmentLHS()
     assert(left_val.sym || left_val.accessor);
 
     // may not change "constant" parameters
-    if (left_val.sym && (left_val.sym->usage & uCONST) != 0) {
+    if (left_val.sym && left_val.sym->is_const) {
         error(pos_, 22);
         return false;
     }
@@ -1590,7 +1590,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 
             // Always pass by reference.
             if (val->ident == iVARIABLE || val->ident == iREFERENCE) {
-                if ((val->sym->usage & uCONST) && (arg->usage & uCONST) == 0) {
+                if (val->sym->is_const && !arg->is_const) {
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
                     if (!lvalue) {
@@ -1631,7 +1631,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            if (val->sym && (val->sym->usage & uCONST) && !(arg->usage & uCONST)) {
+            if (val->sym && val->sym->is_const && !arg->is_const) {
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
@@ -1644,7 +1644,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            if (val->sym && (val->sym->usage & uCONST) && !(arg->usage & uCONST)) {
+            if (val->sym && val->sym->is_const && !arg->is_const) {
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }

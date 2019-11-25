@@ -364,7 +364,7 @@ insert_dbgsymbol(symbol* sym)
         /* address tag:name codestart codeend ident vclass [tag:dim ...] */
         assert(sym->ident != iFUNCTN);
         sprintf(string, "S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x", sym->addr(), sym->tag,
-                symname, sym->codeaddr, code_idx, sym->ident, sym->vclass, sym->usage);
+                symname, sym->codeaddr, code_idx, sym->ident, sym->vclass, (int)sym->is_const);
         if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
 #if !defined NDEBUG
             int count = sym->dim.array.level;

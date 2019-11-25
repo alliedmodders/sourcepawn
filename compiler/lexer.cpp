@@ -3103,6 +3103,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    compound(0),
    tag(symtag),
    defined(false),
+   is_const(false),
    stock(false),
    is_public(false),
    is_struct(false),
@@ -3154,6 +3155,7 @@ symbol::symbol(const symbol& other)
     stock = other.stock;
     is_struct = other.is_struct;
     is_public = other.is_public;
+    is_const = other.is_const;
 
     x = other.x;
 }

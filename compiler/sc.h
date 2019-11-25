@@ -69,7 +69,7 @@ typedef int jmp_buf[9];
 struct arginfo { /* function argument info */
     char name[sNAMEMAX + 1];
     char ident; /* iVARIABLE, iREFERENCE, iREFARRAY or iVARARGS */
-    char usage; /* uCONST */
+    bool is_const;
     int tag;    /* argument tag id */
     int dim[sDIMEN_MAX];
     int idxtag[sDIMEN_MAX];
@@ -190,6 +190,7 @@ struct symbol {
     // Function: the function is defined ("implemented") in the source file
     // Constant: the symbol is defined in the source file.
     bool defined : 1;
+    bool is_const : 1;
 
     // Variables and functions.
     bool stock : 1;         // discardable without warning
@@ -321,7 +322,6 @@ struct symbol {
  *  bits: 0     (uDEFINE) the variable is defined in the source file
  *        1     (uREAD) the variable is "read" (accessed) in the source file
  *        2     (uWRITTEN) the variable is altered (assigned a value)
- *        3     (uCONST) the variable is constant (may not be assigned to)
  *
  *  FUNCTION
  *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
@@ -334,7 +334,6 @@ struct symbol {
  */
 #define uREAD 0x002
 #define uWRITTEN 0x004
-#define uCONST 0x008
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
 #define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */
