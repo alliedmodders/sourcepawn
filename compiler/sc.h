@@ -191,6 +191,9 @@ struct symbol {
     // Constant: the symbol is defined in the source file.
     bool defined : 1;
 
+    // Variables and functions: discardable without warning
+    bool stock : 1;
+
     // Functions only.
     bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
     bool missing : 1;       // the function is not implemented in this source file
@@ -316,13 +319,11 @@ struct symbol {
  *        2     (uWRITTEN) the variable is altered (assigned a value)
  *        3     (uCONST) the variable is constant (may not be assigned to)
  *        4     (uPUBLIC) the variable is public
- *        6     (uSTOCK) the variable is discardable (without warning)
  *
  *  FUNCTION
  *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
  *        1     (uREAD) the function is invoked in the source file
  *        4     (uPUBLIC) the function is public
- *        6     (uSTOCK) the function is discardable (without warning)
  *
  *  CONSTANT
  *  bits: 0     (uDEFINE) the symbol is defined in the source file
@@ -333,7 +334,6 @@ struct symbol {
 #define uWRITTEN 0x004
 #define uCONST 0x008
 #define uPUBLIC 0x010
-#define uSTOCK 0x040
 #define uSTRUCT 0x200   /* :TODO: make this an ident */
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */

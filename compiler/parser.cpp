@@ -1296,7 +1296,8 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     if (!matchtoken('=')) {
         matchtoken(';');
         /* Mark it as undefined instead */
-        mysym->usage = uSTOCK | uSTRUCT;
+        mysym->usage = uSTRUCT;
+        mysym->stock = true;
         free(found);
         free(values);
         return;
@@ -1515,7 +1516,7 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
         if (decl->type.usage & uCONST)
             sym->usage |= uCONST;
         if (fstock)
-            sym->usage |= uSTOCK;
+            sym->stock = true;
         if (fstatic)
             sym->fnumber = filenum;
         if (sc_status == statSKIP) {
@@ -4615,14 +4616,14 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
             sc_err_status = TRUE;
     }
 
-    if ((sym->flags & flgDEPRECATED) != 0 && (sym->usage & uSTOCK) == 0) {
+    if ((sym->flags & flgDEPRECATED) != 0 && !sym->stock) {
         const char* ptr = sym->documentation.chars();
         error(234, decl->name, ptr); /* deprecated (probably a public function) */
     }
     begcseg();
     sym->defined = true;
     if (stock)
-        sym->usage |= uSTOCK;
+        sym->stock = true;
     if (decl->opertok != 0 && opererror)
         sym->defined = false;
     startfunc(sym->name()); /* creates stack frame */
@@ -4984,7 +4985,7 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
         argsym->compound = 0;
         if (type->ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (fun->callback || (fun->usage & (uPUBLIC | uSTOCK)))
+        if (fun->callback || fun->stock || (fun->usage & uPUBLIC))
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
         if (type->usage & uCONST)
             argsym->usage |= uCONST;
@@ -5030,8 +5031,8 @@ reduce_referrers(symbol* root) {
                 // the final binary *without warning*. If a stock calls a non-stock
                 // function, we want to avoid warnings on that function as well, so
                 // we propagate the stock bit.
-                if (dead->usage & uSTOCK)
-                    sym->usage |= uSTOCK;
+                if (dead->stock)
+                    sym->stock = true;
 
                 sym->flags |= flgQUEUED;
                 work.append(sym);
@@ -5119,7 +5120,9 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
         }
         switch (sym->ident) {
             case iFUNCTN:
-                if ((sym->usage & (uREAD | uSTOCK | uPUBLIC)) == 0 && !sym->native && sym->defined) {
+                if ((sym->usage & (uREAD | uPUBLIC)) == 0 && !(sym->native || sym->stock) &&
+                    sym->defined)
+                {
                     funcdisplayname(symname, sym->name());
                     if (strlen(symname) > 0) {
                         error(sym, 203,
@@ -5142,16 +5145,10 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                 /* a variable */
                 if (sym->parent() != NULL)
                     break; /* hierarchical data type */
-                if ((sym->usage & (uWRITTEN | uREAD | uSTOCK)) == 0) {
+                if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0) {
                     error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
-                } else if ((sym->usage & (uREAD | uSTOCK | uPUBLIC)) == 0) {
+                } else if (!sym->stock && (sym->usage & (uREAD | uPUBLIC)) == 0) {
                     error(sym, 204, sym->name()); /* value assigned to symbol is never used */
-#if 0 // ??? not sure whether it is a good idea to force people use "const"
-      } else if ((sym->usage & (uWRITTEN | uPUBLIC | uCONST))==0 && sym->ident==iREFARRAY) {
-        errorset(sSETFILE,sym->fnumber);
-        errorset(sSETLINE,sym->lnumber);
-        error(214,sym->name);       /* make array argument "const" */
-#endif
                 }
                 /* also mark the variable (local or global) to the debug information */
                 if ((sym->usage & (uWRITTEN | uREAD)) != 0 && !sym->native)

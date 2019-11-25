@@ -1445,7 +1445,7 @@ CallExpr::Analyze()
     // read, then we're encountering some kind of compiler bug. If we're not
     // supposed to emit this code than the status should be statSKIP - so
     // we're generating code that will jump to the wrong address.
-    if ((sym_->usage & uSTOCK) && !(sym_->usage & uREAD) && sc_status == statWRITE) {
+    if (sym_->stock && !(sym_->usage & uREAD) && sc_status == statWRITE) {
         error(pos_, 195, sym_->name());
         return false;
     }

@@ -3103,6 +3103,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    compound(0),
    tag(symtag),
    defined(false),
+   stock(false),
    prototyped(false),
    missing(false),
    callback(false),
@@ -3148,6 +3149,7 @@ symbol::symbol(const symbol& other)
     retvalue = other.retvalue;
     forward = other.forward;
     native = other.native;
+    stock = other.stock;
 
     x = other.x;
 }
