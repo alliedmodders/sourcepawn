@@ -213,6 +213,8 @@ class SourceManager
 
   RefPtr<SourceFile> open(ReportingContext& cc, const char* path);
 
+  RefPtr<SourceFile> createFromBuffer(UniquePtr<char[]>&& buffer, uint32_t length, const char* path);
+
   // Returns whether two source locations ultimately originate from the same
   // file (i.e., ignoring macros).
   bool sameFiles(const SourceLocation& a, const SourceLocation& b);
