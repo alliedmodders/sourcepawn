@@ -1252,7 +1252,6 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     char* str;
     int cur_litidx = 0;
     cell *values, *found;
-    int usage;
     symbol *mysym, *sym;
 
     sp::Atom* name = gAtoms.add(firstname);
@@ -1268,7 +1267,6 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
      * Lastly, very lastly, we will insert a copy of this variable.
      * This is soley to expose the pubvar.
      */
-    usage = uREAD;
     mysym = NULL;
     for (sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
@@ -1287,9 +1285,10 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
         }
     }
     if (!mysym)
-        mysym = addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name), usage);
+        mysym = addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name));
     else
         mysym->codeaddr = code_idx;
+    mysym->usage |= uREAD;
 
     if (!matchtoken('=')) {
         matchtoken(';');
@@ -1301,7 +1300,6 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
         return;
     }
 
-    mysym->usage = usage;
     mysym->is_struct = true;
     mysym->is_public = !!fpublic;
     mysym->is_const = true;
@@ -3458,8 +3456,7 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef) {
                      0,          // addr
                      iMETHODMAP, // ident
                      sGLOBAL,    // vclass
-                     map->tag,   // tag
-                     0);   // usage
+                     map->tag);  // tag
         sym->defined = true;
     }
     sym->methodmap = map;
@@ -4133,7 +4130,7 @@ fetchfunc(const char* name) {
         assert(sym->vclass == sGLOBAL);
     } else {
         /* don't set the "uDEFINE" flag; it may be a prototype */
-        sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0, 0);
+        sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0);
         assert(sym != NULL); /* fatal error 103 must be given on error */
         /* set the required stack size to zero (only for non-native functions) */
         sym->function()->stacksize = 1; /* 1 for PROC opcode */
@@ -5342,7 +5339,7 @@ add_constant(const char* name, cell val, int vclass, int tag) {
 
     /* constant doesn't exist yet (or is allowed to be redefined) */
 redef_enumfield:
-    sym = addsym(name, val, iCONSTEXPR, vclass, tag, 0);
+    sym = addsym(name, val, iCONSTEXPR, vclass, tag);
     sym->defined = true;
     if (sc_status == statIDLE)
         sym->predefined = true;

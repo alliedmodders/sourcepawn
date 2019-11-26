@@ -174,17 +174,19 @@ struct symbol;
 struct symbol {
     symbol();
     symbol(const symbol& other);
-    symbol(const char* name, cell addr, int ident, int vclass, int tag, int usage);
+    symbol(const char* name, cell addr, int ident, int vclass, int tag);
     ~symbol();
 
     symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
     char ident;    /* see below for possible values */
-    short usage;   /* see below for possible values */
     char flags;    /* see below for possible values */
     int compound;  /* compound level (braces nesting level) */
     int tag;       /* tagname id */
+
+    // See uREAD/uWRITTEN above.
+    uint8_t usage : 2;
 
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
@@ -313,27 +315,9 @@ struct symbol {
     symbol* child_;
 };
 
-/*  Possible entries for "usage"
- *
- *  This byte is used as a serie of bits, the syntax is different for
- *  functions and other symbols:
- *
- *  VARIABLE
- *  bits: 0     (uDEFINE) the variable is defined in the source file
- *        1     (uREAD) the variable is "read" (accessed) in the source file
- *        2     (uWRITTEN) the variable is altered (assigned a value)
- *
- *  FUNCTION
- *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
- *        1     (uREAD) the function is invoked in the source file
- *
- *  CONSTANT
- *  bits: 0     (uDEFINE) the symbol is defined in the source file
- *        1     (uREAD) the constant is "read" (accessed) in the source file
- *        2     (uWRITTEN) redundant, but may be set for constants passed by reference
- */
-#define uREAD 0x002
-#define uWRITTEN 0x004
+// Values for symbol::usage.
+#define uREAD       0x1     // Used/accessed.
+#define uWRITTEN    0x2     // Altered/written (variables only).
 
 #define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
 #define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */

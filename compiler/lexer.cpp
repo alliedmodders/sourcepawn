@@ -3089,19 +3089,18 @@ FunctionData::resizeArgs(size_t nargs)
 }
 
 symbol::symbol()
- : symbol("", 0, 0, 0, 0, 0)
+ : symbol("", 0, 0, 0, 0)
 {}
 
-symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag,
-               int symusage)
+symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag)
  : next(nullptr),
    codeaddr(code_idx),
    vclass((char)symvclass),
    ident((char)symident),
-   usage((char)symusage),
    flags(0),
    compound(0),
    tag(symtag),
+   usage(0),
    defined(false),
    is_const(false),
    stock(false),
@@ -3137,10 +3136,11 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
 }
 
 symbol::symbol(const symbol& other)
- : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag, other.usage)
+ : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag)
 {
     name_ = other.name_;
 
+    usage = other.usage;
     defined = other.defined;
     prototyped = other.prototyped;
     missing = other.missing;
@@ -3212,10 +3212,10 @@ symbol::drop_reference_from(symbol* from)
  *  or global and local constants).
  */
 symbol*
-addsym(const char* name, cell addr, int ident, int vclass, int tag, int usage)
+addsym(const char* name, cell addr, int ident, int vclass, int tag)
 {
     /* first fill in the entry */
-    symbol* sym = new symbol(name, addr, ident, vclass, tag, usage);
+    symbol* sym = new symbol(name, addr, ident, vclass, tag);
 
     /* then insert it in the list */
     if (vclass == sGLOBAL)
@@ -3259,7 +3259,7 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
         int level;
         sym = NULL; /* to avoid a compiler warning */
         for (level = 0; level < numdim; level++) {
-            top = addsym(name, addr, ident, vclass, tag, 0);
+            top = addsym(name, addr, ident, vclass, tag);
             top->defined = true;
             top->dim.array.length = dim[level];
             top->dim.array.slength = 0;
@@ -3280,7 +3280,7 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
                 sym = top;
         }
     } else {
-        sym = addsym(name, addr, ident, vclass, tag, 0);
+        sym = addsym(name, addr, ident, vclass, tag);
         sym->defined = true;
     }
     return sym;
