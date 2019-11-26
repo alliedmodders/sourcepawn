@@ -4137,7 +4137,7 @@ fetchfunc(const char* name) {
     }
     if (pc_deprecate.length() > 0) {
         assert(sym != NULL);
-        sym->flags |= flgDEPRECATED;
+        sym->deprecated = true;
         if (sc_status == statWRITE) {
             sym->documentation = ke::Move(pc_deprecate);
         } else {
@@ -4616,7 +4616,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
             sc_err_status = TRUE;
     }
 
-    if ((sym->flags & flgDEPRECATED) != 0 && !sym->stock) {
+    if (sym->deprecated && !sym->stock) {
         const char* ptr = sym->documentation.chars();
         error(234, decl->name, ptr); /* deprecated (probably a public function) */
     }

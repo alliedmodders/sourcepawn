@@ -215,6 +215,9 @@ struct symbol {
     bool enumfield : 1;     // the constant is a field in a named enumeration
     bool predefined : 1;    // the constant is pre-defined and should be kept between passes
 
+    // General symbol flags.
+    bool deprecated : 1;    // symbol is deprecated (avoid use)
+
     union {
         struct {
             int index; /* array & enum: tag of array indices or the enum item */
@@ -319,7 +322,6 @@ struct symbol {
 #define uREAD       0x1     // Used/accessed.
 #define uWRITTEN    0x2     // Altered/written (variables only).
 
-#define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
 #define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */
 
 #define uMAINFUNC "main"

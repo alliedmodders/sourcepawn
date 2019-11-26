@@ -1457,7 +1457,7 @@ CallExpr::Analyze()
         val_.sym = sym_->array_return();
     }
 
-    if ((sym_->flags & flgDEPRECATED) != 0) {
+    if (sym_->deprecated) {
         const char* ptr = sym_->documentation.chars();
         error(pos_, 234, sym_->name(), ptr); /* deprecated (probably a native function) */
     }

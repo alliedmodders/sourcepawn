@@ -3116,6 +3116,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    enumroot(false),
    enumfield(false),
    predefined(false),
+   deprecated(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3156,6 +3157,7 @@ symbol::symbol(const symbol& other)
     is_struct = other.is_struct;
     is_public = other.is_public;
     is_const = other.is_const;
+    deprecated = other.deprecated;
 
     x = other.x;
 }

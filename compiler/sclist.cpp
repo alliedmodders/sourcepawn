@@ -68,7 +68,7 @@ struct MacroEntry {
     ke::AString first;
     ke::AString second;
     ke::AString documentation;
-    int flags;
+    bool deprecated;
 };
 static bool sMacroTableInitialized;
 static ke::HashMap<ke::AString, MacroEntry, MacroTablePolicy> sMacros;
@@ -198,9 +198,9 @@ insert_subst(const char* pattern, size_t pattern_length, const char* substitutio
     MacroEntry macro;
     macro.first = pattern;
     macro.second = substitution;
-    macro.flags = 0;
+    macro.deprecated = false;
     if (pc_deprecate.length() > 0) {
-        macro.flags |= flgDEPRECATED;
+        macro.deprecated = true;
         if (sc_status == statWRITE)
             macro.documentation = ke::Move(pc_deprecate);
         else
@@ -224,7 +224,7 @@ find_subst(const char* name, size_t length, macro_t* macro)
         return false;
 
     MacroEntry& entry = p->value;
-    if (entry.flags & flgDEPRECATED)
+    if (entry.deprecated)
         error(234, p->key.chars(), entry.documentation.chars());
 
     if (macro) {
