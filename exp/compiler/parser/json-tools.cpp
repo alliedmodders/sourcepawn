@@ -21,8 +21,8 @@
 using namespace ke;
 using namespace sp;
 
-JsonRenderer::JsonRenderer(FILE* fp)
- : fp_(fp),
+JsonRenderer::JsonRenderer(std::ostream& output)
+ : out_(output),
    indent_(0)
 {
 }
@@ -35,43 +35,43 @@ JsonRenderer::Render(JsonValue* value)
 
 void JsonRenderer::RenderNull(JsonNull* val)
 {
-  fprintf(fp_, "null");
+  out_ << "null";
 }
 
 void JsonRenderer::RenderBool(JsonBool* val)
 {
   if (val->value())
-    fprintf(fp_, "true");
+    out_ << "true";
   else
-    fprintf(fp_, "false");
+    out_ << "false";
 }
 
 void JsonRenderer::RenderInt(JsonInt* val)
 {
-  fprintf(fp_, "%d", val->value());
+  out_ << val->value();
 }
 
 void JsonRenderer::RenderString(JsonString* val)
 {
-  fprintf(fp_, "\"");
+  out_ << "\"";
   for (size_t i = 0; i < val->atom()->length(); i++) {
     char c = val->atom()->chars()[i];
     switch (c) {
       case '\0':
-        fprintf(fp_, "\\0");
+        out_ << "\\0";
         continue;
       case '\\':
-        fprintf(fp_, "\\");
+        out_ << "\\";
         continue;
       case '"':
       case '\r':
       case '\n':
-        fprintf(fp_, "\\");
+        out_ << "\\";
         break;
     }
-    fprintf(fp_, "%c", c);
+    out_ << c;
   }
-  fprintf(fp_, "\"");
+  out_ << "\"";
 }
 
 void
@@ -91,48 +91,50 @@ void
 JsonRenderer::prefix()
 {
   for (size_t i = 0; i < indent_; i++)
-    fprintf(fp_, " ");
+    out_ << " ";
 }
 
 void JsonRenderer::RenderList(JsonList* val)
 {
   if (!val->items().length()) {
-    fprintf(fp_, "[]");
+    out_ << "[]";
     return;
   }
 
-  fprintf(fp_, "[\n");
+  out_ << "[\n";
   indent();
   for (size_t i = 0; i < val->items().length(); i++) {
     prefix();
     val->items()[i]->Render(this);
     if (i != val->items().length() - 1)
-      fprintf(fp_, ",");
-    fprintf(fp_, "\n");
+      out_ << ",";
+    out_ << "\n";
   }
   dedent();
   prefix();
-  fprintf(fp_, "]");
+  out_ << "]";
 }
 
 void JsonRenderer::RenderObject(JsonObject* val)
 {
   if (!val->keys().length()) {
-    fprintf(fp_, "{}");
+    out_ << "{}";
     return;
   }
 
-  fprintf(fp_, "{\n");
+  out_ << "{\n";
   indent();
   for (size_t i = 0; i < val->keys().length(); i++) {
     prefix();
-    fprintf(fp_, "\"%s\": ", val->keys()[i]->chars());
+    out_ << "\"";
+    out_ << val->keys()[i]->chars();
+    out_ << "\": ";
     val->values()[i]->Render(this);
     if (i != val->keys().length() - 1)
-      fprintf(fp_, ",");
-    fprintf(fp_, "\n");
+      out_ << ",";
+    out_ << "\n";
   }
   dedent();
   prefix();
-  fprintf(fp_, "}");
+  out_ << "}";
 }

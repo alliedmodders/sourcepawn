@@ -480,7 +480,7 @@ int main(int argc, char **argv)
       return 1;
     }
 
-    JsonRenderer renderer(stdout);
+    JsonRenderer renderer(std::cout);
     renderer.Render(obj);
 
     if (reports.HasMessages())
