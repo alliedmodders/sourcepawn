@@ -18,6 +18,8 @@
 #ifndef _include_spcomp_json_tools_h_
 #define _include_spcomp_json_tools_h_
 
+#include <iostream>
+#include <sstream>
 #include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include "boxed-value.h"
@@ -45,13 +47,14 @@ class JsonObject;
 class JsonRenderer
 {
  public:
-  JsonRenderer(FILE* fp);
+  JsonRenderer(std::ostream& output);
 
   void Render(JsonValue* value);
 
-  FILE* fp() const {
-    return fp_;
+  std::ostream& stream() {
+    return out_;
   }
+
 
   void RenderNull(JsonNull* val);
   void RenderBool(JsonBool* val);
@@ -66,7 +69,7 @@ class JsonRenderer
   void prefix();
 
  private:
-  FILE* fp_;
+  std::ostream& out_;
   size_t indent_;
 };
 
