@@ -181,7 +181,6 @@ struct symbol {
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
     char ident;    /* see below for possible values */
-    char flags;    /* see below for possible values */
     int compound;  /* compound level (braces nesting level) */
     int tag;       /* tagname id */
 
@@ -217,6 +216,7 @@ struct symbol {
 
     // General symbol flags.
     bool deprecated : 1;    // symbol is deprecated (avoid use)
+    bool queued : 1;        // symbol is queued for a local work algorithm
 
     union {
         struct {
@@ -321,8 +321,6 @@ struct symbol {
 // Values for symbol::usage.
 #define uREAD       0x1     // Used/accessed.
 #define uWRITTEN    0x2     // Altered/written (variables only).
-
-#define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */
 
 #define uMAINFUNC "main"
 

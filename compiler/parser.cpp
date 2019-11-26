@@ -5015,7 +5015,7 @@ reduce_referrers(symbol* root) {
     // Enqueue all unreferred symbols.
     for (symbol* sym = root->next; sym; sym = sym->next) {
         if (is_symbol_unused(sym)) {
-            sym->flags |= flgQUEUED;
+            sym->queued = true;
             work.append(sym);
         }
     }
@@ -5026,7 +5026,7 @@ reduce_referrers(symbol* root) {
 
         for (symbol* sym : dead->refers_to()) {
             sym->drop_reference_from(dead);
-            if (is_symbol_unused(sym) && !(sym->flags & flgQUEUED)) {
+            if (is_symbol_unused(sym) && !sym->queued) {
                 // During compilation, anything marked as stock will be omitted from
                 // the final binary *without warning*. If a stock calls a non-stock
                 // function, we want to avoid warnings on that function as well, so
@@ -5034,7 +5034,7 @@ reduce_referrers(symbol* root) {
                 if (dead->stock)
                     sym->stock = true;
 
-                sym->flags |= flgQUEUED;
+                sym->queued = true;
                 work.append(sym);
             }
         }
@@ -5055,10 +5055,10 @@ deduce_liveness(symbol* root) {
             continue;
 
         if (sym->is_public) {
-            sym->flags |= flgQUEUED;
+            sym->queued = true;
             work.append(sym);
         } else {
-            sym->flags &= ~flgQUEUED;
+            sym->queued = false;
         }
     }
 
@@ -5067,16 +5067,16 @@ deduce_liveness(symbol* root) {
         symbol* live = work.popCopy();
 
         for (const auto& other : live->refers_to()) {
-            if (other->ident != iFUNCTN || (other->flags & flgQUEUED))
+            if (other->ident != iFUNCTN || other->queued)
                 continue;
-            other->flags |= flgQUEUED;
+            other->queued = true;
             work.append(other);
         }
     }
 
     // Remove the liveness flags for anything we did not visit.
     for (symbol* sym = root->next; sym; sym = sym->next) {
-        if (sym->ident != iFUNCTN || (sym->flags & flgQUEUED))
+        if (sym->ident != iFUNCTN || sym->queued)
             continue;
         if (sym->native)
             continue;

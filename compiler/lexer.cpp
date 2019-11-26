@@ -3097,7 +3097,6 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    codeaddr(code_idx),
    vclass((char)symvclass),
    ident((char)symident),
-   flags(0),
    compound(0),
    tag(symtag),
    usage(0),
@@ -3117,6 +3116,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    enumfield(false),
    predefined(false),
    deprecated(false),
+   queued(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3158,6 +3158,7 @@ symbol::symbol(const symbol& other)
     is_public = other.is_public;
     is_const = other.is_const;
     deprecated = other.deprecated;
+    // Note: explicitly don't add queued.
 
     x = other.x;
 }
