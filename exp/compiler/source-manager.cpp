@@ -143,6 +143,22 @@ SourceManager::open(ReportingContext& cc, const char* path)
   return file;
 }
 
+RefPtr<SourceFile>
+SourceManager::createFromBuffer(UniquePtr<char[]>&& buffer, uint32_t length, const char* path)
+{
+  Atom* atom = strings_.add(path);
+  AtomMap<RefPtr<SourceFile>>::Insert p = file_cache_.findForAdd(atom);
+
+  if (p.found())
+    return p->value;
+
+  RefPtr<SourceFile> file = new SourceFile(buffer.take(), length, path);
+
+  file_cache_.add(p, atom, file);
+
+  return file;
+}
+
 bool
 SourceManager::trackExtents(uint32_t length, size_t* index)
 {
