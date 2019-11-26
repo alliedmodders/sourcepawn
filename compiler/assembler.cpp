@@ -405,10 +405,10 @@ do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     symbol* sym = reader->extract_call_target();
     assert(sym->ident == iFUNCTN);
-    assert(!(sym->usage & uNATIVE));
+    assert(!sym->native);
     assert((sym->function()->funcid & 1) == 1);
     assert(sym->usage & uREAD);
-    assert(!(sym->usage & uSKIPPED));
+    assert(!sym->skipped);
 
     // Note: we emit const.pri for backward compatibility.
     assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
@@ -421,7 +421,7 @@ do_call(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     symbol* sym = reader->extract_call_target();
     assert(sym->usage & uREAD);
-    assert(!(sym->usage & uSKIPPED));
+    assert(!sym->skipped);
 
     writer->append(opcode);
     writer->append(sym->addr());
@@ -433,7 +433,7 @@ do_sysreq(CellWriter* writer, AsmReader* reader, cell opcode)
     symbol* sym = reader->extract_call_target();
     ucell nargs = reader->getparam();
 
-    assert(sym->usage & uNATIVE);
+    assert(sym->native);
     if (sym->addr() < 0) {
       sym->setAddr(reader->native_list().length());
       reader->native_list().append(sym);
@@ -951,7 +951,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     uint32_t code_end = str.parse();
     int ident = str.parse();
     int vclass = str.parse();
-    int usage = str.parse();
+    bool is_const = !!str.parse();
 
     // We don't care about the ident type, we derive it from the tag.
     (void)ident;
@@ -980,7 +980,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     // Encode the type.
     uint32_t type_id;
     {
-        variable_type_t type = {tag, dims, dimcount, (usage & uCONST) == uCONST};
+        variable_type_t type = {tag, dims, dimcount, is_const};
         Vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -1193,7 +1193,7 @@ RttiBuilder::encode_signature(symbol* sym)
 
         if (arg->ident == iREFERENCE)
             bytes.append(cb::kByRef);
-        variable_type_t info = {tag, arg->dim, numdim, (arg->usage & uCONST) == uCONST};
+        variable_type_t info = {tag, arg->dim, numdim, arg->is_const};
         encode_var_type(bytes, info);
     }
 
@@ -1432,7 +1432,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     // Build the easy symbol tables.
     for (const auto& sym : global_symbols) {
         if (sym->ident == iFUNCTN) {
-            if (sym->usage & uNATIVE) {
+            if (sym->native) {
                 // Set native addresses to -1 to indicate whether we've seen
                 // them in the assembly yet.
                 sym->setAddr(-1);
@@ -1441,15 +1441,15 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
 
             // If a function is marked as missing it should not be a public function
             // with a declaration.
-            if (sym->usage & uMISSING) {
-                assert((sym->usage & (uPUBLIC | uDEFINE)) != (uPUBLIC | uDEFINE));
+            if (sym->missing) {
+                assert(!(sym->is_public && sym->defined));
                 continue;
             }
 
-            if (sym->usage & (uPUBLIC | uREAD)) {
+            if (sym->is_public || (sym->usage & uREAD)) {
                 function_entry entry;
                 entry.sym = sym;
-                if (sym->usage & uPUBLIC) {
+                if (sym->is_public) {
                     entry.name = sym->name();
                 } else {
                     // Create a private name.
@@ -1464,7 +1464,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
                 continue;
             }
         } else if (sym->ident == iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
-            if ((sym->usage & uPUBLIC) != 0 && (sym->usage & (uREAD | uWRITTEN)) != 0) {
+            if (sym->is_public && (sym->usage & (uREAD | uWRITTEN)) != 0) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
                 pubvar.address = sym->addr();
                 pubvar.name = names->add(sym->nameAtom());
@@ -1479,7 +1479,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
         symbol* sym = f.sym;
 
         assert(sym->addr() > 0);
-        assert(sym->usage & uDEFINE);
+        assert(sym->defined);
         assert(sym->codeaddr > sym->addr());
 
         sp_file_publics_t& pubfunc = publics->add();

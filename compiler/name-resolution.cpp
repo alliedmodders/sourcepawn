@@ -54,7 +54,7 @@ SymbolExpr::Bind()
      * stub in the first pass (i.e. it was "used" but never declared or
      * implemented, issue an error
      */
-    if (sc_status != statFIRST && sym_->ident == iFUNCTN && (sym_->usage & uPROTOTYPED) == 0) {
+    if (sc_status != statFIRST && sym_->ident == iFUNCTN && !sym_->prototyped) {
         error(pos_, 17, name_->chars());
         return false;
     }
@@ -136,7 +136,7 @@ IsDefinedExpr::Bind()
     symbol* sym = findloc(name_->chars());
     if (!sym)
         sym = findglb(name_->chars());
-    if (sym && sym->ident == iFUNCTN && (sym->usage & uDEFINE) == 0)
+    if (sym && sym->ident == iFUNCTN && !sym->defined)
         sym = nullptr;
     value_ = sym ? 1 : 0;
     if (!value_ && find_subst(name_->chars(), name_->length(), nullptr))

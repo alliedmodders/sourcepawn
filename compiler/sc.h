@@ -69,7 +69,7 @@ typedef int jmp_buf[9];
 struct arginfo { /* function argument info */
     char name[sNAMEMAX + 1];
     char ident; /* iVARIABLE, iREFERENCE, iREFARRAY or iVARARGS */
-    char usage; /* uCONST */
+    bool is_const;
     int tag;    /* argument tag id */
     int dim[sDIMEN_MAX];
     int idxtag[sDIMEN_MAX];
@@ -174,17 +174,50 @@ struct symbol;
 struct symbol {
     symbol();
     symbol(const symbol& other);
-    symbol(const char* name, cell addr, int ident, int vclass, int tag, int usage);
+    symbol(const char* name, cell addr, int ident, int vclass, int tag);
     ~symbol();
 
     symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
     char ident;    /* see below for possible values */
-    short usage;   /* see below for possible values */
-    char flags;    /* see below for possible values */
     int compound;  /* compound level (braces nesting level) */
     int tag;       /* tagname id */
+
+    // See uREAD/uWRITTEN above.
+    uint8_t usage : 2;
+
+    // Variable: the variable is defined in the source file.
+    // Function: the function is defined ("implemented") in the source file
+    // Constant: the symbol is defined in the source file.
+    bool defined : 1;
+    bool is_const : 1;
+
+    // Variables and functions.
+    bool stock : 1;         // discardable without warning
+    bool is_public : 1;     // publicly exposed
+
+    // TODO: make this an ident.
+    bool is_struct : 1;
+
+    // Functions only.
+    bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
+    bool missing : 1;       // the function is not implemented in this source file
+    bool callback : 1;      // used as a callback
+    bool skipped : 1;       // skipped in codegen
+    bool retvalue : 1;      // function returns (or should return) a value
+    bool forward : 1;       // the function is explicitly forwardly declared
+    bool native : 1;        // the function is native
+
+    // Constants only.
+    bool enumroot : 1;      // the constant is the "root" of an enumeration
+    bool enumfield : 1;     // the constant is a field in a named enumeration
+    bool predefined : 1;    // the constant is pre-defined and should be kept between passes
+
+    // General symbol flags.
+    bool deprecated : 1;    // symbol is deprecated (avoid use)
+    bool queued : 1;        // symbol is queued for a local work algorithm
+
     union {
         struct {
             int index; /* array & enum: tag of array indices or the enum item */
@@ -285,63 +318,9 @@ struct symbol {
     symbol* child_;
 };
 
-/*  Possible entries for "usage"
- *
- *  This byte is used as a serie of bits, the syntax is different for
- *  functions and other symbols:
- *
- *  VARIABLE
- *  bits: 0     (uDEFINE) the variable is defined in the source file
- *        1     (uREAD) the variable is "read" (accessed) in the source file
- *        2     (uWRITTEN) the variable is altered (assigned a value)
- *        3     (uCONST) the variable is constant (may not be assigned to)
- *        4     (uPUBLIC) the variable is public
- *        6     (uSTOCK) the variable is discardable (without warning)
- *
- *  FUNCTION
- *  bits: 0     (uDEFINE) the function is defined ("implemented") in the source file
- *        1     (uREAD) the function is invoked in the source file
- *        2     (uRETVALUE) the function returns a value (or should return a value)
- *        3     (uPROTOTYPED) the function was prototyped (implicitly via a definition or explicitly)
- *        4     (uPUBLIC) the function is public
- *        5     (uNATIVE) the function is native
- *        6     (uSTOCK) the function is discardable (without warning)
- *        7     (uMISSING) the function is not implemented in this source file
- *        8     (uFORWARD) the function is explicitly forwardly declared
- *
- *  CONSTANT
- *  bits: 0     (uDEFINE) the symbol is defined in the source file
- *        1     (uREAD) the constant is "read" (accessed) in the source file
- *        2     (uWRITTEN) redundant, but may be set for constants passed by reference
- *        3     (uPREDEF) the constant is pre-defined and should be kept between passes
- *        5     (uENUMROOT) the constant is the "root" of an enumeration
- *        6     (uENUMFIELD) the constant is a field in a named enumeration
- */
-#define uDEFINE 0x001
-#define uREAD 0x002
-#define uWRITTEN 0x004
-#define uRETVALUE 0x004 /* function returns (or should return) a value */
-#define uCONST 0x008
-#define uPROTOTYPED 0x008
-#define uPREDEF 0x008 /* constant is pre-defined */
-#define uPUBLIC 0x010
-#define uNATIVE 0x020
-#define uENUMROOT 0x020
-#define uSTOCK 0x040
-#define uENUMFIELD 0x040
-#define uMISSING 0x080
-#define uFORWARD 0x100
-#define uSTRUCT 0x200   /* :TODO: make this an ident */
-#define uCALLBACK 0x400 /* Used as a callback */
-#define uSKIPPED 0x800  /* Not generated */
-/* uRETNONE is not stored in the "usage" field of a symbol. It is
- * used during parsing a function, to detect a mix of "return;" and
- * "return value;" in a few special cases.
- */
-#define uRETNONE 0x10
-
-#define flgDEPRECATED 0x01 /* symbol is deprecated (avoid use) */
-#define flgQUEUED 0x02     /* symbol is queued for a local work algorithm */
+// Values for symbol::usage.
+#define uREAD       0x1     // Used/accessed.
+#define uWRITTEN    0x2     // Altered/written (variables only).
 
 #define uMAINFUNC "main"
 

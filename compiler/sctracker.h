@@ -21,13 +21,11 @@ typedef struct funcarg_s {
 struct functag_t {
     functag_t()
      : ret_tag(0),
-       usage(0),
        argcount(0),
        ommittable(0),
        args()
     {}
     int ret_tag;
-    int usage;
     int argcount;
     int ommittable;
     funcarg_t args[SP_MAX_EXEC_PARAMS];

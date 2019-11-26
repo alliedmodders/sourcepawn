@@ -64,9 +64,9 @@ struct typeinfo_t {
     // Type information.
     int tag;           // Effective tag.
     int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
-    char usage;        // Usage flags.
-    bool is_new;       // New-style declaration.
-    bool has_postdims; // Dimensions, if present, were in postfix position.
+    bool is_const : 1;
+    bool is_new : 1;        // New-style declaration.
+    bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
 
     // If non-zero, this type was originally declared with this type, but was
     // rewritten for desugaring.

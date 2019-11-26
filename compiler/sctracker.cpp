@@ -115,7 +115,6 @@ funcenum_for_symbol(symbol* sym)
     auto ft = ke::MakeUnique<functag_t>();
 
     ft->ret_tag = sym->tag;
-    ft->usage = uPUBLIC & (sym->usage & uRETVALUE);
     ft->argcount = 0;
     ft->ommittable = FALSE;
     for (arginfo& arg : sym->function()->args) {
@@ -131,7 +130,7 @@ funcenum_for_symbol(symbol* sym)
         memcpy(dest->dims, arg.dim, arg.numdim * sizeof(int));
 
         dest->ident = arg.ident;
-        dest->fconst = !!(arg.usage & uCONST);
+        dest->fconst = arg.is_const;
         dest->ommittable = FALSE;
     }
 

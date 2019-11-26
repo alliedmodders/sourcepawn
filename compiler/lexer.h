@@ -293,7 +293,7 @@ symbol* findglb(const char* name);
 symbol* findloc(const char* name);
 symbol* findconst(const char* name);
 symbol* find_enumstruct_field(Type* type, const char* name);
-symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag, int usage);
+symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag);
 symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
                     int numdim, int idxtag[]);
 symbol* addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int dim[],

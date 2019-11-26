@@ -145,8 +145,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     operator_symname(symbolname, opername, tag1, tag2, numparam, tag2);
     swapparams = false;
     sym = findglb(symbolname);
-    if (sym == NULL /*|| (sym->usage & uDEFINE)==0*/)
-    { /* ??? should not check uDEFINE; first pass clears these bits */
+    if (!sym) {
         /* check for commutative operators */
         if (tag1 == tag2 || oper == NULL || !commutative(oper))
             return false; /* not commutative, cannot swap operands */
@@ -157,17 +156,17 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
         operator_symname(symbolname, opername, tag2, tag1, numparam, tag1);
         swapparams = true;
         sym = findglb(symbolname);
-        if (sym == NULL /*|| (sym->usage & uDEFINE)==0*/)
+        if (!sym)
             return false;
     }
 
     /* check existance and the proper declaration of this function */
-    if ((sym->usage & uMISSING) != 0 || (sym->usage & uPROTOTYPED) == 0) {
+    if (sym->missing || !sym->prototyped) {
         char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
         funcdisplayname(symname, sym->name());
-        if ((sym->usage & uMISSING) != 0)
+        if (sym->missing)
             error(4, symname); /* function not defined */
-        if ((sym->usage & uPROTOTYPED) == 0)
+        if (!sym->prototyped)
             error(71, symname); /* operator must be declared before use */
     }
 
@@ -412,7 +411,7 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
     if (formal->ret_tag == actual->ret_tag)
         return TRUE;
     if (formal->ret_tag == pc_tag_void) {
-        if (actual->ret_tag == 0 && !(actual->usage & uRETVALUE))
+        if (actual->ret_tag == 0)
             return TRUE;
     }
     return FALSE;
@@ -646,18 +645,18 @@ checkfunction(const value* lval)
     if (sym == NULL || (sym->ident != iFUNCTN))
         return; /* no known symbol, or not a function result */
 
-    if ((sym->usage & uDEFINE) != 0) {
+    if (sym->defined) {
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */
-        if (sym != curfunc && (sym->usage & uRETVALUE) == 0) {
+        if (sym != curfunc && !sym->retvalue) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym->name());
             error(209, symname); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
-        sym->usage |= uRETVALUE; /* make sure that a future implementation of
+        sym->retvalue = true;    /* make sure that a future implementation of
                                   * the function uses "return <value>" */
     }
 }

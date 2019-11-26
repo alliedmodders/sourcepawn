@@ -185,6 +185,12 @@ static void check_void_decl(const declinfo_t* decl, int variable);
 static void rewrite_type_for_enum_struct(typeinfo_t* info);
 
 enum {
+    RETURN_NONE = 0,
+    RETURN_NO_VALUE = 0x1,
+    RETURN_VALUE = 0x2,
+};
+
+enum {
     TEST_PLAIN,  /* no parentheses */
     TEST_PARENS, /* '(' <expr> ')' */
     TEST_OPT,    /* '(' <expr> ')' or <expr> */
@@ -194,13 +200,13 @@ static int autozero = 1;              /* if 1 will zero out the variable, if 0 o
 static int lastst = 0;                /* last executed statement type */
 static int nestlevel = 0;             /* number of active (open) compound statements */
 static int endlessloop = 0;           /* nesting level of endless loop */
-static int rettype = 0;               /* the type that a "return" expression should have */
 static int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
 static int sc_reparse = 0;            /* needs 3th parse because of changed prototypes? */
 static int sc_parsenum = 0;           /* number of the extra parses */
 static int wq[wqTABSZ];               /* "while queue", internal stack for nested loops */
 static int* wqptr;                    /* pointer to next entry */
 static char* sc_documentation = NULL; /* main documentation */
+static int sReturnType = RETURN_NONE;
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 static HWND hwndFinish = 0;
 #endif
@@ -629,7 +635,6 @@ resetglobals(void) {
     curfunc = NULL;        /* pointer to current function */
     lastst = 0;            /* last executed statement type */
     nestlevel = 0;         /* number of active (open) compound statements */
-    rettype = 0;           /* the type that a "return" expression should have */
     litidx = 0;            /* index to literal table */
     stgidx = 0;            /* index to the staging buffer */
     sc_labnum = 0;         /* top value of (internal) labels */
@@ -652,6 +657,8 @@ resetglobals(void) {
     sc_intest = false;
     sc_allowtags = true;
     fcurrent = 0;
+
+    sReturnType = RETURN_NONE;
 }
 
 static void
@@ -1079,7 +1086,7 @@ dodecl(const token_t* tok) {
 
     // Hacky bag o' hints as to whether this is a variable decl.
     bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexpeek('(') ||
-                            ((decl.type.usage & uCONST) == uCONST);
+                            decl.type.is_const;
 
     if (!decl.opertok && probablyVariable) {
         if (tok->id == tNEW && decl.type.is_new)
@@ -1245,7 +1252,6 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     char* str;
     int cur_litidx = 0;
     cell *values, *found;
-    int usage;
     symbol *mysym, *sym;
 
     sp::Atom* name = gAtoms.add(firstname);
@@ -1261,17 +1267,14 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
      * Lastly, very lastly, we will insert a copy of this variable.
      * This is soley to expose the pubvar.
      */
-    usage = uREAD | uCONST | uSTRUCT;
-    if (fpublic)
-        usage |= uPUBLIC;
     mysym = NULL;
     for (sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
-            if ((sym->usage & uSTRUCT) && sym->vclass == sGLOBAL) {
-                if (sym->usage & uDEFINE) {
+            if (sym->is_struct && sym->vclass == sGLOBAL) {
+                if (sym->defined) {
                     error(21, name->chars());
                 } else {
-                    if (sym->usage & uPUBLIC && !fpublic)
+                    if (sym->is_public && !fpublic)
                         error(42);
                 }
             } else {
@@ -1282,20 +1285,24 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
         }
     }
     if (!mysym)
-        mysym = addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name), usage);
+        mysym = addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name));
     else
         mysym->codeaddr = code_idx;
+    mysym->usage |= uREAD;
 
     if (!matchtoken('=')) {
         matchtoken(';');
         /* Mark it as undefined instead */
-        mysym->usage = uSTOCK | uSTRUCT;
+        mysym->is_struct = true;
+        mysym->stock = true;
         free(found);
         free(values);
         return;
     }
 
-    mysym->usage = usage;
+    mysym->is_struct = true;
+    mysym->is_public = !!fpublic;
+    mysym->is_const = true;
     needtoken('{');
 
     do {
@@ -1460,7 +1467,7 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
          * a) not found a matching variable (or rejected it, because it was a shadow)
          * b) found a global variable and we were looking for that global variable
          */
-        if (sym != NULL && (sym->usage & uDEFINE) != 0)
+        if (sym != NULL && sym->defined)
             error(21, decl->name); /* symbol already defined */
         /* if this variable is never used (which can be detected only in the
          * second stage), shut off code generation
@@ -1500,15 +1507,17 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
         } else { /* if declared but not yet defined, adjust the variable's address */
             sym->setAddr(address);
             sym->codeaddr = code_idx;
-            sym->usage |= uDEFINE;
+            sym->defined = true;
         }
         assert(sym != NULL);
-        if (ispublic)
-            sym->usage |= uPUBLIC | uREAD;
-        if (decl->type.usage & uCONST)
-            sym->usage |= uCONST;
+        if (ispublic) {
+            sym->usage |= uREAD;
+            sym->is_public = true;
+        }
+        if (decl->type.is_const)
+            sym->is_const = true;
         if (fstock)
-            sym->usage |= uSTOCK;
+            sym->stock = true;
         if (fstatic)
             sym->fnumber = filenum;
         if (sc_status == statSKIP) {
@@ -1564,7 +1573,7 @@ is_shadowed_name(const char* name)
     }
     // ignore implicitly prototyped names.
     if (symbol* sym = findglb(name))
-        return !(sym->ident == iFUNCTN && !(sym->usage & uDEFINE));
+        return !(sym->ident == iFUNCTN && !sym->defined);
     return false;
 }
 
@@ -1649,7 +1658,7 @@ declloc(int tokid) {
             modstk(-type->size * sizeof(cell));
             markstack(MEMUSE_STATIC, type->size);
             assert(curfunc != NULL);
-            assert((curfunc->usage & uNATIVE) == 0);
+            assert(!curfunc->native);
             if (curfunc->function()->stacksize < declared + 1)
                 curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         } else if (type->ident == iREFARRAY) {
@@ -1750,7 +1759,7 @@ declloc(int tokid) {
             /* genarray() pushes the address onto the stack, so we don't need to call modstk() here! */
             markheap(MEMUSE_DYNAMIC, 0);
             markstack(MEMUSE_STATIC, 1);
-            assert(curfunc != NULL && ((curfunc->usage & uNATIVE) == 0));
+            assert(curfunc != NULL && !curfunc->native);
             if (curfunc->function()->stacksize < declared + 1)
                 curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         }
@@ -1758,8 +1767,8 @@ declloc(int tokid) {
          * to initialize it */
         assert(sym != NULL);       /* we declared it, it must be there */
         sym->compound = nestlevel; /* for multiple declaration/shadowing check */
-        if (type->usage & uCONST)
-            sym->usage |= uCONST;
+        if (type->is_const)
+            sym->is_const = true;
         if (!fstatic) { /* static variables already initialized */
             if (type->ident == iVARIABLE) {
                 /* simple variable, also supports initialization */
@@ -2534,7 +2543,7 @@ declstruct(void) {
         arg.dimcount = decl.type.numdim;
         memcpy(arg.dims, decl.type.dim, sizeof(int) * arg.dimcount);
         strcpy(arg.name, decl.name);
-        arg.fconst = !!(decl.type.usage & uCONST);
+        arg.fconst = decl.type.is_const;
         arg.ident = decl.type.ident;
         if (arg.ident == iARRAY)
             arg.ident = iREFARRAY;
@@ -2644,9 +2653,9 @@ parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags) {
         lextok(&tok);
 
     if (tok.id == tCONST) {
-        if (type->usage & uCONST)
+        if (type->is_const)
             error(138);
-        type->usage |= uCONST;
+        type->is_const = true;
         lextok(&tok);
     }
 
@@ -2816,9 +2825,9 @@ parse_old_decl(declinfo_t* decl, int flags) {
     typeinfo_t* type = &decl->type;
 
     if (matchtoken(tCONST)) {
-        if (type->usage & uCONST)
+        if (type->is_const)
             error(138);
-        type->usage |= uCONST;
+        type->is_const = true;
     }
 
     int tags[MAXTAGS], numtags = 0;
@@ -2915,12 +2924,12 @@ parse_old_decl(declinfo_t* decl, int flags) {
 
 static int
 reparse_old_decl(declinfo_t* decl, int flags) {
-    int usage = decl->type.usage & uCONST;
+    bool is_const = decl->type.is_const;
 
     memset(decl, 0, sizeof(*decl));
     decl->type.ident = iVARIABLE;
     decl->type.size = 1;
-    decl->type.usage |= usage;
+    decl->type.is_const = is_const;
 
     return parse_old_decl(decl, flags);
 }
@@ -3058,7 +3067,7 @@ parse_decl(declinfo_t* decl, int flags) {
 
     // Must attempt to match const first, since it's a common prefix.
     if (matchtoken(tCONST))
-        decl->type.usage |= uCONST;
+        decl->type.is_const = true;
 
     // Sometimes we know ahead of time whether the declaration will be old, for
     // example, if preceded by tNEW or tDECL.
@@ -3184,7 +3193,7 @@ parse_inline_function(methodmap_t* map, const typeinfo_t* type, const char* name
 
         if (!ok)
             return NULL;
-        if (!target || (target->usage & uFORWARD)) {
+        if (!target || target->forward) {
             error(10);
             return NULL;
         }
@@ -3269,7 +3278,7 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
         }
     }
 
-    if (target->usage & uNATIVE)
+    if (target->native)
         require_newline(TerminatorPolicy::Semicolon);
     else
         require_newline(TerminatorPolicy::Newline);
@@ -3398,7 +3407,7 @@ parse_method(methodmap_t* map) {
         map->ctor = method.get();
     }
 
-    if (target->usage & uNATIVE)
+    if (target->native)
         require_newline(TerminatorPolicy::Semicolon);
     else
         require_newline(TerminatorPolicy::Newline);
@@ -3422,12 +3431,13 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef) {
             sym->ident = iMETHODMAP;
 
             // Kill previous enumstruct properties, if any.
-            if (sym->usage & uENUMROOT) {
+            if (sym->enumroot) {
                 for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
                     symbol* csym = findglb(cv->name);
                     if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
-                        (csym->usage & uENUMFIELD)) {
-                        csym->usage &= ~uENUMFIELD;
+                        csym->enumfield)
+                    {
+                        csym->enumfield = false;
                         csym->set_parent(nullptr);
                     }
                 }
@@ -3446,8 +3456,8 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef) {
                      0,          // addr
                      iMETHODMAP, // ident
                      sGLOBAL,    // vclass
-                     map->tag,   // tag
-                     uDEFINE);   // usage
+                     map->tag);  // tag
+        sym->defined = true;
     }
     sym->methodmap = map;
 }
@@ -3662,7 +3672,7 @@ dodelete() {
 
     // Only zap non-const lvalues.
     int zap = sval.lvalue;
-    if (zap && sval.val.sym && (sval.val.sym->usage & uCONST))
+    if (zap && sval.val.sym && sval.val.sym->is_const)
         zap = FALSE;
 
     int popaddr = FALSE;
@@ -3730,7 +3740,6 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
     needtoken(tFUNCTION);
 
     parse_new_typename(NULL, &type->ret_tag);
-    type->usage = uPUBLIC;
 
     needtoken('(');
 
@@ -3760,7 +3769,7 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
         arg->tags[0] = decl.type.tag;
         arg->dimcount = decl.type.numdim;
         memcpy(arg->dims, decl.type.dim, arg->dimcount * sizeof(decl.type.dim[0]));
-        arg->fconst = (decl.type.usage & uCONST) ? TRUE : FALSE;
+        arg->fconst = decl.type.is_const;
         if (decl.type.ident == iARRAY)
             arg->ident = iREFARRAY;
         else
@@ -3911,7 +3920,7 @@ decl_enum(int vclass) {
             /* create the root symbol, so the fields can have it as their "parent" */
             enumsym = add_constant(enumname, 0, vclass, tag);
             if (enumsym != NULL)
-                enumsym->usage |= uENUMROOT;
+                enumsym->enumroot = true;
             /* start a new list for the element names */
             if ((enumroot = (constvalue*)malloc(sizeof(constvalue))) == NULL)
                 error(FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
@@ -3966,7 +3975,7 @@ decl_enum(int vclass) {
         sym->set_parent(enumsym);
         /* add the constant to a separate list as well */
         if (enumroot != NULL) {
-            sym->usage |= uENUMFIELD;
+            sym->enumfield = true;
             append_constval(enumroot, constname, value, tag);
         }
         if (multiplier == 1)
@@ -3979,7 +3988,7 @@ decl_enum(int vclass) {
 
     /* set the enum name to the "next" value (typically the last value plus one) */
     if (enumsym) {
-        assert((enumsym->usage & uENUMROOT) != 0);
+        assert(enumsym->enumroot);
         enumsym->setAddr(0);
         /* assign the constant list */
         assert(enumroot != NULL);
@@ -4002,7 +4011,7 @@ decl_enumstruct() {
         } else {
             root = add_constant(struct_name.name, 0, sGLOBAL, 0);
             root->tag = gTypes.defineEnumStruct(struct_name.name, root)->tagid();
-            root->usage |= uENUMROOT;
+            root->enumroot = true;
             root->ident = iENUMSTRUCT;
         }
     }
@@ -4026,7 +4035,7 @@ decl_enumstruct() {
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 
-        if (decl.type.usage & uCONST)
+        if (decl.type.is_const)
             error(94, decl.name);
 
         // It's not possible to have circular references other than this, because
@@ -4077,7 +4086,7 @@ decl_enumstruct() {
         }
         sym->set_parent(root);
         if (values) {
-            sym->usage |= uENUMFIELD;
+            sym->enumfield = true;
             append_constval(values, decl.name, position, root_tag);
         }
 
@@ -4097,7 +4106,7 @@ decl_enumstruct() {
     require_newline(TerminatorPolicy::Newline);
 
     if (root) {
-        assert(root->usage & uENUMROOT);
+        assert(root->enumroot);
         root->setAddr(position);
         root->dim.enumlist = values;
     }
@@ -4115,20 +4124,20 @@ fetchfunc(const char* name) {
         if (sym->ident != iFUNCTN) {
             error(21, name); /* yes, but not as a function */
             return NULL;     /* make sure the old symbol is not damaged */
-        } else if ((sym->usage & uNATIVE) != 0) {
+        } else if (sym->native) {
             error(21, name); /* yes, and it is a native */
         }
         assert(sym->vclass == sGLOBAL);
     } else {
         /* don't set the "uDEFINE" flag; it may be a prototype */
-        sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0, 0);
+        sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0);
         assert(sym != NULL); /* fatal error 103 must be given on error */
         /* set the required stack size to zero (only for non-native functions) */
         sym->function()->stacksize = 1; /* 1 for PROC opcode */
     }
     if (pc_deprecate.length() > 0) {
         assert(sym != NULL);
-        sym->flags |= flgDEPRECATED;
+        sym->deprecated = true;
         if (sc_status == statWRITE) {
             sym->documentation = ke::Move(pc_deprecate);
         } else {
@@ -4265,7 +4274,7 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
     assert(strlen(opername) > 0);
     operator_symname(tmpname, opername, tags[0], tags[1], count, resulttag);
     if ((oldsym = findglb(tmpname)) != NULL) {
-        if ((oldsym->usage & uDEFINE) != 0) {
+        if (oldsym->defined) {
             char errname[2 * sNAMEMAX + 16];
             funcdisplayname(errname, tmpname);
             error(21, errname); /* symbol already defined */
@@ -4282,7 +4291,7 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
 
     /* operators should return a value, except the '~' operator */
     if (opertok != '~')
-        sym->usage |= uRETVALUE;
+        sym->retvalue = true;
 
     return TRUE;
 }
@@ -4425,25 +4434,27 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
     sym = fetchfunc(decl->name);
     if (sym == NULL)
         return NULL;
-    if ((sym->usage & uPROTOTYPED) != 0 && sym->tag != decl->type.tag)
+    if (sym->prototyped && sym->tag != decl->type.tag)
         error(25);
-    if ((sym->usage & uDEFINE) == 0) {
+    if (!sym->defined) {
         // As long as the function stays undefined, update its address and tag.
         sym->setAddr(code_idx);
         sym->tag = decl->type.tag;
     }
 
     if (fnative) {
-        sym->usage = (char)(uNATIVE | uRETVALUE | uDEFINE | (sym->usage & uPROTOTYPED));
+        sym->native = true;
+        sym->defined = true;
+        sym->retvalue = true;
     } else if (fpublic) {
-        sym->usage |= uPUBLIC;
+        sym->is_public = true;
     }
-    sym->usage |= uFORWARD;
+    sym->forward = true;
 
     declargs(sym, FALSE, thistag);
     /* "declargs()" found the ")" */
     if (!operatoradjust(decl->opertok, sym, decl->name, decl->type.tag))
-        sym->usage &= ~uDEFINE;
+        sym->defined = false;
 
     /* for a native operator, also need to specify an "exported" function name;
      * for a native function, this is optional
@@ -4492,7 +4503,6 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
  *  out of the following text
  *
  *  Global references: funcstatus,lastst,litidx
- *                     rettype  (altered)
  *                     curfunc  (altered)
  *                     declared (altered)
  *                     glb_declared (altered)
@@ -4537,23 +4547,23 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         return TRUE;
 
     // Not a valid function declaration if native.
-    if (sym->usage & uNATIVE)
+    if (sym->native)
         return TRUE;
 
     // If the function has not been prototyed, set its tag.
-    if (!(sym->usage & uPROTOTYPED))
+    if (!sym->prototyped)
         sym->tag = decl->type.tag;
 
     // As long as the function stays undefined, update its address.
-    if (!(sym->usage & uDEFINE))
+    if (!sym->defined)
         sym->setAddr(code_idx);
 
     if (fpublic)
-        sym->usage |= uPUBLIC;
+        sym->is_public = true;
     if (fstatic)
         sym->fnumber = filenum;
 
-    if (sym->usage & (uPUBLIC | uFORWARD)) {
+    if (sym->is_public || sym->forward) {
         if (decl->type.numdim > 0)
             error(141);
     }
@@ -4564,15 +4574,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
      * been incorrectly flagged (as the return tag was unknown at the time of
      * the call)
      */
-    if ((sym->usage & (uPROTOTYPED | uREAD)) == uREAD && sym->tag != 0) {
-        int curstatus = sc_status;
-        sc_status = statWRITE; /* temporarily set status to WRITE, so the warning isn't blocked */
-#if 0                          /* SourceMod - silly, should be removed in first pass, so removed */
-    error(208);
-#endif
-        sc_status = curstatus;
+    if (!sym->prototyped && (sym->usage & uREAD) && sym->tag != 0)
         sc_reparse = TRUE; /* must add another pass to "initial scan" phase */
-    }
 
     /* declare all arguments */
     argcnt = declargs(sym, TRUE, thistag);
@@ -4583,15 +4586,15 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         sym->usage |= uREAD; /* "main()" is the program's entry point: always used */
     }
 
-    if ((sym->usage & uDEFINE) != 0)
+    if (sym->defined)
         error(21, sym->name());
 
     /* "declargs()" found the ")"; if a ";" appears after this, it was a
      * prototype */
     if (matchtoken(';')) {
-        if (sym->usage & uPUBLIC)
+        if (sym->is_public)
             error(10);
-        sym->usage |= uFORWARD;
+        sym->forward = true;
         if (!sc_needsemicolon)
             error(10); /* old style prototypes used with optional semicolumns */
         delete_symbols(&loctab, 0, TRUE); /* prototype is done; forget everything */
@@ -4606,30 +4609,33 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         glbdecl = glb_declared;
 
         sc_status = statSKIP;
-        sym->usage |= uSKIPPED;
+        sym->skipped = true;
 
         // If this is a method, output errors even if it's unused.
         if (thistag && *thistag != -1)
             sc_err_status = TRUE;
     }
 
-    if ((sym->flags & flgDEPRECATED) != 0 && (sym->usage & uSTOCK) == 0) {
+    if (sym->deprecated && !sym->stock) {
         const char* ptr = sym->documentation.chars();
         error(234, decl->name, ptr); /* deprecated (probably a public function) */
     }
     begcseg();
-    sym->usage |= uDEFINE; /* set the definition flag */
+    sym->defined = true;
     if (stock)
-        sym->usage |= uSTOCK;
+        sym->stock = true;
     if (decl->opertok != 0 && opererror)
-        sym->usage &= ~uDEFINE;
+        sym->defined = false;
     startfunc(sym->name()); /* creates stack frame */
     insert_dbgline(funcline);
     setline(FALSE);
     declared = 0; /* number of local cells */
     resetstacklist();
     resetheaplist();
-    rettype = (sym->usage & uRETVALUE); /* set "return type" variable */
+    if (sym->retvalue)
+        sReturnType = RETURN_VALUE;
+    else
+        sReturnType = RETURN_NONE;
     curfunc = sym;
     define_args(); /* add the symbolic info for the function arguments */
     if (matchtoken('{')) {
@@ -4641,10 +4647,10 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     }
     statement(NULL, FALSE);
 
-    if ((rettype & uRETVALUE) != 0) {
-        sym->usage |= uRETVALUE;
+    if (sReturnType & RETURN_VALUE) {
+        sym->retvalue = true;
     } else {
-        if (sym->tag == pc_tag_void && (sym->usage & uFORWARD) && !decl->type.tag &&
+        if (sym->tag == pc_tag_void && sym->forward && !decl->type.tag &&
             !decl->type.is_new) {
             // We got something like:
             //    forward void X();
@@ -4656,7 +4662,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     }
 
     // Check that return tags match.
-    if ((sym->usage & uPROTOTYPED) && sym->tag != decl->type.tag) {
+    if (sym->prototyped && sym->tag != decl->type.tag) {
         int old_fline = fline;
         fline = funcline;
         error(180, type_to_name(sym->tag), type_to_name(decl->type.tag));
@@ -4675,7 +4681,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (lastst != tRETURN) {
         ldconst(0, sPRI);
         ffret();
-        if ((sym->usage & uRETVALUE) != 0) {
+        if (sym->retvalue) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym->name());
             error(209, symname); /* function should return a value */
@@ -4712,7 +4718,7 @@ argcompare(arginfo* a1, arginfo* a2) {
     if (result)
         result = a1->ident == a2->ident; /* type/class */
     if (result)
-        result = a1->usage == a2->usage; /* "const" flag */
+        result = a1->is_const == a2->is_const; /* "const" flag */
     if (result)
         result = a1->tag == a2->tag;
     if (result)
@@ -4759,14 +4765,14 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
      * of the existing definition
      */
     oldargcnt = 0;
-    if ((sym->usage & uPROTOTYPED) != 0)
+    if (sym->prototyped)
         while (arglist[oldargcnt].ident != 0)
             oldargcnt++;
     argcnt = 0; /* zero aruments up to now */
 
     if (thistag && *thistag != -1) {
         arginfo* argptr;
-        if ((sym->usage & uPROTOTYPED) == 0) {
+        if (!sym->prototyped) {
             // Push a copy of the terminal argument.
             sym->function()->resizeArgs(argcnt + 1);
 
@@ -4780,7 +4786,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
                 argptr->numdim = 1;
             } else {
                 argptr->ident = iVARIABLE;
-                argptr->usage = uCONST;
+                argptr->is_const = true;
                 argptr->tag = *thistag;
             }
         } else {
@@ -4789,8 +4795,8 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
 
         symbol* sym = addvariable2(argptr->name, (argcnt + 3) * sizeof(cell), argptr->ident, sLOCAL,
                                    argptr->tag, argptr->dim, argptr->numdim, argptr->idxtag, 0);
-        if (argptr->usage & uCONST)
-            sym->usage |= uCONST;
+        if (argptr->is_const)
+            sym->is_const = true;
         markusage(sym, uREAD);
 
         argcnt++;
@@ -4804,7 +4810,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
             check_void_decl(&decl, TRUE);
 
             if (decl.type.ident == iVARARGS) {
-                if ((sym->usage & uPROTOTYPED) == 0) {
+                if (!sym->prototyped) {
                     /* redimension the argument list, add the entry iVARARGS */
                     sym->function()->resizeArgs(argcnt + 1);
 
@@ -4828,7 +4834,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
 
             Type* type = gTypes.find(decl.type.semantic_tag());
             if (type->isEnumStruct()) {
-                if (sym->usage & uNATIVE)
+                if (sym->native)
                     error(135, type->name());
             }
 
@@ -4843,11 +4849,11 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
              */
             doarg(sym, &decl, (argcnt + 3) * sizeof(cell), chkshadow, &arg);
 
-            if ((sym->usage & uPUBLIC) && arg.hasdefault)
+            if (sym->is_public && arg.hasdefault)
                 error(59,
                       decl.name); /* arguments of a public function may not have a default value */
 
-            if ((sym->usage & uPROTOTYPED) == 0) {
+            if (!sym->prototyped) {
                 /* redimension the argument list, add the entry */
                 sym->function()->resizeArgs(argcnt + 1);
                 arglist[argcnt] = arg;
@@ -4865,7 +4871,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
         needtoken(')');
     }
 
-    sym->usage |= uPROTOTYPED;
+    sym->prototyped = true;
     errorset(sRESET, 0); /* reset error flag (clear the "panic mode")*/
     return argcnt;
 }
@@ -4965,7 +4971,7 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
         }
     }
     arg->ident = (char)type->ident;
-    arg->usage = type->usage;
+    arg->is_const = type->is_const;
     arg->tag = type->tag;
     argsym = findloc(decl->name);
     if (argsym != NULL) {
@@ -4979,10 +4985,10 @@ doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg) {
         argsym->compound = 0;
         if (type->ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (fun->usage & (uPUBLIC | uSTOCK | uCALLBACK))
+        if (fun->callback || fun->stock || fun->is_public)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
-        if (type->usage & uCONST)
-            argsym->usage |= uCONST;
+        if (type->is_const)
+            argsym->is_const = true;
     }
 
     errorset(sEXPRRELEASE, 0);
@@ -4994,11 +5000,11 @@ is_symbol_unused(symbol* sym) {
         return false;
     if (!sym->is_unreferenced())
         return false;
-    if (sym->usage & uPUBLIC)
+    if (sym->is_public)
         return false;
     if (sym->ident == iVARIABLE || sym->ident == iARRAY)
         return true;
-    return sym->ident == iFUNCTN && (sym->usage & uNATIVE) == 0 &&
+    return sym->ident == iFUNCTN && !sym->native &&
            strcmp(sym->name(), uMAINFUNC) != 0;
 }
 
@@ -5009,7 +5015,7 @@ reduce_referrers(symbol* root) {
     // Enqueue all unreferred symbols.
     for (symbol* sym = root->next; sym; sym = sym->next) {
         if (is_symbol_unused(sym)) {
-            sym->flags |= flgQUEUED;
+            sym->queued = true;
             work.append(sym);
         }
     }
@@ -5020,15 +5026,15 @@ reduce_referrers(symbol* root) {
 
         for (symbol* sym : dead->refers_to()) {
             sym->drop_reference_from(dead);
-            if (is_symbol_unused(sym) && !(sym->flags & flgQUEUED)) {
+            if (is_symbol_unused(sym) && !sym->queued) {
                 // During compilation, anything marked as stock will be omitted from
                 // the final binary *without warning*. If a stock calls a non-stock
                 // function, we want to avoid warnings on that function as well, so
                 // we propagate the stock bit.
-                if (dead->usage & uSTOCK)
-                    sym->usage |= uSTOCK;
+                if (dead->stock)
+                    sym->stock = true;
 
-                sym->flags |= flgQUEUED;
+                sym->queued = true;
                 work.append(sym);
             }
         }
@@ -5045,14 +5051,14 @@ deduce_liveness(symbol* root) {
     for (symbol* sym = root->next; sym; sym = sym->next) {
         if (sym->ident != iFUNCTN)
             continue;
-        if (sym->usage & uNATIVE)
+        if (sym->native)
             continue;
 
-        if (sym->usage & uPUBLIC) {
-            sym->flags |= flgQUEUED;
+        if (sym->is_public) {
+            sym->queued = true;
             work.append(sym);
         } else {
-            sym->flags &= ~flgQUEUED;
+            sym->queued = false;
         }
     }
 
@@ -5061,18 +5067,18 @@ deduce_liveness(symbol* root) {
         symbol* live = work.popCopy();
 
         for (const auto& other : live->refers_to()) {
-            if (other->ident != iFUNCTN || (other->flags & flgQUEUED))
+            if (other->ident != iFUNCTN || other->queued)
                 continue;
-            other->flags |= flgQUEUED;
+            other->queued = true;
             work.append(other);
         }
     }
 
     // Remove the liveness flags for anything we did not visit.
     for (symbol* sym = root->next; sym; sym = sym->next) {
-        if (sym->ident != iFUNCTN || (sym->flags & flgQUEUED))
+        if (sym->ident != iFUNCTN || sym->queued)
             continue;
-        if (sym->usage & uNATIVE)
+        if (sym->native)
             continue;
         sym->usage &= ~(uWRITTEN | uREAD);
     }
@@ -5114,14 +5120,16 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
         }
         switch (sym->ident) {
             case iFUNCTN:
-                if ((sym->usage & (uDEFINE | uREAD | uNATIVE | uSTOCK | uPUBLIC)) == uDEFINE) {
+                if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
+                    sym->defined)
+                {
                     funcdisplayname(symname, sym->name());
                     if (strlen(symname) > 0) {
                         error(sym, 203,
                               symname); /* symbol isn't used ... (and not public/native/stock) */
                     }
                 }
-                if ((sym->usage & uPUBLIC) != 0 || strcmp(sym->name(), uMAINFUNC) == 0)
+                if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
                     entry = TRUE; /* there is an entry point */
                 break;
             case iCONSTEXPR:
@@ -5137,19 +5145,13 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                 /* a variable */
                 if (sym->parent() != NULL)
                     break; /* hierarchical data type */
-                if ((sym->usage & (uWRITTEN | uREAD | uSTOCK)) == 0) {
+                if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0) {
                     error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
-                } else if ((sym->usage & (uREAD | uSTOCK | uPUBLIC)) == 0) {
+                } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
                     error(sym, 204, sym->name()); /* value assigned to symbol is never used */
-#if 0 // ??? not sure whether it is a good idea to force people use "const"
-      } else if ((sym->usage & (uWRITTEN | uPUBLIC | uCONST))==0 && sym->ident==iREFARRAY) {
-        errorset(sSETFILE,sym->fnumber);
-        errorset(sSETLINE,sym->lnumber);
-        error(214,sym->name);       /* make array argument "const" */
-#endif
                 }
                 /* also mark the variable (local or global) to the debug information */
-                if ((sym->usage & (uWRITTEN | uREAD)) != 0 && (sym->usage & uNATIVE) == 0)
+                if ((sym->usage & (uWRITTEN | uREAD)) != 0 && !sym->native)
                     insert_dbgsymbol(sym);
         }
         sym = sym->next;
@@ -5302,7 +5304,7 @@ add_constant(const char* name, cell val, int vclass, int tag) {
         int redef = 0;
         if (sym->ident != iCONSTEXPR)
             redef = 1; /* redefinition a function/variable to a constant is not allowed */
-        if ((sym->usage & uENUMFIELD) != 0) {
+        if (sym->enumfield) {
             /* enum field, special case if it has a different tag and the new symbol is also an enum field */
             symbol* tagsym;
             if (sym->tag == tag)
@@ -5312,7 +5314,7 @@ add_constant(const char* name, cell val, int vclass, int tag) {
                 redef = 1; /* new constant does not have a tag */
             } else {
                 tagsym = findconst(type->name());
-                if (tagsym == NULL || (tagsym->usage & uENUMROOT) == 0)
+                if (tagsym == NULL || !tagsym->enumroot)
                     redef = 1; /* new constant is not an enumeration field */
             }
             /* in this particular case (enumeration field that is part of a different
@@ -5337,10 +5339,10 @@ add_constant(const char* name, cell val, int vclass, int tag) {
 
     /* constant doesn't exist yet (or is allowed to be redefined) */
 redef_enumfield:
-    sym = addsym(name, val, iCONSTEXPR, vclass, tag, uDEFINE);
-    assert(sym != NULL); /* fatal error 103 must be given on error */
+    sym = addsym(name, val, iCONSTEXPR, vclass, tag);
+    sym->defined = true;
     if (sc_status == statIDLE)
-        sym->usage |= uPREDEF;
+        sym->predefined = true;
     return sym;
 }
 
@@ -6115,7 +6117,8 @@ doassert(void) {
 }
 
 static int
-is_variadic(symbol* sym) {
+is_variadic(symbol* sym)
+{
     assert(sym->ident == iFUNCTN);
     arginfo* arg = &sym->function()->args[0];
     while (arg->ident) {
@@ -6126,12 +6129,9 @@ is_variadic(symbol* sym) {
     return FALSE;
 }
 
-/*  doreturn
- *
- *  Global references: rettype  (altered)
- */
 static void
-doreturn(void) {
+doreturn(void)
+{
     int tag, ident;
     int level;
     symbol *sym, *sub;
@@ -6140,7 +6140,7 @@ doreturn(void) {
         if (curfunc->tag == pc_tag_void)
             error(88);
         /* "return <value>" */
-        if ((rettype & uRETNONE) != 0)
+        if (sReturnType & RETURN_NONE)
             error(78); /* mix "return;" and "return value;" */
         ident = doexpr(TRUE, FALSE, TRUE, FALSE, &tag, &sym, TRUE);
         needtoken(tTERM);
@@ -6152,15 +6152,15 @@ doreturn(void) {
         /* see if this function already has a sub type (an array attached) */
         sub = curfunc->array_return();
         assert(sub == NULL || sub->ident == iREFARRAY);
-        if ((rettype & uRETVALUE) != 0) {
+        if (sReturnType & RETURN_VALUE) {
             int retarray = (ident == iARRAY || ident == iREFARRAY);
             /* there was an earlier "return" statement in this function */
             if ((sub == NULL && retarray) || (sub != NULL && !retarray))
                 error(79); /* mixing "return array;" and "return value;" */
-            if (retarray && (curfunc->usage & uPUBLIC) != 0)
+            if (retarray && curfunc->is_public)
                 error(90, curfunc->name()); /* public function may not return array */
         }
-        rettype |= uRETVALUE; /* function returns a value */
+        sReturnType |= RETURN_VALUE;
         /* check tagname with function tagname */
         assert(curfunc != NULL);
         if (!matchtag_string(ident, tag))
@@ -6253,13 +6253,13 @@ doreturn(void) {
     } else {
         /* this return statement contains no expression */
         ldconst(0, sPRI);
-        if ((rettype & uRETVALUE) != 0) {
+        if (sReturnType & RETURN_VALUE) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             assert(curfunc != NULL);
             funcdisplayname(symname, curfunc->name());
             error(209, symname); /* function should return a value */
         }
-        rettype |= uRETNONE; /* function does not return anything */
+        sReturnType |= RETURN_NO_VALUE;
     }
     destructsymbols(&loctab, 0); /* call destructor for *all* locals */
     if (pc_must_drop_stack) {

@@ -1119,7 +1119,7 @@ command(void)
                     if (delete_subst(str, strlen(str))) {
                         /* also undefine normal constants */
                         symbol* sym = findconst(str);
-                        if (sym != NULL && (sym->usage & (uENUMROOT | uENUMFIELD)) == 0) {
+                        if (sym != NULL && !(sym->enumroot && sym->enumfield)) {
                             delete_symbol(&glbtab, sym);
                         }
                     }
@@ -2938,13 +2938,13 @@ delete_symbols(symbol* root, int level, int delete_functions)
             case iCONSTEXPR:
             case iENUMSTRUCT:
                 /* delete constants, except predefined constants */
-                mustdelete = delete_functions || (sym->usage & uPREDEF) == 0;
+                mustdelete = delete_functions || !sym->predefined;
                 break;
             case iFUNCTN:
                 /* optionally preserve globals (variables & functions), but
                  * NOT native functions
                  */
-                mustdelete = delete_functions || (sym->usage & uNATIVE) != 0;
+                mustdelete = delete_functions || sym->native;
                 assert(sym->parent() == NULL);
                 break;
             case iMETHODMAP:
@@ -2972,15 +2972,15 @@ delete_symbols(symbol* root, int level, int delete_functions)
             /* if the function was prototyped, but not implemented in this source,
              * mark it as such, so that its use can be flagged
              */
-            if (sym->ident == iFUNCTN && (sym->usage & uDEFINE) == 0)
-                sym->usage |= uMISSING;
+            if (sym->ident == iFUNCTN && !sym->defined)
+                sym->missing = true;
             if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
-                sym->usage &= ~uDEFINE; /* clear "defined" flag */
+                sym->defined = false;
             /* for user defined operators, also remove the "prototyped" flag, as
              * user-defined operators *must* be declared before use
              */
             if (sym->ident == iFUNCTN && !alpha(*sym->name()))
-                sym->usage &= ~uPROTOTYPED;
+                sym->prototyped = false;
             if (origRoot == &glbtab)
                 sym->clear_refers();
             root = sym; /* skip the symbol */
@@ -3058,7 +3058,7 @@ findconst(const char* name)
     }
     if (sym == NULL || sym->ident != iCONSTEXPR)
         return NULL;
-    assert(sym->parent() == NULL || (sym->usage & uENUMFIELD) != 0);
+    assert(sym->parent() == NULL || sym->enumfield);
     /* ^^^ constants have no hierarchy, but enumeration fields may have a parent */
     return sym;
 }
@@ -3089,19 +3089,34 @@ FunctionData::resizeArgs(size_t nargs)
 }
 
 symbol::symbol()
- : symbol("", 0, 0, 0, 0, 0)
+ : symbol("", 0, 0, 0, 0)
 {}
 
-symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag,
-               int symusage)
+symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag)
  : next(nullptr),
    codeaddr(code_idx),
    vclass((char)symvclass),
    ident((char)symident),
-   usage((char)symusage),
-   flags(0),
    compound(0),
    tag(symtag),
+   usage(0),
+   defined(false),
+   is_const(false),
+   stock(false),
+   is_public(false),
+   is_struct(false),
+   prototyped(false),
+   missing(false),
+   callback(false),
+   skipped(false),
+   retvalue(false),
+   forward(false),
+   native(false),
+   enumroot(false),
+   enumfield(false),
+   predefined(false),
+   deprecated(false),
+   queued(false),
    x({}),
    fnumber(-1),
    /* assume global visibility (ignored for local symbols) */
@@ -3122,13 +3137,34 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
 }
 
 symbol::symbol(const symbol& other)
- : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag, other.usage)
+ : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag)
 {
     name_ = other.name_;
+
+    usage = other.usage;
+    defined = other.defined;
+    prototyped = other.prototyped;
+    missing = other.missing;
+    enumroot = other.enumroot;
+    enumfield = other.enumfield;
+    predefined = other.predefined;
+    callback = other.callback;
+    skipped = other.skipped;
+    retvalue = other.retvalue;
+    forward = other.forward;
+    native = other.native;
+    stock = other.stock;
+    is_struct = other.is_struct;
+    is_public = other.is_public;
+    is_const = other.is_const;
+    deprecated = other.deprecated;
+    // Note: explicitly don't add queued.
+
     x = other.x;
 }
 
-symbol::~symbol() {
+symbol::~symbol()
+{
     if (ident == iFUNCTN) {
         /* run through the argument list; "default array" arguments
          * must be freed explicitly; the tag list must also be freed */
@@ -3136,7 +3172,7 @@ symbol::~symbol() {
             if (arg->ident == iREFARRAY && arg->hasdefault)
                 free(arg->defvalue.array.data);
         }
-    } else if (ident == iCONSTEXPR && (usage & uENUMROOT) == uENUMROOT) {
+    } else if (ident == iCONSTEXPR && enumroot) {
         /* free the constant list of an enum root */
         assert(dim.enumlist != NULL);
         delete_consttable(dim.enumlist);
@@ -3179,10 +3215,10 @@ symbol::drop_reference_from(symbol* from)
  *  or global and local constants).
  */
 symbol*
-addsym(const char* name, cell addr, int ident, int vclass, int tag, int usage)
+addsym(const char* name, cell addr, int ident, int vclass, int tag)
 {
     /* first fill in the entry */
-    symbol* sym = new symbol(name, addr, ident, vclass, tag, usage);
+    symbol* sym = new symbol(name, addr, ident, vclass, tag);
 
     /* then insert it in the list */
     if (vclass == sGLOBAL)
@@ -3218,7 +3254,7 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
      * "redeclared" if they are local to an automaton (and findglb() will find
      * the symbol without states if no symbol with states exists).
      */
-    assert(vclass != sGLOBAL || (sym = findglb(name)) == NULL || (sym->usage & uDEFINE) == 0 ||
+    assert(vclass != sGLOBAL || (sym = findglb(name)) == NULL || !sym->defined ||
            (sym->ident == iFUNCTN && sym == curfunc));
 
     if (ident == iARRAY || ident == iREFARRAY) {
@@ -3226,7 +3262,8 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
         int level;
         sym = NULL; /* to avoid a compiler warning */
         for (level = 0; level < numdim; level++) {
-            top = addsym(name, addr, ident, vclass, tag, uDEFINE);
+            top = addsym(name, addr, ident, vclass, tag);
+            top->defined = true;
             top->dim.array.length = dim[level];
             top->dim.array.slength = 0;
             if (level == numdim - 1 && tag == pc_tag_string) {
@@ -3246,7 +3283,8 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
                 sym = top;
         }
     } else {
-        sym = addsym(name, addr, ident, vclass, tag, uDEFINE);
+        sym = addsym(name, addr, ident, vclass, tag);
+        sym->defined = true;
     }
     return sym;
 }

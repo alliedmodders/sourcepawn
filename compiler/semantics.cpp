@@ -217,7 +217,7 @@ IncDecExpr::Analyze()
 
     const auto& expr_val = expr_->val();
     if (expr_val.ident != iACCESSOR) {
-        if ((expr_val.sym->usage & uCONST) != 0) {
+        if (expr_val.sym->is_const) {
             error(pos_, 22); /* assignment to const argument */
             return false;
         }
@@ -407,7 +407,7 @@ BinaryExpr::ValidateAssignmentLHS()
     assert(left_val.sym || left_val.accessor);
 
     // may not change "constant" parameters
-    if (left_val.sym && (left_val.sym->usage & uCONST) != 0) {
+    if (left_val.sym && left_val.sym->is_const) {
         error(pos_, 22);
         return false;
     }
@@ -792,7 +792,7 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
     }
 
     if (sym_->vclass == sGLOBAL && sym_->ident != iFUNCTN) {
-        if ((sym_->usage & uDEFINE) == 0) {
+        if (!sym_->defined) {
             error(pos_, 17, sym_->name());
             return false;
         }
@@ -801,10 +801,10 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
         // If the function is only in the table because it was inserted as
         // a stub in the first pass (used but never declared or implemented),
         // issue an error.
-        if ((sym_->usage & uPROTOTYPED) == 0)
+        if (!sym_->prototyped)
             error(pos_, 17, sym_->name());
 
-        if (sym_->usage & uNATIVE) {
+        if (sym_->native) {
             error(pos_, 76);
             return false;
         }
@@ -933,7 +933,7 @@ IndexExpr::Analyze()
         return false;
     }
 
-    if ((base.sym->usage & uENUMROOT)) {
+    if (base.sym->enumroot) {
         if (!matchtag(base.sym->x.tags.index, expr_->val().tag, TRUE))
             return false;
     }
@@ -1326,7 +1326,7 @@ SizeofExpr::Analyze()
     } else if (sym->ident == iFUNCTN) {
         error(pos_, 72); // "function" symbol has no size
         return false;
-    } else if ((sym->usage & uDEFINE) == 0) {
+    } else if (!sym->defined) {
         error(pos_, 17, ident_->chars());
         return false;
     }
@@ -1445,7 +1445,7 @@ CallExpr::Analyze()
     // read, then we're encountering some kind of compiler bug. If we're not
     // supposed to emit this code than the status should be statSKIP - so
     // we're generating code that will jump to the wrong address.
-    if ((sym_->usage & uSTOCK) && !(sym_->usage & uREAD) && sc_status == statWRITE) {
+    if (sym_->stock && !(sym_->usage & uREAD) && sc_status == statWRITE) {
         error(pos_, 195, sym_->name());
         return false;
     }
@@ -1457,7 +1457,7 @@ CallExpr::Analyze()
         val_.sym = sym_->array_return();
     }
 
-    if ((sym_->flags & flgDEPRECATED) != 0) {
+    if (sym_->deprecated) {
         const char* ptr = sym_->documentation.chars();
         error(pos_, 234, sym_->name(), ptr); /* deprecated (probably a native function) */
     }
@@ -1590,7 +1590,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 
             // Always pass by reference.
             if (val->ident == iVARIABLE || val->ident == iREFERENCE) {
-                if ((val->sym->usage & uCONST) && (arg->usage & uCONST) == 0) {
+                if (val->sym->is_const && !arg->is_const) {
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
                     if (!lvalue) {
@@ -1631,7 +1631,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            if (val->sym && (val->sym->usage & uCONST) && !(arg->usage & uCONST)) {
+            if (val->sym && val->sym->is_const && !arg->is_const) {
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
@@ -1644,7 +1644,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            if (val->sym && (val->sym->usage & uCONST) && !(arg->usage & uCONST)) {
+            if (val->sym && val->sym->is_const && !arg->is_const) {
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
@@ -1737,17 +1737,17 @@ CallExpr::ProcessUses()
 void
 CallExpr::MarkUsed()
 {
-    if ((sym_->usage & uDEFINE) != 0) {
+    if (sym_->defined) {
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */
-        if (sym_ != curfunc && (sym_->usage & uRETVALUE) == 0) {
+        if (sym_ != curfunc && !sym_->retvalue) {
             char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
             funcdisplayname(symname, sym_->name());
             error(pos_, 209, symname); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
-        sym_->usage |= uRETVALUE;
+        sym_->retvalue = true;
     }
 }
