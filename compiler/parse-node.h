@@ -561,9 +561,11 @@ class FieldAccessExpr final : public Expr
     void DoEmit() override;
     void ProcessUses() override;
 
+    bool AnalyzeWithOptions(bool from_call);
+
   private:
     bool AnalyzeStaticAccess();
-    bool AnalyzeEnumStructAccess(Type* type, symbol* root);
+    bool AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_call);
 
   private:
     int token_;
