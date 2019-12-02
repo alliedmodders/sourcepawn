@@ -1012,6 +1012,8 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
 void
 RttiBuilder::add_method(symbol* sym)
 {
+    assert(!sym->skipped);
+
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(sym->nameAtom());
