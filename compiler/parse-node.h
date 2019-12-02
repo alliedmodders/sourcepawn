@@ -44,7 +44,7 @@ struct UserOperation
     int paramspassed;
     bool savepri;
     bool savealt;
-    int swapparams;
+    bool swapparams;
 };
 
 typedef void (*OpFunc)();

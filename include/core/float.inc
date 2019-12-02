@@ -49,6 +49,7 @@ native bool __float_eq(float a, float b);
 native bool __float_ne(float a, float b);
 native bool __float_not(float a);
 native int __float_to_int(float a);
+native float float(int value);
 
 native float operator*(float oper1, float oper2) = __float_mul;
 native float operator/(float oper1, float oper2) = __float_div;
