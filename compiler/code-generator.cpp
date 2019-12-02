@@ -231,10 +231,12 @@ BinaryExpr::DoEmit()
 }
 
 void
-BinaryExpr::EmitInner(OpFunc oper, const UserOperation& userop, Expr* left, Expr* right)
+BinaryExpr::EmitInner(OpFunc oper, const UserOperation& in_user_op, Expr* left, Expr* right)
 {
     const auto& left_val = left->val();
     const auto& right_val = right->val();
+
+    UserOperation user_op = in_user_op;
 
     // left goes into ALT, right goes into PRI, though we can swap them for
     // commutative operations.
@@ -252,6 +254,7 @@ BinaryExpr::EmitInner(OpFunc oper, const UserOperation& userop, Expr* left, Expr
         if (right_val.ident == iCONSTEXPR) {
             if (commutative(oper)) {
                 ldconst(right_val.constval, sALT);
+                user_op.swapparams ^= true;
             } else {
                 if (must_save_lhs)
                     pushreg(sPRI);
@@ -269,8 +272,8 @@ BinaryExpr::EmitInner(OpFunc oper, const UserOperation& userop, Expr* left, Expr
     }
 
     if (oper) {
-        if (userop.sym)
-            emit_userop(userop, nullptr);
+        if (user_op.sym)
+            emit_userop(user_op, nullptr);
         else
             oper();
     }

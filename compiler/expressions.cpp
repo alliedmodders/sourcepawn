@@ -94,7 +94,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
 
     char opername[4] = "", symbolname[sNAMEMAX + 1];
     size_t i;
-    bool swapparams, savepri, savealt;
+    bool savepri, savealt;
     symbol* sym;
 
     /* since user-defined operators on untagged operands are forbidden, we have
@@ -143,7 +143,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     /* create a symbol name from the tags and the operator name */
     assert(numparam == 1 || numparam == 2);
     operator_symname(symbolname, opername, tag1, tag2, numparam, tag2);
-    swapparams = false;
+    bool swapparams = false;
     sym = findglb(symbolname);
     if (!sym) {
         /* check for commutative operators */
