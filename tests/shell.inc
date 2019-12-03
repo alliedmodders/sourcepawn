@@ -7,6 +7,7 @@
 #include <float>
 
 native void printnum(int n);
+native void writenum(int n);
 native void printfloat(float n);
 native void writefloat(float n);
 native void printnums(any:...);
@@ -20,3 +21,7 @@ typedef InvokeCallback = function void ();
 native bool invoke(int count, InvokeCallback fn);
 // Invoke |fn|, |count| times, returning the number of successful invocations.
 native int execute(int count, InvokeCallback fn);
+
+enum Handle { INVALID_HANDLE = 0 }
+native void CloseHandle(Handle h);
+using __intrinsics__.Handle;

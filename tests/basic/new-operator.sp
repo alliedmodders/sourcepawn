@@ -1,12 +1,5 @@
 #include <shell>
 
-enum Handle // Tag disables introducing "Handle" as a symbol.
-{
-	INVALID_HANDLE = 0,
-};
-
-using __intrinsics__.Handle;
-
 methodmap Clam < Handle
 {
   public Clam(int c) {
