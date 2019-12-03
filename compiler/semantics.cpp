@@ -1061,7 +1061,7 @@ StringExpr::Analyze()
 }
 
 bool FieldAccessExpr::Analyze() {
-	return AnalyzeWithOptions(false);
+    return AnalyzeWithOptions(false);
 }
 
 bool
@@ -1237,10 +1237,10 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
         return false;
     }
     if (field_->ident == iFUNCTN) {
-		if (!from_call) {
-			error(pos_, 76);
-			return false;
-		}
+        if (!from_call) {
+            error(pos_, 76);
+            return false;
+        }
 
         val_.ident = iFUNCTN;
         val_.sym = field_;
