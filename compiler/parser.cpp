@@ -2255,25 +2255,49 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
     cell prev1 = 0, prev2 = 0;
     int ellips = FALSE;
     int curlit = litidx;
-    int rtag, ctag;
+    int errorfound_tmp = 0;
+
+    if (!errorfound)
+        errorfound = &errorfound_tmp;
 
     assert(ident == iARRAY || ident == iREFARRAY);
     if (matchtoken('{')) {
         constvalue* enumfield = (enumroot != NULL) ? enumroot->next : NULL;
         do {
             int fieldlit = litidx;
-            int matchbrace, i;
             if (matchtoken('}')) { /* to allow for trailing ',' after the initialization */
                 lexpush();
                 break;
             }
             if ((ellips = matchtoken(tELLIPS)) != 0)
                 break;
-            /* for enumeration fields, allow another level of braces ("{...}") */
-            matchbrace = 0; /* preset */
             ellips = 0;
-            if (enumfield != NULL)
-                matchbrace = matchtoken('{');
+
+            symbol* symfield = nullptr;
+            int matchbrace = FALSE;
+            if (enumfield) {
+                symfield = findconst(enumfield->name);
+                if (!symfield) {
+                    Type* type = gTypes.find(enumfield->index);
+                    if (type->isEnumStruct())
+                        symfield = find_enumstruct_field(type, enumfield->name);
+                }
+                assert(symfield);
+
+                // Hack: do not allow {"asdf"} around a string literal, only
+                // normal arrays/structs. When we separate parsing/codegen for
+                // the statement parser, {"asdf"} will create a sub-vector and
+                // eliminate the need for this hack.
+                if (symfield->dim.array.length > 0 && matchtoken('{')) {
+                    matchbrace = true;
+                    if (symfield->x.tags.index == pc_tag_string && lexpeek(tSTRING)) {
+                        error(68);
+                        *errorfound = TRUE;
+                    }
+                }
+            }
+
+            int ctag;
             for (;;) {
                 prev2 = prev1;
                 prev1 = init(ident, &ctag, errorfound);
@@ -2291,30 +2315,25 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
              */
             if (enumroot != NULL && enumfield == NULL) {
                 error(227); /* more initializers than enum fields */
-                if (errorfound != NULL)
-                    *errorfound = TRUE;
+                *errorfound = TRUE;
             }
-            rtag = tag; /* preset, may be overridden by enum field tag */
-            if (enumfield != NULL) {
+            int rtag = tag; /* preset, may be overridden by enum field tag */
+            if (symfield) {
                 cell step;
                 int cmptag = enumfield->index;
-                symbol* symfield = findconst(enumfield->name);
-                if (!symfield) {
-                    Type* type = gTypes.find(enumfield->index);
-                    if (type->isEnumStruct())
-                        symfield = find_enumstruct_field(type, enumfield->name);
-                }
-                assert(symfield);
                 if (symfield->tag != cmptag) {
                     error(91, enumfield->name); /* ambiguous constant, needs tag override */
-                    if (errorfound != NULL)
-                        *errorfound = TRUE;
+                    *errorfound = TRUE;
                 }
                 assert(fieldlit < litidx);
-                if (litidx - fieldlit > symfield->dim.array.length) {
-                    error(228); /* length of initializer exceeds size of the enum field */
-                    if (errorfound != NULL)
-                        *errorfound = TRUE;
+
+                cell cell_count = symfield->dim.array.length;
+                if (cell_count < 1)
+                    cell_count = 1;
+
+                if (litidx - fieldlit > cell_count) {
+                    error(68); /* length of initializer exceeds size of the enum field */
+                    *errorfound = TRUE;
                 }
                 if (ellips) {
                     step = prev1 - prev2;
@@ -2322,7 +2341,7 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
                     step = 0;
                     prev1 = 0;
                 }
-                for (i = litidx - fieldlit; i < symfield->dim.array.length; i++) {
+                for (int i = litidx - fieldlit; i < symfield->dim.array.length; i++) {
                     prev1 += step;
                     litadd(prev1);
                 }
@@ -2334,6 +2353,7 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
         needtoken('}');
     } else {
         if (!lexpeek('}')) {
+            int ctag;
             init(ident, &ctag, errorfound);
             matchtag(tag, ctag, TRUE);
         }
@@ -2343,12 +2363,10 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
         cell step = ((litidx - curlit) == 1) ? (cell)0 : prev1 - prev2;
         if (size == 0 || (litidx - curlit) == 0) {
             error(41); /* invalid ellipsis, array size unknown */
-            if (errorfound != NULL)
-                *errorfound = TRUE;
+            *errorfound = TRUE;
         } else if ((litidx - curlit) == (int)size) {
             error(18); /* initialization data exceeds declared size */
-            if (errorfound != NULL)
-                *errorfound = TRUE;
+            *errorfound = TRUE;
         }
         while ((litidx - curlit) < (int)size) {
             prev1 += step;
@@ -2363,8 +2381,7 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
         size = litidx - curlit;               /* number of elements defined */
     } else if (litidx - curlit > (int)size) { /* e.g. "myvar[3]={1,2,3,4};" */
         error(18);                            /* initialization data exceeds declared size */
-        if (errorfound != NULL)
-            *errorfound = TRUE;
+        *errorfound = TRUE;
         litidx = (int)size + curlit; /* avoid overflow in memory moves */
     }
     return size;

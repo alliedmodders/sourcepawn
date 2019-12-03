@@ -1,0 +1,1 @@
+(5) : error 068: length of initializer exceeds size of the enum field
