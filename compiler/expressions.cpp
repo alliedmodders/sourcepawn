@@ -724,12 +724,10 @@ lvalexpr(svalue* sval)
     memset(sval, 0, sizeof(*sval));
 
     errorset(sEXPRMARK, 0);
-    pushheaplist();
 
     Parser parser;
     sval->lvalue = parser.expression(&sval->val);
 
-    popheaplist(true);
     errorset(sEXPRRELEASE, 0);
 
     return sval->val.ident;
