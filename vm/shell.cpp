@@ -102,6 +102,11 @@ static cell_t Print(IPluginContext* cx, const cell_t* params)
   return printf("%s", p);
 }
 
+static cell_t WriteNum(IPluginContext* cx, const cell_t* params)
+{
+  return printf("%d", params[1]);
+}
+
 static cell_t PrintNum(IPluginContext* cx, const cell_t* params)
 {
   return printf("%d\n", params[1]);
@@ -198,6 +203,7 @@ static int Execute(const char* file)
   rt->InstallBuiltinNatives();
   BindNative(rt, "print", Print);
   BindNative(rt, "printnum", PrintNum);
+  BindNative(rt, "writenum", WriteNum);
   BindNative(rt, "printnums", PrintNums);
   BindNative(rt, "printfloat", PrintFloat);
   BindNative(rt, "writefloat", WriteFloat);
@@ -206,6 +212,7 @@ static int Execute(const char* file)
   BindNative(rt, "invoke", DoInvoke);
   BindNative(rt, "dump_stack_trace", DumpStackTrace);
   BindNative(rt, "report_error", ReportError);
+  BindNative(rt, "CloseHandle", DoNothing);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
