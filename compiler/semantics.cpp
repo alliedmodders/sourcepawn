@@ -1060,8 +1060,12 @@ StringExpr::Analyze()
     return true;
 }
 
+bool FieldAccessExpr::Analyze() {
+    return AnalyzeWithOptions(false);
+}
+
 bool
-FieldAccessExpr::Analyze()
+FieldAccessExpr::AnalyzeWithOptions(bool from_call)
 {
     AutoErrorPos aep(pos_);
 
@@ -1083,7 +1087,7 @@ FieldAccessExpr::Analyze()
             if (base_val.sym && base_val.sym->dim.array.level == 0) {
                 Type* type = gTypes.find(base_val.sym->x.tags.index);
                 if (symbol* root = type->asEnumStruct())
-                    return AnalyzeEnumStructAccess(type, root);
+                    return AnalyzeEnumStructAccess(type, root, from_call);
             }
             error(pos_, 106);
             return false;
@@ -1154,7 +1158,7 @@ FieldAccessExpr::ProcessUses()
 symbol*
 FieldAccessExpr::BindCallTarget(int token, Expr** implicit_this)
 {
-    if (!Analyze())
+    if (!AnalyzeWithOptions(true))
         return nullptr;
     if (val_.ident != iFUNCTN)
         return nullptr;
@@ -1222,7 +1226,7 @@ SymbolExpr::BindNewTarget()
 }
 
 bool
-FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root)
+FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_call)
 {
     // Enum structs are always arrays, so they're never l-values.
     assert(!base_->lvalue());
@@ -1233,6 +1237,11 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root)
         return false;
     }
     if (field_->ident == iFUNCTN) {
+        if (!from_call) {
+            error(pos_, 76);
+            return false;
+        }
+
         val_.ident = iFUNCTN;
         val_.sym = field_;
         markusage(val_.sym, uREAD);
