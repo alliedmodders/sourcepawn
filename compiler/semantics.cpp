@@ -361,7 +361,7 @@ BinaryExpr::Analyze()
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
-                matchtag(left_val.tag, right_val.tag, MATCHTAG_COMMUTATIVE | MATCHTAG_DEDUCE);
+                matchtag_commutative(left_val.tag, right_val.tag, MATCHTAG_DEDUCE);
         }
 
         if (IsChainedOp(token_) || token_ == tlEQ || token_ == tlNE)
@@ -616,7 +616,7 @@ ChainedCompareExpr::Analyze()
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
-                matchtag(left_val.tag, right_val.tag, MATCHTAG_COMMUTATIVE | MATCHTAG_DEDUCE);
+                matchtag_commutative(left_val.tag, right_val.tag, MATCHTAG_DEDUCE);
         }
 
         if (right_val.ident != iCONSTEXPR || op.userop.sym)

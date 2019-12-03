@@ -349,17 +349,12 @@ matchobjecttags(Type* formal, Type* actual, int flags)
     int formaltag = formal->tagid();
     int actualtag = actual->tagid();
 
-    if ((flags & MATCHTAG_COMMUTATIVE) &&
-        (formaltag == pc_tag_null_t || formaltag == pc_tag_nullfunc_t))
-    {
-        // Bypass the check immediately after for non-object coercion.
-        ke::Swap(formaltag, actualtag);
-        ke::Swap(formal, actual);
-    }
-
     // objects never coerce to non-objects, YET.
-    if (formal->isObject() && !actual->isObject())
-        return obj_typeerror(132, formaltag, actualtag);
+    if (formal->isObject() && !(actual->isObject() || actual->isFunction())) {
+        if (!(flags & MATCHTAG_SILENT))
+            obj_typeerror(132, formaltag, actualtag);
+        return FALSE;
+    }
 
     if (actualtag == pc_tag_nullfunc_t) {
         // All functions are nullable. We use a separate constant for backward
@@ -367,7 +362,8 @@ matchobjecttags(Type* formal, Type* actual, int flags)
         if (formal->isFunction())
             return TRUE;
 
-        error(154, pc_tagname(formaltag));
+        if (!(flags & MATCHTAG_SILENT))
+            error(154, pc_tagname(formaltag));
         return FALSE;
     }
 
@@ -382,7 +378,8 @@ matchobjecttags(Type* formal, Type* actual, int flags)
         if (map && map->nullable)
             return TRUE;
 
-        error(148, pc_tagname(formaltag));
+        if (!(flags & MATCHTAG_SILENT))
+            error(148, pc_tagname(formaltag));
         return FALSE;
     }
 
@@ -402,7 +399,9 @@ matchobjecttags(Type* formal, Type* actual, int flags)
             return TRUE;
     }
 
-    return obj_typeerror(133, formaltag, actualtag);
+    if (!(flags & MATCHTAG_SILENT))
+        obj_typeerror(133, formaltag, actualtag);
+    return FALSE;
 }
 
 static int
@@ -568,6 +567,16 @@ matchtag(int formaltag, int actualtag, int flags)
     if (!(flags & MATCHTAG_SILENT))
         error(213);
     return FALSE;
+}
+
+int matchtag_commutative(int formaltag, int actualtag, int flags)
+{
+    if (matchtag(formaltag, actualtag, flags | MATCHTAG_SILENT))
+        return TRUE;
+    if (matchtag(actualtag, formaltag, flags | MATCHTAG_SILENT))
+        return TRUE;
+    // Report the error.
+    return matchtag(formaltag, actualtag, flags);
 }
 
 /*
@@ -817,7 +826,7 @@ checktag(int tag, int exprtag)
 {
     int errcount = errnum;
 
-    if (matchtag(tag, exprtag, MATCHTAG_COERCE | MATCHTAG_SILENT))
+    if (matchtag(tag, exprtag, MATCHTAG_COERCE))
         return TRUE; /* matching tag */
 
     // If matchtag() didn't error, report an error.
