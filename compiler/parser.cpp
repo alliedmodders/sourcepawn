@@ -5981,9 +5981,10 @@ doswitch(void) {
     constvalue *cse, *csp;
     char labelname[sNAMEMAX + 1];
     bool all_cases_return = true;
+    int switch_tag, case_tag;
 
     endtok = matchtoken('(') ? ')' : tDO;
-    doexpr(TRUE, FALSE, FALSE, FALSE, NULL, NULL, TRUE); /* evaluate switch expression */
+    doexpr(TRUE, FALSE, FALSE, FALSE, &switch_tag, NULL, TRUE); /* evaluate switch expression */
     needtoken(endtok);
     /* generate the code for the switch statement, the label is the address
      * of the case table (to be generated later).
@@ -6019,7 +6020,8 @@ doswitch(void) {
                      *     parse all expressions until that special token.
                      */
 
-                    exprconst(&val, NULL, NULL);
+                    exprconst(&val, &case_tag, NULL);
+                    matchtag(switch_tag, case_tag, MATCHTAG_COERCE);
                     /* Search the insertion point (the table is kept in sorted order, so
                      * that advanced abstract machines can sift the case table with a
                      * binary search). Check for duplicate case values at the same time.
