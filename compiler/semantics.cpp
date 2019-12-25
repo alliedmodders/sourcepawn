@@ -908,6 +908,7 @@ ArrayExpr::Analyze()
 
     val_.ident = iARRAY;
     val_.constval = litidx - start_litidx;
+    val_.tag = lasttag;
     return true;
 }
 
