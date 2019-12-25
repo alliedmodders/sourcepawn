@@ -205,6 +205,10 @@ class Analyzer : public PartialAstVisitor
     startDoc(obj, "method", node->name(), node->loc());
 
     FunctionNode *fun = node->method();
+    if (fun->signature()->native())
+        obj->add(atom_kind_, toJson("native"));
+    else
+        obj->add(atom_kind_, toJson("stock"));
     obj->add(atom_returnType_, toJson(fun->signature()->returnType()));
     obj->add(atom_parameters_, toJson(fun->signature()->parameters()));
     methods_->add(obj);
