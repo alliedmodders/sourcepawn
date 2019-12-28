@@ -1584,6 +1584,15 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 
     bool handling_this = implicit_this_ && (pos == 0);
 
+    if (param->val().ident == iACCESSOR) {
+        // We must always compute r-values for accessors.
+        if (!param->val().accessor->getter) {
+            error(param->pos(), 149, param->val().accessor->name);
+            return false;
+        }
+        param = new RvalueExpr(param);
+    }
+
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
     switch (arg->ident) {
