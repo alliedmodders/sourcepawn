@@ -873,6 +873,7 @@ setheap_pri(void)
     stgwrite("\tstor.i\n");   /* store PRI (default value) at address ALT */
     stgwrite("\tmove.pri\n"); /* move ALT to PRI: PRI contains the address */
     code_idx += opcodes(3) + opargs(1);
+    markheap(MEMUSE_STATIC, 1);
 }
 
 void
