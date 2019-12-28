@@ -683,7 +683,6 @@ DefaultArgExpr::DoEmit()
         }
         case iREFERENCE:
             setheap(arg_->defvalue.val);
-            markheap(MEMUSE_STATIC, 1);
             break;
         case iVARIABLE:
             ldconst(arg_->defvalue.val, sPRI);
