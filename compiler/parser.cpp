@@ -150,7 +150,6 @@ static int dodo(void);
 static int dofor(void);
 static int doswitch(void);
 static void doreturn(void);
-static void dotypedef();
 static void dotypeset();
 static void domethodmap(LayoutSpec spec);
 static bool dousing();
@@ -1132,8 +1131,12 @@ parse(void) {
                 error(FATAL_ERROR_FUNCENUM);
                 break;
             case tTYPEDEF:
-                dotypedef();
+            {
+                Parser parser;
+                Decl* decl = parser.parse_typedef();
+                decl->Bind();
                 break;
+            }
             case tTYPESET:
                 dotypeset();
                 break;
@@ -3669,7 +3672,7 @@ dodelete() {
  *                 | function-type-inner
  * function-type-inner ::= "function" type-expr "(" new-style-args ")"
  */
-static functag_t*
+functag_t*
 parse_function_type()
 {
     int lparen = matchtoken('(');
@@ -3725,24 +3728,6 @@ parse_function_type()
     require_newline(TerminatorPolicy::Semicolon);
     errorset(sRESET, 0);
     return type;
-}
-
-static void
-dotypedef() {
-    token_ident_t ident;
-    if (!needsymbol(&ident))
-        return;
-
-    Type* prev_type = gTypes.find(ident.name);
-    if (prev_type && prev_type->isDefinedType())
-        error(110, ident.name, prev_type->kindName());
-
-    needtoken('=');
-
-    funcenum_t* def = funcenums_add(ident.name);
-
-    auto type = parse_function_type();
-    functags_add(def, type);
 }
 
 // Unsafe typeset - only supports function types. This is a transition hack for SP2.

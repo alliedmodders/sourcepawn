@@ -100,6 +100,18 @@ class Decl : public ParseNode
     sp::Atom* name_;
 };
 
+class ErrorDecl final : public Decl
+{
+  public:
+    ErrorDecl()
+      : Decl(token_pos_t{}, nullptr)
+    {}
+
+    bool Bind() override {
+        return false;
+    }
+};
+
 struct EnumField {
     EnumField(const token_pos_t& pos, sp::Atom* name, cell value)
       : pos(pos), name(name), value(value)
@@ -152,6 +164,20 @@ class StructDecl : public Decl
 
   protected:
     PoolList<StructField> fields_;
+};
+
+class TypedefDecl : public Decl
+{
+  public:
+    explicit TypedefDecl(const token_pos_t& pos, sp::Atom* name, functag_t* type)
+      : Decl(pos, name),
+        type_(type)
+    {}
+
+    bool Bind() override;
+
+  private:
+    functag_t* type_;
 };
 
 // "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()

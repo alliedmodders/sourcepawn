@@ -160,6 +160,21 @@ Parser::parse_pstruct()
     return struct_decl;
 }
 
+Decl*
+Parser::parse_typedef()
+{
+    auto pos = current_pos();
+
+    token_ident_t ident;
+    if (!needsymbol(&ident))
+        return new ErrorDecl();
+
+    needtoken('=');
+
+    auto type = parse_function_type();
+    return new TypedefDecl(pos, gAtoms.add(ident.name), type);
+}
+
 int
 Parser::expression(value* lval)
 {
