@@ -199,6 +199,9 @@ static HWND hwndFinish = 0;
 int glbstringread = 0;
 char g_tmpfile[_MAX_PATH] = {0};
 
+args::ToggleOption opt_show_stats(nullptr, "--show-stats", Some(false),
+                                  "Show compiler statistics on exit.");
+
 /*  "main" of the compiler
  */
 int
@@ -459,6 +462,14 @@ cleanup:
             pc_printf("Total requirements:%8ld bytes\n", (long)code_idx +
                                                              (long)glb_declared * sizeof(cell) +
                                                              (long)pc_stksize * sizeof(cell));
+        }
+        if (opt_show_stats.value()) {
+            size_t allocated, reserved, bookkeeping;
+            gPoolAllocator.memoryUsage(&allocated, &reserved, &bookkeeping);
+
+            pc_printf("Pool allocation:   %8" KE_FMT_SIZET " bytes\n", allocated);
+            pc_printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);
+            pc_printf("Pool bookkeeping:  %8" KE_FMT_SIZET " bytes\n", bookkeeping);
         }
     }
 
@@ -1100,12 +1111,6 @@ parse(void) {
                 /* ignore zero's */
                 break;
             case tSYMBOL:
-#if 0
-      if (strcmp(tok.str, "class") == 0) {
-        domethodmap(Layout_Class);
-        break;
-      }
-#endif
                 // Fallthrough.
             case tINT:
             case tOBJECT:
