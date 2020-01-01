@@ -115,20 +115,18 @@ funcenum_for_symbol(symbol* sym)
     auto ft = ke::MakeUnique<functag_t>();
 
     ft->ret_tag = sym->tag;
-    ft->argcount = 0;
     for (arginfo& arg : sym->function()->args) {
         if (!arg.ident)
             break;
 
-        funcarg_t* dest = &ft->args[ft->argcount++];
+        funcarg_t dest;
+        dest.tag = arg.tag;
+        dest.dimcount = arg.numdim;
+        memcpy(dest.dims, arg.dim, arg.numdim * sizeof(int));
+        dest.ident = arg.ident;
+        dest.fconst = arg.is_const;
 
-        dest->tag = arg.tag;
-
-        dest->dimcount = arg.numdim;
-        memcpy(dest->dims, arg.dim, arg.numdim * sizeof(int));
-
-        dest->ident = arg.ident;
-        dest->fconst = arg.is_const;
+        ft->args.append(dest);
     }
 
     char name[METHOD_NAMEMAX + 1];

@@ -3,6 +3,7 @@
 #define _INCLUDE_SOURCEPAWN_COMPILER_TRACKER_H_
 
 #include "lexer.h"
+#include "pool-allocator.h"
 #include "scvars.h"
 
 #define MEMUSE_STATIC 0
@@ -19,12 +20,10 @@ typedef struct funcarg_s {
 struct functag_t {
     functag_t()
      : ret_tag(0),
-       argcount(0),
        args()
     {}
     int ret_tag;
-    int argcount;
-    funcarg_t args[SP_MAX_EXEC_PARAMS];
+    PoolList<funcarg_t> args;
 };
 
 struct funcenum_t {

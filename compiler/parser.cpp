@@ -3691,7 +3691,7 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
         matchtoken(tSYMBOL);
 
         // Error once when we're past max args.
-        if (type->argcount == SP_MAX_EXEC_PARAMS) {
+        if (type->args.length() == SP_MAX_EXEC_PARAMS) {
             error(45);
             continue;
         }
@@ -3699,15 +3699,16 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
         // Account for strings.
         fix_char_size(&decl);
 
-        funcarg_t* arg = &type->args[type->argcount++];
-        arg->tag = decl.type.tag;
-        arg->dimcount = decl.type.numdim;
-        memcpy(arg->dims, decl.type.dim, arg->dimcount * sizeof(decl.type.dim[0]));
-        arg->fconst = decl.type.is_const;
+        funcarg_t arg;
+        arg.tag = decl.type.tag;
+        arg.dimcount = decl.type.numdim;
+        memcpy(arg.dims, decl.type.dim, arg.dimcount * sizeof(decl.type.dim[0]));
+        arg.fconst = decl.type.is_const;
         if (decl.type.ident == iARRAY)
-            arg->ident = iREFARRAY;
+            arg.ident = iREFARRAY;
         else
-            arg->ident = decl.type.ident;
+            arg.ident = decl.type.ident;
+        type->args.append(arg);
 
         if (!matchtoken(',')) {
             needtoken(')');

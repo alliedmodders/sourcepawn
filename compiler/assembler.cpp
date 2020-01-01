@@ -1357,16 +1357,15 @@ void
 RttiBuilder::encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft)
 {
     bytes.append(cb::kFunction);
-    bytes.append((uint8_t)ft->argcount);
-    if (ft->argcount > 0 && ft->args[ft->argcount - 1].ident == iVARARGS)
+    bytes.append((uint8_t)ft->args.length());
+    if (!ft->args.empty() && ft->args[ft->args.length() - 1].ident == iVARARGS)
         bytes.append(cb::kVariadic);
     if (ft->ret_tag == pc_tag_void)
         bytes.append(cb::kVoid);
     else
         encode_tag_into(bytes, ft->ret_tag);
 
-    for (int i = 0; i < ft->argcount; i++) {
-        const funcarg_t& arg = ft->args[i];
+    for (const auto& arg : ft->args) {
         if (arg.ident == iREFERENCE)
             bytes.append(cb::kByRef);
 
