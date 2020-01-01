@@ -150,6 +150,20 @@ PstructDecl::Bind()
 }
 
 bool
+TypedefDecl::Bind()
+{
+    Type* prev_type = gTypes.find(name_->chars());
+    if (prev_type && prev_type->isDefinedType()) {
+        error(pos_, 110, name_->chars(), prev_type->kindName());
+        return false;
+    }
+
+    funcenum_t* def = funcenums_add(name_->chars());
+    functags_add(def, type_);
+    return true;
+}
+
+bool
 SymbolExpr::Bind()
 {
     AutoErrorPos aep(pos_);

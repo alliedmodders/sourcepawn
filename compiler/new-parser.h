@@ -33,6 +33,7 @@ class Parser : public ExpressionParser
 
     Decl* parse_enum(int vclass);
     Decl* parse_pstruct();
+    Decl* parse_typedef();
 
   private:
     typedef int (Parser::*HierFn)(value*);
@@ -62,3 +63,4 @@ class Parser : public ExpressionParser
 
 // Implemented in parser.cpp.
 int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
+functag_t* parse_function_type();
