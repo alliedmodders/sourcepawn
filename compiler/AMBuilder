@@ -30,7 +30,6 @@ if compiler.family == 'gcc':
   if compiler.version >= '4.6':
     compiler.cxxflags += ['-Wno-unused-but-set-variable']
 
-compiler.defines += ['HAVE_STDINT_H']
 if builder.target.platform == 'linux':
   compiler.defines += [
     'AMX_ANSIONLY',
