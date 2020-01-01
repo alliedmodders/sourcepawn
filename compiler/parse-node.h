@@ -129,6 +129,44 @@ class EnumDecl : public Decl
     PoolList<EnumField> fields_;
 };
 
+struct StructField {
+    StructField(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& typeinfo)
+      : pos(pos), name(name), type(typeinfo)
+    {}
+
+    token_pos_t pos;
+    sp::Atom* name;
+    typeinfo_t type;
+};
+
+class StructDecl : public Decl
+{
+  public:
+    explicit StructDecl(const token_pos_t& pos, sp::Atom* name)
+      : Decl(pos, name)
+    {}
+
+    PoolList<StructField>& fields() {
+        return fields_;
+    }
+
+  protected:
+    PoolList<StructField> fields_;
+};
+
+// "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()
+// when SourceMod was first being prototyped. Theoretically these could be retooled
+// as proper structs.
+class PstructDecl : public StructDecl
+{
+  public:
+    explicit PstructDecl(const token_pos_t& pos, sp::Atom* name)
+      : StructDecl(pos, name)
+    {}
+
+    bool Bind() override;
+};
+
 class Expr : public ParseNode
 {
   public:

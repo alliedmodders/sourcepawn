@@ -117,6 +117,49 @@ Parser::parse_enum(int vclass)
     return decl;
 }
 
+Decl*
+Parser::parse_pstruct()
+{
+    PstructDecl* struct_decl = nullptr;
+
+    auto pos = current_pos();
+
+    token_ident_t ident = {};
+    if (needsymbol(&ident))
+        struct_decl = new PstructDecl(pos, gAtoms.add(ident.name));
+
+    needtoken('{');
+    do {
+        if (matchtoken('}')) {
+            /* Quick exit */
+            lexpush();
+            break;
+        }
+
+        declinfo_t decl = {};
+        decl.type.ident = iVARIABLE;
+        decl.type.size = 1;
+
+        needtoken(tPUBLIC);
+        auto pos = current_pos();
+        if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD)) {
+            lexclr(TRUE);
+            continue;
+        }
+
+        if (struct_decl) {
+            auto name = gAtoms.add(decl.name);
+            struct_decl->fields().append(StructField(pos, name, decl.type));
+        }
+
+        require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    } while (!lexpeek('}'));
+
+    needtoken('}');
+    matchtoken(';'); // eat up optional semicolon
+    return struct_decl;
+}
+
 int
 Parser::expression(value* lval)
 {
