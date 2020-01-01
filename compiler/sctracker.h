@@ -13,20 +13,17 @@ typedef struct funcarg_s {
     int dimcount;
     int dims[sDIMEN_MAX];
     int ident;
-    int fconst;
-    int ommittable;
+    bool fconst : 1;
 } funcarg_t;
 
 struct functag_t {
     functag_t()
      : ret_tag(0),
        argcount(0),
-       ommittable(0),
        args()
     {}
     int ret_tag;
     int argcount;
-    int ommittable;
     funcarg_t args[SP_MAX_EXEC_PARAMS];
 };
 
