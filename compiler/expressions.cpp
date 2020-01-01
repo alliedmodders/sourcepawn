@@ -457,11 +457,8 @@ functag_compare(const functag_t* formal, const functag_t* actual)
     for (int i = 0; i < formal->argcount; i++) {
         const funcarg_t* formal_arg = &formal->args[i];
 
-        if (i >= actual->argcount) {
-            if (formal_arg->ommittable)
-                return TRUE;
+        if (i >= actual->argcount)
             return FALSE;
-        }
 
         const funcarg_t* actual_arg = &actual->args[i];
         if (!funcarg_compare(formal_arg, actual_arg))

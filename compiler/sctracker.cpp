@@ -116,7 +116,6 @@ funcenum_for_symbol(symbol* sym)
 
     ft->ret_tag = sym->tag;
     ft->argcount = 0;
-    ft->ommittable = FALSE;
     for (arginfo& arg : sym->function()->args) {
         if (!arg.ident)
             break;
@@ -130,7 +129,6 @@ funcenum_for_symbol(symbol* sym)
 
         dest->ident = arg.ident;
         dest->fconst = arg.is_const;
-        dest->ommittable = FALSE;
     }
 
     char name[METHOD_NAMEMAX + 1];
