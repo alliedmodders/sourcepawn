@@ -123,8 +123,7 @@ funcenum_for_symbol(symbol* sym)
 
         funcarg_t* dest = &ft->args[ft->argcount++];
 
-        dest->tagcount = 1;
-        dest->tags[0] = arg.tag;
+        dest->tag = arg.tag;
 
         dest->dimcount = arg.numdim;
         memcpy(dest->dims, arg.dim, arg.numdim * sizeof(int));

@@ -1371,7 +1371,7 @@ RttiBuilder::encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft)
         if (arg.ident == iREFERENCE)
             bytes.append(cb::kByRef);
 
-        variable_type_t info = {arg.tags[0], arg.dims, arg.dimcount, !!arg.fconst};
+        variable_type_t info = {arg.tag, arg.dims, arg.dimcount, !!arg.fconst};
         encode_var_type(bytes, info);
     }
 }

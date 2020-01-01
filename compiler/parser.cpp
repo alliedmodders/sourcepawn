@@ -3762,8 +3762,7 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
         fix_char_size(&decl);
 
         funcarg_t* arg = &type->args[type->argcount++];
-        arg->tagcount = 1;
-        arg->tags[0] = decl.type.tag;
+        arg->tag = decl.type.tag;
         arg->dimcount = decl.type.numdim;
         memcpy(arg->dims, decl.type.dim, arg->dimcount * sizeof(decl.type.dim[0]));
         arg->fconst = decl.type.is_const;

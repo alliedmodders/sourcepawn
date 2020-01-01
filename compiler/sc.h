@@ -56,7 +56,6 @@
 #define PREPROC_TERM \
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
-#define sTAGS_MAX 16                /* maximum number of tags on an argument */
 
 struct arginfo { /* function argument info */
     char name[sNAMEMAX + 1];
