@@ -41,9 +41,6 @@
 #include "sci18n.h"
 #include "sclist.h"
 #include "scvars.h"
-#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
-#    include "sclinux.h"
-#endif
 #include "sp_symhash.h"
 #include "types.h"
 

@@ -33,9 +33,6 @@
 #include "sc.h"
 #include "sclist.h"
 #include "scvars.h"
-#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
-#    include "sclinux.h"
-#endif
 #include <amtl/am-hashmap.h>
 #include <amtl/am-string.h>
 #include <smx/smx-v1-opcodes.h>

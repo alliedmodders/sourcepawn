@@ -31,9 +31,6 @@
 #if defined FREEBSD && !defined __FreeBSD__
 #    define __FreeBSD__
 #endif
-#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
-#    include "sclinux.h"
-#endif
 
 #if defined HAVE_STDINT_H
 #    include <stddef.h>

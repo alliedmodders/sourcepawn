@@ -47,7 +47,6 @@
 #if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
 #    include <unistd.h>
 #    include "binreloc.h" /* from BinReloc, see www.autopackage.org */
-#    include "sclinux.h"
 #endif
 
 #if defined _MSC_VER && defined _WIN32
