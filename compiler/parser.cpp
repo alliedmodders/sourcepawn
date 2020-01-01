@@ -150,7 +150,6 @@ static int dodo(void);
 static int dofor(void);
 static int doswitch(void);
 static void doreturn(void);
-static void dotypeset();
 static void domethodmap(LayoutSpec spec);
 static bool dousing();
 static void dobreak(void);
@@ -1138,8 +1137,12 @@ parse(void) {
                 break;
             }
             case tTYPESET:
-                dotypeset();
+            {
+                Parser parser;
+                Decl* decl = parser.parse_typeset();
+                decl->Bind();
                 break;
+            }
             case tSTRUCT:
             {
                 Parser parser;
@@ -3728,27 +3731,6 @@ parse_function_type()
     require_newline(TerminatorPolicy::Semicolon);
     errorset(sRESET, 0);
     return type;
-}
-
-// Unsafe typeset - only supports function types. This is a transition hack for SP2.
-static void
-dotypeset() {
-    token_ident_t ident;
-    if (!needsymbol(&ident))
-        return;
-
-    Type* prev_type = gTypes.find(ident.name);
-    if (prev_type && prev_type->isDefinedType())
-        error(110, ident.name, prev_type->kindName());
-
-    funcenum_t* def = funcenums_add(ident.name);
-    needtoken('{');
-    while (!matchtoken('}')) {
-        auto type = parse_function_type();
-        functags_add(def, type);
-    }
-
-    require_newline(TerminatorPolicy::NewlineOrSemicolon);
 }
 
 /*  decl_enum   - declare enumerated constants
