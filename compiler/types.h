@@ -32,6 +32,7 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 #include "amx.h"
+#include "pool-allocator.h"
 
 #define TAGTYPEMASK (0x3E000000)
 #define TAGFLAGMASK (TAGTYPEMASK | 0x40000000)
@@ -76,6 +77,24 @@ struct typeinfo_t {
         return tag ? tag : declared_tag;
     }
     bool isCharArray() const;
+};
+
+struct funcarg_t {
+    int tag;
+    int dimcount;
+    int dims[sDIMEN_MAX];
+    int ident;
+    bool fconst : 1;
+};
+
+struct functag_t : public PoolObject
+{
+    functag_t()
+     : ret_tag(0),
+       args()
+    {}
+    int ret_tag;
+    PoolList<funcarg_t> args;
 };
 
 class Type

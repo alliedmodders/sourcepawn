@@ -3669,10 +3669,13 @@ dodelete() {
  *                 | function-type-inner
  * function-type-inner ::= "function" type-expr "(" new-style-args ")"
  */
-static void
-parse_function_type(const ke::UniquePtr<functag_t>& type) {
+static functag_t*
+parse_function_type()
+{
     int lparen = matchtoken('(');
     needtoken(tFUNCTION);
+
+    functag_t* type = new functag_t;
 
     parse_new_typename(NULL, &type->ret_tag);
 
@@ -3721,6 +3724,7 @@ parse_function_type(const ke::UniquePtr<functag_t>& type) {
 
     require_newline(TerminatorPolicy::Semicolon);
     errorset(sRESET, 0);
+    return type;
 }
 
 static void
@@ -3737,9 +3741,8 @@ dotypedef() {
 
     funcenum_t* def = funcenums_add(ident.name);
 
-    auto type = ke::MakeUnique<functag_t>();
-    parse_function_type(type);
-    functags_add(def, ke::Move(type));
+    auto type = parse_function_type();
+    functags_add(def, type);
 }
 
 // Unsafe typeset - only supports function types. This is a transition hack for SP2.
@@ -3756,9 +3759,8 @@ dotypeset() {
     funcenum_t* def = funcenums_add(ident.name);
     needtoken('{');
     while (!matchtoken('}')) {
-        auto type = ke::MakeUnique<functag_t>();
-        parse_function_type(type);
-        functags_add(def, ke::Move(type));
+        auto type = parse_function_type();
+        functags_add(def, type);
     }
 
     require_newline(TerminatorPolicy::NewlineOrSemicolon);

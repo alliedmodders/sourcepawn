@@ -492,7 +492,7 @@ matchfunctags(Type* formal, Type* actual)
         return FALSE;
 
     for (const auto& formalfn : e->entries) {
-        if (functag_compare(formalfn.get(), actualfn))
+        if (functag_compare(formalfn, actualfn))
             return TRUE;
     }
 

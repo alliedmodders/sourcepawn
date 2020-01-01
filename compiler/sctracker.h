@@ -9,23 +9,6 @@
 #define MEMUSE_STATIC 0
 #define MEMUSE_DYNAMIC 1
 
-typedef struct funcarg_s {
-    int tag;
-    int dimcount;
-    int dims[sDIMEN_MAX];
-    int ident;
-    bool fconst : 1;
-} funcarg_t;
-
-struct functag_t {
-    functag_t()
-     : ret_tag(0),
-       args()
-    {}
-    int ret_tag;
-    PoolList<funcarg_t> args;
-};
-
 struct funcenum_t {
     funcenum_t()
      : tag(0),
@@ -33,7 +16,7 @@ struct funcenum_t {
     {}
     int tag;
     char name[METHOD_NAMEMAX + 1];
-    ke::Vector<ke::UniquePtr<functag_t>> entries;
+    ke::Vector<functag_t*> entries;
 };
 
 struct structarg_t {
@@ -141,7 +124,7 @@ structarg_t* pstructs_getarg(pstruct_t* pstruct, const char* member);
  */
 void funcenums_free();
 funcenum_t* funcenums_add(const char* name);
-functag_t* functags_add(funcenum_t* en, ke::UniquePtr<functag_t>&& src);
+void functags_add(funcenum_t* en, functag_t* src);
 funcenum_t* funcenum_for_symbol(symbol* sym);
 functag_t* functag_find_intrinsic(int tag);
 

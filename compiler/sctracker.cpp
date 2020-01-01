@@ -112,7 +112,7 @@ funcenums_add(const char* name)
 funcenum_t*
 funcenum_for_symbol(symbol* sym)
 {
-    auto ft = ke::MakeUnique<functag_t>();
+    functag_t* ft = new functag_t;
 
     ft->ret_tag = sym->tag;
     for (arginfo& arg : sym->function()->args) {
@@ -133,7 +133,7 @@ funcenum_for_symbol(symbol* sym)
     ke::SafeSprintf(name, sizeof(name), "::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
 
     funcenum_t* fe = funcenums_add(name);
-    functags_add(fe, ke::Move(ft));
+    functags_add(fe, ft);
 
     return fe;
 }
@@ -150,14 +150,13 @@ functag_find_intrinsic(int tag)
         return nullptr;
     if (fe->entries.empty())
         return nullptr;
-    return fe->entries.back().get();
+    return fe->entries.back();
 }
 
-functag_t*
-functags_add(funcenum_t* en, ke::UniquePtr<functag_t>&& src)
+void
+functags_add(funcenum_t* en, functag_t* src)
 {
-    en->entries.append(ke::Move(src));
-    return en->entries.back().get();
+    en->entries.append(src);
 }
 
 static void
