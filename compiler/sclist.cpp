@@ -35,7 +35,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "errors.h"
-#include "lstring.h"
 #include "sc.h"
 #include "scvars.h"
 #include "sp_symhash.h"

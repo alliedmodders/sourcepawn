@@ -32,19 +32,11 @@ if compiler.family == 'gcc':
 
 if builder.target.platform == 'linux':
   compiler.defines += [
-    'AMX_ANSIONLY',
     '_GNU_SOURCE'
   ]
 elif builder.target.platform == 'mac':
   compiler.defines += [
     'DARWIN',
-    'AMX_ANSIONLY',
-    'HAVE_SAFESTR'
-  ]
-
-if compiler.like('emscripten'):
-  compiler.defines += [
-    'HAVE_SAFESTR'
   ]
 
 binary.sources += [
@@ -55,7 +47,6 @@ binary.sources += [
   'expressions.cpp',
   'lexer.cpp',
   'libpawnc.cpp',
-  'lstring.cpp',
   'memfile.cpp',
   'name-resolution.cpp',
   'new-parser.cpp',
