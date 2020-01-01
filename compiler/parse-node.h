@@ -180,6 +180,24 @@ class TypedefDecl : public Decl
     functag_t* type_;
 };
 
+// Unsafe typeset - only supports function types. This is a transition hack for SP2.
+class TypesetDecl : public Decl
+{
+  public:
+    explicit TypesetDecl(const token_pos_t& pos, sp::Atom* name)
+      : Decl(pos, name)
+    {}
+
+    bool Bind() override;
+
+    PoolList<functag_t*>& types() {
+        return types_;
+    }
+
+  private:
+    PoolList<functag_t*> types_;
+};
+
 // "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()
 // when SourceMod was first being prototyped. Theoretically these could be retooled
 // as proper structs.

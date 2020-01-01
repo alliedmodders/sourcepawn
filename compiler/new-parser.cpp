@@ -175,6 +175,27 @@ Parser::parse_typedef()
     return new TypedefDecl(pos, gAtoms.add(ident.name), type);
 }
 
+Decl*
+Parser::parse_typeset()
+{
+    auto pos = current_pos();
+
+    token_ident_t ident;
+    if (!needsymbol(&ident))
+        return new ErrorDecl();
+
+    TypesetDecl* decl = new TypesetDecl(pos, gAtoms.add(ident.name));
+
+    needtoken('{');
+    while (!matchtoken('}')) {
+        auto type = parse_function_type();
+        decl->types().append(type);
+    }
+
+    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    return decl;
+}
+
 int
 Parser::expression(value* lval)
 {
