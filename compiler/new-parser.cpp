@@ -60,7 +60,7 @@ Parser::expression(value* lval)
 Expr*
 Parser::hier14()
 {
-    Expr* node = new_hier13();
+    Expr* node = hier13();
 
     cell val;
     char* st;
@@ -142,86 +142,86 @@ Parser::plnge_rel(int* opstr, NewHierFn hier)
 }
 
 Expr*
-Parser::new_hier13()
+Parser::hier13()
 {
-    Expr* node = new_hier12();
+    Expr* node = hier12();
     if (matchtoken('?')) {
         auto pos = current_pos();
         Expr* left;
         {
             /* do not allow tagnames here (colon is a special token) */
             ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
-            left = new_hier13();
+            left = hier13();
         }
         needtoken(':');
-        Expr* right = new_hier13();
+        Expr* right = hier13();
         return new TernaryExpr(pos, node, left, right);
     }
     return node;
 }
 
 Expr*
-Parser::new_hier12()
+Parser::hier12()
 {
-    return plnge(list12, &Parser::new_hier11);
+    return plnge(list12, &Parser::hier11);
 }
 
 Expr*
-Parser::new_hier11()
+Parser::hier11()
 {
-    return plnge(list11, &Parser::new_hier10);
+    return plnge(list11, &Parser::hier10);
 }
 
 Expr*
-Parser::new_hier10()
+Parser::hier10()
 {
-    return plnge(list10, &Parser::new_hier9);
+    return plnge(list10, &Parser::hier9);
 }
 
 Expr*
-Parser::new_hier9()
+Parser::hier9()
 {
-    return plnge_rel(list9, &Parser::new_hier8);
+    return plnge_rel(list9, &Parser::hier8);
 }
 
 Expr*
-Parser::new_hier8()
+Parser::hier8()
 {
-    return plnge(list8, &Parser::new_hier7);
+    return plnge(list8, &Parser::hier7);
 }
 
 Expr*
-Parser::new_hier7()
+Parser::hier7()
 {
-    return plnge(list7, &Parser::new_hier6);
+    return plnge(list7, &Parser::hier6);
 }
 
 Expr*
-Parser::new_hier6()
+Parser::hier6()
 {
-    return plnge(list6, &Parser::new_hier5);
+    return plnge(list6, &Parser::hier5);
 }
 
 Expr*
-Parser::new_hier5()
+Parser::hier5()
 {
-    return plnge(list5, &Parser::new_hier4);
+    return plnge(list5, &Parser::hier4);
 }
 
 Expr*
-Parser::new_hier4()
+Parser::hier4()
 {
-    return plnge(list4, &Parser::new_hier3);
+    return plnge(list4, &Parser::hier3);
 }
 
 Expr*
-Parser::new_hier3()
+Parser::hier3()
 {
-    return plnge(list3, &Parser::new_hier2);
+    return plnge(list3, &Parser::hier2);
 }
 
 Expr*
-Parser::new_hier2()
+Parser::hier2()
 {
     int val;
     char* st;
@@ -231,14 +231,14 @@ Parser::new_hier2()
         case tINC: /* ++lval */
         case tDEC: /* --lval */
         {
-            Expr* node = new_hier2();
+            Expr* node = hier2();
             return new PreIncExpr(pos, tok, node);
         }
         case '~':
         case '-':
         case '!':
         {
-            Expr* node = new_hier2();
+            Expr* node = hier2();
             return new UnaryExpr(pos, tok, node);
         }
         case tNEW:
@@ -259,7 +259,7 @@ Parser::new_hier2()
                 // Warn: old style cast used when newdecls pragma is enabled
                 error(240, st, type_to_name(tag));
             }
-            Expr* expr = new_hier2();
+            Expr* expr = hier2();
             return new CastExpr(pos, tok, tag, expr);
         }
         case tDEFINED:
@@ -314,7 +314,7 @@ Parser::new_hier2()
             break;
     }
 
-    Expr* node = new_hier1();
+    Expr* node = hier1();
 
     /* check for postfix operators */
     if (matchtoken(';')) {
@@ -344,7 +344,7 @@ Parser::new_hier2()
 }
 
 Expr*
-Parser::new_hier1()
+Parser::hier1()
 {
     Expr* base = nullptr;
     if (matchtoken(tVIEW_AS)) {
