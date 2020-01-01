@@ -33,9 +33,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
 #include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"

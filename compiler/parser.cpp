@@ -50,10 +50,6 @@
 #    include "sclinux.h"
 #endif
 
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
-
 #if defined _MSC_VER && defined _WIN32
 #    include <direct.h> /* for _chdrive() */
 #    define dos_setdrive(i) _chdrive(i)
@@ -520,9 +516,6 @@ cleanup:
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (IsWindow(hwndFinish))
         PostMessageA(hwndFinish, RegisterWindowMessageA("PawnNotify"), retcode, 0L);
-#endif
-#if defined FORTIFY
-    Fortify_ListAllMemory();
 #endif
     return retcode;
 }
