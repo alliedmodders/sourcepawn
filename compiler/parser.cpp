@@ -37,6 +37,7 @@
 #include <amtl/am-unused.h>
 #include <amtl/experimental/am-argparser.h>
 
+#include "new-parser.h"
 #include "types.h"
 
 #if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
@@ -3833,167 +3834,17 @@ dotypeset() {
  *
  */
 static void
-decl_enum(int vclass) {
-    char enumname[sNAMEMAX + 1], constname[sNAMEMAX + 1];
-    cell val, value, size;
-    char* str;
-    int tag, explicittag;
-    cell increment, multiplier;
-    LayoutSpec spec;
-    symbol* enumsym = nullptr;
-    constvalue* enumroot = nullptr;
-
+decl_enum(int vclass)
+{
     if (vclass == sGLOBAL && matchtoken(tSTRUCT)) {
         decl_enumstruct();
         return;
     }
 
-    /* get an explicit tag, if any (we need to remember whether an explicit
-     * tag was passed, even if that explicit tag was "_:", so we cannot call
-     * pc_addtag() here
-     */
-    if (lex(&val, &str) == tLABEL) {
-        if (pc_findtag(str) == 0) {
-            error(169);
-            tag = 0;
-            explicittag = FALSE;
-        } else {
-            tag = gTypes.defineEnumTag(str)->tagid();
-            spec = deduce_layout_spec_by_tag(tag);
-            if (!can_redef_layout_spec(spec, Layout_Enum))
-                error(110, str, layout_spec_name(spec));
-            explicittag = TRUE;
-        }
-    } else {
-        lexpush();
-        tag = 0;
-        explicittag = FALSE;
-    }
+    Parser parser;
 
-    /* get optional enum name (also serves as a tag if no explicit tag was set) */
-    if (lex(&val, &str) == tSYMBOL) { /* read in (new) token */
-        strcpy(enumname, str);        /* save enum name (last constant) */
-        if (!explicittag) {
-            tag = gTypes.defineEnumTag(enumname)->tagid();
-            spec = deduce_layout_spec_by_tag(tag);
-            if (!can_redef_layout_spec(spec, Layout_Enum))
-                error(110, enumname, layout_spec_name(spec));
-        } else {
-            error(168);
-
-            spec = deduce_layout_spec_by_name(enumname);
-            if (!can_redef_layout_spec(spec, Layout_Enum))
-                error(110, enumname, layout_spec_name(spec));
-        }
-    } else {
-        lexpush(); /* analyze again */
-        enumname[0] = '\0';
-    }
-
-    /* get increment and multiplier */
-    increment = 1;
-    multiplier = 1;
-    if (matchtoken('(')) {
-        if (matchtoken(taADD)) {
-            exprconst(&increment, NULL, NULL);
-        } else if (matchtoken(taMULT)) {
-            exprconst(&multiplier, NULL, NULL);
-        } else if (matchtoken(taSHL)) {
-            exprconst(&val, NULL, NULL);
-            while (val-- > 0)
-                multiplier *= 2;
-        }
-        needtoken(')');
-    }
-
-    if (strlen(enumname) > 0) {
-        if (vclass == sGLOBAL) {
-            if ((enumsym = findglb(enumname)) != NULL) {
-                // If we were previously defined as a methodmap, don't overwrite the
-                // symbol. Otherwise, flow into add_constant where we will error.
-                if (enumsym->ident != iMETHODMAP)
-                    enumsym = nullptr;
-            }
-        }
-
-        if (!enumsym) {
-            /* create the root symbol, so the fields can have it as their "parent" */
-            enumsym = add_constant(enumname, 0, vclass, tag);
-            if (enumsym != NULL)
-                enumsym->enumroot = true;
-            /* start a new list for the element names */
-            if ((enumroot = (constvalue*)malloc(sizeof(constvalue))) == NULL)
-                error(FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
-            memset(enumroot, 0, sizeof(constvalue));
-        }
-    } else {
-        enumsym = NULL;
-        enumroot = NULL;
-    }
-
-    // If this enum is for a methodmap, forget the symbol so code below doesn't
-    // build an enum struct.
-    if (enumsym && enumsym->ident == iMETHODMAP)
-        enumsym = NULL;
-
-    needtoken('{');
-    /* go through all constants */
-    value = 0; /* default starting value */
-    do {
-        symbol* sym;
-        if (matchtoken('}')) { /* quick exit if '}' follows ',' */
-            lexpush();
-            break;
-        }
-        if (matchtoken(tLABEL))
-            error(153);
-        if (needtoken(tSYMBOL)) {   /* read in (new) token */
-            tokeninfo(&val, &str);  /* get the information */
-            strcpy(constname, str); /* save symbol name */
-        } else {
-            constname[0] = '\0';
-        }
-        size = increment; /* default increment of 'val' */
-        if (matchtoken('[')) {
-            error(153);
-            exprconst(&size, NULL, NULL); /* get size */
-            needtoken(']');
-        }
-        /* :TODO: do we need a size modifier here for pc_tag_string? */
-        if (matchtoken('='))
-            exprconst(&value, NULL, NULL); /* get value */
-        // Cannot shadow names; they must be prefixed.
-        if (findconst(constname))
-            error(50, constname);
-        /* add_constant() checks whether a variable (global or local) or
-         * a constant with the same name already exists
-         */
-        sym = add_constant(constname, value, vclass, tag);
-        if (sym == NULL)
-            continue; /* error message already given */
-        /* set the item tag and the item size, for use in indexing arrays */
-        sym->set_parent(enumsym);
-        /* add the constant to a separate list as well */
-        if (enumroot != NULL) {
-            sym->enumfield = true;
-            append_constval(enumroot, constname, value, tag);
-        }
-        if (multiplier == 1)
-            value += size;
-        else
-            value *= size * multiplier;
-    } while (matchtoken(','));
-    needtoken('}');  /* terminates the constant list */
-    matchtoken(';'); /* eat an optional ; */
-
-    /* set the enum name to the "next" value (typically the last value plus one) */
-    if (enumsym) {
-        assert(enumsym->enumroot);
-        enumsym->setAddr(0);
-        /* assign the constant list */
-        assert(enumroot != NULL);
-        enumsym->dim.enumlist = enumroot;
-    }
+    Decl* decl = parser.parse_enum(vclass);
+    decl->Bind();
 }
 
 static void

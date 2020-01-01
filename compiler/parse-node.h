@@ -56,6 +56,10 @@ class SymbolExpr;
 class ParseNode : public PoolObject
 {
   public:
+    explicit ParseNode(const token_pos_t& pos)
+      : pos_(pos)
+    {}
+
     virtual bool Bind() {
         return true;
     }
@@ -64,13 +68,72 @@ class ParseNode : public PoolObject
     virtual bool HasSideEffects() {
         return false;
     }
+
+  protected:
+    void error(const token_pos_t& pos, int number, ...);
+
+  private:
+    // Hide this symbol. Calls to error(pos... will get more accurate as we
+    // make adjustments.
+    void error(int number, ...) = delete;
+
+  protected:
+    token_pos_t pos_;
+};
+
+class Decl : public ParseNode
+{
+  public:
+    explicit Decl(const token_pos_t& pos, sp::Atom* name)
+      : ParseNode(pos),
+        name_(name)
+    {}
+
+    bool Analyze() override final;
+    void Emit() override final;
+
+    sp::Atom* name() const {
+        return name_;
+    }
+
+  protected:
+    sp::Atom* name_;
+};
+
+struct EnumField {
+    EnumField(const token_pos_t& pos, sp::Atom* name, cell value)
+      : pos(pos), name(name), value(value)
+    {}
+    token_pos_t pos;
+    sp::Atom* name;
+    cell value;
+};
+
+class EnumDecl : public Decl
+{
+  public:
+    explicit EnumDecl(const token_pos_t& pos, int vclass, sp::Atom* label, sp::Atom* name)
+      : Decl(pos, name),
+        vclass_(vclass),
+        label_(label)
+    {}
+
+    bool Bind() override;
+    PoolList<EnumField>& fields() {
+        return fields_;
+    }
+
+  private:
+    int vclass_;
+    sp::Atom* label_;
+    PoolList<EnumField> fields_;
 };
 
 class Expr : public ParseNode
 {
   public:
     explicit Expr(const token_pos_t& pos)
-      : pos_(pos)
+      : ParseNode(pos)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -118,18 +181,10 @@ class Expr : public ParseNode
         return nullptr;
     }
 
-  private:
-    // Hide this symbol. Calls to error(pos... will get more accurate as we
-    // make adjustments.
-    void error(int number, ...) = delete;
-
   protected:
     virtual void DoEmit() = 0;
 
-    void error(const token_pos_t& pos, int number, ...);
-
   protected:
-    token_pos_t pos_;
     value val_ = {};
     bool lvalue_ = 0;
 };

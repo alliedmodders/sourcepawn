@@ -27,6 +27,12 @@
 #include "sctracker.h"
 
 void
+Decl::Emit()
+{
+    // Declarations usually don't emit anything.
+}
+
+void
 Expr::Emit()
 {
     AutoErrorPos aep(pos_);

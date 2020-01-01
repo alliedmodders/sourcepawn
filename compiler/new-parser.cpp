@@ -38,6 +38,85 @@
 
 using namespace sp;
 
+Decl*
+Parser::parse_enum(int vclass)
+{
+    auto pos = current_pos();
+
+    cell val;
+    char* str;
+    Atom* label = nullptr;
+    if (lex(&val, &str) == tLABEL)
+        label = gAtoms.add(str);
+    else
+        lexpush();
+
+    Atom* name = nullptr;
+    if (lex(&val, &str) == tSYMBOL)
+        name = gAtoms.add(str);
+    else
+        lexpush();
+
+    EnumDecl* decl = new EnumDecl(pos, vclass, label, name);
+
+    needtoken('{');
+
+    cell increment = 1;
+    cell multiplier = 1;
+    if (matchtoken('(')) {
+        if (matchtoken(taADD)) {
+            exprconst(&increment, NULL, NULL);
+        } else if (matchtoken(taMULT)) {
+            exprconst(&multiplier, NULL, NULL);
+        } else if (matchtoken(taSHL)) {
+            exprconst(&val, NULL, NULL);
+            while (val-- > 0)
+                multiplier *= 2;
+        }
+        needtoken(')');
+    }
+
+    cell size;
+    cell value = 0;
+    do {
+        if (matchtoken('}')) {
+            lexpush();
+            break;
+        }
+        if (matchtoken(tLABEL))
+            error(153);
+
+        sp::Atom* field_name = nullptr;
+        if (needtoken(tSYMBOL)) {
+            tokeninfo(&val, &str);
+            field_name = gAtoms.add(str);
+        }
+
+        auto pos = current_pos();
+
+        size = increment;
+        if (matchtoken('[')) {
+            error(153);
+            exprconst(&size, nullptr, nullptr);
+            needtoken(']');
+        }
+        if (matchtoken('='))
+            exprconst(&value, nullptr, nullptr);
+
+        if (field_name)
+            decl->fields().append(EnumField(pos, field_name, value));
+
+        if (multiplier == 1)
+            value += size;
+        else
+            value *= size * multiplier;
+    } while (matchtoken(','));
+
+    needtoken('}');
+    matchtoken(';');
+    return decl;
+}
+
 int
 Parser::expression(value* lval)
 {

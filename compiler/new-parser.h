@@ -31,6 +31,8 @@ class Parser : public ExpressionParser
   public:
     int expression(value* lval);
 
+    Decl* parse_enum(int vclass);
+
   private:
     typedef int (Parser::*HierFn)(value*);
     typedef Expr* (Parser::*NewHierFn)();
