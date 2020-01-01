@@ -29,6 +29,13 @@
 #include "sctracker.h"
 #include "scvars.h"
 
+bool
+Decl::Analyze()
+{
+    // No analysis needed for most decls.
+    return true;
+}
+
 static inline OpFunc TokenToOpFunc(int token) {
     switch (token) {
         case '*':
@@ -95,7 +102,7 @@ CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
 }
 
 void
-Expr::error(const token_pos_t& pos, int number, ...)
+ParseNode::error(const token_pos_t& pos, int number, ...)
 {
     va_list ap;
     va_start(ap, number);

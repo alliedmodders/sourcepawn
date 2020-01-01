@@ -25,7 +25,93 @@
 #include "parse-node.h"
 #include "sc.h"
 #include "sclist.h"
+#include "sctracker.h"
 #include "scvars.h"
+
+bool
+EnumDecl::Bind()
+{
+    int tag = 0;
+    if (label_) {
+        if (pc_findtag(label_->chars()) == 0) {
+            // No implicit-int allowed.
+            error(pos_, 169);
+            label_ = nullptr;
+        } else {
+            tag = gTypes.defineEnumTag(label_->chars())->tagid();
+        }
+    }
+
+    if (name_) {
+        if (label_)
+            error(pos_, 168);
+        tag = gTypes.defineEnumTag(name_->chars())->tagid();
+    } else {
+        // The name is automatically the label.
+        name_ = label_;
+    }
+
+    if (tag) {
+        auto spec = deduce_layout_spec_by_tag(tag);
+        if (!can_redef_layout_spec(spec, Layout_Enum))
+            error(pos_, 110, name_->chars(), layout_spec_name(spec));
+    }
+
+    symbol* enumsym = nullptr;
+    constvalue* enumroot = nullptr;
+    if (name_) {
+        if (vclass_ == sGLOBAL) {
+            if ((enumsym = findglb(name_->chars())) != NULL) {
+                // If we were previously defined as a methodmap, don't overwrite the
+                // symbol. Otherwise, flow into add_constant where we will error.
+                if (enumsym->ident != iMETHODMAP)
+                    enumsym = nullptr;
+            }
+        }
+
+        if (!enumsym) {
+            // create the root symbol, so the fields can have it as their "parent"
+            enumsym = add_constant(name_->chars(), 0, vclass_, tag);
+            if (enumsym)
+                enumsym->enumroot = true;
+            // start a new list for the element names
+            if ((enumroot = (constvalue*)calloc(1, sizeof(constvalue))) == NULL)
+                error(pos_, FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
+        }
+    }
+
+    // If this enum is for a methodmap, forget the symbol so code below doesn't
+    // build an enum struct.
+    if (enumsym && enumsym->ident == iMETHODMAP)
+        enumsym = NULL;
+
+    for (const auto& field : fields_ ) {
+        if (findconst(field.name->chars()))
+            error(field.pos, 50, field.name->chars());
+
+        symbol* sym = add_constant(field.name->chars(), field.value, vclass_, tag);
+        if (!sym)
+            continue;
+
+        // set the item tag and the item size, for use in indexing arrays
+        sym->set_parent(enumsym);
+        // add the constant to a separate list as well
+        if (enumroot) {
+            sym->enumfield = true;
+            append_constval(enumroot, field.name->chars(), field.value, tag);
+        }
+    }
+
+    // set the enum name to the "next" value (typically the last value plus one)
+    if (enumsym) {
+        assert(enumsym->enumroot);
+        enumsym->setAddr(0);
+        // assign the constant list
+        assert(enumroot);
+        enumsym->dim.enumlist = enumroot;
+    }
+    return true;
+}
 
 bool
 SymbolExpr::Bind()
