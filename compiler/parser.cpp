@@ -54,18 +54,9 @@
 #    include <alloc/fortify.h>
 #endif
 
-#if defined __BORLANDC__ || defined __WATCOMC__
-#    include <dos.h>
-static unsigned total_drives; /* dummy variable */
-#    define dos_setdrive(i) _dos_setdrive(i, &total_drives)
-#elif defined _MSC_VER && defined _WIN32
+#if defined _MSC_VER && defined _WIN32
 #    include <direct.h> /* for _chdrive() */
 #    define dos_setdrive(i) _chdrive(i)
-#endif
-#if defined __BORLANDC__
-#    include <dir.h> /* for chdir() */
-#elif defined __WATCOMC__
-#    include <direct.h> /* for chdir() */
 #endif
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 #    include <windows.h>
@@ -936,9 +927,6 @@ setopt(int argc, char** argv, char* oname, char* ename, char* pname) {
     parseoptions(argc, argv, oname, ename, pname);
 }
 
-#if defined __BORLANDC__ || defined __WATCOMC__
-#    pragma argsused
-#endif
 static void
 setconfig(char* root) {
     char path[_MAX_PATH];

@@ -15,17 +15,7 @@
  * the macros of Watcom C/C++ and Microsoft Visual C/C++ are mapped to
  * those of Borland C++.
  */
-#if defined(__WATCOMC__)
-#    if defined(__WINDOWS__) || defined(__NT__)
-#        define _Windows 1
-#    endif
-#    ifdef __386__
-#        define __32BIT__ 1
-#    endif
-#    if defined(_Windows) && defined(__32BIT__)
-#        define __WIN32__ 1
-#    endif
-#elif defined(_MSC_VER)
+#if defined(_MSC_VER)
 #    if defined(_WINDOWS) || defined(_WIN32)
 #        define _Windows 1
 #    endif
