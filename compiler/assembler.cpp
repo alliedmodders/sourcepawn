@@ -29,7 +29,6 @@
 #include <string.h>
 #include "amxdbg.h"
 #include "errors.h"
-#include "lstring.h"
 #include "sc.h"
 #include "sclist.h"
 #include "scvars.h"

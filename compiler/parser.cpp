@@ -73,7 +73,6 @@
 #include "expressions.h"
 #include "lexer.h"
 #include "libpawnc.h"
-#include "lstring.h"
 #include "optimizer.h"
 #include "sc.h"
 #include "sci18n.h"
@@ -806,9 +805,9 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     }
 
     if (opt_prefixfile.hasValue())
-        strlcpy(pname, opt_prefixfile.value().chars(), _MAX_PATH);
+        SafeStrcpy(pname, _MAX_PATH, opt_prefixfile.value().chars());
     if (opt_outputfile.hasValue())
-        strlcpy(oname, opt_outputfile.value().chars(), _MAX_PATH);
+        SafeStrcpy(oname, _MAX_PATH, opt_outputfile.value().chars());
 
     if (opt_verbosity.hasValue()) {
         if (isdigit(*opt_verbosity.value().chars()))
@@ -834,7 +833,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     }
 
     if (opt_error_file.hasValue())
-        strlcpy(ename, opt_error_file.value().chars(), _MAX_PATH);
+        SafeStrcpy(ename, _MAX_PATH, opt_error_file.value().chars());
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
@@ -882,11 +881,11 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
                 i = sNAMEMAX;
                 error(200, arg, sNAMEMAX); /* symbol too long, truncated to sNAMEMAX chars */
             }
-            strlcpy(str, arg, i + 1); /* str holds symbol name */
+            SafeStrcpyN(str, _MAX_PATH, arg, i);
             i = atoi(ptr + 1);
             add_constant(str, i, sGLOBAL, 0);
         } else {
-            strlcpy(str, arg, sizeof(str) - 5); /* -5 because default extension is ".sp" */
+            SafeStrcpy(str, sizeof(str) - 5, arg); /* -5 because default extension is ".sp" */
             set_extension(str, ".sp", FALSE);
             insert_sourcefile(str);
             /* The output name is the first input name with a different extension,
@@ -932,7 +931,7 @@ setconfig(char* root) {
     /* see www.autopackage.org for the BinReloc module */
     br_init_lib(NULL);
     ptr = br_find_exe("spcomp");
-    strlcpy(path, ptr, sizeof path);
+    SafeStrcpy(path, sizeof(path), ptr);
     free(ptr);
 #elif defined __EMSCRIPTEN__
     if (EM_ASM_INT(
@@ -945,11 +944,11 @@ setconfig(char* root) {
             },
             path, sizeof(path)) == 0 &&
         root != NULL) {
-        strlcpy(path, root, sizeof(path));
+        SafeStrcpy(path, sizeof(path), root);
     }
 #else
     if (root != NULL)
-        strlcpy(path, root, sizeof path); /* path + filename (hopefully) */
+        SafeStrcpy(path, sizeof(path), root); /* path + filename (hopefully) */
 #endif
 
 #if defined __MSDOS__

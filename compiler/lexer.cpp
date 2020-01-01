@@ -35,7 +35,6 @@
 #include "emitter.h"
 #include "errors.h"
 #include "libpawnc.h"
-#include "lstring.h"
 #include "optimizer.h"
 #include "sc.h"
 #include "sci18n.h"
@@ -155,8 +154,8 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
                 int len = (int)(ptr - inpfname) + 1;
                 if (len + strlen(name) < _MAX_PATH) {
                     char path[_MAX_PATH];
-                    strlcpy(path, inpfname, len + 1);
-                    strlcat(path, name, sizeof path);
+                    SafeStrcpyN(path, sizeof(path), inpfname, len);
+                    SafeStrcat(path, sizeof(path), name);
                     result = plungequalifiedfile(path);
                 }
             }
@@ -168,8 +167,7 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         char* ptr;
         for (i = 0; !result && (ptr = get_path(i)) != NULL; i++) {
             char path[_MAX_PATH];
-            strlcpy(path, ptr, sizeof path);
-            strlcat(path, name, sizeof path);
+            SafeSprintf(path, sizeof(path), "%s%s", ptr, name);
             result = plungequalifiedfile(path);
         }
     }
@@ -1306,7 +1304,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                 args[arg] = (unsigned char*)malloc(len + 1);
                 if (args[arg] == NULL)
                     error(FATAL_ERROR_OOM);
-                strlcpy((char*)args[arg], (char*)s, len + 1);
+                SafeStrcpy((char*)args[arg], len + 1, (char*)s);
                 /* character behind the pattern was matched too */
                 if (*e == *p) {
                     s = e + 1;
