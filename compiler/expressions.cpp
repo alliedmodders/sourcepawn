@@ -430,23 +430,15 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
             return FALSE;
     }
 
-    // Check tags.
-    if (actual->tagcount != formal->tagcount)
+    // Note we invert the order we pass things to matchtag() here. If the
+    // typedef specifies base type X, and the function specifies derived
+    // type Y, we want this to type since such an assignment is valid.
+    //
+    // Most programming languages do not subtype arguments like this. We do
+    // it in SourcePawn to preserve compatibility during the Transitional
+    // Syntax effort.
+    if (!matchtag(actual->tag, formal->tag, MATCHTAG_SILENT | MATCHTAG_COERCE))
         return FALSE;
-    for (int i = 0; i < formal->tagcount; i++) {
-        // Note we invert the order we pass things to matchtag() here. If the
-        // typedef specifies base type X, and the function specifies derived
-        // type Y, we want this to type since such an assignment is valid.
-        //
-        // Most programming languages do not subtype arguments like this. We do
-        // it in SourcePawn to preserve compatibility during the Transitional
-        // Syntax effort.
-        int actual_tag = actual->tags[i];
-        int formal_tag = formal->tags[i];
-        if (!matchtag(actual_tag, formal_tag, MATCHTAG_SILENT | MATCHTAG_COERCE))
-            return FALSE;
-    }
-
     return TRUE;
 }
 

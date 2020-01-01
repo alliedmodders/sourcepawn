@@ -9,8 +9,7 @@
 #define MEMUSE_DYNAMIC 1
 
 typedef struct funcarg_s {
-    int tagcount;
-    int tags[sTAGS_MAX];
+    int tag;
     int dimcount;
     int dims[sDIMEN_MAX];
     int ident;
