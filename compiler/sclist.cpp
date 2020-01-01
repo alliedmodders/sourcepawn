@@ -40,10 +40,6 @@
 #include "scvars.h"
 #include "sp_symhash.h"
 
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
-
 static bool sAliasTableInitialized;
 static ke::HashMap<sp::CharsAndLength, ke::AString, KeywordTablePolicy> sAliases;
 

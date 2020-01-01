@@ -27,9 +27,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* for macro max() */
 #include <string.h>
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
 #include "amxdbg.h"
 #include "errors.h"
 #include "lstring.h"

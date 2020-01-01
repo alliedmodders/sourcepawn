@@ -25,9 +25,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* for _MAX_PATH */
 #include <string.h>
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
 #include <amtl/am-algorithm.h>
 #include "emitter.h"
 #include "errors.h"

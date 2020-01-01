@@ -52,9 +52,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* for atoi() */
 #include <string.h>
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"

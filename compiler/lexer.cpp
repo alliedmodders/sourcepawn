@@ -47,10 +47,6 @@
 #include "sp_symhash.h"
 #include "types.h"
 
-#if defined FORTIFY
-#    include <alloc/fortify.h>
-#endif
-
 using namespace sp;
 
 /* flags for litchar() */
