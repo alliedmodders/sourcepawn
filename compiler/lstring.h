@@ -2,11 +2,6 @@
 
 #include <stddef.h>
 
-#if defined __WATCOMC__ && __WATCOMC__ >= 1240
-/* OpenWatcom introduced BSD "safe string functions" with version 1.4 */
-#    define HAVE_SAFESTR
-#endif
-
 #if !defined HAVE_SAFESTR
 
 #    if defined(__cplusplus)

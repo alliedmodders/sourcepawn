@@ -31,17 +31,9 @@
 #ifndef SC_H_INCLUDED
 #define SC_H_INCLUDED
 #include <limits.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
-#if defined __BORLANDC__ && defined _Windows && !(defined __32BIT__ || defined __WIN32__)
-/* setjmp() and longjmp() not well supported in 16-bit windows */
-#    include <windows.h>
-typedef int jmp_buf[9];
-#    define setjmp(b) Catch(b)
-#    define longjmp(b, e) Throw(b, e)
-#else
-#    include <setjmp.h>
-#endif
 #include <amtl/am-uniqueptr.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>

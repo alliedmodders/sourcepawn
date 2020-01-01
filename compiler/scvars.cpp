@@ -105,11 +105,3 @@ ke::Vector<char*> gInputFilenameStack;
 jmp_buf errbuf;
 
 HashTable* sp_Globals = NULL;
-
-#if defined __WATCOMC__ && !defined NDEBUG
-/* Watcom's CVPACK dislikes .OBJ files without functions */
-static int
-dummyfunc(void) {
-    return 0;
-}
-#endif
