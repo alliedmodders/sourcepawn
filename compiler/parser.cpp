@@ -115,7 +115,6 @@ static void declstructvar(char* firstname, int fpublic, pstruct_t* pstruct);
 static void declloc(int tokid);
 static void dodelete();
 static void decl_const(int table);
-static void declstruct();
 static void decl_enum(int table);
 static void decl_enumstruct();
 static cell needsub();
@@ -164,7 +163,6 @@ static void inst_datetime_defines(void);
 static void inst_binary_name(char* binfname);
 static int operatorname(char* name);
 static int parse_new_typename(const token_t* tok);
-static int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
 static int reparse_old_decl(declinfo_t* decl, int flags);
 static int reparse_new_decl(declinfo_t* decl, int flags);
 static void check_void_decl(const declinfo_t* decl, int variable);
@@ -1140,8 +1138,12 @@ parse(void) {
                 dotypeset();
                 break;
             case tSTRUCT:
-                declstruct();
+            {
+                Parser parser;
+                Decl* decl = parser.parse_pstruct();
+                decl->Bind();
                 break;
+            }
             case tCONST:
                 decl_const(sGLOBAL);
                 break;
@@ -2489,76 +2491,6 @@ decl_const(int vclass) {
     needtoken(tTERM);
 }
 
-static void
-check_struct_name(const char* name) {
-    LayoutSpec spec = deduce_layout_spec_by_name(name);
-    if (!can_redef_layout_spec(spec, Layout_PawnStruct))
-        error(110, name, layout_spec_name(spec));
-    if (!isupper(*name))
-        error(109, "struct");
-}
-
-/*
- * declstruct - declare a struct type
- */
-static void
-declstruct(void) {
-    cell val;
-    char* str;
-    int tok;
-    pstruct_t* pstruct;
-
-    /* get the explicit tag (required!) */
-    tok = lex(&val, &str);
-    if (tok != tSYMBOL) {
-        error(93);
-    } else {
-        check_struct_name(str);
-    }
-
-    pstruct = pstructs_add(str);
-
-    gTypes.definePStruct(pstruct->name, pstruct);
-
-    needtoken('{');
-    do {
-        if (matchtoken('}')) {
-            /* Quick exit */
-            lexpush();
-            break;
-        }
-
-        declinfo_t decl;
-        memset(&decl, 0, sizeof(decl));
-
-        decl.type.ident = iVARIABLE;
-        decl.type.size = 1;
-        if (!needtoken(tPUBLIC) || !parse_new_decl(&decl, NULL, DECLFLAG_FIELD)) {
-            // skip the rest of the line.
-            lexclr(TRUE);
-            break;
-        }
-
-        structarg_t arg;
-
-        arg.tag = decl.type.tag;
-        arg.dimcount = decl.type.numdim;
-        memcpy(arg.dims, decl.type.dim, sizeof(int) * arg.dimcount);
-        strcpy(arg.name, decl.name);
-        arg.fconst = decl.type.is_const;
-        arg.ident = decl.type.ident;
-        if (arg.ident == iARRAY)
-            arg.ident = iREFARRAY;
-
-        if (pstructs_addarg(pstruct, &arg) == NULL)
-            error(103, arg.name, layout_spec_name(Layout_PawnStruct));
-
-        require_newline(TerminatorPolicy::NewlineOrSemicolon);
-    } while (!lexpeek('}'));
-    needtoken('}');
-    matchtoken(';'); /* eat up optional semicolon */
-}
-
 // Consumes a line, returns FALSE if EOF hit.
 static int
 consume_line() {
@@ -2967,8 +2899,9 @@ rewrite_type_for_enum_struct(typeinfo_t* info) {
     }
 }
 
-static int
-parse_new_decl(declinfo_t* decl, const token_t* first, int flags) {
+int
+parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
+{
     token_t tok;
 
     if (!parse_new_typeexpr(&decl->type, first, flags))

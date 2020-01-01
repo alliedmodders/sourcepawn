@@ -114,6 +114,42 @@ EnumDecl::Bind()
 }
 
 bool
+PstructDecl::Bind()
+{
+    const char* name = name_->chars();
+    auto spec = deduce_layout_spec_by_name(name);
+    if (!can_redef_layout_spec(spec, Layout_PawnStruct)) {
+        error(pos_, 110, name, layout_spec_name(spec));
+        return false;
+    }
+    if (!isupper(*name)) {
+        error(pos_, 109, "struct");
+        return false;
+    }
+
+    pstruct_t* pstruct = pstructs_add(name);
+    gTypes.definePStruct(pstruct->name, pstruct);
+
+    for (const auto& field : fields_) {
+        structarg_t arg;
+        arg.tag = field.type.tag;
+        arg.dimcount = field.type.numdim;
+        memcpy(arg.dims, field.type.dim, sizeof(int) * arg.dimcount);
+        ke::SafeStrcpy(arg.name, sizeof(arg.name), field.name->chars());
+        arg.fconst = field.type.is_const;
+        arg.ident = field.type.ident;
+        if (arg.ident == iARRAY)
+            arg.ident = iREFARRAY;
+
+        if (!pstructs_addarg(pstruct, &arg)) {
+            error(field.pos, 103, arg.name, layout_spec_name(Layout_PawnStruct));
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
 SymbolExpr::Bind()
 {
     AutoErrorPos aep(pos_);

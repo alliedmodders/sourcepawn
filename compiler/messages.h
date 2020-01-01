@@ -117,7 +117,7 @@ static const char* errmsg[] = {
     /*090*/ "public functions may not return arrays (symbol \"%s\")\n",
     /*091*/ "ambiguous constant; tag override is required (symbol \"%s\")\n",
     /*092*/ "number of arguments does not match definition\n",
-    /*093*/ "expected tag name identifier\n",
+    /*093*/ "unused93\n",
     /*094*/ "cannot apply const qualifier to enum struct field \"%s\"\n",
     /*095*/ "type \"%s\" cannot be applied as a tag\n",
     /*096*/ "could not find member \"%s\" in struct \"%s\"\n",
