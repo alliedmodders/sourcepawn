@@ -25,21 +25,27 @@
 #include "expressions.h"
 #include "parse-node.h"
 #include "sc.h"
+#include "sctracker.h"
 
 class Parser : public ExpressionParser
 {
   public:
     int expression(value* lval);
 
+    void parse();
+
+    // Temporary until parser.cpp no longer is shimmed.
     Decl* parse_enum(int vclass);
-    Decl* parse_pstruct();
-    Decl* parse_typedef();
-    Decl* parse_typeset();
-    Decl* parse_using();
 
   private:
     typedef int (Parser::*HierFn)(value*);
     typedef Expr* (Parser::*NewHierFn)();
+
+    void parse_unknown_decl(const token_t* tok);
+    Decl* parse_pstruct();
+    Decl* parse_typedef();
+    Decl* parse_typeset();
+    Decl* parse_using();
 
     Expr* hier14();
     Expr* parse_view_as();
@@ -66,3 +72,12 @@ class Parser : public ExpressionParser
 // Implemented in parser.cpp.
 int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
 functag_t* parse_function_type();
+void dodecl(const token_t* tok);
+void decl_const(int vclass);
+void decl_enumstruct();
+void domethodmap(LayoutSpec spec);
+symbol* funcstub(int tokid, declinfo_t* decl, const int* thistag);
+void declglb(declinfo_t* decl, int fpublic, int fstatic, int stock);
+void declstructvar(char* firstname, int fpublic, pstruct_t* pstruct);
+int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock,
+            symbol** symp);

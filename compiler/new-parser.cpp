@@ -38,6 +38,148 @@
 
 using namespace sp;
 
+void
+Parser::parse()
+{
+    while (freading) {
+        Decl* decl = nullptr;
+
+        token_t tok;
+        switch (lextok(&tok)) {
+            case 0:
+                /* ignore zero's */
+                break;
+            case tSYMBOL:
+                // Fallthrough.
+            case tINT:
+            case tOBJECT:
+            case tCHAR:
+            case tVOID:
+            case tLABEL:
+                lexpush();
+                // Fallthrough.
+            case tNEW:
+            case tSTATIC:
+            case tPUBLIC:
+            case tSTOCK:
+            case tOPERATOR:
+            case tNATIVE:
+            case tFORWARD:
+                parse_unknown_decl(&tok);
+                break;
+            case tFUNCENUM:
+            case tFUNCTAG:
+                error(FATAL_ERROR_FUNCENUM);
+                break;
+            case tTYPEDEF:
+                decl = parse_typedef();
+                break;
+            case tTYPESET:
+                decl = parse_typeset();
+                break;
+            case tSTRUCT:
+                decl = parse_pstruct();
+                break;
+            case tCONST:
+                decl_const(sGLOBAL);
+                break;
+            case tENUM:
+                if (matchtoken(tSTRUCT))
+                    decl_enumstruct();
+                else
+                    decl = parse_enum(sGLOBAL);
+                break;
+            case tMETHODMAP:
+                domethodmap(Layout_MethodMap);
+                break;
+            case tUSING:
+                decl = parse_using();
+                break;
+            case '}':
+                error(54); /* unmatched closing brace */
+                break;
+            case '{':
+                error(55); /* start of function body without function header */
+                break;
+            default:
+                if (freading) {
+                    error(10);    /* illegal function or declaration */
+                    lexclr(TRUE); /* drop the rest of the line */
+                    litidx = 0;   /* drop any literal arrays (strings) */
+                }
+        }
+
+        // Until we can eliminate the two-pass parser, top-level decls must be
+        // resolved immediately.
+        if (decl)
+            decl->Bind();
+    }
+}
+
+void
+Parser::parse_unknown_decl(const token_t* tok)
+{
+    declinfo_t decl;
+
+    if (tok->id == tNATIVE || tok->id == tFORWARD) {
+        parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
+        funcstub(tok->id, &decl, NULL);
+        return;
+    }
+
+    int fpublic = FALSE, fstock = FALSE, fstatic = FALSE;
+    switch (tok->id) {
+        case tPUBLIC:
+            fpublic = TRUE;
+            break;
+        case tSTOCK:
+            fstock = TRUE;
+            if (matchtoken(tSTATIC))
+                fstatic = TRUE;
+            break;
+        case tSTATIC:
+            fstatic = TRUE;
+
+            // For compatibility, we must include this case. Though "stock" should
+            // come first.
+            if (matchtoken(tSTOCK))
+                fstock = TRUE;
+            break;
+    }
+
+    int flags = DECLFLAG_MAYBE_FUNCTION | DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT;
+    if (tok->id == tNEW)
+        flags |= DECLFLAG_OLD;
+
+    if (!parse_decl(&decl, flags)) {
+        // Error will have been reported earlier. Reset |decl| so we don't crash
+        // thinking tag -1 has every flag.
+        decl.type.tag = 0;
+    }
+
+    // Hacky bag o' hints as to whether this is a variable decl.
+    bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexpeek('(') ||
+                            decl.type.is_const;
+
+    if (!decl.opertok && probablyVariable) {
+        if (tok->id == tNEW && decl.type.is_new)
+            error(143);
+        Type* type = gTypes.find(decl.type.tag);
+        if (type && type->kind() == TypeKind::Struct) {
+            declstructvar(decl.name, fpublic, type->asStruct());
+        } else {
+            declglb(&decl, fpublic, fstatic, fstock);
+        }
+    } else {
+        if (!newfunc(&decl, NULL, fpublic, fstatic, fstock, NULL)) {
+            // Illegal function or declaration. Drop the line, reset literal queue.
+            error(10);
+            lexclr(TRUE);
+            litidx = 0;
+        }
+    }
+}
+
 Decl*
 Parser::parse_enum(int vclass)
 {

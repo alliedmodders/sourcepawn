@@ -107,16 +107,10 @@ static void setopt(int argc, char** argv, char* oname, char* ename, char* pname)
 static void setconfig(char* root);
 static void setcaption(void);
 static void setconstants(void);
-static void parse(void);
 static void dumplits(void);
 static void dumpzero(int count);
-static void declglb(declinfo_t* decl, int fpublic, int fstatic, int stock);
-static void declstructvar(char* firstname, int fpublic, pstruct_t* pstruct);
 static void declloc(int tokid);
 static void dodelete();
-static void decl_const(int table);
-static void decl_enum(int table);
-static void decl_enumstruct();
 static cell needsub();
 static void initials(int ident, int tag, cell* size, int dim[], int numdim, constvalue* enumroot);
 static cell initarray(int ident, int tag, int dim[], int numdim, int cur, int startlit,
@@ -126,9 +120,6 @@ static cell initvector(int ident, int tag, cell size, int fillzero, constvalue* 
 static void initials3(declinfo_t* decl);
 static cell fix_char_size(declinfo_t* decl);
 static cell init(int ident, int* tag, int* errorfound);
-static symbol* funcstub(int tokid, declinfo_t* decl, const int* thistag);
-static int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock,
-                   symbol** symp);
 static int declargs(symbol* sym, int chkshadow, const int* thistag);
 static void doarg(symbol* sym, declinfo_t* decl, int offset, int chkshadow, arginfo* arg);
 static void reduce_referrers(symbol* root);
@@ -150,7 +141,6 @@ static int dodo(void);
 static int dofor(void);
 static int doswitch(void);
 static void doreturn(void);
-static void domethodmap(LayoutSpec spec);
 static void dobreak(void);
 static void docont(void);
 static void addwhile(int* ptr);
@@ -375,7 +365,10 @@ pc_compile(int argc, char* argv[]) {
             }
         }
         preprocess(); /* fetch first line */
-        parse();      /* process all input */
+
+        Parser parser;
+        parser.parse();      /* process all input */
+
         sc_parsenum++;
     } while (sc_reparse);
 
@@ -423,7 +416,10 @@ pc_compile(int argc, char* argv[]) {
         plungefile(incfname, FALSE, TRUE); /* parse "default.inc" (again) */
     }
     preprocess(); /* fetch first line */
-    parse();      /* process all input */
+
+    Parser parser;
+    parser.parse();      /* process all input */
+
     /* inpf is already closed when readline() attempts to pop of a file */
     writetrailer(); /* write remaining stuff */
 
@@ -1030,161 +1026,6 @@ setconstants(void) {
     add_constant("debug", debug, sGLOBAL, 0);
 }
 
-static void
-dodecl(const token_t* tok) {
-    declinfo_t decl;
-
-    if (tok->id == tNATIVE || tok->id == tFORWARD) {
-        parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
-        funcstub(tok->id, &decl, NULL);
-        return;
-    }
-
-    int fpublic = FALSE, fstock = FALSE, fstatic = FALSE;
-    switch (tok->id) {
-        case tPUBLIC:
-            fpublic = TRUE;
-            break;
-        case tSTOCK:
-            fstock = TRUE;
-            if (matchtoken(tSTATIC))
-                fstatic = TRUE;
-            break;
-        case tSTATIC:
-            fstatic = TRUE;
-
-            // For compatibility, we must include this case. Though "stock" should
-            // come first.
-            if (matchtoken(tSTOCK))
-                fstock = TRUE;
-            break;
-    }
-
-    int flags = DECLFLAG_MAYBE_FUNCTION | DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT;
-    if (tok->id == tNEW)
-        flags |= DECLFLAG_OLD;
-
-    if (!parse_decl(&decl, flags)) {
-        // Error will have been reported earlier. Reset |decl| so we don't crash
-        // thinking tag -1 has every flag.
-        decl.type.tag = 0;
-    }
-
-    // Hacky bag o' hints as to whether this is a variable decl.
-    bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexpeek('(') ||
-                            decl.type.is_const;
-
-    if (!decl.opertok && probablyVariable) {
-        if (tok->id == tNEW && decl.type.is_new)
-            error(143);
-        Type* type = gTypes.find(decl.type.tag);
-        if (type && type->kind() == TypeKind::Struct) {
-            declstructvar(decl.name, fpublic, type->asStruct());
-        } else {
-            declglb(&decl, fpublic, fstatic, fstock);
-        }
-    } else {
-        if (!newfunc(&decl, NULL, fpublic, fstatic, fstock, NULL)) {
-            // Illegal function or declaration. Drop the line, reset literal queue.
-            error(10);
-            lexclr(TRUE);
-            litidx = 0;
-        }
-    }
-}
-
-/*  parse       - process all input text
- *
- *  At this level, only static declarations and function definitions are legal.
- */
-static void
-parse(void)
-{
-    token_t tok;
-
-    while (freading) {
-        switch (lextok(&tok)) {
-            case 0:
-                /* ignore zero's */
-                break;
-            case tSYMBOL:
-                // Fallthrough.
-            case tINT:
-            case tOBJECT:
-            case tCHAR:
-            case tVOID:
-            case tLABEL:
-                lexpush();
-                // Fallthrough.
-            case tNEW:
-            case tSTATIC:
-            case tPUBLIC:
-            case tSTOCK:
-            case tOPERATOR:
-            case tNATIVE:
-            case tFORWARD: {
-                dodecl(&tok);
-                break;
-            }
-            case tFUNCTAG:
-                error(FATAL_ERROR_FUNCENUM);
-                break;
-            case tTYPEDEF:
-            {
-                Parser parser;
-                Decl* decl = parser.parse_typedef();
-                decl->Bind();
-                break;
-            }
-            case tTYPESET:
-            {
-                Parser parser;
-                Decl* decl = parser.parse_typeset();
-                decl->Bind();
-                break;
-            }
-            case tSTRUCT:
-            {
-                Parser parser;
-                Decl* decl = parser.parse_pstruct();
-                decl->Bind();
-                break;
-            }
-            case tCONST:
-                decl_const(sGLOBAL);
-                break;
-            case tENUM:
-                decl_enum(sGLOBAL);
-                break;
-            case tFUNCENUM:
-                error(FATAL_ERROR_FUNCENUM);
-                break;
-            case tMETHODMAP:
-                domethodmap(Layout_MethodMap);
-                break;
-            case tUSING:
-            {
-                Parser parser;
-                Decl* decl = parser.parse_using();
-                decl->Bind();
-                break;
-            }
-            case '}':
-                error(54); /* unmatched closing brace */
-                break;
-            case '{':
-                error(55); /* start of function body without function header */
-                break;
-            default:
-                if (freading) {
-                    error(10);    /* illegal function or declaration */
-                    lexclr(TRUE); /* drop the rest of the line */
-                    litidx = 0;   /* drop any literal arrays (strings) */
-                }
-        }
-    }
-}
-
 /*  dumplits
  *
  *  Dump the literal pool (strings etc.)
@@ -1239,8 +1080,9 @@ dumpzero(int count) {
  * 
  * global references: glb_declared (altered)
  */
-static void
-declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
+void
+declstructvar(char* firstname, int fpublic, pstruct_t* pstruct)
+{
     int tok;
     cell val;
     char* str;
@@ -1426,8 +1268,9 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
  *
  *  global references: glb_declared     (altered)
  */
-static void
-declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock) {
+void
+declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
+{
     int ispublic;
     cell cidx;
     ucell address;
@@ -2437,8 +2280,9 @@ needsub()
 /*  decl_const  - declare a single constant
  *
  */
-static void
-decl_const(int vclass) {
+void
+decl_const(int vclass)
+{
     char constname[sNAMEMAX + 1];
     cell val;
     token_t tok;
@@ -3360,8 +3204,9 @@ parse_method(methodmap_t* map) {
  * domethodmap - declare a method map for OO-ish syntax.
  *
  */
-static void
-domethodmap(LayoutSpec spec) {
+void
+domethodmap(LayoutSpec spec)
+{
     token_ident_t ident;
     methodmap_t* parent = NULL;
     const char* spectype = layout_spec_name(spec);
@@ -3636,25 +3481,9 @@ parse_function_type()
     return type;
 }
 
-/*  decl_enum   - declare enumerated constants
- *
- */
-static void
-decl_enum(int vclass)
+void
+decl_enumstruct()
 {
-    if (vclass == sGLOBAL && matchtoken(tSTRUCT)) {
-        decl_enumstruct();
-        return;
-    }
-
-    Parser parser;
-
-    Decl* decl = parser.parse_enum(vclass);
-    decl->Bind();
-}
-
-static void
-decl_enumstruct() {
     token_ident_t struct_name = {};
     strcpy(struct_name.name, "__unknown__");
     needsymbol(&struct_name);
@@ -4069,8 +3898,9 @@ fix_char_size(declinfo_t* decl) {
     return 0;
 }
 
-static symbol*
-funcstub(int tokid, declinfo_t* decl, const int* thistag) {
+symbol*
+funcstub(int tokid, declinfo_t* decl, const int* thistag)
+{
     char* str;
     cell val;
     symbol* sym;
@@ -4164,8 +3994,9 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag) {
  *                     declared (altered)
  *                     glb_declared (altered)
  */
-static int
-newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock, symbol** symp) {
+int
+newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock, symbol** symp)
+{
     symbol* sym;
     int argcnt, funcline;
     int opererror;
@@ -5145,9 +4976,10 @@ statement(int* lastindent, int allow_decl) {
         case tCONST:
             decl_const(sLOCAL);
             break;
-        case tENUM:
-            decl_enum(sLOCAL);
+        case tENUM: {
+            Parser().parse_enum(sLOCAL)->Bind();
             break;
+        }
         default: /* non-empty expression */
         doexpr_jump:
             lexpush(); /* analyze token later */
