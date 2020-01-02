@@ -211,6 +211,16 @@ class PstructDecl : public StructDecl
     bool Bind() override;
 };
 
+class UsingDecl : public Decl
+{
+  public:
+    explicit UsingDecl(const token_pos_t& pos)
+      : Decl(pos, nullptr)
+    {}
+
+    bool Bind() override;
+};
+
 class Expr : public ParseNode
 {
   public:

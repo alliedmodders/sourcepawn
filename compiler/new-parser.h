@@ -35,6 +35,7 @@ class Parser : public ExpressionParser
     Decl* parse_pstruct();
     Decl* parse_typedef();
     Decl* parse_typeset();
+    Decl* parse_using();
 
   private:
     typedef int (Parser::*HierFn)(value*);

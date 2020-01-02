@@ -39,6 +39,7 @@
 #include "sc.h"
 #include "sci18n.h"
 #include "sclist.h"
+#include "sctracker.h"
 #include "scvars.h"
 #include "sp_symhash.h"
 #include "types.h"
@@ -3384,4 +3385,81 @@ find_enumstruct_field(Type* type, const char* name)
     if (symbol* sym = findconst(const_name))
         return sym;
     return findglb(const_name);
+}
+
+void
+declare_methodmap_symbol(methodmap_t* map, bool can_redef)
+{
+    if (!can_redef)
+        return;
+
+    symbol* sym = findglb(map->name);
+    if (sym && sym->ident != iMETHODMAP) {
+        if (sym->ident == iCONSTEXPR) {
+            // We should only hit this on the first pass. Assert really hard that
+            // we're about to kill an enum definition and not something random.
+            assert(sc_status == statFIRST);
+            assert(sym->ident == iCONSTEXPR);
+            assert(map->tag == sym->tag);
+
+            sym->ident = iMETHODMAP;
+
+            // Kill previous enumstruct properties, if any.
+            if (sym->enumroot) {
+                for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
+                    symbol* csym = findglb(cv->name);
+                    if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
+                        csym->enumfield)
+                    {
+                        csym->enumfield = false;
+                        csym->set_parent(nullptr);
+                    }
+                }
+                delete_consttable(sym->dim.enumlist);
+                free(sym->dim.enumlist);
+                sym->dim.enumlist = NULL;
+            }
+        } else {
+            error(11, map->name);
+            sym = nullptr;
+        }
+    }
+
+    if (!sym) {
+        sym = addsym(map->name,  // name
+                     0,          // addr
+                     iMETHODMAP, // ident
+                     sGLOBAL,    // vclass
+                     map->tag);  // tag
+        sym->defined = true;
+    }
+    sym->methodmap = map;
+}
+
+void
+declare_handle_intrinsics()
+{
+    // Must not have an existing Handle methodmap.
+    if (methodmap_find_by_name("Handle")) {
+        error(156);
+        return;
+    }
+
+    methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, "Handle");
+    map->nullable = true;
+
+    declare_methodmap_symbol(map, true);
+
+    if (symbol* sym = findglb("CloseHandle")) {
+        auto dtor = ke::MakeUnique<methodmap_method_t>(map);
+        dtor->target = sym;
+        strcpy(dtor->name, "~Handle");
+        map->dtor = dtor.get();
+        map->methods.append(ke::Move(dtor));
+
+        auto close = ke::MakeUnique<methodmap_method_t>(map);
+        close->target = sym;
+        strcpy(close->name, "Close");
+        map->methods.append(ke::Move(close));
+    }
 }

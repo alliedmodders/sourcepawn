@@ -164,6 +164,13 @@ TypedefDecl::Bind()
 }
 
 bool
+UsingDecl::Bind()
+{
+    declare_handle_intrinsics();
+    return true;
+}
+
+bool
 TypesetDecl::Bind()
 {
     Type* prev_type = gTypes.find(name_->chars());
