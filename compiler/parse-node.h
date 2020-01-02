@@ -81,11 +81,19 @@ class ParseNode : public PoolObject
     token_pos_t pos_;
 };
 
-class Decl : public ParseNode
+class Stmt : public ParseNode
+{
+  public:
+    explicit Stmt(const token_pos_t& pos)
+      : ParseNode(pos)
+    {}
+};
+
+class Decl : public Stmt
 {
   public:
     explicit Decl(const token_pos_t& pos, sp::Atom* name)
-      : ParseNode(pos),
+      : Stmt(pos),
         name_(name)
     {}
 
