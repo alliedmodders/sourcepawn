@@ -196,6 +196,38 @@ Parser::parse_typeset()
     return decl;
 }
 
+Decl*
+Parser::parse_using()
+{
+    auto pos = current_pos();
+
+    auto validate = []() -> bool {
+        token_ident_t ident;
+        if (!needsymbol(&ident))
+            return false;
+        if (strcmp(ident.name, "__intrinsics__") != 0) {
+            error(156);
+            return false;
+        }
+        if (!needtoken('.'))
+            return false;
+        if (!needsymbol(&ident))
+            return false;
+        if (strcmp(ident.name, "Handle") != 0) {
+            error(156);
+            return false;
+        }
+        return true;
+    };
+    if (!validate()) {
+        lexclr(TRUE);
+        return new ErrorDecl();
+    }
+
+    require_newline(TerminatorPolicy::Semicolon);
+    return new UsingDecl(pos);
+}
+
 int
 Parser::expression(value* lval)
 {

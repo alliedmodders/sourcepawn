@@ -299,6 +299,8 @@ symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag,
 symbol* addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
                      int numdim, int idxtag[], int slength);
 symbol* addvariable3(declinfo_t* decl, cell addr, int vclass, int slength);
+void declare_methodmap_symbol(methodmap_t* map, bool can_redef);
+void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);
 ke::AString get_token_string(int tok_id);

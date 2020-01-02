@@ -151,7 +151,6 @@ static int dofor(void);
 static int doswitch(void);
 static void doreturn(void);
 static void domethodmap(LayoutSpec spec);
-static bool dousing();
 static void dobreak(void);
 static void docont(void);
 static void addwhile(int* ptr);
@@ -1099,7 +1098,8 @@ dodecl(const token_t* tok) {
  *  At this level, only static declarations and function definitions are legal.
  */
 static void
-parse(void) {
+parse(void)
+{
     token_t tok;
 
     while (freading) {
@@ -1163,11 +1163,12 @@ parse(void) {
                 domethodmap(Layout_MethodMap);
                 break;
             case tUSING:
-                if (!dousing()) {
-                    lexclr(TRUE);
-                    litidx = 0;
-                }
+            {
+                Parser parser;
+                Decl* decl = parser.parse_using();
+                decl->Bind();
                 break;
+            }
             case '}':
                 error(54); /* unmatched closing brace */
                 break;
@@ -3353,104 +3354,6 @@ parse_method(methodmap_t* map) {
     else
         require_newline(TerminatorPolicy::Newline);
     return method;
-}
-
-void
-declare_methodmap_symbol(methodmap_t* map, bool can_redef) {
-    if (!can_redef)
-        return;
-
-    symbol* sym = findglb(map->name);
-    if (sym && sym->ident != iMETHODMAP) {
-        if (sym->ident == iCONSTEXPR) {
-            // We should only hit this on the first pass. Assert really hard that
-            // we're about to kill an enum definition and not something random.
-            assert(sc_status == statFIRST);
-            assert(sym->ident == iCONSTEXPR);
-            assert(map->tag == sym->tag);
-
-            sym->ident = iMETHODMAP;
-
-            // Kill previous enumstruct properties, if any.
-            if (sym->enumroot) {
-                for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
-                    symbol* csym = findglb(cv->name);
-                    if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
-                        csym->enumfield)
-                    {
-                        csym->enumfield = false;
-                        csym->set_parent(nullptr);
-                    }
-                }
-                delete_consttable(sym->dim.enumlist);
-                free(sym->dim.enumlist);
-                sym->dim.enumlist = NULL;
-            }
-        } else {
-            error(11, map->name);
-            sym = nullptr;
-        }
-    }
-
-    if (!sym) {
-        sym = addsym(map->name,  // name
-                     0,          // addr
-                     iMETHODMAP, // ident
-                     sGLOBAL,    // vclass
-                     map->tag);  // tag
-        sym->defined = true;
-    }
-    sym->methodmap = map;
-}
-
-static void
-declare_handle_intrinsics() {
-    // Must not have an existing Handle methodmap.
-    if (methodmap_find_by_name("Handle")) {
-        error(156);
-        return;
-    }
-
-    methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, "Handle");
-    map->nullable = true;
-
-    declare_methodmap_symbol(map, true);
-
-    if (symbol* sym = findglb("CloseHandle")) {
-        auto dtor = ke::MakeUnique<methodmap_method_t>(map);
-        dtor->target = sym;
-        strcpy(dtor->name, "~Handle");
-        map->dtor = dtor.get();
-        map->methods.append(ke::Move(dtor));
-
-        auto close = ke::MakeUnique<methodmap_method_t>(map);
-        close->target = sym;
-        strcpy(close->name, "Close");
-        map->methods.append(ke::Move(close));
-    }
-}
-
-static bool
-dousing() {
-    token_ident_t ident;
-    if (!needsymbol(&ident))
-        return false;
-    if (strcmp(ident.name, "__intrinsics__") != 0) {
-        error(156);
-        return false;
-    }
-    if (!needtoken('.'))
-        return false;
-    if (!needsymbol(&ident))
-        return false;
-    if (strcmp(ident.name, "Handle") != 0) {
-        error(156);
-        return false;
-    }
-
-    declare_handle_intrinsics();
-    require_newline(TerminatorPolicy::Semicolon);
-    return true;
 }
 
 /**
