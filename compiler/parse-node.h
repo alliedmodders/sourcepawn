@@ -33,6 +33,7 @@
 #include "lexer.h"
 #include "pool-allocator.h"
 #include "sc.h"
+#include "scvars.h"
 #include "shared/string-pool.h"
 
 struct UserOperation
@@ -821,11 +822,13 @@ class NullExpr final : public Expr
     void ProcessUses() override {}
 };
 
-class NumberExpr final : public Expr
+
+class TaggedValueExpr : public Expr
 {
   public:
-    explicit NumberExpr(const token_pos_t& pos, cell value)
+    TaggedValueExpr(const token_pos_t& pos, int tag, cell value)
       : Expr(pos),
+        tag_(tag),
         value_(value)
     {}
 
@@ -833,24 +836,25 @@ class NumberExpr final : public Expr
     void DoEmit() override;
     void ProcessUses() override {}
 
-  private:
+  protected:
+    int tag_;
     cell value_;
 };
 
-class FloatExpr final : public Expr
+class NumberExpr final : public TaggedValueExpr
 {
   public:
-    explicit FloatExpr(const token_pos_t& pos, cell value)
-      : Expr(pos),
-        value_(value)
+    NumberExpr(const token_pos_t& pos, cell value)
+      : TaggedValueExpr(pos, 0, value)
     {}
+};
 
-    bool Analyze() override;
-    void DoEmit() override;
-    void ProcessUses() override {}
-
-  private:
-    cell value_;
+class FloatExpr final : public TaggedValueExpr
+{
+  public:
+    FloatExpr(const token_pos_t& pos, cell value)
+      : TaggedValueExpr(pos, sc_rationaltag, value)
+    {}
 };
 
 class StringExpr final : public Expr

@@ -1038,19 +1038,11 @@ NullExpr::Analyze()
 }
 
 bool
-NumberExpr::Analyze()
+TaggedValueExpr::Analyze()
 {
     val_.ident = iCONSTEXPR;
+    val_.tag = tag_;
     val_.constval = value_;
-    return true;
-}
-
-bool
-FloatExpr::Analyze()
-{
-    val_.ident = iCONSTEXPR;
-    val_.constval = value_;
-    val_.tag = sc_rationaltag;
     return true;
 }
 
