@@ -491,14 +491,7 @@ NullExpr::DoEmit()
 }
 
 void
-NumberExpr::DoEmit()
-{
-    // Always const.
-    assert(false);
-}
-
-void
-FloatExpr::DoEmit()
+TaggedValueExpr::DoEmit()
 {
     // Always const.
     assert(false);
