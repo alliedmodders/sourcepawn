@@ -761,8 +761,10 @@ Parser::constant()
             return new FloatExpr(pos, val);
         case tSTRING:
         {
-            cell addr = (val + glb_declared) * sizeof(cell);
-            return new StringExpr(pos, addr, litidx - val);
+            cell prev_litidx = litidx;
+            cell addr = (prev_litidx + glb_declared) * sizeof(cell);
+            litadd(current_token()->str, current_token()->len);
+            return new StringExpr(pos, addr, litidx - prev_litidx);
         }
         case '{':
         {

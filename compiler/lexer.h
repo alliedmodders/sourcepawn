@@ -217,7 +217,6 @@ enum TokenKind {
     tSYMBOL,
     tLABEL,
     tSTRING,
-    tPENDING_STRING, /* string, but not yet dequeued */
     tEXPR,           /* for assigment to "lastst" only (see SC1.C) */
     tENDLESS,        /* endless loop, for assigment to "lastst" only */
     tEMPTYBLOCK,     /* empty blocks for AM bug 4825 */
@@ -275,6 +274,7 @@ void lexclr(int clreol);
 const token_pos_t& current_pos();
 int matchtoken(int token);
 int tokeninfo(cell* val, char** str);
+full_token_t* current_token();
 int needtoken(int token);
 int matchtoken2(int id, token_t* tok);
 int expecttoken(int id, token_t* tok);

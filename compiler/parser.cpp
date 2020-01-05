@@ -1158,7 +1158,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct)
             continue;
         }
         if (tok == tSTRING) {
-            assert(litidx != 0);
+            litadd(current_token()->str, current_token()->len);
             if (arg->dimcount != 1) {
                 error(48);
             } else if (arg->tag != pc_tag_string) {
@@ -1512,6 +1512,8 @@ declloc(int tokid) {
                 if (type->isCharArray() && !lexpeek(tNEW)) {
                     // Error if we're assigning something other than a string literal.
                     needtoken(tSTRING);
+
+                    litadd(current_token()->str, current_token()->len);
 
                     // Note: the genarray call pushes the result array into the stack
                     // slot of our local variable - we can access |sym| after.
@@ -2058,7 +2060,6 @@ initarray(int ident, int tag, int dim[], int numdim, int cur, int startlit, int 
         {
             // We need this since, lex() could add a string to the literal queue,
             // which totally messes up initvector's state tracking. What a mess.
-            AutoDisableLiteralQueue disable;
             if (lexpeek('}'))
                 abortparse = TRUE;
         }
@@ -2235,6 +2236,8 @@ init(int ident, int* tag, int* errorfound) {
             if (errorfound != NULL)
                 *errorfound = TRUE;
             litidx = 1; /* reset literal queue */
+        } else {
+            litadd(current_token()->str, current_token()->len);
         }
         *tag = pc_tag_string;
     } else if (exprconst(&i, tag, NULL)) {
