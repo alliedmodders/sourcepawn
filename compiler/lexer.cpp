@@ -47,8 +47,7 @@
 using namespace sp;
 
 /* flags for litchar() */
-#define RAWMODE 0x1
-#define UTF8MODE 0x2
+#define UTF8MODE 0x1
 static cell litchar(const unsigned char** lptr, int flags);
 static symbol* find_symbol(const symbol* root, const char* name, int fnumber);
 
@@ -1146,46 +1145,17 @@ is_startstring(const unsigned char* string)
 {
     if (*string == '\"' || *string == '\'')
         return TRUE; /* "..." */
-
-    if (*string == '!') {
-        string++;
-        if (*string == '\"' || *string == '\'')
-            return TRUE; /* !"..." */
-        if (*string == sc_ctrlchar) {
-            string++;
-            if (*string == '\"' || *string == '\'')
-                return TRUE; /* !\"..." */
-        }
-    } else if (*string == sc_ctrlchar) {
-        string++;
-        if (*string == '\"' || *string == '\'')
-            return TRUE; /* \"..." */
-        if (*string == '!') {
-            string++;
-            if (*string == '\"' || *string == '\'')
-                return TRUE; /* \!"..." */
-        }
-    }
-
     return FALSE;
 }
 
 static const unsigned char*
 skipstring(const unsigned char* string)
 {
-    char endquote;
-    int flags = 0;
-
-    if (*string == sc_ctrlchar) {
-        flags = RAWMODE;
-        string++;
-    }
-
-    endquote = *string;
+    char endquote = *string;
     assert(endquote == '"' || endquote == '\'');
     string++; /* skip open quote */
     while (*string != endquote && *string != '\0')
-        litchar(&string, flags);
+        litchar(&string, 0);
     return string;
 }
 
@@ -2236,13 +2206,6 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
     glbstringread = 1;
 
     for (;;) {
-        int segmentflags = 0;
-        if (*lptr == sc_ctrlchar) {
-            segmentflags = RAWMODE;
-            lptr += 1; /* skip "escape" character too */
-        } else {
-            segmentflags = 0;
-        }
         assert(*lptr == '\"');
         lptr += 1;
 
@@ -2258,7 +2221,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         }
         *cat = '\0'; /* terminate string */
 
-        packedstring((unsigned char*)buffer, segmentflags, tok);
+        packedstring((unsigned char*)buffer, 0, tok);
 
         if (*lptr == '\"')
             lptr += 1; /* skip final quote */
@@ -2695,7 +2658,7 @@ litchar(const unsigned char** lptr, int flags)
     const unsigned char* cptr;
 
     cptr = *lptr;
-    if ((flags & RAWMODE) != 0 || *cptr != sc_ctrlchar) { /* no escape character */
+    if (*cptr != sc_ctrlchar) { /* no escape character */
         if ((flags & UTF8MODE) != 0) {
             c = get_utf8_char(cptr, &cptr);
             assert(c >= 0); /* file was already scanned for conformance to UTF-8 */
