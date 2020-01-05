@@ -1589,40 +1589,26 @@ preprocess(void)
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading); /* enddo */
 }
 
-static const unsigned char*
-packedstring(const unsigned char* lptr, int flags)
+static void
+packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
 {
-    int i;
-    ucell val, c;
-
-    i = 0; /* start at least significant byte */
-    val = 0;
-    glbstringread = 1;
     while (*lptr != '\0') {
-        if (*lptr == '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
+        if (*lptr == '\a') { // ignore '\a' (which was inserted at a line concatenation)
             lptr++;
             continue;
         }
-        c = litchar(&lptr, flags); /* litchar() alters "lptr" */
+        ucell c = litchar(&lptr, flags); // litchar() alters "lptr"
         if (c >= (ucell)(1 << sCHARBITS))
-            error(43); /* character constant exceeds range */
-        val |= (c << 8 * i);
+            error(43); // character constant exceeds range
         glbstringread++;
-        if (i == sizeof(ucell) - (sCHARBITS / 8)) {
-            litadd(val);
-            val = 0;
-            i = 0;
-        } else {
-            i = i + 1;
+        if (tok->len >= sizeof(tok->str) - 1) {
+            error(75); // line too long
+            continue;
         }
+        tok->str[tok->len++] = (char)c;
     }
-
-    /* save last code; make sure there is at least one terminating zero character */
-    if (i != 0)
-        litadd(val); /* at least one zero character in "val" */
-    else
-        litadd(0); /* add full cell of zeros */
-    return lptr;
+    assert(tok->len < sizeof(tok->str));
+    tok->str[tok->len] = '\0';
 }
 
 /*  lex(lexvalue,lexsym)        Lexical Analysis
@@ -2241,13 +2227,16 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         tok->end = tok->start;
         return;
     }
-    int stringflags, segmentflags;
-    char* cat;
-    tok->id = tSTRING;
     *lexvalue = tok->value = litidx;
+
+    tok->id = tSTRING;
     tok->str[0] = '\0';
-    stringflags = -1; /* to mark the first segment */
+    tok->len = 0;
+
+    glbstringread = 1;
+
     for (;;) {
+        int segmentflags = 0;
         if (*lptr == sc_ctrlchar) {
             segmentflags = RAWMODE;
             lptr += 1; /* skip "escape" character too */
@@ -2256,13 +2245,10 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         }
         assert(*lptr == '\"');
         lptr += 1;
-        if (stringflags == -1)
-            stringflags = segmentflags;
-        else if (stringflags != segmentflags)
-            error(238); /* mixing packed/unpacked/raw strings in concatenation */
-        cat = strchr(tok->str, '\0');
-        assert(cat != NULL);
-        while (*lptr != '\"' && *lptr != '\0' && (cat - tok->str) < sLINEMAX) {
+
+        static char buffer[sLINEMAX + 1];
+        char* cat = buffer;
+        while (*lptr != '\"' && *lptr != '\0' && (cat - buffer) < sLINEMAX) {
             if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
                 *cat++ = *lptr;
                 if (*lptr == sc_ctrlchar && *(lptr + 1) != '\0')
@@ -2271,7 +2257,9 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
             lptr++;
         }
         *cat = '\0'; /* terminate string */
-        tok->len = (size_t)(cat - tok->str);
+
+        packedstring((unsigned char*)buffer, segmentflags, tok);
+
         if (*lptr == '\"')
             lptr += 1; /* skip final quote */
         else
@@ -2303,7 +2291,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
             break;
         }
     }
-    packedstring((unsigned char*)tok->str, stringflags);
+    litadd(tok->str, tok->len);
 }
 
 static bool
@@ -2645,6 +2633,30 @@ litadd(cell value)
     chk_grow_litq();
     assert(litidx < litmax);
     litq[litidx++] = value;
+}
+
+void
+litadd(const char* str, size_t len)
+{
+    ucell val = 0;
+    int byte = 0;
+    for (size_t i = 0; i < len; i++) {
+        val |= str[i] << (8 * byte);
+        if (byte == sizeof(ucell) - 1) {
+            litadd(val);
+            val = 0;
+            byte = 0;
+        } else {
+            byte++;
+        }
+    }
+    if (byte != 0) {
+        // There are zeroes to terminate |val|.
+        litadd(val);
+    } else {
+        // Add a full cell of zeroes.
+        litadd(0);
+    }
 }
 
 /*  litinsert

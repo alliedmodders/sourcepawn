@@ -282,6 +282,7 @@ int matchsymbol(token_ident_t* ident);
 int needsymbol(token_ident_t* ident);
 int peek_same_line();
 void litadd(cell value);
+void litadd(const char* str, size_t len);
 void litinsert(cell value, int pos);
 int alphanum(char c);
 int ishex(char c);
