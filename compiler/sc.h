@@ -479,15 +479,6 @@ typedef struct array_info_s {
     cell* base;                   /* &litq[startlit] */
 } array_info_t;
 
-struct AutoDisableLiteralQueue {
-  public:
-    AutoDisableLiteralQueue();
-    ~AutoDisableLiteralQueue();
-
-  private:
-    bool prev_value_;
-};
-
 extern sp::StringPool gAtoms;
 
 #endif /* SC_H_INCLUDED */

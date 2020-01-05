@@ -68,19 +68,7 @@ static short skiplevel; /* level at which we started skipping (including nested 
 static unsigned char term_expr[] = "";
 static int listline = -1; /* "current line" for the list file */
 
-static bool sLiteralQueueDisabled = false;
-
 ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sKeywords;
-
-AutoDisableLiteralQueue::AutoDisableLiteralQueue()
- : prev_value_(sLiteralQueueDisabled)
-{
-    sLiteralQueueDisabled = true;
-}
-
-AutoDisableLiteralQueue::~AutoDisableLiteralQueue() {
-    sLiteralQueueDisabled = prev_value_;
-}
 
 int
 plungequalifiedfile(char* name)
@@ -1623,7 +1611,7 @@ token_buffer_t sNormalBuffer;
 token_buffer_t sPreprocessBuffer;
 token_buffer_t* sTokenBuffer;
 
-static full_token_t*
+full_token_t*
 current_token()
 {
     return &sTokenBuffer->tokens[sTokenBuffer->cursor];
@@ -2192,16 +2180,10 @@ lex_number(full_token_t* tok, cell* lexvalue)
 static void
 lex_string_literal(full_token_t* tok, cell* lexvalue)
 {
-    if (sLiteralQueueDisabled) {
-        tok->id = tPENDING_STRING;
-        tok->end = tok->start;
-        return;
-    }
-    *lexvalue = tok->value = litidx;
-
     tok->id = tSTRING;
     tok->str[0] = '\0';
     tok->len = 0;
+    tok->value = -1;  // Catch consumers expecting automatic litadd().
 
     glbstringread = 1;
 
@@ -2254,7 +2236,6 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
             break;
         }
     }
-    litadd(tok->str, tok->len);
 }
 
 static bool
@@ -2378,11 +2359,6 @@ lex_symbol(full_token_t* tok, const char* token_start)
 void
 lexpush(void)
 {
-    if (current_token()->id == tPENDING_STRING) {
-        // Don't push back fake tokens.
-        return;
-    }
-
     assert(sTokenBuffer->depth < MAX_TOKEN_DEPTH);
     sTokenBuffer->depth++;
     if (sTokenBuffer->cursor == 0)
@@ -2592,7 +2568,6 @@ chk_grow_litq(void)
 void
 litadd(cell value)
 {
-    assert(!sLiteralQueueDisabled);
     chk_grow_litq();
     assert(litidx < litmax);
     litq[litidx++] = value;
@@ -2633,7 +2608,6 @@ litadd(const char* str, size_t len)
 void
 litinsert(cell value, int pos)
 {
-    assert(!sLiteralQueueDisabled);
     chk_grow_litq();
     assert(litidx < litmax);
     assert(pos >= 0 && pos <= litidx);
