@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2012-2014 David Anderson
 //
@@ -21,6 +21,7 @@
 #include <new>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <limits.h>
 #include <amtl/am-fixedarray.h>
 #include <amtl/am-uniqueptr.h>
@@ -145,6 +146,27 @@ class PoolObject
     void operator delete [](void* ptr) {
         assert(false);
     }
+};
+
+class PoolString : public PoolObject
+{
+  public:
+    explicit PoolString(const char* chars, size_t len) {
+        length_ = len;
+        chars_ = (char*)gPoolAllocator.rawAllocate(length_ + 1);
+        memcpy(chars_, chars, length_ + 1);
+    }
+
+    const char* chars() const {
+        return chars_;
+    }
+    size_t length() const {
+        return length_;
+    }
+
+  private:
+    char* chars_;
+    size_t length_;
 };
 
 class PoolAllocationPolicy

@@ -760,12 +760,7 @@ Parser::constant()
         case tRATIONAL:
             return new FloatExpr(pos, val);
         case tSTRING:
-        {
-            cell prev_litidx = litidx;
-            cell addr = (prev_litidx + glb_declared) * sizeof(cell);
-            litadd(current_token()->str, current_token()->len);
-            return new StringExpr(pos, addr, litidx - prev_litidx);
-        }
+            return new StringExpr(pos, current_token()->str, current_token()->len);
         case '{':
         {
             ArrayExpr* expr = new ArrayExpr(pos);

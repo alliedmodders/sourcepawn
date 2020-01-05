@@ -2360,11 +2360,6 @@ consume_line() {
     return TRUE;
 }
 
-constexpr cell
-char_array_cells(cell size) {
-    return (size + sizeof(cell) - 1) / sizeof(cell);
-}
-
 static int
 parse_new_typename(const token_t* tok) {
     token_t tmp;

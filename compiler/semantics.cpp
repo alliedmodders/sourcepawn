@@ -1063,7 +1063,7 @@ bool
 StringExpr::Analyze()
 {
     val_.ident = iARRAY;
-    val_.constval = -length_;
+    val_.constval = -char_array_cells((cell)text_->length() + 1);
     val_.tag = pc_tag_string;
     return true;
 }

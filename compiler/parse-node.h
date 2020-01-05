@@ -856,10 +856,9 @@ class FloatExpr final : public Expr
 class StringExpr final : public Expr
 {
   public:
-    StringExpr(const token_pos_t& pos, cell lit_addr, cell length)
+    StringExpr(const token_pos_t& pos, const char* str, size_t len)
       : Expr(pos),
-        lit_addr_(lit_addr),
-        length_(length)
+        text_(new PoolString(str, len))
     {}
 
     bool Analyze() override;
@@ -867,8 +866,7 @@ class StringExpr final : public Expr
     void ProcessUses() override {}
 
   private:
-    cell lit_addr_;
-    cell length_;
+    PoolString* text_;
 };
 
 class ArrayExpr final : public Expr
