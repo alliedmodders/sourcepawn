@@ -479,6 +479,10 @@ typedef struct array_info_s {
     cell* base;                   /* &litq[startlit] */
 } array_info_t;
 
+constexpr cell char_array_cells(cell size) {
+    return (size + sizeof(cell) - 1) / sizeof(cell);
+}
+
 extern sp::StringPool gAtoms;
 
 #endif /* SC_H_INCLUDED */

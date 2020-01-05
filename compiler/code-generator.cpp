@@ -504,7 +504,9 @@ FloatExpr::DoEmit()
 void
 StringExpr::DoEmit()
 {
-    ldconst(lit_addr_, sPRI);
+    auto addr = (litidx + glb_declared) * sizeof(cell);
+    litadd(text_->chars(), text_->length());
+    ldconst(addr, sPRI);
 }
 
 void
