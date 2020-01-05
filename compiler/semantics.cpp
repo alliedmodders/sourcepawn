@@ -893,10 +893,6 @@ ArrayExpr::Analyze()
     AutoErrorPos aep(pos_);
 
     int lasttag = -1;
-    cell start_litidx = litidx;
-
-    addr_ = (start_litidx + glb_declared) * sizeof(cell);
-
     for (const auto& expr : exprs_) {
         if (!expr->Analyze())
             return false;
@@ -910,11 +906,10 @@ ArrayExpr::Analyze()
             lasttag = val.tag;
         else
             matchtag(lasttag, val.tag, FALSE);
-        litadd(val.constval);
     }
 
     val_.ident = iARRAY;
-    val_.constval = litidx - start_litidx;
+    val_.constval = exprs_.length();
     val_.tag = lasttag;
     return true;
 }
