@@ -49,7 +49,6 @@ using namespace sp;
 /* flags for litchar() */
 #define RAWMODE 0x1
 #define UTF8MODE 0x2
-#define ISPACKED 0x4
 static cell litchar(const unsigned char** lptr, int flags);
 static symbol* find_symbol(const symbol* root, const char* name, int fnumber);
 
@@ -1177,9 +1176,8 @@ skipstring(const unsigned char* string)
     char endquote;
     int flags = 0;
 
-    while (*string == '!' || *string == sc_ctrlchar) {
-        if (*string == sc_ctrlchar)
-            flags = RAWMODE;
+    if (*string == sc_ctrlchar) {
+        flags = RAWMODE;
         string++;
     }
 
@@ -1589,20 +1587,6 @@ preprocess(void)
                 pc_writeasm(outf, (char*)pline);
         }
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading); /* enddo */
-}
-
-static const unsigned char*
-unpackedstring(const unsigned char* lptr, int flags)
-{
-    while (*lptr != '\"' && *lptr != '\0') {
-        if (*lptr == '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
-            lptr++;
-            continue;
-        }
-        litadd(litchar(&lptr, flags | UTF8MODE)); /* litchar() alters "lptr" */
-    }
-    litadd(0); /* terminate string */
-    return lptr;
 }
 
 static const unsigned char*
@@ -2263,16 +2247,12 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
     tok->str[0] = '\0';
     stringflags = -1; /* to mark the first segment */
     for (;;) {
-        if (*lptr == '!')
-            segmentflags = (*(lptr + 1) == sc_ctrlchar) ? RAWMODE | ISPACKED : ISPACKED;
-        else if (*lptr == sc_ctrlchar)
-            segmentflags = (*(lptr + 1) == '!') ? RAWMODE | ISPACKED : RAWMODE;
-        else
-            segmentflags = 0;
-        if ((segmentflags & ISPACKED) != 0)
-            lptr += 1; /* skip '!' character */
-        if ((segmentflags & RAWMODE) != 0)
+        if (*lptr == sc_ctrlchar) {
+            segmentflags = RAWMODE;
             lptr += 1; /* skip "escape" character too */
+        } else {
+            segmentflags = 0;
+        }
         assert(*lptr == '\"');
         lptr += 1;
         if (stringflags == -1)
@@ -2322,12 +2302,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
             break;
         }
     }
-    if (sc_packstr)
-        stringflags ^= ISPACKED; /* invert packed/unpacked parameters */
-    if ((stringflags & ISPACKED) != 0)
-        packedstring((unsigned char*)tok->str, stringflags);
-    else
-        unpackedstring((unsigned char*)tok->str, stringflags);
+    packedstring((unsigned char*)tok->str, stringflags);
 }
 
 static bool

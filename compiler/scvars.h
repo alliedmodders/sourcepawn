@@ -53,7 +53,6 @@ extern cell code_idx;             /* number of bytes with generated code */
 extern int errnum;                /* number of errors */
 extern int warnnum;               /* number of warnings */
 extern int sc_debug;              /* debug/optimization options (bit field) */
-extern int sc_packstr;            /* strings are packed by default? */
 extern int sc_asmfile;            /* create .ASM file? */
 extern int sc_listing;            /* create .LST file? */
 extern int sc_needsemicolon;      /* semicolon required to terminate expressions? */

@@ -204,7 +204,7 @@ pc_compile(int argc, char* argv[]) {
     int retcode;
     char incfname[_MAX_PATH];
     void* inpfmark;
-    int lcl_packstr, lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
+    int lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
     char* ptr;
 
     /* set global variables to their initial value */
@@ -250,7 +250,6 @@ pc_compile(int argc, char* argv[]) {
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
     sc_ctrlchar_org = sc_ctrlchar;
-    lcl_packstr = sc_packstr;
     lcl_needsemicolon = sc_needsemicolon;
     lcl_require_newdecls = sc_require_newdecls;
     lcl_tabsize = sc_tabsize;
@@ -319,10 +318,9 @@ pc_compile(int argc, char* argv[]) {
         char string[150];
         sprintf(string,
                 "#pragma ctrlchar 0x%02x\n"
-                "#pragma pack %s\n"
                 "#pragma semicolon %s\n"
                 "#pragma tabsize %d\n",
-                sc_ctrlchar, sc_packstr ? "true" : "false", sc_needsemicolon ? "true" : "false",
+                sc_ctrlchar, sc_needsemicolon ? "true" : "false",
                 sc_tabsize);
         pc_writeasm(outf, string);
         setfiledirect(inpfname);
@@ -343,7 +341,6 @@ pc_compile(int argc, char* argv[]) {
         funcenums_free();
         methodmaps_free();
         sc_ctrlchar = sc_ctrlchar_org;
-        sc_packstr = lcl_packstr;
         sc_needsemicolon = lcl_needsemicolon;
         sc_require_newdecls = lcl_require_newdecls;
         sc_tabsize = lcl_tabsize;
@@ -398,7 +395,6 @@ pc_compile(int argc, char* argv[]) {
     inst_binary_name(binfname);
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
-    sc_packstr = lcl_packstr;
     sc_needsemicolon = lcl_needsemicolon;
     sc_require_newdecls = lcl_require_newdecls;
     sc_tabsize = lcl_tabsize;
@@ -659,7 +655,6 @@ initglobals(void) {
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_debug = sCHKBOUNDS | sSYMBOLIC; /* sourcemod: full debug stuff */
     pc_optimize = sOPTIMIZE_DEFAULT;   /* sourcemod: full optimization */
-    sc_packstr = TRUE;                 /* strings are packed by default */
     sc_needsemicolon = FALSE;          /* semicolon required to terminate expressions? */
     sc_require_newdecls = FALSE;
     sc_dataalign = sizeof(cell);
