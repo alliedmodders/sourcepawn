@@ -470,7 +470,10 @@ CommaExpr::DoEmit()
 void
 ArrayExpr::DoEmit()
 {
-    ldconst(addr_, sPRI);
+    auto addr = (litidx + glb_declared) * sizeof(cell);
+    for (const auto& expr : exprs_)
+        litadd(expr->val().constval);
+    ldconst(addr, sPRI);
 }
 
 void

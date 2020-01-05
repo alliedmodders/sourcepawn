@@ -886,6 +886,5 @@ class ArrayExpr final : public Expr
     }
 
   private:
-    cell_t addr_ = 0;
     PoolList<Expr*> exprs_;
 };
