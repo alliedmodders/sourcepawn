@@ -1598,7 +1598,7 @@ packedstring(const unsigned char* lptr, int flags)
     i = 0; /* start at least significant byte */
     val = 0;
     glbstringread = 1;
-    while (*lptr != '\"' && *lptr != '\0') {
+    while (*lptr != '\0') {
         if (*lptr == '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
             lptr++;
             continue;
@@ -1616,6 +1616,7 @@ packedstring(const unsigned char* lptr, int flags)
             i = i + 1;
         }
     }
+
     /* save last code; make sure there is at least one terminating zero character */
     if (i != 0)
         litadd(val); /* at least one zero character in "val" */
