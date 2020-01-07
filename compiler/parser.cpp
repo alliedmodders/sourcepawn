@@ -2431,7 +2431,7 @@ needsub()
     if (!is_valid_index_tag(tag)) {
         error(77, gTypes.find(tag)->prettyName());
         val = 1;
-    } else if (val < 0) {
+    } else if (val <= 0) {
         error(9); /* negative array size is invalid; assumed zero */
         val = 1;
     }
