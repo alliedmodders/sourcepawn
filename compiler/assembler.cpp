@@ -1118,7 +1118,10 @@ RttiBuilder::add_struct(Type* type)
     for (size_t i = 0; i < ps->args.length(); i++) {
         const structarg_t* arg = ps->args[i].get();
 
-        variable_type_t type = {arg->tag, arg->dims, arg->dimcount, !!arg->fconst};
+        int dims[1] = {0};
+        int dimcount = arg->ident == iREFARRAY ? 1 : 0;
+
+        variable_type_t type = {arg->tag, dims, dimcount, !!arg->fconst};
         Vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 

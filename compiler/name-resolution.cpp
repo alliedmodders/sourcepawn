@@ -142,13 +142,16 @@ PstructDecl::Bind()
     for (const auto& field : fields_) {
         structarg_t arg;
         arg.tag = field.type.tag;
-        arg.dimcount = field.type.numdim;
-        memcpy(arg.dims, field.type.dim, sizeof(int) * arg.dimcount);
         ke::SafeStrcpy(arg.name, sizeof(arg.name), field.name->chars());
         arg.fconst = field.type.is_const;
         arg.ident = field.type.ident;
         if (arg.ident == iARRAY)
             arg.ident = iREFARRAY;
+
+        if (field.type.numdim > 1 || (field.type.numdim == 1 && field.type.dim[0] != 0)) {
+            error(field.pos, 69);
+            return false;
+        }
 
         if (!pstructs_addarg(pstruct, &arg)) {
             error(field.pos, 103, arg.name, layout_spec_name(Layout_PawnStruct));
