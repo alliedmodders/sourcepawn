@@ -88,6 +88,10 @@ class Stmt : public ParseNode
     explicit Stmt(const token_pos_t& pos)
       : ParseNode(pos)
     {}
+
+    // Helper to immediately bind, analyze, and emit. This will be removed once
+    // the two-phase process is eliminated.
+    void Process();
 };
 
 class Decl : public Stmt

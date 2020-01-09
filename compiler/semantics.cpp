@@ -36,6 +36,16 @@ Decl::Analyze()
     return true;
 }
 
+void
+Decl::Process()
+{
+    if (!Bind())
+        return;
+    if (!Analyze())
+        return;
+    Emit();
+}
+
 static inline OpFunc TokenToOpFunc(int token) {
     switch (token) {
         case '*':
