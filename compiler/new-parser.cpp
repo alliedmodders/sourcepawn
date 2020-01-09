@@ -42,7 +42,7 @@ void
 Parser::parse()
 {
     while (freading) {
-        Decl* decl = nullptr;
+        Stmt* decl = nullptr;
 
         token_t tok;
         switch (lextok(&tok)) {
@@ -81,7 +81,7 @@ Parser::parse()
                 decl = parse_pstruct();
                 break;
             case tCONST:
-                decl_const(sGLOBAL);
+                decl = parse_const(sGLOBAL);
                 break;
             case tENUM:
                 if (matchtoken(tSTRUCT))
@@ -368,6 +368,75 @@ Parser::parse_using()
 
     require_newline(TerminatorPolicy::Semicolon);
     return new UsingDecl(pos);
+}
+
+Stmt*
+Parser::parse_const(int vclass)
+{
+    StmtList* list = nullptr;
+    Stmt* decl = nullptr;
+
+    do {
+        auto pos = current_pos();
+
+        // Since spcomp is terrible, it's hard to use parse_decl() here - there
+        // are all sorts of restrictions on const. We just implement some quick
+        // detection instead.
+        int tag = 0;
+        token_t tok;
+        switch (lextok(&tok)) {
+            case tINT:
+            case tOBJECT:
+            case tCHAR:
+                tag = parse_new_typename(&tok);
+                break;
+            case tLABEL:
+                tag = pc_addtag(tok.str);
+                break;
+            case tSYMBOL:
+                // See if we can peek ahead another symbol.
+                if (lexpeek(tSYMBOL)) {
+                    // This is a new-style declaration.
+                    tag = parse_new_typename(&tok);
+                } else {
+                    // Otherwise, we got "const X ..." so the tag is int. Give the
+                    // symbol back to the lexer so we get it as the name.
+                    lexpush();
+                }
+                break;
+            default:
+                error(122);
+                break;
+        }
+
+        sp::Atom* name = nullptr;
+        if (expecttoken(tSYMBOL, &tok))
+            name = gAtoms.add(tok.str);
+
+        needtoken('=');
+
+        int expr_val, expr_tag;
+        exprconst(&expr_val, &expr_tag, nullptr);
+
+        typeinfo_t type = {};
+        type.size = 1;
+        type.tag = tag;
+        type.is_const = true;
+
+        VarDecl* var = new ConstDecl(pos, name, type, vclass, expr_tag, expr_val);
+        if (decl) {
+            if (!list) {
+                list = new StmtList(var->pos());
+                list->stmts().append(decl);
+            }
+            list->stmts().append(var);
+        } else {
+            decl = var;
+        }
+    } while (matchtoken(','));
+
+    needtoken(tTERM);
+    return list ? list : decl;
 }
 
 int

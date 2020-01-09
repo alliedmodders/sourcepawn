@@ -36,6 +36,7 @@ class Parser : public ExpressionParser
 
     // Temporary until parser.cpp no longer is shimmed.
     Decl* parse_enum(int vclass);
+    Stmt* parse_const(int vclass);
 
   private:
     typedef int (Parser::*HierFn)(value*);
@@ -73,7 +74,6 @@ class Parser : public ExpressionParser
 int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
 functag_t* parse_function_type();
 void dodecl(const token_t* tok);
-void decl_const(int vclass);
 void decl_enumstruct();
 void domethodmap(LayoutSpec spec);
 symbol* funcstub(int tokid, declinfo_t* decl, const int* thistag);
@@ -81,3 +81,4 @@ void declglb(declinfo_t* decl, int fpublic, int fstatic, int stock);
 void declstructvar(char* firstname, int fpublic, pstruct_t* pstruct);
 int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock,
             symbol** symp);
+int parse_new_typename(const token_t* tok);

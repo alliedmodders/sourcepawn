@@ -50,6 +50,7 @@ struct UserOperation
 
 typedef void (*OpFunc)();
 
+class Expr;
 class BinaryExpr;
 class DefaultArgExpr;
 class SymbolExpr;
@@ -68,6 +69,10 @@ class ParseNode : public PoolObject
     virtual void Emit() = 0;
     virtual bool HasSideEffects() {
         return false;
+    }
+
+    const token_pos_t& pos() const {
+        return pos_;
     }
 
   protected:
@@ -94,15 +99,34 @@ class Stmt : public ParseNode
     void Process();
 };
 
+class StmtList : public Stmt
+{
+  public:
+    explicit StmtList(const token_pos_t& pos)
+      : Stmt(pos)
+    {}
+
+    bool Bind() override;
+    bool Analyze() override;
+    void Emit() override;
+
+    PoolList<Stmt*>& stmts() {
+        return stmts_;
+    }
+
+  private:
+    PoolList<Stmt*> stmts_;
+};
+
 class Decl : public Stmt
 {
   public:
-    explicit Decl(const token_pos_t& pos, sp::Atom* name)
+    Decl(const token_pos_t& pos, sp::Atom* name)
       : Stmt(pos),
         name_(name)
     {}
 
-    bool Analyze() override final;
+    bool Analyze() override;
     void Emit() override final;
 
     sp::Atom* name() const {
@@ -123,6 +147,45 @@ class ErrorDecl final : public Decl
     bool Bind() override {
         return false;
     }
+};
+
+class VarDecl : public Decl
+{
+  public:
+    VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+            bool is_public, bool is_static, bool is_stock, Expr* initializer)
+      : Decl(pos, name),
+        type_(type),
+        vclass_(vclass),
+        is_public_(is_public),
+        is_static_(is_static),
+        is_stock_(is_stock)
+    {}
+
+  protected:
+    typeinfo_t type_;
+    int vclass_; // This will be implied by scope, when we get there.
+    bool is_public_ : 1;
+    bool is_static_ : 1;
+    bool is_stock_ : 1;
+};
+
+class ConstDecl : public VarDecl
+{
+  public:
+    ConstDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+              int tag, int value)
+      : VarDecl(pos, name, type, vclass, false, false, false, nullptr),
+        expr_tag_(tag),
+        value_(value)
+    {}
+
+    bool Bind() override;
+    bool Analyze() override;
+
+  private:
+    int expr_tag_;
+    int value_;
 };
 
 struct EnumField {
@@ -265,9 +328,6 @@ class Expr : public ParseNode
     }
     bool lvalue() const {
         return lvalue_;
-    }
-    const token_pos_t& pos() const {
-        return pos_;
     }
 
     void MarkAndProcessUses() {
