@@ -112,7 +112,7 @@ Parser::parse()
         // Until we can eliminate the two-pass parser, top-level decls must be
         // resolved immediately.
         if (decl)
-            decl->Bind();
+            decl->Process();
     }
 }
 

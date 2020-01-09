@@ -4970,7 +4970,7 @@ statement(int* lastindent, int allow_decl) {
             decl_const(sLOCAL);
             break;
         case tENUM: {
-            Parser().parse_enum(sLOCAL)->Bind();
+            Parser().parse_enum(sLOCAL)->Process();
             break;
         }
         default: /* non-empty expression */
