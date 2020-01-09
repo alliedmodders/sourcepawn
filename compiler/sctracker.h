@@ -22,7 +22,7 @@ struct funcenum_t {
 struct structarg_t {
     structarg_t()
      : tag(0),
-       name(),
+       name(nullptr),
        fconst(0),
        ident(0),
        offs(0),
@@ -30,7 +30,7 @@ struct structarg_t {
     {}
 
     int tag;
-    char name[sNAMEMAX + 1];
+    sp::Atom* name;
     int fconst;
     int ident;
     unsigned int offs;
@@ -113,7 +113,7 @@ pstruct_t* pstructs_add(const char* name);
 void pstructs_free();
 pstruct_t* pstructs_find(const char* name);
 structarg_t* pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg);
-structarg_t* pstructs_getarg(pstruct_t* pstruct, const char* member);
+structarg_t* pstructs_getarg(pstruct_t* pstruct, sp::Atom* name);
 
 /**
  * Function enumeration tags

@@ -1147,7 +1147,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct)
             error(1, "-identifier-", str);
             continue;
         }
-        arg = pstructs_getarg(pstruct, str);
+        arg = pstructs_getarg(pstruct, gAtoms.add(str));
         if (arg == NULL)
             error(96, str, sym->name());
         needtoken('=');
