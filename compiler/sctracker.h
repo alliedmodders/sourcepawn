@@ -22,8 +22,6 @@ struct funcenum_t {
 struct structarg_t {
     structarg_t()
      : tag(0),
-       dimcount(0),
-       dims(),
        name(),
        fconst(0),
        ident(0),
@@ -32,8 +30,6 @@ struct structarg_t {
     {}
 
     int tag;
-    int dimcount;
-    int dims[sDIMEN_MAX];
     char name[sNAMEMAX + 1];
     int fconst;
     int ident;

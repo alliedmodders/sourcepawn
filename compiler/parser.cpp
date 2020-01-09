@@ -1158,7 +1158,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct)
         }
         if (tok == tSTRING) {
             litadd(current_token()->str, current_token()->len);
-            if (arg->dimcount != 1) {
+            if (arg->ident != iREFARRAY) {
                 error(48);
             } else if (arg->tag != pc_tag_string) {
                 error(213);

@@ -93,7 +93,7 @@ static const char* errmsg[] = {
     /*066*/ "function argument may not be a reference argument or an array (argument \"%s\")\n",
     /*067*/ "variable cannot be both a reference and an array (variable \"%s\")\n",
     /*068*/ "length of initializer exceeds size of the enum field\n",
-    /*069*/ "unused\n",
+    /*069*/ "arrays in info structs must be unsized and single dimension\n",
     /*070*/ "unused\n",
     /*071*/ "user-defined operator must be declared before use (function \"%s\")\n",
     /*072*/ "\"sizeof\" operator is only valid on variables\n",
