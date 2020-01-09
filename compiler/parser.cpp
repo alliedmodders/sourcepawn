@@ -149,7 +149,6 @@ static int* readwhile(void);
 static void inst_datetime_defines(void);
 static void inst_binary_name(char* binfname);
 static int operatorname(char* name);
-static int parse_new_typename(const token_t* tok);
 static int reparse_old_decl(declinfo_t* decl, int flags);
 static int reparse_new_decl(declinfo_t* decl, int flags);
 static void check_void_decl(const declinfo_t* decl, int variable);
@@ -2275,71 +2274,6 @@ needsub()
     return val; /* return array size */
 }
 
-/*  decl_const  - declare a single constant
- *
- */
-void
-decl_const(int vclass)
-{
-    char constname[sNAMEMAX + 1];
-    cell val;
-    token_t tok;
-    int exprtag;
-    int symbolline;
-
-    do {
-        int orgfline;
-
-        // Since spcomp is terrible, it's hard to use parse_decl() here - there
-        // are all sorts of restrictions on const. We just implement some quick
-        // detection instead.
-        int tag = 0;
-        switch (lextok(&tok)) {
-            case tINT:
-            case tOBJECT:
-            case tCHAR:
-                tag = parse_new_typename(&tok);
-                break;
-            case tLABEL:
-                tag = pc_addtag(tok.str);
-                break;
-            case tSYMBOL:
-                // See if we can peek ahead another symbol.
-                if (lexpeek(tSYMBOL)) {
-                    // This is a new-style declaration.
-                    tag = parse_new_typename(&tok);
-                } else {
-                    // Otherwise, we got "const X ..." so the tag is int. Give the
-                    // symbol back to the lexer so we get it as the name.
-                    lexpush();
-                }
-                break;
-            default:
-                error(122);
-                break;
-        }
-
-        if (expecttoken(tSYMBOL, &tok))
-            strcpy(constname, tok.str);
-        else
-            strcpy(constname, "__unknown__");
-
-        symbolline = fline; /* save line where symbol was found */
-        needtoken('=');
-        exprconst(&val, &exprtag, NULL); /* get value */
-
-        /* add_constant() checks for duplicate definitions */
-        /* temporarily reset the line number to where the symbol was defined */
-        orgfline = fline;
-        fline = symbolline;
-        matchtag(tag, exprtag, FALSE);
-        fline = orgfline;
-
-        add_constant(constname, val, vclass, tag);
-    } while (matchtoken(',')); /* enddo */ /* more? */
-    needtoken(tTERM);
-}
-
 // Consumes a line, returns FALSE if EOF hit.
 static int
 consume_line() {
@@ -2360,8 +2294,9 @@ consume_line() {
     return TRUE;
 }
 
-static int
-parse_new_typename(const token_t* tok) {
+int
+parse_new_typename(const token_t* tok)
+{
     token_t tmp;
 
     if (!tok) {
@@ -4967,7 +4902,7 @@ statement(int* lastindent, int allow_decl) {
             lastst = tASSERT;
             break;
         case tCONST:
-            decl_const(sLOCAL);
+            Parser().parse_const(sLOCAL)->Process();
             break;
         case tENUM: {
             Parser().parse_enum(sLOCAL)->Process();

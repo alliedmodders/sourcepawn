@@ -29,6 +29,15 @@
 #include "scvars.h"
 
 bool
+StmtList::Bind()
+{
+    bool ok = true;
+    for (const auto& stmt : stmts_)
+        ok &= stmt->Bind();
+    return ok;
+}
+
+bool
 EnumDecl::Bind()
 {
     int tag = 0;
@@ -182,6 +191,15 @@ TypesetDecl::Bind()
     funcenum_t* def = funcenums_add(name_->chars());
     for (const auto& type : types_)
         functags_add(def, type);
+    return true;
+}
+
+bool
+ConstDecl::Bind()
+{
+    AutoErrorPos aep(pos_);
+
+    add_constant(name_->chars(), value_, vclass_, type_.tag);
     return true;
 }
 

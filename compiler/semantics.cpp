@@ -29,6 +29,32 @@
 #include "sctracker.h"
 #include "scvars.h"
 
+void
+Stmt::Process()
+{
+    if (!Bind())
+        return;
+    if (!Analyze())
+        return;
+    Emit();
+}
+
+bool
+StmtList::Analyze()
+{
+    bool ok = true;
+    for (const auto& stmt : stmts_)
+        ok &= stmt->Analyze();
+    return ok;
+}
+
+void
+StmtList::Emit()
+{
+    for (const auto& stmt : stmts_)
+        stmt->Emit();
+}
+
 bool
 Decl::Analyze()
 {
@@ -36,14 +62,13 @@ Decl::Analyze()
     return true;
 }
 
-void
-Decl::Process()
+bool
+ConstDecl::Analyze()
 {
-    if (!Bind())
-        return;
-    if (!Analyze())
-        return;
-    Emit();
+    AutoErrorPos aep(pos_);
+
+    matchtag(type_.tag, expr_tag_, 0);
+    return true;
 }
 
 static inline OpFunc TokenToOpFunc(int token) {
