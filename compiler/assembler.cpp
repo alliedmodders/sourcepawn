@@ -1127,7 +1127,7 @@ RttiBuilder::add_struct(Type* type)
 
         smx_rtti_field field;
         field.flags = 0;
-        field.name = names_->add(gAtoms, arg->name);
+        field.name = names_->add(arg->name);
         field.type_id = to_typeid(encoding);
         fields_->at(classdef.first_field + i) = field;
     }

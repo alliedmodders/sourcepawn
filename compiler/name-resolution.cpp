@@ -142,7 +142,7 @@ PstructDecl::Bind()
     for (const auto& field : fields_) {
         structarg_t arg;
         arg.tag = field.type.tag;
-        ke::SafeStrcpy(arg.name, sizeof(arg.name), field.name->chars());
+        arg.name = field.name;
         arg.fconst = field.type.is_const;
         arg.ident = field.type.ident;
         if (arg.ident == iARRAY)

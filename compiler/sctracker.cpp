@@ -43,10 +43,10 @@ pstruct_t::pstruct_t(const char* name) {
 }
 
 structarg_t*
-pstructs_getarg(pstruct_t* pstruct, const char* member)
+pstructs_getarg(pstruct_t* pstruct, sp::Atom* name)
 {
     for (const auto& arg : pstruct->args) {
-        if (strcmp(arg->name, member) == 0)
+        if (arg->name == name)
             return arg.get();
     }
     return nullptr;
