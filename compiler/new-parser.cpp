@@ -65,7 +65,7 @@ Parser::parse()
             case tOPERATOR:
             case tNATIVE:
             case tFORWARD:
-                parse_unknown_decl(&tok);
+                decl = parse_unknown_decl(&tok);
                 break;
             case tFUNCENUM:
             case tFUNCTAG:
@@ -116,7 +116,7 @@ Parser::parse()
     }
 }
 
-void
+Stmt*
 Parser::parse_unknown_decl(const token_t* tok)
 {
     declinfo_t decl;
@@ -124,8 +124,10 @@ Parser::parse_unknown_decl(const token_t* tok)
     if (tok->id == tNATIVE || tok->id == tFORWARD) {
         parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
         funcstub(tok->id, &decl, NULL);
-        return;
+        return nullptr;
     }
+
+    auto pos = current_pos();
 
     int fpublic = FALSE, fstock = FALSE, fstatic = FALSE;
     switch (tok->id) {
@@ -166,10 +168,17 @@ Parser::parse_unknown_decl(const token_t* tok)
             error(143);
         Type* type = gTypes.find(decl.type.tag);
         if (type && type->kind() == TypeKind::Struct) {
-            declstructvar(decl.name, fpublic, type->asStruct());
-        } else {
-            declglb(&decl, fpublic, fstatic, fstock);
+            Expr* init = nullptr;
+            if (matchtoken('=')) {
+                needtoken('{');
+                init = struct_init();
+            }
+            matchtoken(';');
+            // Without an initializer, the stock keyword is implied.
+            return new VarDecl(pos, gAtoms.add(decl.name), decl.type, sGLOBAL, fpublic && init,
+                               false, !init, init);
         }
+        declglb(&decl, fpublic, fstatic, fstock);
     } else {
         if (!newfunc(&decl, NULL, fpublic, fstatic, fstock, NULL)) {
             // Illegal function or declaration. Drop the line, reset literal queue.
@@ -178,6 +187,7 @@ Parser::parse_unknown_decl(const token_t* tok)
             litidx = 0;
         }
     }
+    return nullptr;
 }
 
 Decl*
@@ -913,4 +923,47 @@ Parser::parse_view_as()
     else
         matchtoken(')');
     return new CastExpr(pos, tVIEW_AS, tag, expr);
+}
+
+Expr*
+Parser::struct_init()
+{
+    StructExpr* init = new StructExpr(current_pos());
+
+    // '}' has already been lexed.
+    do {
+        sp::Atom* name = nullptr;
+
+        token_ident_t ident;
+        if (needsymbol(&ident))
+            name = gAtoms.add(ident.name);
+
+        needtoken('=');
+
+        auto pos = current_pos();
+
+        cell value;
+        char* str;
+        Expr* expr = nullptr;
+        switch (lex(&value, &str)) {
+            case tSTRING:
+                expr = new StringExpr(pos, current_token()->str, current_token()->len);
+                break;
+            case tNUMBER:
+                expr = new NumberExpr(pos, value);
+                break;
+            case tRATIONAL:
+                expr = new FloatExpr(pos, value);
+                break;
+            default:
+                error(1, "-constant-", str);
+                break;
+        }
+
+        if (name && expr)
+            init->fields().append(StructInitField(name, expr));
+    } while (matchtoken(',') && !lexpeek('}'));
+
+    needtoken('}');
+    return init;
 }

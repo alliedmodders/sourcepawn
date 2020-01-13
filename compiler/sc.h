@@ -181,7 +181,7 @@ struct symbol {
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
     // Constant: the symbol is defined in the source file.
-    bool defined : 1;
+    bool defined : 1;       // remove when moving to a single-pass system
     bool is_const : 1;
 
     // Variables and functions.

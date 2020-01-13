@@ -33,6 +33,53 @@ Decl::Emit()
 }
 
 void
+VarDecl::Emit()
+{
+    if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct) {
+        EmitPstruct();
+        return;
+    }
+
+    assert(sym_->ident == iCONSTEXPR);
+}
+
+void
+VarDecl::EmitPstruct()
+{
+    if (!init_)
+        return;
+
+    auto type = gTypes.find(sym_->tag);
+    auto ps = type->asStruct();
+
+    ke::Vector<cell> values;
+    values.resize(ps->args.length());
+
+    sym_->codeaddr = code_idx;
+    begdseg();
+
+    auto init = init_->AsStructExpr();
+    for (const auto& field : init->fields()) {
+        auto arg = pstructs_getarg(ps, field.name);
+        if (auto expr = field.value->AsStringExpr()) {
+            values[arg->index] = (litidx + glb_declared) * sizeof(cell);
+            litadd(expr->text()->chars(), expr->text()->length());
+        } else if (auto expr = field.value->AsTaggedValueExpr()) {
+            values[arg->index] = expr->value();
+        } else {
+            assert(false);
+        }
+    }
+
+    sym_->setAddr((litidx + glb_declared) * sizeof(cell));
+
+    for (const auto& value : values)
+        litadd(value);
+
+    glb_declared += dumplits();
+}
+
+void
 Expr::Emit()
 {
     AutoErrorPos aep(pos_);

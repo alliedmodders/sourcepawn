@@ -1461,7 +1461,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
                 continue;
             }
         } else if (sym->ident == iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
-            if (sym->is_public && (sym->usage & (uREAD | uWRITTEN)) != 0) {
+            if (sym->is_public || (sym->usage & (uREAD | uWRITTEN)) != 0) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
                 pubvar.address = sym->addr();
                 pubvar.name = names->add(sym->nameAtom());

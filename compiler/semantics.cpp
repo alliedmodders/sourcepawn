@@ -63,6 +63,99 @@ Decl::Analyze()
 }
 
 bool
+VarDecl::Analyze()
+{
+    if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct)
+        return AnalyzePstruct();
+
+    assert(false);
+    return false;
+}
+
+bool
+VarDecl::AnalyzePstruct()
+{
+    if (!init_)
+        return true;
+
+    auto init = init_->AsStructExpr();
+    assert(init); // If we parse struct initializers as a normal global, this check will need to be
+                  // soft.
+    auto type = gTypes.find(sym_->tag);
+    auto ps = type->asStruct();
+
+    ke::Vector<bool> visited;
+    visited.resize(ps->args.length());
+
+    // Do as much checking as we can before bailing out.
+    bool ok = true;
+    for (const auto& field : init->fields())
+        ok &= AnalyzePstructArg(ps, field, &visited);
+
+    if (!ok)
+        return false;
+
+    // Fill in default values as needed.
+    for (size_t i = 0; i < visited.length(); i++) {
+        if (visited[i])
+            continue;
+        if (ps->args[i]->ident == iREFARRAY) {
+            assert(ps->args[i]->tag == pc_tag_string);
+
+            auto expr = new StringExpr(pos_, "", 0);
+            init->fields().append(StructInitField(ps->args[i]->name, expr));
+        }
+    }
+
+    return true;
+}
+
+bool
+VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
+                           ke::Vector<bool>* visited)
+{
+    auto arg = pstructs_getarg(ps, field.name);
+    if (!arg) {
+        error(pos_, 96, field.name->chars(), name_->chars());
+        return false;
+    }
+
+    if (visited->at(arg->index)) {
+        error(field.value->pos(), 58);
+        return false;
+    }
+
+    visited->at(arg->index) = true;
+
+    if (auto expr = field.value->AsStringExpr()) {
+        if (arg->ident != iREFARRAY) {
+            error(expr->pos(), 48);
+            return false;
+        }
+        if (arg->tag != pc_tag_string)
+            error(expr->pos(), 213);
+    } else if (auto expr = field.value->AsTaggedValueExpr()) {
+        if (arg->ident != iVARIABLE) {
+            error(expr->pos(), 23);
+            return false;
+        }
+
+        // Proper tag checks were missing in the old parser, and unfortunately
+        // adding them breaks older code. As a special case, we allow implicit
+        // coercion of constants 0 or 1 to bool.
+        if (!(arg->tag == pc_tag_bool && expr->tag() == 0 &&
+            (expr->value() == 0 || expr->value() == 1)))
+        {
+            matchtag(arg->tag, expr->tag(), MATCHTAG_COERCE);
+        }
+    } else {
+        assert(false);
+        return false;
+    }
+    return true;
+}
+
+bool
 ConstDecl::Analyze()
 {
     AutoErrorPos aep(pos_);
@@ -328,7 +421,6 @@ BinaryExpr::HasSideEffects()
         return true;
     return BinaryExprBase::HasSideEffects();
 }
-
 
 bool
 BinaryExpr::Analyze()

@@ -135,7 +135,7 @@ void jmp_eq0(int number);
 void outval(cell val, int newline);
 void litadd(cell value);
 void litinsert(cell value, int pos);
-void dumplits();
+cell dumplits();
 void dumpzero(int count);
 
 /* macros for code generation */

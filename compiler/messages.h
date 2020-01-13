@@ -72,7 +72,7 @@ static const char* errmsg[] = {
     /*045*/ "too many function arguments\n",
     /*046*/ "unknown array size (variable \"%s\")\n",
     /*047*/ "array sizes do not match, or destination array is too small\n",
-    /*048*/ "array (s do not match\n",
+    /*048*/ "arrays do not match\n",
     /*049*/ "invalid line continuation\n",
     /*050*/ "constant '%s' already defined\n",
     /*051*/ "overloaded operator '%s' does not return bool\n",

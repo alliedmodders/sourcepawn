@@ -42,7 +42,7 @@ class Parser : public ExpressionParser
     typedef int (Parser::*HierFn)(value*);
     typedef Expr* (Parser::*NewHierFn)();
 
-    void parse_unknown_decl(const token_t* tok);
+    Stmt* parse_unknown_decl(const token_t* tok);
     Decl* parse_pstruct();
     Decl* parse_typedef();
     Decl* parse_typeset();
@@ -67,6 +67,7 @@ class Parser : public ExpressionParser
     Expr* hier1();
     Expr* primary();
     Expr* constant();
+    Expr* struct_init();
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
 };
 
@@ -78,7 +79,6 @@ void decl_enumstruct();
 void domethodmap(LayoutSpec spec);
 symbol* funcstub(int tokid, declinfo_t* decl, const int* thistag);
 void declglb(declinfo_t* decl, int fpublic, int fstatic, int stock);
-void declstructvar(char* firstname, int fpublic, pstruct_t* pstruct);
 int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock,
             symbol** symp);
 int parse_new_typename(const token_t* tok);
