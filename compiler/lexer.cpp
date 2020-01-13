@@ -2543,36 +2543,6 @@ require_newline(TerminatorPolicy policy)
     return FALSE;
 }
 
-static void
-chk_grow_litq(void)
-{
-    if (litidx >= litmax) {
-        cell* p;
-
-        litmax += sDEF_LITMAX;
-        p = (cell*)realloc(litq, litmax * sizeof(cell));
-        if (p == NULL)
-            error(FATAL_ERROR_ALLOC_OVERFLOW, "literal table");
-        litq = p;
-    }
-}
-
-/*  litadd
- *
- *  Adds a value at the end of the literal queue. The literal queue is used
- *  for literal strings used in functions and for initializing array variables.
- *
- *  Global references: litidx  (altered)
- *                     litq    (altered)
- */
-void
-litadd(cell value)
-{
-    chk_grow_litq();
-    assert(litidx < litmax);
-    litq[litidx++] = value;
-}
-
 void
 litadd(const char* str, size_t len)
 {
@@ -2595,25 +2565,6 @@ litadd(const char* str, size_t len)
         // Add a full cell of zeroes.
         litadd(0);
     }
-}
-
-/*  litinsert
- *
- *  Inserts a value into the literal queue. This is sometimes necessary for
- *  initializing multi-dimensional arrays.
- *
- *  Global references: litidx  (altered)
- *                     litq    (altered)
- */
-void
-litinsert(cell value, int pos)
-{
-    chk_grow_litq();
-    assert(litidx < litmax);
-    assert(pos >= 0 && pos <= litidx);
-    memmove(litq + (pos + 1), litq + pos, (litidx - pos) * sizeof(cell));
-    litidx++;
-    litq[pos] = value;
 }
 
 /*  litchar

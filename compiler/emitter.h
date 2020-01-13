@@ -133,6 +133,10 @@ void dec(const value* lval);
 void jmp_ne0(int number);
 void jmp_eq0(int number);
 void outval(cell val, int newline);
+void litadd(cell value);
+void litinsert(cell value, int pos);
+void dumplits();
+void dumpzero(int count);
 
 /* macros for code generation */
 #define opcodes(n) ((n) * sizeof(cell)) /* opcode size */
