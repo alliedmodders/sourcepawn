@@ -107,8 +107,6 @@ static void setopt(int argc, char** argv, char* oname, char* ename, char* pname)
 static void setconfig(char* root);
 static void setcaption(void);
 static void setconstants(void);
-static void dumplits(void);
-static void dumpzero(int count);
 static void declloc(int tokid);
 static void dodelete();
 static cell needsub();
@@ -1018,56 +1016,6 @@ setconstants(void) {
     else if ((sc_debug & sCHKBOUNDS) == sCHKBOUNDS)
         debug = 1;
     add_constant("debug", debug, sGLOBAL, 0);
-}
-
-/*  dumplits
- *
- *  Dump the literal pool (strings etc.)
- *
- *  Global references: litidx (referred to only)
- */
-static void
-dumplits(void) {
-    int j, k;
-
-    if (sc_status == statSKIP)
-        return;
-
-    k = 0;
-    while (k < litidx) {
-        /* should be in the data segment */
-        assert(curseg == 2);
-        defstorage();
-        j = 16; /* 16 values per line */
-        while (j && k < litidx) {
-            outval(litq[k], FALSE);
-            stgwrite(" ");
-            k++;
-            j--;
-            if (j == 0 || k >= litidx)
-                stgwrite("\n"); /* force a newline after 10 dumps */
-            /* Note: stgwrite() buffers a line until it is complete. It recognizes
-             * the end of line as a sequence of "\n\0", so something like "\n\t"
-             * so should not be passed to stgwrite().
-             */
-        }
-    }
-}
-
-/*  dumpzero
- *
- *  Dump zero's for default initial values
- */
-static void
-dumpzero(int count) {
-    if (sc_status == statSKIP || count <= 0)
-        return;
-    assert(curseg == 2);
-
-    stgwrite("dumpfill ");
-    outval(0, FALSE);
-    stgwrite(" ");
-    outval(count, TRUE);
 }
 
 /* declstruct - declare global struct symbols

@@ -1395,3 +1395,104 @@ load_glbfn(symbol* sym)
     if (sc_status != statSKIP)
         markusage(sym, uREAD);
 }
+
+/*  dumplits
+ *
+ *  Dump the literal pool (strings etc.)
+ *
+ *  Global references: litidx (referred to only)
+ */
+void
+dumplits()
+{
+    int j, k;
+
+    if (sc_status == statSKIP)
+        return;
+
+    k = 0;
+    while (k < litidx) {
+        /* should be in the data segment */
+        assert(curseg == 2);
+        defstorage();
+        j = 16; /* 16 values per line */
+        while (j && k < litidx) {
+            outval(litq[k], FALSE);
+            stgwrite(" ");
+            k++;
+            j--;
+            if (j == 0 || k >= litidx)
+                stgwrite("\n"); /* force a newline after 10 dumps */
+            /* Note: stgwrite() buffers a line until it is complete. It recognizes
+             * the end of line as a sequence of "\n\0", so something like "\n\t"
+             * so should not be passed to stgwrite().
+             */
+        }
+    }
+}
+
+/*  dumpzero
+ *
+ *  Dump zero's for default initial values
+ */
+void
+dumpzero(int count)
+{
+    if (sc_status == statSKIP || count <= 0)
+        return;
+    assert(curseg == 2);
+
+    stgwrite("dumpfill ");
+    outval(0, FALSE);
+    stgwrite(" ");
+    outval(count, TRUE);
+}
+
+static void
+chk_grow_litq(void)
+{
+    if (litidx >= litmax) {
+        cell* p;
+
+        litmax += sDEF_LITMAX;
+        p = (cell*)realloc(litq, litmax * sizeof(cell));
+        if (p == NULL)
+            error(FATAL_ERROR_ALLOC_OVERFLOW, "literal table");
+        litq = p;
+    }
+}
+
+/*  litadd
+ *
+ *  Adds a value at the end of the literal queue. The literal queue is used
+ *  for literal strings used in functions and for initializing array variables.
+ *
+ *  Global references: litidx  (altered)
+ *                     litq    (altered)
+ */
+void
+litadd(cell value)
+{
+    chk_grow_litq();
+    assert(litidx < litmax);
+    litq[litidx++] = value;
+}
+
+/*  litinsert
+ *
+ *  Inserts a value into the literal queue. This is sometimes necessary for
+ *  initializing multi-dimensional arrays.
+ *
+ *  Global references: litidx  (altered)
+ *                     litq    (altered)
+ */
+void
+litinsert(cell value, int pos)
+{
+    chk_grow_litq();
+    assert(litidx < litmax);
+    assert(pos >= 0 && pos <= litidx);
+    memmove(litq + (pos + 1), litq + pos, (litidx - pos) * sizeof(cell));
+    litidx++;
+    litq[pos] = value;
+}
