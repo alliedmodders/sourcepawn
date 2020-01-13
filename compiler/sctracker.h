@@ -113,7 +113,7 @@ pstruct_t* pstructs_add(const char* name);
 void pstructs_free();
 pstruct_t* pstructs_find(const char* name);
 structarg_t* pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg);
-structarg_t* pstructs_getarg(pstruct_t* pstruct, sp::Atom* name);
+const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
 
 /**
  * Function enumeration tags

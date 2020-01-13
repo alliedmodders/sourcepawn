@@ -53,7 +53,11 @@ typedef void (*OpFunc)();
 class Expr;
 class BinaryExpr;
 class DefaultArgExpr;
+class StringExpr;
+class StructExpr;
 class SymbolExpr;
+class TaggedValueExpr;
+struct StructInitField;
 
 class ParseNode : public PoolObject
 {
@@ -127,7 +131,7 @@ class Decl : public Stmt
     {}
 
     bool Analyze() override;
-    void Emit() override final;
+    void Emit() override;
 
     sp::Atom* name() const {
         return name_;
@@ -157,17 +161,30 @@ class VarDecl : public Decl
       : Decl(pos, name),
         type_(type),
         vclass_(vclass),
+        init_(initializer),
         is_public_(is_public),
         is_static_(is_static),
         is_stock_(is_stock)
     {}
 
+    bool Bind() override;
+    bool Analyze() override;
+    void Emit() override;
+
+  private:
+    bool AnalyzePstruct();
+    bool AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
+                           ke::Vector<bool>* visited);
+    void EmitPstruct();
+
   protected:
     typeinfo_t type_;
     int vclass_; // This will be implied by scope, when we get there.
+    Expr* init_;
     bool is_public_ : 1;
     bool is_static_ : 1;
     bool is_stock_ : 1;
+    symbol* sym_ = nullptr;
 };
 
 class ConstDecl : public VarDecl
@@ -336,15 +353,12 @@ class Expr : public ParseNode
     }
 
     // Casts.
-    virtual BinaryExpr* AsBinaryExpr() {
-        return nullptr;
-    }
-    virtual DefaultArgExpr* AsDefaultArgExpr() {
-        return nullptr;
-    }
-    virtual SymbolExpr* AsSymbolExpr() {
-        return nullptr;
-    }
+    virtual BinaryExpr* AsBinaryExpr() { return nullptr; }
+    virtual DefaultArgExpr* AsDefaultArgExpr() {  return nullptr; }
+    virtual SymbolExpr* AsSymbolExpr() { return nullptr; }
+    virtual StructExpr* AsStructExpr() { return nullptr; }
+    virtual StringExpr* AsStringExpr() { return nullptr; }
+    virtual TaggedValueExpr* AsTaggedValueExpr() { return nullptr; }
 
   protected:
     virtual void DoEmit() = 0;
@@ -899,6 +913,16 @@ class TaggedValueExpr : public Expr
     bool Analyze() override;
     void DoEmit() override;
     void ProcessUses() override {}
+    TaggedValueExpr* AsTaggedValueExpr() override {
+        return this;
+    }
+
+    int tag() const {
+        return tag_;
+    }
+    cell value() const {
+        return value_;
+    }
 
   protected:
     int tag_;
@@ -932,6 +956,13 @@ class StringExpr final : public Expr
     bool Analyze() override;
     void DoEmit() override;
     void ProcessUses() override {}
+    StringExpr* AsStringExpr() override {
+        return this;
+    }
+
+    PoolString* text() const {
+        return text_;
+    }
 
   private:
     PoolString* text_;
@@ -955,4 +986,40 @@ class ArrayExpr final : public Expr
 
   private:
     PoolList<Expr*> exprs_;
+};
+
+struct StructInitField {
+    StructInitField(sp::Atom* name, Expr* value)
+        : name(name), value(value)
+    {}
+    sp::Atom* name;
+    Expr* value;
+};
+
+class StructExpr final : public Expr
+{
+  public:
+    explicit StructExpr(const token_pos_t& pos)
+        : Expr(pos)
+    {}
+
+    bool Analyze() override {
+        return true;
+    }
+    void ProcessUses() override {
+        assert(false);
+    }
+    void DoEmit() override {
+        assert(false);
+    }
+    StructExpr* AsStructExpr() override {
+        return this;
+    }
+
+    PoolList<StructInitField>& fields() {
+        return fields_;
+    }
+
+  private:
+    PoolList<StructInitField> fields_;
 };

@@ -202,7 +202,40 @@ ConstDecl::Bind()
 {
     AutoErrorPos aep(pos_);
 
-    add_constant(name_->chars(), value_, vclass_, type_.tag);
+    sym_ = add_constant(name_->chars(), value_, vclass_, type_.tag);
+    return true;
+}
+
+bool
+VarDecl::Bind()
+{
+    // :TODO: introduce find-by-atom to improve compiler speed
+    sym_ = findconst(name_->chars());
+    if (!sym_)
+        sym_ = findglb(name_->chars());
+
+    bool should_define = !!sym_;
+
+    // This will go away when we remove the two-pass system.
+    if (sym_ && sym_->defined) {
+        error(pos_, 21, name_->chars());
+        return false;
+    }
+
+    if (gTypes.find(type_.tag)->kind() == TypeKind::Struct) {
+        if (!sym_)
+            sym_ = addsym(name_->chars(), 0, iVARIABLE, sGLOBAL, type_.tag);
+        else
+            assert(sym_->is_struct);
+        sym_->is_struct = true;
+        sym_->stock = is_stock_;
+        sym_->is_public = is_public_;
+        sym_->is_const = true;
+    } else {
+        assert(false);
+    }
+
+    sym_->defined = should_define;
     return true;
 }
 

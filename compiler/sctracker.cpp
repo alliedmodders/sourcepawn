@@ -38,12 +38,13 @@ ke::Vector<ke::UniquePtr<funcenum_t>> sFuncEnums;
 ke::Vector<ke::UniquePtr<pstruct_t>> sStructs;
 ke::Vector<ke::UniquePtr<methodmap_t>> sMethodmaps;
 
-pstruct_t::pstruct_t(const char* name) {
+pstruct_t::pstruct_t(const char* name)
+{
     ke::SafeStrcpy(this->name, sizeof(this->name), name);
 }
 
-structarg_t*
-pstructs_getarg(pstruct_t* pstruct, sp::Atom* name)
+const structarg_t*
+pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name)
 {
     for (const auto& arg : pstruct->args) {
         if (arg->name == name)

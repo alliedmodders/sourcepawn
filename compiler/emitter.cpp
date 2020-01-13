@@ -26,6 +26,9 @@
 #include <stdio.h>
 #include <stdlib.h> /* for _MAX_PATH */
 #include <string.h>
+
+#include <amtl/am-raii.h>
+
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
@@ -1399,16 +1402,14 @@ load_glbfn(symbol* sym)
 /*  dumplits
  *
  *  Dump the literal pool (strings etc.)
- *
- *  Global references: litidx (referred to only)
  */
-void
+cell
 dumplits()
 {
     int j, k;
 
     if (sc_status == statSKIP)
-        return;
+        return ke::ReturnAndVoid(litidx);
 
     k = 0;
     while (k < litidx) {
@@ -1429,6 +1430,7 @@ dumplits()
              */
         }
     }
+    return ke::ReturnAndVoid(litidx);
 }
 
 /*  dumpzero

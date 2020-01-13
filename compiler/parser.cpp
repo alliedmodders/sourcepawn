@@ -1018,191 +1018,6 @@ setconstants(void) {
     add_constant("debug", debug, sGLOBAL, 0);
 }
 
-/* declstruct - declare global struct symbols
- * 
- * global references: glb_declared (altered)
- */
-void
-declstructvar(char* firstname, int fpublic, pstruct_t* pstruct)
-{
-    int tok;
-    cell val;
-    char* str;
-    int cur_litidx = 0;
-    cell *values, *found;
-    symbol *mysym, *sym;
-
-    sp::Atom* name = gAtoms.add(firstname);
-
-    values = (cell*)malloc(pstruct->args.length() * sizeof(cell));
-    found = (cell*)malloc(pstruct->args.length() * sizeof(cell));
-
-    memset(found, 0, sizeof(cell) * pstruct->args.length());
-
-    //:TODO: Make this work with stock
-
-    /**
-     * Lastly, very lastly, we will insert a copy of this variable.
-     * This is soley to expose the pubvar.
-     */
-    mysym = NULL;
-    for (sym = glbtab.next; sym != NULL; sym = sym->next) {
-        if (sym->nameAtom() == name) {
-            if (sym->is_struct && sym->vclass == sGLOBAL) {
-                if (sym->defined) {
-                    error(21, name->chars());
-                } else {
-                    if (sym->is_public && !fpublic)
-                        error(42);
-                }
-            } else {
-                error(21, name->chars());
-            }
-            mysym = sym;
-            break;
-        }
-    }
-    if (!mysym)
-        mysym = addsym(name->chars(), 0, iVARIABLE, sGLOBAL, pc_addtag(pstruct->name));
-    else
-        mysym->codeaddr = code_idx;
-    mysym->usage |= uREAD;
-
-    if (!matchtoken('=')) {
-        matchtoken(';');
-        /* Mark it as undefined instead */
-        mysym->is_struct = true;
-        mysym->stock = true;
-        free(found);
-        free(values);
-        return;
-    }
-
-    mysym->is_struct = true;
-    mysym->is_public = !!fpublic;
-    mysym->is_const = true;
-    needtoken('{');
-
-    do {
-        structarg_t* arg;
-        /* Detect early exit */
-        if (matchtoken('}')) {
-            lexpush();
-            break;
-        }
-        tok = lex(&val, &str);
-        if (tok != tSYMBOL) {
-            error(1, "-identifier-", str);
-            continue;
-        }
-        arg = pstructs_getarg(pstruct, gAtoms.add(str));
-        if (arg == NULL)
-            error(96, str, sym->name());
-        needtoken('=');
-        cur_litidx = litidx;
-        tok = lex(&val, &str);
-        if (!arg) {
-            continue;
-        }
-        if (tok == tSTRING) {
-            litadd(current_token()->str, current_token()->len);
-            if (arg->ident != iREFARRAY) {
-                error(48);
-            } else if (arg->tag != pc_tag_string) {
-                error(213);
-            }
-            values[arg->index] = glb_declared * sizeof(cell);
-            glb_declared += (litidx - cur_litidx);
-            found[arg->index] = 1;
-        } else if (tok == tNUMBER || tok == tRATIONAL) {
-            /* eat optional 'f' */
-            matchtoken('f');
-            if (arg->ident != iVARIABLE && arg->ident != iREFERENCE) {
-                error(23);
-            } else {
-                if ((arg->tag == pc_addtag("Float") && tok == tNUMBER) ||
-                    (arg->tag == 0 && tok == tRATIONAL)) {
-                    error(213);
-                }
-                if (arg->ident == iVARIABLE) {
-                    values[arg->index] = val;
-                } else if (arg->ident == iREFERENCE) {
-                    values[arg->index] = glb_declared * sizeof(cell);
-                    glb_declared += 1;
-                    litadd(val);
-                    cur_litidx = litidx;
-                }
-                found[arg->index] = 1;
-            }
-        } else if (tok == tSYMBOL) {
-            sp::Atom* str_atom = gAtoms.add(str);
-            for (sym = glbtab.next; sym != NULL; sym = sym->next) {
-                if (sym->vclass != sGLOBAL)
-                    continue;
-                if (sym->nameAtom() == str_atom) {
-                    if (arg->ident == iREFERENCE && sym->ident != iVARIABLE) {
-                        error(97, str);
-                    } else if (arg->ident == iARRAY) {
-                        if (sym->ident != iARRAY) {
-                            error(97, str);
-                        } else {
-                            /* :TODO: We should check dimension sizes here... */
-                        }
-                    } else if (arg->ident == iREFARRAY) {
-                        if (sym->ident != iARRAY)
-                            error(97, str);
-                        /* :TODO: Check dimension sizes! */
-                    } else {
-                        error(97, str);
-                    }
-                    if (sym->tag != arg->tag)
-                        error(213);
-                    sym->usage |= uREAD;
-                    values[arg->index] = sym->addr();
-                    found[arg->index] = 1;
-                    mysym->add_reference_to(sym);
-                    break;
-                }
-            }
-            if (!sym)
-                error(17, str);
-        } else {
-            error(1, "-identifier-", str);
-        }
-    } while (matchtoken(','));
-    needtoken('}');
-    matchtoken(';'); /* eat up optional semicolon */
-
-    for (size_t i = 0; i < pstruct->args.length(); i++) {
-        if (!found[i]) {
-            structarg_t* arg = pstruct->args[i].get();
-            if (arg->ident == iREFARRAY) {
-                values[arg->index] = glb_declared * sizeof(cell);
-                glb_declared += 1;
-                litadd(0);
-                cur_litidx = litidx;
-            } else if (arg->ident == iVARIABLE) {
-                values[arg->index] = 0;
-            } else {
-                /* :TODO: broken for iARRAY! (unused tho) */
-            }
-        }
-    }
-
-    mysym->setAddr(glb_declared * sizeof(cell));
-    glb_declared += pstruct->args.length();
-
-    for (size_t i = 0; i < pstruct->args.length(); i++)
-        litadd(values[i]);
-
-    begdseg();
-    dumplits();
-    litidx = 0;
-
-    free(found);
-    free(values);
-}
-
 /*  declglb     - declare global symbols
  *
  *  Declare a static (global) variable. Global variables are stored in
@@ -1277,8 +1092,8 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
         address = sizeof(cell) * glb_declared;
         glb_incr = (int)type->size;
         if (type->size != CELL_MAX && address == sizeof(cell) * glb_declared) {
-            dumplits(); /* dump the literal queue */
-            dumpzero((int)(type->size) - litidx);
+            auto cells = dumplits(); /* dump the literal queue */
+            dumpzero((int)(type->size) - cells);
         }
         litidx = 0;
         if (sym == NULL) { /* define only if not yet defined */
@@ -4057,7 +3872,6 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         glb_declared += litidx;
         begdseg();  /* flip to DATA segment */
         dumplits(); /* dump literal strings */
-        litidx = 0;
     }
     testsymbols(&loctab, 0, TRUE, TRUE);    /* test for unused arguments and labels */
     delete_symbols(&loctab, 0, TRUE);       /* clear local variables queue */
@@ -4509,13 +4323,13 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                 /* a variable */
                 if (sym->parent() != NULL)
                     break; /* hierarchical data type */
-                if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0) {
+                if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
                     error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
                 } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
                     error(sym, 204, sym->name()); /* value assigned to symbol is never used */
                 }
                 /* also mark the variable (local or global) to the debug information */
-                if ((sym->usage & (uWRITTEN | uREAD)) != 0 && !sym->native)
+                if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
                     insert_dbgsymbol(sym);
         }
         sym = sym->next;
