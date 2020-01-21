@@ -454,7 +454,7 @@ functag_compare(const functag_t* formal, const functag_t* actual)
         return FALSE;
 
     // Check arguments.
-    for (int i = 0; i < formal->args.length(); i++) {
+    for (size_t i = 0; i < formal->args.length(); i++) {
         const funcarg_t* formal_arg = &formal->args[i];
 
         if (i >= actual->args.length())
