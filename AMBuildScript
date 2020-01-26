@@ -116,7 +116,7 @@ class Config(object):
 
       is_wsl = False
       if os.path.exists('/proc/sys/kernel/osrelease'):
-        with open('/proc/sys/kernel/osrelease') as fp:
+        with open('/proc/sys/kernel/osrelease', 'rb') as fp:
           contents = fp.read().decode("utf-8")
           is_wsl = 'Microsoft' in contents
 
