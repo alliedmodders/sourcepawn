@@ -656,29 +656,6 @@ checkfunction(const value* lval)
     }
 }
 
-static cell
-flooreddiv(cell a, cell b, int return_remainder)
-{
-    cell q, r;
-
-    if (b == 0) {
-        error(29);
-        return 0;
-    }
-/* first implement truncated division in a portable way */
-#define IABS(a) ((a) >= 0 ? (a) : (-a))
-    q = IABS(a) / IABS(b);
-    if ((cell)(a ^ b) < 0)
-        q = -q;    /* swap sign if either "a" or "b" is negative (but not both) */
-    r = a - q * b; /* calculate the matching remainder */
-    /* now "fiddle" with the values to get floored division */
-    if (r != 0 && (cell)(r ^ b) < 0) {
-        q--;
-        r += b;
-    }
-    return return_remainder ? r : q;
-}
-
 cell
 calc(cell left, void (*oper)(), cell right, char* boolresult)
 {
@@ -704,10 +681,19 @@ calc(cell left, void (*oper)(), cell right, char* boolresult)
         return (left - right);
     else if (oper == os_mult)
         return (left * right);
-    else if (oper == os_div)
-        return flooreddiv(left, right, 0);
-    else if (oper == os_mod)
-        return flooreddiv(left, right, 1);
+    else if (oper == os_div) {
+        if (right == 0) {
+            error(29);
+            return 0;
+        }
+        return left / right;
+    } else if (oper == os_mod) {
+        if (right == 0) {
+            error(29);
+            return 0;
+        }
+        return left % right;
+    }
     assert(false);
     error(29); /* invalid expression, assumed 0 (this should never occur) */
     return 0;
