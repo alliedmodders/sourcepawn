@@ -2462,11 +2462,10 @@ parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
             if (decl->opertok == 0)
                 strcpy(decl->name, "__unknown__");
         } else {
-            if (!expecttoken(tSYMBOL, &tok)) {
+            if (expecttoken(tSYMBOL, &tok))
+                strcpy(decl->name, tok.str);
+            else
                 strcpy(decl->name, "__unknown__");
-                return FALSE;
-            }
-            strcpy(decl->name, tok.str);
         }
     }
 
