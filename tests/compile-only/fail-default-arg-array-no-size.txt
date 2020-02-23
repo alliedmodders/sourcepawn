@@ -1,0 +1,1 @@
+(1) : error 183: brackets after variable name indicates a fixed-size array, but size is missing or not constant

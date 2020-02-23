@@ -45,6 +45,7 @@ elif compiler.target.platform == 'mac':
 
 binary.sources += [
   'assembler.cpp',
+  'array-helpers.cpp',
   'code-generator.cpp',
   'emitter.cpp',
   'errors.cpp',
@@ -64,6 +65,7 @@ binary.sources += [
   'scvars.cpp',
   'semantics.cpp',
   'sp_symhash.cpp',
+  'type-checker.cpp',
   'types.cpp',
 ]
 

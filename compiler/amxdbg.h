@@ -134,14 +134,6 @@ typedef struct tagAMX_DBG {
     AMX_DBG_STATE _FAR** statetbl PACKED;
 } PACKED AMX_DBG;
 
-#if !defined iVARIABLE
-#    define iVARIABLE 1  /* cell that has an address and that can be fetched directly (lvalue) */
-#    define iREFERENCE 2 /* iVARIABLE, but must be dereferenced */
-#    define iARRAY 3
-#    define iREFARRAY 4 /* an array passed by reference (i.e. a pointer) */
-#    define iFUNCTN 9
-#endif
-
 int AMXAPI dbg_FreeInfo(AMX_DBG* amxdbg);
 int AMXAPI dbg_LoadInfo(AMX_DBG* amxdbg, void* dbg_addr);
 

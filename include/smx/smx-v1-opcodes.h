@@ -237,7 +237,9 @@ namespace sp {
     _U(STKADJUST, "stackadjust")                                            \
     _G(ENDPROC, "endproc", 1)                                               \
     _U(LDGFN_PRI, "ldgfn.pri")                                              \
-    _G(REBASE, "rebase", 4)                                                 \
+    _U(REBASE, "rebase")                                                    \
+    _G(INITARRAY_PRI, "initarray.pri", 6)                                   \
+    _G(INITARRAY_ALT, "initarray.alt", 6)                                   \
     /* Opcodes below this are pseudo-opcodes and are not part of the ABI */ \
     _U(FIRST_FAKE, "firstfake")                                             \
     _G(FABS, "fabs", 1)                                                     \

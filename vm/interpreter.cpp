@@ -1061,14 +1061,10 @@ Interpreter::visitHALT(cell_t value)
 }
 
 bool
-Interpreter::visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size)
+Interpreter::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                            cell_t data_fill_size, cell_t fill_value)
 {
-  int err = cx_->rebaseArray(regs_.pri(), addr, iv_size, data_size);
-  if (err != SP_ERROR_NONE) {
-    cx_->ReportErrorNumber(err);
-    return false;
-  }
-  return true;
+  return cx_->initArray(regs_[reg], addr, iv_size, data_copy_size, data_fill_size, fill_value);
 }
 
 } // namespace sp

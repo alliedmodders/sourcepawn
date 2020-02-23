@@ -42,8 +42,6 @@ extern char binfname[];           /* binary file name */
 extern char errfname[];           /* error file name */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
-extern int litidx;                /* index to literal table */
-extern int litmax;                /* current size of the literal table */
 extern int stgidx;                /* index to the staging buffer */
 extern int sc_labnum;             /* number of (internal) labels */
 extern int staging;               /* true if staging output */
@@ -60,6 +58,7 @@ extern int sc_dataalign;          /* data alignment value */
 extern int sc_showincludes;       /* show include files? */
 extern int curseg;                /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;           /* stack size */
+extern cell pc_stksize_override;  /* stack size override */
 extern int freading;              /* is there an input file ready for reading? */
 extern int fline;                 /* the line number in the current file */
 extern short fnumber;             /* number of files in the input file table */
@@ -80,11 +79,9 @@ extern int pc_tag_bool;           /* global bool tag */
 extern int pc_tag_null_t;         /* the null type */
 extern int pc_tag_nullfunc_t;     /* the null function type */
 extern int pc_anytag;             /* global any tag */
-extern int glbstringread;         /* last global string read */
 extern int sc_require_newdecls;   /* only newdecls are allowed */
 extern bool sc_warnings_are_errors;
 extern unsigned sc_total_errors;
-extern int pc_code_version; /* override the code version */
 extern int sc_compression_level;
 extern int pc_max_func_memory;    /* high stack watermark */
 extern int pc_current_memory;     /* current stack watermark */

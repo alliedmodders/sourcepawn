@@ -637,12 +637,17 @@ class PcodeReader
       return true;
     }
 
-    case OP_REBASE:
+    case OP_INITARRAY_PRI:
+    case OP_INITARRAY_ALT:
     {
+      PawnReg reg = (op == OP_INITARRAY_PRI) ? PawnReg::Pri : PawnReg::Alt;
       cell_t addr = readCell();
       cell_t iv_size = readCell();
-      cell_t data_size = readCell();
-      return visitor_->visitREBASE(addr, iv_size, data_size);
+      cell_t data_copy_size = readCell();
+      cell_t data_fill_size = readCell();
+      cell_t fill_value = readCell();
+      return visitor_->visitINITARRAY(reg, addr, iv_size, data_copy_size, data_fill_size,
+                                      fill_value);
     }
 
     default:

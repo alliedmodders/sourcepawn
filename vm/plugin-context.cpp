@@ -935,38 +935,68 @@ PluginContext::addStack(cell_t amount)
   return true;
 }
 
-int
-PluginContext::rebaseArray(cell_t array_addr,
-                           cell_t dat_addr,
-                           cell_t iv_size,
-                           cell_t data_size)
+bool
+PluginContext::initArray(cell_t array_addr,
+                         cell_t dat_addr,
+                         cell_t iv_size,
+                         cell_t data_copy_size,
+                         cell_t data_fill_size,
+                         cell_t fill_value)
 {
   int err;
 
   cell_t* iv_vec;
-  if ((err = LocalToPhysAddr(array_addr, &iv_vec)) != SP_ERROR_NONE)
-    return err;
-
-  cell_t* data_vec;
-  if ((err = LocalToPhysAddr(array_addr + iv_size, &data_vec)) != SP_ERROR_NONE)
-    return err;
-
-  cell_t* tpl_iv_vec;
-  if ((err = LocalToPhysAddr(dat_addr, &tpl_iv_vec)) != SP_ERROR_NONE)
-    return err;
-
-  cell_t* tpl_data_vec;
-  if ((err = LocalToPhysAddr(dat_addr + iv_size, &tpl_data_vec)) != SP_ERROR_NONE)
-    return err;
-
-  assert(iv_vec < data_vec);
-  assert(tpl_iv_vec < tpl_data_vec);
-
-  while (iv_vec < data_vec) {
-    *iv_vec = *tpl_iv_vec + array_addr;
-    iv_vec++;
-    tpl_iv_vec++;
+  if ((err = LocalToPhysAddr(array_addr, &iv_vec)) != SP_ERROR_NONE) {
+    ReportErrorNumber(err);
+    return false;
   }
-  memcpy(data_vec, tpl_data_vec, data_size);
-  return SP_ERROR_NONE;
+
+  // Note: we don't use LocalToPhysAddr here because the address could be the
+  // very end of DAT and it could throw an error.
+  cell_t* data_vec = iv_vec + iv_size;
+  assert(iv_vec <= data_vec);
+
+  cell_t* mem_end = reinterpret_cast<cell_t*>(memory_ + mem_size_);
+  if (data_vec + data_copy_size + data_fill_size - 1 >= mem_end) {
+      ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
+      return false;
+  }
+
+  // Only attempt address conversions if there's a template to copy from.
+  if (iv_size || data_copy_size) {
+    cell_t* tpl_iv_vec;
+    if ((err = LocalToPhysAddr(dat_addr, &tpl_iv_vec)) != SP_ERROR_NONE) {
+      ReportErrorNumber(err);
+      return false;
+    }
+
+    cell_t* tpl_data_vec = tpl_iv_vec + iv_size;
+    assert(tpl_iv_vec <= tpl_data_vec);
+
+    cell_t* dat_end = reinterpret_cast<cell_t*>(memory_ + data_size_);
+    if (tpl_data_vec + data_copy_size - 1 >= dat_end) {
+      ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
+      return false;
+    }
+
+    while (iv_vec < data_vec) {
+      *iv_vec = *tpl_iv_vec + array_addr;
+      iv_vec++;
+      tpl_iv_vec++;
+    }
+    memcpy(data_vec, tpl_data_vec, data_copy_size * sizeof(cell_t));
+  }
+
+  if (!data_fill_size)
+    return true;
+
+  cell_t* fill_pos = data_vec + data_copy_size;
+  if (fill_value) {
+    cell_t* fill_end = fill_pos + data_fill_size;
+    while (fill_pos < fill_end)
+      *fill_pos++ = fill_value;
+  } else {
+    memset(fill_pos, 0, data_fill_size * sizeof(cell_t));
+  }
+  return true;
 }

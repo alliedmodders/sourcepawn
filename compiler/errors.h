@@ -51,7 +51,7 @@ struct ErrorReport {
 };
 
 enum FatalError {
-    FIRST_FATAL_ERROR = 183,
+    FIRST_FATAL_ERROR = 300,
 
     FATAL_ERROR_READ = FIRST_FATAL_ERROR,
     FATAL_ERROR_WRITE,

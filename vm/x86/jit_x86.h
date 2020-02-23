@@ -135,7 +135,8 @@ class Compiler : public CompilerBase
     cell_t defaultOffset,
     const CaseTableEntry* cases,
     size_t ncases) override;
-  bool visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size) override;
+  bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                      cell_t data_fill_size, cell_t fill_value) override;
 
  private:
   bool setup(cell_t pcode_offs);

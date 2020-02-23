@@ -51,8 +51,10 @@ struct UserOperation
 typedef void (*OpFunc)();
 
 class Expr;
+class ArrayExpr;
 class BinaryExpr;
 class DefaultArgExpr;
+class NewArrayExpr;
 class StringExpr;
 class StructExpr;
 class SymbolExpr;
@@ -177,33 +179,46 @@ class VarDecl : public Decl
 {
   public:
     VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
-            bool is_public, bool is_static, bool is_stock, Expr* initializer)
-      : Decl(pos, name),
-        type_(type),
-        vclass_(vclass),
-        init_(initializer),
-        is_public_(is_public),
-        is_static_(is_static),
-        is_stock_(is_stock)
-    {}
+            bool is_public, bool is_static, bool is_stock, Expr* initializer);
 
     bool Bind() override;
     bool Analyze() override;
     void Emit() override;
+
+    Expr* init_rhs() const;
+    int vclass() const {
+        return vclass_;
+    }
+    const typeinfo_t& type() const {
+        return type_;
+    }
+    typeinfo_t* mutable_type() {
+        return &type_;
+    }
+    void set_init(Expr* expr);
+    bool autozero() const {
+        return autozero_;
+    }
+    void set_no_autozero() {
+        autozero_ = false;
+    }
 
   private:
     bool AnalyzePstruct();
     bool AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
                            std::vector<bool>* visited);
     void EmitPstruct();
+    void EmitGlobal();
+    void EmitLocal();
 
   protected:
     typeinfo_t type_;
     int vclass_; // This will be implied by scope, when we get there.
-    Expr* init_;
+    BinaryExpr* init_ = nullptr;
     bool is_public_ : 1;
     bool is_static_ : 1;
     bool is_stock_ : 1;
+    bool autozero_ : 1;
     symbol* sym_ = nullptr;
 };
 
@@ -383,6 +398,10 @@ class Expr : public ParseNode
     // Mark the node's value as consumed.
     virtual void MarkUsed() {}
 
+    virtual bool AnalyzeForInitializer() {
+        return Analyze();
+    }
+
     void Emit() override;
 
     const value& val() const {
@@ -398,12 +417,14 @@ class Expr : public ParseNode
     }
 
     // Casts.
+    virtual ArrayExpr* AsArrayExpr() { return nullptr; }
     virtual BinaryExpr* AsBinaryExpr() { return nullptr; }
     virtual DefaultArgExpr* AsDefaultArgExpr() {  return nullptr; }
     virtual SymbolExpr* AsSymbolExpr() { return nullptr; }
     virtual StructExpr* AsStructExpr() { return nullptr; }
     virtual StringExpr* AsStringExpr() { return nullptr; }
     virtual TaggedValueExpr* AsTaggedValueExpr() { return nullptr; }
+    virtual NewArrayExpr* AsNewArrayExpr() { return nullptr; }
 
   protected:
     virtual void DoEmit() = 0;
@@ -515,6 +536,9 @@ class BinaryExpr final : public BinaryExprBase
     const UserOperation& userop() const {
         return userop_;
     }
+    void set_initializer() {
+        initializer_ = true;
+    }
 
     static void EmitInner(OpFunc oper, const UserOperation& userop, Expr* left, Expr* right);
 
@@ -527,6 +551,7 @@ class BinaryExpr final : public BinaryExprBase
     UserOperation assignop_;
     OpFunc oper_ = nullptr;
     cell array_copy_length_ = 0;
+    bool initializer_ = false;
 };
 
 class LogicalExpr final : public BinaryExprBase
@@ -723,6 +748,10 @@ class SymbolExpr final : public Expr
     }
 
     bool AnalyzeWithOptions(bool allow_types);
+
+    symbol* sym() const {
+        return sym_;
+    }
 
   private:
     bool DoBind(bool is_lval);
@@ -1025,10 +1054,48 @@ class StringExpr final : public Expr
     PoolString* text_;
 };
 
+class NewArrayExpr final : public Expr
+{
+  public:
+    explicit NewArrayExpr(const token_pos_t& pos, int tag)
+      : Expr(pos),
+        tag_(tag)
+    {}
+
+    bool Bind() override;
+    bool Analyze() override;
+    bool AnalyzeForInitializer() override;
+    void DoEmit() override;
+    void ProcessUses() override;
+
+    NewArrayExpr* AsNewArrayExpr() override {
+        return this;
+    }
+
+    int tag() {
+        return tag_;
+    }
+    PoolList<Expr*>& exprs() {
+        return exprs_;
+    }
+    void set_no_autozero() {
+        autozero_ = false;
+    }
+    void set_already_analyzed() {
+        already_analyzed_ = true;
+    }
+
+  private:
+    int tag_;
+    PoolList<Expr*> exprs_;
+    bool autozero_ = true;
+    bool already_analyzed_ = false;
+};
+
 class ArrayExpr final : public Expr
 {
   public:
-    ArrayExpr(const token_pos_t& pos)
+    explicit ArrayExpr(const token_pos_t& pos)
       : Expr(pos)
     {}
 
@@ -1037,11 +1104,22 @@ class ArrayExpr final : public Expr
     void DoEmit() override;
     void ProcessUses() override {}
 
+    ArrayExpr* AsArrayExpr() override {
+        return this;
+    }
+
     PoolList<Expr*>& exprs() {
         return exprs_;
     }
+    bool ellipses() const {
+        return ellipses_;
+    }
+    void set_ellipses() {
+        ellipses_ = true;
+    }
 
   private:
+    bool ellipses_ = false;
     PoolList<Expr*> exprs_;
 };
 

@@ -150,7 +150,8 @@ class Interpreter final : public PcodeVisitor
   bool visitSTRADJUST_PRI() override;
   bool visitBREAK() override;
   bool visitHALT(cell_t value) override;
-  bool visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size) override;
+  bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                      cell_t data_fill_size, cell_t fill_value) override;
 
  private:
   Interpreter(PluginContext* cx, RefPtr<MethodInfo> method);

@@ -21,6 +21,7 @@
 //
 //  Version: $Id$
 
+#include "array-helpers.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -40,7 +41,162 @@ VarDecl::Emit()
         return;
     }
 
-    assert(sym_->ident == iCONSTEXPR);
+    sym_->codeaddr = code_idx;
+
+    if (sym_->ident == iCONSTEXPR)
+        return;
+
+    if (sym_->vclass == sLOCAL)
+        EmitLocal();
+    else
+        EmitGlobal();
+}
+
+void
+VarDecl::EmitGlobal()
+{
+    sym_->setAddr(gDataQueue.dat_address());
+
+    if (sym_->ident == iVARIABLE) {
+        assert(!init_ || init_->right()->val().ident == iCONSTEXPR);
+        if (init_)
+            gDataQueue.Add(init_->right()->val().constval);
+        else
+            gDataQueue.Add(0);
+    } else if (sym_->ident == iARRAY) {
+        ArrayData array;
+        BuildArrayInitializer(this, &array, gDataQueue.dat_address());
+
+        gDataQueue.Add(std::move(array.iv));
+        gDataQueue.Add(std::move(array.data));
+        gDataQueue.AddZeroes(array.zeroes);
+    } else {
+        assert(false);
+    }
+
+    // Data queue is only purged in endfunc(), so make sure each global
+    // dumps the data queue.
+    if (sym_->vclass == sGLOBAL)
+        gDataQueue.Emit();
+}
+
+void
+VarDecl::EmitLocal()
+{
+    if (sym_->ident == iVARIABLE) {
+        declared++;
+        sym_->setAddr(-declared * sizeof(cell));
+        markexpr(sLDECL, name()->chars(), sym_->addr());
+        markstack(MEMUSE_STATIC, 1);
+
+        if (init_) {
+            const auto& val = init_->right()->val();
+            if (val.ident == iCONSTEXPR) {
+                pushval(val.constval);
+            } else {
+                init_->right()->Emit();
+                pushreg(sPRI);
+            }
+        } else {
+            // Note: we no longer honor "decl" for scalars.
+            pushval(0);
+        }
+    } else if (sym_->ident == iARRAY) {
+        ArrayData array;
+        BuildArrayInitializer(this, &array, 0);
+
+        cell iv_size = array.iv.size();
+        cell data_size = array.data.size() + array.zeroes;
+        cell total_size = iv_size + data_size;
+
+        declared += total_size;
+        sym_->setAddr(-declared * sizeof(cell));
+        markexpr(sLDECL, name()->chars(), sym_->addr());
+        modstk(-(total_size * sizeof(cell)));
+        markstack(MEMUSE_STATIC, total_size);
+
+        cell fill_value = 0;
+        cell fill_size = 0;
+        if (!array.zeroes) {
+            // Check for a fill value as an optimization. Note that zeroes are
+            // handled by INITARRAY so we don't bother with zeroes here.
+            cell test_value = array.data[0];
+            for (size_t i = 1; i < array.data.size(); i++) {
+                if (test_value != array.data[i]) {
+                    test_value = 0;
+                    break;
+                }
+            }
+
+            if (test_value) {
+                // Note: data_size must be preserved since it includes any fills.
+                fill_value = test_value;
+                fill_size = data_size;
+                array.data.clear();
+            }
+        }
+
+        cell iv_addr = gDataQueue.dat_address();
+        gDataQueue.Add(std::move(array.iv));
+        gDataQueue.Add(std::move(array.data));
+        if (array.zeroes < 16) {
+            // For small numbers of extra zeroes, fold them into the data
+            // section.
+            gDataQueue.AddZeroes(array.zeroes);
+            gDataQueue.Compact();
+            array.zeroes = 0;
+        }
+
+        if (array.zeroes) {
+            assert(fill_value == 0);
+            fill_size = array.zeroes;
+        }
+
+        cell non_filled = data_size - fill_size;
+
+        // the decl keyword is deprecated, but we preserve its optimization for
+        // older plugins so we don't introduce any surprises. Note we zap the
+        // fill size *after* computing the non-fill size, since we need to
+        // compute the copy size correctly.
+        if (!autozero_ && fill_size && fill_value == 0)
+            fill_size = 0;
+
+        addr_reg(sym_->addr(), sPRI);
+        emit_initarray(sPRI, iv_addr, iv_size, non_filled, fill_size, fill_value);
+    } else if (sym_->ident == iREFARRAY) {
+        // Note that genarray() pushes the address onto the stack, so we don't
+        // need to call modstk() here.
+        declared++;
+        sym_->setAddr(-declared * sizeof(cell));
+
+        markexpr(sLDECL, name()->chars(), sym_->addr());
+
+        if (NewArrayExpr* ctor = init_rhs()->AsNewArrayExpr()) {
+            ctor->Emit();
+        } else if (StringExpr* ctor = init_rhs()->AsStringExpr()) {
+            auto queue_size = gDataQueue.size();
+            auto str_addr = gDataQueue.dat_address();
+            gDataQueue.Add(ctor->text()->chars(), ctor->text()->length());
+
+            auto cells = gDataQueue.size() - queue_size;
+            assert(cells > 0);
+
+            pushval(cells);
+            genarray(1, autozero_);
+            ldconst(str_addr, sPRI);
+            copyarray(sym_, cells * sizeof(cell));
+        } else {
+            assert(false);
+        }
+
+        markheap(MEMUSE_DYNAMIC, 0);
+        markstack(MEMUSE_STATIC, 1);
+    } else {
+        assert(false);
+    }
+
+    if (declared + sDEF_AMXSTACK / 2 > pc_stksize)
+        pc_stksize = declared + sDEF_AMXSTACK;
 }
 
 void
@@ -56,14 +212,13 @@ VarDecl::EmitPstruct()
     values.resize(ps->args.size());
 
     sym_->codeaddr = code_idx;
-    begdseg();
 
-    auto init = init_->AsStructExpr();
+    auto init = init_rhs()->AsStructExpr();
     for (const auto& field : init->fields()) {
         auto arg = pstructs_getarg(ps, field.name);
         if (auto expr = field.value->AsStringExpr()) {
-            values[arg->index] = (litidx + glb_declared) * sizeof(cell);
-            litadd(expr->text()->chars(), expr->text()->length());
+            values[arg->index] = gDataQueue.dat_address();
+            gDataQueue.Add(expr->text()->chars(), expr->text()->length());
         } else if (auto expr = field.value->AsTaggedValueExpr()) {
             values[arg->index] = expr->value();
         } else {
@@ -71,12 +226,11 @@ VarDecl::EmitPstruct()
         }
     }
 
-    sym_->setAddr((litidx + glb_declared) * sizeof(cell));
+    sym_->setAddr(gDataQueue.dat_address());
 
     for (const auto& value : values)
-        litadd(value);
-
-    glb_declared += dumplits();
+        gDataQueue.Add(value);
+    gDataQueue.Emit();
 }
 
 void
@@ -456,22 +610,22 @@ TernaryExpr::DoEmit()
 
     second_->Emit();
 
-    if ((total1 = pop_static_heaplist())) {
+    if ((total1 = pop_static_heaplist()))
         setheap_save(total1 * sizeof(cell));
-    }
+
     pushheaplist();
     jumplabel(flab2);
     setlabel(flab1);
 
     third_->Emit();
 
-    if ((total2 = pop_static_heaplist())) {
+    if ((total2 = pop_static_heaplist()))
         setheap_save(total2 * sizeof(cell));
-    }
+
     setlabel(flab2);
-    if (val_.ident == iREFARRAY && (total1 && total2)) {
+
+    if (val_.ident == iREFARRAY && (total1 && total2))
         markheap(MEMUSE_DYNAMIC, 0);
-    }
 }
 
 void
@@ -528,9 +682,9 @@ CommaExpr::EmitTest(bool jump_on_true, int target) {
 void
 ArrayExpr::DoEmit()
 {
-    auto addr = (litidx + glb_declared) * sizeof(cell);
+    auto addr = gDataQueue.dat_address();
     for (const auto& expr : exprs_)
-        litadd(expr->val().constval);
+        gDataQueue.Add(expr->val().constval);
     ldconst(addr, sPRI);
 }
 
@@ -558,8 +712,8 @@ TaggedValueExpr::DoEmit()
 void
 StringExpr::DoEmit()
 {
-    auto addr = (litidx + glb_declared) * sizeof(cell);
-    litadd(text_->chars(), text_->length());
+    auto addr = gDataQueue.dat_address();
+    gDataQueue.Add(text_->chars(), text_->length());
     ldconst(addr, sPRI);
 }
 
@@ -575,53 +729,41 @@ IndexExpr::DoEmit()
 
     const auto& idxval = expr_->val();
     if (idxval.ident == iCONSTEXPR) {
-        if (!(sym->tag == pc_tag_string && sym->dim.array.level == 0)) {
+        if (!magic_string) {
             /* normal array index */
             if (idxval.constval != 0) {
                 /* don't add offsets for zero subscripts */
-                ldconst(idxval.constval << 2, sALT);
-                ob_add();
+                addconst(idxval.constval << 2);
             }
         } else {
             /* character index */
             if (idxval.constval != 0) {
                 /* don't add offsets for zero subscripts */
-                ldconst(idxval.constval, sALT); /* 8-bit character */
-                ob_add();
+                addconst(idxval.constval); /* 8-bit character */
             }
         }
     } else {
         pushreg(sPRI);
         expr_->Emit();
 
-        /* array index is not constant */
-        if (!magic_string) {
-            if (sym->dim.array.length != 0)
-                ffbounds(sym->dim.array.length - 1); /* run time check for array bounds */
-            else
-                ffbounds();
-            cell2addr(); /* normal array index */
+        if (sym->dim.array.length != 0)
+            ffbounds(sym->dim.array.length - 1); /* run time check for array bounds */
+        else
+            ffbounds();
+
+        if (magic_string) {
+            char2addr();
+            popreg(sALT);
+            ob_add();
         } else {
-            if (sym->dim.array.length != 0)
-                ffbounds(sym->dim.array.length * (32 / sCHARBITS) - 1);
-            else
-                ffbounds();
-            char2addr(); /* character array index */
+            popreg(sALT);
+            idxaddr();
         }
-        popreg(sALT);
-        ob_add(); /* base address was popped into secondary register */
     }
 
-    /* the indexed item may be another array (multi-dimensional arrays) */
-    if (sym->dim.array.level > 0) {
-        /* read the offset to the subarray and add it to the current address */
-        value val = base_->val();
-        val.ident = iARRAYCELL;
-        pushreg(sPRI); /* the optimizer makes this to a MOVE.alt */
-        rvalue(&val);
-        popreg(sALT);
-        ob_add();
-    }
+    // The indexed item is another array (multi-dimensional arrays).
+    if (sym->dim.array.level > 0)
+        load_i();
 }
 
 void
@@ -652,8 +794,7 @@ CallExpr::DoEmit()
 {
     // If returning an array, push a hidden parameter.
     if (val_.sym) {
-        int retsize = array_totalsize(val_.sym);
-        assert(retsize > 0  || !cc_ok());
+        cell retsize = CalcArraySize(val_.sym);
 
         modheap(retsize * sizeof(cell));
         pushreg(sALT);
@@ -734,20 +875,13 @@ DefaultArgExpr::DoEmit()
 {
     switch (arg_->ident) {
         case iREFARRAY:
-        {
-            auto& def = arg_->defvalue.array;
-            bool is_const = arg_->is_const;
-
-            setdefarray(def.data, def.size, def.arraysize, &def.addr, is_const);
-            if (def.data)
-                assert(arg_->numdim > 0);
+            emit_default_array(arg_);
             break;
-        }
         case iREFERENCE:
-            setheap(arg_->defvalue.val);
+            setheap(arg_->def->val.get());
             break;
         case iVARIABLE:
-            ldconst(arg_->defvalue.val, sPRI);
+            ldconst(arg_->def->val.get(), sPRI);
             break;
         default:
             assert(false);
@@ -766,4 +900,31 @@ CallUserOpExpr::DoEmit()
     } else {
         emit_userop(userop_, nullptr);
     }
+}
+
+void
+NewArrayExpr::DoEmit()
+{
+    int numdim = 0;
+    for (size_t i = 0; i < exprs_.size(); i++) {
+        Expr* expr = exprs_[i];
+        expr->Emit();
+
+        if (i == exprs_.size() - 1 && tag_ == pc_tag_string)
+            stradjust(sPRI);
+
+        pushreg(sPRI);
+        numdim++;
+    }
+
+    if (symbol* es = gTypes.find(tag_)->asEnumStruct()) {
+        // The last dimension is implicit in the size of the enum struct. Note
+        // that when synthesizing a NewArrayExpr for old-style declarations,
+        // it is impossible to have an enum struct.
+        // :TODO: test this
+        pushval(es->addr());
+        numdim++;
+    }
+
+    genarray(numdim, autozero_);
 }

@@ -183,11 +183,6 @@ class TestPlan(object):
         'spcomp': spcomp,
         'args': ['-O0'],
       })
-      self.modes.append({
-        'name': 'pcode12',
-        'spcomp': spcomp,
-        'args': ['-x12'],
-      })
 
   def find_spcomp2(self):
     for arch in self.arch_suffixes:

@@ -79,6 +79,8 @@ Type::prettyName() const
 {
   if (kind_ == TypeKind::Function)
     return kindName();
+  if (tagid() == 0)
+    return "int";
   return name();
 }
 

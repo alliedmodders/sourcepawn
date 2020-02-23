@@ -1,1 +1,1 @@
-(6) : error 009: invalid array size (negative, zero or out of bounds)
+(6) : error 174: symbol 'Sample' is a type and cannot be used as a value

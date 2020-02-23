@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
@@ -20,6 +20,7 @@
 #pragma once
 
 #include <amtl/am-string.h>
+#include <amtl/am-vector.h>
 
 #include "sc.h"
 
@@ -282,7 +283,7 @@ int expecttoken(int id, token_t* tok);
 int matchsymbol(token_ident_t* ident);
 int needsymbol(token_ident_t* ident);
 int peek_same_line();
-void litadd(const char* str, size_t len);
+void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
@@ -296,14 +297,12 @@ symbol* find_enumstruct_field(Type* type, const char* name);
 symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag);
 symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
                     int numdim, int idxtag[]);
-symbol* addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
-                     int numdim, int idxtag[], int slength);
-symbol* addvariable3(declinfo_t* decl, cell addr, int vclass, int slength);
 void declare_methodmap_symbol(methodmap_t* map, bool can_redef);
 void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);
 std::string get_token_string(int tok_id);
+int is_variadic(symbol* sym);
 
 enum class TerminatorPolicy {
     Newline,

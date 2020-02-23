@@ -50,8 +50,6 @@ char binfname[_MAX_PATH];                  /* binary file name */
 char errfname[_MAX_PATH];                  /* error file name */
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
-int litidx = 0;                            /* index to literal table */
-int litmax = sDEF_LITMAX;                  /* current size of the literal table */
 int stgidx = 0;                            /* index to the staging buffer */
 int sc_labnum = 0;                         /* number of (internal) labels */
 int staging = 0;                           /* true if staging output */
@@ -67,6 +65,7 @@ int sc_needsemicolon = TRUE;               /* semicolon required to terminate ex
 int sc_dataalign = sizeof(cell);           /* data alignment value */
 int curseg = 0;                            /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize = sDEF_AMXSTACK;           /* default stack size */
+cell pc_stksize_override = 0;
 int freading = FALSE;                      /* Is there an input file ready for reading? */
 int fline = 0;                             /* the line number in the current file */
 short fnumber = 0;                         /* the file number in the file table (debugging) */

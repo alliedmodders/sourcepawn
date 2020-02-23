@@ -40,14 +40,16 @@
 #    include <direct.h>
 #endif
 
-#include "lexer.h"
 #include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
 #include <amtl/am-raii.h>
 #include <amtl/am-string.h>
 #include <sp_typeutil.h>
+#include "array-helpers.h"
 #include "emitter.h"
 #include "errors.h"
+#include "lexer.h"
+#include "lexer-inl.h"
 #include "libpawnc.h"
 #include "new-parser.h"
 #include "optimizer.h"
@@ -1008,7 +1010,7 @@ command(void)
                             (char*)lptr,
                             '\0'); /* skip to end (ignore "extra characters on line") */
                     } else if (strcmp(str, "dynamic") == 0) {
-                        preproc_expr(&pc_stksize, NULL);
+                        preproc_expr(&pc_stksize_override, NULL);
                     } else if (strcmp(str, "rational") == 0) {
                         while (*lptr != '\0')
                             lptr++;
@@ -1673,7 +1675,6 @@ packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
         ucell c = litchar(&lptr, flags); // litchar() alters "lptr"
         if (c >= (ucell)(1 << sCHARBITS))
             error(43); // character constant exceeds range
-        glbstringread++;
         if (tok->len >= sizeof(tok->str) - 1) {
             error(75); // line too long
             continue;
@@ -1714,7 +1715,6 @@ packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
  *
  *  Global references: lptr          (altered)
  *                     fline         (referred to only)
- *                     litidx        (referred to only)
  *                     _pushed
  */
 
@@ -2306,8 +2306,6 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
     tok->len = 0;
     tok->value = -1;  // Catch consumers expecting automatic litadd().
 
-    glbstringread = 1;
-
     for (;;) {
         assert(*lptr == '\"' || *lptr == '\'');
 
@@ -2676,27 +2674,11 @@ require_newline(TerminatorPolicy policy)
 }
 
 void
-litadd(const char* str, size_t len)
+litadd_str(const char* str, size_t len, std::vector<cell>* out)
 {
-    ucell val = 0;
-    int byte = 0;
-    for (size_t i = 0; i < len; i++) {
-        val |= (unsigned char)str[i] << (8 * byte);
-        if (byte == sizeof(ucell) - 1) {
-            litadd(val);
-            val = 0;
-            byte = 0;
-        } else {
-            byte++;
-        }
-    }
-    if (byte != 0) {
-        // There are zeroes to terminate |val|.
-        litadd(val);
-    } else {
-        // Add a full cell of zeroes.
-        litadd(0);
-    }
+    StringToCells(str, len, [out](cell val) -> void {
+        out->emplace_back(val);
+    });
 }
 
 /*  litchar
@@ -3058,8 +3040,9 @@ findconst(const char* name)
 }
 
 FunctionData::FunctionData()
- : funcid(0)
- , dbgstrs(nullptr)
+ : funcid(0),
+   dbgstrs(nullptr),
+   array(nullptr)
 {
     resizeArgs(0);
 }
@@ -3069,16 +3052,14 @@ FunctionData::~FunctionData() {
         delete_stringtable(dbgstrs);
         free(dbgstrs);
     }
+    delete array;
 }
 
 void
 FunctionData::resizeArgs(size_t nargs)
 {
-    arginfo null_arg;
-    memset(&null_arg, 0, sizeof(null_arg));
-
     args.resize(nargs);
-    args.push_back(null_arg);
+    args.emplace_back();
 }
 
 symbol::symbol()
@@ -3158,14 +3139,7 @@ symbol::symbol(const symbol& other)
 
 symbol::~symbol()
 {
-    if (ident == iFUNCTN) {
-        /* run through the argument list; "default array" arguments
-         * must be freed explicitly; the tag list must also be freed */
-        for (arginfo* arg = &function()->args[0]; arg->ident != 0; arg++) {
-            if (arg->ident == iREFARRAY && arg->hasdefault)
-                free(arg->defvalue.array.data);
-        }
-    } else if (ident == iCONSTEXPR && enumroot) {
+    if (ident == iCONSTEXPR && enumroot) {
         /* free the constant list of an enum root */
         assert(dim.enumlist != NULL);
         delete_consttable(dim.enumlist);
@@ -3223,21 +3197,6 @@ symbol*
 addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
             int idxtag[])
 {
-    return addvariable2(name, addr, ident, vclass, tag, dim, numdim, idxtag, 0);
-}
-
-symbol*
-addvariable3(declinfo_t* decl, cell addr, int vclass, int slength)
-{
-    typeinfo_t* type = &decl->type;
-    return addvariable2(decl->name, addr, type->ident, vclass, type->tag, type->dim, type->numdim,
-                        type->idxtag, slength);
-}
-
-symbol*
-addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
-             int idxtag[], int slength)
-{
     symbol* sym;
 
     /* global variables may only be defined once
@@ -3258,13 +3217,6 @@ addvariable2(const char* name, cell addr, int ident, int vclass, int tag, int di
             top = addsym(name, addr, ident, vclass, tag);
             top->defined = true;
             top->dim.array.length = dim[level];
-            top->dim.array.slength = 0;
-            if (level == numdim - 1 && tag == pc_tag_string) {
-                if (slength == 0)
-                    top->dim.array.length = dim[level] * sizeof(cell);
-                else
-                    top->dim.array.slength = slength;
-            }
             top->dim.array.level = (short)(numdim - level - 1);
             top->x.tags.index = idxtag[level];
             top->set_parent(parent);
@@ -3463,4 +3415,22 @@ declare_handle_intrinsics()
         strcpy(close->name, "Close");
         map->methods.push_back(std::move(close));
     }
+}
+
+DefaultArg::~DefaultArg()
+{
+    delete array;
+}
+
+int
+is_variadic(symbol* sym)
+{
+    assert(sym->ident == iFUNCTN);
+    arginfo* arg = &sym->function()->args[0];
+    while (arg->ident) {
+        if (arg->ident == iVARARGS)
+            return TRUE;
+        arg++;
+    }
+    return FALSE;
 }

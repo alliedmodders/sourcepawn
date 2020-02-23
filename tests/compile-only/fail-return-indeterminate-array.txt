@@ -1,1 +1,1 @@
-(6) : error 128: cannot return an array of indeterminate length
+(6) : error 079: inconsistent return types (array & non-array)

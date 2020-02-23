@@ -112,7 +112,6 @@ Parser::parse()
                 if (freading) {
                     error(10);    /* illegal function or declaration */
                     lexclr(TRUE); /* drop the rest of the line */
-                    litidx = 0;   /* drop any literal arrays (strings) */
                 }
         }
 
@@ -185,16 +184,62 @@ Parser::parse_unknown_decl(const token_t* tok)
             return new VarDecl(pos, gAtoms.add(decl.name), decl.type, sGLOBAL, fpublic && init,
                                false, !init, init);
         }
-        declglb(&decl, fpublic, fstatic, fstock);
+        VarParams params;
+        params.vclass = sGLOBAL;
+        params.is_public = !!fpublic;
+        params.is_static = !!fstatic;
+        params.is_stock = !!fstock;
+        return parse_var(&decl, params);
     } else {
         if (!newfunc(&decl, NULL, fpublic, fstatic, fstock, NULL)) {
             // Illegal function or declaration. Drop the line, reset literal queue.
             error(10);
             lexclr(TRUE);
-            litidx = 0;
         }
     }
     return nullptr;
+}
+
+Stmt*
+Parser::parse_var(declinfo_t* decl, const VarParams& params)
+{
+    StmtList* list = nullptr;
+    Stmt* stmt = nullptr;
+
+    for (;;) {
+        auto pos = current_pos();
+        auto name = gAtoms.add(decl->name);
+
+        Expr* init = nullptr;
+        if (matchtoken('='))
+            init = var_init(params.vclass);
+
+        VarDecl* var = new VarDecl(pos, name, decl->type, params.vclass, params.is_public,
+                                   params.is_static, params.is_stock, init);
+        if (!params.autozero)
+            var->set_no_autozero();
+
+        if (stmt) {
+            if (!list) {
+                list = new StmtList(var->pos());
+                list->stmts().emplace_back(stmt);
+            }
+            list->stmts().emplace_back(var);
+        } else {
+            stmt = var;
+        }
+
+        if (!matchtoken(','))
+            break;
+
+        if (decl->type.is_new)
+            reparse_new_decl(decl, DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT);
+        else
+            reparse_old_decl(decl, DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT);
+    }
+
+    needtoken(tTERM); /* if not comma, must be semicolumn */
+    return list ? list : stmt;
 }
 
 Decl*
@@ -293,7 +338,6 @@ Parser::parse_pstruct()
 
         declinfo_t decl = {};
         decl.type.ident = iVARIABLE;
-        decl.type.size = 1;
 
         needtoken(tPUBLIC);
         auto pos = current_pos();
@@ -432,7 +476,6 @@ Parser::parse_const(int vclass)
         exprconst(&expr_val, &expr_tag, nullptr);
 
         typeinfo_t type = {};
-        type.size = 1;
         type.tag = tag;
         type.is_const = true;
 
@@ -660,14 +703,24 @@ Parser::hier2()
         }
         case tNEW:
         {
+            // :TODO: unify this to only care about types. This will depend on
+            // removing immediate name resolution from parse_new_typename.
             token_ident_t ident;
-            if (!needsymbol(&ident))
+            if (matchsymbol(&ident)) {
+                if (matchtoken('(')) {
+                    Expr* target = new SymbolExpr(current_pos(), gAtoms.add(ident.name));
+                    return parse_call(pos, tok, target);
+                }
+                lexpush();
+            }
+
+            int tag = 0;
+            parse_new_typename(nullptr, &tag);
+
+            if (!needtoken('['))
                 return new ErrorExpr();
 
-            Expr* target = new SymbolExpr(current_pos(), gAtoms.add(ident.name));
-
-            needtoken('(');
-            return parse_call(pos, tok, target);
+            return parse_new_array(pos, tag);
         }
         case tLABEL: /* tagname override */
         {
@@ -854,6 +907,10 @@ Parser::constant()
         {
             ArrayExpr* expr = new ArrayExpr(pos);
             do {
+                if (matchtoken(tELLIPS)) {
+                    expr->set_ellipses();
+                    break;
+                }
                 Expr* child = hier14();
                 expr->exprs().push_back(child);
             } while (matchtoken(','));
@@ -998,4 +1055,92 @@ Parser::parse_static_assert()
         return nullptr;
 
     return new StaticAssertStmt(pos, expr_val, text);
+}
+
+Expr*
+Parser::var_init(int vclass)
+{
+    if (matchtoken('{')) {
+        ArrayExpr* expr = new ArrayExpr(current_pos());
+        do {
+            if (lexpeek('}'))
+                break;
+            if (matchtoken(tELLIPS)) {
+                expr->set_ellipses();
+                break;
+            }
+            Expr* child = var_init(vclass);
+            expr->exprs().emplace_back(child);
+        } while (matchtoken(','));
+        needtoken('}');
+        return expr;
+    }
+
+    if (matchtoken(tSTRING)) {
+        auto tok = current_token();
+        return new StringExpr(tok->start, tok->str, tok->len);
+    }
+
+    if (vclass == sLOCAL)
+        return hier14();
+
+    // We allow assigning symbols to arrays in arguments.
+    token_ident_t ident;
+    if (vclass == sARGUMENT && matchsymbol(&ident))
+        return new SymbolExpr(current_pos(), gAtoms.add(ident.name));
+
+    // Note: this position is not really accurate. Once we eliminate exprconst
+    // we can use hier14() instead and this code will go away.
+    auto pos = current_pos();
+
+    int tag;
+    cell value;
+    if (!exprconst(&value, &tag, nullptr))
+        return new ErrorExpr();
+    return new TaggedValueExpr(pos, tag, value);
+}
+
+Expr*
+Parser::parse_new_array(const token_pos_t& pos, int tag)
+{
+    auto expr = new NewArrayExpr(pos, tag);
+
+    do {
+        Expr* child = hier14();
+        expr->exprs().emplace_back(child);
+
+        needtoken(']');
+    } while (matchtoken('['));
+    return expr;
+}
+
+void
+Parser::parse_post_dims(typeinfo_t* type)
+{
+    Expr* old_dims[sDIMEN_MAX];
+    bool has_old_dims = false;
+
+    do {
+        if (type->numdim == sDIMEN_MAX) {
+            error(53);
+            break;
+        }
+
+        type->idxtag[type->numdim] = 0;
+        type->dim[type->numdim] = 0;
+
+        if (matchtoken(']')) {
+            old_dims[type->numdim] = nullptr;
+        } else {
+            old_dims[type->numdim] = hier14();
+            has_old_dims = true;
+            needtoken(']');
+        }
+        type->numdim++;
+    } while (matchtoken('['));
+
+    if (has_old_dims) {
+        type->dim_exprs = gPoolAllocator.alloc<Expr*>(type->numdim);
+        memcpy(type->dim_exprs, old_dims, sizeof(Expr*) * type->numdim);
+    }
 }

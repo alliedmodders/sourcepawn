@@ -21,6 +21,7 @@
 //
 //  Version: $Id$
 
+#include "array-helpers.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -36,7 +37,9 @@ Stmt::Process()
         return;
     if (!Analyze())
         return;
-    Emit();
+
+    if (cc_ok())
+        Emit();
 }
 
 bool
@@ -62,14 +65,55 @@ Decl::Analyze()
     return true;
 }
 
+VarDecl::VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+                 bool is_public, bool is_static, bool is_stock, Expr* initializer)
+ : Decl(pos, name),
+   type_(type),
+   vclass_(vclass),
+   is_public_(is_public),
+   is_static_(is_static),
+   is_stock_(is_stock),
+   autozero_(true)
+{
+    // Having a BinaryExpr allows us to re-use assignment logic.
+    if (initializer)
+        set_init(initializer);
+}
+
+void
+VarDecl::set_init(Expr* expr)
+{
+    init_ = new BinaryExpr(pos(), '=', new SymbolExpr(pos(), name()), expr);
+    init_->set_initializer();
+}
+
+Expr*
+VarDecl::init_rhs() const
+{
+    if (!init_)
+        return nullptr;
+    return init_->right();
+}
+
 bool
 VarDecl::Analyze()
 {
+    AutoErrorPos aep(pos_);
+
     if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct)
         return AnalyzePstruct();
 
-    assert(false);
-    return false;
+    if (type_.ident == iARRAY || type_.ident == iREFARRAY)
+        return CheckArrayDeclaration(this);
+
+    assert(type_.ident == iVARIABLE || type_.ident == iREFERENCE);
+
+    // Since we always create an assignment expression, all type checks will
+    // be performed by the Analyze() call here.
+    if (init_ && !init_->Analyze())
+        return false;
+
+    return true;
 }
 
 bool
@@ -78,7 +122,7 @@ VarDecl::AnalyzePstruct()
     if (!init_)
         return true;
 
-    auto init = init_->AsStructExpr();
+    auto init = init_->right()->AsStructExpr();
     assert(init); // If we parse struct initializers as a normal global, this check will need to be
                   // soft.
     auto type = gTypes.find(sym_->tag);
@@ -541,9 +585,14 @@ BinaryExpr::ValidateAssignmentLHS()
             error(pos_, 142);
             return false;
         }
-        if (array_totalsize(left_sym) == 0) {
-            error(pos_, 46, left_sym->name());
-            return false;
+
+        symbol* iter = left_sym;
+        while (iter) {
+            if (!iter->dim.array.length) {
+                error(pos_, 46, left_sym->name());
+                return false;
+            }
+            iter = iter->array_child();
         }
         return true;
     }
@@ -556,7 +605,7 @@ BinaryExpr::ValidateAssignmentLHS()
     assert(left_val.sym || left_val.accessor);
 
     // may not change "constant" parameters
-    if (left_val.sym && left_val.sym->is_const) {
+    if (!initializer_ && left_val.sym && left_val.sym->is_const) {
         error(pos_, 22);
         return false;
     }
@@ -642,7 +691,10 @@ BinaryExpr::ValidateAssignmentRHS()
         {
             error(pos_, 229, right_val.sym ? right_val.sym->name() : left_val.sym->name());
         }
+
         array_copy_length_ = right_length;
+        if (left_val.sym->tag == pc_tag_string)
+            array_copy_length_ = char_array_cells(array_copy_length_);
     } else {
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
             error(pos_, 6); // must be assigned to an array
@@ -1210,8 +1262,7 @@ IndexExpr::Analyze()
             /* character index */
             if (expr.constval < 0 ||
                 (base.sym->dim.array.length != 0 &&
-                 base.sym->dim.array.length * ((8 * sizeof(cell)) / sCHARBITS) <=
-                     (ucell)expr.constval))
+                 base.sym->dim.array.length <= (ucell)expr.constval))
             {
                 error(pos_, 32, base.sym->name()); /* array index out of bounds */
                 return false;
@@ -1287,7 +1338,7 @@ bool
 StringExpr::Analyze()
 {
     val_.ident = iARRAY;
-    val_.constval = -char_array_cells((cell)text_->length() + 1);
+    val_.constval = -((cell)text_->length() + 1);
     val_.tag = pc_tag_string;
     return true;
 }
@@ -1511,7 +1562,6 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
 
     if (field_->dim.array.length > 0) {
         child->dim.array.length = field_->dim.array.length;
-        child->dim.array.slength = field_->dim.array.slength;
         child->dim.array.level = 0;
         child->ident = iREFARRAY;
         val_.constval = field_->dim.array.length;
@@ -1615,10 +1665,6 @@ SizeofExpr::Analyze()
                 error(pos_, 105, enum_type->name(), field_->chars());
                 return false;
             }
-            if (int string_size = field->dim.array.slength) {
-                val_.constval = string_size;
-                return true;
-            }
             if (int array_size = field->dim.array.length) {
                 val_.constval = array_size;
                 return true;
@@ -1640,11 +1686,17 @@ SizeofExpr::Analyze()
             return false;
         }
         if (array_levels_ != sym->dim.array.level + 1) {
-            val_.constval = array_levelsize(sym, array_levels_);
-            if (val_.constval == 0) {
+            symbol* iter = sym;
+            int level = array_levels_;
+            while (level-- > 0)
+                iter = iter->array_child();
+
+            if (!iter->dim.array.length) {
                 error(pos_, 163, sym->name()); // indeterminate array size in "sizeof"
                 return false;
             }
+            val_.constval = iter->dim.array.length;
+            return true;
         }
     }
     return true;
@@ -1696,7 +1748,7 @@ CallExpr::Analyze()
     // supposed to emit this code than the status should be statSKIP - so
     // we're generating code that will jump to the wrong address.
     if (sym_->stock && !(sym_->usage & uREAD) && sc_status == statWRITE) {
-        error(pos_, 195, sym_->name());
+        error(pos_, FATAL_ERROR_NO_GENERATED_CODE, sym_->name());
         return false;
     }
 
@@ -1791,7 +1843,7 @@ CallExpr::Analyze()
         Expr* expr = argv_[argidx].expr;
         if (expr->AsDefaultArgExpr() && arg.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(nullptr, arg.defvalue_tag, arg.tag, 2, nullptr, &userop))
+            if (find_userop(nullptr, arg.def->tag, arg.tag, 2, nullptr, &userop))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -1812,7 +1864,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             error(pos_, 92); // argument count mismatch
             return false;
         }
-        if (!arg->hasdefault) {
+        if (!arg->def) {
             error(pos_, 34, visual_pos); // argument has no default value
             return false;
         }
@@ -1822,6 +1874,8 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
         argv_[pos].arg = arg;
         return true;
     }
+
+    AutoErrorPos aep(param->pos());
 
     bool handling_this = implicit_this_ && (pos == 0);
 
@@ -2022,4 +2076,50 @@ bool StaticAssertStmt::Analyze()
     error(pos_, 70, message.c_str());
 
     return false;
+}
+
+bool
+NewArrayExpr::Analyze()
+{
+    // We can't handle random refarrays floating around yet, so forbid this.
+    error(pos_, 142);
+    return false;
+}
+
+bool
+NewArrayExpr::AnalyzeForInitializer()
+{
+    if (already_analyzed_)
+        return true;
+
+    val_.ident = iREFARRAY;
+    val_.tag = tag_;
+    for (auto& expr : exprs_) {
+        if (!expr->Analyze())
+            return false;
+        if (expr->lvalue())
+            expr = new RvalueExpr(expr);
+
+        const auto& v = expr->val();
+        if (is_legacy_enum_tag(v.tag)) {
+            error(expr->pos(), 153);
+            return false;
+        }
+        if (!is_valid_index_tag(v.tag)) {
+            error(expr->pos(), 77, type_to_name(v.tag));
+            return false;
+        }
+        if (v.ident == iCONSTEXPR && v.constval <= 0) {
+            error(expr->pos(), 9);
+            return false;
+        }
+    }
+    return true;
+}
+
+void
+NewArrayExpr::ProcessUses()
+{
+    for (const auto& expr : exprs_)
+        expr->ProcessUses();
 }

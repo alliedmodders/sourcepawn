@@ -24,7 +24,7 @@
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0xD
-#define SOURCEPAWN_API_VERSION 0x020F
+#define SOURCEPAWN_API_VERSION 0x0210
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -574,6 +574,24 @@ class IPluginRuntime
      */
     virtual int UpdateNativeBindingObject(uint32_t index, INativeCallback* native, uint32_t flags,
                                           void* data) = 0;
+
+    /**
+     * @brief Returns whether the plugin was compiled with direct array support.
+     *
+     * Direct arrays were introduced in SourcePawn 1.12. Any plugin with this
+     * feature will use absolute addressing for indirection vectors. Eg, for an
+     * array of array of cells (int x[][]), you can extract x[3][5] by doing:
+     *
+     *     cell_t addr_of_x = ...;
+     *     cell_t* phys_x;
+     *     LocalToPhysAddr(addr_of_x, &phys_x);
+     *     LocalToPhysAddr(phys_x[3], &phys_x);
+     *     cell_t value = phys_x[5];
+     *
+     * This code does not work on plugins compiled prior to 1.12, because arrays
+     * had relative indirection vectors.
+     */
+    virtual bool UsesDirectArrays() = 0;
 };
 
 /**
