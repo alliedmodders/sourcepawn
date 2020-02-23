@@ -477,29 +477,49 @@ MethodVerifier::verifyOp(OPCODE op)
     return true;
   }
 
-  case OP_REBASE:
+  case OP_INITARRAY_PRI:
+  case OP_INITARRAY_ALT:
   {
     if (!(code_features_ & SmxConsts::kCodeFeatureDirectArrays)) {
       reportError(SP_ERROR_INVALID_INSTRUCTION);
       return false;
     }
 
+    constexpr cell_t kMaxCells = INT_MAX / (2 * (int)sizeof(cell_t));
+
     cell_t addr = readCell();
     cell_t iv_size = readCell();
-    cell_t data_size = readCell();
-    if (iv_size <= 0 ||
-        data_size <= 0 ||
-        iv_size >= INT_MAX / 2 ||
-        data_size >= INT_MAX / 2 ||
-        !ke::IsUintAddSafe<uint32_t>(addr, iv_size + data_size) ||
-        !ke::IsAligned(addr, sizeof(cell_t)) ||
-        !ke::IsAligned(iv_size, sizeof(cell_t)) ||
-        !ke::IsAligned(data_size, sizeof(cell_t)))
+    cell_t data_copy_size = readCell();
+    cell_t data_fill_size = readCell();
+    cell_t fill_value = readCell();
+    if (iv_size < 0 ||
+        data_copy_size < 0 ||
+        data_fill_size < 0 ||
+        iv_size >= kMaxCells ||
+        data_copy_size >= kMaxCells ||
+        data_fill_size >= kMaxCells ||
+        (!data_fill_size && fill_value) ||
+        !ke::IsAligned(addr, sizeof(cell_t)))
     {
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
     }
-    if (!verifyDatOffset(addr) || !verifyDatOffset(addr + iv_size + data_size - 1))
+
+    cell_t copy_addr = addr + iv_size * sizeof(cell_t);
+    cell_t fill_addr = copy_addr + data_copy_size * sizeof(cell_t);
+    if (copy_addr < addr || fill_addr < copy_addr ||
+        !ke::IsUintAddSafe<uint32_t>(fill_addr, data_fill_size * sizeof(cell_t)))
+    {
+      reportError(SP_ERROR_INSTRUCTION_PARAM);
+      return false;
+    }
+
+    // If there's nothing to read from DAT, we can early return.
+    if (!iv_size && !data_copy_size)
+      return true;
+
+    cell_t end_addr = addr + (iv_size + data_copy_size) * sizeof(cell_t);
+    if (!verifyDatOffset(addr) || !verifyDatOffset(end_addr - 1))
       return false;
     return true;
   }

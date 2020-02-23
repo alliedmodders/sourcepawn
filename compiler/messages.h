@@ -76,7 +76,7 @@ static const char* errmsg[] = {
     /*049*/ "invalid line continuation\n",
     /*050*/ "constant '%s' already defined\n",
     /*051*/ "overloaded operator '%s' does not return bool\n",
-    /*052*/ "multi-dimensional arrays must be fully initialized\n",
+    /*052*/ "array size exceeds memory capacity\n",
     /*053*/ "exceeding maximum number of dimensions\n",
     /*054*/ "unmatched closing brace (\"}\")\n",
     /*055*/ "start of function body without function header\n",
@@ -92,7 +92,7 @@ static const char* errmsg[] = {
     /*065*/ "enum struct fields cannot have more than one dimension\n",
     /*066*/ "function argument may not be a reference argument or an array (argument \"%s\")\n",
     /*067*/ "variable cannot be both a reference and an array (variable \"%s\")\n",
-    /*068*/ "length of initializer exceeds size of the enum field\n",
+    /*068*/ "cannot automatically increment values of type '%s'\n",
     /*069*/ "arrays in info structs must be unsized and single dimension\n",
     /*070*/ "assertion failed%s\n",
     /*071*/ "user-defined operator must be declared before use (function \"%s\")\n",
@@ -115,7 +115,7 @@ static const char* errmsg[] = {
     /*088*/ "cannot return a value from a void function\n",
     /*089*/ "casting a void function is illegal\n",
     /*090*/ "public functions may not return arrays (symbol \"%s\")\n",
-    /*091*/ "ambiguous constant; tag override is required (symbol \"%s\")\n",
+    /*091*/ "more initializers than enum fields\n",
     /*092*/ "number of arguments does not match definition\n",
     /*093*/ "cannot divide by zero\n",
     /*094*/ "cannot apply const qualifier to enum struct field \"%s\"\n",
@@ -125,7 +125,7 @@ static const char* errmsg[] = {
     /*098*/ "type \"%s\" should be \"%s\" in new-style declarations\n",
     /*099*/ "%s should not have an explicit return type\n",
     /*100*/ "function prototypes do not match\n",
-    /*101*/ "specify either all dimensions or only the last dimension\n",
+    /*101*/ "fixed dimensions must be after the array name, not on the type\n",
     /*102*/ "cannot find %s %s\n",
     /*103*/ "%s was already defined on this %s\n",
     /*104*/ "cannot find any methods for %s\n",
@@ -158,13 +158,13 @@ static const char* errmsg[] = {
     /*131*/ "cannot coerce object type %s to non-object type %s\n",
     /*132*/ "cannot coerce non-object type %s to object type %s\n",
     /*133*/ "cannot coerce unrelated object types %s and %s\n",
-    /*134*/ "type mismatch (%s and %s)\n",
+    /*134*/ "type mismatch (expected \"%s\", got \"%s\")\n",
     /*135*/ "cannot use enum struct type \"%s\" in natives\n",
     /*136*/ "reference is redundant, enum struct types are array-like\n",
     /*137*/ "cannot mix reference and array types\n",
     /*138*/ "const was specified twice\n",
     /*139*/ "could not find type \"%s\"\n",
-    /*140*/ "new-style array types cannot specify dimension sizes as part of their type\n",
+    /*140*/ "unused140\n",
     /*141*/ "natives, forwards, and public functions cannot return arrays\n",
     /*142*/ "unexpected array expression\n",
     /*143*/ "new-style declarations should not have \"new\"\n",
@@ -192,9 +192,8 @@ static const char* errmsg[] = {
     /*161*/
     "brackets after variable name indicate a fixed-size array, but a dynamic size was given - did "
     "you mean to use 'new %s[size]' syntax?\n",
-    /*162*/
-    "cannot create dynamic arrays in global scope - did you mean to create a fixed-length array "
-    "with brackets after the variable name?\n",
+    /*162*/ "cannot create dynamic arrays in global scope - did you mean to "
+	    "create a fixed-length array?\n",
     /*163*/ "indeterminate array size in \"sizeof\" expression (symbol \"%s\")\n",
     /*164*/ "allocated array type '%s' doesn't match original type '%s'\n",
     /*165*/
@@ -219,31 +218,34 @@ static const char* errmsg[] = {
     /*180*/ "function return type differs from prototype. expected '%s', but got '%s'\n",
     /*181*/ "function argument named '%s' differs from prototype\n",
     /*182*/ "functions that return arrays cannot be used as callbacks\n",
+    /*183*/ "brackets after variable name indicates a fixed-size array, but "
+	    "size is missing or not constant\n",
+    /*184*/ "implicit dynamic array has a dimension of unspecified size\n",
+    /*185*/ "invalid default array initializer\n",
 };
 
 static const char* fatalmsg[] = {
-    /*183*/ "cannot read from file: \"%s\"\n",
-    /*184*/ "cannot write to file: \"%s\"\n",
-    /*185*/ "table overflow: \"%s\"\n",
+    /*300*/ "cannot read from file: \"%s\"\n",
+    /*301*/ "cannot write to file: \"%s\"\n",
+    /*302*/ "table overflow: \"%s\"\n",
     /* table can be: loop table
            *               literal table
            *               staging buffer
            *               option table (response file)
            *               peephole optimizer table
            */
-    /*186*/ "insufficient memory\n",
-    /*187*/ "invalid assembler instruction \"%s\"\n",
-    /*188*/ "numeric overflow, exceeding capacity\n",
-    /*189*/ "compiled script exceeds the maximum memory size (%ld bytes)\n",
-    /*190*/ "too many error messages on one line\n",
-    /*191*/ "codepage mapping file not found\n",
-    /*192*/ "invalid path: \"%s\"\n",
-    /*193*/ "assertion failed: %s\n",
-    /*194*/ "user error: %s\n",
-    /*195*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
-    /*196*/
+    /*303*/ "insufficient memory\n",
+    /*304*/ "invalid assembler instruction \"%s\"\n",
+    /*305*/ "numeric overflow, exceeding capacity\n",
+    /*306*/ "compiled script exceeds the maximum memory size (%ld bytes)\n",
+    /*307*/ "too many error messages on one line\n",
+    /*308*/ "codepage mapping file not found\n",
+    /*309*/ "invalid path: \"%s\"\n",
+    /*310*/ "assertion failed: %s\n",
+    /*311*/ "user error: %s\n",
+    /*312*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
+    /*313*/
     "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
-    /*197*/ "maximum macro recursion depth reached",
 };
 
 static const char* warnmsg[] = {
@@ -274,7 +276,7 @@ static const char* warnmsg[] = {
     /*224*/ "user warning: %s\n",
     /*225*/ "unreachable code\n",
     /*226*/ "a variable is assigned to itself (symbol \"%s\")\n",
-    /*227*/ "more initializers than enum fields\n",
+    /*227*/ "unused227\n",
     /*228*/ "enum multiplers are deprecated and will be removed in the next release\n",
     /*229*/ "index tag mismatch (symbol \"%s\")\n",
     /*230*/ "symbol \"%s\" is not a preprocessor symbol; this behavior is undefined and will be removed in the future\n",
@@ -289,4 +291,5 @@ static const char* warnmsg[] = {
     /*238*/ "'%s:' is an illegal cast; use view_as<%s>(expression)\n",
     /*239*/ "'%s' is an illegal tag; use %s as a type\n",
     /*240*/ "'%s:' is an old-style tag operation; use view_as<%s>(expression) instead\n",
+    /*241*/ "scalar assignment to array is deprecated; use \"{ <val>, ... }\" instead\n",
 };

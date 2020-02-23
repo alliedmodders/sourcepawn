@@ -43,6 +43,13 @@ class SmxAssemblyBuffer : public AssemblyBuffer
     write<cell_t>(param2);
     write<cell_t>(param3);
   }
+  void opcode(OPCODE op, cell_t param1, cell_t param2, cell_t param3, cell_t param4) {
+    write<cell_t>(static_cast<cell_t>(op));
+    write<cell_t>(param1);
+    write<cell_t>(param2);
+    write<cell_t>(param3);
+    write<cell_t>(param4);
+  }
   void opcode(OPCODE op, Label* address) {
     write<cell_t>(static_cast<cell_t>(op));
     encodeAbsoluteAddress(address);

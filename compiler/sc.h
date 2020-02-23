@@ -38,6 +38,7 @@
 #include <memory>
 #include <utility>
 
+#include <amtl/am-maybe.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 
@@ -55,31 +56,39 @@
 #define MAXTAGS 16
 #define sLINEMAX 4095      /* input line length (in characters) */
 #define sCOMP_STACK 32     /* maximum nesting of #if .. #endif sections */
-#define sDEF_LITMAX 500    /* initial size of the literal pool, in "cells" */
 #define sDEF_AMXSTACK 4096 /* default stack size for AMX files */
 #define PREPROC_TERM \
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
 
+struct ArrayData;
+
+struct DefaultArg {
+    int tag = 0;
+    ke::Maybe<cell> val;
+    ArrayData* array = nullptr;
+
+    ~DefaultArg();
+};
+
 struct arginfo { /* function argument info */
+    arginfo()
+      : dim(),
+        idxtag()
+    {}
+    arginfo(const arginfo& arg) = delete;
+    arginfo(arginfo&& other) = default;
+    void operator =(const arginfo& other) = delete;
+    arginfo& operator =(arginfo&& other) = default;
+
     char name[sNAMEMAX + 1];
-    char ident; /* iVARIABLE, iREFERENCE, iREFARRAY or iVARARGS */
-    bool is_const;
-    int tag;    /* argument tag id */
+    char ident = 0;
+    bool is_const = false;
+    int tag = 0;
     int dim[sDIMEN_MAX];
     int idxtag[sDIMEN_MAX];
-    int numdim;               /* number of dimensions */
-    unsigned char hasdefault; /* bit0: is there a default value? bit6: "tagof"; bit7: "sizeof" */
-    union {
-        cell val; /* default value */
-        struct {
-            cell* data;    /* values of default array */
-            int size;      /* complete length of default array */
-            int arraysize; /* size to reserve on the heap */
-            cell addr;     /* address of the default array in the data segment */
-        } array;
-    } defvalue;       /* default value, or pointer to default array */
-    int defvalue_tag; /* tag of the default value */
+    int numdim = 0;
+    std::unique_ptr<DefaultArg> def;
 };
 
 /*  Equate table, tagname table, library table */
@@ -93,25 +102,26 @@ struct constvalue {
 
 struct methodmap_t;
 struct stringlist;
-
-/*  Possible entries for "ident". These are used in the "symbol", "value"
- *  and arginfo structures. Not every constant is valid for every use.
- *  In an argument list, the list is terminated with a "zero" ident; labels
- *  cannot be passed as function arguments, so the value 0 is overloaded.
- */
-#define iVARIABLE 1  /* cell that has an address and that can be fetched directly (lvalue) */
-#define iREFERENCE 2 /* iVARIABLE, but must be dereferenced */
-#define iARRAY 3
-#define iREFARRAY 4   /* an array passed by reference (i.e. a pointer) */
-#define iARRAYCELL 5  /* array element, cell that must be fetched indirectly */
-#define iARRAYCHAR 6  /* array element, character from cell from array */
-#define iEXPRESSION 7 /* expression result, has no address (rvalue) */
-#define iCONSTEXPR 8  /* constant expression (or constant symbol) */
-#define iFUNCTN 9
-#define iVARARGS 11    /* function specified ... as argument(s) */
-#define iACCESSOR 13   /* property accessor via a methodmap_method_t */
-#define iMETHODMAP 14  /* symbol defining a methodmap */
-#define iENUMSTRUCT 15 /* symbol defining an enumstruct */
+ 
+// Possible entries for "ident". These are used in the "symbol", "value"
+// and arginfo structures. Not every constant is valid for every use.
+// In an argument list, the list is terminated with a "zero" ident; labels
+// cannot be passed as function arguments, so the value 0 is overloaded.
+enum IdentifierKind {
+    iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
+    iREFERENCE = 2,     /* iVARIABLE, but must be dereferenced */
+    iARRAY = 3,
+    iREFARRAY = 4,      /* an array passed by reference (i.e. a pointer) */
+    iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
+    iARRAYCHAR = 6,     /* array element, character from cell from array */
+    iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
+    iCONSTEXPR = 8,     /* constant expression (or constant symbol) */
+    iFUNCTN = 9,
+    iVARARGS = 11,      /* function specified ... as argument(s) */
+    iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
+    iMETHODMAP = 14,    /* symbol defining a methodmap */
+    iENUMSTRUCT = 15,   /* symbol defining an enumstruct */
+};
 
 class EnumStructVarData;
 class FunctionData;
@@ -141,6 +151,7 @@ class FunctionData final : public SymbolData
     int funcid;          /* set for functions during codegen */
     stringlist* dbgstrs; /* debug strings - functions only */
     std::vector<arginfo> args;
+    ArrayData* array;    /* For functions with array returns */
 };
 
 class EnumStructVarData final : public SymbolData
@@ -223,7 +234,6 @@ struct symbol {
         constvalue* enumlist; /* list of names for the "root" of an enumeration */
         struct {
             cell length;  /* arrays: length (size) */
-            cell slength; /* if a string index, this will be set to the original size */
             short level;  /* number of dimensions below this level */
         } array;
     } dim;       /* for 'dimension', both functions and arrays */
@@ -319,9 +329,13 @@ struct symbol {
 
 #define uMAINFUNC "main"
 
-#define sGLOBAL 0 /* global variable/constant class (no states) */
-#define sLOCAL 1  /* local variable/constant */
-#define sSTATIC 2 /* global life, local scope */
+enum ScopeKind {
+    sGLOBAL = 0,    /* global variable/constant class (no states) */
+    sLOCAL = 1,     /* local variable/constant */
+    sSTATIC = 2,    /* global life, local scope */
+    sARGUMENT = 3,  /* function argument (this is never stored anywhere) */
+    sENUMFIELD = 4  /* for analysis purposes only (not stored anywhere) */
+};
 
 struct methodmap_method_t;
 
@@ -372,7 +386,6 @@ struct svalue {
 #define DECLFLAG_VARIABLE 0x04       // The declaration is for a variable.
 #define DECLFLAG_ENUMROOT 0x08       // Multi-dimensional arrays should have an enumroot.
 #define DECLFLAG_MAYBE_FUNCTION 0x10 // Might be a named function.
-#define DECLFLAG_DYNAMIC_ARRAYS 0x20 // Dynamic arrays are allowed.
 #define DECLFLAG_OLD 0x40            // Known old-style declaration.
 #define DECLFLAG_FIELD 0x80          // Struct field.
 #define DECLFLAG_NEW 0x100           // Known new-style declaration.

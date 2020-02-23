@@ -2,6 +2,7 @@
 
 bool do_not_call() {
   print("SHOULD NOT GET HERE!\n");
+  return false;
 }
 
 public main() {

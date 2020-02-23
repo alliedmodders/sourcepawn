@@ -1632,7 +1632,7 @@ SmxCompiler::initialize_array(VariableSymbol* sym, sema::Expr* expr, const Array
   // For local arrays, we need to copy over data and rebase the iv section.
   if (info.iv_size) {
     __ opcode(OP_ADDR_PRI, sym->address());
-    __ opcode(OP_REBASE, base, info.iv_size, info.data_size);
+    assert(false);
   } else {
     __ opcode(OP_ADDR_ALT, sym->address());
     __ const_pri(base);

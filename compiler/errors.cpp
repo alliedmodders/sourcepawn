@@ -163,9 +163,9 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     else
         report.filename = inpfname;
 
-    if (number < FIRST_FATAL_ERROR || (number >= 200 && sc_warnings_are_errors))
+    if (number < 200 || (number < 300 && sc_warnings_are_errors))
         report.type = ErrorType::Error;
-    else if (number < 200)
+    else if (number >= 300)
         report.type = ErrorType::Fatal;
     else
         report.type = ErrorType::Warning;
@@ -193,12 +193,17 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     }
 
     const char* format = nullptr;
-    if (report.number < FIRST_FATAL_ERROR)
+    if (report.number < 200) {
+        assert(size_t(report.number - 1) < sizeof(errmsg) / sizeof(*errmsg));
         format = errmsg[report.number - 1];
-    else if (report.number < 200)
-        format = fatalmsg[report.number - FIRST_FATAL_ERROR];
-    else
+    } else if (report.number < 300) {
+        assert(size_t(report.number - 200) < sizeof(warnmsg) / sizeof(*warnmsg));
         format = warnmsg[report.number - 200];
+    } else {
+        assert(report.number >= FIRST_FATAL_ERROR);
+        assert(size_t(report.number - FIRST_FATAL_ERROR) < sizeof(fatalmsg) / sizeof(*fatalmsg));
+        format = fatalmsg[report.number - FIRST_FATAL_ERROR];
+    }
 
     char msg[1024];
     ke::SafeVsprintf(msg, sizeof(msg), format, ap);

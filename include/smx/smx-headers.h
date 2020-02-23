@@ -70,9 +70,11 @@ struct SmxConsts {
     static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_FEATURE_MASK;
     static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
 
-    // This feature adds the REBASE opcode, and requires that multi-dimensional
+    static const uint32_t kCodeFeatureDeprecated0 = (1 << 0);
+
+    // This feature adds the INIT_ARRAY opcode, and requires that multi-dimensional
     // arrays use direct internal addressing.
-    static const uint32_t kCodeFeatureDirectArrays = (1 << 0);
+    static const uint32_t kCodeFeatureDirectArrays = (1 << 1);
 };
 
 // These structures are byte-packed.

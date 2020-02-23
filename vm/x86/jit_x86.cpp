@@ -101,15 +101,17 @@ InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int auto
   return cx->generateFullArray(argc, argv, autozero);
 }
 
-// No exit frame - error code is returned directly.
 static int
-InvokeRebaseArray(PluginContext* cx,
-                  cell_t base_addr,
-                  cell_t dat_addr,
-                  cell_t iv_size,
-                  cell_t data_size)
+InvokeInitArray(PluginContext* cx,
+                cell_t base_addr,
+                cell_t dat_addr,
+                cell_t iv_size,
+                cell_t data_copy_size,
+                cell_t data_fill_size,
+                cell_t fill_value)
 {
-  return cx->rebaseArray(base_addr, dat_addr, iv_size, data_size);
+  return cx->initArray(base_addr, dat_addr, iv_size, data_copy_size, data_fill_size,
+                       fill_value) ? 1 : 0;
 }
 
 bool
@@ -1113,23 +1115,54 @@ Compiler::visitTRACKER_POP_SETHEAP()
 }
 
 bool
-Compiler::visitREBASE(cell_t addr, cell_t iv_size, cell_t data_size)
+Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                         cell_t data_fill_size, cell_t fill_value)
 {
-  // We need to sync |sp| first.
-  __ subl(stk, dat);
-  __ movl(Operand(spAddr()), stk);
-  __ addl(stk, dat);
+  if (!iv_size) {
+    // This is a flat array, we can inline something a little faster.
+    __ push(edi);
+    if (reg == PawnReg::Pri)
+      __ lea(edi, Operand(dat, pri, NoScale));
+    else
+      __ lea(edi, Operand(dat, alt, NoScale));
+    if (data_copy_size) {
+      __ push(esi);
+      __ lea(esi, Operand(dat, addr));
+      __ cld();
+      __ movl(ecx, data_copy_size);
+      __ rep_movsd();
+      __ pop(esi);
+    }
+    if (data_fill_size) {
+      __ movl(eax, fill_value);
+      __ movl(ecx, data_fill_size);
+      __ rep_stosd();
+    }
+    __ pop(edi);
+  } else {
+    // Slow (multi-d) array initialization.
+    // We need to sync |sp| first.
+    __ subl(stk, dat);
+    __ movl(Operand(spAddr()), stk);
+    __ addl(stk, dat);
 
-  __ subl(esp, 3 * sizeof(intptr_t));
-  __ push(data_size);
-  __ push(iv_size);
-  __ push(addr);
-  __ push(pri);
-  __ push(intptr_t(rt_->GetBaseContext()));
-  __ callWithABI(ExternalAddress((void*)InvokeRebaseArray));
-  __ addl(esp, 8 * sizeof(intptr_t));
-  __ testl(eax, eax);
-  jumpOnError(not_zero);
+    __ push(alt);
+    __ push(fill_value);
+    __ push(data_fill_size);
+    __ push(data_copy_size);
+    __ push(iv_size);
+    __ push(addr);
+    if (reg == PawnReg::Pri)
+      __ push(pri);
+    else
+      __ push(alt);
+    __ push(intptr_t(rt_->GetBaseContext()));
+    __ callWithABI(ExternalAddress((void*)InvokeInitArray));
+    __ addl(esp, 7 * sizeof(intptr_t));
+    __ pop(alt);
+    __ testl(eax, eax);
+    __ j(zero, &return_reported_error_);
+  }
   return true;
 }
 

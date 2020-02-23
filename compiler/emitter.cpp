@@ -29,9 +29,11 @@
 
 #include <amtl/am-raii.h>
 
+#include "array-helpers.h"
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
+#include "lexer-inl.h"
 #include "libpawnc.h"
 #include "optimizer.h"
 #include "sc.h"
@@ -39,9 +41,171 @@
 #include "sctracker.h"
 #include "scvars.h"
 
+DataQueue gDataQueue;
 static int fcurseg; /* the file number (fcurrent) for the active segment */
 
-void load_i();
+DataQueue::DataQueue()
+{
+    Reset();
+}
+
+void
+DataQueue::Reset()
+{
+    data_.clear();
+    data_.emplace_back(DataRun());
+    size_ = 0;
+}
+
+cell
+DataQueue::dat_address() const
+{
+    return (glb_declared + size_) * sizeof(cell);
+}
+
+void
+DataQueue::Add(cell value)
+{
+    size_++;
+
+    if (!value) {
+        current().zeroes++;
+        return;
+    }
+
+    if (!Compact())
+        data_.emplace_back(DataRun());
+
+    current().cells.emplace_back(value);
+}
+
+bool
+DataQueue::Compact()
+{
+    if (!current().zeroes)
+        return true;
+
+    // Either collapse a small number of zeroes into actual values, or
+    // start a new data run. We collapse if there are only a few zeroes,
+    // since the point is to avoid dumping huge DATA lines in the assembly.
+    if (current().zeroes < 16) {
+        current().cells.resize(current().cells.size() + current().zeroes);
+        current().zeroes = 0;
+        return true;
+    }
+    return false;
+}
+
+void
+DataQueue::Add(const char* text, size_t length)
+{
+    StringToCells(text, length, [this](cell value) -> void {
+        Add(value);
+    });
+}
+
+void
+DataQueue::Add(std::vector<cell>&& cells)
+{
+    if (cells.empty())
+        return;
+
+    // Always start a new run.
+    if (!current().cells.empty() || current().zeroes)
+        data_.emplace_back(DataRun());
+
+    size_ += cells.size();
+    current().cells = std::move(cells);
+}
+
+void
+DataQueue::AddZeroes(cell count)
+{
+    size_ += count;
+    current().zeroes += count;
+}
+
+class DataEmitter final
+{
+  public:
+    DataEmitter();
+
+    void Dump(const std::vector<cell>& vals);
+    void DumpZeroes(cell nzeroes);
+    void Finish();
+
+  private:
+    size_t col_ = 0;
+};
+
+DataEmitter::DataEmitter()
+{
+    assert(curseg == 2);
+}
+
+void
+DataEmitter::Dump(const std::vector<cell>& vals)
+{
+    for (const auto& val : vals) {
+        if (col_ == 0)
+            defstorage();
+        else
+            stgwrite(" ");
+        outval(val, FALSE);
+
+        col_++;
+        if (col_ == 16) {
+            stgwrite("\n");
+            col_ = 0;
+        }
+    }
+}
+
+void
+DataEmitter::Finish()
+{
+    if (col_) {
+        stgwrite("\n");
+        col_ = 0;
+    }
+}
+
+void
+DataEmitter::DumpZeroes(cell nzeroes)
+{
+    if (sc_status == statSKIP || nzeroes <= 0)
+        return;
+
+    Finish();
+
+    stgwrite("dumpfill ");
+    outval(0, FALSE);
+    stgwrite(" ");
+    outval(nzeroes, TRUE);
+}
+
+void
+DataQueue::Emit()
+{
+    Compact();
+
+    if (!size_)
+        return;
+
+    begdseg();
+
+    DataEmitter de;
+    for (const auto& run : data_) {
+        de.Dump(run.cells);
+        if (run.zeroes)
+            de.DumpZeroes(run.zeroes);
+    }
+
+    de.Finish();
+
+    glb_declared += size_;
+    Reset();
+}
 
 /* When a subroutine returns to address 0, the AMX must halt. In earlier
  * releases, the RET and RETN opcodes checked for the special case 0 address.
@@ -82,7 +246,6 @@ writetrailer(void)
     }
 
     /* pad data segment to align the stack and the heap */
-    assert(litidx == 0 || !cc_ok()); /* literal queue should have been emptied */
     assert(sc_dataalign % sizeof(cell) == 0);
     if (((glb_declared * sizeof(cell)) % sc_dataalign) != 0) {
         begdseg();
@@ -135,7 +298,7 @@ begdseg(void)
         stgwrite("DATA ");
         outval(fcurrent, FALSE);
         stgwrite("\t; ");
-        outval((glb_declared - litidx) * sizeof(cell), TRUE);
+        outval(gDataQueue.dat_address(), TRUE);
         curseg = sIN_DSEG;
         fcurseg = fcurrent;
     }
@@ -361,7 +524,7 @@ address(symbol* sym, regid reg)
     code_idx += opcodes(1) + opargs(1);
 }
 
-static void
+void
 addr_reg(int val, regid reg)
 {
     if (reg == sPRI)
@@ -403,26 +566,33 @@ load_i()
     code_idx += opcodes(1);
 }
 
-// Load the hidden array argument into ALT.
+// Load the hidden array argument into ALT, preserving PRI.
 void
-load_hidden_arg()
+load_hidden_arg(symbol* fun, symbol* sym, bool save_pri)
 {
-    pushreg(sPRI);
+    if (!is_variadic(fun)) {
+        address(sym, sALT);
+        return;
+    }
 
     // Compute an address to the first argument, then add the argument count
     // to find the address after the final argument:
+    //    push.pri
     //    addr.alt   0xc   ; Compute &first_arg
     //    load.s.alt 0x8   ; Load arg count
     //    idxaddr          ; Compute (&first_arg) + argcount
     //    load.i           ; Load *(&first_arg + argcount)
-    //    move.alt         ; Move result into ALT.
+    //    move.alt
+    //    pop.pri
+    if (save_pri)
+        pushreg(sPRI);
     addr_reg(0xc, sALT);
     load_argcount(sPRI);
     idxaddr();
     load_i();
     move_alt();
-
-    popreg(sPRI);
+    if (save_pri)
+        popreg(sPRI);
 }
 
 /*  store
@@ -562,6 +732,18 @@ fillarray(symbol* sym, cell size, cell value)
 }
 
 void
+emit_fill(cell val, cell size)
+{
+    assert(size > 0);
+
+    ldconst(val, sPRI);
+
+    stgwrite("\tfill ");
+    outval(size, TRUE);
+    code_idx += opcodes(1) + opargs(1);
+}
+
+void
 stradjust(regid reg)
 {
     assert(reg == sPRI);
@@ -668,13 +850,12 @@ popreg(regid reg)
  *   hea += 1 + (# cells in array)
  */
 void
-genarray(int dims, int _autozero)
+genarray(int dims, bool autozero)
 {
-    if (_autozero) {
+    if (autozero)
         stgwrite("\tgenarray.z ");
-    } else {
+    else
         stgwrite("\tgenarray ");
-    }
     outval(dims, TRUE);
     code_idx += opcodes(1) + opargs(1);
 }
@@ -1398,102 +1579,60 @@ load_glbfn(symbol* sym)
         markusage(sym, uREAD);
 }
 
-/*  dumplits
- *
- *  Dump the literal pool (strings etc.)
- */
-cell
-dumplits()
-{
-    int j, k;
-
-    if (sc_status == statSKIP)
-        return ke::ReturnAndVoid(litidx);
-
-    k = 0;
-    while (k < litidx) {
-        /* should be in the data segment */
-        assert(curseg == 2);
-        defstorage();
-        j = 16; /* 16 values per line */
-        while (j && k < litidx) {
-            outval(litq[k], FALSE);
-            stgwrite(" ");
-            k++;
-            j--;
-            if (j == 0 || k >= litidx)
-                stgwrite("\n"); /* force a newline after 10 dumps */
-            /* Note: stgwrite() buffers a line until it is complete. It recognizes
-             * the end of line as a sequence of "\n\0", so something like "\n\t"
-             * so should not be passed to stgwrite().
-             */
-        }
-    }
-    return ke::ReturnAndVoid(litidx);
-}
-
-/*  dumpzero
- *
- *  Dump zero's for default initial values
- */
+// Array initialization. Uses and clobbers PRI.
 void
-dumpzero(int count)
+emit_initarray(regid reg, cell base_addr, cell iv_size, cell data_copy_size, cell data_fill_size,
+               cell fill_value)
 {
-    if (sc_status == statSKIP || count <= 0)
-        return;
-    assert(curseg == 2);
-
-    stgwrite("dumpfill ");
-    outval(0, FALSE);
+    if (reg == sPRI)
+        stgwrite("\tinitarray.pri ");
+    else
+        stgwrite("\tinitarray.alt ");
+    outval(base_addr, FALSE);
     stgwrite(" ");
-    outval(count, TRUE);
+    outval(iv_size, FALSE);
+    stgwrite(" ");
+    outval(data_copy_size, FALSE);
+    stgwrite(" ");
+    outval(data_fill_size, FALSE);
+    stgwrite(" ");
+    outval(fill_value, TRUE);
+    code_idx += opcodes(1) + opargs(5);
 }
 
-static void
-chk_grow_litq(void)
+void
+emit_default_array(arginfo* arg)
 {
-    if (litidx >= litmax) {
-        cell* p;
+    DefaultArg* def = arg->def.get();
+    if (!def->val) {
+        def->val = ke::Some(gDataQueue.dat_address());
 
-        litmax += sDEF_LITMAX;
-        p = (cell*)realloc(litq, litmax * sizeof(cell));
-        if (p == NULL)
-            error(FATAL_ERROR_ALLOC_OVERFLOW, "literal table");
-        litq = p;
+        // Make copies since we cache DefaultArgs across compilations. This
+        // will go away when the two-pass parser dies.
+        std::vector<cell> iv = def->array->iv;
+        std::vector<cell> data = def->array->data;
+
+        gDataQueue.Add(std::move(iv));
+        gDataQueue.Add(std::move(data));
+        gDataQueue.AddZeroes(def->array->zeroes);
     }
-}
 
-/*  litadd
- *
- *  Adds a value at the end of the literal queue. The literal queue is used
- *  for literal strings used in functions and for initializing array variables.
- *
- *  Global references: litidx  (altered)
- *                     litq    (altered)
- */
-void
-litadd(cell value)
-{
-    chk_grow_litq();
-    assert(litidx < litmax);
-    litq[litidx++] = value;
-}
+    if (arg->is_const || !def->array) {
+        // No modification is possible, so use the array we emitted. (This is
+        // why we emitted the zeroes above.)
+        ldconst(def->val.get(), sPRI);
+    } else {
+        cell iv_size = (cell)def->array->iv.size();
+        cell data_size = (cell)def->array->data.size();
+        cell total_size = iv_size + data_size + def->array->zeroes;
 
-/*  litinsert
- *
- *  Inserts a value into the literal queue. This is sometimes necessary for
- *  initializing multi-dimensional arrays.
- *
- *  Global references: litidx  (altered)
- *                     litq    (altered)
- */
-void
-litinsert(cell value, int pos)
-{
-    chk_grow_litq();
-    assert(litidx < litmax);
-    assert(pos >= 0 && pos <= litidx);
-    memmove(litq + (pos + 1), litq + pos, (litidx - pos) * sizeof(cell));
-    litidx++;
-    litq[pos] = value;
+        //  heap <size>
+        //  move.alt        ; pri = new address
+        //  init.array
+        //  move.alt        ; pri = new address
+        modheap(total_size * sizeof(cell));
+        markheap(MEMUSE_STATIC, total_size);
+        emit_initarray(sALT, def->val.get(), iv_size, data_size, def->array->zeroes, 0);
+        moveto1();
+    }
 }

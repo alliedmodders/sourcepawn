@@ -1,0 +1,1 @@
+(2) : error 101: fixed dimensions must be after the array name, not on the type

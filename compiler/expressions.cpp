@@ -426,14 +426,16 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
     if (actual->ident != formal->ident)
         return FALSE;
 
-    // Check rank.
-    if (actual->dimcount != formal->dimcount)
-        return FALSE;
-
-    // Check arity.
-    for (int i = 0; i < formal->dimcount; i++) {
-        if (actual->dims[i] != formal->dims[i])
+    if (actual->ident == iREFARRAY || actual->ident == iARRAY) {
+        // Check rank.
+        if (actual->dimcount != formal->dimcount)
             return FALSE;
+
+        // Check arity.
+        for (int i = 0; i < formal->dimcount; i++) {
+            if (actual->dims[i] != formal->dims[i])
+                return FALSE;
+        }
     }
 
     // Do not allow casting between different array types, eg:
@@ -647,37 +649,6 @@ findnamedarg(arginfo* arg, const char* name)
 }
 
 cell
-array_totalsize(symbol* sym)
-{
-    cell length;
-
-    assert(sym != NULL);
-    assert(sym->ident == iARRAY || sym->ident == iREFARRAY);
-    length = sym->dim.array.length;
-    if (sym->dim.array.level > 0) {
-        cell sublength = array_totalsize(sym->array_child());
-        if (sublength > 0)
-            length = length + length * sublength;
-        else
-            length = 0;
-    }
-    return length;
-}
-
-cell
-array_levelsize(symbol* sym, int level)
-{
-    assert(sym != NULL);
-    assert(sym->ident == iARRAY || sym->ident == iREFARRAY);
-    assert(level <= sym->dim.array.level);
-    while (level-- > 0) {
-        sym = sym->array_child();
-        assert(sym != NULL);
-    }
-    return (sym->dim.array.slength ? sym->dim.array.slength : sym->dim.array.length);
-}
-
-cell
 calc(cell left, void (*oper)(), cell right, char* boolresult)
 {
     if (oper == ob_or)
@@ -769,49 +740,6 @@ is_valid_index_tag(int tag)
     return idx_type->isEnum();
 }
 
-void
-setdefarray(cell* string, cell size, cell array_sz, cell* dataaddr, int fconst)
-{
-    /* The routine must copy the default array data onto the heap, as to avoid
-     * that a function can change the default value. An optimization is that
-     * the default array data is "dumped" into the data segment only once (on the
-     * first use).
-     */
-    /* check whether to dump the default array */
-    assert(dataaddr != NULL);
-    if (sc_status == statWRITE && *dataaddr < 0) {
-        int i;
-        *dataaddr = (litidx + glb_declared) * sizeof(cell);
-        for (i = 0; i < size; i++)
-            litadd(*string++);
-    }
-
-    /* if the function is known not to modify the array (meaning that it also
-     * does not modify the default value), directly pass the address of the
-     * array in the data segment.
-     */
-    if (fconst || !string) {
-        ldconst(*dataaddr, sPRI);
-    } else {
-        /* Generate the code:
-         *  CONST.pri dataaddr                ;address of the default array data
-         *  HEAP      array_sz*sizeof(cell)   ;heap address in ALT
-         *  MOVS      size*sizeof(cell)       ;copy data from PRI to ALT
-         *  MOVE.PRI                          ;PRI = address on the heap
-         */
-        ldconst(*dataaddr, sPRI);
-        /* "array_sz" is the size of the argument (the value between the brackets
-         * in the declaration), "size" is the size of the default array data.
-         */
-        assert(array_sz >= size);
-        modheap((int)array_sz * sizeof(cell));
-        markheap(MEMUSE_STATIC, array_sz);
-        /* ??? should perhaps fill with zeros first */
-        memcopy(size * sizeof(cell));
-        moveto1();
-    }
-}
-
 int
 checktag(int tag, int exprtag)
 {
@@ -848,4 +776,14 @@ commutative(void (*oper)())
 {
     return oper == ob_add || oper == os_mult || oper == ob_eq || oper == ob_ne || oper == ob_and ||
            oper == ob_xor || oper == ob_or;
+}
+
+bool
+is_legacy_enum_tag(int tag)
+{
+    Type* type = gTypes.find(tag);
+    if (!type->isEnum())
+        return false;
+    symbol* sym = findconst(type->name());
+    return sym->dim.enumlist != nullptr;
 }

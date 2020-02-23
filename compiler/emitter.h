@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
@@ -40,6 +40,49 @@ typedef enum s_optmark {
     sLDECL, /* start of local declaration (variable) */
 } optmark;
 
+class DataQueue final
+{
+  public:
+    DataQueue();
+
+    void Add(cell value);
+    void Add(std::vector<cell>&& cells);
+    void Add(const char* text, size_t length);
+    void AddZeroes(cell count);
+    void Reset();
+    void Emit();
+    bool Compact();
+
+    cell size() const {
+      return size_;
+    }
+    cell dat_address() const;
+
+  private:
+    // A "run" of data is a vector of non-zero cells followed by a count of
+    // zero cells.
+    struct DataRun {
+        DataRun()
+         : zeroes(0)
+        {}
+        DataRun(DataRun&& run)
+         : cells(std::move(run.cells)),
+           zeroes(run.zeroes)
+        {}
+
+        std::vector<cell> cells;
+        cell zeroes;
+    };
+    DataRun& current() {
+      return data_.back();
+    }
+
+  private:
+    std::vector<DataRun> data_;
+    cell size_;
+};
+extern DataQueue gDataQueue;
+
 void writeleader(symbol* root);
 void writetrailer(void);
 void begcseg(void);
@@ -61,13 +104,14 @@ void storereg(cell address, regid reg);
 void memcopy(cell size);
 void copyarray(symbol* sym, cell size);
 void fillarray(symbol* sym, cell size, cell value);
+void emit_fill(cell val, cell size);
 void ldconst(cell val, regid reg);
 void moveto1(void);
 void move_alt(void);
 void pushreg(regid reg);
 void pushval(cell val);
 void popreg(regid reg);
-void genarray(int dims, int _autozero);
+void genarray(int dims, bool autozero);
 void swap1(void);
 void ffswitch(int label);
 void ffcase(cell value, char* labelname, int newtable);
@@ -93,8 +137,14 @@ void invoke_getter(methodmap_method_t* method);
 void invoke_setter(methodmap_method_t* method, int save);
 void inc_pri();
 void dec_pri();
-void load_hidden_arg();
+void load_hidden_arg(symbol* fun, symbol* sym, bool save_pri);
 void load_glbfn(symbol* sym);
+void addr_reg(int val, regid reg);
+void emit_initarray(regid reg, cell base_addr, cell iv_size, cell data_copy_size,
+                    cell data_fill_size, cell fill_value);
+void load_i();
+void idxaddr();
+void emit_default_array(arginfo* arg);
 
 /*  Code generation functions for arithmetic operators.
  *
@@ -133,10 +183,6 @@ void dec(const value* lval);
 void jmp_ne0(int number);
 void jmp_eq0(int number);
 void outval(cell val, int newline);
-void litadd(cell value);
-void litinsert(cell value, int pos);
-cell dumplits();
-void dumpzero(int count);
 
 /* macros for code generation */
 #define opcodes(n) ((n) * sizeof(cell)) /* opcode size */

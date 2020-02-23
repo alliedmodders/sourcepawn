@@ -38,6 +38,18 @@ class Parser : public ExpressionParser
     Decl* parse_enum(int vclass);
     Stmt* parse_const(int vclass);
 
+    struct VarParams {
+        int vclass;
+        bool is_public = false;
+        bool is_static = false;
+        bool is_stock = false;
+        bool autozero = true;
+        bool is_arg = false;
+    };
+    Stmt* parse_var(declinfo_t* decl, const VarParams& params);
+    void parse_post_dims(typeinfo_t* type);
+    Expr* var_init(int vclass);
+
     static bool sInPreprocessor;
     static bool sDetectedIllegalPreprocessorSymbols;
 
@@ -72,6 +84,7 @@ class Parser : public ExpressionParser
     Expr* primary();
     Expr* constant();
     Expr* struct_init();
+    Expr* parse_new_array(const token_pos_t& pos, int tag);
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
 };
 
@@ -86,3 +99,7 @@ void declglb(declinfo_t* decl, int fpublic, int fstatic, int stock);
 int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock,
             symbol** symp);
 int parse_new_typename(const token_t* tok);
+int reparse_old_decl(declinfo_t* decl, int flags);
+int reparse_new_decl(declinfo_t* decl, int flags);
+bool is_shadowed_name(const char* name);
+int current_nestlevel();

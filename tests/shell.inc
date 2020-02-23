@@ -19,6 +19,9 @@ native int donothing();
 // Return arg, but through a dynamically generated native.
 native int dynamic_native(int arg);
 
+// Read array[x][y] and store in |out|. If compiled with < 1.12, return false.
+native bool access_2d_array(int[][] array, int x, int y, int& out);
+
 typedef InvokeCallback = function void ();
 // Invoke |fn| up to |count| times, returning false immediately on failure.
 native bool invoke(int count, InvokeCallback fn);

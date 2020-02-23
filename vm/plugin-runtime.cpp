@@ -607,3 +607,10 @@ PluginRuntime::LookupLineAddress(const uint32_t line, const char* file, ucell_t*
     return SP_ERROR_NOT_FOUND;
   return SP_ERROR_NONE;
 }
+
+bool
+PluginRuntime::UsesDirectArrays()
+{
+  auto features = image()->DescribeCode().features;
+  return !!(features & SmxConsts::kCodeFeatureDirectArrays);
+}

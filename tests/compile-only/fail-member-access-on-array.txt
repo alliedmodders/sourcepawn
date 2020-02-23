@@ -1,2 +1,2 @@
-(7) : error 052: multi-dimensional arrays must be fully initialized
+(7) : error 047: array sizes do not match, or destination array is too small
 (9) : error 096: could not find member "WEAPONLEVEL" in type "array"

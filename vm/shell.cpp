@@ -199,6 +199,26 @@ static cell_t ReportError(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* phys_in;
+  cell_t* phys_out;
+
+  if (!cx->GetRuntime()->UsesDirectArrays())
+    return 0;
+
+  int err;
+  if ((err = cx->LocalToPhysAddr(params[1], &phys_in)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if ((err = cx->LocalToPhysAddr(params[4], &phys_out)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if ((err = cx->LocalToPhysAddr(phys_in[params[2]], &phys_in)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read array level 0");
+
+  *phys_out = phys_in[params[3]];
+  return 1;
+}
+
 class DynamicNative : public INativeCallback
 {
   public:
@@ -250,6 +270,7 @@ static int Execute(const char* file)
   BindNative(rt, "report_error", ReportError);
   BindNative(rt, "CloseHandle", DoNothing);
   BindNative(rt, "dynamic_native", new DynamicNative());
+  BindNative(rt, "access_2d_array", Access2DArray);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
