@@ -1253,8 +1253,6 @@ declloc(int tokid) {
             markstack(MEMUSE_STATIC, type->size);
             assert(curfunc != NULL);
             assert(!curfunc->native);
-            if (curfunc->function()->stacksize < declared + 1)
-                curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         } else if (type->ident == iREFARRAY) {
             // Generate the symbol so we can access its stack address during initialization.
             declared += 1; /* one cell for address */
@@ -1356,8 +1354,6 @@ declloc(int tokid) {
             markheap(MEMUSE_DYNAMIC, 0);
             markstack(MEMUSE_STATIC, 1);
             assert(curfunc != NULL && !curfunc->native);
-            if (curfunc->function()->stacksize < declared + 1)
-                curfunc->function()->stacksize = declared + 1; /* +1 for PROC opcode */
         }
         /* now that we have reserved memory for the variable, we can proceed
          * to initialize it */
@@ -3308,8 +3304,6 @@ fetchfunc(const char* name) {
         /* don't set the "uDEFINE" flag; it may be a prototype */
         sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0);
         assert(sym != NULL); /* fatal error 103 must be given on error */
-        /* set the required stack size to zero (only for non-native functions) */
-        sym->function()->stacksize = 1; /* 1 for PROC opcode */
     }
     if (pc_deprecate.length() > 0) {
         assert(sym != NULL);

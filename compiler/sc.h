@@ -134,7 +134,6 @@ class FunctionData final : public SymbolData
 
     void resizeArgs(size_t nargs);
 
-    long stacksize;      /* label: how many local variables are declared */
     int funcid;          /* set for functions during codegen */
     stringlist* dbgstrs; /* debug strings - functions only */
     ke::Vector<arginfo> args;
