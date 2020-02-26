@@ -2932,8 +2932,7 @@ findconst(const char* name)
 }
 
 FunctionData::FunctionData()
- : stacksize(0)
- , funcid(0)
+ : funcid(0)
  , dbgstrs(nullptr)
 {
     resizeArgs(0);
