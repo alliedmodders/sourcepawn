@@ -133,7 +133,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
             return false;
         }
         if (arg->tag != pc_tag_string)
-            error(expr->pos(), 213);
+            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->tag));
     } else if (auto expr = field.value->AsTaggedValueExpr()) {
         if (arg->ident != iVARIABLE) {
             error(expr->pos(), 23);
@@ -1740,7 +1740,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 }
             }
             if (!checktag_string(arg->tag, val) && !checktag(arg->tag, val->tag))
-                error(pos_, 213);
+                error(pos_, 213, type_to_name(arg->tag), type_to_name(val->tag));
             break;
         case iVARIABLE:
         {

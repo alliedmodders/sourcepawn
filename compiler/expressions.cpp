@@ -315,7 +315,7 @@ type_to_name(int tag)
 
     Type* type = gTypes.find(tag);
     if (!type)
-        return "unknown";
+        return "-unknown-";
     return type->prettyName();
 }
 
@@ -551,7 +551,7 @@ matchtag(int formaltag, int actualtag, int flags)
     }
 
     if (!(flags & MATCHTAG_SILENT))
-        error(213);
+        error(213, type_to_name(formaltag), type_to_name(actualtag));
     return FALSE;
 }
 
@@ -803,7 +803,7 @@ checktag(int tag, int exprtag)
 
     // If matchtag() didn't error, report an error.
     if (errnum == errcount)
-        error(213);
+        error(213, type_to_name(tag), type_to_name(exprtag));
 
     return FALSE; /* no tag matched */
 }
