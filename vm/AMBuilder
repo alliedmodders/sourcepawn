@@ -10,8 +10,10 @@ def configure_like_shell(name, arch):
     libsourcepawn_a.binary,
     SP.zlib[arch],
   ]
-  if prog.compiler.like('gcc'):
-    prog.compiler.linkflags += ['-lstdc++']
+  if prog.compiler.like('emscripten'):
+    prog.compiler.postlink += ['-lnodefs.js']
+  elif prog.compiler.like('gcc'):
+    prog.compiler.postlink += ['-lstdc++']
   return prog
 
 Includes = [

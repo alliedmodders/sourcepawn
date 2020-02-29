@@ -185,24 +185,30 @@ char g_tmpfile[_MAX_PATH] = {0};
 args::ToggleOption opt_show_stats(nullptr, "--show-stats", Some(false),
                                   "Show compiler statistics on exit.");
 
+#ifdef __EMSCRIPTEN__
+EM_JS(void, setup_emscripten_fs, (), {
+    if (ENVIRONMENT_IS_NODE) {
+        FS.mkdir('/fakeroot');
+        FS.mount(NODEFS, {root: '/'}, '/fakeroot');
+        FS.chdir('/fakeroot/' + process.cwd());
+    }
+});
+#endif
+
 /*  "main" of the compiler
  */
 int
 pc_compile(int argc, char* argv[]) {
-#ifdef __EMSCRIPTEN__
-    EM_ASM(if (ENVIRONMENT_IS_NODE) {
-        FS.mkdir('/fakeroot');
-        FS.mount(NODEFS, {root: '/'}, '/fakeroot');
-        FS.chdir('/fakeroot/' + process.cwd());
-    });
-#endif
-
     int entry, jmpcode;
     int retcode;
     char incfname[_MAX_PATH];
     void* inpfmark;
     int lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
     char* ptr;
+
+#ifdef __EMSCRIPTEN__
+    setup_emscripten_fs();
+#endif
 
     /* set global variables to their initial value */
     initglobals();
@@ -913,6 +919,10 @@ setopt(int argc, char** argv, char* oname, char* ename, char* pname) {
     parseoptions(argc, argv, oname, ename, pname);
 }
 
+#if defined __EMSCRIPTEN__
+// Needed due to EM_ASM usage
+__attribute__((noinline))
+#endif
 static void
 setconfig(char* root) {
     char path[_MAX_PATH];
