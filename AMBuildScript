@@ -170,7 +170,7 @@ class Config(object):
       if cxx.like('gcc'):
         cxx.cflags += ['-O3']
         if cxx.like('emscripten'):
-          emflags = ['--closure', '0', '--memory-init-file', '0', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1', '--llvm-lto', '1']
+          emflags = ['--closure', '1', '-flto', '--llvm-lto', '1']
           cxx.cflags += emflags
           cxx.linkflags += ['-O3'] + emflags
       elif cxx.like('msvc'):
@@ -183,7 +183,7 @@ class Config(object):
       if cxx.like('msvc'):
         cxx.cflags += ['/Od', '/RTC1']
       elif cxx.like('emscripten'):
-        emflags = ['-s', 'ASSERTIONS=1', '-s', 'SAFE_HEAP=1', '-s', 'STACK_OVERFLOW_CHECK=1', '-s', 'WARN_UNALIGNED=0', '-s', 'DEMANGLE_SUPPORT=1']
+        emflags = ['-s', 'ASSERTIONS=2', '-s', 'SAFE_HEAP=1', '-s', 'STACK_OVERFLOW_CHECK=2', '-s', 'DEMANGLE_SUPPORT=1']
         cxx.cflags += emflags
         cxx.linkflags += emflags
 

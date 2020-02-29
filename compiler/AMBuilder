@@ -18,7 +18,11 @@ if compiler.like('gcc'):
     '-Wno-format',
   ]
   compiler.c_only_flags += ['-std=c99']
-  compiler.postlink += ['-lstdc++']
+
+  if compiler.like('emscripten'):
+    compiler.postlink += ['-lnodefs.js']
+  else:
+    compiler.postlink += ['-lstdc++']
 if compiler.family == 'clang':
   compiler.cxxflags += [
     '-Wno-implicit-exception-spec-mismatch',

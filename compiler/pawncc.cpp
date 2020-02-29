@@ -17,7 +17,7 @@ main(int argc, char* argv[])
     return pc_compile(argc, argv);
 }
 
-#if defined __linux__ || defined __APPLE__
+#if (defined __linux__ || defined __APPLE__) && not defined __EMSCRIPTEN__
 extern "C" void
 __cxa_pure_virtual(void)
 {
