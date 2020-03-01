@@ -131,7 +131,7 @@ builder.Add(verifier)
 
 # Build the emscripten C wrapper.
 if shell.compiler.like('emscripten'):
-  emscripten = configure_like_shell('sourcepawn-js')
+  emscripten = configure_like_shell('sourcepawn-js', arch)
   emscripten.sources += [
     'emscripten.cpp'
   ]
@@ -140,7 +140,7 @@ if shell.compiler.like('emscripten'):
   emscripten.compiler.linkflags += [
     '-s', 'NODEJS_CATCH_EXIT=0',
     '-s', 'RESERVED_FUNCTION_POINTERS=128',
-    '-s', 'EXTRA_EXPORTED_RUNTIME_METHODS=["FS"]',
+    '-s', 'EXTRA_EXPORTED_RUNTIME_METHODS=["FS", "addFunction", "setValue", "getValue","UTF8ToString", "stringToUTF8"]',
   ];
 
   builder.Add(emscripten)
