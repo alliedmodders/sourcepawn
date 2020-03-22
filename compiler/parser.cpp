@@ -1357,7 +1357,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     int cur_litidx = 0;
     cell *values, *found;
     int usage;
-    symbol *mysym, *sym;
+    symbol *mysym;
 
     sp::Atom* name = gAtoms.add(firstname);
 
@@ -1376,7 +1376,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
     if (fpublic)
         usage |= uPUBLIC;
     mysym = NULL;
-    for (sym = glbtab.next; sym != NULL; sym = sym->next) {
+    for (symbol *sym = glbtab.next; sym != NULL; sym = sym->next) {
         if (sym->nameAtom() == name) {
             if ((sym->usage & uSTRUCT) && sym->vclass == sGLOBAL) {
                 if (sym->usage & uDEFINE) {
@@ -1423,7 +1423,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
         }
         arg = pstructs_getarg(pstruct, str);
         if (arg == NULL)
-            error(96, str, sym->name());
+            error(96, str, mysym->name());
         needtoken('=');
         cur_litidx = litidx;
         tok = lex(&val, &str);
@@ -1462,6 +1462,7 @@ declstructvar(char* firstname, int fpublic, pstruct_t* pstruct) {
             }
         } else if (tok == tSYMBOL) {
             sp::Atom* str_atom = gAtoms.add(str);
+            symbol *sym;
             for (sym = glbtab.next; sym != NULL; sym = sym->next) {
                 if (sym->vclass != sGLOBAL)
                     continue;
