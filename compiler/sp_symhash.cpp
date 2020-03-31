@@ -33,7 +33,7 @@ struct SymbolHashPolicy {
     static bool matches(const NameAndScope& key, symbol* sym) {
         if (sym->parent() && sym->ident != iCONSTEXPR)
             return false;
-        if (sym->fnumber >= 0 && sym->fnumber != key.fnumber)
+        if (sym->is_static && sym->fnumber != key.fnumber)
             return false;
         if (key.name != sym->nameAtom())
             return false;

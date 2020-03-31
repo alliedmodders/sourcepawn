@@ -186,6 +186,7 @@ struct symbol {
     // Variables and functions.
     bool stock : 1;         // discardable without warning
     bool is_public : 1;     // publicly exposed
+    bool is_static : 1;     // declared as static
 
     // TODO: make this an ident.
     bool is_struct : 1;
@@ -222,8 +223,8 @@ struct symbol {
             short level;  /* number of dimensions below this level */
         } array;
     } dim;       /* for 'dimension', both functions and arrays */
-    int fnumber; /* static global variables: file number in which the declaration is visible */
-    int lnumber; /* line number (in the current source file) for the declaration */
+    int fnumber; /* file number in which the symbol is declared */
+    int lnumber; /* line number for the declaration */
     ke::AString documentation; /* optional documentation string */
     methodmap_t* methodmap;    /* if ident == iMETHODMAP */
 

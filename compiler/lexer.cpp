@@ -2866,7 +2866,7 @@ find_symbol(const symbol* root, const char* name, int fnumber)
             (sym->parent() == NULL ||
              sym->ident ==
                  iCONSTEXPR) /* sub-types (hierarchical types) are skipped, except for enum fields */
-            && (sym->fnumber < 0 || sym->fnumber == fnumber)) /* check file number for scope */
+            && (!sym->is_static || sym->fnumber == fnumber)) /* check file number for scope */
         {
             return sym; /* return first match */
         }               /*  */
@@ -2971,6 +2971,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    is_const(false),
    stock(false),
    is_public(false),
+   is_static(false),
    is_struct(false),
    prototyped(false),
    missing(false),
@@ -2985,7 +2986,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    deprecated(false),
    queued(false),
    x({}),
-   fnumber(-1),
+   fnumber(fcurrent),
    /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
    documentation(nullptr),

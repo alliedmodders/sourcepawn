@@ -1123,7 +1123,10 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
         if (fstock)
             sym->stock = true;
         if (fstatic)
-            sym->fnumber = filenum;
+            sym->is_static = true;
+
+        sym->fnumber = filenum;
+
         if (sc_status == statSKIP) {
             sc_status = statWRITE;
             code_idx = cidx;
@@ -3743,7 +3746,9 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (fpublic)
         sym->is_public = true;
     if (fstatic)
-        sym->fnumber = filenum;
+        sym->is_static = true;
+
+    sym->fnumber = filenum;
 
     if (sym->is_public || sym->forward) {
         if (decl->type.numdim > 0)
