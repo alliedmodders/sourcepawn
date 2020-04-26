@@ -79,8 +79,8 @@ class Config(object):
       if builder.options.debug == '1':
           cxx.cflags += ['-g3']
 
-      have_gcc = cxx.family is 'gcc'
-      have_clang = cxx.family is 'clang' or cxx.family is 'emscripten'
+      have_gcc = cxx.family == 'gcc'
+      have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
       if have_clang or have_gcc:
         cxx.cflags += ['-fvisibility=hidden']
         cxx.cxxflags += ['-fvisibility-inlines-hidden']
