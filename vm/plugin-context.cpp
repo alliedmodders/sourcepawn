@@ -692,6 +692,10 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
   cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);
   LegacyImage* image = runtime()->image();
 
+  if (autozero) {
+    memset(reinterpret_cast<uint8_t*>(base) + iv_size, 0, bytes - iv_size);
+  }
+
   if (image->DescribeCode().features & SmxConsts::kCodeFeatureDirectArrays) {
     abs_iv_data_t info;
     info.addr = hp_;
@@ -704,10 +708,6 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
 
     assert(info.iv_cursor == iv_size);
     assert(info.data_cursor == (cell_t)bytes);
-
-    if (autozero) {
-      memset(info.ptr + iv_size, 0, bytes - iv_size);
-    }
   } else {
     cell_t offs = GenerateArrayIndirectionVectors(base, argv, argc);
     assert(size_t(offs) == cells);
