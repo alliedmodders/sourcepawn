@@ -741,7 +741,7 @@ PluginContext::generateArray(cell_t dims, cell_t* stk, bool autozero)
       return err;
 
     if (autozero)
-      memset(memory_ + hp_, 0, bytes);
+      memset(memory_ + *stk, 0, bytes);
 
     return SP_ERROR_NONE;
   }
