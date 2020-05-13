@@ -1043,14 +1043,14 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
     ucell address;
     int glb_incr;
     int slength = 0;
-    short filenum;
+    short filenum = fcurrent; /* save file number at the start of the declaration */
+    int fileline = fline;
     symbol* sym;
 #if !defined NDEBUG
     cell glbdecl = 0;
 #endif
 
     assert(!fpublic || !fstatic); /* may not both be set */
-    filenum = fcurrent;           /* save file number at the start of the declaration */
 
     for (;;) {
         typeinfo_t* type = &decl->type;
@@ -1123,7 +1123,11 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
         if (fstock)
             sym->stock = true;
         if (fstatic)
-            sym->fnumber = filenum;
+            sym->is_static = true;
+
+        sym->fnumber = filenum;
+        sym->lnumber = fileline;
+
         if (sc_status == statSKIP) {
             sc_status = statWRITE;
             code_idx = cidx;
@@ -1198,6 +1202,8 @@ declloc(int tokid) {
     int staging_start;
     int slength = 0;
     int fstatic = (tokid == tSTATIC);
+    short filenum = fcurrent;
+    int fileline = fline;
     declinfo_t decl;
 
     int declflags = DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT | DECLFLAG_DYNAMIC_ARRAYS;
@@ -1247,6 +1253,7 @@ declloc(int tokid) {
                 litadd(0);
             sym = addvariable2(decl.name, (cur_lit + glb_declared) * sizeof(cell), type->ident,
                                sSTATIC, type->tag, type->dim, type->numdim, type->idxtag, slength);
+            sym->is_static = true;
         } else if (type->ident != iREFARRAY) {
             declared += type->size; /* variables are put on stack, adjust "declared" */
             sym = addvariable2(decl.name, -declared * sizeof(cell), type->ident, sLOCAL, type->tag,
@@ -1369,6 +1376,8 @@ declloc(int tokid) {
          * to initialize it */
         assert(sym != NULL);       /* we declared it, it must be there */
         sym->compound = nestlevel; /* for multiple declaration/shadowing check */
+        sym->fnumber = filenum;
+        sym->lnumber = fileline;
         if (type->is_const)
             sym->is_const = true;
         if (!fstatic) { /* static variables already initialized */
@@ -3692,10 +3701,11 @@ int
 newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock, symbol** symp)
 {
     symbol* sym;
-    int argcnt, funcline;
+    int argcnt;
     int opererror;
     cell cidx, glbdecl;
-    short filenum;
+    short filenum = fcurrent; /* save file number at the start of the declaration */ 
+    int fileline = fline;
 
     assert(litidx == 0 || !cc_ok()); /* literal queue should be empty */
     litidx = 0;                      /* clear the literal pool (should already be empty) */
@@ -3703,7 +3713,6 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     cidx = 0;                        /* just to avoid compiler warnings */
     glbdecl = 0;
     assert(loctab.next == NULL); /* local symbol table should be empty */
-    filenum = fcurrent;          /* save file number at the start of the declaration */
 
     if (symp)
         *symp = NULL;
@@ -3718,7 +3727,6 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (!matchtoken('('))
         return FALSE;
     /* so it is a function, proceed */
-    funcline = fline; /* save line at which the function is defined */
     if (decl->name[0] == PUBLIC_CHAR) {
         fpublic = TRUE; /* implicitly public function */
         if (stock)
@@ -3743,7 +3751,10 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (fpublic)
         sym->is_public = true;
     if (fstatic)
-        sym->fnumber = filenum;
+        sym->is_static = true;
+
+    sym->fnumber = filenum;
+    sym->lnumber = fileline;
 
     if (sym->is_public || sym->forward) {
         if (decl->type.numdim > 0)
@@ -3809,7 +3820,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     if (decl->opertok != 0 && opererror)
         sym->defined = false;
     startfunc(sym->name()); /* creates stack frame */
-    insert_dbgline(funcline);
+    insert_dbgline(fileline);
     setline(FALSE);
     declared = 0; /* number of local cells */
     resetstacklist();
@@ -3846,7 +3857,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     // Check that return tags match.
     if (sym->prototyped && sym->tag != decl->type.tag) {
         int old_fline = fline;
-        fline = funcline;
+        fline = fileline;
         error(180, type_to_name(sym->tag), type_to_name(decl->type.tag));
         fline = old_fline;
     }

@@ -49,7 +49,6 @@ using namespace sp;
 /* flags for litchar() */
 #define UTF8MODE 0x1
 static cell litchar(const unsigned char** lptr, int flags);
-static symbol* find_symbol(const symbol* root, const char* name, int fnumber);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static int alpha(char c);
@@ -2856,24 +2855,6 @@ delete_symbols(symbol* root, int level, int delete_functions)
     }
 }
 
-static symbol*
-find_symbol(const symbol* root, const char* name, int fnumber)
-{
-    symbol* sym = root->next;
-    sp::Atom* atom = gAtoms.add(name);
-    while (sym != NULL) {
-        if (atom == sym->nameAtom() &&
-            (sym->parent() == NULL ||
-             sym->ident ==
-                 iCONSTEXPR) /* sub-types (hierarchical types) are skipped, except for enum fields */
-            && (sym->fnumber < 0 || sym->fnumber == fnumber)) /* check file number for scope */
-        {
-            return sym; /* return first match */
-        }               /*  */
-        sym = sym->next;
-    }
-    return nullptr;
-}
 
 void
 markusage(symbol* sym, int usage)
@@ -2912,7 +2893,19 @@ findglb(const char* name)
 symbol*
 findloc(const char* name)
 {
-    return find_symbol(&loctab, name, -1);
+    symbol* sym = loctab.next;
+    sp::Atom* atom = gAtoms.add(name);
+    while (sym != NULL) {
+        if (atom == sym->nameAtom() &&
+            (sym->parent() == NULL ||
+             sym->ident ==
+                 iCONSTEXPR)) /* sub-types (hierarchical types) are skipped, except for enum fields */
+        {
+            return sym; /* return first match */
+        }
+        sym = sym->next;
+    }
+    return nullptr;
 }
 
 symbol*
@@ -2920,7 +2913,7 @@ findconst(const char* name)
 {
     symbol* sym;
 
-    sym = find_symbol(&loctab, name, -1);          /* try local symbols first */
+    sym = findloc(name);          /* try local symbols first */
     if (sym == NULL || sym->ident != iCONSTEXPR) { /* not found, or not a constant */
         sym = FindInHashTable(sp_Globals, name, fcurrent);
     }
@@ -2971,6 +2964,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    is_const(false),
    stock(false),
    is_public(false),
+   is_static(false),
    is_struct(false),
    prototyped(false),
    missing(false),
@@ -2985,7 +2979,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    deprecated(false),
    queued(false),
    x({}),
-   fnumber(-1),
+   fnumber(fcurrent),
    /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
    documentation(nullptr),
