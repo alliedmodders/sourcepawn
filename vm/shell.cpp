@@ -239,11 +239,11 @@ int main(int argc, char** argv)
 
   Parser parser("SourcePawn standalone shell.");
 
-  BoolOption disable_jit(parser,
+  ToggleOption disable_jit(parser,
     "i", "disable-jit",
     Some(false),
     "Disable the just-in-time compiler.");
-  BoolOption disable_watchdog(parser,
+  ToggleOption disable_watchdog(parser,
     "w", "disable-watchdog",
     Some(false),
     "Disable the watchdog timer.");
