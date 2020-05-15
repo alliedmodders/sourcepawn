@@ -38,7 +38,7 @@ MethodInfo::setCompiledFunction(CompiledFunction* fun)
 
   // Grab the lock before linking code in, since the watchdog timer will look
   // at this on another thread.
-  ke::AutoLock lock(Environment::get()->lock());
+  std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
   jit_ = fun;
 }
 

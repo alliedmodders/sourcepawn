@@ -19,7 +19,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <am-thread-utils.h>
+
+#include <condition_variable>
+#include <thread>
 
 namespace SourcePawn {
   class IErrorReport;
@@ -57,11 +59,12 @@ class WatchdogTimer
 
   bool terminate_;
   size_t timeout_ms_;
-  ke::ThreadId mainthread_;
+  std::thread::id mainthread_;
   bool ignore_timeout_;
 
-  ke::AutoPtr<ke::Thread> thread_;
-  ke::ConditionVariable cv_;
+  std::unique_ptr<std::thread> thread_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
 
   // Accessed only on the watchdog thread.
   uintptr_t last_frame_id_;

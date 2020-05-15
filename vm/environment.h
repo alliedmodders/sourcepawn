@@ -14,9 +14,10 @@
 #define _include_sourcepawn_vm_environment_h_
 
 #include <sp_vm_api.h>
+#include <amtl/am-autoptr.h>
 #include <amtl/am-cxx.h>
 #include <amtl/am-inlinelist.h>
-#include <amtl/am-thread-utils.h>
+#include <amtl/am-mutex.h>
 #include "code-allocator.h"
 #include "plugin-runtime.h"
 #include "stack-frames.h"
@@ -87,8 +88,8 @@ class Environment : public ISourcePawnEnvironment
   void DeregisterRuntime(PluginRuntime* rt);
   void PatchAllJumpsForTimeout();
   void UnpatchAllJumpsFromTimeout();
-  ke::Mutex* lock() {
-    return &mutex_;
+  ke::Mutex& lock() {
+    return mutex_;
   }
 
   bool Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t* result);
