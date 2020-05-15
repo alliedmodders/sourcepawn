@@ -38,7 +38,7 @@ PluginRuntime::PluginRuntime(LegacyImage* image)
   memset(code_hash_, 0, sizeof(code_hash_));
   memset(data_hash_, 0, sizeof(data_hash_));
 
-  ke::AutoLock lock(Environment::get()->lock());
+  std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
   Environment::get()->RegisterRuntime(this);
 }
 
@@ -48,7 +48,7 @@ PluginRuntime::~PluginRuntime()
   // runtimes. It is not enough to ensure that the unlinking of the runtime is
   // protected; we cannot delete functions or code while the watchdog might be
   // executing. Therefore, the entire destructor is guarded.
-  ke::AutoLock lock(Environment::get()->lock());
+  std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
 
   Environment::get()->DeregisterRuntime(this);
 
@@ -235,7 +235,7 @@ PluginRuntime::AcquireMethod(cell_t pcode_offset)
   // Grab the lock before linking code in, since the watchdog timer will look
   // at this list on another thread.
   {
-    ke::AutoLock lock(Environment::get()->lock());
+    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
     if (!methods_.append(method))
       return nullptr;
   }
@@ -245,7 +245,7 @@ PluginRuntime::AcquireMethod(cell_t pcode_offset)
 const ke::Vector<RefPtr<MethodInfo>>&
 PluginRuntime::AllMethods() const
 {
-  Environment::get()->lock()->AssertCurrentThreadOwns();
+  Environment::get()->lock().AssertCurrentThreadOwns();
   return methods_;
 }
 

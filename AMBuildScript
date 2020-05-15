@@ -74,7 +74,7 @@ class Config(object):
         '-Werror',
         '-Wno-switch',
       ]
-      cxx.cxxflags += ['-std=c++11']
+      cxx.cxxflags += ['-std=c++14']
 
       if builder.options.debug == '1':
           cxx.cflags += ['-g3']

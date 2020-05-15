@@ -15,7 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #include "watchdog_timer.h"
+
 #include <string.h>
+
+#include <amtl/am-thread.h>
 #include "environment.h"
 
 using namespace sp;
@@ -32,7 +35,7 @@ extern "C" int __attribute__((weak)) prctl(int, ...)
 WatchdogTimer::WatchdogTimer(Environment* env)
  : env_(env),
    terminate_(false),
-   mainthread_(ke::GetCurrentThreadId()),
+   mainthread_(std::this_thread::get_id()),
    ignore_timeout_(false),
    last_frame_id_(0),
    second_timeout_(false),
@@ -53,12 +56,10 @@ WatchdogTimer::Initialize(size_t timeout_ms)
 
   timeout_ms_ = timeout_ms;
 
-  thread_ = new ke::Thread([this]() -> void {
+  std::lock_guard<std::mutex> lock(mutex_);
+  thread_ = ke::NewThread("SourcePawn Watchdog", [this]() -> void {
     Run();
-  }, "SM Watchdog");
-  if (!thread_->Succeeded())
-    return false;
-
+  });
   return true;
 }
 
@@ -69,31 +70,28 @@ WatchdogTimer::Shutdown()
     return;
 
   {
-    ke::AutoLock lock(&cv_);
+    std::lock_guard<std::mutex> lock(mutex_);
     terminate_ = true;
-    cv_.Notify();
+    cv_.notify_all();
   }
-  thread_->Join();
+  thread_->join();
   thread_ = nullptr;
 }
 
 void
 WatchdogTimer::Run()
 {
-  ke::AutoLock lock(&cv_);
+  std::unique_lock<std::mutex> lock(mutex_);
 
   // Initialize the frame id, so we don't have to wait longer on startup.
   last_frame_id_ = env_->FrameId();
 
   while (!terminate_) {
-    ke::WaitResult rv = cv_.Wait(timeout_ms_ / 2);
+    auto rv = cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms_ / 2));
     if (terminate_)
       return;
 
-    if (rv == ke::Wait_Error)
-      return;
-
-    if (rv != ke::Wait_Timeout)
+    if (rv != std::cv_status::timeout)
       continue;
 
     // We reached a timeout. If the current frame is not equal to the last
@@ -121,7 +119,7 @@ WatchdogTimer::Run()
 
     {
       // Prevent the JIT from linking or destroying runtimes and functions.
-      ke::AutoLock lock(env_->lock());
+      std::lock_guard<ke::Mutex> lock(env_->lock());
 
       // Set the timeout notification bit. If this is detected before any patched
       // JIT backedges are reached, the main thread will attempt to acquire the
@@ -136,7 +134,7 @@ WatchdogTimer::Run()
 
     // The JIT will be free to compile new functions while we wait, but it will
     // see the timeout bit set above and immediately bail out.
-    cv_.Wait();
+    cv_.wait(lock);
 
     second_timeout_ = false;
 
@@ -157,15 +155,15 @@ WatchdogTimer::NotifyTimeoutReceived()
   // notification, and is therefore blocked. We take the JIT lock
   // anyway for sanity.
   {
-    ke::AutoLock lock(env_->lock());
+    std::lock_guard<ke::Mutex> lock(env_->lock());
     env_->UnpatchAllJumpsFromTimeout();
   }
 
   timedout_ = false;
 
   // Wake up the watchdog thread, it's okay to keep processing now.
-  ke::AutoLock lock(&cv_);
-  cv_.Notify();
+  std::lock_guard<std::mutex> lock(mutex_);
+  cv_.notify_all();
   return false;
 }
 
