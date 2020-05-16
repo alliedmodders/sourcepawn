@@ -92,13 +92,13 @@ Expr::Emit()
 }
 
 void
-Expr::EmitTest(bool jump_on_true, int taken, int /* fallthrough */)
+Expr::EmitTest(bool jump_on_true, int target)
 {
     Emit();
     if (jump_on_true)
-        jmp_ne0(taken);
+        jmp_ne0(target);
     else
-        jmp_eq0(taken);
+        jmp_eq0(target);
 }
 
 void
@@ -332,87 +332,118 @@ BinaryExpr::EmitInner(OpFunc oper, const UserOperation& in_user_op, Expr* left, 
     }
 }
 
+// This sets up an outermost context for logical expresions.  There are two
+// forms, one for tlAND and one for tlOR.  The bailout label is used for
+// short-circuiting.
+//
+// First, for tlAND such as a && b && ...
+//
+//    test a
+//    jzer bailout
+//    test b
+//    jzer bailout
+//    ...
+//    /* all tests are non-zero, so a && b && ... is true */
+//    const.pri 1
+//    jump done
+// bailout:
+//    /* some test was zero, so a && b && ... is false */
+//    zero.pri
+// done:
+//
+// Then, for tlOR such as a || b || ...
+//
+//    test a
+//    jnz bailout
+//    test b
+//    jnz bailout
+//    ...
+//    /* all tests are zero, so a || b || ... is false */
+//    zero.pri
+//    jump done
+// bailout:
+//    /* some test was non-zero, so a || b || ... is true */
+//    const.pri 1
+// done:
+//
+// When the test is for another LogicalExpression, EmitTest creates an inner
+// context.
+
 void
 LogicalExpr::DoEmit()
 {
-    int done = getlabel();
-    int taken = getlabel();
-    int fallthrough = getlabel();
+    assert(token_ == tlAND || token_ == tlOR);
 
-    EmitTest(true, taken, fallthrough);
-    setlabel(fallthrough);
-    ldconst(0, sPRI);
-    jumplabel(done);
-    setlabel(taken);
-    ldconst(1, sPRI);
-    setlabel(done);
-}
-
-void
-LogicalExpr::EmitTest(bool jump_on_true, int taken, int fallthrough)
-{
     ke::Vector<Expr*> sequence;
     FlattenLogical(token_, &sequence);
 
-    // a || b || c .... given jumpOnTrue, should be:
-    //
-    //   resolve a
-    //   jtrue TAKEN
-    //   resolve b
-    //   jtrue TAKEN
-    //   resolve c
-    //   jtrue TAKEN
-    //
-    // a || b || c .... given jumpOnFalse, should be:
-    //   resolve a
-    //   jtrue FALLTHROUGH
-    //   resolve b
-    //   jtrue FALLTHROUGH
-    //   resolve c
-    //   jfalse TAKEN
-    //  FALLTHROUGH:
-    //
-    // a && b && c ..... given jumpOnTrue, should be:
-    //   resolve a
-    //   jfalse FALLTHROUGH
-    //   resolve b
-    //   jfalse FALLTHROUGH
-    //   resolve c
-    //   jtrue TAKEN
-    //  FALLTHROUGH:
-    //
-    // a && b && c ..... given jumpOnFalse, should be:
-    //   resolve a
-    //   jfalse TAKEN
-    //   resolve b
-    //   jfalse TAKEN
-    //   resolve c
-    //   jfalse TAKEN
-    //
-    // This is fairly efficient, and by re-entering test() we can ensure each
-    // jfalse/jtrue encodes things like "a > b" with a combined jump+compare
-    // instruction.
-    //
-    // Note: to make this slightly easier to read, we make all this logic
-    // explicit below rather than collapsing it into a single test() call.
-    for (size_t i = 0; i < sequence.length() - 1; i++) {
-        Expr* expr = sequence[i];
-        if (token_ == tlOR) {
-            if (jump_on_true)
-                expr->EmitTest(true, taken, fallthrough);
-            else
-                expr->EmitTest(true, fallthrough, taken);
-        } else {
-            assert(token_ == tlAND);
-            if (jump_on_true)
-                expr->EmitTest(false, fallthrough, taken);
-            else
-                expr->EmitTest(false, taken, fallthrough);
-        }
-    }
+    int done = getlabel();
+    int bailout = getlabel();
+    bool jump_on_true = token_ == tlOR;
 
-    Expr* last = sequence.back();
-    last->EmitTest(jump_on_true, taken, fallthrough);
+    for (size_t i = 0; i < sequence.length(); i++)
+        sequence[i]->EmitTest(jump_on_true, bailout);
+
+    ldconst(!jump_on_true, sPRI);
+    jumplabel(done);
+    setlabel(bailout);
+    ldconst(jump_on_true, sPRI);
+    setlabel(done);
+}
+
+// Since we flattened out the tests in DoEmit, any subexpression that's a
+// LogicalExpr must not have the same operator as the parent.  Since the 
+// operator changed, a short-circuit here shouldn't jump to bailout.
+//
+// Instead, a short-circuit should fall through to the sibling subexpression.
+//
+// #1 (a1 && a2 && ...) || (b1 && b2 && ...) || (c1 && c2 && ...)
+// #2 (d1 || d2 || ...) && (e1 || e2 || ...) && (f1 || f2 || ...)
+//
+// In #1, short-circuiting the tlORs should bail out of the entire expression, 
+// but short-circuiting the tlANDs means we should move on to the next sibling
+// subexpression.  In #2, similarly, short-circuiting the tlANDs bails out,
+// but short-circuiting the tlORs should, again, move on to the next sibling.
+//
+// For #1 --
+//
+//    test a1
+//    jzer fallthrough
+//    test a1
+//    jzer fallthrough
+//    ...
+//    /* all tests passed, so our subexpression is true */
+//    jump bailout
+// fallthrough:
+//    /* repeat for bs)
+//
+// For #2 --
+//
+//    test d1
+//    jnz fallthrough
+//    test d2
+//    jnz fallthrough
+//    ...
+//    /* all tests failed, so our subexpression is false */
+//    jump bailout
+// fallthrough:
+//    /* repeat for es */
+
+void
+LogicalExpr::EmitTest(bool jump_on_true, int bailout)
+{
+    assert((jump_on_true && token_ == tlAND) || (jump_on_true && token_ == tlOR));
+    assert(token_ == tlAND || token_ == tlOR);
+
+    ke::Vector<Expr*> sequence;
+    FlattenLogical(token_, &sequence);
+
+    int fallthrough = getlabel();
+    for (size_t i = 0; i < sequence.length(); i++)
+        sequence[i]->EmitTest(token_ == tlOR, fallthrough);
+
+    jumplabel(bailout);
+    setlabel(fallthrough);
 }
 
 void

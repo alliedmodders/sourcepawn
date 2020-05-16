@@ -324,7 +324,7 @@ class Expr : public ParseNode
     // Flatten a series of binary expressions into a single list.
     virtual void FlattenLogical(int token, ke::Vector<Expr*>* out);
 
-    virtual void EmitTest(bool jump_on_true, int taken, int fallthrough);
+    virtual void EmitTest(bool jump_on_true, int bailout);
     virtual symbol* BindCallTarget(int token, Expr** implicit_this) {
         return nullptr;
     }
@@ -496,7 +496,7 @@ class LogicalExpr final : public BinaryExprBase
 
     bool Analyze() override;
     void DoEmit() override;
-    void EmitTest(bool jump_on_true, int taken, int fallthrough) override;
+    void EmitTest(bool jump_on_true, int bailout) override;
     void FlattenLogical(int token, ke::Vector<Expr*>* out) override;
 };
 
