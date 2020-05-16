@@ -34,9 +34,12 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <amtl/am-uniqueptr.h>
+
+#include <memory>
+
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
+
 #include "amx.h"
 #include "osdefs.h"
 #include "shared/string-pool.h"
@@ -146,7 +149,7 @@ class EnumStructVarData final : public SymbolData
         return this;
     }
 
-    ke::Vector<ke::UniquePtr<symbol>> children;
+    ke::Vector<std::unique_ptr<symbol>> children;
 };
 
 struct symbol;
@@ -275,7 +278,7 @@ struct symbol {
     SymbolData* data() const {
         return data_.get();
     }
-    void set_data(ke::UniquePtr<SymbolData>&& data) {
+    void set_data(std::unique_ptr<SymbolData>&& data) {
         data_ = ke::Move(data);
     }
 
@@ -296,7 +299,7 @@ struct symbol {
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
     sp::Atom* name_;
-    ke::UniquePtr<SymbolData> data_;
+    std::unique_ptr<SymbolData> data_;
 
     // Other symbols that this symbol refers to.
     ke::Vector<symbol*> refers_to_;

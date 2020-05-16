@@ -2993,7 +2993,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
     if (symname)
         name_ = gAtoms.add(symname);
     if (symident == iFUNCTN)
-        data_.assign(new FunctionData);
+        data_.reset(new FunctionData);
     memset(&dim, 0, sizeof(dim));
 }
 
@@ -3320,13 +3320,13 @@ declare_handle_intrinsics()
     declare_methodmap_symbol(map, true);
 
     if (symbol* sym = findglb("CloseHandle")) {
-        auto dtor = ke::MakeUnique<methodmap_method_t>(map);
+        auto dtor = std::make_unique<methodmap_method_t>(map);
         dtor->target = sym;
         strcpy(dtor->name, "~Handle");
         map->dtor = dtor.get();
         map->methods.append(ke::Move(dtor));
 
-        auto close = ke::MakeUnique<methodmap_method_t>(map);
+        auto close = std::make_unique<methodmap_method_t>(map);
         close->target = sym;
         strcpy(close->name, "Close");
         map->methods.append(ke::Move(close));

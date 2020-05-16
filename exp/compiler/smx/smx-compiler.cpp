@@ -253,7 +253,7 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
     ke::SafeSprintf(decorated_prefix, sizeof(decorated_prefix), ".%d.", fun->address()->offset());
 
     size_t length = strlen(decorated_prefix) + name->length() + 1;
-    ke::UniquePtr<char[]> decorated(new char[length]);
+    std::unique_ptr<char[]> decorated(new char[length]);
     ke::SafeSprintf(decorated.get(), length, "%s%s", decorated_prefix, name->chars());
     name = cc_.add(decorated.get(), length);
   }
@@ -589,7 +589,7 @@ SmxCompiler::generateSwitch(ast::SwitchStatement* stmt)
   __ bind(&casetbl);
   __ casetbl(total_cases, &defcase);
 
-  ke::UniquePtr<Label[]> labels(new Label[cases->length()]);
+  std::unique_ptr<Label[]> labels(new Label[cases->length()]);
 
   // Generate entries for the CASETBL opcode above.
   for (size_t i = 0; i < cases->length(); i++) {

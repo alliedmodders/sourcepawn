@@ -15,13 +15,15 @@
 #define _include_sourcepawn_vm_graph_builder_h_
 
 #include <assert.h>
+
+#include <memory>
+
 #include <amtl/am-fixedarray.h>
 #include <amtl/am-hashmap.h>
 #include <amtl/am-refcounting.h>
 #include <amtl/am-string.h>
-#include <amtl/am-uniqueptr.h>
-#include <sp_vm_types.h>
 #include <smx/smx-v1-opcodes.h>
+#include <sp_vm_types.h>
 #include "control-flow.h"
 #include "bitset.h"
 

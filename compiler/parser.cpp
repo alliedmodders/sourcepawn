@@ -33,6 +33,7 @@
 #include <string.h>
 
 #include <amtl/am-platform.h>
+#include <amtl/am-raii.h>
 #include <amtl/am-string.h>
 #include <amtl/am-unused.h>
 #include <amtl/experimental/am-argparser.h>
@@ -2776,7 +2777,7 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
     return TRUE;
 }
 
-static ke::UniquePtr<methodmap_method_t>
+static std::unique_ptr<methodmap_method_t>
 parse_property(methodmap_t* map) {
     typeinfo_t type;
     token_ident_t ident;
@@ -2790,7 +2791,7 @@ parse_property(methodmap_t* map) {
     if (!needsymbol(&ident))
         return NULL;
 
-    auto method = ke::MakeUnique<methodmap_method_t>(map);
+    auto method = std::make_unique<methodmap_method_t>(map);
     strcpy(method->name, ident.name);
     method->target = NULL;
     method->getter = NULL;
@@ -2808,7 +2809,7 @@ parse_property(methodmap_t* map) {
     return method;
 }
 
-static ke::UniquePtr<methodmap_method_t>
+static std::unique_ptr<methodmap_method_t>
 parse_method(methodmap_t* map) {
     int maybe_ctor = 0;
     int is_ctor = 0;
@@ -2885,7 +2886,7 @@ parse_method(methodmap_t* map) {
     if (!target)
         return nullptr;
 
-    auto method = ke::MakeUnique<methodmap_method_t>(map);
+    auto method = std::make_unique<methodmap_method_t>(map);
     strcpy(method->name, ident.name);
     method->target = target;
     method->is_static = is_static;
@@ -2953,7 +2954,7 @@ domethodmap(LayoutSpec spec)
     needtoken('{');
     while (!matchtoken('}')) {
         token_t tok;
-        ke::UniquePtr<methodmap_method_t> method;
+        std::unique_ptr<methodmap_method_t> method;
 
         if (lextok(&tok) == tPUBLIC) {
             method = parse_method(map);

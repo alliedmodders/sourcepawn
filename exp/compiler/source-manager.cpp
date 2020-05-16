@@ -60,7 +60,7 @@ class FileReader
       return false;
     }
 
-    UniquePtr<char[]> buffer = MakeUnique<char[]>(size + 1);
+    std::unique_ptr<char[]> buffer = std::make_unique<char[]>(size + 1);
     if (!buffer) {
       cc_.reportFatal(rmsg::outofmemory);
       return false;
@@ -71,7 +71,7 @@ class FileReader
       return false;
     }
 
-    *ptr = buffer.take();
+    *ptr = buffer.release();
     *lengthp = uint32_t(size);
     return true;
   }
@@ -99,7 +99,7 @@ SourceFile::computeLineCache()
     }
   }
 
-  line_cache_ = new LineExtents(lines.length());
+  line_cache_ = std::make_unique<LineExtents>(lines.length());
   if (!line_cache_->initialize()) {
     line_cache_ = nullptr;
     return;
@@ -130,21 +130,21 @@ SourceManager::open(ReportingContext& cc, const char* path)
     return nullptr;
 
   uint32_t length;
-  UniquePtr<char[]> chars;
+  std::unique_ptr<char[]> chars;
   {
     char* ptr;
     if (!reader.read(&ptr, &length))
       return nullptr;
-    chars.assign(ptr);
+    chars.reset(ptr);
   }
 
-  RefPtr<SourceFile> file = new SourceFile(chars.take(), length, path);
+  RefPtr<SourceFile> file = new SourceFile(chars.release(), length, path);
   file_cache_.add(p, atom, file);
   return file;
 }
 
 RefPtr<SourceFile>
-SourceManager::createFromBuffer(UniquePtr<char[]>&& buffer, uint32_t length, const char* path)
+SourceManager::createFromBuffer(std::unique_ptr<char[]>&& buffer, uint32_t length, const char* path)
 {
   Atom* atom = strings_.add(path);
   AtomMap<RefPtr<SourceFile>>::Insert p = file_cache_.findForAdd(atom);
@@ -152,7 +152,7 @@ SourceManager::createFromBuffer(UniquePtr<char[]>&& buffer, uint32_t length, con
   if (p.found())
     return p->value;
 
-  RefPtr<SourceFile> file = new SourceFile(buffer.take(), length, path);
+  RefPtr<SourceFile> file = new SourceFile(buffer.release(), length, path);
 
   file_cache_.add(p, atom, file);
 

@@ -13,8 +13,9 @@
 #ifndef _include_sourcepawn_vm_environment_h_
 #define _include_sourcepawn_vm_environment_h_
 
+#include <memory>
+
 #include <sp_vm_api.h>
-#include <amtl/am-autoptr.h>
 #include <amtl/am-cxx.h>
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-mutex.h>
@@ -77,10 +78,10 @@ class Environment : public ISourcePawnEnvironment
   CodeChunk AllocateCode(size_t size);
 
   CodeStubs* stubs() {
-    return code_stubs_;
+    return code_stubs_.get();
   }
   BuiltinNatives* builtins() {
-    return builtins_;
+    return builtins_.get();
   }
 
   // Runtime management.
@@ -129,7 +130,7 @@ class Environment : public ISourcePawnEnvironment
   }
 
   WatchdogTimer* watchdog() const {
-    return watchdog_timer_;
+    return watchdog_timer_.get();
   }
 
   bool hasPendingException() const;
@@ -176,10 +177,10 @@ class Environment : public ISourcePawnEnvironment
   void DispatchReport(const ErrorReport& report);
 
  private:
-  ke::AutoPtr<ISourcePawnEngine> api_v1_;
-  ke::AutoPtr<ISourcePawnEngine2> api_v2_;
-  ke::AutoPtr<WatchdogTimer> watchdog_timer_;
-  ke::AutoPtr<BuiltinNatives> builtins_;
+  std::unique_ptr<ISourcePawnEngine> api_v1_;
+  std::unique_ptr<ISourcePawnEngine2> api_v2_;
+  std::unique_ptr<WatchdogTimer> watchdog_timer_;
+  std::unique_ptr<BuiltinNatives> builtins_;
   ke::Mutex mutex_;
 
   bool debug_break_enabled_;
@@ -194,8 +195,8 @@ class Environment : public ISourcePawnEnvironment
   bool jit_enabled_;
   bool profiling_enabled_;
 
-  ke::AutoPtr<CodeAllocator> code_alloc_;
-  ke::AutoPtr<CodeStubs> code_stubs_;
+  std::unique_ptr<CodeAllocator> code_alloc_;
+  std::unique_ptr<CodeStubs> code_stubs_;
 
   ke::InlineList<PluginRuntime> runtimes_;
 

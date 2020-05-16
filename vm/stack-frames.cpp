@@ -232,12 +232,12 @@ FrameIterator::nextInvokeFrame()
 {
   runtime_ = ivk_->cx()->runtime();
   if (JitInvokeFrame* jvk = ivk_->AsJitInvokeFrame()) {
-    frame_cursor_ = new JitFrameIterator(runtime_, next_exit_fp_);
+    frame_cursor_ = std::make_unique<JitFrameIterator>(runtime_, next_exit_fp_);
     next_exit_fp_ = jvk->prev_exit_fp();
     return;
   }
   if (InterpInvokeFrame* ivk = ivk_->AsInterpInvokeFrame()) {
-    frame_cursor_ = new InterpFrameIterator(ivk);
+    frame_cursor_ = std::make_unique<InterpFrameIterator>(ivk);
     return;
   }
 }

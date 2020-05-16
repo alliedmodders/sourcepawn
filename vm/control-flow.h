@@ -119,7 +119,7 @@ class Block :
     return static_cast<T*>(data_.get());
   }
   void setData(IBlockData* data) {
-    ke::UniquePtr<IBlockData> ptr(data);
+    std::unique_ptr<IBlockData> ptr(data);
     data_ = ke::Move(ptr);
   }
 
@@ -145,7 +145,7 @@ class Block :
   ControlFlowGraph& graph_;
   ke::Vector<ke::RefPtr<Block>> predecessors_;
   ke::Vector<ke::RefPtr<Block>> successors_;
-  ke::UniquePtr<IBlockData> data_;
+  std::unique_ptr<IBlockData> data_;
 
   // Note that |end| is dependent on end_type. If it's Insn, then end_ should
   // be the |start| of the last instruction, since that is the terminating

@@ -77,7 +77,7 @@ static bool
 Analyze(const char* file)
 {
   char error[255];
-  AutoPtr<IPluginRuntime> rt(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<IPluginRuntime> rt(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
     fprintf(stdout, "Could not load .smx file: %s\n", error);
     return false;
@@ -101,7 +101,7 @@ Analyze(const char* file)
     }
   }
 
-  return Verify(rt);
+  return Verify(rt.get());
 }
 
 int main(int argc, char **argv)

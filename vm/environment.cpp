@@ -80,12 +80,12 @@ bool
 Environment::Initialize()
 {
   PoolAllocator::InitDefault();
-  api_v1_ = new SourcePawnEngine();
-  api_v2_ = new SourcePawnEngine2();
-  watchdog_timer_ = new WatchdogTimer(this);
-  builtins_ = new BuiltinNatives();
-  code_alloc_ = new CodeAllocator();
-  code_stubs_ = new CodeStubs(this);
+  api_v1_ = std::make_unique<SourcePawnEngine>();
+  api_v2_ = std::make_unique<SourcePawnEngine2>();
+  watchdog_timer_ = std::make_unique<WatchdogTimer>(this);
+  builtins_ = std::make_unique<BuiltinNatives>();
+  code_alloc_ = std::make_unique<CodeAllocator>();
+  code_stubs_ = std::make_unique<CodeStubs>(this);
 
   // Safe to initialize code now that we have the code cache.
   if (!code_stubs_->Initialize())
@@ -147,13 +147,13 @@ Environment::InstallWatchdogTimer(int timeout_ms)
 ISourcePawnEngine*
 Environment::APIv1()
 {
-  return api_v1_;
+  return api_v1_.get();
 }
 
 ISourcePawnEngine2*
 Environment::APIv2()
 {
-  return api_v2_;
+  return api_v2_.get();
 }
 
 static const char* sErrorMsgTable[] = 

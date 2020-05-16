@@ -2,6 +2,8 @@
 #ifndef _INCLUDE_SOURCEPAWN_COMPILER_TRACKER_H_
 #define _INCLUDE_SOURCEPAWN_COMPILER_TRACKER_H_
 
+#include <memory>
+
 #include "lexer.h"
 #include "pool-allocator.h"
 #include "scvars.h"
@@ -41,7 +43,7 @@ struct pstruct_t {
     explicit pstruct_t(const char* name);
 
     char name[sNAMEMAX + 1];
-    ke::Vector<ke::UniquePtr<structarg_t>> args;
+    ke::Vector<std::unique_ptr<structarg_t>> args;
 };
 
 // The ordering of these definitions should be preserved for
@@ -95,7 +97,7 @@ struct methodmap_t {
     bool keyword_nullable;
     LayoutSpec spec;
     char name[sNAMEMAX + 1];
-    ke::Vector<ke::UniquePtr<methodmap_method_t>> methods;
+    ke::Vector<std::unique_ptr<methodmap_method_t>> methods;
 
     bool must_construct_with_new() const {
         return nullable || keyword_nullable;

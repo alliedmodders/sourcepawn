@@ -11,7 +11,8 @@
 #define _include_sourcepawn_file_parser_h_
 
 #include <stdio.h>
-#include <amtl/am-uniqueptr.h>
+
+#include <memory>
 
 namespace sp {
 
@@ -28,7 +29,7 @@ class FileReader
 {
  public:
   FileReader(FILE* fp);
-  FileReader(ke::UniquePtr<uint8_t[]>&& buffer, size_t length);
+  FileReader(std::unique_ptr<uint8_t[]>&& buffer, size_t length);
 
   const uint8_t* buffer() const {
     return buffer_.get();
@@ -38,7 +39,7 @@ class FileReader
   }
 
  protected:
-  ke::UniquePtr<uint8_t[]> buffer_;
+  std::unique_ptr<uint8_t[]> buffer_;
   size_t length_;
 };
 

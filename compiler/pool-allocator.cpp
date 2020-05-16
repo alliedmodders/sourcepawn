@@ -18,7 +18,9 @@
  */
 #include <assert.h>
 #include <stdlib.h>
+
 #include <new>
+
 #include "pool-allocator.h"
 
 using namespace ke;
@@ -68,8 +70,8 @@ PoolAllocator::ensurePool(size_t actualBytes)
     if (bytesNeeded < kDefaultPoolSize)
         bytesNeeded = kDefaultPoolSize;
 
-    auto pool = ke::MakeUnique<Pool>();
-    pool->base = ke::MakeUnique<char[]>(bytesNeeded);
+    auto pool = std::make_unique<Pool>();
+    pool->base = std::make_unique<char[]>(bytesNeeded);
     pool->ptr = pool->base.get();
     pool->end = pool->ptr + bytesNeeded;
     pools_.append(ke::Move(pool));

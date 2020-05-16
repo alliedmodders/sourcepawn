@@ -38,7 +38,7 @@ ScriptedInvoker::ScriptedInvoker(PluginRuntime* runtime, funcid_t id, uint32_t p
   size_t rt_len = strlen(runtime->Name());
   size_t len = rt_len + strlen("::") + strlen(public_->name);
 
-  full_name_ = MakeUnique<char[]>(len + 1);
+  full_name_ = std::make_unique<char[]>(len + 1);
   strcpy(full_name_.get(), runtime->Name());
   strcpy(full_name_.get() + rt_len, "::");
   strcpy(full_name_.get() + rt_len + 2, public_->name);

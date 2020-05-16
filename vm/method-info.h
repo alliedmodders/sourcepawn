@@ -53,7 +53,7 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
 
   void setCompiledFunction(CompiledFunction* fun);
   CompiledFunction* jit() const {
-    return jit_;
+    return jit_.get();
   }
 
  private:
@@ -62,7 +62,7 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
  private:
   PluginRuntime* rt_;
   uint32_t pcode_offset_;
-  ke::AutoPtr<CompiledFunction> jit_;
+  std::unique_ptr<CompiledFunction> jit_;
   ke::RefPtr<ControlFlowGraph> graph_;
 
   bool checked_;

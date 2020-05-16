@@ -13,8 +13,9 @@
 #ifndef _INCLUDE_SOURCEMOD_BASEFUNCTION_H_
 #define _INCLUDE_SOURCEMOD_BASEFUNCTION_H_
 
+#include <memory>
+
 #include <sp_vm_api.h>
-#include <amtl/am-autoptr.h>
 #include <amtl/am-refcounting.h>
 
 namespace sp {
@@ -92,7 +93,7 @@ class ScriptedInvoker : public IPluginFunction
   unsigned int m_curparam;
   int m_errorstate;
   funcid_t m_FnId;
-  ke::AutoPtr<char[]> full_name_;
+  std::unique_ptr<char[]> full_name_;
   sp_public_t* public_;
   RefPtr<MethodInfo> method_;
 };

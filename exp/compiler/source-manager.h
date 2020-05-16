@@ -18,11 +18,12 @@
 #ifndef _include_spcomp_source_cache_h_
 #define _include_spcomp_source_cache_h_
 
+#include <memory>
+
 #include <amtl/am-string.h>
 #include <amtl/am-refcounting.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-fixedarray.h>
-#include <amtl/am-autoptr.h>
 #include "macros.h"
 #include "token-kind.h"
 
@@ -69,9 +70,9 @@ class SourceFile : public Refcounted<SourceFile>
   void computeLineCache();
 
  protected:
-  AutoPtr<char[]> chars_;
+  std::unique_ptr<char[]> chars_;
   uint32_t length_;
-  AutoPtr<LineExtents> line_cache_;
+  std::unique_ptr<LineExtents> line_cache_;
   AString path_;
 };
 
@@ -213,7 +214,7 @@ class SourceManager
 
   RefPtr<SourceFile> open(ReportingContext& cc, const char* path);
 
-  RefPtr<SourceFile> createFromBuffer(UniquePtr<char[]>&& buffer, uint32_t length, const char* path);
+  RefPtr<SourceFile> createFromBuffer(std::unique_ptr<char[]>&& buffer, uint32_t length, const char* path);
 
   // Returns whether two source locations ultimately originate from the same
   // file (i.e., ignoring macros).

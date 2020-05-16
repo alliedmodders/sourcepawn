@@ -1,10 +1,13 @@
 /* vim: set ts=8 sts=2 sw=2 tw=99 et: */
 #include "sctracker.h"
-#include <amtl/am-vector.h>
+
 #include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <amtl/am-raii.h>
+#include <amtl/am-vector.h>
 #include "emitter.h"
 #include "lexer.h"
 #include "sc.h"
@@ -34,9 +37,9 @@ struct MemoryScope {
 
 ke::Vector<MemoryScope> sStackScopes;
 ke::Vector<MemoryScope> sHeapScopes;
-ke::Vector<ke::UniquePtr<funcenum_t>> sFuncEnums;
-ke::Vector<ke::UniquePtr<pstruct_t>> sStructs;
-ke::Vector<ke::UniquePtr<methodmap_t>> sMethodmaps;
+ke::Vector<std::unique_ptr<funcenum_t>> sFuncEnums;
+ke::Vector<std::unique_ptr<pstruct_t>> sStructs;
+ke::Vector<std::unique_ptr<methodmap_t>> sMethodmaps;
 
 pstruct_t::pstruct_t(const char* name)
 {
@@ -56,7 +59,7 @@ pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name)
 pstruct_t*
 pstructs_add(const char* name)
 {
-    auto p = ke::MakeUnique<pstruct_t>(name);
+    auto p = std::make_unique<pstruct_t>(name);
     sStructs.append(ke::Move(p));
     return sStructs.back().get();
 }
@@ -83,7 +86,7 @@ pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg)
     if (pstructs_getarg(pstruct, arg->name))
         return nullptr;
 
-    auto newarg = ke::MakeUnique<structarg_t>();
+    auto newarg = std::make_unique<structarg_t>();
     memcpy(newarg.get(), arg, sizeof(structarg_t));
     newarg->offs = pstruct->args.length() * sizeof(cell);
     newarg->index = pstruct->args.length();
@@ -101,7 +104,7 @@ funcenums_free()
 funcenum_t*
 funcenums_add(const char* name)
 {
-    auto e = ke::MakeUnique<funcenum_t>();
+    auto e = std::make_unique<funcenum_t>();
 
     strcpy(e->name, name);
     e->tag = gTypes.defineFunction(name, e.get())->tagid();
@@ -321,7 +324,7 @@ methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, const char* name)
 methodmap_t*
 methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name)
 {
-    auto map = ke::MakeUnique<methodmap_t>(parent, spec, name);
+    auto map = std::make_unique<methodmap_t>(parent, spec, name);
 
     if (spec == Layout_MethodMap && parent) {
         if (parent->nullable)
