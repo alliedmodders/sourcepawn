@@ -136,7 +136,7 @@ TypeDictionary::findOrAdd(const char* name)
     }
 
     int tag = int(types_.length());
-    UniquePtr<Type> type = MakeUnique<Type>(name, tag);
+    std::unique_ptr<Type> type = std::make_unique<Type>(name, tag);
     types_.append(Move(type));
     return types_.back().get();
 }

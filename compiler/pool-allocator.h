@@ -18,13 +18,15 @@
 #ifndef _include_jitcraft_pool_allocator_h_
 #define _include_jitcraft_pool_allocator_h_
 
-#include <new>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include <limits.h>
+
+#include <memory>
+#include <new>
+
 #include <amtl/am-fixedarray.h>
-#include <amtl/am-uniqueptr.h>
 #include <amtl/am-vector.h>
 
 // Allocates memory in chunks that are not freed until the entire allocator
@@ -34,7 +36,7 @@ class PoolAllocator final
     friend class PoolAllocationScope;
 
     struct Pool {
-        ke::UniquePtr<char[]> base;
+        std::unique_ptr<char[]> base;
         char* ptr = nullptr;
         char* end = nullptr;
 
@@ -47,7 +49,7 @@ class PoolAllocator final
     static const size_t kMaxReserveSize = 64 * 1024;
 
   private:
-    ke::Vector<ke::UniquePtr<Pool>> pools_;
+    ke::Vector<std::unique_ptr<Pool>> pools_;
 
   private:
     void unwind(char* pos);

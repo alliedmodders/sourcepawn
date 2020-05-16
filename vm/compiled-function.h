@@ -13,10 +13,11 @@
 #ifndef _INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_
 #define _INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_
 
-#include <sp_vm_types.h>
-#include <amtl/am-autoptr.h>
+#include <memory>
+
 #include <amtl/am-fixedarray.h>
 #include <amtl/am-refcounting.h>
+#include <sp_vm_types.h>
 #include "code-allocator.h"
 
 namespace sp {
@@ -72,8 +73,8 @@ class CompiledFunction
  private:
   CodeChunk code_;
   cell_t code_offset_;
-  AutoPtr<FixedArray<LoopEdge>> edges_;
-  AutoPtr<FixedArray<CipMapEntry>> cip_map_;
+  std::unique_ptr<FixedArray<LoopEdge>> edges_;
+  std::unique_ptr<FixedArray<CipMapEntry>> cip_map_;
   bool cip_map_sorted_;
 };
 

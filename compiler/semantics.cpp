@@ -1375,10 +1375,10 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
 
     symbol* var = base_->val().sym;
     if (!var->data())
-        var->set_data(ke::MakeUnique<EnumStructVarData>());
+        var->set_data(std::make_unique<EnumStructVarData>());
 
     EnumStructVarData* es_var = var->data()->asEnumStructVar();
-    es_var->children.append(ke::MakeUnique<symbol>(*field_));
+    es_var->children.append(std::make_unique<symbol>(*field_));
 
     symbol* child = es_var->children.back().get();
     child->setName(name_);

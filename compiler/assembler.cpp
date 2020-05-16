@@ -1577,7 +1577,7 @@ assemble(const char* binfname, memfile_t* fin)
     if (sc_compression_level) {
         size_t region_size = header->imagesize - header->dataoffs;
         size_t zbuf_max = compressBound(region_size);
-        UniquePtr<Bytef[]> zbuf = MakeUnique<Bytef[]>(zbuf_max);
+        std::unique_ptr<Bytef[]> zbuf = std::make_unique<Bytef[]>(zbuf_max);
 
         uLong new_disksize = zbuf_max;
         int err = compress2(zbuf.get(), &new_disksize, (Bytef*)(buffer.bytes() + header->dataoffs),

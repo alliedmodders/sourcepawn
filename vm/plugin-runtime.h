@@ -135,28 +135,28 @@ class PluginRuntime
     return data_;
   }
   LegacyImage* image() const {
-    return image_;
+    return image_.get();
   }
   PluginContext* context() const {
-    return context_;
+    return context_.get();
   }
 
  private:
   void SetupFloatNativeRemapping();
 
  private:
-  ke::AutoPtr<sp::LegacyImage> image_;
-  ke::AutoPtr<uint8_t[]> aligned_code_;
-  ke::AutoPtr<floattbl_t[]> float_table_;
+  std::unique_ptr<sp::LegacyImage> image_;
+  std::unique_ptr<uint8_t[]> aligned_code_;
+  std::unique_ptr<floattbl_t[]> float_table_;
   ke::AString name_;
   ke::AString full_name_;
   Code code_;
   Data data_;
-  ke::AutoPtr<NativeEntry[]> natives_;
-  ke::AutoPtr<sp_public_t[]> publics_;
-  ke::AutoPtr<sp_pubvar_t[]> pubvars_;
-  ke::AutoPtr<ScriptedInvoker*[]> entrypoints_;
-  ke::AutoPtr<PluginContext> context_;
+  std::unique_ptr<NativeEntry[]> natives_;
+  std::unique_ptr<sp_public_t[]> publics_;
+  std::unique_ptr<sp_pubvar_t[]> pubvars_;
+  std::unique_ptr<ScriptedInvoker*[]> entrypoints_;
+  std::unique_ptr<PluginContext> context_;
 
   struct FunctionMapPolicy {
     static inline uint32_t hash(ucell_t value) {

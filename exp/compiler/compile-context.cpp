@@ -122,7 +122,7 @@ GetOutputFilename(const char* output_file, const char* input_file)
 {
   // :TODO: add a Strdup to amtl.
   size_t buffer_len = strlen(input_file) + 1;
-  UniquePtr<char[]> buffer = MakeUnique<char[]>(buffer_len);
+  std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_len);
   SafeStrcpy(buffer.get(), buffer_len, input_file);
 
   if (!output_file) {

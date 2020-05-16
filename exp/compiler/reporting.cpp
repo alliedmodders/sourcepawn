@@ -291,7 +291,7 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
 }
 
 AString
-ReportManager::renderMessage(rmsg::Id id, const AutoPtr<TMessage::Arg>* args, size_t argc)
+ReportManager::renderMessage(rmsg::Id id, const std::unique_ptr<TMessage::Arg>* args, size_t argc)
 {
   const rmsg_info& info = GetMessageInfo(id);
 
@@ -358,7 +358,7 @@ ReportManager::printMessage(RefPtr<TMessage> message)
     note = note + ": ";
 
     Atom* name = history.macros[i].macro->name;
-    AutoPtr<TMessage::Arg> arg(new TMessage::AtomArg(name));
+    std::unique_ptr<TMessage::Arg> arg(new TMessage::AtomArg(name));
 
     note = note + renderMessage(rmsg::from_macro, &arg, 1);
 

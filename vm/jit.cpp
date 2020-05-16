@@ -157,7 +157,7 @@ CompilerBase::emit()
     return nullptr;
   }
 
-  AutoPtr<FixedArray<LoopEdge>> edges(
+  std::unique_ptr<FixedArray<LoopEdge>> edges(
     new FixedArray<LoopEdge>(backward_jumps_.length()));
   for (size_t i = 0; i < backward_jumps_.length(); i++) {
     const BackwardJump& jump = backward_jumps_[i];
@@ -165,12 +165,12 @@ CompilerBase::emit()
     edges->at(i).disp32 = int32_t(jump.timeout_offset) - int32_t(jump.pc);
   }
 
-  AutoPtr<FixedArray<CipMapEntry>> cipmap(
+  std::unique_ptr<FixedArray<CipMapEntry>> cipmap(
     new FixedArray<CipMapEntry>(cip_map_.length()));
   memcpy(cipmap->buffer(), cip_map_.buffer(), cip_map_.length() * sizeof(CipMapEntry));
 
   assert(error_ == SP_ERROR_NONE);
-  return new CompiledFunction(code, pcode_start_, edges.take(), cipmap.take());
+  return new CompiledFunction(code, pcode_start_, edges.release(), cipmap.release());
 }
 
 void

@@ -1,13 +1,15 @@
 #ifndef _INCLUDE_MEMFILE_H
 #define _INCLUDE_MEMFILE_H
 
-#include <amtl/am-string.h>
-#include <amtl/am-uniqueptr.h>
 #include <stdlib.h>
+
+#include <memory>
+
+#include <amtl/am-string.h>
 
 struct memfile_t {
     ke::AString name;
-    ke::UniquePtr<char[]> base;
+    std::unique_ptr<char[]> base;
     long offs;
     long usedoffs;
     size_t size;

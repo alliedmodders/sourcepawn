@@ -255,7 +255,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
     return nullptr;
   }
 
-  ke::AutoPtr<SmxV1Image> image(new SmxV1Image(fp));
+  std::unique_ptr<SmxV1Image> image(new SmxV1Image(fp));
   fclose(fp);
 
   if (!image->validate()) {
@@ -266,7 +266,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
     return nullptr;
   }
 
-  PluginRuntime* pRuntime = new PluginRuntime(image.take());
+  PluginRuntime* pRuntime = new PluginRuntime(image.release());
   if (!pRuntime->Initialize()) {
     delete pRuntime;
 
@@ -382,9 +382,9 @@ SourcePawnEngine2::Shutdown()
 IPluginRuntime*
 SourcePawnEngine2::CreateEmptyRuntime(const char* name, uint32_t memory)
 {
-  ke::AutoPtr<EmptyImage> image(new EmptyImage(memory));
+  std::unique_ptr<EmptyImage> image(new EmptyImage(memory));
 
-  PluginRuntime* rt = new PluginRuntime(image.take());
+  PluginRuntime* rt = new PluginRuntime(image.release());
   if (!rt->Initialize()) {
     delete rt;
     return NULL;

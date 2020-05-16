@@ -28,15 +28,15 @@
 memfile_t*
 memfile_creat(const char* name, size_t init)
 {
-    auto pmf = ke::MakeUnique<memfile_t>();
+    auto pmf = std::make_unique<memfile_t>();
     pmf->size = init;
-    pmf->base = ke::MakeUnique<char[]>(init);
+    pmf->base = std::make_unique<char[]>(init);
     if (!pmf->base)
         return nullptr;
     pmf->name = name;
     pmf->usedoffs = 0;
     pmf->offs = 0;
-    return pmf.take();
+    return pmf.release();
 }
 
 void
@@ -111,7 +111,7 @@ memfile_write(memfile_t* mf, const void* buffer, size_t size)
 {
     if (mf->offs + size > mf->size) {
         size_t newsize = (mf->size + size) * 2;
-        auto new_base = ke::MakeUnique<char[]>(newsize);
+        auto new_base = std::make_unique<char[]>(newsize);
         if (!new_base)
             return 0;
         memcpy(new_base.get(), mf->base.get(), mf->usedoffs);

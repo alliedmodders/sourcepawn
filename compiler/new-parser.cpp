@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include <amtl/am-raii.h>
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"

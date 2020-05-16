@@ -26,9 +26,10 @@
 #ifndef _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_
 #define _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_
 
+#include <memory>
+
 #include <amtl/am-enum.h>
 #include <amtl/am-string.h>
-#include <amtl/am-uniqueptr.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 #include "amx.h"
@@ -271,7 +272,7 @@ class TypeDictionary
     Type* findOrAdd(const char* name);
 
   private:
-    ke::Vector<ke::UniquePtr<Type>> types_;
+    ke::Vector<std::unique_ptr<Type>> types_;
 };
 
 extern TypeDictionary gTypes;

@@ -8,6 +8,10 @@
 //   http://www.gnu.org/licenses/gpl.html
 //
 #include <stdint.h>
+
+#include <memory>
+#include <utility>
+
 #include <smx/smx-headers.h>
 #include "file-utils.h"
 
@@ -37,16 +41,16 @@ FileReader::FileReader(FILE* fp)
   if (fseek(fp, 0, SEEK_SET) != 0)
     return;
 
-  ke::UniquePtr<uint8_t[]> bytes = ke::MakeUnique<uint8_t[]>(size);
+  std::unique_ptr<uint8_t[]> bytes = std::make_unique<uint8_t[]>(size);
   if (!bytes || fread(bytes.get(), sizeof(uint8_t), size, fp) != (size_t)size)
     return;
 
-  buffer_ = Move(bytes);
+  buffer_ = std::move(bytes);
   length_ = size;
 }
 
-FileReader::FileReader(ke::UniquePtr<uint8_t[]>&& buffer, size_t length)
- : buffer_(Move(buffer)),
+FileReader::FileReader(std::unique_ptr<uint8_t[]>&& buffer, size_t length)
+ : buffer_(std::move(buffer)),
    length_(length)
 {
 }

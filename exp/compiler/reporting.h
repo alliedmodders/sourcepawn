@@ -18,12 +18,13 @@
 #ifndef _include_spcomp_reporting_h_
 #define _include_spcomp_reporting_h_
 
-#include "shared/string-pool.h"
-#include "source-location.h"
+#include <memory>
+
 #include <amtl/am-refcounting.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-string.h>
-#include <amtl/am-autoptr.h>
+#include "shared/string-pool.h"
+#include "source-location.h"
 
 namespace sp {
 
@@ -140,14 +141,14 @@ class TMessage : public ke::Refcounted<TMessage>
   RefPtr<TMessage> note(size_t i) const {
     return notes_[i];
   }
-  const Vector<AutoPtr<Arg>>& args() const {
+  const Vector<std::unique_ptr<Arg>>& args() const {
     return args_;
   }
 
  private:
   SourceLocation origin_;
   rmsg::Id message_id_;
-  Vector<AutoPtr<Arg>> args_;
+  Vector<std::unique_ptr<Arg>> args_;
   Vector<RefPtr<TMessage>> notes_;
 };
 
@@ -235,7 +236,7 @@ class ReportManager
 
   AString renderSourceRef(const FullSourceRef& ref);
   AString renderMessage(rmsg::Id id,
-                        const AutoPtr<TMessage::Arg>* args,
+                        const std::unique_ptr<TMessage::Arg>* args,
                         size_t len);
 
  private:

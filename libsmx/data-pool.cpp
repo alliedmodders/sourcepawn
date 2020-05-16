@@ -42,7 +42,7 @@ DataPool::add(const Vector<uint8_t>& run)
     return 0;
 
   ByteRun key;
-  key.bytes = ke::MakeUnique<uint8_t[]>(run.length());
+  key.bytes = std::make_unique<uint8_t[]>(run.length());
   key.length = run.length();
   memcpy(key.bytes.get(), run.buffer(), key.length);
   pool_map_.add(p, Move(key), index);

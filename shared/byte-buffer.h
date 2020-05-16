@@ -19,11 +19,14 @@
 #ifndef _include_sourcepawn_metadata_byte_buffer_h
 #define _include_sourcepawn_metadata_byte_buffer_h
 
-#include <amtl/am-bits.h>
-#include <amtl/am-uniqueptr.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <memory>
+#include <utility>
+
+#include <amtl/am-bits.h>
 
 namespace sp {
 
@@ -32,7 +35,7 @@ class ByteBuffer
 {
  public:
   ByteBuffer() {
-    buffer_ = ke::MakeUnique<uint8_t[]>(kInitialSize);
+    buffer_ = std::make_unique<uint8_t[]>(kInitialSize);
     buffer_pos_ = buffer_.get();
     buffer_end_ = buffer_pos_ + kInitialSize;
     oom_ = false;
@@ -115,12 +118,12 @@ class ByteBuffer
       return false;
 
     ptrdiff_t pos = buffer_pos_ - buffer_.get();
-    ke::UniquePtr<uint8_t[]> new_buffer = ke::MakeUnique<uint8_t[]>(new_size);
+    std::unique_ptr<uint8_t[]> new_buffer = std::make_unique<uint8_t[]>(new_size);
     if (!new_buffer)
       return false;
 
     memcpy(new_buffer.get(), buffer_.get(), pos);
-    buffer_ = Move(new_buffer);
+    buffer_ = std::move(new_buffer);
     buffer_pos_ = buffer_.get() + pos;
     buffer_end_ = buffer_.get() + new_size;
     return true;
@@ -130,7 +133,7 @@ class ByteBuffer
   static const size_t kInitialSize = 256;
 
  protected:
-  ke::UniquePtr<uint8_t[]> buffer_;
+  std::unique_ptr<uint8_t[]> buffer_;
   uint8_t* buffer_pos_;
   uint8_t* buffer_end_;
   bool oom_;
