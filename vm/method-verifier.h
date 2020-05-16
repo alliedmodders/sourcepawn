@@ -13,9 +13,10 @@
 #ifndef _include_sourcepawn_vm_method_verifier_h_
 #define _include_sourcepawn_vm_method_verifier_h_
 
+#include <functional>
+
 #include <sp_vm_types.h>
 #include <smx/smx-v1-opcodes.h>
-#include <amtl/am-function.h>
 #include "control-flow.h"
 
 namespace sp {
@@ -27,7 +28,7 @@ class MethodVerifier final
  public:
   explicit MethodVerifier(PluginRuntime* rt, uint32_t startOffset);
 
-  typedef ke::Lambda<void(cell_t)> ExternalFuncRefCallback;
+  typedef std::function<void(cell_t)> ExternalFuncRefCallback;
   void collectExternalFuncRefs(const ExternalFuncRefCallback& callback);
 
   ke::RefPtr<ControlFlowGraph> verify();

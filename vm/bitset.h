@@ -11,11 +11,13 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 
+#include <stddef.h>
+
+#include <functional>
+
 #include <amtl/am-bits.h>
 #include <amtl/am-maybe.h>
-#include <amtl/am-function.h>
 #include <amtl/am-vector.h>
-#include <stddef.h>
 
 namespace sp {
 
@@ -47,7 +49,7 @@ class BitSet
     words_[word] |= (uintptr_t(1) << pos_in_word(bit));
   }
 
-  void for_each(const ke::Function<void(uintptr_t)>& callback) {
+  void for_each(const std::function<void(uintptr_t)>& callback) {
     for (size_t i = 0; i < words_.length(); i++) {
       uintptr_t word = words_[i];
 
