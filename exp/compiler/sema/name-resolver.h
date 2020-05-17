@@ -18,6 +18,8 @@
 #ifndef _include_spcomp_name_resolver_h_
 #define _include_spcomp_name_resolver_h_
 
+#include <utility>
+
 #include "scopes.h"
 #include "type-resolver.h"
 
@@ -142,7 +144,7 @@ class NameResolver
     SymbolEnv(SymbolEnv&& other)
      : scope_(other.scope_),
        kind_(other.kind_),
-       children_(Move(other.children_))
+       children_(std::move(other.children_))
     {
     }
 
@@ -170,6 +172,13 @@ class NameResolver
         // Wait until we leave the environment to decide what to do.
         children_.append(child);
       }
+    }
+
+    SymbolEnv& operator =(SymbolEnv&& other) {
+      scope_ = other.scope_;
+      kind_ = other.kind_;
+      children_ = std::move(other.children_);
+      return *this;
     }
 
    private:

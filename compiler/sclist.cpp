@@ -26,14 +26,17 @@
  *
  *  Version: $Id$
  */
-#include "sclist.h"
-#include <amtl/am-hashmap.h>
-#include <amtl/am-string.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <utility>
+
+#include "sclist.h"
+#include <amtl/am-hashmap.h>
+#include <amtl/am-string.h>
 #include "errors.h"
 #include "sc.h"
 #include "scvars.h"
@@ -197,7 +200,7 @@ insert_subst(const char* pattern, size_t pattern_length, const char* substitutio
     if (pc_deprecate.length() > 0) {
         macro.deprecated = true;
         if (sc_status == statWRITE)
-            macro.documentation = ke::Move(pc_deprecate);
+            macro.documentation = std::move(pc_deprecate);
         else
             pc_deprecate = "";
     }
@@ -207,7 +210,7 @@ insert_subst(const char* pattern, size_t pattern_length, const char* substitutio
     if (p.found())
         p->value = macro;
     else
-        sMacros.add(p, ke::Move(key), macro);
+        sMacros.add(p, std::move(key), macro);
 }
 
 bool

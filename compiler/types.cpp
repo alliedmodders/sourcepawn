@@ -23,8 +23,11 @@
  *
  *  Version: $Id$
  */
-#include "types.h"
 #include <ctype.h>
+
+#include <utility>
+
+#include "types.h"
 #include "sc.h"
 #include "sctracker.h"
 #include "scvars.h"
@@ -137,7 +140,7 @@ TypeDictionary::findOrAdd(const char* name)
 
     int tag = int(types_.length());
     std::unique_ptr<Type> type = std::make_unique<Type>(name, tag);
-    types_.append(Move(type));
+    types_.append(std::move(type));
     return types_.back().get();
 }
 

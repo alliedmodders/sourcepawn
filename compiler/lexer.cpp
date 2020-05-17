@@ -21,17 +21,20 @@
  *
  *  Version: $Id$
  */
+#include <assert.h>
+#include <ctype.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <utility>
+
 #include "lexer.h"
 #include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
 #include <amtl/am-string.h>
-#include <assert.h>
-#include <ctype.h>
-#include <math.h>
 #include <sp_typeutil.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "emitter.h"
 #include "errors.h"
 #include "libpawnc.h"
@@ -3324,11 +3327,11 @@ declare_handle_intrinsics()
         dtor->target = sym;
         strcpy(dtor->name, "~Handle");
         map->dtor = dtor.get();
-        map->methods.append(ke::Move(dtor));
+        map->methods.append(std::move(dtor));
 
         auto close = std::make_unique<methodmap_method_t>(map);
         close->target = sym;
         strcpy(close->name, "Close");
-        map->methods.append(ke::Move(close));
+        map->methods.append(std::move(close));
     }
 }

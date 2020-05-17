@@ -14,6 +14,7 @@
 #include <stddef.h>
 
 #include <functional>
+#include <utility>
 
 #include <amtl/am-bits.h>
 #include <amtl/am-maybe.h>
@@ -30,8 +31,8 @@ class BitSet
    : max_bits_(ke::Some(max_bits))
   {}
   explicit BitSet(BitSet&& other)
-   : words_(ke::Move(other.words_)),
-     max_bits_(ke::Move(other.max_bits_))
+   : words_(std::move(other.words_)),
+     max_bits_(std::move(other.max_bits_))
   {}
 
   bool test(uintptr_t bit) {
@@ -62,8 +63,8 @@ class BitSet
   }
 
   BitSet& operator =(BitSet&& other) {
-    words_ = ke::Move(other.words_);
-    max_bits_ = ke::Move(other.max_bits_);
+    words_ = std::move(other.words_);
+    max_bits_ = std::move(other.max_bits_);
     return *this;
   }
 

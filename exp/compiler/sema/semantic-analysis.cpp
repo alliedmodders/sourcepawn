@@ -15,11 +15,13 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <utility>
+
+#include <amtl/am-linkedlist.h>
 #include "compile-context.h"
 #include "semantic-analysis.h"
 #include "scopes.h"
 #include "symbols.h"
-#include <amtl/am-linkedlist.h>
 
 namespace sp {
 
@@ -45,8 +47,8 @@ SemanticAnalysis::analyze()
     return nullptr;
 
   sema::Program* program = new (pool_) sema::Program;
-  program->functions = ke::Move(global_functions_);
-  program->globals = ke::Move(global_vars_);
+  program->functions = std::move(global_functions_);
+  program->globals = std::move(global_vars_);
   return program;
 }
 

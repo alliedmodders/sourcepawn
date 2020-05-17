@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <utility>
+
 #include <amtl/am-raii.h>
 #include <amtl/am-vector.h>
 #include "emitter.h"
@@ -25,11 +27,17 @@ struct MemoryUse {
 struct MemoryScope {
     MemoryScope(MemoryScope&& other)
      : scope_id(other.scope_id),
-       usage(ke::Move(other.usage))
+       usage(std::move(other.usage))
     {}
     explicit MemoryScope(int scope_id)
      : scope_id(scope_id)
     {}
+
+    MemoryScope& operator =(MemoryScope&& other) {
+        scope_id = other.scope_id;
+        usage = std::move(other.usage);
+        return *this;
+    }
 
     int scope_id;
     ke::Vector<MemoryUse> usage;
@@ -60,7 +68,7 @@ pstruct_t*
 pstructs_add(const char* name)
 {
     auto p = std::make_unique<pstruct_t>(name);
-    sStructs.append(ke::Move(p));
+    sStructs.append(std::move(p));
     return sStructs.back().get();
 }
 
@@ -90,7 +98,7 @@ pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg)
     memcpy(newarg.get(), arg, sizeof(structarg_t));
     newarg->offs = pstruct->args.length() * sizeof(cell);
     newarg->index = pstruct->args.length();
-    pstruct->args.append(ke::Move(newarg));
+    pstruct->args.append(std::move(newarg));
 
     return pstruct->args.back().get();
 }
@@ -109,7 +117,7 @@ funcenums_add(const char* name)
     strcpy(e->name, name);
     e->tag = gTypes.defineFunction(name, e.get())->tagid();
 
-    sFuncEnums.append(ke::Move(e));
+    sFuncEnums.append(std::move(e));
     return sFuncEnums.back().get();
 }
 
@@ -337,7 +345,7 @@ methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name)
         map->tag = gTypes.defineMethodmap(name, map.get())->tagid();
     else
         map->tag = gTypes.defineObject(name)->tagid();
-    sMethodmaps.append(ke::Move(map));
+    sMethodmaps.append(std::move(map));
 
     return sMethodmaps.back().get();
 }

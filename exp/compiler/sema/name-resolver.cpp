@@ -15,6 +15,8 @@
 //
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <utility>
+
 #include "compile-context.h"
 #include "name-resolver.h"
 
@@ -121,7 +123,7 @@ NameResolver::OnLeaveScope()
   } else {
     // We didn't have a scope. Transfer any children to our parent. Note that
     // we must have a parent, since we stop at the global scope.
-    prev->children().extend(ke::Move(env.children()));
+    prev->children().extend(std::move(env.children()));
   }
   env_.pop();
   return scope;

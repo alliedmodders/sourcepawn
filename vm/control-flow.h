@@ -13,10 +13,13 @@
 #ifndef _include_sourcepawn_vm_control_flow_h_
 #define _include_sourcepawn_vm_control_flow_h_
 
+#include <stdio.h>
+
+#include <utility>
+
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
 #include <amtl/am-vector.h>
-#include <stdio.h>
 #include "plugin-runtime.h"
 #include "label.h"
 
@@ -120,7 +123,7 @@ class Block :
   }
   void setData(IBlockData* data) {
     std::unique_ptr<IBlockData> ptr(data);
-    data_ = ke::Move(ptr);
+    data_ = std::move(ptr);
   }
 
   void addTarget(Block* target);

@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <utility>
+
 #include "osdefs.h"
 
 memfile_t*
@@ -116,7 +118,7 @@ memfile_write(memfile_t* mf, const void* buffer, size_t size)
             return 0;
         memcpy(new_base.get(), mf->base.get(), mf->usedoffs);
         mf->size = newsize;
-        mf->base = ke::Move(new_base);
+        mf->base = std::move(new_base);
     }
     memcpy(mf->base.get() + mf->offs, buffer, size);
     mf->offs += size;
