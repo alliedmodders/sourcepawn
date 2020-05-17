@@ -15,6 +15,8 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <utility>
+
 #include "compile-context.h"
 #include "parser/ast.h"
 #include "scopes.h"
@@ -842,8 +844,8 @@ SmxCompiler::emitBinary(sema::BinaryExpr* expr, ValueDest dest)
       if (left_i32 && !right_i32 &&
           (expr->token() == TOK_PLUS || expr->token() == TOK_STAR))
       {
-        ke::Swap(left, right);
-        ke::Swap(left_i32, right_i32);
+        std::swap(left, right);
+        std::swap(left_i32, right_i32);
       }
 
       if (!emit_into(left, ValueDest::Pri))

@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <memory>
+#include <utility>
 
 #include <amtl/am-hashmap.h>
 #include <amtl/am-vector.h>
@@ -48,7 +49,7 @@ class DataPool
     ByteRun()
     {}
     ByteRun(ByteRun&& other)
-     : bytes(Move(other.bytes)),
+     : bytes(std::move(other.bytes)),
        length(other.length)
     {}
     std::unique_ptr<uint8_t[]> bytes;

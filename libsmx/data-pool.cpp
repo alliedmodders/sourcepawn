@@ -18,6 +18,8 @@
 
 #include "data-pool.h"
 
+#include <utility>
+
 namespace sp { 
 
 DataPool::DataPool()
@@ -45,7 +47,7 @@ DataPool::add(const Vector<uint8_t>& run)
   key.bytes = std::make_unique<uint8_t[]>(run.length());
   key.length = run.length();
   memcpy(key.bytes.get(), run.buffer(), key.length);
-  pool_map_.add(p, Move(key), index);
+  pool_map_.add(p, std::move(key), index);
   return index;
 }
 

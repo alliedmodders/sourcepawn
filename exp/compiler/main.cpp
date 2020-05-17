@@ -16,9 +16,12 @@
  * You should have received a copy of the GNU General Public License along with
  * SourcePawn. If not, see http://www.gnu.org/licenses/.
  */
-#include <amtl/experimental/am-argparser.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <utility>
+
+#include <amtl/experimental/am-argparser.h>
 #include "compile-context.h"
 #include "source-manager.h"
 #include "type-manager.h"
@@ -68,7 +71,7 @@ int main(int argc, char** argv)
     cc.options().ShowSema = show_sema.value();
     cc.options().ShowPoolStats = pool_stats.value();
     cc.options().OutputFile = output_file.maybeValue();
-    cc.options().SearchPaths = Move(includes.values());
+    cc.options().SearchPaths = std::move(includes.values());
     
     ReportingContext rc(cc, SourceLocation(), false);
 

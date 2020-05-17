@@ -18,12 +18,14 @@
 #ifndef _include_jitcraft_pool_allocator_h_
 #define _include_jitcraft_pool_allocator_h_
 
-#include <new>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <limits.h>
-#include <amtl/am-vector.h>
+
+#include <new>
+
 #include <amtl/am-fixedarray.h>
+#include <amtl/am-vector.h>
 
 namespace sp {
 
@@ -176,7 +178,7 @@ class PoolList : public PoolObject
 
   template <typename U>
   bool append(U&& item) {
-    return impl_.append(ke::Forward<U>(item));
+    return impl_.append(std::forward<U>(item));
   }
   T& at(size_t index) {
     return impl_.at(index);

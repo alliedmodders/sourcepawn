@@ -15,6 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
+#include <fenv.h>
+#include <math.h>
+#include <stdlib.h>
+
+#include <utility>
+
 #include "interpreter.h"
 #include "debugging.h"
 #include "environment.h"
@@ -25,9 +31,6 @@
 #include "watchdog_timer.h"
 #include <amtl/am-algorithm.h>
 #include <amtl/am-float.h>
-#include <fenv.h>
-#include <math.h>
-#include <stdlib.h>
 
 namespace sp {
 
@@ -770,7 +773,7 @@ Interpreter::visitMOVE(PawnReg reg)
 bool
 Interpreter::visitXCHG()
 {
-  ke::Swap(regs_.pri(), regs_.alt());
+  std::swap(regs_.pri(), regs_.alt());
   return true;
 }
 

@@ -32,6 +32,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <utility>
+
 #include <amtl/am-platform.h>
 #include <amtl/am-raii.h>
 #include <amtl/am-string.h>
@@ -2981,7 +2983,7 @@ domethodmap(LayoutSpec spec)
             continue;
         }
 
-        map->methods.append(ke::Move(method));
+        map->methods.append(std::move(method));
     }
 
     require_newline(TerminatorPolicy::NewlineOrSemicolon);
@@ -3329,7 +3331,7 @@ fetchfunc(const char* name) {
         assert(sym != NULL);
         sym->deprecated = true;
         if (sc_status == statWRITE) {
-            sym->documentation = ke::Move(pc_deprecate);
+            sym->documentation = std::move(pc_deprecate);
         } else {
             pc_deprecate = "";
         }

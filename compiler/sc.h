@@ -36,6 +36,7 @@
 #include <stdio.h>
 
 #include <memory>
+#include <utility>
 
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
@@ -279,7 +280,7 @@ struct symbol {
         return data_.get();
     }
     void set_data(std::unique_ptr<SymbolData>&& data) {
-        data_ = ke::Move(data);
+        data_ = std::move(data);
     }
 
     void add_reference_to(symbol* other);

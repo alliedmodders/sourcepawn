@@ -7,9 +7,11 @@
 // provided with this file, you can obtain it here:
 //   http://www.gnu.org/licenses/gpl.html
 //
+#include <utility>
+
+#include <amtl/am-string.h>
 #include "smx-v1-image.h"
 #include "zlib/zlib.h"
-#include <amtl/am-string.h>
 
 using namespace ke;
 using namespace sp;
@@ -94,7 +96,7 @@ SmxV1Image::validate()
 
       // Replace the original buffer.
       length_ = hdr_->imagesize;
-      buffer_ = Move(uncompressed);
+      buffer_ = std::move(uncompressed);
       hdr_ = (sp_file_hdr_t*)buffer();
       break;
     }

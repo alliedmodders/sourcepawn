@@ -20,6 +20,7 @@
 #include <stdlib.h>
 
 #include <new>
+#include <utility>
 
 #include "pool-allocator.h"
 
@@ -74,7 +75,7 @@ PoolAllocator::ensurePool(size_t actualBytes)
     pool->base = std::make_unique<char[]>(bytesNeeded);
     pool->ptr = pool->base.get();
     pool->end = pool->ptr + bytesNeeded;
-    pools_.append(ke::Move(pool));
+    pools_.append(std::move(pool));
     return pools_.back().get();
 }
 
