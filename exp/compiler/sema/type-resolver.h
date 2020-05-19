@@ -91,7 +91,7 @@ class TypeResolver
   void visitTypesetDecl(TypesetDecl* decl) override;
 
   void addPending(AstNode* node) {
-    work_queue_.append(node);
+    work_queue_.push_back(node);
   }
 
   Type* applyConstQualifier(TypeSpecifier* spec, Type* type);
@@ -139,7 +139,7 @@ class TypeResolver
   PoolAllocator& pool_;
   CompileContext& cc_;
 
-  Deque<AstNode*> work_queue_;
+  std::deque<AstNode*> work_queue_;
 
   Vector<EnumConstant*> enum_constant_stack_;
 };

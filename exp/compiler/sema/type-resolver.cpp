@@ -126,9 +126,9 @@ TypeResolver::TypeResolver(CompileContext& cc)
 bool
 TypeResolver::analyze()
 {
-  printf("unresolved type queue size: %d\n", int(work_queue_.length()));
+  printf("unresolved type queue size: %d\n", int(work_queue_.size()));
   while (!work_queue_.empty()) {
-    AstNode* node = work_queue_.popFrontCopy();
+    AstNode* node = PopFront(&work_queue_);
     node->accept(this);
 
     if (!cc_.canContinueProcessing())
