@@ -290,7 +290,7 @@ int main(int argc, char** argv)
   if (!getenv("DISABLE_WATCHDOG") && !disable_watchdog.value())
     sEnv->InstallWatchdogTimer(5000);
 
-  int errcode = Execute(filename.value().chars());
+  int errcode = Execute(filename.value().c_str());
 
   sEnv->SetDebugger(NULL);
   sEnv->Shutdown();

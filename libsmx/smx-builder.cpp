@@ -80,8 +80,8 @@ SmxBuilder::write(ISmxBuffer* buf)
   assert(current_offset == header.stringtab);
   
   for (size_t i = 0; i < sections_.length(); i++) {
-    const AString& name = sections_[i]->name();
-    if (!buf->write(name.chars(), name.length() + 1))
+    const auto& name = sections_[i]->name();
+    if (!buf->write(name.c_str(), name.size() + 1))
       return false;
   }
   current_offset += current_string_offset;

@@ -229,7 +229,7 @@ struct symbol {
     } dim;       /* for 'dimension', both functions and arrays */
     int fnumber; /* file number in which the symbol is declared */
     int lnumber; /* line number for the declaration */
-    ke::AString documentation; /* optional documentation string */
+    std::string documentation; /* optional documentation string */
     methodmap_t* methodmap;    /* if ident == iMETHODMAP */
 
     int addr() const {

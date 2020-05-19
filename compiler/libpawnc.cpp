@@ -300,7 +300,7 @@ pc_closeasm(memfile_t* handle, int deletefile)
 {
     if (handle) {
         if (!deletefile) {
-            if (FILE* fp = fopen(handle->name.chars(), "wb")) {
+            if (FILE* fp = fopen(handle->name.c_str(), "wb")) {
                 fwrite(handle->base.get(), handle->usedoffs, 1, fp);
                 fclose(fp);
             }

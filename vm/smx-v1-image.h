@@ -38,7 +38,7 @@ class SmxV1Image
   }
 
   const char* errorMessage() const {
-    return error_.chars();
+    return error_.c_str();
   }
 
  public:
@@ -212,7 +212,7 @@ class SmxV1Image
 
  private:
   sp_file_hdr_t* hdr_;
-  ke::AString error_;
+  std::string error_;
   const char* header_strings_;
   ke::Vector<Section> sections_;
 

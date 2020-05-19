@@ -79,7 +79,7 @@ int sc_err_status;
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
-ke::AString pc_deprecate;            /* if non-empty, mark next declaration as deprecated */
+std::string pc_deprecate;            /* if non-empty, mark next declaration as deprecated */
 int pc_optimize = sOPTIMIZE_NOMACRO; /* (peephole) optimization level */
 int pc_memflags = 0;                 /* special flags for the stack/heap usage */
 int sc_showincludes = 0;             /* show include files */

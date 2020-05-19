@@ -329,10 +329,10 @@ class Analyzer : public PartialAstVisitor
   }
 
   JsonString *toJson(const TypeSpecifier *spec, Atom *name = nullptr) {
-    return toJson(BuildTypeName(spec, name, TypeDiagFlags::Names).chars());
+    return toJson(BuildTypeName(spec, name, TypeDiagFlags::Names).c_str());
   }
   JsonString *toJson(Type *type, Atom *name = nullptr) {
-    return toJson(BuildTypeName(type, name, TypeDiagFlags::Names).chars());
+    return toJson(BuildTypeName(type, name, TypeDiagFlags::Names).c_str());
   }
 
   JsonString *toJson(const TypeExpr &te, Atom *name = nullptr) {
@@ -362,7 +362,7 @@ class Analyzer : public PartialAstVisitor
     return toJson(BuildTypeName(
       decl->te(),
       named ? decl->name() : nullptr,
-      flags).chars());
+      flags).c_str());
   }
 
   JsonList *toJson(const ParameterList *params) {
@@ -483,7 +483,7 @@ int main(int argc, char **argv)
 
     cc.SkipResolution();
 
-    const char* file = filename.value().chars();
+    const char* file = filename.value().c_str();
     JsonObject *obj = Run(cc, file);
     if (!obj) {
       reports.PrintMessages();

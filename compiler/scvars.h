@@ -93,7 +93,7 @@ extern memfile_t* outf; /* file written to */
 
 extern jmp_buf errbuf; /* target of longjmp() on a fatal error */
 
-extern ke::AString pc_deprecate;
+extern std::string pc_deprecate;
 
 extern bool sc_intest;
 extern bool sc_allowtags;

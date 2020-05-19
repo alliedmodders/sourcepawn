@@ -37,7 +37,7 @@ int main(int argc, char** argv)
   StringOption input_file(parser, "file", "Input file.");
   StringOption output_file(parser, "o", "output", Nothing(),
     "SMX output file.");
-  RepeatOption<AString> includes(parser, "-i", nullptr,
+  RepeatOption<std::string> includes(parser, "-i", nullptr,
     "Add a folder to the include path.");
 
   // :TODO: Turn these off by default once we're closer to release.
@@ -75,7 +75,7 @@ int main(int argc, char** argv)
     
     ReportingContext rc(cc, SourceLocation(), false);
 
-    const char* filename = input_file.value().chars();
+    const char* filename = input_file.value().c_str();
     RefPtr<SourceFile> file = source.open(rc, filename);
     if (!file) {
       fprintf(stderr, "cannot open file '%s'\n", filename);

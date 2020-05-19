@@ -100,7 +100,7 @@ Type::kindName() const
       if (funcenum_ptr_) {
         if (funcenum_ptr_->entries.length() > 1)
           return "typeset";
-        if (name_.startsWith("::"))
+        if (ke::StartsWith(name_, "::"))
           return "function";
         return "typedef";
       }

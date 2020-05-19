@@ -49,12 +49,12 @@ class SmxSection : public ke::Refcounted<SmxSection>
     return false;
   }
 
-  const ke::AString& name() const {
+  const std::string& name() const {
     return name_;
   }
 
  private:
-  ke::AString name_;
+  std::string name_;
 };
 
 // An SmxBlobSection is a section that has some kind of header structure

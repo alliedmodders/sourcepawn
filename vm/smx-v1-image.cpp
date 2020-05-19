@@ -381,11 +381,11 @@ SmxV1Image::validateRtti()
     const char* table_name = tables[i];
     const Section* section = findSection(table_name);
     if (!section) {
-      error_.format("missing %s section", table_name);
+      error_ = StringPrintf("missing %s section", table_name);
       return false;
     }
     if (!validateRttiHeader(section)) {
-      error_.format("could not validate %s section", table_name);
+      error_ = StringPrintf("could not validate %s section", table_name);
       return false;
     }
   }

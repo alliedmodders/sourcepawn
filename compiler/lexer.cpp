@@ -1786,19 +1786,16 @@ lexinit()
     }
 }
 
-ke::AString
+std::string
 get_token_string(int tok_id)
 {
-    ke::AString str;
-    if (tok_id < 256) {
-        str.format("%c", tok_id);
-    } else if (tok_id == tEOL) {
-        str.format("<newline>");
-    } else {
-        assert(tok_id >= tFIRST && tok_id <= tLAST);
-        str.format("%s", sc_tokens[tok_id - tFIRST]);
-    }
-    return str;
+    std::string str;
+    if (tok_id < 256)
+        return StringPrintf("%c", tok_id);
+    if (tok_id == tEOL)
+        return "<newline>";
+    assert(tok_id >= tFIRST && tok_id <= tLAST);
+    return StringPrintf("%s", sc_tokens[tok_id - tFIRST]);
 }
 
 static int
@@ -2249,15 +2246,15 @@ lex_keyword(full_token_t* tok, const char* token_start)
 
     if (IsUnimplementedKeyword(tok_id)) {
         // Try to gracefully error.
-        error(173, get_token_string(tok_id).chars());
+        error(173, get_token_string(tok_id).c_str());
         tok->id = tSYMBOL;
-        strcpy(tok->str, get_token_string(tok_id).chars());
+        strcpy(tok->str, get_token_string(tok_id).c_str());
         tok->len = strlen(tok->str);
     } else if (*lptr == ':' && (tok_id == tINT || tok_id == tVOID)) {
         // Special case 'int:' to its old behavior: an implicit view_as<> cast
         // with Pawn's awful lowercase coercion semantics.
-        ke::AString token_str = get_token_string(tok_id);
-        const char* token = token_str.chars();
+        std::string token_str = get_token_string(tok_id);
+        const char* token = token_str.c_str();
         switch (tok_id) {
             case tINT:
                 error(238, token, token);
@@ -2528,7 +2525,7 @@ require_newline(TerminatorPolicy policy)
         if (next_tok_id == ';') {
             lexpop();
         } else if (policy == TerminatorPolicy::Semicolon && sc_needsemicolon) {
-            error(pos, 1, ";", get_token_string(next_tok_id).chars());
+            error(pos, 1, ";", get_token_string(next_tok_id).c_str());
         }
     }
 
@@ -2985,7 +2982,6 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    fnumber(fcurrent),
    /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
-   documentation(nullptr),
    methodmap(nullptr),
    addr_(symaddr),
    name_(nullptr),

@@ -159,7 +159,7 @@ class Preprocessor
   bool handleEndOfFile();
 
   void setNextDeprecationMessage(const char* buffer, size_t length) {
-    next_deprecation_message_ = AString(buffer, length);
+    next_deprecation_message_ = std::string(buffer, length);
   }
 
   // Nasty business of evaluating a preprocessor expression. Implemented in
@@ -231,7 +231,7 @@ class Preprocessor
   TokenRing* tokens_;
 
   // The next deprecation message.
-  AString next_deprecation_message_;
+  std::string next_deprecation_message_;
 
   // Whether or not macro expansion is allowed.
   bool allow_macro_expansion_;

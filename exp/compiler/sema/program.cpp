@@ -77,7 +77,7 @@ class SemaPrinter : public ast::StrictAstVisitor
   void visitVarDecl(ast::VarDecl* stmt) override {
     for (; stmt; stmt = stmt->next()) {
       prefix();
-      fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).chars());
+      fprintf(fp_, "- VarDecl: %s\n", BuildTypeName(stmt->sym()->type(), stmt->sym()->name()).c_str());
       indent();
       {
         if (sema::Expr* expr = stmt->sema_init())
@@ -387,11 +387,11 @@ class SemaPrinter : public ast::StrictAstVisitor
 
   void printVar(sema::VarExpr* expr) {
     prefix();
-    AString str = BuildTypeName(expr->type(), nullptr);
+    std::string str = BuildTypeName(expr->type(), nullptr);
     fprintf(fp_, "- %s %s (%s)\n",
       expr->prettyName(),
       expr->sym()->name()->chars(),
-      str.chars());
+      str.c_str());
   }
 
   void printIncDec(sema::IncDecExpr* expr) {
@@ -466,16 +466,16 @@ class SemaPrinter : public ast::StrictAstVisitor
 
   void enter(sema::Expr* expr, Type* type, const char* extra = nullptr) {
     prefix();
-    AString str = BuildTypeName(type, nullptr);
+    std::string str = BuildTypeName(type, nullptr);
     if (extra)
-      fprintf(fp_, "- %s (%s) %s\n", expr->prettyName(), str.chars(), extra);
+      fprintf(fp_, "- %s (%s) %s\n", expr->prettyName(), str.c_str(), extra);
     else
-      fprintf(fp_, "- %s (%s)\n", expr->prettyName(), str.chars());
+      fprintf(fp_, "- %s (%s)\n", expr->prettyName(), str.c_str());
   }
 
   void dump(const ast::TypeExpr& te, Atom* name) {
-    AString str = BuildTypeName(te.resolved(), name);
-    fprintf(fp_, "%s", str.chars());
+    std::string str = BuildTypeName(te.resolved(), name);
+    fprintf(fp_, "%s", str.c_str());
   }
 
   void dump(ast::FunctionSignature* sig) {

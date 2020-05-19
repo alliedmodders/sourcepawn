@@ -43,19 +43,19 @@
 #include "sp_symhash.h"
 
 static bool sAliasTableInitialized;
-static ke::HashMap<sp::CharsAndLength, ke::AString, KeywordTablePolicy> sAliases;
+static ke::HashMap<sp::CharsAndLength, std::string, KeywordTablePolicy> sAliases;
 
 struct MacroTablePolicy {
-    static bool matches(const ke::AString& a, const ke::AString& b) {
+    static bool matches(const std::string& a, const std::string& b) {
         return a == b;
     }
-    static bool matches(const sp::CharsAndLength& a, const ke::AString& b) {
+    static bool matches(const sp::CharsAndLength& a, const std::string& b) {
         if (a.length() != b.length())
             return false;
-        return strncmp(a.str(), b.chars(), a.length()) == 0;
+        return strncmp(a.str(), b.c_str(), a.length()) == 0;
     }
-    static uint32_t hash(const ke::AString& key) {
-        return ke::HashCharSequence(key.chars(), key.length());
+    static uint32_t hash(const std::string& key) {
+        return ke::HashCharSequence(key.c_str(), key.length());
     }
     static uint32_t hash(const sp::CharsAndLength& key) {
         return ke::HashCharSequence(key.str(), key.length());
@@ -63,13 +63,13 @@ struct MacroTablePolicy {
 };
 
 struct MacroEntry {
-    ke::AString first;
-    ke::AString second;
-    ke::AString documentation;
+    std::string first;
+    std::string second;
+    std::string documentation;
     bool deprecated;
 };
 static bool sMacroTableInitialized;
-static ke::HashMap<ke::AString, MacroEntry, MacroTablePolicy> sMacros;
+static ke::HashMap<std::string, MacroEntry, MacroTablePolicy> sMacros;
 
 /* ----- string list functions ----------------------------------- */
 static stringlist*
@@ -150,7 +150,7 @@ lookup_alias(char* target, const char* name)
     auto p = sAliases.find(key);
     if (!p.found())
         return false;
-    ke::SafeStrcpy(target, sNAMEMAX + 1, p->value.chars());
+    ke::SafeStrcpy(target, sNAMEMAX + 1, p->value.c_str());
     return true;
 }
 
@@ -205,7 +205,7 @@ insert_subst(const char* pattern, size_t pattern_length, const char* substitutio
             pc_deprecate = "";
     }
 
-    ke::AString key(pattern, pattern_length);
+    std::string key(pattern, pattern_length);
     auto p = sMacros.findForAdd(key);
     if (p.found())
         p->value = macro;
@@ -223,11 +223,11 @@ find_subst(const char* name, size_t length, macro_t* macro)
 
     MacroEntry& entry = p->value;
     if (entry.deprecated)
-        error(234, p->key.chars(), entry.documentation.chars());
+        error(234, p->key.c_str(), entry.documentation.c_str());
 
     if (macro) {
-        macro->first = entry.first.chars();
-        macro->second = entry.second.chars();
+        macro->first = entry.first.c_str();
+        macro->second = entry.second.c_str();
     }
     return true;
 }

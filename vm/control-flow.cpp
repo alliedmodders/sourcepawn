@@ -286,12 +286,10 @@ ControlFlowGraph::dump(FILE* fp)
   }
 }
 
-static AString
+static std::string
 MakeDotBlockname(Block* block)
 {
-  AString name;
-  name.format("block%d_%p", block->id(), block);
-  return name;
+  return ke::StringPrintf("block%d_%p", block->id(), block);
 }
 
 void
@@ -302,8 +300,8 @@ ControlFlowGraph::dumpDot(FILE* fp)
     Block* block = *iter;
     for (const auto& successor : block->successors()) {
       fprintf(fp, "  %s -> %s;\n",
-        MakeDotBlockname(block).chars(),
-        MakeDotBlockname(successor).chars());
+        MakeDotBlockname(block).c_str(),
+        MakeDotBlockname(successor).c_str());
     }
   }
   fprintf(fp, "}\n");
@@ -320,8 +318,8 @@ ControlFlowGraph::dumpDomTreeDot(FILE* fp)
     Block* block = work.popCopy();
     for (const auto& child : block->immediatelyDominated()) {
       fprintf(fp, "  %s -> %s;\n",
-        MakeDotBlockname(block).chars(),
-        MakeDotBlockname(child).chars());
+        MakeDotBlockname(block).c_str(),
+        MakeDotBlockname(child).c_str());
       work.append(child);
     }
   }
