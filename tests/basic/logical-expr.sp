@@ -8,6 +8,8 @@
    <noparenexpr> ::= <expr> <op> <expr> | <value>;
 */
 
+#include <shell>
+
 public void main() {
 	bool a = true;
 	bool b = false;
