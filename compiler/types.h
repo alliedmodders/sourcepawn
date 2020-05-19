@@ -106,7 +106,7 @@ class Type
     Type(const char* name, cell value);
 
     const char* name() const {
-        return name_.chars();
+        return name_.c_str();
     }
     TypeKind kind() const {
         return kind_;
@@ -218,7 +218,7 @@ class Type
     void resetPtr();
 
   private:
-    ke::AString name_;
+    std::string name_;
     cell value_;
     int fixed_;
     bool intrinsic_;

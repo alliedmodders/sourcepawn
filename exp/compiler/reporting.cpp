@@ -192,7 +192,7 @@ GetTerminalWidth()
 #endif
 }
 
-static AString
+static std::string
 ExpandTabsInLine(const char* line, size_t length)
 {
   AutoString builder;
@@ -200,7 +200,7 @@ ExpandTabsInLine(const char* line, size_t length)
   size_t last_tab = 0;
   for (size_t i = 0; i < length; i++) {
     if (line[i] == '\t') {
-      builder = builder + AString(&line[last_tab], i - last_tab);
+      builder = builder + std::string(&line[last_tab], i - last_tab);
       builder = builder + "        ";
 
       last_tab = i + 1;
@@ -209,8 +209,8 @@ ExpandTabsInLine(const char* line, size_t length)
   }
 
   if (last_tab < length)
-    builder = builder + AString(&line[last_tab], length - last_tab);
-  return AString(builder.ptr());
+    builder = builder + std::string(&line[last_tab], length - last_tab);
+  return std::string(builder.ptr());
 }
 
 void
@@ -243,9 +243,9 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
     line_length--;
   }
 
-  AString expanded = ExpandTabsInLine(lineptr, line_length);
+  std::string expanded = ExpandTabsInLine(lineptr, line_length);
 
-  const char* line_print = expanded.chars();
+  const char* line_print = expanded.c_str();
 
   // Recompute the column number if we expanded tabs.
   unsigned col = ref.col;
@@ -281,8 +281,8 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
   }
 
   {
-    AString line(line_print, line_length);
-    fprintf(stderr, "%s%s%s\n", prefix, line.chars(), suffix);
+    std::string line(line_print, line_length);
+    fprintf(stderr, "%s%s%s\n", prefix, line.c_str(), suffix);
   }
 
   for (size_t i = 1; i < col; i++)
@@ -290,7 +290,7 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
   fprintf(stderr, "^\n");
 }
 
-AString
+std::string
 ReportManager::renderMessage(rmsg::Id id, const std::unique_ptr<TMessage::Arg>* args, size_t argc)
 {
   const rmsg_info& info = GetMessageInfo(id);
@@ -308,7 +308,7 @@ ReportManager::renderMessage(rmsg::Id id, const std::unique_ptr<TMessage::Arg>* 
         continue;
       }
 
-      builder = builder + AString(info.text + last_insertion, i - last_insertion);
+      builder = builder + std::string(info.text + last_insertion, i - last_insertion);
       builder = builder + args[argno]->Render();
 
       last_insertion = i + 2;
@@ -316,19 +316,19 @@ ReportManager::renderMessage(rmsg::Id id, const std::unique_ptr<TMessage::Arg>* 
   }
 
   if (last_insertion < text_length)
-    builder = builder + AString(info.text + last_insertion, text_length - last_insertion);
-  return AString(builder.ptr());
+    builder = builder + std::string(info.text + last_insertion, text_length - last_insertion);
+  return std::string(builder.ptr());
 }
 
-AString
+std::string
 ReportManager::renderSourceRef(const FullSourceRef& ref)
 {
   if (!ref.file)
-    return AString(":0");
+    return std::string(":0");
 
   AutoString builder = ref.file->path();
   builder = builder + ":" + AutoString(ref.line) + ":" + AutoString(ref.col);
-  return AString(builder.ptr());
+  return std::string(builder.ptr());
 }
 
 void
@@ -378,8 +378,8 @@ ReportManager::printMessage(RefPtr<TMessage> message)
     printMessage(message->note(i));
 }
 
-AString
+std::string
 TMessage::AtomArg::Render()
 {
-  return AString(atom_->chars());
+  return std::string(atom_->chars());
 }

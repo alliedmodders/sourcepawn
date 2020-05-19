@@ -271,14 +271,14 @@ GetBaseTypeName(Type* type)
   return GetPrimitiveName(type->primitive());
 }
 
-static AString BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags);
-static AString BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags);
+static std::string BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags);
+static std::string BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags);
 
 // When building inner typenames, only include these flags.
 static const TypeDiagFlags kDiagFlagsInnerMask =
   TypeDiagFlags::Names;
 
-static AString
+static std::string
 BuildTypeFromTypeExpr(const TypeExpr& te, Atom* name, TypeDiagFlags flags)
 {
   if (te.spec())
@@ -286,7 +286,7 @@ BuildTypeFromTypeExpr(const TypeExpr& te, Atom* name, TypeDiagFlags flags)
   return BuildTypeName(te.resolved(), name, flags);
 }
 
-static AString
+static std::string
 BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags)
 {
   AutoString base = "function ";
@@ -310,10 +310,10 @@ BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags)
       base = base + ", ";
   }
   base = base + ")";
-  return AString(base.ptr());
+  return std::string(base.ptr());
 }
 
-static AString
+static std::string
 BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags)
 {
   AutoString base;
@@ -387,16 +387,16 @@ BuildTypeFromSpecifier(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flag
   if (spec->isVariadic())
     base = base + " ...";
 
-  return AString(base.ptr());
+  return std::string(base.ptr());
 }
 
-AString
+std::string
 sp::BuildTypeName(const TypeSpecifier* spec, Atom* name, TypeDiagFlags flags)
 {
   return BuildTypeFromSpecifier(spec, name, flags);
 }
 
-AString
+std::string
 sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
 {
   bool variadic = false;
@@ -447,7 +447,7 @@ sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
     }
     if (variadic)
       builder = builder + "...";
-    return AString(builder.ptr());
+    return std::string(builder.ptr());
   }
 
   AutoString builder;
@@ -469,10 +469,10 @@ sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
   if (variadic)
     builder = builder + "...";
 
-  return AString(builder.ptr());
+  return std::string(builder.ptr());
 }
 
-AString
+std::string
 sp::BuildTypeName(const TypeExpr& te, Atom* name, TypeDiagFlags flags)
 {
   if (te.spec())

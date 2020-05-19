@@ -94,7 +94,7 @@ class PluginRuntime
   int LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override;
   int LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
   const char* GetFilename() override {
-    return full_name_.chars();
+    return full_name_.c_str();
   }
 
   // Mark builtin natives as bound.
@@ -117,7 +117,7 @@ class PluginRuntime
   PluginContext* GetBaseContext();
 
   const char* Name() const {
-    return name_.chars();
+    return name_.c_str();
   }
 
   static PluginRuntime* FromAPI(IPluginRuntime* rt) {
@@ -148,8 +148,8 @@ class PluginRuntime
   std::unique_ptr<sp::LegacyImage> image_;
   std::unique_ptr<uint8_t[]> aligned_code_;
   std::unique_ptr<floattbl_t[]> float_table_;
-  ke::AString name_;
-  ke::AString full_name_;
+  std::string name_;
+  std::string full_name_;
   Code code_;
   Data data_;
   std::unique_ptr<NativeEntry[]> natives_;

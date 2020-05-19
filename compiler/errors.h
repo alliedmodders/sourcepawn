@@ -41,7 +41,7 @@ struct ErrorReport {
     int fileno;
     int lineno;
     const char* filename;
-    ke::AString message;
+    std::string message;
     ErrorType type;
 };
 

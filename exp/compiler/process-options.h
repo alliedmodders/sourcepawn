@@ -60,10 +60,10 @@ struct CompileOptions
   uint32_t PragmaDynamic;
 
   // Search paths.
-  Vector<AString> SearchPaths;
+  Vector<std::string> SearchPaths;
 
   // Override output file.
-  Maybe<AString> OutputFile;
+  Maybe<std::string> OutputFile;
 
   CompileOptions()
    : RequireNewdecls(false),

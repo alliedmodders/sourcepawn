@@ -8,7 +8,7 @@
 #include <amtl/am-string.h>
 
 struct memfile_t {
-    ke::AString name;
+    std::string name;
     std::unique_ptr<char[]> base;
     long offs;
     long usedoffs;

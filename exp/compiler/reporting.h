@@ -67,7 +67,7 @@ class TMessage : public ke::Refcounted<TMessage>
   {
    public:
     virtual ~Arg() {}
-    virtual AString Render() = 0;
+    virtual std::string Render() = 0;
   };
 
   class StringArg : public Arg
@@ -76,19 +76,19 @@ class TMessage : public ke::Refcounted<TMessage>
     explicit StringArg(const char* str)
      : str_(str)
     {}
-    explicit StringArg(const AString& str)
+    explicit StringArg(const std::string& str)
      : str_(str)
     {}
-    explicit StringArg(AString&& str)
+    explicit StringArg(std::string&& str)
      : str_(str)
     {}
 
-    AString Render() override {
+    std::string Render() override {
       return str_;
     }
 
    private:
-    AString str_;
+    std::string str_;
   };
 
   class AtomArg : public Arg
@@ -98,7 +98,7 @@ class TMessage : public ke::Refcounted<TMessage>
      : atom_(atom)
     {}
 
-    AString Render() override;
+    std::string Render() override;
 
    private:
     Atom* atom_;
@@ -113,10 +113,10 @@ class TMessage : public ke::Refcounted<TMessage>
   void addArg(const char* str) {
     addArg(new StringArg(str));
   }
-  void addArg(const AString& str) {
+  void addArg(const std::string& str) {
     addArg(new StringArg(str));
   }
-  void addArg(AString&& str) {
+  void addArg(std::string&& str) {
     addArg(new StringArg(str));
   }
   void addArg(size_t value);
@@ -234,10 +234,10 @@ class ReportManager
   void printMessage(RefPtr<TMessage> message);
   void printSourceLine(const FullSourceRef& ref);
 
-  AString renderSourceRef(const FullSourceRef& ref);
-  AString renderMessage(rmsg::Id id,
-                        const std::unique_ptr<TMessage::Arg>* args,
-                        size_t len);
+  std::string renderSourceRef(const FullSourceRef& ref);
+  std::string renderMessage(rmsg::Id id,
+                            const std::unique_ptr<TMessage::Arg>* args,
+                            size_t len);
 
  private:
   SourceManager* source_;

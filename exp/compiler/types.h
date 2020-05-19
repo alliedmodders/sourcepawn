@@ -789,9 +789,9 @@ KE_DEFINE_ENUM_OPERATORS(TypeDiagFlags);
 
 // Build a type name for diagnostics, with an optional name for building a
 // declaration.
-AString BuildTypeName(Type* type, Atom* name = nullptr, TypeDiagFlags flags = TypeDiagFlags::None);
-AString BuildTypeName(const ast::TypeSpecifier* spec, Atom* name, TypeDiagFlags flags = TypeDiagFlags::None);
-AString BuildTypeName(const ast::TypeExpr& te, Atom* name, TypeDiagFlags flags = TypeDiagFlags::None);
+std::string BuildTypeName(Type* type, Atom* name = nullptr, TypeDiagFlags flags = TypeDiagFlags::None);
+std::string BuildTypeName(const ast::TypeSpecifier* spec, Atom* name, TypeDiagFlags flags = TypeDiagFlags::None);
+std::string BuildTypeName(const ast::TypeExpr& te, Atom* name, TypeDiagFlags flags = TypeDiagFlags::None);
 
 // Compute the size of a type. It must be an array type, and it must have
 // at least as many levels as specified, and the specified level must be

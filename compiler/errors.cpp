@@ -257,7 +257,7 @@ report_error(ErrorReport* report)
     if (!fp)
         fp = stdout;
 
-    fprintf(fp, "%s", report->message.chars());
+    fprintf(fp, "%s", report->message.c_str());
     fflush(fp);
 
     if (fp != stdout)

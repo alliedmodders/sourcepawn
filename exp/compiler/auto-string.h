@@ -46,9 +46,9 @@ class AutoString
     {
       assign(ptr);
     }
-    AutoString(const AString& str)
+    AutoString(const std::string& str)
     {
-      assign(str.chars(), str.length());
+      assign(str.c_str(), str.size());
     }
     AutoString(const char* ptr, size_t len)
     {

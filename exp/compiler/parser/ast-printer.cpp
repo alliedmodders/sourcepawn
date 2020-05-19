@@ -48,8 +48,8 @@ class AstPrinter : public AstVisitor
   }
 
   void dump(const TypeExpr& te, Atom* name) {
-    AString str = BuildTypeName(te, name);
-    fprintf(fp_, "%s", str.chars());
+    std::string str = BuildTypeName(te, name);
+    fprintf(fp_, "%s", str.c_str());
   }
 
   void dump(FunctionSignature* sig) {
@@ -151,14 +151,14 @@ class AstPrinter : public AstVisitor
   }
   void visitViewAsExpression(ViewAsExpression* node) override {
     prefix();
-    fprintf(fp_, "[ ViewAsExpression (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    fprintf(fp_, "[ ViewAsExpression (%s)\n", BuildTypeName(node->te(), nullptr).c_str());
     indent();
     node->expr()->accept(this);
     unindent();
   }
   void visitCallNewExpr(CallNewExpr* node) override {
     prefix();
-    fprintf(fp_, "[ CallNewExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    fprintf(fp_, "[ CallNewExpr (%s)\n", BuildTypeName(node->te(), nullptr).c_str());
     indent();
     for (size_t i = 0; i < node->arguments()->length(); i++)
       node->arguments()->at(i)->accept(this);
@@ -166,7 +166,7 @@ class AstPrinter : public AstVisitor
   }
   void visitNewArrayExpr(NewArrayExpr* node) override {
     prefix();
-    fprintf(fp_, "[ NewArrayeExpr (%s)\n", BuildTypeName(node->te(), nullptr).chars());
+    fprintf(fp_, "[ NewArrayeExpr (%s)\n", BuildTypeName(node->te(), nullptr).c_str());
     indent();
     for (size_t i = 0; i < node->dims()->length(); i++) {
       if (node->dims()->at(i))
@@ -212,7 +212,7 @@ class AstPrinter : public AstVisitor
   }
   void visitVarDecl(VarDecl* node) override {
     prefix();
-    fprintf(fp_, "[ VarDecl (%s)\n", BuildTypeName(node->te(), node->name()).chars());
+    fprintf(fp_, "[ VarDecl (%s)\n", BuildTypeName(node->te(), node->name()).c_str());
     indent();
     if (node->initialization())
       node->initialization()->accept(this);

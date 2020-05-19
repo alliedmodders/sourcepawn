@@ -61,7 +61,7 @@ class SourceFile : public Refcounted<SourceFile>
     return length_;
   }
   const char* path() const {
-    return path_.chars();
+    return path_.c_str();
   }
 
   LineExtents* lineCache() {
@@ -73,7 +73,7 @@ class SourceFile : public Refcounted<SourceFile>
   std::unique_ptr<char[]> chars_;
   uint32_t length_;
   std::unique_ptr<LineExtents> line_cache_;
-  AString path_;
+  std::string path_;
 };
 
 struct FullMacroRef

@@ -27,6 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h> /* for macro max() */
 #include <string.h>
+#include <algorithm>
+#include <vector>
 #include "amxdbg.h"
 #include "errors.h"
 #include "sc.h"
@@ -705,17 +707,26 @@ sort_by_name(const void* a1, const void* a2)
 }
 
 struct function_entry {
-    symbol* sym;
-    AString name;
-};
+    function_entry() : sym(nullptr)
+    {}
 
-static int
-sort_functions(const void* a1, const void* a2)
-{
-    function_entry& f1 = *(function_entry*)a1;
-    function_entry& f2 = *(function_entry*)a2;
-    return strcmp(f1.name.chars(), f2.name.chars());
-}
+    function_entry(function_entry&& other)
+      : sym(other.sym),
+        name(std::move(other.name))
+    {}
+
+    function_entry& operator =(function_entry&& other) {
+        sym = other.sym;
+        name = std::move(other.name);
+        return *this;
+    }
+
+    function_entry(const function_entry& other) = delete;
+    function_entry& operator =(const function_entry& other) = delete;
+
+    symbol* sym;
+    std::string name;
+};
 
 // Helper for parsing a debug string. Debug strings look like this:
 //  L:40 10
@@ -1418,7 +1429,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
 
     RttiBuilder rtti(names);
 
-    Vector<function_entry> functions;
+    std::vector<function_entry> functions;
 
     // Sort globals.
     Vector<symbol*> global_symbols;
@@ -1457,7 +1468,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
                     entry.name = private_name;
                 }
 
-                functions.append(entry);
+                functions.emplace_back(std::move(entry));
                 continue;
             }
         } else if (sym->ident == iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
@@ -1470,8 +1481,11 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     }
 
     // The public list must be sorted.
-    qsort(functions.buffer(), functions.length(), sizeof(function_entry), sort_functions);
-    for (size_t i = 0; i < functions.length(); i++) {
+    std::sort(functions.begin(), functions.end(),
+              [](const function_entry& a, const function_entry& b) -> bool {
+        return a.name < b.name;
+    });
+    for (size_t i = 0; i < functions.size(); i++) {
         function_entry& f = functions[i];
         symbol* sym = f.sym;
 
@@ -1481,7 +1495,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
 
         sp_file_publics_t& pubfunc = publics->add();
         pubfunc.address = sym->addr();
-        pubfunc.name = names->add(gAtoms, f.name.chars());
+        pubfunc.name = names->add(gAtoms, f.name.c_str());
 
         sym->function()->funcid = (uint32_t(i) << 1) | 1;
 

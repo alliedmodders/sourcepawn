@@ -49,7 +49,7 @@ CompileContext::CompileContext(PoolAllocator& pool,
   CurrentCompileContext = this;
 
   // We automatically add "include" from the current working directory.
-  options_.SearchPaths.append(AString("include/"));
+  options_.SearchPaths.append(std::string("include/"));
 
   types_.initialize();
 }
@@ -117,7 +117,7 @@ LastMatch(T ptr, const char* search)
   return ext;
 }
 
-static AString
+static std::string
 GetOutputFilename(const char* output_file, const char* input_file)
 {
   // :TODO: add a Strdup to amtl.
@@ -132,23 +132,21 @@ GetOutputFilename(const char* output_file, const char* input_file)
     if (ext && ext != buffer.get())
       *ext = '\0';
 
-    AString new_file;
-    new_file.format("%s.smx", buffer.get());
+    std::string new_file = ke::StringPrintf("%s.smx", buffer.get());
     return new_file;
   }
 
   // /folder/crab, /blah/tmp.sp -> /folder/crab/tmp.smx
   if (ke::file::IsDirectory(output_file)) {
-    AString path(input_file);
-    path = Join(path.split("\\"), "/");
+    std::string path(input_file);
+    path = Join(Split(path, "\\"), "/");
 
-    Vector<AString> parts = path.split("/");
+    Vector<std::string> parts = Split(path, "/");
     while (!parts.empty() && parts.back().length() == 0)
       parts.pop();
     if (!parts.empty()) {
-      AString smx_name = GetOutputFilename(nullptr, parts.back().chars());
-      AString new_file;
-      new_file.format("%s/%s", output_file, smx_name.chars());
+      std::string smx_name = GetOutputFilename(nullptr, parts.back().c_str());
+      std::string new_file = StringPrintf("%s/%s", output_file, smx_name.c_str());
       return new_file;
     }
 
@@ -160,11 +158,9 @@ GetOutputFilename(const char* output_file, const char* input_file)
   // crab -> crab.smx
   const char* ext = LastMatch(output_file, ".smx");
   if (ext && ext[4] == '\0')
-    return AString(output_file);
+    return std::string(output_file);
 
-  AString new_file;
-  new_file.format("%s.smx", output_file);
-  return new_file;
+  return StringPrintf("%s.smx", output_file);
 }
 
 bool
@@ -214,8 +210,8 @@ CompileContext::compile(RefPtr<SourceFile> file)
   if (options_.ShowSema)
     program->dump(stderr);
 
-  AString output_path = GetOutputFilename(
-    options_.OutputFile ? (*options_.OutputFile).chars() : nullptr,
+  std::string output_path = GetOutputFilename(
+    options_.OutputFile ? (*options_.OutputFile).c_str() : nullptr,
     file->path());
 
   // Code generation.
@@ -224,7 +220,7 @@ CompileContext::compile(RefPtr<SourceFile> file)
     if (!compiler.compile())
       return false;
     {
-      FILE* fp = fopen(output_path.chars(), "wt");
+      FILE* fp = fopen(output_path.c_str(), "wt");
       FpBuffer buf(fp);
       if (!compiler.emit(&buf))
         return false;
@@ -235,8 +231,7 @@ CompileContext::compile(RefPtr<SourceFile> file)
   if (reports_.HasErrors())
     return false;
 
-  fprintf(stderr, "\n-- Ok! %s --\n", output_path.chars());
-
+  fprintf(stderr, "\n-- Ok! %s --\n", output_path.c_str());
   return true;
 }
 

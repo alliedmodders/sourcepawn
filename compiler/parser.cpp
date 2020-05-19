@@ -743,8 +743,8 @@ args::StringOption opt_outputfile("-o", "--output", {},
                                   "Set base name of (P-code) output file");
 args::IntOption opt_optlevel("-O", "--opt-level", Some(2),
                              "Optimization level (0=none, 2=full)");
-args::RepeatOption<AString> opt_includes("-i", "--include", "Path for include files");
-args::RepeatOption<AString> opt_warnings("-w", "--warning",
+args::RepeatOption<std::string> opt_includes("-i", "--include", "Path for include files");
+args::RepeatOption<std::string> opt_warnings("-w", "--warning",
                                          "Disable a specific warning by its number.");
 args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
@@ -809,13 +809,13 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     }
 
     if (opt_prefixfile.hasValue())
-        SafeStrcpy(pname, _MAX_PATH, opt_prefixfile.value().chars());
+        SafeStrcpy(pname, _MAX_PATH, opt_prefixfile.value().c_str());
     if (opt_outputfile.hasValue())
-        SafeStrcpy(oname, _MAX_PATH, opt_outputfile.value().chars());
+        SafeStrcpy(oname, _MAX_PATH, opt_outputfile.value().c_str());
 
     if (opt_verbosity.hasValue()) {
-        if (isdigit(*opt_verbosity.value().chars()))
-            verbosity = atoi(opt_verbosity.value().chars());
+        if (isdigit(*opt_verbosity.value().c_str()))
+            verbosity = atoi(opt_verbosity.value().c_str());
         else
             verbosity = 2;
     }
@@ -825,7 +825,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
         verbosity = 1;
 
     if (opt_active_dir.hasValue()) {
-        const char* ptr = opt_active_dir.value().chars();
+        const char* ptr = opt_active_dir.value().c_str();
 #if defined dos_setdrive
         if (ptr[1] == ':')
             dos_setdrive(toupper(*ptr) - 'A' + 1); /* set active drive */
@@ -837,11 +837,11 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     }
 
     if (opt_error_file.hasValue())
-        SafeStrcpy(ename, _MAX_PATH, opt_error_file.value().chars());
+        SafeStrcpy(ename, _MAX_PATH, opt_error_file.value().c_str());
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
-        hwndFinish = (HWND)atoi(opt_hwnd.value().chars());
+        hwndFinish = (HWND)atoi(opt_hwnd.value().c_str());
         if (!IsWindow(hwndFinish))
             hwndFinish = (HWND)0;
     }
@@ -849,7 +849,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
 
     for (const auto& inc_path : opt_includes.values()) {
         char str[_MAX_PATH];
-        ke::SafeStrcpy(str, sizeof(str), inc_path.chars());
+        ke::SafeStrcpy(str, sizeof(str), inc_path.c_str());
 
         size_t i = strlen(str);
         if (i > 0) {
@@ -863,7 +863,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
 
     for (const auto& warning : opt_warnings.values()) {
         char* ptr;
-        int i = (int)strtol(warning.chars(), (char**)&ptr, 10);
+        int i = (int)strtol(warning.c_str(), (char**)&ptr, 10);
         if (*ptr == '-')
             pc_enablewarning(i, 0);
         else if (*ptr == '+')
@@ -875,7 +875,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     for (const auto& option : parser.extra_args()) {
         char str[_MAX_PATH];
         const char* ptr = nullptr;
-        const char* arg = option.chars();
+        const char* arg = option.c_str();
         if (arg[0] == '@') {
             fprintf(stderr, "Response files (@ prefix) are no longer supported.");
             exit(1);
@@ -3813,7 +3813,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     }
 
     if (sym->deprecated && !sym->stock) {
-        const char* ptr = sym->documentation.chars();
+        const char* ptr = sym->documentation.c_str();
         error(234, decl->name, ptr); /* deprecated (probably a public function) */
     }
     begcseg();

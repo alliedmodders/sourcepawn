@@ -102,9 +102,7 @@ class Config(object):
       # Disable some stuff we don't use, that gives us better binary
       # compatibility on Linux.
       cxx.cxxflags += [
-        '-fno-exceptions',
         '-fno-rtti',
-        '-fno-threadsafe-statics',
         '-Wno-non-virtual-dtor',
         '-Wno-overloaded-virtual',
       ]
@@ -119,9 +117,6 @@ class Config(object):
         with open('/proc/sys/kernel/osrelease', 'rb') as fp:
           contents = fp.read().decode("utf-8")
           is_wsl = 'Microsoft' in contents
-
-      if is_wsl:
-        cxx.linkflags += ['-lstdc++']
 
       if cxx.like('emscripten'):
         emflags = ['-s', 'PRECISE_F32=1']
@@ -192,30 +187,18 @@ class Config(object):
       # Don't omit the frame pointer.
       cxx.cflags += ['/Oy-']
 
+    if cxx.like('gcc'):
+      cxx.linkflags += ['-lstdc++']
+
     # Platform-specifics
     if not cxx.like('emscripten'):
       if builder.target.platform == 'linux':
-        if cxx.family == 'gcc':
-          cxx.postlink += ['-static-libgcc']
-        elif cxx.family == 'clang':
-          cxx.postlink += ['-lgcc_eh']
         cxx.postlink += ['-lpthread', '-lrt']
       elif builder.target.platform == 'mac':
-        if cxx.version >= 'apple-clang-10.0':
-          cxx.cflags += [
-            '-stdlib=libc++',
-            '-mmacosx-version-min=10.9',
-          ]
-          cxx.linkflags += [
-            '-mmacosx-version-min=10.9',
-          ]
-        else:
-          cxx.cflags += [
-            '-mmacosx-version-min=10.5',
-          ]
-          cxx.linkflags += [
-            '-mmacosx-version-min=10.5',
-          ]
+        cxx.linkflags.remove('-lstdc++')
+        cxx.cflags += ['-mmacosx-version-min=10.7']
+        cxx.linkflags += ['-stdlib=libc++']
+        cxx.linkflags += ['-mmacosx-version-min=10.7']
       elif builder.target.platform == 'windows':
         cxx.defines += ['WIN32', '_WINDOWS']
 

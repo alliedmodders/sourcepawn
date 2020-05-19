@@ -744,7 +744,7 @@ ChainedCompareExpr::Analyze()
 
         if (find_userop(op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
             if (op.userop.sym->tag != pc_tag_bool) {
-                error(op.pos, 51, get_token_string(op.token).chars());
+                error(op.pos, 51, get_token_string(op.token).c_str());
                 return false;
             }
         } else {
@@ -1589,7 +1589,7 @@ CallExpr::Analyze()
     }
 
     if (sym_->deprecated) {
-        const char* ptr = sym_->documentation.chars();
+        const char* ptr = sym_->documentation.c_str();
         error(pos_, 234, sym_->name(), ptr); /* deprecated (probably a native function) */
     }
 

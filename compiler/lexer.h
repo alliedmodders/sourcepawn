@@ -302,7 +302,7 @@ void declare_methodmap_symbol(methodmap_t* map, bool can_redef);
 void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);
-ke::AString get_token_string(int tok_id);
+std::string get_token_string(int tok_id);
 
 enum class TerminatorPolicy { Newline, NewlineOrSemicolon, Semicolon };
 
