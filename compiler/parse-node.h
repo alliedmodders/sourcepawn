@@ -861,6 +861,7 @@ class CommaExpr final : public Expr
     bool Bind() override;
     bool Analyze() override;
     void DoEmit() override;
+    void EmitTest(bool jump_on_true, int bailout) override;
     void ProcessUses() override;
     bool HasSideEffects() override {
         return has_side_effects_;
