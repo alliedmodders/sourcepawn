@@ -518,11 +518,11 @@ CommaExpr::DoEmit()
 }
 
 void
-CommaExpr::EmitTest(bool jump_on_true, int bailout) {
+CommaExpr::EmitTest(bool jump_on_true, int target) {
     for (size_t i = 0; i < exprs_.length() - 1; i++)
         exprs_[i]->Emit();
 
-    exprs_.back()->EmitTest(jump_on_true, bailout);
+    exprs_.back()->EmitTest(jump_on_true, target);
 }
 
 void
