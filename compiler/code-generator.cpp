@@ -92,13 +92,13 @@ Expr::Emit()
 }
 
 void
-Expr::EmitTest(bool jump_on_true, int taken, int /* fallthrough */)
+Expr::EmitTest(bool jump_on_true, int target)
 {
     Emit();
     if (jump_on_true)
-        jmp_ne0(taken);
+        jmp_ne0(target);
     else
-        jmp_eq0(taken);
+        jmp_eq0(target);
 }
 
 void
@@ -335,21 +335,21 @@ BinaryExpr::EmitInner(OpFunc oper, const UserOperation& in_user_op, Expr* left, 
 void
 LogicalExpr::DoEmit()
 {
-    int done = getlabel();
-    int taken = getlabel();
-    int fallthrough = getlabel();
+    bool jump_on_true = token_ == tlOR;
 
-    EmitTest(true, taken, fallthrough);
-    setlabel(fallthrough);
-    ldconst(0, sPRI);
+    int shortcircuit = getlabel();
+    int done = getlabel();
+
+    EmitTest(jump_on_true, shortcircuit);
+    ldconst(!jump_on_true, sPRI);
     jumplabel(done);
-    setlabel(taken);
-    ldconst(1, sPRI);
+    setlabel(shortcircuit);
+    ldconst(jump_on_true, sPRI);
     setlabel(done);
 }
 
 void
-LogicalExpr::EmitTest(bool jump_on_true, int taken, int fallthrough)
+LogicalExpr::EmitTest(bool jump_on_true, int target)
 {
     ke::Vector<Expr*> sequence;
     FlattenLogical(token_, &sequence);
@@ -395,24 +395,27 @@ LogicalExpr::EmitTest(bool jump_on_true, int taken, int fallthrough)
     //
     // Note: to make this slightly easier to read, we make all this logic
     // explicit below rather than collapsing it into a single test() call.
+
+    int fallthrough = getlabel();
     for (size_t i = 0; i < sequence.length() - 1; i++) {
         Expr* expr = sequence[i];
         if (token_ == tlOR) {
             if (jump_on_true)
-                expr->EmitTest(true, taken, fallthrough);
+                expr->EmitTest(true, target);
             else
-                expr->EmitTest(true, fallthrough, taken);
+                expr->EmitTest(true, fallthrough);
         } else {
             assert(token_ == tlAND);
             if (jump_on_true)
-                expr->EmitTest(false, fallthrough, taken);
+                expr->EmitTest(false, fallthrough);
             else
-                expr->EmitTest(false, taken, fallthrough);
+                expr->EmitTest(false, target);
         }
     }
 
     Expr* last = sequence.back();
-    last->EmitTest(jump_on_true, taken, fallthrough);
+    last->EmitTest(jump_on_true, target);
+    setlabel(fallthrough);
 }
 
 void
@@ -512,6 +515,14 @@ CommaExpr::DoEmit()
 {
     for (const auto& expr : exprs_)
         expr->Emit();
+}
+
+void
+CommaExpr::EmitTest(bool jump_on_true, int target) {
+    for (size_t i = 0; i < exprs_.length() - 1; i++)
+        exprs_[i]->Emit();
+
+    exprs_.back()->EmitTest(jump_on_true, target);
 }
 
 void
