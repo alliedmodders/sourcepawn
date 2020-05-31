@@ -20,7 +20,6 @@
 #include "scopes.h"
 #include "symbols.h"
 #include "coercion.h"
-#include <amtl/am-linkedlist.h>
 
 namespace sp {
 

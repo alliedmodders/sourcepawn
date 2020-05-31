@@ -15,12 +15,14 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
-#include "compile-context.h"
-#include "semantic-analysis.h"
-#include "scopes.h"
-#include "symbols.h"
+#include <list>
+
 #include "coercion.h"
-#include <amtl/am-linkedlist.h>
+#include "compile-context.h"
+#include "parser/ast.h"
+#include "scopes.h"
+#include "semantic-analysis.h"
+#include "symbols.h"
 
 namespace sp {
 
@@ -573,9 +575,9 @@ SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
     return nullptr;
   }
 
-  LinkedList<NameAndValue*> entries;
-  for (NameAndValue* item : *expr->pairs())
-    entries.append(item);
+  std::list<ast::NameAndValue*> entries;
+  for (ast::NameAndValue* item : *expr->pairs())
+    entries.push_back(item);
 
   StructType* st = type->asStruct();
   ast::RecordDecl* decl = st->decl();
