@@ -19,7 +19,6 @@
 #include "compile-context.h"
 #include "semantic-analysis.h"
 #include "coercion.h"
-#include <amtl/am-linkedlist.h>
 
 namespace sp {
 

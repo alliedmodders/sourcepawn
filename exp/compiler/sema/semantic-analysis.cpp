@@ -17,7 +17,6 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include <utility>
 
-#include <amtl/am-linkedlist.h>
 #include "compile-context.h"
 #include "semantic-analysis.h"
 #include "scopes.h"
