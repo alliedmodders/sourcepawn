@@ -237,8 +237,8 @@ Environment::PatchAllJumpsForTimeout()
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
     PluginRuntime* rt = *iter;
 
-    const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
-    for (size_t i = 0; i < methods.length(); i++) {
+    const std::vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
+    for (size_t i = 0; i < methods.size(); i++) {
       CompiledFunction* fun = methods[i]->jit();
       if (!fun)
         continue;
@@ -258,8 +258,8 @@ Environment::UnpatchAllJumpsFromTimeout()
   for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end(); iter++) {
     PluginRuntime* rt = *iter;
 
-    const Vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
-    for (size_t i = 0; i < methods.length(); i++) {
+    const std::vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
+    for (size_t i = 0; i < methods.size(); i++) {
       CompiledFunction* fun = methods[i]->jit();
       if (!fun)
         continue;

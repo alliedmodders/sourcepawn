@@ -101,20 +101,20 @@ NameResolver::declareSystemType(Scope* scope, const char* name, Type* type)
 void
 NameResolver::OnEnterScope(Scope::Kind kind)
 {
-  env_.append(SymbolEnv(kind));
+  env_.push_back(SymbolEnv(kind));
 }
 
 Scope*
 NameResolver::OnLeaveScope()
 {
   SymbolEnv& env = env_.back();
-  SymbolEnv* prev = env_.length() >= 2
-                    ? &env_[env_.length() - 2]
+  SymbolEnv* prev = env_.size() >= 2
+                    ? &env_[env_.size() - 2]
                     : nullptr;
   Scope* scope = env.scope();
   if (scope) {
     // Fix up children.
-    for (size_t i = 0; i < env.children().length(); i++)
+    for (size_t i = 0; i < env.children().size(); i++)
       env.children()[i]->setParent(scope);
         
     // Add us to our parent scope.
@@ -123,9 +123,9 @@ NameResolver::OnLeaveScope()
   } else {
     // We didn't have a scope. Transfer any children to our parent. Note that
     // we must have a parent, since we stop at the global scope.
-    prev->children().extend(std::move(env.children()));
+    ke::MoveExtend(&prev->children(), &env.children());
   }
-  env_.pop();
+  env_.pop_back();
   return scope;
 }
 
@@ -133,7 +133,7 @@ void
 NameResolver::OnLeaveOrphanScope()
 {
   // Don't connect the current up to anything.
-  env_.pop();
+  env_.pop_back();
 }
 
 Scope*
@@ -160,7 +160,7 @@ NameResolver::getOrCreateScope()
 Symbol*
 NameResolver::lookup(Atom* name)
 {
-  for (size_t i = env_.length(); i > 0; i--) {
+  for (size_t i = env_.size(); i > 0; i--) {
     SymbolEnv& env = env_[i - 1];
     if (!env.scope())
       continue;
@@ -194,7 +194,8 @@ NameResolver::registerSymbol(Symbol* sym)
     return true;
   }
 
-  return scope->addSymbol(sym);
+  scope->addSymbol(sym);
+  return true;
 }
 
 void
@@ -217,7 +218,7 @@ NameResolver::resolveUnboundNames()
 {
   // Resolve unresolved global names.
   AtomSet seen;
-  for (size_t i = 0; i < unresolved_names_.length(); i++) {
+  for (size_t i = 0; i < unresolved_names_.size(); i++) {
     NameProxy* proxy = unresolved_names_[i];
     Symbol* sym = globals_->lookup(proxy->name());
     if (!sym) {
@@ -246,7 +247,7 @@ NameResolver::OnNameProxy(NameProxy* proxy)
   } else {
     // Place this symbol in the unresolved list, in case it binds to a
     // global we haven't seen yet.
-    unresolved_names_.append(proxy);
+    unresolved_names_.push_back(proxy);
   }
 }
 
@@ -264,7 +265,7 @@ NameResolver::OnTagProxy(NameProxy* proxy)
   AtomMap<NameProxy*>::Insert p = user_tags_.findForAdd(proxy->name());
   if (!p.found())
     user_tags_.add(p, proxy->name(), proxy);
-  unresolved_names_.append(proxy);
+  unresolved_names_.push_back(proxy);
 }
 
 void
@@ -657,7 +658,7 @@ NameResolver::HandleFunctionSignature(TokenKind kind,
 
   if (te.resolved() && canResolveEagerly) {
 #if defined(DEBUG)
-    for (size_t i = 0; i < params->length(); i++)
+    for (size_t i = 0; i < params->size(); i++)
       assert(params->at(i)->sym()->type());
 #endif
     sig->setResolved();
@@ -837,20 +838,20 @@ NameResolver::EnterTypeset(const SourceLocation& loc, const NameToken& name)
 }
 
 void
-NameResolver::EnterTypeIntoTypeset(TypesetDecl* decl, Vector<TypesetDecl::Entry>& types, TypeSpecifier& spec)
+NameResolver::EnterTypeIntoTypeset(TypesetDecl* decl, std::vector<TypesetDecl::Entry>& types, TypeSpecifier& spec)
 {
   TypeExpr te = resolve(spec);
   if (!te.resolved())
     decl->setNeedsFullTypeResolution();
 
-  types.append(TypesetDecl::Entry(spec.startLoc(), te));
+  types.push_back(TypesetDecl::Entry(spec.startLoc(), te));
 }
 
 void
-NameResolver::FinishTypeset(TypesetDecl* decl, const Vector<TypesetDecl::Entry>& types)
+NameResolver::FinishTypeset(TypesetDecl* decl, const std::vector<TypesetDecl::Entry>& types)
 {
-  TypesetDecl::Entries* list = new (pool_) TypesetDecl::Entries(types.length());
-  for (size_t i = 0; i < types.length(); i++)
+  TypesetDecl::Entries* list = new (pool_) TypesetDecl::Entries(types.size());
+  for (size_t i = 0; i < types.size(); i++)
     list->at(i) = types[i];
   decl->setTypes(list);
 

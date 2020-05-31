@@ -514,8 +514,8 @@ class ArrayLiteral : public Expression
   DECLARE_NODE(ArrayLiteral);
 
   int32_t arrayLength() const {
-    assert(expressions()->length() < INT_MAX);
-    return int32_t(expressions()->length());
+    assert(expressions()->size() < INT_MAX);
+    return int32_t(expressions()->size());
   }
   ExpressionList* expressions() const {
     return expressions_;

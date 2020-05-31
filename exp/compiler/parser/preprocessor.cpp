@@ -26,6 +26,7 @@
 # include <unistd.h>
 #endif
 #include <amtl/am-utility.h>
+#include <amtl/am-vector.h>
 
 using namespace ke;
 using namespace sp;
@@ -308,7 +309,7 @@ Preprocessor::searchPaths(const char* file, const char* where)
     }
   }
 
-  for (size_t i = 0; i < options_.SearchPaths.length(); i++) {
+  for (size_t i = 0; i < options_.SearchPaths.size(); i++) {
     AutoString search = AutoString(options_.SearchPaths[i]) + file;
     if (FileExists(search))
       return search;
@@ -328,7 +329,7 @@ Preprocessor::enterFile(TokenKind directive,
 
   AutoString path = searchPaths(file, where);
   if (!path.length()) {
-    // Try to append '.inc'.
+    // Try to push_back '.inc'.
     size_t len = strlen(file);
     if (len < 4 || strcmp(&file[len - 4], ".inc") != 0) {
       AutoString new_file = AutoString(file) + ".inc";
@@ -364,7 +365,7 @@ Preprocessor::enterFile(TokenKind directive,
   include_depth_++;
 
   assert(!macro_lexer_ && lexer_);
-  lexer_stack_.append(SavedLexer(lexer_, nullptr));
+  lexer_stack_.push_back(SavedLexer(lexer_, nullptr));
   lexer_ = new Lexer(cc_, *this, lexer_->options(), new_file, tl);
   return true;
 }
@@ -427,7 +428,7 @@ Preprocessor::enterMacro(const SourceLocation& nameLoc, Atom* name)
 
   // If the macro has no tokens, don't bother doing anything. We still return
   // so that we do not lex this as an identifier.
-  if (macro->tokens->length() == 0)
+  if (macro->tokens->size() == 0)
     return true;
 
   LREntry range = cc_.source().trackMacro(nameLoc, macro);
@@ -443,11 +444,11 @@ Preprocessor::enterMacro(const SourceLocation& nameLoc, Atom* name)
   if (recycled_macro_lexers_.empty()) {
     macro_lexer = new MacroLexer(cc_, *this, macro, range);
   } else {
-    macro_lexer = recycled_macro_lexers_.popCopy();
+    macro_lexer = ke::PopBack(&recycled_macro_lexers_);
     macro_lexer->Reuse(macro, range);
   }
 
-  lexer_stack_.append(SavedLexer(lexer_, macro_lexer_));
+  lexer_stack_.push_back(SavedLexer(lexer_, macro_lexer_));
   lexer_ = nullptr;
   macro_lexer_ = macro_lexer;
   return true;
@@ -466,7 +467,7 @@ Preprocessor::handleEndOfFile()
   }
 
   if (macro_lexer_) {
-    recycled_macro_lexers_.append(macro_lexer_);
+    recycled_macro_lexers_.push_back(macro_lexer_);
   } else if (lexer_) {
     assert(include_depth_ > 0);
     include_depth_--;
@@ -476,7 +477,7 @@ Preprocessor::handleEndOfFile()
     SavedLexer& saved = lexer_stack_.back();
     lexer_ = saved.lexer;
     macro_lexer_ = saved.macro_lexer;
-    lexer_stack_.pop();
+    lexer_stack_.pop_back();
   }
 
   assert(!!lexer_ != !!macro_lexer_);

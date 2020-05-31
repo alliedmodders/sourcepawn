@@ -212,8 +212,8 @@ class Preprocessor
 
   AtomMap<Macro*> macros_;
 
-  Vector<RefPtr<MacroLexer>> recycled_macro_lexers_;
-  Vector<SavedLexer> lexer_stack_;
+  std::vector<RefPtr<MacroLexer>> recycled_macro_lexers_;
+  std::vector<SavedLexer> lexer_stack_;
 
   // Exactly one of these is set at a given time.
   RefPtr<Lexer> lexer_;

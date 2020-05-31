@@ -173,7 +173,7 @@ class TypeSpecifier : public PoolObject
   }
   uint32_t rank() const {
     if (attrs_ & SizedArray)
-      return dims_->length();
+      return dims_->size();
     return rank_;
   }
 

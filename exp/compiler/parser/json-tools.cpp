@@ -96,17 +96,17 @@ JsonRenderer::prefix()
 
 void JsonRenderer::RenderList(JsonList* val)
 {
-  if (!val->items().length()) {
+  if (!val->items().size()) {
     out_ << "[]";
     return;
   }
 
   out_ << "[\n";
   indent();
-  for (size_t i = 0; i < val->items().length(); i++) {
+  for (size_t i = 0; i < val->items().size(); i++) {
     prefix();
     val->items()[i]->Render(this);
-    if (i != val->items().length() - 1)
+    if (i != val->items().size() - 1)
       out_ << ",";
     out_ << "\n";
   }
@@ -117,20 +117,20 @@ void JsonRenderer::RenderList(JsonList* val)
 
 void JsonRenderer::RenderObject(JsonObject* val)
 {
-  if (!val->keys().length()) {
+  if (!val->keys().size()) {
     out_ << "{}";
     return;
   }
 
   out_ << "{\n";
   indent();
-  for (size_t i = 0; i < val->keys().length(); i++) {
+  for (size_t i = 0; i < val->keys().size(); i++) {
     prefix();
     out_ << "\"";
     out_ << val->keys()[i]->chars();
     out_ << "\": ";
     val->values()[i]->Render(this);
-    if (i != val->keys().length() - 1)
+    if (i != val->keys().size() - 1)
       out_ << ",";
     out_ << "\n";
   }

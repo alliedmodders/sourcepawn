@@ -18,7 +18,7 @@ struct funcenum_t {
     {}
     int tag;
     char name[METHOD_NAMEMAX + 1];
-    ke::Vector<functag_t*> entries;
+    std::vector<functag_t*> entries;
 };
 
 struct structarg_t {
@@ -43,7 +43,7 @@ struct pstruct_t {
     explicit pstruct_t(const char* name);
 
     char name[sNAMEMAX + 1];
-    ke::Vector<std::unique_ptr<structarg_t>> args;
+    std::vector<std::unique_ptr<structarg_t>> args;
 };
 
 // The ordering of these definitions should be preserved for
@@ -97,7 +97,7 @@ struct methodmap_t {
     bool keyword_nullable;
     LayoutSpec spec;
     char name[sNAMEMAX + 1];
-    ke::Vector<std::unique_ptr<methodmap_method_t>> methods;
+    std::vector<std::unique_ptr<methodmap_method_t>> methods;
 
     bool must_construct_with_new() const {
         return nullable || keyword_nullable;

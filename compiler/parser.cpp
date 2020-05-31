@@ -960,7 +960,7 @@ setconfig(char* root) {
 #endif
 
 #if defined __MSDOS__
-    /* strip the options (appended to the path + filename) */
+    /* strip the options (push_backed to the path + filename) */
     if ((ptr = strpbrk(path, " \t/")) != NULL)
         *ptr = '\0';
 #endif /* __MSDOS__ */
@@ -2983,7 +2983,7 @@ domethodmap(LayoutSpec spec)
             continue;
         }
 
-        map->methods.append(std::move(method));
+        map->methods.push_back(std::move(method));
     }
 
     require_newline(TerminatorPolicy::NewlineOrSemicolon);
@@ -3156,7 +3156,7 @@ parse_function_type()
         matchtoken(tSYMBOL);
 
         // Error once when we're past max args.
-        if (type->args.length() == SP_MAX_EXEC_PARAMS) {
+        if (type->args.size() == SP_MAX_EXEC_PARAMS) {
             error(45);
             continue;
         }
@@ -3173,7 +3173,7 @@ parse_function_type()
             arg.ident = iREFARRAY;
         else
             arg.ident = decl.type.ident;
-        type->args.append(arg);
+        type->args.push_back(arg);
 
         if (!matchtoken(',')) {
             needtoken(')');
@@ -3954,7 +3954,7 @@ declargs(symbol* sym, int chkshadow, const int* thistag) {
     int argcnt, oldargcnt;
     arginfo arg;
 
-    ke::Vector<arginfo>& arglist = sym->function()->args;
+    std::vector<arginfo>& arglist = sym->function()->args;
 
     /* if the function is already defined earlier, get the number of arguments
      * of the existing definition
@@ -4205,18 +4205,18 @@ is_symbol_unused(symbol* sym) {
 
 static void
 reduce_referrers(symbol* root) {
-    ke::Vector<symbol*> work;
+    std::vector<symbol*> work;
 
     // Enqueue all unreferred symbols.
     for (symbol* sym = root->next; sym; sym = sym->next) {
         if (is_symbol_unused(sym)) {
             sym->queued = true;
-            work.append(sym);
+            work.push_back(sym);
         }
     }
 
     while (!work.empty()) {
-        symbol* dead = work.popCopy();
+        symbol* dead = ke::PopBack(&work);
         dead->usage &= ~(uREAD | uWRITTEN);
 
         for (symbol* sym : dead->refers_to()) {
@@ -4230,7 +4230,7 @@ reduce_referrers(symbol* root) {
                     sym->stock = true;
 
                 sym->queued = true;
-                work.append(sym);
+                work.push_back(sym);
             }
         }
     }
@@ -4240,7 +4240,7 @@ reduce_referrers(symbol* root) {
 // since that resets referrer lists.
 static void
 deduce_liveness(symbol* root) {
-    ke::Vector<symbol*> work;
+    std::vector<symbol*> work;
 
     // The root set is all public functions.
     for (symbol* sym = root->next; sym; sym = sym->next) {
@@ -4251,7 +4251,7 @@ deduce_liveness(symbol* root) {
 
         if (sym->is_public) {
             sym->queued = true;
-            work.append(sym);
+            work.push_back(sym);
         } else {
             sym->queued = false;
         }
@@ -4259,13 +4259,13 @@ deduce_liveness(symbol* root) {
 
     // Traverse referrers to find the transitive set of live functions.
     while (!work.empty()) {
-        symbol* live = work.popCopy();
+        symbol* live = ke::PopBack(&work);
 
         for (const auto& other : live->refers_to()) {
             if (other->ident != iFUNCTN || other->queued)
                 continue;
             other->queued = true;
-            work.append(other);
+            work.push_back(other);
         }
     }
 

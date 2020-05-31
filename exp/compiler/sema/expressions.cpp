@@ -92,24 +92,24 @@ SemanticAnalysis::visitCallExpression(CallExpression* node)
 
   // If this function is variadic, extract the variadic parameter.
   Type* vararg = nullptr;
-  size_t normal_argc = params->length();
-  if (params->length() > 0) {
+  size_t normal_argc = params->size();
+  if (params->size() > 0) {
     VariableSymbol* sym = params->back()->sym();
     if (sym->type()->isVariadic()) {
       vararg = sym->type();
-      normal_argc = params->length() - 1;
+      normal_argc = params->size() - 1;
     }
   }
 
-  if ((vararg && ast_args->length() < params->length() - 1) ||
-      (!vararg && ast_args->length() != params->length()))
+  if ((vararg && ast_args->size() < params->size() - 1) ||
+      (!vararg && ast_args->size() != params->size()))
   {
     cc_.report(node->loc(), rmsg::incorrect_argcount) <<
-      params->length() << ast_args->length();
+      params->size() << ast_args->size();
   }
 
   sema::ExprList* args = new (pool_) sema::ExprList();
-  for (size_t i = 0; i < ast_args->length(); i++) {
+  for (size_t i = 0; i < ast_args->size(); i++) {
     ast::Expression* ast_arg = ast_args->at(i);
 
     Type* arg_type = nullptr;
@@ -126,7 +126,7 @@ SemanticAnalysis::visitCallExpression(CallExpression* node)
     sema::Expr* result = coerce_arg(ast_arg, arg_type);
     if (!result)
       return nullptr;
-    args->append(result);
+    args->push_back(result);
   }
 
   return new (pool_) sema::CallExpr(node, fun_type->returnType(), callee, args);
@@ -536,7 +536,7 @@ SemanticAnalysis::array_initializer(ast::ArrayLiteral* expr, Type* type)
   bool all_const = true;
   FixedPoolList<sema::Expr*>* list = new (pool_) FixedPoolList<sema::Expr*>(expr->arrayLength());
 
-  for (size_t i = 0; i < expr->expressions()->length(); i++) {
+  for (size_t i = 0; i < expr->expressions()->size(); i++) {
     ast::Expression* src = expr->expressions()->at(i);
     sema::Expr* val;
     if (src->isArrayLiteral()) {
@@ -613,7 +613,7 @@ SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
 
     // The backend must generate a default initializer.
     if (!assignment) {
-      out->append(nullptr);
+      out->push_back(nullptr);
       continue;
     }
 
@@ -645,7 +645,7 @@ SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
       continue;
     }
 
-    out->append(value);
+    out->push_back(value);
   }
 
   for (NameAndValue* nv : entries) {
@@ -653,7 +653,7 @@ SemanticAnalysis::struct_initializer(ast::StructInitializer* expr, Type* type)
       st->name() << nv->name();
   }
 
-  if (out->length() != nfields)
+  if (out->size() != nfields)
     return nullptr;
 
   return new (pool_) sema::StructInitExpr(expr, st, out);
@@ -696,9 +696,9 @@ SemanticAnalysis::visitNewArray(ast::NewArrayExpr* node)
 
   Type* int32Type = types_->getPrimitive(PrimitiveType::Int32);
 
-  sema::FixedExprList* exprs = new (pool_) sema::FixedExprList(node->dims()->length());
+  sema::FixedExprList* exprs = new (pool_) sema::FixedExprList(node->dims()->size());
   Type* type = base;
-  for (size_t i = 0; i < node->dims()->length(); i++) {
+  for (size_t i = 0; i < node->dims()->size(); i++) {
     ast::Expression* ast_expr = node->dims()->at(i);
     if (!ast_expr) {
       cc_.report(node->loc(), rmsg::new_array_missing_dimension) << i;

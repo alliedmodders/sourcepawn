@@ -35,8 +35,8 @@ class FunctionDef;
 
 struct Program : public PoolObject
 {
-  ke::Vector<ast::FunctionStatement*> functions;
-  ke::Vector<ast::VarDecl*> globals;
+  std::vector<ast::FunctionStatement*> functions;
+  std::vector<ast::VarDecl*> globals;
 
   void dump(FILE* fp);
 };

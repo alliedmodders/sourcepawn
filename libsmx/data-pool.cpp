@@ -29,24 +29,24 @@ DataPool::DataPool()
 }
 
 uint32_t
-DataPool::add(const Vector<uint8_t>& run)
+DataPool::add(const std::vector<uint8_t>& run)
 {
   BytesAndLength tmp_key;
-  tmp_key.bytes = run.buffer();
-  tmp_key.length = run.length();
+  tmp_key.bytes = run.data();
+  tmp_key.length = run.size();
 
   DataPoolMap::Insert p = pool_map_.findForAdd(tmp_key);
   if (p.found())
     return p->value;
 
   uint32_t index = buffer_.position();
-  if (!buffer_.writeBytes(run.buffer(), run.length()))
+  if (!buffer_.writeBytes(run.data(), run.size()))
     return 0;
 
   ByteRun key;
-  key.bytes = std::make_unique<uint8_t[]>(run.length());
-  key.length = run.length();
-  memcpy(key.bytes.get(), run.buffer(), key.length);
+  key.bytes = std::make_unique<uint8_t[]>(run.size());
+  key.length = run.size();
+  memcpy(key.bytes.get(), run.data(), key.length);
   pool_map_.add(p, std::move(key), index);
   return index;
 }

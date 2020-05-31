@@ -70,29 +70,29 @@ struct BackpatchEntry {
     cell target;
 };
 
-static ke::Vector<cell> sLabelTable;
-static ke::Vector<BackpatchEntry> sBackpatchList;
+static std::vector<cell> sLabelTable;
+static std::vector<BackpatchEntry> sBackpatchList;
 
 class CellWriter
 {
   public:
-    explicit CellWriter(Vector<cell>& buffer)
+    explicit CellWriter(std::vector<cell>& buffer)
      : buffer_(buffer),
        current_address_(0)
     {}
 
-    void append(cell value) {
-        buffer_.append(value);
+    void push_back(cell value) {
+        buffer_.push_back(value);
         current_address_ += sizeof(value);
     }
     void write_label(int index) {
         assert(index >= 0 && index < sc_labnum);
         if (sLabelTable[index] < 0) {
             BackpatchEntry entry = {current_index(), index};
-            sBackpatchList.append(entry);
-            append(-1);
+            sBackpatchList.push_back(entry);
+            push_back(-1);
         } else {
-            append(sLabelTable[index]);
+            push_back(sLabelTable[index]);
         }
     }
 
@@ -100,11 +100,11 @@ class CellWriter
         return current_address_;
     }
     size_t current_index() const {
-        return buffer_.length();
+        return buffer_.size();
     }
 
   private:
-    Vector<cell>& buffer_;
+    std::vector<cell>& buffer_;
     cell current_address_;
 };
 
@@ -204,7 +204,7 @@ class AsmReader final
         assert(pos_ < end_);
         return pos_;
     }
-    Vector<symbol*>& native_list() {
+    std::vector<symbol*>& native_list() {
         return native_list_;
     }
     symbol* extract_call_target();
@@ -217,7 +217,7 @@ class AsmReader final
     memfile_t* fp_;
     const char* pos_;
     const char* end_;
-    Vector<symbol*> native_list_;
+    std::vector<symbol*> native_list_;
 };
 
 const char*
@@ -310,15 +310,15 @@ set_currentfile(CellWriter* writer, AsmReader* reader, cell opcode)
 static void
 parm0(CellWriter* writer, AsmReader* reader, cell opcode)
 {
-    writer->append(opcode);
+    writer->push_back(opcode);
 }
 
 static void
 parm1(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     ucell p = reader->getparam();
-    writer->append(opcode);
-    writer->append(p);
+    writer->push_back(opcode);
+    writer->push_back(p);
 }
 
 static void
@@ -326,9 +326,9 @@ parm2(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     ucell p1 = reader->getparam();
     ucell p2 = reader->getparam();
-    writer->append(opcode);
-    writer->append(p1);
-    writer->append(p2);
+    writer->push_back(opcode);
+    writer->push_back(p1);
+    writer->push_back(p2);
 }
 
 static void
@@ -337,10 +337,10 @@ parm3(CellWriter* writer, AsmReader* reader, cell opcode)
     ucell p1 = reader->getparam();
     ucell p2 = reader->getparam();
     ucell p3 = reader->getparam();
-    writer->append(opcode);
-    writer->append(p1);
-    writer->append(p2);
-    writer->append(p3);
+    writer->push_back(opcode);
+    writer->push_back(p1);
+    writer->push_back(p2);
+    writer->push_back(p3);
 }
 
 static void
@@ -350,11 +350,11 @@ parm4(CellWriter* writer, AsmReader* reader, cell opcode)
     ucell p2 = reader->getparam();
     ucell p3 = reader->getparam();
     ucell p4 = reader->getparam();
-    writer->append(opcode);
-    writer->append(p1);
-    writer->append(p2);
-    writer->append(p3);
-    writer->append(p4);
+    writer->push_back(opcode);
+    writer->push_back(p1);
+    writer->push_back(p2);
+    writer->push_back(p3);
+    writer->push_back(p4);
 }
 
 static void
@@ -365,12 +365,12 @@ parm5(CellWriter* writer, AsmReader* reader, cell opcode)
     ucell p3 = reader->getparam();
     ucell p4 = reader->getparam();
     ucell p5 = reader->getparam();
-    writer->append(opcode);
-    writer->append(p1);
-    writer->append(p2);
-    writer->append(p3);
-    writer->append(p4);
-    writer->append(p5);
+    writer->push_back(opcode);
+    writer->push_back(p1);
+    writer->push_back(p2);
+    writer->push_back(p3);
+    writer->push_back(p4);
+    writer->push_back(p5);
 }
 
 static void
@@ -380,7 +380,7 @@ do_dump(CellWriter* writer, AsmReader* reader, cell opcode)
 
     while (reader->next_token_on_line()) {
         ucell p = reader->getparam();
-        writer->append(p);
+        writer->push_back(p);
         num++;
     }
 }
@@ -391,7 +391,7 @@ do_dumpfill(CellWriter* writer, AsmReader* reader, cell opcode)
     ucell value = reader->getparam();
     ucell times = reader->getparam();
     while (times-- > 0) {
-        writer->append(value);
+        writer->push_back(value);
     }
 }
 
@@ -407,8 +407,8 @@ do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
 
     // Note: we emit const.pri for backward compatibility.
     assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
-    writer->append(sp::OP_CONST_PRI);
-    writer->append(sym->function()->funcid);
+    writer->push_back(sp::OP_CONST_PRI);
+    writer->push_back(sym->function()->funcid);
 }
 
 static void
@@ -418,8 +418,8 @@ do_call(CellWriter* writer, AsmReader* reader, cell opcode)
     assert(sym->usage & uREAD);
     assert(!sym->skipped);
 
-    writer->append(opcode);
-    writer->append(sym->addr());
+    writer->push_back(opcode);
+    writer->push_back(sym->addr());
 }
 
 static void
@@ -430,13 +430,13 @@ do_sysreq(CellWriter* writer, AsmReader* reader, cell opcode)
 
     assert(sym->native);
     if (sym->addr() < 0) {
-      sym->setAddr(reader->native_list().length());
-      reader->native_list().append(sym);
+      sym->setAddr(reader->native_list().size());
+      reader->native_list().push_back(sym);
     }
 
-    writer->append(opcode);
-    writer->append(sym->addr());
-    writer->append(nargs);
+    writer->push_back(opcode);
+    writer->push_back(sym->addr());
+    writer->push_back(nargs);
 }
 
 static void
@@ -444,7 +444,7 @@ do_jump(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     int i = reader->hex2long();
 
-    writer->append(opcode);
+    writer->push_back(opcode);
     writer->write_label(i);
 }
 
@@ -453,7 +453,7 @@ do_switch(CellWriter* writer, AsmReader* reader, cell opcode)
 {
     int i = reader->hex2long();
 
-    writer->append(opcode);
+    writer->push_back(opcode);
     writer->write_label(i);
 }
 
@@ -463,7 +463,7 @@ do_case(CellWriter* writer, AsmReader* reader, cell opcode)
     cell v = reader->hex2long();
     int i = reader->hex2long();
 
-    writer->append(v);
+    writer->push_back(v);
     writer->write_label(i);
 }
 
@@ -642,7 +642,7 @@ findopcode(const char* instr, size_t maxlen)
 
 // Generate code or data into a buffer.
 static void
-generate_segment(AsmReader& reader, Vector<cell>* code_buffer, Vector<cell>* data_buffer)
+generate_segment(AsmReader& reader, std::vector<cell>* code_buffer, std::vector<cell>* data_buffer)
 {
     CellWriter code_writer(*code_buffer);
     CellWriter data_writer(*data_buffer);
@@ -676,7 +676,7 @@ generate_segment(AsmReader& reader, Vector<cell>* code_buffer, Vector<cell>* dat
 
     // Fix up backpatches.
     for (const auto& patch : sBackpatchList) {
-        assert(patch.index < code_buffer->length());
+        assert(patch.index < code_buffer->size());
         assert(patch.target >= 0 && patch.target < sc_labnum);
         assert(sLabelTable[patch.target] >= 0);
         code_buffer->at(patch.index) = sLabelTable[patch.target];
@@ -798,16 +798,16 @@ class RttiBuilder
     uint32_t add_struct(Type* type);
     uint32_t add_enumstruct(Type* type);
     uint32_t encode_signature(symbol* sym);
-    void encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft);
-    void encode_enum_into(Vector<uint8_t>& bytes, Type* type);
-    void encode_tag_into(Vector<uint8_t>& bytes, int tag);
-    void encode_ret_array_into(Vector<uint8_t>& bytes, symbol* sym);
-    void encode_funcenum_into(Vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
-    void encode_var_type(Vector<uint8_t>& bytes, const variable_type_t& info);
-    void encode_struct_into(Vector<uint8_t>& bytes, Type* type);
-    void encode_enumstruct_into(Vector<uint8_t>& bytes, Type* type);
+    void encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft);
+    void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
+    void encode_tag_into(std::vector<uint8_t>& bytes, int tag);
+    void encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym);
+    void encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
+    void encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t& info);
+    void encode_struct_into(std::vector<uint8_t>& bytes, Type* type);
+    void encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type);
 
-    uint32_t to_typeid(const Vector<uint8_t>& bytes);
+    uint32_t to_typeid(const std::vector<uint8_t>& bytes);
 
     void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
     void build_debuginfo();
@@ -985,7 +985,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     uint32_t type_id;
     {
         variable_type_t type = {tag, dims, dimcount, is_const};
-        Vector<uint8_t> encoding;
+        std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
         type_id = to_typeid(encoding);
@@ -1090,7 +1090,7 @@ RttiBuilder::add_enumstruct(Type* type)
             dims[dimcount++] = field->dim.array.length;
 
         variable_type_t type = {field->x.tags.index, dims, dimcount, false};
-        Vector<uint8_t> encoding;
+        std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
         smx_rtti_es_field info;
@@ -1123,17 +1123,17 @@ RttiBuilder::add_struct(Type* type)
     classdefs_->add(classdef);
 
     // Pre-reserve space in case we recursively add structs.
-    for (size_t i = 0; i < ps->args.length(); i++)
+    for (size_t i = 0; i < ps->args.size(); i++)
         fields_->add();
 
-    for (size_t i = 0; i < ps->args.length(); i++) {
+    for (size_t i = 0; i < ps->args.size(); i++) {
         const structarg_t* arg = ps->args[i].get();
 
         int dims[1] = {0};
         int dimcount = arg->ident == iREFARRAY ? 1 : 0;
 
         variable_type_t type = {arg->tag, dims, dimcount, !!arg->fconst};
-        Vector<uint8_t> encoding;
+        std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
         smx_rtti_field field;
@@ -1146,11 +1146,11 @@ RttiBuilder::add_struct(Type* type)
 }
 
 uint32_t
-RttiBuilder::to_typeid(const Vector<uint8_t>& bytes)
+RttiBuilder::to_typeid(const std::vector<uint8_t>& bytes)
 {
-    if (bytes.length() <= 4) {
+    if (bytes.size() <= 4) {
         uint32_t payload = 0;
-        for (size_t i = 0; i < bytes.length(); i++)
+        for (size_t i = 0; i < bytes.size(); i++)
             payload |= bytes[i] << (i * 8);
         if (payload <= kMaxTypeIdPayload)
             return MakeTypeId(payload, kTypeId_Inline);
@@ -1163,7 +1163,7 @@ RttiBuilder::to_typeid(const Vector<uint8_t>& bytes)
 uint32_t
 RttiBuilder::encode_signature(symbol* sym)
 {
-    Vector<uint8_t> bytes;
+    std::vector<uint8_t> bytes;
 
     uint32_t argc = 0;
     bool is_variadic = false;
@@ -1175,15 +1175,15 @@ RttiBuilder::encode_signature(symbol* sym)
     if (argc > UCHAR_MAX)
         error(45);
 
-    bytes.append((uint8_t)argc);
+    bytes.push_back((uint8_t)argc);
     if (is_variadic)
-        bytes.append(cb::kVariadic);
+        bytes.push_back(cb::kVariadic);
 
     symbol* child = sym->array_return();
     if (child && child->dim.array.length) {
         encode_ret_array_into(bytes, child);
     } else if (sym->tag == pc_tag_void) {
-        bytes.append(cb::kVoid);
+        bytes.push_back(cb::kVoid);
     } else {
         encode_tag_into(bytes, sym->tag);
     }
@@ -1201,7 +1201,7 @@ RttiBuilder::encode_signature(symbol* sym)
         }
 
         if (arg->ident == iREFERENCE)
-            bytes.append(cb::kByRef);
+            bytes.push_back(cb::kByRef);
         variable_type_t info = {tag, arg->dim, numdim, arg->is_const};
         encode_var_type(bytes, info);
     }
@@ -1238,7 +1238,7 @@ RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
     typeid_cache_.add(p, type, index);
     typedefs_->add();
 
-    Vector<uint8_t> bytes;
+    std::vector<uint8_t> bytes;
     encode_signature_into(bytes, fe->entries.back());
     uint32_t signature = type_pool_.add(bytes);
 
@@ -1260,9 +1260,9 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
     typeid_cache_.add(p, type, index);
     typesets_->add();
 
-    uint32_t typecount = (uint32_t)fe->entries.length();
+    uint32_t typecount = (uint32_t)fe->entries.size();
 
-    Vector<uint8_t> bytes;
+    std::vector<uint8_t> bytes;
     CompactEncodeUint32(bytes, typecount);
     for (const auto& iter : fe->entries)
         encode_signature_into(bytes, iter);
@@ -1274,30 +1274,30 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
 }
 
 void
-RttiBuilder::encode_struct_into(Vector<uint8_t>& bytes, Type* type)
+RttiBuilder::encode_struct_into(std::vector<uint8_t>& bytes, Type* type)
 {
-    bytes.append(cb::kClassdef);
+    bytes.push_back(cb::kClassdef);
     CompactEncodeUint32(bytes, add_struct(type));
 }
 
 void
-RttiBuilder::encode_enum_into(Vector<uint8_t>& bytes, Type* type)
+RttiBuilder::encode_enum_into(std::vector<uint8_t>& bytes, Type* type)
 {
-    bytes.append(cb::kEnum);
+    bytes.push_back(cb::kEnum);
     CompactEncodeUint32(bytes, add_enum(type));
 }
 
 void
-RttiBuilder::encode_enumstruct_into(Vector<uint8_t>& bytes, Type* type)
+RttiBuilder::encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type)
 {
-    bytes.append(cb::kEnumStruct);
+    bytes.push_back(cb::kEnumStruct);
     CompactEncodeUint32(bytes, add_enumstruct(type));
 }
 
 void
-RttiBuilder::encode_ret_array_into(Vector<uint8_t>& bytes, symbol* sym)
+RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym)
 {
-    bytes.append(cb::kFixedArray);
+    bytes.push_back(cb::kFixedArray);
     if (sym->tag == pc_tag_string)
         CompactEncodeUint32(bytes, sym->dim.array.length * 4);
     else
@@ -1322,10 +1322,10 @@ TagToRttiBytecode(int tag)
 }
 
 void
-RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
+RttiBuilder::encode_tag_into(std::vector<uint8_t>& bytes, int tag)
 {
     if (uint8_t b = TagToRttiBytecode(tag)) {
-        bytes.append(b);
+        bytes.push_back(b);
         return;
     }
 
@@ -1341,7 +1341,7 @@ RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
         if (funcenum_t* fe = type->toFunction())
             encode_funcenum_into(bytes, type, fe);
         else
-            bytes.append(cb::kTopFunction);
+            bytes.push_back(cb::kTopFunction);
         return;
     }
 
@@ -1354,34 +1354,34 @@ RttiBuilder::encode_tag_into(Vector<uint8_t>& bytes, int tag)
 }
 
 void
-RttiBuilder::encode_funcenum_into(Vector<uint8_t>& bytes, Type* type, funcenum_t* fe)
+RttiBuilder::encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe)
 {
-    if (fe->entries.length() == 1) {
+    if (fe->entries.size() == 1) {
         uint32_t index = add_funcenum(type, fe);
-        bytes.append(cb::kTypedef);
+        bytes.push_back(cb::kTypedef);
         CompactEncodeUint32(bytes, index);
     } else {
         uint32_t index = add_typeset(type, fe);
-        bytes.append(cb::kTypeset);
+        bytes.push_back(cb::kTypeset);
         CompactEncodeUint32(bytes, index);
     }
 }
 
 void
-RttiBuilder::encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft)
+RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
 {
-    bytes.append(cb::kFunction);
-    bytes.append((uint8_t)ft->args.length());
-    if (!ft->args.empty() && ft->args[ft->args.length() - 1].ident == iVARARGS)
-        bytes.append(cb::kVariadic);
+    bytes.push_back(cb::kFunction);
+    bytes.push_back((uint8_t)ft->args.size());
+    if (!ft->args.empty() && ft->args[ft->args.size() - 1].ident == iVARARGS)
+        bytes.push_back(cb::kVariadic);
     if (ft->ret_tag == pc_tag_void)
-        bytes.append(cb::kVoid);
+        bytes.push_back(cb::kVoid);
     else
         encode_tag_into(bytes, ft->ret_tag);
 
     for (const auto& arg : ft->args) {
         if (arg.ident == iREFERENCE)
-            bytes.append(cb::kByRef);
+            bytes.push_back(cb::kByRef);
 
         variable_type_t info = {arg.tag, arg.dims, arg.dimcount, !!arg.fconst};
         encode_var_type(bytes, info);
@@ -1389,13 +1389,13 @@ RttiBuilder::encode_signature_into(Vector<uint8_t>& bytes, functag_t* ft)
 }
 
 void
-RttiBuilder::encode_var_type(Vector<uint8_t>& bytes, const variable_type_t& info)
+RttiBuilder::encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t& info)
 {
     for (int i = 0; i < info.dimcount; i++) {
         if (info.dims[i] == 0) {
-            bytes.append(cb::kArray);
+            bytes.push_back(cb::kArray);
         } else {
-            bytes.append(cb::kFixedArray);
+            bytes.push_back(cb::kFixedArray);
             if (i == info.dimcount - 1 && info.tag == pc_tag_string)
                 CompactEncodeUint32(bytes, info.dims[i] * 4);
             else
@@ -1403,10 +1403,10 @@ RttiBuilder::encode_var_type(Vector<uint8_t>& bytes, const variable_type_t& info
         }
 
         if (i != info.dimcount - 1 && info.is_const)
-            bytes.append(cb::kConst);
+            bytes.push_back(cb::kConst);
     }
     if (info.is_const)
-        bytes.append(cb::kConst);
+        bytes.push_back(cb::kConst);
     encode_tag_into(bytes, info.tag);
 }
 
@@ -1432,10 +1432,10 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     std::vector<function_entry> functions;
 
     // Sort globals.
-    Vector<symbol*> global_symbols;
+    std::vector<symbol*> global_symbols;
     for (symbol* sym = glbtab.next; sym; sym = sym->next)
-        global_symbols.append(sym);
-    qsort(global_symbols.buffer(), global_symbols.length(), sizeof(symbol*), sort_by_name);
+        global_symbols.push_back(sym);
+    qsort(global_symbols.data(), global_symbols.size(), sizeof(symbol*), sort_by_name);
 
     // Build the easy symbol tables.
     for (const auto& sym : global_symbols) {
@@ -1503,16 +1503,16 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     }
 
     for (int i = 1; i <= sc_labnum; i++)
-        sLabelTable.append(-1);
-    assert(sLabelTable.length() == size_t(sc_labnum));
+        sLabelTable.push_back(-1);
+    assert(sLabelTable.size() == size_t(sc_labnum));
 
     // Generate buffers.
     AsmReader reader(fin);
-    Vector<cell> code_buffer, data_buffer;
+    std::vector<cell> code_buffer, data_buffer;
     generate_segment(reader, &code_buffer, &data_buffer);
 
     // Populate the native table.
-    for (size_t i = 0; i < reader.native_list().length(); i++) {
+    for (size_t i = 0; i < reader.native_list().size(); i++) {
         symbol* sym = reader.native_list()[i];
         assert(size_t(sym->addr()) == i);
 
@@ -1528,7 +1528,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     }
 
     // Set up the code section.
-    code->header().codesize = code_buffer.length() * sizeof(cell);
+    code->header().codesize = code_buffer.size() * sizeof(cell);
     code->header().cellsize = sizeof(cell);
     code->header().codeversion =
         (pc_code_version) ? pc_code_version : SmxConsts::CODE_VERSION_SM_LEGACY;
@@ -1536,17 +1536,17 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     code->header().main = 0;
     code->header().code = sizeof(sp_file_code_t);
     code->header().features = 0;
-    code->setBlob((uint8_t*)code_buffer.buffer(), code_buffer.length() * sizeof(cell));
+    code->setBlob((uint8_t*)code_buffer.data(), code_buffer.size() * sizeof(cell));
 
     // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was
     // computed as AMX::stp, which included the entire memory size needed to
     // store the file. Here (in 1.7+), we allocate what is actually needed
     // by the plugin.
-    data->header().datasize = data_buffer.length() * sizeof(cell);
+    data->header().datasize = data_buffer.size() * sizeof(cell);
     data->header().memsize =
         data->header().datasize + glb_declared * sizeof(cell) + pc_stksize * sizeof(cell);
     data->header().data = sizeof(sp_file_data_t);
-    data->setBlob((uint8_t*)data_buffer.buffer(), data_buffer.length() * sizeof(cell));
+    data->setBlob((uint8_t*)data_buffer.data(), data_buffer.size() * sizeof(cell));
 
     // Add tables in the same order SourceMod 1.6 added them.
     builder.add(code);

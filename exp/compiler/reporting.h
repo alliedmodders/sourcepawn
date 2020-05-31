@@ -105,7 +105,7 @@ class TMessage : public ke::Refcounted<TMessage>
   };
 
   void addArg(Arg* arg) {
-    args_.append(arg);
+    args_.push_back(std::unique_ptr<Arg>(arg));
   }
   void addArg(Atom* atom) {
     addArg(new AtomArg(atom));
@@ -124,8 +124,8 @@ class TMessage : public ke::Refcounted<TMessage>
 
   void addNote(RefPtr<TMessage> note) {
     if (note) {
-      assert(!note->notes_.length());
-      notes_.append(note);
+      assert(!note->notes_.size());
+      notes_.push_back(note);
     }
   }
 
@@ -136,20 +136,20 @@ class TMessage : public ke::Refcounted<TMessage>
     return message_id_;
   }
   size_t num_notes() const {
-    return notes_.length();
+    return notes_.size();
   }
   RefPtr<TMessage> note(size_t i) const {
     return notes_[i];
   }
-  const Vector<std::unique_ptr<Arg>>& args() const {
+  const std::vector<std::unique_ptr<Arg>>& args() const {
     return args_;
   }
 
  private:
   SourceLocation origin_;
   rmsg::Id message_id_;
-  Vector<std::unique_ptr<Arg>> args_;
-  Vector<RefPtr<TMessage>> notes_;
+  std::vector<std::unique_ptr<Arg>> args_;
+  std::vector<RefPtr<TMessage>> notes_;
 };
 
 class MessageBuilder 
@@ -204,7 +204,7 @@ class ReportManager
     return fatal_error_ != rmsg::none;
   }
   bool HasMessages() const {
-    return HasFatalError() || messages_.length() > 0;
+    return HasFatalError() || messages_.size() > 0;
   }
 
   void PrintMessages();
@@ -245,7 +245,7 @@ class ReportManager
   SourceLocation fatal_loc_;
 
   unsigned num_errors_;
-  Vector<RefPtr<TMessage>> messages_;
+  std::vector<RefPtr<TMessage>> messages_;
 };
 
 struct ReportingContext

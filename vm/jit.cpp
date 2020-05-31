@@ -114,7 +114,7 @@ CompilerBase::emit()
       visitJUMP(0);
   }
 
-  for (size_t i = 0; i < ool_paths_.length(); i++) {
+  for (size_t i = 0; i < ool_paths_.size(); i++) {
     OutOfLinePath* path = ool_paths_[i];
     __ bind(path->label());
     if (!path->emit(static_cast<Compiler*>(this)))
@@ -123,7 +123,7 @@ CompilerBase::emit()
 
   // For each backward jump, emit a little thunk so we can exit from a timeout.
   // Track the offset of where the thunk is, so the watchdog timer can patch it.
-  for (size_t i = 0; i < backward_jumps_.length(); i++) {
+  for (size_t i = 0; i < backward_jumps_.size(); i++) {
     BackwardJump& jump = backward_jumps_[i];
     jump.timeout_offset = masm.pc();
     __ call(&throw_timeout_);
@@ -158,16 +158,16 @@ CompilerBase::emit()
   }
 
   std::unique_ptr<FixedArray<LoopEdge>> edges(
-    new FixedArray<LoopEdge>(backward_jumps_.length()));
-  for (size_t i = 0; i < backward_jumps_.length(); i++) {
+    new FixedArray<LoopEdge>(backward_jumps_.size()));
+  for (size_t i = 0; i < backward_jumps_.size(); i++) {
     const BackwardJump& jump = backward_jumps_[i];
     edges->at(i).offset = jump.pc;
     edges->at(i).disp32 = int32_t(jump.timeout_offset) - int32_t(jump.pc);
   }
 
   std::unique_ptr<FixedArray<CipMapEntry>> cipmap(
-    new FixedArray<CipMapEntry>(cip_map_.length()));
-  memcpy(cipmap->buffer(), cip_map_.buffer(), cip_map_.length() * sizeof(CipMapEntry));
+    new FixedArray<CipMapEntry>(cip_map_.size()));
+  memcpy(cipmap->buffer(), cip_map_.data(), cip_map_.size() * sizeof(CipMapEntry));
 
   assert(error_ == SP_ERROR_NONE);
   return new CompiledFunction(code, pcode_start_, edges.release(), cipmap.release());

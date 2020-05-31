@@ -19,11 +19,13 @@
 #ifndef _include_jitcraft_compile_context_h_
 #define _include_jitcraft_compile_context_h_
 
-#include <amtl/am-vector.h>
-#include <amtl/am-hashtable.h>
-#include <amtl/am-threadlocal.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include <amtl/am-hashtable.h>
+#include <amtl/am-threadlocal.h>
+#include <amtl/am-vector.h>
+
 #include "shared/string-pool.h"
 #include "pool-allocator.h"
 #include "auto-string.h"

@@ -272,7 +272,7 @@ class TypeDictionary
     Type* findOrAdd(const char* name);
 
   private:
-    ke::Vector<std::unique_ptr<Type>> types_;
+    std::vector<std::unique_ptr<Type>> types_;
 };
 
 extern TypeDictionary gTypes;

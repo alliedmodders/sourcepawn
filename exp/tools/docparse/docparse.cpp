@@ -65,7 +65,7 @@ class Comments : public CommentDelegate
 
   void HandleComment(CommentPos aWhere, const SourceRange &aRange)
   {
-    Vector<CommentRange> &where = (aWhere == CommentPos::Front)
+    std::vector<CommentRange> &where = (aWhere == CommentPos::Front)
                                   ? lead_comments_
                                   : tail_comments_;
 
@@ -81,7 +81,7 @@ class Comments : public CommentDelegate
       // Comments must be in order.
       assert(range.start.offset >= where.back().end.offset);
     }
-    where.append(range);
+    where.push_back(range);
   }
 
   static int cmp_ends_at_line(const void *aItem1, const void *aItem2) {
@@ -111,14 +111,14 @@ class Comments : public CommentDelegate
 
     void *found =
       bsearch(reinterpret_cast<void *>(ref.line - 1),
-              lead_comments_.buffer(),
-              lead_comments_.length(),
+              lead_comments_.data(),
+              lead_comments_.size(),
               sizeof(CommentRange),
               cmp_ends_at_line);
     if (!found) {
       found = bsearch(reinterpret_cast<void *>(ref.line),
-                      tail_comments_.buffer(),
-                      tail_comments_.length(),
+                      tail_comments_.data(),
+                      tail_comments_.size(),
                       sizeof(CommentRange),
                       cmp_starts_at_line);
       if (!found)
@@ -133,8 +133,8 @@ class Comments : public CommentDelegate
 
  private:
   CompileContext &cc_;
-  Vector<CommentRange> lead_comments_;
-  Vector<CommentRange> tail_comments_;
+  std::vector<CommentRange> lead_comments_;
+  std::vector<CommentRange> tail_comments_;
 };
 
 class Analyzer : public PartialAstVisitor
@@ -170,7 +170,7 @@ class Analyzer : public PartialAstVisitor
     typesets_ = new (pool_) JsonList();
     typedefs_ = new (pool_) JsonList();
 
-    for (size_t i = 0; i < tree->statements()->length(); i++) {
+    for (size_t i = 0; i < tree->statements()->size(); i++) {
       Statement *stmt = tree->statements()->at(i);
       stmt->accept(this);
     }
@@ -195,7 +195,7 @@ class Analyzer : public PartialAstVisitor
 
     SaveAndSet<JsonList *> new_props(&props_, new (pool_) JsonList());
     SaveAndSet<JsonList *> new_methods(&methods_, new (pool_) JsonList());
-    for (size_t i = 0; i < node->body()->length(); i++)
+    for (size_t i = 0; i < node->body()->size(); i++)
       node->body()->at(i)->accept(this);
 
     obj->add(atom_methods_, methods_);
@@ -235,7 +235,7 @@ class Analyzer : public PartialAstVisitor
     startDoc(obj, "typeset", decl->name(), decl->loc());
 
     JsonList *list = new (pool_) JsonList();
-    for (size_t i = 0; i < decl->types()->length(); i++) {
+    for (size_t i = 0; i < decl->types()->size(); i++) {
       const TypesetDecl::Entry &entry = decl->types()->at(i);
       JsonObject *te = new (pool_) JsonObject();
       te->add(atom_type_, toJson(entry.te));
@@ -263,7 +263,7 @@ class Analyzer : public PartialAstVisitor
 
   void visitEnumStatement(EnumStatement *node) override {
     if (!node->name()) {
-      for (size_t i = 0; i < node->entries()->length(); i++) {
+      for (size_t i = 0; i < node->entries()->size(); i++) {
         EnumConstant *cs = node->entries()->at(i);
 
         JsonObject *val = new (pool_) JsonObject();
@@ -280,7 +280,7 @@ class Analyzer : public PartialAstVisitor
     startDoc(obj, "enum", node->name(), node->loc());
 
     JsonList *list = new (pool_) JsonList();
-    for (size_t i = 0; i < node->entries()->length(); i++) {
+    for (size_t i = 0; i < node->entries()->size(); i++) {
       EnumConstant *cs = node->entries()->at(i);
 
       JsonObject *val = new (pool_) JsonObject();
@@ -367,7 +367,7 @@ class Analyzer : public PartialAstVisitor
 
   JsonList *toJson(const ParameterList *params) {
     JsonList *list = new (pool_) JsonList();
-    for (size_t i = 0; i < params->length(); i++) {
+    for (size_t i = 0; i < params->size(); i++) {
       VarDecl *decl = params->at(i);
       JsonObject *obj = new (pool_) JsonObject();
 

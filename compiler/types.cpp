@@ -98,7 +98,7 @@ Type::kindName() const
       return "object";
     case TypeKind::Function:
       if (funcenum_ptr_) {
-        if (funcenum_ptr_->entries.length() > 1)
+        if (funcenum_ptr_->entries.size() > 1)
           return "typeset";
         if (ke::StartsWith(name_, "::"))
           return "function";
@@ -125,7 +125,7 @@ TypeDictionary::find(const char* name)
 Type*
 TypeDictionary::find(int tag)
 {
-    assert(size_t(tag) < types_.length());
+    assert(size_t(tag) < types_.size());
 
     return types_[tag].get();
 }
@@ -138,9 +138,9 @@ TypeDictionary::findOrAdd(const char* name)
             return type.get();
     }
 
-    int tag = int(types_.length());
+    int tag = int(types_.size());
     std::unique_ptr<Type> type = std::make_unique<Type>(name, tag);
-    types_.append(std::move(type));
+    types_.push_back(std::move(type));
     return types_.back().get();
 }
 

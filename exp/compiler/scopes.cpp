@@ -32,7 +32,7 @@ Scope::Scope(PoolAllocator& pool, Scope* enclosing)
 Symbol*
 Scope::localLookup(Atom * name)
 {
-  for (size_t i = 0; i < names_.length(); i++) {
+  for (size_t i = 0; i < names_.size(); i++) {
     if (names_[i]->name() == name)
       return names_[i];
   }
@@ -49,10 +49,10 @@ Scope::lookup(Atom* name)
   return nullptr;
 }
 
-bool
+void
 Scope::addSymbol(Symbol* sym)
 {
-  return names_.append(sym);
+  names_.push_back(sym);
 }
 
 BlockScope::BlockScope(PoolAllocator& pool)
@@ -105,7 +105,7 @@ LayoutScope::addAnonymousField(ast::FieldDecl* decl)
 {
   if (!anonymous_fields_)
     anonymous_fields_ = new (POOL()) PoolList<ast::FieldDecl*>();
-  anonymous_fields_->append(decl);
+  anonymous_fields_->push_back(decl);
 }
 
 bool
@@ -113,5 +113,5 @@ LayoutScope::hasMixedAnonymousFields() const
 {
   if (!anonymous_fields_)
     return false;
-  return names_.length() > 0;
+  return names_.size() > 0;
 }

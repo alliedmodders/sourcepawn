@@ -58,7 +58,7 @@ class Scope : public PoolObject
   PoolList<Scope*> children_;
   
   bool empty() const {
-    return names_.length() == 0;
+    return names_.size() == 0;
   }
 
  public:
@@ -81,7 +81,7 @@ class Scope : public PoolObject
     return enclosing_;
   }
 
-  bool addSymbol(Symbol* symbol);
+  void addSymbol(Symbol* symbol);
 
   Scope* unlinkIfEmpty();
   Symbol* localLookup(Atom* name);
@@ -155,7 +155,7 @@ class GlobalScope : public Scope
     return &exported_;
   }
   void addPublic(Symbol* symbol) {
-    exported_.append(symbol);
+    exported_.push_back(symbol);
   }
 
  private:

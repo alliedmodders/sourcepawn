@@ -51,12 +51,12 @@ struct Macro : public PoolObject
 
   // Return the location of the first token from the parent file.
   const SourceLocation& start() const {
-    if (!tokens->length())
+    if (!tokens->size())
       return definedAt;
     return tokens->at(0).start.loc;
   }
   size_t length() const {
-    if (tokens->length() == 0)
+    if (tokens->size() == 0)
       return 0;
     return tokens->back().end.loc.offset() - tokens->at(0).start.loc.offset();
   }

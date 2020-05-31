@@ -620,8 +620,7 @@ class Assembler : public AssemblerBase
       writeInt32(0xabcdef0);
       src->use(pc());
     }
-    if (!local_refs_.append(pc()))
-      outOfMemory_ = true;
+    local_refs_.push_back(pc());
   }
   void pop(Register reg) {
     emit1(0x58 + reg.code);
@@ -792,16 +791,14 @@ class Assembler : public AssemblerBase
       writeInt32(0xabcdef0);
       src->use(pc());
     }
-    if (!local_refs_.append(pc()))
-      outOfMemory_ = true;
+    local_refs_.push_back(pc());
   }
   void emit_absolute_address(Label* address) {
     if (address->bound())
       writeUint32(int32_t(address->offset()) - (position() + 4));
     else
       writeUint32(address->addPending(position() + 4));
-    if (!local_refs_.append(pc()))
-      outOfMemory_ = true;
+    local_refs_.push_back(pc());
   }
 
   void call(Register target) {
@@ -813,15 +810,13 @@ class Assembler : public AssemblerBase
   void call(const AddressValue& address) {
     emit1(0xe8);
     writeInt32(address.value());
-    if (!external_refs_.append(pc()))
-      outOfMemory_ = true;
+    external_refs_.push_back(pc());
   }
   void jmp(ExternalAddress address) {
     assert(sizeof(address) == sizeof(int32_t));
     emit1(0xe9);
     writeInt32(address.value());
-    if (!external_refs_.append(pc()))
-      outOfMemory_ = true;
+    external_refs_.push_back(pc());
   }
 
   void cpuid() {
@@ -908,7 +903,7 @@ class Assembler : public AssemblerBase
     // Relocate anything we emitted as rel32 with an external pointer.
     uint8_t* base = reinterpret_cast<uint8_t*>(code);
     memcpy(base, buffer(), length());
-    for (size_t i = 0; i < external_refs_.length(); i++) {
+    for (size_t i = 0; i < external_refs_.size(); i++) {
       size_t offset = external_refs_[i];
       PatchRel32Absolute(base + offset, *reinterpret_cast<void**>(base + offset - 4));
     }
@@ -916,7 +911,7 @@ class Assembler : public AssemblerBase
     // Relocate everything we emitted as an abs32 with an internal offset. Note
     // that in the code stream, we use relative offsets so we can use both Label
     // and CodeLabel.
-    for (size_t i = 0; i < local_refs_.length(); i++) {
+    for (size_t i = 0; i < local_refs_.size(); i++) {
       size_t offset = local_refs_[i];
       int32_t delta = *reinterpret_cast<int32_t*>(base + offset - 4);
       *reinterpret_cast<void**>(base + offset - 4) = base + offset + delta;
@@ -1101,8 +1096,8 @@ class Assembler : public AssemblerBase
   }
 
  private:
-  ke::Vector<uint32_t> external_refs_;
-  ke::Vector<uint32_t> local_refs_;
+  std::vector<uint32_t> external_refs_;
+  std::vector<uint32_t> local_refs_;
 };
 
 static inline ConditionCode

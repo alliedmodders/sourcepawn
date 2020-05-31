@@ -51,7 +51,7 @@ SemanticAnalysis::visitFunctionStatement(FunctionStatement* node)
     node->set_guaranteed_return();
 
   assert(fs_->return_status != ReturnStatus::Mixed);
-  global_functions_.append(node);
+  global_functions_.push_back(node);
 }
 
 // :TODO: write tests for this.
@@ -65,7 +65,7 @@ SemanticAnalysis::analyzeShadowedFunctions(FunctionSymbol* sym)
   // We support non-native implementations of a forwarded function.
   FunctionStatement* forward = nullptr;
 
-  for (size_t i = 0; i < sym->shadows()->length(); i++) {
+  for (size_t i = 0; i < sym->shadows()->size(); i++) {
     FunctionStatement* stmt = sym->shadows()->at(i);
     switch (stmt->token()) {
       case TOK_FORWARD:
@@ -133,7 +133,7 @@ SemanticAnalysis::matchForwardSignatures(FunctionSignature* fwdSig, FunctionSign
   // Due to SourceMod oddness, and the implementation detail that arguments are
   // pushed in reverse order, the impl function is allowed to leave off any
   // number of arguments. But, it cannot have more arguments.
-  if (fwdSig->parameters()->length() < implSig->parameters()->length())
+  if (fwdSig->parameters()->size() < implSig->parameters()->size())
     return false;
 
   // We allow return types to differ iff the forward's type is void and the
@@ -159,7 +159,7 @@ SemanticAnalysis::matchForwardReturnTypes(Type* fwdRetType, Type* implRetType)
 void
 SemanticAnalysis::visitBlockStatement(BlockStatement* node)
 {
-  for (size_t i = 0; i < node->statements()->length(); i++) {
+  for (size_t i = 0; i < node->statements()->size(); i++) {
     Statement* ast_stmt = node->statements()->at(i);
     visitStatement(ast_stmt);
   }
@@ -276,7 +276,7 @@ SemanticAnalysis::visitVarDecl(VarDecl* node)
   }
 
   if (sym->scope()->kind() == Scope::Global)
-    global_vars_.append(node);
+    global_vars_.push_back(node);
 }
 
 void
@@ -321,7 +321,7 @@ SemanticAnalysis::visitForStatement(ForStatement* node)
 void
 SemanticAnalysis::visitIfStatement(IfStatement* node)
 {
-  for (size_t i = 0; i < node->clauses()->length(); i++) {
+  for (size_t i = 0; i < node->clauses()->size(); i++) {
     IfClause& clause = node->clauses()->at(i);
 
     TestEvalContext ec(cc_, clause.cond);
@@ -422,17 +422,17 @@ SemanticAnalysis::visitSwitchStatement(SwitchStatement* node)
   };
 
   PoolList<ast::Case*>* cases = node->cases();
-  for (size_t i = 0; i < cases->length(); i++) {
+  for (size_t i = 0; i < cases->size(); i++) {
     ast::Case* entry = cases->at(i);
 
     size_t ncases = 1 + (entry->others()
-                         ? entry->others()->length()
+                         ? entry->others()->size()
                          : 0);
     FixedPoolList<int32_t>* values = new (pool_) FixedPoolList<int32_t>(ncases);
 
     values->at(0) = get_value(entry->expression());
     if (const auto& others = entry->others()) {
-      for (size_t j = 0; j < others->length(); j++)
+      for (size_t j = 0; j < others->size(); j++)
         values->at(j + 1) = get_value(others->at(j));
     }
     entry->setValues(values);

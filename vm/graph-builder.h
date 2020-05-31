@@ -111,7 +111,7 @@ class GraphBuilder
 
   // Block building.
   ke::RefPtr<Block> current_;
-  ke::Vector<ke::RefPtr<Block>> work_queue_;
+  std::vector<ke::RefPtr<Block>> work_queue_;
 
   typedef ke::HashMap<const uint8_t*,
                       ke::RefPtr<Block>,

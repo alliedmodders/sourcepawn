@@ -257,7 +257,7 @@ Parser::parse_enum(int vclass)
             exprconst(&value, nullptr, nullptr);
 
         if (field_name)
-            decl->fields().append(EnumField(pos, field_name, value));
+            decl->fields().push_back(EnumField(pos, field_name, value));
 
         if (multiplier == 1)
             value += size;
@@ -302,7 +302,7 @@ Parser::parse_pstruct()
 
         if (struct_decl) {
             auto name = gAtoms.add(decl.name);
-            struct_decl->fields().append(StructField(pos, name, decl.type));
+            struct_decl->fields().push_back(StructField(pos, name, decl.type));
         }
 
         require_newline(TerminatorPolicy::NewlineOrSemicolon);
@@ -342,7 +342,7 @@ Parser::parse_typeset()
     needtoken('{');
     while (!matchtoken('}')) {
         auto type = parse_function_type();
-        decl->types().append(type);
+        decl->types().push_back(type);
     }
 
     require_newline(TerminatorPolicy::NewlineOrSemicolon);
@@ -438,9 +438,9 @@ Parser::parse_const(int vclass)
         if (decl) {
             if (!list) {
                 list = new StmtList(var->pos());
-                list->stmts().append(decl);
+                list->stmts().push_back(decl);
             }
-            list->stmts().append(var);
+            list->stmts().push_back(var);
         } else {
             decl = var;
         }
@@ -547,7 +547,7 @@ Parser::plnge_rel(int* opstr, NewHierFn hier)
         auto pos = current_pos();
         Expr* right = (this->*hier)();
 
-        chain->ops().append(CompareOp(pos, opstr[opidx], right));
+        chain->ops().push_back(CompareOp(pos, opstr[opidx], right));
     } while (nextop(&opidx, opstr));
 
     return chain;
@@ -803,7 +803,7 @@ Parser::primary()
         CommaExpr* expr = new CommaExpr(current_pos());
         do {
             Expr* child = hier14();
-            expr->exprs().append(child);
+            expr->exprs().push_back(child);
         } while (matchtoken(','));
         needtoken(')');
         lexclr(FALSE); /* clear lex() push-back, it should have been
@@ -846,7 +846,7 @@ Parser::constant()
             ArrayExpr* expr = new ArrayExpr(pos);
             do {
                 Expr* child = hier14();
-                expr->exprs().append(child);
+                expr->exprs().push_back(child);
             } while (matchtoken(','));
             if (!needtoken('}'))
                 lexclr(FALSE);
@@ -887,10 +887,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
         if (!matchtoken('_'))
             expr = hier14();
 
-        ParsedArg arg;
-        arg.name = name;
-        arg.expr = expr;
-        call->args().append(arg);
+        call->args().emplace_back(name, expr);
 
         if (matchtoken(')'))
             break;
@@ -962,7 +959,7 @@ Parser::struct_init()
         }
 
         if (name && expr)
-            init->fields().append(StructInitField(name, expr));
+            init->fields().push_back(StructInitField(name, expr));
     } while (matchtoken(',') && !lexpeek('}'));
 
     needtoken('}');

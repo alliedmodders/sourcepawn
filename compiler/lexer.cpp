@@ -62,8 +62,8 @@ static int alpha(char c);
 #define SKIPPING (skiplevel > 0 && (ifstack[skiplevel - 1] & SKIPMODE) == SKIPMODE)
 
 static short icomment; /* currently in multiline comment? */
-static ke::Vector<short> sCommentStack;
-static ke::Vector<short> sPreprocIfStack;
+static std::vector<short> sCommentStack;
+static std::vector<short> sPreprocIfStack;
 static char ifstack[sCOMP_STACK]; /* "#if" stack */
 static short iflevel;             /* nesting level if #if/#else/#endif */
 static short skiplevel; /* level at which we started skipping (including nested #if .. #endif) */
@@ -86,7 +86,7 @@ plungequalifiedfile(char* name)
         fp = pc_opensrc(name);
         ext = strchr(name, '\0'); /* save position */
         if (fp == NULL) {
-            /* try to append an extension */
+            /* try to push_back an extension */
             strcpy(ext, extensions[ext_idx]);
             fp = pc_opensrc(name);
             if (fp == NULL)
@@ -101,14 +101,14 @@ plungequalifiedfile(char* name)
     if (sc_showincludes && sc_status == statFIRST) {
         fprintf(stdout, "Note: including file: %s\n", name);
     }
-    gInputFileStack.append(inpf);
-    gInputFilenameStack.append(inpfname);
-    sPreprocIfStack.append(iflevel);
+    gInputFileStack.push_back(inpf);
+    gInputFilenameStack.push_back(inpfname);
+    sPreprocIfStack.push_back(iflevel);
     assert(!SKIPPING);
     assert(skiplevel == iflevel); /* these two are always the same when "parsing" */
-    sCommentStack.append(icomment);
-    gCurrentFileStack.append(fcurrent);
-    gCurrentLineStack.append(fline);
+    sCommentStack.push_back(icomment);
+    gCurrentFileStack.push_back(fcurrent);
+    gCurrentLineStack.push_back(fline);
     inpfname = strdup(name); /* set name of include file */
     if (inpfname == NULL)
         error(FATAL_ERROR_OOM);
@@ -262,15 +262,15 @@ readline(unsigned char* line)
                     error(1, "*/", "-end of file-");
                 return;
             }
-            fline = gCurrentLineStack.popCopy();
-            fcurrent = gCurrentFileStack.popCopy();
-            icomment = sCommentStack.popCopy();
-            iflevel = sPreprocIfStack.popCopy();
+            fline = ke::PopBack(&gCurrentLineStack);
+            fcurrent = ke::PopBack(&gCurrentFileStack);
+            icomment = ke::PopBack(&sCommentStack);
+            iflevel = ke::PopBack(&sPreprocIfStack);
             skiplevel = iflevel; /* this condition held before including the file */
             assert(!SKIPPING);   /* idem ditto */
             free(inpfname);      /* return memory allocated for the include file name */
-            inpfname = gInputFilenameStack.popCopy();
-            inpf = gInputFileStack.popCopy();
+            inpfname = ke::PopBack(&gInputFilenameStack);
+            inpf = ke::PopBack(&gInputFileStack);
             insert_dbgfile(inpfname);
             setfiledirect(inpfname);
             assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpfname) == 0);
@@ -694,7 +694,7 @@ preproc_expr(cell* val, int* tag)
     substallpatterns(pline, sLINEMAX);
     assert((lptr - pline) <
            (int)strlen((char*)pline)); /* lptr must STILL point inside the string */
-    /* append a special symbol to the string, so the expression
+    /* push_back a special symbol to the string, so the expression
      * analyzer won't try to read a next line when it encounters
      * an end-of-line
      */
@@ -2945,7 +2945,7 @@ FunctionData::resizeArgs(size_t nargs)
     memset(&null_arg, 0, sizeof(null_arg));
 
     args.resize(nargs);
-    args.append(null_arg);
+    args.push_back(null_arg);
 }
 
 symbol::symbol()
@@ -3047,8 +3047,8 @@ symbol::add_reference_to(symbol* other)
         if (sym == other)
             return;
     }
-    refers_to_.append(other);
-    other->referred_from_.append(this);
+    refers_to_.push_back(other);
+    other->referred_from_.push_back(this);
     other->referred_from_count_++;
 }
 
@@ -3057,7 +3057,7 @@ symbol::drop_reference_from(symbol* from)
 {
 #if !defined(NDEBUG)
     bool found = false;
-    for (size_t i = 0; i < referred_from_.length(); i++) {
+    for (size_t i = 0; i < referred_from_.size(); i++) {
         if (referred_from_[i] == from) {
             referred_from_[i] = nullptr;
             found = true;
@@ -3323,11 +3323,11 @@ declare_handle_intrinsics()
         dtor->target = sym;
         strcpy(dtor->name, "~Handle");
         map->dtor = dtor.get();
-        map->methods.append(std::move(dtor));
+        map->methods.push_back(std::move(dtor));
 
         auto close = std::make_unique<methodmap_method_t>(map);
         close->target = sym;
         strcpy(close->name, "Close");
-        map->methods.append(std::move(close));
+        map->methods.push_back(std::move(close));
     }
 }

@@ -18,8 +18,9 @@
 
 #include "array-helpers.h"
 #include "types.h"
-#include <amtl/am-bits.h>
 #include <amtl/am-algorithm.h>
+#include <amtl/am-bits.h>
+#include <amtl/am-vector.h>
 #include <assert.h>
 #include <sp_vm_types.h>
 
@@ -32,19 +33,19 @@ bool
 ComputeArrayInfo(ArrayType* array, ArrayInfo* out)
 {
   out->base_type = array;
-  Vector<ArrayType*> work;
+  std::vector<ArrayType*> work;
 
   Type* iter = array;
   while (iter->isArray()) {
     ArrayType* array_type = iter->toArray();
     if (!array_type->hasFixedLength())
       break;
-    work.append(array_type);
+    work.push_back(array_type);
     iter = array_type->contained();
   }
 
   // Compute the final level first.
-  ArrayType* level = work.popCopy();
+  ArrayType* level = ke::PopBack(&work);
   uint64_t bytes = level->isCharArray()
                    ? CellLengthOfString(level->fixedLength()) * sizeof(cell_t)
                    : level->fixedLength() * sizeof(cell_t);
@@ -56,7 +57,7 @@ ComputeArrayInfo(ArrayType* array, ArrayInfo* out)
   // Compute each additional level, walking inwards.
   uint64_t iv_size = 0;
   while (!work.empty()) {
-    level = work.popCopy();
+    level = ke::PopBack(&work);
 
     if (!IsUint64MultiplySafe(iv_size, level->fixedLength()))
       return false;

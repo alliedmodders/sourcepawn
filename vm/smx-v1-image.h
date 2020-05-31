@@ -214,7 +214,7 @@ class SmxV1Image
   sp_file_hdr_t* hdr_;
   std::string error_;
   const char* header_strings_;
-  ke::Vector<Section> sections_;
+  std::vector<Section> sections_;
 
   const Section* names_section_;
   const char* names_;

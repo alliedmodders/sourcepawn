@@ -16,10 +16,10 @@
 #include <stdio.h>
 
 #include <utility>
+#include <vector>
 
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
-#include <amtl/am-vector.h>
 #include "plugin-runtime.h"
 #include "label.h"
 
@@ -56,8 +56,8 @@ class Block :
 
  public:
   ~Block() {
-    assert(!predecessors_.length());
-    assert(!successors_.length());
+    assert(!predecessors_.size());
+    assert(!successors_.size());
   }
 
   const uint8_t* start() const {
@@ -72,10 +72,10 @@ class Block :
   BlockEnd endType() const {
     return end_type_;
   }
-  const ke::Vector<ke::RefPtr<Block>>& predecessors() const {
+  const std::vector<ke::RefPtr<Block>>& predecessors() const {
     return predecessors_;
   }
-  const ke::Vector<ke::RefPtr<Block>>& successors() const {
+  const std::vector<ke::RefPtr<Block>>& successors() const {
     return successors_;
   }
   uint32_t id() const {
@@ -96,7 +96,7 @@ class Block :
   uint32_t numDominated() const {
     return num_dominated_;
   }
-  const ke::Vector<ke::RefPtr<Block>>& immediatelyDominated() const {
+  const std::vector<ke::RefPtr<Block>>& immediatelyDominated() const {
     return immediately_dominated_;
   }
   bool dominates(const Block* other) const {
@@ -146,8 +146,8 @@ class Block :
 
  private:
   ControlFlowGraph& graph_;
-  ke::Vector<ke::RefPtr<Block>> predecessors_;
-  ke::Vector<ke::RefPtr<Block>> successors_;
+  std::vector<ke::RefPtr<Block>> predecessors_;
+  std::vector<ke::RefPtr<Block>> successors_;
   std::unique_ptr<IBlockData> data_;
 
   // Note that |end| is dependent on end_type. If it's Insn, then end_ should
@@ -162,7 +162,7 @@ class Block :
 
   // Immediate dominator, and list of dominated blocks.
   ke::RefPtr<Block> idom_;
-  ke::Vector<ke::RefPtr<Block>> immediately_dominated_;
+  std::vector<ke::RefPtr<Block>> immediately_dominated_;
   // Dominator tree index.
   uint32_t domtree_id_;
   // The number of nodes this block dominates, including itself.

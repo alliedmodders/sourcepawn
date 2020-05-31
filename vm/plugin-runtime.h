@@ -108,7 +108,7 @@ class PluginRuntime
   RefPtr<MethodInfo> AcquireMethod(cell_t pcode_offset);
 
   // Return a list of all methods. The caller must own the environment lock.
-  const ke::Vector<RefPtr<MethodInfo>>& AllMethods() const;
+  const std::vector<RefPtr<MethodInfo>>& AllMethods() const;
 
   NativeEntry* NativeAt(size_t index) {
     return &natives_[index];
@@ -169,7 +169,7 @@ class PluginRuntime
   typedef ke::HashMap<ucell_t, RefPtr<MethodInfo>, FunctionMapPolicy> FunctionMap;
 
   FunctionMap function_map_;
-  ke::Vector<RefPtr<MethodInfo>> methods_;;
+  std::vector<RefPtr<MethodInfo>> methods_;;
 
   // Pause state.
   bool paused_;

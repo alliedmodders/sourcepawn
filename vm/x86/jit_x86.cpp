@@ -1002,7 +1002,7 @@ Compiler::visitHEAP(cell_t amount)
 bool
 Compiler::visitJUMP(cell_t offset)
 {
-  assert(block_->successors().length() == 1);
+  assert(block_->successors().size() == 1);
 
   Block* successor = block_->successors()[0];
   if (isNextBlock(successor)) {
@@ -1015,7 +1015,7 @@ Compiler::visitJUMP(cell_t offset)
   Label* target = successor->label();
   if (isBackedge(successor)) {
     __ jmp32(target);
-    backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
+    backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
   } else {
     __ jmp(target);
   }
@@ -1046,7 +1046,7 @@ Compiler::visitJcmp(CompareOp op, cell_t offset)
       return false;
   }
 
-  assert(block_->successors().length() == 2);
+  assert(block_->successors().size() == 2);
   Block* fallthrough = block_->successors()[0];
   Block* target = block_->successors()[1];
 
@@ -1054,7 +1054,7 @@ Compiler::visitJcmp(CompareOp op, cell_t offset)
 
   if (isBackedge(target)) {
     __ j32(cc, target->label());
-    backward_jumps_.append(BackwardJump(masm.pc(), op_cip_));
+    backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
 
     if (!isNextBlock(fallthrough))
       __ jmp(fallthrough->label());
@@ -1157,10 +1157,7 @@ bool
 Compiler::visitBOUNDS(uint32_t limit)
 {
   OutOfBoundsErrorPath* bounds = new OutOfBoundsErrorPath(op_cip_, limit);
-  if (!ool_paths_.append(bounds)) {
-    reportError(SP_ERROR_OUT_OF_MEMORY);
-    return false;
-  }
+  ool_paths_.push_back(bounds);
 
   __ cmpl(eax, limit);
   __ j(above, bounds->label());
@@ -1272,10 +1269,7 @@ Compiler::visitCALL(cell_t offset)
     // Need to emit a delayed thunk.
     CallThunk* thunk = new CallThunk(offset);
     __ callWithABI(thunk->label());
-    if (!ool_paths_.append(thunk)) {
-      reportError(SP_ERROR_OUT_OF_MEMORY);
-      return false;
-    }
+    ool_paths_.push_back(thunk);
   } else {
     // Function is already emitted, we can do a direct call.
     __ callWithABI(ExternalAddress(method->jit()->GetEntryAddress()));
@@ -1406,7 +1400,7 @@ Compiler::visitSWITCH(cell_t defaultOffset,
                       const CaseTableEntry* cases,
                       size_t ncases)
 {
-  assert(block_->successors().length() == ncases + 1);
+  assert(block_->successors().size() == ncases + 1);
   Block* defaultCase = block_->successors()[0];
 
   // Degenerate - 0 cases.
@@ -1539,8 +1533,7 @@ Compiler::jumpOnError(ConditionCode cc, int err)
 {
   // Note: we accept 0 for err. In this case we expect the error to be in eax.
   ErrorPath* path = new ErrorPath(op_cip_, err);
-  if (!ool_paths_.append(path))
-    reportError(SP_ERROR_OUT_OF_MEMORY);
+  ool_paths_.push_back(path);
 
   __ j(cc, path->label());
 }

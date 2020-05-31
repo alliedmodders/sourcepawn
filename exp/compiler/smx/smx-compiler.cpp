@@ -133,11 +133,11 @@ SmxCompiler::add_data()
 void
 SmxCompiler::add_natives()
 {
-  if (natives_.length())
-    qsort(natives_.buffer(), natives_.length(), sizeof(FunctionEntry), sort_functions);
+  if (natives_.size())
+    qsort(natives_.data(), natives_.size(), sizeof(FunctionEntry), sort_functions);
 
   RefPtr<SmxNativeSection> natives =  new SmxNativeSection(".natives");
-  for (size_t i = 0; i < natives_.length(); i++) {
+  for (size_t i = 0; i < natives_.size(); i++) {
     const FunctionEntry& entry = natives_[i];
 
     sp_file_natives_t& nf = natives->add();
@@ -152,11 +152,11 @@ void
 SmxCompiler::add_publics()
 {
   // :TODO: error
-  assert(publics_.length());
-  qsort(publics_.buffer(), publics_.length(), sizeof(FunctionEntry), sort_functions);
+  assert(publics_.size());
+  qsort(publics_.data(), publics_.size(), sizeof(FunctionEntry), sort_functions);
 
   RefPtr<SmxPublicSection> publics = new SmxPublicSection(".publics");
-  for (size_t i = 0; i < publics_.length(); i++) {
+  for (size_t i = 0; i < publics_.size(); i++) {
     const FunctionEntry& entry = publics_[i];
 
     sp_file_publics_t& pf = publics->add();
@@ -177,7 +177,7 @@ sort_vars(const void* a1, const void* a2)
 void
 SmxCompiler::add_pubvars()
 {
-  qsort(program_->globals.buffer(), program_->globals.length(), sizeof(ast::VarDecl*), sort_vars);
+  qsort(program_->globals.data(), program_->globals.size(), sizeof(ast::VarDecl*), sort_vars);
 
   RefPtr<SmxPubvarSection> pubvars = new SmxPubvarSection(".pubvars");
   for (ast::VarDecl* decl : program_->globals) {
@@ -219,10 +219,10 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
 
   ast::FunctionSignature* sig = fun->signature();
   ast::ParameterList* params = sig->parameters();
-  if (params->length() >= kMaxArgSlots)
+  if (params->size() >= kMaxArgSlots)
     cc_.report(fun->loc(), rmsg::too_many_arguments);
 
-  for (size_t i = 0; i < params->length(); i++) {
+  for (size_t i = 0; i < params->size(); i++) {
     VariableSymbol* param = params->at(i)->sym();
     param->allocate(StorageClass::Argument, (i + kFirstArgSlot) * sizeof(cell_t));
   }
@@ -260,7 +260,7 @@ SmxCompiler::generate(ast::FunctionStatement* fun)
     name = cc_.add(decorated.get(), length);
   }
 
-  publics_.append(FunctionEntry(name, fun));
+  publics_.push_back(FunctionEntry(name, fun));
 }
 
 void
@@ -340,7 +340,7 @@ SmxCompiler::generateBlock(ast::BlockStatement* block)
   int32_t stk_usage = cur_var_stk_;
 
   ast::StatementList* statements = block->statements();
-  for (size_t i = 0; i < statements->length(); i++) {
+  for (size_t i = 0; i < statements->size(); i++) {
     ast::Statement* stmt = statements->at(i);
     generateStatement(stmt);
   }
@@ -535,7 +535,7 @@ SmxCompiler::generateIf(ast::IfStatement* stmt)
 {
   Label taken, fallthrough;
 
-  for (size_t i = 0; i < stmt->clauses()->length(); i++) {
+  for (size_t i = 0; i < stmt->clauses()->size(); i++) {
     const ast::IfClause& clause = stmt->clauses()->at(i);
 
     // The previous false jump goes to the next condition.
@@ -573,9 +573,9 @@ SmxCompiler::generateSwitch(ast::SwitchStatement* stmt)
   PoolList<ast::Case*>* cases = stmt->cases();
 
   size_t total_cases = 0;
-  for (size_t i = 0; i < cases->length(); i++) {
+  for (size_t i = 0; i < cases->size(); i++) {
     ast::Case* entry = cases->at(i);
-    total_cases += entry->values()->length();
+    total_cases += entry->values()->size();
   }
 
   if (total_cases >= INT_MAX) {
@@ -591,13 +591,13 @@ SmxCompiler::generateSwitch(ast::SwitchStatement* stmt)
   __ bind(&casetbl);
   __ casetbl(total_cases, &defcase);
 
-  std::unique_ptr<Label[]> labels(new Label[cases->length()]);
+  std::unique_ptr<Label[]> labels(new Label[cases->size()]);
 
   // Generate entries for the CASETBL opcode above.
-  for (size_t i = 0; i < cases->length(); i++) {
+  for (size_t i = 0; i < cases->size(); i++) {
     ast::Case* entry = cases->at(i);
 
-    for (size_t j = 0; j < entry->values()->length(); j++) {
+    for (size_t j = 0; j < entry->values()->size(); j++) {
       cell_t value = entry->values()->at(j);
       __ casetbl_entry(value, &labels[i]);
     }
@@ -606,14 +606,14 @@ SmxCompiler::generateSwitch(ast::SwitchStatement* stmt)
   Label done;
 
   // Now generate the actual switch cases.
-  for (size_t i = 0; i < cases->length(); i++) {
+  for (size_t i = 0; i < cases->size(); i++) {
     ast::Case* entry = cases->at(i);
 
     __ bind(&labels[i]);
     generateStatement(entry->statement());
 
     // All but the very last case should jump past the other cases.
-    if (i != cases->length() - 1 || stmt->defaultCase())
+    if (i != cases->size() - 1 || stmt->defaultCase())
       __ opcode(OP_JUMP, &done);
   }
 
@@ -1088,11 +1088,11 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
 
   // SMX v1 requires that variadic arguments be passed by-reference, for no
   // discernable reason.
-  size_t formal_argc = sig->parameters()->length();
+  size_t formal_argc = sig->parameters()->size();
   if (!sig->parameters()->empty() &&
       sig->parameters()->back()->sym()->type()->isVariadic())
   {
-    formal_argc = sig->parameters()->length() - 1;
+    formal_argc = sig->parameters()->size() - 1;
   }
 
   // We have to kill pri/alt before entering the argument push sequence, since
@@ -1120,13 +1120,13 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
 
   // This would overflow the PUSH_C opcode below.
   static const size_t kMaxArgs = (INT_MAX / sizeof(cell_t)) - 1;
-  if (args->length() > kMaxArgs)
+  if (args->size() > kMaxArgs)
     cc_.report(expr->src()->loc(), rmsg::too_many_arguments);
 
-  for (size_t i = args->length() - 1; i < args->length(); i--) {
+  for (size_t i = args->size() - 1; i < args->size(); i--) {
     sema::Expr* expr = args->at(i);
 
-    size_t opstack_size = operand_stack_.length();
+    size_t opstack_size = operand_stack_.size();
 
     if (i >= formal_argc &&
         !expr->isAddressable() &&
@@ -1149,7 +1149,7 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
     // Make sure emit_into does not cause any spills (or, if it did, that the
     // spills were cleaned up internally). Otherwise the stack will be
     // misaligned.
-    if (opstack_size != operand_stack_.length()) {
+    if (opstack_size != operand_stack_.size()) {
       cc_.report(SourceLocation(), rmsg::regalloc_error) <<
         "argument pushed too many values onto the stack";
     }
@@ -1158,12 +1158,12 @@ SmxCompiler::emitCall(sema::CallExpr* expr, ValueDest dest)
   if (sig->native()) {
     // Mark the native as used.
     if (!fun->impl()->address()->used())
-      natives_.append(FunctionEntry(fun->name(), fun->impl()));
+      natives_.push_back(FunctionEntry(fun->name(), fun->impl()));
 
-    __ sysreq_n(fun->impl()->address(), (uint32_t)args->length());
+    __ sysreq_n(fun->impl()->address(), (uint32_t)args->size());
     assert(fun->impl()->address()->used());
   } else {
-    __ opcode(OP_PUSH_C, cell_t(args->length()));
+    __ opcode(OP_PUSH_C, cell_t(args->size()));
     __ opcode(OP_CALL, fun->impl()->address());
   }
 
@@ -1237,7 +1237,7 @@ SmxCompiler::generateLegacyStructData(ast::VarDecl* stmt)
                                ? stmt->sema_init()->toStructInitExpr()
                                : nullptr;
 
-  Vector<int32_t> values;
+  std::vector<int32_t> values;
 
   size_t field_index = 0;
   for (ast::LayoutDecl* decl : *body) {
@@ -1265,7 +1265,7 @@ SmxCompiler::generateLegacyStructData(ast::VarDecl* stmt)
         value = 0;
     }
 
-    values.append(value);
+    values.push_back(value);
     field_index++;
   }
 
@@ -1699,7 +1699,7 @@ SmxCompiler::gen_array_iv(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
 
   sema::ArrayInitExpr* init = expr ? expr->toArrayInitExpr() : nullptr;
   for (int32_t i = 0; i < type->fixedLength(); i++) {
-    sema::Expr* child_init = init && size_t(i) < init->exprs()->length()
+    sema::Expr* child_init = init && size_t(i) < init->exprs()->size()
                              ? init->exprs()->at(i)
                              : nullptr;
     int32_t next_array = gen_array_iv(child, child_init, b);
@@ -1737,9 +1737,9 @@ SmxCompiler::gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
 
   sema::ArrayInitExpr* lit = expr->toArrayInitExpr();
 
-  assert(lit->exprs()->length() <= size_t(type->fixedLength()));
+  assert(lit->exprs()->size() <= size_t(type->fixedLength()));
   cell_t prev2 = 0, prev1 = 0;
-  for (size_t i = 0; i < lit->exprs()->length(); i++) {
+  for (size_t i = 0; i < lit->exprs()->size(); i++) {
     sema::Expr* ev = lit->exprs()->at(i);
     BoxedValue box;
     if (!ev->getBoxedValue(&box)) {
@@ -1756,7 +1756,7 @@ SmxCompiler::gen_array_data(ArrayType* type, sema::Expr* expr, ArrayBuilder& b)
   cell_t step = prev1 - prev2;
   if (!contained->isPrimitive(PrimitiveType::Int32))
     step = 0;
-  for (int32_t i = int32_t(lit->exprs()->length()); i < type->fixedLength(); i++) {
+  for (int32_t i = int32_t(lit->exprs()->size()); i < type->fixedLength(); i++) {
     prev1 += step;
     *data_.ptr<cell_t>(data_addr + i * sizeof(cell_t)) = prev1;
   }
@@ -1781,13 +1781,13 @@ SmxCompiler::initialize_dynamic_array(ast::VarDecl* decl, sema::Expr* expr)
     __ opcode(OP_MOVS, arrayLength * sizeof(cell_t));
   } else {
     sema::NewArrayExpr* ctor = expr->toNewArrayExpr();
-    for (size_t i = 0; i < ctor->exprs()->length(); i++) {
+    for (size_t i = 0; i < ctor->exprs()->size(); i++) {
       sema::Expr* dim = ctor->exprs()->at(i);
       if (!emit_into(dim, ValueDest::Stack))
         return;
     }
 
-    int32_t argc = int32_t(ctor->exprs()->length());
+    int32_t argc = int32_t(ctor->exprs()->size());
     if (decl->must_zero_init())
       __ opcode(OP_GENARRAY_Z, argc);
     else
@@ -1897,8 +1897,8 @@ void
 SmxCompiler::test_logical(sema::BinaryExpr* bin, bool jumpOnTrue, Label* taken, Label* fallthrough)
 {
   TokenKind token = bin->token();
-  ke::Vector<sema::Expr*> sequence = flatten(bin);
-  assert(sequence.length() >= 2);
+  std::vector<sema::Expr*> sequence = flatten(bin);
+  assert(sequence.size() >= 2);
 
   // a || b || c .... given jumpOnTrue, should be:
   //
@@ -1941,7 +1941,7 @@ SmxCompiler::test_logical(sema::BinaryExpr* bin, bool jumpOnTrue, Label* taken, 
   //
   // Note: to make this slightly easier to read, we make all this logic
   // explicit below rather than collapsing it into a single test() call.
-  for (size_t i = 0; i < sequence.length() - 1; i++) {
+  for (size_t i = 0; i < sequence.size() - 1; i++) {
     sema::Expr* expr = sequence[i];
     if (token == TOK_OR) {
       if (jumpOnTrue)
@@ -1961,21 +1961,21 @@ SmxCompiler::test_logical(sema::BinaryExpr* bin, bool jumpOnTrue, Label* taken, 
 }
 
 static inline void
-flatten_recursive(sema::Expr* expr, TokenKind token, ke::Vector<sema::Expr*>* out)
+flatten_recursive(sema::Expr* expr, TokenKind token, std::vector<sema::Expr*>* out)
 {
   sema::BinaryExpr* bin = expr->asBinaryExpr();
   if (bin && bin->token() == token) {
     flatten_recursive(bin->left(), token, out);
     flatten_recursive(bin->right(), token, out);
   } else {
-    out->append(expr);
+    out->push_back(expr);
   }
 }
 
-ke::Vector<sema::Expr*>
+std::vector<sema::Expr*>
 SmxCompiler::flatten(sema::BinaryExpr* expr)
 {
-  ke::Vector<sema::Expr*> out;
+  std::vector<sema::Expr*> out;
   flatten_recursive(expr->left(), expr->token(), &out);
   flatten_recursive(expr->right(), expr->token(), &out);
   return out;
@@ -2048,7 +2048,7 @@ SmxCompiler::preserve(ValueDest dest)
   assert(dest == ValueDest::Pri || dest == ValueDest::Alt);
 
   SValue value(dest);
-  operand_stack_.append(value);
+  operand_stack_.push_back(value);
 
   uint64_t* slot = (dest == ValueDest::Pri)
                    ? &pri_value_
@@ -2074,7 +2074,7 @@ SmxCompiler::restore(uint64_t id)
     return;
   }
 
-  SValue value = operand_stack_.popCopy();
+  SValue value = ke::PopBack(&operand_stack_);
   assert(value.where() == ValueDest::Pri || value.where() == ValueDest::Alt);
 
   uint64_t* slot = nullptr;

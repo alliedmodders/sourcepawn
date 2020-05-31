@@ -84,8 +84,8 @@ VarDecl::AnalyzePstruct()
     auto type = gTypes.find(sym_->tag);
     auto ps = type->asStruct();
 
-    ke::Vector<bool> visited;
-    visited.resize(ps->args.length());
+    std::vector<bool> visited;
+    visited.resize(ps->args.size());
 
     // Do as much checking as we can before bailing out.
     bool ok = true;
@@ -96,14 +96,14 @@ VarDecl::AnalyzePstruct()
         return false;
 
     // Fill in default values as needed.
-    for (size_t i = 0; i < visited.length(); i++) {
+    for (size_t i = 0; i < visited.size(); i++) {
         if (visited[i])
             continue;
         if (ps->args[i]->ident == iREFARRAY) {
             assert(ps->args[i]->tag == pc_tag_string);
 
             auto expr = new StringExpr(pos_, "", 0);
-            init->fields().append(StructInitField(ps->args[i]->name, expr));
+            init->fields().push_back(StructInitField(ps->args[i]->name, expr));
         }
     }
 
@@ -112,7 +112,7 @@ VarDecl::AnalyzePstruct()
 
 bool
 VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
-                           ke::Vector<bool>* visited)
+                           std::vector<bool>* visited)
 {
     auto arg = pstructs_getarg(ps, field.name);
     if (!arg) {
@@ -239,9 +239,9 @@ ParseNode::error(const token_pos_t& pos, int number, ...)
 }
 
 void
-Expr::FlattenLogical(int token, ke::Vector<Expr*>* out)
+Expr::FlattenLogical(int token, std::vector<Expr*>* out)
 {
-    out->append(this);
+    out->push_back(this);
 }
 
 
@@ -651,7 +651,7 @@ BinaryExpr::ValidateAssignmentRHS()
 }
 
 void
-LogicalExpr::FlattenLogical(int token, ke::Vector<Expr*>* out)
+LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
 {
     if (token_ == token) {
         left_->FlattenLogical(token, out);
@@ -991,7 +991,7 @@ CommaExpr::Analyze()
     }
 
     Expr* last = exprs_.back();
-    if (exprs_.length() > 1 && last->lvalue()) {
+    if (exprs_.size() > 1 && last->lvalue()) {
         last = new RvalueExpr(last);
         exprs_.back() = last;
     }
@@ -1001,7 +1001,7 @@ CommaExpr::Analyze()
 
     // Don't propagate a constant if it would cause Emit() to shortcut and not
     // emit other expressions.
-    if (exprs_.length() > 1 && val_.ident == iCONSTEXPR)
+    if (exprs_.size() > 1 && val_.ident == iCONSTEXPR)
         val_.ident = iEXPRESSION;
     return true;
 }
@@ -1036,7 +1036,7 @@ ArrayExpr::Analyze()
     }
 
     val_.ident = iARRAY;
-    val_.constval = exprs_.length();
+    val_.constval = exprs_.size();
     val_.tag = lasttag;
     return true;
 }
@@ -1378,7 +1378,7 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
         var->set_data(std::make_unique<EnumStructVarData>());
 
     EnumStructVarData* es_var = var->data()->asEnumStructVar();
-    es_var->children.append(std::make_unique<symbol>(*field_));
+    es_var->children.push_back(std::make_unique<symbol>(*field_));
 
     symbol* child = es_var->children.back().get();
     child->setName(name_);
@@ -1626,7 +1626,7 @@ CallExpr::Analyze()
             error(pos_, 45); // too many function arguments
             return false;
         }
-        if (argpos < argv_.length() && argv_[argpos].expr) {
+        if (argpos < argv_.size() && argv_[argpos].expr) {
             error(pos_, 58); // argument already set
             return false;
         }
@@ -1664,7 +1664,7 @@ CallExpr::Analyze()
         auto& arg = arglist[argidx];
         if (arg.ident == 0 || arg.ident == iVARARGS)
             break;
-        if (argidx >= argv_.length() || !argv_[argidx].expr) {
+        if (argidx >= argv_.size() || !argv_[argidx].expr) {
             if (!ProcessArg(&arg, nullptr, argidx))
                 return false;
         }
@@ -1683,8 +1683,8 @@ CallExpr::Analyze()
 bool
 CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 {
-    while (pos >= argv_.length())
-        argv_.append(ComputedArg{});
+    while (pos >= argv_.size())
+        argv_.push_back(ComputedArg{});
 
     unsigned int visual_pos = implicit_this_ ? pos : pos + 1;
 

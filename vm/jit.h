@@ -92,7 +92,7 @@ class CompilerBase : public PcodeVisitor
     CipMapEntry entry;
     entry.cipoffs = uintptr_t(cip) - uintptr_t(code_start_);
     entry.pcoffs = masm.pc();
-    cip_map_.append(entry);
+    cip_map_.push_back(entry);
   }
 
   bool isNextBlock(Block* target) {
@@ -124,7 +124,7 @@ class CompilerBase : public PcodeVisitor
 
   MacroAssembler masm;
 
-  ke::Vector<OutOfLinePath*> ool_paths_;
+  std::vector<OutOfLinePath*> ool_paths_;
 
   Label throw_timeout_;
   Label throw_error_code_[SP_MAX_ERROR_CODES];
@@ -135,8 +135,8 @@ class CompilerBase : public PcodeVisitor
   // Debugging.
   Label debug_break_;
 
-  ke::Vector<BackwardJump> backward_jumps_;
-  ke::Vector<CipMapEntry> cip_map_;
+  std::vector<BackwardJump> backward_jumps_;
+  std::vector<CipMapEntry> cip_map_;
 };
 
 } // namespace sp

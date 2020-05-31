@@ -26,6 +26,7 @@
 #include <memory>
 #include <new>
 
+#include <amtl/am-bits.h>
 #include <amtl/am-fixedarray.h>
 #include <amtl/am-vector.h>
 
@@ -49,7 +50,7 @@ class PoolAllocator final
     static const size_t kMaxReserveSize = 64 * 1024;
 
   private:
-    ke::Vector<std::unique_ptr<Pool>> pools_;
+    std::vector<std::unique_ptr<Pool>> pools_;
 
   private:
     void unwind(char* pos);
@@ -72,7 +73,7 @@ class PoolAllocator final
 
     void* rawAllocate(size_t bytes) {
         // Guarantee malloc alignment.
-        size_t actualBytes = ke::Align(bytes, ke::kMallocAlignment);
+        size_t actualBytes = ke::Align(bytes, alignof(max_align_t));
         Pool* last = pools_.empty() ? nullptr : pools_.back().get();
         if (!last || (size_t(last->end - last->ptr) < actualBytes))
             last = ensurePool(actualBytes);
@@ -180,10 +181,29 @@ class PoolAllocationPolicy
   public:
     void* am_malloc(size_t bytes);
     void am_free(void* ptr);
+
+    static void* Malloc(size_t bytes);
 };
 
 template <typename T>
-class PoolList final : public ke::Vector<T, PoolAllocationPolicy>
+class StlPoolAllocator
+{
+  public:
+    typedef T value_type;
+    typedef std::true_type propagate_on_container_move_assignment;
+    typedef std::true_type propagate_on_container_copy_assignment;
+    typedef std::true_type propagate_on_container_swap;
+
+    static T* allocate(size_t n, const void* = nullptr) {
+        if (!ke::IsUintMultiplySafe(n, sizeof(T)))
+            throw std::bad_alloc{};
+        return reinterpret_cast<T*>(PoolAllocationPolicy::Malloc(n * sizeof(T)));
+    }
+    void deallocate(T* p, size_t n) {}
+};
+
+template <typename T>
+class PoolList final : public std::vector<T, StlPoolAllocator<T>>
 {
 };
 

@@ -66,7 +66,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     indent();
     {
       ast::StatementList* statements = body->statements();
-      for (size_t i = 0; i < statements->length(); i++) {
+      for (size_t i = 0; i < statements->size(); i++) {
         ast::Statement* stmt = statements->at(i);
         stmt->accept(this);
       }
@@ -157,7 +157,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     fprintf(fp_, "- IfStatement\n");
     indent();
     {
-      for (size_t i = 0; i < node->clauses()->length(); i++) {
+      for (size_t i = 0; i < node->clauses()->size(); i++) {
         const ast::IfClause& clause = node->clauses()->at(i);
         printExpr(clause.sema_cond);
         clause.body->accept(this);
@@ -173,14 +173,14 @@ class SemaPrinter : public ast::StrictAstVisitor
     fprintf(fp_, "- SwitchStatement\n");
     indent();
     {
-      for (size_t i = 0; i < node->cases()->length(); i++) {
+      for (size_t i = 0; i < node->cases()->size(); i++) {
         ast::Case* entry = node->cases()->at(i);
 
         prefix();
         fprintf(fp_, "case: ");
-        for (size_t j = 0; j < entry->values()->length(); j++) {
+        for (size_t j = 0; j < entry->values()->size(); j++) {
           fprintf(fp_, "%d", entry->values()->at(j));
-          if (j != entry->values()->length() - 1)
+          if (j != entry->values()->size() - 1)
             fprintf(fp_, ",");
         }
         fprintf(fp_, "\n");
@@ -284,7 +284,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     indent();
     {
       printExpr(expr->callee());
-      for (size_t i = 0; i < expr->args()->length(); i++)
+      for (size_t i = 0; i < expr->args()->size(); i++)
         printExpr(expr->args()->at(i));
     }
     unindent();
@@ -421,7 +421,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     enter(expr, expr->type());
     indent();
     {
-      for (size_t i = 0; i < expr->exprs()->length(); i++) {
+      for (size_t i = 0; i < expr->exprs()->size(); i++) {
         sema::Expr* e = expr->exprs()->at(i);
         printExpr(e);
       }
@@ -437,7 +437,7 @@ class SemaPrinter : public ast::StrictAstVisitor
     enter(expr, expr->type());
     indent();
     {
-      for (size_t i = 0; i < expr->exprs()->length(); i++) {
+      for (size_t i = 0; i < expr->exprs()->size(); i++) {
         sema::Expr* e = expr->exprs()->at(i);
         printExpr(e);
       }
@@ -480,13 +480,13 @@ class SemaPrinter : public ast::StrictAstVisitor
 
   void dump(ast::FunctionSignature* sig) {
     dump(sig->returnType(), nullptr);
-    if (!sig->parameters()->length()) {
+    if (!sig->parameters()->size()) {
       fprintf(fp_, " ()\n");
       return;
     }
     fprintf(fp_, " (\n");
     indent();
-    for (size_t i = 0; i < sig->parameters()->length(); i++) {
+    for (size_t i = 0; i < sig->parameters()->size(); i++) {
       prefix();
       ast::VarDecl* param = sig->parameters()->at(i);
       dump(param->te(), param->name());

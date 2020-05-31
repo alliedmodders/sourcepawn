@@ -149,8 +149,8 @@ class JsonObject : public JsonValue
   }
 
   void add(Atom* key, JsonValue* value) {
-    keys_.append(key);
-    values_.append(value);
+    keys_.push_back(key);
+    values_.push_back(value);
   }
 
   void Render(JsonRenderer* renderer) override {
@@ -169,10 +169,10 @@ class JsonList : public JsonValue
     return items_;
   }
   void add(JsonValue* value) {
-    items_.append(value);
+    items_.push_back(value);
   }
   size_t length() const {
-    return items_.length();
+    return items_.size();
   }
 
   void Render(JsonRenderer* renderer) override {

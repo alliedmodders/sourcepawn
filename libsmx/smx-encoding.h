@@ -24,14 +24,14 @@
 namespace sp {
 
 static inline void
-CompactEncodeUint32(ke::Vector<uint8_t>& out, uint32_t value)
+CompactEncodeUint32(std::vector<uint8_t>& out, uint32_t value)
 {
   uint32_t copy = value;
   do {
     uint8_t byte = uint8_t(copy & 0x7f);
     if (copy > 0x7f)
       byte |= 0x80;
-    out.append(byte);
+    out.push_back(byte);
     copy >>= 7;
   } while (copy);
 }

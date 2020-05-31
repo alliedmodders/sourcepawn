@@ -52,8 +52,8 @@ VarDecl::EmitPstruct()
     auto type = gTypes.find(sym_->tag);
     auto ps = type->asStruct();
 
-    ke::Vector<cell> values;
-    values.resize(ps->args.length());
+    std::vector<cell> values;
+    values.resize(ps->args.size());
 
     sym_->codeaddr = code_idx;
     begdseg();
@@ -351,7 +351,7 @@ LogicalExpr::DoEmit()
 void
 LogicalExpr::EmitTest(bool jump_on_true, int target)
 {
-    ke::Vector<Expr*> sequence;
+    std::vector<Expr*> sequence;
     FlattenLogical(token_, &sequence);
 
     // a || b || c .... given jumpOnTrue, should be:
@@ -397,7 +397,7 @@ LogicalExpr::EmitTest(bool jump_on_true, int target)
     // explicit below rather than collapsing it into a single test() call.
 
     int fallthrough = getlabel();
-    for (size_t i = 0; i < sequence.length() - 1; i++) {
+    for (size_t i = 0; i < sequence.size() - 1; i++) {
         Expr* expr = sequence[i];
         if (token_ == tlOR) {
             if (jump_on_true)
@@ -519,7 +519,7 @@ CommaExpr::DoEmit()
 
 void
 CommaExpr::EmitTest(bool jump_on_true, int target) {
-    for (size_t i = 0; i < exprs_.length() - 1; i++)
+    for (size_t i = 0; i < exprs_.size() - 1; i++)
         exprs_[i]->Emit();
 
     exprs_.back()->EmitTest(jump_on_true, target);
@@ -663,7 +663,7 @@ CallExpr::DoEmit()
     // Everything heap-allocated after here is owned by the callee.
     pushheaplist();
 
-    for (size_t i = argv_.length() - 1; i < argv_.length(); i--) {
+    for (size_t i = argv_.size() - 1; i < argv_.size(); i--) {
         const auto& expr = argv_[i].expr;
         const auto& arg = argv_[i].arg;
 
@@ -720,7 +720,7 @@ CallExpr::DoEmit()
         markexpr(sPARM, NULL, 0); // mark the end of a sub-expression
     }
 
-    ffcall(sym_, argv_.length());
+    ffcall(sym_, argv_.size());
 
     if (val_.sym)
         popreg(sPRI); // Pop hidden parameter as function result
