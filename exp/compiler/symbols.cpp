@@ -60,7 +60,7 @@ FunctionSymbol::addShadow(FunctionStatement* stmt)
 {
   if (!shadows_)
     shadows_ = new (POOL()) FuncStmtList();
-  shadows_->append(stmt);
+  shadows_->push_back(stmt);
 }
 
 // If a function has a body, or its implementation is native, we consider it
@@ -82,7 +82,7 @@ FunctionSymbol::impl() const
   }
 
   FunctionStatement* candidate = nullptr;
-  for (size_t i = 0; i < shadows_->length(); i++) {
+  for (size_t i = 0; i < shadows_->size(); i++) {
     FunctionStatement* stmt = shadows_->at(i);
     if (IsCandidateFunctionImpl(stmt)) {
       // We don't allow overloading yet.

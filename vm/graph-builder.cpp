@@ -83,7 +83,7 @@ GraphBuilder::scan()
       if (work_queue_.empty())
         return true;
 
-      current_ = work_queue_.popCopy();
+      current_ = ke::PopBack(&work_queue_);
       assert(!current_->ended());
 
       // Set the cip_ accordingly and proceed.
@@ -232,13 +232,13 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState
   cell_t ncases = read();
 
   // Add the default case.
-  Vector<cell_t> cases;
-  cases.append(read());
+  std::vector<cell_t> cases;
+  cases.push_back(read());
 
   // Add all cases.
   for (cell_t i = 0; i < ncases; i++) {
     read();
-    cases.append(read());
+    cases.push_back(read());
   }
 
   // Process each case.
@@ -287,7 +287,7 @@ GraphBuilder::enqueueBlock(Block* block)
   if (block->visited())
     return;
 
-  work_queue_.append(block);
+  work_queue_.push_back(block);
   block->setVisited();
 }
 
@@ -434,9 +434,9 @@ GraphBuilder::cleanup()
 
   // Find all reachable blocks, from the entrypoint.
   graph_->entry()->setVisited();
-  work_queue_.append(graph_->entry());
+  work_queue_.push_back(graph_->entry());
   while (!work_queue_.empty()) {
-    ke::RefPtr<Block> block = work_queue_.popCopy();
+    ke::RefPtr<Block> block = ke::PopBack(&work_queue_);
     assert(block->visited());
 
     if (!block->ended()) {
@@ -448,7 +448,7 @@ GraphBuilder::cleanup()
     for (const auto& successor : block->successors()) {
       if (successor->visited())
         continue;
-      work_queue_.append(successor);
+      work_queue_.push_back(successor);
       successor->setVisited();
     }
   }

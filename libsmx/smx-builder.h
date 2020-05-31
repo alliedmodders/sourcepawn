@@ -131,34 +131,34 @@ class SmxListSection : public SmxSection
   {
   }
 
-  void append(const T& t) {
-    list_.append(t);
+  void push_back(const T& t) {
+    list_.push_back(t);
   }
   T& add() {
-    list_.append(T());
+    list_.push_back(T());
     return list_.back();
   }
   void add(const T& t) {
-    list_.append(t);
+    list_.push_back(t);
   }
   T& at(size_t index) {
     return list_[index];
   }
   virtual bool write(ISmxBuffer* buf) override {
-    return buf->write(list_.buffer(), list_.length() * sizeof(T));
+    return buf->write(list_.data(), list_.size() * sizeof(T));
   }
   virtual size_t length() const override {
     return count() * sizeof(T);
   }
   size_t count() const {
-    return list_.length();
+    return list_.size();
   }
   bool empty() const override {
     return list_.empty();
   }
 
  private:
-  ke::Vector<T> list_;
+  std::vector<T> list_;
 };
 
 // An SmxRttiTable is an SmxListSection that is preceded by an RTTI header.
@@ -215,7 +215,7 @@ class SmxNameTable : public SmxSection
 
     uint32_t index = buffer_size_;
     name_table_.add(i, str, index);
-    names_.append(str);
+    names_.push_back(str);
     buffer_size_ += str->length() + 1;
     return index;
   }
@@ -237,7 +237,7 @@ class SmxNameTable : public SmxSection
   typedef ke::HashMap<Atom*, size_t, HashPolicy> NameTable;
 
   NameTable name_table_;
-  ke::Vector<Atom*> names_;
+  std::vector<Atom*> names_;
   uint32_t buffer_size_;
 };
 
@@ -249,15 +249,15 @@ class SmxBuilder
   bool write(ISmxBuffer* buf);
 
   void add(const ke::RefPtr<SmxSection>& section) {
-    sections_.append(section);
+    sections_.push_back(section);
   }
   void addIfNotEmpty(const ke::RefPtr<SmxSection>& section) {
     if (!section->empty())
-      sections_.append(section);
+      sections_.push_back(section);
   }
 
  private:
-  ke::Vector<ke::RefPtr<SmxSection>> sections_;
+  std::vector<ke::RefPtr<SmxSection>> sections_;
 };
 
 } // namespace sp

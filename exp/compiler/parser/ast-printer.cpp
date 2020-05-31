@@ -54,13 +54,13 @@ class AstPrinter : public AstVisitor
 
   void dump(FunctionSignature* sig) {
     dump(sig->returnType(), nullptr);
-    if (!sig->parameters()->length()) {
+    if (!sig->parameters()->size()) {
       fprintf(fp_, " ()\n");
       return;
     }
     fprintf(fp_, " (\n");
     indent();
-    for (size_t i = 0; i < sig->parameters()->length(); i++) {
+    for (size_t i = 0; i < sig->parameters()->size(); i++) {
       prefix();
       VarDecl* param = sig->parameters()->at(i);
       dump(param->te(), param->name());
@@ -87,7 +87,7 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "[ CallExpression\n");
     indent();
     node->callee()->accept(this);
-    for (size_t i = 0; i < node->arguments()->length(); i++)
+    for (size_t i = 0; i < node->arguments()->size(); i++)
       node->arguments()->at(i)->accept(this);
     unindent();
   }
@@ -160,7 +160,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ CallNewExpr (%s)\n", BuildTypeName(node->te(), nullptr).c_str());
     indent();
-    for (size_t i = 0; i < node->arguments()->length(); i++)
+    for (size_t i = 0; i < node->arguments()->size(); i++)
       node->arguments()->at(i)->accept(this);
     unindent();
   }
@@ -168,7 +168,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ NewArrayeExpr (%s)\n", BuildTypeName(node->te(), nullptr).c_str());
     indent();
-    for (size_t i = 0; i < node->dims()->length(); i++) {
+    for (size_t i = 0; i < node->dims()->size(); i++) {
       if (node->dims()->at(i))
         node->dims()->at(i)->accept(this);
     }
@@ -206,7 +206,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ BlockStatement\n");
     indent();
-    for (size_t i = 0; i < node->statements()->length(); i++)
+    for (size_t i = 0; i < node->statements()->size(); i++)
       node->statements()->at(i)->accept(this);
     unindent();
   }
@@ -240,7 +240,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ IfStatement\n");
     indent();
-    for (size_t i = 0; i < node->clauses()->length(); i++) {
+    for (size_t i = 0; i < node->clauses()->size(); i++) {
       const IfClause& clause = node->clauses()->at(i);
       prefix();
       fprintf(fp_, "clause:\n");
@@ -280,7 +280,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ EnumStatement (%s)\n", node->name() ? node->name()->chars() : "<anonymous>");
     indent();
-    for (size_t i = 0; i < node->entries()->length(); i++)
+    for (size_t i = 0; i < node->entries()->size(); i++)
       node->entries()->at(i)->accept(this);
     unindent();
   }
@@ -342,11 +342,11 @@ class AstPrinter : public AstVisitor
     fprintf(fp_, "[ SwitchStatement\n");
     indent();
     node->expression()->accept(this);
-    for (size_t i = 0; i < node->cases()->length(); i++) {
+    for (size_t i = 0; i < node->cases()->size(); i++) {
       Case* c = node->cases()->at(i);
       c->expression()->accept(this);
       if (c->others()) {
-        for (size_t j = 0; j < c->others()->length(); j++)
+        for (size_t j = 0; j < c->others()->size(); j++)
           c->others()->at(j)->accept(this);
       }
       indent();
@@ -361,7 +361,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ ArrayLiteral\n");
     indent();
-    for (size_t i = 0; i < node->expressions()->length(); i++) {
+    for (size_t i = 0; i < node->expressions()->size(); i++) {
       Expression* expr = node->expressions()->at(i);
       indent();
       expr->accept(this);
@@ -378,7 +378,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ StructInitializer\n");
     indent();
-    for (size_t i = 0; i < node->pairs()->length(); i++) {
+    for (size_t i = 0; i < node->pairs()->size(); i++) {
       NameAndValue* pair = node->pairs()->at(i);
       prefix();
       fprintf(fp_, "%s = \n", pair->name()->chars());
@@ -399,7 +399,7 @@ class AstPrinter : public AstVisitor
   }
 
   void dumpLayout(LayoutDecls* body) {
-    for (size_t i = 0; i < body->length(); i++)
+    for (size_t i = 0; i < body->size(); i++)
       body->at(i)->accept(this);
   }
 
@@ -436,7 +436,7 @@ class AstPrinter : public AstVisitor
     prefix();
     fprintf(fp_, "[ TypesetDecl %s\n", node->name()->chars());
     indent();
-    for (size_t i = 0; i < node->types()->length(); i++) {
+    for (size_t i = 0; i < node->types()->size(); i++) {
       prefix();
       dump(node->types()->at(i).te, nullptr);
       fprintf(fp_, "\n");
@@ -472,7 +472,7 @@ ParseTree::dump(FILE* fp)
 {
   AstPrinter printer(fp);
 
-  for (size_t i = 0; i < statements_->length(); i++)
+  for (size_t i = 0; i < statements_->size(); i++)
     statements_->at(i)->accept(&printer);
 }
 

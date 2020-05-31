@@ -99,10 +99,10 @@ extern bool sc_intest;
 extern bool sc_allowtags;
 extern short fcurrent; /* current file being processed */
 
-extern ke::Vector<short> gCurrentFileStack;
-extern ke::Vector<int> gCurrentLineStack;
-extern ke::Vector<void*> gInputFileStack;
-extern ke::Vector<char*> gInputFilenameStack;
+extern std::vector<short> gCurrentFileStack;
+extern std::vector<int> gCurrentLineStack;
+extern std::vector<void*> gInputFileStack;
+extern std::vector<char*> gInputFilenameStack;
 
 // Returns true if compilation is in its second phase (writing phase) and has
 // so far proceeded without error.

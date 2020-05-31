@@ -18,12 +18,15 @@
 #ifndef _include_jitcraft_pool_allocator_h_
 #define _include_jitcraft_pool_allocator_h_
 
-#include <new>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <limits.h>
-#include <am-vector.h>
+
+#include <new>
+
+#include <am-bits.h>
 #include <am-fixedarray.h>
+#include <am-vector.h>
 
 namespace sp {
 
@@ -81,7 +84,7 @@ class PoolAllocator
 
   void* rawAllocate(size_t bytes) {
     // Guarantee malloc alignment.
-    size_t actualBytes = Align(bytes, kMallocAlignment);
+    size_t actualBytes = ke::Align(bytes, alignof(max_align_t));
     if (!last_ || (size_t(last_->end - last_->ptr) < actualBytes))
       return slowAllocate(actualBytes);
     char* ptr = last_->ptr;
@@ -162,16 +165,33 @@ class PoolAllocationPolicy
  public:
   void* am_malloc(size_t bytes);
   void am_free(void* ptr);
+
+  static void* Malloc(size_t bytes);
+};
+
+template <typename T>
+class StlPoolAllocator
+{
+ public:
+  typedef T value_type;
+  typedef std::true_type propagate_on_container_move_assignment;
+  typedef std::true_type propagate_on_container_copy_assignment;
+  typedef std::true_type propagate_on_container_swap;
+
+  static T* allocate(size_t n, const void* = nullptr) {
+    return reinterpret_cast<T*>(PoolAllocationPolicy::Malloc(n));
+  }
+  void deallocate(T* p, size_t n) {}
 };
 
 template <typename T>
 class PoolList
- : public Vector<T, PoolAllocationPolicy>,
+ : public std::vector<T, PoolAllocationPolicy>,
    public PoolObject
 {
  public:
   PoolList()
-    : Vector<T, PoolAllocationPolicy>(PoolAllocationPolicy())
+    : std::vector<T, PoolAllocationPolicy>(PoolAllocationPolicy())
   {
   }
 };

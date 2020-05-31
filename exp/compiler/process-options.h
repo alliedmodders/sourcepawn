@@ -60,7 +60,7 @@ struct CompileOptions
   uint32_t PragmaDynamic;
 
   // Search paths.
-  Vector<std::string> SearchPaths;
+  std::vector<std::string> SearchPaths;
 
   // Override output file.
   Maybe<std::string> OutputFile;

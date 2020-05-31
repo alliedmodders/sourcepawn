@@ -75,7 +75,7 @@ ControlFlowGraph::computeOrdering()
     Block* block;
     size_t index;
   };
-  Vector<Entry> work;
+  std::vector<Entry> work;
 
 #if !defined(NDEBUG)
   size_t block_count = blocks_.length();
@@ -86,18 +86,18 @@ ControlFlowGraph::computeOrdering()
   while (iter != blocks_.end())
     iter = blocks_.erase(iter);
 
-  Vector<Block*> postordering;
+  std::vector<Block*> postordering;
 
   // Compute the postorder traversal.
   newEpoch();
-  work.append(Entry{entry_, 0});
+  work.push_back(Entry{entry_, 0});
   while (!work.empty()) {
     Block* block = work.back().block;
     size_t successor_index = work.back().index;
 
-    if (successor_index >= block->successors().length()) {
-      postordering.append(block);
-      work.pop();
+    if (successor_index >= block->successors().size()) {
+      postordering.push_back(block);
+      work.pop_back();
       continue;
     }
     work.back().index++;
@@ -108,15 +108,15 @@ ControlFlowGraph::computeOrdering()
     child->setVisited();
 
     if (!child->successors().empty())
-      work.append(Entry{child, 0});
+      work.push_back(Entry{child, 0});
     else
-      postordering.append(child);
+      postordering.push_back(child);
   }
-  assert(postordering.length() == block_count);
+  assert(postordering.size() == block_count);
 
   // Add and number everything in RPO.
   uint32_t id = 1;
-  for (size_t i = postordering.length() - 1; i < postordering.length(); i--) {
+  for (size_t i = postordering.size() - 1; i < postordering.size(); i--) {
     Block* block = postordering[i];
 
     assert(!block->id());
@@ -173,7 +173,7 @@ ControlFlowGraph::computeDominance()
 
       // Pick a candidate for this node's dominator.
       Block* idom = nullptr;
-      for (size_t i = 0; i < block->predecessors().length(); i++) {
+      for (size_t i = 0; i < block->predecessors().size(); i++) {
         Block* pred = block->predecessors()[i];
         if (!pred->idom())
           continue;
@@ -213,19 +213,19 @@ ControlFlowGraph::computeDominance()
   // Process the dominator tree. Note that it is acyclic, so we do not need a
   // visited marker. We walk the tree and assign a pre-order index to each
   // dominator.
-  Vector<Block*> work;
-  work.append(entry_);
+  std::vector<Block*> work;
+  work.push_back(entry_);
 
   uint32_t id = 0;
   while (!work.empty()) {
-    Block* block = work.popCopy();
+    Block* block = ke::PopBack(&work);
 
     // We should never visit the same block twice.
     assert(!block->domTreeId());
 
     block->setDomTreeId(id++);
     for (const auto& child : block->immediatelyDominated())
-      work.append(child);
+      work.push_back(child);
   }
 
 #if !defined(NDEBUG)
@@ -312,15 +312,15 @@ ControlFlowGraph::dumpDomTreeDot(FILE* fp)
 {
   fprintf(fp, "digraph domtree {\n");
 
-  Vector<Block*> work;
-  work.append(entry_);
+  std::vector<Block*> work;
+  work.push_back(entry_);
   while (!work.empty()) {
-    Block* block = work.popCopy();
+    Block* block = ke::PopBack(&work);
     for (const auto& child : block->immediatelyDominated()) {
       fprintf(fp, "  %s -> %s;\n",
         MakeDotBlockname(block).c_str(),
         MakeDotBlockname(child).c_str());
-      work.append(child);
+      work.push_back(child);
     }
   }
 
@@ -342,8 +342,8 @@ Block::Block(ControlFlowGraph& graph, const uint8_t* start)
 void
 Block::addTarget(Block* target)
 {
-  target->predecessors_.append(this);
-  successors_.append(target);
+  target->predecessors_.push_back(this);
+  successors_.push_back(target);
 }
 
 void
@@ -382,7 +382,7 @@ Block::setImmediateDominator(Block* block)
 void
 Block::addImmediatelyDominated(Block* child)
 {
-  immediately_dominated_.append(child);
+  immediately_dominated_.push_back(child);
   num_dominated_ += child->numDominated();
 }
 

@@ -315,7 +315,7 @@ Parser::parse_old_array_dims(Declaration* decl, uint32_t flags)
     // Check if the size is unspecified.
     if (match(TOK_RBRACKET)) {
       if (dims)
-        dims->append(nullptr);
+        dims->push_back(nullptr);
       continue;
     }
 
@@ -324,13 +324,13 @@ Parser::parse_old_array_dims(Declaration* decl, uint32_t flags)
       // indeterminate dimensions with null.
       dims = new (pool_) ExpressionList();
       for (uint32_t i = 0; i < rank - 1; i++)
-        dims->append(nullptr);
+        dims->push_back(nullptr);
     }
 
     Expression* expr = expression();
     if (!expr)
       break;
-    dims->append(expr);
+    dims->push_back(expr);
 
     if (!expect(TOK_RBRACKET))
       break;
@@ -604,7 +604,7 @@ Parser::parseStructInitializer(const SourceLocation& pos)
     // Eat an optional comma.
     match(TOK_COMMA);
 
-    pairs->append(new (pool_) NameAndValue(name, expr));
+    pairs->push_back(new (pool_) NameAndValue(name, expr));
   }
 
   return new (pool_) StructInitializer(pos, pairs);
@@ -638,7 +638,7 @@ Parser::parseCompoundLiteral()
     Expression* item = expression();
     if (!item)
       return nullptr;
-    list->append(item);
+    list->push_back(item);
 
     if (!match(TOK_COMMA))
       break;
@@ -738,8 +738,7 @@ Parser::callArgs()
       if (!expr)
         return nullptr;
 
-      if (!arguments->append(expr))
-        return nullptr;
+      arguments->push_back(expr);
 
       if (!match(TOK_COMMA))
         break;
@@ -1395,7 +1394,7 @@ Parser::methodmap(TokenKind kind)
       if (match(TOK_EOF))
         break;
     } else {
-      decls->append(decl);
+      decls->push_back(decl);
     }
   }
   methodmap->setBody(decls);
@@ -1467,7 +1466,7 @@ Parser::switch_()
           while (need_colon && match(TOK_COMMA)) {
             if (match(TOK_LABEL)) {
               NameProxy* proxy = nameref();
-              others->append(proxy);
+              others->push_back(proxy);
               need_colon = false;
               break;
             }
@@ -1475,7 +1474,7 @@ Parser::switch_()
             Expression* other = expression();
             if (!other)
               return nullptr;
-            others->append(other);
+            others->push_back(other);
           }
         }
       }
@@ -1497,8 +1496,7 @@ Parser::switch_()
 
     if (expr) {
       Case* caze = new (pool_) Case(expr, others, stmt);
-      if (!cases->append(caze))
-        return nullptr;
+      cases->push_back(caze);
     } else {
       defaultCase = stmt;
     }
@@ -1588,7 +1586,7 @@ Parser::dimensions()
       if (!expect(TOK_RBRACKET))
         return nullptr;
     }
-    postDimensions->append(dim);
+    postDimensions->push_back(dim);
   }
   return postDimensions;
 }
@@ -1708,7 +1706,7 @@ Parser::statements()
   while (!match(TOK_RBRACE)) {
     // Call statement() directly, so we don't set allowDeclaratiosn to false.
     if (Statement* stmt = statement())
-      list->append(stmt);
+      list->push_back(stmt);
 
     // Note: we keep looping, since statement() will always consume a token.
   }
@@ -1759,7 +1757,7 @@ Parser::if_()
     return nullptr;
 
   PoolList<IfClause>* clauses = new (pool_) PoolList<IfClause>();
-  clauses->append(IfClause(cond, ifTrue));
+  clauses->push_back(IfClause(cond, ifTrue));
 
   Statement* fallthrough = nullptr;
 
@@ -1784,7 +1782,7 @@ Parser::if_()
     if (!otherIfTrue)
       return nullptr;
 
-    clauses->append(IfClause(otherCond, otherIfTrue));
+    clauses->push_back(IfClause(otherCond, otherIfTrue));
   }
 
   requireNewline();
@@ -1947,7 +1945,7 @@ Parser::enum_()
 
     EnumConstant* cs = new (pool_) EnumConstant(loc, stmt, name, expr);
     delegate_.OnEnumValueDecl(cs);
-    entries->append(cs);
+    entries->push_back(cs);
   } while (match(TOK_COMMA));
   if (!expect(TOK_RBRACE))
     return nullptr;
@@ -2001,7 +1999,7 @@ Parser::arguments(bool* canEarlyResolve)
     // Mark whether we eagerly resolved a type for this node.
     *canEarlyResolve &= !!node->sym()->type();
 
-    params->append(node);
+    params->push_back(node);
   } while (match(TOK_COMMA));
 
   if (!expect(TOK_RPAREN)) {
@@ -2034,7 +2032,7 @@ Parser::methodBody()
     if (!stmt)
       return nullptr;
     list = new (pool_) StatementList();
-    list->append(stmt);
+    list->push_back(stmt);
   }
 
   requireNewline();
@@ -2142,7 +2140,7 @@ Parser::typeset_()
 
   TypesetDecl* decl = delegate_.EnterTypeset(loc, name);
 
-  Vector<TypesetDecl::Entry> types;
+  std::vector<TypesetDecl::Entry> types;
   while (!match(TOK_RBRACE)) {
     TypeSpecifier spec;
     parse_new_type_expr(&spec, 0);
@@ -2188,7 +2186,7 @@ Parser::struct_(TokenKind kind)
 
     SourceLocation begin = decl.spec.startLoc();
     FieldDecl* field = delegate_.HandleFieldDecl(begin, decl.name, decl.spec);
-    decls->append(field);
+    decls->push_back(field);
 
     requireNewlineOrSemi();
   }
@@ -2325,7 +2323,7 @@ Parser::parse()
       if (scanner_.current()->kind == TOK_EOF)
         break;
     } else {
-      list->append(statement);
+      list->push_back(statement);
     }
   }
 

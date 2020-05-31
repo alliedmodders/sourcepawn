@@ -57,7 +57,7 @@ SemanticAnalysis::walkAST()
 {
   ParseTree* tree = tu_->tree();
   StatementList* statements = tree->statements();
-  for (size_t i = 0; i < statements->length(); i++) {
+  for (size_t i = 0; i < statements->size(); i++) {
     Statement* stmt = statements->at(i);
     switch (stmt->kind()) {
       case AstKind::kFunctionStatement:

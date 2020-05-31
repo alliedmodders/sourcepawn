@@ -656,7 +656,7 @@ class TypesetType : public Type
     return name_;
   }
   size_t numTypes() const {
-    return types_->length();
+    return types_->size();
   }
   Type* typeAt(size_t i) const {
     return types_->at(i);

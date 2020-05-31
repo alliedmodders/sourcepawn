@@ -236,13 +236,12 @@ PluginRuntime::AcquireMethod(cell_t pcode_offset)
   // at this list on another thread.
   {
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
-    if (!methods_.append(method))
-      return nullptr;
+    methods_.push_back(method);
   }
   return method;
 }
 
-const ke::Vector<RefPtr<MethodInfo>>&
+const std::vector<RefPtr<MethodInfo>>&
 PluginRuntime::AllMethods() const
 {
   Environment::get()->lock().AssertCurrentThreadOwns();

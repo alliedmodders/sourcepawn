@@ -41,7 +41,7 @@ MacroLexer::Reuse(Macro* macro, const LREntry& range)
 TokenKind
 MacroLexer::next(Token* tok)
 {
-  if (cursor_ >= macro_->tokens->length()) {
+  if (cursor_ >= macro_->tokens->size()) {
     macro_->active = false;
     pp_.handleEndOfFile();
     return TOK_NONE;

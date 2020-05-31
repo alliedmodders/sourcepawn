@@ -123,12 +123,20 @@ PoolAllocationPolicy::reportAllocationOverflow()
 }
 
 void*
-PoolAllocationPolicy::am_malloc(size_t bytes)
+PoolAllocationPolicy::Malloc(size_t bytes)
 {
   void* p = CurrentCompileContext->pool().rawAllocate(bytes);
-  if (!p)
-    reportOutOfMemory();
+  if (!p) {
+    fprintf(stderr, "OUT OF POOL MEMORY\n");
+    abort();
+  }
   return p;
+}
+
+void*
+PoolAllocationPolicy::am_malloc(size_t bytes)
+{
+  return Malloc(bytes);
 }
 
 void

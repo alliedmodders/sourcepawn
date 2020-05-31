@@ -32,7 +32,9 @@ struct MemoryScope {
     explicit MemoryScope(int scope_id)
      : scope_id(scope_id)
     {}
+    MemoryScope(const MemoryScope& other) = delete;
 
+    MemoryScope& operator =(const MemoryScope& other) = delete;
     MemoryScope& operator =(MemoryScope&& other) {
         scope_id = other.scope_id;
         usage = std::move(other.usage);
@@ -40,14 +42,14 @@ struct MemoryScope {
     }
 
     int scope_id;
-    ke::Vector<MemoryUse> usage;
+    std::vector<MemoryUse> usage;
 };
 
-ke::Vector<MemoryScope> sStackScopes;
-ke::Vector<MemoryScope> sHeapScopes;
-ke::Vector<std::unique_ptr<funcenum_t>> sFuncEnums;
-ke::Vector<std::unique_ptr<pstruct_t>> sStructs;
-ke::Vector<std::unique_ptr<methodmap_t>> sMethodmaps;
+std::vector<MemoryScope> sStackScopes;
+std::vector<MemoryScope> sHeapScopes;
+std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
+std::vector<std::unique_ptr<pstruct_t>> sStructs;
+std::vector<std::unique_ptr<methodmap_t>> sMethodmaps;
 
 pstruct_t::pstruct_t(const char* name)
 {
@@ -68,7 +70,7 @@ pstruct_t*
 pstructs_add(const char* name)
 {
     auto p = std::make_unique<pstruct_t>(name);
-    sStructs.append(std::move(p));
+    sStructs.push_back(std::move(p));
     return sStructs.back().get();
 }
 
@@ -96,9 +98,9 @@ pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg)
 
     auto newarg = std::make_unique<structarg_t>();
     memcpy(newarg.get(), arg, sizeof(structarg_t));
-    newarg->offs = pstruct->args.length() * sizeof(cell);
-    newarg->index = pstruct->args.length();
-    pstruct->args.append(std::move(newarg));
+    newarg->offs = pstruct->args.size() * sizeof(cell);
+    newarg->index = pstruct->args.size();
+    pstruct->args.push_back(std::move(newarg));
 
     return pstruct->args.back().get();
 }
@@ -117,7 +119,7 @@ funcenums_add(const char* name)
     strcpy(e->name, name);
     e->tag = gTypes.defineFunction(name, e.get())->tagid();
 
-    sFuncEnums.append(std::move(e));
+    sFuncEnums.push_back(std::move(e));
     return sFuncEnums.back().get();
 }
 
@@ -138,7 +140,7 @@ funcenum_for_symbol(symbol* sym)
         dest.ident = arg.ident;
         dest.fconst = arg.is_const;
 
-        ft->args.append(dest);
+        ft->args.push_back(dest);
     }
 
     char name[METHOD_NAMEMAX + 1];
@@ -168,16 +170,16 @@ functag_find_intrinsic(int tag)
 void
 functags_add(funcenum_t* en, functag_t* src)
 {
-    en->entries.append(src);
+    en->entries.push_back(src);
 }
 
 static void
-EnterMemoryScope(ke::Vector<MemoryScope>& frame)
+EnterMemoryScope(std::vector<MemoryScope>& frame)
 {
     if (frame.empty())
-        frame.append(MemoryScope{0});
+        frame.push_back(MemoryScope{0});
     else
-        frame.append(MemoryScope{frame.back().scope_id + 1});
+        frame.push_back(MemoryScope{frame.back().scope_id + 1});
 }
 
 static void
@@ -186,7 +188,7 @@ AllocInScope(MemoryScope& scope, int type, int size)
     if (type == MEMUSE_STATIC && !scope.usage.empty() && scope.usage.back().type == MEMUSE_STATIC) {
         scope.usage.back().size += size;
     } else {
-        scope.usage.append(MemoryUse{type, size});
+        scope.usage.push_back(MemoryUse{type, size});
     }
 }
 
@@ -212,7 +214,7 @@ pop_static_heaplist()
         assert(use.type == MEMUSE_STATIC);
         total += use.size;
     }
-    sHeapScopes.pop();
+    sHeapScopes.pop_back();
     return total;
 }
 
@@ -240,7 +242,7 @@ markstack(int type, int size)
 static void
 modheap_for_scope(const MemoryScope& scope)
 {
-    for (size_t i = scope.usage.length() - 1; i < scope.usage.length(); i--) {
+    for (size_t i = scope.usage.size() - 1; i < scope.usage.size(); i--) {
         const MemoryUse& use = scope.usage[i];
         if (use.type == MEMUSE_STATIC) {
             modheap((-1) * use.size * sizeof(cell));
@@ -266,13 +268,13 @@ popheaplist(bool codegen)
 {
     if (codegen)
         modheap_for_scope(sHeapScopes.back());
-    sHeapScopes.pop();
+    sHeapScopes.pop_back();
 }
 
 void
 genstackfree(int stop_id)
 {
-    for (size_t i = sStackScopes.length() - 1; i < sStackScopes.length(); i--) {
+    for (size_t i = sStackScopes.size() - 1; i < sStackScopes.size(); i--) {
         const MemoryScope& scope = sStackScopes[i];
         if (scope.scope_id <= stop_id)
             break;
@@ -283,7 +285,7 @@ genstackfree(int stop_id)
 void
 genheapfree(int stop_id)
 {
-    for (size_t i = sHeapScopes.length() - 1; i < sHeapScopes.length(); i--) {
+    for (size_t i = sHeapScopes.size() - 1; i < sHeapScopes.size(); i--) {
         const MemoryScope& scope = sHeapScopes[i];
         if (scope.scope_id <= stop_id)
             break;
@@ -296,7 +298,7 @@ popstacklist(bool codegen)
 {
     if (codegen)
         modstk_for_scope(sStackScopes.back());
-    sStackScopes.pop();
+    sStackScopes.pop_back();
 }
 
 void
@@ -345,7 +347,7 @@ methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name)
         map->tag = gTypes.defineMethodmap(name, map.get())->tagid();
     else
         map->tag = gTypes.defineObject(name)->tagid();
-    sMethodmaps.append(std::move(map));
+    sMethodmaps.push_back(std::move(map));
 
     return sMethodmaps.back().get();
 }

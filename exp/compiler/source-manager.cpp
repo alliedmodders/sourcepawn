@@ -85,9 +85,9 @@ class FileReader
 void
 SourceFile::computeLineCache()
 {
-  Vector<uint32_t> lines;
+  std::vector<uint32_t> lines;
 
-  lines.append(0);
+  lines.push_back(0);
   for (uint32_t i = 0; i < length_; i++) {
     if (chars_[i] == '\r' || chars_[i] == '\n') {
       if (chars_[i] == '\r') {
@@ -95,17 +95,17 @@ SourceFile::computeLineCache()
         if (i + 1 < length_ && chars_[i + 1] == '\n')
           i++;
       }
-      lines.append(i + 1);
+      lines.push_back(i + 1);
     }
   }
 
-  line_cache_ = std::make_unique<LineExtents>(lines.length());
+  line_cache_ = std::make_unique<LineExtents>(lines.size());
   if (!line_cache_->initialize()) {
     line_cache_ = nullptr;
     return;
   }
 
-  memcpy(line_cache_->buffer(), lines.buffer(), sizeof(uint32_t) * lines.length());
+  memcpy(line_cache_->buffer(), lines.data(), sizeof(uint32_t) * lines.size());
 }
 
 SourceManager::SourceManager(StringPool& strings, ReportManager& reports)
@@ -172,11 +172,11 @@ SourceManager::trackExtents(uint32_t length, size_t* index)
     return false;
   }
 
-  *index = locations_.length();
+  *index = locations_.size();
 
   LREntry tracker;
   tracker.id = next_source_id_;
-  locations_.append(tracker);
+  locations_.push_back(tracker);
 
   next_source_id_ = next_source_id;
   return true;
@@ -214,7 +214,7 @@ SourceManager::findLocation(const SourceLocation& loc, size_t* aIndex)
   if (!loc.isSet())
     return false;
 
-  if (last_lookup_ < locations_.length() && locations_[last_lookup_].owns(loc)) {
+  if (last_lookup_ < locations_.size() && locations_[last_lookup_].owns(loc)) {
     *aIndex = last_lookup_;
     return true;
   }
@@ -224,7 +224,7 @@ SourceManager::findLocation(const SourceLocation& loc, size_t* aIndex)
 
   // Binary search.
   size_t lower = 0;
-  size_t upper = locations_.length();
+  size_t upper = locations_.size();
   while (lower < upper) {
     size_t index = (lower + upper) / 2;
 
@@ -460,9 +460,9 @@ SourceManager::getTokenHistory(const SourceLocation& aLoc, TokenHistory* history
 
     const LREntry& range = locations_[loc_index];
     if (loc.isInMacro()) {
-      history->macros.append(FullMacroRef(range.getMacro(), loc.offset() - range.id));
+      history->macros.push_back(FullMacroRef(range.getMacro(), loc.offset() - range.id));
     } else {
-      history->files.append(fullSourceRef(range, loc));
+      history->files.push_back(fullSourceRef(range, loc));
     }
     loc = range.getParent();
   }

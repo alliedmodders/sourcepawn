@@ -37,7 +37,7 @@ class BitSet
 
   bool test(uintptr_t bit) {
     size_t word = word_for_bit(bit);
-    if (word >= words_.length())
+    if (word >= words_.size())
       return false;
     return !!(words_[word] & (uintptr_t(1) << pos_in_word(bit)));
   }
@@ -45,13 +45,13 @@ class BitSet
   void set(uintptr_t bit) {
     assert(!max_bits_ || bit <= *max_bits_);
     size_t word = word_for_bit(bit);
-    if (word >= words_.length())
+    if (word >= words_.size())
       words_.resize(word + 1);
     words_[word] |= (uintptr_t(1) << pos_in_word(bit));
   }
 
   void for_each(const std::function<void(uintptr_t)>& callback) {
-    for (size_t i = 0; i < words_.length(); i++) {
+    for (size_t i = 0; i < words_.size(); i++) {
       uintptr_t word = words_[i];
 
       while (word) {
@@ -79,7 +79,7 @@ class BitSet
   }
 
  private:
-  ke::Vector<uintptr_t> words_;
+  std::vector<uintptr_t> words_;
   ke::Maybe<size_t> max_bits_;
 };
 

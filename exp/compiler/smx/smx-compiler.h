@@ -95,7 +95,7 @@ private:
   void test_logical(sema::BinaryExpr* expr, bool jumpOnTrue, Label* taken, Label* fallthrough);
 
   // Flatten a tree of BinaryExprs into a chain of the same operator.
-  ke::Vector<sema::Expr*> flatten(sema::BinaryExpr* expr);
+  std::vector<sema::Expr*> flatten(sema::BinaryExpr* expr);
 
   // Load two expressions into PRI and ALT.
   bool load_both(sema::Expr* left, sema::Expr* right);
@@ -188,10 +188,10 @@ private:
         fun(fun)
     {}
   };
-  ke::Vector<FunctionEntry> publics_;
-  ke::Vector<FunctionEntry> natives_;
+  std::vector<FunctionEntry> publics_;
+  std::vector<FunctionEntry> natives_;
 
-  ke::Vector<SValue> operand_stack_;
+  std::vector<SValue> operand_stack_;
   uint64_t pri_value_;
   uint64_t alt_value_;
 

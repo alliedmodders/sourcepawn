@@ -10,13 +10,15 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
+#include <assert.h>
+#include <limits.h>
+
+#include <amtl/am-vector.h>
 #include "method-verifier.h"
 #include "graph-builder.h"
 #include "opcodes.h"
 #include "plugin-runtime.h"
 #include "plugin-context.h"
-#include <assert.h>
-#include <limits.h>
 
 namespace sp {
 
@@ -175,7 +177,7 @@ MethodVerifier::verifyOp(OPCODE op)
       reportError(SP_ERROR_INVALID_INSTRUCTION);
       return false;
     }
-    v->heap_balance.pop();
+    v->heap_balance.pop_back();
     return true;
   }
 
@@ -347,7 +349,7 @@ MethodVerifier::verifyOp(OPCODE op)
   }
 
   case OP_TRACKER_PUSH_C:
-    block_->data<VerifyData>()->heap_balance.append(-1);
+    block_->data<VerifyData>()->heap_balance.push_back(-1);
     cip_++;
     return true;
 
@@ -462,7 +464,7 @@ MethodVerifier::verifyOp(OPCODE op)
       return false;
     if (!popStack(ndims - 1))
       return false;
-    block_->data<VerifyData>()->heap_balance.append(-1);
+    block_->data<VerifyData>()->heap_balance.push_back(-1);
     return true;
   }
 
@@ -533,16 +535,16 @@ DetectCompilerBreakBug(Block* block)
   // To figure out whether or not this block is "leaving" the loop, we need to
   // compute the set of blocks owned by the loop. We do this by computing
   // the predecessors of each backedge.
-  Vector<Block*> worklist;
+  std::vector<Block*> worklist;
   for (const auto& pred : dom->predecessors()) {
     if (pred->id() >= dom->id()) {
       pred->setVisited();
-      worklist.append(pred);
+      worklist.push_back(pred);
     }
   }
 
   while (!worklist.empty()) {
-    Block* block = worklist.popCopy();
+    Block* block = ke::PopBack(&worklist);
     for (const auto& pred : block->predecessors()) {
       // Note: we need to make sure we don't predecessors beyond the initial
       // loop header.
@@ -554,7 +556,7 @@ DetectCompilerBreakBug(Block* block)
 
       // Keep walking up nodes.
       pred->setVisited();
-      worklist.append(pred);
+      worklist.push_back(pred);
     }
   }
 
@@ -570,7 +572,7 @@ MethodVerifier::verifyJoin(Block* block, VerifyData* a, VerifyData* b)
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
-  if (a->heap_balance.length() != b->heap_balance.length()) {
+  if (a->heap_balance.size() != b->heap_balance.size()) {
     if (DetectCompilerBreakBug(block))
       return true;
     reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -588,7 +590,7 @@ MethodVerifier::handleJoins()
   bool verify_later = false;
 
   VerifyData* pred_data = nullptr;
-  for (size_t i = 0; i < block_->predecessors().length(); i++) {
+  for (size_t i = 0; i < block_->predecessors().size(); i++) {
     Block* pred = block_->predecessors()[i];
 
     // Backedges won't have been visited yet, so we'll have to verify this
@@ -609,7 +611,7 @@ MethodVerifier::handleJoins()
   }
 
   if (verify_later)
-    verify_joins_.append(block_);
+    verify_joins_.push_back(block_);
 
   // If the block had no incoming edges other than backedges, then this would
   // be an illegal backedge to the entry block. While this is not allowed
@@ -623,7 +625,7 @@ MethodVerifier::handleJoins()
   VerifyData* data = block_->data<VerifyData>();
   data->stack_balance = pred_data->stack_balance;
   for (const auto& item : pred_data->heap_balance)
-    data->heap_balance.append(item);
+    data->heap_balance.push_back(item);
   return true;
 }
 
@@ -635,7 +637,7 @@ MethodVerifier::verifyJoins(Block* block)
 
   // If this is a self-loop, and it's the entry block, verify the exit stack
   // depth is 0.
-  if (block->predecessors().length() == 1) {
+  if (block->predecessors().size() == 1) {
     if (first_edge->stack_balance != 0) {
       reportError(SP_ERROR_INVALID_INSTRUCTION);
       return false;
@@ -644,7 +646,7 @@ MethodVerifier::verifyJoins(Block* block)
   }
 
   // Otherwise, verify the balance is the same across all incoming edges.
-  for (size_t i = 1; i < block->predecessors().length(); i++) {
+  for (size_t i = 1; i < block->predecessors().size(); i++) {
     Block* other_pred = block->predecessors()[1];
     VerifyData* other_edge = other_pred->data<VerifyData>();
     if (!verifyJoin(block, first_edge, other_edge))
@@ -695,7 +697,7 @@ MethodVerifier::pushHeap(uint32_t num_cells)
     return false;
   }
   if (v->heap_balance.empty() || v->heap_balance.back() == -1)
-    v->heap_balance.append(num_cells);
+    v->heap_balance.push_back(num_cells);
   else
     v->heap_balance.back() += num_cells;
   return true;
@@ -714,7 +716,7 @@ MethodVerifier::popHeap(uint32_t num_cells)
   }
   v->heap_balance.back() -= num_cells;
   if (v->heap_balance.back() == 0)
-    v->heap_balance.pop();
+    v->heap_balance.pop_back();
   return true;
 }
 

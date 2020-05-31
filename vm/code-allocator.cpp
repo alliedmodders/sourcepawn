@@ -18,6 +18,7 @@
 # include <unistd.h>
 # include <sys/mman.h>
 #endif
+#include <amtl/am-bits.h>
 
 using namespace sp;
 
@@ -34,7 +35,7 @@ CodeAllocator::~CodeAllocator()
 CodeChunk
 CodeAllocator::Allocate(size_t rawBytes)
 {
-  size_t bytes = Align(rawBytes, kMallocAlignment);
+  size_t bytes = ke::Align(rawBytes, alignof(max_align_t));
   if (bytes < rawBytes)
     return CodeChunk();
 
@@ -50,13 +51,13 @@ CodeAllocator::Allocate(size_t rawBytes)
   CodeChunk chunk = allocateInPool(pool, bytes);
 
   // Enter this pool into the cache if we can.
-  if (cached_pools_.length() < kMaxCachedPools) {
-    cached_pools_.append(pool);
+  if (cached_pools_.size() < kMaxCachedPools) {
+    cached_pools_.push_back(pool);
   } else {
     // If this pool has more free space than any of our cached pools, then
     // evict the pool with the least amount of free space left.
     size_t min_index = 0;
-    for (size_t i = 1; i < cached_pools_.length(); i++) {
+    for (size_t i = 1; i < cached_pools_.size(); i++) {
       if (cached_pools_[i]->bytesFree() < cached_pools_[min_index]->bytesFree())
         min_index = i;
     }
@@ -73,7 +74,7 @@ CodeAllocator::findPool(size_t bytes)
   // Find the cached pool with the smallest free region that holds |bytes|, to
   // reduce fragmentation.
   RefPtr<CodePool> min;
-  for (size_t i = 0; i < cached_pools_.length(); i++) {
+  for (size_t i = 0; i < cached_pools_.size(); i++) {
     RefPtr<CodePool> pool = cached_pools_[i];
     if (bytes > pool->bytesFree())
       continue;

@@ -113,8 +113,8 @@ struct FullSourceRef
 
 struct TokenHistory
 {
-  Vector<FullMacroRef> macros;
-  Vector<FullSourceRef> files;
+  std::vector<FullMacroRef> macros;
+  std::vector<FullSourceRef> files;
 };
 
 // An LREntry is created each time we register a range of locations (it is
@@ -275,7 +275,7 @@ class SourceManager
   StringPool& strings_;
   ReportManager& rr_;
   AtomMap<RefPtr<SourceFile>> file_cache_;
-  Vector<LREntry> locations_;
+  std::vector<LREntry> locations_;
 
   // Source ids start from 1. The source file id is 1 + len(source) + 1. This
   // lets us store source locations as a single integer, as we can always

@@ -60,7 +60,7 @@ PoolAllocator::unwind(char* pos)
             last->ptr = pos;
             return;
         }
-        pools_.pop();
+        pools_.pop_back();
     }
 }
 
@@ -75,7 +75,7 @@ PoolAllocator::ensurePool(size_t actualBytes)
     pool->base = std::make_unique<char[]>(bytesNeeded);
     pool->ptr = pool->base.get();
     pool->end = pool->ptr + bytesNeeded;
-    pools_.append(std::move(pool));
+    pools_.push_back(std::move(pool));
     return pools_.back().get();
 }
 
@@ -94,12 +94,20 @@ PoolAllocationPolicy::reportAllocationOverflow()
 }
 
 void*
-PoolAllocationPolicy::am_malloc(size_t bytes)
+PoolAllocationPolicy::Malloc(size_t bytes)
 {
     void* p = gPoolAllocator.rawAllocate(bytes);
-    if (!p)
-        reportOutOfMemory();
+    if (!p) {
+        fprintf(stderr, "OUT OF POOL MEMORY\n");
+        abort();
+    }
     return p;
+}
+
+void*
+PoolAllocationPolicy::am_malloc(size_t bytes)
+{
+    return PoolAllocationPolicy::Malloc(bytes);
 }
 
 void

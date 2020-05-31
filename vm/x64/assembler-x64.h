@@ -462,8 +462,7 @@ class Assembler : public AssemblerBase
     }
     if (patch)
       bind(patch);
-    if (!absolute_code_refs_.append(pc()))
-      outOfMemory_ = true;
+    absolute_code_refs_.push_back(pc());
   }
   void movl(Register dest, int32_t value) {
     emit1_maybe_rex(0xb8 + dest.low_bits(), dest);
@@ -770,7 +769,7 @@ class Assembler : public AssemblerBase
   }
 
  private:
-  ke::Vector<uint32_t> absolute_code_refs_;
+  std::vector<uint32_t> absolute_code_refs_;
 };
 
 } // namespace sp

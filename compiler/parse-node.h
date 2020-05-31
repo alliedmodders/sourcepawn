@@ -174,7 +174,7 @@ class VarDecl : public Decl
   private:
     bool AnalyzePstruct();
     bool AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
-                           ke::Vector<bool>* visited);
+                           std::vector<bool>* visited);
     void EmitPstruct();
 
   protected:
@@ -322,7 +322,7 @@ class Expr : public ParseNode
     {}
 
     // Flatten a series of binary expressions into a single list.
-    virtual void FlattenLogical(int token, ke::Vector<Expr*>* out);
+    virtual void FlattenLogical(int token, std::vector<Expr*>* out);
 
     virtual void EmitTest(bool jump_on_true, int target);
     virtual symbol* BindCallTarget(int token, Expr** implicit_this) {
@@ -497,7 +497,7 @@ class LogicalExpr final : public BinaryExprBase
     bool Analyze() override;
     void DoEmit() override;
     void EmitTest(bool jump_on_true, int target) override;
-    void FlattenLogical(int token, ke::Vector<Expr*>* out) override;
+    void FlattenLogical(int token, std::vector<Expr*>* out) override;
 };
 
 struct CompareOp
@@ -686,6 +686,15 @@ class SymbolExpr final : public Expr
 };
 
 struct ParsedArg {
+    ParsedArg()
+      : name(nullptr),
+        expr(nullptr)
+    {}
+    ParsedArg(sp::Atom* name, Expr* expr)
+      : name(name),
+        expr(expr)
+    {}
+
     sp::Atom* name;
     Expr* expr;
 };

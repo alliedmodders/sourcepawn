@@ -23,7 +23,7 @@ Assembler::emitToExecutableMemory(void* code)
   uint8_t* base = reinterpret_cast<uint8_t*>(code);
   memcpy(base, buffer(), length());
 
-  for (size_t i = 0; i < absolute_code_refs_.length(); i++) {
+  for (size_t i = 0; i < absolute_code_refs_.size(); i++) {
     size_t offset = absolute_code_refs_[i];
     size_t target = *reinterpret_cast<uint64_t*>(base + offset - 8);
     assert(target <= length());

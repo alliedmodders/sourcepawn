@@ -146,9 +146,9 @@ Lexer::hexLiteral()
       putBack(c);
       break;
     }
-    literal_.append(c);
+    literal_.push_back(c);
   }
-  literal_.append('\0');
+  literal_.push_back('\0');
   return TOK_HEX_LITERAL;
 }
 
@@ -156,18 +156,18 @@ TokenKind
 Lexer::numberLiteral(char first)
 {
   literal_.clear();
-  literal_.append(first);
+  literal_.push_back(first);
 
   char c;
   for (;;) {
     c = readChar();
     if (!IsDigit(c))
       break;
-    literal_.append(c);
+    literal_.push_back(c);
   }
 
   // Detect a hexadecimal string.
-  if (literal_.length() == 1 &&
+  if (literal_.size() == 1 &&
       literal_[0] == '0' &&
       (c == 'x' || c == 'X'))
   {
@@ -176,10 +176,10 @@ Lexer::numberLiteral(char first)
 
   if (c != '.') {
     putBack(c);
-    literal_.append('\0');
+    literal_.push_back('\0');
     return TOK_INTEGER_LITERAL;
   }
-  literal_.append(c);
+  literal_.push_back(c);
 
   c = readChar();
   if (!IsDigit(c)) {
@@ -188,7 +188,7 @@ Lexer::numberLiteral(char first)
       << print;
     return TOK_UNKNOWN;
   }
-  literal_.append(c);
+  literal_.push_back(c);
 
   for (;;) {
     c = readChar();
@@ -196,18 +196,18 @@ Lexer::numberLiteral(char first)
       putBack(c);
       break;
     }
-    literal_.append(c);
+    literal_.push_back(c);
   }
 
   if (!matchChar('e')) {
-    literal_.append('\0');
+    literal_.push_back('\0');
     return TOK_FLOAT_LITERAL;
   }
 
-  literal_.append(c);
+  literal_.push_back(c);
   c = readChar();
   if (c == '-') {
-    literal_.append(c);
+    literal_.push_back(c);
     c = readChar();
   }
   if (!IsDigit(c)) {
@@ -218,17 +218,17 @@ Lexer::numberLiteral(char first)
       << print;
     return TOK_UNKNOWN;
   }
-  literal_.append(c);
+  literal_.push_back(c);
   for (;;) {
     c = readChar();
     if (!IsDigit(c)) {
       putBack(c);
       break;
     }
-    literal_.append(c);
+    literal_.push_back(c);
   }
   
-  literal_.append('\0');
+  literal_.push_back('\0');
   return TOK_FLOAT_LITERAL;
 }
 
@@ -346,7 +346,7 @@ TokenKind
 Lexer::name(char first)
 {
   literal_.clear();
-  literal_.append(first);
+  literal_.push_back(first);
   char c;
   for (;;) {
     c = readChar();
@@ -354,9 +354,9 @@ Lexer::name(char first)
       putBack(c);
       break;
     }
-    literal_.append(c);
+    literal_.push_back(c);
   }
-  literal_.append('\0');
+  literal_.push_back('\0');
   return TOK_NAME;
 }
 
@@ -506,10 +506,10 @@ Lexer::stringLiteral(Token* tok)
         code = '?';
       c = char(code);
     }
-    literal_.append(c);
+    literal_.push_back(c);
   }
 
-  literal_.append('\0');
+  literal_.push_back('\0');
 
   tok->setAtom(cc_.add(literal(), literal_length()));
   return TOK_STRING_LITERAL;
@@ -660,7 +660,7 @@ Lexer::handleDirectiveWhileInactive()
     {
       // We need to push *something* here, otherwise we don't know which
       // #endifs match up to what.
-      ifstack_.append(IfContext(begin, IfContext::Dead));
+      ifstack_.push_back(IfContext(begin, IfContext::Dead));
       break;
     }
 
@@ -690,7 +690,7 @@ Lexer::handleDirectiveWhileInactive()
     {
       // We're guaranteed there's something pushed, since otherwise we wouldn't
       // be in handleIfContext().
-      ifstack_.pop();
+      ifstack_.pop_back();
       chewLineAfterDirective(true);
       break;
     }
@@ -749,7 +749,7 @@ Lexer::handleIfContext()
 TokenList*
 Lexer::getMacroTokens()
 {
-  Vector<Token> tokens;
+  std::vector<Token> tokens;
 
   // We do not allow macro expansion while we're looking for tokens - we only
   // perform expansion during pasting.
@@ -761,11 +761,11 @@ Lexer::getMacroTokens()
       continue;
     if (tok.kind == TOK_EOL)
       break;
-    tokens.append(tok);
+    tokens.push_back(tok);
   }
 
-  TokenList* list = new (cc_.pool()) TokenList(tokens.length());
-  for (size_t i = 0; i < tokens.length(); i++)
+  TokenList* list = new (cc_.pool()) TokenList(tokens.size());
+  for (size_t i = 0; i < tokens.size(); i++)
     list->at(i) = tokens[i];
   return list;
 }
@@ -804,7 +804,7 @@ Lexer::handlePreprocessorDirective()
       int val = 0;
       bool errored = pp_.eval(&val);
       
-      ifstack_.append(IfContext(begin, val ? IfContext::Active : IfContext::Ignoring));
+      ifstack_.push_back(IfContext(begin, val ? IfContext::Active : IfContext::Ignoring));
       return !errored;
     }
 
@@ -837,7 +837,7 @@ Lexer::handlePreprocessorDirective()
         return false;
       }
 
-      ifstack_.pop();
+      ifstack_.pop_back();
       return true;
     }
 
@@ -889,9 +889,9 @@ Lexer::handlePreprocessorDirective()
         if (c == match)
           break;
 
-        literal_.append(c);
+        literal_.push_back(c);
       }
-      literal_.append('\0');
+      literal_.push_back('\0');
 
       const char* where = nullptr;
       if (match == '"') {

@@ -96,7 +96,7 @@ class CodeAllocator
   void operator =(const CodeAllocator&) = delete;
 
  private:
-  Vector<RefPtr<CodePool>> cached_pools_;
+  std::vector<RefPtr<CodePool>> cached_pools_;
 };
 
 } // namespace sp

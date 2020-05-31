@@ -49,7 +49,7 @@ CompileContext::CompileContext(PoolAllocator& pool,
   CurrentCompileContext = this;
 
   // We automatically add "include" from the current working directory.
-  options_.SearchPaths.append(std::string("include/"));
+  options_.SearchPaths.push_back(std::string("include/"));
 
   types_.initialize();
 }
@@ -141,9 +141,9 @@ GetOutputFilename(const char* output_file, const char* input_file)
     std::string path(input_file);
     path = Join(Split(path, "\\"), "/");
 
-    Vector<std::string> parts = Split(path, "/");
+    std::vector<std::string> parts = Split(path, "/");
     while (!parts.empty() && parts.back().length() == 0)
-      parts.pop();
+      parts.pop_back();
     if (!parts.empty()) {
       std::string smx_name = GetOutputFilename(nullptr, parts.back().c_str());
       std::string new_file = StringPrintf("%s/%s", output_file, smx_name.c_str());

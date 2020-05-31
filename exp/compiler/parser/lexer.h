@@ -214,10 +214,10 @@ class Lexer : public ke::Refcounted<Lexer>
     return pos_ < end_;
   }
   const char* literal() const {
-    return literal_.buffer();
+    return literal_.data();
   }
   size_t literal_length() const {
-    return literal_.length() - 1;
+    return literal_.size() - 1;
   }
 
  private:
@@ -229,8 +229,8 @@ class Lexer : public ke::Refcounted<Lexer>
   const char* chars_;
   const char* pos_;
   const char* end_;
-  Vector<char> literal_;
-  Vector<IfContext> ifstack_;
+  std::vector<char> literal_;
+  std::vector<IfContext> ifstack_;
 
   // Current line number.
   unsigned line_number_;

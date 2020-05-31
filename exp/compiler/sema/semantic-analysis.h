@@ -140,8 +140,8 @@ class SemanticAnalysis
 
   FuncState* fs_;
 
-  ke::Vector<ast::FunctionStatement*> global_functions_;
-  ke::Vector<ast::VarDecl*> global_vars_;
+  std::vector<ast::FunctionStatement*> global_functions_;
+  std::vector<ast::VarDecl*> global_vars_;
 
   size_t loop_depth_;
 };

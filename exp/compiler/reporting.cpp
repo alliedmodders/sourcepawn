@@ -125,7 +125,7 @@ ReportManager::report(const RefPtr<TMessage>& msg)
       reportFatal(msg->origin(), rmsg::too_many_errors);
   }
 
-  messages_.append(msg);
+  messages_.push_back(msg);
 }
 
 MessageBuilder
@@ -155,9 +155,9 @@ ReportManager::PrintMessages()
     return;
   }
 
-  for (size_t i = 0; i < messages_.length(); i++) {
+  for (size_t i = 0; i < messages_.size(); i++) {
     printMessage(messages_[i]);
-    if (i != messages_.length() - 1)
+    if (i != messages_.size() - 1)
       fprintf(stderr, "\n");
   }
 
@@ -249,14 +249,14 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
 
   // Recompute the column number if we expanded tabs.
   unsigned col = ref.col;
-  if (expanded.length() != line_length) {
+  if (expanded.size() != line_length) {
     for (unsigned i = 0; i < ref.col; i++) {
       if (lineptr[i] == '\t')
         col += 7;
     }
   }
 
-  line_length = expanded.length();
+  line_length = expanded.size();
 
   const char* prefix = "";
   const char* suffix = "";
@@ -344,15 +344,15 @@ ReportManager::printMessage(RefPtr<TMessage> message)
     line = renderSourceRef(history.files[0]);
   line = line + ": ";
   line = line + renderMessage(message->id(),
-                              message->args().buffer(),
-                              message->args().length());
+                              message->args().data(),
+                              message->args().size());
 
   fprintf(stderr, "%s\n", line.ptr());
 
   if (!history.files.empty())
     printSourceLine(history.files[0]);
 
-  for (size_t i = 0; i < history.macros.length(); i++) {
+  for (size_t i = 0; i < history.macros.size(); i++) {
     FullSourceRef ref = source_->getOrigin(history.macros[i]);
     AutoString note = renderSourceRef(ref);
     note = note + ": ";
@@ -366,7 +366,7 @@ ReportManager::printMessage(RefPtr<TMessage> message)
     printSourceLine(ref);
   }
 
-  for (size_t i = 1; i < history.files.length(); i++) {
+  for (size_t i = 1; i < history.files.size(); i++) {
     AutoString note = renderSourceRef(history.files[i]);
     note = note + ": ";
     note = note + renderMessage(rmsg::included_from, nullptr, 0);

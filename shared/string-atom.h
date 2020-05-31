@@ -34,8 +34,10 @@ class Atom
  private:
   Atom(const char* str, size_t len)
    : str_(str, len)
-  {
-  }
+  {}
+  Atom(const Atom&) = delete;
+
+  Atom& operator =(const Atom&) = delete;
 
  public:
   size_t length() const {

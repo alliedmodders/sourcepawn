@@ -127,7 +127,7 @@ SmxV1Image::validate()
     if (sections[i].nameoffs > last_header_string)
       last_header_string = sections[i].nameoffs;
 
-    sections_.append(Section());
+    sections_.push_back(Section());
     sections_.back().dataoffs = sections[i].dataoffs;
     sections_.back().size = sections[i].size;
     sections_.back().name = header_strings_ + sections[i].nameoffs;
@@ -184,7 +184,7 @@ SmxV1Image::validate()
 const SmxV1Image::Section*
 SmxV1Image::findSection(const char* name)
 {
-  for (size_t i = 0; i < sections_.length(); i++) {
+  for (size_t i = 0; i < sections_.size(); i++) {
     if (strcmp(sections_[i].name, name) == 0)
       return &sections_[i];
   }

@@ -14,6 +14,7 @@
 #define _include_sourcepawn_vm_method_verifier_h_
 
 #include <functional>
+#include <vector>
 
 #include <sp_vm_types.h>
 #include <smx/smx-v1-opcodes.h>
@@ -64,7 +65,7 @@ class MethodVerifier final
      : stack_balance(0)
     {}
     uint32_t stack_balance;
-    ke::Vector<int32_t> heap_balance;
+    std::vector<int32_t> heap_balance;
   };
 
   bool handleJoins();
@@ -79,7 +80,7 @@ class MethodVerifier final
   PluginRuntime* rt_;
   ke::RefPtr<ControlFlowGraph> graph_;
   Block* block_;
-  ke::Vector<Block*> verify_joins_;
+  std::vector<Block*> verify_joins_;
   uint32_t code_features_;
   uint32_t startOffset_;
   size_t memSize_;

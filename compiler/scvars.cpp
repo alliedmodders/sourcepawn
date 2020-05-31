@@ -96,10 +96,10 @@ bool sc_intest;
 bool sc_allowtags;
 short fcurrent; /* current file being processed */
 
-ke::Vector<short> gCurrentFileStack;
-ke::Vector<int> gCurrentLineStack;
-ke::Vector<void*> gInputFileStack;
-ke::Vector<char*> gInputFilenameStack;
+std::vector<short> gCurrentFileStack;
+std::vector<int> gCurrentLineStack;
+std::vector<void*> gInputFileStack;
+std::vector<char*> gInputFilenameStack;
 
 jmp_buf errbuf;
 

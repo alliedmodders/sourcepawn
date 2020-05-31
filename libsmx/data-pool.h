@@ -38,7 +38,7 @@ class DataPool
  public:
   DataPool();
 
-  uint32_t add(const Vector<uint8_t>& run);
+  uint32_t add(const std::vector<uint8_t>& run);
 
   const ByteBuffer& buffer() const {
     return buffer_;

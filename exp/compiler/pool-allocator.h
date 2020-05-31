@@ -24,6 +24,7 @@
 
 #include <new>
 
+#include <amtl/am-bits.h>
 #include <amtl/am-fixedarray.h>
 #include <amtl/am-vector.h>
 
@@ -80,7 +81,7 @@ class PoolAllocator
 
   void* rawAllocate(size_t bytes) {
     // Guarantee malloc alignment.
-    size_t actualBytes = Align(bytes, kMallocAlignment);
+    size_t actualBytes = Align(bytes, alignof(max_align_t));
     if (!last_ || (size_t(last_->end - last_->ptr) < actualBytes))
       return slowAllocate(actualBytes);
     char* ptr = last_->ptr;
@@ -167,6 +168,25 @@ class PoolAllocationPolicy
  public:
   void* am_malloc(size_t bytes);
   void am_free(void* ptr);
+
+  static void* Malloc(size_t bytes);
+};
+
+template <typename T>
+class StlPoolAllocator
+{
+ public:
+  typedef T value_type;
+  typedef std::true_type propagate_on_container_move_assignment;
+  typedef std::true_type propagate_on_container_copy_assignment;
+  typedef std::true_type propagate_on_container_swap;
+
+  static T* allocate(size_t n, const void* = nullptr) {
+    if (!ke::IsUintMultiplySafe(n, sizeof(T)))
+      throw std::bad_alloc{};
+    return reinterpret_cast<T*>(PoolAllocationPolicy::Malloc(n * sizeof(T)));
+  }
+  void deallocate(T* p, size_t n) {}
 };
 
 template <typename T>
@@ -177,8 +197,8 @@ class PoolList : public PoolObject
   {}
 
   template <typename U>
-  bool append(U&& item) {
-    return impl_.append(std::forward<U>(item));
+  void push_back(U&& item) {
+    impl_.push_back(std::forward<U>(item));
   }
   T& at(size_t index) {
     return impl_.at(index);
@@ -186,8 +206,8 @@ class PoolList : public PoolObject
   const T& at(size_t index) const {
     return impl_.at(index);
   }
-  size_t length() const {
-    return impl_.length();
+  size_t size() const {
+    return impl_.size();
   }
   T& operator [](size_t index) {
     return impl_[index];
@@ -205,15 +225,15 @@ class PoolList : public PoolObject
     return impl_.empty();
   }
 
-  const T* begin() const {
+  typename std::vector<T, StlPoolAllocator<T>>::iterator begin() {
     return impl_.begin();
   }
-  const T* end() const {
+  typename std::vector<T, StlPoolAllocator<T>>::iterator end() {
     return impl_.end();
   }
 
  private:
-  Vector<T, PoolAllocationPolicy> impl_;
+  std::vector<T, StlPoolAllocator<T>> impl_;
 };
 
 template <typename T>
@@ -237,7 +257,7 @@ class FixedPoolList : public PoolObject
   const T& back() const {
     return impl_.back();
   }
-  size_t length() const {
+  size_t size() const {
     return impl_.length();
   }
 

@@ -450,14 +450,14 @@ functag_compare(const functag_t* formal, const functag_t* actual)
         return FALSE;
 
     // Make sure there are no trailing arguments.
-    if (actual->args.length() > formal->args.length())
+    if (actual->args.size() > formal->args.size())
         return FALSE;
 
     // Check arguments.
-    for (size_t i = 0; i < formal->args.length(); i++) {
+    for (size_t i = 0; i < formal->args.size(); i++) {
         const funcarg_t* formal_arg = &formal->args[i];
 
-        if (i >= actual->args.length())
+        if (i >= actual->args.size())
             return FALSE;
 
         const funcarg_t* actual_arg = &actual->args[i];

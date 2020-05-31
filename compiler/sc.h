@@ -140,7 +140,7 @@ class FunctionData final : public SymbolData
 
     int funcid;          /* set for functions during codegen */
     stringlist* dbgstrs; /* debug strings - functions only */
-    ke::Vector<arginfo> args;
+    std::vector<arginfo> args;
 };
 
 class EnumStructVarData final : public SymbolData
@@ -150,7 +150,7 @@ class EnumStructVarData final : public SymbolData
         return this;
     }
 
-    ke::Vector<std::unique_ptr<symbol>> children;
+    std::vector<std::unique_ptr<symbol>> children;
 };
 
 struct symbol;
@@ -286,7 +286,7 @@ struct symbol {
     void add_reference_to(symbol* other);
     void drop_reference_from(symbol* from);
 
-    ke::Vector<symbol*>& refers_to() {
+    std::vector<symbol*>& refers_to() {
         return refers_to_;
     }
     bool is_unreferenced() const {
@@ -303,10 +303,10 @@ struct symbol {
     std::unique_ptr<SymbolData> data_;
 
     // Other symbols that this symbol refers to.
-    ke::Vector<symbol*> refers_to_;
+    std::vector<symbol*> refers_to_;
 
     // All the symbols that refer to this symbol.
-    ke::Vector<symbol*> referred_from_;
+    std::vector<symbol*> referred_from_;
     size_t referred_from_count_;
 
     symbol* parent_;

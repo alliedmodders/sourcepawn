@@ -293,7 +293,7 @@ BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags)
   base = base + BuildTypeFromTypeExpr(sig->returnType(), nullptr, flags & kDiagFlagsInnerMask);
   base = base + "(";
 
-  for (size_t i = 0; i < sig->parameters()->length(); i++) {
+  for (size_t i = 0; i < sig->parameters()->size(); i++) {
     TypeDiagFlags varFlags = flags & kDiagFlagsInnerMask;
     Atom* name = !!(flags & TypeDiagFlags::Names)
                  ? sig->parameters()->at(i)->name()
@@ -306,7 +306,7 @@ BuildTypeFromSignature(const FunctionSignature* sig, TypeDiagFlags flags)
       varFlags |= TypeDiagFlags::IsByRef;
     }
     base = base + BuildTypeFromTypeExpr(sig->parameters()->at(i)->te(), name, varFlags);
-    if (i != sig->parameters()->length() - 1)
+    if (i != sig->parameters()->size() - 1)
       base = base + ", ";
   }
   base = base + ")";
@@ -406,7 +406,7 @@ sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
   }
 
   if (ArrayType* type = aType->asArray()) {
-    Vector<ArrayType*> stack;
+    std::vector<ArrayType*> stack;
 
     Type* cursor = type;
     Type* innermost = nullptr;
@@ -415,7 +415,7 @@ sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
         innermost = cursor;
         break;
       }
-      stack.append(cursor->toArray());
+      stack.push_back(cursor->toArray());
       cursor = cursor->toArray()->contained();
     }
 
@@ -427,7 +427,7 @@ sp::BuildTypeName(Type* aType, Atom* name, TypeDiagFlags flags)
 
     bool hasFixedLengths = false;
     AutoString brackets;
-    for (size_t i = 0; i < stack.length(); i++) {
+    for (size_t i = 0; i < stack.size(); i++) {
       if (!stack[i]->hasFixedLength()) {
         brackets = brackets + "[]";
         continue;
@@ -544,10 +544,10 @@ sp::AreFunctionTypesEqual(FunctionType* a, FunctionType* b)
 
   ParameterList* ap = af->parameters();
   ParameterList* bp = bf->parameters();
-  if (ap->length() != bp->length())
+  if (ap->size() != bp->size())
     return false;
 
-  for (size_t i = 0; i < ap->length(); i++) {
+  for (size_t i = 0; i < ap->size(); i++) {
     VarDecl* arga = ap->at(i);
     VarDecl* argb = bp->at(i);
     if (!AreTypesEquivalent(arga->te().resolved(),
