@@ -35,7 +35,7 @@ CodeAllocator::~CodeAllocator()
 CodeChunk
 CodeAllocator::Allocate(size_t rawBytes)
 {
-  size_t bytes = ke::Align(rawBytes, alignof(max_align_t));
+  size_t bytes = ke::Align(rawBytes, ke::kMallocAlignment);
   if (bytes < rawBytes)
     return CodeChunk();
 
