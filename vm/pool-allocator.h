@@ -84,7 +84,7 @@ class PoolAllocator
 
   void* rawAllocate(size_t bytes) {
     // Guarantee malloc alignment.
-    size_t actualBytes = ke::Align(bytes, alignof(max_align_t));
+    size_t actualBytes = ke::Align(bytes, ke::kMallocAlignment);
     if (!last_ || (size_t(last_->end - last_->ptr) < actualBytes))
       return slowAllocate(actualBytes);
     char* ptr = last_->ptr;
