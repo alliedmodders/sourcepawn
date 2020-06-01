@@ -18,7 +18,6 @@
 
 #include "array-helpers.h"
 #include "types.h"
-#include <amtl/am-algorithm.h>
 #include <amtl/am-bits.h>
 #include <amtl/am-vector.h>
 #include <assert.h>

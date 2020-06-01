@@ -24,7 +24,6 @@
 
 #include <algorithm>
 
-#include <amtl/am-algorithm.h>
 #include <amtl/am-string.h>
 
 namespace sp {

@@ -29,7 +29,6 @@
 #include "pcode-reader.h"
 #include "runtime-helpers.h"
 #include "watchdog_timer.h"
-#include <amtl/am-algorithm.h>
 #include <amtl/am-float.h>
 
 namespace sp {

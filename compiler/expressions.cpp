@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* for _MAX_PATH */
 #include <string.h>
-#include <amtl/am-algorithm.h>
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"

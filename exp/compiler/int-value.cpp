@@ -15,6 +15,8 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <algorithm>
+
 #include "int-value.h"
 #include "compile-context.h"
 #include "parser/tokens.h"
@@ -47,7 +49,7 @@ IntValue::ValidateAluOp(ReportingContext& cc, TokenKind kind, IntValue* aLeft, I
   if (aLeft->isSigned() == aRight->isSigned()) {
     *aSign = aLeft->isSigned();
 
-    unsigned bits = ke::Max(aLeft->numBits(), aRight->numBits());
+    unsigned bits = std::max(aLeft->numBits(), aRight->numBits());
     aLeft->bits_ = bits;
     aRight->bits_ = bits;
     return true;
@@ -65,7 +67,7 @@ IntValue::ValidateAluOp(ReportingContext& cc, TokenKind kind, IntValue* aLeft, I
     return false;
   }
 
-  unsigned bits = ke::Max(aLeft->numBits(), aRight->numBits()) * 2;
+  unsigned bits = std::max(aLeft->numBits(), aRight->numBits()) * 2;
   assert(bits <= kMaxBits && IsPowerOfTwo(bits));
 
   *aSign = true;
@@ -99,7 +101,7 @@ IntValue::Add(ReportingContext& cc, const IntValue& aLeft, const IntValue& aRigh
     uint64_t result = leftv + rightv;
 
     // Check both 64-bit overflow and locally bounded overflow.
-    if ((result < ke::Max(leftv, rightv)) || Log2(result) > left.numBits()) {
+    if ((result < std::max(leftv, rightv)) || Log2(result) > left.numBits()) {
       cc.report(rmsg::constexpr_overflow) << left.getTypename();
       return false;
     }

@@ -15,6 +15,7 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <algorithm>
 #include <utility>
 
 #include "compile-context.h"
@@ -22,7 +23,6 @@
 #include "scopes.h"
 #include "smx-compiler.h"
 #include "array-helpers.h"
-#include <amtl/am-algorithm.h>
 #include <amtl/am-maybe.h>
 #include <amtl/am-string.h>
 #include <smx/smx-v1.h>
@@ -326,7 +326,7 @@ SmxCompiler::generateStatement(ast::Statement* stmt)
 
   if (heap_usage_) {
     __ opcode(OP_HEAP, -heap_usage_);
-    max_heap_usage_ = ke::Max(heap_usage_, max_heap_usage_);
+    max_heap_usage_ = std::max(heap_usage_, max_heap_usage_);
     heap_usage_ = 0;
   }
 }
@@ -346,7 +346,7 @@ SmxCompiler::generateBlock(ast::BlockStatement* block)
   }
 
   // Commit this scope's stack usage to the frame, then drop our local usage.
-  max_var_stk_ = ke::Max(max_var_stk_, cur_var_stk_);
+  max_var_stk_ = std::max(max_var_stk_, cur_var_stk_);
   cur_var_stk_ = stk_usage;
 }
 
