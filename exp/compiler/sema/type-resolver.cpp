@@ -15,6 +15,8 @@
 //
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <algorithm>
+
 #include "type-resolver.h"
 #include "compile-context.h"
 #include "compile-phases.h"
@@ -695,7 +697,7 @@ TypeResolver::computeFixedArraySizes(TypeSpecifier* spec,
       if (base->isPrimitive(PrimitiveType::Char)) {
         // Strings are null-terminated, so we pick the maximum size of any
         // entry in the last dimension.
-        rank.size = ke::Max(rank.size, size);
+        rank.size = std::max(rank.size, size);
       } else if (rank.size != size) {
         rank.status = RankStatus::Indeterminate;
 

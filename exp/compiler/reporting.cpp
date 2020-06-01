@@ -15,15 +15,18 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
+#include <amtl/am-platform.h>
+#if defined(KE_POSIX)
+# include <sys/ioctl.h>
+# include <unistd.h>
+#endif
+
+#include <algorithm>
+
 #include "reporting.h"
 #include "compile-context.h"
 #include "source-manager.h"
 #include "auto-string.h"
-#include <amtl/am-platform.h>
-#if defined(KE_POSIX)
-# include <unistd.h>
-# include <sys/ioctl.h>
-#endif
 
 using namespace ke;
 using namespace sp;
@@ -223,7 +226,7 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
   const unsigned min_cols = suffix_len + prefix_len + 12;
 
   // Fudge factor, we assume we can print at least 16 columns.
-  const unsigned max_cols = ke::Max(GetTerminalWidth(), min_cols);
+  const unsigned max_cols = std::max(GetTerminalWidth(), min_cols);
 
   const unsigned line_index = ref.line - 1;
   LineExtents* lines = ref.file->lineCache();
@@ -269,7 +272,7 @@ ReportManager::printSourceLine(const FullSourceRef& ref)
       static const unsigned delta = col - midpoint;
 
       line_print += delta;
-      line_length = Min(max_chars, line_length - delta);
+      line_length = std::min(max_chars, line_length - delta);
       col = prefix_len + midpoint;
 
       prefix = long_prefix;

@@ -201,6 +201,7 @@ class Config(object):
         cxx.linkflags += ['-mmacosx-version-min=10.7']
       elif builder.target.platform == 'windows':
         cxx.defines += ['WIN32', '_WINDOWS']
+        cxx.cxxdefines += ['NOMINMAX']
 
     cxx.defines += ['KE_THREADSAFE']
     cxx.defines += ['SOURCEPAWN_VERSION="1.11"']
