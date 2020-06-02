@@ -2548,7 +2548,7 @@ litadd(const char* str, size_t len)
     ucell val = 0;
     int byte = 0;
     for (size_t i = 0; i < len; i++) {
-        val |= str[i] << (8 * byte);
+        val |= (unsigned char)str[i] << (8 * byte);
         if (byte == sizeof(ucell) - 1) {
             litadd(val);
             val = 0;
