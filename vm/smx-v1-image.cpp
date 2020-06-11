@@ -472,12 +472,13 @@ SmxV1Image::validateRttiEnums()
 bool
 SmxV1Image::validateRttiEnumStructs()
 {
+  if (!rtti_enumstruct_fields_)
+		return error("rtti.enumstruct_fields section missing");
+
   for (uint32_t i = 0; i < rtti_enumstructs_->row_count; i++) {
     const smx_rtti_enumstruct* enumstruct = getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i);
     if (!validateName(enumstruct->name))
       return error("invalid enum struct name");
-    if (!rtti_enumstruct_fields_)
-      return error("rtti.enumstruct_fields section missing");
 
     // Calculate how many fields this enumstruct has.
     uint32_t stopat = rtti_enumstruct_fields_->row_count;
@@ -515,13 +516,14 @@ SmxV1Image::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, u
 bool
 SmxV1Image::validateRttiClassdefs()
 {
+  if (!rtti_fields_)
+    return error("rtti.fields section missing");
+
   for (uint32_t i = 0; i < rtti_classdefs_->row_count; i++) {
     const smx_rtti_classdef* classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i);
     // TODO: Validate flags.
     if (!validateName(classdef->name))
       return error("invalid classdef name");
-    if (!rtti_fields_)
-      return error("rtti.fields section missing");
 
     // Calculate how many fields this class has.
     uint32_t stopat = rtti_fields_->row_count;
