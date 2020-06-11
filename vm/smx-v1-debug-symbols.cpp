@@ -357,6 +357,7 @@ SmxV1SymbolType::fromRttiType(SmxV1Image* image, const Rtti* type)
     while (inner->inner()) {
       assert(inner->type() == cb::kArray);
       dimensions_.append(0);
+      inner = inner->inner();
     }
     return fromRttiType(image, inner);
   }
