@@ -59,11 +59,11 @@ class SmxV1Image
   bool FindPubvar(const char* name, size_t* indexp) const override;
   size_t HeapSize() const override;
   size_t ImageSize() const override;
-  const char* LookupFile(uint32_t code_offset) override;
-  const char* LookupFunction(uint32_t code_offset) override;
-  bool LookupLine(uint32_t code_offset, uint32_t* line) override;
-  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override;
-  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
+  const char* LookupFile(uint32_t code_offset) const override;
+  const char* LookupFunction(uint32_t code_offset) const override;
+  bool LookupLine(uint32_t code_offset, uint32_t* line) const override;
+  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) const override;
+  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
   SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) override;
@@ -226,9 +226,9 @@ class SmxV1Image
 
  private:
   template <typename SymbolType, typename DimType>
-  const char* lookupFunction(const SymbolType* syms, uint32_t addr);
+  const char* lookupFunction(const SymbolType* syms, uint32_t addr) const;
   template <typename SymbolType, typename DimType>
-  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index);
+  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index) const;
 
   const smx_rtti_table_header* findRttiSection(const char* name) const {
     const Section* section = findSection(name);

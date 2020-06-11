@@ -52,14 +52,14 @@ class LegacyImage
   virtual bool FindPubvar(const char* name, size_t* indexp) const = 0;
   virtual size_t HeapSize() const = 0;
   virtual size_t ImageSize() const = 0;
-  virtual const char* LookupFile(uint32_t code_offset) = 0;
-  virtual const char* LookupFunction(uint32_t code_offset) = 0;
-  virtual bool LookupLine(uint32_t code_offset, uint32_t* line) = 0;
-  virtual bool LookupFunctionAddress(const char* function, const char* file, ucell_t *addr) = 0;
-  virtual bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) = 0;
+  virtual const char* LookupFile(uint32_t code_offset) const = 0;
+  virtual const char* LookupFunction(uint32_t code_offset) const = 0;
+  virtual bool LookupLine(uint32_t code_offset, uint32_t* line) const = 0;
+  virtual bool LookupFunctionAddress(const char* function, const char* file, ucell_t *addr) const = 0;
+  virtual bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const = 0;
   virtual size_t NumFiles() const = 0;
-  virtual SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) = 0;
   virtual const char* GetFileName(size_t index) const = 0;
+  virtual SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) = 0;
 };
 
 class EmptyImage : public LegacyImage
@@ -119,19 +119,19 @@ class EmptyImage : public LegacyImage
   size_t ImageSize() const override {
     return 0;
   }
-  const char* LookupFile(uint32_t code_offset) override {
+  const char* LookupFile(uint32_t code_offset) const override {
     return nullptr;
   }
-  const char* LookupFunction(uint32_t code_offset) override {
+  const char* LookupFunction(uint32_t code_offset) const override {
     return nullptr;
   }
-  bool LookupLine(uint32_t code_offset, uint32_t* line) override {
+  bool LookupLine(uint32_t code_offset, uint32_t* line) const override {
     return false;
   }
-  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override {
+  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) const override {
     return false;
   }
-  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override {
+  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const override {
     return false;
   }
   size_t NumFiles() const override {

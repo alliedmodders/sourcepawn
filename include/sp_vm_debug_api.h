@@ -22,7 +22,7 @@
 
 namespace SourcePawn
 {
-  // Represents a the type of a variable.
+  // Represents the type of a variable.
   class ISymbolType {
   public:
     // @brief Returns the version of the type interface. (SOURCEPAWN_DEBUG_TYPE_VERSION)
