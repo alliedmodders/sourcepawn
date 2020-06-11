@@ -41,11 +41,11 @@ RttiData::typeFromTypeId(uint32_t type_id)
     bytes[2] = (payload >> 16) & 0xff;
     bytes[3] = (payload >> 24) & 0xff;
 
-    AutoPtr<RttiParser> parser(new RttiParser(bytes, 4, 0));
-    return parser->decodeNew();
+    RttiParser parser(bytes, 4, 0);
+    return parser.decodeNew();
   } else if (kind == kTypeId_Complex) {
-    AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, payload));
-    return parser->decodeNew();
+    RttiParser parser(rtti_data_, rtti_data_size_, payload);
+    return parser.decodeNew();
   }
   return nullptr;
 }
@@ -56,8 +56,8 @@ RttiData::functionTypeFromOffset(uint32_t offset)
   if (!rtti_data_)
     return nullptr;
 
-  AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
-  return parser->decodeFunction();
+  RttiParser parser(rtti_data_, rtti_data_size_, offset);
+  return parser.decodeFunction();
 }
 
 const Rtti*
@@ -66,8 +66,8 @@ RttiData::typesetTypeFromOffset(uint32_t offset)
   if (!rtti_data_)
     return nullptr;
 
-  AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
-  return parser->decodeTypeset();
+  RttiParser parser(rtti_data_, rtti_data_size_, offset);
+  return parser.decodeTypeset();
 }
 
 const uint8_t*
@@ -94,15 +94,15 @@ RttiData::validateType(uint32_t type_id)
     bytes[2] = (payload >> 16) & 0xff;
     bytes[3] = (payload >> 24) & 0xff;
 
-    AutoPtr<RttiParser> parser(new RttiParser(bytes, 4, 0));
-    return parser->validate();
+    RttiParser parser(bytes, 4, 0);
+    return parser.validate();
   }
   else if (kind == kTypeId_Complex) {
     if (payload >= rtti_data_size_)
       return false;
 
-    AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, payload));
-    return parser->validate();
+    RttiParser parser(rtti_data_, rtti_data_size_, payload);
+    return parser.validate();
   }
   else
     return false;
@@ -111,15 +111,15 @@ RttiData::validateType(uint32_t type_id)
 bool
 RttiData::validateFunctionOffset(uint32_t offset)
 {
-  AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
-  return parser->validateFunction();
+  RttiParser parser(rtti_data_, rtti_data_size_, offset);
+  return parser.validateFunction();
 }
 
 bool
 RttiData::validateTypesetOffset(uint32_t offset)
 {
-  AutoPtr<RttiParser> parser(new RttiParser(rtti_data_, rtti_data_size_, offset));
-  return parser->validateTypeset();
+  RttiParser parser(rtti_data_, rtti_data_size_, offset);
+  return parser.validateTypeset();
 }
 
 RttiParser::RttiParser(const uint8_t* bytes, uint32_t length, uint32_t offset)
