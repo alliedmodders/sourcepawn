@@ -44,7 +44,7 @@ namespace sp {
       return type_ == Boolean;
     }
     virtual bool isString() {
-      return type_ == String;
+      return type_ == Character;
     }
     virtual bool isEnum() {
       return type_ == Enum;
@@ -83,7 +83,6 @@ namespace sp {
       Boolean,
       Character,
       Any,
-      String,
       Enum,
       Typedef,
       Typeset,

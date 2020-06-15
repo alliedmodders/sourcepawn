@@ -435,7 +435,7 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
       return;
     }
     if (!stricmp(tagname, "String")) {
-      type_ = String;
+      type_ = Character;
       return;
     }
     if ((tag->tag_id & FUNCTAG) > 0) {
