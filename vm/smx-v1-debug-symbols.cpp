@@ -342,21 +342,12 @@ SmxV1SymbolType::fromRttiType(SmxV1Image* image, const Rtti* type)
   case cb::kTopFunction:
     return Function;
   case cb::kFixedArray:
-  {
-    const Rtti* inner = type;
-    while (inner->inner()) {
-      assert(inner->type() == cb::kFixedArray);
-      dimensions_.insert(0, inner->index());
-      inner = inner->inner();
-    }
-    return fromRttiType(image, inner);
-  }
   case cb::kArray:
   {
     const Rtti* inner = type;
     while (inner->inner()) {
-      assert(inner->type() == cb::kArray);
-      dimensions_.append(0);
+      assert(inner->type() == cb::kArray || inner->type() == cb::kFixedArray);
+      dimensions_.insert(0, inner->index());
       inner = inner->inner();
     }
     return fromRttiType(image, inner);
