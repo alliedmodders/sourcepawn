@@ -747,7 +747,7 @@ SmxV1Image::validateSymbolAddress(int32_t address, uint8_t vclass)
   switch (vclass) {
   case kVarClass_Global:
   case kVarClass_Static:
-    if ((uint32_t)address >= code_.header()->size)
+    if ((uint32_t)address >= HeapSize())
       return error("invalid global variable address");
     break;
   case kVarClass_Local:
@@ -831,7 +831,7 @@ SmxV1Image::validateLegacySymbolAddress(int32_t address, uint8_t vclass)
   switch (vclass) {
   case VCLASS_GLOBAL:
   case VCLASS_STATIC:
-    if ((uint32_t)address >= code_.header()->size)
+    if ((uint32_t)address >= HeapSize())
       return false;
     break;
   case VCLASS_LOCAL:
