@@ -1124,8 +1124,94 @@ SmxV1Image::GetFileName(size_t index) const
 }
 
 template <typename SymbolType, typename DimType>
+uint32_t
+SmxV1Image::getFunctionCount(const SymbolType* syms) const {
+  const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
+  const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
+  uint32_t func_count = 0;
+  for (uint32_t i = 0; i < debug_info_->num_syms; i++) {
+    if (cursor + sizeof(SymbolType) > cursor_end)
+      break;
+
+    const SymbolType* sym = reinterpret_cast<const SymbolType*>(cursor);
+    if (sym->ident == sp::IDENT_FUNCTION)
+        func_count++;
+
+    if (sym->dimcount > 0)
+      cursor += sizeof(DimType) * sym->dimcount;
+    cursor += sizeof(SymbolType);
+  }
+  return func_count;
+}
+
+size_t
+SmxV1Image::NumFunctions() const {
+	if (rtti_methods_) {
+		return rtti_methods_->row_count;
+	}
+
+  // Count function symbols once.
+  static uint32_t num_debug_functions = 0;
+  if (num_debug_functions == 0) {
+    if (debug_syms_)
+      num_debug_functions = getFunctionCount<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_);
+    else
+      num_debug_functions = getFunctionCount<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_);
+  }
+  return num_debug_functions;
+}
+
+template <typename SymbolType, typename DimType>
+const char*
+SmxV1Image::getFunctionName(const SymbolType* syms, const char** filename, uint32_t index) const {
+  const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
+  const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
+  uint32_t func_count = 0;
+  for (uint32_t i = 0; i < debug_info_->num_syms; i++) {
+    if (cursor + sizeof(SymbolType) > cursor_end)
+      break;
+
+    const SymbolType* sym = reinterpret_cast<const SymbolType*>(cursor);
+    if (sym->ident == sp::IDENT_FUNCTION) {
+      if (func_count == index) {
+        if (filename)
+          *filename = LookupFile(sym->addr);
+        if (sym->name < debug_names_section_->size)
+          return debug_names_ + sym->name;
+        return nullptr;
+      }
+      func_count++;
+    }
+
+    if (sym->dimcount > 0)
+      cursor += sizeof(DimType) * sym->dimcount;
+    cursor += sizeof(SymbolType);
+  }
+  return nullptr;
+}
+
+const char*
+SmxV1Image::GetFunctionName(size_t index, const char** filename) const {
+  if (rtti_methods_) {
+    if (index >= rtti_methods_->row_count)
+      return nullptr;
+
+    const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, index);
+    if (filename)
+      *filename = LookupFile(method->pcode_start);
+    return names_ + method->name;
+  }
+
+  if (debug_syms_) {
+    return getFunctionName<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, filename, index);
+  } else {
+    return getFunctionName<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, filename, index);
+  }
+}
+
+template <typename SymbolType, typename DimType>
 bool
-SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index) const
+SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t index) const
 {
   const uint8_t* cursor = reinterpret_cast<const uint8_t *>(syms);
   const uint8_t* cursor_end = cursor + debug_symbols_section_->size;

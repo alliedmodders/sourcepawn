@@ -59,6 +59,8 @@ class LegacyImage
   virtual bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const = 0;
   virtual size_t NumFiles() const = 0;
   virtual const char* GetFileName(size_t index) const = 0;
+  virtual size_t NumFunctions() const = 0;
+  virtual const char* GetFunctionName(size_t index, const char** filename) const = 0;
   virtual SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) = 0;
 };
 
@@ -139,6 +141,12 @@ class EmptyImage : public LegacyImage
   }
   const char* GetFileName(size_t index) const override {
     return nullptr;
+  }
+  size_t NumFunctions() const override {
+      return 0;
+  }
+  const char* GetFunctionName(size_t index, const char** filename) const override {
+      return nullptr;
   }
   SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) override {
     return nullptr;

@@ -66,6 +66,8 @@ class SmxV1Image
   bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
+  size_t NumFunctions() const override;
+  const char* GetFunctionName(size_t index, const char** filename) const override;
   SourcePawn::IDebugSymbolIterator* SymbolIterator(ucell_t addr) override;
   const sp_file_tag_t* GetTagById(uint32_t tagid) const;
   const char* GetName(uint32_t nameoffs) const;
@@ -228,7 +230,12 @@ class SmxV1Image
   template <typename SymbolType, typename DimType>
   const char* lookupFunction(const SymbolType* syms, uint32_t addr) const;
   template <typename SymbolType, typename DimType>
-  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index) const;
+  uint32_t getFunctionCount(const SymbolType* syms) const;
+  template <typename SymbolType, typename DimType>
+  const char* getFunctionName(const SymbolType* syms, const char** filename, uint32_t index) const;
+  template <typename SymbolType, typename DimType>
+  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t index) const;
+
 
   const smx_rtti_table_header* findRttiSection(const char* name) const {
     const Section* section = findSection(name);
