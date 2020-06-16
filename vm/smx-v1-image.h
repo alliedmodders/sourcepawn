@@ -76,6 +76,8 @@ class SmxV1Image
   const smx_rtti_classdef* GetRttiClassdef(uint32_t index) const;
   const smx_rtti_enum* GetRttiEnum(uint32_t index) const;
   const smx_rtti_enumstruct* GetRttiEnumStruct(uint32_t index) const;
+  uint32_t GetRttiEnumStructLastFieldIndex(uint32_t index) const;
+  const smx_rtti_es_field* GetRttiEnumStructField(uint32_t index) const;
   const smx_rtti_native* GetRttiNative(uint32_t index) const;
   const smx_rtti_typedef* GetRttiTypedef(uint32_t index) const;
   const smx_rtti_typeset* GetRttiTypeset(uint32_t index) const;
@@ -188,7 +190,7 @@ class SmxV1Image
   const List<sp_file_pubvars_t>& pubvars() const {
     return pubvars_;
   }
-  RttiData* rttidata() {
+  RttiData* rttidata() const {
     return rtti_data_;
   }
 

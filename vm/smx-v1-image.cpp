@@ -1409,6 +1409,27 @@ SmxV1Image::GetRttiEnumStruct(uint32_t index) const
   return getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, index);
 }
 
+uint32_t
+SmxV1Image::GetRttiEnumStructLastFieldIndex(uint32_t index) const
+{
+  const smx_rtti_enumstruct* next_enumstruct = GetRttiEnumStruct(index + 1);
+  if (next_enumstruct)
+    return next_enumstruct->first_field;
+  else if (rtti_enumstruct_fields_)
+    return rtti_enumstruct_fields_->row_count;
+  return 0;
+}
+
+const smx_rtti_es_field*
+SmxV1Image::GetRttiEnumStructField(uint32_t index) const {
+    if (!rtti_enumstruct_fields_)
+        return nullptr;
+    if (index >= rtti_enumstruct_fields_->row_count)
+        return nullptr;
+
+    return getRttiRow<smx_rtti_es_field>(rtti_enumstruct_fields_, index);
+}
+
 const smx_rtti_native*
 SmxV1Image::GetRttiNative(uint32_t index) const
 {

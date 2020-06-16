@@ -163,7 +163,7 @@ SmxV1LegacySymbolIterator::Done()
   return cursor_ >= cursor_end_;
 }
 
-IDebugSymbol*
+const IDebugSymbol*
 SmxV1LegacySymbolIterator::Next()
 {
   assert(!Done());
@@ -230,9 +230,11 @@ SmxV1LegacySymbolIterator::findFirstSymbol()
 SmxV1DebugSymbol::SmxV1DebugSymbol(SmxV1Image* image, const smx_rtti_debug_var* sym)
   : address_(sym->address),
     codestart_(sym->code_start),
-    codeend_(sym->code_end),
-    type_(image, sym)
+    codeend_(sym->code_end)
 {
+  AutoPtr<const Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
+  type_ = new SmxV1SymbolType(image, type);
+
   switch (sym->vclass & 3)
   {
   case kVarClass_Global:
@@ -255,9 +257,10 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(SmxV1Image* image, const smx_rtti_debug_var* 
 SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol_t* sym)
   : address_(sym->addr),
     codestart_(sym->codestart),
-    codeend_(sym->codeend),
-    type_(image, sym)
+    codeend_(sym->codeend)
 {
+  type_ = new SmxV1SymbolType(image, sym);
+
   switch (sym->vclass)
   {
   case VCLASS_GLOBAL:
@@ -280,9 +283,10 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol
 SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym)
   : address_(sym->addr),
     codestart_(sym->codestart),
-    codeend_(sym->codeend),
-    type_(image, sym)
+    codeend_(sym->codeend)
 {
+  type_ = new SmxV1SymbolType(image, sym);
+
   switch (sym->vclass)
   {
   case VCLASS_GLOBAL:
@@ -302,11 +306,7 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
   name_ = image->GetDebugName(sym->name);
 }
 
-SmxV1SymbolType::SmxV1SymbolType(SmxV1Image* image, const smx_rtti_debug_var* sym)
-  : type_(Integer),
-    reference_(false)
-{
-  AutoPtr<const Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
+SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const Rtti* type) {
   reference_ = type->isByRef();
   type_ = fromRttiType(image, type);
 }
@@ -326,7 +326,7 @@ SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol
 }
 
 SmxV1SymbolType::BaseType
-SmxV1SymbolType::fromRttiType(SmxV1Image* image, const Rtti* type)
+SmxV1SymbolType::fromRttiType(const SmxV1Image* image, const Rtti* type)
 {
   switch (type->type()) {
   case cb::kBool:
@@ -392,6 +392,15 @@ SmxV1SymbolType::fromRttiType(SmxV1Image* image, const Rtti* type)
     const smx_rtti_enumstruct* enumstruct = image->GetRttiEnumStruct(type->index());
     if (enumstruct)
       name_ = image->GetName(enumstruct->name);
+
+    uint32_t last_field = image->GetRttiEnumStructLastFieldIndex(type->index());
+    for (uint32_t field = enumstruct->first_field; field < last_field; field++) {
+      const smx_rtti_es_field* enumstruct_field = image->GetRttiEnumStructField(field);
+      if (!enumstruct_field)
+        break;
+
+      es_fields_.append(new SmxV1EnumStructField(image, enumstruct_field));
+    }
     return EnumStruct;
   }
   }
@@ -465,4 +474,12 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
       return;
     }
   }
+}
+
+SmxV1EnumStructField::SmxV1EnumStructField(const SmxV1Image* image, const smx_rtti_es_field* es_field)
+{
+  name_ = image->GetName(es_field->name);
+  offset_ = es_field->offset;
+  AutoPtr<const Rtti> type(image->rttidata()->typeFromTypeId(es_field->type_id));
+  type_ = new SmxV1SymbolType(image, type);
 }
