@@ -2187,24 +2187,38 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
     glbstringread = 1;
 
     for (;;) {
-        assert(*lptr == '\"');
-        lptr += 1;
+        assert(*lptr == '\"' || *lptr == '\'');
 
         static char buffer[sLINEMAX + 1];
         char* cat = buffer;
-        while (*lptr != '\"' && *lptr != '\0' && (cat - buffer) < sLINEMAX) {
-            if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
-                *cat++ = *lptr;
-                if (*lptr == sc_ctrlchar && *(lptr + 1) != '\0')
-                    *cat++ = *++lptr; /* skip escape character plus the escaped character */
+        if (*lptr == '\"')
+        {
+            lptr += 1;
+            while (*lptr != '\"' && *lptr != '\0' && (cat - buffer) < sLINEMAX) {
+                if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
+                    *cat++ = *lptr;
+                    if (*lptr == sc_ctrlchar && *(lptr + 1) != '\0')
+                        *cat++ = *++lptr; /* skip escape character plus the escaped character */
+                }
+                lptr++;
             }
-            lptr++;
+        }
+        else
+        {
+            lptr += 1;
+            ucell c = litchar(&lptr, UTF8MODE);
+            if (c >= (ucell)(1 << sCHARBITS))
+                error(43); // character constant exceeds range
+            *cat++ = static_cast<char>(c);
+            /* invalid char declaration */
+            if (*lptr != '\'')
+                error(27); /* invalid character constant (must be one character) */
         }
         *cat = '\0'; /* terminate string */
 
         packedstring((unsigned char*)buffer, 0, tok);
 
-        if (*lptr == '\"')
+        if (*lptr == '\"' || *lptr == '\'')
             lptr += 1; /* skip final quote */
         else
             error(37); /* invalid (non-terminated) string */
@@ -2230,7 +2244,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
                 lptr++;
             }
         }
-        if (!freading || !(*lptr == '\"')) {
+        if (!freading || !((*lptr == '\"') || (*lptr == '\''))) {
             error(37); /* invalid string concatenation */
             break;
         }
