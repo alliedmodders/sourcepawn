@@ -1,6 +1,6 @@
 #include <shell>
 
-char str[64] = "Hello" ... ' ' ... "World" ... '\x20';
+char str[64] = "Hello" ... ' ' ... "World" ... '\x21';
 
 public main() {
 	print(str);
