@@ -2191,8 +2191,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
 
         static char buffer[sLINEMAX + 1];
         char* cat = buffer;
-        if (*lptr == '\"')
-        {
+        if (*lptr == '\"') {
             lptr += 1;
             while (*lptr != '\"' && *lptr != '\0' && (cat - buffer) < sLINEMAX) {
                 if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
@@ -2202,9 +2201,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
                 }
                 lptr++;
             }
-        }
-        else
-        {
+        } else {
             lptr += 1;
             ucell c = litchar(&lptr, UTF8MODE);
             if (c >= (ucell)(1 << sCHARBITS))
