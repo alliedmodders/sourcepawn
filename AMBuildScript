@@ -23,50 +23,36 @@ import copy
 def Normalize(path):
   return os.path.abspath(os.path.normpath(path))
 
-def SetArchFlags(compiler, arch, platform):
+def SetArchFlags(compiler):
   if compiler.like('gcc'):
-    if arch == 'x86':
+    if compiler.target.arch == 'x86':
       if not compiler.like('emscripten'):
         compiler.cflags += ['-msse']
     else:
       compiler.cflags += ['-fPIC']
 
-  if arch == 'x64':
-    gccarch = '-m64'
-    msvcarch = '/MACHINE:X64'
-  else:
-    gccarch = '-m32'
-    msvcarch = '/MACHINE:X86'
-
-  if compiler.like('msvc'):
-    if msvcarch not in compiler.linkflags:
-      compiler.linkflags += [msvcarch]
-  else:
-    if gccarch not in compiler.cflags:
-      compiler.cflags += [gccarch]
-    if gccarch not in compiler.linkflags:
-      compiler.linkflags += [gccarch]
-
-def AppendArchSuffix(binary, name, arch):
-  if arch == 'x64':
-    binary.localFolder = name + '.x64'
-
 class Config(object):
   def __init__(self):
     super(Config, self).__init__()
-    self.archs = builder.target.arch.replace('x86_64', 'x64').split(',')
     self.enable_coverage = getattr(builder.options, 'enable_coverage', False)
+    self.targets = []
 
   def configure(self):
-    cxx = builder.DetectCxx()
+    target_archs = [builder.host.arch]
+    if builder.options.targets:
+        target_archs = builder.options.targets.split(',')
 
-    if cxx.like('msvc') and len(self.archs) > 1:
-      raise Exception('Building multiple archs with MSVC is not currently supported')
+    dupes = set()
+    for arch in target_archs:
+        if arch in dupes:
+            continue
+        dupes.add(arch)
 
-    archset = set(self.archs)
-    if not archset.issubset(['x86', 'x64']):
-      raise Exception('Unknown target architecture: {0}'.format(builder.target.arch))
+        cxx = builder.DetectCxx(target_arch = arch)
+        self.configure_cxx(cxx)
+        self.targets.append(cxx)
 
+  def configure_cxx(self, cxx):
     if cxx.like('gcc'):
       cxx.cflags += [
         '-pipe',
@@ -192,14 +178,14 @@ class Config(object):
 
     # Platform-specifics
     if not cxx.like('emscripten'):
-      if builder.target.platform == 'linux':
+      if cxx.target.platform == 'linux':
         cxx.postlink += ['-lpthread', '-lrt']
-      elif builder.target.platform == 'mac':
+      elif cxx.target.platform == 'mac':
         cxx.linkflags.remove('-lstdc++')
         cxx.cflags += ['-mmacosx-version-min=10.7']
         cxx.linkflags += ['-stdlib=libc++']
         cxx.linkflags += ['-mmacosx-version-min=10.7']
-      elif builder.target.platform == 'windows':
+      elif cxx.target.platform == 'windows':
         cxx.defines += ['WIN32', '_WINDOWS']
         cxx.cxxdefines += ['NOMINMAX']
 
@@ -224,46 +210,41 @@ class Config(object):
       os.path.join(builder.sourcePath, 'include'),
     ]
 
-  def ProgramBuilder(self, compiler, name, arch):
+  def ProgramBuilder(self, compiler, name):
     binary = compiler.Program(name)
-    AppendArchSuffix(binary, name, arch)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
     return binary
 
-  def LibraryBuilder(self, compiler, name, arch):
+  def LibraryBuilder(self, compiler, name):
     binary = compiler.Library(name)
-    AppendArchSuffix(binary, name, arch)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
     return binary
 
-  def StaticLibraryBuilder(self, compiler, name, arch):
-    binary = compiler.StaticLibrary(name)
-    AppendArchSuffix(binary, name, arch)
-    return binary
+  def StaticLibraryBuilder(self, compiler, name):
+    return compiler.StaticLibrary(name)
 
-  def Program(self, context, name, arch):
+  def Program(self, context, name):
     compiler = context.cxx.clone()
-    SetArchFlags(compiler, arch, builder.target.platform)
-    return self.ProgramBuilder(compiler, name, arch)
+    SetArchFlags(compiler)
+    return self.ProgramBuilder(compiler, name)
 
-  def Library(self, context, name, arch):
+  def Library(self, context, name):
     compiler = context.cxx.clone()
-    SetArchFlags(compiler, arch, builder.target.platform)
-    return self.LibraryBuilder(compiler, name, arch)
+    SetArchFlags(compiler)
+    return self.LibraryBuilder(compiler, name)
 
-  def StaticLibrary(self, context, name, arch):
+  def StaticLibrary(self, context, name):
     compiler = context.cxx.clone()
-    SetArchFlags(compiler, arch, builder.target.platform)
-    return self.StaticLibraryBuilder(compiler, name, arch)
+    SetArchFlags(compiler)
+    return self.StaticLibraryBuilder(compiler, name)
 
 class SourcePawn(object):
   def __init__(self, root, amtl):
     super(SourcePawn, self).__init__()
     self.root = root
     self.amtl = amtl
-    self.arch = builder.target.arch
     self.spcomp_scripts = [
       os.path.join('compiler', 'AMBuilder'),
     ]
@@ -283,25 +264,25 @@ class SourcePawn(object):
     self.EnsureZlib()
     self.EnsureLibSmx()
     self.EnsureAmtl()
-    for arch in self.root.archs:
-      spcomp = self.BuildForArch('compiler/AMBuilder', arch)
-      self.spcomp[arch] = spcomp
+    for cxx in self.root.targets:
+      spcomp = self.BuildForArch('compiler/AMBuilder', cxx)
+      self.spcomp[cxx.target.arch] = spcomp
 
   def BuildVM(self):
     self.EnsureZlib()
     self.EnsureAmtl()
-    for arch in self.root.archs:
-      spshell, libsourcepawn = self.BuildForArch('vm/AMBuilder', arch)
-      self.spshell[arch] = spshell
-      self.libsourcepawn[arch] = libsourcepawn
+    for cxx in self.root.targets:
+      spshell, libsourcepawn = self.BuildForArch('vm/AMBuilder', cxx)
+      self.spshell[cxx.target.arch] = spshell
+      self.libsourcepawn[cxx.target.arch] = libsourcepawn
 
   def BuildExperimental(self):
     self.EnsureAmtl()
-    for arch in self.root.archs:
-      libspcomp2 = self.BuildForArch('exp/compiler/AMBuilder', arch)
-      self.libspcomp2[arch] = libspcomp2
+    for cxx in self.root.targets:
+      libspcomp2 = self.BuildForArch('exp/compiler/AMBuilder', cxx)
+      self.libspcomp2[cxx.target.arch] = libspcomp2
 
-      self.BuildForArch('exp/tools/docparse/AMBuilder', arch)
+      self.BuildForArch('exp/tools/docparse/AMBuilder', cxx)
 
   def BuildSuite(self):
     self.BuildSpcomp()
@@ -312,35 +293,40 @@ class SourcePawn(object):
     if self.libamtl is not None:
       return
     self.libamtl = {}
-    for arch in self.root.archs:
+    for cxx in self.root.targets:
       def do_config(builder, name):
-          return self.root.StaticLibrary(builder, name, arch)
+          return self.root.StaticLibrary(builder, name)
       extra_vars = {'Configure': do_config}
-      libamtl = self.BuildForArch("third_party/amtl/amtl/AMBuilder", arch, extra_vars)
-      self.libamtl[arch] = libamtl.binary
+      libamtl = self.BuildForArch("third_party/amtl/amtl/AMBuilder", cxx, extra_vars)
+      self.libamtl[cxx.target.arch] = libamtl.binary
 
   def EnsureZlib(self):
     if self.zlib is not None:
       return
     self.zlib = {}
-    for arch in self.root.archs:
-      self.zlib[arch] = self.BuildForArch("third_party/zlib/AMBuilder", arch)
+    for cxx in self.root.targets:
+      self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
     self.included_zlib = True
 
   def EnsureLibSmx(self):
     if self.libsmx is not None:
       return
     self.libsmx = {}
-    for arch in self.root.archs:
-      lib = self.BuildForArch('libsmx/AMBuilder', arch)
-      self.libsmx[arch] = lib
+    for cxx in self.root.targets:
+      lib = self.BuildForArch('libsmx/AMBuilder', cxx)
+      self.libsmx[cxx.target.arch] = lib
 
-  def BuildForArch(self, scripts, arch, extra_vars = {}):
+  def BuildForArch(self, scripts, cxx, extra_vars = {}):
     new_vars = copy.copy(self.vars)
-    new_vars['arch'] = arch
     for key in extra_vars:
         new_vars[key] = extra_vars[key]
-    return builder.Build(scripts, new_vars)
+
+    builder.cxx = cxx
+    try:
+        rvalue = builder.Build(scripts, new_vars)
+    finally:
+        builder.cxx = None
+    return rvalue
 
 if builder.parent is None:
   root = Config()

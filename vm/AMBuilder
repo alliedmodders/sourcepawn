@@ -3,12 +3,12 @@ import os
 
 libsourcepawn_a = None
 
-def configure_like_shell(name, arch):
-  prog = Root.Program(builder, name, arch)
+def configure_like_shell(name):
+  prog = Root.Program(builder, name)
   prog.compiler.includes += Includes
   prog.compiler.linkflags[0:0] = [
     libsourcepawn_a.binary,
-    SP.zlib[arch],
+    SP.zlib[builder.cxx.target.arch],
   ]
   if prog.compiler.like('emscripten'):
     prog.compiler.postlink += ['-lnodefs.js']
@@ -42,7 +42,7 @@ if builder.cxx.family == 'gcc':
   ]
 
 # Build the static library.
-library = Root.StaticLibrary(builder, 'sourcepawn', arch)
+library = Root.StaticLibrary(builder, 'sourcepawn')
 library.compiler.includes += Includes
 
 library.sources += [
@@ -73,7 +73,7 @@ library.sources += [
 ]
 
 is_emscripten = builder.cxx.family == 'emscripten'
-has_jit = arch in ['x86'] and not is_emscripten
+has_jit = builder.cxx.target.arch in ['x86'] and not is_emscripten
 
 if has_jit:
   library.sources += [
@@ -85,14 +85,14 @@ if is_emscripten:
   library.sources += [
     'code-stubs-null.cpp',
   ]
-elif arch == 'x86':
+elif builder.cxx.target.arch == 'x86':
   library.sources += [
     'linking.cpp',
     'x86/assembler-x86.cpp',
     'x86/code-stubs-x86.cpp',
     'x86/jit_x86.cpp',
   ]
-elif arch == 'x64':
+elif builder.cxx.target.arch == 'x86_64':
   library.sources += [
     'linking.cpp',
     'x64/assembler-x64.cpp',
@@ -103,11 +103,11 @@ elif arch == 'x64':
 libsourcepawn_a = builder.Add(library)
 
 # Build the dynamically-linked library.
-dll = Root.Library(builder, 'sourcepawn.jit.x86', arch)
+dll = Root.Library(builder, 'sourcepawn.vm')
 dll.compiler.includes += Includes
 dll.compiler.linkflags[0:0] = [
   libsourcepawn_a.binary,
-  SP.zlib[arch],
+  SP.zlib[builder.cxx.target.arch],
 ]
 dll.sources += [
   'dll_exports.cpp'
@@ -116,19 +116,19 @@ dll.sources += [
 libsourcepawn = builder.Add(dll)
 
 # Build the debug shell.
-shell = configure_like_shell('spshell', arch)
+shell = configure_like_shell('spshell')
 if has_jit:
   shell.compiler.defines += ['SP_HAS_JIT']
 shell.sources += [
   'shell.cpp'
 ]
 shell.compiler.linkflags[0:0] = [
-  SP.libamtl[arch],
+  SP.libamtl[builder.cxx.target.arch],
 ]
 spshell = builder.Add(shell)
 
 # Build the verifier.
-verifier = configure_like_shell('verifier', arch)
+verifier = configure_like_shell('verifier')
 verifier.sources += [
   '../tools/verifier/verifier.cpp',
 ]

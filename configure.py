@@ -29,21 +29,24 @@ except:
 		sys.stderr.write('http://www.alliedmods.net/ambuild\n')
 	sys.exit(1)
 
-def make_objdir_name(p):
-  return 'obj-' + util.Platform() + '-' + p.target_arch
+# Hack to show a decent upgrade message, which wasn't done until 2.2.
+ambuild_version = getattr(run, 'CURRENT_API', '2.1')
+if ambuild_version.startswith('2.1'):
+	sys.stderr.write("AMBuild 2.2 or higher is required; please update\n")
+	sys.exit(1)
 
-parser = run.BuildParser(sourcePath=sys.path[0], api='2.1')
-parser.default_arch = 'x86'
-parser.default_build_folder = make_objdir_name
-parser.options.add_option('--enable-debug', action='store_const', const='1', dest='debug',
-                       help='Enable debugging symbols')
-parser.options.add_option('--enable-optimize', action='store_const', const='1', dest='opt',
-                       help='Enable optimization')
-parser.options.add_option('--amtl', type='string', dest='amtl', default=None, help='Custom AMTL path')
-parser.options.add_option('--build', type='string', dest='build', default='all', 
-                       help='Build which components (all, spcomp, vm, exp, test, core)')
-parser.options.add_option('--enable-spew', action='store_true', default=False, dest='enable_spew',
-                       help='Enable debug spew')
-parser.options.add_option("--enable-coverage", action='store_true', default=False,
-                       dest='enable_coverage', help='Enable code coverage support.')
+parser = run.BuildParser(sourcePath=sys.path[0], api='2.2')
+parser.options.add_argument('--enable-debug', action='store_const', const='1', dest='debug',
+                            help='Enable debugging symbols')
+parser.options.add_argument('--enable-optimize', action='store_const', const='1', dest='opt',
+                            help='Enable optimization')
+parser.options.add_argument('--amtl', type=str, dest='amtl', default=None, help='Custom AMTL path')
+parser.options.add_argument('--build', type=str, dest='build', default='all', 
+                            help='Build which components (all, spcomp, vm, exp, test, core)')
+parser.options.add_argument('--enable-spew', action='store_true', default=False, dest='enable_spew',
+                            help='Enable debug spew')
+parser.options.add_argument("--enable-coverage", action='store_true', default=False,
+                            dest='enable_coverage', help='Enable code coverage support.')
+parser.options.add_argument("--targets", type=str, default=None,
+                            help='Specify target architecture (use commas to include more than one)')
 parser.Configure()

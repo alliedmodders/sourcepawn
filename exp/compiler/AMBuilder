@@ -19,7 +19,7 @@
 import os
 
 ### CLI
-binary = Root.StaticLibrary(builder, 'spcomp2', arch)
+binary = Root.StaticLibrary(builder, 'spcomp2')
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath, 'include'),
   os.path.join(builder.sourcePath, builder.sourceFolder),
@@ -72,7 +72,7 @@ binary.sources += [
 ]
 libspcomp2 = builder.Add(binary)
 
-binary = Root.Program(builder, 'spcomp2', arch)
+binary = Root.Program(builder, 'spcomp2')
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath),
   os.path.join(builder.sourcePath, 'include'),
@@ -86,8 +86,8 @@ binary.sources += [
 ]
 binary.compiler.linkflags += [
   libspcomp2.binary,
-  SP.libsmx[arch].binary,
-  SP.libamtl[arch],
+  SP.libsmx[builder.cxx.target.arch].binary,
+  SP.libamtl[builder.cxx.target.arch],
 ]
 builder.Add(binary)
 

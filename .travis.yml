@@ -13,19 +13,18 @@ addons:
       - linux-libc-dev:i386
 env:
   matrix:
-    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86 AM_TYPE=optimize
-    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x64 AM_TYPE=optimize
+    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86,x64 AM_TYPE=optimize
 #   - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=optimize
 #   - AM_CC=emcc AM_CXX=em++ AM_ARCH=x86 AM_TYPE=debug
-    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86 AM_TYPE=debug
-    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x64 AM_TYPE=debug
+    - AM_CC=clang AM_CXX=clang++ AM_ARCH=x86,x64 AM_TYPE=debug
 install:
   - source ./tools/travis-download-compiler.sh
   - CHECKOUT_DIR=$PWD && cd .. && $CHECKOUT_DIR/tools/checkout-deps.sh && cd $CHECKOUT_DIR
   - export PATH="~/.local/bin:$PATH"
   - $AM_CXX --version
 script:
-  - mkdir $AM_CC-$AM_ARCH-$AM_TYPE && cd $AM_CC-$AM_ARCH-$AM_TYPE
-  - CC=$AM_CC CXX=$AM_CXX python ../configure.py --enable-$AM_TYPE --target-arch=$AM_ARCH
+  - mkdir objdir
+  - cd objdir
+  - CC=$AM_CC CXX=$AM_CXX python ../configure.py --enable-$AM_TYPE --targets=$AM_ARCH
   - ambuild
   - python $CHECKOUT_DIR/tests/runtests.py .

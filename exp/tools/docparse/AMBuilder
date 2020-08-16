@@ -17,7 +17,7 @@
 # SourcePawn. If not, see http://www.gnu.org/licenses/.
 import os
 
-binary = Root.Program(builder, 'docparse', arch)
+binary = Root.Program(builder, 'docparse',)
 binary.compiler.cxxincludes += [
   os.path.join(builder.sourcePath),
   os.path.join(builder.sourcePath, 'exp'),
@@ -31,8 +31,8 @@ binary.sources += [
   'docparse.cpp',
 ]
 binary.compiler.linkflags += [
-  SP.libspcomp2[arch].binary,
-  SP.libsmx[arch].binary,
-  SP.libamtl[arch],
+  SP.libspcomp2[builder.cxx.target.arch].binary,
+  SP.libsmx[builder.cxx.target.arch].binary,
+  SP.libamtl[builder.cxx.target.arch],
 ]
 builder.Add(binary)

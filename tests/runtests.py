@@ -1,10 +1,12 @@
 # vim: set ts=2 sw=2 tw=99 et:
-import re
-import os, sys
 import argparse
-import subprocess
-import testutil
 import datetime
+import os
+import platform
+import re
+import subprocess
+import sys
+import testutil
 from testutil import manifest_get
 
 def main():
@@ -69,18 +71,12 @@ class TestPlan(object):
   def show_cli(self):
     return self.args.show_cli
 
-  arch_suffixes = [
-    '',
-    '.x64',
-  ]
   def match_arch(self, arch):
     if self.args.arch is None:
       return True
-    if self.args.arch == 'x86':
-      return arch == ''
     if self.args.arch == 'x64' or self.args.arch == 'x86_64':
-      return arch == '.x64'
-    return False
+      return arch == 'x86_64'
+    return self.args.arch == arch
 
   def find_executable(self, path):
     if os.path.exists(path):
@@ -93,23 +89,40 @@ class TestPlan(object):
       return None
     return path
 
+  def find_executables_in(self, path, name):
+    kPlatformNames = {
+        'Linux': 'linux',
+        'Darwin': 'mac',
+        'Windows': 'windows',
+    }
+
+    found = []
+    for subdir in os.listdir(path):
+      parts = subdir.split('-')
+      if len(parts) != 2:
+        continue
+      our_platform = kPlatformNames.get(platform.system(), platform.system())
+      if parts[0] != our_platform:
+        continue
+      if not self.match_arch(parts[1]):
+        continue
+
+      prefix = os.path.join(path, subdir, name)
+      full_path = self.find_executable(prefix)
+      if not full_path:
+        continue
+      found.append((parts[1], os.path.abspath(full_path)))
+    return found
+
   def find_shells(self):
-    for arch in self.arch_suffixes:
-      if not self.match_arch(arch):
-        continue
+    search_in = os.path.join(self.args.objdir, 'vm', 'spshell')
+    found = self.find_executables_in(search_in, 'spshell')
 
-      path = os.path.join(self.args.objdir, 'vm', 'spshell' + arch, 'spshell')
-      path = self.find_executable(path)
-
-      if not path:
-        continue
-
+    for arch, path in found:
       env = None
       if self.args.coverage:
         env = self.env_.copy()
         env['LLVM_PROFILE_FILE'] = '{0}/spshell-%9m'.format(self.args.coverage)
-
-      path = os.path.abspath(path)
 
       rc, stdout, stderr = testutil.exec_argv([path, '--version'])
       if rc == 0 and 'JIT' in stdout:
@@ -134,16 +147,10 @@ class TestPlan(object):
       self.find_spcomp()
 
   def find_spcomp(self):
-    for arch in self.arch_suffixes:
-      if not self.match_arch(arch):
-        continue
+    search_in = os.path.join(self.args.objdir, 'compiler', 'spcomp')
+    found = self.find_executables_in(search_in, 'spcomp')
 
-      path = os.path.join(self.args.objdir, 'compiler', 'spcomp' + arch, 'spcomp')
-      path = self.find_executable(path)
-
-      if not path:
-        continue
-
+    for arch, path in found:
       env = None
       if self.args.coverage:
         env = self.env_.copy()
