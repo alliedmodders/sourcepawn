@@ -41,11 +41,11 @@ int main(int argc, char** argv)
     "Add a folder to the include path.");
 
   // :TODO: Turn these off by default once we're closer to release.
-  BoolOption show_ast(parser, nullptr, "show-ast", Some(true),
+  EnableOption show_ast(parser, nullptr, "show-ast", true,
     "Print the AST to stderr.");
-  BoolOption show_sema(parser, nullptr, "show-sema", Some(true),
+  EnableOption show_sema(parser, nullptr, "show-sema", true,
     "Print the semantic analysis tree to stderr.");
-  BoolOption pool_stats(parser, nullptr, "pool-stats", Some(true),
+  EnableOption pool_stats(parser, nullptr, "pool-stats", true,
     "Show pool memory usage after each phase.");
   ToggleOption parse_only(parser, nullptr, "parse-only", Some(false),
     "Skip name binding and type resolution.");

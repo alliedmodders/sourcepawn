@@ -18,7 +18,7 @@
 #
 import os
 
-binary = Root.StaticLibrary(builder, 'smx', arch)
+binary = Root.StaticLibrary(builder, 'smx')
 binary.compiler.cxxincludes += [
   os.path.join(builder.currentSourcePath, '..'),
   os.path.join(builder.currentSourcePath, '..', 'include'),

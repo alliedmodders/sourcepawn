@@ -1,7 +1,7 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
 import os
 
-binary = Root.Program(builder, 'spcomp', arch)
+binary = Root.Program(builder, 'spcomp')
 compiler = binary.compiler
 compiler.includes += [
   os.path.join(SP.amtl, 'amtl'),
@@ -34,11 +34,11 @@ if compiler.family == 'gcc':
   if compiler.version >= '4.6':
     compiler.cxxflags += ['-Wno-unused-but-set-variable']
 
-if builder.target.platform == 'linux':
+if compiler.target.platform == 'linux':
   compiler.defines += [
     '_GNU_SOURCE'
   ]
-elif builder.target.platform == 'mac':
+elif compiler.target.platform == 'mac':
   compiler.defines += [
     'DARWIN',
   ]
@@ -67,14 +67,14 @@ binary.sources += [
   'types.cpp',
 ]
 
-if builder.target.platform == 'linux' and not compiler.like('emscripten'):
+if compiler.target.platform == 'linux' and not compiler.like('emscripten'):
   compiler.defines += ['ENABLE_BINRELOC']
   binary.sources.append('binreloc.c')
 
 binary.compiler.linkflags[0:0] = [
-  SP.libsmx[arch].binary,
-  SP.zlib[arch],
-  SP.libamtl[arch],
+  SP.libsmx[compiler.target.arch].binary,
+  SP.zlib[compiler.target.arch],
+  SP.libamtl[compiler.target.arch],
 ]
 
 rvalue = builder.Add(binary)
