@@ -292,6 +292,11 @@ class SourcePawn(object):
   def EnsureAmtl(self):
     if self.libamtl is not None:
       return
+
+    self.libamtl = getattr(self.root, 'libamtl', None)
+    if self.libamtl:
+      return
+
     self.libamtl = {}
     for cxx in self.root.targets:
       def do_config(builder, name):
