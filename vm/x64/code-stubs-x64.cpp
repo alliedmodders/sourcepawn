@@ -96,34 +96,4 @@ CodeStubs::CompileInvokeStub()
   return true;
 }
 
-SPVM_NATIVE_FUNC
-CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void* pData)
-{
-  MacroAssembler masm;
-
-  __ push(rbp);
-  __ movq(rbp, rsp);
-
-#if (defined(KE_WINDOWS)) && (defined(KE_ARCH_X64))
-  // Shadow space.
-  __ subq(rsp, 0x20);
-#endif
-
-  // Arguments are already set up. We just need to set the third argument.
-  // Note that the stack is aligned too!
-  __ movq(ArgReg2, reinterpret_cast<intptr_t>(pData));
-  __ movq(rax, reinterpret_cast<intptr_t>(reinterpret_cast<void*>(callback)));
-  __ call(rax);
-
-#if (defined(KE_WINDOWS)) && (defined(KE_ARCH_X64))
-  // Shadow space.
-  __ addq(rsp, 0x20);
-#endif
-
-  __ leave();
-  __ ret();
-
-  return (SPVM_NATIVE_FUNC)LinkCodeToLegacyPtr(env_, masm);
-}
-
 } // namespace sp

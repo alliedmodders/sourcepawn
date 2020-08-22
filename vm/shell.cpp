@@ -142,6 +142,16 @@ static void BindNative(IPluginRuntime* rt, const char* name, SPVM_NATIVE_FUNC fn
   rt->UpdateNativeBinding(index, fn, 0, nullptr);
 }
 
+static void BindNative(IPluginRuntime* rt, const char* name, INativeCallback* callback)
+{
+  int err;
+  uint32_t index;
+  if ((err = rt->FindNativeByName(name, &index)) != SP_ERROR_NONE)
+    return;
+
+  rt->UpdateNativeBindingObject(index, callback, 0, nullptr);
+}
+
 static cell_t PrintFloat(IPluginContext* cx, const cell_t* params)
 {
   return printf("%f\n", sp_ctof(params[1]));
@@ -189,6 +199,32 @@ static cell_t ReportError(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+class DynamicNative : public INativeCallback
+{
+  public:
+    explicit DynamicNative()
+    {}
+
+    void AddRef() override {
+      refcount_++;
+    }
+    void Release() override {
+      assert(refcount_ > 0);
+      if (--refcount_ == 0)
+        delete this;
+    }
+    int Invoke(IPluginContext* cx, const cell_t* params) override {
+      if (params[0] != 1) {
+        cx->ReportError("wrong param count");
+        return 0;
+      }
+      return params[1];
+    }
+
+  private:
+    uintptr_t refcount_ = 0;
+};
+
 static int Execute(const char* file)
 {
   char error[255];
@@ -213,6 +249,7 @@ static int Execute(const char* file)
   BindNative(rt, "dump_stack_trace", DumpStackTrace);
   BindNative(rt, "report_error", ReportError);
   BindNative(rt, "CloseHandle", DoNothing);
+  BindNative(rt, "dynamic_native", new DynamicNative());
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

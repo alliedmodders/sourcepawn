@@ -1334,6 +1334,13 @@ Compiler::visitSYSREQ_C(uint32_t native_index)
   return true;
 }
 
+static cell_t NativeInvokeThunk(NativeEntry* native, IPluginContext* ctx, const cell_t* params)
+{
+  if (native->legacy_fn)
+    return native->legacy_fn(ctx, params);
+  return native->callback->Invoke(ctx, params);
+} 
+
 void
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
 {
@@ -1347,10 +1354,17 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   bool immutable = native->status == SP_NATIVE_BOUND &&
                    !(native->flags & (SP_NTVFLAG_EPHEMERAL|SP_NTVFLAG_OPTIONAL));
   if (!immutable) {
-    __ movl(edx, Operand(ExternalAddress(&native->legacy_fn)));
-    __ testl(edx, edx);
-    __ j(zero, &unbound_native_error_);
+    __ movl(edx, Operand(ExternalAddress(&native->status)));
+    __ cmpl(edx, SP_NATIVE_BOUND);
+    __ j(not_equal, &unbound_native_error_);
   }
+
+  bool fast_path = immutable && native->legacy_fn;
+
+  // If we're going to take the slow path, the stack has an extra word, so we
+  // need to align it here.
+  if (!fast_path)
+    __ subl(esp, 12);
 
   // Save the old heap pointer.
   __ push(Operand(hpAddr()));
@@ -1366,11 +1380,29 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   // Push the first parameter, the context.
   __ push(intptr_t(rt_->GetBaseContext()));
 
-  // Invoke the native.
-  if (immutable)
+  if (fast_path) {
+    // Fast invoke, skip right to the function call.
+    //
+    // Stack (16 bytes):
+    //   12: Saved EDX
+    //    8: Saved HP
+    //    4: Cells
+    //    0: Context
     __ callWithABI(ExternalAddress((void*)native->legacy_fn));
-  else
-    __ callWithABI(edx);
+  } else {
+    // Slower invoke, go through a wrapper so we don't have to make this super
+    // complicated handling all the different calling conventions.
+    //
+    // Stack (32 bytes):
+    //   28: Saved EDX
+    //   24: Alignment (3 words)
+    //   12: Saved HP
+    //    8: Cells
+    //    4: Context
+    //    0: Native
+    __ push(reinterpret_cast<intptr_t>(native));
+    __ callWithABI(ExternalAddress((void*)NativeInvokeThunk));
+  }
   __ bind(&return_address);
   // Map the return address to the cip that initiated this call.
   emitCipMapping(op_cip_);

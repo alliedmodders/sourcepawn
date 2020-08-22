@@ -16,6 +16,9 @@ native void dump_stack_trace();
 native void unbound_native();
 native int donothing();
 
+// Return arg, but through a dynamically generated native.
+native int dynamic_native(int arg);
+
 typedef InvokeCallback = function void ();
 // Invoke |fn| up to |count| times, returning false immediately on failure.
 native bool invoke(int count, InvokeCallback fn);
