@@ -1,4 +1,4 @@
-// vim: set ts=4 sw=4 tw=99 noet:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0xC
-#define SOURCEPAWN_API_VERSION 0x020E
+#define SOURCEPAWN_ENGINE2_API_VERSION 0xD
+#define SOURCEPAWN_API_VERSION 0x020F
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -58,9 +58,40 @@ enum SP_NULL_TYPE {
     SP_NULL_STRING = 1, /**< const String[1] reference */
 };
 
+// @brief Interface for a refcounted objects.
+class IRefcountedObject
+{
+  public:
+    // Virtual destructor.
+    virtual ~IRefcountedObject() {}
+
+    // @brief Increase the object's reference count.
+    virtual void AddRef() = 0;
+
+    // @brief Decrease the object's reference count, freeing any resources once
+    // the reference count reaches zero.
+    virtual void Release() = 0;
+};
+
+// @brief Interface for a native callback.
+class INativeCallback : public IRefcountedObject
+{
+  public:
+    // @brief Return the SOURCEPAWN_API_VERSION this was compiled against.
+    virtual int GetApiVersion() const { return SOURCEPAWN_API_VERSION; }
+
+    // @brief Called when a plugin invokes this native. The signature is the same
+    // as a normal native callback.
+    //
+    // @param ctx       Plugin context.
+    // @param params    Parameter vector.
+    // @return          Return value (ignored if an error is thrown).
+    virtual cell_t Invoke(IPluginContext* ctx, const cell_t* params) = 0;
+};
+
 /**
-   * @brief Represents what a function needs to implement in order to be callable.
-   */
+ * @brief Represents what a function needs to implement in order to be callable.
+ */
 class ICallable
 {
   public:
@@ -252,8 +283,8 @@ class IPluginFunction : public ICallable
 
     /**
      * @brief Returns a name to identify this function for debugging purposes.
-	    *
-	    * @return       String name.
+     *
+     * @return       String name.
      */
     virtual const char* DebugName() = 0;
 };
@@ -508,7 +539,7 @@ class IPluginRuntime
      * @brief Returns the native at the given index.
      *
      * @param index     Native index.
-     * @return      Native pointer, or NULL on failure.
+     * @return          Native pointer, or NULL on failure.
      */
     virtual const sp_native_t* GetNative(uint32_t index) = 0;
 
@@ -516,6 +547,19 @@ class IPluginRuntime
      * @brief Return the file or location this plugin was loaded from.
      */
     virtual const char* GetFilename() = 0;
+
+    /**
+     * @brief Update the native binding at the given index.
+     *
+     * The given object will be AddRef'd immediately, and Released on failure.
+     * Thus, the caller can pass a newborn object with refcount == 0.
+     *
+     * @param native    Native callback object.
+     * @param flags     Native flags.
+     * @param user      User data pointer.
+     */
+    virtual int UpdateNativeBindingObject(uint32_t index, INativeCallback* native, uint32_t flags,
+                                          void* data) = 0;
 };
 
 /**
@@ -1421,20 +1465,16 @@ class ISourcePawnEngine2
     virtual IPluginRuntime* LoadPlugin(ICompilation* co, const char* file, int* err) = 0;
 
     /**
-     * @brief Creates a fake native and binds it to a general callback function.
+     * @brief Deprecated, do not use.
      *
-     * @param callback  Callback function to bind the native to.
-     * @param pData    Private data to pass to the callback when the native is invoked.
-     * @return      A new fake native function as a wrapper around the callback.
+     * @return          NULL.
      */
-    virtual SPVM_NATIVE_FUNC CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void* pData) = 0;
+    virtual SPVM_NATIVE_FUNC CreateFakeNative(SPVM_FAKENATIVE_FUNC, void*) = 0;
 
     /**
-     * @brief Destroys a fake native function wrapper.  
-     *
-     * @param func    Pointer to the fake native created by CreateFakeNative.
+     * @brief Deprecated, do not use.
      */
-    virtual void DestroyFakeNative(SPVM_NATIVE_FUNC func) = 0;
+    virtual void DestroyFakeNative(SPVM_NATIVE_FUNC) = 0;
 
     /**
      * @brief Sets the debug listener.

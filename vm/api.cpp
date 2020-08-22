@@ -294,15 +294,14 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
 }
 
 SPVM_NATIVE_FUNC
-SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void* pData)
+SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC, void*)
 {
-  return Environment::get()->stubs()->CreateFakeNativeStub(callback, pData);
+  return nullptr;
 }
 
 void
-SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC func)
+SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC)
 {
-  return Environment::get()->APIv1()->FreePageMemory((void*)func);
 }
 
 #if !defined(SOURCEPAWN_VERSION)

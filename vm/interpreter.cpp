@@ -90,7 +90,10 @@ Interpreter::invokeNative(uint32_t native_index)
 
     const cell_t* params = reinterpret_cast<const cell_t*>(cx_->memory() + cx_->sp());
 
-    regs_.pri() = native->legacy_fn(cx_, params);
+    if (native->legacy_fn)
+      regs_.pri() = native->legacy_fn(cx_, params);
+    else
+      regs_.pri() = native->callback->Invoke(cx_, params);
   } else {
     cx_->ReportErrorNumber(SP_ERROR_INVALID_NATIVE);
   }

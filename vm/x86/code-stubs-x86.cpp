@@ -104,30 +104,3 @@ CodeStubs::CompileInvokeStub()
   return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.address()) + error.offset();
   return true;
 }
-
-SPVM_NATIVE_FUNC
-CodeStubs::CreateFakeNativeStub(SPVM_FAKENATIVE_FUNC callback, void* pData)
-{
-  Assembler masm;
-
-  __ push(ebx);
-  __ push(edi);
-  __ push(esi);
-  __ movl(edi, Operand(esp, 16)); // store ctx
-  __ movl(esi, Operand(esp, 20)); // store params
-  __ movl(ebx, esp);
-  __ andl(esp, 0xfffffff0);
-  __ subl(esp, 4);
-
-  __ push(intptr_t(pData));
-  __ push(esi);
-  __ push(edi);
-  __ call(ExternalAddress((void*)callback));
-  __ movl(esp, ebx);
-  __ pop(esi);
-  __ pop(edi);
-  __ pop(ebx);
-  __ ret();
-
-  return (SPVM_NATIVE_FUNC)LinkCodeToLegacyPtr(env_, masm);
-}

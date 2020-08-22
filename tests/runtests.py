@@ -129,14 +129,14 @@ class TestPlan(object):
         self.shells.append({
           'path': path,
           'args': [],
-          'name': 'default' + arch,
+          'name': 'default-' + arch,
           'env': env,
           })
 
       self.shells.append({
         'path': path,
         'args': ['--disable-jit'],
-        'name': 'interpreter' + arch,
+        'name': 'interpreter-' + arch,
         'env': env,
       })
 

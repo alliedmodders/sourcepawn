@@ -45,6 +45,7 @@ struct NativeEntry : public sp_native_t
    : legacy_fn(nullptr)
   {}
   SPVM_NATIVE_FUNC legacy_fn;
+  RefPtr<SourcePawn::INativeCallback> callback;
 };
 
 /* Jit wants fast access to this so we expose things as public */
@@ -85,6 +86,8 @@ class PluginRuntime
   unsigned GetNativeReplacement(size_t index);
   ScriptedInvoker* GetPublicFunction(size_t index);
   int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void* data) override;
+  int UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
+                                void* data) override;
   const sp_native_t* GetNative(uint32_t index) override;
   int LookupLine(ucell_t addr, uint32_t* line) override;
   int LookupFunction(ucell_t addr, const char** name) override;

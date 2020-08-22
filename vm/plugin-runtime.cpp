@@ -285,9 +285,35 @@ PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_
   }
 
   native->legacy_fn = pfn;
-  native->status = pfn
-                   ? SP_NATIVE_BOUND
-                   : SP_NATIVE_UNBOUND;
+  native->callback = nullptr;
+  native->status = pfn ? SP_NATIVE_BOUND : SP_NATIVE_UNBOUND;
+  native->flags = flags;
+  native->user = data;
+  return SP_ERROR_NONE;
+}
+
+int
+PluginRuntime::UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
+                                         void* data)
+{
+  RefPtr<INativeCallback> holder(callback);
+  if (index >= image_->NumNatives())
+    return SP_ERROR_INDEX;
+
+  NativeEntry* native = &natives_[index];
+
+  // The native must either be unbound, or it must be ephemeral or optional.
+  // Otherwise, we've already baked its address in at callsites and it's too
+  // late to fix them.
+  if (native->status == SP_NATIVE_BOUND &&
+      !(native->flags & (SP_NTVFLAG_OPTIONAL|SP_NTVFLAG_EPHEMERAL)))
+  {
+    return SP_ERROR_PARAM;
+  }
+
+  native->legacy_fn = nullptr;
+  native->callback = callback;
+  native->status = callback ? SP_NATIVE_BOUND : SP_NATIVE_UNBOUND;
   native->flags = flags;
   native->user = data;
   return SP_ERROR_NONE;
