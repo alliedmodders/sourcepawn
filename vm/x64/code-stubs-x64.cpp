@@ -27,6 +27,7 @@ CodeStubs::InitializeFeatureDetection()
   return true;
 }
 
+#if 0
 bool
 CodeStubs::CompileInvokeStub()
 {
@@ -95,5 +96,6 @@ CodeStubs::CompileInvokeStub()
   return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.address()) + error.offset();
   return true;
 }
+#endif
 
 } // namespace sp

@@ -99,7 +99,7 @@ class TestPlan(object):
     found = []
     for subdir in os.listdir(path):
       parts = subdir.split('-')
-      if len(parts) != 2:
+      if len(parts) < 2:
         continue
       our_platform = kPlatformNames.get(platform.system(), platform.system())
       if parts[0] != our_platform:
