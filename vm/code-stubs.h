@@ -38,11 +38,12 @@ class CodeStubs
   void* ReturnStub() const {
     return return_stub_;
   }
-  void* LegacyNativeStub();
 
  private:
   bool InitializeFeatureDetection();
+#if defined(SP_HAS_JIT)
   bool CompileInvokeStub();
+#endif
 
  private:
   Environment* env_;

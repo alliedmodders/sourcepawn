@@ -38,17 +38,20 @@ class Config(object):
     self.targets = []
 
   def configure(self):
-    target_archs = [builder.host.arch]
     if builder.options.targets:
         target_archs = builder.options.targets.split(',')
 
-    dupes = set()
-    for arch in target_archs:
-        if arch in dupes:
-            continue
-        dupes.add(arch)
+        dupes = set()
+        for arch in target_archs:
+            if arch in dupes:
+                continue
+            dupes.add(arch)
 
-        cxx = builder.DetectCxx(target_arch = arch)
+            cxx = builder.DetectCxx(target_arch = arch)
+            self.configure_cxx(cxx)
+            self.targets.append(cxx)
+    else:
+        cxx = builder.DetectCxx()
         self.configure_cxx(cxx)
         self.targets.append(cxx)
 
@@ -72,7 +75,8 @@ class Config(object):
         cxx.cxxflags += ['-fvisibility-inlines-hidden']
         if have_clang or (have_gcc and cxx.version >= '4.7'):
           cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
-        cxx.cxxflags += ['-Wno-unused-private-field']
+        if not (have_gcc and cxx.version <= 6.3):
+          cxx.cxxflags += ['-Wno-unused-private-field']
 
       if self.enable_coverage:
         if cxx.family == 'clang':
@@ -93,7 +97,7 @@ class Config(object):
         '-Wno-overloaded-virtual',
       ]
 
-      if have_gcc:
+      if have_gcc and cxx.target.arch in ['x86', 'x86_64']:
         cxx.cflags += ['-mfpmath=sse']
 
       cxx.postlink += ['-lm']

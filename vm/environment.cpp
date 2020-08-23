@@ -19,7 +19,7 @@
 #include "method-info.h"
 #include "compiled-function.h"
 #include "code-stubs.h"
-#ifndef KE_EMSCRIPTEN
+#if defined(SP_HAS_JIT)
 #include "jit.h"
 #endif
 #include "interpreter.h"
