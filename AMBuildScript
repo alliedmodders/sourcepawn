@@ -39,15 +39,15 @@ class Config(object):
 
   def configure(self):
     if builder.options.targets:
-        target_archs = builder.options.targets.split(',')
+        targets = builder.options.targets.split(',')
 
         dupes = set()
-        for arch in target_archs:
-            if arch in dupes:
+        for target in targets:
+            if target in dupes:
                 continue
-            dupes.add(arch)
+            dupes.add(target)
 
-            cxx = builder.DetectCxx(target_arch = arch)
+            cxx = builder.DetectCxx(target = target)
             self.configure_cxx(cxx)
             self.targets.append(cxx)
     else:

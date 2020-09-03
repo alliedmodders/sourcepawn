@@ -434,6 +434,9 @@ Parser::parse_const(int vclass)
         type.tag = tag;
         type.is_const = true;
 
+        if (!name)
+            continue;
+
         VarDecl* var = new ConstDecl(pos, name, type, vclass, expr_tag, expr_val);
         if (decl) {
             if (!list) {
