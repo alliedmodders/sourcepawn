@@ -1082,6 +1082,7 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
         cidx = 0; /* only to avoid a compiler warning */
         if (sc_status == statWRITE && sym != NULL && (sym->usage & (uREAD | uWRITTEN)) == 0) {
             sc_status = statSKIP;
+            sc_err_status = TRUE;
             cidx = code_idx;
 #if !defined NDEBUG
             glbdecl = glb_declared;
@@ -1133,6 +1134,7 @@ declglb(declinfo_t* decl, int fpublic, int fstatic, int fstock)
 
         if (sc_status == statSKIP) {
             sc_status = statWRITE;
+            sc_err_status = FALSE;
             code_idx = cidx;
             assert(glb_declared == glbdecl);
         } else {
