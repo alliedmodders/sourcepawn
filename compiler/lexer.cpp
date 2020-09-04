@@ -2126,10 +2126,18 @@ lex_once(full_token_t* tok, cell* lexvalue)
             lptr += 1; /* skip quote */
             tok->id = tNUMBER;
             *lexvalue = tok->value = litchar(&lptr, UTF8MODE);
-            if (*lptr == '\'')
+            if (*lptr == '\'') {
                 lptr += 1; /* skip final quote */
-            else
+            } else {
                 error(27); /* invalid character constant (must be one character) */
+
+                // Eat tokens on the same line until we can close the malformed
+                // string.
+                while (*lptr && *lptr != '\'')
+                    litchar(&lptr, UTF8MODE);
+                if (*lptr && *lptr == '\'')
+                    lptr++;
+            }
             return;
 
         case ';':
