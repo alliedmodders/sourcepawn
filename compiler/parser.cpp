@@ -2369,6 +2369,9 @@ parse_old_decl(declinfo_t* decl, int flags) {
     if (type_obj->isEnumStruct())
         error(85, type_obj->name());
 
+    if (sc_require_newdecls)
+        error(147);
+
     // Look for varargs and end early.
     if (matchtoken(tELLIPS)) {
         type->ident = iVARARGS;
@@ -2411,9 +2414,6 @@ parse_old_decl(declinfo_t* decl, int flags) {
         if (matchtoken('['))
             parse_old_array_dims(decl, flags);
     }
-
-    if (sc_require_newdecls)
-        error(147);
 
     return TRUE;
 }
