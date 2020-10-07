@@ -212,8 +212,6 @@ Parser::parse_enum(int vclass)
 
     EnumDecl* decl = new EnumDecl(pos, vclass, label, name);
 
-    needtoken('{');
-
     cell increment = 1;
     cell multiplier = 1;
     if (matchtoken('(')) {
@@ -228,6 +226,8 @@ Parser::parse_enum(int vclass)
         }
         needtoken(')');
     }
+
+    needtoken('{');
 
     cell size;
     cell value = 0;
