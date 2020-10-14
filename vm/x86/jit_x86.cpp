@@ -1408,17 +1408,17 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native)
   emitCipMapping(op_cip_);
 
   // Restore the heap pointer.
-  __ movl(edx, Operand(esp, 2 * sizeof(intptr_t)));
+  __ movl(edx, Operand(esp, (fast_path ? 2 : 3) * sizeof(intptr_t)));
   __ movl(Operand(hpAddr()), edx);
 
   // Restore ALT.
-  __ movl(edx, Operand(esp, 3 * sizeof(intptr_t)));
+  __ movl(edx, Operand(esp, (fast_path ? 3 : 7) * sizeof(intptr_t)));
 
   // Restore SP.
   __ addl(stk, dat);
 
   // Remove the inline frame, + our four arguments.
-  __ popInlineExitFrame(4);
+  __ popInlineExitFrame(fast_path ? 4 : 8);
 
   // Check for errors. Note we jump directly to the return stub since the
   // error has already been reported.
