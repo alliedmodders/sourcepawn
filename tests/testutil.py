@@ -74,7 +74,7 @@ def parse_manifest(path, local_folder, source = {}):
 
   for entry in manifest:
     includes = manifest[entry].get('includes', None)
-    if includes and isinstance(includes, basestring):
+    if includes and isinstance(includes, str):
       includes = [include.strip() for include in includes.split(',')]
       includes = [os.path.join(local_folder, include) for include in includes]
       manifest[entry]['includes'] = includes
