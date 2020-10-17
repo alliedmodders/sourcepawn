@@ -243,6 +243,7 @@ static const char* fatalmsg[] = {
     /*195*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
     /*196*/
     "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
+    /*197*/ "maximum macro recursion depth reached",
 };
 
 static const char* warnmsg[] = {
