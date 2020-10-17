@@ -1394,6 +1394,8 @@ substallpatterns(unsigned char* line, int buffersize)
     unsigned char *start, *end;
     int prefixlen;
 
+    int depth = 0;
+
     start = line;
     while (*start != '\0') {
         /* find the start of a prefix (skip all non-alphabetic characters),
@@ -1439,8 +1441,15 @@ substallpatterns(unsigned char* line, int buffersize)
             /* match succeeded: do not update "start", because the substitution text
              * may be matched by other macros
              */
+
+            ++depth;
+            if (depth >= 32) {
+                error(FATAL_ERROR_MACRO_DEPTH);
+                return;
+            }
         } else {
             start = end; /* no macro with this prefix, skip this prefix */
+            depth = 0;
         }
     }
 }
