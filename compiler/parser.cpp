@@ -3299,6 +3299,8 @@ decl_enumstruct()
     if (!position)
         error(119, struct_name.name);
 
+    matchtoken(';'); /* eat an optional ; */
+
     require_newline(TerminatorPolicy::Newline);
 
     if (root) {
