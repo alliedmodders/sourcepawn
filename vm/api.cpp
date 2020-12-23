@@ -287,7 +287,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
     }
   }
 
-  if (!pRuntime->Name())
+  if (*pRuntime->Name() == '\0')
     pRuntime->SetNames(file, file);
 
   return pRuntime;
