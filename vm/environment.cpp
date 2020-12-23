@@ -19,6 +19,7 @@
 #include "method-info.h"
 #include "compiled-function.h"
 #include "code-stubs.h"
+#include "debug-metadata.h"
 #if defined(SP_HAS_JIT)
 #include "jit.h"
 #endif
@@ -38,6 +39,7 @@ Environment::Environment()
    debugger_(nullptr),
    eh_top_(nullptr),
    exception_code_(SP_ERROR_NONE),
+   debug_metadata_flags_(JIT_DEBUG_DELETE_ON_EXIT | JIT_DEBUG_PERF_BASIC),
    profiler_(nullptr),
 #if defined(SP_HAS_JIT)
    jit_enabled_(true),
@@ -127,6 +129,12 @@ Environment::EnableDebugBreak()
 }
 
 void
+Environment::SetDebugMetadataFlags(int flags)
+{
+  debug_metadata_flags_ = flags;
+}
+
+void
 Environment::EnableProfiling()
 {
   profiling_enabled_ = !!profiler_;
@@ -205,6 +213,40 @@ CodeChunk
 Environment::AllocateCode(size_t size)
 {
   return code_alloc_->Allocate(size);
+}
+
+void
+Environment::WriteDebugMetadata(void* address, uint64_t length, const char* symbol, const CodeDebugMap& mapping)
+{
+  // Some other debug info consumers we might want to implement here:
+  //
+  // * Intel VTune
+  //   https://github.com/intel/ittapi
+  //   Would give us profiling coverage on non-Linux.
+  //   Very similar input (and use case) as perf, requires linking Intel code in though.
+  //
+  // * GDB JIT Interface
+  //   https://sourceware.org/gdb/current/onlinedocs/gdb/JIT-Interface.html
+  //   Lets GDB show JIT frames when debugging, with source info.
+  //   Requires generating full ELF + DWARF objects in memory.
+
+#if defined(KE_LINUX)
+  if (!perf_jit_file_ && (debug_metadata_flags_ & JIT_DEBUG_PERF_BASIC) != 0) {
+    perf_jit_file_ = std::make_unique<PerfJitFile>((debug_metadata_flags_ & JIT_DEBUG_DELETE_ON_EXIT) != 0);
+  }
+
+  if (perf_jit_file_) {
+    perf_jit_file_->Write(address, length, symbol);
+  }
+
+  if (!perf_jitdump_file_ && (debug_metadata_flags_ & JIT_DEBUG_PERF_JITDUMP) != 0) {
+    perf_jitdump_file_ = std::make_unique<PerfJitdumpFile>((debug_metadata_flags_ & JIT_DEBUG_DELETE_ON_EXIT) != 0);
+  }
+
+  if (perf_jitdump_file_) {
+    perf_jitdump_file_->Write(address, length, symbol, mapping);
+  }
+#endif
 }
 
 void

@@ -25,6 +25,7 @@
 #include "plugin-runtime.h"
 #include "stack-frames.h"
 #include "watchdog_timer.h"
+#include "debug-metadata.h"
 #if defined(KE_ARCH_X86)
 # include "x86/jit_x86.h"
 #endif
@@ -79,14 +80,24 @@ CompilerBase::emit()
   pcode_start_ = method_info_->pcode_offset();
   code_start_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_);
 
+  const char* function_name = rt_->image()->LookupFunction(pcode_start_);
+
+  debug_name_ = std::string(rt_->Name()) + "::" + function_name;
+
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
-      "Compiling function %s::%s\n",
-      rt_->Name(),
-      rt_->image()->LookupFunction(pcode_start_));
+      "Compiling function %s\n",
+      debug_name_.c_str());
 
   SpewOpcode(stdout, rt_, code_start_, reader.cip());
 #endif
+
+  CodeDebugMap debug_map;
+
+  // DWARF has special tags for marking the prologue/epilogue, but they're not exposed
+  // by the jitdump format. As that information is useful for humans, we emit a couple
+  // of fake source file mappings to frame the actual function body.
+  debug_map.push_back({ masm.pc(), "<prologue>", 0 });
 
   emitPrologue();
 
@@ -102,17 +113,38 @@ CompilerBase::emit()
       SpewOpcode(rt_, code_start_, reader.cip());
 #endif
 
+      // Save these for outputting debug mappings after the codegen.
+      auto pcode_addr = reader.cip_offset();
+      auto op_pc = masm.pc();
+
       // Save the start of the opcode for emitCipMap().
       op_cip_ = reader.cip();
 
       if (!reader.visitNext() || error_)
         return nullptr;
+
+      // Store debug info if any code was generated.
+      if (masm.pc() != op_pc) {
+        const char* debug_file_name = rt_->image()->LookupFile(pcode_addr);
+
+        if (debug_file_name) {
+          uint32_t debug_line = 0;
+          rt_->image()->LookupLine(pcode_addr, &debug_line);
+
+          debug_map.push_back({ op_pc, debug_file_name, debug_line });
+        } else {
+          // Attempt to do something useful for plugins missing debug info.
+          debug_map.push_back({ op_pc, "<body>", pcode_addr - pcode_start_ });
+        }
+      }
     }
 
     // Note: the offset is ignored.
     if (block_->endType() == BlockEnd::Jump)
       visitJUMP(0);
   }
+
+  debug_map.push_back({ masm.pc(), "<epilogue>", 0 });
 
   for (size_t i = 0; i < ool_paths_.size(); i++) {
     OutOfLinePath* path = ool_paths_[i];
@@ -148,10 +180,14 @@ CompilerBase::emit()
   // are used.
   emitErrorHandlers();
 
+  // perf's translation of the jitdump debug mappings to DWARF ignores the last
+  // record, so we emit a bonus one here so that the epilogue marker is included.
+  debug_map.push_back({ masm.pc(), "<end>", 0 });
+
   if (error_)
     return nullptr;
 
-  CodeChunk code = LinkCode(env_, masm);
+  CodeChunk code = LinkCode(env_, masm, debug_name_.c_str(), debug_map);
   if (!code.address()) {
     reportError(SP_ERROR_OUT_OF_MEMORY);
     return nullptr;
