@@ -16,15 +16,21 @@
 using namespace sp;
 
 CodeChunk
-sp::LinkCode(Environment* env, Assembler& masm)
+sp::LinkCode(Environment* env, Assembler& masm, const char* name, const CodeDebugMap& mapping)
 {
   if (masm.outOfMemory())
     return CodeChunk();
 
-  CodeChunk code = env->AllocateCode(masm.length());
-  if (!code.address())
+  auto length = masm.length();
+  CodeChunk code = env->AllocateCode(length);
+
+  auto address = code.address();
+  if (!address)
     return code;
 
-  masm.emitToExecutableMemory(code.address());
+  masm.emitToExecutableMemory(address);
+
+  env->WriteDebugMetadata(address, length, name, mapping);
+
   return code;
 }
