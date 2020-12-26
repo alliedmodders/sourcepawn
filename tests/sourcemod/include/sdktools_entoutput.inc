@@ -58,9 +58,10 @@ typeset EntityOutput
  * @param classname		The classname to hook.
  * @param output		The output name to hook.
  * @param callback		An EntityOutput function pointer.
+ * @return				True on success, false if was found same hook.
  * @error				Entity Outputs disabled.
  */
-native void HookEntityOutput(const char[] classname, const char[] output, EntityOutput callback);
+native bool HookEntityOutput(const char[] classname, const char[] output, EntityOutput callback);
 
 /**
  * Remove an entity output hook.
