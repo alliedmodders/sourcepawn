@@ -47,6 +47,7 @@ Environment::Environment()
    jit_enabled_(false),
 #endif
    profiling_enabled_(false),
+   code_stubs_(nullptr),
    top_(nullptr)
 {
 }
@@ -87,11 +88,7 @@ Environment::Initialize()
   watchdog_timer_ = std::make_unique<WatchdogTimer>(this);
   builtins_ = std::make_unique<BuiltinNatives>();
   code_alloc_ = std::make_unique<CodeAllocator>();
-  code_stubs_ = std::make_unique<CodeStubs>(this);
 
-  // Safe to initialize code now that we have the code cache.
-  if (!code_stubs_->Initialize())
-    return false;
   if (!builtins_->Initialize())
     return false;
 
@@ -321,6 +318,17 @@ Environment::Invoke(PluginContext* cx,
 {
 #if defined(SP_HAS_JIT)
   if (jit_enabled_) {
+    if (!code_stubs_) {
+      code_stubs_ = std::make_unique<CodeStubs>(this);
+
+      // We delay initializing this to here to avoid executing any generated code if the embedder
+      // doesn't want the JIT enabled. The debug metadata flags must be set before this point.
+      if (!code_stubs_->Initialize()) {
+        code_stubs_ = nullptr;
+        return false;
+      }
+    }
+
     if (!method->jit()) {
       int err = SP_ERROR_NONE;
       if (!CompilerBase::Compile(cx, method, &err)) {
