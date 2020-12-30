@@ -428,7 +428,7 @@ SmxV1Image::validateRtti()
     if (!section)
       continue;
     if (!validateRttiHeader(section)) {
-      error_.format("could not validate %s section", table_name);
+      error_ = StringPrintf("could not validate %s section", table_name);
       return false;
     }
   }

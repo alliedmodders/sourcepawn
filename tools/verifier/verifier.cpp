@@ -114,11 +114,11 @@ int main(int argc, char **argv)
 {
   Parser parser("SourcePawn plugin verifier.");
 
-  BoolOption verbose(parser,
+  ToggleOption verbose(parser,
     "v", "verbose",
     Some(false),
     "Verbose output.");
-  BoolOption validate_debug_sections(parser,
+  ToggleOption validate_debug_sections(parser,
     "d", "validate_debug_sections",
     Some(false),
     "Validate debug sections as well.");
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
   if ((getenv("VALIDATE_DEBUG_SECTIONS") && getenv("VALIDATE_DEBUG_SECTIONS")[0] == '1') || validate_debug_sections.value())
     sEnv->EnableDebugBreak();
 
-  bool ok = Analyze(filename.value().chars());
+  bool ok = Analyze(filename.value().c_str());
 
   sEnv->Shutdown();
   delete sEnv;

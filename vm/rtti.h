@@ -10,10 +10,11 @@
 #ifndef _include_sourcepawn_rtti_h_
 #define _include_sourcepawn_rtti_h_
 
+#include <memory>
+#include <vector>
+
 #include <sp_vm_types.h>
-#include <amtl/am-vector.h>
 #include <amtl/am-hashmap.h>
-#include <amtl/am-autoptr.h>
 
 namespace sp {
 
@@ -93,7 +94,7 @@ namespace sp {
       return index_;
     }
     const Rtti* inner() const {
-      return inner_;
+      return inner_.get();
     }
     bool isVariadic() const {
       return is_variadic_;
@@ -102,14 +103,14 @@ namespace sp {
   private:
     uint8_t type_;
     uint32_t index_;
-    ke::AutoPtr<Rtti> inner_;
+    std::unique_ptr<const Rtti> inner_;
     bool is_const_;
 
     // Arguments
     bool is_by_ref_;
 
     // Function type only
-    ke::Vector<ke::AutoPtr<Rtti>> args_;
+    std::vector<std::unique_ptr<const Rtti>> args_;
     bool is_variadic_;
   };
 

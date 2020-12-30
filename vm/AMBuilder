@@ -135,7 +135,7 @@ verifier.sources += [
   '../tools/verifier/verifier.cpp',
 ]
 verifier.compiler.linkflags[0:0] = [
-  SP.libamtl[arch],
+  SP.libamtl[builder.cxx.target.arch],
 ]
 builder.Add(verifier)
 

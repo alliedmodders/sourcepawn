@@ -425,12 +425,12 @@ void
 Rtti::addArgument(Rtti* arg)
 {
   assert(type_ == cb::kFunction);
-  args_.append(arg);
+  args_.push_back(std::unique_ptr<const Rtti>(arg));
 }
 
 void
 Rtti::addSignature(Rtti* arg)
 {
   assert(type_ == cb::kTypeset);
-  args_.append(arg);
+  args_.push_back(std::unique_ptr<const Rtti>(arg));
 }

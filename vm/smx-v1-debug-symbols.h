@@ -10,11 +10,12 @@
 #ifndef _include_sourcepawn_smxv1_debug_symbols_h_
 #define _include_sourcepawn_smxv1_debug_symbols_h_
 
+#include <memory>
+#include <vector>
+
 #include <sp_vm_debug_api.h>
 #include <smx/smx-legacy-debuginfo.h>
 #include <smx/smx-typeinfo.h>
-#include <amtl/am-vector.h>
-#include <amtl/am-autoptr.h>
 
 using namespace SourcePawn;
 
@@ -37,12 +38,12 @@ namespace sp {
       return offset_;
     }
     const ISymbolType* type() const {
-      return *type_;
+      return type_.get();
     }
   private:
     const char* name_;
     uint32_t offset_;
-    ke::AutoPtr<ISymbolType> type_;
+    std::unique_ptr<const ISymbolType> type_;
   };
 
   class SmxV1SymbolType
@@ -90,10 +91,10 @@ namespace sp {
       return !dimensions_.empty();
     }
     virtual size_t dimcount() const {
-      return dimensions_.length();
+      return dimensions_.size();
     }
     virtual uint32_t dimension(uint32_t dim) const {
-      if (dim >= dimensions_.length())
+      if (dim >= dimensions_.size())
         return 0;
       return dimensions_[dim];
     }
@@ -101,12 +102,12 @@ namespace sp {
       return name_;
     }
     virtual size_t esfieldcount() const {
-      return es_fields_.length();
+      return es_fields_.size();
     }
     virtual const IEnumStructField* esfield(uint32_t idx) const {
-      if (idx >= es_fields_.length())
+      if (idx >= es_fields_.size())
         return nullptr;
-      return es_fields_[idx];
+      return es_fields_[idx].get();
     }
 
   private:
@@ -132,8 +133,8 @@ namespace sp {
     BaseType type_;
     bool reference_;
     const char* name_;
-    ke::Vector<uint32_t> dimensions_;
-    ke::Vector<ke::AutoPtr<SmxV1EnumStructField>> es_fields_;
+    std::vector<uint32_t> dimensions_;
+    std::vector<std::unique_ptr<const SmxV1EnumStructField>> es_fields_;
   };
 
   class SmxV1DebugSymbol
@@ -164,7 +165,7 @@ namespace sp {
       return codeend_;
     }
     virtual const ISymbolType* type() const {
-      return type_;
+      return type_.get();
     }
 
   private:
@@ -173,7 +174,7 @@ namespace sp {
     cell_t address_;
     cell_t codestart_;
     cell_t codeend_;
-    ke::AutoPtr<SmxV1SymbolType> type_;
+    std::unique_ptr<const SmxV1SymbolType> type_;
   };
 
   // .dbg.globals and .dbg.locals iteration
@@ -201,7 +202,7 @@ namespace sp {
   private:
     SmxV1Image* image_;
     ucell_t scope_address_;
-    ke::Vector<ke::AutoPtr<SmxV1DebugSymbol>> symbols_;
+    std::vector<std::unique_ptr<SmxV1DebugSymbol>> symbols_;
 
     RttiIteratorState state_;
     const smx_rtti_table_header* rtti_section_;
@@ -233,7 +234,7 @@ namespace sp {
   private:
     SmxV1Image* image_;
     ucell_t scope_address_;
-    ke::Vector<ke::AutoPtr<SmxV1DebugSymbol>> symbols_;
+    std::vector<std::unique_ptr<SmxV1DebugSymbol>> symbols_;
 
     const uint8_t* start_;
     const uint8_t* cursor_;

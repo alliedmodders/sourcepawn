@@ -57,8 +57,8 @@ SmxV1SymbolIterator::Next()
       break;
     }
   }
-  symbols_.append(new SmxV1DebugSymbol(image_, debug_var));
-  return symbols_.back();
+  symbols_.push_back(std::make_unique<SmxV1DebugSymbol>(image_, debug_var));
+  return symbols_.back().get();
 }
 
 void
@@ -187,8 +187,8 @@ SmxV1LegacySymbolIterator::nextSymbol()
 {
   const SymbolType *sym = reinterpret_cast<const SymbolType *>(cursor_);
   advanceCursor<SymbolType, DimType>();
-  symbols_.append(new SmxV1DebugSymbol(image_, sym));
-  return symbols_.back();
+  symbols_.push_back(std::make_unique<SmxV1DebugSymbol>(image_, sym));
+  return symbols_.back().get();
 }
 
 template <typename SymbolType, typename DimType>
@@ -232,8 +232,8 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(SmxV1Image* image, const smx_rtti_debug_var* 
     codestart_(sym->code_start),
     codeend_(sym->code_end)
 {
-  AutoPtr<const Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
-  type_ = new SmxV1SymbolType(image, type);
+  std::unique_ptr<const Rtti> type(image->rttidata()->typeFromTypeId(sym->type_id));
+  type_ = std::make_unique<const SmxV1SymbolType>(image, type.get());
 
   switch (sym->vclass & 3)
   {
@@ -259,7 +259,7 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_fdbg_symbol
     codestart_(sym->codestart),
     codeend_(sym->codeend)
 {
-  type_ = new SmxV1SymbolType(image, sym);
+  type_ = std::make_unique<const SmxV1SymbolType>(image, sym);
 
   switch (sym->vclass)
   {
@@ -285,7 +285,7 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
     codestart_(sym->codestart),
     codeend_(sym->codeend)
 {
-  type_ = new SmxV1SymbolType(image, sym);
+  type_ = std::make_unique<const SmxV1SymbolType>(image, sym);
 
   switch (sym->vclass)
   {
@@ -347,7 +347,7 @@ SmxV1SymbolType::fromRttiType(const SmxV1Image* image, const Rtti* type)
     const Rtti* inner = type;
     while (inner->inner()) {
       assert(inner->type() == cb::kArray || inner->type() == cb::kFixedArray);
-      dimensions_.insert(0, inner->index());
+      dimensions_.insert(dimensions_.begin() + 0, inner->index());
       inner = inner->inner();
     }
     return fromRttiType(image, inner);
@@ -392,6 +392,8 @@ SmxV1SymbolType::fromRttiType(const SmxV1Image* image, const Rtti* type)
     const smx_rtti_enumstruct* enumstruct = image->GetRttiEnumStruct(type->index());
     if (enumstruct)
       name_ = image->GetName(enumstruct->name);
+    // Enum structs are just arrays.
+    dimensions_.push_back(enumstruct->size);
 
     uint32_t last_field = image->GetRttiEnumStructLastFieldIndex(type->index());
     for (uint32_t field = enumstruct->first_field; field < last_field; field++) {
@@ -399,7 +401,7 @@ SmxV1SymbolType::fromRttiType(const SmxV1Image* image, const Rtti* type)
       if (!enumstruct_field)
         break;
 
-      es_fields_.append(new SmxV1EnumStructField(image, enumstruct_field));
+      es_fields_.push_back(std::make_unique<const SmxV1EnumStructField>(image, enumstruct_field));
     }
     return EnumStruct;
   }
@@ -424,7 +426,7 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
   assert(sym->dimcount == 0 || sym->ident == IDENT_ARRAY || sym->ident == IDENT_REFARRAY);
   const DimType* dim = (const DimType*)(sym + 1);
   for (int i = 0; i < sym->dimcount; i++) {
-    dimensions_.append(dim->size);
+    dimensions_.push_back(dim->size);
     dim++;
   }
 
@@ -480,6 +482,6 @@ SmxV1EnumStructField::SmxV1EnumStructField(const SmxV1Image* image, const smx_rt
 {
   name_ = image->GetName(es_field->name);
   offset_ = es_field->offset;
-  AutoPtr<const Rtti> type(image->rttidata()->typeFromTypeId(es_field->type_id));
-  type_ = new SmxV1SymbolType(image, type);
+  std::unique_ptr<const Rtti> type(image->rttidata()->typeFromTypeId(es_field->type_id));
+  type_ = std::make_unique<const SmxV1SymbolType>(image, type.get());
 }
