@@ -795,7 +795,9 @@ SmxV1Image::validateLegacyDebugSymbols()
       return error("invalid debug symbol name");
     if (sym->vclass > VCLASS_MAX)
       return error("invalid debug symbol vclass");
-    if (!validateLegacySymbolAddress(sym->addr, sym->vclass))
+    if (sym->ident > IDENT_VARARGS)
+      return error("invalid debug symbol ident");
+    if (!validateLegacySymbolAddress(sym->addr, sym->vclass, sym->ident))
       return error("invalid debug symbol address");
     //if (sym->codestart > sym->codeend)
     //  return error("invalid debug symbol code range");
@@ -805,8 +807,6 @@ SmxV1Image::validateLegacyDebugSymbols()
       return error("invalid debug symbol code end");
     if (sym->dimcount > sDIMEN_MAX)
       return error("invalid debug symbol dimension count");
-    if (sym->ident > IDENT_VARARGS)
-      return error("invalid debug symbol ident");
     if (!validateTag(sym->tagid))
       return error("invalid debug symbol tag");
     cursor += sizeof(SymbolType);
@@ -826,8 +826,16 @@ SmxV1Image::validateLegacyDebugSymbols()
 }
 
 bool
-SmxV1Image::validateLegacySymbolAddress(int32_t address, uint8_t vclass)
+SmxV1Image::validateLegacySymbolAddress(int32_t address, uint8_t vclass, uint8_t ident)
 {
+  // Function symbol addresses are in the .code section.
+  if (ident == IDENT_FUNCTION) {
+      if (vclass == VCLASS_GLOBAL && (uint32_t)address < code_.header()->size)
+        return true;
+      return false;
+  }
+
+  // All other symbols must be in the .data section.
   switch (vclass) {
   case VCLASS_GLOBAL:
   case VCLASS_STATIC:

@@ -224,7 +224,7 @@ class SmxV1Image
   bool validateDebugName(size_t offset);
   template<typename SymbolType, typename DimType>
   bool validateLegacyDebugSymbols();
-  bool validateLegacySymbolAddress(int32_t address, uint8_t vclass);
+  bool validateLegacySymbolAddress(int32_t address, uint8_t vclass, uint8_t ident);
   bool validateTags();
   bool validateTag(int16_t tagid);
 
