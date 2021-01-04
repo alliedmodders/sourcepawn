@@ -832,7 +832,7 @@ TernaryExpr::Analyze()
         return false;
     }
 
-    if (!matchtag(left.tag, right.tag, FALSE))
+    if (!matchtag_commutative(left.tag, right.tag, FALSE))
         return false;
 
     /* If both sides are arrays, we should return the maximal as the lvalue.
