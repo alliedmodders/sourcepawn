@@ -93,7 +93,7 @@ namespace SourcePawn
     virtual uint32_t dimension(uint32_t dim) const = 0;
 
     // @brief Returns the number of fields in the enum struct.
-    virtual size_t esfieldcount() const = 0;
+    virtual uint32_t esfieldcount() const = 0;
 
     // @brief Returns the selected enum struct field.
     virtual const IEnumStructField* esfield(uint32_t idx) const = 0;

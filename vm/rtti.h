@@ -24,7 +24,7 @@ namespace sp {
   class RttiData {
   public:
     RttiData();
-    RttiData(const uint8_t* blob, size_t size);
+    RttiData(const uint8_t* blob, uint32_t size);
 
     const Rtti* typeFromTypeId(uint32_t type_id);
     const Rtti* functionTypeFromOffset(uint32_t offset);
@@ -39,7 +39,7 @@ namespace sp {
 
   private:
     const uint8_t* rtti_data_;
-    size_t rtti_data_size_;
+    uint32_t rtti_data_size_;
   };
 
   class RttiParser {

@@ -1219,11 +1219,11 @@ SmxV1Image::GetFunctionName(size_t index, const char** filename) const {
 
 template <typename SymbolType, typename DimType>
 bool
-SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t index) const
+SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, size_t index) const
 {
   const uint8_t* cursor = reinterpret_cast<const uint8_t *>(syms);
   const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
-  for (uint32_t i = index; i < debug_info_->num_syms; i++) {
+  for (size_t i = index; i < debug_info_->num_syms; i++) {
     if (cursor + sizeof(SymbolType) > cursor_end)
       break;
 

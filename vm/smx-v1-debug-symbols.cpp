@@ -442,19 +442,19 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
   const sp_file_tag_t* tag = image->GetTagById(sym->tagid);
   if (tag) {
     const char* tagname = image->GetName(tag->name);
-    if (!stricmp(tagname, "bool")) {
+    if (!StrCaseCmp(tagname, "bool")) {
       type_ = Boolean;
       return;
     }
-    if (!stricmp(tagname, "float")) {
+    if (!StrCaseCmp(tagname, "float")) {
       type_ = Float;
       return;
     }
-    if (!stricmp(tagname, "String")) {
+    if (!StrCaseCmp(tagname, "String")) {
       type_ = Character;
       return;
     }
-    if (!stricmp(tagname, "any")) {
+    if (!StrCaseCmp(tagname, "any")) {
       type_ = Any;
       return;
     }

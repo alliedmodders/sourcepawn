@@ -99,8 +99,8 @@ namespace sp {
     virtual bool isArray() const {
       return !dimensions_.empty();
     }
-    virtual size_t dimcount() const {
-      return dimensions_.size();
+    virtual uint32_t dimcount() const {
+      return static_cast<uint32_t>(dimensions_.size());
     }
     virtual uint32_t dimension(uint32_t dim) const {
       if (dim >= dimensions_.size())
@@ -110,8 +110,8 @@ namespace sp {
     virtual const char* name() const {
       return name_;
     }
-    virtual size_t esfieldcount() const {
-      return es_fields_.size();
+    virtual uint32_t esfieldcount() const {
+      return static_cast<uint32_t>(es_fields_.size());
     }
     virtual const IEnumStructField* esfield(uint32_t idx) const {
       if (idx >= es_fields_.size())

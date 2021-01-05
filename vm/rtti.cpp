@@ -19,7 +19,7 @@ RttiData::RttiData()
 {
 }
 
-RttiData::RttiData(const uint8_t* blob, size_t size)
+RttiData::RttiData(const uint8_t* blob, uint32_t size)
  : rtti_data_(blob),
    rtti_data_size_(size)
 {
