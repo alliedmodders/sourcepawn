@@ -308,19 +308,22 @@ SmxV1DebugSymbol::SmxV1DebugSymbol(const SmxV1Image* image, const sp_u_fdbg_symb
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const Rtti* type) {
   reference_ = type->isByRef();
+  constant_ = type->isConst();
   type_ = fromRttiType(image, type);
 }
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_fdbg_symbol_t* sym)
   : type_(Integer),
-    reference_(false)
+    reference_(false),
+    constant_(false)
 {
   guessLegacyType<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(image, sym);
 }
 
 SmxV1SymbolType::SmxV1SymbolType(const SmxV1Image* image, const sp_u_fdbg_symbol_t* sym)
   : type_(Integer),
-    reference_(false)
+    reference_(false),
+    constant_(false)
 {
   guessLegacyType<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(image, sym);
 }
@@ -341,6 +344,8 @@ SmxV1SymbolType::fromRttiType(const SmxV1Image* image, const Rtti* type)
     return Any;
   case cb::kTopFunction:
     return Function;
+  case cb::kVoid:
+    return Void;
   case cb::kFixedArray:
   case cb::kArray:
   {
@@ -447,6 +452,10 @@ SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)
     }
     if (!stricmp(tagname, "String")) {
       type_ = Character;
+      return;
+    }
+    if (!stricmp(tagname, "any")) {
+      type_ = Any;
       return;
     }
     if ((tag->tag_id & FUNCTAG) > 0) {

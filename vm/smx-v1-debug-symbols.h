@@ -60,7 +60,7 @@ namespace sp {
     virtual bool isInt32() const {
       return type_ == Integer;
     }
-    virtual bool isFloat() const {
+    virtual bool isFloat32() const {
       return type_ == Float;
     }
     virtual bool isBoolean() const {
@@ -69,11 +69,17 @@ namespace sp {
     virtual bool isString() const {
       return type_ == Character;
     }
+    virtual bool isAny() const {
+      return type_ == Any;
+    }
     virtual bool isEnum() const {
       return type_ == Enum;
     }
     virtual bool isFunction() const {
       return type_ == Function;
+    }
+    virtual bool isVoid() const {
+      return type_ == Void;
     }
     virtual bool isStruct() const {
       return type_ == Struct;
@@ -86,6 +92,9 @@ namespace sp {
     }
     virtual bool isReference() const {
       return reference_;
+    }
+    virtual bool isConstant() const {
+      return constant_;
     }
     virtual bool isArray() const {
       return !dimensions_.empty();
@@ -123,6 +132,7 @@ namespace sp {
       Struct,
       Object,
       Function,
+      Void,
       EnumStruct
     };
     BaseType fromRttiType(const SmxV1Image* image, const Rtti* type);
@@ -132,6 +142,7 @@ namespace sp {
   private:
     BaseType type_;
     bool reference_;
+    bool constant_;
     const char* name_;
     std::vector<uint32_t> dimensions_;
     std::vector<std::unique_ptr<const SmxV1EnumStructField>> es_fields_;

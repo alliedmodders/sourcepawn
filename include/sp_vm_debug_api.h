@@ -24,6 +24,7 @@ namespace SourcePawn
 {
   class ISymbolType;
 
+  // Represents an enum struct field of a enum struct type.
   class IEnumStructField {
   public:
     // @brief Returns the name of the field.
@@ -46,7 +47,7 @@ namespace SourcePawn
     virtual bool isInt32() const = 0;
 
     // @brief Returns whether the type represents a float.
-    virtual bool isFloat() const = 0;
+    virtual bool isFloat32() const = 0;
 
     // @brief Returns whether the type represents a boolean.
     virtual bool isBoolean() const = 0;
@@ -54,11 +55,17 @@ namespace SourcePawn
     // @brief Returns whether the type represents a string.
     virtual bool isString() const = 0;
 
+    // @brief Returns whether the type represents the special "any" type.
+    virtual bool isAny() const = 0;
+
     // @brief Returns whether the type represents an enum.
     virtual bool isEnum() const = 0;
 
     // @brief Returns whether the type represents a function.
     virtual bool isFunction() const = 0;
+
+    // @brief Returns whether the type represents nothing.
+    virtual bool isVoid() const = 0;
 
     // @brief Returns whether the type represents a struct.
     virtual bool isStruct() const = 0;
@@ -72,6 +79,9 @@ namespace SourcePawn
     // @brief Returns whether the argument is passed by reference.
     // Only valid for argument types in a function signature.
     virtual bool isReference() const = 0;
+
+    // @brief Returns whether the type is const.
+    virtual bool isConstant() const = 0;
 
     // @brief Returns whether the symbol is an array.
     virtual bool isArray() const = 0;
