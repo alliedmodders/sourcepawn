@@ -24,7 +24,7 @@ namespace SourcePawn
 {
   class ISymbolType;
 
-  // Represents an enum struct field of a enum struct type.
+  // Represents an enum struct field of an enum struct type.
   class IEnumStructField {
   public:
     // @brief Returns the name of the field.
@@ -111,24 +111,48 @@ namespace SourcePawn
     Argument
   };
 
+  // Represents a debug symbol in a plugin
+  // which can be a variable or a function.
   class IDebugSymbol {
   public:
+    // @brief Returns the version of the symbol interface. (SOURCEPAWN_DEBUG_SYMBOL_VERSION)
     virtual int ApiVersion() const = 0;
+
+    // @brief Returns the name of the symbol.
     virtual const char* name() const = 0;
+
+    // @brief Returns the visibility scope of the symbol.
     virtual SymbolScope scope() const = 0;
+
+    // @brief Returns the address of the data of the symbol.
+    // For function symbols, this is the same as codestart().
     virtual cell_t address() const = 0;
+
+    // @brief Returns the code address of where the symbol's scope starts.
+    // For function symbols, this is the address of the first instruction.
     virtual cell_t codestart() const = 0;
+
+    // @brief Returns the code address of where the symbol's scope ends.
+    // For function symbols, this is the address of the last instruction.
     virtual cell_t codeend() const = 0;
+
+    // @brief Returns the type of the symbol.
     virtual const ISymbolType* type() const = 0;
   };
 
+  // Allows to iterate through all available IDebugSymbols.
   class IDebugSymbolIterator
   {
   public:
-    virtual ~IDebugSymbolIterator()
-    {}
+    virtual ~IDebugSymbolIterator() {}
+
+    // @brief Returns whether the end of the iteration was reached.
     virtual bool Done() = 0;
+
+    // @brief Returns the next debug symbol in the iteration.
     virtual const IDebugSymbol* Next() = 0;
+
+    // @brief Resets the iterator back to the beginning.
     virtual void Reset() = 0;
   };
 }
