@@ -18,6 +18,7 @@
 #include "dll_exports.h"
 #include "environment.h"
 #include "stack-frames.h"
+#include <sstream>
 
 #ifdef __EMSCRIPTEN__
 # include <emscripten.h>
@@ -34,6 +35,8 @@ using namespace sp;
 using namespace SourcePawn;
 
 Environment* sEnv;
+ucell_t sDebugBreakCip = -1;
+static const char* scope_names[] = {"glb", "loc", "sta", "arg"};
 
 static const char*
 BaseFilename(const char* path)
@@ -93,6 +96,76 @@ public:
 #endif
   }
 };
+
+std::string
+TypeToString(const ISymbolType* type) {
+  std::stringstream output;
+  if (type->isConstant())
+    output << "const ";
+
+  if (type->isReference())
+    output << "&";
+
+  if (type->isBoolean())
+    output << "bool";
+  else if (type->isInt32())
+    output << "int";
+  else if (type->isFloat32())
+    output << "float";
+  else if (type->isString())
+    output << "char";
+  else if (type->isAny())
+    output << "any";
+  else if (type->isFunction())
+    output << "Function";
+  else if (type->isVoid())
+    output << "void";
+  else if (type->isEnum() || type->isEnumStruct() || type->isStruct() || type->isObject())
+    output << type->name();
+  else
+    output << "<unknown>";
+
+  if (type->isArray()) {
+    for (uint32_t dim = 0; dim < type->dimcount(); dim++) {
+      if (type->dimension(dim) > 0)
+        output << '[' << type->dimension(dim) << ']';
+      else {
+        output << "[]";
+      }
+    }
+  }
+  return output.str();
+}
+
+void
+OnDebugBreak(IPluginContext* ctx, sp_debug_break_info_t& dbginfo,
+             const IErrorReport* report) {
+  if (dbginfo.cip != sDebugBreakCip)
+    return;
+
+  IPluginDebugInfo* debuginfo = ctx->GetRuntime()->GetDebugInfo();
+  IDebugSymbolIterator* symbol_iterator = debuginfo->CreateSymbolIterator(dbginfo.cip);
+
+  // Print visible variables in local scope.
+  uint32_t index = 0;
+  while (!symbol_iterator->Done()) {
+    const SourcePawn::IDebugSymbol* sym = symbol_iterator->Next();
+      if (sym->scope() == Global)
+        continue;
+
+    fprintf(stdout, "[dbg] Symbol #%d:\n", index);
+    // fprintf(stdout, "[dbg]   address: %08x\n", sym->address());
+    // fprintf(stdout, "[dbg]   codestart: %08x\n", sym->codestart());
+    // fprintf(stdout, "[dbg]   codeend: %08x\n", sym->codeend());
+    fprintf(stdout, "[dbg]   name: %s\n", sym->name() ? sym->name() : "<unknown>");
+    fprintf(stdout, "[dbg]   scope: %s\n", scope_names[sym->scope()]);
+    fprintf(stdout, "[dbg]   type: %s\n", TypeToString(sym->type()).c_str());
+
+    ++index;
+  }
+
+  debuginfo->DestroySymbolIterator(symbol_iterator);
+}
 
 static cell_t Print(IPluginContext* cx, const cell_t* params)
 {
@@ -225,7 +298,7 @@ class DynamicNative : public INativeCallback
     uintptr_t refcount_ = 0;
 };
 
-static int Execute(const char* file)
+static int Execute(const char* file, uint32_t break_line)
 {
   char error[255];
   std::unique_ptr<IPluginRuntime> rtb(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
@@ -250,6 +323,19 @@ static int Execute(const char* file)
   BindNative(rt, "report_error", ReportError);
   BindNative(rt, "CloseHandle", DoNothing);
   BindNative(rt, "dynamic_native", new DynamicNative());
+
+  if (break_line > 0) {
+    if (rt->NumFiles() == 0) {
+      fprintf(stderr, "Couldn't find source file name for debug break.\n");
+      return 1;
+    }
+
+    const char* filename = rt->GetFileName(rt->NumFiles() - 1);
+    if (rt->LookupLineAddress(break_line - 1, filename, &sDebugBreakCip) != SP_ERROR_NONE) {
+      fprintf(stderr, "Error finding debug break line %s:%d\n", filename, break_line);
+      return 1;
+    }
+  }
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
@@ -292,9 +378,13 @@ int main(int argc, char** argv)
     Some(false),
     "Disable the watchdog timer.");
   ToggleOption validate_debug_sections(parser,
-    "d", "validate_debug_sections",
+    "d", "validate-debug-sections",
     Some(false),
     "Validate debug sections before loading the plugin. Enables line debugging in the runtime, which might slow down execution.");
+  StringOption debug_break_line(parser,
+    "dbg", "debug-break-line",
+    Some(std::string()),
+    "Line to break at and dump the available debug state.");
   StringOption filename(parser,
     "file",
     "SMX file to execute.");
@@ -325,7 +415,19 @@ int main(int argc, char** argv)
   if (getenv("DISABLE_JIT") || disable_jit.value())
     sEnv->SetJitEnabled(false);
 
-  if (getenv("VALIDATE_DEBUG_SECTIONS") || validate_debug_sections.value())
+  uint32_t break_line = 0;
+  if (getenv("DEBUG_BREAK_LINE") || !debug_break_line.value().empty()) {
+    std::string break_line_str;
+    if (getenv("DEBUG_BREAK_LINE"))
+      break_line_str = getenv("DEBUG_BREAK_LINE");
+    else
+      break_line_str = debug_break_line.value();
+
+    break_line = strtoul(break_line_str.c_str(), nullptr, 10);
+    sEnv->SetDebugBreakHandler(OnDebugBreak);
+  }
+
+  if (break_line > 0 || getenv("VALIDATE_DEBUG_SECTIONS") || validate_debug_sections.value())
     sEnv->EnableDebugBreak();
 
   ShellDebugListener debug;
@@ -334,7 +436,7 @@ int main(int argc, char** argv)
   if (!getenv("DISABLE_WATCHDOG") && !disable_watchdog.value())
     sEnv->InstallWatchdogTimer(5000);
 
-  int errcode = Execute(filename.value().c_str());
+  int errcode = Execute(filename.value().c_str(), break_line);
 
   sEnv->SetDebugger(NULL);
   sEnv->Shutdown();

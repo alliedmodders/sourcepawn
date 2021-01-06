@@ -1,0 +1,17 @@
+[dbg] Symbol #0:
+[dbg]   name: somebool
+[dbg]   scope: loc
+[dbg]   type: bool
+[dbg] Symbol #1:
+[dbg]   name: c
+[dbg]   scope: arg
+[dbg]   type: int
+[dbg] Symbol #2:
+[dbg]   name: b
+[dbg]   scope: arg
+[dbg]   type: int
+[dbg] Symbol #3:
+[dbg]   name: a
+[dbg]   scope: arg
+[dbg]   type: int
+12, 13, 14
