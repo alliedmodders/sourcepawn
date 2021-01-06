@@ -49,6 +49,16 @@ static const uint8_t VCLASS_LOCAL  = 1;     // local variable/constant
 static const uint8_t VCLASS_STATIC = 2;     // global life, local scope 
 static const uint8_t VCLASS_MAX    = VCLASS_STATIC;
 
+static const uint32_t FIXEDTAG     = 0x40000000;
+static const uint32_t FUNCTAG      = 0x20000000;
+static const uint32_t OBJECTTAG    = 0x10000000;
+static const uint32_t ENUMTAG      = 0x08000000;
+static const uint32_t METHODMAPTAG = 0x04000000;
+static const uint32_t STRUCTTAG    = 0x02000000;
+static const uint32_t TAGTYPEMASK  = (FUNCTAG | OBJECTTAG | ENUMTAG | METHODMAPTAG | STRUCTTAG);
+static const uint32_t TAGFLAGMASK  = (FIXEDTAG | TAGTYPEMASK);
+#define TAGID(tag) ((tag) & ~(TAGFLAGMASK))
+
 // The ".dbg.symbols" table.
 typedef struct sp_fdbg_symbol_s {
     int32_t addr;       /**< Address rel to DAT or stack frame */

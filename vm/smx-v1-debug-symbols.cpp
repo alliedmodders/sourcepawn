@@ -414,14 +414,6 @@ SmxV1SymbolType::fromRttiType(const SmxV1Image* image, const Rtti* type)
   return Any;
 }
 
-// Tag masks from pre-rtti compiler.
-#define FIXEDTAG     0x40000000
-#define FUNCTAG      0x20000000
-#define OBJECTTAG    0x10000000
-#define ENUMTAG      0x08000000
-#define METHODMAPTAG 0x04000000
-#define STRUCTTAG    0x02000000
-
 template <typename SymbolType, typename DimType>
 void
 SmxV1SymbolType::guessLegacyType(const SmxV1Image* image, const SymbolType* sym)

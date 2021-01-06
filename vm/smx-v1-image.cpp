@@ -1368,7 +1368,7 @@ const sp_file_tag_t*
 SmxV1Image::GetTagById(uint32_t tag) const
 {
   unsigned int index;
-  for (index = 0; index < tags_.length() && tags_[index].tag_id != tag; index++)
+  for (index = 0; index < tags_.length() && TAGID(tags_[index].tag_id) != tag; index++)
     continue;
   if (index >= tags_.length())
     return nullptr;
