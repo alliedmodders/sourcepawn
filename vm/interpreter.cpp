@@ -51,7 +51,8 @@ Interpreter::Interpreter(PluginContext* cx, RefPtr<MethodInfo> method)
    reader_(rt_, method->pcode_offset(), this),
    method_(method),
    has_returned_(false),
-   return_value_(0)
+   return_value_(0),
+   op_cip_(nullptr)
 {
 }
 
@@ -60,7 +61,7 @@ Interpreter::run()
 {
   assert(reader_.peekOpcode() == OP_PROC);
 
-  InterpInvokeFrame ivk(cx_, method_, reader_.cip());
+  InterpInvokeFrame ivk(cx_, method_, op_cip_);
   ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
 
   reader_.begin();
@@ -69,6 +70,8 @@ Interpreter::run()
     return false;
 
   while (!has_returned_ && reader_.more()) {
+    // Save the start of the opcode for the stack trace.
+    op_cip_ = reader_.cip();
     if (reader_.peekOpcode() == OP_PROC || reader_.peekOpcode() == OP_ENDPROC)
       break;
     if (!reader_.visitNext())

@@ -172,6 +172,7 @@ class Interpreter final : public PcodeVisitor
   RefPtr<MethodInfo> method_;
   bool has_returned_;
   cell_t return_value_;
+  const cell_t* op_cip_;
   InterpRegs regs_;
   InterpInvokeFrame* ivk_;
 };
