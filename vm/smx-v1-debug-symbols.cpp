@@ -129,7 +129,7 @@ SmxV1SymbolIterator::validateScopeOfRow()
   for (; rtti_row_index_ < rtti_end_index_; rtti_row_index_++) {
     const smx_rtti_debug_var* debug_var = image_->getRttiRow<smx_rtti_debug_var>(rtti_section_, rtti_row_index_);
     if (debug_var->code_start <= scope_address_ &&
-      debug_var->code_end >= scope_address_)
+      debug_var->code_end > scope_address_)
       return true;
   }
   return false;
@@ -210,7 +210,7 @@ SmxV1LegacySymbolIterator::advanceCursor()
 
     // Check if this symbol is visible at the requested address.
     if (sym->codestart <= scope_address_ &&
-        sym->codeend >= scope_address_)
+        sym->codeend > scope_address_)
       break;
   }
 }
@@ -223,7 +223,7 @@ SmxV1LegacySymbolIterator::findFirstSymbol()
   const SymbolType *sym = reinterpret_cast<const SymbolType *>(cursor_);
   if (sym->ident == IDENT_FUNCTION ||
       sym->codestart > scope_address_ ||
-      sym->codeend < scope_address_)
+      sym->codeend <= scope_address_)
     advanceCursor<SymbolType, DimType>();
 }
 
