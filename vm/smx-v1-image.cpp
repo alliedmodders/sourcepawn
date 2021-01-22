@@ -135,7 +135,7 @@ SmxV1Image::validate()
 
   // Validate sanity of section header strings.
   bool found_terminator = false;
-  for (const uint8_t* iter = header_strings_ + last_header_string;
+  for (const char* iter = header_strings_ + last_header_string;
        iter < buffer() + hdr_->dataoffs;
        iter++)
   {
