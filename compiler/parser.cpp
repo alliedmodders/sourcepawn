@@ -173,6 +173,7 @@ static int sReturnType = RETURN_NONE;
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 static HWND hwndFinish = 0;
 #endif
+static int sc_syntax_only = FALSE;
 
 char g_tmpfile[_MAX_PATH] = {0};
 
@@ -427,13 +428,13 @@ cleanup:
     }
 
     // Write the binary file.
-    if (!(sc_asmfile || sc_listing) && errnum == 0 && jmpcode == 0) {
+    if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0) {
         pc_resetasm(outf);
         assemble(binfname, outf);
     }
 
     if (outf != NULL) {
-        pc_closeasm(outf, !(sc_asmfile || sc_listing));
+        pc_closeasm(outf, !(sc_asmfile || sc_listing) || sc_syntax_only);
         outf = NULL;
     }
 
@@ -730,6 +731,10 @@ args::RepeatOption<std::string> opt_warnings("-w", "--warning",
                                          "Disable a specific warning by its number.");
 args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
+args::ToggleOption opt_syntax_only(nullptr, "--syntax-only", Some(false),
+                              "Perform a dry-run (No file output) on the input");
+args::ToggleOption opt_stderr(nullptr, "--use-stderr", Some(false),
+                              "Use stderr instead of stdout for error messages.");
 
 static void
 Usage(args::Parser& parser, int argc, char** argv)
@@ -767,6 +772,8 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     sc_compression_level = opt_compression.value();
     sc_tabsize = opt_tabsize.value();
     sc_needsemicolon = opt_semicolons.value();
+    sc_syntax_only = opt_syntax_only.value();
+    sc_use_stderr = opt_stderr.value();
 
     pc_optimize = opt_optlevel.value();
     if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER ||
@@ -2619,7 +2626,7 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     int argcnt;
     int opererror;
     cell cidx, glbdecl;
-    short filenum = fcurrent; /* save file number at the start of the declaration */ 
+    short filenum = fcurrent; /* save file number at the start of the declaration */
     int fileline = fline;
 
     lastst = 0;                      /* no statement yet */
@@ -3549,7 +3556,7 @@ statement(int* lastindent, int allow_decl) {
             } else {
                 lastst = tEMPTYBLOCK;
             }
-            /* lastst (for "last statement") does not change 
+            /* lastst (for "last statement") does not change
                you're not my father, don't tell me what to do */
             break;
         case ';':

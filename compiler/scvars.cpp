@@ -89,6 +89,7 @@ bool sc_use_new_parser = false;
 int pc_max_func_memory = 0;          /* high stack watermark */
 int pc_current_memory = 0;           /* current stack watermark */
 int pc_max_memory = 0;               /* maximum stack watermark across all stacks */
+int sc_use_stderr = FALSE;
 
 void* inpf = NULL;      /* file read from (source or include) */
 void* inpf_org = NULL;  /* main source file */

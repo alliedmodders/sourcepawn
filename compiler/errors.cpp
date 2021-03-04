@@ -230,6 +230,7 @@ report_error(ErrorReport* report)
 {
     static int lastline, errorcount;
     static short lastfile;
+    static FILE* stdfp = sc_use_stderr ? stderr : stdout;
 
     /* errflag is reset on each semicolon.
      * In a two-pass compiler, an error should not be reported twice. Therefore
@@ -261,12 +262,12 @@ report_error(ErrorReport* report)
     if (strlen(errfname) > 0)
         fp = fopen(errfname, "a");
     if (!fp)
-        fp = stdout;
+        fp = stdfp;
 
     fprintf(fp, "%s", report->message.c_str());
     fflush(fp);
 
-    if (fp != stdout)
+    if (fp != stdfp)
         fclose(fp);
 
     if (report->type == ErrorType::Fatal || errnum > 25) {
