@@ -255,12 +255,12 @@ report_error(ErrorReport* report)
     if (strlen(errfname) > 0)
         fp = fopen(errfname, "a");
     if (!fp)
-        fp = stdout;
+        fp = stderr;
 
     fprintf(fp, "%s", report->message.c_str());
     fflush(fp);
 
-    if (fp != stdout)
+    if (fp != stderr)
         fclose(fp);
 
     if (report->type == ErrorType::Fatal || errnum > 25) {
