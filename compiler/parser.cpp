@@ -181,6 +181,7 @@ static int sReturnType = RETURN_NONE;
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 static HWND hwndFinish = 0;
 #endif
+static int sc_dryrun = FALSE;
 
 int glbstringread = 0;
 char g_tmpfile[_MAX_PATH] = {0};
@@ -438,13 +439,13 @@ cleanup:
     }
 
     // Write the binary file.
-    if (!(sc_asmfile || sc_listing) && errnum == 0 && jmpcode == 0) {
+    if (!(sc_asmfile || sc_listing || sc_dryrun) && errnum == 0 && jmpcode == 0) {
         pc_resetasm(outf);
         assemble(binfname, outf);
     }
 
     if (outf != NULL) {
-        pc_closeasm(outf, !(sc_asmfile || sc_listing));
+        pc_closeasm(outf, !(sc_asmfile || sc_listing) || sc_dryrun);
         outf = NULL;
     }
 
@@ -748,6 +749,8 @@ args::RepeatOption<std::string> opt_warnings("-w", "--warning",
                                          "Disable a specific warning by its number.");
 args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
+args::ToggleOption opt_dryrun("-d", "--dry-run", Some(false), 
+                              "Perform a dry-run (No file output) on the input");
 
 static void
 Usage(args::Parser& parser, int argc, char** argv)
@@ -785,6 +788,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     sc_compression_level = opt_compression.value();
     sc_tabsize = opt_tabsize.value();
     sc_needsemicolon = opt_semicolons.value();
+    sc_dryrun = opt_dryrun.value();
 
     if (opt_codeversion.hasValue()) {
         switch (opt_codeversion.value()) {
