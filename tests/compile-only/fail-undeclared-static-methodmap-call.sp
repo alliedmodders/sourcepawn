@@ -3,6 +3,7 @@ methodmap TestA {
 }
 
 enum struct TestB {
+	int Var;
     void TestB() {
         TestA.UndeclaredStaticFunc();
     }
