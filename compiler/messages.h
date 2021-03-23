@@ -129,7 +129,7 @@ static const char* errmsg[] = {
     /*102*/ "cannot find %s %s\n",
     /*103*/ "%s was already defined on this %s\n",
     /*104*/ "cannot find any methods for %s\n",
-    /*105*/ "cannot find method or property %s.%s\n",
+    /*105*/ "cannot find method or property \"%s.%s\"\n",
     /*106*/ "cannot call methods on an array\n",
     /*107*/ "cannot call methods on a function\n",
     /*108*/ "resolution operator (::) can only resolve field offsets of enum structs\n",

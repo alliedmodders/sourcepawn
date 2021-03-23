@@ -1,1 +1,1 @@
-(8) : error 105: cannot find method or property TestA.UndeclaredStaticFunc
+(8) : error 105: cannot find method or property "TestA.UndeclaredStaticFunc"
