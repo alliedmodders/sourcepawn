@@ -1222,7 +1222,7 @@ FieldAccessExpr::AnalyzeWithOptions(bool from_call)
         methodmap_t* map = base_val.sym->methodmap;
         method_ = methodmap_find_method(map, name_->chars());
         if (!method_) {
-            error(pos_, 105, map->name, field_->name());
+            error(pos_, 105, map->name, name_->chars());
             return false;
         }
         if (!method_->is_static) {
