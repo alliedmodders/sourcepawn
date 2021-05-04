@@ -1,0 +1,73 @@
+name: Continuous Integration
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [optimize, debug]
+        build_target: [x86, x64]
+        # The macos builder has min. XCode 10.3, so no x86 builds.
+        exclude:
+          - os: macos-latest
+            build_target: x86
+        # Test if ARM compiles on windows.
+        include:
+          - os: windows-latest
+            build_type: optimize
+            build_target: arm
+          - os: windows-latest
+            build_type: debug
+            build_target: arm
+          - os: windows-latest
+            build_type: optimize
+            build_target: arm64
+          - os: windows-latest
+            build_type: debug
+            build_target: arm64
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      # Setup Python for AMBuild
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install AMBuild
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install git+https://github.com/alliedmodders/ambuild
+
+      - name: Select clang compiler
+        if: startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+          clang --version
+          clang++ --version
+
+      - name: Install Linux dependencies
+        if: startsWith(runner.os, 'Linux') && matrix.build_target == 'x86'
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-multilib g++-multilib libstdc++6 lib32stdc++6 \
+            libc6-dev libc6-dev-i386 linux-libc-dev \
+            linux-libc-dev:i386
+
+      - name: Build
+        run: |
+          mkdir objdir
+          cd objdir
+          python ../configure.py --enable-${{ matrix.build_type }} --targets=${{ matrix.build_target }}
+          ambuild
+
+      # Cannot run tests for ARM since the builder is amd64.
+      - name: Test
+        if: ${{ !startsWith(matrix.build_target, 'arm') }}
+        run: |
+          python tests/runtests.py objdir

@@ -187,6 +187,7 @@ class Config(object):
       elif cxx.target.platform == 'mac':
         cxx.linkflags.remove('-lstdc++')
         cxx.cflags += ['-mmacosx-version-min=10.7']
+        cxx.cflags += ['-stdlib=libc++']
         cxx.linkflags += ['-stdlib=libc++']
         cxx.linkflags += ['-mmacosx-version-min=10.7']
       elif cxx.target.platform == 'windows':
