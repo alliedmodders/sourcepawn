@@ -1303,76 +1303,78 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             match = FALSE;
     }
 
-    if (match) {
-        /* calculate the length of the substituted string */
-        for (e = (unsigned char*)substitution, len = 0; *e != '\0'; e++) {
-            if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
-                stringize = 1;
-                e++; /* skip '#' */
-            } else {
-                stringize = 0;
-            }
-            if (*e == '%' && isdigit(*(e + 1)) && !args.empty()) {
-                arg = *(e + 1) - '0';
-                assert(arg >= 0 && arg <= 9);
-                assert(stringize == 0 || stringize == 1);
-                if (size_t(arg) < args.size() && args[arg]) {
-                    len += args[arg]->size() + 2 * stringize;
-                    e++;
-                } else {
-                    len++;
-                }
+    if (!match)
+        return FALSE;
+
+    /* calculate the length of the substituted string */
+    for (e = (unsigned char*)substitution, len = 0; *e != '\0'; e++) {
+        if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
+            stringize = 1;
+            e++; /* skip '#' */
+        } else {
+            stringize = 0;
+        }
+        if (*e == '%' && isdigit(*(e + 1)) && !args.empty()) {
+            arg = *(e + 1) - '0';
+            assert(arg >= 0 && arg <= 9);
+            assert(stringize == 0 || stringize == 1);
+            if (size_t(arg) < args.size() && args[arg]) {
+                len += args[arg]->size() + 2 * stringize;
+                e++;
             } else {
                 len++;
             }
-        }
-        /* check length of the string after substitution */
-        if (strlen((char*)line) + len - (int)(s - line) > buffersize) {
-            error(75); /* line too long */
         } else {
-            /* substitute pattern */
-            strdel((char*)line, (int)(s - line));
-            for (e = (unsigned char*)substitution, s = line; *e != '\0'; e++) {
-                if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2))) {
-                    stringize = 1;
-                    e++; /* skip '#' */
-                } else {
-                    stringize = 0;
-                }
-                if (*e == '%' && isdigit(*(e + 1))) {
-                    arg = *(e + 1) - '0';
-                    assert(arg >= 0 && arg <= 9);
-                    if (size_t(arg) < args.size() && args[arg]) {
-                        if (stringize)
-                            strins((char*)s++, "\"", 1);
-                        strins((char*)s, (char*)args[arg]->data(), args[arg]->size());
-                        s += args[arg]->size();
-                        if (stringize)
-                            strins((char*)s++, "\"", 1);
-                    } else {
-                        error(236); /* parameter does not exist, incorrect #define pattern */
-                        strins((char*)s, (char*)e, 2);
-                        s += 2;
-                    }
-                    e++; /* skip %, digit is skipped later */
-                } else if (*e == '"') {
-                    p = e;
-                    if (is_startstring(e)) {
-                        e = skipstring(e);
-                        strins((char*)s, (char*)p, (e - p + 1));
-                        s += (e - p + 1);
-                    } else {
-                        strins((char*)s, (char*)e, 1);
-                        s++;
-                    }
-                } else {
-                    strins((char*)s, (char*)e, 1);
-                    s++;
-                }
-            }
+            len++;
         }
     }
 
+    /* check length of the string after substitution */
+    if (strlen((char*)line) + len - (int)(s - line) > buffersize) {
+        error(75); /* line too long */
+        return match;
+    }
+
+    /* substitute pattern */
+    strdel((char*)line, (int)(s - line));
+    for (e = (unsigned char*)substitution, s = line; *e != '\0'; e++) {
+        if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2))) {
+            stringize = 1;
+            e++; /* skip '#' */
+        } else {
+            stringize = 0;
+        }
+        if (*e == '%' && isdigit(*(e + 1))) {
+            arg = *(e + 1) - '0';
+            assert(arg >= 0 && arg <= 9);
+            if (size_t(arg) < args.size() && args[arg]) {
+                if (stringize)
+                    strins((char*)s++, "\"", 1);
+                strins((char*)s, (char*)args[arg]->data(), args[arg]->size());
+                s += args[arg]->size();
+                if (stringize)
+                    strins((char*)s++, "\"", 1);
+            } else {
+                error(236); /* parameter does not exist, incorrect #define pattern */
+                strins((char*)s, (char*)e, 2);
+                s += 2;
+            }
+            e++; /* skip %, digit is skipped later */
+        } else if (*e == '"') {
+            p = e;
+            if (is_startstring(e)) {
+                e = skipstring(e);
+                strins((char*)s, (char*)p, (e - p + 1));
+                s += (e - p + 1);
+            } else {
+                strins((char*)s, (char*)e, 1);
+                s++;
+            }
+        } else {
+            strins((char*)s, (char*)e, 1);
+            s++;
+        }
+    }
     return match;
 }
 
