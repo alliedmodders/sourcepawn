@@ -1215,11 +1215,9 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
 {
     int prefixlen;
     const unsigned char *p, *s, *e;
-    unsigned char* args[10];
-    int match, arg, len, argsnum = 0;
+    std::vector<std::unique_ptr<std::string>> args;
+    int match, arg, len;
     int stringize;
-
-    memset(args, 0, sizeof args);
 
     /* check the length of the prefix */
     for (prefixlen = 0, s = (unsigned char*)pattern; alphanum(*s); prefixlen++, s++)
@@ -1255,15 +1253,9 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                               * a string, or the closing paranthese of a group) */
                 }
                 /* store the parameter (overrule any earlier) */
-                if (args[arg] != NULL)
-                    free(args[arg]);
-                else
-                    argsnum++;
-                len = (int)(e - s);
-                args[arg] = (unsigned char*)malloc(len + 1);
-                if (args[arg] == NULL)
-                    error(FATAL_ERROR_OOM);
-                SafeStrcpy((char*)args[arg], len + 1, (char*)s);
+                if (size_t(arg) >= args.size())
+                    args.resize(arg + 1);
+                args[arg] = std::make_unique<std::string>(reinterpret_cast<const char*>(s), e - s);
                 /* character behind the pattern was matched too */
                 if (*e == *p) {
                     s = e + 1;
@@ -1314,18 +1306,18 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     if (match) {
         /* calculate the length of the substituted string */
         for (e = (unsigned char*)substitution, len = 0; *e != '\0'; e++) {
-            if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && argsnum) {
+            if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
                 stringize = 1;
                 e++; /* skip '#' */
             } else {
                 stringize = 0;
             }
-            if (*e == '%' && isdigit(*(e + 1)) && argsnum) {
+            if (*e == '%' && isdigit(*(e + 1)) && !args.empty()) {
                 arg = *(e + 1) - '0';
                 assert(arg >= 0 && arg <= 9);
                 assert(stringize == 0 || stringize == 1);
-                if (args[arg] != NULL) {
-                    len += strlen((char*)args[arg]) + 2 * stringize;
+                if (size_t(arg) < args.size() && args[arg]) {
+                    len += args[arg]->size() + 2 * stringize;
                     e++;
                 } else {
                     len++;
@@ -1350,11 +1342,11 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                 if (*e == '%' && isdigit(*(e + 1))) {
                     arg = *(e + 1) - '0';
                     assert(arg >= 0 && arg <= 9);
-                    if (args[arg] != NULL) {
+                    if (size_t(arg) < args.size() && args[arg]) {
                         if (stringize)
                             strins((char*)s++, "\"", 1);
-                        strins((char*)s, (char*)args[arg], strlen((char*)args[arg]));
-                        s += strlen((char*)args[arg]);
+                        strins((char*)s, (char*)args[arg]->data(), args[arg]->size());
+                        s += args[arg]->size();
                         if (stringize)
                             strins((char*)s++, "\"", 1);
                     } else {
@@ -1380,10 +1372,6 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             }
         }
     }
-
-    for (arg = 0; arg < 10; arg++)
-        if (args[arg] != NULL)
-            free(args[arg]);
 
     return match;
 }
