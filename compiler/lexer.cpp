@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <unordered_set>
 #include <utility>
 
 #include "lexer.h"
@@ -1209,14 +1210,14 @@ strins(char* dest, const char* src, size_t srclen)
     return dest;
 }
 
-static int
+static size_t
 substpattern(unsigned char* line, size_t buffersize, const char* pattern,
              const char* substitution)
 {
     int prefixlen;
     const unsigned char *p, *s, *e;
     std::vector<std::unique_ptr<std::string>> args;
-    int match, arg, len;
+    int match, arg;
     int stringize;
 
     /* check the length of the prefix */
@@ -1304,9 +1305,10 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     }
 
     if (!match)
-        return FALSE;
+        return 0;
 
     /* calculate the length of the substituted string */
+    size_t len = 0;
     for (e = (unsigned char*)substitution, len = 0; *e != '\0'; e++) {
         if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
             stringize = 1;
@@ -1332,7 +1334,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     /* check length of the string after substitution */
     if (strlen((char*)line) + len - (int)(s - line) > buffersize) {
         error(75); /* line too long */
-        return match;
+        return 0;
     }
 
     /* substitute pattern */
@@ -1370,7 +1372,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             s++;
         }
     }
-    return match;
+    return len;
 }
 
 static void
@@ -1379,9 +1381,20 @@ substallpatterns(unsigned char* line, int buffersize)
     unsigned char *start, *end;
     int prefixlen;
 
-    int depth = 0;
+    std::unordered_set<std::string> blocked_macros;
+
+    auto enter_macro = [&](const char* start, size_t prefixlen, macro_t* out) -> bool {
+        if (!find_subst(start, prefixlen, out))
+            return false;
+        if (blocked_macros.count(out->first))
+            return false;
+        blocked_macros.emplace(out->first);
+        return true;
+    };
 
     start = line;
+
+    unsigned char* sequence_end = nullptr;
     while (*start != '\0') {
         /* find the start of a prefix (skip all non-alphabetic characters),
          * also skip strings
@@ -1418,24 +1431,27 @@ substallpatterns(unsigned char* line, int buffersize)
         }
         assert(prefixlen > 0);
 
-        macro_t subst;
-        if (find_subst((const char*)start, prefixlen, &subst)) {
-            /* properly match the pattern and substitute */
-            if (!substpattern(start, buffersize - (int)(start - line), subst.first, subst.second))
-                start = end; /* match failed, skip this prefix */
-            /* match succeeded: do not update "start", because the substitution text
-             * may be matched by other macros
-             */
+        // If we've scanned beyond the end of the last sequence, we can clear
+        // the blocked macros set.
+        if (sequence_end && start >= sequence_end)
+            blocked_macros.clear();
 
-            ++depth;
-            if (depth >= 32) {
-                error(FATAL_ERROR_MACRO_DEPTH);
-                return;
-            }
-        } else {
+        macro_t subst;
+        if (!enter_macro((const char *)start, prefixlen, &subst)) {
             start = end; /* no macro with this prefix, skip this prefix */
-            depth = 0;
+            continue;
         }
+
+        /* properly match the pattern and substitute */
+        size_t len = substpattern(start, buffersize - (int)(start - line), subst.first, subst.second);
+        if (len) {
+            sequence_end = std::max(sequence_end, start + len);
+        } else {
+            start = end; /* match failed, skip this prefix */
+        }
+        /* match succeeded: do not update "start", because the substitution text
+         * may be matched by other macros
+         */
     }
 }
 

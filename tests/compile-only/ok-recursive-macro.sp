@@ -1,3 +1,3 @@
 #define TEST TEST
 
-TEST
+public TEST() {}
