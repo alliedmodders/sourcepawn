@@ -1360,16 +1360,11 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                 s += 2;
             }
             e++; /* skip %, digit is skipped later */
-        } else if (*e == '"') {
+        } else if (is_startstring(e)) {
             p = e;
-            if (is_startstring(e)) {
-                e = skipstring(e);
-                strins((char*)s, (char*)p, (e - p + 1));
-                s += (e - p + 1);
-            } else {
-                strins((char*)s, (char*)e, 1);
-                s++;
-            }
+            e = skipstring(e);
+            strins((char*)s, (char*)p, (e - p + 1));
+            s += (e - p + 1);
         } else {
             strins((char*)s, (char*)e, 1);
             s++;
