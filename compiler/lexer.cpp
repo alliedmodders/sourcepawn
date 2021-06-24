@@ -207,7 +207,7 @@ doinclude(int silent)
     i = 0;
     while (*lptr != c && *lptr != '\0' && i < sizeof name - 1) /* find the end of the string */
     {
-        if (DIRSEP_CHAR == '\\' && *lptr == '/') {
+        if (DIRSEP_CHAR != '/' && *lptr == '/') {
             name[i++] = DIRSEP_CHAR;
             lptr++;
             continue;
