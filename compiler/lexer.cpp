@@ -206,7 +206,15 @@ doinclude(int silent)
 
     i = 0;
     while (*lptr != c && *lptr != '\0' && i < sizeof name - 1) /* find the end of the string */
-        name[i++] = *lptr++;
+    {
+        if (DIRSEP_CHAR != '/' && *lptr == '/') {
+            name[i++] = DIRSEP_CHAR;
+            lptr++;
+        }
+        else {
+            name[i++] = *lptr++;
+        }
+    }
     while (i > 0 && name[i - 1] <= ' ')
         i--; /* strip trailing whitespace */
     assert(i < sizeof name);
