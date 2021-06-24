@@ -210,9 +210,10 @@ doinclude(int silent)
         if (DIRSEP_CHAR != '/' && *lptr == '/') {
             name[i++] = DIRSEP_CHAR;
             lptr++;
-            continue;
         }
-        name[i++] = *lptr++;
+        else {
+            name[i++] = *lptr++;
+        }
     }
     while (i > 0 && name[i - 1] <= ' ')
         i--; /* strip trailing whitespace */
