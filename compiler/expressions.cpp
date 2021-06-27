@@ -630,29 +630,6 @@ array_levelsize(symbol* sym, int level)
     return (sym->dim.array.slength ? sym->dim.array.slength : sym->dim.array.length);
 }
 
-static void
-checkfunction(const value* lval)
-{
-    symbol* sym = lval->sym;
-
-    if (sym == NULL || (sym->ident != iFUNCTN))
-        return; /* no known symbol, or not a function result */
-
-    if (sym->defined) {
-        /* function is defined, can now check the return value (but make an
-         * exception for directly recursive functions)
-         */
-        if (sym != curfunc && !sym->retvalue) {
-            auto symname = funcdisplayname(sym->name());
-            error(209, symname.c_str()); /* function should return a value */
-        }
-    } else {
-        /* function not yet defined, set */
-        sym->retvalue = true;    /* make sure that a future implementation of
-                                  * the function uses "return <value>" */
-    }
-}
-
 cell
 calc(cell left, void (*oper)(), cell right, char* boolresult)
 {
@@ -712,7 +689,7 @@ lvalexpr(svalue* sval)
 }
 
 int
-expression(cell* val, int* tag, symbol** symptr, int chkfuncresult, value* _lval)
+expression(cell* val, int* tag, symbol** symptr, value* _lval)
 {
     value lval = {0};
     pushheaplist();
@@ -730,8 +707,6 @@ expression(cell* val, int* tag, symbol** symptr, int chkfuncresult, value* _lval
         *tag = lval.tag;
     if (symptr != NULL)
         *symptr = lval.sym;
-    if (chkfuncresult)
-        checkfunction(&lval);
     if (_lval)
         *_lval = lval;
     return lval.ident;
