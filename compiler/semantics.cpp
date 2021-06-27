@@ -1322,6 +1322,11 @@ SymbolExpr::BindCallTarget(int token, Expr** implicit_this)
     }
     if (sym_->ident != iFUNCTN)
         return nullptr;
+    if (sym_->missing) {
+        auto symname = funcdisplayname(sym_->name());
+        error(pos_, 4, symname.c_str());
+        return nullptr;
+    }
     return sym_;
 }
 
