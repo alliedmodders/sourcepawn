@@ -131,9 +131,9 @@ static void statement(int* lastindent, int allow_decl);
 static void compound(int stmt_sameline);
 static int test(int label, int parens, int invert);
 static int doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag,
-                  symbol** symptr, int chkfuncresult);
+                  symbol** symptr);
 static int doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag,
-                   symbol** symptr, int chkfuncresult, value* lval);
+                   symbol** symptr, value* lval);
 static void doassert(void);
 static void doexit(void);
 static int doif(void);
@@ -1329,7 +1329,7 @@ declloc(int tokid) {
                         value val;
                         symbol* child;
                         int ident =
-                            doexpr2(TRUE, FALSE, TRUE, FALSE, &type->idxtag[i], &child, 0, &val);
+                            doexpr2(TRUE, FALSE, TRUE, FALSE, &type->idxtag[i], &child, &val);
                         if (i == type->numdim - 1 && type->tag == pc_tag_string)
                             stradjust(sPRI);
                         pushreg(sPRI);
@@ -1394,7 +1394,7 @@ declloc(int tokid) {
                 if (matchtoken('=')) {
                     if (!autozero)
                         error(10);
-                    cident = doexpr(FALSE, FALSE, FALSE, FALSE, &ctag, NULL, TRUE);
+                    cident = doexpr(FALSE, FALSE, FALSE, FALSE, &ctag, nullptr);
                     explicit_init = TRUE;
                 } else {
                     if (autozero)
@@ -2246,7 +2246,7 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
             int tag;
             value val;
             symbol* sym;
-            int ident = doexpr2(TRUE, FALSE, FALSE, FALSE, &tag, &sym, 0, &val);
+            int ident = doexpr2(TRUE, FALSE, FALSE, FALSE, &tag, &sym, &val);
 
             if (!is_valid_index_tag(tag))
                 error(77, gTypes.find(tag)->prettyName());
@@ -4685,7 +4685,7 @@ statement(int* lastindent, int allow_decl) {
         default: /* non-empty expression */
         doexpr_jump:
             lexpush(); /* analyze token later */
-            doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL, FALSE);
+            doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL);
             needtoken(tTERM);
             lastst = tEXPR;
     }
@@ -4753,9 +4753,9 @@ compound(int stmt_sameline) {
  *  Global references: stgidx   (referred to only)
  */
 static int
-doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, symbol** symptr,
-       int chkfuncresult) {
-    return doexpr2(comma, chkeffect, allowarray, mark_endexpr, tag, symptr, chkfuncresult, NULL);
+doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, symbol** symptr)
+{
+    return doexpr2(comma, chkeffect, allowarray, mark_endexpr, tag, symptr, nullptr);
 }
 
 /*  doexpr2
@@ -4764,7 +4764,8 @@ doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sym
  */
 static int
 doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, symbol** symptr,
-        int chkfuncresult, value* lval) {
+        value* lval)
+{
     int index, ident;
     int localstaging = FALSE;
     cell val;
@@ -4785,7 +4786,7 @@ doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sy
         if (index != stgidx)
             markexpr(sEXPR, NULL, 0);
         sideeffect = FALSE;
-        ident = expression(&val, tag, symptr, chkfuncresult, lval);
+        ident = expression(&val, tag, symptr, lval);
         if (!allowarray && (ident == iARRAY || ident == iREFARRAY))
             error(33, "-unknown-"); /* array must be indexed */
         if (chkeffect && !sideeffect)
@@ -4811,7 +4812,7 @@ exprconst(cell* val, int* tag, symbol** symptr) {
     stgset(TRUE);          /* start stage-buffering */
     stgget(&index, &cidx); /* mark position in code generator */
     errorset(sEXPRMARK, 0);
-    ident = expression(val, tag, symptr, FALSE, NULL);
+    ident = expression(val, tag, symptr, nullptr);
     stgdel(index, cidx); /* scratch generated code */
     stgset(FALSE);       /* stop stage-buffering */
     if (ident != iCONSTEXPR) {
@@ -4867,7 +4868,7 @@ test(int label, int parens, int invert) {
     do {
         stgget(&index, &cidx); /* mark position (of last expression) in
                                  * code generator */
-        ident = expression(&constval, &tag, &sym, TRUE, NULL);
+        ident = expression(&constval, &tag, &sym, nullptr);
         tok = matchtoken(',');
         if (tok)
             markexpr(sEXPR, NULL, 0);
@@ -5059,7 +5060,7 @@ dofor(void) {
             }
             default:
                 lexpush();
-                doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL, FALSE); /* expression 1 */
+                doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL); /* expression 1 */
                 needtoken(';');
                 break;
         }
@@ -5099,7 +5100,7 @@ dofor(void) {
     }
     stgmark((char)(sEXPRSTART + 1)); /* mark start of 3th expression in stage */
     if (!matchtoken(endtok)) {
-        doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL, FALSE); /* expression 3 */
+        doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL); /* expression 3 */
         needtoken(endtok);
     }
     stgmark(sENDREORDER); /* mark end of reversed evaluation */
@@ -5158,7 +5159,7 @@ doswitch(void) {
     int switch_tag, case_tag;
 
     endtok = matchtoken('(') ? ')' : tDO;
-    doexpr(TRUE, FALSE, FALSE, FALSE, &switch_tag, NULL, TRUE); /* evaluate switch expression */
+    doexpr(TRUE, FALSE, FALSE, FALSE, &switch_tag, NULL); /* evaluate switch expression */
     needtoken(endtok);
     /* generate the code for the switch statement, the label is the address
      * of the case table (to be generated later).
@@ -5301,7 +5302,7 @@ doassert(void) {
         stgset(TRUE);          /* start staging */
         stgget(&index, &cidx); /* mark position in code generator */
         do {
-            expression(NULL, NULL, NULL, FALSE, NULL);
+            expression(nullptr, nullptr, nullptr, nullptr);
             stgdel(index, cidx); /* just scrap the code */
         } while (matchtoken(','));
         stgset(FALSE); /* stop staging */
@@ -5335,7 +5336,7 @@ doreturn(void)
         /* "return <value>" */
         if (sReturnType & RETURN_NONE)
             error(78); /* mix "return;" and "return value;" */
-        ident = doexpr(TRUE, FALSE, TRUE, FALSE, &tag, &sym, TRUE);
+        ident = doexpr(TRUE, FALSE, TRUE, FALSE, &tag, &sym);
         needtoken(tTERM);
         if (ident == iARRAY && sym == NULL) {
             /* returning a literal string is not supported (it must be a variable) */
@@ -5495,7 +5496,7 @@ doexit(void) {
     int tag = 0;
 
     if (matchtoken(tTERM) == 0) {
-        doexpr(TRUE, FALSE, FALSE, TRUE, &tag, NULL, TRUE);
+        doexpr(TRUE, FALSE, FALSE, TRUE, &tag, NULL);
         needtoken(tTERM);
     } else {
         ldconst(0, sPRI);
