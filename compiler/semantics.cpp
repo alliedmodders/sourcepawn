@@ -1424,7 +1424,7 @@ FieldAccessExpr::AnalyzeStaticAccess()
     Type* type = gTypes.find(base_val.tag);
     symbol* field = find_enumstruct_field(type, name_->chars());
     if (!field) {
-        error(pos_, 105, type->name(), field_->name());
+        error(pos_, 105, type->name(), name_->chars());
         return FALSE;
     }
     assert(field->parent() == type->asEnumStruct());
