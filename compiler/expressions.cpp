@@ -158,12 +158,11 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
 
     /* check existance and the proper declaration of this function */
     if (sym->missing || !sym->prototyped) {
-        char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
-        funcdisplayname(symname, sym->name());
+        auto symname = funcdisplayname(sym->name());
         if (sym->missing)
-            error(4, symname); /* function not defined */
+            error(4, symname.c_str()); /* function not defined */
         if (!sym->prototyped)
-            error(71, symname); /* operator must be declared before use */
+            error(71, symname.c_str()); /* operator must be declared before use */
     }
 
     /* we don't want to use the redefined operator in the function that
@@ -644,9 +643,8 @@ checkfunction(const value* lval)
          * exception for directly recursive functions)
          */
         if (sym != curfunc && !sym->retvalue) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
-            funcdisplayname(symname, sym->name());
-            error(209, symname); /* function should return a value */
+            auto symname = funcdisplayname(sym->name());
+            error(209, symname.c_str()); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */

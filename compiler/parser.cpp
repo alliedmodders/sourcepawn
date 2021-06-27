@@ -3469,9 +3469,8 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
     operator_symname(tmpname, opername, tags[0], tags[1], count, resulttag);
     if ((oldsym = findglb(tmpname)) != NULL) {
         if (oldsym->defined) {
-            char errname[2 * sNAMEMAX + 16];
-            funcdisplayname(errname, tmpname);
-            error(21, errname); /* symbol already defined */
+            auto errname = funcdisplayname(tmpname);
+            error(21, errname.c_str()); /* symbol already defined */
         }
         sym->usage |= oldsym->usage; /* copy flags from the previous definition */
         for (const auto& other : oldsym->refers_to()) {
@@ -3566,33 +3565,29 @@ parse_funcname(const char* fname, int* tag1, int* tag2, char* opname, size_t opn
     return unary;
 }
 
-char*
-funcdisplayname(char* dest, const char* funcname) {
+std::string
+funcdisplayname(const char* funcname)
+{
     int tags[2];
     char opname[10];
     int unary;
 
-    if (isalpha(*funcname) || *funcname == '_' || *funcname == PUBLIC_CHAR || *funcname == '\0') {
-        if (dest != funcname)
-            strcpy(dest, funcname);
-        return dest;
-    }
+    if (isalpha(*funcname) || *funcname == '_' || *funcname == PUBLIC_CHAR || *funcname == '\0')
+        return funcname;
 
     unary = parse_funcname(funcname, &tags[0], &tags[1], opname, sizeof(opname));
     Type* rhsType = gTypes.find(tags[1]);
     assert(rhsType != NULL);
     if (unary) {
-        sprintf(dest, "operator%s(%s:)", opname, rhsType->name());
-    } else {
-        Type* lhsType = gTypes.find(tags[0]);
-        assert(lhsType != NULL);
-        /* special case: the assignment operator has the return value as the 2nd tag */
-        if (opname[0] == '=' && opname[1] == '\0')
-            sprintf(dest, "%s:operator%s(%s:)", lhsType->name(), opname, rhsType->name());
-        else
-            sprintf(dest, "operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
+        return ke::StringPrintf("operator%s(%s:)", opname, rhsType->name());
     }
-    return dest;
+
+    Type* lhsType = gTypes.find(tags[0]);
+    assert(lhsType != NULL);
+    /* special case: the assignment operator has the return value as the 2nd tag */
+    if (opname[0] == '=' && opname[1] == '\0')
+        return ke::StringPrintf("%s:operator%s(%s:)", lhsType->name(), opname, rhsType->name());
+    return ke::StringPrintf("operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
 }
 
 static cell
@@ -3880,9 +3875,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         ldconst(0, sPRI);
         ffret();
         if (sym->retvalue) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
-            funcdisplayname(symname, sym->name());
-            error(209, symname); /* function should return a value */
+            auto symname = funcdisplayname(sym->name());
+            error(209, symname.c_str()); /* function should return a value */
         }
     }
     endfunc();
@@ -4296,7 +4290,6 @@ deduce_liveness(symbol* root) {
  */
 static int
 testsymbols(symbol* root, int level, int testlabs, int testconst) {
-    char symname[2 * sNAMEMAX + 16];
     int entry = FALSE;
 
     symbol* sym = root->next;
@@ -4320,10 +4313,10 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                 if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
                     sym->defined)
                 {
-                    funcdisplayname(symname, sym->name());
-                    if (strlen(symname) > 0) {
-                        error(sym, 203,
-                              symname); /* symbol isn't used ... (and not public/native/stock) */
+                    auto symname = funcdisplayname(sym->name());
+                    if (!symname.empty()) {
+                        /* symbol isn't used ... (and not public/native/stock) */
+                        error(sym, 203, symname.c_str());
                     }
                 }
                 if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
@@ -5454,10 +5447,9 @@ doreturn(void)
         /* this return statement contains no expression */
         ldconst(0, sPRI);
         if (sReturnType & RETURN_VALUE) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
+            auto symname = funcdisplayname(curfunc->name());
             assert(curfunc != NULL);
-            funcdisplayname(symname, curfunc->name());
-            error(209, symname); /* function should return a value */
+            error(209, symname.c_str()); /* function should return a value */
         }
         sReturnType |= RETURN_NO_VALUE;
     }
