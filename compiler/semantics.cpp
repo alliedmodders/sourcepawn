@@ -946,6 +946,11 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
             error(pos_, 182);
             return false;
         }
+        if (sym_->missing) {
+            auto symname = funcdisplayname(sym_->name());
+            error(pos_, 4, symname.c_str());
+            return false;
+        }
 
         funcenum_t* fe = funcenum_for_symbol(sym_);
 
