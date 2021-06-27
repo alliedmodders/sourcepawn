@@ -1882,9 +1882,8 @@ CallExpr::MarkUsed()
          * exception for directly recursive functions)
          */
         if (sym_ != curfunc && !sym_->retvalue) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
-            funcdisplayname(symname, sym_->name());
-            error(pos_, 209, symname); /* function should return a value */
+            auto symname = funcdisplayname(sym_->name());
+            error(pos_, 209, symname.c_str()); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
