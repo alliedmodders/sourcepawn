@@ -275,7 +275,7 @@ static const char* warnmsg[] = {
     /*225*/ "unreachable code\n",
     /*226*/ "a variable is assigned to itself (symbol \"%s\")\n",
     /*227*/ "more initializers than enum fields\n",
-    /*228*/ "unused228\n",
+    /*228*/ "enum multiplers are deprecated and will be removed in the next release\n",
     /*229*/ "index tag mismatch (symbol \"%s\")\n",
     /*230*/ "unused230\n",
     /*231*/ "unused231\n",
