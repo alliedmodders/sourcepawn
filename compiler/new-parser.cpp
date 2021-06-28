@@ -39,6 +39,9 @@
 
 using namespace sp;
 
+bool Parser::sInPreprocessor = false;
+bool Parser::sDetectedIllegalPreprocessorSymbols = false;
+
 void
 Parser::parse()
 {

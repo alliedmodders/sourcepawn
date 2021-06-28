@@ -277,7 +277,7 @@ static const char* warnmsg[] = {
     /*227*/ "more initializers than enum fields\n",
     /*228*/ "enum multiplers are deprecated and will be removed in the next release\n",
     /*229*/ "index tag mismatch (symbol \"%s\")\n",
-    /*230*/ "unused230\n",
+    /*230*/ "symbol \"%s\" is not a preprocessor symbol; this behavior is undefined and will be removed in the future\n",
     /*231*/ "unused231\n",
     /*232*/ "output file is written, but with compact encoding disabled\n",
     /*233*/ "unused233\n",

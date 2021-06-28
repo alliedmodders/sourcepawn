@@ -22,6 +22,7 @@
 
 #include "errors.h"
 #include "expressions.h"
+#include "new-parser.h"
 #include "parse-node.h"
 #include "sc.h"
 #include "sclist.h"
@@ -243,6 +244,11 @@ bool
 SymbolExpr::Bind()
 {
     AutoErrorPos aep(pos_);
+
+    if (Parser::sInPreprocessor) {
+        Parser::sDetectedIllegalPreprocessorSymbols = true;
+        error(pos_, 230, name_->chars());
+    }
 
     sym_ = findconst(name_->chars());
     if (!sym_)

@@ -38,6 +38,9 @@ class Parser : public ExpressionParser
     Decl* parse_enum(int vclass);
     Stmt* parse_const(int vclass);
 
+    static bool sInPreprocessor;
+    static bool sDetectedIllegalPreprocessorSymbols;
+
   private:
     typedef int (Parser::*HierFn)(value*);
     typedef Expr* (Parser::*NewHierFn)();
