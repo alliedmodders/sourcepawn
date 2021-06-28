@@ -34,11 +34,13 @@
 #include "lexer.h"
 #include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
+#include <amtl/am-raii.h>
 #include <amtl/am-string.h>
 #include <sp_typeutil.h>
 #include "emitter.h"
 #include "errors.h"
 #include "libpawnc.h"
+#include "new-parser.h"
 #include "optimizer.h"
 #include "sc.h"
 #include "sci18n.h"
@@ -688,6 +690,8 @@ preproc_expr(cell* val, int* tag)
     cell code_index;
     char* term;
 
+    ke::SaveAndSet<bool> forbid_const(&Parser::sInPreprocessor, true);
+
     /* Disable staging; it should be disabled already because
      * expressions may not be cut off half-way between conditional
      * compilations. Reset the staging index, but keep the code
@@ -911,15 +915,21 @@ command(void)
             check_empty(lptr);
             break;
         case tpASSERT:
+        {
+            ke::SaveAndSet<bool> reset(&Parser::sDetectedIllegalPreprocessorSymbols, false);
+
             if (!SKIPPING && (sc_debug & sCHKBOUNDS) != 0) {
                 for (str = (char*)lptr; *str <= ' ' && *str != '\0'; str++)
                     /* nothing */;        /* save start of expression */
                 preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
-                if (!val)
+                bool should_assert = (!Parser::sDetectedIllegalPreprocessorSymbols ||
+                                      sc_status == statWRITE);
+                if (!val && should_assert)
                     error(FATAL_ERROR_ASSERTION_FAILED, str); /* assertion failed */
                 check_empty(lptr);
             }
             break;
+        }
         case tpPRAGMA:
             if (!SKIPPING) {
                 if (lex(&val, &str) == tSYMBOL) {
