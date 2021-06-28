@@ -215,6 +215,7 @@ Parser::parse_enum(int vclass)
     cell increment = 1;
     cell multiplier = 1;
     if (matchtoken('(')) {
+        error(228);
         if (matchtoken(taADD)) {
             exprconst(&increment, NULL, NULL);
         } else if (matchtoken(taMULT)) {
