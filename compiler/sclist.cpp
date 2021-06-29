@@ -278,9 +278,7 @@ static stringlist inputfiles;
 stringlist*
 insert_inputfile(char* string)
 {
-    if (sc_status != statFIRST)
-        return insert_string(&inputfiles, string);
-    return NULL;
+    return insert_string(&inputfiles, string);
 }
 
 char*

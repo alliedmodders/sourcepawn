@@ -20,6 +20,8 @@
 //
 //  Version: $Id$
 
+#include <amtl/am-raii.h>
+
 #include "errors.h"
 #include "expressions.h"
 #include "new-parser.h"
@@ -247,7 +249,10 @@ SymbolExpr::Bind()
 
     if (Parser::sInPreprocessor) {
         Parser::sDetectedIllegalPreprocessorSymbols = true;
-        error(pos_, 230, name_->chars());
+        if (sc_status == statFIRST) {
+            ke::SaveAndSet<bool> restore(&sc_enable_first_pass_error_display, true);
+            error(pos_, 230, name_->chars());
+        }
     }
 
     sym_ = findconst(name_->chars());
