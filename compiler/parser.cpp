@@ -4804,19 +4804,24 @@ doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sy
 
 /*  exprconst
  */
-int
-exprconst(cell* val, int* tag, symbol** symptr) {
+bool
+exprconst(cell* val, int* tag, symbol** symptr)
+{
     int ident, index;
     cell cidx;
+
+    int old_errcount = sc_total_errors;
 
     stgset(TRUE);          /* start stage-buffering */
     stgget(&index, &cidx); /* mark position in code generator */
     errorset(sEXPRMARK, 0);
     ident = expression(val, tag, symptr, nullptr);
+    bool failed = (sc_status == statWRITE && sc_total_errors > old_errcount);
     stgdel(index, cidx); /* scratch generated code */
     stgset(FALSE);       /* stop stage-buffering */
     if (ident != iCONSTEXPR) {
-        error(8); /* must be constant expression */
+        if (!failed) // Don't pile on errors.
+            error(8); /* must be constant expression */
         if (val != NULL)
             *val = 0;
         if (tag != NULL)
@@ -4825,7 +4830,7 @@ exprconst(cell* val, int* tag, symbol** symptr) {
             *symptr = NULL;
     }
     errorset(sEXPRRELEASE, 0);
-    return (ident == iCONSTEXPR);
+    return !failed && (ident == iCONSTEXPR);
 }
 
 /*  test

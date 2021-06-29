@@ -122,6 +122,23 @@ class StmtList : public Stmt
     PoolList<Stmt*> stmts_;
 };
 
+class StaticAssertStmt : public Stmt
+{
+  public:
+    explicit StaticAssertStmt(const token_pos_t& pos, int val, PoolString* text)
+      : Stmt(pos),
+        val_(val),
+        text_(text)
+    {}
+
+    bool Analyze() override;
+    void Emit() override {}
+
+  private:
+    int val_;
+    PoolString* text_;
+};
+
 class Decl : public Stmt
 {
   public:

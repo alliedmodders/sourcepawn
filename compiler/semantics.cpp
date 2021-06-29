@@ -1900,3 +1900,17 @@ CallExpr::MarkUsed()
         sym_->retvalue = true;
     }
 }
+
+bool StaticAssertStmt::Analyze()
+{
+    if (val_)
+        return true;
+
+    std::string message;
+    if (text_)
+        message += ": " + std::string(text_->chars(), text_->length());
+
+    error(pos_, 70, message.c_str());
+
+    return false;
+}
