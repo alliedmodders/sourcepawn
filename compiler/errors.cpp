@@ -56,6 +56,7 @@ static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char *
 
 static int errflag;
 static AutoErrorPos* sPosOverride = nullptr;
+bool sc_enable_first_pass_error_display = false;
 
 AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
   : pos_(pos),
@@ -233,7 +234,7 @@ report_error(ErrorReport* report)
     if (report->type != ErrorType::Fatal) {
         if (errflag)
             return;
-        if (sc_status != statWRITE && !sc_err_status)
+        if (sc_status != statWRITE && !sc_err_status && !sc_enable_first_pass_error_display)
             return;
     }
 

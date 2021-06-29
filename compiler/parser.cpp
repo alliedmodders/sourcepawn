@@ -357,6 +357,7 @@ pc_compile(int argc, char* argv[]) {
         pc_resetsrc(inpf, inpfmark); /* reset file position */
         sc_reparse = FALSE;          /* assume no extra passes */
         sc_status = statFIRST;       /* resetglobals() resets it to IDLE */
+        insert_inputfile(inpfname); /* save for the error system */
 
         /* look for default prefix (include) file in include paths,
          * but only error if it was manually set on the command line

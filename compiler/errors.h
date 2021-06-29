@@ -95,4 +95,6 @@ void report_error(ErrorReport* report);
 
 int pc_enablewarning(int number, int enable);
 
+extern bool sc_enable_first_pass_error_display;
+
 #endif // am_sourcepawn_compiler_sc5_h
