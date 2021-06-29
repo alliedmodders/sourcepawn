@@ -71,6 +71,9 @@ Parser::parse()
             case tFORWARD:
                 decl = parse_unknown_decl(&tok);
                 break;
+            case tSTATIC_ASSERT:
+                decl = parse_static_assert();
+                break;
             case tFUNCENUM:
             case tFUNCTAG:
                 error(FATAL_ERROR_FUNCENUM);
@@ -971,4 +974,29 @@ Parser::struct_init()
 
     needtoken('}');
     return init;
+}
+
+Stmt*
+Parser::parse_static_assert()
+{
+    auto pos = current_pos();
+
+    needtoken('(');
+
+    int expr_val, expr_tag;
+    bool is_const = exprconst(&expr_val, &expr_tag, nullptr);
+
+    PoolString * text = nullptr;
+    if (matchtoken(',') && needtoken(tSTRING)) {
+        auto tok = current_token();
+        text = new PoolString(tok->str, tok->len);
+    }
+
+    needtoken(')');
+    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+
+    if (!is_const)
+        return nullptr;
+
+    return new StaticAssertStmt(pos, expr_val, text);
 }

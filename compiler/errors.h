@@ -31,7 +31,12 @@
 #include "lexer.h"
 #include "sc.h"
 
-enum class ErrorType { Suppressed, Warning, Error, Fatal };
+enum class ErrorType {
+    Suppressed,
+    Warning,
+    Error,
+    Fatal
+};
 
 struct ErrorReport {
     static ErrorReport infer_va(int number, va_list ap);

@@ -459,7 +459,7 @@ symbol* fetchfunc(const char* name);
 char* operator_symname(char* symname, const char* opername, int tag1, int tag2, int numtags,
                        int resulttag);
 std::string funcdisplayname(const char* funcname);
-int exprconst(cell* val, int* tag, symbol** symptr);
+bool exprconst(cell* val, int* tag, symbol** symptr);
 constvalue* append_constval(constvalue* table, const char* name, cell val, int index);
 constvalue* find_constval(constvalue* table, char* name, int index);
 void delete_consttable(constvalue* table);
