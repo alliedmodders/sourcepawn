@@ -22,7 +22,7 @@
  */
 
 // To find unused errors, try this:
-//   for i in {1..182}; do echo -n "Error $i:" ; grep -E "\($i(,|\))" compiler/sc*.cpp | wc -l; done
+//   for i in {1..182}; do echo -n "Error $i:" ; grep error compiler/*.cpp | grep -E "\b$i\b" | wc -l; done
 
 static const char* errmsg[] = {
     /*001*/ "expected token: \"%s\", but found \"%s\"\n",
@@ -43,7 +43,7 @@ static const char* errmsg[] = {
     /*016*/ "multiple defaults in \"switch\"\n",
     /*017*/ "undefined symbol \"%s\"\n",
     /*018*/ "initialization data exceeds declared size\n",
-    /*019*/ "not a label: \"%s\"\n",
+    /*019*/ "cannot use symbol \"%s\" before it is fully parsed\n",
     /*020*/ "invalid symbol name \"%s\"\n",
     /*021*/ "symbol already defined: \"%s\"\n",
     /*022*/ "must be lvalue (non-constant)\n",
@@ -104,7 +104,7 @@ static const char* errmsg[] = {
     /*077*/ "arrays cannot be indexed by non-integral type '%s'\n",
     /*078*/ "function uses both \"return\" and \"return <value>\"\n",
     /*079*/ "inconsistent return types (array & non-array)\n",
-    /*080*/ "unknown symbol, or not a constant symbol (symbol \"%s\")\n",
+    /*080*/ "unused80\n",
     /*081*/ "enum struct field arrays must have fixed sizes\n",
     /*082*/ "properties cannot be arrays\n",
     /*083*/ "methodmap methods cannot return arrays\n",
@@ -121,7 +121,7 @@ static const char* errmsg[] = {
     /*094*/ "cannot apply const qualifier to enum struct field \"%s\"\n",
     /*095*/ "type \"%s\" cannot be applied as a tag\n",
     /*096*/ "could not find member \"%s\" in struct \"%s\"\n",
-    /*097*/ "symbol \"%s\" does not have a matching type\n",
+    /*097*/ "unused97\n",
     /*098*/ "type \"%s\" should be \"%s\" in new-style declarations\n",
     /*099*/ "%s should not have an explicit return type\n",
     /*100*/ "function prototypes do not match\n",

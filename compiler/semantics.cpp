@@ -1522,6 +1522,10 @@ SizeofExpr::Analyze()
         }
 
         if (sym->ident == iENUMSTRUCT) {
+            if (!sym->dim.enumlist) {
+                error(pos_, 19, sym->name());
+                return false;
+            }
             val_.constval = sym->addr();
             return true;
         }
