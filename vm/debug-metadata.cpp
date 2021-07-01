@@ -65,7 +65,7 @@ void PerfJitFile::Write(void* address, uint64_t length, const char* symbol) {
   }
 
   fprintf(file_,
-    (sizeof(long) == 8) ? "%lx %lx %s\n" : "%llx %llx %s\n",
+    "%" KE_FMT_X64 " %" KE_FMT_X64 " %s\n",
     (uint64_t)address, length, symbol);
 
   fflush(file_);
