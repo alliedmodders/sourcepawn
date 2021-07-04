@@ -411,6 +411,14 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
     return FALSE;
 }
 
+static bool
+IsValidImplicitArrayCast(int a, int b)
+{
+    // Dumb check for now. This should really do a deep type validation though.
+    // Fix this when we overhaul types in 1.12.
+    return a == b;
+}
+
 static int
 funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
 {
@@ -428,14 +436,12 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
             return FALSE;
     }
 
-    // Note we invert the order we pass things to matchtag() here. If the
-    // typedef specifies base type X, and the function specifies derived
-    // type Y, we want this to type since such an assignment is valid.
-    //
-    // Most programming languages do not subtype arguments like this. We do
-    // it in SourcePawn to preserve compatibility during the Transitional
-    // Syntax effort.
-    if (!matchtag(actual->tag, formal->tag, MATCHTAG_SILENT | MATCHTAG_COERCE))
+    // Do not allow casting between different array types, eg:
+    //   any[] <-> float[] is illegal.
+    if (formal->dimcount && !IsValidImplicitArrayCast(formal->tag, actual->tag))
+        return FALSE;
+
+    if (!matchtag(formal->tag, actual->tag, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return FALSE;
     return TRUE;
 }
@@ -481,7 +487,7 @@ matchfunctags(Type* formal, Type* actual)
     if (!actual->isFunction())
         return FALSE;
 
-    functag_t* actualfn = functag_find_intrinsic(actualtag);
+    functag_t* actualfn = functag_from_tag(actualtag);
     if (!actualfn)
         return FALSE;
 
@@ -495,6 +501,19 @@ matchfunctags(Type* formal, Type* actual)
     }
 
     return FALSE;
+}
+
+static bool
+HasTagOnInheritanceChain(Type* type, int tag)
+{
+    methodmap_t* map = type->asMethodmap();
+    if (!map)
+        return false;
+    for (; map; map = map->parent) {
+        if (map->tag == tag)
+            return true;
+    }
+    return false;
 }
 
 int
@@ -526,8 +545,21 @@ matchtag(int formaltag, int actualtag, int flags)
         return TRUE;
     }
 
-    if (formaltag == pc_anytag || actualtag == pc_anytag)
+    if (actualtag == pc_anytag)
         return TRUE;
+
+    if (!(flags & MATCHTAG_FUNCARG)) {
+        // This is not legal for signature checks. For example:
+        //   void f(int x);
+        //   void g(void f(any y)) {
+        //       f(3.0);
+        //   }
+        //   g(f);
+        //
+        // 3.0 casts to any, but not to int.
+        if (formaltag == pc_anytag)
+            return TRUE;
+    }
 
     if (formal->isFunction()) {
         if (!matchfunctags(formal, actual)) {
@@ -537,15 +569,25 @@ matchtag(int formaltag, int actualtag, int flags)
         return TRUE;
     }
 
-    if (flags & (MATCHTAG_COERCE | MATCHTAG_DEDUCE)) {
+    if (flags & (MATCHTAG_COERCE | MATCHTAG_DEDUCE | MATCHTAG_FUNCARG)) {
         // See if the tag has a methodmap associated with it. If so, see if the given
         // tag is anywhere on the inheritance chain.
-        if (methodmap_t* map = actual->asMethodmap()) {
-            for (; map; map = map->parent) {
-                if (map->tag == formaltag)
-                    return TRUE;
-            }
-        }
+        if (HasTagOnInheritanceChain(actual, formaltag))
+            return TRUE;
+
+        // As a special exception to the "any" rule above, we allow the inverse
+        // to succeed for signature matching. This is a convenience and allows
+        // something like:
+        //
+        //   void f(DataPack x);
+        //   void g(void f(Handle h), Handle h) {
+        //     f(h);
+        //   }
+        //
+        // In the future, we can insert a runtime check here. For now, we can't,
+        // but we allow it anyway.
+        if ((flags & MATCHTAG_FUNCARG) && HasTagOnInheritanceChain(formal, actualtag))
+            return TRUE;
     }
 
     if (!(flags & MATCHTAG_SILENT))
