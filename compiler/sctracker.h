@@ -124,7 +124,7 @@ void funcenums_free();
 funcenum_t* funcenums_add(const char* name);
 void functags_add(funcenum_t* en, functag_t* src);
 funcenum_t* funcenum_for_symbol(symbol* sym);
-functag_t* functag_find_intrinsic(int tag);
+functag_t* functag_from_tag(int tag);
 
 /**
  * Given a name or tag, find any extra weirdness it has associated with it.

@@ -154,13 +154,11 @@ funcenum_for_symbol(symbol* sym)
 
 // Finds a functag that was created intrinsically.
 functag_t*
-functag_find_intrinsic(int tag)
+functag_from_tag(int tag)
 {
     Type* type = gTypes.find(tag);
     funcenum_t* fe = type->asFunction();
     if (!fe)
-        return nullptr;
-    if (strncmp(fe->name, "::ft:", 5) != 0)
         return nullptr;
     if (fe->entries.empty())
         return nullptr;
