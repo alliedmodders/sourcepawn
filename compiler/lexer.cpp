@@ -1228,9 +1228,9 @@ strins(char* dest, const char* src, size_t srclen)
     return dest;
 }
 
-static size_t
+static bool
 substpattern(unsigned char* line, size_t buffersize, const char* pattern,
-             const char* substitution)
+             const char* substitution, int* sizeDiff = nullptr)
 {
     int prefixlen;
     const unsigned char *p, *s, *e;
@@ -1323,7 +1323,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     }
 
     if (!match)
-        return 0;
+        return false;
 
     /* calculate the length of the substituted string */
     size_t len = 0;
@@ -1352,8 +1352,11 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     /* check length of the string after substitution */
     if (strlen((char*)line) + len - (int)(s - line) > buffersize) {
         error(75); /* line too long */
-        return 0;
+        return false;
     }
+
+    if (sizeDiff)
+        *sizeDiff = len - (int)(s - line);
 
     /* substitute pattern */
     strdel((char*)line, (int)(s - line));
@@ -1390,7 +1393,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             s++;
         }
     }
-    return len;
+    return true;
 }
 
 static void
@@ -1461,9 +1464,9 @@ substallpatterns(unsigned char* line, int buffersize)
         }
 
         /* properly match the pattern and substitute */
-        size_t len = substpattern(start, buffersize - (int)(start - line), subst.first, subst.second);
-        if (len) {
-            sequence_end = std::max(sequence_end, start + len);
+        int sizeDiff = 0;
+        if (substpattern(start, buffersize - (int)(start - line), subst.first, subst.second, &sizeDiff)) {
+            sequence_end += sizeDiff;
         } else {
             start = end; /* match failed, skip this prefix */
         }
