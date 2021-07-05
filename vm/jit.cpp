@@ -82,7 +82,7 @@ CompilerBase::emit()
 
   const char* function_name = rt_->image()->LookupFunction(pcode_start_);
 
-  debug_name_ = std::string(rt_->Name()) + "::" + function_name;
+  debug_name_ = std::string(rt_->Name()) + "::" + (function_name ? function_name : "<unknown function>");
 
 #if defined JIT_SPEW
   Environment::get()->debugger()->OnDebugSpew(
