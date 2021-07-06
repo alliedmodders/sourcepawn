@@ -1230,7 +1230,7 @@ strins(char* dest, const char* src, size_t srclen)
 
 static bool
 substpattern(unsigned char* line, size_t buffersize, const char* pattern,
-             const char* substitution, int* sizeDiff = nullptr)
+             const char* substitution, int& patternLen, int& substLen)
 {
     int prefixlen;
     const unsigned char *p, *s, *e;
@@ -1313,6 +1313,9 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
         }
     }
 
+    //length of the entire matched pattern, including parameters
+    patternLen = (int)(s - line);
+
     if (match && *p == '\0') {
         /* if the last character to match is an alphanumeric character, the
          * current character in the source may not be alphanumeric
@@ -1326,8 +1329,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
         return false;
 
     /* calculate the length of the substituted string */
-    size_t len = 0;
-    for (e = (unsigned char*)substitution, len = 0; *e != '\0'; e++) {
+    for (e = (unsigned char*)substitution, substLen = 0; *e != '\0'; e++) {
         if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
             stringize = 1;
             e++; /* skip '#' */
@@ -1339,27 +1341,24 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             assert(arg >= 0 && arg <= 9);
             assert(stringize == 0 || stringize == 1);
             if (size_t(arg) < args.size() && args[arg]) {
-                len += args[arg]->size() + 2 * stringize;
+                substLen += args[arg]->size() + 2 * stringize;
                 e++;
             } else {
-                len++;
+                substLen++;
             }
         } else {
-            len++;
+            substLen++;
         }
     }
 
     /* check length of the string after substitution */
-    if (strlen((char*)line) + len - (int)(s - line) > buffersize) {
+    if (strlen((char*)line) + substLen - patternLen > buffersize) {
         error(75); /* line too long */
         return false;
     }
 
-    if (sizeDiff)
-        *sizeDiff = len - (int)(s - line);
-
     /* substitute pattern */
-    strdel((char*)line, (int)(s - line));
+    strdel((char*)line, patternLen);
     for (e = (unsigned char*)substitution, s = line; *e != '\0'; e++) {
         if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2))) {
             stringize = 1;
@@ -1393,6 +1392,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             s++;
         }
     }
+
     return true;
 }
 
@@ -1415,6 +1415,7 @@ substallpatterns(unsigned char* line, int buffersize)
 
     start = line;
 
+    /* track the end of chars substituted in this sequence of replacements */
     unsigned char* sequence_end = nullptr;
     while (*start != '\0') {
         /* find the start of a prefix (skip all non-alphabetic characters),
@@ -1452,10 +1453,12 @@ substallpatterns(unsigned char* line, int buffersize)
         }
         assert(prefixlen > 0);
 
-        // If we've scanned beyond the end of the last sequence, we can clear
-        // the blocked macros set.
-        if (sequence_end && start >= sequence_end)
+        // If we've scanned beyond the end of the previously-subst'd chars in this
+        // sequence of substitutions, clear the blocked macros set and end of sequence.
+        if (sequence_end && start >= sequence_end) {
             blocked_macros.clear();
+            sequence_end = nullptr;
+        }
 
         macro_t subst;
         if (!enter_macro((const char *)start, prefixlen, &subst)) {
@@ -1464,9 +1467,14 @@ substallpatterns(unsigned char* line, int buffersize)
         }
 
         /* properly match the pattern and substitute */
-        int sizeDiff = 0;
-        if (substpattern(start, buffersize - (int)(start - line), subst.first, subst.second, &sizeDiff)) {
-            sequence_end += sizeDiff;
+        int patternLen = 0;
+        int substLen = 0;
+        if (substpattern(start, buffersize - (int)(start - line), subst.first, subst.second, patternLen, substLen)) {
+            if (sequence_end) {
+                sequence_end += substLen - patternLen; /* update end of subst'd chars */
+            } else {
+                sequence_end = start + substLen; /* new sequence, set initial end */
+            }
         } else {
             start = end; /* match failed, skip this prefix */
         }
