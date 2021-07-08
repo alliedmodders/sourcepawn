@@ -155,10 +155,12 @@ Interpreter::visitCALL(cell_t offset)
     cx_->ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
     return false;
   }
-  int err = target->Validate();
-  if (err != SP_ERROR_NONE) {
-    cx_->ReportErrorNumber(err);
-    return false;
+  {
+    auto graph = target->Validate();
+    if (!graph) {
+      cx_->ReportErrorNumber(target->validationError());
+      return false;
+    }
   }
 
   // We don't interleave between the interpreter and JIT (yet).
