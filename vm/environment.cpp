@@ -351,10 +351,12 @@ Environment::Invoke(PluginContext* cx,
 #endif
 
   // The JIT performs its own validation. Handle the interpreter here.
-  int err = method->Validate();
-  if (err != SP_ERROR_NONE) {
-    cx->ReportErrorNumber(err);
-    return false;
+  {
+    auto graph = method->Validate();
+    if (!graph) {
+      cx->ReportErrorNumber(method->validationError());
+      return false;
+    }
   }
 
   return Interpreter::Run(cx, method, result);

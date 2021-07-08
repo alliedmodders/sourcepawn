@@ -71,7 +71,7 @@ CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err)
 CompiledFunction*
 CompilerBase::emit()
 {
-  graph_ = method_info_->ValidateWithGraph();
+  graph_ = method_info_->Validate();
   if (!graph_) {
     reportError(method_info_->validationError());
     return nullptr;
