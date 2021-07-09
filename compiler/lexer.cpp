@@ -134,6 +134,8 @@ int
 plungefile(char* name, int try_currentpath, int try_includepaths)
 {
     int result = FALSE;
+    char* pcwd = NULL;
+    char cwd[_MAX_PATH];
 
     if (try_currentpath) {
         result = plungequalifiedfile(name);
@@ -153,6 +155,13 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
                 }
             }
         }
+        else {
+            pcwd = getcwd(cwd, sizeof(cwd));
+            error(224, pcwd);
+            if(pcwd == NULL){
+                error(1, "can't get current working directory, either too small or can't be determined.");
+            }
+        }
     }
 
     if (try_includepaths && name[0] != DIRSEP_CHAR) {
@@ -165,7 +174,16 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         }
     }
 
-    set_file_defines(inpfname);
+    if(pcwd != NULL) {
+        char path[_MAX_PATH];
+        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
+        set_file_defines(path);
+        error(224,pcwd);
+        // set_file_defines(inpfname);
+    }
+    else {
+        set_file_defines(inpfname);
+    }
 
     return result;
 }
