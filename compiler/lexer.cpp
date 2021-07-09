@@ -58,6 +58,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static int alpha(char c);
+static void set_file_defines(char* file);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
@@ -163,7 +164,41 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
             result = plungequalifiedfile(path);
         }
     }
+
+    set_file_defines(inpfname);
+
     return result;
+}
+
+static void
+set_file_defines(char* file)
+{
+    size_t i, len;
+    char* inptr;
+    char newpath[512], newname[512];
+
+    inptr = NULL;
+    len = strlen(file);
+    for (i = len - 1; i < len; i--) {
+        if (file[i] == '/'
+#if defined WIN32 || defined _WIN32
+            || file[i] == '\\'
+#endif
+        ) {
+            inptr = &file[i + 1];
+            break;
+        }
+    }
+
+    if (inptr == NULL) {
+        inptr = file;
+    }
+
+    snprintf(newpath, sizeof(newpath), "\"%s\"", file);
+    snprintf(newname, sizeof(newname), "\"%s\"", inptr);
+
+    insert_subst("__FILE_PATH__", 13, newpath);
+    insert_subst("__FILE_NAME__", 13, newname);
 }
 
 static void
@@ -282,6 +317,7 @@ readline(unsigned char* line)
             free(inpfname);      /* return memory allocated for the include file name */
             inpfname = ke::PopBack(&gInputFilenameStack);
             inpf = ke::PopBack(&gInputFileStack);
+            set_file_defines(inpfname);
             insert_dbgfile(inpfname);
             setfiledirect(inpfname);
             assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpfname) == 0);
