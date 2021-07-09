@@ -31,6 +31,14 @@
 #include <unordered_set>
 #include <utility>
 
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#    include <unistd.h>
+#endif
+
+#if defined _MSC_VER && defined _WIN32
+#    include <direct.h>
+#endif
+
 #include "lexer.h"
 #include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
@@ -157,9 +165,8 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         }
         else {
             pcwd = getcwd(cwd, sizeof(cwd));
-            error(224, pcwd);
-            if(pcwd == NULL){
-                error(1, "can't get current working directory, either too small or can't be determined.");
+            if(pcwd == NULL) {
+                error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
             }
         }
     }
@@ -178,8 +185,6 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         char path[_MAX_PATH];
         SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
         set_file_defines(path);
-        error(224,pcwd);
-        // set_file_defines(inpfname);
     }
     else {
         set_file_defines(inpfname);
