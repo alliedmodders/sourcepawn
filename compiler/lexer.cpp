@@ -168,6 +168,11 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
             if(!pcwd) {
                 error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
             }
+
+#if defined __MSDOS__ || defined __WIN32__ || defined _Windows
+            // make the drive letter on windows lower case to be in line with the rest of SP, as they have a small drive letter in the path
+            cwd[0] = tolower(cwd[0]);
+#endif
         }
     }
 
