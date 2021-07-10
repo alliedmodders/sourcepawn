@@ -2317,7 +2317,8 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
 }
 
 static int
-parse_old_decl(declinfo_t* decl, int flags) {
+parse_old_decl(declinfo_t* decl, int flags)
+{
     token_t tok;
     typeinfo_t* type = &decl->type;
 
@@ -2604,6 +2605,9 @@ parse_decl(declinfo_t* decl, int flags) {
                 decl->type.has_postdims = false;
                 return parse_new_decl(decl, &ident.tok, flags);
             }
+
+            if (sc_require_newdecls)
+                error(147);
 
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
