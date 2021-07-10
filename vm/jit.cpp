@@ -80,7 +80,11 @@ CompilerBase::emit()
   pcode_start_ = method_info_->pcode_offset();
   code_start_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_);
 
-  const char* function_name = rt_->image()->LookupFunction(pcode_start_);
+  std::string function_name;
+  if (const char* name = rt_->image()->LookupFunction(pcode_start_))
+    function_name = name;
+  else
+    function_name = "anonymous_" + std::to_string(pcode_start_);
 
   debug_name_ = std::string(rt_->Name()) + "::" + function_name;
 

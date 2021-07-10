@@ -723,13 +723,23 @@ SmxV1Image::LookupFunction(uint32_t code_offset)
     return names_ + method->name;
 
   if (debug_syms_) {
-    return lookupFunction<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(
-      debug_syms_, code_offset);
+    auto name = lookupFunction<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, code_offset);
+    if (name)
+      return name;
   }
-  if (!debug_syms_unpacked_)
-    return nullptr;
-  return lookupFunction<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(
-      debug_syms_unpacked_, code_offset);
+  if (debug_syms_unpacked_) {
+    auto name =
+      lookupFunction<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, code_offset);
+    if (name)
+      return name;
+  }
+
+  for (size_t i = 0; i < publics_.length(); i++) {
+    if (code_offset == publics_[i].address)
+      return names_ + publics_[i].name;
+  }
+
+  return nullptr;
 }
 
 bool
