@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include <unordered_set>
 #include <utility>
@@ -66,7 +67,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static int alpha(char c);
-static void set_file_defines(char* file);
+static void set_file_defines(const std::string file);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
@@ -194,34 +195,28 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
 }
 
 static void
-set_file_defines(char* file)
+set_file_defines(std::string file)
 {
-    size_t i, len;
-    char* inptr;
-    char newpath[512], newname[512];
+    auto sepIndex = file.find_last_of(DIRSEP_CHAR);
 
-    inptr = NULL;
-    len = strlen(file);
-    for (i = len - 1; i < len; i--) {
-        if (file[i] == '/'
-#if defined WIN32 || defined _WIN32
-            || file[i] == '\\'
+    std::string fileName = sepIndex == std::string::npos ? file : file.substr(sepIndex + 1);
+
+#if DIRSEP_CHAR == '\\'
+    auto pos = file.find('\\');
+    while (pos != std::string::npos) {
+        file.insert(pos + 1, 1, '\\');
+        pos = file.find('\\', pos + 2);
+    }
 #endif
-        ) {
-            inptr = &file[i + 1];
-            break;
-        }
-    }
 
-    if (inptr == NULL) {
-        inptr = file;
-    }
+    file.insert(file.begin(), '"');
+    fileName.insert(fileName.begin(), '"');
 
-    snprintf(newpath, sizeof(newpath), "\"%s\"", file);
-    snprintf(newname, sizeof(newname), "\"%s\"", inptr);
+    file.push_back('"');
+    fileName.push_back('"');
 
-    insert_subst("__FILE_PATH__", 13, newpath);
-    insert_subst("__FILE_NAME__", 13, newname);
+    insert_subst("__FILE_PATH__", 13, file.c_str());
+    insert_subst("__FILE_NAME__", 13, fileName.c_str());
 }
 
 static void
