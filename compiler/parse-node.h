@@ -69,6 +69,9 @@ class ParseNode : public PoolObject
     virtual bool Bind() {
         return true;
     }
+    virtual bool BindLval() {
+        return Bind();
+    }
     virtual bool Analyze() = 0;
     virtual void Emit() = 0;
     virtual bool HasSideEffects() {
@@ -448,11 +451,7 @@ class BinaryExprBase : public Expr
   public:
     BinaryExprBase(const token_pos_t& pos, int token, Expr* left, Expr* right);
 
-    bool Bind() override {
-        bool ok = left_->Bind();
-        ok &= right_->Bind();
-        return ok;
-    }
+    bool Bind() override;
     bool HasSideEffects() override;
     void ProcessUses() override;
 
@@ -686,6 +685,7 @@ class SymbolExpr final : public Expr
     }
 
     bool Bind() override;
+    bool BindLval() override;
     bool Analyze() override;
     void DoEmit() override;
     void ProcessUses() override {}
@@ -696,6 +696,9 @@ class SymbolExpr final : public Expr
     }
 
     bool AnalyzeWithOptions(bool allow_types);
+
+  private:
+    bool DoBind(bool is_lval);
 
   private:
     sp::Atom* name_;

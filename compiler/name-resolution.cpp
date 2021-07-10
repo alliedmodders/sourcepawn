@@ -245,6 +245,18 @@ VarDecl::Bind()
 bool
 SymbolExpr::Bind()
 {
+    return DoBind(false);
+}
+
+bool
+SymbolExpr::BindLval()
+{
+    return DoBind(true);
+}
+
+bool
+SymbolExpr::DoBind(bool is_lval)
+{
     AutoErrorPos aep(pos_);
 
     if (Parser::sInPreprocessor) {
@@ -293,7 +305,7 @@ SymbolExpr::Bind()
     // As a workaround, we always call markusage() during binding. Note that
     // we preserve some old behavior where functions are not marked if being
     // skipped.
-    if (!(sym_->ident == iFUNCTN && sc_status == statSKIP))
+    if (!is_lval && !(sym_->ident == iFUNCTN && sc_status == statSKIP))
         markusage(sym_, uREAD);
     return true;
 }
@@ -391,5 +403,17 @@ ChainedCompareExpr::Bind()
     bool ok = first_->Bind();
     for (const auto& op : ops_)
         ok &= op.expr->Bind();
+    return ok;
+}
+
+bool
+BinaryExprBase::Bind()
+{
+    bool ok = true;
+    if (IsAssignOp(token_))
+        ok &= left_->BindLval();
+    else
+        ok &= left_->Bind();
+    ok &= right_->Bind();
     return ok;
 }
