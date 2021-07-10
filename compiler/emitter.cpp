@@ -825,7 +825,7 @@ defstorage(void)
 }
 
 /*
- *  Inclrement/decrement stack pointer. Note that this routine does
+ *  Increment/decrement stack pointer. Note that this routine does
  *  nothing if the delta is zero.
  */
 void

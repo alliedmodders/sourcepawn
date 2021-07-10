@@ -87,6 +87,9 @@ int sc_require_newdecls = 0;         /* Require new-style declarations */
 bool sc_warnings_are_errors = false;
 int sc_compression_level = 9;
 bool sc_use_new_parser = false;
+int pc_max_func_memory = 0;          /* high stack watermark */
+int pc_current_memory = 0;           /* current stack watermark */
+int pc_max_memory = 0;               /* maximum stack watermark across all stacks */
 
 void* inpf = NULL;      /* file read from (source or include) */
 void* inpf_org = NULL;  /* main source file */
