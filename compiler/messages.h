@@ -104,7 +104,7 @@ static const char* errmsg[] = {
     /*077*/ "arrays cannot be indexed by non-integral type '%s'\n",
     /*078*/ "function uses both \"return\" and \"return <value>\"\n",
     /*079*/ "inconsistent return types (array & non-array)\n",
-    /*080*/ "unused80\n",
+    /*080*/ "'...' not allowed in enum struct initializers\n",
     /*081*/ "enum struct field arrays must have fixed sizes\n",
     /*082*/ "properties cannot be arrays\n",
     /*083*/ "methodmap methods cannot return arrays\n",

@@ -1867,22 +1867,34 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
     int ellips = FALSE;
     int curlit = litidx;
     int errorfound_tmp = 0;
+    bool empty_initializer = false;
 
     if (!errorfound)
         errorfound = &errorfound_tmp;
 
-    constvalue* enumfield = (enumroot != NULL) ? enumroot->next : NULL;
+    bool is_enum_struct = false;
+    if (enumroot && enumroot->next)
+        is_enum_struct = gTypes.find(enumroot->next->index)->isEnumStruct();
 
     assert(ident == iARRAY || ident == iREFARRAY);
     if (matchtoken('{')) {
+        constvalue* enumfield = (enumroot != NULL) ? enumroot->next : NULL;
+        empty_initializer = true;
+
         do {
             int fieldlit = litidx;
             if (matchtoken('}')) { /* to allow for trailing ',' after the initialization */
                 lexpush();
                 break;
             }
-            if ((ellips = matchtoken(tELLIPS)) != 0)
+
+            empty_initializer = false;
+
+            if ((ellips = matchtoken(tELLIPS)) != 0) {
+                if (is_enum_struct)
+                    error(80);
                 break;
+            }
             ellips = 0;
 
             int sub_ident = iVARIABLE;
@@ -1969,11 +1981,7 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
         } while (matchtoken(','));
         needtoken('}');
     } else if (!lexpeek('}')) {
-        Type* type = nullptr;
-        if (enumfield)
-            type = gTypes.find(enumfield->index);
-
-        if (type && type->isEnumStruct() && !*errorfound) {
+        if (is_enum_struct && !*errorfound) {
             error(52);
             *errorfound = TRUE;
         }
@@ -1998,7 +2006,7 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
             litadd(prev1);
         }
     }
-    if (fillzero && size > 0) {
+    if ((fillzero || empty_initializer || is_enum_struct) && size > 0) {
         while ((litidx - curlit) < (int)size)
             litadd(0);
     }
