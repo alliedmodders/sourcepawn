@@ -67,7 +67,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static int alpha(char c);
-static void set_file_defines(const std::string file);
+static void set_file_defines(std::string file);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
