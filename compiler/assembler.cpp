@@ -1544,7 +1544,8 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     // by the plugin.
     data->header().datasize = data_buffer.size() * sizeof(cell);
     data->header().memsize =
-        data->header().datasize + glb_declared * sizeof(cell) + pc_stksize * sizeof(cell);
+        data->header().datasize + glb_declared * sizeof(cell) +
+        std::max(pc_max_memory + 4096, pc_stksize) * sizeof(cell);
     data->header().data = sizeof(sp_file_data_t);
     data->setBlob((uint8_t*)data_buffer.data(), data_buffer.size() * sizeof(cell));
 

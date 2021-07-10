@@ -3719,6 +3719,9 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     glbdecl = 0;
     assert(loctab.next == NULL); /* local symbol table should be empty */
 
+    pc_max_func_memory = 0;
+    pc_current_memory = 0;
+
     if (symp)
         *symp = NULL;
 
@@ -3901,8 +3904,12 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         glb_declared = glbdecl;
         sc_err_status = FALSE;
     }
+
     if (symp)
         *symp = sym;
+
+    pc_max_memory = std::max(pc_max_func_memory, pc_max_memory);
+
     return TRUE;
 }
 
