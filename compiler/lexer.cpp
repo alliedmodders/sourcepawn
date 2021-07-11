@@ -165,7 +165,7 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
             }
         } else {
             pcwd = getcwd(cwd, sizeof(cwd));
-            if(!pcwd) {
+            if (!pcwd) {
                 error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
             }
 
@@ -186,7 +186,7 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         }
     }
 
-    if(pcwd) {
+    if (pcwd) {
         char path[_MAX_PATH];
         SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
         set_file_defines(path);

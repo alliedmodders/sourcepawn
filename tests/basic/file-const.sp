@@ -28,21 +28,21 @@ public main() {
 }
 
 bool StringEquals(char[] leftString, char[] rightString) {
-    for(int i = 0;; i++)
+    for (int i = 0;; i++)
     {
-        if(leftString[i] != rightString[i])
+        if (leftString[i] != rightString[i])
             return false;
 
-        if(leftString[i] == 0)
+        if (leftString[i] == 0)
             return true;
     }
 }
 
 int StringLength(char[] string) {
     int length = 0;
-    for(;;)
+    for (;;)
     {
-        if(string[length++] == 0)
+        if (string[length++] == 0)
             return length;
     }
 }
@@ -54,11 +54,11 @@ bool EndsWith(char[] string, char[] sequence) {
     int strI = stringLength - 1;
     int seqI = sequnceLength - 1;
 
-    for(; strI > 0; strI--, seqI--) {
-        if(string[strI] != sequence[seqI])
+    for (; strI > 0; strI--, seqI--) {
+        if (string[strI] != sequence[seqI])
             return false;
 
-        if(seqI == 0)
+        if (seqI == 0)
             return true;
     }
 
