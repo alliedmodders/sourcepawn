@@ -1,0 +1,2 @@
+(7) : error 052: multi-dimensional arrays must be fully initialized
+(9) : error 096: could not find member "WEAPONLEVEL" in type "array"

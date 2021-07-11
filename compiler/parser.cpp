@@ -1876,9 +1876,10 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
     if (!errorfound)
         errorfound = &errorfound_tmp;
 
+    constvalue* enumfield = (enumroot != NULL) ? enumroot->next : NULL;
+
     assert(ident == iARRAY || ident == iREFARRAY);
     if (matchtoken('{')) {
-        constvalue* enumfield = (enumroot != NULL) ? enumroot->next : NULL;
         do {
             int fieldlit = litidx;
             if (matchtoken('}')) { /* to allow for trailing ',' after the initialization */
@@ -1972,12 +1973,20 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
             matchtag(rtag, ctag, TRUE);
         } while (matchtoken(','));
         needtoken('}');
-    } else {
-        if (!lexpeek('}')) {
-            int ctag;
-            init(ident, &ctag, errorfound);
-            matchtag(tag, ctag, TRUE);
+    } else if (!lexpeek('}')) {
+        Type* type = nullptr;
+        if (enumfield)
+            type = gTypes.find(enumfield->index);
+
+        if (type && type->isEnumStruct() && !*errorfound) {
+            error(52);
+            *errorfound = TRUE;
         }
+
+        int ctag;
+        init(ident, &ctag, errorfound);
+        if (!*errorfound)
+            matchtag(tag, ctag, MATCHTAG_COERCE);
     }
     /* fill up the literal queue with a series */
     if (ellips) {

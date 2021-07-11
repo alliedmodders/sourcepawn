@@ -116,7 +116,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
 {
     auto arg = pstructs_getarg(ps, field.name);
     if (!arg) {
-        error(pos_, 96, field.name->chars(), name_->chars());
+        error(pos_, 96, field.name->chars(), "struct", name_->chars());
         return false;
     }
 
@@ -1216,7 +1216,7 @@ FieldAccessExpr::AnalyzeWithOptions(bool from_call)
                 if (symbol* root = type->asEnumStruct())
                     return AnalyzeEnumStructAccess(type, root, from_call);
             }
-            error(pos_, 106);
+            error(pos_, 96, name_->chars(), "type", "array");
             return false;
         case iFUNCTN:
             error(pos_, 107);
