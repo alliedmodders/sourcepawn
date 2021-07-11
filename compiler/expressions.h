@@ -54,6 +54,7 @@ class ExpressionParser
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning
 #define MATCHTAG_DEDUCE 0x4      // correct coercion
 #define MATCHTAG_FUNCARG 0x8     // argument in a function signature
+#define MATCHTAG_ENUM_ASSN 0x10  // enum assignment
 
 bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);

@@ -97,11 +97,21 @@ EnumDecl::Bind()
     if (enumsym && enumsym->ident == iMETHODMAP)
         enumsym = NULL;
 
+    cell value = 0;
     for (const auto& field : fields_ ) {
         if (findconst(field.name->chars()))
             error(field.pos, 50, field.name->chars());
 
-        symbol* sym = add_constant(field.name->chars(), field.value, vclass_, tag);
+        if (field.value && field.value->Bind() && field.value->Analyze()) {
+            int field_tag;
+            if (field.value->EvalConst(&value, &field_tag)) {
+                matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            } else {
+                error(field.pos, 80);
+            }
+        }
+
+        symbol* sym = add_constant(field.name->chars(), value, vclass_, tag);
         if (!sym)
             continue;
 
@@ -110,8 +120,13 @@ EnumDecl::Bind()
         // add the constant to a separate list as well
         if (enumroot) {
             sym->enumfield = true;
-            append_constval(enumroot, field.name->chars(), field.value, tag);
+            append_constval(enumroot, field.name->chars(), value, tag);
         }
+
+        if (multiplier_ == 1)
+            value += increment_;
+        else
+            value *= increment_ * multiplier_;
     }
 
     // set the enum name to the "next" value (typically the last value plus one)
