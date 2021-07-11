@@ -1889,6 +1889,8 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
                 break;
             ellips = 0;
 
+            int sub_ident = iVARIABLE;
+
             symbol* symfield = nullptr;
             int matchbrace = FALSE;
             if (enumfield) {
@@ -1911,12 +1913,15 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
                         *errorfound = TRUE;
                     }
                 }
+
+                if (symfield->dim.array.length > 0)
+                    sub_ident = iARRAY;
             }
 
             int ctag;
             for (;;) {
                 prev2 = prev1;
-                prev1 = init(ident, &ctag, errorfound);
+                prev1 = init(sub_ident, &ctag, errorfound);
                 if (!matchbrace)
                     break;
                 if ((ellips = matchtoken(tELLIPS)) != 0)
@@ -2018,10 +2023,8 @@ init(int ident, int* tag, int* errorfound) {
             error(6); /* must be assigned to an array */
             if (errorfound != NULL)
                 *errorfound = TRUE;
-            litidx = 1; /* reset literal queue */
-        } else {
-            litadd(current_token()->str, current_token()->len);
         }
+        litadd(current_token()->str, current_token()->len);
         *tag = pc_tag_string;
     } else if (exprconst(&i, tag, NULL)) {
         litadd(i); /* store expression result in literal table */
