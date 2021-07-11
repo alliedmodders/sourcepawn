@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include <utility>
 
@@ -148,7 +149,7 @@ static void addwhile(int* ptr);
 static void delwhile(void);
 static int* readwhile(void);
 static void inst_datetime_defines(void);
-static void inst_binary_name(char* binfname);
+static void inst_binary_name(std::string binfile);
 static int operatorname(char* name);
 static int reparse_old_decl(declinfo_t* decl, int flags);
 static int reparse_new_decl(declinfo_t* decl, int flags);
@@ -533,33 +534,27 @@ pc_addconstant(const char* name, cell value, int tag) {
 }
 
 static void
-inst_binary_name(char* binfname) {
-    size_t i, len;
-    char* binptr;
-    char newpath[512], newname[512];
+inst_binary_name(std::string binfile) {
+    auto sepIndex = binfile.find_last_of(DIRSEP_CHAR);
 
-    binptr = NULL;
-    len = strlen(binfname);
-    for (i = len - 1; i < len; i--) {
-        if (binfname[i] == '/'
-#if defined WIN32 || defined _WIN32
-            || binfname[i] == '\\'
+    std::string binfileName = sepIndex == std::string::npos ? binfile : binfile.substr(sepIndex + 1);
+
+#if DIRSEP_CHAR == '\\'
+    auto pos = binfile.find('\\');
+    while (pos != std::string::npos) {
+        binfile.insert(pos + 1, 1, '\\');
+        pos = binfile.find('\\', pos + 2);
+    }
 #endif
-        ) {
-            binptr = &binfname[i + 1];
-            break;
-        }
-    }
 
-    if (binptr == NULL) {
-        binptr = binfname;
-    }
+    binfile.insert(binfile.begin(), '"');
+    binfileName.insert(binfileName.begin(), '"');
 
-    snprintf(newpath, sizeof(newpath), "\"%s\"", binfname);
-    snprintf(newname, sizeof(newname), "\"%s\"", binptr);
+    binfile.push_back('"');
+    binfileName.push_back('"');
 
-    insert_subst("__BINARY_PATH__", 15, newpath);
-    insert_subst("__BINARY_NAME__", 15, newname);
+    insert_subst("__BINARY_PATH__", 15, binfile.c_str());
+    insert_subst("__BINARY_NAME__", 15, binfileName.c_str());
 }
 
 static void

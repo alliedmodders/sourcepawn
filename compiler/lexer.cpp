@@ -27,9 +27,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include <unordered_set>
 #include <utility>
+
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#    include <unistd.h>
+#endif
+
+#if defined _MSC_VER && defined _WIN32
+#    include <direct.h>
+#endif
 
 #include "lexer.h"
 #include <amtl/am-hashmap.h>
@@ -58,6 +67,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static int alpha(char c);
+static void set_file_defines(std::string file);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
@@ -133,6 +143,8 @@ int
 plungefile(char* name, int try_currentpath, int try_includepaths)
 {
     int result = FALSE;
+    char* pcwd = NULL;
+    char cwd[_MAX_PATH];
 
     if (try_currentpath) {
         result = plungequalifiedfile(name);
@@ -151,6 +163,16 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
                     result = plungequalifiedfile(path);
                 }
             }
+        } else {
+            pcwd = getcwd(cwd, sizeof(cwd));
+            if (!pcwd) {
+                error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
+            }
+
+#if defined __MSDOS__ || defined __WIN32__ || defined _Windows
+            // make the drive letter on windows lower case to be in line with the rest of SP, as they have a small drive letter in the path
+            cwd[0] = tolower(cwd[0]);
+#endif
         }
     }
 
@@ -163,7 +185,41 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
             result = plungequalifiedfile(path);
         }
     }
+
+    if (pcwd) {
+        char path[_MAX_PATH];
+        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
+        set_file_defines(path);
+    } else {
+        set_file_defines(inpfname);
+    }
+
     return result;
+}
+
+static void
+set_file_defines(std::string file)
+{
+    auto sepIndex = file.find_last_of(DIRSEP_CHAR);
+
+    std::string fileName = sepIndex == std::string::npos ? file : file.substr(sepIndex + 1);
+
+#if DIRSEP_CHAR == '\\'
+    auto pos = file.find('\\');
+    while (pos != std::string::npos) {
+        file.insert(pos + 1, 1, '\\');
+        pos = file.find('\\', pos + 2);
+    }
+#endif
+
+    file.insert(file.begin(), '"');
+    fileName.insert(fileName.begin(), '"');
+
+    file.push_back('"');
+    fileName.push_back('"');
+
+    insert_subst("__FILE_PATH__", 13, file.c_str());
+    insert_subst("__FILE_NAME__", 13, fileName.c_str());
 }
 
 static void
@@ -282,6 +338,7 @@ readline(unsigned char* line)
             free(inpfname);      /* return memory allocated for the include file name */
             inpfname = ke::PopBack(&gInputFilenameStack);
             inpf = ke::PopBack(&gInputFileStack);
+            set_file_defines(inpfname);
             insert_dbgfile(inpfname);
             setfiledirect(inpfname);
             assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpfname) == 0);
