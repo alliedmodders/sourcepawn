@@ -244,6 +244,21 @@ Expr::FlattenLogical(int token, std::vector<Expr*>* out)
     out->push_back(this);
 }
 
+bool
+Expr::EvalConst(cell* value, int* tag)
+{
+    if (val_.ident != iCONSTEXPR) {
+        if (!FoldToConstant())
+            return false;
+        assert(val_.ident == iCONSTEXPR);
+    }
+
+    if (value)
+        *value = val_.constval;
+    if (tag)
+        *tag = val_.tag;
+    return true;
+}
 
 RvalueExpr::RvalueExpr(Expr* expr)
   : EmitOnlyExpr(expr->pos()),
@@ -650,6 +665,71 @@ BinaryExpr::ValidateAssignmentRHS()
     return true;
 }
 
+bool
+BinaryExpr::FoldToConstant()
+{
+    cell left_val, right_val;
+    int left_tag, right_tag;
+
+    if (!left_->EvalConst(&left_val, &left_tag) || !right_->EvalConst(&right_val, &right_tag))
+        return false;
+
+    if (IsAssignOp(token_))
+        return false;
+    if (left_tag != 0 || right_tag != 0)
+        return false;
+
+    switch (token_) {
+        case '*':
+            val_.constval = left_val * right_val;
+            break;
+        case '/':
+        case '%':
+            if (!right_val) {
+                error(pos_, 93);
+                return false;
+            }
+            if (left_val == cell(0x80000000) && right_val == -1) {
+                error(pos_, 97);
+                return false;
+            }
+            if (token_ == '/')
+                val_.constval = left_val / right_val;
+            else
+                val_.constval = left_val % right_val;
+            break;
+        case '+':
+            val_.constval = left_val + right_val;
+            break;
+        case '-':
+            val_.constval = left_val - right_val;
+            break;
+        case tSHL:
+            val_.constval = left_val << right_val;
+            break;
+        case tSHR:
+            val_.constval = left_val >> right_val;
+            break;
+        case tSHRU:
+            val_.constval = uint32_t(left_val) >> uint32_t(right_val);
+            break;
+        case '&':
+            val_.constval = left_val & right_val;
+            break;
+        case '^':
+            val_.constval = left_val ^ right_val;
+            break;
+        case '|':
+            val_.constval = left_val | right_val;
+            break;
+        default:
+            return false;
+    }
+
+    val_.ident = iCONSTEXPR;
+    return true;
+}
+
 void
 LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
 {
@@ -847,6 +927,21 @@ TernaryExpr::Analyze()
         val_.ident = iREFARRAY;
     else if (val_.ident != iREFARRAY)
         val_.ident = iEXPRESSION;
+    return true;
+}
+
+bool
+TernaryExpr::FoldToConstant()
+{
+    cell cond, left, right;
+    if (!first_->EvalConst(&cond, nullptr) || second_->EvalConst(&left, nullptr) ||
+        !third_->EvalConst(&right, nullptr))
+    {
+        return false;
+    }
+
+    val_.constval = cond ? left : right;
+    val_.ident = iCONSTEXPR;
     return true;
 }
 

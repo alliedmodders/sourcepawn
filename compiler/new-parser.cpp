@@ -216,8 +216,6 @@ Parser::parse_enum(int vclass)
     else
         lexpush();
 
-    EnumDecl* decl = new EnumDecl(pos, vclass, label, name);
-
     cell increment = 1;
     cell multiplier = 1;
     if (matchtoken('(')) {
@@ -234,10 +232,11 @@ Parser::parse_enum(int vclass)
         needtoken(')');
     }
 
+    EnumDecl* decl = new EnumDecl(pos, vclass, label, name, increment, multiplier);
+
     needtoken('{');
 
     cell size;
-    cell value = 0;
     do {
         if (matchtoken('}')) {
             lexpush();
@@ -254,22 +253,18 @@ Parser::parse_enum(int vclass)
 
         auto pos = current_pos();
 
-        size = increment;
         if (matchtoken('[')) {
             error(153);
             exprconst(&size, nullptr, nullptr);
             needtoken(']');
         }
+
+        Expr* value = nullptr;
         if (matchtoken('='))
-            exprconst(&value, nullptr, nullptr);
+            value = hier14();
 
         if (field_name)
             decl->fields().push_back(EnumField(pos, field_name, value));
-
-        if (multiplier == 1)
-            value += size;
-        else
-            value *= size * multiplier;
     } while (matchtoken(','));
 
     needtoken('}');

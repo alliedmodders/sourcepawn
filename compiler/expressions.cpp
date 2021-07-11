@@ -590,6 +590,11 @@ matchtag(int formaltag, int actualtag, int flags)
             return TRUE;
     }
 
+    if (flags & MATCHTAG_ENUM_ASSN) {
+        if (formal->isEnum() && actualtag == 0)
+            return TRUE;
+    }
+
     if (!(flags & MATCHTAG_SILENT))
         error(213, type_to_name(formaltag), type_to_name(actualtag));
     return FALSE;
