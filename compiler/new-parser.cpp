@@ -704,8 +704,12 @@ Parser::hier2()
                 parens++;
 
             token_ident_t ident;
-            if (!needsymbol(&ident))
-                return new ErrorExpr();
+            if (matchtoken(tTHIS)) {
+                strcpy(ident.name, "this");
+            } else {
+                if (!needsymbol(&ident))
+                    return new ErrorExpr();
+            }
 
             int array_levels = 0;
             while (matchtoken('[')) {
