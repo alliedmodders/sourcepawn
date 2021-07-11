@@ -11,6 +11,7 @@ public main() {
     PrintIncludeName2();
     print("\n");
 
+    printnum(EndsWith(__FILE_PATH__, __FILE_NAME__));
     printnum(StringLength(__FILE_PATH__) > StringLength(__FILE_NAME__));
 
     char buffer[512];
@@ -44,4 +45,22 @@ int StringLength(char[] string) {
         if(string[length++] == 0)
             return length;
     }
+}
+
+bool EndsWith(char[] string, char[] sequence) {
+    int stringLength = StringLength(string);
+    int sequnceLength = StringLength(sequence);
+
+    int strI = stringLength - 1;
+    int seqI = sequnceLength - 1;
+
+    for(; strI > 0; strI--, seqI--) {
+        if(string[strI] != sequence[seqI])
+            return false;
+
+        if(seqI == 0)
+            return true;
+    }
+
+    return false;
 }
