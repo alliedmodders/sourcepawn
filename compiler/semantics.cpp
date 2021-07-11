@@ -665,6 +665,14 @@ BinaryExpr::ValidateAssignmentRHS()
     return true;
 }
 
+static inline bool
+IsTypeBinaryConstantFoldable(Type* type)
+{
+    if (type->isEnum() || type->tagid() == 0)
+        return true;
+    return false;
+}
+
 bool
 BinaryExpr::FoldToConstant()
 {
@@ -673,10 +681,12 @@ BinaryExpr::FoldToConstant()
 
     if (!left_->EvalConst(&left_val, &left_tag) || !right_->EvalConst(&right_val, &right_tag))
         return false;
-
-    if (IsAssignOp(token_))
+    if (IsAssignOp(token_) || userop_.sym)
         return false;
-    if (left_tag != 0 || right_tag != 0)
+
+    Type* left_type = gTypes.find(left_tag);
+    Type* right_type = gTypes.find(right_tag);
+    if (!IsTypeBinaryConstantFoldable(left_type) || !IsTypeBinaryConstantFoldable(right_type))
         return false;
 
     switch (token_) {
