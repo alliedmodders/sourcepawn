@@ -135,8 +135,8 @@ SmxV1Image::validate()
 
   // Validate sanity of section header strings.
   bool found_terminator = false;
-  for (const uint8_t* iter = buffer() + last_header_string;
-       iter < buffer() + hdr_->dataoffs;
+  for (const char* iter = header_strings_ + last_header_string;
+       iter < reinterpret_cast<const char*>(buffer() + hdr_->dataoffs);
        iter++)
   {
     if (*iter == '\0') {
@@ -719,23 +719,47 @@ SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr)
 const char*
 SmxV1Image::LookupFunction(uint32_t code_offset)
 {
-  if (rtti_methods_) {
-    for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
-      const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
-      if (method->pcode_start <= code_offset && method->pcode_end > code_offset)
-        return names_ + method->name;
-    }
-    return nullptr;
-  }
+  if (auto method = GetMethodRttiByOffset(code_offset))
+    return names_ + method->name;
 
   if (debug_syms_) {
-    return lookupFunction<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(
-      debug_syms_, code_offset);
+    auto name = lookupFunction<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, code_offset);
+    if (name)
+      return name;
   }
-  if (!debug_syms_unpacked_)
+  if (debug_syms_unpacked_) {
+    auto name =
+      lookupFunction<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(debug_syms_unpacked_, code_offset);
+    if (name)
+      return name;
+  }
+
+  for (size_t i = 0; i < publics_.length(); i++) {
+    if (code_offset == publics_[i].address)
+      return names_ + publics_[i].name;
+  }
+
+  return nullptr;
+}
+
+bool
+SmxV1Image::HasRtti() const
+{
+  return rtti_data_ != nullptr;
+}
+
+const smx_rtti_method*
+SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset)
+{
+  if (!rtti_methods_)
     return nullptr;
-  return lookupFunction<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(
-      debug_syms_unpacked_, code_offset);
+
+  for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
+    const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+    if (method->pcode_start <= pcode_offset && method->pcode_end > pcode_offset)
+      return method;
+  }
+  return nullptr;
 }
 
 bool

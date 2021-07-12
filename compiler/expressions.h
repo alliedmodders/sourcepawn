@@ -53,6 +53,8 @@ class ExpressionParser
 #define MATCHTAG_COERCE 0x1      // allow coercion
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning
 #define MATCHTAG_DEDUCE 0x4      // correct coercion
+#define MATCHTAG_FUNCARG 0x8     // argument in a function signature
+#define MATCHTAG_ENUM_ASSN 0x10  // enum assignment
 
 bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);
@@ -66,7 +68,7 @@ bool is_valid_index_tag(int tag);
 int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag);
 int matchtag(int formaltag, int actualtag, int flags);
 int matchtag_commutative(int formaltag, int actualtag, int flags);
-int expression(cell* val, int* tag, symbol** symptr, int chkfuncresult, value* _lval);
+int expression(cell* val, int* tag, symbol** symptr, value* _lval);
 int matchtag_string(int ident, int tag);
 int checkval_string(const value* sym1, const value* sym2);
 int checktag_string(int tag, const value* sym1);

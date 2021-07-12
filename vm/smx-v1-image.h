@@ -62,6 +62,8 @@ class SmxV1Image
   bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
+  bool HasRtti() const override;
+  const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) override;
 
  private:
    struct Section

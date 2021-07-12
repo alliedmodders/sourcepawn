@@ -1,0 +1,1 @@
+(10) : error 105: cannot find method or property "A.b"

@@ -15,6 +15,7 @@
 
 #include <string.h>
 #include <smx/smx-headers.h>
+#include <smx/smx-typeinfo.h>
 
 namespace sp {
 
@@ -58,6 +59,8 @@ class LegacyImage
   virtual bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) = 0;
   virtual size_t NumFiles() const = 0;
   virtual const char* GetFileName(size_t index) const = 0;
+  virtual bool HasRtti() const = 0;
+  virtual const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) = 0;
 };
 
 class EmptyImage : public LegacyImage
@@ -137,6 +140,12 @@ class EmptyImage : public LegacyImage
   }
   const char* GetFileName(size_t index) const override {
     return nullptr;
+  }
+  const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) override {
+    return nullptr;
+  }
+  bool HasRtti() const override {
+    return false;
   }
 
  private:

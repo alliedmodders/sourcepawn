@@ -15,6 +15,7 @@
 #include "linking.h"
 #include "jit_x86.h"
 #include "environment.h"
+#include "debug-metadata.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -26,7 +27,7 @@ CodeStubs::InitializeFeatureDetection()
 {
   MacroAssembler masm;
   MacroAssembler::GenerateFeatureDetection(masm);
-  CodeChunk code = LinkCode(env_, masm);
+  CodeChunk code = LinkCode(env_, masm, "<cpu feature detection>", {});
   if (!code.address())
     return false;
   MacroAssembler::RunFeatureDetection(code.address());
@@ -97,7 +98,7 @@ CodeStubs::CompileInvokeStub()
   __ bind(&error);
   __ jmp(&ret);
 
-  invoke_stub_ = LinkCode(env_, masm);
+  invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
   if (!invoke_stub_.address())
     return false;
 

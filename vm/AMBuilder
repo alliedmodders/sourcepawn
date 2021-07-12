@@ -54,6 +54,7 @@ library.sources += [
   'control-flow.cpp',
   'compiled-function.cpp',
   'debugging.cpp',
+  'debug-metadata.cpp',
   'environment.cpp',
   'file-utils.cpp',
   'graph-builder.cpp',

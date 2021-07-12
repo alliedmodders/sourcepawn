@@ -278,9 +278,7 @@ static stringlist inputfiles;
 stringlist*
 insert_inputfile(char* string)
 {
-    if (sc_status != statFIRST)
-        return insert_string(&inputfiles, string);
-    return NULL;
+    return insert_string(&inputfiles, string);
 }
 
 char*
@@ -355,34 +353,32 @@ stringlist*
 insert_dbgsymbol(symbol* sym)
 {
     if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
-        char string[2 * sNAMEMAX + 128];
-        char symname[2 * sNAMEMAX + 16];
+	auto symname = funcdisplayname(sym->name());
 
-        funcdisplayname(symname, sym->name());
         /* address tag:name codestart codeend ident vclass [tag:dim ...] */
         assert(sym->ident != iFUNCTN);
-        sprintf(string, "S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x", sym->addr(), sym->tag,
-                symname, sym->codeaddr, code_idx, sym->ident, sym->vclass, (int)sym->is_const);
+        auto string = ke::StringPrintf("S:%" PRIxC " %x:%s %" PRIxC " %" PRIxC " %x %x %x",
+                                       sym->addr(), sym->tag, symname.c_str(), sym->codeaddr,
+                                       code_idx, sym->ident, sym->vclass, (int)sym->is_const);
         if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
 #if !defined NDEBUG
             int count = sym->dim.array.level;
 #endif
             symbol* sub;
-            strcat(string, " [ ");
+            string += " [ ";
             for (sub = sym; sub != NULL; sub = sub->array_child()) {
                 assert(sub->dim.array.level == count--);
-                sprintf(string + strlen(string), "%x:%x ", sub->x.tags.index,
-                        sub->dim.array.length);
+                string += ke::StringPrintf("%x:%x ", sub->x.tags.index, sub->dim.array.length);
             }
-            strcat(string, "]");
+            string += "]";
         }
 
         if (curfunc) {
             if (!curfunc->function()->dbgstrs)
                 curfunc->function()->dbgstrs = (stringlist*)calloc(1, sizeof(stringlist));
-            return insert_string(curfunc->function()->dbgstrs, string);
+            return insert_string(curfunc->function()->dbgstrs, string.c_str());
         }
-        return insert_string(&dbgstrings, string);
+        return insert_string(&dbgstrings, string.c_str());
     }
     return NULL;
 }

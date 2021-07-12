@@ -31,7 +31,12 @@
 #include "lexer.h"
 #include "sc.h"
 
-enum class ErrorType { Suppressed, Warning, Error, Fatal };
+enum class ErrorType {
+    Suppressed,
+    Warning,
+    Error,
+    Fatal
+};
 
 struct ErrorReport {
     static ErrorReport infer_va(int number, va_list ap);
@@ -89,5 +94,7 @@ void errorset(int code, int line);
 void report_error(ErrorReport* report);
 
 int pc_enablewarning(int number, int enable);
+
+extern bool sc_enable_first_pass_error_display;
 
 #endif // am_sourcepawn_compiler_sc5_h

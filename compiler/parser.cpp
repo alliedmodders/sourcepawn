@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include <utility>
 
@@ -131,9 +132,9 @@ static void statement(int* lastindent, int allow_decl);
 static void compound(int stmt_sameline);
 static int test(int label, int parens, int invert);
 static int doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag,
-                  symbol** symptr, int chkfuncresult);
+                  symbol** symptr);
 static int doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag,
-                   symbol** symptr, int chkfuncresult, value* lval);
+                   symbol** symptr, value* lval);
 static void doassert(void);
 static void doexit(void);
 static int doif(void);
@@ -148,7 +149,7 @@ static void addwhile(int* ptr);
 static void delwhile(void);
 static int* readwhile(void);
 static void inst_datetime_defines(void);
-static void inst_binary_name(char* binfname);
+static void inst_binary_name(std::string binfile);
 static int operatorname(char* name);
 static int reparse_old_decl(declinfo_t* decl, int flags);
 static int reparse_new_decl(declinfo_t* decl, int flags);
@@ -358,6 +359,7 @@ pc_compile(int argc, char* argv[]) {
         pc_resetsrc(inpf, inpfmark); /* reset file position */
         sc_reparse = FALSE;          /* assume no extra passes */
         sc_status = statFIRST;       /* resetglobals() resets it to IDLE */
+        insert_inputfile(inpfname); /* save for the error system */
 
         /* look for default prefix (include) file in include paths,
          * but only error if it was manually set on the command line
@@ -533,33 +535,27 @@ pc_addconstant(const char* name, cell value, int tag) {
 }
 
 static void
-inst_binary_name(char* binfname) {
-    size_t i, len;
-    char* binptr;
-    char newpath[512], newname[512];
+inst_binary_name(std::string binfile) {
+    auto sepIndex = binfile.find_last_of(DIRSEP_CHAR);
 
-    binptr = NULL;
-    len = strlen(binfname);
-    for (i = len - 1; i < len; i--) {
-        if (binfname[i] == '/'
-#if defined WIN32 || defined _WIN32
-            || binfname[i] == '\\'
+    std::string binfileName = sepIndex == std::string::npos ? binfile : binfile.substr(sepIndex + 1);
+
+#if DIRSEP_CHAR == '\\'
+    auto pos = binfile.find('\\');
+    while (pos != std::string::npos) {
+        binfile.insert(pos + 1, 1, '\\');
+        pos = binfile.find('\\', pos + 2);
+    }
 #endif
-        ) {
-            binptr = &binfname[i + 1];
-            break;
-        }
-    }
 
-    if (binptr == NULL) {
-        binptr = binfname;
-    }
+    binfile.insert(binfile.begin(), '"');
+    binfileName.insert(binfileName.begin(), '"');
 
-    snprintf(newpath, sizeof(newpath), "\"%s\"", binfname);
-    snprintf(newname, sizeof(newname), "\"%s\"", binptr);
+    binfile.push_back('"');
+    binfileName.push_back('"');
 
-    insert_subst("__BINARY_PATH__", 15, newpath);
-    insert_subst("__BINARY_NAME__", 15, newname);
+    insert_subst("__BINARY_PATH__", 15, binfile.c_str());
+    insert_subst("__BINARY_NAME__", 15, binfileName.c_str());
 }
 
 static void
@@ -1336,7 +1332,7 @@ declloc(int tokid) {
                         value val;
                         symbol* child;
                         int ident =
-                            doexpr2(TRUE, FALSE, TRUE, FALSE, &type->idxtag[i], &child, 0, &val);
+                            doexpr2(TRUE, FALSE, TRUE, FALSE, &type->idxtag[i], &child, &val);
                         if (i == type->numdim - 1 && type->tag == pc_tag_string)
                             stradjust(sPRI);
                         pushreg(sPRI);
@@ -1401,7 +1397,7 @@ declloc(int tokid) {
                 if (matchtoken('=')) {
                     if (!autozero)
                         error(10);
-                    cident = doexpr(FALSE, FALSE, FALSE, FALSE, &ctag, NULL, TRUE);
+                    cident = doexpr(FALSE, FALSE, FALSE, FALSE, &ctag, nullptr);
                     explicit_init = TRUE;
                 } else {
                     if (autozero)
@@ -1878,22 +1874,37 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
     int ellips = FALSE;
     int curlit = litidx;
     int errorfound_tmp = 0;
+    bool empty_initializer = false;
 
     if (!errorfound)
         errorfound = &errorfound_tmp;
 
+    bool is_enum_struct = false;
+    if (enumroot && enumroot->next)
+        is_enum_struct = gTypes.find(enumroot->next->index)->isEnumStruct();
+
     assert(ident == iARRAY || ident == iREFARRAY);
     if (matchtoken('{')) {
         constvalue* enumfield = (enumroot != NULL) ? enumroot->next : NULL;
+        empty_initializer = true;
+
         do {
             int fieldlit = litidx;
             if (matchtoken('}')) { /* to allow for trailing ',' after the initialization */
                 lexpush();
                 break;
             }
-            if ((ellips = matchtoken(tELLIPS)) != 0)
+
+            empty_initializer = false;
+
+            if ((ellips = matchtoken(tELLIPS)) != 0) {
+                if (is_enum_struct)
+                    error(80);
                 break;
+            }
             ellips = 0;
+
+            int sub_ident = iVARIABLE;
 
             symbol* symfield = nullptr;
             int matchbrace = FALSE;
@@ -1917,12 +1928,15 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
                         *errorfound = TRUE;
                     }
                 }
+
+                if (symfield->dim.array.length > 0)
+                    sub_ident = iARRAY;
             }
 
             int ctag;
             for (;;) {
                 prev2 = prev1;
-                prev1 = init(ident, &ctag, errorfound);
+                prev1 = init(sub_ident, &ctag, errorfound);
                 if (!matchbrace)
                     break;
                 if ((ellips = matchtoken(tELLIPS)) != 0)
@@ -1973,12 +1987,16 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
             matchtag(rtag, ctag, TRUE);
         } while (matchtoken(','));
         needtoken('}');
-    } else {
-        if (!lexpeek('}')) {
-            int ctag;
-            init(ident, &ctag, errorfound);
-            matchtag(tag, ctag, TRUE);
+    } else if (!lexpeek('}')) {
+        if (is_enum_struct && !*errorfound) {
+            error(52);
+            *errorfound = TRUE;
         }
+
+        int ctag;
+        init(ident, &ctag, errorfound);
+        if (!*errorfound)
+            matchtag(tag, ctag, MATCHTAG_COERCE);
     }
     /* fill up the literal queue with a series */
     if (ellips) {
@@ -1995,7 +2013,7 @@ initvector(int ident, int tag, cell size, int fillzero, constvalue* enumroot, in
             litadd(prev1);
         }
     }
-    if (fillzero && size > 0) {
+    if ((fillzero || empty_initializer || is_enum_struct) && size > 0) {
         while ((litidx - curlit) < (int)size)
             litadd(0);
     }
@@ -2024,10 +2042,8 @@ init(int ident, int* tag, int* errorfound) {
             error(6); /* must be assigned to an array */
             if (errorfound != NULL)
                 *errorfound = TRUE;
-            litidx = 1; /* reset literal queue */
-        } else {
-            litadd(current_token()->str, current_token()->len);
         }
+        litadd(current_token()->str, current_token()->len);
         *tag = pc_tag_string;
     } else if (exprconst(&i, tag, NULL)) {
         litadd(i); /* store expression result in literal table */
@@ -2253,7 +2269,7 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
             int tag;
             value val;
             symbol* sym;
-            int ident = doexpr2(TRUE, FALSE, FALSE, FALSE, &tag, &sym, 0, &val);
+            int ident = doexpr2(TRUE, FALSE, FALSE, FALSE, &tag, &sym, &val);
 
             if (!is_valid_index_tag(tag))
                 error(77, gTypes.find(tag)->prettyName());
@@ -2323,7 +2339,8 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
 }
 
 static int
-parse_old_decl(declinfo_t* decl, int flags) {
+parse_old_decl(declinfo_t* decl, int flags)
+{
     token_t tok;
     typeinfo_t* type = &decl->type;
 
@@ -2610,6 +2627,9 @@ parse_decl(declinfo_t* decl, int flags) {
                 decl->type.has_postdims = false;
                 return parse_new_decl(decl, &ident.tok, flags);
             }
+
+            if (sc_require_newdecls)
+                error(147);
 
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
@@ -3476,9 +3496,8 @@ operatoradjust(int opertok, symbol* sym, char* opername, int resulttag) {
     operator_symname(tmpname, opername, tags[0], tags[1], count, resulttag);
     if ((oldsym = findglb(tmpname)) != NULL) {
         if (oldsym->defined) {
-            char errname[2 * sNAMEMAX + 16];
-            funcdisplayname(errname, tmpname);
-            error(21, errname); /* symbol already defined */
+            auto errname = funcdisplayname(tmpname);
+            error(21, errname.c_str()); /* symbol already defined */
         }
         sym->usage |= oldsym->usage; /* copy flags from the previous definition */
         for (const auto& other : oldsym->refers_to()) {
@@ -3573,33 +3592,29 @@ parse_funcname(const char* fname, int* tag1, int* tag2, char* opname, size_t opn
     return unary;
 }
 
-char*
-funcdisplayname(char* dest, const char* funcname) {
+std::string
+funcdisplayname(const char* funcname)
+{
     int tags[2];
     char opname[10];
     int unary;
 
-    if (isalpha(*funcname) || *funcname == '_' || *funcname == PUBLIC_CHAR || *funcname == '\0') {
-        if (dest != funcname)
-            strcpy(dest, funcname);
-        return dest;
-    }
+    if (isalpha(*funcname) || *funcname == '_' || *funcname == PUBLIC_CHAR || *funcname == '\0')
+        return funcname;
 
     unary = parse_funcname(funcname, &tags[0], &tags[1], opname, sizeof(opname));
     Type* rhsType = gTypes.find(tags[1]);
     assert(rhsType != NULL);
     if (unary) {
-        sprintf(dest, "operator%s(%s:)", opname, rhsType->name());
-    } else {
-        Type* lhsType = gTypes.find(tags[0]);
-        assert(lhsType != NULL);
-        /* special case: the assignment operator has the return value as the 2nd tag */
-        if (opname[0] == '=' && opname[1] == '\0')
-            sprintf(dest, "%s:operator%s(%s:)", lhsType->name(), opname, rhsType->name());
-        else
-            sprintf(dest, "operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
+        return ke::StringPrintf("operator%s(%s:)", opname, rhsType->name());
     }
-    return dest;
+
+    Type* lhsType = gTypes.find(tags[0]);
+    assert(lhsType != NULL);
+    /* special case: the assignment operator has the return value as the 2nd tag */
+    if (opname[0] == '=' && opname[1] == '\0')
+        return ke::StringPrintf("%s:operator%s(%s:)", lhsType->name(), opname, rhsType->name());
+    return ke::StringPrintf("operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
 }
 
 static cell
@@ -3725,6 +3740,9 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     cidx = 0;                        /* just to avoid compiler warnings */
     glbdecl = 0;
     assert(loctab.next == NULL); /* local symbol table should be empty */
+
+    pc_max_func_memory = 0;
+    pc_current_memory = 0;
 
     if (symp)
         *symp = NULL;
@@ -3887,9 +3905,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         ldconst(0, sPRI);
         ffret();
         if (sym->retvalue) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
-            funcdisplayname(symname, sym->name());
-            error(209, symname); /* function should return a value */
+            auto symname = funcdisplayname(sym->name());
+            error(209, symname.c_str()); /* function should return a value */
         }
     }
     endfunc();
@@ -3909,8 +3926,12 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
         glb_declared = glbdecl;
         sc_err_status = FALSE;
     }
+
     if (symp)
         *symp = sym;
+
+    pc_max_memory = std::max(pc_max_func_memory, pc_max_memory);
+
     return TRUE;
 }
 
@@ -4303,7 +4324,6 @@ deduce_liveness(symbol* root) {
  */
 static int
 testsymbols(symbol* root, int level, int testlabs, int testconst) {
-    char symname[2 * sNAMEMAX + 16];
     int entry = FALSE;
 
     symbol* sym = root->next;
@@ -4327,10 +4347,10 @@ testsymbols(symbol* root, int level, int testlabs, int testconst) {
                 if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
                     sym->defined)
                 {
-                    funcdisplayname(symname, sym->name());
-                    if (strlen(symname) > 0) {
-                        error(sym, 203,
-                              symname); /* symbol isn't used ... (and not public/native/stock) */
+                    auto symname = funcdisplayname(sym->name());
+                    if (!symname.empty()) {
+                        /* symbol isn't used ... (and not public/native/stock) */
+                        error(sym, 203, symname.c_str());
                     }
                 }
                 if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
@@ -4699,7 +4719,7 @@ statement(int* lastindent, int allow_decl) {
         default: /* non-empty expression */
         doexpr_jump:
             lexpush(); /* analyze token later */
-            doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL, FALSE);
+            doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL);
             needtoken(tTERM);
             lastst = tEXPR;
     }
@@ -4767,9 +4787,9 @@ compound(int stmt_sameline) {
  *  Global references: stgidx   (referred to only)
  */
 static int
-doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, symbol** symptr,
-       int chkfuncresult) {
-    return doexpr2(comma, chkeffect, allowarray, mark_endexpr, tag, symptr, chkfuncresult, NULL);
+doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, symbol** symptr)
+{
+    return doexpr2(comma, chkeffect, allowarray, mark_endexpr, tag, symptr, nullptr);
 }
 
 /*  doexpr2
@@ -4778,7 +4798,8 @@ doexpr(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sym
  */
 static int
 doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, symbol** symptr,
-        int chkfuncresult, value* lval) {
+        value* lval)
+{
     int index, ident;
     int localstaging = FALSE;
     cell val;
@@ -4799,7 +4820,7 @@ doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sy
         if (index != stgidx)
             markexpr(sEXPR, NULL, 0);
         sideeffect = FALSE;
-        ident = expression(&val, tag, symptr, chkfuncresult, lval);
+        ident = expression(&val, tag, symptr, lval);
         if (!allowarray && (ident == iARRAY || ident == iREFARRAY))
             error(33, "-unknown-"); /* array must be indexed */
         if (chkeffect && !sideeffect)
@@ -4817,19 +4838,24 @@ doexpr2(int comma, int chkeffect, int allowarray, int mark_endexpr, int* tag, sy
 
 /*  exprconst
  */
-int
-exprconst(cell* val, int* tag, symbol** symptr) {
+bool
+exprconst(cell* val, int* tag, symbol** symptr)
+{
     int ident, index;
     cell cidx;
+
+    int old_errcount = sc_total_errors;
 
     stgset(TRUE);          /* start stage-buffering */
     stgget(&index, &cidx); /* mark position in code generator */
     errorset(sEXPRMARK, 0);
-    ident = expression(val, tag, symptr, FALSE, NULL);
+    ident = expression(val, tag, symptr, nullptr);
+    bool failed = (sc_status == statWRITE && sc_total_errors > old_errcount);
     stgdel(index, cidx); /* scratch generated code */
     stgset(FALSE);       /* stop stage-buffering */
     if (ident != iCONSTEXPR) {
-        error(8); /* must be constant expression */
+        if (!failed) // Don't pile on errors.
+            error(8); /* must be constant expression */
         if (val != NULL)
             *val = 0;
         if (tag != NULL)
@@ -4838,7 +4864,7 @@ exprconst(cell* val, int* tag, symbol** symptr) {
             *symptr = NULL;
     }
     errorset(sEXPRRELEASE, 0);
-    return (ident == iCONSTEXPR);
+    return !failed && (ident == iCONSTEXPR);
 }
 
 /*  test
@@ -4881,7 +4907,7 @@ test(int label, int parens, int invert) {
     do {
         stgget(&index, &cidx); /* mark position (of last expression) in
                                  * code generator */
-        ident = expression(&constval, &tag, &sym, TRUE, NULL);
+        ident = expression(&constval, &tag, &sym, nullptr);
         tok = matchtoken(',');
         if (tok)
             markexpr(sEXPR, NULL, 0);
@@ -5073,7 +5099,7 @@ dofor(void) {
             }
             default:
                 lexpush();
-                doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL, FALSE); /* expression 1 */
+                doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL); /* expression 1 */
                 needtoken(';');
                 break;
         }
@@ -5113,7 +5139,7 @@ dofor(void) {
     }
     stgmark((char)(sEXPRSTART + 1)); /* mark start of 3th expression in stage */
     if (!matchtoken(endtok)) {
-        doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL, FALSE); /* expression 3 */
+        doexpr(TRUE, TRUE, TRUE, TRUE, NULL, NULL); /* expression 3 */
         needtoken(endtok);
     }
     stgmark(sENDREORDER); /* mark end of reversed evaluation */
@@ -5172,7 +5198,7 @@ doswitch(void) {
     int switch_tag, case_tag;
 
     endtok = matchtoken('(') ? ')' : tDO;
-    doexpr(TRUE, FALSE, FALSE, FALSE, &switch_tag, NULL, TRUE); /* evaluate switch expression */
+    doexpr(TRUE, FALSE, FALSE, FALSE, &switch_tag, NULL); /* evaluate switch expression */
     needtoken(endtok);
     /* generate the code for the switch statement, the label is the address
      * of the case table (to be generated later).
@@ -5315,7 +5341,7 @@ doassert(void) {
         stgset(TRUE);          /* start staging */
         stgget(&index, &cidx); /* mark position in code generator */
         do {
-            expression(NULL, NULL, NULL, FALSE, NULL);
+            expression(nullptr, nullptr, nullptr, nullptr);
             stgdel(index, cidx); /* just scrap the code */
         } while (matchtoken(','));
         stgset(FALSE); /* stop staging */
@@ -5349,7 +5375,7 @@ doreturn(void)
         /* "return <value>" */
         if (sReturnType & RETURN_NONE)
             error(78); /* mix "return;" and "return value;" */
-        ident = doexpr(TRUE, FALSE, TRUE, FALSE, &tag, &sym, TRUE);
+        ident = doexpr(TRUE, FALSE, TRUE, FALSE, &tag, &sym);
         needtoken(tTERM);
         if (ident == iARRAY && sym == NULL) {
             /* returning a literal string is not supported (it must be a variable) */
@@ -5461,10 +5487,9 @@ doreturn(void)
         /* this return statement contains no expression */
         ldconst(0, sPRI);
         if (sReturnType & RETURN_VALUE) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
+            auto symname = funcdisplayname(curfunc->name());
             assert(curfunc != NULL);
-            funcdisplayname(symname, curfunc->name());
-            error(209, symname); /* function should return a value */
+            error(209, symname.c_str()); /* function should return a value */
         }
         sReturnType |= RETURN_NO_VALUE;
     }
@@ -5510,7 +5535,7 @@ doexit(void) {
     int tag = 0;
 
     if (matchtoken(tTERM) == 0) {
-        doexpr(TRUE, FALSE, FALSE, TRUE, &tag, NULL, TRUE);
+        doexpr(TRUE, FALSE, FALSE, TRUE, &tag, NULL);
         needtoken(tTERM);
     } else {
         ldconst(0, sPRI);

@@ -58,6 +58,20 @@ enum SP_NULL_TYPE {
     SP_NULL_STRING = 1, /**< const String[1] reference */
 };
 
+enum {
+  // If this flag is set, any metadata files generated will be deleted at the end of the process.
+  // This is useful when paired with lightweight metadata, as it allows attaching to a running
+  // process without filling up the disk. Enabled by default.
+  JIT_DEBUG_DELETE_ON_EXIT = (1 << 0),
+
+  // Enables output of function name mappings for perf. Linux only, enabled by default.
+  JIT_DEBUG_PERF_BASIC = (1 << 1),
+
+  // Enables output of full function metadata for perf in the jitdump format.
+  // Includes names, bytecode, and source file mappings. Linux only.
+  JIT_DEBUG_PERF_JITDUMP = (1 << 2),
+};
+
 // @brief Interface for a refcounted objects.
 class IRefcountedObject
 {
@@ -1628,6 +1642,10 @@ class ISourcePawnEnvironment
     // @brief Enables the line debugger callbacks. This must be called
     // before any plugins are loaded.
     virtual bool EnableDebugBreak() = 0;
+
+    // @brief See JIT_DEBUG_* flags.
+    // Must be set before any plugin code is executed.
+    virtual void SetDebugMetadataFlags(int flags) = 0;
 };
 
 // @brief This class is the entry-point to using SourcePawn from a DLL.

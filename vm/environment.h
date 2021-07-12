@@ -32,6 +32,13 @@ class CodeStubs;
 class WatchdogTimer;
 class ErrorReport;
 class BuiltinNatives;
+struct CodeDebugMapping;
+using CodeDebugMap = std::vector<CodeDebugMapping>;
+
+#if defined(KE_LINUX)
+class PerfJitFile;
+class PerfJitdumpFile;
+#endif
 
 // An Environment encapsulates everything that's needed to load and run
 // instances of plugins on a single thread. There can be at most one
@@ -64,6 +71,7 @@ class Environment : public ISourcePawnEnvironment
   bool HasPendingException(const ExceptionHandler* handler) override;
   const char* GetPendingExceptionMessage(const ExceptionHandler* handler) override;
   bool EnableDebugBreak() override;
+  void SetDebugMetadataFlags(int flags) override;
 
   // Runtime functions.
   const char* GetErrorString(int err);
@@ -76,6 +84,7 @@ class Environment : public ISourcePawnEnvironment
 
   // Allocate and free executable memory.
   CodeChunk AllocateCode(size_t size);
+  void WriteDebugMetadata(void* address, uint64_t length, const char* symbol, const CodeDebugMap& mapping);
 
   CodeStubs* stubs() {
     return code_stubs_.get();
@@ -127,6 +136,10 @@ class Environment : public ISourcePawnEnvironment
   }
   SPVM_DEBUGBREAK debugbreak() const {
     return debug_break_handler_;
+  }
+
+  int GetDebugMetadataFlags() const {
+    return debug_metadata_flags_;
   }
 
   WatchdogTimer* watchdog() const {
@@ -190,6 +203,17 @@ class Environment : public ISourcePawnEnvironment
   ExceptionHandler* eh_top_;
   int exception_code_;
   char exception_message_[1024];
+
+  int debug_metadata_flags_;
+
+#if defined(KE_LINUX)
+  // There can only be one of each of these per process, as the filenames are
+  // only distinguished by PID (although jitdump does internally support per-
+  // thread metadata). Once we support multiple environments per process we'll
+  // need to globalise these and add internal locking.
+  std::unique_ptr<PerfJitFile> perf_jit_file_;
+  std::unique_ptr<PerfJitdumpFile> perf_jitdump_file_;
+#endif
 
   IProfilingTool* profiler_;
   bool jit_enabled_;

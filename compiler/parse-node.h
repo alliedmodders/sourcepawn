@@ -69,6 +69,9 @@ class ParseNode : public PoolObject
     virtual bool Bind() {
         return true;
     }
+    virtual bool BindLval() {
+        return Bind();
+    }
     virtual bool Analyze() = 0;
     virtual void Emit() = 0;
     virtual bool HasSideEffects() {
@@ -120,6 +123,23 @@ class StmtList : public Stmt
 
   private:
     PoolList<Stmt*> stmts_;
+};
+
+class StaticAssertStmt : public Stmt
+{
+  public:
+    explicit StaticAssertStmt(const token_pos_t& pos, int val, PoolString* text)
+      : Stmt(pos),
+        val_(val),
+        text_(text)
+    {}
+
+    bool Analyze() override;
+    void Emit() override {}
+
+  private:
+    int val_;
+    PoolString* text_;
 };
 
 class Decl : public Stmt
@@ -206,21 +226,24 @@ class ConstDecl : public VarDecl
 };
 
 struct EnumField {
-    EnumField(const token_pos_t& pos, sp::Atom* name, cell value)
+    EnumField(const token_pos_t& pos, sp::Atom* name, Expr* value)
       : pos(pos), name(name), value(value)
     {}
     token_pos_t pos;
     sp::Atom* name;
-    cell value;
+    Expr* value;
 };
 
 class EnumDecl : public Decl
 {
   public:
-    explicit EnumDecl(const token_pos_t& pos, int vclass, sp::Atom* label, sp::Atom* name)
+    explicit EnumDecl(const token_pos_t& pos, int vclass, sp::Atom* label, sp::Atom* name,
+                      int increment, int multiplier)
       : Decl(pos, name),
         vclass_(vclass),
-        label_(label)
+        label_(label),
+        increment_(increment),
+        multiplier_(multiplier)
     {}
 
     bool Bind() override;
@@ -228,10 +251,19 @@ class EnumDecl : public Decl
         return fields_;
     }
 
+    int increment() const {
+        return increment_;
+    }
+    int multiplier() const {
+        return multiplier_;
+    }
+
   private:
     int vclass_;
     sp::Atom* label_;
     PoolList<EnumField> fields_;
+    int increment_;
+    int multiplier_;
 };
 
 struct StructField {
@@ -323,6 +355,19 @@ class Expr : public ParseNode
 
     // Flatten a series of binary expressions into a single list.
     virtual void FlattenLogical(int token, std::vector<Expr*>* out);
+
+    // Fold the expression into a constant. The expression must have been
+    // bound and analyzed. False indicates the expression is non-constant.
+    //
+    // If an expression folds constants during analysis, it can return false
+    // here. ExprToConst handles both cases.
+    virtual bool FoldToConstant() {
+        return false;
+    }
+
+    // Evaluate as a constant. Returns false if non-const. This is a wrapper
+    // around FoldToConstant().
+    bool EvalConst(cell* value, int* tag);
 
     virtual void EmitTest(bool jump_on_true, int target);
     virtual symbol* BindCallTarget(int token, Expr** implicit_this) {
@@ -431,11 +476,7 @@ class BinaryExprBase : public Expr
   public:
     BinaryExprBase(const token_pos_t& pos, int token, Expr* left, Expr* right);
 
-    bool Bind() override {
-        bool ok = left_->Bind();
-        ok &= right_->Bind();
-        return ok;
-    }
+    bool Bind() override;
     bool HasSideEffects() override;
     void ProcessUses() override;
 
@@ -462,6 +503,7 @@ class BinaryExpr final : public BinaryExprBase
 
     bool HasSideEffects() override;
     bool Analyze() override;
+    bool FoldToConstant() override;
     void DoEmit() override;
 
     BinaryExpr* AsBinaryExpr() override {
@@ -551,6 +593,7 @@ class TernaryExpr final : public Expr
         return ok;
     }
     bool Analyze() override;
+    bool FoldToConstant() override;
     void DoEmit() override;
     bool HasSideEffects() override {
         return first_->HasSideEffects() || second_->HasSideEffects() || third_->HasSideEffects();
@@ -669,6 +712,7 @@ class SymbolExpr final : public Expr
     }
 
     bool Bind() override;
+    bool BindLval() override;
     bool Analyze() override;
     void DoEmit() override;
     void ProcessUses() override {}
@@ -679,6 +723,9 @@ class SymbolExpr final : public Expr
     }
 
     bool AnalyzeWithOptions(bool allow_types);
+
+  private:
+    bool DoBind(bool is_lval);
 
   private:
     sp::Atom* name_;

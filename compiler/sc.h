@@ -458,8 +458,8 @@ void set_extension(char* filename, const char* extension, int force);
 symbol* fetchfunc(const char* name);
 char* operator_symname(char* symname, const char* opername, int tag1, int tag2, int numtags,
                        int resulttag);
-char* funcdisplayname(char* dest, const char* funcname);
-int exprconst(cell* val, int* tag, symbol** symptr);
+std::string funcdisplayname(const char* funcname);
+bool exprconst(cell* val, int* tag, symbol** symptr);
 constvalue* append_constval(constvalue* table, const char* name, cell val, int index);
 constvalue* find_constval(constvalue* table, char* name, int index);
 void delete_consttable(constvalue* table);

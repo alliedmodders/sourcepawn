@@ -89,7 +89,7 @@ CodeStubs::CompileInvokeStub()
   __ bind(&error);
   __ jmp(&ret);
 
-  invoke_stub_ = LinkCode(env_, masm);
+  invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
   if (!invoke_stub_.address())
     return false;
 
