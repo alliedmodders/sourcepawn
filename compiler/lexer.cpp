@@ -27,17 +27,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
+#include <unordered_set>
 #include <utility>
+
+#if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
+#    include <unistd.h>
+#endif
+
+#if defined _MSC_VER && defined _WIN32
+#    include <direct.h>
+#endif
 
 #include "lexer.h"
 #include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
+#include <amtl/am-raii.h>
 #include <amtl/am-string.h>
 #include <sp_typeutil.h>
 #include "emitter.h"
 #include "errors.h"
 #include "libpawnc.h"
+#include "new-parser.h"
 #include "optimizer.h"
 #include "sc.h"
 #include "sci18n.h"
@@ -55,6 +67,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static int alpha(char c);
+static void set_file_defines(std::string file);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
@@ -130,6 +143,8 @@ int
 plungefile(char* name, int try_currentpath, int try_includepaths)
 {
     int result = FALSE;
+    char* pcwd = NULL;
+    char cwd[_MAX_PATH];
 
     if (try_currentpath) {
         result = plungequalifiedfile(name);
@@ -148,6 +163,16 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
                     result = plungequalifiedfile(path);
                 }
             }
+        } else {
+            pcwd = getcwd(cwd, sizeof(cwd));
+            if (!pcwd) {
+                error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
+            }
+
+#if defined __MSDOS__ || defined __WIN32__ || defined _Windows
+            // make the drive letter on windows lower case to be in line with the rest of SP, as they have a small drive letter in the path
+            cwd[0] = tolower(cwd[0]);
+#endif
         }
     }
 
@@ -160,7 +185,41 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
             result = plungequalifiedfile(path);
         }
     }
+
+    if (pcwd) {
+        char path[_MAX_PATH];
+        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
+        set_file_defines(path);
+    } else {
+        set_file_defines(inpfname);
+    }
+
     return result;
+}
+
+static void
+set_file_defines(std::string file)
+{
+    auto sepIndex = file.find_last_of(DIRSEP_CHAR);
+
+    std::string fileName = sepIndex == std::string::npos ? file : file.substr(sepIndex + 1);
+
+#if DIRSEP_CHAR == '\\'
+    auto pos = file.find('\\');
+    while (pos != std::string::npos) {
+        file.insert(pos + 1, 1, '\\');
+        pos = file.find('\\', pos + 2);
+    }
+#endif
+
+    file.insert(file.begin(), '"');
+    fileName.insert(fileName.begin(), '"');
+
+    file.push_back('"');
+    fileName.push_back('"');
+
+    insert_subst("__FILE_PATH__", 13, file.c_str());
+    insert_subst("__FILE_NAME__", 13, fileName.c_str());
 }
 
 static void
@@ -205,7 +264,15 @@ doinclude(int silent)
 
     i = 0;
     while (*lptr != c && *lptr != '\0' && i < sizeof name - 1) /* find the end of the string */
-        name[i++] = *lptr++;
+    {
+        if (DIRSEP_CHAR != '/' && *lptr == '/') {
+            name[i++] = DIRSEP_CHAR;
+            lptr++;
+        }
+        else {
+            name[i++] = *lptr++;
+        }
+    }
     while (i > 0 && name[i - 1] <= ' ')
         i--; /* strip trailing whitespace */
     assert(i < sizeof name);
@@ -271,6 +338,7 @@ readline(unsigned char* line)
             free(inpfname);      /* return memory allocated for the include file name */
             inpfname = ke::PopBack(&gInputFilenameStack);
             inpf = ke::PopBack(&gInputFileStack);
+            set_file_defines(inpfname);
             insert_dbgfile(inpfname);
             setfiledirect(inpfname);
             assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpfname) == 0);
@@ -679,6 +747,8 @@ preproc_expr(cell* val, int* tag)
     cell code_index;
     char* term;
 
+    ke::SaveAndSet<bool> forbid_const(&Parser::sInPreprocessor, true);
+
     /* Disable staging; it should be disabled already because
      * expressions may not be cut off half-way between conditional
      * compilations. Reset the staging index, but keep the code
@@ -902,15 +972,21 @@ command(void)
             check_empty(lptr);
             break;
         case tpASSERT:
+        {
+            ke::SaveAndSet<bool> reset(&Parser::sDetectedIllegalPreprocessorSymbols, false);
+
             if (!SKIPPING && (sc_debug & sCHKBOUNDS) != 0) {
                 for (str = (char*)lptr; *str <= ' ' && *str != '\0'; str++)
                     /* nothing */;        /* save start of expression */
                 preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
-                if (!val)
+                bool should_assert = (!Parser::sDetectedIllegalPreprocessorSymbols ||
+                                      sc_status == statWRITE);
+                if (!val && should_assert)
                     error(FATAL_ERROR_ASSERTION_FAILED, str); /* assertion failed */
                 check_empty(lptr);
             }
             break;
+        }
         case tpPRAGMA:
             if (!SKIPPING) {
                 if (lex(&val, &str) == tSYMBOL) {
@@ -1209,17 +1285,15 @@ strins(char* dest, const char* src, size_t srclen)
     return dest;
 }
 
-static int
+static bool
 substpattern(unsigned char* line, size_t buffersize, const char* pattern,
-             const char* substitution)
+             const char* substitution, int& patternLen, int& substLen)
 {
     int prefixlen;
     const unsigned char *p, *s, *e;
-    unsigned char* args[10];
-    int match, arg, len, argsnum = 0;
+    std::vector<std::unique_ptr<std::string>> args;
+    int match, arg;
     int stringize;
-
-    memset(args, 0, sizeof args);
 
     /* check the length of the prefix */
     for (prefixlen = 0, s = (unsigned char*)pattern; alphanum(*s); prefixlen++, s++)
@@ -1255,15 +1329,9 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                               * a string, or the closing paranthese of a group) */
                 }
                 /* store the parameter (overrule any earlier) */
-                if (args[arg] != NULL)
-                    free(args[arg]);
-                else
-                    argsnum++;
-                len = (int)(e - s);
-                args[arg] = (unsigned char*)malloc(len + 1);
-                if (args[arg] == NULL)
-                    error(FATAL_ERROR_OOM);
-                SafeStrcpy((char*)args[arg], len + 1, (char*)s);
+                if (size_t(arg) >= args.size())
+                    args.resize(arg + 1);
+                args[arg] = std::make_unique<std::string>(reinterpret_cast<const char*>(s), e - s);
                 /* character behind the pattern was matched too */
                 if (*e == *p) {
                     s = e + 1;
@@ -1302,6 +1370,9 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
         }
     }
 
+    //length of the entire matched pattern, including parameters
+    patternLen = (int)(s - line);
+
     if (match && *p == '\0') {
         /* if the last character to match is an alphanumeric character, the
          * current character in the source may not be alphanumeric
@@ -1311,81 +1382,75 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             match = FALSE;
     }
 
-    if (match) {
-        /* calculate the length of the substituted string */
-        for (e = (unsigned char*)substitution, len = 0; *e != '\0'; e++) {
-            if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && argsnum) {
-                stringize = 1;
-                e++; /* skip '#' */
-            } else {
-                stringize = 0;
-            }
-            if (*e == '%' && isdigit(*(e + 1)) && argsnum) {
-                arg = *(e + 1) - '0';
-                assert(arg >= 0 && arg <= 9);
-                assert(stringize == 0 || stringize == 1);
-                if (args[arg] != NULL) {
-                    len += strlen((char*)args[arg]) + 2 * stringize;
-                    e++;
-                } else {
-                    len++;
-                }
-            } else {
-                len++;
-            }
-        }
-        /* check length of the string after substitution */
-        if (strlen((char*)line) + len - (int)(s - line) > buffersize) {
-            error(75); /* line too long */
+    if (!match)
+        return false;
+
+    /* calculate the length of the substituted string */
+    for (e = (unsigned char*)substitution, substLen = 0; *e != '\0'; e++) {
+        if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
+            stringize = 1;
+            e++; /* skip '#' */
         } else {
-            /* substitute pattern */
-            strdel((char*)line, (int)(s - line));
-            for (e = (unsigned char*)substitution, s = line; *e != '\0'; e++) {
-                if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2))) {
-                    stringize = 1;
-                    e++; /* skip '#' */
-                } else {
-                    stringize = 0;
-                }
-                if (*e == '%' && isdigit(*(e + 1))) {
-                    arg = *(e + 1) - '0';
-                    assert(arg >= 0 && arg <= 9);
-                    if (args[arg] != NULL) {
-                        if (stringize)
-                            strins((char*)s++, "\"", 1);
-                        strins((char*)s, (char*)args[arg], strlen((char*)args[arg]));
-                        s += strlen((char*)args[arg]);
-                        if (stringize)
-                            strins((char*)s++, "\"", 1);
-                    } else {
-                        error(236); /* parameter does not exist, incorrect #define pattern */
-                        strins((char*)s, (char*)e, 2);
-                        s += 2;
-                    }
-                    e++; /* skip %, digit is skipped later */
-                } else if (*e == '"') {
-                    p = e;
-                    if (is_startstring(e)) {
-                        e = skipstring(e);
-                        strins((char*)s, (char*)p, (e - p + 1));
-                        s += (e - p + 1);
-                    } else {
-                        strins((char*)s, (char*)e, 1);
-                        s++;
-                    }
-                } else {
-                    strins((char*)s, (char*)e, 1);
-                    s++;
-                }
+            stringize = 0;
+        }
+        if (*e == '%' && isdigit(*(e + 1)) && !args.empty()) {
+            arg = *(e + 1) - '0';
+            assert(arg >= 0 && arg <= 9);
+            assert(stringize == 0 || stringize == 1);
+            if (size_t(arg) < args.size() && args[arg]) {
+                substLen += args[arg]->size() + 2 * stringize;
+                e++;
+            } else {
+                substLen++;
             }
+        } else {
+            substLen++;
         }
     }
 
-    for (arg = 0; arg < 10; arg++)
-        if (args[arg] != NULL)
-            free(args[arg]);
+    /* check length of the string after substitution */
+    if (strlen((char*)line) + substLen - patternLen > buffersize) {
+        error(75); /* line too long */
+        return false;
+    }
 
-    return match;
+    /* substitute pattern */
+    strdel((char*)line, patternLen);
+    for (e = (unsigned char*)substitution, s = line; *e != '\0'; e++) {
+        if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2))) {
+            stringize = 1;
+            e++; /* skip '#' */
+        } else {
+            stringize = 0;
+        }
+        if (*e == '%' && isdigit(*(e + 1))) {
+            arg = *(e + 1) - '0';
+            assert(arg >= 0 && arg <= 9);
+            if (size_t(arg) < args.size() && args[arg]) {
+                if (stringize)
+                    strins((char*)s++, "\"", 1);
+                strins((char*)s, (char*)args[arg]->data(), args[arg]->size());
+                s += args[arg]->size();
+                if (stringize)
+                    strins((char*)s++, "\"", 1);
+            } else {
+                error(236); /* parameter does not exist, incorrect #define pattern */
+                strins((char*)s, (char*)e, 2);
+                s += 2;
+            }
+            e++; /* skip %, digit is skipped later */
+        } else if (is_startstring(e)) {
+            p = e;
+            e = skipstring(e);
+            strins((char*)s, (char*)p, (e - p + 1));
+            s += (e - p + 1);
+        } else {
+            strins((char*)s, (char*)e, 1);
+            s++;
+        }
+    }
+
+    return true;
 }
 
 static void
@@ -1394,7 +1459,21 @@ substallpatterns(unsigned char* line, int buffersize)
     unsigned char *start, *end;
     int prefixlen;
 
+    std::unordered_set<std::string> blocked_macros;
+
+    auto enter_macro = [&](const char* start, size_t prefixlen, macro_t* out) -> bool {
+        if (!find_subst(start, prefixlen, out))
+            return false;
+        if (blocked_macros.count(out->first))
+            return false;
+        blocked_macros.emplace(out->first);
+        return true;
+    };
+
     start = line;
+
+    /* track the end of chars substituted in this sequence of replacements */
+    unsigned char* sequence_end = nullptr;
     while (*start != '\0') {
         /* find the start of a prefix (skip all non-alphabetic characters),
          * also skip strings
@@ -1431,17 +1510,34 @@ substallpatterns(unsigned char* line, int buffersize)
         }
         assert(prefixlen > 0);
 
-        macro_t subst;
-        if (find_subst((const char*)start, prefixlen, &subst)) {
-            /* properly match the pattern and substitute */
-            if (!substpattern(start, buffersize - (int)(start - line), subst.first, subst.second))
-                start = end; /* match failed, skip this prefix */
-            /* match succeeded: do not update "start", because the substitution text
-             * may be matched by other macros
-             */
-        } else {
-            start = end; /* no macro with this prefix, skip this prefix */
+        // If we've scanned beyond the end of the previously-subst'd chars in this
+        // sequence of substitutions, clear the blocked macros set and end of sequence.
+        if (sequence_end && start >= sequence_end) {
+            blocked_macros.clear();
+            sequence_end = nullptr;
         }
+
+        macro_t subst;
+        if (!enter_macro((const char *)start, prefixlen, &subst)) {
+            start = end; /* no macro with this prefix, skip this prefix */
+            continue;
+        }
+
+        /* properly match the pattern and substitute */
+        int patternLen = 0;
+        int substLen = 0;
+        if (substpattern(start, buffersize - (int)(start - line), subst.first, subst.second, patternLen, substLen)) {
+            if (sequence_end) {
+                sequence_end += substLen - patternLen; /* update end of subst'd chars */
+            } else {
+                sequence_end = start + substLen; /* new sequence, set initial end */
+            }
+        } else {
+            start = end; /* match failed, skip this prefix */
+        }
+        /* match succeeded: do not update "start", because the substitution text
+         * may be matched by other macros
+         */
     }
 }
 
@@ -1712,6 +1808,7 @@ const char* sc_tokens[] = {"*=",
                            "sealed",
                            "sizeof",
                            "static",
+                           "static_assert",
                            "stock",
                            "struct",
                            "switch",

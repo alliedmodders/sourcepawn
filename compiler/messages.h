@@ -22,7 +22,7 @@
  */
 
 // To find unused errors, try this:
-//   for i in {1..182}; do echo -n "Error $i:" ; grep -E "\($i(,|\))" compiler/sc*.cpp | wc -l; done
+//   for i in {1..182}; do echo -n "Error $i:" ; grep error compiler/*.cpp | grep -E "\b$i\b" | wc -l; done
 
 static const char* errmsg[] = {
     /*001*/ "expected token: \"%s\", but found \"%s\"\n",
@@ -43,7 +43,7 @@ static const char* errmsg[] = {
     /*016*/ "multiple defaults in \"switch\"\n",
     /*017*/ "undefined symbol \"%s\"\n",
     /*018*/ "initialization data exceeds declared size\n",
-    /*019*/ "not a label: \"%s\"\n",
+    /*019*/ "cannot use symbol \"%s\" before it is fully parsed\n",
     /*020*/ "invalid symbol name \"%s\"\n",
     /*021*/ "symbol already defined: \"%s\"\n",
     /*022*/ "must be lvalue (non-constant)\n",
@@ -94,7 +94,7 @@ static const char* errmsg[] = {
     /*067*/ "variable cannot be both a reference and an array (variable \"%s\")\n",
     /*068*/ "length of initializer exceeds size of the enum field\n",
     /*069*/ "arrays in info structs must be unsized and single dimension\n",
-    /*070*/ "unused\n",
+    /*070*/ "assertion failed%s\n",
     /*071*/ "user-defined operator must be declared before use (function \"%s\")\n",
     /*072*/ "\"sizeof\" operator is only valid on variables\n",
     /*073*/ "function argument must be an array (argument \"%s\")\n",
@@ -104,7 +104,7 @@ static const char* errmsg[] = {
     /*077*/ "arrays cannot be indexed by non-integral type '%s'\n",
     /*078*/ "function uses both \"return\" and \"return <value>\"\n",
     /*079*/ "inconsistent return types (array & non-array)\n",
-    /*080*/ "unknown symbol, or not a constant symbol (symbol \"%s\")\n",
+    /*080*/ "'...' not allowed in enum struct initializers\n",
     /*081*/ "enum struct field arrays must have fixed sizes\n",
     /*082*/ "properties cannot be arrays\n",
     /*083*/ "methodmap methods cannot return arrays\n",
@@ -117,11 +117,11 @@ static const char* errmsg[] = {
     /*090*/ "public functions may not return arrays (symbol \"%s\")\n",
     /*091*/ "ambiguous constant; tag override is required (symbol \"%s\")\n",
     /*092*/ "number of arguments does not match definition\n",
-    /*093*/ "unused93\n",
+    /*093*/ "cannot divide by zero\n",
     /*094*/ "cannot apply const qualifier to enum struct field \"%s\"\n",
     /*095*/ "type \"%s\" cannot be applied as a tag\n",
-    /*096*/ "could not find member \"%s\" in struct \"%s\"\n",
-    /*097*/ "symbol \"%s\" does not have a matching type\n",
+    /*096*/ "could not find member \"%s\" in %s \"%s\"\n",
+    /*097*/ "overflow in integer division\n",
     /*098*/ "type \"%s\" should be \"%s\" in new-style declarations\n",
     /*099*/ "%s should not have an explicit return type\n",
     /*100*/ "function prototypes do not match\n",
@@ -129,8 +129,8 @@ static const char* errmsg[] = {
     /*102*/ "cannot find %s %s\n",
     /*103*/ "%s was already defined on this %s\n",
     /*104*/ "cannot find any methods for %s\n",
-    /*105*/ "cannot find method or property %s.%s\n",
-    /*106*/ "cannot call methods on an array\n",
+    /*105*/ "cannot find method or property \"%s.%s\"\n",
+    /*106*/ "unused106\n",
     /*107*/ "cannot call methods on a function\n",
     /*108*/ "resolution operator (::) can only resolve field offsets of enum structs\n",
     /*109*/ "%s name must start with an uppercase letter\n",
@@ -243,6 +243,7 @@ static const char* fatalmsg[] = {
     /*195*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
     /*196*/
     "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
+    /*197*/ "maximum macro recursion depth reached",
 };
 
 static const char* warnmsg[] = {
@@ -274,9 +275,9 @@ static const char* warnmsg[] = {
     /*225*/ "unreachable code\n",
     /*226*/ "a variable is assigned to itself (symbol \"%s\")\n",
     /*227*/ "more initializers than enum fields\n",
-    /*228*/ "unused228\n",
+    /*228*/ "enum multiplers are deprecated and will be removed in the next release\n",
     /*229*/ "index tag mismatch (symbol \"%s\")\n",
-    /*230*/ "unused230\n",
+    /*230*/ "symbol \"%s\" is not a preprocessor symbol; this behavior is undefined and will be removed in the future\n",
     /*231*/ "unused231\n",
     /*232*/ "output file is written, but with compact encoding disabled\n",
     /*233*/ "unused233\n",

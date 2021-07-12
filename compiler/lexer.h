@@ -166,6 +166,7 @@ enum TokenKind {
     tSEALED,
     tSIZEOF,
     tSTATIC,
+    tSTATIC_ASSERT,
     tSTOCK,
     tSTRUCT,
     tSWITCH,
@@ -304,6 +305,10 @@ int getlabel(void);
 char* itoh(ucell val);
 std::string get_token_string(int tok_id);
 
-enum class TerminatorPolicy { Newline, NewlineOrSemicolon, Semicolon };
+enum class TerminatorPolicy {
+    Newline,
+    NewlineOrSemicolon,
+    Semicolon
+};
 
 int require_newline(TerminatorPolicy policy);

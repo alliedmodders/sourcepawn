@@ -238,7 +238,7 @@ class TestPlan(object):
       path = os.path.join(self.tests_path, local_path)
       if os.path.isdir(path):
         self.find_tests_impl(local_path, manifest)
-      elif path.endswith('.sp'):
+      elif path.endswith('.sp') or path.endswith('.smx'):
         if self.args.test is not None and not local_path.startswith(self.args.test):
           continue
 
@@ -280,6 +280,8 @@ class Test(object):
     smx_base_path, ext = os.path.splitext(smx_path)
     if ext == '.sp':
       self.smx_path = smx_base_path + '.smx'
+    elif ext == '.smx':
+      self.smx_path = self.path
     else:
       self.smx_path += '.smx'
 
@@ -349,6 +351,10 @@ class Test(object):
 
   def read_local_manifest(self):
     self.local_manifest_ = {}
+
+    if self.path.endswith('.smx'):
+      return
+
     with open(self.path, 'r') as fp:
       for line in fp:
         if not self.process_manifest_line(line):
@@ -421,6 +427,8 @@ class TestRunner(object):
         self.failures_.add(test)
 
   def should_compile_only(self, test):
+    if test.path.endswith('.smx'):
+      return False
     if test.type == 'compiler-output' or test.type == 'compile-only':
       return True
     return self.plan.args.compile_only
@@ -433,19 +441,20 @@ class TestRunner(object):
     self.out('Begin test {0}'.format(test.path))
 
     # First run the compiler.
-    rc, stdout, stderr = self.run_compiler(mode, test)
-    if compile_only:
-      if not self.compile_ok(mode, test, rc, stdout, stderr):
+    if not test.path.endswith('.smx'):
+      rc, stdout, stderr = self.run_compiler(mode, test)
+      if compile_only:
+        if not self.compile_ok(mode, test, rc, stdout, stderr):
+          self.out_io(stderr, stdout)
+          return False
+        self.out("PASS")
+        return True
+
+      # If this is a runtime test, the compiler must pass to continue.
+      if rc != 0:
+        self.out("Compile failed, return code {0} (expected 0)".format(rc))
         self.out_io(stderr, stdout)
         return False
-      self.out("PASS")
-      return True
-
-    # If this is a runtime test, the compiler must pass to continue.
-    if rc != 0:
-      self.out("Compile failed, return code {0} (expected 0)".format(rc))
-      self.out_io(stderr, stdout)
-      return False
 
     # Run all shells we found.
     return self.run_shells(mode, test)

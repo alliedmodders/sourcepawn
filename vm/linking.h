@@ -13,14 +13,18 @@
 #ifndef _include_sourcepawn_vm_x86_utils_h_
 #define _include_sourcepawn_vm_x86_utils_h_
 
+#include <vector>
 #include <stdint.h>
+
 #include "macro-assembler.h"
 
 namespace sp {
 
 class Environment;
+struct CodeDebugMapping;
+using CodeDebugMap = std::vector<CodeDebugMapping>;
 
-CodeChunk LinkCode(Environment* env, Assembler& masm);
+CodeChunk LinkCode(Environment* env, Assembler& masm, const char* name, const CodeDebugMap& mapping);
 
 }
 

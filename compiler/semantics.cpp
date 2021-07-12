@@ -116,7 +116,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
 {
     auto arg = pstructs_getarg(ps, field.name);
     if (!arg) {
-        error(pos_, 96, field.name->chars(), name_->chars());
+        error(pos_, 96, field.name->chars(), "struct", name_->chars());
         return false;
     }
 
@@ -244,6 +244,21 @@ Expr::FlattenLogical(int token, std::vector<Expr*>* out)
     out->push_back(this);
 }
 
+bool
+Expr::EvalConst(cell* value, int* tag)
+{
+    if (val_.ident != iCONSTEXPR) {
+        if (!FoldToConstant())
+            return false;
+        assert(val_.ident == iCONSTEXPR);
+    }
+
+    if (value)
+        *value = val_.constval;
+    if (tag)
+        *tag = val_.tag;
+    return true;
+}
 
 RvalueExpr::RvalueExpr(Expr* expr)
   : EmitOnlyExpr(expr->pos()),
@@ -650,6 +665,81 @@ BinaryExpr::ValidateAssignmentRHS()
     return true;
 }
 
+static inline bool
+IsTypeBinaryConstantFoldable(Type* type)
+{
+    if (type->isEnum() || type->tagid() == 0)
+        return true;
+    return false;
+}
+
+bool
+BinaryExpr::FoldToConstant()
+{
+    cell left_val, right_val;
+    int left_tag, right_tag;
+
+    if (!left_->EvalConst(&left_val, &left_tag) || !right_->EvalConst(&right_val, &right_tag))
+        return false;
+    if (IsAssignOp(token_) || userop_.sym)
+        return false;
+
+    Type* left_type = gTypes.find(left_tag);
+    Type* right_type = gTypes.find(right_tag);
+    if (!IsTypeBinaryConstantFoldable(left_type) || !IsTypeBinaryConstantFoldable(right_type))
+        return false;
+
+    switch (token_) {
+        case '*':
+            val_.constval = left_val * right_val;
+            break;
+        case '/':
+        case '%':
+            if (!right_val) {
+                error(pos_, 93);
+                return false;
+            }
+            if (left_val == cell(0x80000000) && right_val == -1) {
+                error(pos_, 97);
+                return false;
+            }
+            if (token_ == '/')
+                val_.constval = left_val / right_val;
+            else
+                val_.constval = left_val % right_val;
+            break;
+        case '+':
+            val_.constval = left_val + right_val;
+            break;
+        case '-':
+            val_.constval = left_val - right_val;
+            break;
+        case tSHL:
+            val_.constval = left_val << right_val;
+            break;
+        case tSHR:
+            val_.constval = left_val >> right_val;
+            break;
+        case tSHRU:
+            val_.constval = uint32_t(left_val) >> uint32_t(right_val);
+            break;
+        case '&':
+            val_.constval = left_val & right_val;
+            break;
+        case '^':
+            val_.constval = left_val ^ right_val;
+            break;
+        case '|':
+            val_.constval = left_val | right_val;
+            break;
+        default:
+            return false;
+    }
+
+    val_.ident = iCONSTEXPR;
+    return true;
+}
+
 void
 LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
 {
@@ -832,7 +922,7 @@ TernaryExpr::Analyze()
         return false;
     }
 
-    if (!matchtag(left.tag, right.tag, FALSE))
+    if (!matchtag_commutative(left.tag, right.tag, FALSE))
         return false;
 
     /* If both sides are arrays, we should return the maximal as the lvalue.
@@ -847,6 +937,21 @@ TernaryExpr::Analyze()
         val_.ident = iREFARRAY;
     else if (val_.ident != iREFARRAY)
         val_.ident = iEXPRESSION;
+    return true;
+}
+
+bool
+TernaryExpr::FoldToConstant()
+{
+    cell cond, left, right;
+    if (!first_->EvalConst(&cond, nullptr) || second_->EvalConst(&left, nullptr) ||
+        !third_->EvalConst(&right, nullptr))
+    {
+        return false;
+    }
+
+    val_.constval = cond ? left : right;
+    val_.ident = iCONSTEXPR;
     return true;
 }
 
@@ -944,6 +1049,11 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
         }
         if (sym_->array_return()) {
             error(pos_, 182);
+            return false;
+        }
+        if (sym_->missing) {
+            auto symname = funcdisplayname(sym_->name());
+            error(pos_, 4, symname.c_str());
             return false;
         }
 
@@ -1211,7 +1321,7 @@ FieldAccessExpr::AnalyzeWithOptions(bool from_call)
                 if (symbol* root = type->asEnumStruct())
                     return AnalyzeEnumStructAccess(type, root, from_call);
             }
-            error(pos_, 106);
+            error(pos_, 96, name_->chars(), "type", "array");
             return false;
         case iFUNCTN:
             error(pos_, 107);
@@ -1222,7 +1332,7 @@ FieldAccessExpr::AnalyzeWithOptions(bool from_call)
         methodmap_t* map = base_val.sym->methodmap;
         method_ = methodmap_find_method(map, name_->chars());
         if (!method_) {
-            error(pos_, 105, map->name, field_->name());
+            error(pos_, 105, map->name, name_->chars());
             return false;
         }
         if (!method_->is_static) {
@@ -1322,6 +1432,11 @@ SymbolExpr::BindCallTarget(int token, Expr** implicit_this)
     }
     if (sym_->ident != iFUNCTN)
         return nullptr;
+    if (sym_->missing) {
+        auto symname = funcdisplayname(sym_->name());
+        error(pos_, 4, symname.c_str());
+        return nullptr;
+    }
     return sym_;
 }
 
@@ -1424,7 +1539,7 @@ FieldAccessExpr::AnalyzeStaticAccess()
     Type* type = gTypes.find(base_val.tag);
     symbol* field = find_enumstruct_field(type, name_->chars());
     if (!field) {
-        error(pos_, 105, type->name(), field_->name());
+        error(pos_, 105, type->name(), name_->chars());
         return FALSE;
     }
     assert(field->parent() == type->asEnumStruct());
@@ -1512,6 +1627,10 @@ SizeofExpr::Analyze()
         }
 
         if (sym->ident == iENUMSTRUCT) {
+            if (!sym->dim.enumlist) {
+                error(pos_, 19, sym->name());
+                return false;
+            }
             val_.constval = sym->addr();
             return true;
         }
@@ -1882,12 +2001,25 @@ CallExpr::MarkUsed()
          * exception for directly recursive functions)
          */
         if (sym_ != curfunc && !sym_->retvalue) {
-            char symname[2 * sNAMEMAX + 16]; /* allow space for user defined operators */
-            funcdisplayname(symname, sym_->name());
-            error(pos_, 209, symname); /* function should return a value */
+            auto symname = funcdisplayname(sym_->name());
+            error(pos_, 209, symname.c_str()); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
         sym_->retvalue = true;
     }
+}
+
+bool StaticAssertStmt::Analyze()
+{
+    if (val_)
+        return true;
+
+    std::string message;
+    if (text_)
+        message += ": " + std::string(text_->chars(), text_->length());
+
+    error(pos_, 70, message.c_str());
+
+    return false;
 }

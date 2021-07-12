@@ -291,6 +291,10 @@ int main(int argc, char** argv)
     "w", "disable-watchdog",
     Some(false),
     "Disable the watchdog timer.");
+  ToggleOption enable_jitdump(parser,
+    "p", "jitdump",
+    Some(false),
+    "Enable perf metadata recording for profiling.");
   StringOption filename(parser,
     "file",
     "SMX file to execute.");
@@ -326,6 +330,10 @@ int main(int argc, char** argv)
 
   if (!getenv("DISABLE_WATCHDOG") && !disable_watchdog.value())
     sEnv->InstallWatchdogTimer(5000);
+
+  if (enable_jitdump.value()) {
+    sEnv->SetDebugMetadataFlags(JIT_DEBUG_PERF_BASIC | JIT_DEBUG_PERF_JITDUMP);
+  }
 
   int errcode = Execute(filename.value().c_str());
 

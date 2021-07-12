@@ -977,7 +977,7 @@ namespace smxviewer
                 }, null);
 
                 int stop_at = (i == table.Entries.Length - 1)
-                              ? file_.RttiEnumStructs.Entries.Length
+                              ? file_.RttiEnumStructFields.Entries.Length
                               : table.Entries[i + 1].first_field;
                 for (int field_index = entry.first_field; field_index < stop_at; field_index++)
                 {

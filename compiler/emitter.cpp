@@ -237,10 +237,9 @@ startfunc(const char* fname)
 {
     stgwrite("\tproc");
     if (sc_asmfile) {
-        char symname[2 * sNAMEMAX + 16];
-        funcdisplayname(symname, fname);
+        auto symname = funcdisplayname(fname);
         stgwrite("\t; ");
-        stgwrite(symname);
+        stgwrite(symname.c_str());
     }
     stgwrite("\n");
     code_idx += opcodes(1);
@@ -728,13 +727,13 @@ ffcase(cell value, char* labelname, int newtable)
 void
 ffcall(symbol* sym, int numargs)
 {
-    char symname[2 * sNAMEMAX + 16];
+    std::string symname;
     char aliasname[sNAMEMAX + 1];
 
     assert(sym != NULL);
     assert(sym->ident == iFUNCTN);
     if (sc_asmfile)
-        funcdisplayname(symname, sym->name());
+        symname = funcdisplayname(sym->name());
     if (sym->native) {
         /* reserve a SYSREQ id if called for the first time */
         stgwrite("\tsysreq.n ");
@@ -752,16 +751,16 @@ ffcall(symbol* sym, int numargs)
         stgwrite("\n");
         code_idx += opcodes(1) + opargs(2);
     } else {
-        const char* symname = sym->name();
+        symname = sym->name();
         pushval(numargs);
         /* normal function */
         stgwrite("\tcall ");
-        stgwrite(symname);
+        stgwrite(symname.c_str());
         if (sc_asmfile &&
             ((!isalpha(symname[0]) && symname[0] != '_' && symname[0] != sc_ctrlchar)))
         {
             stgwrite("\t; ");
-            stgwrite(symname);
+            stgwrite(symname.c_str());
         }
         stgwrite("\n");
         code_idx += opcodes(1) + opargs(1);
@@ -826,7 +825,7 @@ defstorage(void)
 }
 
 /*
- *  Inclrement/decrement stack pointer. Note that this routine does
+ *  Increment/decrement stack pointer. Note that this routine does
  *  nothing if the delta is zero.
  */
 void

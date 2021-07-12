@@ -39,6 +39,9 @@
 
 using namespace sp;
 
+bool Parser::sInPreprocessor = false;
+bool Parser::sDetectedIllegalPreprocessorSymbols = false;
+
 void
 Parser::parse()
 {
@@ -67,6 +70,9 @@ Parser::parse()
             case tNATIVE:
             case tFORWARD:
                 decl = parse_unknown_decl(&tok);
+                break;
+            case tSTATIC_ASSERT:
+                decl = parse_static_assert();
                 break;
             case tFUNCENUM:
             case tFUNCTAG:
@@ -210,13 +216,10 @@ Parser::parse_enum(int vclass)
     else
         lexpush();
 
-    EnumDecl* decl = new EnumDecl(pos, vclass, label, name);
-
-    needtoken('{');
-
     cell increment = 1;
     cell multiplier = 1;
     if (matchtoken('(')) {
+        error(228);
         if (matchtoken(taADD)) {
             exprconst(&increment, NULL, NULL);
         } else if (matchtoken(taMULT)) {
@@ -229,8 +232,11 @@ Parser::parse_enum(int vclass)
         needtoken(')');
     }
 
+    EnumDecl* decl = new EnumDecl(pos, vclass, label, name, increment, multiplier);
+
+    needtoken('{');
+
     cell size;
-    cell value = 0;
     do {
         if (matchtoken('}')) {
             lexpush();
@@ -247,22 +253,18 @@ Parser::parse_enum(int vclass)
 
         auto pos = current_pos();
 
-        size = increment;
         if (matchtoken('[')) {
             error(153);
             exprconst(&size, nullptr, nullptr);
             needtoken(']');
         }
+
+        Expr* value = nullptr;
         if (matchtoken('='))
-            exprconst(&value, nullptr, nullptr);
+            value = hier14();
 
         if (field_name)
             decl->fields().push_back(EnumField(pos, field_name, value));
-
-        if (multiplier == 1)
-            value += size;
-        else
-            value *= size * multiplier;
     } while (matchtoken(','));
 
     needtoken('}');
@@ -697,8 +699,12 @@ Parser::hier2()
                 parens++;
 
             token_ident_t ident;
-            if (!needsymbol(&ident))
-                return new ErrorExpr();
+            if (matchtoken(tTHIS)) {
+                strcpy(ident.name, "this");
+            } else {
+                if (!needsymbol(&ident))
+                    return new ErrorExpr();
+            }
 
             int array_levels = 0;
             while (matchtoken('[')) {
@@ -967,4 +973,29 @@ Parser::struct_init()
 
     needtoken('}');
     return init;
+}
+
+Stmt*
+Parser::parse_static_assert()
+{
+    auto pos = current_pos();
+
+    needtoken('(');
+
+    int expr_val, expr_tag;
+    bool is_const = exprconst(&expr_val, &expr_tag, nullptr);
+
+    PoolString * text = nullptr;
+    if (matchtoken(',') && needtoken(tSTRING)) {
+        auto tok = current_token();
+        text = new PoolString(tok->str, tok->len);
+    }
+
+    needtoken(')');
+    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+
+    if (!is_const)
+        return nullptr;
+
+    return new StaticAssertStmt(pos, expr_val, text);
 }

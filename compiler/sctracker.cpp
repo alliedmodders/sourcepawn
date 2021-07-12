@@ -154,13 +154,11 @@ funcenum_for_symbol(symbol* sym)
 
 // Finds a functag that was created intrinsically.
 functag_t*
-functag_find_intrinsic(int tag)
+functag_from_tag(int tag)
 {
     Type* type = gTypes.find(tag);
     funcenum_t* fe = type->asFunction();
     if (!fe)
-        return nullptr;
-    if (strncmp(fe->name, "::ft:", 5) != 0)
         return nullptr;
     if (fe->entries.empty())
         return nullptr;
@@ -190,6 +188,20 @@ AllocInScope(MemoryScope& scope, int type, int size)
     } else {
         scope.usage.push_back(MemoryUse{type, size});
     }
+
+    pc_current_memory += size;
+    pc_max_memory = std::max(pc_current_memory, pc_max_memory);
+}
+
+static void
+PopScope(std::vector<MemoryScope>& scope_list)
+{
+    MemoryScope scope = ke::PopBack(&scope_list);
+    while (!scope.usage.empty()) {
+        assert(scope.usage.back().size <= pc_current_memory);
+        pc_current_memory -= scope.usage.back().size;
+        scope.usage.pop_back();
+    }
 }
 
 void
@@ -214,7 +226,7 @@ pop_static_heaplist()
         assert(use.type == MEMUSE_STATIC);
         total += use.size;
     }
-    sHeapScopes.pop_back();
+    PopScope(sHeapScopes);
     return total;
 }
 
@@ -268,7 +280,7 @@ popheaplist(bool codegen)
 {
     if (codegen)
         modheap_for_scope(sHeapScopes.back());
-    sHeapScopes.pop_back();
+    PopScope(sHeapScopes);
 }
 
 void
@@ -298,7 +310,7 @@ popstacklist(bool codegen)
 {
     if (codegen)
         modstk_for_scope(sStackScopes.back());
-    sStackScopes.pop_back();
+    PopScope(sStackScopes);
 }
 
 void

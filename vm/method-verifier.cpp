@@ -56,6 +56,15 @@ MethodVerifier::verify()
     return nullptr;
   }
 
+  auto image = rt_->image();
+  if (image->HasRtti()) {
+    auto rtti = image->GetMethodRttiByOffset(startOffset_);
+    if (!rtti || rtti->pcode_start != startOffset_) {
+      reportError(SP_ERROR_INVALID_ADDRESS);
+      return nullptr;
+    }
+  }
+
   GraphBuilder gb(rt_, startOffset_);
   graph_ = gb.build();
   if (!graph_) {

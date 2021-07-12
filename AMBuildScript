@@ -97,8 +97,10 @@ class Config(object):
         '-Wno-overloaded-virtual',
       ]
 
-      if have_gcc and cxx.target.arch in ['x86', 'x86_64']:
-        cxx.cflags += ['-mfpmath=sse']
+      if have_gcc:
+        if cxx.target.arch in ['x86', 'x86_64']:
+          cxx.cflags += ['-mfpmath=sse']
+        cxx.cxxflags += ['-Wformat-truncation=0']
 
       cxx.postlink += ['-lm']
 
@@ -187,6 +189,7 @@ class Config(object):
       elif cxx.target.platform == 'mac':
         cxx.linkflags.remove('-lstdc++')
         cxx.cflags += ['-mmacosx-version-min=10.7']
+        cxx.cflags += ['-stdlib=libc++']
         cxx.linkflags += ['-stdlib=libc++']
         cxx.linkflags += ['-mmacosx-version-min=10.7']
       elif cxx.target.platform == 'windows':
