@@ -749,7 +749,7 @@ args::RepeatOption<std::string> opt_warnings("-w", "--warning",
                                          "Disable a specific warning by its number.");
 args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
-args::ToggleOption opt_dryrun("-d", "--dry-run", Some(false), 
+args::ToggleOption opt_dryrun("-S", "--no-output", Some(false), 
                               "Perform a dry-run (No file output) on the input");
 args::ToggleOption opt_stderr("-u", "--use-stderr", Some(false),
                               "Use stderr instead of stdout for error messages.");
