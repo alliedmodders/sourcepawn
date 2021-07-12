@@ -86,6 +86,7 @@ extern bool sc_warnings_are_errors;
 extern unsigned sc_total_errors;
 extern int pc_code_version; /* override the code version */
 extern int sc_compression_level;
+extern int sc_use_stderr;
 
 extern void* inpf;      /* file read from (source or include) */
 extern void* inpf_org;  /* main source file */

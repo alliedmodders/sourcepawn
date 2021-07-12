@@ -751,6 +751,8 @@ args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
                                   "Require a semicolon to end each statement.");
 args::ToggleOption opt_dryrun("-d", "--dry-run", Some(false), 
                               "Perform a dry-run (No file output) on the input");
+args::ToggleOption opt_stderr("-u", "--use-stderr", Some(false),
+                              "Use stderr instead of stdout for error messages.");
 
 static void
 Usage(args::Parser& parser, int argc, char** argv)
@@ -789,6 +791,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     sc_tabsize = opt_tabsize.value();
     sc_needsemicolon = opt_semicolons.value();
     sc_dryrun = opt_dryrun.value();
+    sc_use_stderr = opt_stderr.value();
 
     if (opt_codeversion.hasValue()) {
         switch (opt_codeversion.value()) {

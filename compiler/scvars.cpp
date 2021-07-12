@@ -87,6 +87,7 @@ int sc_require_newdecls = 0;         /* Require new-style declarations */
 bool sc_warnings_are_errors = false;
 int sc_compression_level = 9;
 bool sc_use_new_parser = false;
+int sc_use_stderr = FALSE;
 
 void* inpf = NULL;      /* file read from (source or include) */
 void* inpf_org = NULL;  /* main source file */
