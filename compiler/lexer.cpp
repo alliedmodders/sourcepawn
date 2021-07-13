@@ -1453,41 +1453,48 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
     return true;
 }
 
-static void
-substallpatterns(unsigned char* line, int buffersize)
+class MacroProcessor
 {
-    unsigned char *start, *end;
-    int prefixlen;
+  public:
+    MacroProcessor(unsigned char* line, int buffersize)
+     : line_(line),
+       buffersize_(buffersize)
+    {}
 
+    void process() {
+        auto end = line_ + strlen((const char*)line_);
+        int ignored;
+        process_range(line_, end, &ignored);
+    }
+
+  private:
+    unsigned char* process_range(unsigned char* start, unsigned char* end, int* delta);
+    bool enter_macro(const char* start, size_t prefixlen, macro_t* out);
+
+private:
     std::unordered_set<std::string> blocked_macros;
+    unsigned char* line_;
+    int buffersize_;
+};
 
-    auto enter_macro = [&](const char* start, size_t prefixlen, macro_t* out) -> bool {
-        if (!find_subst(start, prefixlen, out))
-            return false;
-        if (blocked_macros.count(out->first))
-            return false;
-        blocked_macros.emplace(out->first);
-        return true;
-    };
-
-    start = line;
-
-    /* track the end of chars substituted in this sequence of replacements */
-    unsigned char* sequence_end = nullptr;
-    while (*start != '\0') {
+unsigned char*
+MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* delta)
+{
+    *delta = 0;
+    while (start < end) {
         /* find the start of a prefix (skip all non-alphabetic characters),
          * also skip strings
          */
-        while (!alpha(*start) && *start != '\0') {
+        while (!alpha(*start) && start < end) {
             /* skip strings */
             if (is_startstring(start)) {
                 start = (unsigned char*)skipstring(start);
-                if (*start == '\0')
+                if (start >= end)
                     break; /* abort loop on error */
             }
             start++; /* skip non-alphapetic character (or closing quote of a string) */
         }
-        if (*start == '\0')
+        if (start >= end)
             break; /* abort loop on error */
         /* if matching the operator "defined", skip it plus the symbol behind it */
         if (strncmp((char*)start, "defined", 7) == 0 && !isalpha((char)*(start + 7))) {
@@ -1502,43 +1509,53 @@ substallpatterns(unsigned char* line, int buffersize)
             continue;
         }
         /* get the prefix (length), look for a matching definition */
-        prefixlen = 0;
-        end = start;
-        while (alphanum(*end)) {
+        size_t prefixlen = 0;
+        unsigned char* prefix_end = start;
+        while (alphanum(*prefix_end) && prefix_end < end) {
             prefixlen++;
-            end++;
+            prefix_end++;
         }
         assert(prefixlen > 0);
 
-        // If we've scanned beyond the end of the previously-subst'd chars in this
-        // sequence of substitutions, clear the blocked macros set and end of sequence.
-        if (sequence_end && start >= sequence_end) {
-            blocked_macros.clear();
-            sequence_end = nullptr;
-        }
-
         macro_t subst;
         if (!enter_macro((const char *)start, prefixlen, &subst)) {
-            start = end; /* no macro with this prefix, skip this prefix */
+            start = prefix_end; /* no macro with this prefix, skip this prefix */
             continue;
         }
 
         /* properly match the pattern and substitute */
         int patternLen = 0;
         int substLen = 0;
-        if (substpattern(start, buffersize - (int)(start - line), subst.first, subst.second, patternLen, substLen)) {
-            if (sequence_end) {
-                sequence_end += substLen - patternLen; /* update end of subst'd chars */
-            } else {
-                sequence_end = start + substLen; /* new sequence, set initial end */
-            }
-        } else {
-            start = end; /* match failed, skip this prefix */
+        if (!substpattern(start, buffersize_ - (int)(start - line_), subst.first, subst.second, patternLen, substLen)) {
+            start = prefix_end;
+            continue;
         }
-        /* match succeeded: do not update "start", because the substitution text
-         * may be matched by other macros
-         */
+
+        blocked_macros.emplace(subst.first);
+        int modified;
+        start = process_range(start, start + substLen, &modified);
+        blocked_macros.erase(blocked_macros.find(subst.first));
+
+        modified += substLen - patternLen;
+        end += modified;
+        *delta += modified;
     }
+    return start;
+}
+
+bool
+MacroProcessor::enter_macro(const char* start, size_t prefixlen, macro_t* out)
+{
+    if (!find_subst(start, prefixlen, out))
+        return false;
+    return blocked_macros.count(out->first) == 0;
+}
+
+static void
+substallpatterns(unsigned char* line, int buffersize)
+{
+    MacroProcessor mp(line, buffersize);
+    mp.process();
 }
 
 /*  scanellipsis
