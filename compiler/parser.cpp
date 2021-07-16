@@ -375,7 +375,7 @@ pc_compile(int argc, char* argv[]) {
         parser.parse();      /* process all input */
 
         sc_parsenum++;
-    } while (sc_reparse);
+    } while (sc_reparse || sc_parsenum == 1);
 
     /* second (or third) pass */
     sc_status = statWRITE; /* set, to enable warnings */
