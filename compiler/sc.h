@@ -121,6 +121,7 @@ enum IdentifierKind {
     iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
     iMETHODMAP = 14,    /* symbol defining a methodmap */
     iENUMSTRUCT = 15,   /* symbol defining an enumstruct */
+    iSCOPE = 16,        /* local scope chain */
 };
 
 class EnumStructVarData;
@@ -186,7 +187,6 @@ struct symbol {
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
     char ident;    /* see below for possible values */
-    int compound;  /* compound level (braces nesting level) */
     int tag;       /* tagname id */
 
     // See uREAD/uWRITTEN above.
@@ -214,6 +214,7 @@ struct symbol {
     bool retvalue : 1;      // function returns (or should return) a value
     bool forward : 1;       // the function is explicitly forwardly declared
     bool native : 1;        // the function is native
+    bool retvalue_used : 1; // the return value is used
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
@@ -223,6 +224,7 @@ struct symbol {
     // General symbol flags.
     bool deprecated : 1;    // symbol is deprecated (avoid use)
     bool queued : 1;        // symbol is queued for a local work algorithm
+    bool explicit_return_type : 1; // transitional return type was specified
 
     union {
         struct {
@@ -306,6 +308,8 @@ struct symbol {
         refers_to_.clear();
         referred_from_.clear();
     }
+
+    bool must_return_value() const;
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
@@ -459,9 +463,6 @@ struct token_t;
  */
 int pc_compile(int argc, char** argv);
 int pc_addconstant(const char* name, cell value, int tag);
-int pc_addtag(const char* name);
-int pc_findtag(const char* name);
-const char* pc_tagname(int tag);
 int parse_decl(declinfo_t* decl, int flags);
 const char* type_to_name(int tag);
 bool parse_new_typename(const token_t* tok, int* tagp);
@@ -477,7 +478,6 @@ constvalue* append_constval(constvalue* table, const char* name, cell val, int i
 constvalue* find_constval(constvalue* table, char* name, int index);
 void delete_consttable(constvalue* table);
 symbol* add_constant(const char* name, cell val, int vclass, int tag);
-int get_actual_compound(symbol* sym);
 
 #if defined WIN32
 #    if !defined snprintf

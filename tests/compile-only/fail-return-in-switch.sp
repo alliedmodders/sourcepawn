@@ -1,5 +1,5 @@
 // warnings_are_errors: true
-int main() {
+void main() {
   funct(2);
   funcg(3);
 }

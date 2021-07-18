@@ -130,7 +130,7 @@ static const char* errmsg[] = {
     /*103*/ "%s was already defined on this %s\n",
     /*104*/ "cannot find any methods for %s\n",
     /*105*/ "cannot find method or property \"%s.%s\"\n",
-    /*106*/ "unused106\n",
+    /*106*/ "invalid expression, must be integral\n",
     /*107*/ "cannot call methods on a function\n",
     /*108*/ "resolution operator (::) can only resolve field offsets of enum structs\n",
     /*109*/ "%s name must start with an uppercase letter\n",
@@ -164,7 +164,7 @@ static const char* errmsg[] = {
     /*137*/ "cannot mix reference and array types\n",
     /*138*/ "const was specified twice\n",
     /*139*/ "could not find type \"%s\"\n",
-    /*140*/ "unused140\n",
+    /*140*/ "function '%s' does not return a value\n",
     /*141*/ "natives, forwards, and public functions cannot return arrays\n",
     /*142*/ "unexpected array expression\n",
     /*143*/ "new-style declarations should not have \"new\"\n",
@@ -258,7 +258,7 @@ static const char* warnmsg[] = {
     /*206*/ "redundant test: constant expression is non-zero\n",
     /*207*/ "unknown #pragma\n",
     /*208*/ "function with tag result used before definition, forcing reparse\n",
-    /*209*/ "function \"%s\" should return a value\n",
+    /*209*/ "function has explicit 'int' tag but does not return a value\n",
     /*210*/ "possible use of symbol before initialization: \"%s\"\n",
     /*211*/ "possibly unintended assignment\n",
     /*212*/ "possibly unintended bitwise operation\n",
@@ -292,4 +292,10 @@ static const char* warnmsg[] = {
     /*239*/ "'%s' is an illegal tag; use %s as a type\n",
     /*240*/ "'%s:' is an old-style tag operation; use view_as<%s>(expression) instead\n",
     /*241*/ "scalar assignment to array is deprecated; use \"{ <val>, ... }\" instead\n",
+    /*242*/ "function \"%s\" should return an explicit value\n",
+    /*243*/ "syntax is deprecated; use parenthesis instead\n",
+};
+
+static const char* errmsg_ex[] = {
+    /*400*/ "function \"%s\" must return a value\n",
 };

@@ -35,6 +35,7 @@
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "semantics.h"
 #include "types.h"
 
 using namespace sp;
@@ -45,6 +46,8 @@ bool Parser::sDetectedIllegalPreprocessorSymbols = false;
 void
 Parser::parse()
 {
+    ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, true);
+
     while (freading) {
         Stmt* decl = nullptr;
 
@@ -502,7 +505,9 @@ int
 Parser::expression(value* lval)
 {
     Expr* expr = hier14();
-    if (!expr->Bind() || !expr->Analyze()) {
+
+    SemaContext sc;
+    if (!expr->Bind(sc) || !expr->Analyze(sc)) {
         sideeffect = TRUE;
         *lval = value::ErrorValue();
         return FALSE;
@@ -1081,23 +1086,8 @@ Parser::var_init(int vclass)
         return new StringExpr(tok->start, tok->str, tok->len);
     }
 
-    if (vclass == sLOCAL)
-        return hier14();
-
-    // We allow assigning symbols to arrays in arguments.
-    token_ident_t ident;
-    if (vclass == sARGUMENT && matchsymbol(&ident))
-        return new SymbolExpr(current_pos(), gAtoms.add(ident.name));
-
-    // Note: this position is not really accurate. Once we eliminate exprconst
-    // we can use hier14() instead and this code will go away.
-    auto pos = current_pos();
-
-    int tag;
-    cell value;
-    if (!exprconst(&value, &tag, nullptr))
-        return new ErrorExpr();
-    return new TaggedValueExpr(pos, tag, value);
+    // We'll check const or symbol-ness for non-sLOCALs in the semantic pass.
+    return hier14();
 }
 
 Expr*
@@ -1143,4 +1133,462 @@ Parser::parse_post_dims(typeinfo_t* type)
         type->dim_exprs = gPoolAllocator.alloc<Expr*>(type->numdim);
         memcpy(type->dim_exprs, old_dims, sizeof(Expr*) * type->numdim);
     }
+}
+
+Stmt*
+Parser::parse_stmt(int* lastindent, bool allow_decl)
+{
+    // :TODO: remove this when compound goes private
+    ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, true);
+
+    if (!freading) {
+        error(36); /* empty statement */
+        return nullptr;
+    }
+    errorset(sRESET, 0);
+
+    cell val;
+    char* st;
+    int tok = lex(&val, &st);
+    if (tok != '{') {
+        insert_dbgline(fline);
+        setline(TRUE);
+    }
+
+    /* lex() has set stmtindent */
+    if (lastindent && tok != tLABEL) {
+        if (*lastindent >= 0 && *lastindent != stmtindent && !indent_nowarn && sc_tabsize > 0)
+            error(217); /* loose indentation */
+        *lastindent = stmtindent;
+        indent_nowarn = FALSE; /* if warning was blocked, re-enable it */
+    }
+
+    if (tok == tSYMBOL) {
+        // We reaaaally don't have enough lookahead for this, so we cheat and try
+        // to determine whether this is probably a declaration.
+        int is_decl = FALSE;
+        if (matchtoken('[')) {
+            if (lexpeek(']'))
+                is_decl = TRUE;
+            lexpush();
+        } else if (lexpeek(tSYMBOL)) {
+            is_decl = TRUE;
+        }
+
+        if (is_decl) {
+            if (!allow_decl) {
+                error(3);
+                return nullptr;
+            }
+            lexpush();
+            return parse_local_decl(tNEWDECL, true);
+        }
+    }
+
+    switch (tok) {
+        case 0:
+            /* nothing */
+            return nullptr;
+        case tINT:
+        case tVOID:
+        case tCHAR:
+        case tOBJECT:
+            lexpush();
+            // Fall-through.
+        case tDECL:
+        case tSTATIC:
+        case tNEW:
+            if (tok == tNEW && matchtoken(tSYMBOL)) {
+                if (lexpeek('(')) {
+                    lexpush();
+                    break;
+                }
+                lexpush(); // we matchtoken'ed, give it back to lex for declloc
+            }
+            if (!allow_decl) {
+                error(3);
+                return nullptr;
+            }
+            return parse_local_decl(tok, tok != tDECL);
+        case tIF:
+            return parse_if();
+        case tCONST:
+            return parse_const(sLOCAL);
+        case tENUM:
+            return parse_enum(sLOCAL);
+        case tCASE:
+        case tDEFAULT:
+            error(14); /* not in switch */
+            return nullptr;
+        case '{': {
+            int save = fline;
+            if (matchtoken('}'))
+                return new StmtList(current_pos());
+            return parse_compound(save == fline);
+        }
+        case ';':
+            error(36); /* empty statement */
+            return nullptr;
+        case tBREAK:
+        case tCONTINUE: {
+            auto pos = current_pos();
+            needtoken(tTERM);
+            if (!in_loop_) {
+                error(24);
+                return nullptr;
+            }
+            return new LoopControlStmt(pos, tok);
+        }
+        case tRETURN: {
+            auto pos = current_pos();
+            Expr* expr = nullptr;
+            if (!matchtoken(tTERM)) {
+                expr = hier14();
+                needtoken(tTERM);
+            }
+            return new ReturnStmt(pos, expr);
+        }
+        case tASSERT: {
+            auto pos = current_pos();
+            Expr* expr = parse_expr(true);
+            needtoken(tTERM);
+            if (!expr)
+                return nullptr;
+            return new AssertStmt(pos, expr);
+        }
+        case tDELETE: {
+            auto pos = current_pos();
+            Expr* expr = parse_expr(false);
+            needtoken(tTERM);
+            if (!expr)
+                return nullptr;
+            return new DeleteStmt(pos, expr);
+        }
+        case tEXIT: {
+            auto pos = current_pos();
+            Expr* expr = nullptr;
+            if (matchtoken(tTERM)) {
+                expr = parse_expr(false);
+                needtoken(tTERM);
+            }
+            return new ExitStmt(pos, expr);
+        }
+        case tDO: {
+            auto pos = current_pos();
+            Stmt* stmt = nullptr;
+            {
+                ke::SaveAndSet<bool> in_loop(&in_loop_, true);
+                stmt = parse_stmt(nullptr, false);
+            }
+            needtoken(tWHILE);
+            bool parens = matchtoken('(');
+            Expr* cond = parse_expr(false);
+            if (parens)
+                needtoken(')');
+            else
+                error(243);
+            needtoken(tTERM);
+            if (!stmt || !cond)
+                return nullptr;
+            return new DoWhileStmt(pos, tok, cond, stmt);
+        }
+        case tWHILE: {
+            auto pos = current_pos();
+            Expr* cond = parse_expr(true);
+            Stmt* stmt = nullptr;
+            {
+                ke::SaveAndSet<bool> in_loop(&in_loop_, true);
+                stmt = parse_stmt(nullptr, false);
+            }
+            if (!stmt || !cond)
+                return nullptr;
+            return new DoWhileStmt(pos, tok, cond, stmt);
+        }
+        case tFOR:
+            return parse_for();
+        case tSWITCH:
+            return parse_switch();
+        default: /* non-empty expression */
+            break;
+    }
+
+    lexpush(); /* analyze token later */
+    Expr* expr = parse_expr(false);
+    needtoken(tTERM);
+    if (!expr)
+        return nullptr;
+    return new ExprStmt(expr->pos(), expr);
+}
+
+Stmt*
+Parser::parse_compound(bool sameline)
+{
+    auto block_start = fline;
+
+    BlockStmt* block = new BlockStmt(current_pos());
+
+    /* if there is more text on this line, we should adjust the statement indent */
+    if (sameline) {
+        int i;
+        const unsigned char* p = lptr;
+        /* go back to the opening brace */
+        while (*p != '{') {
+            assert(p > pline);
+            p--;
+        }
+        assert(*p == '{'); /* it should be found */
+        /* go forward, skipping white-space */
+        p++;
+        while (*p <= ' ' && *p != '\0')
+            p++;
+        assert(*p != '\0'); /* a token should be found */
+        stmtindent = 0;
+        for (i = 0; i < (int)(p - pline); i++)
+            if (pline[i] == '\t' && sc_tabsize > 0)
+                stmtindent += (int)(sc_tabsize - (stmtindent + sc_tabsize) % sc_tabsize);
+            else
+                stmtindent++;
+    }
+
+    int indent = -1;
+    while (matchtoken('}') == 0) { /* repeat until compound statement is closed */
+        if (!freading) {
+            error(30, block_start); /* compound block not closed at end of file */
+            break;
+        }
+        if (Stmt* stmt = parse_stmt(&indent, true))
+            block->stmts().push_back(stmt);
+    }
+
+    return block;
+}
+
+Stmt*
+Parser::parse_local_decl(int tokid, bool autozero)
+{
+    declinfo_t decl = {};
+
+    int declflags = DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT;
+    if (tokid == tNEW || tokid == tDECL)
+        declflags |= DECLFLAG_OLD;
+    else if (tokid == tNEWDECL)
+        declflags |= DECLFLAG_NEW;
+
+    parse_decl(&decl, declflags);
+
+    Parser::VarParams params;
+    params.vclass = (tokid == tSTATIC) ? sSTATIC : sLOCAL;
+    params.autozero = autozero;
+    return parse_var(&decl, params);
+}
+
+Stmt*
+Parser::parse_if()
+{
+    auto ifindent = stmtindent;
+    auto pos = current_pos();
+    auto expr = parse_expr(true);
+    if (!expr)
+        return nullptr;
+    auto stmt = parse_stmt(nullptr, false);
+    Stmt* else_stmt = nullptr;
+    if (matchtoken(tELSE)) {
+        /* to avoid the "dangling else" error, we want a warning if the "else"
+         * has a lower indent than the matching "if" */
+        if (stmtindent < ifindent && sc_tabsize > 0)
+            error(217); /* loose indentation */
+        else_stmt = parse_stmt(nullptr, false);
+        if (!else_stmt)
+            return nullptr;
+    }
+    if (!stmt)
+        return nullptr;
+    return new IfStmt(pos, expr, stmt, else_stmt);
+}
+
+Expr*
+Parser::parse_expr(bool parens)
+{
+    ke::SaveAndSet<bool> in_test(&sc_intest, parens);
+
+    if (parens)
+        needtoken('(');
+
+    Expr* expr = nullptr;
+    CommaExpr* comma = nullptr;
+    while (true) {
+        expr = hier14();
+        if (!expr)
+            break;
+
+        if (comma)
+            comma->exprs().push_back(expr);
+
+        if (!matchtoken(','))
+            break;
+
+        if (!comma) {
+            comma = new CommaExpr(expr->pos());
+            comma->exprs().push_back(expr);
+        }
+    }
+    if (parens)
+        needtoken(')');
+
+    return comma ? comma : expr;
+}
+
+Stmt*
+Parser::parse_for()
+{
+    auto pos = current_pos();
+
+    int endtok = matchtoken('(') ? ')' : tDO;
+    if (endtok != ')')
+        error(243);
+
+    Stmt* init = nullptr;
+    if (!matchtoken(';')) {
+        /* new variable declarations are allowed here */
+        token_t tok;
+
+        switch (lextok(&tok)) {
+            case tINT:
+            case tCHAR:
+            case tOBJECT:
+            case tVOID:
+                lexpush();
+                // Fallthrough.
+            case tNEW:
+                /* The variable in expr1 of the for loop is at a
+                 * 'compound statement' level of it own.
+                 */
+                // :TODO: test needtoken(tTERM) accepting newlines here
+                init = parse_local_decl(tok.id, true);
+                break;
+            case tSYMBOL: {
+                // See comment in statement() near tSYMBOL.
+                bool is_decl = false;
+                if (matchtoken('[')) {
+                    if (lexpeek(']'))
+                        is_decl = true;
+                    lexpush();
+                } else if (lexpeek(tSYMBOL)) {
+                    is_decl = true;
+                }
+
+                if (is_decl) {
+                    lexpush();
+                    init = parse_local_decl(tSYMBOL, true);
+                    break;
+                }
+                // Fall-through to default!
+            }
+            default:
+                lexpush();
+                if (Expr* expr = parse_expr(false))
+                    init = new ExprStmt(expr->pos(), expr);
+                needtoken(';');
+                break;
+        }
+    }
+
+    Expr* cond = nullptr;
+    if (!matchtoken(';')) {
+        cond = parse_expr(false);
+        needtoken(';');
+    }
+
+    Expr* advance = nullptr;
+    if (!matchtoken(endtok)) {
+        advance = parse_expr(false);
+        needtoken(endtok);
+    }
+
+    Stmt* body = nullptr;
+    {
+        ke::SaveAndSet<bool> in_loop(&in_loop_, true);
+        body = parse_stmt(nullptr, false);
+    }
+    if (!body)
+        return nullptr;
+    return new ForStmt(pos, init, cond, advance, body);
+}
+
+Stmt*
+Parser::parse_switch()
+{
+    auto pos = current_pos();
+
+    int endtok = matchtoken('(') ? ')' : tDO;
+    if (endtok != ')')
+        error(243);
+
+    Expr* cond = parse_expr(false);
+    needtoken(endtok);
+
+    SwitchStmt* sw = new SwitchStmt(pos, cond);
+
+    endtok = '}';
+    needtoken('{');
+    while (true) {
+        cell val;
+        char* st;
+        int tok = lex(&val, &st);
+
+        switch (tok) {
+            case tCASE:
+                if (sw->default_case())
+                    error(15); /* "default" case must be last in switch statement */
+                parse_case(sw);
+                break;
+            case tDEFAULT:
+                needtoken(':');
+                if (Stmt* stmt = parse_stmt(nullptr, false)) {
+                    if (sw->default_case())
+                        error(16);
+                    else
+                        sw->set_default_case(stmt);
+                }
+                break;
+            default:
+                if (tok != '}') {
+                    error(2);
+                    indent_nowarn = TRUE;
+                    tok = endtok;
+                }
+                break;
+        }
+        if (tok == endtok)
+            break;
+    }
+
+    if (!cond)
+        return nullptr;
+
+    return sw;
+}
+
+void
+Parser::parse_case(SwitchStmt* sw)
+{
+    PoolList<Expr*> exprs;
+    do {
+        /* do not allow tagnames here */
+        ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
+
+        // hier14 because parse_expr() allows comma exprs
+        if (Expr* expr = hier14())
+            exprs.push_back(expr);
+        if (matchtoken(tDBLDOT))
+            error(1, ":", "..");
+    } while (matchtoken(','));
+
+    needtoken(':');
+
+    Stmt* stmt = parse_stmt(nullptr, false);
+    if (!stmt || exprs.empty())
+        return;
+
+    sw->AddCase(std::move(exprs), stmt);
 }

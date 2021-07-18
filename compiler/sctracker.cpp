@@ -13,6 +13,7 @@
 #include "emitter.h"
 #include "lexer.h"
 #include "sc.h"
+#include "symbols.h"
 #include "types.h"
 
 struct MemoryUse {
@@ -196,15 +197,18 @@ AllocInScope(MemoryScope& scope, int type, int size)
     pc_max_memory = std::max(pc_current_memory, pc_max_memory);
 }
 
-static void
+static int
 PopScope(std::vector<MemoryScope>& scope_list)
 {
     MemoryScope scope = ke::PopBack(&scope_list);
+    int total_use = 0;
     while (!scope.usage.empty()) {
         assert(scope.usage.back().size <= pc_current_memory);
-        pc_current_memory -= scope.usage.back().size;
+        total_use += scope.usage.back().size;
         scope.usage.pop_back();
     }
+    pc_current_memory -= total_use;
+    return total_use;
 }
 
 void
@@ -249,6 +253,7 @@ pushstacklist()
 int
 markstack(int type, int size)
 {
+    pc_current_stack += size;
     AllocInScope(sStackScopes.back(), type, size);
     return size;
 }
@@ -281,6 +286,7 @@ modstk_for_scope(const MemoryScope& scope)
 void
 popheaplist(bool codegen)
 {
+    assert(!sHeapScopes.empty());
     if (codegen)
         modheap_for_scope(sHeapScopes.back());
     PopScope(sHeapScopes);
@@ -313,7 +319,7 @@ popstacklist(bool codegen)
 {
     if (codegen)
         modstk_for_scope(sStackScopes.back());
-    PopScope(sStackScopes);
+    pc_current_stack -= PopScope(sStackScopes);
 }
 
 void
@@ -332,6 +338,12 @@ int
 stack_scope_id()
 {
     return sStackScopes.back().scope_id;
+}
+
+bool
+has_stack_or_heap_scopes()
+{
+    return !sStackScopes.empty() || !sHeapScopes.empty();
 }
 
 methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, const char* name)

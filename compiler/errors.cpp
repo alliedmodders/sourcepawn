@@ -57,6 +57,7 @@ static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char *
 static int errflag;
 static AutoErrorPos* sPosOverride = nullptr;
 bool sc_enable_first_pass_error_display = false;
+bool sc_one_error_per_statement = false;
 
 AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
   : pos_(pos),
@@ -163,7 +164,7 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     else
         report.filename = inpfname;
 
-    if (number < 200 || (number < 300 && sc_warnings_are_errors))
+    if (number < 200 || (number < 300 && sc_warnings_are_errors) || number >= 400)
         report.type = ErrorType::Error;
     else if (number >= 300)
         report.type = ErrorType::Fatal;
@@ -199,6 +200,9 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     } else if (report.number < 300) {
         assert(size_t(report.number - 200) < sizeof(warnmsg) / sizeof(*warnmsg));
         format = warnmsg[report.number - 200];
+    } else if (report.number >= 400) {
+        assert(size_t(report.number - 400) < sizeof(errmsg_ex) / sizeof(*errmsg_ex));
+        format = errmsg_ex[report.number - 400];
     } else {
         assert(report.number >= FIRST_FATAL_ERROR);
         assert(size_t(report.number - FIRST_FATAL_ERROR) < sizeof(fatalmsg) / sizeof(*fatalmsg));
@@ -238,7 +242,7 @@ report_error(ErrorReport* report)
      * actually producing output). Fatal errors may never be ignored.
      */
     if (report->type != ErrorType::Fatal) {
-        if (errflag)
+        if (errflag && sc_one_error_per_statement)
             return;
         if (sc_status != statWRITE && !sc_err_status && !sc_enable_first_pass_error_display)
             return;
@@ -254,7 +258,8 @@ report_error(ErrorReport* report)
         case ErrorType::Fatal:
             errnum++;
             sc_total_errors++;
-            errflag = TRUE;
+            if (sc_one_error_per_statement)
+                errflag = TRUE;
             break;
     }
 

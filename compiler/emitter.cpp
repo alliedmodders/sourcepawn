@@ -40,6 +40,7 @@
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "symbols.h"
 
 DataQueue gDataQueue;
 static int fcurseg; /* the file number (fcurrent) for the active segment */
@@ -888,7 +889,7 @@ ffswitch(int label)
 }
 
 void
-ffcase(cell value, char* labelname, int newtable)
+ffcase(cell value, const char* labelname, int newtable)
 {
     if (newtable) {
         stgwrite("\tcasetbl\n");
@@ -992,6 +993,29 @@ void
 jumplabel(int number)
 {
     stgwrite("\tjump ");
+    outval(number, TRUE);
+    code_idx += opcodes(1) + opargs(1);
+}
+
+void
+jumplabel_cond(int token, int number)
+{
+    switch (token) {
+        case tlGE:
+            stgwrite("\tjsgeq ");
+            break;
+        case tlLE:
+            stgwrite("\tjsleq ");
+            break;
+        case '<':
+            stgwrite("\tjsless ");
+            break;
+        case '>':
+            stgwrite("\tjsgrtr ");
+            break;
+        default:
+            assert(false);
+    }
     outval(number, TRUE);
     code_idx += opcodes(1) + opargs(1);
 }

@@ -1,6 +1,55 @@
 SourcePawn 1.12
 ---------------
 
+## Assignment Changes
+
+The following code is no longer valid:
+
+    // error 017: undefined symbol "i"
+    int i = i;
+
+In previous versions of SourcePawn, the right-hand side of the expression was
+evaluated after creating the left-hand name. We have changed the ordering to
+eliminate a source of confusion and possible bugs. Because the right-hand side
+now evaluates first, the symbol `i` does not exist.
+
+The fix is to explicitly initialize to zero:
+
+    int i = 0;
+
+## Return Value Changes
+
+It is now a warning to omit a return statement. That means the following
+examples are all problematic:
+
+    // Should return an explicit value
+    public Action OnTimer() {
+    }
+
+    // Should return an explicit value
+    public int GetNumber() {
+        if (!DoStuff()) return;
+    }
+
+To ease the transition to the new semantic checker, spcomp will emit a warning
+when the return value is an enum, boolean, or integer. Any other type is an
+error and compilation will fail.
+
+## Syntax Changes
+
+Two obscure syntax options have been deprecated, and will emit a warning. Using
+the keyword `do` before a statement, and omitting parenthesis on control
+conditionals.
+
+    for int i = 0; i < 10; i++ do {
+    }
+
+    switch i do {
+    }
+
+    do {
+    } while i;
+
 ## Array Changes
 
 Type checking of arrays has been greatly improved in SourcePawn 1.12. More

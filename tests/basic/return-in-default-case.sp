@@ -1,7 +1,7 @@
 // warnings_are_errors: true
 #include <shell>
 
-public int main() {
+public void main() {
   printnum(funct(2));
   printnum(funcu(1));
 }

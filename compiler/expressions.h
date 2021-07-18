@@ -71,7 +71,6 @@ int expression(cell* val, int* tag, symbol** symptr, value* _lval);
 int matchtag_string(int ident, int tag);
 int checkval_string(const value* sym1, const value* sym2);
 int checktag_string(int tag, const value* sym1);
-int lvalexpr(svalue* sval);
 void user_inc();
 void user_dec();
 int checktag(int tag, int exprtag);

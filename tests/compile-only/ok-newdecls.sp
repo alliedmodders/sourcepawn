@@ -18,10 +18,12 @@ forward void OnPluginStart();
 
 public int Crab()
 {
+  return 0;
 }
 
 public float Crab2()
 {
+  return 0.0;
 }
 
 public Crab3()

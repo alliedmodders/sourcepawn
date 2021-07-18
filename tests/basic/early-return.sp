@@ -8,7 +8,7 @@ void inner() {
   print("inner.3\n");
 }
 
-public int main() {
+public void main() {
   print("main.1\n");
   inner();
   print("main.2\n");

@@ -144,12 +144,12 @@ class Runner(object):
         ok, path, output = result_tuple
 
         if not ok:
-            if self.args_.remove_bad:
+            if self.args_.diagnose:
+                diagnose_error(path, output.decode('utf8'))
+            elif self.args_.remove_bad:
                 print("rm \"{}\"".format(path))
                 if self.args_.commit:
                     os.unlink(path)
-            elif self.args_.diagnose:
-                diagnose_error(path, output.decode('utf8'))
         else:
             if self.args_.remove_good:
                 print("rm \"{}\"".format(path))

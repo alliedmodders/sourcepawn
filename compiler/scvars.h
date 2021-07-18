@@ -19,9 +19,13 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <setjmp.h>
+
+#include <vector>
+
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
-#include <setjmp.h>
+
 #include "sc.h"
 
 struct memfile_t;
@@ -86,6 +90,7 @@ extern int sc_compression_level;
 extern int pc_max_func_memory;    /* high stack watermark */
 extern int pc_current_memory;     /* current stack watermark */
 extern int pc_max_memory;         /* maximum stack watermark across all stacks */
+extern int pc_current_stack;
 extern int sc_use_stderr;
 
 extern void* inpf;      /* file read from (source or include) */

@@ -152,6 +152,7 @@ void pushstacklist();
 void popstacklist(bool codegen);
 int markstack(int type, int size);
 int stack_scope_id();
+bool has_stack_or_heap_scopes();
 
 /**
  * Generates code to free mem usage, but does not pop the list.  

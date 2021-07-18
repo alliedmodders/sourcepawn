@@ -1,1 +1,1 @@
-(6) : error 079: inconsistent return types (array & non-array)
+(6) : error 046: unknown array size (variable "sNames")

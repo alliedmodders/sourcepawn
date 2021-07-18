@@ -287,22 +287,14 @@ void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
-void delete_symbol(symbol* root, symbol* sym);
-void delete_symbols(symbol* root, int level, int delete_functions);
-void markusage(symbol* sym, int usage);
-symbol* findglb(const char* name);
-symbol* findloc(const char* name);
-symbol* findconst(const char* name);
 symbol* find_enumstruct_field(Type* type, const char* name);
-symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag);
-symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
-                    int numdim, int idxtag[]);
 void declare_methodmap_symbol(methodmap_t* map, bool can_redef);
 void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);
 std::string get_token_string(int tok_id);
 int is_variadic(symbol* sym);
+int alpha(char c);
 
 enum class TerminatorPolicy {
     Newline,
