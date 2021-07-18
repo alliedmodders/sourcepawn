@@ -119,7 +119,6 @@ static void parse_arg_array_initializer(declinfo_t* decl, arginfo* arg);
 static void reduce_referrers(symbol* root);
 static void deduce_liveness(symbol* root);
 static int testsymbols(symbol* root, int level, int testlabs, int testconst);
-static void destructsymbols(symbol* root, int level);
 static void statement(int* lastindent, int allow_decl);
 static void compound(int stmt_sameline);
 static int test(int label, int parens, int invert);
@@ -3276,80 +3275,6 @@ testsymbols(symbol* root, int level, int testlabs, int testconst)
     return entry;
 }
 
-static cell
-calc_array_datasize(symbol* sym, cell* offset)
-{
-    cell length;
-
-    assert(sym != NULL);
-    assert(sym->ident == iARRAY || sym->ident == iREFARRAY);
-    length = sym->dim.array.length;
-    if (sym->dim.array.level > 0) {
-        cell sublength = calc_array_datasize(sym->array_child(), offset);
-        if (offset != NULL)
-            *offset = length * (*offset + sizeof(cell));
-        if (sublength > 0)
-            length *= length * sublength;
-        else
-            length = 0;
-    } else {
-        if (offset != NULL)
-            *offset = 0;
-    }
-    return length;
-}
-
-static void
-destructsymbols(symbol* root, int level)
-{
-    cell offset = 0;
-    int savepri = FALSE;
-    symbol* sym = root->next;
-    while (sym != NULL && get_actual_compound(sym) >= level) {
-        if (sym->ident == iVARIABLE || sym->ident == iARRAY) {
-            char symbolname[16];
-            symbol* opsym;
-            cell elements;
-            /* check that the '~' operator is defined for this tag */
-            operator_symname(symbolname, "~", sym->tag, 0, 1, 0);
-            if ((opsym = findglb(symbolname)) != NULL) {
-                /* save PRI, in case of a return statment */
-                if (!savepri) {
-                    pushreg(sPRI); /* right-hand operand is in PRI */
-                    savepri = TRUE;
-                }
-                /* if the variable is an array, get the number of elements */
-                if (sym->ident == iARRAY) {
-                    elements = calc_array_datasize(sym, &offset);
-                    /* "elements" can be zero when the variable is declared like
-                     *    new mytag: myvar[2][] = { {1, 2}, {3, 4} }
-                     * one should declare all dimensions!
-                     */
-                    if (elements == 0)
-                        error(46, sym->name()); /* array size is unknown */
-                } else {
-                    elements = 1;
-                    offset = 0;
-                }
-                pushval(elements);
-                /* call the '~' operator */
-                address(sym, sPRI);
-                addconst(offset); /* add offset to array data to the address */
-                pushreg(sPRI);
-                assert(opsym->ident == iFUNCTN);
-                ffcall(opsym, 2);
-                if (sc_status != statSKIP)
-                    markusage(opsym,
-                              uREAD); /* do not mark as "used" when this call itself is skipped */
-            }
-        }
-        sym = sym->next;
-    }
-    /* restore PRI, if it was saved */
-    if (savepri)
-        popreg(sPRI);
-}
-
 static constvalue*
 insert_constval(constvalue* prev, constvalue* next, const char* name, cell val, int index) {
     constvalue* cur;
@@ -3663,8 +3588,6 @@ compound(int stmt_sameline)
             count_stmt++;
         }
     }
-    if (lastst != tRETURN)
-        destructsymbols(&loctab, nestlevel);
 
     popheaplist(lastst != tRETURN);
     popstacklist(lastst != tRETURN);
@@ -4055,7 +3978,6 @@ dofor(void)
         /* Clean up the space and the symbol table for the local
          * variable in "expr1".
          */
-        destructsymbols(&loctab, nestlevel);
         popstacklist(true);
         testsymbols(&loctab, nestlevel, FALSE, TRUE); /* look for unused block locals */
         declared = save_decl;
@@ -4297,7 +4219,6 @@ doreturn(void)
         }
         sReturnType |= RETURN_NO_VALUE;
     }
-    destructsymbols(&loctab, 0); /* call destructor for *all* locals */
     if (pc_must_drop_stack) {
         genheapfree(-1);
         genstackfree(-1); /* free everything on the stack */
@@ -4455,7 +4376,6 @@ dobreak(void)
     needtoken(tTERM);
     if (ptr == NULL)
         return;
-    destructsymbols(&loctab, nestlevel);
     genstackfree(ptr[wqBRK]);
     genheapfree(ptr[wqBRK]);
     jumplabel(ptr[wqEXIT]);
@@ -4470,7 +4390,6 @@ docont(void)
     needtoken(tTERM);
     if (ptr == NULL)
         return;
-    destructsymbols(&loctab, nestlevel);
     genstackfree(ptr[wqCONT]);
     genheapfree(ptr[wqCONT]);
     jumplabel(ptr[wqLOOP]);
@@ -4488,7 +4407,6 @@ doexit(void)
         ldconst(0, sPRI);
     }
     ldconst(tag, sALT);
-    destructsymbols(&loctab, 0); /* call destructor for *all* locals */
     ffabort(xEXIT);
 }
 
