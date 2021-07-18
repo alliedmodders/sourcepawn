@@ -2,10 +2,12 @@
 import argparse
 import os
 import progressbar
+import queue
 import re
 import subprocess
 import sys
 import tempfile
+import threading
 
 # Tool for interacting with a .sp corpus to find behavorial differences between
 # compiler versions.
@@ -23,8 +25,14 @@ def main():
                         help = 'Interactive diagnose script')
     parser.add_argument("--remove-good", action = 'store_true', default = False,
                         help = 'Remove good .sp failes on success')
+    parser.add_argument("-j", type = int, default = 1,
+                        help = "Number of compile jobs; does not work with --diagnose")
 
     args = parser.parse_args()
+
+    if args.j > 1 and args.diagnose:
+        print("Cannot use both -j and --diagnose.")
+        return 1
 
     files = []
     get_all_files(args.corpus, '.sp', files)
@@ -38,10 +46,55 @@ class Runner(object):
         self.args_ = args
         self.files_ = files
         self.temp_dir_ = temp_dir
+        self.threads_ = []
+        self.work_ = queue.LifoQueue()
+        self.completed_ = queue.Queue()
+        self.progress_ = 0
 
     def run(self):
-        for i in progressbar.progressbar(range(len(self.files_)), redirect_stdout = True):
-            self.compile(self.files_[i])
+        with progressbar.ProgressBar(max_value = len(self.files_), redirect_stdout = True) as bar:
+            if self.args_.j <= 1:
+                self.run_st(bar)
+            else:
+                self.run_mt(bar)
+
+    def run_st(self, bar):
+        for i in range(len(self.files_)):
+            result_tuple = self.compile(self.files_[i])
+            self.handle_result(result_tuple)
+
+            bar.update(i)
+
+    def run_mt(self, bar):
+        for file in self.files_:
+            self.work_.put(file)
+
+        for i in range(self.args_.j):
+            thread = threading.Thread(None, self.consumer)
+            self.threads_.append(thread)
+            thread.start()
+
+        while self.progress_ < len(self.files_):
+            result_tuple = self.completed_.get()
+            self.handle_result(result_tuple)
+            bar.update(self.progress_)
+            self.progress_ += 1
+
+        for thread in self.threads_:
+            thread.join()
+
+    def consumer(self):
+        while True:
+            try:
+                item = self.work_.get_nowait()
+            except queue.Empty:
+                item = None
+            if item is None:
+                if self.work_.empty():
+                    break
+                continue
+            result_tuple = self.compile(item)
+            self.completed_.put(result_tuple)
 
     def compile(self, path):
         argv = [
@@ -66,6 +119,11 @@ class Runner(object):
             output = e.output
         except:
             pass
+
+        return (ok, path, output)
+
+    def handle_result(self, result_tuple):
+        ok, path, output = result_tuple
 
         if not ok:
             if self.args_.remove_bad:
