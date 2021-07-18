@@ -12,6 +12,7 @@ public main()
   testContiguous(0);
   testContiguous(9);
   testScattered(30000);
+  testScattered(40000);
   testScattered(2000);
   testScattered(100);
   testScattered(0);
@@ -71,7 +72,7 @@ void testScattered(int n)
     print("second\n");
   case 2000:
     print("third\n")
-  case 30000:
+  case 30000,40000:
     print("fourth\n");
   default:
     print("default\n");

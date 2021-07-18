@@ -3,6 +3,6 @@ void PrintToServer(const int[] test)
 {
 }
 
-int main()
+void main()
 {
 }

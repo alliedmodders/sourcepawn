@@ -3,7 +3,7 @@
 enum Handle: {};
 enum Crab: {};
 
-stock bool WriteFile(Handle hndl, const int[] items, int num_items, int size)
+stock void WriteFile(Handle hndl, const int[] items, int num_items, int size)
 {
   for (int i = 0; i < num_items; i++) {
     printnum(view_as<int>(items[i]));

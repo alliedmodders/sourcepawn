@@ -1,4 +1,4 @@
-int main() {
+void main() {
   if (
   {
     int b = c();

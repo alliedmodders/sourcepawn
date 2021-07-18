@@ -31,18 +31,28 @@
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "symbols.h"
 
 bool
-StmtList::Bind()
+StmtList::Bind(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& stmt : stmts_)
-        ok &= stmt->Bind();
+        ok &= stmt->Bind(sc);
     return ok;
 }
 
 bool
-EnumDecl::Bind()
+BlockStmt::Bind(SemaContext& sc)
+{
+    scope_ = CreateScope();
+
+    AutoEnterScope enter_scope(scope_);
+    return StmtList::Bind(sc);
+}
+
+bool
+EnumDecl::Bind(SemaContext& sc)
 {
     int tag = 0;
     if (label_) {
@@ -103,7 +113,7 @@ EnumDecl::Bind()
         if (findconst(field.name->chars()))
             error(field.pos, 50, field.name->chars());
 
-        if (field.value && field.value->Bind() && field.value->Analyze()) {
+        if (field.value && field.value->Bind(sc) && field.value->Analyze(sc)) {
             int field_tag;
             if (field.value->EvalConst(&value, &field_tag)) {
                 matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
@@ -142,7 +152,7 @@ EnumDecl::Bind()
 }
 
 bool
-PstructDecl::Bind()
+PstructDecl::Bind(SemaContext& sc)
 {
     const char* name = name_->chars();
     auto spec = deduce_layout_spec_by_name(name);
@@ -181,7 +191,7 @@ PstructDecl::Bind()
 }
 
 bool
-TypedefDecl::Bind()
+TypedefDecl::Bind(SemaContext& sc)
 {
     Type* prev_type = gTypes.find(name_->chars());
     if (prev_type && prev_type->isDefinedType()) {
@@ -195,14 +205,14 @@ TypedefDecl::Bind()
 }
 
 bool
-UsingDecl::Bind()
+UsingDecl::Bind(SemaContext& sc)
 {
     declare_handle_intrinsics();
     return true;
 }
 
 bool
-TypesetDecl::Bind()
+TypesetDecl::Bind(SemaContext& sc)
 {
     Type* prev_type = gTypes.find(name_->chars());
     if (prev_type && prev_type->isDefinedType()) {
@@ -217,7 +227,7 @@ TypesetDecl::Bind()
 }
 
 bool
-ConstDecl::Bind()
+ConstDecl::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -226,10 +236,29 @@ ConstDecl::Bind()
 }
 
 bool
-VarDecl::Bind()
+is_shadowed_name(const char* name)
 {
+    symbol* scope;
+    if (symbol* sym = findloc(name, &scope)) {
+        if (scope != GetScopeChain())
+            return true;
+    }
+    // ignore implicitly prototyped names.
+    if (symbol* sym = findglb(name))
+        return !(sym->ident == iFUNCTN && !sym->defined);
+    return false;
+}
+
+
+bool
+VarDecl::Bind(SemaContext& sc)
+{
+    // |int x = x| should bind to outer x, not inner.
+    if (init_)
+        init_rhs()->Bind(sc);
+
     if (type_.ident == iARRAY)
-        ResolveArraySize(this);
+        ResolveArraySize(sc, this);
 
     if (type_.tag == pc_tag_void)
         error(pos_, 144);
@@ -261,8 +290,9 @@ VarDecl::Bind()
         // compound blocks (as with standard C); so we must check (and add)
         // the "nesting level" of local variables to verify the
         // multi-definition of symbols.
-        symbol* sym = findloc(name_->chars());
-        if (sym && sym->compound == current_nestlevel())
+        symbol* scope;
+        symbol* sym = findloc(name_->chars(), &scope);
+        if (sym && scope == GetScopeChain())
             error(pos_, 21, name_->chars());
 
         // Although valid, a local variable whose name is equal to that
@@ -305,30 +335,26 @@ VarDecl::Bind()
     if (vclass_ == sGLOBAL && is_static_)
         sym_->fnumber = pos_.file;
 
-    if (vclass_ != sGLOBAL)
-        sym_->compound = current_nestlevel();
-
-    // Note: the LHS bind should always succeed, since we just added the
-    // variable.
-    if (init_ && !init_->Bind())
-        return false;
+    // LHS bind should now succeed.
+    if (init_)
+        init_->left()->Bind(sc);
     return true;
 }
 
 bool
-SymbolExpr::Bind()
+SymbolExpr::Bind(SemaContext& sc)
 {
-    return DoBind(false);
+    return DoBind(sc, false);
 }
 
 bool
-SymbolExpr::BindLval()
+SymbolExpr::BindLval(SemaContext& sc)
 {
-    return DoBind(true);
+    return DoBind(sc, true);
 }
 
 bool
-SymbolExpr::DoBind(bool is_lval)
+SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
 {
     AutoErrorPos aep(pos_);
 
@@ -384,7 +410,7 @@ SymbolExpr::DoBind(bool is_lval)
 }
 
 bool
-ThisExpr::Bind()
+ThisExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -397,47 +423,47 @@ ThisExpr::Bind()
 }
 
 bool
-CallExpr::Bind()
+CallExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!target_->Bind())
+    if (!target_->Bind(sc))
         return false;
 
     bool ok = true;
     for (const auto& arg : args_) {
         if (arg.expr)
-           ok &= arg.expr->Bind();
+           ok &= arg.expr->Bind(sc);
     }
     return ok;
 }
 
 bool
-CommaExpr::Bind()
+CommaExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
     bool ok = true;
     for (const auto& expr : exprs_) {
-       ok &= expr->Bind();
+       ok &= expr->Bind(sc);
     }
     return ok;
 }
 
 bool
-ArrayExpr::Bind()
+ArrayExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
     bool ok = true;
     for (const auto& expr : exprs_) {
-       ok &= expr->Bind();
+       ok &= expr->Bind(sc);
     }
     return ok;
 }
 
 bool
-IsDefinedExpr::Bind()
+IsDefinedExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -453,7 +479,7 @@ IsDefinedExpr::Bind()
 }
 
 bool
-SizeofExpr::Bind()
+SizeofExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -469,36 +495,109 @@ SizeofExpr::Bind()
 }
 
 bool
-ChainedCompareExpr::Bind()
+ChainedCompareExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    bool ok = first_->Bind();
+    bool ok = first_->Bind(sc);
     for (const auto& op : ops_)
-        ok &= op.expr->Bind();
+        ok &= op.expr->Bind(sc);
     return ok;
 }
 
 bool
-BinaryExprBase::Bind()
+BinaryExprBase::Bind(SemaContext& sc)
 {
     bool ok = true;
     if (IsAssignOp(token_))
-        ok &= left_->BindLval();
+        ok &= left_->BindLval(sc);
     else
-        ok &= left_->Bind();
-    ok &= right_->Bind();
+        ok &= left_->Bind(sc);
+    ok &= right_->Bind(sc);
     return ok;
 }
 
 bool
-NewArrayExpr::Bind()
+NewArrayExpr::Bind(SemaContext& sc)
 {
     if (already_analyzed_)
         return true;
 
     bool ok = true;
     for (const auto& expr : exprs_)
-        ok &= expr->Bind();
+        ok &= expr->Bind(sc);
+    return ok;
+}
+
+bool
+IfStmt::Bind(SemaContext& sc)
+{
+    bool ok = cond_->Bind(sc);
+    ok &= on_true_->Bind(sc);
+    if (on_false_)
+        ok &= on_false_->Bind(sc);
+    return ok;
+}
+
+bool
+ReturnStmt::Bind(SemaContext& sc)
+{
+    if (!expr_)
+        return true;
+    return expr_->Bind(sc);
+}
+
+bool
+ExitStmt::Bind(SemaContext& sc)
+{
+    if (!expr_)
+        return true;
+    return expr_->Bind(sc);
+}
+
+bool
+DoWhileStmt::Bind(SemaContext& sc)
+{
+    bool ok = cond_->Bind(sc);
+    ok &= body_->Bind(sc);
+    return ok;
+}
+
+bool
+ForStmt::Bind(SemaContext& sc)
+{
+    bool ok = true;
+
+    ke::Maybe<AutoEnterScope> enter_scope;
+    if (init_) {
+        if (!init_->IsExprStmt()) {
+            scope_ = CreateScope();
+            enter_scope.init(scope_);
+        }
+
+        ok &= init_->Bind(sc);
+    }
+
+    if (cond_)
+        ok &= cond_->Bind(sc);
+    if (advance_)
+        ok &= advance_->Bind(sc);
+    ok &= body_->Bind(sc);
+    return ok;
+}
+
+bool
+SwitchStmt::Bind(SemaContext& sc)
+{
+    bool ok = expr_->Bind(sc);
+
+    if (default_case_)
+        ok &= default_case_->Bind(sc);
+
+    for (const auto& pair : cases_) {
+        for (const auto& expr : pair.first)
+            ok &= expr->Bind(sc);
+        ok &= pair.second->Bind(sc);
+    }
     return ok;
 }

@@ -2,6 +2,7 @@
 //  Pawn compiler - Recursive descend expresion parser
 //
 //  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) AlliedModders LLC 2021
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -19,32 +20,28 @@
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
 //
-//  Version: $Id$
+
 #pragma once
 
-#include "parse-node.h"
+#include "sc.h"
 
-// Determine the static size of an iARRAY based on dimension expressions and
-// array initializers. The array may be converted to an iREFARRAY if it is
-// determined to be dynamic.
-void ResolveArraySize(SemaContext& sc, VarDecl* decl);
-void ResolveArraySize(SemaContext& sc, const token_pos_t& pos, typeinfo_t* type, int vclass);
+symbol* CreateScope();
 
-// Perform type and size checks of an array and its initializer if present.
-bool CheckArrayDeclaration(SemaContext& sc, VarDecl* decl);
-bool CheckArrayInitialization(SemaContext& sc, const typeinfo_t& type, Expr* init);
-
-struct ArrayData {
-    std::vector<cell> iv;
-    std::vector<cell> data;
-    uint32_t zeroes;
-
-    size_t total_size() const {
-        return iv.size() + data.size() + zeroes;
-    }
+class AutoEnterScope final
+{
+  public:
+    AutoEnterScope(symbol* scope);
+    ~AutoEnterScope();
 };
 
-void BuildArrayInitializer(VarDecl* decl, ArrayData* array, cell base_addr);
-void BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
+symbol* GetScopeChain();
 
-cell CalcArraySize(symbol* sym);
+symbol* findglb(const char* name);
+symbol* findloc(const char* name, symbol** scope = nullptr);
+symbol* findconst(const char* name);
+void delete_symbols(symbol* root, int delete_functions);
+void delete_symbol(symbol* root, symbol* sym);
+void markusage(symbol* sym, int usage);
+symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag);
+symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
+                    int numdim, int idxtag[]);

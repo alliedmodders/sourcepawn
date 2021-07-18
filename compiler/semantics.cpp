@@ -2,6 +2,7 @@
 //  Pawn compiler - Recursive descend expresion parser
 //
 //  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) AlliedModders 2021
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -18,24 +19,29 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
+#include "semantics.h"
 
+#include <unordered_set>
+
+#include <amtl/am-raii.h>
 #include "array-helpers.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
 #include "parse-node.h"
+#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "symbols.h"
 
 void
 Stmt::Process()
 {
-    if (!Bind())
+    SemaContext sc;
+    if (!Bind(sc))
         return;
-    if (!Analyze())
+    if (!Analyze(sc))
         return;
 
     if (cc_ok())
@@ -43,23 +49,28 @@ Stmt::Process()
 }
 
 bool
-StmtList::Analyze()
+StmtList::Analyze(SemaContext& sc)
 {
     bool ok = true;
-    for (const auto& stmt : stmts_)
-        ok &= stmt->Analyze();
+    for (const auto& stmt : stmts_) {
+        ok &= stmt->Analyze(sc);
+
+        FlowType flow = stmt->flow_type();
+        if (flow != Flow_None && flow_type() == Flow_None)
+            set_flow_type(flow);
+    }
     return ok;
 }
 
 void
-StmtList::Emit()
+StmtList::DoEmit()
 {
     for (const auto& stmt : stmts_)
         stmt->Emit();
 }
 
 bool
-Decl::Analyze()
+Decl::Analyze(SemaContext& sc)
 {
     // No analysis needed for most decls.
     return true;
@@ -96,7 +107,7 @@ VarDecl::init_rhs() const
 }
 
 bool
-VarDecl::Analyze()
+VarDecl::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -104,15 +115,22 @@ VarDecl::Analyze()
         return AnalyzePstruct();
 
     if (type_.ident == iARRAY || type_.ident == iREFARRAY)
-        return CheckArrayDeclaration(this);
+        return CheckArrayDeclaration(sc, this);
 
     assert(type_.ident == iVARIABLE || type_.ident == iREFERENCE);
 
     // Since we always create an assignment expression, all type checks will
-    // be performed by the Analyze() call here.
-    if (init_ && !init_->Analyze())
+    // be performed by the Analyze(sc) call here.
+    if (init_ && !init_->Analyze(sc))
         return false;
 
+    if (init_ && vclass_ != sLOCAL) {
+        if (!init_rhs()->EvalConst(nullptr, nullptr)) {
+            if (vclass_ == sARGUMENT && init_rhs()->AsSymbolExpr())
+                return true;
+            error(init_rhs()->pos(), 8);
+        }
+    }
     return true;
 }
 
@@ -200,7 +218,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
 }
 
 bool
-ConstDecl::Analyze()
+ConstDecl::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -304,6 +322,53 @@ Expr::EvalConst(cell* value, int* tag)
     return true;
 }
 
+Expr*
+Expr::AnalyzeForTest(SemaContext& sc)
+{
+    if (!Analyze(sc))
+        return nullptr;
+
+    if (val_.ident == iARRAY || val_.ident == iREFARRAY) {
+        if (val_.sym)
+            error(pos_, 33, val_.sym->name());
+        else
+            error(pos_, 29);
+        return nullptr;
+    }
+
+    if (val_.tag != 0 || val_.tag != pc_tag_bool) {
+        UserOperation userop;
+        if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop)) {
+            // Call user op for '!', then invert it. EmitTest will fold out the
+            // extra invert.
+            //
+            // First convert to rvalue, since user operators should never
+            // taken an lvalue.
+            Expr* expr = this;
+            if (expr->lvalue())
+                expr = new RvalueExpr(expr);
+
+            expr = new CallUserOpExpr(userop, expr);
+            expr = new UnaryExpr(expr->pos(), '!', expr);
+            expr->val_.ident = iEXPRESSION;
+            expr->val_.tag = pc_tag_bool;
+            return expr;
+        }
+    }
+
+    if (val_.ident == iCONSTEXPR) {
+        if (val_.constval)
+            error(pos_, 206);
+        else
+            error(pos_, 205);
+    }
+
+    if (lvalue())
+        return new RvalueExpr(this);
+
+    return this;
+}
+
 RvalueExpr::RvalueExpr(Expr* expr)
   : EmitOnlyExpr(expr->pos()),
     expr_(expr)
@@ -325,7 +390,7 @@ RvalueExpr::ProcessUses()
 }
 
 bool
-IsDefinedExpr::Analyze()
+IsDefinedExpr::Analyze(SemaContext& sc)
 {
     val_.ident = iCONSTEXPR;
     val_.constval = value_;
@@ -334,11 +399,11 @@ IsDefinedExpr::Analyze()
 }
 
 bool
-UnaryExpr::Analyze()
+UnaryExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!expr_->Analyze())
+    if (!expr_->Analyze(sc))
         return false;
 
     if (expr_->lvalue())
@@ -398,11 +463,11 @@ UnaryExpr::ProcessUses()
 }
 
 bool
-IncDecExpr::Analyze()
+IncDecExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!expr_->Analyze())
+    if (!expr_->Analyze(sc))
         return false;
     if (!expr_->lvalue()) {
         error(pos_, 22);
@@ -482,17 +547,21 @@ BinaryExpr::HasSideEffects()
 }
 
 bool
-BinaryExpr::Analyze()
+BinaryExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!left_->Analyze() || !right_->Analyze())
+    if (!left_->Analyze(sc) || !right_->Analyze(sc))
         return false;
 
     if (IsAssignOp(token_)) {
         // Mark the left-hand side as written as soon as we can.
         if (symbol* sym = left_->val().sym) {
             markusage(sym, uWRITTEN);
+
+            // Update the line number as a hack so we can warn that it was never
+            // used.
+            sym->lnumber = pos_.line;
         } else if (auto* accessor = left_->val().accessor) {
             if (!accessor->setter) {
                 error(pos_, 152, accessor->name);
@@ -519,12 +588,12 @@ BinaryExpr::Analyze()
         assert(token_ != '=');
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
-            const char* ptr = (left_val.sym != NULL) ? left_val.sym->name() : "-unknown-";
+            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name() : "-unknown-";
             error(pos_, 33, ptr); /* array must be indexed */
             return false;
         }
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
-            const char* ptr = (right_val.sym != NULL) ? right_val.sym->name() : "-unknown-";
+            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name() : "-unknown-";
             error(pos_, 33, ptr); /* array must be indexed */
             return false;
         }
@@ -804,11 +873,11 @@ LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
 }
 
 bool
-LogicalExpr::Analyze()
+LogicalExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!left_->Analyze() || !right_->Analyze())
+    if (!left_->Analyze(sc) || !right_->Analyze(sc))
         return false;
 
     if (left_->lvalue())
@@ -847,15 +916,15 @@ ChainedCompareExpr::HasSideEffects()
 }
 
 bool
-ChainedCompareExpr::Analyze()
+ChainedCompareExpr::Analyze(SemaContext& sc)
 {
-    if (!first_->Analyze())
+    if (!first_->Analyze(sc))
         return false;
     if (first_->lvalue())
         first_ = new RvalueExpr(first_);
 
     for (auto& op : ops_) {
-        if (!op.expr->Analyze())
+        if (!op.expr->Analyze(sc))
             return false;
         if (op.expr->lvalue())
             op.expr = new RvalueExpr(op.expr);
@@ -874,12 +943,12 @@ ChainedCompareExpr::Analyze()
         const auto& right_val = right->val();
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
-            const char* ptr = (left_val.sym != NULL) ? left_val.sym->name() : "-unknown-";
+            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name() : "-unknown-";
             error(pos_, 33, ptr); /* array must be indexed */
             return false;
         }
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
-            const char* ptr = (right_val.sym != NULL) ? right_val.sym->name() : "-unknown-";
+            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name() : "-unknown-";
             error(pos_, 33, ptr); /* array must be indexed */
             return false;
         }
@@ -938,11 +1007,11 @@ ChainedCompareExpr::ProcessUses()
 }
 
 bool
-TernaryExpr::Analyze()
+TernaryExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!first_->Analyze() || !second_->Analyze() || !third_->Analyze())
+    if (!first_->Analyze(sc) || !second_->Analyze(sc) || !third_->Analyze(sc))
         return false;
 
     if (first_->lvalue()) {
@@ -962,13 +1031,13 @@ TernaryExpr::Analyze()
     bool right_array = (left.ident == iARRAY || right.ident == iREFARRAY);
     if (!left_array && right_array) {
         const char* ptr = "-unknown-";
-        if (left.sym != NULL)
+        if (left.sym != nullptr)
             ptr = left.sym->name();
         error(pos_, 33, ptr); /* array must be indexed */
         return false;
     } else if (left_array && !right_array) {
         const char* ptr = "-unknown-";
-        if (right.sym != NULL)
+        if (right.sym != nullptr)
             ptr = right.sym->name();
         error(pos_, 33, ptr); /* array must be indexed */
         return false;
@@ -1016,7 +1085,7 @@ TernaryExpr::ProcessUses()
 }
 
 bool
-CastExpr::Analyze()
+CastExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -1025,7 +1094,7 @@ CastExpr::Analyze()
         return false;
     }
 
-    if (!expr_->Analyze())
+    if (!expr_->Analyze(sc))
         return false;
 
     val_ = expr_->val();
@@ -1054,9 +1123,9 @@ CastExpr::ProcessUses()
 }
 
 bool
-SymbolExpr::Analyze()
+SymbolExpr::Analyze(SemaContext& sc)
 {
-    return AnalyzeWithOptions(false);
+    return AnalyzeWithOptions(sc, false);
 }
 
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
@@ -1064,7 +1133,7 @@ SymbolExpr::Analyze()
 // prepared for this, we have a special analysis option to allow returning
 // types as values.
 bool
-SymbolExpr::AnalyzeWithOptions(bool allow_types)
+SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
 {
     AutoErrorPos aep(pos_);
 
@@ -1142,12 +1211,12 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
 }
 
 bool
-CommaExpr::Analyze()
+CommaExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
     for (const auto& expr : exprs_) {
-        if (!expr->Analyze())
+        if (!expr->Analyze(sc))
             return false;
         has_side_effects_ |= expr->HasSideEffects();
     }
@@ -1177,13 +1246,13 @@ CommaExpr::ProcessUses()
 }
 
 bool
-ArrayExpr::Analyze()
+ArrayExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
     int lasttag = -1;
     for (const auto& expr : exprs_) {
-        if (!expr->Analyze())
+        if (!expr->Analyze(sc))
             return false;
 
         const auto& val = expr->val();
@@ -1204,11 +1273,11 @@ ArrayExpr::Analyze()
 }
 
 bool
-IndexExpr::Analyze()
+IndexExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (!base_->Analyze() || !expr_->Analyze())
+    if (!base_->Analyze(sc) || !expr_->Analyze(sc))
         return false;
     if (base_->lvalue() && base_->val().ident == iACCESSOR)
         base_ = new RvalueExpr(base_);
@@ -1271,7 +1340,7 @@ IndexExpr::Analyze()
         /* if the array index is a field from an enumeration, get the tag name
          * from the field and save the size of the field too.
          */
-        assert(expr.sym == NULL || expr.sym->dim.array.level == 0);
+        assert(expr.sym == nullptr || expr.sym->dim.array.level == 0);
     }
 
     if (base.sym->dim.array.level > 0) {
@@ -1279,7 +1348,7 @@ IndexExpr::Analyze()
         val_.ident = iREFARRAY;
         val_.sym = base.sym->array_child();
 
-        assert(val_.sym != NULL);
+        assert(val_.sym != nullptr);
         assert(val_.sym->dim.array.level == base.sym->dim.array.level - 1);
         return true;
     }
@@ -1305,7 +1374,7 @@ IndexExpr::ProcessUses()
 }
 
 bool
-ThisExpr::Analyze()
+ThisExpr::Analyze(SemaContext& sc)
 {
     assert(sym_->ident == iREFARRAY || sym_->ident == iVARIABLE);
 
@@ -1317,7 +1386,7 @@ ThisExpr::Analyze()
 }
 
 bool
-NullExpr::Analyze()
+NullExpr::Analyze(SemaContext& sc)
 {
     val_.ident = iCONSTEXPR;
     val_.constval = 0;
@@ -1326,7 +1395,7 @@ NullExpr::Analyze()
 }
 
 bool
-TaggedValueExpr::Analyze()
+TaggedValueExpr::Analyze(SemaContext& sc)
 {
     val_.ident = iCONSTEXPR;
     val_.tag = tag_;
@@ -1335,7 +1404,7 @@ TaggedValueExpr::Analyze()
 }
 
 bool
-StringExpr::Analyze()
+StringExpr::Analyze(SemaContext& sc)
 {
     val_.ident = iARRAY;
     val_.constval = -((cell)text_->length() + 1);
@@ -1343,20 +1412,20 @@ StringExpr::Analyze()
     return true;
 }
 
-bool FieldAccessExpr::Analyze() {
-    return AnalyzeWithOptions(false);
+bool FieldAccessExpr::Analyze(SemaContext& sc) {
+    return AnalyzeWithOptions(sc, false);
 }
 
 bool
-FieldAccessExpr::AnalyzeWithOptions(bool from_call)
+FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
 {
     AutoErrorPos aep(pos_);
 
     if (SymbolExpr* expr = base_->AsSymbolExpr()) {
-        if (!expr->AnalyzeWithOptions(true))
+        if (!expr->AnalyzeWithOptions(sc, true))
             return false;
     } else {
-        if (!base_->Analyze())
+        if (!base_->Analyze(sc))
             return false;
     }
 
@@ -1439,9 +1508,9 @@ FieldAccessExpr::ProcessUses()
 }
 
 symbol*
-FieldAccessExpr::BindCallTarget(int token, Expr** implicit_this)
+FieldAccessExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
 {
-    if (!AnalyzeWithOptions(true))
+    if (!AnalyzeWithOptions(sc, true))
         return nullptr;
     if (val_.ident != iFUNCTN)
         return nullptr;
@@ -1462,7 +1531,7 @@ FieldAccessExpr::BindCallTarget(int token, Expr** implicit_this)
 }
 
 symbol*
-SymbolExpr::BindCallTarget(int token, Expr** implicit_this)
+SymbolExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
 {
     AutoErrorPos aep(pos_);
 
@@ -1492,7 +1561,7 @@ SymbolExpr::BindCallTarget(int token, Expr** implicit_this)
 }
 
 symbol*
-SymbolExpr::BindNewTarget()
+SymbolExpr::BindNewTarget(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -1608,7 +1677,7 @@ FieldAccessExpr::HasSideEffects()
 }
 
 bool
-SizeofExpr::Analyze()
+SizeofExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
@@ -1726,16 +1795,16 @@ DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, arginfo* arg)
 }
 
 bool
-CallExpr::Analyze()
+CallExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
     // Note: we do not Analyze the call target. We leave this to the
     // implementation of BindCallTarget.
     if (token_ == tNEW)
-        sym_ = target_->BindNewTarget();
+        sym_ = target_->BindNewTarget(sc);
     else
-        sym_ = target_->BindCallTarget(token_, &implicit_this_);
+        sym_ = target_->BindCallTarget(sc, token_, &implicit_this_);
     if (!sym_) {
         error(pos_, 12);
         return false;
@@ -1803,7 +1872,7 @@ CallExpr::Analyze()
         }
         // Note: we don't do this in ProcessArg, since we don't want to double-call
         // analyze on implicit_this (Analyze is not idempotent).
-        if (param.expr && !param.expr->Analyze())
+        if (param.expr && !param.expr->Analyze(sc))
             return false;
 
         // Add the argument to |argv_| and perform type checks.
@@ -2056,15 +2125,16 @@ CallExpr::MarkUsed()
          */
         if (sym_ != curfunc && !sym_->retvalue) {
             auto symname = funcdisplayname(sym_->name());
-            error(pos_, 209, symname.c_str()); /* function should return a value */
+            error(pos_, 140, symname.c_str()); /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
         sym_->retvalue = true;
     }
+    sym_->retvalue_used = true;
 }
 
-bool StaticAssertStmt::Analyze()
+bool StaticAssertStmt::Analyze(SemaContext& sc)
 {
     if (val_)
         return true;
@@ -2079,7 +2149,7 @@ bool StaticAssertStmt::Analyze()
 }
 
 bool
-NewArrayExpr::Analyze()
+NewArrayExpr::Analyze(SemaContext& sc)
 {
     // We can't handle random refarrays floating around yet, so forbid this.
     error(pos_, 142);
@@ -2087,7 +2157,7 @@ NewArrayExpr::Analyze()
 }
 
 bool
-NewArrayExpr::AnalyzeForInitializer()
+NewArrayExpr::AnalyzeForInitializer(SemaContext& sc)
 {
     if (already_analyzed_)
         return true;
@@ -2095,7 +2165,7 @@ NewArrayExpr::AnalyzeForInitializer()
     val_.ident = iREFARRAY;
     val_.tag = tag_;
     for (auto& expr : exprs_) {
-        if (!expr->Analyze())
+        if (!expr->Analyze(sc))
             return false;
         if (expr->lvalue())
             expr = new RvalueExpr(expr);
@@ -2122,4 +2192,595 @@ NewArrayExpr::ProcessUses()
 {
     for (const auto& expr : exprs_)
         expr->ProcessUses();
+}
+
+bool
+IfStmt::Analyze(SemaContext& sc)
+{
+    if (Expr* expr = cond_->AnalyzeForTest(sc))
+        cond_ = expr;
+
+    // Note: unlike loop conditions, we don't factor in constexprs here, it's
+    // too much work and way less common than constant loop conditions.
+
+    ke::Maybe<bool> always_returns;
+    {
+        AutoCollectSemaFlow flow(sc, &always_returns);
+        if (!on_true_->Analyze(sc))
+            return false;
+    }
+    {
+        AutoCollectSemaFlow flow(sc, &always_returns);
+        if (on_false_ && !on_false_->Analyze(sc))
+            return false;
+    }
+
+    if (on_true_ && on_false_) {
+        FlowType a = on_true_->flow_type();
+        FlowType b = on_false_->flow_type();
+        if (a == b)
+            set_flow_type(a);
+        else if (a != Flow_None && b != Flow_None)
+            set_flow_type(Flow_Mixed);
+    }
+
+    if (*always_returns)
+        sc.set_always_returns(true);
+    return true;
+}
+
+bool
+ExprStmt::Analyze(SemaContext& sc)
+{
+    if (!expr_->Analyze(sc))
+        return false;
+    if (!expr_->HasSideEffects())
+        error(expr_->pos(), 215);
+    return true;
+}
+
+/*  testsymbols - test for unused local or global variables
+ *
+ *  "Public" functions are excluded from the check, since these
+ *  may be exported to other object modules.
+ *  Labels are excluded from the check if the argument 'testlabs'
+ *  is 0. Thus, labels are not tested until the end of the function.
+ *  Constants may also be excluded (convenient for global constants).
+ *
+ *  When the nesting level drops below "level", the check stops.
+ *
+ *  The function returns whether there is an "entry" point for the file.
+ *  This flag will only be 1 when browsing the global symbol table.
+ */
+bool TestSymbols(symbol* root, int testconst)
+{
+    bool entry = false;
+
+    symbol* sym = root->next;
+    while (sym != NULL) {
+        switch (sym->ident) {
+            case iFUNCTN:
+                if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
+                    sym->defined)
+                {
+                    auto symname = funcdisplayname(sym->name());
+                    if (!symname.empty()) {
+                        /* symbol isn't used ... (and not public/native/stock) */
+                        error(sym, 203, symname.c_str());
+                    }
+                }
+                if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
+                    entry = true; /* there is an entry point */
+                break;
+            case iCONSTEXPR:
+                if (testconst && (sym->usage & uREAD) == 0) {
+                    error(sym, 203, sym->name()); /* symbol isn't used: ... */
+                }
+                break;
+            case iMETHODMAP:
+            case iENUMSTRUCT:
+                // Ignore usage on methodmaps and enumstructs.
+                break;
+            default:
+                /* a variable */
+                if (sym->parent() != NULL)
+                    break; /* hierarchical data type */
+                if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
+                    error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
+                } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
+                    error(sym, 204, sym->name()); /* value assigned to symbol is never used */
+                }
+                /* also mark the variable (local or global) to the debug information */
+                if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
+                    insert_dbgsymbol(sym);
+        }
+        sym = sym->next;
+    }
+
+    errorset(sEXPRRELEASE, 0); /* clear error data */
+    errorset(sRESET, 0);
+    return entry;
+}
+
+
+bool
+BlockStmt::Analyze(SemaContext& sc)
+{
+    bool ok = true;
+    for (const auto& stmt : stmts_) {
+        if (ok && !sc.warned_unreachable() && (sc.always_returns() || flow_type() != Flow_None)) {
+            error(stmt->pos(), 225);
+            sc.set_warned_unreachable();
+        }
+        ok &= stmt->Analyze(sc);
+
+        FlowType flow = stmt->flow_type();
+        if (flow != Flow_None && flow_type() == Flow_None)
+            set_flow_type(flow);
+    }
+
+    TestSymbols(scope_, TRUE);
+    return true;
+}
+
+AutoCollectSemaFlow::AutoCollectSemaFlow(SemaContext& sc, ke::Maybe<bool>* out)
+  : sc_(sc),
+    out_(out),
+    old_value_(sc.always_returns())
+{
+    sc.set_always_returns(false);
+}
+
+AutoCollectSemaFlow::~AutoCollectSemaFlow()
+{
+    if (out_->isValid())
+        out_->get() &= sc_.always_returns();
+    else
+        out_->init(sc_.always_returns());
+    sc_.set_always_returns(old_value_);
+}
+
+bool
+ReturnStmt::Analyze(SemaContext& sc)
+{
+    sc.set_always_returns();
+    sc.loop_has_return() = true;
+
+    if (!expr_) {
+        if (curfunc->must_return_value())
+            ReportFunctionReturnError(curfunc);
+        if (sc.void_return())
+            return true;
+        sc.set_void_return(this);
+        return true;
+    }
+
+    if (Stmt* stmt = sc.void_return()) {
+        if (!sc.warned_mixed_returns()) {
+            error(stmt->pos(), 78);
+            error(pos_, 78);
+            sc.set_warned_mixed_returns();
+        }
+    }
+
+    if (!expr_->Analyze(sc))
+        return false;
+
+    if (expr_->lvalue())
+        expr_ = new RvalueExpr(expr_);
+
+    AutoErrorPos aep(expr_->pos());
+
+    if (curfunc->tag == pc_tag_void) {
+        error(pos_, 88);
+        return false;
+    }
+
+    const auto& v = expr_->val();
+    if (v.ident == iARRAY && !v.sym) {
+        /* returning a literal string is not supported (it must be a variable) */
+        error(pos_, 39);
+        return false;
+    }
+    /* see if this function already has a sub type (an array attached) */
+    auto sub = curfunc->array_return();
+    assert(sub == nullptr || sub->ident == iREFARRAY);
+    if (sc.returns_value()) {
+        int retarray = (v.ident == iARRAY || v.ident == iREFARRAY);
+        /* there was an earlier "return" statement in this function */
+        if ((sub == nullptr && retarray) || (sub != nullptr && !retarray)) {
+            error(pos_, 79); /* mixing "return array;" and "return value;" */
+            return false;
+        }
+        if (retarray && curfunc->is_public) {
+            error(pos_, 90, curfunc->name()); /* public function may not return array */
+            return false;
+        }
+    } else {
+        sc.set_returns_value();
+    }
+
+    /* check tagname with function tagname */
+    assert(curfunc != nullptr);
+    if (!matchtag_string(v.ident, v.tag))
+        matchtag(curfunc->tag, v.tag, TRUE);
+
+    if (v.ident == iARRAY || v.ident == iREFARRAY) {
+        if (!CheckArrayReturn())
+            return false;
+    }
+    return true;
+}
+
+bool
+ReturnStmt::CheckArrayReturn()
+{
+    symbol* sub = curfunc->array_return();
+    symbol* sym = expr_->val().sym;
+
+    array_ = {};
+    array_.ident = iARRAY;
+
+    if (sub) {
+        assert(sub->ident == iREFARRAY);
+        // this function has an array attached already; check that the current
+        // "return" statement returns exactly the same array
+        int level = sym->dim.array.level;
+        if (sub->dim.array.level != level) {
+            error(pos_, 48); /* array dimensions must match */
+            return false;
+        }
+
+        for (array_.numdim = 0; array_.numdim <= level; array_.numdim++) {
+            array_.dim[array_.numdim] = (int)sub->dim.array.length;
+            if (sym->dim.array.length != array_.dim[array_.numdim]) {
+                error(pos_, 47); /* array sizes must match */
+                return false;
+            }
+            if (array_.numdim < level) {
+                sym = sym->array_child();
+                sub = sub->array_child();
+                assert(sym != NULL && sub != NULL);
+                // ^^^ both arrays have the same dimensions (this was checked
+                //     earlier) so the dependend should always be found
+            }
+        }
+        if (!sub->dim.array.length) {
+            error(pos_, 128);
+            return false;
+        }
+
+        // Restore it for below.
+        sub = curfunc->array_return();
+    } else {
+        // this function does not yet have an array attached; clone the
+        // returned symbol beneath the current function
+        sub = sym;
+        assert(sub != NULL);
+        int level = sub->dim.array.level;
+        for (array_.numdim = 0; array_.numdim <= level; array_.numdim++) {
+            array_.dim[array_.numdim] = (int)sub->dim.array.length;
+            array_.idxtag[array_.numdim] = sub->x.tags.index;
+            if (array_.numdim < level) {
+                sub = sub->array_child();
+                assert(sub != NULL);
+            }
+            /* check that all dimensions are known */
+            if (array_.dim[array_.numdim] <= 0) {
+                error(pos_, 46, sym->name());
+                return false;
+            }
+        }
+        if (!sub->dim.array.length) {
+            error(pos_, 128);
+            return false;
+        }
+
+        // the address of the array is stored in a hidden parameter; the address
+        // of this parameter is 1 + the number of parameters (times the size of
+        // a cell) + the size of the stack frame and the return address
+        //   base + 0*sizeof(cell)         == previous "base"
+        //   base + 1*sizeof(cell)         == function return address
+        //   base + 2*sizeof(cell)         == number of arguments
+        //   base + 3*sizeof(cell)         == first argument of the function
+        //   ...
+        //   base + ((n-1)+3)*sizeof(cell) == last argument of the function
+        //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
+        assert(curfunc != NULL);
+        int argcount;
+        for (argcount = 0; curfunc->function()->args[argcount].ident != 0; argcount++)
+            /* nothing */;
+        sub = addvariable(curfunc->name(), (argcount + 3) * sizeof(cell), iREFARRAY,
+                          sGLOBAL, curfunc->tag, array_.dim, array_.numdim, array_.idxtag);
+        sub->set_parent(curfunc);
+        curfunc->set_array_return(sub);
+    }
+
+    array_.tag = sub->tag;
+    array_.has_postdims = true;
+    return true;
+}
+
+bool
+AssertStmt::Analyze(SemaContext& sc)
+{
+    if (Expr* expr = expr_->AnalyzeForTest(sc)) {
+        expr_ = expr;
+        return true;
+    }
+    return false;
+}
+
+bool
+DeleteStmt::Analyze(SemaContext& sc)
+{
+    if (!expr_->Analyze(sc))
+        return false;
+
+    const auto& v = expr_->val();
+    switch (v.ident) {
+        case iFUNCTN:
+            error(expr_->pos(), 167, "functions");
+            return false;
+
+        case iARRAY:
+        case iREFARRAY:
+        case iARRAYCELL:
+        case iARRAYCHAR: {
+            symbol* sym = v.sym;
+            if (!sym || sym->dim.array.level > 0) {
+                error(expr_->pos(), 167, "arrays");
+                return false;
+            }
+            break;
+        }
+    }
+
+    if (v.tag == 0) {
+        error(expr_->pos(), 167, "integers");
+        return false;
+    }
+
+    methodmap_t* map = gTypes.find(v.tag)->asMethodmap();
+    if (!map) {
+        error(expr_->pos(), 115, "type", type_to_name(v.tag));
+        return false;
+    }
+
+    for (methodmap_t* iter = map; iter; iter = iter->parent) {
+        if (iter->dtor) {
+            map = iter;
+            break;
+        }
+    }
+
+    if (!map || !map->dtor) {
+        error(expr_->pos(), 115, layout_spec_name(map->spec), map->name);
+        return false;
+    }
+
+    map_ = map;
+    return true;
+}
+
+bool
+ExitStmt::Analyze(SemaContext& sc)
+{
+    if (!expr_->Analyze(sc))
+        return false;
+    if (expr_->lvalue())
+        expr_ = new RvalueExpr(expr_);
+
+    switch (expr_->val().ident) {
+        case iEXPRESSION:
+        case iREFERENCE:
+        case iVARIABLE:
+        case iCONSTEXPR:
+        case iARRAYCHAR:
+        case iARRAYCELL: {
+            AutoErrorPos aep(expr_->pos());
+            matchtag(0, expr_->val().tag, MATCHTAG_COERCE);
+            break;
+        }
+        default:
+            error(expr_->pos(), 106);
+            return false;
+    }
+    return true;
+}
+
+bool
+DoWhileStmt::Analyze(SemaContext& sc)
+{
+    if (Expr* expr = cond_->AnalyzeForTest(sc))
+        cond_ = expr;
+
+    ke::Maybe<cell> constval;
+    if (cond_->val().ident == iCONSTEXPR)
+        constval.init(cond_->val().constval);
+
+    bool has_break = false;
+    bool has_return = false;
+    ke::Maybe<bool> always_returns;
+    {
+        AutoCollectSemaFlow flow(sc, &always_returns);
+        ke::SaveAndSet<bool> auto_break(&sc.loop_has_break(), false);
+        ke::SaveAndSet<bool> auto_return(&sc.loop_has_return(), false);
+
+        if (!body_->Analyze(sc))
+            return false;
+
+        has_break = sc.loop_has_break();
+        has_return = sc.loop_has_return();
+    }
+
+    never_taken_ = constval.isValid() && !constval.get();
+    always_taken_ = constval.isValid() && constval.get();
+
+    if (never_taken_ && token_ == tWHILE) {
+        // Loop is never taken, don't touch the return status.
+    } else if ((token_ == tDO || always_taken_) && !has_break) {
+        // Loop is always taken, and has no break statements.
+        if (always_taken_ && has_return)
+            sc.set_always_returns(true);
+
+        // Loop body ends in a return and has no break statements.
+        if (body_->flow_type() == Flow_Return)
+            set_flow_type(Flow_Return);
+    }
+
+    // :TODO: endless loop warning?
+    return true;
+}
+
+bool
+ForStmt::Analyze(SemaContext& sc)
+{
+    bool ok = true;
+    if (init_ && !init_->Analyze(sc))
+        ok = false;
+    if (cond_) {
+        if (Expr* expr = cond_->AnalyzeForTest(sc))
+            cond_ = expr;
+        else
+            ok = false;
+    }
+    if (advance_ && !advance_->Analyze(sc))
+        ok = false;
+
+    ke::Maybe<cell> constval;
+    if (cond_ && cond_->val().ident == iCONSTEXPR)
+        constval.init(cond_->val().constval);
+
+    bool has_break = false;
+    bool has_return = false;
+    ke::Maybe<bool> always_returns;
+    {
+        AutoCollectSemaFlow flow(sc, &always_returns);
+        ke::SaveAndSet<bool> auto_break(&sc.loop_has_break(), false);
+        ke::SaveAndSet<bool> auto_continue(&sc.loop_has_continue(), false);
+        ke::SaveAndSet<bool> auto_return(&sc.loop_has_return(), false);
+
+        if (!body_->Analyze(sc))
+            ok = false;
+
+        has_break = sc.loop_has_break();
+        has_return = sc.loop_has_return();
+        has_continue_ = sc.loop_has_continue();
+    }
+
+    never_taken_ = constval.isValid() && !constval.get();
+    always_taken_ = !cond_ || (constval.isValid() && constval.get());
+
+    // If the body falls through, then implicitly there is a continue operation.
+    if (body_->flow_type() != Flow_Break && body_->flow_type() != Flow_Return)
+        has_continue_ = true;
+    // If there is a non-constant conditional, there is also an implicit continue.
+    if (!always_taken_)
+        has_continue_ = true;
+
+    if (never_taken_) {
+        // Loop is never taken, don't touch the return status.
+    } else if (always_taken_ && !has_break) {
+        if (has_return) {
+            // Loop is always taken, and has no break statements, and has a return statement.
+            sc.set_always_returns(true);
+        }
+        if (body_->flow_type() == Flow_Return && !has_break)
+            set_flow_type(Flow_Return);
+    }
+
+    if (scope_)
+        TestSymbols(scope_, TRUE);
+    return ok;
+}
+
+bool
+SwitchStmt::Analyze(SemaContext& sc)
+{
+    bool tag_ok = expr_->Analyze(sc);
+    const auto& v = expr_->val();
+    if (tag_ok && (v.ident == iARRAY || v.ident == iREFARRAY))
+        error(expr_->pos(), 33, "-unknown-");
+
+    if (expr_->lvalue())
+        expr_ = new RvalueExpr(expr_);
+
+    ke::Maybe<bool> always_returns;
+    ke::Maybe<FlowType> flow;
+
+    auto update_flow = [&](FlowType other) -> void {
+        if (flow) {
+            if (*flow == Flow_None || other == Flow_None)
+                *flow = Flow_None;
+            else if (*flow != other)
+                *flow = Flow_Mixed;
+        } else {
+            flow.init(other);
+        }
+    };
+
+    std::unordered_set<cell> case_values;
+    for (const auto& case_entry : cases_) {
+        for (Expr* expr : case_entry.first) {
+            if (!expr->Analyze(sc))
+                continue;
+
+            int tag;
+            cell value;
+            if (!expr->EvalConst(&value, &tag)) {
+                error(expr->pos(), 8);
+                continue;
+            }
+            if (tag_ok) {
+                AutoErrorPos aep(expr->pos());
+                matchtag(v.tag, tag, MATCHTAG_COERCE);
+            }
+
+            if (!case_values.count(value))
+                case_values.emplace(value);
+            else
+                error(expr->pos(), 40, value);
+        }
+
+        AutoCollectSemaFlow flow(sc, &always_returns);
+        case_entry.second->Analyze(sc);
+
+        update_flow(case_entry.second->flow_type());
+    }
+
+    if (default_case_) {
+        AutoCollectSemaFlow flow(sc, &always_returns);
+        default_case_->Analyze(sc);
+
+        update_flow(default_case_->flow_type());
+    } else {
+        always_returns.init(false);
+        update_flow(Flow_None);
+    }
+
+    if (*always_returns)
+        sc.set_always_returns(true);
+
+    set_flow_type(*flow);
+
+    // Return value doesn't really matter for statements.
+    return true;
+}
+
+void
+ReportFunctionReturnError(symbol* sym)
+{
+    auto symname = funcdisplayname(sym->name());
+
+    // Normally we want to encourage return values. But for legacy code,
+    // we allow "public int" to warn instead of error.
+    //
+    // :TODO: stronger enforcement when function result is used from call
+    if (sym->tag == 0)
+        error(209, symname.c_str());
+    else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool || !sym->retvalue_used)
+        error(242, symname.c_str());
+    else
+        error(400, symname.c_str());
 }

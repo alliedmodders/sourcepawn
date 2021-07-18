@@ -156,6 +156,7 @@ class SmxListSection : public SmxSection
   bool empty() const override {
     return list_.empty();
   }
+  std::vector<T>& list() { return list_; }
 
  private:
   std::vector<T> list_;

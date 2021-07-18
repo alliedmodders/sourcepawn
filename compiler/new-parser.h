@@ -37,6 +37,7 @@ class Parser : public ExpressionParser
     // Temporary until parser.cpp no longer is shimmed.
     Decl* parse_enum(int vclass);
     Stmt* parse_const(int vclass);
+    Stmt* parse_stmt(int* lastindent, bool allow_decl);
 
     struct VarParams {
         int vclass;
@@ -64,6 +65,17 @@ class Parser : public ExpressionParser
     Decl* parse_typeset();
     Decl* parse_using();
 
+    Stmt* parse_compound(bool sameline);
+    Stmt* parse_local_decl(int tokid, bool autozero);
+    Stmt* parse_if();
+    Stmt* parse_for();
+    Stmt* parse_switch();
+    void parse_case(SwitchStmt* sw);
+
+    // Wrapper around hier14() that allows comma expressions without a wrapping
+    // parens.
+    Expr* parse_expr(bool parens);
+
     Expr* hier14();
     Expr* parse_view_as();
     Expr* plnge(int* opstr, NewHierFn hier);
@@ -86,6 +98,9 @@ class Parser : public ExpressionParser
     Expr* struct_init();
     Expr* parse_new_array(const token_pos_t& pos, int tag);
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
+
+  private:
+    bool in_loop_ = false;
 };
 
 // Implemented in parser.cpp.
@@ -101,5 +116,3 @@ int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int 
 int parse_new_typename(const token_t* tok);
 int reparse_old_decl(declinfo_t* decl, int flags);
 int reparse_new_decl(declinfo_t* decl, int flags);
-bool is_shadowed_name(const char* name);
-int current_nestlevel();

@@ -152,15 +152,16 @@ void ParseConfigs()
 
 public SMCResult NewSection(SMCParser smc, const char[] name, bool opt_quotes)
 {
-
+	return SMCParse_Continue;
 }
 
 public SMCResult KeyValue(SMCParser smc, const char[] key, const char[] value, bool key_quotes, bool value_quotes)
 {
 	g_ConfigMenu.AddItem(key, value);
+	return SMCParse_Continue;
 }
 
 public SMCResult EndSection(SMCParser smc)
 {
-	
+	return SMCParse_Continue;
 }

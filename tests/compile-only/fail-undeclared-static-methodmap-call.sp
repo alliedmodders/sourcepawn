@@ -9,4 +9,4 @@ enum struct TestB {
     }
 }
 
-int main() {}
+public int main() {}

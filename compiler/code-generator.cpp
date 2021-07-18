@@ -21,20 +21,27 @@
 //
 //  Version: $Id$
 
+#include <map>
+
+#include <amtl/am-raii.h>
+
 #include "array-helpers.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
+#include "sclist.h"
 #include "sctracker.h"
+#include "symbols.h"
 
 void
-Decl::Emit()
+Stmt::Emit()
 {
-    // Declarations usually don't emit anything.
+    insert_dbgline(pos_.line);
+    DoEmit();
 }
 
 void
-VarDecl::Emit()
+VarDecl::DoEmit()
 {
     if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct) {
         EmitPstruct();
@@ -84,10 +91,9 @@ void
 VarDecl::EmitLocal()
 {
     if (sym_->ident == iVARIABLE) {
-        declared++;
-        sym_->setAddr(-declared * sizeof(cell));
-        markexpr(sLDECL, name()->chars(), sym_->addr());
         markstack(MEMUSE_STATIC, 1);
+        sym_->setAddr(-pc_current_stack * sizeof(cell));
+        markexpr(sLDECL, name()->chars(), sym_->addr());
 
         if (init_) {
             const auto& val = init_->right()->val();
@@ -109,11 +115,10 @@ VarDecl::EmitLocal()
         cell data_size = array.data.size() + array.zeroes;
         cell total_size = iv_size + data_size;
 
-        declared += total_size;
-        sym_->setAddr(-declared * sizeof(cell));
+        markstack(MEMUSE_STATIC, total_size);
+        sym_->setAddr(-pc_current_stack * sizeof(cell));
         markexpr(sLDECL, name()->chars(), sym_->addr());
         modstk(-(total_size * sizeof(cell)));
-        markstack(MEMUSE_STATIC, total_size);
 
         cell fill_value = 0;
         cell fill_size = 0;
@@ -166,8 +171,9 @@ VarDecl::EmitLocal()
     } else if (sym_->ident == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
-        declared++;
-        sym_->setAddr(-declared * sizeof(cell));
+        markheap(MEMUSE_DYNAMIC, 0);
+        markstack(MEMUSE_STATIC, 1);
+        sym_->setAddr(-pc_current_stack * sizeof(cell));
 
         markexpr(sLDECL, name()->chars(), sym_->addr());
 
@@ -188,15 +194,9 @@ VarDecl::EmitLocal()
         } else {
             assert(false);
         }
-
-        markheap(MEMUSE_DYNAMIC, 0);
-        markstack(MEMUSE_STATIC, 1);
     } else {
         assert(false);
     }
-
-    if (declared + sDEF_AMXSTACK / 2 > pc_stksize)
-        pc_stksize = declared + sDEF_AMXSTACK;
 }
 
 void
@@ -285,6 +285,15 @@ UnaryExpr::DoEmit()
         default:
             assert(false);
     }
+}
+
+void
+UnaryExpr::EmitTest(bool jump_on_true, int target)
+{
+    if (!userop_ && token_ == '!')
+        return expr_->EmitTest(!jump_on_true, target);
+
+    return Expr::EmitTest(jump_on_true, target);
 }
 
 void
@@ -570,6 +579,45 @@ LogicalExpr::EmitTest(bool jump_on_true, int target)
     Expr* last = sequence.back();
     last->EmitTest(jump_on_true, target);
     setlabel(fallthrough);
+}
+
+void
+ChainedCompareExpr::EmitTest(bool jump_on_true, int target)
+{
+    // No optimization for user operators or for compare chains.
+    if (ops_.size() > 1 || ops_[0].userop.sym) {
+        Expr::EmitTest(jump_on_true, target);
+        return;
+    }
+
+    Expr* left = first_;
+    Expr* right = ops_[0].expr;
+
+    right->Emit();
+    pushreg(sPRI);
+    left->Emit();
+    popreg(sALT);
+
+    int token = ops_[0].token;
+    if (!jump_on_true) {
+        switch (token) {
+            case '<':
+                token = tlGE;
+                break;
+            case '>':
+                token = tlLE;
+                break;
+            case tlGE:
+                token = '<';
+                break;
+            case tlLE:
+                token = '>';
+                break;
+            default:
+                assert(false);
+        }
+    }
+    jumplabel_cond(token, target);
 }
 
 void
@@ -927,4 +975,389 @@ NewArrayExpr::DoEmit()
     }
 
     genarray(numdim, autozero_);
+}
+
+void
+IfStmt::DoEmit()
+{
+    int flab1 = getlabel();
+
+    cond_->EmitTest(false, flab1);
+    on_true_->Emit();
+    if (on_false_) {
+        ke::Maybe<int> flab2;
+        if (!on_true_->IsTerminal()) {
+            flab2.init(getlabel());
+            jumplabel(*flab2);
+        }
+        setlabel(flab1);
+        on_false_->Emit();
+        if (flab2)
+            setlabel(*flab2);
+    } else {
+        setlabel(flab1);
+    }
+}
+
+void
+ExprStmt::DoEmit()
+{
+    // Emit even if no side effects
+    expr_->Emit();
+}
+
+void
+BlockStmt::DoEmit()
+{
+    pushstacklist();
+    pushheaplist();
+
+    StmtList::DoEmit();
+
+    bool returns = flow_type() == Flow_Return;
+    popheaplist(!returns);
+    popstacklist(!returns);
+}
+
+void
+ReturnStmt::EmitArrayReturn()
+{
+    ArrayData array;
+    BuildArrayInitializer(array_, nullptr, &array);
+
+    if (array.iv.empty()) {
+        symbol* sub = curfunc->array_return();
+
+        // A much simpler copy can be emitted.
+        load_hidden_arg(curfunc, sub, true);
+
+        cell size = sub->dim.array.length;
+        if (sub->tag == pc_tag_string)
+            size = char_array_cells(size);
+
+        memcopy(size * sizeof(cell));
+        return;
+    }
+
+    auto fun = curfunc->function();
+    if (!fun->array) {
+        fun->array = new ArrayData;
+        *fun->array = std::move(array);
+
+        // No initializer == no data.
+        assert(fun->array->data.empty());
+        assert(fun->array->zeroes);
+
+        cell iv_size = (cell)fun->array->iv.size();
+        cell dat_addr = gDataQueue.dat_address();
+        gDataQueue.Add(std::move(fun->array->iv));
+
+        fun->array->iv.emplace_back(iv_size);
+        fun->array->data.emplace_back(dat_addr);
+    }
+
+    cell dat_addr = fun->array->data[0];
+    cell iv_size = fun->array->iv[0];
+    assert(iv_size);
+    assert(fun->array->zeroes);
+
+    // push.pri                 ; save array expression result
+    // alt = hidden array
+    // initarray.alt            ; initialize IV (if needed)
+    // move.pri
+    // add.c <iv-size * 4>      ; address to data
+    // move.alt
+    // pop.pri
+    // add.c <iv-size * 4>      ; address to data
+    // memcopy <data-size>
+    pushreg(sPRI);
+    load_hidden_arg(curfunc, curfunc->array_return(), false);
+    emit_initarray(sALT, dat_addr, iv_size, 0, 0, 0);
+    moveto1();
+    addconst(iv_size * sizeof(cell));
+    move_alt();
+    popreg(sPRI);
+    addconst(iv_size * sizeof(cell));
+    memcopy(fun->array->zeroes * sizeof(cell));
+}
+
+void
+ReturnStmt::DoEmit()
+{
+    if (expr_) {
+        expr_->Emit();
+
+        const auto& v = expr_->val();
+        if (v.ident == iARRAY || v.ident == iREFARRAY)
+            EmitArrayReturn();
+    } else {
+        /* this return statement contains no expression */
+        ldconst(0, sPRI);
+    }
+
+    genheapfree(-1);
+    genstackfree(-1); /* free everything on the stack */
+    ffret();
+}
+
+void
+AssertStmt::DoEmit()
+{
+    if (!(sc_debug & sCHKBOUNDS))
+        return;
+
+    // this insert dbgline call looks bad.
+    assert(false);
+
+    int flab1 = getlabel();
+    expr_->EmitTest(true, flab1);
+    //insert_dbgline(pos_.line);
+    ffabort(xASSERTION);
+    setlabel(flab1);
+}
+
+void
+DeleteStmt::DoEmit()
+{
+    auto v = expr_->val();
+
+    // Only zap non-const lvalues.
+    bool zap = expr_->lvalue();
+    if (zap && v.sym && v.sym->is_const)
+        zap = false;
+
+    expr_->Emit();
+
+    bool popaddr = false;
+    methodmap_method_t* accessor = nullptr;
+    if (expr_->lvalue()) {
+        if (zap) {
+            switch (v.ident) {
+                case iACCESSOR:
+                    // rvalue() removes iACCESSOR so we store it locally.
+                    accessor = v.accessor;
+                    if (!accessor->setter) {
+                        zap = false;
+                        break;
+                    }
+                    pushreg(sPRI);
+                    popaddr = true;
+                    break;
+                case iARRAYCELL:
+                case iARRAYCHAR:
+                    pushreg(sPRI);
+                    popaddr = true;
+                    break;
+            }
+        }
+
+        rvalue(&v);
+    }
+
+    // push.pri
+    // push.c 1
+    // sysreq.c N 1
+    // stack 8
+    pushreg(sPRI);
+    {
+        ffcall(map_->dtor->target, 1);
+
+        // Only mark usage if we're not skipping codegen.
+        if (sc_status != statSKIP)
+            markusage(map_->dtor->target, uREAD);
+    }
+
+    if (zap) {
+        if (popaddr)
+            popreg(sALT);
+
+        // Store 0 back.
+        ldconst(0, sPRI);
+        if (accessor)
+            invoke_setter(accessor, FALSE);
+        else
+            store(&v);
+    }
+
+    markexpr(sEXPR, NULL, 0);
+}
+
+void
+ExitStmt::DoEmit()
+{
+    if (expr_)
+        expr_->Emit();
+    else
+        ldconst(0, sPRI);
+    ffabort(xEXIT);
+}
+
+struct LoopContext {
+    int break_to;
+    int continue_to;
+    int break_scope_id;
+    int continue_scope_id;
+};
+LoopContext* sLoopContext = nullptr;
+
+void
+DoWhileStmt::DoEmit()
+{
+    assert(token_ == tDO || token_ == tWHILE);
+
+    LoopContext loop_cx;
+    loop_cx.break_to = getlabel();
+    loop_cx.continue_to = getlabel();
+    loop_cx.break_scope_id = stack_scope_id();
+    loop_cx.continue_scope_id = stack_scope_id();
+    ke::SaveAndSet<LoopContext*> push_context(&sLoopContext, &loop_cx);
+
+    setlabel(loop_cx.continue_to);
+
+    if (token_ == tDO) {
+        body_->Emit();
+        if (!body_->IsTerminal())
+            cond_->EmitTest(true, loop_cx.continue_to);
+    } else {
+        cond_->EmitTest(false, loop_cx.break_to);
+        body_->Emit();
+        if (!body_->IsTerminal())
+            jumplabel(loop_cx.continue_to);
+    }
+
+    setlabel(loop_cx.break_to);
+}
+
+void
+LoopControlStmt::DoEmit()
+{
+    assert(sLoopContext);
+    assert(token_ == tBREAK || token_ == tCONTINUE);
+
+    if (token_ == tBREAK) {
+        genstackfree(sLoopContext->break_scope_id);
+        genheapfree(sLoopContext->break_scope_id);
+        jumplabel(sLoopContext->break_to);
+    } else {
+        genstackfree(sLoopContext->continue_scope_id);
+        genheapfree(sLoopContext->continue_scope_id);
+        jumplabel(sLoopContext->continue_to);
+    }
+}
+
+void
+ForStmt::DoEmit()
+{
+    if (scope_) {
+        pushstacklist();
+        pushheaplist();
+    }
+    if (init_)
+        init_->Emit();
+
+    LoopContext loop_cx;
+    loop_cx.break_to = getlabel();
+    loop_cx.continue_to = getlabel();
+    loop_cx.break_scope_id = stack_scope_id();
+    loop_cx.continue_scope_id = stack_scope_id();
+    ke::SaveAndSet<LoopContext*> push_context(&sLoopContext, &loop_cx);
+
+    bool body_always_exits = body_->flow_type() == Flow_Return ||
+                             body_->flow_type() == Flow_Break;
+
+    if (advance_ && !never_taken_) {
+        // top:
+        //   <cond>
+        //   jf break
+        //   <body>
+        // continue:
+        //   <advance>
+        //   jmp top
+        // break:
+        int top = getlabel();
+        setlabel(top);
+
+        if (cond_ && !always_taken_)
+            cond_->EmitTest(false, loop_cx.break_to);
+
+        body_->Emit();
+
+        if (has_continue_) {
+            setlabel(loop_cx.continue_to);
+            advance_->Emit();
+        }
+        if (!body_always_exits)
+            jumplabel(top);
+    } else if (!never_taken_) {
+        // continue:
+        //   <cond>
+        //   jf break
+        //   <body>
+        //   jmp continue
+        // break:
+        setlabel(loop_cx.continue_to);
+
+        if (cond_ && !always_taken_)
+            cond_->EmitTest(false, loop_cx.break_to);
+
+        body_->Emit();
+
+        if (!body_always_exits)
+            jumplabel(loop_cx.continue_to);
+    }
+    setlabel(loop_cx.break_to);
+
+    if (scope_) {
+        popheaplist(true);
+        popstacklist(true);
+    }
+}
+
+void
+SwitchStmt::DoEmit()
+{
+    expr_->Emit();
+
+    auto exit_label = getlabel();
+    auto table_label = getlabel();
+    ffswitch(table_label);
+
+    // Note: we use map for ordering so the case table is sorted.
+    std::map<cell, int> case_labels;
+
+    for (const auto& case_entry : cases_) {
+        Stmt* stmt = case_entry.second;
+        int label = getlabel();
+        for (const auto& expr : case_entry.first) {
+            const auto& v = expr->val();
+            assert(v.ident == iCONSTEXPR);
+
+            case_labels.emplace(v.constval, label);
+        }
+
+        setlabel(label);
+        stmt->Emit();
+        if (!stmt->IsTerminal())
+            jumplabel(exit_label);
+    }
+
+    int default_label = exit_label;
+    if (default_case_) {
+        default_label = getlabel();
+        setlabel(default_label);
+        default_case_->Emit();
+        if (!default_case_->IsTerminal())
+            jumplabel(exit_label);
+    }
+
+    setlabel(table_label);
+
+    std::string deflabel = itoh(default_label);
+    ffcase((int)case_labels.size(), deflabel.c_str(), TRUE);
+    for (const auto& pair : case_labels) {
+        deflabel = itoh(pair.second);
+        ffcase(pair.first, deflabel.c_str(), FALSE);
+    }
+
+    setlabel(exit_label);
 }

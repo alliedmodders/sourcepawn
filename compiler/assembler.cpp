@@ -51,6 +51,7 @@
 #include "scvars.h"
 #include "shared/byte-buffer.h"
 #include "sp_symhash.h"
+#include "symbols.h"
 #include "types.h"
 
 using namespace SourcePawn;
@@ -922,9 +923,18 @@ RttiBuilder::build_debuginfo()
             }
 
             case 'L': {
+                auto addr = str.parse();
+                auto line = str.parse();
+                if (!dbg_lines_->list().empty()) {
+                    auto& last = dbg_lines_->list().back();
+                    if (last.addr == addr) {
+                        last.line = line;
+                        continue;
+                    }
+                }
                 sp_fdbg_line_t& entry = dbg_lines_->add();
-                entry.addr = str.parse();
-                entry.line = str.parse();
+                entry.addr = addr;
+                entry.line = line;
                 break;
             }
 

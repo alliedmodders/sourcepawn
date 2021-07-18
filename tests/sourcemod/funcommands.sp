@@ -258,6 +258,7 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	KillAllFireBombs();
 	KillAllFreezes();
 	KillAllDrugs();
+	return Plugin_Continue;
 }
 
 public void OnAdminMenuReady(Handle aTopMenu)

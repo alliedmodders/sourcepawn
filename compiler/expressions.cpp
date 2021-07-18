@@ -28,13 +28,14 @@
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
-#include "new-parser.h"
 #include "lexer.h"
+#include "new-parser.h"
 #include "optimizer.h"
 #include "sc.h"
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "symbols.h"
 #include "types.h"
 
 /* Function addresses of binary operators for signed operations */
@@ -689,21 +690,6 @@ calc(cell left, void (*oper)(), cell right, char* boolresult)
     assert(false);
     error(29); /* invalid expression, assumed 0 (this should never occur) */
     return 0;
-}
-
-int
-lvalexpr(svalue* sval)
-{
-    memset(sval, 0, sizeof(*sval));
-
-    errorset(sEXPRMARK, 0);
-
-    Parser parser;
-    sval->lvalue = parser.expression(&sval->val);
-
-    errorset(sEXPRRELEASE, 0);
-
-    return sval->val.ident;
 }
 
 int

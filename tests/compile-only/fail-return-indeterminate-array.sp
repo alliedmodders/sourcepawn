@@ -1,6 +1,6 @@
 native void PrintToServer(const char[] fmt, any:...);
 
-stock String:Workaround(val)
+stock char[] Workaround(val)
 {
   char sNames[][] = {"Humans", "Zombies", "Egg"};
   return sNames[val];

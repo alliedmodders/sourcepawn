@@ -276,3 +276,43 @@ TypeDictionary::definePStruct(const char* name, pstruct_t* ps)
     type->setStruct(ps);
     return type;
 }
+
+const char*
+pc_tagname(int tag)
+{
+    if (Type* type = gTypes.find(tag))
+        return type->name();
+    return "__unknown__";
+}
+
+int
+pc_findtag(const char* name)
+{
+    if (Type* type = gTypes.find(name))
+        return type->tagid();
+    return -1;
+}
+
+int
+pc_addtag(const char* name)
+{
+    int val;
+
+    if (name == NULL) {
+        /* no tagname was given, check for one */
+        char* nameptr;
+        if (lex(&val, &nameptr) != tLABEL) {
+            lexpush();
+            return 0; /* untagged */
+        }
+        name = nameptr;
+    }
+
+    return gTypes.defineTag(name)->tagid();
+}
+
+bool
+typeinfo_t::isCharArray() const
+{
+    return numdim == 1 && tag == pc_tag_string;
+}

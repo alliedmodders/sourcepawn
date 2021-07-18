@@ -16,4 +16,5 @@ public Action:MyOldFunc( String:someString[128] )
 }
 public Action MyNewFunc( char someString[128] )
 {
+    return view_as<Action>(0);
 }

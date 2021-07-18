@@ -2,7 +2,7 @@ enum struct A {
 	const int x;
 }
 
-int main() {
+void main() {
 	A t;
 	t.x = 3;
 }

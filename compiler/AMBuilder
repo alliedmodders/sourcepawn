@@ -65,6 +65,7 @@ binary.sources += [
   'scvars.cpp',
   'semantics.cpp',
   'sp_symhash.cpp',
+  'symbols.cpp',
   'type-checker.cpp',
   'types.cpp',
 ]
