@@ -565,3 +565,9 @@ Environment::leaveInvoke()
 {
   top_ = top_->prev();
 }
+
+ISourcePawnEnvironment*
+ISourcePawnEnvironment::New()
+{
+  return new Environment();
+}

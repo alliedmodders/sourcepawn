@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0xD
-#define SOURCEPAWN_API_VERSION 0x0210
+#define SOURCEPAWN_ENGINE2_API_VERSION 0xE
+#define SOURCEPAWN_API_VERSION 0x0211
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -574,6 +574,12 @@ class IPluginRuntime
      */
     virtual int UpdateNativeBindingObject(uint32_t index, INativeCallback* native, uint32_t flags,
                                           void* data) = 0;
+
+    /**
+     * @brief Perform a full validation. Normally validation is lazy to improve
+     * load-time performance. This validates all methods immediately.
+     */
+    virtual bool PerformFullValidation() = 0;
 
     /**
      * @brief Returns whether the plugin was compiled with direct array support.
@@ -1615,6 +1621,22 @@ class ISourcePawnEngine2
      * @brief Returns the environment.
      */
     virtual ISourcePawnEnvironment* Environment() = 0;
+
+    /**
+     * @brief Loads a plugin from memory.
+     *
+     * @param file    Path for display purposes.
+     * @param addr    Plugin structure.
+     * @param size    Plugin structure size.
+     * @param dtor    If non-null, a destructor indicating that ownership of |addr|
+     *                is being transferred. The destructor is invoked even on failure.
+     * @param errpr    Buffer to store an error message (optional).
+     * @param maxlength  Maximum length of the error buffer.
+     * @return    New runtime pointer, or NULL on failure.
+     */
+    virtual IPluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                                 void (*dtor)(uint8_t*), char* error,
+                                                 size_t maxlength) = 0;
 };
 
 // @brief This class is the v3 API for SourcePawn. It provides access to
@@ -1622,6 +1644,8 @@ class ISourcePawnEngine2
 class ISourcePawnEnvironment
 {
   public:
+    static ISourcePawnEnvironment* New();
+
     // The Environment must be freed with the delete keyword. This
     // automatically calls Shutdown().
     virtual ~ISourcePawnEnvironment() {}

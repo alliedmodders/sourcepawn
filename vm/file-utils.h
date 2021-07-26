@@ -29,7 +29,8 @@ class FileReader
 {
  public:
   FileReader(FILE* fp);
-  FileReader(std::unique_ptr<uint8_t[]>&& buffer, size_t length);
+  FileReader(const uint8_t* addr, size_t length);
+  FileReader(uint8_t* addr, size_t length, void (*dtor)(uint8_t*));
 
   const uint8_t* buffer() const {
     return buffer_.get();
@@ -39,7 +40,9 @@ class FileReader
   }
 
  protected:
-  std::unique_ptr<uint8_t[]> buffer_;
+  static void DefaultFree(uint8_t* addr);
+
+  std::unique_ptr<uint8_t, decltype(&DefaultFree)> buffer_;
   size_t length_;
 };
 

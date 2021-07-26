@@ -29,6 +29,8 @@ class SmxV1Image
 {
  public:
   SmxV1Image(FILE* fp);
+  SmxV1Image(uint8_t* addr, size_t length);
+  SmxV1Image(uint8_t* addr, size_t length, void (*dtor)(uint8_t*));
 
   // This must be called to initialize the reader.
   bool validate();
@@ -66,12 +68,14 @@ class SmxV1Image
   const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) override;
 
  private:
-   struct Section
-   {
-     const char* name;
-     uint32_t dataoffs;
-     uint32_t size;
-   };
+  SmxV1Image();
+
+  struct Section
+  {
+    const char* name;
+    uint32_t dataoffs;
+    uint32_t size;
+  };
   const Section* findSection(const char* name);
 
  public:
@@ -213,13 +217,13 @@ class SmxV1Image
   }
 
  private:
-  sp_file_hdr_t* hdr_;
+  sp_file_hdr_t* hdr_ = nullptr;
   std::string error_;
-  const char* header_strings_;
+  const char* header_strings_ = nullptr;
   std::vector<Section> sections_;
 
-  const Section* names_section_;
-  const char* names_;
+  const Section* names_section_ = nullptr;
+  const char* names_ = nullptr;
 
   Blob<sp_file_code_t> code_;
   Blob<sp_file_data_t> data_;
@@ -228,17 +232,17 @@ class SmxV1Image
   List<sp_file_pubvars_t> pubvars_;
   List<sp_file_tag_t> tags_;
 
-  const Section* debug_names_section_;
-  const char* debug_names_;
-  const sp_fdbg_info_t* debug_info_;
+  const Section* debug_names_section_ = nullptr;
+  const char* debug_names_ = nullptr;
+  const sp_fdbg_info_t* debug_info_ = nullptr;
   List<sp_fdbg_file_t> debug_files_;
   List<sp_fdbg_line_t> debug_lines_;
-  const Section* debug_symbols_section_;
-  const sp_fdbg_symbol_t* debug_syms_;
-  const sp_u_fdbg_symbol_t* debug_syms_unpacked_;
+  const Section* debug_symbols_section_ = nullptr;
+  const sp_fdbg_symbol_t* debug_syms_ = nullptr;
+  const sp_u_fdbg_symbol_t* debug_syms_unpacked_ = nullptr;
 
-  const Section* rtti_data_;
-  const smx_rtti_table_header* rtti_methods_;
+  const Section* rtti_data_ = nullptr;
+  const smx_rtti_table_header* rtti_methods_ = nullptr;
 };
 
 } // namespace sp

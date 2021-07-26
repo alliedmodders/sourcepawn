@@ -99,6 +99,7 @@ class PluginRuntime
   const char* GetFilename() override {
     return full_name_.c_str();
   }
+  bool PerformFullValidation() override;
   bool UsesDirectArrays() override;
 
   // Mark builtin natives as bound.
