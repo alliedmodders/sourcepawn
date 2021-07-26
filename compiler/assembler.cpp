@@ -27,31 +27,35 @@
 #include <stdio.h>
 #include <stdlib.h> /* for macro max() */
 #include <string.h>
+
 #include <algorithm>
 #include <vector>
-#include "amxdbg.h"
-#include "errors.h"
-#include "sc.h"
-#include "sclist.h"
-#include "scvars.h"
+
 #include <amtl/am-hashmap.h>
 #include <amtl/am-string.h>
 #include <smx/smx-v1-opcodes.h>
 #include <smx/smx-v1.h>
+#include <sp_vm_api.h>
 #include <zlib/zlib.h>
+#include "amxdbg.h"
+#include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"
 #include "libsmx/data-pool.h"
 #include "libsmx/smx-builder.h"
 #include "libsmx/smx-encoding.h"
 #include "memfile.h"
+#include "sc.h"
+#include "sclist.h"
 #include "sctracker.h"
+#include "scvars.h"
 #include "shared/byte-buffer.h"
 #include "sp_symhash.h"
 #include "types.h"
 
-using namespace sp;
+using namespace SourcePawn;
 using namespace ke;
+using namespace sp;
 
 class AsmReader;
 class CellWriter;
@@ -1578,6 +1582,29 @@ splat_to_binary(const char* binfname, const void* bytes, size_t size)
     fclose(fp);
 }
 
+static bool
+VerifyBinary(const char* file, uint8_t* bytes, size_t size)
+{
+    std::unique_ptr<ISourcePawnEnvironment> env(ISourcePawnEnvironment::New());
+    auto api = env->APIv2();
+
+    char buffer[255];
+    std::unique_ptr<IPluginRuntime> rt(api->LoadBinaryFromMemory(file, bytes, size, nullptr,
+                                                                 buffer, sizeof(buffer)));
+    if (!rt) {
+        fprintf(stderr, "Binary validation failed: %s\n", buffer);
+        return false;
+    }
+
+    ExceptionHandler eh(api);
+    if (!rt->PerformFullValidation()) {
+        const char* message = eh.HasException() ? eh.Message() : "unknown error";
+        fprintf(stderr, "Binary validation failed: %s\n", message);
+        return false;
+    }
+    return true;
+}
+
 void
 assemble(const char* binfname, memfile_t* fin)
 {
@@ -1615,6 +1642,12 @@ assemble(const char* binfname, memfile_t* fin)
 
     header->disksize = 0;
     header->compression = SmxConsts::FILE_COMPRESSION_NONE;
+
+    if (!VerifyBinary(binfname, buffer.bytes(), buffer.size())) {
+        fprintf(stderr, "Internal compilation error detected. Please file a bug:\n");
+        fprintf(stderr, "https://github.com/alliedmodders/sourcepawn/issues/new\n");
+        exit(1);
+    }
 
     splat_to_binary(binfname, buffer.bytes(), buffer.size());
 }

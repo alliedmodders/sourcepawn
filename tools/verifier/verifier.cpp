@@ -25,51 +25,12 @@ bool sVerbose = false;
 static bool
 Verify(IPluginRuntime* rt)
 {
-  std::set<cell_t> seen;
-  std::deque<cell_t> work;
-  for (size_t i = 0; i < rt->GetPublicsNum(); i++) {
-    int err;
-    sp_public_t* fun;
-    if ((err = rt->GetPublicByIndex(i, &fun)) != SP_ERROR_NONE) {
-      fprintf(stderr, "Could not get public function at index %" KE_FMT_SIZET "\n", i);
+  ExceptionHandler eh(sEnv->APIv2());
+  if (!rt->PerformFullValidation()) {
+      const char* message = eh.HasException() ? eh.Message() : "unknown error";
+      fprintf(stderr, "Binary validation failed: %s\n", message);
       return false;
-    }
-    assert(seen.find(fun->code_offs) == seen.end());
-    seen.insert(fun->code_offs);
-    work.push_back(fun->code_offs);
   }
-
-  auto onExternFuncRef = [&seen, &work](cell_t offset) -> void {
-    if (seen.find(offset) != seen.end())
-      return;
-    if (sVerbose)
-      fprintf(stdout, "  Enqueued function reference @ %d\n", offset);
-    seen.insert(offset);
-    work.push_back(offset);
-  };
-
-  while (!work.empty()) {
-    cell_t offset = work.front();
-    work.pop_front();
-
-    if (sVerbose) {
-      const char* name;
-      int err = rt->GetDebugInfo()->LookupFunction(offset, &name);
-      if (err != SP_ERROR_NONE)
-        name = "<unknown>";
-
-      fprintf(stdout, "Verifying %s @ %d...\n", name, offset);
-    }
-
-    MethodVerifier verifier(PluginRuntime::FromAPI(rt), offset);
-    verifier.collectExternalFuncRefs(onExternFuncRef);
-
-    if (!verifier.verify()) {
-      fprintf(stdout, "Failed verification: %d\n", verifier.error());
-      return false;
-    }
-  }
-
   return true;
 }
 

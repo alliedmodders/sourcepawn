@@ -73,6 +73,7 @@ if compiler.target.platform == 'linux' and not compiler.like('emscripten'):
 
 binary.compiler.linkflags[0:0] = [
   SP.libsmx[compiler.target.arch].binary,
+  SP.libsourcepawn_a[compiler.target.arch].binary,
   SP.zlib[compiler.target.arch],
   SP.libamtl[compiler.target.arch],
 ]

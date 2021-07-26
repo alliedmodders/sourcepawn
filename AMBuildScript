@@ -263,6 +263,7 @@ class SourcePawn(object):
     self.spcomp = {}
     self.libspcomp2 = {}
     self.libsourcepawn = {}
+    self.libsourcepawn_a = {}
     self.zlib = None
     self.libsmx = None
     self.libamtl = None
@@ -271,17 +272,22 @@ class SourcePawn(object):
     self.EnsureZlib()
     self.EnsureLibSmx()
     self.EnsureAmtl()
+    self.BuildVM()
     for cxx in self.root.targets:
       spcomp = self.BuildForArch('compiler/AMBuilder', cxx)
       self.spcomp[cxx.target.arch] = spcomp
 
   def BuildVM(self):
+    if self.spshell:
+        return
+
     self.EnsureZlib()
     self.EnsureAmtl()
     for cxx in self.root.targets:
-      spshell, libsourcepawn = self.BuildForArch('vm/AMBuilder', cxx)
+      spshell, libsourcepawn, libsourcepawn_a = self.BuildForArch('vm/AMBuilder', cxx)
       self.spshell[cxx.target.arch] = spshell
       self.libsourcepawn[cxx.target.arch] = libsourcepawn
+      self.libsourcepawn_a[cxx.target.arch] = libsourcepawn_a
 
   def BuildExperimental(self):
     self.EnsureAmtl()
@@ -292,8 +298,8 @@ class SourcePawn(object):
       self.BuildForArch('exp/tools/docparse/AMBuilder', cxx)
 
   def BuildSuite(self):
-    self.BuildSpcomp()
     self.BuildVM()
+    self.BuildSpcomp()
     self.BuildExperimental()
 
   def EnsureAmtl(self):
