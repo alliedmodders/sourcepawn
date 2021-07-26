@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('spcomp', type = str, help = 'Path to spcomp')
     parser.add_argument('corpus', type = str, help = 'Path to plugin corpus')
-    parser.add_argument('-i', '--include', type = str, action = 'append',
+    parser.add_argument('-i', '--include', type = str, action = 'append', default = [],
                         help = 'Extra include paths')
     parser.add_argument('--remove-bad', action = 'store_true', default = False,
                         help = 'Remove bad .sp files on failure')
@@ -27,6 +27,8 @@ def main():
                         help = 'Remove good .sp failes on success')
     parser.add_argument("-j", type = int, default = 1,
                         help = "Number of compile jobs; does not work with --diagnose")
+    parser.add_argument("--verifier", type = str, default = None,
+                        help = "Optional verification tool for .smx files")
 
     args = parser.parse_args()
 
@@ -103,10 +105,13 @@ class Runner(object):
         ]
         for include_path in self.args_.include:
             argv += ['-i', include_path]
-        argv += [
-            '-o',
-            os.path.join(self.temp_dir_, os.path.basename(path)),
-        ]
+
+        output_file = os.path.join(self.temp_dir_, os.path.basename(path))
+        if output_file.endswith('.sp'):
+            output_file = output_file[:-3]
+            output_file += '.smx'
+
+        argv += ['-o', output_file]
 
         ok = False
         output = None
@@ -119,6 +124,19 @@ class Runner(object):
             output = e.output
         except:
             pass
+
+        if ok and self.args_.verifier:
+            argv = [self.args_.verifier, output_file]
+            ok = False
+            try:
+                subprocess.check_output(argv, stderr = subprocess.STDOUT)
+                ok = True
+            except KeyboardInterrupt:
+                raise
+            except subprocess.CalledProcessError as e:
+                output = e.output
+            except:
+                pass
 
         return (ok, path, output)
 

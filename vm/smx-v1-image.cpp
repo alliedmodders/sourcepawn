@@ -17,17 +17,17 @@ using namespace ke;
 using namespace sp;
 
 SmxV1Image::SmxV1Image(FILE* fp)
- : FileReader(fp),
-   hdr_(nullptr),
-   header_strings_(nullptr),
-   names_section_(nullptr),
-   names_(nullptr),
-   debug_names_section_(nullptr),
-   debug_names_(nullptr),
-   debug_syms_(nullptr),
-   debug_syms_unpacked_(nullptr),
-   rtti_data_(nullptr),
-   rtti_methods_(nullptr)
+ : FileReader(fp)
+{
+}
+
+SmxV1Image::SmxV1Image(uint8_t* addr, size_t length)
+ : FileReader(addr, length)
+{
+}
+
+SmxV1Image::SmxV1Image(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
+ : FileReader(addr, length, dtor)
 {
 }
 
@@ -75,7 +75,8 @@ SmxV1Image::validate()
 
       // Allocate the uncompressed image buffer.
       uint32_t compressedSize = hdr_->disksize - hdr_->dataoffs;
-      std::unique_ptr<uint8_t[]> uncompressed = std::make_unique<uint8_t[]>(hdr_->imagesize);
+      std::unique_ptr<uint8_t, decltype(&DefaultFree)> uncompressed(
+          static_cast<uint8_t*>(malloc(hdr_->imagesize)), DefaultFree);
       if (!uncompressed)
         return error("out of memory");
 
