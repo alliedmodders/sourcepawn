@@ -245,23 +245,13 @@ SourcePawnEngine2::LoadPlugin(ICompilation* co, const char* file, int* err)
   return rt;
 }
 
-IPluginRuntime*
-SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxlength)
+static IPluginRuntime*
+LoadImage(std::unique_ptr<SmxV1Image> image, const char* file, char* error, size_t maxlength)
 {
-  FILE* fp = fopen(file, "rb");
-
-  if (!fp) {
-    UTIL_Format(error, maxlength, "file not found");
-    return nullptr;
-  }
-
-  std::unique_ptr<SmxV1Image> image(new SmxV1Image(fp));
-  fclose(fp);
-
   if (!image->validate()) {
     const char* errorMessage = image->errorMessage();
     if (!errorMessage)
-      errorMessage = "file parse error";
+      errorMessage = "binary parse error";
     UTIL_Format(error, maxlength, "%s", errorMessage);
     return nullptr;
   }
@@ -291,6 +281,36 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
     pRuntime->SetNames(file, file);
 
   return pRuntime;
+}
+
+IPluginRuntime*
+SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxlength)
+{
+  FILE* fp = fopen(file, "rb");
+
+  if (!fp) {
+    UTIL_Format(error, maxlength, "file not found");
+    return nullptr;
+  }
+
+  std::unique_ptr<SmxV1Image> image(new SmxV1Image(fp));
+  fclose(fp);
+
+  return LoadImage(std::move(image), file, error, maxlength);
+}
+
+IPluginRuntime*
+SourcePawnEngine2::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                        void (*dtor)(uint8_t*), char* error, size_t maxlength)
+{
+  std::unique_ptr<SmxV1Image> image;
+
+  if (dtor)
+    image = std::make_unique<SmxV1Image>(addr, size, dtor);
+  else
+    image = std::make_unique<SmxV1Image>(addr, size);
+
+  return LoadImage(std::move(image), file, error, maxlength);
 }
 
 SPVM_NATIVE_FUNC

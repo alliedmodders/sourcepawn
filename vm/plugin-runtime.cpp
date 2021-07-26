@@ -11,18 +11,23 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "plugin-runtime.h"
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
+
+#include <unordered_set>
+#include <deque>
+
 #include <smx/smx-v1-opcodes.h>
+#include "builtins.h"
 #include "compiled-function.h"
 #include "environment.h"
-#include "method-info.h"
-#include "plugin-context.h"
-#include "builtins.h"
-
 #include "md5/md5.h"
+#include "method-info.h"
+#include "method-verifier.h"
+#include "plugin-context.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -606,6 +611,52 @@ PluginRuntime::LookupLineAddress(const uint32_t line, const char* file, ucell_t*
   if (!image_->LookupLineAddress(line, file, addr))
     return SP_ERROR_NOT_FOUND;
   return SP_ERROR_NONE;
+}
+
+bool
+PluginRuntime::PerformFullValidation()
+{
+  std::unordered_set<cell_t> seen;
+  std::deque<cell_t> work;
+
+  Environment* env = Environment::get();
+  for (size_t i = 0; i < GetPublicsNum(); i++) {
+    int err;
+    sp_public_t* fun;
+    if ((err = GetPublicByIndex(i, &fun)) != SP_ERROR_NONE) {
+      env->ReportErrorFmt(SP_ERROR_USER, "Could not get public function at index %" KE_FMT_SIZET "\n", i);
+      return false;
+    }
+    assert(seen.find(fun->code_offs) == seen.end());
+    seen.insert(fun->code_offs);
+    work.push_back(fun->code_offs);
+  }
+
+  auto onExternFuncRef = [&seen, &work](cell_t offset) -> void {
+    if (seen.find(offset) != seen.end())
+      return;
+    seen.insert(offset);
+    work.push_back(offset);
+  };
+
+  while (!work.empty()) {
+    cell_t offset = work.front();
+    work.pop_front();
+
+    const char* name;
+    int err = GetDebugInfo()->LookupFunction(offset, &name);
+    if (err != SP_ERROR_NONE)
+      name = "<unknown>";
+
+    MethodVerifier verifier(this, offset);
+    verifier.collectExternalFuncRefs(onExternFuncRef);
+
+    if (!verifier.verify()) {
+      env->ReportErrorFmt(SP_ERROR_USER, "Method %s failed verification: %d\n", name, verifier.error());
+      return false;
+    }
+  }
+  return true;
 }
 
 bool
