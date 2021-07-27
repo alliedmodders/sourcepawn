@@ -73,7 +73,6 @@ extern int sc_tabsize;            /* number of spaces that a TAB represents */
 extern int sc_status;             /* read/write status */
 extern int sc_err_status;         /* TRUE if errors should be generated even if sc_status = SKIP */
 extern int sc_rationaltag;        /* tag for rational numbers */
-extern int pc_optimize;           /* (peephole) optimization level */
 extern int pc_memflags;           /* special flags for the stack/heap usage */
 extern int pc_functag;            /* global function tag */
 extern int pc_tag_string;         /* global String tag */

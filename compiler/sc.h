@@ -421,11 +421,6 @@ enum {
     statSKIP,  /* skipping output */
 };
 
-/* (reversed) evaluation of staging buffer */
-#define sSTARTREORDER 0x01
-#define sENDREORDER 0x02
-#define sEXPRSTART 0x80 /* top bit set, rest is free */
-
 #define sDOCSEP 0x01 /* to separate documentation comments between functions */
 
 /* codes for ffabort() */
