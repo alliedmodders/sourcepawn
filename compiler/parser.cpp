@@ -2344,19 +2344,9 @@ funcstub(int tokid, declinfo_t* decl, const int* thistag)
         }
         if (matchtoken('=')) {
             /* allow number or symbol */
-            if (matchtoken(tSYMBOL)) {
+            if (needtoken(tSYMBOL)) {
                 tokeninfo(&val, &str);
                 insert_alias(sym->name(), str);
-            } else {
-                exprconst(&val, NULL, NULL);
-                sym->setAddr(val);
-                /* At the moment, I have assumed that this syntax is only valid if
-                 * val < 0. To properly mix "normal" native functions and indexed
-                 * native functions, one should use negative indices anyway.
-                 * Special code for a negative index in sym->addr() exists in SC4.C
-                 * (ffcall()) and in SC6.C (the loops for counting the number of native
-                 * variables and for writing them).
-                 */
             }
         }
     }
