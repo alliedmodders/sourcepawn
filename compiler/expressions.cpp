@@ -29,7 +29,7 @@
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
-#include "new-parser.h"
+#include "parser.h"
 #include "sc.h"
 #include "sclist.h"
 #include "sctracker.h"
