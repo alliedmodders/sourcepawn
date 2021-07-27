@@ -187,8 +187,6 @@ pc_compile(int argc, char* argv[]) {
     inpfname = (char*)malloc(_MAX_PATH);
     if (inpfname == NULL)
         error(FATAL_ERROR_OOM); /* insufficient memory */
-    if (!phopt_init())
-        error(FATAL_ERROR_OOM); /* insufficient memory */
 
     setopt(argc, argv, outfname, errfname, incfname);
     strcpy(binfname, outfname);
@@ -433,7 +431,6 @@ cleanup:
     }
     if (litq != NULL)
         free(litq);
-    phopt_cleanup();
     stgbuffer_cleanup();
 
     gCurrentFileStack.clear();
@@ -580,7 +577,6 @@ initglobals(void)
     warnnum = 0;                       /* number of warnings */
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_debug = sCHKBOUNDS | sSYMBOLIC; /* sourcemod: full debug stuff */
-    pc_optimize = sOPTIMIZE_NONE;      /* sourcemod:  no optimization */
     sc_needsemicolon = FALSE;          /* semicolon required to terminate expressions? */
     sc_require_newdecls = FALSE;
     sc_dataalign = sizeof(cell);
@@ -712,12 +708,9 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     sc_syntax_only = opt_syntax_only.value();
     sc_use_stderr = opt_stderr.value();
 
-    pc_optimize = opt_optlevel.value();
-    if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER ||
-        pc_optimize == sOPTIMIZE_NOMACRO)
-    {
+    int pc_optimize = opt_optlevel.value();
+    if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER)
         Usage(parser, argc, argv);
-    }
 
     if (opt_prefixfile.hasValue())
         SafeStrcpy(pname, _MAX_PATH, opt_prefixfile.value().c_str());

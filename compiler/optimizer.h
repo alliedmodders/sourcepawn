@@ -22,11 +22,8 @@
 #include "amx.h"
 
 void stgbuffer_cleanup(void);
-void stgmark(char mark);
 void stgwrite(const char* st);
 void stgout(int index);
 void stgdel(int index, cell code_index);
 int stgget(int* index, cell* code_index);
 void stgset(int onoff);
-int phopt_init(void);
-int phopt_cleanup(void);
