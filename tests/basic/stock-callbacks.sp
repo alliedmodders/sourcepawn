@@ -2,7 +2,7 @@
 
 public main()
 {
-  invoke(1, callback);
+  invoke(callback, 1);
 }
 
 stock do_print(const char[] text)
