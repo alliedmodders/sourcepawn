@@ -1,0 +1,7 @@
+hello
+Exception thrown: What the crab?!
+  [0] report_error()
+  [1] restore-frame.sp::callback, line 6
+  [2] execute()
+  [3] restore-frame.sp::main, line 14
+10
