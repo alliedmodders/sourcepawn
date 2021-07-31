@@ -441,6 +441,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
   /* Save our previous state. */
   cell_t save_sp = sp_;
   cell_t save_hp = hp_;
+  cell_t save_frm = frm_;
 
   /* Push parameters */
   sp_ -= sizeof(cell_t) * (num_params + 1);
@@ -475,6 +476,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
 
   sp_ = save_sp;
   hp_ = save_hp;
+  frm_ = save_frm;
   return ok;
 }
 
