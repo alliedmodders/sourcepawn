@@ -42,6 +42,7 @@ class PcodeReader
     auto& code = rt->code();
     code_ = reinterpret_cast<const cell_t*>(code.bytes);
     cip_ = code_ + (startOffset / sizeof(cell_t));
+    insn_begin_ = cip_;
     stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
   }
   PcodeReader(PluginRuntime* rt, Block* block, T* visitor)
@@ -54,6 +55,7 @@ class PcodeReader
     auto& code = rt->code();
     code_ = reinterpret_cast<const cell_t*>(code.bytes);
     cip_ = reinterpret_cast<const cell_t*>(block->start());
+    insn_begin_ = cip_;
 
     const uint8_t* end = block->end();
     if (block->endType() == BlockEnd::Insn)
@@ -69,6 +71,7 @@ class PcodeReader
 
   // Read the next opcode, return true on success, false otherwise.
   bool visitNext() {
+    insn_begin_ = cip_;
     OPCODE op = (OPCODE)readCell();
     return visitOp(op);
   }
@@ -85,8 +88,13 @@ class PcodeReader
   }
 
   // Return the current position in the code stream.
-  const cell_t* const& cip() const {
+  const cell_t* cip() const {
     return cip_;
+  }
+
+  // Return the start of the current instruction.
+  const cell_t* const& insn_begin() const {
+    return insn_begin_;
   }
   cell_t cip_offset() const {
     return (cip_ - code_) * sizeof(cell_t);
@@ -671,6 +679,7 @@ class PcodeReader
   PluginRuntime* rt_;
   T* visitor_;
   const cell_t* code_;
+  const cell_t* insn_begin_;
   const cell_t* cip_;
   const cell_t* stop_at_;
 };
