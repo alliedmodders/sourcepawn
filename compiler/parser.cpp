@@ -62,6 +62,7 @@
 #    define dos_setdrive(i) _chdrive(i)
 #endif
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
+#    define NOMINMAX
 #    include <windows.h>
 #endif
 
