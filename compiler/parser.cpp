@@ -88,6 +88,13 @@
 #define VERSION_STR "3.2.3636"
 #define VERSION_INT 0x0302
 
+#ifdef max
+# undef max
+#endif
+#ifdef min
+# undef min
+#endif
+
 using namespace ke;
 
 int pc_anytag = 0;
