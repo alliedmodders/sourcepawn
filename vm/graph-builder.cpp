@@ -123,6 +123,11 @@ IsControlOpcode(OPCODE op)
 auto
 GraphBuilder::scanFlow() -> FlowState
 {
+  if (!more()) {
+    error(SP_ERROR_INVALID_INSTRUCTION);
+    return FlowState::Error;
+  }
+
   uint32_t cell_number = getCellNumber(cip_);
   assert(insn_bitmap_.test(cell_number));
 
