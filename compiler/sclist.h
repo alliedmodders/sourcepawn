@@ -34,8 +34,8 @@ struct macro_t {
     const char* second;
 };
 
-void insert_alias(const char* name, const char* alias);
-bool lookup_alias(char* target, const char* name);
+void insert_alias(const char* name, sp::Atom* atom);
+sp::Atom* lookup_alias(const char* name);
 void delete_aliastable(void);
 stringlist* insert_path(char* path);
 char* get_path(int index);

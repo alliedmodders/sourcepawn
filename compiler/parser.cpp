@@ -28,6 +28,7 @@
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
+#include "lexer-inl.h"
 #include "parser.h"
 #include "parse-node.h"
 #include "sc.h"
@@ -41,6 +42,17 @@ using namespace sp;
 
 bool Parser::sInPreprocessor = false;
 bool Parser::sDetectedIllegalPreprocessorSymbols = false;
+int Parser::sActive = 0;
+
+Parser::Parser()
+{
+    sActive++;
+}
+
+Parser::~Parser()
+{
+    sActive--;
+}
 
 void
 Parser::parse()
@@ -104,6 +116,9 @@ Parser::parse()
             case tUSING:
                 decl = parse_using();
                 break;
+            case tSYN_PRAGMA_UNUSED:
+                decl = parse_pragma_unused();
+                break;
             case '}':
                 error(54); /* unmatched closing brace */
                 break;
@@ -119,8 +134,13 @@ Parser::parse()
 
         // Until we can eliminate the two-pass parser, top-level decls must be
         // resolved immediately.
-        if (decl)
+        if (decl) {
+            errorset(sRESET, 0);
+
             decl->Process();
+        }
+
+        pc_deprecate = {};
     }
 }
 
@@ -131,7 +151,7 @@ Parser::parse_unknown_decl(const token_t* tok)
 
     if (tok->id == tNATIVE || tok->id == tFORWARD) {
         parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
-        funcstub(tok->id, &decl, NULL);
+        Parser::ParseInlineFunction(tok->id, decl, nullptr);
         return nullptr;
     }
 
@@ -193,11 +213,23 @@ Parser::parse_unknown_decl(const token_t* tok)
         params.is_stock = !!fstock;
         return parse_var(&decl, params);
     } else {
-        if (!newfunc(&decl, NULL, fpublic, fstatic, fstock, NULL)) {
-            // Illegal function or declaration. Drop the line, reset literal queue.
-            error(10);
-            lexclr(TRUE);
+        auto pos = current_pos();
+        FunctionInfo* info = new FunctionInfo(pos, decl);
+        info->set_name(gAtoms.add(decl.name));
+        if (fpublic)
+            info->set_is_public();
+        if (fstatic)
+            info->set_is_static();
+        if (fstock)
+            info->set_is_stock();
+        if (!parse_function(info, 0))
+            return nullptr;
+        auto stmt = new FunctionDecl(pos, info);
+        if (!pc_deprecate.empty()) {
+            stmt->set_deprecate(pc_deprecate);
+            pc_deprecate = {};
         }
+        return stmt;
     }
     return nullptr;
 }
@@ -430,6 +462,33 @@ Parser::parse_using()
 }
 
 Stmt*
+Parser::parse_pragma_unused()
+{
+    PragmaUnusedStmt* stmt = new PragmaUnusedStmt(current_pos());
+
+    int tok = lex_same_line();
+    for (;;) {
+        if (tok != tSYMBOL) {
+            error(1, get_token_string(tSYMBOL).c_str(), get_token_string(tok).c_str());
+            lexclr(TRUE);
+            break;
+        }
+
+        sp::Atom* name = gAtoms.add(current_token()->str);
+        stmt->names().emplace_back(name);
+
+        tok = lex_same_line();
+        if (tok == ',') {
+            tok = lex_same_line();
+            continue;
+        }
+        if (tok == tEOL)
+            break;
+    }
+    return stmt;
+}
+
+Stmt*
 Parser::parse_const(int vclass)
 {
     StmtList* list = nullptr;
@@ -511,7 +570,7 @@ Parser::expression(value* lval)
         *lval = value::ErrorValue();
         return FALSE;
     }
-    expr->ProcessUses();
+    expr->ProcessUses(sc);
 
     *lval = expr->val();
     if (cc_ok())
@@ -1149,10 +1208,6 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
     cell val;
     char* st;
     int tok = lex(&val, &st);
-    if (tok != '{') {
-        insert_dbgline(fline);
-        setline(TRUE);
-    }
 
     /* lex() has set stmtindent */
     if (lastindent && tok != tLABEL) {
@@ -1222,7 +1277,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
         case '{': {
             int save = fline;
             if (matchtoken('}'))
-                return new StmtList(current_pos());
+                return new BlockStmt(current_pos());
             return parse_compound(save == fline);
         }
         case ';':
@@ -1307,6 +1362,8 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return parse_for();
         case tSWITCH:
             return parse_switch();
+        case tSYN_PRAGMA_UNUSED:
+            return parse_pragma_unused();
         default: /* non-empty expression */
             break;
     }
@@ -1544,10 +1601,10 @@ Parser::parse_switch()
             case tDEFAULT:
                 needtoken(':');
                 if (Stmt* stmt = parse_stmt(nullptr, false)) {
-                    if (sw->default_case())
-                        error(16);
-                    else
+                    if (!sw->default_case())
                         sw->set_default_case(stmt);
+                    else
+                        error(16);
                 }
                 break;
             default:
@@ -1590,4 +1647,155 @@ Parser::parse_case(SwitchStmt* sw)
         return;
 
     sw->AddCase(std::move(exprs), stmt);
+}
+
+symbol*
+Parser::ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag)
+{
+    auto pos = current_pos();
+    auto info = new FunctionInfo(pos, decl);
+    info->set_name(gAtoms.add(decl.name));
+    if (this_tag)
+        info->set_this_tag(*this_tag);
+
+    if (tokid == tNATIVE || tokid == tMETHODMAP)
+        info->set_is_native();
+    else if (tokid == tPUBLIC)
+        info->set_is_public();
+    else if (tokid == tFORWARD)
+        info->set_is_forward();
+    else
+        info->set_is_stock();
+
+    Parser parser;
+    if (!parser.parse_function(info, tokid))
+        return nullptr;
+
+    auto stmt = new FunctionDecl(pos, info);
+    if (!pc_deprecate.empty()) {
+        stmt->set_deprecate(pc_deprecate);
+        pc_deprecate = {};
+    }
+    stmt->Process();
+    return stmt->sym();
+}
+
+bool
+Parser::parse_function(FunctionInfo* info, int tokid)
+{
+    if (!matchtoken('(')) {
+        error(10);
+        lexclr(TRUE);
+        return false;
+    }
+    parse_args(info); // eats the close paren
+
+    if (info->is_native()) {
+        if (info->decl().opertok != 0) {
+            needtoken('=');
+            lexpush();
+        }
+        if (matchtoken('=')) {
+            token_ident_t ident;
+            if (needsymbol(&ident))
+                info->set_alias(gAtoms.add(ident.name));
+        }
+    }
+
+    switch (tokid) {
+        case tNATIVE:
+        case tFORWARD:
+            needtoken(tTERM);
+            return true;
+        case tMETHODMAP:
+            // Don't look for line endings if we're inline.
+            return true;
+        default:
+            if (matchtoken(';')) {
+                if (!sc_needsemicolon)
+                    error(10); /* old style prototypes used with optional semicolumns */
+                info->set_is_forward();
+                return true;
+            }
+            break;
+    }
+
+    if (matchtoken('{'))
+        lexpush();
+    else if (info->decl().type.is_new)
+        needtoken('{');
+
+    Stmt* body = parse_stmt(nullptr, false);
+    if (!body)
+        return false;
+
+    info->set_body(BlockStmt::WrapStmt(body));
+    info->set_end_pos(current_pos());
+    return true;
+}
+
+void
+Parser::parse_args(FunctionInfo* info)
+{
+    auto this_tag = info->this_tag();
+    if (this_tag && *this_tag != -1) {
+        Type* type = gTypes.find(*this_tag);
+
+        typeinfo_t typeinfo = {};
+        if (symbol* enum_type = type->asEnumStruct()) {
+            typeinfo.tag = 0;
+            typeinfo.ident = iREFARRAY;
+            typeinfo.declared_tag = *this_tag;
+            typeinfo.dim[0] = enum_type->addr();
+            typeinfo.idxtag[0] = *this_tag;
+            typeinfo.numdim = 1;
+        } else {
+            typeinfo.tag = *this_tag;
+            typeinfo.ident = iVARIABLE;
+            typeinfo.is_const = true;
+        }
+
+        auto decl = new VarDecl(info->pos(), gAtoms.add("this"), typeinfo, sARGUMENT, false,
+                                false, false, nullptr);
+        info->AddArg(decl);
+    }
+
+    if (matchtoken(')'))
+        return;
+
+    do {
+        auto pos = current_pos();
+
+        declinfo_t decl = {};
+        parse_decl(&decl, DECLFLAG_ARGUMENT | DECLFLAG_ENUMROOT);
+
+        if (decl.type.ident == iVARARGS) {
+            if (info->IsVariadic())
+                error(401);
+
+            auto p = new VarDecl(pos, gAtoms.add("..."), decl.type, sARGUMENT, false, false,
+                                 false, nullptr);
+            info->AddArg(p);
+            continue;
+        }
+
+        if (info->IsVariadic())
+            error(402);
+
+        Expr* init = nullptr;
+        if (matchtoken('='))
+            init = var_init(sARGUMENT);
+
+        if (info->args().size() >= SP_MAX_CALL_ARGUMENTS)
+            error(45);
+        if (decl.name[0] == PUBLIC_CHAR)
+            error(56, decl.name); // function arguments cannot be public
+
+        auto p = new VarDecl(pos, gAtoms.add(decl.name), decl.type, sARGUMENT, false, false,
+                             false, init);
+        info->AddArg(p);
+    } while (matchtoken(','));
+
+    needtoken(')');
+    errorset(sRESET, 0);
 }

@@ -134,12 +134,17 @@ LayoutSpec deduce_layout_spec_by_name(const char* name);
 const char* layout_spec_name(LayoutSpec spec);
 bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 
+enum class AllocScopeKind {
+  Normal,
+  Temp
+};
+
 /**
  * Heap functions
  */
-void pushheaplist();
+void pushheaplist(AllocScopeKind kind = AllocScopeKind::Normal);
 void popheaplist(bool codegen);
-int markheap(int type, int size);
+int markheap(int type, int size, AllocScopeKind kind);
 
 // Remove the current heap scope, requiring that all alocations within be
 // static. Then return that static size.
@@ -152,6 +157,7 @@ void pushstacklist();
 void popstacklist(bool codegen);
 int markstack(int type, int size);
 int stack_scope_id();
+int heap_scope_id();
 bool has_stack_or_heap_scopes();
 
 /**

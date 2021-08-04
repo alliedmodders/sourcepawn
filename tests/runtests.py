@@ -178,11 +178,13 @@ class TestPlan(object):
         # configuration.
         continue
 
-      self.modes.append({
-        'name': 'no_phopt',
-        'spcomp': spcomp,
-        'args': ['-O0'],
-      })
+      # Disabled, no optimization for now.
+      #
+      # self.modes.append({
+      #   'name': 'no_phopt',
+      #   'spcomp': spcomp,
+      #   'args': ['-O0'],
+      # })
 
   def find_spcomp2(self):
     for arch in self.arch_suffixes:

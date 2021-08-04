@@ -30,6 +30,9 @@
 class Parser : public ExpressionParser
 {
   public:
+    Parser();
+    ~Parser();
+
     int expression(value* lval);
 
     void parse();
@@ -51,8 +54,11 @@ class Parser : public ExpressionParser
     void parse_post_dims(typeinfo_t* type);
     Expr* var_init(int vclass);
 
+    static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
+
     static bool sInPreprocessor;
     static bool sDetectedIllegalPreprocessorSymbols;
+    static int sActive;
 
   private:
     typedef int (Parser::*HierFn)(value*);
@@ -71,6 +77,10 @@ class Parser : public ExpressionParser
     Stmt* parse_for();
     Stmt* parse_switch();
     void parse_case(SwitchStmt* sw);
+    Stmt* parse_pragma_unused();
+
+    bool parse_function(FunctionInfo* info, int tokid);
+    void parse_args(FunctionInfo* info);
 
     // Wrapper around hier14() that allows comma expressions without a wrapping
     // parens.
@@ -109,10 +119,6 @@ functag_t* parse_function_type();
 void dodecl(const token_t* tok);
 void decl_enumstruct();
 void domethodmap(LayoutSpec spec);
-symbol* funcstub(int tokid, declinfo_t* decl, const int* thistag);
-void declglb(declinfo_t* decl, int fpublic, int fstatic, int stock);
-int newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock,
-            symbol** symp);
 int parse_new_typename(const token_t* tok);
 int reparse_old_decl(declinfo_t* decl, int flags);
 int reparse_new_decl(declinfo_t* decl, int flags);

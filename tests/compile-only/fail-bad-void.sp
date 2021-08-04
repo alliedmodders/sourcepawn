@@ -10,4 +10,5 @@ stock Bad3(void x)
 
 public main()
 {
+    Bad1();
 }

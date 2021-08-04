@@ -86,16 +86,39 @@ class AutoErrorPos final
     AutoErrorPos* prev_;
 };
 
+extern unsigned sc_total_errors;
+
+class AutoCountErrors
+{
+  public:
+    AutoCountErrors()
+      : old_errors_(sc_total_errors)
+    {}
+
+    void Reset() {
+        old_errors_ = sc_total_errors;
+    }
+
+    bool ok() const {
+        return old_errors_ == sc_total_errors;
+    }
+
+  private:
+    unsigned old_errors_;
+};
+
 int error(int number, ...);
 int error(symbol* sym, int number, ...);
 int error(const token_pos_t& where, int number, ...);
 int error_va(const token_pos_t& where, int number, va_list ap);
 void errorset(int code, int line);
-void report_error(ErrorReport* report);
+void clear_errors();
+void dump_error_report(bool clear);
 
 int pc_enablewarning(int number, int enable);
 
 extern bool sc_one_error_per_statement;
 extern bool sc_enable_first_pass_error_display;
+extern bool sc_shutting_down;
 
 #endif // am_sourcepawn_compiler_sc5_h

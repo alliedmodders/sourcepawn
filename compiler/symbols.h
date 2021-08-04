@@ -36,8 +36,10 @@ class AutoEnterScope final
 
 symbol* GetScopeChain();
 
+symbol* findglb(sp::Atom* name);
 symbol* findglb(const char* name);
 symbol* findloc(const char* name, symbol** scope = nullptr);
+symbol* findloc(sp::Atom* name, symbol** scope = nullptr);
 symbol* findconst(const char* name);
 void delete_symbols(symbol* root, int delete_functions);
 void delete_symbol(symbol* root, symbol* sym);

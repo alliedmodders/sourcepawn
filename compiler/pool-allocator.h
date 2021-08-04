@@ -25,6 +25,7 @@
 
 #include <memory>
 #include <new>
+#include <string>
 
 #include <amtl/am-bits.h>
 #include <amtl/am-fixedarray.h>
@@ -154,7 +155,12 @@ class PoolObject
 class PoolString : public PoolObject
 {
   public:
-    explicit PoolString(const char* chars, size_t len) {
+    explicit PoolString(const std::string& other) {
+        length_ = other.size();
+        chars_ = (char*)gPoolAllocator.rawAllocate(length_ + 1);
+        memcpy(chars_, other.c_str(), length_ + 1);
+    }
+    PoolString(const char* chars, size_t len) {
         length_ = len;
         chars_ = (char*)gPoolAllocator.rawAllocate(length_ + 1);
         memcpy(chars_, chars, length_ + 1);

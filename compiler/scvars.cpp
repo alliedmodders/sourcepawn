@@ -88,6 +88,7 @@ int pc_current_memory = 0;           /* current stack watermark */
 int pc_max_memory = 0;               /* maximum stack watermark across all stacks */
 int sc_use_stderr = FALSE;
 int pc_current_stack = 0;
+int sc_reparse = 0;
 
 symbol* sScopeChain = nullptr;
 

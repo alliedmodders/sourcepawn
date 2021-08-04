@@ -319,6 +319,11 @@ begdseg(void)
 void
 setline(int chkbounds)
 {
+    static cell last_code_idx = -1;
+
+    if (last_code_idx == code_idx)
+        return;
+
     if (sc_asmfile) {
         stgwrite("\t; line ");
         outval(fline, TRUE);
@@ -332,6 +337,7 @@ setline(int chkbounds)
         outval(code_idx, TRUE);
         code_idx += opcodes(1);
     }
+    last_code_idx = code_idx;
 }
 
 void
@@ -418,7 +424,9 @@ startfunc(const char* fname)
 void
 endfunc(void)
 {
+    stgwrite("\tendproc\n");
     stgwrite("\n"); /* skip a line */
+    code_idx += opcodes(1);
 }
 
 /*  rvalue
@@ -442,7 +450,7 @@ rvalue(value* lval)
     } else if (lval->ident == iREFERENCE) {
         /* indirect fetch, but address not yet in PRI */
         assert(sym != NULL);
-        assert(sym->vclass == sLOCAL); /* global references don't exist in Pawn */
+        assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT); /* global references don't exist in Pawn */
         stgwrite("\tlref.s.pri ");
         outval(sym->addr(), TRUE);
         markusage(sym, uREAD);
@@ -454,7 +462,7 @@ rvalue(value* lval)
     } else {
         /* direct or stack relative fetch */
         assert(sym != NULL);
-        if (sym->vclass == sLOCAL)
+        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
             stgwrite("\tload.s.pri ");
         else
             stgwrite("\tload.pri ");
@@ -509,13 +517,13 @@ address(symbol* sym, regid reg)
         /* a local array or local variable */
         switch (reg) {
             case sPRI:
-                if (sym->vclass == sLOCAL)
+                if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
                     stgwrite("\taddr.pri ");
                 else
                     stgwrite("\tconst.pri ");
                 break;
             case sALT:
-                if (sym->vclass == sLOCAL)
+                if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
                     stgwrite("\taddr.alt ");
                 else
                     stgwrite("\tconst.alt ");
@@ -620,7 +628,7 @@ store(const value* lval)
         code_idx += opcodes(1) + opargs(1);
     } else if (lval->ident == iREFERENCE) {
         assert(sym != NULL);
-        assert(sym->vclass == sLOCAL);
+        assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT);
         stgwrite("\tsref.s.pri ");
         outval(sym->addr(), TRUE);
         code_idx += opcodes(1) + opargs(1);
@@ -629,7 +637,7 @@ store(const value* lval)
     } else {
         assert(sym != NULL);
         markusage(sym, uWRITTEN);
-        if (sym->vclass == sLOCAL)
+        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
             stgwrite("\tstor.s.pri ");
         else
             stgwrite("\tstor.pri ");
@@ -688,11 +696,11 @@ copyarray(symbol* sym, cell size)
      */
     if (sym->ident == iREFARRAY) {
         /* reference to an array; currently this is always a local variable */
-        assert(sym->vclass == sLOCAL); /* symbol must be stack relative */
+        assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT); /* symbol must be stack relative */
         stgwrite("\tload.s.alt ");
     } else {
         /* a local or global array */
-        if (sym->vclass == sLOCAL)
+        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
             stgwrite("\taddr.alt ");
         else
             stgwrite("\tconst.alt ");
@@ -715,11 +723,11 @@ fillarray(symbol* sym, cell size, cell value)
      */
     if (sym->ident == iREFARRAY) {
         /* reference to an array; currently this is always a local variable */
-        assert(sym->vclass == sLOCAL); /* symbol must be stack relative */
+        assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT); /* symbol must be stack relative */
         stgwrite("\tload.s.alt ");
     } else {
         /* a local or global array */
-        if (sym->vclass == sLOCAL)
+        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
             stgwrite("\taddr.alt ");
         else
             stgwrite("\tconst.alt ");
@@ -912,7 +920,6 @@ void
 ffcall(symbol* sym, int numargs)
 {
     std::string symname;
-    char aliasname[sNAMEMAX + 1];
 
     assert(sym != NULL);
     assert(sym->ident == iFUNCTN);
@@ -924,7 +931,7 @@ ffcall(symbol* sym, int numargs)
 
         /* Look for an alias */
         symbol* target = sym;
-        if (lookup_alias(aliasname, sym->name())) {
+        if (sp::Atom* aliasname = lookup_alias(sym->name())) {
             symbol* asym = findglb(aliasname);
             if (asym && asym->ident == iFUNCTN && sym->native)
                 target = asym;
@@ -1078,7 +1085,7 @@ setheap_pri(void)
     stgwrite("\tstor.i\n");   /* store PRI (default value) at address ALT */
     stgwrite("\tmove.pri\n"); /* move ALT to PRI: PRI contains the address */
     code_idx += opcodes(3) + opargs(1);
-    markheap(MEMUSE_STATIC, 1);
+    markheap(MEMUSE_STATIC, 1, AllocScopeKind::Temp);
 }
 
 void
@@ -1440,7 +1447,7 @@ inc(const value* lval)
         assert(sym != NULL);
         stgwrite("\tpush.pri\n");
         /* load dereferenced value */
-        assert(sym->vclass == sLOCAL); /* global references don't exist in Pawn */
+        assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT); /* global references don't exist in Pawn */
         stgwrite("\tlref.s.pri ");
         outval(sym->addr(), TRUE);
         /* increment */
@@ -1456,7 +1463,7 @@ inc(const value* lval)
     } else {
         /* local or global variable */
         assert(sym != NULL);
-        if (sym->vclass == sLOCAL)
+        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
             stgwrite("\tinc.s ");
         else
             stgwrite("\tinc ");
@@ -1496,7 +1503,7 @@ dec(const value* lval)
         assert(sym != NULL);
         stgwrite("\tpush.pri\n");
         /* load dereferenced value */
-        assert(sym->vclass == sLOCAL); /* global references don't exist in Pawn */
+        assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT); /* global references don't exist in Pawn */
         stgwrite("\tlref.s.pri ");
         outval(sym->addr(), TRUE);
         /* decrement */
@@ -1512,7 +1519,7 @@ dec(const value* lval)
     } else {
         /* local or global variable */
         assert(sym != NULL);
-        if (sym->vclass == sLOCAL)
+        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
             stgwrite("\tdec.s ");
         else
             stgwrite("\tdec ");
@@ -1656,7 +1663,7 @@ emit_default_array(arginfo* arg)
         //  init.array
         //  move.alt        ; pri = new address
         modheap(total_size * sizeof(cell));
-        markheap(MEMUSE_STATIC, total_size);
+        markheap(MEMUSE_STATIC, total_size, AllocScopeKind::Temp);
         emit_initarray(sALT, def->val.get(), iv_size, data_size, def->array->zeroes, 0);
         moveto1();
     }

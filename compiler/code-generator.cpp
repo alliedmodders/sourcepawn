@@ -26,6 +26,7 @@
 #include <amtl/am-raii.h>
 
 #include "array-helpers.h"
+#include "code-generator.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -35,14 +36,26 @@
 #include "symbols.h"
 
 void
-Stmt::Emit()
+Stmt::Emit(CodegenContext& cg)
 {
-    insert_dbgline(pos_.line);
-    DoEmit();
+    if (cg.func()) {
+        ke::SaveAndSet<int> save_fline(&fline, pos_.line);
+        insert_dbgline(pos_.line);
+        setline(FALSE);
+    }
+
+    if (cg.func())
+        pushheaplist(AllocScopeKind::Temp);
+
+    DoEmit(cg);
+
+    // Scrap all temporary allocations used in the statement.
+    if (cg.func())
+        popheaplist(flow_type() == Flow_None);
 }
 
 void
-VarDecl::DoEmit()
+VarDecl::DoEmit(CodegenContext& cg)
 {
     if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct) {
         EmitPstruct();
@@ -172,7 +185,7 @@ VarDecl::EmitLocal()
     } else if (sym_->ident == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
-        markheap(MEMUSE_DYNAMIC, 0);
+        markheap(MEMUSE_DYNAMIC, 0, AllocScopeKind::Normal);
         markstack(MEMUSE_STATIC, 1);
         sym_->setAddr(-pc_current_stack * sizeof(cell));
 
@@ -249,7 +262,11 @@ Expr::Emit()
 void
 Expr::EmitTest(bool jump_on_true, int target)
 {
+    // We need a temporary allocation scope here to cleanup before we branch.
+    pushheaplist(AllocScopeKind::Temp);
     Emit();
+    popheaplist(true);
+
     if (jump_on_true)
         jmp_ne0(target);
     else
@@ -594,10 +611,14 @@ ChainedCompareExpr::EmitTest(bool jump_on_true, int target)
     Expr* left = first_;
     Expr* right = ops_[0].expr;
 
+    pushheaplist(AllocScopeKind::Temp);
+
     right->Emit();
     pushreg(sPRI);
     left->Emit();
     popreg(sALT);
+
+    popheaplist(true);
 
     int token = ops_[0].token;
     if (!jump_on_true) {
@@ -661,7 +682,7 @@ TernaryExpr::DoEmit()
     assert(branch1.isValid() == branch2.isValid());
 
     if (branch1.isValid() && branch2.isValid())
-        markheap(MEMUSE_DYNAMIC, 0);
+        markheap(MEMUSE_DYNAMIC, 0, AllocScopeKind::Temp);
 }
 
 void
@@ -672,7 +693,7 @@ TernaryExpr::EmitImpl(ke::Maybe<cell_t>* branch1, ke::Maybe<cell_t>* branch2)
     int flab1 = getlabel();
     int flab2 = getlabel();
 
-    pushheaplist();
+    pushheaplist(AllocScopeKind::Temp);
     jmp_eq0(flab1); /* go to second expression if primary register==0 */
 
     second_->Emit();
@@ -683,7 +704,7 @@ TernaryExpr::EmitImpl(ke::Maybe<cell_t>* branch1, ke::Maybe<cell_t>* branch2)
         branch1->init(total1);
     }
 
-    pushheaplist();
+    pushheaplist(AllocScopeKind::Temp);
     jumplabel(flab2);
     setlabel(flab1);
 
@@ -867,11 +888,8 @@ CallExpr::DoEmit()
 
         modheap(retsize * sizeof(cell));
         pushreg(sALT);
-        markheap(MEMUSE_STATIC, retsize);
+        markheap(MEMUSE_STATIC, retsize, AllocScopeKind::Temp);
     }
-
-    // Everything heap-allocated after here is owned by the callee.
-    pushheaplist();
 
     for (size_t i = argv_.size() - 1; i < argv_.size(); i--) {
         const auto& expr = argv_[i].expr;
@@ -934,9 +952,6 @@ CallExpr::DoEmit()
 
     if (val_.sym)
         popreg(sPRI); // Pop hidden parameter as function result
-
-    // Scrap all temporary heap allocations used to perform the call.
-    popheaplist(true);
 }
 
 void
@@ -999,12 +1014,12 @@ NewArrayExpr::DoEmit()
 }
 
 void
-IfStmt::DoEmit()
+IfStmt::DoEmit(CodegenContext& cg)
 {
     int flab1 = getlabel();
 
     cond_->EmitTest(false, flab1);
-    on_true_->Emit();
+    on_true_->Emit(cg);
     if (on_false_) {
         ke::Maybe<int> flab2;
         if (!on_true_->IsTerminal()) {
@@ -1012,7 +1027,7 @@ IfStmt::DoEmit()
             jumplabel(*flab2);
         }
         setlabel(flab1);
-        on_false_->Emit();
+        on_false_->Emit(cg);
         if (flab2)
             setlabel(*flab2);
     } else {
@@ -1021,19 +1036,19 @@ IfStmt::DoEmit()
 }
 
 void
-ExprStmt::DoEmit()
+ExprStmt::DoEmit(CodegenContext& cg)
 {
     // Emit even if no side effects
     expr_->Emit();
 }
 
 void
-BlockStmt::DoEmit()
+BlockStmt::DoEmit(CodegenContext& cg)
 {
     pushstacklist();
     pushheaplist();
 
-    StmtList::DoEmit();
+    StmtList::DoEmit(cg);
 
     bool returns = flow_type() == Flow_Return;
     popheaplist(!returns);
@@ -1041,8 +1056,10 @@ BlockStmt::DoEmit()
 }
 
 void
-ReturnStmt::EmitArrayReturn()
+ReturnStmt::EmitArrayReturn(CodegenContext& cg)
 {
+    symbol* curfunc = cg.func();
+
     ArrayData array;
     BuildArrayInitializer(array_, nullptr, &array);
 
@@ -1103,14 +1120,14 @@ ReturnStmt::EmitArrayReturn()
 }
 
 void
-ReturnStmt::DoEmit()
+ReturnStmt::DoEmit(CodegenContext& cg)
 {
     if (expr_) {
         expr_->Emit();
 
         const auto& v = expr_->val();
         if (v.ident == iARRAY || v.ident == iREFARRAY)
-            EmitArrayReturn();
+            EmitArrayReturn(cg);
     } else {
         /* this return statement contains no expression */
         ldconst(0, sPRI);
@@ -1122,7 +1139,7 @@ ReturnStmt::DoEmit()
 }
 
 void
-AssertStmt::DoEmit()
+AssertStmt::DoEmit(CodegenContext& cg)
 {
     if (!(sc_debug & sCHKBOUNDS))
         return;
@@ -1137,7 +1154,7 @@ AssertStmt::DoEmit()
 }
 
 void
-DeleteStmt::DoEmit()
+DeleteStmt::DoEmit(CodegenContext& cg)
 {
     auto v = expr_->val();
 
@@ -1203,7 +1220,7 @@ DeleteStmt::DoEmit()
 }
 
 void
-ExitStmt::DoEmit()
+ExitStmt::DoEmit(CodegenContext& cg)
 {
     if (expr_)
         expr_->Emit();
@@ -1215,32 +1232,32 @@ ExitStmt::DoEmit()
 struct LoopContext {
     int break_to;
     int continue_to;
-    int break_scope_id;
-    int continue_scope_id;
+    int stack_scope_id;
+    int heap_scope_id;
 };
 LoopContext* sLoopContext = nullptr;
 
 void
-DoWhileStmt::DoEmit()
+DoWhileStmt::DoEmit(CodegenContext& cg)
 {
     assert(token_ == tDO || token_ == tWHILE);
 
     LoopContext loop_cx;
     loop_cx.break_to = getlabel();
     loop_cx.continue_to = getlabel();
-    loop_cx.break_scope_id = stack_scope_id();
-    loop_cx.continue_scope_id = stack_scope_id();
+    loop_cx.stack_scope_id = stack_scope_id();
+    loop_cx.heap_scope_id = heap_scope_id();
     ke::SaveAndSet<LoopContext*> push_context(&sLoopContext, &loop_cx);
 
     setlabel(loop_cx.continue_to);
 
     if (token_ == tDO) {
-        body_->Emit();
+        body_->Emit(cg);
         if (!body_->IsTerminal())
             cond_->EmitTest(true, loop_cx.continue_to);
     } else {
         cond_->EmitTest(false, loop_cx.break_to);
-        body_->Emit();
+        body_->Emit(cg);
         if (!body_->IsTerminal())
             jumplabel(loop_cx.continue_to);
     }
@@ -1249,37 +1266,35 @@ DoWhileStmt::DoEmit()
 }
 
 void
-LoopControlStmt::DoEmit()
+LoopControlStmt::DoEmit(CodegenContext& cg)
 {
     assert(sLoopContext);
     assert(token_ == tBREAK || token_ == tCONTINUE);
 
-    if (token_ == tBREAK) {
-        genstackfree(sLoopContext->break_scope_id);
-        genheapfree(sLoopContext->break_scope_id);
+    genstackfree(sLoopContext->stack_scope_id);
+    genheapfree(sLoopContext->heap_scope_id);
+
+    if (token_ == tBREAK)
         jumplabel(sLoopContext->break_to);
-    } else {
-        genstackfree(sLoopContext->continue_scope_id);
-        genheapfree(sLoopContext->continue_scope_id);
+    else
         jumplabel(sLoopContext->continue_to);
-    }
 }
 
 void
-ForStmt::DoEmit()
+ForStmt::DoEmit(CodegenContext& cg)
 {
     if (scope_) {
         pushstacklist();
         pushheaplist();
     }
     if (init_)
-        init_->Emit();
+        init_->Emit(cg);
 
     LoopContext loop_cx;
     loop_cx.break_to = getlabel();
     loop_cx.continue_to = getlabel();
-    loop_cx.break_scope_id = stack_scope_id();
-    loop_cx.continue_scope_id = stack_scope_id();
+    loop_cx.stack_scope_id = stack_scope_id();
+    loop_cx.heap_scope_id = heap_scope_id();
     ke::SaveAndSet<LoopContext*> push_context(&sLoopContext, &loop_cx);
 
     bool body_always_exits = body_->flow_type() == Flow_Return ||
@@ -1300,7 +1315,7 @@ ForStmt::DoEmit()
         if (cond_ && !always_taken_)
             cond_->EmitTest(false, loop_cx.break_to);
 
-        body_->Emit();
+        body_->Emit(cg);
 
         if (has_continue_) {
             setlabel(loop_cx.continue_to);
@@ -1320,7 +1335,7 @@ ForStmt::DoEmit()
         if (cond_ && !always_taken_)
             cond_->EmitTest(false, loop_cx.break_to);
 
-        body_->Emit();
+        body_->Emit(cg);
 
         if (!body_always_exits)
             jumplabel(loop_cx.continue_to);
@@ -1334,7 +1349,7 @@ ForStmt::DoEmit()
 }
 
 void
-SwitchStmt::DoEmit()
+SwitchStmt::DoEmit(CodegenContext& cg)
 {
     expr_->Emit();
 
@@ -1356,7 +1371,7 @@ SwitchStmt::DoEmit()
         }
 
         setlabel(label);
-        stmt->Emit();
+        stmt->Emit(cg);
         if (!stmt->IsTerminal())
             jumplabel(exit_label);
     }
@@ -1365,7 +1380,7 @@ SwitchStmt::DoEmit()
     if (default_case_) {
         default_label = getlabel();
         setlabel(default_label);
-        default_case_->Emit();
+        default_case_->Emit(cg);
         if (!default_case_->IsTerminal())
             jumplabel(exit_label);
     }
@@ -1380,4 +1395,48 @@ SwitchStmt::DoEmit()
     }
 
     setlabel(exit_label);
+}
+
+void
+FunctionInfo::Emit(CodegenContext& cg)
+{
+    pc_max_func_memory = 0;
+    pc_current_memory = 0;
+
+    if (sym_->skipped)
+        return;
+
+    if (!body_)
+        return;
+
+    CodegenContext new_cg(sym_);
+
+    sym_->setAddr(code_idx);
+
+    begcseg();
+    startfunc(name_->chars());
+    insert_dbgline(pos_.line);
+    setline(FALSE);
+    pc_current_stack = 0;
+    resetstacklist();
+    resetheaplist();
+
+    if (body_)
+        body_->Emit(new_cg);
+
+    assert(!has_stack_or_heap_scopes());
+
+    // If return keyword is missing, we added it in the semantic pass.
+    endfunc();
+
+    sym_->codeaddr = code_idx;
+    gDataQueue.Emit();
+
+    pc_max_memory = std::max(pc_max_func_memory, pc_max_memory);
+}
+
+void
+FunctionDecl::DoEmit(CodegenContext& cg)
+{
+    info_->Emit(cg);
 }

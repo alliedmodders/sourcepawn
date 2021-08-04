@@ -89,6 +89,12 @@ findglb(const char* name)
     return FindInHashTable(sp_Globals, name, fcurrent);
 }
 
+symbol*
+findglb(sp::Atom* name)
+{
+    return findglb(name->chars());
+}
+
 /*  findloc
  *
  *  Returns a pointer to the local symbol (if found) or NULL (if not found).
@@ -114,9 +120,15 @@ table_findloc(symbol* table, sp::Atom* atom)
 symbol*
 findloc(const char* name, symbol** scope)
 {
-    sp::Atom* atom = gAtoms.add(name);
+    auto atom = gAtoms.add(name);
+    return findloc(atom, scope);
+}
+
+symbol*
+findloc(sp::Atom* name, symbol** scope)
+{
     for (symbol* iter = sScopeChain; iter; iter = iter->parent()) {
-        if (symbol* sym = table_findloc(iter, atom)) {
+        if (symbol* sym = table_findloc(iter, name)) {
             if (scope)
                 *scope = iter;
             return sym;
@@ -124,7 +136,7 @@ findloc(const char* name, symbol** scope)
     }
     if (scope)
         *scope = &loctab;
-    return table_findloc(&loctab, atom);
+    return table_findloc(&loctab, name);
 }
 
 /* The local variable table must be searched backwards, so that the deepest

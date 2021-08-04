@@ -42,6 +42,8 @@
 #include <amtl/experimental/am-argparser.h>
 
 #include "array-helpers.h"
+#include "code-generator.h"
+#include "lexer-inl.h"
 #include "output-buffer.h"
 #include "parser.h"
 #include "semantics.h"
@@ -110,15 +112,11 @@ static void setopt(int argc, char** argv, char* oname, char* ename, char* pname)
 static void setconfig(char* root);
 static void setcaption(void);
 static void setconstants(void);
-static int declargs(symbol* sym, int chkshadow, const int* thistag);
-static void doarg(symbol* sym, declinfo_t* decl, int offset, int chkshadow, arginfo* arg);
-static void parse_arg_array_initializer(declinfo_t* decl, arginfo* arg);
 static void reduce_referrers(symbol* root);
 static void deduce_liveness(symbol* root);
 static void inst_datetime_defines(void);
 static void inst_binary_name(std::string binfile);
 static int operatorname(char* name);
-static void check_void_decl(const declinfo_t* decl, int variable);
 static void rewrite_type_for_enum_struct(typeinfo_t* info);
 
 enum {
@@ -128,7 +126,6 @@ enum {
 };
 static int norun = 0;                 /* the compiler never ran */
 static int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
-static int sc_reparse = 0;            /* needs 3th parse because of changed prototypes? */
 static int sc_parsenum = 0;           /* number of the extra parses */
 static int wq[wqTABSZ];               /* "while queue", internal stack for nested loops */
 static int* wqptr;                    /* pointer to next entry */
@@ -293,6 +290,7 @@ pc_compile(int argc, char* argv[]) {
         sc_require_newdecls = lcl_require_newdecls;
         sc_tabsize = lcl_tabsize;
         errorset(sRESET, 0);
+        clear_errors();
         /* reset the source file */
         inpf = inpf_org;
         freading = TRUE;
@@ -310,7 +308,7 @@ pc_compile(int argc, char* argv[]) {
                 error(FATAL_ERROR_READ, incfname);
             }
         }
-        preprocess(); /* fetch first line */
+        preprocess(true); /* fetch first line */
 
         Parser parser;
         parser.parse();      /* process all input */
@@ -348,6 +346,7 @@ pc_compile(int argc, char* argv[]) {
     sc_require_newdecls = lcl_require_newdecls;
     sc_tabsize = lcl_tabsize;
     errorset(sRESET, 0);
+    clear_errors();
     /* reset the source file */
     inpf = inpf_org;
     freading = TRUE;
@@ -360,7 +359,7 @@ pc_compile(int argc, char* argv[]) {
     if (strlen(incfname) > 0) {
         plungefile(incfname, FALSE, TRUE); /* parse "default.inc" (again) */
     }
-    preprocess(); /* fetch first line */
+    preprocess(true); /* fetch first line */
 
     {
         Parser parser;
@@ -376,6 +375,9 @@ pc_compile(int argc, char* argv[]) {
         error(13); /* no entry point (no public functions) */
 
 cleanup:
+    sc_shutting_down = true;
+    dump_error_report(true);
+
     /* main source file is not closed, do it now */
     if (inpf != NULL) {
         pc_closesrc(inpf);
@@ -386,7 +388,7 @@ cleanup:
     if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0)
         assemble(binfname);
 
-    if (sc_asmfile || sc_listing) {
+    if ((sc_asmfile || sc_listing) && !gAsmBuffer.empty()) {
         std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(outfname, "wb"), fclose);
         auto data = gAsmBuffer.str();
         if (fwrite(data.c_str(), data.size(), 1, fp.get()) != 1)
@@ -1436,10 +1438,10 @@ parse_decl(declinfo_t* decl, int flags)
     return parse_new_decl(decl, NULL, flags);
 }
 
-static void
-check_void_decl(const declinfo_t* decl, int variable)
+void
+check_void_decl(const typeinfo_t* type, int variable)
 {
-    if (decl->type.tag != pc_tag_void)
+    if (type->tag != pc_tag_void)
         return;
 
     if (variable) {
@@ -1447,10 +1449,16 @@ check_void_decl(const declinfo_t* decl, int variable)
         return;
     }
 
-    if (decl->type.numdim > 0) {
+    if (type->numdim > 0) {
         error(145);
         return;
     }
+}
+
+void
+check_void_decl(const declinfo_t* decl, int variable)
+{
+    check_void_decl(&decl->type, variable);
 }
 
 // If a name is too long, error and truncate.
@@ -1500,19 +1508,13 @@ parse_inline_function(methodmap_t* map, const typeinfo_t* type, const char* name
     check_name_length(fullname);
     strcpy(decl.name, fullname);
 
-    symbol* target = NULL;
-    if (is_native) {
-        target = funcstub(tMETHODMAP, &decl, thistag);
-    } else {
-        ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
-        int ok = newfunc(&decl, thistag, FALSE, FALSE, TRUE, &target);
+    ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
 
-        if (!ok)
-            return NULL;
-        if (!target || target->forward) {
-            error(10);
-            return NULL;
-        }
+    int tokid = is_native ? tMETHODMAP : 0;
+    symbol* target = Parser::ParseInlineFunction(tokid, decl, thistag);
+    if (!target || target->forward) {
+        error(10);
+        return nullptr;
     }
     return target;
 }
@@ -1623,15 +1625,15 @@ parse_property(methodmap_t* map)
     method->getter = NULL;
     method->setter = NULL;
 
-    if (matchtoken('{')) {
-        while (!matchtoken('}')) {
-            if (!parse_property_accessor(&type, map, method.get()))
-                lexclr(TRUE);
-        }
+    if (!needtoken('{'))
+        return nullptr;
 
-        require_newline(TerminatorPolicy::Newline);
+    while (!matchtoken('}')) {
+        if (!parse_property_accessor(&type, map, method.get()))
+            lexclr(TRUE);
     }
 
+    require_newline(TerminatorPolicy::Newline);
     return method;
 }
 
@@ -1786,7 +1788,12 @@ domethodmap(LayoutSpec spec)
         if (lextok(&tok) == tPUBLIC) {
             method = parse_method(map);
         } else if (tok.id == tSYMBOL && strcmp(tok.str, "property") == 0) {
+            auto pos = current_pos();
             method = parse_property(map);
+            if (method && !(method->getter || method->setter)) {
+                error(pos, 57, method->name);
+                continue;
+            }
         } else {
             error(124);
         }
@@ -1953,7 +1960,7 @@ decl_enumstruct()
             ke::SafeStrcpy(decl.name, sizeof(decl.name), const_name);
 
             ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
-            newfunc(&decl, &root_tag, FALSE, FALSE, TRUE, nullptr);
+            Parser::ParseInlineFunction(0, decl, &root_tag);
             continue;
         }
 
@@ -2028,24 +2035,6 @@ fetchfunc(const char* name)
     return sym;
 }
 
-/* This routine adds symbolic information for each argument.
- */
-static void
-define_args(void)
-{
-    symbol* sym;
-
-    /* At this point, no local variables have been declared. All
-     * local symbols are function arguments.
-     */
-    sym = loctab.next;
-    while (sym != NULL) {
-        assert(sym->vclass == sLOCAL);
-        markexpr(sLDECL, sym->name(), sym->addr()); /* mark for better optimization */
-        sym = sym->next;
-    }
-}
-
 static int
 operatorname(char* name)
 {
@@ -2098,83 +2087,7 @@ operatorname(char* name)
     return opertok;
 }
 
-static int
-operatoradjust(int opertok, symbol* sym, char* opername, int resulttag)
-{
-    int tags[2] = {0, 0};
-    int count = 0;
-    arginfo* arg;
-    char tmpname[sNAMEMAX + 1];
-    symbol* oldsym;
-
-    if (opertok == 0)
-        return TRUE;
-
-    assert(sym != NULL && sym->ident == iFUNCTN);
-    /* count arguments and save (first two) tags */
-    while (arg = &sym->function()->args[count], arg->ident != 0) {
-        if (count < 2) {
-            tags[count] = arg->tag;
-        }
-        if (opertok == '~' && count == 0) {
-            if (arg->ident != iREFARRAY)
-                error(73, arg->name); /* must be an array argument */
-        } else {
-            //if (arg->ident!=iVARIABLE)
-            //error(66,arg->name);/* must be non-reference argument */
-        }
-        if (arg->def)
-            error(59, arg->name); /* arguments of an operator may not have a default value */
-        count++;
-    }
-
-    /* for '!', '++' and '--', count must be 1
-     * for '-', count may be 1 or 2
-     * for '=', count must be 1, and the resulttag is also important
-     * for all other (binary) operators and the special '~' operator, count must be 2
-     */
-    switch (opertok) {
-        case '!':
-        case '=':
-        case tINC:
-        case tDEC:
-            if (count != 1)
-                error(62); /* number or placement of the operands does not fit the operator */
-            break;
-        case '-':
-            if (count != 1 && count != 2)
-                error(62); /* number or placement of the operands does not fit the operator */
-            break;
-        default:
-            if (count != 2)
-                error(62); /* number or placement of the operands does not fit the operator */
-    }
-
-    if (tags[0] == 0 && ((opertok != '=' && tags[1] == 0) || (opertok == '=' && resulttag == 0)))
-        error(64); /* cannot change predefined operators */
-
-    /* change the operator name */
-    assert(strlen(opername) > 0);
-    operator_symname(tmpname, opername, tags[0], tags[1], count, resulttag);
-    if ((oldsym = findglb(tmpname)) != NULL) {
-        if (oldsym->defined) {
-            auto errname = funcdisplayname(tmpname);
-            error(21, errname.c_str()); /* symbol already defined */
-        }
-        sym->usage |= oldsym->usage; /* copy flags from the previous definition */
-        for (const auto& other : oldsym->refers_to()) {
-            sym->add_reference_to(other);
-        }
-        delete_symbol(&glbtab, oldsym);
-    }
-    RemoveFromHashTable(sp_Globals, sym);
-    sym->setName(gAtoms.add(tmpname));
-    AddToHashTable(sp_Globals, sym);
-
-    return TRUE;
-}
-
-static int
+int
 check_operatortag(int opertok, int resulttag, char* opername)
 {
     assert(opername != NULL && strlen(opername) > 0);
@@ -2246,7 +2159,7 @@ parse_funcname(const char* fname, int* tag1, int* tag2, char* opname, size_t opn
     assert(!unary || *tag1 == 0);
     assert(*ptr != '\0');
     size_t chars_to_copy = 0;
-    for (const char* iter = ptr; !isdigit(*iter); iter++)
+    for (const char* iter = ptr; *iter && !isdigit(*iter); iter++)
         chars_to_copy++;
     ke::SafeStrcpyN(opname, opname_len, ptr, chars_to_copy);
     *tag2 = (int)strtol(&ptr[chars_to_copy], NULL, 16);
@@ -2278,291 +2191,7 @@ funcdisplayname(const char* funcname)
     return ke::StringPrintf("operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
 }
 
-symbol*
-funcstub(int tokid, declinfo_t* decl, const int* thistag)
-{
-    char* str;
-    cell val;
-    symbol* sym;
-    int fnative = (tokid == tNATIVE || tokid == tMETHODMAP);
-    int fpublic = (tokid == tPUBLIC);
-
-    assert(loctab.next == NULL); /* local symbol table should be empty */
-
-    if (decl->opertok)
-        check_operatortag(decl->opertok, decl->type.tag, decl->name);
-
-    needtoken('('); /* only functions may be native/forward */
-
-    sym = fetchfunc(decl->name);
-    if (sym == NULL)
-        return NULL;
-    if (sym->prototyped && sym->tag != decl->type.tag)
-        error(25);
-    if (!sym->defined) {
-        // As long as the function stays undefined, update its address and tag.
-        sym->setAddr(code_idx);
-        sym->tag = decl->type.tag;
-    }
-
-    if (fnative) {
-        sym->native = true;
-        sym->defined = true;
-        sym->retvalue = true;
-    } else if (fpublic) {
-        sym->is_public = true;
-    }
-    sym->forward = true;
-
-    declargs(sym, FALSE, thistag);
-    /* "declargs()" found the ")" */
-    if (!operatoradjust(decl->opertok, sym, decl->name, decl->type.tag))
-        sym->defined = false;
-
-    /* for a native operator, also need to specify an "exported" function name;
-     * for a native function, this is optional
-     */
-    if (fnative) {
-        if (decl->opertok != 0) {
-            needtoken('=');
-            lexpush(); /* push back, for matchtoken() to retrieve again */
-        }
-        if (matchtoken('=')) {
-            /* allow number or symbol */
-            if (needtoken(tSYMBOL)) {
-                tokeninfo(&val, &str);
-                insert_alias(sym->name(), str);
-            }
-        }
-    }
-
-    // Don't look for line endings if we're inline.
-    if (tokid != tMETHODMAP)
-        needtoken(tTERM);
-
-    /* attach the array to the function symbol */
-    if (decl->type.numdim > 0)
-        error(141);
-
-    delete_symbols(&loctab, TRUE);       /* clear local variables queue */
-
-    return sym;
-}
-
-/*  newfunc    - begin a function
- *
- *  This routine is called from "parse" and tries to make a function
- *  out of the following text
- *
- *  Global references: funcstatus
- *                     curfunc  (altered)
- *                     declared (altered)
- *                     glb_declared (altered)
- */
 int
-newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stock, symbol** symp)
-{
-    symbol* sym;
-    int argcnt;
-    int opererror;
-    cell cidx, glbdecl;
-    short filenum = fcurrent; /* save file number at the start of the declaration */
-    int fileline = fline;
-
-    cidx = 0;                        /* just to avoid compiler warnings */
-    glbdecl = 0;
-    assert(loctab.next == NULL); /* local symbol table should be empty */
-
-    pc_max_func_memory = 0;
-    pc_current_memory = 0;
-
-    if (symp)
-        *symp = NULL;
-
-    check_void_decl(decl, FALSE);
-
-    if (decl->opertok) {
-        check_operatortag(decl->opertok, decl->type.tag, decl->name);
-    }
-
-    /* check whether this is a function or a variable declaration */
-    if (!matchtoken('('))
-        return FALSE;
-    /* so it is a function, proceed */
-    if (decl->name[0] == PUBLIC_CHAR) {
-        fpublic = TRUE; /* implicitly public function */
-        if (stock)
-            error(42); /* invalid combination of class specifiers */
-    }
-
-    if ((sym = fetchfunc(decl->name)) == NULL)
-        return TRUE;
-
-    // Not a valid function declaration if native.
-    if (sym->native)
-        return TRUE;
-
-    // If the function has not been prototyed, set its tag.
-    if (!sym->prototyped) {
-        sym->tag = decl->type.tag;
-        sym->explicit_return_type = decl->type.is_new;
-    }
-
-    // As long as the function stays undefined, update its address.
-    if (!sym->defined)
-        sym->setAddr(code_idx);
-
-    if (fpublic)
-        sym->is_public = true;
-    if (fstatic)
-        sym->is_static = true;
-
-    sym->fnumber = filenum;
-    sym->lnumber = fileline;
-
-    if (sym->is_public || sym->forward) {
-        if (decl->type.numdim > 0)
-            error(141);
-    }
-
-    /* if the function was used before being declared, and it has a tag for the
-     * result, add a third pass (as second "skimming" parse) because the function
-     * result may have been used with user-defined operators, which have now
-     * been incorrectly flagged (as the return tag was unknown at the time of
-     * the call)
-     */
-    if (!sym->prototyped && (sym->usage & uREAD) && sym->tag != 0)
-        sc_reparse = TRUE; /* must add another pass to "initial scan" phase */
-
-    /* declare all arguments */
-    argcnt = declargs(sym, TRUE, thistag);
-    opererror = !operatoradjust(decl->opertok, sym, decl->name, decl->type.tag);
-    if (strcmp(decl->name, uMAINFUNC) == 0) {
-        if (argcnt > 0)
-            error(5);        /* "main()" functions may not have any arguments */
-        sym->usage |= uREAD; /* "main()" is the program's entry point: always used */
-    }
-
-    if (sym->defined)
-        error(21, sym->name());
-
-    /* "declargs()" found the ")"; if a ";" appears after this, it was a
-     * prototype */
-    if (matchtoken(';')) {
-        if (sym->is_public)
-            error(10);
-        sym->forward = true;
-        if (!sc_needsemicolon)
-            error(10); /* old style prototypes used with optional semicolumns */
-        delete_symbols(&loctab, TRUE); /* prototype is done; forget everything */
-        return TRUE;
-    }
-    /* so it is not a prototype, proceed */
-
-    /* if this is a function that is not referred to (this can only be detected
-     * in the second stage), shut code generation off */
-    AutoStage stage;
-    if (sc_status == statWRITE && (sym->usage & uREAD) == 0 && !fpublic) {
-        glbdecl = glb_declared;
-
-        sc_status = statSKIP;
-        sym->skipped = true;
-
-        // If this is a method, output errors even if it's unused.
-        if (thistag && *thistag != -1)
-            sc_err_status = TRUE;
-    }
-
-    if (sym->deprecated && !sym->stock) {
-        const char* ptr = sym->documentation.c_str();
-        error(234, decl->name, ptr); /* deprecated (probably a public function) */
-    }
-    begcseg();
-    sym->defined = true;
-    if (stock)
-        sym->stock = true;
-    if (decl->opertok != 0 && opererror)
-        sym->defined = false;
-    startfunc(sym->name()); /* creates stack frame */
-    insert_dbgline(fileline);
-    setline(FALSE);
-    declared = 0; /* number of local cells */
-    pc_current_stack = 0;
-    resetstacklist();
-    resetheaplist();
-    curfunc = sym;
-    define_args(); /* add the symbolic info for the function arguments */
-    if (matchtoken('{')) {
-        lexpush();
-    } else {
-        // We require '{' for new methods.
-        if (decl->type.is_new)
-            needtoken('{');
-    }
-
-    Parser parser;
-    SemaContext sc;
-    if (auto stmt = parser.parse_stmt(nullptr, false)) {
-        ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, false);
-        if (stmt->Bind(sc)) {
-            if (stmt->Analyze(sc) && cc_ok())
-                stmt->Emit();
-        }
-    }
-
-    if (sc.returns_value()) {
-        sym->retvalue = true;
-    } else {
-        if (sym->tag == pc_tag_void && sym->forward && !decl->type.tag &&
-            !decl->type.is_new) {
-            // We got something like:
-            //    forward void X();
-            //    public X()
-            //
-            // Switch our decl type to void.
-            decl->type.tag = pc_tag_void;
-        }
-    }
-
-    // Check that return tags match.
-    if (sym->prototyped && sym->tag != decl->type.tag) {
-        int old_fline = fline;
-        fline = fileline;
-        error(180, type_to_name(sym->tag), type_to_name(decl->type.tag));
-        fline = old_fline;
-    }
-
-    assert(!has_stack_or_heap_scopes());
-
-    if (!sc.always_returns()) {
-        ldconst(0, sPRI);
-        ffret();
-        if (sym->must_return_value())
-            ReportFunctionReturnError(sym);
-    }
-    endfunc();
-    sym->codeaddr = code_idx;
-    gDataQueue.Emit();
-    TestSymbols(&loctab, TRUE);       /* test for unused arguments and labels */
-    delete_symbols(&loctab, TRUE);    /* clear local variables queue */
-    assert(loctab.next == NULL);
-    curfunc = NULL;
-    if (sc_status == statSKIP) {
-        stage.Rewind();
-        sc_status = statWRITE;
-        glb_declared = glbdecl;
-        sc_err_status = FALSE;
-    }
-
-    if (symp)
-        *symp = sym;
-
-    pc_max_memory = std::max(pc_max_func_memory, pc_max_memory);
-
-    return TRUE;
-}
-
-static int
 argcompare(arginfo* a1, arginfo* a2)
 {
     int result, level;
@@ -2603,184 +2232,7 @@ argcompare(arginfo* a1, arginfo* a2)
     return result;
 }
 
-/*  declargs()
- *
- *  This routine adds an entry in the local symbol table for each argument
- *  found in the argument list. It returns the number of arguments.
- */
-static int
-declargs(symbol* sym, int chkshadow, const int* thistag)
-{
-    int argcnt, oldargcnt;
-    arginfo arg;
-
-    std::vector<arginfo>& arglist = sym->function()->args;
-
-    /* if the function is already defined earlier, get the number of arguments
-     * of the existing definition
-     */
-    oldargcnt = 0;
-    if (sym->prototyped)
-        while (arglist[oldargcnt].ident != 0)
-            oldargcnt++;
-    argcnt = 0; /* zero aruments up to now */
-
-    if (thistag && *thistag != -1) {
-        arginfo* argptr;
-        if (!sym->prototyped) {
-            // Push a copy of the terminal argument.
-            sym->function()->resizeArgs(argcnt + 1);
-
-            argptr = &arglist[argcnt];
-            strcpy(argptr->name, "this");
-            if (symbol* enum_type = gTypes.find(*thistag)->asEnumStruct()) {
-                argptr->ident = iREFARRAY;
-                argptr->tag = 0;
-                argptr->dim[0] = enum_type->addr();
-                argptr->idxtag[0] = *thistag;
-                argptr->numdim = 1;
-            } else {
-                argptr->ident = iVARIABLE;
-                argptr->is_const = true;
-                argptr->tag = *thistag;
-            }
-        } else {
-            argptr = &arglist[0];
-        }
-
-        symbol* sym = addvariable(argptr->name, (argcnt + 3) * sizeof(cell), argptr->ident, sLOCAL,
-                                  argptr->tag, argptr->dim, argptr->numdim, argptr->idxtag);
-        if (argptr->is_const)
-            sym->is_const = true;
-        markusage(sym, uREAD);
-
-        argcnt++;
-    }
-
-    /* the '(' parantheses has already been parsed */
-    if (!matchtoken(')')) {
-        do { /* there are arguments; process them */
-            declinfo_t decl;
-            parse_decl(&decl, DECLFLAG_ARGUMENT | DECLFLAG_ENUMROOT);
-            check_void_decl(&decl, TRUE);
-
-            if (decl.type.ident == iVARARGS) {
-                if (!sym->prototyped) {
-                    /* redimension the argument list, add the entry iVARARGS */
-                    sym->function()->resizeArgs(argcnt + 1);
-
-                    arglist[argcnt].ident = iVARARGS;
-                    arglist[argcnt].tag = decl.type.tag;
-                } else {
-                    if (argcnt > oldargcnt || arglist[argcnt].ident != iVARARGS)
-                        error(25); /* function definition does not match prototype */
-                }
-                argcnt++;
-                continue;
-            }
-
-            if (argcnt >= SP_MAX_CALL_ARGUMENTS)
-                error(45);
-            if (decl.name[0] == PUBLIC_CHAR)
-                error(56, decl.name); /* function arguments cannot be public */
-
-            Type* type = gTypes.find(decl.type.semantic_tag());
-            if (type->isEnumStruct()) {
-                if (sym->native)
-                    error(135, type->name());
-            }
-
-            /* Stack layout:
-             *   base + 0*sizeof(cell)  == previous "base"
-             *   base + 1*sizeof(cell)  == function return address
-             *   base + 2*sizeof(cell)  == number of arguments
-             *   base + 3*sizeof(cell)  == first argument of the function
-             * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
-             */
-            arginfo arg;
-            doarg(sym, &decl, (argcnt + 3) * sizeof(cell), chkshadow, &arg);
-
-            /* arguments of a public function may not have a default value */
-            if (sym->is_public && arg.def)
-                error(59, decl.name);
-
-            if (!sym->prototyped) {
-                /* redimension the argument list, add the entry */
-                sym->function()->resizeArgs(argcnt + 1);
-                arglist[argcnt] = std::move(arg);
-            } else {
-                /* check the argument with the earlier definition */
-                if (argcnt > oldargcnt || !argcompare(&arglist[argcnt], &arg))
-                    error(181, arg.name); /* function argument does not match prototype */
-            }
-            argcnt++;
-        } while (matchtoken(','));
-        /* if the next token is not ",", it should be ")" */
-        needtoken(')');
-    }
-
-    sym->prototyped = true;
-    errorset(sRESET, 0); /* reset error flag (clear the "panic mode")*/
-    return argcnt;
-}
-
-/*  doarg       - declare one argument type
- *
- *  this routine is called from "declargs()" and adds an entry in the local
- *  symbol table for one argument.
- *
- *  "fpublic" indicates whether the function for this argument list is public.
- *  The arguments themselves are never public.
- */
-static void
-doarg(symbol* fun, declinfo_t* decl, int offset, int chkshadow, arginfo* arg)
-{
-    symbol* argsym;
-    typeinfo_t* type = &decl->type;
-
-    // Otherwise we get very weird line number ranges, anything to the current fline.
-    errorset(sEXPRMARK, 0);
-
-    strcpy(arg->name, decl->name);
-    arg->def = nullptr;
-    if (type->ident == iREFARRAY || type->ident == iARRAY) {
-        parse_arg_array_initializer(decl, arg);
-    } else {
-        if (matchtoken('=')) {
-            assert(type->ident == iVARIABLE || type->ident == iREFERENCE);
-            arg->def = std::make_unique<DefaultArg>();
-
-            cell val;
-            exprconst(&val, &arg->def->tag, NULL);
-            arg->def->val = ke::Some(val);
-
-            matchtag(type->tag, arg->def->tag, TRUE);
-        }
-        arg->ident = (char)type->ident;
-    }
-    arg->is_const = type->is_const;
-    arg->tag = type->tag;
-    argsym = findloc(decl->name);
-    if (argsym != NULL) {
-        error(21, decl->name); /* symbol already defined */
-    } else {
-        if (chkshadow && (argsym = findglb(decl->name)) != NULL && argsym->ident != iFUNCTN)
-            error(219, decl->name); /* variable shadows another symbol */
-        /* add details of type and address */
-        argsym = addvariable(decl->name, offset, arg->ident, sLOCAL, type->tag, arg->dim,
-                             arg->numdim, arg->idxtag);
-        if (type->ident == iREFERENCE)
-            argsym->usage |= uREAD; /* because references are passed back */
-        if (fun->callback || fun->stock || fun->is_public)
-            argsym->usage |= uREAD; /* arguments of public functions are always "used" */
-        if (type->is_const)
-            argsym->is_const = true;
-    }
-
-    errorset(sEXPRRELEASE, 0);
-}
-
-static void
+void
 fill_arg_defvalue(VarDecl* decl, arginfo* arg)
 {
     arg->def = std::make_unique<DefaultArg>();
@@ -2802,47 +2254,6 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
 
     arg->def->array = new ArrayData;
     *arg->def->array = std::move(data);
-}
-
-static void
-parse_arg_array_initializer(declinfo_t* orig_decl, arginfo* arg)
-{
-    // Note: position is not totally accurate, we'll fix this when we add
-    // positioning information to typeinfo_t.
-    auto pos = current_pos();
-
-    Expr* init = nullptr;
-    if (matchtoken('=')) {
-        Parser parser;
-        init = parser.var_init(sARGUMENT);
-    }
-
-    // Manually bind since we don't ever bind VarDecl (yet). If we can't bind
-    // then pretend we don't have an initializer.
-    SemaContext sc;
-    if (init && !init->Bind(sc))
-        init = nullptr;
-
-    // Note: this is only to assist with semantic checks, we do not actually
-    // emit this since arguments generate no code.
-    VarDecl* decl = new VarDecl(pos, gAtoms.add(orig_decl->name), orig_decl->type, sARGUMENT,
-                                false, false, false, init);
-    if (decl->type().ident == iARRAY)
-        ResolveArraySize(sc, decl);
-
-    // The initializer should not have been rewritten.
-    assert(init == decl->init_rhs());
-
-    if (CheckArrayDeclaration(sc, decl) && init)
-        fill_arg_defvalue(decl, arg);
-
-    const typeinfo_t& type = decl->type();
-    arg->numdim = type.numdim;
-    memcpy(arg->dim, type.dim, sizeof(int) * type.numdim);
-    memcpy(arg->idxtag, type.idxtag, sizeof(int) * type.numdim);
-
-    // Arrays are only ever passed by-reference, so rewrite the type here.
-    arg->ident = iREFARRAY;
 }
 
 static inline bool
@@ -3061,14 +2472,14 @@ bool
 exprconst(cell* val, int* tag, symbol** symptr)
 {
     int ident;
-    int old_errcount = sc_total_errors;
+    AutoCountErrors errors;
 
     bool failed;
     {
         AutoStage stage;
         errorset(sEXPRMARK, 0);
         ident = expression(val, tag, symptr, nullptr);
-        failed = (sc_status == statWRITE && sc_total_errors > old_errcount);
+        failed = (sc_status == statWRITE && !errors.ok());
         stage.Rewind();
     }
 

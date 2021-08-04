@@ -3,7 +3,7 @@ methodmap Handle {
 	public native Handle Clone();
 	public native int Size();
 	public native float SizeF();
-	public native bool Ok(x, y, z);
+	public native bool Ok(int x, int y, int z);
 };
 
 public main() {

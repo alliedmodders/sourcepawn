@@ -1017,6 +1017,9 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
         case sSTATIC:
             var.vclass = kVarClass_Static;
             break;
+        case sARGUMENT:
+            var.vclass = kVarClass_Arg;
+            break;
         default:
             var.vclass = 0;
             assert(false);
@@ -1534,8 +1537,7 @@ assemble_to_buffer(SmxByteBuffer* buffer)
 
         sp_file_natives_t& entry = natives->add();
 
-        char testalias[sNAMEMAX + 1];
-        if (lookup_alias(testalias, sym->name()))
+        if (lookup_alias(sym->name()))
             entry.name = names->add(gAtoms, "@");
         else
             entry.name = names->add(sym->nameAtom());

@@ -220,6 +220,7 @@ enum TokenKind {
     tLABEL,
     tSTRING,
     tEXPR,           /* for assigment to "lastst" only (see SC1.C) */
+    tSYN_PRAGMA_UNUSED,
     tENDLESS,        /* endless loop, for assigment to "lastst" only */
     tEMPTYBLOCK,     /* empty blocks for AM bug 4825 */
     tEOL,            /* newline, only returned by peek_new_line() */
@@ -266,7 +267,7 @@ IsAssignOp(int token)
 int plungequalifiedfile(char* name); /* explicit path included */
 int plungefile(char* name, int try_currentpath,
                int try_includepaths); /* search through "include" paths */
-void preprocess(void);
+void preprocess(bool allow_synthesized_tokens);
 void lexinit(void);
 int lex(cell* lexvalue, char** lexsym);
 int lextok(token_t* tok);
@@ -283,6 +284,7 @@ int expecttoken(int id, token_t* tok);
 int matchsymbol(token_ident_t* ident);
 int needsymbol(token_ident_t* ident);
 int peek_same_line();
+int lex_same_line();
 void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);

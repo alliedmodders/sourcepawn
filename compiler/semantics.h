@@ -28,6 +28,10 @@
 class SemaContext
 {
   public:
+    SemaContext(symbol* func = nullptr)
+      : func_(func)
+    {}
+
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
 
@@ -62,7 +66,11 @@ class SemaContext
     bool warned_unreachable() const { return warned_unreachable_; }
     void set_warned_unreachable() { warned_unreachable_ = true; }
 
+    symbol* func() const { return func_; }
+    void set_func(symbol* func) { func_ = func; }
+
   private:
+    symbol* func_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
@@ -87,3 +95,8 @@ class AutoCollectSemaFlow final
 
 void ReportFunctionReturnError(symbol* sym);
 bool TestSymbols(symbol* root, int testconst);
+void check_void_decl(const typeinfo_t* type, int variable);
+void check_void_decl(const declinfo_t* decl, int variable);
+int check_operatortag(int opertok, int resulttag, char* opername);
+int argcompare(arginfo* a1, arginfo* a2);
+void fill_arg_defvalue(VarDecl* decl, arginfo* arg);
