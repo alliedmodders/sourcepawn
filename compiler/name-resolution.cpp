@@ -31,20 +31,27 @@
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "semantics.h"
 #include "symbols.h"
 
 bool
 StmtList::Bind(SemaContext& sc)
 {
     bool ok = true;
-    for (const auto& stmt : stmts_)
+    for (const auto& stmt : stmts_) {
+        errorset(sRESET, 0);
+
         ok &= stmt->Bind(sc);
+    }
     return ok;
 }
 
 bool
 BlockStmt::Bind(SemaContext& sc)
 {
+    if (stmts_.empty())
+        return true;
+
     scope_ = CreateScope();
 
     AutoEnterScope enter_scope(scope_);
@@ -236,7 +243,7 @@ ConstDecl::Bind(SemaContext& sc)
 }
 
 bool
-is_shadowed_name(const char* name)
+is_shadowed_name(sp::Atom* name)
 {
     symbol* scope;
     if (symbol* sym = findloc(name, &scope)) {
@@ -268,7 +275,7 @@ VarDecl::Bind(SemaContext& sc)
     if (vclass_ == sGLOBAL) {
         sym_ = findconst(name_->chars());
         if (!sym_)
-            sym_ = findglb(name_->chars());
+            sym_ = findglb(name_);
 
         // This will go away when we remove the two-pass system.
         if (sym_ && sym_->defined) {
@@ -298,8 +305,14 @@ VarDecl::Bind(SemaContext& sc)
         // Although valid, a local variable whose name is equal to that
         // of a global variable or to that of a local variable at a lower
         // level might indicate a bug.
-        if (is_shadowed_name(name_->chars()))
-            error(pos_, 219, name_->chars());
+        if (vclass_ == sARGUMENT) {
+            auto sym = findglb(name_);
+            if (sym && sym->ident != iFUNCTN)
+                error(pos_, 219, name_->chars());
+        } else {
+            if (is_shadowed_name(name_))
+                error(pos_, 219, name_->chars());
+        }
 
         if (vclass_ == sSTATIC && type_.ident == iREFARRAY)
             error(pos_, 165);
@@ -315,8 +328,15 @@ VarDecl::Bind(SemaContext& sc)
         sym_->is_const = true;
     } else {
         if (!sym_) {
-            sym_ = addvariable(name_->chars(), 0, type_.ident, vclass_, type_.tag, type_.dim,
+            int ident = type_.ident;
+            if (vclass_ == sARGUMENT && ident == iARRAY)
+                ident = iREFARRAY;
+
+            sym_ = addvariable(name_->chars(), 0, ident, vclass_, type_.tag, type_.dim,
                                type_.numdim, type_.idxtag);
+
+            if (ident == iVARARGS)
+                markusage(sym_, uREAD);
         }
         sym_->is_const = type_.is_const;
         sym_->stock = is_stock_;
@@ -368,9 +388,9 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
 
     sym_ = findconst(name_->chars());
     if (!sym_)
-        sym_ = findloc(name_->chars());
+        sym_ = findloc(name_);
     if (!sym_)
-        sym_ = findglb(name_->chars());
+        sym_ = findglb(name_);
 
     if (!sym_) {
         // We assume this is a function that hasn't been seen yet. We should
@@ -388,7 +408,9 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
      * stub in the first pass (i.e. it was "used" but never declared or
      * implemented, issue an error
      */
-    if (sc_status != statFIRST && sym_->ident == iFUNCTN && !sym_->prototyped) {
+    if (sc_status != statFIRST && sym_->ident == iFUNCTN && !sym_->prototyped &&
+        sym_ != sc.func())
+    {
         error(pos_, 17, name_->chars());
         return false;
     }
@@ -469,7 +491,7 @@ IsDefinedExpr::Bind(SemaContext& sc)
 
     symbol* sym = findloc(name_->chars());
     if (!sym)
-        sym = findglb(name_->chars());
+        sym = findglb(name_);
     if (sym && sym->ident == iFUNCTN && !sym->defined)
         sym = nullptr;
     value_ = sym ? 1 : 0;
@@ -483,9 +505,9 @@ SizeofExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = findloc(ident_->chars());
+    sym_ = findloc(ident_);
     if (!sym_)
-        sym_ = findglb(ident_->chars());
+        sym_ = findglb(ident_);
     if (!sym_) {
         error(pos_, 17, ident_->chars());
         return false;
@@ -600,4 +622,166 @@ SwitchStmt::Bind(SemaContext& sc)
         ok &= pair.second->Bind(sc);
     }
     return ok;
+}
+
+bool
+FunctionInfo::Bind(SemaContext& sc)
+{
+    if (name_ && name_->chars()[0] == PUBLIC_CHAR) {
+        // :TODO: deprecate this syntax.
+        is_public_ = true;  // implicit public function
+        if (is_stock_)
+            error(42);      // invalid combination of class specifiers.
+    }
+
+    {
+        AutoErrorPos error_pos(pos_);
+
+        if (decl_.opertok)
+            name_ = NameForOperator();
+
+        sym_ = fetchfunc(name_->chars());
+    }
+
+    sc.set_func(sym_);
+    auto guard = ke::MakeScopeGuard([&]() -> void {
+        sc.set_func(nullptr);
+    });
+
+    if (strcmp(sym_->name(), uMAINFUNC) == 0) {
+        if (!args_.empty())
+            error(pos_, 5);     /* "main()" functions may not have any arguments */
+        sym_->usage |= uREAD;   /* "main()" is the program's entry point: always used */
+        is_public_ = true;
+    }
+
+    if (is_public_)
+        sym_->is_public = true;
+    if (is_static_)
+        sym_->is_static = true;
+    if (is_stock_)
+        sym_->stock = true;
+    if (is_forward_)
+        sym_->forward = true;
+    if (is_native_)
+        sym_->native = true;
+
+    sym_->fnumber = pos_.file;
+    sym_->lnumber = pos_.line;
+
+    bool ok = true;
+
+    ke::Maybe<AutoEnterScope> enter_scope;
+    if (!args_.empty()) {
+        scope_ = CreateScope();
+        enter_scope.init(scope_);
+
+        for (const auto& arg : args_)
+            ok &= arg.decl->Bind(sc);
+
+        if (this_tag_ && ok)
+            markusage(args_[0].decl->sym(), uREAD);
+    }
+
+    if ((sym_->native || sym_->is_public || is_forward_) && decl_.type.numdim > 0)
+        error(pos_, 141);
+
+    // :TODO: remove this. errors are errors.
+    if (sc_status == statWRITE && (sym_->usage & uREAD) == 0 && !sym_->is_public && !is_native_) {
+        sym_->skipped = true;
+
+        if (!this_tag_) {
+            if (body_)
+                sym_->defined = true;
+            return true;
+        }
+
+        // always error on inline methods
+        sc_err_status = TRUE;
+    }
+
+    if (body_)
+        ok &= body_->Bind(sc);
+
+    if (sym_->native && alias_)
+        insert_alias(sym_->name(), alias_);
+
+    sc_err_status = FALSE;
+    return ok;
+}
+
+sp::Atom*
+FunctionInfo::NameForOperator()
+{
+    int count = 0;
+    int tags[2] = {0, 0};
+    for (const auto& arg : args_) {
+        auto var = arg.decl;
+        if (count < 2)
+            tags[count] = var->type().tag;
+        if (var->type().ident != iVARIABLE)
+            error(pos_, 66, var->name()->chars());
+        if (var->init_rhs())
+            error(pos_, 59, var->name()->chars());
+        count++;
+    }
+
+    /* for '!', '++' and '--', count must be 1
+     * for '-', count may be 1 or 2
+     * for '=', count must be 1, and the resulttag is also important
+     * for all other (binary) operators and the special '~' operator, count must be 2
+     */
+    switch (decl_.opertok) {
+        case '!':
+        case '=':
+        case tINC:
+        case tDEC:
+            if (count != 1)
+                error(pos_, 62);
+            break;
+        case '-':
+            if (count != 1 && count != 2)
+                error(pos_, 62);
+            break;
+        default:
+            if (count != 2)
+                error(pos_, 62);
+            break;
+    }
+    if (decl_.type.ident != iVARIABLE)
+        error(pos_, 62);
+
+    char opername[sNAMEMAX + 1];
+    operator_symname(opername, decl_.name, tags[0], tags[1], count, decl_.type.tag);
+    return gAtoms.add(opername);
+}
+
+bool
+FunctionDecl::Bind(SemaContext& sc)
+{
+    if (!info_->Bind(sc))
+        return false;
+
+    if (deprecate_) {
+        symbol* sym = info_->sym();
+        sym->documentation = std::string(deprecate_->chars(), deprecate_->length());
+        sym->deprecated = true;
+    }
+    return true;
+}
+
+bool
+PragmaUnusedStmt::Bind(SemaContext& sc)
+{
+    for (const auto& name : names_) {
+        symbol* sym = findloc(name);
+        if (!sym)
+            sym = findglb(name);
+        if (!sym) {
+            error(pos_, 17, name->chars());
+            continue;
+        }
+        symbols_.emplace_back(sym);
+    }
+    return names_.size() == symbols_.size();
 }

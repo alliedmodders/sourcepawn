@@ -70,6 +70,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static void set_file_defines(std::string file);
+static void push_synthesized_token(TokenKind tok, int col);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
@@ -807,6 +808,7 @@ enum {
     CMD_DEFINE,
     CMD_IF,
     CMD_DIRECTIVE,
+    CMD_INJECTED,
 };
 
 /*  command
@@ -826,7 +828,7 @@ enum {
  *                    lptr      (altered)
  */
 static int
-command(void)
+command(bool allow_synthesized_tokens)
 {
     int tok, ret;
     cell val;
@@ -988,6 +990,8 @@ command(void)
                         lptr = (unsigned char*)strchr(
                             (char*)lptr,
                             '\0'); /* skip to end (ignore "extra characters on line") */
+                        while (!pc_deprecate.empty() && isspace(pc_deprecate.back()))
+                            pc_deprecate.pop_back();
                     } else if (strcmp(str, "dynamic") == 0) {
                         preproc_expr(&pc_stksize_override, NULL);
                     } else if (strcmp(str, "rational") == 0) {
@@ -1014,6 +1018,14 @@ command(void)
                         preproc_expr(&val, NULL);
                         sc_tabsize = (int)val;
                     } else if (strcmp(str, "unused") == 0) {
+                        if (Parser::sActive && allow_synthesized_tokens) {
+                            while (*lptr <= ' ' && *lptr != '\0')
+                                lptr++;
+
+                            push_synthesized_token(tSYN_PRAGMA_UNUSED, int(lptr - pline));
+                            return CMD_INJECTED;
+                        }
+
                         char name[sNAMEMAX + 1];
                         size_t i;
                         int comma;
@@ -1608,7 +1620,7 @@ scanellipsis(const unsigned char* lptr)
  *                     freading (referred to only)
  */
 void
-preprocess(void)
+preprocess(bool allow_synthesized_tokens)
 {
     int iscommand;
 
@@ -1619,7 +1631,9 @@ preprocess(void)
         stripcom(
             pline); /* ??? no need for this when reading back from list file (in the second pass) */
         lptr = pline; /* set "line pointer" to start of the parsing buffer */
-        iscommand = command();
+        iscommand = command(allow_synthesized_tokens);
+        if (iscommand == CMD_INJECTED)
+            return;
         if (iscommand != CMD_NONE)
             errorset(sRESET, 0); /* reset error flag ("panic mode") on empty line or directive */
         if (iscommand == CMD_NONE) {
@@ -1852,7 +1866,8 @@ const char* sc_tokens[] = {"*=",
                            "-identifier-",
                            "-label-",
                            "-string-",
-                           "-string-"};
+                           "-string-",
+                           "#pragma unused"};
 
 void
 lexinit()
@@ -1961,11 +1976,29 @@ advance_token_ptr()
     return current_token();
 }
 
+void
+push_synthesized_token(TokenKind kind, int col)
+{
+    ke::SaveAndSet<token_buffer_t*> switch_buffer(&sTokenBuffer, &sNormalBuffer);
+
+    assert(sTokenBuffer->depth < MAX_TOKEN_DEPTH);
+    full_token_t* tok = advance_token_ptr();
+    tok->id = kind;
+    tok->value = 0;
+    tok->str[0] = '\0';
+    tok->len = 0;
+    tok->start.line = fline;
+    tok->start.col = (int)(lptr - pline);
+    tok->start.file = fcurrent;
+    tok->end = tok->start;
+    lexpush();
+}
+
 static void
-preprocess_in_lex()
+preprocess_in_lex(bool allow_synthesized_tokens)
 {
     sTokenBuffer = &sPreprocessBuffer;
-    preprocess();
+    preprocess(allow_synthesized_tokens);
     sTokenBuffer = &sNormalBuffer;
 }
 
@@ -2017,7 +2050,14 @@ lex(cell* lexvalue, char** lexsym)
     newline = (lptr == pline); /* does lptr point to start of line buffer */
     while (*lptr <= ' ') {     /* delete leading white space */
         if (*lptr == '\0') {
-            preprocess_in_lex();
+            preprocess_in_lex(true);
+            if (sTokenBuffer->depth > 0) {
+                // Token was injected during preprocessing.
+                lexpop();
+                *lexvalue = current_token()->value;
+                *lexsym = current_token()->str;
+                return current_token()->id;
+            }
             if (!freading)
                 return 0;
             if (lptr == term_expr) /* special sequence to terminate a pending expression */
@@ -2324,7 +2364,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         /* there is an ellipses, go on parsing (this time with full preprocessing) */
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
-                preprocess_in_lex();
+                preprocess_in_lex(false);
                 assert(freading && lptr != term_expr);
             } else {
                 lptr++;
@@ -2334,7 +2374,7 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
         lptr += 3;
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
-                preprocess_in_lex();
+                preprocess_in_lex(false);
                 assert(freading && lptr != term_expr);
             } else {
                 lptr++;
@@ -2623,6 +2663,17 @@ peek_same_line()
         return next->id;
 
     return tEOL;
+}
+
+int
+lex_same_line()
+{
+    if (peek_same_line() == tEOL)
+        return tEOL;
+
+    cell value;
+    char* str;
+    return lex(&value, &str);
 }
 
 int

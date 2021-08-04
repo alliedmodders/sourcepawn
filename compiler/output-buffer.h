@@ -53,6 +53,8 @@ class AsmBuffer
         bytes_.resize(pos);
     }
 
+    bool empty() const { return bytes_.empty(); }
+
     void dump();
 
   private:

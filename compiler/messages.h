@@ -81,7 +81,7 @@ static const char* errmsg[] = {
     /*054*/ "unmatched closing brace (\"}\")\n",
     /*055*/ "start of function body without function header\n",
     /*056*/ "arrays, local variables and function arguments cannot be public (variable \"%s\")\n",
-    /*057*/ "unused57\n",
+    /*057*/ "property \"%s\" has no getter or setter\n",
     /*058*/ "duplicate argument; same argument is passed twice\n",
     /*059*/ "function argument may not have a default value (variable \"%s\")\n",
     /*060*/ "multiple \"#else\" directives between \"#if ... #endif\"\n",
@@ -298,4 +298,7 @@ static const char* warnmsg[] = {
 
 static const char* errmsg_ex[] = {
     /*400*/ "function \"%s\" must return a value\n",
+    /*401*/ "cannot specify '...' arguments more than once\n",
+    /*402*/ "cannot specify additional arguments after '...'\n",
+    /*403*/ "not yet implemented\n",
 };

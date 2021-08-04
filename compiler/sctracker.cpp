@@ -1,4 +1,4 @@
-/* vim: set ts=8 sts=2 sw=2 tw=99 et: */
+/* vim: set ts=8 sts=4 sw=4 tw=99 et: */
 #include "sctracker.h"
 
 #include <assert.h>
@@ -28,22 +28,30 @@ struct MemoryUse {
 struct MemoryScope {
     MemoryScope(MemoryScope&& other)
      : scope_id(other.scope_id),
-       usage(std::move(other.usage))
+       kind(other.kind),
+       usage(std::move(other.usage)),
+       blacklisted(other.blacklisted)
     {}
-    explicit MemoryScope(int scope_id)
-     : scope_id(scope_id)
+    explicit MemoryScope(int scope_id, AllocScopeKind kind)
+     : scope_id(scope_id),
+       kind(kind),
+       blacklisted(false)
     {}
     MemoryScope(const MemoryScope& other) = delete;
 
     MemoryScope& operator =(const MemoryScope& other) = delete;
     MemoryScope& operator =(MemoryScope&& other) {
         scope_id = other.scope_id;
+        kind = other.kind;
         usage = std::move(other.usage);
+        blacklisted = other.blacklisted;
         return *this;
     }
 
     int scope_id;
+    AllocScopeKind kind;
     std::vector<MemoryUse> usage;
+    bool blacklisted;
 };
 
 std::vector<MemoryScope> sStackScopes;
@@ -176,12 +184,12 @@ functags_add(funcenum_t* en, functag_t* src)
 }
 
 static void
-EnterMemoryScope(std::vector<MemoryScope>& frame)
+EnterMemoryScope(std::vector<MemoryScope>& frame, AllocScopeKind kind)
 {
     if (frame.empty())
-        frame.push_back(MemoryScope{0});
+        frame.push_back(MemoryScope{0, kind});
     else
-        frame.push_back(MemoryScope{frame.back().scope_id + 1});
+        frame.push_back(MemoryScope{frame.back().scope_id + 1, kind});
 }
 
 static void
@@ -212,9 +220,9 @@ PopScope(std::vector<MemoryScope>& scope_list)
 }
 
 void
-pushheaplist()
+pushheaplist(AllocScopeKind kind)
 {
-    EnterMemoryScope(sHeapScopes);
+    EnterMemoryScope(sHeapScopes, kind);
 }
 
 // Sums up array usage in the current heap tracer and convert it into a dynamic array.
@@ -238,16 +246,40 @@ pop_static_heaplist()
 }
 
 int
-markheap(int type, int size)
+markheap(int type, int size, AllocScopeKind kind)
 {
-    AllocInScope(sHeapScopes.back(), type, size);
+    MemoryScope* scope = nullptr;
+    if (kind == AllocScopeKind::Temp) {
+        // Every expression should have an immediate temporary scope.
+        scope = &sHeapScopes.back();
+        assert(scope->kind == AllocScopeKind::Temp);
+        assert(!scope->blacklisted);
+    } else {
+        // Declarations will have an immediate temporary scope as well, but we
+        // must allocate into the normal scope before using the temporary one
+        // (because it's a LIFO allocation).
+        for (auto iter = sHeapScopes.rbegin(); iter != sHeapScopes.rend(); iter++) {
+            if (iter->kind == AllocScopeKind::Temp) {
+                assert(iter->usage.empty());
+                iter->blacklisted = true;
+                continue;
+            }
+            if (iter->kind == AllocScopeKind::Normal) {
+                scope = &*iter;
+                break;
+            }
+        }
+        assert(scope);
+    }
+
+    AllocInScope(*scope, type, size);
     return size;
 }
 
 void
 pushstacklist()
 {
-    EnterMemoryScope(sStackScopes);
+    EnterMemoryScope(sStackScopes, AllocScopeKind::Normal);
 }
 
 int
@@ -338,6 +370,12 @@ int
 stack_scope_id()
 {
     return sStackScopes.back().scope_id;
+}
+
+int
+heap_scope_id()
+{
+    return sHeapScopes.back().scope_id;
 }
 
 bool

@@ -22,7 +22,9 @@
 
 #include <stddef.h>
 
+#include "errors.h"
 #include "sc.h"
+#include "scvars.h"
 
 template <typename T>
 static void
@@ -47,4 +49,12 @@ StringToCells(const char* str, size_t len, const T& litadd)
         // Add a full cell of zeroes.
         litadd(0);
     }
+}
+
+// Returns true if compilation is in its second phase (writing phase) and has
+// so far proceeded without error.
+static inline bool
+cc_ok()
+{
+    return sc_status == statWRITE && sc_total_errors == 0;
 }

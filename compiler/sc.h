@@ -190,7 +190,7 @@ struct symbol {
     int tag;       /* tagname id */
 
     // See uREAD/uWRITTEN above.
-    uint8_t usage : 2;
+    uint8_t usage;
 
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
@@ -360,7 +360,7 @@ struct value {
             case iCONSTEXPR:
                 return true;
             case iREFERENCE:
-                return sym->vclass == sLOCAL;
+                return sym->vclass == sARGUMENT || sym->vclass == sLOCAL;
             default:
                 return false;
         }

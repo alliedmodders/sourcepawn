@@ -43,7 +43,7 @@
 #include "sp_symhash.h"
 
 static bool sAliasTableInitialized;
-static ke::HashMap<sp::CharsAndLength, std::string, KeywordTablePolicy> sAliases;
+static ke::HashMap<sp::CharsAndLength, sp::Atom*, KeywordTablePolicy> sAliases;
 
 struct MacroTablePolicy {
     static bool matches(const std::string& a, const std::string& b) {
@@ -125,7 +125,7 @@ delete_stringtable(stringlist* root)
 }
 
 void
-insert_alias(const char* name, const char* alias)
+insert_alias(const char* name, sp::Atom* alias)
 {
     if (!sAliasTableInitialized) {
         sAliases.init(128);
@@ -140,18 +140,17 @@ insert_alias(const char* name, const char* alias)
         sAliases.add(p, key, alias);
 }
 
-bool
-lookup_alias(char* target, const char* name)
+sp::Atom*
+lookup_alias(const char* name)
 {
     if (!sAliasTableInitialized)
-        return false;
+        return nullptr;
 
     sp::CharsAndLength key(name, strlen(name));
     auto p = sAliases.find(key);
     if (!p.found())
-        return false;
-    ke::SafeStrcpy(target, sNAMEMAX + 1, p->value.c_str());
-    return true;
+        return nullptr;
+    return p->value;
 }
 
 void

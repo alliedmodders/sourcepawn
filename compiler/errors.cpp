@@ -33,6 +33,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <utility>
+#include <vector>
+
 #include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"
@@ -55,9 +59,15 @@
 static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char */
 
 static int errflag;
+static int errorcount;
 static AutoErrorPos* sPosOverride = nullptr;
 bool sc_enable_first_pass_error_display = false;
 bool sc_one_error_per_statement = false;
+bool sc_shutting_down = false;
+
+std::vector<ErrorReport> sErrorList;
+
+void report_error(ErrorReport&& report);
 
 AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
   : pos_(pos),
@@ -100,7 +110,7 @@ error(int number, ...)
     ErrorReport report = ErrorReport::infer_va(number, ap);
     va_end(ap);
 
-    report_error(&report);
+    report_error(std::move(report));
     return 0;
 }
 
@@ -113,7 +123,7 @@ error(const token_pos_t& where, int number, ...)
     va_end(ap);
 
     report.lineno = where.line;
-    report_error(&report);
+    report_error(std::move(report));
     return 0;
 }
 
@@ -123,7 +133,7 @@ error_va(const token_pos_t& where, int number, va_list ap)
     ErrorReport report = ErrorReport::create_va(number, where.file, where.line, ap);
 
     report.lineno = where.line;
-    report_error(&report);
+    report_error(std::move(report));
     return 0;
 }
 
@@ -135,7 +145,7 @@ error(symbol* sym, int number, ...)
     ErrorReport report = ErrorReport::create_va(number, sym->fnumber, sym->lnumber, ap);
     va_end(ap);
 
-    report_error(&report);
+    report_error(std::move(report));
     return 0;
 }
 
@@ -143,7 +153,7 @@ static void
 abort_compiler()
 {
     if (strlen(errfname) == 0) {
-        fprintf(stdout, "\nCompilation aborted.");
+        fprintf(stdout, "\nCompilation aborted.\n");
     }
     longjmp(errbuf, 2); /* fatal error, quit */
 }
@@ -155,10 +165,12 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     report.number = number;
     report.fileno = fileno;
     report.lineno = lineno;
-    if (report.fileno >= 0)
+    if (report.fileno >= 0) {
         report.filename = get_inputfile(report.fileno);
-    else
+    } else {
+        report.fileno = 0;
         report.filename = inpfname;
+    }
 
     if (number < 200 || (number < 300 && sc_warnings_are_errors) || number >= 400)
         report.type = ErrorType::Error;
@@ -226,25 +238,42 @@ ErrorReport::infer_va(int number, va_list ap)
 }
 
 void
-report_error(ErrorReport* report)
+clear_errors()
 {
-    static int lastline, errorcount;
+    sErrorList.clear();
+    warnnum = 0;
+
+    // :TODO: What? Combine these variables.
+    sc_total_errors = 0;
+    errorcount = 0;
+    errnum = 0;
+}
+
+void
+report_error(ErrorReport&& report)
+{
+    static int lastline;
     static short lastfile;
-    static FILE* stdfp = sc_use_stderr ? stderr : stdout;
 
     /* errflag is reset on each semicolon.
      * In a two-pass compiler, an error should not be reported twice. Therefore
      * the error reporting is enabled only in the second pass (and only when
      * actually producing output). Fatal errors may never be ignored.
      */
-    if (report->type != ErrorType::Fatal) {
+    if (report.type != ErrorType::Fatal) {
+        // This is needed so Analyze() can return "true" but still propagate errors.
+        if (report.type == ErrorType::Error)
+            sc_total_errors++;
+
         if (errflag && sc_one_error_per_statement)
             return;
         if (sc_status != statWRITE && !sc_err_status && !sc_enable_first_pass_error_display)
             return;
     }
 
-    switch (report->type) {
+    sErrorList.emplace_back(std::move(report));
+
+    switch (sErrorList.back().type) {
         case ErrorType::Suppressed:
             return;
         case ErrorType::Warning:
@@ -259,34 +288,54 @@ report_error(ErrorReport* report)
             break;
     }
 
+    if (sErrorList.back().type == ErrorType::Fatal || errnum > 25) {
+        if (sc_shutting_down)
+            dump_error_report(true);
+        else
+            abort_compiler();
+        return;
+    }
+
+    // Count messages per line, reset if not the same line.
+    if (lastline != sErrorList.back().lineno || sErrorList.back().fileno != lastfile)
+        errorcount = 0;
+
+    lastline = sErrorList.back().lineno;
+    lastfile = sErrorList.back().fileno;
+
+    if (sErrorList.back().type != ErrorType::Warning)
+        errorcount++;
+    if (errorcount >= 3)
+        error(FATAL_ERROR_OVERWHELMED_BY_BAD);
+}
+
+void
+dump_error_report(bool clear)
+{
+    static FILE* stdfp = sc_use_stderr ? stderr : stdout;
+
     FILE* fp = nullptr;
     if (strlen(errfname) > 0)
         fp = fopen(errfname, "a");
     if (!fp)
         fp = stdfp;
 
-    fprintf(fp, "%s", report->message.c_str());
+    std::sort(sErrorList.begin(), sErrorList.end(),
+              [](const ErrorReport& a, const ErrorReport& b) -> bool {
+        if (a.fileno == b.fileno)
+            return a.lineno < b.lineno;
+        return a.fileno > b.fileno;
+    });
+
+    for (const auto& report : sErrorList)
+        fprintf(fp, "%s", report.message.c_str());
     fflush(fp);
 
     if (fp != stdfp)
         fclose(fp);
 
-    if (report->type == ErrorType::Fatal || errnum > 25) {
-        abort_compiler();
-        return;
-    }
-
-    // Count messages per line, reset if not the same line.
-    if (lastline != report->lineno || report->fileno != lastfile)
-        errorcount = 0;
-
-    lastline = report->lineno;
-    lastfile = report->fileno;
-
-    if (report->type != ErrorType::Warning)
-        errorcount++;
-    if (errorcount >= 3)
-        error(FATAL_ERROR_OVERWHELMED_BY_BAD);
+    if (clear)
+        sErrorList.clear();
 }
 
 void

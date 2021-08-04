@@ -79,13 +79,13 @@ extern int pc_tag_nullfunc_t;     /* the null function type */
 extern int pc_anytag;             /* global any tag */
 extern int sc_require_newdecls;   /* only newdecls are allowed */
 extern bool sc_warnings_are_errors;
-extern unsigned sc_total_errors;
 extern int sc_compression_level;
 extern int pc_max_func_memory;    /* high stack watermark */
 extern int pc_current_memory;     /* current stack watermark */
 extern int pc_max_memory;         /* maximum stack watermark across all stacks */
 extern int pc_current_stack;
 extern int sc_use_stderr;
+extern int sc_reparse;            /* needs 3th parse because of changed prototypes? */
 
 extern void* inpf;      /* file read from (source or include) */
 extern void* inpf_org;  /* main source file */
@@ -102,11 +102,3 @@ extern std::vector<short> gCurrentFileStack;
 extern std::vector<int> gCurrentLineStack;
 extern std::vector<void*> gInputFileStack;
 extern std::vector<char*> gInputFilenameStack;
-
-// Returns true if compilation is in its second phase (writing phase) and has
-// so far proceeded without error.
-static inline bool
-cc_ok()
-{
-    return sc_status == statWRITE && sc_total_errors == 0;
-}

@@ -1,1 +1,1 @@
-X2 was already defined on this methodmap
+(4) : error 021: symbol already defined: "X.X2"

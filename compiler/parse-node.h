@@ -53,6 +53,7 @@ typedef void (*OpFunc)();
 class Expr;
 class ArrayExpr;
 class BinaryExpr;
+class BlockStmt;
 class DefaultArgExpr;
 class NewArrayExpr;
 class StringExpr;
@@ -61,6 +62,7 @@ class SymbolExpr;
 class TaggedValueExpr;
 struct StructInitField;
 
+class CodegenContext;
 class SemaContext;
 
 class ParseNode : public PoolObject
@@ -112,7 +114,10 @@ class Stmt : public ParseNode
       : ParseNode(pos)
     {}
 
-    void Emit();
+    void Emit(CodegenContext& cg);
+
+    // Process any child nodes whose value is consumed.
+    virtual void ProcessUses(SemaContext& sc) = 0;
 
     // Return the last statement in a linear statement chain.
     virtual Stmt* GetLast() { return this; }
@@ -122,6 +127,7 @@ class Stmt : public ParseNode
     void Process();
 
     virtual bool IsExprStmt() { return false; }
+    virtual BlockStmt* AsBlockStmt() { return nullptr; }
 
     FlowType flow_type() const { return flow_type_; }
     void set_flow_type(FlowType type) { flow_type_ = type; }
@@ -129,7 +135,7 @@ class Stmt : public ParseNode
     bool IsTerminal() const { return flow_type() != Flow_None; }
 
   private:
-    virtual void DoEmit() = 0;
+    virtual void DoEmit(CodegenContext& cg) = 0;
 
   private:
     FlowType flow_type_ = Flow_None;
@@ -144,7 +150,8 @@ class StmtList : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
+    void ProcessUses(SemaContext& sc) override;
 
     Stmt* GetLast() override {
         return stmts_.empty() ? this : stmts_.back();
@@ -166,9 +173,12 @@ class BlockStmt : public StmtList
         scope_(nullptr)
     {}
 
+    static BlockStmt* WrapStmt(Stmt* stmt);
+
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
+    BlockStmt* AsBlockStmt() override { return this; }
 
     symbol* scope() const { return scope_; }
     void set_scope(symbol* scope) { scope_ = scope; }
@@ -188,7 +198,8 @@ class LoopControlStmt : public Stmt
     }
 
     bool Analyze(SemaContext& sc) override { return true; }
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
+    void ProcessUses(SemaContext& sc) override {}
 
     int token() const { return token_; }
 
@@ -206,7 +217,8 @@ class StaticAssertStmt : public Stmt
     {}
 
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override {}
+    void DoEmit(CodegenContext&) override {}
+    void ProcessUses(SemaContext& sc) override {}
 
   private:
     int val_;
@@ -224,7 +236,7 @@ class Decl : public Stmt
     bool Analyze(SemaContext& sc) override;
 
     // Most decls don't emit anything.
-    void DoEmit() override {}
+    void DoEmit(CodegenContext&) override {}
 
     sp::Atom* name() const {
         return name_;
@@ -244,7 +256,8 @@ class ErrorDecl final : public Decl
     bool Bind(SemaContext& sc) override {
         return false;
     }
-    void DoEmit() override {}
+    void DoEmit(CodegenContext&) override {}
+    void ProcessUses(SemaContext& sc) override {}
 };
 
 class VarDecl : public Decl
@@ -255,7 +268,8 @@ class VarDecl : public Decl
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext&) override;
+    void ProcessUses(SemaContext& sc) override;
 
     Expr* init_rhs() const;
     int vclass() const {
@@ -274,6 +288,7 @@ class VarDecl : public Decl
     void set_no_autozero() {
         autozero_ = false;
     }
+    symbol* sym() const { return sym_; }
 
   private:
     bool AnalyzePstruct();
@@ -334,10 +349,11 @@ class EnumDecl : public Decl
     {}
 
     bool Bind(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
+
     PoolList<EnumField>& fields() {
         return fields_;
     }
-
     int increment() const {
         return increment_;
     }
@@ -370,6 +386,8 @@ class StructDecl : public Decl
       : Decl(pos, name)
     {}
 
+    void ProcessUses(SemaContext& sc) override {}
+
     PoolList<StructField>& fields() {
         return fields_;
     }
@@ -387,6 +405,7 @@ class TypedefDecl : public Decl
     {}
 
     bool Bind(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
 
   private:
     functag_t* type_;
@@ -401,6 +420,7 @@ class TypesetDecl : public Decl
     {}
 
     bool Bind(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
 
     PoolList<functag_t*>& types() {
         return types_;
@@ -431,6 +451,7 @@ class UsingDecl : public Decl
     {}
 
     bool Bind(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
 };
 
 class Expr : public ParseNode
@@ -452,6 +473,11 @@ class Expr : public ParseNode
         return false;
     }
 
+    // Process any child nodes whose value is consumed.
+    virtual void ProcessUses(SemaContext& sc) = 0;
+    // Process any child nodes whose value is not consumed.
+    virtual void ProcessDiscardUses(SemaContext& sc) { ProcessUses(sc); }
+
     // Evaluate as a constant. Returns false if non-const. This is a wrapper
     // around FoldToConstant().
     bool EvalConst(cell* value, int* tag);
@@ -464,11 +490,8 @@ class Expr : public ParseNode
         return nullptr;
     }
 
-    // Process any child nodes whose value is consumed.
-    virtual void ProcessUses() = 0;
-
     // Mark the node's value as consumed.
-    virtual void MarkUsed() {}
+    virtual void MarkUsed(SemaContext&) {}
 
     virtual bool AnalyzeForInitializer(SemaContext& sc) {
         return Analyze(sc);
@@ -484,9 +507,9 @@ class Expr : public ParseNode
         return lvalue_;
     }
 
-    void MarkAndProcessUses() {
-        MarkUsed();
-        ProcessUses();
+    void MarkAndProcessUses(SemaContext& sc) {
+        MarkUsed(sc);
+        ProcessUses(sc);
     }
 
     // Casts.
@@ -521,7 +544,7 @@ class ErrorExpr final : public Expr
         return false;
     }
     void DoEmit() override {}
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
 };
 
 class IsDefinedExpr final : public Expr
@@ -535,7 +558,7 @@ class IsDefinedExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
 
   private:
     cell value_ = 0;
@@ -558,7 +581,7 @@ class UnaryExpr final : public Expr
     void DoEmit() override;
     void EmitTest(bool jump_on_true, int target) override;
     bool HasSideEffects() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
   private:
     int token_;
@@ -573,7 +596,7 @@ class BinaryExprBase : public Expr
 
     bool Bind(SemaContext& sc) override;
     bool HasSideEffects() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
     int token() const {
         return token_;
@@ -668,7 +691,7 @@ class ChainedCompareExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     bool HasSideEffects() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
     void EmitTest(bool jump_on_true, int target) override;
 
   private:
@@ -698,7 +721,8 @@ class TernaryExpr final : public Expr
     bool HasSideEffects() override {
         return first_->HasSideEffects() || second_->HasSideEffects() || third_->HasSideEffects();
     }
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
+    void ProcessDiscardUses(SemaContext& sc) override;
 
   private:
     void EmitImpl(ke::Maybe<cell>* branch1, ke::Maybe<cell>* branch2);
@@ -725,7 +749,7 @@ class IncDecExpr : public Expr
     bool HasSideEffects() override {
         return true;
     }
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
   protected:
     int token_;
@@ -771,7 +795,7 @@ class CastExpr final : public Expr
     bool HasSideEffects() override {
         return expr_->HasSideEffects();
     }
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
   private:
     int token_;
@@ -793,7 +817,7 @@ class SizeofExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext& sc) override {}
 
   private:
     sp::Atom* ident_;
@@ -817,7 +841,8 @@ class SymbolExpr final : public Expr
     bool BindLval(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void MarkUsed(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
     symbol* BindCallTarget(SemaContext& sc, int token, Expr** implicit_this) override;
     symbol* BindNewTarget(SemaContext& sc) override;
     SymbolExpr* AsSymbolExpr() override {
@@ -869,8 +894,8 @@ class CallExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void MarkUsed() override;
-    void ProcessUses() override;
+    void MarkUsed(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override;
     bool HasSideEffects() override {
         return true;
     }
@@ -916,7 +941,7 @@ class CallUserOpExpr final : public EmitOnlyExpr
         return true;
     }
     void DoEmit() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
   private:
     UserOperation userop_;
@@ -932,7 +957,7 @@ class DefaultArgExpr final : public EmitOnlyExpr
         return this;
     }
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext& sc) override {}
 
   private:
     arginfo* arg_;
@@ -955,7 +980,7 @@ class FieldAccessExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     bool HasSideEffects() override;
     void DoEmit() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
     bool AnalyzeWithOptions(SemaContext& sc, bool from_call);
 
@@ -987,7 +1012,7 @@ class IndexExpr final : public Expr
     }
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
     bool HasSideEffects() override {
         return base_->HasSideEffects() || expr_->HasSideEffects();
     }
@@ -1003,7 +1028,7 @@ class RvalueExpr final : public EmitOnlyExpr
     explicit RvalueExpr(Expr* expr);
 
     void DoEmit() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
   private:
     Expr* expr_;
@@ -1024,7 +1049,8 @@ class CommaExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void EmitTest(bool jump_on_true, int target) override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
+    void ProcessDiscardUses(SemaContext& sc) override;
     bool HasSideEffects() override {
         return has_side_effects_;
     }
@@ -1045,7 +1071,7 @@ class ThisExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
 
   private:
     symbol* sym_;
@@ -1060,7 +1086,7 @@ class NullExpr final : public Expr
 
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
 };
 
 
@@ -1075,7 +1101,7 @@ class TaggedValueExpr : public Expr
 
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
     TaggedValueExpr* AsTaggedValueExpr() override {
         return this;
     }
@@ -1118,7 +1144,7 @@ class StringExpr final : public Expr
 
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
     StringExpr* AsStringExpr() override {
         return this;
     }
@@ -1143,7 +1169,7 @@ class NewArrayExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     bool AnalyzeForInitializer(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override;
+    void ProcessUses(SemaContext& sc) override;
 
     NewArrayExpr* AsNewArrayExpr() override {
         return this;
@@ -1179,7 +1205,7 @@ class ArrayExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
-    void ProcessUses() override {}
+    void ProcessUses(SemaContext&) override {}
 
     ArrayExpr* AsArrayExpr() override {
         return this;
@@ -1218,9 +1244,7 @@ class StructExpr final : public Expr
     bool Analyze(SemaContext& sc) override {
         return true;
     }
-    void ProcessUses() override {
-        assert(false);
-    }
+    void ProcessUses(SemaContext&) override {}
     void DoEmit() override {
         assert(false);
     }
@@ -1248,7 +1272,8 @@ class IfStmt : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
+    void ProcessUses(SemaContext& sc) override;
 
   private:
     Expr* cond_;
@@ -1266,8 +1291,12 @@ class ExprStmt : public Stmt
 
     bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
     bool IsExprStmt() override { return true; }
+
+    void ProcessUses(SemaContext& sc) override {
+        expr_->ProcessDiscardUses(sc);
+    }
 
   private:
     Expr* expr_;
@@ -1285,11 +1314,12 @@ class ReturnStmt : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
 
   private:
-    bool CheckArrayReturn();
-    void EmitArrayReturn();
+    bool CheckArrayReturn(SemaContext& sc);
+    void EmitArrayReturn(CodegenContext& cg);
 
   private:
     Expr* expr_;
@@ -1306,7 +1336,11 @@ class AssertStmt : public Stmt
 
     bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
+
+    void ProcessUses(SemaContext& sc) override {
+        expr_->MarkAndProcessUses(sc);
+    }
 
   private:
     Expr* expr_;
@@ -1322,7 +1356,11 @@ class DeleteStmt : public Stmt
 
     bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void DoEmit(CodegenContext& cg) override;
+
+    void ProcessUses(SemaContext& sc) override {
+        expr_->MarkAndProcessUses(sc);
+    }
 
   private:
     Expr* expr_;
@@ -1339,7 +1377,8 @@ class ExitStmt : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
 
   private:
     Expr* expr_;
@@ -1357,7 +1396,8 @@ class DoWhileStmt : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
 
   private:
     int token_;
@@ -1381,7 +1421,8 @@ class ForStmt : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
 
   private:
     symbol* scope_;
@@ -1405,7 +1446,8 @@ class SwitchStmt : public Stmt
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
-    void DoEmit() override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
 
     void AddCase(PoolList<Expr*>&& exprs, Stmt* stmt) {
         cases_.emplace_back(std::move(exprs), stmt);
@@ -1421,4 +1463,111 @@ class SwitchStmt : public Stmt
     typedef std::pair<PoolList<Expr*>, Stmt*> Case;
 
     PoolList<Case> cases_;
+};
+
+class PragmaUnusedStmt : public Stmt
+{
+  public:
+    PragmaUnusedStmt(const token_pos_t& pos)
+      : Stmt(pos)
+    {}
+
+    bool Bind(SemaContext& sc) override;
+    bool Analyze(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
+    void DoEmit(CodegenContext& cg) override {}
+
+    PoolList<sp::Atom*>& names() { return names_; }
+
+  private:
+    PoolList<sp::Atom*> names_;
+    PoolList<symbol*> symbols_;
+};
+
+struct FunctionArg {
+    VarDecl* decl;
+};
+
+class FunctionInfo : public PoolObject
+{
+  public:
+    explicit FunctionInfo(const token_pos_t& pos, const declinfo_t& decl);
+
+    void AddArg(VarDecl* arg);
+    bool IsVariadic() const;
+
+    bool Bind(SemaContext& sc);
+    bool Analyze(SemaContext& sc);
+    void ProcessUses(SemaContext& sc);
+    void Emit(CodegenContext& cg);
+
+    void set_is_public() { is_public_ = true; }
+    void set_is_static() { is_static_ = true; }
+    void set_is_stock() { is_stock_ = true; }
+    void set_is_forward() { is_forward_ = true; }
+    void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
+    void set_alias(sp::Atom* alias) { alias_ = alias; }
+
+    const ke::Maybe<int>& this_tag() const { return this_tag_; }
+    void set_this_tag(int this_tag) {
+        if (this_tag != -1)
+            this_tag_.init(this_tag);
+    }
+
+    Stmt* body() const { return body_; }
+    void set_body(Stmt* body) { body_ = body; }
+
+    sp::Atom* name() const { return name_; }
+    void set_name(sp::Atom* name) { name_ = name; }
+
+    void set_is_native() { is_native_ = true; }
+    bool is_native() const { return is_native_; }
+
+    PoolList<FunctionArg>& args() { return args_; }
+    const declinfo_t& decl() const { return decl_; }
+    symbol* sym() const { return sym_; }
+    const token_pos_t& pos() const { return pos_; }
+
+  private:
+    bool AnalyzeArgs(SemaContext& sc);
+
+    sp::Atom* NameForOperator();
+
+  private:
+    token_pos_t pos_;
+    token_pos_t end_pos_;
+    declinfo_t decl_;
+    sp::Atom* name_ = nullptr;
+    bool is_public_ = false;
+    bool is_static_ = false;
+    bool is_stock_ = false;
+    bool is_forward_ = false;
+    bool is_native_ = false;
+    Stmt* body_ = nullptr;
+    PoolList<FunctionArg> args_;
+    symbol* sym_ = nullptr;
+    symbol* scope_ = nullptr;
+    ke::Maybe<int> this_tag_;
+    sp::Atom* alias_ = nullptr;
+};
+
+class FunctionDecl : public Decl
+{
+  public:
+    explicit FunctionDecl(const token_pos_t& pos, FunctionInfo* info)
+      : Decl(pos, info->name()),
+        info_(info)
+    {}
+
+    bool Bind(SemaContext& sc) override;
+    bool Analyze(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
+
+    void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
+    symbol* sym() const { return info_->sym(); }
+
+  private:
+    FunctionInfo* info_;
+    PoolString* deprecate_;
 };

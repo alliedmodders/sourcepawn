@@ -25,10 +25,12 @@
 
 #include <amtl/am-raii.h>
 #include "array-helpers.h"
+#include "code-generator.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
+#include "lexer-inl.h"
 #include "parse-node.h"
 #include "sclist.h"
 #include "sctracker.h"
@@ -39,13 +41,20 @@ void
 Stmt::Process()
 {
     SemaContext sc;
-    if (!Bind(sc))
-        return;
-    if (!Analyze(sc))
+    AutoCountErrors errors;
+
+    if (!Bind(sc) || !errors.ok())
         return;
 
-    if (cc_ok())
-        Emit();
+    errors.Reset();
+    if (!Analyze(sc) || !errors.ok())
+        return;
+
+    ProcessUses(sc);
+
+    CodegenContext cg(curfunc);
+    if (sc_status == statWRITE)
+        Emit(cg);
 }
 
 bool
@@ -53,6 +62,8 @@ StmtList::Analyze(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& stmt : stmts_) {
+        errorset(sRESET, 0);
+
         ok &= stmt->Analyze(sc);
 
         FlowType flow = stmt->flow_type();
@@ -63,10 +74,10 @@ StmtList::Analyze(SemaContext& sc)
 }
 
 void
-StmtList::DoEmit()
+StmtList::DoEmit(CodegenContext& cg)
 {
     for (const auto& stmt : stmts_)
-        stmt->Emit();
+        stmt->Emit(cg);
 }
 
 bool
@@ -384,9 +395,9 @@ RvalueExpr::RvalueExpr(Expr* expr)
 }
 
 void
-RvalueExpr::ProcessUses()
+RvalueExpr::ProcessUses(SemaContext& sc)
 {
-    expr_->MarkAndProcessUses();
+    expr_->MarkAndProcessUses(sc);
 }
 
 bool
@@ -457,9 +468,9 @@ UnaryExpr::HasSideEffects()
 }
 
 void
-UnaryExpr::ProcessUses()
+UnaryExpr::ProcessUses(SemaContext& sc)
 {
-    expr_->MarkAndProcessUses();
+    expr_->MarkAndProcessUses(sc);
 }
 
 bool
@@ -503,9 +514,9 @@ IncDecExpr::Analyze(SemaContext& sc)
 }
 
 void
-IncDecExpr::ProcessUses()
+IncDecExpr::ProcessUses(SemaContext& sc)
 {
-    expr_->MarkAndProcessUses();
+    expr_->MarkAndProcessUses(sc);
 }
 
 BinaryExprBase::BinaryExprBase(const token_pos_t& pos, int token, Expr* left, Expr* right)
@@ -526,10 +537,14 @@ BinaryExprBase::HasSideEffects()
 }
 
 void
-BinaryExprBase::ProcessUses()
+BinaryExprBase::ProcessUses(SemaContext& sc)
 {
-    left_->MarkAndProcessUses();
-    right_->MarkAndProcessUses();
+    // Assign ops, even read/write ones, do not count as variable uses for TestSymbols.
+    if (IsAssignOp(token_))
+        left_->ProcessUses(sc);
+    else
+        left_->MarkAndProcessUses(sc);
+    right_->MarkAndProcessUses(sc);
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
@@ -999,11 +1014,11 @@ ChainedCompareExpr::Analyze(SemaContext& sc)
 }
 
 void
-ChainedCompareExpr::ProcessUses()
+ChainedCompareExpr::ProcessUses(SemaContext& sc)
 {
-    first_->ProcessUses();
+    first_->MarkAndProcessUses(sc);
     for (const auto& op : ops_)
-        op.expr->ProcessUses();
+        op.expr->MarkAndProcessUses(sc);
 }
 
 bool
@@ -1077,11 +1092,19 @@ TernaryExpr::FoldToConstant()
 }
 
 void
-TernaryExpr::ProcessUses()
+TernaryExpr::ProcessUses(SemaContext& sc)
 {
-    first_->MarkAndProcessUses();
-    second_->MarkAndProcessUses();
-    third_->MarkAndProcessUses();
+    first_->MarkAndProcessUses(sc);
+    second_->MarkAndProcessUses(sc);
+    third_->MarkAndProcessUses(sc);
+}
+
+void
+TernaryExpr::ProcessDiscardUses(SemaContext& sc)
+{
+    first_->MarkAndProcessUses(sc);
+    second_->ProcessUses(sc);
+    third_->ProcessUses(sc);
 }
 
 bool
@@ -1117,9 +1140,15 @@ CastExpr::Analyze(SemaContext& sc)
 }
 
 void
-CastExpr::ProcessUses()
+CastExpr::ProcessUses(SemaContext& sc)
 {
-    expr_->MarkAndProcessUses();
+    expr_->MarkAndProcessUses(sc);
+}
+
+void
+SymbolExpr::MarkUsed(SemaContext& sc)
+{
+    markusage(sym_, uREAD);
 }
 
 bool
@@ -1161,7 +1190,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
         // If the function is only in the table because it was inserted as
         // a stub in the first pass (used but never declared or implemented),
         // issue an error.
-        if (!sym_->prototyped)
+        if (!sym_->prototyped && sym_ != sc.func())
             error(pos_, 17, sym_->name());
 
         if (sym_->native) {
@@ -1172,7 +1201,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
             error(pos_, 182);
             return false;
         }
-        if (sym_->missing) {
+        if (sym_->missing && sym_ != sc.func()) {
             auto symname = funcdisplayname(sym_->name());
             error(pos_, 4, symname.c_str());
             return false;
@@ -1238,11 +1267,18 @@ CommaExpr::Analyze(SemaContext& sc)
 }
 
 void
-CommaExpr::ProcessUses()
+CommaExpr::ProcessUses(SemaContext& sc)
 {
     for (const auto& expr : exprs_)
-        expr->ProcessUses();
-    exprs_.back()->MarkUsed();
+        expr->ProcessUses(sc);
+    exprs_.back()->MarkUsed(sc);
+}
+
+void
+CommaExpr::ProcessDiscardUses(SemaContext& sc)
+{
+    for (const auto& expr : exprs_)
+        expr->ProcessUses(sc);
 }
 
 bool
@@ -1367,10 +1403,10 @@ IndexExpr::Analyze(SemaContext& sc)
 }
 
 void
-IndexExpr::ProcessUses()
+IndexExpr::ProcessUses(SemaContext& sc)
 {
-    base_->MarkAndProcessUses();
-    expr_->MarkAndProcessUses();
+    base_->MarkAndProcessUses(sc);
+    expr_->MarkAndProcessUses(sc);
 }
 
 bool
@@ -1502,9 +1538,9 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
 }
 
 void
-FieldAccessExpr::ProcessUses()
+FieldAccessExpr::ProcessUses(SemaContext& sc)
 {
-    base_->MarkAndProcessUses();
+    base_->MarkAndProcessUses(sc);
 }
 
 symbol*
@@ -1781,9 +1817,9 @@ CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
 }
 
 void
-CallUserOpExpr::ProcessUses()
+CallUserOpExpr::ProcessUses(SemaContext& sc)
 {
-    expr_->MarkAndProcessUses();
+    expr_->MarkAndProcessUses(sc);
 }
 
 DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, arginfo* arg)
@@ -1893,7 +1929,7 @@ CallExpr::Analyze(SemaContext& sc)
         }
     }
 
-    if (!curfunc) {
+    if (!sc.func()) {
         error(pos_, 10);
         return false;
     }
@@ -2107,23 +2143,23 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 }
 
 void
-CallExpr::ProcessUses()
+CallExpr::ProcessUses(SemaContext& sc)
 {
     for (const auto& arg : argv_) {
         if (!arg.expr)
             continue;
-        arg.expr->MarkAndProcessUses();
+        arg.expr->MarkAndProcessUses(sc);
     }
 }
 
 void
-CallExpr::MarkUsed()
+CallExpr::MarkUsed(SemaContext& sc)
 {
     if (sym_->defined) {
         /* function is defined, can now check the return value (but make an
          * exception for directly recursive functions)
          */
-        if (sym_ != curfunc && !sym_->retvalue) {
+        if (sym_ != sc.func() && !sym_->retvalue) {
             auto symname = funcdisplayname(sym_->name());
             error(pos_, 140, symname.c_str()); /* function should return a value */
         }
@@ -2188,10 +2224,10 @@ NewArrayExpr::AnalyzeForInitializer(SemaContext& sc)
 }
 
 void
-NewArrayExpr::ProcessUses()
+NewArrayExpr::ProcessUses(SemaContext& sc)
 {
     for (const auto& expr : exprs_)
-        expr->ProcessUses();
+        expr->MarkAndProcessUses(sc);
 }
 
 bool
@@ -2252,7 +2288,8 @@ ExprStmt::Analyze(SemaContext& sc)
  *  The function returns whether there is an "entry" point for the file.
  *  This flag will only be 1 when browsing the global symbol table.
  */
-bool TestSymbols(symbol* root, int testconst)
+bool
+TestSymbols(symbol* root, int testconst)
 {
     bool entry = false;
 
@@ -2302,12 +2339,23 @@ bool TestSymbols(symbol* root, int testconst)
     return entry;
 }
 
+BlockStmt*
+BlockStmt::WrapStmt(Stmt* stmt)
+{
+    if (BlockStmt* block = stmt->AsBlockStmt())
+        return block;
+    BlockStmt* block = new BlockStmt(stmt->pos());
+    block->stmts().emplace_back(stmt);
+    return block;
+}
 
 bool
 BlockStmt::Analyze(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& stmt : stmts_) {
+        errorset(sRESET, 0);
+
         if (ok && !sc.warned_unreachable() && (sc.always_returns() || flow_type() != Flow_None)) {
             error(stmt->pos(), 225);
             sc.set_warned_unreachable();
@@ -2319,7 +2367,8 @@ BlockStmt::Analyze(SemaContext& sc)
             set_flow_type(flow);
     }
 
-    TestSymbols(scope_, TRUE);
+    if (scope_)
+        TestSymbols(scope_, TRUE);
     return true;
 }
 
@@ -2345,6 +2394,8 @@ ReturnStmt::Analyze(SemaContext& sc)
 {
     sc.set_always_returns();
     sc.loop_has_return() = true;
+
+    symbol* curfunc = sc.func();
 
     if (!expr_) {
         if (curfunc->must_return_value())
@@ -2406,15 +2457,16 @@ ReturnStmt::Analyze(SemaContext& sc)
         matchtag(curfunc->tag, v.tag, TRUE);
 
     if (v.ident == iARRAY || v.ident == iREFARRAY) {
-        if (!CheckArrayReturn())
+        if (!CheckArrayReturn(sc))
             return false;
     }
     return true;
 }
 
 bool
-ReturnStmt::CheckArrayReturn()
+ReturnStmt::CheckArrayReturn(SemaContext& sc)
 {
+    symbol* curfunc = sc.func();
     symbol* sub = curfunc->array_return();
     symbol* sym = expr_->val().sym;
 
@@ -2777,10 +2829,373 @@ ReportFunctionReturnError(symbol* sym)
     // we allow "public int" to warn instead of error.
     //
     // :TODO: stronger enforcement when function result is used from call
-    if (sym->tag == 0)
+    if (sym->tag == 0) {
         error(209, symname.c_str());
-    else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool || !sym->retvalue_used)
+    } else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
+               sym->tag == sc_rationaltag || !sym->retvalue_used)
+    {
         error(242, symname.c_str());
-    else
+    } else {
         error(400, symname.c_str());
+    }
+}
+
+FunctionInfo::FunctionInfo(const token_pos_t& pos, const declinfo_t& decl)
+  : pos_(pos),
+    decl_(decl)
+{
+}
+
+void
+FunctionInfo::AddArg(VarDecl* arg)
+{
+    args_.emplace_back(FunctionArg{arg});
+}
+
+bool
+FunctionInfo::IsVariadic() const
+{
+    return !args_.empty() && args_.back().decl->type().ident == iVARARGS;
+}
+
+bool
+FunctionInfo::Analyze(SemaContext& sc)
+{
+    if (sym_->skipped && !this_tag_)
+        return true;
+
+    sc.set_func(sym_);
+    auto guard = ke::MakeScopeGuard([&]() -> void {
+        sc.set_func(nullptr);
+    });
+
+    // :TODO: remove this when curfunc goes away.
+    ke::SaveAndSet<symbol*> auto_curfunc(&curfunc, sym_);
+
+    {
+        AutoErrorPos error_pos(pos_);
+        check_void_decl(&decl_, FALSE);
+
+        if (decl_.opertok)
+            check_operatortag(decl_.opertok, decl_.type.tag, decl_.name);
+    }
+
+    bool was_prototyped = sym_->prototyped;
+    if (!was_prototyped) {
+        sym_->tag = decl_.type.tag;
+        sym_->explicit_return_type = decl_.type.is_new;
+    }
+
+    if (sym_->is_public || sym_->forward) {
+        if (decl_.type.numdim > 0)
+            error(pos_, 141);
+    }
+
+    /* if the function was used before being declared, and it has a tag for the
+     * result, add a third pass (as second "skimming" parse) because the function
+     * result may have been used with user-defined operators, which have now
+     * been incorrectly flagged (as the return tag was unknown at the time of
+     * the call)
+     */
+    if (!was_prototyped && (sym_->usage & uREAD) && sym_->tag != 0 && !decl_.opertok && body_)
+        sc_reparse = TRUE; /* must add another pass to "initial scan" phase */
+
+    bool ok = AnalyzeArgs(sc);
+
+    // Must be after AnalyzeArgs() for argcompare to work.
+    sym_->prototyped = true;
+
+    if (sym_->defined && !is_forward_)
+        error(21, sym_->name());
+
+    if (sym_->native) {
+        sym_->retvalue = true;
+        return true;
+    }
+
+    if (!body_) {
+        if (sym_->is_public && !sym_->forward)
+            error(pos_, 10);
+        return true;
+    }
+
+    if (sym_->deprecated && !sym_->stock) {
+        const char* ptr = sym_->documentation.c_str();
+        error(234, sym_->name(), ptr); /* deprecated (probably a public function) */
+    }
+
+    sym_->defined = true;
+
+    if (this_tag_)
+        sc_err_status = TRUE;
+
+    ok &= body_->Analyze(sc);
+
+    if (sc.returns_value()) {
+        sym_->retvalue = true;
+    } else {
+        if (sym_->tag == pc_tag_void && sym_->forward && !decl_.type.tag &&
+            !decl_.type.is_new)
+        {
+            // We got something like:
+            //    forward void X();
+            //    public X()
+            //
+            // Switch our decl type to void.
+            decl_.type.tag = pc_tag_void;
+        }
+    }
+
+    // Check that return tags match.
+    if (was_prototyped && sym_->tag != decl_.type.tag)
+        error(pos_, 180, type_to_name(sym_->tag), type_to_name(decl_.type.tag));
+
+    if (scope_)
+        TestSymbols(scope_, TRUE);
+
+    if (!sc.always_returns()) {
+        if (sym_->must_return_value())
+            ReportFunctionReturnError(sym_);
+
+        // We should always have a block statement for the body. If no '{' was
+        // detected it would have been an error in the parsing pass.
+        auto block = body_->AsBlockStmt();
+        assert(block);
+
+        // Synthesize a return statement.
+        auto ret_stmt = new ReturnStmt(end_pos_, nullptr);
+        block->stmts().push_back(ret_stmt);
+        block->set_flow_type(Flow_Return);
+    }
+
+    sc_err_status = FALSE;
+    return true;
+}
+
+bool
+FunctionInfo::AnalyzeArgs(SemaContext& sc)
+{
+    std::vector<arginfo>& arglist = sym_->function()->args;
+
+    size_t oldargcnt = 0;
+    if (sym_->prototyped) {
+        while (arglist[oldargcnt].ident != 0)
+            oldargcnt++;
+    }
+
+    AutoCountErrors errors;
+
+    size_t argcnt = 0;
+    for (const auto& parsed_arg : args_) {
+        const auto& var = parsed_arg.decl;
+        const auto& typeinfo = var->type();
+        symbol* argsym = var->sym();
+
+        AutoErrorPos pos(var->pos());
+
+        if (typeinfo.ident == iVARARGS) {
+            if (!sym_->prototyped) {
+                /* redimension the argument list, add the entry iVARARGS */
+                sym_->function()->resizeArgs(argcnt + 1);
+
+                arglist[argcnt].ident = iVARARGS;
+                arglist[argcnt].tag = typeinfo.tag;
+            } else {
+                if (argcnt > oldargcnt || arglist[argcnt].ident != iVARARGS)
+                    error(25); /* function definition does not match prototype */
+            }
+            argcnt++;
+            continue;
+        }
+
+        Type* type = gTypes.find(typeinfo.semantic_tag());
+        if (type->isEnumStruct()) {
+            if (sym_->native)
+                error(135, type->name());
+        }
+
+        /* Stack layout:
+         *   base + 0*sizeof(cell)  == previous "base"
+         *   base + 1*sizeof(cell)  == function return address
+         *   base + 2*sizeof(cell)  == number of arguments
+         *   base + 3*sizeof(cell)  == first argument of the function
+         * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
+         */
+        argsym->setAddr(static_cast<cell>((argcnt + 3) * sizeof(cell)));
+
+        arginfo arg;
+        strcpy(arg.name, var->name()->chars());
+        arg.ident = argsym->ident;
+        arg.is_const = argsym->is_const;
+        arg.tag = argsym->tag;
+        arg.numdim = typeinfo.numdim;
+        memcpy(arg.dim, typeinfo.dim, sizeof(arg.dim));
+        memcpy(arg.idxtag, typeinfo.idxtag, sizeof(arg.idxtag));
+
+        if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
+            if (var->Analyze(sc) && var->init_rhs())
+                fill_arg_defvalue(var, &arg);
+        } else {
+            Expr* init = var->init_rhs();
+            if (init && init->Analyze(sc)) {
+                assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
+                arg.def = std::make_unique<DefaultArg>();
+
+                int tag;
+                cell val;
+                if (!init->EvalConst(&val, &tag)) {
+                    error(8);
+
+                    // Populate to avoid errors.
+                    val = 0;
+                    tag = typeinfo.tag;
+                }
+                arg.def->tag = tag;
+                arg.def->val = ke::Some(val);
+
+                matchtag(arg.tag, arg.def->tag, MATCHTAG_COERCE);
+            }
+        }
+
+        if (arg.ident == iREFERENCE)
+            argsym->usage |= uREAD; /* because references are passed back */
+        if (sym_->callback || sym_->stock || sym_->is_public)
+            argsym->usage |= uREAD; /* arguments of public functions are always "used" */
+
+        /* arguments of a public function may not have a default value */
+        if (sym_->is_public && arg.def)
+            error(59, var->name()->chars());
+
+        if (!sym_->prototyped) {
+            /* redimension the argument list, add the entry */
+            sym_->function()->resizeArgs(argcnt + 1);
+            arglist[argcnt] = std::move(arg);
+        } else {
+            /* check the argument with the earlier definition */
+            if (argcnt > oldargcnt || !argcompare(&arglist[argcnt], &arg))
+                error(181, arg.name); /* function argument does not match prototype */
+        }
+        argcnt++;
+    }
+    return errors.ok();
+}
+
+bool
+FunctionDecl::Analyze(SemaContext& sc)
+{
+    return info_->Analyze(sc);
+}
+
+void
+StmtList::ProcessUses(SemaContext& sc)
+{
+    for (const auto& stmt : stmts_)
+        stmt->ProcessUses(sc);
+}
+
+void
+VarDecl::ProcessUses(SemaContext& sc)
+{
+    if (init_)
+        init_rhs()->MarkAndProcessUses(sc);
+}
+
+void
+IfStmt::ProcessUses(SemaContext& sc)
+{
+    cond_->MarkAndProcessUses(sc);
+    on_true_->ProcessUses(sc);
+    if (on_false_)
+        on_false_->ProcessUses(sc);
+}
+
+void
+ReturnStmt::ProcessUses(SemaContext& sc)
+{
+    if (expr_)
+        expr_->MarkAndProcessUses(sc);
+}
+
+void
+ExitStmt::ProcessUses(SemaContext& sc)
+{
+    if (expr_)
+        expr_->MarkAndProcessUses(sc);
+}
+
+void
+DoWhileStmt::ProcessUses(SemaContext& sc)
+{
+    cond_->MarkAndProcessUses(sc);
+    body_->ProcessUses(sc);
+}
+
+void
+ForStmt::ProcessUses(SemaContext& sc)
+{
+    if (init_)
+        init_->ProcessUses(sc);
+    if (cond_)
+        cond_->MarkAndProcessUses(sc);
+    if (advance_)
+        advance_->ProcessUses(sc);
+    body_->ProcessUses(sc);
+}
+
+void
+SwitchStmt::ProcessUses(SemaContext& sc)
+{
+    expr_->MarkAndProcessUses(sc);
+
+    for (const auto& entry : cases_) {
+        for (const auto& expr : entry.first)
+            expr->MarkAndProcessUses(sc);
+        entry.second->ProcessUses(sc);
+    }
+
+    if (default_case_)
+        default_case_->ProcessUses(sc);
+}
+
+void
+FunctionInfo::ProcessUses(SemaContext& sc)
+{
+    if (!body_ || sym_->skipped)
+        return;
+
+    sc.set_func(sym_);
+    auto guard = ke::MakeScopeGuard([&]() -> void {
+        sc.set_func(nullptr);
+    });
+
+    ke::SaveAndSet<symbol*> set_curfunc(&curfunc, sym_);
+
+    for (const auto& arg : args_)
+        arg.decl->ProcessUses(sc);
+
+    body_->ProcessUses(sc);
+}
+
+void
+FunctionDecl::ProcessUses(SemaContext& sc)
+{
+    info_->ProcessUses(sc);
+}
+
+bool
+PragmaUnusedStmt::Analyze(SemaContext& sc)
+{
+    for (const auto& sym : symbols_) {
+        sym->usage |= uREAD;
+
+        switch (sym->ident) {
+            case iVARIABLE:
+            case iREFERENCE:
+            case iARRAY:
+            case iREFARRAY:
+                sym->usage |= uWRITTEN;
+                break;
+        }
+    }
+    return true;
 }
