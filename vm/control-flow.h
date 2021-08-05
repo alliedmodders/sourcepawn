@@ -169,7 +169,7 @@ class Block :
   uint32_t num_dominated_;
 
   // Set to true if this is a loop header.
-  bool is_loop_header_;
+  bool is_loop_header_ = false;
 
   // Label, for the JIT.
   Label label_;
