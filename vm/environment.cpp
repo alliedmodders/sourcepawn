@@ -569,5 +569,5 @@ Environment::leaveInvoke()
 ISourcePawnEnvironment*
 ISourcePawnEnvironment::New()
 {
-  return new Environment();
+  return Environment::New();
 }

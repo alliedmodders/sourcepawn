@@ -1578,8 +1578,41 @@ assemble_to_buffer(SmxByteBuffer* buffer)
 }
 
 static void
-splat_to_binary(const char* binfname, const void* bytes, size_t size)
+FailedValidation(const std::string& message)
 {
+    fprintf(stderr, "Binary validation failed: %s\n", message.c_str());
+    fprintf(stderr, "Internal compilation error detected. Please file a bug:\n");
+    fprintf(stderr, "https://github.com/alliedmodders/sourcepawn/issues/new\n");
+    exit(1);
+}
+
+static void
+VerifyBinary(const char* file, void* buffer, size_t size)
+{
+    std::unique_ptr<ISourcePawnEnvironment> env(ISourcePawnEnvironment::New());
+    if (!env)
+        FailedValidation("could not initialize environment");
+
+    auto api = env->APIv2();
+
+    char msgbuf[255];
+    std::unique_ptr<IPluginRuntime> rt(api->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
+                                                                 nullptr, msgbuf,  sizeof(msgbuf)));
+    if (!rt)
+        FailedValidation(msgbuf);
+
+    ExceptionHandler eh(api);
+    if (!rt->PerformFullValidation()) {
+        const char* message = eh.HasException() ? eh.Message() : "unknown error";
+        FailedValidation(message);
+    }
+}
+
+static void
+splat_to_binary(const char* binfname, void* bytes, size_t size)
+{
+    VerifyBinary(binfname, bytes, size);
+
     // Note: error 161 will setjmp(), which skips destructors :(
     FILE* fp = fopen(binfname, "wb");
     if (!fp) {
@@ -1592,29 +1625,6 @@ splat_to_binary(const char* binfname, const void* bytes, size_t size)
         return;
     }
     fclose(fp);
-}
-
-static bool
-VerifyBinary(const char* file, uint8_t* bytes, size_t size)
-{
-    std::unique_ptr<ISourcePawnEnvironment> env(ISourcePawnEnvironment::New());
-    auto api = env->APIv2();
-
-    char buffer[255];
-    std::unique_ptr<IPluginRuntime> rt(api->LoadBinaryFromMemory(file, bytes, size, nullptr,
-                                                                 buffer, sizeof(buffer)));
-    if (!rt) {
-        fprintf(stderr, "Binary validation failed: %s\n", buffer);
-        return false;
-    }
-
-    ExceptionHandler eh(api);
-    if (!rt->PerformFullValidation()) {
-        const char* message = eh.HasException() ? eh.Message() : "unknown error";
-        fprintf(stderr, "Binary validation failed: %s\n", message);
-        return false;
-    }
-    return true;
 }
 
 void
@@ -1654,12 +1664,6 @@ assemble(const char* binfname)
 
     header->disksize = 0;
     header->compression = SmxConsts::FILE_COMPRESSION_NONE;
-
-    if (!VerifyBinary(binfname, buffer.bytes(), buffer.size())) {
-        fprintf(stderr, "Internal compilation error detected. Please file a bug:\n");
-        fprintf(stderr, "https://github.com/alliedmodders/sourcepawn/issues/new\n");
-        exit(1);
-    }
 
     splat_to_binary(binfname, buffer.bytes(), buffer.size());
 }
