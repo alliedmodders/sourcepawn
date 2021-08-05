@@ -652,7 +652,8 @@ PluginRuntime::PerformFullValidation()
     verifier.collectExternalFuncRefs(onExternFuncRef);
 
     if (!verifier.verify()) {
-      env->ReportErrorFmt(SP_ERROR_USER, "Method %s failed verification: %d\n", name, verifier.error());
+      env->ReportErrorFmt(SP_ERROR_USER, "Method %s failed verification: %s\n", name,
+                          env->GetErrorString(verifier.error()));
       return false;
     }
   }
