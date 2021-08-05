@@ -383,7 +383,7 @@ readline(unsigned char* line)
             line += strlen((char*)line);
         }
         fline += 1;
-        if (sym = findconst("__LINE__")) {
+        if ((sym = findconst("__LINE__")) != NULL) {
             sym->setAddr(fline);
         }
     } while (num >= 0 && cont);
