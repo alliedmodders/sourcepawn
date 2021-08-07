@@ -182,12 +182,41 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_TRACKER_POP_SETHEAP:
   {
     VerifyData* v = block_->data<VerifyData>();
-    if (v->heap_balance.empty() || v->heap_balance.back() != -1) {
+    if (v->tracker_balance.empty()) {
       reportError(SP_ERROR_INVALID_INSTRUCTION);
       return false;
     }
-    v->heap_balance.pop_back();
-    return true;
+
+    // As a special case we allow pushing 0 for balance across ternary operations.
+    auto amount = ke::PopBack(&v->tracker_balance);
+    if (amount == 0)
+      return true;
+
+    if (amount == -1) {
+      // There must be an indeterminate heap allocation.
+      if (v->heap_balance.empty() || v->heap_balance.back() != -1) {
+        reportError(SP_ERROR_INVALID_INSTRUCTION);
+        return false;
+      }
+      v->heap_balance.pop_back();
+      return true;
+    }
+
+    while (!v->heap_balance.empty()) {
+      auto value = ke::PopBack(&v->heap_balance);
+      if (value == -1)
+        break;
+      if (value > amount) {
+        v->heap_balance.emplace_back(value - amount);
+        return true;
+      }
+      amount -= value;
+      if (amount == 0)
+        return true;
+    }
+
+    reportError(SP_ERROR_INVALID_INSTRUCTION);
+    return false;
   }
 
   case OP_SWAP_PRI:
@@ -358,9 +387,35 @@ MethodVerifier::verifyOp(OPCODE op)
   }
 
   case OP_TRACKER_PUSH_C:
-    block_->data<VerifyData>()->heap_balance.push_back(-1);
-    cip_++;
+  {
+    cell_t val = readCell();
+    if (val < 0 || !ke::IsAligned(val, sizeof(cell_t))) {
+        reportError(SP_ERROR_INVALID_INSTRUCTION);
+        return false;
+    }
+
+    val /= sizeof(cell_t);
+    if (val > 0) {
+      // The amount being tracked must be a statically verifiable amount allocated
+      // on the heap.
+      cell_t total = 0;
+      auto& heap = block_->data<VerifyData>()->heap_balance;
+      for (auto iter = heap.rbegin(); iter != heap.rend(); iter++) {
+        if (*iter == -1)
+          break;
+        total += *iter;
+        if (total >= val)
+          break;
+      }
+      if (val > total) {
+        reportError(SP_ERROR_INVALID_INSTRUCTION);
+        return false;
+      }
+    }
+
+    block_->data<VerifyData>()->tracker_balance.push_back(val);
     return true;
+  }
 
   case OP_HALT:
   {
@@ -474,6 +529,7 @@ MethodVerifier::verifyOp(OPCODE op)
     if (!popStack(ndims - 1))
       return false;
     block_->data<VerifyData>()->heap_balance.push_back(-1);
+    block_->data<VerifyData>()->tracker_balance.push_back(-1);
     return true;
   }
 
@@ -548,7 +604,7 @@ DetectCompilerBreakBug(Block* block)
   for (const auto& pred : dom->predecessors()) {
     if (pred->id() >= dom->id()) {
       pred->setVisited();
-      worklist.push_back(pred);
+      worklist.emplace_back(pred);
     }
   }
 
@@ -565,7 +621,7 @@ DetectCompilerBreakBug(Block* block)
 
       // Keep walking up nodes.
       pred->setVisited();
-      worklist.push_back(pred);
+      worklist.emplace_back(pred);
     }
   }
 
@@ -575,17 +631,90 @@ DetectCompilerBreakBug(Block* block)
 }
 
 bool
-MethodVerifier::verifyJoin(Block* block, VerifyData* a, VerifyData* b)
+MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other)
 {
-  if (a->stack_balance != b->stack_balance) {
+  if (first->stack_balance != other->stack_balance) {
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
-  if (a->heap_balance.size() != b->heap_balance.size()) {
-    if (DetectCompilerBreakBug(block))
+
+  if (first->tracker_balance.size() != other->tracker_balance.size()) {
+    if (DetectCompilerBreakBug(block_)) {
+      block_->set_has_compiler_break_bug();
       return true;
+    }
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
+  }
+
+  return true;
+}
+
+bool
+MethodVerifier::mergeTracker(Block* block, VerifyData* other)
+{
+  VerifyData* join = block->data<VerifyData>();
+  if (!verifyJoin(join, other))
+    return false;
+
+  if (block->has_compiler_break_bug())
+    return true;
+
+  // If our tracker value is determinate, but another branch was different
+  // (or indeterminate), we allow this and convert the propagated amount to
+  // be indeterminate.
+  auto heap_cursor = join->heap_balance.rbegin();
+  for (auto cursor = join->tracker_balance.size(); cursor != 0; cursor--) {
+    size_t index = cursor - 1;
+    cell_t this_amount = join->tracker_balance[index];
+    cell_t other_amount = other->tracker_balance[index];
+    if (this_amount == -1 || other_amount == this_amount)
+      continue;
+
+    // Convert this tracker entry into an unknown quantity.
+    join->tracker_balance[index] = -1;
+
+    // If the amount was zero, there's no heap cursor entry, so fab one.
+    if (this_amount == 0) {
+      auto iter = join->heap_balance.emplace(heap_cursor.base(), -1);
+      heap_cursor = std::make_reverse_iterator(iter);
+      heap_cursor++;
+      continue;
+    }
+
+    // If there's no heap entries, something went wrong when we analyzec the
+    // tracker opcode.
+    if (heap_cursor == join->heap_balance.rend()) {
+      reportError(SP_ERROR_INSTRUCTION_PARAM);
+      return false;
+    }
+
+    // Walk the heap and fix up static tracking to be indeterminate.
+    while (heap_cursor != join->heap_balance.rend()) {
+      if (*heap_cursor < this_amount) {
+        this_amount -= *heap_cursor;
+        *heap_cursor++ = 0;
+        continue;
+      }
+      if (*heap_cursor == this_amount) {
+        *heap_cursor++ = -1;
+        break;
+      }
+      if (*heap_cursor > this_amount) {
+        *heap_cursor -= this_amount;
+
+        auto iter = join->heap_balance.emplace(heap_cursor.base(), -1);
+        heap_cursor = std::make_reverse_iterator(iter);
+        heap_cursor++;
+        break;
+      }
+    }
+  }
+
+  // If we changed the heap at all, remove zero entries.
+  if (heap_cursor != join->heap_balance.rbegin()) {
+    join->heap_balance.erase(std::remove(join->heap_balance.begin(), join->heap_balance.end(), 0),
+                             join->heap_balance.end());
   }
   return true;
 }
@@ -598,7 +727,7 @@ MethodVerifier::handleJoins()
 
   bool verify_later = false;
 
-  VerifyData* pred_data = nullptr;
+  bool found_pred = false;
   for (size_t i = 0; i < block_->predecessors().size(); i++) {
     Block* pred = block_->predecessors()[i];
 
@@ -610,13 +739,21 @@ MethodVerifier::handleJoins()
       continue;
     }
 
-    VerifyData* other_pred_data = pred->data<VerifyData>();
-    if (!pred_data) {
-      pred_data = other_pred_data;
-    } else {
-      if (!verifyJoin(block_, pred_data, other_pred_data))
-        return false;
+    VerifyData* pred_data = pred->data<VerifyData>();
+    if (!found_pred) {
+      // Inherit everything from the first already-visited preceding block.
+      VerifyData* data = block_->data<VerifyData>();
+      *data = *pred_data;
+
+      // Save the entry state.
+      data->entry = std::make_unique<VerifyData>(*pred_data);
+
+      found_pred = true;
+      continue;
     }
+
+    if (!mergeTracker(block_, pred_data))
+      return false;
   }
 
   if (verify_later)
@@ -626,39 +763,24 @@ MethodVerifier::handleJoins()
   // be an illegal backedge to the entry block. While this is not allowed
   // currently, because of OP_PROC, it may be allowed in the future, so we
   // handle it.
-  if (!pred_data) {
+  if (!found_pred) {
     assert(verify_later);
     return true;
   }
-
-  VerifyData* data = block_->data<VerifyData>();
-  data->stack_balance = pred_data->stack_balance;
-  for (const auto& item : pred_data->heap_balance)
-    data->heap_balance.push_back(item);
   return true;
 }
 
 bool
 MethodVerifier::verifyJoins(Block* block)
 {
-  Block* first_pred = block->predecessors()[0];
-  VerifyData* first_edge = first_pred->data<VerifyData>();
+  VerifyData* join_data = block->data<VerifyData>();
+  VerifyData* entry = join_data->entry.get();
 
-  // If this is a self-loop, and it's the entry block, verify the exit stack
-  // depth is 0.
-  if (block->predecessors().size() == 1) {
-    if (first_edge->stack_balance != 0) {
-      reportError(SP_ERROR_INVALID_INSTRUCTION);
-      return false;
-    }
-    return true;
-  }
-
-  // Otherwise, verify the balance is the same across all incoming edges.
-  for (size_t i = 1; i < block->predecessors().size(); i++) {
-    Block* other_pred = block->predecessors()[1];
+  for (size_t i = 0; i < block->predecessors().size(); i++) {
+    Block* other_pred = block->predecessors()[i];
     VerifyData* other_edge = other_pred->data<VerifyData>();
-    if (!verifyJoin(block, first_edge, other_edge))
+
+    if (!verifyJoin(entry, other_edge))
       return false;
   }
   return true;

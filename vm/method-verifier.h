@@ -64,12 +64,29 @@ class MethodVerifier final
     VerifyData()
      : stack_balance(0)
     {}
+    VerifyData(const VerifyData& other)
+     : stack_balance(other.stack_balance),
+       heap_balance(other.heap_balance),
+       tracker_balance(other.tracker_balance)
+    {}
+
+    VerifyData& operator =(const VerifyData& other) {
+      stack_balance = other.stack_balance;
+      heap_balance = other.heap_balance;
+      tracker_balance = other.tracker_balance;
+      return *this;
+    }
+
     uint32_t stack_balance;
     std::vector<int32_t> heap_balance;
+    std::vector<int32_t> tracker_balance;
+
+    std::unique_ptr<VerifyData> entry;
   };
 
   bool handleJoins();
-  bool verifyJoin(Block* block, VerifyData* a, VerifyData* b);
+  bool mergeTracker(Block* block, VerifyData* other);
+  bool verifyJoin(VerifyData* first, VerifyData* other);
   bool verifyJoins(Block* block);
   bool pushStack(uint32_t num_cells);
   bool popStack(uint32_t num_cells);
