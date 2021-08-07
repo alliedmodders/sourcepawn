@@ -4,6 +4,7 @@ import os
 import progressbar
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,8 @@ def main():
                         help = "Number of compile jobs; does not work with --diagnose")
     parser.add_argument("--verifier", type = str, default = None,
                         help = "Optional verification tool for .smx files")
+    parser.add_argument("--collect-smx", type = str, default = None,
+                        help = "Copy .smx files to the given folder")
 
     args = parser.parse_args()
 
@@ -37,7 +40,7 @@ def main():
         return 1
 
     files = []
-    get_all_files(args.corpus, '.sp', files)
+    get_all_files(args.corpus, ['.sp', '.smx'], files)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         runner = Runner(args, files, temp_dir)
@@ -99,31 +102,36 @@ class Runner(object):
             self.completed_.put(result_tuple)
 
     def compile(self, path):
-        argv = [
-            self.args_.spcomp,
-            path,
-        ]
-        for include_path in self.args_.include:
-            argv += ['-i', include_path]
+        if path.endswith('.sp'):
+            argv = [
+                self.args_.spcomp,
+                path,
+            ]
+            for include_path in self.args_.include:
+                argv += ['-i', include_path]
 
-        output_file = os.path.join(self.temp_dir_, os.path.basename(path))
-        if output_file.endswith('.sp'):
-            output_file = output_file[:-3]
-            output_file += '.smx'
+            output_file = os.path.join(self.temp_dir_, os.path.basename(path))
+            if output_file.endswith('.sp'):
+                output_file = output_file[:-3]
+                output_file += '.smx'
 
-        argv += ['-o', output_file]
+            argv += ['-o', output_file]
 
-        ok = False
-        output = None
-        try:
-            subprocess.check_output(argv, stderr = subprocess.STDOUT)
+            ok = False
+            output = None
+            try:
+                subprocess.check_output(argv, stderr = subprocess.STDOUT)
+                ok = True
+            except KeyboardInterrupt:
+                raise
+            except subprocess.CalledProcessError as e:
+                output = e.output
+            except:
+                pass
+        else:
             ok = True
-        except KeyboardInterrupt:
-            raise
-        except subprocess.CalledProcessError as e:
-            output = e.output
-        except:
-            pass
+            output = ''
+            output_file = path
 
         if ok and self.args_.verifier:
             argv = [self.args_.verifier, output_file]
@@ -137,6 +145,10 @@ class Runner(object):
                 output = e.output
             except:
                 pass
+
+        if ok and path.endswith('.sp') and self.args_.collect_smx:
+            shutil.move(output_file,
+                        os.path.join(self.args_.collect_smx, os.path.basename(output_file)))
 
         return (ok, path, output)
 
@@ -197,12 +209,14 @@ def extract_line(path, number):
         return None
     return lines[number - 1]
 
-def get_all_files(path, ext, out):
+def get_all_files(path, exts, out):
     for file in os.listdir(path):
         child = os.path.join(path, file)
         if os.path.isdir(child):
-            get_all_files(child, ext, out)
-        elif child.endswith(ext):
+            get_all_files(child, exts, out)
+            continue
+        _, ext = os.path.splitext(child)
+        if ext in exts:
             out.append(child)
 
 if __name__ == '__main__':
