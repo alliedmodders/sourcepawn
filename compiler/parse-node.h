@@ -701,6 +701,9 @@ class TernaryExpr final : public Expr
     void ProcessUses() override;
 
   private:
+    void EmitImpl(ke::Maybe<cell>* branch1, ke::Maybe<cell>* branch2);
+
+  private:
     Expr* first_;
     Expr* second_;
     Expr* third_;
