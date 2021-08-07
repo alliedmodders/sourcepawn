@@ -24,6 +24,7 @@
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
+#include "optimizer.h"
 #include "sctracker.h"
 
 void
@@ -444,34 +445,66 @@ ChainedCompareExpr::DoEmit()
 void
 TernaryExpr::DoEmit()
 {
+    bool unstage = false;
+
+    if (!staging) {
+        stgset(TRUE);
+        unstage = true;
+    }
+
+    int index;
+    cell cidx;
+    stgget(&index, &cidx);
+
+    ke::Maybe<cell_t> branch1, branch2;
+    EmitImpl(&branch1, &branch2);
+
+    if (branch1.isValid() != branch2.isValid()) {
+        stgdel(index, cidx);
+
+        // Try again, this time make sure both branches have a tracker.push.c.
+        EmitImpl(&branch1, &branch2);
+    }
+    assert(branch1.isValid() == branch2.isValid());
+
+    if (branch1.isValid() && branch2.isValid())
+        markheap(MEMUSE_DYNAMIC, 0);
+
+    if (unstage)
+        stgset(FALSE);
+}
+
+void
+TernaryExpr::EmitImpl(ke::Maybe<cell_t>* branch1, ke::Maybe<cell_t>* branch2)
+{
     first_->Emit();
 
     int flab1 = getlabel();
     int flab2 = getlabel();
-    cell_t total1 = 0;
-    cell_t total2 = 0;
 
     pushheaplist();
     jmp_eq0(flab1); /* go to second expression if primary register==0 */
 
     second_->Emit();
 
-    if ((total1 = pop_static_heaplist())) {
+    auto total1 = pop_static_heaplist();
+    if (total1 || branch2->isValid()) {
         setheap_save(total1 * sizeof(cell));
+        branch1->init(total1);
     }
+
     pushheaplist();
     jumplabel(flab2);
     setlabel(flab1);
 
     third_->Emit();
 
-    if ((total2 = pop_static_heaplist())) {
+    auto total2 = pop_static_heaplist();
+    if (total2 || branch1->isValid()) {
         setheap_save(total2 * sizeof(cell));
+        branch2->init(total2);
     }
     setlabel(flab2);
-    if (val_.ident == iREFARRAY && (total1 && total2)) {
-        markheap(MEMUSE_DYNAMIC, 0);
-    }
 }
 
 void
