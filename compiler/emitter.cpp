@@ -1065,7 +1065,6 @@ modheap_i()
 void
 setheap_save(cell value)
 {
-    assert(value);
     stgwrite("\ttracker.push.c ");
     outval(value, TRUE);
     code_idx += opcodes(1) + opargs(1);
