@@ -144,6 +144,13 @@ class Block :
   // Zap all references so the block has no cycles.
   void unlink();
 
+  bool has_compiler_break_bug() const {
+    return has_compiler_break_bug_;
+  }
+  void set_has_compiler_break_bug() {
+    has_compiler_break_bug_ = true;
+  }
+
  private:
   ControlFlowGraph& graph_;
   std::vector<ke::RefPtr<Block>> predecessors_;
@@ -170,6 +177,7 @@ class Block :
 
   // Set to true if this is a loop header.
   bool is_loop_header_ = false;
+  bool has_compiler_break_bug_ = false;
 
   // Label, for the JIT.
   Label label_;
