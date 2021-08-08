@@ -37,7 +37,6 @@
 #include <smx/smx-v1.h>
 #include <sp_vm_api.h>
 #include <zlib/zlib.h>
-#include "amxdbg.h"
 #include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"
