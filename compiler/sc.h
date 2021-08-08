@@ -481,16 +481,6 @@ symbol* add_constant(const char* name, cell val, int vclass, int tag);
 #    endif
 #endif
 
-typedef struct array_info_s {
-    const int* dim_list;          /* Dimension sizes */
-    int dim_count;                /* Number of dimensions */
-    const int* lastdim_list;      /* Sizes of last dimensions, if variable */
-    const cell* dim_offs_precalc; /* Cached calculations into the lastdim_list array */
-    cell* data_offs;              /* Current offset AFTER the indirection vectors (data) */
-    int* cur_dims;                /* Current dimensions the recursion is at */
-    cell* base;                   /* &litq[startlit] */
-} array_info_t;
-
 constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);
 }

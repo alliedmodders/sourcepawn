@@ -2,7 +2,6 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
-#include "memfile.h"
 #include "osdefs.h"
 #if defined __linux__ || defined DARWIN
 #    include <unistd.h>

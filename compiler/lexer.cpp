@@ -52,7 +52,7 @@
 #include "lexer-inl.h"
 #include "libpawnc.h"
 #include "new-parser.h"
-#include "optimizer.h"
+#include "output-buffer.h"
 #include "sc.h"
 #include "sci18n.h"
 #include "sclist.h"
@@ -745,22 +745,10 @@ static int
 preproc_expr(cell* val, int* tag)
 {
     int result;
-    int index;
-    cell code_index;
     char* term;
 
     ke::SaveAndSet<bool> forbid_const(&Parser::sInPreprocessor, true);
 
-    /* Disable staging; it should be disabled already because
-     * expressions may not be cut off half-way between conditional
-     * compilations. Reset the staging index, but keep the code
-     * index.
-     */
-    if (stgget(&index, &code_index)) {
-        error(57); /* unfinished expression */
-        stgdel(0, code_index);
-        stgset(FALSE);
-    }
     assert((lptr - pline) < (int)strlen((char*)pline)); /* lptr must point inside the string */
     /* preprocess the string */
     substallpatterns(pline, sLINEMAX);
@@ -843,8 +831,6 @@ command(void)
     int tok, ret;
     cell val;
     char* str;
-    int index;
-    cell code_index;
 
     while (*lptr <= ' ' && *lptr != '\0')
         lptr += 1;
@@ -855,13 +841,6 @@ command(void)
     /* compiler directive found */
     indent_nowarn = TRUE; /* allow loose indentation" */
     lexclr(FALSE);        /* clear any "pushed" tokens */
-    /* on a pending expression, force to return a silent ';' token and force to
-     * re-read the line
-     */
-    if (!sc_needsemicolon && stgget(&index, &code_index)) {
-        lptr = term_expr;
-        return CMD_TERM;
-    }
     tok = lex(&val, &str);
     ret = SKIPPING ? CMD_CONDFALSE
                    : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
@@ -1657,9 +1636,9 @@ preprocess(void)
                 setlinedirect(fline);
             }
             if (iscommand == CMD_EMPTYLINE)
-                pc_writeasm(outf, "\n");
+                gAsmBuffer << "\n";
             else
-                pc_writeasm(outf, (char*)pline);
+                gAsmBuffer << (char*)pline;
         }
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading); /* enddo */
 }

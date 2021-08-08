@@ -81,7 +81,7 @@ static const char* errmsg[] = {
     /*054*/ "unmatched closing brace (\"}\")\n",
     /*055*/ "start of function body without function header\n",
     /*056*/ "arrays, local variables and function arguments cannot be public (variable \"%s\")\n",
-    /*057*/ "unfinished expression before compiler directive\n",
+    /*057*/ "unused57\n",
     /*058*/ "duplicate argument; same argument is passed twice\n",
     /*059*/ "function argument may not have a default value (variable \"%s\")\n",
     /*060*/ "multiple \"#else\" directives between \"#if ... #endif\"\n",

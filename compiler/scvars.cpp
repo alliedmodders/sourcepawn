@@ -36,7 +36,6 @@
  */
 symbol loctab;                             /* local symbol table */
 symbol glbtab;                             /* global symbol table */
-cell* litq;                                /* the literal queue */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
 constvalue tagname_tab = {NULL, "", 0, 0}; /* tagname table */
@@ -96,7 +95,6 @@ symbol* sScopeChain = nullptr;
 
 void* inpf = NULL;      /* file read from (source or include) */
 void* inpf_org = NULL;  /* main source file */
-memfile_t* outf = NULL; /* (intermediate) text file written to */
 
 bool sc_intest;
 bool sc_allowtags;

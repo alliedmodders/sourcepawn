@@ -43,6 +43,7 @@
 
 #include "array-helpers.h"
 #include "new-parser.h"
+#include "output-buffer.h"
 #include "semantics.h"
 #include "symbols.h"
 #include "types.h"
@@ -82,7 +83,6 @@
 #include "expressions.h"
 #include "lexer.h"
 #include "libpawnc.h"
-#include "optimizer.h"
 #include "sc.h"
 #include "sci18n.h"
 #include "sclist.h"
@@ -265,21 +265,13 @@ pc_compile(int argc, char* argv[]) {
         error(FATAL_ERROR_READ, inpfname);
     skip_utf8_bom(inpf_org);
     freading = TRUE;
-    outf = pc_openasm(outfname); /* first write to assembler file (may be temporary) */
-    if (outf == NULL)
-        error(FATAL_ERROR_WRITE, outfname);
     setconstants(); /* set predefined constants and tagnames */
     sc_status = statFIRST;
     /* write starting options (from the command line or the configuration file) */
     if (sc_listing) {
-        char string[150];
-        sprintf(string,
-                "#pragma ctrlchar 0x%02x\n"
-                "#pragma semicolon %s\n"
-                "#pragma tabsize %d\n",
-                sc_ctrlchar, sc_needsemicolon ? "true" : "false",
-                sc_tabsize);
-        pc_writeasm(outf, string);
+        gAsmBuffer << "#pragma ctrlchar 0x" << ke::StringPrintf("%02x", sc_ctrlchar) << "\n";
+        gAsmBuffer << "#pragma semicolon " << (sc_needsemicolon ? "true" : "false") << "\n";
+        gAsmBuffer << "#pragma tabsize " << sc_tabsize << "\n";
         setfiledirect(inpfname);
     }
     /* do the first pass through the file (or possibly two or more "first passes") */
@@ -392,14 +384,14 @@ cleanup:
     }
 
     // Write the binary file.
-    if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0) {
-        pc_resetasm(outf);
-        assemble(binfname, outf);
-    }
+    if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0)
+        assemble(binfname);
 
-    if (outf != NULL) {
-        pc_closeasm(outf, !(sc_asmfile || sc_listing) || sc_syntax_only);
-        outf = NULL;
+    if (sc_asmfile || sc_listing) {
+        std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(outfname, "wb"), fclose);
+        auto data = gAsmBuffer.str();
+        if (fwrite(data.c_str(), data.size(), 1, fp.get()) != 1)
+            error(FATAL_ERROR_WRITE, outfname);
     }
 
     if (errnum == 0 && strlen(errfname) == 0) {
@@ -430,9 +422,6 @@ cleanup:
     if (inpfname != NULL) {
         free(inpfname);
     }
-    if (litq != NULL)
-        free(litq);
-    stgbuffer_cleanup();
 
     gCurrentFileStack.clear();
     gCurrentLineStack.clear();
@@ -543,9 +532,7 @@ resetglobals(void)
 {
     /* reset the subset of global variables that is modified by the first pass */
     curfunc = NULL;        /* pointer to current function */
-    stgidx = 0;            /* index to the staging buffer */
     sc_labnum = 0;         /* top value of (internal) labels */
-    staging = 0;           /* true if staging output */
     declared = 0;          /* number of local cells declared */
     glb_declared = 0;      /* number of global cells declared */
     code_idx = 0;          /* number of bytes with generated code */
@@ -589,8 +576,6 @@ initglobals(void)
     errfname[0] = '\0';      /* error file name */
     inpf = NULL;             /* file read from */
     inpfname = NULL;         /* pointer to name of the file currently read from */
-    outf = NULL;             /* file written to */
-    litq = NULL;             /* the literal queue */
     glbtab.next = NULL;      /* clear global variables/constants table */
     loctab.next = NULL;      /*   "   local      "    /    "       "   */
     libname_tab.next = NULL; /* library table (#pragma library "..." syntax) */
@@ -2477,8 +2462,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
 
     /* if this is a function that is not referred to (this can only be detected
      * in the second stage), shut code generation off */
+    AutoStage stage;
     if (sc_status == statWRITE && (sym->usage & uREAD) == 0 && !fpublic) {
-        cidx = code_idx;
         glbdecl = glb_declared;
 
         sc_status = statSKIP;
@@ -2564,8 +2549,8 @@ newfunc(declinfo_t* decl, const int* thistag, int fpublic, int fstatic, int stoc
     assert(loctab.next == NULL);
     curfunc = NULL;
     if (sc_status == statSKIP) {
+        stage.Rewind();
         sc_status = statWRITE;
-        code_idx = cidx;
         glb_declared = glbdecl;
         sc_err_status = FALSE;
     }
@@ -3076,18 +3061,18 @@ redef_enumfield:
 bool
 exprconst(cell* val, int* tag, symbol** symptr)
 {
-    int ident, index;
-    cell cidx;
-
+    int ident;
     int old_errcount = sc_total_errors;
 
-    stgset(TRUE);          /* start stage-buffering */
-    stgget(&index, &cidx); /* mark position in code generator */
-    errorset(sEXPRMARK, 0);
-    ident = expression(val, tag, symptr, nullptr);
-    bool failed = (sc_status == statWRITE && sc_total_errors > old_errcount);
-    stgdel(index, cidx); /* scratch generated code */
-    stgset(FALSE);       /* stop stage-buffering */
+    bool failed;
+    {
+        AutoStage stage;
+        errorset(sEXPRMARK, 0);
+        ident = expression(val, tag, symptr, nullptr);
+        failed = (sc_status == statWRITE && sc_total_errors > old_errcount);
+        stage.Rewind();
+    }
+
     if (ident != iCONSTEXPR) {
         if (!failed) // Don't pile on errors.
             error(8); /* must be constant expression */

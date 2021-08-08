@@ -35,15 +35,26 @@
 #include "lexer.h"
 #include "lexer-inl.h"
 #include "libpawnc.h"
-#include "optimizer.h"
+#include "output-buffer.h"
 #include "sc.h"
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "symbols.h"
 
+/* macros for code generation */
+#define opcodes(n) ((n) * sizeof(cell)) /* opcode size */
+#define opargs(n) ((n) * sizeof(cell))  /* size of typical argument */
+
 DataQueue gDataQueue;
 static int fcurseg; /* the file number (fcurrent) for the active segment */
+
+static inline void
+stgwrite(const char* st)
+{
+    if (sc_status == statWRITE)
+        gAsmBuffer << st;
+}
 
 DataQueue::DataQueue()
 {
@@ -328,20 +339,15 @@ setfiledirect(char* name)
 {
     if (sc_status == statFIRST && sc_listing) {
         assert(name != NULL);
-        pc_writeasm(outf, "#file ");
-        pc_writeasm(outf, name);
-        pc_writeasm(outf, "\n");
+        gAsmBuffer << "#file " << name << "\n";
     }
 }
 
 void
 setlinedirect(int line)
 {
-    if (sc_status == statFIRST && sc_listing) {
-        char string[40];
-        sprintf(string, "#line %d\n", line);
-        pc_writeasm(outf, string);
-    }
+    if (sc_status == statFIRST && sc_listing)
+        gAsmBuffer << "#line " << line << "\n";
 }
 
 /*  setlabel
@@ -355,14 +361,10 @@ setlabel(int number)
     stgwrite("l.");
     stgwrite((char*)itoh(number));
     /* To assist verification of the assembled code, put the address of the
-     * label as a comment. However, labels that occur inside an expression
-     * may move (through optimization or through re-ordering). So write the
-     * address only if it is known to accurate.
+     * label as a comment.
      */
-    if (!staging) {
-        stgwrite("\t\t; ");
-        outval(code_idx, FALSE);
-    }
+    stgwrite("\t\t; ");
+    outval(code_idx, FALSE);
     stgwrite("\n");
 }
 
