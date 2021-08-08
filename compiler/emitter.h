@@ -184,7 +184,3 @@ void dec(const value* lval);
 void jmp_ne0(int number);
 void jmp_eq0(int number);
 void outval(cell val, int newline);
-
-/* macros for code generation */
-#define opcodes(n) ((n) * sizeof(cell)) /* opcode size */
-#define opargs(n) ((n) * sizeof(cell))  /* size of typical argument */

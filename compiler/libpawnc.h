@@ -19,8 +19,6 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-struct memfile_t;
-
 void* pc_opensrc(char* filename); /* reading only */
 void* pc_createsrc(char* filename);
 void pc_closesrc(void* handle); /* never delete */
@@ -29,11 +27,5 @@ int pc_writesrc(void* handle, unsigned char* source);
 void* pc_getpossrc(void* handle);
 void pc_resetsrc(void* handle, void* position); /* reset to a position marked earlier */
 int pc_eofsrc(void* handle);
-
-memfile_t* pc_openasm(char* filename); /* read/write */
-void pc_closeasm(memfile_t* handle, int deletefile);
-void pc_resetasm(memfile_t* handle);
-int pc_writeasm(memfile_t* handle, const char* str);
-char* pc_readasm(memfile_t* handle, char* target, int maxchars);
 
 int pc_printf(const char* message, ...);

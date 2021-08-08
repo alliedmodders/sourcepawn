@@ -28,13 +28,10 @@
 
 #include "sc.h"
 
-struct memfile_t;
-
 typedef struct HashTable HashTable;
 extern struct HashTable* sp_Globals;
 extern symbol loctab;             /* local symbol table */
 extern symbol glbtab;             /* global symbol table */
-extern cell* litq;                /* the literal queue */
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern constvalue libname_tab;    /* library table (#pragma library "..." syntax) */
@@ -46,9 +43,7 @@ extern char binfname[];           /* binary file name */
 extern char errfname[];           /* error file name */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
-extern int stgidx;                /* index to the staging buffer */
 extern int sc_labnum;             /* number of (internal) labels */
-extern int staging;               /* true if staging output */
 extern cell declared;             /* number of local cells declared */
 extern cell glb_declared;         /* number of global cells declared */
 extern cell code_idx;             /* number of bytes with generated code */
@@ -94,7 +89,6 @@ extern int sc_use_stderr;
 
 extern void* inpf;      /* file read from (source or include) */
 extern void* inpf_org;  /* main source file */
-extern memfile_t* outf; /* file written to */
 
 extern jmp_buf errbuf; /* target of longjmp() on a fatal error */
 

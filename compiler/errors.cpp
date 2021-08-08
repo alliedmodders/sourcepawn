@@ -145,10 +145,6 @@ abort_compiler()
     if (strlen(errfname) == 0) {
         fprintf(stdout, "\nCompilation aborted.");
     }
-    if (outf != NULL) {
-        pc_closeasm(outf, TRUE);
-        outf = NULL;
-    }
     longjmp(errbuf, 2); /* fatal error, quit */
 }
 

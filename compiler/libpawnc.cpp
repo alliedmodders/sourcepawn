@@ -29,7 +29,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "memfile.h"
 #include "sc.h"
 
 #if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
@@ -284,40 +283,4 @@ pc_eofsrc(void* handle)
 
     assert(!src->fp);
     return src->pos == src->end;
-}
-
-/* should return a pointer, which is used as a "magic cookie" to all I/O
- * functions; return NULL for failure
- */
-memfile_t*
-pc_openasm(char* filename)
-{
-    return memfile_creat(filename, 4096);
-}
-
-void
-pc_closeasm(memfile_t* handle, int deletefile)
-{
-    if (handle) {
-        if (!deletefile) {
-            if (FILE* fp = fopen(handle->name.c_str(), "wb")) {
-                fwrite(handle->base.get(), handle->usedoffs, 1, fp);
-                fclose(fp);
-            }
-        }
-        memfile_destroy(handle);
-    }
-}
-
-void
-pc_resetasm(memfile_t* handle)
-{
-    memfile_seek(handle, 0, SEEK_SET);
-}
-
-int
-pc_writeasm(memfile_t* handle, const char* string)
-{
-    size_t bytes = strlen(string);
-    return memfile_write(handle, string, bytes);
 }

@@ -44,7 +44,7 @@
 #include "libsmx/data-pool.h"
 #include "libsmx/smx-builder.h"
 #include "libsmx/smx-encoding.h"
-#include "memfile.h"
+#include "output-buffer.h"
 #include "sc.h"
 #include "sclist.h"
 #include "sctracker.h"
@@ -178,12 +178,11 @@ skipwhitespace(const char* str)
 class AsmReader final
 {
   public:
-    explicit AsmReader(memfile_t* fp)
-     : fp_(fp)
+    explicit AsmReader()
     {
-        pc_resetasm(fp_);
-        pos_ = fp_->pos();
-        end_ = fp_->end();
+        data_ = gAsmBuffer.str();
+        pos_ = data_.c_str();
+        end_ = data_.c_str() + data_.size();
     }
 
     // Find the next token that is immediately proceeded by a newline.
@@ -219,7 +218,7 @@ class AsmReader final
     inline const char* advance();
 
   private:
-    memfile_t* fp_;
+    std::string data_;
     const char* pos_;
     const char* end_;
     std::vector<symbol*> native_list_;
@@ -1433,7 +1432,7 @@ typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
 static void
-assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
+assemble_to_buffer(SmxByteBuffer* buffer)
 {
     SmxBuilder builder;
     RefPtr<SmxNativeSection> natives = new SmxNativeSection(".natives");
@@ -1525,7 +1524,7 @@ assemble_to_buffer(SmxByteBuffer* buffer, memfile_t* fin)
     assert(sLabelTable.size() == size_t(sc_labnum));
 
     // Generate buffers.
-    AsmReader reader(fin);
+    AsmReader reader;
     std::vector<cell> code_buffer, data_buffer;
     generate_segment(reader, &code_buffer, &data_buffer);
 
@@ -1619,12 +1618,12 @@ VerifyBinary(const char* file, uint8_t* bytes, size_t size)
 }
 
 void
-assemble(const char* binfname, memfile_t* fin)
+assemble(const char* binfname)
 {
     init_opcode_lookup();
 
     SmxByteBuffer buffer;
-    assemble_to_buffer(&buffer, fin);
+    assemble_to_buffer(&buffer);
 
     // Buffer compression logic.
     sp_file_hdr_t* header = (sp_file_hdr_t*)buffer.bytes();

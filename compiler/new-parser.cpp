@@ -29,7 +29,6 @@
 #include "errors.h"
 #include "lexer.h"
 #include "new-parser.h"
-#include "optimizer.h"
 #include "parse-node.h"
 #include "sc.h"
 #include "sclist.h"

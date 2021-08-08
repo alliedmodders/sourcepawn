@@ -30,7 +30,6 @@
 #include "expressions.h"
 #include "lexer.h"
 #include "new-parser.h"
-#include "optimizer.h"
 #include "sc.h"
 #include "sclist.h"
 #include "sctracker.h"
