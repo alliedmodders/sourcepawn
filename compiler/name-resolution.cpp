@@ -671,6 +671,29 @@ FunctionInfo::Bind(SemaContext& sc)
 
     bool ok = true;
 
+    if (this_tag_) {
+        Type* type = gTypes.find(*this_tag_);
+
+        typeinfo_t typeinfo = {};
+        if (symbol* enum_type = type->asEnumStruct()) {
+            typeinfo.tag = 0;
+            typeinfo.ident = iREFARRAY;
+            typeinfo.declared_tag = *this_tag_;
+            typeinfo.dim[0] = enum_type->addr();
+            typeinfo.idxtag[0] = *this_tag_;
+            typeinfo.numdim = 1;
+        } else {
+            typeinfo.tag = *this_tag_;
+            typeinfo.ident = iVARIABLE;
+            typeinfo.is_const = true;
+        }
+
+        auto decl = new VarDecl(pos_, gAtoms.add("this"), typeinfo, sARGUMENT, false,
+                                false, false, nullptr);
+        args_.emplace(args_.begin(), FunctionArg{decl});
+    }
+
+
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {
         scope_ = CreateScope();
@@ -784,4 +807,109 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
         symbols_.emplace_back(sym);
     }
     return names_.size() == symbols_.size();
+}
+
+bool
+EnumStructDecl::Bind(SemaContext& sc)
+{
+    AutoCountErrors errors;
+    constvalue* values = (constvalue*)calloc(1, sizeof(constvalue));
+
+    if (findglb(name_) || findconst(name_->chars()))
+        error(pos_, 21, name_->chars());
+
+    symbol* root = add_constant(name_->chars(), 0, sGLOBAL, 0);
+    root->tag = gTypes.defineEnumStruct(name_->chars(), root)->tagid();
+    root->enumroot = true;
+    root->ident = iENUMSTRUCT;
+
+    cell position = 0;
+    for (auto& field : fields_) {
+        // It's not possible to have circular references other than this, because
+        // Pawn is inherently forward-pass only.
+        if (field.decl.type.semantic_tag() == root->tag) {
+            error(field.pos, 87, name_->chars());
+            continue;
+        }
+
+        if (field.decl.type.is_const)
+            error(field.pos, 94, field.decl.name);
+
+        if (field.decl.type.numdim) {
+            if (field.decl.type.ident == iARRAY) {
+                ResolveArraySize(sc, field.pos, &field.decl.type, sENUMFIELD);
+
+                if (field.decl.type.numdim > 1) {
+                    error(field.pos, 65);
+                    continue;
+                }
+            } else {
+                error(field.pos, 81);
+                continue;
+            }
+        }
+
+        auto field_name = DecorateInnerName(field.pos, field.decl.name);
+        if (!field_name)
+            continue;
+
+        if (findconst(field_name->chars())) {
+            error(field.pos, 103, field.decl.name, "enum struct");
+            continue;
+        }
+
+        symbol* child = add_constant(field_name->chars(), position, sGLOBAL, root->tag);
+        if (!child)
+            continue;
+        child->x.tags.index = field.decl.type.semantic_tag();
+        child->x.tags.field = 0;
+        child->dim.array.length = field.decl.type.numdim ? field.decl.type.dim[0] : 0;
+        child->dim.array.level = 0;
+        child->set_parent(root);
+        if (values) {
+            child->enumfield = true;
+            append_constval(values, field.decl.name, position, root->tag);
+        }
+
+        cell size = 1;
+        if (field.decl.type.numdim) {
+            size = field.decl.type.tag == pc_tag_string
+                   ? char_array_cells(field.decl.type.dim[0])
+                   : field.decl.type.dim[0];
+        }
+        position += size;
+    }
+
+    if (!position)
+        error(pos_, 119, name_->chars());
+
+    assert(root->enumroot);
+    root->setAddr(position);
+    root->dim.enumlist = values;
+
+    for (const auto& fun : methods_) {
+        auto inner_name = DecorateInnerName(fun->pos(), fun->info()->decl().name);
+        if (!inner_name)
+            continue;
+
+        fun->info()->set_name(inner_name);
+        fun->info()->set_this_tag(root->tag);
+        fun->Bind(sc);
+    }
+
+    return errors.ok();
+}
+
+sp::Atom*
+EnumStructDecl::DecorateInnerName(const token_pos_t& pos, const char* field_name)
+{
+    char const_name[METHOD_NAMEMAX + 1];
+    size_t full_name_length =
+        ke::SafeSprintf(const_name, sizeof(const_name), "%s::%s", name_->chars(), field_name);
+    if (full_name_length > sNAMEMAX) {
+        const_name[sNAMEMAX] = '\0';
+        error(pos, 123, field_name, const_name);
+        return nullptr;
+    }
+    return gAtoms.add(const_name);
 }

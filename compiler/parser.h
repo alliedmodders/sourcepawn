@@ -70,6 +70,7 @@ class Parser : public ExpressionParser
     Decl* parse_typedef();
     Decl* parse_typeset();
     Decl* parse_using();
+    Decl* parse_enumstruct();
 
     Stmt* parse_compound(bool sameline);
     Stmt* parse_local_decl(int tokid, bool autozero);
@@ -116,8 +117,6 @@ class Parser : public ExpressionParser
 // Implemented in parser.cpp.
 int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
 functag_t* parse_function_type();
-void dodecl(const token_t* tok);
-void decl_enumstruct();
 void domethodmap(LayoutSpec spec);
 int parse_new_typename(const token_t* tok);
 int reparse_old_decl(declinfo_t* decl, int flags);

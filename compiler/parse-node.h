@@ -1565,9 +1565,39 @@ class FunctionDecl : public Decl
     void DoEmit(CodegenContext& cg) override;
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
+
+    FunctionInfo* info() const { return info_; }
     symbol* sym() const { return info_->sym(); }
 
   private:
     FunctionInfo* info_;
     PoolString* deprecate_;
+};
+
+struct EnumStructField {
+    token_pos_t pos;
+    declinfo_t decl;
+};
+
+class EnumStructDecl : public Decl
+{
+  public:
+    explicit EnumStructDecl(const token_pos_t& pos, sp::Atom* name)
+      : Decl(pos, name)
+    {}
+
+    bool Bind(SemaContext& sc) override;
+    bool Analyze(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
+
+    PoolList<FunctionDecl*>& methods() { return methods_; }
+    PoolList<EnumStructField>& fields() { return fields_; }
+
+  private:
+    sp::Atom* DecorateInnerName(const token_pos_t& pos, const char* name);
+
+  private:
+    PoolList<FunctionDecl*> methods_;
+    PoolList<EnumStructField> fields_;
 };

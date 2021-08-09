@@ -106,7 +106,7 @@ Parser::parse()
                 break;
             case tENUM:
                 if (matchtoken(tSTRUCT))
-                    decl_enumstruct();
+                    decl = parse_enumstruct();
                 else
                     decl = parse_enum(sGLOBAL);
                 break;
@@ -349,6 +349,54 @@ Parser::parse_enum(int vclass)
     needtoken('}');
     matchtoken(';');
     return decl;
+}
+
+Decl*
+Parser::parse_enumstruct()
+{
+    auto pos = current_pos();
+
+    token_ident_t struct_name = {};
+    strcpy(struct_name.name, "__unknown__");
+    needsymbol(&struct_name);
+
+    if (!matchtoken('{')) {
+        needtoken('{');
+        return nullptr;
+    }
+
+    auto stmt = new EnumStructDecl(pos, gAtoms.add(struct_name.name));
+
+    int opening_line = fline;
+    while (!matchtoken('}')) {
+        if (!freading) {
+            error(151, opening_line);
+            break;
+        }
+
+        declinfo_t decl = {};
+        if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
+            continue;
+
+        auto decl_pos = current_pos();
+        if (!decl.type.has_postdims && lexpeek('(')) {
+            auto info = new FunctionInfo(decl_pos, decl);
+            info->set_is_stock();
+            if (!parse_function(info, 0))
+                continue;
+
+            auto method = new FunctionDecl(decl_pos, info);
+            stmt->methods().emplace_back(method);
+            continue;
+        }
+
+        stmt->fields().emplace_back(EnumStructField{decl_pos, decl});
+
+        require_newline(TerminatorPolicy::Semicolon);
+    }
+
+    require_newline(TerminatorPolicy::Newline);
+    return stmt;
 }
 
 Decl*
@@ -1737,29 +1785,6 @@ Parser::parse_function(FunctionInfo* info, int tokid)
 void
 Parser::parse_args(FunctionInfo* info)
 {
-    auto this_tag = info->this_tag();
-    if (this_tag && *this_tag != -1) {
-        Type* type = gTypes.find(*this_tag);
-
-        typeinfo_t typeinfo = {};
-        if (symbol* enum_type = type->asEnumStruct()) {
-            typeinfo.tag = 0;
-            typeinfo.ident = iREFARRAY;
-            typeinfo.declared_tag = *this_tag;
-            typeinfo.dim[0] = enum_type->addr();
-            typeinfo.idxtag[0] = *this_tag;
-            typeinfo.numdim = 1;
-        } else {
-            typeinfo.tag = *this_tag;
-            typeinfo.ident = iVARIABLE;
-            typeinfo.is_const = true;
-        }
-
-        auto decl = new VarDecl(info->pos(), gAtoms.add("this"), typeinfo, sARGUMENT, false,
-                                false, false, nullptr);
-        info->AddArg(decl);
-    }
-
     if (matchtoken(')'))
         return;
 

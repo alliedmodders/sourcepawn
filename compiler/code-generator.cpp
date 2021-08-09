@@ -1440,3 +1440,10 @@ FunctionDecl::DoEmit(CodegenContext& cg)
 {
     info_->Emit(cg);
 }
+
+void
+EnumStructDecl::DoEmit(CodegenContext& cg)
+{
+    for (const auto& fun : methods_)
+        fun->DoEmit(cg);
+}
