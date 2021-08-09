@@ -663,7 +663,7 @@ MethodVerifier::mergeTracker(Block* block, VerifyData* other)
   // If our tracker value is determinate, but another branch was different
   // (or indeterminate), we allow this and convert the propagated amount to
   // be indeterminate.
-  auto heap_cursor = join->heap_balance.rbegin();
+  auto heap_cursor = join->heap_balance.size();
   for (auto cursor = join->tracker_balance.size(); cursor != 0; cursor--) {
     size_t index = cursor - 1;
     cell_t this_amount = join->tracker_balance[index];
@@ -676,45 +676,41 @@ MethodVerifier::mergeTracker(Block* block, VerifyData* other)
 
     // If the amount was zero, there's no heap cursor entry, so fab one.
     if (this_amount == 0) {
-      auto iter = join->heap_balance.emplace(heap_cursor.base(), -1);
-      heap_cursor = std::make_reverse_iterator(iter);
-      heap_cursor++;
+      // note: heap_cursor is +1, so we're inserting after the current element.
+      join->heap_balance.emplace(join->heap_balance.begin() + heap_cursor, -1);
       continue;
     }
 
     // If there's no heap entries, something went wrong when we analyzec the
     // tracker opcode.
-    if (heap_cursor == join->heap_balance.rend()) {
+    if (heap_cursor == 0) {
       reportError(SP_ERROR_INSTRUCTION_PARAM);
       return false;
     }
 
     // Walk the heap and fix up static tracking to be indeterminate.
-    while (heap_cursor != join->heap_balance.rend()) {
-      if (*heap_cursor < this_amount) {
-        this_amount -= *heap_cursor;
-        *heap_cursor++ = 0;
+    while (heap_cursor != 0) {
+      auto entry = join->heap_balance.begin() + (heap_cursor - 1);
+      if (*entry < this_amount) {
+        this_amount -= *entry;
+        if (join->heap_balance.erase(entry) != join->heap_balance.begin())
+          heap_cursor--;
         continue;
       }
-      if (*heap_cursor == this_amount) {
-        *heap_cursor++ = -1;
+      if (*entry == this_amount) {
+        *entry = -1;
+        heap_cursor--;
         break;
       }
-      if (*heap_cursor > this_amount) {
-        *heap_cursor -= this_amount;
+      if (*entry > this_amount) {
+        *entry -= this_amount;
 
-        auto iter = join->heap_balance.emplace(heap_cursor.base(), -1);
-        heap_cursor = std::make_reverse_iterator(iter);
-        heap_cursor++;
+        // note: heap_cursor doesn't change, since we modified in-place and
+        // inserted the new value after.
+        join->heap_balance.emplace(entry + 1, -1);
         break;
       }
     }
-  }
-
-  // If we changed the heap at all, remove zero entries.
-  if (heap_cursor != join->heap_balance.rbegin()) {
-    join->heap_balance.erase(std::remove(join->heap_balance.begin(), join->heap_balance.end(), 0),
-                             join->heap_balance.end());
   }
   return true;
 }
