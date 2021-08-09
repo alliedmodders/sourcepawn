@@ -67,6 +67,7 @@ class Config(object):
 
       if builder.options.debug == '1':
           cxx.cflags += ['-g3']
+          cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
 
       have_gcc = cxx.family == 'gcc'
       have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
