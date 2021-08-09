@@ -3199,3 +3199,19 @@ PragmaUnusedStmt::Analyze(SemaContext& sc)
     }
     return true;
 }
+
+bool
+EnumStructDecl::Analyze(SemaContext& sc)
+{
+    bool ok = true;
+    for (const auto& fun : methods_)
+        ok &= fun->Analyze(sc);
+    return ok;
+}
+
+void
+EnumStructDecl::ProcessUses(SemaContext& sc)
+{
+    for (const auto& fun : methods_)
+        fun->ProcessUses(sc);
+}

@@ -1,1 +1,0 @@
-(7) : error 019: cannot use symbol "STest" before it is fully parsed
