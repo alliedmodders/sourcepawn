@@ -38,8 +38,8 @@ symbol loctab;                             /* local symbol table */
 symbol glbtab;                             /* global symbol table */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
-constvalue tagname_tab = {NULL, "", 0, 0}; /* tagname table */
-constvalue libname_tab = {NULL, "", 0, 0}; /* library table (#pragma library "..." syntax) */
+constvalue tagname_tab = {nullptr, nullptr, 0, 0}; /* tagname table */
+constvalue libname_tab = {nullptr, nullptr, 0, 0}; /* library table (#pragma library "..." syntax) */
 constvalue* curlibrary = NULL;             /* current library */
 int pc_addlibtable = TRUE;                 /* is the library table added to the AMX file? */
 symbol* curfunc;                           /* pointer to current function */

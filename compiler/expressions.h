@@ -60,7 +60,6 @@ struct UserOperation;
 bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);
 
-int findnamedarg(arginfo* arg, const char* name);
 int commutative(void (*oper)());
 cell calc(cell left, void (*oper)(), cell right, char* boolresult);
 bool is_valid_index_tag(int tag);

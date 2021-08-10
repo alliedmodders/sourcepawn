@@ -832,7 +832,7 @@ command(bool allow_synthesized_tokens)
 {
     int tok, ret;
     cell val;
-    char* str;
+    const char* str;
 
     while (*lptr <= ' ' && *lptr != '\0')
         lptr += 1;
@@ -1026,28 +1026,29 @@ command(bool allow_synthesized_tokens)
                             return CMD_INJECTED;
                         }
 
-                        char name[sNAMEMAX + 1];
-                        size_t i;
                         int comma;
                         symbol* sym;
                         do {
                             /* get the name */
                             while (*lptr <= ' ' && *lptr != '\0')
                                 lptr++;
-                            for (i = 0; i < sizeof name && alphanum(*lptr); i++, lptr++)
-                                name[i] = *lptr;
-                            name[i] = '\0';
+                            auto name_start = lptr;
+                            while (alphanum(*lptr))
+                                lptr++;
+
+                            auto atom = gAtoms.add((const char*)name_start, lptr - name_start);
+
                             /* get the symbol */
-                            sym = findloc(name);
+                            sym = findloc(atom);
                             if (sym == NULL)
-                                sym = findglb(name);
+                                sym = findglb(atom);
                             if (sym != NULL) {
                                 sym->usage |= uREAD;
                                 if (sym->ident == iVARIABLE || sym->ident == iREFERENCE ||
                                     sym->ident == iARRAY || sym->ident == iREFARRAY)
                                     sym->usage |= uWRITTEN;
                             } else {
-                                error(17, name); /* undefined symbol */
+                                report(17) << atom; /* undefined symbol */
                             }
                             /* see if a comma follows the name */
                             while (*lptr <= ' ' && *lptr != '\0')
@@ -1173,7 +1174,7 @@ command(bool allow_synthesized_tokens)
                         }
                     }
                     if (!ret)
-                        error(17, str); /* undefined symbol */
+                        report(17) << str; /* undefined symbol */
                 } else {
                     error(20, str); /* invalid symbol name */
                 }
@@ -2023,7 +2024,7 @@ static void lex_symbol(full_token_t* tok, const char* token_start);
 static bool lex_symbol_or_keyword(full_token_t* tok);
 
 int
-lex(cell* lexvalue, char** lexsym)
+lex(cell* lexvalue, const char** lexsym)
 {
     int newline;
 
@@ -2396,7 +2397,7 @@ lex_keyword(full_token_t* tok, const char* token_start)
 
     if (IsUnimplementedKeyword(tok_id)) {
         // Try to gracefully error.
-        error(173, get_token_string(tok_id).c_str());
+        report(173) << get_token_string(tok_id);
         tok->id = tSYMBOL;
         strcpy(tok->str, get_token_string(tok_id).c_str());
         tok->len = strlen(tok->str);
@@ -2404,18 +2405,17 @@ lex_keyword(full_token_t* tok, const char* token_start)
         // Special case 'int:' to its old behavior: an implicit view_as<> cast
         // with Pawn's awful lowercase coercion semantics.
         std::string token_str = get_token_string(tok_id);
-        const char* token = token_str.c_str();
         switch (tok_id) {
             case tINT:
-                error(238, token, token);
+                report(238) << token_str << token_str;
                 break;
             case tVOID:
-                error(239, token, token);
+                report(239) << token_str << token_str;
                 break;
         }
         lptr++;
         tok->id = tLABEL;
-        strcpy(tok->str, token);
+        strcpy(tok->str, token_str.c_str());
         tok->len = strlen(tok->str);
     } else {
         tok->id = tok_id;
@@ -2468,12 +2468,6 @@ static void
 lex_symbol(full_token_t* tok, const char* token_start)
 {
     ke::SafeStrcpyN(tok->str, sizeof(tok->str), token_start, tok->len);
-    if (tok->len > sNAMEMAX) {
-        static_assert(sNAMEMAX < sizeof(tok->str), "sLINEMAX should be > sNAMEMAX");
-        tok->str[sNAMEMAX] = '\0';
-        tok->len = sNAMEMAX;
-        error(200, tok->str, sNAMEMAX);
-    }
 
     tok->id = tSYMBOL;
 
@@ -2563,10 +2557,9 @@ int
 matchtoken(int token)
 {
     cell val;
-    char* str;
-    int tok;
+    const char* str;
 
-    tok = lex(&val, &str);
+    int tok = lex(&val, &str);
 
     if (token == tok)
         return 1;
@@ -2594,7 +2587,7 @@ matchtoken(int token)
  *  The token itself is the return value. Normally, this one is already known.
  */
 int
-tokeninfo(cell* val, char** str)
+tokeninfo(cell* val, const char** str)
 {
     *val = current_token()->value;
     *str = current_token()->str;
@@ -2672,7 +2665,7 @@ lex_same_line()
         return tEOL;
 
     cell value;
-    char* str;
+    const char* str;
     return lex(&value, &str);
 }
 
@@ -2686,7 +2679,7 @@ require_newline(TerminatorPolicy policy)
         if (next_tok_id == ';') {
             lexpop();
         } else if (policy == TerminatorPolicy::Semicolon && sc_needsemicolon) {
-            error(pos, 1, ";", get_token_string(next_tok_id).c_str());
+            report(pos, 1) << ";" << get_token_string(next_tok_id);
         }
     }
 
@@ -2934,31 +2927,21 @@ matchsymbol(token_ident_t* ident)
         lexpush();
         return FALSE;
     }
-    strcpy(ident->name, ident->tok.str);
-    ident->tok.str = ident->name;
+    ident->name = gAtoms.add(ident->tok.str);
+    ident->tok.str = ident->name->chars();
     return TRUE;
 }
 
 int
 needsymbol(token_ident_t* ident)
 {
-    if (!expecttoken(tSYMBOL, &ident->tok))
+    if (!expecttoken(tSYMBOL, &ident->tok)) {
+        ident->name = gAtoms.add("__unknown__");
         return FALSE;
-    strcpy(ident->name, ident->tok.str);
-    ident->tok.str = ident->name;
+    }
+    ident->name = gAtoms.add(ident->tok.str);
+    ident->tok.str = ident->name->chars();
     return TRUE;
-}
-
-symbol*
-find_enumstruct_field(Type* type, const char* name)
-{
-    assert(type->asEnumStruct());
-
-    char const_name[METHOD_NAMEMAX + 1];
-    ke::SafeSprintf(const_name, sizeof(const_name), "%s::%s", type->name(), name);
-    if (symbol* sym = findconst(const_name))
-        return sym;
-    return findglb(const_name);
 }
 
 void
@@ -2981,6 +2964,8 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef)
             // Kill previous enumstruct properties, if any.
             if (sym->enumroot) {
                 for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
+                    if (!cv->name)
+                        continue;
                     symbol* csym = findglb(cv->name);
                     if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
                         csym->enumfield)
@@ -2994,13 +2979,13 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef)
                 sym->dim.enumlist = NULL;
             }
         } else {
-            error(11, map->name);
+            report(11) << map->name;
             sym = nullptr;
         }
     }
 
     if (!sym) {
-        sym = addsym(map->name,  // name
+        sym = addsym(map->name->chars(),
                      0,          // addr
                      iMETHODMAP, // ident
                      sGLOBAL,    // vclass
@@ -3014,12 +2999,13 @@ void
 declare_handle_intrinsics()
 {
     // Must not have an existing Handle methodmap.
-    if (methodmap_find_by_name("Handle")) {
+    sp::Atom* handle_atom = gAtoms.add("Handle");
+    if (methodmap_find_by_name(handle_atom)) {
         error(156);
         return;
     }
 
-    methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, "Handle");
+    methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, handle_atom);
     map->nullable = true;
 
     declare_methodmap_symbol(map, true);
@@ -3027,13 +3013,13 @@ declare_handle_intrinsics()
     if (symbol* sym = findglb("CloseHandle")) {
         auto dtor = std::make_unique<methodmap_method_t>(map);
         dtor->target = sym;
-        strcpy(dtor->name, "~Handle");
+        dtor->name = gAtoms.add("~Handle");
         map->dtor = dtor.get();
         map->methods.push_back(std::move(dtor));
 
         auto close = std::make_unique<methodmap_method_t>(map);
         close->target = sym;
-        strcpy(close->name, "Close");
+        close->name = gAtoms.add("Close");
         map->methods.push_back(std::move(close));
     }
 }

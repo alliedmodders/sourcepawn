@@ -491,3 +491,53 @@ addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim
     return sym;
 }
 
+int
+findnamedarg(arginfo* arg, sp::Atom* name)
+{
+    int i;
+
+    for (i = 0; arg[i].ident != 0 && arg[i].ident != iVARARGS; i++)
+        if (arg[i].name == name)
+            return i;
+    return -1;
+}
+
+symbol*
+find_enumstruct_field(Type* type, sp::Atom* name)
+{
+    assert(type->asEnumStruct());
+
+    auto const_name = ke::StringPrintf("%s::%s", type->name(), name->chars());
+    auto atom = gAtoms.add(const_name);
+    if (symbol* sym = findconst(atom->chars()))
+        return sym;
+    return findglb(atom);
+}
+
+static char*
+tag2str(char* dest, int tag)
+{
+    assert(tag >= 0);
+    sprintf(dest, "0%x", tag);
+    return isdigit(dest[1]) ? &dest[1] : dest;
+}
+
+sp::Atom*
+operator_symname(const char* opername, int tag1, int tag2, int numtags, int resulttag)
+{
+    char tagstr1[10], tagstr2[10];
+    int opertok;
+
+    assert(numtags >= 1 && numtags <= 2);
+    opertok = (opername[1] == '\0') ? opername[0] : 0;
+
+    std::string symname;
+    if (opertok == '=')
+        symname = ke::StringPrintf("%s%s%s", tag2str(tagstr1, resulttag), opername, tag2str(tagstr2, tag1));
+    else if (numtags == 1 || opertok == '~')
+        symname = ke::StringPrintf("%s%s", opername, tag2str(tagstr1, tag1));
+    else
+        symname = ke::StringPrintf("%s%s%s", tag2str(tagstr1, tag1), opername, tag2str(tagstr2, tag2));
+    return gAtoms.add(symname);
+}
+

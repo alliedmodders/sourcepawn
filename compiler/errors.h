@@ -115,6 +115,54 @@ void errorset(int code, int line);
 void clear_errors();
 void dump_error_report(bool clear);
 
+class MessageBuilder
+{
+  public:
+    explicit MessageBuilder(int number);
+    MessageBuilder(symbol* sym, int number);
+    MessageBuilder(MessageBuilder&& other);
+
+    MessageBuilder(const MessageBuilder& other) = delete;
+
+    MessageBuilder(const token_pos_t& where, int number)
+      : where_(where),
+        number_(number)
+    {}
+    ~MessageBuilder();
+
+    MessageBuilder& operator <<(const char* arg) {
+        args_.emplace_back(arg);
+        return *this;
+    }
+    MessageBuilder& operator <<(const std::string& arg) {
+        args_.emplace_back(arg);
+        return *this;
+    }
+    MessageBuilder& operator <<(sp::Atom* atom) {
+        args_.emplace_back(atom ? atom->chars() : "<unknown>");
+        return *this;
+    }
+
+    void operator =(const MessageBuilder& other) = delete;
+    MessageBuilder& operator =(MessageBuilder&& other);
+
+  private:
+    token_pos_t where_;
+    int number_;
+    std::vector<std::string> args_;
+    bool disabled_ = false;
+};
+
+static inline MessageBuilder report(const token_pos_t& where, int number) {
+    return MessageBuilder(where, number);
+}
+static inline MessageBuilder report(int number) {
+    return MessageBuilder(number);
+}
+static inline MessageBuilder report(symbol* sym, int number) {
+    return MessageBuilder(sym, number);
+}
+
 int pc_enablewarning(int number, int enable);
 
 extern bool sc_one_error_per_statement;

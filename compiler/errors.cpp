@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -82,6 +83,59 @@ AutoErrorPos::~AutoErrorPos()
     sPosOverride = prev_;
 }
 
+static inline ErrorType
+DeduceErrorType(int number)
+{
+    if (number < 200 || (number < 300 && sc_warnings_are_errors) || number >= 400)
+        return ErrorType::Error;
+    if (number >= 300)
+        return ErrorType::Fatal;
+
+    int index = (number - 200) / 8;
+    int mask = 1 << ((number - 200) % 8);
+    if ((warndisable[index] & mask) != 0)
+        return ErrorType::Suppressed;
+    return ErrorType::Warning;
+}
+
+static inline const char*
+GetErrorTypePrefix(ErrorType type)
+{
+    switch (type) {
+        case ErrorType::Error:
+            return "error";
+        case ErrorType::Fatal:
+            return "fatal error";
+        case ErrorType::Warning:
+        case ErrorType::Suppressed:
+            return "warning";
+        default:
+            assert(false);
+            return "(unknown)";
+    }
+}
+
+
+static inline const char*
+GetMessageForNumber(int number)
+{
+    if (number < 200) {
+        assert(size_t(number - 1) < sizeof(errmsg) / sizeof(*errmsg));
+        return errmsg[number - 1];
+    }
+    if (number < 300) {
+        assert(size_t(number - 200) < sizeof(warnmsg) / sizeof(*warnmsg));
+        return warnmsg[number - 200];
+    }
+    if (number >= 400) {
+        assert(size_t(number - 400) < sizeof(errmsg_ex) / sizeof(*errmsg_ex));
+        return errmsg_ex[number - 400];
+    }
+    assert(number >= FIRST_FATAL_ERROR);
+    assert(size_t(number - FIRST_FATAL_ERROR) < sizeof(fatalmsg) / sizeof(*fatalmsg));
+    return fatalmsg[number - FIRST_FATAL_ERROR];
+}
+
 /*  error
  *
  *  Outputs an error message (note: msg is passed optionally).
@@ -112,6 +166,82 @@ error(int number, ...)
 
     report_error(std::move(report));
     return 0;
+}
+
+MessageBuilder::MessageBuilder(int number)
+  : number_(number)
+{
+    if (sPosOverride)
+        where_ = sPosOverride->pos();
+    else
+        where_ = current_pos();
+}
+
+MessageBuilder::MessageBuilder(symbol* sym, int number)
+  : number_(number)
+{
+    where_.file = sym->fnumber;
+    where_.line = sym->lnumber;
+    where_.col = 0;
+}
+
+MessageBuilder::MessageBuilder(MessageBuilder&& other)
+  : where_(other.where_),
+    number_(other.number_),
+    args_(std::move(other.args_)),
+    disabled_(false)
+{
+    other.disabled_ = true;
+}
+
+MessageBuilder&
+MessageBuilder::operator =(MessageBuilder&& other)
+{
+    where_ = other.where_;
+    number_ = other.number_;
+    args_ = std::move(other.args_);
+    disabled_ = false;
+    other.disabled_ = true;
+    return *this;
+}
+
+MessageBuilder::~MessageBuilder()
+{
+    if (disabled_)
+        return;
+
+    ErrorReport report;
+    report.number = number_;
+    report.fileno = where_.file;
+    report.lineno = where_.line;
+    if (report.fileno >= 0) {
+        report.filename = get_inputfile(report.fileno);
+    } else {
+        report.fileno = 0;
+        report.filename = inpfname;
+    }
+    report.type = DeduceErrorType(number_);
+
+    std::ostringstream out;
+    out << report.filename << "(" << report.lineno << ") : " << GetErrorTypePrefix(report.type)
+        << " " << ke::StringPrintf("%03d", report.number) << ": ";
+
+    auto iter = args_.begin();
+    const char* msg = GetMessageForNumber(number_);
+    while (*msg) {
+        if (*msg == '%' && (*(msg + 1) == 's' || *(msg + 1) == 'd')) {
+            if (iter == args_.end())
+                out << "<invalid>";
+            else
+                out << *iter++;
+            msg += 2;
+        } else {
+            out << *msg++;
+        }
+    }
+
+    report.message = out.str();
+    report_error(std::move(report));
 }
 
 int
@@ -171,51 +301,10 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
         report.fileno = 0;
         report.filename = inpfname;
     }
+    report.type = DeduceErrorType(number);
 
-    if (number < 200 || (number < 300 && sc_warnings_are_errors) || number >= 400)
-        report.type = ErrorType::Error;
-    else if (number >= 300)
-        report.type = ErrorType::Fatal;
-    else
-        report.type = ErrorType::Warning;
-
-    /* also check for disabled warnings */
-    if (report.type == ErrorType::Warning) {
-        int index = (report.number - 200) / 8;
-        int mask = 1 << ((report.number - 200) % 8);
-        if ((warndisable[index] & mask) != 0)
-            report.type = ErrorType::Suppressed;
-    }
-
-    const char* prefix = "";
-    switch (report.type) {
-        case ErrorType::Error:
-            prefix = "error";
-            break;
-        case ErrorType::Fatal:
-            prefix = "fatal error";
-            break;
-        case ErrorType::Warning:
-        case ErrorType::Suppressed:
-            prefix = "warning";
-            break;
-    }
-
-    const char* format = nullptr;
-    if (report.number < 200) {
-        assert(size_t(report.number - 1) < sizeof(errmsg) / sizeof(*errmsg));
-        format = errmsg[report.number - 1];
-    } else if (report.number < 300) {
-        assert(size_t(report.number - 200) < sizeof(warnmsg) / sizeof(*warnmsg));
-        format = warnmsg[report.number - 200];
-    } else if (report.number >= 400) {
-        assert(size_t(report.number - 400) < sizeof(errmsg_ex) / sizeof(*errmsg_ex));
-        format = errmsg_ex[report.number - 400];
-    } else {
-        assert(report.number >= FIRST_FATAL_ERROR);
-        assert(size_t(report.number - FIRST_FATAL_ERROR) < sizeof(fatalmsg) / sizeof(*fatalmsg));
-        format = fatalmsg[report.number - FIRST_FATAL_ERROR];
-    }
+    const char* prefix = GetErrorTypePrefix(report.type);
+    const char* format = GetMessageForNumber(report.number);
 
     char msg[1024];
     ke::SafeVsprintf(msg, sizeof(msg), format, ap);

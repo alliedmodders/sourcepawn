@@ -84,7 +84,7 @@ EnumDecl::Bind(SemaContext& sc)
     if (tag) {
         auto spec = deduce_layout_spec_by_tag(tag);
         if (!can_redef_layout_spec(spec, Layout_Enum))
-            error(pos_, 110, name_->chars(), layout_spec_name(spec));
+            report(pos_, 110) << name_ << layout_spec_name(spec);
     }
 
     symbol* enumsym = nullptr;
@@ -118,7 +118,7 @@ EnumDecl::Bind(SemaContext& sc)
     cell value = 0;
     for (const auto& field : fields_ ) {
         if (findconst(field.name->chars()))
-            error(field.pos, 50, field.name->chars());
+            report(field.pos, 50) << field.name;
 
         if (field.value && field.value->Bind(sc) && field.value->Analyze(sc)) {
             int field_tag;
@@ -138,7 +138,7 @@ EnumDecl::Bind(SemaContext& sc)
         // add the constant to a separate list as well
         if (enumroot) {
             sym->enumfield = true;
-            append_constval(enumroot, field.name->chars(), value, tag);
+            append_constval(enumroot, field.name, value, tag);
         }
 
         if (multiplier_ == 1)
@@ -164,7 +164,7 @@ PstructDecl::Bind(SemaContext& sc)
     const char* name = name_->chars();
     auto spec = deduce_layout_spec_by_name(name);
     if (!can_redef_layout_spec(spec, Layout_PawnStruct)) {
-        error(pos_, 110, name, layout_spec_name(spec));
+        report(pos_, 110) << name_ << layout_spec_name(spec);
         return false;
     }
     if (!isupper(*name)) {
@@ -172,8 +172,8 @@ PstructDecl::Bind(SemaContext& sc)
         return false;
     }
 
-    pstruct_t* pstruct = pstructs_add(name);
-    gTypes.definePStruct(pstruct->name, pstruct);
+    pstruct_t* pstruct = pstructs_add(name_);
+    gTypes.definePStruct(pstruct->name->chars(), pstruct);
 
     for (const auto& field : fields_) {
         structarg_t arg;
@@ -190,7 +190,7 @@ PstructDecl::Bind(SemaContext& sc)
         }
 
         if (!pstructs_addarg(pstruct, &arg)) {
-            error(field.pos, 103, arg.name, layout_spec_name(Layout_PawnStruct));
+            report(field.pos, 103) << arg.name << layout_spec_name(Layout_PawnStruct);
             return false;
         }
     }
@@ -202,11 +202,11 @@ TypedefDecl::Bind(SemaContext& sc)
 {
     Type* prev_type = gTypes.find(name_->chars());
     if (prev_type && prev_type->isDefinedType()) {
-        error(pos_, 110, name_->chars(), prev_type->kindName());
+        report(pos_, 110) << name_ << prev_type->kindName();
         return false;
     }
 
-    funcenum_t* def = funcenums_add(name_->chars());
+    funcenum_t* def = funcenums_add(name_);
     functags_add(def, type_);
     return true;
 }
@@ -223,11 +223,11 @@ TypesetDecl::Bind(SemaContext& sc)
 {
     Type* prev_type = gTypes.find(name_->chars());
     if (prev_type && prev_type->isDefinedType()) {
-        error(pos_, 110, name_->chars(), prev_type->kindName());
+        report(pos_, 110) << name_ << prev_type->kindName();
         return false;
     }
 
-    funcenum_t* def = funcenums_add(name_->chars());
+    funcenum_t* def = funcenums_add(name_);
     for (const auto& type : types_)
         functags_add(def, type);
     return true;
@@ -279,7 +279,7 @@ VarDecl::Bind(SemaContext& sc)
 
         // This will go away when we remove the two-pass system.
         if (sym_ && sym_->defined) {
-            error(pos_, 21, name_->chars());
+            report(pos_, 21) << name_;
             return false;
         }
 
@@ -300,7 +300,7 @@ VarDecl::Bind(SemaContext& sc)
         symbol* scope;
         symbol* sym = findloc(name_->chars(), &scope);
         if (sym && scope == GetScopeChain())
-            error(pos_, 21, name_->chars());
+            report(pos_, 21) << name_;
 
         // Although valid, a local variable whose name is equal to that
         // of a global variable or to that of a local variable at a lower
@@ -308,10 +308,10 @@ VarDecl::Bind(SemaContext& sc)
         if (vclass_ == sARGUMENT) {
             auto sym = findglb(name_);
             if (sym && sym->ident != iFUNCTN)
-                error(pos_, 219, name_->chars());
+                report(pos_, 219) << name_;
         } else {
             if (is_shadowed_name(name_))
-                error(pos_, 219, name_->chars());
+                report(pos_, 219) << name_;
         }
 
         if (vclass_ == sSTATIC && type_.ident == iREFARRAY)
@@ -382,7 +382,7 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         Parser::sDetectedIllegalPreprocessorSymbols = true;
         if (sc_status == statFIRST) {
             ke::SaveAndSet<bool> restore(&sc_enable_first_pass_error_display, true);
-            error(pos_, 230, name_->chars());
+            report(pos_, 230) << name_;
         }
     }
 
@@ -397,7 +397,7 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         // either be in the first pass, or the second pass and skipping writes.
         // If we're writing, then this is an error.
         if (sc_status != statFIRST) {
-            error(pos_, 17, name_->chars());
+            report(pos_, 17) << name_;
             return false;
         }
 
@@ -411,7 +411,7 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
     if (sc_status != statFIRST && sym_->ident == iFUNCTN && !sym_->prototyped &&
         sym_ != sc.func())
     {
-        error(pos_, 17, name_->chars());
+        report(pos_, 17) << name_;
         return false;
     }
 
@@ -509,7 +509,7 @@ SizeofExpr::Bind(SemaContext& sc)
     if (!sym_)
         sym_ = findglb(ident_);
     if (!sym_) {
-        error(pos_, 17, ident_->chars());
+        report(pos_, 17) << ident_;
         return false;
     }
     markusage(sym_, uREAD);
@@ -743,9 +743,9 @@ FunctionInfo::NameForOperator()
         if (count < 2)
             tags[count] = var->type().tag;
         if (var->type().ident != iVARIABLE)
-            error(pos_, 66, var->name()->chars());
+            report(pos_, 66) << var->name();
         if (var->init_rhs())
-            error(pos_, 59, var->name()->chars());
+            report(pos_, 59) << var->name();
         count++;
     }
 
@@ -774,9 +774,7 @@ FunctionInfo::NameForOperator()
     if (decl_.type.ident != iVARIABLE)
         error(pos_, 62);
 
-    char opername[sNAMEMAX + 1];
-    operator_symname(opername, decl_.name, tags[0], tags[1], count, decl_.type.tag);
-    return gAtoms.add(opername);
+    return operator_symname(decl_.name->chars(), tags[0], tags[1], count, decl_.type.tag);
 }
 
 bool
@@ -801,7 +799,7 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
         if (!sym)
             sym = findglb(name);
         if (!sym) {
-            error(pos_, 17, name->chars());
+            report(pos_, 17) << name;
             continue;
         }
         symbols_.emplace_back(sym);
@@ -816,7 +814,7 @@ EnumStructDecl::Bind(SemaContext& sc)
     constvalue* values = (constvalue*)calloc(1, sizeof(constvalue));
 
     if (findglb(name_) || findconst(name_->chars()))
-        error(pos_, 21, name_->chars());
+        report(pos_, 21) << name_;
 
     symbol* root = add_constant(name_->chars(), 0, sGLOBAL, 0);
     root->tag = gTypes.defineEnumStruct(name_->chars(), root)->tagid();
@@ -828,12 +826,12 @@ EnumStructDecl::Bind(SemaContext& sc)
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
         if (field.decl.type.semantic_tag() == root->tag) {
-            error(field.pos, 87, name_->chars());
+            report(field.pos, 87) << name_;
             continue;
         }
 
         if (field.decl.type.is_const)
-            error(field.pos, 94, field.decl.name);
+            report(field.pos, 94) << field.decl.name;
 
         if (field.decl.type.numdim) {
             if (field.decl.type.ident == iARRAY) {
@@ -854,7 +852,7 @@ EnumStructDecl::Bind(SemaContext& sc)
             continue;
 
         if (findconst(field_name->chars())) {
-            error(field.pos, 103, field.decl.name, "enum struct");
+            report(field.pos, 103) << field.decl.name << "enum struct";
             continue;
         }
 
@@ -881,7 +879,7 @@ EnumStructDecl::Bind(SemaContext& sc)
     }
 
     if (!position)
-        error(pos_, 119, name_->chars());
+        report(pos_, 119) << name_;
 
     assert(root->enumroot);
     root->setAddr(position);
@@ -901,15 +899,8 @@ EnumStructDecl::Bind(SemaContext& sc)
 }
 
 sp::Atom*
-EnumStructDecl::DecorateInnerName(const token_pos_t& pos, const char* field_name)
+EnumStructDecl::DecorateInnerName(const token_pos_t& pos, sp::Atom* field_name)
 {
-    char const_name[METHOD_NAMEMAX + 1];
-    size_t full_name_length =
-        ke::SafeSprintf(const_name, sizeof(const_name), "%s::%s", name_->chars(), field_name);
-    if (full_name_length > sNAMEMAX) {
-        const_name[sNAMEMAX] = '\0';
-        error(pos, 123, field_name, const_name);
-        return nullptr;
-    }
-    return gAtoms.add(const_name);
+    auto full_name = ke::StringPrintf("%s::%s", name_->chars(), field_name->chars());
+    return gAtoms.add(full_name);
 }
