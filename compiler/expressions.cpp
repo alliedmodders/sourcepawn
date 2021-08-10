@@ -88,7 +88,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     static const char* unoperstr[] = {"!", "-", "++", "--"};
     static void (*unopers[])(void) = {lneg, neg, user_inc, user_dec};
 
-    char opername[4] = "", symbolname[sNAMEMAX + 1];
+    char opername[4] = "";
     size_t i;
     bool savepri, savealt;
     symbol* sym;
@@ -138,7 +138,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
 
     /* create a symbol name from the tags and the operator name */
     assert(numparam == 1 || numparam == 2);
-    operator_symname(symbolname, opername, tag1, tag2, numparam, tag2);
+    auto symbolname = operator_symname(opername, tag1, tag2, numparam, tag2);
     bool swapparams = false;
     sym = findglb(symbolname);
     if (!sym) {
@@ -149,7 +149,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
          * swap tags and try again
          */
         assert(numparam == 2); /* commutative operator must be a binary operator */
-        operator_symname(symbolname, opername, tag2, tag1, numparam, tag1);
+        symbolname = operator_symname(opername, tag2, tag1, numparam, tag1);
         swapparams = true;
         sym = findglb(symbolname);
         if (!sym)
@@ -160,9 +160,9 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     if (sym->missing || !sym->prototyped) {
         auto symname = funcdisplayname(sym->name());
         if (sym->missing)
-            error(4, symname.c_str()); /* function not defined */
+            report(4) << symname; /* function not defined */
         if (!sym->prototyped)
-            error(71, symname.c_str()); /* operator must be declared before use */
+            report(71) << symname; /* operator must be declared before use */
     }
 
     /* we don't want to use the redefined operator in the function that
@@ -635,17 +635,6 @@ ExpressionParser::nextop(int* opidx, int* list)
         }
     }
     return FALSE; /* entire list scanned, nothing found */
-}
-
-int
-findnamedarg(arginfo* arg, const char* name)
-{
-    int i;
-
-    for (i = 0; arg[i].ident != 0 && arg[i].ident != iVARARGS; i++)
-        if (strcmp(arg[i].name, name) == 0)
-            return i;
-    return -1;
 }
 
 cell

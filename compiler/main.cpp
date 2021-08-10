@@ -116,7 +116,7 @@ static void reduce_referrers(symbol* root);
 static void deduce_liveness(symbol* root);
 static void inst_datetime_defines(void);
 static void inst_binary_name(std::string binfile);
-static int operatorname(char* name);
+static int operatorname(sp::Atom** name);
 static void rewrite_type_for_enum_struct(typeinfo_t* info);
 
 enum {
@@ -772,10 +772,6 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
             exit(1);
         } else if ((ptr = strchr(arg, '=')) != NULL) {
             int i = (int)(ptr - arg);
-            if (i > sNAMEMAX) {
-                i = sNAMEMAX;
-                error(200, arg, sNAMEMAX); /* symbol too long, truncated to sNAMEMAX chars */
-            }
             SafeStrcpyN(str, _MAX_PATH, arg, i);
             i = atoi(ptr + 1);
             add_constant(str, i, sGLOBAL, 0);
@@ -931,7 +927,7 @@ static int
 consume_line()
 {
     int val;
-    char* str;
+    const char* str;
 
     // First check for EOF.
     if (lex(&val, &str) == 0)
@@ -982,14 +978,14 @@ parse_new_typename(const token_t* tok)
             } else if (tag == 0) {
                 error(98, "_", "int");
             } else if (tag == -1) {
-                error(139, tok->str);
+                report(139) << tok->str;
                 tag = 0;
             } else if (tag != pc_anytag) {
                 Type* type = gTypes.find(tag);
                 // Perform some basic filters so we can start narrowing down what can
                 // be used as a type.
                 if (type->isDeclaredButNotDefined())
-                    error(139, tok->str);
+                    report(139) << tok->str;
             }
             return tag;
         }
@@ -1078,7 +1074,7 @@ parse_post_array_dims(declinfo_t* decl, int flags)
 
     // Illegal declaration (we'll have a name since ref requires decl).
     if (type->ident == iREFERENCE)
-        error(67, decl->name);
+        report(67) << decl->name;
 
     Parser parser;
     parser.parse_post_dims(type);
@@ -1155,9 +1151,9 @@ parse_old_decl(declinfo_t* decl, int flags)
 
     if (flags & DECLMASK_NAMED_DECL) {
         if ((flags & DECLFLAG_MAYBE_FUNCTION) && matchtoken(tOPERATOR)) {
-            decl->opertok = operatorname(decl->name);
+            decl->opertok = operatorname(&decl->name);
             if (decl->opertok == 0)
-                strcpy(decl->name, "__unknown__");
+                decl->name = gAtoms.add("__unknown__");
         } else {
             if (!lexpeek(tSYMBOL)) {
                 extern const char* sc_tokens[];
@@ -1170,7 +1166,7 @@ parse_old_decl(declinfo_t* decl, int flags)
                             error(143);
                         } else {
                             error(157, sc_tokens[tok.id - tFIRST]);
-                            strcpy(decl->name, sc_tokens[tok.id - tFIRST]);
+                            decl->name = gAtoms.add(sc_tokens[tok.id - tFIRST]);
                         }
                         break;
                     default:
@@ -1179,9 +1175,9 @@ parse_old_decl(declinfo_t* decl, int flags)
                 }
             }
             if (expecttoken(tSYMBOL, &tok))
-                strcpy(decl->name, tok.str);
-            else if (decl->name[0] == '\0')
-                strcpy(decl->name, "__unknown__");
+                decl->name = gAtoms.add(tok.str);
+            else if (!decl->name)
+                decl->name = gAtoms.add("__unknown__");
         }
     }
 
@@ -1253,14 +1249,14 @@ parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
         }
 
         if ((flags & DECLFLAG_MAYBE_FUNCTION) && matchtoken(tOPERATOR)) {
-            decl->opertok = operatorname(decl->name);
+            decl->opertok = operatorname(&decl->name);
             if (decl->opertok == 0)
-                strcpy(decl->name, "__unknown__");
+                decl->name = gAtoms.add("__unknown__");
         } else {
             if (expecttoken(tSYMBOL, &tok))
-                strcpy(decl->name, tok.str);
+                decl->name = gAtoms.add(tok.str);
             else
-                strcpy(decl->name, "__unknown__");
+                decl->name = gAtoms.add("__unknown__");
         }
     }
 
@@ -1282,7 +1278,7 @@ reparse_new_decl(declinfo_t* decl, int flags)
 {
     token_t tok;
     if (expecttoken(tSYMBOL, &tok))
-        strcpy(decl->name, tok.str);
+        decl->name = gAtoms.add(tok.str);
 
     if (decl->type.declared_tag && !decl->type.tag) {
         assert(decl->type.numdim > 0);
@@ -1424,7 +1420,7 @@ parse_decl(declinfo_t* decl, int flags)
 
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
-            strcpy(decl->name, ident.name);
+            decl->name = ident.name;
             decl->type.tag = 0;
             return TRUE;
         }
@@ -1461,19 +1457,6 @@ check_void_decl(const declinfo_t* decl, int variable)
     check_void_decl(&decl->type, variable);
 }
 
-// If a name is too long, error and truncate.
-void
-check_name_length(char* original)
-{
-    if (strlen(original) > sNAMEMAX) {
-        char buffer[METHOD_NAMEMAX + 1];
-        strcpy(buffer, original);
-        buffer[sNAMEMAX] = '\0';
-        error(123, original, buffer);
-        original[sNAMEMAX] = '\0';
-    }
-}
-
 static void
 make_primitive(typeinfo_t* type, int tag)
 {
@@ -1483,7 +1466,7 @@ make_primitive(typeinfo_t* type, int tag)
 }
 
 symbol*
-parse_inline_function(methodmap_t* map, const typeinfo_t* type, const char* name, int is_native,
+parse_inline_function(methodmap_t* map, const typeinfo_t* type, sp::Atom* name, int is_native,
                       int is_ctor, bool is_static)
 {
     declinfo_t decl;
@@ -1501,12 +1484,8 @@ parse_inline_function(methodmap_t* map, const typeinfo_t* type, const char* name
         thistag = &map->tag;
 
     // Build a new symbol. Construct a temporary name including the class.
-    char fullname[METHOD_NAMEMAX + 1];
-    strcpy(fullname, map->name);
-    strcat(fullname, ".");
-    strcat(fullname, name);
-    check_name_length(fullname);
-    strcpy(decl.name, fullname);
+    auto fullname = ke::StringPrintf("%s.%s", map->name->chars(), name->chars());
+    decl.name = gAtoms.add(fullname);
 
     ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
 
@@ -1536,8 +1515,8 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
             return FALSE;
     }
 
-    int getter = (strcmp(ident.name, "get") == 0);
-    int setter = (strcmp(ident.name, "set") == 0);
+    int getter = (strcmp(ident.name->chars(), "get") == 0);
+    int setter = (strcmp(ident.name->chars(), "set") == 0);
 
     if (!getter && !setter) {
         error(125);
@@ -1545,12 +1524,12 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
     }
 
     typeinfo_t voidtype;
-    char tmpname[METHOD_NAMEMAX + 1];
-    strcpy(tmpname, method->name);
+    std::string tmpname = method->name->chars();
     if (getter)
-        strcat(tmpname, ".get");
+        tmpname += ".get";
     else
-        strcat(tmpname, ".set");
+        tmpname += ".set";
+    auto full_atom = gAtoms.add(tmpname);
 
     const typeinfo_t* ret_type;
     if (getter) {
@@ -1560,7 +1539,7 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
         ret_type = &voidtype;
     }
 
-    symbol* target = parse_inline_function(map, ret_type, tmpname, is_native, FALSE, false);
+    symbol* target = parse_inline_function(map, ret_type, full_atom, is_native, FALSE, false);
 
     if (!target)
         return FALSE;
@@ -1620,7 +1599,7 @@ parse_property(methodmap_t* map)
         return NULL;
 
     auto method = std::make_unique<methodmap_method_t>(map);
-    strcpy(method->name, ident.name);
+    method->name = ident.name;
     method->target = NULL;
     method->getter = NULL;
     method->setter = NULL;
@@ -1650,8 +1629,7 @@ parse_method(methodmap_t* map)
         is_static = true;
 
     // This stores the name of the method (for destructors, we add a ~).
-    token_ident_t ident;
-    strcpy(ident.name, "__unknown__");
+    token_ident_t ident = {};
 
     typeinfo_t type;
     memset(&type, 0, sizeof(type));
@@ -1688,16 +1666,16 @@ parse_method(methodmap_t* map)
 
         // If the identifier is a constructor, error, since the user specified
         // a type.
-        if (strcmp(ident.name, map->name) == 0)
+        if (ident.name == map->name)
             error(99, "constructor");
     }
 
     // Do some preliminary verification of ctor names.
     if (maybe_ctor) {
-        if (strcmp(ident.name, map->name) == 0)
+        if (ident.name == map->name)
             is_ctor = TRUE;
         else
-            error(114, "constructor", spectype, map->name);
+            report(114) << "constructor" << spectype << map->name;
     }
 
     if (is_ctor && is_static) {
@@ -1716,14 +1694,14 @@ parse_method(methodmap_t* map)
         return nullptr;
 
     auto method = std::make_unique<methodmap_method_t>(map);
-    strcpy(method->name, ident.name);
+    method->name = ident.name;
     method->target = target;
     method->is_static = is_static;
 
     // If the symbol is a constructor, we bypass the initial argument checks.
     if (is_ctor) {
         if (map->ctor)
-            error(113, map->name);
+            report(113) << map->name;
 
         map->ctor = method.get();
     }
@@ -1747,27 +1725,27 @@ domethodmap(LayoutSpec spec)
     const char* spectype = layout_spec_name(spec);
 
     // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
-    char mapname[sNAMEMAX + 1];
+    sp::Atom* mapname;
     if (needsymbol(&ident)) {
-        strcpy(mapname, ident.name);
+        if (!isupper(*ident.name->chars()))
+            error(109, spectype);
+        mapname = ident.name;
     } else {
         static int unknown_methodmap_num = 0;
-        ke::SafeSprintf(mapname, sizeof(mapname), "methodmap_%d", ++unknown_methodmap_num);
+        auto tempname = ke::StringPrintf("methodmap_%d", ++unknown_methodmap_num);
+        mapname = gAtoms.add(tempname);
     }
 
-    if (!isupper(*mapname))
-        error(109, spectype);
-
-    LayoutSpec old_spec = deduce_layout_spec_by_name(mapname);
+    LayoutSpec old_spec = deduce_layout_spec_by_name(mapname->chars());
     bool can_redef = can_redef_layout_spec(spec, old_spec);
     if (!can_redef)
-        error(110, mapname, layout_spec_name(old_spec));
+        report(110) << mapname << layout_spec_name(old_spec);
 
     int old_nullable = matchtoken(tNULLABLE);
 
     if (matchtoken('<') && needsymbol(&ident)) {
         if ((parent = methodmap_find_by_name(ident.name)) == NULL) {
-            error(102, spectype, ident.name);
+            report(102) << spectype << ident.name;
         } else if (parent->spec != spec) {
             error(129);
         }
@@ -1801,7 +1779,7 @@ domethodmap(LayoutSpec spec)
         if (method) {
             // Check that a method with this name doesn't already exist.
             for (const auto& other : map->methods) {
-                if (strcmp(other->name, method->name) == 0) {
+                if (other->name == method->name) {
                     error(103, method->name, spectype);
                     method = nullptr;
                     break;
@@ -1921,16 +1899,13 @@ fetchfunc(const char* name)
 }
 
 static int
-operatorname(char* name)
+operatorname(sp::Atom** name)
 {
-    int opertok;
-    char* str;
     cell val;
-
-    assert(name != NULL);
+    const char* str;
 
     /* check the operator */
-    opertok = lex(&val, &str);
+    int opertok = lex(&val, &str);
     switch (opertok) {
         case '+':
         case '-':
@@ -1942,29 +1917,31 @@ operatorname(char* name)
         case '!':
         case '~':
         case '=':
-            name[0] = (char)opertok;
-            name[1] = '\0';
+        {
+            char str[] = {(char)opertok, '\0'};
+            *name = gAtoms.add(str);
             break;
+        }
         case tINC:
-            strcpy(name, "++");
+            *name = gAtoms.add("++");
             break;
         case tDEC:
-            strcpy(name, "--");
+            *name = gAtoms.add("--");
             break;
         case tlEQ:
-            strcpy(name, "==");
+            *name = gAtoms.add("==");
             break;
         case tlNE:
-            strcpy(name, "!=");
+            *name = gAtoms.add("!=");
             break;
         case tlLE:
-            strcpy(name, "<=");
+            *name = gAtoms.add("<=");
             break;
         case tlGE:
-            strcpy(name, ">=");
+            *name = gAtoms.add(">=");
             break;
         default:
-            name[0] = '\0';
+            *name = gAtoms.add("");
             error(7); /* operator cannot be redefined (or bad operator name) */
             return 0;
     }
@@ -1973,7 +1950,7 @@ operatorname(char* name)
 }
 
 int
-check_operatortag(int opertok, int resulttag, char* opername)
+check_operatortag(int opertok, int resulttag, const char* opername)
 {
     assert(opername != NULL && strlen(opername) > 0);
     switch (opertok) {
@@ -1997,31 +1974,6 @@ check_operatortag(int opertok, int resulttag, char* opername)
             break;
     }
     return TRUE;
-}
-
-static char*
-tag2str(char* dest, int tag)
-{
-    assert(tag >= 0);
-    sprintf(dest, "0%x", tag);
-    return isdigit(dest[1]) ? &dest[1] : dest;
-}
-
-char*
-operator_symname(char* symname, const char* opername, int tag1, int tag2, int numtags,
-                 int resulttag) {
-    char tagstr1[10], tagstr2[10];
-    int opertok;
-
-    assert(numtags >= 1 && numtags <= 2);
-    opertok = (opername[1] == '\0') ? opername[0] : 0;
-    if (opertok == '=')
-        sprintf(symname, "%s%s%s", tag2str(tagstr1, resulttag), opername, tag2str(tagstr2, tag1));
-    else if (numtags == 1 || opertok == '~')
-        sprintf(symname, "%s%s", opername, tag2str(tagstr1, tag1));
-    else
-        sprintf(symname, "%s%s%s", tag2str(tagstr1, tag1), opername, tag2str(tagstr2, tag2));
-    return symname;
 }
 
 static int
@@ -2235,17 +2187,14 @@ deduce_liveness(symbol* root)
 }
 
 static constvalue*
-insert_constval(constvalue* prev, constvalue* next, const char* name, cell val, int index)
+insert_constval(constvalue* prev, constvalue* next, sp::Atom* name, cell val, int index)
 {
     constvalue* cur;
 
     if ((cur = (constvalue*)malloc(sizeof(constvalue))) == NULL)
         error(FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
     memset(cur, 0, sizeof(constvalue));
-    if (name != NULL) {
-        assert(strlen(name) <= sNAMEMAX);
-        strcpy(cur->name, name);
-    }
+    cur->name = name;
     cur->value = val;
     cur->index = index;
     cur->next = next;
@@ -2254,27 +2203,14 @@ insert_constval(constvalue* prev, constvalue* next, const char* name, cell val, 
 }
 
 constvalue*
-append_constval(constvalue* table, const char* name, cell val, int index)
+append_constval(constvalue* table, sp::Atom* name, cell val, int index)
 {
     constvalue *cur, *prev;
 
     /* find the end of the constant table */
     for (prev = table, cur = table->next; cur != NULL; prev = cur, cur = cur->next)
         /* nothing */;
-    return insert_constval(prev, NULL, name, val, index);
-}
-
-constvalue*
-find_constval(constvalue* table, char* name, int index)
-{
-    constvalue* ptr = table->next;
-
-    while (ptr != NULL) {
-        if (strcmp(name, ptr->name) == 0 && ptr->index == index)
-            return ptr;
-        ptr = ptr->next;
-    }
-    return NULL;
+    return insert_constval(prev, nullptr, name, val, index);
 }
 
 void

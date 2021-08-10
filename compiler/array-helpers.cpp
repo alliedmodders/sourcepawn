@@ -27,6 +27,7 @@
 #include "emitter.h"
 #include "errors.h"
 #include "lexer-inl.h"
+#include "symbols.h"
 #include "type-checker.h"
 
 class ArraySizeResolver

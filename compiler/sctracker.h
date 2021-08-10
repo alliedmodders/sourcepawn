@@ -17,7 +17,7 @@ struct funcenum_t {
        name()
     {}
     int tag;
-    char name[METHOD_NAMEMAX + 1];
+    sp::Atom* name;
     std::vector<functag_t*> entries;
 };
 
@@ -40,9 +40,9 @@ struct structarg_t {
 };
 
 struct pstruct_t {
-    explicit pstruct_t(const char* name);
+    explicit pstruct_t(sp::Atom* name);
 
-    char name[sNAMEMAX + 1];
+    sp::Atom* name;
     std::vector<std::unique_ptr<structarg_t>> args;
 };
 
@@ -67,7 +67,7 @@ struct methodmap_method_t {
        is_static(false)
     {}
 
-    char name[METHOD_NAMEMAX + 1];
+    sp::Atom* name;
     methodmap_t* parent;
     symbol* target;
     symbol* getter;
@@ -89,14 +89,14 @@ struct methodmap_method_t {
 };
 
 struct methodmap_t {
-    methodmap_t(methodmap_t* parent, LayoutSpec spec, const char* name);
+    methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name);
 
     methodmap_t* parent;
     int tag;
     bool nullable;
     bool keyword_nullable;
     LayoutSpec spec;
-    char name[sNAMEMAX + 1];
+    sp::Atom* name;
     std::vector<std::unique_ptr<methodmap_method_t>> methods;
 
     bool must_construct_with_new() const {
@@ -111,7 +111,7 @@ struct methodmap_t {
 /**
  * Pawn Structs
  */
-pstruct_t* pstructs_add(const char* name);
+pstruct_t* pstructs_add(sp::Atom* name);
 void pstructs_free();
 pstruct_t* pstructs_find(const char* name);
 structarg_t* pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg);
@@ -121,7 +121,7 @@ const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
  * Function enumeration tags
  */
 void funcenums_free();
-funcenum_t* funcenums_add(const char* name);
+funcenum_t* funcenums_add(sp::Atom* name);
 void functags_add(funcenum_t* en, functag_t* src);
 funcenum_t* funcenum_for_symbol(symbol* sym);
 functag_t* functag_from_tag(int tag);
@@ -177,9 +177,9 @@ void resetheaplist();
 /**
  * Method maps.
  */
-methodmap_t* methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name);
-methodmap_t* methodmap_find_by_name(const char* name);
-methodmap_method_t* methodmap_find_method(methodmap_t* map, const char* name);
+methodmap_t* methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name);
+methodmap_t* methodmap_find_by_name(sp::Atom* name);
+methodmap_method_t* methodmap_find_method(methodmap_t* map, sp::Atom* name);
 void methodmaps_free();
 
 #endif //_INCLUDE_SOURCEPAWN_COMPILER_TRACKER_H_

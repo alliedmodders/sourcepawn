@@ -24,11 +24,6 @@
 
 #include "sc.h"
 
-// The method name buffer is larger since we can include our parent class's
-// name, a "." to separate it, a "~" for constructors, or a ".get/.set" for
-// accessors.
-#define METHOD_NAMEMAX sNAMEMAX * 2 + 6
-
 class Type;
 
 struct token_pos_t {
@@ -41,12 +36,12 @@ struct token_pos_t {
 struct token_t {
     int id;
     cell val;
-    char* str;
+    const char* str;
 };
 
 struct token_ident_t {
     token_t tok;
-    char name[METHOD_NAMEMAX + 1];
+    sp::Atom* name;
 };
 
 struct full_token_t {
@@ -269,14 +264,14 @@ int plungefile(char* name, int try_currentpath,
                int try_includepaths); /* search through "include" paths */
 void preprocess(bool allow_synthesized_tokens);
 void lexinit(void);
-int lex(cell* lexvalue, char** lexsym);
+int lex(cell* lexvalue, const char** lexsym);
 int lextok(token_t* tok);
 int lexpeek(int id);
 void lexpush(void);
 void lexclr(int clreol);
 const token_pos_t& current_pos();
 int matchtoken(int token);
-int tokeninfo(cell* val, char** str);
+int tokeninfo(cell* val, const char** str);
 full_token_t* current_token();
 int needtoken(int token);
 int matchtoken2(int id, token_t* tok);
@@ -289,7 +284,6 @@ void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
-symbol* find_enumstruct_field(Type* type, const char* name);
 void declare_methodmap_symbol(methodmap_t* map, bool can_redef);
 void declare_handle_intrinsics();
 int getlabel(void);

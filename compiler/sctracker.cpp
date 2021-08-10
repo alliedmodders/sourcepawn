@@ -60,9 +60,9 @@ std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
 std::vector<std::unique_ptr<pstruct_t>> sStructs;
 std::vector<std::unique_ptr<methodmap_t>> sMethodmaps;
 
-pstruct_t::pstruct_t(const char* name)
+pstruct_t::pstruct_t(sp::Atom* name)
 {
-    ke::SafeStrcpy(this->name, sizeof(this->name), name);
+    this->name = name;
 }
 
 const structarg_t*
@@ -76,7 +76,7 @@ pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name)
 }
 
 pstruct_t*
-pstructs_add(const char* name)
+pstructs_add(sp::Atom* name)
 {
     auto p = std::make_unique<pstruct_t>(name);
     sStructs.push_back(std::move(p));
@@ -90,10 +90,10 @@ pstructs_free()
 }
 
 pstruct_t*
-pstructs_find(const char* name)
+pstructs_find(sp::Atom* name)
 {
     for (const auto& p : sStructs) {
-        if (strcmp(p->name, name) == 0)
+        if (p->name == name)
             return p.get();
     }
     return nullptr;
@@ -121,12 +121,12 @@ funcenums_free()
 }
 
 funcenum_t*
-funcenums_add(const char* name)
+funcenums_add(sp::Atom* name)
 {
     auto e = std::make_unique<funcenum_t>();
 
-    strcpy(e->name, name);
-    e->tag = gTypes.defineFunction(name, e.get())->tagid();
+    e->name = name;
+    e->tag = gTypes.defineFunction(name->chars(), e.get())->tagid();
 
     sFuncEnums.push_back(std::move(e));
     return sFuncEnums.back().get();
@@ -155,10 +155,8 @@ funcenum_for_symbol(symbol* sym)
         ft->args.push_back(dest);
     }
 
-    char name[METHOD_NAMEMAX + 1];
-    ke::SafeSprintf(name, sizeof(name), "::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
-
-    funcenum_t* fe = funcenums_add(name);
+    auto name = ke::StringPrintf("::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
+    funcenum_t* fe = funcenums_add(gAtoms.add(name));
     functags_add(fe, ft);
 
     return fe;
@@ -384,20 +382,20 @@ has_stack_or_heap_scopes()
     return !sStackScopes.empty() || !sHeapScopes.empty();
 }
 
-methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, const char* name)
+methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
  : parent(parent),
    tag(0),
    nullable(false),
    keyword_nullable(false),
    spec(spec),
+   name(name),
    dtor(nullptr),
    ctor(nullptr)
 {
-    ke::SafeStrcpy(this->name, sizeof(this->name), name);
 }
 
 methodmap_t*
-methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name)
+methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 {
     auto map = std::make_unique<methodmap_t>(parent, spec, name);
 
@@ -409,9 +407,9 @@ methodmap_add(methodmap_t* parent, LayoutSpec spec, const char* name)
     }
 
     if (spec == Layout_MethodMap)
-        map->tag = gTypes.defineMethodmap(name, map.get())->tagid();
+        map->tag = gTypes.defineMethodmap(name->chars(), map.get())->tagid();
     else
-        map->tag = gTypes.defineObject(name)->tagid();
+        map->tag = gTypes.defineObject(name->chars())->tagid();
     sMethodmaps.push_back(std::move(map));
 
     return sMethodmaps.back().get();
@@ -424,19 +422,19 @@ methodmap_find_by_tag(int tag)
 }
 
 methodmap_t*
-methodmap_find_by_name(const char* name)
+methodmap_find_by_name(sp::Atom* name)
 {
-    int tag = pc_findtag(name);
+    int tag = pc_findtag(name->chars());
     if (tag == -1)
         return NULL;
     return methodmap_find_by_tag(tag);
 }
 
 methodmap_method_t*
-methodmap_find_method(methodmap_t* map, const char* name)
+methodmap_find_method(methodmap_t* map, sp::Atom* name)
 {
     for (const auto& method : map->methods) {
-        if (strcmp(method->name, name) == 0)
+        if (method->name == name)
             return method.get();
     }
     if (map->parent)

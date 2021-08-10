@@ -203,7 +203,7 @@ Parser::parse_unknown_decl(const token_t* tok)
             }
             matchtoken(';');
             // Without an initializer, the stock keyword is implied.
-            return new VarDecl(pos, gAtoms.add(decl.name), decl.type, sGLOBAL, fpublic && init,
+            return new VarDecl(pos, decl.name, decl.type, sGLOBAL, fpublic && init,
                                false, !init, init);
         }
         VarParams params;
@@ -215,7 +215,7 @@ Parser::parse_unknown_decl(const token_t* tok)
     } else {
         auto pos = current_pos();
         FunctionInfo* info = new FunctionInfo(pos, decl);
-        info->set_name(gAtoms.add(decl.name));
+        info->set_name(decl.name);
         if (fpublic)
             info->set_is_public();
         if (fstatic)
@@ -242,13 +242,12 @@ Parser::parse_var(declinfo_t* decl, const VarParams& params)
 
     for (;;) {
         auto pos = current_pos();
-        auto name = gAtoms.add(decl->name);
 
         Expr* init = nullptr;
         if (matchtoken('='))
             init = var_init(params.vclass);
 
-        VarDecl* var = new VarDecl(pos, name, decl->type, params.vclass, params.is_public,
+        VarDecl* var = new VarDecl(pos, decl->name, decl->type, params.vclass, params.is_public,
                                    params.is_static, params.is_stock, init);
         if (!params.autozero)
             var->set_no_autozero();
@@ -282,7 +281,7 @@ Parser::parse_enum(int vclass)
     auto pos = current_pos();
 
     cell val;
-    char* str;
+    const char* str;
     Atom* label = nullptr;
     if (lex(&val, &str) == tLABEL)
         label = gAtoms.add(str);
@@ -357,15 +356,15 @@ Parser::parse_enumstruct()
     auto pos = current_pos();
 
     token_ident_t struct_name = {};
-    strcpy(struct_name.name, "__unknown__");
-    needsymbol(&struct_name);
+    if (!needsymbol(&struct_name))
+        return nullptr;
 
     if (!matchtoken('{')) {
         needtoken('{');
         return nullptr;
     }
 
-    auto stmt = new EnumStructDecl(pos, gAtoms.add(struct_name.name));
+    auto stmt = new EnumStructDecl(pos, struct_name.name);
 
     int opening_line = fline;
     while (!matchtoken('}')) {
@@ -408,7 +407,7 @@ Parser::parse_pstruct()
 
     token_ident_t ident = {};
     if (needsymbol(&ident))
-        struct_decl = new PstructDecl(pos, gAtoms.add(ident.name));
+        struct_decl = new PstructDecl(pos, ident.name);
 
     needtoken('{');
     do {
@@ -428,10 +427,8 @@ Parser::parse_pstruct()
             continue;
         }
 
-        if (struct_decl) {
-            auto name = gAtoms.add(decl.name);
-            struct_decl->fields().push_back(StructField(pos, name, decl.type));
-        }
+        if (struct_decl)
+            struct_decl->fields().push_back(StructField(pos, decl.name, decl.type));
 
         require_newline(TerminatorPolicy::NewlineOrSemicolon);
     } while (!lexpeek('}'));
@@ -453,7 +450,7 @@ Parser::parse_typedef()
     needtoken('=');
 
     auto type = parse_function_type();
-    return new TypedefDecl(pos, gAtoms.add(ident.name), type);
+    return new TypedefDecl(pos, ident.name, type);
 }
 
 Decl*
@@ -465,7 +462,7 @@ Parser::parse_typeset()
     if (!needsymbol(&ident))
         return new ErrorDecl();
 
-    TypesetDecl* decl = new TypesetDecl(pos, gAtoms.add(ident.name));
+    TypesetDecl* decl = new TypesetDecl(pos, ident.name);
 
     needtoken('{');
     while (!matchtoken('}')) {
@@ -486,7 +483,7 @@ Parser::parse_using()
         token_ident_t ident;
         if (!needsymbol(&ident))
             return false;
-        if (strcmp(ident.name, "__intrinsics__") != 0) {
+        if (strcmp(ident.name->chars(), "__intrinsics__") != 0) {
             error(156);
             return false;
         }
@@ -494,7 +491,7 @@ Parser::parse_using()
             return false;
         if (!needsymbol(&ident))
             return false;
-        if (strcmp(ident.name, "Handle") != 0) {
+        if (strcmp(ident.name->chars(), "Handle") != 0) {
             error(156);
             return false;
         }
@@ -517,7 +514,7 @@ Parser::parse_pragma_unused()
     int tok = lex_same_line();
     for (;;) {
         if (tok != tSYMBOL) {
-            error(1, get_token_string(tSYMBOL).c_str(), get_token_string(tok).c_str());
+            report(1) << get_token_string(tSYMBOL) << get_token_string(tok);
             lexclr(TRUE);
             break;
         }
@@ -634,7 +631,7 @@ Parser::hier14()
     Expr* node = hier13();
 
     cell val;
-    char* st;
+    const char* st;
     int tok = lex(&val, &st);
     auto pos = current_pos();
     switch (tok) {
@@ -795,7 +792,7 @@ Expr*
 Parser::hier2()
 {
     int val;
-    char* st;
+    const char* st;
     int tok = lex(&val, &st);
     auto pos = current_pos();
     switch (tok) {
@@ -819,7 +816,7 @@ Parser::hier2()
             token_ident_t ident;
             if (matchsymbol(&ident)) {
                 if (matchtoken('(')) {
-                    Expr* target = new SymbolExpr(current_pos(), gAtoms.add(ident.name));
+                    Expr* target = new SymbolExpr(current_pos(), ident.name);
                     return parse_call(pos, tok, target);
                 }
                 lexpush();
@@ -854,7 +851,7 @@ Parser::hier2()
                 return new ErrorExpr();
             while (parens--)
                 needtoken(')');
-            return new IsDefinedExpr(pos, gAtoms.add(ident.name));
+            return new IsDefinedExpr(pos, ident.name);
         }
         case tSIZEOF:
         {
@@ -864,7 +861,7 @@ Parser::hier2()
 
             token_ident_t ident;
             if (matchtoken(tTHIS)) {
-                strcpy(ident.name, "this");
+                ident.name = gAtoms.add("this");
             } else {
                 if (!needsymbol(&ident))
                     return new ErrorExpr();
@@ -882,7 +879,7 @@ Parser::hier2()
                 token_ident_t field_name;
                 if (!needsymbol(&field_name))
                     return new ErrorExpr();
-                field = gAtoms.add(field_name.name);
+                field = field_name.name;
             } else {
                 lexpush();
                 token = 0;
@@ -891,7 +888,7 @@ Parser::hier2()
             while (parens--)
                 needtoken(')');
 
-            Atom* name = gAtoms.add(ident.name);
+            Atom* name = ident.name;
             return new SizeofExpr(pos, name, field, token, array_levels);
         }
         default:
@@ -939,15 +936,15 @@ Parser::hier1()
     }
 
     for (;;) {
-        char* st;
         cell val;
+        const char* st;
         int tok = lex(&val, &st);
         if (tok == '.' || tok == tDBLCOLON) {
             auto pos = current_pos();
             token_ident_t ident;
             if (!needsymbol(&ident))
                 break;
-            base = new FieldAccessExpr(pos, tok, base, gAtoms.add(ident.name));
+            base = new FieldAccessExpr(pos, tok, base, ident.name);
         } else if (tok == '[') {
             auto pos = current_pos();
             Expr* inner = hier14();
@@ -985,7 +982,7 @@ Parser::primary()
     }
 
     cell val;
-    char* st;
+    const char* st;
     int tok = lex(&val, &st);
 
     if (tok == tTHIS)
@@ -1002,7 +999,7 @@ Expr*
 Parser::constant()
 {
     cell val;
-    char* st;
+    const char* st;
     int tok = lex(&val, &st);
     auto pos = current_pos();
     switch (tok) {
@@ -1054,7 +1051,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
                 break;
             needtoken('=');
 
-            name = gAtoms.add(ident.name);
+            name = ident.name;
         } else {
             if (named_params)
                 error(44);
@@ -1111,14 +1108,14 @@ Parser::struct_init()
 
         token_ident_t ident;
         if (needsymbol(&ident))
-            name = gAtoms.add(ident.name);
+            name = ident.name;
 
         needtoken('=');
 
         auto pos = current_pos();
 
         cell value;
-        char* str;
+        const char* str;
         Expr* expr = nullptr;
         switch (lex(&value, &str)) {
             case tSTRING:
@@ -1254,7 +1251,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
     errorset(sRESET, 0);
 
     cell val;
-    char* st;
+    const char* st;
     int tok = lex(&val, &st);
 
     /* lex() has set stmtindent */
@@ -1637,7 +1634,7 @@ Parser::parse_switch()
     needtoken('{');
     while (true) {
         cell val;
-        char* st;
+        const char* st;
         int tok = lex(&val, &st);
 
         switch (tok) {
@@ -1702,7 +1699,7 @@ Parser::ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_t
 {
     auto pos = current_pos();
     auto info = new FunctionInfo(pos, decl);
-    info->set_name(gAtoms.add(decl.name));
+    info->set_name(decl.name);
     if (this_tag)
         info->set_this_tag(*this_tag);
 
@@ -1746,7 +1743,7 @@ Parser::parse_function(FunctionInfo* info, int tokid)
         if (matchtoken('=')) {
             token_ident_t ident;
             if (needsymbol(&ident))
-                info->set_alias(gAtoms.add(ident.name));
+                info->set_alias(ident.name);
         }
     }
 
@@ -1813,10 +1810,10 @@ Parser::parse_args(FunctionInfo* info)
 
         if (info->args().size() >= SP_MAX_CALL_ARGUMENTS)
             error(45);
-        if (decl.name[0] == PUBLIC_CHAR)
-            error(56, decl.name); // function arguments cannot be public
+        if (decl.name->chars()[0] == PUBLIC_CHAR)
+            report(56) << decl.name; // function arguments cannot be public
 
-        auto p = new VarDecl(pos, gAtoms.add(decl.name), decl.type, sARGUMENT, false, false,
+        auto p = new VarDecl(pos, decl.name, decl.type, sARGUMENT, false, false,
                              false, init);
         info->AddArg(p);
     } while (matchtoken(','));

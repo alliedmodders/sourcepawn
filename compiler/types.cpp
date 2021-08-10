@@ -300,7 +300,7 @@ pc_addtag(const char* name)
 
     if (name == NULL) {
         /* no tagname was given, check for one */
-        char* nameptr;
+        const char* nameptr;
         if (lex(&val, &nameptr) != tLABEL) {
             lexpush();
             return 0; /* untagged */

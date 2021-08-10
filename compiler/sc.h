@@ -81,7 +81,7 @@ struct arginfo { /* function argument info */
     void operator =(const arginfo& other) = delete;
     arginfo& operator =(arginfo&& other) = default;
 
-    char name[sNAMEMAX + 1];
+    sp::Atom* name;
     char ident = 0;
     bool is_const = false;
     int tag = 0;
@@ -94,7 +94,7 @@ struct arginfo { /* function argument info */
 /*  Equate table, tagname table, library table */
 struct constvalue {
     constvalue* next;
-    char name[sNAMEMAX + 1];
+    sp::Atom* name;
     cell value;
     int index; /* index level, for constants referring to array sizes/tags
                          * tag for enumeration lists */
@@ -398,7 +398,7 @@ struct svalue {
 
 /* For parsing declarations. */
 struct declinfo_t {
-    char name[sNAMEMAX + 1];
+    sp::Atom* name;
     typeinfo_t type;
     int opertok; // Operator token, if applicable.
 };
@@ -465,12 +465,9 @@ bool parse_new_typename(const token_t* tok, int* tagp);
 /* function prototypes in SC1.C */
 void set_extension(char* filename, const char* extension, int force);
 symbol* fetchfunc(const char* name);
-char* operator_symname(char* symname, const char* opername, int tag1, int tag2, int numtags,
-                       int resulttag);
 std::string funcdisplayname(const char* funcname);
 bool exprconst(cell* val, int* tag, symbol** symptr);
-constvalue* append_constval(constvalue* table, const char* name, cell val, int index);
-constvalue* find_constval(constvalue* table, char* name, int index);
+constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
 void delete_consttable(constvalue* table);
 symbol* add_constant(const char* name, cell val, int vclass, int tag);
 

@@ -1595,7 +1595,7 @@ class EnumStructDecl : public Decl
     PoolList<EnumStructField>& fields() { return fields_; }
 
   private:
-    sp::Atom* DecorateInnerName(const token_pos_t& pos, const char* name);
+    sp::Atom* DecorateInnerName(const token_pos_t& pos, sp::Atom* field_name);
 
   private:
     PoolList<FunctionDecl*> methods_;

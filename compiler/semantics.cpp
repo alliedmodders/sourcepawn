@@ -189,7 +189,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
 {
     auto arg = pstructs_getarg(ps, field.name);
     if (!arg) {
-        error(pos_, 96, field.name->chars(), "struct", name_->chars());
+        report(pos_, 96) << field.name << "struct" << name_;
         return false;
     }
 
@@ -493,11 +493,11 @@ IncDecExpr::Analyze(SemaContext& sc)
         }
     } else {
         if (!expr_val.accessor->setter) {
-            error(pos_, 152, expr_val.accessor->name);
+            report(pos_, 152) << expr_val.accessor->name;
             return false;
         }
         if (!expr_val.accessor->getter) {
-            error(pos_, 149, expr_val.accessor->name);
+            report(pos_, 149) << expr_val.accessor->name;
             return false;
         }
         markusage(expr_val.accessor->getter, uREAD);
@@ -579,7 +579,7 @@ BinaryExpr::Analyze(SemaContext& sc)
             sym->lnumber = pos_.line;
         } else if (auto* accessor = left_->val().accessor) {
             if (!accessor->setter) {
-                error(pos_, 152, accessor->name);
+                report(pos_, 152) << accessor->name;
                 return false;
             }
             markusage(accessor->setter, uREAD);
@@ -970,7 +970,7 @@ ChainedCompareExpr::Analyze(SemaContext& sc)
 
         if (find_userop(op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
             if (op.userop.sym->tag != pc_tag_bool) {
-                error(op.pos, 51, get_token_string(op.token).c_str());
+                report(op.pos, 51) << get_token_string(op.token);
                 return false;
             }
         } else {
@@ -1133,7 +1133,7 @@ CastExpr::Analyze(SemaContext& sc)
     } else if (val_.sym && val_.sym->tag == pc_tag_void) {
         error(pos_, 89);
     } else if (atype->isEnumStruct()) {
-        error(pos_, 95, atype->name());
+        report(pos_, 95) << atype->name();
     }
     val_.tag = tag_;
     return true;
@@ -1182,7 +1182,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
 
     if (sym_->vclass == sGLOBAL && sym_->ident != iFUNCTN) {
         if (!sym_->defined) {
-            error(pos_, 17, sym_->name());
+            report(pos_, 17) << sym_->name();
             return false;
         }
     }
@@ -1191,7 +1191,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
         // a stub in the first pass (used but never declared or implemented),
         // issue an error.
         if (!sym_->prototyped && sym_ != sc.func())
-            error(pos_, 17, sym_->name());
+            report(pos_, 17) << sym_->name();
 
         if (sym_->native) {
             error(pos_, 76);
@@ -1203,7 +1203,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
         }
         if (sym_->missing && sym_ != sc.func()) {
             auto symname = funcdisplayname(sym_->name());
-            error(pos_, 4, symname.c_str());
+            report(pos_, 4) << symname;
             return false;
         }
 
@@ -1477,7 +1477,7 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
                 if (symbol* root = type->asEnumStruct())
                     return AnalyzeEnumStructAccess(type, root, from_call);
             }
-            error(pos_, 96, name_->chars(), "type", "array");
+            report(pos_, 96) << name_->chars() << "type" << "array";
             return false;
         case iFUNCTN:
             error(pos_, 107);
@@ -1486,13 +1486,13 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
 
     if (base_val.ident == iMETHODMAP) {
         methodmap_t* map = base_val.sym->methodmap;
-        method_ = methodmap_find_method(map, name_->chars());
+        method_ = methodmap_find_method(map, name_);
         if (!method_) {
-            error(pos_, 105, map->name, name_->chars());
+            report(pos_, 105) << map->name << name_;
             return false;
         }
         if (!method_->is_static) {
-            error(pos_, 176, method_->name, map->name);
+            report(pos_, 176) << method_->name << map->name;
             return false;
         }
         val_.ident = iFUNCTN;
@@ -1508,9 +1508,9 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
         return false;
     }
 
-    method_ = methodmap_find_method(map, name_->chars());
+    method_ = methodmap_find_method(map, name_);
     if (!method_) {
-        error(pos_, 105, map->name, name_->chars());
+        report(pos_, 105) << map->name << name_;
         return false;
     }
 
@@ -1527,7 +1527,7 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
     }
 
     if (method_->is_static) {
-        error(pos_, 177, method_->name, map->name, method_->name);
+        report(pos_, 177) << method_->name << map->name << method_->name;
         return false;
     }
 
@@ -1555,7 +1555,7 @@ FieldAccessExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this
     assert(token_ == '.');
 
     if (method_ && method_->parent->ctor == method_) {
-        error(pos_, 84, method_->parent->name);
+        report(pos_, 84) << method_->parent->name;
         return nullptr;
     }
 
@@ -1581,7 +1581,7 @@ SymbolExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
         }
         if (sym_->methodmap->must_construct_with_new()) {
             // Keep going, this is basically a style thing.
-            error(pos_, 170, sym_->methodmap->name);
+            report(pos_, 170) << sym_->methodmap->name;
             return nullptr;
         }
         return sym_->methodmap->ctor->target;
@@ -1608,11 +1608,11 @@ SymbolExpr::BindNewTarget(SemaContext& sc)
 
     methodmap_t* methodmap = sym_->methodmap;
     if (!methodmap->must_construct_with_new()) {
-        error(pos_, 171, methodmap->name);
+        report(pos_, 171) << methodmap->name;
         return nullptr;
     }
     if (!methodmap->ctor) {
-        error(pos_, 172, methodmap->name);
+        report(pos_, 172) << methodmap->name;
         return nullptr;
     }
     return methodmap->ctor->target;
@@ -1624,9 +1624,9 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
     // Enum structs are always arrays, so they're never l-values.
     assert(!base_->lvalue());
 
-    field_ = find_enumstruct_field(type, name_->chars());
+    field_ = find_enumstruct_field(type, name_);
     if (!field_) {
-        error(pos_, 105, type->name(), name_->chars());
+        report(pos_, 105) << type->name() << name_;
         return false;
     }
     if (field_->ident == iFUNCTN) {
@@ -1692,9 +1692,9 @@ FieldAccessExpr::AnalyzeStaticAccess()
     }
 
     Type* type = gTypes.find(base_val.tag);
-    symbol* field = find_enumstruct_field(type, name_->chars());
+    symbol* field = find_enumstruct_field(type, name_);
     if (!field) {
-        error(pos_, 105, type->name(), name_->chars());
+        report(pos_, 105) << type->name() << name_;
         return FALSE;
     }
     assert(field->parent() == type->asEnumStruct());
@@ -1728,7 +1728,7 @@ SizeofExpr::Analyze(SemaContext& sc)
         error(pos_, 72); // "function" symbol has no size
         return false;
     } else if (!sym->defined) {
-        error(pos_, 17, ident_->chars());
+        report(pos_, 17) << ident_;
         return false;
     }
 
@@ -1765,9 +1765,9 @@ SizeofExpr::Analyze(SemaContext& sc)
         if (enum_type) {
             assert(enum_type->asEnumStruct());
 
-            symbol* field = find_enumstruct_field(enum_type, field_->chars());
+            symbol* field = find_enumstruct_field(enum_type, field_);
             if (!field) {
-                error(pos_, 105, enum_type->name(), field_->chars());
+                report(pos_, 105) << enum_type->name() << field_;
                 return false;
             }
             if (int array_size = field->dim.array.length) {
@@ -1883,9 +1883,9 @@ CallExpr::Analyze(SemaContext& sc)
     for (const auto& param : args_) {
         unsigned int argpos;
         if (param.name) {
-            int pos = findnamedarg(arglist, param.name->chars());
+            int pos = findnamedarg(arglist, param.name);
             if (pos < 0) {
-                error(pos_, 17, param.name->chars());
+                report(pos_, 17) << param.name;
                 break;
             }
             argpos = pos;
@@ -1987,7 +1987,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
     if (param->val().ident == iACCESSOR) {
         // We must always compute r-values for accessors.
         if (!param->val().accessor->getter) {
-            error(param->pos(), 149, param->val().accessor->name);
+            report(param->pos(), 149) << param->val().accessor->name;
             return false;
         }
         param = new RvalueExpr(param);
@@ -2161,7 +2161,7 @@ CallExpr::MarkUsed(SemaContext& sc)
          */
         if (sym_ != sc.func() && !sym_->retvalue) {
             auto symname = funcdisplayname(sym_->name());
-            error(pos_, 140, symname.c_str()); /* function should return a value */
+            report(pos_, 140) << symname; /* function should return a value */
         }
     } else {
         /* function not yet defined, set */
@@ -2179,7 +2179,7 @@ bool StaticAssertStmt::Analyze(SemaContext& sc)
     if (text_)
         message += ": " + std::string(text_->chars(), text_->length());
 
-    error(pos_, 70, message.c_str());
+    report(pos_, 70) << message;
 
     return false;
 }
@@ -2303,7 +2303,7 @@ TestSymbols(symbol* root, int testconst)
                     auto symname = funcdisplayname(sym->name());
                     if (!symname.empty()) {
                         /* symbol isn't used ... (and not public/native/stock) */
-                        error(sym, 203, symname.c_str());
+                        report(sym, 203) << symname;
                     }
                 }
                 if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
@@ -2607,7 +2607,7 @@ DeleteStmt::Analyze(SemaContext& sc)
     }
 
     if (!map || !map->dtor) {
-        error(expr_->pos(), 115, layout_spec_name(map->spec), map->name);
+        report(expr_->pos(), 115) << layout_spec_name(map->spec) << map->name;
         return false;
     }
 
@@ -2830,13 +2830,13 @@ ReportFunctionReturnError(symbol* sym)
     //
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
-        error(209, symname.c_str());
+        report(209) << symname;
     } else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
                sym->tag == sc_rationaltag || !sym->retvalue_used)
     {
-        error(242, symname.c_str());
+        report(242) << symname;
     } else {
-        error(400, symname.c_str());
+        report(400) << symname;
     }
 }
 
@@ -2877,7 +2877,7 @@ FunctionInfo::Analyze(SemaContext& sc)
         check_void_decl(&decl_, FALSE);
 
         if (decl_.opertok)
-            check_operatortag(decl_.opertok, decl_.type.tag, decl_.name);
+            check_operatortag(decl_.opertok, decl_.type.tag, decl_.name->chars());
     }
 
     bool was_prototyped = sym_->prototyped;
@@ -3024,7 +3024,7 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
         argsym->setAddr(static_cast<cell>((argcnt + 3) * sizeof(cell)));
 
         arginfo arg;
-        strcpy(arg.name, var->name()->chars());
+        arg.name = var->name();
         arg.ident = argsym->ident;
         arg.is_const = argsym->is_const;
         arg.tag = argsym->tag;
@@ -3073,7 +3073,7 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
         } else {
             /* check the argument with the earlier definition */
             if (argcnt > oldargcnt || !argcompare(&arglist[argcnt], &arg))
-                error(181, arg.name); /* function argument does not match prototype */
+                report(181) << arg.name; /* function argument does not match prototype */
         }
         argcnt++;
     }

@@ -276,20 +276,20 @@ AsmReader::end_of_token()
 symbol*
 AsmReader::extract_call_target()
 {
-    char name[METHOD_NAMEMAX];
+    const char* param_start = pos();
+    const char* params = param_start;
 
-    const char* params = pos();
-
-    int i;
+    size_t i;
     for (i = 0; !isspace(*params); i++, params++) {
         assert(*params != '\0');
-        assert(i < METHOD_NAMEMAX);
-        name[i] = *params;
     }
-    name[i] = '\0';
     pos_ += i;
 
-    symbol* sym = findglb(name);
+    auto atom = gAtoms.add(param_start, i);
+
+    symbol* sym = findglb(atom);
+    assert(sym);
+
     if (!sym) {
         return nullptr;
     }
@@ -1098,7 +1098,7 @@ RttiBuilder::add_enumstruct(Type* type)
     for (auto iter = table->next; iter; iter = iter->next, index++) {
         symbol* field = find_enumstruct_field(type, iter->name);
         if (!field) {
-            error(105, type->name(), iter->name);
+            report(105) << type->name() << iter->name;
             continue;
         }
 
@@ -1111,7 +1111,7 @@ RttiBuilder::add_enumstruct(Type* type)
         encode_var_type(encoding, type);
 
         smx_rtti_es_field info;
-        info.name = names_->add(gAtoms, iter->name);
+        info.name = names_->add(gAtoms, iter->name->chars());
         info.type_id = to_typeid(encoding);
         info.offset = field->addr();
         es_fields_->at(es.first_field + index) = info;
@@ -1135,7 +1135,7 @@ RttiBuilder::add_struct(Type* type)
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
     classdef.flags = kClassDefType_Struct;
-    classdef.name = names_->add(gAtoms, ps->name);
+    classdef.name = names_->add(gAtoms, ps->name->chars());
     classdef.first_field = fields_->count();
     classdefs_->add(classdef);
 
@@ -1480,11 +1480,7 @@ assemble_to_buffer(SmxByteBuffer* buffer)
                     entry.name = sym->name();
                 } else {
                     // Create a private name.
-                    char private_name[sNAMEMAX * 3 + 1];
-                    snprintf(private_name, sizeof(private_name), ".%d.%s", sym->addr(),
-                             sym->name());
-
-                    entry.name = private_name;
+                    entry.name = ke::StringPrintf(".%d.%s", sym->addr(), sym->name());
                 }
 
                 functions.emplace_back(std::move(entry));
