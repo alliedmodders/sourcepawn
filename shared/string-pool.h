@@ -18,6 +18,8 @@
 #ifndef _include_jitcraft_string_pool_h_
 #define _include_jitcraft_string_pool_h_
 
+#include <string>
+
 #include <amtl/am-hashtable.h>
 #include <amtl/am-hashset.h>
 #include <amtl/am-hashmap.h>
@@ -73,6 +75,10 @@ class StringPool
       delete* i;
   }
 
+  Atom* add(const std::string& str) {
+    return add(str.c_str(), str.size());
+  }
+
   Atom* add(const char* str, size_t length) {
     CharsAndLength chars(str, length);
     Table::Insert p = table_.findForAdd(chars);
@@ -100,7 +106,7 @@ class StringPool
     static bool matches(const CharsAndLength& key, const Payload& e) {
       if (key.length() != e->length())
         return false;
-      return strcmp(key.str(), e->chars()) == 0;
+      return strncmp(key.str(), e->chars(), key.length()) == 0;
     }
   };
 
