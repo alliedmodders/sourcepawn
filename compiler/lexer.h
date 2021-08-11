@@ -259,8 +259,8 @@ IsAssignOp(int token)
     }
 }
 
-int plungequalifiedfile(char* name); /* explicit path included */
-int plungefile(char* name, int try_currentpath,
+int plungequalifiedfile(const char* name); /* explicit path included */
+int plungefile(const char* name, int try_currentpath,
                int try_includepaths); /* search through "include" paths */
 void preprocess(bool allow_synthesized_tokens);
 void lexinit(void);

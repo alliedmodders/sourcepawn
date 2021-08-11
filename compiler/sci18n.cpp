@@ -42,27 +42,6 @@
 #include "sc.h"
 #include "scvars.h"
 
-#if !defined TRUE
-#    define FALSE 0
-#    define TRUE 1
-#endif
-#if !defined _MAX_PATH
-#    define _MAX_PATH 250
-#endif
-#if !defined DIRSEP_CHAR
-#    if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__
-#        define DIRSEP_CHAR '/'
-#    elif defined macintosh
-#        define DIRSEP_CHAR ':'
-#    else
-#        define DIRSEP_CHAR '\\'
-#    endif
-#endif
-
-#if !defined ELEMENTS
-#    define ELEMENTS(array) (sizeof(array) / sizeof(array[0]))
-#endif
-
 cell
 get_utf8_char(const unsigned char* string, const unsigned char** endptr)
 {

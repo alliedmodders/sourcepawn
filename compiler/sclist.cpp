@@ -164,7 +164,7 @@ delete_aliastable(void)
 static stringlist includepaths; /* directory list for include files */
 
 stringlist*
-insert_path(char* path)
+insert_path(const char* path)
 {
     return insert_string(&includepaths, path);
 }
@@ -293,28 +293,6 @@ delete_inputfiletable(void)
     assert(inputfiles.next == NULL);
 }
 
-/* ----- autolisting --------------------------------------------- */
-static stringlist autolist;
-
-stringlist*
-insert_autolist(const char* string)
-{
-    return insert_string(&autolist, string);
-}
-
-char*
-get_autolist(int index)
-{
-    return get_string(&autolist, index);
-}
-
-void
-delete_autolisttable(void)
-{
-    delete_stringtable(&autolist);
-    assert(autolist.next == NULL);
-}
-
 /* ----- debug information --------------------------------------- */
 
 #define PRIdC "d"
@@ -326,7 +304,7 @@ stringlist*
 insert_dbgfile(const char* filename)
 {
     if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
-        char string[_MAX_PATH + 40];
+        char string[PATH_MAX + 40];
         assert(filename != NULL);
         assert(strlen(filename) + 40 < sizeof string);
         sprintf(string, "F:%" PRIxC " %s", code_idx, filename);

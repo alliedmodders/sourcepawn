@@ -236,8 +236,10 @@ class TestPlan(object):
       if os.path.isdir(path):
         self.find_tests_impl(local_path, manifest)
       elif path.endswith('.sp') or path.endswith('.smx'):
-        if self.args.test is not None and not local_path.startswith(self.args.test):
-          continue
+        if self.args.test is not None:
+          if not local_path.startswith(self.args.test) and \
+             not local_path.endswith(self.args.test):
+            continue
 
         test = Test(**{
           'path': os.path.abspath(path),

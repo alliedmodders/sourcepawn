@@ -77,7 +77,7 @@ typedef struct src_file_s {
  *    file can be open for reading and another for writing.
  */
 void*
-pc_opensrc(char* filename)
+pc_opensrc(const char* filename)
 {
     FILE* fp = NULL;
     long length;
@@ -134,7 +134,7 @@ err:
  *    file can be open for reading and another for writing.
  */
 void*
-pc_createsrc(char* filename)
+pc_createsrc(const char* filename)
 {
     src_file_t* src = (src_file_t*)calloc(1, sizeof(src_file_t));
     if (!src)

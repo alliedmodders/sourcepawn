@@ -21,7 +21,6 @@
 //
 //  Version: $Id$
 
-#include "amx.h"
 #include "expressions.h"
 #include "parse-node.h"
 #include "sc.h"

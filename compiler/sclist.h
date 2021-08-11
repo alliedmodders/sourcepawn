@@ -37,7 +37,7 @@ struct macro_t {
 void insert_alias(const char* name, sp::Atom* atom);
 sp::Atom* lookup_alias(const char* name);
 void delete_aliastable(void);
-stringlist* insert_path(char* path);
+stringlist* insert_path(const char* path);
 char* get_path(int index);
 void delete_pathtable(void);
 void insert_subst(const char* pattern, size_t pattern_length, const char* substitution);
@@ -50,9 +50,6 @@ void delete_sourcefiletable(void);
 stringlist* insert_inputfile(char* string);
 char* get_inputfile(int index);
 void delete_inputfiletable(void);
-stringlist* insert_autolist(const char* string);
-char* get_autolist(int index);
-void delete_autolisttable(void);
 stringlist* insert_dbgfile(const char* filename);
 stringlist* insert_dbgline(int linenr);
 stringlist* insert_dbgsymbol(symbol* sym);

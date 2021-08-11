@@ -235,6 +235,8 @@ writeleader(symbol* root)
     code_idx += opcodes(1) + opargs(1); /* calculate code length */
 }
 
+static constexpr cell sc_dataalign = sizeof(cell);
+
 /*  writetrailer
  *  Not much left of this once important function.
  *

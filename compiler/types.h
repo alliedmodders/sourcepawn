@@ -32,8 +32,10 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
-#include "amx.h"
 #include "pool-allocator.h"
+
+typedef int32_t cell;
+typedef uint32_t ucell;
 
 #define TAGTYPEMASK (0x3E000000)
 #define TAGFLAGMASK (TAGTYPEMASK | 0x40000000)
@@ -61,7 +63,6 @@ struct typeinfo_t {
     int numdim;
     int dim[sDIMEN_MAX];
     int idxtag[sDIMEN_MAX];
-    constvalue* enumroot;
 
     // Either null or an array of size |numdim|, pool-allocated.
     Expr** dim_exprs;

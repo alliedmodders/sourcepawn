@@ -50,9 +50,10 @@
 #include "symbols.h"
 #include "types.h"
 
-#if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
+#if defined _WIN32
 #    include <conio.h>
 #    include <io.h>
+#    define strcasecmp stricmp
 #endif
 
 #if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
@@ -127,15 +128,12 @@ enum {
 static int norun = 0;                 /* the compiler never ran */
 static int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
 static int sc_parsenum = 0;           /* number of the extra parses */
-static int wq[wqTABSZ];               /* "while queue", internal stack for nested loops */
-static int* wqptr;                    /* pointer to next entry */
-static char* sc_documentation = NULL; /* main documentation */
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 static HWND hwndFinish = 0;
 #endif
 static int sc_syntax_only = FALSE;
 
-char g_tmpfile[_MAX_PATH] = {0};
+char g_tmpfile[PATH_MAX] = {0};
 
 args::ToggleOption opt_show_stats(nullptr, "--show-stats", Some(false),
                                   "Show compiler statistics on exit.");
@@ -156,7 +154,7 @@ int
 pc_compile(int argc, char* argv[]) {
     int entry, jmpcode;
     int retcode;
-    char incfname[_MAX_PATH];
+    char incfname[PATH_MAX];
     void* inpfmark;
     int lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
     char* ptr;
@@ -181,14 +179,14 @@ pc_compile(int argc, char* argv[]) {
         error(FATAL_ERROR_OOM);
 
     /* allocate memory for fixed tables */
-    inpfname = (char*)malloc(_MAX_PATH);
+    inpfname = (char*)malloc(PATH_MAX);
     if (inpfname == NULL)
         error(FATAL_ERROR_OOM); /* insufficient memory */
 
     setopt(argc, argv, outfname, errfname, incfname);
     strcpy(binfname, outfname);
     ptr = get_extension(binfname);
-    if (ptr != NULL && stricmp(ptr, ".asm") == 0)
+    if (ptr != NULL && strcasecmp(ptr, ".asm") == 0)
         set_extension(binfname, ".smx", TRUE);
     else
         set_extension(binfname, ".smx", FALSE);
@@ -218,8 +216,6 @@ pc_compile(int argc, char* argv[]) {
         int fidx;
 #if defined __WIN32__ || defined _WIN32
         tname = _tempnam(NULL, "pawn");
-#elif defined __MSDOS__ || defined _Windows
-        tname = tempnam(NULL, "pawn");
 #elif defined(MACOS) && !defined(__MACH__)
         /* tempnam is not supported for the Macintosh CFM build. */
         error(FATAL_ERROR_INVALID_INSN, get_sourcefile(1));
@@ -429,13 +425,8 @@ cleanup:
     gInputFileStack.clear();
     gInputFilenameStack.clear();
 
-    assert(jmpcode != 0 || loctab.next == NULL); /* on normal flow, local symbols
-                                                  * should already have been deleted */
-    delete_symbols(&loctab, TRUE);            /* delete local variables if not yet
-                                               * done (i.e. on a fatal error) */
     delete_symbols(&glbtab, TRUE);
     DestroyHashTable(sp_Globals);
-    delete_consttable(&libname_tab);
     delete_aliastable();
     delete_pathtable();
     delete_sourcefiletable();
@@ -446,9 +437,6 @@ cleanup:
     methodmaps_free();
     pstructs_free();
     delete_substtable();
-    if (sc_documentation != NULL)
-        free(sc_documentation);
-    delete_autolisttable();
     if (errnum != 0) {
         if (strlen(errfname) == 0)
             pc_printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");
@@ -485,13 +473,13 @@ inst_binary_name(std::string binfile)
 
     std::string binfileName = sepIndex == std::string::npos ? binfile : binfile.substr(sepIndex + 1);
 
-#if DIRSEP_CHAR == '\\'
-    auto pos = binfile.find('\\');
-    while (pos != std::string::npos) {
-        binfile.insert(pos + 1, 1, '\\');
-        pos = binfile.find('\\', pos + 2);
+    if (DIRSEP_CHAR == '\\') {
+        auto pos = binfile.find('\\');
+        while (pos != std::string::npos) {
+            binfile.insert(pos + 1, 1, '\\');
+            pos = binfile.find('\\', pos + 2);
+        }
     }
-#endif
 
     binfile.insert(binfile.begin(), '"');
     binfileName.insert(binfileName.begin(), '"');
@@ -534,7 +522,6 @@ resetglobals(void)
     /* reset the subset of global variables that is modified by the first pass */
     curfunc = NULL;        /* pointer to current function */
     sc_labnum = 0;         /* top value of (internal) labels */
-    declared = 0;          /* number of local cells declared */
     glb_declared = 0;      /* number of global cells declared */
     code_idx = 0;          /* number of bytes with generated code */
     curseg = 0;            /* 1 if currently parsing CODE, 2 if parsing DATA */
@@ -545,9 +532,7 @@ resetglobals(void)
     stmtindent = 0;        /* current indent of the statement */
     indent_nowarn = FALSE; /* do not skip warning "217 loose indentation" */
     sc_status = statIDLE;
-    pc_addlibtable = TRUE; /* by default, add a "library table" to the output file */
     pc_deprecate = "";
-    pc_memflags = 0;
 
     sc_intest = false;
     sc_allowtags = true;
@@ -568,7 +553,6 @@ initglobals(void)
     sc_debug = sCHKBOUNDS | sSYMBOLIC; /* sourcemod: full debug stuff */
     sc_needsemicolon = FALSE;          /* semicolon required to terminate expressions? */
     sc_require_newdecls = FALSE;
-    sc_dataalign = sizeof(cell);
     pc_stksize = sDEF_AMXSTACK; /* default stack size */
     sc_tabsize = 8;             /* assume a TAB is 8 spaces */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
@@ -578,15 +562,10 @@ initglobals(void)
     inpf = NULL;             /* file read from */
     inpfname = NULL;         /* pointer to name of the file currently read from */
     glbtab.next = NULL;      /* clear global variables/constants table */
-    loctab.next = NULL;      /*   "   local      "    /    "       "   */
-    libname_tab.next = NULL; /* library table (#pragma library "..." syntax) */
 
     pline[0] = '\0'; /* the line read from the input file */
     lptr = NULL;     /* points to the current position in "pline" */
     inpf_org = NULL; /* main source file */
-
-    wqptr = wq; /* initialize while queue pointer */
-    sc_documentation = NULL;
 }
 
 static char*
@@ -672,9 +651,9 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     args::Parser parser;
     parser.enable_inline_values();
     parser.collect_extra_args();
-#if DIRSEP_CHAR != '/'
-    parser.allow_slashes();
-#endif
+    if (DIRSEP_CHAR != '/') {
+        parser.allow_slashes();
+    }
 
     parser.add_usage_line("sym=val", "Define constant \"sym\" with value \"val\".");
     parser.add_usage_line("sym=", "Define constant \"sym\" with value 0.");
@@ -700,9 +679,9 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
         Usage(parser, argc, argv);
 
     if (opt_prefixfile.hasValue())
-        SafeStrcpy(pname, _MAX_PATH, opt_prefixfile.value().c_str());
+        SafeStrcpy(pname, PATH_MAX, opt_prefixfile.value().c_str());
     if (opt_outputfile.hasValue())
-        SafeStrcpy(oname, _MAX_PATH, opt_outputfile.value().c_str());
+        SafeStrcpy(oname, PATH_MAX, opt_outputfile.value().c_str());
 
     if (opt_verbosity.hasValue()) {
         if (isdigit(*opt_verbosity.value().c_str()))
@@ -728,7 +707,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     }
 
     if (opt_error_file.hasValue())
-        SafeStrcpy(ename, _MAX_PATH, opt_error_file.value().c_str());
+        SafeStrcpy(ename, PATH_MAX, opt_error_file.value().c_str());
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
@@ -739,17 +718,14 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
 #endif
 
     for (const auto& inc_path : opt_includes.values()) {
-        char str[_MAX_PATH];
-        ke::SafeStrcpy(str, sizeof(str), inc_path.c_str());
+        std::string str = inc_path;
 
-        size_t i = strlen(str);
-        if (i > 0) {
-            if (str[i - 1] != DIRSEP_CHAR) {
-                str[i] = DIRSEP_CHAR;
-                str[i + 1] = '\0';
-            }
-            insert_path(str);
-        }
+        if (str.empty())
+            continue;
+        if (str.back() != DIRSEP_CHAR)
+            str.push_back(DIRSEP_CHAR);
+
+        insert_path(str.c_str());
     }
 
     for (const auto& warning : opt_warnings.values()) {
@@ -764,7 +740,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
     }
 
     for (const auto& option : parser.extra_args()) {
-        char str[_MAX_PATH];
+        char str[PATH_MAX];
         const char* ptr = nullptr;
         const char* arg = option.c_str();
         if (arg[0] == '@') {
@@ -772,7 +748,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
             exit(1);
         } else if ((ptr = strchr(arg, '=')) != NULL) {
             int i = (int)(ptr - arg);
-            SafeStrcpyN(str, _MAX_PATH, arg, i);
+            SafeStrcpyN(str, PATH_MAX, arg, i);
             i = atoi(ptr + 1);
             add_constant(str, i, sGLOBAL, 0);
         } else {
@@ -787,7 +763,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
                     ptr++; /* strip path */
                 else
                     ptr = str;
-                assert(strlen(ptr) < _MAX_PATH);
+                assert(strlen(ptr) < PATH_MAX);
                 strcpy(oname, ptr);
             }
             set_extension(oname, ".asm", TRUE);
@@ -817,13 +793,13 @@ __attribute__((noinline))
 static void
 setconfig(char* root)
 {
-    char path[_MAX_PATH];
+    char path[PATH_MAX];
     char *ptr, *base;
     int len;
 
     /* add the default "include" directory */
 #if defined KE_WINDOWS
-    GetModuleFileNameA(NULL, path, _MAX_PATH);
+    GetModuleFileNameA(NULL, path, PATH_MAX);
 #elif defined ENABLE_BINRELOC
     /* see www.autopackage.org for the BinReloc module */
     br_init_lib(NULL);
@@ -847,12 +823,6 @@ setconfig(char* root)
     if (root != NULL)
         SafeStrcpy(path, sizeof(path), root); /* path + filename (hopefully) */
 #endif
-
-#if defined __MSDOS__
-    /* strip the options (push_backed to the path + filename) */
-    if ((ptr = strpbrk(path, " \t/")) != NULL)
-        *ptr = '\0';
-#endif /* __MSDOS__ */
 
     /* terminate just behind last \ or : */
     if ((ptr = strrchr(path, DIRSEP_CHAR)) != NULL || (ptr = strchr(path, ':')) != NULL) {
@@ -1097,7 +1067,7 @@ parse_old_decl(declinfo_t* decl, int flags)
         type->is_const = true;
     }
 
-    int tags[MAXTAGS], numtags = 0;
+    int tag, numtags = 0;
     if (flags & DECLFLAG_ARGUMENT) {
         if (matchtoken('&'))
             type->ident = iREFERENCE;
@@ -1105,15 +1075,16 @@ parse_old_decl(declinfo_t* decl, int flags)
         // grammar for multitags is:
         //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
         if (matchtoken('{')) {
-            while (numtags < MAXTAGS) {
-                int tag = 0;
+            while (true) {
+                int parsed_tag = 0;
 
                 if (!matchtoken('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
                     if (expecttoken(tSYMBOL, &tok))
-                        tag = pc_addtag(tok.str);
+                        parsed_tag = pc_addtag(tok.str);
                 }
-                tags[numtags++] = tag;
+                tag = parsed_tag;
+                numtags++;
 
                 if (matchtoken('}'))
                     break;
@@ -1127,13 +1098,13 @@ parse_old_decl(declinfo_t* decl, int flags)
 
     if (numtags == 0) {
         if (matchtoken2(tLABEL, &tok))
-            tags[numtags++] = pc_addtag(tok.str);
+            tag = pc_addtag(tok.str);
         else
-            tags[numtags++] = 0;
+            tag = 0;
     }
 
     // All finished with tag stuff.
-    type->tag = tags[0];
+    type->tag = tag;
     type->declared_tag = type->tag;
 
     Type* type_obj = gTypes.find(type->tag);
@@ -1217,7 +1188,6 @@ rewrite_type_for_enum_struct(typeinfo_t* info)
     info->tag = 0;
     info->dim[info->numdim] = enum_type->addr();
     info->idxtag[info->numdim] = enum_type->tag;
-    info->enumroot = enum_type->dim.enumlist;
 
     // Note that the size here is incorrect. It's fixed up in initials() by
     // parse_var_decl. Unfortunately type->size is difficult to remove because
@@ -1282,9 +1252,7 @@ reparse_new_decl(declinfo_t* decl, int flags)
 
     if (decl->type.declared_tag && !decl->type.tag) {
         assert(decl->type.numdim > 0);
-        assert(decl->type.enumroot);
         decl->type.numdim--;
-        decl->type.enumroot = nullptr;
     }
 
     decl->type.dim_exprs = nullptr;
@@ -1295,7 +1263,6 @@ reparse_new_decl(declinfo_t* decl, int flags)
         //
         // Reset the fact that we saw an array.
         decl->type.numdim = 0;
-        decl->type.enumroot = NULL;
         decl->type.ident = iVARIABLE;
         decl->type.has_postdims = false;
         if (matchtoken('[')) {

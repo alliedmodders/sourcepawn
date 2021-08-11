@@ -19,8 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-void* pc_opensrc(char* filename); /* reading only */
-void* pc_createsrc(char* filename);
+void* pc_opensrc(const char* filename); /* reading only */
+void* pc_createsrc(const char* filename);
 void pc_closesrc(void* handle); /* never delete */
 char* pc_readsrc(void* handle, unsigned char* target, int maxchars);
 int pc_writesrc(void* handle, unsigned char* source);

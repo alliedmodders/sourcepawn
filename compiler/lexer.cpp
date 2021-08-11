@@ -23,6 +23,7 @@
  */
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,31 +90,31 @@ static int listline = -1; /* "current line" for the list file */
 ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sKeywords;
 
 int
-plungequalifiedfile(char* name)
+plungequalifiedfile(const char* name)
 {
     static const char* extensions[] = {".inc", ".p", ".pawn"};
+    std::string alt_name;
 
     void* fp;
-    char* ext;
     size_t ext_idx;
 
     ext_idx = 0;
     do {
         fp = pc_opensrc(name);
-        ext = strchr(name, '\0'); /* save position */
+
         if (fp == NULL) {
             /* try to push_back an extension */
-            strcpy(ext, extensions[ext_idx]);
-            fp = pc_opensrc(name);
-            if (fp == NULL)
-                *ext = '\0'; /* on failure, restore filename */
+            alt_name = std::string(name) + extensions[ext_idx];
+            fp = pc_opensrc(alt_name.c_str());
+            if (fp) {
+                name = alt_name.c_str();
+                break;
+            }
         }
         ext_idx++;
-    } while (fp == NULL && ext_idx < (sizeof extensions / sizeof extensions[0]));
-    if (fp == NULL) {
-        *ext = '\0'; /* restore filename */
+    } while (ext_idx < (sizeof extensions / sizeof extensions[0]));
+    if (!fp)
         return FALSE;
-    }
     if (sc_showincludes && sc_status == statFIRST) {
         fprintf(stdout, "Note: including file: %s\n", name);
     }
@@ -143,11 +144,11 @@ plungequalifiedfile(char* name)
 }
 
 int
-plungefile(char* name, int try_currentpath, int try_includepaths)
+plungefile(const char* name, int try_currentpath, int try_includepaths)
 {
     int result = FALSE;
     char* pcwd = NULL;
-    char cwd[_MAX_PATH];
+    char cwd[PATH_MAX];
 
     if (try_currentpath) {
         result = plungequalifiedfile(name);
@@ -159,8 +160,8 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
             char* ptr;
             if ((ptr = strrchr(inpfname, DIRSEP_CHAR)) != 0) {
                 int len = (int)(ptr - inpfname) + 1;
-                if (len + strlen(name) < _MAX_PATH) {
-                    char path[_MAX_PATH];
+                if (len + strlen(name) < PATH_MAX) {
+                    char path[PATH_MAX];
                     SafeStrcpyN(path, sizeof(path), inpfname, len);
                     SafeStrcat(path, sizeof(path), name);
                     result = plungequalifiedfile(path);
@@ -172,7 +173,7 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
                 error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
             }
 
-#if defined __MSDOS__ || defined __WIN32__ || defined _Windows
+#ifdef _WIN32
             // make the drive letter on windows lower case to be in line with the rest of SP, as they have a small drive letter in the path
             cwd[0] = tolower(cwd[0]);
 #endif
@@ -183,14 +184,13 @@ plungefile(char* name, int try_currentpath, int try_includepaths)
         int i;
         char* ptr;
         for (i = 0; !result && (ptr = get_path(i)) != NULL; i++) {
-            char path[_MAX_PATH];
-            SafeSprintf(path, sizeof(path), "%s%s", ptr, name);
-            result = plungequalifiedfile(path);
+            auto path = StringPrintf("%s%s", ptr, name);
+            result = plungequalifiedfile(path.c_str());
         }
     }
 
     if (pcwd) {
-        char path[_MAX_PATH];
+        char path[PATH_MAX];
         SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
         set_file_defines(path);
     } else {
@@ -207,13 +207,13 @@ set_file_defines(std::string file)
 
     std::string fileName = sepIndex == std::string::npos ? file : file.substr(sepIndex + 1);
 
-#if DIRSEP_CHAR == '\\'
-    auto pos = file.find('\\');
-    while (pos != std::string::npos) {
-        file.insert(pos + 1, 1, '\\');
-        pos = file.find('\\', pos + 2);
+    if (DIRSEP_CHAR == '\\') {
+        auto pos = file.find('\\');
+        while (pos != std::string::npos) {
+            file.insert(pos + 1, 1, '\\');
+            pos = file.find('\\', pos + 2);
+        }
     }
-#endif
 
     file.insert(file.begin(), '"');
     fileName.insert(fileName.begin(), '"');
@@ -249,7 +249,7 @@ check_empty(const unsigned char* lptr)
 static void
 doinclude(int silent)
 {
-    char name[_MAX_PATH];
+    char name[PATH_MAX];
     char c;
     size_t i;
     int result;
@@ -934,7 +934,7 @@ command(bool allow_synthesized_tokens)
             break;
         case tpFILE:
             if (!SKIPPING) {
-                char pathname[_MAX_PATH];
+                char pathname[PATH_MAX];
                 lptr = getstring((unsigned char*)pathname, sizeof pathname, lptr);
                 if (strlen(pathname) > 0) {
                     free(inpfname);

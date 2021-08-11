@@ -34,6 +34,8 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 #include <memory>
 #include <utility>
@@ -42,10 +44,11 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 
-#include "amx.h"
-#include "osdefs.h"
 #include "shared/string-pool.h"
 #include "types.h"
+
+typedef int32_t cell;
+typedef uint32_t ucell;
 
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
@@ -53,13 +56,19 @@
 #define CTRL_CHAR '\\'  /* default control character */
 #define sCHARBITS 8     /* size of a packed character */
 
-#define MAXTAGS 16
 #define sLINEMAX 4095      /* input line length (in characters) */
 #define sCOMP_STACK 32     /* maximum nesting of #if .. #endif sections */
 #define sDEF_AMXSTACK 4096 /* default stack size for AMX files */
 #define PREPROC_TERM \
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
+
+#ifdef _WIN32
+static constexpr char DIRSEP_CHAR = '\\';
+# define PATH_MAX _MAX_PATH
+#else
+static constexpr char DIRSEP_CHAR = '/';
+#endif
 
 struct ArrayData;
 
@@ -470,13 +479,6 @@ bool exprconst(cell* val, int* tag, symbol** symptr);
 constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
 void delete_consttable(constvalue* table);
 symbol* add_constant(const char* name, cell val, int vclass, int tag);
-
-#if defined WIN32
-#    if !defined snprintf
-#        define snprintf _snprintf
-#        define vsnprintf _vsnprintf
-#    endif
-#endif
 
 constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);
