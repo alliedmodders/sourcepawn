@@ -30,12 +30,9 @@
 
 typedef struct HashTable HashTable;
 extern struct HashTable* sp_Globals;
-extern symbol loctab;             /* local symbol table */
 extern symbol glbtab;             /* global symbol table */
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
-extern constvalue libname_tab;    /* library table (#pragma library "..." syntax) */
-extern int pc_addlibtable;        /* is the library table added to the AMX file? */
 extern symbol* curfunc;           /* pointer to current function */
 extern char* inpfname;            /* name of the file currently read from */
 extern char outfname[];           /* intermediate (assembler) file name */
@@ -44,7 +41,6 @@ extern char errfname[];           /* error file name */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
 extern int sc_labnum;             /* number of (internal) labels */
-extern cell declared;             /* number of local cells declared */
 extern cell glb_declared;         /* number of global cells declared */
 extern cell code_idx;             /* number of bytes with generated code */
 extern int errnum;                /* number of errors */
@@ -53,7 +49,6 @@ extern int sc_debug;              /* debug/optimization options (bit field) */
 extern int sc_asmfile;            /* create .ASM file? */
 extern int sc_listing;            /* create .LST file? */
 extern int sc_needsemicolon;      /* semicolon required to terminate expressions? */
-extern int sc_dataalign;          /* data alignment value */
 extern int sc_showincludes;       /* show include files? */
 extern int curseg;                /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;           /* stack size */
@@ -68,7 +63,6 @@ extern int sc_tabsize;            /* number of spaces that a TAB represents */
 extern int sc_status;             /* read/write status */
 extern int sc_err_status;         /* TRUE if errors should be generated even if sc_status = SKIP */
 extern int sc_rationaltag;        /* tag for rational numbers */
-extern int pc_memflags;           /* special flags for the stack/heap usage */
 extern int pc_functag;            /* global function tag */
 extern int pc_tag_string;         /* global String tag */
 extern int pc_tag_void;           /* global void tag */

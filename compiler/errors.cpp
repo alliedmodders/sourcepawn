@@ -23,7 +23,7 @@
  *  Version: $Id$
  */
 #include <assert.h>
-#if defined __WIN32__ || defined _WIN32 || defined __MSDOS__
+#ifdef _WIN32
 #    include <io.h>
 #endif
 #if defined __linux__ || defined __GNUC__
@@ -478,5 +478,3 @@ pc_enablewarning(int number, int enable)
 
     return TRUE;
 }
-
-#undef SCPACK_TABLE

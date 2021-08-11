@@ -46,12 +46,6 @@ struct SymbolHashPolicy {
 
 struct HashTable : public ke::HashTable<SymbolHashPolicy> {};
 
-uint32_t
-NameHash(const char* str)
-{
-    return ke::HashCharSequence(str, strlen(str));
-}
-
 HashTable*
 NewHashTable()
 {

@@ -50,10 +50,6 @@ TypeInfoFromSymbol(symbol* sym)
                 type.dim[type.numdim] = iter->dim.array.length;
                 type.numdim++;
             }
-
-            Type* t = gTypes.find(type.semantic_tag());
-            if (t->isEnumStruct())
-                type.enumroot = t->asEnumStruct()->dim.enumlist;
         }
     }
     return type;

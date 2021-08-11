@@ -22,9 +22,11 @@
  *
  *  Version: $Id$
  */
-#include "scvars.h"
 #include <stdio.h>
-#include <stdlib.h> /* for _MAX_PATH */
+#include <stdlib.h>
+#include <limits.h>
+
+#include "scvars.h"
 #include "emitter.h"
 #include "sc.h"
 #include "sp_symhash.h"
@@ -39,18 +41,14 @@ symbol glbtab;                             /* global symbol table */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
 constvalue tagname_tab = {nullptr, nullptr, 0, 0}; /* tagname table */
-constvalue libname_tab = {nullptr, nullptr, 0, 0}; /* library table (#pragma library "..." syntax) */
-constvalue* curlibrary = NULL;             /* current library */
-int pc_addlibtable = TRUE;                 /* is the library table added to the AMX file? */
 symbol* curfunc;                           /* pointer to current function */
 char* inpfname;                            /* pointer to name of the file currently read from */
-char outfname[_MAX_PATH];                  /* intermediate (assembler) file name */
-char binfname[_MAX_PATH];                  /* binary file name */
-char errfname[_MAX_PATH];                  /* error file name */
+char outfname[PATH_MAX];                   /* intermediate (assembler) file name */
+char binfname[PATH_MAX];                   /* binary file name */
+char errfname[PATH_MAX];                   /* error file name */
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
 int sc_labnum = 0;                         /* number of (internal) labels */
-cell declared = 0;                         /* number of local cells declared */
 cell glb_declared = 0;                     /* number of global cells declared */
 cell code_idx = 0;                         /* number of bytes with generated code */
 int errnum = 0;                            /* number of errors */
@@ -59,7 +57,6 @@ int sc_debug = sCHKBOUNDS;                 /* by default: bounds checking+assert
 int sc_asmfile = FALSE;                    /* create .ASM file? */
 int sc_listing = FALSE;                    /* create .LST file? */
 int sc_needsemicolon = TRUE;               /* semicolon required to terminate expressions? */
-int sc_dataalign = sizeof(cell);           /* data alignment value */
 int curseg = 0;                            /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize = sDEF_AMXSTACK;           /* default stack size */
 cell pc_stksize_override = 0;
@@ -77,7 +74,6 @@ int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
 std::string pc_deprecate;            /* if non-empty, mark next declaration as deprecated */
 int pc_optimize = sOPTIMIZE_NOMACRO; /* (peephole) optimization level */
-int pc_memflags = 0;                 /* special flags for the stack/heap usage */
 int sc_showincludes = 0;             /* show include files */
 int sc_require_newdecls = 0;         /* Require new-style declarations */
 bool sc_warnings_are_errors = false;

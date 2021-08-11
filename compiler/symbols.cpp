@@ -58,9 +58,7 @@ CreateScope()
 symbol*
 GetScopeChain()
 {
-    if (sScopeChain)
-        return sScopeChain;
-    return &loctab;
+    return sScopeChain;
 }
 
 symbol*
@@ -134,9 +132,7 @@ findloc(sp::Atom* name, symbol** scope)
             return sym;
         }
     }
-    if (scope)
-        *scope = &loctab;
-    return table_findloc(&loctab, name);
+    return nullptr;
 }
 
 /* The local variable table must be searched backwards, so that the deepest

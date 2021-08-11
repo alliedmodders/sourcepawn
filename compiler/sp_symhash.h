@@ -19,8 +19,6 @@ struct KeywordTablePolicy {
     }
 };
 
-uint32_t NameHash(const char* str);
-
 struct HashTable;
 
 HashTable* NewHashTable();

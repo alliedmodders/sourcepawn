@@ -19,7 +19,5 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include "amx.h"
-
 cell get_utf8_char(const unsigned char* string, const unsigned char** endptr);
 void skip_utf8_bom(void* fp);

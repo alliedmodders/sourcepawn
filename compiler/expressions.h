@@ -24,7 +24,6 @@
 #ifndef am_sourcepawn_compiler_sc3_h
 #define am_sourcepawn_compiler_sc3_h
 
-#include "amx.h"
 #include "parse-node.h"
 #include "sc.h"
 
