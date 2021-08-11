@@ -1208,8 +1208,8 @@ RttiBuilder::encode_signature(symbol* sym)
     for (arginfo* arg = &sym->function()->args[0]; arg->ident; arg++) {
         int tag = arg->tag;
         int numdim = arg->numdim;
-        if (arg->numdim && arg->idxtag[numdim - 1]) {
-            int last_tag = arg->idxtag[numdim - 1];
+        if (arg->numdim && arg->enum_struct_tag) {
+            int last_tag = arg->enum_struct_tag;
             Type* last_type = gTypes.find(last_tag);
             if (last_type->isEnumStruct()) {
                 tag = last_tag;

@@ -1219,7 +1219,6 @@ Parser::parse_post_dims(typeinfo_t* type)
             break;
         }
 
-        type->idxtag[type->numdim] = 0;
         type->dim[type->numdim] = 0;
 
         if (matchtoken(']')) {
