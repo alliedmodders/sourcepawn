@@ -46,7 +46,7 @@ void delete_symbol(symbol* root, symbol* sym);
 void markusage(symbol* sym, int usage);
 symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag);
 symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
-                    int numdim, int idxtag[]);
+                    int numdim, int semantic_tag);
 int findnamedarg(arginfo* arg, sp::Atom* name);
 symbol* find_enumstruct_field(Type* type, sp::Atom* name);
 sp::Atom* operator_symname(const char* opername, int tag1, int tag2, int numtags,

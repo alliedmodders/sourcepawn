@@ -2106,8 +2106,6 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                         error(pos_, 47); // array sizes must match
                         return false;
                     }
-                    if (!matchtag(arg->idxtag[level], sym->x.tags.index, MATCHTAG_SILENT))
-                        error(pos_, 229, sym->name()); // index tag mismatch
                     sym = sym->array_child();
                     level++;
                 }
@@ -2117,7 +2115,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                     error(pos_, 47); // array sizes must match
                     return false;
                 }
-                if (!matchtag(arg->idxtag[level], sym->x.tags.index, MATCHTAG_SILENT)) {
+                if (!matchtag(arg->enum_struct_tag, sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
                     if (arg->tag != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
                         error(pos_, 229, sym->name());
@@ -2512,7 +2510,10 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         int level = sub->dim.array.level;
         for (array_.numdim = 0; array_.numdim <= level; array_.numdim++) {
             array_.dim[array_.numdim] = (int)sub->dim.array.length;
-            array_.idxtag[array_.numdim] = sub->x.tags.index;
+            if (sub->x.tags.index) {
+                array_.tag = 0;
+                array_.declared_tag = sub->x.tags.index;
+            }
             if (array_.numdim < level) {
                 sub = sub->array_child();
                 assert(sub != NULL);
@@ -2543,7 +2544,8 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         for (argcount = 0; curfunc->function()->args[argcount].ident != 0; argcount++)
             /* nothing */;
         sub = addvariable(curfunc->name(), (argcount + 3) * sizeof(cell), iREFARRAY,
-                          sGLOBAL, curfunc->tag, array_.dim, array_.numdim, array_.idxtag);
+                          sGLOBAL, curfunc->tag, array_.dim, array_.numdim,
+                          array_.enum_struct_tag());
         sub->set_parent(curfunc);
         curfunc->set_array_return(sub);
     }
@@ -3029,8 +3031,8 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
         arg.is_const = argsym->is_const;
         arg.tag = argsym->tag;
         arg.numdim = typeinfo.numdim;
+        arg.enum_struct_tag = typeinfo.enum_struct_tag();
         memcpy(arg.dim, typeinfo.dim, sizeof(arg.dim));
-        memcpy(arg.idxtag, typeinfo.idxtag, sizeof(arg.idxtag));
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
             if (var->Analyze(sc) && var->init_rhs())

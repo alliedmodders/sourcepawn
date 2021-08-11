@@ -1187,7 +1187,7 @@ rewrite_type_for_enum_struct(typeinfo_t* info)
 
     info->tag = 0;
     info->dim[info->numdim] = enum_type->addr();
-    info->idxtag[info->numdim] = enum_type->tag;
+    assert(info->declared_tag = enum_type->tag);
 
     // Note that the size here is incorrect. It's fixed up in initials() by
     // parse_var_decl. Unfortunately type->size is difficult to remove because
@@ -2009,10 +2009,10 @@ argcompare(arginfo* a1, arginfo* a2)
         result = a1->tag == a2->tag;
     if (result)
         result = a1->numdim == a2->numdim; /* array dimensions & index tags */
+    if (result)
+        result = a1->enum_struct_tag == a2->enum_struct_tag;
     for (level = 0; result && level < a1->numdim; level++)
         result = a1->dim[level] == a2->dim[level];
-    for (level = 0; result && level < a1->numdim; level++)
-        result = a1->idxtag[level] == a2->idxtag[level];
     if (result)
         result = !!a1->def == !!a2->def; /* availability of default value */
     if (a1->def) {

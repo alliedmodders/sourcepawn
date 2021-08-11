@@ -333,7 +333,7 @@ VarDecl::Bind(SemaContext& sc)
                 ident = iREFARRAY;
 
             sym_ = addvariable(name_->chars(), 0, ident, vclass_, type_.tag, type_.dim,
-                               type_.numdim, type_.idxtag);
+                               type_.numdim, type_.enum_struct_tag());
 
             if (ident == iVARARGS)
                 markusage(sym_, uREAD);
@@ -680,7 +680,6 @@ FunctionInfo::Bind(SemaContext& sc)
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
             typeinfo.dim[0] = enum_type->addr();
-            typeinfo.idxtag[0] = *this_tag_;
             typeinfo.numdim = 1;
         } else {
             typeinfo.tag = *this_tag_;

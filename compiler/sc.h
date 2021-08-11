@@ -82,8 +82,7 @@ struct DefaultArg {
 
 struct arginfo { /* function argument info */
     arginfo()
-      : dim(),
-        idxtag()
+      : dim()
     {}
     arginfo(const arginfo& arg) = delete;
     arginfo(arginfo&& other) = default;
@@ -94,8 +93,8 @@ struct arginfo { /* function argument info */
     char ident = 0;
     bool is_const = false;
     int tag = 0;
+    int enum_struct_tag = 0;
     int dim[sDIMEN_MAX];
-    int idxtag[sDIMEN_MAX];
     int numdim = 0;
     std::unique_ptr<DefaultArg> def;
 };

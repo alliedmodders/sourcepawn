@@ -448,7 +448,7 @@ addsym(const char* name, cell addr, int ident, int vclass, int tag)
 
 symbol*
 addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
-            int idxtag[])
+            int semantic_tag)
 {
     symbol* sym;
 
@@ -471,7 +471,7 @@ addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim
             top->defined = true;
             top->dim.array.length = dim[level];
             top->dim.array.level = (short)(numdim - level - 1);
-            top->x.tags.index = idxtag[level];
+            top->x.tags.index = (level == numdim - 1) ? semantic_tag : 0;
             top->set_parent(parent);
             if (parent) {
                 parent->set_array_child(top);

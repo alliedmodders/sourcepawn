@@ -62,7 +62,6 @@ struct typeinfo_t {
     // Array information.
     int numdim;
     int dim[sDIMEN_MAX];
-    int idxtag[sDIMEN_MAX];
 
     // Either null or an array of size |numdim|, pool-allocated.
     Expr** dim_exprs;
@@ -78,6 +77,9 @@ struct typeinfo_t {
     // rewritten for desugaring.
     int declared_tag;
 
+    int enum_struct_tag() const {
+        return tag ? 0 : declared_tag;
+    }
     int semantic_tag() const {
         return tag ? tag : declared_tag;
     }

@@ -46,7 +46,10 @@ TypeInfoFromSymbol(symbol* sym)
             for (symbol* iter = sym; iter; iter = iter->array_child()) {
                 if (iter->x.tags.index && iter->dim.array.level == 0)
                     type.declared_tag = iter->x.tags.index;
-                type.idxtag[type.numdim] = iter->x.tags.index;
+                if (iter->x.tags.index) {
+                    type.declared_tag = iter->x.tags.index;
+                    type.tag = 0;
+                }
                 type.dim[type.numdim] = iter->dim.array.length;
                 type.numdim++;
             }
