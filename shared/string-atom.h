@@ -46,6 +46,9 @@ class Atom
   const char* chars() const {
     return str_.c_str();
   }
+  const std::string& str() const {
+    return str_;
+  }
 
  private:
   std::string str_;

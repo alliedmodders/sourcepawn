@@ -892,27 +892,6 @@ setconstants(void)
     add_constant("debug", debug, sGLOBAL, 0);
 }
 
-// Consumes a line, returns FALSE if EOF hit.
-static int
-consume_line()
-{
-    int val;
-    const char* str;
-
-    // First check for EOF.
-    if (lex(&val, &str) == 0)
-        return FALSE;
-    lexpush();
-
-    while (!matchtoken(tTERM)) {
-        // Check for EOF.
-        if (lex(&val, &str) == 0)
-            return FALSE;
-    }
-
-    return TRUE;
-}
-
 int
 parse_new_typename(const token_t* tok)
 {
@@ -976,7 +955,7 @@ parse_new_typename(const token_t* tok, int* tagp)
     return true;
 }
 
-static int
+int
 parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
 {
     token_t tok;
@@ -1439,11 +1418,10 @@ parse_inline_function(methodmap_t* map, const typeinfo_t* type, sp::Atom* name, 
     declinfo_t decl;
     memset(&decl, 0, sizeof(decl));
 
-    if (is_ctor) {
+    if (is_ctor)
         make_primitive(&decl.type, map->tag);
-    } else {
+    else
         decl.type = *type;
-    }
     decl.type.is_new = TRUE;
 
     const int* thistag = NULL;
@@ -1548,222 +1526,6 @@ parse_property_accessor(const typeinfo_t* type, methodmap_t* map, methodmap_meth
     else
         require_newline(TerminatorPolicy::Newline);
     return TRUE;
-}
-
-static std::unique_ptr<methodmap_method_t>
-parse_property(methodmap_t* map)
-{
-    typeinfo_t type;
-    token_ident_t ident;
-
-    memset(&type, 0, sizeof(type));
-    if (!parse_new_typeexpr(&type, NULL, 0))
-        return NULL;
-    if (type.numdim > 0)
-        error(82);
-
-    if (!needsymbol(&ident))
-        return NULL;
-
-    auto method = std::make_unique<methodmap_method_t>(map);
-    method->name = ident.name;
-    method->target = NULL;
-    method->getter = NULL;
-    method->setter = NULL;
-
-    if (!needtoken('{'))
-        return nullptr;
-
-    while (!matchtoken('}')) {
-        if (!parse_property_accessor(&type, map, method.get()))
-            lexclr(TRUE);
-    }
-
-    require_newline(TerminatorPolicy::Newline);
-    return method;
-}
-
-static std::unique_ptr<methodmap_method_t>
-parse_method(methodmap_t* map)
-{
-    int maybe_ctor = 0;
-    int is_ctor = 0;
-    int is_native = 0;
-    bool is_static = false;
-    const char* spectype = layout_spec_name(map->spec);
-
-    if (matchtoken(tSTATIC))
-        is_static = true;
-
-    // This stores the name of the method (for destructors, we add a ~).
-    token_ident_t ident = {};
-
-    typeinfo_t type;
-    memset(&type, 0, sizeof(type));
-
-    // Destructors cannot be static.
-    int got_symbol;
-
-    is_native = matchtoken(tNATIVE);
-    got_symbol = matchsymbol(&ident);
-
-    if (matchtoken('~'))
-        error(118);
-
-    if (got_symbol && matchtoken('(')) {
-        // ::= ident '('
-
-        // Push the '(' token back for declargs().
-        maybe_ctor = TRUE;
-        lexpush();
-    } else {
-        // The first token of the type expression is either the symbol we
-        // predictively parsed earlier, or it's been pushed back into the
-        // lex buffer.
-        const token_t* first = got_symbol ? &ident.tok : nullptr;
-
-        // Parse for type expression, priming it with the token we predicted
-        // would be an identifier.
-        if (!parse_new_typeexpr(&type, first, 0))
-            return nullptr;
-
-        // Now, we should get an identifier.
-        if (!needsymbol(&ident))
-            return nullptr;
-
-        // If the identifier is a constructor, error, since the user specified
-        // a type.
-        if (ident.name == map->name)
-            error(99, "constructor");
-    }
-
-    // Do some preliminary verification of ctor names.
-    if (maybe_ctor) {
-        if (ident.name == map->name)
-            is_ctor = TRUE;
-        else
-            report(114) << "constructor" << spectype << map->name;
-    }
-
-    if (is_ctor && is_static) {
-        // Constructors may not be static.
-        error(175);
-    }
-
-    // Natives will hit a similar error on their own, so we only check numdim
-    // if we're not parsing a native.
-    if (!is_native && type.numdim > 0)
-        error(83);
-
-    symbol* target = parse_inline_function(map, &type, ident.name, is_native, is_ctor, is_static);
-
-    if (!target)
-        return nullptr;
-
-    auto method = std::make_unique<methodmap_method_t>(map);
-    method->name = ident.name;
-    method->target = target;
-    method->is_static = is_static;
-
-    // If the symbol is a constructor, we bypass the initial argument checks.
-    if (is_ctor) {
-        if (map->ctor)
-            report(113) << map->name;
-
-        map->ctor = method.get();
-    }
-
-    if (target->native)
-        require_newline(TerminatorPolicy::Semicolon);
-    else
-        require_newline(TerminatorPolicy::Newline);
-    return method;
-}
-
-/**
- * domethodmap - declare a method map for OO-ish syntax.
- *
- */
-void
-domethodmap(LayoutSpec spec)
-{
-    token_ident_t ident;
-    methodmap_t* parent = NULL;
-    const char* spectype = layout_spec_name(spec);
-
-    // methodmap ::= "methodmap" symbol ("<" symbol)? "{" methodmap-body "}"
-    sp::Atom* mapname;
-    if (needsymbol(&ident)) {
-        if (!isupper(*ident.name->chars()))
-            error(109, spectype);
-        mapname = ident.name;
-    } else {
-        static int unknown_methodmap_num = 0;
-        auto tempname = ke::StringPrintf("methodmap_%d", ++unknown_methodmap_num);
-        mapname = gAtoms.add(tempname);
-    }
-
-    LayoutSpec old_spec = deduce_layout_spec_by_name(mapname->chars());
-    bool can_redef = can_redef_layout_spec(spec, old_spec);
-    if (!can_redef)
-        report(110) << mapname << layout_spec_name(old_spec);
-
-    int old_nullable = matchtoken(tNULLABLE);
-
-    if (matchtoken('<') && needsymbol(&ident)) {
-        if ((parent = methodmap_find_by_name(ident.name)) == NULL) {
-            report(102) << spectype << ident.name;
-        } else if (parent->spec != spec) {
-            error(129);
-        }
-    }
-
-    methodmap_t* map = methodmap_add(parent, spec, mapname);
-
-    if (old_nullable)
-        map->keyword_nullable = old_nullable;
-
-    declare_methodmap_symbol(map, can_redef);
-
-    needtoken('{');
-    while (!matchtoken('}')) {
-        token_t tok;
-        std::unique_ptr<methodmap_method_t> method;
-
-        if (lextok(&tok) == tPUBLIC) {
-            method = parse_method(map);
-        } else if (tok.id == tSYMBOL && strcmp(tok.str, "property") == 0) {
-            auto pos = current_pos();
-            method = parse_property(map);
-            if (method && !(method->getter || method->setter)) {
-                error(pos, 57, method->name);
-                continue;
-            }
-        } else {
-            error(124);
-        }
-
-        if (method) {
-            // Check that a method with this name doesn't already exist.
-            for (const auto& other : map->methods) {
-                if (other->name == method->name) {
-                    error(103, method->name, spectype);
-                    method = nullptr;
-                    break;
-                }
-            }
-        }
-
-        if (!method) {
-            if (!consume_line())
-                return;
-            continue;
-        }
-
-        map->methods.push_back(std::move(method));
-    }
-
-    require_newline(TerminatorPolicy::NewlineOrSemicolon);
 }
 
 /**

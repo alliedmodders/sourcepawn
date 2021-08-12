@@ -1528,6 +1528,9 @@ class FunctionInfo : public PoolObject
     symbol* sym() const { return sym_; }
     const token_pos_t& pos() const { return pos_; }
 
+    const typeinfo_t& type() const { return decl_.type; }
+    typeinfo_t& mutable_type() { return decl_.type; }
+
   private:
     bool AnalyzeArgs(SemaContext& sc);
 
@@ -1554,6 +1557,10 @@ class FunctionInfo : public PoolObject
 class FunctionDecl : public Decl
 {
   public:
+    explicit FunctionDecl(const token_pos_t& pos, sp::Atom* atom, FunctionInfo* info)
+      : Decl(pos, atom),
+        info_(info)
+    {}
     explicit FunctionDecl(const token_pos_t& pos, FunctionInfo* info)
       : Decl(pos, info->name()),
         info_(info)
@@ -1600,4 +1607,49 @@ class EnumStructDecl : public Decl
   private:
     PoolList<FunctionDecl*> methods_;
     PoolList<EnumStructField> fields_;
+};
+
+struct MethodmapProperty : public PoolObject {
+    token_pos_t pos;
+    typeinfo_t type;
+    sp::Atom* name = nullptr;
+    FunctionInfo* getter = nullptr;
+    FunctionInfo* setter = nullptr;
+};
+
+struct MethodmapMethod : public PoolObject {
+    bool is_static = false;
+    FunctionDecl* decl = nullptr;
+};
+
+class MethodmapDecl : public Decl
+{
+  public:
+    explicit MethodmapDecl(const token_pos_t& pos, sp::Atom* name, bool nullable, sp::Atom* extends)
+      : Decl(pos, name),
+        nullable_(nullable),
+        extends_(extends)
+    {}
+
+    bool Bind(SemaContext& sc) override;
+    bool Analyze(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override;
+    void DoEmit(CodegenContext& cg) override;
+
+    PoolList<MethodmapProperty*>& properties() { return properties_; }
+    PoolList<MethodmapMethod*>& methods() { return methods_; }
+
+    void set_map(methodmap_t* map) { map_ = map; }
+
+  private:
+    bool BindGetter(SemaContext& sc, MethodmapProperty* prop);
+    bool BindSetter(SemaContext& sc, MethodmapProperty* prop);
+
+  private:
+    bool nullable_;
+    sp::Atom* extends_;
+    PoolList<MethodmapProperty*> properties_;
+    PoolList<MethodmapMethod*> methods_;
+
+    methodmap_t* map_ = nullptr;
 };

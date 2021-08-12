@@ -70,6 +70,10 @@ class Parser : public ExpressionParser
     Decl* parse_typeset();
     Decl* parse_using();
     Decl* parse_enumstruct();
+    Decl* parse_methodmap();
+    bool parse_methodmap_method(MethodmapDecl* map);
+    bool parse_methodmap_property(MethodmapDecl* map);
+    bool parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop);
 
     Stmt* parse_compound(bool sameline);
     Stmt* parse_local_decl(int tokid, bool autozero);
@@ -109,6 +113,8 @@ class Parser : public ExpressionParser
     Expr* parse_new_array(const token_pos_t& pos, int tag);
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
 
+    bool consume_line();
+
   private:
     bool in_loop_ = false;
 };
@@ -116,7 +122,7 @@ class Parser : public ExpressionParser
 // Implemented in parser.cpp.
 int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
 functag_t* parse_function_type();
-void domethodmap(LayoutSpec spec);
+int parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags);
 int parse_new_typename(const token_t* tok);
 int reparse_old_decl(declinfo_t* decl, int flags);
 int reparse_new_decl(declinfo_t* decl, int flags);

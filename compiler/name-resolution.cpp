@@ -20,6 +20,8 @@
 //
 //  Version: $Id$
 
+#include <unordered_set>
+
 #include <amtl/am-raii.h>
 
 #include "array-helpers.h"
@@ -625,7 +627,7 @@ SwitchStmt::Bind(SemaContext& sc)
 }
 
 bool
-FunctionInfo::Bind(SemaContext& sc)
+FunctionInfo::Bind(SemaContext& outer_sc)
 {
     if (name_ && name_->chars()[0] == PUBLIC_CHAR) {
         // :TODO: deprecate this syntax.
@@ -643,7 +645,7 @@ FunctionInfo::Bind(SemaContext& sc)
         sym_ = fetchfunc(name_->chars());
     }
 
-    sc.set_func(sym_);
+    SemaContext sc(sym_);
     auto guard = ke::MakeScopeGuard([&]() -> void {
         sc.set_func(nullptr);
     });
@@ -902,4 +904,129 @@ EnumStructDecl::DecorateInnerName(const token_pos_t& pos, sp::Atom* field_name)
 {
     auto full_name = ke::StringPrintf("%s::%s", name_->chars(), field_name->chars());
     return gAtoms.add(full_name);
+}
+
+bool
+MethodmapDecl::Bind(SemaContext& sc)
+{
+    AutoCountErrors errors;
+
+    std::unordered_set<sp::Atom*> seen;
+    for (const auto& prop : properties_) {
+        if (seen.count(prop->name)) {
+            report(prop->pos, 103) << prop->name << "methodmap";
+            continue;
+        }
+        seen.emplace(prop->name);
+
+        if (prop->type.numdim > 0) {
+            report(prop->pos, 82);
+            continue;
+        }
+
+        auto method = std::make_unique<methodmap_method_t>(map_);
+        method->name = prop->name;
+
+        if (prop->getter && BindGetter(sc, prop))
+            method->getter = prop->getter->sym();
+        if (prop->setter && BindSetter(sc, prop))
+            method->setter = prop->setter->sym();
+
+        if (method->getter || method->setter)
+            map_->methods.emplace_back(std::move(method));
+    }
+
+    for (const auto& method : methods_) {
+        if (seen.count(method->decl->name())) {
+            report(method->decl->pos(), 103) << method->decl->name() << "methodmap";
+            continue;
+        }
+        seen.emplace(method->decl->name());
+
+        bool is_ctor = false;
+        if (method->decl->name() == map_->name) {
+            // Constructors may not be static.
+            if (method->is_static) {
+                report(method->decl->pos(), 175);
+                continue;
+            }
+            if (map_->ctor) {
+                report(method->decl->pos(), 113) << method->decl->name();
+                continue;
+            }
+            is_ctor = true;
+
+            auto& type = method->decl->info()->mutable_type();
+            type.tag = map_->tag;
+            type.ident = iVARIABLE;
+            type.is_new = true;
+        } else if (method->decl->info()->type().ident == 0) {
+            // Parsed as a constructor, but not using the map name. This is illegal.
+            report(method->decl->pos(), 114) << "constructor" << "methodmap" << map_->name;
+            continue;
+        }
+
+        if (!method->is_static && !is_ctor)
+            method->decl->info()->set_this_tag(map_->tag);
+
+        if (!method->decl->Bind(sc))
+            continue;
+
+        auto m = std::make_unique<methodmap_method_t>(map_);
+        m->name = method->decl->name();
+        m->target = method->decl->sym();
+
+        if (is_ctor)
+            map_->ctor = m.get();
+        if (method->is_static)
+            m->is_static = true;
+
+        map_->methods.emplace_back(std::move(m));
+    }
+
+    map_->keyword_nullable = nullable_;
+
+    AutoErrorPos error_pos(pos_);
+    declare_methodmap_symbol(map_, true);
+
+    return errors.ok();
+}
+
+bool
+MethodmapDecl::BindGetter(SemaContext& sc, MethodmapProperty* prop)
+{
+    auto fun = prop->getter;
+
+    // There should be no extra arguments.
+    if (fun->args().size() > 0) {
+        report(fun->pos(), 127);
+        return false;
+    }
+
+    fun->set_this_tag(map_->tag);
+
+    return fun->Bind(sc);
+}
+
+bool
+MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
+{
+    auto fun = prop->setter;
+
+    // Must have one extra argument taking the return type.
+    if (fun->args().size() > 1) {
+        report(150) << pc_tagname(prop->type.tag);
+        return false;
+    }
+
+    auto decl = fun->args()[0].decl;
+    if (decl->type().ident != iVARIABLE || decl->init_rhs() || decl->type().tag != prop->type.tag)
+    {
+        report(150) << pc_tagname(prop->type.tag);
+        return false;
+    }
+
+    fun->set_this_tag(map_->tag);
+
+    return fun->Bind(sc);
 }

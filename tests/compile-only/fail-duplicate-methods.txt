@@ -1,1 +1,1 @@
-(4) : error 021: symbol already defined: "X.X2"
+(4) : error 103: X2 was already defined on this methodmap

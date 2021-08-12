@@ -163,6 +163,12 @@ static inline MessageBuilder report(symbol* sym, int number) {
     return MessageBuilder(sym, number);
 }
 
+#ifdef NDEBUG
+static inline void break_on_error(int) {}
+#else
+void break_on_error(int number);
+#endif
+
 int pc_enablewarning(int number, int enable);
 
 extern bool sc_one_error_per_statement;

@@ -111,7 +111,7 @@ Parser::parse()
                     decl = parse_enum(sGLOBAL);
                 break;
             case tMETHODMAP:
-                domethodmap(Layout_MethodMap);
+                decl = parse_methodmap();
                 break;
             case tUSING:
                 decl = parse_using();
@@ -1820,3 +1820,254 @@ Parser::parse_args(FunctionInfo* info)
     needtoken(')');
     errorset(sRESET, 0);
 }
+
+Decl*
+Parser::parse_methodmap()
+{
+    auto pos = current_pos();
+
+    token_ident_t ident;
+    if (!needsymbol(&ident))
+        ident.name = gAtoms.add("__unknown__");
+
+    auto name_atom = ident.name;
+    if (!isupper(name_atom->chars()[0]))
+        report(109) << "methodmap";
+
+    auto old_spec = deduce_layout_spec_by_name(name_atom->chars());
+    if (!can_redef_layout_spec(Layout_MethodMap, old_spec))
+        report(110) << name_atom << layout_spec_name(old_spec);
+
+    bool nullable = matchtoken(tNULLABLE);
+
+    sp::Atom* extends = nullptr;
+    methodmap_t* extends_map = nullptr;
+    if (matchtoken('<') && needsymbol(&ident)) {
+        extends = ident.name;
+        if ((extends_map = methodmap_find_by_name(extends)) == nullptr)
+            report(102) << "methodmap" << extends;
+    }
+
+    auto decl = new MethodmapDecl(pos, name_atom, nullable, extends);
+
+    // Because tags are deduced during parsing, we need to pre-populate the methodmap tag.
+    auto impl = methodmap_add(extends_map, Layout_MethodMap, name_atom);
+    decl->set_map(impl);
+
+    gTypes.defineMethodmap(name_atom->chars(), impl);
+
+    needtoken('{');
+    while (!matchtoken('}')) {
+        token_t tok;
+        bool ok = false;
+        if (lextok(&tok) == tPUBLIC) {
+            ok = parse_methodmap_method(decl);
+        } else if (tok.id == tSYMBOL && strcmp(tok.str, "property") == 0) {
+            ok = parse_methodmap_property(decl);
+        } else {
+            error(124);
+        }
+        if (!ok) {
+            if (!consume_line())
+                return decl;
+            continue;
+        }
+    }
+
+    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    return decl;
+}
+
+bool
+Parser::parse_methodmap_method(MethodmapDecl* map)
+{
+    auto pos = current_pos();
+
+    bool is_static = matchtoken(tSTATIC);
+    bool is_native = matchtoken(tNATIVE);
+
+    token_ident_t ident;
+    bool got_symbol = matchsymbol(&ident);
+
+    if (matchtoken('~'))
+        error(118);
+
+    declinfo_t ret_type = {};
+
+    bool is_ctor = false;
+    if (got_symbol && matchtoken('(')) {
+        // ::= ident '('
+
+        // Push the '(' token back for parse_args().
+        is_ctor = true;
+        lexpush();
+
+        // Force parser to require { for the method body.
+        ret_type.type.is_new = true;
+    } else {
+        // The first token of the type expression is either the symbol we
+        // predictively parsed earlier, or it's been pushed back into the
+        // lex buffer.
+        const token_t* first = got_symbol ? &ident.tok : nullptr;
+
+        // Parse for type expression, priming it with the token we predicted
+        // would be an identifier.
+        if (!parse_new_typeexpr(&ret_type.type, first, 0))
+            return false;
+
+        // Now, we should get an identifier.
+        if (!needsymbol(&ident))
+            return false;
+
+        ret_type.type.ident = iVARIABLE;
+    }
+
+    // Build a new symbol. Construct a temporary name including the class.
+    auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), ident.name->chars());
+    auto fqn = gAtoms.add(fullname);
+
+    auto fun = new FunctionInfo(pos, ret_type);
+    fun->set_name(fqn);
+
+    if (is_native)
+        fun->set_is_native();
+    else
+        fun->set_is_stock();
+
+    ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
+    if (!parse_function(fun, is_native ? tMETHODMAP : 0))
+        return false;
+
+    // Use the short name for the function decl
+    auto method = new MethodmapMethod;
+    method->is_static = is_static;
+    method->decl = new FunctionDecl(pos, ident.name, fun);
+    map->methods().emplace_back(method);
+
+    if (is_native)
+        require_newline(TerminatorPolicy::Semicolon);
+    else
+        require_newline(TerminatorPolicy::Newline);
+    return true;
+}
+
+bool
+Parser::parse_methodmap_property(MethodmapDecl* map)
+{
+    auto prop = new MethodmapProperty;
+    prop->pos = current_pos();
+
+    if (!parse_new_typeexpr(&prop->type, nullptr, 0))
+        return false;
+
+    token_ident_t ident;
+    if (!needsymbol(&ident))
+        return false;
+    if (!needtoken('{'))
+        return false;
+
+    prop->name = ident.name;
+
+    while (!matchtoken('}')) {
+        if (!parse_methodmap_property_accessor(map, prop))
+            lexclr(TRUE);
+    }
+
+    map->properties().emplace_back(prop);
+
+    require_newline(TerminatorPolicy::Newline);
+    return true;
+}
+
+bool
+Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop)
+{
+    bool is_native = false;
+    auto pos = current_pos();
+
+    needtoken(tPUBLIC);
+
+    token_ident_t ident;
+    if (!matchsymbol(&ident)) {
+        if (!matchtoken(tNATIVE)) {
+            report(125);
+            return false;
+        }
+        is_native = true;
+        if (!needsymbol(&ident))
+            return false;
+    }
+
+    bool getter = (strcmp(ident.name->chars(), "get") == 0);
+    bool setter = (strcmp(ident.name->chars(), "set") == 0);
+
+    if (!getter && !setter) {
+        report(125);
+        return false;
+    }
+
+    declinfo_t ret_type = {};
+    if (getter) {
+        ret_type.type = prop->type;
+    } else {
+        ret_type.type.tag = pc_tag_void;
+        ret_type.type.ident = iVARIABLE;
+    }
+
+    auto fun = new FunctionInfo(pos, ret_type);
+    std::string tmpname = map->name()->str() + "." + prop->name->str();
+    if (getter)
+        tmpname += ".get";
+    else
+        tmpname += ".set";
+    fun->set_name(gAtoms.add(tmpname));
+
+    if (is_native)
+        fun->set_is_native();
+    else
+        fun->set_is_stock();
+
+    if (!parse_function(fun, is_native ? tMETHODMAP : 0))
+        return false;
+
+    if (getter && prop->getter) {
+        report(126) << "getter" << prop->name;
+        return false;
+    }
+    if (setter && prop->setter) {
+        report(126) << "setter" << prop->name;
+        return false;
+    }
+
+    if (getter)
+        prop->getter = fun;
+    else
+        prop->setter = fun;
+
+    if (is_native)
+        require_newline(TerminatorPolicy::Semicolon);
+    else
+        require_newline(TerminatorPolicy::Newline);
+    return true;
+}
+
+// Consumes a line, returns FALSE if EOF hit.
+bool
+Parser::consume_line()
+{
+    int val;
+    const char* str;
+
+    // First check for EOF.
+    if (lex(&val, &str) == 0)
+        return false;
+    lexpush();
+
+    while (!matchtoken(tTERM)) {
+        // Check for EOF.
+        if (lex(&val, &str) == 0)
+            return false;
+    }
+    return true;
+}
+

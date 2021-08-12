@@ -1,1 +1,1 @@
-(4) : error 021: symbol already defined: "Crab.Crab.get"
+(4) : error 126: getter for Crab already exists
