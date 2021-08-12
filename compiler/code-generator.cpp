@@ -1445,5 +1445,18 @@ void
 EnumStructDecl::DoEmit(CodegenContext& cg)
 {
     for (const auto& fun : methods_)
-        fun->DoEmit(cg);
+        fun->Emit(cg);
+}
+
+void
+MethodmapDecl::DoEmit(CodegenContext& cg)
+{
+    for (const auto& prop : properties_) {
+        if (prop->getter)
+            prop->getter->Emit(cg);
+        if (prop->setter)
+            prop->setter->Emit(cg);
+    }
+    for (const auto& method : methods_)
+        method->decl->Emit(cg);
 }

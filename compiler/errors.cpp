@@ -360,6 +360,8 @@ report_error(ErrorReport&& report)
             return;
     }
 
+    break_on_error(report.number);
+
     sErrorList.emplace_back(std::move(report));
 
     switch (sErrorList.back().type) {
@@ -478,3 +480,9 @@ pc_enablewarning(int number, int enable)
 
     return TRUE;
 }
+
+#ifndef NDEBUG
+void break_on_error(int number)
+{
+}
+#endif

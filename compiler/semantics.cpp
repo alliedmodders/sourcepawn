@@ -2861,8 +2861,10 @@ FunctionInfo::IsVariadic() const
 }
 
 bool
-FunctionInfo::Analyze(SemaContext& sc)
+FunctionInfo::Analyze(SemaContext& outer_sc)
 {
+    SemaContext sc(sym_);
+
     if (sym_->skipped && !this_tag_)
         return true;
 
@@ -2911,6 +2913,10 @@ FunctionInfo::Analyze(SemaContext& sc)
         error(21, sym_->name());
 
     if (sym_->native) {
+        if (decl_.type.numdim > 0) {
+            report(83);
+            return false;
+        }
         sym_->retvalue = true;
         return true;
     }
@@ -3216,4 +3222,32 @@ EnumStructDecl::ProcessUses(SemaContext& sc)
 {
     for (const auto& fun : methods_)
         fun->ProcessUses(sc);
+}
+
+bool
+MethodmapDecl::Analyze(SemaContext& sc)
+{
+    bool ok = true;
+    for (const auto& prop : properties_) {
+        if (prop->getter)
+            ok &= prop->getter->Analyze(sc);
+        if (prop->setter)
+            ok &= prop->setter->Analyze(sc);
+    }
+    for (const auto& method : methods_)
+        ok &= method->decl->Analyze(sc);
+    return ok;
+}
+
+void
+MethodmapDecl::ProcessUses(SemaContext& sc)
+{
+    for (const auto& prop : properties_) {
+        if (prop->getter)
+            prop->getter->ProcessUses(sc);
+        if (prop->setter)
+            prop->setter->ProcessUses(sc);
+    }
+    for (const auto& method : methods_)
+        method->decl->ProcessUses(sc);
 }
