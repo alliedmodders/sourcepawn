@@ -82,6 +82,7 @@ class Parser : public ExpressionParser
     Stmt* parse_switch();
     void parse_case(SwitchStmt* sw);
     Stmt* parse_pragma_unused();
+    TypedefInfo* parse_function_type();
 
     bool parse_function(FunctionInfo* info, int tokid);
     void parse_args(FunctionInfo* info);
@@ -121,7 +122,6 @@ class Parser : public ExpressionParser
 
 // Implemented in parser.cpp.
 int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
-functag_t* parse_function_type();
 int parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags);
 int parse_new_typename(const token_t* tok);
 int reparse_old_decl(declinfo_t* decl, int flags);

@@ -396,10 +396,18 @@ class StructDecl : public Decl
     PoolList<StructField> fields_;
 };
 
+struct TypedefInfo : public PoolObject {
+    token_pos_t pos;
+    int ret_tag;
+    PoolList<declinfo_t*> args;
+
+    functag_t* ToFunctag(SemaContext& sc) const;
+};
+
 class TypedefDecl : public Decl
 {
   public:
-    explicit TypedefDecl(const token_pos_t& pos, sp::Atom* name, functag_t* type)
+    explicit TypedefDecl(const token_pos_t& pos, sp::Atom* name, TypedefInfo* type)
       : Decl(pos, name),
         type_(type)
     {}
@@ -408,7 +416,7 @@ class TypedefDecl : public Decl
     void ProcessUses(SemaContext& sc) override {}
 
   private:
-    functag_t* type_;
+    TypedefInfo* type_;
 };
 
 // Unsafe typeset - only supports function types. This is a transition hack for SP2.
@@ -422,12 +430,12 @@ class TypesetDecl : public Decl
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
 
-    PoolList<functag_t*>& types() {
+    PoolList<TypedefInfo*>& types() {
         return types_;
     }
 
   private:
-    PoolList<functag_t*> types_;
+    PoolList<TypedefInfo*> types_;
 };
 
 // "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()
