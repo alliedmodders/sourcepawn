@@ -209,7 +209,7 @@ TypedefDecl::Bind(SemaContext& sc)
     }
 
     funcenum_t* def = funcenums_add(name_);
-    functags_add(def, type_);
+    functags_add(def, type_->ToFunctag(sc));
     return true;
 }
 
@@ -218,6 +218,32 @@ UsingDecl::Bind(SemaContext& sc)
 {
     declare_handle_intrinsics();
     return true;
+}
+
+functag_t*
+TypedefInfo::ToFunctag(SemaContext& sc) const
+{
+    auto ft = new functag_t();
+    ft->ret_tag = ret_tag;
+
+    for (auto& arg : args) {
+        if (arg->type.ident == iARRAY)
+            ResolveArraySize(sc, pos, &arg->type, sARGUMENT);
+
+        funcarg_t fa = {};
+        fa.tag = arg->type.tag;
+        fa.dimcount = arg->type.numdim;
+        memcpy(fa.dims, arg->type.dim, fa.dimcount * sizeof(fa.dims[0]));
+        fa.fconst = arg->type.is_const;
+        if (arg->type.ident == iARRAY)
+            fa.ident = iREFARRAY;
+        else
+            fa.ident = arg->type.ident;
+        if (fa.ident != iREFARRAY && fa.ident != iARRAY)
+            assert(fa.dimcount == 0);
+        ft->args.emplace_back(fa);
+    }
+    return ft;
 }
 
 bool
@@ -231,7 +257,7 @@ TypesetDecl::Bind(SemaContext& sc)
 
     funcenum_t* def = funcenums_add(name_);
     for (const auto& type : types_)
-        functags_add(def, type);
+        functags_add(def, type->ToFunctag(sc));
     return true;
 }
 
@@ -911,6 +937,9 @@ MethodmapDecl::Bind(SemaContext& sc)
 {
     AutoCountErrors errors;
 
+    AutoErrorPos error_pos(pos_);
+    declare_methodmap_symbol(map_, true);
+
     std::unordered_set<sp::Atom*> seen;
     for (const auto& prop : properties_) {
         if (seen.count(prop->name)) {
@@ -985,9 +1014,6 @@ MethodmapDecl::Bind(SemaContext& sc)
     }
 
     map_->keyword_nullable = nullable_;
-
-    AutoErrorPos error_pos(pos_);
-    declare_methodmap_symbol(map_, true);
 
     return errors.ok();
 }

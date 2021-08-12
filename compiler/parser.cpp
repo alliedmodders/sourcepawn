@@ -2071,3 +2071,51 @@ Parser::consume_line()
     return true;
 }
 
+/**
+ * function-type ::= "(" function-type-inner ")"
+ *                 | function-type-inner
+ * function-type-inner ::= "function" type-expr "(" new-style-args ")"
+ */
+TypedefInfo*
+Parser::parse_function_type()
+{
+    int lparen = matchtoken('(');
+    if (!needtoken(tFUNCTION))
+        return nullptr;
+
+    auto info = new TypedefInfo;
+    info->pos = current_pos();
+
+    parse_new_typename(nullptr, &info->ret_tag);
+
+    needtoken('(');
+
+    while (!matchtoken(')')) {
+        auto decl = gPoolAllocator.alloc<declinfo_t>();
+        decl->type.ident = iVARIABLE;
+
+        parse_new_decl(decl, nullptr, DECLFLAG_ARGUMENT);
+
+        // Eat optional symbol name.
+        matchtoken(tSYMBOL);
+
+        info->args.emplace_back(decl);
+
+        if (!matchtoken(',')) {
+            needtoken(')');
+            break;
+        }
+    }
+
+    // Error once when we're past max args.
+    if (info->args.size() >= SP_MAX_EXEC_PARAMS)
+        report(45);
+
+    if (lparen)
+        needtoken(')');
+
+    require_newline(TerminatorPolicy::Semicolon);
+    errorset(sRESET, 0);
+    return info;
+}
+
