@@ -2119,3 +2119,540 @@ Parser::parse_function_type()
     return info;
 }
 
+// Parse a declaration.
+//
+// Grammar for named declarations is:
+//    "const"? symbol ('[' ']')* '&'? symbol
+//  | "const"? label? '&'? symbol '[' ']'
+//
+bool
+Parser::parse_decl(declinfo_t* decl, int flags)
+{
+    token_ident_t ident;
+
+    memset(decl, 0, sizeof(*decl));
+
+    decl->type.ident = iVARIABLE;
+
+    // Match early varargs as old decl.
+    if (lexpeek(tELLIPS))
+        return parse_old_decl(decl, flags);
+
+    // Must attempt to match const first, since it's a common prefix.
+    if (matchtoken(tCONST))
+        decl->type.is_const = true;
+
+    // Sometimes we know ahead of time whether the declaration will be old, for
+    // example, if preceded by tNEW or tDECL.
+    if (flags & DECLFLAG_OLD)
+        return parse_old_decl(decl, flags);
+    if (flags & DECLFLAG_NEW)
+        return parse_new_decl(decl, NULL, flags);
+
+    // If parsing an argument, there are two simple checks for whether this is a
+    // new or old-style declaration.
+    if ((flags & DECLFLAG_ARGUMENT) && (lexpeek('&') || lexpeek('{')))
+        return parse_old_decl(decl, flags);
+
+    // Another dead giveaway is there being a label or typeless operator.
+    if (lexpeek(tLABEL) || lexpeek(tOPERATOR))
+        return parse_old_decl(decl, flags);
+
+    // Otherwise, we have to eat a symbol to tell.
+    if (matchsymbol(&ident)) {
+        if (lexpeek(tSYMBOL) || lexpeek(tOPERATOR) || lexpeek('&') || lexpeek(tELLIPS)) {
+            // A new-style declaration only allows array dims or a symbol name, so
+            // this is a new-style declaration.
+            return parse_new_decl(decl, &ident.tok, flags);
+        }
+
+        if ((flags & DECLMASK_NAMED_DECL) && matchtoken('[')) {
+            // Oh no - we have to parse array dims before we can tell what kind of
+            // declarator this is. It could be either:
+            //    "x[] y" (new-style), or
+            //    "y[],"  (old-style)
+            parse_post_array_dims(decl, flags);
+
+            if (matchtoken(tSYMBOL) || matchtoken('&')) {
+                // This must be a newdecl, "x[] y" or "x[] &y", the latter of which
+                // is illegal, but we flow it through the right path anyway.
+                lexpush();
+                fix_mispredicted_postdims(decl);
+                return parse_new_decl(decl, &ident.tok, flags);
+            }
+
+            if (sc_require_newdecls)
+                error(147);
+
+            // The most basic - "x[]" and that's it. Well, we know it has no tag and
+            // we know its name. We might as well just complete the entire decl.
+            decl->name = ident.name;
+            decl->type.tag = 0;
+            return true;
+        }
+
+        // Give the symbol back to the lexer. This is an old decl.
+        lexpush();
+        return parse_old_decl(decl, flags);
+    }
+
+    // All else has failed. Probably got a type keyword. New-style.
+    return parse_new_decl(decl, NULL, flags);
+}
+
+void
+Parser::fix_mispredicted_postdims(declinfo_t* decl)
+{
+    assert(decl->type.has_postdims);
+    assert(decl->type.ident == iARRAY);
+
+    decl->type.has_postdims = false;
+
+    // We got a declaration like:
+    //      int[3] x;
+    //
+    // This is illegal, so report it now, and strip dim_exprs.
+    if (decl->type.dim_exprs) {
+        for (int i = 0; i < decl->type.numdim; i++) {
+            if (decl->type.dim_exprs[i]) {
+                error(decl->type.dim_exprs[i]->pos(), 101);
+                break;
+            }
+        }
+        decl->type.dim_exprs = nullptr;
+    }
+
+    // If has_postdims is false, we never want to report an iARRAY.
+    decl->type.ident = iREFARRAY;
+}
+
+bool
+Parser::parse_old_decl(declinfo_t* decl, int flags)
+{
+    token_t tok;
+    typeinfo_t* type = &decl->type;
+
+    if (matchtoken(tCONST)) {
+        if (type->is_const)
+            error(138);
+        type->is_const = true;
+    }
+
+    int tag, numtags = 0;
+    if (flags & DECLFLAG_ARGUMENT) {
+        if (matchtoken('&'))
+            type->ident = iREFERENCE;
+
+        // grammar for multitags is:
+        //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
+        if (matchtoken('{')) {
+            while (true) {
+                int parsed_tag = 0;
+
+                if (!matchtoken('_')) {
+                    // If we don't get the magic tag '_', then we should have a symbol.
+                    if (expecttoken(tSYMBOL, &tok))
+                        parsed_tag = pc_addtag(tok.str);
+                }
+                tag = parsed_tag;
+                numtags++;
+
+                if (matchtoken('}'))
+                    break;
+                needtoken(',');
+            }
+            needtoken(':');
+        }
+        if (numtags > 1)
+            error(158);
+    }
+
+    if (numtags == 0) {
+        if (matchtoken2(tLABEL, &tok))
+            tag = pc_addtag(tok.str);
+        else
+            tag = 0;
+    }
+
+    // All finished with tag stuff.
+    type->tag = tag;
+    type->declared_tag = type->tag;
+
+    Type* type_obj = gTypes.find(type->tag);
+    if (type_obj->isEnumStruct())
+        error(85, type_obj->name());
+
+    if (sc_require_newdecls)
+        error(147);
+
+    // Look for varargs and end early.
+    if (matchtoken(tELLIPS)) {
+        type->ident = iVARARGS;
+        return TRUE;
+    }
+
+    if (flags & DECLMASK_NAMED_DECL) {
+        if ((flags & DECLFLAG_MAYBE_FUNCTION) && matchtoken(tOPERATOR)) {
+            decl->opertok = operatorname(&decl->name);
+            if (decl->opertok == 0)
+                decl->name = gAtoms.add("__unknown__");
+        } else {
+            if (!lexpeek(tSYMBOL)) {
+                extern const char* sc_tokens[];
+                switch (lextok(&tok)) {
+                    case tOBJECT:
+                    case tCHAR:
+                    case tVOID:
+                    case tINT:
+                        if (lexpeek(tSYMBOL)) {
+                            error(143);
+                        } else {
+                            error(157, sc_tokens[tok.id - tFIRST]);
+                            decl->name = gAtoms.add(sc_tokens[tok.id - tFIRST]);
+                        }
+                        break;
+                    default:
+                        lexpush();
+                        break;
+                }
+            }
+            if (expecttoken(tSYMBOL, &tok))
+                decl->name = gAtoms.add(tok.str);
+            else if (!decl->name)
+                decl->name = gAtoms.add("__unknown__");
+        }
+    }
+
+    if ((flags & DECLMASK_NAMED_DECL) && !decl->opertok) {
+        if (matchtoken('['))
+            parse_post_array_dims(decl, flags);
+    }
+
+    return true;
+}
+
+bool
+Parser::parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
+{
+    token_t tok;
+
+    if (!parse_new_typeexpr(&decl->type, first, flags))
+        return false;
+
+    decl->type.is_new = TRUE;
+
+    if (flags & DECLMASK_NAMED_DECL) {
+        if ((flags & DECLFLAG_ARGUMENT) && matchtoken(tELLIPS)) {
+            decl->type.ident = iVARARGS;
+            return true;
+        }
+
+        if ((flags & DECLFLAG_MAYBE_FUNCTION) && matchtoken(tOPERATOR)) {
+            decl->opertok = operatorname(&decl->name);
+            if (decl->opertok == 0)
+                decl->name = gAtoms.add("__unknown__");
+        } else {
+            if (expecttoken(tSYMBOL, &tok))
+                decl->name = gAtoms.add(tok.str);
+            else
+                decl->name = gAtoms.add("__unknown__");
+        }
+    }
+
+    if (flags & DECLMASK_NAMED_DECL) {
+        if (matchtoken('[')) {
+            if (decl->type.numdim == 0)
+                parse_post_array_dims(decl, flags);
+            else
+                error(121);
+        }
+    }
+
+    rewrite_type_for_enum_struct(&decl->type);
+    return true;
+}
+
+int
+Parser::operatorname(sp::Atom** name)
+{
+    cell val;
+    const char* str;
+
+    /* check the operator */
+    int opertok = lex(&val, &str);
+    switch (opertok) {
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '%':
+        case '>':
+        case '<':
+        case '!':
+        case '~':
+        case '=':
+        {
+            char str[] = {(char)opertok, '\0'};
+            *name = gAtoms.add(str);
+            break;
+        }
+        case tINC:
+            *name = gAtoms.add("++");
+            break;
+        case tDEC:
+            *name = gAtoms.add("--");
+            break;
+        case tlEQ:
+            *name = gAtoms.add("==");
+            break;
+        case tlNE:
+            *name = gAtoms.add("!=");
+            break;
+        case tlLE:
+            *name = gAtoms.add("<=");
+            break;
+        case tlGE:
+            *name = gAtoms.add(">=");
+            break;
+        default:
+            *name = gAtoms.add("");
+            error(7); /* operator cannot be redefined (or bad operator name) */
+            return 0;
+    }
+
+    return opertok;
+}
+
+void
+Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
+{
+    Type* type = gTypes.find(info->declared_tag);
+    symbol* enum_type = type->asEnumStruct();
+    if (!enum_type)
+        return;
+
+    if (info->numdim >= sDIMEN_MAX) {
+        error(86, type->name());
+        return;
+    }
+
+    info->tag = 0;
+    info->dim[info->numdim] = enum_type->addr();
+    assert(info->declared_tag = enum_type->tag);
+
+    // Note that the size here is incorrect. It's fixed up in initials() by
+    // parse_var_decl. Unfortunately type->size is difficult to remove because
+    // it can't be recomputed from array sizes (yet), in the case of
+    // initializers with inconsistent final arrays. We could set it to
+    // anything here, but we follow what parse_post_array_dims() does.
+    info->numdim++;
+
+    if (info->ident != iARRAY && info->ident != iREFARRAY) {
+        info->ident = iARRAY;
+        info->has_postdims = true;
+    }
+}
+
+bool
+Parser::reparse_new_decl(declinfo_t* decl, int flags)
+{
+    token_t tok;
+    if (expecttoken(tSYMBOL, &tok))
+        decl->name = gAtoms.add(tok.str);
+
+    if (decl->type.declared_tag && !decl->type.tag) {
+        assert(decl->type.numdim > 0);
+        decl->type.numdim--;
+    }
+
+    decl->type.dim_exprs = nullptr;
+
+    if (decl->type.has_postdims) {
+        // We have something like:
+        //    int x[], y...
+        //
+        // Reset the fact that we saw an array.
+        decl->type.numdim = 0;
+        decl->type.ident = iVARIABLE;
+        decl->type.has_postdims = false;
+        if (matchtoken('[')) {
+            // int x[], y[]
+            //           ^-- parse this
+            parse_post_array_dims(decl, flags);
+        }
+    } else {
+        if (matchtoken('[')) {
+            if (decl->type.numdim > 0) {
+                // int[] x, y[]
+                //           ^-- not allowed
+                error(121);
+            }
+
+            // int x, y[]
+            //         ^-- parse this
+            parse_post_array_dims(decl, flags);
+        } else if (decl->type.numdim) {
+            // int[] x, y
+            //          ^-- still an array, because the type is int[]
+            //
+            // Dim count should be 0 but we zap it anyway.
+            memset(decl->type.dim, 0, sizeof(decl->type.dim[0]) * decl->type.numdim);
+        }
+    }
+
+    rewrite_type_for_enum_struct(&decl->type);
+    return true;
+}
+
+bool
+Parser::reparse_old_decl(declinfo_t* decl, int flags)
+{
+    bool is_const = decl->type.is_const;
+
+    memset(decl, 0, sizeof(*decl));
+    decl->type.ident = iVARIABLE;
+    decl->type.is_const = is_const;
+
+    return parse_old_decl(decl, flags);
+}
+
+void
+Parser::parse_post_array_dims(declinfo_t* decl, int flags)
+{
+    typeinfo_t* type = &decl->type;
+
+    // Illegal declaration (we'll have a name since ref requires decl).
+    if (type->ident == iREFERENCE)
+        report(67) << decl->name;
+
+    parse_post_dims(type);
+
+    // We can't deduce iARRAY vs iREFARRAY until the analysis phase. Start with
+    // iARRAY for now.
+    decl->type.ident = iARRAY;
+    decl->type.has_postdims = TRUE;
+}
+
+bool
+Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
+{
+    token_t tok;
+
+    if (first)
+        tok = *first;
+    else
+        lextok(&tok);
+
+    if (tok.id == tCONST) {
+        if (type->is_const)
+            error(138);
+        type->is_const = true;
+        lextok(&tok);
+    }
+
+    if (!parse_new_typename(&tok, &type->tag))
+        return false;
+    type->declared_tag = type->tag;
+
+    // Note: we could have already filled in the prefix array bits, so we check
+    // that ident != iARRAY before looking for an open bracket.
+    if (type->ident != iARRAY && matchtoken('[')) {
+        do {
+            if (type->numdim == sDIMEN_MAX) {
+                error(53);
+                break;
+            }
+            type->dim[type->numdim++] = 0;
+            if (!matchtoken(']')) {
+                error(101);
+
+                // Try to eat a close bracket anyway.
+                cell ignored;
+                if (exprconst(&ignored, nullptr, nullptr))
+                    matchtoken(']');
+            }
+        } while (matchtoken('['));
+        type->ident = iREFARRAY;
+    }
+
+    if (flags & DECLFLAG_ARGUMENT) {
+        if (matchtoken('&')) {
+            if (type->ident == iARRAY || type->ident == iREFARRAY)
+                error(137);
+            else if (gTypes.find(type->semantic_tag())->isEnumStruct())
+                error(136);
+            else
+                type->ident = iREFERENCE;
+        }
+    }
+
+    // We're not getting another chance to do enum struct desugaring, since our
+    // caller is not looking for a declaration. Do it now.
+    if (!flags)
+        rewrite_type_for_enum_struct(type);
+
+    return true;
+}
+
+bool
+Parser::parse_new_typename(const token_t* tok, int* tagp)
+{
+    int tag = parse_new_typename(tok);
+    if (tag >= 0)
+        *tagp = tag;
+    else
+        *tagp = 0;
+    return true;
+}
+
+int
+Parser::parse_new_typename(const token_t* tok)
+{
+    token_t tmp;
+
+    if (!tok) {
+        lextok(&tmp);
+        tok = &tmp;
+    }
+
+    switch (tok->id) {
+        case tINT:
+            return 0;
+        case tCHAR:
+            return pc_tag_string;
+        case tVOID:
+            return pc_tag_void;
+        case tOBJECT:
+            return pc_tag_object;
+        case tLABEL:
+            error(120);
+            return pc_addtag(tok->str);
+        case tSYMBOL: {
+            if (strcmp(tok->str, "float") == 0)
+                return sc_rationaltag;
+            if (strcmp(tok->str, "bool") == 0)
+                return pc_tag_bool;
+            int tag = pc_findtag(tok->str);
+            if (tag == sc_rationaltag) {
+                error(98, "Float", "float");
+            } else if (tag == pc_tag_string) {
+                error(98, "String", "char");
+            } else if (tag == 0) {
+                error(98, "_", "int");
+            } else if (tag == -1) {
+                report(139) << tok->str;
+                tag = 0;
+            } else if (tag != pc_anytag) {
+                Type* type = gTypes.find(tag);
+                // Perform some basic filters so we can start narrowing down what can
+                // be used as a type.
+                if (type->isDeclaredButNotDefined())
+                    report(139) << tok->str;
+            }
+            return tag;
+        }
+    }
+
+    error(122);
+    return -1;
+}

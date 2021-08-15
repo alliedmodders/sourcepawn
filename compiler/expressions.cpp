@@ -29,6 +29,7 @@
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
+#include "output-buffer.h"
 #include "parser.h"
 #include "sc.h"
 #include "sclist.h"
@@ -760,4 +761,35 @@ is_legacy_enum_tag(int tag)
         return false;
     symbol* sym = findconst(type->name());
     return sym->dim.enumlist != nullptr;
+}
+
+/*  exprconst
+ */
+bool
+exprconst(cell* val, int* tag, symbol** symptr)
+{
+    int ident;
+    AutoCountErrors errors;
+
+    bool failed;
+    {
+        AutoStage stage;
+        errorset(sEXPRMARK, 0);
+        ident = expression(val, tag, symptr, nullptr);
+        failed = (sc_status == statWRITE && !errors.ok());
+        stage.Rewind();
+    }
+
+    if (ident != iCONSTEXPR) {
+        if (!failed) // Don't pile on errors.
+            error(8); /* must be constant expression */
+        if (val != NULL)
+            *val = 0;
+        if (tag != NULL)
+            *tag = 0;
+        if (symptr != NULL)
+            *symptr = NULL;
+    }
+    errorset(sEXPRRELEASE, 0);
+    return !failed && (ident == iCONSTEXPR);
 }

@@ -465,19 +465,10 @@ struct token_t;
  * Functions you call from the "driver" program
  */
 int pc_compile(int argc, char** argv);
-int pc_addconstant(const char* name, cell value, int tag);
-int parse_decl(declinfo_t* decl, int flags);
 const char* type_to_name(int tag);
-bool parse_new_typename(const token_t* tok, int* tagp);
 
 /* function prototypes in SC1.C */
 void set_extension(char* filename, const char* extension, int force);
-symbol* fetchfunc(const char* name);
-std::string funcdisplayname(const char* funcname);
-bool exprconst(cell* val, int* tag, symbol** symptr);
-constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
-void delete_consttable(constvalue* table);
-symbol* add_constant(const char* name, cell val, int vclass, int tag);
 
 constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);
