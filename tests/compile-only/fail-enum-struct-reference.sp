@@ -2,7 +2,7 @@
 
 enum struct Point {
   int x;
-};
+}
 
 void Crab(Point& p) {
   p.x = 10;

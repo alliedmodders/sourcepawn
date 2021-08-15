@@ -1,0 +1,1 @@
+(9) : warning 246: function dostuff returns an array but return type is not marked as an array

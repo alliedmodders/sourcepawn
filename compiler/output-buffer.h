@@ -30,11 +30,15 @@ class AsmBuffer
   public:
     AsmBuffer& operator <<(const char* str) {
         size_t added = strlen(str);
+        if (!added)
+            return *this;
         char* at = Append(added);
         memcpy(at, str, added);
         return *this;
     }
     AsmBuffer& operator <<(const std::string& str) {
+        if (str.empty())
+            return *this;
         char* at = Append(str.size());
         memcpy(at, str.c_str(), str.size());
         return *this;

@@ -54,24 +54,20 @@ AutoEnterScope::~AutoEnterScope()
     sc_.set_scope(sc_.scope()->parent());
 }
 
-void
-Stmt::Process()
+bool
+ParseTree::Analyze(SemaContext& sc)
 {
-    SemaContext sc;
     AutoCountErrors errors;
+    if (!StmtList::Analyze(sc) || !errors.ok())
+        return false;
 
-    if (!Bind(sc) || !errors.ok())
-        return;
-
-    errors.Reset();
-    if (!Analyze(sc) || !errors.ok())
-        return;
-
-    ProcessUses(sc);
-
-    CodegenContext cg(curfunc);
-    if (sc_status == statWRITE)
-        Emit(cg);
+    // This inserts missing return statements at the global scope, so it cannot
+    // be omitted.
+    if (!TestSymbols(sc.cc().globals(), false)) {
+        report(13); /* no entry point (no public functions) */
+        return false;
+    }
+    return true;
 }
 
 bool
@@ -190,7 +186,7 @@ VarDecl::AnalyzePstruct()
         if (visited[i])
             continue;
         if (ps->args[i]->type.ident == iREFARRAY) {
-            assert(ps->args[i]->type.tag == pc_tag_string);
+            assert(ps->args[i]->type.tag() == pc_tag_string);
 
             auto expr = new StringExpr(pos_, "", 0);
             init->fields().push_back(StructInitField(ps->args[i]->name, expr));
@@ -220,8 +216,8 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
             error(expr->pos(), 48);
             return false;
         }
-        if (arg->type.tag != pc_tag_string)
-            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag));
+        if (arg->type.tag() != pc_tag_string)
+            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag()));
     } else if (auto expr = field.value->AsTaggedValueExpr()) {
         if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
@@ -231,10 +227,10 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type.tag == pc_tag_bool && expr->tag() == 0 &&
+        if (!(arg->type.tag() == pc_tag_bool && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->type.tag, expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field.value->AsSymbolExpr()) {
         auto sym = expr->sym();
@@ -243,7 +239,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
                 error(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type.tag, sym->tag, MATCHTAG_COERCE);
+            matchtag(arg->type.tag(), sym->tag, MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
             if (sym->ident != iARRAY) {
                 error(expr->pos(), 405);
@@ -824,8 +820,9 @@ BinaryExpr::ValidateAssignmentRHS()
     }
 
     if (!oper_ && !checkval_string(&left_val, &right_val)) {
-        if ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
-            (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string))
+        if (leftarray &&
+            ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
+             (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string)))
         {
             error(pos_, 179, type_to_name(left_val.tag), type_to_name(right_val.tag));
             return false;
@@ -1146,7 +1143,7 @@ CastExpr::Analyze(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    if (tag_ == pc_tag_void) {
+    if (type_.tag() == pc_tag_void) {
         error(pos_, 144);
         return false;
     }
@@ -1158,20 +1155,20 @@ CastExpr::Analyze(SemaContext& sc)
     lvalue_ = expr_->lvalue();
 
     Type* ltype = gTypes.find(val_.tag);
-    Type* atype = gTypes.find(tag_);
+    Type* atype = gTypes.find(type_.tag());
     if (ltype->isObject() || atype->isObject()) {
-        matchtag(tag_, val_.tag, MATCHTAG_COERCE);
+        matchtag(type_.tag(), val_.tag, MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
         // Warn: unsupported cast.
         error(pos_, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
-        matchtag(tag_, val_.tag, MATCHTAG_COERCE);
+        matchtag(type_.tag(), val_.tag, MATCHTAG_COERCE);
     } else if (val_.sym && val_.sym->tag == pc_tag_void) {
         error(pos_, 89);
     } else if (atype->isEnumStruct()) {
         report(pos_, 95) << atype->name();
     }
-    val_.tag = tag_;
+    val_.tag = type_.tag();
     return true;
 }
 
@@ -1224,12 +1221,6 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
         }
     }
     if (sym_->ident == iFUNCTN) {
-        // If the function is only in the table because it was inserted as
-        // a stub in the first pass (used but never declared or implemented),
-        // issue an error.
-        if (!sym_->prototyped && sym_ != sc.func())
-            report(pos_, 17) << sym_->name();
-
         if (sym_->native) {
             error(pos_, 76);
             return false;
@@ -1238,7 +1229,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
             error(pos_, 182);
             return false;
         }
-        if (sym_->missing && sym_ != sc.func()) {
+        if (!sym_->defined) {
             auto symname = funcdisplayname(sym_->name());
             report(pos_, 4) << symname;
             return false;
@@ -1249,6 +1240,10 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
         // New-style "closure".
         val_.ident = iEXPRESSION;
         val_.tag = fe->tag;
+
+        // Mark as being indirectly invoked. Direct invocations go through
+        // BindCallTarget.
+        sym_->callback = true;
     }
 
     switch (sym_->ident) {
@@ -1258,8 +1253,8 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
             break;
         case iARRAY:
         case iREFARRAY:
-        case iCONSTEXPR:
         case iFUNCTN:
+        case iCONSTEXPR:
             // Not an l-value.
             break;
         case iMETHODMAP:
@@ -1627,7 +1622,7 @@ SymbolExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
     }
     if (sym_->ident != iFUNCTN)
         return nullptr;
-    if (sym_->missing) {
+    if (!sym_->defined) {
         auto symname = funcdisplayname(sym_->name());
         error(pos_, 4, symname.c_str());
         return nullptr;
@@ -1688,9 +1683,9 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
         var->set_data(new EnumStructVarData());
 
     EnumStructVarData* es_var = var->data()->asEnumStructVar();
-    es_var->children.push_back(std::make_unique<symbol>(*field_));
+    es_var->children.emplace_back(new symbol(*field_));
 
-    symbol* child = es_var->children.back().get();
+    symbol* child = es_var->children.back();
     child->setName(name_);
     child->vclass = var->vclass;
 
@@ -1817,10 +1812,6 @@ SizeofExpr::Analyze(SemaContext& sc)
         }
 
         if (sym->ident == iENUMSTRUCT) {
-            if (!sym->dim.enumlist) {
-                error(pos_, 19, sym->name());
-                return false;
-            }
             val_.constval = sym->addr();
             return true;
         }
@@ -1880,21 +1871,23 @@ CallExpr::Analyze(SemaContext& sc)
         sym_ = target_->BindNewTarget(sc);
     else
         sym_ = target_->BindCallTarget(sc, token_, &implicit_this_);
-    if (!sym_) {
-        error(pos_, 12);
+    if (!sym_)
         return false;
+
+    auto info = sym_->function()->node;
+    if (info &&
+        (info->decl().type.numdim() > 0 || info->maybe_returns_array()) &&
+        !sym_->array_return())
+    {
+        // We need to know the size of the returned array. Recursively analyze
+        // the function.
+        if (info->is_analyzing() || !info->Analyze(sc)) {
+            report(pos_, 411);
+            return false;
+        }
     }
 
     markusage(sym_, uREAD);
-
-    // If we're calling a stock in the 2nd pass, and it was never defined as
-    // read, then we're encountering some kind of compiler bug. If we're not
-    // supposed to emit this code than the status should be statSKIP - so
-    // we're generating code that will jump to the wrong address.
-    if (sym_->stock && !(sym_->usage & uREAD) && sc_status == statWRITE) {
-        error(pos_, FATAL_ERROR_NO_GENERATED_CODE, sym_->name());
-        return false;
-    }
 
     val_.ident = iEXPRESSION;
     val_.tag = sym_->tag;
@@ -1987,7 +1980,7 @@ CallExpr::Analyze(SemaContext& sc)
         Expr* expr = argv_[argidx].expr;
         if (expr->AsDefaultArgExpr() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(nullptr, arg.def->tag, arg.type.tag, 2, nullptr, &userop, pos_.line))
+            if (find_userop(nullptr, arg.def->tag, arg.type.tag(), 2, nullptr, &userop, pos_.line))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -2056,8 +2049,8 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                     }
                 }
             }
-            if (!checktag_string(arg->type.tag, val) && !checktag(arg->type.tag, val->tag))
-                error(pos_, 213, type_to_name(arg->type.tag), type_to_name(val->tag));
+            if (!checktag_string(arg->type.tag(), val) && !checktag(arg->type.tag(), val->tag))
+                error(pos_, 213, type_to_name(arg->type.tag()), type_to_name(val->tag));
             break;
         case iVARIABLE:
         {
@@ -2074,13 +2067,13 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(nullptr, val->tag, arg->type.tag, 2, nullptr, &userop, pos_.line))
+                find_userop(nullptr, val->tag, arg->type.tag(), 2, nullptr, &userop, pos_.line))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
             }
-            if (!checktag_string(arg->type.tag, val))
-                checktag(arg->type.tag, val->tag);
+            if (!checktag_string(arg->type.tag(), val))
+                checktag(arg->type.tag(), val->tag);
             break;
         }
         case iREFERENCE:
@@ -2094,7 +2087,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            checktag(arg->type.tag, val->tag);
+            checktag(arg->type.tag(), val->tag);
             break;
         case iREFARRAY:
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
@@ -2161,16 +2154,16 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 }
                 if (!matchtag(arg->type.enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    if (arg->type.tag != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
+                    if (arg->type.tag() != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
                         error(pos_, 229, sym->name());
                 }
             }
 
-            checktag(arg->type.tag, val->tag);
-            if ((arg->type.tag != pc_tag_string && val->tag == pc_tag_string) ||
-                (arg->type.tag == pc_tag_string && val->tag != pc_tag_string))
+            checktag(arg->type.tag(), val->tag);
+            if ((arg->type.tag() != pc_tag_string && val->tag == pc_tag_string) ||
+                (arg->type.tag() == pc_tag_string && val->tag != pc_tag_string))
             {
-                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->type.tag));
+                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->type.tag()));
                 return false;
             }
             break;
@@ -2197,19 +2190,8 @@ CallExpr::ProcessUses(SemaContext& sc)
 void
 CallExpr::MarkUsed(SemaContext& sc)
 {
-    if (sym_->defined) {
-        /* function is defined, can now check the return value (but make an
-         * exception for directly recursive functions)
-         */
-        if (sym_ != sc.func() && !sym_->retvalue) {
-            auto symname = funcdisplayname(sym_->name());
-            report(pos_, 140) << symname; /* function should return a value */
-        }
-    } else {
-        /* function not yet defined, set */
-        sym_->retvalue = true;
-    }
-    sym_->retvalue_used = true;
+    if (sym_)
+        sym_->retvalue_used = true;
 }
 
 bool StaticAssertStmt::Analyze(SemaContext& sc)
@@ -2251,7 +2233,7 @@ NewArrayExpr::AnalyzeForInitializer(SemaContext& sc)
         return true;
 
     val_.ident = iREFARRAY;
-    val_.tag = tag_;
+    val_.tag = type_.tag();
     for (auto& expr : exprs_) {
         if (!expr->Analyze(sc))
             return false;
@@ -2346,6 +2328,9 @@ TestSymbol(symbol* sym, bool testconst)
     bool entry = false;
     switch (sym->ident) {
         case iFUNCTN:
+        {
+            if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
+                entry = true; /* there is an entry point */
             if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
                 sym->defined)
             {
@@ -2353,11 +2338,22 @@ TestSymbol(symbol* sym, bool testconst)
                 if (!symname.empty()) {
                     /* symbol isn't used ... (and not public/native/stock) */
                     report(sym, 203) << symname;
+                    return entry;
                 }
             }
-            if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
-                entry = true; /* there is an entry point */
+
+            // Functions may be used as callbacks, in which case we don't check
+            // whether their arguments were used or not. We can't tell this until
+            // the scope is exiting, which is right here, so peek at the arguments
+            // for the function and check now.
+            auto node = sym->function()->node;
+            if (node && node->body()) {
+                node->CheckReturnUsage();
+                if (node->scope() && !sym->callback)
+                    TestSymbols(node->scope(), true);
+            }
             break;
+        }
         case iCONSTEXPR:
             if (testconst && (sym->usage & uREAD) == 0) {
                 error(sym, 203, sym->name()); /* symbol isn't used: ... */
@@ -2390,22 +2386,6 @@ TestSymbols(SymbolScope* root, int testconst)
     root->ForEachSymbol([&](symbol* sym) -> void {
         entry |= TestSymbol(sym, !!testconst);
     });
-    return entry;
-}
-
-bool
-TestSymbols(symbol* root, int testconst)
-{
-    bool entry = false;
-
-    symbol* sym = root->next;
-    while (sym != NULL) {
-        entry |= TestSymbol(sym, !!testconst);
-        sym = sym->next;
-    }
-
-    errorset(sEXPRRELEASE, 0); /* clear error data */
-    errorset(sRESET, 0);
     return entry;
 }
 
@@ -2584,7 +2564,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         for (int i = 0; i <= level; i++) {
             array_.dim.emplace_back((int)sub->dim.array.length);
             if (sub->x.tags.index) {
-                array_.tag = 0;
+                array_.set_tag(0);
                 array_.declared_tag = sub->x.tags.index;
             }
             if (i != level) {
@@ -2598,6 +2578,9 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
                 return false;
             }
         }
+        if (!array_.has_tag())
+            array_.set_tag(sub->tag);
+
         if (!sub->dim.array.length) {
             error(pos_, 128);
             return false;
@@ -2626,7 +2609,13 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         curfunc->set_array_return(sub);
     }
 
-    array_.tag = sub->tag;
+    auto func_node = sc.func_node();
+    if (func_node->type().numdim() == 0)
+        report(pos_, 246) << func_node->name();
+    else if (func_node->type().numdim() != array_.numdim())
+        report(pos_, 413);
+
+    array_.set_tag(sub->tag);
     array_.has_postdims = true;
     return true;
 }
@@ -2903,18 +2892,25 @@ ReportFunctionReturnError(symbol* sym)
 {
     auto symname = funcdisplayname(sym->name());
 
+    if (sym->parent()) {
+        // This is a member function, ignore compatibility checks and go
+        // straight to erroring.
+        report(sym, 400) << symname;
+        return;
+    }
+
     // Normally we want to encourage return values. But for legacy code,
     // we allow "public int" to warn instead of error.
     //
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
-        report(209) << symname;
+        report(sym, 209) << symname;
     } else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
                sym->tag == sc_rationaltag || !sym->retvalue_used)
     {
-        report(242) << symname;
+        report(sym, 242) << symname;
     } else {
-        report(400) << symname;
+        report(sym, 400) << symname;
     }
 }
 
@@ -2939,15 +2935,26 @@ FunctionInfo::IsVariadic() const
 bool
 FunctionInfo::Analyze(SemaContext& outer_sc)
 {
-    SemaContext sc(sym_);
+    // We could have been analyzed recursively to derive return array sizes.
+    if (analyzed_)
+        return *analyzed_;
+
+    assert(!is_analyzing_);
+
+    is_analyzing_ = true;
+    analyzed_.init(DoAnalyze(outer_sc));
+    is_analyzing_ = false;
+
+    return *analyzed_;
+}
+
+bool
+FunctionInfo::DoAnalyze(SemaContext& outer_sc)
+{
+    SemaContext sc(sym_, this);
 
     if (sym_->skipped && !this_tag_)
         return true;
-
-    sc.set_func(sym_);
-    auto guard = ke::MakeScopeGuard([&]() -> void {
-        sc.set_func(nullptr);
-    });
 
     // :TODO: remove this when curfunc goes away.
     ke::SaveAndSet<symbol*> auto_curfunc(&curfunc, sym_);
@@ -2957,50 +2964,27 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
         check_void_decl(&decl_, FALSE);
 
         if (decl_.opertok)
-            check_operatortag(decl_.opertok, decl_.type.tag, decl_.name->chars());
+            check_operatortag(decl_.opertok, decl_.type.tag(), decl_.name->chars());
     }
 
-    bool was_prototyped = sym_->prototyped;
-    if (!was_prototyped) {
-        sym_->tag = decl_.type.tag;
-        sym_->explicit_return_type = decl_.type.is_new;
-    }
-
-    if (sym_->is_public || sym_->forward) {
+    if (is_public_ || is_forward_) {
         if (decl_.type.numdim() > 0)
             error(pos_, 141);
     }
-
-    /* if the function was used before being declared, and it has a tag for the
-     * result, add a third pass (as second "skimming" parse) because the function
-     * result may have been used with user-defined operators, which have now
-     * been incorrectly flagged (as the return tag was unknown at the time of
-     * the call)
-     */
-    if (!was_prototyped && (sym_->usage & uREAD) && sym_->tag != 0 && !decl_.opertok && body_)
-        sc_reparse = TRUE; /* must add another pass to "initial scan" phase */
-
-    bool ok = AnalyzeArgs(sc);
-
-    // Must be after AnalyzeArgs() for argcompare to work.
-    sym_->prototyped = true;
-
-    if (sym_->defined && !is_forward_)
-        error(21, sym_->name());
 
     if (sym_->native) {
         if (decl_.type.numdim() > 0) {
             report(83);
             return false;
         }
-        sym_->retvalue = true;
         return true;
     }
 
     if (!body_) {
-        if (sym_->is_public && !sym_->forward)
-            error(pos_, 10);
-        return true;
+        if (is_native_ || is_forward_)
+            return true;
+        error(pos_, 10);
+        return false;
     }
 
     if (sym_->deprecated && !sym_->stock) {
@@ -3008,18 +2992,16 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
         report(pos_, 234) << sym_->name() << ptr; /* deprecated (probably a public function) */
     }
 
-    sym_->defined = true;
-    sym_->missing = false;
-
     if (this_tag_)
         sc_err_status = TRUE;
 
-    ok &= body_->Analyze(sc);
+    body_->Analyze(sc);
 
-    if (sc.returns_value()) {
-        sym_->retvalue = true;
-    } else {
-        if (sym_->tag == pc_tag_void && sym_->forward && !decl_.type.tag &&
+    sym_->returns_value = sc.returns_value();
+    sym_->always_returns = sc.always_returns();
+
+    if (!sym_->returns_value) {
+        if (sym_->tag == pc_tag_void && sym_->function()->forward && !decl_.type.tag() &&
             !decl_.type.is_new)
         {
             // We got something like:
@@ -3027,141 +3009,48 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
             //    public X()
             //
             // Switch our decl type to void.
-            decl_.type.tag = pc_tag_void;
+            decl_.type.set_tag(pc_tag_void);
         }
     }
 
-    // Check that return tags match.
-    if (was_prototyped && sym_->tag != decl_.type.tag)
-        error(pos_, 180, type_to_name(sym_->tag), type_to_name(decl_.type.tag));
+    // Make sure that a public return type matches the forward (if any).
+    if (sym_->function()->forward && is_public_) {
+        if (sym_->tag != decl_.type.tag())
+            report(pos_, 180) << type_to_name(sym_->tag) << type_to_name(decl_.type.tag());
+    }
 
-    if (scope_)
-        TestSymbols(scope_, TRUE);
-
-    if (!sc.always_returns()) {
-        if (sym_->must_return_value())
-            ReportFunctionReturnError(sym_);
-
-        // We should always have a block statement for the body. If no '{' was
-        // detected it would have been an error in the parsing pass.
-        auto block = body_->AsBlockStmt();
-        assert(block);
-
-        // Synthesize a return statement.
-        auto ret_stmt = new ReturnStmt(end_pos_, nullptr);
-        block->stmts().push_back(ret_stmt);
-        block->set_flow_type(Flow_Return);
+    // For globals, we test arguments in a later pass, since we need to know
+    // which functions get used as callbacks in order to emit a warning. The
+    // same is true for return value usage: we don't know how to handle
+    // compatibility edge cases until we've discovered all callers.
+    if (sym_->parent()) {
+        CheckReturnUsage();
+        if (scope_)
+            TestSymbols(scope_, TRUE);
     }
 
     sc_err_status = FALSE;
     return true;
 }
 
-bool
-FunctionInfo::AnalyzeArgs(SemaContext& sc)
+void
+FunctionInfo::CheckReturnUsage()
 {
-    auto& arglist = sym_->function()->args;
+    if (sym_->returns_value && sym_->always_returns)
+        return;
 
-    size_t oldargcnt = 0;
-    if (sym_->prototyped) {
-        while (arglist[oldargcnt].type.ident != 0)
-            oldargcnt++;
-    }
+    if (sym_->must_return_value())
+        ReportFunctionReturnError(sym_);
 
-    AutoCountErrors errors;
+    // We should always have a block statement for the body. If no '{' was
+    // detected it would have been an error in the parsing pass.
+    auto block = body_->AsBlockStmt();
+    assert(block);
 
-    size_t argcnt = 0;
-    for (const auto& parsed_arg : args_) {
-        const auto& var = parsed_arg.decl;
-        const auto& typeinfo = var->type();
-        symbol* argsym = var->sym();
-
-        AutoErrorPos pos(var->pos());
-
-        if (typeinfo.ident == iVARARGS) {
-            if (!sym_->prototyped) {
-                /* redimension the argument list, add the entry iVARARGS */
-                sym_->function()->resizeArgs(argcnt + 1);
-
-                arglist[argcnt].type.ident = iVARARGS;
-                arglist[argcnt].type.tag = typeinfo.tag;
-            } else {
-                if (argcnt > oldargcnt || arglist[argcnt].type.ident != iVARARGS)
-                    error(25); /* function definition does not match prototype */
-            }
-            argcnt++;
-            continue;
-        }
-
-        Type* type = gTypes.find(typeinfo.semantic_tag());
-        if (type->isEnumStruct()) {
-            if (sym_->native)
-                error(135, type->name());
-        }
-
-        /* Stack layout:
-         *   base + 0*sizeof(cell)  == previous "base"
-         *   base + 1*sizeof(cell)  == function return address
-         *   base + 2*sizeof(cell)  == number of arguments
-         *   base + 3*sizeof(cell)  == first argument of the function
-         * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
-         */
-        argsym->setAddr(static_cast<cell>((argcnt + 3) * sizeof(cell)));
-
-        arginfo arg;
-        arg.name = var->name();
-        arg.type.ident = argsym->ident;
-        arg.type.is_const = argsym->is_const;
-        arg.type.tag = argsym->tag;
-        arg.type.dim = typeinfo.dim;
-        arg.type.declared_tag = typeinfo.enum_struct_tag();
-
-        if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
-            if (var->Analyze(sc) && var->init_rhs())
-                fill_arg_defvalue(var, &arg);
-        } else {
-            Expr* init = var->init_rhs();
-            if (init && init->Analyze(sc)) {
-                assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
-                arg.def = new DefaultArg();
-
-                int tag;
-                cell val;
-                if (!init->EvalConst(&val, &tag)) {
-                    error(8);
-
-                    // Populate to avoid errors.
-                    val = 0;
-                    tag = typeinfo.tag;
-                }
-                arg.def->tag = tag;
-                arg.def->val = ke::Some(val);
-
-                matchtag(arg.type.tag, arg.def->tag, MATCHTAG_COERCE);
-            }
-        }
-
-        if (arg.type.ident == iREFERENCE)
-            argsym->usage |= uREAD; /* because references are passed back */
-        if (sym_->callback || sym_->stock || sym_->is_public)
-            argsym->usage |= uREAD; /* arguments of public functions are always "used" */
-
-        /* arguments of a public function may not have a default value */
-        if (sym_->is_public && arg.def)
-            error(59, var->name()->chars());
-
-        if (!sym_->prototyped) {
-            /* redimension the argument list, add the entry */
-            sym_->function()->resizeArgs(argcnt + 1);
-            arglist[argcnt] = std::move(arg);
-        } else {
-            /* check the argument with the earlier definition */
-            if (argcnt > oldargcnt || !argcompare(&arglist[argcnt], &arg))
-                report(181) << arg.name; /* function argument does not match prototype */
-        }
-        argcnt++;
-    }
-    return errors.ok();
+    // Synthesize a return statement.
+    auto ret_stmt = new ReturnStmt(end_pos_, nullptr);
+    block->stmts().push_back(ret_stmt);
+    block->set_flow_type(Flow_Return);
 }
 
 bool
@@ -3242,16 +3131,12 @@ SwitchStmt::ProcessUses(SemaContext& sc)
 }
 
 void
-FunctionInfo::ProcessUses(SemaContext& sc)
+FunctionInfo::ProcessUses(SemaContext& outer_sc)
 {
     if (!body_ || sym_->skipped)
         return;
 
-    sc.set_func(sym_);
-    auto guard = ke::MakeScopeGuard([&]() -> void {
-        sc.set_func(nullptr);
-    });
-
+    SemaContext sc(sym_, this);
     ke::SaveAndSet<symbol*> set_curfunc(&curfunc, sym_);
 
     for (const auto& arg : args_)
@@ -3331,7 +3216,7 @@ MethodmapDecl::ProcessUses(SemaContext& sc)
 void
 check_void_decl(const typeinfo_t* type, int variable)
 {
-    if (type->tag != pc_tag_void)
+    if (type->tag() != pc_tag_void)
         return;
 
     if (variable) {
@@ -3361,7 +3246,7 @@ argcompare(arginfo* a1, arginfo* a2)
     if (result)
         result = a1->type.is_const == a2->type.is_const; /* "const" flag */
     if (result)
-        result = a1->type.tag == a2->type.tag;
+        result = a1->type.tag() == a2->type.tag();
     if (result)
         result = a1->type.dim == a2->type.dim; /* array dimensions & index tags */
     if (result)
@@ -3396,5 +3281,29 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
     if (!type->isEnum())
         return false;
     symbol* sym = findconst(CompileContext::get(), scope, type->nameAtom(), -1);
-    return sym->dim.enumlist != nullptr;
+    return sym->data() && (sym->data()->asEnumStruct() || sym->data()->asEnum());
+}
+
+void
+fill_arg_defvalue(VarDecl* decl, arginfo* arg)
+{
+    arg->def = new DefaultArg();
+    arg->def->tag = decl->type().tag();
+
+    if (SymbolExpr* expr = decl->init_rhs()->AsSymbolExpr()) {
+        symbol* sym = expr->sym();
+        assert(sym->vclass == sGLOBAL);
+
+        arg->def->val = ke::Some(sym->addr());
+        arg->type.set_tag(sym->tag);
+        if (sym->usage & uREAD)
+            markusage(sym, uREAD);
+        return;
+    }
+
+    ArrayData data;
+    BuildArrayInitializer(decl, &data, 0);
+
+    arg->def->array = new ArrayData;
+    *arg->def->array = std::move(data);
 }

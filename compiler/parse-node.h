@@ -35,6 +35,7 @@
 #include "sc.h"
 #include "scvars.h"
 #include "shared/string-pool.h"
+#include "symbols.h"
 
 struct UserOperation
 {
@@ -62,6 +63,7 @@ class SymbolScope;
 class SymbolExpr;
 class TaggedValueExpr;
 struct StructInitField;
+struct structarg_t;
 
 class CodegenContext;
 class SemaContext;
@@ -117,15 +119,15 @@ class Stmt : public ParseNode
 
     void Emit(CodegenContext& cg);
 
+    // Create symbolic information for any names global to the current name
+    // context.
+    virtual bool EnterNames(SemaContext& sc) { return true; }
+
     // Process any child nodes whose value is consumed.
     virtual void ProcessUses(SemaContext& sc) = 0;
 
     // Return the last statement in a linear statement chain.
     virtual Stmt* GetLast() { return this; }
-
-    // Helper to immediately bind, analyze, and emit. This will be removed once
-    // the two-phase process is eliminated.
-    void Process();
 
     virtual bool IsExprStmt() { return false; }
     virtual BlockStmt* AsBlockStmt() { return nullptr; }
@@ -149,6 +151,7 @@ class StmtList : public Stmt
       : Stmt(pos)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
@@ -164,6 +167,17 @@ class StmtList : public Stmt
 
   protected:
     PoolList<Stmt*> stmts_;
+};
+
+class ParseTree : public StmtList
+{
+  public:
+    explicit ParseTree(const token_pos_t& pos)
+      : StmtList(pos)
+    {}
+
+    bool ResolveNames(SemaContext& sc);
+    bool Analyze(SemaContext& sc) override;
 };
 
 class BlockStmt : public StmtList
@@ -245,6 +259,9 @@ class Decl : public Stmt
     }
 
   protected:
+    sp::Atom* DecorateInnerName(sp::Atom* parent_name, sp::Atom* field_name);
+
+  protected:
     sp::Atom* name_;
 };
 
@@ -272,6 +289,9 @@ class VarDecl : public Decl
     bool Analyze(SemaContext& sc) override;
     void DoEmit(CodegenContext&) override;
     void ProcessUses(SemaContext& sc) override;
+
+    // Bind only the typeinfo.
+    bool BindType(SemaContext& sc);
 
     Expr* init_rhs() const;
     int vclass() const {
@@ -320,6 +340,7 @@ class ConstDecl : public VarDecl
         expr_(expr)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
 
@@ -348,6 +369,7 @@ class EnumDecl : public Decl
         multiplier_(multiplier)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
 
@@ -371,21 +393,28 @@ class EnumDecl : public Decl
 
 struct StructField {
     StructField(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& typeinfo)
-      : pos(pos), name(name), type(typeinfo)
+      : pos(pos), name(name), type(typeinfo), field(nullptr)
     {}
 
     token_pos_t pos;
     sp::Atom* name;
     typeinfo_t type;
+    structarg_t* field;
 };
 
-class StructDecl : public Decl
+// "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()
+// when SourceMod was first being prototyped. Theoretically these could be retooled
+// as proper structs.
+class PstructDecl : public Decl
 {
   public:
-    explicit StructDecl(const token_pos_t& pos, sp::Atom* name)
-      : Decl(pos, name)
+    PstructDecl(const token_pos_t& pos, sp::Atom* name)
+      : Decl(pos, name),
+        ps_(nullptr)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
+    bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
 
     PoolList<StructField>& fields() {
@@ -393,15 +422,16 @@ class StructDecl : public Decl
     }
 
   protected:
+    pstruct_t* ps_;
     PoolList<StructField> fields_;
 };
 
 struct TypedefInfo : public PoolObject {
     token_pos_t pos;
-    int ret_tag;
+    TypenameInfo ret_type;
     PoolList<declinfo_t*> args;
 
-    functag_t* ToFunctag(SemaContext& sc) const;
+    functag_t* Bind(SemaContext& sc);
 };
 
 class TypedefDecl : public Decl
@@ -412,11 +442,13 @@ class TypedefDecl : public Decl
         type_(type)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
 
   private:
     TypedefInfo* type_;
+    funcenum_t* fe_ = nullptr;
 };
 
 // Unsafe typeset - only supports function types. This is a transition hack for SP2.
@@ -427,6 +459,7 @@ class TypesetDecl : public Decl
       : Decl(pos, name)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
 
@@ -436,19 +469,7 @@ class TypesetDecl : public Decl
 
   private:
     PoolList<TypedefInfo*> types_;
-};
-
-// "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()
-// when SourceMod was first being prototyped. Theoretically these could be retooled
-// as proper structs.
-class PstructDecl : public StructDecl
-{
-  public:
-    explicit PstructDecl(const token_pos_t& pos, sp::Atom* name)
-      : StructDecl(pos, name)
-    {}
-
-    bool Bind(SemaContext& sc) override;
+    funcenum_t* fe_ = nullptr;
 };
 
 class UsingDecl : public Decl
@@ -458,7 +479,7 @@ class UsingDecl : public Decl
       : Decl(pos, nullptr)
     {}
 
-    bool Bind(SemaContext& sc) override;
+    bool EnterNames(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
 };
 
@@ -788,16 +809,14 @@ class PostIncExpr final : public IncDecExpr
 class CastExpr final : public Expr
 {
   public:
-    CastExpr(const token_pos_t& pos, int token, int tag, Expr* expr)
+    CastExpr(const token_pos_t& pos, int token, const TypenameInfo& type, Expr* expr)
       : Expr(pos),
         token_(token),
-        tag_(tag),
+        type_(type),
         expr_(expr)
     {}
 
-    bool Bind(SemaContext& sc) override {
-        return expr_->Bind(sc);
-    }
+    bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     bool HasSideEffects() override {
@@ -807,7 +826,7 @@ class CastExpr final : public Expr
 
   private:
     int token_;
-    int tag_;
+    TypenameInfo type_;
     Expr* expr_;
 };
 
@@ -1166,9 +1185,9 @@ class StringExpr final : public Expr
 class NewArrayExpr final : public Expr
 {
   public:
-    explicit NewArrayExpr(const token_pos_t& pos, int tag)
+    explicit NewArrayExpr(const token_pos_t& pos, const TypenameInfo& ur)
       : Expr(pos),
-        tag_(tag)
+        type_(ur)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1182,7 +1201,7 @@ class NewArrayExpr final : public Expr
     }
 
     int tag() {
-        return tag_;
+        return type_.tag();
     }
     PoolList<Expr*>& exprs() {
         return exprs_;
@@ -1195,7 +1214,7 @@ class NewArrayExpr final : public Expr
     }
 
   private:
-    int tag_;
+    TypenameInfo type_;
     PoolList<Expr*> exprs_;
     bool autozero_ = true;
     bool already_analyzed_ = false;
@@ -1220,15 +1239,15 @@ class ArrayExpr final : public Expr
     PoolList<Expr*>& exprs() {
         return exprs_;
     }
-    bool ellipses() const {
-        return ellipses_;
-    }
-    void set_ellipses() {
-        ellipses_ = true;
-    }
+
+    bool ellipses() const { return ellipses_; }
+    void set_ellipses() { ellipses_ = true; }
+    bool synthesized_for_compat() const { return synthesized_for_compat_; }
+    void set_synthesized_for_compat() { synthesized_for_compat_ = true; }
 
   private:
     bool ellipses_ = false;
+    bool synthesized_for_compat_ = false;
     PoolList<Expr*> exprs_;
 };
 
@@ -1508,10 +1527,6 @@ class FunctionInfo : public PoolObject
     void ProcessUses(SemaContext& sc);
     void Emit(CodegenContext& cg);
 
-    void set_is_public() { is_public_ = true; }
-    void set_is_static() { is_static_ = true; }
-    void set_is_stock() { is_stock_ = true; }
-    void set_is_forward() { is_forward_ = true; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
     void set_alias(sp::Atom* alias) { alias_ = alias; }
 
@@ -1530,16 +1545,40 @@ class FunctionInfo : public PoolObject
     void set_is_native() { is_native_ = true; }
     bool is_native() const { return is_native_; }
 
+    void set_is_forward() { is_forward_ = true; }
+    bool is_forward() const { return is_forward_; }
+
+    void set_is_public() { is_public_ = true; }
+    bool is_public() const { return is_public_; }
+
+    void set_is_stock() { is_stock_ = true; }
+    bool is_stock() const { return is_stock_; }
+
+    void set_is_static() { is_static_ = true; }
+    bool is_static() const { return is_static_; }
+
     PoolList<FunctionArg>& args() { return args_; }
     const declinfo_t& decl() const { return decl_; }
-    symbol* sym() const { return sym_; }
     const token_pos_t& pos() const { return pos_; }
+
+    symbol* sym() const { return sym_; }
+    void set_sym(symbol* sym) { sym_ = sym; }
 
     const typeinfo_t& type() const { return decl_.type; }
     typeinfo_t& mutable_type() { return decl_.type; }
 
+    bool is_analyzing() const { return is_analyzing_; }
+
+    SymbolScope* scope() const { return scope_; }
+
+    bool maybe_returns_array() const { return maybe_returns_array_; }
+    void set_maybe_returns_array() { maybe_returns_array_ = true; }
+
+    void CheckReturnUsage();
+
   private:
-    bool AnalyzeArgs(SemaContext& sc);
+    bool BindArgs(SemaContext& sc);
+    bool DoAnalyze(SemaContext& sc);
 
     sp::Atom* NameForOperator();
 
@@ -1559,6 +1598,9 @@ class FunctionInfo : public PoolObject
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
     sp::Atom* alias_ = nullptr;
+    ke::Maybe<bool> analyzed_;
+    bool is_analyzing_ = false;
+    bool maybe_returns_array_ = false;
 };
 
 class FunctionDecl : public Decl
@@ -1573,6 +1615,7 @@ class FunctionDecl : public Decl
         info_(info)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
@@ -1582,6 +1625,9 @@ class FunctionDecl : public Decl
 
     FunctionInfo* info() const { return info_; }
     symbol* sym() const { return info_->sym(); }
+
+  private:
+    bool CanRedefine(symbol* sym);
 
   private:
     FunctionInfo* info_;
@@ -1600,6 +1646,7 @@ class EnumStructDecl : public Decl
       : Decl(pos, name)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
@@ -1609,11 +1656,9 @@ class EnumStructDecl : public Decl
     PoolList<EnumStructField>& fields() { return fields_; }
 
   private:
-    sp::Atom* DecorateInnerName(const token_pos_t& pos, sp::Atom* field_name);
-
-  private:
     PoolList<FunctionDecl*> methods_;
     PoolList<EnumStructField> fields_;
+    symbol* root_ = nullptr;
 };
 
 struct MethodmapProperty : public PoolObject {
@@ -1622,11 +1667,13 @@ struct MethodmapProperty : public PoolObject {
     sp::Atom* name = nullptr;
     FunctionInfo* getter = nullptr;
     FunctionInfo* setter = nullptr;
+    methodmap_method_t* entry = nullptr;
 };
 
 struct MethodmapMethod : public PoolObject {
     bool is_static = false;
     FunctionDecl* decl = nullptr;
+    methodmap_method_t* entry = nullptr;
 };
 
 class MethodmapDecl : public Decl
@@ -1638,6 +1685,7 @@ class MethodmapDecl : public Decl
         extends_(extends)
     {}
 
+    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
@@ -1645,8 +1693,6 @@ class MethodmapDecl : public Decl
 
     PoolList<MethodmapProperty*>& properties() { return properties_; }
     PoolList<MethodmapMethod*>& methods() { return methods_; }
-
-    void set_map(methodmap_t* map) { map_ = map; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapProperty* prop);
@@ -1659,4 +1705,5 @@ class MethodmapDecl : public Decl
     PoolList<MethodmapMethod*> methods_;
 
     methodmap_t* map_ = nullptr;
+    symbol* sym_ = nullptr;
 };

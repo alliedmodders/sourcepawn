@@ -296,7 +296,7 @@ ArraySizeResolver::ResolveDimExprs()
             //     int blah[y];
             //              ^-- no
             if (type_->is_new) {
-                error(expr->pos(), 161, type_to_name(type_->tag));
+                error(expr->pos(), 161, type_to_name(type_->tag()));
                 return false;
             }
 
@@ -475,7 +475,7 @@ CalcArraySize(symbol* sym)
     symbol* iter = sym;
     while (iter) {
         cell length = iter->dim.array.length;
-        assert(length || !cc_ok());
+        assert(length);
 
         if (!iter->dim.array.level && sym->tag == pc_tag_string)
             length = char_array_cells(length);
@@ -500,11 +500,11 @@ FixedArrayValidator::CheckArgument(Expr* init)
     assert(sym->vclass == sGLOBAL);
 
     if (sym->ident != iARRAY && sym->ident != iREFARRAY) {
-        error(expr->pos(), 134, type_to_name(type_.tag), "array");
+        error(expr->pos(), 134, type_to_name(type_.tag()), "array");
         return false;
     }
-    if (type_.tag != sym->tag) {
-        error(expr->pos(), 134, type_to_name(type_.tag), type_to_name(sym->tag));
+    if (type_.tag() != sym->tag) {
+        error(expr->pos(), 134, type_to_name(type_.tag()), type_to_name(sym->tag));
         return false;
     }
 
@@ -568,9 +568,9 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     }
 
     if (StringExpr* str = init->AsStringExpr()) {
-        if (type_.tag != pc_tag_string) {
+        if (type_.tag() != pc_tag_string) {
             error(init->pos(), 134, gTypes.find(pc_tag_string)->prettyName(),
-                  gTypes.find(type_.tag)->prettyName());
+                  gTypes.find(type_.tag())->prettyName());
             return false;
         }
 
@@ -585,7 +585,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         return true;
     }
 
-    cell rank_size = (type_.tag == pc_tag_string && type_.dim[rank])
+    cell rank_size = (type_.tag() == pc_tag_string && type_.dim[rank])
                      ? char_array_cells(type_.dim[rank])
                      : type_.dim[rank];
 
@@ -608,11 +608,12 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             return false;
         }
 
-        error(init->pos(), 241);
+        report(init->pos(), 241);
 
         array = new ArrayExpr(init->pos());
         array->exprs().push_back(init);
         array->set_ellipses();
+        array->set_synthesized_for_compat();
         decl_->set_init(array);
     }
 
@@ -639,7 +640,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             continue;
         }
 
-        matchtag(type_.tag, v.tag, MATCHTAG_COERCE);
+        matchtag(type_.tag(), v.tag, MATCHTAG_COERCE);
 
         prev2 = prev1;
         prev1 = ke::Some(v.constval);
@@ -655,12 +656,14 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             error(array->pos(), 41);
             return true;
         }
-        if (prev1.isValid() && prev2.isValid() && type_.tag) {
+        if (prev1.isValid() && prev2.isValid() && type_.tag()) {
             // Unknown stepping type.
-            error(array->exprs().back()->pos(), 68, type_to_name(type_.tag));
+            error(array->exprs().back()->pos(), 68, type_to_name(type_.tag()));
             return false;
         }
-        if (!rank_size || rank_size == (cell)array->exprs().size()) {
+        if (!rank_size ||
+            (rank_size == (cell)array->exprs().size() && !array->synthesized_for_compat()))
+        {
             // Initialization data exceeds declared size.
             error(array->exprs().back()->pos(), 18);
             return false;
@@ -681,11 +684,11 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
     }
 
     symbol* esroot = es_->asEnumStruct();
-    auto field_list = esroot->dim.enumlist;
-    auto field_iter = field_list->begin();
+    auto& field_list = esroot->data()->asEnumStruct()->fields;
+    auto field_iter = field_list.begin();
 
     for (const auto& expr : array->exprs()) {
-        if (field_iter == field_list->end()) {
+        if (field_iter == field_list.end()) {
             error(expr->pos(), 91);
             return false;
         }
@@ -743,7 +746,7 @@ AddImplicitDynamicInitializer(VarDecl* decl)
 {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type();
-    assert(!gTypes.find(type->tag)->asEnumStruct());
+    assert(!gTypes.find(type->tag())->asEnumStruct());
 
     // If any one rank was dynamic, the entire array is considered dynamic. For
     // new-style fixed arrays we've thrown an error at this point. For old
@@ -755,7 +758,8 @@ AddImplicitDynamicInitializer(VarDecl* decl)
     //
     // Note that these declarations use old tag-based syntax, and therefore
     // do not work with enum structs, which create implicit dimensions.
-    NewArrayExpr* init = new NewArrayExpr(decl->pos(), type->tag);
+    TypenameInfo ti = type->ToTypenameInfo();
+    NewArrayExpr* init = new NewArrayExpr(decl->pos(), ti);
     for (int i = 0; i < type->numdim(); i++) {
         Expr* expr = type->get_dim_expr(i);
         if (!expr) {
@@ -945,7 +949,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
         PoolList<symbol*>::iterator field_iter;
         if (es_) {
             symbol* esroot = es_->asEnumStruct();
-            field_list = esroot->dim.enumlist;
+            field_list = &esroot->data()->asEnumStruct()->fields;
             field_iter = field_list->begin();
         }
 
@@ -975,7 +979,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
             }
 
             if (field_list) {
-                assert(field_iter != field_list->end());
+                assert(field_iter != field_list->end() && (*field_iter)->ident == iCONSTEXPR);
                 field_iter++;
             }
         }
@@ -988,7 +992,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
     size_t emitted = data_size() - start;
 
-    EmitPadding(type_.dim[rank], type_.tag, emitted, ellipses, prev1, prev2);
+    EmitPadding(type_.dim[rank], type_.tag(), emitted, ellipses, prev1, prev2);
 
     return (start * sizeof(cell)) | kDataFlag;
 }

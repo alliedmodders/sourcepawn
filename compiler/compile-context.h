@@ -20,7 +20,10 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <unordered_set>
+
 class SymbolScope;
+struct symbol;
 
 // The thread-safe successor to scvars.
 class CompileContext final
@@ -36,6 +39,9 @@ class CompileContext final
     SymbolScope* globals() const { return globals_; }
     void set_globals(SymbolScope* globals) { globals_ = globals; }
 
+    std::unordered_set<symbol*>& functions() { return functions_; }
+
   private:
     SymbolScope* globals_;
+    std::unordered_set<symbol*> functions_;
 };

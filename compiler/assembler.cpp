@@ -1090,13 +1090,13 @@ RttiBuilder::add_enumstruct(Type* type)
     enumstructs_->add(es);
 
     // Pre-allocate storage in case of nested types.
-    auto enumlist = sym->dim.enumlist;
-    for (auto iter = enumlist->begin(); iter != enumlist->end(); iter++)
+    auto& enumlist = sym->data()->asEnumStruct()->fields;
+    for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++)
         es_fields_->add() = smx_rtti_es_field{};
 
     // Add all fields.
     size_t index = 0;
-    for (auto iter = enumlist->begin(); iter != enumlist->end(); iter++) {
+    for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
         auto field = *iter;
 
         int dims[1], dimcount = 0;
@@ -1141,12 +1141,12 @@ RttiBuilder::add_struct(Type* type)
         fields_->add();
 
     for (size_t i = 0; i < ps->args.size(); i++) {
-        const structarg_t* arg = ps->args[i].get();
+        const structarg_t* arg = ps->args[i];
 
         int dims[1] = {0};
         int dimcount = arg->type.ident == iREFARRAY ? 1 : 0;
 
-        variable_type_t type = {arg->type.tag, dims, dimcount, !!arg->type.is_const};
+        variable_type_t type = {arg->type.tag(), dims, dimcount, !!arg->type.is_const};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -1203,7 +1203,7 @@ RttiBuilder::encode_signature(symbol* sym)
     }
 
     for (arginfo* arg = &sym->function()->args[0]; arg->type.ident; arg++) {
-        int tag = arg->type.tag;
+        int tag = arg->type.tag();
         int numdim = arg->type.numdim();
         if (arg->type.numdim() && arg->type.enum_struct_tag()) {
             int last_tag = arg->type.enum_struct_tag();
@@ -1400,7 +1400,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
             bytes.push_back(cb::kByRef);
 
         auto dims = arg.type.dim.empty() ? nullptr : &arg.type.dim[0];
-        variable_type_t info = {arg.type.tag, dims, arg.type.numdim(), arg.type.is_const};
+        variable_type_t info = {arg.type.tag(), dims, arg.type.numdim(), arg.type.is_const};
         encode_var_type(bytes, info);
     }
 }
@@ -1457,6 +1457,13 @@ assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
         // This is only to assert that we embedded pointers properly in the assembly buffer.
         symbols.emplace(sym);
     });
+    for (const auto& sym : cc.functions()) {
+        if (symbols.count(sym))
+            continue;
+        global_symbols.push_back(sym);
+        symbols.emplace(sym);
+    }
+
     qsort(global_symbols.data(), global_symbols.size(), sizeof(symbol*), sort_by_name);
 
     // Build the easy symbol tables.
@@ -1469,12 +1476,8 @@ assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
                 continue;
             }
 
-            // If a function is marked as missing it should not be a public function
-            // with a declaration.
-            if (sym->missing) {
-                assert(!(sym->is_public && sym->defined));
+            if (!sym->defined)
                 continue;
-            }
             if (sym->skipped)
                 continue;
 

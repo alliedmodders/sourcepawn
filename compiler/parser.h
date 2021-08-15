@@ -34,7 +34,7 @@ class Parser : public ExpressionParser
 
     static bool PreprocExpr(cell* val, int* tag);
 
-    void parse();
+    StmtList* parse();
 
     static bool sInPreprocessor;
     static bool sDetectedIllegalPreprocessorSymbols;
@@ -68,18 +68,19 @@ class Parser : public ExpressionParser
         bool is_stock = false;
         bool autozero = true;
         bool is_arg = false;
+        bool struct_init = false;
     };
-    Stmt* parse_var(declinfo_t* decl, const VarParams& params);
+    Stmt* parse_var(declinfo_t* decl, VarParams& params);
     void parse_post_dims(typeinfo_t* type);
     Expr* var_init(int vclass);
+    Decl* parse_inline_function(int tokid, const declinfo_t& decl, const int* this_tag);
 
     bool parse_decl(declinfo_t* decl, int flags);
     bool parse_old_decl(declinfo_t* decl, int flags);
     bool parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
     void parse_post_array_dims(declinfo_t* decl, int flags);
     bool parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags);
-    bool parse_new_typename(const token_t* tok, int* tagp);
-    int parse_new_typename(const token_t* tok);
+    bool parse_new_typename(const token_t* tok, TypenameInfo* out);
     bool reparse_old_decl(declinfo_t* decl, int flags);
     bool reparse_new_decl(declinfo_t* decl, int flags);
     void fix_mispredicted_postdims(declinfo_t* decl);
@@ -122,7 +123,7 @@ class Parser : public ExpressionParser
     Expr* primary();
     Expr* constant();
     Expr* struct_init();
-    Expr* parse_new_array(const token_pos_t& pos, int tag);
+    Expr* parse_new_array(const token_pos_t& pos, const TypenameInfo& rt);
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
 
     bool consume_line();

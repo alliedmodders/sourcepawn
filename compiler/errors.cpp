@@ -43,6 +43,8 @@
 #include "sc.h"
 #include "sclist.h"
 #include "scvars.h"
+#include "symbols.h"
+#include "types.h"
 
 #if defined _MSC_VER
 #    pragma warning(push)
@@ -61,7 +63,6 @@ static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char *
 static int errflag;
 static int errorcount;
 static AutoErrorPos* sPosOverride = nullptr;
-bool sc_enable_first_pass_error_display = false;
 bool sc_one_error_per_statement = false;
 bool sc_shutting_down = false;
 
@@ -284,7 +285,7 @@ static void
 abort_compiler()
 {
     if (strlen(errfname) == 0) {
-        fprintf(stdout, "\nCompilation aborted.\n");
+        fprintf(stdout, "Compilation aborted.\n");
     }
     longjmp(errbuf, 2); /* fatal error, quit */
 }
@@ -356,8 +357,6 @@ report_error(ErrorReport&& report)
             sc_total_errors++;
 
         if (errflag && sc_one_error_per_statement)
-            return;
-        if (sc_status != statWRITE && !sc_err_status && !sc_enable_first_pass_error_display)
             return;
     }
 
@@ -437,9 +436,6 @@ errorset(int code, int line)
         case sRESET:
             errflag = FALSE; /* start reporting errors */
             break;
-        case sFORCESET:
-            errflag = TRUE; /* stop reporting errors */
-            break;
     }
 }
 
@@ -487,3 +483,10 @@ void break_on_error(int number)
 {
 }
 #endif
+
+MessageBuilder&
+MessageBuilder::operator <<(Type* type)
+{
+    args_.emplace_back(type->prettyName());
+    return *this;
+}

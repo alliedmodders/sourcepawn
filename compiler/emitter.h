@@ -20,6 +20,7 @@
 #pragma once
 
 #include "sc.h"
+#include "symbols.h"
 
 enum {
     sOPTIMIZE_NONE,    /* no optimization */

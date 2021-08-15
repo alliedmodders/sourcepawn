@@ -31,26 +31,26 @@ class SemaContext
   public:
     SemaContext()
       : cc_(CompileContext::get()),
-        parent_(gCurrentSemaContext),
         func_(nullptr),
         scope_(nullptr)
     {
-        gCurrentSemaContext = this;
     }
-    SemaContext(symbol* func)
+    SemaContext(symbol* func, FunctionInfo* func_node)
       : cc_(CompileContext::get()),
-        parent_(gCurrentSemaContext),
         func_(func),
+        func_node_(func_node),
         scope_(nullptr)
     {
-        gCurrentSemaContext = this;
     }
 
     ~SemaContext() {
-        gCurrentSemaContext = parent_;
     }
 
     CompileContext& cc() { return cc_; }
+
+    bool BindType(const token_pos_t& pos, TypenameInfo* ti);
+    bool BindType(const token_pos_t& pos, typeinfo_t* ti);
+    bool BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag);
 
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
@@ -87,7 +87,7 @@ class SemaContext
     void set_warned_unreachable() { warned_unreachable_ = true; }
 
     symbol* func() const { return func_; }
-    void set_func(symbol* func) { func_ = func; }
+    FunctionInfo* func_node() const { return func_node_; }
 
     // Currently, this only refers to local/argument scopes, and not global
     // scope. They will be linked together when reparse goes away.
@@ -96,8 +96,8 @@ class SemaContext
 
   private:
     CompileContext& cc_;
-    SemaContext* parent_ = nullptr;
     symbol* func_ = nullptr;
+    FunctionInfo* func_node_ = nullptr;
     SymbolScope* scope_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;

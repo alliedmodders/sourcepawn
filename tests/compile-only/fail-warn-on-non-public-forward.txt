@@ -1,0 +1,1 @@
+(4) : error 245: function OnMapEnd implements a forward but is not marked as public

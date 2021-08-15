@@ -58,12 +58,13 @@ struct MemoryScope {
 std::vector<MemoryScope> sStackScopes;
 std::vector<MemoryScope> sHeapScopes;
 std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
-std::vector<std::unique_ptr<pstruct_t>> sStructs;
 std::vector<methodmap_t*> sMethodmaps;
 
+std::vector<pstruct_t*> sStructs;
+
 pstruct_t::pstruct_t(sp::Atom* name)
+  : name(name)
 {
-    this->name = name;
 }
 
 const structarg_t*
@@ -71,7 +72,7 @@ pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name)
 {
     for (const auto& arg : pstruct->args) {
         if (arg->name == name)
-            return arg.get();
+            return arg;
     }
     return nullptr;
 }
@@ -79,9 +80,9 @@ pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name)
 pstruct_t*
 pstructs_add(sp::Atom* name)
 {
-    auto p = std::make_unique<pstruct_t>(name);
-    sStructs.push_back(std::move(p));
-    return sStructs.back().get();
+    auto p = new pstruct_t(name);
+    sStructs.push_back(p);
+    return sStructs.back();
 }
 
 void
@@ -95,24 +96,17 @@ pstructs_find(sp::Atom* name)
 {
     for (const auto& p : sStructs) {
         if (p->name == name)
-            return p.get();
+            return p;
     }
     return nullptr;
 }
 
-structarg_t*
-pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg)
+void
+pstructs_addarg(pstruct_t* pstruct, structarg_t* arg)
 {
-    if (pstructs_getarg(pstruct, arg->name))
-        return nullptr;
-
-    auto newarg = std::make_unique<structarg_t>();
-    memcpy(newarg.get(), arg, sizeof(structarg_t));
-    newarg->offs = pstruct->args.size() * sizeof(cell);
-    newarg->index = pstruct->args.size();
-    pstruct->args.push_back(std::move(newarg));
-
-    return pstruct->args.back().get();
+    arg->offs = pstruct->args.size() * sizeof(cell);
+    arg->index = pstruct->args.size();
+    pstruct->args.emplace_back(arg);
 }
 
 void
@@ -387,8 +381,25 @@ methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
    spec(spec),
    name(name),
    dtor(nullptr),
-   ctor(nullptr)
+   ctor(nullptr),
+   is_bound(false),
+   enum_data(nullptr)
 {
+}
+
+int
+methodmap_method_t::property_tag() const
+{
+    assert(getter || setter);
+    if (getter)
+        return getter->tag;
+    arginfo* thisp = &setter->function()->args[0];
+    if (thisp->type.ident == 0)
+        return pc_tag_void;
+    arginfo* valp = &setter->function()->args[1];
+    if (valp->type.ident != iVARIABLE)
+        return pc_tag_void;
+    return valp->type.tag();
 }
 
 methodmap_t*
@@ -421,10 +432,10 @@ methodmap_find_by_tag(int tag)
 methodmap_t*
 methodmap_find_by_name(sp::Atom* name)
 {
-    int tag = pc_findtag(name->chars());
-    if (tag == -1)
+    auto type = gTypes.find(name);
+    if (!type)
         return NULL;
-    return methodmap_find_by_tag(tag);
+    return methodmap_find_by_tag(type->tagid());
 }
 
 methodmap_method_t*
@@ -467,7 +478,7 @@ deduce_layout_spec_by_tag(int tag)
 }
 
 LayoutSpec
-deduce_layout_spec_by_name(const char* name)
+deduce_layout_spec_by_name(sp::Atom* name)
 {
     Type* type = gTypes.find(name);
     if (!type)

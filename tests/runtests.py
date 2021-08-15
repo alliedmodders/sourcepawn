@@ -384,6 +384,7 @@ class TestRunner(object):
     self.include_path = os.path.dirname(os.path.abspath(__file__))
     self.start_time_ = datetime.datetime.now()
     self.failures_ = set()
+    self.total_tests_ = 0
 
     # Walk up the test path looking for an 'include' folder.
     search_path, _ = os.path.split(self.include_path)
@@ -404,11 +405,16 @@ class TestRunner(object):
     if len(self.failures_):
       self.print_failures()
       return False
+
+    self.out("Done. {} tests passed.".format(self.total_tests_))
     return True
 
   def run_impl(self):
-    for mode in self.plan.modes:
-      self.run_mode(mode)
+    try:
+      for mode in self.plan.modes:
+        self.run_mode(mode)
+    except KeyboardInterrupt as e:
+      pass
 
   def run_mode(self, mode):
     spcomp = mode['spcomp']
@@ -433,6 +439,8 @@ class TestRunner(object):
     return self.plan.args.compile_only
 
   def run_test(self, mode, test):
+    self.total_tests_ += 1
+
     compile_only = self.should_compile_only(test)
     if compile_only and self.plan.args.runtime_only:
       return True

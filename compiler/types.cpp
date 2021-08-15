@@ -36,8 +36,8 @@ using namespace ke;
 
 TypeDictionary gTypes;
 
-Type::Type(const char* name, cell value)
- : name_(gAtoms.add(name)),
+Type::Type(sp::Atom* name, cell value)
+ : name_(name),
    value_(value),
    fixed_(0),
    intrinsic_(false),
@@ -102,7 +102,7 @@ Type::kindName() const
       if (funcenum_ptr_) {
         if (funcenum_ptr_->entries.size() > 1)
           return "typeset";
-        if (ke::StartsWith(name_->str(), "::"))
+        if (ke::StartsWith(name_->chars(), "::"))
           return "function";
         return "typedef";
       }
@@ -123,10 +123,10 @@ Type::isLabelTag() const
 TypeDictionary::TypeDictionary() {}
 
 Type*
-TypeDictionary::find(const char* name)
+TypeDictionary::find(sp::Atom* name)
 {
     for (const auto& type : types_) {
-        if (strcmp(type->name(), name) == 0)
+        if (type->nameAtom() == name)
             return type.get();
     }
     return nullptr;
@@ -143,13 +143,14 @@ TypeDictionary::find(int tag)
 Type*
 TypeDictionary::findOrAdd(const char* name)
 {
+    sp::Atom* atom = gAtoms.add(name);
     for (const auto& type : types_) {
-        if (strcmp(type->name(), name) == 0)
+        if (type->nameAtom() == atom)
             return type.get();
     }
 
     int tag = int(types_.size());
-    std::unique_ptr<Type> type = std::make_unique<Type>(name, tag);
+    std::unique_ptr<Type> type = std::make_unique<Type>(atom, tag);
     types_.push_back(std::move(type));
     return types_.back().get();
 }
@@ -294,14 +295,6 @@ pc_tagname(int tag)
 }
 
 int
-pc_findtag(const char* name)
-{
-    if (Type* type = gTypes.find(name))
-        return type->tagid();
-    return -1;
-}
-
-int
 pc_addtag(const char* name)
 {
     int val;
@@ -322,5 +315,5 @@ pc_addtag(const char* name)
 bool
 typeinfo_t::isCharArray() const
 {
-    return numdim() == 1 && tag == pc_tag_string;
+    return numdim() == 1 && tag() == pc_tag_string;
 }

@@ -37,6 +37,89 @@
 #include "symbols.h"
 
 bool
+SemaContext::BindType(const token_pos_t& pos, TypenameInfo* ti)
+{
+    if (ti->has_tag())
+        return true;
+
+    if (!BindType(pos, ti->type_atom, ti->is_label(), &ti->resolved_tag))
+        return false;
+    return true;
+}
+
+bool
+SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
+{
+    if (ti->has_tag())
+        return true;
+
+    int tag;
+    if (!BindType(pos, ti->type_atom, ti->is_label, &tag))
+        return false;
+
+    auto type = gTypes.find(tag);
+    if (auto enum_type = type->asEnumStruct()) {
+        if (ti->ident == iREFERENCE) {
+            report(pos, 136);
+            return false;
+        }
+
+        ti->set_tag(0);
+        ti->declared_tag = tag;
+        ti->dim.emplace_back(enum_type->addr());
+        if (!ti->dim_exprs.empty())
+            ti->dim_exprs.emplace_back(nullptr);
+
+        if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
+            ti->ident = iARRAY;
+            ti->has_postdims = true;
+        }
+    } else {
+        ti->set_tag(tag);
+    }
+    return true;
+}
+
+bool
+SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag)
+{
+    if (is_label) {
+        *tag = pc_addtag(atom->chars());
+        return true;
+    }
+
+    Type* type = gTypes.find(atom);
+    if (!type) {
+        report(pos, 139) << atom;
+        return false;
+    }
+
+    if (type->tagid() != pc_anytag && type->isDeclaredButNotDefined())
+        report(pos, 139) << atom;
+
+    *tag = type->tagid();
+    return true;
+}
+
+bool
+ParseTree::ResolveNames(SemaContext& sc)
+{
+    bool ok = true;
+    ok &= StmtList::EnterNames(sc);
+    ok &= StmtList::Bind(sc);
+    return ok;
+}
+
+bool
+StmtList::EnterNames(SemaContext& sc)
+{
+    bool ok = true;
+    for (const auto& stmt : stmts_)
+        ok &= stmt->EnterNames(sc);
+    return ok;
+}
+
+bool
 StmtList::Bind(SemaContext& sc)
 {
     bool ok = true;
@@ -61,11 +144,14 @@ BlockStmt::Bind(SemaContext& sc)
 }
 
 bool
-EnumDecl::Bind(SemaContext& sc)
+EnumDecl::EnterNames(SemaContext& sc)
 {
+    AutoErrorPos error_pos(pos_);
+
     int tag = 0;
     if (label_) {
-        if (pc_findtag(label_->chars()) == 0) {
+        auto type = gTypes.find(label_);
+        if (type && type->tagid() == 0) {
             // No implicit-int allowed.
             error(pos_, 169);
             label_ = nullptr;
@@ -90,7 +176,7 @@ EnumDecl::Bind(SemaContext& sc)
     }
 
     symbol* enumsym = nullptr;
-    PoolList<symbol*>* enumroot = nullptr;
+    EnumData* enumroot = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
             if ((enumsym = findglb(sc.cc(), name_, pos_.file)) != NULL) {
@@ -107,7 +193,7 @@ EnumDecl::Bind(SemaContext& sc)
             if (enumsym)
                 enumsym->enumroot = true;
             // start a new list for the element names
-            enumroot = gPoolAllocator.alloc<PoolList<symbol*>>();
+            enumroot = new EnumData();
         }
     }
 
@@ -118,6 +204,8 @@ EnumDecl::Bind(SemaContext& sc)
 
     cell value = 0;
     for (const auto& field : fields_ ) {
+        AutoErrorPos error_pos(field.pos);
+
         if (findconst(sc.cc(), sc.scope(), field.name, pos_.file))
             report(field.pos, 50) << field.name;
 
@@ -139,7 +227,7 @@ EnumDecl::Bind(SemaContext& sc)
         // add the constant to a separate list as well
         if (enumroot) {
             sym->enumfield = true;
-            enumroot->emplace_back(sym);
+            enumroot->children.emplace_back(sym);
         }
 
         if (multiplier_ == 1)
@@ -154,7 +242,52 @@ EnumDecl::Bind(SemaContext& sc)
         enumsym->setAddr(value);
         // assign the constant list
         assert(enumroot);
-        enumsym->dim.enumlist = enumroot;
+        enumsym->set_data(enumroot);
+    }
+    return true;
+}
+
+bool
+EnumDecl::Bind(SemaContext& sc)
+{
+    return true;
+}
+
+bool
+PstructDecl::EnterNames(SemaContext& sc)
+{
+    auto spec = deduce_layout_spec_by_name(name_);
+    if (!can_redef_layout_spec(spec, Layout_PawnStruct)) {
+        report(pos_, 110) << name_ << layout_spec_name(spec);
+        return false;
+    }
+    if (!isupper(*name_->chars())) {
+        error(pos_, 109, "struct");
+        return false;
+    }
+
+    ps_ = pstructs_add(name_);
+    gTypes.definePStruct(ps_->name->chars(), ps_);
+
+    for (auto& field : fields_) {
+        if (pstructs_getarg(ps_, field.name)) {
+            report(field.pos, 103) << field.name << layout_spec_name(Layout_PawnStruct);
+            return false;
+        }
+
+        auto arg = new structarg_t;
+        arg->type = field.type;
+        arg->name = field.name;
+        if (arg->type.ident == iARRAY)
+            arg->type.ident = iREFARRAY;
+
+        if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim[0] != 0)) {
+            error(field.pos, 69);
+            return false;
+        }
+
+        field.field = arg;
+        pstructs_addarg(ps_, arg);
     }
     return true;
 }
@@ -162,68 +295,56 @@ EnumDecl::Bind(SemaContext& sc)
 bool
 PstructDecl::Bind(SemaContext& sc)
 {
-    const char* name = name_->chars();
-    auto spec = deduce_layout_spec_by_name(name);
-    if (!can_redef_layout_spec(spec, Layout_PawnStruct)) {
-        report(pos_, 110) << name_ << layout_spec_name(spec);
-        return false;
-    }
-    if (!isupper(*name)) {
-        error(pos_, 109, "struct");
-        return false;
-    }
-
-    pstruct_t* pstruct = pstructs_add(name_);
-    gTypes.definePStruct(pstruct->name->chars(), pstruct);
-
+    bool ok = true;
     for (const auto& field : fields_) {
-        structarg_t arg;
-        arg.type = field.type;
-        arg.name = field.name;
-        if (arg.type.ident == iARRAY)
-            arg.type.ident = iREFARRAY;
-
-        if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim[0] != 0)) {
-            error(field.pos, 69);
-            return false;
-        }
-
-        if (!pstructs_addarg(pstruct, &arg)) {
-            report(field.pos, 103) << arg.name << layout_spec_name(Layout_PawnStruct);
-            return false;
-        }
+        ok &= field.field && sc.BindType(field.pos, &field.field->type);
     }
+    return ok;
+}
+
+bool
+TypedefDecl::EnterNames(SemaContext& sc)
+{
+    if (Type* prev_type = gTypes.find(name_)) {
+        report(pos_, 110) << name_ << prev_type->kindName();
+        return false;
+    }
+
+    fe_ = funcenums_add(name_);
     return true;
 }
 
 bool
 TypedefDecl::Bind(SemaContext& sc)
 {
-    Type* prev_type = gTypes.find(name_->chars());
-    if (prev_type && prev_type->isDefinedType()) {
-        report(pos_, 110) << name_ << prev_type->kindName();
+    auto ft = type_->Bind(sc);
+    if (!ft)
         return false;
-    }
 
-    funcenum_t* def = funcenums_add(name_);
-    functags_add(def, type_->ToFunctag(sc));
+    functags_add(fe_, ft);
     return true;
 }
 
 bool
-UsingDecl::Bind(SemaContext& sc)
+UsingDecl::EnterNames(SemaContext& sc)
 {
     declare_handle_intrinsics();
     return true;
 }
 
 functag_t*
-TypedefInfo::ToFunctag(SemaContext& sc) const
+TypedefInfo::Bind(SemaContext& sc)
 {
+    if (!sc.BindType(pos, &ret_type))
+        return nullptr;
+
     auto ft = new functag_t();
-    ft->ret_tag = ret_tag;
+    ft->ret_tag = ret_type.tag();
 
     for (auto& arg : args) {
+        if (!sc.BindType(pos, &arg->type))
+            return nullptr;
+
         if (arg->type.ident == iARRAY)
             ResolveArraySize(sc, pos, &arg->type, sARGUMENT);
 
@@ -239,23 +360,50 @@ TypedefInfo::ToFunctag(SemaContext& sc) const
 }
 
 bool
-TypesetDecl::Bind(SemaContext& sc)
+TypesetDecl::EnterNames(SemaContext& sc)
 {
-    Type* prev_type = gTypes.find(name_->chars());
-    if (prev_type && prev_type->isDefinedType()) {
+    if (Type* prev_type = gTypes.find(name_)) {
         report(pos_, 110) << name_ << prev_type->kindName();
         return false;
     }
 
-    funcenum_t* def = funcenums_add(name_);
-    for (const auto& type : types_)
-        functags_add(def, type->ToFunctag(sc));
+    fe_ = funcenums_add(name_);
     return true;
 }
 
 bool
+TypesetDecl::Bind(SemaContext& sc)
+{
+    bool ok = true;
+    for (const auto& type : types_) {
+        auto ft = type->Bind(sc);
+        if (!ft) {
+            ok = false;
+            continue;
+        }
+        functags_add(fe_, ft);
+    }
+    return ok;
+}
+
+bool
+ConstDecl::EnterNames(SemaContext& sc)
+{
+    sym_ = add_constant(sc.cc(), sc.scope(), name_, 0, vclass_, 0, pos_.file);
+    return !!sym_;
+}
+bool
 ConstDecl::Bind(SemaContext& sc)
 {
+    if (sc.func() && !EnterNames(sc))
+        return false;
+
+    if (!sym_)
+        return false;
+
+    if (!sc.BindType(pos_, &type_))
+        return false;
+
     if (!expr_->Bind(sc))
         return false;
     if (!expr_->Analyze(sc))
@@ -267,9 +415,10 @@ ConstDecl::Bind(SemaContext& sc)
         return false;
 
     AutoErrorPos aep(pos_);
-    matchtag(type_.tag, tag, 0);
+    matchtag(type_.tag(), tag, 0);
 
-    sym_ = add_constant(sc.cc(), sc.scope(), name_, value, vclass_, type_.tag, pos_.file);
+    sym_->setAddr(value);
+    sym_->tag = type_.tag();
     return true;
 }
 
@@ -287,10 +436,12 @@ IsShadowedName(SemaContext& sc, sp::Atom* name)
     return false;
 }
 
-
 bool
 VarDecl::Bind(SemaContext& sc)
 {
+    if (!sc.BindType(pos(), &type_))
+        return false;
+
     // |int x = x| should bind to outer x, not inner.
     if (init_)
         init_rhs()->Bind(sc);
@@ -298,17 +449,15 @@ VarDecl::Bind(SemaContext& sc)
     if (type_.ident == iARRAY)
         ResolveArraySize(sc, this);
 
-    if (type_.tag == pc_tag_void)
+    if (type_.tag() == pc_tag_void)
         error(pos_, 144);
 
-    // :TODO: introduce find-by-atom to improve compiler speed
-    bool should_define = false;
     if (vclass_ == sGLOBAL) {
         sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
         if (!sym_)
             sym_ = findglb(sc.cc(), name_, pos_.file);
 
-        if (sym_ && sym_->defined) {
+        if (sym_) {
             // Can't redefine a global or in-scope static variable.
             if ((!is_static_ && !sym_->is_static) ||
                 (sym_->is_static && sym_->fnumber == pos_.file))
@@ -323,8 +472,6 @@ VarDecl::Bind(SemaContext& sc)
             assert(type_.is_new);
             error(pos_, 162);
         }
-
-        should_define = !!sym_;
     }
 
     if (vclass_ != sGLOBAL) {
@@ -353,9 +500,9 @@ VarDecl::Bind(SemaContext& sc)
             error(pos_, 165);
     }
 
-    if (gTypes.find(type_.tag)->kind() == TypeKind::Struct) {
+    if (gTypes.find(type_.tag())->kind() == TypeKind::Struct) {
         if (!sym_) {
-            sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag);
+            sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag());
             AddGlobal(sc.cc(), sym_);
         } else {
             assert(sym_->is_struct);
@@ -370,9 +517,10 @@ VarDecl::Bind(SemaContext& sc)
                 ident = iREFARRAY;
 
             auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-            sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag, dim,
+            sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag(), dim,
                                type_.numdim(), type_.enum_struct_tag());
             sym_->defined = true;
+            sym_->is_static = is_static_;
             if (vclass_ == sGLOBAL)
                 AddGlobal(sc.cc(), sym_);
             else
@@ -385,7 +533,7 @@ VarDecl::Bind(SemaContext& sc)
         sym_->stock = is_stock_;
     }
 
-    if (vclass_ == sGLOBAL && should_define)
+    if (vclass_ == sGLOBAL)
         sym_->defined = true;
 
     if (is_public_) {
@@ -393,15 +541,19 @@ VarDecl::Bind(SemaContext& sc)
         sym_->usage |= uREAD;
     }
 
-    // Note: fnumber implies static scoping for symbol lookup, so until that's
-    // fixed we only set it for globals.
-    if (vclass_ == sGLOBAL && is_static_)
-        sym_->fnumber = pos_.file;
+    sym_->fnumber = pos_.file;
+    sym_->lnumber = pos_.line;
 
     // LHS bind should now succeed.
     if (init_)
         init_->left()->Bind(sc);
     return true;
+}
+
+bool
+VarDecl::BindType(SemaContext& sc)
+{
+    return sc.BindType(pos(), &type_);
 }
 
 bool
@@ -423,53 +575,22 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
 
     if (Parser::sInPreprocessor) {
         Parser::sDetectedIllegalPreprocessorSymbols = true;
-        if (sc_status == statFIRST) {
-            ke::SaveAndSet<bool> restore(&sc_enable_first_pass_error_display, true);
-            report(pos_, 230) << name_;
-        }
+
+        report(pos_, 230) << name_;
     }
 
-    sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
+    sym_ = findloc(sc.scope(), name_);
     if (!sym_)
-        sym_ = findloc(sc.scope(), name_);
+        sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
     if (!sym_)
         sym_ = findglb(sc.cc(), name_, pos_.file);
 
     if (!sym_) {
-        // We assume this is a function that hasn't been seen yet. We should
-        // either be in the first pass, or the second pass and skipping writes.
-        // If we're writing, then this is an error.
-        if (sc_status != statFIRST) {
-            report(pos_, 17) << name_;
-            return false;
-        }
-
-        sym_ = fetchfunc(sc.cc(), name_, pos_.file);
-    }
-
-    /* if the function is only in the table because it was inserted as a
-     * stub in the first pass (i.e. it was "used" but never declared or
-     * implemented, issue an error
-     */
-    if (sc_status != statFIRST && sym_->ident == iFUNCTN && !sym_->prototyped &&
-        sym_ != sc.func())
-    {
         report(pos_, 17) << name_;
         return false;
     }
 
-    // Aggressively mark all symbols as read. This is a workaround until the
-    // two-pass system can be removed. In the old parser, it was necessary
-    // to aggressively generate as much code as early as possible, because
-    // marking global functions as read produced correct output in the next
-    // pass. However, our new parser short-circuits during the analysis phase
-    // if an error occurs, which means we won't have our normal opportunities
-    // to call markusage().
-    //
-    // As a workaround, we always call markusage() during binding. Note that
-    // we preserve some old behavior where functions are not marked if being
-    // skipped.
-    if (!is_lval && !(sym_->ident == iFUNCTN && sc_status == statSKIP))
+    if (!is_lval)
         markusage(sym_, uREAD);
     return true;
 }
@@ -588,6 +709,9 @@ NewArrayExpr::Bind(SemaContext& sc)
     if (already_analyzed_)
         return true;
 
+    if (!sc.BindType(pos_, &type_))
+        return false;
+
     bool ok = true;
     for (const auto& expr : exprs_)
         ok &= expr->Bind(sc);
@@ -618,7 +742,20 @@ ReturnStmt::Bind(SemaContext& sc)
 {
     if (!expr_)
         return true;
-    return expr_->Bind(sc);
+
+    if (!expr_->Bind(sc))
+        return false;
+
+    // Do some peeking to see if this really returns an array. This is a
+    // compatibility hack.
+    if (auto sym_expr = expr_->AsSymbolExpr()) {
+        if (auto sym = sym_expr->sym()) {
+            if (sym->ident == iARRAY || sym->ident == iREFARRAY)
+                sc.func_node()->set_maybe_returns_array();
+        }
+    }
+
+    return true;
 }
 
 bool
@@ -677,63 +814,111 @@ SwitchStmt::Bind(SemaContext& sc)
 }
 
 bool
+FunctionDecl::EnterNames(SemaContext& sc)
+{
+    sp::Atom* name = info_->decl().name;
+
+    symbol* sym = nullptr;
+    if (!info_->decl().opertok) {
+        // Handle forwards.
+        sym = findglb(sc.cc(), name, pos_.file);
+        if (sym && !CanRedefine(sym))
+            return false;
+    }
+
+    if (!sym) {
+        sym = new symbol(name, 0, iFUNCTN, sGLOBAL, 0);
+
+        if (info_->decl().opertok) {
+            sym->is_operator = true;
+            sc.cc().globals()->AddChain(sym);
+        } else {
+            AddGlobal(sc.cc(), sym);
+        }
+    }
+
+    if (info_->body())
+        sym->function()->node = info_;
+    else if (info_->is_forward())
+        sym->function()->forward = info_;
+
+    info_->set_sym(sym);
+    return true;
+}
+
+bool
+FunctionDecl::CanRedefine(symbol* sym)
+{
+    if (sym->ident != iFUNCTN) {
+        report(pos_, 21) << name_;
+        return false;
+    }
+
+    auto data = sym->function();
+    if (data->forward && !info_->is_forward() && !info_->is_native() && !info_->is_stock() &&
+        !info_->is_static())
+    {
+        if (info_->is_public())
+            return true;
+
+        report(pos_, 245) << sym->name();
+
+        info_->set_is_public();
+        return true;
+    }
+
+    if (data->node) {
+        if (!data->node->is_public()) {
+            report(data->node->pos(), 412) << name_;
+            return false;
+        }
+        return true;
+    }
+
+    report(pos(), 21) << sym->name();
+    return false;
+}
+
+bool
 FunctionInfo::Bind(SemaContext& outer_sc)
 {
-    if (name_ && name_->chars()[0] == PUBLIC_CHAR) {
-        // :TODO: deprecate this syntax.
-        is_public_ = true;  // implicit public function
-        if (is_stock_)
-            error(42);      // invalid combination of class specifiers.
+    if (!outer_sc.BindType(pos_, &decl_.type))
+        return false;
+
+    // Only named functions get an early symbol in EnterNames.
+    if (!sym_)
+        sym_ = new symbol(decl_.name, 0, iFUNCTN, sGLOBAL, 0);
+
+    // This may not be set if EnterNames wasn't called (eg not a global).
+    if (body_ && !sym_->function()->node)
+        sym_->function()->node = this;
+
+    // The forward's prototype is canonical. If this symbol has a forward, we
+    // don't set or override the return type when we see the public
+    // implementation. Note that args are checked similarly in BindArgs.
+    if (!sym_->function()->forward || is_forward_) {
+        sym_->tag = decl_.type.tag();
+        sym_->explicit_return_type = decl_.type.is_new;
     }
 
-    {
-        AutoErrorPos error_pos(pos_);
-
-        if (decl_.opertok)
-            name_ = NameForOperator();
-
-        sym_ = fetchfunc(outer_sc.cc(), name_, pos_.file);
+    // But position info belongs to the implementation.
+    if (!sym_->function()->forward || is_public_) {
+        sym_->fnumber = pos_.file;
+        sym_->lnumber = pos_.line;
     }
 
-    SemaContext sc(sym_);
-    auto guard = ke::MakeScopeGuard([&]() -> void {
-        sc.set_func(nullptr);
-    });
-
-    if (strcmp(sym_->name(), uMAINFUNC) == 0) {
-        if (!args_.empty())
-            error(pos_, 5);     /* "main()" functions may not have any arguments */
-        sym_->usage |= uREAD;   /* "main()" is the program's entry point: always used */
-        is_public_ = true;
-    }
-
-    if (is_public_)
-        sym_->is_public = true;
-    if (is_static_)
-        sym_->is_static = true;
-    if (is_stock_)
-        sym_->stock = true;
-    if (is_forward_)
-        sym_->forward = true;
-    if (is_native_)
-        sym_->native = true;
-
-    sym_->fnumber = pos_.file;
-    sym_->lnumber = pos_.line;
-
-    bool ok = true;
-
+    // Ensure |this| argument exists.
     if (this_tag_) {
         Type* type = gTypes.find(*this_tag_);
 
         typeinfo_t typeinfo = {};
         if (symbol* enum_type = type->asEnumStruct()) {
-            typeinfo.tag = 0;
+            typeinfo.set_tag(0);
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
             typeinfo.dim.emplace_back(enum_type->addr());
         } else {
-            typeinfo.tag = *this_tag_;
+            typeinfo.set_tag(*this_tag_);
             typeinfo.ident = iVARIABLE;
             typeinfo.is_const = true;
         }
@@ -743,6 +928,43 @@ FunctionInfo::Bind(SemaContext& outer_sc)
         args_.emplace(args_.begin(), FunctionArg{decl});
     }
 
+    // Bind all argument types, so we can get an operator name if needed.
+    bool ok = true;
+    for (const auto& arg : args_)
+        ok &= arg.decl->BindType(outer_sc);
+
+    if (!ok)
+        return false;
+
+    if (name_ && name_->chars()[0] == PUBLIC_CHAR) {
+        // :TODO: deprecate this syntax.
+        is_public_ = true;  // implicit public function
+        if (is_stock_)
+            error(42);      // invalid combination of class specifiers.
+    }
+
+    if (decl_.opertok)
+        name_ = NameForOperator();
+
+    SemaContext sc(sym_, this);
+
+    if (strcmp(sym_->name(), uMAINFUNC) == 0) {
+        if (!args_.empty())
+            error(pos_, 5);     /* "main()" functions may not have any arguments */
+        sym_->usage |= uREAD;   /* "main()" is the program's entry point: always used */
+        is_public_ = true;
+    }
+
+    if (body_ || is_native_)
+        sym_->defined = true;
+    if (is_public_)
+        sym_->is_public = true;
+    if (is_static_)
+        sym_->is_static = true;
+    if (is_stock_)
+        sym_->stock = true;
+    if (is_native_)
+        sym_->native = true;
 
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {
@@ -759,19 +981,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
     if ((sym_->native || sym_->is_public || is_forward_) && decl_.type.numdim() > 0)
         error(pos_, 141);
 
-    // :TODO: remove this. errors are errors.
-    if (sc_status == statWRITE && (sym_->usage & uREAD) == 0 && !sym_->is_public && !is_native_) {
-        sym_->skipped = true;
-
-        if (!this_tag_) {
-            if (body_)
-                sym_->defined = true;
-            return true;
-        }
-
-        // always error on inline methods
-        sc_err_status = TRUE;
-    }
+    ok &= BindArgs(sc);
 
     if (body_)
         ok &= body_->Bind(sc);
@@ -783,20 +993,152 @@ FunctionInfo::Bind(SemaContext& outer_sc)
     return ok;
 }
 
+bool
+FunctionInfo::BindArgs(SemaContext& sc)
+{
+    PoolList<arginfo> arglist;
+
+    // Always have one empty argument at the end.
+    arglist.emplace_back();
+
+    AutoCountErrors errors;
+    for (const auto& parsed_arg : args_) {
+        const auto& var = parsed_arg.decl;
+        const auto& typeinfo = var->type();
+        symbol* argsym = var->sym();
+
+        AutoErrorPos pos(var->pos());
+
+        if (typeinfo.ident == iVARARGS) {
+            /* redimension the argument list, add the entry iVARARGS */
+            arglist.back().type.ident = iVARARGS;
+            arglist.back().type.set_tag(typeinfo.tag());
+            arglist.emplace_back();
+            continue;
+        }
+
+        Type* type = gTypes.find(typeinfo.semantic_tag());
+        if (type->isEnumStruct()) {
+            if (sym_->native)
+                error(135, type->name());
+        }
+
+        /* Stack layout:
+         *   base + 0*sizeof(cell)  == previous "base"
+         *   base + 1*sizeof(cell)  == function return address
+         *   base + 2*sizeof(cell)  == number of arguments
+         *   base + 3*sizeof(cell)  == first argument of the function
+         * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
+         *
+         * Since arglist has an empty terminator at the end, we actually add 2.
+         */
+        argsym->setAddr(static_cast<cell>((arglist.size() + 2) * sizeof(cell)));
+
+        arginfo& arg = arglist.back();
+        arg.name = var->name();
+        arg.type.ident = argsym->ident;
+        arg.type.is_const = argsym->is_const;
+        arg.type.set_tag(argsym->tag);
+        arg.type.dim = typeinfo.dim;
+        arg.type.declared_tag = typeinfo.enum_struct_tag();
+
+        if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
+            if (var->Analyze(sc) && var->init_rhs())
+                fill_arg_defvalue(var, &arg);
+        } else {
+            Expr* init = var->init_rhs();
+            if (init && init->Analyze(sc)) {
+                assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
+                arg.def = new DefaultArg();
+
+                int tag;
+                cell val;
+                if (!init->EvalConst(&val, &tag)) {
+                    error(8);
+
+                    // Populate to avoid errors.
+                    val = 0;
+                    tag = typeinfo.tag();
+                }
+                arg.def->tag = tag;
+                arg.def->val = ke::Some(val);
+
+                matchtag(arg.type.tag(), arg.def->tag, MATCHTAG_COERCE);
+            }
+        }
+
+        if (arg.type.ident == iREFERENCE)
+            argsym->usage |= uREAD; /* because references are passed back */
+        if (sym_->callback || sym_->stock || sym_->is_public)
+            argsym->usage |= uREAD; /* arguments of public functions are always "used" */
+
+        /* arguments of a public function may not have a default value */
+        if (sym_->is_public && arg.def)
+            error(59, var->name()->chars());
+
+        // Fill terminator argument.
+        arglist.emplace_back();
+    }
+
+    // Now, see if the function already had an argument list.
+    auto& prev_args = sym_->function()->args;
+    if (!prev_args[0].type.ident) {
+        // No, replace it with the new list.
+        sym_->function()->args = std::move(arglist);
+        return errors.ok();
+    }
+
+    // If we get here, we're a public and forward pair, and we need to compare
+    // to make sure the argument lists are compatible.
+    assert(sym_->function()->forward);
+    assert(sym_->function()->node);
+    token_pos_t error_pos = sym_->function()->node->pos();
+
+    size_t fwd_argc = prev_args.size();
+    size_t impl_argc = arglist.size();
+    if (is_forward_)
+        std::swap(fwd_argc, impl_argc);
+
+    // We allow forwards to omit arguments in their signature, so this is not
+    // a straight-up equality test.
+    if (impl_argc > fwd_argc) {
+        report(error_pos, 25);
+        return false;
+    }
+
+    for (size_t i = 0; i < impl_argc - 1; i++) {
+        if (!argcompare(&arglist[i], &prev_args[i]))
+            report(error_pos, 181) << arglist[i].name;
+    }
+
+    // No matter what, always replace the canonical argument list with the
+    // implementation's. This is so names will bind correctly in CallExpr,
+    // though we should really kill off arglist entirely and use VarDecls.
+    if (is_public_)
+        sym_->function()->args = std::move(arglist);
+
+    return errors.ok();
+}
+
 sp::Atom*
 FunctionInfo::NameForOperator()
 {
+    std::vector<std::string> params;
+
     int count = 0;
     int tags[2] = {0, 0};
     for (const auto& arg : args_) {
         auto var = arg.decl;
         if (count < 2)
-            tags[count] = var->type().tag;
+            tags[count] = var->type().tag();
         if (var->type().ident != iVARIABLE)
             report(pos_, 66) << var->name();
         if (var->init_rhs())
             report(pos_, 59) << var->name();
         count++;
+
+        auto type = gTypes.find(var->type().tag());
+        params.emplace_back(type->name());
     }
 
     /* for '!', '++' and '--', count must be 1
@@ -824,7 +1166,9 @@ FunctionInfo::NameForOperator()
     if (decl_.type.ident != iVARIABLE)
         error(pos_, 62);
 
-    return operator_symname(decl_.name->chars(), tags[0], tags[1], count, decl_.type.tag);
+    std::string name =
+        "operator" + get_token_string(decl_.opertok) + "(" + ke::Join(params, ",") + ")";
+    return gAtoms.add(name);
 }
 
 bool
@@ -858,25 +1202,32 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
 }
 
 bool
-EnumStructDecl::Bind(SemaContext& sc)
+EnumStructDecl::EnterNames(SemaContext& sc)
 {
     AutoCountErrors errors;
-    auto values = gPoolAllocator.alloc<PoolList<symbol*>>();
 
     if (findglb(sc.cc(), name_, pos_.file) || findconst(sc.cc(), sc.scope(), name_, pos_.file))
         report(pos_, 21) << name_;
 
     AutoErrorPos error_pos(pos_);
-    symbol* root = add_constant(sc.cc(), sc.scope(), name_, 0, sGLOBAL, 0, pos_.file);
-    root->tag = gTypes.defineEnumStruct(name_->chars(), root)->tagid();
-    root->enumroot = true;
-    root->ident = iENUMSTRUCT;
+    root_ = add_constant(sc.cc(), sc.scope(), name_, 0, sGLOBAL, 0, pos_.file);
+    root_->tag = gTypes.defineEnumStruct(name_->chars(), root_)->tagid();
+    root_->enumroot = true;
+    root_->ident = iENUMSTRUCT;
+
+    auto data = new EnumStructData;
+    root_->set_data(data);
+
+    std::unordered_set<sp::Atom*> seen;
 
     cell position = 0;
     for (auto& field : fields_) {
+        if (!sc.BindType(field.pos, &field.decl.type))
+            continue;
+
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
-        if (field.decl.type.semantic_tag() == root->tag) {
+        if (field.decl.type.semantic_tag() == root_->tag) {
             report(field.pos, 87) << name_;
             continue;
         }
@@ -898,36 +1249,24 @@ EnumStructDecl::Bind(SemaContext& sc)
             }
         }
 
-        auto field_name = DecorateInnerName(field.pos, field.decl.name);
-        if (!field_name)
-            continue;
-
-        if (findconst(sc.cc(), sc.scope(), field_name, pos_.file)) {
+        if (seen.count(field.decl.name)) {
             report(field.pos, 103) << field.decl.name << "enum struct";
             continue;
         }
+        seen.emplace(field.decl.name);
 
-        symbol* child = add_constant(sc.cc(), sc.scope(), field_name, position, sGLOBAL,
-                                     root->tag, pos_.file);
-        if (!child)
-            continue;
+        symbol* child = new symbol(field.decl.name, position, iCONSTEXPR, sGLOBAL, root_->tag);
         child->x.tags.index = field.decl.type.semantic_tag();
         child->x.tags.field = 0;
         child->dim.array.length = field.decl.type.numdim() ? field.decl.type.dim[0] : 0;
         child->dim.array.level = 0;
-        child->set_parent(root);
-        if (values) {
-            child->enumfield = true;
-            values->emplace_back(child);
-        }
-
-        // Override the name now that it's in the hashtable. We never use the
-        // fully decorated name aside from lookups.
-        child->setName(field.decl.name);
+        child->set_parent(root_);
+        child->enumfield = true;
+        data->fields.emplace_back(child);
 
         cell size = 1;
         if (field.decl.type.numdim()) {
-            size = field.decl.type.tag == pc_tag_string
+            size = field.decl.type.tag() == pc_tag_string
                    ? char_array_cells(field.decl.type.dim[0])
                    : field.decl.type.dim[0];
         }
@@ -937,28 +1276,97 @@ EnumStructDecl::Bind(SemaContext& sc)
     if (!position)
         report(pos_, 119) << name_;
 
-    assert(root->enumroot);
-    root->setAddr(position);
-    root->dim.enumlist = values;
-
-    for (const auto& fun : methods_) {
-        auto inner_name = DecorateInnerName(fun->pos(), fun->info()->decl().name);
-        if (!inner_name)
+    for (const auto& decl : methods_) {
+        auto info = decl->info();
+        if (seen.count(decl->name())) {
+            report(decl->pos(), 103) << decl->name() << "enum struct";
             continue;
+        }
+        seen.emplace(decl->name());
 
-        fun->info()->set_name(inner_name);
-        fun->info()->set_this_tag(root->tag);
-        fun->Bind(sc);
+        auto sym = new symbol(decl->name(), 0, iFUNCTN, sGLOBAL, 0);
+        sym->set_parent(root_);
+        info->set_sym(sym);
+        data->methods.emplace_back(sym);
     }
+
+    assert(root_->enumroot);
+    root_->setAddr(position);
 
     return errors.ok();
 }
 
-sp::Atom*
-EnumStructDecl::DecorateInnerName(const token_pos_t& pos, sp::Atom* field_name)
+bool
+EnumStructDecl::Bind(SemaContext& sc)
 {
-    auto full_name = ke::StringPrintf("%s::%s", name_->chars(), field_name->chars());
+    if (!root_)
+        return false;
+
+    AutoCountErrors errors;
+    for (const auto& fun : methods_) {
+        auto inner_name = DecorateInnerName(name_, fun->info()->decl().name);
+        if (!inner_name)
+            continue;
+
+        fun->info()->set_name(inner_name);
+        fun->info()->set_this_tag(root_->tag);
+        fun->Bind(sc);
+    }
+    return errors.ok();
+}
+
+sp::Atom*
+Decl::DecorateInnerName(sp::Atom* parent_name, sp::Atom* field_name)
+{
+    auto full_name = ke::StringPrintf("%s::%s", parent_name->chars(), field_name->chars());
     return gAtoms.add(full_name);
+}
+
+bool
+MethodmapDecl::EnterNames(SemaContext& sc)
+{
+    AutoErrorPos error_pos(pos_);
+
+    map_ = methodmap_add(nullptr, Layout_MethodMap, name_);
+    gTypes.defineMethodmap(name_->chars(), map_);
+
+    sym_ = declare_methodmap_symbol(sc.cc(), map_);
+    if (!sym_)
+        return false;
+
+    for (auto& prop : properties_) {
+        if (map_->methods.count(prop->name)) {
+            report(prop->pos, 103) << prop->name << "methodmap";
+            continue;
+        }
+
+        auto method = new methodmap_method_t(map_);
+        method->name = prop->name;
+        map_->methods.emplace(prop->name, method);
+
+        prop->entry = method;
+    }
+
+    for (auto& method : methods_) {
+        if (map_->methods.count(method->decl->name())) {
+            report(method->decl->pos(), 103) << method->decl->name() << "methodmap";
+            continue;
+        }
+
+        auto m = new methodmap_method_t(map_);
+        m->name = method->decl->name();
+        if (m->name == map_->name) {
+            if (map_->ctor) {
+                report(method->decl->pos(), 113) << method->decl->name();
+                continue;
+            }
+            map_->ctor = m;
+        }
+        map_->methods.emplace(m->name, m);
+
+        method->entry = m;
+    }
+    return true;
 }
 
 bool
@@ -966,41 +1374,58 @@ MethodmapDecl::Bind(SemaContext& sc)
 {
     AutoCountErrors errors;
 
-    AutoErrorPos error_pos(pos_);
-    declare_methodmap_symbol(sc.cc(), map_, true);
+    methodmap_t* extends_map = nullptr;
+    if (extends_) {
+        if ((extends_map = methodmap_find_by_name(extends_)) == nullptr)
+            report(pos_, 102) << "methodmap" << extends_;
+    }
 
-    std::unordered_set<sp::Atom*> seen;
-    for (const auto& prop : properties_) {
-        if (seen.count(prop->name)) {
-            report(prop->pos, 103) << prop->name << "methodmap";
-            continue;
+    if (extends_map) {
+        if (!extends_map->is_bound)
+            report(pos_, 409) << extends_;
+
+        for (auto iter = extends_map; iter; iter = iter->parent) {
+            if (iter == map_) {
+                extends_map = nullptr;
+                report(pos_, 410);
+            }
         }
-        seen.emplace(prop->name);
+    }
+
+    map_->parent = extends_map;
+    if (map_->parent)
+        map_->nullable = map_->parent->nullable;
+
+    map_->is_bound = true;
+
+    for (const auto& prop : properties_) {
+        if (!sc.BindType(prop->pos, &prop->type))
+            return false;
 
         if (prop->type.numdim() > 0) {
             report(prop->pos, 82);
             continue;
         }
 
-        auto method = new methodmap_method_t(map_);
-        method->name = prop->name;
+        auto method = prop->entry;
 
-        if (prop->getter && BindGetter(sc, prop))
+        if (prop->getter && BindGetter(sc, prop)) {
             method->getter = prop->getter->sym();
-        if (prop->setter && BindSetter(sc, prop))
-            method->setter = prop->setter->sym();
+            method->getter->set_parent(sym_);
 
-        if (method->getter || method->setter)
-            map_->methods.emplace(prop->name, method);
+            auto name = ke::StringPrintf("%s::%s::get", name_->chars(), prop->name->chars());
+            method->getter->setName(gAtoms.add(name));
+        }
+        if (prop->setter && BindSetter(sc, prop)) {
+            method->setter = prop->setter->sym();
+            method->setter->set_parent(sym_);
+
+            auto name = ke::StringPrintf("%s::%s::set", name_->chars(), prop->name->chars());
+            method->setter->setName(gAtoms.add(name));
+        }
     }
 
     for (const auto& method : methods_) {
-        if (seen.count(method->decl->name())) {
-            report(method->decl->pos(), 103) << method->decl->name() << "methodmap";
-            continue;
-        }
-        seen.emplace(method->decl->name());
-
         bool is_ctor = false;
         if (method->decl->name() == map_->name) {
             // Constructors may not be static.
@@ -1008,14 +1433,10 @@ MethodmapDecl::Bind(SemaContext& sc)
                 report(method->decl->pos(), 175);
                 continue;
             }
-            if (map_->ctor) {
-                report(method->decl->pos(), 113) << method->decl->name();
-                continue;
-            }
             is_ctor = true;
 
             auto& type = method->decl->info()->mutable_type();
-            type.tag = map_->tag;
+            type.set_tag(map_->tag);
             type.ident = iVARIABLE;
             type.is_new = true;
         } else if (method->decl->info()->type().ident == 0) {
@@ -1030,20 +1451,16 @@ MethodmapDecl::Bind(SemaContext& sc)
         if (!method->decl->Bind(sc))
             continue;
 
-        auto m = new methodmap_method_t(map_);
-        m->name = method->decl->name();
-        m->target = method->decl->sym();
+        method->decl->sym()->set_parent(sym_);
+        method->decl->sym()->setName(DecorateInnerName(name_, method->decl->name()));
 
-        if (is_ctor)
-            map_->ctor = m;
+        auto m = method->entry;
+        m->target = method->decl->sym();
         if (method->is_static)
             m->is_static = true;
-
-        map_->methods.emplace(m->name, m);
     }
 
     map_->keyword_nullable = nullable_;
-
     return errors.ok();
 }
 
@@ -1070,20 +1487,37 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
 
     // Must have one extra argument taking the return type.
     if (fun->args().size() > 1) {
-        report(150) << pc_tagname(prop->type.tag);
-        return false;
-    }
-
-    auto decl = fun->args()[0].decl;
-    if (decl->type().ident != iVARIABLE || decl->init_rhs() || decl->type().tag != prop->type.tag)
-    {
-        report(150) << pc_tagname(prop->type.tag);
+        report(prop->pos, 150) << pc_tagname(prop->type.tag());
         return false;
     }
 
     fun->set_this_tag(map_->tag);
 
-    return fun->Bind(sc);
+    if (!fun->Bind(sc))
+        return false;
+
+    if (fun->args().size() <= 1) {
+        report(prop->pos, 150) << pc_tagname(prop->type.tag());
+        return false;
+    }
+
+    auto decl = fun->args()[1].decl;
+    if (decl->type().ident != iVARIABLE || decl->init_rhs() ||
+        decl->type().tag() != prop->type.tag())
+    {
+        report(prop->pos, 150) << pc_tagname(prop->type.tag());
+        return false;
+    }
+    return true;
+}
+
+bool
+CastExpr::Bind(SemaContext& sc)
+{
+    bool ok = true;
+    ok &= sc.BindType(pos_, &type_);
+    ok &= expr_->Bind(sc);
+    return ok;
 }
 
 bool

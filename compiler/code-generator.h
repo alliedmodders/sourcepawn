@@ -23,12 +23,15 @@
 class CodegenContext
 {
   public:
-    explicit CodegenContext(symbol* func)
-      : func_(func)
+    explicit CodegenContext(CompileContext& cc, symbol* func)
+      : cc_(cc),
+        func_(func)
     {}
 
+    CompileContext& cc() { return cc_; }
     symbol* func() const { return func_; }
 
   private:
+    CompileContext& cc_;
     symbol* func_;
 };

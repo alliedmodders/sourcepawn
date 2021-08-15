@@ -1,6 +1,17 @@
 SourcePawn 1.12
 ---------------
 
+SourcePawn 1.12 contains a major rewrite of the compiler. This rewrite is
+intended to allow rapid feature development and improve the health and
+stability of the language. It fixes many bugs, and as a result, old programs
+may not compiler.
+
+Notably, SourcePawn 1.12 does not hide errors in unused functions anymore. If a
+stock is unused, and has errors, the errors should be fixed or the stock should
+be removed.
+
+Otherwise, common errors upgrading to 1.12 are listed below.
+
 ## Assignment Changes
 
 The following code is no longer valid:
@@ -16,6 +27,15 @@ now evaluates first, the symbol `i` does not exist.
 The fix is to explicitly initialize to zero:
 
     int i = 0;
+
+In addition, the following code is no longer valid:
+
+    static const int color[4] = { 0, 0, 0, 0 };
+
+    color[1] = 255;
+
+In previous versions, the "const" keyword was not respected. It is now properly
+implemented.
 
 ## Return Value Changes
 
@@ -35,6 +55,21 @@ To ease the transition to the new semantic checker, spcomp will emit a warning
 when the return value is an enum, boolean, or integer. Any other type is an
 error and compilation will fail.
 
+## Returning Arrays
+
+Functions that return arrays now MUST use transitional syntax. The following
+will not work:
+
+    String:GetAString() {
+        return "hello";
+    }
+
+Instead, it must be:
+
+    char[] GetAString() {
+        return "hello";
+    }
+
 ## Syntax Changes
 
 Two obscure syntax options have been deprecated, and will emit a warning. Using
@@ -49,6 +84,12 @@ conditionals.
 
     do {
     } while i;
+
+## pragma changes
+
+`#pragma semicolon 1` now only affects the current file, and does not affect
+sub-files. This is to enable better compatibility with include files. This also
+makes language changes less risky for extension developers.
 
 ## Array Changes
 

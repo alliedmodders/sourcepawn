@@ -32,6 +32,10 @@ def main():
                         help = "Optional verification tool for .smx files")
     parser.add_argument("--collect-smx", type = str, default = None,
                         help = "Copy .smx files to the given folder")
+    parser.add_argument("--log", type = str, default = None,
+                        help = "Write output log to a file")
+    parser.add_argument("--retry-bad", default = False, action = 'store_true',
+                        help = "Retry previously known bad scripts")
 
     args = parser.parse_args()
 
@@ -57,9 +61,13 @@ class Runner(object):
         self.progress_ = 0
         self.skip_set_ = set()
         self.missing_includes_ = {}
+        self.log_ = sys.stderr
 
         self.includes_ = [os.path.join(self.args_.corpus, 'include')]
         self.includes_.extend(args.include)
+
+        if self.args_.log:
+            self.log_ = open(self.args_.log, 'wt')
 
         more_includes = os.path.join(self.args_.corpus, 'corpus_include.list')
         if os.path.exists(more_includes):
@@ -69,7 +77,7 @@ class Runner(object):
                     self.includes_.append(include)
 
         self.skip_file_path_ = os.path.join(self.args_.corpus, 'corpus_skip.list')
-        if os.path.exists(self.skip_file_path_):
+        if os.path.exists(self.skip_file_path_) and not self.args_.retry_bad:
             with open(self.skip_file_path_, 'rt') as fp:
                 for line in fp.readlines():
                     self.skip_set_.add(line.strip())
@@ -87,6 +95,17 @@ class Runner(object):
         missing = sorted(self.missing_includes_.items(), key=lambda item: item[1])
         for include, encounters in missing:
             print("Missing include {} used {} times.".format(include, encounters))
+
+        # Re-sort the skip list.
+        if os.path.exists(self.skip_file_path_):
+            skip_set = set()
+            with open(self.skip_file_path_, 'rt') as fp:
+                for line in fp.readlines():
+                    skip_set.add(line.strip())
+
+            with open(self.skip_file_path_, 'wt') as fp:
+                for path in sorted(skip_set):
+                    fp.write(path + "\n")
 
     def run_st(self, bar):
         for i in range(len(self.files_)):
@@ -145,31 +164,36 @@ class Runner(object):
             ok = False
             output = None
             try:
-                subprocess.check_output(argv, stderr = subprocess.STDOUT)
+                subprocess.check_output(argv, stderr = subprocess.STDOUT, timeout = 10)
                 ok = True
             except KeyboardInterrupt:
                 raise
             except subprocess.CalledProcessError as e:
                 output = e.output
                 output = output.decode('utf-8', errors = 'ignore')
+            except subprocess.TimeoutExpired as e:
+                output = "timed out"
             except:
                 pass
         else:
             ok = True
             output = ''
             output_file = path
+            argv = []
 
         if ok and self.args_.verifier:
             argv = [self.args_.verifier, output_file]
             ok = False
             try:
-                subprocess.check_output(argv, stderr = subprocess.STDOUT)
+                subprocess.check_output(argv, stderr = subprocess.STDOUT, timeout = 10)
                 ok = True
             except KeyboardInterrupt:
                 raise
             except subprocess.CalledProcessError as e:
                 output = e.output
                 output = output.decode('utf-8', errors = 'ignore')
+            except subprocess.TimeoutExpired as e:
+                output = "timed out"
             except:
                 pass
 
@@ -182,22 +206,30 @@ class Runner(object):
     def handle_result(self, result_tuple):
         ok, path, output, argv = result_tuple
 
+        if output is None:
+            output = ""
+
         remove = False
         if not ok:
+            if output == "timed out":
+                self.log_.write("timed out: " + path + "\n")
+            else:
+                self.log_.write("failed: " + path + "\n")
+            self.log_.write("    " + ' '.join(argv) + "\n")
+
             if self.args_.diagnose:
-                diagnose_error(path, output.decode('utf8'))
+                remove = diagnose_error(os.path.join(self.args_.corpus, path), output)
             elif self.args_.remove_bad:
-                print("failed: " + path)
-                print("    " + ' '.join(argv))
                 if self.args_.commit:
                     remove = True
-                m = re.search("cannot read from file: \"(.+)\"", output)
-                if m is not None:
-                    include = m.group(1)
-                    self.missing_includes_[include] = self.missing_includes_.get(include, 0) + 1
+
+            m = re.search("cannot read from file: \"(.+)\"", output)
+            if m is not None:
+                include = m.group(1)
+                self.missing_includes_[include] = self.missing_includes_.get(include, 0) + 1
         else:
             if self.args_.remove_good:
-                print("rm \"{}\"".format(path))
+                self.log_.write("rm \"{}\"".format(path) + "\n")
                 if self.args_.commit:
                     remove = True
 
@@ -232,10 +264,9 @@ def diagnose_error(path, output):
         line = sys.stdin.readline()
         line = line.strip()
         if line == 'D' or line == 'd':
-            os.unlink(path)
-            return
+            return True
         elif line == 'S' or line == 's':
-            return
+            return False
 
 def extract_line(path, number):
     with open(path, 'rb') as fp:

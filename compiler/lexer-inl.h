@@ -50,11 +50,3 @@ StringToCells(const char* str, size_t len, const T& litadd)
         litadd(0);
     }
 }
-
-// Returns true if compilation is in its second phase (writing phase) and has
-// so far proceeded without error.
-static inline bool
-cc_ok()
-{
-    return sc_status == statWRITE && sc_total_errors == 0;
-}

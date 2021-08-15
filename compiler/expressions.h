@@ -63,8 +63,6 @@ void emit_userop(const UserOperation& user_op, value* lval);
 int commutative(void (*oper)());
 cell calc(cell left, void (*oper)(), cell right, char* boolresult);
 bool is_valid_index_tag(int tag);
-int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag,
-                 int fnumber);
 int matchtag(int formaltag, int actualtag, int flags);
 int matchtag_commutative(int formaltag, int actualtag, int flags);
 int matchtag_string(int ident, int tag);

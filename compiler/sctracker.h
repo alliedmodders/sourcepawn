@@ -21,7 +21,8 @@ struct funcenum_t {
     std::vector<functag_t*> entries;
 };
 
-struct structarg_t {
+struct structarg_t : public PoolObject
+{
     structarg_t()
       : type(),
         name(nullptr),
@@ -35,11 +36,12 @@ struct structarg_t {
     int index;
 };
 
-struct pstruct_t {
+struct pstruct_t : public PoolObject
+{
     explicit pstruct_t(sp::Atom* name);
 
     sp::Atom* name;
-    std::vector<std::unique_ptr<structarg_t>> args;
+    PoolList<structarg_t*> args;
 };
 
 // The ordering of these definitions should be preserved for
@@ -71,18 +73,7 @@ struct methodmap_method_t : public PoolObject
     symbol* setter;
     bool is_static;
 
-    int property_tag() const {
-        assert(getter || setter);
-        if (getter)
-            return getter->tag;
-        arginfo* thisp = &setter->function()->args[0];
-        if (thisp->type.ident == 0)
-            return pc_tag_void;
-        arginfo* valp = &setter->function()->args[1];
-        if (valp->type.ident != iVARIABLE)
-            return pc_tag_void;
-        return valp->type.tag;
-    }
+    int property_tag() const;
 };
 
 struct methodmap_t : public SymbolData
@@ -106,6 +97,12 @@ struct methodmap_t : public SymbolData
     // Shortcut.
     methodmap_method_t* dtor;
     methodmap_method_t* ctor;
+
+    // Set in MethodmapDecl::Bind.
+    bool is_bound;
+
+    // Original enum list.
+    EnumData* enum_data;
 };
 
 /**
@@ -114,7 +111,7 @@ struct methodmap_t : public SymbolData
 pstruct_t* pstructs_add(sp::Atom* name);
 void pstructs_free();
 pstruct_t* pstructs_find(const char* name);
-structarg_t* pstructs_addarg(pstruct_t* pstruct, const structarg_t* arg);
+void pstructs_addarg(pstruct_t* pstruct, structarg_t* arg);
 const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
 
 /**
@@ -130,7 +127,7 @@ functag_t* functag_from_tag(int tag);
  * Given a name or tag, find any extra weirdness it has associated with it.
  */
 LayoutSpec deduce_layout_spec_by_tag(int tag);
-LayoutSpec deduce_layout_spec_by_name(const char* name);
+LayoutSpec deduce_layout_spec_by_name(sp::Atom* name);
 const char* layout_spec_name(LayoutSpec spec);
 bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 

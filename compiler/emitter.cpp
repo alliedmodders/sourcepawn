@@ -52,15 +52,14 @@ static int fcurseg; /* the file number (fcurrent) for the active segment */
 static inline void
 stgwrite(const char* st)
 {
-    if (sc_status == statWRITE)
-        gAsmBuffer << st;
+    gAsmBuffer << st;
 }
 
 static inline void
 stgwrite(const std::string& st)
 {
-    if (sc_status == statWRITE)
-        gAsmBuffer << st;
+    assert(!st.empty());
+    gAsmBuffer << st;
 }
 
 DataQueue::DataQueue()
@@ -192,7 +191,7 @@ DataEmitter::Finish()
 void
 DataEmitter::DumpZeroes(cell nzeroes)
 {
-    if (sc_status == statSKIP || nzeroes <= 0)
+    if (nzeroes <= 0)
         return;
 
     Finish();
@@ -295,7 +294,7 @@ writetrailer(void)
 void
 begcseg(void)
 {
-    if (sc_status != statSKIP && (curseg != sIN_CSEG || fcurrent != fcurseg)) {
+    if (curseg != sIN_CSEG || fcurrent != fcurseg) {
         stgwrite("\n");
         stgwrite("CODE ");
         outval(fcurrent, FALSE);
@@ -314,7 +313,7 @@ begcseg(void)
 void
 begdseg(void)
 {
-    if (sc_status != statSKIP && (curseg != sIN_DSEG || fcurrent != fcurseg)) {
+    if (curseg != sIN_DSEG || fcurrent != fcurseg) {
         stgwrite("\n");
         stgwrite("DATA ");
         outval(fcurrent, FALSE);
@@ -337,7 +336,7 @@ setline(int chkbounds)
         stgwrite("\t; line ");
         outval(fline, TRUE);
     }
-    if ((sc_debug & sSYMBOLIC) != 0 || (chkbounds && (sc_debug & sCHKBOUNDS) != 0)) {
+    if ((sc_debug & sSYMBOLIC) != 0) {
         /* generate a "break" (start statement) opcode rather than a "line" opcode
          * because earlier versions of Small/Pawn have an incompatible version of the
          * line opcode
@@ -352,7 +351,7 @@ setline(int chkbounds)
 void
 setfiledirect(const char* name)
 {
-    if (sc_status == statFIRST && sc_listing) {
+    if (sc_listing) {
         assert(name != NULL);
         gAsmBuffer << "#file " << name << "\n";
     }
@@ -361,7 +360,7 @@ setfiledirect(const char* name)
 void
 setlinedirect(int line)
 {
-    if (sc_status == statFIRST && sc_listing)
+    if (sc_listing)
         gAsmBuffer << "#line " << line << "\n";
 }
 
@@ -963,6 +962,7 @@ ffcall(symbol* sym, int numargs)
         if (sc_asmfile &&
             ((!isalpha(symname[0]) && symname[0] != '_' && symname[0] != sc_ctrlchar)))
         {
+            assert(!symname.empty());
             stgwrite("\t; ");
             stgwrite(symname);
         }
@@ -1585,8 +1585,7 @@ invoke_getter(methodmap_method_t* method)
     pushreg(sPRI);
     ffcall(method->getter, 1);
 
-    if (sc_status != statSKIP)
-        markusage(method->getter, uREAD);
+    markusage(method->getter, uREAD);
 }
 
 void
@@ -1605,8 +1604,7 @@ invoke_setter(methodmap_method_t* method, int save)
     if (save)
         popreg(sPRI);
 
-    if (sc_status != statSKIP)
-        markusage(method->setter, uREAD);
+    markusage(method->setter, uREAD);
 }
 
 // function value -> pri
@@ -1624,8 +1622,7 @@ load_glbfn(symbol* sym)
     stgwrite("\n");
     code_idx += opcodes(1) + opargs(1);
 
-    if (sc_status != statSKIP)
-        markusage(sym, uREAD);
+    markusage(sym, uREAD);
 }
 
 // Array initialization. Uses and clobbers PRI.
