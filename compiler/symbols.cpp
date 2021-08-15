@@ -23,7 +23,9 @@
 #include "symbols.h"
 
 #include "array-helpers.h"
+#include "errors.h"
 #include "lexer.h"
+#include "parser.h"
 #include "sc.h"
 #include "sclist.h"
 #include "scvars.h"
@@ -535,5 +537,313 @@ operator_symname(const char* opername, int tag1, int tag2, int numtags, int resu
     else
         symname = ke::StringPrintf("%s%s%s", tag2str(tagstr1, tag1), opername, tag2str(tagstr2, tag2));
     return gAtoms.add(symname);
+}
+
+/*
+ *  Finds a function in the global symbol table or creates a new entry.
+ *  It does some basic processing and error checking.
+ */
+symbol*
+fetchfunc(const char* name)
+{
+    symbol* sym;
+
+    if ((sym = findglb(name)) != 0) { /* already in symbol table? */
+        if (sym->ident != iFUNCTN) {
+            error(21, name); /* yes, but not as a function */
+            return NULL;     /* make sure the old symbol is not damaged */
+        } else if (sym->native) {
+            error(21, name); /* yes, and it is a native */
+        }
+        assert(sym->vclass == sGLOBAL);
+    } else {
+        /* don't set the "uDEFINE" flag; it may be a prototype */
+        sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0);
+        assert(sym != NULL); /* fatal error 103 must be given on error */
+    }
+    if (pc_deprecate.size() > 0) {
+        assert(sym != NULL);
+        sym->deprecated = true;
+        if (sc_status == statWRITE) {
+            sym->documentation = std::move(pc_deprecate);
+        } else {
+            pc_deprecate = "";
+        }
+    }
+
+    return sym;
+}
+
+int
+check_operatortag(int opertok, int resulttag, const char* opername)
+{
+    assert(opername != NULL && strlen(opername) > 0);
+    switch (opertok) {
+        case '!':
+        case '<':
+        case '>':
+        case tlEQ:
+        case tlNE:
+        case tlLE:
+        case tlGE:
+            if (resulttag != pc_tag_bool) {
+                error(63, opername, "bool:"); /* operator X requires a "bool:" result tag */
+                return FALSE;
+            }
+            break;
+        case '~':
+            if (resulttag != 0) {
+                error(63, opername, "_:"); /* operator "~" requires a "_:" result tag */
+                return FALSE;
+            }
+            break;
+    }
+    return TRUE;
+}
+
+static int
+parse_funcname(const char* fname, int* tag1, int* tag2, char* opname, size_t opname_len)
+{
+    const char* ptr;
+    int unary;
+
+    /* tags are only positive, so if the function name starts with a '-',
+     * the operator is an unary '-' or '--' operator.
+     */
+    if (*fname == '-') {
+        *tag1 = 0;
+        unary = TRUE;
+        ptr = fname;
+    } else {
+        *tag1 = (int)strtol(fname, (char**)&ptr, 16);
+        unary = ptr == fname; /* unary operator if it doesn't start with a tag name */
+    }
+    assert(!unary || *tag1 == 0);
+    assert(*ptr != '\0');
+    size_t chars_to_copy = 0;
+    for (const char* iter = ptr; *iter && !isdigit(*iter); iter++)
+        chars_to_copy++;
+    ke::SafeStrcpyN(opname, opname_len, ptr, chars_to_copy);
+    *tag2 = (int)strtol(&ptr[chars_to_copy], NULL, 16);
+    return unary;
+}
+
+std::string
+funcdisplayname(const char* funcname)
+{
+    int tags[2];
+    char opname[10];
+    int unary;
+
+    if (isalpha(*funcname) || *funcname == '_' || *funcname == PUBLIC_CHAR || *funcname == '\0')
+        return funcname;
+
+    unary = parse_funcname(funcname, &tags[0], &tags[1], opname, sizeof(opname));
+    Type* rhsType = gTypes.find(tags[1]);
+    assert(rhsType != NULL);
+    if (unary) {
+        return ke::StringPrintf("operator%s(%s:)", opname, rhsType->name());
+    }
+
+    Type* lhsType = gTypes.find(tags[0]);
+    assert(lhsType != NULL);
+    /* special case: the assignment operator has the return value as the 2nd tag */
+    if (opname[0] == '=' && opname[1] == '\0')
+        return ke::StringPrintf("%s:operator%s(%s:)", lhsType->name(), opname, rhsType->name());
+    return ke::StringPrintf("operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
+}
+
+static inline bool
+is_symbol_unused(symbol* sym)
+{
+    if (sym->parent())
+        return false;
+    if (!sym->is_unreferenced())
+        return false;
+    if (sym->is_public)
+        return false;
+    if (sym->ident == iVARIABLE || sym->ident == iARRAY)
+        return true;
+    return sym->ident == iFUNCTN && !sym->native &&
+           strcmp(sym->name(), uMAINFUNC) != 0;
+}
+
+void
+reduce_referrers(symbol* root)
+{
+    std::vector<symbol*> work;
+
+    // Enqueue all unreferred symbols.
+    for (symbol* sym = root->next; sym; sym = sym->next) {
+        if (is_symbol_unused(sym)) {
+            sym->queued = true;
+            work.push_back(sym);
+        }
+    }
+
+    while (!work.empty()) {
+        symbol* dead = ke::PopBack(&work);
+        dead->usage &= ~(uREAD | uWRITTEN);
+
+        for (symbol* sym : dead->refers_to()) {
+            sym->drop_reference_from(dead);
+            if (is_symbol_unused(sym) && !sym->queued) {
+                // During compilation, anything marked as stock will be omitted from
+                // the final binary *without warning*. If a stock calls a non-stock
+                // function, we want to avoid warnings on that function as well, so
+                // we propagate the stock bit.
+                if (dead->stock)
+                    sym->stock = true;
+
+                sym->queued = true;
+                work.push_back(sym);
+            }
+        }
+    }
+}
+
+// Determine the set of live functions. Note that this must run before delete_symbols,
+// since that resets referrer lists.
+void
+deduce_liveness(symbol* root)
+{
+    std::vector<symbol*> work;
+
+    // The root set is all public functions.
+    for (symbol* sym = root->next; sym; sym = sym->next) {
+        if (sym->ident != iFUNCTN)
+            continue;
+        if (sym->native)
+            continue;
+
+        if (sym->is_public) {
+            sym->queued = true;
+            work.push_back(sym);
+        } else {
+            sym->queued = false;
+        }
+    }
+
+    // Traverse referrers to find the transitive set of live functions.
+    while (!work.empty()) {
+        symbol* live = ke::PopBack(&work);
+
+        for (const auto& other : live->refers_to()) {
+            if (other->ident != iFUNCTN || other->queued)
+                continue;
+            other->queued = true;
+            work.push_back(other);
+        }
+    }
+
+    // Remove the liveness flags for anything we did not visit.
+    for (symbol* sym = root->next; sym; sym = sym->next) {
+        if (sym->ident != iFUNCTN || sym->queued)
+            continue;
+        if (sym->native)
+            continue;
+        sym->usage &= ~(uWRITTEN | uREAD);
+    }
+}
+
+static constvalue*
+insert_constval(constvalue* prev, constvalue* next, sp::Atom* name, cell val, int index)
+{
+    constvalue* cur;
+
+    if ((cur = (constvalue*)malloc(sizeof(constvalue))) == NULL)
+        error(FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
+    memset(cur, 0, sizeof(constvalue));
+    cur->name = name;
+    cur->value = val;
+    cur->index = index;
+    cur->next = next;
+    prev->next = cur;
+    return cur;
+}
+
+constvalue*
+append_constval(constvalue* table, sp::Atom* name, cell val, int index)
+{
+    constvalue *cur, *prev;
+
+    /* find the end of the constant table */
+    for (prev = table, cur = table->next; cur != NULL; prev = cur, cur = cur->next)
+        /* nothing */;
+    return insert_constval(prev, nullptr, name, val, index);
+}
+
+void
+delete_consttable(constvalue* table)
+{
+    constvalue *cur = table->next, *next;
+
+    while (cur != NULL) {
+        next = cur->next;
+        free(cur);
+        cur = next;
+    }
+    memset(table, 0, sizeof(constvalue));
+}
+
+/*  add_constant
+ *
+ *  Adds a symbol to the symbol table. Returns NULL on failure.
+ */
+symbol*
+add_constant(const char* name, cell val, int vclass, int tag)
+{
+    symbol* sym;
+
+    /* Test whether a global or local symbol with the same name exists. Since
+     * constants are stored in the symbols table, this also finds previously
+     * defind constants. */
+    sym = findglb(name);
+    if (!sym)
+        sym = findloc(name);
+    if (sym) {
+        int redef = 0;
+        if (sym->ident != iCONSTEXPR)
+            redef = 1; /* redefinition a function/variable to a constant is not allowed */
+        if (sym->enumfield) {
+            /* enum field, special case if it has a different tag and the new symbol is also an enum field */
+            symbol* tagsym;
+            if (sym->tag == tag)
+                redef = 1; /* enumeration field is redefined (same tag) */
+            Type* type = gTypes.find(tag);
+            if (type == NULL) {
+                redef = 1; /* new constant does not have a tag */
+            } else {
+                tagsym = findconst(type->name());
+                if (tagsym == NULL || !tagsym->enumroot)
+                    redef = 1; /* new constant is not an enumeration field */
+            }
+            /* in this particular case (enumeration field that is part of a different
+             * enum, and non-conflicting with plain constants) we want to be able to
+             * redefine it
+             */
+            if (!redef)
+                goto redef_enumfield;
+        } else if (sym->tag != tag) {
+            redef = 1; /* redefinition of a constant (non-enum) to a different tag is not allowed */
+        }
+        if (redef) {
+            error(21, name); /* symbol already defined */
+            return NULL;
+        } else if (sym->addr() != val) {
+            error(201, name);  /* redefinition of constant (different value) */
+            sym->setAddr(val); /* set new value */
+        }
+        /* silently ignore redefinitions of constants with the same value & tag */
+        return sym;
+    }
+
+    /* constant doesn't exist yet (or is allowed to be redefined) */
+redef_enumfield:
+    sym = addsym(name, val, iCONSTEXPR, vclass, tag);
+    sym->defined = true;
+    if (sc_status == statIDLE)
+        sym->predefined = true;
+    return sym;
 }
 

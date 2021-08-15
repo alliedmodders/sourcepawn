@@ -51,3 +51,10 @@ int findnamedarg(arginfo* arg, sp::Atom* name);
 symbol* find_enumstruct_field(Type* type, sp::Atom* name);
 sp::Atom* operator_symname(const char* opername, int tag1, int tag2, int numtags,
                            int resulttag);
+symbol* fetchfunc(const char* name);
+std::string funcdisplayname(const char* funcname);
+constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
+void delete_consttable(constvalue* table);
+symbol* add_constant(const char* name, cell val, int vclass, int tag);
+void reduce_referrers(symbol* root);
+void deduce_liveness(symbol* root);

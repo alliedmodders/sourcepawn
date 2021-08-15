@@ -3251,3 +3251,68 @@ MethodmapDecl::ProcessUses(SemaContext& sc)
     for (const auto& method : methods_)
         method->decl->ProcessUses(sc);
 }
+
+void
+check_void_decl(const typeinfo_t* type, int variable)
+{
+    if (type->tag != pc_tag_void)
+        return;
+
+    if (variable) {
+        error(144);
+        return;
+    }
+
+    if (type->numdim > 0) {
+        error(145);
+        return;
+    }
+}
+
+void
+check_void_decl(const declinfo_t* decl, int variable)
+{
+    check_void_decl(&decl->type, variable);
+}
+
+int
+argcompare(arginfo* a1, arginfo* a2)
+{
+    int result, level;
+
+    result = 1;
+    if (result)
+        result = a1->ident == a2->ident; /* type/class */
+    if (result)
+        result = a1->is_const == a2->is_const; /* "const" flag */
+    if (result)
+        result = a1->tag == a2->tag;
+    if (result)
+        result = a1->numdim == a2->numdim; /* array dimensions & index tags */
+    if (result)
+        result = a1->enum_struct_tag == a2->enum_struct_tag;
+    for (level = 0; result && level < a1->numdim; level++)
+        result = a1->dim[level] == a2->dim[level];
+    if (result)
+        result = !!a1->def == !!a2->def; /* availability of default value */
+    if (a1->def) {
+        if (a1->ident == iREFARRAY) {
+            if (result)
+                result = !!a1->def->array == !!a2->def->array;
+            if (result && a1->def->array)
+                result = a1->def->array->total_size() == a2->def->array->total_size();
+            /* ??? should also check contents of the default array (these troubles
+             * go away in a 2-pass compiler that forbids double declarations, but
+             * Pawn currently does not forbid them) */
+        } else {
+            if (result)
+                result = a1->def->val.isValid() == a2->def->val.isValid();
+            if (result && a1->def->val)
+                result = a1->def->val.get() == a2->def->val.get();
+        }
+        if (result)
+            result = a1->def->tag == a2->def->tag;
+    }
+    return result;
+}
+

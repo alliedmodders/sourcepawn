@@ -41,6 +41,7 @@
 #include "sc.h"
 #include "scvars.h"
 #include "sp_symhash.h"
+#include "symbols.h"
 
 static bool sAliasTableInitialized;
 static ke::HashMap<sp::CharsAndLength, sp::Atom*, KeywordTablePolicy> sAliases;

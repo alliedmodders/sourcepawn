@@ -75,6 +75,19 @@ class Parser : public ExpressionParser
     bool parse_methodmap_property(MethodmapDecl* map);
     bool parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop);
 
+    bool parse_decl(declinfo_t* decl, int flags);
+    bool parse_old_decl(declinfo_t* decl, int flags);
+    bool parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
+    void parse_post_array_dims(declinfo_t* decl, int flags);
+    bool parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags);
+    bool parse_new_typename(const token_t* tok, int* tagp);
+    int parse_new_typename(const token_t* tok);
+    bool reparse_old_decl(declinfo_t* decl, int flags);
+    bool reparse_new_decl(declinfo_t* decl, int flags);
+    void fix_mispredicted_postdims(declinfo_t* decl);
+    void rewrite_type_for_enum_struct(typeinfo_t* info);
+    int operatorname(sp::Atom** name);
+
     Stmt* parse_compound(bool sameline);
     Stmt* parse_local_decl(int tokid, bool autozero);
     Stmt* parse_if();
@@ -119,10 +132,3 @@ class Parser : public ExpressionParser
   private:
     bool in_loop_ = false;
 };
-
-// Implemented in parser.cpp.
-int parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
-int parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags);
-int parse_new_typename(const token_t* tok);
-int reparse_old_decl(declinfo_t* decl, int flags);
-int reparse_new_decl(declinfo_t* decl, int flags);
