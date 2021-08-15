@@ -825,14 +825,14 @@ void
 fill_arg_defvalue(VarDecl* decl, arginfo* arg)
 {
     arg->def = new DefaultArg();
-    arg->def->tag = decl->type().tag;
+    arg->def->tag = decl->type().tag();
 
     if (SymbolExpr* expr = decl->init_rhs()->AsSymbolExpr()) {
         symbol* sym = expr->sym();
         assert(sym->vclass == sGLOBAL);
 
         arg->def->val = ke::Some(sym->addr());
-        arg->type.tag = sym->tag;
+        arg->type.set_tag(sym->tag);
         if (sc_status == statWRITE && (sym->usage & uREAD) == 0)
             markusage(sym, uREAD);
         return;

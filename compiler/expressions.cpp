@@ -437,10 +437,13 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
 
     // Do not allow casting between different array types, eg:
     //   any[] <-> float[] is illegal.
-    if (!formal->type.dim.empty() && !IsValidImplicitArrayCast(formal->type.tag, actual->type.tag))
+    if (!formal->type.dim.empty() &&
+        !IsValidImplicitArrayCast(formal->type.tag(), actual->type.tag()))
+    {
         return FALSE;
+    }
 
-    if (!matchtag(formal->type.tag, actual->type.tag, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
+    if (!matchtag(formal->type.tag(), actual->type.tag(), MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return FALSE;
     return TRUE;
 }

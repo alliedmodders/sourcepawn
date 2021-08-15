@@ -267,9 +267,9 @@ ConstDecl::Bind(SemaContext& sc)
         return false;
 
     AutoErrorPos aep(pos_);
-    matchtag(type_.tag, tag, 0);
+    matchtag(type_.tag(), tag, 0);
 
-    sym_ = add_constant(sc.cc(), sc.scope(), name_, value, vclass_, type_.tag, pos_.file);
+    sym_ = add_constant(sc.cc(), sc.scope(), name_, value, vclass_, type_.tag(), pos_.file);
     return true;
 }
 
@@ -298,7 +298,7 @@ VarDecl::Bind(SemaContext& sc)
     if (type_.ident == iARRAY)
         ResolveArraySize(sc, this);
 
-    if (type_.tag == pc_tag_void)
+    if (type_.tag() == pc_tag_void)
         error(pos_, 144);
 
     // :TODO: introduce find-by-atom to improve compiler speed
@@ -353,9 +353,9 @@ VarDecl::Bind(SemaContext& sc)
             error(pos_, 165);
     }
 
-    if (gTypes.find(type_.tag)->kind() == TypeKind::Struct) {
+    if (gTypes.find(type_.tag())->kind() == TypeKind::Struct) {
         if (!sym_) {
-            sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag);
+            sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag());
             AddGlobal(sc.cc(), sym_);
         } else {
             assert(sym_->is_struct);
@@ -370,7 +370,7 @@ VarDecl::Bind(SemaContext& sc)
                 ident = iREFARRAY;
 
             auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-            sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag, dim,
+            sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag(), dim,
                                type_.numdim(), type_.enum_struct_tag());
             sym_->defined = true;
             if (vclass_ == sGLOBAL)
@@ -728,12 +728,12 @@ FunctionInfo::Bind(SemaContext& outer_sc)
 
         typeinfo_t typeinfo = {};
         if (symbol* enum_type = type->asEnumStruct()) {
-            typeinfo.tag = 0;
+            typeinfo.set_tag(0);
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
             typeinfo.dim.emplace_back(enum_type->addr());
         } else {
-            typeinfo.tag = *this_tag_;
+            typeinfo.set_tag(*this_tag_);
             typeinfo.ident = iVARIABLE;
             typeinfo.is_const = true;
         }
@@ -791,7 +791,7 @@ FunctionInfo::NameForOperator()
     for (const auto& arg : args_) {
         auto var = arg.decl;
         if (count < 2)
-            tags[count] = var->type().tag;
+            tags[count] = var->type().tag();
         if (var->type().ident != iVARIABLE)
             report(pos_, 66) << var->name();
         if (var->init_rhs())
@@ -824,7 +824,7 @@ FunctionInfo::NameForOperator()
     if (decl_.type.ident != iVARIABLE)
         error(pos_, 62);
 
-    return operator_symname(decl_.name->chars(), tags[0], tags[1], count, decl_.type.tag);
+    return operator_symname(decl_.name->chars(), tags[0], tags[1], count, decl_.type.tag());
 }
 
 bool
@@ -927,7 +927,7 @@ EnumStructDecl::Bind(SemaContext& sc)
 
         cell size = 1;
         if (field.decl.type.numdim()) {
-            size = field.decl.type.tag == pc_tag_string
+            size = field.decl.type.tag() == pc_tag_string
                    ? char_array_cells(field.decl.type.dim[0])
                    : field.decl.type.dim[0];
         }
@@ -1015,7 +1015,7 @@ MethodmapDecl::Bind(SemaContext& sc)
             is_ctor = true;
 
             auto& type = method->decl->info()->mutable_type();
-            type.tag = map_->tag;
+            type.set_tag(map_->tag);
             type.ident = iVARIABLE;
             type.is_new = true;
         } else if (method->decl->info()->type().ident == 0) {
@@ -1070,14 +1070,15 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
 
     // Must have one extra argument taking the return type.
     if (fun->args().size() > 1) {
-        report(150) << pc_tagname(prop->type.tag);
+        report(150) << pc_tagname(prop->type.tag());
         return false;
     }
 
     auto decl = fun->args()[0].decl;
-    if (decl->type().ident != iVARIABLE || decl->init_rhs() || decl->type().tag != prop->type.tag)
+    if (decl->type().ident != iVARIABLE || decl->init_rhs() ||
+        decl->type().tag() != prop->type.tag())
     {
-        report(150) << pc_tagname(prop->type.tag);
+        report(150) << pc_tagname(prop->type.tag());
         return false;
     }
 

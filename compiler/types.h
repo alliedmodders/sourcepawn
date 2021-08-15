@@ -59,6 +59,16 @@ struct symbol;
 class Expr;
 
 struct typeinfo_t {
+    typeinfo_t()
+      : type_atom(nullptr),
+        tag_(-1),
+        ident(0),
+        is_const(false),
+        is_new(false),
+        has_postdims(false),
+        declared_tag(0)
+    {}
+
     // Array information.
     PoolList<int> dim;
 
@@ -66,8 +76,9 @@ struct typeinfo_t {
     PoolList<Expr*> dim_exprs;
 
     // Type information.
-    int tag;           // Effective tag.
-    int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
+    sp::Atom* type_atom;
+    int tag_;               // Effective tag.
+    int ident;              // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;
     bool is_new : 1;        // New-style declaration.
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
@@ -76,14 +87,21 @@ struct typeinfo_t {
     // rewritten for desugaring.
     int declared_tag;
 
+    int tag() const {
+        assert(tag_ >= 0);
+        return tag_;
+    }
+    void set_tag(int tag) { tag_ = tag; }
+    bool has_tag() const { return tag_ >= 0; }
+
     int enum_struct_tag() const {
-        return tag ? 0 : declared_tag;
+        return tag() ? 0 : declared_tag;
     }
     int semantic_tag() const {
-        return tag ? tag : declared_tag;
+        return tag() ? tag() : declared_tag;
     }
     bool is_implicit_dim(int i) const {
-        return semantic_tag() != tag && i == numdim() - 1;
+        return semantic_tag() != tag() && i == numdim() - 1;
     }
     int numdim() const { return (int)dim.size(); }
     bool isCharArray() const;

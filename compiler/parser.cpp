@@ -184,7 +184,7 @@ Parser::parse_unknown_decl(const token_t* tok)
     if (!parse_decl(&decl, flags)) {
         // Error will have been reported earlier. Reset |decl| so we don't crash
         // thinking tag -1 has every flag.
-        decl.type.tag = 0;
+        decl.type.set_tag(0);
     }
 
     // Hacky bag o' hints as to whether this is a variable decl.
@@ -194,7 +194,7 @@ Parser::parse_unknown_decl(const token_t* tok)
     if (!decl.opertok && probablyVariable) {
         if (tok->id == tNEW && decl.type.is_new)
             error(143);
-        Type* type = gTypes.find(decl.type.tag);
+        Type* type = gTypes.find(decl.type.tag());
         if (type && type->kind() == TypeKind::Struct) {
             Expr* init = nullptr;
             if (matchtoken('=')) {
@@ -602,7 +602,7 @@ Parser::parse_const(int vclass)
             continue;
 
         typeinfo_t type = {};
-        type.tag = tag;
+        type.set_tag(tag);
         type.is_const = true;
 
         if (!name)
@@ -2001,7 +2001,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
     if (getter) {
         ret_type.type = prop->type;
     } else {
-        ret_type.type.tag = pc_tag_void;
+        ret_type.type.set_tag(pc_tag_void);
         ret_type.type.ident = iVARIABLE;
     }
 
@@ -2176,7 +2176,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
             decl->name = ident.name;
-            decl->type.tag = 0;
+            decl->type.set_tag(0);
             return true;
         }
 
@@ -2264,10 +2264,10 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
     }
 
     // All finished with tag stuff.
-    type->tag = tag;
-    type->declared_tag = type->tag;
+    type->set_tag(tag);
+    type->declared_tag = type->tag();
 
-    Type* type_obj = gTypes.find(type->tag);
+    Type* type_obj = gTypes.find(type->tag());
     if (type_obj->isEnumStruct())
         error(85, type_obj->name());
 
@@ -2425,7 +2425,7 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
     // it can't be recomputed from array sizes (yet), in the case of
     // initializers with inconsistent final arrays. We could set it to
     // anything here, but we follow what parse_post_array_dims() does.
-    info->tag = 0;
+    info->set_tag(0);
     info->dim.emplace_back(enum_type->addr());
     if (!info->dim_exprs.empty())
         info->dim_exprs.emplace_back(nullptr);
@@ -2444,7 +2444,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
     if (expecttoken(tSYMBOL, &tok))
         decl->name = gAtoms.add(tok.str);
 
-    if (decl->type.declared_tag && !decl->type.tag) {
+    if (decl->type.declared_tag && !decl->type.tag()) {
         assert(decl->type.numdim() > 0);
         decl->type.dim.pop_back();
     }
@@ -2535,9 +2535,11 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
         lextok(&tok);
     }
 
-    if (!parse_new_typename(&tok, &type->tag))
+    int tag;
+    if (!parse_new_typename(&tok, &tag))
         return false;
-    type->declared_tag = type->tag;
+    type->set_tag(tag);
+    type->declared_tag = type->tag();
 
     // Note: we could have already filled in the prefix array bits, so we check
     // that ident != iARRAY before looking for an open bracket.

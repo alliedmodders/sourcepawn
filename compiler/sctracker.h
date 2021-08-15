@@ -81,7 +81,7 @@ struct methodmap_method_t : public PoolObject
         arginfo* valp = &setter->function()->args[1];
         if (valp->type.ident != iVARIABLE)
             return pc_tag_void;
-        return valp->type.tag;
+        return valp->type.tag();
     }
 };
 

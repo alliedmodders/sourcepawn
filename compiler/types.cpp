@@ -322,5 +322,5 @@ pc_addtag(const char* name)
 bool
 typeinfo_t::isCharArray() const
 {
-    return numdim() == 1 && tag == pc_tag_string;
+    return numdim() == 1 && tag() == pc_tag_string;
 }

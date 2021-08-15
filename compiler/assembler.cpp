@@ -1146,7 +1146,7 @@ RttiBuilder::add_struct(Type* type)
         int dims[1] = {0};
         int dimcount = arg->type.ident == iREFARRAY ? 1 : 0;
 
-        variable_type_t type = {arg->type.tag, dims, dimcount, !!arg->type.is_const};
+        variable_type_t type = {arg->type.tag(), dims, dimcount, !!arg->type.is_const};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -1203,7 +1203,7 @@ RttiBuilder::encode_signature(symbol* sym)
     }
 
     for (arginfo* arg = &sym->function()->args[0]; arg->type.ident; arg++) {
-        int tag = arg->type.tag;
+        int tag = arg->type.tag();
         int numdim = arg->type.numdim();
         if (arg->type.numdim() && arg->type.enum_struct_tag()) {
             int last_tag = arg->type.enum_struct_tag();
@@ -1400,7 +1400,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
             bytes.push_back(cb::kByRef);
 
         auto dims = arg.type.dim.empty() ? nullptr : &arg.type.dim[0];
-        variable_type_t info = {arg.type.tag, dims, arg.type.numdim(), arg.type.is_const};
+        variable_type_t info = {arg.type.tag(), dims, arg.type.numdim(), arg.type.is_const};
         encode_var_type(bytes, info);
     }
 }

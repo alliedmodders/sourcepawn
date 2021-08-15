@@ -190,7 +190,7 @@ VarDecl::AnalyzePstruct()
         if (visited[i])
             continue;
         if (ps->args[i]->type.ident == iREFARRAY) {
-            assert(ps->args[i]->type.tag == pc_tag_string);
+            assert(ps->args[i]->type.tag() == pc_tag_string);
 
             auto expr = new StringExpr(pos_, "", 0);
             init->fields().push_back(StructInitField(ps->args[i]->name, expr));
@@ -220,8 +220,8 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
             error(expr->pos(), 48);
             return false;
         }
-        if (arg->type.tag != pc_tag_string)
-            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag));
+        if (arg->type.tag() != pc_tag_string)
+            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag()));
     } else if (auto expr = field.value->AsTaggedValueExpr()) {
         if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
@@ -231,10 +231,10 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type.tag == pc_tag_bool && expr->tag() == 0 &&
+        if (!(arg->type.tag() == pc_tag_bool && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->type.tag, expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field.value->AsSymbolExpr()) {
         auto sym = expr->sym();
@@ -243,7 +243,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
                 error(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type.tag, sym->tag, MATCHTAG_COERCE);
+            matchtag(arg->type.tag(), sym->tag, MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
             if (sym->ident != iARRAY) {
                 error(expr->pos(), 405);
@@ -1165,7 +1165,7 @@ CastExpr::Analyze(SemaContext& sc)
         // Warn: unsupported cast.
         error(pos_, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
-        matchtag(tag_, val_.tag, MATCHTAG_COERCE);
+        matchtag(type_.tag(), val_.tag, MATCHTAG_COERCE);
     } else if (val_.sym && val_.sym->tag == pc_tag_void) {
         error(pos_, 89);
     } else if (atype->isEnumStruct()) {
@@ -1987,7 +1987,7 @@ CallExpr::Analyze(SemaContext& sc)
         Expr* expr = argv_[argidx].expr;
         if (expr->AsDefaultArgExpr() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(nullptr, arg.def->tag, arg.type.tag, 2, nullptr, &userop, pos_.line))
+            if (find_userop(nullptr, arg.def->tag, arg.type.tag(), 2, nullptr, &userop, pos_.line))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -2056,8 +2056,8 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                     }
                 }
             }
-            if (!checktag_string(arg->type.tag, val) && !checktag(arg->type.tag, val->tag))
-                error(pos_, 213, type_to_name(arg->type.tag), type_to_name(val->tag));
+            if (!checktag_string(arg->type.tag(), val) && !checktag(arg->type.tag(), val->tag))
+                error(pos_, 213, type_to_name(arg->type.tag()), type_to_name(val->tag));
             break;
         case iVARIABLE:
         {
@@ -2074,13 +2074,13 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(nullptr, val->tag, arg->type.tag, 2, nullptr, &userop, pos_.line))
+                find_userop(nullptr, val->tag, arg->type.tag(), 2, nullptr, &userop, pos_.line))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
             }
-            if (!checktag_string(arg->type.tag, val))
-                checktag(arg->type.tag, val->tag);
+            if (!checktag_string(arg->type.tag(), val))
+                checktag(arg->type.tag(), val->tag);
             break;
         }
         case iREFERENCE:
@@ -2094,7 +2094,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            checktag(arg->type.tag, val->tag);
+            checktag(arg->type.tag(), val->tag);
             break;
         case iREFARRAY:
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
@@ -2161,16 +2161,16 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 }
                 if (!matchtag(arg->type.enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    if (arg->type.tag != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
+                    if (arg->type.tag() != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
                         error(pos_, 229, sym->name());
                 }
             }
 
-            checktag(arg->type.tag, val->tag);
-            if ((arg->type.tag != pc_tag_string && val->tag == pc_tag_string) ||
-                (arg->type.tag == pc_tag_string && val->tag != pc_tag_string))
+            checktag(arg->type.tag(), val->tag);
+            if ((arg->type.tag() != pc_tag_string && val->tag == pc_tag_string) ||
+                (arg->type.tag() == pc_tag_string && val->tag != pc_tag_string))
             {
-                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->type.tag));
+                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->type.tag()));
                 return false;
             }
             break;
@@ -2584,7 +2584,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         for (int i = 0; i <= level; i++) {
             array_.dim.emplace_back((int)sub->dim.array.length);
             if (sub->x.tags.index) {
-                array_.tag = 0;
+                array_.set_tag(0);
                 array_.declared_tag = sub->x.tags.index;
             }
             if (i != level) {
@@ -2598,6 +2598,9 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
                 return false;
             }
         }
+        if (!array_.has_tag())
+            array_.set_tag(sub->tag);
+
         if (!sub->dim.array.length) {
             error(pos_, 128);
             return false;
@@ -2626,7 +2629,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         curfunc->set_array_return(sub);
     }
 
-    array_.tag = sub->tag;
+    array_.set_tag(sub->tag);
     array_.has_postdims = true;
     return true;
 }
@@ -2957,12 +2960,12 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
         check_void_decl(&decl_, FALSE);
 
         if (decl_.opertok)
-            check_operatortag(decl_.opertok, decl_.type.tag, decl_.name->chars());
+            check_operatortag(decl_.opertok, decl_.type.tag(), decl_.name->chars());
     }
 
     bool was_prototyped = sym_->prototyped;
     if (!was_prototyped) {
-        sym_->tag = decl_.type.tag;
+        sym_->tag = decl_.type.tag();
         sym_->explicit_return_type = decl_.type.is_new;
     }
 
@@ -3019,7 +3022,7 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
     if (sc.returns_value()) {
         sym_->retvalue = true;
     } else {
-        if (sym_->tag == pc_tag_void && sym_->forward && !decl_.type.tag &&
+        if (sym_->tag == pc_tag_void && sym_->forward && !decl_.type.tag() &&
             !decl_.type.is_new)
         {
             // We got something like:
@@ -3027,13 +3030,13 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
             //    public X()
             //
             // Switch our decl type to void.
-            decl_.type.tag = pc_tag_void;
+            decl_.type.set_tag(pc_tag_void);
         }
     }
 
     // Check that return tags match.
-    if (was_prototyped && sym_->tag != decl_.type.tag)
-        error(pos_, 180, type_to_name(sym_->tag), type_to_name(decl_.type.tag));
+    if (was_prototyped && sym_->tag != decl_.type.tag())
+        error(pos_, 180, type_to_name(sym_->tag), type_to_name(decl_.type.tag()));
 
     if (scope_)
         TestSymbols(scope_, TRUE);
@@ -3084,7 +3087,7 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
                 sym_->function()->resizeArgs(argcnt + 1);
 
                 arglist[argcnt].type.ident = iVARARGS;
-                arglist[argcnt].type.tag = typeinfo.tag;
+                arglist[argcnt].type.set_tag(typeinfo.tag());
             } else {
                 if (argcnt > oldargcnt || arglist[argcnt].type.ident != iVARARGS)
                     error(25); /* function definition does not match prototype */
@@ -3112,7 +3115,7 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
         arg.name = var->name();
         arg.type.ident = argsym->ident;
         arg.type.is_const = argsym->is_const;
-        arg.type.tag = argsym->tag;
+        arg.type.set_tag(argsym->tag);
         arg.type.dim = typeinfo.dim;
         arg.type.declared_tag = typeinfo.enum_struct_tag();
 
@@ -3132,12 +3135,12 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
 
                     // Populate to avoid errors.
                     val = 0;
-                    tag = typeinfo.tag;
+                    tag = typeinfo.tag();
                 }
                 arg.def->tag = tag;
                 arg.def->val = ke::Some(val);
 
-                matchtag(arg.type.tag, arg.def->tag, MATCHTAG_COERCE);
+                matchtag(arg.type.tag(), arg.def->tag, MATCHTAG_COERCE);
             }
         }
 
@@ -3331,7 +3334,7 @@ MethodmapDecl::ProcessUses(SemaContext& sc)
 void
 check_void_decl(const typeinfo_t* type, int variable)
 {
-    if (type->tag != pc_tag_void)
+    if (type->tag() != pc_tag_void)
         return;
 
     if (variable) {
@@ -3361,7 +3364,7 @@ argcompare(arginfo* a1, arginfo* a2)
     if (result)
         result = a1->type.is_const == a2->type.is_const; /* "const" flag */
     if (result)
-        result = a1->type.tag == a2->type.tag;
+        result = a1->type.tag() == a2->type.tag();
     if (result)
         result = a1->type.dim == a2->type.dim; /* array dimensions & index tags */
     if (result)
