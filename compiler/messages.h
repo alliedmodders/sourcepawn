@@ -285,17 +285,19 @@ static const char* warnmsg[] = {
     /*232*/ "output file is written, but with compact encoding disabled\n",
     /*233*/ "unused233\n",
     /*234*/ "symbol \"%s\" is marked as deprecated: %s\n",
-    /*235*/ "public function lacks forward declaration (symbol \"%s\")\n",
+    /*235*/ "unused235\n",
     /*236*/ "unknown parameter in substitution (incorrect #define pattern)\n",
     /*237*/
     "coercing functions to and from primitives is unsupported and will be removed in the future\n",
     /*238*/ "'%s:' is an illegal cast; use view_as<%s>(expression)\n",
     /*239*/ "'%s' is an illegal tag; use %s as a type\n",
-    /*240*/ "'%s:' is an old-style tag operation; use view_as<%s>(expression) instead\n",
+    /*240*/ "'%s:' is an old-style tag operation; use view_as<type>(expression) instead\n",
     /*241*/ "scalar assignment to array is deprecated; use \"{ <val>, ... }\" instead\n",
     /*242*/ "function \"%s\" should return an explicit value\n",
     /*243*/ "syntax is deprecated; use parenthesis instead\n",
-	/*244*/ "field '%s' was specified twice\n",
+    /*244*/ "field '%s' was specified twice\n",
+    /*245*/ "function %s implements a forward but is not marked as public\n",
+    /*246*/ "function %s returns an array but return type is not marked as an array\n",
 };
 
 static const char* errmsg_ex[] = {
@@ -305,4 +307,12 @@ static const char* errmsg_ex[] = {
     /*403*/ "not yet implemented\n",
     /*404*/ "enum multiplers are no longer supported\n",
     /*405*/ "invalid assignment\n",
+    /*406*/ "operator %s(%s) was used before declaration\n",
+    /*407*/ "operator %s(%s, %s) was used before declaration\n",
+    /*408*/ "recursion detected in user operator\n",
+    /*409*/ "methodmap %s referenced before definition\n",
+    /*410*/ "methodmap inheritance forms a cycle\n",
+    /*411*/ "cannot determine fixed array size of return value\n",
+    /*412*/ "function %s implements a forward but is not marked as public\n",
+    /*413*/ "returned array does not have the same dimension count as return type\n",
 };

@@ -20,13 +20,14 @@
 #include "type-checker.h"
 
 #include "sc.h"
+#include "symbols.h"
 
 typeinfo_t
 TypeInfoFromSymbol(symbol* sym)
 {
     typeinfo_t type = {};
 
-    type.tag = sym->tag;
+    type.set_tag(sym->tag);
     type.is_const = sym->is_const;
 
     if (sym->parent() && sym->parent()->ident == iENUMSTRUCT) {
@@ -36,7 +37,7 @@ TypeInfoFromSymbol(symbol* sym)
         } else {
             type.ident = iVARIABLE;
         }
-        type.tag = sym->x.tags.index;
+        type.set_tag(sym->x.tags.index);
     } else {
         type.ident = sym->ident;
 
@@ -46,7 +47,7 @@ TypeInfoFromSymbol(symbol* sym)
                     type.declared_tag = iter->x.tags.index;
                 if (iter->x.tags.index) {
                     type.declared_tag = iter->x.tags.index;
-                    type.tag = 0;
+                    type.set_tag(0);
                 }
                 type.dim.emplace_back(iter->dim.array.length);
             }
@@ -59,7 +60,7 @@ typeinfo_t
 TypeInfoFromTag(int tag)
 {
     typeinfo_t type = {};
-    type.tag = tag;
+    type.set_tag(tag);
     type.ident = iEXPRESSION;
 
     return type;

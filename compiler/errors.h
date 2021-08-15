@@ -150,6 +150,7 @@ class MessageBuilder
         args_.emplace_back(std::to_string(n));
         return *this;
     }
+    MessageBuilder& operator <<(Type* type);
 
     void operator =(const MessageBuilder& other) = delete;
     MessageBuilder& operator =(MessageBuilder&& other);
@@ -180,7 +181,6 @@ void break_on_error(int number);
 int pc_enablewarning(int number, int enable);
 
 extern bool sc_one_error_per_statement;
-extern bool sc_enable_first_pass_error_display;
 extern bool sc_shutting_down;
 
 #endif // am_sourcepawn_compiler_sc5_h

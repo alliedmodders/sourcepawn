@@ -9,8 +9,8 @@ stock Float:operator*(Float:oper1, oper2)
 native Float:GetRandomFloat();
 
 enum _:Rocketeer {
-  bool:bActivated,
-  iRockets[20]
+  bActivated,
+  iRockets
 };
 
 public OnPluginStart()

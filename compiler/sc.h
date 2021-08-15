@@ -121,208 +121,21 @@ enum IdentifierKind {
     iSCOPE = 16,        /* local scope chain */
 };
 
+class EnumData;
+class EnumStructData;
 class EnumStructVarData;
 class FunctionData;
 class SymbolData : public PoolObject
 {
   public:
-    virtual FunctionData* asFunction() {
-        return nullptr;
-    }
-    virtual EnumStructVarData* asEnumStructVar() {
-        return nullptr;
-    }
-    virtual methodmap_t* asMethodmap() {
-        return nullptr;
-    }
-};
-
-class FunctionData final : public SymbolData
-{
-  public:
-    FunctionData();
-    FunctionData* asFunction() override {
-        return this;
-    }
-
-    void resizeArgs(size_t nargs);
-
-    int funcid;          /* set for functions during codegen */
-    PoolList<PoolString> dbgstrs;
-    PoolList<arginfo> args;
-    ArrayData* array;    /* For functions with array returns */
-};
-
-class EnumStructVarData final : public SymbolData
-{
-  public:
-    EnumStructVarData* asEnumStructVar() override {
-        return this;
-    }
-
-    std::vector<std::unique_ptr<symbol>> children;
+    virtual FunctionData* asFunction() { return nullptr; }
+    virtual EnumStructVarData* asEnumStructVar() { return nullptr; }
+    virtual methodmap_t* asMethodmap() { return nullptr; }
+    virtual EnumStructData* asEnumStruct() { return nullptr; }
+    virtual EnumData* asEnum() { return nullptr; }
 };
 
 struct symbol;
-
-/*  Symbol table format
- *
- *  The symbol name read from the input file is stored in "name", the
- *  value of "addr" is written to the output file. The address in "addr"
- *  depends on the class of the symbol:
- *      global          offset into the data segment
- *      local           offset relative to the stack frame
- *      label           generated hexadecimal number
- *      function        offset into code segment
- */
-struct symbol : public PoolObject
-{
-    symbol();
-    symbol(const symbol& other);
-    symbol(sp::Atom* name, cell addr, int ident, int vclass, int tag);
-
-    symbol* next;
-    cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
-    char vclass;   /* sLOCAL if "addr" refers to a local symbol */
-    char ident;    /* see below for possible values */
-    int tag;       /* tagname id */
-
-    // See uREAD/uWRITTEN above.
-    uint8_t usage : 2;
-
-    // Variable: the variable is defined in the source file.
-    // Function: the function is defined ("implemented") in the source file
-    // Constant: the symbol is defined in the source file.
-    bool defined : 1;       // remove when moving to a single-pass system
-    bool is_const : 1;
-
-    // Variables and functions.
-    bool stock : 1;         // discardable without warning
-    bool is_public : 1;     // publicly exposed
-    bool is_static : 1;     // declared as static
-
-    // TODO: make this an ident.
-    bool is_struct : 1;
-
-    // Functions only.
-    bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
-    bool missing : 1;       // the function is not implemented in this source file
-    bool callback : 1;      // used as a callback
-    bool skipped : 1;       // skipped in codegen
-    bool retvalue : 1;      // function returns (or should return) a value
-    bool forward : 1;       // the function is explicitly forwardly declared
-    bool native : 1;        // the function is native
-    bool retvalue_used : 1; // the return value is used
-
-    // Constants only.
-    bool enumroot : 1;      // the constant is the "root" of an enumeration
-    bool enumfield : 1;     // the constant is a field in a named enumeration
-    bool predefined : 1;    // the constant is pre-defined and should be kept between passes
-
-    // General symbol flags.
-    bool deprecated : 1;    // symbol is deprecated (avoid use)
-    bool queued : 1;        // symbol is queued for a local work algorithm
-    bool explicit_return_type : 1; // transitional return type was specified
-
-    union {
-        struct {
-            int index; /* array & enum: tag of array indices or the enum item */
-            int field; /* enumeration fields, where a size is attached to the field */
-        } tags;        /* extra tags */
-    } x;               /* 'x' for 'extra' */
-    union {
-        PoolList<symbol*>* enumlist;
-        struct {
-            cell length;  /* arrays: length (size) */
-            short level;  /* number of dimensions below this level */
-        } array;
-    } dim;       /* for 'dimension', both functions and arrays */
-    int fnumber; /* file number in which the symbol is declared */
-    int lnumber; /* line number for the declaration */
-    PoolString* documentation; /* optional documentation string */
-
-    int addr() const {
-        return addr_;
-    }
-    void setAddr(int addr) {
-        addr_ = addr;
-    }
-    sp::Atom* nameAtom() const {
-        return name_;
-    }
-    const char* name() const {
-        return name_ ? name_->chars() : "";
-    }
-    void setName(sp::Atom* name) {
-        name_ = name;
-    }
-    FunctionData* function() const {
-        assert(ident == iFUNCTN);
-        return data_->asFunction();
-    }
-    symbol* parent() const {
-        return parent_;
-    }
-    void set_parent(symbol* parent) {
-        parent_ = parent;
-    }
-
-    symbol* array_return() const {
-        assert(ident == iFUNCTN);
-        return child_;
-    }
-    void set_array_return(symbol* child) {
-        assert(ident == iFUNCTN);
-        assert(!child_);
-        child_ = child;
-    }
-    symbol* array_child() const {
-        assert(ident == iARRAY || ident == iREFARRAY);
-        return child_;
-    }
-    void set_array_child(symbol* child) {
-        assert(ident == iARRAY || ident == iREFARRAY);
-        assert(!child_);
-        child_ = child;
-    }
-    SymbolData* data() const {
-        return data_;
-    }
-    void set_data(SymbolData* data) {
-        data_ = std::move(data);
-    }
-
-    void add_reference_to(symbol* other);
-    void drop_reference_from(symbol* from);
-
-    PoolList<symbol*>& refers_to() {
-        return refers_to_;
-    }
-    bool is_unreferenced() const {
-        return referred_from_count_ == 0;
-    }
-    void clear_refers() {
-        refers_to_.clear();
-        referred_from_.clear();
-    }
-
-    bool must_return_value() const;
-
-  private:
-    cell addr_; /* address or offset (or value for constant, index for native function) */
-    sp::Atom* name_;
-    SymbolData* data_;
-
-    // Other symbols that this symbol refers to.
-    PoolList<symbol*> refers_to_;
-
-    // All the symbols that refer to this symbol.
-    PoolList<symbol*> referred_from_;
-    size_t referred_from_count_;
-
-    symbol* parent_;
-    symbol* child_;
-};
 
 // Values for symbol::usage.
 #define uREAD       0x1     // Used/accessed.
@@ -336,53 +149,9 @@ enum ScopeKind {
     sSTATIC = 2,      /* global life, local scope */
     sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
     sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
-    sFILE_STATIC = 5, /* global life, file scope */
 };
 
 struct methodmap_method_t;
-
-struct value {
-    char ident;      /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
-                         * iEXPRESSION or iREFERENCE */
-    /* symbol in symbol table, NULL for (constant) expression */
-    symbol* sym;
-    cell constval;   /* value of the constant expression (if ident==iCONSTEXPR)
-                         * also used for the size of a literal array */
-    int tag;         /* tag (of the expression) */
-
-    // Returns whether the value can be rematerialized based on static
-    // information, or whether it is the result of an expression.
-    bool canRematerialize() const {
-        switch (ident) {
-            case iVARIABLE:
-            case iCONSTEXPR:
-                return true;
-            case iREFERENCE:
-                return sym->vclass == sARGUMENT || sym->vclass == sLOCAL;
-            default:
-                return false;
-        }
-    }
-
-    /* when ident == iACCESSOR */
-    methodmap_method_t* accessor;
-
-    static value ErrorValue() {
-        value v = {};
-        v.ident = iCONSTEXPR;
-        return v;
-    }
-};
-
-/* Wrapper around value + l/rvalue bit. */
-struct svalue {
-    value val;
-    int lvalue;
-
-    bool canRematerialize() const {
-        return val.canRematerialize();
-    }
-};
 
 #define DECLFLAG_ARGUMENT 0x02       // The declaration is for an argument.
 #define DECLFLAG_VARIABLE 0x04       // The declaration is for a variable.
@@ -401,37 +170,9 @@ struct declinfo_t {
     int opertok; // Operator token, if applicable.
 };
 
-/*  "while" statement queue (also used for "for" and "do - while" loops) */
-enum {
-    wqBRK,  /* used to restore stack for "break" */
-    wqCONT, /* used to restore stack for "continue" */
-    wqLOOP, /* loop start label number */
-    wqEXIT, /* loop exit label number (jump if false) */
-    /* --- */
-    wqSIZE /* "while queue" size */
-};
-#define wqTABSZ (24 * wqSIZE) /* 24 nested loop statements */
-
-enum {
-    statIDLE,  /* not compiling yet */
-    statFIRST, /* first pass */
-    statWRITE, /* writing output */
-    statSKIP,  /* skipping output */
-};
-
-#define sDOCSEP 0x01 /* to separate documentation comments between functions */
-
 /* codes for ffabort() */
 #define xEXIT 1           /* exit code in PRI */
 #define xASSERTION 2      /* abort caused by failing assertion */
-#define xSTACKERROR 3     /* stack/heap overflow */
-#define xBOUNDSERROR 4    /* array index out of bounds */
-#define xMEMACCESS 5      /* data access error */
-#define xINVINSTR 6       /* invalid instruction */
-#define xSTACKUNDERFLOW 7 /* stack underflow */
-#define xHEAPUNDERFLOW 8  /* heap underflow */
-#define xCALLBACKERR 9    /* no, or invalid, callback */
-#define xSLEEP 12         /* sleep, exit code in PRI, tag in ALT */
 
 /* Miscellaneous  */
 #if !defined TRUE
@@ -440,12 +181,8 @@ enum {
 #endif
 #define sIN_CSEG 1     /* if parsing CODE */
 #define sIN_DSEG 2     /* if parsing DATA */
-#define sCHKBOUNDS 1   /* bit position in "debug" variable: check bounds */
 #define sSYMBOLIC 2    /* bit position in "debug" variable: symbolic info */
 #define sRESET 0       /* reset error flag */
-#define sFORCESET 1    /* force error flag on */
-#define sEXPRMARK 2    /* mark start of expression */
-#define sEXPRRELEASE 3 /* mark end of expression */
 
 #define CELL_MAX (((ucell)1 << (sizeof(cell) * 8 - 1)) - 1)
 

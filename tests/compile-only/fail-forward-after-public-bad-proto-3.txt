@@ -1,0 +1,1 @@
+(1) : error 181: function argument named 'b' differs from prototype

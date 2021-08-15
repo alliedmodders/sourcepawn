@@ -1,6 +1,6 @@
 methodmap Handle
 {
-  Handle();
+  public native Handle();
 };
 
 public t()

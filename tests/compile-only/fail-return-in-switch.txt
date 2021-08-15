@@ -1,2 +1,2 @@
-(22) : error 209: function has explicit 'int' tag but does not return a value
-(30) : error 209: function has explicit 'int' tag but does not return a value
+(9) : error 209: function has explicit 'int' tag but does not return a value
+(24) : error 209: function has explicit 'int' tag but does not return a value

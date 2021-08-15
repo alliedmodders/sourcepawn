@@ -58,7 +58,44 @@ struct methodmap_t;
 struct symbol;
 class Expr;
 
+struct TypenameInfo {
+    TypenameInfo() {}
+    explicit TypenameInfo(int tag) : resolved_tag(tag) {}
+    explicit TypenameInfo(sp::Atom* type_atom) : type_atom(type_atom) {}
+    TypenameInfo(sp::Atom* type_atom, bool is_label) : type_atom(type_atom) {
+        if (is_label)
+            set_is_label();
+    }
+
+    sp::Atom* type_atom = nullptr;
+    int resolved_tag = -1;
+
+    int tag() const {
+        assert(has_tag());
+        return resolved_tag;
+    }
+    bool has_tag() const { return resolved_tag >= 0; }
+
+    void set_is_label() {
+        assert(type_atom);
+        assert(resolved_tag == -1);
+        resolved_tag = -2;
+    }
+    bool is_label() const { return resolved_tag == -2; }
+};
+
 struct typeinfo_t {
+    typeinfo_t()
+      : type_atom(nullptr),
+        tag_(-1),
+        ident(0),
+        is_const(false),
+        is_new(false),
+        has_postdims(false),
+        is_label(false),
+        declared_tag(0)
+    {}
+
     // Array information.
     PoolList<int> dim;
 
@@ -66,24 +103,51 @@ struct typeinfo_t {
     PoolList<Expr*> dim_exprs;
 
     // Type information.
-    int tag;           // Effective tag.
-    int ident;         // Either iREFERENCE, iARRAY, or iVARIABLE.
+    sp::Atom* type_atom;    // Parsed atom.
+    int tag_;               // Effective tag.
+    int ident;              // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;
     bool is_new : 1;        // New-style declaration.
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
+    bool is_label : 1;      // If type_atom came from a tLABEL.
 
     // If non-zero, this type was originally declared with this type, but was
     // rewritten for desugaring.
     int declared_tag;
 
+    TypenameInfo ToTypenameInfo() const {
+        if (tag_ >= 0)
+            return TypenameInfo(tag_);
+        return TypenameInfo(type_atom, is_label);
+    }
+
+    void set_type(const TypenameInfo& rt) {
+        if (rt.resolved_tag >= 0) {
+            type_atom = nullptr;
+            set_tag(rt.tag());
+        } else {
+            assert(rt.type_atom);
+            type_atom = rt.type_atom;
+            is_label = rt.is_label();
+            tag_ = -1;
+        }
+    }
+
+    int tag() const {
+        assert(tag_ >= 0);
+        return tag_;
+    }
+    void set_tag(int tag) { tag_ = tag; }
+    bool has_tag() const { return tag_ >= 0; }
+
     int enum_struct_tag() const {
-        return tag ? 0 : declared_tag;
+        return tag() ? 0 : declared_tag;
     }
     int semantic_tag() const {
-        return tag ? tag : declared_tag;
+        return tag() ? tag() : declared_tag;
     }
     bool is_implicit_dim(int i) const {
-        return semantic_tag() != tag && i == numdim() - 1;
+        return semantic_tag() != tag() && i == numdim() - 1;
     }
     int numdim() const { return (int)dim.size(); }
     bool isCharArray() const;
@@ -112,15 +176,13 @@ class Type
     friend class TypeDictionary;
 
   public:
-    Type(const char* name, cell value);
+    Type(sp::Atom* name, cell value);
 
     const char* name() const {
         return name_->chars();
     }
     sp::Atom* nameAtom() const { return name_; }
-    TypeKind kind() const {
-        return kind_;
-    }
+    TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName() const;
     cell smx_export_value() const {
@@ -253,7 +315,7 @@ class TypeDictionary
     TypeDictionary();
 
     Type* find(int tag);
-    Type* find(const char* name);
+    Type* find(sp::Atom* name);
 
     void init();
     void clearExtendedTypes();
@@ -287,7 +349,6 @@ class TypeDictionary
 };
 
 int pc_addtag(const char* name);
-int pc_findtag(const char* name);
 const char* pc_tagname(int tag);
 
 extern TypeDictionary gTypes;

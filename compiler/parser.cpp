@@ -24,6 +24,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include <deque>
+
 #include <amtl/am-raii.h>
 #include "emitter.h"
 #include "errors.h"
@@ -54,11 +56,14 @@ Parser::~Parser()
     sActive--;
 }
 
-void
+StmtList*
 Parser::parse()
 {
     ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, true);
 
+    std::deque<Stmt*> add_to_end;
+
+    auto list = new ParseTree(token_pos_t{});
     while (freading) {
         Stmt* decl = nullptr;
 
@@ -117,7 +122,9 @@ Parser::parse()
                 decl = parse_using();
                 break;
             case tSYN_PRAGMA_UNUSED:
-                decl = parse_pragma_unused();
+                // These get added to the end so they can bind before use.
+                if (auto decl = parse_pragma_unused())
+                    add_to_end.emplace_back(decl);
                 break;
             case '}':
                 error(54); /* unmatched closing brace */
@@ -137,11 +144,17 @@ Parser::parse()
         if (decl) {
             errorset(sRESET, 0);
 
-            decl->Process();
+            list->stmts().emplace_back(decl);
         }
 
         pc_deprecate = {};
     }
+
+    while (!add_to_end.empty()) {
+        list->stmts().emplace_back(add_to_end.front());
+        add_to_end.pop_front();
+    }
+    return list;
 }
 
 Stmt*
@@ -151,11 +164,8 @@ Parser::parse_unknown_decl(const token_t* tok)
 
     if (tok->id == tNATIVE || tok->id == tFORWARD) {
         parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
-        Parser::ParseInlineFunction(tok->id, decl, nullptr);
-        return nullptr;
+        return parse_inline_function(tok->id, decl, nullptr);
     }
-
-    auto pos = current_pos();
 
     int fpublic = FALSE, fstock = FALSE, fstatic = FALSE;
     switch (tok->id) {
@@ -184,7 +194,7 @@ Parser::parse_unknown_decl(const token_t* tok)
     if (!parse_decl(&decl, flags)) {
         // Error will have been reported earlier. Reset |decl| so we don't crash
         // thinking tag -1 has every flag.
-        decl.type.tag = 0;
+        decl.type.set_tag(0);
     }
 
     // Hacky bag o' hints as to whether this is a variable decl.
@@ -194,24 +204,22 @@ Parser::parse_unknown_decl(const token_t* tok)
     if (!decl.opertok && probablyVariable) {
         if (tok->id == tNEW && decl.type.is_new)
             error(143);
-        Type* type = gTypes.find(decl.type.tag);
-        if (type && type->kind() == TypeKind::Struct) {
-            Expr* init = nullptr;
-            if (matchtoken('=')) {
-                needtoken('{');
-                init = struct_init();
-            }
-            matchtoken(';');
-            // Without an initializer, the stock keyword is implied.
-            return new VarDecl(pos, decl.name, decl.type, sGLOBAL, fpublic && init,
-                               false, !init, init);
-        }
+
         VarParams params;
         params.vclass = sGLOBAL;
         params.is_public = !!fpublic;
         params.is_static = !!fstatic;
         params.is_stock = !!fstock;
-        return parse_var(&decl, params);
+
+        auto stmt = parse_var(&decl, params);
+
+        // The old parser had a different line ending policy for struct
+        // initializers, so we approximate that here.
+        if (params.struct_init)
+            matchtoken(';');
+        else
+            needtoken(tTERM);
+        return stmt;
     } else {
         auto pos = current_pos();
         FunctionInfo* info = new FunctionInfo(pos, decl);
@@ -247,7 +255,7 @@ Parser::PreprocExpr(cell* val, int* tag)
 }
 
 Stmt*
-Parser::parse_var(declinfo_t* decl, const VarParams& params)
+Parser::parse_var(declinfo_t* decl, VarParams& params)
 {
     StmtList* list = nullptr;
     Stmt* stmt = nullptr;
@@ -258,6 +266,9 @@ Parser::parse_var(declinfo_t* decl, const VarParams& params)
         Expr* init = nullptr;
         if (matchtoken('='))
             init = var_init(params.vclass);
+
+        // Keep updating this field, as we only care about the last initializer.
+        params.struct_init = init && init->AsStructExpr();
 
         VarDecl* var = new VarDecl(pos, decl->name, decl->type, params.vclass, params.is_public,
                                    params.is_static, params.is_stock, init);
@@ -282,8 +293,6 @@ Parser::parse_var(declinfo_t* decl, const VarParams& params)
         else
             reparse_old_decl(decl, DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT);
     }
-
-    needtoken(tTERM); /* if not comma, must be semicolumn */
     return list ? list : stmt;
 }
 
@@ -399,6 +408,7 @@ Parser::parse_enumstruct()
         auto decl_pos = current_pos();
         if (!decl.type.has_postdims && lexpeek('(')) {
             auto info = new FunctionInfo(decl_pos, decl);
+            info->set_name(decl.name);
             info->set_is_stock();
             if (!parse_function(info, 0))
                 continue;
@@ -564,26 +574,28 @@ Parser::parse_const(int vclass)
         // Since spcomp is terrible, it's hard to use parse_decl() here - there
         // are all sorts of restrictions on const. We just implement some quick
         // detection instead.
-        int tag = 0;
         token_t tok;
+        TypenameInfo rt;
         switch (lextok(&tok)) {
             case tINT:
             case tOBJECT:
             case tCHAR:
-                tag = parse_new_typename(&tok);
+                parse_new_typename(&tok, &rt);
                 break;
             case tLABEL:
-                tag = pc_addtag(tok.str);
+                rt = TypenameInfo{gAtoms.add(tok.str)};
+                rt.set_is_label();
                 break;
             case tSYMBOL:
                 // See if we can peek ahead another symbol.
                 if (lexpeek(tSYMBOL)) {
                     // This is a new-style declaration.
-                    tag = parse_new_typename(&tok);
+                    parse_new_typename(&tok, &rt);
                 } else {
                     // Otherwise, we got "const X ..." so the tag is int. Give the
                     // symbol back to the lexer so we get it as the name.
                     lexpush();
+                    rt = TypenameInfo{0};
                 }
                 break;
             default:
@@ -602,7 +614,7 @@ Parser::parse_const(int vclass)
             continue;
 
         typeinfo_t type = {};
-        type.tag = tag;
+        type.set_type(rt);
         type.is_const = true;
 
         if (!name)
@@ -821,23 +833,24 @@ Parser::hier2()
                 lexpush();
             }
 
-            int tag = 0;
-            parse_new_typename(nullptr, &tag);
+            TypenameInfo rt;
+            if (!parse_new_typename(nullptr, &rt))
+                rt = TypenameInfo{0};
 
             if (!needtoken('['))
                 return new ErrorExpr();
 
-            return parse_new_array(pos, tag);
+            return parse_new_array(pos, rt);
         }
         case tLABEL: /* tagname override */
         {
-            int tag = pc_addtag(st);
+            TypenameInfo ti(gAtoms.add(st), true);
             if (sc_require_newdecls) {
                 // Warn: old style cast used when newdecls pragma is enabled
-                error(240, st, type_to_name(tag));
+                report(240) << st;
             }
             Expr* expr = hier2();
-            return new CastExpr(pos, tok, tag, expr);
+            return new CastExpr(pos, tok, ti, expr);
         }
         case tDEFINED:
         {
@@ -1077,12 +1090,13 @@ Parser::parse_view_as()
     auto pos = current_pos();
 
     needtoken('<');
-    int tag = 0;
+    TypenameInfo ti;
     {
         token_t tok;
         lextok(&tok);
-        if (!parse_new_typename(&tok, &tag))
-            tag = 0;
+
+        if (!parse_new_typename(&tok, &ti))
+            ti = TypenameInfo{0};
     }
     needtoken('>');
 
@@ -1093,7 +1107,7 @@ Parser::parse_view_as()
         needtoken(')');
     else
         matchtoken(')');
-    return new CastExpr(pos, tVIEW_AS, tag, expr);
+    return new CastExpr(pos, tVIEW_AS, ti, expr);
 }
 
 Expr*
@@ -1169,6 +1183,16 @@ Expr*
 Parser::var_init(int vclass)
 {
     if (matchtoken('{')) {
+        // Peek for " <symbol> = " to see if this is a struct initializer.
+        if (matchtoken(tSYMBOL)) {
+            if (matchtoken('=')) {
+                lexpush();
+                lexpush();
+                return struct_init();
+            }
+            lexpush();
+        }
+
         ArrayExpr* expr = new ArrayExpr(current_pos());
         do {
             if (lexpeek('}'))
@@ -1194,9 +1218,9 @@ Parser::var_init(int vclass)
 }
 
 Expr*
-Parser::parse_new_array(const token_pos_t& pos, int tag)
+Parser::parse_new_array(const token_pos_t& pos, const TypenameInfo& rt)
 {
-    auto expr = new NewArrayExpr(pos, tag);
+    auto expr = new NewArrayExpr(pos, rt);
 
     do {
         Expr* child = hier14();
@@ -1270,7 +1294,9 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
                 return nullptr;
             }
             lexpush();
-            return parse_local_decl(tNEWDECL, true);
+            auto stmt = parse_local_decl(tNEWDECL, true);
+            needtoken(tTERM);
+            return stmt;
         }
     }
 
@@ -1286,7 +1312,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             // Fall-through.
         case tDECL:
         case tSTATIC:
-        case tNEW:
+        case tNEW: {
             if (tok == tNEW && matchtoken(tSYMBOL)) {
                 if (lexpeek('(')) {
                     lexpush();
@@ -1298,7 +1324,10 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
                 error(3);
                 return nullptr;
             }
-            return parse_local_decl(tok, tok != tDECL);
+            auto stmt = parse_local_decl(tok, tok != tDECL);
+            needtoken(tTERM);
+            return stmt;
+        }
         case tIF:
             return parse_if();
         case tCONST:
@@ -1332,7 +1361,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             auto pos = current_pos();
             Expr* expr = nullptr;
             if (!matchtoken(tTERM)) {
-                expr = hier14();
+                expr = parse_expr(false);
                 needtoken(tTERM);
             }
             return new ReturnStmt(pos, expr);
@@ -1556,6 +1585,7 @@ Parser::parse_for()
                  */
                 // :TODO: test needtoken(tTERM) accepting newlines here
                 init = parse_local_decl(tok.id, true);
+                needtoken(';');
                 break;
             case tSYMBOL: {
                 // See comment in statement() near tSYMBOL.
@@ -1571,6 +1601,7 @@ Parser::parse_for()
                 if (is_decl) {
                     lexpush();
                     init = parse_local_decl(tSYMBOL, true);
+                    needtoken(';');
                     break;
                 }
                 // Fall-through to default!
@@ -1684,8 +1715,8 @@ Parser::parse_case(SwitchStmt* sw)
     sw->AddCase(std::move(exprs), stmt);
 }
 
-symbol*
-Parser::ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag)
+Decl*
+Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this_tag)
 {
     auto pos = current_pos();
     auto info = new FunctionInfo(pos, decl);
@@ -1702,8 +1733,7 @@ Parser::ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_t
     else
         info->set_is_stock();
 
-    Parser parser;
-    if (!parser.parse_function(info, tokid))
+    if (!parse_function(info, tokid))
         return nullptr;
 
     auto stmt = new FunctionDecl(pos, info);
@@ -1711,8 +1741,7 @@ Parser::ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_t
         stmt->set_deprecate(pc_deprecate);
         pc_deprecate = {};
     }
-    stmt->Process();
-    return stmt->sym();
+    return stmt;
 }
 
 bool
@@ -1747,7 +1776,7 @@ Parser::parse_function(FunctionInfo* info, int tokid)
             return true;
         default:
             if (matchtoken(';')) {
-                if (!sc_needsemicolon)
+                if (!NeedSemicolon())
                     error(10); /* old style prototypes used with optional semicolumns */
                 info->set_is_forward();
                 return true;
@@ -1825,27 +1854,17 @@ Parser::parse_methodmap()
     if (!isupper(name_atom->chars()[0]))
         report(109) << "methodmap";
 
-    auto old_spec = deduce_layout_spec_by_name(name_atom->chars());
+    auto old_spec = deduce_layout_spec_by_name(name_atom);
     if (!can_redef_layout_spec(Layout_MethodMap, old_spec))
         report(110) << name_atom << layout_spec_name(old_spec);
 
     bool nullable = matchtoken(tNULLABLE);
 
     sp::Atom* extends = nullptr;
-    methodmap_t* extends_map = nullptr;
-    if (matchtoken('<') && needsymbol(&ident)) {
+    if (matchtoken('<') && needsymbol(&ident))
         extends = ident.name;
-        if ((extends_map = methodmap_find_by_name(extends)) == nullptr)
-            report(102) << "methodmap" << extends;
-    }
 
     auto decl = new MethodmapDecl(pos, name_atom, nullable, extends);
-
-    // Because tags are deduced during parsing, we need to pre-populate the methodmap tag.
-    auto impl = methodmap_add(extends_map, Layout_MethodMap, name_atom);
-    decl->set_map(impl);
-
-    gTypes.defineMethodmap(name_atom->chars(), impl);
 
     needtoken('{');
     while (!matchtoken('}')) {
@@ -2001,7 +2020,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
     if (getter) {
         ret_type.type = prop->type;
     } else {
-        ret_type.type.tag = pc_tag_void;
+        ret_type.type.set_tag(pc_tag_void);
         ret_type.type.ident = iVARIABLE;
     }
 
@@ -2077,7 +2096,7 @@ Parser::parse_function_type()
     auto info = new TypedefInfo;
     info->pos = current_pos();
 
-    parse_new_typename(nullptr, &info->ret_tag);
+    parse_new_typename(nullptr, &info->ret_type);
 
     needtoken('(');
 
@@ -2176,7 +2195,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
             decl->name = ident.name;
-            decl->type.tag = 0;
+            decl->type.set_tag(0);
             return true;
         }
 
@@ -2227,7 +2246,9 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         type->is_const = true;
     }
 
-    int tag, numtags = 0;
+    TypenameInfo ti = TypenameInfo(0);
+
+    int numtags = 0;
     if (flags & DECLFLAG_ARGUMENT) {
         if (matchtoken('&'))
             type->ident = iREFERENCE;
@@ -2236,14 +2257,11 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
         if (matchtoken('{')) {
             while (true) {
-                int parsed_tag = 0;
-
                 if (!matchtoken('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
                     if (expecttoken(tSYMBOL, &tok))
-                        parsed_tag = pc_addtag(tok.str);
+                        ti = TypenameInfo(gAtoms.add(tok.str), true);
                 }
-                tag = parsed_tag;
                 numtags++;
 
                 if (matchtoken('}'))
@@ -2258,18 +2276,11 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
 
     if (numtags == 0) {
         if (matchtoken2(tLABEL, &tok))
-            tag = pc_addtag(tok.str);
-        else
-            tag = 0;
+            ti = TypenameInfo(gAtoms.add(tok.str), true);
     }
 
     // All finished with tag stuff.
-    type->tag = tag;
-    type->declared_tag = type->tag;
-
-    Type* type_obj = gTypes.find(type->tag);
-    if (type_obj->isEnumStruct())
-        error(85, type_obj->name());
+    type->set_type(ti);
 
     if (sc_require_newdecls)
         error(147);
@@ -2425,7 +2436,7 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
     // it can't be recomputed from array sizes (yet), in the case of
     // initializers with inconsistent final arrays. We could set it to
     // anything here, but we follow what parse_post_array_dims() does.
-    info->tag = 0;
+    info->set_tag(0);
     info->dim.emplace_back(enum_type->addr());
     if (!info->dim_exprs.empty())
         info->dim_exprs.emplace_back(nullptr);
@@ -2444,7 +2455,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
     if (expecttoken(tSYMBOL, &tok))
         decl->name = gAtoms.add(tok.str);
 
-    if (decl->type.declared_tag && !decl->type.tag) {
+    if (decl->type.declared_tag && !decl->type.tag()) {
         assert(decl->type.numdim() > 0);
         decl->type.dim.pop_back();
     }
@@ -2535,9 +2546,10 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
         lextok(&tok);
     }
 
-    if (!parse_new_typename(&tok, &type->tag))
+    TypenameInfo ti;
+    if (!parse_new_typename(&tok, &ti))
         return false;
-    type->declared_tag = type->tag;
+    type->set_type(ti);
 
     // Note: we could have already filled in the prefix array bits, so we check
     // that ident != iARRAY before looking for an open bracket.
@@ -2559,8 +2571,6 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
         if (matchtoken('&')) {
             if (type->ident == iARRAY || type->ident == iREFARRAY)
                 error(137);
-            else if (gTypes.find(type->semantic_tag())->isEnumStruct())
-                error(136);
             else
                 type->ident = iREFERENCE;
         }
@@ -2575,18 +2585,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
 }
 
 bool
-Parser::parse_new_typename(const token_t* tok, int* tagp)
-{
-    int tag = parse_new_typename(tok);
-    if (tag >= 0)
-        *tagp = tag;
-    else
-        *tagp = 0;
-    return true;
-}
-
-int
-Parser::parse_new_typename(const token_t* tok)
+Parser::parse_new_typename(const token_t* tok, TypenameInfo* out)
 {
     token_t tmp;
 
@@ -2597,42 +2596,52 @@ Parser::parse_new_typename(const token_t* tok)
 
     switch (tok->id) {
         case tINT:
-            return 0;
+            *out = TypenameInfo{0};
+            return true;
         case tCHAR:
-            return pc_tag_string;
+            *out = TypenameInfo{pc_tag_string};
+            return true;
         case tVOID:
-            return pc_tag_void;
+            *out = TypenameInfo{pc_tag_void};
+            return true;
         case tOBJECT:
-            return pc_tag_object;
+            *out = TypenameInfo{pc_tag_object};
+            return true;
         case tLABEL:
-            error(120);
-            return pc_addtag(tok->str);
-        case tSYMBOL: {
-            if (strcmp(tok->str, "float") == 0)
-                return sc_rationaltag;
-            if (strcmp(tok->str, "bool") == 0)
-                return pc_tag_bool;
-            int tag = pc_findtag(tok->str);
-            if (tag == sc_rationaltag) {
-                error(98, "Float", "float");
-            } else if (tag == pc_tag_string) {
-                error(98, "String", "char");
-            } else if (tag == 0) {
-                error(98, "_", "int");
-            } else if (tag == -1) {
-                report(139) << tok->str;
-                tag = 0;
-            } else if (tag != pc_anytag) {
-                Type* type = gTypes.find(tag);
-                // Perform some basic filters so we can start narrowing down what can
-                // be used as a type.
-                if (type->isDeclaredButNotDefined())
-                    report(139) << tok->str;
+        case tSYMBOL:
+            if (tok->id == tLABEL)
+                error(120);
+            if (strcmp(tok->str, "float") == 0) {
+                *out = TypenameInfo{sc_rationaltag};
+                return true;
             }
-            return tag;
-        }
+            if (strcmp(tok->str, "bool") == 0) {
+                *out = TypenameInfo{pc_tag_bool};
+                return true;
+            }
+            if (strcmp(tok->str, "Float") == 0) {
+                error(98, "Float", "float");
+                *out = TypenameInfo{sc_rationaltag};
+                return true;
+            }
+            if (strcmp(tok->str, "String") == 0) {
+                error(98, "String", "char");
+                *out = TypenameInfo{pc_tag_string};
+                return true;
+            }
+            if (strcmp(tok->str, "_") == 0) {
+                error(98, "_", "int");
+                *out = TypenameInfo{0};
+                return true;
+            }
+            if (strcmp(tok->str, "any") == 0) {
+                *out = TypenameInfo(pc_anytag);
+                return true;
+            }
+            *out = TypenameInfo(gAtoms.add(tok->str), tok->id == tLABEL);
+            return true;
     }
 
     error(122);
-    return -1;
+    return false;
 }

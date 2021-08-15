@@ -2,7 +2,7 @@
 
 enum struct Sample {
   float a;
-};
+}
 
 methodmap Crab {
   property Sample s {

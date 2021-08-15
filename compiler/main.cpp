@@ -147,11 +147,11 @@ EM_JS(void, setup_emscripten_fs, (), {
  */
 int
 pc_compile(int argc, char* argv[]) {
-    int entry, jmpcode;
+    int jmpcode;
     int retcode;
     char incfname[PATH_MAX];
     int64_t inpfmark;
-    int lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
+    int lcl_tabsize, lcl_require_newdecls;
     char* ptr;
 
     CompileContext cc;
@@ -164,7 +164,6 @@ pc_compile(int argc, char* argv[]) {
     /* set global variables to their initial value */
     initglobals();
     errorset(sRESET, 0);
-    errorset(sEXPRRELEASE, 0);
     lexinit();
 
     /* make sure that we clean up on a fatal error; do this before the first
@@ -190,7 +189,6 @@ pc_compile(int argc, char* argv[]) {
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
     sc_ctrlchar_org = sc_ctrlchar;
-    lcl_needsemicolon = sc_needsemicolon;
     lcl_require_newdecls = sc_require_newdecls;
     lcl_tabsize = sc_tabsize;
 
@@ -208,88 +206,22 @@ pc_compile(int argc, char* argv[]) {
     freading = TRUE;
 
     setconstants(); /* set predefined constants and tagnames */
-    sc_status = statFIRST;
     /* write starting options (from the command line or the configuration file) */
     if (sc_listing) {
         gAsmBuffer << "#pragma ctrlchar 0x" << ke::StringPrintf("%02x", sc_ctrlchar) << "\n";
-        gAsmBuffer << "#pragma semicolon " << (sc_needsemicolon ? "true" : "false") << "\n";
         gAsmBuffer << "#pragma tabsize " << sc_tabsize << "\n";
         setfiledirect(inpf->name());
     }
     /* do the first pass through the file (or possibly two or more "first passes") */
     sc_parsenum = 0;
     inpfmark = inpf_org->Pos();
-    do {
-        /* reset "defined" flag of all functions and global variables */
-        reduce_referrers(cc);
-        delete_symbols(cc, false);
-        delete_substtable();
-        inst_datetime_defines();
-        inst_binary_name(binfname);
-        resetglobals();
-        gTypes.clearExtendedTypes();
-        pstructs_free();
-        funcenums_free();
-        methodmaps_free();
-        sc_ctrlchar = sc_ctrlchar_org;
-        sc_needsemicolon = lcl_needsemicolon;
-        sc_require_newdecls = lcl_require_newdecls;
-        sc_tabsize = lcl_tabsize;
-        errorset(sRESET, 0);
-        clear_errors();
-        /* reset the source file */
-        inpf = inpf_org;
-        freading = TRUE;
-        inpf->Reset(inpfmark);
-        sc_reparse = FALSE;          /* assume no extra passes */
-        sc_status = statFIRST;       /* resetglobals() resets it to IDLE */
-        insert_inputfile(inpf->name()); /* save for the error system */
 
-        /* look for default prefix (include) file in include paths,
-         * but only error if it was manually set on the command line
-         */
-        if (strlen(incfname) > 0) {
-            int defOK = plungefile(incfname, FALSE, TRUE);
-            if (!defOK && strcmp(incfname, sDEF_PREFIX) != 0) {
-                error(FATAL_ERROR_READ, incfname);
-            }
-        }
-        preprocess(true); /* fetch first line */
-
-        Parser parser;
-        parser.parse();      /* process all input */
-
-        sc_parsenum++;
-    } while (sc_reparse || sc_parsenum == 1);
-
-    /* second (or third) pass */
-    sc_status = statWRITE; /* set, to enable warnings */
-
-    if (sc_listing)
-        goto cleanup;
-
-    /* ??? for re-parsing the listing file instead of the original source
-     * file (and doing preprocessing twice):
-     * - close input file, close listing file
-     * - re-open listing file for reading (inpf)
-     * - open assembler file (outf)
-     */
-
-    /* reset "defined" flag of all functions and global variables */
-    reduce_referrers(cc);
-    deduce_liveness(cc);
-    delete_symbols(cc, false);
-    gTypes.clearExtendedTypes();
-    funcenums_free();
-    methodmaps_free();
-    pstructs_free();
-    delete_substtable();
     inst_datetime_defines();
     inst_binary_name(binfname);
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
-    sc_needsemicolon = lcl_needsemicolon;
     sc_require_newdecls = lcl_require_newdecls;
+    gNeedSemicolonStack.emplace_back(!!sc_needsemicolon);
     sc_tabsize = lcl_tabsize;
     errorset(sRESET, 0);
     clear_errors();
@@ -298,7 +230,7 @@ pc_compile(int argc, char* argv[]) {
     freading = TRUE;
     inpf->Reset(inpfmark);       /* reset file position */
     lexinit();                   /* clear internal flags of lex() */
-    sc_status = statWRITE;       /* allow to write --this variable was reset by resetglobals() */
+
     writeleader();
     insert_dbgfile(inpf->name());   /* attach to debug information */
     insert_inputfile(inpf->name()); /* save for the error system */
@@ -309,23 +241,38 @@ pc_compile(int argc, char* argv[]) {
 
     {
         Parser parser;
-        parser.parse();      /* process all input */
+
+        AutoCountErrors errors;
+        auto stmts = parser.parse();      /* process all input */
+        if (!stmts || !errors.ok() || sc_listing)
+            goto cleanup;
+
+        errors.Reset();
+
+        SemaContext sc;
+        if (!stmts->EnterNames(sc) || !errors.ok())
+            goto cleanup;
+
+        errors.Reset();
+        if (!stmts->Bind(sc) || !errors.ok())
+            goto cleanup;
+
+        errors.Reset();
+        if (!stmts->Analyze(sc) || !errors.ok())
+            goto cleanup;
+
+        stmts->ProcessUses(sc);
+
+        CodegenContext cg(sc.cc(), nullptr);
+        stmts->Emit(cg);
     }
 
     /* inpf is already closed when readline() attempts to pop of a file */
     writetrailer(); /* write remaining stuff */
 
-    entry = TestSymbols(cc.globals(), FALSE); /* test for unused or undefined
-                                               * functions and variables */
-    if (!entry)
-        error(13); /* no entry point (no public functions) */
-
 cleanup:
     sc_shutting_down = true;
     dump_error_report(true);
-
-    inpf = nullptr;
-    inpf_org = nullptr;
 
     // Write the binary file.
     if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0)
@@ -337,6 +284,9 @@ cleanup:
         if (fwrite(data.c_str(), data.size(), 1, fp.get()) != 1)
             error(FATAL_ERROR_WRITE, outfname);
     }
+
+    inpf = nullptr;
+    inpf_org = nullptr;
 
     if (errnum == 0 && strlen(errfname) == 0) {
         if (pc_stksize_override)
@@ -368,7 +318,6 @@ cleanup:
     gCurrentLineStack.clear();
     gInputFileStack.clear();
 
-    delete_symbols(cc, true);
     delete_aliastable();
     delete_pathtable();
     delete_sourcefiletable();
@@ -461,10 +410,8 @@ resetglobals(void)
     freading = FALSE;      /* no input file ready yet */
     fline = 0;             /* the line number in the current file */
     fnumber = 0;           /* the file number in the file table (debugging) */
-    sideeffect = 0;        /* true if an expression causes a side-effect */
     stmtindent = 0;        /* current indent of the statement */
     indent_nowarn = FALSE; /* do not skip warning "217 loose indentation" */
-    sc_status = statIDLE;
     pc_deprecate = "";
 
     sc_intest = false;
@@ -483,7 +430,7 @@ initglobals(void)
     errnum = 0;                        /* number of errors */
     warnnum = 0;                       /* number of warnings */
     verbosity = 1;                     /* verbosity level, no copyright banner */
-    sc_debug = sCHKBOUNDS | sSYMBOLIC; /* sourcemod: full debug stuff */
+    sc_debug = sSYMBOLIC;              /* sourcemod: full debug stuff */
     sc_needsemicolon = FALSE;          /* semicolon required to terminate expressions? */
     sc_require_newdecls = FALSE;
     pc_stksize = sDEF_AMXSTACK; /* default stack size */
@@ -796,10 +743,6 @@ setcaption(void)
 static void
 setconstants(void)
 {
-    int debug;
-
-    assert(sc_status == statIDLE);
-
     gTypes.init();
     assert(sc_rationaltag);
 
@@ -813,34 +756,5 @@ setconstants(void)
 
     add_constant(cc, nullptr, gAtoms.add("__Pawn"), VERSION_INT, sGLOBAL, 0, -1);
 
-    debug = 0;
-    if ((sc_debug & (sCHKBOUNDS | sSYMBOLIC)) == (sCHKBOUNDS | sSYMBOLIC))
-        debug = 2;
-    else if ((sc_debug & sCHKBOUNDS) == sCHKBOUNDS)
-        debug = 1;
-    add_constant(cc, nullptr, gAtoms.add("debug"), debug, sGLOBAL, 0, -1);
-}
-
-void
-fill_arg_defvalue(VarDecl* decl, arginfo* arg)
-{
-    arg->def = new DefaultArg();
-    arg->def->tag = decl->type().tag;
-
-    if (SymbolExpr* expr = decl->init_rhs()->AsSymbolExpr()) {
-        symbol* sym = expr->sym();
-        assert(sym->vclass == sGLOBAL);
-
-        arg->def->val = ke::Some(sym->addr());
-        arg->type.tag = sym->tag;
-        if (sc_status == statWRITE && (sym->usage & uREAD) == 0)
-            markusage(sym, uREAD);
-        return;
-    }
-
-    ArrayData data;
-    BuildArrayInitializer(decl, &data, 0);
-
-    arg->def->array = new ArrayData;
-    *arg->def->array = std::move(data);
+    add_constant(cc, nullptr, gAtoms.add("debug"), 2, sGLOBAL, 0, -1);
 }

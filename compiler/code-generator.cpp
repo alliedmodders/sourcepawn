@@ -27,6 +27,7 @@
 
 #include "array-helpers.h"
 #include "code-generator.h"
+#include "compile-context.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -736,7 +737,6 @@ SymbolExpr::DoEmit()
             break;
         case iFUNCTN:
             load_glbfn(sym_);
-            sym_->callback = true;
             break;
         case iVARIABLE:
         case iREFERENCE:
@@ -996,14 +996,14 @@ NewArrayExpr::DoEmit()
         Expr* expr = exprs_[i];
         expr->Emit();
 
-        if (i == exprs_.size() - 1 && tag_ == pc_tag_string)
+        if (i == exprs_.size() - 1 && type_.tag() == pc_tag_string)
             stradjust(sPRI);
 
         pushreg(sPRI);
         numdim++;
     }
 
-    if (symbol* es = gTypes.find(tag_)->asEnumStruct()) {
+    if (symbol* es = gTypes.find(type_.tag())->asEnumStruct()) {
         // The last dimension is implicit in the size of the enum struct. Note
         // that when synthesizing a NewArrayExpr for old-style declarations,
         // it is impossible to have an enum struct.
@@ -1143,9 +1143,6 @@ ReturnStmt::DoEmit(CodegenContext& cg)
 void
 AssertStmt::DoEmit(CodegenContext& cg)
 {
-    if (!(sc_debug & sCHKBOUNDS))
-        return;
-
     // this insert dbgline call looks bad.
     assert(false);
 
@@ -1198,13 +1195,7 @@ DeleteStmt::DoEmit(CodegenContext& cg)
     // sysreq.c N 1
     // stack 8
     pushreg(sPRI);
-    {
-        ffcall(map_->dtor->target, 1);
-
-        // Only mark usage if we're not skipping codegen.
-        if (sc_status != statSKIP)
-            markusage(map_->dtor->target, uREAD);
-    }
+    ffcall(map_->dtor->target, 1);
 
     if (zap) {
         if (popaddr)
@@ -1408,10 +1399,13 @@ FunctionInfo::Emit(CodegenContext& cg)
     if (sym_->skipped)
         return;
 
+    // :TODO: factor in usage
+    cg.cc().functions().emplace(sym_);
+
     if (!body_)
         return;
 
-    CodegenContext new_cg(sym_);
+    CodegenContext new_cg(cg.cc(), sym_);
 
     sym_->setAddr(code_idx);
 

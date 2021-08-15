@@ -1,0 +1,1 @@
+(3) : error 160: brackets in between type and variable name indicate a dynamic-size array, but a fixed-size initializer was given

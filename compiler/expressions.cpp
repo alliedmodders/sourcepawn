@@ -80,6 +80,29 @@ user_dec(void)
 {
 }
 
+static inline bool
+MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
+{
+    auto fun = sym->function();
+    if (fun->args.size() != size_t(numparam) + 1)
+        return false;
+
+    assert(numparam == 1 || numparam == 2);
+    int tags[2] = { tag1, tag2 };
+
+    for (int i = 0; i < numparam; i++) {
+        if (fun->args[i].type.ident != iVARIABLE)
+            return false;
+        if (fun->args[i].type.tag() != tags[i])
+            return false;
+    }
+
+    if (fun->args[numparam].type.ident != 0)
+        return false;
+
+    return true;
+}
+
 bool
 find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op,
             int fnumber)
@@ -94,13 +117,12 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     char opername[4] = "";
     size_t i;
     bool savepri, savealt;
-    symbol* sym;
 
     /* since user-defined operators on untagged operands are forbidden, we have
      * a quick exit.
      */
     assert(numparam == 1 || numparam == 2);
-    if (tag1 == 0 && (numparam == 1 || tag2 == 0))
+    if (Parser::sInPreprocessor || (tag1 == 0 && (numparam == 1 || tag2 == 0)))
         return false;
 
     savepri = savealt = false;
@@ -139,33 +161,36 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     if (opername[0] == '\0')
         return false;
 
-    /* create a symbol name from the tags and the operator name */
-    assert(numparam == 1 || numparam == 2);
-    auto symbolname = operator_symname(opername, tag1, tag2, numparam, tag2);
+    auto opername_atom = gAtoms.add(opername);
+    symbol* chain = findglb(CompileContext::get(), opername_atom, fnumber);
+    if (!chain)
+        return false;
+
+    symbol* sym = nullptr;
     bool swapparams = false;
-    sym = findglb(CompileContext::get(), symbolname, fnumber);
-    if (!sym) {
-        /* check for commutative operators */
-        if (tag1 == tag2 || oper == NULL || !commutative(oper))
-            return false; /* not commutative, cannot swap operands */
-        /* if arrived here, the operator is commutative and the tags are different,
-         * swap tags and try again
-         */
-        assert(numparam == 2); /* commutative operator must be a binary operator */
-        symbolname = operator_symname(opername, tag2, tag1, numparam, tag1);
-        swapparams = true;
-        sym = findglb(CompileContext::get(), symbolname, fnumber);
-        if (!sym)
-            return false;
+    bool is_commutative = commutative(oper);
+    for (auto iter = chain; iter; iter = iter->next) {
+        bool matched = MatchOperator(iter, tag1, tag2, numparam);
+        if (!matched && is_commutative && tag1 != tag2 && oper) {
+            matched = MatchOperator(iter, tag2, tag1, numparam);
+            swapparams = true;
+        }
+        if (matched) {
+            sym = iter;
+            break;
+        }
     }
 
+    if (!sym)
+        return false;
+
     /* check existance and the proper declaration of this function */
-    if (sym->missing || !sym->prototyped) {
-        auto symname = funcdisplayname(sym->name());
-        if (sym->missing)
-            report(4) << symname; /* function not defined */
-        if (!sym->prototyped)
-            report(71) << symname; /* operator must be declared before use */
+    if (!sym->defined) {
+        if (numparam == 1)
+            report(406) << opername << gTypes.find(tag1);
+        else
+            report(407) << opername << gTypes.find(tag1) << gTypes.find(tag2);
+        return false;
     }
 
     /* we don't want to use the redefined operator in the function that
@@ -174,11 +199,11 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
      *    fixed:operator+(fixed:a, fixed:b)
      *        return a + b
      */
-    if (sym == curfunc)
-        return false;
+    if (sym == curfunc) {
+        report(408);
+    }
 
-    if (sc_status != statSKIP)
-        markusage(sym, uREAD); /* do not mark as "used" when this call itself is skipped */
+    markusage(sym, uREAD);
 
     op->sym = sym;
     op->oper = oper;
@@ -256,23 +281,6 @@ emit_userop(const UserOperation& user_op, value* lval)
             moveto1();   /* make sure PRI is restored on exit */
         }
     }
-}
-
-int
-check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag,
-             int fnumber)
-{
-    UserOperation user_op;
-    if (!find_userop(oper, tag1, tag2, numparam, lval, &user_op, fnumber))
-        return FALSE;
-
-    sideeffect = TRUE;         /* assume functions carry out a side-effect */
-
-    assert(resulttag != NULL);
-    *resulttag = user_op.sym->tag; /* save tag of the called function */
-
-    emit_userop(user_op, lval);
-    return TRUE;
 }
 
 int
@@ -437,10 +445,13 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
 
     // Do not allow casting between different array types, eg:
     //   any[] <-> float[] is illegal.
-    if (!formal->type.dim.empty() && !IsValidImplicitArrayCast(formal->type.tag, actual->type.tag))
+    if (!formal->type.dim.empty() &&
+        !IsValidImplicitArrayCast(formal->type.tag(), actual->type.tag()))
+    {
         return FALSE;
+    }
 
-    if (!matchtag(formal->type.tag, actual->type.tag, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
+    if (!matchtag(formal->type.tag(), actual->type.tag(), MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return FALSE;
     return TRUE;
 }

@@ -135,3 +135,7 @@ As of this release, both the compiler and VM can run on non-x86 platforms
 ### SourcePawn 1.12
 
 SourcePawn 1.12 is the current development version.
+
+This release contains a rewrite of the statement parser. It eliminates the
+multi-pass reparse model. It also contains stricter type checking and much
+better handling of array initializers.

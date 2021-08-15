@@ -52,9 +52,9 @@ SymbolScope::AddChain(symbol* sym)
 #ifndef NDEBUG
     for (auto iter = sym->next; iter; iter = iter->next) {
         if (sym->is_static)
-            assert(!iter->is_static || iter->fnumber != sym->fnumber);
+            assert(!iter->is_static || iter->fnumber != sym->fnumber || sym->is_operator);
         else
-            assert(iter->is_static);
+            assert(iter->is_static || iter->is_operator);
     }
 #endif
 }
@@ -72,7 +72,7 @@ SymbolScope::FindGlobal(sp::Atom* atom, int fnumber) const
     // When reparse goes away, we can introduce a separate static scope.
     symbol* nonstatic = nullptr;
     for (auto sym = iter->second; sym; sym = sym->next) {
-        if (!sym->is_static || fnumber == -1) {
+        if (!nonstatic && (!sym->is_static || fnumber == -1)) {
             nonstatic = sym;
             continue;
         }
@@ -82,43 +82,12 @@ SymbolScope::FindGlobal(sp::Atom* atom, int fnumber) const
     return nonstatic;
 }
 
-void
-SymbolScope::DeleteSymbols(const std::function<bool(symbol*)>& callback)
-{
-    auto iter = symbols_.begin();
-    while (iter != symbols_.end()) {
-        symbol* prev = nullptr;
-        symbol* sym = iter->second;
-        while (sym) {
-            // |iter->second| is the list head, which we fix up if it gets
-            // deleted.
-            if (callback(sym)) {
-                if (!prev)
-                    iter->second = sym->next;
-                else
-                    prev->next = sym->next;
-            } else {
-                prev = sym;
-            }
-            sym = sym->next;
-        }
-
-        if (!iter->second)
-            iter = symbols_.erase(iter);
-        else
-            iter++;
-    }
-}
-
 void AddGlobal(CompileContext& cc, symbol* sym)
 {
     assert(sym->vclass == sGLOBAL);
 
     auto scope = cc.globals();
-    if (sym->is_static)
-        scope->AddChain(sym);
-    else
-        scope->Add(sym);
+    scope->AddChain(sym);
 }
 
 symbol*
@@ -169,91 +138,9 @@ findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
     return nullptr;
 }
 
-// Note: not idempotent
-static bool
-ShouldDeleteSymbol(symbol* sym, bool delete_functions)
-{
-    bool mustdelete;
-    switch (sym->ident) {
-        case iVARIABLE:
-        case iARRAY:
-            /* do not delete global variables if functions are preserved */
-            mustdelete = delete_functions;
-            break;
-        case iREFERENCE:
-            /* always delete references (only exist as function parameters) */
-            mustdelete = true;
-            break;
-        case iREFARRAY:
-            /* a global iREFARRAY symbol is the return value of a function: delete
-             * this only if "globals" must be deleted; other iREFARRAY instances
-             * (locals) are also deleted
-             */
-            assert(!sym->parent());
-            mustdelete = true;
-            break;
-        case iCONSTEXPR:
-        case iENUMSTRUCT:
-            /* delete constants, except predefined constants */
-            mustdelete = delete_functions || !sym->predefined;
-            break;
-        case iFUNCTN:
-            /* optionally preserve globals (variables & functions), but
-             * NOT native functions
-             */
-            mustdelete = delete_functions || sym->native;
-            assert(sym->parent() == NULL);
-            break;
-        case iMETHODMAP:
-            // We delete methodmap symbols at the end, but since methodmaps
-            // themselves get wiped, we null the pointer.
-            sym->set_data(nullptr);
-            mustdelete = delete_functions;
-            assert(!sym->parent());
-            break;
-        case iARRAYCELL:
-        case iARRAYCHAR:
-        case iEXPRESSION:
-        case iVARARGS:
-        case iACCESSOR:
-        default:
-            assert(false);
-            return false;
-    }
-    if (mustdelete)
-        return true;
-    /* if the function was prototyped, but not implemented in this source,
-     * mark it as such, so that its use can be flagged
-     */
-    if (sym->ident == iFUNCTN && !sym->defined)
-        sym->missing = true;
-    if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
-        sym->defined = false;
-    /* for user defined operators, also remove the "prototyped" flag, as
-     * user-defined operators *must* be declared before use
-     */
-    if (sym->ident == iFUNCTN && !alpha(*sym->name()))
-        sym->prototyped = false;
-    sym->clear_refers();
-    return false;
-}
-
-void
-delete_symbols(CompileContext& cc, bool delete_functions)
-{
-    cc.globals()->DeleteSymbols([delete_functions](symbol* sym) -> bool {
-        return ShouldDeleteSymbol(sym, delete_functions);
-    });
-}
-
 void
 markusage(symbol* sym, int usage)
 {
-    // When compiling a skipped function, do not accumulate liveness information
-    // for referenced functions.
-    if (sc_status == statSKIP && sym->ident == iFUNCTN)
-        return;
-
     sym->usage |= usage;
     /* check if (global) reference must be added to the symbol */
     if ((usage & (uREAD | uWRITTEN)) != 0) {
@@ -265,21 +152,13 @@ markusage(symbol* sym, int usage)
 
 FunctionData::FunctionData()
  : funcid(0),
-   array(nullptr)
+   array(nullptr),
+   node(nullptr),
+   forward(nullptr)
 {
-    resizeArgs(0);
-}
-
-void
-FunctionData::resizeArgs(size_t nargs)
-{
-    args.resize(nargs);
+    // Always have one empty argument at the end.
     args.emplace_back();
 }
-
-symbol::symbol()
- : symbol(nullptr, 0, 0, 0, 0)
-{}
 
 symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int symtag)
  : next(nullptr),
@@ -294,24 +173,22 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
    is_public(false),
    is_static(false),
    is_struct(false),
-   prototyped(false),
-   missing(false),
    callback(false),
    skipped(false),
-   retvalue(false),
-   forward(false),
    native(false),
+   returns_value(false),
+   always_returns(false),
    retvalue_used(false),
+   is_operator(false),
    enumroot(false),
    enumfield(false),
-   predefined(false),
    deprecated(false),
    queued(false),
    explicit_return_type(false),
    x({}),
-   fnumber(fcurrent),
+   fnumber(0),
    /* assume global visibility (ignored for local symbols) */
-   lnumber(fline),
+   lnumber(0),
    documentation(nullptr),
    addr_(symaddr),
    name_(nullptr),
@@ -332,15 +209,13 @@ symbol::symbol(const symbol& other)
 
     usage = other.usage;
     defined = other.defined;
-    prototyped = other.prototyped;
-    missing = other.missing;
     enumroot = other.enumroot;
     enumfield = other.enumfield;
-    predefined = other.predefined;
     callback = other.callback;
     skipped = other.skipped;
-    retvalue = other.retvalue;
-    forward = other.forward;
+    returns_value = other.returns_value;
+    always_returns = other.always_returns;
+    is_operator = other.is_operator;
     native = other.native;
     stock = other.stock;
     is_struct = other.is_struct;
@@ -386,7 +261,7 @@ bool
 symbol::must_return_value() const
 {
     assert(ident == iFUNCTN);
-    return retvalue || (explicit_return_type && tag != pc_tag_void);
+    return retvalue_used || (explicit_return_type && tag != pc_tag_void);
 }
 
 symbol*
@@ -433,72 +308,20 @@ findnamedarg(arginfo* arg, sp::Atom* name)
 symbol*
 FindEnumStructField(Type* type, sp::Atom* name)
 {
-    assert(type->asEnumStruct());
+    symbol* sym = type->asEnumStruct();
+    if (!sym->data())
+        return nullptr;
 
-    auto const_name = ke::StringPrintf("%s::%s", type->name(), name->chars());
-    auto atom = gAtoms.add(const_name);
-    return findglb(CompileContext::get(), atom, -1);
-}
-
-static char*
-tag2str(char* dest, int tag)
-{
-    assert(tag >= 0);
-    sprintf(dest, "0%x", tag);
-    return isdigit(dest[1]) ? &dest[1] : dest;
-}
-
-sp::Atom*
-operator_symname(const char* opername, int tag1, int tag2, int numtags, int resulttag)
-{
-    char tagstr1[10], tagstr2[10];
-    int opertok;
-
-    assert(numtags >= 1 && numtags <= 2);
-    opertok = (opername[1] == '\0') ? opername[0] : 0;
-
-    std::string symname;
-    if (opertok == '=')
-        symname = ke::StringPrintf("%s%s%s", tag2str(tagstr1, resulttag), opername, tag2str(tagstr2, tag1));
-    else if (numtags == 1 || opertok == '~')
-        symname = ke::StringPrintf("%s%s", opername, tag2str(tagstr1, tag1));
-    else
-        symname = ke::StringPrintf("%s%s%s", tag2str(tagstr1, tag1), opername, tag2str(tagstr2, tag2));
-    return gAtoms.add(symname);
-}
-
-/*
- *  Finds a function in the global symbol table or creates a new entry.
- *  It does some basic processing and error checking.
- */
-symbol*
-fetchfunc(CompileContext& cc, sp::Atom* name, int fnumber)
-{
-    symbol* sym;
-
-    if ((sym = findglb(cc, name, fnumber)) != 0) { /* already in symbol table? */
-        if (sym->ident != iFUNCTN) {
-            report(21) << name; /* yes, but not as a function */
-            return nullptr;     /* make sure the old symbol is not damaged */
-        } else if (sym->native) {
-            report(21) << name; /* yes, and it is a native */
-        }
-        assert(sym->vclass == sGLOBAL);
-    } else {
-        /* don't set the "uDEFINE" flag; it may be a prototype */
-        sym = new symbol(name, code_idx, iFUNCTN, sGLOBAL, 0);
-        AddGlobal(cc, sym);
-        assert(sym); /* fatal error 103 must be given on error */
+    auto es = sym->data()->asEnumStruct();
+    for (const auto& field : es->fields) {
+        if (field->nameAtom() == name)
+            return field;
     }
-    if (pc_deprecate.size() > 0) {
-        assert(sym);
-        sym->deprecated = true;
-        if (sc_status == statWRITE && !pc_deprecate.empty())
-            sym->documentation = new PoolString(pc_deprecate);
-        pc_deprecate.clear();
+    for (const auto& method : es->methods) {
+        if (method->nameAtom() == name)
+            return method;
     }
-
-    return sym;
+    return nullptr;
 }
 
 int
@@ -528,56 +351,10 @@ check_operatortag(int opertok, int resulttag, const char* opername)
     return TRUE;
 }
 
-static int
-parse_funcname(const char* fname, int* tag1, int* tag2, char* opname, size_t opname_len)
-{
-    const char* ptr;
-    int unary;
-
-    /* tags are only positive, so if the function name starts with a '-',
-     * the operator is an unary '-' or '--' operator.
-     */
-    if (*fname == '-') {
-        *tag1 = 0;
-        unary = TRUE;
-        ptr = fname;
-    } else {
-        *tag1 = (int)strtol(fname, (char**)&ptr, 16);
-        unary = ptr == fname; /* unary operator if it doesn't start with a tag name */
-    }
-    assert(!unary || *tag1 == 0);
-    assert(*ptr != '\0');
-    size_t chars_to_copy = 0;
-    for (const char* iter = ptr; *iter && !isdigit(*iter); iter++)
-        chars_to_copy++;
-    ke::SafeStrcpyN(opname, opname_len, ptr, chars_to_copy);
-    *tag2 = (int)strtol(&ptr[chars_to_copy], NULL, 16);
-    return unary;
-}
-
 std::string
 funcdisplayname(const char* funcname)
 {
-    int tags[2];
-    char opname[10];
-    int unary;
-
-    if (isalpha(*funcname) || *funcname == '_' || *funcname == PUBLIC_CHAR || *funcname == '\0')
-        return funcname;
-
-    unary = parse_funcname(funcname, &tags[0], &tags[1], opname, sizeof(opname));
-    Type* rhsType = gTypes.find(tags[1]);
-    assert(rhsType != NULL);
-    if (unary) {
-        return ke::StringPrintf("operator%s(%s:)", opname, rhsType->name());
-    }
-
-    Type* lhsType = gTypes.find(tags[0]);
-    assert(lhsType != NULL);
-    /* special case: the assignment operator has the return value as the 2nd tag */
-    if (opname[0] == '=' && opname[1] == '\0')
-        return ke::StringPrintf("%s:operator%s(%s:)", lhsType->name(), opname, rhsType->name());
-    return ke::StringPrintf("operator%s(%s:,%s:)", opname, lhsType->name(), rhsType->name());
+    return funcname;
 }
 
 static inline bool
@@ -629,8 +406,7 @@ reduce_referrers(CompileContext& cc)
     }
 }
 
-// Determine the set of live functions. Note that this must run before delete_symbols,
-// since that resets referrer lists.
+// Determine the set of live functions.
 void
 deduce_liveness(CompileContext& cc)
 {
@@ -699,8 +475,36 @@ add_constant(CompileContext& cc, SymbolScope* scope, sp::Atom* name, cell val, i
         scope->Add(sym);
 
     sym->defined = true;
-    if (sc_status == statIDLE)
-        sym->predefined = true;
     return sym;
 }
 
+symbol*
+declare_methodmap_symbol(CompileContext& cc, methodmap_t* map)
+{
+    symbol* sym = findglb(cc, map->name, -1);
+    if (sym && sym->ident != iMETHODMAP) {
+        if (sym->ident == iCONSTEXPR) {
+            // We should only hit this on the first pass. Assert really hard that
+            // we're about to kill an enum definition and not something random.
+            assert(sym->ident == iCONSTEXPR);
+            assert(map->tag == sym->tag);
+
+            sym->ident = iMETHODMAP;
+
+            // Kill previous enumstruct properties, if any.
+            auto data = sym->data() ? sym->data()->asEnum() : nullptr;
+            map->enum_data = data;
+            sym->set_data(map);
+            return sym;
+        }
+        report(11) << map->name;
+        return nullptr;
+    }
+
+    sym = new symbol(map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
+    AddGlobal(cc, sym);
+
+    sym->defined = true;
+    sym->set_data(map);
+    return sym;
+}

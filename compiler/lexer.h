@@ -284,13 +284,13 @@ void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
-void declare_methodmap_symbol(CompileContext& cc, methodmap_t* map, bool can_redef);
 void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);
 std::string get_token_string(int tok_id);
 int is_variadic(symbol* sym);
 int alpha(char c);
+bool NeedSemicolon();
 
 enum class TerminatorPolicy {
     Newline,

@@ -190,10 +190,7 @@ insert_subst(const char* pattern, size_t pattern_length, const char* substitutio
     macro.deprecated = false;
     if (pc_deprecate.length() > 0) {
         macro.deprecated = true;
-        if (sc_status == statWRITE)
-            macro.documentation = std::move(pc_deprecate);
-        else
-            pc_deprecate = "";
+        macro.documentation = std::move(pc_deprecate);
     }
 
     std::string key(pattern, pattern_length);
@@ -295,7 +292,7 @@ static stringlist dbgstrings;
 stringlist*
 insert_dbgfile(const char* filename)
 {
-    if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
+    if ((sc_debug & sSYMBOLIC) != 0) {
         char string[PATH_MAX + 40];
         assert(filename != NULL);
         assert(strlen(filename) + 40 < sizeof string);
@@ -308,7 +305,7 @@ insert_dbgfile(const char* filename)
 stringlist*
 insert_dbgline(int linenr)
 {
-    if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
+    if ((sc_debug & sSYMBOLIC) != 0) {
         char string[40];
         if (linenr > 0)
             linenr--; /* line numbers are zero-based in the debug information */
@@ -321,7 +318,7 @@ insert_dbgline(int linenr)
 void
 insert_dbgsymbol(symbol* sym)
 {
-    if (sc_status == statWRITE && (sc_debug & sSYMBOLIC) != 0) {
+    if ((sc_debug & sSYMBOLIC) != 0) {
 	auto symname = funcdisplayname(sym->name());
 
         /* address tag:name codestart codeend ident vclass [tag:dim ...] */

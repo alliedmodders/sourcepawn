@@ -30,8 +30,6 @@
 #include "emitter.h"
 #include "sc.h"
 
-SemaContext* gCurrentSemaContext = nullptr;
-
 /*  global variables
  *
  *  All global variables that are shared amongst the compiler files are
@@ -50,7 +48,7 @@ cell glb_declared = 0;                     /* number of global cells declared */
 cell code_idx = 0;                         /* number of bytes with generated code */
 int errnum = 0;                            /* number of errors */
 int warnnum = 0;                           /* number of warnings */
-int sc_debug = sCHKBOUNDS;                 /* by default: bounds checking+assertions */
+int sc_debug = sSYMBOLIC;                 /* by default: bounds checking+assertions */
 int sc_asmfile = FALSE;                    /* create .ASM file? */
 int sc_listing = FALSE;                    /* create .LST file? */
 int sc_needsemicolon = TRUE;               /* semicolon required to terminate expressions? */
@@ -60,11 +58,9 @@ cell pc_stksize_override = 0;
 int freading = FALSE;                      /* Is there an input file ready for reading? */
 int fline = 0;                             /* the line number in the current file */
 short fnumber = 0;                         /* the file number in the file table (debugging) */
-int sideeffect = 0;                        /* true if an expression causes a side-effect */
 int stmtindent = 0;                        /* current indent of the statement */
 int indent_nowarn = FALSE;                 /* skip warning "217 loose indentation" */
 int sc_tabsize = 8;                        /* number of spaces that a TAB represents */
-int sc_status;                             /* read/write status */
 int sc_err_status;
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
@@ -95,6 +91,7 @@ short fcurrent; /* current file being processed */
 std::vector<short> gCurrentFileStack;
 std::vector<int> gCurrentLineStack;
 std::vector<std::shared_ptr<SourceFile>> gInputFileStack;
+std::vector<bool> gNeedSemicolonStack;
 
 jmp_buf errbuf;
 

@@ -29,9 +29,6 @@
 #include "sc.h"
 #include "source-file.h"
 
-class SemaContext;
-extern SemaContext* gCurrentSemaContext;
-
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern symbol* curfunc;           /* pointer to current function */
@@ -56,11 +53,9 @@ extern cell pc_stksize_override;  /* stack size override */
 extern int freading;              /* is there an input file ready for reading? */
 extern int fline;                 /* the line number in the current file */
 extern short fnumber;             /* number of files in the input file table */
-extern int sideeffect;            /* true if an expression causes a side-effect */
 extern int stmtindent;            /* current indent of the statement */
 extern int indent_nowarn;         /* skip warning "217 loose indentation" */
 extern int sc_tabsize;            /* number of spaces that a TAB represents */
-extern int sc_status;             /* read/write status */
 extern int sc_err_status;         /* TRUE if errors should be generated even if sc_status = SKIP */
 extern int sc_rationaltag;        /* tag for rational numbers */
 extern int pc_functag;            /* global function tag */
@@ -95,3 +90,4 @@ extern short fcurrent; /* current file being processed */
 extern std::vector<short> gCurrentFileStack;
 extern std::vector<int> gCurrentLineStack;
 extern std::vector<std::shared_ptr<SourceFile>> gInputFileStack;
+extern std::vector<bool> gNeedSemicolonStack;

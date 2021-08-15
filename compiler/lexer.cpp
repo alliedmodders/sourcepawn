@@ -113,7 +113,7 @@ plungequalifiedfile(const char* name)
     } while (ext_idx < (sizeof extensions / sizeof extensions[0]));
     if (!fp)
         return FALSE;
-    if (sc_showincludes && sc_status == statFIRST) {
+    if (sc_showincludes) {
         fprintf(stdout, "Note: including file: %s\n", name);
     }
     gInputFileStack.push_back(inpf);
@@ -123,6 +123,7 @@ plungequalifiedfile(const char* name)
     sCommentStack.push_back(icomment);
     gCurrentFileStack.push_back(fcurrent);
     gCurrentLineStack.push_back(fline);
+    gNeedSemicolonStack.push_back(!!sc_needsemicolon);
     inpf = fp; /* set input file pointer to include file */
     fnumber++;
     fline = 0; /* set current line number to 0 */
@@ -130,7 +131,7 @@ plungequalifiedfile(const char* name)
     icomment = 0;               /* not in a comment */
     insert_dbgfile(inpf->name());   /* attach to debug information */
     insert_inputfile(inpf->name()); /* save for the error system */
-    assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
+    assert(strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
     setfiledirect(inpf->name()); /* (optionally) set in the list file */
     listline = -1;           /* force a #line directive when changing the file */
     skip_utf8_bom(inpf.get());
@@ -329,13 +330,14 @@ readline(unsigned char* line)
             fcurrent = ke::PopBack(&gCurrentFileStack);
             icomment = ke::PopBack(&sCommentStack);
             iflevel = ke::PopBack(&sPreprocIfStack);
+            gNeedSemicolonStack.pop_back();
             skiplevel = iflevel; /* this condition held before including the file */
             assert(!SKIPPING);   /* idem ditto */
             inpf = ke::PopBack(&gInputFileStack);
             set_file_defines(inpf->name());
             insert_dbgfile(inpf->name());
             setfiledirect(inpf->name());
-            assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
+            assert(strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
             listline = -1; /* force a #line directive when changing the file */
         }
 
@@ -902,13 +904,11 @@ command(bool allow_synthesized_tokens)
         {
             ke::SaveAndSet<bool> reset(&Parser::sDetectedIllegalPreprocessorSymbols, false);
 
-            if (!SKIPPING && (sc_debug & sCHKBOUNDS) != 0) {
+            if (!SKIPPING) {
                 for (str = (char*)lptr; *str <= ' ' && *str != '\0'; str++)
                     /* nothing */;        /* save start of expression */
                 preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
-                bool should_assert = (!Parser::sDetectedIllegalPreprocessorSymbols ||
-                                      sc_status == statWRITE);
-                if (!val && should_assert)
+                if (!val)
                     error(FATAL_ERROR_ASSERTION_FAILED, str); /* assertion failed */
                 check_empty(lptr);
             }
@@ -944,7 +944,7 @@ command(bool allow_synthesized_tokens)
                     } else if (strcmp(str, "semicolon") == 0) {
                         cell val;
                         preproc_expr(&val, NULL);
-                        sc_needsemicolon = (int)val;
+                        gNeedSemicolonStack.back() = !!val;
                     } else if (strcmp(str, "newdecls") == 0) {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
@@ -1251,7 +1251,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                 /* character behind the pattern was matched too */
                 if (*e == *p) {
                     s = e + 1;
-                } else if (*e == '\n' && *p == ';' && *(p + 1) == '\0' && !sc_needsemicolon) {
+                } else if (*e == '\n' && *p == ';' && *(p + 1) == '\0' && !NeedSemicolon()) {
                     s = e; /* allow a trailing ; in the pattern match to end of line */
                 } else {
                     assert(*e == '\0' || *e == '\n');
@@ -1262,7 +1262,7 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             } else {
                 match = FALSE;
             }
-        } else if (*p == ';' && *(p + 1) == '\0' && !sc_needsemicolon) {
+        } else if (*p == ';' && *(p + 1) == '\0' && !NeedSemicolon()) {
             /* source may be ';' or end of the line */
             while (*s <= ' ' && *s != '\0')
                 s++; /* skip white space */
@@ -1575,7 +1575,7 @@ preprocess(bool allow_synthesized_tokens)
             substallpatterns(pline, sLINEMAX);
             lptr = pline; /* reset "line pointer" to start of the parsing buffer */
         }
-        if (sc_status == statFIRST && sc_listing && freading &&
+        if (sc_listing && freading &&
             (iscommand == CMD_NONE || iscommand == CMD_EMPTYLINE || iscommand == CMD_DIRECTIVE))
         {
             listline++;
@@ -2407,7 +2407,7 @@ lex_symbol(full_token_t* tok, const char* token_start)
         if (sc_allowtags) {
             tok->id = tLABEL;
             lptr++;
-        } else if (gTypes.find(tok->str)) {
+        } else if (gTypes.find(gAtoms.add(tok->str))) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
             error(220);
@@ -2498,7 +2498,7 @@ matchtoken(int token)
     if (token == tTERM && (tok == ';' || tok == tENDEXPR))
         return 1;
 
-    if (!sc_needsemicolon && token == tTERM && (_lexnewline || !freading)) {
+    if (!NeedSemicolon() && token == tTERM && (_lexnewline || !freading)) {
         /* Push "tok" back, because it is the token following the implicit statement
          * termination (newline) token.
          */
@@ -2610,7 +2610,7 @@ require_newline(TerminatorPolicy policy)
         int next_tok_id = peek_same_line();
         if (next_tok_id == ';') {
             lexpop();
-        } else if (policy == TerminatorPolicy::Semicolon && sc_needsemicolon) {
+        } else if (policy == TerminatorPolicy::Semicolon && NeedSemicolon()) {
             report(pos, 1) << ";" << get_token_string(next_tok_id);
         }
     }
@@ -2618,6 +2618,10 @@ require_newline(TerminatorPolicy policy)
     int tokid = peek_same_line();
     if (tokid == tEOL || tokid == 0)
         return TRUE;
+
+    // Eat an incorrect semicolon just so we can continue parsing.
+    if (tokid == ';' && policy == TerminatorPolicy::Newline)
+        lex_same_line();
 
     char s[20];
     if (tokid < 256)
@@ -2875,52 +2879,6 @@ needsymbol(token_ident_t* ident)
     ident->tok.str = ident->name->chars();
     return TRUE;
 }
-
-void
-declare_methodmap_symbol(CompileContext& cc, methodmap_t* map, bool can_redef)
-{
-    if (!can_redef)
-        return;
-
-    symbol* sym = findglb(CompileContext::get(), map->name, -1);
-    if (sym && sym->ident != iMETHODMAP) {
-        if (sym->ident == iCONSTEXPR) {
-            // We should only hit this on the first pass. Assert really hard that
-            // we're about to kill an enum definition and not something random.
-            assert(sc_status == statFIRST);
-            assert(sym->ident == iCONSTEXPR);
-            assert(map->tag == sym->tag);
-
-            sym->ident = iMETHODMAP;
-
-            // Kill previous enumstruct properties, if any.
-            if (sym->enumroot) {
-                for (auto iter = sym->dim.enumlist->begin(); iter != sym->dim.enumlist->end();
-                     iter++)
-                {
-                    auto csym = *iter;
-                    assert(csym->ident == iCONSTEXPR);
-                    assert(csym->parent() == sym);
-                    assert(csym->enumfield);
-                    csym->enumfield = false;
-                    csym->set_parent(nullptr);
-                }
-                sym->dim.enumlist = NULL;
-            }
-        } else {
-            report(11) << map->name;
-        }
-        return;
-    }
-
-    if (!sym) {
-        sym = new symbol(map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
-        AddGlobal(cc, sym);
-    }
-    sym->defined = true;
-    sym->set_data(map);
-}
-
 void
 declare_handle_intrinsics()
 {
@@ -2934,10 +2892,11 @@ declare_handle_intrinsics()
     methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, handle_atom);
     map->nullable = true;
 
-    declare_methodmap_symbol(CompileContext::get(), map, true);
+    auto& cc = CompileContext::get();
+    declare_methodmap_symbol(cc, map);
 
     auto atom = gAtoms.add("CloseHandle");
-    if (symbol* sym = findglb(CompileContext::get(), atom, -1)) {
+    if (symbol* sym = findglb(cc, atom, -1)) {
         auto dtor = new methodmap_method_t(map);
         dtor->target = sym;
         dtor->name = gAtoms.add("~Handle");
@@ -2949,6 +2908,8 @@ declare_handle_intrinsics()
         close->name = gAtoms.add("Close");
         map->methods.emplace(close->name, close);
     }
+
+    map->is_bound = true;
 }
 
 DefaultArg::~DefaultArg()
@@ -2967,4 +2928,10 @@ is_variadic(symbol* sym)
         arg++;
     }
     return FALSE;
+}
+
+bool
+NeedSemicolon()
+{
+    return sc_needsemicolon || gNeedSemicolonStack.back();
 }
