@@ -44,6 +44,7 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 
+#include "pool-allocator.h"
 #include "shared/string-pool.h"
 #include "types.h"
 
@@ -94,9 +95,10 @@ struct arginfo { /* function argument info */
     bool is_const = false;
     int tag = 0;
     int enum_struct_tag = 0;
-    int dim[sDIMEN_MAX];
-    int numdim = 0;
+    PoolList<int> dim;
     std::unique_ptr<DefaultArg> def;
+
+    int numdim() const { return (int)dim.size(); }
 };
 
 /*  Equate table, tagname table, library table */

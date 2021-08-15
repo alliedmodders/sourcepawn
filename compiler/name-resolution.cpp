@@ -186,7 +186,7 @@ PstructDecl::Bind(SemaContext& sc)
         if (arg.ident == iARRAY)
             arg.ident = iREFARRAY;
 
-        if (field.type.numdim > 1 || (field.type.numdim == 1 && field.type.dim[0] != 0)) {
+        if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim[0] != 0)) {
             error(field.pos, 69);
             return false;
         }
@@ -232,15 +232,14 @@ TypedefInfo::ToFunctag(SemaContext& sc) const
 
         funcarg_t fa = {};
         fa.tag = arg->type.tag;
-        fa.dimcount = arg->type.numdim;
-        memcpy(fa.dims, arg->type.dim, fa.dimcount * sizeof(fa.dims[0]));
+        fa.dims = arg->type.dim;
         fa.fconst = arg->type.is_const;
         if (arg->type.ident == iARRAY)
             fa.ident = iREFARRAY;
         else
             fa.ident = arg->type.ident;
         if (fa.ident != iREFARRAY && fa.ident != iARRAY)
-            assert(fa.dimcount == 0);
+            assert(fa.dims.empty());
         ft->args.emplace_back(fa);
     }
     return ft;
@@ -360,8 +359,9 @@ VarDecl::Bind(SemaContext& sc)
             if (vclass_ == sARGUMENT && ident == iARRAY)
                 ident = iREFARRAY;
 
-            sym_ = addvariable(name_->chars(), 0, ident, vclass_, type_.tag, type_.dim,
-                               type_.numdim, type_.enum_struct_tag());
+            auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
+            sym_ = addvariable(name_->chars(), 0, ident, vclass_, type_.tag, dim,
+                               type_.numdim(), type_.enum_struct_tag());
 
             if (ident == iVARARGS)
                 markusage(sym_, uREAD);
@@ -707,8 +707,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
             typeinfo.tag = 0;
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
-            typeinfo.dim[0] = enum_type->addr();
-            typeinfo.numdim = 1;
+            typeinfo.dim.emplace_back(enum_type->addr());
         } else {
             typeinfo.tag = *this_tag_;
             typeinfo.ident = iVARIABLE;
@@ -733,7 +732,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
             markusage(args_[0].decl->sym(), uREAD);
     }
 
-    if ((sym_->native || sym_->is_public || is_forward_) && decl_.type.numdim > 0)
+    if ((sym_->native || sym_->is_public || is_forward_) && decl_.type.numdim() > 0)
         error(pos_, 141);
 
     // :TODO: remove this. errors are errors.
@@ -860,11 +859,11 @@ EnumStructDecl::Bind(SemaContext& sc)
         if (field.decl.type.is_const)
             report(field.pos, 94) << field.decl.name;
 
-        if (field.decl.type.numdim) {
+        if (field.decl.type.numdim()) {
             if (field.decl.type.ident == iARRAY) {
                 ResolveArraySize(sc, field.pos, &field.decl.type, sENUMFIELD);
 
-                if (field.decl.type.numdim > 1) {
+                if (field.decl.type.numdim() > 1) {
                     error(field.pos, 65);
                     continue;
                 }
@@ -888,7 +887,7 @@ EnumStructDecl::Bind(SemaContext& sc)
             continue;
         child->x.tags.index = field.decl.type.semantic_tag();
         child->x.tags.field = 0;
-        child->dim.array.length = field.decl.type.numdim ? field.decl.type.dim[0] : 0;
+        child->dim.array.length = field.decl.type.numdim() ? field.decl.type.dim[0] : 0;
         child->dim.array.level = 0;
         child->set_parent(root);
         if (values) {
@@ -897,7 +896,7 @@ EnumStructDecl::Bind(SemaContext& sc)
         }
 
         cell size = 1;
-        if (field.decl.type.numdim) {
+        if (field.decl.type.numdim()) {
             size = field.decl.type.tag == pc_tag_string
                    ? char_array_cells(field.decl.type.dim[0])
                    : field.decl.type.dim[0];
@@ -948,7 +947,7 @@ MethodmapDecl::Bind(SemaContext& sc)
         }
         seen.emplace(prop->name);
 
-        if (prop->type.numdim > 0) {
+        if (prop->type.numdim() > 0) {
             report(prop->pos, 82);
             continue;
         }

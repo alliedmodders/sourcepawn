@@ -582,13 +582,12 @@ GenerateArrayIndirectionVectors(cell_t* arraybase, cell_t dims[], cell_t _dimcou
   cell_t data_offs;
 
   /* Reverse the dimensions */
-  cell_t dim_list[sDIMEN_MAX];
-  int cur_dim = 0;
+  std::vector<cell_t> dim_list;
   for (int i = _dimcount - 1; i >= 0; i--)
-    dim_list[cur_dim++] = dims[i];
+    dim_list.emplace_back(dims[i]);
   
   ar.base = arraybase;
-  ar.dim_list = dim_list;
+  ar.dim_list = &dim_list[0];
   ar.dim_count = _dimcount;
   ar.data_offs = &data_offs;
 

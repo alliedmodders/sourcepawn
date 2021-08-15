@@ -97,9 +97,6 @@ typedef uint32_t funcid_t; /**< Function index code */
 #define SP_MAX_ERROR_CODES 33
 //Hey you! Update the string table if you add to the end of me! */
 
-// Maximum number of dimensions.
-#define sDIMEN_MAX 4
-
 /**********************************************
  *** The following structures are reference structures.
  *** They are not essential to the API, but are used

@@ -428,20 +428,13 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
         return FALSE;
 
     if (actual->ident == iREFARRAY || actual->ident == iARRAY) {
-        // Check rank.
-        if (actual->dimcount != formal->dimcount)
+        if (actual->dims != formal->dims)
             return FALSE;
-
-        // Check arity.
-        for (int i = 0; i < formal->dimcount; i++) {
-            if (actual->dims[i] != formal->dims[i])
-                return FALSE;
-        }
     }
 
     // Do not allow casting between different array types, eg:
     //   any[] <-> float[] is illegal.
-    if (formal->dimcount && !IsValidImplicitArrayCast(formal->tag, actual->tag))
+    if (!formal->dims.empty() && !IsValidImplicitArrayCast(formal->tag, actual->tag))
         return FALSE;
 
     if (!matchtag(formal->tag, actual->tag, MATCHTAG_SILENT | MATCHTAG_FUNCARG))

@@ -49,7 +49,7 @@ class ArraySizeResolver
     const token_pos_t& pos_;
     typeinfo_t* type_;
     Expr* initializer_;
-    int computed_[sDIMEN_MAX];
+    std::vector<int> computed_;
     int vclass_;
     unsigned old_error_count_;
     Type* es_;
@@ -63,6 +63,7 @@ ArraySizeResolver::ArraySizeResolver(SemaContext& sc, VarDecl* decl)
     pos_(decl->pos()),
     type_(decl->mutable_type()),
     initializer_(decl->init_rhs()),
+    computed_(type_->dim.size()),
     vclass_(decl->vclass()),
     old_error_count_(sc_total_errors),
     es_(nullptr)
@@ -78,6 +79,7 @@ ArraySizeResolver::ArraySizeResolver(SemaContext& sc, const token_pos_t& pos, ty
     pos_(pos),
     type_(type),
     initializer_(nullptr),
+    computed_(type_->dim.size()),
     vclass_(vclass),
     old_error_count_(sc_total_errors)
 {
@@ -121,13 +123,13 @@ ArraySizeResolver::Resolve()
     // Any kind of indeterminate status gets forced back to 0. Semantic
     // analysis will catch type or other size errors in the initializer.
     bool indeterminate = false;
-    for (int i = 0; i < type_->numdim; i++) {
+    for (int i = 0; i < type_->numdim(); i++) {
         if (type_->dim[i])
             continue;
 
         if (computed_[i] >= 0)
             type_->dim[i] = computed_[i];
-        else if (i != type_->numdim - 1)
+        else if (i != type_->numdim() - 1)
             indeterminate = true;
     }
 
@@ -144,7 +146,7 @@ ArraySizeResolver::Resolve()
     // technical reason with our new array code to not support indeterminism.
     // But for now, we retain the old error.
     if (type_->is_new && indeterminate) {
-        if (vclass_ == sARGUMENT && type_->dim[type_->numdim - 1]) {
+        if (vclass_ == sARGUMENT && type_->dim[type_->numdim() - 1]) {
             // As noted in ResolveDimExprs, we allow this for arguments as long
             // as the last dimension is filled.
         } else if (vclass_ == sLOCAL) {
@@ -158,7 +160,7 @@ ArraySizeResolver::Resolve()
 void
 ArraySizeResolver::PrepareDimArray()
 {
-    for (int i = 0; i < type_->numdim; i++) {
+    for (int i = 0; i < type_->numdim(); i++) {
         if (type_->dim[i] != 0) {
             computed_[i] = type_->dim[i];
         } else {
@@ -189,7 +191,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
     }
 
     if (StringExpr* expr = init->AsStringExpr()) {
-        if (rank != type_->numdim - 1) {
+        if (rank != type_->numdim() - 1) {
             // This is an error, but we'll let it get reported during semantic
             // analysis.
             return;
@@ -224,7 +226,7 @@ ArraySizeResolver::SetRankSize(Expr* expr, int rank, int size)
     if (computed_[rank] == size)
         return;
 
-    if (rank == type_->numdim - 1) {
+    if (rank == type_->numdim() - 1) {
         // The final rank is allowed to vary as long as the size was not
         // explicitly specified. If it was specified, we'll error during
         // semantic analysis, so there's no need to handle it now.
@@ -240,7 +242,7 @@ ArraySizeResolver::SetRankSize(Expr* expr, int rank, int size)
 bool
 ArraySizeResolver::ResolveDimExprs()
 {
-    for (int i = 0; i < type_->numdim; i++) {
+    for (int i = 0; i < type_->numdim(); i++) {
         Expr* expr = type_->get_dim_expr(i);
         if (!expr) {
             // If we implicitly added a final dim, skip it here.
@@ -262,7 +264,7 @@ ArraySizeResolver::ResolveDimExprs()
             //
             // And this seems like a perfectly valid thing to want (a dynamic
             // array of fixed-size arrays).
-            if (i == type_->numdim - 1 && vclass_ == sARGUMENT && type_->is_new) {
+            if (i == type_->numdim() - 1 && vclass_ == sARGUMENT && type_->is_new) {
                 error(pos_, 183);
                 return false;
             }
@@ -404,7 +406,7 @@ FixedArrayValidator::Validate()
         return true;
     }
 
-    for (int i = 0; i < type_.numdim; i++) {
+    for (int i = 0; i < type_.numdim(); i++) {
         if (!type_.dim[i] && decl_ && decl_->vclass() != sARGUMENT) {
             error(decl_->pos(), 46, decl_->name()->chars());
             return true;
@@ -416,7 +418,7 @@ FixedArrayValidator::Validate()
     //
     // The calculation is not simply 3*4*5 because of indirection vectors.
     unsigned last_size = 1;
-    for (int i = 0; i < type_.numdim; i++) {
+    for (int i = 0; i < type_.numdim(); i++) {
         if (!type_.dim[i])
             break;
         if (!ke::IsUintMultiplySafe<uint32_t>(last_size, type_.dim[i])) {
@@ -475,16 +477,15 @@ FixedArrayValidator::CheckArgument(Expr* init)
         return false;
     }
 
-    int dim[sDIMEN_MAX];
-    int numdim = 0;
-    while (sym && numdim < sDIMEN_MAX) {
-        dim[numdim++] = sym->dim.array.length;
+    std::vector<int> dim;
+    while (sym) {
+        dim.emplace_back(sym->dim.array.length);
         sym = sym->array_child();
     }
     assert(!sym);
 
-    if (numdim != type_.numdim) {
-        error(expr->pos(), 19, type_.numdim, numdim);
+    if (dim.size() != type_.dim.size()) {
+        report(expr->pos(), 19) << type_.numdim() << dim.size();
         return false;
     }
 
@@ -493,7 +494,7 @@ FixedArrayValidator::CheckArgument(Expr* init)
     if (type_.ident == iREFARRAY)
         return true;
 
-    for (int i = 0; i < numdim; i++) {
+    for (int i = 0; i < type_.dim.size(); i++) {
         if (type_.dim[i] && type_.dim[i] != dim[i]) {
             error(expr->pos(), 48);
             return false;
@@ -505,7 +506,7 @@ FixedArrayValidator::CheckArgument(Expr* init)
 bool
 FixedArrayValidator::ValidateRank(int rank, Expr* init)
 {
-    if (rank != type_.numdim - 1) {
+    if (rank != type_.numdim() - 1) {
         ArrayExpr* array = init->AsArrayExpr();
         if (!array) {
             error(init->pos(), 47);
@@ -563,7 +564,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         // compatibility:
         //
         //    int x[10] = 0;
-        if (!decl_ || type_.numdim != 1) {
+        if (!decl_ || type_.numdim() != 1) {
             error(init->pos(), 47);
             return false;
         }
@@ -640,7 +641,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
 bool
 FixedArrayValidator::ValidateEnumStruct(Expr* init)
 {
-    assert(type_.dim[type_.numdim - 1] > 0);
+    assert(type_.dim[type_.numdim() - 1] > 0);
 
     ArrayExpr* array = init->AsArrayExpr();
     if (!array) {
@@ -724,7 +725,7 @@ AddImplicitDynamicInitializer(VarDecl* decl)
     // Note that these declarations use old tag-based syntax, and therefore
     // do not work with enum structs, which create implicit dimensions.
     NewArrayExpr* init = new NewArrayExpr(decl->pos(), type->tag);
-    for (int i = 0; i < type->numdim; i++) {
+    for (int i = 0; i < type->numdim(); i++) {
         Expr* expr = type->get_dim_expr(i);
         if (!expr) {
             error(decl->pos(), 184);
@@ -799,7 +800,7 @@ CheckArrayDeclaration(SemaContext& sc, VarDecl* decl)
         return false;
     }
 
-    size_t expected_dims = type.numdim;
+    size_t expected_dims = type.numdim();
     if (gTypes.find(type.semantic_tag())->isEnumStruct())
         expected_dims--;
     if (expected_dims != ctor->exprs().size()) {
@@ -878,7 +879,7 @@ ArrayEmitter::Emit()
 cell
 ArrayEmitter::Emit(int rank, Expr* init)
 {
-    if (rank != type_.numdim - 1) {
+    if (rank != type_.numdim() - 1) {
         assert(type_.dim[rank]);
 
         size_t start = iv_.size();

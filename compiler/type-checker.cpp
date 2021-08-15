@@ -24,8 +24,7 @@
 typeinfo_t
 TypeInfoFromSymbol(symbol* sym)
 {
-    typeinfo_t type;
-    memset(&type, 0, sizeof(type));
+    typeinfo_t type = {};
 
     type.tag = sym->tag;
     type.is_const = sym->is_const;
@@ -33,8 +32,7 @@ TypeInfoFromSymbol(symbol* sym)
     if (sym->parent() && sym->parent()->ident == iENUMSTRUCT) {
         if (sym->dim.array.length) {
             type.ident = iARRAY;
-            type.dim[0] = sym->dim.array.length;
-            type.numdim = 1;
+            type.dim.emplace_back(sym->dim.array.length);
         } else {
             type.ident = iVARIABLE;
         }
@@ -50,8 +48,7 @@ TypeInfoFromSymbol(symbol* sym)
                     type.declared_tag = iter->x.tags.index;
                     type.tag = 0;
                 }
-                type.dim[type.numdim] = iter->dim.array.length;
-                type.numdim++;
+                type.dim.emplace_back(iter->dim.array.length);
             }
         }
     }
@@ -61,9 +58,7 @@ TypeInfoFromSymbol(symbol* sym)
 typeinfo_t
 TypeInfoFromTag(int tag)
 {
-    typeinfo_t type;
-    memset(&type, 0, sizeof(type));
-
+    typeinfo_t type = {};
     type.tag = tag;
     type.ident = iEXPRESSION;
 
