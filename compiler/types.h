@@ -60,11 +60,10 @@ class Expr;
 
 struct typeinfo_t {
     // Array information.
-    int numdim;
-    int dim[sDIMEN_MAX];
+    PoolList<int> dim;
 
     // Either null or an array of size |numdim|, pool-allocated.
-    Expr** dim_exprs;
+    PoolList<Expr*> dim_exprs;
 
     // Type information.
     int tag;           // Effective tag.
@@ -84,21 +83,23 @@ struct typeinfo_t {
         return tag ? tag : declared_tag;
     }
     bool is_implicit_dim(int i) const {
-        return semantic_tag() != tag && i == numdim - 1;
+        return semantic_tag() != tag && i == numdim() - 1;
     }
+    int numdim() const { return (int)dim.size(); }
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
-        assert(i < numdim);
-        return dim_exprs ? dim_exprs[i] : nullptr;
+        assert(i < numdim());
+        return dim_exprs.empty() ? nullptr : dim_exprs[i];
     }
 };
 
 struct funcarg_t {
     int tag;
-    int dimcount;
-    int dims[sDIMEN_MAX];
     int ident;
+    PoolList<int> dims;
     bool fconst : 1;
+
+    int numdim() const { return (int)dims.size(); }
 };
 
 struct functag_t : public PoolObject

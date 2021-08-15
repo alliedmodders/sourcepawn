@@ -976,29 +976,28 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
 
     str.skipspaces();
 
-    int dims[sDIMEN_MAX];
-    int dimcount = 0;
+    std::vector<int> dims;
     int last_tag = 0;
     if (str.getc() == '[') {
         for (const char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
             last_tag = str.parse();
             str.skipspaces();
             str.expect(':');
-            dims[dimcount++] = str.parse();
+            dims.emplace_back(str.parse());
         }
     }
 
     // Rewrite enum structs to look less like arrays.
     if (gTypes.find(last_tag)->asEnumStruct()) {
-        assert(dimcount > 0);
-        dimcount--;
+        dims.pop_back();
         tag = last_tag;
     }
 
     // Encode the type.
     uint32_t type_id;
     {
-        variable_type_t type = {tag, dims, dimcount, is_const};
+        auto dimptr = dims.empty() ? nullptr : &dims[0];
+        variable_type_t type = {tag, dimptr, (int)dims.size(), is_const};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -1207,8 +1206,8 @@ RttiBuilder::encode_signature(symbol* sym)
 
     for (arginfo* arg = &sym->function()->args[0]; arg->ident; arg++) {
         int tag = arg->tag;
-        int numdim = arg->numdim;
-        if (arg->numdim && arg->enum_struct_tag) {
+        int numdim = arg->numdim();
+        if (arg->numdim() && arg->enum_struct_tag) {
             int last_tag = arg->enum_struct_tag;
             Type* last_type = gTypes.find(last_tag);
             if (last_type->isEnumStruct()) {
@@ -1219,7 +1218,9 @@ RttiBuilder::encode_signature(symbol* sym)
 
         if (arg->ident == iREFERENCE)
             bytes.push_back(cb::kByRef);
-        variable_type_t info = {tag, arg->dim, numdim, arg->is_const};
+
+        auto dim = numdim ? &arg->dim[0] : nullptr;
+        variable_type_t info = {tag, dim, numdim, arg->is_const};
         encode_var_type(bytes, info);
     }
 
@@ -1400,7 +1401,8 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
         if (arg.ident == iREFERENCE)
             bytes.push_back(cb::kByRef);
 
-        variable_type_t info = {arg.tag, arg.dims, arg.dimcount, !!arg.fconst};
+        auto dims = arg.dims.empty() ? nullptr : &arg.dims[0];
+        variable_type_t info = {arg.tag, dims, arg.numdim(), !!arg.fconst};
         encode_var_type(bytes, info);
     }
 }

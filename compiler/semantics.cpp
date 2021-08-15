@@ -2070,7 +2070,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             // always has a single dimension. An iARRAYCELL parameter is also
             // assumed to have a single dimension.
             if (!val->sym || val->ident == iARRAYCELL || val->ident == iARRAYCHAR) {
-                if (arg->numdim != 1) {
+                if (arg->numdim() != 1) {
                     error(pos_, 48); // array dimensions must match
                     return false;
                 }
@@ -2093,7 +2093,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 }
             } else {
                 symbol* sym = val->sym;
-                if (sym->dim.array.level + 1 != arg->numdim) {
+                if (sym->dim.array.level + 1 != arg->numdim()) {
                     error(pos_, 48); // array dimensions must match
                     return false;
                 }
@@ -2101,7 +2101,6 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 // length was defined at zero (which means "undefined").
                 short level = 0;
                 while (sym->dim.array.level > 0) {
-                    assert(level < sDIMEN_MAX);
                     if (arg->dim[level] != 0 && sym->dim.array.length != arg->dim[level]) {
                         error(pos_, 47); // array sizes must match
                         return false;
@@ -2110,7 +2109,6 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                     level++;
                 }
                 // The last dimension is checked too, again, unless it is zero.
-                assert(level < sDIMEN_MAX);
                 if (arg->dim[level] != 0 && sym->dim.array.length != arg->dim[level]) {
                     error(pos_, 47); // array sizes must match
                     return false;
@@ -2481,13 +2479,14 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
             return false;
         }
 
-        for (array_.numdim = 0; array_.numdim <= level; array_.numdim++) {
-            array_.dim[array_.numdim] = (int)sub->dim.array.length;
-            if (sym->dim.array.length != array_.dim[array_.numdim]) {
+        for (int i = 0; i <= level; i++) {
+            array_.dim.emplace_back((int)sub->dim.array.length);
+            if (sym->dim.array.length != array_.dim.back()) {
                 error(pos_, 47); /* array sizes must match */
                 return false;
             }
-            if (array_.numdim < level) {
+
+            if (i != level) {
                 sym = sym->array_child();
                 sub = sub->array_child();
                 assert(sym != NULL && sub != NULL);
@@ -2508,18 +2507,19 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         sub = sym;
         assert(sub != NULL);
         int level = sub->dim.array.level;
-        for (array_.numdim = 0; array_.numdim <= level; array_.numdim++) {
-            array_.dim[array_.numdim] = (int)sub->dim.array.length;
+        for (int i = 0; i <= level; i++) {
+            array_.dim.emplace_back((int)sub->dim.array.length);
             if (sub->x.tags.index) {
                 array_.tag = 0;
                 array_.declared_tag = sub->x.tags.index;
             }
-            if (array_.numdim < level) {
+            if (i != level) {
                 sub = sub->array_child();
                 assert(sub != NULL);
             }
+
             /* check that all dimensions are known */
-            if (array_.dim[array_.numdim] <= 0) {
+            if (array_.dim.back() <= 0) {
                 error(pos_, 46, sym->name());
                 return false;
             }
@@ -2543,8 +2543,10 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         int argcount;
         for (argcount = 0; curfunc->function()->args[argcount].ident != 0; argcount++)
             /* nothing */;
+
+        auto dim = array_.dim.empty() ? nullptr : &array_.dim[0];
         sub = addvariable(curfunc->name(), (argcount + 3) * sizeof(cell), iREFARRAY,
-                          sGLOBAL, curfunc->tag, array_.dim, array_.numdim,
+                          sGLOBAL, curfunc->tag, dim, array_.numdim(),
                           array_.enum_struct_tag());
         sub->set_parent(curfunc);
         curfunc->set_array_return(sub);
@@ -2891,7 +2893,7 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
     }
 
     if (sym_->is_public || sym_->forward) {
-        if (decl_.type.numdim > 0)
+        if (decl_.type.numdim() > 0)
             error(pos_, 141);
     }
 
@@ -2913,7 +2915,7 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
         error(21, sym_->name());
 
     if (sym_->native) {
-        if (decl_.type.numdim > 0) {
+        if (decl_.type.numdim() > 0) {
             report(83);
             return false;
         }
@@ -3036,9 +3038,8 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
         arg.ident = argsym->ident;
         arg.is_const = argsym->is_const;
         arg.tag = argsym->tag;
-        arg.numdim = typeinfo.numdim;
+        arg.dim = typeinfo.dim;
         arg.enum_struct_tag = typeinfo.enum_struct_tag();
-        memcpy(arg.dim, typeinfo.dim, sizeof(arg.dim));
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
             if (var->Analyze(sc) && var->init_rhs())
@@ -3263,7 +3264,7 @@ check_void_decl(const typeinfo_t* type, int variable)
         return;
     }
 
-    if (type->numdim > 0) {
+    if (type->numdim() > 0) {
         error(145);
         return;
     }
@@ -3278,9 +3279,8 @@ check_void_decl(const declinfo_t* decl, int variable)
 int
 argcompare(arginfo* a1, arginfo* a2)
 {
-    int result, level;
+    int result = 1;
 
-    result = 1;
     if (result)
         result = a1->ident == a2->ident; /* type/class */
     if (result)
@@ -3288,11 +3288,11 @@ argcompare(arginfo* a1, arginfo* a2)
     if (result)
         result = a1->tag == a2->tag;
     if (result)
-        result = a1->numdim == a2->numdim; /* array dimensions & index tags */
+        result = a1->dim == a2->dim; /* array dimensions & index tags */
     if (result)
         result = a1->enum_struct_tag == a2->enum_struct_tag;
-    for (level = 0; result && level < a1->numdim; level++)
-        result = a1->dim[level] == a2->dim[level];
+    if (result)
+        result = a1->dim == a2->dim;
     if (result)
         result = !!a1->def == !!a2->def; /* availability of default value */
     if (a1->def) {

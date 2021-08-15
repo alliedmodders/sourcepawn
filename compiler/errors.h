@@ -142,6 +142,14 @@ class MessageBuilder
         args_.emplace_back(atom ? atom->chars() : "<unknown>");
         return *this;
     }
+    MessageBuilder& operator <<(size_t n) {
+        args_.emplace_back(std::to_string(n));
+        return *this;
+    }
+    MessageBuilder& operator <<(int n) {
+        args_.emplace_back(std::to_string(n));
+        return *this;
+    }
 
     void operator =(const MessageBuilder& other) = delete;
     MessageBuilder& operator =(MessageBuilder&& other);

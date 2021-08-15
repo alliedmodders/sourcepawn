@@ -907,7 +907,7 @@ MethodVerifier::verifyDatOffset(cell_t offset)
 bool
 MethodVerifier::verifyDimensionCount(cell_t ndims)
 {
-  if (ndims <= 0 || ndims > sDIMEN_MAX) {
+  if (ndims <= 0) {
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }

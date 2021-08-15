@@ -206,11 +206,12 @@ class StlPoolAllocator
         return reinterpret_cast<T*>(PoolAllocationPolicy::Malloc(n * sizeof(T)));
     }
     void deallocate(T* p, size_t n) {}
+
+    bool operator ==(const StlPoolAllocator& other) const { return true; }
+    bool operator !=(const StlPoolAllocator& other) const { return false; }
 };
 
 template <typename T>
-class PoolList final : public std::vector<T, StlPoolAllocator<T>>
-{
-};
+using PoolList = std::vector<T, StlPoolAllocator<T>>;
 
 #endif // _include_jitcraft_pool_allocator_h_

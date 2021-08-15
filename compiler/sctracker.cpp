@@ -144,13 +144,12 @@ funcenum_for_symbol(symbol* sym)
 
         funcarg_t dest;
         dest.tag = arg.tag;
-        dest.dimcount = arg.numdim;
-        memcpy(dest.dims, arg.dim, arg.numdim * sizeof(int));
+        dest.dims = arg.dim;
         dest.ident = arg.ident;
         dest.fconst = arg.is_const;
 
         if (dest.ident != iARRAY && dest.ident != iREFARRAY)
-          assert(dest.dimcount == 0);
+          assert(dest.dims.empty());
 
         ft->args.push_back(dest);
     }

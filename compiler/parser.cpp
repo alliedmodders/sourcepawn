@@ -147,7 +147,7 @@ Parser::parse()
 Stmt*
 Parser::parse_unknown_decl(const token_t* tok)
 {
-    declinfo_t decl;
+    declinfo_t decl = {};
 
     if (tok->id == tNATIVE || tok->id == tFORWARD) {
         parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
@@ -1210,31 +1210,22 @@ Parser::parse_new_array(const token_pos_t& pos, int tag)
 void
 Parser::parse_post_dims(typeinfo_t* type)
 {
-    Expr* old_dims[sDIMEN_MAX];
-    bool has_old_dims = false;
-
+    std::vector<Expr*> dim_exprs;
+    bool has_dim_exprs = false;
     do {
-        if (type->numdim == sDIMEN_MAX) {
-            error(53);
-            break;
-        }
-
-        type->dim[type->numdim] = 0;
+        type->dim.emplace_back(0);
 
         if (matchtoken(']')) {
-            old_dims[type->numdim] = nullptr;
+            dim_exprs.emplace_back(nullptr);
         } else {
-            old_dims[type->numdim] = hier14();
-            has_old_dims = true;
+            has_dim_exprs = true;
+            dim_exprs.emplace_back(hier14());
             needtoken(']');
         }
-        type->numdim++;
     } while (matchtoken('['));
 
-    if (has_old_dims) {
-        type->dim_exprs = gPoolAllocator.alloc<Expr*>(type->numdim);
-        memcpy(type->dim_exprs, old_dims, sizeof(Expr*) * type->numdim);
-    }
+    if (has_dim_exprs)
+        type->dim_exprs = PoolList<Expr*>(dim_exprs.begin(), dim_exprs.end());
 }
 
 Stmt*
@@ -2128,9 +2119,7 @@ Parser::parse_function_type()
 bool
 Parser::parse_decl(declinfo_t* decl, int flags)
 {
-    token_ident_t ident;
-
-    memset(decl, 0, sizeof(*decl));
+    token_ident_t ident = {};
 
     decl->type.ident = iVARIABLE;
 
@@ -2212,14 +2201,14 @@ Parser::fix_mispredicted_postdims(declinfo_t* decl)
     //      int[3] x;
     //
     // This is illegal, so report it now, and strip dim_exprs.
-    if (decl->type.dim_exprs) {
-        for (int i = 0; i < decl->type.numdim; i++) {
+    if (!decl->type.dim_exprs.empty()) {
+        for (int i = 0; i < decl->type.numdim(); i++) {
             if (decl->type.dim_exprs[i]) {
-                error(decl->type.dim_exprs[i]->pos(), 101);
+                report(decl->type.dim_exprs[i]->pos(), 101);
                 break;
             }
         }
-        decl->type.dim_exprs = nullptr;
+        decl->type.dim_exprs.clear();
     }
 
     // If has_postdims is false, we never want to report an iARRAY.
@@ -2361,7 +2350,7 @@ Parser::parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
 
     if (flags & DECLMASK_NAMED_DECL) {
         if (matchtoken('[')) {
-            if (decl->type.numdim == 0)
+            if (decl->type.numdim() == 0)
                 parse_post_array_dims(decl, flags);
             else
                 error(121);
@@ -2431,21 +2420,16 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
     if (!enum_type)
         return;
 
-    if (info->numdim >= sDIMEN_MAX) {
-        error(86, type->name());
-        return;
-    }
-
-    info->tag = 0;
-    info->dim[info->numdim] = enum_type->addr();
-    assert(info->declared_tag = enum_type->tag);
-
     // Note that the size here is incorrect. It's fixed up in initials() by
     // parse_var_decl. Unfortunately type->size is difficult to remove because
     // it can't be recomputed from array sizes (yet), in the case of
     // initializers with inconsistent final arrays. We could set it to
     // anything here, but we follow what parse_post_array_dims() does.
-    info->numdim++;
+    info->tag = 0;
+    info->dim.emplace_back(enum_type->addr());
+    if (!info->dim_exprs.empty())
+        info->dim_exprs.emplace_back(nullptr);
+    assert(info->declared_tag = enum_type->tag);
 
     if (info->ident != iARRAY && info->ident != iREFARRAY) {
         info->ident = iARRAY;
@@ -2461,18 +2445,18 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         decl->name = gAtoms.add(tok.str);
 
     if (decl->type.declared_tag && !decl->type.tag) {
-        assert(decl->type.numdim > 0);
-        decl->type.numdim--;
+        assert(decl->type.numdim() > 0);
+        decl->type.dim.pop_back();
     }
 
-    decl->type.dim_exprs = nullptr;
+    decl->type.dim_exprs.clear();
 
     if (decl->type.has_postdims) {
         // We have something like:
         //    int x[], y...
         //
         // Reset the fact that we saw an array.
-        decl->type.numdim = 0;
+        decl->type.dim.clear();
         decl->type.ident = iVARIABLE;
         decl->type.has_postdims = false;
         if (matchtoken('[')) {
@@ -2482,7 +2466,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         }
     } else {
         if (matchtoken('[')) {
-            if (decl->type.numdim > 0) {
+            if (decl->type.numdim() > 0) {
                 // int[] x, y[]
                 //           ^-- not allowed
                 error(121);
@@ -2491,12 +2475,13 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
             // int x, y[]
             //         ^-- parse this
             parse_post_array_dims(decl, flags);
-        } else if (decl->type.numdim) {
+        } else if (decl->type.numdim()) {
             // int[] x, y
             //          ^-- still an array, because the type is int[]
             //
             // Dim count should be 0 but we zap it anyway.
-            memset(decl->type.dim, 0, sizeof(decl->type.dim[0]) * decl->type.numdim);
+            for (auto& dim : decl->type.dim)
+                dim = 0;
         }
     }
 
@@ -2509,7 +2494,7 @@ Parser::reparse_old_decl(declinfo_t* decl, int flags)
 {
     bool is_const = decl->type.is_const;
 
-    memset(decl, 0, sizeof(*decl));
+    *decl = {};
     decl->type.ident = iVARIABLE;
     decl->type.is_const = is_const;
 
@@ -2558,11 +2543,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
     // that ident != iARRAY before looking for an open bracket.
     if (type->ident != iARRAY && matchtoken('[')) {
         do {
-            if (type->numdim == sDIMEN_MAX) {
-                error(53);
-                break;
-            }
-            type->dim[type->numdim++] = 0;
+            type->dim.emplace_back(0);
             if (!matchtoken(']')) {
                 error(101);
 
