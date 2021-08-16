@@ -494,7 +494,7 @@ findnamedarg(arginfo* arg, sp::Atom* name)
 {
     int i;
 
-    for (i = 0; arg[i].ident != 0 && arg[i].ident != iVARARGS; i++)
+    for (i = 0; arg[i].type.ident != 0 && arg[i].type.ident != iVARARGS; i++)
         if (arg[i].name == name)
             return i;
     return -1;

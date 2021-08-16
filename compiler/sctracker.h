@@ -23,18 +23,14 @@ struct funcenum_t {
 
 struct structarg_t {
     structarg_t()
-     : tag(0),
-       name(nullptr),
-       fconst(0),
-       ident(0),
-       offs(0),
-       index(0)
+      : type(),
+        name(nullptr),
+        offs(0),
+        index(0)
     {}
 
-    int tag;
+    typeinfo_t type;
     sp::Atom* name;
-    int fconst;
-    int ident;
     unsigned int offs;
     int index;
 };
@@ -79,12 +75,12 @@ struct methodmap_method_t {
         if (getter)
             return getter->tag;
         arginfo* thisp = &setter->function()->args[0];
-        if (thisp->ident == 0)
+        if (thisp->type.ident == 0)
             return pc_tag_void;
         arginfo* valp = &setter->function()->args[1];
-        if (valp->ident != iVARIABLE)
+        if (valp->type.ident != iVARIABLE)
             return pc_tag_void;
-        return valp->tag;
+        return valp->type.tag;
     }
 };
 

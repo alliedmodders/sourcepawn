@@ -83,7 +83,7 @@ struct DefaultArg {
 
 struct arginfo { /* function argument info */
     arginfo()
-      : dim()
+      : type()
     {}
     arginfo(const arginfo& arg) = delete;
     arginfo(arginfo&& other) = default;
@@ -91,14 +91,8 @@ struct arginfo { /* function argument info */
     arginfo& operator =(arginfo&& other) = default;
 
     sp::Atom* name;
-    char ident = 0;
-    bool is_const = false;
-    int tag = 0;
-    int enum_struct_tag = 0;
-    PoolList<int> dim;
+    typeinfo_t type;
     std::unique_ptr<DefaultArg> def;
-
-    int numdim() const { return (int)dim.size(); }
 };
 
 /*  Equate table, tagname table, library table */

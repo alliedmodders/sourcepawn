@@ -424,20 +424,20 @@ static int
 funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
 {
     // Check type.
-    if (actual->ident != formal->ident)
+    if (actual->type.ident != formal->type.ident)
         return FALSE;
 
-    if (actual->ident == iREFARRAY || actual->ident == iARRAY) {
-        if (actual->dims != formal->dims)
+    if (actual->type.ident == iREFARRAY || actual->type.ident == iARRAY) {
+        if (actual->type.dim != formal->type.dim)
             return FALSE;
     }
 
     // Do not allow casting between different array types, eg:
     //   any[] <-> float[] is illegal.
-    if (!formal->dims.empty() && !IsValidImplicitArrayCast(formal->tag, actual->tag))
+    if (!formal->type.dim.empty() && !IsValidImplicitArrayCast(formal->type.tag, actual->type.tag))
         return FALSE;
 
-    if (!matchtag(formal->tag, actual->tag, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
+    if (!matchtag(formal->type.tag, actual->type.tag, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return FALSE;
     return TRUE;
 }

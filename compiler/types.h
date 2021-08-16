@@ -94,12 +94,7 @@ struct typeinfo_t {
 };
 
 struct funcarg_t {
-    int tag;
-    int ident;
-    PoolList<int> dims;
-    bool fconst : 1;
-
-    int numdim() const { return (int)dims.size(); }
+    typeinfo_t type;
 };
 
 struct functag_t : public PoolObject

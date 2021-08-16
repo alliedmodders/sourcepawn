@@ -172,8 +172,8 @@ VarDecl::AnalyzePstruct()
     for (size_t i = 0; i < visited.size(); i++) {
         if (visited[i])
             continue;
-        if (ps->args[i]->ident == iREFARRAY) {
-            assert(ps->args[i]->tag == pc_tag_string);
+        if (ps->args[i]->type.ident == iREFARRAY) {
+            assert(ps->args[i]->type.tag == pc_tag_string);
 
             auto expr = new StringExpr(pos_, "", 0);
             init->fields().push_back(StructInitField(ps->args[i]->name, expr));
@@ -201,14 +201,14 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
     visited->at(arg->index) = true;
 
     if (auto expr = field.value->AsStringExpr()) {
-        if (arg->ident != iREFARRAY) {
+        if (arg->type.ident != iREFARRAY) {
             error(expr->pos(), 48);
             return false;
         }
-        if (arg->tag != pc_tag_string)
-            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->tag));
+        if (arg->type.tag != pc_tag_string)
+            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag));
     } else if (auto expr = field.value->AsTaggedValueExpr()) {
-        if (arg->ident != iVARIABLE) {
+        if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
             return false;
         }
@@ -216,10 +216,10 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->tag == pc_tag_bool && expr->tag() == 0 &&
+        if (!(arg->type.tag == pc_tag_bool && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->tag, expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type.tag, expr->tag(), MATCHTAG_COERCE);
         }
     } else {
         assert(false);
@@ -1919,7 +1919,7 @@ CallExpr::Analyze(SemaContext& sc)
         nargs++;
 
         // Don't iterate past terminators (0 or varargs).
-        switch (arglist[argidx].ident) {
+        switch (arglist[argidx].type.ident) {
             case 0:
             case iVARARGS:
                 break;
@@ -1938,7 +1938,7 @@ CallExpr::Analyze(SemaContext& sc)
     // arguments.
     for (unsigned int argidx = 0; ; argidx++) {
         auto& arg = arglist[argidx];
-        if (arg.ident == 0 || arg.ident == iVARARGS)
+        if (arg.type.ident == 0 || arg.type.ident == iVARARGS)
             break;
         if (argidx >= argv_.size() || !argv_[argidx].expr) {
             if (!ProcessArg(&arg, nullptr, argidx))
@@ -1946,9 +1946,9 @@ CallExpr::Analyze(SemaContext& sc)
         }
 
         Expr* expr = argv_[argidx].expr;
-        if (expr->AsDefaultArgExpr() && arg.ident == iVARIABLE) {
+        if (expr->AsDefaultArgExpr() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(nullptr, arg.def->tag, arg.tag, 2, nullptr, &userop))
+            if (find_userop(nullptr, arg.def->tag, arg.type.tag, 2, nullptr, &userop))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -1965,7 +1965,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
     unsigned int visual_pos = implicit_this_ ? pos : pos + 1;
 
     if (!param) {
-        if (arg->ident == 0 || arg->ident == iVARARGS) {
+        if (arg->type.ident == 0 || arg->type.ident == iVARARGS) {
             error(pos_, 92); // argument count mismatch
             return false;
         }
@@ -1995,7 +1995,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
-    switch (arg->ident) {
+    switch (arg->type.ident) {
         case 0:
             // On the first pass, we don't have all of the parameter info.
             // However, use information must be marked anyway, otherwise
@@ -2008,7 +2008,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 
             // Always pass by reference.
             if (val->ident == iVARIABLE || val->ident == iREFERENCE) {
-                if (val->sym->is_const && !arg->is_const) {
+                if (val->sym->is_const && !arg->type.is_const) {
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
                     if (!lvalue) {
@@ -2017,8 +2017,8 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                     }
                 }
             }
-            if (!checktag_string(arg->tag, val) && !checktag(arg->tag, val->tag))
-                error(pos_, 213, type_to_name(arg->tag), type_to_name(val->tag));
+            if (!checktag_string(arg->type.tag, val) && !checktag(arg->type.tag, val->tag))
+                error(pos_, 213, type_to_name(arg->type.tag), type_to_name(val->tag));
             break;
         case iVARIABLE:
         {
@@ -2034,12 +2034,14 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
 
             // Do not allow user operators to transform |this|.
             UserOperation userop;
-            if (!handling_this && find_userop(nullptr, val->tag, arg->tag, 2, nullptr, &userop)) {
+            if (!handling_this &&
+                find_userop(nullptr, val->tag, arg->type.tag, 2, nullptr, &userop))
+            {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
             }
-            if (!checktag_string(arg->tag, val))
-                checktag(arg->tag, val->tag);
+            if (!checktag_string(arg->type.tag, val))
+                checktag(arg->type.tag, val->tag);
             break;
         }
         case iREFERENCE:
@@ -2049,11 +2051,11 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            if (val->sym && val->sym->is_const && !arg->is_const) {
+            if (val->sym && val->sym->is_const && !arg->type.is_const) {
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            checktag(arg->tag, val->tag);
+            checktag(arg->type.tag, val->tag);
             break;
         case iREFARRAY:
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
@@ -2062,7 +2064,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
-            if (val->sym && val->sym->is_const && !arg->is_const) {
+            if (val->sym && val->sym->is_const && !arg->type.is_const) {
                 error(pos_, 35, visual_pos); // argument type mismatch
                 return false;
             }
@@ -2070,21 +2072,21 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             // always has a single dimension. An iARRAYCELL parameter is also
             // assumed to have a single dimension.
             if (!val->sym || val->ident == iARRAYCELL || val->ident == iARRAYCHAR) {
-                if (arg->numdim() != 1) {
+                if (arg->type.numdim() != 1) {
                     error(pos_, 48); // array dimensions must match
                     return false;
                 }
-                if (arg->dim[0] != 0) {
-                    assert(arg->dim[0] > 0);
+                if (arg->type.dim[0] != 0) {
+                    assert(arg->type.dim[0] > 0);
                     if (val->ident == iARRAYCELL) {
-                        if (val->constval == 0 || arg->dim[0] != val->constval) {
+                        if (val->constval == 0 || arg->type.dim[0] != val->constval) {
                             error(pos_, 47); // array sizes must match
                             return false;
                         }
                     } else {
                         assert(val->constval != 0); // literal array must have a size
-                        if ((val->constval > 0 && arg->dim[0] != val->constval) ||
-                            (val->constval < 0 && arg->dim[0] < -val->constval))
+                        if ((val->constval > 0 && arg->type.dim[0] != val->constval) ||
+                            (val->constval < 0 && arg->type.dim[0] < -val->constval))
                         {
                             error(pos_, 47); // array sizes must match
                             return false;
@@ -2093,7 +2095,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 }
             } else {
                 symbol* sym = val->sym;
-                if (sym->dim.array.level + 1 != arg->numdim()) {
+                if (sym->dim.array.level + 1 != arg->type.numdim()) {
                     error(pos_, 48); // array dimensions must match
                     return false;
                 }
@@ -2101,7 +2103,9 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 // length was defined at zero (which means "undefined").
                 short level = 0;
                 while (sym->dim.array.level > 0) {
-                    if (arg->dim[level] != 0 && sym->dim.array.length != arg->dim[level]) {
+                    if (arg->type.dim[level] != 0 &&
+                        sym->dim.array.length != arg->type.dim[level])
+                    {
                         error(pos_, 47); // array sizes must match
                         return false;
                     }
@@ -2109,22 +2113,22 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                     level++;
                 }
                 // The last dimension is checked too, again, unless it is zero.
-                if (arg->dim[level] != 0 && sym->dim.array.length != arg->dim[level]) {
+                if (arg->type.dim[level] != 0 && sym->dim.array.length != arg->type.dim[level]) {
                     error(pos_, 47); // array sizes must match
                     return false;
                 }
-                if (!matchtag(arg->enum_struct_tag, sym->x.tags.index, MATCHTAG_SILENT)) {
+                if (!matchtag(arg->type.enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    if (arg->tag != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
+                    if (arg->type.tag != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
                         error(pos_, 229, sym->name());
                 }
             }
 
-            checktag(arg->tag, val->tag);
-            if ((arg->tag != pc_tag_string && val->tag == pc_tag_string) ||
-                (arg->tag == pc_tag_string && val->tag != pc_tag_string))
+            checktag(arg->type.tag, val->tag);
+            if ((arg->type.tag != pc_tag_string && val->tag == pc_tag_string) ||
+                (arg->type.tag == pc_tag_string && val->tag != pc_tag_string))
             {
-                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->tag));
+                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->type.tag));
                 return false;
             }
             break;
@@ -2541,7 +2545,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
         assert(curfunc != NULL);
         int argcount;
-        for (argcount = 0; curfunc->function()->args[argcount].ident != 0; argcount++)
+        for (argcount = 0; curfunc->function()->args[argcount].type.ident != 0; argcount++)
             /* nothing */;
 
         auto dim = array_.dim.empty() ? nullptr : &array_.dim[0];
@@ -2989,7 +2993,7 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
 
     size_t oldargcnt = 0;
     if (sym_->prototyped) {
-        while (arglist[oldargcnt].ident != 0)
+        while (arglist[oldargcnt].type.ident != 0)
             oldargcnt++;
     }
 
@@ -3008,10 +3012,10 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
                 /* redimension the argument list, add the entry iVARARGS */
                 sym_->function()->resizeArgs(argcnt + 1);
 
-                arglist[argcnt].ident = iVARARGS;
-                arglist[argcnt].tag = typeinfo.tag;
+                arglist[argcnt].type.ident = iVARARGS;
+                arglist[argcnt].type.tag = typeinfo.tag;
             } else {
-                if (argcnt > oldargcnt || arglist[argcnt].ident != iVARARGS)
+                if (argcnt > oldargcnt || arglist[argcnt].type.ident != iVARARGS)
                     error(25); /* function definition does not match prototype */
             }
             argcnt++;
@@ -3035,11 +3039,11 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
 
         arginfo arg;
         arg.name = var->name();
-        arg.ident = argsym->ident;
-        arg.is_const = argsym->is_const;
-        arg.tag = argsym->tag;
-        arg.dim = typeinfo.dim;
-        arg.enum_struct_tag = typeinfo.enum_struct_tag();
+        arg.type.ident = argsym->ident;
+        arg.type.is_const = argsym->is_const;
+        arg.type.tag = argsym->tag;
+        arg.type.dim = typeinfo.dim;
+        arg.type.declared_tag = typeinfo.enum_struct_tag();
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
             if (var->Analyze(sc) && var->init_rhs())
@@ -3062,11 +3066,11 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
                 arg.def->tag = tag;
                 arg.def->val = ke::Some(val);
 
-                matchtag(arg.tag, arg.def->tag, MATCHTAG_COERCE);
+                matchtag(arg.type.tag, arg.def->tag, MATCHTAG_COERCE);
             }
         }
 
-        if (arg.ident == iREFERENCE)
+        if (arg.type.ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
         if (sym_->callback || sym_->stock || sym_->is_public)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
@@ -3282,21 +3286,19 @@ argcompare(arginfo* a1, arginfo* a2)
     int result = 1;
 
     if (result)
-        result = a1->ident == a2->ident; /* type/class */
+        result = a1->type.ident == a2->type.ident; /* type/class */
     if (result)
-        result = a1->is_const == a2->is_const; /* "const" flag */
+        result = a1->type.is_const == a2->type.is_const; /* "const" flag */
     if (result)
-        result = a1->tag == a2->tag;
+        result = a1->type.tag == a2->type.tag;
     if (result)
-        result = a1->dim == a2->dim; /* array dimensions & index tags */
+        result = a1->type.dim == a2->type.dim; /* array dimensions & index tags */
     if (result)
-        result = a1->enum_struct_tag == a2->enum_struct_tag;
-    if (result)
-        result = a1->dim == a2->dim;
+        result = a1->type.declared_tag == a2->type.declared_tag;
     if (result)
         result = !!a1->def == !!a2->def; /* availability of default value */
     if (a1->def) {
-        if (a1->ident == iREFARRAY) {
+        if (a1->type.ident == iREFARRAY) {
             if (result)
                 result = !!a1->def->array == !!a2->def->array;
             if (result && a1->def->array)

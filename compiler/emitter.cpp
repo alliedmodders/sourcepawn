@@ -1651,7 +1651,7 @@ emit_default_array(arginfo* arg)
         gDataQueue.AddZeroes(def->array->zeroes);
     }
 
-    if (arg->is_const || !def->array) {
+    if (arg->type.is_const || !def->array) {
         // No modification is possible, so use the array we emitted. (This is
         // why we emitted the zeroes above.)
         ldconst(def->val.get(), sPRI);
