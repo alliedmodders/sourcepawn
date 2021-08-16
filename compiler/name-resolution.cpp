@@ -179,12 +179,10 @@ PstructDecl::Bind(SemaContext& sc)
 
     for (const auto& field : fields_) {
         structarg_t arg;
-        arg.tag = field.type.tag;
+        arg.type = field.type;
         arg.name = field.name;
-        arg.fconst = field.type.is_const;
-        arg.ident = field.type.ident;
-        if (arg.ident == iARRAY)
-            arg.ident = iREFARRAY;
+        if (arg.type.ident == iARRAY)
+            arg.type.ident = iREFARRAY;
 
         if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim[0] != 0)) {
             error(field.pos, 69);
@@ -231,15 +229,11 @@ TypedefInfo::ToFunctag(SemaContext& sc) const
             ResolveArraySize(sc, pos, &arg->type, sARGUMENT);
 
         funcarg_t fa = {};
-        fa.tag = arg->type.tag;
-        fa.dims = arg->type.dim;
-        fa.fconst = arg->type.is_const;
-        if (arg->type.ident == iARRAY)
-            fa.ident = iREFARRAY;
-        else
-            fa.ident = arg->type.ident;
-        if (fa.ident != iREFARRAY && fa.ident != iARRAY)
-            assert(fa.dims.empty());
+        fa.type = arg->type;
+        if (fa.type.ident == iARRAY)
+            fa.type.ident = iREFARRAY;
+        if (fa.type.ident != iREFARRAY && fa.type.ident != iARRAY)
+            assert(fa.type.dim.empty());
         ft->args.emplace_back(fa);
     }
     return ft;

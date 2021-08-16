@@ -905,14 +905,14 @@ CallExpr::DoEmit()
         const auto& val = expr->val();
         bool lvalue = expr->lvalue();
 
-        switch (arg->ident) {
+        switch (arg->type.ident) {
             case iVARARGS:
                 if (val.ident == iVARIABLE || val.ident == iREFERENCE) {
                     assert(val.sym);
                     assert(lvalue);
                     /* treat a "const" variable passed to a function with a non-const
                      * "variable argument list" as a constant here */
-                    if (val.sym->is_const && !arg->is_const) {
+                    if (val.sym->is_const && !arg->type.is_const) {
                         rvalue(val);
                         setheap_pri();
                     } else if (lvalue) {
@@ -957,7 +957,7 @@ CallExpr::DoEmit()
 void
 DefaultArgExpr::DoEmit()
 {
-    switch (arg_->ident) {
+    switch (arg_->type.ident) {
         case iREFARRAY:
             emit_default_array(arg_);
             break;

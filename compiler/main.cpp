@@ -890,7 +890,7 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
         assert(sym->vclass == sGLOBAL);
 
         arg->def->val = ke::Some(sym->addr());
-        arg->tag = sym->tag;
+        arg->type.tag = sym->tag;
         if (sc_status == statWRITE && (sym->usage & uREAD) == 0)
             markusage(sym, uREAD);
         return;

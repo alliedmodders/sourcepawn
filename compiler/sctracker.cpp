@@ -139,17 +139,14 @@ funcenum_for_symbol(symbol* sym)
 
     ft->ret_tag = sym->tag;
     for (arginfo& arg : sym->function()->args) {
-        if (!arg.ident)
+        if (!arg.type.ident)
             break;
 
         funcarg_t dest;
-        dest.tag = arg.tag;
-        dest.dims = arg.dim;
-        dest.ident = arg.ident;
-        dest.fconst = arg.is_const;
+        dest.type = arg.type;
 
-        if (dest.ident != iARRAY && dest.ident != iREFARRAY)
-          assert(dest.dims.empty());
+        if (dest.type.ident != iARRAY && dest.type.ident != iREFARRAY)
+          assert(dest.type.dim.empty());
 
         ft->args.push_back(dest);
     }

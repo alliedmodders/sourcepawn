@@ -3034,8 +3034,8 @@ is_variadic(symbol* sym)
 {
     assert(sym->ident == iFUNCTN);
     arginfo* arg = &sym->function()->args[0];
-    while (arg->ident) {
-        if (arg->ident == iVARARGS)
+    while (arg->type.ident) {
+        if (arg->type.ident == iVARARGS)
             return TRUE;
         arg++;
     }
