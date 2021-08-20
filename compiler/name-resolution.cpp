@@ -54,7 +54,7 @@ BlockStmt::Bind(SemaContext& sc)
     if (stmts_.empty())
         return true;
 
-    scope_ = CreateScope();
+    scope_ = CreateScope(sLOCAL);
 
     AutoEnterScope enter_scope(scope_);
     return StmtList::Bind(sc);
@@ -266,7 +266,7 @@ ConstDecl::Bind(SemaContext& sc)
 bool
 is_shadowed_name(sp::Atom* name)
 {
-    symbol* scope;
+    SymbolScope* scope;
     if (symbol* sym = findloc(name, &scope)) {
         if (scope != GetScopeChain())
             return true;
@@ -318,8 +318,8 @@ VarDecl::Bind(SemaContext& sc)
         // compound blocks (as with standard C); so we must check (and add)
         // the "nesting level" of local variables to verify the
         // multi-definition of symbols.
-        symbol* scope;
-        symbol* sym = findloc(name_->chars(), &scope);
+        SymbolScope* scope;
+        symbol* sym = findloc(name_, &scope);
         if (sym && scope == GetScopeChain())
             report(pos_, 21) << name_;
 
@@ -458,7 +458,7 @@ ThisExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = findloc("this");
+    sym_ = findloc(gAtoms.add("this"));
     if (!sym_) {
         error(pos_, 166);
         return false;
@@ -511,7 +511,7 @@ IsDefinedExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    symbol* sym = findloc(name_->chars());
+    symbol* sym = findloc(name_);
     if (!sym)
         sym = findglb(name_);
     if (sym && sym->ident == iFUNCTN && !sym->defined)
@@ -615,7 +615,7 @@ ForStmt::Bind(SemaContext& sc)
     ke::Maybe<AutoEnterScope> enter_scope;
     if (init_) {
         if (!init_->IsExprStmt()) {
-            scope_ = CreateScope();
+            scope_ = CreateScope(sLOCAL);
             enter_scope.init(scope_);
         }
 
@@ -716,7 +716,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
 
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {
-        scope_ = CreateScope();
+        scope_ = CreateScope(sARGUMENT);
         enter_scope.init(scope_);
 
         for (const auto& arg : args_)

@@ -2288,6 +2288,59 @@ ExprStmt::Analyze(SemaContext& sc)
  *  The function returns whether there is an "entry" point for the file.
  *  This flag will only be 1 when browsing the global symbol table.
  */
+static bool
+TestSymbol(symbol* sym, bool testconst)
+{
+    bool entry = false;
+    switch (sym->ident) {
+        case iFUNCTN:
+            if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
+                sym->defined)
+            {
+                auto symname = funcdisplayname(sym->name());
+                if (!symname.empty()) {
+                    /* symbol isn't used ... (and not public/native/stock) */
+                    report(sym, 203) << symname;
+                }
+            }
+            if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
+                entry = true; /* there is an entry point */
+            break;
+        case iCONSTEXPR:
+            if (testconst && (sym->usage & uREAD) == 0) {
+                error(sym, 203, sym->name()); /* symbol isn't used: ... */
+            }
+            break;
+        case iMETHODMAP:
+        case iENUMSTRUCT:
+            // Ignore usage on methodmaps and enumstructs.
+            break;
+        default:
+            /* a variable */
+            if (sym->parent() != NULL)
+                break; /* hierarchical data type */
+            if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
+                error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
+            } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
+                error(sym, 204, sym->name()); /* value assigned to symbol is never used */
+            }
+            /* also mark the variable (local or global) to the debug information */
+            if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
+                insert_dbgsymbol(sym);
+    }
+    return entry;
+}
+
+bool
+TestSymbols(SymbolScope* root, int testconst)
+{
+    bool entry = false;
+    root->ForEachSymbol([&](symbol* sym) -> void {
+        entry |= TestSymbol(sym, !!testconst);
+    });
+    return entry;
+}
+
 bool
 TestSymbols(symbol* root, int testconst)
 {
@@ -2295,42 +2348,7 @@ TestSymbols(symbol* root, int testconst)
 
     symbol* sym = root->next;
     while (sym != NULL) {
-        switch (sym->ident) {
-            case iFUNCTN:
-                if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
-                    sym->defined)
-                {
-                    auto symname = funcdisplayname(sym->name());
-                    if (!symname.empty()) {
-                        /* symbol isn't used ... (and not public/native/stock) */
-                        report(sym, 203) << symname;
-                    }
-                }
-                if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
-                    entry = true; /* there is an entry point */
-                break;
-            case iCONSTEXPR:
-                if (testconst && (sym->usage & uREAD) == 0) {
-                    error(sym, 203, sym->name()); /* symbol isn't used: ... */
-                }
-                break;
-            case iMETHODMAP:
-            case iENUMSTRUCT:
-                // Ignore usage on methodmaps and enumstructs.
-                break;
-            default:
-                /* a variable */
-                if (sym->parent() != NULL)
-                    break; /* hierarchical data type */
-                if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
-                    error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
-                } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
-                    error(sym, 204, sym->name()); /* value assigned to symbol is never used */
-                }
-                /* also mark the variable (local or global) to the debug information */
-                if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
-                    insert_dbgsymbol(sym);
-        }
+        entry |= TestSymbol(sym, !!testconst);
         sym = sym->next;
     }
 

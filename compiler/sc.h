@@ -338,11 +338,12 @@ struct symbol {
 #define uMAINFUNC "main"
 
 enum ScopeKind {
-    sGLOBAL = 0,    /* global variable/constant class (no states) */
-    sLOCAL = 1,     /* local variable/constant */
-    sSTATIC = 2,    /* global life, local scope */
-    sARGUMENT = 3,  /* function argument (this is never stored anywhere) */
-    sENUMFIELD = 4  /* for analysis purposes only (not stored anywhere) */
+    sGLOBAL = 0,      /* global variable/constant class (no states) */
+    sLOCAL = 1,       /* local variable/constant */
+    sSTATIC = 2,      /* global life, local scope */
+    sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
+    sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
+    sFILE_STATIC = 5, /* global life, file scope */
 };
 
 struct methodmap_method_t;

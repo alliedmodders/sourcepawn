@@ -23,23 +23,59 @@
 
 #pragma once
 
+#include <functional>
+#include <unordered_map>
+
 #include "sc.h"
 
-symbol* CreateScope();
+class SymbolScope final : public PoolObject
+{
+  public:
+    SymbolScope(SymbolScope* parent, ScopeKind kind)
+      : parent_(parent),
+        kind_(kind)
+    {}
+
+    symbol* Find(sp::Atom* atom) const {
+        auto iter = symbols_.find(atom);
+        if (iter == symbols_.end())
+            return nullptr;
+        return iter->second;
+    }
+    void Add(symbol* sym);
+
+    void ForEachSymbol(const std::function<void(symbol*)>& callback) {
+        for (const auto& pair : symbols_) {
+            symbol* iter = pair.second;
+            while (iter) {
+                callback(iter);
+                iter = iter->next;
+            }
+        }
+    }
+
+    SymbolScope* parent() const { return parent_; }
+    ScopeKind kind() const { return kind_; }
+
+  private:
+    SymbolScope* parent_;
+    ScopeKind kind_;
+    PoolMap<sp::Atom*, symbol*> symbols_;
+};
 
 class AutoEnterScope final
 {
   public:
-    AutoEnterScope(symbol* scope);
+    AutoEnterScope(SymbolScope* scope);
     ~AutoEnterScope();
 };
 
-symbol* GetScopeChain();
+SymbolScope* CreateScope(ScopeKind kind);
+SymbolScope* GetScopeChain();
 
 symbol* findglb(sp::Atom* name);
 symbol* findglb(const char* name);
-symbol* findloc(const char* name, symbol** scope = nullptr);
-symbol* findloc(sp::Atom* name, symbol** scope = nullptr);
+symbol* findloc(sp::Atom* name, SymbolScope** scope = nullptr);
 symbol* findconst(const char* name);
 void delete_symbols(symbol* root, int delete_functions);
 void delete_symbol(symbol* root, symbol* sym);

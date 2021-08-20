@@ -95,6 +95,7 @@ class AutoCollectSemaFlow final
 
 void ReportFunctionReturnError(symbol* sym);
 bool TestSymbols(symbol* root, int testconst);
+bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
 int check_operatortag(int opertok, int resulttag, const char* opername);

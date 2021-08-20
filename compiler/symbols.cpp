@@ -31,10 +31,16 @@
 #include "scvars.h"
 #include "sp_symhash.h"
 
-static symbol* sScopeChain;
-static std::vector<symbol*> sAllocatedScopes;
+static SymbolScope* sScopeChain;
 
-AutoEnterScope::AutoEnterScope(symbol* scope)
+void
+SymbolScope::Add(symbol* sym)
+{
+    assert(symbols_.find(sym->nameAtom()) == symbols_.end());
+    symbols_.emplace(sym->nameAtom(), sym);
+}
+
+AutoEnterScope::AutoEnterScope(SymbolScope* scope)
 {
     assert(scope->parent() == sScopeChain);
     sScopeChain = scope;
@@ -45,19 +51,13 @@ AutoEnterScope::~AutoEnterScope()
     sScopeChain = sScopeChain->parent();
 }
 
-symbol*
-CreateScope()
+SymbolScope*
+CreateScope(ScopeKind kind)
 {
-    symbol* scope = new symbol();
-
-    scope->ident = iSCOPE;
-    scope->set_parent(sScopeChain);
-
-    sAllocatedScopes.emplace_back(scope);
-    return scope;
+    return new SymbolScope(GetScopeChain(), kind);
 }
 
-symbol*
+SymbolScope*
 GetScopeChain()
 {
     return sScopeChain;
@@ -68,7 +68,7 @@ findconst(const char* name)
 {
     symbol* sym;
 
-    sym = findloc(name);          /* try local symbols first */
+    sym = findloc(gAtoms.add(name));          /* try local symbols first */
     if (sym == NULL || sym->ident != iCONSTEXPR) { /* not found, or not a constant */
         sym = FindInHashTable(sp_Globals, name, fcurrent);
     }
@@ -95,40 +95,11 @@ findglb(sp::Atom* name)
     return findglb(name->chars());
 }
 
-/*  findloc
- *
- *  Returns a pointer to the local symbol (if found) or NULL (if not found).
- *  See add_symbol() how the deepest nesting level is searched first.
- */
 symbol*
-table_findloc(symbol* table, sp::Atom* atom)
+findloc(sp::Atom* name, SymbolScope** scope)
 {
-    symbol* sym = table->next;
-    while (sym != NULL) {
-        if (atom == sym->nameAtom() &&
-            (sym->parent() == NULL ||
-             sym->ident ==
-                 iCONSTEXPR)) /* sub-types (hierarchical types) are skipped, except for enum fields */
-        {
-            return sym; /* return first match */
-        }
-        sym = sym->next;
-    }
-    return nullptr;
-}
-
-symbol*
-findloc(const char* name, symbol** scope)
-{
-    auto atom = gAtoms.add(name);
-    return findloc(atom, scope);
-}
-
-symbol*
-findloc(sp::Atom* name, symbol** scope)
-{
-    for (symbol* iter = sScopeChain; iter; iter = iter->parent()) {
-        if (symbol* sym = table_findloc(iter, name)) {
+    for (auto iter = sScopeChain; iter; iter = iter->parent()) {
+        if (auto sym = iter->Find(name)) {
             if (scope)
                 *scope = iter;
             return sym;
@@ -148,8 +119,8 @@ add_symbol(symbol* root, symbol* entry)
 {
     entry->next = root->next;
     root->next = entry;
-    if (root == &glbtab)
-        AddToHashTable(sp_Globals, entry);
+    assert(root == &glbtab);
+    AddToHashTable(sp_Globals, entry);
     return entry;
 }
 
@@ -445,7 +416,9 @@ addsym(const char* name, cell addr, int ident, int vclass, int tag)
     /* then insert it in the list */
     if (vclass == sGLOBAL)
         return add_symbol(&glbtab, sym);
-    return add_symbol(GetScopeChain(), sym);
+
+    sScopeChain->Add(sym);
+    return sym;
 }
 
 symbol*
@@ -469,7 +442,7 @@ addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim
         int level;
         sym = NULL; /* to avoid a compiler warning */
         for (level = 0; level < numdim; level++) {
-            top = addsym(name, addr, ident, vclass, tag);
+            top = new symbol(name, addr, ident, vclass, tag);
             top->defined = true;
             top->dim.array.length = dim[level];
             top->dim.array.level = (short)(numdim - level - 1);
@@ -482,6 +455,10 @@ addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim
             if (level == 0)
                 sym = top;
         }
+        if (vclass == sGLOBAL)
+            add_symbol(&glbtab, sym);
+        else
+            sScopeChain->Add(sym);
     } else {
         sym = addsym(name, addr, ident, vclass, tag);
         sym->defined = true;
@@ -798,9 +775,9 @@ add_constant(const char* name, cell val, int vclass, int tag)
     /* Test whether a global or local symbol with the same name exists. Since
      * constants are stored in the symbols table, this also finds previously
      * defind constants. */
-    sym = findglb(name);
+    sym = findglb(gAtoms.add(name));
     if (!sym)
-        sym = findloc(name);
+        sym = findloc(gAtoms.add(name));
     if (sym) {
         int redef = 0;
         if (sym->ident != iCONSTEXPR)
