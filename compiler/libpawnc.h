@@ -27,5 +27,3 @@ int pc_writesrc(void* handle, unsigned char* source);
 void* pc_getpossrc(void* handle);
 void pc_resetsrc(void* handle, void* position); /* reset to a position marked earlier */
 int pc_eofsrc(void* handle);
-
-int pc_printf(const char* message, ...);

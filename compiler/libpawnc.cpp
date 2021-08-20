@@ -36,24 +36,6 @@
 #    include <sys/types.h>
 #endif
 
-/* pc_printf()
- * Called for general purpose "console" output. This function prints general
- * purpose messages; errors go through pc_error(). The function is modelled
- * after printf().
- */
-int
-pc_printf(const char* message, ...)
-{
-    int ret;
-    va_list argptr;
-
-    va_start(argptr, message);
-    ret = vprintf(message, argptr);
-    va_end(argptr);
-
-    return ret;
-}
-
 unsigned sc_total_errors = 0;
 
 typedef struct src_file_s {
