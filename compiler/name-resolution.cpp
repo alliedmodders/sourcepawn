@@ -90,7 +90,7 @@ EnumDecl::Bind(SemaContext& sc)
     }
 
     symbol* enumsym = nullptr;
-    constvalue* enumroot = nullptr;
+    PoolList<symbol*>* enumroot = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
             if ((enumsym = findglb(sc.cc(), name_, pos_.file)) != NULL) {
@@ -107,8 +107,7 @@ EnumDecl::Bind(SemaContext& sc)
             if (enumsym)
                 enumsym->enumroot = true;
             // start a new list for the element names
-            if ((enumroot = (constvalue*)calloc(1, sizeof(constvalue))) == NULL)
-                error(pos_, FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
+            enumroot = gPoolAllocator.alloc<PoolList<symbol*>>();
         }
     }
 
@@ -140,7 +139,7 @@ EnumDecl::Bind(SemaContext& sc)
         // add the constant to a separate list as well
         if (enumroot) {
             sym->enumfield = true;
-            append_constval(enumroot, field.name, value, tag);
+            enumroot->emplace_back(sym);
         }
 
         if (multiplier_ == 1)
@@ -842,7 +841,7 @@ bool
 EnumStructDecl::Bind(SemaContext& sc)
 {
     AutoCountErrors errors;
-    constvalue* values = (constvalue*)calloc(1, sizeof(constvalue));
+    auto values = gPoolAllocator.alloc<PoolList<symbol*>>();
 
     if (findglb(sc.cc(), name_, pos_.file) || findconst(sc.cc(), sc.scope(), name_, pos_.file))
         report(pos_, 21) << name_;
@@ -899,8 +898,12 @@ EnumStructDecl::Bind(SemaContext& sc)
         child->set_parent(root);
         if (values) {
             child->enumfield = true;
-            append_constval(values, field.decl.name, position, root->tag);
+            values->emplace_back(child);
         }
+
+        // Override the name now that it's in the hashtable. We never use the
+        // fully decorated name aside from lookups.
+        child->setName(field.decl.name);
 
         cell size = 1;
         if (field.decl.type.numdim()) {

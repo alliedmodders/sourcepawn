@@ -363,12 +363,6 @@ symbol::symbol(const symbol& other)
 
 symbol::~symbol()
 {
-    if (ident == iCONSTEXPR && enumroot) {
-        /* free the constant list of an enum root */
-        assert(dim.enumlist != NULL);
-        delete_consttable(dim.enumlist);
-        free(dim.enumlist);
-    }
 }
 
 void
@@ -691,46 +685,6 @@ deduce_liveness(CompileContext& cc)
             return;
         sym->usage &= ~(uWRITTEN | uREAD);
     });
-}
-
-static constvalue*
-insert_constval(constvalue* prev, constvalue* next, sp::Atom* name, cell val, int index)
-{
-    constvalue* cur;
-
-    if ((cur = (constvalue*)malloc(sizeof(constvalue))) == NULL)
-        error(FATAL_ERROR_OOM); /* insufficient memory (fatal error) */
-    memset(cur, 0, sizeof(constvalue));
-    cur->name = name;
-    cur->value = val;
-    cur->index = index;
-    cur->next = next;
-    prev->next = cur;
-    return cur;
-}
-
-constvalue*
-append_constval(constvalue* table, sp::Atom* name, cell val, int index)
-{
-    constvalue *cur, *prev;
-
-    /* find the end of the constant table */
-    for (prev = table, cur = table->next; cur != NULL; prev = cur, cur = cur->next)
-        /* nothing */;
-    return insert_constval(prev, nullptr, name, val, index);
-}
-
-void
-delete_consttable(constvalue* table)
-{
-    constvalue *cur = table->next, *next;
-
-    while (cur != NULL) {
-        next = cur->next;
-        free(cur);
-        cur = next;
-    }
-    memset(table, 0, sizeof(constvalue));
 }
 
 /*  add_constant

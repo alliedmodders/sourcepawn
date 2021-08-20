@@ -95,15 +95,6 @@ struct arginfo { /* function argument info */
     std::unique_ptr<DefaultArg> def;
 };
 
-/*  Equate table, tagname table, library table */
-struct constvalue {
-    constvalue* next;
-    sp::Atom* name;
-    cell value;
-    int index; /* index level, for constants referring to array sizes/tags
-                         * tag for enumeration lists */
-};
-
 struct methodmap_t;
 struct stringlist;
  
@@ -237,7 +228,7 @@ struct symbol {
         } tags;        /* extra tags */
     } x;               /* 'x' for 'extra' */
     union {
-        constvalue* enumlist; /* list of names for the "root" of an enumeration */
+        PoolList<symbol*>* enumlist;
         struct {
             cell length;  /* arrays: length (size) */
             short level;  /* number of dimensions below this level */

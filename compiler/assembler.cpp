@@ -1090,18 +1090,14 @@ RttiBuilder::add_enumstruct(Type* type)
     enumstructs_->add(es);
 
     // Pre-allocate storage in case of nested types.
-    constvalue* table = sym->dim.enumlist;
-    for (auto iter = table->next; iter; iter = iter->next)
+    auto enumlist = sym->dim.enumlist;
+    for (auto iter = enumlist->begin(); iter != enumlist->end(); iter++)
         es_fields_->add() = smx_rtti_es_field{};
 
     // Add all fields.
     size_t index = 0;
-    for (auto iter = table->next; iter; iter = iter->next, index++) {
-        symbol* field = FindEnumStructField(type, iter->name);
-        if (!field) {
-            report(105) << type->name() << iter->name;
-            continue;
-        }
+    for (auto iter = enumlist->begin(); iter != enumlist->end(); iter++) {
+        auto field = *iter;
 
         int dims[1], dimcount = 0;
         if (field->dim.array.length)
@@ -1112,7 +1108,7 @@ RttiBuilder::add_enumstruct(Type* type)
         encode_var_type(encoding, type);
 
         smx_rtti_es_field info;
-        info.name = names_->add(gAtoms, iter->name->chars());
+        info.name = names_->add(field->nameAtom());
         info.type_id = to_typeid(encoding);
         info.offset = field->addr();
         es_fields_->at(es.first_field + index) = info;
