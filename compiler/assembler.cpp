@@ -1661,8 +1661,8 @@ assemble(CompileContext& cc, const char* binfname)
             return;
         }
 
-        pc_printf("Unable to compress, error %d\n", err);
-        pc_printf("Falling back to no compression.\n");
+        printf("Unable to compress, error %d\n", err);
+        printf("Falling back to no compression.\n");
     }
 
     header->disksize = 0;

@@ -391,10 +391,10 @@ cleanup:
             pc_stksize = pc_stksize_override;
 
         if ((!norun && (sc_debug & sSYMBOLIC) != 0) || verbosity >= 2) {
-            pc_printf("Code size:         %8ld bytes\n", (long)code_idx);
-            pc_printf("Data size:         %8ld bytes\n", (long)glb_declared * sizeof(cell));
-            pc_printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));
-            pc_printf("Total requirements:%8ld bytes\n", (long)code_idx +
+            printf("Code size:         %8ld bytes\n", (long)code_idx);
+            printf("Data size:         %8ld bytes\n", (long)glb_declared * sizeof(cell));
+            printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));
+            printf("Total requirements:%8ld bytes\n", (long)code_idx +
                                                              (long)glb_declared * sizeof(cell) +
                                                              (long)pc_stksize * sizeof(cell));
         }
@@ -402,9 +402,9 @@ cleanup:
             size_t allocated, reserved, bookkeeping;
             gPoolAllocator.memoryUsage(&allocated, &reserved, &bookkeeping);
 
-            pc_printf("Pool allocation:   %8" KE_FMT_SIZET " bytes\n", allocated);
-            pc_printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);
-            pc_printf("Pool bookkeeping:  %8" KE_FMT_SIZET " bytes\n", bookkeeping);
+            printf("Pool allocation:   %8" KE_FMT_SIZET " bytes\n", allocated);
+            printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);
+            printf("Pool bookkeeping:  %8" KE_FMT_SIZET " bytes\n", bookkeeping);
         }
     }
 
@@ -433,16 +433,16 @@ cleanup:
     delete_substtable();
     if (errnum != 0) {
         if (strlen(errfname) == 0)
-            pc_printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");
+            printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");
         retcode = 1;
     } else if (warnnum != 0) {
         if (strlen(errfname) == 0)
-            pc_printf("\n%d Warning%s.\n", warnnum, (warnnum > 1) ? "s" : "");
+            printf("\n%d Warning%s.\n", warnnum, (warnnum > 1) ? "s" : "");
         retcode = 0; /* use "0", so that MAKE and similar tools continue */
     } else {
         retcode = jmpcode;
         if (retcode == 0 && verbosity >= 2)
-            pc_printf("\nDone.\n");
+            printf("\nDone.\n");
     }
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (IsWindow(hwndFinish))
@@ -843,9 +843,9 @@ setconfig(char* root)
 static void
 setcaption(void)
 {
-    pc_printf("SourcePawn Compiler %s\n", SOURCEPAWN_VERSION);
-    pc_printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
-    pc_printf("Copyright (c) 2004-2021 AlliedModders LLC\n\n");
+    printf("SourcePawn Compiler %s\n", SOURCEPAWN_VERSION);
+    printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
+    printf("Copyright (c) 2004-2021 AlliedModders LLC\n\n");
 }
 
 static void
