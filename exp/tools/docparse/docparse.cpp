@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "shared/string-pool.h"
-#include "compiler/reporting.h"
-#include "compiler/source-manager.h"
-#include "compiler/compile-context.h"
-#include "compiler/parser/preprocessor.h"
-#include "compiler/parser/parser.h"
-#include "compiler/parser/json-tools.h"
-#include "compiler/sema/name-resolver.h"
+#include "exp/compiler/reporting.h"
+#include "exp/compiler/source-manager.h"
+#include "exp/compiler/compile-context.h"
+#include "exp/compiler/parser/preprocessor.h"
+#include "exp/compiler/parser/parser.h"
+#include "exp/compiler/parser/json-tools.h"
+#include "exp/compiler/sema/name-resolver.h"
 #include <assert.h>
 #include <amtl/experimental/am-argparser.h>
 
