@@ -73,7 +73,7 @@ static constexpr char DIRSEP_CHAR = '/';
 
 struct ArrayData;
 
-struct DefaultArg {
+struct DefaultArg : public PoolObject {
     int tag = 0;
     ke::Maybe<cell> val;
     ArrayData* array = nullptr;
@@ -83,7 +83,8 @@ struct DefaultArg {
 
 struct arginfo { /* function argument info */
     arginfo()
-      : type()
+      : type(),
+        def(nullptr)
     {}
     arginfo(const arginfo& arg) = delete;
     arginfo(arginfo&& other) = default;
@@ -92,7 +93,7 @@ struct arginfo { /* function argument info */
 
     sp::Atom* name;
     typeinfo_t type;
-    std::unique_ptr<DefaultArg> def;
+    DefaultArg* def;
 };
 
 struct methodmap_t;
@@ -121,10 +122,9 @@ enum IdentifierKind {
 
 class EnumStructVarData;
 class FunctionData;
-class SymbolData
+class SymbolData : public PoolObject
 {
   public:
-    virtual ~SymbolData() {}
     virtual FunctionData* asFunction() {
         return nullptr;
     }
@@ -137,7 +137,6 @@ class FunctionData final : public SymbolData
 {
   public:
     FunctionData();
-    ~FunctionData() override;
     FunctionData* asFunction() override {
         return this;
     }
@@ -145,8 +144,8 @@ class FunctionData final : public SymbolData
     void resizeArgs(size_t nargs);
 
     int funcid;          /* set for functions during codegen */
-    stringlist* dbgstrs; /* debug strings - functions only */
-    std::vector<arginfo> args;
+    PoolList<PoolString> dbgstrs;
+    PoolList<arginfo> args;
     ArrayData* array;    /* For functions with array returns */
 };
 
@@ -172,11 +171,11 @@ struct symbol;
  *      label           generated hexadecimal number
  *      function        offset into code segment
  */
-struct symbol {
+struct symbol : public PoolObject
+{
     symbol();
     symbol(const symbol& other);
     symbol(sp::Atom* name, cell addr, int ident, int vclass, int tag);
-    ~symbol();
 
     symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
@@ -236,7 +235,7 @@ struct symbol {
     } dim;       /* for 'dimension', both functions and arrays */
     int fnumber; /* file number in which the symbol is declared */
     int lnumber; /* line number for the declaration */
-    std::string documentation; /* optional documentation string */
+    PoolString* documentation; /* optional documentation string */
     methodmap_t* methodmap;    /* if ident == iMETHODMAP */
 
     int addr() const {
@@ -284,16 +283,16 @@ struct symbol {
         child_ = child;
     }
     SymbolData* data() const {
-        return data_.get();
+        return data_;
     }
-    void set_data(std::unique_ptr<SymbolData>&& data) {
+    void set_data(SymbolData* data) {
         data_ = std::move(data);
     }
 
     void add_reference_to(symbol* other);
     void drop_reference_from(symbol* from);
 
-    std::vector<symbol*>& refers_to() {
+    PoolList<symbol*>& refers_to() {
         return refers_to_;
     }
     bool is_unreferenced() const {
@@ -309,13 +308,13 @@ struct symbol {
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
     sp::Atom* name_;
-    std::unique_ptr<SymbolData> data_;
+    SymbolData* data_;
 
     // Other symbols that this symbol refers to.
-    std::vector<symbol*> refers_to_;
+    PoolList<symbol*> refers_to_;
 
     // All the symbols that refer to this symbol.
-    std::vector<symbol*> referred_from_;
+    PoolList<symbol*> referred_from_;
     size_t referred_from_count_;
 
     symbol* parent_;

@@ -1658,7 +1658,7 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
 
     symbol* var = base_->val().sym;
     if (!var->data())
-        var->set_data(std::make_unique<EnumStructVarData>());
+        var->set_data(new EnumStructVarData());
 
     EnumStructVarData* es_var = var->data()->asEnumStructVar();
     es_var->children.push_back(std::make_unique<symbol>(*field_));
@@ -1877,8 +1877,8 @@ CallExpr::Analyze(SemaContext& sc)
     }
 
     if (sym_->deprecated) {
-        const char* ptr = sym_->documentation.c_str();
-        error(pos_, 234, sym_->name(), ptr); /* deprecated (probably a native function) */
+        const char* ptr = sym_->documentation->chars();
+        report(pos_, 234) << sym_->name() << ptr; /* deprecated (probably a native function) */
     }
 
     unsigned int nargs = 0;
@@ -2964,8 +2964,8 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
     }
 
     if (sym_->deprecated && !sym_->stock) {
-        const char* ptr = sym_->documentation.c_str();
-        error(234, sym_->name(), ptr); /* deprecated (probably a public function) */
+        const char* ptr = sym_->documentation->chars();
+        report(pos_, 234) << sym_->name() << ptr; /* deprecated (probably a public function) */
     }
 
     sym_->defined = true;
@@ -3020,7 +3020,7 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
 bool
 FunctionInfo::AnalyzeArgs(SemaContext& sc)
 {
-    std::vector<arginfo>& arglist = sym_->function()->args;
+    auto& arglist = sym_->function()->args;
 
     size_t oldargcnt = 0;
     if (sym_->prototyped) {
@@ -3083,7 +3083,7 @@ FunctionInfo::AnalyzeArgs(SemaContext& sc)
             Expr* init = var->init_rhs();
             if (init && init->Analyze(sc)) {
                 assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
-                arg.def = std::make_unique<DefaultArg>();
+                arg.def = new DefaultArg();
 
                 int tag;
                 cell val;

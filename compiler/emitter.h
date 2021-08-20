@@ -46,7 +46,7 @@ class DataQueue final
     DataQueue();
 
     void Add(cell value);
-    void Add(std::vector<cell>&& cells);
+    void Add(PoolList<cell>&& cells);
     void Add(const char* text, size_t length);
     void AddZeroes(cell count);
     void Reset();
@@ -70,7 +70,7 @@ class DataQueue final
            zeroes(run.zeroes)
         {}
 
-        std::vector<cell> cells;
+        PoolList<cell> cells;
         cell zeroes;
     };
     DataRun& current() {

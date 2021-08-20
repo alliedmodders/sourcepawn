@@ -125,7 +125,7 @@ DataQueue::Add(const char* text, size_t length)
 }
 
 void
-DataQueue::Add(std::vector<cell>&& cells)
+DataQueue::Add(PoolList<cell>&& cells)
 {
     if (cells.empty())
         return;
@@ -150,7 +150,7 @@ class DataEmitter final
   public:
     DataEmitter();
 
-    void Dump(const std::vector<cell>& vals);
+    void Dump(const PoolList<cell>& vals);
     void DumpZeroes(cell nzeroes);
     void Finish();
 
@@ -164,7 +164,7 @@ DataEmitter::DataEmitter()
 }
 
 void
-DataEmitter::Dump(const std::vector<cell>& vals)
+DataEmitter::Dump(const PoolList<cell>& vals)
 {
     for (const auto& val : vals) {
         if (col_ == 0)
@@ -1653,14 +1653,14 @@ emit_initarray(regid reg, cell base_addr, cell iv_size, cell data_copy_size, cel
 void
 emit_default_array(arginfo* arg)
 {
-    DefaultArg* def = arg->def.get();
+    DefaultArg* def = arg->def;
     if (!def->val) {
         def->val = ke::Some(gDataQueue.dat_address());
 
         // Make copies since we cache DefaultArgs across compilations. This
         // will go away when the two-pass parser dies.
-        std::vector<cell> iv = def->array->iv;
-        std::vector<cell> data = def->array->data;
+        PoolList<cell> iv = def->array->iv;
+        PoolList<cell> data = def->array->data;
 
         gDataQueue.Add(std::move(iv));
         gDataQueue.Add(std::move(data));

@@ -52,7 +52,7 @@ char* get_inputfile(int index);
 void delete_inputfiletable(void);
 stringlist* insert_dbgfile(const char* filename);
 stringlist* insert_dbgline(int linenr);
-stringlist* insert_dbgsymbol(symbol* sym);
+void insert_dbgsymbol(symbol* sym);
 char* get_dbgstring(int index);
 void delete_dbgstringtable(void);
 stringlist* get_dbgstrings();
