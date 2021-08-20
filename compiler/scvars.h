@@ -28,6 +28,9 @@
 
 #include "sc.h"
 
+class SemaContext;
+extern SemaContext* gCurrentSemaContext;
+
 typedef struct HashTable HashTable;
 extern struct HashTable* sp_Globals;
 extern symbol glbtab;             /* global symbol table */

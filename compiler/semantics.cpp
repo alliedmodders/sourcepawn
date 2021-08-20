@@ -37,6 +37,24 @@
 #include "scvars.h"
 #include "symbols.h"
 
+AutoEnterScope::AutoEnterScope(SemaContext& sc, SymbolScope* scope)
+  : sc_(sc)
+{
+    assert(scope->parent() == sc.scope());
+    sc.set_scope(scope);
+}
+
+AutoEnterScope::AutoEnterScope(SemaContext& sc, ScopeKind kind)
+  : sc_(sc)
+{
+    sc.set_scope(new SymbolScope(sc.scope(), kind));
+}
+
+AutoEnterScope::~AutoEnterScope()
+{
+    sc_.set_scope(sc_.scope()->parent());
+}
+
 void
 Stmt::Process()
 {
@@ -1479,9 +1497,10 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
 
     if (base_val.ident == iMETHODMAP) {
         methodmap_t* map = base_val.sym->methodmap;
-        method_ = methodmap_find_method(map, name_);
+        if (map)
+            method_ = methodmap_find_method(map, name_);
         if (!method_) {
-            report(pos_, 105) << map->name << name_;
+            report(pos_, 105) << base_val.sym->name() << name_;
             return false;
         }
         if (!method_->is_static) {
@@ -1617,7 +1636,7 @@ FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_cal
     // Enum structs are always arrays, so they're never l-values.
     assert(!base_->lvalue());
 
-    field_ = find_enumstruct_field(type, name_);
+    field_ = FindEnumStructField(type, name_);
     if (!field_) {
         report(pos_, 105) << type->name() << name_;
         return false;
@@ -1685,7 +1704,7 @@ FieldAccessExpr::AnalyzeStaticAccess()
     }
 
     Type* type = gTypes.find(base_val.tag);
-    symbol* field = find_enumstruct_field(type, name_);
+    symbol* field = FindEnumStructField(type, name_);
     if (!field) {
         report(pos_, 105) << type->name() << name_;
         return FALSE;
@@ -1758,7 +1777,7 @@ SizeofExpr::Analyze(SemaContext& sc)
         if (enum_type) {
             assert(enum_type->asEnumStruct());
 
-            symbol* field = find_enumstruct_field(enum_type, field_);
+            symbol* field = FindEnumStructField(enum_type, field_);
             if (!field) {
                 report(pos_, 105) << enum_type->name() << field_;
                 return false;
@@ -2200,7 +2219,7 @@ NewArrayExpr::AnalyzeForInitializer(SemaContext& sc)
             expr = new RvalueExpr(expr);
 
         const auto& v = expr->val();
-        if (is_legacy_enum_tag(v.tag)) {
+        if (IsLegacyEnumTag(sc.scope(), v.tag)) {
             error(expr->pos(), 153);
             return false;
         }
@@ -2560,7 +2579,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
             /* nothing */;
 
         auto dim = array_.dim.empty() ? nullptr : &array_.dim[0];
-        sub = addvariable(curfunc->name(), (argcount + 3) * sizeof(cell), iREFARRAY,
+        sub = NewVariable(curfunc->name(), (argcount + 3) * sizeof(cell), iREFARRAY,
                           sGLOBAL, curfunc->tag, dim, array_.numdim(),
                           array_.enum_struct_tag());
         sub->set_parent(curfunc);
@@ -2950,6 +2969,7 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
     }
 
     sym_->defined = true;
+    sym_->missing = false;
 
     if (this_tag_)
         sc_err_status = TRUE;
@@ -3329,3 +3349,12 @@ argcompare(arginfo* a1, arginfo* a2)
     return result;
 }
 
+bool
+IsLegacyEnumTag(SymbolScope* scope, int tag)
+{
+    Type* type = gTypes.find(tag);
+    if (!type->isEnum())
+        return false;
+    symbol* sym = findconst(scope, type->name());
+    return sym->dim.enumlist != nullptr;
+}

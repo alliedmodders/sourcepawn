@@ -31,12 +31,13 @@
 #include "sc.h"
 #include "sp_symhash.h"
 
+SemaContext* gCurrentSemaContext = nullptr;
+
 /*  global variables
  *
  *  All global variables that are shared amongst the compiler files are
  *  declared here.
  */
-symbol loctab;                             /* local symbol table */
 symbol glbtab;                             /* global symbol table */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */

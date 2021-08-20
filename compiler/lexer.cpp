@@ -59,6 +59,7 @@
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "semantics.h"
 #include "sp_symhash.h"
 #include "symbols.h"
 #include "types.h"
@@ -2972,12 +2973,9 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef)
     }
 
     if (!sym) {
-        sym = addsym(map->name->chars(),
-                     0,          // addr
-                     iMETHODMAP, // ident
-                     sGLOBAL,    // vclass
-                     map->tag);  // tag
+        sym = new symbol(map->name->chars(), 0, iMETHODMAP, sGLOBAL, map->tag);
         sym->defined = true;
+        add_symbol(&glbtab, sym);
     }
     sym->methodmap = map;
 }

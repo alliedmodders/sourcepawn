@@ -746,16 +746,6 @@ commutative(void (*oper)())
            oper == ob_xor || oper == ob_or;
 }
 
-bool
-is_legacy_enum_tag(int tag)
-{
-    Type* type = gTypes.find(tag);
-    if (!type->isEnum())
-        return false;
-    symbol* sym = findconst(type->name());
-    return sym->dim.enumlist != nullptr;
-}
-
 /*  exprconst
  */
 bool

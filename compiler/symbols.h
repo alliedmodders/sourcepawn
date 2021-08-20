@@ -63,34 +63,24 @@ class SymbolScope final : public PoolObject
     PoolMap<sp::Atom*, symbol*> symbols_;
 };
 
-class AutoEnterScope final
-{
-  public:
-    AutoEnterScope(SymbolScope* scope);
-    ~AutoEnterScope();
-};
-
-SymbolScope* CreateScope(ScopeKind kind);
-SymbolScope* GetScopeChain();
-
 symbol* findglb(sp::Atom* name);
 symbol* findglb(const char* name);
-symbol* findloc(sp::Atom* name, SymbolScope** scope = nullptr);
-symbol* findconst(const char* name);
+symbol* findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found = nullptr);
+symbol* findconst(SymbolScope* scope, const char* name);
 void delete_symbols(symbol* root, int delete_functions);
 void delete_symbol(symbol* root, symbol* sym);
 void markusage(symbol* sym, int usage);
-symbol* addsym(const char* name, cell addr, int ident, int vclass, int tag);
-symbol* addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
+symbol* NewVariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
                     int numdim, int semantic_tag);
 int findnamedarg(arginfo* arg, sp::Atom* name);
-symbol* find_enumstruct_field(Type* type, sp::Atom* name);
+symbol* FindEnumStructField(Type* type, sp::Atom* name);
 sp::Atom* operator_symname(const char* opername, int tag1, int tag2, int numtags,
                            int resulttag);
 symbol* fetchfunc(const char* name);
 std::string funcdisplayname(const char* funcname);
 constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
 void delete_consttable(constvalue* table);
-symbol* add_constant(const char* name, cell val, int vclass, int tag);
+symbol* add_constant(SymbolScope* scope, const char* name, cell val, int vclass, int tag);
 void reduce_referrers(symbol* root);
 void deduce_liveness(symbol* root);
+symbol* add_symbol(symbol* root, symbol* entry);

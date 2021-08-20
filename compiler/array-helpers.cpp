@@ -27,6 +27,7 @@
 #include "emitter.h"
 #include "errors.h"
 #include "lexer-inl.h"
+#include "semantics.h"
 #include "symbols.h"
 #include "type-checker.h"
 
@@ -307,7 +308,7 @@ ArraySizeResolver::ResolveDimExprs()
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
-        } else if (is_legacy_enum_tag(v.tag) && v.sym && !v.sym->parent()) {
+        } else if (IsLegacyEnumTag(sc_.scope(), v.tag) && v.sym && !v.sym->parent()) {
             error(expr->pos(), 153);
             return false;
         } else {
@@ -658,7 +659,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
             return false;
         }
 
-        symbol* field = find_enumstruct_field(es_, field_iter->name);
+        symbol* field = FindEnumStructField(es_, field_iter->name);
         assert(field);
 
         // Advance early so we can use |continue|.
@@ -924,7 +925,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
                 size_t emitted = AddString(expr);
 
-                symbol* field = find_enumstruct_field(es_, field_iter->name);
+                symbol* field = FindEnumStructField(es_, field_iter->name);
                 assert(field);
 
                 EmitPadding(field->dim.array.length, field->x.tags.index, emitted, false, {}, {});
@@ -932,7 +933,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
                 assert(es_);
-                symbol* field = find_enumstruct_field(es_, field_iter->name);
+                symbol* field = FindEnumStructField(es_, field_iter->name);
                 AddInlineArray(field, expr);
             } else {
                 assert(item->val().ident == iCONSTEXPR);

@@ -1095,7 +1095,7 @@ RttiBuilder::add_enumstruct(Type* type)
     // Add all fields.
     size_t index = 0;
     for (auto iter = table->next; iter; iter = iter->next, index++) {
-        symbol* field = find_enumstruct_field(type, iter->name);
+        symbol* field = FindEnumStructField(type, iter->name);
         if (!field) {
             report(105) << type->name() << iter->name;
             continue;
