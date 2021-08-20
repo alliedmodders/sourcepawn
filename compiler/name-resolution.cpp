@@ -815,7 +815,7 @@ FunctionDecl::Bind(SemaContext& sc)
 
     if (deprecate_) {
         symbol* sym = info_->sym();
-        sym->documentation = std::string(deprecate_->chars(), deprecate_->length());
+        sym->documentation = new PoolString(deprecate_->chars(), deprecate_->length());
         sym->deprecated = true;
     }
     return true;

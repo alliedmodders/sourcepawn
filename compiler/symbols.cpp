@@ -265,18 +265,9 @@ markusage(symbol* sym, int usage)
 
 FunctionData::FunctionData()
  : funcid(0),
-   dbgstrs(nullptr),
    array(nullptr)
 {
     resizeArgs(0);
-}
-
-FunctionData::~FunctionData() {
-    if (dbgstrs) {
-        delete_stringtable(dbgstrs);
-        free(dbgstrs);
-    }
-    delete array;
 }
 
 void
@@ -321,6 +312,7 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
    fnumber(fcurrent),
    /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
+   documentation(nullptr),
    methodmap(nullptr),
    addr_(symaddr),
    name_(nullptr),
@@ -330,7 +322,7 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
 {
     name_ = symname;
     if (symident == iFUNCTN)
-        data_.reset(new FunctionData);
+        data_ = new FunctionData;
     memset(&dim, 0, sizeof(dim));
 }
 
@@ -356,13 +348,10 @@ symbol::symbol(const symbol& other)
     is_public = other.is_public;
     is_const = other.is_const;
     deprecated = other.deprecated;
+    documentation = other.documentation;
     // Note: explicitly don't add queued.
 
     x = other.x;
-}
-
-symbol::~symbol()
-{
 }
 
 void
@@ -505,11 +494,9 @@ fetchfunc(CompileContext& cc, sp::Atom* name, int fnumber)
     if (pc_deprecate.size() > 0) {
         assert(sym);
         sym->deprecated = true;
-        if (sc_status == statWRITE) {
-            sym->documentation = std::move(pc_deprecate);
-        } else {
-            pc_deprecate = "";
-        }
+        if (sc_status == statWRITE && !pc_deprecate.empty())
+            sym->documentation = new PoolString(pc_deprecate);
+        pc_deprecate.clear();
     }
 
     return sym;

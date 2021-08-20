@@ -34,9 +34,9 @@ void ResolveArraySize(SemaContext& sc, const token_pos_t& pos, typeinfo_t* type,
 bool CheckArrayDeclaration(SemaContext& sc, VarDecl* decl);
 bool CheckArrayInitialization(SemaContext& sc, const typeinfo_t& type, Expr* init);
 
-struct ArrayData {
-    std::vector<cell> iv;
-    std::vector<cell> data;
+struct ArrayData : public PoolObject {
+    PoolList<cell> iv;
+    PoolList<cell> data;
     uint32_t zeroes;
 
     size_t total_size() const {

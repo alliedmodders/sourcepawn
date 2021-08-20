@@ -744,7 +744,7 @@ class DebugString
      : kind_('\0'),
        str_(nullptr)
     {}
-    DebugString(char* str)
+    explicit DebugString(const char* str)
      : kind_(str[0]),
        str_(str)
     {
@@ -1043,18 +1043,19 @@ RttiBuilder::add_method(symbol* sym)
     method.pcode_end = sym->codeaddr;
     method.signature = encode_signature(sym);
 
-    if (!sym->function()->dbgstrs)
+    if (sym->function()->dbgstrs.empty())
         return;
 
     smx_rtti_debug_method debug;
     debug.method_index = index;
     debug.first_local = dbg_locals_->count();
 
-    for (stringlist* iter = sym->function()->dbgstrs; iter; iter = iter->next) {
-        if (iter->line[0] == '\0')
+    for (auto& iter : sym->function()->dbgstrs) {
+        const auto& chars = iter.chars();
+        if (chars[0] == '\0')
             continue;
 
-        DebugString str(iter->line);
+        DebugString str(chars);
         if (str.kind() == 'S')
             add_debug_var(dbg_locals_, str);
     }

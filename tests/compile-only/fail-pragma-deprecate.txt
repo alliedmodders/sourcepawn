@@ -1,2 +1,2 @@
 (11) : error 234: symbol "DontUse" is marked as deprecated: Do not use this
-(16) : error 234: symbol "Blah" is marked as deprecated: Do not use this either
+(14) : error 234: symbol "Blah" is marked as deprecated: Do not use this either

@@ -89,6 +89,8 @@ class SemaContext
     symbol* func() const { return func_; }
     void set_func(symbol* func) { func_ = func; }
 
+    // Currently, this only refers to local/argument scopes, and not global
+    // scope. They will be linked together when reparse goes away.
     SymbolScope* scope() const { return scope_; }
     void set_scope(SymbolScope* scope) { scope_ = scope; }
 

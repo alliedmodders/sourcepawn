@@ -879,7 +879,7 @@ setconstants(void)
 void
 fill_arg_defvalue(VarDecl* decl, arginfo* arg)
 {
-    arg->def = std::make_unique<DefaultArg>();
+    arg->def = new DefaultArg();
     arg->def->tag = decl->type().tag;
 
     if (SymbolExpr* expr = decl->init_rhs()->AsSymbolExpr()) {
