@@ -29,9 +29,8 @@
 #include "sc.h"
 #include "sclist.h"
 #include "scvars.h"
+#include "semantics.h"
 #include "sp_symhash.h"
-
-static SymbolScope* sScopeChain;
 
 void
 SymbolScope::Add(symbol* sym)
@@ -40,35 +39,12 @@ SymbolScope::Add(symbol* sym)
     symbols_.emplace(sym->nameAtom(), sym);
 }
 
-AutoEnterScope::AutoEnterScope(SymbolScope* scope)
-{
-    assert(scope->parent() == sScopeChain);
-    sScopeChain = scope;
-}
-
-AutoEnterScope::~AutoEnterScope()
-{
-    sScopeChain = sScopeChain->parent();
-}
-
-SymbolScope*
-CreateScope(ScopeKind kind)
-{
-    return new SymbolScope(GetScopeChain(), kind);
-}
-
-SymbolScope*
-GetScopeChain()
-{
-    return sScopeChain;
-}
-
 symbol*
-findconst(const char* name)
+findconst(SymbolScope* scope, const char* name)
 {
     symbol* sym;
 
-    sym = findloc(gAtoms.add(name));          /* try local symbols first */
+    sym = findloc(scope, gAtoms.add(name));          /* try local symbols first */
     if (sym == NULL || sym->ident != iCONSTEXPR) { /* not found, or not a constant */
         sym = FindInHashTable(sp_Globals, name, fcurrent);
     }
@@ -96,12 +72,12 @@ findglb(sp::Atom* name)
 }
 
 symbol*
-findloc(sp::Atom* name, SymbolScope** scope)
+findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
 {
-    for (auto iter = sScopeChain; iter; iter = iter->parent()) {
+    for (auto iter = scope; iter; iter = iter->parent()) {
         if (auto sym = iter->Find(name)) {
-            if (scope)
-                *scope = iter;
+            if (found)
+                *found = iter;
             return sym;
         }
     }
@@ -114,7 +90,7 @@ findloc(sp::Atom* name, SymbolScope** scope)
  * In the global list, the symbols are kept in sorted order, so that the
  * public functions are written in sorted order.
  */
-static symbol*
+symbol*
 add_symbol(symbol* root, symbol* entry)
 {
     entry->next = root->next;
@@ -402,27 +378,8 @@ symbol::must_return_value() const
     return retvalue || (explicit_return_type && tag != pc_tag_void);
 }
 
-/*  addsym
- *
- *  Adds a symbol to the symbol table (either global or local variables,
- *  or global and local constants).
- */
 symbol*
-addsym(const char* name, cell addr, int ident, int vclass, int tag)
-{
-    /* first fill in the entry */
-    symbol* sym = new symbol(name, addr, ident, vclass, tag);
-
-    /* then insert it in the list */
-    if (vclass == sGLOBAL)
-        return add_symbol(&glbtab, sym);
-
-    sScopeChain->Add(sym);
-    return sym;
-}
-
-symbol*
-addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
+NewVariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
             int semantic_tag)
 {
     symbol* sym;
@@ -455,13 +412,8 @@ addvariable(const char* name, cell addr, int ident, int vclass, int tag, int dim
             if (level == 0)
                 sym = top;
         }
-        if (vclass == sGLOBAL)
-            add_symbol(&glbtab, sym);
-        else
-            sScopeChain->Add(sym);
     } else {
-        sym = addsym(name, addr, ident, vclass, tag);
-        sym->defined = true;
+        sym = new symbol(name, addr, ident, vclass, tag);
     }
     return sym;
 }
@@ -478,15 +430,13 @@ findnamedarg(arginfo* arg, sp::Atom* name)
 }
 
 symbol*
-find_enumstruct_field(Type* type, sp::Atom* name)
+FindEnumStructField(Type* type, sp::Atom* name)
 {
     assert(type->asEnumStruct());
 
     auto const_name = ke::StringPrintf("%s::%s", type->name(), name->chars());
     auto atom = gAtoms.add(const_name);
-    if (symbol* sym = findconst(atom->chars()))
-        return sym;
-    return findglb(atom);
+    return FindInHashTable(sp_Globals, atom->chars(), fcurrent);
 }
 
 static char*
@@ -535,7 +485,8 @@ fetchfunc(const char* name)
         assert(sym->vclass == sGLOBAL);
     } else {
         /* don't set the "uDEFINE" flag; it may be a prototype */
-        sym = addsym(name, code_idx, iFUNCTN, sGLOBAL, 0);
+        sym = new symbol(name, code_idx, iFUNCTN, sGLOBAL, 0);
+        add_symbol(&glbtab, sym);
         assert(sym != NULL); /* fatal error 103 must be given on error */
     }
     if (pc_deprecate.size() > 0) {
@@ -768,7 +719,7 @@ delete_consttable(constvalue* table)
  *  Adds a symbol to the symbol table. Returns NULL on failure.
  */
 symbol*
-add_constant(const char* name, cell val, int vclass, int tag)
+add_constant(SymbolScope* scope, const char* name, cell val, int vclass, int tag)
 {
     symbol* sym;
 
@@ -776,8 +727,8 @@ add_constant(const char* name, cell val, int vclass, int tag)
      * constants are stored in the symbols table, this also finds previously
      * defind constants. */
     sym = findglb(gAtoms.add(name));
-    if (!sym)
-        sym = findloc(gAtoms.add(name));
+    if (!sym && scope)
+        sym = findloc(scope, gAtoms.add(name));
     if (sym) {
         int redef = 0;
         if (sym->ident != iCONSTEXPR)
@@ -791,7 +742,7 @@ add_constant(const char* name, cell val, int vclass, int tag)
             if (type == NULL) {
                 redef = 1; /* new constant does not have a tag */
             } else {
-                tagsym = findconst(type->name());
+                tagsym = findconst(scope, type->name());
                 if (tagsym == NULL || !tagsym->enumroot)
                     redef = 1; /* new constant is not an enumeration field */
             }
@@ -817,7 +768,9 @@ add_constant(const char* name, cell val, int vclass, int tag)
 
     /* constant doesn't exist yet (or is allowed to be redefined) */
 redef_enumfield:
-    sym = addsym(name, val, iCONSTEXPR, vclass, tag);
+    sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
+    add_symbol(&glbtab, sym);
+
     sym->defined = true;
     if (sc_status == statIDLE)
         sym->predefined = true;

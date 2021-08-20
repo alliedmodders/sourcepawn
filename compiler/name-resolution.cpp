@@ -54,9 +54,9 @@ BlockStmt::Bind(SemaContext& sc)
     if (stmts_.empty())
         return true;
 
-    scope_ = CreateScope(sLOCAL);
+    AutoEnterScope enter_scope(sc, sLOCAL);
+    scope_ = sc.scope();
 
-    AutoEnterScope enter_scope(scope_);
     return StmtList::Bind(sc);
 }
 
@@ -103,7 +103,7 @@ EnumDecl::Bind(SemaContext& sc)
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = add_constant(name_->chars(), 0, vclass_, tag);
+            enumsym = add_constant(sc.scope(), name_->chars(), 0, vclass_, tag);
             if (enumsym)
                 enumsym->enumroot = true;
             // start a new list for the element names
@@ -119,7 +119,7 @@ EnumDecl::Bind(SemaContext& sc)
 
     cell value = 0;
     for (const auto& field : fields_ ) {
-        if (findconst(field.name->chars()))
+        if (findconst(sc.scope(), field.name->chars()))
             report(field.pos, 50) << field.name;
 
         if (field.value && field.value->Bind(sc) && field.value->Analyze(sc)) {
@@ -131,7 +131,7 @@ EnumDecl::Bind(SemaContext& sc)
             }
         }
 
-        symbol* sym = add_constant(field.name->chars(), value, vclass_, tag);
+        symbol* sym = add_constant(sc.scope(), field.name->chars(), value, vclass_, tag);
         if (!sym)
             continue;
 
@@ -259,16 +259,16 @@ ConstDecl::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = add_constant(name_->chars(), value_, vclass_, type_.tag);
+    sym_ = add_constant(sc.scope(), name_->chars(), value_, vclass_, type_.tag);
     return true;
 }
 
 bool
-is_shadowed_name(sp::Atom* name)
+IsShadowedName(SemaContext& sc, sp::Atom* name)
 {
     SymbolScope* scope;
-    if (symbol* sym = findloc(name, &scope)) {
-        if (scope != GetScopeChain())
+    if (symbol* sym = findloc(sc.scope(), name, &scope)) {
+        if (scope != sc.scope())
             return true;
     }
     // ignore implicitly prototyped names.
@@ -294,7 +294,7 @@ VarDecl::Bind(SemaContext& sc)
     // :TODO: introduce find-by-atom to improve compiler speed
     bool should_define = false;
     if (vclass_ == sGLOBAL) {
-        sym_ = findconst(name_->chars());
+        sym_ = findconst(sc.scope(), name_->chars());
         if (!sym_)
             sym_ = findglb(name_);
 
@@ -319,8 +319,8 @@ VarDecl::Bind(SemaContext& sc)
         // the "nesting level" of local variables to verify the
         // multi-definition of symbols.
         SymbolScope* scope;
-        symbol* sym = findloc(name_, &scope);
-        if (sym && scope == GetScopeChain())
+        symbol* sym = findloc(sc.scope(), name_, &scope);
+        if (sym && scope == sc.scope())
             report(pos_, 21) << name_;
 
         // Although valid, a local variable whose name is equal to that
@@ -331,7 +331,7 @@ VarDecl::Bind(SemaContext& sc)
             if (sym && sym->ident != iFUNCTN)
                 report(pos_, 219) << name_;
         } else {
-            if (is_shadowed_name(name_))
+            if (IsShadowedName(sc, name_))
                 report(pos_, 219) << name_;
         }
 
@@ -340,10 +340,12 @@ VarDecl::Bind(SemaContext& sc)
     }
 
     if (gTypes.find(type_.tag)->kind() == TypeKind::Struct) {
-        if (!sym_)
-            sym_ = addsym(name_->chars(), 0, iVARIABLE, sGLOBAL, type_.tag);
-        else
+        if (!sym_) {
+            sym_ = new symbol(name_->chars(), 0, iVARIABLE, sGLOBAL, type_.tag);
+            add_symbol(&glbtab, sym_);
+        } else {
             assert(sym_->is_struct);
+        }
         sym_->is_struct = true;
         sym_->stock = is_stock_;
         sym_->is_const = true;
@@ -354,8 +356,13 @@ VarDecl::Bind(SemaContext& sc)
                 ident = iREFARRAY;
 
             auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-            sym_ = addvariable(name_->chars(), 0, ident, vclass_, type_.tag, dim,
+            sym_ = NewVariable(name_->chars(), 0, ident, vclass_, type_.tag, dim,
                                type_.numdim(), type_.enum_struct_tag());
+            sym_->defined = true;
+            if (vclass_ == sGLOBAL)
+                add_symbol(&glbtab, sym_);
+            else
+                sc.scope()->Add(sym_);
 
             if (ident == iVARARGS)
                 markusage(sym_, uREAD);
@@ -408,9 +415,9 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         }
     }
 
-    sym_ = findconst(name_->chars());
+    sym_ = findconst(sc.scope(), name_->chars());
     if (!sym_)
-        sym_ = findloc(name_);
+        sym_ = findloc(sc.scope(), name_);
     if (!sym_)
         sym_ = findglb(name_);
 
@@ -458,7 +465,7 @@ ThisExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = findloc(gAtoms.add("this"));
+    sym_ = findloc(sc.scope(), gAtoms.add("this"));
     if (!sym_) {
         error(pos_, 166);
         return false;
@@ -511,7 +518,7 @@ IsDefinedExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    symbol* sym = findloc(name_);
+    symbol* sym = findloc(sc.scope(), name_);
     if (!sym)
         sym = findglb(name_);
     if (sym && sym->ident == iFUNCTN && !sym->defined)
@@ -527,7 +534,7 @@ SizeofExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = findloc(ident_);
+    sym_ = findloc(sc.scope(), ident_);
     if (!sym_)
         sym_ = findglb(ident_);
     if (!sym_) {
@@ -615,8 +622,8 @@ ForStmt::Bind(SemaContext& sc)
     ke::Maybe<AutoEnterScope> enter_scope;
     if (init_) {
         if (!init_->IsExprStmt()) {
-            scope_ = CreateScope(sLOCAL);
-            enter_scope.init(scope_);
+            enter_scope.init(sc, sLOCAL);
+            scope_ = sc.scope();
         }
 
         ok &= init_->Bind(sc);
@@ -716,8 +723,8 @@ FunctionInfo::Bind(SemaContext& outer_sc)
 
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {
-        scope_ = CreateScope(sARGUMENT);
-        enter_scope.init(scope_);
+        enter_scope.init(sc, sARGUMENT);
+        scope_ = sc.scope();
 
         for (const auto& arg : args_)
             ok &= arg.decl->Bind(sc);
@@ -815,7 +822,7 @@ bool
 PragmaUnusedStmt::Bind(SemaContext& sc)
 {
     for (const auto& name : names_) {
-        symbol* sym = findloc(name);
+        symbol* sym = findloc(sc.scope(), name);
         if (!sym)
             sym = findglb(name);
         if (!sym) {
@@ -833,10 +840,10 @@ EnumStructDecl::Bind(SemaContext& sc)
     AutoCountErrors errors;
     constvalue* values = (constvalue*)calloc(1, sizeof(constvalue));
 
-    if (findglb(name_) || findconst(name_->chars()))
+    if (findglb(name_) || findconst(sc.scope(), name_->chars()))
         report(pos_, 21) << name_;
 
-    symbol* root = add_constant(name_->chars(), 0, sGLOBAL, 0);
+    symbol* root = add_constant(sc.scope(), name_->chars(), 0, sGLOBAL, 0);
     root->tag = gTypes.defineEnumStruct(name_->chars(), root)->tagid();
     root->enumroot = true;
     root->ident = iENUMSTRUCT;
@@ -871,12 +878,12 @@ EnumStructDecl::Bind(SemaContext& sc)
         if (!field_name)
             continue;
 
-        if (findconst(field_name->chars())) {
+        if (findconst(sc.scope(), field_name->chars())) {
             report(field.pos, 103) << field.decl.name << "enum struct";
             continue;
         }
 
-        symbol* child = add_constant(field_name->chars(), position, sGLOBAL, root->tag);
+        symbol* child = add_constant(sc.scope(), field_name->chars(), position, sGLOBAL, root->tag);
         if (!child)
             continue;
         child->x.tags.index = field.decl.type.semantic_tag();

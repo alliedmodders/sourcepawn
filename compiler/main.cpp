@@ -253,6 +253,7 @@ pc_compile(int argc, char* argv[]) {
         error(FATAL_ERROR_READ, inpfname);
     skip_utf8_bom(inpf_org);
     freading = TRUE;
+
     setconstants(); /* set predefined constants and tagnames */
     sc_status = statFIRST;
     /* write starting options (from the command line or the configuration file) */
@@ -737,7 +738,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
             int i = (int)(ptr - arg);
             SafeStrcpyN(str, PATH_MAX, arg, i);
             i = atoi(ptr + 1);
-            add_constant(str, i, sGLOBAL, 0);
+            add_constant(nullptr, str, i, sGLOBAL, 0);
         } else {
             SafeStrcpy(str, sizeof(str) - 5, arg); /* -5 because default extension is ".sp" */
             set_extension(str, ".sp", FALSE);
@@ -861,21 +862,21 @@ setconstants(void)
     gTypes.init();
     assert(sc_rationaltag);
 
-    add_constant("true", 1, sGLOBAL, 1); /* boolean flags */
-    add_constant("false", 0, sGLOBAL, 1);
-    add_constant("EOS", 0, sGLOBAL, 0); /* End Of String, or '\0' */
-    add_constant("INVALID_FUNCTION", -1, sGLOBAL, pc_tag_nullfunc_t);
-    add_constant("cellmax", INT_MAX, sGLOBAL, 0);
-    add_constant("cellmin", INT_MIN, sGLOBAL, 0);
+    add_constant(nullptr, "true", 1, sGLOBAL, 1); /* boolean flags */
+    add_constant(nullptr, "false", 0, sGLOBAL, 1);
+    add_constant(nullptr, "EOS", 0, sGLOBAL, 0); /* End Of String, or '\0' */
+    add_constant(nullptr, "INVALID_FUNCTION", -1, sGLOBAL, pc_tag_nullfunc_t);
+    add_constant(nullptr, "cellmax", INT_MAX, sGLOBAL, 0);
+    add_constant(nullptr, "cellmin", INT_MIN, sGLOBAL, 0);
 
-    add_constant("__Pawn", VERSION_INT, sGLOBAL, 0);
+    add_constant(nullptr, "__Pawn", VERSION_INT, sGLOBAL, 0);
 
     debug = 0;
     if ((sc_debug & (sCHKBOUNDS | sSYMBOLIC)) == (sCHKBOUNDS | sSYMBOLIC))
         debug = 2;
     else if ((sc_debug & sCHKBOUNDS) == sCHKBOUNDS)
         debug = 1;
-    add_constant("debug", debug, sGLOBAL, 0);
+    add_constant(nullptr, "debug", debug, sGLOBAL, 0);
 }
 
 void

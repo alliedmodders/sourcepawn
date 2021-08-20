@@ -28,9 +28,24 @@
 class SemaContext
 {
   public:
-    SemaContext(symbol* func = nullptr)
-      : func_(func)
-    {}
+    SemaContext()
+      : parent_(gCurrentSemaContext),
+        func_(nullptr),
+        scope_(nullptr)
+    {
+        gCurrentSemaContext = this;
+    }
+    SemaContext(symbol* func)
+      : parent_(gCurrentSemaContext),
+        func_(func),
+        scope_(nullptr)
+    {
+        gCurrentSemaContext = this;
+    }
+
+    ~SemaContext() {
+        gCurrentSemaContext = parent_;
+    }
 
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
@@ -69,8 +84,13 @@ class SemaContext
     symbol* func() const { return func_; }
     void set_func(symbol* func) { func_ = func; }
 
+    SymbolScope* scope() const { return scope_; }
+    void set_scope(SymbolScope* scope) { scope_ = scope; }
+
   private:
+    SemaContext* parent_ = nullptr;
     symbol* func_ = nullptr;
+    SymbolScope* scope_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
@@ -79,6 +99,21 @@ class SemaContext
     bool loop_has_continue_ = false;
     bool loop_has_return_ = false;
     bool warned_unreachable_ = false;
+};
+
+class AutoEnterScope final
+{
+  public:
+    // Create a new scope.
+    AutoEnterScope(SemaContext& sc, ScopeKind kind);
+
+    // Use existing scope.
+    AutoEnterScope(SemaContext& sc, SymbolScope* scope);
+
+    ~AutoEnterScope();
+
+  private:
+    SemaContext& sc_;
 };
 
 class AutoCollectSemaFlow final
@@ -101,3 +136,4 @@ void check_void_decl(const declinfo_t* decl, int variable);
 int check_operatortag(int opertok, int resulttag, const char* opername);
 int argcompare(arginfo* a1, arginfo* a2);
 void fill_arg_defvalue(VarDecl* decl, arginfo* arg);
+bool IsLegacyEnumTag(SymbolScope* scope, int tag);

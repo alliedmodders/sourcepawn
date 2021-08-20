@@ -72,7 +72,6 @@ int checktag_string(int tag, const value* sym1);
 void user_inc();
 void user_dec();
 int checktag(int tag, int exprtag);
-bool is_legacy_enum_tag(int tag);
 bool exprconst(cell* val, int* tag, symbol** symptr);
 
 #endif // am_sourcepawn_compiler_sc3_h
