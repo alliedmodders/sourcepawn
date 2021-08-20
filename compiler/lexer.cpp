@@ -51,7 +51,6 @@
 #include "errors.h"
 #include "lexer.h"
 #include "lexer-inl.h"
-#include "libpawnc.h"
 #include "output-buffer.h"
 #include "parser.h"
 #include "sc.h"
@@ -95,21 +94,20 @@ plungequalifiedfile(const char* name)
     static const char* extensions[] = {".inc", ".p", ".pawn"};
     std::string alt_name;
 
-    void* fp;
+    std::shared_ptr<SourceFile> fp;
     size_t ext_idx;
 
     ext_idx = 0;
     do {
-        fp = pc_opensrc(name);
-
-        if (fp == NULL) {
+        fp = std::make_shared<SourceFile>();
+        if (!fp->Open(name)) {
             /* try to push_back an extension */
             alt_name = std::string(name) + extensions[ext_idx];
-            fp = pc_opensrc(alt_name.c_str());
-            if (fp) {
+            if (fp->Open(alt_name)) {
                 name = alt_name.c_str();
                 break;
             }
+            fp = nullptr;
         }
         ext_idx++;
     } while (ext_idx < (sizeof extensions / sizeof extensions[0]));
@@ -119,27 +117,23 @@ plungequalifiedfile(const char* name)
         fprintf(stdout, "Note: including file: %s\n", name);
     }
     gInputFileStack.push_back(inpf);
-    gInputFilenameStack.push_back(inpfname);
     sPreprocIfStack.push_back(iflevel);
     assert(!SKIPPING);
     assert(skiplevel == iflevel); /* these two are always the same when "parsing" */
     sCommentStack.push_back(icomment);
     gCurrentFileStack.push_back(fcurrent);
     gCurrentLineStack.push_back(fline);
-    inpfname = strdup(name); /* set name of include file */
-    if (inpfname == NULL)
-        error(FATAL_ERROR_OOM);
     inpf = fp; /* set input file pointer to include file */
     fnumber++;
     fline = 0; /* set current line number to 0 */
     fcurrent = fnumber;
     icomment = 0;               /* not in a comment */
-    insert_dbgfile(inpfname);   /* attach to debug information */
-    insert_inputfile(inpfname); /* save for the error system */
-    assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpfname) == 0);
-    setfiledirect(inpfname); /* (optionally) set in the list file */
+    insert_dbgfile(inpf->name());   /* attach to debug information */
+    insert_inputfile(inpf->name()); /* save for the error system */
+    assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
+    setfiledirect(inpf->name()); /* (optionally) set in the list file */
     listline = -1;           /* force a #line directive when changing the file */
-    skip_utf8_bom(inpf);
+    skip_utf8_bom(inpf.get());
     return TRUE;
 }
 
@@ -157,12 +151,12 @@ plungefile(const char* name, int try_currentpath, int try_includepaths)
              * in the same directory as the current file --but first check whether
              * there is a (relative) path for the current file
              */
-            char* ptr;
-            if ((ptr = strrchr(inpfname, DIRSEP_CHAR)) != 0) {
-                int len = (int)(ptr - inpfname) + 1;
+            const char* ptr;
+            if ((ptr = strrchr(inpf->name(), DIRSEP_CHAR)) != 0) {
+                int len = (int)(ptr - inpf->name()) + 1;
                 if (len + strlen(name) < PATH_MAX) {
                     char path[PATH_MAX];
-                    SafeStrcpyN(path, sizeof(path), inpfname, len);
+                    SafeStrcpyN(path, sizeof(path), inpf->name(), len);
                     SafeStrcat(path, sizeof(path), name);
                     result = plungequalifiedfile(path);
                 }
@@ -191,10 +185,10 @@ plungefile(const char* name, int try_currentpath, int try_includepaths)
 
     if (pcwd) {
         char path[PATH_MAX];
-        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpfname);
+        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpf->name());
         set_file_defines(path);
     } else {
-        set_file_defines(inpfname);
+        set_file_defines(inpf->name());
     }
 
     return result;
@@ -313,11 +307,11 @@ readline(unsigned char* line)
     num = sLINEMAX;
     cont = FALSE;
     do {
-        if (inpf == NULL || pc_eofsrc(inpf)) {
+        if (inpf == NULL || inpf->Eof()) {
             if (cont)
                 error(49); /* invalid line continuation */
             if (inpf != NULL && inpf != inpf_org)
-                pc_closesrc(inpf);
+                inpf = nullptr;
             if (gCurrentLineStack.empty()) {
                 freading = FALSE;
                 *line = '\0';
@@ -337,17 +331,15 @@ readline(unsigned char* line)
             iflevel = ke::PopBack(&sPreprocIfStack);
             skiplevel = iflevel; /* this condition held before including the file */
             assert(!SKIPPING);   /* idem ditto */
-            free(inpfname);      /* return memory allocated for the include file name */
-            inpfname = ke::PopBack(&gInputFilenameStack);
             inpf = ke::PopBack(&gInputFileStack);
-            set_file_defines(inpfname);
-            insert_dbgfile(inpfname);
-            setfiledirect(inpfname);
-            assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpfname) == 0);
+            set_file_defines(inpf->name());
+            insert_dbgfile(inpf->name());
+            setfiledirect(inpf->name());
+            assert(sc_status == statFIRST || strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
             listline = -1; /* force a #line directive when changing the file */
         }
 
-        if (pc_readsrc(inpf, line, num) == NULL) {
+        if (!inpf->Read(line, num)) {
             *line = '\0'; /* delete line */
             cont = FALSE;
         } else {
@@ -361,7 +353,7 @@ readline(unsigned char* line)
             }
             cont = FALSE;
             /* check whether a full line was read */
-            if (strchr((char*)line, '\n') == NULL && !pc_eofsrc(inpf))
+            if (strchr((char*)line, '\n') == NULL && !inpf->Eof())
                 error(75); /* line too long */
             /* check if the next line must be concatenated to this line */
             if ((ptr = (unsigned char*)strchr((char*)line, '\n')) == NULL)
@@ -765,36 +757,6 @@ preproc_expr(cell* val, int* tag)
     return result;
 }
 
-/* getstring
- * Returns returns a pointer behind the closing quote or to the other
- * character that caused the input to be ended.
- */
-static const unsigned char*
-getstring(unsigned char* dest, int max, const unsigned char* line)
-{
-    assert(dest != NULL && line != NULL);
-    *dest = '\0';
-    while (*line <= ' ' && *line != '\0')
-        line++; /* skip whitespace */
-    if (*line == '"') {
-        int len = 0;
-        line++; /* skip " */
-        while (*line != '"' && *line != '\0') {
-            if (len < max - 1)
-                dest[len++] = *line;
-            line++;
-        }
-        dest[len] = '\0';
-        if (*line == '"')
-            line++; /* skip closing " */
-        else
-            error(37); /* invalid string */
-    } else {
-        error(37); /* invalid string */
-    }
-    return line;
-}
-
 enum {
     CMD_NONE,
     CMD_TERM,
@@ -928,20 +890,6 @@ command(bool allow_synthesized_tokens)
             if (!SKIPPING)
                 doinclude(tok == tpTRYINCLUDE);
             break;
-        case tpFILE:
-            if (!SKIPPING) {
-                char pathname[PATH_MAX];
-                lptr = getstring((unsigned char*)pathname, sizeof pathname, lptr);
-                if (strlen(pathname) > 0) {
-                    free(inpfname);
-                    inpfname = strdup(pathname);
-                    if (inpfname == NULL)
-                        error(FATAL_ERROR_OOM);
-                    fline = 0;
-                }
-            }
-            check_empty(lptr);
-            break;
         case tpLINE:
             if (!SKIPPING) {
                 if (lex(&val, &str) != tNUMBER)
@@ -1055,8 +1003,6 @@ command(bool allow_synthesized_tokens)
             if (!SKIPPING) {
                 check_empty(lptr);
                 assert(inpf != NULL);
-                if (inpf != inpf_org)
-                    pc_closesrc(inpf);
                 inpf = NULL;
             }
             break;
@@ -1552,7 +1498,7 @@ substallpatterns(unsigned char* line, int buffersize)
 static int
 scanellipsis(const unsigned char* lptr)
 {
-    static void* inpfmark = NULL;
+    static int64_t inpfmark = 0;
     unsigned char* localbuf;
     short localcomment, found;
 
@@ -1567,16 +1513,16 @@ scanellipsis(const unsigned char* lptr)
     /* the ellipsis was not on the active line, read more lines from the current
      * file (but save its position first)
      */
-    if (inpf == NULL || pc_eofsrc(inpf))
+    if (!inpf || inpf->Eof())
         return 0; /* quick exit: cannot read after EOF */
     if ((localbuf = (unsigned char*)malloc((sLINEMAX + 1) * sizeof(unsigned char))) == NULL)
         return 0;
-    inpfmark = pc_getpossrc(inpf);
+    inpfmark = inpf->Pos();
     localcomment = icomment;
 
     found = 0;
     /* read from the file, skip preprocessing, but strip off comments */
-    while (!found && pc_readsrc(inpf, localbuf, sLINEMAX) != NULL) {
+    while (!found && inpf->Read(localbuf, sLINEMAX)) {
         stripcom(localbuf);
         lptr = localbuf;
         /* skip white space */
@@ -1590,7 +1536,7 @@ scanellipsis(const unsigned char* lptr)
 
     /* clean up & reset */
     free(localbuf);
-    pc_resetsrc(inpf, inpfmark);
+    inpf->Reset(inpfmark);
     icomment = localcomment;
     return found;
 }
@@ -1840,7 +1786,6 @@ const char* sc_tokens[] = {"*=",
                            "#endscript",
                            "#error",
                            "#warning",
-                           "#file",
                            "#if",
                            "#include",
                            "#line",

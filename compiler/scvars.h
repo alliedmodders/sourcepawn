@@ -27,6 +27,7 @@
 #include <amtl/am-vector.h>
 
 #include "sc.h"
+#include "source-file.h"
 
 class SemaContext;
 extern SemaContext* gCurrentSemaContext;
@@ -34,7 +35,6 @@ extern SemaContext* gCurrentSemaContext;
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern symbol* curfunc;           /* pointer to current function */
-extern char* inpfname;            /* name of the file currently read from */
 extern char outfname[];           /* intermediate (assembler) file name */
 extern char binfname[];           /* binary file name */
 extern char errfname[];           /* error file name */
@@ -81,8 +81,8 @@ extern int pc_current_stack;
 extern int sc_use_stderr;
 extern int sc_reparse;            /* needs 3th parse because of changed prototypes? */
 
-extern void* inpf;      /* file read from (source or include) */
-extern void* inpf_org;  /* main source file */
+extern std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
+extern std::shared_ptr<SourceFile> inpf_org;  /* main source file */
 
 extern jmp_buf errbuf; /* target of longjmp() on a fatal error */
 
@@ -94,5 +94,4 @@ extern short fcurrent; /* current file being processed */
 
 extern std::vector<short> gCurrentFileStack;
 extern std::vector<int> gCurrentLineStack;
-extern std::vector<void*> gInputFileStack;
-extern std::vector<char*> gInputFilenameStack;
+extern std::vector<std::shared_ptr<SourceFile>> gInputFileStack;

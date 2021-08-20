@@ -47,7 +47,7 @@ void delete_substtable(void);
 stringlist* insert_sourcefile(char* string);
 char* get_sourcefile(int index);
 void delete_sourcefiletable(void);
-stringlist* insert_inputfile(char* string);
+stringlist* insert_inputfile(const char* string);
 char* get_inputfile(int index);
 void delete_inputfiletable(void);
 stringlist* insert_dbgfile(const char* filename);

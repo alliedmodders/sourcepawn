@@ -46,6 +46,7 @@
 
 #include "pool-allocator.h"
 #include "shared/string-pool.h"
+#include "source-file.h"
 #include "types.h"
 
 typedef int32_t cell;
@@ -57,8 +58,8 @@ typedef uint32_t ucell;
 #define CTRL_CHAR '\\'  /* default control character */
 #define sCHARBITS 8     /* size of a packed character */
 
-#define sLINEMAX 4095      /* input line length (in characters) */
 #define sCOMP_STACK 32     /* maximum nesting of #if .. #endif sections */
+#define sLINEMAX 4095
 #define sDEF_AMXSTACK 4096 /* default stack size for AMX files */
 #define PREPROC_TERM \
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */

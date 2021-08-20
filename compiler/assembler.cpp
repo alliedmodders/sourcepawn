@@ -41,7 +41,6 @@
 #include "compile-context.h"
 #include "errors.h"
 #include "lexer.h"
-#include "libpawnc.h"
 #include "libsmx/data-pool.h"
 #include "libsmx/smx-builder.h"
 #include "libsmx/smx-encoding.h"

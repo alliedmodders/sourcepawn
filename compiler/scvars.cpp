@@ -40,7 +40,6 @@ SemaContext* gCurrentSemaContext = nullptr;
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
 symbol* curfunc;                           /* pointer to current function */
-char* inpfname;                            /* pointer to name of the file currently read from */
 char outfname[PATH_MAX];                   /* intermediate (assembler) file name */
 char binfname[PATH_MAX];                   /* binary file name */
 char errfname[PATH_MAX];                   /* error file name */
@@ -86,8 +85,8 @@ int sc_reparse = 0;
 
 symbol* sScopeChain = nullptr;
 
-void* inpf = NULL;      /* file read from (source or include) */
-void* inpf_org = NULL;  /* main source file */
+std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
+std::shared_ptr<SourceFile> inpf_org;  /* main source file */
 
 bool sc_intest;
 bool sc_allowtags;
@@ -95,7 +94,8 @@ short fcurrent; /* current file being processed */
 
 std::vector<short> gCurrentFileStack;
 std::vector<int> gCurrentLineStack;
-std::vector<void*> gInputFileStack;
-std::vector<char*> gInputFilenameStack;
+std::vector<std::shared_ptr<SourceFile>> gInputFileStack;
 
 jmp_buf errbuf;
+
+unsigned sc_total_errors = 0;

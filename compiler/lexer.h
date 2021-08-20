@@ -198,7 +198,6 @@ enum TokenKind {
     tpENDSCRPT,
     tpERROR,
     tpWARNING,
-    tpFILE,
     tpIF, /* #if */
     tINCLUDE,
     tpLINE,
