@@ -58,6 +58,7 @@ class DefaultArgExpr;
 class NewArrayExpr;
 class StringExpr;
 class StructExpr;
+class SymbolScope;
 class SymbolExpr;
 class TaggedValueExpr;
 struct StructInitField;
@@ -180,11 +181,11 @@ class BlockStmt : public StmtList
     void DoEmit(CodegenContext& cg) override;
     BlockStmt* AsBlockStmt() override { return this; }
 
-    symbol* scope() const { return scope_; }
-    void set_scope(symbol* scope) { scope_ = scope; }
+    SymbolScope* scope() const { return scope_; }
+    void set_scope(SymbolScope* scope) { scope_ = scope; }
 
   private:
-    symbol* scope_;
+    SymbolScope* scope_;
 };
 
 class LoopControlStmt : public Stmt
@@ -1433,7 +1434,7 @@ class ForStmt : public Stmt
     void DoEmit(CodegenContext& cg) override;
 
   private:
-    symbol* scope_;
+    SymbolScope* scope_;
     Stmt* init_;
     Expr* cond_;
     Expr* advance_;
@@ -1557,7 +1558,7 @@ class FunctionInfo : public PoolObject
     Stmt* body_ = nullptr;
     PoolList<FunctionArg> args_;
     symbol* sym_ = nullptr;
-    symbol* scope_ = nullptr;
+    SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
     sp::Atom* alias_ = nullptr;
 };

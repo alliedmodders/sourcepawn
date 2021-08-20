@@ -26,6 +26,7 @@
 #include <memory>
 #include <new>
 #include <string>
+#include <unordered_map>
 
 #include <amtl/am-bits.h>
 #include <amtl/am-fixedarray.h>
@@ -199,6 +200,16 @@ class StlPoolAllocator
     typedef std::true_type propagate_on_container_move_assignment;
     typedef std::true_type propagate_on_container_copy_assignment;
     typedef std::true_type propagate_on_container_swap;
+    typedef std::true_type is_always_equal;
+
+    StlPoolAllocator() = default;
+    StlPoolAllocator(const StlPoolAllocator&) = default;
+
+    template <typename U>
+    StlPoolAllocator(const StlPoolAllocator<U>& other) {}
+
+    template <typename U>
+    using rebind = StlPoolAllocator<U>;
 
     static T* allocate(size_t n, const void* = nullptr) {
         if (!ke::IsUintMultiplySafe(n, sizeof(T)))
@@ -213,5 +224,11 @@ class StlPoolAllocator
 
 template <typename T>
 using PoolList = std::vector<T, StlPoolAllocator<T>>;
+
+template <typename Key,
+          typename T,
+          typename Hash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>>
+using PoolMap = std::unordered_map<Key, T, Hash, KeyEqual, StlPoolAllocator<std::pair<const Key, T>>>;
 
 #endif // _include_jitcraft_pool_allocator_h_
