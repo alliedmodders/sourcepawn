@@ -40,7 +40,6 @@
 #include "errors.h"
 #include "sc.h"
 #include "scvars.h"
-#include "sp_symhash.h"
 #include "symbols.h"
 
 static bool sAliasTableInitialized;

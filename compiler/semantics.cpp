@@ -367,7 +367,7 @@ Expr::AnalyzeForTest(SemaContext& sc)
 
     if (val_.tag != 0 || val_.tag != pc_tag_bool) {
         UserOperation userop;
-        if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop)) {
+        if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop, pos_.line)) {
             // Call user op for '!', then invert it. EmitTest will fold out the
             // extra invert.
             //
@@ -448,7 +448,7 @@ UnaryExpr::Analyze(SemaContext& sc)
                 val_.constval = ~val_.constval;
             break;
         case '!':
-            if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop)) {
+            if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop, pos_.line)) {
                 expr_ = new CallUserOpExpr(userop, expr_);
                 val_ = expr_->val();
                 userop_ = true;
@@ -461,7 +461,7 @@ UnaryExpr::Analyze(SemaContext& sc)
             if (val_.ident == iCONSTEXPR && val_.tag == sc_rationaltag) {
                 float f = sp::FloatCellUnion(val_.constval).f32;
                 val_.constval = sp::FloatCellUnion(-f).cell;
-            } else if (find_userop(neg, val_.tag, 0, 1, &val_, &userop)) {
+            } else if (find_userop(neg, val_.tag, 0, 1, &val_, &userop, pos_.line)) {
                 expr_ = new CallUserOpExpr(userop, expr_);
                 val_ = expr_->val();
                 userop_ = true;
@@ -523,7 +523,7 @@ IncDecExpr::Analyze(SemaContext& sc)
     }
 
     auto op = (token_ == tINC) ? user_inc : user_dec;
-    find_userop(op, expr_val.tag, 0, 1, &expr_val, &userop_);
+    find_userop(op, expr_val.tag, 0, 1, &expr_val, &userop_, pos_.line);
 
     // :TODO: more type checks
     val_.ident = iEXPRESSION;
@@ -646,7 +646,7 @@ BinaryExpr::Analyze(SemaContext& sc)
         val_.tag = assignop_.sym->tag;
 
     if (oper_) {
-        if (find_userop(oper_, left_val.tag, right_val.tag, 2, nullptr, &userop_)) {
+        if (find_userop(oper_, left_val.tag, right_val.tag, 2, nullptr, &userop_, pos_.line)) {
             val_.tag = userop_.sym->tag;
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
@@ -804,7 +804,7 @@ BinaryExpr::ValidateAssignmentRHS()
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
+        find_userop(nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_, pos_.line);
     }
 
     if (!oper_ && !checkval_string(&left_val, &right_val)) {
@@ -986,7 +986,7 @@ ChainedCompareExpr::Analyze(SemaContext& sc)
             return false;
         }
 
-        if (find_userop(op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
+        if (find_userop(op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop, pos_.line)) {
             if (op.userop.sym->tag != pc_tag_bool) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
@@ -1960,7 +1960,7 @@ CallExpr::Analyze(SemaContext& sc)
         Expr* expr = argv_[argidx].expr;
         if (expr->AsDefaultArgExpr() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(nullptr, arg.def->tag, arg.type.tag, 2, nullptr, &userop))
+            if (find_userop(nullptr, arg.def->tag, arg.type.tag, 2, nullptr, &userop, pos_.line))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -2047,7 +2047,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(nullptr, val->tag, arg->type.tag, 2, nullptr, &userop))
+                find_userop(nullptr, val->tag, arg->type.tag, 2, nullptr, &userop, pos_.line))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
@@ -2579,7 +2579,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
             /* nothing */;
 
         auto dim = array_.dim.empty() ? nullptr : &array_.dim[0];
-        sub = NewVariable(curfunc->name(), (argcount + 3) * sizeof(cell), iREFARRAY,
+        sub = NewVariable(curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
                           sGLOBAL, curfunc->tag, dim, array_.numdim(),
                           array_.enum_struct_tag());
         sub->set_parent(curfunc);
@@ -3355,6 +3355,6 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
     Type* type = gTypes.find(tag);
     if (!type->isEnum())
         return false;
-    symbol* sym = findconst(scope, type->name());
+    symbol* sym = findconst(CompileContext::get(), scope, type->nameAtom(), -1);
     return sym->dim.enumlist != nullptr;
 }

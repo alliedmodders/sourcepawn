@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h> /* for _MAX_PATH */
 #include <string.h>
+#include "compile-context.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -80,7 +81,8 @@ user_dec(void)
 }
 
 bool
-find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op)
+find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op,
+            int fnumber)
 {
     static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
                                        "",  "",  "<=", ">=", "<", ">", "==", "!="};
@@ -141,7 +143,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     assert(numparam == 1 || numparam == 2);
     auto symbolname = operator_symname(opername, tag1, tag2, numparam, tag2);
     bool swapparams = false;
-    sym = findglb(symbolname);
+    sym = findglb(CompileContext::get(), symbolname, fnumber);
     if (!sym) {
         /* check for commutative operators */
         if (tag1 == tag2 || oper == NULL || !commutative(oper))
@@ -152,7 +154,7 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
         assert(numparam == 2); /* commutative operator must be a binary operator */
         symbolname = operator_symname(opername, tag2, tag1, numparam, tag1);
         swapparams = true;
-        sym = findglb(symbolname);
+        sym = findglb(CompileContext::get(), symbolname, fnumber);
         if (!sym)
             return false;
     }
@@ -257,10 +259,11 @@ emit_userop(const UserOperation& user_op, value* lval)
 }
 
 int
-check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag)
+check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lval, int* resulttag,
+             int fnumber)
 {
     UserOperation user_op;
-    if (!find_userop(oper, tag1, tag2, numparam, lval, &user_op))
+    if (!find_userop(oper, tag1, tag2, numparam, lval, &user_op, fnumber))
         return FALSE;
 
     sideeffect = TRUE;         /* assume functions carry out a side-effect */

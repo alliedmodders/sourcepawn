@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <unordered_set>
 #include <vector>
 
 #include <amtl/am-hashmap.h>
@@ -37,6 +38,7 @@
 #include <smx/smx-v1.h>
 #include <sp_vm_api.h>
 #include <zlib/zlib.h>
+#include "compile-context.h"
 #include "errors.h"
 #include "lexer.h"
 #include "libpawnc.h"
@@ -49,7 +51,6 @@
 #include "sctracker.h"
 #include "scvars.h"
 #include "shared/byte-buffer.h"
-#include "sp_symhash.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -177,11 +178,12 @@ skipwhitespace(const char* str)
 class AsmReader final
 {
   public:
-    explicit AsmReader()
+    explicit AsmReader(std::unordered_set<symbol*>&& symbols)
     {
         data_ = gAsmBuffer.str();
         pos_ = data_.c_str();
         end_ = data_.c_str() + data_.size();
+        symbols_ = std::move(symbols);
     }
 
     // Find the next token that is immediately proceeded by a newline.
@@ -221,6 +223,7 @@ class AsmReader final
     const char* pos_;
     const char* end_;
     std::vector<symbol*> native_list_;
+    std::unordered_set<symbol*> symbols_;
 };
 
 const char*
@@ -285,14 +288,13 @@ AsmReader::extract_call_target()
     }
     pos_ += i;
 
-    auto atom = gAtoms.add(param_start, i);
+    char* end = const_cast<char*>(param_start);
+    auto value = strtoll(param_start, &end, 16);
+    assert(value);
+    assert(end == pos_);
 
-    symbol* sym = findglb(atom);
-    assert(sym);
-
-    if (!sym) {
-        return nullptr;
-    }
+    symbol* sym = reinterpret_cast<symbol*>(value);
+    assert(symbols_.find(sym) != symbols_.end());
 
     assert(sym->ident == iFUNCTN);
     assert(sym->vclass == sGLOBAL);
@@ -1436,7 +1438,7 @@ typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
 static void
-assemble_to_buffer(SmxByteBuffer* buffer)
+assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
 {
     SmxBuilder builder;
     RefPtr<SmxNativeSection> natives = new SmxNativeSection(".natives");
@@ -1449,11 +1451,16 @@ assemble_to_buffer(SmxByteBuffer* buffer)
     RttiBuilder rtti(names);
 
     std::vector<function_entry> functions;
+    std::unordered_set<symbol*> symbols;
 
     // Sort globals.
     std::vector<symbol*> global_symbols;
-    for (symbol* sym = glbtab.next; sym; sym = sym->next)
+    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
         global_symbols.push_back(sym);
+
+        // This is only to assert that we embedded pointers properly in the assembly buffer.
+        symbols.emplace(sym);
+    });
     qsort(global_symbols.data(), global_symbols.size(), sizeof(symbol*), sort_by_name);
 
     // Build the easy symbol tables.
@@ -1524,7 +1531,7 @@ assemble_to_buffer(SmxByteBuffer* buffer)
     assert(sLabelTable.size() == size_t(sc_labnum));
 
     // Generate buffers.
-    AsmReader reader;
+    AsmReader reader(std::move(symbols));
     std::vector<cell> code_buffer, data_buffer;
     generate_segment(reader, &code_buffer, &data_buffer);
 
@@ -1627,12 +1634,12 @@ splat_to_binary(const char* binfname, void* bytes, size_t size)
 }
 
 void
-assemble(const char* binfname)
+assemble(CompileContext& cc, const char* binfname)
 {
     init_opcode_lookup();
 
     SmxByteBuffer buffer;
-    assemble_to_buffer(&buffer);
+    assemble_to_buffer(cc, &buffer);
 
     // Buffer compression logic.
     sp_file_hdr_t* header = (sp_file_hdr_t*)buffer.bytes();

@@ -60,7 +60,6 @@
 #include "sctracker.h"
 #include "scvars.h"
 #include "semantics.h"
-#include "sp_symhash.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -2933,12 +2932,12 @@ needsymbol(token_ident_t* ident)
 }
 
 void
-declare_methodmap_symbol(methodmap_t* map, bool can_redef)
+declare_methodmap_symbol(CompileContext& cc, methodmap_t* map, bool can_redef)
 {
     if (!can_redef)
         return;
 
-    symbol* sym = findglb(map->name);
+    symbol* sym = findglb(CompileContext::get(), map->name, -1);
     if (sym && sym->ident != iMETHODMAP) {
         if (sym->ident == iCONSTEXPR) {
             // We should only hit this on the first pass. Assert really hard that
@@ -2954,7 +2953,7 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef)
                 for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
                     if (!cv->name)
                         continue;
-                    symbol* csym = findglb(cv->name);
+                    symbol* csym = findglb(CompileContext::get(), cv->name, -1);
                     if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
                         csym->enumfield)
                     {
@@ -2968,15 +2967,15 @@ declare_methodmap_symbol(methodmap_t* map, bool can_redef)
             }
         } else {
             report(11) << map->name;
-            sym = nullptr;
         }
+        return;
     }
 
     if (!sym) {
-        sym = new symbol(map->name->chars(), 0, iMETHODMAP, sGLOBAL, map->tag);
-        sym->defined = true;
-        add_symbol(&glbtab, sym);
+        sym = new symbol(map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
+        AddGlobal(cc, sym);
     }
+    sym->defined = true;
     sym->methodmap = map;
 }
 
@@ -2993,9 +2992,10 @@ declare_handle_intrinsics()
     methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, handle_atom);
     map->nullable = true;
 
-    declare_methodmap_symbol(map, true);
+    declare_methodmap_symbol(CompileContext::get(), map, true);
 
-    if (symbol* sym = findglb("CloseHandle")) {
+    auto atom = gAtoms.add("CloseHandle");
+    if (symbol* sym = findglb(CompileContext::get(), atom, -1)) {
         auto dtor = std::make_unique<methodmap_method_t>(map);
         dtor->target = sym;
         dtor->name = gAtoms.add("~Handle");

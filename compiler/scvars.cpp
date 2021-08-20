@@ -29,7 +29,6 @@
 #include "scvars.h"
 #include "emitter.h"
 #include "sc.h"
-#include "sp_symhash.h"
 
 SemaContext* gCurrentSemaContext = nullptr;
 
@@ -38,7 +37,6 @@ SemaContext* gCurrentSemaContext = nullptr;
  *  All global variables that are shared amongst the compiler files are
  *  declared here.
  */
-symbol glbtab;                             /* global symbol table */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
 constvalue tagname_tab = {nullptr, nullptr, 0, 0}; /* tagname table */
@@ -102,5 +100,3 @@ std::vector<void*> gInputFileStack;
 std::vector<char*> gInputFilenameStack;
 
 jmp_buf errbuf;
-
-HashTable* sp_Globals = NULL;

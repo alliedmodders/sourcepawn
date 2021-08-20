@@ -33,6 +33,7 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 #include "pool-allocator.h"
+#include "shared/string-atom.h"
 
 typedef int32_t cell;
 typedef uint32_t ucell;
@@ -115,8 +116,9 @@ class Type
     Type(const char* name, cell value);
 
     const char* name() const {
-        return name_.c_str();
+        return name_->chars();
     }
+    sp::Atom* nameAtom() const { return name_; }
     TypeKind kind() const {
         return kind_;
     }
@@ -227,7 +229,7 @@ class Type
     void resetPtr();
 
   private:
-    std::string name_;
+    sp::Atom* name_;
     cell value_;
     int fixed_;
     bool intrinsic_;

@@ -90,7 +90,6 @@
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
-#include "sp_symhash.h"
 #define VERSION_INT 0x0302
 
 using namespace ke;
@@ -155,6 +154,9 @@ pc_compile(int argc, char* argv[]) {
     int lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
     char* ptr;
 
+    CompileContext cc;
+    cc.set_globals(new SymbolScope(nullptr, sGLOBAL));
+
 #ifdef __EMSCRIPTEN__
     setup_emscripten_fs();
 #endif
@@ -169,10 +171,6 @@ pc_compile(int argc, char* argv[]) {
      * call to error(). */
     if ((jmpcode = setjmp(errbuf)) != 0)
         goto cleanup;
-
-    sp_Globals = NewHashTable();
-    if (!sp_Globals)
-        error(FATAL_ERROR_OOM);
 
     /* allocate memory for fixed tables */
     inpfname = (char*)malloc(PATH_MAX);
@@ -268,8 +266,8 @@ pc_compile(int argc, char* argv[]) {
     inpfmark = pc_getpossrc(inpf_org);
     do {
         /* reset "defined" flag of all functions and global variables */
-        reduce_referrers(&glbtab);
-        delete_symbols(&glbtab, FALSE);
+        reduce_referrers(cc);
+        delete_symbols(cc, false);
         delete_substtable();
         inst_datetime_defines();
         inst_binary_name(binfname);
@@ -323,9 +321,9 @@ pc_compile(int argc, char* argv[]) {
      */
 
     /* reset "defined" flag of all functions and global variables */
-    reduce_referrers(&glbtab);
-    deduce_liveness(&glbtab);
-    delete_symbols(&glbtab, FALSE);
+    reduce_referrers(cc);
+    deduce_liveness(cc);
+    delete_symbols(cc, false);
     gTypes.clearExtendedTypes();
     funcenums_free();
     methodmaps_free();
@@ -346,7 +344,7 @@ pc_compile(int argc, char* argv[]) {
     pc_resetsrc(inpf, inpfmark); /* reset file position */
     lexinit();                   /* clear internal flags of lex() */
     sc_status = statWRITE;       /* allow to write --this variable was reset by resetglobals() */
-    writeleader(&glbtab);
+    writeleader();
     insert_dbgfile(inpfname);   /* attach to debug information */
     insert_inputfile(inpfname); /* save for the error system */
     if (strlen(incfname) > 0) {
@@ -362,8 +360,8 @@ pc_compile(int argc, char* argv[]) {
     /* inpf is already closed when readline() attempts to pop of a file */
     writetrailer(); /* write remaining stuff */
 
-    entry = TestSymbols(&glbtab, FALSE); /* test for unused or undefined
-                                          * functions and variables */
+    entry = TestSymbols(cc.globals(), FALSE); /* test for unused or undefined
+                                               * functions and variables */
     if (!entry)
         error(13); /* no entry point (no public functions) */
 
@@ -379,7 +377,7 @@ cleanup:
 
     // Write the binary file.
     if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0)
-        assemble(binfname);
+        assemble(cc, binfname);
 
     if ((sc_asmfile || sc_listing) && !gAsmBuffer.empty()) {
         std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(outfname, "wb"), fclose);
@@ -422,8 +420,7 @@ cleanup:
     gInputFileStack.clear();
     gInputFilenameStack.clear();
 
-    delete_symbols(&glbtab, TRUE);
-    DestroyHashTable(sp_Globals);
+    delete_symbols(cc, true);
     delete_aliastable();
     delete_pathtable();
     delete_sourcefiletable();
@@ -549,7 +546,6 @@ initglobals(void)
     errfname[0] = '\0';      /* error file name */
     inpf = NULL;             /* file read from */
     inpfname = NULL;         /* pointer to name of the file currently read from */
-    glbtab.next = NULL;      /* clear global variables/constants table */
 
     pline[0] = '\0'; /* the line read from the input file */
     lptr = NULL;     /* points to the current position in "pline" */
@@ -738,7 +734,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
             int i = (int)(ptr - arg);
             SafeStrcpyN(str, PATH_MAX, arg, i);
             i = atoi(ptr + 1);
-            add_constant(nullptr, str, i, sGLOBAL, 0);
+            add_constant(CompileContext::get(), nullptr, gAtoms.add(str), i, sGLOBAL, 0, -1);
         } else {
             SafeStrcpy(str, sizeof(str) - 5, arg); /* -5 because default extension is ".sp" */
             set_extension(str, ".sp", FALSE);
@@ -862,21 +858,22 @@ setconstants(void)
     gTypes.init();
     assert(sc_rationaltag);
 
-    add_constant(nullptr, "true", 1, sGLOBAL, 1); /* boolean flags */
-    add_constant(nullptr, "false", 0, sGLOBAL, 1);
-    add_constant(nullptr, "EOS", 0, sGLOBAL, 0); /* End Of String, or '\0' */
-    add_constant(nullptr, "INVALID_FUNCTION", -1, sGLOBAL, pc_tag_nullfunc_t);
-    add_constant(nullptr, "cellmax", INT_MAX, sGLOBAL, 0);
-    add_constant(nullptr, "cellmin", INT_MIN, sGLOBAL, 0);
+    auto& cc = CompileContext::get();
+    add_constant(cc, nullptr, gAtoms.add("true"), 1, sGLOBAL, 1, -1); /* boolean flags */
+    add_constant(cc, nullptr, gAtoms.add("false"), 0, sGLOBAL, 1, -1);
+    add_constant(cc, nullptr, gAtoms.add("EOS"), 0, sGLOBAL, 0, -1); /* End Of String, or '\0' */
+    add_constant(cc, nullptr, gAtoms.add("INVALID_FUNCTION"), -1, sGLOBAL, pc_tag_nullfunc_t, -1);
+    add_constant(cc, nullptr, gAtoms.add("cellmax"), INT_MAX, sGLOBAL, 0, -1);
+    add_constant(cc, nullptr, gAtoms.add("cellmin"), INT_MIN, sGLOBAL, 0, -1);
 
-    add_constant(nullptr, "__Pawn", VERSION_INT, sGLOBAL, 0);
+    add_constant(cc, nullptr, gAtoms.add("__Pawn"), VERSION_INT, sGLOBAL, 0, -1);
 
     debug = 0;
     if ((sc_debug & (sCHKBOUNDS | sSYMBOLIC)) == (sCHKBOUNDS | sSYMBOLIC))
         debug = 2;
     else if ((sc_debug & sCHKBOUNDS) == sCHKBOUNDS)
         debug = 1;
-    add_constant(nullptr, "debug", debug, sGLOBAL, 0);
+    add_constant(cc, nullptr, gAtoms.add("debug"), debug, sGLOBAL, 0, -1);
 }
 
 void
