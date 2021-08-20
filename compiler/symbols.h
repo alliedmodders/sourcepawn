@@ -88,8 +88,6 @@ sp::Atom* operator_symname(const char* opername, int tag1, int tag2, int numtags
                            int resulttag);
 symbol* fetchfunc(CompileContext& cc, sp::Atom* name, int fnumber);
 std::string funcdisplayname(const char* funcname);
-constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
-void delete_consttable(constvalue* table);
 symbol* add_constant(CompileContext& cc, SymbolScope* scope, sp::Atom* name, cell val,
                      int vclass, int tag, int fnumber);
 void reduce_referrers(CompileContext& cc);

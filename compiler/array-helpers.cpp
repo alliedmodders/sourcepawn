@@ -651,19 +651,19 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
     }
 
     symbol* esroot = es_->asEnumStruct();
-    constvalue* field_iter = esroot->dim.enumlist->next;
+    auto field_list = esroot->dim.enumlist;
+    auto field_iter = field_list->begin();
 
     for (const auto& expr : array->exprs()) {
-        if (!field_iter) {
+        if (field_iter == field_list->end()) {
             error(expr->pos(), 91);
             return false;
         }
 
-        symbol* field = FindEnumStructField(es_, field_iter->name);
-        assert(field);
+        symbol* field = *field_iter;
 
         // Advance early so we can use |continue|.
-        field_iter = field_iter->next;
+        field_iter++;
 
         typeinfo_t type = TypeInfoFromSymbol(field);
         if (type.ident == iARRAY) {
@@ -911,10 +911,12 @@ ArrayEmitter::Emit(int rank, Expr* init)
     if (!init) {
         assert(type_.dim[rank]);
     } else if (ArrayExpr* array = init->AsArrayExpr()) {
-        constvalue* field_iter = nullptr;
+        PoolList<symbol*>* field_list = nullptr;
+        PoolList<symbol*>::iterator field_iter;
         if (es_) {
             symbol* esroot = es_->asEnumStruct();
-            field_iter = esroot->dim.enumlist->next;
+            field_list = esroot->dim.enumlist;
+            field_iter = field_list->begin();
         }
 
         for (const auto& item : array->exprs()) {
@@ -925,7 +927,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
                 size_t emitted = AddString(expr);
 
-                symbol* field = FindEnumStructField(es_, field_iter->name);
+                symbol* field = *field_iter;
                 assert(field);
 
                 EmitPadding(field->dim.array.length, field->x.tags.index, emitted, false, {}, {});
@@ -933,7 +935,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
                 assert(es_);
-                symbol* field = FindEnumStructField(es_, field_iter->name);
+                symbol* field = *field_iter;
                 AddInlineArray(field, expr);
             } else {
                 assert(item->val().ident == iCONSTEXPR);
@@ -942,8 +944,10 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 prev1 = ke::Some(item->val().constval);
             }
 
-            if (field_iter)
-                field_iter = field_iter->next;
+            if (field_list) {
+                assert(field_iter != field_list->end());
+                field_iter++;
+            }
         }
         ellipses = array->ellipses();
     } else if (StringExpr* expr = init->AsStringExpr()) {

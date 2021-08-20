@@ -2950,19 +2950,16 @@ declare_methodmap_symbol(CompileContext& cc, methodmap_t* map, bool can_redef)
 
             // Kill previous enumstruct properties, if any.
             if (sym->enumroot) {
-                for (constvalue* cv = sym->dim.enumlist; cv; cv = cv->next) {
-                    if (!cv->name)
-                        continue;
-                    symbol* csym = findglb(CompileContext::get(), cv->name, -1);
-                    if (csym && csym->ident == iCONSTEXPR && csym->parent() == sym &&
-                        csym->enumfield)
-                    {
-                        csym->enumfield = false;
-                        csym->set_parent(nullptr);
-                    }
+                for (auto iter = sym->dim.enumlist->begin(); iter != sym->dim.enumlist->end();
+                     iter++)
+                {
+                    auto csym = *iter;
+                    assert(csym->ident == iCONSTEXPR);
+                    assert(csym->parent() == sym);
+                    assert(csym->enumfield);
+                    csym->enumfield = false;
+                    csym->set_parent(nullptr);
                 }
-                delete_consttable(sym->dim.enumlist);
-                free(sym->dim.enumlist);
                 sym->dim.enumlist = NULL;
             }
         } else {

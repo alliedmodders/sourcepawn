@@ -39,7 +39,6 @@ SemaContext* gCurrentSemaContext = nullptr;
  */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
-constvalue tagname_tab = {nullptr, nullptr, 0, 0}; /* tagname table */
 symbol* curfunc;                           /* pointer to current function */
 char* inpfname;                            /* pointer to name of the file currently read from */
 char outfname[PATH_MAX];                   /* intermediate (assembler) file name */

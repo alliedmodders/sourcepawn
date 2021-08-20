@@ -55,7 +55,6 @@ KE_DEFINE_ENUM_OPERATORS(TypeKind)
 struct pstruct_t;
 struct funcenum_t;
 struct methodmap_t;
-struct constvalue;
 struct symbol;
 class Expr;
 
