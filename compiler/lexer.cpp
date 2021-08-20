@@ -307,7 +307,6 @@ readline(unsigned char* line)
 {
     int num, cont;
     unsigned char* ptr;
-    symbol* sym;
 
     if (lptr == term_expr)
         return;
@@ -384,9 +383,6 @@ readline(unsigned char* line)
             line += strlen((char*)line);
         }
         fline += 1;
-        sym = findconst("__LINE__");
-        assert(sym != NULL);
-        sym->setAddr(fline);
     } while (num >= 0 && cont);
 }
 
@@ -1026,8 +1022,7 @@ command(bool allow_synthesized_tokens)
                             return CMD_INJECTED;
                         }
 
-                        int comma;
-                        symbol* sym;
+                        bool comma;
                         do {
                             /* get the name */
                             while (*lptr <= ' ' && *lptr != '\0')
@@ -1036,20 +1031,9 @@ command(bool allow_synthesized_tokens)
                             while (alphanum(*lptr))
                                 lptr++;
 
-                            auto atom = gAtoms.add((const char*)name_start, lptr - name_start);
+                            auto ident = std::string((const char*)name_start, lptr - name_start);
+                            report(17) << ident; /* undefined symbol */
 
-                            /* get the symbol */
-                            sym = findloc(atom);
-                            if (sym == NULL)
-                                sym = findglb(atom);
-                            if (sym != NULL) {
-                                sym->usage |= uREAD;
-                                if (sym->ident == iVARIABLE || sym->ident == iREFERENCE ||
-                                    sym->ident == iARRAY || sym->ident == iREFARRAY)
-                                    sym->usage |= uWRITTEN;
-                            } else {
-                                report(17) << atom; /* undefined symbol */
-                            }
                             /* see if a comma follows the name */
                             while (*lptr <= ' ' && *lptr != '\0')
                                 lptr++;
@@ -1166,15 +1150,7 @@ command(bool allow_synthesized_tokens)
         case tpUNDEF:
             if (!SKIPPING) {
                 if (lex(&val, &str) == tSYMBOL) {
-                    if (delete_subst(str, strlen(str))) {
-                        /* also undefine normal constants */
-                        symbol* sym = findconst(str);
-                        if (sym != NULL && !(sym->enumroot && sym->enumfield)) {
-                            delete_symbol(&glbtab, sym);
-                        }
-                    }
-                    if (!ret)
-                        report(17) << str; /* undefined symbol */
+                    delete_subst(str, strlen(str));
                 } else {
                     error(20, str); /* invalid symbol name */
                 }
@@ -1469,6 +1445,7 @@ private:
     std::unordered_set<std::string> blocked_macros;
     unsigned char* line_;
     int buffersize_;
+    std::string line_number_buffer_;
 };
 
 unsigned char*
@@ -1540,8 +1517,18 @@ MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* del
 bool
 MacroProcessor::enter_macro(const char* start, size_t prefixlen, macro_t* out)
 {
-    if (!find_subst(start, prefixlen, out))
+    if (!find_subst(start, prefixlen, out)) {
+        static constexpr size_t kLineMacroLen = 8;
+        if (prefixlen != kLineMacroLen)
+            return false;
+        if (strncmp(start, "__LINE__", kLineMacroLen) == 0) {
+            line_number_buffer_ = ke::StringPrintf("%d", fline);
+            out->first = "__LINE__";
+            out->second = line_number_buffer_.c_str();
+            return true;
+        }
         return false;
+    }
     return blocked_macros.count(out->first) == 0;
 }
 
