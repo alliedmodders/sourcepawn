@@ -19,5 +19,7 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include "source-file.h"
+
 cell get_utf8_char(const unsigned char* string, const unsigned char** endptr);
-void skip_utf8_bom(void* fp);
+void skip_utf8_bom(SourceFile* file);

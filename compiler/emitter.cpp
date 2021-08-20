@@ -35,7 +35,6 @@
 #include "errors.h"
 #include "lexer.h"
 #include "lexer-inl.h"
-#include "libpawnc.h"
 #include "output-buffer.h"
 #include "sc.h"
 #include "sclist.h"
@@ -351,7 +350,7 @@ setline(int chkbounds)
 }
 
 void
-setfiledirect(char* name)
+setfiledirect(const char* name)
 {
     if (sc_status == statFIRST && sc_listing) {
         assert(name != NULL);

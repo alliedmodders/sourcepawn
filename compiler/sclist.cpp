@@ -267,7 +267,7 @@ delete_sourcefiletable(void)
 static stringlist inputfiles;
 
 stringlist*
-insert_inputfile(char* string)
+insert_inputfile(const char* string)
 {
     return insert_string(&inputfiles, string);
 }

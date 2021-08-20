@@ -246,6 +246,7 @@ static const char* fatalmsg[] = {
     /*312*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
     /*313*/
     "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
+    /*314*/ "only one source file can be specified at a time\n",
 };
 
 static const char* warnmsg[] = {

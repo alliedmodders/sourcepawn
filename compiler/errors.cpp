@@ -40,7 +40,6 @@
 
 #include "errors.h"
 #include "lexer.h"
-#include "libpawnc.h"
 #include "sc.h"
 #include "sclist.h"
 #include "scvars.h"
@@ -218,12 +217,14 @@ MessageBuilder::~MessageBuilder()
         report.filename = get_inputfile(report.fileno);
     } else {
         report.fileno = 0;
-        report.filename = inpfname;
+        report.filename = inpf->name();
     }
     report.type = DeduceErrorType(number_);
 
     std::ostringstream out;
-    out << report.filename << "(" << report.lineno << ") : " << GetErrorTypePrefix(report.type)
+    if (report.filename)
+        out << report.filename << "(" << report.lineno << ") : ";
+    out << GetErrorTypePrefix(report.type)
         << " " << ke::StringPrintf("%03d", report.number) << ": ";
 
     auto iter = args_.begin();
@@ -299,7 +300,7 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
         report.filename = get_inputfile(report.fileno);
     } else {
         report.fileno = 0;
-        report.filename = inpfname;
+        report.filename = inpf->name();
     }
     report.type = DeduceErrorType(number);
 

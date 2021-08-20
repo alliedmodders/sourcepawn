@@ -1,6 +1,6 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) ITB CompuPhase, 1997-2006
+//  Copyright (c) AlliedModders LLC 2021
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -19,11 +19,28 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-void* pc_opensrc(const char* filename); /* reading only */
-void* pc_createsrc(const char* filename);
-void pc_closesrc(void* handle); /* never delete */
-char* pc_readsrc(void* handle, unsigned char* target, int maxchars);
-int pc_writesrc(void* handle, unsigned char* source);
-void* pc_getpossrc(void* handle);
-void pc_resetsrc(void* handle, void* position); /* reset to a position marked earlier */
-int pc_eofsrc(void* handle);
+#include <stdio.h>
+
+#include <memory>
+#include <string>
+
+class SourceFile
+{
+  public:
+    SourceFile();
+
+    bool Open(const std::string& file_name);
+
+    bool Read(unsigned char* target, int maxchars);
+    int64_t Pos();
+    void Reset(int64_t pos);
+    int Eof();
+
+    const char* name() const { return name_.c_str(); }
+
+  private:
+    std::unique_ptr<FILE, decltype(&::fclose)> fp_;
+    std::string name_;
+    std::string data_;
+    size_t pos_;
+};

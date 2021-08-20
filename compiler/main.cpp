@@ -31,8 +31,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <string>
 
+#include <sstream>
+#include <string>
 #include <utility>
 
 #include <amtl/am-platform.h>
@@ -84,7 +85,6 @@
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
-#include "libpawnc.h"
 #include "sc.h"
 #include "sci18n.h"
 #include "sclist.h"
@@ -150,7 +150,7 @@ pc_compile(int argc, char* argv[]) {
     int entry, jmpcode;
     int retcode;
     char incfname[PATH_MAX];
-    void* inpfmark;
+    int64_t inpfmark;
     int lcl_needsemicolon, lcl_tabsize, lcl_require_newdecls;
     char* ptr;
 
@@ -171,11 +171,6 @@ pc_compile(int argc, char* argv[]) {
      * call to error(). */
     if ((jmpcode = setjmp(errbuf)) != 0)
         goto cleanup;
-
-    /* allocate memory for fixed tables */
-    inpfname = (char*)malloc(PATH_MAX);
-    if (inpfname == NULL)
-        error(FATAL_ERROR_OOM); /* insufficient memory */
 
     setopt(argc, argv, outfname, errfname, incfname);
     strcpy(binfname, outfname);
@@ -204,52 +199,12 @@ pc_compile(int argc, char* argv[]) {
      */
     assert(get_sourcefile(0) != NULL); /* there must be at least one source file */
     if (get_sourcefile(1) != NULL) {
-        /* there are at least two or more source files */
-        char *tname, *sname;
-        void *ftmp, *fsrc;
-        int fidx;
-#if defined __WIN32__ || defined _WIN32
-        tname = _tempnam(NULL, "pawn");
-#elif defined(MACOS) && !defined(__MACH__)
-        /* tempnam is not supported for the Macintosh CFM build. */
-        error(FATAL_ERROR_INVALID_INSN, get_sourcefile(1));
-        tname = NULL;
-        sname = NULL;
-#else
-        char* buffer = strdup(P_tmpdir "/pawn.XXXXXX");
-        close(mkstemp(buffer));
-        tname = buffer;
-#endif
-        ftmp = pc_createsrc(tname);
-        for (fidx = 0; (sname = get_sourcefile(fidx)) != NULL; fidx++) {
-            unsigned char tstring[128];
-            fsrc = pc_opensrc(sname);
-            if (fsrc == NULL) {
-                pc_closesrc(ftmp);
-                remove(tname);
-                strcpy(inpfname, sname); /* avoid invalid filename */
-                error(FATAL_ERROR_READ, sname);
-            }
-            pc_writesrc(ftmp, (unsigned char*)"#file \"");
-            pc_writesrc(ftmp, (unsigned char*)sname);
-            pc_writesrc(ftmp, (unsigned char*)"\"\n");
-            skip_utf8_bom(fsrc);
-            while (!pc_eofsrc(fsrc) && pc_readsrc(fsrc, tstring, sizeof tstring)) {
-                pc_writesrc(ftmp, tstring);
-            }
-            pc_closesrc(fsrc);
-        }
-        pc_closesrc(ftmp);
-        strcpy(inpfname, tname);
-        strcpy(g_tmpfile, tname);
-        free(tname);
-    } else {
-        strcpy(inpfname, get_sourcefile(0));
+        report(314);
     }
-    inpf_org = pc_opensrc(inpfname);
-    if (inpf_org == NULL)
-        error(FATAL_ERROR_READ, inpfname);
-    skip_utf8_bom(inpf_org);
+    inpf_org = std::make_shared<SourceFile>();
+    if (!inpf_org->Open(get_sourcefile(0)))
+        report(FATAL_ERROR_READ) << get_sourcefile(0);
+    skip_utf8_bom(inpf_org.get());
     freading = TRUE;
 
     setconstants(); /* set predefined constants and tagnames */
@@ -259,11 +214,11 @@ pc_compile(int argc, char* argv[]) {
         gAsmBuffer << "#pragma ctrlchar 0x" << ke::StringPrintf("%02x", sc_ctrlchar) << "\n";
         gAsmBuffer << "#pragma semicolon " << (sc_needsemicolon ? "true" : "false") << "\n";
         gAsmBuffer << "#pragma tabsize " << sc_tabsize << "\n";
-        setfiledirect(inpfname);
+        setfiledirect(inpf->name());
     }
     /* do the first pass through the file (or possibly two or more "first passes") */
     sc_parsenum = 0;
-    inpfmark = pc_getpossrc(inpf_org);
+    inpfmark = inpf_org->Pos();
     do {
         /* reset "defined" flag of all functions and global variables */
         reduce_referrers(cc);
@@ -285,10 +240,10 @@ pc_compile(int argc, char* argv[]) {
         /* reset the source file */
         inpf = inpf_org;
         freading = TRUE;
-        pc_resetsrc(inpf, inpfmark); /* reset file position */
+        inpf->Reset(inpfmark);
         sc_reparse = FALSE;          /* assume no extra passes */
         sc_status = statFIRST;       /* resetglobals() resets it to IDLE */
-        insert_inputfile(inpfname); /* save for the error system */
+        insert_inputfile(inpf->name()); /* save for the error system */
 
         /* look for default prefix (include) file in include paths,
          * but only error if it was manually set on the command line
@@ -341,12 +296,12 @@ pc_compile(int argc, char* argv[]) {
     /* reset the source file */
     inpf = inpf_org;
     freading = TRUE;
-    pc_resetsrc(inpf, inpfmark); /* reset file position */
+    inpf->Reset(inpfmark);       /* reset file position */
     lexinit();                   /* clear internal flags of lex() */
     sc_status = statWRITE;       /* allow to write --this variable was reset by resetglobals() */
     writeleader();
-    insert_dbgfile(inpfname);   /* attach to debug information */
-    insert_inputfile(inpfname); /* save for the error system */
+    insert_dbgfile(inpf->name());   /* attach to debug information */
+    insert_inputfile(inpf->name()); /* save for the error system */
     if (strlen(incfname) > 0) {
         plungefile(incfname, FALSE, TRUE); /* parse "default.inc" (again) */
     }
@@ -369,11 +324,8 @@ cleanup:
     sc_shutting_down = true;
     dump_error_report(true);
 
-    /* main source file is not closed, do it now */
-    if (inpf != NULL) {
-        pc_closesrc(inpf);
-        inpf = nullptr;
-    }
+    inpf = nullptr;
+    inpf_org = nullptr;
 
     // Write the binary file.
     if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0)
@@ -411,14 +363,10 @@ cleanup:
     if (g_tmpfile[0] != '\0') {
         remove(g_tmpfile);
     }
-    if (inpfname != NULL) {
-        free(inpfname);
-    }
 
     gCurrentFileStack.clear();
     gCurrentLineStack.clear();
     gInputFileStack.clear();
-    gInputFilenameStack.clear();
 
     delete_symbols(cc, true);
     delete_aliastable();
@@ -544,12 +492,9 @@ initglobals(void)
 
     outfname[0] = '\0';      /* output file name */
     errfname[0] = '\0';      /* error file name */
-    inpf = NULL;             /* file read from */
-    inpfname = NULL;         /* pointer to name of the file currently read from */
 
     pline[0] = '\0'; /* the line read from the input file */
     lptr = NULL;     /* points to the current position in "pline" */
-    inpf_org = NULL; /* main source file */
 }
 
 static char*
