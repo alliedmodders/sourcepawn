@@ -31,9 +31,6 @@
 class SemaContext;
 extern SemaContext* gCurrentSemaContext;
 
-typedef struct HashTable HashTable;
-extern struct HashTable* sp_Globals;
-extern symbol glbtab;             /* global symbol table */
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern symbol* curfunc;           /* pointer to current function */

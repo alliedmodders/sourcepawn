@@ -22,6 +22,7 @@
 
 #include <vector>
 
+#include "compile-context.h"
 #include "sc.h"
 #include "parse-node.h"
 
@@ -29,14 +30,16 @@ class SemaContext
 {
   public:
     SemaContext()
-      : parent_(gCurrentSemaContext),
+      : cc_(CompileContext::get()),
+        parent_(gCurrentSemaContext),
         func_(nullptr),
         scope_(nullptr)
     {
         gCurrentSemaContext = this;
     }
     SemaContext(symbol* func)
-      : parent_(gCurrentSemaContext),
+      : cc_(CompileContext::get()),
+        parent_(gCurrentSemaContext),
         func_(func),
         scope_(nullptr)
     {
@@ -46,6 +49,8 @@ class SemaContext
     ~SemaContext() {
         gCurrentSemaContext = parent_;
     }
+
+    CompileContext& cc() { return cc_; }
 
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
@@ -88,6 +93,7 @@ class SemaContext
     void set_scope(SymbolScope* scope) { scope_ = scope; }
 
   private:
+    CompileContext& cc_;
     SemaContext* parent_ = nullptr;
     symbol* func_ = nullptr;
     SymbolScope* scope_ = nullptr;
@@ -129,7 +135,6 @@ class AutoCollectSemaFlow final
 };
 
 void ReportFunctionReturnError(symbol* sym);
-bool TestSymbols(symbol* root, int testconst);
 bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);

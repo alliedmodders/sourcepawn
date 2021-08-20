@@ -10,6 +10,7 @@
 
 #include <amtl/am-raii.h>
 #include <amtl/am-vector.h>
+#include "compile-context.h"
 #include "emitter.h"
 #include "lexer.h"
 #include "sc.h"
@@ -458,7 +459,7 @@ deduce_layout_spec_by_tag(int tag)
         return Layout_PawnStruct;
 
     if (Type* type = gTypes.find(tag)) {
-      if (findglb(type->name()))
+      if (findglb(CompileContext::get(), type->nameAtom(), -1))
           return Layout_Enum;
     }
 

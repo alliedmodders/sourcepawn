@@ -1,5 +1,6 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
+//  Copyright (c) AlliedModders LLC 2021
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
 //  This software is provided "as-is", without any express or implied warranty.
@@ -19,4 +20,22 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-void assemble(CompileContext& cc, const char* outname);
+class SymbolScope;
+
+// The thread-safe successor to scvars.
+class CompileContext final
+{
+  public:
+    CompileContext();
+    ~CompileContext();
+
+    static CompileContext* sInstance;
+
+    static inline CompileContext& get() { return *sInstance; }
+
+    SymbolScope* globals() const { return globals_; }
+    void set_globals(SymbolScope* globals) { globals_ = globals; }
+
+  private:
+    SymbolScope* globals_;
+};

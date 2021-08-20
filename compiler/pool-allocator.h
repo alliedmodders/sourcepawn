@@ -30,7 +30,10 @@
 
 #include <amtl/am-bits.h>
 #include <amtl/am-fixedarray.h>
+#include <amtl/am-hashtable.h>
 #include <amtl/am-vector.h>
+
+#include "shared/string-pool.h"
 
 // Allocates memory in chunks that are not freed until the entire allocator
 // is freed. This is intended for use with large, temporary data structures.
@@ -230,5 +233,16 @@ template <typename Key,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 using PoolMap = std::unordered_map<Key, T, Hash, KeyEqual, StlPoolAllocator<std::pair<const Key, T>>>;
+
+struct KeywordTablePolicy {
+    static bool matches(const sp::CharsAndLength& a, const sp::CharsAndLength& b) {
+        if (a.length() != b.length())
+            return false;
+        return strncmp(a.str(), b.str(), a.length()) == 0;
+    }
+    static uint32_t hash(const sp::CharsAndLength& key) {
+        return ke::HashCharSequence(key.str(), key.length());
+    }
+};
 
 #endif // _include_jitcraft_pool_allocator_h_

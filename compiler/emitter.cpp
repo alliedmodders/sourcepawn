@@ -30,6 +30,7 @@
 #include <amtl/am-raii.h>
 
 #include "array-helpers.h"
+#include "compile-context.h"
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
@@ -51,6 +52,13 @@ static int fcurseg; /* the file number (fcurrent) for the active segment */
 
 static inline void
 stgwrite(const char* st)
+{
+    if (sc_status == statWRITE)
+        gAsmBuffer << st;
+}
+
+static inline void
+stgwrite(const std::string& st)
 {
     if (sc_status == statWRITE)
         gAsmBuffer << st;
@@ -225,7 +233,7 @@ DataQueue::Emit()
  * a subroutine can savely return to 0, and then encounter a HALT.
  */
 void
-writeleader(symbol* root)
+writeleader()
 {
     assert(code_idx == 0);
 
@@ -934,13 +942,17 @@ ffcall(symbol* sym, int numargs)
         /* Look for an alias */
         symbol* target = sym;
         if (sp::Atom* aliasname = lookup_alias(sym->name())) {
-            symbol* asym = findglb(aliasname);
+            symbol* asym = findglb(CompileContext::get(), aliasname, -1);
             if (asym && asym->ident == iFUNCTN && sym->native)
                 target = asym;
         }
-        stgwrite(target->name());
+        stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(target)));
         stgwrite(" ");
         outval(numargs, FALSE);
+        if (sc_asmfile) {
+            stgwrite("\t; ");
+            stgwrite(target->name());
+        }
         stgwrite("\n");
         code_idx += opcodes(1) + opargs(2);
     } else {
@@ -948,12 +960,12 @@ ffcall(symbol* sym, int numargs)
         pushval(numargs);
         /* normal function */
         stgwrite("\tcall ");
-        stgwrite(symname.c_str());
+        stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(sym)));
         if (sc_asmfile &&
             ((!isalpha(symname[0]) && symname[0] != '_' && symname[0] != sc_ctrlchar)))
         {
             stgwrite("\t; ");
-            stgwrite(symname.c_str());
+            stgwrite(symname);
         }
         stgwrite("\n");
         code_idx += opcodes(1) + opargs(1);
@@ -1605,7 +1617,11 @@ load_glbfn(symbol* sym)
     assert(sym->ident == iFUNCTN);
     assert(!sym->native);
     stgwrite("\tldgfn.pri ");
-    stgwrite(sym->name());
+    stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(sym)));
+    if (sc_asmfile) {
+        stgwrite("\t; ");
+        stgwrite(sym->name());
+    }
     stgwrite("\n");
     code_idx += opcodes(1) + opargs(1);
 

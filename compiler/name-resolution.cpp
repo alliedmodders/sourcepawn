@@ -93,7 +93,7 @@ EnumDecl::Bind(SemaContext& sc)
     constvalue* enumroot = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
-            if ((enumsym = findglb(name_->chars())) != NULL) {
+            if ((enumsym = findglb(sc.cc(), name_, pos_.file)) != NULL) {
                 // If we were previously defined as a methodmap, don't overwrite the
                 // symbol. Otherwise, flow into add_constant where we will error.
                 if (enumsym->ident != iMETHODMAP)
@@ -103,7 +103,7 @@ EnumDecl::Bind(SemaContext& sc)
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = add_constant(sc.scope(), name_->chars(), 0, vclass_, tag);
+            enumsym = add_constant(sc.cc(), sc.scope(), name_, 0, vclass_, tag, pos_.file);
             if (enumsym)
                 enumsym->enumroot = true;
             // start a new list for the element names
@@ -119,7 +119,7 @@ EnumDecl::Bind(SemaContext& sc)
 
     cell value = 0;
     for (const auto& field : fields_ ) {
-        if (findconst(sc.scope(), field.name->chars()))
+        if (findconst(sc.cc(), sc.scope(), field.name, pos_.file))
             report(field.pos, 50) << field.name;
 
         if (field.value && field.value->Bind(sc) && field.value->Analyze(sc)) {
@@ -131,7 +131,7 @@ EnumDecl::Bind(SemaContext& sc)
             }
         }
 
-        symbol* sym = add_constant(sc.scope(), field.name->chars(), value, vclass_, tag);
+        symbol* sym = add_constant(sc.cc(), sc.scope(), field.name, value, vclass_, tag, pos_.file);
         if (!sym)
             continue;
 
@@ -259,7 +259,7 @@ ConstDecl::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = add_constant(sc.scope(), name_->chars(), value_, vclass_, type_.tag);
+    sym_ = add_constant(sc.cc(), sc.scope(), name_, value_, vclass_, type_.tag, pos_.file);
     return true;
 }
 
@@ -272,7 +272,7 @@ IsShadowedName(SemaContext& sc, sp::Atom* name)
             return true;
     }
     // ignore implicitly prototyped names.
-    if (symbol* sym = findglb(name))
+    if (symbol* sym = findglb(sc.cc(), name, -1))
         return !(sym->ident == iFUNCTN && !sym->defined);
     return false;
 }
@@ -294,14 +294,18 @@ VarDecl::Bind(SemaContext& sc)
     // :TODO: introduce find-by-atom to improve compiler speed
     bool should_define = false;
     if (vclass_ == sGLOBAL) {
-        sym_ = findconst(sc.scope(), name_->chars());
+        sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
         if (!sym_)
-            sym_ = findglb(name_);
+            sym_ = findglb(sc.cc(), name_, pos_.file);
 
-        // This will go away when we remove the two-pass system.
         if (sym_ && sym_->defined) {
-            report(pos_, 21) << name_;
-            return false;
+            // Can't redefine a global or in-scope static variable.
+            if ((!is_static_ && !sym_->is_static) ||
+                (sym_->is_static && sym_->fnumber == pos_.file))
+            {
+                report(pos_, 21) << name_;
+                return false;
+            }
         }
 
         if (type_.ident == iREFARRAY) {
@@ -327,7 +331,7 @@ VarDecl::Bind(SemaContext& sc)
         // of a global variable or to that of a local variable at a lower
         // level might indicate a bug.
         if (vclass_ == sARGUMENT) {
-            auto sym = findglb(name_);
+            auto sym = findglb(sc.cc(), name_, pos_.file);
             if (sym && sym->ident != iFUNCTN)
                 report(pos_, 219) << name_;
         } else {
@@ -341,8 +345,8 @@ VarDecl::Bind(SemaContext& sc)
 
     if (gTypes.find(type_.tag)->kind() == TypeKind::Struct) {
         if (!sym_) {
-            sym_ = new symbol(name_->chars(), 0, iVARIABLE, sGLOBAL, type_.tag);
-            add_symbol(&glbtab, sym_);
+            sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag);
+            AddGlobal(sc.cc(), sym_);
         } else {
             assert(sym_->is_struct);
         }
@@ -356,11 +360,11 @@ VarDecl::Bind(SemaContext& sc)
                 ident = iREFARRAY;
 
             auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-            sym_ = NewVariable(name_->chars(), 0, ident, vclass_, type_.tag, dim,
+            sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag, dim,
                                type_.numdim(), type_.enum_struct_tag());
             sym_->defined = true;
             if (vclass_ == sGLOBAL)
-                add_symbol(&glbtab, sym_);
+                AddGlobal(sc.cc(), sym_);
             else
                 sc.scope()->Add(sym_);
 
@@ -415,11 +419,11 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         }
     }
 
-    sym_ = findconst(sc.scope(), name_->chars());
+    sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
     if (!sym_)
         sym_ = findloc(sc.scope(), name_);
     if (!sym_)
-        sym_ = findglb(name_);
+        sym_ = findglb(sc.cc(), name_, pos_.file);
 
     if (!sym_) {
         // We assume this is a function that hasn't been seen yet. We should
@@ -430,7 +434,7 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
             return false;
         }
 
-        sym_ = fetchfunc(name_->chars());
+        sym_ = fetchfunc(sc.cc(), name_, pos_.file);
     }
 
     /* if the function is only in the table because it was inserted as a
@@ -520,7 +524,7 @@ IsDefinedExpr::Bind(SemaContext& sc)
 
     symbol* sym = findloc(sc.scope(), name_);
     if (!sym)
-        sym = findglb(name_);
+        sym = findglb(sc.cc(), name_, pos_.file);
     if (sym && sym->ident == iFUNCTN && !sym->defined)
         sym = nullptr;
     value_ = sym ? 1 : 0;
@@ -536,7 +540,7 @@ SizeofExpr::Bind(SemaContext& sc)
 
     sym_ = findloc(sc.scope(), ident_);
     if (!sym_)
-        sym_ = findglb(ident_);
+        sym_ = findglb(sc.cc(), ident_, pos_.file);
     if (!sym_) {
         report(pos_, 17) << ident_;
         return false;
@@ -669,7 +673,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
         if (decl_.opertok)
             name_ = NameForOperator();
 
-        sym_ = fetchfunc(name_->chars());
+        sym_ = fetchfunc(outer_sc.cc(), name_, pos_.file);
     }
 
     SemaContext sc(sym_);
@@ -824,7 +828,7 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
     for (const auto& name : names_) {
         symbol* sym = findloc(sc.scope(), name);
         if (!sym)
-            sym = findglb(name);
+            sym = findglb(sc.cc(), name, pos_.file);
         if (!sym) {
             report(pos_, 17) << name;
             continue;
@@ -840,10 +844,11 @@ EnumStructDecl::Bind(SemaContext& sc)
     AutoCountErrors errors;
     constvalue* values = (constvalue*)calloc(1, sizeof(constvalue));
 
-    if (findglb(name_) || findconst(sc.scope(), name_->chars()))
+    if (findglb(sc.cc(), name_, pos_.file) || findconst(sc.cc(), sc.scope(), name_, pos_.file))
         report(pos_, 21) << name_;
 
-    symbol* root = add_constant(sc.scope(), name_->chars(), 0, sGLOBAL, 0);
+    AutoErrorPos error_pos(pos_);
+    symbol* root = add_constant(sc.cc(), sc.scope(), name_, 0, sGLOBAL, 0, pos_.file);
     root->tag = gTypes.defineEnumStruct(name_->chars(), root)->tagid();
     root->enumroot = true;
     root->ident = iENUMSTRUCT;
@@ -878,12 +883,13 @@ EnumStructDecl::Bind(SemaContext& sc)
         if (!field_name)
             continue;
 
-        if (findconst(sc.scope(), field_name->chars())) {
+        if (findconst(sc.cc(), sc.scope(), field_name, pos_.file)) {
             report(field.pos, 103) << field.decl.name << "enum struct";
             continue;
         }
 
-        symbol* child = add_constant(sc.scope(), field_name->chars(), position, sGLOBAL, root->tag);
+        symbol* child = add_constant(sc.cc(), sc.scope(), field_name, position, sGLOBAL,
+                                     root->tag, pos_.file);
         if (!child)
             continue;
         child->x.tags.index = field.decl.type.semantic_tag();
@@ -938,7 +944,7 @@ MethodmapDecl::Bind(SemaContext& sc)
     AutoCountErrors errors;
 
     AutoErrorPos error_pos(pos_);
-    declare_methodmap_symbol(map_, true);
+    declare_methodmap_symbol(sc.cc(), map_, true);
 
     std::unordered_set<sp::Atom*> seen;
     for (const auto& prop : properties_) {

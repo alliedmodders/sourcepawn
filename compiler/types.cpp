@@ -37,7 +37,7 @@ using namespace ke;
 TypeDictionary gTypes;
 
 Type::Type(const char* name, cell value)
- : name_(name),
+ : name_(gAtoms.add(name)),
    value_(value),
    fixed_(0),
    intrinsic_(false),
@@ -102,7 +102,7 @@ Type::kindName() const
       if (funcenum_ptr_) {
         if (funcenum_ptr_->entries.size() > 1)
           return "typeset";
-        if (ke::StartsWith(name_, "::"))
+        if (ke::StartsWith(name_->str(), "::"))
           return "function";
         return "typedef";
       }

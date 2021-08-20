@@ -83,7 +83,7 @@ class DataQueue final
 };
 extern DataQueue gDataQueue;
 
-void writeleader(symbol* root);
+void writeleader();
 void writetrailer(void);
 void begcseg(void);
 void begdseg(void);

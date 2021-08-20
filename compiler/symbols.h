@@ -28,6 +28,8 @@
 
 #include "sc.h"
 
+class CompileContext;
+
 class SymbolScope final : public PoolObject
 {
   public:
@@ -42,17 +44,23 @@ class SymbolScope final : public PoolObject
             return nullptr;
         return iter->second;
     }
+
+    // Only valid in global scope.
+    symbol* FindGlobal(sp::Atom* atom, int fnumber) const;
+
     void Add(symbol* sym);
+
+    // Add, but allow duplicates by linking together.
+    void AddChain(symbol* sym);
 
     void ForEachSymbol(const std::function<void(symbol*)>& callback) {
         for (const auto& pair : symbols_) {
-            symbol* iter = pair.second;
-            while (iter) {
+            for (symbol* iter = pair.second; iter; iter = iter->next)
                 callback(iter);
-                iter = iter->next;
-            }
         }
     }
+
+    void DeleteSymbols(const std::function<bool(symbol*)>& callback);
 
     SymbolScope* parent() const { return parent_; }
     ScopeKind kind() const { return kind_; }
@@ -63,24 +71,27 @@ class SymbolScope final : public PoolObject
     PoolMap<sp::Atom*, symbol*> symbols_;
 };
 
-symbol* findglb(sp::Atom* name);
-symbol* findglb(const char* name);
+void AddGlobal(CompileContext& cc, symbol* sym);
+
+symbol* FindSymbol(CompileContext& cc, SymbolScope* chain, sp::Atom* name, int fnumber,
+                   SymbolScope** found = nullptr);
+
+symbol* findglb(CompileContext& cc, sp::Atom* name, int fnumber);
 symbol* findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found = nullptr);
-symbol* findconst(SymbolScope* scope, const char* name);
-void delete_symbols(symbol* root, int delete_functions);
-void delete_symbol(symbol* root, symbol* sym);
+symbol* findconst(CompileContext& cc, SymbolScope* scope, sp::Atom* name, int fnumber);
 void markusage(symbol* sym, int usage);
-symbol* NewVariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[],
+symbol* NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[],
                     int numdim, int semantic_tag);
 int findnamedarg(arginfo* arg, sp::Atom* name);
 symbol* FindEnumStructField(Type* type, sp::Atom* name);
 sp::Atom* operator_symname(const char* opername, int tag1, int tag2, int numtags,
                            int resulttag);
-symbol* fetchfunc(const char* name);
+symbol* fetchfunc(CompileContext& cc, sp::Atom* name, int fnumber);
 std::string funcdisplayname(const char* funcname);
 constvalue* append_constval(constvalue* table, sp::Atom* name, cell val, int index);
 void delete_consttable(constvalue* table);
-symbol* add_constant(SymbolScope* scope, const char* name, cell val, int vclass, int tag);
-void reduce_referrers(symbol* root);
-void deduce_liveness(symbol* root);
-symbol* add_symbol(symbol* root, symbol* entry);
+symbol* add_constant(CompileContext& cc, SymbolScope* scope, sp::Atom* name, cell val,
+                     int vclass, int tag, int fnumber);
+void reduce_referrers(CompileContext& cc);
+void deduce_liveness(CompileContext& cc);
+void delete_symbols(CompileContext& cc, bool delete_functions);

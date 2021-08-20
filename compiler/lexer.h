@@ -24,6 +24,7 @@
 
 #include "sc.h"
 
+class CompileContext;
 class Type;
 
 struct token_pos_t {
@@ -284,7 +285,7 @@ void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
-void declare_methodmap_symbol(methodmap_t* map, bool can_redef);
+void declare_methodmap_symbol(CompileContext& cc, methodmap_t* map, bool can_redef);
 void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);

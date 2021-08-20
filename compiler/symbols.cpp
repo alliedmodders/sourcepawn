@@ -23,6 +23,7 @@
 #include "symbols.h"
 
 #include "array-helpers.h"
+#include "compile-context.h"
 #include "errors.h"
 #include "lexer.h"
 #include "parser.h"
@@ -30,7 +31,6 @@
 #include "sclist.h"
 #include "scvars.h"
 #include "semantics.h"
-#include "sp_symhash.h"
 
 void
 SymbolScope::Add(symbol* sym)
@@ -39,14 +39,96 @@ SymbolScope::Add(symbol* sym)
     symbols_.emplace(sym->nameAtom(), sym);
 }
 
+void
+SymbolScope::AddChain(symbol* sym)
+{
+    auto iter = symbols_.find(sym->nameAtom());
+    if (iter == symbols_.end()) {
+        symbols_.emplace(sym->nameAtom(), sym);
+    } else {
+        sym->next = iter->second;
+        iter->second = sym;
+    }
+#ifndef NDEBUG
+    for (auto iter = sym->next; iter; iter = iter->next) {
+        if (sym->is_static)
+            assert(!iter->is_static || iter->fnumber != sym->fnumber);
+        else
+            assert(iter->is_static);
+    }
+#endif
+}
+
 symbol*
-findconst(SymbolScope* scope, const char* name)
+SymbolScope::FindGlobal(sp::Atom* atom, int fnumber) const
+{
+    assert(!parent_);
+
+    auto iter = symbols_.find(atom);
+    if (iter == symbols_.end())
+        return nullptr;
+
+    // In case a static shadows a global, we search statics first.
+    // When reparse goes away, we can introduce a separate static scope.
+    symbol* nonstatic = nullptr;
+    for (auto sym = iter->second; sym; sym = sym->next) {
+        if (!sym->is_static || fnumber == -1) {
+            nonstatic = sym;
+            continue;
+        }
+        if (sym->fnumber == fnumber)
+            return sym;
+    }
+    return nonstatic;
+}
+
+void
+SymbolScope::DeleteSymbols(const std::function<bool(symbol*)>& callback)
+{
+    auto iter = symbols_.begin();
+    while (iter != symbols_.end()) {
+        symbol* prev = nullptr;
+        symbol* sym = iter->second;
+        while (sym) {
+            // |iter->second| is the list head, which we fix up if it gets
+            // deleted.
+            if (callback(sym)) {
+                if (!prev)
+                    iter->second = sym->next;
+                else
+                    prev->next = sym->next;
+            } else {
+                prev = sym;
+            }
+            sym = sym->next;
+        }
+
+        if (!iter->second)
+            iter = symbols_.erase(iter);
+        else
+            iter++;
+    }
+}
+
+void AddGlobal(CompileContext& cc, symbol* sym)
+{
+    assert(sym->vclass == sGLOBAL);
+
+    auto scope = cc.globals();
+    if (sym->is_static)
+        scope->AddChain(sym);
+    else
+        scope->Add(sym);
+}
+
+symbol*
+findconst(CompileContext& cc, SymbolScope* scope, sp::Atom* name, int fnumber)
 {
     symbol* sym;
 
-    sym = findloc(scope, gAtoms.add(name));          /* try local symbols first */
+    sym = findloc(scope, name);          /* try local symbols first */
     if (sym == NULL || sym->ident != iCONSTEXPR) { /* not found, or not a constant */
-        sym = FindInHashTable(sp_Globals, name, fcurrent);
+        sym = findglb(cc, name, fnumber);
     }
     if (sym == NULL || sym->ident != iCONSTEXPR)
         return NULL;
@@ -55,20 +137,23 @@ findconst(SymbolScope* scope, const char* name)
     return sym;
 }
 
-/*  findglb
- *
- *  Returns a pointer to the global symbol (if found) or NULL (if not found)
- */
 symbol*
-findglb(const char* name)
+findglb(CompileContext& cc, sp::Atom* name, int fnumber)
 {
-    return FindInHashTable(sp_Globals, name, fcurrent);
+    return cc.globals()->FindGlobal(name, fnumber);
 }
 
 symbol*
-findglb(sp::Atom* name)
+FindSymbol(CompileContext& cc, SymbolScope* chain, sp::Atom* name, int fnumber, SymbolScope** found)
 {
-    return findglb(name->chars());
+    if (auto sym = findloc(chain, name, found))
+        return sym;
+    if (auto sym = cc.globals()->FindGlobal(name, fnumber)) {
+        if (found)
+            *found = cc.globals();
+        return sym;
+    }
+    return nullptr;
 }
 
 symbol*
@@ -84,136 +169,81 @@ findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
     return nullptr;
 }
 
-/* The local variable table must be searched backwards, so that the deepest
- * nesting of local variables is searched first. The simplest way to do
- * this is to insert all new items at the head of the list.
- * In the global list, the symbols are kept in sorted order, so that the
- * public functions are written in sorted order.
- */
-symbol*
-add_symbol(symbol* root, symbol* entry)
+// Note: not idempotent
+static bool
+ShouldDeleteSymbol(symbol* sym, bool delete_functions)
 {
-    entry->next = root->next;
-    root->next = entry;
-    assert(root == &glbtab);
-    AddToHashTable(sp_Globals, entry);
-    return entry;
-}
-
-static void
-free_symbol(symbol* sym)
-{
-    delete sym;
-}
-
-void
-delete_symbol(symbol* root, symbol* sym)
-{
-    symbol* origRoot = root;
-    /* find the symbol and its predecessor
-     * (this function assumes that you will never delete a symbol that is not
-     * in the table pointed at by "root")
+    bool mustdelete;
+    switch (sym->ident) {
+        case iVARIABLE:
+        case iARRAY:
+            /* do not delete global variables if functions are preserved */
+            mustdelete = delete_functions;
+            break;
+        case iREFERENCE:
+            /* always delete references (only exist as function parameters) */
+            mustdelete = true;
+            break;
+        case iREFARRAY:
+            /* a global iREFARRAY symbol is the return value of a function: delete
+             * this only if "globals" must be deleted; other iREFARRAY instances
+             * (locals) are also deleted
+             */
+            assert(!sym->parent());
+            mustdelete = true;
+            break;
+        case iCONSTEXPR:
+        case iENUMSTRUCT:
+            /* delete constants, except predefined constants */
+            mustdelete = delete_functions || !sym->predefined;
+            break;
+        case iFUNCTN:
+            /* optionally preserve globals (variables & functions), but
+             * NOT native functions
+             */
+            mustdelete = delete_functions || sym->native;
+            assert(sym->parent() == NULL);
+            break;
+        case iMETHODMAP:
+            // We delete methodmap symbols at the end, but since methodmaps
+            // themselves get wiped, we null the pointer.
+            sym->methodmap = nullptr;
+            mustdelete = delete_functions;
+            assert(!sym->parent());
+            break;
+        case iARRAYCELL:
+        case iARRAYCHAR:
+        case iEXPRESSION:
+        case iVARARGS:
+        case iACCESSOR:
+        default:
+            assert(false);
+            return false;
+    }
+    if (mustdelete)
+        return true;
+    /* if the function was prototyped, but not implemented in this source,
+     * mark it as such, so that its use can be flagged
      */
-    assert(root != sym);
-    while (root->next != sym) {
-        root = root->next;
-        assert(root != NULL);
-    }
-
-    if (origRoot == &glbtab)
-        RemoveFromHashTable(sp_Globals, sym);
-
-    /* unlink it, then free it */
-    root->next = sym->next;
-    free_symbol(sym);
+    if (sym->ident == iFUNCTN && !sym->defined)
+        sym->missing = true;
+    if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
+        sym->defined = false;
+    /* for user defined operators, also remove the "prototyped" flag, as
+     * user-defined operators *must* be declared before use
+     */
+    if (sym->ident == iFUNCTN && !alpha(*sym->name()))
+        sym->prototyped = false;
+    sym->clear_refers();
+    return false;
 }
 
 void
-delete_symbols(symbol* root, int delete_functions)
+delete_symbols(CompileContext& cc, bool delete_functions)
 {
-    symbol* origRoot = root;
-    symbol *sym, *parent_sym;
-    int mustdelete;
-
-    /* erase only the symbols with a deeper nesting level than the
-     * specified nesting level */
-    while (root->next != NULL) {
-        sym = root->next;
-        switch (sym->ident) {
-            case iVARIABLE:
-            case iARRAY:
-                /* do not delete global variables if functions are preserved */
-                mustdelete = delete_functions;
-                break;
-            case iREFERENCE:
-                /* always delete references (only exist as function parameters) */
-                mustdelete = TRUE;
-                break;
-            case iREFARRAY:
-                /* a global iREFARRAY symbol is the return value of a function: delete
-                 * this only if "globals" must be deleted; other iREFARRAY instances
-                 * (locals) are also deleted
-                 */
-                mustdelete = delete_functions;
-                for (parent_sym = sym->parent(); parent_sym != NULL && parent_sym->ident != iFUNCTN;
-                     parent_sym = parent_sym->parent())
-                    assert(parent_sym->ident == iREFARRAY);
-                assert(parent_sym == NULL ||
-                       (parent_sym->ident == iFUNCTN && parent_sym->parent() == NULL));
-                if (parent_sym == NULL || parent_sym->ident != iFUNCTN)
-                    mustdelete = TRUE;
-                break;
-            case iCONSTEXPR:
-            case iENUMSTRUCT:
-                /* delete constants, except predefined constants */
-                mustdelete = delete_functions || !sym->predefined;
-                break;
-            case iFUNCTN:
-                /* optionally preserve globals (variables & functions), but
-                 * NOT native functions
-                 */
-                mustdelete = delete_functions || sym->native;
-                assert(sym->parent() == NULL);
-                break;
-            case iMETHODMAP:
-                // We delete methodmap symbols at the end, but since methodmaps
-                // themselves get wiped, we null the pointer.
-                sym->methodmap = nullptr;
-                mustdelete = delete_functions;
-                assert(!sym->parent());
-                break;
-            case iARRAYCELL:
-            case iARRAYCHAR:
-            case iEXPRESSION:
-            case iVARARGS:
-            case iACCESSOR:
-            default:
-                assert(0);
-                break;
-        }
-        if (mustdelete) {
-            if (origRoot == &glbtab)
-                RemoveFromHashTable(sp_Globals, sym);
-            root->next = sym->next;
-            free_symbol(sym);
-        } else {
-            /* if the function was prototyped, but not implemented in this source,
-             * mark it as such, so that its use can be flagged
-             */
-            if (sym->ident == iFUNCTN && !sym->defined)
-                sym->missing = true;
-            if (sym->ident == iFUNCTN || sym->ident == iVARIABLE || sym->ident == iARRAY)
-                sym->defined = false;
-            /* for user defined operators, also remove the "prototyped" flag, as
-             * user-defined operators *must* be declared before use
-             */
-            if (sym->ident == iFUNCTN && !alpha(*sym->name()))
-                sym->prototyped = false;
-            if (origRoot == &glbtab)
-                sym->clear_refers();
-            root = sym; /* skip the symbol */
-        }
-    }
+    cc.globals()->DeleteSymbols([delete_functions](symbol* sym) -> bool {
+        return ShouldDeleteSymbol(sym, delete_functions);
+    });
 }
 
 void
@@ -257,10 +287,10 @@ FunctionData::resizeArgs(size_t nargs)
 }
 
 symbol::symbol()
- : symbol("", 0, 0, 0, 0)
+ : symbol(nullptr, 0, 0, 0, 0)
 {}
 
-symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, int symtag)
+symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int symtag)
  : next(nullptr),
    codeaddr(code_idx),
    vclass((char)symvclass),
@@ -298,8 +328,7 @@ symbol::symbol(const char* symname, cell symaddr, int symident, int symvclass, i
    parent_(nullptr),
    child_(nullptr)
 {
-    if (symname)
-        name_ = gAtoms.add(symname);
+    name_ = symname;
     if (symident == iFUNCTN)
         data_.reset(new FunctionData);
     memset(&dim, 0, sizeof(dim));
@@ -379,20 +408,10 @@ symbol::must_return_value() const
 }
 
 symbol*
-NewVariable(const char* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
+NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
             int semantic_tag)
 {
     symbol* sym;
-
-    /* global variables may only be defined once
-     * One complication is that functions returning arrays declare an array
-     * with the same name as the function, so the assertion must allow for
-     * this special case. Another complication is that variables may be
-     * "redeclared" if they are local to an automaton (and findglb() will find
-     * the symbol without states if no symbol with states exists).
-     */
-    assert(vclass != sGLOBAL || (sym = findglb(name)) == NULL || !sym->defined ||
-           (sym->ident == iFUNCTN && sym == curfunc));
 
     if (ident == iARRAY || ident == iREFARRAY) {
         symbol *parent = NULL, *top;
@@ -436,7 +455,7 @@ FindEnumStructField(Type* type, sp::Atom* name)
 
     auto const_name = ke::StringPrintf("%s::%s", type->name(), name->chars());
     auto atom = gAtoms.add(const_name);
-    return FindInHashTable(sp_Globals, atom->chars(), fcurrent);
+    return findglb(CompileContext::get(), atom, -1);
 }
 
 static char*
@@ -471,26 +490,26 @@ operator_symname(const char* opername, int tag1, int tag2, int numtags, int resu
  *  It does some basic processing and error checking.
  */
 symbol*
-fetchfunc(const char* name)
+fetchfunc(CompileContext& cc, sp::Atom* name, int fnumber)
 {
     symbol* sym;
 
-    if ((sym = findglb(name)) != 0) { /* already in symbol table? */
+    if ((sym = findglb(cc, name, fnumber)) != 0) { /* already in symbol table? */
         if (sym->ident != iFUNCTN) {
-            error(21, name); /* yes, but not as a function */
-            return NULL;     /* make sure the old symbol is not damaged */
+            report(21) << name; /* yes, but not as a function */
+            return nullptr;     /* make sure the old symbol is not damaged */
         } else if (sym->native) {
-            error(21, name); /* yes, and it is a native */
+            report(21) << name; /* yes, and it is a native */
         }
         assert(sym->vclass == sGLOBAL);
     } else {
         /* don't set the "uDEFINE" flag; it may be a prototype */
         sym = new symbol(name, code_idx, iFUNCTN, sGLOBAL, 0);
-        add_symbol(&glbtab, sym);
-        assert(sym != NULL); /* fatal error 103 must be given on error */
+        AddGlobal(cc, sym);
+        assert(sym); /* fatal error 103 must be given on error */
     }
     if (pc_deprecate.size() > 0) {
-        assert(sym != NULL);
+        assert(sym);
         sym->deprecated = true;
         if (sc_status == statWRITE) {
             sym->documentation = std::move(pc_deprecate);
@@ -597,17 +616,17 @@ is_symbol_unused(symbol* sym)
 }
 
 void
-reduce_referrers(symbol* root)
+reduce_referrers(CompileContext& cc)
 {
     std::vector<symbol*> work;
 
     // Enqueue all unreferred symbols.
-    for (symbol* sym = root->next; sym; sym = sym->next) {
+    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
         if (is_symbol_unused(sym)) {
             sym->queued = true;
             work.push_back(sym);
         }
-    }
+    });
 
     while (!work.empty()) {
         symbol* dead = ke::PopBack(&work);
@@ -633,16 +652,16 @@ reduce_referrers(symbol* root)
 // Determine the set of live functions. Note that this must run before delete_symbols,
 // since that resets referrer lists.
 void
-deduce_liveness(symbol* root)
+deduce_liveness(CompileContext& cc)
 {
     std::vector<symbol*> work;
 
     // The root set is all public functions.
-    for (symbol* sym = root->next; sym; sym = sym->next) {
+    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
         if (sym->ident != iFUNCTN)
-            continue;
+            return;
         if (sym->native)
-            continue;
+            return;
 
         if (sym->is_public) {
             sym->queued = true;
@@ -650,7 +669,7 @@ deduce_liveness(symbol* root)
         } else {
             sym->queued = false;
         }
-    }
+    });
 
     // Traverse referrers to find the transitive set of live functions.
     while (!work.empty()) {
@@ -665,13 +684,13 @@ deduce_liveness(symbol* root)
     }
 
     // Remove the liveness flags for anything we did not visit.
-    for (symbol* sym = root->next; sym; sym = sym->next) {
+    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
         if (sym->ident != iFUNCTN || sym->queued)
-            continue;
+            return;
         if (sym->native)
-            continue;
+            return;
         sym->usage &= ~(uWRITTEN | uREAD);
-    }
+    });
 }
 
 static constvalue*
@@ -719,57 +738,25 @@ delete_consttable(constvalue* table)
  *  Adds a symbol to the symbol table. Returns NULL on failure.
  */
 symbol*
-add_constant(SymbolScope* scope, const char* name, cell val, int vclass, int tag)
+add_constant(CompileContext& cc, SymbolScope* scope, sp::Atom* name, cell val, int vclass,
+             int tag, int fnumber)
 {
-    symbol* sym;
-
     /* Test whether a global or local symbol with the same name exists. Since
      * constants are stored in the symbols table, this also finds previously
      * defind constants. */
-    sym = findglb(gAtoms.add(name));
-    if (!sym && scope)
-        sym = findloc(scope, gAtoms.add(name));
-    if (sym) {
-        int redef = 0;
-        if (sym->ident != iCONSTEXPR)
-            redef = 1; /* redefinition a function/variable to a constant is not allowed */
-        if (sym->enumfield) {
-            /* enum field, special case if it has a different tag and the new symbol is also an enum field */
-            symbol* tagsym;
-            if (sym->tag == tag)
-                redef = 1; /* enumeration field is redefined (same tag) */
-            Type* type = gTypes.find(tag);
-            if (type == NULL) {
-                redef = 1; /* new constant does not have a tag */
-            } else {
-                tagsym = findconst(scope, type->name());
-                if (tagsym == NULL || !tagsym->enumroot)
-                    redef = 1; /* new constant is not an enumeration field */
-            }
-            /* in this particular case (enumeration field that is part of a different
-             * enum, and non-conflicting with plain constants) we want to be able to
-             * redefine it
-             */
-            if (!redef)
-                goto redef_enumfield;
-        } else if (sym->tag != tag) {
-            redef = 1; /* redefinition of a constant (non-enum) to a different tag is not allowed */
+    SymbolScope* found;
+    if (symbol* sym = FindSymbol(cc, scope, name, fnumber, &found)) {
+        if (found == scope || (found == cc.globals() && vclass == sGLOBAL)) {
+            report(21) << name; /* symbol already defined */
+            return sym;
         }
-        if (redef) {
-            error(21, name); /* symbol already defined */
-            return NULL;
-        } else if (sym->addr() != val) {
-            error(201, name);  /* redefinition of constant (different value) */
-            sym->setAddr(val); /* set new value */
-        }
-        /* silently ignore redefinitions of constants with the same value & tag */
-        return sym;
     }
 
-    /* constant doesn't exist yet (or is allowed to be redefined) */
-redef_enumfield:
-    sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
-    add_symbol(&glbtab, sym);
+    auto sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
+    if (vclass == sGLOBAL)
+        AddGlobal(cc, sym);
+    else
+        scope->Add(sym);
 
     sym->defined = true;
     if (sc_status == statIDLE)

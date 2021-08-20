@@ -184,7 +184,7 @@ struct symbol;
 struct symbol {
     symbol();
     symbol(const symbol& other);
-    symbol(const char* name, cell addr, int ident, int vclass, int tag);
+    symbol(sp::Atom* name, cell addr, int ident, int vclass, int tag);
     ~symbol();
 
     symbol* next;
