@@ -18,13 +18,16 @@
 #ifndef _include_spcomp2_smx_builder_h_
 #define _include_spcomp2_smx_builder_h_
 
+#include <stdlib.h>
+
+#include <unordered_map>
+
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-hashmap.h>
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <smx/smx-typeinfo.h>
-#include <stdlib.h>
 #include "shared/string-atom.h"
 #include "smx-buffer.h"
 
@@ -198,16 +201,14 @@ class SmxNameTable : public SmxSection
   SmxNameTable(const char* name)
    : SmxSection(name),
      buffer_size_(0)
-  {
-    name_table_.init(64);
-  }
+  {}
 
   uint32_t add(StringPool& pool, const char* str);
 
   uint32_t add(Atom* str) {
-    NameTable::Insert i = name_table_.findForAdd(str);
-    if (i.found())
-      return i->value;
+    auto iter = name_table_.find(str);
+    if (iter != name_table_.end())
+      return iter->second;
 
     if (!ke::IsUint32AddSafe(buffer_size_, str->length() + 1)) {
       fprintf(stderr, "out of memory in nametable\n");
@@ -215,7 +216,7 @@ class SmxNameTable : public SmxSection
     }
 
     uint32_t index = buffer_size_;
-    name_table_.add(i, str, index);
+    name_table_.emplace(str, index);
     names_.push_back(str);
     buffer_size_ += str->length() + 1;
     return index;
@@ -227,17 +228,7 @@ class SmxNameTable : public SmxSection
   }
 
  private:
-  struct HashPolicy {
-    static uint32_t hash(Atom* str) {
-      return ke::HashPointer(str);
-    }
-    static bool matches(Atom* a, Atom* b) {
-      return a == b;
-    }
-  };
-  typedef ke::HashMap<Atom*, size_t, HashPolicy> NameTable;
-
-  NameTable name_table_;
+  std::unordered_map<Atom*, size_t> name_table_;
   std::vector<Atom*> names_;
   uint32_t buffer_size_;
 };
