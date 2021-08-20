@@ -1170,15 +1170,8 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
     val_.sym = sym_;
     val_.tag = sym_->tag;
 
-    if (sym_->ident == iCONSTEXPR) {
-        // Hack: __LINE__ is updated by the lexer, so we have to special case
-        // it here.
-        static symbol* sLineConst = findconst("__LINE__");
-        if (sym_ == sLineConst)
-            val_.constval = pos_.line;
-        else
-            val_.constval = sym_->addr();
-    }
+    if (sym_->ident == iCONSTEXPR)
+        val_.constval = sym_->addr();
 
     if (sym_->vclass == sGLOBAL && sym_->ident != iFUNCTN) {
         if (!sym_->defined) {
