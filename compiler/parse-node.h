@@ -211,18 +211,19 @@ class LoopControlStmt : public Stmt
 class StaticAssertStmt : public Stmt
 {
   public:
-    explicit StaticAssertStmt(const token_pos_t& pos, int val, PoolString* text)
+    explicit StaticAssertStmt(const token_pos_t& pos, Expr* expr, PoolString* text)
       : Stmt(pos),
-        val_(val),
+        expr_(expr),
         text_(text)
     {}
 
+    bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit(CodegenContext&) override {}
     void ProcessUses(SemaContext& sc) override {}
 
   private:
-    int val_;
+    Expr* expr_;
     PoolString* text_;
 };
 
@@ -314,18 +315,16 @@ class ConstDecl : public VarDecl
 {
   public:
     ConstDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
-              int tag, int value)
+              Expr* expr)
       : VarDecl(pos, name, type, vclass, false, false, false, nullptr),
-        expr_tag_(tag),
-        value_(value)
+        expr_(expr)
     {}
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
 
   private:
-    int expr_tag_;
-    int value_;
+    Expr* expr_;
 };
 
 struct EnumField {

@@ -32,14 +32,34 @@ class Parser : public ExpressionParser
     Parser();
     ~Parser();
 
-    int expression(value* lval);
+    static bool PreprocExpr(cell* val, int* tag);
 
     void parse();
 
-    // Temporary until parser.cpp no longer is shimmed.
+    static bool sInPreprocessor;
+    static bool sDetectedIllegalPreprocessorSymbols;
+    static int sActive;
+
+  private:
+    typedef int (Parser::*HierFn)(value*);
+    typedef Expr* (Parser::*NewHierFn)();
+
+    static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
+
+    Stmt* parse_unknown_decl(const token_t* tok);
     Decl* parse_enum(int vclass);
     Stmt* parse_const(int vclass);
     Stmt* parse_stmt(int* lastindent, bool allow_decl);
+    Stmt* parse_static_assert();
+    Decl* parse_pstruct();
+    Decl* parse_typedef();
+    Decl* parse_typeset();
+    Decl* parse_using();
+    Decl* parse_enumstruct();
+    Decl* parse_methodmap();
+    bool parse_methodmap_method(MethodmapDecl* map);
+    bool parse_methodmap_property(MethodmapDecl* map);
+    bool parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop);
 
     struct VarParams {
         int vclass;
@@ -52,28 +72,6 @@ class Parser : public ExpressionParser
     Stmt* parse_var(declinfo_t* decl, const VarParams& params);
     void parse_post_dims(typeinfo_t* type);
     Expr* var_init(int vclass);
-
-    static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
-
-    static bool sInPreprocessor;
-    static bool sDetectedIllegalPreprocessorSymbols;
-    static int sActive;
-
-  private:
-    typedef int (Parser::*HierFn)(value*);
-    typedef Expr* (Parser::*NewHierFn)();
-
-    Stmt* parse_unknown_decl(const token_t* tok);
-    Stmt* parse_static_assert();
-    Decl* parse_pstruct();
-    Decl* parse_typedef();
-    Decl* parse_typeset();
-    Decl* parse_using();
-    Decl* parse_enumstruct();
-    Decl* parse_methodmap();
-    bool parse_methodmap_method(MethodmapDecl* map);
-    bool parse_methodmap_property(MethodmapDecl* map);
-    bool parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop);
 
     bool parse_decl(declinfo_t* decl, int flags);
     bool parse_old_decl(declinfo_t* decl, int flags);

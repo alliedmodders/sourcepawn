@@ -249,9 +249,6 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
 bool
 ConstDecl::Analyze(SemaContext& sc)
 {
-    AutoErrorPos aep(pos_);
-
-    matchtag(type_.tag, expr_tag_, 0);
     return true;
 }
 
@@ -2185,7 +2182,18 @@ CallExpr::MarkUsed(SemaContext& sc)
 
 bool StaticAssertStmt::Analyze(SemaContext& sc)
 {
-    if (val_)
+    if (!expr_->Analyze(sc))
+        return false;
+
+    // :TODO: insert coercion to bool.
+    int tag;
+    cell value;
+    if (!expr_->EvalConst(&value, &tag)) {
+        report(pos_, 8);
+        return false;
+    }
+
+    if (value)
         return true;
 
     std::string message;
@@ -2193,7 +2201,6 @@ bool StaticAssertStmt::Analyze(SemaContext& sc)
         message += ": " + std::string(text_->chars(), text_->length());
 
     report(pos_, 70) << message;
-
     return false;
 }
 

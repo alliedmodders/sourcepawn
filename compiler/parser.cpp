@@ -234,6 +234,18 @@ Parser::parse_unknown_decl(const token_t* tok)
     return nullptr;
 }
 
+bool
+Parser::PreprocExpr(cell* val, int* tag)
+{
+    Parser parser;
+    auto expr = parser.hier14();
+
+    SemaContext sc;
+    if (!expr->Bind(sc) || !expr->Analyze(sc))
+        return false;
+    return expr->EvalConst(val, tag);
+}
+
 Stmt*
 Parser::parse_var(declinfo_t* decl, const VarParams& params)
 {
@@ -320,7 +332,6 @@ Parser::parse_enum(int vclass)
 
     needtoken('{');
 
-    cell size;
     do {
         if (matchtoken('}')) {
             lexpush();
@@ -339,8 +350,10 @@ Parser::parse_enum(int vclass)
 
         if (matchtoken('[')) {
             error(153);
-            exprconst(&size, nullptr, nullptr);
-            needtoken(']');
+            if (!matchtoken(']')) {
+                hier14();
+                needtoken(']');
+            }
         }
 
         Expr* value = nullptr;
@@ -584,8 +597,9 @@ Parser::parse_const(int vclass)
 
         needtoken('=');
 
-        int expr_val, expr_tag;
-        exprconst(&expr_val, &expr_tag, nullptr);
+        Expr* expr = hier14();
+        if (!expr)
+            continue;
 
         typeinfo_t type = {};
         type.tag = tag;
@@ -594,7 +608,7 @@ Parser::parse_const(int vclass)
         if (!name)
             continue;
 
-        VarDecl* var = new ConstDecl(pos, name, type, vclass, expr_tag, expr_val);
+        VarDecl* var = new ConstDecl(pos, name, type, vclass, expr);
         if (decl) {
             if (!list) {
                 list = new StmtList(var->pos());
@@ -608,27 +622,6 @@ Parser::parse_const(int vclass)
 
     needtoken(tTERM);
     return list ? list : decl;
-}
-
-int
-Parser::expression(value* lval)
-{
-    Expr* expr = hier14();
-
-    SemaContext sc;
-    if (!expr->Bind(sc) || !expr->Analyze(sc)) {
-        sideeffect = TRUE;
-        *lval = value::ErrorValue();
-        return FALSE;
-    }
-    expr->ProcessUses(sc);
-
-    *lval = expr->val();
-    if (cc_ok())
-        expr->Emit();
-
-    sideeffect = expr->HasSideEffects();
-    return expr->lvalue();
 }
 
 Expr*
@@ -1153,8 +1146,9 @@ Parser::parse_static_assert()
 
     needtoken('(');
 
-    int expr_val, expr_tag;
-    bool is_const = exprconst(&expr_val, &expr_tag, nullptr);
+    Expr* expr = hier14();
+    if (!expr)
+        return nullptr;
 
     PoolString * text = nullptr;
     if (matchtoken(',') && needtoken(tSTRING)) {
@@ -1165,10 +1159,7 @@ Parser::parse_static_assert()
     needtoken(')');
     require_newline(TerminatorPolicy::NewlineOrSemicolon);
 
-    if (!is_const)
-        return nullptr;
-
-    return new StaticAssertStmt(pos, expr_val, text);
+    return new StaticAssertStmt(pos, expr, text);
 }
 
 Expr*
@@ -2554,9 +2545,8 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
                 error(101);
 
                 // Try to eat a close bracket anyway.
-                cell ignored;
-                if (exprconst(&ignored, nullptr, nullptr))
-                    matchtoken(']');
+                hier14();
+                matchtoken(']');
             }
         } while (matchtoken('['));
         type->ident = iREFARRAY;
