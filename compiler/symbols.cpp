@@ -207,7 +207,7 @@ ShouldDeleteSymbol(symbol* sym, bool delete_functions)
         case iMETHODMAP:
             // We delete methodmap symbols at the end, but since methodmaps
             // themselves get wiped, we null the pointer.
-            sym->methodmap = nullptr;
+            sym->set_data(nullptr);
             mustdelete = delete_functions;
             assert(!sym->parent());
             break;
@@ -313,7 +313,6 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
    /* assume global visibility (ignored for local symbols) */
    lnumber(fline),
    documentation(nullptr),
-   methodmap(nullptr),
    addr_(symaddr),
    name_(nullptr),
    referred_from_count_(0),

@@ -84,8 +84,10 @@ struct methodmap_method_t {
     }
 };
 
-struct methodmap_t {
+struct methodmap_t : public SymbolData {
     methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name);
+
+    methodmap_t* asMethodmap() override { return this; }
 
     methodmap_t* parent;
     int tag;

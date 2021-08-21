@@ -132,6 +132,9 @@ class SymbolData : public PoolObject
     virtual EnumStructVarData* asEnumStructVar() {
         return nullptr;
     }
+    virtual methodmap_t* asMethodmap() {
+        return nullptr;
+    }
 };
 
 class FunctionData final : public SymbolData
@@ -237,7 +240,6 @@ struct symbol : public PoolObject
     int fnumber; /* file number in which the symbol is declared */
     int lnumber; /* line number for the declaration */
     PoolString* documentation; /* optional documentation string */
-    methodmap_t* methodmap;    /* if ident == iMETHODMAP */
 
     int addr() const {
         return addr_;
