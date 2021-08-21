@@ -302,4 +302,5 @@ static const char* errmsg_ex[] = {
     /*401*/ "cannot specify '...' arguments more than once\n",
     /*402*/ "cannot specify additional arguments after '...'\n",
     /*403*/ "not yet implemented\n",
+    /*404*/ "enum multiplers are no longer supported\n",
 };
