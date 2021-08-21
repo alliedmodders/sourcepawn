@@ -185,12 +185,12 @@ struct symbol : public PoolObject
     int tag;       /* tagname id */
 
     // See uREAD/uWRITTEN above.
-    uint8_t usage;
+    uint8_t usage : 2;
 
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
     // Constant: the symbol is defined in the source file.
-    bool defined    ;       // remove when moving to a single-pass system
+    bool defined : 1;       // remove when moving to a single-pass system
     bool is_const : 1;
 
     // Variables and functions.
@@ -203,7 +203,7 @@ struct symbol : public PoolObject
 
     // Functions only.
     bool prototyped : 1;    // prototyped, implicitly via a definition or explicitly
-    bool missing  ;       // the function is not implemented in this source file
+    bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback
     bool skipped : 1;       // skipped in codegen
     bool retvalue : 1;      // function returns (or should return) a value
