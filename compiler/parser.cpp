@@ -299,13 +299,19 @@ Parser::parse_enum(int vclass)
     if (matchtoken('(')) {
         error(228);
         if (matchtoken(taADD)) {
-            exprconst(&increment, NULL, NULL);
+            if (needtoken(tNUMBER)) {
+                if (current_token()->value != 1)
+                    report(404);
+            }
         } else if (matchtoken(taMULT)) {
-            exprconst(&multiplier, NULL, NULL);
+            if (needtoken(tNUMBER))
+                report(404);
         } else if (matchtoken(taSHL)) {
-            exprconst(&val, NULL, NULL);
-            while (val-- > 0)
-                multiplier *= 2;
+            if (needtoken(tNUMBER)) {
+                if (current_token()->value != 1)
+                    report(404);
+                multiplier = 2;
+            }
         }
         needtoken(')');
     }
