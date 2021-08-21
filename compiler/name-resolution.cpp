@@ -256,9 +256,20 @@ TypesetDecl::Bind(SemaContext& sc)
 bool
 ConstDecl::Bind(SemaContext& sc)
 {
-    AutoErrorPos aep(pos_);
+    if (!expr_->Bind(sc))
+        return false;
+    if (!expr_->Analyze(sc))
+        return false;
 
-    sym_ = add_constant(sc.cc(), sc.scope(), name_, value_, vclass_, type_.tag, pos_.file);
+    int tag;
+    cell value;
+    if (!expr_->EvalConst(&value, &tag))
+        return false;
+
+    AutoErrorPos aep(pos_);
+    matchtag(type_.tag, tag, 0);
+
+    sym_ = add_constant(sc.cc(), sc.scope(), name_, value, vclass_, type_.tag, pos_.file);
     return true;
 }
 
@@ -1064,4 +1075,10 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
     fun->set_this_tag(map_->tag);
 
     return fun->Bind(sc);
+}
+
+bool
+StaticAssertStmt::Bind(SemaContext& sc)
+{
+    return expr_->Bind(sc);
 }

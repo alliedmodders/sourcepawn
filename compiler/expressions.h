@@ -67,13 +67,11 @@ int check_userop(void (*oper)(void), int tag1, int tag2, int numparam, value* lv
                  int fnumber);
 int matchtag(int formaltag, int actualtag, int flags);
 int matchtag_commutative(int formaltag, int actualtag, int flags);
-int expression(cell* val, int* tag, symbol** symptr, value* _lval);
 int matchtag_string(int ident, int tag);
 int checkval_string(const value* sym1, const value* sym2);
 int checktag_string(int tag, const value* sym1);
 void user_inc();
 void user_dec();
 int checktag(int tag, int exprtag);
-bool exprconst(cell* val, int* tag, symbol** symptr);
 
 #endif // am_sourcepawn_compiler_sc3_h

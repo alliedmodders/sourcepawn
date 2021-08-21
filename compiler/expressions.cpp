@@ -677,30 +677,6 @@ calc(cell left, void (*oper)(), cell right, char* boolresult)
     return 0;
 }
 
-int
-expression(cell* val, int* tag, symbol** symptr, value* _lval)
-{
-    value lval = {0};
-    pushheaplist();
-
-    Parser parser;
-    int lvalue = parser.expression(&lval);
-    if (lvalue)
-        rvalue(&lval);
-    /* scrap any arrays left on the heap */
-    popheaplist(true);
-
-    if (lval.ident == iCONSTEXPR && val != NULL) /* constant expression */
-        *val = lval.constval;
-    if (tag != NULL)
-        *tag = lval.tag;
-    if (symptr != NULL)
-        *symptr = lval.sym;
-    if (_lval)
-        *_lval = lval;
-    return lval.ident;
-}
-
 bool
 is_valid_index_tag(int tag)
 {
@@ -747,35 +723,4 @@ commutative(void (*oper)())
 {
     return oper == ob_add || oper == os_mult || oper == ob_eq || oper == ob_ne || oper == ob_and ||
            oper == ob_xor || oper == ob_or;
-}
-
-/*  exprconst
- */
-bool
-exprconst(cell* val, int* tag, symbol** symptr)
-{
-    int ident;
-    AutoCountErrors errors;
-
-    bool failed;
-    {
-        AutoStage stage;
-        errorset(sEXPRMARK, 0);
-        ident = expression(val, tag, symptr, nullptr);
-        failed = (sc_status == statWRITE && !errors.ok());
-        stage.Rewind();
-    }
-
-    if (ident != iCONSTEXPR) {
-        if (!failed) // Don't pile on errors.
-            error(8); /* must be constant expression */
-        if (val != NULL)
-            *val = 0;
-        if (tag != NULL)
-            *tag = 0;
-        if (symptr != NULL)
-            *symptr = NULL;
-    }
-    errorset(sEXPRRELEASE, 0);
-    return !failed && (ident == iCONSTEXPR);
 }
