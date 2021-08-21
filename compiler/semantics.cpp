@@ -1495,8 +1495,8 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
             return false;
     }
 
-    if (base_val.ident == iMETHODMAP) {
-        methodmap_t* map = base_val.sym->methodmap;
+    if (base_val.ident == iMETHODMAP && base_val.sym->data()) {
+        methodmap_t* map = base_val.sym->data()->asMethodmap();
         if (map)
             method_ = methodmap_find_method(map, name_);
         if (!method_) {
@@ -1585,18 +1585,19 @@ SymbolExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
 
     *implicit_this = nullptr;
 
-    if (token != tNEW && sym_->ident == iMETHODMAP && sym_->methodmap) {
-        if (!sym_->methodmap->ctor) {
+    if (token != tNEW && sym_->ident == iMETHODMAP && sym_->data()) {
+        auto map = sym_->data()->asMethodmap();
+        if (!map->ctor) {
             // Immediately fatal - no function to call.
             error(pos_, 172, sym_->name());
             return nullptr;
         }
-        if (sym_->methodmap->must_construct_with_new()) {
+        if (map->must_construct_with_new()) {
             // Keep going, this is basically a style thing.
-            report(pos_, 170) << sym_->methodmap->name;
+            report(pos_, 170) << map->name;
             return nullptr;
         }
-        return sym_->methodmap->ctor->target;
+        return map->ctor->target;
     }
     if (sym_->ident != iFUNCTN)
         return nullptr;
@@ -1618,7 +1619,7 @@ SymbolExpr::BindNewTarget(SemaContext& sc)
         return nullptr;
     }
 
-    methodmap_t* methodmap = sym_->methodmap;
+    methodmap_t* methodmap = sym_->data()->asMethodmap();
     if (!methodmap->must_construct_with_new()) {
         report(pos_, 171) << methodmap->name;
         return nullptr;

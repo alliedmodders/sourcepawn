@@ -59,7 +59,7 @@ std::vector<MemoryScope> sStackScopes;
 std::vector<MemoryScope> sHeapScopes;
 std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
 std::vector<std::unique_ptr<pstruct_t>> sStructs;
-std::vector<std::unique_ptr<methodmap_t>> sMethodmaps;
+std::vector<methodmap_t*> sMethodmaps;
 
 pstruct_t::pstruct_t(sp::Atom* name)
 {
@@ -394,7 +394,7 @@ methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 methodmap_t*
 methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 {
-    auto map = std::make_unique<methodmap_t>(parent, spec, name);
+    auto map = new methodmap_t(parent, spec, name);
 
     if (spec == Layout_MethodMap && parent) {
         if (parent->nullable)
@@ -404,12 +404,12 @@ methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
     }
 
     if (spec == Layout_MethodMap)
-        map->tag = gTypes.defineMethodmap(name->chars(), map.get())->tagid();
+        map->tag = gTypes.defineMethodmap(name->chars(), map)->tagid();
     else
         map->tag = gTypes.defineObject(name->chars())->tagid();
     sMethodmaps.push_back(std::move(map));
 
-    return sMethodmaps.back().get();
+    return sMethodmaps.back();
 }
 
 methodmap_t*

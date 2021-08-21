@@ -2918,7 +2918,7 @@ declare_methodmap_symbol(CompileContext& cc, methodmap_t* map, bool can_redef)
         AddGlobal(cc, sym);
     }
     sym->defined = true;
-    sym->methodmap = map;
+    sym->set_data(map);
 }
 
 void
