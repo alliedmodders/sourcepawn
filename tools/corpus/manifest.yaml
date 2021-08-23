@@ -4,6 +4,7 @@ git:
         - https://github.com/dysphie/nmrih-voicecmd-block nmrih-voicecmd-block.sp
         - https://github.com/dysphie/sourcemod-indev incap-wip.sp
         - https://github.com/dysphie/nmrih-qol-ex scripting/qol.sp
+        - https://github.com/Bara/fuckZones addons/sourcemod/scripting/fuckZones.sp
 
 includes:
         - https://github.com/alliedmodders/sourcemod plugins/include
@@ -23,4 +24,5 @@ includes:
         - https://github.com/thraaawn/SMJansson pawn/scripting/include
         - https://github.com/sbpp/sourcebans-pp game/addons/sourcemod/scripting/include
         - https://github.com/Deathknife/sourcemod-discord include
+        - https://github.com/Bara/fuckZones addons/sourcemod/scripting/include
         
