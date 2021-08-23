@@ -1040,7 +1040,12 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
 
     val_.ident = sym_->ident;
     val_.sym = sym_;
-    val_.tag = sym_->tag;
+
+    // Don't expose the tag of old enumroots.
+    if (sym_->enumroot && !gTypes.find(sym_->tag)->asEnumStruct())
+        val_.tag = 0;
+    else
+        val_.tag = sym_->tag;
 
     if (sym_->ident == iCONSTEXPR) {
         // Hack: __LINE__ is updated by the lexer, so we have to special case

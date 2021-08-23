@@ -132,7 +132,7 @@ EnumDecl::Bind()
     // set the enum name to the "next" value (typically the last value plus one)
     if (enumsym) {
         assert(enumsym->enumroot);
-        enumsym->setAddr(0);
+        enumsym->setAddr(value);
         // assign the constant list
         assert(enumroot);
         enumsym->dim.enumlist = enumroot;
