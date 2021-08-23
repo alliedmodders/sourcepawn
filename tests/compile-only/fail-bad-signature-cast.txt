@@ -1,1 +1,0 @@
-(8) : error 100: function prototypes do not match

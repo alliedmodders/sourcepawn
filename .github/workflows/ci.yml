@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - master
+      - 1.11-dev
   pull_request:
     branches:
       - master
+      - 1.11-dev
 jobs:
   test:
     strategy:
