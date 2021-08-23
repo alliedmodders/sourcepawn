@@ -548,18 +548,10 @@ matchtag(int formaltag, int actualtag, int flags)
     if (actualtag == pc_anytag)
         return TRUE;
 
-    if (!(flags & MATCHTAG_FUNCARG)) {
-        // This is not legal for signature checks. For example:
-        //   void f(int x);
-        //   void g(void f(any y)) {
-        //       f(3.0);
-        //   }
-        //   g(f);
-        //
-        // 3.0 casts to any, but not to int.
-        if (formaltag == pc_anytag)
-            return TRUE;
-    }
+    // We allow this even on function signature checks as a convenient shorthand,
+    // even though it violates standard contravariance rules.
+    if (formaltag == pc_anytag)
+        return TRUE;
 
     if (formal->isFunction()) {
         if (!matchfunctags(formal, actual)) {
