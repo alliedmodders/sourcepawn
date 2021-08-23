@@ -4,3 +4,18 @@ git:
         - https://github.com/dysphie/nmrih-voicecmd-block nmrih-voicecmd-block.sp
         - https://github.com/dysphie/sourcemod-indev incap-wip.sp
         - https://github.com/dysphie/nmrih-qol-ex scripting/qol.sp
+
+includes:
+        - https://github.com/alliedmodders/sourcemod plugins/include
+        - https://github.com/bcserv/smlib scripting/include
+        - https://github.com/peace-maker/DHooks2 sourcemod_files/scripting/include
+        - https://github.com/DoctorMcKay/sourcemod-plugins scripting/include
+        - https://github.com/FlaminSarge/tf2attributes ./
+        - https://github.com/Steell/Freak-Fortress-2 plugin/addons/sourcemod/scripting/include
+        - https://github.com/Bara/Multi-Colors addons/sourcemod/scripting/include
+        - https://github.com/asherkin/TF2Items pawn
+        - https://github.com/Impact123/AutoExecConfig ./
+        - https://github.com/asherkin/SteamTools plugin
+        - https://github.com/JoinedSenses/sm-ext-socket scripting/include
+        - https://github.com/KyleSanderson/SteamWorks Pawn/includes
+        - https://github.com/dvarnai/store-plugin addons/sourcemod/scripting/include

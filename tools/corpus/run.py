@@ -55,9 +55,27 @@ class Runner(object):
         self.work_ = queue.LifoQueue()
         self.completed_ = queue.Queue()
         self.progress_ = 0
+        self.skip_set_ = set()
+        self.missing_includes_ = {}
 
         self.includes_ = [os.path.join(self.args_.corpus, 'include')]
         self.includes_.extend(args.include)
+
+        more_includes = os.path.join(self.args_.corpus, 'corpus_include.list')
+        if os.path.exists(more_includes):
+            with open(more_includes, 'rt') as fp:
+                for line in fp.readlines():
+                    include = os.path.join(self.args_.corpus, line.strip())
+                    self.includes_.append(include)
+
+        self.skip_file_path_ = os.path.join(self.args_.corpus, 'corpus_skip.list')
+        if os.path.exists(self.skip_file_path_):
+            with open(self.skip_file_path_, 'rt') as fp:
+                for line in fp.readlines():
+                    self.skip_set_.add(line.strip())
+
+        self.files_ = [os.path.relpath(file, self.args_.corpus) for file in self.files_]
+        self.files_ = [file for file in self.files_ if file not in self.skip_set_]
 
     def run(self):
         with progressbar.ProgressBar(max_value = len(self.files_), redirect_stdout = True) as bar:
@@ -65,6 +83,10 @@ class Runner(object):
                 self.run_st(bar)
             else:
                 self.run_mt(bar)
+
+        missing = sorted(self.missing_includes_.items(), key=lambda item: item[1])
+        for include, encounters in missing:
+            print("Missing include {} used {} times.".format(include, encounters))
 
     def run_st(self, bar):
         for i in range(len(self.files_)):
@@ -108,7 +130,7 @@ class Runner(object):
         if path.endswith('.sp'):
             argv = [
                 self.args_.spcomp,
-                path,
+                os.path.join(self.args_.corpus, path),
             ]
             for include_path in self.includes_:
                 argv += ['-i', include_path]
@@ -129,6 +151,7 @@ class Runner(object):
                 raise
             except subprocess.CalledProcessError as e:
                 output = e.output
+                output = output.decode('utf-8', errors = 'ignore')
             except:
                 pass
         else:
@@ -146,6 +169,7 @@ class Runner(object):
                 raise
             except subprocess.CalledProcessError as e:
                 output = e.output
+                output = output.decode('utf-8', errors = 'ignore')
             except:
                 pass
 
@@ -153,23 +177,33 @@ class Runner(object):
             shutil.move(output_file,
                         os.path.join(self.args_.collect_smx, os.path.basename(output_file)))
 
-        return (ok, path, output)
+        return (ok, path, output, argv)
 
     def handle_result(self, result_tuple):
-        ok, path, output = result_tuple
+        ok, path, output, argv = result_tuple
 
+        remove = False
         if not ok:
             if self.args_.diagnose:
                 diagnose_error(path, output.decode('utf8'))
             elif self.args_.remove_bad:
-                print("rm \"{}\"".format(path))
+                print("failed: " + path)
+                print("    " + ' '.join(argv))
                 if self.args_.commit:
-                    os.unlink(path)
+                    remove = True
+                m = re.search("cannot read from file: \"(.+)\"", output)
+                if m is not None:
+                    include = m.group(1)
+                    self.missing_includes_[include] = self.missing_includes_.get(include, 0) + 1
         else:
             if self.args_.remove_good:
                 print("rm \"{}\"".format(path))
                 if self.args_.commit:
-                    os.unlink(path)
+                    remove = True
+
+        if remove:
+            with open(self.skip_file_path_, 'at') as fp:
+                fp.write(path + "\n")
 
 def diagnose_error(path, output):
     print("Error compiling {}:".format(path))
