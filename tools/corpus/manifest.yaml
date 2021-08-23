@@ -19,3 +19,8 @@ includes:
         - https://github.com/JoinedSenses/sm-ext-socket scripting/include
         - https://github.com/KyleSanderson/SteamWorks Pawn/includes
         - https://github.com/dvarnai/store-plugin addons/sourcemod/scripting/include
+        - https://github.com/ErikMinekus/sm-ripext pawn/scripting/include
+        - https://github.com/thraaawn/SMJansson pawn/scripting/include
+        - https://github.com/sbpp/sourcebans-pp game/addons/sourcemod/scripting/include
+        - https://github.com/Deathknife/sourcemod-discord include
+        
