@@ -146,6 +146,28 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
         {
             matchtag(arg->tag, expr->tag(), MATCHTAG_COERCE);
         }
+    } else if (auto expr = field.value->AsSymbolExpr()) {
+        auto sym = expr->sym();
+        if (arg->ident == iVARIABLE) {
+            if (sym->ident != iVARIABLE) {
+                error(expr->pos(), 106);
+                return false;
+            }
+            matchtag(arg->tag, sym->tag, MATCHTAG_COERCE);
+        } else if (arg->ident == iREFARRAY) {
+            if (sym->ident != iARRAY) {
+                error(expr->pos(), 106);
+                return false;
+            }
+            if (sym->dim.array.level != 0) {
+                error(expr->pos(), 106);
+                return false;
+            }
+        } else {
+            error(expr->pos(), 106);
+            return false;
+        }
+        sym_->add_reference_to(sym);
     } else {
         assert(false);
         return false;

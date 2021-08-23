@@ -253,6 +253,9 @@ VarDecl::Bind()
         assert(false);
     }
 
+    if (init_ && !init_->Bind())
+        return false;
+
     sym_->defined = should_define;
     return true;
 }
@@ -430,5 +433,14 @@ BinaryExprBase::Bind()
     else
         ok &= left_->Bind();
     ok &= right_->Bind();
+    return ok;
+}
+
+bool
+StructExpr::Bind()
+{
+    bool ok = true;
+    for (const auto& field : fields_)
+        ok &= field.value->Bind();
     return ok;
 }

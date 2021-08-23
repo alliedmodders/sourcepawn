@@ -130,7 +130,7 @@ static const char* errmsg[] = {
     /*103*/ "%s was already defined on this %s\n",
     /*104*/ "cannot find any methods for %s\n",
     /*105*/ "cannot find method or property \"%s.%s\"\n",
-    /*106*/ "unused106\n",
+    /*106*/ "invalid assignment\n",
     /*107*/ "cannot call methods on a function\n",
     /*108*/ "resolution operator (::) can only resolve field offsets of enum structs\n",
     /*109*/ "%s name must start with an uppercase letter\n",
