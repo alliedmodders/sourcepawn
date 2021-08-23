@@ -727,6 +727,8 @@ class SymbolExpr final : public Expr
 
     bool AnalyzeWithOptions(bool allow_types);
 
+    symbol* sym() const { return sym_; }
+
   private:
     bool DoBind(bool is_lval);
 
@@ -1063,6 +1065,7 @@ class StructExpr final : public Expr
         : Expr(pos)
     {}
 
+    bool Bind() override;
     bool Analyze() override {
         return true;
     }
