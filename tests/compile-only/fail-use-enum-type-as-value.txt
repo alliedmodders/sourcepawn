@@ -1,0 +1,1 @@
+(4) : error 174: symbol 'A' is a type and cannot be used as a value

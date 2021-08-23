@@ -30,7 +30,6 @@
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
-#include "lexer-inl.h"
 #include "parse-node.h"
 #include "sclist.h"
 #include "sctracker.h"
@@ -1205,7 +1204,15 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
 
     val_.ident = sym_->ident;
     val_.sym = sym_;
-    val_.tag = sym_->tag;
+
+    // Don't expose the tag of old enumroots.
+    Type* type = gTypes.find(sym_->tag);
+    if (sym_->enumroot && !type->asEnumStruct() && sym_->ident == iCONSTEXPR) {
+        val_.tag = 0;
+        error(pos_, 174, sym_->name());
+    } else {
+        val_.tag = sym_->tag;
+    }
 
     if (sym_->ident == iCONSTEXPR)
         val_.constval = sym_->addr();

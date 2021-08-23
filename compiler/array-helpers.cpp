@@ -44,6 +44,7 @@ class ArraySizeResolver
     void PrepareDimArray();
     void ResolveRank(int rank, Expr* init);
     void SetRankSize(Expr* expr, int rank, int size);
+    bool ResolveDimExpr(Expr* expr, value* v);
 
   private:
     SemaContext& sc_;
@@ -280,10 +281,10 @@ ArraySizeResolver::ResolveDimExprs()
 
         assert(!type_->is_implicit_dim(i));
 
-        if (!expr->Bind(sc_) || !expr->Analyze(sc_))
+        value v;
+        if (!ResolveDimExpr(expr, &v))
             return false;
 
-        const auto& v = expr->val();
         if (!is_valid_index_tag(v.tag)) {
             error(expr->pos(), 77, gTypes.find(v.tag)->prettyName());
             return false;
@@ -320,6 +321,35 @@ ArraySizeResolver::ResolveDimExprs()
             type_->dim[i] = v.constval;
         }
     }
+    return true;
+}
+
+bool
+ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
+{
+    if (!expr->Bind(sc_))
+        return false;
+
+    if (auto sym_expr = expr->AsSymbolExpr()) {
+        // Special case this:
+        //   enum X { ... };
+        //   int blah[X];
+        //
+        // For backward compatibility with a huge number of plugins.
+        auto sym = sym_expr->sym();
+        auto type = gTypes.find(sym->tag);
+        if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
+            *v = {};
+            v->ident = iCONSTEXPR;
+            v->constval = sym->addr();
+            return true;
+        }
+    }
+
+    if (!expr->Analyze(sc_))
+        return false;
+
+    *v = expr->val();
     return true;
 }
 
