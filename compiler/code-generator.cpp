@@ -235,6 +235,8 @@ VarDecl::EmitPstruct()
             gDataQueue.Add(expr->text()->chars(), expr->text()->length());
         } else if (auto expr = field.value->AsTaggedValueExpr()) {
             values[arg->index] = expr->value();
+        } else if (auto expr = field.value->AsSymbolExpr()) {
+            values[arg->index] = expr->sym()->addr();
         } else {
             assert(false);
         }

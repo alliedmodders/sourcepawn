@@ -859,9 +859,7 @@ class SymbolExpr final : public Expr
 
     bool AnalyzeWithOptions(SemaContext& sc, bool allow_types);
 
-    symbol* sym() const {
-        return sym_;
-    }
+    symbol* sym() const { return sym_; }
 
   private:
     bool DoBind(SemaContext& sc, bool is_lval);
@@ -1249,6 +1247,7 @@ class StructExpr final : public Expr
         : Expr(pos)
     {}
 
+    bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override {
         return true;
     }
