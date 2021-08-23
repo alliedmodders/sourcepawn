@@ -1126,6 +1126,9 @@ Parser::struct_init()
             case tRATIONAL:
                 expr = new FloatExpr(pos, value);
                 break;
+            case tSYMBOL:
+                expr = new SymbolExpr(pos, gAtoms.add(str));
+                break;
             default:
                 error(1, "-constant-", str);
                 break;

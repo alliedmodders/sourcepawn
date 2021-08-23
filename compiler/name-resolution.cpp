@@ -595,6 +595,15 @@ NewArrayExpr::Bind(SemaContext& sc)
 }
 
 bool
+StructExpr::Bind(SemaContext& sc)
+{
+    bool ok = true;
+    for (const auto& field : fields_)
+        ok &= field.value->Bind(sc);
+    return ok;
+}
+
+bool
 IfStmt::Bind(SemaContext& sc)
 {
     bool ok = cond_->Bind(sc);
