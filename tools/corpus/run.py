@@ -56,6 +56,9 @@ class Runner(object):
         self.completed_ = queue.Queue()
         self.progress_ = 0
 
+        self.includes_ = [os.path.join(self.args_.corpus, 'include')]
+        self.includes_.extend(args.include)
+
     def run(self):
         with progressbar.ProgressBar(max_value = len(self.files_), redirect_stdout = True) as bar:
             if self.args_.j <= 1:
@@ -107,7 +110,7 @@ class Runner(object):
                 self.args_.spcomp,
                 path,
             ]
-            for include_path in self.args_.include:
+            for include_path in self.includes_:
                 argv += ['-i', include_path]
 
             output_file = os.path.join(self.temp_dir_, os.path.basename(path))
@@ -212,12 +215,20 @@ def extract_line(path, number):
 def get_all_files(path, exts, out):
     for file in os.listdir(path):
         child = os.path.join(path, file)
+        if file == 'corpus.list':
+            import_corpus_list(path, child, out)
+            return
         if os.path.isdir(child):
             get_all_files(child, exts, out)
             continue
         _, ext = os.path.splitext(child)
         if ext in exts:
             out.append(child)
+
+def import_corpus_list(root, list_file, out):
+    with open(list_file, 'rt') as fp:
+        for line in fp.readlines():
+            out.append(os.path.join(root, line.strip()))
 
 if __name__ == '__main__':
     main()

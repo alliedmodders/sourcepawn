@@ -1,0 +1,6 @@
+git:
+        - https://github.com/dysphie/nmrih-team-healing scripting/nmrih-team-healing.sp
+        - https://github.com/dysphie/sm-map-translator scripting/map-translator.sp
+        - https://github.com/dysphie/nmrih-voicecmd-block nmrih-voicecmd-block.sp
+        - https://github.com/dysphie/sourcemod-indev incap-wip.sp
+        - https://github.com/dysphie/nmrih-qol-ex scripting/qol.sp
