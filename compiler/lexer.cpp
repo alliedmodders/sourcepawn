@@ -950,16 +950,10 @@ command(void)
                 doinclude(tok == tpTRYINCLUDE);
             break;
         case tpFILE:
+            error(242);
             if (!SKIPPING) {
                 char pathname[_MAX_PATH];
                 lptr = getstring((unsigned char*)pathname, sizeof pathname, lptr);
-                if (strlen(pathname) > 0) {
-                    free(inpfname);
-                    inpfname = strdup(pathname);
-                    if (inpfname == NULL)
-                        error(FATAL_ERROR_OOM);
-                    fline = 0;
-                }
             }
             check_empty(lptr);
             break;

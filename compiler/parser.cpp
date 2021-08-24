@@ -300,9 +300,6 @@ pc_compile(int argc, char* argv[]) {
                 strcpy(inpfname, sname); /* avoid invalid filename */
                 error(FATAL_ERROR_READ, sname);
             }
-            pc_writesrc(ftmp, (unsigned char*)"#file \"");
-            pc_writesrc(ftmp, (unsigned char*)sname);
-            pc_writesrc(ftmp, (unsigned char*)"\"\n");
             skip_utf8_bom(fsrc);
             while (!pc_eofsrc(fsrc) && pc_readsrc(fsrc, tstring, sizeof tstring)) {
                 pc_writesrc(ftmp, tstring);
