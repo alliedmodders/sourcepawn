@@ -290,4 +290,5 @@ static const char* warnmsg[] = {
     /*239*/ "'%s' is an illegal tag; use %s as a type\n",
     /*240*/ "'%s:' is an old-style tag operation; use view_as<%s>(expression) instead\n",
     /*241*/ "field '%s' was specified twice\n",
+    /*242*/ "#file has no effect\n",
 };
