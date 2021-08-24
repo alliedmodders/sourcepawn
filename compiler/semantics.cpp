@@ -673,12 +673,18 @@ BinaryExpr::ValidateAssignmentRHS()
         find_userop(nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
     }
 
-    if (!oper_ && !checkval_string(&left_val, &right_val)) {
-        if ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
-            (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string))
-        {
-            error(pos_, 179, type_to_name(left_val.tag), type_to_name(right_val.tag));
-            return false;
+    if (!oper_) {
+        if (left_val.ident == iARRAYCHAR || left_val.ident == iARRAYCELL) {
+            matchtag(left_val.tag, right_val.tag, MATCHTAG_COERCE);
+            return true;
+        }
+        if (!checkval_string(&left_val, &right_val)) {
+            if ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
+                (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string))
+            {
+                error(pos_, 179, type_to_name(left_val.tag), type_to_name(right_val.tag));
+                return false;
+            }
         }
         matchtag(left_val.tag, right_val.tag, TRUE);
     }
