@@ -181,6 +181,7 @@ class Type
         return methodmap_ptr_;
     }
 
+    bool isLabelTag() const;
     bool isEnum() const {
         return kind_ == TypeKind::Enum;
     }
