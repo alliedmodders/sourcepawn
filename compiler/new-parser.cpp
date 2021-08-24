@@ -41,6 +41,7 @@ using namespace sp;
 
 bool Parser::sInPreprocessor = false;
 bool Parser::sDetectedIllegalPreprocessorSymbols = false;
+bool Parser::sAllowEnumNameBinding = false;
 
 void
 Parser::parse()
