@@ -1143,6 +1143,8 @@ CastExpr::Analyze(SemaContext& sc)
     } else if (ltype->isFunction() != atype->isFunction()) {
         // Warn: unsupported cast.
         error(pos_, 237);
+    } else if (ltype->isFunction() && atype->isFunction()) {
+        matchtag(tag_, val_.tag, MATCHTAG_COERCE);
     } else if (val_.sym && val_.sym->tag == pc_tag_void) {
         error(pos_, 89);
     } else if (atype->isEnumStruct()) {
