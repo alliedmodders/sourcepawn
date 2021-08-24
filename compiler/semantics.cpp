@@ -2086,13 +2086,16 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
                 }
                 if (arg->type.dim[0] != 0) {
                     assert(arg->type.dim[0] > 0);
+                    if (val->constval == 0) {
+                        error(pos_, 47);
+                        return false;
+                    }
                     if (val->ident == iARRAYCELL) {
-                        if (val->constval == 0 || arg->type.dim[0] != val->constval) {
+                        if (arg->type.dim[0] != val->constval) {
                             error(pos_, 47); // array sizes must match
                             return false;
                         }
                     } else {
-                        assert(val->constval != 0); // literal array must have a size
                         if ((val->constval > 0 && arg->type.dim[0] != val->constval) ||
                             (val->constval < 0 && arg->type.dim[0] < -val->constval))
                         {
