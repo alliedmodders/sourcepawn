@@ -120,10 +120,8 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
         return false;
     }
 
-    if (visited->at(arg->index)) {
-        error(field.value->pos(), 58);
-        return false;
-    }
+    if (visited->at(arg->index))
+        error(field.value->pos(), 241, field.name->chars());
 
     visited->at(arg->index) = true;
 
