@@ -295,6 +295,7 @@ static const char* warnmsg[] = {
     /*241*/ "scalar assignment to array is deprecated; use \"{ <val>, ... }\" instead\n",
     /*242*/ "function \"%s\" should return an explicit value\n",
     /*243*/ "syntax is deprecated; use parenthesis instead\n",
+	/*244*/ "field '%s' was specified twice\n",
 };
 
 static const char* errmsg_ex[] = {
