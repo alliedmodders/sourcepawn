@@ -25,6 +25,7 @@
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
+#include "new-parser.h"
 #include "parse-node.h"
 #include "sctracker.h"
 #include "scvars.h"
@@ -1042,10 +1043,13 @@ SymbolExpr::AnalyzeWithOptions(bool allow_types)
     val_.sym = sym_;
 
     // Don't expose the tag of old enumroots.
-    if (sym_->enumroot && !gTypes.find(sym_->tag)->asEnumStruct())
+    if (sym_->enumroot && !gTypes.find(sym_->tag)->asEnumStruct() && !sym_->methodmap) {
         val_.tag = 0;
-    else
+        if (!Parser::sAllowEnumNameBinding)
+            error(pos_, 174, sym_->name());
+    } else {
         val_.tag = sym_->tag;
+    }
 
     if (sym_->ident == iCONSTEXPR) {
         // Hack: __LINE__ is updated by the lexer, so we have to special case

@@ -2063,7 +2063,10 @@ needsub()
     int tag;
     cell val;
     symbol* sym;
+
+    ke::SaveAndSet<bool> allow_enums(&Parser::sAllowEnumNameBinding, true);
     exprconst(&val, &tag, &sym); /* get value (must be constant expression) */
+
     if (!is_valid_index_tag(tag)) {
         error(77, gTypes.find(tag)->prettyName());
         val = 1;
@@ -2265,6 +2268,8 @@ parse_old_array_dims(declinfo_t* decl, int flags) {
             int tag;
             value val;
             symbol* sym;
+
+            ke::SaveAndSet<bool> allow_enums(&Parser::sAllowEnumNameBinding, true);
             int ident = doexpr2(TRUE, FALSE, FALSE, FALSE, &tag, &sym, &val);
 
             if (!is_valid_index_tag(tag))

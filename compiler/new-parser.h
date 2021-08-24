@@ -40,6 +40,7 @@ class Parser : public ExpressionParser
 
     static bool sInPreprocessor;
     static bool sDetectedIllegalPreprocessorSymbols;
+    static bool sAllowEnumNameBinding;
 
   private:
     typedef int (Parser::*HierFn)(value*);
