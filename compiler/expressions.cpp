@@ -754,11 +754,11 @@ expression(cell* val, int* tag, symbol** symptr, value* _lval)
 bool
 is_valid_index_tag(int tag)
 {
-    if (tag == 0 || tag == pc_anytag)
+    if (tag == 0 || tag == pc_anytag || tag == pc_tag_string)
         return true;
 
     Type* idx_type = gTypes.find(tag);
-    return idx_type->isEnum();
+    return idx_type->isEnum() || idx_type->isLabelTag();
 }
 
 void

@@ -110,6 +110,14 @@ Type::kindName() const
   }
 }
 
+bool
+Type::isLabelTag() const
+{
+    if (tagid() == 0 || tagid() == pc_tag_bool || tagid() == sc_rationaltag)
+        return false;
+    return kind_ == TypeKind::None;
+}
+
 TypeDictionary::TypeDictionary() {}
 
 Type*
