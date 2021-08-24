@@ -1,0 +1,1 @@
+(9) : error 244: field 'version' was specified twice
