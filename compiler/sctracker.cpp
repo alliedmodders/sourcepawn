@@ -430,10 +430,10 @@ methodmap_find_by_name(sp::Atom* name)
 methodmap_method_t*
 methodmap_find_method(methodmap_t* map, sp::Atom* name)
 {
-    for (const auto& method : map->methods) {
-        if (method->name == name)
-            return method.get();
-    }
+    auto iter = map->methods.find(name);
+    if (iter != map->methods.end())
+        return iter->second;
+
     if (map->parent)
         return methodmap_find_method(map->parent, name);
     return nullptr;

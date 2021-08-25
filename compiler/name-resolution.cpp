@@ -982,7 +982,7 @@ MethodmapDecl::Bind(SemaContext& sc)
             continue;
         }
 
-        auto method = std::make_unique<methodmap_method_t>(map_);
+        auto method = new methodmap_method_t(map_);
         method->name = prop->name;
 
         if (prop->getter && BindGetter(sc, prop))
@@ -991,7 +991,7 @@ MethodmapDecl::Bind(SemaContext& sc)
             method->setter = prop->setter->sym();
 
         if (method->getter || method->setter)
-            map_->methods.emplace_back(std::move(method));
+            map_->methods.emplace(prop->name, method);
     }
 
     for (const auto& method : methods_) {
@@ -1030,16 +1030,16 @@ MethodmapDecl::Bind(SemaContext& sc)
         if (!method->decl->Bind(sc))
             continue;
 
-        auto m = std::make_unique<methodmap_method_t>(map_);
+        auto m = new methodmap_method_t(map_);
         m->name = method->decl->name();
         m->target = method->decl->sym();
 
         if (is_ctor)
-            map_->ctor = m.get();
+            map_->ctor = m;
         if (method->is_static)
             m->is_static = true;
 
-        map_->methods.emplace_back(std::move(m));
+        map_->methods.emplace(m->name, m);
     }
 
     map_->keyword_nullable = nullable_;

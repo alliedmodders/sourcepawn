@@ -53,7 +53,8 @@ typedef enum LayoutSpec_t {
     Layout_Class
 } LayoutSpec;
 
-struct methodmap_method_t {
+struct methodmap_method_t : public PoolObject
+{
     explicit methodmap_method_t(methodmap_t* parent)
      : name(),
        parent(parent),
@@ -84,7 +85,8 @@ struct methodmap_method_t {
     }
 };
 
-struct methodmap_t : public SymbolData {
+struct methodmap_t : public SymbolData
+{
     methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name);
 
     methodmap_t* asMethodmap() override { return this; }
@@ -95,7 +97,7 @@ struct methodmap_t : public SymbolData {
     bool keyword_nullable;
     LayoutSpec spec;
     sp::Atom* name;
-    std::vector<std::unique_ptr<methodmap_method_t>> methods;
+    PoolMap<sp::Atom*, methodmap_method_t*> methods;
 
     bool must_construct_with_new() const {
         return nullable || keyword_nullable;
