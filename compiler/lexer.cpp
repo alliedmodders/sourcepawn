@@ -2938,16 +2938,16 @@ declare_handle_intrinsics()
 
     auto atom = gAtoms.add("CloseHandle");
     if (symbol* sym = findglb(CompileContext::get(), atom, -1)) {
-        auto dtor = std::make_unique<methodmap_method_t>(map);
+        auto dtor = new methodmap_method_t(map);
         dtor->target = sym;
         dtor->name = gAtoms.add("~Handle");
-        map->dtor = dtor.get();
-        map->methods.push_back(std::move(dtor));
+        map->dtor = dtor;
+        map->methods.emplace(dtor->name, dtor);
 
-        auto close = std::make_unique<methodmap_method_t>(map);
+        auto close = new methodmap_method_t(map);
         close->target = sym;
         close->name = gAtoms.add("Close");
-        map->methods.push_back(std::move(close));
+        map->methods.emplace(close->name, close);
     }
 }
 
