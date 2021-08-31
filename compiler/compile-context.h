@@ -20,7 +20,9 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 class SymbolScope;
 struct symbol;
@@ -36,12 +38,16 @@ class CompileContext final
 
     static inline CompileContext& get() { return *sInstance; }
 
-    SymbolScope* globals() const { return globals_; }
-    void set_globals(SymbolScope* globals) { globals_ = globals; }
+    void CreateGlobalScope();
 
+    SymbolScope* globals() const { return globals_; }
     std::unordered_set<symbol*>& functions() { return functions_; }
+
+    const std::string& default_include() const { return default_include_; }
+    void set_default_include(const std::string& file) { default_include_ = file; }
 
   private:
     SymbolScope* globals_;
+    std::string default_include_;
     std::unordered_set<symbol*> functions_;
 };

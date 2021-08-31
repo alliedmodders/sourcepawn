@@ -37,21 +37,22 @@
 #include "symbols.h"
 
 AutoEnterScope::AutoEnterScope(SemaContext& sc, SymbolScope* scope)
-  : sc_(sc)
+  : sc_(sc),
+    prev_(sc.scope())
 {
-    assert(scope->parent() == sc.scope());
     sc.set_scope(scope);
 }
 
 AutoEnterScope::AutoEnterScope(SemaContext& sc, ScopeKind kind)
-  : sc_(sc)
+  : sc_(sc),
+    prev_(sc.scope())
 {
     sc.set_scope(new SymbolScope(sc.scope(), kind));
 }
 
 AutoEnterScope::~AutoEnterScope()
 {
-    sc_.set_scope(sc_.scope()->parent());
+    sc_.set_scope(prev_);
 }
 
 bool
@@ -379,7 +380,7 @@ Expr::AnalyzeForTest(SemaContext& sc)
 
     if (val_.tag != 0 || val_.tag != pc_tag_bool) {
         UserOperation userop;
-        if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop, pos_.line)) {
+        if (find_userop(sc, lneg, val_.tag, 0, 1, &val_, &userop)) {
             // Call user op for '!', then invert it. EmitTest will fold out the
             // extra invert.
             //
@@ -460,7 +461,7 @@ UnaryExpr::Analyze(SemaContext& sc)
                 val_.constval = ~val_.constval;
             break;
         case '!':
-            if (find_userop(lneg, val_.tag, 0, 1, &val_, &userop, pos_.line)) {
+            if (find_userop(sc, lneg, val_.tag, 0, 1, &val_, &userop)) {
                 expr_ = new CallUserOpExpr(userop, expr_);
                 val_ = expr_->val();
                 userop_ = true;
@@ -473,7 +474,7 @@ UnaryExpr::Analyze(SemaContext& sc)
             if (val_.ident == iCONSTEXPR && val_.tag == sc_rationaltag) {
                 float f = sp::FloatCellUnion(val_.constval).f32;
                 val_.constval = sp::FloatCellUnion(-f).cell;
-            } else if (find_userop(neg, val_.tag, 0, 1, &val_, &userop, pos_.line)) {
+            } else if (find_userop(sc, neg, val_.tag, 0, 1, &val_, &userop)) {
                 expr_ = new CallUserOpExpr(userop, expr_);
                 val_ = expr_->val();
                 userop_ = true;
@@ -535,7 +536,7 @@ IncDecExpr::Analyze(SemaContext& sc)
     }
 
     auto op = (token_ == tINC) ? user_inc : user_dec;
-    find_userop(op, expr_val.tag, 0, 1, &expr_val, &userop_, pos_.line);
+    find_userop(sc, op, expr_val.tag, 0, 1, &expr_val, &userop_);
 
     // :TODO: more type checks
     val_.ident = iEXPRESSION;
@@ -647,7 +648,7 @@ BinaryExpr::Analyze(SemaContext& sc)
 
     // The assignment operator is overloaded separately.
     if (IsAssignOp(token_)) {
-        if (!ValidateAssignmentRHS())
+        if (!ValidateAssignmentRHS(sc))
             return false;
     }
 
@@ -658,7 +659,7 @@ BinaryExpr::Analyze(SemaContext& sc)
         val_.tag = assignop_.sym->tag;
 
     if (oper_) {
-        if (find_userop(oper_, left_val.tag, right_val.tag, 2, nullptr, &userop_, pos_.line)) {
+        if (find_userop(sc, oper_, left_val.tag, right_val.tag, 2, nullptr, &userop_)) {
             val_.tag = userop_.sym->tag;
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
@@ -727,7 +728,7 @@ BinaryExpr::ValidateAssignmentLHS()
 }
 
 bool
-BinaryExpr::ValidateAssignmentRHS()
+BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
 {
     const auto& left_val = left_->val();
     const auto& right_val = right_->val();
@@ -816,7 +817,7 @@ BinaryExpr::ValidateAssignmentRHS()
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_, pos_.line);
+        find_userop(sc, nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
     }
 
     if (!oper_ && !checkval_string(&left_val, &right_val)) {
@@ -999,7 +1000,7 @@ ChainedCompareExpr::Analyze(SemaContext& sc)
             return false;
         }
 
-        if (find_userop(op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop, pos_.line)) {
+        if (find_userop(sc, op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
             if (op.userop.sym->tag != pc_tag_bool) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
@@ -1905,7 +1906,7 @@ CallExpr::Analyze(SemaContext& sc)
     unsigned int argidx = 0;
     arginfo* arglist = &sym_->function()->args[0];
     if (implicit_this_) {
-        if (!ProcessArg(&arglist[0], implicit_this_, 0))
+        if (!ProcessArg(sc, &arglist[0], implicit_this_, 0))
             return false;
         nargs++;
         argidx++;
@@ -1944,7 +1945,7 @@ CallExpr::Analyze(SemaContext& sc)
             return false;
 
         // Add the argument to |argv_| and perform type checks.
-        if (!ProcessArg(&arglist[argidx], param.expr, argpos))
+        if (!ProcessArg(sc, &arglist[argidx], param.expr, argpos))
             return false;
 
         assert(argv_[argpos].expr != nullptr);
@@ -1973,14 +1974,14 @@ CallExpr::Analyze(SemaContext& sc)
         if (arg.type.ident == 0 || arg.type.ident == iVARARGS)
             break;
         if (argidx >= argv_.size() || !argv_[argidx].expr) {
-            if (!ProcessArg(&arg, nullptr, argidx))
+            if (!ProcessArg(sc, &arg, nullptr, argidx))
                 return false;
         }
 
         Expr* expr = argv_[argidx].expr;
         if (expr->AsDefaultArgExpr() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(nullptr, arg.def->tag, arg.type.tag(), 2, nullptr, &userop, pos_.line))
+            if (find_userop(sc, nullptr, arg.def->tag, arg.type.tag(), 2, nullptr, &userop))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -1989,7 +1990,7 @@ CallExpr::Analyze(SemaContext& sc)
 }
 
 bool
-CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
+CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int pos)
 {
     while (pos >= argv_.size())
         argv_.push_back(ComputedArg{});
@@ -2067,7 +2068,7 @@ CallExpr::ProcessArg(arginfo* arg, Expr* param, unsigned int pos)
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(nullptr, val->tag, arg->type.tag(), 2, nullptr, &userop, pos_.line))
+                find_userop(sc, nullptr, val->tag, arg->type.tag(), 2, nullptr, &userop))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
@@ -2951,7 +2952,7 @@ FunctionInfo::Analyze(SemaContext& outer_sc)
 bool
 FunctionInfo::DoAnalyze(SemaContext& outer_sc)
 {
-    SemaContext sc(sym_, this);
+    SemaContext sc(outer_sc, sym_, this);
 
     if (sym_->skipped && !this_tag_)
         return true;
@@ -3136,7 +3137,7 @@ FunctionInfo::ProcessUses(SemaContext& outer_sc)
     if (!body_ || sym_->skipped)
         return;
 
-    SemaContext sc(sym_, this);
+    SemaContext sc(outer_sc, sym_, this);
     ke::SaveAndSet<symbol*> set_curfunc(&curfunc, sym_);
 
     for (const auto& arg : args_)
@@ -3280,7 +3281,9 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
     Type* type = gTypes.find(tag);
     if (!type->isEnum())
         return false;
-    symbol* sym = findconst(CompileContext::get(), scope, type->nameAtom(), -1);
+    symbol* sym = FindSymbol(scope, type->nameAtom());
+    if (!sym)
+        return false;
     return sym->data() && (sym->data()->asEnumStruct() || sym->data()->asEnum());
 }
 

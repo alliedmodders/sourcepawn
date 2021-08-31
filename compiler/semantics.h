@@ -31,20 +31,18 @@ class SemaContext
   public:
     SemaContext()
       : cc_(CompileContext::get()),
-        func_(nullptr),
-        scope_(nullptr)
+        func_(nullptr)
     {
     }
-    SemaContext(symbol* func, FunctionInfo* func_node)
-      : cc_(CompileContext::get()),
+    SemaContext(SemaContext& parent, symbol* func, FunctionInfo* func_node)
+      : cc_(parent.cc_),
+        scope_(parent.scope_),
         func_(func),
-        func_node_(func_node),
-        scope_(nullptr)
+        func_node_(func_node)
     {
     }
 
-    ~SemaContext() {
-    }
+    ~SemaContext() {}
 
     CompileContext& cc() { return cc_; }
 
@@ -96,9 +94,9 @@ class SemaContext
 
   private:
     CompileContext& cc_;
+    SymbolScope* scope_ = nullptr;
     symbol* func_ = nullptr;
     FunctionInfo* func_node_ = nullptr;
-    SymbolScope* scope_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
@@ -122,6 +120,7 @@ class AutoEnterScope final
 
   private:
     SemaContext& sc_;
+    SymbolScope* prev_;
 };
 
 class AutoCollectSemaFlow final

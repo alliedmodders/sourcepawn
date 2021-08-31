@@ -44,30 +44,58 @@ using namespace sp;
 
 bool Parser::sInPreprocessor = false;
 bool Parser::sDetectedIllegalPreprocessorSymbols = false;
-int Parser::sActive = 0;
 
-Parser::Parser()
+Parser::Parser(CompileContext& cc)
+  : cc_(cc)
 {
-    sActive++;
 }
 
 Parser::~Parser()
 {
-    sActive--;
 }
 
 StmtList*
-Parser::parse()
+Parser::Parse()
 {
     ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, true);
-
     std::deque<Stmt*> add_to_end;
 
     auto list = new ParseTree(token_pos_t{});
+
+    // Create a static scope for the main file.
+    assert(fcurrent == 0);
+    static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
+    list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back()));
+
+    if (!cc_.default_include().empty()) {
+        const char* incfname = cc_.default_include().c_str();
+        if (plungefile(incfname, FALSE, TRUE)) {
+            static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
+            list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back()));
+        }
+    }
+
+    // Prime the lexer.
+    preprocess(true);
+
     while (freading) {
         Stmt* decl = nullptr;
 
         int tok = lex();
+
+        // We don't have end-of-file tokens (yet), so we pop static scopes
+        // before every declaration. This should be after lex() so we've
+        // processed any end-of-file events. 
+        bool changed = false;
+        while (!static_scopes_.empty() && static_scopes_.back()->fnumber() != fcurrent) {
+            changed = true;
+            static_scopes_.pop_back();
+        }
+        assert(!static_scopes_.empty());
+
+        if (changed)
+            list->stmts().emplace_back(new ChangeScopeNode(current_pos(), static_scopes_.back()));
+
         switch (tok) {
             case 0:
                 /* ignore zero's */
@@ -136,6 +164,9 @@ Parser::parse()
                 auto result = plungefile(name.c_str() + 1, (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE)
                     report(FATAL_ERROR_READ) << name;
+
+                static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
+                decl = new ChangeScopeNode(current_pos(), static_scopes_.back());
                 break;
             }
             case '}':
@@ -218,7 +249,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
             error(143);
 
         VarParams params;
-        params.vclass = sGLOBAL;
+        params.vclass = fstatic ? sSTATIC : sGLOBAL;
         params.is_public = !!fpublic;
         params.is_static = !!fstatic;
         params.is_stock = !!fstock;
@@ -257,7 +288,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 bool
 Parser::PreprocExpr(cell* val, int* tag)
 {
-    Parser parser;
+    Parser parser(CompileContext::get());
     auto expr = parser.hier14();
 
     SemaContext sc;
@@ -1021,6 +1052,10 @@ Parser::constant()
             const auto& str = current_token()->data;
             return new StringExpr(pos, str.c_str(), str.size());
         }
+        case tTRUE:
+            return new TaggedValueExpr(current_pos(), pc_tag_bool, 1);
+        case tFALSE:
+            return new TaggedValueExpr(current_pos(), pc_tag_bool, 0);
         case '{':
         {
             ArrayExpr* expr = new ArrayExpr(pos);
@@ -1490,6 +1525,7 @@ Parser::parse_local_decl(int tokid, bool autozero)
     Parser::VarParams params;
     params.vclass = (tokid == tSTATIC) ? sSTATIC : sLOCAL;
     params.autozero = autozero;
+    params.is_static = (tokid == tSTATIC);
     return parse_var(&decl, params);
 }
 
@@ -1840,10 +1876,6 @@ Parser::parse_methodmap()
     auto name_atom = ident;
     if (!isupper(name_atom->chars()[0]))
         report(109) << "methodmap";
-
-    auto old_spec = deduce_layout_spec_by_name(name_atom);
-    if (!can_redef_layout_spec(Layout_MethodMap, old_spec))
-        report(110) << name_atom << layout_spec_name(old_spec);
 
     bool nullable = matchtoken(tNULLABLE);
 

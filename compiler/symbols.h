@@ -30,6 +30,8 @@
 
 class CompileContext;
 class FunctionInfo;
+class SemaContext;
+struct token_pos_t;
 
 class FunctionData final : public SymbolData
 {
@@ -47,6 +49,7 @@ class FunctionData final : public SymbolData
     ArrayData* array;    /* For functions with array returns */
     FunctionInfo* node;
     FunctionInfo* forward;
+    symbol* alias;
 };
 
 class EnumStructVarData final : public SymbolData
@@ -230,12 +233,22 @@ struct symbol : public PoolObject
     symbol* child_;
 };
 
+enum ScopeKind {
+    sGLOBAL = 0,      /* global variable/constant class (no states) */
+    sLOCAL = 1,       /* local variable/constant */
+    sSTATIC = 2,      /* global lifetime, local or global scope */
+    sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
+    sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
+    sFILE_STATIC = 5, /* only appears on SymbolScope, to clarify sSTATIC */
+};
+
 class SymbolScope final : public PoolObject
 {
   public:
-    SymbolScope(SymbolScope* parent, ScopeKind kind)
+    SymbolScope(SymbolScope* parent, ScopeKind kind, int fnumber = -1)
       : parent_(parent),
-        kind_(kind)
+        kind_(kind),
+        fnumber_(fnumber)
     {}
 
     symbol* Find(sp::Atom* atom) const {
@@ -244,9 +257,6 @@ class SymbolScope final : public PoolObject
             return nullptr;
         return iter->second;
     }
-
-    // Only valid in global scope.
-    symbol* FindGlobal(sp::Atom* atom, int fnumber) const;
 
     void Add(symbol* sym);
 
@@ -260,13 +270,22 @@ class SymbolScope final : public PoolObject
         }
     }
 
+    bool IsGlobalOrFileStatic() const {
+        return kind_ == sGLOBAL || kind_ == sFILE_STATIC;
+    }
+    bool IsLocalOrArgument() const {
+        return kind_ == sLOCAL || kind_ == sARGUMENT;
+    }
+
     SymbolScope* parent() const { return parent_; }
     ScopeKind kind() const { return kind_; }
+    int fnumber() const { return fnumber_; }
 
   private:
     SymbolScope* parent_;
     ScopeKind kind_;
     PoolMap<sp::Atom*, symbol*> symbols_;
+    int fnumber_;
 };
 
 struct value {
@@ -314,20 +333,20 @@ struct svalue {
 
 void AddGlobal(CompileContext& cc, symbol* sym);
 
-symbol* FindSymbol(CompileContext& cc, SymbolScope* chain, sp::Atom* name, int fnumber,
-                   SymbolScope** found = nullptr);
+symbol* FindSymbol(SymbolScope* scope, sp::Atom* name, SymbolScope** found = nullptr);
+symbol* FindSymbol(SemaContext& sc, sp::Atom* name, SymbolScope** found = nullptr);
+void DefineSymbol(SemaContext& sc, symbol* sym);
+symbol* DefineConstant(CompileContext& cc, sp::Atom* name, cell val, int tag);
+symbol* DefineConstant(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, cell val,
+                       int vclass, int tag);
+bool CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, int vclass);
 
-symbol* findglb(CompileContext& cc, sp::Atom* name, int fnumber);
-symbol* findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found = nullptr);
-symbol* findconst(CompileContext& cc, SymbolScope* scope, sp::Atom* name, int fnumber);
 void markusage(symbol* sym, int usage);
 symbol* NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[],
                     int numdim, int semantic_tag);
 int findnamedarg(arginfo* arg, sp::Atom* name);
 symbol* FindEnumStructField(Type* type, sp::Atom* name);
 std::string funcdisplayname(const char* funcname);
-symbol* add_constant(CompileContext& cc, SymbolScope* scope, sp::Atom* name, cell val,
-                     int vclass, int tag, int fnumber);
 void reduce_referrers(CompileContext& cc);
 void deduce_liveness(CompileContext& cc);
 symbol* declare_methodmap_symbol(CompileContext& cc, methodmap_t* map);

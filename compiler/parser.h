@@ -29,16 +29,15 @@
 class Parser : public ExpressionParser
 {
   public:
-    Parser();
+    explicit Parser(CompileContext& cc);
     ~Parser();
 
     static bool PreprocExpr(cell* val, int* tag);
 
-    StmtList* parse();
+    StmtList* Parse();
 
     static bool sInPreprocessor;
     static bool sDetectedIllegalPreprocessorSymbols;
-    static int sActive;
 
   private:
     typedef int (Parser::*HierFn)(value*);
@@ -129,5 +128,7 @@ class Parser : public ExpressionParser
     bool consume_line();
 
   private:
+    CompileContext& cc_;
     bool in_loop_ = false;
+    std::vector<SymbolScope*> static_scopes_;
 };

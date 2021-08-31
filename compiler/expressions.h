@@ -27,6 +27,7 @@
 #include "parse-node.h"
 #include "sc.h"
 
+class SemaContext;
 struct value;
 struct svalue;
 
@@ -56,8 +57,8 @@ class ExpressionParser
 #define MATCHTAG_ENUM_ASSN 0x10  // enum assignment
 
 struct UserOperation;
-bool find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
-                 UserOperation* op, int fnumber);
+bool find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam,
+                 const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);
 
 int commutative(void (*oper)());

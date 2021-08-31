@@ -144,6 +144,24 @@ class Stmt : public ParseNode
     FlowType flow_type_ = Flow_None;
 };
 
+class ChangeScopeNode : public Stmt
+{
+  public:
+    explicit ChangeScopeNode(const token_pos_t& pos, SymbolScope* scope)
+      : Stmt(pos),
+        scope_(scope)
+    {}
+
+    virtual bool EnterNames(SemaContext& sc) override;
+    virtual bool Bind(SemaContext& sc) override;
+    virtual bool Analyze(SemaContext&) override { return true; }
+    virtual void ProcessUses(SemaContext&) override {}
+    virtual void DoEmit(CodegenContext& cg) override {}
+
+  private:
+    SymbolScope* scope_;
+};
+
 class StmtList : public Stmt
 {
   public:
@@ -670,7 +688,7 @@ class BinaryExpr final : public BinaryExprBase
 
   private:
     bool ValidateAssignmentLHS();
-    bool ValidateAssignmentRHS();
+    bool ValidateAssignmentRHS(SemaContext& sc);
 
   private:
     UserOperation userop_;
@@ -930,7 +948,7 @@ class CallExpr final : public Expr
     }
 
   private:
-    bool ProcessArg(arginfo* arg, Expr* param, unsigned int pos);
+    bool ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int pos);
 
     int token_;
     Expr* target_;

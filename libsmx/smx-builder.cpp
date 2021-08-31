@@ -106,6 +106,12 @@ SmxNameTable::add(StringPool& pool, const char* str)
   return add(pool.add(str));
 }
 
+uint32_t
+SmxNameTable::add(StringPool& pool, const std::string& str)
+{
+  return add(pool.add(str));
+}
+
 bool
 SmxNameTable::write(ISmxBuffer* buf)
 {

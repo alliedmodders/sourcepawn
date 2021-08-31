@@ -8,6 +8,8 @@
 #include "pool-allocator.h"
 #include "scvars.h"
 
+class SemaContext;
+
 #define MEMUSE_STATIC 0
 #define MEMUSE_DYNAMIC 1
 
@@ -126,8 +128,8 @@ functag_t* functag_from_tag(int tag);
 /**
  * Given a name or tag, find any extra weirdness it has associated with it.
  */
-LayoutSpec deduce_layout_spec_by_tag(int tag);
-LayoutSpec deduce_layout_spec_by_name(sp::Atom* name);
+LayoutSpec deduce_layout_spec_by_tag(SemaContext& sc, int tag);
+LayoutSpec deduce_layout_spec_by_name(SemaContext& sc, sp::Atom* name);
 const char* layout_spec_name(LayoutSpec spec);
 bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 

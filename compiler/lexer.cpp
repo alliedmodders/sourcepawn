@@ -966,7 +966,7 @@ command(bool allow_synthesized_tokens)
                         preproc_expr(&val, NULL);
                         sc_tabsize = (int)val;
                     } else if (current_token()->atom->str() == "unused") {
-                        if (Parser::sActive && allow_synthesized_tokens) {
+                        if (allow_synthesized_tokens) {
                             while (*lptr <= ' ' && *lptr != '\0')
                                 lptr++;
 
@@ -1712,6 +1712,7 @@ const char* sc_tokens[] = {"*=",
                            "enum",
                            "exit",
                            "explicit",
+                           "false",
                            "finally",
                            "for",
                            "foreach",
@@ -1755,6 +1756,7 @@ const char* sc_tokens[] = {"*=",
                            "switch",
                            "this",
                            "throw",
+                           "true",
                            "try",
                            "typedef",
                            "typeof",
@@ -2822,7 +2824,7 @@ declare_handle_intrinsics()
     declare_methodmap_symbol(cc, map);
 
     auto atom = gAtoms.add("CloseHandle");
-    if (symbol* sym = findglb(cc, atom, -1)) {
+    if (auto sym = FindSymbol(cc.globals(), atom)) {
         auto dtor = new methodmap_method_t(map);
         dtor->target = sym;
         dtor->name = gAtoms.add("~Handle");
