@@ -143,14 +143,6 @@ struct symbol;
 
 #define uMAINFUNC "main"
 
-enum ScopeKind {
-    sGLOBAL = 0,      /* global variable/constant class (no states) */
-    sLOCAL = 1,       /* local variable/constant */
-    sSTATIC = 2,      /* global life, local scope */
-    sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
-    sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
-};
-
 struct methodmap_method_t;
 
 #define DECLFLAG_ARGUMENT 0x02       // The declaration is for an argument.

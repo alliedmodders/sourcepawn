@@ -170,7 +170,7 @@ EnumDecl::EnterNames(SemaContext& sc)
     }
 
     if (tag) {
-        auto spec = deduce_layout_spec_by_tag(tag);
+        auto spec = deduce_layout_spec_by_tag(sc, tag);
         if (!can_redef_layout_spec(spec, Layout_Enum))
             report(pos_, 110) << name_ << layout_spec_name(spec);
     }
@@ -179,9 +179,9 @@ EnumDecl::EnterNames(SemaContext& sc)
     EnumData* enumroot = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
-            if ((enumsym = findglb(sc.cc(), name_, pos_.file)) != NULL) {
+            if ((enumsym = FindSymbol(sc, name_)) != nullptr) {
                 // If we were previously defined as a methodmap, don't overwrite the
-                // symbol. Otherwise, flow into add_constant where we will error.
+                // symbol. Otherwise, flow into DefineConstant where we will error.
                 if (enumsym->ident != iMETHODMAP)
                     enumsym = nullptr;
             }
@@ -189,7 +189,7 @@ EnumDecl::EnterNames(SemaContext& sc)
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = add_constant(sc.cc(), sc.scope(), name_, 0, vclass_, tag, pos_.file);
+            enumsym = DefineConstant(sc, name_, pos_, 0, vclass_, tag);
             if (enumsym)
                 enumsym->enumroot = true;
             // start a new list for the element names
@@ -206,9 +206,6 @@ EnumDecl::EnterNames(SemaContext& sc)
     for (const auto& field : fields_ ) {
         AutoErrorPos error_pos(field.pos);
 
-        if (findconst(sc.cc(), sc.scope(), field.name, pos_.file))
-            report(field.pos, 50) << field.name;
-
         if (field.value && field.value->Bind(sc) && field.value->Analyze(sc)) {
             int field_tag;
             if (field.value->EvalConst(&value, &field_tag)) {
@@ -218,7 +215,7 @@ EnumDecl::EnterNames(SemaContext& sc)
             }
         }
 
-        symbol* sym = add_constant(sc.cc(), sc.scope(), field.name, value, vclass_, tag, pos_.file);
+        symbol* sym = DefineConstant(sc, field.name, field.pos, value, vclass_, tag);
         if (!sym)
             continue;
 
@@ -256,7 +253,7 @@ EnumDecl::Bind(SemaContext& sc)
 bool
 PstructDecl::EnterNames(SemaContext& sc)
 {
-    auto spec = deduce_layout_spec_by_name(name_);
+    auto spec = deduce_layout_spec_by_name(sc, name_);
     if (!can_redef_layout_spec(spec, Layout_PawnStruct)) {
         report(pos_, 110) << name_ << layout_spec_name(spec);
         return false;
@@ -389,9 +386,10 @@ TypesetDecl::Bind(SemaContext& sc)
 bool
 ConstDecl::EnterNames(SemaContext& sc)
 {
-    sym_ = add_constant(sc.cc(), sc.scope(), name_, 0, vclass_, 0, pos_.file);
+    sym_ = DefineConstant(sc, name_, pos_, 0, vclass_, 0);
     return !!sym_;
 }
+
 bool
 ConstDecl::Bind(SemaContext& sc)
 {
@@ -423,20 +421,6 @@ ConstDecl::Bind(SemaContext& sc)
 }
 
 bool
-IsShadowedName(SemaContext& sc, sp::Atom* name)
-{
-    SymbolScope* scope;
-    if (symbol* sym = findloc(sc.scope(), name, &scope)) {
-        if (scope != sc.scope())
-            return true;
-    }
-    // ignore implicitly prototyped names.
-    if (symbol* sym = findglb(sc.cc(), name, -1))
-        return !(sym->ident == iFUNCTN && !sym->defined);
-    return false;
-}
-
-bool
 VarDecl::Bind(SemaContext& sc)
 {
     if (!sc.BindType(pos(), &type_))
@@ -453,20 +437,6 @@ VarDecl::Bind(SemaContext& sc)
         error(pos_, 144);
 
     if (vclass_ == sGLOBAL) {
-        sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
-        if (!sym_)
-            sym_ = findglb(sc.cc(), name_, pos_.file);
-
-        if (sym_) {
-            // Can't redefine a global or in-scope static variable.
-            if ((!is_static_ && !sym_->is_static) ||
-                (sym_->is_static && sym_->fnumber == pos_.file))
-            {
-                report(pos_, 21) << name_;
-                return false;
-            }
-        }
-
         if (type_.ident == iREFARRAY) {
             // Dynamic array in global scope.
             assert(type_.is_new);
@@ -474,61 +444,31 @@ VarDecl::Bind(SemaContext& sc)
         }
     }
 
-    if (vclass_ != sGLOBAL) {
-        // Note: block locals may be named identical to locals at higher
-        // compound blocks (as with standard C); so we must check (and add)
-        // the "nesting level" of local variables to verify the
-        // multi-definition of symbols.
-        SymbolScope* scope;
-        symbol* sym = findloc(sc.scope(), name_, &scope);
-        if (sym && scope == sc.scope())
-            report(pos_, 21) << name_;
+    bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
 
-        // Although valid, a local variable whose name is equal to that
-        // of a global variable or to that of a local variable at a lower
-        // level might indicate a bug.
-        if (vclass_ == sARGUMENT) {
-            auto sym = findglb(sc.cc(), name_, pos_.file);
-            if (sym && sym->ident != iFUNCTN)
-                report(pos_, 219) << name_;
-        } else {
-            if (IsShadowedName(sc, name_))
-                report(pos_, 219) << name_;
-        }
-
-        if (vclass_ == sSTATIC && type_.ident == iREFARRAY)
-            error(pos_, 165);
-    }
+    // REFARRAY is invalid in both file and local static contexts.
+    if ((vclass_ == sSTATIC || vclass_ == sGLOBAL) && type_.ident == iREFARRAY)
+        error(pos_, 165);
 
     if (gTypes.find(type_.tag())->kind() == TypeKind::Struct) {
-        if (!sym_) {
-            sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag());
-            AddGlobal(sc.cc(), sym_);
-        } else {
-            assert(sym_->is_struct);
-        }
+        sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag());
         sym_->is_struct = true;
         sym_->stock = is_stock_;
         sym_->is_const = true;
     } else {
-        if (!sym_) {
-            int ident = type_.ident;
-            if (vclass_ == sARGUMENT && ident == iARRAY)
-                ident = iREFARRAY;
+        int ident = type_.ident;
+        if (vclass_ == sARGUMENT && ident == iARRAY)
+            ident = iREFARRAY;
 
-            auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-            sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag(), dim,
-                               type_.numdim(), type_.enum_struct_tag());
-            sym_->defined = true;
-            sym_->is_static = is_static_;
-            if (vclass_ == sGLOBAL)
-                AddGlobal(sc.cc(), sym_);
-            else
-                sc.scope()->Add(sym_);
+        auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
+        sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag(), dim,
+                           type_.numdim(), type_.enum_struct_tag());
+        sym_->defined = true;
+        sym_->is_static = is_static_;
 
-            if (ident == iVARARGS)
-                markusage(sym_, uREAD);
-        }
+        if (ident == iVARARGS)
+            markusage(sym_, uREAD);
+
         sym_->is_const = type_.is_const;
         sym_->stock = is_stock_;
     }
@@ -543,6 +483,9 @@ VarDecl::Bind(SemaContext& sc)
 
     sym_->fnumber = pos_.file;
     sym_->lnumber = pos_.line;
+
+    if (def_ok)
+        DefineSymbol(sc, sym_);
 
     // LHS bind should now succeed.
     if (init_)
@@ -579,12 +522,7 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         report(pos_, 230) << name_;
     }
 
-    sym_ = findloc(sc.scope(), name_);
-    if (!sym_)
-        sym_ = findconst(sc.cc(), sc.scope(), name_, pos_.file);
-    if (!sym_)
-        sym_ = findglb(sc.cc(), name_, pos_.file);
-
+    sym_ = FindSymbol(sc, name_);
     if (!sym_) {
         report(pos_, 17) << name_;
         return false;
@@ -600,7 +538,7 @@ ThisExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = findloc(sc.scope(), gAtoms.add("this"));
+    sym_ = FindSymbol(sc, gAtoms.add("this"));
     if (!sym_) {
         error(pos_, 166);
         return false;
@@ -653,9 +591,7 @@ IsDefinedExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    symbol* sym = findloc(sc.scope(), name_);
-    if (!sym)
-        sym = findglb(sc.cc(), name_, pos_.file);
+    auto sym = FindSymbol(sc, name_);
     if (sym && sym->ident == iFUNCTN && !sym->defined)
         sym = nullptr;
     value_ = sym ? 1 : 0;
@@ -669,9 +605,7 @@ SizeofExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = findloc(sc.scope(), ident_);
-    if (!sym_)
-        sym_ = findglb(sc.cc(), ident_, pos_.file);
+    sym_ = FindSymbol(sc, ident_);
     if (!sym_) {
         report(pos_, 17) << ident_;
         return false;
@@ -821,20 +755,17 @@ FunctionDecl::EnterNames(SemaContext& sc)
     symbol* sym = nullptr;
     if (!info_->decl().opertok) {
         // Handle forwards.
-        sym = findglb(sc.cc(), name, pos_.file);
+        sym = FindSymbol(sc, name);
         if (sym && !CanRedefine(sym))
             return false;
     }
 
     if (!sym) {
         sym = new symbol(name, 0, iFUNCTN, sGLOBAL, 0);
-
-        if (info_->decl().opertok) {
+        if (info_->decl().opertok)
             sym->is_operator = true;
-            sc.cc().globals()->AddChain(sym);
-        } else {
-            AddGlobal(sc.cc(), sym);
-        }
+
+        DefineSymbol(sc, sym);
     }
 
     if (info_->body())
@@ -946,7 +877,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
     if (decl_.opertok)
         name_ = NameForOperator();
 
-    SemaContext sc(sym_, this);
+    SemaContext sc(outer_sc, sym_, this);
 
     if (strcmp(sym_->name(), uMAINFUNC) == 0) {
         if (!args_.empty())
@@ -986,8 +917,12 @@ FunctionInfo::Bind(SemaContext& outer_sc)
     if (body_)
         ok &= body_->Bind(sc);
 
-    if (sym_->native && alias_)
-        insert_alias(sym_->name(), alias_);
+    if (sym_->native && alias_) {
+        auto alias_sym = FindSymbol(sc, alias_);
+        if (!alias_sym)
+            report(pos_, 17) << alias_;
+        sym_->function()->alias = alias_sym;
+    }
 
     sc_err_status = FALSE;
     return ok;
@@ -1189,9 +1124,7 @@ bool
 PragmaUnusedStmt::Bind(SemaContext& sc)
 {
     for (const auto& name : names_) {
-        symbol* sym = findloc(sc.scope(), name);
-        if (!sym)
-            sym = findglb(sc.cc(), name, pos_.file);
+        symbol* sym = FindSymbol(sc, name);
         if (!sym) {
             report(pos_, 17) << name;
             continue;
@@ -1206,11 +1139,8 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 {
     AutoCountErrors errors;
 
-    if (findglb(sc.cc(), name_, pos_.file) || findconst(sc.cc(), sc.scope(), name_, pos_.file))
-        report(pos_, 21) << name_;
-
     AutoErrorPos error_pos(pos_);
-    root_ = add_constant(sc.cc(), sc.scope(), name_, 0, sGLOBAL, 0, pos_.file);
+    root_ = DefineConstant(sc, name_, pos_, 0, sGLOBAL, 0);
     root_->tag = gTypes.defineEnumStruct(name_->chars(), root_)->tagid();
     root_->enumroot = true;
     root_->ident = iENUMSTRUCT;
@@ -1326,6 +1256,10 @@ bool
 MethodmapDecl::EnterNames(SemaContext& sc)
 {
     AutoErrorPos error_pos(pos_);
+
+    auto old_spec = deduce_layout_spec_by_name(sc, name_);
+    if (!can_redef_layout_spec(Layout_MethodMap, old_spec))
+        report(110) << name_ << layout_spec_name(old_spec);
 
     map_ = methodmap_add(nullptr, Layout_MethodMap, name_);
     gTypes.defineMethodmap(name_->chars(), map_);
@@ -1524,4 +1458,18 @@ bool
 StaticAssertStmt::Bind(SemaContext& sc)
 {
     return expr_->Bind(sc);
+}
+
+bool
+ChangeScopeNode::EnterNames(SemaContext& sc)
+{
+    sc.set_scope(scope_);
+    return true;
+}
+
+bool
+ChangeScopeNode::Bind(SemaContext& sc)
+{
+    sc.set_scope(scope_);
+    return true;
 }

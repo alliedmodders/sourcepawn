@@ -14,6 +14,7 @@
 #include "emitter.h"
 #include "lexer.h"
 #include "sc.h"
+#include "semantics.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -457,7 +458,7 @@ methodmaps_free()
 }
 
 LayoutSpec
-deduce_layout_spec_by_tag(int tag)
+deduce_layout_spec_by_tag(SemaContext& sc, int tag)
 {
     if (methodmap_t* map = methodmap_find_by_tag(tag))
         return map->spec;
@@ -470,7 +471,7 @@ deduce_layout_spec_by_tag(int tag)
         return Layout_PawnStruct;
 
     if (Type* type = gTypes.find(tag)) {
-      if (findglb(CompileContext::get(), type->nameAtom(), -1))
+      if (FindSymbol(sc.scope(), type->nameAtom()))
           return Layout_Enum;
     }
 
@@ -478,13 +479,13 @@ deduce_layout_spec_by_tag(int tag)
 }
 
 LayoutSpec
-deduce_layout_spec_by_name(sp::Atom* name)
+deduce_layout_spec_by_name(SemaContext& sc, sp::Atom* name)
 {
     Type* type = gTypes.find(name);
     if (!type)
         return Layout_None;
 
-    return deduce_layout_spec_by_tag(type->tagid());
+    return deduce_layout_spec_by_tag(sc, type->tagid());
 }
 
 const char*

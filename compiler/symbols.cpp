@@ -49,37 +49,6 @@ SymbolScope::AddChain(symbol* sym)
         sym->next = iter->second;
         iter->second = sym;
     }
-#ifndef NDEBUG
-    for (auto iter = sym->next; iter; iter = iter->next) {
-        if (sym->is_static)
-            assert(!iter->is_static || iter->fnumber != sym->fnumber || sym->is_operator);
-        else
-            assert(iter->is_static || iter->is_operator);
-    }
-#endif
-}
-
-symbol*
-SymbolScope::FindGlobal(sp::Atom* atom, int fnumber) const
-{
-    assert(!parent_);
-
-    auto iter = symbols_.find(atom);
-    if (iter == symbols_.end())
-        return nullptr;
-
-    // In case a static shadows a global, we search statics first.
-    // When reparse goes away, we can introduce a separate static scope.
-    symbol* nonstatic = nullptr;
-    for (auto sym = iter->second; sym; sym = sym->next) {
-        if (!nonstatic && (!sym->is_static || fnumber == -1)) {
-            nonstatic = sym;
-            continue;
-        }
-        if (sym->fnumber == fnumber)
-            return sym;
-    }
-    return nonstatic;
 }
 
 void AddGlobal(CompileContext& cc, symbol* sym)
@@ -88,54 +57,6 @@ void AddGlobal(CompileContext& cc, symbol* sym)
 
     auto scope = cc.globals();
     scope->AddChain(sym);
-}
-
-symbol*
-findconst(CompileContext& cc, SymbolScope* scope, sp::Atom* name, int fnumber)
-{
-    symbol* sym;
-
-    sym = findloc(scope, name);          /* try local symbols first */
-    if (sym == NULL || sym->ident != iCONSTEXPR) { /* not found, or not a constant */
-        sym = findglb(cc, name, fnumber);
-    }
-    if (sym == NULL || sym->ident != iCONSTEXPR)
-        return NULL;
-    assert(sym->parent() == NULL || sym->enumfield);
-    /* ^^^ constants have no hierarchy, but enumeration fields may have a parent */
-    return sym;
-}
-
-symbol*
-findglb(CompileContext& cc, sp::Atom* name, int fnumber)
-{
-    return cc.globals()->FindGlobal(name, fnumber);
-}
-
-symbol*
-FindSymbol(CompileContext& cc, SymbolScope* chain, sp::Atom* name, int fnumber, SymbolScope** found)
-{
-    if (auto sym = findloc(chain, name, found))
-        return sym;
-    if (auto sym = cc.globals()->FindGlobal(name, fnumber)) {
-        if (found)
-            *found = cc.globals();
-        return sym;
-    }
-    return nullptr;
-}
-
-symbol*
-findloc(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
-{
-    for (auto iter = scope; iter; iter = iter->parent()) {
-        if (auto sym = iter->Find(name)) {
-            if (found)
-                *found = iter;
-            return sym;
-        }
-    }
-    return nullptr;
 }
 
 void
@@ -154,7 +75,8 @@ FunctionData::FunctionData()
  : funcid(0),
    array(nullptr),
    node(nullptr),
-   forward(nullptr)
+   forward(nullptr),
+   alias(nullptr)
 {
     // Always have one empty argument at the end.
     args.emplace_back();
@@ -449,39 +371,102 @@ deduce_liveness(CompileContext& cc)
     });
 }
 
-/*  add_constant
- *
- *  Adds a symbol to the symbol table. Returns NULL on failure.
- */
-symbol*
-add_constant(CompileContext& cc, SymbolScope* scope, sp::Atom* name, cell val, int vclass,
-             int tag, int fnumber)
+enum class NewNameStatus {
+    Ok,
+    Shadowed,
+    Duplicated
+};
+
+static NewNameStatus
+GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
 {
-    /* Test whether a global or local symbol with the same name exists. Since
-     * constants are stored in the symbols table, this also finds previously
-     * defind constants. */
-    SymbolScope* found;
-    if (symbol* sym = FindSymbol(cc, scope, name, fnumber, &found)) {
-        if (found == scope || (found == cc.globals() && vclass == sGLOBAL)) {
-            report(21) << name; /* symbol already defined */
-            return sym;
-        }
+    SymbolScope* scope;
+    symbol* sym = FindSymbol(sc, name, &scope);
+    if (!sym)
+        return NewNameStatus::Ok;
+    if (scope->kind() == sGLOBAL && sc.scope()->IsGlobalOrFileStatic()) {
+        if (vclass == sSTATIC)
+            return NewNameStatus::Shadowed;
+        return NewNameStatus::Duplicated;
     }
+    if (scope == sc.scope())
+        return NewNameStatus::Duplicated;
+    if (scope->IsLocalOrArgument())
+        return NewNameStatus::Shadowed;
+    return NewNameStatus::Ok;
+}
 
+bool
+CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, int vclass)
+{
+    auto name_status = GetNewNameStatus(sc, name, vclass);
+    if (name_status == NewNameStatus::Duplicated) {
+        report(pos, 21) << name;
+        return false;
+    }
+    if (name_status == NewNameStatus::Shadowed)
+        report(pos, 219) << name;
+    return true;
+}
+
+static symbol*
+NewConstant(sp::Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
+{
     auto sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
-    if (vclass == sGLOBAL)
-        AddGlobal(cc, sym);
-    else
-        scope->Add(sym);
-
+    sym->fnumber = pos.file;
+    sym->lnumber = pos.line;
     sym->defined = true;
     return sym;
 }
 
 symbol*
+DefineConstant(CompileContext& cc, sp::Atom* name, cell val, int tag)
+{
+    auto globals = cc.globals();
+    if (auto sym = globals->Find(name)) {
+        sym->setAddr(val);
+        sym->tag = tag;
+        return sym;
+    }
+
+    auto sym = NewConstant(name, {}, val, sGLOBAL, tag);
+    globals->Add(sym);
+    return sym;
+}
+
+symbol*
+DefineConstant(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, cell val, int vclass,
+               int tag)
+{
+    auto sym = NewConstant(name, pos, val, vclass, tag);
+    if (CheckNameRedefinition(sc, name, pos, vclass))
+        DefineSymbol(sc, sym);
+    return sym;
+}
+
+symbol*
+FindSymbol(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
+{
+    for (auto iter = scope; iter; iter = iter->parent()) {
+        if (auto sym = iter->Find(name)) {
+            if (found)
+                *found = iter;
+            return sym;
+        }
+    }
+    return nullptr;
+}
+
+symbol*
+FindSymbol(SemaContext& sc, sp::Atom* name, SymbolScope** found)
+{
+    return FindSymbol(sc.scope(), name, found);
+}
+
+symbol*
 declare_methodmap_symbol(CompileContext& cc, methodmap_t* map)
 {
-    symbol* sym = findglb(cc, map->name, -1);
+    symbol* sym = FindSymbol(cc.globals(), map->name);
     if (sym && sym->ident != iMETHODMAP) {
         if (sym->ident == iCONSTEXPR) {
             // We should only hit this on the first pass. Assert really hard that
@@ -502,9 +487,26 @@ declare_methodmap_symbol(CompileContext& cc, methodmap_t* map)
     }
 
     sym = new symbol(map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
-    AddGlobal(cc, sym);
+    cc.globals()->Add(sym);
 
     sym->defined = true;
     sym->set_data(map);
     return sym;
+}
+
+void
+DefineSymbol(SemaContext& sc, symbol* sym)
+{
+    auto scope = sc.scope();
+    if (scope->kind() == sFILE_STATIC && sym->vclass != sSTATIC) {
+        // The default scope is global scope, but "file static" scope comes
+        // earlier in the lookup hierarchy, so skip past it if we need to.
+        assert(sym->vclass == sGLOBAL);
+        assert(scope->parent()->kind() == sGLOBAL);
+        scope = scope->parent();
+    }
+    if (scope->kind() == sGLOBAL || scope->kind() == sFILE_STATIC)
+        scope->AddChain(sym);
+    else
+        scope->Add(sym);
 }

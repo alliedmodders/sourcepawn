@@ -1541,8 +1541,8 @@ assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
 
         sp_file_natives_t& entry = natives->add();
 
-        if (lookup_alias(sym->name()))
-            entry.name = names->add(gAtoms, "@");
+        if (auto alias = sym->function()->alias)
+            entry.name = names->add(gAtoms, "@" + alias->nameAtom()->str());
         else
             entry.name = names->add(sym->nameAtom());
 

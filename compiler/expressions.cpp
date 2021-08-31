@@ -104,8 +104,8 @@ MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
 }
 
 bool
-find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval, UserOperation* op,
-            int fnumber)
+find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
+            UserOperation* op)
 {
     static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
                                        "",  "",  "<=", ">=", "<", ">", "==", "!="};
@@ -161,8 +161,9 @@ find_userop(void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
     if (opername[0] == '\0')
         return false;
 
+    // :TODO: restrict this to globals.
     auto opername_atom = gAtoms.add(opername);
-    symbol* chain = findglb(CompileContext::get(), opername_atom, fnumber);
+    symbol* chain = FindSymbol(sc, opername_atom);
     if (!chain)
         return false;
 

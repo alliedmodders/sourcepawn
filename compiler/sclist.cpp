@@ -34,9 +34,6 @@
 #include "scvars.h"
 #include "symbols.h"
 
-static bool sAliasTableInitialized;
-static ke::HashMap<sp::CharsAndLength, sp::Atom*, KeywordTablePolicy> sAliases;
-
 struct MacroTablePolicy {
     static bool matches(const std::string& a, const std::string& b) {
         return a == b;
@@ -114,42 +111,6 @@ delete_stringtable(stringlist* root)
         cur = next;
     }
     memset(root, 0, sizeof(stringlist));
-}
-
-void
-insert_alias(const char* name, sp::Atom* alias)
-{
-    if (!sAliasTableInitialized) {
-        sAliases.init(128);
-        sAliasTableInitialized = true;
-    }
-
-    sp::CharsAndLength key(name, strlen(name));
-    auto p = sAliases.findForAdd(key);
-    if (p.found())
-        p->value = alias;
-    else
-        sAliases.add(p, key, alias);
-}
-
-sp::Atom*
-lookup_alias(const char* name)
-{
-    if (!sAliasTableInitialized)
-        return nullptr;
-
-    sp::CharsAndLength key(name, strlen(name));
-    auto p = sAliases.find(key);
-    if (!p.found())
-        return nullptr;
-    return p->value;
-}
-
-void
-delete_aliastable(void)
-{
-    if (sAliasTableInitialized)
-        sAliases.clear();
 }
 
 /* ----- include paths list -------------------------------------- */

@@ -23,15 +23,25 @@
 
 #include <assert.h>
 
+#include "symbols.h"
+
 CompileContext* CompileContext::sInstance = nullptr;
 
 CompileContext::CompileContext()
+  : globals_(nullptr)
 {
     assert(!sInstance);
     sInstance = this;
+    default_include_ = sDEF_PREFIX;
 }
 
 CompileContext::~CompileContext()
 {
     sInstance = nullptr;
+}
+
+void
+CompileContext::CreateGlobalScope()
+{
+    globals_ = new SymbolScope(nullptr, sGLOBAL);
 }

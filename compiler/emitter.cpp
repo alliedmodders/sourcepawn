@@ -939,11 +939,8 @@ ffcall(symbol* sym, int numargs)
 
         /* Look for an alias */
         symbol* target = sym;
-        if (sp::Atom* aliasname = lookup_alias(sym->name())) {
-            symbol* asym = findglb(CompileContext::get(), aliasname, -1);
-            if (asym && asym->ident == iFUNCTN && sym->native)
-                target = asym;
-        }
+        if (auto alias = target->function()->alias)
+            target = alias;
         stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(target)));
         stgwrite(" ");
         outval(numargs, FALSE);

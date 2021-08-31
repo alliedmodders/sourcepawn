@@ -74,7 +74,7 @@ static const char* errmsg[] = {
     /*047*/ "array sizes do not match, or destination array is too small\n",
     /*048*/ "arrays do not match\n",
     /*049*/ "invalid line continuation\n",
-    /*050*/ "constant '%s' already defined\n",
+    /*050*/ "unused\n",
     /*051*/ "overloaded operator '%s' does not return bool\n",
     /*052*/ "array size exceeds memory capacity\n",
     /*053*/ "unused53\n",

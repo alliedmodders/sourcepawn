@@ -108,7 +108,7 @@ sp::StringPool gAtoms;
 static void resetglobals(void);
 static void initglobals(void);
 static char* get_extension(char* filename);
-static void setopt(int argc, char** argv, char* oname, char* ename, char* pname);
+static void setopt(CompileContext& cc, int argc, char** argv, char* oname, char* ename);
 static void setconfig(char* root);
 static void setcaption(void);
 static void setconstants(void);
@@ -149,13 +149,12 @@ int
 pc_compile(int argc, char* argv[]) {
     int jmpcode;
     int retcode;
-    char incfname[PATH_MAX];
     int64_t inpfmark;
     int lcl_tabsize, lcl_require_newdecls;
     char* ptr;
 
     CompileContext cc;
-    cc.set_globals(new SymbolScope(nullptr, sGLOBAL));
+    cc.CreateGlobalScope();
 
 #ifdef __EMSCRIPTEN__
     setup_emscripten_fs();
@@ -171,7 +170,7 @@ pc_compile(int argc, char* argv[]) {
     if ((jmpcode = setjmp(errbuf)) != 0)
         goto cleanup;
 
-    setopt(argc, argv, outfname, errfname, incfname);
+    setopt(cc, argc, argv, outfname, errfname);
     strcpy(binfname, outfname);
     ptr = get_extension(binfname);
     if (ptr != NULL && strcasecmp(ptr, ".asm") == 0)
@@ -234,16 +233,12 @@ pc_compile(int argc, char* argv[]) {
     writeleader();
     insert_dbgfile(inpf->name());   /* attach to debug information */
     insert_inputfile(inpf->name()); /* save for the error system */
-    if (strlen(incfname) > 0) {
-        plungefile(incfname, FALSE, TRUE); /* parse "default.inc" (again) */
-    }
-    preprocess(true); /* fetch first line */
 
     {
-        Parser parser;
+        Parser parser(cc);
 
         AutoCountErrors errors;
-        auto stmts = parser.parse();      /* process all input */
+        auto stmts = parser.Parse();      /* process all input */
         if (!stmts || !errors.ok() || sc_listing)
             goto cleanup;
 
@@ -318,7 +313,6 @@ cleanup:
     gCurrentLineStack.clear();
     gInputFileStack.clear();
 
-    delete_aliastable();
     delete_pathtable();
     delete_sourcefiletable();
     delete_inputfiletable();
@@ -522,7 +516,7 @@ Usage(args::Parser& parser, int argc, char** argv)
 }
 
 static void
-parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
+parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename)
 {
     args::Parser parser;
     parser.enable_inline_values();
@@ -555,7 +549,8 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
         Usage(parser, argc, argv);
 
     if (opt_prefixfile.hasValue())
-        SafeStrcpy(pname, PATH_MAX, opt_prefixfile.value().c_str());
+        cc.set_default_include(opt_prefixfile.value());
+
     if (opt_outputfile.hasValue())
         SafeStrcpy(oname, PATH_MAX, opt_outputfile.value().c_str());
 
@@ -626,7 +621,7 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
             int i = (int)(ptr - arg);
             SafeStrcpyN(str, PATH_MAX, arg, i);
             i = atoi(ptr + 1);
-            add_constant(CompileContext::get(), nullptr, gAtoms.add(str), i, sGLOBAL, 0, -1);
+            DefineConstant(CompileContext::get(), gAtoms.add(str), i, sGLOBAL);
         } else {
             SafeStrcpy(str, sizeof(str) - 5, arg); /* -5 because default extension is ".sp" */
             set_extension(str, ".sp", FALSE);
@@ -651,15 +646,13 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname)
 }
 
 static void
-setopt(int argc, char** argv, char* oname, char* ename, char* pname)
+setopt(CompileContext& cc, int argc, char** argv, char* oname, char* ename)
 {
     delete_sourcefiletable(); /* make sure it is empty */
     *oname = '\0';
     *ename = '\0';
-    *pname = '\0';
-    strcpy(pname, sDEF_PREFIX);
 
-    parseoptions(argc, argv, oname, ename, pname);
+    parseoptions(cc, argc, argv, oname, ename);
 }
 
 #if defined __EMSCRIPTEN__
@@ -747,14 +740,12 @@ setconstants(void)
     assert(sc_rationaltag);
 
     auto& cc = CompileContext::get();
-    add_constant(cc, nullptr, gAtoms.add("true"), 1, sGLOBAL, 1, -1); /* boolean flags */
-    add_constant(cc, nullptr, gAtoms.add("false"), 0, sGLOBAL, 1, -1);
-    add_constant(cc, nullptr, gAtoms.add("EOS"), 0, sGLOBAL, 0, -1); /* End Of String, or '\0' */
-    add_constant(cc, nullptr, gAtoms.add("INVALID_FUNCTION"), -1, sGLOBAL, pc_tag_nullfunc_t, -1);
-    add_constant(cc, nullptr, gAtoms.add("cellmax"), INT_MAX, sGLOBAL, 0, -1);
-    add_constant(cc, nullptr, gAtoms.add("cellmin"), INT_MIN, sGLOBAL, 0, -1);
+    DefineConstant(cc, gAtoms.add("EOS"), 0, 0);
+    DefineConstant(cc, gAtoms.add("INVALID_FUNCTION"), -1, pc_tag_nullfunc_t);
+    DefineConstant(cc, gAtoms.add("cellmax"), INT_MAX, 0);
+    DefineConstant(cc, gAtoms.add("cellmin"), INT_MIN, 0);
 
-    add_constant(cc, nullptr, gAtoms.add("__Pawn"), VERSION_INT, sGLOBAL, 0, -1);
+    DefineConstant(cc, gAtoms.add("__Pawn"), VERSION_INT, 0);
 
-    add_constant(cc, nullptr, gAtoms.add("debug"), 2, sGLOBAL, 0, -1);
+    DefineConstant(cc, gAtoms.add("debug"), 2, 0);
 }
