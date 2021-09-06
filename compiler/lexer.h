@@ -28,28 +28,16 @@ class CompileContext;
 class Type;
 
 struct token_pos_t {
-    int file;
-    int line;
-    int col;
-};
-
-// Helper for token info.
-struct token_t {
-    int id;
-    cell val;
-    const char* str;
-};
-
-struct token_ident_t {
-    token_t tok;
-    sp::Atom* name;
+    int file = 0;
+    int line = 0;
+    int col = 0;
 };
 
 struct full_token_t {
-    int id;
-    int value;
-    char str[sLINEMAX + 1];
-    size_t len;
+    int id = 0;
+    int value = 0;
+    std::string data;
+    sp::Atom* atom = nullptr;
     token_pos_t start;
     token_pos_t end;
 };
@@ -264,20 +252,16 @@ int plungefile(const char* name, int try_currentpath,
                int try_includepaths); /* search through "include" paths */
 void preprocess(bool allow_synthesized_tokens);
 void lexinit(void);
-int lex(cell* lexvalue, const char** lexsym);
-int lextok(token_t* tok);
+int lex();
 int lexpeek(int id);
 void lexpush(void);
 void lexclr(int clreol);
 const token_pos_t& current_pos();
 int matchtoken(int token);
-int tokeninfo(cell* val, const char** str);
 full_token_t* current_token();
 int needtoken(int token);
-int matchtoken2(int id, token_t* tok);
-int expecttoken(int id, token_t* tok);
-int matchsymbol(token_ident_t* ident);
-int needsymbol(token_ident_t* ident);
+int matchsymbol(sp::Atom** name);
+int needsymbol(sp::Atom** name);
 int peek_same_line();
 int lex_same_line();
 void litadd_str(const char* str, size_t len, std::vector<cell>* out);
@@ -291,6 +275,12 @@ std::string get_token_string(int tok_id);
 int is_variadic(symbol* sym);
 int alpha(char c);
 bool NeedSemicolon();
+
+static inline full_token_t lex_tok()
+{
+    lex();
+    return *current_token();
+}
 
 enum class TerminatorPolicy {
     Newline,

@@ -297,16 +297,13 @@ pc_tagname(int tag)
 int
 pc_addtag(const char* name)
 {
-    int val;
-
     if (name == NULL) {
         /* no tagname was given, check for one */
-        const char* nameptr;
-        if (lex(&val, &nameptr) != tLABEL) {
+        if (lex() != tLABEL) {
             lexpush();
             return 0; /* untagged */
         }
-        name = nameptr;
+        name = current_token()->atom->chars();
     }
 
     return gTypes.defineTag(name)->tagid();

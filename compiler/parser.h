@@ -46,7 +46,7 @@ class Parser : public ExpressionParser
 
     static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
 
-    Stmt* parse_unknown_decl(const token_t* tok);
+    Stmt* parse_unknown_decl(const full_token_t* tok);
     Decl* parse_enum(int vclass);
     Stmt* parse_const(int vclass);
     Stmt* parse_stmt(int* lastindent, bool allow_decl);
@@ -77,10 +77,10 @@ class Parser : public ExpressionParser
 
     bool parse_decl(declinfo_t* decl, int flags);
     bool parse_old_decl(declinfo_t* decl, int flags);
-    bool parse_new_decl(declinfo_t* decl, const token_t* first, int flags);
+    bool parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags);
     void parse_post_array_dims(declinfo_t* decl, int flags);
-    bool parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags);
-    bool parse_new_typename(const token_t* tok, TypenameInfo* out);
+    bool parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flags);
+    bool parse_new_typename(const full_token_t* tok, TypenameInfo* out);
     bool reparse_old_decl(declinfo_t* decl, int flags);
     bool reparse_new_decl(declinfo_t* decl, int flags);
     void fix_mispredicted_postdims(declinfo_t* decl);

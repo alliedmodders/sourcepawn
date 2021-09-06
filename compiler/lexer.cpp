@@ -803,7 +803,7 @@ command(bool allow_synthesized_tokens)
     /* compiler directive found */
     indent_nowarn = TRUE; /* allow loose indentation" */
     lexclr(FALSE);        /* clear any "pushed" tokens */
-    tok = lex(&val, &str);
+    tok = lex();
     ret = SKIPPING ? CMD_CONDFALSE
                    : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
     switch (tok) {
@@ -894,9 +894,9 @@ command(bool allow_synthesized_tokens)
             break;
         case tpLINE:
             if (!SKIPPING) {
-                if (lex(&val, &str) != tNUMBER)
+                if (lex() != tNUMBER)
                     error(8); /* invalid/non-constant expression */
-                fline = (int)val;
+                fline = current_token()->value;
             }
             check_empty(lptr);
             break;
@@ -916,18 +916,18 @@ command(bool allow_synthesized_tokens)
         }
         case tpPRAGMA:
             if (!SKIPPING) {
-                if (lex(&val, &str) == tSYMBOL) {
-                    if (strcmp(str, "ctrlchar") == 0) {
+                if (lex() == tSYMBOL) {
+                    if (current_token()->atom->str() == "ctrlchar") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
                         if (*lptr == '\0') {
                             sc_ctrlchar = sc_ctrlchar_org;
                         } else {
-                            if (lex(&val, &str) != tNUMBER)
+                            if (lex() != tNUMBER)
                                 error(27); /* invalid character constant */
-                            sc_ctrlchar = (char)val;
+                            sc_ctrlchar = (char)current_token()->value;
                         }
-                    } else if (strcmp(str, "deprecated") == 0) {
+                    } else if (current_token()->atom->str() == "deprecated") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
                         pc_deprecate = (char*)lptr;
@@ -936,16 +936,16 @@ command(bool allow_synthesized_tokens)
                             '\0'); /* skip to end (ignore "extra characters on line") */
                         while (!pc_deprecate.empty() && isspace(pc_deprecate.back()))
                             pc_deprecate.pop_back();
-                    } else if (strcmp(str, "dynamic") == 0) {
+                    } else if (current_token()->atom->str() == "dynamic") {
                         preproc_expr(&pc_stksize_override, NULL);
-                    } else if (strcmp(str, "rational") == 0) {
+                    } else if (current_token()->atom->str() == "rational") {
                         while (*lptr != '\0')
                             lptr++;
-                    } else if (strcmp(str, "semicolon") == 0) {
+                    } else if (current_token()->atom->str() == "semicolon") {
                         cell val;
                         preproc_expr(&val, NULL);
                         gNeedSemicolonStack.back() = !!val;
-                    } else if (strcmp(str, "newdecls") == 0) {
+                    } else if (current_token()->atom->str() == "newdecls") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
                         if (strncmp((char*)lptr, "required", 8) == 0)
@@ -957,11 +957,11 @@ command(bool allow_synthesized_tokens)
                         lptr = (unsigned char*)strchr(
                             (char*)lptr,
                             '\0'); /* skip to end (ignore "extra characters on line") */
-                    } else if (strcmp(str, "tabsize") == 0) {
+                    } else if (current_token()->atom->str() == "tabsize") {
                         cell val;
                         preproc_expr(&val, NULL);
                         sc_tabsize = (int)val;
-                    } else if (strcmp(str, "unused") == 0) {
+                    } else if (current_token()->atom->str() == "unused") {
                         if (Parser::sActive && allow_synthesized_tokens) {
                             while (*lptr <= ' ' && *lptr != '\0')
                                 lptr++;
@@ -1095,8 +1095,9 @@ command(bool allow_synthesized_tokens)
         } /* case */
         case tpUNDEF:
             if (!SKIPPING) {
-                if (lex(&val, &str) == tSYMBOL) {
-                    delete_subst(str, strlen(str));
+                if (lex() == tSYMBOL) {
+                    const auto& str = current_token()->atom->str();
+                    delete_subst(str.c_str(), str.size());
                 } else {
                     error(20, str); /* invalid symbol name */
                 }
@@ -1602,14 +1603,8 @@ packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
         ucell c = litchar(&lptr, flags); // litchar() alters "lptr"
         if (c >= (ucell)(1 << sCHARBITS))
             error(43); // character constant exceeds range
-        if (tok->len >= sizeof(tok->str) - 1) {
-            error(75); // line too long
-            continue;
-        }
-        tok->str[tok->len++] = (char)c;
+        tok->data.push_back((char)c);
     }
-    assert(tok->len < sizeof(tok->str));
-    tok->str[tok->len] = '\0';
 }
 
 /*  lex(lexvalue,lexsym)        Lexical Analysis
@@ -1809,8 +1804,6 @@ lexinit()
     skiplevel = 0; /* preprocessor: not currently skipping */
     icomment = 0;  /* currently not in a multiline comment */
     _lexnewline = FALSE;
-    memset(&sNormalBuffer, 0, sizeof(sNormalBuffer));
-    memset(&sPreprocessBuffer, 0, sizeof(sPreprocessBuffer));
     sTokenBuffer = &sNormalBuffer;
 
     if (!sKeywords.elements()) {
@@ -1918,8 +1911,8 @@ push_synthesized_token(TokenKind kind, int col)
     full_token_t* tok = advance_token_ptr();
     tok->id = kind;
     tok->value = 0;
-    tok->str[0] = '\0';
-    tok->len = 0;
+    tok->data.clear();
+    tok->atom = nullptr;
     tok->start.line = fline;
     tok->start.col = (int)(lptr - pline);
     tok->start.file = fcurrent;
@@ -1947,34 +1940,26 @@ lexpop()
         sTokenBuffer->cursor = 0;
 }
 
-static void lex_once(full_token_t* tok, cell* lexvalue);
+static void lex_once(full_token_t* tok);
 static bool lex_match_char(char c);
-static void lex_string_literal(full_token_t* tok, cell* lexvalue);
-static bool lex_number(full_token_t* tok, cell* lexvalue);
-static bool lex_keyword(full_token_t* tok, const char* token_start);
-static void lex_symbol(full_token_t* tok, const char* token_start);
+static void lex_string_literal(full_token_t* tok);
+static bool lex_number(full_token_t* tok);
+static bool lex_keyword(full_token_t* tok, const char* token_start, size_t len);
+static void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
 static bool lex_symbol_or_keyword(full_token_t* tok);
 
 int
-lex(cell* lexvalue, const char** lexsym)
+lex()
 {
     int newline;
 
     if (sTokenBuffer->depth > 0) {
         lexpop();
-        *lexvalue = current_token()->value;
-        *lexsym = current_token()->str;
         return current_token()->id;
     }
 
     full_token_t* tok = advance_token_ptr();
-    tok->id = 0;
-    tok->value = 0;
-    tok->str[0] = '\0';
-    tok->len = 0;
-
-    *lexvalue = tok->value;
-    *lexsym = tok->str;
+    *tok = {};
 
     _lexnewline = FALSE;
     if (!freading)
@@ -1987,8 +1972,6 @@ lex(cell* lexvalue, const char** lexsym)
             if (sTokenBuffer->depth > 0) {
                 // Token was injected during preprocessing.
                 lexpop();
-                *lexvalue = current_token()->value;
-                *lexsym = current_token()->str;
                 return current_token()->id;
             }
             if (!freading)
@@ -2015,7 +1998,7 @@ lex(cell* lexvalue, const char** lexsym)
     tok->start.col = (int)(lptr - pline);
     tok->start.file = fcurrent;
 
-    lex_once(tok, lexvalue);
+    lex_once(tok);
 
     tok->end.line = fline;
     tok->end.col = (int)(lptr - pline);
@@ -2024,7 +2007,7 @@ lex(cell* lexvalue, const char** lexsym)
 }
 
 static void
-lex_once(full_token_t* tok, cell* lexvalue)
+lex_once(full_token_t* tok)
 {
     switch (*lptr) {
         case '0':
@@ -2037,7 +2020,7 @@ lex_once(full_token_t* tok, cell* lexvalue)
         case '7':
         case '8':
         case '9': {
-            if (lex_number(tok, lexvalue))
+            if (lex_number(tok))
                 return;
             break;
         }
@@ -2185,13 +2168,13 @@ lex_once(full_token_t* tok, cell* lexvalue)
             return;
 
         case '"':
-            lex_string_literal(tok, lexvalue);
+            lex_string_literal(tok);
             return;
 
         case '\'':
             lptr += 1; /* skip quote */
             tok->id = tNUMBER;
-            *lexvalue = tok->value = litchar(&lptr, UTF8MODE);
+            tok->value = litchar(&lptr, UTF8MODE);
             if (*lptr == '\'') {
                 lptr += 1; /* skip final quote */
             } else {
@@ -2233,17 +2216,15 @@ lex_match_char(char c)
 }
 
 static bool
-lex_number(full_token_t* tok, cell* lexvalue)
+lex_number(full_token_t* tok)
 {
     if (int i = number(&tok->value, lptr)) {
         tok->id = tNUMBER;
-        *lexvalue = tok->value;
         lptr += i;
         return true;
     }
     if (int i = ftoi(&tok->value, lptr)) {
         tok->id = tRATIONAL;
-        *lexvalue = tok->value;
         lptr += i;
         return true;
     }
@@ -2251,11 +2232,11 @@ lex_number(full_token_t* tok, cell* lexvalue)
 }
 
 static void
-lex_string_literal(full_token_t* tok, cell* lexvalue)
+lex_string_literal(full_token_t* tok)
 {
     tok->id = tSTRING;
-    tok->str[0] = '\0';
-    tok->len = 0;
+    tok->data.clear();
+    tok->atom = nullptr;
     tok->value = -1;  // Catch consumers expecting automatic litadd().
 
     for (;;) {
@@ -2321,9 +2302,9 @@ lex_string_literal(full_token_t* tok, cell* lexvalue)
 }
 
 static bool
-lex_keyword(full_token_t* tok, const char* token_start)
+lex_keyword(full_token_t* tok, const char* token_start, size_t len)
 {
-    int tok_id = lex_keyword_impl(token_start, tok->len);
+    int tok_id = lex_keyword_impl(token_start, len);
     if (!tok_id)
         return false;
 
@@ -2331,24 +2312,22 @@ lex_keyword(full_token_t* tok, const char* token_start)
         // Try to gracefully error.
         report(173) << get_token_string(tok_id);
         tok->id = tSYMBOL;
-        strcpy(tok->str, get_token_string(tok_id).c_str());
-        tok->len = strlen(tok->str);
+        tok->atom = gAtoms.add(get_token_string(tok_id));
     } else if (*lptr == ':' && (tok_id == tINT || tok_id == tVOID)) {
         // Special case 'int:' to its old behavior: an implicit view_as<> cast
         // with Pawn's awful lowercase coercion semantics.
-        std::string token_str = get_token_string(tok_id);
+        auto str = get_token_string(tok_id);
         switch (tok_id) {
             case tINT:
-                report(238) << token_str << token_str;
+                report(238) << str << str;
                 break;
             case tVOID:
-                report(239) << token_str << token_str;
+                report(239) << str << str;
                 break;
         }
         lptr++;
         tok->id = tLABEL;
-        strcpy(tok->str, token_str.c_str());
-        tok->len = strlen(tok->str);
+        tok->atom = gAtoms.add(str);
     } else {
         tok->id = tok_id;
         errorset(sRESET, 0); /* reset error flag (clear the "panic mode")*/
@@ -2377,17 +2356,17 @@ lex_symbol_or_keyword(full_token_t* tok)
         }
     }
 
-    tok->len = lptr - token_start;
-    if (tok->len == 1 && first_char == PUBLIC_CHAR) {
+    size_t len = lptr - token_start;
+    if (len == 1 && first_char == PUBLIC_CHAR) {
         tok->id = PUBLIC_CHAR;
         return true;
     }
     if (maybe_keyword) {
-        if (lex_keyword(tok, (const char*)token_start))
+        if (lex_keyword(tok, (const char*)token_start, len))
             return true;
     }
     if (first_char != '#') {
-        lex_symbol(tok, (const char*)token_start);
+        lex_symbol(tok, (const char*)token_start, len);
         return true;
     }
 
@@ -2397,22 +2376,21 @@ lex_symbol_or_keyword(full_token_t* tok)
 }
 
 static void
-lex_symbol(full_token_t* tok, const char* token_start)
+lex_symbol(full_token_t* tok, const char* token_start, size_t len)
 {
-    ke::SafeStrcpyN(tok->str, sizeof(tok->str), token_start, tok->len);
-
+    tok->atom = gAtoms.add(token_start, len);
     tok->id = tSYMBOL;
 
     if (*lptr == ':' && *(lptr + 1) != ':') {
         if (sc_allowtags) {
             tok->id = tLABEL;
             lptr++;
-        } else if (gTypes.find(gAtoms.add(tok->str))) {
+        } else if (gTypes.find(tok->atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
             error(220);
         }
-    } else if (tok->len == 1 && *token_start == '_') {
+    } else if (len == 1 && *token_start == '_') {
         // By itself, '_' is not a symbol but a placeholder. However, '_:' is
         // a label which is why we handle this after the label check.
         tok->id = '_';
@@ -2488,10 +2466,7 @@ const token_pos_t& current_pos()
 int
 matchtoken(int token)
 {
-    cell val;
-    const char* str;
-
-    int tok = lex(&val, &str);
+    int tok = lex();
 
     if (token == tok)
         return 1;
@@ -2508,22 +2483,6 @@ matchtoken(int token)
 
     lexpush();
     return 0;
-}
-
-/*  tokeninfo
- *
- *  Returns additional information of a token after using "matchtoken()"
- *  or needtoken(). It does no harm using this routine after a call to
- *  "lex()", but lex() already returns the same information.
- *
- *  The token itself is the return value. Normally, this one is already known.
- */
-int
-tokeninfo(cell* val, const char** str)
-{
-    *val = current_token()->value;
-    *str = current_token()->str;
-    return current_token()->id;
 }
 
 /*  needtoken
@@ -2573,19 +2532,14 @@ peek_same_line()
     if (sTokenBuffer->depth > 0 && current_token()->end.line == fline)
         return next_token()->id;
 
-    // Make sure the next token is lexed by lexing, and then buffering it.
-    full_token_t* next;
-    {
-        token_t tmp;
-        lextok(&tmp);
-        next = current_token();
-        lexpush();
-    }
+    // Make sure the next token is lexed, then buffer it.
+    full_token_t next = lex_tok();
+    lexpush();
 
     // If the next token starts on the line the last token ends, then the next
     // token is considered on the same line.
-    if (next->start.line == current_token()->end.line)
-        return next->id;
+    if (next.start.line == current_token()->end.line)
+        return next.id;
 
     return tEOL;
 }
@@ -2596,9 +2550,7 @@ lex_same_line()
     if (peek_same_line() == tEOL)
         return tEOL;
 
-    cell value;
-    const char* str;
-    return lex(&value, &str);
+    return lex();
 }
 
 int
@@ -2827,56 +2779,24 @@ itoh(ucell val)
 }
 
 int
-lextok(token_t* tok)
+matchsymbol(sp::Atom** name)
 {
-    tok->id = lex(&tok->val, &tok->str);
-    return tok->id;
-}
-
-int
-expecttoken(int id, token_t* tok)
-{
-    int rval = needtoken(id);
-    if (rval) {
-        tok->val = current_token()->value;
-        tok->id = current_token()->id;
-        tok->str = current_token()->str;
-        return rval;
-    }
-    return FALSE;
-}
-
-int
-matchtoken2(int id, token_t* tok)
-{
-    if (matchtoken(id)) {
-        tok->id = tokeninfo(&tok->val, &tok->str);
-        return TRUE;
-    }
-    return FALSE;
-}
-
-int
-matchsymbol(token_ident_t* ident)
-{
-    if (lextok(&ident->tok) != tSYMBOL) {
+    if (lex() != tSYMBOL) {
         lexpush();
         return FALSE;
     }
-    ident->name = gAtoms.add(ident->tok.str);
-    ident->tok.str = ident->name->chars();
+    *name = current_token()->atom;
     return TRUE;
 }
 
 int
-needsymbol(token_ident_t* ident)
+needsymbol(sp::Atom** name)
 {
-    if (!expecttoken(tSYMBOL, &ident->tok)) {
-        ident->name = gAtoms.add("__unknown__");
+    if (!needtoken(tSYMBOL)) {
+        *name = gAtoms.add("__unknown__");
         return FALSE;
     }
-    ident->name = gAtoms.add(ident->tok.str);
-    ident->tok.str = ident->name->chars();
+    *name = current_token()->atom;
     return TRUE;
 }
 void
