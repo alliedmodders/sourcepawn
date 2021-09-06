@@ -204,6 +204,7 @@ enum TokenKind {
     tSTRING,
     tEXPR,           /* for assigment to "lastst" only (see SC1.C) */
     tSYN_PRAGMA_UNUSED,
+    tSYN_INCLUDE_PATH,
     tENDLESS,        /* endless loop, for assigment to "lastst" only */
     tEMPTYBLOCK,     /* empty blocks for AM bug 4825 */
     tEOL,            /* newline, only returned by peek_new_line() */

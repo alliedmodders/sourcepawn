@@ -70,7 +70,7 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static void set_file_defines(std::string file);
-static void push_synthesized_token(TokenKind tok, int col);
+static full_token_t* push_synthesized_token(TokenKind tok, int col);
 
 #define SKIPMODE 1     /* bit field in "#if" stack */
 #define PARSEMODE 2    /* bit field in "#if" stack */
@@ -85,6 +85,7 @@ static short iflevel;             /* nesting level if #if/#else/#endif */
 static short skiplevel; /* level at which we started skipping (including nested #if .. #endif) */
 static unsigned char term_expr[] = "";
 static int listline = -1; /* "current line" for the list file */
+static int _lexnewline;
 
 ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sKeywords;
 
@@ -230,39 +231,31 @@ check_empty(const unsigned char* lptr)
         error(38); /* extra characters on line */
 }
 
-/*  doinclude
- *
- *  Gets the name of an include file, pushes the old file on the stack and
- *  sets some options. This routine doesn't use lex(), since lex() doesn't
- *  recognize file names (and directories).
- *
- *  Global references: inpf     (altered)
- *                     inpfname (altered)
- *                     fline    (altered)
- *                     lptr     (altered)
- */
-static void
-doinclude(int silent)
+void
+synthesize_include_path_token()
 {
-    char name[PATH_MAX];
-    char c;
-    size_t i;
-    int result;
-
     while (*lptr <= ' ' && *lptr != '\0') /* skip leading whitespace */
         lptr++;
-    if (*lptr == '<' || *lptr == '\"') {
-        c = (char)((*lptr == '\"') ? '\"' : '>'); /* termination character */
+
+    auto tok = push_synthesized_token(tSYN_INCLUDE_PATH, int(lptr - pline));
+
+    char open_c = (char)*lptr;
+    char close_c;
+    if (open_c == '"' || open_c == '<') {
+        close_c = (char)((open_c == '"') ? '"' : '>');
         lptr++;
-        while (*lptr <= ' ' && *lptr != '\0') /* skip whitespace after quote */
-            lptr++;
     } else {
-        c = '\0';
+        close_c = 0;
+        report(247);
     }
 
-    i = 0;
-    while (*lptr != c && *lptr != '\0' && i < sizeof name - 1) /* find the end of the string */
-    {
+    while (*lptr <= ' ' && *lptr != '\0') /* skip whitespace after quote */
+        lptr++;
+
+    char name[PATH_MAX];
+
+    int i = 0;
+    while (*lptr != close_c && *lptr != '\0' && i < sizeof(name) - 1) {
         if (DIRSEP_CHAR != '/' && *lptr == '/') {
             name[i++] = DIRSEP_CHAR;
             lptr++;
@@ -276,16 +269,16 @@ doinclude(int silent)
     assert(i < sizeof name);
     name[i] = '\0'; /* zero-terminate the string */
 
-    if (*lptr != c) { /* verify correct string termination */
-        error(37);    /* invalid string */
-        return;
+    if (close_c) {
+        if (*lptr != close_c)
+            error(37);
+        lptr++;
     }
-    if (c != '\0')
-        check_empty(lptr + 1); /* verify that the rest of the line is whitespace */
+    check_empty(lptr); /* verify that the rest of the line is whitespace */
 
-    result = plungefile(name, (c != '>'), TRUE);
-    if (!result && !silent)
-        error(FATAL_ERROR_READ, name);
+    if (!open_c)
+        open_c = '"';
+    tok->data = ke::StringPrintf("%c%s", open_c, name);
 }
 
 /*  readline
@@ -790,7 +783,6 @@ enum {
 static int
 command(bool allow_synthesized_tokens)
 {
-    int tok, ret;
     cell val;
     const char* str;
 
@@ -803,9 +795,9 @@ command(bool allow_synthesized_tokens)
     /* compiler directive found */
     indent_nowarn = TRUE; /* allow loose indentation" */
     lexclr(FALSE);        /* clear any "pushed" tokens */
-    tok = lex();
-    ret = SKIPPING ? CMD_CONDFALSE
-                   : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
+    int tok = lex();
+    int ret = SKIPPING ? CMD_CONDFALSE
+                       : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
     switch (tok) {
         case tpIF: /* conditional compilation */
             ret = CMD_IF;
@@ -887,11 +879,23 @@ command(bool allow_synthesized_tokens)
             check_empty(lptr);
             break;
         case tINCLUDE: /* #include directive */
-        case tpTRYINCLUDE:
+        case tpTRYINCLUDE: {
             ret = CMD_INCLUDE;
-            if (!SKIPPING)
-                doinclude(tok == tpTRYINCLUDE);
+            if (SKIPPING)
+                break;
+            auto col = current_token()->start.col;
+            if (allow_synthesized_tokens) {
+                synthesize_include_path_token();
+                push_synthesized_token((TokenKind)tok, col);
+                ret = CMD_INJECTED;
+
+                // Force lexer to reset.
+                pline[0] = '\0';
+                lptr = pline;
+                _lexnewline = TRUE;
+            }
             break;
+        }
         case tpLINE:
             if (!SKIPPING) {
                 if (lex() != tNUMBER)
@@ -1640,8 +1644,6 @@ packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
  *                     _pushed
  */
 
-static int _lexnewline;
-
 // lex() is called recursively, which messes up the lookahead buffer. To get
 // around this we use two separate token buffers.
 token_buffer_t sNormalBuffer;
@@ -1795,7 +1797,8 @@ const char* sc_tokens[] = {"*=",
                            "-label-",
                            "-string-",
                            "-string-",
-                           "#pragma unused"};
+                           "#pragma unused",
+                           "-include-path-"};
 
 void
 lexinit()
@@ -1902,13 +1905,15 @@ advance_token_ptr()
     return current_token();
 }
 
-void
+full_token_t*
 push_synthesized_token(TokenKind kind, int col)
 {
     ke::SaveAndSet<token_buffer_t*> switch_buffer(&sTokenBuffer, &sNormalBuffer);
 
-    assert(sTokenBuffer->depth < MAX_TOKEN_DEPTH);
-    full_token_t* tok = advance_token_ptr();
+    sTokenBuffer->num_tokens++;
+
+    // Now fill it in.
+    auto tok = current_token();
     tok->id = kind;
     tok->value = 0;
     tok->data.clear();
@@ -1918,6 +1923,7 @@ push_synthesized_token(TokenKind kind, int col)
     tok->start.file = fcurrent;
     tok->end = tok->start;
     lexpush();
+    return tok;
 }
 
 static void
