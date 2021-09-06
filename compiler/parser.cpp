@@ -67,8 +67,7 @@ Parser::parse()
     while (freading) {
         Stmt* decl = nullptr;
 
-        token_t tok;
-        switch (lextok(&tok)) {
+        switch (lex()) {
             case 0:
                 /* ignore zero's */
                 break;
@@ -87,9 +86,11 @@ Parser::parse()
             case tSTOCK:
             case tOPERATOR:
             case tNATIVE:
-            case tFORWARD:
+            case tFORWARD: {
+                auto tok = *current_token();
                 decl = parse_unknown_decl(&tok);
                 break;
+            }
             case tSTATIC_ASSERT:
                 decl = parse_static_assert();
                 break;
@@ -158,7 +159,7 @@ Parser::parse()
 }
 
 Stmt*
-Parser::parse_unknown_decl(const token_t* tok)
+Parser::parse_unknown_decl(const full_token_t* tok)
 {
     declinfo_t decl = {};
 
@@ -301,17 +302,15 @@ Parser::parse_enum(int vclass)
 {
     auto pos = current_pos();
 
-    cell val;
-    const char* str;
     Atom* label = nullptr;
-    if (lex(&val, &str) == tLABEL)
-        label = gAtoms.add(str);
+    if (lex() == tLABEL)
+        label = current_token()->atom;
     else
         lexpush();
 
     Atom* name = nullptr;
-    if (lex(&val, &str) == tSYMBOL)
-        name = gAtoms.add(str);
+    if (lex() == tSYMBOL)
+        name = current_token()->atom;
     else
         lexpush();
 
@@ -350,10 +349,8 @@ Parser::parse_enum(int vclass)
             error(153);
 
         sp::Atom* field_name = nullptr;
-        if (needtoken(tSYMBOL)) {
-            tokeninfo(&val, &str);
-            field_name = gAtoms.add(str);
-        }
+        if (needtoken(tSYMBOL))
+            field_name = current_token()->atom;
 
         auto pos = current_pos();
 
@@ -383,7 +380,7 @@ Parser::parse_enumstruct()
 {
     auto pos = current_pos();
 
-    token_ident_t struct_name = {};
+    sp::Atom* struct_name;
     if (!needsymbol(&struct_name))
         return nullptr;
 
@@ -392,7 +389,7 @@ Parser::parse_enumstruct()
         return nullptr;
     }
 
-    auto stmt = new EnumStructDecl(pos, struct_name.name);
+    auto stmt = new EnumStructDecl(pos, struct_name);
 
     int opening_line = fline;
     while (!matchtoken('}')) {
@@ -434,9 +431,9 @@ Parser::parse_pstruct()
 
     auto pos = current_pos();
 
-    token_ident_t ident = {};
+    sp::Atom* ident;
     if (needsymbol(&ident))
-        struct_decl = new PstructDecl(pos, ident.name);
+        struct_decl = new PstructDecl(pos, ident);
 
     needtoken('{');
     do {
@@ -472,14 +469,14 @@ Parser::parse_typedef()
 {
     auto pos = current_pos();
 
-    token_ident_t ident;
+    sp::Atom* ident;
     if (!needsymbol(&ident))
         return new ErrorDecl();
 
     needtoken('=');
 
     auto type = parse_function_type();
-    return new TypedefDecl(pos, ident.name, type);
+    return new TypedefDecl(pos, ident, type);
 }
 
 Decl*
@@ -487,11 +484,11 @@ Parser::parse_typeset()
 {
     auto pos = current_pos();
 
-    token_ident_t ident;
+    sp::Atom* ident;
     if (!needsymbol(&ident))
         return new ErrorDecl();
 
-    TypesetDecl* decl = new TypesetDecl(pos, ident.name);
+    TypesetDecl* decl = new TypesetDecl(pos, ident);
 
     needtoken('{');
     while (!matchtoken('}')) {
@@ -509,10 +506,10 @@ Parser::parse_using()
     auto pos = current_pos();
 
     auto validate = []() -> bool {
-        token_ident_t ident;
+        sp::Atom* ident;
         if (!needsymbol(&ident))
             return false;
-        if (strcmp(ident.name->chars(), "__intrinsics__") != 0) {
+        if (strcmp(ident->chars(), "__intrinsics__") != 0) {
             error(156);
             return false;
         }
@@ -520,7 +517,7 @@ Parser::parse_using()
             return false;
         if (!needsymbol(&ident))
             return false;
-        if (strcmp(ident.name->chars(), "Handle") != 0) {
+        if (strcmp(ident->chars(), "Handle") != 0) {
             error(156);
             return false;
         }
@@ -548,7 +545,7 @@ Parser::parse_pragma_unused()
             break;
         }
 
-        sp::Atom* name = gAtoms.add(current_token()->str);
+        sp::Atom* name = current_token()->atom;
         stmt->names().emplace_back(name);
 
         tok = lex_same_line();
@@ -574,19 +571,21 @@ Parser::parse_const(int vclass)
         // Since spcomp is terrible, it's hard to use parse_decl() here - there
         // are all sorts of restrictions on const. We just implement some quick
         // detection instead.
-        token_t tok;
         TypenameInfo rt;
-        switch (lextok(&tok)) {
+        switch (lex()) {
             case tINT:
             case tOBJECT:
-            case tCHAR:
+            case tCHAR: {
+                auto tok = *current_token();
                 parse_new_typename(&tok, &rt);
                 break;
+            }
             case tLABEL:
-                rt = TypenameInfo{gAtoms.add(tok.str)};
+                rt = TypenameInfo{current_token()->atom};
                 rt.set_is_label();
                 break;
-            case tSYMBOL:
+            case tSYMBOL: {
+                auto tok = *current_token();
                 // See if we can peek ahead another symbol.
                 if (lexpeek(tSYMBOL)) {
                     // This is a new-style declaration.
@@ -598,14 +597,14 @@ Parser::parse_const(int vclass)
                     rt = TypenameInfo{0};
                 }
                 break;
+            }
             default:
                 error(122);
                 break;
         }
 
         sp::Atom* name = nullptr;
-        if (expecttoken(tSYMBOL, &tok))
-            name = gAtoms.add(tok.str);
+        needsymbol(&name);
 
         needtoken('=');
 
@@ -641,9 +640,7 @@ Parser::hier14()
 {
     Expr* node = hier13();
 
-    cell val;
-    const char* st;
-    int tok = lex(&val, &st);
+    int tok = lex();
     auto pos = current_pos();
     switch (tok) {
         case taOR:
@@ -802,9 +799,7 @@ Parser::hier3()
 Expr*
 Parser::hier2()
 {
-    int val;
-    const char* st;
-    int tok = lex(&val, &st);
+    int tok = lex();
     auto pos = current_pos();
     switch (tok) {
         case tINC: /* ++lval */
@@ -824,10 +819,10 @@ Parser::hier2()
         {
             // :TODO: unify this to only care about types. This will depend on
             // removing immediate name resolution from parse_new_typename.
-            token_ident_t ident;
+            sp::Atom* ident;
             if (matchsymbol(&ident)) {
                 if (matchtoken('(')) {
-                    Expr* target = new SymbolExpr(current_pos(), ident.name);
+                    Expr* target = new SymbolExpr(current_pos(), ident);
                     return parse_call(pos, tok, target);
                 }
                 lexpush();
@@ -844,10 +839,10 @@ Parser::hier2()
         }
         case tLABEL: /* tagname override */
         {
-            TypenameInfo ti(gAtoms.add(st), true);
+            TypenameInfo ti(current_token()->atom, true);
             if (sc_require_newdecls) {
                 // Warn: old style cast used when newdecls pragma is enabled
-                report(240) << st;
+                report(240) << current_token()->atom;
             }
             Expr* expr = hier2();
             return new CastExpr(pos, tok, ti, expr);
@@ -858,12 +853,12 @@ Parser::hier2()
             while (matchtoken('('))
                 parens++;
 
-            token_ident_t ident;
+            sp::Atom* ident;
             if (!needsymbol(&ident))
                 return new ErrorExpr();
             while (parens--)
                 needtoken(')');
-            return new IsDefinedExpr(pos, ident.name);
+            return new IsDefinedExpr(pos, ident);
         }
         case tSIZEOF:
         {
@@ -871,9 +866,9 @@ Parser::hier2()
             while (matchtoken('('))
                 parens++;
 
-            token_ident_t ident;
+            sp::Atom* ident;
             if (matchtoken(tTHIS)) {
-                ident.name = gAtoms.add("this");
+                ident = gAtoms.add("this");
             } else {
                 if (!needsymbol(&ident))
                     return new ErrorExpr();
@@ -886,12 +881,10 @@ Parser::hier2()
             }
 
             Atom* field = nullptr;
-            int token = lex(&val, &st);
+            int token = lex();
             if (token == tDBLCOLON || token == '.') {
-                token_ident_t field_name;
-                if (!needsymbol(&field_name))
+                if (!needsymbol(&field))
                     return new ErrorExpr();
-                field = field_name.name;
             } else {
                 lexpush();
                 token = 0;
@@ -900,8 +893,7 @@ Parser::hier2()
             while (parens--)
                 needtoken(')');
 
-            Atom* name = ident.name;
-            return new SizeofExpr(pos, name, field, token, array_levels);
+            return new SizeofExpr(pos, ident, field, token, array_levels);
         }
         default:
             lexpush();
@@ -925,7 +917,7 @@ Parser::hier2()
         return node;
     }
 
-    tok = lex(&val, &st);
+    tok = lex();
     switch (tok) {
         case tINC: /* lval++ */
         case tDEC: /* lval-- */
@@ -948,15 +940,13 @@ Parser::hier1()
     }
 
     for (;;) {
-        cell val;
-        const char* st;
-        int tok = lex(&val, &st);
+        int tok = lex();
         if (tok == '.' || tok == tDBLCOLON) {
             auto pos = current_pos();
-            token_ident_t ident;
+            sp::Atom* ident;
             if (!needsymbol(&ident))
                 break;
-            base = new FieldAccessExpr(pos, tok, base, ident.name);
+            base = new FieldAccessExpr(pos, tok, base, ident);
         } else if (tok == '[') {
             auto pos = current_pos();
             Expr* inner = hier14();
@@ -993,14 +983,11 @@ Parser::primary()
         return expr;
     }
 
-    cell val;
-    const char* st;
-    int tok = lex(&val, &st);
-
+    int tok = lex();
     if (tok == tTHIS)
         return new ThisExpr(current_pos());
     if (tok == tSYMBOL)
-        return new SymbolExpr(current_pos(), gAtoms.add(st));
+        return new SymbolExpr(current_pos(), current_token()->atom);
 
     lexpush();
 
@@ -1010,19 +997,19 @@ Parser::primary()
 Expr*
 Parser::constant()
 {
-    cell val;
-    const char* st;
-    int tok = lex(&val, &st);
+    int tok = lex();
     auto pos = current_pos();
     switch (tok) {
         case tNULL:
             return new NullExpr(pos);
         case tNUMBER:
-            return new NumberExpr(pos, val);
+            return new NumberExpr(pos, current_token()->value);
         case tRATIONAL:
-            return new FloatExpr(pos, val);
-        case tSTRING:
-            return new StringExpr(pos, current_token()->str, current_token()->len);
+            return new FloatExpr(pos, current_token()->value);
+        case tSTRING: {
+            const auto& str = current_token()->data;
+            return new StringExpr(pos, str.c_str(), str.size());
+        }
         case '{':
         {
             ArrayExpr* expr = new ArrayExpr(pos);
@@ -1058,12 +1045,9 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
         if (matchtoken('.')) {
             named_params = true;
 
-            token_ident_t ident;
-            if (!needsymbol(&ident))
+            if (!needsymbol(&name))
                 break;
             needtoken('=');
-
-            name = ident.name;
         } else {
             if (named_params)
                 error(44);
@@ -1092,10 +1076,7 @@ Parser::parse_view_as()
     needtoken('<');
     TypenameInfo ti;
     {
-        token_t tok;
-        lextok(&tok);
-
-        if (!parse_new_typename(&tok, &ti))
+        if (!parse_new_typename(nullptr, &ti))
             ti = TypenameInfo{0};
     }
     needtoken('>');
@@ -1118,33 +1099,30 @@ Parser::struct_init()
     // '}' has already been lexed.
     do {
         sp::Atom* name = nullptr;
-
-        token_ident_t ident;
-        if (needsymbol(&ident))
-            name = ident.name;
+        needsymbol(&name);
 
         needtoken('=');
 
         auto pos = current_pos();
 
-        cell value;
-        const char* str;
         Expr* expr = nullptr;
-        switch (lex(&value, &str)) {
-            case tSTRING:
-                expr = new StringExpr(pos, current_token()->str, current_token()->len);
+        switch (lex()) {
+            case tSTRING: {
+                const auto& str = current_token()->data;
+                expr = new StringExpr(pos, str.c_str(), str.size());
                 break;
+            }
             case tNUMBER:
-                expr = new NumberExpr(pos, value);
+                expr = new NumberExpr(pos, current_token()->value);
                 break;
             case tRATIONAL:
-                expr = new FloatExpr(pos, value);
+                expr = new FloatExpr(pos, current_token()->value);
                 break;
             case tSYMBOL:
-                expr = new SymbolExpr(pos, gAtoms.add(str));
+                expr = new SymbolExpr(pos, current_token()->atom);
                 break;
             default:
-                error(1, "-constant-", str);
+                report(1) << "-constant-" << get_token_string(current_token()->id);
                 break;
         }
 
@@ -1170,7 +1148,7 @@ Parser::parse_static_assert()
     PoolString * text = nullptr;
     if (matchtoken(',') && needtoken(tSTRING)) {
         auto tok = current_token();
-        text = new PoolString(tok->str, tok->len);
+        text = new PoolString(tok->data.c_str(), tok->data.size());
     }
 
     needtoken(')');
@@ -1210,7 +1188,7 @@ Parser::var_init(int vclass)
 
     if (matchtoken(tSTRING)) {
         auto tok = current_token();
-        return new StringExpr(tok->start, tok->str, tok->len);
+        return new StringExpr(tok->start, tok->data.c_str(), tok->data.size());
     }
 
     // We'll check const or symbol-ness for non-sLOCALs in the semantic pass.
@@ -1264,9 +1242,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
     }
     errorset(sRESET, 0);
 
-    cell val;
-    const char* st;
-    int tok = lex(&val, &st);
+    int tok = lex();
 
     /* lex() has set stmtindent */
     if (lastindent && tok != tLABEL) {
@@ -1570,9 +1546,8 @@ Parser::parse_for()
     Stmt* init = nullptr;
     if (!matchtoken(';')) {
         /* new variable declarations are allowed here */
-        token_t tok;
-
-        switch (lextok(&tok)) {
+        int tok_id = lex();
+        switch (tok_id) {
             case tINT:
             case tCHAR:
             case tOBJECT:
@@ -1584,7 +1559,7 @@ Parser::parse_for()
                  * 'compound statement' level of it own.
                  */
                 // :TODO: test needtoken(tTERM) accepting newlines here
-                init = parse_local_decl(tok.id, true);
+                init = parse_local_decl(tok_id, true);
                 needtoken(';');
                 break;
             case tSYMBOL: {
@@ -1654,9 +1629,7 @@ Parser::parse_switch()
     endtok = '}';
     needtoken('{');
     while (true) {
-        cell val;
-        const char* st;
-        int tok = lex(&val, &st);
+        int tok = lex();
 
         switch (tok) {
             case tCASE:
@@ -1760,9 +1733,9 @@ Parser::parse_function(FunctionInfo* info, int tokid)
             lexpush();
         }
         if (matchtoken('=')) {
-            token_ident_t ident;
+            sp::Atom* ident;
             if (needsymbol(&ident))
-                info->set_alias(ident.name);
+                info->set_alias(ident);
         }
     }
 
@@ -1846,11 +1819,10 @@ Parser::parse_methodmap()
 {
     auto pos = current_pos();
 
-    token_ident_t ident;
-    if (!needsymbol(&ident))
-        ident.name = gAtoms.add("__unknown__");
+    sp::Atom* ident;
+    needsymbol(&ident);
 
-    auto name_atom = ident.name;
+    auto name_atom = ident;
     if (!isupper(name_atom->chars()[0]))
         report(109) << "methodmap";
 
@@ -1862,17 +1834,17 @@ Parser::parse_methodmap()
 
     sp::Atom* extends = nullptr;
     if (matchtoken('<') && needsymbol(&ident))
-        extends = ident.name;
+        extends = ident;
 
     auto decl = new MethodmapDecl(pos, name_atom, nullable, extends);
 
     needtoken('{');
     while (!matchtoken('}')) {
-        token_t tok;
         bool ok = false;
-        if (lextok(&tok) == tPUBLIC) {
+        int tok_id = lex();
+        if (tok_id == tPUBLIC) {
             ok = parse_methodmap_method(decl);
-        } else if (tok.id == tSYMBOL && strcmp(tok.str, "property") == 0) {
+        } else if (tok_id == tSYMBOL && current_token()->atom->str() == "property") {
             ok = parse_methodmap_property(decl);
         } else {
             error(124);
@@ -1896,8 +1868,10 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     bool is_static = matchtoken(tSTATIC);
     bool is_native = matchtoken(tNATIVE);
 
-    token_ident_t ident;
-    bool got_symbol = matchsymbol(&ident);
+    sp::Atom* symbol = nullptr;
+    full_token_t symbol_tok;
+    if (matchsymbol(&symbol))
+        symbol_tok = *current_token();
 
     if (matchtoken('~'))
         error(118);
@@ -1905,7 +1879,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     declinfo_t ret_type = {};
 
     bool is_ctor = false;
-    if (got_symbol && matchtoken('(')) {
+    if (symbol && matchtoken('(')) {
         // ::= ident '('
 
         // Push the '(' token back for parse_args().
@@ -1918,7 +1892,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
         // The first token of the type expression is either the symbol we
         // predictively parsed earlier, or it's been pushed back into the
         // lex buffer.
-        const token_t* first = got_symbol ? &ident.tok : nullptr;
+        const full_token_t* first = symbol ? &symbol_tok : nullptr;
 
         // Parse for type expression, priming it with the token we predicted
         // would be an identifier.
@@ -1926,14 +1900,14 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
             return false;
 
         // Now, we should get an identifier.
-        if (!needsymbol(&ident))
+        if (!needsymbol(&symbol))
             return false;
 
         ret_type.type.ident = iVARIABLE;
     }
 
     // Build a new symbol. Construct a temporary name including the class.
-    auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), ident.name->chars());
+    auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), symbol->chars());
     auto fqn = gAtoms.add(fullname);
 
     auto fun = new FunctionInfo(pos, ret_type);
@@ -1951,7 +1925,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     // Use the short name for the function decl
     auto method = new MethodmapMethod;
     method->is_static = is_static;
-    method->decl = new FunctionDecl(pos, ident.name, fun);
+    method->decl = new FunctionDecl(pos, symbol, fun);
     map->methods().emplace_back(method);
 
     if (is_native)
@@ -1970,13 +1944,13 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     if (!parse_new_typeexpr(&prop->type, nullptr, 0))
         return false;
 
-    token_ident_t ident;
+    sp::Atom* ident;
     if (!needsymbol(&ident))
         return false;
     if (!needtoken('{'))
         return false;
 
-    prop->name = ident.name;
+    prop->name = ident;
 
     while (!matchtoken('}')) {
         if (!parse_methodmap_property_accessor(map, prop))
@@ -1997,7 +1971,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
 
     needtoken(tPUBLIC);
 
-    token_ident_t ident;
+    sp::Atom* ident;
     if (!matchsymbol(&ident)) {
         if (!matchtoken(tNATIVE)) {
             report(125);
@@ -2008,8 +1982,8 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
             return false;
     }
 
-    bool getter = (strcmp(ident.name->chars(), "get") == 0);
-    bool setter = (strcmp(ident.name->chars(), "set") == 0);
+    bool getter = (ident->str() == "get");
+    bool setter = (ident->str() == "set");
 
     if (!getter && !setter) {
         report(125);
@@ -2065,17 +2039,14 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
 bool
 Parser::consume_line()
 {
-    int val;
-    const char* str;
-
     // First check for EOF.
-    if (lex(&val, &str) == 0)
+    if (lex() == 0)
         return false;
     lexpush();
 
     while (!matchtoken(tTERM)) {
         // Check for EOF.
-        if (lex(&val, &str) == 0)
+        if (lex() == 0)
             return false;
     }
     return true;
@@ -2138,7 +2109,7 @@ Parser::parse_function_type()
 bool
 Parser::parse_decl(declinfo_t* decl, int flags)
 {
-    token_ident_t ident = {};
+    sp::Atom* ident = nullptr;
 
     decl->type.ident = iVARIABLE;
 
@@ -2168,10 +2139,12 @@ Parser::parse_decl(declinfo_t* decl, int flags)
 
     // Otherwise, we have to eat a symbol to tell.
     if (matchsymbol(&ident)) {
+        auto ident_tok = *current_token();
+
         if (lexpeek(tSYMBOL) || lexpeek(tOPERATOR) || lexpeek('&') || lexpeek(tELLIPS)) {
             // A new-style declaration only allows array dims or a symbol name, so
             // this is a new-style declaration.
-            return parse_new_decl(decl, &ident.tok, flags);
+            return parse_new_decl(decl, &ident_tok, flags);
         }
 
         if ((flags & DECLMASK_NAMED_DECL) && matchtoken('[')) {
@@ -2186,7 +2159,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
                 // is illegal, but we flow it through the right path anyway.
                 lexpush();
                 fix_mispredicted_postdims(decl);
-                return parse_new_decl(decl, &ident.tok, flags);
+                return parse_new_decl(decl, &ident_tok, flags);
             }
 
             if (sc_require_newdecls)
@@ -2194,7 +2167,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
 
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
-            decl->name = ident.name;
+            decl->name = ident;
             decl->type.set_tag(0);
             return true;
         }
@@ -2237,7 +2210,6 @@ Parser::fix_mispredicted_postdims(declinfo_t* decl)
 bool
 Parser::parse_old_decl(declinfo_t* decl, int flags)
 {
-    token_t tok;
     typeinfo_t* type = &decl->type;
 
     if (matchtoken(tCONST)) {
@@ -2259,8 +2231,9 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
             while (true) {
                 if (!matchtoken('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
-                    if (expecttoken(tSYMBOL, &tok))
-                        ti = TypenameInfo(gAtoms.add(tok.str), true);
+                    sp::Atom* name;
+                    if (needsymbol(&name))
+                        ti = TypenameInfo(name, true);
                 }
                 numtags++;
 
@@ -2275,8 +2248,8 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
     }
 
     if (numtags == 0) {
-        if (matchtoken2(tLABEL, &tok))
-            ti = TypenameInfo(gAtoms.add(tok.str), true);
+        if (matchtoken(tLABEL))
+            ti = TypenameInfo(current_token()->atom, true);
     }
 
     // All finished with tag stuff.
@@ -2299,7 +2272,8 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         } else {
             if (!lexpeek(tSYMBOL)) {
                 extern const char* sc_tokens[];
-                switch (lextok(&tok)) {
+                int tok_id = lex();
+                switch (tok_id) {
                     case tOBJECT:
                     case tCHAR:
                     case tVOID:
@@ -2307,8 +2281,8 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                         if (lexpeek(tSYMBOL)) {
                             error(143);
                         } else {
-                            error(157, sc_tokens[tok.id - tFIRST]);
-                            decl->name = gAtoms.add(sc_tokens[tok.id - tFIRST]);
+                            error(157, sc_tokens[tok_id - tFIRST]);
+                            decl->name = gAtoms.add(sc_tokens[tok_id - tFIRST]);
                         }
                         break;
                     default:
@@ -2316,10 +2290,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                         break;
                 }
             }
-            if (expecttoken(tSYMBOL, &tok))
-                decl->name = gAtoms.add(tok.str);
-            else if (!decl->name)
-                decl->name = gAtoms.add("__unknown__");
+            needsymbol(&decl->name);
         }
     }
 
@@ -2332,10 +2303,8 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
 }
 
 bool
-Parser::parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
+Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
 {
-    token_t tok;
-
     if (!parse_new_typeexpr(&decl->type, first, flags))
         return false;
 
@@ -2352,10 +2321,7 @@ Parser::parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
             if (decl->opertok == 0)
                 decl->name = gAtoms.add("__unknown__");
         } else {
-            if (expecttoken(tSYMBOL, &tok))
-                decl->name = gAtoms.add(tok.str);
-            else
-                decl->name = gAtoms.add("__unknown__");
+            needsymbol(&decl->name);
         }
     }
 
@@ -2375,11 +2341,8 @@ Parser::parse_new_decl(declinfo_t* decl, const token_t* first, int flags)
 int
 Parser::operatorname(sp::Atom** name)
 {
-    cell val;
-    const char* str;
-
     /* check the operator */
-    int opertok = lex(&val, &str);
+    int opertok = lex();
     switch (opertok) {
         case '+':
         case '-':
@@ -2451,9 +2414,8 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
 bool
 Parser::reparse_new_decl(declinfo_t* decl, int flags)
 {
-    token_t tok;
-    if (expecttoken(tSYMBOL, &tok))
-        decl->name = gAtoms.add(tok.str);
+    if (matchtoken(tSYMBOL))
+        decl->name = current_token()->atom;
 
     if (decl->type.declared_tag && !decl->type.tag()) {
         assert(decl->type.numdim() > 0);
@@ -2530,20 +2492,20 @@ Parser::parse_post_array_dims(declinfo_t* decl, int flags)
 }
 
 bool
-Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
+Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flags)
 {
-    token_t tok;
+    full_token_t tok;
 
     if (first)
         tok = *first;
     else
-        lextok(&tok);
+        tok = lex_tok();
 
     if (tok.id == tCONST) {
         if (type->is_const)
             error(138);
         type->is_const = true;
-        lextok(&tok);
+        tok = lex_tok();
     }
 
     TypenameInfo ti;
@@ -2585,12 +2547,12 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const token_t* first, int flags)
 }
 
 bool
-Parser::parse_new_typename(const token_t* tok, TypenameInfo* out)
+Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
 {
-    token_t tmp;
+    full_token_t tmp;
 
     if (!tok) {
-        lextok(&tmp);
+        tmp = lex_tok();
         tok = &tmp;
     }
 
@@ -2611,34 +2573,34 @@ Parser::parse_new_typename(const token_t* tok, TypenameInfo* out)
         case tSYMBOL:
             if (tok->id == tLABEL)
                 error(120);
-            if (strcmp(tok->str, "float") == 0) {
+            if (tok->atom->str() == "float") {
                 *out = TypenameInfo{sc_rationaltag};
                 return true;
             }
-            if (strcmp(tok->str, "bool") == 0) {
+            if (tok->atom->str() == "bool") {
                 *out = TypenameInfo{pc_tag_bool};
                 return true;
             }
-            if (strcmp(tok->str, "Float") == 0) {
+            if (tok->atom->str() == "Float") {
                 error(98, "Float", "float");
                 *out = TypenameInfo{sc_rationaltag};
                 return true;
             }
-            if (strcmp(tok->str, "String") == 0) {
+            if (tok->atom->str() == "String") {
                 error(98, "String", "char");
                 *out = TypenameInfo{pc_tag_string};
                 return true;
             }
-            if (strcmp(tok->str, "_") == 0) {
+            if (tok->atom->str() == "_") {
                 error(98, "_", "int");
                 *out = TypenameInfo{0};
                 return true;
             }
-            if (strcmp(tok->str, "any") == 0) {
+            if (tok->atom->str() == "any") {
                 *out = TypenameInfo(pc_anytag);
                 return true;
             }
-            *out = TypenameInfo(gAtoms.add(tok->str), tok->id == tLABEL);
+            *out = TypenameInfo(tok->atom, tok->id == tLABEL);
             return true;
     }
 
