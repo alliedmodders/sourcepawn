@@ -1,0 +1,5 @@
+#include float
+
+public main()
+{
+}

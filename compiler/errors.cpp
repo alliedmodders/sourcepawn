@@ -213,7 +213,7 @@ MessageBuilder::~MessageBuilder()
     ErrorReport report;
     report.number = number_;
     report.fileno = where_.file;
-    report.lineno = where_.line;
+    report.lineno = std::max(where_.line, 1);
     if (report.fileno >= 0) {
         report.filename = get_inputfile(report.fileno);
     } else {
@@ -296,7 +296,7 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     ErrorReport report;
     report.number = number;
     report.fileno = fileno;
-    report.lineno = lineno;
+    report.lineno = std::max(lineno, 1);
     if (report.fileno >= 0) {
         report.filename = get_inputfile(report.fileno);
     } else {

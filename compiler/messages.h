@@ -298,6 +298,7 @@ static const char* warnmsg[] = {
     /*244*/ "field '%s' was specified twice\n",
     /*245*/ "function %s implements a forward but is not marked as public\n",
     /*246*/ "function %s returns an array but return type is not marked as an array\n",
+    /*247*/ "include paths should be enclosed in \"quotes\" or <angle brackets>\n",
 };
 
 static const char* errmsg_ex[] = {
@@ -315,4 +316,5 @@ static const char* errmsg_ex[] = {
     /*411*/ "cannot determine fixed array size of return value\n",
     /*412*/ "function %s implements a forward but is not marked as public\n",
     /*413*/ "returned array does not have the same dimension count as return type\n",
+    /*414*/ "include statements are only allowed at the top-level scope\n",
 };

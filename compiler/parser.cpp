@@ -67,7 +67,8 @@ Parser::parse()
     while (freading) {
         Stmt* decl = nullptr;
 
-        switch (lex()) {
+        int tok = lex();
+        switch (tok) {
             case 0:
                 /* ignore zero's */
                 break;
@@ -127,6 +128,16 @@ Parser::parse()
                 if (auto decl = parse_pragma_unused())
                     add_to_end.emplace_back(decl);
                 break;
+            case tINCLUDE:
+            case tpTRYINCLUDE: {
+                if (!needtoken(tSYN_INCLUDE_PATH))
+                    break;
+                auto name = current_token()->data;
+                auto result = plungefile(name.c_str() + 1, (name[0] != '<'), TRUE);
+                if (!result && tok != tpTRYINCLUDE)
+                    report(FATAL_ERROR_READ) << name;
+                break;
+            }
             case '}':
                 error(54); /* unmatched closing brace */
                 break;
@@ -1404,6 +1415,10 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return parse_switch();
         case tSYN_PRAGMA_UNUSED:
             return parse_pragma_unused();
+        case tINCLUDE:
+        case tpTRYINCLUDE:
+            report(414);
+            break;
         default: /* non-empty expression */
             break;
     }
