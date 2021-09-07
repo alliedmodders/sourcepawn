@@ -46,7 +46,8 @@ bool Parser::sInPreprocessor = false;
 bool Parser::sDetectedIllegalPreprocessorSymbols = false;
 
 Parser::Parser(CompileContext& cc)
-  : cc_(cc)
+  : cc_(cc),
+    lexer_(cc.lexer())
 {
 }
 
@@ -69,22 +70,22 @@ Parser::Parse()
 
     if (!cc_.default_include().empty()) {
         const char* incfname = cc_.default_include().c_str();
-        if (plungefile(incfname, FALSE, TRUE)) {
+        if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
             static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
             list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back()));
         }
     }
 
     // Prime the lexer.
-    preprocess(true);
+    lexer_->Preprocess(true);
 
     while (freading) {
         Stmt* decl = nullptr;
 
-        int tok = lex();
+        int tok = lexer_->lex();
 
         // We don't have end-of-file tokens (yet), so we pop static scopes
-        // before every declaration. This should be after lex() so we've
+        // before every declaration. This should be after lexer_->lex() so we've
         // processed any end-of-file events. 
         bool changed = false;
         while (!static_scopes_.empty() && static_scopes_.back()->fnumber() != fcurrent) {
@@ -94,7 +95,7 @@ Parser::Parse()
         assert(!static_scopes_.empty());
 
         if (changed)
-            list->stmts().emplace_back(new ChangeScopeNode(current_pos(), static_scopes_.back()));
+            list->stmts().emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back()));
 
         switch (tok) {
             case 0:
@@ -107,7 +108,7 @@ Parser::Parse()
             case tCHAR:
             case tVOID:
             case tLABEL:
-                lexpush();
+                lexer_->lexpush();
                 // Fallthrough.
             case tNEW:
             case tSTATIC:
@@ -116,7 +117,7 @@ Parser::Parse()
             case tOPERATOR:
             case tNATIVE:
             case tFORWARD: {
-                auto tok = *current_token();
+                auto tok = *lexer_->current_token();
                 decl = parse_unknown_decl(&tok);
                 break;
             }
@@ -140,7 +141,7 @@ Parser::Parse()
                 decl = parse_const(sGLOBAL);
                 break;
             case tENUM:
-                if (matchtoken(tSTRUCT))
+                if (lexer_->match(tSTRUCT))
                     decl = parse_enumstruct();
                 else
                     decl = parse_enum(sGLOBAL);
@@ -158,15 +159,15 @@ Parser::Parse()
                 break;
             case tINCLUDE:
             case tpTRYINCLUDE: {
-                if (!needtoken(tSYN_INCLUDE_PATH))
+                if (!lexer_->need(tSYN_INCLUDE_PATH))
                     break;
-                auto name = current_token()->data;
-                auto result = plungefile(name.c_str() + 1, (name[0] != '<'), TRUE);
+                auto name = lexer_->current_token()->data;
+                auto result = lexer_->PlungeFile(name.c_str() + 1, (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE)
                     report(FATAL_ERROR_READ) << name;
 
                 static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-                decl = new ChangeScopeNode(current_pos(), static_scopes_.back());
+                decl = new ChangeScopeNode(lexer_->pos(), static_scopes_.back());
                 break;
             }
             case '}':
@@ -178,7 +179,7 @@ Parser::Parse()
             default:
                 if (freading) {
                     error(10);    /* illegal function or declaration */
-                    lexclr(TRUE); /* drop the rest of the line */
+                    lexer_->lexclr(TRUE); /* drop the rest of the line */
                 }
         }
 
@@ -217,7 +218,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
             break;
         case tSTOCK:
             fstock = TRUE;
-            if (matchtoken(tSTATIC))
+            if (lexer_->match(tSTATIC))
                 fstatic = TRUE;
             break;
         case tSTATIC:
@@ -225,7 +226,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 
             // For compatibility, we must include this case. Though "stock" should
             // come first.
-            if (matchtoken(tSTOCK))
+            if (lexer_->match(tSTOCK))
                 fstock = TRUE;
             break;
     }
@@ -241,7 +242,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
     }
 
     // Hacky bag o' hints as to whether this is a variable decl.
-    bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexpeek('(') ||
+    bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexer_->peek('(') ||
                             decl.type.is_const;
 
     if (!decl.opertok && probablyVariable) {
@@ -259,12 +260,12 @@ Parser::parse_unknown_decl(const full_token_t* tok)
         // The old parser had a different line ending policy for struct
         // initializers, so we approximate that here.
         if (params.struct_init)
-            matchtoken(';');
+            lexer_->match(';');
         else
-            needtoken(tTERM);
+            lexer_->need(tTERM);
         return stmt;
     } else {
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
         FunctionInfo* info = new FunctionInfo(pos, decl);
         info->set_name(decl.name);
         if (fpublic)
@@ -304,10 +305,10 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
     Stmt* stmt = nullptr;
 
     for (;;) {
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
 
         Expr* init = nullptr;
-        if (matchtoken('='))
+        if (lexer_->match('='))
             init = var_init(params.vclass);
 
         // Keep updating this field, as we only care about the last initializer.
@@ -328,7 +329,7 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
             stmt = var;
         }
 
-        if (!matchtoken(','))
+        if (!lexer_->match(','))
             break;
 
         if (decl->type.is_new)
@@ -342,99 +343,99 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
 Decl*
 Parser::parse_enum(int vclass)
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
     Atom* label = nullptr;
-    if (lex() == tLABEL)
-        label = current_token()->atom;
+    if (lexer_->lex() == tLABEL)
+        label = lexer_->current_token()->atom;
     else
-        lexpush();
+        lexer_->lexpush();
 
     Atom* name = nullptr;
-    if (lex() == tSYMBOL)
-        name = current_token()->atom;
+    if (lexer_->lex() == tSYMBOL)
+        name = lexer_->current_token()->atom;
     else
-        lexpush();
+        lexer_->lexpush();
 
     cell increment = 1;
     cell multiplier = 1;
-    if (matchtoken('(')) {
+    if (lexer_->match('(')) {
         error(228);
-        if (matchtoken(taADD)) {
-            if (needtoken(tNUMBER)) {
-                if (current_token()->value != 1)
+        if (lexer_->match(taADD)) {
+            if (lexer_->need(tNUMBER)) {
+                if (lexer_->current_token()->value != 1)
                     report(404);
             }
-        } else if (matchtoken(taMULT)) {
-            if (needtoken(tNUMBER))
+        } else if (lexer_->match(taMULT)) {
+            if (lexer_->need(tNUMBER))
                 report(404);
-        } else if (matchtoken(taSHL)) {
-            if (needtoken(tNUMBER)) {
-                if (current_token()->value != 1)
+        } else if (lexer_->match(taSHL)) {
+            if (lexer_->need(tNUMBER)) {
+                if (lexer_->current_token()->value != 1)
                     report(404);
                 multiplier = 2;
             }
         }
-        needtoken(')');
+        lexer_->need(')');
     }
 
     EnumDecl* decl = new EnumDecl(pos, vclass, label, name, increment, multiplier);
 
-    needtoken('{');
+    lexer_->need('{');
 
     do {
-        if (matchtoken('}')) {
-            lexpush();
+        if (lexer_->match('}')) {
+            lexer_->lexpush();
             break;
         }
-        if (matchtoken(tLABEL))
+        if (lexer_->match(tLABEL))
             error(153);
 
         sp::Atom* field_name = nullptr;
-        if (needtoken(tSYMBOL))
-            field_name = current_token()->atom;
+        if (lexer_->need(tSYMBOL))
+            field_name = lexer_->current_token()->atom;
 
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
 
-        if (matchtoken('[')) {
+        if (lexer_->match('[')) {
             error(153);
-            if (!matchtoken(']')) {
+            if (!lexer_->match(']')) {
                 hier14();
-                needtoken(']');
+                lexer_->need(']');
             }
         }
 
         Expr* value = nullptr;
-        if (matchtoken('='))
+        if (lexer_->match('='))
             value = hier14();
 
         if (field_name)
             decl->fields().push_back(EnumField(pos, field_name, value));
-    } while (matchtoken(','));
+    } while (lexer_->match(','));
 
-    needtoken('}');
-    matchtoken(';');
+    lexer_->need('}');
+    lexer_->match(';');
     return decl;
 }
 
 Decl*
 Parser::parse_enumstruct()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
     sp::Atom* struct_name;
-    if (!needsymbol(&struct_name))
+    if (!lexer_->needsymbol(&struct_name))
         return nullptr;
 
-    if (!matchtoken('{')) {
-        needtoken('{');
+    if (!lexer_->match('{')) {
+        lexer_->need('{');
         return nullptr;
     }
 
     auto stmt = new EnumStructDecl(pos, struct_name);
 
     int opening_line = fline;
-    while (!matchtoken('}')) {
+    while (!lexer_->match('}')) {
         if (!freading) {
             error(151, opening_line);
             break;
@@ -444,8 +445,8 @@ Parser::parse_enumstruct()
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 
-        auto decl_pos = current_pos();
-        if (!decl.type.has_postdims && lexpeek('(')) {
+        auto decl_pos = lexer_->pos();
+        if (!decl.type.has_postdims && lexer_->peek('(')) {
             auto info = new FunctionInfo(decl_pos, decl);
             info->set_name(decl.name);
             info->set_is_stock();
@@ -459,10 +460,10 @@ Parser::parse_enumstruct()
 
         stmt->fields().emplace_back(EnumStructField{decl_pos, decl});
 
-        require_newline(TerminatorPolicy::Semicolon);
+        lexer_->require_newline(TerminatorPolicy::Semicolon);
     }
 
-    require_newline(TerminatorPolicy::Newline);
+    lexer_->require_newline(TerminatorPolicy::Newline);
     return stmt;
 }
 
@@ -471,51 +472,51 @@ Parser::parse_pstruct()
 {
     PstructDecl* struct_decl = nullptr;
 
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
     sp::Atom* ident;
-    if (needsymbol(&ident))
+    if (lexer_->needsymbol(&ident))
         struct_decl = new PstructDecl(pos, ident);
 
-    needtoken('{');
+    lexer_->need('{');
     do {
-        if (matchtoken('}')) {
+        if (lexer_->match('}')) {
             /* Quick exit */
-            lexpush();
+            lexer_->lexpush();
             break;
         }
 
         declinfo_t decl = {};
         decl.type.ident = iVARIABLE;
 
-        needtoken(tPUBLIC);
-        auto pos = current_pos();
+        lexer_->need(tPUBLIC);
+        auto pos = lexer_->pos();
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD)) {
-            lexclr(TRUE);
+            lexer_->lexclr(TRUE);
             continue;
         }
 
         if (struct_decl)
             struct_decl->fields().push_back(StructField(pos, decl.name, decl.type));
 
-        require_newline(TerminatorPolicy::NewlineOrSemicolon);
-    } while (!lexpeek('}'));
+        lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    } while (!lexer_->peek('}'));
 
-    needtoken('}');
-    matchtoken(';'); // eat up optional semicolon
+    lexer_->need('}');
+    lexer_->match(';'); // eat up optional semicolon
     return struct_decl;
 }
 
 Decl*
 Parser::parse_typedef()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
     sp::Atom* ident;
-    if (!needsymbol(&ident))
+    if (!lexer_->needsymbol(&ident))
         return new ErrorDecl();
 
-    needtoken('=');
+    lexer_->need('=');
 
     auto type = parse_function_type();
     return new TypedefDecl(pos, ident, type);
@@ -524,40 +525,40 @@ Parser::parse_typedef()
 Decl*
 Parser::parse_typeset()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
     sp::Atom* ident;
-    if (!needsymbol(&ident))
+    if (!lexer_->needsymbol(&ident))
         return new ErrorDecl();
 
     TypesetDecl* decl = new TypesetDecl(pos, ident);
 
-    needtoken('{');
-    while (!matchtoken('}')) {
+    lexer_->need('{');
+    while (!lexer_->match('}')) {
         auto type = parse_function_type();
         decl->types().push_back(type);
     }
 
-    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
 }
 
 Decl*
 Parser::parse_using()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    auto validate = []() -> bool {
+    auto validate = [this]() -> bool {
         sp::Atom* ident;
-        if (!needsymbol(&ident))
+        if (!lexer_->needsymbol(&ident))
             return false;
         if (strcmp(ident->chars(), "__intrinsics__") != 0) {
             error(156);
             return false;
         }
-        if (!needtoken('.'))
+        if (!lexer_->need('.'))
             return false;
-        if (!needsymbol(&ident))
+        if (!lexer_->needsymbol(&ident))
             return false;
         if (strcmp(ident->chars(), "Handle") != 0) {
             error(156);
@@ -566,33 +567,33 @@ Parser::parse_using()
         return true;
     };
     if (!validate()) {
-        lexclr(TRUE);
+        lexer_->lexclr(TRUE);
         return new ErrorDecl();
     }
 
-    require_newline(TerminatorPolicy::Semicolon);
+    lexer_->require_newline(TerminatorPolicy::Semicolon);
     return new UsingDecl(pos);
 }
 
 Stmt*
 Parser::parse_pragma_unused()
 {
-    PragmaUnusedStmt* stmt = new PragmaUnusedStmt(current_pos());
+    PragmaUnusedStmt* stmt = new PragmaUnusedStmt(lexer_->pos());
 
-    int tok = lex_same_line();
+    int tok = lexer_->lex_same_line();
     for (;;) {
         if (tok != tSYMBOL) {
             report(1) << get_token_string(tSYMBOL) << get_token_string(tok);
-            lexclr(TRUE);
+            lexer_->lexclr(TRUE);
             break;
         }
 
-        sp::Atom* name = current_token()->atom;
+        sp::Atom* name = lexer_->current_token()->atom;
         stmt->names().emplace_back(name);
 
-        tok = lex_same_line();
+        tok = lexer_->lex_same_line();
         if (tok == ',') {
-            tok = lex_same_line();
+            tok = lexer_->lex_same_line();
             continue;
         }
         if (tok == tEOL)
@@ -608,34 +609,34 @@ Parser::parse_const(int vclass)
     Stmt* decl = nullptr;
 
     do {
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
 
         // Since spcomp is terrible, it's hard to use parse_decl() here - there
         // are all sorts of restrictions on const. We just implement some quick
         // detection instead.
         TypenameInfo rt;
-        switch (lex()) {
+        switch (lexer_->lex()) {
             case tINT:
             case tOBJECT:
             case tCHAR: {
-                auto tok = *current_token();
+                auto tok = *lexer_->current_token();
                 parse_new_typename(&tok, &rt);
                 break;
             }
             case tLABEL:
-                rt = TypenameInfo{current_token()->atom};
+                rt = TypenameInfo{lexer_->current_token()->atom};
                 rt.set_is_label();
                 break;
             case tSYMBOL: {
-                auto tok = *current_token();
+                auto tok = *lexer_->current_token();
                 // See if we can peek ahead another symbol.
-                if (lexpeek(tSYMBOL)) {
+                if (lexer_->peek(tSYMBOL)) {
                     // This is a new-style declaration.
                     parse_new_typename(&tok, &rt);
                 } else {
                     // Otherwise, we got "const X ..." so the tag is int. Give the
                     // symbol back to the lexer so we get it as the name.
-                    lexpush();
+                    lexer_->lexpush();
                     rt = TypenameInfo{0};
                 }
                 break;
@@ -646,9 +647,9 @@ Parser::parse_const(int vclass)
         }
 
         sp::Atom* name = nullptr;
-        needsymbol(&name);
+        lexer_->needsymbol(&name);
 
-        needtoken('=');
+        lexer_->need('=');
 
         Expr* expr = hier14();
         if (!expr)
@@ -671,9 +672,9 @@ Parser::parse_const(int vclass)
         } else {
             decl = var;
         }
-    } while (matchtoken(','));
+    } while (lexer_->match(','));
 
-    needtoken(tTERM);
+    lexer_->need(tTERM);
     return list ? list : decl;
 }
 
@@ -682,8 +683,8 @@ Parser::hier14()
 {
     Expr* node = hier13();
 
-    int tok = lex();
-    auto pos = current_pos();
+    int tok = lexer_->lex();
+    auto pos = lexer_->pos();
     switch (tok) {
         case taOR:
         case taXOR:
@@ -702,13 +703,29 @@ Parser::hier14()
                 error(211); /* possibly unintended assignment */
             break;
         default:
-            lexpush();
+            lexer_->lexpush();
             return node;
     }
 
     Expr* right = hier14();
     return new BinaryExpr(pos, tok, node, right);
 }
+
+// Each of these lists is an operator precedence level, and each list is a
+// zero-terminated list of operators in that level (in precedence order).
+//
+// The "op1" array in sc3.cpp must have the same ordering as if these lists
+// were flattened.
+static int list3[] = {'*', '/', '%', 0};
+static int list4[] = {'+', '-', 0};
+static int list5[] = {tSHL, tSHR, tSHRU, 0};
+static int list6[] = {'&', 0};
+static int list7[] = {'^', 0};
+static int list8[] = {'|', 0};
+static int list9[] = {tlLE, tlGE, '<', '>', 0};
+static int list10[] = {tlEQ, tlNE, 0};
+static int list11[] = {tlAND, 0};
+static int list12[] = {tlOR, 0};
 
 Expr*
 Parser::plnge(int* opstr, NewHierFn hier)
@@ -720,7 +737,7 @@ Parser::plnge(int* opstr, NewHierFn hier)
         return node;
 
     do {
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
         Expr* right = (this->*hier)();
 
         int token = opstr[opidx];
@@ -747,10 +764,10 @@ Parser::plnge_rel(int* opstr, NewHierFn hier)
     if (nextop(&opidx, opstr) == 0)
         return first;
 
-    ChainedCompareExpr* chain = new ChainedCompareExpr(current_pos(), first);
+    ChainedCompareExpr* chain = new ChainedCompareExpr(lexer_->pos(), first);
 
     do {
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
         Expr* right = (this->*hier)();
 
         chain->ops().push_back(CompareOp(pos, opstr[opidx], right));
@@ -763,15 +780,15 @@ Expr*
 Parser::hier13()
 {
     Expr* node = hier12();
-    if (matchtoken('?')) {
-        auto pos = current_pos();
+    if (lexer_->match('?')) {
+        auto pos = lexer_->pos();
         Expr* left;
         {
             /* do not allow tagnames here (colon is a special token) */
             ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
             left = hier13();
         }
-        needtoken(':');
+        lexer_->need(':');
         Expr* right = hier13();
         return new TernaryExpr(pos, node, left, right);
     }
@@ -841,8 +858,8 @@ Parser::hier3()
 Expr*
 Parser::hier2()
 {
-    int tok = lex();
-    auto pos = current_pos();
+    int tok = lexer_->lex();
+    auto pos = lexer_->pos();
     switch (tok) {
         case tINC: /* ++lval */
         case tDEC: /* --lval */
@@ -862,29 +879,29 @@ Parser::hier2()
             // :TODO: unify this to only care about types. This will depend on
             // removing immediate name resolution from parse_new_typename.
             sp::Atom* ident;
-            if (matchsymbol(&ident)) {
-                if (matchtoken('(')) {
-                    Expr* target = new SymbolExpr(current_pos(), ident);
+            if (lexer_->matchsymbol(&ident)) {
+                if (lexer_->match('(')) {
+                    Expr* target = new SymbolExpr(lexer_->pos(), ident);
                     return parse_call(pos, tok, target);
                 }
-                lexpush();
+                lexer_->lexpush();
             }
 
             TypenameInfo rt;
             if (!parse_new_typename(nullptr, &rt))
                 rt = TypenameInfo{0};
 
-            if (!needtoken('['))
+            if (!lexer_->need('['))
                 return new ErrorExpr();
 
             return parse_new_array(pos, rt);
         }
         case tLABEL: /* tagname override */
         {
-            TypenameInfo ti(current_token()->atom, true);
+            TypenameInfo ti(lexer_->current_token()->atom, true);
             if (sc_require_newdecls) {
                 // Warn: old style cast used when newdecls pragma is enabled
-                report(240) << current_token()->atom;
+                report(240) << lexer_->current_token()->atom;
             }
             Expr* expr = hier2();
             return new CastExpr(pos, tok, ti, expr);
@@ -892,65 +909,65 @@ Parser::hier2()
         case tDEFINED:
         {
             int parens = 0;
-            while (matchtoken('('))
+            while (lexer_->match('('))
                 parens++;
 
             sp::Atom* ident;
-            if (!needsymbol(&ident))
+            if (!lexer_->needsymbol(&ident))
                 return new ErrorExpr();
             while (parens--)
-                needtoken(')');
+                lexer_->need(')');
             return new IsDefinedExpr(pos, ident);
         }
         case tSIZEOF:
         {
             int parens = 0;
-            while (matchtoken('('))
+            while (lexer_->match('('))
                 parens++;
 
             sp::Atom* ident;
-            if (matchtoken(tTHIS)) {
+            if (lexer_->match(tTHIS)) {
                 ident = gAtoms.add("this");
             } else {
-                if (!needsymbol(&ident))
+                if (!lexer_->needsymbol(&ident))
                     return new ErrorExpr();
             }
 
             int array_levels = 0;
-            while (matchtoken('[')) {
+            while (lexer_->match('[')) {
                 array_levels++;
-                needtoken(']');
+                lexer_->need(']');
             }
 
             Atom* field = nullptr;
-            int token = lex();
+            int token = lexer_->lex();
             if (token == tDBLCOLON || token == '.') {
-                if (!needsymbol(&field))
+                if (!lexer_->needsymbol(&field))
                     return new ErrorExpr();
             } else {
-                lexpush();
+                lexer_->lexpush();
                 token = 0;
             }
 
             while (parens--)
-                needtoken(')');
+                lexer_->need(')');
 
             return new SizeofExpr(pos, ident, field, token, array_levels);
         }
         default:
-            lexpush();
+            lexer_->lexpush();
             break;
     }
 
     Expr* node = hier1();
 
     /* check for postfix operators */
-    if (matchtoken(';')) {
+    if (lexer_->match(';')) {
         /* Found a ';', do not look further for postfix operators */
-        lexpush(); /* push ';' back after successful match */
+        lexer_->lexpush(); /* push ';' back after successful match */
         return node;
     }
-    if (matchtoken(tTERM)) {
+    if (lexer_->match(tTERM)) {
         /* Found a newline that ends a statement (this is the case when
          * semicolons are optional). Note that an explicit semicolon was
          * handled above. This case is similar, except that the token must
@@ -959,13 +976,13 @@ Parser::hier2()
         return node;
     }
 
-    tok = lex();
+    tok = lexer_->lex();
     switch (tok) {
         case tINC: /* lval++ */
         case tDEC: /* lval-- */
-            return new PostIncExpr(current_pos(), tok, node);
+            return new PostIncExpr(lexer_->pos(), tok, node);
         default:
-            lexpush();
+            lexer_->lexpush();
             break;
     }
     return node;
@@ -975,30 +992,30 @@ Expr*
 Parser::hier1()
 {
     Expr* base = nullptr;
-    if (matchtoken(tVIEW_AS)) {
+    if (lexer_->match(tVIEW_AS)) {
         base = parse_view_as();
     } else {
         base = primary();
     }
 
     for (;;) {
-        int tok = lex();
+        int tok = lexer_->lex();
         if (tok == '.' || tok == tDBLCOLON) {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             sp::Atom* ident;
-            if (!needsymbol(&ident))
+            if (!lexer_->needsymbol(&ident))
                 break;
             base = new FieldAccessExpr(pos, tok, base, ident);
         } else if (tok == '[') {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Expr* inner = hier14();
             base = new IndexExpr(pos, base, inner);
-            needtoken(']');
+            lexer_->need(']');
         } else if (tok == '(') {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             base = parse_call(pos, tok, base);
         } else {
-            lexpush();
+            lexer_->lexpush();
             break;
         }
     }
@@ -1008,30 +1025,30 @@ Parser::hier1()
 Expr*
 Parser::primary()
 {
-    if (matchtoken('(')) { /* sub-expression - (expression,...) */
+    if (lexer_->match('(')) { /* sub-expression - (expression,...) */
         /* no longer in "test" expression */
         ke::SaveAndSet<bool> in_test(&sc_intest, false);
         /* allow tagnames to be used in parenthesized expressions */
         ke::SaveAndSet<bool> allowtags(&sc_allowtags, true);
 
-        CommaExpr* expr = new CommaExpr(current_pos());
+        CommaExpr* expr = new CommaExpr(lexer_->pos());
         do {
             Expr* child = hier14();
             expr->exprs().push_back(child);
-        } while (matchtoken(','));
-        needtoken(')');
-        lexclr(FALSE); /* clear lex() push-back, it should have been
-                        * cleared already by needtoken() */
+        } while (lexer_->match(','));
+        lexer_->need(')');
+        lexer_->lexclr(FALSE); /* clear lexer_->lex() push-back, it should have been
+                        * cleared already by lexer_->need() */
         return expr;
     }
 
-    int tok = lex();
+    int tok = lexer_->lex();
     if (tok == tTHIS)
-        return new ThisExpr(current_pos());
+        return new ThisExpr(lexer_->pos());
     if (tok == tSYMBOL)
-        return new SymbolExpr(current_pos(), current_token()->atom);
+        return new SymbolExpr(lexer_->pos(), lexer_->current_token()->atom);
 
-    lexpush();
+    lexer_->lexpush();
 
     return constant();
 }
@@ -1039,36 +1056,36 @@ Parser::primary()
 Expr*
 Parser::constant()
 {
-    int tok = lex();
-    auto pos = current_pos();
+    int tok = lexer_->lex();
+    auto pos = lexer_->pos();
     switch (tok) {
         case tNULL:
             return new NullExpr(pos);
         case tNUMBER:
-            return new NumberExpr(pos, current_token()->value);
+            return new NumberExpr(pos, lexer_->current_token()->value);
         case tRATIONAL:
-            return new FloatExpr(pos, current_token()->value);
+            return new FloatExpr(pos, lexer_->current_token()->value);
         case tSTRING: {
-            const auto& str = current_token()->data;
+            const auto& str = lexer_->current_token()->data;
             return new StringExpr(pos, str.c_str(), str.size());
         }
         case tTRUE:
-            return new TaggedValueExpr(current_pos(), pc_tag_bool, 1);
+            return new TaggedValueExpr(lexer_->pos(), pc_tag_bool, 1);
         case tFALSE:
-            return new TaggedValueExpr(current_pos(), pc_tag_bool, 0);
+            return new TaggedValueExpr(lexer_->pos(), pc_tag_bool, 0);
         case '{':
         {
             ArrayExpr* expr = new ArrayExpr(pos);
             do {
-                if (matchtoken(tELLIPS)) {
+                if (lexer_->match(tELLIPS)) {
                     expr->set_ellipses();
                     break;
                 }
                 Expr* child = hier14();
                 expr->exprs().push_back(child);
-            } while (matchtoken(','));
-            if (!needtoken('}'))
-                lexclr(FALSE);
+            } while (lexer_->match(','));
+            if (!lexer_->need('}'))
+                lexer_->lexclr(FALSE);
             return expr;
         }
         default:
@@ -1082,34 +1099,34 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
 {
     CallExpr* call = new CallExpr(pos, tok, target);
 
-    if (matchtoken(')'))
+    if (lexer_->match(')'))
         return call;
 
     bool named_params = false;
     do {
         sp::Atom* name = nullptr;
-        if (matchtoken('.')) {
+        if (lexer_->match('.')) {
             named_params = true;
 
-            if (!needsymbol(&name))
+            if (!lexer_->needsymbol(&name))
                 break;
-            needtoken('=');
+            lexer_->need('=');
         } else {
             if (named_params)
                 error(44);
         }
 
         Expr* expr = nullptr;
-        if (!matchtoken('_'))
+        if (!lexer_->match('_'))
             expr = hier14();
 
         call->args().emplace_back(name, expr);
 
-        if (matchtoken(')'))
+        if (lexer_->match(')'))
             break;
-        if (!needtoken(','))
+        if (!lexer_->need(','))
             break;
-    } while (freading && !matchtoken(tENDEXPR));
+    } while (freading && !lexer_->match(tENDEXPR));
 
     return call;
 }
@@ -1117,88 +1134,88 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
 Expr*
 Parser::parse_view_as()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    needtoken('<');
+    lexer_->need('<');
     TypenameInfo ti;
     {
         if (!parse_new_typename(nullptr, &ti))
             ti = TypenameInfo{0};
     }
-    needtoken('>');
+    lexer_->need('>');
 
-    int paren = needtoken('(');
+    int paren = lexer_->need('(');
 
     Expr* expr = hier14();
     if (paren)
-        needtoken(')');
+        lexer_->need(')');
     else
-        matchtoken(')');
+        lexer_->match(')');
     return new CastExpr(pos, tVIEW_AS, ti, expr);
 }
 
 Expr*
 Parser::struct_init()
 {
-    StructExpr* init = new StructExpr(current_pos());
+    StructExpr* init = new StructExpr(lexer_->pos());
 
     // '}' has already been lexed.
     do {
         sp::Atom* name = nullptr;
-        needsymbol(&name);
+        lexer_->needsymbol(&name);
 
-        needtoken('=');
+        lexer_->need('=');
 
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
 
         Expr* expr = nullptr;
-        switch (lex()) {
+        switch (lexer_->lex()) {
             case tSTRING: {
-                const auto& str = current_token()->data;
+                const auto& str = lexer_->current_token()->data;
                 expr = new StringExpr(pos, str.c_str(), str.size());
                 break;
             }
             case tNUMBER:
-                expr = new NumberExpr(pos, current_token()->value);
+                expr = new NumberExpr(pos, lexer_->current_token()->value);
                 break;
             case tRATIONAL:
-                expr = new FloatExpr(pos, current_token()->value);
+                expr = new FloatExpr(pos, lexer_->current_token()->value);
                 break;
             case tSYMBOL:
-                expr = new SymbolExpr(pos, current_token()->atom);
+                expr = new SymbolExpr(pos, lexer_->current_token()->atom);
                 break;
             default:
-                report(1) << "-constant-" << get_token_string(current_token()->id);
+                report(1) << "-constant-" << get_token_string(lexer_->current_token()->id);
                 break;
         }
 
         if (name && expr)
             init->fields().push_back(StructInitField(name, expr));
-    } while (matchtoken(',') && !lexpeek('}'));
+    } while (lexer_->match(',') && !lexer_->peek('}'));
 
-    needtoken('}');
+    lexer_->need('}');
     return init;
 }
 
 Stmt*
 Parser::parse_static_assert()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    needtoken('(');
+    lexer_->need('(');
 
     Expr* expr = hier14();
     if (!expr)
         return nullptr;
 
     PoolString * text = nullptr;
-    if (matchtoken(',') && needtoken(tSTRING)) {
-        auto tok = current_token();
+    if (lexer_->match(',') && lexer_->need(tSTRING)) {
+        auto tok = lexer_->current_token();
         text = new PoolString(tok->data.c_str(), tok->data.size());
     }
 
-    needtoken(')');
-    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    lexer_->need(')');
+    lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
 
     return new StaticAssertStmt(pos, expr, text);
 }
@@ -1206,34 +1223,34 @@ Parser::parse_static_assert()
 Expr*
 Parser::var_init(int vclass)
 {
-    if (matchtoken('{')) {
+    if (lexer_->match('{')) {
         // Peek for " <symbol> = " to see if this is a struct initializer.
-        if (matchtoken(tSYMBOL)) {
-            if (matchtoken('=')) {
-                lexpush();
-                lexpush();
+        if (lexer_->match(tSYMBOL)) {
+            if (lexer_->match('=')) {
+                lexer_->lexpush();
+                lexer_->lexpush();
                 return struct_init();
             }
-            lexpush();
+            lexer_->lexpush();
         }
 
-        ArrayExpr* expr = new ArrayExpr(current_pos());
+        ArrayExpr* expr = new ArrayExpr(lexer_->pos());
         do {
-            if (lexpeek('}'))
+            if (lexer_->peek('}'))
                 break;
-            if (matchtoken(tELLIPS)) {
+            if (lexer_->match(tELLIPS)) {
                 expr->set_ellipses();
                 break;
             }
             Expr* child = var_init(vclass);
             expr->exprs().emplace_back(child);
-        } while (matchtoken(','));
-        needtoken('}');
+        } while (lexer_->match(','));
+        lexer_->need('}');
         return expr;
     }
 
-    if (matchtoken(tSTRING)) {
-        auto tok = current_token();
+    if (lexer_->match(tSTRING)) {
+        auto tok = lexer_->current_token();
         return new StringExpr(tok->start, tok->data.c_str(), tok->data.size());
     }
 
@@ -1250,8 +1267,8 @@ Parser::parse_new_array(const token_pos_t& pos, const TypenameInfo& rt)
         Expr* child = hier14();
         expr->exprs().emplace_back(child);
 
-        needtoken(']');
-    } while (matchtoken('['));
+        lexer_->need(']');
+    } while (lexer_->match('['));
     return expr;
 }
 
@@ -1263,14 +1280,14 @@ Parser::parse_post_dims(typeinfo_t* type)
     do {
         type->dim.emplace_back(0);
 
-        if (matchtoken(']')) {
+        if (lexer_->match(']')) {
             dim_exprs.emplace_back(nullptr);
         } else {
             has_dim_exprs = true;
             dim_exprs.emplace_back(hier14());
-            needtoken(']');
+            lexer_->need(']');
         }
-    } while (matchtoken('['));
+    } while (lexer_->match('['));
 
     if (has_dim_exprs)
         type->dim_exprs = PoolList<Expr*>(dim_exprs.begin(), dim_exprs.end());
@@ -1288,9 +1305,9 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
     }
     errorset(sRESET, 0);
 
-    int tok = lex();
+    int tok = lexer_->lex();
 
-    /* lex() has set stmtindent */
+    /* lexer_->lex() has set stmtindent */
     if (lastindent && tok != tLABEL) {
         if (*lastindent >= 0 && *lastindent != stmtindent && !indent_nowarn && sc_tabsize > 0)
             error(217); /* loose indentation */
@@ -1302,11 +1319,11 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
         // We reaaaally don't have enough lookahead for this, so we cheat and try
         // to determine whether this is probably a declaration.
         int is_decl = FALSE;
-        if (matchtoken('[')) {
-            if (lexpeek(']'))
+        if (lexer_->match('[')) {
+            if (lexer_->peek(']'))
                 is_decl = TRUE;
-            lexpush();
-        } else if (lexpeek(tSYMBOL)) {
+            lexer_->lexpush();
+        } else if (lexer_->peek(tSYMBOL)) {
             is_decl = TRUE;
         }
 
@@ -1315,9 +1332,9 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
                 error(3);
                 return nullptr;
             }
-            lexpush();
+            lexer_->lexpush();
             auto stmt = parse_local_decl(tNEWDECL, true);
-            needtoken(tTERM);
+            lexer_->need(tTERM);
             return stmt;
         }
     }
@@ -1330,24 +1347,24 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
         case tVOID:
         case tCHAR:
         case tOBJECT:
-            lexpush();
+            lexer_->lexpush();
             // Fall-through.
         case tDECL:
         case tSTATIC:
         case tNEW: {
-            if (tok == tNEW && matchtoken(tSYMBOL)) {
-                if (lexpeek('(')) {
-                    lexpush();
+            if (tok == tNEW && lexer_->match(tSYMBOL)) {
+                if (lexer_->peek('(')) {
+                    lexer_->lexpush();
                     break;
                 }
-                lexpush(); // we matchtoken'ed, give it back to lex for declloc
+                lexer_->lexpush(); // we lexer_->match'ed, give it back to lex for declloc
             }
             if (!allow_decl) {
                 error(3);
                 return nullptr;
             }
             auto stmt = parse_local_decl(tok, tok != tDECL);
-            needtoken(tTERM);
+            lexer_->need(tTERM);
             return stmt;
         }
         case tIF:
@@ -1362,8 +1379,8 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return nullptr;
         case '{': {
             int save = fline;
-            if (matchtoken('}'))
-                return new BlockStmt(current_pos());
+            if (lexer_->match('}'))
+                return new BlockStmt(lexer_->pos());
             return parse_compound(save == fline);
         }
         case ';':
@@ -1371,8 +1388,8 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return nullptr;
         case tBREAK:
         case tCONTINUE: {
-            auto pos = current_pos();
-            needtoken(tTERM);
+            auto pos = lexer_->pos();
+            lexer_->need(tTERM);
             if (!in_loop_) {
                 error(24);
                 return nullptr;
@@ -1380,60 +1397,60 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return new LoopControlStmt(pos, tok);
         }
         case tRETURN: {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Expr* expr = nullptr;
-            if (!matchtoken(tTERM)) {
+            if (!lexer_->match(tTERM)) {
                 expr = parse_expr(false);
-                needtoken(tTERM);
+                lexer_->need(tTERM);
             }
             return new ReturnStmt(pos, expr);
         }
         case tASSERT: {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Expr* expr = parse_expr(true);
-            needtoken(tTERM);
+            lexer_->need(tTERM);
             if (!expr)
                 return nullptr;
             return new AssertStmt(pos, expr);
         }
         case tDELETE: {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Expr* expr = parse_expr(false);
-            needtoken(tTERM);
+            lexer_->need(tTERM);
             if (!expr)
                 return nullptr;
             return new DeleteStmt(pos, expr);
         }
         case tEXIT: {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Expr* expr = nullptr;
-            if (matchtoken(tTERM)) {
+            if (lexer_->match(tTERM)) {
                 expr = parse_expr(false);
-                needtoken(tTERM);
+                lexer_->need(tTERM);
             }
             return new ExitStmt(pos, expr);
         }
         case tDO: {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Stmt* stmt = nullptr;
             {
                 ke::SaveAndSet<bool> in_loop(&in_loop_, true);
                 stmt = parse_stmt(nullptr, false);
             }
-            needtoken(tWHILE);
-            bool parens = matchtoken('(');
+            lexer_->need(tWHILE);
+            bool parens = lexer_->match('(');
             Expr* cond = parse_expr(false);
             if (parens)
-                needtoken(')');
+                lexer_->need(')');
             else
                 error(243);
-            needtoken(tTERM);
+            lexer_->need(tTERM);
             if (!stmt || !cond)
                 return nullptr;
             return new DoWhileStmt(pos, tok, cond, stmt);
         }
         case tWHILE: {
-            auto pos = current_pos();
+            auto pos = lexer_->pos();
             Expr* cond = parse_expr(true);
             Stmt* stmt = nullptr;
             {
@@ -1458,9 +1475,9 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             break;
     }
 
-    lexpush(); /* analyze token later */
+    lexer_->lexpush(); /* analyze token later */
     Expr* expr = parse_expr(false);
-    needtoken(tTERM);
+    lexer_->need(tTERM);
     if (!expr)
         return nullptr;
     return new ExprStmt(expr->pos(), expr);
@@ -1471,7 +1488,7 @@ Parser::parse_compound(bool sameline)
 {
     auto block_start = fline;
 
-    BlockStmt* block = new BlockStmt(current_pos());
+    BlockStmt* block = new BlockStmt(lexer_->pos());
 
     /* if there is more text on this line, we should adjust the statement indent */
     if (sameline) {
@@ -1497,7 +1514,7 @@ Parser::parse_compound(bool sameline)
     }
 
     int indent = -1;
-    while (matchtoken('}') == 0) { /* repeat until compound statement is closed */
+    while (lexer_->match('}') == 0) { /* repeat until compound statement is closed */
         if (!freading) {
             error(30, block_start); /* compound block not closed at end of file */
             break;
@@ -1533,13 +1550,13 @@ Stmt*
 Parser::parse_if()
 {
     auto ifindent = stmtindent;
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
     auto expr = parse_expr(true);
     if (!expr)
         return nullptr;
     auto stmt = parse_stmt(nullptr, false);
     Stmt* else_stmt = nullptr;
-    if (matchtoken(tELSE)) {
+    if (lexer_->match(tELSE)) {
         /* to avoid the "dangling else" error, we want a warning if the "else"
          * has a lower indent than the matching "if" */
         if (stmtindent < ifindent && sc_tabsize > 0)
@@ -1559,7 +1576,7 @@ Parser::parse_expr(bool parens)
     ke::SaveAndSet<bool> in_test(&sc_intest, parens);
 
     if (parens)
-        needtoken('(');
+        lexer_->need('(');
 
     Expr* expr = nullptr;
     CommaExpr* comma = nullptr;
@@ -1571,7 +1588,7 @@ Parser::parse_expr(bool parens)
         if (comma)
             comma->exprs().push_back(expr);
 
-        if (!matchtoken(','))
+        if (!lexer_->match(','))
             break;
 
         if (!comma) {
@@ -1580,7 +1597,7 @@ Parser::parse_expr(bool parens)
         }
     }
     if (parens)
-        needtoken(')');
+        lexer_->need(')');
 
     return comma ? comma : expr;
 }
@@ -1588,69 +1605,69 @@ Parser::parse_expr(bool parens)
 Stmt*
 Parser::parse_for()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    int endtok = matchtoken('(') ? ')' : tDO;
+    int endtok = lexer_->match('(') ? ')' : tDO;
     if (endtok != ')')
         error(243);
 
     Stmt* init = nullptr;
-    if (!matchtoken(';')) {
+    if (!lexer_->match(';')) {
         /* new variable declarations are allowed here */
-        int tok_id = lex();
+        int tok_id = lexer_->lex();
         switch (tok_id) {
             case tINT:
             case tCHAR:
             case tOBJECT:
             case tVOID:
-                lexpush();
+                lexer_->lexpush();
                 // Fallthrough.
             case tNEW:
                 /* The variable in expr1 of the for loop is at a
                  * 'compound statement' level of it own.
                  */
-                // :TODO: test needtoken(tTERM) accepting newlines here
+                // :TODO: test lexer_->need(tTERM) accepting newlines here
                 init = parse_local_decl(tok_id, true);
-                needtoken(';');
+                lexer_->need(';');
                 break;
             case tSYMBOL: {
                 // See comment in statement() near tSYMBOL.
                 bool is_decl = false;
-                if (matchtoken('[')) {
-                    if (lexpeek(']'))
+                if (lexer_->match('[')) {
+                    if (lexer_->peek(']'))
                         is_decl = true;
-                    lexpush();
-                } else if (lexpeek(tSYMBOL)) {
+                    lexer_->lexpush();
+                } else if (lexer_->peek(tSYMBOL)) {
                     is_decl = true;
                 }
 
                 if (is_decl) {
-                    lexpush();
+                    lexer_->lexpush();
                     init = parse_local_decl(tSYMBOL, true);
-                    needtoken(';');
+                    lexer_->need(';');
                     break;
                 }
                 // Fall-through to default!
             }
             default:
-                lexpush();
+                lexer_->lexpush();
                 if (Expr* expr = parse_expr(false))
                     init = new ExprStmt(expr->pos(), expr);
-                needtoken(';');
+                lexer_->need(';');
                 break;
         }
     }
 
     Expr* cond = nullptr;
-    if (!matchtoken(';')) {
+    if (!lexer_->match(';')) {
         cond = parse_expr(false);
-        needtoken(';');
+        lexer_->need(';');
     }
 
     Expr* advance = nullptr;
-    if (!matchtoken(endtok)) {
+    if (!lexer_->match(endtok)) {
         advance = parse_expr(false);
-        needtoken(endtok);
+        lexer_->need(endtok);
     }
 
     Stmt* body = nullptr;
@@ -1666,21 +1683,21 @@ Parser::parse_for()
 Stmt*
 Parser::parse_switch()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    int endtok = matchtoken('(') ? ')' : tDO;
+    int endtok = lexer_->match('(') ? ')' : tDO;
     if (endtok != ')')
         error(243);
 
     Expr* cond = parse_expr(false);
-    needtoken(endtok);
+    lexer_->need(endtok);
 
     SwitchStmt* sw = new SwitchStmt(pos, cond);
 
     endtok = '}';
-    needtoken('{');
+    lexer_->need('{');
     while (true) {
-        int tok = lex();
+        int tok = lexer_->lex();
 
         switch (tok) {
             case tCASE:
@@ -1689,7 +1706,7 @@ Parser::parse_switch()
                 parse_case(sw);
                 break;
             case tDEFAULT:
-                needtoken(':');
+                lexer_->need(':');
                 if (Stmt* stmt = parse_stmt(nullptr, false)) {
                     if (!sw->default_case())
                         sw->set_default_case(stmt);
@@ -1726,11 +1743,11 @@ Parser::parse_case(SwitchStmt* sw)
         // hier14 because parse_expr() allows comma exprs
         if (Expr* expr = hier14())
             exprs.push_back(expr);
-        if (matchtoken(tDBLDOT))
+        if (lexer_->match(tDBLDOT))
             error(1, ":", "..");
-    } while (matchtoken(','));
+    } while (lexer_->match(','));
 
-    needtoken(':');
+    lexer_->need(':');
 
     Stmt* stmt = parse_stmt(nullptr, false);
     if (!stmt || exprs.empty())
@@ -1742,7 +1759,7 @@ Parser::parse_case(SwitchStmt* sw)
 Decl*
 Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this_tag)
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
     auto info = new FunctionInfo(pos, decl);
     info->set_name(decl.name);
     if (this_tag)
@@ -1771,21 +1788,21 @@ Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this
 bool
 Parser::parse_function(FunctionInfo* info, int tokid)
 {
-    if (!matchtoken('(')) {
+    if (!lexer_->match('(')) {
         error(10);
-        lexclr(TRUE);
+        lexer_->lexclr(TRUE);
         return false;
     }
     parse_args(info); // eats the close paren
 
     if (info->is_native()) {
         if (info->decl().opertok != 0) {
-            needtoken('=');
-            lexpush();
+            lexer_->need('=');
+            lexer_->lexpush();
         }
-        if (matchtoken('=')) {
+        if (lexer_->match('=')) {
             sp::Atom* ident;
-            if (needsymbol(&ident))
+            if (lexer_->needsymbol(&ident))
                 info->set_alias(ident);
         }
     }
@@ -1793,13 +1810,13 @@ Parser::parse_function(FunctionInfo* info, int tokid)
     switch (tokid) {
         case tNATIVE:
         case tFORWARD:
-            needtoken(tTERM);
+            lexer_->need(tTERM);
             return true;
         case tMETHODMAP:
             // Don't look for line endings if we're inline.
             return true;
         default:
-            if (matchtoken(';')) {
+            if (lexer_->match(';')) {
                 if (!NeedSemicolon())
                     error(10); /* old style prototypes used with optional semicolumns */
                 info->set_is_forward();
@@ -1808,28 +1825,28 @@ Parser::parse_function(FunctionInfo* info, int tokid)
             break;
     }
 
-    if (matchtoken('{'))
-        lexpush();
+    if (lexer_->match('{'))
+        lexer_->lexpush();
     else if (info->decl().type.is_new)
-        needtoken('{');
+        lexer_->need('{');
 
     Stmt* body = parse_stmt(nullptr, false);
     if (!body)
         return false;
 
     info->set_body(BlockStmt::WrapStmt(body));
-    info->set_end_pos(current_pos());
+    info->set_end_pos(lexer_->pos());
     return true;
 }
 
 void
 Parser::parse_args(FunctionInfo* info)
 {
-    if (matchtoken(')'))
+    if (lexer_->match(')'))
         return;
 
     do {
-        auto pos = current_pos();
+        auto pos = lexer_->pos();
 
         declinfo_t decl = {};
         parse_decl(&decl, DECLFLAG_ARGUMENT | DECLFLAG_ENUMROOT);
@@ -1848,7 +1865,7 @@ Parser::parse_args(FunctionInfo* info)
             error(402);
 
         Expr* init = nullptr;
-        if (matchtoken('='))
+        if (lexer_->match('='))
             init = var_init(sARGUMENT);
 
         if (info->args().size() >= SP_MAX_CALL_ARGUMENTS)
@@ -1859,39 +1876,39 @@ Parser::parse_args(FunctionInfo* info)
         auto p = new VarDecl(pos, decl.name, decl.type, sARGUMENT, false, false,
                              false, init);
         info->AddArg(p);
-    } while (matchtoken(','));
+    } while (lexer_->match(','));
 
-    needtoken(')');
+    lexer_->need(')');
     errorset(sRESET, 0);
 }
 
 Decl*
 Parser::parse_methodmap()
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
     sp::Atom* ident;
-    needsymbol(&ident);
+    lexer_->needsymbol(&ident);
 
     auto name_atom = ident;
     if (!isupper(name_atom->chars()[0]))
         report(109) << "methodmap";
 
-    bool nullable = matchtoken(tNULLABLE);
+    bool nullable = lexer_->match(tNULLABLE);
 
     sp::Atom* extends = nullptr;
-    if (matchtoken('<') && needsymbol(&ident))
+    if (lexer_->match('<') && lexer_->needsymbol(&ident))
         extends = ident;
 
     auto decl = new MethodmapDecl(pos, name_atom, nullable, extends);
 
-    needtoken('{');
-    while (!matchtoken('}')) {
+    lexer_->need('{');
+    while (!lexer_->match('}')) {
         bool ok = false;
-        int tok_id = lex();
+        int tok_id = lexer_->lex();
         if (tok_id == tPUBLIC) {
             ok = parse_methodmap_method(decl);
-        } else if (tok_id == tSYMBOL && current_token()->atom->str() == "property") {
+        } else if (tok_id == tSYMBOL && lexer_->current_token()->atom->str() == "property") {
             ok = parse_methodmap_property(decl);
         } else {
             error(124);
@@ -1903,35 +1920,35 @@ Parser::parse_methodmap()
         }
     }
 
-    require_newline(TerminatorPolicy::NewlineOrSemicolon);
+    lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
 }
 
 bool
 Parser::parse_methodmap_method(MethodmapDecl* map)
 {
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    bool is_static = matchtoken(tSTATIC);
-    bool is_native = matchtoken(tNATIVE);
+    bool is_static = lexer_->match(tSTATIC);
+    bool is_native = lexer_->match(tNATIVE);
 
     sp::Atom* symbol = nullptr;
     full_token_t symbol_tok;
-    if (matchsymbol(&symbol))
-        symbol_tok = *current_token();
+    if (lexer_->matchsymbol(&symbol))
+        symbol_tok = *lexer_->current_token();
 
-    if (matchtoken('~'))
+    if (lexer_->match('~'))
         error(118);
 
     declinfo_t ret_type = {};
 
     bool is_ctor = false;
-    if (symbol && matchtoken('(')) {
+    if (symbol && lexer_->match('(')) {
         // ::= ident '('
 
         // Push the '(' token back for parse_args().
         is_ctor = true;
-        lexpush();
+        lexer_->lexpush();
 
         // Force parser to require { for the method body.
         ret_type.type.is_new = true;
@@ -1947,7 +1964,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
             return false;
 
         // Now, we should get an identifier.
-        if (!needsymbol(&symbol))
+        if (!lexer_->needsymbol(&symbol))
             return false;
 
         ret_type.type.ident = iVARIABLE;
@@ -1976,9 +1993,9 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     map->methods().emplace_back(method);
 
     if (is_native)
-        require_newline(TerminatorPolicy::Semicolon);
+        lexer_->require_newline(TerminatorPolicy::Semicolon);
     else
-        require_newline(TerminatorPolicy::Newline);
+        lexer_->require_newline(TerminatorPolicy::Newline);
     return true;
 }
 
@@ -1986,27 +2003,27 @@ bool
 Parser::parse_methodmap_property(MethodmapDecl* map)
 {
     auto prop = new MethodmapProperty;
-    prop->pos = current_pos();
+    prop->pos = lexer_->pos();
 
     if (!parse_new_typeexpr(&prop->type, nullptr, 0))
         return false;
 
     sp::Atom* ident;
-    if (!needsymbol(&ident))
+    if (!lexer_->needsymbol(&ident))
         return false;
-    if (!needtoken('{'))
+    if (!lexer_->need('{'))
         return false;
 
     prop->name = ident;
 
-    while (!matchtoken('}')) {
+    while (!lexer_->match('}')) {
         if (!parse_methodmap_property_accessor(map, prop))
-            lexclr(TRUE);
+            lexer_->lexclr(TRUE);
     }
 
     map->properties().emplace_back(prop);
 
-    require_newline(TerminatorPolicy::Newline);
+    lexer_->require_newline(TerminatorPolicy::Newline);
     return true;
 }
 
@@ -2014,18 +2031,18 @@ bool
 Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop)
 {
     bool is_native = false;
-    auto pos = current_pos();
+    auto pos = lexer_->pos();
 
-    needtoken(tPUBLIC);
+    lexer_->need(tPUBLIC);
 
     sp::Atom* ident;
-    if (!matchsymbol(&ident)) {
-        if (!matchtoken(tNATIVE)) {
+    if (!lexer_->matchsymbol(&ident)) {
+        if (!lexer_->match(tNATIVE)) {
             report(125);
             return false;
         }
         is_native = true;
-        if (!needsymbol(&ident))
+        if (!lexer_->needsymbol(&ident))
             return false;
     }
 
@@ -2076,9 +2093,9 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
         prop->setter = fun;
 
     if (is_native)
-        require_newline(TerminatorPolicy::Semicolon);
+        lexer_->require_newline(TerminatorPolicy::Semicolon);
     else
-        require_newline(TerminatorPolicy::Newline);
+        lexer_->require_newline(TerminatorPolicy::Newline);
     return true;
 }
 
@@ -2087,13 +2104,13 @@ bool
 Parser::consume_line()
 {
     // First check for EOF.
-    if (lex() == 0)
+    if (lexer_->lex() == 0)
         return false;
-    lexpush();
+    lexer_->lexpush();
 
-    while (!matchtoken(tTERM)) {
+    while (!lexer_->match(tTERM)) {
         // Check for EOF.
-        if (lex() == 0)
+        if (lexer_->lex() == 0)
             return false;
     }
     return true;
@@ -2107,30 +2124,30 @@ Parser::consume_line()
 TypedefInfo*
 Parser::parse_function_type()
 {
-    int lparen = matchtoken('(');
-    if (!needtoken(tFUNCTION))
+    int lparen = lexer_->match('(');
+    if (!lexer_->need(tFUNCTION))
         return nullptr;
 
     auto info = new TypedefInfo;
-    info->pos = current_pos();
+    info->pos = lexer_->pos();
 
     parse_new_typename(nullptr, &info->ret_type);
 
-    needtoken('(');
+    lexer_->need('(');
 
-    while (!matchtoken(')')) {
+    while (!lexer_->match(')')) {
         auto decl = gPoolAllocator.alloc<declinfo_t>();
         decl->type.ident = iVARIABLE;
 
         parse_new_decl(decl, nullptr, DECLFLAG_ARGUMENT);
 
         // Eat optional symbol name.
-        matchtoken(tSYMBOL);
+        lexer_->match(tSYMBOL);
 
         info->args.emplace_back(decl);
 
-        if (!matchtoken(',')) {
-            needtoken(')');
+        if (!lexer_->match(',')) {
+            lexer_->need(')');
             break;
         }
     }
@@ -2140,9 +2157,9 @@ Parser::parse_function_type()
         report(45);
 
     if (lparen)
-        needtoken(')');
+        lexer_->need(')');
 
-    require_newline(TerminatorPolicy::Semicolon);
+    lexer_->require_newline(TerminatorPolicy::Semicolon);
     errorset(sRESET, 0);
     return info;
 }
@@ -2161,11 +2178,11 @@ Parser::parse_decl(declinfo_t* decl, int flags)
     decl->type.ident = iVARIABLE;
 
     // Match early varargs as old decl.
-    if (lexpeek(tELLIPS))
+    if (lexer_->peek(tELLIPS))
         return parse_old_decl(decl, flags);
 
     // Must attempt to match const first, since it's a common prefix.
-    if (matchtoken(tCONST))
+    if (lexer_->match(tCONST))
         decl->type.is_const = true;
 
     // Sometimes we know ahead of time whether the declaration will be old, for
@@ -2177,34 +2194,34 @@ Parser::parse_decl(declinfo_t* decl, int flags)
 
     // If parsing an argument, there are two simple checks for whether this is a
     // new or old-style declaration.
-    if ((flags & DECLFLAG_ARGUMENT) && (lexpeek('&') || lexpeek('{')))
+    if ((flags & DECLFLAG_ARGUMENT) && (lexer_->peek('&') || lexer_->peek('{')))
         return parse_old_decl(decl, flags);
 
     // Another dead giveaway is there being a label or typeless operator.
-    if (lexpeek(tLABEL) || lexpeek(tOPERATOR))
+    if (lexer_->peek(tLABEL) || lexer_->peek(tOPERATOR))
         return parse_old_decl(decl, flags);
 
     // Otherwise, we have to eat a symbol to tell.
-    if (matchsymbol(&ident)) {
-        auto ident_tok = *current_token();
+    if (lexer_->matchsymbol(&ident)) {
+        auto ident_tok = *lexer_->current_token();
 
-        if (lexpeek(tSYMBOL) || lexpeek(tOPERATOR) || lexpeek('&') || lexpeek(tELLIPS)) {
+        if (lexer_->peek(tSYMBOL) || lexer_->peek(tOPERATOR) || lexer_->peek('&') || lexer_->peek(tELLIPS)) {
             // A new-style declaration only allows array dims or a symbol name, so
             // this is a new-style declaration.
             return parse_new_decl(decl, &ident_tok, flags);
         }
 
-        if ((flags & DECLMASK_NAMED_DECL) && matchtoken('[')) {
+        if ((flags & DECLMASK_NAMED_DECL) && lexer_->match('[')) {
             // Oh no - we have to parse array dims before we can tell what kind of
             // declarator this is. It could be either:
             //    "x[] y" (new-style), or
             //    "y[],"  (old-style)
             parse_post_array_dims(decl, flags);
 
-            if (matchtoken(tSYMBOL) || matchtoken('&')) {
+            if (lexer_->match(tSYMBOL) || lexer_->match('&')) {
                 // This must be a newdecl, "x[] y" or "x[] &y", the latter of which
                 // is illegal, but we flow it through the right path anyway.
-                lexpush();
+                lexer_->lexpush();
                 fix_mispredicted_postdims(decl);
                 return parse_new_decl(decl, &ident_tok, flags);
             }
@@ -2220,7 +2237,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
         }
 
         // Give the symbol back to the lexer. This is an old decl.
-        lexpush();
+        lexer_->lexpush();
         return parse_old_decl(decl, flags);
     }
 
@@ -2259,7 +2276,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
 {
     typeinfo_t* type = &decl->type;
 
-    if (matchtoken(tCONST)) {
+    if (lexer_->match(tCONST)) {
         if (type->is_const)
             error(138);
         type->is_const = true;
@@ -2269,34 +2286,34 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
 
     int numtags = 0;
     if (flags & DECLFLAG_ARGUMENT) {
-        if (matchtoken('&'))
+        if (lexer_->match('&'))
             type->ident = iREFERENCE;
 
         // grammar for multitags is:
         //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
-        if (matchtoken('{')) {
+        if (lexer_->match('{')) {
             while (true) {
-                if (!matchtoken('_')) {
+                if (!lexer_->match('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
                     sp::Atom* name;
-                    if (needsymbol(&name))
+                    if (lexer_->needsymbol(&name))
                         ti = TypenameInfo(name, true);
                 }
                 numtags++;
 
-                if (matchtoken('}'))
+                if (lexer_->match('}'))
                     break;
-                needtoken(',');
+                lexer_->need(',');
             }
-            needtoken(':');
+            lexer_->need(':');
         }
         if (numtags > 1)
             error(158);
     }
 
     if (numtags == 0) {
-        if (matchtoken(tLABEL))
-            ti = TypenameInfo(current_token()->atom, true);
+        if (lexer_->match(tLABEL))
+            ti = TypenameInfo(lexer_->current_token()->atom, true);
     }
 
     // All finished with tag stuff.
@@ -2306,26 +2323,26 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         error(147);
 
     // Look for varargs and end early.
-    if (matchtoken(tELLIPS)) {
+    if (lexer_->match(tELLIPS)) {
         type->ident = iVARARGS;
         return TRUE;
     }
 
     if (flags & DECLMASK_NAMED_DECL) {
-        if ((flags & DECLFLAG_MAYBE_FUNCTION) && matchtoken(tOPERATOR)) {
+        if ((flags & DECLFLAG_MAYBE_FUNCTION) && lexer_->match(tOPERATOR)) {
             decl->opertok = operatorname(&decl->name);
             if (decl->opertok == 0)
                 decl->name = gAtoms.add("__unknown__");
         } else {
-            if (!lexpeek(tSYMBOL)) {
+            if (!lexer_->peek(tSYMBOL)) {
                 extern const char* sc_tokens[];
-                int tok_id = lex();
+                int tok_id = lexer_->lex();
                 switch (tok_id) {
                     case tOBJECT:
                     case tCHAR:
                     case tVOID:
                     case tINT:
-                        if (lexpeek(tSYMBOL)) {
+                        if (lexer_->peek(tSYMBOL)) {
                             error(143);
                         } else {
                             error(157, sc_tokens[tok_id - tFIRST]);
@@ -2333,16 +2350,16 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                         }
                         break;
                     default:
-                        lexpush();
+                        lexer_->lexpush();
                         break;
                 }
             }
-            needsymbol(&decl->name);
+            lexer_->needsymbol(&decl->name);
         }
     }
 
     if ((flags & DECLMASK_NAMED_DECL) && !decl->opertok) {
-        if (matchtoken('['))
+        if (lexer_->match('['))
             parse_post_array_dims(decl, flags);
     }
 
@@ -2358,22 +2375,22 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
     decl->type.is_new = TRUE;
 
     if (flags & DECLMASK_NAMED_DECL) {
-        if ((flags & DECLFLAG_ARGUMENT) && matchtoken(tELLIPS)) {
+        if ((flags & DECLFLAG_ARGUMENT) && lexer_->match(tELLIPS)) {
             decl->type.ident = iVARARGS;
             return true;
         }
 
-        if ((flags & DECLFLAG_MAYBE_FUNCTION) && matchtoken(tOPERATOR)) {
+        if ((flags & DECLFLAG_MAYBE_FUNCTION) && lexer_->match(tOPERATOR)) {
             decl->opertok = operatorname(&decl->name);
             if (decl->opertok == 0)
                 decl->name = gAtoms.add("__unknown__");
         } else {
-            needsymbol(&decl->name);
+            lexer_->needsymbol(&decl->name);
         }
     }
 
     if (flags & DECLMASK_NAMED_DECL) {
-        if (matchtoken('[')) {
+        if (lexer_->match('[')) {
             if (decl->type.numdim() == 0)
                 parse_post_array_dims(decl, flags);
             else
@@ -2389,7 +2406,7 @@ int
 Parser::operatorname(sp::Atom** name)
 {
     /* check the operator */
-    int opertok = lex();
+    int opertok = lexer_->lex();
     switch (opertok) {
         case '+':
         case '-':
@@ -2461,8 +2478,8 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
 bool
 Parser::reparse_new_decl(declinfo_t* decl, int flags)
 {
-    if (matchtoken(tSYMBOL))
-        decl->name = current_token()->atom;
+    if (lexer_->match(tSYMBOL))
+        decl->name = lexer_->current_token()->atom;
 
     if (decl->type.declared_tag && !decl->type.tag()) {
         assert(decl->type.numdim() > 0);
@@ -2479,13 +2496,13 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         decl->type.dim.clear();
         decl->type.ident = iVARIABLE;
         decl->type.has_postdims = false;
-        if (matchtoken('[')) {
+        if (lexer_->match('[')) {
             // int x[], y[]
             //           ^-- parse this
             parse_post_array_dims(decl, flags);
         }
     } else {
-        if (matchtoken('[')) {
+        if (lexer_->match('[')) {
             if (decl->type.numdim() > 0) {
                 // int[] x, y[]
                 //           ^-- not allowed
@@ -2546,13 +2563,13 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
     if (first)
         tok = *first;
     else
-        tok = lex_tok();
+        tok = lexer_->lex_tok();
 
     if (tok.id == tCONST) {
         if (type->is_const)
             error(138);
         type->is_const = true;
-        tok = lex_tok();
+        tok = lexer_->lex_tok();
     }
 
     TypenameInfo ti;
@@ -2562,22 +2579,22 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
 
     // Note: we could have already filled in the prefix array bits, so we check
     // that ident != iARRAY before looking for an open bracket.
-    if (type->ident != iARRAY && matchtoken('[')) {
+    if (type->ident != iARRAY && lexer_->match('[')) {
         do {
             type->dim.emplace_back(0);
-            if (!matchtoken(']')) {
+            if (!lexer_->match(']')) {
                 error(101);
 
                 // Try to eat a close bracket anyway.
                 hier14();
-                matchtoken(']');
+                lexer_->match(']');
             }
-        } while (matchtoken('['));
+        } while (lexer_->match('['));
         type->ident = iREFARRAY;
     }
 
     if (flags & DECLFLAG_ARGUMENT) {
-        if (matchtoken('&')) {
+        if (lexer_->match('&')) {
             if (type->ident == iARRAY || type->ident == iREFARRAY)
                 error(137);
             else
@@ -2599,7 +2616,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
     full_token_t tmp;
 
     if (!tok) {
-        tmp = lex_tok();
+        tmp = lexer_->lex_tok();
         tok = &tmp;
     }
 
@@ -2653,4 +2670,29 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
 
     error(122);
     return false;
+}
+
+/*
+ *  Searches for a binary operator a list of operators. The list is stored in
+ *  the array "list". The last entry in the list should be set to 0.
+ *
+ *  The index of an operator in "list" (if found) is returned in "opidx". If
+ *  no operator is found, nextop() returns 0.
+ *
+ *  If an operator is found in the expression, it cannot be used in a function
+ *  call with omitted parantheses. Mark this...
+ */
+int
+Parser::nextop(int* opidx, int* list)
+{
+    *opidx = 0;
+    while (*list) {
+        if (lexer_->match(*list)) {
+            return TRUE; /* found! */
+        } else {
+            list += 1;
+            *opidx += 1;
+        }
+    }
+    return FALSE; /* entire list scanned, nothing found */
 }

@@ -294,21 +294,6 @@ pc_tagname(int tag)
     return "__unknown__";
 }
 
-int
-pc_addtag(const char* name)
-{
-    if (name == NULL) {
-        /* no tagname was given, check for one */
-        if (lex() != tLABEL) {
-            lexpush();
-            return 0; /* untagged */
-        }
-        name = current_token()->atom->chars();
-    }
-
-    return gTypes.defineTag(name)->tagid();
-}
-
 bool
 typeinfo_t::isCharArray() const
 {

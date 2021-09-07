@@ -19,8 +19,10 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <amtl/am-hashtable.h>
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
+#include <shared/string-pool.h>
 
 #include "sc.h"
 
@@ -46,13 +48,13 @@ struct full_token_t {
 
 struct token_buffer_t {
     // Total number of tokens parsed.
-    int num_tokens;
+    int num_tokens = 0;
 
     // Number of tokens that we've rewound back to.
-    int depth;
+    int depth = 0;
 
     // Most recently fetched token.
-    int cursor;
+    int cursor = 0;
 
     // Circular token buffer.
     full_token_t tokens[MAX_TOKEN_DEPTH];
@@ -250,28 +252,10 @@ IsAssignOp(int token)
     }
 }
 
-int plungequalifiedfile(const char* name); /* explicit path included */
-int plungefile(const char* name, int try_currentpath,
-               int try_includepaths); /* search through "include" paths */
-void preprocess(bool allow_synthesized_tokens);
-void lexinit(void);
-int lex();
-int lexpeek(int id);
-void lexpush(void);
-void lexclr(int clreol);
-const token_pos_t& current_pos();
-int matchtoken(int token);
-full_token_t* current_token();
-int needtoken(int token);
-int matchsymbol(sp::Atom** name);
-int needsymbol(sp::Atom** name);
-int peek_same_line();
-int lex_same_line();
 void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
-void declare_handle_intrinsics();
 int getlabel(void);
 char* itoh(ucell val);
 std::string get_token_string(int tok_id);
@@ -279,16 +263,81 @@ int is_variadic(symbol* sym);
 int alpha(char c);
 bool NeedSemicolon();
 
-static inline full_token_t lex_tok()
-{
-    lex();
-    return *current_token();
-}
-
 enum class TerminatorPolicy {
     Newline,
     NewlineOrSemicolon,
     Semicolon
 };
 
-int require_newline(TerminatorPolicy policy);
+static constexpr int SKIPMODE = 1;     /* bit field in "#if" stack */
+static constexpr int PARSEMODE = 2;    /* bit field in "#if" stack */
+static constexpr int HANDLED_ELSE = 4; /* bit field in "#if" stack */
+
+class Lexer
+{
+  public:
+    Lexer();
+
+    int lex();
+    int lex_same_line();
+    bool peek(int id);
+    bool match(int token);
+    bool need(int token);
+    bool matchsymbol(sp::Atom** atom);
+    bool needsymbol(sp::Atom** atom);
+    int require_newline(TerminatorPolicy policy);
+    int peek_same_line();
+    void lexpush();
+    void lexclr(int clreol);
+
+    bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
+    void Preprocess(bool allow_synthesized_tokens);
+
+    full_token_t lex_tok() {
+        lex();
+        return *current_token();
+    }
+    full_token_t* current_token() {
+        return &token_buffer_->tokens[token_buffer_->cursor];
+    }
+    const token_pos_t& pos() { return current_token()->start; }
+
+  private:
+    void LexOnce(full_token_t* tok);
+    void PreprocessInLex(bool allow_synthesized_tokens);
+    void Readline(unsigned char* line);
+    void StripComments(unsigned char* line);
+    int DoCommand(bool allow_synthesized_tokens);
+    int ScanEllipsis(const unsigned char* lptr);
+    bool LexSymbolOrKeyword(full_token_t* tok);
+    int LexKeywordImpl(const char* match, size_t length);
+    bool LexKeyword(full_token_t* tok, const char* token_start, size_t len);
+    void LexStringLiteral(full_token_t* tok);
+    bool PlungeQualifiedFile(const char* name);
+    full_token_t* PushSynthesizedToken(TokenKind kind, int col);
+    void SynthesizeIncludePathToken();
+
+    full_token_t* advance_token_ptr();
+    full_token_t* next_token();
+    void lexpop();
+    int preproc_expr(cell* val, int* tag);
+
+    bool IsSkipping() const {
+        return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
+    }
+
+  private:
+    ke::HashMap<sp::CharsAndLength, int, KeywordTablePolicy> keywords_;
+    short icomment_; /* currently in multiline comment? */
+    std::vector<short> comment_stack_;
+    std::vector<short> preproc_if_stack_;
+    char ifstack_[sCOMP_STACK]; /* "#if" stack */
+    short iflevel_;             /* nesting level if #if/#else/#endif */
+    short skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
+    int listline_ = -1; /* "current line" for the list file */
+    int lexnewline_;
+
+    token_buffer_t normal_buffer_;;
+    token_buffer_t preproc_buffer_;
+    token_buffer_t* token_buffer_;
+};

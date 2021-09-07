@@ -38,6 +38,7 @@
 #include <utility>
 #include <vector>
 
+#include "compile-context.h"
 #include "errors.h"
 #include "lexer.h"
 #include "sc.h"
@@ -174,7 +175,7 @@ MessageBuilder::MessageBuilder(int number)
     if (sPosOverride)
         where_ = sPosOverride->pos();
     else
-        where_ = current_pos();
+        where_ = CompileContext::get().lexer()->pos();
 }
 
 MessageBuilder::MessageBuilder(symbol* sym, int number)

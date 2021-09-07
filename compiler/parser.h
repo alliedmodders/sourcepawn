@@ -26,7 +26,7 @@
 #include "sc.h"
 #include "sctracker.h"
 
-class Parser : public ExpressionParser
+class Parser
 {
   public:
     explicit Parser(CompileContext& cc);
@@ -124,6 +124,7 @@ class Parser : public ExpressionParser
     Expr* struct_init();
     Expr* parse_new_array(const token_pos_t& pos, const TypenameInfo& rt);
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
+    int nextop(int* opidx, int* list);
 
     bool consume_line();
 
@@ -131,4 +132,5 @@ class Parser : public ExpressionParser
     CompileContext& cc_;
     bool in_loop_ = false;
     std::vector<SymbolScope*> static_scopes_;
+    std::shared_ptr<Lexer> lexer_;
 };
