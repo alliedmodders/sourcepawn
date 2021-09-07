@@ -70,27 +70,9 @@ static cell litchar(const unsigned char** lptr, int flags);
 
 static void substallpatterns(unsigned char* line, int buffersize);
 static void set_file_defines(std::string file);
-static full_token_t* push_synthesized_token(TokenKind tok, int col);
 
-#define SKIPMODE 1     /* bit field in "#if" stack */
-#define PARSEMODE 2    /* bit field in "#if" stack */
-#define HANDLED_ELSE 4 /* bit field in "#if" stack */
-#define SKIPPING (skiplevel > 0 && (ifstack[skiplevel - 1] & SKIPMODE) == SKIPMODE)
-
-static short icomment; /* currently in multiline comment? */
-static std::vector<short> sCommentStack;
-static std::vector<short> sPreprocIfStack;
-static char ifstack[sCOMP_STACK]; /* "#if" stack */
-static short iflevel;             /* nesting level if #if/#else/#endif */
-static short skiplevel; /* level at which we started skipping (including nested #if .. #endif) */
-static unsigned char term_expr[] = "";
-static int listline = -1; /* "current line" for the list file */
-static int _lexnewline;
-
-ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sKeywords;
-
-int
-plungequalifiedfile(const char* name)
+bool
+Lexer::PlungeQualifiedFile(const char* name)
 {
     static const char* extensions[] = {".inc", ".p", ".pawn"};
     std::string alt_name;
@@ -118,10 +100,10 @@ plungequalifiedfile(const char* name)
         fprintf(stdout, "Note: including file: %s\n", name);
     }
     gInputFileStack.push_back(inpf);
-    sPreprocIfStack.push_back(iflevel);
-    assert(!SKIPPING);
-    assert(skiplevel == iflevel); /* these two are always the same when "parsing" */
-    sCommentStack.push_back(icomment);
+    preproc_if_stack_.push_back(iflevel_);
+    assert(!IsSkipping());
+    assert(skiplevel_ == iflevel_); /* these two are always the same when "parsing" */
+    comment_stack_.push_back(icomment_);
     gCurrentFileStack.push_back(fcurrent);
     gCurrentLineStack.push_back(fline);
     gNeedSemicolonStack.push_back(!!sc_needsemicolon);
@@ -129,25 +111,25 @@ plungequalifiedfile(const char* name)
     fnumber++;
     fline = 0; /* set current line number to 0 */
     fcurrent = fnumber;
-    icomment = 0;               /* not in a comment */
+    icomment_ = 0;               /* not in a comment */
     insert_dbgfile(inpf->name());   /* attach to debug information */
     insert_inputfile(inpf->name()); /* save for the error system */
     assert(strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
     setfiledirect(inpf->name()); /* (optionally) set in the list file */
-    listline = -1;           /* force a #line directive when changing the file */
+    listline_ = -1;           /* force a #line directive when changing the file */
     skip_utf8_bom(inpf.get());
     return TRUE;
 }
 
-int
-plungefile(const char* name, int try_currentpath, int try_includepaths)
+bool
+Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
 {
-    int result = FALSE;
+    bool result = false;
     char* pcwd = NULL;
     char cwd[PATH_MAX];
 
     if (try_currentpath) {
-        result = plungequalifiedfile(name);
+        result = PlungeQualifiedFile(name);
         if (!result) {
             /* failed to open the file in the active directory, try to open the file
              * in the same directory as the current file --but first check whether
@@ -160,7 +142,7 @@ plungefile(const char* name, int try_currentpath, int try_includepaths)
                     char path[PATH_MAX];
                     SafeStrcpyN(path, sizeof(path), inpf->name(), len);
                     SafeStrcat(path, sizeof(path), name);
-                    result = plungequalifiedfile(path);
+                    result = PlungeQualifiedFile(path);
                 }
             }
         } else {
@@ -181,7 +163,7 @@ plungefile(const char* name, int try_currentpath, int try_includepaths)
         char* ptr;
         for (i = 0; !result && (ptr = get_path(i)) != NULL; i++) {
             auto path = StringPrintf("%s%s", ptr, name);
-            result = plungequalifiedfile(path.c_str());
+            result = PlungeQualifiedFile(path.c_str());
         }
     }
 
@@ -232,12 +214,12 @@ check_empty(const unsigned char* lptr)
 }
 
 void
-synthesize_include_path_token()
+Lexer::SynthesizeIncludePathToken()
 {
     while (*lptr <= ' ' && *lptr != '\0') /* skip leading whitespace */
         lptr++;
 
-    auto tok = push_synthesized_token(tSYN_INCLUDE_PATH, int(lptr - pline));
+    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, int(lptr - pline));
 
     char open_c = (char)*lptr;
     char close_c;
@@ -290,14 +272,12 @@ synthesize_include_path_token()
  *
  *  Global references: inpf,fline,inpfname,freading,icomment (altered)
  */
-static void
-readline(unsigned char* line)
+void
+Lexer::Readline(unsigned char* line)
 {
     int num, cont;
     unsigned char* ptr;
 
-    if (lptr == term_expr)
-        return;
     num = sLINEMAX;
     cont = FALSE;
     do {
@@ -312,26 +292,26 @@ readline(unsigned char* line)
                 /* when there is nothing more to read, the #if/#else stack should
                  * be empty and we should not be in a comment
                  */
-                assert(iflevel >= 0);
-                if (iflevel > 0)
+                assert(iflevel_ >= 0);
+                if (iflevel_ > 0)
                     error(1, "#endif", "-end of file-");
-                else if (icomment != 0)
+                else if (icomment_ != 0)
                     error(1, "*/", "-end of file-");
                 return;
             }
             fline = ke::PopBack(&gCurrentLineStack);
             fcurrent = ke::PopBack(&gCurrentFileStack);
-            icomment = ke::PopBack(&sCommentStack);
-            iflevel = ke::PopBack(&sPreprocIfStack);
+            icomment_ = ke::PopBack(&comment_stack_);
+            iflevel_ = ke::PopBack(&preproc_if_stack_);
             gNeedSemicolonStack.pop_back();
-            skiplevel = iflevel; /* this condition held before including the file */
-            assert(!SKIPPING);   /* idem ditto */
+            skiplevel_ = iflevel_; /* this condition held before including the file */
+            assert(!IsSkipping());   /* idem ditto */
             inpf = ke::PopBack(&gInputFileStack);
             set_file_defines(inpf->name());
             insert_dbgfile(inpf->name());
             setfiledirect(inpf->name());
             assert(strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
-            listline = -1; /* force a #line directive when changing the file */
+            listline_ = -1; /* force a #line directive when changing the file */
         }
 
         if (!inpf->Read(line, num)) {
@@ -386,8 +366,8 @@ readline(unsigned char* line)
  *
  *  Global references: icomment  (private to "stripcom")
  */
-static void
-stripcom(unsigned char* line)
+void
+Lexer::StripComments(unsigned char* line)
 {
     char c;
 #define COMMENT_LIMIT 100
@@ -397,13 +377,13 @@ stripcom(unsigned char* line)
     int skipstar = TRUE;
 
     while (*line) {
-        if (icomment != 0) {
+        if (icomment_ != 0) {
             if (*line == '*' && *(line + 1) == '/') {
-                if (icomment == 2) {
+                if (icomment_ == 2) {
                     assert(commentidx < COMMENT_LIMIT + COMMENT_MARGIN);
                     comment[commentidx] = '\0';
                 }
-                icomment = 0; /* comment has ended */
+                icomment_ = 0; /* comment has ended */
                 *line = ' ';  /* replace '*' and '/' characters by spaces */
                 *(line + 1) = ' ';
                 line += 2;
@@ -411,7 +391,7 @@ stripcom(unsigned char* line)
                 if (*line == '/' && *(line + 1) == '*')
                     error(216); /* nested comment */
                 /* collect the comment characters in a string */
-                if (icomment == 2) {
+                if (icomment_ == 2) {
                     if (skipstar && ((*line != '\0' && *line <= ' ') || *line == '*')) {
                         /* ignore leading whitespace and '*' characters */
                     } else if (commentidx < COMMENT_LIMIT + COMMENT_MARGIN - 1) {
@@ -428,17 +408,17 @@ stripcom(unsigned char* line)
             }
         } else {
             if (*line == '/' && *(line + 1) == '*') {
-                icomment = 1; /* start comment */
+                icomment_ = 1; /* start comment */
                 /* there must be two "*" behind the slash and then white space */
                 if (*(line + 2) == '*' && *(line + 3) <= ' ') {
-                    icomment = 2; /* documentation comment */
+                    icomment_ = 2; /* documentation comment */
                 }
                 commentidx = 0;
                 skipstar = TRUE;
                 *line = ' '; /* replace '/' and '*' characters by spaces */
                 *(line + 1) = ' ';
                 line += 2;
-                if (icomment == 2)
+                if (icomment_ == 2)
                     *line++ = ' ';
             } else if (*line == '/' && *(line + 1) == '/') { /* comment to end of line */
                 if (strchr((char*)line, '\a') != NULL)
@@ -470,7 +450,7 @@ stripcom(unsigned char* line)
             }
         }
     }
-    if (icomment == 2) {
+    if (icomment_ == 2) {
         assert(commentidx < COMMENT_LIMIT + COMMENT_MARGIN);
         comment[commentidx] = '\0';
     }
@@ -725,8 +705,8 @@ chrcat(char* str, char chr)
     *str = '\0';
 }
 
-static int
-preproc_expr(cell* val, int* tag)
+int
+Lexer::preproc_expr(cell* val, int* tag)
 {
     int result;
     char* term;
@@ -780,8 +760,8 @@ enum {
  *  Global variables: iflevel, ifstack (altered)
  *                    lptr      (altered)
  */
-static int
-command(bool allow_synthesized_tokens)
+int
+Lexer::DoCommand(bool allow_synthesized_tokens)
 {
     cell val;
     const char* str;
@@ -791,55 +771,54 @@ command(bool allow_synthesized_tokens)
     if (*lptr == '\0')
         return CMD_EMPTYLINE; /* empty line */
     if (*lptr != '#')
-        return SKIPPING ? CMD_CONDFALSE : CMD_NONE; /* it is not a compiler directive */
+        return IsSkipping() ? CMD_CONDFALSE : CMD_NONE; /* it is not a compiler directive */
     /* compiler directive found */
     indent_nowarn = TRUE; /* allow loose indentation" */
     lexclr(FALSE);        /* clear any "pushed" tokens */
     int tok = lex();
-    int ret = SKIPPING ? CMD_CONDFALSE
-                       : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
+    int ret = IsSkipping() ? CMD_CONDFALSE : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
     switch (tok) {
         case tpIF: /* conditional compilation */
             ret = CMD_IF;
-            assert(iflevel >= 0);
-            if (iflevel >= sCOMP_STACK)
+            assert(iflevel_ >= 0);
+            if (iflevel_ >= sCOMP_STACK)
                 error(FATAL_ERROR_ALLOC_OVERFLOW, "Conditional compilation stack");
-            iflevel++;
-            if (SKIPPING)
+            iflevel_++;
+            if (IsSkipping())
                 break; /* break out of switch */
-            skiplevel = iflevel;
+            skiplevel_ = iflevel_;
             preproc_expr(&val, NULL); /* get value (or 0 on error) */
-            ifstack[iflevel - 1] = (char)(val ? PARSEMODE : SKIPMODE);
+            ifstack_[iflevel_ - 1] = (char)(val ? PARSEMODE : SKIPMODE);
             check_empty(lptr);
             break;
         case tpELSE:
         case tpELSEIF:
             ret = CMD_IF;
-            assert(iflevel >= 0);
-            if (iflevel == 0) {
+            assert(iflevel_ >= 0);
+            if (iflevel_ == 0) {
                 error(26); /* no matching #if */
                 errorset(sRESET, 0);
             } else {
                 /* check for earlier #else */
-                if ((ifstack[iflevel - 1] & HANDLED_ELSE) == HANDLED_ELSE) {
+                if ((ifstack_[iflevel_ - 1] & HANDLED_ELSE) == HANDLED_ELSE) {
                     if (tok == tpELSEIF)
                         error(61); /* #elseif directive may not follow an #else */
                     else
                         error(60); /* multiple #else directives between #if ... #endif */
                     errorset(sRESET, 0);
                 } else {
-                    assert(iflevel > 0);
+                    assert(iflevel_ > 0);
                     /* if there has been a "parse mode" on this level, set "skip mode",
                      * otherwise, clear "skip mode"
                      */
-                    if ((ifstack[iflevel - 1] & PARSEMODE) == PARSEMODE) {
+                    if ((ifstack_[iflevel_ - 1] & PARSEMODE) == PARSEMODE) {
                         /* there has been a parse mode already on this level, so skip the rest */
-                        ifstack[iflevel - 1] |= (char)SKIPMODE;
+                        ifstack_[iflevel_ - 1] |= (char)SKIPMODE;
                         /* if we were already skipping this section, allow expressions with
                          * undefined symbols; otherwise check the expression to catch errors
                          */
                         if (tok == tpELSEIF) {
-                            if (skiplevel == iflevel)
+                            if (skiplevel_ == iflevel_)
                                 preproc_expr(&val, NULL); /* get, but ignore the expression */
                             else
                                 lptr = (unsigned char*)strchr((char*)lptr, '\0');
@@ -850,16 +829,16 @@ command(bool allow_synthesized_tokens)
                             /* if we were already skipping this section, allow expressions with
                              * undefined symbols; otherwise check the expression to catch errors
                              */
-                            if (skiplevel == iflevel) {
+                            if (skiplevel_ == iflevel_) {
                                 preproc_expr(&val, NULL); /* get value (or 0 on error) */
                             } else {
                                 lptr = (unsigned char*)strchr((char*)lptr, '\0');
                                 val = 0;
                             }
-                            ifstack[iflevel - 1] = (char)(val ? PARSEMODE : SKIPMODE);
+                            ifstack_[iflevel_ - 1] = (char)(val ? PARSEMODE : SKIPMODE);
                         } else {
                             /* a simple #else, clear skip mode */
-                            ifstack[iflevel - 1] &= (char)~SKIPMODE;
+                            ifstack_[iflevel_ - 1] &= (char)~SKIPMODE;
                         }
                     }
                 }
@@ -868,36 +847,36 @@ command(bool allow_synthesized_tokens)
             break;
         case tpENDIF:
             ret = CMD_IF;
-            if (iflevel == 0) {
+            if (iflevel_ == 0) {
                 error(26); /* no matching "#if" */
                 errorset(sRESET, 0);
             } else {
-                iflevel--;
-                if (iflevel < skiplevel)
-                    skiplevel = iflevel;
+                iflevel_--;
+                if (iflevel_ < skiplevel_)
+                    skiplevel_ = iflevel_;
             }
             check_empty(lptr);
             break;
         case tINCLUDE: /* #include directive */
         case tpTRYINCLUDE: {
             ret = CMD_INCLUDE;
-            if (SKIPPING)
+            if (IsSkipping())
                 break;
             auto col = current_token()->start.col;
             if (allow_synthesized_tokens) {
-                synthesize_include_path_token();
-                push_synthesized_token((TokenKind)tok, col);
+                SynthesizeIncludePathToken();
+                PushSynthesizedToken((TokenKind)tok, col);
                 ret = CMD_INJECTED;
 
                 // Force lexer to reset.
                 pline[0] = '\0';
                 lptr = pline;
-                _lexnewline = TRUE;
+                lexnewline_ = TRUE;
             }
             break;
         }
         case tpLINE:
-            if (!SKIPPING) {
+            if (!IsSkipping()) {
                 if (lex() != tNUMBER)
                     error(8); /* invalid/non-constant expression */
                 fline = current_token()->value;
@@ -908,7 +887,7 @@ command(bool allow_synthesized_tokens)
         {
             ke::SaveAndSet<bool> reset(&Parser::sDetectedIllegalPreprocessorSymbols, false);
 
-            if (!SKIPPING) {
+            if (!IsSkipping()) {
                 for (str = (char*)lptr; *str <= ' ' && *str != '\0'; str++)
                     /* nothing */;        /* save start of expression */
                 preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
@@ -919,7 +898,7 @@ command(bool allow_synthesized_tokens)
             break;
         }
         case tpPRAGMA:
-            if (!SKIPPING) {
+            if (!IsSkipping()) {
                 if (lex() == tSYMBOL) {
                     if (current_token()->atom->str() == "ctrlchar") {
                         while (*lptr <= ' ' && *lptr != '\0')
@@ -970,7 +949,7 @@ command(bool allow_synthesized_tokens)
                             while (*lptr <= ' ' && *lptr != '\0')
                                 lptr++;
 
-                            push_synthesized_token(tSYN_PRAGMA_UNUSED, int(lptr - pline));
+                            PushSynthesizedToken(tSYN_PRAGMA_UNUSED, int(lptr - pline));
                             return CMD_INJECTED;
                         }
 
@@ -1004,7 +983,7 @@ command(bool allow_synthesized_tokens)
             break;
         case tpENDINPUT:
         case tpENDSCRPT:
-            if (!SKIPPING) {
+            if (!IsSkipping()) {
                 check_empty(lptr);
                 assert(inpf != NULL);
                 inpf = NULL;
@@ -1012,7 +991,7 @@ command(bool allow_synthesized_tokens)
             break;
         case tpDEFINE: {
             ret = CMD_DEFINE;
-            if (!SKIPPING) {
+            if (!IsSkipping()) {
                 char *pattern, *substitution;
                 const unsigned char *start, *end;
                 int count, prefixlen;
@@ -1098,7 +1077,7 @@ command(bool allow_synthesized_tokens)
             break;
         } /* case */
         case tpUNDEF:
-            if (!SKIPPING) {
+            if (!IsSkipping()) {
                 if (lex() == tSYMBOL) {
                     const auto& str = current_token()->atom->str();
                     delete_subst(str.c_str(), str.size());
@@ -1111,18 +1090,18 @@ command(bool allow_synthesized_tokens)
         case tpERROR:
             while (*lptr <= ' ' && *lptr != '\0')
                 lptr++;
-            if (!SKIPPING)
+            if (!IsSkipping())
                 error(FATAL_ERROR_USER_ERROR, lptr); /* user error */
             break;
         case tpWARNING:
             while (*lptr <= ' ' && *lptr != '\0')
                 lptr++;
-            if (!SKIPPING)
+            if (!IsSkipping())
                 error(224, lptr); /* user warning */
             break;
         default:
             error(31);                                 /* unknown compiler directive */
-            ret = SKIPPING ? CMD_CONDFALSE : CMD_NONE; /* process as normal line */
+            ret = IsSkipping() ? CMD_CONDFALSE : CMD_NONE; /* process as normal line */
     }
     return ret;
 }
@@ -1500,8 +1479,8 @@ substallpatterns(unsigned char* line, int buffersize)
  *
  *  The function returns 1 if an ellipsis was found and 0 if not
  */
-static int
-scanellipsis(const unsigned char* lptr)
+int
+Lexer::ScanEllipsis(const unsigned char* lptr)
 {
     static int64_t inpfmark = 0;
     unsigned char* localbuf;
@@ -1523,12 +1502,12 @@ scanellipsis(const unsigned char* lptr)
     if ((localbuf = (unsigned char*)malloc((sLINEMAX + 1) * sizeof(unsigned char))) == NULL)
         return 0;
     inpfmark = inpf->Pos();
-    localcomment = icomment;
+    localcomment = icomment_;
 
     found = 0;
     /* read from the file, skip preprocessing, but strip off comments */
     while (!found && inpf->Read(localbuf, sLINEMAX)) {
-        stripcom(localbuf);
+        StripComments(localbuf);
         lptr = localbuf;
         /* skip white space */
         while (*lptr <= ' ' && *lptr != '\0')
@@ -1542,7 +1521,7 @@ scanellipsis(const unsigned char* lptr)
     /* clean up & reset */
     free(localbuf);
     inpf->Reset(inpfmark);
-    icomment = localcomment;
+    icomment_ = localcomment;
     return found;
 }
 
@@ -1559,33 +1538,31 @@ scanellipsis(const unsigned char* lptr)
  *                     freading (referred to only)
  */
 void
-preprocess(bool allow_synthesized_tokens)
+Lexer::Preprocess(bool allow_synthesized_tokens)
 {
     int iscommand;
 
     if (!freading)
         return;
     do {
-        readline(pline);
-        stripcom(
-            pline); /* ??? no need for this when reading back from list file (in the second pass) */
+        Readline(pline);
+        StripComments(pline);
         lptr = pline; /* set "line pointer" to start of the parsing buffer */
-        iscommand = command(allow_synthesized_tokens);
+        iscommand = DoCommand(allow_synthesized_tokens);
         if (iscommand == CMD_INJECTED)
             return;
         if (iscommand != CMD_NONE)
             errorset(sRESET, 0); /* reset error flag ("panic mode") on empty line or directive */
         if (iscommand == CMD_NONE) {
-            assert(lptr != term_expr);
             substallpatterns(pline, sLINEMAX);
             lptr = pline; /* reset "line pointer" to start of the parsing buffer */
         }
         if (sc_listing && freading &&
             (iscommand == CMD_NONE || iscommand == CMD_EMPTYLINE || iscommand == CMD_DIRECTIVE))
         {
-            listline++;
-            if (fline != listline) {
-                listline = fline;
+            listline_++;
+            if (fline != listline_) {
+                listline_ = fline;
                 setlinedirect(fline);
             }
             if (iscommand == CMD_EMPTYLINE)
@@ -1646,24 +1623,15 @@ packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
 
 // lex() is called recursively, which messes up the lookahead buffer. To get
 // around this we use two separate token buffers.
-token_buffer_t sNormalBuffer;
-token_buffer_t sPreprocessBuffer;
-token_buffer_t* sTokenBuffer;
 
 full_token_t*
-current_token()
+Lexer::next_token()
 {
-    return &sTokenBuffer->tokens[sTokenBuffer->cursor];
-}
-
-static full_token_t*
-next_token()
-{
-    assert(sTokenBuffer->depth > 0);
-    int cursor = sTokenBuffer->cursor + 1;
+    assert(token_buffer_->depth > 0);
+    int cursor = token_buffer_->cursor + 1;
     if (cursor == MAX_TOKEN_DEPTH)
         cursor = 0;
-    return &sTokenBuffer->tokens[cursor];
+    return &token_buffer_->tokens[cursor];
 }
 
 const char* sc_tokens[] = {"*=",
@@ -1802,26 +1770,23 @@ const char* sc_tokens[] = {"*=",
                            "#pragma unused",
                            "-include-path-"};
 
-void
-lexinit()
+Lexer::Lexer()
 {
-    iflevel = 0;   /* preprocessor: nesting of "#if" is currently 0 */
-    skiplevel = 0; /* preprocessor: not currently skipping */
-    icomment = 0;  /* currently not in a multiline comment */
-    _lexnewline = FALSE;
-    sTokenBuffer = &sNormalBuffer;
+    iflevel_ = 0;   /* preprocessor: nesting of "#if" is currently 0 */
+    skiplevel_ = 0; /* preprocessor: not currently skipping */
+    icomment_ = 0;  /* currently not in a multiline comment */
+    lexnewline_ = false;
+    token_buffer_ = &normal_buffer_;
 
-    if (!sKeywords.elements()) {
-        sKeywords.init(128);
+    keywords_.init(128);
 
-        const int kStart = tMIDDLE + 1;
-        const char** tokptr = &sc_tokens[kStart - tFIRST];
-        for (int i = kStart; i <= tLAST; i++, tokptr++) {
-            CharsAndLength key(*tokptr, strlen(*tokptr));
-            auto p = sKeywords.findForAdd(key);
-            assert(!p.found());
-            sKeywords.add(p, key, i);
-        }
+    const int kStart = tMIDDLE + 1;
+    const char** tokptr = &sc_tokens[kStart - tFIRST];
+    for (int i = kStart; i <= tLAST; i++, tokptr++) {
+        CharsAndLength key(*tokptr, strlen(*tokptr));
+        auto p = keywords_.findForAdd(key);
+        assert(!p.found());
+        keywords_.add(p, key, i);
     }
 }
 
@@ -1837,11 +1802,11 @@ get_token_string(int tok_id)
     return StringPrintf("%s", sc_tokens[tok_id - tFIRST]);
 }
 
-static int
-lex_keyword_impl(const char* match, size_t length)
+int
+Lexer::LexKeywordImpl(const char* match, size_t length)
 {
     CharsAndLength key(match, length);
-    auto p = sKeywords.find(key);
+    auto p = keywords_.find(key);
     if (!p.found())
         return 0;
     return p->value;
@@ -1895,24 +1860,24 @@ IsUnimplementedKeyword(int token)
     }
 }
 
-static full_token_t*
-advance_token_ptr()
+full_token_t*
+Lexer::advance_token_ptr()
 {
-    assert(sTokenBuffer->depth == 0);
-    sTokenBuffer->num_tokens++;
-    sTokenBuffer->cursor++;
-    if (sTokenBuffer->cursor == MAX_TOKEN_DEPTH)
-        sTokenBuffer->cursor = 0;
+    assert(token_buffer_->depth == 0);
+    token_buffer_->num_tokens++;
+    token_buffer_->cursor++;
+    if (token_buffer_->cursor == MAX_TOKEN_DEPTH)
+        token_buffer_->cursor = 0;
 
     return current_token();
 }
 
 full_token_t*
-push_synthesized_token(TokenKind kind, int col)
+Lexer::PushSynthesizedToken(TokenKind kind, int col)
 {
-    ke::SaveAndSet<token_buffer_t*> switch_buffer(&sTokenBuffer, &sNormalBuffer);
+    ke::SaveAndSet<token_buffer_t*> switch_buffer(&token_buffer_, &normal_buffer_);
 
-    sTokenBuffer->num_tokens++;
+    token_buffer_->num_tokens++;
 
     // Now fill it in.
     auto tok = current_token();
@@ -1928,40 +1893,36 @@ push_synthesized_token(TokenKind kind, int col)
     return tok;
 }
 
-static void
-preprocess_in_lex(bool allow_synthesized_tokens)
+void
+Lexer::PreprocessInLex(bool allow_synthesized_tokens)
 {
-    sTokenBuffer = &sPreprocessBuffer;
-    preprocess(allow_synthesized_tokens);
-    sTokenBuffer = &sNormalBuffer;
+    token_buffer_ = &preproc_buffer_;
+    Preprocess(allow_synthesized_tokens);
+    token_buffer_ = &normal_buffer_;
 }
 
 // Pops a token off the token buffer, making it the current token.
-static void
-lexpop()
+void
+Lexer::lexpop()
 {
-    assert(sTokenBuffer->depth > 0);
+    assert(token_buffer_->depth > 0);
 
-    sTokenBuffer->depth--;
-    sTokenBuffer->cursor++;
-    if (sTokenBuffer->cursor == MAX_TOKEN_DEPTH)
-        sTokenBuffer->cursor = 0;
+    token_buffer_->depth--;
+    token_buffer_->cursor++;
+    if (token_buffer_->cursor == MAX_TOKEN_DEPTH)
+        token_buffer_->cursor = 0;
 }
 
-static void lex_once(full_token_t* tok);
 static bool lex_match_char(char c);
-static void lex_string_literal(full_token_t* tok);
 static bool lex_number(full_token_t* tok);
-static bool lex_keyword(full_token_t* tok, const char* token_start, size_t len);
 static void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
-static bool lex_symbol_or_keyword(full_token_t* tok);
 
 int
-lex()
+Lexer::lex()
 {
     int newline;
 
-    if (sTokenBuffer->depth > 0) {
+    if (token_buffer_->depth > 0) {
         lexpop();
         return current_token()->id;
     }
@@ -1969,24 +1930,22 @@ lex()
     full_token_t* tok = advance_token_ptr();
     *tok = {};
 
-    _lexnewline = FALSE;
+    lexnewline_ = FALSE;
     if (!freading)
         return 0;
 
     newline = (lptr == pline); /* does lptr point to start of line buffer */
     while (*lptr <= ' ') {     /* delete leading white space */
         if (*lptr == '\0') {
-            preprocess_in_lex(true);
-            if (sTokenBuffer->depth > 0) {
+            PreprocessInLex(true);
+            if (token_buffer_->depth > 0) {
                 // Token was injected during preprocessing.
                 lexpop();
                 return current_token()->id;
             }
             if (!freading)
                 return 0;
-            if (lptr == term_expr) /* special sequence to terminate a pending expression */
-                return (tok->id = tENDEXPR);
-            _lexnewline = TRUE; /* set this after preprocess(), because
+            lexnewline_ = TRUE; /* set this after preprocess(), because
                                  * preprocess() calls lex() recursively */
             newline = TRUE;
         } else {
@@ -2006,7 +1965,7 @@ lex()
     tok->start.col = (int)(lptr - pline);
     tok->start.file = fcurrent;
 
-    lex_once(tok);
+    LexOnce(tok);
 
     tok->end.line = fline;
     tok->end.col = (int)(lptr - pline);
@@ -2014,8 +1973,8 @@ lex()
     return tok->id;
 }
 
-static void
-lex_once(full_token_t* tok)
+void
+Lexer::LexOnce(full_token_t* tok)
 {
     switch (*lptr) {
         case '0':
@@ -2176,7 +2135,7 @@ lex_once(full_token_t* tok)
             return;
 
         case '"':
-            lex_string_literal(tok);
+            LexStringLiteral(tok);
             return;
 
         case '\'':
@@ -2206,7 +2165,7 @@ lex_once(full_token_t* tok)
     }
 
     if (alpha(*lptr) || *lptr == '#') {
-        if (lex_symbol_or_keyword(tok))
+        if (LexSymbolOrKeyword(tok))
             return;
     }
 
@@ -2239,8 +2198,8 @@ lex_number(full_token_t* tok)
     return false;
 }
 
-static void
-lex_string_literal(full_token_t* tok)
+void
+Lexer::LexStringLiteral(full_token_t* tok)
 {
     tok->id = tSTRING;
     tok->data.clear();
@@ -2281,13 +2240,13 @@ lex_string_literal(full_token_t* tok)
         else
             error(37); /* invalid (non-terminated) string */
         /* see whether an ellipsis is following the string */
-        if (!scanellipsis(lptr))
+        if (!ScanEllipsis(lptr))
             break; /* no concatenation of string literals */
         /* there is an ellipses, go on parsing (this time with full preprocessing) */
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
-                preprocess_in_lex(false);
-                assert(freading && lptr != term_expr);
+                PreprocessInLex(false);
+                assert(freading);
             } else {
                 lptr++;
             }
@@ -2296,8 +2255,8 @@ lex_string_literal(full_token_t* tok)
         lptr += 3;
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
-                preprocess_in_lex(false);
-                assert(freading && lptr != term_expr);
+                PreprocessInLex(false);
+                assert(freading);
             } else {
                 lptr++;
             }
@@ -2309,10 +2268,10 @@ lex_string_literal(full_token_t* tok)
     }
 }
 
-static bool
-lex_keyword(full_token_t* tok, const char* token_start, size_t len)
+bool
+Lexer::LexKeyword(full_token_t* tok, const char* token_start, size_t len)
 {
-    int tok_id = lex_keyword_impl(token_start, len);
+    int tok_id = LexKeywordImpl(token_start, len);
     if (!tok_id)
         return false;
 
@@ -2343,8 +2302,8 @@ lex_keyword(full_token_t* tok, const char* token_start, size_t len)
     return true;
 }
 
-static bool
-lex_symbol_or_keyword(full_token_t* tok)
+bool
+Lexer::LexSymbolOrKeyword(full_token_t* tok)
 {
     unsigned char const* token_start = lptr;
     char first_char = *lptr;
@@ -2370,7 +2329,7 @@ lex_symbol_or_keyword(full_token_t* tok)
         return true;
     }
     if (maybe_keyword) {
-        if (lex_keyword(tok, (const char*)token_start, len))
+        if (LexKeyword(tok, (const char*)token_start, len))
             return true;
     }
     if (first_char != '#') {
@@ -2418,15 +2377,15 @@ lex_symbol(full_token_t* tok, const char* token_start, size_t len)
  *  to read in a new token from the input file.
  */
 void
-lexpush(void)
+Lexer::lexpush()
 {
-    assert(sTokenBuffer->depth < MAX_TOKEN_DEPTH);
-    sTokenBuffer->depth++;
-    if (sTokenBuffer->cursor == 0)
-        sTokenBuffer->cursor = MAX_TOKEN_DEPTH - 1;
+    assert(token_buffer_->depth < MAX_TOKEN_DEPTH);
+    token_buffer_->depth++;
+    if (token_buffer_->cursor == 0)
+        token_buffer_->cursor = MAX_TOKEN_DEPTH - 1;
     else
-        sTokenBuffer->cursor--;
-    assert(sTokenBuffer->depth <= sTokenBuffer->num_tokens);
+        token_buffer_->cursor--;
+    assert(token_buffer_->depth <= token_buffer_->num_tokens);
 }
 
 /*  lexclr
@@ -2436,9 +2395,9 @@ lexpush(void)
  *  from Assembler mode, and in a few cases after detecting an syntax error.
  */
 void
-lexclr(int clreol)
+Lexer::lexclr(int clreol)
 {
-    sTokenBuffer->depth = 0;
+    token_buffer_->depth = 0;
     if (clreol) {
         lptr = (unsigned char*)strchr((char*)pline, '\0');
         assert(lptr != NULL);
@@ -2446,19 +2405,14 @@ lexclr(int clreol)
 }
 
 // Return true if the symbol is ahead, false otherwise.
-int
-lexpeek(int id)
+bool
+Lexer::peek(int id)
 {
-    if (matchtoken(id)) {
+    if (match(id)) {
         lexpush();
-        return TRUE;
+        return true;
     }
-    return FALSE;
-}
-
-const token_pos_t& current_pos()
-{
-    return current_token()->start;
+    return false;
 }
 
 /*  matchtoken
@@ -2471,26 +2425,26 @@ const token_pos_t& current_pos()
  *  (i.e. not present in the source code) should not be pushed back, which is
  *  why it is sometimes important to distinguish the two.
  */
-int
-matchtoken(int token)
+bool
+Lexer::match(int token)
 {
     int tok = lex();
 
     if (token == tok)
-        return 1;
+        return true;
     if (token == tTERM && (tok == ';' || tok == tENDEXPR))
-        return 1;
+        return true;
 
-    if (!NeedSemicolon() && token == tTERM && (_lexnewline || !freading)) {
+    if (!NeedSemicolon() && token == tTERM && (lexnewline_ || !freading)) {
         /* Push "tok" back, because it is the token following the implicit statement
          * termination (newline) token.
          */
         lexpush();
-        return 2;
+        return true;
     }
 
     lexpush();
-    return 0;
+    return false;
 }
 
 /*  needtoken
@@ -2500,17 +2454,17 @@ matchtoken(int token)
  *  this function returns 1 for "token found" and 2 for "statement termination
  *  token" found; see function matchtoken() for details.
  */
-int
-needtoken(int token)
+bool
+Lexer::need(int token)
 {
     char s1[20], s2[20];
     int t;
 
-    if ((t = matchtoken(token)) != 0) {
-        return t;
+    if ((t = match(token)) != 0) {
+        return true;
     } else {
         /* token already pushed back */
-        assert(sTokenBuffer->depth > 0);
+        assert(token_buffer_->depth > 0);
         if (token < 256)
             sprintf(s1, "%c", (char)token); /* single character token */
         else
@@ -2522,22 +2476,22 @@ needtoken(int token)
         else
             strcpy(s2, sc_tokens[next_token()->id - tFIRST]);
         error(1, s1, s2); /* expected ..., but found ... */
-        return FALSE;
+        return false;
     }
 }
 
 // If the next token is on the current line, return that token. Otherwise,
 // return tNEWLINE.
 int
-peek_same_line()
+Lexer::peek_same_line()
 {
     // We should not call this without having parsed at least one token.
-    assert(sTokenBuffer->num_tokens > 0);
+    assert(token_buffer_->num_tokens > 0);
 
     // If there's tokens pushed back, then |fline| is the line of the furthest
     // token parsed. If fline == current token's line, we are guaranteed any
     // buffered token is still on the same line.
-    if (sTokenBuffer->depth > 0 && current_token()->end.line == fline)
+    if (token_buffer_->depth > 0 && current_token()->end.line == fline)
         return next_token()->id;
 
     // Make sure the next token is lexed, then buffer it.
@@ -2553,7 +2507,7 @@ peek_same_line()
 }
 
 int
-lex_same_line()
+Lexer::lex_same_line()
 {
     if (peek_same_line() == tEOL)
         return tEOL;
@@ -2562,7 +2516,7 @@ lex_same_line()
 }
 
 int
-require_newline(TerminatorPolicy policy)
+Lexer::require_newline(TerminatorPolicy policy)
 {
     if (policy != TerminatorPolicy::Newline) {
         // Semicolon must be on the same line.
@@ -2786,27 +2740,28 @@ itoh(ucell val)
     return itohstr;
 }
 
-int
-matchsymbol(sp::Atom** name)
+bool
+Lexer::matchsymbol(sp::Atom** name)
 {
     if (lex() != tSYMBOL) {
         lexpush();
-        return FALSE;
+        return false;
     }
     *name = current_token()->atom;
-    return TRUE;
+    return true;
 }
 
-int
-needsymbol(sp::Atom** name)
+bool
+Lexer::needsymbol(sp::Atom** name)
 {
-    if (!needtoken(tSYMBOL)) {
+    if (!need(tSYMBOL)) {
         *name = gAtoms.add("__unknown__");
-        return FALSE;
+        return false;
     }
     *name = current_token()->atom;
-    return TRUE;
+    return true;
 }
+
 void
 declare_handle_intrinsics()
 {

@@ -468,7 +468,7 @@ UnaryExpr::Analyze(SemaContext& sc)
             } else if (val_.ident == iCONSTEXPR) {
                 val_.constval = !val_.constval;
             }
-            val_.tag = pc_addtag("bool");
+            val_.tag = pc_tag_bool;
             break;
         case '-':
             if (val_.ident == iCONSTEXPR && val_.tag == sc_rationaltag) {
@@ -673,7 +673,7 @@ BinaryExpr::Analyze(SemaContext& sc)
         }
 
         if (IsChainedOp(token_) || token_ == tlEQ || token_ == tlNE)
-            val_.tag = pc_addtag("bool");
+            val_.tag = pc_tag_bool;
     }
 
     return true;
@@ -946,7 +946,7 @@ LogicalExpr::Analyze(SemaContext& sc)
         val_.ident = iEXPRESSION;
     }
     val_.sym = nullptr;
-    val_.tag = pc_addtag("bool");
+    val_.tag = pc_tag_bool;
     return true;
 }
 

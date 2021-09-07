@@ -24,6 +24,7 @@
 #ifndef am_sourcepawn_compiler_sc3_h
 #define am_sourcepawn_compiler_sc3_h
 
+#include "lexer.h"
 #include "parse-node.h"
 #include "sc.h"
 
@@ -31,24 +32,7 @@ class SemaContext;
 struct value;
 struct svalue;
 
-class ExpressionParser
-{
-  protected:
-    static int nextop(int* opidx, int* list);
-
-    // Each of these lists is an operator precedence level, and each list is a
-    // zero-terminated list of operators in that level (in precedence order).
-    static int list3[];
-    static int list4[];
-    static int list5[];
-    static int list6[];
-    static int list7[];
-    static int list8[];
-    static int list9[];
-    static int list10[];
-    static int list11[];
-    static int list12[];
-};
+int NextExprOp(Lexer* lexer, int* opidx, int* list);
 
 #define MATCHTAG_COERCE 0x1      // allow coercion
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning

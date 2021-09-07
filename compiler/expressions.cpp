@@ -51,19 +51,6 @@ static void (*op1[17])(void) = {
     ob_eq,   ob_ne,                 /* hier10, index 15 */
 };
 
-// The "op1" array in sc3.cpp must have the same ordering as if these lists
-// were flattened.
-int ExpressionParser::list3[] = {'*', '/', '%', 0};
-int ExpressionParser::list4[] = {'+', '-', 0};
-int ExpressionParser::list5[] = {tSHL, tSHR, tSHRU, 0};
-int ExpressionParser::list6[] = {'&', 0};
-int ExpressionParser::list7[] = {'^', 0};
-int ExpressionParser::list8[] = {'|', 0};
-int ExpressionParser::list9[] = {tlLE, tlGE, '<', '>', 0};
-int ExpressionParser::list10[] = {tlEQ, tlNE, 0};
-int ExpressionParser::list11[] = {tlAND, 0};
-int ExpressionParser::list12[] = {tlOR, 0};
-
 /* These two functions are defined because the functions inc() and dec() in
  * SC4.C have a different prototype than the other code generation functions.
  * The arrays for user-defined functions use the function pointers for
@@ -611,31 +598,6 @@ int matchtag_commutative(int formaltag, int actualtag, int flags)
         return TRUE;
     // Report the error.
     return matchtag(formaltag, actualtag, flags);
-}
-
-/*
- *  Searches for a binary operator a list of operators. The list is stored in
- *  the array "list". The last entry in the list should be set to 0.
- *
- *  The index of an operator in "list" (if found) is returned in "opidx". If
- *  no operator is found, nextop() returns 0.
- *
- *  If an operator is found in the expression, it cannot be used in a function
- *  call with omitted parantheses. Mark this...
- */
-int
-ExpressionParser::nextop(int* opidx, int* list)
-{
-    *opidx = 0;
-    while (*list) {
-        if (matchtoken(*list)) {
-            return TRUE; /* found! */
-        } else {
-            list += 1;
-            *opidx += 1;
-        }
-    }
-    return FALSE; /* entire list scanned, nothing found */
 }
 
 cell

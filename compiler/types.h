@@ -348,7 +348,6 @@ class TypeDictionary
     std::vector<std::unique_ptr<Type>> types_;
 };
 
-int pc_addtag(const char* name);
 const char* pc_tagname(int tag);
 
 extern TypeDictionary gTypes;

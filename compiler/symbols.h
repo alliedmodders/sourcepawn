@@ -349,4 +349,5 @@ symbol* FindEnumStructField(Type* type, sp::Atom* name);
 std::string funcdisplayname(const char* funcname);
 void reduce_referrers(CompileContext& cc);
 void deduce_liveness(CompileContext& cc);
+void declare_handle_intrinsics();
 symbol* declare_methodmap_symbol(CompileContext& cc, methodmap_t* map);

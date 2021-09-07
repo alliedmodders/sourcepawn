@@ -45,3 +45,9 @@ CompileContext::CreateGlobalScope()
 {
     globals_ = new SymbolScope(nullptr, sGLOBAL);
 }
+
+void
+CompileContext::InitLexer()
+{
+    lexer_ = std::make_shared<Lexer>();
+}

@@ -84,7 +84,7 @@ bool
 SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag)
 {
     if (is_label) {
-        *tag = pc_addtag(atom->chars());
+        *tag = gTypes.defineTag(atom->chars())->tagid();
         return true;
     }
 

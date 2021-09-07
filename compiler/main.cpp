@@ -155,6 +155,7 @@ pc_compile(int argc, char* argv[]) {
 
     CompileContext cc;
     cc.CreateGlobalScope();
+    cc.InitLexer();
 
 #ifdef __EMSCRIPTEN__
     setup_emscripten_fs();
@@ -163,7 +164,6 @@ pc_compile(int argc, char* argv[]) {
     /* set global variables to their initial value */
     initglobals();
     errorset(sRESET, 0);
-    lexinit();
 
     /* make sure that we clean up on a fatal error; do this before the first
      * call to error(). */
@@ -228,7 +228,6 @@ pc_compile(int argc, char* argv[]) {
     inpf = inpf_org;
     freading = TRUE;
     inpf->Reset(inpfmark);       /* reset file position */
-    lexinit();                   /* clear internal flags of lex() */
 
     writeleader();
     insert_dbgfile(inpf->name());   /* attach to debug information */

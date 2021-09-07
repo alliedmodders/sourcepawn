@@ -20,9 +20,12 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
+
+#include "lexer.h"
 
 class SymbolScope;
 struct symbol;
@@ -39,9 +42,11 @@ class CompileContext final
     static inline CompileContext& get() { return *sInstance; }
 
     void CreateGlobalScope();
+    void InitLexer();
 
     SymbolScope* globals() const { return globals_; }
     std::unordered_set<symbol*>& functions() { return functions_; }
+    const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
@@ -50,4 +55,8 @@ class CompileContext final
     SymbolScope* globals_;
     std::string default_include_;
     std::unordered_set<symbol*> functions_;
+
+    // The lexer is in CompileContext rather than Parser until we can eliminate
+    // PreprocExpr().
+    std::shared_ptr<Lexer> lexer_;
 };
