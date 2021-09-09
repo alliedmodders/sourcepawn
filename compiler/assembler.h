@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
@@ -19,4 +19,46 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <vector>
+
+#include "compile-context.h"
+#include "libsmx/data-pool.h"
+#include "libsmx/smx-builder.h"
+#include "libsmx/smx-encoding.h"
+#include "sc.h"
+#include "shared/byte-buffer.h"
+#include "shared/string-pool.h"
+
 void assemble(CompileContext& cc, const char* outname);
+
+struct BackpatchEntry {
+    size_t index;
+    cell target;
+};
+
+class AsmReader;
+
+class Assembler
+{
+  public:
+    explicit Assembler(CompileContext& cc);
+
+    void Assemble(sp::SmxByteBuffer* buffer);
+
+    std::vector<BackpatchEntry>& backpatch_list() { return backpatch_list_; }
+    std::vector<cell>& label_table() { return label_table_; }
+
+  private:
+    void InitOpcodeLookup();
+    void GenerateSegment(AsmReader& reader);
+
+    int FindOpcode(const char* instr, size_t maxlen);
+
+  private:
+    CompileContext& cc_;
+    std::vector<cell> code_buffer_;
+    std::vector<cell> data_buffer_;
+    std::vector<BackpatchEntry> backpatch_list_;
+    std::vector<cell> label_table_;
+    ke::HashMap<sp::CharsAndLength, int, KeywordTablePolicy> opcode_lookup_;
+};

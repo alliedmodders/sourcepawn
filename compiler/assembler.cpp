@@ -38,18 +38,15 @@
 #include <smx/smx-v1.h>
 #include <sp_vm_api.h>
 #include <zlib/zlib.h>
+#include "assembler.h"
 #include "compile-context.h"
 #include "errors.h"
 #include "lexer.h"
-#include "libsmx/data-pool.h"
-#include "libsmx/smx-builder.h"
-#include "libsmx/smx-encoding.h"
 #include "output-buffer.h"
 #include "sc.h"
 #include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
-#include "shared/byte-buffer.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -57,7 +54,6 @@ using namespace SourcePawn;
 using namespace ke;
 using namespace sp;
 
-class AsmReader;
 class CellWriter;
 
 typedef void (*OPCODE_PROC)(CellWriter* writer, AsmReader* reader, cell opcode);
@@ -69,20 +65,14 @@ typedef struct {
     OPCODE_PROC func;
 } OPCODEC;
 
-struct BackpatchEntry {
-    size_t index;
-    cell target;
-};
-
-static std::vector<cell> sLabelTable;
-static std::vector<BackpatchEntry> sBackpatchList;
-
 class CellWriter
 {
   public:
-    explicit CellWriter(std::vector<cell>& buffer)
-     : buffer_(buffer),
-       current_address_(0)
+    explicit CellWriter(Assembler* assm, std::vector<cell>& buffer)
+      : backpatch_list_(assm->backpatch_list()),
+        label_table_(assm->label_table()),
+        buffer_(buffer),
+        current_address_(0)
     {}
 
     void push_back(cell value) {
@@ -91,12 +81,12 @@ class CellWriter
     }
     void write_label(int index) {
         assert(index >= 0 && index < sc_labnum);
-        if (sLabelTable[index] < 0) {
+        if (label_table_[index] < 0) {
             BackpatchEntry entry = {current_index(), index};
-            sBackpatchList.push_back(entry);
+            backpatch_list_.push_back(entry);
             push_back(-1);
         } else {
-            push_back(sLabelTable[index]);
+            push_back(label_table_[index]);
         }
     }
 
@@ -108,6 +98,8 @@ class CellWriter
     }
 
   private:
+    std::vector<BackpatchEntry>& backpatch_list_;
+    std::vector<cell>& label_table_;
     std::vector<cell>& buffer_;
     cell current_address_;
 };
@@ -616,42 +608,37 @@ static OPCODEC opcodelist[] = {
 };
 // clang-format on
 
-static ke::HashMap<CharsAndLength, int, KeywordTablePolicy> sOpcodeLookup;
-
-static void
-init_opcode_lookup()
+void
+Assembler::InitOpcodeLookup()
 {
-    if (sOpcodeLookup.elements())
-        return;
+    opcode_lookup_.init(512);
 
-    sOpcodeLookup.init(512);
-
-    static const int kNumOpcodes = size_t(sizeof(opcodelist) / sizeof(*opcodelist));
+    constexpr int kNumOpcodes = size_t(sizeof(opcodelist) / sizeof(*opcodelist));
     for (int i = 1; i < kNumOpcodes; i++) {
         const auto& entry = opcodelist[i];
         CharsAndLength key(entry.name, strlen(entry.name));
-        auto p = sOpcodeLookup.findForAdd(key);
+        auto p = opcode_lookup_.findForAdd(key);
         assert(!p.found());
-        sOpcodeLookup.add(p, key, i);
+        opcode_lookup_.add(p, key, i);
     }
 }
 
-static int
-findopcode(const char* instr, size_t maxlen)
+int
+Assembler::FindOpcode(const char* instr, size_t maxlen)
 {
     CharsAndLength key(instr, maxlen);
-    auto p = sOpcodeLookup.find(key);
+    auto p = opcode_lookup_.find(key);
     if (!p.found())
         return 0;
     return p->value;
 }
 
 // Generate code or data into a buffer.
-static void
-generate_segment(AsmReader& reader, std::vector<cell>* code_buffer, std::vector<cell>* data_buffer)
+void
+Assembler::GenerateSegment(AsmReader& reader)
 {
-    CellWriter code_writer(*code_buffer);
-    CellWriter data_writer(*data_buffer);
+    CellWriter code_writer(this, code_buffer_);
+    CellWriter data_writer(this, data_buffer_);
 
     do {
         const char* instr = reader.next_token_on_line();
@@ -663,13 +650,13 @@ generate_segment(AsmReader& reader, std::vector<cell>* code_buffer, std::vector<
         if (tolower(instr[0]) == 'l' && instr[1] == '.') {
             int lindex = (int)hex2long(instr + 2, nullptr);
             assert(lindex >= 0 && lindex < sc_labnum);
-            assert(sLabelTable[lindex] == -1);
-            sLabelTable[lindex] = code_writer.current_address();
+            assert(label_table_[lindex] == -1);
+            label_table_[lindex] = code_writer.current_address();
             continue;
         }
 
         const char* pos = reader.end_of_token();
-        int op_index = findopcode(instr, (pos - instr));
+        int op_index = FindOpcode(instr, (pos - instr));
         OPCODEC& op = opcodelist[op_index];
         assert(op.name != nullptr);
 
@@ -681,11 +668,11 @@ generate_segment(AsmReader& reader, std::vector<cell>* code_buffer, std::vector<
     } while (reader.next_line());
 
     // Fix up backpatches.
-    for (const auto& patch : sBackpatchList) {
-        assert(patch.index < code_buffer->size());
+    for (const auto& patch : backpatch_list_) {
+        assert(patch.index < code_buffer_.size());
         assert(patch.target >= 0 && patch.target < sc_labnum);
-        assert(sLabelTable[patch.target] >= 0);
-        code_buffer->at(patch.index) = sLabelTable[patch.target];
+        assert(label_table_[patch.target] >= 0);
+        code_buffer_.at(patch.index) = label_table_[patch.target];
     }
 }
 
@@ -1433,8 +1420,14 @@ typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
 typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
-static void
-assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
+Assembler::Assembler(CompileContext& cc)
+  : cc_(cc)
+{
+    InitOpcodeLookup();
+}
+
+void
+Assembler::Assemble(SmxByteBuffer* buffer)
 {
     SmxBuilder builder;
     RefPtr<SmxNativeSection> natives = new SmxNativeSection(".natives");
@@ -1451,13 +1444,13 @@ assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
 
     // Sort globals.
     std::vector<symbol*> global_symbols;
-    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
+    cc_.globals()->ForEachSymbol([&](symbol* sym) -> void {
         global_symbols.push_back(sym);
 
         // This is only to assert that we embedded pointers properly in the assembly buffer.
         symbols.emplace(sym);
     });
-    for (const auto& sym : cc.functions()) {
+    for (const auto& sym : cc_.functions()) {
         if (symbols.count(sym))
             continue;
         global_symbols.push_back(sym);
@@ -1526,13 +1519,12 @@ assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
     }
 
     for (int i = 1; i <= sc_labnum; i++)
-        sLabelTable.push_back(-1);
-    assert(sLabelTable.size() == size_t(sc_labnum));
+        label_table_.push_back(-1);
+    assert(label_table_.size() == size_t(sc_labnum));
 
     // Generate buffers.
     AsmReader reader(std::move(symbols));
-    std::vector<cell> code_buffer, data_buffer;
-    generate_segment(reader, &code_buffer, &data_buffer);
+    GenerateSegment(reader);
 
     // Populate the native table.
     for (size_t i = 0; i < reader.native_list().size(); i++) {
@@ -1550,25 +1542,25 @@ assemble_to_buffer(CompileContext& cc, SmxByteBuffer* buffer)
     }
 
     // Set up the code section.
-    code->header().codesize = code_buffer.size() * sizeof(cell);
+    code->header().codesize = code_buffer_.size() * sizeof(cell);
     code->header().cellsize = sizeof(cell);
     code->header().codeversion = SmxConsts::CODE_VERSION_FEATURE_MASK;
     code->header().flags = CODEFLAG_DEBUG;
     code->header().main = 0;
     code->header().code = sizeof(sp_file_code_t);
     code->header().features = SmxConsts::kCodeFeatureDirectArrays;
-    code->setBlob((uint8_t*)code_buffer.data(), code_buffer.size() * sizeof(cell));
+    code->setBlob((uint8_t*)code_buffer_.data(), code_buffer_.size() * sizeof(cell));
 
     // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was
     // computed as AMX::stp, which included the entire memory size needed to
     // store the file. Here (in 1.7+), we allocate what is actually needed
     // by the plugin.
-    data->header().datasize = data_buffer.size() * sizeof(cell);
+    data->header().datasize = data_buffer_.size() * sizeof(cell);
     data->header().memsize =
         data->header().datasize + glb_declared * sizeof(cell) +
         std::max(pc_max_memory + 4096, pc_stksize) * sizeof(cell);
     data->header().data = sizeof(sp_file_data_t);
-    data->setBlob((uint8_t*)data_buffer.data(), data_buffer.size() * sizeof(cell));
+    data->setBlob((uint8_t*)data_buffer_.data(), data_buffer_.size() * sizeof(cell));
 
     // Add tables in the same order SourceMod 1.6 added them.
     builder.add(code);
@@ -1635,10 +1627,10 @@ splat_to_binary(const char* binfname, void* bytes, size_t size)
 void
 assemble(CompileContext& cc, const char* binfname)
 {
-    init_opcode_lookup();
+    Assembler assembler(cc);
 
     SmxByteBuffer buffer;
-    assemble_to_buffer(cc, &buffer);
+    assembler.Assemble(&buffer);
 
     // Buffer compression logic.
     sp_file_hdr_t* header = (sp_file_hdr_t*)buffer.bytes();
