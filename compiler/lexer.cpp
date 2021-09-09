@@ -237,7 +237,7 @@ Lexer::SynthesizeIncludePathToken()
     char name[PATH_MAX];
 
     int i = 0;
-    while (*lptr != close_c && *lptr != '\0' && i < sizeof(name) - 1) {
+    while (*lptr != close_c && *lptr != '\0' && i < (int)sizeof(name) - 1) {
         if (DIRSEP_CHAR != '/' && *lptr == '/') {
             name[i++] = DIRSEP_CHAR;
             lptr++;
@@ -248,7 +248,7 @@ Lexer::SynthesizeIncludePathToken()
     }
     while (i > 0 && name[i - 1] <= ' ')
         i--; /* strip trailing whitespace */
-    assert(i < sizeof name);
+    assert(i < (int)sizeof name);
     name[i] = '\0'; /* zero-terminate the string */
 
     if (close_c) {

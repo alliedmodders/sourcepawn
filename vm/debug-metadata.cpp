@@ -206,7 +206,7 @@ uint16_t PerfJitdumpFile::GetElfMachine() {
     uint16_t machine;
   } __attribute__((packed)) elf_header;
 
-  if (fread(&elf_header, sizeof(elf_header), 1, exe) != -1) {
+  if (fread(&elf_header, sizeof(elf_header), 1, exe) != 0) {
     machine = elf_header.machine;
   }
 
