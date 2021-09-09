@@ -1400,7 +1400,7 @@ IndexExpr::Analyze(SemaContext& sc)
             /* character index */
             if (expr.constval < 0 ||
                 (base.sym->dim.array.length != 0 &&
-                 base.sym->dim.array.length <= (ucell)expr.constval))
+                 base.sym->dim.array.length <= expr.constval))
             {
                 error(pos_, 32, base.sym->name()); /* array index out of bounds */
                 return false;
