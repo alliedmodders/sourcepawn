@@ -656,13 +656,13 @@ is_valid_index_tag(int tag)
 int
 checktag(int tag, int exprtag)
 {
-    int errcount = errnum;
+    AutoCountErrors errors;
 
     if (matchtag(tag, exprtag, MATCHTAG_COERCE))
         return TRUE; /* matching tag */
 
     // If matchtag() didn't error, report an error.
-    if (errnum == errcount)
+    if (errors.ok())
         error(213, type_to_name(tag), type_to_name(exprtag));
 
     return FALSE; /* no tag matched */

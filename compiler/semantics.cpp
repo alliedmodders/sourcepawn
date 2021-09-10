@@ -76,7 +76,7 @@ StmtList::Analyze(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& stmt : stmts_) {
-        errorset(sRESET, 0);
+        sc.cc().reports()->ResetErrorFlag();
 
         ok &= stmt->Analyze(sc);
 
@@ -2405,7 +2405,7 @@ BlockStmt::Analyze(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& stmt : stmts_) {
-        errorset(sRESET, 0);
+        sc.cc().reports()->ResetErrorFlag();
 
         if (ok && !sc.warned_unreachable() && (sc.always_returns() || flow_type() != Flow_None)) {
             error(stmt->pos(), 225);

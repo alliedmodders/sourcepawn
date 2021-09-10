@@ -163,7 +163,6 @@ pc_compile(int argc, char* argv[]) {
 
     /* set global variables to their initial value */
     initglobals();
-    errorset(sRESET, 0);
 
     /* make sure that we clean up on a fatal error; do this before the first
      * call to error(). */
@@ -222,8 +221,6 @@ pc_compile(int argc, char* argv[]) {
     sc_require_newdecls = lcl_require_newdecls;
     gNeedSemicolonStack.emplace_back(!!sc_needsemicolon);
     sc_tabsize = lcl_tabsize;
-    errorset(sRESET, 0);
-    clear_errors();
     /* reset the source file */
     inpf = inpf_org;
     freading = TRUE;
@@ -265,11 +262,15 @@ pc_compile(int argc, char* argv[]) {
     writetrailer(); /* write remaining stuff */
 
 cleanup:
-    sc_shutting_down = true;
-    dump_error_report(true);
+    unsigned int errnum = cc.reports()->NumErrorMessages();
+    unsigned int warnnum = cc.reports()->NumWarnMessages();
+    bool compile_ok = (errnum == 0);
+
+    cc.set_shutting_down();
+    cc.reports()->DumpErrorReport(true);
 
     // Write the binary file.
-    if (!(sc_asmfile || sc_listing || sc_syntax_only) && errnum == 0 && jmpcode == 0)
+    if (!(sc_asmfile || sc_listing || sc_syntax_only) && compile_ok && jmpcode == 0)
         assemble(cc, binfname);
 
     if ((sc_asmfile || sc_listing) && !gAsmBuffer.empty()) {
@@ -282,7 +283,7 @@ cleanup:
     inpf = nullptr;
     inpf_org = nullptr;
 
-    if (errnum == 0 && strlen(errfname) == 0) {
+    if (compile_ok && strlen(errfname) == 0) {
         if (pc_stksize_override)
             pc_stksize = pc_stksize_override;
 
@@ -321,7 +322,7 @@ cleanup:
     methodmaps_free();
     pstructs_free();
     delete_substtable();
-    if (errnum != 0) {
+    if (!compile_ok) {
         if (strlen(errfname) == 0)
             printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");
         retcode = 1;
@@ -420,8 +421,6 @@ initglobals(void)
     sc_asmfile = FALSE;                /* do not create .ASM file */
     sc_listing = FALSE;                /* do not create .LST file */
     sc_ctrlchar = CTRL_CHAR;           /* the escape character */
-    errnum = 0;                        /* number of errors */
-    warnnum = 0;                       /* number of warnings */
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_debug = sSYMBOLIC;              /* sourcemod: full debug stuff */
     sc_needsemicolon = FALSE;          /* semicolon required to terminate expressions? */
@@ -602,11 +601,11 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         char* ptr;
         int i = (int)strtol(warning.c_str(), (char**)&ptr, 10);
         if (*ptr == '-')
-            pc_enablewarning(i, 0);
+            cc.reports()->EnableWarning(i, 0);
         else if (*ptr == '+')
-            pc_enablewarning(i, 1);
+            cc.reports()->EnableWarning(i, 1);
         else if (*ptr == '\0')
-            pc_enablewarning(i, 2);
+            cc.reports()->EnableWarning(i, 2);
     }
 
     for (const auto& option : parser.extra_args()) {

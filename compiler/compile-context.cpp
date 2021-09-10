@@ -23,6 +23,7 @@
 
 #include <assert.h>
 
+#include "errors.h"
 #include "symbols.h"
 
 CompileContext* CompileContext::sInstance = nullptr;
@@ -33,6 +34,8 @@ CompileContext::CompileContext()
     assert(!sInstance);
     sInstance = this;
     default_include_ = sDEF_PREFIX;
+
+    reports_ = std::make_unique<ReportManager>(*this);
 }
 
 CompileContext::~CompileContext()
@@ -49,5 +52,5 @@ CompileContext::CreateGlobalScope()
 void
 CompileContext::InitLexer()
 {
-    lexer_ = std::make_shared<Lexer>();
+    lexer_ = std::make_shared<Lexer>(*this);
 }

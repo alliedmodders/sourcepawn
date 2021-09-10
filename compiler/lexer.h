@@ -276,7 +276,7 @@ static constexpr int HANDLED_ELSE = 4; /* bit field in "#if" stack */
 class Lexer
 {
   public:
-    Lexer();
+    Lexer(CompileContext& cc);
 
     int lex();
     int lex_same_line();
@@ -327,6 +327,7 @@ class Lexer
     }
 
   private:
+    CompileContext& cc_;
     ke::HashMap<sp::CharsAndLength, int, KeywordTablePolicy> keywords_;
     short icomment_; /* currently in multiline comment? */
     std::vector<short> comment_stack_;

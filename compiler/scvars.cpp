@@ -46,8 +46,6 @@ char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
 int sc_labnum = 0;                         /* number of (internal) labels */
 cell glb_declared = 0;                     /* number of global cells declared */
 cell code_idx = 0;                         /* number of bytes with generated code */
-int errnum = 0;                            /* number of errors */
-int warnnum = 0;                           /* number of warnings */
 int sc_debug = sSYMBOLIC;                 /* by default: bounds checking+assertions */
 int sc_asmfile = FALSE;                    /* create .ASM file? */
 int sc_listing = FALSE;                    /* create .LST file? */
@@ -94,5 +92,3 @@ std::vector<std::shared_ptr<SourceFile>> gInputFileStack;
 std::vector<bool> gNeedSemicolonStack;
 
 jmp_buf errbuf;
-
-unsigned sc_total_errors = 0;

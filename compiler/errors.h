@@ -27,6 +27,8 @@
 
 #include <stdarg.h>
 
+#include <unordered_set>
+
 #include <amtl/am-string.h>
 #include "lexer.h"
 #include "sc.h"
@@ -71,6 +73,8 @@ enum FatalError {
     FATAL_ERRORS_TOTAL
 };
 
+class ReportManager;
+
 class AutoErrorPos final
 {
   public:
@@ -82,38 +86,15 @@ class AutoErrorPos final
     }
 
   private:
+    ReportManager* reports_;
     token_pos_t pos_;
     AutoErrorPos* prev_;
-};
-
-extern unsigned sc_total_errors;
-
-class AutoCountErrors
-{
-  public:
-    AutoCountErrors()
-      : old_errors_(sc_total_errors)
-    {}
-
-    void Reset() {
-        old_errors_ = sc_total_errors;
-    }
-
-    bool ok() const {
-        return old_errors_ == sc_total_errors;
-    }
-
-  private:
-    unsigned old_errors_;
 };
 
 int error(int number, ...);
 int error(symbol* sym, int number, ...);
 int error(const token_pos_t& where, int number, ...);
 int error_va(const token_pos_t& where, int number, va_list ap);
-void errorset(int code, int line);
-void clear_errors();
-void dump_error_report(bool clear);
 
 class MessageBuilder
 {
@@ -180,7 +161,53 @@ void break_on_error(int number);
 
 int pc_enablewarning(int number, int enable);
 
-extern bool sc_one_error_per_statement;
-extern bool sc_shutting_down;
+class ReportManager
+{
+  public:
+    ReportManager(CompileContext& cc);
+
+    void ReportError(ErrorReport&& report);
+    void ResetErrorFlag() { errflag_ = false; }
+    void DumpErrorReport(bool clear);
+    bool IsWarningDisabled(int number);
+
+    // 0=disable, 1=enable, 2=toggle
+    void EnableWarning(int number, int enable);
+
+    unsigned int total_errors() const { return total_errors_; }
+    unsigned int NumErrorMessages() const;
+    unsigned int NumWarnMessages() const;
+
+    void set_pos_override(AutoErrorPos* pos) { pos_override_ = pos; }
+    AutoErrorPos* pos_override() const { return pos_override_; }
+
+  private:
+    CompileContext& cc_;
+    bool errflag_ = false;
+    unsigned int errors_on_line_ = 0;
+    std::vector<ErrorReport> error_list_;
+    AutoErrorPos* pos_override_ = nullptr;
+    std::unordered_set<int> warn_disable_;
+    int lastline_ = 0;
+    short lastfile_ = 0;
+
+    // This is not necessarily equal to the number of reports, since we
+    // suppress generating a report if there are too many errors on one
+    // line.
+    unsigned int total_errors_ = 0;
+};
+
+class AutoCountErrors
+{
+  public:
+    AutoCountErrors();
+
+    void Reset();
+    bool ok() const;
+
+  private:
+    ReportManager* reports_;
+    unsigned old_errors_;
+};
 
 #endif // am_sourcepawn_compiler_sc5_h

@@ -797,7 +797,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             assert(iflevel_ >= 0);
             if (iflevel_ == 0) {
                 error(26); /* no matching #if */
-                errorset(sRESET, 0);
+                cc_.reports()->ResetErrorFlag();
             } else {
                 /* check for earlier #else */
                 if ((ifstack_[iflevel_ - 1] & HANDLED_ELSE) == HANDLED_ELSE) {
@@ -805,7 +805,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                         error(61); /* #elseif directive may not follow an #else */
                     else
                         error(60); /* multiple #else directives between #if ... #endif */
-                    errorset(sRESET, 0);
+                    cc_.reports()->ResetErrorFlag();
                 } else {
                     assert(iflevel_ > 0);
                     /* if there has been a "parse mode" on this level, set "skip mode",
@@ -849,7 +849,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             ret = CMD_IF;
             if (iflevel_ == 0) {
                 error(26); /* no matching "#if" */
-                errorset(sRESET, 0);
+                cc_.reports()->ResetErrorFlag();
             } else {
                 iflevel_--;
                 if (iflevel_ < skiplevel_)
@@ -1552,7 +1552,7 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
         if (iscommand == CMD_INJECTED)
             return;
         if (iscommand != CMD_NONE)
-            errorset(sRESET, 0); /* reset error flag ("panic mode") on empty line or directive */
+            cc_.reports()->ResetErrorFlag();
         if (iscommand == CMD_NONE) {
             substallpatterns(pline, sLINEMAX);
             lptr = pline; /* reset "line pointer" to start of the parsing buffer */
@@ -1770,7 +1770,8 @@ const char* sc_tokens[] = {"*=",
                            "#pragma unused",
                            "-include-path-"};
 
-Lexer::Lexer()
+Lexer::Lexer(CompileContext& cc)
+  : cc_(cc)
 {
     iflevel_ = 0;   /* preprocessor: nesting of "#if" is currently 0 */
     skiplevel_ = 0; /* preprocessor: not currently skipping */
@@ -2160,7 +2161,7 @@ Lexer::LexOnce(full_token_t* tok)
             // semicolon resets the error state.
             tok->id = ';';
             lptr++;
-            errorset(sRESET, 0);
+            cc_.reports()->ResetErrorFlag();
             return;
     }
 
@@ -2297,7 +2298,7 @@ Lexer::LexKeyword(full_token_t* tok, const char* token_start, size_t len)
         tok->atom = gAtoms.add(str);
     } else {
         tok->id = tok_id;
-        errorset(sRESET, 0); /* reset error flag (clear the "panic mode")*/
+        cc_.reports()->ResetErrorFlag();
     }
     return true;
 }
