@@ -174,7 +174,6 @@ struct declinfo_t {
 #define sIN_CSEG 1     /* if parsing CODE */
 #define sIN_DSEG 2     /* if parsing DATA */
 #define sSYMBOLIC 2    /* bit position in "debug" variable: symbolic info */
-#define sRESET 0       /* reset error flag */
 
 #define CELL_MAX (((ucell)1 << (sizeof(cell) * 8 - 1)) - 1)
 

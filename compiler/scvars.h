@@ -40,8 +40,6 @@ extern char sc_ctrlchar_org;      /* the default control character */
 extern int sc_labnum;             /* number of (internal) labels */
 extern cell glb_declared;         /* number of global cells declared */
 extern cell code_idx;             /* number of bytes with generated code */
-extern int errnum;                /* number of errors */
-extern int warnnum;               /* number of warnings */
 extern int sc_debug;              /* debug/optimization options (bit field) */
 extern int sc_asmfile;            /* create .ASM file? */
 extern int sc_listing;            /* create .LST file? */

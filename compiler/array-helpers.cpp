@@ -53,7 +53,7 @@ class ArraySizeResolver
     Expr* initializer_;
     std::vector<int> computed_;
     int vclass_;
-    unsigned old_error_count_;
+    AutoCountErrors errors_;
     Type* es_;
 };
 
@@ -67,7 +67,6 @@ ArraySizeResolver::ArraySizeResolver(SemaContext& sc, VarDecl* decl)
     initializer_(decl->init_rhs()),
     computed_(type_->dim.size()),
     vclass_(decl->vclass()),
-    old_error_count_(sc_total_errors),
     es_(nullptr)
 {
     Type* type = gTypes.find(type_->semantic_tag());
@@ -82,8 +81,7 @@ ArraySizeResolver::ArraySizeResolver(SemaContext& sc, const token_pos_t& pos, ty
     type_(type),
     initializer_(nullptr),
     computed_(type_->dim.size()),
-    vclass_(vclass),
-    old_error_count_(sc_total_errors)
+    vclass_(vclass)
 {
 }
 
@@ -118,7 +116,7 @@ ArraySizeResolver::Resolve()
 
         // If we hit errors resolving the type, don't bother using any values
         // we computed along the way.
-        if (sc_total_errors > old_error_count_)
+        if (!errors_.ok())
             return;
     }
 
@@ -416,8 +414,8 @@ CheckArrayInitialization(SemaContext& sc, const typeinfo_t& type, Expr* init)
 {
     FixedArrayValidator av(sc, type, init);
 
-    auto old_error_count = sc_total_errors;
-    return av.Validate() && sc_total_errors == old_error_count;
+    AutoCountErrors errors;
+    return av.Validate() && errors.ok();
 }
 
 static constexpr cell kMaxCells = INT_MAX / sizeof(cell);
@@ -783,11 +781,11 @@ AddImplicitDynamicInitializer(VarDecl* decl)
 bool
 CheckArrayDeclaration(SemaContext& sc, VarDecl* decl)
 {
-    auto old_error_count = sc_total_errors;
+    AutoCountErrors errors;
     const auto& type = decl->type();
     if (type.ident == iARRAY || decl->vclass() == sARGUMENT) {
         FixedArrayValidator validator(sc, decl);
-        if (!validator.Validate() || sc_total_errors != old_error_count)
+        if (!validator.Validate() || !errors.ok())
             return false;
         return true;
     }

@@ -27,6 +27,7 @@
 
 #include "lexer.h"
 
+class ReportManager;
 class SymbolScope;
 struct symbol;
 
@@ -47,9 +48,22 @@ class CompileContext final
     SymbolScope* globals() const { return globals_; }
     std::unordered_set<symbol*>& functions() { return functions_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
+    ReportManager* reports() const { return reports_.get(); }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
+
+    bool shutting_down() const { return shutting_down_; }
+    void set_shutting_down() { shutting_down_ = true; }
+
+    bool one_error_per_stmt() const { return one_error_per_stmt_; }
+    void set_one_error_per_stmt(bool value) { one_error_per_stmt_ = value; }
+
+    // No copy construction.
+    CompileContext(const CompileContext&) = delete;
+    CompileContext(CompileContext&&) = delete;
+    void operator =(const CompileContext&) = delete;
+    void operator =(CompileContext&&) = delete;
 
   private:
     SymbolScope* globals_;
@@ -59,4 +73,9 @@ class CompileContext final
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().
     std::shared_ptr<Lexer> lexer_;
+
+    // Error state.
+    bool shutting_down_ = false;
+    bool one_error_per_stmt_ = false;
+    std::unique_ptr<ReportManager> reports_;
 };

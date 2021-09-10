@@ -58,7 +58,11 @@ Parser::~Parser()
 StmtList*
 Parser::Parse()
 {
-    ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, true);
+    cc_.set_one_error_per_stmt(true);
+    auto restore_errors = ke::MakeScopeGuard([this]() -> void {
+        cc_.set_one_error_per_stmt(false);
+    });
+
     std::deque<Stmt*> add_to_end;
 
     auto list = new ParseTree(token_pos_t{});
@@ -186,7 +190,7 @@ Parser::Parse()
         // Until we can eliminate the two-pass parser, top-level decls must be
         // resolved immediately.
         if (decl) {
-            errorset(sRESET, 0);
+            cc_.reports()->ResetErrorFlag();
 
             list->stmts().emplace_back(decl);
         }
@@ -1296,14 +1300,11 @@ Parser::parse_post_dims(typeinfo_t* type)
 Stmt*
 Parser::parse_stmt(int* lastindent, bool allow_decl)
 {
-    // :TODO: remove this when compound goes private
-    ke::SaveAndSet<bool> limit_errors(&sc_one_error_per_statement, true);
-
     if (!freading) {
         error(36); /* empty statement */
         return nullptr;
     }
-    errorset(sRESET, 0);
+    cc_.reports()->ResetErrorFlag();
 
     int tok = lexer_->lex();
 
@@ -1879,7 +1880,7 @@ Parser::parse_args(FunctionInfo* info)
     } while (lexer_->match(','));
 
     lexer_->need(')');
-    errorset(sRESET, 0);
+    cc_.reports()->ResetErrorFlag();
 }
 
 Decl*
@@ -2160,7 +2161,7 @@ Parser::parse_function_type()
         lexer_->need(')');
 
     lexer_->require_newline(TerminatorPolicy::Semicolon);
-    errorset(sRESET, 0);
+    cc_.reports()->ResetErrorFlag();
     return info;
 }
 

@@ -58,30 +58,20 @@
 #    pragma warning(pop)
 #endif
 
-#define NUM_WARNINGS (int)(sizeof warnmsg / sizeof warnmsg[0])
-static unsigned char warndisable[(NUM_WARNINGS + 7) / 8]; /* 8 flags in a char */
-
-static int errflag;
-static int errorcount;
-static AutoErrorPos* sPosOverride = nullptr;
-bool sc_one_error_per_statement = false;
-bool sc_shutting_down = false;
-
-std::vector<ErrorReport> sErrorList;
-
 void report_error(ErrorReport&& report);
 
 AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
-  : pos_(pos),
-    prev_(sPosOverride)
+  : reports_(CompileContext::get().reports()),
+    pos_(pos)
 {
-    sPosOverride = this;
+    prev_ = reports_->pos_override();
+    reports_->set_pos_override(this);
 }
 
 AutoErrorPos::~AutoErrorPos()
 {
-    assert(sPosOverride == this);
-    sPosOverride = prev_;
+    assert(reports_->pos_override() == this);
+    reports_->set_pos_override(prev_);
 }
 
 static inline ErrorType
@@ -92,9 +82,8 @@ DeduceErrorType(int number)
     if (number >= 300)
         return ErrorType::Fatal;
 
-    int index = (number - 200) / 8;
-    int mask = 1 << ((number - 200) % 8);
-    if ((warndisable[index] & mask) != 0)
+    auto& cc = CompileContext::get();
+    if (cc.reports()->IsWarningDisabled(number))
         return ErrorType::Suppressed;
     return ErrorType::Warning;
 }
@@ -152,10 +141,11 @@ GetMessageForNumber(int number)
 int
 error(int number, ...)
 {
-    if (sPosOverride) {
+    auto& cc = CompileContext::get();
+    if (auto pos_override = cc.reports()->pos_override()) {
         va_list ap;
         va_start(ap, number);
-        error_va(sPosOverride->pos(), number, ap);
+        error_va(pos_override->pos(), number, ap);
         va_end(ap);
         return 0;
     }
@@ -172,8 +162,9 @@ error(int number, ...)
 MessageBuilder::MessageBuilder(int number)
   : number_(number)
 {
-    if (sPosOverride)
-        where_ = sPosOverride->pos();
+    auto& cc = CompileContext::get();
+    if (auto pos_override = cc.reports()->pos_override())
+        where_ = pos_override->pos();
     else
         where_ = CompileContext::get().lexer()->pos();
 }
@@ -330,23 +321,15 @@ ErrorReport::infer_va(int number, va_list ap)
 }
 
 void
-clear_errors()
+report_error(ErrorReport&& report)
 {
-    sErrorList.clear();
-    warnnum = 0;
-
-    // :TODO: What? Combine these variables.
-    sc_total_errors = 0;
-    errorcount = 0;
-    errnum = 0;
+    auto& cc = CompileContext::get();
+    cc.reports()->ReportError(std::move(report));
 }
 
 void
-report_error(ErrorReport&& report)
+ReportManager::ReportError(ErrorReport&& report)
 {
-    static int lastline;
-    static short lastfile;
-
     /* errflag is reset on each semicolon.
      * In a two-pass compiler, an error should not be reported twice. Therefore
      * the error reporting is enabled only in the second pass (and only when
@@ -355,56 +338,54 @@ report_error(ErrorReport&& report)
     if (report.type != ErrorType::Fatal) {
         // This is needed so Analyze() can return "true" but still propagate errors.
         if (report.type == ErrorType::Error)
-            sc_total_errors++;
+            total_errors_++;
 
-        if (errflag && sc_one_error_per_statement)
+        if (errflag_ && cc_.one_error_per_stmt())
             return;
     }
 
     break_on_error(report.number);
 
-    sErrorList.emplace_back(std::move(report));
+    error_list_.emplace_back(std::move(report));
 
-    switch (sErrorList.back().type) {
+    switch (error_list_.back().type) {
         case ErrorType::Suppressed:
             return;
         case ErrorType::Warning:
-            warnnum++;
             break;
         case ErrorType::Error:
         case ErrorType::Fatal:
-            errnum++;
-            sc_total_errors++;
-            if (sc_one_error_per_statement)
-                errflag = TRUE;
+            total_errors_++;
+            if (cc_.one_error_per_stmt())
+                errflag_ = true;
             break;
     }
 
-    if (sErrorList.back().type == ErrorType::Fatal || errnum > 25) {
-        if (sc_shutting_down)
-            dump_error_report(true);
+    if (error_list_.back().type == ErrorType::Fatal || total_errors_ > 25) {
+        if (cc_.shutting_down())
+            DumpErrorReport(true);
         else
             abort_compiler();
         return;
     }
 
     // Count messages per line, reset if not the same line.
-    if (lastline != sErrorList.back().lineno || sErrorList.back().fileno != lastfile)
-        errorcount = 0;
+    if (lastline_ != error_list_.back().lineno || error_list_.back().fileno != lastfile_)
+        errors_on_line_ = 0;
 
-    lastline = sErrorList.back().lineno;
-    lastfile = sErrorList.back().fileno;
+    lastline_ = error_list_.back().lineno;
+    lastfile_ = error_list_.back().fileno;
 
-    if (sErrorList.back().type != ErrorType::Warning)
-        errorcount++;
-    if (errorcount >= 3)
+    if (error_list_.back().type != ErrorType::Warning)
+        errors_on_line_++;
+    if (errors_on_line_ >= 3)
         error(FATAL_ERROR_OVERWHELMED_BY_BAD);
 }
 
 void
-dump_error_report(bool clear)
+ReportManager::DumpErrorReport(bool clear)
 {
-    static FILE* stdfp = sc_use_stderr ? stderr : stdout;
+    FILE* stdfp = sc_use_stderr ? stderr : stdout;
 
     FILE* fp = nullptr;
     if (strlen(errfname) > 0)
@@ -412,14 +393,14 @@ dump_error_report(bool clear)
     if (!fp)
         fp = stdfp;
 
-    std::sort(sErrorList.begin(), sErrorList.end(),
+    std::sort(error_list_.begin(), error_list_.end(),
               [](const ErrorReport& a, const ErrorReport& b) -> bool {
         if (a.fileno == b.fileno)
             return a.lineno < b.lineno;
         return a.fileno > b.fileno;
     });
 
-    for (const auto& report : sErrorList)
+    for (const auto& report : error_list_)
         fprintf(fp, "%s", report.message.c_str());
     fflush(fp);
 
@@ -427,17 +408,7 @@ dump_error_report(bool clear)
         fclose(fp);
 
     if (clear)
-        sErrorList.clear();
-}
-
-void
-errorset(int code, int line)
-{
-    switch (code) {
-        case sRESET:
-            errflag = FALSE; /* start reporting errors */
-            break;
-    }
+        error_list_.clear();
 }
 
 /* sc_enablewarning()
@@ -450,33 +421,28 @@ errorset(int code, int line)
  *  o  1 for enable
  *  o  2 for toggle
  */
-int
-pc_enablewarning(int number, int enable)
+void
+ReportManager::EnableWarning(int number, int enable)
 {
-    int index;
-    unsigned char mask;
-
-    if (number < 200)
-        return FALSE; /* errors and fatal errors cannot be disabled */
-    number -= 200;
-    if (number >= NUM_WARNINGS)
-        return FALSE;
-
-    index = number / 8;
-    mask = (unsigned char)(1 << (number % 8));
     switch (enable) {
         case 0:
-            warndisable[index] |= mask;
+            warn_disable_.emplace(number);
             break;
-        case 1:
-            warndisable[index] &= (unsigned char)~mask;
+        case 1: {
+            auto iter = warn_disable_.find(number);
+            if (iter != warn_disable_.end())
+                warn_disable_.erase(iter);
             break;
-        case 2:
-            warndisable[index] ^= mask;
+        }
+        case 2: {
+            auto iter = warn_disable_.find(number);
+            if (iter != warn_disable_.end())
+                warn_disable_.erase(iter);
+            else
+                warn_disable_.emplace(number);
             break;
+        }
     }
-
-    return TRUE;
 }
 
 #ifndef NDEBUG
@@ -490,4 +456,55 @@ MessageBuilder::operator <<(Type* type)
 {
     args_.emplace_back(type->prettyName());
     return *this;
+}
+
+ReportManager::ReportManager(CompileContext& cc)
+  : cc_(cc)
+{
+}
+
+unsigned int
+ReportManager::NumErrorMessages() const
+{
+    unsigned int total = 0;
+    for (const auto& report : error_list_) {
+        if (report.type == ErrorType::Error)
+            total++;
+    }
+    return total;
+}
+
+unsigned int
+ReportManager::NumWarnMessages() const
+{
+    unsigned int total = 0;
+    for (const auto& report : error_list_) {
+        if (report.type == ErrorType::Warning)
+            total++;
+    }
+    return total;
+}
+
+bool
+ReportManager::IsWarningDisabled(int number)
+{
+    return warn_disable_.count(number) > 0;
+}
+
+AutoCountErrors::AutoCountErrors()
+  : reports_(CompileContext::get().reports()),
+    old_errors_(reports_->total_errors())
+{
+}
+
+void
+AutoCountErrors::Reset()
+{
+    old_errors_ = reports_->total_errors();
+}
+
+bool
+AutoCountErrors::ok() const
+{
+    return old_errors_ == reports_->total_errors();
 }

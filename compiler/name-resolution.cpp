@@ -124,7 +124,7 @@ StmtList::Bind(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& stmt : stmts_) {
-        errorset(sRESET, 0);
+        sc.cc().reports()->ResetErrorFlag();
 
         ok &= stmt->Bind(sc);
     }
