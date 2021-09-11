@@ -780,7 +780,7 @@ SmxV1Image::LookupLine(uint32_t addr, uint32_t* line)
   if (low == -1)
     return false;
 
-  // Since the CIP occurs BEFORE the line, we have to add one.
+  // Lines are zero-indexed for some reason.
   *line = debug_lines_[low].line + 1;
   return true;
 }

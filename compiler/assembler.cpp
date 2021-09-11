@@ -778,7 +778,7 @@ struct variable_type_t {
 class RttiBuilder
 {
   public:
-    explicit RttiBuilder(SmxNameTable* names);
+    RttiBuilder(CodegenContext& cg, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
     void add_method(symbol* sym);
@@ -803,9 +803,11 @@ class RttiBuilder
     uint32_t to_typeid(const std::vector<uint8_t>& bytes);
 
     void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
+    void add_debug_line(DebugString& str);
     void build_debuginfo();
 
   private:
+    CodegenContext& cg_;
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> data_;
@@ -829,8 +831,9 @@ class RttiBuilder
     TypeIdCache typeid_cache_;
 };
 
-RttiBuilder::RttiBuilder(SmxNameTable* names)
- : names_(names)
+RttiBuilder::RttiBuilder(CodegenContext& cg, SmxNameTable* names)
+ : cg_(cg),
+   names_(names)
 {
     typeid_cache_.init(128);
     data_ = new SmxBlobSection<void>("rtti.data");
@@ -880,19 +883,14 @@ RttiBuilder::finish(SmxBuilder& builder)
 void
 RttiBuilder::build_debuginfo()
 {
-    stringlist* dbgstrs = get_dbgstrings();
-
     // State for tracking which file we're on. We replicate the original AMXDBG
     // behavior here which excludes duplicate addresses.
     ucell prev_file_addr = 0;
     const char* prev_file_name = nullptr;
 
     // Add debug data.
-    for (stringlist* iter = dbgstrs; iter; iter = iter->next) {
-        if (iter->line[0] == '\0')
-            continue;
-
-        DebugString str(iter->line);
+    for (const auto& line : cg_.debug_strings()) {
+        DebugString str(line.c_str());
         switch (str.kind()) {
             case 'F': {
                 ucell codeidx = str.parse();
@@ -908,21 +906,9 @@ RttiBuilder::build_debuginfo()
                 break;
             }
 
-            case 'L': {
-                auto addr = str.parse();
-                auto line = str.parse();
-                if (!dbg_lines_->list().empty()) {
-                    auto& last = dbg_lines_->list().back();
-                    if (last.addr == addr) {
-                        last.line = line;
-                        continue;
-                    }
-                }
-                sp_fdbg_line_t& entry = dbg_lines_->add();
-                entry.addr = addr;
-                entry.line = line;
+            case 'L':
+                add_debug_line(str);
                 break;
-            }
 
             case 'S':
                 add_debug_var(dbg_globals_, str);
@@ -937,11 +923,43 @@ RttiBuilder::build_debuginfo()
         entry.name = names_->add(gAtoms, prev_file_name);
     }
 
+    // Make sure debug tables are sorted by address.
+    std::sort(dbg_files_->list().begin(), dbg_files_->list().end(),
+              [](const sp_fdbg_file_t& a, const sp_fdbg_file_t& b) -> bool {
+                return a.addr < b.addr;
+              });
+    std::sort(dbg_lines_->list().begin(), dbg_lines_->list().end(),
+              [](const sp_fdbg_line_t& a, const sp_fdbg_line_t& b) -> bool {
+                return a.addr < b.addr;
+              });
+
     // Finish up debug header statistics.
     dbg_info_->header().num_files = dbg_files_->count();
     dbg_info_->header().num_lines = dbg_lines_->count();
     dbg_info_->header().num_syms = 0;
     dbg_info_->header().num_arrays = 0;
+}
+
+void
+RttiBuilder::add_debug_line(DebugString& str)
+{
+    auto addr = str.parse();
+    auto line = str.parse();
+
+    // Lines are zero-indexed for some reason.
+    if (line > 0)
+        line--;
+
+    if (!dbg_lines_->list().empty()) {
+        auto& last = dbg_lines_->list().back();
+        if (last.addr == addr) {
+            last.line = line;
+            return;
+        }
+    }
+    sp_fdbg_line_t& entry = dbg_lines_->add();
+    entry.addr = addr;
+    entry.line = line;
 }
 
 void
@@ -1044,6 +1062,8 @@ RttiBuilder::add_method(symbol* sym)
         DebugString str(chars);
         if (str.kind() == 'S')
             add_debug_var(dbg_locals_, str);
+        else if (str.kind() == 'L')
+            add_debug_line(str);
     }
 
     // Only add a method table entry if we actually had locals.
@@ -1420,8 +1440,9 @@ typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
 typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
-Assembler::Assembler(CompileContext& cc)
-  : cc_(cc)
+Assembler::Assembler(CompileContext& cc, CodegenContext& cg)
+  : cc_(cc),
+    cg_(cg)
 {
     InitOpcodeLookup();
 }
@@ -1437,7 +1458,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
     RefPtr<SmxNameTable> names = new SmxNameTable(".names");
 
-    RttiBuilder rtti(names);
+    RttiBuilder rtti(cg_, names);
 
     std::vector<function_entry> functions;
     std::unordered_set<symbol*> symbols;
@@ -1625,9 +1646,9 @@ splat_to_binary(const char* binfname, void* bytes, size_t size)
 }
 
 void
-assemble(CompileContext& cc, const char* binfname)
+assemble(CompileContext& cc, CodegenContext& cg, const char* binfname)
 {
-    Assembler assembler(cc);
+    Assembler assembler(cc, cg);
 
     SmxByteBuffer buffer;
     assembler.Assemble(&buffer);

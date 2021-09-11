@@ -81,7 +81,6 @@
 #    include <emscripten.h>
 #endif
 
-#include "assembler.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -153,6 +152,7 @@ pc_compile(int argc, char* argv[]) {
     int64_t inpfmark;
     int lcl_tabsize, lcl_require_newdecls;
     char* ptr;
+    ParseTree* tree = nullptr;
 
     CompileContext cc;
     cc.CreateGlobalScope();
@@ -226,40 +226,32 @@ pc_compile(int argc, char* argv[]) {
     freading = TRUE;
     inpf->Reset(inpfmark);       /* reset file position */
 
-    writeleader();
-    insert_dbgfile(inpf->name());   /* attach to debug information */
     cc.input_files().emplace_back(inpf->name());
 
     {
         Parser parser(cc);
 
         AutoCountErrors errors;
-        auto stmts = parser.Parse();      /* process all input */
-        if (!stmts || !errors.ok() || sc_listing)
+        tree = parser.Parse();      /* process all input */
+        if (!tree || !errors.ok() || sc_listing)
             goto cleanup;
 
         errors.Reset();
 
         SemaContext sc;
-        if (!stmts->EnterNames(sc) || !errors.ok())
+        if (!tree->EnterNames(sc) || !errors.ok())
             goto cleanup;
 
         errors.Reset();
-        if (!stmts->Bind(sc) || !errors.ok())
+        if (!tree->Bind(sc) || !errors.ok())
             goto cleanup;
 
         errors.Reset();
-        if (!stmts->Analyze(sc) || !errors.ok())
+        if (!tree->Analyze(sc) || !errors.ok())
             goto cleanup;
 
-        stmts->ProcessUses(sc);
-
-        CodegenContext cg(sc.cc(), nullptr);
-        stmts->Emit(cg);
+        tree->ProcessUses(sc);
     }
-
-    /* inpf is already closed when readline() attempts to pop of a file */
-    writetrailer(); /* write remaining stuff */
 
 cleanup:
     unsigned int errnum = cc.reports()->NumErrorMessages();
@@ -271,7 +263,7 @@ cleanup:
 
     // Write the binary file.
     if (!(sc_asmfile || sc_listing || sc_syntax_only) && compile_ok && jmpcode == 0)
-        assemble(cc, binfname);
+        tree->Emit(cc);
 
     if ((sc_asmfile || sc_listing) && !gAsmBuffer.empty()) {
         std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(outfname, "wb"), fclose);
@@ -313,7 +305,6 @@ cleanup:
     gCurrentLineStack.clear();
     gInputFileStack.clear();
 
-    delete_dbgstringtable();
     gTypes.clear();
     funcenums_free();
     methodmaps_free();

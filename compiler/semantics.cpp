@@ -1231,8 +1231,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
             return false;
         }
         if (!sym_->defined) {
-            auto symname = funcdisplayname(sym_->name());
-            report(pos_, 4) << symname;
+            report(pos_, 4) << sym_->name();
             return false;
         }
 
@@ -1624,8 +1623,7 @@ SymbolExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
     if (sym_->ident != iFUNCTN)
         return nullptr;
     if (!sym_->defined) {
-        auto symname = funcdisplayname(sym_->name());
-        error(pos_, 4, symname.c_str());
+        error(pos_, 4, sym_->name());
         return nullptr;
     }
     return sym_;
@@ -2335,12 +2333,9 @@ TestSymbol(symbol* sym, bool testconst)
             if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
                 sym->defined)
             {
-                auto symname = funcdisplayname(sym->name());
-                if (!symname.empty()) {
-                    /* symbol isn't used ... (and not public/native/stock) */
-                    report(sym, 203) << symname;
-                    return entry;
-                }
+                /* symbol isn't used ... (and not public/native/stock) */
+                report(sym, 203) << sym->name();
+                return entry;
             }
 
             // Functions may be used as callbacks, in which case we don't check
@@ -2373,9 +2368,6 @@ TestSymbol(symbol* sym, bool testconst)
             } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
                 error(sym, 204, sym->name()); /* value assigned to symbol is never used */
             }
-            /* also mark the variable (local or global) to the debug information */
-            if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
-                insert_dbgsymbol(sym);
     }
     return entry;
 }
@@ -2891,12 +2883,10 @@ SwitchStmt::Analyze(SemaContext& sc)
 void
 ReportFunctionReturnError(symbol* sym)
 {
-    auto symname = funcdisplayname(sym->name());
-
     if (sym->parent()) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
-        report(sym, 400) << symname;
+        report(sym, 400) << sym->name();
         return;
     }
 
@@ -2905,13 +2895,13 @@ ReportFunctionReturnError(symbol* sym)
     //
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
-        report(sym, 209) << symname;
+        report(sym, 209) << sym->name();
     } else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
                sym->tag == sc_rationaltag || !sym->retvalue_used)
     {
-        report(sym, 242) << symname;
+        report(sym, 242) << sym->name();
     } else {
-        report(sym, 400) << symname;
+        report(sym, 400) << sym->name();
     }
 }
 

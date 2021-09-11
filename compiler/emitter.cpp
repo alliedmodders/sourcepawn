@@ -417,9 +417,8 @@ startfunc(const char* fname)
 {
     stgwrite("\tproc");
     if (sc_asmfile) {
-        auto symname = funcdisplayname(fname);
         stgwrite("\t; ");
-        stgwrite(symname.c_str());
+        stgwrite(fname);
     }
     stgwrite("\n");
     code_idx += opcodes(1);
@@ -927,12 +926,8 @@ ffcase(cell value, const char* labelname, int newtable)
 void
 ffcall(symbol* sym, int numargs)
 {
-    std::string symname;
-
     assert(sym != NULL);
     assert(sym->ident == iFUNCTN);
-    if (sc_asmfile)
-        symname = funcdisplayname(sym->name());
     if (sym->native) {
         /* reserve a SYSREQ id if called for the first time */
         stgwrite("\tsysreq.n ");
@@ -951,7 +946,7 @@ ffcall(symbol* sym, int numargs)
         stgwrite("\n");
         code_idx += opcodes(1) + opargs(2);
     } else {
-        symname = sym->name();
+        const char* symname = sym->name();
         pushval(numargs);
         /* normal function */
         stgwrite("\tcall ");
@@ -959,7 +954,6 @@ ffcall(symbol* sym, int numargs)
         if (sc_asmfile &&
             ((!isalpha(symname[0]) && symname[0] != '_' && symname[0] != sc_ctrlchar)))
         {
-            assert(!symname.empty());
             stgwrite("\t; ");
             stgwrite(symname);
         }

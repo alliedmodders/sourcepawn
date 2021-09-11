@@ -25,6 +25,7 @@
 
 #include "compile-options.h"
 #include "errors.h"
+#include "scvars.h"
 #include "symbols.h"
 
 CompileContext* CompileContext::sInstance = nullptr;

@@ -34,7 +34,7 @@ class Parser
 
     static bool PreprocExpr(cell* val, int* tag);
 
-    StmtList* Parse();
+    ParseTree* Parse();
 
     static bool sInPreprocessor;
     static bool sDetectedIllegalPreprocessorSymbols;

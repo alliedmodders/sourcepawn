@@ -26,6 +26,7 @@
 #include <amtl/am-raii.h>
 
 #include "array-helpers.h"
+#include "assembler.h"
 #include "code-generator.h"
 #include "compile-context.h"
 #include "emitter.h"
@@ -37,11 +38,82 @@
 #include "symbols.h"
 
 void
+ParseTree::Emit(CompileContext& cc)
+{
+    CodegenContext cg(cc, nullptr);
+
+    writeleader();
+    StmtList::Emit(cg);
+    writetrailer();
+
+    assemble(cc, cg, binfname);
+}
+
+void
+CodegenContext::AddDebugFile(const std::string& file)
+{
+    if (!(sc_debug & sSYMBOLIC))
+        return;
+
+    auto str = ke::StringPrintf("F:%x %s", code_idx, file.c_str());
+    debug_strings_.emplace_back(std::move(str));
+}
+
+void
+CodegenContext::AddDebugLine(int linenr)
+{
+    if (!(sc_debug & sSYMBOLIC))
+        return;
+
+    auto str = ke::StringPrintf("L:%x %x", code_idx, linenr);
+    if (func_) {
+        auto data = func_->function();
+        data->dbgstrs.emplace_back(str.c_str(), str.size());
+    } else {
+        debug_strings_.emplace_back(std::move(str));
+    }
+}
+
+void
+CodegenContext::AddDebugSymbol(symbol* sym)
+{
+    if (!(sc_debug & sSYMBOLIC))
+        return;
+
+    auto symname = sym->name();
+
+    /* address tag:name codestart codeend ident vclass [tag:dim ...] */
+    assert(sym->ident != iFUNCTN);
+    auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
+                                   sym->addr(), sym->tag, symname, sym->codeaddr,
+                                   code_idx, sym->ident, sym->vclass, (int)sym->is_const);
+    if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
+#if !defined NDEBUG
+        int count = sym->dim.array.level;
+#endif
+        symbol* sub;
+        string += " [ ";
+        for (sub = sym; sub != NULL; sub = sub->array_child()) {
+            assert(sub->dim.array.level == count--);
+            string += ke::StringPrintf("%x:%x ", sub->x.tags.index, sub->dim.array.length);
+        }
+        string += "]";
+    }
+
+    if (func_) {
+        auto data = func_->function();
+        data->dbgstrs.emplace_back(string.c_str(), string.size());
+    } else {
+        debug_strings_.emplace_back(std::move(string));
+    }
+}
+
+void
 Stmt::Emit(CodegenContext& cg)
 {
     if (cg.func()) {
         ke::SaveAndSet<int> save_fline(&fline, pos_.line);
-        insert_dbgline(pos_.line);
+        cg.AddDebugLine(pos_.line);
         setline(FALSE);
     }
 
@@ -56,8 +128,17 @@ Stmt::Emit(CodegenContext& cg)
 }
 
 void
+ChangeScopeNode::DoEmit(CodegenContext& cg)
+{
+    cg.AddDebugFile(file_->chars());
+}
+
+void
 VarDecl::DoEmit(CodegenContext& cg)
 {
+    if ((sym_->is_public || (sym_->usage & (uWRITTEN | uREAD)) != 0) && !sym_->native)
+        cg.AddDebugSymbol(sym_);
+
     if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct) {
         EmitPstruct();
         return;
@@ -1411,7 +1492,7 @@ FunctionInfo::Emit(CodegenContext& cg)
 
     begcseg();
     startfunc(name_->chars());
-    insert_dbgline(pos_.line);
+    cg.AddDebugLine(pos_.line);
     setline(FALSE);
     pc_current_stack = 0;
     resetstacklist();

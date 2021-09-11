@@ -20,6 +20,12 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <string>
+#include <vector>
+
+class CompileContext;
+struct symbol;
+
 class CodegenContext
 {
   public:
@@ -28,10 +34,17 @@ class CodegenContext
         func_(func)
     {}
 
+    void AddDebugFile(const std::string& line);
+    void AddDebugLine(int linenr);
+    void AddDebugSymbol(symbol* sym);
+
     CompileContext& cc() { return cc_; }
     symbol* func() const { return func_; }
+    const std::vector<std::string>& debug_strings() const { return debug_strings_; }
 
   private:
     CompileContext& cc_;
     symbol* func_;
+
+    std::vector<std::string> debug_strings_;
 };

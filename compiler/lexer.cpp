@@ -115,7 +115,6 @@ Lexer::PlungeQualifiedFile(const char* name)
     fline = 0; /* set current line number to 0 */
     fcurrent = fnumber;
     icomment_ = 0;               /* not in a comment */
-    insert_dbgfile(inpf->name());   /* attach to debug information */
     cc.input_files().emplace_back(inpf->name());
     assert(cc.input_files().at(fcurrent) == inpf->name());
     setfiledirect(inpf->name()); /* (optionally) set in the list file */
@@ -316,7 +315,6 @@ Lexer::Readline(unsigned char* line)
             assert(!IsSkipping());   /* idem ditto */
             inpf = ke::PopBack(&gInputFileStack);
             set_file_defines(inpf->name());
-            insert_dbgfile(inpf->name());
             setfiledirect(inpf->name());
             assert(cc.input_files().at(fcurrent) == inpf->name());
             listline_ = -1; /* force a #line directive when changing the file */
