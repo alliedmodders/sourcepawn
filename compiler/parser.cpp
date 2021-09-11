@@ -168,7 +168,7 @@ Parser::Parse()
                 auto name = lexer_->current_token()->data;
                 auto result = lexer_->PlungeFile(name.c_str() + 1, (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE)
-                    report(FATAL_ERROR_READ) << name;
+                    report(FATAL_ERROR_READ) << name.substr(1);
 
                 static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
                 decl = new ChangeScopeNode(lexer_->pos(), static_scopes_.back());

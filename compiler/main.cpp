@@ -44,6 +44,7 @@
 
 #include "array-helpers.h"
 #include "code-generator.h"
+#include "compile-options.h"
 #include "lexer-inl.h"
 #include "output-buffer.h"
 #include "parser.h"
@@ -157,6 +158,8 @@ pc_compile(int argc, char* argv[]) {
     cc.CreateGlobalScope();
     cc.InitLexer();
 
+    auto options = cc.options();
+
 #ifdef __EMSCRIPTEN__
     setup_emscripten_fs();
 #endif
@@ -193,13 +196,10 @@ pc_compile(int argc, char* argv[]) {
     /* optionally create a temporary input file that is a collection of all
      * input files
      */
-    assert(get_sourcefile(0) != NULL); /* there must be at least one source file */
-    if (get_sourcefile(1) != NULL) {
-        report(314);
-    }
+    assert(options->source_files.size() == 1);
     inpf_org = std::make_shared<SourceFile>();
-    if (!inpf_org->Open(get_sourcefile(0)))
-        report(FATAL_ERROR_READ) << get_sourcefile(0);
+    if (!inpf_org->Open(options->source_files[0]))
+        report(FATAL_ERROR_READ) << options->source_files[0];
     skip_utf8_bom(inpf_org.get());
     freading = TRUE;
 
@@ -228,7 +228,7 @@ pc_compile(int argc, char* argv[]) {
 
     writeleader();
     insert_dbgfile(inpf->name());   /* attach to debug information */
-    insert_inputfile(inpf->name()); /* save for the error system */
+    cc.input_files().emplace_back(inpf->name());
 
     {
         Parser parser(cc);
@@ -313,9 +313,6 @@ cleanup:
     gCurrentLineStack.clear();
     gInputFileStack.clear();
 
-    delete_pathtable();
-    delete_sourcefiletable();
-    delete_inputfiletable();
     delete_dbgstringtable();
     gTypes.clear();
     funcenums_free();
@@ -594,7 +591,7 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         if (str.back() != DIRSEP_CHAR)
             str.push_back(DIRSEP_CHAR);
 
-        insert_path(str.c_str());
+        cc.options()->include_paths.emplace_back(str);
     }
 
     for (const auto& warning : opt_warnings.values()) {
@@ -623,7 +620,7 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         } else {
             SafeStrcpy(str, sizeof(str) - 5, arg); /* -5 because default extension is ".sp" */
             set_extension(str, ".sp", FALSE);
-            insert_sourcefile(str);
+            cc.options()->source_files.emplace_back(str);
             /* The output name is the first input name with a different extension,
              * but it is stored in a different directory
              */
@@ -639,14 +636,13 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         }
     }
 
-    if (get_sourcefile(0) == NULL)
+    if (cc.options()->source_files.empty())
         Usage(parser, argc, argv);
 }
 
 static void
 setopt(CompileContext& cc, int argc, char** argv, char* oname, char* ename)
 {
-    delete_sourcefiletable(); /* make sure it is empty */
     *oname = '\0';
     *ename = '\0';
 
@@ -719,7 +715,9 @@ setconfig(char* root)
                 *base = DIRSEP_CHAR;
             }
         }
-        insert_path(path);
+
+        auto& cc = CompileContext::get();
+        cc.options()->include_paths.emplace_back(path);
     }
 }
 
