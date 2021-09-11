@@ -42,7 +42,6 @@
 #include "errors.h"
 #include "lexer.h"
 #include "sc.h"
-#include "sclist.h"
 #include "scvars.h"
 #include "symbols.h"
 #include "types.h"

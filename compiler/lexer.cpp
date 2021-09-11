@@ -56,7 +56,6 @@
 #include "parser.h"
 #include "sc.h"
 #include "sci18n.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "semantics.h"
@@ -68,9 +67,6 @@ using namespace sp;
 /* flags for litchar() */
 #define UTF8MODE 0x1
 static cell litchar(const unsigned char** lptr, int flags);
-
-static void substallpatterns(unsigned char* line, int buffersize);
-static void set_file_defines(std::string file);
 
 bool
 Lexer::PlungeQualifiedFile(const char* name)
@@ -174,16 +170,16 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
     if (pcwd) {
         char path[PATH_MAX];
         SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpf->name());
-        set_file_defines(path);
+        SetFileDefines(path);
     } else {
-        set_file_defines(inpf->name());
+        SetFileDefines(inpf->name());
     }
 
     return result;
 }
 
-static void
-set_file_defines(std::string file)
+void
+Lexer::SetFileDefines(std::string file)
 {
     auto sepIndex = file.find_last_of(DIRSEP_CHAR);
 
@@ -203,8 +199,8 @@ set_file_defines(std::string file)
     file.push_back('"');
     fileName.push_back('"');
 
-    insert_subst("__FILE_PATH__", 13, file.c_str());
-    insert_subst("__FILE_NAME__", 13, fileName.c_str());
+    AddMacro("__FILE_PATH__", 13, file.c_str());
+    AddMacro("__FILE_NAME__", 13, fileName.c_str());
 }
 
 static void
@@ -314,7 +310,7 @@ Lexer::Readline(unsigned char* line)
             skiplevel_ = iflevel_; /* this condition held before including the file */
             assert(!IsSkipping());   /* idem ditto */
             inpf = ke::PopBack(&gInputFileStack);
-            set_file_defines(inpf->name());
+            SetFileDefines(inpf->name());
             setfiledirect(inpf->name());
             assert(cc.input_files().at(fcurrent) == inpf->name());
             listline_ = -1; /* force a #line directive when changing the file */
@@ -1069,14 +1065,14 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                 assert(prefixlen > 0);
 
                 macro_t def;
-                if (find_subst(pattern, prefixlen, &def)) {
+                if (FindMacro(pattern, prefixlen, &def)) {
                     if (strcmp(def.first, pattern) != 0 || strcmp(def.second, substitution) != 0)
                         error(201, pattern); /* redefinition of macro (non-identical) */
-                    delete_subst(pattern, prefixlen);
+                    DeleteMacro(pattern, prefixlen);
                 }
                 /* add the pattern/substitution pair to the list */
                 assert(strlen(pattern) > 0);
-                insert_subst(pattern, prefixlen, substitution);
+                AddMacro(pattern, prefixlen, substitution);
                 free(pattern);
                 free(substitution);
             }
@@ -1086,7 +1082,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             if (!IsSkipping()) {
                 if (lex() == tSYMBOL) {
                     const auto& str = current_token()->atom->str();
-                    delete_subst(str.c_str(), str.size());
+                    DeleteMacro(str.c_str(), str.size());
                 } else {
                     error(20, str); /* invalid symbol name */
                 }
@@ -1362,8 +1358,9 @@ substpattern(unsigned char* line, size_t buffersize, const char* pattern,
 class MacroProcessor
 {
   public:
-    MacroProcessor(unsigned char* line, int buffersize)
-     : line_(line),
+    MacroProcessor(Lexer* lexer, unsigned char* line, int buffersize)
+     : lexer_(lexer),
+       line_(line),
        buffersize_(buffersize)
     {}
 
@@ -1375,9 +1372,10 @@ class MacroProcessor
 
   private:
     unsigned char* process_range(unsigned char* start, unsigned char* end, int* delta);
-    bool enter_macro(const char* start, size_t prefixlen, macro_t* out);
+    bool enter_macro(const char* start, size_t prefixlen, Lexer::macro_t* out);
 
-private:
+  private:
+    Lexer* lexer_;
     std::unordered_set<std::string> blocked_macros;
     unsigned char* line_;
     int buffersize_;
@@ -1424,7 +1422,7 @@ MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* del
         }
         assert(prefixlen > 0);
 
-        macro_t subst;
+        Lexer::macro_t subst;
         if (!enter_macro((const char *)start, prefixlen, &subst)) {
             start = prefix_end; /* no macro with this prefix, skip this prefix */
             continue;
@@ -1451,9 +1449,9 @@ MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* del
 }
 
 bool
-MacroProcessor::enter_macro(const char* start, size_t prefixlen, macro_t* out)
+MacroProcessor::enter_macro(const char* start, size_t prefixlen, Lexer::macro_t* out)
 {
-    if (!find_subst(start, prefixlen, out)) {
+    if (!lexer_->FindMacro(start, prefixlen, out)) {
         static constexpr size_t kLineMacroLen = 8;
         if (prefixlen != kLineMacroLen)
             return false;
@@ -1468,10 +1466,10 @@ MacroProcessor::enter_macro(const char* start, size_t prefixlen, macro_t* out)
     return blocked_macros.count(out->first) == 0;
 }
 
-static void
-substallpatterns(unsigned char* line, int buffersize)
+void
+Lexer::substallpatterns(unsigned char* line, int buffersize)
 {
-    MacroProcessor mp(line, buffersize);
+    MacroProcessor mp(this, line, buffersize);
     mp.process();
 }
 
@@ -1795,6 +1793,8 @@ Lexer::Lexer(CompileContext& cc)
         assert(!p.found());
         keywords_.add(p, key, i);
     }
+
+    macros_.init(128);
 }
 
 std::string
@@ -2766,6 +2766,57 @@ Lexer::needsymbol(sp::Atom** name)
         return false;
     }
     *name = current_token()->atom;
+    return true;
+}
+
+void
+Lexer::AddMacro(const char* pattern, size_t length, const char* subst)
+{
+    MacroEntry macro;
+    macro.first = pattern;
+    macro.second = subst;
+    macro.deprecated = false;
+    if (pc_deprecate.length() > 0) {
+        macro.deprecated = true;
+        macro.documentation = std::move(pc_deprecate);
+    }
+
+    std::string key(pattern, length);
+    auto p = macros_.findForAdd(key);
+    if (p.found())
+        p->value = macro;
+    else
+        macros_.add(p, std::move(key), macro);
+}
+
+bool
+Lexer::FindMacro(const char* name, size_t length, macro_t* macro)
+{
+    sp::CharsAndLength key(name, length);
+    auto p = macros_.find(key);
+    if (!p.found())
+        return false;
+
+    MacroEntry& entry = p->value;
+    if (entry.deprecated)
+        error(234, p->key.c_str(), entry.documentation.c_str());
+
+    if (macro) {
+        macro->first = entry.first.c_str();
+        macro->second = entry.second.c_str();
+    }
+    return true;
+}
+
+bool
+Lexer::DeleteMacro(const char* name, size_t length)
+{
+    sp::CharsAndLength key(name, length);
+    auto p = macros_.find(key);
+    if (!p.found())
+        return false;
+
+    macros_.remove(p);
     return true;
 }
 

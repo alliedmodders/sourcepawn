@@ -275,6 +275,8 @@ static constexpr int HANDLED_ELSE = 4; /* bit field in "#if" stack */
 
 class Lexer
 {
+    friend class MacroProcessor;
+
   public:
     Lexer(CompileContext& cc);
 
@@ -292,6 +294,7 @@ class Lexer
 
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
     void Preprocess(bool allow_synthesized_tokens);
+    void AddMacro(const char* pattern, size_t length, const char* subst);
 
     full_token_t lex_tok() {
         lex();
@@ -301,6 +304,12 @@ class Lexer
         return &token_buffer_->tokens[token_buffer_->cursor];
     }
     const token_pos_t& pos() { return current_token()->start; }
+    bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
+
+    struct macro_t {
+        const char* first;
+        const char* second;
+    };
 
   private:
     void LexOnce(full_token_t* tok);
@@ -316,15 +325,20 @@ class Lexer
     bool PlungeQualifiedFile(const char* name);
     full_token_t* PushSynthesizedToken(TokenKind kind, int col);
     void SynthesizeIncludePathToken();
+    void SetFileDefines(std::string file);
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
     void lexpop();
     int preproc_expr(cell* val, int* tag);
+    void substallpatterns(unsigned char* line, int buffersize);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
     }
+
+    bool FindMacro(const char* name, size_t length, macro_t* macro);
+    bool DeleteMacro(const char* name, size_t length);
 
   private:
     CompileContext& cc_;
@@ -341,4 +355,29 @@ class Lexer
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
     token_buffer_t* token_buffer_;
+
+    struct MacroTablePolicy {
+        static bool matches(const std::string& a, const std::string& b) {
+            return a == b;
+        }
+        static bool matches(const sp::CharsAndLength& a, const std::string& b) {
+            if (a.length() != b.length())
+                return false;
+            return strncmp(a.str(), b.c_str(), a.length()) == 0;
+        }
+        static uint32_t hash(const std::string& key) {
+            return ke::HashCharSequence(key.c_str(), key.length());
+        }
+        static uint32_t hash(const sp::CharsAndLength& key) {
+            return ke::HashCharSequence(key.str(), key.length());
+        }
+    };
+
+    struct MacroEntry {
+        std::string first;
+        std::string second;
+        std::string documentation;
+        bool deprecated;
+    };
+    ke::HashMap<std::string, MacroEntry, MacroTablePolicy> macros_;
 };

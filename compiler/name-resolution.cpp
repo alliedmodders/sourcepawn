@@ -30,7 +30,6 @@
 #include "parse-node.h"
 #include "parser.h"
 #include "sc.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "semantics.h"
@@ -595,7 +594,7 @@ IsDefinedExpr::Bind(SemaContext& sc)
     if (sym && sym->ident == iFUNCTN && !sym->defined)
         sym = nullptr;
     value_ = sym ? 1 : 0;
-    if (!value_ && find_subst(name_->chars(), name_->length(), nullptr))
+    if (!value_ && sc.cc().lexer()->HasMacro(name_))
         value_ = 1;
     return true;
 }
