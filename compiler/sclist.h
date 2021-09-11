@@ -21,14 +21,6 @@
 
 #include "sc.h"
 
-struct stringlist {
-    stringlist* next;
-    union {
-        char* line;
-        stringlist* tail;
-    };
-};
-
 struct macro_t {
     const char* first;
     const char* second;
@@ -38,10 +30,3 @@ void insert_subst(const char* pattern, size_t pattern_length, const char* substi
 bool find_subst(const char* name, size_t length, macro_t* result);
 bool delete_subst(const char* name, size_t length);
 void delete_substtable(void);
-stringlist* insert_dbgfile(const char* filename);
-stringlist* insert_dbgline(int linenr);
-void insert_dbgsymbol(symbol* sym);
-char* get_dbgstring(int index);
-void delete_dbgstringtable(void);
-stringlist* get_dbgstrings();
-void delete_stringtable(stringlist* root);

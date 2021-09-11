@@ -273,12 +273,6 @@ check_operatortag(int opertok, int resulttag, const char* opername)
     return TRUE;
 }
 
-std::string
-funcdisplayname(const char* funcname)
-{
-    return funcname;
-}
-
 static inline bool
 is_symbol_unused(symbol* sym)
 {

@@ -55,7 +55,7 @@ Parser::~Parser()
 {
 }
 
-StmtList*
+ParseTree*
 Parser::Parse()
 {
     cc_.set_one_error_per_stmt(true);
@@ -70,13 +70,15 @@ Parser::Parse()
     // Create a static scope for the main file.
     assert(fcurrent == 0);
     static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-    list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back()));
+    list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
+                                                   cc_.input_files().at(fcurrent)));
 
     if (!cc_.default_include().empty()) {
         const char* incfname = cc_.default_include().c_str();
         if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
             static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-            list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back()));
+            list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
+                                                           cc_.input_files().at(fcurrent)));
         }
     }
 
@@ -99,7 +101,8 @@ Parser::Parse()
         assert(!static_scopes_.empty());
 
         if (changed)
-            list->stmts().emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back()));
+            list->stmts().emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back(),
+                                                           cc_.input_files().at(fcurrent)));
 
         switch (tok) {
             case 0:
@@ -171,7 +174,7 @@ Parser::Parse()
                     report(FATAL_ERROR_READ) << name.substr(1);
 
                 static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-                decl = new ChangeScopeNode(lexer_->pos(), static_scopes_.back());
+                decl = new ChangeScopeNode(lexer_->pos(), static_scopes_.back(), name.substr(1));
                 break;
             }
             case '}':

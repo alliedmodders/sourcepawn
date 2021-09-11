@@ -147,19 +147,21 @@ class Stmt : public ParseNode
 class ChangeScopeNode : public Stmt
 {
   public:
-    explicit ChangeScopeNode(const token_pos_t& pos, SymbolScope* scope)
+    explicit ChangeScopeNode(const token_pos_t& pos, SymbolScope* scope, const std::string& file)
       : Stmt(pos),
-        scope_(scope)
+        scope_(scope),
+        file_(new PoolString(file))
     {}
 
     virtual bool EnterNames(SemaContext& sc) override;
     virtual bool Bind(SemaContext& sc) override;
     virtual bool Analyze(SemaContext&) override { return true; }
     virtual void ProcessUses(SemaContext&) override {}
-    virtual void DoEmit(CodegenContext& cg) override {}
+    virtual void DoEmit(CodegenContext& cg) override;
 
   private:
     SymbolScope* scope_;
+    PoolString* file_;
 };
 
 class StmtList : public Stmt
@@ -196,6 +198,7 @@ class ParseTree : public StmtList
 
     bool ResolveNames(SemaContext& sc);
     bool Analyze(SemaContext& sc) override;
+    void Emit(CompileContext& cc);
 };
 
 class BlockStmt : public StmtList

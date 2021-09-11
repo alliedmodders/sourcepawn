@@ -346,7 +346,6 @@ symbol* NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, i
                     int numdim, int semantic_tag);
 int findnamedarg(arginfo* arg, sp::Atom* name);
 symbol* FindEnumStructField(Type* type, sp::Atom* name);
-std::string funcdisplayname(const char* funcname);
 void reduce_referrers(CompileContext& cc);
 void deduce_liveness(CompileContext& cc);
 void declare_handle_intrinsics();

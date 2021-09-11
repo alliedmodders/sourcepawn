@@ -21,6 +21,7 @@
 
 #include <vector>
 
+#include "code-generator.h"
 #include "compile-context.h"
 #include "libsmx/data-pool.h"
 #include "libsmx/smx-builder.h"
@@ -29,7 +30,7 @@
 #include "shared/byte-buffer.h"
 #include "shared/string-pool.h"
 
-void assemble(CompileContext& cc, const char* outname);
+void assemble(CompileContext& cc, CodegenContext& cg, const char* outname);
 
 struct BackpatchEntry {
     size_t index;
@@ -41,7 +42,7 @@ class AsmReader;
 class Assembler
 {
   public:
-    explicit Assembler(CompileContext& cc);
+    explicit Assembler(CompileContext& cc, CodegenContext& cg);
 
     void Assemble(sp::SmxByteBuffer* buffer);
 
@@ -56,6 +57,7 @@ class Assembler
 
   private:
     CompileContext& cc_;
+    CodegenContext& cg_;
     std::vector<cell> code_buffer_;
     std::vector<cell> data_buffer_;
     std::vector<BackpatchEntry> backpatch_list_;
