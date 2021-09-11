@@ -27,6 +27,7 @@
 #include <deque>
 
 #include <amtl/am-raii.h>
+#include "compile-options.h"
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
@@ -905,7 +906,7 @@ Parser::hier2()
         case tLABEL: /* tagname override */
         {
             TypenameInfo ti(lexer_->current_token()->atom, true);
-            if (sc_require_newdecls) {
+            if (lexer_->require_newdecls()) {
                 // Warn: old style cast used when newdecls pragma is enabled
                 report(240) << lexer_->current_token()->atom;
             }
@@ -1312,10 +1313,14 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
 
     /* lexer_->lex() has set stmtindent */
     if (lastindent && tok != tLABEL) {
-        if (*lastindent >= 0 && *lastindent != stmtindent && !indent_nowarn && sc_tabsize > 0)
+        int tabsize = cc_.options()->tabsize;
+        if (*lastindent >= 0 && *lastindent != lexer_->stmtindent() && !lexer_->indent_nowarn() &&
+            tabsize > 0)
+        {
             error(217); /* loose indentation */
-        *lastindent = stmtindent;
-        indent_nowarn = FALSE; /* if warning was blocked, re-enable it */
+        }
+        *lastindent = lexer_->stmtindent();
+        lexer_->indent_nowarn() = false; /* if warning was blocked, re-enable it */
     }
 
     if (tok == tSYMBOL) {
@@ -1508,12 +1513,14 @@ Parser::parse_compound(bool sameline)
         while (*p <= ' ' && *p != '\0')
             p++;
         assert(*p != '\0'); /* a token should be found */
-        stmtindent = 0;
-        for (i = 0; i < (int)(p - pline); i++)
-            if (pline[i] == '\t' && sc_tabsize > 0)
-                stmtindent += (int)(sc_tabsize - (stmtindent + sc_tabsize) % sc_tabsize);
+        lexer_->stmtindent() = 0;
+        for (i = 0; i < (int)(p - pline); i++) {
+            int tabsize = cc_.options()->tabsize;
+            if (pline[i] == '\t' && tabsize > 0)
+                lexer_->stmtindent() += (int)(tabsize - (lexer_->stmtindent() + tabsize) % tabsize);
             else
-                stmtindent++;
+                lexer_->stmtindent()++;
+        }
     }
 
     int indent = -1;
@@ -1552,7 +1559,7 @@ Parser::parse_local_decl(int tokid, bool autozero)
 Stmt*
 Parser::parse_if()
 {
-    auto ifindent = stmtindent;
+    auto ifindent = lexer_->stmtindent();
     auto pos = lexer_->pos();
     auto expr = parse_expr(true);
     if (!expr)
@@ -1562,7 +1569,7 @@ Parser::parse_if()
     if (lexer_->match(tELSE)) {
         /* to avoid the "dangling else" error, we want a warning if the "else"
          * has a lower indent than the matching "if" */
-        if (stmtindent < ifindent && sc_tabsize > 0)
+        if (lexer_->stmtindent() < ifindent && cc_.options()->tabsize > 0)
             error(217); /* loose indentation */
         else_stmt = parse_stmt(nullptr, false);
         if (!else_stmt)
@@ -1720,7 +1727,7 @@ Parser::parse_switch()
             default:
                 if (tok != '}') {
                     error(2);
-                    indent_nowarn = TRUE;
+                    lexer_->indent_nowarn() = true;
                     tok = endtok;
                 }
                 break;
@@ -1985,7 +1992,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     else
         fun->set_is_stock();
 
-    ke::SaveAndSet<int> require_newdecls(&sc_require_newdecls, TRUE);
+    ke::SaveAndSet<int> require_newdecls(&lexer_->require_newdecls(), TRUE);
     if (!parse_function(fun, is_native ? tMETHODMAP : 0))
         return false;
 
@@ -2229,7 +2236,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
                 return parse_new_decl(decl, &ident_tok, flags);
             }
 
-            if (sc_require_newdecls)
+            if (lexer_->require_newdecls())
                 error(147);
 
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
@@ -2322,7 +2329,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
     // All finished with tag stuff.
     type->set_type(ti);
 
-    if (sc_require_newdecls)
+    if (lexer_->require_newdecls())
         error(147);
 
     // Look for varargs and end early.

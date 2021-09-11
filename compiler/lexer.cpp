@@ -95,9 +95,7 @@ Lexer::PlungeQualifiedFile(const char* name)
     } while (ext_idx < (sizeof extensions / sizeof extensions[0]));
     if (!fp)
         return FALSE;
-    if (sc_showincludes) {
-        fprintf(stdout, "Note: including file: %s\n", name);
-    }
+    cc.included_files().emplace_back(name);
     input_file_stack_.push_back(inpf);
     preproc_if_stack_.push_back(iflevel_);
     assert(!IsSkipping());
@@ -106,6 +104,7 @@ Lexer::PlungeQualifiedFile(const char* name)
     current_file_stack_.push_back(fcurrent);
     current_line_stack_.push_back(fline);
     need_semicolon_stack_.push_back(cc.options()->need_semicolon);
+    require_newdecls_stack_.push_back(cc.options()->require_newdecls);
     inpf = fp; /* set input file pointer to include file */
     fnumber++;
     fline = 0; /* set current line number to 0 */
@@ -113,7 +112,6 @@ Lexer::PlungeQualifiedFile(const char* name)
     icomment_ = 0;               /* not in a comment */
     cc.input_files().emplace_back(inpf->name());
     assert(cc.input_files().at(fcurrent) == inpf->name());
-    setfiledirect(inpf->name()); /* (optionally) set in the list file */
     listline_ = -1;           /* force a #line directive when changing the file */
     skip_utf8_bom(inpf.get());
     return TRUE;
@@ -307,11 +305,11 @@ Lexer::Readline(unsigned char* line)
             icomment_ = ke::PopBack(&comment_stack_);
             iflevel_ = ke::PopBack(&preproc_if_stack_);
             need_semicolon_stack_.pop_back();
+            require_newdecls_stack_.pop_back();
             skiplevel_ = iflevel_; /* this condition held before including the file */
             assert(!IsSkipping());   /* idem ditto */
             inpf = ke::PopBack(&input_file_stack_);
             SetFileDefines(inpf->name());
-            setfiledirect(inpf->name());
             assert(cc.input_files().at(fcurrent) == inpf->name());
             listline_ = -1; /* force a #line directive when changing the file */
         }
@@ -775,7 +773,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
     if (*lptr != '#')
         return IsSkipping() ? CMD_CONDFALSE : CMD_NONE; /* it is not a compiler directive */
     /* compiler directive found */
-    indent_nowarn = TRUE; /* allow loose indentation" */
+    indent_nowarn_ = true; /* allow loose indentation" */
     lexclr(FALSE);        /* clear any "pushed" tokens */
     int tok = lex();
     int ret = IsSkipping() ? CMD_CONDFALSE : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
@@ -934,9 +932,9 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
                         if (strncmp((char*)lptr, "required", 8) == 0)
-                            sc_require_newdecls = 1;
+                            require_newdecls_stack_.back() = true;
                         else if (strncmp((char*)lptr, "optional", 8) == 0)
-                            sc_require_newdecls = 0;
+                            require_newdecls_stack_.back() = false;
                         else
                             error(146);
                         lptr = (unsigned char*)strchr(
@@ -945,7 +943,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     } else if (current_token()->atom->str() == "tabsize") {
                         cell val;
                         preproc_expr(&val, NULL);
-                        sc_tabsize = (int)val;
+                        cc_.options()->tabsize = (int)val;
                     } else if (current_token()->atom->str() == "unused") {
                         if (allow_synthesized_tokens) {
                             while (*lptr <= ' ' && *lptr != '\0')
@@ -1563,19 +1561,6 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
             substallpatterns(pline, sLINEMAX);
             lptr = pline; /* reset "line pointer" to start of the parsing buffer */
         }
-        if (sc_listing && freading &&
-            (iscommand == CMD_NONE || iscommand == CMD_EMPTYLINE || iscommand == CMD_DIRECTIVE))
-        {
-            listline_++;
-            if (fline != listline_) {
-                listline_ = fline;
-                setlinedirect(fline);
-            }
-            if (iscommand == CMD_EMPTYLINE)
-                gAsmBuffer << "\n";
-            else
-                gAsmBuffer << (char*)pline;
-        }
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading); /* enddo */
 }
 
@@ -1803,6 +1788,7 @@ void
 Lexer::Start()
 {
     need_semicolon_stack_.emplace_back(cc_.options()->need_semicolon);
+    require_newdecls_stack_.emplace_back(cc_.options()->require_newdecls);
     Preprocess(true);
 }
 
@@ -1968,12 +1954,14 @@ Lexer::lex()
         }
     }
     if (newline) {
-        stmtindent = 0;
-        for (int i = 0; i < (int)(lptr - pline); i++)
-            if (pline[i] == '\t' && sc_tabsize > 0)
-                stmtindent += (int)(sc_tabsize - (stmtindent + sc_tabsize) % sc_tabsize);
+        stmtindent_ = 0;
+        for (int i = 0; i < (int)(lptr - pline); i++) {
+            int tabsize = cc_.options()->tabsize;
+            if (pline[i] == '\t' && tabsize > 0)
+                stmtindent_ += (int)(tabsize - (stmtindent_ + tabsize) % tabsize);
             else
-                stmtindent++;
+                stmtindent_++;
+        }
     }
 
     tok->start.line = fline;

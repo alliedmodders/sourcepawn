@@ -922,8 +922,6 @@ FunctionInfo::Bind(SemaContext& outer_sc)
             report(pos_, 17) << alias_;
         sym_->function()->alias = alias_sym;
     }
-
-    sc_err_status = FALSE;
     return ok;
 }
 
