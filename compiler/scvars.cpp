@@ -49,7 +49,6 @@ cell code_idx = 0;                         /* number of bytes with generated cod
 int sc_debug = sSYMBOLIC;                 /* by default: bounds checking+assertions */
 int sc_asmfile = FALSE;                    /* create .ASM file? */
 int sc_listing = FALSE;                    /* create .LST file? */
-int sc_needsemicolon = TRUE;               /* semicolon required to terminate expressions? */
 int curseg = 0;                            /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize = sDEF_AMXSTACK;           /* default stack size */
 cell pc_stksize_override = 0;
@@ -63,7 +62,6 @@ int sc_err_status;
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
-std::string pc_deprecate;            /* if non-empty, mark next declaration as deprecated */
 int pc_optimize = sOPTIMIZE_NOMACRO; /* (peephole) optimization level */
 int sc_showincludes = 0;             /* show include files */
 int sc_require_newdecls = 0;         /* Require new-style declarations */
@@ -82,13 +80,6 @@ symbol* sScopeChain = nullptr;
 std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 std::shared_ptr<SourceFile> inpf_org;  /* main source file */
 
-bool sc_intest;
-bool sc_allowtags;
 short fcurrent; /* current file being processed */
-
-std::vector<short> gCurrentFileStack;
-std::vector<int> gCurrentLineStack;
-std::vector<std::shared_ptr<SourceFile>> gInputFileStack;
-std::vector<bool> gNeedSemicolonStack;
 
 jmp_buf errbuf;

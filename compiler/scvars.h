@@ -43,7 +43,6 @@ extern cell code_idx;             /* number of bytes with generated code */
 extern int sc_debug;              /* debug/optimization options (bit field) */
 extern int sc_asmfile;            /* create .ASM file? */
 extern int sc_listing;            /* create .LST file? */
-extern int sc_needsemicolon;      /* semicolon required to terminate expressions? */
 extern int sc_showincludes;       /* show include files? */
 extern int curseg;                /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;           /* stack size */
@@ -79,13 +78,4 @@ extern std::shared_ptr<SourceFile> inpf_org;  /* main source file */
 
 extern jmp_buf errbuf; /* target of longjmp() on a fatal error */
 
-extern std::string pc_deprecate;
-
-extern bool sc_intest;
-extern bool sc_allowtags;
 extern short fcurrent; /* current file being processed */
-
-extern std::vector<short> gCurrentFileStack;
-extern std::vector<int> gCurrentLineStack;
-extern std::vector<std::shared_ptr<SourceFile>> gInputFileStack;
-extern std::vector<bool> gNeedSemicolonStack;

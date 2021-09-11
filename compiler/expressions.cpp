@@ -95,8 +95,9 @@ find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, c
 {
     static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
                                        "",  "",  "<=", ">=", "<", ">", "==", "!="};
-    static bool binoper_savepri[] = {false, false, false, false, false, false, false, false, false,
-                                     false, false, true,  true,  true,  true,  false, false};
+    static const bool binoper_savepri[] = {false, false, false, false, false, false, false, false,
+                                           false, false, false, true,  true,  true,  true,  false,
+                                           false};
     static const char* unoperstr[] = {"!", "-", "++", "--"};
     static void (*unopers[])(void) = {lneg, neg, user_inc, user_dec};
 

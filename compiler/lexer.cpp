@@ -98,14 +98,14 @@ Lexer::PlungeQualifiedFile(const char* name)
     if (sc_showincludes) {
         fprintf(stdout, "Note: including file: %s\n", name);
     }
-    gInputFileStack.push_back(inpf);
+    input_file_stack_.push_back(inpf);
     preproc_if_stack_.push_back(iflevel_);
     assert(!IsSkipping());
     assert(skiplevel_ == iflevel_); /* these two are always the same when "parsing" */
     comment_stack_.push_back(icomment_);
-    gCurrentFileStack.push_back(fcurrent);
-    gCurrentLineStack.push_back(fline);
-    gNeedSemicolonStack.push_back(!!sc_needsemicolon);
+    current_file_stack_.push_back(fcurrent);
+    current_line_stack_.push_back(fline);
+    need_semicolon_stack_.push_back(cc.options()->need_semicolon);
     inpf = fp; /* set input file pointer to include file */
     fnumber++;
     fline = 0; /* set current line number to 0 */
@@ -289,7 +289,7 @@ Lexer::Readline(unsigned char* line)
                 error(49); /* invalid line continuation */
             if (inpf != NULL && inpf != inpf_org)
                 inpf = nullptr;
-            if (gCurrentLineStack.empty()) {
+            if (current_line_stack_.empty()) {
                 freading = FALSE;
                 *line = '\0';
                 /* when there is nothing more to read, the #if/#else stack should
@@ -302,14 +302,14 @@ Lexer::Readline(unsigned char* line)
                     error(1, "*/", "-end of file-");
                 return;
             }
-            fline = ke::PopBack(&gCurrentLineStack);
-            fcurrent = ke::PopBack(&gCurrentFileStack);
+            fline = ke::PopBack(&current_line_stack_);
+            fcurrent = ke::PopBack(&current_file_stack_);
             icomment_ = ke::PopBack(&comment_stack_);
             iflevel_ = ke::PopBack(&preproc_if_stack_);
-            gNeedSemicolonStack.pop_back();
+            need_semicolon_stack_.pop_back();
             skiplevel_ = iflevel_; /* this condition held before including the file */
             assert(!IsSkipping());   /* idem ditto */
-            inpf = ke::PopBack(&gInputFileStack);
+            inpf = ke::PopBack(&input_file_stack_);
             SetFileDefines(inpf->name());
             setfiledirect(inpf->name());
             assert(cc.input_files().at(fcurrent) == inpf->name());
@@ -915,12 +915,12 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     } else if (current_token()->atom->str() == "deprecated") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
-                        pc_deprecate = (char*)lptr;
+                        deprecate_ = (char*)lptr;
                         lptr = (unsigned char*)strchr(
                             (char*)lptr,
                             '\0'); /* skip to end (ignore "extra characters on line") */
-                        while (!pc_deprecate.empty() && isspace(pc_deprecate.back()))
-                            pc_deprecate.pop_back();
+                        while (!deprecate_.empty() && isspace(deprecate_.back()))
+                            deprecate_.pop_back();
                     } else if (current_token()->atom->str() == "dynamic") {
                         preproc_expr(&pc_stksize_override, NULL);
                     } else if (current_token()->atom->str() == "rational") {
@@ -929,7 +929,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     } else if (current_token()->atom->str() == "semicolon") {
                         cell val;
                         preproc_expr(&val, NULL);
-                        gNeedSemicolonStack.back() = !!val;
+                        need_semicolon_stack_.back() = !!val;
                     } else if (current_token()->atom->str() == "newdecls") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
@@ -1187,9 +1187,9 @@ strins(char* dest, const char* src, size_t srclen)
     return dest;
 }
 
-static bool
-substpattern(unsigned char* line, size_t buffersize, const char* pattern,
-             const char* substitution, int& patternLen, int& substLen)
+bool
+Lexer::substpattern(unsigned char* line, size_t buffersize, const char* pattern,
+                    const char* substitution, int& patternLen, int& substLen)
 {
     int prefixlen;
     const unsigned char *p, *s, *e;
@@ -1431,7 +1431,9 @@ MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* del
         /* properly match the pattern and substitute */
         int patternLen = 0;
         int substLen = 0;
-        if (!substpattern(start, buffersize_ - (int)(start - line_), subst.first, subst.second, patternLen, substLen)) {
+        if (!lexer_->substpattern(start, buffersize_ - (int)(start - line_), subst.first,
+                                  subst.second, patternLen, substLen))
+        {
             start = prefix_end;
             continue;
         }
@@ -1797,6 +1799,13 @@ Lexer::Lexer(CompileContext& cc)
     macros_.init(128);
 }
 
+void
+Lexer::Start()
+{
+    need_semicolon_stack_.emplace_back(cc_.options()->need_semicolon);
+    Preprocess(true);
+}
+
 std::string
 get_token_string(int tok_id)
 {
@@ -1922,7 +1931,6 @@ Lexer::lexpop()
 
 static bool lex_match_char(char c);
 static bool lex_number(full_token_t* tok);
-static void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
 
 int
 Lexer::lex()
@@ -2349,14 +2357,14 @@ Lexer::LexSymbolOrKeyword(full_token_t* tok)
     return false;
 }
 
-static void
-lex_symbol(full_token_t* tok, const char* token_start, size_t len)
+void
+Lexer::lex_symbol(full_token_t* tok, const char* token_start, size_t len)
 {
     tok->atom = gAtoms.add(token_start, len);
     tok->id = tSYMBOL;
 
     if (*lptr == ':' && *(lptr + 1) != ':') {
-        if (sc_allowtags) {
+        if (allow_tags_) {
             tok->id = tLABEL;
             lptr++;
         } else if (gTypes.find(tok->atom)) {
@@ -2776,9 +2784,9 @@ Lexer::AddMacro(const char* pattern, size_t length, const char* subst)
     macro.first = pattern;
     macro.second = subst;
     macro.deprecated = false;
-    if (pc_deprecate.length() > 0) {
+    if (deprecate_.length() > 0) {
         macro.deprecated = true;
-        macro.documentation = std::move(pc_deprecate);
+        macro.documentation = std::move(deprecate_);
     }
 
     std::string key(pattern, length);
@@ -2872,7 +2880,10 @@ is_variadic(symbol* sym)
 }
 
 bool
-NeedSemicolon()
+Lexer::NeedSemicolon()
 {
-    return sc_needsemicolon || gNeedSemicolonStack.back();
+    assert(!need_semicolon_stack_.empty());
+    if (cc_.options()->need_semicolon)
+        return true;
+    return need_semicolon_stack_.back();
 }
