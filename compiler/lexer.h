@@ -261,7 +261,6 @@ char* itoh(ucell val);
 std::string get_token_string(int tok_id);
 int is_variadic(symbol* sym);
 int alpha(char c);
-bool NeedSemicolon();
 
 enum class TerminatorPolicy {
     Newline,
@@ -292,9 +291,11 @@ class Lexer
     void lexpush();
     void lexclr(int clreol);
 
+    void Start();
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
     void Preprocess(bool allow_synthesized_tokens);
     void AddMacro(const char* pattern, size_t length, const char* subst);
+    bool NeedSemicolon();
 
     full_token_t lex_tok() {
         lex();
@@ -304,6 +305,10 @@ class Lexer
         return &token_buffer_->tokens[token_buffer_->cursor];
     }
     const token_pos_t& pos() { return current_token()->start; }
+    std::vector<bool>& need_semicolon_stack() { return need_semicolon_stack_; }
+    std::string& deprecate() { return deprecate_; }
+    bool& allow_tags() { return allow_tags_; }
+
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
     struct macro_t {
@@ -332,6 +337,9 @@ class Lexer
     void lexpop();
     int preproc_expr(cell* val, int* tag);
     void substallpatterns(unsigned char* line, int buffersize);
+    bool substpattern(unsigned char* line, size_t buffersize, const char* pattern,
+                      const char* substitution, int& patternLen, int& substLen);
+    void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
@@ -351,6 +359,8 @@ class Lexer
     short skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
     int listline_ = -1; /* "current line" for the list file */
     int lexnewline_;
+    std::string deprecate_;
+    bool allow_tags_ = true;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
@@ -380,4 +390,9 @@ class Lexer
         bool deprecated;
     };
     ke::HashMap<std::string, MacroEntry, MacroTablePolicy> macros_;
+
+    std::vector<short> current_file_stack_;
+    std::vector<int> current_line_stack_;
+    std::vector<std::shared_ptr<SourceFile>> input_file_stack_;
+    std::vector<bool> need_semicolon_stack_;
 };

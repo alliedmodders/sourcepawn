@@ -24,6 +24,7 @@
 #include <vector>
 
 struct CompileOptions {
+    bool need_semicolon = false;
     std::vector<std::string> source_files;
     std::vector<std::string> include_paths;
 };

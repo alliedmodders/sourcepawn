@@ -82,7 +82,7 @@ Parser::Parse()
     }
 
     // Prime the lexer.
-    lexer_->Preprocess(true);
+    lexer_->Start();
 
     while (freading) {
         Stmt* decl = nullptr;
@@ -197,7 +197,7 @@ Parser::Parse()
             list->stmts().emplace_back(decl);
         }
 
-        pc_deprecate = {};
+        lexer_->deprecate() = {};
     }
 
     while (!add_to_end.empty()) {
@@ -283,9 +283,9 @@ Parser::parse_unknown_decl(const full_token_t* tok)
         if (!parse_function(info, 0))
             return nullptr;
         auto stmt = new FunctionDecl(pos, info);
-        if (!pc_deprecate.empty()) {
-            stmt->set_deprecate(pc_deprecate);
-            pc_deprecate = {};
+        if (!lexer_->deprecate().empty()) {
+            stmt->set_deprecate(lexer_->deprecate());
+            lexer_->deprecate() = {};
         }
         return stmt;
     }
@@ -705,7 +705,7 @@ Parser::hier14()
         case taSHL:
             break;
         case '=': /* simple assignment */
-            if (sc_intest)
+            if (in_test_)
                 error(211); /* possibly unintended assignment */
             break;
         default:
@@ -791,7 +791,7 @@ Parser::hier13()
         Expr* left;
         {
             /* do not allow tagnames here (colon is a special token) */
-            ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
+            ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), false);
             left = hier13();
         }
         lexer_->need(':');
@@ -1033,9 +1033,9 @@ Parser::primary()
 {
     if (lexer_->match('(')) { /* sub-expression - (expression,...) */
         /* no longer in "test" expression */
-        ke::SaveAndSet<bool> in_test(&sc_intest, false);
+        ke::SaveAndSet<bool> in_test(&in_test_, false);
         /* allow tagnames to be used in parenthesized expressions */
-        ke::SaveAndSet<bool> allowtags(&sc_allowtags, true);
+        ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), true);
 
         CommaExpr* expr = new CommaExpr(lexer_->pos());
         do {
@@ -1576,7 +1576,7 @@ Parser::parse_if()
 Expr*
 Parser::parse_expr(bool parens)
 {
-    ke::SaveAndSet<bool> in_test(&sc_intest, parens);
+    ke::SaveAndSet<bool> in_test(&in_test_, parens);
 
     if (parens)
         lexer_->need('(');
@@ -1741,7 +1741,7 @@ Parser::parse_case(SwitchStmt* sw)
     PoolList<Expr*> exprs;
     do {
         /* do not allow tagnames here */
-        ke::SaveAndSet<bool> allowtags(&sc_allowtags, false);
+        ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), false);
 
         // hier14 because parse_expr() allows comma exprs
         if (Expr* expr = hier14())
@@ -1781,9 +1781,9 @@ Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this
         return nullptr;
 
     auto stmt = new FunctionDecl(pos, info);
-    if (!pc_deprecate.empty()) {
-        stmt->set_deprecate(pc_deprecate);
-        pc_deprecate = {};
+    if (!lexer_->deprecate().empty()) {
+        stmt->set_deprecate(lexer_->deprecate());
+        lexer_->deprecate() = {};
     }
     return stmt;
 }
@@ -1820,7 +1820,7 @@ Parser::parse_function(FunctionInfo* info, int tokid)
             return true;
         default:
             if (lexer_->match(';')) {
-                if (!NeedSemicolon())
+                if (!lexer_->NeedSemicolon())
                     error(10); /* old style prototypes used with optional semicolumns */
                 info->set_is_forward();
                 return true;

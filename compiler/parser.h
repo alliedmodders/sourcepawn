@@ -131,6 +131,7 @@ class Parser
   private:
     CompileContext& cc_;
     bool in_loop_ = false;
+    bool in_test_ = false;
     std::vector<SymbolScope*> static_scopes_;
     std::shared_ptr<Lexer> lexer_;
 };

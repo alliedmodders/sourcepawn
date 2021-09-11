@@ -218,7 +218,6 @@ pc_compile(int argc, char* argv[]) {
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
     sc_require_newdecls = lcl_require_newdecls;
-    gNeedSemicolonStack.emplace_back(!!sc_needsemicolon);
     sc_tabsize = lcl_tabsize;
     /* reset the source file */
     inpf = inpf_org;
@@ -299,10 +298,6 @@ cleanup:
     if (g_tmpfile[0] != '\0') {
         remove(g_tmpfile);
     }
-
-    gCurrentFileStack.clear();
-    gCurrentLineStack.clear();
-    gInputFileStack.clear();
 
     gTypes.clear();
     funcenums_free();
@@ -392,10 +387,7 @@ resetglobals(void)
     fnumber = 0;           /* the file number in the file table (debugging) */
     stmtindent = 0;        /* current indent of the statement */
     indent_nowarn = FALSE; /* do not skip warning "217 loose indentation" */
-    pc_deprecate = "";
 
-    sc_intest = false;
-    sc_allowtags = true;
     fcurrent = 0;
 }
 
@@ -409,7 +401,6 @@ initglobals(void)
     sc_ctrlchar = CTRL_CHAR;           /* the escape character */
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_debug = sSYMBOLIC;              /* sourcemod: full debug stuff */
-    sc_needsemicolon = FALSE;          /* semicolon required to terminate expressions? */
     sc_require_newdecls = FALSE;
     pc_stksize = sDEF_AMXSTACK; /* default stack size */
     sc_tabsize = 8;             /* assume a TAB is 8 spaces */
@@ -524,9 +515,10 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
     sc_listing = opt_listing.value();
     sc_compression_level = opt_compression.value();
     sc_tabsize = opt_tabsize.value();
-    sc_needsemicolon = opt_semicolons.value();
     sc_syntax_only = opt_syntax_only.value();
     sc_use_stderr = opt_stderr.value();
+
+    cc.options()->need_semicolon = opt_semicolons.value();
 
     int pc_optimize = opt_optlevel.value();
     if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER)
