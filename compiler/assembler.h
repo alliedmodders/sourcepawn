@@ -30,7 +30,8 @@
 #include "shared/byte-buffer.h"
 #include "shared/string-pool.h"
 
-void assemble(CompileContext& cc, CodegenContext& cg, const char* outname);
+void assemble(CompileContext& cc, CodegenContext& cg, const char* outname,
+              int compression_level);
 
 struct BackpatchEntry {
     size_t index;

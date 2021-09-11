@@ -89,8 +89,6 @@ void writetrailer(void);
 void begcseg(void);
 void begdseg(void);
 void setline(int chkbounds);
-void setfiledirect(const char* name);
-void setlinedirect(int line);
 void setlabel(int index);
 void markexpr(optmark type, const char* name, cell offset);
 void startfunc(const char* fname);

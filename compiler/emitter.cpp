@@ -31,6 +31,7 @@
 
 #include "array-helpers.h"
 #include "compile-context.h"
+#include "compile-options.h"
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
@@ -331,36 +332,19 @@ setline(int chkbounds)
     if (last_code_idx == code_idx)
         return;
 
-    if (sc_asmfile) {
+    auto& cc = CompileContext::get();
+    if (cc.options()->asmfile) {
         stgwrite("\t; line ");
         outval(fline, TRUE);
     }
-    if ((sc_debug & sSYMBOLIC) != 0) {
-        /* generate a "break" (start statement) opcode rather than a "line" opcode
-         * because earlier versions of Small/Pawn have an incompatible version of the
-         * line opcode
-         */
-        stgwrite("\tbreak\t; ");
-        outval(code_idx, TRUE);
-        code_idx += opcodes(1);
-    }
+    /* generate a "break" (start statement) opcode rather than a "line" opcode
+     * because earlier versions of Small/Pawn have an incompatible version of the
+     * line opcode
+     */
+    stgwrite("\tbreak\t; ");
+    outval(code_idx, TRUE);
+    code_idx += opcodes(1);
     last_code_idx = code_idx;
-}
-
-void
-setfiledirect(const char* name)
-{
-    if (sc_listing) {
-        assert(name != NULL);
-        gAsmBuffer << "#file " << name << "\n";
-    }
-}
-
-void
-setlinedirect(int line)
-{
-    if (sc_listing)
-        gAsmBuffer << "#line " << line << "\n";
 }
 
 /*  setlabel
@@ -415,7 +399,7 @@ void
 startfunc(const char* fname)
 {
     stgwrite("\tproc");
-    if (sc_asmfile) {
+    if (CompileContext::get().options()->asmfile) {
         stgwrite("\t; ");
         stgwrite(fname);
     }
@@ -938,7 +922,7 @@ ffcall(symbol* sym, int numargs)
         stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(target)));
         stgwrite(" ");
         outval(numargs, FALSE);
-        if (sc_asmfile) {
+        if (CompileContext::get().options()->asmfile) {
             stgwrite("\t; ");
             stgwrite(target->name());
         }
@@ -950,7 +934,7 @@ ffcall(symbol* sym, int numargs)
         /* normal function */
         stgwrite("\tcall ");
         stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(sym)));
-        if (sc_asmfile &&
+        if (CompileContext::get().options()->asmfile &&
             ((!isalpha(symname[0]) && symname[0] != '_' && symname[0] != sc_ctrlchar)))
         {
             stgwrite("\t; ");
@@ -1605,7 +1589,7 @@ load_glbfn(symbol* sym)
     assert(!sym->native);
     stgwrite("\tldgfn.pri ");
     stgwrite(ke::StringPrintf("%" PRIxPTR, reinterpret_cast<uintptr_t>(sym)));
-    if (sc_asmfile) {
+    if (CompileContext::get().options()->asmfile) {
         stgwrite("\t; ");
         stgwrite(sym->name());
     }

@@ -46,34 +46,20 @@ char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
 int sc_labnum = 0;                         /* number of (internal) labels */
 cell glb_declared = 0;                     /* number of global cells declared */
 cell code_idx = 0;                         /* number of bytes with generated code */
-int sc_debug = sSYMBOLIC;                 /* by default: bounds checking+assertions */
-int sc_asmfile = FALSE;                    /* create .ASM file? */
-int sc_listing = FALSE;                    /* create .LST file? */
 int curseg = 0;                            /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize = sDEF_AMXSTACK;           /* default stack size */
 cell pc_stksize_override = 0;
 int freading = FALSE;                      /* Is there an input file ready for reading? */
 int fline = 0;                             /* the line number in the current file */
 short fnumber = 0;                         /* the file number in the file table (debugging) */
-int stmtindent = 0;                        /* current indent of the statement */
-int indent_nowarn = FALSE;                 /* skip warning "217 loose indentation" */
-int sc_tabsize = 8;                        /* number of spaces that a TAB represents */
-int sc_err_status;
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
-int pc_optimize = sOPTIMIZE_NOMACRO; /* (peephole) optimization level */
-int sc_showincludes = 0;             /* show include files */
-int sc_require_newdecls = 0;         /* Require new-style declarations */
-bool sc_warnings_are_errors = false;
-int sc_compression_level = 9;
 bool sc_use_new_parser = false;
 int pc_max_func_memory = 0;          /* high stack watermark */
 int pc_current_memory = 0;           /* current stack watermark */
 int pc_max_memory = 0;               /* maximum stack watermark across all stacks */
-int sc_use_stderr = FALSE;
 int pc_current_stack = 0;
-int sc_reparse = 0;
 
 symbol* sScopeChain = nullptr;
 

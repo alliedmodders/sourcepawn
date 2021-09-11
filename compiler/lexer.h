@@ -308,6 +308,9 @@ class Lexer
     std::vector<bool>& need_semicolon_stack() { return need_semicolon_stack_; }
     std::string& deprecate() { return deprecate_; }
     bool& allow_tags() { return allow_tags_; }
+    int& require_newdecls() { return require_newdecls_stack_.back(); }
+    int& stmtindent() { return stmtindent_; }
+    bool& indent_nowarn() { return indent_nowarn_; }
 
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
@@ -361,6 +364,8 @@ class Lexer
     int lexnewline_;
     std::string deprecate_;
     bool allow_tags_ = true;
+    int stmtindent_ = 0;
+    bool indent_nowarn_ = false;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
@@ -395,4 +400,5 @@ class Lexer
     std::vector<int> current_line_stack_;
     std::vector<std::shared_ptr<SourceFile>> input_file_stack_;
     std::vector<bool> need_semicolon_stack_;
+    std::vector<int> require_newdecls_stack_;
 };

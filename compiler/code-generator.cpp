@@ -29,6 +29,7 @@
 #include "assembler.h"
 #include "code-generator.h"
 #include "compile-context.h"
+#include "compile-options.h"
 #include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
@@ -37,7 +38,7 @@
 #include "symbols.h"
 
 void
-ParseTree::Emit(CompileContext& cc)
+ParseTree::Emit(CompileContext& cc, int compression_level)
 {
     CodegenContext cg(cc, nullptr);
 
@@ -45,15 +46,12 @@ ParseTree::Emit(CompileContext& cc)
     StmtList::Emit(cg);
     writetrailer();
 
-    assemble(cc, cg, binfname);
+    assemble(cc, cg, binfname, compression_level);
 }
 
 void
 CodegenContext::AddDebugFile(const std::string& file)
 {
-    if (!(sc_debug & sSYMBOLIC))
-        return;
-
     auto str = ke::StringPrintf("F:%x %s", code_idx, file.c_str());
     debug_strings_.emplace_back(std::move(str));
 }
@@ -61,9 +59,6 @@ CodegenContext::AddDebugFile(const std::string& file)
 void
 CodegenContext::AddDebugLine(int linenr)
 {
-    if (!(sc_debug & sSYMBOLIC))
-        return;
-
     auto str = ke::StringPrintf("L:%x %x", code_idx, linenr);
     if (func_) {
         auto data = func_->function();
@@ -76,9 +71,6 @@ CodegenContext::AddDebugLine(int linenr)
 void
 CodegenContext::AddDebugSymbol(symbol* sym)
 {
-    if (!(sc_debug & sSYMBOLIC))
-        return;
-
     auto symname = sym->name();
 
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */

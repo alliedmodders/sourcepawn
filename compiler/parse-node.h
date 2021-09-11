@@ -198,7 +198,7 @@ class ParseTree : public StmtList
 
     bool ResolveNames(SemaContext& sc);
     bool Analyze(SemaContext& sc) override;
-    void Emit(CompileContext& cc);
+    void Emit(CompileContext& cc, int compression_level);
 };
 
 class BlockStmt : public StmtList

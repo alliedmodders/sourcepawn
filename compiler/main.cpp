@@ -119,9 +119,7 @@ enum {
     TEST_PARENS, /* '(' <expr> ')' */
     TEST_OPT,    /* '(' <expr> ')' or <expr> */
 };
-static int norun = 0;                 /* the compiler never ran */
 static int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
-static int sc_parsenum = 0;           /* number of the extra parses */
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
 static HWND hwndFinish = 0;
 #endif
@@ -142,6 +140,37 @@ EM_JS(void, setup_emscripten_fs, (), {
 });
 #endif
 
+args::ToggleOption opt_assembly("-a", "--assembly-only", Some(false), "Output assembler code");
+args::StringOption opt_active_dir("-D", "--active-dir", {}, "Active directory path");
+args::StringOption opt_error_file("-e", "--error-file", {}, "Error file path");
+#if defined __WIN32__ || defined _WIN32 || defined _Windows
+args::StringOption opt_hwnd("-H", "--hwnd", {},
+                            "Window handle to send a notification message on finish");
+#endif
+args::ToggleOption opt_warnings_as_errors("-E", "--warnings-as-errors", Some(false),
+                                          "Treat warnings as errors");
+args::ToggleOption opt_showincludes("-h", "--show-includes", Some(false),
+                                    "Show included file paths");
+args::IntOption opt_compression("-z", "--compress-level", Some(9),
+                                "Compression level, default 9 (0=none, 1=worst, 9=best)");
+args::IntOption opt_tabsize("-t", "--tabsize", Some(8),
+                            "TAB indent size (in character positions, default=8)");
+args::StringOption opt_verbosity("-v", "--verbose", {},
+                                 "Verbosity level; 0=quiet, 1=normal, 2=verbose");
+args::StringOption opt_prefixfile("-p", "--prefix", {}, "Set name of \"prefix\" file");
+args::StringOption opt_outputfile("-o", "--output", {},
+                                  "Set base name of (P-code) output file");
+args::IntOption opt_optlevel("-O", "--opt-level", Some(2), "Deprecated; has no effect");
+args::RepeatOption<std::string> opt_includes("-i", "--include", "Path for include files");
+args::RepeatOption<std::string> opt_warnings("-w", "--warning",
+                                         "Disable a specific warning by its number.");
+args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
+                                  "Require a semicolon to end each statement.");
+args::ToggleOption opt_syntax_only(nullptr, "--syntax-only", Some(false),
+                              "Perform a dry-run (No file output) on the input");
+args::ToggleOption opt_stderr(nullptr, "--use-stderr", Some(false),
+                              "Use stderr instead of stdout for error messages.");
+
 /*  "main" of the compiler
  */
 int
@@ -149,7 +178,6 @@ pc_compile(int argc, char* argv[]) {
     int jmpcode;
     int retcode;
     int64_t inpfmark;
-    int lcl_tabsize, lcl_require_newdecls;
     char* ptr;
     ParseTree* tree = nullptr;
 
@@ -179,18 +207,13 @@ pc_compile(int argc, char* argv[]) {
     else
         set_extension(binfname, ".smx", FALSE);
     /* set output names that depend on the input name */
-    if (sc_listing)
-        set_extension(outfname, ".lst", TRUE);
-    else
-        set_extension(outfname, ".asm", TRUE);
+    set_extension(outfname, ".asm", TRUE);
     if (strlen(errfname) != 0)
         remove(errfname); /* delete file on startup */
     else if (verbosity > 0)
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
     sc_ctrlchar_org = sc_ctrlchar;
-    lcl_require_newdecls = sc_require_newdecls;
-    lcl_tabsize = sc_tabsize;
 
     /* optionally create a temporary input file that is a collection of all
      * input files
@@ -203,22 +226,13 @@ pc_compile(int argc, char* argv[]) {
     freading = TRUE;
 
     setconstants(); /* set predefined constants and tagnames */
-    /* write starting options (from the command line or the configuration file) */
-    if (sc_listing) {
-        gAsmBuffer << "#pragma ctrlchar 0x" << ke::StringPrintf("%02x", sc_ctrlchar) << "\n";
-        gAsmBuffer << "#pragma tabsize " << sc_tabsize << "\n";
-        setfiledirect(inpf->name());
-    }
     /* do the first pass through the file (or possibly two or more "first passes") */
-    sc_parsenum = 0;
     inpfmark = inpf_org->Pos();
 
     inst_datetime_defines(cc);
     inst_binary_name(cc, binfname);
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
-    sc_require_newdecls = lcl_require_newdecls;
-    sc_tabsize = lcl_tabsize;
     /* reset the source file */
     inpf = inpf_org;
     freading = TRUE;
@@ -231,7 +245,7 @@ pc_compile(int argc, char* argv[]) {
 
         AutoCountErrors errors;
         tree = parser.Parse();      /* process all input */
-        if (!tree || !errors.ok() || sc_listing)
+        if (!tree || !errors.ok())
             goto cleanup;
 
         errors.Reset();
@@ -260,10 +274,15 @@ cleanup:
     cc.reports()->DumpErrorReport(true);
 
     // Write the binary file.
-    if (!(sc_asmfile || sc_listing || sc_syntax_only) && compile_ok && jmpcode == 0)
-        tree->Emit(cc);
+    if (!(opt_assembly.value() || sc_syntax_only) && compile_ok && jmpcode == 0)
+        tree->Emit(cc, opt_compression.value());
 
-    if ((sc_asmfile || sc_listing) && !gAsmBuffer.empty()) {
+    if (compile_ok && jmpcode == 0 && opt_showincludes.value()) {
+        for (const auto& name : cc.included_files())
+            fprintf(stdout, "Note: including file: %s\n", name.c_str());
+    }
+
+    if ((opt_assembly.value()) && !gAsmBuffer.empty()) {
         std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(outfname, "wb"), fclose);
         auto data = gAsmBuffer.str();
         if (fwrite(data.c_str(), data.size(), 1, fp.get()) != 1)
@@ -277,7 +296,7 @@ cleanup:
         if (pc_stksize_override)
             pc_stksize = pc_stksize_override;
 
-        if ((!norun && (sc_debug & sSYMBOLIC) != 0) || verbosity >= 2) {
+        if (verbosity >= 2) {
             printf("Code size:         %8ld bytes\n", (long)code_idx);
             printf("Data size:         %8ld bytes\n", (long)glb_declared * sizeof(cell));
             printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));
@@ -385,8 +404,6 @@ resetglobals(void)
     freading = FALSE;      /* no input file ready yet */
     fline = 0;             /* the line number in the current file */
     fnumber = 0;           /* the file number in the file table (debugging) */
-    stmtindent = 0;        /* current indent of the statement */
-    indent_nowarn = FALSE; /* do not skip warning "217 loose indentation" */
 
     fcurrent = 0;
 }
@@ -396,14 +413,9 @@ initglobals(void)
 {
     resetglobals();
 
-    sc_asmfile = FALSE;                /* do not create .ASM file */
-    sc_listing = FALSE;                /* do not create .LST file */
     sc_ctrlchar = CTRL_CHAR;           /* the escape character */
     verbosity = 1;                     /* verbosity level, no copyright banner */
-    sc_debug = sSYMBOLIC;              /* sourcemod: full debug stuff */
-    sc_require_newdecls = FALSE;
     pc_stksize = sDEF_AMXSTACK; /* default stack size */
-    sc_tabsize = 8;             /* assume a TAB is 8 spaces */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
 
     outfname[0] = '\0';      /* output file name */
@@ -446,40 +458,6 @@ set_extension(char* filename, const char* extension, int force)
         strcat(filename, extension);
 }
 
-args::ToggleOption opt_assembly("-a", "--assembly-only", Some(false), "Output assembler code");
-args::StringOption opt_active_dir("-D", "--active-dir", {}, "Active directory path");
-args::StringOption opt_error_file("-e", "--error-file", {}, "Error file path");
-#if defined __WIN32__ || defined _WIN32 || defined _Windows
-args::StringOption opt_hwnd("-H", "--hwnd", {},
-                            "Window handle to send a notification message on finish");
-#endif
-args::ToggleOption opt_warnings_as_errors("-E", "--warnings-as-errors", Some(false),
-                                          "Treat warnings as errors");
-args::ToggleOption opt_showincludes("-h", "--show-includes", Some(false),
-                                    "Show included file paths");
-args::ToggleOption opt_listing("-l", "--listing", Some(false),
-                               "Create list file (preprocess only)");
-args::IntOption opt_compression("-z", "--compress-level", Some(9),
-                                "Compression level, default 9 (0=none, 1=worst, 9=best)");
-args::IntOption opt_tabsize("-t", "--tabsize", Some(8),
-                            "TAB indent size (in character positions, default=8)");
-args::StringOption opt_verbosity("-v", "--verbose", {},
-                                 "Verbosity level; 0=quiet, 1=normal, 2=verbose");
-args::StringOption opt_prefixfile("-p", "--prefix", {}, "Set name of \"prefix\" file");
-args::StringOption opt_outputfile("-o", "--output", {},
-                                  "Set base name of (P-code) output file");
-args::IntOption opt_optlevel("-O", "--opt-level", Some(2),
-                             "Optimization level (0=none, 2=full)");
-args::RepeatOption<std::string> opt_includes("-i", "--include", "Path for include files");
-args::RepeatOption<std::string> opt_warnings("-w", "--warning",
-                                         "Disable a specific warning by its number.");
-args::ToggleOption opt_semicolons("-;", "--require-semicolons", Some(false),
-                                  "Require a semicolon to end each statement.");
-args::ToggleOption opt_syntax_only(nullptr, "--syntax-only", Some(false),
-                              "Perform a dry-run (No file output) on the input");
-args::ToggleOption opt_stderr(nullptr, "--use-stderr", Some(false),
-                              "Use stderr instead of stdout for error messages.");
-
 static void
 Usage(args::Parser& parser, int argc, char** argv)
 {
@@ -510,19 +488,13 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         Usage(parser, argc, argv);
     }
 
-    sc_warnings_are_errors = opt_warnings_as_errors.value();
-    sc_showincludes = opt_showincludes.value();
-    sc_listing = opt_listing.value();
-    sc_compression_level = opt_compression.value();
-    sc_tabsize = opt_tabsize.value();
     sc_syntax_only = opt_syntax_only.value();
-    sc_use_stderr = opt_stderr.value();
 
     cc.options()->need_semicolon = opt_semicolons.value();
-
-    int pc_optimize = opt_optlevel.value();
-    if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER)
-        Usage(parser, argc, argv);
+    cc.options()->tabsize = opt_tabsize.value();
+    cc.options()->asmfile = opt_assembly.value();
+    cc.options()->warnings_are_errors = opt_warnings_as_errors.value();
+    cc.options()->use_stderr = opt_stderr.value();
 
     if (opt_prefixfile.hasValue())
         cc.set_default_include(opt_prefixfile.value());
@@ -537,8 +509,7 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
             verbosity = 2;
     }
 
-    sc_asmfile = opt_assembly.value();
-    if (sc_asmfile && verbosity > 1)
+    if (opt_assembly.value() && verbosity > 1)
         verbosity = 1;
 
     if (opt_active_dir.hasValue()) {

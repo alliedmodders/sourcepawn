@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "compile-context.h"
+#include "compile-options.h"
 #include "errors.h"
 #include "lexer.h"
 #include "sc.h"
@@ -76,12 +77,12 @@ AutoErrorPos::~AutoErrorPos()
 static inline ErrorType
 DeduceErrorType(int number)
 {
-    if (number < 200 || (number < 300 && sc_warnings_are_errors) || number >= 400)
+    auto& cc = CompileContext::get();
+    if (number < 200 || (number < 300 && cc.options()->warnings_are_errors) || number >= 400)
         return ErrorType::Error;
     if (number >= 300)
         return ErrorType::Fatal;
 
-    auto& cc = CompileContext::get();
     if (cc.reports()->IsWarningDisabled(number))
         return ErrorType::Suppressed;
     return ErrorType::Warning;
@@ -388,7 +389,7 @@ ReportManager::ReportError(ErrorReport&& report)
 void
 ReportManager::DumpErrorReport(bool clear)
 {
-    FILE* stdfp = sc_use_stderr ? stderr : stdout;
+    FILE* stdfp = cc_.options()->use_stderr ? stderr : stdout;
 
     FILE* fp = nullptr;
     if (strlen(errfname) > 0)

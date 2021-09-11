@@ -1645,7 +1645,7 @@ splat_to_binary(const char* binfname, void* bytes, size_t size)
 }
 
 void
-assemble(CompileContext& cc, CodegenContext& cg, const char* binfname)
+assemble(CompileContext& cc, CodegenContext& cg, const char* binfname, int compression_level)
 {
     Assembler assembler(cc, cg);
 
@@ -1655,14 +1655,14 @@ assemble(CompileContext& cc, CodegenContext& cg, const char* binfname)
     // Buffer compression logic.
     sp_file_hdr_t* header = (sp_file_hdr_t*)buffer.bytes();
 
-    if (sc_compression_level) {
+    if (compression_level) {
         size_t region_size = header->imagesize - header->dataoffs;
         size_t zbuf_max = compressBound(region_size);
         std::unique_ptr<Bytef[]> zbuf = std::make_unique<Bytef[]>(zbuf_max);
 
         uLong new_disksize = zbuf_max;
         int err = compress2(zbuf.get(), &new_disksize, (Bytef*)(buffer.bytes() + header->dataoffs),
-                            region_size, sc_compression_level);
+                            region_size, compression_level);
         if (err == Z_OK) {
             header->disksize = new_disksize + header->dataoffs;
             header->compression = SmxConsts::FILE_COMPRESSION_GZ;

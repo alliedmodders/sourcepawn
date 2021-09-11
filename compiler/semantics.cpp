@@ -2982,9 +2982,6 @@ FunctionInfo::DoAnalyze(SemaContext& outer_sc)
         report(pos_, 234) << sym_->name() << ptr; /* deprecated (probably a public function) */
     }
 
-    if (this_tag_)
-        sc_err_status = TRUE;
-
     body_->Analyze(sc);
 
     sym_->returns_value = sc.returns_value();
@@ -3018,8 +3015,6 @@ FunctionInfo::DoAnalyze(SemaContext& outer_sc)
         if (scope_)
             TestSymbols(scope_, TRUE);
     }
-
-    sc_err_status = FALSE;
     return true;
 }
 
