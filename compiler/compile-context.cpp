@@ -23,6 +23,7 @@
 
 #include <assert.h>
 
+#include "compile-options.h"
 #include "errors.h"
 #include "symbols.h"
 
@@ -36,6 +37,7 @@ CompileContext::CompileContext()
     default_include_ = sDEF_PREFIX;
 
     reports_ = std::make_unique<ReportManager>(*this);
+    options_ = std::make_unique<CompileOptions>();
 }
 
 CompileContext::~CompileContext()

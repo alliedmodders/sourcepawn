@@ -1,5 +1,6 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
+//  Copyright (c) AlliedModders LLC 2021
 //  Copyright (c) ITB CompuPhase, 1997-2006
 //
 //  This software is provided "as-is", without any express or implied warranty.
@@ -19,29 +20,10 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include "sc.h"
+#include <string>
+#include <vector>
 
-struct stringlist {
-    stringlist* next;
-    union {
-        char* line;
-        stringlist* tail;
-    };
+struct CompileOptions {
+    std::vector<std::string> source_files;
+    std::vector<std::string> include_paths;
 };
-
-struct macro_t {
-    const char* first;
-    const char* second;
-};
-
-void insert_subst(const char* pattern, size_t pattern_length, const char* substitution);
-bool find_subst(const char* name, size_t length, macro_t* result);
-bool delete_subst(const char* name, size_t length);
-void delete_substtable(void);
-stringlist* insert_dbgfile(const char* filename);
-stringlist* insert_dbgline(int linenr);
-void insert_dbgsymbol(symbol* sym);
-char* get_dbgstring(int index);
-void delete_dbgstringtable(void);
-stringlist* get_dbgstrings();
-void delete_stringtable(stringlist* root);

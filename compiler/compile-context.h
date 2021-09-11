@@ -29,6 +29,7 @@
 
 class ReportManager;
 class SymbolScope;
+struct CompileOptions;
 struct symbol;
 
 // The thread-safe successor to scvars.
@@ -49,6 +50,8 @@ class CompileContext final
     std::unordered_set<symbol*>& functions() { return functions_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
+    CompileOptions* options() const { return options_.get(); }
+    std::vector<std::string>& input_files() { return input_files_; }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
@@ -69,6 +72,8 @@ class CompileContext final
     SymbolScope* globals_;
     std::string default_include_;
     std::unordered_set<symbol*> functions_;
+    std::unique_ptr<CompileOptions> options_;
+    std::vector<std::string> input_files_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().

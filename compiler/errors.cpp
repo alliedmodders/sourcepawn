@@ -202,12 +202,14 @@ MessageBuilder::~MessageBuilder()
     if (disabled_)
         return;
 
+    auto& cc = CompileContext::get();
+
     ErrorReport report;
     report.number = number_;
     report.fileno = where_.file;
     report.lineno = std::max(where_.line, 1);
     if (report.fileno >= 0) {
-        report.filename = get_inputfile(report.fileno);
+        report.filename = cc.input_files().at(report.fileno);
     } else {
         report.fileno = 0;
         report.filename = inpf->name();
@@ -215,7 +217,7 @@ MessageBuilder::~MessageBuilder()
     report.type = DeduceErrorType(number_);
 
     std::ostringstream out;
-    if (report.filename)
+    if (!report.filename.empty())
         out << report.filename << "(" << report.lineno << ") : ";
     out << GetErrorTypePrefix(report.type)
         << " " << ke::StringPrintf("%03d", report.number) << ": ";
@@ -285,12 +287,14 @@ abort_compiler()
 ErrorReport
 ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
 {
+    auto& cc = CompileContext::get();
+
     ErrorReport report;
     report.number = number;
     report.fileno = fileno;
     report.lineno = std::max(lineno, 1);
     if (report.fileno >= 0) {
-        report.filename = get_inputfile(report.fileno);
+        report.filename = cc.input_files().at(report.fileno);
     } else {
         report.fileno = 0;
         report.filename = inpf->name();
@@ -304,8 +308,8 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     ke::SafeVsprintf(msg, sizeof(msg), format, ap);
 
     char base[1024];
-    ke::SafeSprintf(base, sizeof(base), "%s(%d) : %s %03d: ", report.filename, report.lineno,
-                    prefix, report.number);
+    ke::SafeSprintf(base, sizeof(base), "%s(%d) : %s %03d: ", report.filename.c_str(),
+                    report.lineno, prefix, report.number);
 
     char full[2048];
     ke::SafeSprintf(full, sizeof(full), "%s%s", base, msg);

@@ -47,7 +47,7 @@ struct ErrorReport {
     int number;
     int fileno;
     int lineno;
-    const char* filename;
+    std::string filename;
     std::string message;
     ErrorType type;
 };

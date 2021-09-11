@@ -47,6 +47,7 @@
 #include <amtl/am-string.h>
 #include <sp_typeutil.h>
 #include "array-helpers.h"
+#include "compile-options.h"
 #include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
@@ -74,6 +75,8 @@ static void set_file_defines(std::string file);
 bool
 Lexer::PlungeQualifiedFile(const char* name)
 {
+    auto& cc = CompileContext::get();
+
     static const char* extensions[] = {".inc", ".p", ".pawn"};
     std::string alt_name;
 
@@ -113,8 +116,8 @@ Lexer::PlungeQualifiedFile(const char* name)
     fcurrent = fnumber;
     icomment_ = 0;               /* not in a comment */
     insert_dbgfile(inpf->name());   /* attach to debug information */
-    insert_inputfile(inpf->name()); /* save for the error system */
-    assert(strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
+    cc.input_files().emplace_back(inpf->name());
+    assert(cc.input_files().at(fcurrent) == inpf->name());
     setfiledirect(inpf->name()); /* (optionally) set in the list file */
     listline_ = -1;           /* force a #line directive when changing the file */
     skip_utf8_bom(inpf.get());
@@ -159,11 +162,13 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
     }
 
     if (try_includepaths && name[0] != DIRSEP_CHAR) {
-        int i;
-        char* ptr;
-        for (i = 0; !result && (ptr = get_path(i)) != NULL; i++) {
-            auto path = StringPrintf("%s%s", ptr, name);
-            result = PlungeQualifiedFile(path.c_str());
+        auto& cc = CompileContext::get();
+        for (const auto& inc_path : cc.options()->include_paths) {
+            auto path = inc_path + name;
+            if (PlungeQualifiedFile(path.c_str())) {
+                result = true;
+                break;
+            }
         }
     }
 
@@ -282,6 +287,9 @@ Lexer::Readline(unsigned char* line)
     cont = FALSE;
     do {
         if (inpf == NULL || inpf->Eof()) {
+            auto& cc = CompileContext::get();
+            (void)cc;
+
             if (cont)
                 error(49); /* invalid line continuation */
             if (inpf != NULL && inpf != inpf_org)
@@ -310,7 +318,7 @@ Lexer::Readline(unsigned char* line)
             set_file_defines(inpf->name());
             insert_dbgfile(inpf->name());
             setfiledirect(inpf->name());
-            assert(strcmp(get_inputfile(fcurrent), inpf->name()) == 0);
+            assert(cc.input_files().at(fcurrent) == inpf->name());
             listline_ = -1; /* force a #line directive when changing the file */
         }
 

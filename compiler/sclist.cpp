@@ -113,28 +113,6 @@ delete_stringtable(stringlist* root)
     memset(root, 0, sizeof(stringlist));
 }
 
-/* ----- include paths list -------------------------------------- */
-static stringlist includepaths; /* directory list for include files */
-
-stringlist*
-insert_path(const char* path)
-{
-    return insert_string(&includepaths, path);
-}
-
-char*
-get_path(int index)
-{
-    return get_string(&includepaths, index);
-}
-
-void
-delete_pathtable(void)
-{
-    delete_stringtable(&includepaths);
-    assert(includepaths.next == NULL);
-}
-
 /* ----- substitutions (macros) -------------------------------------- */
 
 void
@@ -197,50 +175,6 @@ void
 delete_substtable(void)
 {
     sMacros.clear();
-}
-
-/* ----- input file list (explicit files) ------------------------ */
-static stringlist sourcefiles;
-
-stringlist*
-insert_sourcefile(char* string)
-{
-    return insert_string(&sourcefiles, string);
-}
-
-char*
-get_sourcefile(int index)
-{
-    return get_string(&sourcefiles, index);
-}
-
-void
-delete_sourcefiletable(void)
-{
-    delete_stringtable(&sourcefiles);
-    assert(sourcefiles.next == NULL);
-}
-
-/* ----- parsed file list (explicit + included files) ------------ */
-static stringlist inputfiles;
-
-stringlist*
-insert_inputfile(const char* string)
-{
-    return insert_string(&inputfiles, string);
-}
-
-char*
-get_inputfile(int index)
-{
-    return get_string(&inputfiles, index);
-}
-
-void
-delete_inputfiletable(void)
-{
-    delete_stringtable(&inputfiles);
-    assert(inputfiles.next == NULL);
 }
 
 /* ----- debug information --------------------------------------- */
