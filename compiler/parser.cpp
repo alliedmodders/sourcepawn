@@ -34,7 +34,6 @@
 #include "parser.h"
 #include "parse-node.h"
 #include "sc.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "semantics.h"

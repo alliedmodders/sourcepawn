@@ -33,7 +33,6 @@
 #include "errors.h"
 #include "expressions.h"
 #include "output-buffer.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "symbols.h"
 

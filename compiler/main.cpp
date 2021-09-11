@@ -87,7 +87,6 @@
 #include "lexer.h"
 #include "sc.h"
 #include "sci18n.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #define VERSION_INT 0x0302
@@ -112,8 +111,8 @@ static void setopt(CompileContext& cc, int argc, char** argv, char* oname, char*
 static void setconfig(char* root);
 static void setcaption(void);
 static void setconstants(void);
-static void inst_datetime_defines(void);
-static void inst_binary_name(std::string binfile);
+static void inst_datetime_defines(CompileContext& cc);
+static void inst_binary_name(CompileContext& cc, std::string binfile);
 
 enum {
     TEST_PLAIN,  /* no parentheses */
@@ -214,8 +213,8 @@ pc_compile(int argc, char* argv[]) {
     sc_parsenum = 0;
     inpfmark = inpf_org->Pos();
 
-    inst_datetime_defines();
-    inst_binary_name(binfname);
+    inst_datetime_defines(cc);
+    inst_binary_name(cc, binfname);
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
     sc_require_newdecls = lcl_require_newdecls;
@@ -309,7 +308,6 @@ cleanup:
     funcenums_free();
     methodmaps_free();
     pstructs_free();
-    delete_substtable();
     if (!compile_ok) {
         if (strlen(errfname) == 0)
             printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");
@@ -331,7 +329,7 @@ cleanup:
 }
 
 static void
-inst_binary_name(std::string binfile)
+inst_binary_name(CompileContext& cc, std::string binfile)
 {
     auto sepIndex = binfile.find_last_of(DIRSEP_CHAR);
 
@@ -351,12 +349,12 @@ inst_binary_name(std::string binfile)
     binfile.push_back('"');
     binfileName.push_back('"');
 
-    insert_subst("__BINARY_PATH__", 15, binfile.c_str());
-    insert_subst("__BINARY_NAME__", 15, binfileName.c_str());
+    cc.lexer()->AddMacro("__BINARY_PATH__", 15, binfile.c_str());
+    cc.lexer()->AddMacro("__BINARY_NAME__", 15, binfileName.c_str());
 }
 
 static void
-inst_datetime_defines(void)
+inst_datetime_defines(CompileContext& cc)
 {
     char date[64];
     char ltime[64];
@@ -376,8 +374,8 @@ inst_datetime_defines(void)
     strftime(ltime, 31, "\"%H:%M:%S\"", curtime);
 #endif
 
-    insert_subst("__DATE__", 8, date);
-    insert_subst("__TIME__", 8, ltime);
+    cc.lexer()->AddMacro("__DATE__", 8, date);
+    cc.lexer()->AddMacro("__TIME__", 8, ltime);
 }
 
 static void

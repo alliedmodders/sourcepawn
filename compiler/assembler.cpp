@@ -44,7 +44,6 @@
 #include "lexer.h"
 #include "output-buffer.h"
 #include "sc.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "symbols.h"

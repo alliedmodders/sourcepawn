@@ -28,7 +28,6 @@
 #include "lexer.h"
 #include "parser.h"
 #include "sc.h"
-#include "sclist.h"
 #include "scvars.h"
 #include "semantics.h"
 

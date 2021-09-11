@@ -31,7 +31,6 @@
 #include "expressions.h"
 #include "lexer.h"
 #include "parse-node.h"
-#include "sclist.h"
 #include "sctracker.h"
 #include "scvars.h"
 #include "symbols.h"
