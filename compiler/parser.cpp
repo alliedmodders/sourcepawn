@@ -319,7 +319,7 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
             init = var_init(params.vclass);
 
         // Keep updating this field, as we only care about the last initializer.
-        params.struct_init = init && init->AsStructExpr();
+        params.struct_init = init && init->as<StructExpr>();
 
         VarDecl* var = new VarDecl(pos, decl->name, decl->type, params.vclass, params.is_public,
                                    params.is_static, params.is_stock, init);
@@ -521,7 +521,7 @@ Parser::parse_typedef()
 
     sp::Atom* ident;
     if (!lexer_->needsymbol(&ident))
-        return new ErrorDecl();
+        return nullptr;
 
     lexer_->need('=');
 
@@ -536,7 +536,7 @@ Parser::parse_typeset()
 
     sp::Atom* ident;
     if (!lexer_->needsymbol(&ident))
-        return new ErrorDecl();
+        return nullptr;
 
     TypesetDecl* decl = new TypesetDecl(pos, ident);
 
@@ -575,7 +575,7 @@ Parser::parse_using()
     };
     if (!validate()) {
         lexer_->lexclr(TRUE);
-        return new ErrorDecl();
+        return nullptr;
     }
 
     lexer_->require_newline(TerminatorPolicy::Semicolon);
@@ -899,7 +899,7 @@ Parser::hier2()
                 rt = TypenameInfo{0};
 
             if (!lexer_->need('['))
-                return new ErrorExpr();
+                return nullptr;
 
             return parse_new_array(pos, rt);
         }
@@ -921,7 +921,7 @@ Parser::hier2()
 
             sp::Atom* ident;
             if (!lexer_->needsymbol(&ident))
-                return new ErrorExpr();
+                return nullptr;
             while (parens--)
                 lexer_->need(')');
             return new IsDefinedExpr(pos, ident);
@@ -937,7 +937,7 @@ Parser::hier2()
                 ident = gAtoms.add("this");
             } else {
                 if (!lexer_->needsymbol(&ident))
-                    return new ErrorExpr();
+                    return nullptr;
             }
 
             int array_levels = 0;
@@ -950,7 +950,7 @@ Parser::hier2()
             int token = lexer_->lex();
             if (token == tDBLCOLON || token == '.') {
                 if (!lexer_->needsymbol(&field))
-                    return new ErrorExpr();
+                    return nullptr;
             } else {
                 lexer_->lexpush();
                 token = 0;
@@ -1097,7 +1097,7 @@ Parser::constant()
         }
         default:
           error(29);
-          return new ErrorExpr();
+          return nullptr;
     }
 }
 

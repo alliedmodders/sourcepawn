@@ -681,7 +681,7 @@ ReturnStmt::Bind(SemaContext& sc)
 
     // Do some peeking to see if this really returns an array. This is a
     // compatibility hack.
-    if (auto sym_expr = expr_->AsSymbolExpr()) {
+    if (auto sym_expr = expr_->as<SymbolExpr>()) {
         if (auto sym = sym_expr->sym()) {
             if (sym->ident == iARRAY || sym->ident == iREFARRAY)
                 sc.func_node()->set_maybe_returns_array();
