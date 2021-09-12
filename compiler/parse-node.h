@@ -1,8 +1,6 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Pawn compiler - Recursive descend expresion parser
-//
-//  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) AlliedModders 2021
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -19,9 +17,6 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
-
 #pragma once
 
 #include <amtl/am-deque.h>
@@ -29,6 +24,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 
+#include "ast-types.h"
 #include "expressions.h"
 #include "lexer.h"
 #include "pool-allocator.h"
@@ -52,16 +48,7 @@ struct UserOperation
 typedef void (*OpFunc)();
 
 class Expr;
-class ArrayExpr;
-class BinaryExpr;
-class BlockStmt;
-class DefaultArgExpr;
-class NewArrayExpr;
-class StringExpr;
-class StructExpr;
 class SymbolScope;
-class SymbolExpr;
-class TaggedValueExpr;
 struct StructInitField;
 struct structarg_t;
 
@@ -71,8 +58,9 @@ class SemaContext;
 class ParseNode : public PoolObject
 {
   public:
-    explicit ParseNode(const token_pos_t& pos)
-      : pos_(pos)
+    explicit ParseNode(AstKind kind, const token_pos_t& pos)
+      : kind_(kind),
+        pos_(pos)
     {}
 
     virtual bool Bind(SemaContext& sc) {
@@ -90,6 +78,15 @@ class ParseNode : public PoolObject
         return pos_;
     }
 
+    AstKind kind() const { return kind_; }
+    bool is(AstKind k) const { return kind() == k; }
+
+    template <class T> T* as() {
+        if (T::is_a(this))
+            return reinterpret_cast<T*>(this);
+        return nullptr;
+    }
+
   protected:
     void error(const token_pos_t& pos, int number, ...);
 
@@ -99,6 +96,7 @@ class ParseNode : public PoolObject
     void error(int number, ...) = delete;
 
   protected:
+    AstKind kind_;
     token_pos_t pos_;
 };
 
@@ -113,8 +111,8 @@ enum FlowType {
 class Stmt : public ParseNode
 {
   public:
-    explicit Stmt(const token_pos_t& pos)
-      : ParseNode(pos)
+    explicit Stmt(AstKind kind, const token_pos_t& pos)
+      : ParseNode(kind, pos)
     {}
 
     void Emit(CodegenContext& cg);
@@ -130,7 +128,6 @@ class Stmt : public ParseNode
     virtual Stmt* GetLast() { return this; }
 
     virtual bool IsExprStmt() { return false; }
-    virtual BlockStmt* AsBlockStmt() { return nullptr; }
 
     FlowType flow_type() const { return flow_type_; }
     void set_flow_type(FlowType type) { flow_type_ = type; }
@@ -141,6 +138,7 @@ class Stmt : public ParseNode
     virtual void DoEmit(CodegenContext& cg) = 0;
 
   private:
+    AstKind kind_;
     FlowType flow_type_ = Flow_None;
 };
 
@@ -148,7 +146,7 @@ class ChangeScopeNode : public Stmt
 {
   public:
     explicit ChangeScopeNode(const token_pos_t& pos, SymbolScope* scope, const std::string& file)
-      : Stmt(pos),
+      : Stmt(AstKind::ChangeScopeNode, pos),
         scope_(scope),
         file_(new PoolString(file))
     {}
@@ -167,8 +165,11 @@ class ChangeScopeNode : public Stmt
 class StmtList : public Stmt
 {
   public:
+    explicit StmtList(AstKind kind, const token_pos_t& pos)
+      : Stmt(kind, pos)
+    {}
     explicit StmtList(const token_pos_t& pos)
-      : Stmt(pos)
+      : Stmt(AstKind::StmtList, pos)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -193,28 +194,31 @@ class ParseTree : public StmtList
 {
   public:
     explicit ParseTree(const token_pos_t& pos)
-      : StmtList(pos)
+      : StmtList(AstKind::ParseTree, pos)
     {}
 
     bool ResolveNames(SemaContext& sc);
     bool Analyze(SemaContext& sc) override;
     void Emit(CompileContext& cc, int compression_level);
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ParseTree; }
 };
 
 class BlockStmt : public StmtList
 {
   public:
     explicit BlockStmt(const token_pos_t& pos)
-      : StmtList(pos),
+      : StmtList(AstKind::BlockStmt, pos),
         scope_(nullptr)
     {}
 
     static BlockStmt* WrapStmt(Stmt* stmt);
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::BlockStmt; }
+
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
-    BlockStmt* AsBlockStmt() override { return this; }
 
     SymbolScope* scope() const { return scope_; }
     void set_scope(SymbolScope* scope) { scope_ = scope; }
@@ -227,7 +231,7 @@ class LoopControlStmt : public Stmt
 {
   public:
     explicit LoopControlStmt(const token_pos_t& pos, int token)
-      : Stmt(pos),
+      : Stmt(AstKind::LoopControlStmt, pos),
         token_(token)
     {
         set_flow_type(token_ == tBREAK ? Flow_Break : Flow_Continue);
@@ -236,6 +240,8 @@ class LoopControlStmt : public Stmt
     bool Analyze(SemaContext& sc) override { return true; }
     void DoEmit(CodegenContext& cg) override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::LoopControlStmt; }
 
     int token() const { return token_; }
 
@@ -247,7 +253,7 @@ class StaticAssertStmt : public Stmt
 {
   public:
     explicit StaticAssertStmt(const token_pos_t& pos, Expr* expr, PoolString* text)
-      : Stmt(pos),
+      : Stmt(AstKind::StaticAssertStmt, pos),
         expr_(expr),
         text_(text)
     {}
@@ -257,6 +263,8 @@ class StaticAssertStmt : public Stmt
     void DoEmit(CodegenContext&) override {}
     void ProcessUses(SemaContext& sc) override {}
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::StaticAssertStmt; }
+
   private:
     Expr* expr_;
     PoolString* text_;
@@ -265,8 +273,8 @@ class StaticAssertStmt : public Stmt
 class Decl : public Stmt
 {
   public:
-    Decl(const token_pos_t& pos, sp::Atom* name)
-      : Stmt(pos),
+    Decl(AstKind kind, const token_pos_t& pos, sp::Atom* name)
+      : Stmt(kind, pos),
         name_(name)
     {}
 
@@ -286,19 +294,7 @@ class Decl : public Stmt
     sp::Atom* name_;
 };
 
-class ErrorDecl final : public Decl
-{
-  public:
-    ErrorDecl()
-      : Decl(token_pos_t{}, nullptr)
-    {}
-
-    bool Bind(SemaContext& sc) override {
-        return false;
-    }
-    void DoEmit(CodegenContext&) override {}
-    void ProcessUses(SemaContext& sc) override {}
-};
+class BinaryExpr;
 
 class VarDecl : public Decl
 {
@@ -310,6 +306,8 @@ class VarDecl : public Decl
     bool Analyze(SemaContext& sc) override;
     void DoEmit(CodegenContext&) override;
     void ProcessUses(SemaContext& sc) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::VarDecl; }
 
     // Bind only the typeinfo.
     bool BindType(SemaContext& sc);
@@ -383,7 +381,7 @@ class EnumDecl : public Decl
   public:
     explicit EnumDecl(const token_pos_t& pos, int vclass, sp::Atom* label, sp::Atom* name,
                       int increment, int multiplier)
-      : Decl(pos, name),
+      : Decl(AstKind::EnumDecl, pos, name),
         vclass_(vclass),
         label_(label),
         increment_(increment),
@@ -393,6 +391,8 @@ class EnumDecl : public Decl
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::EnumDecl; }
 
     PoolList<EnumField>& fields() {
         return fields_;
@@ -430,13 +430,15 @@ class PstructDecl : public Decl
 {
   public:
     PstructDecl(const token_pos_t& pos, sp::Atom* name)
-      : Decl(pos, name),
+      : Decl(AstKind::PstructDecl, pos, name),
         ps_(nullptr)
     {}
 
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::PstructDecl; }
 
     PoolList<StructField>& fields() {
         return fields_;
@@ -459,13 +461,15 @@ class TypedefDecl : public Decl
 {
   public:
     explicit TypedefDecl(const token_pos_t& pos, sp::Atom* name, TypedefInfo* type)
-      : Decl(pos, name),
+      : Decl(AstKind::TypedefDecl, pos, name),
         type_(type)
     {}
 
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::TypedefDecl; }
 
   private:
     TypedefInfo* type_;
@@ -477,12 +481,14 @@ class TypesetDecl : public Decl
 {
   public:
     explicit TypesetDecl(const token_pos_t& pos, sp::Atom* name)
-      : Decl(pos, name)
+      : Decl(AstKind::TypesetDecl, pos, name)
     {}
 
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::TypesetDecl; }
 
     PoolList<TypedefInfo*>& types() {
         return types_;
@@ -497,18 +503,20 @@ class UsingDecl : public Decl
 {
   public:
     explicit UsingDecl(const token_pos_t& pos)
-      : Decl(pos, nullptr)
+      : Decl(AstKind::UsingDecl, pos, nullptr)
     {}
 
     bool EnterNames(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::UsingDecl; }
 };
 
 class Expr : public ParseNode
 {
   public:
-    explicit Expr(const token_pos_t& pos)
-      : ParseNode(pos)
+    explicit Expr(AstKind kind, const token_pos_t& pos)
+      : ParseNode(kind, pos)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -562,16 +570,6 @@ class Expr : public ParseNode
         ProcessUses(sc);
     }
 
-    // Casts.
-    virtual ArrayExpr* AsArrayExpr() { return nullptr; }
-    virtual BinaryExpr* AsBinaryExpr() { return nullptr; }
-    virtual DefaultArgExpr* AsDefaultArgExpr() {  return nullptr; }
-    virtual SymbolExpr* AsSymbolExpr() { return nullptr; }
-    virtual StructExpr* AsStructExpr() { return nullptr; }
-    virtual StringExpr* AsStringExpr() { return nullptr; }
-    virtual TaggedValueExpr* AsTaggedValueExpr() { return nullptr; }
-    virtual NewArrayExpr* AsNewArrayExpr() { return nullptr; }
-
   protected:
     virtual void DoEmit() = 0;
 
@@ -580,28 +578,11 @@ class Expr : public ParseNode
     bool lvalue_ = 0;
 };
 
-class ErrorExpr final : public Expr
-{
-  public:
-    ErrorExpr() : Expr(token_pos_t{})
-    {}
-
-    // Errors never bind.
-    bool Bind(SemaContext& sc) override {
-        return false;
-    }
-    bool Analyze(SemaContext& sc) override {
-        return false;
-    }
-    void DoEmit() override {}
-    void ProcessUses(SemaContext&) override {}
-};
-
 class IsDefinedExpr final : public Expr
 {
   public:
     IsDefinedExpr(const token_pos_t& pos, sp::Atom* name)
-      : Expr(pos),
+      : Expr(AstKind::IsDefinedExpr, pos),
         name_(name)
     {}
 
@@ -609,6 +590,8 @@ class IsDefinedExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void ProcessUses(SemaContext&) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::IsDefinedExpr; }
 
   private:
     cell value_ = 0;
@@ -619,7 +602,7 @@ class UnaryExpr final : public Expr
 {
   public:
     UnaryExpr(const token_pos_t& pos, int token, Expr* expr)
-      : Expr(pos),
+      : Expr(AstKind::UnaryExpr, pos),
         token_(token),
         expr_(expr)
     {}
@@ -633,6 +616,8 @@ class UnaryExpr final : public Expr
     bool HasSideEffects() override;
     void ProcessUses(SemaContext& sc) override;
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::UnaryExpr; }
+
   private:
     int token_;
     Expr* expr_;
@@ -642,7 +627,7 @@ class UnaryExpr final : public Expr
 class BinaryExprBase : public Expr
 {
   public:
-    BinaryExprBase(const token_pos_t& pos, int token, Expr* left, Expr* right);
+    BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right);
 
     bool Bind(SemaContext& sc) override;
     bool HasSideEffects() override;
@@ -674,9 +659,8 @@ class BinaryExpr final : public BinaryExprBase
     bool FoldToConstant() override;
     void DoEmit() override;
 
-    BinaryExpr* AsBinaryExpr() override {
-        return this;
-    }
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::BinaryExpr; }
+
     OpFunc oper() const {
         return oper_;
     }
@@ -705,13 +689,15 @@ class LogicalExpr final : public BinaryExprBase
 {
   public:
     LogicalExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
-      : BinaryExprBase(pos, token, left, right)
+      : BinaryExprBase(AstKind::LogicalExpr, pos, token, left, right)
     {}
 
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void EmitTest(bool jump_on_true, int target) override;
     void FlattenLogical(int token, std::vector<Expr*>* out) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::LogicalExpr; }
 };
 
 struct CompareOp
@@ -729,7 +715,7 @@ class ChainedCompareExpr final : public Expr
 {
   public:
     explicit ChainedCompareExpr(const token_pos_t& pos, Expr* first)
-      : Expr(pos),
+      : Expr(AstKind::ChainedCompareExpr, pos),
         first_(first)
     {}
 
@@ -744,6 +730,8 @@ class ChainedCompareExpr final : public Expr
     void ProcessUses(SemaContext& sc) override;
     void EmitTest(bool jump_on_true, int target) override;
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ChainedCompareExpr; }
+
   private:
     Expr* first_;
     PoolList<CompareOp> ops_;
@@ -753,7 +741,7 @@ class TernaryExpr final : public Expr
 {
   public:
     TernaryExpr(const token_pos_t& pos, Expr* first, Expr* second, Expr* third)
-      : Expr(pos),
+      : Expr(AstKind::TernaryExpr, pos),
         first_(first),
         second_(second),
         third_(third)
@@ -774,6 +762,8 @@ class TernaryExpr final : public Expr
     void ProcessUses(SemaContext& sc) override;
     void ProcessDiscardUses(SemaContext& sc) override;
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::TernaryExpr; }
+
   private:
     void EmitImpl(ke::Maybe<cell>* branch1, ke::Maybe<cell>* branch2);
 
@@ -787,7 +777,7 @@ class IncDecExpr : public Expr
 {
   public:
     IncDecExpr(const token_pos_t& pos, int token, Expr* expr)
-      : Expr(pos),
+      : Expr(AstKind::IncDecExpr, pos),
         token_(token),
         expr_(expr)
     {}
@@ -800,6 +790,8 @@ class IncDecExpr : public Expr
         return true;
     }
     void ProcessUses(SemaContext& sc) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::IncDecExpr; }
 
   protected:
     int token_;
@@ -831,7 +823,7 @@ class CastExpr final : public Expr
 {
   public:
     CastExpr(const token_pos_t& pos, int token, const TypenameInfo& type, Expr* expr)
-      : Expr(pos),
+      : Expr(AstKind::CastExpr, pos),
         token_(token),
         type_(type),
         expr_(expr)
@@ -845,6 +837,8 @@ class CastExpr final : public Expr
     }
     void ProcessUses(SemaContext& sc) override;
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::CastExpr; }
+
   private:
     int token_;
     TypenameInfo type_;
@@ -855,7 +849,7 @@ class SizeofExpr final : public Expr
 {
   public:
     SizeofExpr(const token_pos_t& pos, sp::Atom* ident, sp::Atom* field, int suffix_token, int array_levels)
-      : Expr(pos),
+      : Expr(AstKind::SizeofExpr, pos),
         ident_(ident),
         field_(field),
         suffix_token_(suffix_token),
@@ -866,6 +860,8 @@ class SizeofExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::SizeofExpr; }
 
   private:
     sp::Atom* ident_;
@@ -879,7 +875,7 @@ class SymbolExpr final : public Expr
 {
   public:
     SymbolExpr(const token_pos_t& pos, sp::Atom* name)
-      : Expr(pos),
+      : Expr(AstKind::SymbolExpr, pos),
         name_(name),
         sym_(nullptr)
     {
@@ -893,11 +889,10 @@ class SymbolExpr final : public Expr
     void ProcessUses(SemaContext& sc) override {}
     symbol* BindCallTarget(SemaContext& sc, int token, Expr** implicit_this) override;
     symbol* BindNewTarget(SemaContext& sc) override;
-    SymbolExpr* AsSymbolExpr() override {
-        return this;
-    }
 
     bool AnalyzeWithOptions(SemaContext& sc, bool allow_types);
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::SymbolExpr; }
 
     symbol* sym() const { return sym_; }
 
@@ -932,7 +927,7 @@ class CallExpr final : public Expr
 {
   public:
     CallExpr(const token_pos_t& pos, int token, Expr* target)
-      : Expr(pos),
+      : Expr(AstKind::CallExpr, pos),
         token_(token),
         target_(target)
     {}
@@ -945,6 +940,8 @@ class CallExpr final : public Expr
     bool HasSideEffects() override {
         return true;
     }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::CallExpr; }
 
     PoolList<ParsedArg>& args() {
         return args_;
@@ -964,8 +961,8 @@ class CallExpr final : public Expr
 class EmitOnlyExpr : public Expr
 {
   public:
-    explicit EmitOnlyExpr(const token_pos_t& pos)
-      : Expr(pos)
+    explicit EmitOnlyExpr(AstKind kind, const token_pos_t& pos)
+      : Expr(kind, pos)
     {}
 
     bool Bind(SemaContext& sc) override {
@@ -989,6 +986,8 @@ class CallUserOpExpr final : public EmitOnlyExpr
     void DoEmit() override;
     void ProcessUses(SemaContext& sc) override;
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::CallUserOpExpr; }
+
   private:
     UserOperation userop_;
     Expr* expr_;
@@ -999,11 +998,10 @@ class DefaultArgExpr final : public EmitOnlyExpr
   public:
     DefaultArgExpr(const token_pos_t& pos, arginfo* arg);
 
-    DefaultArgExpr* AsDefaultArgExpr() override {
-        return this;
-    }
     void DoEmit() override;
     void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::DefaultArgExpr; }
 
   private:
     arginfo* arg_;
@@ -1013,7 +1011,7 @@ class FieldAccessExpr final : public Expr
 {
   public:
     FieldAccessExpr(const token_pos_t& pos, int tok, Expr* base, sp::Atom* name)
-      : Expr(pos),
+      : Expr(AstKind::FieldAccessExpr, pos),
         token_(tok),
         base_(base),
         name_(name)
@@ -1029,6 +1027,8 @@ class FieldAccessExpr final : public Expr
     void ProcessUses(SemaContext& sc) override;
 
     bool AnalyzeWithOptions(SemaContext& sc, bool from_call);
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::FieldAccessExpr; }
 
   private:
     bool AnalyzeStaticAccess();
@@ -1046,7 +1046,7 @@ class IndexExpr final : public Expr
 {
   public:
     IndexExpr(const token_pos_t& pos, Expr* base, Expr* expr)
-      : Expr(pos),
+      : Expr(AstKind::IndexExpr, pos),
         base_(base),
         expr_(expr)
     {}
@@ -1063,6 +1063,8 @@ class IndexExpr final : public Expr
         return base_->HasSideEffects() || expr_->HasSideEffects();
     }
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::IndexExpr; }
+
   private:
     Expr* base_;
     Expr* expr_;
@@ -1076,6 +1078,8 @@ class RvalueExpr final : public EmitOnlyExpr
     void DoEmit() override;
     void ProcessUses(SemaContext& sc) override;
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::RvalueExpr; }
+
   private:
     Expr* expr_;
 };
@@ -1084,7 +1088,7 @@ class CommaExpr final : public Expr
 {
   public:
     explicit CommaExpr(const token_pos_t& pos)
-      : Expr(pos)
+      : Expr(AstKind::CommaExpr, pos)
     {}
 
     PoolList<Expr*>& exprs() {
@@ -1101,6 +1105,8 @@ class CommaExpr final : public Expr
         return has_side_effects_;
     }
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::CommaExpr; }
+
   private:
     PoolList<Expr*> exprs_;
     bool has_side_effects_ = false;
@@ -1110,7 +1116,7 @@ class ThisExpr final : public Expr
 {
   public:
     explicit ThisExpr(const token_pos_t& pos)
-      : Expr(pos),
+      : Expr(AstKind::ThisExpr, pos),
         sym_(nullptr)
     {}
 
@@ -1118,6 +1124,8 @@ class ThisExpr final : public Expr
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void ProcessUses(SemaContext&) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ThisExpr; }
 
   private:
     symbol* sym_;
@@ -1127,20 +1135,21 @@ class NullExpr final : public Expr
 {
   public:
     explicit NullExpr(const token_pos_t& pos)
-      : Expr(pos)
+      : Expr(AstKind::NullExpr, pos)
     {}
 
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void ProcessUses(SemaContext&) override {}
-};
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::NullExpr; }
+};
 
 class TaggedValueExpr : public Expr
 {
   public:
     TaggedValueExpr(const token_pos_t& pos, int tag, cell value)
-      : Expr(pos),
+      : Expr(AstKind::TaggedValueExpr, pos),
         tag_(tag),
         value_(value)
     {}
@@ -1148,9 +1157,8 @@ class TaggedValueExpr : public Expr
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void ProcessUses(SemaContext&) override {}
-    TaggedValueExpr* AsTaggedValueExpr() override {
-        return this;
-    }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::TaggedValueExpr; }
 
     int tag() const {
         return tag_;
@@ -1184,16 +1192,15 @@ class StringExpr final : public Expr
 {
   public:
     StringExpr(const token_pos_t& pos, const char* str, size_t len)
-      : Expr(pos),
+      : Expr(AstKind::StringExpr, pos),
         text_(new PoolString(str, len))
     {}
 
     bool Analyze(SemaContext& sc) override;
     void DoEmit() override;
     void ProcessUses(SemaContext&) override {}
-    StringExpr* AsStringExpr() override {
-        return this;
-    }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::StringExpr; }
 
     PoolString* text() const {
         return text_;
@@ -1207,7 +1214,7 @@ class NewArrayExpr final : public Expr
 {
   public:
     explicit NewArrayExpr(const token_pos_t& pos, const TypenameInfo& ur)
-      : Expr(pos),
+      : Expr(AstKind::NewArrayExpr, pos),
         type_(ur)
     {}
 
@@ -1217,9 +1224,7 @@ class NewArrayExpr final : public Expr
     void DoEmit() override;
     void ProcessUses(SemaContext& sc) override;
 
-    NewArrayExpr* AsNewArrayExpr() override {
-        return this;
-    }
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::NewArrayExpr; }
 
     int tag() {
         return type_.tag();
@@ -1245,7 +1250,7 @@ class ArrayExpr final : public Expr
 {
   public:
     explicit ArrayExpr(const token_pos_t& pos)
-      : Expr(pos)
+      : Expr(AstKind::ArrayExpr, pos)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1253,9 +1258,7 @@ class ArrayExpr final : public Expr
     void DoEmit() override;
     void ProcessUses(SemaContext&) override {}
 
-    ArrayExpr* AsArrayExpr() override {
-        return this;
-    }
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ArrayExpr; }
 
     PoolList<Expr*>& exprs() {
         return exprs_;
@@ -1284,7 +1287,7 @@ class StructExpr final : public Expr
 {
   public:
     explicit StructExpr(const token_pos_t& pos)
-        : Expr(pos)
+      : Expr(AstKind::StructExpr, pos)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1295,9 +1298,8 @@ class StructExpr final : public Expr
     void DoEmit() override {
         assert(false);
     }
-    StructExpr* AsStructExpr() override {
-        return this;
-    }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::StructExpr; }
 
     PoolList<StructInitField>& fields() {
         return fields_;
@@ -1311,7 +1313,7 @@ class IfStmt : public Stmt
 {
   public:
     explicit IfStmt(const token_pos_t& pos, Expr* cond, Stmt* on_true, Stmt* on_false)
-      : Stmt(pos),
+      : Stmt(AstKind::IfStmt, pos),
         cond_(cond),
         on_true_(on_true),
         on_false_(on_false)
@@ -1321,6 +1323,8 @@ class IfStmt : public Stmt
     bool Analyze(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
     void ProcessUses(SemaContext& sc) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::IfStmt; }
 
   private:
     Expr* cond_;
@@ -1332,7 +1336,7 @@ class ExprStmt : public Stmt
 {
   public:
     ExprStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(pos),
+      : Stmt(AstKind::ExprStmt, pos),
         expr_(expr)
     {}
 
@@ -1345,6 +1349,8 @@ class ExprStmt : public Stmt
         expr_->ProcessDiscardUses(sc);
     }
 
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ExprStmt; }
+
   private:
     Expr* expr_;
 };
@@ -1353,7 +1359,7 @@ class ReturnStmt : public Stmt
 {
   public:
     explicit ReturnStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(pos),
+      : Stmt(AstKind::ReturnStmt, pos),
         expr_(expr)
     {
         set_flow_type(Flow_Return);
@@ -1363,6 +1369,8 @@ class ReturnStmt : public Stmt
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ReturnStmt; }
 
   private:
     bool CheckArrayReturn(SemaContext& sc);
@@ -1377,7 +1385,7 @@ class AssertStmt : public Stmt
 {
   public:
     explicit AssertStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(pos),
+      : Stmt(AstKind::AssertStmt, pos),
         expr_(expr)
     {}
 
@@ -1388,6 +1396,8 @@ class AssertStmt : public Stmt
     void ProcessUses(SemaContext& sc) override {
         expr_->MarkAndProcessUses(sc);
     }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::AssertStmt; }
 
   private:
     Expr* expr_;
@@ -1397,7 +1407,7 @@ class DeleteStmt : public Stmt
 {
   public:
     explicit DeleteStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(pos),
+      : Stmt(AstKind::DeleteStmt, pos),
         expr_(expr)
     {}
 
@@ -1408,6 +1418,8 @@ class DeleteStmt : public Stmt
     void ProcessUses(SemaContext& sc) override {
         expr_->MarkAndProcessUses(sc);
     }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::DeleteStmt; }
 
   private:
     Expr* expr_;
@@ -1418,7 +1430,7 @@ class ExitStmt : public Stmt
 {
   public:
     explicit ExitStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(pos),
+      : Stmt(AstKind::ExitStmt, pos),
         expr_(expr)
     {}
 
@@ -1426,6 +1438,8 @@ class ExitStmt : public Stmt
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ExitStmt; }
 
   private:
     Expr* expr_;
@@ -1435,7 +1449,7 @@ class DoWhileStmt : public Stmt
 {
   public:
     explicit DoWhileStmt(const token_pos_t& pos, int token, Expr* cond, Stmt* body)
-      : Stmt(pos),
+      : Stmt(AstKind::DoWhileStmt, pos),
         token_(token),
         cond_(cond),
         body_(body)
@@ -1445,6 +1459,8 @@ class DoWhileStmt : public Stmt
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::DoWhileStmt; }
 
   private:
     int token_;
@@ -1458,7 +1474,7 @@ class ForStmt : public Stmt
 {
   public:
     explicit ForStmt(const token_pos_t& pos, Stmt* init, Expr* cond, Expr* advance, Stmt* body)
-      : Stmt(pos),
+      : Stmt(AstKind::ForStmt, pos),
         scope_(nullptr),
         init_(init),
         cond_(cond),
@@ -1470,6 +1486,8 @@ class ForStmt : public Stmt
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ForStmt; }
 
   private:
     SymbolScope* scope_;
@@ -1486,7 +1504,7 @@ class SwitchStmt : public Stmt
 {
   public:
     explicit SwitchStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(pos),
+      : Stmt(AstKind::SwitchStmt, pos),
         expr_(expr),
         default_case_(nullptr)
     {}
@@ -1495,6 +1513,8 @@ class SwitchStmt : public Stmt
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::SwitchStmt; }
 
     void AddCase(PoolList<Expr*>&& exprs, Stmt* stmt) {
         cases_.emplace_back(std::move(exprs), stmt);
@@ -1516,13 +1536,15 @@ class PragmaUnusedStmt : public Stmt
 {
   public:
     PragmaUnusedStmt(const token_pos_t& pos)
-      : Stmt(pos)
+      : Stmt(AstKind::PragmaUnusedStmt, pos)
     {}
 
     bool Bind(SemaContext& sc) override;
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override {}
     void DoEmit(CodegenContext& cg) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::PragmaUnusedStmt; }
 
     PoolList<sp::Atom*>& names() { return names_; }
 
@@ -1628,11 +1650,11 @@ class FunctionDecl : public Decl
 {
   public:
     explicit FunctionDecl(const token_pos_t& pos, sp::Atom* atom, FunctionInfo* info)
-      : Decl(pos, atom),
+      : Decl(AstKind::FunctionDecl, pos, atom),
         info_(info)
     {}
     explicit FunctionDecl(const token_pos_t& pos, FunctionInfo* info)
-      : Decl(pos, info->name()),
+      : Decl(AstKind::FunctionDecl, pos, info->name()),
         info_(info)
     {}
 
@@ -1641,6 +1663,8 @@ class FunctionDecl : public Decl
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::FunctionDecl; }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
 
@@ -1664,7 +1688,7 @@ class EnumStructDecl : public Decl
 {
   public:
     explicit EnumStructDecl(const token_pos_t& pos, sp::Atom* name)
-      : Decl(pos, name)
+      : Decl(AstKind::EnumStructDecl, pos, name)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -1672,6 +1696,8 @@ class EnumStructDecl : public Decl
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::EnumStructDecl; }
 
     PoolList<FunctionDecl*>& methods() { return methods_; }
     PoolList<EnumStructField>& fields() { return fields_; }
@@ -1701,7 +1727,7 @@ class MethodmapDecl : public Decl
 {
   public:
     explicit MethodmapDecl(const token_pos_t& pos, sp::Atom* name, bool nullable, sp::Atom* extends)
-      : Decl(pos, name),
+      : Decl(AstKind::MethodmapDecl, pos, name),
         nullable_(nullable),
         extends_(extends)
     {}
@@ -1711,6 +1737,8 @@ class MethodmapDecl : public Decl
     bool Analyze(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void DoEmit(CodegenContext& cg) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::MethodmapDecl; }
 
     PoolList<MethodmapProperty*>& properties() { return properties_; }
     PoolList<MethodmapMethod*>& methods() { return methods_; }

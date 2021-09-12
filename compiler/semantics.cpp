@@ -102,7 +102,7 @@ Decl::Analyze(SemaContext& sc)
 
 VarDecl::VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
                  bool is_public, bool is_static, bool is_stock, Expr* initializer)
- : Decl(pos, name),
+ : Decl(AstKind::VarDecl, pos, name),
    type_(type),
    vclass_(vclass),
    is_public_(is_public),
@@ -150,7 +150,7 @@ VarDecl::Analyze(SemaContext& sc)
 
     if (init_ && vclass_ != sLOCAL) {
         if (!init_rhs()->EvalConst(nullptr, nullptr)) {
-            if (vclass_ == sARGUMENT && init_rhs()->AsSymbolExpr())
+            if (vclass_ == sARGUMENT && init_rhs()->is(AstKind::SymbolExpr))
                 return true;
             error(init_rhs()->pos(), 8);
         }
@@ -164,7 +164,7 @@ VarDecl::AnalyzePstruct()
     if (!init_)
         return true;
 
-    auto init = init_->right()->AsStructExpr();
+    auto init = init_->right()->as<StructExpr>();
     assert(init); // If we parse struct initializers as a normal global, this check will need to be
                   // soft.
     auto type = gTypes.find(sym_->tag);
@@ -211,14 +211,14 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
 
     visited->at(arg->index) = true;
 
-    if (auto expr = field.value->AsStringExpr()) {
+    if (auto expr = field.value->as<StringExpr>()) {
         if (arg->type.ident != iREFARRAY) {
             error(expr->pos(), 48);
             return false;
         }
         if (arg->type.tag() != pc_tag_string)
             error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag()));
-    } else if (auto expr = field.value->AsTaggedValueExpr()) {
+    } else if (auto expr = field.value->as<TaggedValueExpr>()) {
         if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
             return false;
@@ -232,7 +232,7 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
         {
             matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
         }
-    } else if (auto expr = field.value->AsSymbolExpr()) {
+    } else if (auto expr = field.value->as<SymbolExpr>()) {
         auto sym = expr->sym();
         if (arg->type.ident == iVARIABLE) {
             if (sym->ident != iVARIABLE) {
@@ -411,7 +411,7 @@ Expr::AnalyzeForTest(SemaContext& sc)
 }
 
 RvalueExpr::RvalueExpr(Expr* expr)
-  : EmitOnlyExpr(expr->pos()),
+  : EmitOnlyExpr(AstKind::RvalueExpr, expr->pos()),
     expr_(expr)
 {
     assert(expr_->lvalue());
@@ -549,8 +549,8 @@ IncDecExpr::ProcessUses(SemaContext& sc)
     expr_->MarkAndProcessUses(sc);
 }
 
-BinaryExprBase::BinaryExprBase(const token_pos_t& pos, int token, Expr* left, Expr* right)
-  : Expr(pos),
+BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right)
+  : Expr(kind, pos),
     token_(token),
     left_(left),
     right_(right)
@@ -578,7 +578,7 @@ BinaryExprBase::ProcessUses(SemaContext& sc)
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
-  : BinaryExprBase(pos, token, left, right)
+  : BinaryExprBase(AstKind::BinaryExpr, pos, token, left, right)
 {
     oper_ = TokenToOpFunc(token_);
 }
@@ -1488,7 +1488,7 @@ FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
 {
     AutoErrorPos aep(pos_);
 
-    if (SymbolExpr* expr = base_->AsSymbolExpr()) {
+    if (auto expr = base_->as<SymbolExpr>()) {
         if (!expr->AnalyzeWithOptions(sc, true))
             return false;
     } else {
@@ -1836,7 +1836,7 @@ SizeofExpr::Analyze(SemaContext& sc)
 }
 
 CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
-  : EmitOnlyExpr(expr->pos()),
+  : EmitOnlyExpr(AstKind::CallUserOpExpr, expr->pos()),
     userop_(userop),
     expr_(expr)
 {
@@ -1851,7 +1851,7 @@ CallUserOpExpr::ProcessUses(SemaContext& sc)
 }
 
 DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, arginfo* arg)
-  : EmitOnlyExpr(pos),
+  : EmitOnlyExpr(AstKind::DefaultArgExpr, pos),
     arg_(arg)
 {
     // Leave val bogus, it doesn't participate in anything, and we can't
@@ -1976,7 +1976,7 @@ CallExpr::Analyze(SemaContext& sc)
         }
 
         Expr* expr = argv_[argidx].expr;
-        if (expr->AsDefaultArgExpr() && arg.type.ident == iVARIABLE) {
+        if (expr->as<DefaultArgExpr>() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
             if (find_userop(sc, nullptr, arg.def->tag, arg.type.tag(), 2, nullptr, &userop))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
@@ -2384,7 +2384,7 @@ TestSymbols(SymbolScope* root, int testconst)
 BlockStmt*
 BlockStmt::WrapStmt(Stmt* stmt)
 {
-    if (BlockStmt* block = stmt->AsBlockStmt())
+    if (BlockStmt* block = stmt->as<BlockStmt>())
         return block;
     BlockStmt* block = new BlockStmt(stmt->pos());
     block->stmts().emplace_back(stmt);
@@ -3029,7 +3029,7 @@ FunctionInfo::CheckReturnUsage()
 
     // We should always have a block statement for the body. If no '{' was
     // detected it would have been an error in the parsing pass.
-    auto block = body_->AsBlockStmt();
+    auto block = body_->as<BlockStmt>();
     assert(block);
 
     // Synthesize a return statement.
@@ -3277,7 +3277,7 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
     arg->def = new DefaultArg();
     arg->def->tag = decl->type().tag();
 
-    if (SymbolExpr* expr = decl->init_rhs()->AsSymbolExpr()) {
+    if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         symbol* sym = expr->sym();
         assert(sym->vclass == sGLOBAL);
 

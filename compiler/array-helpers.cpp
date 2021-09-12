@@ -190,7 +190,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
         return;
     }
 
-    if (StringExpr* expr = init->AsStringExpr()) {
+    if (StringExpr* expr = init->as<StringExpr>()) {
         if (rank != type_->numdim() - 1) {
             // This is an error, but we'll let it get reported during semantic
             // analysis.
@@ -200,7 +200,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
         return;
     }
 
-    ArrayExpr* expr = init->AsArrayExpr();
+    ArrayExpr* expr = init->as<ArrayExpr>();
     if (!expr) {
         // This is an error, but we just continue anyway. We'll let semantic
         // analysis report a more complete error.
@@ -328,7 +328,7 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
     if (!expr->Bind(sc_))
         return false;
 
-    if (auto sym_expr = expr->AsSymbolExpr()) {
+    if (auto sym_expr = expr->as<SymbolExpr>()) {
         // Special case this:
         //   enum X { ... };
         //   int blah[X];
@@ -490,7 +490,7 @@ FixedArrayValidator::CheckArgument(Expr* init)
 {
     // As a special exception, array arguments can be initialized with a global
     // reference.
-    SymbolExpr* expr = init->AsSymbolExpr();
+    SymbolExpr* expr = init->as<SymbolExpr>();
     if (!expr)
         return ValidateRank(0, init);
 
@@ -536,7 +536,7 @@ bool
 FixedArrayValidator::ValidateRank(int rank, Expr* init)
 {
     if (rank != type_.numdim() - 1) {
-        ArrayExpr* array = init->AsArrayExpr();
+        ArrayExpr* array = init->as<ArrayExpr>();
         if (!array) {
             error(init->pos(), 47);
             return false;
@@ -565,7 +565,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
        return true;
     }
 
-    if (StringExpr* str = init->AsStringExpr()) {
+    if (StringExpr* str = init->as<StringExpr>()) {
         if (type_.tag() != pc_tag_string) {
             error(init->pos(), 134, gTypes.find(pc_tag_string)->prettyName(),
                   gTypes.find(type_.tag())->prettyName());
@@ -587,7 +587,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
                      ? char_array_cells(type_.dim[rank])
                      : type_.dim[rank];
 
-    ArrayExpr* array = init->AsArrayExpr();
+    ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
         // Detect and rewrite a very common anti-pattern for backwards
         // compatibility:
@@ -627,7 +627,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
 
         AutoErrorPos pos(expr->pos());
 
-        if (expr->AsStringExpr()) {
+        if (expr->as<StringExpr>()) {
             error(47);
             continue;
         }
@@ -675,7 +675,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
 {
     assert(type_.dim[type_.numdim() - 1] > 0);
 
-    ArrayExpr* array = init->AsArrayExpr();
+    ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
         error(init->pos(), 47);
         return false;
@@ -813,7 +813,7 @@ CheckArrayDeclaration(SemaContext& sc, VarDecl* decl)
         return false;
 
     if (type.is_new && type.isCharArray()) {
-        if (init->AsStringExpr())
+        if (init->as<StringExpr>())
             return true;
     }
 
@@ -822,7 +822,7 @@ CheckArrayDeclaration(SemaContext& sc, VarDecl* decl)
         return false;
     }
 
-    NewArrayExpr* ctor = init->AsNewArrayExpr();
+    NewArrayExpr* ctor = init->as<NewArrayExpr>();
     if (!ctor) {
         error(init->pos(), 160);
         return false;
@@ -920,7 +920,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
         iv_.resize(start + type_.dim[rank]);
 
-        ArrayExpr* array = init ? init->AsArrayExpr() : nullptr;
+        ArrayExpr* array = init ? init->as<ArrayExpr>() : nullptr;
         assert(!array || (array->exprs().size() == size_t(type_.dim[rank])));
 
         for (int i = 0; i < type_.dim[rank]; i++) {
@@ -942,7 +942,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
     ke::Maybe<cell> prev1, prev2;
     if (!init) {
         assert(type_.dim[rank]);
-    } else if (ArrayExpr* array = init->AsArrayExpr()) {
+    } else if (ArrayExpr* array = init->as<ArrayExpr>()) {
         PoolList<symbol*>* field_list = nullptr;
         PoolList<symbol*>::iterator field_iter;
         if (es_) {
@@ -952,7 +952,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
         }
 
         for (const auto& item : array->exprs()) {
-            if (StringExpr* expr = item->AsStringExpr()) {
+            if (StringExpr* expr = item->as<StringExpr>()) {
                 // Substrings can only appear in an enum struct. Normal 2D
                 // cases would flow through the outer string check.
                 assert(es_);
@@ -963,7 +963,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 assert(field);
 
                 EmitPadding(field->dim.array.length, field->x.tags.index, emitted, false, {}, {});
-            } else if (ArrayExpr* expr = item->AsArrayExpr()) {
+            } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
                 assert(es_);
@@ -982,7 +982,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
             }
         }
         ellipses = array->ellipses();
-    } else if (StringExpr* expr = init->AsStringExpr()) {
+    } else if (StringExpr* expr = init->as<StringExpr>()) {
         AddString(expr);
     } else {
         assert(false);

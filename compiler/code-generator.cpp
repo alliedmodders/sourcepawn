@@ -264,9 +264,9 @@ VarDecl::EmitLocal()
 
         markexpr(sLDECL, name()->chars(), sym_->addr());
 
-        if (NewArrayExpr* ctor = init_rhs()->AsNewArrayExpr()) {
+        if (NewArrayExpr* ctor = init_rhs()->as<NewArrayExpr>()) {
             ctor->Emit();
-        } else if (StringExpr* ctor = init_rhs()->AsStringExpr()) {
+        } else if (StringExpr* ctor = init_rhs()->as<StringExpr>()) {
             auto queue_size = gDataQueue.size();
             auto str_addr = gDataQueue.dat_address();
             gDataQueue.Add(ctor->text()->chars(), ctor->text()->length());
@@ -300,15 +300,15 @@ VarDecl::EmitPstruct()
 
     sym_->codeaddr = code_idx;
 
-    auto init = init_rhs()->AsStructExpr();
+    auto init = init_rhs()->as<StructExpr>();
     for (const auto& field : init->fields()) {
         auto arg = pstructs_getarg(ps, field.name);
-        if (auto expr = field.value->AsStringExpr()) {
+        if (auto expr = field.value->as<StringExpr>()) {
             values[arg->index] = gDataQueue.dat_address();
             gDataQueue.Add(expr->text()->chars(), expr->text()->length());
-        } else if (auto expr = field.value->AsTaggedValueExpr()) {
+        } else if (auto expr = field.value->as<TaggedValueExpr>()) {
             values[arg->index] = expr->value();
-        } else if (auto expr = field.value->AsSymbolExpr()) {
+        } else if (auto expr = field.value->as<SymbolExpr>()) {
             values[arg->index] = expr->sym()->addr();
         } else {
             assert(false);
@@ -971,7 +971,7 @@ CallExpr::DoEmit()
 
         expr->Emit();
 
-        if (expr->AsDefaultArgExpr()) {
+        if (expr->as<DefaultArgExpr>()) {
             pushreg(sPRI);
             continue;
         }
