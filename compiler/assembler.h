@@ -30,7 +30,7 @@
 #include "shared/byte-buffer.h"
 #include "shared/string-pool.h"
 
-void assemble(CompileContext& cc, CodegenContext& cg, const char* outname,
+void assemble(CompileContext& cc, CodeGenerator& cg, const char* outname,
               int compression_level);
 
 struct BackpatchEntry {
@@ -43,7 +43,7 @@ class AsmReader;
 class Assembler
 {
   public:
-    explicit Assembler(CompileContext& cc, CodegenContext& cg);
+    explicit Assembler(CompileContext& cc, CodeGenerator& cg);
 
     void Assemble(sp::SmxByteBuffer* buffer);
 
@@ -58,7 +58,7 @@ class Assembler
 
   private:
     CompileContext& cc_;
-    CodegenContext& cg_;
+    CodeGenerator& cg_;
     std::vector<cell> code_buffer_;
     std::vector<cell> data_buffer_;
     std::vector<BackpatchEntry> backpatch_list_;

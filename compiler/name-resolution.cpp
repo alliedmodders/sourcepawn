@@ -714,7 +714,7 @@ ForStmt::Bind(SemaContext& sc)
 
     ke::Maybe<AutoEnterScope> enter_scope;
     if (init_) {
-        if (!init_->IsExprStmt()) {
+        if (!init_->is(AstKind::ExprStmt)) {
             enter_scope.init(sc, sLOCAL);
             scope_ = sc.scope();
         }

@@ -86,13 +86,6 @@ StmtList::Analyze(SemaContext& sc)
     return ok;
 }
 
-void
-StmtList::DoEmit(CodegenContext& cg)
-{
-    for (const auto& stmt : stmts_)
-        stmt->Emit(cg);
-}
-
 bool
 Decl::Analyze(SemaContext& sc)
 {
