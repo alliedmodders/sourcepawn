@@ -43,6 +43,7 @@
 #include <amtl/experimental/am-argparser.h>
 
 #include "array-helpers.h"
+#include "assembler.h"
 #include "code-generator.h"
 #include "compile-options.h"
 #include "lexer-inl.h"
@@ -273,9 +274,14 @@ cleanup:
     cc.set_shutting_down();
     cc.reports()->DumpErrorReport(true);
 
+    CodeGenerator cg(cc, tree);
+    if (tree && compile_ok)
+        cg.Generate();
+
     // Write the binary file.
-    if (!(opt_assembly.value() || sc_syntax_only) && compile_ok && jmpcode == 0)
-        tree->Emit(cc, opt_compression.value());
+    if (!(opt_assembly.value() || sc_syntax_only) && compile_ok && jmpcode == 0) {
+        assemble(cc, cg, binfname, opt_compression.value());
+    }
 
     if (compile_ok && jmpcode == 0 && opt_showincludes.value()) {
         for (const auto& name : cc.included_files())
@@ -296,7 +302,7 @@ cleanup:
         if (pc_stksize_override)
             pc_stksize = pc_stksize_override;
 
-        if (verbosity >= 2) {
+        if (verbosity >= 1) {
             printf("Code size:         %8ld bytes\n", (long)code_idx);
             printf("Data size:         %8ld bytes\n", (long)glb_declared * sizeof(cell));
             printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));

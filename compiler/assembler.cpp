@@ -777,7 +777,7 @@ struct variable_type_t {
 class RttiBuilder
 {
   public:
-    RttiBuilder(CodegenContext& cg, SmxNameTable* names);
+    RttiBuilder(CodeGenerator& cg, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
     void add_method(symbol* sym);
@@ -806,7 +806,7 @@ class RttiBuilder
     void build_debuginfo();
 
   private:
-    CodegenContext& cg_;
+    CodeGenerator& cg_;
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> data_;
@@ -830,7 +830,7 @@ class RttiBuilder
     TypeIdCache typeid_cache_;
 };
 
-RttiBuilder::RttiBuilder(CodegenContext& cg, SmxNameTable* names)
+RttiBuilder::RttiBuilder(CodeGenerator& cg, SmxNameTable* names)
  : cg_(cg),
    names_(names)
 {
@@ -1439,7 +1439,7 @@ typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
 typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
 typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
-Assembler::Assembler(CompileContext& cc, CodegenContext& cg)
+Assembler::Assembler(CompileContext& cc, CodeGenerator& cg)
   : cc_(cc),
     cg_(cg)
 {
@@ -1645,7 +1645,7 @@ splat_to_binary(const char* binfname, void* bytes, size_t size)
 }
 
 void
-assemble(CompileContext& cc, CodegenContext& cg, const char* binfname, int compression_level)
+assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compression_level)
 {
     Assembler assembler(cc, cg);
 
