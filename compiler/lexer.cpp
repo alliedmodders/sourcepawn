@@ -48,11 +48,9 @@
 #include <sp_typeutil.h>
 #include "array-helpers.h"
 #include "compile-options.h"
-#include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
 #include "lexer-inl.h"
-#include "output-buffer.h"
 #include "parser.h"
 #include "sc.h"
 #include "sci18n.h"
@@ -2701,17 +2699,6 @@ isoctal(char c)
     return (c >= '0' && c <= '7');
 }
 
-/*  getlabel
- *
- *  Returns te next internal label number. The global variable sc_labnum is
- *  initialized to zero.
- */
-int
-getlabel(void)
-{
-    return sc_labnum++;
-}
-
 /*  itoh
  *
  *  Converts a number to a hexadecimal string and returns a pointer to that
@@ -2852,19 +2839,6 @@ declare_handle_intrinsics()
 DefaultArg::~DefaultArg()
 {
     delete array;
-}
-
-int
-is_variadic(symbol* sym)
-{
-    assert(sym->ident == iFUNCTN);
-    arginfo* arg = &sym->function()->args[0];
-    while (arg->type.ident) {
-        if (arg->type.ident == iVARARGS)
-            return TRUE;
-        arg++;
-    }
-    return FALSE;
 }
 
 bool

@@ -893,8 +893,10 @@ FunctionInfo::Bind(SemaContext& outer_sc)
         sym_->is_static = true;
     if (is_stock_)
         sym_->stock = true;
-    if (is_native_)
+    if (is_native_) {
         sym_->native = true;
+        sym_->setAddr(-1);
+    }
 
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {

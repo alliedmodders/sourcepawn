@@ -65,14 +65,14 @@ markusage(symbol* sym, int usage)
     /* check if (global) reference must be added to the symbol */
     if ((usage & (uREAD | uWRITTEN)) != 0) {
         /* only do this for global symbols */
-        if (sym->vclass == sGLOBAL && curfunc)
-            curfunc->add_reference_to(sym);
+        auto& cc = CompileContext::get();
+        if (sym->vclass == sGLOBAL && cc.sema() && cc.sema()->func())
+            cc.sema()->func()->add_reference_to(sym);
     }
 }
 
 FunctionData::FunctionData()
- : funcid(0),
-   array(nullptr),
+ : array(nullptr),
    node(nullptr),
    forward(nullptr),
    alias(nullptr)
@@ -83,7 +83,7 @@ FunctionData::FunctionData()
 
 symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int symtag)
  : next(nullptr),
-   codeaddr(code_idx),
+   codeaddr(0),
    vclass((char)symvclass),
    ident((char)symident),
    tag(symtag),
@@ -184,6 +184,20 @@ symbol::must_return_value() const
     assert(ident == iFUNCTN);
     return retvalue_used || (explicit_return_type && tag != pc_tag_void);
 }
+
+bool
+symbol::is_variadic() const
+{
+    assert(ident == iFUNCTN);
+    arginfo* arg = &function()->args[0];
+    while (arg->type.ident) {
+        if (arg->type.ident == iVARARGS)
+            return true;
+        arg++;
+    }
+    return false;
+}
+
 
 symbol*
 NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,

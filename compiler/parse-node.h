@@ -38,7 +38,7 @@ struct UserOperation
     UserOperation() {}
 
     symbol* sym = nullptr;
-    void (*oper)() = nullptr;
+    int oper = 0;
     int paramspassed;
     bool savepri;
     bool savealt;
@@ -641,8 +641,8 @@ class BinaryExpr final : public BinaryExprBase
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::BinaryExpr; }
 
-    OpFunc oper() const {
-        return oper_;
+    int oper() const {
+        return oper_tok_;
     }
     const UserOperation& userop() const {
         return userop_;
@@ -662,9 +662,9 @@ class BinaryExpr final : public BinaryExprBase
   private:
     UserOperation userop_;
     UserOperation assignop_;
-    OpFunc oper_ = nullptr;
     cell array_copy_length_ = 0;
     bool initializer_ = false;
+    int oper_tok_ = 0;
 };
 
 class LogicalExpr final : public BinaryExprBase
@@ -687,7 +687,7 @@ struct CompareOp
     token_pos_t pos;
     int token;
     Expr* expr;
-    OpFunc oper;
+    int oper_tok;
     UserOperation userop = {};
 };
 

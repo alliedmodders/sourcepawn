@@ -29,7 +29,6 @@ struct CompileOptions {
     std::vector<std::string> include_paths;
     int tabsize = 8;
     bool require_newdecls = false;
-    bool asmfile = false;
     bool warnings_are_errors = false;
     bool use_stderr = false;
 };

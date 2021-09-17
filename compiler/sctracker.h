@@ -133,46 +133,6 @@ LayoutSpec deduce_layout_spec_by_name(SemaContext& sc, sp::Atom* name);
 const char* layout_spec_name(LayoutSpec spec);
 bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 
-enum class AllocScopeKind {
-  Normal,
-  Temp
-};
-
-/**
- * Heap functions
- */
-void pushheaplist(AllocScopeKind kind = AllocScopeKind::Normal);
-void popheaplist(bool codegen);
-int markheap(int type, int size, AllocScopeKind kind);
-
-// Remove the current heap scope, requiring that all alocations within be
-// static. Then return that static size.
-cell_t pop_static_heaplist();
-
-/**
- * Stack functions
- */
-void pushstacklist();
-void popstacklist(bool codegen);
-int markstack(int type, int size);
-int stack_scope_id();
-int heap_scope_id();
-bool has_stack_or_heap_scopes();
-
-/**
- * Generates code to free mem usage, but does not pop the list.  
- *  This is used for code like dobreak()/docont()/doreturn().
- * stop_id is the list at which to stop generating.
- */
-void genstackfree(int stop_id);
-void genheapfree(int stop_id);
-
-/**
- * Resets a mem list by freeing everything
- */
-void resetstacklist();
-void resetheaplist();
-
 /**
  * Method maps.
  */

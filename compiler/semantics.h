@@ -33,6 +33,8 @@ class SemaContext
       : cc_(CompileContext::get()),
         func_(nullptr)
     {
+        cc_prev_sc_ = cc_.sema();
+        cc_.set_sema(this);
     }
     SemaContext(SemaContext& parent, symbol* func, FunctionInfo* func_node)
       : cc_(parent.cc_),
@@ -40,9 +42,13 @@ class SemaContext
         func_(func),
         func_node_(func_node)
     {
+        cc_prev_sc_ = cc_.sema();
+        cc_.set_sema(this);
     }
 
-    ~SemaContext() {}
+    ~SemaContext() {
+        cc_.set_sema(cc_prev_sc_);
+    }
 
     CompileContext& cc() { return cc_; }
 
@@ -105,6 +111,7 @@ class SemaContext
     bool loop_has_continue_ = false;
     bool loop_has_return_ = false;
     bool warned_unreachable_ = false;
+    SemaContext* cc_prev_sc_ = nullptr;
 };
 
 class AutoEnterScope final

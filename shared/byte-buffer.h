@@ -87,6 +87,9 @@ class ByteBuffer
   size_t size() const {
     return position();
   }
+  void reserve(size_t amount) {
+    ensureSpace(amount);
+  }
 
  private:
   bool ensureSpace(size_t size) {
