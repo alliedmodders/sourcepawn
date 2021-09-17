@@ -28,7 +28,6 @@
 
 #include <amtl/am-raii.h>
 #include "compile-options.h"
-#include "emitter.h"
 #include "errors.h"
 #include "lexer.h"
 #include "lexer-inl.h"

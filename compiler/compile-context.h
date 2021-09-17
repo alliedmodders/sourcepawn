@@ -28,6 +28,7 @@
 #include "lexer.h"
 
 class ReportManager;
+class SemaContext;
 class SymbolScope;
 struct CompileOptions;
 struct symbol;
@@ -63,6 +64,13 @@ class CompileContext final
     bool one_error_per_stmt() const { return one_error_per_stmt_; }
     void set_one_error_per_stmt(bool value) { one_error_per_stmt_ = value; }
 
+    bool verify_output() const { return verify_output_; }
+    void set_verify_output(bool verify_output) { verify_output_ = verify_output; }
+
+    // Kludge until we can get rid of markusage().
+    void set_sema(SemaContext* sc) { sc_ = sc; }
+    SemaContext* sema() const { return sc_; }
+
     // No copy construction.
     CompileContext(const CompileContext&) = delete;
     CompileContext(CompileContext&&) = delete;
@@ -85,4 +93,9 @@ class CompileContext final
     bool shutting_down_ = false;
     bool one_error_per_stmt_ = false;
     std::unique_ptr<ReportManager> reports_;
+
+    // Skip the verify step.
+    bool verify_output_ = true;
+
+    SemaContext* sc_ = nullptr;
 };

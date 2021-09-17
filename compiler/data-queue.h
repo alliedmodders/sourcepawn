@@ -19,33 +19,23 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include <vector>
-
-#include "code-generator.h"
-#include "compile-context.h"
-#include "libsmx/data-pool.h"
-#include "libsmx/smx-builder.h"
-#include "libsmx/smx-encoding.h"
 #include "sc.h"
-#include "shared/byte-buffer.h"
-#include "shared/string-pool.h"
+#include "symbols.h"
 
-void assemble(CompileContext& cc, CodeGenerator& cg, const char* outname,
-              int compression_level);
-
-class Assembler
+class DataQueue final
 {
   public:
-    explicit Assembler(CompileContext& cc, CodeGenerator& cg);
+    DataQueue();
 
-    void Assemble(sp::SmxByteBuffer* buffer);
+    void Add(cell value);
+    void Add(PoolList<cell>&& cells);
+    void Add(const char* text, size_t length);
+    void AddZeroes(cell count);
+
+    cell size() const { return buffer_.size() * sizeof(cell); }
+    cell dat_address() const { return (cell)buffer_.size() * sizeof(cell); }
+    const uint8_t* dat() const { return reinterpret_cast<const uint8_t*>(buffer_.data()); }
 
   private:
-    void InitOpcodeLookup();
-
-    int FindOpcode(const char* instr, size_t maxlen);
-
-  private:
-    CompileContext& cc_;
-    CodeGenerator& cg_;
+    std::vector<cell> buffer_;
 };

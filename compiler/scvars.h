@@ -31,16 +31,11 @@
 
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
-extern symbol* curfunc;           /* pointer to current function */
 extern char outfname[];           /* intermediate (assembler) file name */
 extern char binfname[];           /* binary file name */
 extern char errfname[];           /* error file name */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
-extern int sc_labnum;             /* number of (internal) labels */
-extern cell glb_declared;         /* number of global cells declared */
-extern cell code_idx;             /* number of bytes with generated code */
-extern int curseg;                /* 1 if currently parsing CODE, 2 if parsing DATA */
 extern cell pc_stksize;           /* stack size */
 extern cell pc_stksize_override;  /* stack size override */
 extern int freading;              /* is there an input file ready for reading? */

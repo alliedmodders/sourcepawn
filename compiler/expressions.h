@@ -41,12 +41,12 @@ int NextExprOp(Lexer* lexer, int* opidx, int* list);
 #define MATCHTAG_ENUM_ASSN 0x10  // enum assignment
 
 struct UserOperation;
-bool find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam,
+bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam,
                  const value* lval, UserOperation* op);
 void emit_userop(const UserOperation& user_op, value* lval);
 
-int commutative(void (*oper)());
-cell calc(cell left, void (*oper)(), cell right, char* boolresult);
+int commutative(int oper);
+cell calc(cell left, int oper_tok, cell right, char* boolresult);
 bool is_valid_index_tag(int tag);
 int matchtag(int formaltag, int actualtag, int flags);
 int matchtag_commutative(int formaltag, int actualtag, int flags);

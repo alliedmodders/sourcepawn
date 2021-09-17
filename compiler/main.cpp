@@ -26,6 +26,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -47,7 +48,6 @@
 #include "code-generator.h"
 #include "compile-options.h"
 #include "lexer-inl.h"
-#include "output-buffer.h"
 #include "parser.h"
 #include "semantics.h"
 #include "symbols.h"
@@ -82,7 +82,6 @@
 #    include <emscripten.h>
 #endif
 
-#include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
@@ -141,7 +140,6 @@ EM_JS(void, setup_emscripten_fs, (), {
 });
 #endif
 
-args::ToggleOption opt_assembly("-a", "--assembly-only", Some(false), "Output assembler code");
 args::StringOption opt_active_dir("-D", "--active-dir", {}, "Active directory path");
 args::StringOption opt_error_file("-e", "--error-file", {}, "Error file path");
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
@@ -171,6 +169,8 @@ args::ToggleOption opt_syntax_only(nullptr, "--syntax-only", Some(false),
                               "Perform a dry-run (No file output) on the input");
 args::ToggleOption opt_stderr(nullptr, "--use-stderr", Some(false),
                               "Use stderr instead of stdout for error messages.");
+args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
+                                 "Disable opcode verification (for debugging).");
 
 /*  "main" of the compiler
  */
@@ -279,20 +279,13 @@ cleanup:
         cg.Generate();
 
     // Write the binary file.
-    if (!(opt_assembly.value() || sc_syntax_only) && compile_ok && jmpcode == 0) {
+    if (!sc_syntax_only && compile_ok && jmpcode == 0) {
         assemble(cc, cg, binfname, opt_compression.value());
     }
 
     if (compile_ok && jmpcode == 0 && opt_showincludes.value()) {
         for (const auto& name : cc.included_files())
             fprintf(stdout, "Note: including file: %s\n", name.c_str());
-    }
-
-    if ((opt_assembly.value()) && !gAsmBuffer.empty()) {
-        std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(outfname, "wb"), fclose);
-        auto data = gAsmBuffer.str();
-        if (fwrite(data.c_str(), data.size(), 1, fp.get()) != 1)
-            error(FATAL_ERROR_WRITE, outfname);
     }
 
     inpf = nullptr;
@@ -303,11 +296,11 @@ cleanup:
             pc_stksize = pc_stksize_override;
 
         if (verbosity >= 1) {
-            printf("Code size:         %8ld bytes\n", (long)code_idx);
-            printf("Data size:         %8ld bytes\n", (long)glb_declared * sizeof(cell));
+            printf("Code size:         %" PRIu32 " bytes\n", cg.code_size());
+            printf("Data size:         %" PRIu32 " bytes\n", cg.data_size());
             printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));
-            printf("Total requirements:%8ld bytes\n", (long)code_idx +
-                                                             (long)glb_declared * sizeof(cell) +
+            printf("Total requirements:%8ld bytes\n", (long)cg.code_size() +
+                                                             (long)cg.data_size() +
                                                              (long)pc_stksize * sizeof(cell));
         }
         if (opt_show_stats.value()) {
@@ -402,11 +395,6 @@ static void
 resetglobals(void)
 {
     /* reset the subset of global variables that is modified by the first pass */
-    curfunc = NULL;        /* pointer to current function */
-    sc_labnum = 0;         /* top value of (internal) labels */
-    glb_declared = 0;      /* number of global cells declared */
-    code_idx = 0;          /* number of bytes with generated code */
-    curseg = 0;            /* 1 if currently parsing CODE, 2 if parsing DATA */
     freading = FALSE;      /* no input file ready yet */
     fline = 0;             /* the line number in the current file */
     fnumber = 0;           /* the file number in the file table (debugging) */
@@ -498,9 +486,11 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
 
     cc.options()->need_semicolon = opt_semicolons.value();
     cc.options()->tabsize = opt_tabsize.value();
-    cc.options()->asmfile = opt_assembly.value();
     cc.options()->warnings_are_errors = opt_warnings_as_errors.value();
     cc.options()->use_stderr = opt_stderr.value();
+
+    if (opt_no_verify.value())
+        cc.set_verify_output(false);
 
     if (opt_prefixfile.hasValue())
         cc.set_default_include(opt_prefixfile.value());
@@ -514,9 +504,6 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         else
             verbosity = 2;
     }
-
-    if (opt_assembly.value() && verbosity > 1)
-        verbosity = 1;
 
     if (opt_active_dir.hasValue()) {
         const char* ptr = opt_active_dir.value().c_str();

@@ -42,7 +42,6 @@
 #include "compile-context.h"
 #include "errors.h"
 #include "lexer.h"
-#include "output-buffer.h"
 #include "sc.h"
 #include "sctracker.h"
 #include "scvars.h"
@@ -52,643 +51,6 @@
 using namespace SourcePawn;
 using namespace ke;
 using namespace sp;
-
-class CellWriter;
-
-typedef void (*OPCODE_PROC)(CellWriter* writer, AsmReader* reader, cell opcode);
-
-typedef struct {
-    cell opcode;
-    const char* name;
-    int segment; /* sIN_CSEG=parse in cseg, sIN_DSEG=parse in dseg */
-    OPCODE_PROC func;
-} OPCODEC;
-
-class CellWriter
-{
-  public:
-    explicit CellWriter(Assembler* assm, std::vector<cell>& buffer)
-      : backpatch_list_(assm->backpatch_list()),
-        label_table_(assm->label_table()),
-        buffer_(buffer),
-        current_address_(0)
-    {}
-
-    void push_back(cell value) {
-        buffer_.push_back(value);
-        current_address_ += sizeof(value);
-    }
-    void write_label(int index) {
-        assert(index >= 0 && index < sc_labnum);
-        if (label_table_[index] < 0) {
-            BackpatchEntry entry = {current_index(), index};
-            backpatch_list_.push_back(entry);
-            push_back(-1);
-        } else {
-            push_back(label_table_[index]);
-        }
-    }
-
-    cell current_address() const {
-        return current_address_;
-    }
-    size_t current_index() const {
-        return buffer_.size();
-    }
-
-  private:
-    std::vector<BackpatchEntry>& backpatch_list_;
-    std::vector<cell>& label_table_;
-    std::vector<cell>& buffer_;
-    cell current_address_;
-};
-
-/* apparently, strtol() does not work correctly on very large (unsigned)
- * hexadecimal values */
-static ucell
-hex2long(const char* s, const char** n)
-{
-    ucell result = 0L;
-    int negate = FALSE;
-    int digit;
-
-    /* ignore leading whitespace */
-    while (*s == ' ' || *s == '\t')
-        s++;
-
-    /* allow a negation sign to create the two's complement of numbers */
-    if (*s == '-') {
-        negate = TRUE;
-        s++;
-    }
-
-    assert((*s >= '0' && *s <= '9') || (*s >= 'a' && *s <= 'f') || (*s >= 'a' && *s <= 'f'));
-    for (;;) {
-        if (*s >= '0' && *s <= '9')
-            digit = *s - '0';
-        else if (*s >= 'a' && *s <= 'f')
-            digit = *s - 'a' + 10;
-        else if (*s >= 'A' && *s <= 'F')
-            digit = *s - 'A' + 10;
-        else
-            break; /* probably whitespace */
-        result = (result << 4) | digit;
-        s++;
-    }
-    if (n != NULL)
-        *n = s;
-    if (negate)
-        result = (~result) + 1; /* take two's complement of the result */
-    return (ucell)result;
-}
-
-static ucell
-getparam(const char* s, const char** n)
-{
-    ucell result = 0;
-    for (;;) {
-        result += hex2long(s, &s);
-        if (*s != '+')
-            break;
-        s++;
-    }
-    if (n != NULL)
-        *n = s;
-    return result;
-}
-
-static const char*
-skipwhitespace(const char* str)
-{
-    while (isspace(*str))
-        str++;
-    return str;
-}
-
-class AsmReader final
-{
-  public:
-    explicit AsmReader(std::unordered_set<symbol*>&& symbols)
-    {
-        data_ = gAsmBuffer.str();
-        pos_ = data_.c_str();
-        end_ = data_.c_str() + data_.size();
-        symbols_ = std::move(symbols);
-    }
-
-    // Find the next token that is immediately proceeded by a newline.
-    const char* next_line();
-
-    // Process characters until non-whitespace is encountered, up to the next
-    // newline. If the position is currently not whitespace then the position
-    // will remain unchanged.
-    const char* next_token_on_line();
-
-    // Advance the stream to the end of the current token, and return the new
-    // position (which should only be used for pointer arithmetic, since it may
-    // point beyond the end of the stream).
-    const char* end_of_token();
-
-    ucell getparam() {
-        return ::getparam(pos_, &pos_);
-    }
-    ucell hex2long() {
-        return ::hex2long(pos_, &pos_);
-    }
-    const char* pos() const {
-        assert(pos_ < end_);
-        return pos_;
-    }
-    std::vector<symbol*>& native_list() {
-        return native_list_;
-    }
-    symbol* extract_call_target();
-
-  private:
-    template <bool StopAtLine>
-    inline const char* advance();
-
-  private:
-    std::string data_;
-    const char* pos_;
-    const char* end_;
-    std::vector<symbol*> native_list_;
-    std::unordered_set<symbol*> symbols_;
-};
-
-const char*
-AsmReader::next_line()
-{
-    while (true) {
-        if (pos_ >= end_)
-            return nullptr;
-        if (*pos_ == '\n') {
-            pos_++;
-            break;
-        }
-        pos_++;
-    }
-    if (pos_ >= end_)
-        return nullptr;
-    return pos_;
-}
-
-const char*
-AsmReader::next_token_on_line()
-{
-    for (; pos_ < end_; pos_++) {
-        // Ignore spaces/tabs, stop on newline.
-        if (isspace(*pos_)) {
-            if (*pos_ == '\n')
-                return nullptr;
-            continue;
-        }
-        // Eat comments until the newline.
-        if (*pos_ == ';') {
-            while (pos_ < end_ && *pos_ != '\n')
-                pos_++;
-            return nullptr;
-        }
-        // Probably a token, stop and return.
-        return pos_;
-    }
-    return nullptr;
-}
-
-const char*
-AsmReader::end_of_token()
-{
-    assert(!isspace(*pos_) && *pos_ != ';');
-    for (; pos_ < end_; pos_++) {
-        if (isspace(*pos_) || *pos_ == ';')
-            return pos_;
-    }
-    return pos_;
-}
-
-symbol*
-AsmReader::extract_call_target()
-{
-    const char* param_start = pos();
-    const char* params = param_start;
-
-    size_t i;
-    for (i = 0; !isspace(*params); i++, params++) {
-        assert(*params != '\0');
-    }
-    pos_ += i;
-
-    char* end = const_cast<char*>(param_start);
-    auto value = strtoll(param_start, &end, 16);
-    assert(value);
-    assert(end == pos_);
-
-    symbol* sym = reinterpret_cast<symbol*>(value);
-    assert(symbols_.find(sym) != symbols_.end());
-
-    assert(sym->ident == iFUNCTN);
-    assert(sym->vclass == sGLOBAL);
-    return sym;
-}
-
-static void
-noop(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-}
-
-static void
-set_currentfile(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    fcurrent = (short)reader->getparam();
-}
-
-static void
-parm0(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    writer->push_back(opcode);
-}
-
-static void
-parm1(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    ucell p = reader->getparam();
-    writer->push_back(opcode);
-    writer->push_back(p);
-}
-
-static void
-parm2(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    ucell p1 = reader->getparam();
-    ucell p2 = reader->getparam();
-    writer->push_back(opcode);
-    writer->push_back(p1);
-    writer->push_back(p2);
-}
-
-static void
-parm3(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    ucell p1 = reader->getparam();
-    ucell p2 = reader->getparam();
-    ucell p3 = reader->getparam();
-    writer->push_back(opcode);
-    writer->push_back(p1);
-    writer->push_back(p2);
-    writer->push_back(p3);
-}
-
-static void
-parm4(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    ucell p1 = reader->getparam();
-    ucell p2 = reader->getparam();
-    ucell p3 = reader->getparam();
-    ucell p4 = reader->getparam();
-    writer->push_back(opcode);
-    writer->push_back(p1);
-    writer->push_back(p2);
-    writer->push_back(p3);
-    writer->push_back(p4);
-}
-
-static void
-parm5(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    ucell p1 = reader->getparam();
-    ucell p2 = reader->getparam();
-    ucell p3 = reader->getparam();
-    ucell p4 = reader->getparam();
-    ucell p5 = reader->getparam();
-    writer->push_back(opcode);
-    writer->push_back(p1);
-    writer->push_back(p2);
-    writer->push_back(p3);
-    writer->push_back(p4);
-    writer->push_back(p5);
-}
-
-static void
-do_dump(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    int num = 0;
-
-    while (reader->next_token_on_line()) {
-        ucell p = reader->getparam();
-        writer->push_back(p);
-        num++;
-    }
-}
-
-static void
-do_dumpfill(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    ucell value = reader->getparam();
-    ucell times = reader->getparam();
-    while (times-- > 0) {
-        writer->push_back(value);
-    }
-}
-
-static void
-do_ldgfen(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    symbol* sym = reader->extract_call_target();
-    assert(sym->ident == iFUNCTN);
-    assert(!sym->native);
-    assert((sym->function()->funcid & 1) == 1);
-    assert(sym->usage & uREAD);
-    assert(!sym->skipped);
-
-    // Note: we emit const.pri for backward compatibility.
-    assert(opcode == sp::OP_UNGEN_LDGFN_PRI);
-    writer->push_back(sp::OP_CONST_PRI);
-    writer->push_back(sym->function()->funcid);
-}
-
-static void
-do_call(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    symbol* sym = reader->extract_call_target();
-    assert(sym->usage & uREAD);
-    assert(!sym->skipped);
-
-    writer->push_back(opcode);
-    writer->push_back(sym->addr());
-}
-
-static void
-do_sysreq(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    symbol* sym = reader->extract_call_target();
-    ucell nargs = reader->getparam();
-
-    assert(sym->native);
-    if (sym->addr() < 0) {
-      sym->setAddr(reader->native_list().size());
-      reader->native_list().push_back(sym);
-    }
-
-    writer->push_back(opcode);
-    writer->push_back(sym->addr());
-    writer->push_back(nargs);
-}
-
-static void
-do_jump(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    int i = reader->hex2long();
-
-    writer->push_back(opcode);
-    writer->write_label(i);
-}
-
-static void
-do_switch(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    int i = reader->hex2long();
-
-    writer->push_back(opcode);
-    writer->write_label(i);
-}
-
-static void
-do_case(CellWriter* writer, AsmReader* reader, cell opcode)
-{
-    cell v = reader->hex2long();
-    int i = reader->hex2long();
-
-    writer->push_back(v);
-    writer->write_label(i);
-}
-
-// clang-format off
-static OPCODEC opcodelist[] = {
-  /* node for "invalid instruction" */
-  {  0, NULL,         0,        noop },
-  {  0, "CODE",       sIN_CSEG, set_currentfile },
-  {  0, "DATA",       sIN_DSEG, set_currentfile },
-  {  0, "STKSIZE",    0,        noop },
-  /* opcodes in sorted order */
-  { 78, "add",        sIN_CSEG, parm0 },
-  { 87, "add.c",      sIN_CSEG, parm1 },
-  { 14, "addr.alt",   sIN_CSEG, parm1 },
-  { 13, "addr.pri",   sIN_CSEG, parm1 },
-  { 81, "and",        sIN_CSEG, parm0 },
-  {121, "bounds",     sIN_CSEG, parm1 },
-  {137, "break",      sIN_CSEG, parm0 },  /* version 8 */
-  { 49, "call",       sIN_CSEG, do_call },
-  {  0, "case",       sIN_CSEG, do_case },
-  {130, "casetbl",    sIN_CSEG, parm0 },  /* version 1 */
-  {156, "const",      sIN_CSEG, parm2 },  /* version 9 */
-  { 12, "const.alt",  sIN_CSEG, parm1 },
-  { 11, "const.pri",  sIN_CSEG, parm1 },
-  {157, "const.s",    sIN_CSEG, parm2 },  /* version 9 */
-  {114, "dec",        sIN_CSEG, parm1 },
-  {113, "dec.alt",    sIN_CSEG, parm0 },
-  {116, "dec.i",      sIN_CSEG, parm0 },
-  {112, "dec.pri",    sIN_CSEG, parm0 },
-  {115, "dec.s",      sIN_CSEG, parm1 },
-  {  0, "dump",       sIN_DSEG, do_dump },
-  {  0, "dumpfill",   sIN_DSEG, do_dumpfill },
-  {166, "endproc",    sIN_CSEG, parm0 },
-  { 95, "eq",         sIN_CSEG, parm0 },
-  {106, "eq.c.alt",   sIN_CSEG, parm1 },
-  {105, "eq.c.pri",   sIN_CSEG, parm1 },
-  {119, "fill",       sIN_CSEG, parm1 },
-  {162, "genarray",   sIN_CSEG, parm1 },
-  {163, "genarray.z", sIN_CSEG, parm1 },
-  {120, "halt",       sIN_CSEG, parm1 },
-  { 45, "heap",       sIN_CSEG, parm1 },
-  { 27, "idxaddr",    sIN_CSEG, parm0 },
-  { 28, "idxaddr.b",  sIN_CSEG, parm1 },
-  {109, "inc",        sIN_CSEG, parm1 },
-  {108, "inc.alt",    sIN_CSEG, parm0 },
-  {111, "inc.i",      sIN_CSEG, parm0 },
-  {107, "inc.pri",    sIN_CSEG, parm0 },
-  {110, "inc.s",      sIN_CSEG, parm1 },
-  {170, "initarray.alt", sIN_CSEG, parm5 },
-  {169, "initarray.pri", sIN_CSEG, parm5 },
-  { 86, "invert",     sIN_CSEG, parm0 },
-  { 55, "jeq",        sIN_CSEG, do_jump },
-  { 56, "jneq",       sIN_CSEG, do_jump },
-  { 54, "jnz",        sIN_CSEG, do_jump },
-  { 64, "jsgeq",      sIN_CSEG, do_jump },
-  { 63, "jsgrtr",     sIN_CSEG, do_jump },
-  { 62, "jsleq",      sIN_CSEG, do_jump },
-  { 61, "jsless",     sIN_CSEG, do_jump },
-  { 51, "jump",       sIN_CSEG, do_jump },
-  { 53, "jzer",       sIN_CSEG, do_jump },
-  {167, "ldgfn.pri",  sIN_CSEG, do_ldgfen },
-  { 25, "lidx",       sIN_CSEG, parm0 },
-  { 26, "lidx.b",     sIN_CSEG, parm1 },
-  {  2, "load.alt",   sIN_CSEG, parm1 },
-  {154, "load.both",  sIN_CSEG, parm2 },  /* version 9 */
-  {  9, "load.i",     sIN_CSEG, parm0 },
-  {  1, "load.pri",   sIN_CSEG, parm1 },
-  {  4, "load.s.alt", sIN_CSEG, parm1 },
-  {155, "load.s.both",sIN_CSEG, parm2 },  /* version 9 */
-  {  3, "load.s.pri", sIN_CSEG, parm1 },
-  { 10, "lodb.i",     sIN_CSEG, parm1 },
-  {  8, "lref.s.alt", sIN_CSEG, parm1 },
-  {  7, "lref.s.pri", sIN_CSEG, parm1 },
-  { 34, "move.alt",   sIN_CSEG, parm0 },
-  { 33, "move.pri",   sIN_CSEG, parm0 },
-  {117, "movs",       sIN_CSEG, parm1 },
-  { 85, "neg",        sIN_CSEG, parm0 },
-  { 96, "neq",        sIN_CSEG, parm0 },
-  {134, "nop",        sIN_CSEG, parm0 },  /* version 6 */
-  { 84, "not",        sIN_CSEG, parm0 },
-  { 82, "or",         sIN_CSEG, parm0 },
-  { 43, "pop.alt",    sIN_CSEG, parm0 },
-  { 42, "pop.pri",    sIN_CSEG, parm0 },
-  { 46, "proc",       sIN_CSEG, parm0 },
-  { 40, "push",       sIN_CSEG, parm1 },
-  {133, "push.adr",   sIN_CSEG, parm1 },  /* version 4 */
-  { 37, "push.alt",   sIN_CSEG, parm0 },
-  { 39, "push.c",     sIN_CSEG, parm1 },
-  { 36, "push.pri",   sIN_CSEG, parm0 },
-  { 41, "push.s",     sIN_CSEG, parm1 },
-  {139, "push2",      sIN_CSEG, parm2 },  /* version 9 */
-  {141, "push2.adr",  sIN_CSEG, parm2 },  /* version 9 */
-  {138, "push2.c",    sIN_CSEG, parm2 },  /* version 9 */
-  {140, "push2.s",    sIN_CSEG, parm2 },  /* version 9 */
-  {143, "push3",      sIN_CSEG, parm3 },  /* version 9 */
-  {145, "push3.adr",  sIN_CSEG, parm3 },  /* version 9 */
-  {142, "push3.c",    sIN_CSEG, parm3 },  /* version 9 */
-  {144, "push3.s",    sIN_CSEG, parm3 },  /* version 9 */
-  {147, "push4",      sIN_CSEG, parm4 },  /* version 9 */
-  {149, "push4.adr",  sIN_CSEG, parm4 },  /* version 9 */
-  {146, "push4.c",    sIN_CSEG, parm4 },  /* version 9 */
-  {148, "push4.s",    sIN_CSEG, parm4 },  /* version 9 */
-  {151, "push5",      sIN_CSEG, parm5 },  /* version 9 */
-  {153, "push5.adr",  sIN_CSEG, parm5 },  /* version 9 */
-  {150, "push5.c",    sIN_CSEG, parm5 },  /* version 9 */
-  {152, "push5.s",    sIN_CSEG, parm5 },  /* version 9 */
-  { 48, "retn",       sIN_CSEG, parm0 },
-  { 74, "sdiv.alt",   sIN_CSEG, parm0 },
-  {104, "sgeq",       sIN_CSEG, parm0 },
-  {103, "sgrtr",      sIN_CSEG, parm0 },
-  { 65, "shl",        sIN_CSEG, parm0 },
-  { 69, "shl.c.alt",  sIN_CSEG, parm1 },
-  { 68, "shl.c.pri",  sIN_CSEG, parm1 },
-  { 66, "shr",        sIN_CSEG, parm0 },
-  { 71, "shr.c.alt",  sIN_CSEG, parm1 },
-  { 70, "shr.c.pri",  sIN_CSEG, parm1 },
-  {102, "sleq",       sIN_CSEG, parm0 },
-  {101, "sless",      sIN_CSEG, parm0 },
-  { 72, "smul",       sIN_CSEG, parm0 },
-  { 88, "smul.c",     sIN_CSEG, parm1 },
-  { 22, "sref.s.alt", sIN_CSEG, parm1 },
-  { 21, "sref.s.pri", sIN_CSEG, parm1 },
-  { 67, "sshr",       sIN_CSEG, parm0 },
-  { 44, "stack",      sIN_CSEG, parm1 },
-  { 16, "stor.alt",   sIN_CSEG, parm1 },
-  { 23, "stor.i",     sIN_CSEG, parm0 },
-  { 15, "stor.pri",   sIN_CSEG, parm1 },
-  { 18, "stor.s.alt", sIN_CSEG, parm1 },
-  { 17, "stor.s.pri", sIN_CSEG, parm1 },
-  {164, "stradjust.pri", sIN_CSEG, parm0 },
-  { 24, "strb.i",     sIN_CSEG, parm1 },
-  { 79, "sub",        sIN_CSEG, parm0 },
-  { 80, "sub.alt",    sIN_CSEG, parm0 },
-  {132, "swap.alt",   sIN_CSEG, parm0 },
-  {131, "swap.pri",   sIN_CSEG, parm0 },
-  {129, "switch",     sIN_CSEG, do_switch },
-  {135, "sysreq.n",   sIN_CSEG, do_sysreq },
-  {161, "tracker.pop.setheap", sIN_CSEG, parm0 },
-  {160, "tracker.push.c", sIN_CSEG, parm1 },
-  { 35, "xchg",       sIN_CSEG, parm0 },
-  { 83, "xor",        sIN_CSEG, parm0 },
-  { 91, "zero",       sIN_CSEG, parm1 },
-  { 90, "zero.alt",   sIN_CSEG, parm0 },
-  { 89, "zero.pri",   sIN_CSEG, parm0 },
-  { 92, "zero.s",     sIN_CSEG, parm1 },
-};
-// clang-format on
-
-void
-Assembler::InitOpcodeLookup()
-{
-    opcode_lookup_.init(512);
-
-    constexpr int kNumOpcodes = size_t(sizeof(opcodelist) / sizeof(*opcodelist));
-    for (int i = 1; i < kNumOpcodes; i++) {
-        const auto& entry = opcodelist[i];
-        CharsAndLength key(entry.name, strlen(entry.name));
-        auto p = opcode_lookup_.findForAdd(key);
-        assert(!p.found());
-        opcode_lookup_.add(p, key, i);
-    }
-}
-
-int
-Assembler::FindOpcode(const char* instr, size_t maxlen)
-{
-    CharsAndLength key(instr, maxlen);
-    auto p = opcode_lookup_.find(key);
-    if (!p.found())
-        return 0;
-    return p->value;
-}
-
-// Generate code or data into a buffer.
-void
-Assembler::GenerateSegment(AsmReader& reader)
-{
-    CellWriter code_writer(this, code_buffer_);
-    CellWriter data_writer(this, data_buffer_);
-
-    do {
-        const char* instr = reader.next_token_on_line();
-
-        // Ignore empty lines.
-        if (!instr)
-            continue;
-
-        if (tolower(instr[0]) == 'l' && instr[1] == '.') {
-            int lindex = (int)hex2long(instr + 2, nullptr);
-            assert(lindex >= 0 && lindex < sc_labnum);
-            assert(label_table_[lindex] == -1);
-            label_table_[lindex] = code_writer.current_address();
-            continue;
-        }
-
-        const char* pos = reader.end_of_token();
-        int op_index = FindOpcode(instr, (pos - instr));
-        OPCODEC& op = opcodelist[op_index];
-        assert(op.name != nullptr);
-
-        reader.next_token_on_line();
-        if (op.segment == sIN_CSEG)
-            op.func(&code_writer, &reader, op.opcode);
-        else if (op.segment == sIN_DSEG)
-            op.func(&data_writer, &reader, op.opcode);
-    } while (reader.next_line());
-
-    // Fix up backpatches.
-    for (const auto& patch : backpatch_list_) {
-        assert(patch.index < code_buffer_.size());
-        assert(patch.target >= 0 && patch.target < sc_labnum);
-        assert(label_table_[patch.target] >= 0);
-        code_buffer_.at(patch.index) = label_table_[patch.target];
-    }
-}
-
-#if !defined NDEBUG
-// The opcode list should be sorted by name.
-class VerifyOpcodeSorting
-{
-  public:
-    VerifyOpcodeSorting() {
-        assert(opcodelist[1].name != NULL);
-        for (size_t i = 2; i < (sizeof opcodelist / sizeof opcodelist[0]); i++) {
-            assert(opcodelist[i].name != NULL);
-            assert(strcmp(opcodelist[i].name, opcodelist[i - 1].name) > 0);
-        }
-    }
-} sVerifyOpcodeSorting;
-#endif
 
 static int
 sort_by_name(const void* a1, const void* a2)
@@ -740,10 +102,11 @@ class DebugString
         return kind_;
     }
     ucell parse() {
-        return hex2long(str_, &str_);
+        return strtoul(str_, const_cast<char**>(&str_), 16);
     }
     const char* skipspaces() {
-        str_ = ::skipwhitespace(str_);
+        while (isspace(*str_))
+            str_++;
         return str_;
     }
     void expect(char c) {
@@ -1443,7 +806,6 @@ Assembler::Assembler(CompileContext& cc, CodeGenerator& cg)
   : cc_(cc),
     cg_(cg)
 {
-    InitOpcodeLookup();
 }
 
 void
@@ -1482,12 +844,8 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     // Build the easy symbol tables.
     for (const auto& sym : global_symbols) {
         if (sym->ident == iFUNCTN) {
-            if (sym->native) {
-                // Set native addresses to -1 to indicate whether we've seen
-                // them in the assembly yet.
-                sym->setAddr(-1);
+            if (sym->native)
                 continue;
-            }
 
             if (!sym->defined)
                 continue;
@@ -1533,22 +891,17 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         pubfunc.address = sym->addr();
         pubfunc.name = names->add(gAtoms, f.name.c_str());
 
-        sym->function()->funcid = (uint32_t(i) << 1) | 1;
+        auto id = (uint32_t(i) << 1) | 1;
+        if (!Label::ValueFits(id))
+            error(302);
+        cg_.LinkPublicFunction(sym, id);
 
         rtti.add_method(sym);
     }
 
-    for (int i = 1; i <= sc_labnum; i++)
-        label_table_.push_back(-1);
-    assert(label_table_.size() == size_t(sc_labnum));
-
-    // Generate buffers.
-    AsmReader reader(std::move(symbols));
-    GenerateSegment(reader);
-
     // Populate the native table.
-    for (size_t i = 0; i < reader.native_list().size(); i++) {
-        symbol* sym = reader.native_list()[i];
+    for (size_t i = 0; i < cg_.native_list().size(); i++) {
+        symbol* sym = cg_.native_list()[i];
         assert(size_t(sym->addr()) == i);
 
         sp_file_natives_t& entry = natives->add();
@@ -1562,25 +915,24 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     }
 
     // Set up the code section.
-    code->header().codesize = code_buffer_.size() * sizeof(cell);
+    code->header().codesize = cg_.code_size();
     code->header().cellsize = sizeof(cell);
     code->header().codeversion = SmxConsts::CODE_VERSION_FEATURE_MASK;
     code->header().flags = CODEFLAG_DEBUG;
     code->header().main = 0;
     code->header().code = sizeof(sp_file_code_t);
     code->header().features = SmxConsts::kCodeFeatureDirectArrays;
-    code->setBlob((uint8_t*)code_buffer_.data(), code_buffer_.size() * sizeof(cell));
+    code->setBlob(cg_.code_ptr(), cg_.code_size());
 
     // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was
     // computed as AMX::stp, which included the entire memory size needed to
     // store the file. Here (in 1.7+), we allocate what is actually needed
     // by the plugin.
-    data->header().datasize = data_buffer_.size() * sizeof(cell);
-    data->header().memsize =
-        data->header().datasize + glb_declared * sizeof(cell) +
-        std::max(pc_max_memory + 4096, pc_stksize) * sizeof(cell);
+    data->header().datasize = cg_.data_size();
+    data->header().memsize = cg_.data_size() +
+                             std::max(pc_max_memory + 4096, pc_stksize) * sizeof(cell);
     data->header().data = sizeof(sp_file_data_t);
-    data->setBlob((uint8_t*)data_buffer_.data(), data_buffer_.size() * sizeof(cell));
+    data->setBlob(cg_.data_ptr(), cg_.data_size());
 
     // Add tables in the same order SourceMod 1.6 added them.
     builder.add(code);
@@ -1626,9 +978,10 @@ VerifyBinary(const char* file, void* buffer, size_t size)
 }
 
 static void
-splat_to_binary(const char* binfname, void* bytes, size_t size)
+splat_to_binary(CompileContext& cc, const char* binfname, void* bytes, size_t size)
 {
-    VerifyBinary(binfname, bytes, size);
+    if (cc.verify_output())
+        VerifyBinary(binfname, bytes, size);
 
     // Note: error 161 will setjmp(), which skips destructors :(
     FILE* fp = fopen(binfname, "wb");
@@ -1671,7 +1024,7 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
             new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
             new_buffer.writeBytes(zbuf.get(), new_disksize);
 
-            splat_to_binary(binfname, new_buffer.bytes(), new_buffer.size());
+            splat_to_binary(cc, binfname, new_buffer.bytes(), new_buffer.size());
             return;
         }
 
@@ -1682,5 +1035,5 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
     header->disksize = 0;
     header->compression = SmxConsts::FILE_COMPRESSION_NONE;
 
-    splat_to_binary(binfname, buffer.bytes(), buffer.size());
+    splat_to_binary(cc, binfname, buffer.bytes(), buffer.size());
 }

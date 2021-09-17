@@ -27,7 +27,6 @@
 #include <limits.h>
 
 #include "scvars.h"
-#include "emitter.h"
 #include "sc.h"
 
 /*  global variables
@@ -37,16 +36,11 @@
  */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
-symbol* curfunc;                           /* pointer to current function */
 char outfname[PATH_MAX];                   /* intermediate (assembler) file name */
 char binfname[PATH_MAX];                   /* binary file name */
 char errfname[PATH_MAX];                   /* error file name */
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
-int sc_labnum = 0;                         /* number of (internal) labels */
-cell glb_declared = 0;                     /* number of global cells declared */
-cell code_idx = 0;                         /* number of bytes with generated code */
-int curseg = 0;                            /* 1 if currently parsing CODE, 2 if parsing DATA */
 cell pc_stksize = sDEF_AMXSTACK;           /* default stack size */
 cell pc_stksize_override = 0;
 int freading = FALSE;                      /* Is there an input file ready for reading? */
@@ -60,8 +54,6 @@ int pc_max_func_memory = 0;          /* high stack watermark */
 int pc_current_memory = 0;           /* current stack watermark */
 int pc_max_memory = 0;               /* maximum stack watermark across all stacks */
 int pc_current_stack = 0;
-
-symbol* sScopeChain = nullptr;
 
 std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 std::shared_ptr<SourceFile> inpf_org;  /* main source file */

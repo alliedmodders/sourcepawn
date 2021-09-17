@@ -26,45 +26,36 @@
 #include <stdlib.h> /* for _MAX_PATH */
 #include <string.h>
 #include "compile-context.h"
-#include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
-#include "output-buffer.h"
 #include "parser.h"
 #include "sc.h"
 #include "sctracker.h"
+#include "semantics.h"
 #include "scvars.h"
 #include "symbols.h"
 #include "types.h"
 
 /* Function addresses of binary operators for signed operations */
-static void (*op1[17])(void) = {
-    os_mult, os_div, os_mod,        /* hier3, index 0 */
-    ob_add,  ob_sub,                /* hier4, index 3 */
-    ob_sal,  os_sar, ou_sar,        /* hier5, index 5 */
-    ob_and,                         /* hier6, index 8 */
-    ob_xor,                         /* hier7, index 9 */
-    ob_or,                          /* hier8, index 10 */
-    os_le,   os_ge,  os_lt,  os_gt, /* hier9, index 11 */
-    ob_eq,   ob_ne,                 /* hier10, index 15 */
+static int op1[17] = {
+    // hier3
+    '*', '/', '%',
+    // hier4
+    '+', '-',
+    // hier5
+    tSHL, tSHR, tSHRU,
+    // hier6
+    '&',
+    // hier7
+    '^',
+    // hier8
+    '|',
+    // hier9
+    tlLE, tlGE, '<', '>',
+    // hier10
+    tlEQ, tlNE
 };
-
-/* These two functions are defined because the functions inc() and dec() in
- * SC4.C have a different prototype than the other code generation functions.
- * The arrays for user-defined functions use the function pointers for
- * identifying what kind of operation is requested; these functions must all
- * have the same prototype. As inc() and dec() are special cases already, it
- * is simplest to add two "do-nothing" functions.
- */
-void
-user_inc(void)
-{
-}
-void
-user_dec(void)
-{
-}
 
 static inline bool
 MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
@@ -90,7 +81,7 @@ MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
 }
 
 bool
-find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, const value* lval,
+find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const value* lval,
             UserOperation* op)
 {
     static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
@@ -99,7 +90,7 @@ find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, c
                                            false, false, false, true,  true,  true,  true,  false,
                                            false};
     static const char* unoperstr[] = {"!", "-", "++", "--"};
-    static void (*unopers[])(void) = {lneg, neg, user_inc, user_dec};
+    static const int unopers[] = {'!', '-', tINC, tDEC};
 
     char opername[4] = "";
     size_t i;
@@ -115,7 +106,7 @@ find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, c
     savepri = savealt = false;
     /* find the name with the operator */
     if (numparam == 2) {
-        if (oper == NULL) {
+        if (oper == 0) {
             /* assignment operator: a special case */
             strcpy(opername, "=");
             if (lval != NULL && (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR))
@@ -131,7 +122,7 @@ find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, c
             }
         }
     } else {
-        assert(oper != NULL);
+        assert(oper);
         assert(numparam == 1);
         /* try a select group of unary operators */
         assert((sizeof unoperstr / sizeof unoperstr[0]) == (sizeof unopers / sizeof unopers[0]));
@@ -187,7 +178,7 @@ find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, c
      *    fixed:operator+(fixed:a, fixed:b)
      *        return a + b
      */
-    if (sym == curfunc) {
+    if (sym == sc.func()) {
         report(408);
     }
 
@@ -195,80 +186,11 @@ find_userop(SemaContext& sc, void (*oper)(), int tag1, int tag2, int numparam, c
 
     op->sym = sym;
     op->oper = oper;
-    op->paramspassed = (oper == NULL) ? 1 : numparam;
+    op->paramspassed = (oper == 0) ? 1 : numparam;
     op->savepri = savepri;
     op->savealt = savealt;
     op->swapparams = swapparams;
     return true;
-}
-
-void
-emit_userop(const UserOperation& user_op, value* lval)
-{
-    /* for increment and decrement operators, the symbol must first be loaded
-     * (and stored back afterwards)
-     */
-    if (user_op.oper == user_inc || user_op.oper == user_dec) {
-        assert(!user_op.savepri);
-        assert(lval != NULL);
-        if (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR)
-            pushreg(sPRI); /* save current address in PRI */
-        if (lval->ident != iACCESSOR)
-            rvalue(lval); /* get the symbol's value in PRI */
-    }
-
-    assert(!user_op.savepri || !user_op.savealt); /* either one MAY be set, but not both */
-    if (user_op.savepri) {
-        /* the chained comparison operators require that the ALT register is
-         * unmodified, so we save it here; actually, we save PRI because the normal
-         * instruction sequence (without user operator) swaps PRI and ALT
-         */
-        pushreg(sPRI); /* right-hand operand is in PRI */
-    } else if (user_op.savealt) {
-        /* for the assignment operator, ALT may contain an address at which the
-         * result must be stored; this address must be preserved accross the
-         * call
-         */
-        assert(lval != NULL); /* this was checked earlier */
-        assert(lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR); /* checked earlier */
-        pushreg(sALT);
-    }
-
-    /* push parameters, call the function */
-    switch (user_op.paramspassed) {
-        case 1:
-            pushreg(sPRI);
-            break;
-        case 2:
-            /* note that 1) a function expects that the parameters are pushed
-             * in reversed order, and 2) the left operand is in the secondary register
-             * and the right operand is in the primary register */
-            if (user_op.swapparams) {
-                pushreg(sALT);
-                pushreg(sPRI);
-            } else {
-                pushreg(sPRI);
-                pushreg(sALT);
-            }
-            break;
-        default:
-            assert(0);
-    }
-    markexpr(sPARM, NULL, 0); /* mark the end of a sub-expression */
-    assert(user_op.sym->ident == iFUNCTN);
-    ffcall(user_op.sym, user_op.paramspassed);
-
-    if (user_op.savepri || user_op.savealt)
-        popreg(sALT); /* restore the saved PRI/ALT that into ALT */
-    if (user_op.oper == user_inc || user_op.oper == user_dec) {
-        assert(lval != NULL);
-        if (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR)
-            popreg(sALT); /* restore address (in ALT) */
-        if (lval->ident != iACCESSOR) {
-            store(lval); /* store PRI in the symbol */
-            moveto1();   /* make sure PRI is restored on exit */
-        }
-    }
 }
 
 int
@@ -601,42 +523,43 @@ int matchtag_commutative(int formaltag, int actualtag, int flags)
 }
 
 cell
-calc(cell left, void (*oper)(), cell right, char* boolresult)
+calc(cell left, int oper_tok, cell right, char* boolresult)
 {
-    if (oper == ob_or)
-        return (left | right);
-    else if (oper == ob_xor)
-        return (left ^ right);
-    else if (oper == ob_and)
-        return (left & right);
-    else if (oper == ob_eq)
-        return (left == right);
-    else if (oper == ob_ne)
-        return (left != right);
-    else if (oper == os_sar)
-        return (left >> (int)right);
-    else if (oper == ou_sar)
-        return ((ucell)left >> (ucell)right);
-    else if (oper == ob_sal)
-        return ((ucell)left << (int)right);
-    else if (oper == ob_add)
-        return (left + right);
-    else if (oper == ob_sub)
-        return (left - right);
-    else if (oper == os_mult)
-        return (left * right);
-    else if (oper == os_div) {
-        if (right == 0) {
-            error(29);
-            return 0;
-        }
-        return left / right;
-    } else if (oper == os_mod) {
-        if (right == 0) {
-            error(29);
-            return 0;
-        }
-        return left % right;
+    switch (oper_tok) {
+        case '|':
+            return (left | right);
+        case '^':
+            return (left ^ right);
+        case '&':
+            return (left & right);
+        case tlEQ:
+            return (left == right);
+        case tlNE:
+            return (left != right);
+        case tSHR:
+            return (left >> (int)right);
+        case tSHRU:
+            return ((ucell)left >> (ucell)right);
+        case tSHL:
+            return ((ucell)left << (int)right);
+        case '+':
+            return (left + right);
+        case '-':
+            return (left - right);
+        case '*':
+            return (left * right);
+        case '/':
+            if (right == 0) {
+                error(29);
+                return 0;
+            }
+            return left / right;
+        case '%':
+            if (right == 0) {
+                error(29);
+                return 0;
+            }
+            return left % right;
     }
     assert(false);
     error(29); /* invalid expression, assumed 0 (this should never occur) */
@@ -685,8 +608,18 @@ checktag(int tag, int exprtag)
  *  is read into the secondary register immediately.
  */
 int
-commutative(void (*oper)())
+commutative(int oper)
 {
-    return oper == ob_add || oper == os_mult || oper == ob_eq || oper == ob_ne || oper == ob_and ||
-           oper == ob_xor || oper == ob_or;
+    switch (oper) {
+        case '+':
+        case '*':
+        case tlEQ:
+        case tlNE:
+        case '&':
+        case '^':
+        case '|':
+            return true;
+        default:
+            return false;
+    }
 }

@@ -26,6 +26,7 @@
 #include <functional>
 #include <unordered_map>
 
+#include "label.h"
 #include "sc.h"
 
 class CompileContext;
@@ -43,13 +44,14 @@ class FunctionData final : public SymbolData
 
     void resizeArgs(size_t nargs);
 
-    int funcid;          /* set for functions during codegen */
     PoolList<PoolString> dbgstrs;
     PoolList<arginfo> args;
-    ArrayData* array;    /* For functions with array returns */
+    ArrayData* array;    // For functions with array returns
     FunctionInfo* node;
     FunctionInfo* forward;
     symbol* alias;
+    sp::Label label;     // modern replacement for addr
+    sp::Label funcid;
 };
 
 class EnumStructVarData final : public SymbolData
@@ -214,7 +216,7 @@ struct symbol : public PoolObject
         refers_to_.clear();
         referred_from_.clear();
     }
-
+    bool is_variadic() const;
     bool must_return_value() const;
 
   private:

@@ -26,7 +26,6 @@
 #include <amtl/am-raii.h>
 #include "array-helpers.h"
 #include "code-generator.h"
-#include "emitter.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
@@ -260,60 +259,55 @@ ConstDecl::Analyze(SemaContext& sc)
     return true;
 }
 
-static inline OpFunc TokenToOpFunc(int token) {
+static inline int GetOperToken(int token) {
     switch (token) {
-        case '*':
-        case taMULT:
-            return os_mult;
-        case '/':
-        case taDIV:
-            return os_div;
-        case '%':
-        case taMOD:
-            return os_mod;
-        case '+':
-        case taADD:
-            return ob_add;
-        case '-':
-        case taSUB:
-            return ob_sub;
-        case tSHL:
-        case taSHL:
-            return ob_sal;
-        case tSHR:
-        case taSHR:
-            return os_sar;
-        case tSHRU:
-        case taSHRU:
-            return ou_sar;
-        case '&':
-        case taAND:
-            return ob_and;
-        case '^':
-        case taXOR:
-            return ob_xor;
-        case '|':
-        case taOR:
-            return ob_or;
-        case tlLE:
-            return os_le;
-        case tlGE:
-            return os_ge;
-        case '<':
-            return os_lt;
-        case '>':
-            return os_gt;
         case tlEQ:
-            return ob_eq;
         case tlNE:
-            return ob_ne;
+        case tlLE:
+        case tlGE:
+        case '<':
+        case '>':
+        case '|':
+        case '^':
+        case '&':
+        case '*':
+        case '/':
+        case '%':
+        case '+':
+        case '-':
+        case tSHL:
+        case tSHR:
+        case tSHRU:
+            return token;
+        case taMULT:
+            return '*';
+        case taDIV:
+            return '/';
+        case taMOD:
+            return '%';
+        case taADD:
+            return '+';
+        case taSUB:
+            return '-';
+        case taSHL:
+            return tSHL;
+        case taSHR:
+            return tSHR;
+        case taSHRU:
+            return tSHRU;
+        case taAND:
+            return '&';
+        case taXOR:
+            return '^';
+        case taOR:
+            return '|';
         case '=':
         case tlOR:
         case tlAND:
-            return nullptr;
+            return 0;
         default:
             assert(false);
-            return nullptr;
+            return 0;
     }
 }
 
@@ -321,7 +315,7 @@ CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
   : pos(pos),
     token(token),
     expr(expr),
-    oper(TokenToOpFunc(token))
+    oper_tok(GetOperToken(token))
 {
 }
 
@@ -372,7 +366,7 @@ Expr::AnalyzeForTest(SemaContext& sc)
 
     if (val_.tag != 0 || val_.tag != pc_tag_bool) {
         UserOperation userop;
-        if (find_userop(sc, lneg, val_.tag, 0, 1, &val_, &userop)) {
+        if (find_userop(sc, '!', val_.tag, 0, 1, &val_, &userop)) {
             // Call user op for '!', then invert it. EmitTest will fold out the
             // extra invert.
             //
@@ -453,7 +447,7 @@ UnaryExpr::Analyze(SemaContext& sc)
                 val_.constval = ~val_.constval;
             break;
         case '!':
-            if (find_userop(sc, lneg, val_.tag, 0, 1, &val_, &userop)) {
+            if (find_userop(sc, '!', val_.tag, 0, 1, &val_, &userop)) {
                 expr_ = new CallUserOpExpr(userop, expr_);
                 val_ = expr_->val();
                 userop_ = true;
@@ -466,7 +460,7 @@ UnaryExpr::Analyze(SemaContext& sc)
             if (val_.ident == iCONSTEXPR && val_.tag == sc_rationaltag) {
                 float f = sp::FloatCellUnion(val_.constval).f32;
                 val_.constval = sp::FloatCellUnion(-f).cell;
-            } else if (find_userop(sc, neg, val_.tag, 0, 1, &val_, &userop)) {
+            } else if (find_userop(sc, '-', val_.tag, 0, 1, &val_, &userop)) {
                 expr_ = new CallUserOpExpr(userop, expr_);
                 val_ = expr_->val();
                 userop_ = true;
@@ -527,8 +521,7 @@ IncDecExpr::Analyze(SemaContext& sc)
         markusage(expr_val.accessor->setter, uREAD);
     }
 
-    auto op = (token_ == tINC) ? user_inc : user_dec;
-    find_userop(sc, op, expr_val.tag, 0, 1, &expr_val, &userop_);
+    find_userop(sc, token_, expr_val.tag, 0, 1, &expr_val, &userop_);
 
     // :TODO: more type checks
     val_.ident = iEXPRESSION;
@@ -573,7 +566,7 @@ BinaryExprBase::ProcessUses(SemaContext& sc)
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
   : BinaryExprBase(AstKind::BinaryExpr, pos, token, left, right)
 {
-    oper_ = TokenToOpFunc(token_);
+    oper_tok_ = GetOperToken(token_);
 }
 
 bool
@@ -622,7 +615,7 @@ BinaryExpr::Analyze(SemaContext& sc)
     const auto& left_val = left_->val();
     const auto& right_val = right_->val();
 
-    if (oper_) {
+    if (oper_tok_) {
         assert(token_ != '=');
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
@@ -650,14 +643,14 @@ BinaryExpr::Analyze(SemaContext& sc)
     if (assignop_.sym)
         val_.tag = assignop_.sym->tag;
 
-    if (oper_) {
-        if (find_userop(sc, oper_, left_val.tag, right_val.tag, 2, nullptr, &userop_)) {
+    if (oper_tok_) {
+        if (find_userop(sc, oper_tok_, left_val.tag, right_val.tag, 2, nullptr, &userop_)) {
             val_.tag = userop_.sym->tag;
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
             matchtag(left_val.tag, right_val.tag, FALSE);
             val_.ident = iCONSTEXPR;
-            val_.constval = calc(left_val.constval, oper_, right_val.constval, &boolresult);
+            val_.constval = calc(left_val.constval, oper_tok_, right_val.constval, &boolresult);
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
@@ -683,7 +676,7 @@ BinaryExpr::ValidateAssignmentLHS()
 
     if (left_ident == iARRAY || left_ident == iREFARRAY) {
         // array assignment is permitted too (with restrictions)
-        if (oper_) {
+        if (oper_tok_) {
             error(pos_, 23);
             return false;
         }
@@ -742,7 +735,7 @@ BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
                      ((left_val.ident == iARRAYCELL || left_val.ident == iARRAYCHAR) &&
                        left_val.constval > 1 &&
                        left_val.sym->dim.array.level == 0 &&
-                       !oper_ &&
+                       !oper_tok_ &&
                        (right_val.ident == iARRAY || right_val.ident == iREFARRAY));
     if (leftarray) {
         if (right_val.ident != iARRAY && right_val.ident != iREFARRAY) {
@@ -809,10 +802,10 @@ BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(sc, nullptr, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
+        find_userop(sc, 0, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
     }
 
-    if (!oper_ && !checkval_string(&left_val, &right_val)) {
+    if (!oper_tok_ && !checkval_string(&left_val, &right_val)) {
         if (leftarray &&
             ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
              (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string)))
@@ -992,7 +985,7 @@ ChainedCompareExpr::Analyze(SemaContext& sc)
             return false;
         }
 
-        if (find_userop(sc, op.oper, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
+        if (find_userop(sc, op.oper_tok, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
             if (op.userop.sym->tag != pc_tag_bool) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
@@ -1971,7 +1964,7 @@ CallExpr::Analyze(SemaContext& sc)
         Expr* expr = argv_[argidx].expr;
         if (expr->as<DefaultArgExpr>() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(sc, nullptr, arg.def->tag, arg.type.tag(), 2, nullptr, &userop))
+            if (find_userop(sc, 0, arg.def->tag, arg.type.tag(), 2, nullptr, &userop))
                 argv_[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
@@ -2058,7 +2051,7 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(sc, nullptr, val->tag, arg->type.tag(), 2, nullptr, &userop))
+                find_userop(sc, 0, val->tag, arg->type.tag(), 2, nullptr, &userop))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
@@ -2939,9 +2932,6 @@ FunctionInfo::DoAnalyze(SemaContext& outer_sc)
     if (sym_->skipped && !this_tag_)
         return true;
 
-    // :TODO: remove this when curfunc goes away.
-    ke::SaveAndSet<symbol*> auto_curfunc(&curfunc, sym_);
-
     {
         AutoErrorPos error_pos(pos_);
         check_void_decl(&decl_, FALSE);
@@ -3115,7 +3105,6 @@ FunctionInfo::ProcessUses(SemaContext& outer_sc)
         return;
 
     SemaContext sc(outer_sc, sym_, this);
-    ke::SaveAndSet<symbol*> set_curfunc(&curfunc, sym_);
 
     for (const auto& arg : args_)
         arg.decl->ProcessUses(sc);

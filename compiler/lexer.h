@@ -259,7 +259,6 @@ int isoctal(char c);
 int getlabel(void);
 char* itoh(ucell val);
 std::string get_token_string(int tok_id);
-int is_variadic(symbol* sym);
 int alpha(char c);
 
 enum class TerminatorPolicy {
