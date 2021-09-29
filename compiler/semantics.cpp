@@ -62,7 +62,13 @@ ParseTree::Analyze(SemaContext& sc)
 
     // This inserts missing return statements at the global scope, so it cannot
     // be omitted.
-    if (!TestSymbols(sc.cc().globals(), false)) {
+    bool has_public = false;
+    for (const auto& entry : sc.static_scopes()) {
+        has_public |= TestSymbols(entry, false);
+    }
+    has_public |= TestSymbols(sc.cc().globals(), false);
+
+    if (!has_public) {
         report(13); /* no entry point (no public functions) */
         return false;
     }
@@ -3275,4 +3281,11 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
 
     arg->def->array = new ArrayData;
     *arg->def->array = std::move(data);
+}
+
+bool
+ChangeScopeNode::Analyze(SemaContext& sc)
+{
+    sc.static_scopes().emplace(scope_);
+    return true;
 }

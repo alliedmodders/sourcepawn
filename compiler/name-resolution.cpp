@@ -760,7 +760,8 @@ FunctionDecl::EnterNames(SemaContext& sc)
     }
 
     if (!sym) {
-        sym = new symbol(name, 0, iFUNCTN, sGLOBAL, 0);
+        auto scope = info_->is_static() ? sSTATIC : sGLOBAL;
+        sym = new symbol(name, 0, iFUNCTN, scope, 0);
         if (info_->decl().opertok)
             sym->is_operator = true;
 
