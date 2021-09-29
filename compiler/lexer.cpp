@@ -79,15 +79,18 @@ Lexer::PlungeQualifiedFile(const char* name)
 
     ext_idx = 0;
     do {
-        fp = std::make_shared<SourceFile>();
-        if (!fp->Open(name)) {
-            /* try to push_back an extension */
-            alt_name = std::string(name) + extensions[ext_idx];
-            if (fp->Open(alt_name)) {
-                name = alt_name.c_str();
-                break;
-            }
-            fp = nullptr;
+        auto sf = std::make_shared<SourceFile>();
+        if (sf->Open(name)) {
+            fp = std::move(sf);
+            break;
+        }
+
+        /* try to push_back an extension */
+        alt_name = std::string(name) + extensions[ext_idx];
+        if (sf->Open(alt_name)) {
+            fp = std::move(sf);
+            name = alt_name.c_str();
+            break;
         }
         ext_idx++;
     } while (ext_idx < (sizeof extensions / sizeof extensions[0]));
@@ -152,7 +155,7 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
         }
     }
 
-    if (try_includepaths && name[0] != DIRSEP_CHAR) {
+    if (!result && try_includepaths && name[0] != DIRSEP_CHAR) {
         auto& cc = CompileContext::get();
         for (const auto& inc_path : cc.options()->include_paths) {
             auto path = inc_path + name;
