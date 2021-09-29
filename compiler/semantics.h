@@ -20,6 +20,7 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <unordered_set>
 #include <vector>
 
 #include "compile-context.h"
@@ -98,6 +99,8 @@ class SemaContext
     SymbolScope* scope() const { return scope_; }
     void set_scope(SymbolScope* scope) { scope_ = scope; }
 
+    std::unordered_set<SymbolScope*>& static_scopes() { return static_scopes_; }
+
   private:
     CompileContext& cc_;
     SymbolScope* scope_ = nullptr;
@@ -112,6 +115,7 @@ class SemaContext
     bool loop_has_return_ = false;
     bool warned_unreachable_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
+    std::unordered_set<SymbolScope*> static_scopes_;
 };
 
 class AutoEnterScope final

@@ -149,7 +149,7 @@ class ChangeScopeNode : public Stmt
 
     virtual bool EnterNames(SemaContext& sc) override;
     virtual bool Bind(SemaContext& sc) override;
-    virtual bool Analyze(SemaContext&) override { return true; }
+    virtual bool Analyze(SemaContext&) override;
     virtual void ProcessUses(SemaContext&) override {}
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::ChangeScopeNode; }
