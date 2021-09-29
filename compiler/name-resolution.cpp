@@ -800,7 +800,7 @@ FunctionDecl::CanRedefine(symbol* sym)
 
     if (data->node) {
         if (!data->node->is_public()) {
-            report(data->node->pos(), 412) << name_;
+            report(pos_, 412) << name_;
             return false;
         }
         return true;
