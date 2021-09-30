@@ -33,8 +33,8 @@
 class ArraySizeResolver
 {
   public:
-    ArraySizeResolver(SemaContext& sc, VarDecl* decl);
-    ArraySizeResolver(SemaContext& sc, const token_pos_t& pos, typeinfo_t* type, int vclass);
+    ArraySizeResolver(Semantics* sema, VarDecl* decl);
+    ArraySizeResolver(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
     void Resolve();
 
@@ -46,7 +46,7 @@ class ArraySizeResolver
     bool ResolveDimExpr(Expr* expr, value* v);
 
   private:
-    SemaContext& sc_;
+    Semantics* sema_;
     const token_pos_t& pos_;
     typeinfo_t* type_;
     Expr* initializer_;
@@ -59,8 +59,8 @@ class ArraySizeResolver
 static const int kSizeUnknown = -1;
 static const int kSizeIndeterminate = -2;
 
-ArraySizeResolver::ArraySizeResolver(SemaContext& sc, VarDecl* decl)
-  : sc_(sc),
+ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDecl* decl)
+  : sema_(sema),
     pos_(decl->pos()),
     type_(decl->mutable_type()),
     initializer_(decl->init_rhs()),
@@ -73,9 +73,9 @@ ArraySizeResolver::ArraySizeResolver(SemaContext& sc, VarDecl* decl)
         es_ = type;
 }
 
-ArraySizeResolver::ArraySizeResolver(SemaContext& sc, const token_pos_t& pos, typeinfo_t* type,
+ArraySizeResolver::ArraySizeResolver(Semantics* sema, const token_pos_t& pos, typeinfo_t* type,
                                      int vclass)
-  : sc_(sc),
+  : sema_(sema),
     pos_(pos),
     type_(type),
     initializer_(nullptr),
@@ -306,7 +306,7 @@ ArraySizeResolver::ResolveDimExprs()
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
-        } else if (IsLegacyEnumTag(sc_.scope(), v.tag) && v.sym && !v.sym->parent()) {
+        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym && !v.sym->parent()) {
             error(expr->pos(), 153);
             return false;
         } else {
@@ -324,7 +324,8 @@ ArraySizeResolver::ResolveDimExprs()
 bool
 ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
 {
-    if (!expr->Bind(sc_))
+    auto& sc = *sema_->context();
+    if (!expr->Bind(sc))
         return false;
 
     if (auto sym_expr = expr->as<SymbolExpr>()) {
@@ -343,7 +344,7 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
         }
     }
 
-    if (!expr->Analyze(sc_))
+    if (!sema_->CheckExpr(expr))
         return false;
 
     *v = expr->val();
@@ -351,28 +352,28 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
 }
 
 void
-ResolveArraySize(SemaContext& sc, VarDecl* decl)
+ResolveArraySize(Semantics* sema, VarDecl* decl)
 {
     assert(decl->type().ident == iARRAY);
 
-    ArraySizeResolver resolver(sc, decl);
+    ArraySizeResolver resolver(sema, decl);
     resolver.Resolve();
 }
 
 void
-ResolveArraySize(SemaContext& sc, const token_pos_t& pos, typeinfo_t* type, int vclass)
+ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass)
 {
     assert(type->ident == iARRAY);
 
-    ArraySizeResolver resolver(sc, pos, type, vclass);
+    ArraySizeResolver resolver(sema, pos, type, vclass);
     resolver.Resolve();
 }
 
 class FixedArrayValidator final
 {
   public:
-    FixedArrayValidator(SemaContext& sc, VarDecl* decl)
-      : sc_(sc),
+    FixedArrayValidator(Semantics* sema, VarDecl* decl)
+      : sema_(sema),
         decl_(decl),
         pos_(decl->pos()),
         init_(decl->init_rhs()),
@@ -381,8 +382,8 @@ class FixedArrayValidator final
     {
     }
 
-    FixedArrayValidator(SemaContext& sc, const typeinfo_t& type, Expr* init)
-      : sc_(sc),
+    FixedArrayValidator(Semantics* sema, const typeinfo_t& type, Expr* init)
+      : sema_(sema),
         decl_(nullptr),
         pos_(init->pos()),
         init_(init),
@@ -399,7 +400,7 @@ class FixedArrayValidator final
     bool CheckArgument(Expr* init);
 
   private:
-    SemaContext& sc_;
+    Semantics* sema_;
     VarDecl* decl_;
     token_pos_t pos_;
     Expr* init_;
@@ -409,9 +410,9 @@ class FixedArrayValidator final
 };
 
 bool
-CheckArrayInitialization(SemaContext& sc, const typeinfo_t& type, Expr* init)
+CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init)
 {
-    FixedArrayValidator av(sc, type, init);
+    FixedArrayValidator av(sema, type, init);
 
     AutoCountErrors errors;
     return av.Validate() && errors.ok();
@@ -597,7 +598,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             return false;
         }
 
-        if (!init->Analyze(sc_))
+        if (!sema_->CheckExpr(init))
             return false;
 
         if (init->val().ident != iCONSTEXPR) {
@@ -621,7 +622,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
 
     ke::Maybe<cell> prev1, prev2;
     for (const auto& expr : array->exprs()) {
-        if (!expr->Analyze(sc_))
+        if (!sema_->CheckExpr(expr))
             continue;
 
         AutoErrorPos pos(expr->pos());
@@ -697,12 +698,12 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
 
         typeinfo_t type = TypeInfoFromSymbol(field);
         if (type.ident == iARRAY) {
-            if (!CheckArrayInitialization(sc_, type, expr))
+            if (!CheckArrayInitialization(sema_, type, expr))
                 continue;
         } else {
             AutoErrorPos pos(expr->pos());
 
-            if (!expr->Analyze(sc_))
+            if (!sema_->CheckExpr(expr))
                 continue;
 
             const auto& v = expr->val();
@@ -773,17 +774,15 @@ AddImplicitDynamicInitializer(VarDecl* decl)
     // Since we could have added EmitOnlyExprs during analysis, make sure
     // we don't analyze these again. This is a pretty gross hack we should
     // look to remove in the future.
-    init->set_already_analyzed();
+    init->set_analysis_result(true);
     return true;
 }
 
-bool
-CheckArrayDeclaration(SemaContext& sc, VarDecl* decl)
-{
+bool Semantics::CheckArrayDeclaration(VarDecl* decl) {
     AutoCountErrors errors;
     const auto& type = decl->type();
     if (type.ident == iARRAY || decl->vclass() == sARGUMENT) {
-        FixedArrayValidator validator(sc, decl);
+        FixedArrayValidator validator(this, decl);
         if (!validator.Validate() || !errors.ok())
             return false;
         return true;
@@ -808,7 +807,7 @@ CheckArrayDeclaration(SemaContext& sc, VarDecl* decl)
         return AddImplicitDynamicInitializer(decl);
     }
 
-    if (!init->AnalyzeForInitializer(sc))
+    if (!CheckExprForArrayInitializer(init))
         return false;
 
     if (type.is_new && type.isCharArray()) {

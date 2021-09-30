@@ -205,13 +205,12 @@ EnumDecl::EnterNames(SemaContext& sc)
     for (const auto& field : fields_ ) {
         AutoErrorPos error_pos(field.pos);
 
-        if (field.value && field.value->Bind(sc) && field.value->Analyze(sc)) {
+        if (field.value && field.value->Bind(sc) && sc.sema()->CheckExpr(field.value)) {
             int field_tag;
-            if (field.value->EvalConst(&value, &field_tag)) {
+            if (field.value->EvalConst(&value, &field_tag))
                 matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
-            } else {
+            else
                 error(field.pos, 80);
-            }
         }
 
         symbol* sym = DefineConstant(sc, field.name, field.pos, value, vclass_, tag);
@@ -342,7 +341,7 @@ TypedefInfo::Bind(SemaContext& sc)
             return nullptr;
 
         if (arg->type.ident == iARRAY)
-            ResolveArraySize(sc, pos, &arg->type, sARGUMENT);
+            ResolveArraySize(sc.sema(), pos, &arg->type, sARGUMENT);
 
         funcarg_t fa = {};
         fa.type = arg->type;
@@ -403,7 +402,7 @@ ConstDecl::Bind(SemaContext& sc)
 
     if (!expr_->Bind(sc))
         return false;
-    if (!expr_->Analyze(sc))
+    if (!sc.sema()->CheckExpr(expr_))
         return false;
 
     int tag;
@@ -430,7 +429,7 @@ VarDecl::Bind(SemaContext& sc)
         init_rhs()->Bind(sc);
 
     if (type_.ident == iARRAY)
-        ResolveArraySize(sc, this);
+        ResolveArraySize(sc.sema(), this);
 
     if (type_.tag() == pc_tag_void)
         error(pos_, 144);
@@ -639,8 +638,8 @@ BinaryExprBase::Bind(SemaContext& sc)
 bool
 NewArrayExpr::Bind(SemaContext& sc)
 {
-    if (already_analyzed_)
-        return true;
+    if (analyzed())
+        return analysis_result();
 
     if (!sc.BindType(pos_, &type_))
         return false;
@@ -878,6 +877,10 @@ FunctionInfo::Bind(SemaContext& outer_sc)
         name_ = NameForOperator();
 
     SemaContext sc(outer_sc, sym_, this);
+    auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {
+        outer_sc.sema()->set_context(&outer_sc);
+    });
+    sc.sema()->set_context(&sc);
 
     if (strcmp(sym_->name(), uMAINFUNC) == 0) {
         if (!args_.empty())
@@ -978,11 +981,11 @@ FunctionInfo::BindArgs(SemaContext& sc)
         arg.type.declared_tag = typeinfo.enum_struct_tag();
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
-            if (var->Analyze(sc) && var->init_rhs())
+            if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
                 fill_arg_defvalue(var, &arg);
         } else {
             Expr* init = var->init_rhs();
-            if (init && init->Analyze(sc)) {
+            if (init && sc.sema()->CheckExpr(init)) {
                 assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
                 arg.def = new DefaultArg();
 
@@ -1167,7 +1170,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
         if (field.decl.type.numdim()) {
             if (field.decl.type.ident == iARRAY) {
-                ResolveArraySize(sc, field.pos, &field.decl.type, sENUMFIELD);
+                ResolveArraySize(sc.sema(), field.pos, &field.decl.type, sENUMFIELD);
 
                 if (field.decl.type.numdim() > 1) {
                     error(field.pos, 65);

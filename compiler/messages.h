@@ -247,6 +247,7 @@ static const char* fatalmsg[] = {
     /*313*/
     "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
     /*314*/ "only one source file can be specified at a time\n",
+    /*315*/ "unhandled AST type: %d\n",
 };
 
 static const char* warnmsg[] = {

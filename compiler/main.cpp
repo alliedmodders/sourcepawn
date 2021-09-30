@@ -251,19 +251,26 @@ pc_compile(int argc, char* argv[]) {
 
         errors.Reset();
 
-        SemaContext sc;
-        if (!tree->EnterNames(sc) || !errors.ok())
-            goto cleanup;
+        Semantics sema(cc, tree);
+        {
+            SemaContext sc(&sema);
+            sema.set_context(&sc);
 
-        errors.Reset();
-        if (!tree->Bind(sc) || !errors.ok())
-            goto cleanup;
+            if (!tree->EnterNames(sc) || !errors.ok())
+                goto cleanup;
 
-        errors.Reset();
-        if (!tree->Analyze(sc) || !errors.ok())
-            goto cleanup;
+            errors.Reset();
+            if (!tree->Bind(sc) || !errors.ok())
+                goto cleanup;
 
-        tree->ProcessUses(sc);
+            sema.set_context(nullptr);
+
+            errors.Reset();
+            if (!sema.Analyze() || !errors.ok())
+                goto cleanup;
+
+            tree->ProcessUses(sc);
+        }
     }
 
 cleanup:

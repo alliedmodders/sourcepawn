@@ -42,6 +42,7 @@
 #include "compile-options.h"
 #include "errors.h"
 #include "lexer.h"
+#include "parse-node.h"
 #include "sc.h"
 #include "scvars.h"
 #include "symbols.h"
@@ -184,6 +185,12 @@ MessageBuilder::MessageBuilder(MessageBuilder&& other)
     disabled_(false)
 {
     other.disabled_ = true;
+}
+
+MessageBuilder::MessageBuilder(ParseNode* node, int number)
+{
+    where_ = node->pos();
+    number_ = number;
 }
 
 MessageBuilder&
