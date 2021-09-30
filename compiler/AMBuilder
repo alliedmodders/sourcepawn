@@ -54,6 +54,7 @@ binary.sources += [
   'lexer.cpp',
   'main.cpp',
   'name-resolution.cpp',
+  'parse-node.cpp',
   'parser.cpp',
   'pawncc.cpp',
   'pool-allocator.cpp',

@@ -27,18 +27,23 @@
 #include "sc.h"
 #include "parse-node.h"
 
+class Semantics;
+
 class SemaContext
 {
   public:
-    SemaContext()
+    explicit SemaContext(Semantics* sema)
       : cc_(CompileContext::get()),
+        sema_(sema),
         func_(nullptr)
     {
         cc_prev_sc_ = cc_.sema();
         cc_.set_sema(this);
+        scope_ = cc_.globals();
     }
     SemaContext(SemaContext& parent, symbol* func, FunctionInfo* func_node)
       : cc_(parent.cc_),
+        sema_(parent.sema()),
         scope_(parent.scope_),
         func_(func),
         func_node_(func_node)
@@ -93,6 +98,7 @@ class SemaContext
 
     symbol* func() const { return func_; }
     FunctionInfo* func_node() const { return func_node_; }
+    Semantics* sema() const { return sema_; }
 
     // Currently, this only refers to local/argument scopes, and not global
     // scope. They will be linked together when reparse goes away.
@@ -103,6 +109,7 @@ class SemaContext
 
   private:
     CompileContext& cc_;
+    Semantics* sema_ = nullptr;
     SymbolScope* scope_ = nullptr;
     symbol* func_ = nullptr;
     FunctionInfo* func_node_ = nullptr;
@@ -116,6 +123,102 @@ class SemaContext
     bool warned_unreachable_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
     std::unordered_set<SymbolScope*> static_scopes_;
+};
+
+class Semantics final
+{
+    friend class ArraySizeResolver;
+    friend class ConstDecl;
+    friend class EnumDecl;
+    friend class FixedArrayValidator;
+    friend class FunctionInfo;
+    friend class Parser;
+
+  public:
+    Semantics(CompileContext& cc, ParseTree* tree);
+
+    bool Analyze();
+
+    SymbolScope* current_scope() const;
+    SemaContext* context() { return sc_; }
+    void set_context(SemaContext* sc) { sc_ = sc; }
+
+  private:
+    bool CheckStmt(Stmt* stmt);
+    bool CheckStmtList(StmtList* list);
+    bool CheckBlockStmt(BlockStmt* stmt);
+    bool CheckChangeScopeNode(ChangeScopeNode* node);
+    bool CheckMethodmapDecl(MethodmapDecl* info);
+    bool CheckEnumStructDecl(EnumStructDecl* info);
+    bool CheckFunctionInfo(FunctionInfo* info);
+    bool CheckFunctionInfoImpl(FunctionInfo* info);
+    void CheckFunctionReturnUsage(FunctionInfo* info);
+    bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
+    bool CheckSwitchStmt(SwitchStmt* stmt);
+    bool CheckForStmt(ForStmt* stmt);
+    bool CheckDoWhileStmt(DoWhileStmt* stmt);
+    bool CheckExitStmt(ExitStmt* stmt);
+    bool CheckDeleteStmt(DeleteStmt* stmt);
+    bool CheckAssertStmt(AssertStmt* stmt);
+    bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
+    bool CheckReturnStmt(ReturnStmt* stmt);
+    bool CheckArrayReturnStmt(ReturnStmt* stmt);
+    bool CheckExprStmt(ExprStmt* stmt);
+    bool CheckIfStmt(IfStmt* stmt);
+    bool CheckConstDecl(ConstDecl* decl);
+    bool CheckVarDecl(VarDecl* decl);
+    bool CheckConstDecl(VarDecl* decl);
+    bool CheckPstructDecl(VarDecl* decl);
+    bool CheckPstructArg(VarDecl* decl, const pstruct_t* ps, const StructInitField& field,
+                         std::vector<bool>* visited);
+
+    // Expressions.
+    bool CheckExpr(Expr* expr);
+    bool CheckNewArrayExpr(NewArrayExpr* expr);
+    bool CheckArrayExpr(ArrayExpr* expr);
+    bool CheckStringExpr(StringExpr* expr);
+    bool CheckTaggedValueExpr(TaggedValueExpr* expr);
+    bool CheckNullExpr(NullExpr* expr);
+    bool CheckThisExpr(ThisExpr* expr);
+    bool CheckCommaExpr(CommaExpr* expr);
+    bool CheckIndexExpr(IndexExpr* expr);
+    bool CheckCallExpr(CallExpr* expr);
+    bool CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
+    bool CheckSizeofExpr(SizeofExpr* expr);
+    bool CheckCastExpr(CastExpr* expr);
+    bool CheckIncDecExpr(IncDecExpr* expr);
+    bool CheckTernaryExpr(TernaryExpr* expr);
+    bool CheckChainedCompareExpr(ChainedCompareExpr* expr);
+    bool CheckLogicalExpr(LogicalExpr* expr);
+    bool CheckBinaryExpr(BinaryExpr* expr);
+    bool CheckUnaryExpr(UnaryExpr* expr);
+    bool CheckIsDefinedExpr(IsDefinedExpr* expr);
+
+    bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
+    bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
+    bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, symbol* root,
+                                        bool from_call);
+
+    bool CheckAssignmentLHS(BinaryExpr* expr);
+    bool CheckAssignmentRHS(BinaryExpr* expr);
+
+    bool CheckArrayDeclaration(VarDecl* decl);
+    bool CheckExprForArrayInitializer(Expr* expr);
+    bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
+    bool CheckArgument(CallExpr* call, arginfo* arg, Expr* expr, unsigned int argpos);
+    symbol* BindNewTarget(Expr* target);
+    symbol* BindCallTarget(CallExpr* call, Expr* target);
+
+    Expr* AnalyzeForTest(Expr* expr);
+
+    bool TestSymbol(symbol* sym, bool testconst);
+    bool TestSymbols(SymbolScope* scope, bool testconst);
+
+  private:
+    CompileContext& cc_;
+    ParseTree* tree_;
+    std::unordered_set<SymbolScope*> static_scopes_;
+    SemaContext* sc_ = nullptr;
 };
 
 class AutoEnterScope final

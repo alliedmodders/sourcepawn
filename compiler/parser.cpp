@@ -18,8 +18,6 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
 
 #include <assert.h>
 #include <string.h>
@@ -295,11 +293,16 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 bool
 Parser::PreprocExpr(cell* val, int* tag)
 {
-    Parser parser(CompileContext::get());
+    auto& cc = CompileContext::get();
+    Parser parser(cc);
     auto expr = parser.hier14();
 
-    SemaContext sc;
-    if (!expr->Bind(sc) || !expr->Analyze(sc))
+    Semantics sema(cc, nullptr);
+
+    SemaContext sc(&sema);
+    sema.set_context(&sc);
+
+    if (!expr->Bind(sc) || !sema.CheckExpr(expr))
         return false;
     return expr->EvalConst(val, tag);
 }
@@ -1170,6 +1173,8 @@ Parser::struct_init()
         sp::Atom* name = nullptr;
         lexer_->needsymbol(&name);
 
+        auto start_pos = lexer_->pos();
+
         lexer_->need('=');
 
         auto pos = lexer_->pos();
@@ -1196,7 +1201,7 @@ Parser::struct_init()
         }
 
         if (name && expr)
-            init->fields().push_back(StructInitField(name, expr));
+            init->fields().push_back(StructInitField(name, expr, start_pos));
     } while (lexer_->match(',') && !lexer_->peek('}'));
 
     lexer_->need('}');

@@ -33,6 +33,8 @@
 #include "lexer.h"
 #include "sc.h"
 
+class ParseNode;
+
 enum class ErrorType {
     Suppressed,
     Warning,
@@ -101,6 +103,7 @@ class MessageBuilder
   public:
     explicit MessageBuilder(int number);
     MessageBuilder(symbol* sym, int number);
+    MessageBuilder(ParseNode* node, int number);
     MessageBuilder(MessageBuilder&& other);
 
     MessageBuilder(const MessageBuilder& other) = delete;
@@ -123,15 +126,14 @@ class MessageBuilder
         args_.emplace_back(atom ? atom->chars() : "<unknown>");
         return *this;
     }
-    MessageBuilder& operator <<(size_t n) {
-        args_.emplace_back(std::to_string(n));
-        return *this;
-    }
-    MessageBuilder& operator <<(int n) {
-        args_.emplace_back(std::to_string(n));
-        return *this;
-    }
     MessageBuilder& operator <<(Type* type);
+
+    template <typename Integer,
+              std::enable_if_t<std::is_integral<Integer>::value, bool> = true>
+    MessageBuilder& operator <<(Integer n) {
+        args_.emplace_back(std::to_string(n));
+        return *this;
+    }
 
     void operator =(const MessageBuilder& other) = delete;
     MessageBuilder& operator =(MessageBuilder&& other);
@@ -151,6 +153,9 @@ static inline MessageBuilder report(int number) {
 }
 static inline MessageBuilder report(symbol* sym, int number) {
     return MessageBuilder(sym, number);
+}
+static inline MessageBuilder report(ParseNode* node, int number) {
+    return MessageBuilder(node, number);
 }
 
 #ifdef NDEBUG

@@ -53,20 +53,26 @@ AutoEnterScope::~AutoEnterScope()
     sc_.set_scope(prev_);
 }
 
-bool
-ParseTree::Analyze(SemaContext& sc)
+Semantics::Semantics(CompileContext& cc, ParseTree* tree)
+  : cc_(cc),
+    tree_(tree)
 {
+}
+
+bool Semantics::Analyze() {
+    SemaContext sc(this);
+    ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
+
     AutoCountErrors errors;
-    if (!StmtList::Analyze(sc) || !errors.ok())
+    if (!CheckStmtList(tree_) || !errors.ok())
         return false;
 
     // This inserts missing return statements at the global scope, so it cannot
     // be omitted.
     bool has_public = false;
-    for (const auto& entry : sc.static_scopes()) {
+    for (const auto& entry : static_scopes_)
         has_public |= TestSymbols(entry, false);
-    }
-    has_public |= TestSymbols(sc.cc().globals(), false);
+    has_public |= TestSymbols(cc_.globals(), false);
 
     if (!has_public) {
         report(13); /* no entry point (no public functions) */
@@ -75,97 +81,124 @@ ParseTree::Analyze(SemaContext& sc)
     return true;
 }
 
-bool
-StmtList::Analyze(SemaContext& sc)
-{
+bool Semantics::CheckStmtList(StmtList* list) {
     bool ok = true;
-    for (const auto& stmt : stmts_) {
-        sc.cc().reports()->ResetErrorFlag();
+    for (const auto& stmt : list->stmts()) {
+        cc_.reports()->ResetErrorFlag();
 
-        ok &= stmt->Analyze(sc);
+        ok &= CheckStmt(stmt);
 
         FlowType flow = stmt->flow_type();
-        if (flow != Flow_None && flow_type() == Flow_None)
-            set_flow_type(flow);
+        if (flow != Flow_None && list->flow_type() == Flow_None)
+            list->set_flow_type(flow);
     }
     return ok;
 }
 
-bool
-Decl::Analyze(SemaContext& sc)
-{
-    // No analysis needed for most decls.
-    return true;
+bool Semantics::CheckStmt(Stmt* stmt) {
+    switch (stmt->kind()) {
+        case AstKind::ChangeScopeNode:
+            return CheckChangeScopeNode(stmt->to<ChangeScopeNode>());
+        case AstKind::VarDecl:
+            return CheckVarDecl(stmt->to<VarDecl>());
+        case AstKind::ExprStmt:
+            // Check even if no side effects.
+            return CheckExpr(stmt->to<ExprStmt>()->expr());
+        case AstKind::ExitStmt:
+            return CheckExitStmt(stmt->to<ExitStmt>());
+        case AstKind::BlockStmt:
+            return CheckBlockStmt(stmt->to<BlockStmt>());
+        case AstKind::AssertStmt:
+            return CheckAssertStmt(stmt->to<AssertStmt>());
+        case AstKind::IfStmt:
+            return CheckIfStmt(stmt->to<IfStmt>());
+        case AstKind::DeleteStmt:
+            return CheckDeleteStmt(stmt->to<DeleteStmt>());
+        case AstKind::DoWhileStmt:
+            return CheckDoWhileStmt(stmt->to<DoWhileStmt>());
+        case AstKind::ForStmt:
+            return CheckForStmt(stmt->to<ForStmt>());
+        case AstKind::SwitchStmt:
+            return CheckSwitchStmt(stmt->to<SwitchStmt>());
+        case AstKind::FunctionDecl: {
+            auto decl = stmt->to<FunctionDecl>();
+            return CheckFunctionInfo(decl->info());
+        }
+        case AstKind::EnumStructDecl:
+            return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
+        case AstKind::MethodmapDecl:
+            return CheckMethodmapDecl(stmt->to<MethodmapDecl>());
+        case AstKind::ReturnStmt:
+            return CheckReturnStmt(stmt->to<ReturnStmt>());
+        case AstKind::PragmaUnusedStmt:
+            return CheckPragmaUnusedStmt(stmt->to<PragmaUnusedStmt>());
+        case AstKind::StmtList:
+            return CheckStmtList(stmt->to<StmtList>());
+        case AstKind::StaticAssertStmt:
+            return CheckStaticAssertStmt(stmt->to<StaticAssertStmt>());
+        case AstKind::EnumDecl:
+        case AstKind::LoopControlStmt:
+        case AstKind::PstructDecl:
+        case AstKind::TypedefDecl:
+        case AstKind::TypesetDecl:
+        case AstKind::UsingDecl:
+            return true;
+        default:
+            assert(false);
+
+            report(stmt, 315) << (int)stmt->kind();
+            return false;
+    }
 }
 
-VarDecl::VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
-                 bool is_public, bool is_static, bool is_stock, Expr* initializer)
- : Decl(AstKind::VarDecl, pos, name),
-   type_(type),
-   vclass_(vclass),
-   is_public_(is_public),
-   is_static_(is_static),
-   is_stock_(is_stock),
-   autozero_(true)
-{
-    // Having a BinaryExpr allows us to re-use assignment logic.
-    if (initializer)
-        set_init(initializer);
-}
+bool Semantics::CheckVarDecl(VarDecl* decl) {
+    AutoErrorPos aep(decl->pos());
 
-void
-VarDecl::set_init(Expr* expr)
-{
-    init_ = new BinaryExpr(pos(), '=', new SymbolExpr(pos(), name()), expr);
-    init_->set_initializer();
-}
+    auto sym = decl->sym();
+    const auto& type = decl->type();
 
-Expr*
-VarDecl::init_rhs() const
-{
-    if (!init_)
-        return nullptr;
-    return init_->right();
-}
+    // Constants are checked during binding.
+    if (sym->ident == iCONSTEXPR)
+        return true;
 
-bool
-VarDecl::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+    if (gTypes.find(sym->tag)->kind() == TypeKind::Struct)
+        return CheckPstructDecl(decl);
 
-    if (gTypes.find(sym_->tag)->kind() == TypeKind::Struct)
-        return AnalyzePstruct();
+    if (type.ident == iARRAY || type.ident == iREFARRAY)
+        return CheckArrayDeclaration(decl);
 
-    if (type_.ident == iARRAY || type_.ident == iREFARRAY)
-        return CheckArrayDeclaration(sc, this);
+    assert(type.ident == iVARIABLE || type.ident == iREFERENCE);
 
-    assert(type_.ident == iVARIABLE || type_.ident == iREFERENCE);
+    auto init = decl->init();
 
     // Since we always create an assignment expression, all type checks will
     // be performed by the Analyze(sc) call here.
-    if (init_ && !init_->Analyze(sc))
+    //
+    // :TODO: write flag when removing ProcessUses
+    if (init && !CheckExpr(init))
         return false;
 
-    if (init_ && vclass_ != sLOCAL) {
-        if (!init_rhs()->EvalConst(nullptr, nullptr)) {
-            if (vclass_ == sARGUMENT && init_rhs()->is(AstKind::SymbolExpr))
+    auto vclass = decl->vclass();
+    auto init_rhs = decl->init_rhs();
+    if (init && vclass != sLOCAL) {
+        if (!init_rhs->EvalConst(nullptr, nullptr)) {
+            if (vclass == sARGUMENT && init_rhs->is(AstKind::SymbolExpr))
                 return true;
-            error(init_rhs()->pos(), 8);
+            report(init_rhs->pos(), 8);
         }
     }
     return true;
 }
 
-bool
-VarDecl::AnalyzePstruct()
-{
-    if (!init_)
+bool Semantics::CheckPstructDecl(VarDecl* decl) {
+    if (!decl->init())
         return true;
 
-    auto init = init_->right()->as<StructExpr>();
+    auto sym = decl->sym();
+    auto init = decl->init()->right()->as<StructExpr>();
     assert(init); // If we parse struct initializers as a normal global, this check will need to be
                   // soft.
-    auto type = gTypes.find(sym_->tag);
+    auto type = gTypes.find(sym->tag);
     auto ps = type->asStruct();
 
     std::vector<bool> visited;
@@ -174,7 +207,7 @@ VarDecl::AnalyzePstruct()
     // Do as much checking as we can before bailing out.
     bool ok = true;
     for (const auto& field : init->fields())
-        ok &= AnalyzePstructArg(ps, field, &visited);
+        ok &= CheckPstructArg(decl, ps, field, &visited);
 
     if (!ok)
         return false;
@@ -186,21 +219,21 @@ VarDecl::AnalyzePstruct()
         if (ps->args[i]->type.ident == iREFARRAY) {
             assert(ps->args[i]->type.tag() == pc_tag_string);
 
-            auto expr = new StringExpr(pos_, "", 0);
-            init->fields().push_back(StructInitField(ps->args[i]->name, expr));
+            auto expr = new StringExpr(decl->pos(), "", 0);
+            init->fields().push_back(StructInitField(ps->args[i]->name, expr,
+                                                     decl->pos()));
         }
     }
 
     return true;
 }
 
-bool
-VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
-                           std::vector<bool>* visited)
+bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps, const StructInitField& field,
+                                std::vector<bool>* visited)
 {
     auto arg = pstructs_getarg(ps, field.name);
     if (!arg) {
-        report(pos_, 96) << field.name << "struct" << name_;
+        report(field.pos, 96) << field.name << "struct" << decl->name();
         return false;
     }
 
@@ -251,17 +284,11 @@ VarDecl::AnalyzePstructArg(const pstruct_t* ps, const StructInitField& field,
             error(expr->pos(), 405);
             return false;
         }
-        sym_->add_reference_to(sym);
+        decl->sym()->add_reference_to(sym);
     } else {
         assert(false);
         return false;
     }
-    return true;
-}
-
-bool
-ConstDecl::Analyze(SemaContext& sc)
-{
     return true;
 }
 
@@ -317,6 +344,56 @@ static inline int GetOperToken(int token) {
     }
 }
 
+bool Semantics::CheckExpr(Expr* expr) {
+    switch (expr->kind()) {
+        case AstKind::UnaryExpr:
+            return CheckUnaryExpr(expr->to<UnaryExpr>());
+        case AstKind::IncDecExpr:
+            return CheckIncDecExpr(expr->to<IncDecExpr>());
+        case AstKind::BinaryExpr:
+            return CheckBinaryExpr(expr->to<BinaryExpr>());
+        case AstKind::LogicalExpr:
+            return CheckLogicalExpr(expr->to<LogicalExpr>());
+        case AstKind::ChainedCompareExpr:
+            return CheckChainedCompareExpr(expr->to<ChainedCompareExpr>());
+        case AstKind::TernaryExpr:
+            return CheckTernaryExpr(expr->to<TernaryExpr>());
+        case AstKind::CastExpr:
+            return CheckCastExpr(expr->to<CastExpr>());
+        case AstKind::SymbolExpr:
+            return CheckSymbolExpr(expr->to<SymbolExpr>(), false);
+        case AstKind::CommaExpr:
+            return CheckCommaExpr(expr->to<CommaExpr>());
+        case AstKind::ThisExpr:
+            return CheckThisExpr(expr->to<ThisExpr>());
+        case AstKind::NullExpr:
+            return CheckNullExpr(expr->to<NullExpr>());
+        case AstKind::StringExpr:
+            return CheckStringExpr(expr->to<StringExpr>());
+        case AstKind::ArrayExpr:
+            return CheckArrayExpr(expr->to<ArrayExpr>());
+        case AstKind::IndexExpr:
+            return CheckIndexExpr(expr->to<IndexExpr>());
+        case AstKind::FieldAccessExpr:
+            return CheckFieldAccessExpr(expr->to<FieldAccessExpr>(), false);
+        case AstKind::CallExpr:
+            return CheckCallExpr(expr->to<CallExpr>());
+        case AstKind::NewArrayExpr:
+            return CheckNewArrayExpr(expr->to<NewArrayExpr>());
+        case AstKind::IsDefinedExpr:
+            return CheckIsDefinedExpr(expr->to<IsDefinedExpr>());
+        case AstKind::TaggedValueExpr:
+            return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
+        case AstKind::SizeofExpr:
+            return CheckSizeofExpr(expr->to<SizeofExpr>());
+        default:
+            assert(false);
+
+            report(expr, 315) << (int)expr->kind();
+            return false;
+    }
+}
+
 CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
   : pos(pos),
     token(token),
@@ -325,24 +402,7 @@ CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
 {
 }
 
-void
-ParseNode::error(const token_pos_t& pos, int number, ...)
-{
-    va_list ap;
-    va_start(ap, number);
-    error_va(pos, number, ap);
-    va_end(ap);
-}
-
-void
-Expr::FlattenLogical(int token, std::vector<Expr*>* out)
-{
-    out->push_back(this);
-}
-
-bool
-Expr::EvalConst(cell* value, int* tag)
-{
+bool Expr::EvalConst(cell* value, int* tag) {
     if (val_.ident != iCONSTEXPR) {
         if (!FoldToConstant())
             return false;
@@ -356,51 +416,49 @@ Expr::EvalConst(cell* value, int* tag)
     return true;
 }
 
-Expr*
-Expr::AnalyzeForTest(SemaContext& sc)
-{
-    if (!Analyze(sc))
+Expr* Semantics::AnalyzeForTest(Expr* expr) {
+    if (!CheckExpr(expr))
         return nullptr;
 
-    if (val_.ident == iARRAY || val_.ident == iREFARRAY) {
-        if (val_.sym)
-            error(pos_, 33, val_.sym->name());
+    auto& val = expr->val();
+    if (val.ident == iARRAY || val.ident == iREFARRAY) {
+        if (val.sym)
+            report(expr, 33) << val.sym->name();
         else
-            error(pos_, 29);
+            report(expr, 29);
         return nullptr;
     }
 
-    if (val_.tag != 0 || val_.tag != pc_tag_bool) {
+    if (val.tag != 0 || val.tag != pc_tag_bool) {
         UserOperation userop;
-        if (find_userop(sc, '!', val_.tag, 0, 1, &val_, &userop)) {
+        if (find_userop(*sc_, '!', val.tag, 0, 1, &val, &userop)) {
             // Call user op for '!', then invert it. EmitTest will fold out the
             // extra invert.
             //
             // First convert to rvalue, since user operators should never
             // taken an lvalue.
-            Expr* expr = this;
             if (expr->lvalue())
                 expr = new RvalueExpr(expr);
 
             expr = new CallUserOpExpr(userop, expr);
             expr = new UnaryExpr(expr->pos(), '!', expr);
-            expr->val_.ident = iEXPRESSION;
-            expr->val_.tag = pc_tag_bool;
+            expr->val().ident = iEXPRESSION;
+            expr->val().tag = pc_tag_bool;
             return expr;
         }
     }
 
-    if (val_.ident == iCONSTEXPR) {
-        if (val_.constval)
-            error(pos_, 206);
+    if (val.ident == iCONSTEXPR) {
+        if (val.constval)
+            report(expr, 206);
         else
-            error(pos_, 205);
+            report(expr, 205);
     }
 
-    if (lvalue())
-        return new RvalueExpr(this);
+    if (expr->lvalue())
+        return new RvalueExpr(expr);
 
-    return this;
+    return expr;
 }
 
 RvalueExpr::RvalueExpr(Expr* expr)
@@ -423,64 +481,64 @@ RvalueExpr::ProcessUses(SemaContext& sc)
     expr_->MarkAndProcessUses(sc);
 }
 
-bool
-IsDefinedExpr::Analyze(SemaContext& sc)
-{
-    val_.ident = iCONSTEXPR;
-    val_.constval = value_;
-    val_.tag = 0;
+bool Semantics::CheckIsDefinedExpr(IsDefinedExpr* expr) {
+    auto& val = expr->val();
+    val.ident = iCONSTEXPR;
+    val.constval = expr->value();
+    val.tag = 0;
     return true;
 }
 
-bool
-UnaryExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
+    AutoErrorPos aep(unary->pos());
 
-    if (!expr_->Analyze(sc))
+    auto expr = unary->expr();
+    if (!CheckExpr(expr))
         return false;
 
-    if (expr_->lvalue())
-        expr_ = new RvalueExpr(expr_);
-    val_ = expr_->val();
+    if (expr->lvalue())
+        expr = unary->set_expr(new RvalueExpr(expr));
+
+    auto& out_val = unary->val();
+    out_val = expr->val();
 
     // :TODO: check for invalid types
 
     UserOperation userop;
-    switch (token_) {
+    switch (unary->token()) {
         case '~':
-            if (val_.ident == iCONSTEXPR)
-                val_.constval = ~val_.constval;
+            if (out_val.ident == iCONSTEXPR)
+                out_val.constval = ~out_val.constval;
             break;
         case '!':
-            if (find_userop(sc, '!', val_.tag, 0, 1, &val_, &userop)) {
-                expr_ = new CallUserOpExpr(userop, expr_);
-                val_ = expr_->val();
-                userop_ = true;
-            } else if (val_.ident == iCONSTEXPR) {
-                val_.constval = !val_.constval;
+            if (find_userop(*sc_, '!', out_val.tag, 0, 1, &out_val, &userop)) {
+                expr = unary->set_expr(new CallUserOpExpr(userop, expr));
+                out_val = expr->val();
+                unary->set_userop();
+            } else if (out_val.ident == iCONSTEXPR) {
+                out_val.constval = !out_val.constval;
             }
-            val_.tag = pc_tag_bool;
+            out_val.tag = pc_tag_bool;
             break;
         case '-':
-            if (val_.ident == iCONSTEXPR && val_.tag == sc_rationaltag) {
-                float f = sp::FloatCellUnion(val_.constval).f32;
-                val_.constval = sp::FloatCellUnion(-f).cell;
-            } else if (find_userop(sc, '-', val_.tag, 0, 1, &val_, &userop)) {
-                expr_ = new CallUserOpExpr(userop, expr_);
-                val_ = expr_->val();
-                userop_ = true;
-            } else if (val_.ident == iCONSTEXPR) {
+            if (out_val.ident == iCONSTEXPR && out_val.tag == sc_rationaltag) {
+                float f = sp::FloatCellUnion(out_val.constval).f32;
+                out_val.constval = sp::FloatCellUnion(-f).cell;
+            } else if (find_userop(*sc_, '-', out_val.tag, 0, 1, &out_val, &userop)) {
+                expr = unary->set_expr(new CallUserOpExpr(userop, expr));
+                out_val = expr->val();
+                unary->set_userop();
+            } else if (out_val.ident == iCONSTEXPR) {
                 /* the negation of a fixed point number is just an integer negation */
-                val_.constval = -val_.constval;
+                out_val.constval = -out_val.constval;
             }
             break;
         default:
             assert(false);
     }
 
-    if (val_.ident != iCONSTEXPR)
-        val_.ident = iEXPRESSION;
+    if (out_val.ident != iCONSTEXPR)
+        out_val.ident = iEXPRESSION;
     return true;
 }
 
@@ -496,42 +554,42 @@ UnaryExpr::ProcessUses(SemaContext& sc)
     expr_->MarkAndProcessUses(sc);
 }
 
-bool
-IncDecExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
+    AutoErrorPos aep(incdec->pos());
 
-    if (!expr_->Analyze(sc))
+    auto expr = incdec->expr();
+    if (!CheckExpr(expr))
         return false;
-    if (!expr_->lvalue()) {
-        error(pos_, 22);
+    if (!expr->lvalue()) {
+        report(incdec, 22);
         return false;
     }
 
-    const auto& expr_val = expr_->val();
+    const auto& expr_val = expr->val();
     if (expr_val.ident != iACCESSOR) {
         if (expr_val.sym->is_const) {
-            error(pos_, 22); /* assignment to const argument */
+            report(incdec, 22); /* assignment to const argument */
             return false;
         }
     } else {
         if (!expr_val.accessor->setter) {
-            report(pos_, 152) << expr_val.accessor->name;
+            report(incdec, 152) << expr_val.accessor->name;
             return false;
         }
         if (!expr_val.accessor->getter) {
-            report(pos_, 149) << expr_val.accessor->name;
+            report(incdec, 149) << expr_val.accessor->name;
             return false;
         }
         markusage(expr_val.accessor->getter, uREAD);
         markusage(expr_val.accessor->setter, uREAD);
     }
 
-    find_userop(sc, token_, expr_val.tag, 0, 1, &expr_val, &userop_);
+    find_userop(*sc_, incdec->token(), expr_val.tag, 0, 1, &expr_val, &incdec->userop());
 
     // :TODO: more type checks
-    val_.ident = iEXPRESSION;
-    val_.tag = expr_val.tag;
+    auto& val = incdec->val();
+    val.ident = iEXPRESSION;
+    val.tag = expr_val.tag;
     return true;
 }
 
@@ -539,15 +597,6 @@ void
 IncDecExpr::ProcessUses(SemaContext& sc)
 {
     expr_->MarkAndProcessUses(sc);
-}
-
-BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right)
-  : Expr(kind, pos),
-    token_(token),
-    left_(left),
-    right_(right)
-{
-    assert(right_ != this);
 }
 
 bool
@@ -583,151 +632,156 @@ BinaryExpr::HasSideEffects()
     return BinaryExprBase::HasSideEffects();
 }
 
-bool
-BinaryExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-    if (!left_->Analyze(sc) || !right_->Analyze(sc))
+    auto left = expr->left();
+    auto right = expr->right();
+    if (!CheckExpr(left) || !CheckExpr(right))
         return false;
 
-    if (IsAssignOp(token_)) {
+    int token = expr->token();
+    if (IsAssignOp(token)) {
         // Mark the left-hand side as written as soon as we can.
-        if (symbol* sym = left_->val().sym) {
+        if (symbol* sym = left->val().sym) {
             markusage(sym, uWRITTEN);
 
             // Update the line number as a hack so we can warn that it was never
             // used.
-            sym->lnumber = pos_.line;
-        } else if (auto* accessor = left_->val().accessor) {
+            sym->lnumber = expr->pos().line;
+        } else if (auto* accessor = left->val().accessor) {
             if (!accessor->setter) {
-                report(pos_, 152) << accessor->name;
+                report(expr, 152) << accessor->name;
                 return false;
             }
             markusage(accessor->setter, uREAD);
         }
 
-        if (!ValidateAssignmentLHS())
+        if (!CheckAssignmentLHS(expr))
             return false;
-    } else if (left_->lvalue()) {
-        left_ = new RvalueExpr(left_);
+    } else if (left->lvalue()) {
+        left = expr->set_left(new RvalueExpr(left));
     }
 
     // RHS is always loaded. Note we do this after validating the left-hand side,
     // so ValidateAssignment has an original view of RHS.
-    if (right_->lvalue())
-        right_ = new RvalueExpr(right_);
+    if (right->lvalue())
+        right = expr->set_right(new RvalueExpr(right));
 
-    const auto& left_val = left_->val();
-    const auto& right_val = right_->val();
+    const auto& left_val = left->val();
+    const auto& right_val = right->val();
 
-    if (oper_tok_) {
-        assert(token_ != '=');
+    auto oper_tok = expr->oper();
+    if (oper_tok) {
+        assert(token != '=');
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
             const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name() : "-unknown-";
-            error(pos_, 33, ptr); /* array must be indexed */
+            report(expr, 33) << ptr; /* array must be indexed */
             return false;
         }
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
             const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name() : "-unknown-";
-            error(pos_, 33, ptr); /* array must be indexed */
+            report(expr, 33) << ptr; /* array must be indexed */
             return false;
         }
         /* ??? ^^^ should do same kind of error checking with functions */
     }
 
     // The assignment operator is overloaded separately.
-    if (IsAssignOp(token_)) {
-        if (!ValidateAssignmentRHS(sc))
+    if (IsAssignOp(token)) {
+        if (!CheckAssignmentRHS(expr))
             return false;
     }
 
-    val_.ident = iEXPRESSION;
-    val_.tag = left_val.tag;
+    auto& val = expr->val();
+    val.ident = iEXPRESSION;
+    val.tag = left_val.tag;
 
-    if (assignop_.sym)
-        val_.tag = assignop_.sym->tag;
+    auto& assignop = expr->assignop();
+    if (assignop.sym)
+        val.tag = assignop.sym->tag;
 
-    if (oper_tok_) {
-        if (find_userop(sc, oper_tok_, left_val.tag, right_val.tag, 2, nullptr, &userop_)) {
-            val_.tag = userop_.sym->tag;
+    if (oper_tok) {
+        auto& userop = expr->userop();
+        if (find_userop(*sc_, oper_tok, left_val.tag, right_val.tag, 2, nullptr, &userop)) {
+            val.tag = userop.sym->tag;
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
             matchtag(left_val.tag, right_val.tag, FALSE);
-            val_.ident = iCONSTEXPR;
-            val_.constval = calc(left_val.constval, oper_tok_, right_val.constval, &boolresult);
+            val.ident = iCONSTEXPR;
+            val.constval = calc(left_val.constval, oper_tok, right_val.constval, &boolresult);
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
                 matchtag_commutative(left_val.tag, right_val.tag, MATCHTAG_DEDUCE);
         }
 
-        if (IsChainedOp(token_) || token_ == tlEQ || token_ == tlNE)
-            val_.tag = pc_tag_bool;
+        if (IsChainedOp(token) || token == tlEQ || token == tlNE)
+            val.tag = pc_tag_bool;
     }
 
     return true;
 }
 
-bool
-BinaryExpr::ValidateAssignmentLHS()
-{
-    int left_ident = left_->val().ident;
+bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
+    auto left = expr->left();
+    int left_ident = left->val().ident;
     if (left_ident == iARRAYCHAR) {
         // This is a special case, assigned to a packed character in a cell
         // is permitted.
         return true;
     }
 
+    int oper_tok = expr->oper();
     if (left_ident == iARRAY || left_ident == iREFARRAY) {
         // array assignment is permitted too (with restrictions)
-        if (oper_tok_) {
-            error(pos_, 23);
+        if (oper_tok) {
+            report(expr, 23);
             return false;
         }
-        symbol* left_sym = left_->val().sym;
+        symbol* left_sym = left->val().sym;
         if (!left_sym) {
-            error(pos_, 142);
+            report(expr, 142);
             return false;
         }
 
         symbol* iter = left_sym;
         while (iter) {
             if (!iter->dim.array.length) {
-                error(pos_, 46, left_sym->name());
+                report(expr, 46) << left_sym->name();
                 return false;
             }
             iter = iter->array_child();
         }
         return true;
     }
-    if (!left_->lvalue()) {
-        error(pos_, 22);
+    if (!left->lvalue()) {
+        report(expr, 22);
         return false;
     }
 
-    const auto& left_val = left_->val();
+    const auto& left_val = left->val();
     assert(left_val.sym || left_val.accessor);
 
     // may not change "constant" parameters
-    if (!initializer_ && left_val.sym && left_val.sym->is_const) {
-        error(pos_, 22);
+    if (!expr->initializer() && left_val.sym && left_val.sym->is_const) {
+        report(expr, 22);
         return false;
     }
     return true;
 }
 
-bool
-BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
-{
-    const auto& left_val = left_->val();
-    const auto& right_val = right_->val();
+bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
+    auto left = expr->left();
+    auto right = expr->right();
+    const auto& left_val = left->val();
+    const auto& right_val = right->val();
 
     if (left_val.ident == iVARIABLE) {
-        const auto& right_val = right_->val();
+        const auto& right_val = right->val();
         if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym)
-            error(pos_, 226, left_val.sym->name()); // self-assignment
+            report(expr, 226) << left_val.sym->name(); // self-assignment
     }
 
     // :TODO: check this comment post-enumstructectomy
@@ -736,16 +790,17 @@ BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
      * than 1. If the expression on the right side of the assignment is a cell,
      * or if an operation is in effect, this does not apply.
      */
+    auto oper_tok = expr->oper();
     bool leftarray = left_val.ident == iARRAY ||
                      left_val.ident == iREFARRAY ||
                      ((left_val.ident == iARRAYCELL || left_val.ident == iARRAYCHAR) &&
                        left_val.constval > 1 &&
                        left_val.sym->dim.array.level == 0 &&
-                       !oper_tok_ &&
+                       !oper_tok &&
                        (right_val.ident == iARRAY || right_val.ident == iREFARRAY));
     if (leftarray) {
         if (right_val.ident != iARRAY && right_val.ident != iREFARRAY) {
-            error(pos_, 47);
+            report(expr, 47);
             return false;
         }
 
@@ -757,7 +812,7 @@ BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
             // Change from the old logic - we immediately reject multi-dimensional
             // arrays in assignment and don't bother validating subarray assignment.
             if (right_val.sym->dim.array.level > 0) {
-                error(pos_, 23);
+                report(expr, 23);
                 return false;
             }
 
@@ -783,40 +838,40 @@ BinaryExpr::ValidateAssignmentRHS(SemaContext& sc)
             }
         }
         if (left_val.sym->dim.array.level != 0) {
-            error(pos_, 47); // array dimensions must match
+            report(expr, 47); // array dimensions must match
             return false;
         }
         if (left_length < right_length || (exact_match && left_length > right_length) ||
             right_length == 0)
         {
-            error(pos_, 47); // array sizes must match
+            report(expr, 47); // array sizes must match
             return false;
         }
         if (left_val.ident != iARRAYCELL &&
             !matchtag(left_val.sym->x.tags.index, right_idxtag, MATCHTAG_COERCE | MATCHTAG_SILENT))
         {
-            error(pos_, 229, right_val.sym ? right_val.sym->name() : left_val.sym->name());
+            report(expr, 229) << (right_val.sym ? right_val.sym->name() : left_val.sym->name());
         }
 
-        array_copy_length_ = right_length;
+        expr->set_array_copy_length(right_length);
         if (left_val.sym->tag == pc_tag_string)
-            array_copy_length_ = char_array_cells(array_copy_length_);
+            expr->set_array_copy_length(char_array_cells(expr->array_copy_length()));
     } else {
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
-            error(pos_, 6); // must be assigned to an array
+            report(expr, 6); // must be assigned to an array
             return false;
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(sc, 0, left_val.tag, right_val.tag, 2, &left_val, &assignop_);
+        find_userop(*sc_, 0, left_val.tag, right_val.tag, 2, &left_val, &expr->assignop());
     }
 
-    if (!oper_tok_ && !checkval_string(&left_val, &right_val)) {
+    if (!expr->oper() && !checkval_string(&left_val, &right_val)) {
         if (leftarray &&
             ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
              (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string)))
         {
-            error(pos_, 179, type_to_name(left_val.tag), type_to_name(right_val.tag));
+            report(expr, 179) << type_to_name(left_val.tag) << type_to_name(right_val.tag);
             return false;
         }
         matchtag(left_val.tag, right_val.tag, TRUE);
@@ -899,45 +954,35 @@ BinaryExpr::FoldToConstant()
     return true;
 }
 
-void
-LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
-{
-    if (token_ == token) {
-        left_->FlattenLogical(token, out);
-        right_->FlattenLogical(token, out);
-    } else {
-        Expr::FlattenLogical(token, out);
-    }
-}
+bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-bool
-LogicalExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
-
-    if (!left_->Analyze(sc) || !right_->Analyze(sc))
+    auto left = expr->left();
+    auto right = expr->right();
+    if (!CheckExpr(left) || !CheckExpr(right))
         return false;
 
-    if (left_->lvalue())
-        left_ = new RvalueExpr(left_);
-    if (right_->lvalue())
-        right_ = new RvalueExpr(right_);
+    if (left->lvalue())
+        left = expr->set_left(new RvalueExpr(left));
+    if (right->lvalue())
+        right = expr->set_right(new RvalueExpr(right));
 
-    const auto& left_val = left_->val();
-    const auto& right_val = right_->val();
+    const auto& left_val = left->val();
+    const auto& right_val = right->val();
+    auto& val = expr->val();
     if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
-        val_.ident = iCONSTEXPR;
-        if (token_ == tlOR)
-            val_.constval = (left_val.constval || right_val.constval);
-        else if (token_ == tlAND)
-            val_.constval = (left_val.constval && right_val.constval);
+        val.ident = iCONSTEXPR;
+        if (expr->token() == tlOR)
+            val.constval = (left_val.constval || right_val.constval);
+        else if (expr->token() == tlAND)
+            val.constval = (left_val.constval && right_val.constval);
         else
             assert(false);
     } else {
-        val_.ident = iEXPRESSION;
+        val.ident = iEXPRESSION;
     }
-    val_.sym = nullptr;
-    val_.tag = pc_tag_bool;
+    val.sym = nullptr;
+    val.tag = pc_tag_bool;
     return true;
 }
 
@@ -953,45 +998,45 @@ ChainedCompareExpr::HasSideEffects()
     return false;
 }
 
-bool
-ChainedCompareExpr::Analyze(SemaContext& sc)
-{
-    if (!first_->Analyze(sc))
+bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
+    auto first = chain->first();
+    if (!CheckExpr(first))
         return false;
-    if (first_->lvalue())
-        first_ = new RvalueExpr(first_);
+    if (first->lvalue())
+        first = chain->set_first(new RvalueExpr(first));
 
-    for (auto& op : ops_) {
-        if (!op.expr->Analyze(sc))
+    for (auto& op : chain->ops()) {
+        if (!CheckExpr(op.expr))
             return false;
         if (op.expr->lvalue())
             op.expr = new RvalueExpr(op.expr);
     }
 
-    Expr* left = first_;
+    Expr* left = first;
     bool all_const = (left->val().ident == iCONSTEXPR);
     bool constval = true;
 
-    val_.ident = iEXPRESSION;
-    val_.tag = pc_tag_bool;
+    auto& val = chain->val();
+    val.ident = iEXPRESSION;
+    val.tag = pc_tag_bool;
 
-    for (auto& op : ops_) {
+    for (auto& op : chain->ops()) {
         Expr* right = op.expr;
         const auto& left_val = left->val();
         const auto& right_val = right->val();
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
             const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name() : "-unknown-";
-            error(pos_, 33, ptr); /* array must be indexed */
+            report(left, 33) << ptr; /* array must be indexed */
             return false;
         }
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
             const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name() : "-unknown-";
-            error(pos_, 33, ptr); /* array must be indexed */
+            report(right, 33) << ptr; /* array must be indexed */
             return false;
         }
 
-        if (find_userop(sc, op.oper_tok, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
+        if (find_userop(*sc_, op.oper_tok, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
             if (op.userop.sym->tag != pc_tag_bool) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
@@ -1030,8 +1075,8 @@ ChainedCompareExpr::Analyze(SemaContext& sc)
     }
 
     if (all_const) {
-        val_.ident = iCONSTEXPR;
-        val_.constval = constval ? 1 :0;
+        val.ident = iCONSTEXPR;
+        val.constval = constval ? 1 :0;
     }
     return true;
 }
@@ -1044,40 +1089,42 @@ ChainedCompareExpr::ProcessUses(SemaContext& sc)
         op.expr->MarkAndProcessUses(sc);
 }
 
-bool
-TernaryExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-    if (!first_->Analyze(sc) || !second_->Analyze(sc) || !third_->Analyze(sc))
+    auto first = expr->first();
+    auto second = expr->second();
+    auto third = expr->third();
+
+    if (!CheckExpr(first) || !CheckExpr(second) || !CheckExpr(third))
         return false;
 
-    if (first_->lvalue()) {
-        first_ = new RvalueExpr(first_);
-    } else if (first_->val().ident == iCONSTEXPR) {
-        error(pos_, first_->val().constval ? 206 : 205);
+    if (first->lvalue()) {
+        first = expr->set_first(new RvalueExpr(first));
+    } else if (first->val().ident == iCONSTEXPR) {
+        report(first, first->val().constval ? 206 : 205);
     }
 
-    if (second_->lvalue())
-        second_ = new RvalueExpr(second_);
-    if (third_->lvalue())
-        third_ = new RvalueExpr(third_);
+    if (second->lvalue())
+        second = expr->set_second(new RvalueExpr(second));
+    if (third->lvalue())
+        third = expr->set_third(new RvalueExpr(third));
 
-    const auto& left = second_->val();
-    const auto& right = third_->val();
+    const auto& left = second->val();
+    const auto& right = third->val();
     bool left_array = (left.ident == iARRAY || right.ident == iREFARRAY);
     bool right_array = (left.ident == iARRAY || right.ident == iREFARRAY);
     if (!left_array && right_array) {
         const char* ptr = "-unknown-";
         if (left.sym != nullptr)
             ptr = left.sym->name();
-        error(pos_, 33, ptr); /* array must be indexed */
+        report(expr, 33) << ptr; /* array must be indexed */
         return false;
     } else if (left_array && !right_array) {
         const char* ptr = "-unknown-";
         if (right.sym != nullptr)
             ptr = right.sym->name();
-        error(pos_, 33, ptr); /* array must be indexed */
+        report(expr, 33) << ptr; /* array must be indexed */
         return false;
     }
 
@@ -1088,14 +1135,15 @@ TernaryExpr::Analyze(SemaContext& sc)
      * Otherwise we could buffer overflow and the compiler is too stupid.
      * Literal strings have a constval == -(num_cells) so the cmp is flipped.
      */
-    val_ = left;
-    if (val_.ident == iARRAY && right.ident == iARRAY && val_.constval < 0 && val_.constval > right.constval)
-        val_ = right;
+    auto& val = expr->val();
+    val = left;
+    if (val.ident == iARRAY && right.ident == iARRAY && val.constval < 0 && val.constval > right.constval)
+        val = right;
 
-    if (val_.ident == iARRAY)
-        val_.ident = iREFARRAY;
-    else if (val_.ident != iREFARRAY)
-        val_.ident = iEXPRESSION;
+    if (val.ident == iARRAY)
+        val.ident = iREFARRAY;
+    else if (val.ident != iREFARRAY)
+        val.ident = iEXPRESSION;
     return true;
 }
 
@@ -1130,37 +1178,38 @@ TernaryExpr::ProcessDiscardUses(SemaContext& sc)
     third_->ProcessUses(sc);
 }
 
-bool
-CastExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckCastExpr(CastExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-    if (type_.tag() == pc_tag_void) {
-        error(pos_, 144);
+    const auto& type = expr->type();
+    if (type.tag() == pc_tag_void) {
+        report(expr, 144);
         return false;
     }
 
-    if (!expr_->Analyze(sc))
+    if (!CheckExpr(expr->expr()))
         return false;
 
-    val_ = expr_->val();
-    lvalue_ = expr_->lvalue();
+    auto& out_val = expr->val();
 
-    Type* ltype = gTypes.find(val_.tag);
-    Type* atype = gTypes.find(type_.tag());
+    out_val = expr->expr()->val();
+    expr->set_lvalue(expr->expr()->lvalue());
+
+    Type* ltype = gTypes.find(out_val.tag);
+    Type* atype = gTypes.find(type.tag());
     if (ltype->isObject() || atype->isObject()) {
-        matchtag(type_.tag(), val_.tag, MATCHTAG_COERCE);
+        matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
         // Warn: unsupported cast.
-        error(pos_, 237);
+        report(expr, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
-        matchtag(type_.tag(), val_.tag, MATCHTAG_COERCE);
-    } else if (val_.sym && val_.sym->tag == pc_tag_void) {
-        error(pos_, 89);
+        matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
+    } else if (out_val.sym && out_val.sym->tag == pc_tag_void) {
+        report(expr, 89);
     } else if (atype->isEnumStruct()) {
-        report(pos_, 95) << atype->name();
+        report(expr, 95) << atype->name();
     }
-    val_.tag = type_.tag();
+    out_val.tag = type.tag();
     return true;
 }
 
@@ -1176,71 +1225,65 @@ SymbolExpr::MarkUsed(SemaContext& sc)
     markusage(sym_, uREAD);
 }
 
-bool
-SymbolExpr::Analyze(SemaContext& sc)
-{
-    return AnalyzeWithOptions(sc, false);
-}
-
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
 // checks, so for now, we forbid it by default. Since the '.' operator *is*
 // prepared for this, we have a special analysis option to allow returning
 // types as values.
-bool
-SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
+    AutoErrorPos aep(expr->pos());
 
-    val_.ident = sym_->ident;
-    val_.sym = sym_;
+    auto sym = expr->sym();
+    auto& val = expr->val();
+    val.ident = sym->ident;
+    val.sym = sym;
 
     // Don't expose the tag of old enumroots.
-    Type* type = gTypes.find(sym_->tag);
-    if (sym_->enumroot && !type->asEnumStruct() && sym_->ident == iCONSTEXPR) {
-        val_.tag = 0;
-        error(pos_, 174, sym_->name());
+    Type* type = gTypes.find(sym->tag);
+    if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
+        val.tag = 0;
+        report(expr, 174) << sym->name();
     } else {
-        val_.tag = sym_->tag;
+        val.tag = sym->tag;
     }
 
-    if (sym_->ident == iCONSTEXPR)
-        val_.constval = sym_->addr();
+    if (sym->ident == iCONSTEXPR)
+        val.constval = sym->addr();
 
-    if (sym_->vclass == sGLOBAL && sym_->ident != iFUNCTN) {
-        if (!sym_->defined) {
-            report(pos_, 17) << sym_->name();
+    if (sym->vclass == sGLOBAL && sym->ident != iFUNCTN) {
+        if (!sym->defined) {
+            report(expr, 17) << sym->name();
             return false;
         }
     }
-    if (sym_->ident == iFUNCTN) {
-        if (sym_->native) {
-            error(pos_, 76);
+    if (sym->ident == iFUNCTN) {
+        if (sym->native) {
+            report(expr, 76);
             return false;
         }
-        if (sym_->array_return()) {
-            error(pos_, 182);
+        if (sym->array_return()) {
+            report(expr, 182);
             return false;
         }
-        if (!sym_->defined) {
-            report(pos_, 4) << sym_->name();
+        if (!sym->defined) {
+            report(expr, 4) << sym->name();
             return false;
         }
 
-        funcenum_t* fe = funcenum_for_symbol(sym_);
+        funcenum_t* fe = funcenum_for_symbol(sym);
 
         // New-style "closure".
-        val_.ident = iEXPRESSION;
-        val_.tag = fe->tag;
+        val.ident = iEXPRESSION;
+        val.tag = fe->tag;
 
         // Mark as being indirectly invoked. Direct invocations go through
         // BindCallTarget.
-        sym_->callback = true;
+        sym->callback = true;
     }
 
-    switch (sym_->ident) {
+    switch (sym->ident) {
         case iVARIABLE:
         case iREFERENCE:
-            lvalue_ = true;
+            expr->set_lvalue(true);
             break;
         case iARRAY:
         case iREFARRAY:
@@ -1251,7 +1294,7 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
         case iMETHODMAP:
         case iENUMSTRUCT:
             if (!allow_types) {
-                error(pos_, 174, sym_->name());
+                report(expr, 174) << sym->name();
                 return false;
             }
             break;
@@ -1262,30 +1305,29 @@ SymbolExpr::AnalyzeWithOptions(SemaContext& sc, bool allow_types)
     return true;
 }
 
-bool
-CommaExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckCommaExpr(CommaExpr* comma) {
+    AutoErrorPos aep(comma->pos());
 
-    for (const auto& expr : exprs_) {
-        if (!expr->Analyze(sc))
+    for (const auto& expr : comma->exprs()) {
+        if (!CheckExpr(expr))
             return false;
-        has_side_effects_ |= expr->HasSideEffects();
+        if (expr->HasSideEffects())
+            comma->set_has_side_effects();
     }
 
-    Expr* last = exprs_.back();
-    if (exprs_.size() > 1 && last->lvalue()) {
+    Expr* last = comma->exprs().back();
+    if (comma->exprs().size() > 1 && last->lvalue()) {
         last = new RvalueExpr(last);
-        exprs_.back() = last;
+        comma->exprs().back() = last;
     }
 
-    val_ = last->val();
-    lvalue_ = last->lvalue();
+    comma->val() = last->val();
+    comma->set_lvalue(last->lvalue());
 
     // Don't propagate a constant if it would cause Emit() to shortcut and not
     // emit other expressions.
-    if (exprs_.size() > 1 && val_.ident == iCONSTEXPR)
-        val_.ident = iEXPRESSION;
+    if (comma->exprs().size() > 1 && comma->val().ident == iCONSTEXPR)
+        comma->val().ident = iEXPRESSION;
     return true;
 }
 
@@ -1304,19 +1346,17 @@ CommaExpr::ProcessDiscardUses(SemaContext& sc)
         expr->ProcessUses(sc);
 }
 
-bool
-ArrayExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckArrayExpr(ArrayExpr* array) {
+    AutoErrorPos aep(array->pos());
 
     int lasttag = -1;
-    for (const auto& expr : exprs_) {
-        if (!expr->Analyze(sc))
+    for (const auto& expr : array->exprs()) {
+        if (!CheckExpr(expr))
             return false;
 
         const auto& val = expr->val();
         if (val.ident != iCONSTEXPR) {
-            error(pos_, 8);
+            report(expr, 8);
             return false;
         }
         if (lasttag < 0)
@@ -1325,103 +1365,106 @@ ArrayExpr::Analyze(SemaContext& sc)
             matchtag(lasttag, val.tag, FALSE);
     }
 
-    val_.ident = iARRAY;
-    val_.constval = exprs_.size();
-    val_.tag = lasttag;
+    auto& val = array->val();
+    val.ident = iARRAY;
+    val.constval = array->exprs().size();
+    val.tag = lasttag;
     return true;
 }
 
-bool
-IndexExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckIndexExpr(IndexExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-    if (!base_->Analyze(sc) || !expr_->Analyze(sc))
+    auto base = expr->base();
+    auto index = expr->index();
+    if (!CheckExpr(base) || !CheckExpr(index))
         return false;
-    if (base_->lvalue() && base_->val().ident == iACCESSOR)
-        base_ = new RvalueExpr(base_);
-    if (expr_->lvalue())
-        expr_ = new RvalueExpr(expr_);
+    if (base->lvalue() && base->val().ident == iACCESSOR)
+        base = expr->set_base(new RvalueExpr(base));
+    if (index->lvalue())
+        index = expr->set_index(new RvalueExpr(index));
 
-    const auto& base = base_->val();
-    if (!base.sym) {
-        error(pos_, 29);
-        return false;
-    }
-    if (base.sym->ident != iARRAY && base.sym->ident != iREFARRAY) {
-        error(pos_, 28, base.sym->name());
+    const auto& base_val = base->val();
+    if (!base_val.sym) {
+        report(base, 29);
         return false;
     }
+    if (base_val.sym->ident != iARRAY && base_val.sym->ident != iREFARRAY) {
+        report(base, 28) << base_val.sym->name();
+        return false;
+    }
 
-    if (base.sym->enumroot) {
-        if (!matchtag(base.sym->x.tags.index, expr_->val().tag, TRUE))
+    if (base_val.sym->enumroot) {
+        if (!matchtag(base_val.sym->x.tags.index, index->val().tag, TRUE))
             return false;
     }
 
-    const auto& expr = expr_->val();
-    if (expr.ident == iARRAY || expr.ident == iREFARRAY) {
-        error(pos_, 33, expr.sym ? expr.sym->name() : "-unknown-"); /* array must be indexed */
+    const auto& index_val = index->val();
+    if (index_val.ident == iARRAY || index_val.ident == iREFARRAY) {
+        report(index, 33) << (index_val.sym ? index_val.sym->name() : "-unknown-"); /* array must be indexed */
         return false;
     }
 
-    if (gTypes.find(base.sym->x.tags.index)->isEnumStruct()) {
-        error(pos_, 117);
+    if (gTypes.find(base_val.sym->x.tags.index)->isEnumStruct()) {
+        report(base, 117);
         return false;
     }
 
-    int idx_tag = expr_->val().tag;
+    int idx_tag = index->val().tag;
     if (!is_valid_index_tag(idx_tag)) {
-        error(pos_, 77, gTypes.find(idx_tag)->prettyName());
+        report(index, 77) << gTypes.find(idx_tag)->prettyName();
         return false;
     }
 
-    val_ = base_->val();
+    auto& out_val = expr->val();
+    out_val = base_val;
 
-    if (expr.ident == iCONSTEXPR) {
-        if (!(base.sym->tag == pc_tag_string && base.sym->dim.array.level == 0)) {
+    if (index_val.ident == iCONSTEXPR) {
+        if (!(base_val.sym->tag == pc_tag_string && base_val.sym->dim.array.level == 0)) {
             /* normal array index */
-            if (expr.constval < 0 ||
-                (base.sym->dim.array.length != 0 && base.sym->dim.array.length <= expr.constval))
+            if (index_val.constval < 0 ||
+                (base_val.sym->dim.array.length != 0 &&
+                 base_val.sym->dim.array.length <= index_val.constval))
             {
-                error(pos_, 32, base.sym->name()); /* array index out of bounds */
+                report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                 return false;
             }
         } else {
             /* character index */
-            if (expr.constval < 0 ||
-                (base.sym->dim.array.length != 0 &&
-                 base.sym->dim.array.length <= expr.constval))
+            if (index_val.constval < 0 ||
+                (base_val.sym->dim.array.length != 0 &&
+                 base_val.sym->dim.array.length <= index_val.constval))
             {
-                error(pos_, 32, base.sym->name()); /* array index out of bounds */
+                report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                 return false;
             }
         }
         /* if the array index is a field from an enumeration, get the tag name
          * from the field and save the size of the field too.
          */
-        assert(expr.sym == nullptr || expr.sym->dim.array.level == 0);
+        assert(index_val.sym == nullptr || index_val.sym->dim.array.level == 0);
     }
 
-    if (base.sym->dim.array.level > 0) {
+    if (base_val.sym->dim.array.level > 0) {
         // Note: Intermediate arrays are not l-values.
-        val_.ident = iREFARRAY;
-        val_.sym = base.sym->array_child();
+        out_val.ident = iREFARRAY;
+        out_val.sym = base_val.sym->array_child();
 
-        assert(val_.sym != nullptr);
-        assert(val_.sym->dim.array.level == base.sym->dim.array.level - 1);
+        assert(out_val.sym != nullptr);
+        assert(out_val.sym->dim.array.level == base_val.sym->dim.array.level - 1);
         return true;
     }
 
     /* set type to fetch... INDIRECTLY */
-    if (base.sym->tag == pc_tag_string)
-        val_.ident = iARRAYCHAR;
+    if (base_val.sym->tag == pc_tag_string)
+        out_val.ident = iARRAYCHAR;
     else
-        val_.ident = iARRAYCELL;
+        out_val.ident = iARRAYCELL;
 
-    val_.tag = base.sym->tag;
-    val_.constval = 0;
+    out_val.tag = base_val.sym->tag;
+    out_val.constval = 0;
 
-    lvalue_ = true;
+    expr->set_lvalue(true);
     return true;
 }
 
@@ -1432,132 +1475,129 @@ IndexExpr::ProcessUses(SemaContext& sc)
     expr_->MarkAndProcessUses(sc);
 }
 
-bool
-ThisExpr::Analyze(SemaContext& sc)
-{
-    assert(sym_->ident == iREFARRAY || sym_->ident == iVARIABLE);
+bool Semantics::CheckThisExpr(ThisExpr* expr) {
+    auto sym = expr->sym();
+    assert(sym->ident == iREFARRAY || sym->ident == iVARIABLE);
 
-    val_.ident = sym_->ident;
-    val_.sym = sym_;
-    val_.tag = sym_->tag;
-    lvalue_ = (sym_->ident != iREFARRAY);
+    auto& val = expr->val();
+    val.ident = sym->ident;
+    val.sym = sym;
+    val.tag = sym->tag;
+    expr->set_lvalue(sym->ident != iREFARRAY);
     return true;
 }
 
-bool
-NullExpr::Analyze(SemaContext& sc)
-{
-    val_.ident = iCONSTEXPR;
-    val_.constval = 0;
-    val_.tag = pc_tag_null_t;
+bool Semantics::CheckNullExpr(NullExpr* expr) {
+    auto& val = expr->val();
+    val.ident = iCONSTEXPR;
+    val.constval = 0;
+    val.tag = pc_tag_null_t;
     return true;
 }
 
-bool
-TaggedValueExpr::Analyze(SemaContext& sc)
-{
-    val_.ident = iCONSTEXPR;
-    val_.tag = tag_;
-    val_.constval = value_;
+bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
+    auto& val = expr->val();
+    val.ident = iCONSTEXPR;
+    val.tag = expr->tag();
+    val.constval = expr->value();
     return true;
 }
 
-bool
-StringExpr::Analyze(SemaContext& sc)
-{
-    val_.ident = iARRAY;
-    val_.constval = -((cell)text_->length() + 1);
-    val_.tag = pc_tag_string;
+bool Semantics::CheckStringExpr(StringExpr* expr) {
+    auto& val = expr->val();
+    val.ident = iARRAY;
+    val.constval = -((cell)expr->text()->length() + 1);
+    val.tag = pc_tag_string;
     return true;
 }
 
-bool FieldAccessExpr::Analyze(SemaContext& sc) {
-    return AnalyzeWithOptions(sc, false);
-}
+bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
+    AutoErrorPos aep(expr->pos());
 
-bool
-FieldAccessExpr::AnalyzeWithOptions(SemaContext& sc, bool from_call)
-{
-    AutoErrorPos aep(pos_);
-
-    if (auto expr = base_->as<SymbolExpr>()) {
-        if (!expr->AnalyzeWithOptions(sc, true))
+    auto base = expr->base();
+    if (auto sym_expr = base->as<SymbolExpr>()) {
+        if (!CheckSymbolExpr(sym_expr, true))
             return false;
     } else {
-        if (!base_->Analyze(sc))
+        if (!CheckExpr(base))
             return false;
     }
 
-    if (token_ == tDBLCOLON)
-        return AnalyzeStaticAccess();
+    int token = expr->token();
+    if (token == tDBLCOLON)
+        return CheckStaticFieldAccessExpr(expr);
 
-    const auto& base_val = base_->val();
+    const auto& base_val = base->val();
     switch (base_val.ident) {
         case iARRAY:
         case iREFARRAY:
             if (base_val.sym && base_val.sym->dim.array.level == 0) {
                 Type* type = gTypes.find(base_val.sym->x.tags.index);
                 if (symbol* root = type->asEnumStruct())
-                    return AnalyzeEnumStructAccess(type, root, from_call);
+                    return CheckEnumStructFieldAccessExpr(expr, type, root, from_call);
             }
-            report(pos_, 96) << name_->chars() << "type" << "array";
+            report(expr, 96) << expr->name() << "type" << "array";
             return false;
         case iFUNCTN:
-            error(pos_, 107);
+            report(expr, 107);
             return false;
     }
 
+    auto& val = expr->val();
     if (base_val.ident == iMETHODMAP && base_val.sym->data()) {
         methodmap_t* map = base_val.sym->data()->asMethodmap();
         if (map)
-            method_ = methodmap_find_method(map, name_);
-        if (!method_) {
-            report(pos_, 105) << base_val.sym->name() << name_;
+            expr->set_method(methodmap_find_method(map, expr->name()));
+
+        auto method = expr->method();
+        if (!method) {
+            report(expr, 105) << base_val.sym->name() << expr->name();
             return false;
         }
-        if (!method_->is_static) {
-            report(pos_, 176) << method_->name << map->name;
+        if (!method->is_static) {
+            report(expr, 176) << method->name << map->name;
             return false;
         }
-        val_.ident = iFUNCTN;
-        val_.sym = method_->target;
-        markusage(method_->target, uREAD);
+        val.ident = iFUNCTN;
+        val.sym = method->target;
+        markusage(method->target, uREAD);
         return true;
     }
 
     Type* base_type = gTypes.find(base_val.tag);
     methodmap_t* map = base_type->asMethodmap();
     if (!map) {
-        error(pos_, 104, type_to_name(base_val.tag));
+        report(expr, 104) << type_to_name(base_val.tag);
         return false;
     }
 
-    method_ = methodmap_find_method(map, name_);
-    if (!method_) {
-        report(pos_, 105) << map->name << name_;
+    expr->set_method(methodmap_find_method(map, expr->name()));
+    auto method = expr->method();
+    if (!method) {
+        report(expr, 105) << map->name << expr->name();
         return false;
     }
 
-    if (method_->getter || method_->setter) {
+    if (method->getter || method->setter) {
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
-        if (base_->lvalue())
-            base_ = new RvalueExpr(base_);
-        val_.ident = iACCESSOR;
-        val_.tag = method_->property_tag();
-        val_.accessor = method_;
-        lvalue_ = true;
+        if (base->lvalue())
+            base = expr->set_base(new RvalueExpr(base));
+        val.ident = iACCESSOR;
+        val.tag = method->property_tag();
+        val.accessor = method;
+        expr->set_lvalue(true);
         return true;
     }
 
-    if (method_->is_static) {
-        report(pos_, 177) << method_->name << map->name << method_->name;
+    if (method->is_static) {
+        report(expr, 177) << method->name << map->name << method->name;
         return false;
     }
 
-    val_.ident = iFUNCTN;
-    val_.sym = method_->target;
-    markusage(method_->target, uREAD);
+    val.ident = iFUNCTN;
+    val.sym = method->target;
+    markusage(method->target, uREAD);
     return true;
 }
 
@@ -1567,166 +1607,185 @@ FieldAccessExpr::ProcessUses(SemaContext& sc)
     base_->MarkAndProcessUses(sc);
 }
 
-symbol*
-FieldAccessExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
-{
-    if (!AnalyzeWithOptions(sc, true))
-        return nullptr;
-    if (val_.ident != iFUNCTN)
-        return nullptr;
+symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
+    AutoErrorPos aep(target->pos());
 
-    // The static accessor (::) is offsetof(), so it can't return functions.
-    assert(token_ == '.');
+    switch (target->kind()) {
+        case AstKind::FieldAccessExpr: {
+            auto expr = target->to<FieldAccessExpr>();
+            if (!CheckFieldAccessExpr(expr, true))
+                return nullptr;
 
-    if (method_ && method_->parent->ctor == method_) {
-        report(pos_, 84) << method_->parent->name;
-        return nullptr;
-    }
+            auto& val = expr->val();
+            if (val.ident != iFUNCTN)
+                return nullptr;
 
-    if (base_->lvalue())
-        base_ = new RvalueExpr(base_);
-    if (field_ || !method_->is_static)
-        *implicit_this = base_;
-    return val_.sym;
-}
+            // The static accessor (::) is offsetof(), so it can't return functions.
+            assert(expr->token() == '.');
 
-symbol*
-SymbolExpr::BindCallTarget(SemaContext& sc, int token, Expr** implicit_this)
-{
-    AutoErrorPos aep(pos_);
+            auto method = expr->method();
+            if (method && method->parent->ctor == method) {
+                report(call, 84) << method->parent->name;
+                return nullptr;
+            }
 
-    *implicit_this = nullptr;
-
-    if (token != tNEW && sym_->ident == iMETHODMAP && sym_->data()) {
-        auto map = sym_->data()->asMethodmap();
-        if (!map->ctor) {
-            // Immediately fatal - no function to call.
-            error(pos_, 172, sym_->name());
-            return nullptr;
+            auto base = expr->base();
+            if (base->lvalue())
+                base = expr->set_base(new RvalueExpr(base));
+            if (expr->field() || !method->is_static)
+                call->set_implicit_this(base);
+            return val.sym;
         }
-        if (map->must_construct_with_new()) {
-            // Keep going, this is basically a style thing.
-            report(pos_, 170) << map->name;
-            return nullptr;
+        case AstKind::SymbolExpr: {
+            call->set_implicit_this(nullptr);
+
+            auto expr = target->to<SymbolExpr>();
+            auto sym = expr->sym();
+            if (call->token() != tNEW && sym->ident == iMETHODMAP && sym->data()) {
+                auto map = sym->data()->asMethodmap();
+                if (!map->ctor) {
+                    // Immediately fatal - no function to call.
+                    report(target, 172) << sym->name();
+                    return nullptr;
+                }
+                if (map->must_construct_with_new()) {
+                    // Keep going, this is basically a style thing.
+                    report(target, 170) << map->name;
+                    return nullptr;
+                }
+                return map->ctor->target;
+            }
+            if (sym->ident != iFUNCTN)
+                return nullptr;
+            if (!sym->defined) {
+                report(target, 4) << sym->name();
+                return nullptr;
+            }
+            return sym;
         }
-        return map->ctor->target;
     }
-    if (sym_->ident != iFUNCTN)
-        return nullptr;
-    if (!sym_->defined) {
-        error(pos_, 4, sym_->name());
-        return nullptr;
-    }
-    return sym_;
+    return nullptr;
 }
 
-symbol*
-SymbolExpr::BindNewTarget(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+symbol* Semantics::BindNewTarget(Expr* target) {
+    AutoErrorPos aep(target->pos());
 
-    if (sym_->ident != iMETHODMAP) {
-        error(pos_, 116, sym_->name());
-        return nullptr;
-    }
+    switch (target->kind()) {
+        case AstKind::SymbolExpr: {
+            auto expr = target->to<SymbolExpr>();
+            auto sym = expr->sym();
 
-    methodmap_t* methodmap = sym_->data()->asMethodmap();
-    if (!methodmap->must_construct_with_new()) {
-        report(pos_, 171) << methodmap->name;
-        return nullptr;
+            if (sym->ident != iMETHODMAP) {
+                report(expr, 116) << sym->name();
+                return nullptr;
+            }
+
+            methodmap_t* methodmap = sym->data()->asMethodmap();
+            if (!methodmap->must_construct_with_new()) {
+                report(expr, 171) << methodmap->name;
+                return nullptr;
+            }
+            if (!methodmap->ctor) {
+                report(expr, 172) << methodmap->name;
+                return nullptr;
+            }
+            return methodmap->ctor->target;
+        }
     }
-    if (!methodmap->ctor) {
-        report(pos_, 172) << methodmap->name;
-        return nullptr;
-    }
-    return methodmap->ctor->target;
+    return nullptr;
 }
 
-bool
-FieldAccessExpr::AnalyzeEnumStructAccess(Type* type, symbol* root, bool from_call)
+bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, symbol* root,
+                                               bool from_call)
 {
+    auto base = expr->base();
+
     // Enum structs are always arrays, so they're never l-values.
-    assert(!base_->lvalue());
+    assert(!base->lvalue());
 
-    field_ = FindEnumStructField(type, name_);
-    if (!field_) {
-        report(pos_, 105) << type->name() << name_;
+    expr->set_field(FindEnumStructField(type, expr->name()));
+
+    auto field = expr->field();
+    if (!field) {
+        report(expr, 105) << type->name() << expr->name();
         return false;
     }
-    if (field_->ident == iFUNCTN) {
+
+    auto& val = expr->val();
+    if (field->ident == iFUNCTN) {
         if (!from_call) {
-            error(pos_, 76);
+            report(expr, 76);
             return false;
         }
 
-        val_.ident = iFUNCTN;
-        val_.sym = field_;
-        markusage(val_.sym, uREAD);
+        val.ident = iFUNCTN;
+        val.sym = field;
+        markusage(val.sym, uREAD);
         return true;
     }
-    assert(field_->parent() == root);
+    assert(field->parent() == root);
 
-    int tag = field_->x.tags.index;
+    int tag = field->x.tags.index;
 
-    symbol* var = base_->val().sym;
+    symbol* var = base->val().sym;
     if (!var->data())
         var->set_data(new EnumStructVarData());
 
     EnumStructVarData* es_var = var->data()->asEnumStructVar();
-    es_var->children.emplace_back(new symbol(*field_));
+    es_var->children.emplace_back(new symbol(*field));
 
     symbol* child = es_var->children.back();
-    child->setName(name_);
+    child->setName(expr->name());
     child->vclass = var->vclass;
 
     if (gTypes.find(tag)->isEnumStruct()) {
-        val_.tag = 0;
+        val.tag = 0;
         child->tag = 0;
         child->x.tags.index = tag;
     } else {
-        val_.tag = tag;
+        val.tag = tag;
         child->tag = tag;
         child->x.tags.index = 0;
     }
 
-    if (field_->dim.array.length > 0) {
-        child->dim.array.length = field_->dim.array.length;
+    if (field->dim.array.length > 0) {
+        child->dim.array.length = field->dim.array.length;
         child->dim.array.level = 0;
         child->ident = iREFARRAY;
-        val_.constval = field_->dim.array.length;
+        val.constval = field->dim.array.length;
     } else {
         child->ident = (tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
-        val_.constval = 0;
-        lvalue_ = true;
+        val.constval = 0;
+        expr->set_lvalue(true);
     }
-    val_.ident = child->ident;
-    val_.sym = child;
+    val.ident = child->ident;
+    val.sym = child;
     return true;
 }
 
-bool
-FieldAccessExpr::AnalyzeStaticAccess()
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-    const auto& base_val = base_->val();
+    auto base = expr->base();
+    const auto& base_val = base->val();
     if (base_val.ident != iENUMSTRUCT) {
-        error(pos_, 108);
+        report(expr, 108);
         return false;
     }
 
     Type* type = gTypes.find(base_val.tag);
-    symbol* field = FindEnumStructField(type, name_);
+    symbol* field = FindEnumStructField(type, expr->name());
     if (!field) {
-        report(pos_, 105) << type->name() << name_;
+        report(expr, 105) << type->name() << expr->name();
         return FALSE;
     }
     assert(field->parent() == type->asEnumStruct());
 
-    val_.ident = iCONSTEXPR;
-    val_.sym = nullptr;
-    val_.constval = field->addr();
-    val_.tag = 0;
+    auto& val = expr->val();
+    val.ident = iCONSTEXPR;
+    val.sym = nullptr;
+    val.constval = field->addr();
+    val.tag = 0;
     return true;
 }
 
@@ -1736,35 +1795,34 @@ FieldAccessExpr::HasSideEffects()
     return base_->HasSideEffects() || val_.ident == iACCESSOR;
 }
 
-bool
-SizeofExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
+    AutoErrorPos aep(expr->pos());
 
-    symbol* sym = sym_;
+    symbol* sym = expr->sym();
 
     markusage(sym, uREAD);
 
     if (sym->ident == iCONSTEXPR) {
-        error(pos_, 39); // constant symbol has no size
+        report(expr, 39); // constant symbol has no size
         return false;
     } else if (sym->ident == iFUNCTN) {
-        error(pos_, 72); // "function" symbol has no size
+        report(expr, 72); // "function" symbol has no size
         return false;
     } else if (!sym->defined) {
-        report(pos_, 17) << ident_;
+        report(expr, 17) << expr->ident();
         return false;
     }
 
-    val_.ident = iCONSTEXPR;
-    val_.constval = 1;
+    auto& val = expr->val();
+    val.ident = iCONSTEXPR;
+    val.constval = 1;
 
     if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
         symbol* subsym = sym;
-        for (int level = 0; level < array_levels_; level++) {
+        for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
             if (sym->ident == iENUMSTRUCT || gTypes.find(sym->x.tags.index)->isEnumStruct()) {
-                error(pos_, 111, sym->name());
+                report(expr, 111) << sym->name();
                 return false;
             }
             if (subsym)
@@ -1772,16 +1830,16 @@ SizeofExpr::Analyze(SemaContext& sc)
         }
 
         Type* enum_type = nullptr;
-        if (suffix_token_ == tDBLCOLON) {
+        if (expr->suffix_token() == tDBLCOLON) {
             if (subsym->ident != iENUMSTRUCT) {
-                error(pos_, 112, subsym->name());
+                report(expr, 112) << subsym->name();
                 return false;
             }
             enum_type = gTypes.find(subsym->tag);
-        } else if (suffix_token_ == '.') {
+        } else if (expr->suffix_token() == '.') {
             enum_type = gTypes.find(subsym->x.tags.index);
             if (!enum_type->asEnumStruct()) {
-                error(pos_, 116, sym->name());
+                report(expr, 116) << sym->name();
                 return false;
             }
         }
@@ -1789,38 +1847,38 @@ SizeofExpr::Analyze(SemaContext& sc)
         if (enum_type) {
             assert(enum_type->asEnumStruct());
 
-            symbol* field = FindEnumStructField(enum_type, field_);
+            symbol* field = FindEnumStructField(enum_type, expr->field());
             if (!field) {
-                report(pos_, 105) << enum_type->name() << field_;
+                report(expr, 105) << enum_type->name() << expr->field();
                 return false;
             }
             if (int array_size = field->dim.array.length) {
-                val_.constval = array_size;
+                val.constval = array_size;
                 return true;
             }
             return true;
         }
 
         if (sym->ident == iENUMSTRUCT) {
-            val_.constval = sym->addr();
+            val.constval = sym->addr();
             return true;
         }
 
-        if (array_levels_ > sym->dim.array.level + 1) {
-            error(pos_, 28, sym->name()); // invalid subscript
+        if (expr->array_levels() > sym->dim.array.level + 1) {
+            report(expr, 28) << sym->name(); // invalid subscript
             return false;
         }
-        if (array_levels_ != sym->dim.array.level + 1) {
+        if (expr->array_levels() != sym->dim.array.level + 1) {
             symbol* iter = sym;
-            int level = array_levels_;
+            int level = expr->array_levels();
             while (level-- > 0)
                 iter = iter->array_child();
 
             if (!iter->dim.array.length) {
-                error(pos_, 163, sym->name()); // indeterminate array size in "sizeof"
+                report(expr, 163) << sym->name(); // indeterminate array size in "sizeof"
                 return false;
             }
-            val_.constval = iter->dim.array.length;
+            val.constval = iter->dim.array.length;
             return true;
         }
     }
@@ -1850,94 +1908,98 @@ DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, arginfo* arg)
     // accurately construct it.
 }
 
-bool
-CallExpr::Analyze(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
+bool Semantics::CheckCallExpr(CallExpr* call) {
+    AutoErrorPos aep(call->pos());
 
     // Note: we do not Analyze the call target. We leave this to the
     // implementation of BindCallTarget.
-    if (token_ == tNEW)
-        sym_ = target_->BindNewTarget(sc);
+    symbol* sym;
+    if (call->token() == tNEW)
+        sym = BindNewTarget(call->target());
     else
-        sym_ = target_->BindCallTarget(sc, token_, &implicit_this_);
-    if (!sym_)
+        sym = BindCallTarget(call, call->target());
+    if (!sym)
         return false;
 
-    auto info = sym_->function()->node;
+    call->set_sym(sym);
+
+    auto info = sym->function()->node;
     if (info &&
         (info->decl().type.numdim() > 0 || info->maybe_returns_array()) &&
-        !sym_->array_return())
+        !sym->array_return())
     {
         // We need to know the size of the returned array. Recursively analyze
         // the function.
-        if (info->is_analyzing() || !info->Analyze(sc)) {
-            report(pos_, 411);
+        if (info->is_analyzing() || !CheckFunctionInfo(info)) {
+            report(call, 411);
             return false;
         }
     }
 
-    markusage(sym_, uREAD);
+    markusage(sym, uREAD);
 
-    val_.ident = iEXPRESSION;
-    val_.tag = sym_->tag;
-    if (sym_->array_return()) {
-        val_.ident = iREFARRAY;
-        val_.sym = sym_->array_return();
+    auto& val = call->val();
+    val.ident = iEXPRESSION;
+    val.tag = sym->tag;
+    if (sym->array_return()) {
+        val.ident = iREFARRAY;
+        val.sym = sym->array_return();
     }
 
-    if (sym_->deprecated) {
-        const char* ptr = sym_->documentation->chars();
-        report(pos_, 234) << sym_->name() << ptr; /* deprecated (probably a native function) */
+    if (sym->deprecated) {
+        const char* ptr = sym->documentation->chars();
+        report(call, 234) << sym->name() << ptr; /* deprecated (probably a native function) */
     }
 
     unsigned int nargs = 0;
     unsigned int argidx = 0;
-    arginfo* arglist = &sym_->function()->args[0];
-    if (implicit_this_) {
-        if (!ProcessArg(sc, &arglist[0], implicit_this_, 0))
+    arginfo* arglist = &sym->function()->args[0];
+    if (call->implicit_this()) {
+        if (!CheckArgument(call, &arglist[0], call->implicit_this(), 0))
             return false;
         nargs++;
         argidx++;
     }
 
+    auto& argv = call->argv();
+
     bool namedparams = false;
-    for (const auto& param : args_) {
+    for (const auto& param : call->args()) {
         unsigned int argpos;
         if (param.name) {
             int pos = findnamedarg(arglist, param.name);
             if (pos < 0) {
-                report(pos_, 17) << param.name;
+                report(call, 17) << param.name;
                 break;
             }
             argpos = pos;
             argidx = pos;
         } else {
             if (namedparams) {
-                error(pos_, 44); // positional parameters must precede named parameters
+                report(call, 44); // positional parameters must precede named parameters
                 return false;
             }
             argpos = nargs;
         }
 
         if (argpos >= SP_MAX_CALL_ARGUMENTS) {
-            error(pos_, 45); // too many function arguments
+            report(call, 45); // too many function arguments
             return false;
         }
-        if (argpos < argv_.size() && argv_[argpos].expr) {
-            error(pos_, 58); // argument already set
+        if (argpos < argv.size() && argv.at(argpos).expr) {
+            report(call, 58); // argument already set
             return false;
         }
         // Note: we don't do this in ProcessArg, since we don't want to double-call
         // analyze on implicit_this (Analyze is not idempotent).
-        if (param.expr && !param.expr->Analyze(sc))
+        if (param.expr && !CheckExpr(param.expr))
             return false;
 
-        // Add the argument to |argv_| and perform type checks.
-        if (!ProcessArg(sc, &arglist[argidx], param.expr, argpos))
+        // Add the argument to |argv| and perform type checks.
+        if (!CheckArgument(call, &arglist[argidx], param.expr, argpos))
             return false;
 
-        assert(argv_[argpos].expr != nullptr);
+        assert(argv[argpos].expr != nullptr);
         nargs++;
 
         // Don't iterate past terminators (0 or varargs).
@@ -1951,8 +2013,8 @@ CallExpr::Analyze(SemaContext& sc)
         }
     }
 
-    if (!sc.func()) {
-        error(pos_, 10);
+    if (!sc_->func()) {
+        report(call, 10);
         return false;
     }
 
@@ -1962,54 +2024,52 @@ CallExpr::Analyze(SemaContext& sc)
         auto& arg = arglist[argidx];
         if (arg.type.ident == 0 || arg.type.ident == iVARARGS)
             break;
-        if (argidx >= argv_.size() || !argv_[argidx].expr) {
-            if (!ProcessArg(sc, &arg, nullptr, argidx))
+        if (argidx >= argv.size() || !argv[argidx].expr) {
+            if (!CheckArgument(call, &arg, nullptr, argidx))
                 return false;
         }
 
-        Expr* expr = argv_[argidx].expr;
+        Expr* expr = argv[argidx].expr;
         if (expr->as<DefaultArgExpr>() && arg.type.ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(sc, 0, arg.def->tag, arg.type.tag(), 2, nullptr, &userop))
-                argv_[argidx].expr = new CallUserOpExpr(userop, expr);
+            if (find_userop(*sc_, 0, arg.def->tag, arg.type.tag(), 2, nullptr, &userop))
+                argv[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
-
     return true;
 }
 
-bool
-CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int pos)
-{
-    while (pos >= argv_.size())
-        argv_.push_back(ComputedArg{});
+bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigned int pos) {
+    auto& argv = call->argv();
+    while (pos >= argv.size())
+        argv.push_back(ComputedArg{});
 
-    unsigned int visual_pos = implicit_this_ ? pos : pos + 1;
+    unsigned int visual_pos = call->implicit_this() ? pos : pos + 1;
 
     if (!param) {
         if (arg->type.ident == 0 || arg->type.ident == iVARARGS) {
-            error(pos_, 92); // argument count mismatch
+            report(call, 92); // argument count mismatch
             return false;
         }
         if (!arg->def) {
-            error(pos_, 34, visual_pos); // argument has no default value
+            report(call, 34) << visual_pos; // argument has no default value
             return false;
         }
 
         // The rest of the code to handle default values is in DoEmit.
-        argv_[pos].expr = new DefaultArgExpr(pos_, arg);
-        argv_[pos].arg = arg;
+        argv[pos].expr = new DefaultArgExpr(call->pos(), arg);
+        argv[pos].arg = arg;
         return true;
     }
 
     AutoErrorPos aep(param->pos());
 
-    bool handling_this = implicit_this_ && (pos == 0);
+    bool handling_this = call->implicit_this() && (pos == 0);
 
     if (param->val().ident == iACCESSOR) {
         // We must always compute r-values for accessors.
         if (!param->val().accessor->getter) {
-            report(param->pos(), 149) << param->val().accessor->name;
+            report(param, 149) << param->val().accessor->name;
             return false;
         }
         param = new RvalueExpr(param);
@@ -2023,7 +2083,7 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             // However, use information must be marked anyway, otherwise
             // vars declared previously will be omitted in the second pass.
             // See SourceMod bug 4643.
-            error(pos_, 92); // argument count mismatch
+            report(param, 92); // argument count mismatch
             break;
         case iVARARGS:
             assert(!handling_this);
@@ -2034,18 +2094,18 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
                     if (!lvalue) {
-                        error(pos_, 22); // need lvalue
+                        report(param, 22); // need lvalue
                         return false;
                     }
                 }
             }
             if (!checktag_string(arg->type.tag(), val) && !checktag(arg->type.tag(), val->tag))
-                error(pos_, 213, type_to_name(arg->type.tag()), type_to_name(val->tag));
+                report(param, 213) << type_to_name(arg->type.tag()) << type_to_name(val->tag);
             break;
         case iVARIABLE:
         {
             if (val->ident == iFUNCTN || val->ident == iARRAY || val->ident == iREFARRAY) {
-                error(pos_, 35, visual_pos); // argument type mismatch
+                report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
 
@@ -2057,7 +2117,7 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(sc, 0, val->tag, arg->type.tag(), 2, nullptr, &userop))
+                find_userop(*sc_, 0, val->tag, arg->type.tag(), 2, nullptr, &userop))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
@@ -2070,11 +2130,11 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             assert(!handling_this);
 
             if (!lvalue || val->ident == iARRAYCHAR) {
-                error(pos_, 35, visual_pos); // argument type mismatch
+                report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
             if (val->sym && val->sym->is_const && !arg->type.is_const) {
-                error(pos_, 35, visual_pos); // argument type mismatch
+                report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
             checktag(arg->type.tag(), val->tag);
@@ -2083,11 +2143,11 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
                 val->ident != iARRAYCHAR)
             {
-                error(pos_, 35, visual_pos); // argument type mismatch
+                report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
             if (val->sym && val->sym->is_const && !arg->type.is_const) {
-                error(pos_, 35, visual_pos); // argument type mismatch
+                report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
             // Verify that the dimensions match those in |arg|. A literal array
@@ -2095,25 +2155,25 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             // assumed to have a single dimension.
             if (!val->sym || val->ident == iARRAYCELL || val->ident == iARRAYCHAR) {
                 if (arg->type.numdim() != 1) {
-                    error(pos_, 48); // array dimensions must match
+                    report(param, 48); // array dimensions must match
                     return false;
                 }
                 if (arg->type.dim[0] != 0) {
                     assert(arg->type.dim[0] > 0);
                     if (val->constval == 0) {
-                        error(pos_, 47);
+                        report(param, 47);
                         return false;
                     }
                     if (val->ident == iARRAYCELL) {
                         if (arg->type.dim[0] != val->constval) {
-                            error(pos_, 47); // array sizes must match
+                            report(param, 47); // array sizes must match
                             return false;
                         }
                     } else {
                         if ((val->constval > 0 && arg->type.dim[0] != val->constval) ||
                             (val->constval < 0 && arg->type.dim[0] < -val->constval))
                         {
-                            error(pos_, 47); // array sizes must match
+                            report(param, 47); // array sizes must match
                             return false;
                         }
                     }
@@ -2121,7 +2181,7 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             } else {
                 symbol* sym = val->sym;
                 if (sym->dim.array.level + 1 != arg->type.numdim()) {
-                    error(pos_, 48); // array dimensions must match
+                    report(param, 48); // array dimensions must match
                     return false;
                 }
                 // The lengths for all dimensions must match, unless the dimension
@@ -2131,7 +2191,7 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
                     if (arg->type.dim[level] != 0 &&
                         sym->dim.array.length != arg->type.dim[level])
                     {
-                        error(pos_, 47); // array sizes must match
+                        report(param, 47); // array sizes must match
                         return false;
                     }
                     sym = sym->array_child();
@@ -2139,13 +2199,13 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
                 }
                 // The last dimension is checked too, again, unless it is zero.
                 if (arg->type.dim[level] != 0 && sym->dim.array.length != arg->type.dim[level]) {
-                    error(pos_, 47); // array sizes must match
+                    report(param, 47); // array sizes must match
                     return false;
                 }
                 if (!matchtag(arg->type.enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
                     if (arg->type.tag() != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
-                        error(pos_, 229, sym->name());
+                        report(param, 229) << sym->name();
                 }
             }
 
@@ -2153,7 +2213,7 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             if ((arg->type.tag() != pc_tag_string && val->tag == pc_tag_string) ||
                 (arg->type.tag() == pc_tag_string && val->tag != pc_tag_string))
             {
-                error(pos_, 178, type_to_name(val->tag), type_to_name(arg->type.tag()));
+                report(param, 178) << type_to_name(val->tag) << type_to_name(arg->type.tag());
                 return false;
             }
             break;
@@ -2162,8 +2222,8 @@ CallExpr::ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int po
             break;
     }
 
-    argv_[pos].expr = param;
-    argv_[pos].arg = arg;
+    argv[pos].expr = param;
+    argv[pos].arg = arg;
     return true;
 }
 
@@ -2184,16 +2244,16 @@ CallExpr::MarkUsed(SemaContext& sc)
         sym_->retvalue_used = true;
 }
 
-bool StaticAssertStmt::Analyze(SemaContext& sc)
-{
-    if (!expr_->Analyze(sc))
+bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
+    auto expr = stmt->expr();
+    if (!CheckExpr(expr))
         return false;
 
     // :TODO: insert coercion to bool.
     int tag;
     cell value;
-    if (!expr_->EvalConst(&value, &tag)) {
-        report(pos_, 8);
+    if (!expr->EvalConst(&value, &tag)) {
+        report(expr, 8);
         return false;
     }
 
@@ -2201,49 +2261,62 @@ bool StaticAssertStmt::Analyze(SemaContext& sc)
         return true;
 
     std::string message;
-    if (text_)
-        message += ": " + std::string(text_->chars(), text_->length());
+    if (stmt->text())
+        message += ": " + std::string(stmt->text()->chars(), stmt->text()->length());
 
-    report(pos_, 70) << message;
+    report(expr, 70) << message;
     return false;
 }
 
-bool
-NewArrayExpr::Analyze(SemaContext& sc)
-{
+bool Semantics::CheckNewArrayExpr(NewArrayExpr* expr) {
     // We can't handle random refarrays floating around yet, so forbid this.
-    error(pos_, 142);
+    report(expr, 142);
     return false;
 }
 
-bool
-NewArrayExpr::AnalyzeForInitializer(SemaContext& sc)
-{
-    if (already_analyzed_)
-        return true;
+bool Semantics::CheckExprForArrayInitializer(Expr* expr) {
+    switch (expr->kind()) {
+        case AstKind::NewArrayExpr: {
+            auto actual = expr->to<NewArrayExpr>();
+            return CheckNewArrayExprForArrayInitializer(actual);
+        }
+        default:
+            return CheckExpr(expr);
+    }
+}
 
-    val_.ident = iREFARRAY;
-    val_.tag = type_.tag();
-    for (auto& expr : exprs_) {
-        if (!expr->Analyze(sc))
+bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
+    if (na->analyzed())
+        return na->analysis_result();
+
+    na->set_analysis_result(false);
+
+    auto& val = na->val();
+    auto& type = na->type();
+    val.ident = iREFARRAY;
+    val.tag = type.tag();
+    for (auto& expr : na->exprs()) {
+        if (!CheckExpr(expr))
             return false;
         if (expr->lvalue())
             expr = new RvalueExpr(expr);
 
         const auto& v = expr->val();
-        if (IsLegacyEnumTag(sc.scope(), v.tag)) {
-            error(expr->pos(), 153);
+        if (IsLegacyEnumTag(sc_->scope(), v.tag)) {
+            report(expr, 153);
             return false;
         }
         if (!is_valid_index_tag(v.tag)) {
-            error(expr->pos(), 77, type_to_name(v.tag));
+            report(expr, 77) << type_to_name(v.tag);
             return false;
         }
         if (v.ident == iCONSTEXPR && v.constval <= 0) {
-            error(expr->pos(), 9);
+            report(expr, 9);
             return false;
         }
     }
+
+    na->set_analysis_result(true);
     return true;
 }
 
@@ -2254,48 +2327,45 @@ NewArrayExpr::ProcessUses(SemaContext& sc)
         expr->MarkAndProcessUses(sc);
 }
 
-bool
-IfStmt::Analyze(SemaContext& sc)
-{
-    if (Expr* expr = cond_->AnalyzeForTest(sc))
-        cond_ = expr;
+bool Semantics::CheckIfStmt(IfStmt* stmt) {
+    if (Expr* expr = AnalyzeForTest(stmt->cond()))
+        stmt->set_cond(expr);
 
     // Note: unlike loop conditions, we don't factor in constexprs here, it's
     // too much work and way less common than constant loop conditions.
 
     ke::Maybe<bool> always_returns;
     {
-        AutoCollectSemaFlow flow(sc, &always_returns);
-        if (!on_true_->Analyze(sc))
+        AutoCollectSemaFlow flow(*sc_, &always_returns);
+        if (!CheckStmt(stmt->on_true()))
             return false;
     }
     {
-        AutoCollectSemaFlow flow(sc, &always_returns);
-        if (on_false_ && !on_false_->Analyze(sc))
+        AutoCollectSemaFlow flow(*sc_, &always_returns);
+        if (stmt->on_false() && !CheckStmt(stmt->on_false()))
             return false;
     }
 
-    if (on_true_ && on_false_) {
-        FlowType a = on_true_->flow_type();
-        FlowType b = on_false_->flow_type();
+    if (stmt->on_true() && stmt->on_false()) {
+        FlowType a = stmt->on_true()->flow_type();
+        FlowType b = stmt->on_false()->flow_type();
         if (a == b)
-            set_flow_type(a);
+            stmt->set_flow_type(a);
         else if (a != Flow_None && b != Flow_None)
-            set_flow_type(Flow_Mixed);
+            stmt->set_flow_type(Flow_Mixed);
     }
 
     if (*always_returns)
-        sc.set_always_returns(true);
+        sc_->set_always_returns(true);
     return true;
 }
 
-bool
-ExprStmt::Analyze(SemaContext& sc)
-{
-    if (!expr_->Analyze(sc))
+bool Semantics::CheckExprStmt(ExprStmt* stmt) {
+    auto expr = stmt->expr();
+    if (!CheckExpr(expr))
         return false;
-    if (!expr_->HasSideEffects())
-        error(expr_->pos(), 215);
+    if (!expr->HasSideEffects())
+        report(expr, 215);
     return true;
 }
 
@@ -2312,8 +2382,8 @@ ExprStmt::Analyze(SemaContext& sc)
  *  The function returns whether there is an "entry" point for the file.
  *  This flag will only be 1 when browsing the global symbol table.
  */
-static bool
-TestSymbol(symbol* sym, bool testconst)
+bool
+Semantics::TestSymbol(symbol* sym, bool testconst)
 {
     bool entry = false;
     switch (sym->ident) {
@@ -2335,7 +2405,7 @@ TestSymbol(symbol* sym, bool testconst)
             // for the function and check now.
             auto node = sym->function()->node;
             if (node && node->body()) {
-                node->CheckReturnUsage();
+                CheckFunctionReturnUsage(node);
                 if (node->scope() && !sym->callback)
                     TestSymbols(node->scope(), true);
             }
@@ -2363,46 +2433,34 @@ TestSymbol(symbol* sym, bool testconst)
     return entry;
 }
 
-bool
-TestSymbols(SymbolScope* root, int testconst)
-{
+bool Semantics::TestSymbols(SymbolScope* root, bool testconst) {
     bool entry = false;
     root->ForEachSymbol([&](symbol* sym) -> void {
-        entry |= TestSymbol(sym, !!testconst);
+        entry |= TestSymbol(sym, testconst);
     });
     return entry;
 }
 
-BlockStmt*
-BlockStmt::WrapStmt(Stmt* stmt)
-{
-    if (BlockStmt* block = stmt->as<BlockStmt>())
-        return block;
-    BlockStmt* block = new BlockStmt(stmt->pos());
-    block->stmts().emplace_back(stmt);
-    return block;
-}
-
-bool
-BlockStmt::Analyze(SemaContext& sc)
-{
+bool Semantics::CheckBlockStmt(BlockStmt* block) {
     bool ok = true;
-    for (const auto& stmt : stmts_) {
-        sc.cc().reports()->ResetErrorFlag();
+    for (const auto& stmt : block->stmts()) {
+        cc_.reports()->ResetErrorFlag();
 
-        if (ok && !sc.warned_unreachable() && (sc.always_returns() || flow_type() != Flow_None)) {
-            error(stmt->pos(), 225);
-            sc.set_warned_unreachable();
+        if (ok && !sc_->warned_unreachable() && (sc_->always_returns() ||
+            block->flow_type() != Flow_None))
+        {
+            report(stmt, 225);
+            sc_->set_warned_unreachable();
         }
-        ok &= stmt->Analyze(sc);
+        ok &= CheckStmt(stmt);
 
         FlowType flow = stmt->flow_type();
-        if (flow != Flow_None && flow_type() == Flow_None)
-            set_flow_type(flow);
+        if (flow != Flow_None && block->flow_type() == Flow_None)
+            block->set_flow_type(flow);
     }
 
-    if (scope_)
-        TestSymbols(scope_, TRUE);
+    if (block->scope())
+        TestSymbols(block->scope(), true);
     return true;
 }
 
@@ -2423,66 +2481,65 @@ AutoCollectSemaFlow::~AutoCollectSemaFlow()
     sc_.set_always_returns(old_value_);
 }
 
-bool
-ReturnStmt::Analyze(SemaContext& sc)
-{
-    sc.set_always_returns();
-    sc.loop_has_return() = true;
+bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
+    sc_->set_always_returns();
+    sc_->loop_has_return() = true;
 
-    symbol* curfunc = sc.func();
+    symbol* curfunc = sc_->func();
 
-    if (!expr_) {
+    auto expr = stmt->expr();
+    if (!expr) {
         if (curfunc->must_return_value())
             ReportFunctionReturnError(curfunc);
-        if (sc.void_return())
+        if (sc_->void_return())
             return true;
-        sc.set_void_return(this);
+        sc_->set_void_return(stmt);
         return true;
     }
 
-    if (Stmt* stmt = sc.void_return()) {
-        if (!sc.warned_mixed_returns()) {
-            error(stmt->pos(), 78);
-            error(pos_, 78);
-            sc.set_warned_mixed_returns();
+    if (Stmt* other = sc_->void_return()) {
+        if (!sc_->warned_mixed_returns()) {
+            report(other, 78);
+            report(stmt, 78);
+            sc_->set_warned_mixed_returns();
         }
     }
 
-    if (!expr_->Analyze(sc))
+    if (!CheckExpr(expr))
         return false;
 
-    if (expr_->lvalue())
-        expr_ = new RvalueExpr(expr_);
+    if (expr->lvalue())
+        expr = stmt->set_expr(new RvalueExpr(expr));
 
-    AutoErrorPos aep(expr_->pos());
+    AutoErrorPos aep(expr->pos());
 
     if (curfunc->tag == pc_tag_void) {
-        error(pos_, 88);
+        report(stmt, 88);
         return false;
     }
 
-    const auto& v = expr_->val();
+    const auto& v = expr->val();
     if (v.ident == iARRAY && !v.sym) {
         /* returning a literal string is not supported (it must be a variable) */
-        error(pos_, 39);
+        report(stmt, 39);
         return false;
     }
     /* see if this function already has a sub type (an array attached) */
     auto sub = curfunc->array_return();
     assert(sub == nullptr || sub->ident == iREFARRAY);
-    if (sc.returns_value()) {
+    if (sc_->returns_value()) {
         int retarray = (v.ident == iARRAY || v.ident == iREFARRAY);
         /* there was an earlier "return" statement in this function */
         if ((sub == nullptr && retarray) || (sub != nullptr && !retarray)) {
-            error(pos_, 79); /* mixing "return array;" and "return value;" */
+            report(stmt, 79); /* mixing "return array;" and "return value;" */
             return false;
         }
         if (retarray && curfunc->is_public) {
-            error(pos_, 90, curfunc->name()); /* public function may not return array */
+            report(stmt, 90) << curfunc->name(); /* public function may not return array */
             return false;
         }
     } else {
-        sc.set_returns_value();
+        sc_->set_returns_value();
     }
 
     /* check tagname with function tagname */
@@ -2491,21 +2548,20 @@ ReturnStmt::Analyze(SemaContext& sc)
         matchtag(curfunc->tag, v.tag, TRUE);
 
     if (v.ident == iARRAY || v.ident == iREFARRAY) {
-        if (!CheckArrayReturn(sc))
+        if (!CheckArrayReturnStmt(stmt))
             return false;
     }
     return true;
 }
 
-bool
-ReturnStmt::CheckArrayReturn(SemaContext& sc)
-{
-    symbol* curfunc = sc.func();
+bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
+    symbol* curfunc = sc_->func();
     symbol* sub = curfunc->array_return();
-    symbol* sym = expr_->val().sym;
+    symbol* sym = stmt->expr()->val().sym;
 
-    array_ = {};
-    array_.ident = iARRAY;
+    auto& array = stmt->array();
+    array = {};
+    array.ident = iARRAY;
 
     if (sub) {
         assert(sub->ident == iREFARRAY);
@@ -2513,14 +2569,14 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         // "return" statement returns exactly the same array
         int level = sym->dim.array.level;
         if (sub->dim.array.level != level) {
-            error(pos_, 48); /* array dimensions must match */
+            report(stmt, 48); /* array dimensions must match */
             return false;
         }
 
         for (int i = 0; i <= level; i++) {
-            array_.dim.emplace_back((int)sub->dim.array.length);
-            if (sym->dim.array.length != array_.dim.back()) {
-                error(pos_, 47); /* array sizes must match */
+            array.dim.emplace_back((int)sub->dim.array.length);
+            if (sym->dim.array.length != array.dim.back()) {
+                report(stmt, 47); /* array sizes must match */
                 return false;
             }
 
@@ -2533,7 +2589,7 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
             }
         }
         if (!sub->dim.array.length) {
-            error(pos_, 128);
+            report(stmt, 128);
             return false;
         }
 
@@ -2546,10 +2602,10 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         assert(sub != NULL);
         int level = sub->dim.array.level;
         for (int i = 0; i <= level; i++) {
-            array_.dim.emplace_back((int)sub->dim.array.length);
+            array.dim.emplace_back((int)sub->dim.array.length);
             if (sub->x.tags.index) {
-                array_.set_tag(0);
-                array_.declared_tag = sub->x.tags.index;
+                array.set_tag(0);
+                array.declared_tag = sub->x.tags.index;
             }
             if (i != level) {
                 sub = sub->array_child();
@@ -2557,16 +2613,16 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
             }
 
             /* check that all dimensions are known */
-            if (array_.dim.back() <= 0) {
-                error(pos_, 46, sym->name());
+            if (array.dim.back() <= 0) {
+                report(stmt, 46) << sym->name();
                 return false;
             }
         }
-        if (!array_.has_tag())
-            array_.set_tag(sub->tag);
+        if (!array.has_tag())
+            array.set_tag(sub->tag);
 
         if (!sub->dim.array.length) {
-            error(pos_, 128);
+            report(stmt, 128);
             return false;
         }
 
@@ -2585,45 +2641,42 @@ ReturnStmt::CheckArrayReturn(SemaContext& sc)
         for (argcount = 0; curfunc->function()->args[argcount].type.ident != 0; argcount++)
             /* nothing */;
 
-        auto dim = array_.dim.empty() ? nullptr : &array_.dim[0];
+        auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         sub = NewVariable(curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
-                          sGLOBAL, curfunc->tag, dim, array_.numdim(),
-                          array_.enum_struct_tag());
+                          sGLOBAL, curfunc->tag, dim, array.numdim(),
+                          array.enum_struct_tag());
         sub->set_parent(curfunc);
         curfunc->set_array_return(sub);
     }
 
-    auto func_node = sc.func_node();
+    auto func_node = sc_->func_node();
     if (func_node->type().numdim() == 0)
-        report(pos_, 246) << func_node->name();
-    else if (func_node->type().numdim() != array_.numdim())
-        report(pos_, 413);
+        report(stmt, 246) << func_node->name();
+    else if (func_node->type().numdim() != array.numdim())
+        report(stmt, 413);
 
-    array_.set_tag(sub->tag);
-    array_.has_postdims = true;
+    array.set_tag(sub->tag);
+    array.has_postdims = true;
     return true;
 }
 
-bool
-AssertStmt::Analyze(SemaContext& sc)
-{
-    if (Expr* expr = expr_->AnalyzeForTest(sc)) {
-        expr_ = expr;
+bool Semantics::CheckAssertStmt(AssertStmt* stmt) {
+    if (Expr* expr = AnalyzeForTest(stmt->expr())) {
+        stmt->set_expr(expr);
         return true;
     }
     return false;
 }
 
-bool
-DeleteStmt::Analyze(SemaContext& sc)
-{
-    if (!expr_->Analyze(sc))
+bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
+    auto expr = stmt->expr();
+    if (!CheckExpr(expr))
         return false;
 
-    const auto& v = expr_->val();
+    const auto& v = expr->val();
     switch (v.ident) {
         case iFUNCTN:
-            error(expr_->pos(), 167, "functions");
+            report(expr, 167) << "functions";
             return false;
 
         case iARRAY:
@@ -2632,7 +2685,7 @@ DeleteStmt::Analyze(SemaContext& sc)
         case iARRAYCHAR: {
             symbol* sym = v.sym;
             if (!sym || sym->dim.array.level > 0) {
-                error(expr_->pos(), 167, "arrays");
+                report(expr, 167) << "arrays";
                 return false;
             }
             break;
@@ -2640,13 +2693,13 @@ DeleteStmt::Analyze(SemaContext& sc)
     }
 
     if (v.tag == 0) {
-        error(expr_->pos(), 167, "integers");
+        report(expr, 167) << "integers";
         return false;
     }
 
     methodmap_t* map = gTypes.find(v.tag)->asMethodmap();
     if (!map) {
-        error(expr_->pos(), 115, "type", type_to_name(v.tag));
+        report(expr, 115) << "type" << type_to_name(v.tag);
         return false;
     }
 
@@ -2658,156 +2711,154 @@ DeleteStmt::Analyze(SemaContext& sc)
     }
 
     if (!map || !map->dtor) {
-        report(expr_->pos(), 115) << layout_spec_name(map->spec) << map->name;
+        report(expr, 115) << layout_spec_name(map->spec) << map->name;
         return false;
     }
 
-    map_ = map;
+    stmt->set_map(map);
     return true;
 }
 
-bool
-ExitStmt::Analyze(SemaContext& sc)
-{
-    if (!expr_->Analyze(sc))
+bool Semantics::CheckExitStmt(ExitStmt* stmt) {
+    auto expr = stmt->expr();
+    if (!CheckExpr(expr))
         return false;
-    if (expr_->lvalue())
-        expr_ = new RvalueExpr(expr_);
+    if (expr->lvalue())
+        expr = stmt->set_expr(new RvalueExpr(expr));
 
-    switch (expr_->val().ident) {
+    switch (expr->val().ident) {
         case iEXPRESSION:
         case iREFERENCE:
         case iVARIABLE:
         case iCONSTEXPR:
         case iARRAYCHAR:
         case iARRAYCELL: {
-            AutoErrorPos aep(expr_->pos());
-            matchtag(0, expr_->val().tag, MATCHTAG_COERCE);
+            AutoErrorPos aep(expr->pos());
+            matchtag(0, expr->val().tag, MATCHTAG_COERCE);
             break;
         }
         default:
-            error(expr_->pos(), 106);
+            report(expr, 106);
             return false;
     }
     return true;
 }
 
-bool
-DoWhileStmt::Analyze(SemaContext& sc)
-{
-    if (Expr* expr = cond_->AnalyzeForTest(sc))
-        cond_ = expr;
+bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
+    if (Expr* expr = AnalyzeForTest(stmt->cond()))
+        stmt->set_cond(expr);
+
+    auto cond = stmt->cond();
 
     ke::Maybe<cell> constval;
-    if (cond_->val().ident == iCONSTEXPR)
-        constval.init(cond_->val().constval);
+    if (cond->val().ident == iCONSTEXPR)
+        constval.init(cond->val().constval);
 
     bool has_break = false;
     bool has_return = false;
     ke::Maybe<bool> always_returns;
     {
-        AutoCollectSemaFlow flow(sc, &always_returns);
-        ke::SaveAndSet<bool> auto_break(&sc.loop_has_break(), false);
-        ke::SaveAndSet<bool> auto_return(&sc.loop_has_return(), false);
+        AutoCollectSemaFlow flow(*sc_, &always_returns);
+        ke::SaveAndSet<bool> auto_break(&sc_->loop_has_break(), false);
+        ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
-        if (!body_->Analyze(sc))
+        if (!CheckStmt(stmt->body()))
             return false;
 
-        has_break = sc.loop_has_break();
-        has_return = sc.loop_has_return();
+        has_break = sc_->loop_has_break();
+        has_return = sc_->loop_has_return();
     }
 
-    never_taken_ = constval.isValid() && !constval.get();
-    always_taken_ = constval.isValid() && constval.get();
+    stmt->set_never_taken(constval.isValid() && !constval.get());
+    stmt->set_always_taken(constval.isValid() && constval.get());
 
-    if (never_taken_ && token_ == tWHILE) {
+    if (stmt->never_taken() && stmt->token() == tWHILE) {
         // Loop is never taken, don't touch the return status.
-    } else if ((token_ == tDO || always_taken_) && !has_break) {
+    } else if ((stmt->token() == tDO || stmt->always_taken()) && !has_break) {
         // Loop is always taken, and has no break statements.
-        if (always_taken_ && has_return)
-            sc.set_always_returns(true);
+        if (stmt->always_taken() && has_return)
+            sc_->set_always_returns(true);
 
         // Loop body ends in a return and has no break statements.
-        if (body_->flow_type() == Flow_Return)
-            set_flow_type(Flow_Return);
+        if (stmt->body()->flow_type() == Flow_Return)
+            stmt->set_flow_type(Flow_Return);
     }
 
     // :TODO: endless loop warning?
     return true;
 }
 
-bool
-ForStmt::Analyze(SemaContext& sc)
-{
+bool Semantics::CheckForStmt(ForStmt* stmt) {
     bool ok = true;
-    if (init_ && !init_->Analyze(sc))
+    if (stmt->init() && !CheckStmt(stmt->init()))
         ok = false;
-    if (cond_) {
-        if (Expr* expr = cond_->AnalyzeForTest(sc))
-            cond_ = expr;
+
+    auto cond = stmt->cond();
+    if (cond) {
+        if (Expr* expr = AnalyzeForTest(cond))
+            cond = stmt->set_cond(expr);
         else
             ok = false;
     }
-    if (advance_ && !advance_->Analyze(sc))
+    if (stmt->advance() && !CheckExpr(stmt->advance()))
         ok = false;
 
     ke::Maybe<cell> constval;
-    if (cond_ && cond_->val().ident == iCONSTEXPR)
-        constval.init(cond_->val().constval);
+    if (cond && cond->val().ident == iCONSTEXPR)
+        constval.init(cond->val().constval);
 
     bool has_break = false;
     bool has_return = false;
     ke::Maybe<bool> always_returns;
     {
-        AutoCollectSemaFlow flow(sc, &always_returns);
-        ke::SaveAndSet<bool> auto_break(&sc.loop_has_break(), false);
-        ke::SaveAndSet<bool> auto_continue(&sc.loop_has_continue(), false);
-        ke::SaveAndSet<bool> auto_return(&sc.loop_has_return(), false);
+        AutoCollectSemaFlow flow(*sc_, &always_returns);
+        ke::SaveAndSet<bool> auto_break(&sc_->loop_has_break(), false);
+        ke::SaveAndSet<bool> auto_continue(&sc_->loop_has_continue(), false);
+        ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
-        if (!body_->Analyze(sc))
-            ok = false;
+        ok &= CheckStmt(stmt->body());
 
-        has_break = sc.loop_has_break();
-        has_return = sc.loop_has_return();
-        has_continue_ = sc.loop_has_continue();
+        has_break = sc_->loop_has_break();
+        has_return = sc_->loop_has_return();
+        stmt->set_has_continue(sc_->loop_has_continue());
     }
 
-    never_taken_ = constval.isValid() && !constval.get();
-    always_taken_ = !cond_ || (constval.isValid() && constval.get());
+    stmt->set_never_taken(constval.isValid() && !constval.get());
+    stmt->set_always_taken(!cond || (constval.isValid() && constval.get()));
 
     // If the body falls through, then implicitly there is a continue operation.
-    if (body_->flow_type() != Flow_Break && body_->flow_type() != Flow_Return)
-        has_continue_ = true;
+    auto body = stmt->body();
+    if (body->flow_type() != Flow_Break && body->flow_type() != Flow_Return)
+        stmt->set_has_continue(true);
     // If there is a non-constant conditional, there is also an implicit continue.
-    if (!always_taken_)
-        has_continue_ = true;
+    if (!stmt->always_taken())
+        stmt->set_has_continue(true);
 
-    if (never_taken_) {
+    if (stmt->never_taken()) {
         // Loop is never taken, don't touch the return status.
-    } else if (always_taken_ && !has_break) {
+    } else if (stmt->always_taken() && !has_break) {
         if (has_return) {
             // Loop is always taken, and has no break statements, and has a return statement.
-            sc.set_always_returns(true);
+            sc_->set_always_returns(true);
         }
-        if (body_->flow_type() == Flow_Return && !has_break)
-            set_flow_type(Flow_Return);
+        if (body->flow_type() == Flow_Return && !has_break)
+            stmt->set_flow_type(Flow_Return);
     }
 
-    if (scope_)
-        TestSymbols(scope_, TRUE);
+    if (stmt->scope())
+        TestSymbols(stmt->scope(), true);
     return ok;
 }
 
-bool
-SwitchStmt::Analyze(SemaContext& sc)
-{
-    bool tag_ok = expr_->Analyze(sc);
-    const auto& v = expr_->val();
+bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
+    auto expr = stmt->expr();
+    bool tag_ok = CheckExpr(expr);
+    const auto& v = expr->val();
     if (tag_ok && (v.ident == iARRAY || v.ident == iREFARRAY))
-        error(expr_->pos(), 33, "-unknown-");
+        report(expr, 33) << "-unknown-";
 
-    if (expr_->lvalue())
-        expr_ = new RvalueExpr(expr_);
+    if (expr->lvalue())
+        expr = stmt->set_expr(new RvalueExpr(expr));
 
     ke::Maybe<bool> always_returns;
     ke::Maybe<FlowType> flow;
@@ -2824,15 +2875,15 @@ SwitchStmt::Analyze(SemaContext& sc)
     };
 
     std::unordered_set<cell> case_values;
-    for (const auto& case_entry : cases_) {
+    for (const auto& case_entry : stmt->cases()) {
         for (Expr* expr : case_entry.first) {
-            if (!expr->Analyze(sc))
+            if (!CheckExpr(expr))
                 continue;
 
             int tag;
             cell value;
             if (!expr->EvalConst(&value, &tag)) {
-                error(expr->pos(), 8);
+                report(expr, 8);
                 continue;
             }
             if (tag_ok) {
@@ -2843,29 +2894,27 @@ SwitchStmt::Analyze(SemaContext& sc)
             if (!case_values.count(value))
                 case_values.emplace(value);
             else
-                error(expr->pos(), 40, value);
+                report(expr, 40) << value;
         }
 
-        AutoCollectSemaFlow flow(sc, &always_returns);
-        case_entry.second->Analyze(sc);
-
-        update_flow(case_entry.second->flow_type());
+        AutoCollectSemaFlow flow(*sc_, &always_returns);
+        if (CheckStmt(case_entry.second))
+            update_flow(case_entry.second->flow_type());
     }
 
-    if (default_case_) {
-        AutoCollectSemaFlow flow(sc, &always_returns);
-        default_case_->Analyze(sc);
-
-        update_flow(default_case_->flow_type());
+    if (stmt->default_case()) {
+        AutoCollectSemaFlow flow(*sc_, &always_returns);
+        if (CheckStmt(stmt->default_case()))
+            update_flow(stmt->default_case()->flow_type());
     } else {
         always_returns.init(false);
         update_flow(Flow_None);
     }
 
     if (*always_returns)
-        sc.set_always_returns(true);
+        sc_->set_always_returns(true);
 
-    set_flow_type(*flow);
+    stmt->set_flow_type(*flow);
 
     // Return value doesn't really matter for statements.
     return true;
@@ -2914,123 +2963,116 @@ FunctionInfo::IsVariadic() const
     return !args_.empty() && args_.back().decl->type().ident == iVARARGS;
 }
 
-bool
-FunctionInfo::Analyze(SemaContext& outer_sc)
-{
+bool Semantics::CheckFunctionInfo(FunctionInfo* info) {
     // We could have been analyzed recursively to derive return array sizes.
-    if (analyzed_)
-        return *analyzed_;
+    if (info->is_analyzed())
+        return info->analysis_status();
 
-    assert(!is_analyzing_);
+    assert(!info->is_analyzing());
 
-    is_analyzing_ = true;
-    analyzed_.init(DoAnalyze(outer_sc));
-    is_analyzing_ = false;
+    info->set_is_analyzing(true);
+    info->set_analyzed(CheckFunctionInfoImpl(info));
+    info->set_is_analyzing(false);
 
-    return *analyzed_;
+    return info->analysis_status();
 }
 
-bool
-FunctionInfo::DoAnalyze(SemaContext& outer_sc)
-{
-    SemaContext sc(outer_sc, sym_, this);
+bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
+    SemaContext sc(*sc_, info->sym(), info);
+    ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
-    if (sym_->skipped && !this_tag_)
+    auto sym = info->sym();
+    if (sym->skipped && !info->this_tag())
         return true;
 
+    auto& decl = info->decl();
     {
-        AutoErrorPos error_pos(pos_);
-        check_void_decl(&decl_, FALSE);
+        AutoErrorPos error_pos(info->pos());
+        check_void_decl(&decl, FALSE);
 
-        if (decl_.opertok)
-            check_operatortag(decl_.opertok, decl_.type.tag(), decl_.name->chars());
+        if (decl.opertok)
+            check_operatortag(decl.opertok, decl.type.tag(), decl.name->chars());
     }
 
-    if (is_public_ || is_forward_) {
-        if (decl_.type.numdim() > 0)
-            error(pos_, 141);
+    if (info->is_public() || info->is_forward()) {
+        if (decl.type.numdim() > 0)
+            report(info->pos(), 141);
     }
 
-    if (sym_->native) {
-        if (decl_.type.numdim() > 0) {
-            report(83);
+    if (sym->native) {
+        if (decl.type.numdim() > 0) {
+            report(info->pos(), 83);
             return false;
         }
         return true;
     }
 
-    if (!body_) {
-        if (is_native_ || is_forward_)
+    auto body = info->body();
+    if (!body) {
+        if (info->is_native() || info->is_forward())
             return true;
-        error(pos_, 10);
+        report(info->pos(), 10);
         return false;
     }
 
-    if (sym_->deprecated && !sym_->stock) {
-        const char* ptr = sym_->documentation->chars();
-        report(pos_, 234) << sym_->name() << ptr; /* deprecated (probably a public function) */
+    if (sym->deprecated && !sym->stock) {
+        const char* ptr = sym->documentation->chars();
+        report(info->pos(), 234) << sym->name() << ptr; /* deprecated (probably a public function) */
     }
 
-    body_->Analyze(sc);
+    CheckStmt(body);
 
-    sym_->returns_value = sc.returns_value();
-    sym_->always_returns = sc.always_returns();
+    sym->returns_value = sc_->returns_value();
+    sym->always_returns = sc_->always_returns();
 
-    if (!sym_->returns_value) {
-        if (sym_->tag == pc_tag_void && sym_->function()->forward && !decl_.type.tag() &&
-            !decl_.type.is_new)
+    if (!sym->returns_value) {
+        if (sym->tag == pc_tag_void && sym->function()->forward && !decl.type.tag() &&
+            !decl.type.is_new)
         {
             // We got something like:
             //    forward void X();
             //    public X()
             //
             // Switch our decl type to void.
-            decl_.type.set_tag(pc_tag_void);
+            decl.type.set_tag(pc_tag_void);
         }
     }
 
     // Make sure that a public return type matches the forward (if any).
-    if (sym_->function()->forward && is_public_) {
-        if (sym_->tag != decl_.type.tag())
-            report(pos_, 180) << type_to_name(sym_->tag) << type_to_name(decl_.type.tag());
+    if (sym->function()->forward && info->is_public()) {
+        if (sym->tag != decl.type.tag())
+            report(info->pos(), 180) << type_to_name(sym->tag) << type_to_name(decl.type.tag());
     }
 
     // For globals, we test arguments in a later pass, since we need to know
     // which functions get used as callbacks in order to emit a warning. The
     // same is true for return value usage: we don't know how to handle
     // compatibility edge cases until we've discovered all callers.
-    if (sym_->parent()) {
-        CheckReturnUsage();
-        if (scope_)
-            TestSymbols(scope_, TRUE);
+    if (sym->parent()) {
+        CheckFunctionReturnUsage(info);
+        if (info->scope())
+            TestSymbols(info->scope(), true);
     }
     return true;
 }
 
-void
-FunctionInfo::CheckReturnUsage()
-{
-    if (sym_->returns_value && sym_->always_returns)
+void Semantics::CheckFunctionReturnUsage(FunctionInfo* info) {
+    auto sym = info->sym();
+    if (sym->returns_value && sym->always_returns)
         return;
 
-    if (sym_->must_return_value())
-        ReportFunctionReturnError(sym_);
+    if (sym->must_return_value())
+        ReportFunctionReturnError(sym);
 
     // We should always have a block statement for the body. If no '{' was
     // detected it would have been an error in the parsing pass.
-    auto block = body_->as<BlockStmt>();
+    auto block = info->body()->as<BlockStmt>();
     assert(block);
 
     // Synthesize a return statement.
-    auto ret_stmt = new ReturnStmt(end_pos_, nullptr);
+    auto ret_stmt = new ReturnStmt(info->end_pos(), nullptr);
     block->stmts().push_back(ret_stmt);
     block->set_flow_type(Flow_Return);
-}
-
-bool
-FunctionDecl::Analyze(SemaContext& sc)
-{
-    return info_->Analyze(sc);
 }
 
 void
@@ -3124,10 +3166,8 @@ FunctionDecl::ProcessUses(SemaContext& sc)
     info_->ProcessUses(sc);
 }
 
-bool
-PragmaUnusedStmt::Analyze(SemaContext& sc)
-{
-    for (const auto& sym : symbols_) {
+bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
+    for (const auto& sym : stmt->symbols()) {
         sym->usage |= uREAD;
 
         switch (sym->ident) {
@@ -3142,12 +3182,10 @@ PragmaUnusedStmt::Analyze(SemaContext& sc)
     return true;
 }
 
-bool
-EnumStructDecl::Analyze(SemaContext& sc)
-{
+bool Semantics::CheckEnumStructDecl(EnumStructDecl* decl) {
     bool ok = true;
-    for (const auto& fun : methods_)
-        ok &= fun->Analyze(sc);
+    for (const auto& fun : decl->methods())
+        ok &= CheckStmt(fun);
     return ok;
 }
 
@@ -3158,18 +3196,16 @@ EnumStructDecl::ProcessUses(SemaContext& sc)
         fun->ProcessUses(sc);
 }
 
-bool
-MethodmapDecl::Analyze(SemaContext& sc)
-{
+bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
     bool ok = true;
-    for (const auto& prop : properties_) {
+    for (const auto& prop : decl->properties()) {
         if (prop->getter)
-            ok &= prop->getter->Analyze(sc);
+            ok &= CheckFunctionInfo(prop->getter);
         if (prop->setter)
-            ok &= prop->setter->Analyze(sc);
+            ok &= CheckFunctionInfo(prop->setter);
     }
-    for (const auto& method : methods_)
-        ok &= method->decl->Analyze(sc);
+    for (const auto& method : decl->methods())
+        ok &= CheckStmt(method->decl);
     return ok;
 }
 
@@ -3283,9 +3319,15 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
     *arg->def->array = std::move(data);
 }
 
-bool
-ChangeScopeNode::Analyze(SemaContext& sc)
-{
-    sc.static_scopes().emplace(scope_);
+bool Semantics::CheckChangeScopeNode(ChangeScopeNode* node) {
+    assert(sc_->scope()->kind() == sGLOBAL || sc_->scope()->kind() == sFILE_STATIC);
+    sc_->set_scope(node->scope());
+    static_scopes_.emplace(node->scope());
     return true;
+}
+
+SymbolScope* Semantics::current_scope() const {
+    if (sc_)
+        return sc_->scope();
+    return cc_.globals();
 }

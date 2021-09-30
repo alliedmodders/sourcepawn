@@ -18,21 +18,20 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
 #pragma once
 
 #include "parse-node.h"
 
+class Semantics;
+
 // Determine the static size of an iARRAY based on dimension expressions and
 // array initializers. The array may be converted to an iREFARRAY if it is
 // determined to be dynamic.
-void ResolveArraySize(SemaContext& sc, VarDecl* decl);
-void ResolveArraySize(SemaContext& sc, const token_pos_t& pos, typeinfo_t* type, int vclass);
+void ResolveArraySize(Semantics* sema, VarDecl* decl);
+void ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
 // Perform type and size checks of an array and its initializer if present.
-bool CheckArrayDeclaration(SemaContext& sc, VarDecl* decl);
-bool CheckArrayInitialization(SemaContext& sc, const typeinfo_t& type, Expr* init);
+bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
 
 struct ArrayData : public PoolObject {
     PoolList<cell> iv;
