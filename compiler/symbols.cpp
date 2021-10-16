@@ -62,13 +62,22 @@ void
 markusage(symbol* sym, int usage)
 {
     sym->usage |= usage;
-    /* check if (global) reference must be added to the symbol */
-    if ((usage & (uREAD | uWRITTEN)) != 0) {
-        /* only do this for global symbols */
-        auto& cc = CompileContext::get();
-        if (sym->vclass == sGLOBAL && cc.sema() && cc.sema()->func())
-            cc.sema()->func()->add_reference_to(sym);
-    }
+
+    auto& cc = CompileContext::get();
+    if (!cc.sema())
+        return;
+
+    auto parent_func = cc.sema()->func();
+    if (!parent_func)
+        return;
+
+    // The reference graph only contains outgoing edges to global or file-static
+    // variables. Locals and such are computed by TestSymbols and don't need
+    // special handling, there's no concept of "stock" there.
+    if (sym->vclass != sGLOBAL && sym->vclass != sSTATIC)
+        return;
+
+    parent_func->add_reference_to(sym);
 }
 
 FunctionData::FunctionData()
@@ -95,7 +104,6 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
    is_static(false),
    is_struct(false),
    callback(false),
-   skipped(false),
    native(false),
    returns_value(false),
    always_returns(false),
@@ -133,7 +141,6 @@ symbol::symbol(const symbol& other)
     enumroot = other.enumroot;
     enumfield = other.enumfield;
     callback = other.callback;
-    skipped = other.skipped;
     returns_value = other.returns_value;
     always_returns = other.always_returns;
     is_operator = other.is_operator;
@@ -342,40 +349,39 @@ deduce_liveness(CompileContext& cc)
     std::vector<symbol*> work;
 
     // The root set is all public functions.
-    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
-        if (sym->ident != iFUNCTN)
-            return;
+    for (const auto& sym : cc.publics()) {
         if (sym->native)
             return;
 
         if (sym->is_public) {
             sym->queued = true;
+            sym->usage |= uLIVE;
             work.push_back(sym);
         } else {
             sym->queued = false;
         }
-    });
+    }
+
+    auto enqueue = [&](symbol* other) -> bool {
+        if (other->ident != iFUNCTN || other->queued)
+            return false;
+        other->queued = true;
+        other->usage |= uLIVE;
+        work.push_back(other);
+        return true;
+    };
 
     // Traverse referrers to find the transitive set of live functions.
     while (!work.empty()) {
         symbol* live = ke::PopBack(&work);
 
         for (const auto& other : live->refers_to()) {
-            if (other->ident != iFUNCTN || other->queued)
+            if (!enqueue(other))
                 continue;
-            other->queued = true;
-            work.push_back(other);
+            if (auto alias = other->function()->alias)
+                enqueue(alias);
         }
     }
-
-    // Remove the liveness flags for anything we did not visit.
-    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
-        if (sym->ident != iFUNCTN || sym->queued)
-            return;
-        if (sym->native)
-            return;
-        sym->usage &= ~(uWRITTEN | uREAD);
-    });
 }
 
 enum class NewNameStatus {

@@ -49,6 +49,7 @@ class CompileContext final
 
     SymbolScope* globals() const { return globals_; }
     std::unordered_set<symbol*>& functions() { return functions_; }
+    std::unordered_set<symbol*>& publics() { return publics_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
@@ -81,6 +82,7 @@ class CompileContext final
     SymbolScope* globals_;
     std::string default_include_;
     std::unordered_set<symbol*> functions_;
+    std::unordered_set<symbol*> publics_;
     std::unique_ptr<CompileOptions> options_;
     std::vector<std::string> input_files_;
     std::vector<std::string> included_files_;

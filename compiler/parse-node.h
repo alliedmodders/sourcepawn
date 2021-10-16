@@ -490,7 +490,8 @@ class Expr : public ParseNode
 {
   public:
     explicit Expr(AstKind kind, const token_pos_t& pos)
-      : ParseNode(kind, pos)
+      : ParseNode(kind, pos),
+        lvalue_(false)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -529,7 +530,7 @@ class Expr : public ParseNode
 
   protected:
     value val_ = {};
-    bool lvalue_ = 0;
+    bool lvalue_ : 1;
 };
 
 class IsDefinedExpr final : public Expr
@@ -1344,9 +1345,7 @@ class DeleteStmt : public Stmt
 
     bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
 
-    void ProcessUses(SemaContext& sc) override {
-        expr_->MarkAndProcessUses(sc);
-    }
+    void ProcessUses(SemaContext& sc) override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::DeleteStmt; }
 
