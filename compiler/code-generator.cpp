@@ -51,6 +51,8 @@ CodeGenerator::Generate()
     // First instruction is always halt.
     __ emit(OP_HALT, 0);
 
+    deduce_liveness(cc_);
+
     EmitStmtList(tree_);
 }
 
@@ -1070,7 +1072,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
             break;
         case iFUNCTN:
             assert(!sym->native);
-            assert(!sym->skipped);
+            assert(sym->used());
             assert(sym->usage & uREAD);
             __ emit(OP_CONST_PRI, &sym->function()->funcid);
             break;
@@ -1711,10 +1713,9 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
     pc_max_func_memory = 0;
     pc_current_memory = 0;
 
-    if (info->sym()->skipped)
+    if (info->sym()->unused())
         return;
 
-    // :TODO: factor in usage
     cc_.functions().emplace(info->sym());
 
     if (!info->body())
@@ -1774,9 +1775,13 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
 void
 CodeGenerator::EmitCall(symbol* sym, cell nargs)
 {
+    assert(sym->used());
+
     if (sym->native) {
-        if (auto alias = sym->function()->alias)
+        if (auto alias = sym->function()->alias) {
             sym = sym->function()->alias;
+            assert(sym->used());
+        }
 
         if (sym->addr() < 0) {
             sym->setAddr((cell)native_list_.size());
@@ -1784,8 +1789,6 @@ CodeGenerator::EmitCall(symbol* sym, cell nargs)
         }
         __ emit(OP_SYSREQ_N, sym->addr(), nargs);
     } else {
-        assert(!sym->skipped);
-        assert(sym->usage & uREAD);
         __ emit(OP_PUSH_C, nargs);
         __ emit(OP_CALL, &sym->function()->label);
     }

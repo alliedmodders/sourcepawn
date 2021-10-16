@@ -655,6 +655,8 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
                 return false;
             }
             markusage(accessor->setter, uREAD);
+            if (accessor->getter && token != '=')
+                markusage(accessor->getter, uREAD);
         }
 
         if (!CheckAssignmentLHS(expr))
@@ -2981,10 +2983,6 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
     SemaContext sc(*sc_, info->sym(), info);
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
-    auto sym = info->sym();
-    if (sym->skipped && !info->this_tag())
-        return true;
-
     auto& decl = info->decl();
     {
         AutoErrorPos error_pos(info->pos());
@@ -2999,6 +2997,7 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
             report(info->pos(), 141);
     }
 
+    auto sym = info->sym();
     if (sym->native) {
         if (decl.type.numdim() > 0) {
             report(info->pos(), 83);
@@ -3053,6 +3052,9 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
         if (info->scope())
             TestSymbols(info->scope(), true);
     }
+
+    if (sym->is_public)
+        cc_.publics().emplace(sym);
     return true;
 }
 
@@ -3149,7 +3151,7 @@ SwitchStmt::ProcessUses(SemaContext& sc)
 void
 FunctionInfo::ProcessUses(SemaContext& outer_sc)
 {
-    if (!body_ || sym_->skipped)
+    if (!body_)
         return;
 
     SemaContext sc(outer_sc, sym_, this);
@@ -3330,4 +3332,9 @@ SymbolScope* Semantics::current_scope() const {
     if (sc_)
         return sc_->scope();
     return cc_.globals();
+}
+
+void DeleteStmt::ProcessUses(SemaContext& sc) {
+    expr_->MarkAndProcessUses(sc);
+    markusage(map_->dtor->target, uREAD);
 }

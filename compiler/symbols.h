@@ -101,7 +101,7 @@ struct symbol : public PoolObject
     int tag;       /* tagname id */
 
     // See uREAD/uWRITTEN above.
-    uint8_t usage : 2;
+    uint8_t usage : 3;
 
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
@@ -120,7 +120,6 @@ struct symbol : public PoolObject
     // Functions only.
     bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback
-    bool skipped : 1;       // skipped in codegen
     bool native : 1;        // the function is native
     bool returns_value : 1; // whether any path returns a value
     bool always_returns: 1; // whether all paths have an explicit return statement
@@ -218,6 +217,13 @@ struct symbol : public PoolObject
     }
     bool is_variadic() const;
     bool must_return_value() const;
+    bool used() const {
+        assert(ident == iFUNCTN);
+        return (usage & uLIVE) == uLIVE;
+    }
+    bool unused() const {
+        return !used();
+    }
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */

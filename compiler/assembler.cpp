@@ -400,7 +400,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
 void
 RttiBuilder::add_method(symbol* sym)
 {
-    assert(!sym->skipped);
+    assert(!sym->unused());
 
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
@@ -849,22 +849,19 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
             if (!sym->defined)
                 continue;
-            if (sym->skipped)
+            if (sym->unused())
                 continue;
 
-            if (sym->is_public || (sym->usage & uREAD)) {
-                function_entry entry;
-                entry.sym = sym;
-                if (sym->is_public) {
-                    entry.name = sym->name();
-                } else {
-                    // Create a private name.
-                    entry.name = ke::StringPrintf(".%d.%s", sym->addr(), sym->name());
-                }
-
-                functions.emplace_back(std::move(entry));
-                continue;
+            function_entry entry;
+            entry.sym = sym;
+            if (sym->is_public) {
+                entry.name = sym->name();
+            } else {
+                // Create a private name.
+                entry.name = ke::StringPrintf(".%d.%s", sym->addr(), sym->name());
             }
+
+            functions.emplace_back(std::move(entry));
         } else if (sym->ident == iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
             if (sym->is_public || (sym->usage & (uREAD | uWRITTEN)) != 0) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
