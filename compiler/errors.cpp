@@ -215,7 +215,7 @@ MessageBuilder::~MessageBuilder()
     report.number = number_;
     report.fileno = where_.file;
     report.lineno = std::max(where_.line, 1);
-    if (report.fileno >= 0) {
+    if (report.fileno >= 0 && (size_t)report.fileno < cc.input_files().size()) {
         report.filename = cc.input_files().at(report.fileno);
     } else {
         report.fileno = 0;
