@@ -293,55 +293,6 @@ check_operatortag(int opertok, int resulttag, const char* opername)
     return TRUE;
 }
 
-static inline bool
-is_symbol_unused(symbol* sym)
-{
-    if (sym->parent())
-        return false;
-    if (!sym->is_unreferenced())
-        return false;
-    if (sym->is_public)
-        return false;
-    if (sym->ident == iVARIABLE || sym->ident == iARRAY)
-        return true;
-    return sym->ident == iFUNCTN && !sym->native &&
-           strcmp(sym->name(), uMAINFUNC) != 0;
-}
-
-void
-reduce_referrers(CompileContext& cc)
-{
-    std::vector<symbol*> work;
-
-    // Enqueue all unreferred symbols.
-    cc.globals()->ForEachSymbol([&](symbol* sym) -> void {
-        if (is_symbol_unused(sym)) {
-            sym->queued = true;
-            work.push_back(sym);
-        }
-    });
-
-    while (!work.empty()) {
-        symbol* dead = ke::PopBack(&work);
-        dead->usage &= ~(uREAD | uWRITTEN);
-
-        for (symbol* sym : dead->refers_to()) {
-            sym->drop_reference_from(dead);
-            if (is_symbol_unused(sym) && !sym->queued) {
-                // During compilation, anything marked as stock will be omitted from
-                // the final binary *without warning*. If a stock calls a non-stock
-                // function, we want to avoid warnings on that function as well, so
-                // we propagate the stock bit.
-                if (dead->stock)
-                    sym->stock = true;
-
-                sym->queued = true;
-                work.push_back(sym);
-            }
-        }
-    }
-}
-
 // Determine the set of live functions.
 void
 deduce_liveness(CompileContext& cc)
