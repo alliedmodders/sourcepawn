@@ -216,11 +216,9 @@ pc_compile(int argc, char* argv[]) {
     setconfig(argv[0]); /* the path to the include files */
     sc_ctrlchar_org = sc_ctrlchar;
 
-    /* optionally create a temporary input file that is a collection of all
-     * input files
-     */
     assert(options->source_files.size() == 1);
     inpf_org = std::make_shared<SourceFile>();
+    inpf = inpf_org;
     if (!inpf_org->Open(options->source_files[0]))
         report(FATAL_ERROR_READ) << options->source_files[0];
     skip_utf8_bom(inpf_org.get());
@@ -302,7 +300,7 @@ cleanup:
         if (pc_stksize_override)
             pc_stksize = pc_stksize_override;
 
-        if (verbosity >= 1) {
+        if (verbosity >= 1 && compile_ok && jmpcode == 0) {
             printf("Code size:         %" PRIu32 " bytes\n", cg.code_size());
             printf("Data size:         %" PRIu32 " bytes\n", cg.data_size());
             printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));
