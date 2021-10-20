@@ -1956,12 +1956,10 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
 
     declinfo_t ret_type = {};
 
-    bool is_ctor = false;
     if (symbol && lexer_->match('(')) {
         // ::= ident '('
 
         // Push the '(' token back for parse_args().
-        is_ctor = true;
         lexer_->lexpush();
 
         // Force parser to require { for the method body.
@@ -2481,7 +2479,7 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
     info->dim.emplace_back(enum_type->addr());
     if (!info->dim_exprs.empty())
         info->dim_exprs.emplace_back(nullptr);
-    assert(info->declared_tag = enum_type->tag);
+    assert(info->declared_tag == enum_type->tag);
 
     if (info->ident != iARRAY && info->ident != iREFARRAY) {
         info->ident = iARRAY;

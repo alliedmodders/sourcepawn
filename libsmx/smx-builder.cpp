@@ -61,7 +61,7 @@ SmxBuilder::write(ISmxBuffer* buf)
   if (!buf->write(&header, sizeof(header)))
     return false;
 
-  size_t current_offset = sizeof(header);
+  [[maybe_unused]] size_t current_offset = sizeof(header);
   size_t current_data_offset = header.stringtab + current_string_offset;
   current_string_offset = 0;
   for (size_t i = 0; i < sections_.size(); i++) {
@@ -76,16 +76,16 @@ SmxBuilder::write(ISmxBuffer* buf)
     current_data_offset += s.size;
     current_string_offset += sections_[i]->name().size() + 1;
   }
+
   assert(buf->pos() == current_offset);
   assert(current_offset == header.stringtab);
-  
+
   for (size_t i = 0; i < sections_.size(); i++) {
     const auto& name = sections_[i]->name();
     if (!buf->write(name.c_str(), name.size() + 1))
       return false;
   }
   current_offset += current_string_offset;
-
   assert(buf->pos() == current_offset);
 
   for (size_t i = 0; i < sections_.size(); i++) {

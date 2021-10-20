@@ -1779,7 +1779,7 @@ CodeGenerator::EmitCall(symbol* sym, cell nargs)
 
     if (sym->native) {
         if (auto alias = sym->function()->alias) {
-            sym = sym->function()->alias;
+            sym = alias;
             assert(sym->used());
         }
 

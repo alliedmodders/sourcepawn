@@ -14,7 +14,7 @@ Overview
 SourcePawn requires the following dependencies:
  * [AMBuild](https://github.com/alliedmodders/ambuild)
  * [AMTL](https://github.com/alliedmodders/amtl)
- * A compiler with C++14 support. The officially supported compilers are Clang and MSVC.
+ * A compiler with C++17 support. The officially supported compilers are Clang and MSVC.
 
 The SourcePawn source tree is divided into the following folders:
  - `compiler` - The legacy compiler, currently used in SourceMod.
