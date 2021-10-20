@@ -609,7 +609,6 @@ ftoi(cell* val, const unsigned char* curptr)
     const unsigned char* ptr;
     double fnum, ffrac, fmult;
     unsigned long dnum, dbase = 1;
-    int ignore;
 
     fnum = 0.0;
     dnum = 0L;
@@ -630,7 +629,6 @@ ftoi(cell* val, const unsigned char* curptr)
         return 0;
     ffrac = 0.0;
     fmult = 1.0;
-    ignore = FALSE;
     while (isdigit(*ptr) || *ptr == '_') {
         if (*ptr != '_') {
             ffrac = (ffrac * 10.0) + (*ptr - '0');
