@@ -1,16 +1,16 @@
-SourcePawn 1.12
+SourcePawn 1.11
 ---------------
 
-SourcePawn 1.12 contains a major rewrite of the compiler. This rewrite is
+SourcePawn 1.11 contains a major rewrite of the compiler. This rewrite is
 intended to allow rapid feature development and improve the health and
 stability of the language. It fixes many bugs, and as a result, old programs
 may not compiler.
 
-Notably, SourcePawn 1.12 does not hide errors in unused functions anymore. If a
+Notably, SourcePawn 1.11 does not hide errors in unused functions anymore. If a
 stock is unused, and has errors, the errors should be fixed or the stock should
 be removed.
 
-Otherwise, common errors upgrading to 1.12 are listed below.
+Otherwise, common errors upgrading to 1.11 are listed below.
 
 ## Assignment Changes
 
@@ -93,7 +93,7 @@ makes language changes less risky for extension developers.
 
 ## Array Changes
 
-Type checking of arrays has been greatly improved in SourcePawn 1.12. More
+Type checking of arrays has been greatly improved in SourcePawn 1.11. More
 errors will be caught and more initialization patterns are supported. Below are
 some common errors that the new compiler finds and some suggestions as to how
 to fix them.
@@ -116,14 +116,14 @@ The fix is to use the correct bracket positioning:
 
 ### error 047: array sizes do not match, or destination array is too small
 
-There are a number of reasons why this error might appear in 1.12 in a script
+There are a number of reasons why this error might appear in 1.11 in a script
 that compiled fine in earlier versions.
 
 #### String is too big
 
 Earlier versions of SourcePawn incorrectly computed the size of string arrays.
 For example, `char x[3]` was internally calculated as four bytes. This has been
-fixed in 1.12. Plugins relying on this incorrect calculation will no longer
+fixed in 1.11. Plugins relying on this incorrect calculation will no longer
 compile.
 
 Here are some examples of code that used to work, but don't anymore:
@@ -178,7 +178,7 @@ For `0` values (or `false`, or `0.0`, or `""`), an initializer is not needed at 
     int gNumKills[MAXPLAYERS + 1];
 
 Since this pattern is quite common, we special-cased it so that it still works
-in 1.12 with a warning. In future versions it may become an error.
+in 1.11 with a warning. In future versions it may become an error.
 
 ### error 101: fixed dimensions must be after the array name, not on the type
 
@@ -207,7 +207,7 @@ static scope. The correct syntax is:
 
 ## C++ Changes
 
-Plugins compiled with SourcePawn 1.12 use a new internal representation for
+Plugins compiled with SourcePawn 1.11 use a new internal representation for
 multi-dimensional arrays called "direct arrays". A new method,
 `IPluginRuntime::UsesDirectArrays`, has been added to detect this. For
 extensions that provide natives taking multi-dimensional arrays or invoke
