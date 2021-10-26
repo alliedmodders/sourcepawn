@@ -4,13 +4,13 @@ SourcePawn 1.11
 SourcePawn 1.11 contains a major rewrite of the compiler. This rewrite is
 intended to allow rapid feature development and improve the health and
 stability of the language. It fixes many bugs, and as a result, old programs
-may not compiler.
+may not compile.
 
 Notably, SourcePawn 1.11 does not hide errors in unused functions anymore. If a
 stock is unused, and has errors, the errors should be fixed or the stock should
 be removed.
 
-Otherwise, common errors upgrading to 1.11 are listed below.
+More common errors for 1.11 upgrades are listed below.
 
 ## Assignment Changes
 
@@ -213,3 +213,6 @@ multi-dimensional arrays called "direct arrays". A new method,
 extensions that provide natives taking multi-dimensional arrays or invoke
 public functions with multi-dimensional arrays, it is necessary to check for
 direct arrays and just memory access appropriately.
+
+Previously, the effective address for `a[i][j]` was `a + i + a[i] + j`. When
+`UsesDirectArrays` is true, the formula is `a[i] + j`.
