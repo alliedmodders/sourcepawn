@@ -1251,7 +1251,7 @@ EnumStructDecl::Bind(SemaContext& sc)
 sp::Atom*
 Decl::DecorateInnerName(sp::Atom* parent_name, sp::Atom* field_name)
 {
-    auto full_name = ke::StringPrintf("%s::%s", parent_name->chars(), field_name->chars());
+    auto full_name = ke::StringPrintf("%s.%s", parent_name->chars(), field_name->chars());
     return gAtoms.add(full_name);
 }
 
@@ -1350,14 +1350,14 @@ MethodmapDecl::Bind(SemaContext& sc)
             method->getter = prop->getter->sym();
             method->getter->set_parent(sym_);
 
-            auto name = ke::StringPrintf("%s::%s::get", name_->chars(), prop->name->chars());
+            auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name->chars());
             method->getter->setName(gAtoms.add(name));
         }
         if (prop->setter && BindSetter(sc, prop)) {
             method->setter = prop->setter->sym();
             method->setter->set_parent(sym_);
 
-            auto name = ke::StringPrintf("%s::%s::set", name_->chars(), prop->name->chars());
+            auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name->chars());
             method->setter->setName(gAtoms.add(name));
         }
     }
