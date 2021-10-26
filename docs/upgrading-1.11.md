@@ -84,6 +84,17 @@ conditionals.
 
     do {
     } while i;
+    
+These examples should be changed to the standard syntax, which uses parentheses:
+
+    for (int i = 0; i < 10; i++) {
+    }
+
+    switch (i) {
+    }
+
+    do {
+    } while (i);
 
 ## pragma changes
 
@@ -134,7 +145,7 @@ Here are some examples of code that used to work, but don't anymore:
     b = IsClientInGame(client) ? "true" : "false"; // Error: "false" is 6 bytes
 
     char buffer[4];
-    GeocipCode2(ip, buffer); // Error: char[3] is needed, but user gave char[4]
+    GeoipCode2(ip, buffer); // Error: char[3] is needed, but user gave char[4]
 
 For international plugins, remember that utf8 strings can occupy more bytes
 than characters. You can use sizeof() to check the true size of a string.
