@@ -8,17 +8,13 @@ Status
 
 SourcePawn is an independent project from SourceMod, however SourceMod is its largest and possibly only consumer. Changes tend to be geared toward compatibility and efficiency with SourceMod and typical SourceMod programs. Their version numbers are currently synchronized.
 
-There are two major development efforts in on/off progress:
- - "Transitional Syntax", which aims to add a basic C#-like type system to the language. The first iteration was released in SourcePawn 1.7, and is mostly a syntactic refactoring. The second iteration involves type safety in the API and runtime.
- - The "v2 compiler", which is an experimental C++ rewrite of the ancient C compiler. It currently has a working frontend, but no semantic analysis.
-
 Overview
 --------
 
 SourcePawn requires the following dependencies:
  * [AMBuild](https://github.com/alliedmodders/ambuild)
  * [AMTL](https://github.com/alliedmodders/amtl)
- * A compiler with C++11 support. MSVC 2015+, GCC 4.8+, or Clang 3.0+ should work.
+ * A compiler with C++14 support. The officially supported compilers are Clang and MSVC.
 
 The SourcePawn source tree is divided into the following folders:
  - `compiler` - The legacy compiler, currently used in SourceMod.
@@ -34,7 +30,7 @@ History
 
 SourcePawn has a long history - or rather, pre-history. It ultimately comes from SmallC, a language which appeared in Dr. Dobb's Journal in 1984.
 
-Thiadmer Riemersma of ITB CompuPhase adopted this code - I suspect - to make a platform-independent language that could run on tiny embedded CPUs, such as 16-bit microcontrollers [1]. Thiadmer made sweeping changes to the language that made it less of a C dialect, so he renamed it to "Small". In particular, pointers were removed in favor of references, and the language became untyped. Each value in Small was a "cell". Cells could have tags, and operators could be defined for tags - but tags were not types. They could not change the storage width, they did not participate in a type system, and they were not type-checked.
+Thiadmer Riemersma of ITB CompuPhase adopted this code to make a platform-independent language that could run on tiny embedded CPUs, such as 16-bit microcontrollers [1]. Thiadmer made sweeping changes to the language that made it less of a C dialect, so he renamed it to "Small". In particular, pointers were removed in favor of references, and the language became untyped. Each value in Small was a "cell". Cells could have tags, and operators could be defined for tags - but tags were not types. They could not change the storage width, they did not participate in a type system, and they were not type-checked.
 
 Around 2000, Alfred Reynolds chose to use Small 1.8 as the scripting language for Admin-Mod, the first hugely popular Half-Life 1 server extension system. Admin-Mod had a lasting impact on the development scene for Valve-related games, and the choice to use Small extended to other systems as well. AMX Mod used Small 2.7, and when AlliedModders forked it for AMX Mod X, it took version 2.7 as well.
 
@@ -122,12 +118,18 @@ Other changes:
 
 ### SourcePawn 1.11
 
-SourcePawn 1.11 was declared stable on July 12, 2021.
+SourcePawn 1.11 is currently in development.
 
-This release contains a rewrite of the parser. It eliminates the multi-pass
-reparse model. It also contains stricter type checking and much better handling
-of array initializers. This release generates binaries that are not compatible
-with earlier VMs.
+This release contains a rewrite of the parser, fully eliminating the multi-pass
+reparse model. We now properly generate an Abstract Syntax Tree (AST). Semantic
+checks and code generation are completely separate phases. Compiler speed is
+improved by 2-3X.
 
-As of this release, both the compiler and VM can run on non-x86 platforms
+This release also contains stricter type checking and much better handling of array
+initializers. In particular, the fully relocatable indirection vector algorithm has
+been removed. This greatly simplifies array generation and access code. Array
+generation as been moved to dedicated opcodes, necessitating a version compatibility
+bump. Array declaration and access will be much faster for multi-dimensional arrays.
+
+Also as of this release, both the compiler and VM can run on non-x86 platforms
 (such as ARM).
