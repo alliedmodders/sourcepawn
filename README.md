@@ -124,18 +124,10 @@ Other changes:
 
 SourcePawn 1.11 was declared stable on July 12, 2021.
 
-This release contains a rewrite of the expression parser. Internally,
-expressions are now represented as an AST. 1.11 also contains many
-small improvements to type checking, validation, and error messaging. Many
-language bugs have been fixed as well.
+This release contains a rewrite of the parser. It eliminates the multi-pass
+reparse model. It also contains stricter type checking and much better handling
+of array initializers. This release generates binaries that are not compatible
+with earlier VMs.
 
 As of this release, both the compiler and VM can run on non-x86 platforms
 (such as ARM).
-
-### SourcePawn 1.12
-
-SourcePawn 1.12 is the current development version.
-
-This release contains a rewrite of the statement parser. It eliminates the
-multi-pass reparse model. It also contains stricter type checking and much
-better handling of array initializers.
