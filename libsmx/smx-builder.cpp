@@ -61,7 +61,9 @@ SmxBuilder::write(ISmxBuffer* buf)
   if (!buf->write(&header, sizeof(header)))
     return false;
 
-  [[maybe_unused]] size_t current_offset = sizeof(header);
+  size_t current_offset = sizeof(header);
+  (void)current_offset;
+
   size_t current_data_offset = header.stringtab + current_string_offset;
   current_string_offset = 0;
   for (size_t i = 0; i < sections_.size(); i++) {
