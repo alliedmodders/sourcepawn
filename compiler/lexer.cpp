@@ -919,7 +919,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                         while (!deprecate_.empty() && isspace(deprecate_.back()))
                             deprecate_.pop_back();
                     } else if (current_token()->atom->str() == "dynamic") {
-                        preproc_expr(&pc_stksize_override, NULL);
+                        preproc_expr(&cc_.options()->pragma_dynamic, NULL);
                     } else if (current_token()->atom->str() == "rational") {
                         while (*lptr != '\0')
                             lptr++;

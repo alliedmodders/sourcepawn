@@ -285,7 +285,8 @@ error(symbol* sym, int number, ...)
 static void
 abort_compiler()
 {
-    if (strlen(errfname) == 0) {
+    auto& cc = CompileContext::get();
+    if (cc.errfname().empty()) {
         fprintf(stdout, "Compilation aborted.\n");
     }
     longjmp(errbuf, 2); /* fatal error, quit */
@@ -399,8 +400,8 @@ ReportManager::DumpErrorReport(bool clear)
     FILE* stdfp = cc_.options()->use_stderr ? stderr : stdout;
 
     FILE* fp = nullptr;
-    if (strlen(errfname) > 0)
-        fp = fopen(errfname, "a");
+    if (!cc_.errfname().empty())
+        fp = fopen(cc_.errfname().c_str(), "a");
     if (!fp)
         fp = stdfp;
 

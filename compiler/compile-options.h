@@ -31,4 +31,5 @@ struct CompileOptions {
     bool require_newdecls = false;
     bool warnings_are_errors = false;
     bool use_stderr = false;
+    int pragma_dynamic = 0;
 };

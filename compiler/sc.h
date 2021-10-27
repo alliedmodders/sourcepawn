@@ -60,7 +60,6 @@ typedef uint32_t ucell;
 
 #define sCOMP_STACK 32     /* maximum nesting of #if .. #endif sections */
 #define sLINEMAX 4095
-#define sDEF_AMXSTACK 4096 /* default stack size for AMX files */
 #define PREPROC_TERM \
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
@@ -185,9 +184,6 @@ struct token_t;
  */
 int pc_compile(int argc, char** argv);
 const char* type_to_name(int tag);
-
-/* function prototypes in SC1.C */
-void set_extension(char* filename, const char* extension, int force);
 
 constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);

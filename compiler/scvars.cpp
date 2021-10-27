@@ -36,24 +36,14 @@
  */
 unsigned char pline[sLINEMAX + 1];         /* the line read from the input file */
 const unsigned char* lptr;                 /* points to the current position in "pline" */
-char outfname[PATH_MAX];                   /* intermediate (assembler) file name */
-char binfname[PATH_MAX];                   /* binary file name */
-char errfname[PATH_MAX];                   /* error file name */
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
-cell pc_stksize = sDEF_AMXSTACK;           /* default stack size */
-cell pc_stksize_override = 0;
 int freading = FALSE;                      /* Is there an input file ready for reading? */
 int fline = 0;                             /* the line number in the current file */
 short fnumber = 0;                         /* the file number in the file table (debugging) */
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
-bool sc_use_new_parser = false;
-int pc_max_func_memory = 0;          /* high stack watermark */
-int pc_current_memory = 0;           /* current stack watermark */
-int pc_max_memory = 0;               /* maximum stack watermark across all stacks */
-int pc_current_stack = 0;
 
 std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 std::shared_ptr<SourceFile> inpf_org;  /* main source file */

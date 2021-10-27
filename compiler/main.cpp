@@ -106,13 +106,14 @@ sp::StringPool gAtoms;
 
 static void resetglobals(void);
 static void initglobals(void);
-static char* get_extension(char* filename);
-static void setopt(CompileContext& cc, int argc, char** argv, char* oname, char* ename);
+static std::string get_extension(const std::string& filename);
+static void set_extension(std::string* filename, const char* extension, bool force);
 static void setconfig(char* root);
 static void setcaption(void);
 static void setconstants(void);
 static void inst_datetime_defines(CompileContext& cc);
 static void inst_binary_name(CompileContext& cc, std::string binfile);
+static void parseoptions(CompileContext& cc, int argc, char** argv);
 
 enum {
     TEST_PLAIN,  /* no parentheses */
@@ -179,8 +180,8 @@ pc_compile(int argc, char* argv[]) {
     int jmpcode;
     int retcode;
     int64_t inpfmark;
-    char* ptr;
     ParseTree* tree = nullptr;
+    std::string ext;
 
     CompileContext cc;
     cc.CreateGlobalScope();
@@ -200,17 +201,19 @@ pc_compile(int argc, char* argv[]) {
     if ((jmpcode = setjmp(errbuf)) != 0)
         goto cleanup;
 
-    setopt(cc, argc, argv, outfname, errfname);
-    strcpy(binfname, outfname);
-    ptr = get_extension(binfname);
-    if (ptr != NULL && strcasecmp(ptr, ".asm") == 0)
-        set_extension(binfname, ".smx", TRUE);
+    parseoptions(cc, argc, argv);
+
+    cc.set_binfname(cc.outfname());
+    ext = get_extension(cc.binfname());
+    if (strcasecmp(ext.c_str(), ".asm") == 0)
+        set_extension(&cc.binfname(), ".smx", true);
     else
-        set_extension(binfname, ".smx", FALSE);
+        set_extension(&cc.binfname(), ".smx", false);
     /* set output names that depend on the input name */
-    set_extension(outfname, ".asm", TRUE);
-    if (strlen(errfname) != 0)
-        remove(errfname); /* delete file on startup */
+    set_extension(&cc.outfname(), ".asm", true);
+
+    if (!cc.errfname().empty())
+        remove(cc.errfname().c_str()); /* delete file on startup */
     else if (verbosity > 0)
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
@@ -229,7 +232,7 @@ pc_compile(int argc, char* argv[]) {
     inpfmark = inpf_org->Pos();
 
     inst_datetime_defines(cc);
-    inst_binary_name(cc, binfname);
+    inst_binary_name(cc, cc.binfname().c_str());
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
     /* reset the source file */
@@ -285,7 +288,7 @@ cleanup:
 
     // Write the binary file.
     if (!sc_syntax_only && compile_ok && jmpcode == 0) {
-        assemble(cc, cg, binfname, opt_compression.value());
+        assemble(cc, cg, cc.binfname().c_str(), opt_compression.value());
     }
 
     if (compile_ok && jmpcode == 0 && opt_showincludes.value()) {
@@ -296,17 +299,14 @@ cleanup:
     inpf = nullptr;
     inpf_org = nullptr;
 
-    if (compile_ok && strlen(errfname) == 0) {
-        if (pc_stksize_override)
-            pc_stksize = pc_stksize_override;
-
+    if (compile_ok && cc.errfname().empty()) {
         if (verbosity >= 1 && compile_ok && jmpcode == 0) {
             printf("Code size:         %" PRIu32 " bytes\n", cg.code_size());
             printf("Data size:         %" PRIu32 " bytes\n", cg.data_size());
-            printf("Stack/heap size:   %8ld bytes\n", (long)pc_stksize * sizeof(cell));
+            printf("Stack/heap size:   %8ld bytes\n", (long)cg.DynamicMemorySize());
             printf("Total requirements:%8ld bytes\n", (long)cg.code_size() +
                                                              (long)cg.data_size() +
-                                                             (long)pc_stksize * sizeof(cell));
+                                                             (long)cg.DynamicMemorySize());
         }
         if (opt_show_stats.value()) {
             size_t allocated, reserved, bookkeeping;
@@ -327,11 +327,11 @@ cleanup:
     methodmaps_free();
     pstructs_free();
     if (!compile_ok) {
-        if (strlen(errfname) == 0)
+        if (cc.errfname().empty())
             printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");
         retcode = 1;
     } else if (warnnum != 0) {
-        if (strlen(errfname) == 0)
+        if (cc.errfname().empty())
             printf("\n%d Warning%s.\n", warnnum, (warnnum > 1) ? "s" : "");
         retcode = 0; /* use "0", so that MAKE and similar tools continue */
     } else {
@@ -414,62 +414,54 @@ initglobals(void)
 
     sc_ctrlchar = CTRL_CHAR;           /* the escape character */
     verbosity = 1;                     /* verbosity level, no copyright banner */
-    pc_stksize = sDEF_AMXSTACK; /* default stack size */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
-
-    outfname[0] = '\0';      /* output file name */
-    errfname[0] = '\0';      /* error file name */
 
     pline[0] = '\0'; /* the line read from the input file */
     lptr = NULL;     /* points to the current position in "pline" */
 }
 
-static char*
-get_extension(char* filename)
-{
-    char* ptr;
+static std::string get_extension(const std::string& filename) {
+    auto pos = filename.rfind('.');
+    if (pos == std::string::npos)
+        return {};
 
-    assert(filename != NULL);
-    ptr = strrchr(filename, '.');
-    if (ptr != NULL) {
-        /* ignore extension on a directory or at the start of the filename */
-        if (strchr(ptr, DIRSEP_CHAR) != NULL || ptr == filename || *(ptr - 1) == DIRSEP_CHAR)
-            ptr = NULL;
-    }
-    return ptr;
+    /* ignore extension on a directory or at the start of the filename */
+    if (pos == 0)
+        return {};
+    if (filename[pos - 1] == DIRSEP_CHAR)
+        return {};
+    if (filename.find(DIRSEP_CHAR, pos) != std::string::npos)
+        return {};
+
+    return filename.substr(pos);
 }
 
 /* set_extension
  * Set the default extension, or force an extension. To erase the
  * extension of a filename, set "extension" to an empty string.
  */
-void
-set_extension(char* filename, const char* extension, int force)
-{
-    char* ptr;
-
+static void set_extension(std::string* filename, const char* extension, bool force) {
     assert(extension != NULL && (*extension == '\0' || *extension == '.'));
     assert(filename != NULL);
-    ptr = get_extension(filename);
-    if (force && ptr != NULL)
-        *ptr = '\0'; /* set zero terminator at the position of the period */
-    if (force || ptr == NULL)
-        strcat(filename, extension);
+
+    auto old_ext = get_extension(*filename);
+    if (force && !old_ext.empty())
+        *filename = filename->substr(0, filename->size() - old_ext.size());
+    if (force || old_ext.empty())
+        *filename += extension;
 }
 
 static void
-Usage(args::Parser& parser, int argc, char** argv)
+Usage(CompileContext& cc, args::Parser& parser, int argc, char** argv)
 {
-    if (strlen(errfname) == 0) {
+    if (cc.errfname().empty()) {
         setcaption();
         parser.usage(stdout, argc, argv);
     }
     exit(1);
 }
 
-static void
-parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename)
-{
+static void parseoptions(CompileContext& cc, int argc, char** argv) {
     args::Parser parser;
     parser.enable_inline_values();
     parser.collect_extra_args();
@@ -484,7 +476,7 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
     parser.set_usage_line(usage);
 
     if (!parser.parse(argc, argv)) {
-        Usage(parser, argc, argv);
+        Usage(cc, parser, argc, argv);
     }
 
     sc_syntax_only = opt_syntax_only.value();
@@ -501,7 +493,7 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
         cc.set_default_include(opt_prefixfile.value());
 
     if (opt_outputfile.hasValue())
-        SafeStrcpy(oname, PATH_MAX, opt_outputfile.value().c_str());
+        cc.set_outfname(opt_outputfile.value());
 
     if (opt_verbosity.hasValue()) {
         if (isdigit(*opt_verbosity.value().c_str()))
@@ -523,7 +515,7 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
     }
 
     if (opt_error_file.hasValue())
-        SafeStrcpy(ename, PATH_MAX, opt_error_file.value().c_str());
+        cc.set_errfname(opt_error_file.value());
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
@@ -568,35 +560,28 @@ parseoptions(CompileContext& cc, int argc, char** argv, char* oname, char* ename
             i = atoi(ptr + 1);
             DefineConstant(CompileContext::get(), gAtoms.add(str), i, sGLOBAL);
         } else {
-            SafeStrcpy(str, sizeof(str) - 5, arg); /* -5 because default extension is ".sp" */
-            set_extension(str, ".sp", FALSE);
+            std::string path = arg;
+            set_extension(&path, ".sp", false);
+            ke::SafeStrcpy(str, sizeof(str), path.c_str());
+
             cc.options()->source_files.emplace_back(str);
             /* The output name is the first input name with a different extension,
              * but it is stored in a different directory
              */
-            if (strlen(oname) == 0) {
+            if (cc.outfname().empty()) {
                 if ((ptr = strrchr(str, DIRSEP_CHAR)) != NULL)
                     ptr++; /* strip path */
                 else
                     ptr = str;
                 assert(strlen(ptr) < PATH_MAX);
-                strcpy(oname, ptr);
+                cc.set_outfname(ptr);
             }
-            set_extension(oname, ".asm", TRUE);
+            set_extension(&cc.outfname(), ".asm", true);
         }
     }
 
     if (cc.options()->source_files.empty())
-        Usage(parser, argc, argv);
-}
-
-static void
-setopt(CompileContext& cc, int argc, char** argv, char* oname, char* ename)
-{
-    *oname = '\0';
-    *ename = '\0';
-
-    parseoptions(cc, argc, argv, oname, ename);
+        Usage(cc, parser, argc, argv);
 }
 
 #if defined __EMSCRIPTEN__
