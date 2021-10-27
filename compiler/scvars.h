@@ -31,13 +31,8 @@
 
 extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
-extern char outfname[];           /* intermediate (assembler) file name */
-extern char binfname[];           /* binary file name */
-extern char errfname[];           /* error file name */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
-extern cell pc_stksize;           /* stack size */
-extern cell pc_stksize_override;  /* stack size override */
 extern int freading;              /* is there an input file ready for reading? */
 extern int fline;                 /* the line number in the current file */
 extern short fnumber;             /* number of files in the input file table */
@@ -50,10 +45,6 @@ extern int pc_tag_bool;           /* global bool tag */
 extern int pc_tag_null_t;         /* the null type */
 extern int pc_tag_nullfunc_t;     /* the null function type */
 extern int pc_anytag;             /* global any tag */
-extern int pc_max_func_memory;    /* high stack watermark */
-extern int pc_current_memory;     /* current stack watermark */
-extern int pc_max_memory;         /* maximum stack watermark across all stacks */
-extern int pc_current_stack;
 
 extern std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 extern std::shared_ptr<SourceFile> inpf_org;  /* main source file */

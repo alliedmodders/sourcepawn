@@ -40,6 +40,7 @@
 #include <zlib/zlib.h>
 #include "assembler.h"
 #include "compile-context.h"
+#include "compile-options.h"
 #include "errors.h"
 #include "lexer.h"
 #include "sc.h"
@@ -926,8 +927,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     // store the file. Here (in 1.7+), we allocate what is actually needed
     // by the plugin.
     data->header().datasize = cg_.data_size();
-    data->header().memsize = cg_.data_size() +
-                             std::max(pc_max_memory + 4096, pc_stksize) * sizeof(cell);
+    data->header().memsize = cg_.data_size() + cg_.DynamicMemorySize();
     data->header().data = sizeof(sp_file_data_t);
     data->setBlob(cg_.data_ptr(), cg_.data_size());
 

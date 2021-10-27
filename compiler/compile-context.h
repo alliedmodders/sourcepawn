@@ -72,6 +72,15 @@ class CompileContext final
     void set_sema(SemaContext* sc) { sc_ = sc; }
     SemaContext* sema() const { return sc_; }
 
+    const std::string& errfname() const { return errfname_; }
+    void set_errfname(const std::string& value) { errfname_ = value; }
+
+    std::string& outfname() { return outfname_; }
+    void set_outfname(const std::string& value) { outfname_ = value; }
+
+    std::string& binfname() { return binfname_; }
+    void set_binfname(const std::string& value) { binfname_ = value; }
+
     // No copy construction.
     CompileContext(const CompileContext&) = delete;
     CompileContext(CompileContext&&) = delete;
@@ -86,6 +95,9 @@ class CompileContext final
     std::unique_ptr<CompileOptions> options_;
     std::vector<std::string> input_files_;
     std::vector<std::string> included_files_;
+    std::string outfname_;
+    std::string binfname_;
+    std::string errfname_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().

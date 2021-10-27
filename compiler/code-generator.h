@@ -47,6 +47,9 @@ class CodeGenerator final
     uint32_t code_size() const { return asm_.size(); }
     const uint8_t* data_ptr() const { return data_.dat(); }
     uint32_t data_size() const { return data_.size(); }
+    int max_script_memory() const { return max_script_memory_; }
+
+    int DynamicMemorySize() const;
 
   private:
     // Statements/decls.
@@ -193,6 +196,7 @@ class CodeGenerator final
     CompileContext& cc_;
     ParseTree* tree_;
     symbol* func_ = nullptr;
+    int max_script_memory_ = 0;
 
     std::vector<std::string> debug_strings_;
     std::vector<symbol*> native_list_;
@@ -211,4 +215,8 @@ class CodeGenerator final
         int heap_scope_id;
     };
     LoopContext* loop_ = nullptr;
+
+    int current_stack_ = 0;
+    int current_memory_ = 0;
+    int max_func_memory_ = 0;
 };

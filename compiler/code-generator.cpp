@@ -282,7 +282,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
 
     if (sym->ident == iVARIABLE) {
         markstack(MEMUSE_STATIC, 1);
-        sym->setAddr(-pc_current_stack * sizeof(cell));
+        sym->setAddr(-current_stack_ * sizeof(cell));
 
         if (init) {
             const auto& val = init->right()->val();
@@ -305,7 +305,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
         cell total_size = iv_size + data_size;
 
         markstack(MEMUSE_STATIC, total_size);
-        sym->setAddr(-pc_current_stack * sizeof(cell));
+        sym->setAddr(-current_stack_ * sizeof(cell));
         __ emit(OP_STACK, -(total_size * sizeof(cell)));
 
         cell fill_value = 0;
@@ -360,7 +360,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
         // need to call modstk() here.
         markheap(MEMUSE_DYNAMIC, 0, AllocScopeKind::Normal);
         markstack(MEMUSE_STATIC, 1);
-        sym->setAddr(-pc_current_stack * sizeof(cell));
+        sym->setAddr(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
         if (NewArrayExpr* ctor = init_rhs->as<NewArrayExpr>()) {
@@ -1710,8 +1710,8 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
 {
     ke::SaveAndSet<symbol*> set_func(&func_, info->sym());
 
-    pc_max_func_memory = 0;
-    pc_current_memory = 0;
+    max_func_memory_ = 0;
+    current_memory_ = 0;
 
     if (info->sym()->unused())
         return;
@@ -1725,7 +1725,7 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
     __ emit(OP_PROC);
     AddDebugLine(info->pos().line);
     EmitBreak();
-    pc_current_stack = 0;
+    current_stack_ = 0;
 
     EmitStmt(info->body());
 
@@ -1740,7 +1740,7 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
     info->sym()->setAddr(info->sym()->function()->label.offset());
     info->sym()->codeaddr = asm_.pc();
 
-    pc_max_memory = std::max(pc_max_func_memory, pc_max_memory);
+    max_script_memory_ = std::max(max_func_memory_, max_script_memory_);
 }
 
 void
@@ -1987,8 +1987,8 @@ CodeGenerator::AllocInScope(MemoryScope& scope, int type, int size)
         scope.usage.push_back(MemoryUse{type, size});
     }
 
-    pc_current_memory += size;
-    pc_max_memory = std::max(pc_current_memory, pc_max_memory);
+    current_memory_ += size;
+    max_func_memory_ = std::max(current_memory_, max_func_memory_);
 }
 
 int
@@ -1997,11 +1997,11 @@ CodeGenerator::PopScope(std::vector<MemoryScope>& scope_list)
     MemoryScope scope = ke::PopBack(&scope_list);
     int total_use = 0;
     while (!scope.usage.empty()) {
-        assert(scope.usage.back().size <= pc_current_memory);
+        assert(scope.usage.back().size <= current_memory_);
         total_use += scope.usage.back().size;
         scope.usage.pop_back();
     }
-    pc_current_memory -= total_use;
+    current_memory_ -= total_use;
     return total_use;
 }
 
@@ -2071,7 +2071,7 @@ CodeGenerator::pushstacklist()
 int
 CodeGenerator::markstack(int type, int size)
 {
-    pc_current_stack += size;
+    current_stack_ += size;
     AllocInScope(stack_scopes_.back(), type, size);
     return size;
 }
@@ -2139,11 +2139,17 @@ CodeGenerator::popstacklist(bool codegen)
 {
     if (codegen)
         modstk_for_scope(stack_scopes_.back());
-    pc_current_stack -= PopScope(stack_scopes_);
+    current_stack_ -= PopScope(stack_scopes_);
 }
 
 void
 CodeGenerator::LinkPublicFunction(symbol* sym, uint32_t id)
 {
     __ bind_to(&sym->function()->funcid, id);
+}
+
+int CodeGenerator::DynamicMemorySize() const {
+    int min_cells = max_script_memory_ + 4096;
+    int custom = cc_.options()->pragma_dynamic;
+    return std::max(min_cells, custom) * sizeof(cell_t);
 }

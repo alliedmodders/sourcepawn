@@ -56,8 +56,8 @@ class ArraySizeResolver
     Type* es_;
 };
 
-static const int kSizeUnknown = -1;
-static const int kSizeIndeterminate = -2;
+static constexpr int kSizeUnknown = -1;
+static constexpr int kSizeIndeterminate = -2;
 
 ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDecl* decl)
   : sema_(sema),
