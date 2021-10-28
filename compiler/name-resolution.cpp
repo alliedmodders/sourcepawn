@@ -245,6 +245,8 @@ EnumDecl::EnterNames(SemaContext& sc)
 bool
 EnumDecl::Bind(SemaContext& sc)
 {
+    if (vclass_ == sLOCAL)
+        return EnterNames(sc);
     return true;
 }
 
