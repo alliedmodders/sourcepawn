@@ -646,6 +646,10 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
         if (symbol* sym = left->val().sym) {
             markusage(sym, uWRITTEN);
 
+            // If it's an outparam, also mark it as read.
+            if (sym->vclass == sARGUMENT && (sym->ident == iREFERENCE || sym->ident == iREFARRAY))
+                markusage(sym, uREAD);
+
             // Update the line number as a hack so we can warn that it was never
             // used.
             sym->lnumber = expr->pos().line;
