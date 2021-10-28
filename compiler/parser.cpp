@@ -1040,15 +1040,23 @@ Parser::primary()
         /* allow tagnames to be used in parenthesized expressions */
         ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), true);
 
-        CommaExpr* expr = new CommaExpr(lexer_->pos());
+        auto pos = lexer_->pos();
+        CommaExpr* comma = nullptr;
+        Expr* expr = nullptr;
         do {
             Expr* child = hier14();
-            expr->exprs().push_back(child);
+            if (expr) {
+                if (!comma)
+                    comma = new CommaExpr(pos);
+                comma->exprs().push_back(child);
+            } else {
+                expr = child;
+            }
         } while (lexer_->match(','));
         lexer_->need(')');
         lexer_->lexclr(FALSE); /* clear lexer_->lex() push-back, it should have been
                         * cleared already by lexer_->need() */
-        return expr;
+        return comma ? comma : expr;
     }
 
     int tok = lexer_->lex();
