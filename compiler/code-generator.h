@@ -122,12 +122,17 @@ class CodeGenerator final
       Temp
     };
 
+    enum MemuseType {
+        MEMUSE_STATIC = 0,
+        MEMUSE_DYNAMIC = 1
+    };
+
     struct MemoryUse {
-        MemoryUse(int type, int size)
+        MemoryUse(MemuseType type, int size)
          : type(type),
            size(size)
         {}
-        int type; /* MEMUSE_STATIC or MEMUSE_DYNAMIC */
+        MemuseType type;
         int size; /* size of array for static (0 for dynamic) */
     };
 
@@ -163,7 +168,7 @@ class CodeGenerator final
     // Heap functions
     void pushheaplist(AllocScopeKind kind = AllocScopeKind::Normal);
     void popheaplist(bool codegen);
-    int markheap(int type, int size, AllocScopeKind kind);
+    int markheap(MemuseType type, int size, AllocScopeKind kind);
 
     // Remove the current heap scope, requiring that all alocations within be
     // static. Then return that static size.
@@ -172,7 +177,7 @@ class CodeGenerator final
     // Stack functions
     void pushstacklist();
     void popstacklist(bool codegen);
-    int markstack(int type, int size);
+    int markstack(MemuseType type, int size);
     void modheap_for_scope(const MemoryScope& scope);
     void modstk_for_scope(const MemoryScope& scope);
 
@@ -189,7 +194,7 @@ class CodeGenerator final
     }
 
     void EnterMemoryScope(std::vector<MemoryScope>& frame, AllocScopeKind kind);
-    void AllocInScope(MemoryScope& scope, int type, int size);
+    void AllocInScope(MemoryScope& scope, MemuseType type, int size);
     int PopScope(std::vector<MemoryScope>& scope_list);
 
   private:

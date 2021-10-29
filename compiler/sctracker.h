@@ -10,9 +10,6 @@
 
 class SemaContext;
 
-#define MEMUSE_STATIC 0
-#define MEMUSE_DYNAMIC 1
-
 struct funcenum_t {
     funcenum_t()
      : tag(0),

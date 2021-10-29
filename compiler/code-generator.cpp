@@ -1979,7 +1979,7 @@ CodeGenerator::EnterMemoryScope(std::vector<MemoryScope>& frame, AllocScopeKind 
 }
 
 void
-CodeGenerator::AllocInScope(MemoryScope& scope, int type, int size)
+CodeGenerator::AllocInScope(MemoryScope& scope, MemuseType type, int size)
 {
     if (type == MEMUSE_STATIC && !scope.usage.empty() && scope.usage.back().type == MEMUSE_STATIC) {
         scope.usage.back().size += size;
@@ -2032,7 +2032,7 @@ CodeGenerator::pop_static_heaplist()
 }
 
 int
-CodeGenerator::markheap(int type, int size, AllocScopeKind kind)
+CodeGenerator::markheap(MemuseType type, int size, AllocScopeKind kind)
 {
     MemoryScope* scope = nullptr;
     if (kind == AllocScopeKind::Temp) {
@@ -2069,7 +2069,7 @@ CodeGenerator::pushstacklist()
 }
 
 int
-CodeGenerator::markstack(int type, int size)
+CodeGenerator::markstack(MemuseType type, int size)
 {
     current_stack_ += size;
     AllocInScope(stack_scopes_.back(), type, size);
