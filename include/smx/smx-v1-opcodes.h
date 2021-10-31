@@ -240,6 +240,8 @@ namespace sp {
     _U(REBASE, "rebase")                                                    \
     _G(INITARRAY_PRI, "initarray.pri", 6)                                   \
     _G(INITARRAY_ALT, "initarray.alt", 6)                                   \
+    _G(HEAP_SAVE, "heap.save", 1)                                           \
+    _G(HEAP_RESTORE, "heap.restore", 1)                                     \
     /* Opcodes below this are pseudo-opcodes and are not part of the ABI */ \
     _U(FIRST_FAKE, "firstfake")                                             \
     _G(FABS, "fabs", 1)                                                     \

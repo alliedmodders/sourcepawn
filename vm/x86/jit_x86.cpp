@@ -1543,6 +1543,34 @@ Compiler::visitSWITCH(cell_t defaultOffset,
   return true;
 }
 
+bool
+Compiler::visitHEAP_SAVE()
+{
+  // Allocate one cell on the heap.
+  visitHEAP(sizeof(cell_t));
+  // Get the addres of the old heap scope in pri.
+  __ movl(pri, Operand(hpScopeAddr()));
+  // Store the old heap scope address into the new heap scope.
+  __ movl(Operand(dat, alt, NoScale), pri);
+  // Update the context's current heap scope.
+  __ movl(Operand(hpScopeAddr()), alt);
+  return true;
+}
+
+bool
+Compiler::visitHEAP_RESTORE()
+{
+  // Get the current heap scope address.
+  __ movl(ecx, Operand(hpScopeAddr()));
+  // Get the previous heap scope address.
+  __ movl(alt, Operand(dat, ecx, NoScale));
+  // Update the heap pointer.
+  __ movl(Operand(hpAddr()), alt);
+  // Update the heap scope.
+  __ movl(Operand(hpScopeAddr()), ecx);
+  return true;
+}
+
 void
 Compiler::emitFloatCmp(ConditionCode cc)
 {

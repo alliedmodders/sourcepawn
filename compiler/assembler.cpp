@@ -919,7 +919,8 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     code->header().flags = CODEFLAG_DEBUG;
     code->header().main = 0;
     code->header().code = sizeof(sp_file_code_t);
-    code->header().features = SmxConsts::kCodeFeatureDirectArrays;
+    code->header().features = SmxConsts::kCodeFeatureDirectArrays |
+                              SmxConsts::kCodeFeatureHeapScopes;
     code->setBlob(cg_.code_ptr(), cg_.code_size());
 
     // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was

@@ -144,7 +144,12 @@ class Semantics final
     void set_context(SemaContext* sc) { sc_ = sc; }
 
   private:
-    bool CheckStmt(Stmt* stmt);
+    enum StmtFlags {
+        STMT_DEFAULT = 0x0,
+        STMT_OWNS_HEAP = 0x1
+    };
+
+    bool CheckStmt(Stmt* stmt, StmtFlags = STMT_DEFAULT);
     bool CheckStmtList(StmtList* list);
     bool CheckBlockStmt(BlockStmt* stmt);
     bool CheckChangeScopeNode(ChangeScopeNode* node);
@@ -209,6 +214,9 @@ class Semantics final
     symbol* BindNewTarget(Expr* target);
     symbol* BindCallTarget(CallExpr* call, Expr* target);
 
+    void NeedsHeapAlloc(Expr* expr);
+    void AssignHeapOwnership(ParseNode* node);
+
     Expr* AnalyzeForTest(Expr* expr);
 
     bool TestSymbol(symbol* sym, bool testconst);
@@ -219,6 +227,7 @@ class Semantics final
     ParseTree* tree_;
     std::unordered_set<SymbolScope*> static_scopes_;
     SemaContext* sc_ = nullptr;
+    bool pending_heap_allocation_ = false;
 };
 
 class AutoEnterScope final

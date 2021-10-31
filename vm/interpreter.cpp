@@ -1061,6 +1061,18 @@ Interpreter::visitHALT(cell_t value)
 }
 
 bool
+Interpreter::visitHEAP_SAVE()
+{
+  return cx_->enterHeapScope();
+}
+
+bool
+Interpreter::visitHEAP_RESTORE()
+{
+  return cx_->leaveHeapScope();
+}
+
+bool
 Interpreter::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
                             cell_t data_fill_size, cell_t fill_value)
 {
