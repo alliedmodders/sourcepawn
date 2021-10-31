@@ -334,11 +334,16 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
 }
 
 static bool
-IsValidImplicitArrayCast(int a, int b)
+IsValidImplicitArrayCast(int formal_tag, int actual_tag)
 {
     // Dumb check for now. This should really do a deep type validation though.
     // Fix this when we overhaul types in 1.12.
-    return a == b;
+    if ((formal_tag == pc_anytag && actual_tag != pc_tag_string) ||
+        (actual_tag == pc_anytag && formal_tag != pc_tag_string))
+    {
+        return true;
+    }
+    return formal_tag == actual_tag;
 }
 
 static int
