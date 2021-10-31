@@ -122,8 +122,8 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         EmitBreak();
     }
 
-    if (func_)
-        pushheaplist(AllocScopeKind::Temp);
+    if (stmt->tree_has_heap_allocs())
+        EnterHeapScope(stmt->flow_type());
 
     switch (stmt->kind()) {
         case AstKind::ChangeScopeNode:
@@ -148,12 +148,10 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         case AstKind::BlockStmt: {
             auto s = stmt->to<BlockStmt>();
             pushstacklist();
-            pushheaplist();
 
             EmitStmtList(s);
 
             bool returns = s->flow_type() == Flow_Return;
-            popheaplist(!returns);
             popstacklist(!returns);
             break;
         }
@@ -213,10 +211,8 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             assert(false);
     }
 
-    // Scrap all temporary allocations used in the statement, unlesss control
-    // flow terminates.
-    if (func_)
-        popheaplist(stmt->flow_type() == Flow_None);
+    if (stmt->tree_has_heap_allocs())
+        LeaveHeapScope();
 }
 
 void
@@ -358,7 +354,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
     } else if (sym->ident == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
-        markheap(MEMUSE_DYNAMIC, 0, AllocScopeKind::Normal);
+        TrackHeapAlloc(MEMUSE_DYNAMIC, 0);
         markstack(MEMUSE_STATIC, 1);
         sym->setAddr(-current_stack_ * sizeof(cell));
 
@@ -541,10 +537,8 @@ CodeGenerator::EmitTest(Expr* expr, bool jump_on_true, Label* target)
             return;
         }
     }
-    // We need a temporary allocation scope here to cleanup before we branch.
-    pushheaplist(AllocScopeKind::Temp);
+
     EmitExpr(expr);
-    popheaplist(true);
 
     if (jump_on_true)
         __ emit(OP_JNZ, target);
@@ -962,14 +956,10 @@ CodeGenerator::EmitChainedCompareExprTest(ChainedCompareExpr* root, bool jump_on
     Expr* left = root->first();
     Expr* right = root->ops()[0].expr;
 
-    pushheaplist(AllocScopeKind::Temp);
-
     EmitExpr(right);
     __ emit(OP_PUSH_PRI);
     EmitExpr(left);
     __ emit(OP_POP_ALT);
-
-    popheaplist(true);
 
     int token = root->ops()[0].token;
     if (!jump_on_true) {
@@ -1024,41 +1014,12 @@ CodeGenerator::EmitTernaryExpr(TernaryExpr* expr)
 
     Label flab1, flab2;
 
-    pushheaplist(AllocScopeKind::Temp);
     __ emit(OP_JZER, &flab1);
-
     EmitExpr(expr->second());
-
-    // We unconditionally pop the heaplist here. This is unfortunate, but we
-    // don't have many options given how the static verifier works. If the
-    // first branch does not use the heap, but the second one does, the tracker
-    // balance will be inequal across both branches.
-    //
-    // We can't scrap generated code because we might have already bound labels
-    // (for example, to the addresses of global functions).
-    //
-    // So instead, we unconditionally generate TRACKER_PUSH_C instructions.
-    //
-    // In the future, we should refactor how the verifier works so we can
-    // simplify this.
-    auto total1 = pop_static_heaplist();
-    __ emit(OP_TRACKER_PUSH_C, total1 * sizeof(cell));
-
-    pushheaplist(AllocScopeKind::Temp);
     __ emit(OP_JUMP, &flab2);
     __ bind(&flab1);
-
     EmitExpr(expr->third());
-
-    auto total2 = pop_static_heaplist();
-    __ emit(OP_TRACKER_PUSH_C, total2 * sizeof(cell));
     __ bind(&flab2);
-
-    // Remove this hack when we can add heap information in the analysis phase.
-    if (total1 || total2)
-        markheap(MEMUSE_DYNAMIC, 0, AllocScopeKind::Temp);
-    else
-        __ emit(OP_TRACKER_POP_SETHEAP);
 }
 
 void
@@ -1163,7 +1124,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
         if (retsize)
             __ emit(OP_HEAP, retsize * sizeof(cell));
         __ emit(OP_PUSH_ALT);
-        markheap(MEMUSE_STATIC, retsize, AllocScopeKind::Temp);
+        TrackTempHeapAlloc(call, 1);
     }
 
     const auto& argv = call->argv();
@@ -1191,18 +1152,18 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
                     if (val.sym->is_const && !arg->type.is_const) {
                         EmitRvalue(val);
                         __ setheap_pri();
-                        markheap(MEMUSE_STATIC, 1, AllocScopeKind::Temp);
+                        TrackTempHeapAlloc(expr, 1);
                     } else if (lvalue) {
                         __ address(val.sym, sPRI);
                     } else {
                         __ setheap_pri();
-                        markheap(MEMUSE_STATIC, 1, AllocScopeKind::Temp);
+                        TrackTempHeapAlloc(expr, 1);
                     }
                 } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
                     /* allocate a cell on the heap and store the
                      * value (already in PRI) there */
                     __ setheap_pri();
-                    markheap(MEMUSE_STATIC, 1, AllocScopeKind::Temp);
+                    TrackTempHeapAlloc(expr, 1);
                 }
                 break;
             case iVARIABLE:
@@ -1234,12 +1195,12 @@ CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
     const auto& arg = expr->arg();
     switch (arg->type.ident) {
         case iREFARRAY:
-            EmitDefaultArray(arg);
+            EmitDefaultArray(expr, arg);
             break;
         case iREFERENCE:
             __ const_pri(arg->def->val.get());
             __ setheap_pri();
-            markheap(MEMUSE_STATIC, 1, AllocScopeKind::Temp);
+            TrackTempHeapAlloc(expr, 1);
             break;
         case iVARIABLE:
             __ const_pri(arg->def->val.get());
@@ -1392,7 +1353,6 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
         __ const_pri(0);
     }
 
-    genheapfree(-1);
     genstackfree(-1); /* free everything on the stack */
     __ emit(OP_RETN);
 }
@@ -1575,7 +1535,13 @@ CodeGenerator::EmitLoopControlStmt(LoopControlStmt* stmt)
     assert(token == tBREAK || token == tCONTINUE);
 
     genstackfree(loop_->stack_scope_id);
-    genheapfree(loop_->heap_scope_id);
+
+    for (auto iter = heap_scopes_.rbegin(); iter != heap_scopes_.rend(); iter++) {
+        if (iter->scope_id == loop_->heap_scope_id)
+            break;
+        if (iter->needs_restore)
+            __ emit(OP_HEAP_RESTORE);
+    }
 
     if (token == tBREAK)
         __ emit(OP_JUMP, &loop_->break_to);
@@ -1587,10 +1553,8 @@ void
 CodeGenerator::EmitForStmt(ForStmt* stmt)
 {
     auto scope = stmt->scope();
-    if (scope) {
+    if (scope)
         pushstacklist();
-        pushheaplist();
-    }
 
     auto init = stmt->init();
     if (init)
@@ -1626,7 +1590,16 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
 
         if (stmt->has_continue()) {
             __ bind(&loop_cx.continue_to);
+
+            // It's a bit tricky to merge this into the same heap scope as
+            // the statement, so we create a one-off scope.
+            if (advance->tree_has_heap_allocs())
+                EnterHeapScope(Flow_None);
+
             EmitExpr(advance);
+
+            if (advance->tree_has_heap_allocs())
+                LeaveHeapScope();
         }
         if (!body_always_exits)
             __ emit(OP_JUMP, &top);
@@ -1649,10 +1622,8 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
     }
     __ bind(&loop_cx.break_to);
 
-    if (scope) {
-        popheaplist(true);
+    if (scope)
         popstacklist(true);
-    }
 }
 
 void
@@ -1795,7 +1766,7 @@ CodeGenerator::EmitCall(symbol* sym, cell nargs)
 }
 
 void
-CodeGenerator::EmitDefaultArray(arginfo* arg)
+CodeGenerator::EmitDefaultArray(Expr* expr, arginfo* arg)
 {
     DefaultArg* def = arg->def;
     if (!def->val) {
@@ -1827,7 +1798,7 @@ CodeGenerator::EmitDefaultArray(arginfo* arg)
         __ emit(OP_HEAP, total_size * sizeof(cell));
         __ emit(OP_INITARRAY_ALT, def->val.get(), iv_size, data_size, def->array->zeroes, 0);
         __ emit(OP_MOVE_PRI);
-        markheap(MEMUSE_STATIC, total_size, AllocScopeKind::Temp);
+        TrackTempHeapAlloc(expr, total_size);
     }
 }
 
@@ -1970,12 +1941,12 @@ void CodeGenerator::EmitDec(const value* lval)
 }
 
 void
-CodeGenerator::EnterMemoryScope(std::vector<MemoryScope>& frame, AllocScopeKind kind)
+CodeGenerator::EnterMemoryScope(std::vector<MemoryScope>& frame)
 {
     if (frame.empty())
-        frame.push_back(MemoryScope{0, kind});
+        frame.push_back(MemoryScope{0});
     else
-        frame.push_back(MemoryScope{frame.back().scope_id + 1, kind});
+        frame.push_back(MemoryScope{frame.back().scope_id + 1});
 }
 
 void
@@ -2005,67 +1976,42 @@ CodeGenerator::PopScope(std::vector<MemoryScope>& scope_list)
     return total_use;
 }
 
-void
-CodeGenerator::pushheaplist(AllocScopeKind kind)
-{
-    EnterMemoryScope(heap_scopes_, kind);
+void CodeGenerator::TrackTempHeapAlloc(Expr* source, int size) {
+    // Make sure the semantic pass determined that temporary allocations were necessary.
+    assert(source->can_alloc_heap());
+    TrackHeapAlloc(MEMUSE_STATIC, size);
 }
 
-// Sums up array usage in the current heap tracer and convert it into a dynamic array.
-// This is used for the ternary operator, which needs to convert its array usage into
-// something dynamically managed.
-// !Note:
-// This might break if expressions can ever return dynamic arrays.
-// Thus, we assert() if something is non-static here.
-// Right now, this poses no problem because this type of expression is impossible:
-//   (a() ? return_array() : return_array()) ? return_array() : return_array()
-cell_t
-CodeGenerator::pop_static_heaplist()
-{
-    cell_t total = 0;
-    for (const auto& use : heap_scopes_.back().usage) {
-        assert(use.type == MEMUSE_STATIC);
-        total += use.size;
-    }
-    PopScope(heap_scopes_);
-    return total;
+void CodeGenerator::TrackHeapAlloc(MemuseType type, int size) {
+    assert(!heap_scopes_.empty());
+    AllocInScope(heap_scopes_.back(), type, size);
 }
 
-int
-CodeGenerator::markheap(MemuseType type, int size, AllocScopeKind kind)
-{
-    MemoryScope* scope = nullptr;
-    if (kind == AllocScopeKind::Temp) {
-        // Every expression should have an immediate temporary scope.
-        scope = &heap_scopes_.back();
-        assert(scope->kind == AllocScopeKind::Temp);
-        assert(!scope->blacklisted);
-    } else {
-        // Declarations will have an immediate temporary scope as well, but we
-        // must allocate into the normal scope before using the temporary one
-        // (because it's a LIFO allocation).
-        for (auto iter = heap_scopes_.rbegin(); iter != heap_scopes_.rend(); iter++) {
-            if (iter->kind == AllocScopeKind::Temp) {
-                assert(iter->usage.empty());
-                iter->blacklisted = true;
-                continue;
-            }
-            if (iter->kind == AllocScopeKind::Normal) {
-                scope = &*iter;
-                break;
-            }
-        }
-        assert(scope);
+void CodeGenerator::EnterHeapScope(FlowType flow_type) {
+    EnterMemoryScope(heap_scopes_);
+    if (flow_type == Flow_None || flow_type == Flow_Mixed) {
+        heap_scopes_.back().needs_restore = true;
+        __ emit(OP_HEAP_SAVE);
     }
+}
 
-    AllocInScope(*scope, type, size);
-    return size;
+void CodeGenerator::LeaveHeapScope() {
+    assert(!heap_scopes_.empty());
+    if (heap_scopes_.back().needs_restore)
+        __ emit(OP_HEAP_RESTORE);
+    heap_scopes_.pop_back();
+}
+
+int CodeGenerator::heap_scope_id() {
+    if (heap_scopes_.empty())
+        return -1;
+    return heap_scopes_.back().scope_id;
 }
 
 void
 CodeGenerator::pushstacklist()
 {
-    EnterMemoryScope(stack_scopes_, AllocScopeKind::Normal);
+    EnterMemoryScope(stack_scopes_);
 }
 
 int
@@ -2074,21 +2020,6 @@ CodeGenerator::markstack(MemuseType type, int size)
     current_stack_ += size;
     AllocInScope(stack_scopes_.back(), type, size);
     return size;
-}
-
-// Generates code to free all heap allocations on a tracker
-void
-CodeGenerator::modheap_for_scope(const MemoryScope& scope)
-{
-    for (size_t i = scope.usage.size() - 1; i < scope.usage.size(); i--) {
-        const MemoryUse& use = scope.usage[i];
-        if (use.type == MEMUSE_STATIC) {
-            if (use.size)
-                __ emit(OP_HEAP, (-1) * use.size * sizeof(cell));
-        } else {
-            __ emit(OP_TRACKER_POP_SETHEAP);
-        }
-    }
 }
 
 void
@@ -2104,15 +2035,6 @@ CodeGenerator::modstk_for_scope(const MemoryScope& scope)
 }
 
 void
-CodeGenerator::popheaplist(bool codegen)
-{
-    assert(!heap_scopes_.empty());
-    if (codegen)
-        modheap_for_scope(heap_scopes_.back());
-    PopScope(heap_scopes_);
-}
-
-void
 CodeGenerator::genstackfree(int stop_id)
 {
     for (size_t i = stack_scopes_.size() - 1; i < stack_scopes_.size(); i--) {
@@ -2120,17 +2042,6 @@ CodeGenerator::genstackfree(int stop_id)
         if (scope.scope_id <= stop_id)
             break;
         modstk_for_scope(scope);
-    }
-}
-
-void
-CodeGenerator::genheapfree(int stop_id)
-{
-    for (size_t i = heap_scopes_.size() - 1; i < heap_scopes_.size(); i--) {
-        const MemoryScope& scope = heap_scopes_[i];
-        if (scope.scope_id <= stop_id)
-            break;
-        modheap_for_scope(scope);
     }
 }
 

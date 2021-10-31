@@ -658,6 +658,11 @@ class PcodeReader
                                       fill_value);
     }
 
+    case OP_HEAP_SAVE:
+      return visitor_->visitHEAP_SAVE();
+    case OP_HEAP_RESTORE:
+      return visitor_->visitHEAP_RESTORE();
+
     default:
       assert(false);
       return false;

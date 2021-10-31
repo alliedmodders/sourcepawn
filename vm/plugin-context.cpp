@@ -50,6 +50,7 @@ PluginContext::PluginContext(PluginRuntime* pRuntime)
   sp_ = mem_size_ - sizeof(cell_t);
   stp_ = sp_;
   frm_ = sp_;
+  hp_scope_ = -1;
 }
 
 PluginContext::~PluginContext()
@@ -442,6 +443,7 @@ PluginContext::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
   cell_t save_sp = sp_;
   cell_t save_hp = hp_;
   cell_t save_frm = frm_;
+  cell_t save_hp_scope = hp_scope_;
 
   /* Push parameters */
   sp_ -= sizeof(cell_t) * (num_params + 1);
@@ -454,29 +456,10 @@ PluginContext::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
   // Enter the execution engine.
   bool ok = env_->Invoke(this, method, result);
 
-  if (ok) {
-    // Verify that our state is still sane.
-    if (sp_ != save_sp) {
-      env_->ReportErrorFmt(
-        SP_ERROR_STACKLEAK,
-        "Stack leak detected: sp:%d should be %d!", 
-        sp_, 
-        save_sp);
-      return false;
-    }
-    if (hp_ != save_hp) {
-      env_->ReportErrorFmt(
-        SP_ERROR_HEAPLEAK,
-        "Heap leak detected: hp:%d should be %d!", 
-        hp_, 
-        save_hp);
-      return false;
-    }
-  }
-
   sp_ = save_sp;
   hp_ = save_hp;
   frm_ = save_frm;
+  hp_scope_ = save_hp_scope;
   return ok;
 }
 
@@ -514,6 +497,7 @@ PluginContext::popTrackerAndSetHeap()
 int
 PluginContext::pushTracker(uint32_t amount)
 {
+  assert(usesHeapTracker());
   if (amount > INT_MAX)
     return SP_ERROR_TRACKER_BOUNDS;
   if (sp_ - hp_ < STACK_MARGIN)
@@ -522,6 +506,38 @@ PluginContext::pushTracker(uint32_t amount)
   *reinterpret_cast<cell_t*>(memory_ + hp_) = amount;
   hp_ += sizeof(cell_t);
   return SP_ERROR_NONE;
+}
+
+bool
+PluginContext::enterHeapScope()
+{
+  auto old_hp_scope = hp_scope_;
+
+  if (!heapAlloc(sizeof(cell_t), &hp_scope_))
+    return false;
+
+  cell_t* scope = throwIfBadAddress(hp_scope_);
+  if (!scope)
+    return false;
+
+  *scope = old_hp_scope;
+  return true;
+}
+
+bool
+PluginContext::leaveHeapScope()
+{
+  cell_t* scope = throwIfBadAddress(hp_scope_);
+  if (!scope)
+    return false;
+
+  auto prev_hp_scope = *scope;
+  hp_ = hp_scope_;
+  hp_scope_ = prev_hp_scope;
+
+  if (hp_scope_ != -1 && !throwIfBadAddress(hp_scope_))
+    return false;
+  return true;
 }
 
 struct array_creation_t
@@ -718,8 +734,10 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
   argv[argc - 1] = hp_;
   hp_ = new_hp;
 
-  if (int err = pushTracker(bytes))
-    return err;
+  if (usesHeapTracker()) {
+    if (int err = pushTracker(bytes))
+      return err;
+  }
   return SP_ERROR_NONE;
 }
 
@@ -738,8 +756,10 @@ PluginContext::generateArray(cell_t dims, cell_t* stk, bool autozero)
       return SP_ERROR_HEAPLOW;
 
     hp_ += bytes;
-    if (int err = pushTracker(bytes))
-      return err;
+    if (usesHeapTracker()) {
+      if (int err = pushTracker(bytes))
+        return err;
+    }
 
     if (autozero)
       memset(memory_ + *stk, 0, bytes);
@@ -1000,4 +1020,11 @@ PluginContext::initArray(cell_t array_addr,
     memset(fill_pos, 0, data_fill_size * sizeof(cell_t));
   }
   return true;
+}
+
+bool
+PluginContext::usesHeapTracker() const
+{
+  LegacyImage* image = runtime()->image();
+  return !!(image->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes);
 }

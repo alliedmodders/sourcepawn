@@ -75,6 +75,9 @@ struct SmxConsts {
     // This feature adds the INIT_ARRAY opcode, and requires that multi-dimensional
     // arrays use direct internal addressing.
     static const uint32_t kCodeFeatureDirectArrays = (1 << 1);
+
+    // This feature adds the HEAP_SAVE and HEAP_RESTORE opcodes.
+    static const uint32_t kCodeFeatureHeapScopes = (1 << 2);
 };
 
 // These structures are byte-packed.

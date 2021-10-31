@@ -151,6 +151,10 @@ class Block :
     has_compiler_break_bug_ = true;
   }
 
+  // For debugging.
+  uint32_t startPc() const;
+  uint32_t endPc() const;
+
  private:
   ControlFlowGraph& graph_;
   std::vector<ke::RefPtr<Block>> predecessors_;
@@ -236,6 +240,8 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
   void dump(FILE* fp);
   void dumpDot(FILE* fp);
   void dumpDomTreeDot(FILE* fp);
+
+  PluginRuntime* rt() const { return rt_; }
 
  private:
   PluginRuntime* rt_;

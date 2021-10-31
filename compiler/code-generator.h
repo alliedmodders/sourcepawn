@@ -96,7 +96,7 @@ class CodeGenerator final
     bool EmitChainedCompareExprTest(ChainedCompareExpr* expr, bool jump_on_true,
                                     sp::Label* target);
 
-    void EmitDefaultArray(arginfo* arg);
+    void EmitDefaultArray(Expr* expr, arginfo* arg);
     void EmitUserOp(const UserOperation& user_op, value* lval);
     void EmitCall(symbol* fun, cell nargs);
     void EmitInc(const value* lval);
@@ -116,12 +116,10 @@ class CodeGenerator final
     void AddDebugLine(int linenr);
     void AddDebugSymbol(symbol* sym);
 
-  private:
-    enum class AllocScopeKind {
-      Normal,
-      Temp
-    };
+    // Helper that automatically handles heap deallocations.
+    void EmitExprForStmt(Expr* expr);
 
+  private:
     enum MemuseType {
         MEMUSE_STATIC = 0,
         MEMUSE_DYNAMIC = 1
@@ -139,40 +137,33 @@ class CodeGenerator final
     struct MemoryScope {
         MemoryScope(MemoryScope&& other)
          : scope_id(other.scope_id),
-           kind(other.kind),
            usage(std::move(other.usage)),
-           blacklisted(other.blacklisted)
+           needs_restore(other.needs_restore)
         {}
-        explicit MemoryScope(int scope_id, AllocScopeKind kind)
+        explicit MemoryScope(int scope_id)
          : scope_id(scope_id),
-           kind(kind),
-           blacklisted(false)
+           needs_restore(false)
         {}
         MemoryScope(const MemoryScope& other) = delete;
 
         MemoryScope& operator =(const MemoryScope& other) = delete;
         MemoryScope& operator =(MemoryScope&& other) {
             scope_id = other.scope_id;
-            kind = other.kind;
             usage = std::move(other.usage);
-            blacklisted = other.blacklisted;
+            needs_restore = other.needs_restore;
             return *this;
         }
 
         int scope_id;
-        AllocScopeKind kind;
         std::vector<MemoryUse> usage;
-        bool blacklisted;
+        bool needs_restore;
     };
 
     // Heap functions
-    void pushheaplist(AllocScopeKind kind = AllocScopeKind::Normal);
-    void popheaplist(bool codegen);
-    int markheap(MemuseType type, int size, AllocScopeKind kind);
-
-    // Remove the current heap scope, requiring that all alocations within be
-    // static. Then return that static size.
-    cell_t pop_static_heaplist();
+    void EnterHeapScope(FlowType flow_type);
+    void LeaveHeapScope();
+    void TrackTempHeapAlloc(Expr* source, int size);
+    void TrackHeapAlloc(MemuseType type, int size);
 
     // Stack functions
     void pushstacklist();
@@ -185,15 +176,14 @@ class CodeGenerator final
     //  This is used for code like dobreak()/docont()/doreturn().
     // stop_id is the list at which to stop generating.
     void genstackfree(int stop_id);
-    void genheapfree(int stop_id);
 
     int stack_scope_id() { return stack_scopes_.back().scope_id; }
-    int heap_scope_id() { return heap_scopes_.back().scope_id; }
+    int heap_scope_id();
     bool has_stack_or_heap_scopes() {
         return !stack_scopes_.empty() || !heap_scopes_.empty();
     }
 
-    void EnterMemoryScope(std::vector<MemoryScope>& frame, AllocScopeKind kind);
+    void EnterMemoryScope(std::vector<MemoryScope>& frame);
     void AllocInScope(MemoryScope& scope, MemuseType type, int size);
     int PopScope(std::vector<MemoryScope>& scope_list);
 

@@ -395,4 +395,16 @@ Block::unlink()
   immediately_dominated_.clear();
 }
 
+uint32_t
+Block::startPc() const
+{
+  return start_ - graph_.rt()->code().bytes;
+}
+
+uint32_t
+Block::endPc() const
+{
+  return end_ - graph_.rt()->code().bytes;
+}
+
 } // namespace sp

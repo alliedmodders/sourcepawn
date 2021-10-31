@@ -181,6 +181,11 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_TRACKER_POP_SETHEAP:
   {
+    if (code_features_ & SmxConsts::kCodeFeatureHeapScopes) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+
     VerifyData* v = block_->data<VerifyData>();
     if (v->tracker_balance.empty()) {
       reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -388,6 +393,11 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_TRACKER_PUSH_C:
   {
+    if (code_features_ & SmxConsts::kCodeFeatureHeapScopes) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+
     cell_t val = readCell();
     if (val < 0 || !ke::IsAligned(val, sizeof(cell_t))) {
         reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -450,9 +460,14 @@ MethodVerifier::verifyOp(OPCODE op)
         return pushStack(num_cells);
       return popStack(num_cells);
     } else if (op == OP_HEAP) {
-      if (value >= 0)
-        return pushHeap(num_cells);
-      return popHeap(num_cells);
+      if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
+        if (value >= 0)
+          return pushHeap(num_cells);
+        return popHeap(num_cells);
+      } else if (value < 0) {
+        reportError(SP_ERROR_INSTRUCTION_PARAM);
+        return false;
+      }
     }
     return true;
   }
@@ -528,8 +543,10 @@ MethodVerifier::verifyOp(OPCODE op)
       return false;
     if (!popStack(ndims - 1))
       return false;
-    block_->data<VerifyData>()->heap_balance.push_back(-1);
-    block_->data<VerifyData>()->tracker_balance.push_back(-1);
+    if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
+      block_->data<VerifyData>()->heap_balance.push_back(-1);
+      block_->data<VerifyData>()->tracker_balance.push_back(-1);
+    }
     return true;
   }
 
@@ -582,6 +599,26 @@ MethodVerifier::verifyOp(OPCODE op)
 
   case OP_CASETBL:
     cip_ = insn_ + GetCaseTableSize(reinterpret_cast<const uint8_t*>(insn_));
+    return true;
+
+  case OP_HEAP_SAVE:
+    if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+    block_->data<VerifyData>()->heap_scope_depth++;
+    return true;
+
+  case OP_HEAP_RESTORE:
+    if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+    if (!block_->data<VerifyData>()->heap_scope_depth) {
+      reportError(SP_ERROR_INVALID_INSTRUCTION);
+      return false;
+    }
+    block_->data<VerifyData>()->heap_scope_depth--;
     return true;
 
   default:
@@ -667,6 +704,10 @@ MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other)
     return false;
   }
 
+  if (first->heap_scope_depth != other->heap_scope_depth) {
+    reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return false;
+  }
   return true;
 }
 
@@ -676,6 +717,9 @@ MethodVerifier::mergeTracker(Block* block, VerifyData* other)
   VerifyData* join = block->data<VerifyData>();
   if (!verifyJoin(join, other))
     return false;
+
+  if (code_features_ & SmxConsts::kCodeFeatureHeapScopes)
+    return true;
 
   if (block->has_compiler_break_bug())
     return true;
@@ -843,10 +887,12 @@ MethodVerifier::pushHeap(uint32_t num_cells)
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
-  if (v->heap_balance.empty() || v->heap_balance.back() == -1)
-    v->heap_balance.push_back(num_cells);
-  else
-    v->heap_balance.back() += num_cells;
+  if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
+    if (v->heap_balance.empty() || v->heap_balance.back() == -1)
+      v->heap_balance.push_back(num_cells);
+    else
+      v->heap_balance.back() += num_cells;
+  }
   return true;
 }
 
@@ -861,9 +907,11 @@ MethodVerifier::popHeap(uint32_t num_cells)
     reportError(SP_ERROR_INSTRUCTION_PARAM);
     return false;
   }
-  v->heap_balance.back() -= num_cells;
-  if (v->heap_balance.back() == 0)
-    v->heap_balance.pop_back();
+  if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
+    v->heap_balance.back() -= num_cells;
+    if (v->heap_balance.back() == 0)
+      v->heap_balance.pop_back();
+  }
   return true;
 }
 

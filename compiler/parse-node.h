@@ -59,7 +59,8 @@ class ParseNode : public PoolObject
   public:
     explicit ParseNode(AstKind kind, const token_pos_t& pos)
       : kind_(kind),
-        pos_(pos)
+        pos_(pos),
+        tree_has_heap_allocs_(false)
     {}
 
     virtual bool Bind(SemaContext& sc) {
@@ -78,6 +79,9 @@ class ParseNode : public PoolObject
 
     AstKind kind() const { return kind_; }
     bool is(AstKind k) const { return kind() == k; }
+
+    bool tree_has_heap_allocs() const { return tree_has_heap_allocs_; }
+    void set_tree_has_heap_allocs(bool b) { tree_has_heap_allocs_ = b; }
 
     template <class T> T* as() {
         if (T::is_a(this))
@@ -100,6 +104,7 @@ class ParseNode : public PoolObject
   protected:
     AstKind kind_;
     token_pos_t pos_;
+    bool tree_has_heap_allocs_ : 1;
 };
 
 enum FlowType {
@@ -491,7 +496,8 @@ class Expr : public ParseNode
   public:
     explicit Expr(AstKind kind, const token_pos_t& pos)
       : ParseNode(kind, pos),
-        lvalue_(false)
+        lvalue_(false),
+        can_alloc_heap_(false)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -522,6 +528,8 @@ class Expr : public ParseNode
     const value& val() const { return val_; }
     bool lvalue() const { return lvalue_; }
     void set_lvalue(bool lvalue) { lvalue_ = lvalue; }
+    bool can_alloc_heap() const { return can_alloc_heap_; }
+    void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
 
     void MarkAndProcessUses(SemaContext& sc) {
         MarkUsed(sc);
@@ -531,6 +539,7 @@ class Expr : public ParseNode
   protected:
     value val_ = {};
     bool lvalue_ : 1;
+    bool can_alloc_heap_ : 1;
 };
 
 class IsDefinedExpr final : public Expr

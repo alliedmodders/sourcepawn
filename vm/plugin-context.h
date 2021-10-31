@@ -95,6 +95,9 @@ class PluginContext : public BasePluginContext
   cell_t* addressOfHp() {
     return &hp_;
   }
+  cell_t* addressOfHpScope() {
+    return &hp_scope_;
+  }
 
   cell_t frm() const {
     return frm_;
@@ -108,6 +111,8 @@ class PluginContext : public BasePluginContext
 
   int popTrackerAndSetHeap();
   int pushTracker(uint32_t amount);
+  bool enterHeapScope();
+  bool leaveHeapScope();
 
   int generateArray(cell_t dims, cell_t* stk, bool autozero);
   int generateFullArray(uint32_t argc, cell_t* argv, int autozero);
@@ -134,6 +139,7 @@ class PluginContext : public BasePluginContext
                  cell_t fill_value);
 
   cell_t* throwIfBadAddress(cell_t addr);
+  bool usesHeapTracker() const;
 
  private:
   PluginRuntime* m_pRuntime;
@@ -151,6 +157,7 @@ class PluginContext : public BasePluginContext
   cell_t sp_;
   cell_t hp_;
   cell_t frm_;
+  cell_t hp_scope_;
 };
 
 } // namespace sp

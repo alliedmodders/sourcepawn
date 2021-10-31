@@ -137,6 +137,8 @@ class Compiler : public CompilerBase
     size_t ncases) override;
   bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
                       cell_t data_fill_size, cell_t fill_value) override;
+  bool visitHEAP_SAVE() override;
+  bool visitHEAP_RESTORE() override;
 
  private:
   bool setup(cell_t pcode_offs);
@@ -163,6 +165,9 @@ class Compiler : public CompilerBase
   }
   ExternalAddress spAddr() {
     return ExternalAddress(context_->addressOfSp());
+  }
+  ExternalAddress hpScopeAddr() {
+    return ExternalAddress(context_->addressOfHpScope());
   }
 };
 

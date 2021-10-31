@@ -136,6 +136,8 @@ class PcodeVisitor
   virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) = 0;
   virtual bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
                               cell_t data_fill_size, cell_t fill_value) = 0;
+  virtual bool visitHEAP_SAVE() = 0;
+  virtual bool visitHEAP_RESTORE() = 0;
 };
 
 class IncompletePcodeVisitor : public PcodeVisitor
@@ -495,6 +497,14 @@ class IncompletePcodeVisitor : public PcodeVisitor
   }
   virtual bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
                               cell_t data_fill_size, cell_t fill_value) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitHEAP_SAVE() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitHEAP_RESTORE() override {
     assert(false);
     return false;
   }

@@ -78,6 +78,9 @@ bool Semantics::Analyze() {
         report(13); /* no entry point (no public functions) */
         return false;
     }
+
+    // All heap allocations must be owned by a ParseNode.
+    assert(!pending_heap_allocation_);
     return true;
 }
 
@@ -95,7 +98,16 @@ bool Semantics::CheckStmtList(StmtList* list) {
     return ok;
 }
 
-bool Semantics::CheckStmt(Stmt* stmt) {
+bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
+    ke::Maybe<ke::SaveAndSet<bool>> restore_heap_ownership;
+    if (flags & STMT_OWNS_HEAP)
+        restore_heap_ownership.init(&pending_heap_allocation_, false);
+
+    auto owns_heap = ke::MakeScopeGuard([&, this]() {
+        if (flags & STMT_OWNS_HEAP)
+            AssignHeapOwnership(stmt);
+    });
+
     switch (stmt->kind()) {
         case AstKind::ChangeScopeNode:
             return CheckChangeScopeNode(stmt->to<ChangeScopeNode>());
@@ -164,8 +176,13 @@ bool Semantics::CheckVarDecl(VarDecl* decl) {
     if (gTypes.find(sym->tag)->kind() == TypeKind::Struct)
         return CheckPstructDecl(decl);
 
-    if (type.ident == iARRAY || type.ident == iREFARRAY)
-        return CheckArrayDeclaration(decl);
+    if (type.ident == iARRAY || type.ident == iREFARRAY) {
+        if (!CheckArrayDeclaration(decl))
+            return false;
+        if (decl->vclass() == sLOCAL && sym->ident == iREFARRAY)
+            pending_heap_allocation_ = true;
+        return true;
+    }
 
     assert(type.ident == iVARIABLE || type.ident == iREFERENCE);
 
@@ -1950,6 +1967,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     if (sym->array_return()) {
         val.ident = iREFARRAY;
         val.sym = sym->array_return();
+        NeedsHeapAlloc(call);
     }
 
     if (sym->deprecated) {
@@ -2065,6 +2083,12 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigne
         // The rest of the code to handle default values is in DoEmit.
         argv[pos].expr = new DefaultArgExpr(call->pos(), arg);
         argv[pos].arg = arg;
+
+        if (arg->type.ident == iREFERENCE ||
+            (arg->type.ident == iREFARRAY && !arg->type.is_const && arg->def->array))
+        {
+            NeedsHeapAlloc(argv[pos].expr);
+        }
         return true;
     }
 
@@ -2103,7 +2127,12 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigne
                         report(param, 22); // need lvalue
                         return false;
                     }
+                    NeedsHeapAlloc(param);
+                } else if (!lvalue) {
+                    NeedsHeapAlloc(param);
                 }
+            } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
+                NeedsHeapAlloc(param);
             }
             if (!checktag_string(arg->type.tag(), val) && !checktag(arg->type.tag(), val->tag))
                 report(param, 213) << type_to_name(arg->type.tag()) << type_to_name(val->tag);
@@ -2343,12 +2372,12 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
     ke::Maybe<bool> always_returns;
     {
         AutoCollectSemaFlow flow(*sc_, &always_returns);
-        if (!CheckStmt(stmt->on_true()))
+        if (!CheckStmt(stmt->on_true(), STMT_OWNS_HEAP))
             return false;
     }
     {
         AutoCollectSemaFlow flow(*sc_, &always_returns);
-        if (stmt->on_false() && !CheckStmt(stmt->on_false()))
+        if (stmt->on_false() && !CheckStmt(stmt->on_false(), STMT_OWNS_HEAP))
             return false;
     }
 
@@ -2448,6 +2477,8 @@ bool Semantics::TestSymbols(SymbolScope* root, bool testconst) {
 }
 
 bool Semantics::CheckBlockStmt(BlockStmt* block) {
+    ke::SaveAndSet<bool> restore_heap(&pending_heap_allocation_, false);
+
     bool ok = true;
     for (const auto& stmt : block->stmts()) {
         cc_.reports()->ResetErrorFlag();
@@ -2467,6 +2498,9 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
 
     if (block->scope())
         TestSymbols(block->scope(), true);
+
+    // Blocks always taken heap ownership.
+    AssignHeapOwnership(block);
     return true;
 }
 
@@ -2768,7 +2802,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
         ke::SaveAndSet<bool> auto_break(&sc_->loop_has_break(), false);
         ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
-        if (!CheckStmt(stmt->body()))
+        if (!CheckStmt(stmt->body(), STMT_OWNS_HEAP))
             return false;
 
         has_break = sc_->loop_has_break();
@@ -2806,8 +2840,13 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
         else
             ok = false;
     }
-    if (stmt->advance() && !CheckExpr(stmt->advance()))
-        ok = false;
+    if (stmt->advance()) {
+        ke::SaveAndSet<bool> restore(&pending_heap_allocation_, false);
+        if (CheckExpr(stmt->advance()))
+            AssignHeapOwnership(stmt->advance());
+        else
+            ok = false;
+    }
 
     ke::Maybe<cell> constval;
     if (cond && cond->val().ident == iCONSTEXPR)
@@ -2822,7 +2861,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
         ke::SaveAndSet<bool> auto_continue(&sc_->loop_has_continue(), false);
         ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
-        ok &= CheckStmt(stmt->body());
+        ok &= CheckStmt(stmt->body(), STMT_OWNS_HEAP);
 
         has_break = sc_->loop_has_break();
         has_return = sc_->loop_has_return();
@@ -3023,7 +3062,7 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
         report(info->pos(), 234) << sym->name() << ptr; /* deprecated (probably a public function) */
     }
 
-    CheckStmt(body);
+    CheckStmt(body, STMT_OWNS_HEAP);
 
     sym->returns_value = sc_->returns_value();
     sym->always_returns = sc_->always_returns();
@@ -3213,6 +3252,18 @@ bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
     for (const auto& method : decl->methods())
         ok &= CheckStmt(method->decl);
     return ok;
+}
+
+void Semantics::NeedsHeapAlloc(Expr* expr) {
+    expr->set_can_alloc_heap(true);
+    pending_heap_allocation_ = true;
+}
+
+void Semantics::AssignHeapOwnership(ParseNode* node) {
+    if (pending_heap_allocation_) {
+        node->set_tree_has_heap_allocs(true);
+        pending_heap_allocation_ = false;
+    }
 }
 
 void
