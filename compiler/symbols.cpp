@@ -188,8 +188,9 @@ symbol::drop_reference_from(symbol* from)
 bool
 symbol::must_return_value() const
 {
+    auto types = &gTypes;
     assert(ident == iFUNCTN);
-    return retvalue_used || (explicit_return_type && tag != pc_tag_void);
+    return retvalue_used || (explicit_return_type && tag != types->tag_void());
 }
 
 bool

@@ -341,11 +341,24 @@ class TypeDictionary
             callback(type.get());
     }
 
+    int tag_nullfunc() const { return tag_nullfunc_; }
+    int tag_object() const { return tag_object_; }
+    int tag_null() const { return tag_null_; }
+    int tag_function() const { return tag_function_; }
+    int tag_any() const { return tag_any_; }
+    int tag_void() const { return tag_void_; }
+
   private:
     Type* findOrAdd(const char* name);
 
   private:
     std::vector<std::unique_ptr<Type>> types_;
+    int tag_nullfunc_ = -1;
+    int tag_object_ = -1;
+    int tag_null_ = -1;
+    int tag_function_ = -1;
+    int tag_any_ = -1;
+    int tag_void_ = -1;
 };
 
 const char* pc_tagname(int tag);

@@ -93,14 +93,8 @@
 
 using namespace ke;
 
-int pc_anytag = 0;
-int pc_functag = 0;
 int pc_tag_string = 0;
-int pc_tag_void = 0;
-int pc_tag_object = 0;
 int pc_tag_bool = 0;
-int pc_tag_null_t = 0;
-int pc_tag_nullfunc_t = 0;
 
 sp::StringPool gAtoms;
 
@@ -640,7 +634,7 @@ setconstants(void)
 
     auto& cc = CompileContext::get();
     DefineConstant(cc, gAtoms.add("EOS"), 0, 0);
-    DefineConstant(cc, gAtoms.add("INVALID_FUNCTION"), -1, pc_tag_nullfunc_t);
+    DefineConstant(cc, gAtoms.add("INVALID_FUNCTION"), -1, gTypes.tag_nullfunc());
     DefineConstant(cc, gAtoms.add("cellmax"), INT_MAX, 0);
     DefineConstant(cc, gAtoms.add("cellmin"), INT_MIN, 0);
 

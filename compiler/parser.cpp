@@ -46,6 +46,7 @@ Parser::Parser(CompileContext& cc)
   : cc_(cc),
     lexer_(cc.lexer())
 {
+    types_ = &gTypes;
 }
 
 Parser::~Parser()
@@ -2086,7 +2087,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
     if (getter) {
         ret_type.type = prop->type;
     } else {
-        ret_type.type.set_tag(pc_tag_void);
+        ret_type.type.set_tag(types_->tag_void());
         ret_type.type.ident = iVARIABLE;
     }
 
@@ -2481,7 +2482,7 @@ Parser::operatorname(sp::Atom** name)
 void
 Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
 {
-    Type* type = gTypes.find(info->declared_tag);
+    Type* type = types_->find(info->declared_tag);
     symbol* enum_type = type->asEnumStruct();
     if (!enum_type)
         return;
@@ -2656,10 +2657,10 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
             *out = TypenameInfo{pc_tag_string};
             return true;
         case tVOID:
-            *out = TypenameInfo{pc_tag_void};
+            *out = TypenameInfo{types_->tag_void()};
             return true;
         case tOBJECT:
-            *out = TypenameInfo{pc_tag_object};
+            *out = TypenameInfo{types_->tag_object()};
             return true;
         case tLABEL:
         case tSYMBOL:
@@ -2689,7 +2690,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
                 return true;
             }
             if (tok->atom->str() == "any") {
-                *out = TypenameInfo(pc_anytag);
+                *out = TypenameInfo(types_->tag_any());
                 return true;
             }
             *out = TypenameInfo(tok->atom, tok->id == tLABEL);

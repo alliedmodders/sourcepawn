@@ -82,18 +82,19 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
 bool
 SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag)
 {
+    auto types = &gTypes;
     if (is_label) {
-        *tag = gTypes.defineTag(atom->chars())->tagid();
+        *tag = types->defineTag(atom->chars())->tagid();
         return true;
     }
 
-    Type* type = gTypes.find(atom);
+    Type* type = types->find(atom);
     if (!type) {
         report(pos, 139) << atom;
         return false;
     }
 
-    if (type->tagid() != pc_anytag && type->isDeclaredButNotDefined())
+    if (type->tagid() != types->tag_any() && type->isDeclaredButNotDefined())
         report(pos, 139) << atom;
 
     *tag = type->tagid();
@@ -433,7 +434,8 @@ VarDecl::Bind(SemaContext& sc)
     if (type_.ident == iARRAY)
         ResolveArraySize(sc.sema(), this);
 
-    if (type_.tag() == pc_tag_void)
+    auto types = &gTypes;
+    if (type_.tag() == types->tag_void())
         error(pos_, 144);
 
     if (vclass_ == sGLOBAL) {
