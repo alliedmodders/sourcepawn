@@ -314,6 +314,7 @@ class Lexer
     void set_freading(bool v) { freading_ = v; }
     int fcurrent() const { return fcurrent_; }
     unsigned fline() const { return fline_; }
+    unsigned char* pline() { return pline_; }
 
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
@@ -372,6 +373,7 @@ class Lexer
     bool freading_ = false;
     int fcurrent_ = 0;
     unsigned fline_ = 0;
+    unsigned char pline_[sLINEMAX + 1];         /* the line read from the input file */
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
