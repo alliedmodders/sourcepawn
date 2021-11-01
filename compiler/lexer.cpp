@@ -267,9 +267,9 @@ Lexer::SynthesizeIncludePathToken()
  *  Reads in a new line from the input file pointed to by "inpf". readline()
  *  concatenates lines that end with a \ with the next line. If no more data
  *  can be read from the file, readline() attempts to pop off the previous file
- *  from the stack. If that fails too, it sets "freading" to 0.
+ *  from the stack. If that fails too, it sets "freading_" to 0.
  *
- *  Global references: inpf,fline,inpfname,freading,icomment (altered)
+ *  Global references: inpf,fline,inpfname,freading_,icomment (altered)
  */
 void
 Lexer::Readline(unsigned char* line)
@@ -289,7 +289,7 @@ Lexer::Readline(unsigned char* line)
             if (inpf != NULL && inpf != inpf_org)
                 inpf = nullptr;
             if (current_line_stack_.empty()) {
-                freading = FALSE;
+                freading_ = FALSE;
                 *line = '\0';
                 /* when there is nothing more to read, the #if/#else stack should
                  * be empty and we should not be in a comment
@@ -1538,14 +1538,14 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
  *
  *  Global references: lptr     (altered)
  *                     pline    (altered)
- *                     freading (referred to only)
+ *                     freading_ (referred to only)
  */
 void
 Lexer::Preprocess(bool allow_synthesized_tokens)
 {
     int iscommand;
 
-    if (!freading)
+    if (!freading_)
         return;
     do {
         Readline(pline);
@@ -1560,7 +1560,7 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
             substallpatterns(pline, sLINEMAX);
             lptr = pline; /* reset "line pointer" to start of the parsing buffer */
         }
-    } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading); /* enddo */
+    } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
 }
 
 static void
@@ -1931,7 +1931,7 @@ Lexer::lex()
     *tok = {};
 
     lexnewline_ = FALSE;
-    if (!freading)
+    if (!freading_)
         return 0;
 
     newline = (lptr == pline); /* does lptr point to start of line buffer */
@@ -1943,7 +1943,7 @@ Lexer::lex()
                 lexpop();
                 return current_token()->id;
             }
-            if (!freading)
+            if (!freading_)
                 return 0;
             lexnewline_ = TRUE; /* set this after preprocess(), because
                                  * preprocess() calls lex() recursively */
@@ -2248,22 +2248,22 @@ Lexer::LexStringLiteral(full_token_t* tok)
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
                 PreprocessInLex(false);
-                assert(freading);
+                assert(freading_);
             } else {
                 lptr++;
             }
         }
-        assert(freading && lptr[0] == '.' && lptr[1] == '.' && lptr[2] == '.');
+        assert(freading_ && lptr[0] == '.' && lptr[1] == '.' && lptr[2] == '.');
         lptr += 3;
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
                 PreprocessInLex(false);
-                assert(freading);
+                assert(freading_);
             } else {
                 lptr++;
             }
         }
-        if (!freading || !((*lptr == '\"') || (*lptr == '\''))) {
+        if (!freading_ || !((*lptr == '\"') || (*lptr == '\''))) {
             error(37); /* invalid string concatenation */
             break;
         }
@@ -2437,7 +2437,7 @@ Lexer::match(int token)
     if (token == tTERM && (tok == ';' || tok == tENDEXPR))
         return true;
 
-    if (!NeedSemicolon() && token == tTERM && (lexnewline_ || !freading)) {
+    if (!NeedSemicolon() && token == tTERM && (lexnewline_ || !freading_)) {
         /* Push "tok" back, because it is the token following the implicit statement
          * termination (newline) token.
          */
@@ -2471,7 +2471,7 @@ Lexer::need(int token)
             sprintf(s1, "%c", (char)token); /* single character token */
         else
             strcpy(s1, sc_tokens[token - tFIRST]); /* multi-character symbol */
-        if (!freading)
+        if (!freading_)
             strcpy(s2, "-end of file-");
         else if (next_token()->id < 256)
             sprintf(s2, "%c", (char)next_token()->id);

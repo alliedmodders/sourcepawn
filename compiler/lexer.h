@@ -310,6 +310,8 @@ class Lexer
     int& require_newdecls() { return require_newdecls_stack_.back(); }
     int& stmtindent() { return stmtindent_; }
     bool& indent_nowarn() { return indent_nowarn_; }
+    bool freading() const { return freading_; }
+    void set_freading(bool v) { freading_ = v; }
 
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
@@ -365,6 +367,7 @@ class Lexer
     bool allow_tags_ = true;
     int stmtindent_ = 0;
     bool indent_nowarn_ = false;
+    bool freading_ = false;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;

@@ -38,7 +38,6 @@ unsigned char pline[sLINEMAX + 1];         /* the line read from the input file 
 const unsigned char* lptr;                 /* points to the current position in "pline" */
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
-int freading = FALSE;                      /* Is there an input file ready for reading? */
 int fline = 0;                             /* the line number in the current file */
 short fnumber = 0;                         /* the file number in the file table (debugging) */
 int sc_rationaltag = 0;              /* tag for rational numbers */
