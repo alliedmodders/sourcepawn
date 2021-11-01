@@ -55,7 +55,6 @@ typedef uint32_t ucell;
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
 #define PUBLIC_CHAR '@' /* character that defines a function "public" */
-#define CTRL_CHAR '\\'  /* default control character */
 #define sCHARBITS 8     /* size of a packed character */
 
 #define sCOMP_STACK 32     /* maximum nesting of #if .. #endif sections */
