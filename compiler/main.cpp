@@ -397,9 +397,6 @@ resetglobals(void)
 {
     /* reset the subset of global variables that is modified by the first pass */
     fline = 0;             /* the line number in the current file */
-    fnumber = 0;           /* the file number in the file table (debugging) */
-
-    fcurrent = 0;
 }
 
 static void

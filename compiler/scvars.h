@@ -34,7 +34,6 @@ extern const unsigned char* lptr; /* points to the current position in "pline" *
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
 extern int fline;                 /* the line number in the current file */
-extern short fnumber;             /* number of files in the input file table */
 extern int sc_rationaltag;        /* tag for rational numbers */
 extern int pc_functag;            /* global function tag */
 extern int pc_tag_string;         /* global String tag */
@@ -49,5 +48,3 @@ extern std::shared_ptr<SourceFile> inpf;      /* file read from (source or inclu
 extern std::shared_ptr<SourceFile> inpf_org;  /* main source file */
 
 extern jmp_buf errbuf; /* target of longjmp() on a fatal error */
-
-extern short fcurrent; /* current file being processed */
