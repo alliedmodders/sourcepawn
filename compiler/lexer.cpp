@@ -1914,9 +1914,6 @@ Lexer::lexpop()
         token_buffer_->cursor = 0;
 }
 
-static bool lex_match_char(char c);
-static bool lex_number(full_token_t* tok);
-
 int
 Lexer::lex()
 {
@@ -2175,18 +2172,14 @@ Lexer::LexOnce(full_token_t* tok)
     tok->id = *lptr++;
 }
 
-static bool
-lex_match_char(char c)
-{
+bool Lexer::lex_match_char(char c) {
     if (*lptr != c)
         return false;
     lptr++;
     return true;
 }
 
-static bool
-lex_number(full_token_t* tok)
-{
+bool Lexer::lex_number(full_token_t* tok) {
     if (int i = number(&tok->value, lptr)) {
         tok->id = tNUMBER;
         lptr += i;

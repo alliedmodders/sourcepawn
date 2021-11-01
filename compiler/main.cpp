@@ -396,8 +396,6 @@ initglobals(void)
     sc_ctrlchar = CTRL_CHAR;           /* the escape character */
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
-
-    lptr = NULL;     /* points to the current position in "pline" */
 }
 
 static std::string get_extension(const std::string& filename) {

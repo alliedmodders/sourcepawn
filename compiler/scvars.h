@@ -29,7 +29,6 @@
 #include "sc.h"
 #include "source-file.h"
 
-extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
 extern int sc_rationaltag;        /* tag for rational numbers */

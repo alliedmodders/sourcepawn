@@ -34,7 +34,6 @@
  *  All global variables that are shared amongst the compiler files are
  *  declared here.
  */
-const unsigned char* lptr;                 /* points to the current position in "pline" */
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
 int sc_rationaltag = 0;              /* tag for rational numbers */
