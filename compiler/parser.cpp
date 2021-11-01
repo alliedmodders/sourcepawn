@@ -1524,7 +1524,7 @@ Parser::parse_compound(bool sameline)
         const unsigned char* p = lptr;
         /* go back to the opening brace */
         while (*p != '{') {
-            assert(p > pline);
+            assert(p > lexer_->pline());
             p--;
         }
         assert(*p == '{'); /* it should be found */
@@ -1534,9 +1534,9 @@ Parser::parse_compound(bool sameline)
             p++;
         assert(*p != '\0'); /* a token should be found */
         lexer_->stmtindent() = 0;
-        for (i = 0; i < (int)(p - pline); i++) {
+        for (i = 0; i < (int)(p - lexer_->pline()); i++) {
             int tabsize = cc_.options()->tabsize;
-            if (pline[i] == '\t' && tabsize > 0)
+            if (lexer_->pline()[i] == '\t' && tabsize > 0)
                 lexer_->stmtindent() += (int)(tabsize - (lexer_->stmtindent() + tabsize) % tabsize);
             else
                 lexer_->stmtindent()++;

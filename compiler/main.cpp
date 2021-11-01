@@ -397,7 +397,6 @@ initglobals(void)
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
 
-    pline[0] = '\0'; /* the line read from the input file */
     lptr = NULL;     /* points to the current position in "pline" */
 }
 

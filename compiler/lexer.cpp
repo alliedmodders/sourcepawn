@@ -216,7 +216,7 @@ Lexer::SynthesizeIncludePathToken()
     while (*lptr <= ' ' && *lptr != '\0') /* skip leading whitespace */
         lptr++;
 
-    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, int(lptr - pline));
+    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, int(lptr - pline_));
 
     char open_c = (char)*lptr;
     char close_c;
@@ -710,19 +710,19 @@ Lexer::preproc_expr(cell* val, int* tag)
 
     ke::SaveAndSet<bool> forbid_const(&Parser::sInPreprocessor, true);
 
-    assert((lptr - pline) < (int)strlen((char*)pline)); /* lptr must point inside the string */
+    assert((lptr - pline_) < (int)strlen((char*)pline_)); /* lptr must point inside the string */
     /* preprocess the string */
-    substallpatterns(pline, sLINEMAX);
-    assert((lptr - pline) <
-           (int)strlen((char*)pline)); /* lptr must STILL point inside the string */
+    substallpatterns(pline_, sLINEMAX);
+    assert((lptr - pline_) <
+           (int)strlen((char*)pline_)); /* lptr must STILL point inside the string */
     /* push_back a special symbol to the string, so the expression
      * analyzer won't try to read a next line when it encounters
      * an end-of-line
      */
-    assert(strlen((char*)pline) < sLINEMAX);
-    term = strchr((char*)pline, '\0');
+    assert(strlen((char*)pline_) < sLINEMAX);
+    term = strchr((char*)pline_, '\0');
     assert(term != NULL);
-    chrcat((char*)pline, PREPROC_TERM); /* the "DEL" code (see SC.H) */
+    chrcat((char*)pline_, PREPROC_TERM); /* the "DEL" code (see SC.H) */
     result = Parser::PreprocExpr(val, tag); /* get value (or 0 on error) */
     *term = '\0';                       /* erase the token (if still present) */
     lexclr(FALSE);                      /* clear any "pushed" tokens */
@@ -866,8 +866,8 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                 ret = CMD_INJECTED;
 
                 // Force lexer to reset.
-                pline[0] = '\0';
-                lptr = pline;
+                pline_[0] = '\0';
+                lptr = pline_;
                 lexnewline_ = TRUE;
             }
             break;
@@ -946,7 +946,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                             while (*lptr <= ' ' && *lptr != '\0')
                                 lptr++;
 
-                            PushSynthesizedToken(tSYN_PRAGMA_UNUSED, int(lptr - pline));
+                            PushSynthesizedToken(tSYN_PRAGMA_UNUSED, int(lptr - pline_));
                             return CMD_INJECTED;
                         }
 
@@ -1528,14 +1528,14 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
 
 /*  preprocess
  *
- *  Reads a line by readline() into "pline" and performs basic preprocessing:
+ *  Reads a line by readline() into "pline_" and performs basic preprocessing:
  *  deleting comments, skipping lines with false "#if.." code and recognizing
  *  other compiler directives. There is an indirect recursion: lex() calls
  *  preprocess() if a new line must be read, preprocess() calls command(),
  *  which at his turn calls lex() to identify the token.
  *
  *  Global references: lptr     (altered)
- *                     pline    (altered)
+ *                     pline_    (altered)
  *                     freading_ (referred to only)
  */
 void
@@ -1546,17 +1546,17 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
     if (!freading_)
         return;
     do {
-        Readline(pline);
-        StripComments(pline);
-        lptr = pline; /* set "line pointer" to start of the parsing buffer */
+        Readline(pline_);
+        StripComments(pline_);
+        lptr = pline_; /* set "line pointer" to start of the parsing buffer */
         iscommand = DoCommand(allow_synthesized_tokens);
         if (iscommand == CMD_INJECTED)
             return;
         if (iscommand != CMD_NONE)
             cc_.reports()->ResetErrorFlag();
         if (iscommand == CMD_NONE) {
-            substallpatterns(pline, sLINEMAX);
-            lptr = pline; /* reset "line pointer" to start of the parsing buffer */
+            substallpatterns(pline_, sLINEMAX);
+            lptr = pline_; /* reset "line pointer" to start of the parsing buffer */
         }
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
 }
@@ -1779,6 +1779,8 @@ Lexer::Lexer(CompileContext& cc)
     }
 
     macros_.init(128);
+
+    pline_[0] = '\0'; /* the line read from the input file */
 }
 
 void
@@ -1885,7 +1887,7 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->data.clear();
     tok->atom = nullptr;
     tok->start.line = fline_;
-    tok->start.col = (int)(lptr - pline);
+    tok->start.col = (int)(lptr - pline_);
     tok->start.file = fcurrent_;
     tok->end = tok->start;
     lexpush();
@@ -1932,7 +1934,7 @@ Lexer::lex()
     if (!freading_)
         return 0;
 
-    newline = (lptr == pline); /* does lptr point to start of line buffer */
+    newline = (lptr == pline_); /* does lptr point to start of line buffer */
     while (*lptr <= ' ') {     /* delete leading white space */
         if (*lptr == '\0') {
             PreprocessInLex(true);
@@ -1952,9 +1954,9 @@ Lexer::lex()
     }
     if (newline) {
         stmtindent_ = 0;
-        for (int i = 0; i < (int)(lptr - pline); i++) {
+        for (int i = 0; i < (int)(lptr - pline_); i++) {
             int tabsize = cc_.options()->tabsize;
-            if (pline[i] == '\t' && tabsize > 0)
+            if (pline_[i] == '\t' && tabsize > 0)
                 stmtindent_ += (int)(tabsize - (stmtindent_ + tabsize) % tabsize);
             else
                 stmtindent_++;
@@ -1962,13 +1964,13 @@ Lexer::lex()
     }
 
     tok->start.line = fline_;
-    tok->start.col = (int)(lptr - pline);
+    tok->start.col = (int)(lptr - pline_);
     tok->start.file = fcurrent_;
 
     LexOnce(tok);
 
     tok->end.line = fline_;
-    tok->end.col = (int)(lptr - pline);
+    tok->end.col = (int)(lptr - pline_);
     tok->end.file = tok->start.file;
     return tok->id;
 }
@@ -2399,7 +2401,7 @@ Lexer::lexclr(int clreol)
 {
     token_buffer_->depth = 0;
     if (clreol) {
-        lptr = (unsigned char*)strchr((char*)pline, '\0');
+        lptr = (unsigned char*)strchr((char*)pline_, '\0');
         assert(lptr != NULL);
     }
 }

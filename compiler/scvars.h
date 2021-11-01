@@ -29,7 +29,6 @@
 #include "sc.h"
 #include "source-file.h"
 
-extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
