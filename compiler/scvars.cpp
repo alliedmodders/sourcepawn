@@ -43,5 +43,3 @@ short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
 
 std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 std::shared_ptr<SourceFile> inpf_org;  /* main source file */
-
-jmp_buf errbuf;
