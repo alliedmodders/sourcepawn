@@ -39,14 +39,11 @@ const unsigned char* lptr;                 /* points to the current position in 
 char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
 char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
 int fline = 0;                             /* the line number in the current file */
-short fnumber = 0;                         /* the file number in the file table (debugging) */
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */
 
 std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 std::shared_ptr<SourceFile> inpf_org;  /* main source file */
-
-short fcurrent; /* current file being processed */
 
 jmp_buf errbuf;

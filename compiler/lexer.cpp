@@ -102,17 +102,15 @@ Lexer::PlungeQualifiedFile(const char* name)
     assert(!IsSkipping());
     assert(skiplevel_ == iflevel_); /* these two are always the same when "parsing" */
     comment_stack_.push_back(icomment_);
-    current_file_stack_.push_back(fcurrent);
+    current_file_stack_.push_back(fcurrent_);
     current_line_stack_.push_back(fline);
     need_semicolon_stack_.push_back(cc.options()->need_semicolon);
     require_newdecls_stack_.push_back(cc.options()->require_newdecls);
     inpf = fp; /* set input file pointer to include file */
-    fnumber++;
     fline = 0; /* set current line number to 0 */
-    fcurrent = fnumber;
     icomment_ = 0;               /* not in a comment */
+    fcurrent_ = (int)cc.input_files().size();
     cc.input_files().emplace_back(inpf->name());
-    assert(cc.input_files().at(fcurrent) == inpf->name());
     listline_ = -1;           /* force a #line directive when changing the file */
     skip_utf8_bom(inpf.get());
     return TRUE;
@@ -302,7 +300,7 @@ Lexer::Readline(unsigned char* line)
                 return;
             }
             fline = ke::PopBack(&current_line_stack_);
-            fcurrent = ke::PopBack(&current_file_stack_);
+            fcurrent_ = ke::PopBack(&current_file_stack_);
             icomment_ = ke::PopBack(&comment_stack_);
             iflevel_ = ke::PopBack(&preproc_if_stack_);
             need_semicolon_stack_.pop_back();
@@ -311,7 +309,7 @@ Lexer::Readline(unsigned char* line)
             assert(!IsSkipping());   /* idem ditto */
             inpf = ke::PopBack(&input_file_stack_);
             SetFileDefines(inpf->name());
-            assert(cc.input_files().at(fcurrent) == inpf->name());
+            assert(cc.input_files().at(fcurrent_) == inpf->name());
             listline_ = -1; /* force a #line directive when changing the file */
         }
 
@@ -1888,7 +1886,7 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->atom = nullptr;
     tok->start.line = fline;
     tok->start.col = (int)(lptr - pline);
-    tok->start.file = fcurrent;
+    tok->start.file = fcurrent_;
     tok->end = tok->start;
     lexpush();
     return tok;
@@ -1965,7 +1963,7 @@ Lexer::lex()
 
     tok->start.line = fline;
     tok->start.col = (int)(lptr - pline);
-    tok->start.file = fcurrent;
+    tok->start.file = fcurrent_;
 
     LexOnce(tok);
 

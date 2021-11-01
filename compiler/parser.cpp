@@ -60,28 +60,13 @@ Parser::Parse()
         cc_.set_one_error_per_stmt(false);
     });
 
-    std::deque<Stmt*> add_to_end;
-
     auto list = new ParseTree(token_pos_t{});
-
-    // Create a static scope for the main file.
-    assert(fcurrent == 0);
-    static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-    list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                   cc_.input_files().at(fcurrent)));
-
-    if (!cc_.default_include().empty()) {
-        const char* incfname = cc_.default_include().c_str();
-        if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
-            static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-            list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                           cc_.input_files().at(fcurrent)));
-        }
-    }
+    CreateInitialScopes(list);
 
     // Prime the lexer.
     lexer_->Start();
 
+    std::deque<Stmt*> add_to_end;
     while (lexer_->freading()) {
         Stmt* decl = nullptr;
 
@@ -91,6 +76,7 @@ Parser::Parse()
         // before every declaration. This should be after lexer_->lex() so we've
         // processed any end-of-file events. 
         bool changed = false;
+        int fcurrent = lexer_->fcurrent();
         while (!static_scopes_.empty() && static_scopes_.back()->fnumber() != fcurrent) {
             changed = true;
             static_scopes_.pop_back();
@@ -170,6 +156,7 @@ Parser::Parse()
                 if (!result && tok != tpTRYINCLUDE)
                     report(FATAL_ERROR_READ) << name.substr(1);
 
+                int fcurrent = lexer_->fcurrent();
                 static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
                 decl = new ChangeScopeNode(lexer_->pos(), static_scopes_.back(), name.substr(1));
                 break;
@@ -203,6 +190,27 @@ Parser::Parse()
         add_to_end.pop_front();
     }
     return list;
+}
+
+void Parser::CreateInitialScopes(ParseTree* list) {
+    // Create a static scope for the main file.
+    {
+        int fcurrent = lexer_->fcurrent();
+        assert(fcurrent == 0);
+        static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
+        list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
+                                                       cc_.input_files().at(fcurrent)));
+    }
+
+    if (!cc_.default_include().empty()) {
+        const char* incfname = cc_.default_include().c_str();
+        if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
+            int fcurrent = lexer_->fcurrent();
+            static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
+            list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
+                                                           cc_.input_files().at(fcurrent)));
+        }
+    }
 }
 
 Stmt*

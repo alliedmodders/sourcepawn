@@ -312,6 +312,7 @@ class Lexer
     bool& indent_nowarn() { return indent_nowarn_; }
     bool freading() const { return freading_; }
     void set_freading(bool v) { freading_ = v; }
+    int fcurrent() const { return fcurrent_; }
 
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
@@ -368,6 +369,7 @@ class Lexer
     int stmtindent_ = 0;
     bool indent_nowarn_ = false;
     bool freading_ = false;
+    int fcurrent_ = 0;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
