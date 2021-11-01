@@ -82,7 +82,7 @@ Parser::Parse()
     // Prime the lexer.
     lexer_->Start();
 
-    while (freading) {
+    while (lexer_->freading()) {
         Stmt* decl = nullptr;
 
         int tok = lexer_->lex();
@@ -181,7 +181,7 @@ Parser::Parse()
                 error(55); /* start of function body without function header */
                 break;
             default:
-                if (freading) {
+                if (lexer_->freading()) {
                     error(10);    /* illegal function or declaration */
                     lexer_->lexclr(TRUE); /* drop the rest of the line */
                 }
@@ -445,7 +445,7 @@ Parser::parse_enumstruct()
 
     int opening_line = fline;
     while (!lexer_->match('}')) {
-        if (!freading) {
+        if (!lexer_->freading()) {
             error(151, opening_line);
             break;
         }
@@ -1143,7 +1143,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
             break;
         if (!lexer_->need(','))
             break;
-    } while (freading && !lexer_->match(tENDEXPR));
+    } while (lexer_->freading() && !lexer_->match(tENDEXPR));
 
     return call;
 }
@@ -1315,7 +1315,7 @@ Parser::parse_post_dims(typeinfo_t* type)
 Stmt*
 Parser::parse_stmt(int* lastindent, bool allow_decl)
 {
-    if (!freading) {
+    if (!lexer_->freading()) {
         error(36); /* empty statement */
         return nullptr;
     }
@@ -1537,7 +1537,7 @@ Parser::parse_compound(bool sameline)
 
     int indent = -1;
     while (lexer_->match('}') == 0) { /* repeat until compound statement is closed */
-        if (!freading) {
+        if (!lexer_->freading()) {
             error(30, block_start); /* compound block not closed at end of file */
             break;
         }

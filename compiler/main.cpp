@@ -225,7 +225,7 @@ pc_compile(int argc, char* argv[]) {
     if (!inpf_org->Open(options->source_files[0]))
         report(FATAL_ERROR_READ) << options->source_files[0];
     skip_utf8_bom(inpf_org.get());
-    freading = TRUE;
+    cc.lexer()->set_freading(true);
 
     setconstants(); /* set predefined constants and tagnames */
     /* do the first pass through the file (or possibly two or more "first passes") */
@@ -235,10 +235,6 @@ pc_compile(int argc, char* argv[]) {
     inst_binary_name(cc, cc.binfname().c_str());
     resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
-    /* reset the source file */
-    inpf = inpf_org;
-    freading = TRUE;
-    inpf->Reset(inpfmark);       /* reset file position */
 
     cc.input_files().emplace_back(inpf->name());
 
@@ -400,7 +396,6 @@ static void
 resetglobals(void)
 {
     /* reset the subset of global variables that is modified by the first pass */
-    freading = FALSE;      /* no input file ready yet */
     fline = 0;             /* the line number in the current file */
     fnumber = 0;           /* the file number in the file table (debugging) */
 
