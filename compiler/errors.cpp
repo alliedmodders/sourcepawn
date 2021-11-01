@@ -329,7 +329,8 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
 ErrorReport
 ErrorReport::infer_va(int number, va_list ap)
 {
-    return create_va(number, -1, fline, ap);
+    auto& cc = CompileContext::get();
+    return create_va(number, -1, cc.lexer()->fline(), ap);
 }
 
 void

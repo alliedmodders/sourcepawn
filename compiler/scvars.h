@@ -33,7 +33,6 @@ extern unsigned char pline[];     /* the line read from the input file */
 extern const unsigned char* lptr; /* points to the current position in "pline" */
 extern char sc_ctrlchar;          /* the control character (or escape character) */
 extern char sc_ctrlchar_org;      /* the default control character */
-extern int fline;                 /* the line number in the current file */
 extern int sc_rationaltag;        /* tag for rational numbers */
 extern int pc_functag;            /* global function tag */
 extern int pc_tag_string;         /* global String tag */

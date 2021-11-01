@@ -103,11 +103,11 @@ Lexer::PlungeQualifiedFile(const char* name)
     assert(skiplevel_ == iflevel_); /* these two are always the same when "parsing" */
     comment_stack_.push_back(icomment_);
     current_file_stack_.push_back(fcurrent_);
-    current_line_stack_.push_back(fline);
+    current_line_stack_.push_back(fline_);
     need_semicolon_stack_.push_back(cc.options()->need_semicolon);
     require_newdecls_stack_.push_back(cc.options()->require_newdecls);
     inpf = fp; /* set input file pointer to include file */
-    fline = 0; /* set current line number to 0 */
+    fline_ = 0; /* set current line number to 0 */
     icomment_ = 0;               /* not in a comment */
     fcurrent_ = (int)cc.input_files().size();
     cc.input_files().emplace_back(inpf->name());
@@ -299,7 +299,7 @@ Lexer::Readline(unsigned char* line)
                     error(1, "*/", "-end of file-");
                 return;
             }
-            fline = ke::PopBack(&current_line_stack_);
+            fline_ = ke::PopBack(&current_line_stack_);
             fcurrent_ = ke::PopBack(&current_file_stack_);
             icomment_ = ke::PopBack(&comment_stack_);
             iflevel_ = ke::PopBack(&preproc_if_stack_);
@@ -348,7 +348,7 @@ Lexer::Readline(unsigned char* line)
             num -= strlen((char*)line);
             line += strlen((char*)line);
         }
-        fline += 1;
+        fline_ += 1;
     } while (num >= 0 && cont);
 }
 
@@ -876,7 +876,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             if (!IsSkipping()) {
                 if (lex() != tNUMBER)
                     error(8); /* invalid/non-constant expression */
-                fline = current_token()->value;
+                fline_ = current_token()->value;
             }
             check_empty(lptr);
             break;
@@ -1453,7 +1453,7 @@ MacroProcessor::enter_macro(const char* start, size_t prefixlen, Lexer::macro_t*
         if (prefixlen != kLineMacroLen)
             return false;
         if (strncmp(start, "__LINE__", kLineMacroLen) == 0) {
-            line_number_buffer_ = ke::StringPrintf("%d", fline);
+            line_number_buffer_ = ke::StringPrintf("%u", lexer_->fline());
             out->first = "__LINE__";
             out->second = line_number_buffer_.c_str();
             return true;
@@ -1884,7 +1884,7 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->value = 0;
     tok->data.clear();
     tok->atom = nullptr;
-    tok->start.line = fline;
+    tok->start.line = fline_;
     tok->start.col = (int)(lptr - pline);
     tok->start.file = fcurrent_;
     tok->end = tok->start;
@@ -1961,13 +1961,13 @@ Lexer::lex()
         }
     }
 
-    tok->start.line = fline;
+    tok->start.line = fline_;
     tok->start.col = (int)(lptr - pline);
     tok->start.file = fcurrent_;
 
     LexOnce(tok);
 
-    tok->end.line = fline;
+    tok->end.line = fline_;
     tok->end.col = (int)(lptr - pline);
     tok->end.file = tok->start.file;
     return tok->id;
@@ -2491,7 +2491,7 @@ Lexer::peek_same_line()
     // If there's tokens pushed back, then |fline| is the line of the furthest
     // token parsed. If fline == current token's line, we are guaranteed any
     // buffered token is still on the same line.
-    if (token_buffer_->depth > 0 && current_token()->end.line == fline)
+    if (token_buffer_->depth > 0 && current_token()->end.line == fline_)
         return next_token()->id;
 
     // Make sure the next token is lexed, then buffer it.
