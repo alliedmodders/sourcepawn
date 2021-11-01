@@ -96,7 +96,7 @@ Lexer::PlungeQualifiedFile(const char* name)
     if (!fp)
         return FALSE;
     cc.included_files().emplace_back(name);
-    input_file_stack_.push_back(inpf);
+    input_file_stack_.push_back(inpf_);
     preproc_if_stack_.push_back(iflevel_);
     assert(!IsSkipping());
     assert(skiplevel_ == iflevel_); /* these two are always the same when "parsing" */
@@ -105,13 +105,13 @@ Lexer::PlungeQualifiedFile(const char* name)
     current_line_stack_.push_back(fline_);
     need_semicolon_stack_.push_back(cc.options()->need_semicolon);
     require_newdecls_stack_.push_back(cc.options()->require_newdecls);
-    inpf = fp; /* set input file pointer to include file */
+    inpf_ = fp; /* set input file pointer to include file */
     fline_ = 0; /* set current line number to 0 */
     icomment_ = 0;               /* not in a comment */
     fcurrent_ = (int)cc.input_files().size();
-    cc.input_files().emplace_back(inpf->name());
+    cc.input_files().emplace_back(inpf_->name());
     listline_ = -1;           /* force a #line directive when changing the file */
-    skip_utf8_bom(inpf.get());
+    skip_utf8_bom(inpf_.get());
     return TRUE;
 }
 
@@ -130,11 +130,11 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
              * there is a (relative) path for the current file
              */
             const char* ptr;
-            if ((ptr = strrchr(inpf->name(), DIRSEP_CHAR)) != 0) {
-                int len = (int)(ptr - inpf->name()) + 1;
+            if ((ptr = strrchr(inpf_->name(), DIRSEP_CHAR)) != 0) {
+                int len = (int)(ptr - inpf_->name()) + 1;
                 if (len + strlen(name) < PATH_MAX) {
                     char path[PATH_MAX];
-                    SafeStrcpyN(path, sizeof(path), inpf->name(), len);
+                    SafeStrcpyN(path, sizeof(path), inpf_->name(), len);
                     SafeStrcat(path, sizeof(path), name);
                     result = PlungeQualifiedFile(path);
                 }
@@ -165,10 +165,10 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
 
     if (pcwd) {
         char path[PATH_MAX];
-        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpf->name());
+        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpf_->name());
         SetFileDefines(path);
     } else {
-        SetFileDefines(inpf->name());
+        SetFileDefines(inpf_->name());
     }
 
     return result;
@@ -277,14 +277,14 @@ Lexer::Readline(unsigned char* line)
     num = sLINEMAX;
     cont = FALSE;
     do {
-        if (inpf == NULL || inpf->Eof()) {
+        if (inpf_ == NULL || inpf_->Eof()) {
             auto& cc = CompileContext::get();
             (void)cc;
 
             if (cont)
                 error(49); /* invalid line continuation */
-            if (inpf != NULL && inpf != inpf_org)
-                inpf = nullptr;
+            if (inpf_ != NULL && inpf_ != cc.inpf_org())
+                inpf_ = nullptr;
             if (current_line_stack_.empty()) {
                 freading_ = FALSE;
                 *line = '\0';
@@ -306,13 +306,13 @@ Lexer::Readline(unsigned char* line)
             require_newdecls_stack_.pop_back();
             skiplevel_ = iflevel_; /* this condition held before including the file */
             assert(!IsSkipping());   /* idem ditto */
-            inpf = ke::PopBack(&input_file_stack_);
-            SetFileDefines(inpf->name());
-            assert(cc.input_files().at(fcurrent_) == inpf->name());
+            inpf_ = ke::PopBack(&input_file_stack_);
+            SetFileDefines(inpf_->name());
+            assert(cc.input_files().at(fcurrent_) == inpf_->name());
             listline_ = -1; /* force a #line directive when changing the file */
         }
 
-        if (!inpf->Read(line, num)) {
+        if (!inpf_->Read(line, num)) {
             *line = '\0'; /* delete line */
             cont = FALSE;
         } else {
@@ -326,7 +326,7 @@ Lexer::Readline(unsigned char* line)
             }
             cont = FALSE;
             /* check whether a full line was read */
-            if (strchr((char*)line, '\n') == NULL && !inpf->Eof())
+            if (strchr((char*)line, '\n') == NULL && !inpf_->Eof())
                 error(75); /* line too long */
             /* check if the next line must be concatenated to this line */
             if ((ptr = (unsigned char*)strchr((char*)line, '\n')) == NULL)
@@ -981,8 +981,8 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
         case tpENDSCRPT:
             if (!IsSkipping()) {
                 check_empty(lptr);
-                assert(inpf != NULL);
-                inpf = NULL;
+                assert(inpf_ != NULL);
+                inpf_ = NULL;
             }
             break;
         case tpDEFINE: {
@@ -1493,16 +1493,16 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
     /* the ellipsis was not on the active line, read more lines from the current
      * file (but save its position first)
      */
-    if (!inpf || inpf->Eof())
+    if (!inpf_ || inpf_->Eof())
         return 0; /* quick exit: cannot read after EOF */
     if ((localbuf = (unsigned char*)malloc((sLINEMAX + 1) * sizeof(unsigned char))) == NULL)
         return 0;
-    inpfmark = inpf->Pos();
+    inpfmark = inpf_->Pos();
     localcomment = icomment_;
 
     found = 0;
     /* read from the file, skip preprocessing, but strip off comments */
-    while (!found && inpf->Read(localbuf, sLINEMAX)) {
+    while (!found && inpf_->Read(localbuf, sLINEMAX)) {
         StripComments(localbuf);
         lptr = localbuf;
         /* skip white space */
@@ -1516,7 +1516,7 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
 
     /* clean up & reset */
     free(localbuf);
-    inpf->Reset(inpfmark);
+    inpf_->Reset(inpfmark);
     icomment_ = localcomment;
     return found;
 }
@@ -1774,6 +1774,13 @@ Lexer::Lexer(CompileContext& cc)
     macros_.init(128);
 
     pline_[0] = '\0'; /* the line read from the input file */
+}
+
+void Lexer::Init(std::shared_ptr<SourceFile> sf) {
+    freading_ = true;
+    inpf_ = std::move(sf);
+    cc_.input_files().emplace_back(inpf_->name());
+    skip_utf8_bom(inpf_.get());
 }
 
 void

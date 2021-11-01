@@ -178,7 +178,6 @@ int
 pc_compile(int argc, char* argv[]) {
     int jmpcode;
     int retcode;
-    int64_t inpfmark;
     ParseTree* tree = nullptr;
     std::string ext;
 
@@ -218,21 +217,16 @@ pc_compile(int argc, char* argv[]) {
     setconfig(argv[0]); /* the path to the include files */
 
     assert(options->source_files.size() == 1);
-    inpf_org = std::make_shared<SourceFile>();
-    inpf = inpf_org;
-    if (!inpf_org->Open(options->source_files[0]))
+    cc.set_inpf_org(std::make_shared<SourceFile>());
+    if (!cc.inpf_org()->Open(options->source_files[0]))
         report(FATAL_ERROR_READ) << options->source_files[0];
-    skip_utf8_bom(inpf_org.get());
-    cc.lexer()->set_freading(true);
+
+    cc.lexer()->Init(cc.inpf_org());
 
     setconstants(); /* set predefined constants and tagnames */
-    /* do the first pass through the file (or possibly two or more "first passes") */
-    inpfmark = inpf_org->Pos();
 
     inst_datetime_defines(cc);
     inst_binary_name(cc, cc.binfname().c_str());
-
-    cc.input_files().emplace_back(inpf->name());
 
     {
         Parser parser(cc);
@@ -288,8 +282,7 @@ cleanup:
             fprintf(stdout, "Note: including file: %s\n", name.c_str());
     }
 
-    inpf = nullptr;
-    inpf_org = nullptr;
+    cc.set_inpf_org(nullptr);
 
     if (compile_ok && cc.errfname().empty()) {
         if (verbosity >= 1 && compile_ok && jmpcode == 0) {

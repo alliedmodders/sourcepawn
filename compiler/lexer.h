@@ -291,6 +291,7 @@ class Lexer
     void lexpush();
     void lexclr(int clreol);
 
+    void Init(std::shared_ptr<SourceFile> sf);
     void Start();
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
     void Preprocess(bool allow_synthesized_tokens);
@@ -312,7 +313,6 @@ class Lexer
     int& stmtindent() { return stmtindent_; }
     bool& indent_nowarn() { return indent_nowarn_; }
     bool freading() const { return freading_; }
-    void set_freading(bool v) { freading_ = v; }
     int fcurrent() const { return fcurrent_; }
     unsigned fline() const { return fline_; }
     unsigned char* pline() { return pline_; }
@@ -384,6 +384,8 @@ class Lexer
     unsigned fline_ = 0;
     unsigned char pline_[sLINEMAX + 1];         /* the line read from the input file */
     int ctrlchar_ = CTRL_CHAR;
+
+    std::shared_ptr<SourceFile> inpf_;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
