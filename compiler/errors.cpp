@@ -289,7 +289,7 @@ abort_compiler()
     if (cc.errfname().empty()) {
         fprintf(stdout, "Compilation aborted.\n");
     }
-    longjmp(errbuf, 2); /* fatal error, quit */
+    longjmp(*cc.errbuf(), 2); /* fatal error, quit */
 }
 
 ErrorReport

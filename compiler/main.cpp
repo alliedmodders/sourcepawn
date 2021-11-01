@@ -197,7 +197,7 @@ pc_compile(int argc, char* argv[]) {
 
     /* make sure that we clean up on a fatal error; do this before the first
      * call to error(). */
-    if ((jmpcode = setjmp(errbuf)) != 0)
+    if ((jmpcode = setjmp(*cc.errbuf())) != 0)
         goto cleanup;
 
     parseoptions(cc, argc, argv);

@@ -20,6 +20,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <setjmp.h>
+
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -81,6 +83,8 @@ class CompileContext final
     std::string& binfname() { return binfname_; }
     void set_binfname(const std::string& value) { binfname_ = value; }
 
+    jmp_buf* errbuf() { return &errbuf_; }
+
     // No copy construction.
     CompileContext(const CompileContext&) = delete;
     CompileContext(CompileContext&&) = delete;
@@ -107,6 +111,7 @@ class CompileContext final
     bool shutting_down_ = false;
     bool one_error_per_stmt_ = false;
     std::unique_ptr<ReportManager> reports_;
+    jmp_buf errbuf_;
 
     // Skip the verify step.
     bool verify_output_ = true;

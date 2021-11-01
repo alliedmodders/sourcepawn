@@ -44,5 +44,3 @@ extern int pc_anytag;             /* global any tag */
 
 extern std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
 extern std::shared_ptr<SourceFile> inpf_org;  /* main source file */
-
-extern jmp_buf errbuf; /* target of longjmp() on a fatal error */
