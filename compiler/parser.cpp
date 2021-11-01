@@ -451,7 +451,7 @@ Parser::parse_enumstruct()
 
     auto stmt = new EnumStructDecl(pos, struct_name);
 
-    int opening_line = fline;
+    int opening_line = lexer_->fline();
     while (!lexer_->match('}')) {
         if (!lexer_->freading()) {
             error(151, opening_line);
@@ -1406,10 +1406,10 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             error(14); /* not in switch */
             return nullptr;
         case '{': {
-            int save = fline;
+            int save = lexer_->fline();
             if (lexer_->match('}'))
                 return new BlockStmt(lexer_->pos());
-            return parse_compound(save == fline);
+            return parse_compound(save == lexer_->fline());
         }
         case ';':
             error(36); /* empty statement */
@@ -1514,7 +1514,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
 Stmt*
 Parser::parse_compound(bool sameline)
 {
-    auto block_start = fline;
+    auto block_start = lexer_->fline();
 
     BlockStmt* block = new BlockStmt(lexer_->pos());
 

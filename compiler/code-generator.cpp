@@ -117,7 +117,6 @@ void
 CodeGenerator::EmitStmt(Stmt* stmt)
 {
     if (func_) {
-        ke::SaveAndSet<int> save_fline(&fline, stmt->pos().line);
         AddDebugLine(stmt->pos().line);
         EmitBreak();
     }

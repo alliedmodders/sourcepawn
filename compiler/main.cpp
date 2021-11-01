@@ -104,7 +104,6 @@ int pc_tag_nullfunc_t = 0;
 
 sp::StringPool gAtoms;
 
-static void resetglobals(void);
 static void initglobals(void);
 static std::string get_extension(const std::string& filename);
 static void set_extension(std::string* filename, const char* extension, bool force);
@@ -233,7 +232,6 @@ pc_compile(int argc, char* argv[]) {
 
     inst_datetime_defines(cc);
     inst_binary_name(cc, cc.binfname().c_str());
-    resetglobals();
     sc_ctrlchar = sc_ctrlchar_org;
 
     cc.input_files().emplace_back(inpf->name());
@@ -393,17 +391,8 @@ inst_datetime_defines(CompileContext& cc)
 }
 
 static void
-resetglobals(void)
-{
-    /* reset the subset of global variables that is modified by the first pass */
-    fline = 0;             /* the line number in the current file */
-}
-
-static void
 initglobals(void)
 {
-    resetglobals();
-
     sc_ctrlchar = CTRL_CHAR;           /* the escape character */
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
