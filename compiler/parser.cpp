@@ -1055,8 +1055,10 @@ Parser::primary()
         do {
             Expr* child = hier14();
             if (expr) {
-                if (!comma)
+                if (!comma) {
                     comma = new CommaExpr(pos);
+                    comma->exprs().push_back(expr);
+                }
                 comma->exprs().push_back(child);
             } else {
                 expr = child;
