@@ -1103,17 +1103,19 @@ namespace smxviewer
                 endDetailUpdate();
             }, null);
 
+            int index = 0;
             foreach (var method in table.Methods)
             {
                 var node = root.Nodes.Add(method.name);
+                int table_index = index++;
                 node.Tag = new NodeData(delegate ()
                 {
                     string signature = file_.RttiData.FunctionTypeFromOffset(method.signature);
                     startDetailUpdate();
-                    addDetailLine("name = {0}", method.name);
-                    addDetailLine("pcode_start = 0x{0:x}", method.pcode_start);
-                    addDetailLine("pcode_end = 0x{0:x}", method.pcode_end);
-                    addDetailLine("signature = 0x{0:x}", method.signature);
+                    addDetailLine("name = {0} ; tableindex={1}", method.name, table_index);
+                    addDetailLine("pcode_start = 0x{0:x} ; {1}", method.pcode_start, method.pcode_start);
+                    addDetailLine("pcode_end = 0x{0:x} ; {1}", method.pcode_end, method.pcode_end);
+                    addDetailLine("signature = 0x{0:x} ; {1}", method.signature, method.signature);
                     addDetailLine("---");
                     addDetailLine("{0}", signature);
                     endDetailUpdate();
