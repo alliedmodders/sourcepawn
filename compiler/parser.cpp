@@ -1521,7 +1521,7 @@ Parser::parse_compound(bool sameline)
     /* if there is more text on this line, we should adjust the statement indent */
     if (sameline) {
         int i;
-        const unsigned char* p = lptr;
+        const unsigned char* p = lexer_->lptr;
         /* go back to the opening brace */
         while (*p != '{') {
             assert(p > lexer_->pline());

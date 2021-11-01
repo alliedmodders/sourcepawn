@@ -323,6 +323,8 @@ class Lexer
         const char* second;
     };
 
+    const unsigned char* lptr = nullptr;                  /* points to the current position in "pline" */
+
   private:
     void LexOnce(full_token_t* tok);
     void PreprocessInLex(bool allow_synthesized_tokens);
@@ -347,6 +349,8 @@ class Lexer
     bool substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                       const char* substitution, int& patternLen, int& substLen);
     void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
+    bool lex_match_char(char c);
+    bool lex_number(full_token_t* tok);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
