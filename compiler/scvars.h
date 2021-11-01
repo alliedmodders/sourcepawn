@@ -30,11 +30,5 @@
 #include "source-file.h"
 
 extern int sc_rationaltag;        /* tag for rational numbers */
-extern int pc_functag;            /* global function tag */
 extern int pc_tag_string;         /* global String tag */
-extern int pc_tag_void;           /* global void tag */
-extern int pc_tag_object;         /* root object tag */
 extern int pc_tag_bool;           /* global bool tag */
-extern int pc_tag_null_t;         /* the null type */
-extern int pc_tag_nullfunc_t;     /* the null function type */
-extern int pc_anytag;             /* global any tag */

@@ -224,16 +224,17 @@ checkval_string(const value* sym1, const value* sym2)
 const char*
 type_to_name(int tag)
 {
+    auto types = &gTypes;
     if (tag == 0)
         return "int";
     if (tag == sc_rationaltag)
         return "float";
     if (tag == pc_tag_string)
         return "char";
-    if (tag == pc_anytag)
+    if (tag == types->tag_any())
         return "any";
 
-    Type* type = gTypes.find(tag);
+    Type* type = types->find(tag);
     if (!type)
         return "-unknown-";
     return type->prettyName();
@@ -263,6 +264,7 @@ obj_typeerror(int id, int tag1, int tag2)
 static int
 matchobjecttags(Type* formal, Type* actual, int flags)
 {
+    auto types = &gTypes;
     int formaltag = formal->tagid();
     int actualtag = actual->tagid();
 
@@ -273,7 +275,7 @@ matchobjecttags(Type* formal, Type* actual, int flags)
         return FALSE;
     }
 
-    if (actualtag == pc_tag_nullfunc_t) {
+    if (actualtag == types->tag_nullfunc()) {
         // All functions are nullable. We use a separate constant for backward
         // compatibility; plugins and extensions check -1, not 0.
         if (formal->isFunction())
@@ -284,7 +286,7 @@ matchobjecttags(Type* formal, Type* actual, int flags)
         return FALSE;
     }
 
-    if (actualtag == pc_tag_null_t) {
+    if (actualtag == types->tag_null()) {
         // All objects are nullable.
         if (formal->isObject())
             return TRUE;
@@ -304,7 +306,7 @@ matchobjecttags(Type* formal, Type* actual, int flags)
         return obj_typeerror(131, formaltag, actualtag);
 
     // Every object coerces to "object".
-    if (formaltag == pc_tag_object)
+    if (formaltag == types->tag_object())
         return TRUE;
 
     if (flags & MATCHTAG_COERCE)
@@ -326,7 +328,9 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
 {
     if (formal->ret_tag == actual->ret_tag)
         return TRUE;
-    if (formal->ret_tag == pc_tag_void) {
+
+    auto types = &gTypes;
+    if (formal->ret_tag == types->tag_void()) {
         if (actual->ret_tag == 0)
             return TRUE;
     }
@@ -338,8 +342,9 @@ IsValidImplicitArrayCast(int formal_tag, int actual_tag)
 {
     // Dumb check for now. This should really do a deep type validation though.
     // Fix this when we overhaul types in 1.12.
-    if ((formal_tag == pc_anytag && actual_tag != pc_tag_string) ||
-        (actual_tag == pc_anytag && formal_tag != pc_tag_string))
+    auto types = &gTypes;
+    if ((formal_tag == types->tag_any() && actual_tag != pc_tag_string) ||
+        (actual_tag == types->tag_any() && formal_tag != pc_tag_string))
     {
         return true;
     }
@@ -403,10 +408,11 @@ matchfunctags(Type* formal, Type* actual)
     int formaltag = formal->tagid();
     int actualtag = actual->tagid();
 
-    if (formaltag == pc_functag && actual->isFunction())
+    auto types = &gTypes;
+    if (formaltag == types->tag_function() && actual->isFunction())
         return TRUE;
 
-    if (actualtag == pc_tag_nullfunc_t)
+    if (actualtag == types->tag_nullfunc())
         return TRUE;
 
     if (!actual->isFunction())
@@ -447,8 +453,9 @@ matchtag(int formaltag, int actualtag, int flags)
     if (formaltag == actualtag)
         return TRUE;
 
-    Type* actual = gTypes.find(actualtag);
-    Type* formal = gTypes.find(formaltag);
+    auto types = &gTypes;
+    Type* actual = types->find(actualtag);
+    Type* formal = types->find(formaltag);
     assert(actual && formal);
 
     if (formaltag == pc_tag_string && actualtag == 0)
@@ -470,12 +477,12 @@ matchtag(int formaltag, int actualtag, int flags)
         return TRUE;
     }
 
-    if (actualtag == pc_anytag)
+    if (actualtag == types->tag_any())
         return TRUE;
 
     // We allow this even on function signature checks as a convenient shorthand,
     // even though it violates standard contravariance rules.
-    if (formaltag == pc_anytag)
+    if (formaltag == types->tag_any())
         return TRUE;
 
     if (formal->isFunction()) {
@@ -574,10 +581,11 @@ calc(cell left, int oper_tok, cell right, char* boolresult)
 bool
 is_valid_index_tag(int tag)
 {
-    if (tag == 0 || tag == pc_anytag || tag == pc_tag_string)
+    auto types = &gTypes;
+    if (tag == 0 || tag == types->tag_any() || tag == pc_tag_string)
         return true;
 
-    Type* idx_type = gTypes.find(tag);
+    Type* idx_type = types->find(tag);
     return idx_type->isEnum() || idx_type->isLabelTag();
 }
 

@@ -178,14 +178,14 @@ TypeDictionary::init()
     assert(type->tagid() == 1);
 
     pc_tag_bool = type->tagid();
-    pc_anytag = defineAny()->tagid();
-    pc_functag = defineFunction("Function", nullptr)->tagid();
+    tag_any_ = defineAny()->tagid();
+    tag_function_ = defineFunction("Function", nullptr)->tagid();
     pc_tag_string = defineString()->tagid();
     sc_rationaltag = defineFloat()->tagid();
-    pc_tag_void = defineVoid()->tagid();
-    pc_tag_object = defineObject("object")->tagid();
-    pc_tag_null_t = defineObject("null_t")->tagid();
-    pc_tag_nullfunc_t = defineObject("nullfunc_t")->tagid();
+    tag_void_ = defineVoid()->tagid();
+    tag_object_ = defineObject("object")->tagid();
+    tag_null_ = defineObject("null_t")->tagid();
+    tag_nullfunc_ = defineObject("nullfunc_t")->tagid();
 
     for (const auto& type : types_)
         type->setIntrinsic();

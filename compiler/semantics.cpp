@@ -57,6 +57,7 @@ Semantics::Semantics(CompileContext& cc, ParseTree* tree)
   : cc_(cc),
     tree_(tree)
 {
+    types_ = &gTypes;
 }
 
 bool Semantics::Analyze() {
@@ -1205,7 +1206,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     const auto& type = expr->type();
-    if (type.tag() == pc_tag_void) {
+    if (type.tag() == types_->tag_void()) {
         report(expr, 144);
         return false;
     }
@@ -1227,7 +1228,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         report(expr, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
         matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
-    } else if (out_val.sym && out_val.sym->tag == pc_tag_void) {
+    } else if (out_val.sym && out_val.sym->tag == types_->tag_void()) {
         report(expr, 89);
     } else if (atype->isEnumStruct()) {
         report(expr, 95) << atype->name();
@@ -1514,7 +1515,7 @@ bool Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
     val.ident = iCONSTEXPR;
     val.constval = 0;
-    val.tag = pc_tag_null_t;
+    val.tag = gTypes.tag_null();
     return true;
 }
 
@@ -2239,8 +2240,12 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigne
                 }
                 if (!matchtag(arg->type.enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    if (arg->type.tag() != pc_anytag || !gTypes.find(sym->x.tags.index)->asEnumStruct())
+                    auto types = &gTypes;
+                    if (arg->type.tag() != types->tag_any() ||
+                        !types->find(sym->x.tags.index)->asEnumStruct())
+                    {
                         report(param, 229) << sym->name();
+                    }
                 }
             }
 
@@ -2553,7 +2558,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     AutoErrorPos aep(expr->pos());
 
-    if (curfunc->tag == pc_tag_void) {
+    if (curfunc->tag == types_->tag_void()) {
         report(stmt, 88);
         return false;
     }
@@ -3029,7 +3034,7 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
     auto& decl = info->decl();
     {
         AutoErrorPos error_pos(info->pos());
-        check_void_decl(&decl, FALSE);
+        CheckVoidDecl(&decl, FALSE);
 
         if (decl.opertok)
             check_operatortag(decl.opertok, decl.type.tag(), decl.name->chars());
@@ -3068,7 +3073,7 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
     sym->always_returns = sc_->always_returns();
 
     if (!sym->returns_value) {
-        if (sym->tag == pc_tag_void && sym->function()->forward && !decl.type.tag() &&
+        if (sym->tag == types_->tag_void() && sym->function()->forward && !decl.type.tag() &&
             !decl.type.is_new)
         {
             // We got something like:
@@ -3076,7 +3081,7 @@ bool Semantics::CheckFunctionInfoImpl(FunctionInfo* info) {
             //    public X()
             //
             // Switch our decl type to void.
-            decl.type.set_tag(pc_tag_void);
+            decl.type.set_tag(types_->tag_void());
         }
     }
 
@@ -3279,10 +3284,8 @@ MethodmapDecl::ProcessUses(SemaContext& sc)
         method->decl->ProcessUses(sc);
 }
 
-void
-check_void_decl(const typeinfo_t* type, int variable)
-{
-    if (type->tag() != pc_tag_void)
+void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {
+    if (type->tag() != types_->tag_void())
         return;
 
     if (variable) {
@@ -3296,10 +3299,8 @@ check_void_decl(const typeinfo_t* type, int variable)
     }
 }
 
-void
-check_void_decl(const declinfo_t* decl, int variable)
-{
-    check_void_decl(&decl->type, variable);
+void Semantics::CheckVoidDecl(const declinfo_t* decl, int variable) {
+    CheckVoidDecl(&decl->type, variable);
 }
 
 int

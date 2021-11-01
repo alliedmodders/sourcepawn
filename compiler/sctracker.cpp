@@ -149,15 +149,17 @@ methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 int
 methodmap_method_t::property_tag() const
 {
+    auto types = &gTypes;
+
     assert(getter || setter);
     if (getter)
         return getter->tag;
     arginfo* thisp = &setter->function()->args[0];
     if (thisp->type.ident == 0)
-        return pc_tag_void;
+        return types->tag_void();
     arginfo* valp = &setter->function()->args[1];
     if (valp->type.ident != iVARIABLE)
-        return pc_tag_void;
+        return types->tag_void();
     return valp->type.tag();
 }
 

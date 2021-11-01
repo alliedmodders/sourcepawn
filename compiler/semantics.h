@@ -222,8 +222,12 @@ class Semantics final
     bool TestSymbol(symbol* sym, bool testconst);
     bool TestSymbols(SymbolScope* scope, bool testconst);
 
+    void CheckVoidDecl(const typeinfo_t* type, int variable);
+    void CheckVoidDecl(const declinfo_t* decl, int variable);
+
   private:
     CompileContext& cc_;
+    TypeDictionary* types_ = nullptr;
     ParseTree* tree_;
     std::unordered_set<SymbolScope*> static_scopes_;
     SemaContext* sc_ = nullptr;

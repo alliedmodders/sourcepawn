@@ -169,8 +169,11 @@ class RttiBuilder
     void add_debug_line(DebugString& str);
     void build_debuginfo();
 
+    uint8_t TagToRttiBytecode(int tag);
+
   private:
     CodeGenerator& cg_;
+    TypeDictionary* types_ = nullptr;
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> data_;
@@ -198,6 +201,7 @@ RttiBuilder::RttiBuilder(CodeGenerator& cg, SmxNameTable* names)
  : cg_(cg),
    names_(names)
 {
+    types_ = &gTypes;
     typeid_cache_.init(128);
     data_ = new SmxBlobSection<void>("rtti.data");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
@@ -357,7 +361,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     }
 
     // Rewrite enum structs to look less like arrays.
-    if (gTypes.find(last_tag)->asEnumStruct()) {
+    if (types_->find(last_tag)->asEnumStruct()) {
         dims.pop_back();
         tag = last_tag;
     }
@@ -566,7 +570,7 @@ RttiBuilder::encode_signature(symbol* sym)
     symbol* child = sym->array_return();
     if (child && child->dim.array.length) {
         encode_ret_array_into(bytes, child);
-    } else if (sym->tag == pc_tag_void) {
+    } else if (sym->tag == types_->tag_void()) {
         bytes.push_back(cb::kVoid);
     } else {
         encode_tag_into(bytes, sym->tag);
@@ -577,7 +581,7 @@ RttiBuilder::encode_signature(symbol* sym)
         int numdim = arg->type.numdim();
         if (arg->type.numdim() && arg->type.enum_struct_tag()) {
             int last_tag = arg->type.enum_struct_tag();
-            Type* last_type = gTypes.find(last_tag);
+            Type* last_type = types_->find(last_tag);
             if (last_type->isEnumStruct()) {
                 tag = last_tag;
                 numdim--;
@@ -691,12 +695,12 @@ RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym)
     encode_tag_into(bytes, sym->tag);
 }
 
-static inline uint8_t
-TagToRttiBytecode(int tag)
+uint8_t
+RttiBuilder::TagToRttiBytecode(int tag)
 {
     if (tag == pc_tag_bool)
         return cb::kBool;
-    if (tag == pc_anytag)
+    if (tag == types_->tag_any())
         return cb::kAny;
     if (tag == pc_tag_string)
         return cb::kChar8;
@@ -715,7 +719,7 @@ RttiBuilder::encode_tag_into(std::vector<uint8_t>& bytes, int tag)
         return;
     }
 
-    Type* type = gTypes.find(tag);
+    Type* type = types_->find(tag);
     assert(!type->isObject());
 
     if (type->isStruct()) {
@@ -760,7 +764,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
     bytes.push_back((uint8_t)ft->args.size());
     if (!ft->args.empty() && ft->args[ft->args.size() - 1].type.ident == iVARARGS)
         bytes.push_back(cb::kVariadic);
-    if (ft->ret_tag == pc_tag_void)
+    if (ft->ret_tag == types_->tag_void())
         bytes.push_back(cb::kVoid);
     else
         encode_tag_into(bytes, ft->ret_tag);
