@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "lexer.h"
+#include "source-file.h"
 
 class ReportManager;
 class SemaContext;
@@ -83,6 +84,9 @@ class CompileContext final
     std::string& binfname() { return binfname_; }
     void set_binfname(const std::string& value) { binfname_ = value; }
 
+    std::shared_ptr<SourceFile> inpf_org() const { return inpf_org_; }
+    void set_inpf_org(std::shared_ptr<SourceFile> sf) { inpf_org_ = sf; }
+
     jmp_buf* errbuf() { return &errbuf_; }
 
     // No copy construction.
@@ -102,6 +106,7 @@ class CompileContext final
     std::string outfname_;
     std::string binfname_;
     std::string errfname_;
+    std::shared_ptr<SourceFile> inpf_org_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().

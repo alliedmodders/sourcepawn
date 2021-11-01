@@ -38,6 +38,3 @@ extern int pc_tag_bool;           /* global bool tag */
 extern int pc_tag_null_t;         /* the null type */
 extern int pc_tag_nullfunc_t;     /* the null function type */
 extern int pc_anytag;             /* global any tag */
-
-extern std::shared_ptr<SourceFile> inpf;      /* file read from (source or include) */
-extern std::shared_ptr<SourceFile> inpf_org;  /* main source file */

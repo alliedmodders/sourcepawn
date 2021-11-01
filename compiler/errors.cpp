@@ -219,7 +219,7 @@ MessageBuilder::~MessageBuilder()
         report.filename = cc.input_files().at(report.fileno);
     } else {
         report.fileno = 0;
-        report.filename = inpf->name();
+        report.filename = cc.inpf_org()->name();
     }
     report.type = DeduceErrorType(number_);
 
@@ -305,7 +305,7 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
         report.filename = cc.input_files().at(report.fileno);
     } else {
         report.fileno = 0;
-        report.filename = inpf->name();
+        report.filename = cc.inpf_org()->name();
     }
     report.type = DeduceErrorType(number);
 
