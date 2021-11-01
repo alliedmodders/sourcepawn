@@ -34,8 +34,6 @@
  *  All global variables that are shared amongst the compiler files are
  *  declared here.
  */
-char sc_ctrlchar = CTRL_CHAR;              /* the control character (or escape character)*/
-char sc_ctrlchar_org = CTRL_CHAR;          /* the default control character */
 int sc_rationaltag = 0;              /* tag for rational numbers */
 int sc_allowproccall = 0;            /* allow/detect tagnames in lex() */
 short sc_is_utf8 = FALSE;            /* is this source file in UTF-8 encoding */

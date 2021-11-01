@@ -24,6 +24,7 @@
 #include <amtl/am-vector.h>
 #include <shared/string-pool.h>
 
+#include "compile-options.h"
 #include "sc.h"
 
 class CompileContext;
@@ -351,6 +352,10 @@ class Lexer
     void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
     bool lex_match_char(char c);
     bool lex_number(full_token_t* tok);
+    cell litchar(const unsigned char** lptr, int flags);
+    const unsigned char* skipstring(const unsigned char* string);
+    const unsigned char* skippgroup(const unsigned char* string);
+    void packedstring(const unsigned char* lptr, int flags, full_token_t* tok);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
@@ -378,6 +383,7 @@ class Lexer
     int fcurrent_ = 0;
     unsigned fline_ = 0;
     unsigned char pline_[sLINEMAX + 1];         /* the line read from the input file */
+    int ctrlchar_ = CTRL_CHAR;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;

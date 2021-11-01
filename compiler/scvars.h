@@ -29,8 +29,6 @@
 #include "sc.h"
 #include "source-file.h"
 
-extern char sc_ctrlchar;          /* the control character (or escape character) */
-extern char sc_ctrlchar_org;      /* the default control character */
 extern int sc_rationaltag;        /* tag for rational numbers */
 extern int pc_functag;            /* global function tag */
 extern int pc_tag_string;         /* global String tag */

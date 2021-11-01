@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#define CTRL_CHAR '\\'  /* default control character */
+
 struct CompileOptions {
     bool need_semicolon = false;
     std::vector<std::string> source_files;
@@ -32,4 +34,5 @@ struct CompileOptions {
     bool warnings_are_errors = false;
     bool use_stderr = false;
     int pragma_dynamic = 0;
+    int ctrlchar_org = CTRL_CHAR;
 };

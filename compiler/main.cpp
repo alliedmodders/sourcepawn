@@ -216,7 +216,6 @@ pc_compile(int argc, char* argv[]) {
     else if (verbosity > 0)
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
-    sc_ctrlchar_org = sc_ctrlchar;
 
     assert(options->source_files.size() == 1);
     inpf_org = std::make_shared<SourceFile>();
@@ -232,7 +231,6 @@ pc_compile(int argc, char* argv[]) {
 
     inst_datetime_defines(cc);
     inst_binary_name(cc, cc.binfname().c_str());
-    sc_ctrlchar = sc_ctrlchar_org;
 
     cc.input_files().emplace_back(inpf->name());
 
@@ -393,7 +391,6 @@ inst_datetime_defines(CompileContext& cc)
 static void
 initglobals(void)
 {
-    sc_ctrlchar = CTRL_CHAR;           /* the escape character */
     verbosity = 1;                     /* verbosity level, no copyright banner */
     sc_rationaltag = 0;         /* assume no support for rational numbers */
 }

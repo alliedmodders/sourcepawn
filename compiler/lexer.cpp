@@ -64,7 +64,6 @@ using namespace sp;
 
 /* flags for litchar() */
 #define UTF8MODE 0x1
-static cell litchar(const unsigned char** lptr, int flags);
 
 bool
 Lexer::PlungeQualifiedFile(const char* name)
@@ -438,7 +437,7 @@ Lexer::StripComments(unsigned char* line)
                     c = *line;                        /* ending quote, single or double */
                     line += 1;
                     while (*line != c && *line != '\0') {
-                        if (*line == sc_ctrlchar && *(line + 1) != '\0')
+                        if (*line == ctrlchar_ && *(line + 1) != '\0')
                             line += 1; /* skip escape character (but avoid skipping past '\0' */
                         line += 1;
                     }
@@ -901,11 +900,11 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
                         if (*lptr == '\0') {
-                            sc_ctrlchar = sc_ctrlchar_org;
+                            ctrlchar_ = cc_.options()->ctrlchar_org;
                         } else {
                             if (lex() != tNUMBER)
                                 error(27); /* invalid character constant */
-                            sc_ctrlchar = (char)current_token()->value;
+                            ctrlchar_ = (char)current_token()->value;
                         }
                     } else if (current_token()->atom->str() == "deprecated") {
                         while (*lptr <= ' ' && *lptr != '\0')
@@ -1111,9 +1110,7 @@ is_startstring(const unsigned char* string)
     return FALSE;
 }
 
-static const unsigned char*
-skipstring(const unsigned char* string)
-{
+const unsigned char* Lexer::skipstring(const unsigned char* string) {
     char endquote = *string;
     assert(endquote == '"' || endquote == '\'');
     string++; /* skip open quote */
@@ -1122,9 +1119,7 @@ skipstring(const unsigned char* string)
     return string;
 }
 
-static const unsigned char*
-skippgroup(const unsigned char* string)
-{
+const unsigned char* Lexer::skippgroup(const unsigned char* string) {
     int nest = 0;
     char open = *string;
     char close;
@@ -1388,7 +1383,7 @@ MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* del
         while (!alpha(*start) && start < end) {
             /* skip strings */
             if (is_startstring(start)) {
-                start = (unsigned char*)skipstring(start);
+                start = (unsigned char*)lexer_->skipstring(start);
                 if (start >= end)
                     break; /* abort loop on error */
             }
@@ -1561,9 +1556,7 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
 }
 
-static void
-packedstring(const unsigned char* lptr, int flags, full_token_t* tok)
-{
+void Lexer::packedstring(const unsigned char* lptr, int flags, full_token_t* tok) {
     while (*lptr != '\0') {
         if (*lptr == '\a') { // ignore '\a' (which was inserted at a line concatenation)
             lptr++;
@@ -2211,7 +2204,7 @@ Lexer::LexStringLiteral(full_token_t* tok)
             while (*lptr != '\"' && *lptr != '\0' && (cat - buffer) < sLINEMAX) {
                 if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
                     *cat++ = *lptr;
-                    if (*lptr == sc_ctrlchar && *(lptr + 1) != '\0')
+                    if (*lptr == ctrlchar_ && *(lptr + 1) != '\0')
                         *cat++ = *++lptr; /* skip escape character plus the escaped character */
                 }
                 lptr++;
@@ -2558,14 +2551,12 @@ litadd_str(const char* str, size_t len, std::vector<cell>* out)
  *        replaced by another character; the syntax '\ddd' is supported,
  *        but ddd must be decimal!
  */
-static cell
-litchar(const unsigned char** lptr, int flags)
-{
+cell Lexer::litchar(const unsigned char** lptr, int flags) {
     cell c = 0;
     const unsigned char* cptr;
 
     cptr = *lptr;
-    if (*cptr != sc_ctrlchar) { /* no escape character */
+    if (*cptr != ctrlchar_) { /* no escape character */
         if ((flags & UTF8MODE) != 0) {
             c = get_utf8_char(cptr, &cptr);
             assert(c >= 0); /* file was already scanned for conformance to UTF-8 */
@@ -2575,7 +2566,7 @@ litchar(const unsigned char** lptr, int flags)
         }
     } else {
         cptr += 1;
-        if (*cptr == sc_ctrlchar) {
+        if (*cptr == ctrlchar_) {
             c = *cptr; /* \\ == \ (the escape character itself) */
             cptr += 1;
         } else {
