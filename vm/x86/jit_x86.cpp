@@ -1565,9 +1565,9 @@ Compiler::visitHEAP_RESTORE()
   // Get the previous heap scope address.
   __ movl(alt, Operand(dat, ecx, NoScale));
   // Update the heap pointer.
-  __ movl(Operand(hpAddr()), alt);
+  __ movl(Operand(hpAddr()), ecx);
   // Update the heap scope.
-  __ movl(Operand(hpScopeAddr()), ecx);
+  __ movl(Operand(hpScopeAddr()), alt);
   return true;
 }
 
