@@ -802,8 +802,12 @@ FunctionDecl::CanRedefine(symbol* sym)
     }
 
     if (data->node) {
-        if (!data->node->is_public()) {
+        if (info_->is_forward() && !data->node->is_public()) {
             report(pos_, 412) << name_;
+            return false;
+        }
+        if (info_->body() && !data->forward) {
+            report(pos_, 21) << name_;
             return false;
         }
         return true;
