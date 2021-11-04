@@ -329,6 +329,7 @@ namespace smxdasm
     // The ".dbg.globals"  and ".dbg.locals" section.
     public class DebugVarEntry
     {
+        public uint index;
         public int address;
         public SymScope scope;
         public int name_offset;
@@ -336,9 +337,10 @@ namespace smxdasm
         public int code_end;
         public int type_id;
 
-        public static DebugVarEntry From(BinaryReader rd)
+        public static DebugVarEntry From(BinaryReader rd, uint index)
         {
             DebugVarEntry entry = new DebugVarEntry();
+            entry.index = index;
             entry.address = rd.ReadInt32();
             entry.scope = (SymScope)(rd.ReadByte() & 3);
             entry.name_offset = rd.ReadInt32();

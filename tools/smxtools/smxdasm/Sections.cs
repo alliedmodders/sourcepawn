@@ -508,7 +508,7 @@ namespace smxdasm
 
             Entries = new DebugVarEntry[row_count_];
             for (uint i = 0; i < row_count_; i++)
-                Entries[i] = DebugVarEntry.From(reader);
+                Entries[i] = DebugVarEntry.From(reader, i);
         }
 
         protected void EnsureSortedAddresses()
