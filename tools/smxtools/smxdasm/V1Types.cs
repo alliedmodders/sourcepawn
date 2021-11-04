@@ -8,6 +8,14 @@ namespace smxdasm
         Debug = 0x00000001,
     }
 
+    [Flags]
+    public enum CodeV1Features : uint
+    {
+        Deprecated0 = 1 << 0,
+        DirectArrays = 1 << 1,
+        HeapScopes = 1 << 2,
+    }
+
     // The ".code" section.
     public class CodeV1Header
     {
@@ -35,7 +43,7 @@ namespace smxdasm
         public int codeoffs;
 
         // Feature set.
-        public int features;
+        public CodeV1Features features;
 
         public static CodeV1Header From(BinaryReader rd)
         {
@@ -47,7 +55,7 @@ namespace smxdasm
             code.main = rd.ReadInt32();
             code.codeoffs = rd.ReadInt32();
             if (code.CodeVersion >= 13)
-              code.features = rd.ReadInt32();
+              code.features = (CodeV1Features)rd.ReadInt32();
             return code;
         }
     }
