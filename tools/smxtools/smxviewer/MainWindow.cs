@@ -729,6 +729,7 @@ namespace smxviewer
         private void renderSymbolDetail(DebugVarEntry sym)
         {
             startDetail("; {0}", file_.Names.StringAt(sym.name_offset));
+            addDetailLine("index = {0}", sym.index);
             if (sym.address < 0)
                 addDetailLine("address = -0x{0:x}", -sym.address);
             else
