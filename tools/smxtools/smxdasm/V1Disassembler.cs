@@ -94,10 +94,10 @@ namespace smxdasm
             Prep(V1Opcode.JZER, V1Param.Jump);
             Prep(V1Opcode.LIDX);
             Prep(V1Opcode.LIDX_B, V1Param.Constant);
-            Prep(V1Opcode.LOAD_ALT, V1Param.Constant);
-            Prep(V1Opcode.LOAD_BOTH, V1Param.Constant, V1Param.Constant);
+            Prep(V1Opcode.LOAD_ALT, V1Param.Address);
+            Prep(V1Opcode.LOAD_BOTH, V1Param.Address, V1Param.Address);
             Prep(V1Opcode.LOAD_I);
-            Prep(V1Opcode.LOAD_PRI, V1Param.Constant);
+            Prep(V1Opcode.LOAD_PRI, V1Param.Address);
             Prep(V1Opcode.LOAD_S_ALT, V1Param.Stack);
             Prep(V1Opcode.LOAD_S_BOTH, V1Param.Stack, V1Param.Stack);
             Prep(V1Opcode.LOAD_S_PRI, V1Param.Stack);
@@ -156,9 +156,9 @@ namespace smxdasm
             Prep(V1Opcode.SREF_S_PRI, V1Param.Stack);
             Prep(V1Opcode.SSHR);
             Prep(V1Opcode.STACK, V1Param.Constant);
-            Prep(V1Opcode.STOR_ALT, V1Param.Constant);
+            Prep(V1Opcode.STOR_ALT, V1Param.Address);
             Prep(V1Opcode.STOR_I);
-            Prep(V1Opcode.STOR_PRI, V1Param.Constant);
+            Prep(V1Opcode.STOR_PRI, V1Param.Address);
             Prep(V1Opcode.STOR_S_ALT, V1Param.Stack);
             Prep(V1Opcode.STOR_S_PRI, V1Param.Stack);
             Prep(V1Opcode.STRADJUST_PRI);
