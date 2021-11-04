@@ -226,6 +226,7 @@ namespace smxviewer
                 renderDebugGlobals(roots[".dbg.globals"], file_.DebugGlobals);
             if (roots.ContainsKey(".dbg.methods") && file_.DebugMethods != null)
             {
+                renderDebugMethods(roots[".dbg.methods"], file_.DebugMethods);
                 if (roots.ContainsKey(".dbg.locals"))
                     renderDebugLocals(roots[".dbg.locals"], file_.DebugMethods);
             }
@@ -859,6 +860,22 @@ namespace smxviewer
                     renderSymbolDetail(sym);
                 }, null);
             }
+        }
+
+        private void renderDebugMethods(TreeNode root, SmxDebugMethods methods)
+        {
+            root.Tag = new NodeData(delegate ()
+            {
+                renderSectionHeaderDetail(methods.SectionHeader);
+                foreach (var entry in methods.Entries)
+                {
+                    var method_name = "";
+                    if (file_.RttiMethods != null && entry.method_index < file_.RttiMethods.Methods.Length)
+                        method_name = file_.RttiMethods.Methods[entry.method_index].name;
+                    addDetailLine("method {0} ({1}), first local index {2}", entry.method_index, method_name, entry.first_local);
+                }
+                endDetailUpdate();
+            }, null);
         }
 
         private void renderDebugLocals(TreeNode root, SmxDebugMethods table)
