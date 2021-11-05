@@ -370,11 +370,15 @@ SmxV1Image::validateName(size_t offset)
 bool
 SmxV1Image::validateRtti()
 {
-  rtti_data_ = findSection("rtti.data");
-  if (!rtti_data_)
+  const Section* rtti_data = findSection("rtti.data");
+  if (!rtti_data)
     return true;
-  if (!validateSection(rtti_data_))
+  if (!validateSection(rtti_data))
     return error("invalid rtti.data section");
+
+  const uint8_t* blob =
+    reinterpret_cast<const uint8_t*>(buffer() + rtti_data->dataoffs);
+  rtti_data_ = std::make_unique<const RttiData>(blob, rtti_data->size);
 
   const char* tables[] = {
     "rtti.methods",
@@ -407,7 +411,7 @@ SmxV1Image::validateRttiMethods()
     const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
     if (!validateName(method->name))
       return error("invalid method name");
-    if (method->signature >= rtti_data_->size)
+    if (!rtti_data_->validateFunctionOffset(method->signature))
       return error("invalid method signature type offset");
     if (method->pcode_start > method->pcode_end)
       return error("invalid method code range");

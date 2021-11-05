@@ -20,8 +20,13 @@
 #include <sp_vm_types.h>
 #include "file-utils.h"
 #include "legacy-image.h"
+#include "rtti.h"
+
+#include <memory>
 
 namespace sp {
+
+using namespace debug;
 
 class SmxV1Image
   : public FileReader,
@@ -177,6 +182,9 @@ class SmxV1Image
   const List<sp_file_pubvars_t>& pubvars() const {
     return pubvars_;
   }
+  const RttiData* rttidata() const {
+    return rtti_data_.get();
+  }
 
  protected:
   bool error(const char* msg) {
@@ -241,7 +249,7 @@ class SmxV1Image
   const sp_fdbg_symbol_t* debug_syms_ = nullptr;
   const sp_u_fdbg_symbol_t* debug_syms_unpacked_ = nullptr;
 
-  const Section* rtti_data_ = nullptr;
+  std::unique_ptr<const RttiData> rtti_data_ = nullptr;
   const smx_rtti_table_header* rtti_methods_ = nullptr;
 };
 
