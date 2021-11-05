@@ -134,6 +134,9 @@ verifier = configure_like_shell('verifier')
 verifier.sources += [
   '../tools/verifier/verifier.cpp',
 ]
+verifier.compiler.linkflags[0:0] = [
+  SP.libamtl[builder.cxx.target.arch],
+]
 builder.Add(verifier)
 
 rvalue = spshell, libsourcepawn, libsourcepawn_a

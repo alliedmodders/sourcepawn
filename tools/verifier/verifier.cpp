@@ -12,10 +12,12 @@
 //
 #include "environment.h"
 #include "method-verifier.h"
+#include <amtl/experimental/am-argparser.h>
 #include <set>
 #include <deque>
 
 using namespace ke;
+using namespace ke::args;
 using namespace sp;
 using namespace SourcePawn;
 
@@ -67,19 +69,36 @@ Analyze(const char* file)
 
 int main(int argc, char **argv)
 {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: <file>\n");
+  Parser parser("SourcePawn plugin verifier.");
+
+  ToggleOption verbose(parser,
+    "v", "verbose",
+    Some(false),
+    "Verbose output.");
+  ToggleOption validate_debug_sections(parser,
+    "d", "validate_debug_sections",
+    Some(false),
+    "Validate debug sections as well.");
+  StringOption filename(parser,
+    "file",
+    "SMX file to verify.");
+
+  if (!parser.parse(argc, argv)) {
+    parser.usage(stderr, argc, argv);
     return 1;
   }
 
-  sVerbose = (getenv("VERBOSE") && getenv("VERBOSE")[0] == '1');
+  sVerbose = (getenv("VERBOSE") && getenv("VERBOSE")[0] == '1') || verbose.value();
 
   if ((sEnv = Environment::New()) == nullptr) {
     fprintf(stderr, "Could not initialize ISourcePawnEngine2\n");
     return 1;
   }
 
-  bool ok = Analyze(argv[1]);
+  if ((getenv("VALIDATE_DEBUG_SECTIONS") && getenv("VALIDATE_DEBUG_SECTIONS")[0] == '1') || validate_debug_sections.value())
+    sEnv->EnableDebugBreak();
+
+  bool ok = Analyze(filename.value().c_str());
 
   sEnv->Shutdown();
   delete sEnv;

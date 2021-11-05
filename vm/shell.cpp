@@ -316,6 +316,10 @@ int main(int argc, char** argv)
     "p", "jitdump",
     Some(false),
     "Enable perf metadata recording for profiling.");
+  ToggleOption validate_debug_sections(parser,
+    "d", "validate-debug-sections",
+    Some(false),
+    "Validate debug sections before loading the plugin. Enables line debugging in the runtime, which might slow down execution.");
   StringOption filename(parser,
     "file",
     "SMX file to execute.");
@@ -345,6 +349,9 @@ int main(int argc, char** argv)
 
   if (getenv("DISABLE_JIT") || disable_jit.value())
     sEnv->SetJitEnabled(false);
+
+  if (getenv("VALIDATE_DEBUG_SECTIONS") || validate_debug_sections.value())
+    sEnv->EnableDebugBreak();
 
   ShellDebugListener debug;
   sEnv->SetDebugger(&debug);
