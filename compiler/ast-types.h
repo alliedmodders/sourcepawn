@@ -19,55 +19,61 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#define AST_TYPE_LIST(FOR_EACH) \
+    FOR_EACH(ParseTree) \
+    FOR_EACH(StmtList) \
+    FOR_EACH(BlockStmt) \
+    FOR_EACH(BreakStmt) \
+    FOR_EACH(ContinueStmt) \
+    FOR_EACH(StaticAssertStmt) \
+    FOR_EACH(VarDecl) \
+    FOR_EACH(EnumDecl) \
+    FOR_EACH(PstructDecl) \
+    FOR_EACH(TypedefDecl) \
+    FOR_EACH(TypesetDecl) \
+    FOR_EACH(UsingDecl) \
+    FOR_EACH(IsDefinedExpr) \
+    FOR_EACH(UnaryExpr) \
+    FOR_EACH(BinaryExpr) \
+    FOR_EACH(LogicalExpr) \
+    FOR_EACH(ChainedCompareExpr) \
+    FOR_EACH(TernaryExpr) \
+    FOR_EACH(IncDecExpr) \
+    FOR_EACH(CastExpr) \
+    FOR_EACH(SizeofExpr) \
+    FOR_EACH(SymbolExpr) \
+    FOR_EACH(CallExpr) \
+    FOR_EACH(CallUserOpExpr) \
+    FOR_EACH(DefaultArgExpr) \
+    FOR_EACH(FieldAccessExpr) \
+    FOR_EACH(IndexExpr) \
+    FOR_EACH(RvalueExpr) \
+    FOR_EACH(CommaExpr) \
+    FOR_EACH(ThisExpr) \
+    FOR_EACH(NullExpr) \
+    FOR_EACH(TaggedValueExpr) \
+    FOR_EACH(StringExpr) \
+    FOR_EACH(NewArrayExpr) \
+    FOR_EACH(ArrayExpr) \
+    FOR_EACH(StructExpr) \
+    FOR_EACH(IfStmt) \
+    FOR_EACH(ExprStmt) \
+    FOR_EACH(ReturnStmt) \
+    FOR_EACH(AssertStmt) \
+    FOR_EACH(DeleteStmt) \
+    FOR_EACH(ExitStmt) \
+    FOR_EACH(DoWhileStmt) \
+    FOR_EACH(ForStmt) \
+    FOR_EACH(SwitchStmt) \
+    FOR_EACH(PragmaUnusedStmt) \
+    FOR_EACH(FunctionDecl) \
+    FOR_EACH(EnumStructDecl) \
+    FOR_EACH(MethodmapDecl) \
+    FOR_EACH(ChangeScopeNode)
+
 enum class AstKind : uint8_t
 {
-    ParseTree,
-    StmtList,
-    BlockStmt,
-    LoopControlStmt,
-    StaticAssertStmt,
-    VarDecl,
-    EnumDecl,
-    PstructDecl,
-    TypedefDecl,
-    TypesetDecl,
-    UsingDecl,
-    IsDefinedExpr,
-    UnaryExpr,
-    BinaryExpr,
-    LogicalExpr,
-    ChainedCompareExpr,
-    TernaryExpr,
-    IncDecExpr,
-    CastExpr,
-    SizeofExpr,
-    SymbolExpr,
-    CallExpr,
-    CallUserOpExpr,
-    DefaultArgExpr,
-    FieldAccessExpr,
-    IndexExpr,
-    RvalueExpr,
-    CommaExpr,
-    ThisExpr,
-    NullExpr,
-    TaggedValueExpr,
-    StringExpr,
-    NewArrayExpr,
-    ArrayExpr,
-    StructExpr,
-    IfStmt,
-    ExprStmt,
-    ReturnStmt,
-    AssertStmt,
-    DeleteStmt,
-    ExitStmt,
-    DoWhileStmt,
-    ForStmt,
-    SwitchStmt,
-    PragmaUnusedStmt,
-    FunctionDecl,
-    EnumStructDecl,
-    MethodmapDecl,
-    ChangeScopeNode,
+#define _(Name) Name,
+    AST_TYPE_LIST(_)
+#undef _
 };

@@ -189,8 +189,11 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         case AstKind::DoWhileStmt:
             EmitDoWhileStmt(stmt->to<DoWhileStmt>());
             break;
-        case AstKind::LoopControlStmt:
-            EmitLoopControlStmt(stmt->to<LoopControlStmt>());
+        case AstKind::BreakStmt:
+            EmitLoopControl(tBREAK);
+            break;
+        case AstKind::ContinueStmt:
+            EmitLoopControl(tCONTINUE);
             break;
         case AstKind::ForStmt:
             EmitForStmt(stmt->to<ForStmt>());
@@ -1572,10 +1575,8 @@ CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt)
 }
 
 void
-CodeGenerator::EmitLoopControlStmt(LoopControlStmt* stmt)
+CodeGenerator::EmitLoopControl(int token)
 {
-    int token = stmt->token();
-
     assert(loop_);
     assert(token == tBREAK || token == tCONTINUE);
 
