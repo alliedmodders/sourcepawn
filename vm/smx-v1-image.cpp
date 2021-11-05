@@ -380,12 +380,12 @@ SmxV1Image::validateRtti()
     reinterpret_cast<const uint8_t*>(buffer() + rtti_data->dataoffs);
   rtti_data_ = std::make_unique<const RttiData>(blob, rtti_data->size);
 
-  const char* tables[] = {
+  const char* mandatory_tables[] = {
     "rtti.methods",
     "rtti.natives",
   };
-  for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
-    const char* table_name = tables[i];
+  for (size_t i = 0; i < sizeof(mandatory_tables) / sizeof(mandatory_tables[0]); i++) {
+    const char* table_name = mandatory_tables[i];
     const Section* section = findSection(table_name);
     if (!section) {
       error_ = StringPrintf("missing %s section", table_name);
@@ -398,9 +398,154 @@ SmxV1Image::validateRtti()
   }
 
   rtti_methods_ = findRttiSection("rtti.methods");
-  if (rtti_methods_ && !validateRttiMethods())
+  if (!validateRttiMethods())
     return false;
 
+  rtti_natives_ = findRttiSection("rtti.natives");
+  if (!validateRttiNatives())
+    return false;
+
+  const char* optional_tables[] = {
+    "rtti.classdefs",
+    "rtti.enums",
+    "rtti.enumstructs",
+    "rtti.enumstruct_fields",
+    "rtti.fields",
+    "rtti.typedefs",
+    "rtti.typesets",
+  };
+  for (size_t i = 0; i < sizeof(optional_tables) / sizeof(optional_tables[0]); i++) {
+    const char* table_name = optional_tables[i];
+    const Section* section = findSection(table_name);
+    if (!section)
+      continue;
+    if (!validateRttiHeader(section)) {
+      error_ = StringPrintf("could not validate %s section", table_name);
+      return false;
+    }
+  }
+
+  rtti_enums_ = findRttiSection("rtti.enums");
+  if (rtti_enums_ && !validateRttiEnums())
+    return false;
+
+  rtti_enumstruct_fields_ = findRttiSection("rtti.enumstruct_fields");
+  rtti_enumstructs_ = findRttiSection("rtti.enumstructs");
+  if (rtti_enumstructs_ && !validateRttiEnumStructs())
+    return false;
+
+  rtti_fields_ = findRttiSection("rtti.fields");
+  rtti_classdefs_ = findRttiSection("rtti.classdefs");
+  if (rtti_classdefs_ && !validateRttiClassdefs())
+    return false;
+
+  rtti_typedefs_ = findRttiSection("rtti.typedefs");
+  if (rtti_typedefs_ && !validateRttiTypedefs())
+    return false;
+
+  rtti_typesets_ = findRttiSection("rtti.typesets");
+  if (rtti_typesets_ && !validateRttiTypesets())
+    return false;
+
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiEnums()
+{
+  for (uint32_t i = 0; i < rtti_enums_->row_count; i++) {
+    const smx_rtti_enum* enumType = getRttiRow<smx_rtti_enum>(rtti_enums_, i);
+    if (!validateName(enumType->name))
+      return error("invalid enum name");
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiEnumStructs()
+{
+  if (!rtti_enumstruct_fields_)
+    return error("rtti.enumstruct_fields section missing");
+
+  for (uint32_t i = 0; i < rtti_enumstructs_->row_count; i++) {
+    const smx_rtti_enumstruct* enumstruct = getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i);
+    if (!validateName(enumstruct->name))
+      return error("invalid enum struct name");
+
+    // Calculate how many fields this enumstruct has.
+    uint32_t stopat = rtti_enumstruct_fields_->row_count;
+    if (i != rtti_enumstructs_->row_count - 1) {
+      const smx_rtti_enumstruct* next_enumstruct = getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i + 1);
+      stopat = next_enumstruct->first_field;
+    }
+    if (enumstruct->first_field >= stopat)
+      return error("invalid enum struct fields boundary");
+
+    for (uint32_t j = enumstruct->first_field; j < stopat; j++) {
+      if (!validateRttiEnumStructField(enumstruct, j))
+        return false;
+    }
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index)
+{
+  if (index >= rtti_enumstruct_fields_->row_count)
+    return error("invalid enum struct field index");
+
+  const smx_rtti_es_field* field = getRttiRow<smx_rtti_es_field>(rtti_enumstruct_fields_, index);
+  if (!validateName(field->name))
+    return error("invalid enum struct field name");
+  if (field->offset >= enumstruct->size * 4)
+    return error("invalid enum struct field offset");
+  if (!rtti_data_->validateType(field->type_id))
+    return error("invalid enum struct field type");
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiClassdefs()
+{
+  if (!rtti_fields_)
+    return error("rtti.fields section missing");
+
+  for (uint32_t i = 0; i < rtti_classdefs_->row_count; i++) {
+    const smx_rtti_classdef* classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i);
+    // TODO: Validate flags.
+    if (!validateName(classdef->name))
+      return error("invalid classdef name");
+
+    // Calculate how many fields this class has.
+    uint32_t stopat = rtti_fields_->row_count;
+    if (i != rtti_classdefs_->row_count - 1) {
+      const smx_rtti_classdef* next_classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
+      stopat = next_classdef->first_field;
+    }
+    if (classdef->first_field >= stopat)
+      return error("invalid classdef fields boundary");
+
+    for (uint32_t j = classdef->first_field; j < stopat; j++) {
+      if (!validateRttiField(j))
+        return false;
+    }
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiField(uint32_t index)
+{
+  if (index >= rtti_fields_->row_count)
+    return error("invalid classdef field index");
+
+  // TODO: Validate flags.
+  const smx_rtti_field* field = getRttiRow<smx_rtti_field>(rtti_fields_, index);
+  if (!validateName(field->name))
+    return error("invalid classdef field name");
+  if (!rtti_data_->validateType(field->type_id))
+    return error("invalid classdef field type");
   return true;
 }
 
@@ -419,6 +564,45 @@ SmxV1Image::validateRttiMethods()
       return error("invalid method code start");
     if (method->pcode_end > code_.header()->size)
       return error("invalid method code end");
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiNatives()
+{
+  for (uint32_t i = 0; i < rtti_natives_->row_count; i++) {
+    const smx_rtti_native* native = getRttiRow<smx_rtti_native>(rtti_natives_, i);
+    if (!validateName(native->name))
+      return error("invalid native name");
+    if (!rtti_data_->validateFunctionOffset(native->signature))
+      return error("invalid native type offset");
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiTypedefs()
+{
+  for (uint32_t i = 0; i < rtti_typedefs_->row_count; i++) {
+    const smx_rtti_typedef* typedefType = getRttiRow<smx_rtti_typedef>(rtti_typedefs_, i);
+    if (!validateName(typedefType->name))
+      return error("invalid typedef name");
+    if (!rtti_data_->validateType(typedefType->type_id))
+      return error("invalid typedef type");
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateRttiTypesets()
+{
+  for (uint32_t i = 0; i < rtti_typesets_->row_count; i++) {
+    const smx_rtti_typeset* typesetType = getRttiRow<smx_rtti_typeset>(rtti_typesets_, i);
+    if (!validateName(typesetType->name))
+      return error("invalid typeset name");
+    if (!rtti_data_->validateTypesetOffset(typesetType->signature))
+      return error("invalid typeset signatures");
   }
   return true;
 }
