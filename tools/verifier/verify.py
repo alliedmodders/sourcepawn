@@ -7,6 +7,8 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('-v', '--verbose', action='store_true', default=False,
                       help="Enable verbose mode")
+  parser.add_argument('-d', '--validate_debug_sections', action='store_true', default=False,
+                      help="Validate debug sections as well")
   parser.add_argument('verifier', type=str, help="Verifier path")
   parser.add_argument('folder', type=str, help="Folder with files to verify")
   args = parser.parse_args()
@@ -15,7 +17,13 @@ def main():
   if args.verbose:
     env = os.environ.copy()
     env['VERBOSE'] = '1'
+  if args.validate_debug_sections:
+    if env == None:
+      env = os.environ.copy()
+    env['VALIDATE_DEBUG_SECTIONS'] = '1'
 
+  verified_files = 0
+  failed_files = 0
   for file in os.listdir(args.folder):
     path = os.path.join(args.folder, file)
     argv = [
@@ -36,8 +44,12 @@ def main():
     sys.stdout.write(stdout)
     sys.stderr.write(stderr)
 
+    verified_files += 1
+
     if p.returncode != 0:
-      raise Exception('failed to verify')
+      print('failed to verify {}'.format(file))
+      failed_files += 1
+  print('Done. {}/{} plugins passed verification. {} ({:.02f}%) failed.'.format(verified_files-failed_files, verified_files, failed_files, failed_files/verified_files*100.0))
 
 def DecodeConsoleText(origin, text):
   try:
