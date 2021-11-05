@@ -200,7 +200,15 @@ class SmxV1Image
   bool validatePubvars();
   bool validateNatives();
   bool validateRtti();
+  bool validateRttiClassdefs();
+  bool validateRttiEnums();
+  bool validateRttiEnumStructs();
+  bool validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index);
+  bool validateRttiField(uint32_t index);
   bool validateRttiMethods();
+  bool validateRttiNatives();
+  bool validateRttiTypedefs();
+  bool validateRttiTypesets();
   bool validateDebugInfo();
   bool validateTags();
 
@@ -250,7 +258,15 @@ class SmxV1Image
   const sp_u_fdbg_symbol_t* debug_syms_unpacked_ = nullptr;
 
   std::unique_ptr<const RttiData> rtti_data_ = nullptr;
+  const smx_rtti_table_header* rtti_classdefs_ = nullptr;
+  const smx_rtti_table_header* rtti_enums_ = nullptr;
+  const smx_rtti_table_header* rtti_enumstructs_ = nullptr;
+  const smx_rtti_table_header* rtti_enumstruct_fields_ = nullptr;
+  const smx_rtti_table_header* rtti_fields_ = nullptr;
   const smx_rtti_table_header* rtti_methods_ = nullptr;
+  const smx_rtti_table_header* rtti_natives_ = nullptr;
+  const smx_rtti_table_header* rtti_typedefs_ = nullptr;
+  const smx_rtti_table_header* rtti_typesets_ = nullptr;
 };
 
 } // namespace sp
