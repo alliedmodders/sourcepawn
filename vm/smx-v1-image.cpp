@@ -184,7 +184,7 @@ SmxV1Image::validate()
 }
 
 const SmxV1Image::Section*
-SmxV1Image::findSection(const char* name)
+SmxV1Image::findSection(const char* name) const
 {
   for (size_t i = 0; i < sections_.size(); i++) {
     if (strcmp(sections_[i].name, name) == 0)
@@ -194,7 +194,7 @@ SmxV1Image::findSection(const char* name)
 }
 
 bool
-SmxV1Image::validateSection(const Section* section)
+SmxV1Image::validateSection(const Section* section) const
 {
   if (section->dataoffs >= length_)
     return false;
@@ -204,7 +204,7 @@ SmxV1Image::validateSection(const Section* section)
 }
 
 bool
-SmxV1Image::validateRttiHeader(const Section* section)
+SmxV1Image::validateRttiHeader(const Section* section) const
 {
   if (!validateSection(section))
     return false;
@@ -363,7 +363,7 @@ SmxV1Image::validateNatives()
 }
 
 bool
-SmxV1Image::validateName(size_t offset)
+SmxV1Image::validateName(size_t offset) const
 {
   return offset < names_section_->size;
 }
@@ -925,7 +925,7 @@ SmxV1Image::ImageSize() const
 }
 
 const char*
-SmxV1Image::LookupFile(uint32_t addr)
+SmxV1Image::LookupFile(uint32_t addr) const
 {
   int high = debug_files_.length();
   int low = -1;
@@ -948,7 +948,7 @@ SmxV1Image::LookupFile(uint32_t addr)
 
 template <typename SymbolType, typename DimType>
 const char*
-SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr)
+SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr) const
 {
   const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
   const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
@@ -974,7 +974,7 @@ SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr)
 }
 
 const char*
-SmxV1Image::LookupFunction(uint32_t code_offset)
+SmxV1Image::LookupFunction(uint32_t code_offset) const
 {
   if (auto method = GetMethodRttiByOffset(code_offset))
     return names_ + method->name;
@@ -1006,7 +1006,7 @@ SmxV1Image::HasRtti() const
 }
 
 const smx_rtti_method*
-SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset)
+SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset) const
 {
   if (!rtti_methods_)
     return nullptr;
@@ -1020,7 +1020,7 @@ SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset)
 }
 
 bool
-SmxV1Image::LookupLine(uint32_t addr, uint32_t* line)
+SmxV1Image::LookupLine(uint32_t addr, uint32_t* line) const
 {
   int high = debug_lines_.length();
   int low = -1;
@@ -1061,7 +1061,7 @@ SmxV1Image::GetFileName(size_t index) const
 
 template <typename SymbolType, typename DimType>
 bool
-SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index)
+SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index) const
 {
   const uint8_t* cursor = reinterpret_cast<const uint8_t *>(syms);
   const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
@@ -1086,7 +1086,7 @@ SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, uce
 }
 
 bool
-SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr)
+SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr) const
 {
   *funcaddr = 0;
   if (rtti_methods_) {
@@ -1137,7 +1137,7 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
 }
 
 bool
-SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr)
+SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr) const
 {
   // Find a suitable "breakpoint address" close to the indicated line (and in
   // the specified file). The address is moved up to the next "breakable" line
