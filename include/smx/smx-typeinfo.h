@@ -316,6 +316,7 @@ static const uint8_t kVarClass_Global = 0x0;
 static const uint8_t kVarClass_Local = 0x1;
 static const uint8_t kVarClass_Static = 0x2;
 static const uint8_t kVarClass_Arg = 0x3;
+static const uint8_t kVarClass_Max = kVarClass_Arg;
 
 #pragma pack(pop)
 
