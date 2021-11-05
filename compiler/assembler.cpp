@@ -486,6 +486,7 @@ RttiBuilder::add_enumstruct(Type* type)
         info.type_id = to_typeid(encoding);
         info.offset = field->addr();
         es_fields_->at(es.first_field + index) = info;
+        index++;
     }
 
     return es_index;
