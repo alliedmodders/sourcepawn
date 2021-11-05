@@ -1425,7 +1425,9 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
                 error(24);
                 return nullptr;
             }
-            return new LoopControlStmt(pos, tok);
+            if (tok == tBREAK)
+                return new BreakStmt(pos);
+            return new ContinueStmt(pos);
         }
         case tRETURN: {
             auto pos = lexer_->pos();

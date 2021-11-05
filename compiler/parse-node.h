@@ -226,24 +226,32 @@ class BlockStmt : public StmtList
     SymbolScope* scope_;
 };
 
-class LoopControlStmt : public Stmt
+class BreakStmt : public Stmt
 {
   public:
-    explicit LoopControlStmt(const token_pos_t& pos, int token)
-      : Stmt(AstKind::LoopControlStmt, pos),
-        token_(token)
+    explicit BreakStmt(const token_pos_t& pos)
+      : Stmt(AstKind::BreakStmt, pos)
     {
-        set_flow_type(token_ == tBREAK ? Flow_Break : Flow_Continue);
+        set_flow_type(Flow_Break);
     }
 
     void ProcessUses(SemaContext& sc) override {}
 
-    static bool is_a(ParseNode* node) { return node->kind() == AstKind::LoopControlStmt; }
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::BreakStmt; }
+};
 
-    int token() const { return token_; }
+class ContinueStmt : public Stmt
+{
+  public:
+    explicit ContinueStmt(const token_pos_t& pos)
+      : Stmt(AstKind::ContinueStmt, pos)
+    {
+        set_flow_type(Flow_Continue);
+    }
 
-  private:
-    int token_;
+    void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::ContinueStmt; }
 };
 
 class StaticAssertStmt : public Stmt

@@ -65,7 +65,6 @@ class CodeGenerator final
     void EmitIfStmt(IfStmt* stmt);
     void EmitDeleteStmt(DeleteStmt* stmt);
     void EmitDoWhileStmt(DoWhileStmt* stmt);
-    void EmitLoopControlStmt(LoopControlStmt* stmt);
     void EmitForStmt(ForStmt* stmt);
     void EmitSwitchStmt(SwitchStmt* stmt);
     void EmitFunctionInfo(FunctionInfo* info);
@@ -122,6 +121,7 @@ class CodeGenerator final
 
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
+    void EmitLoopControl(int token);
 
   private:
     enum MemuseType {
