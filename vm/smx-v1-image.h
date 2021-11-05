@@ -62,15 +62,15 @@ class SmxV1Image
   bool FindPubvar(const char* name, size_t* indexp) const override;
   size_t HeapSize() const override;
   size_t ImageSize() const override;
-  const char* LookupFile(uint32_t code_offset) override;
-  const char* LookupFunction(uint32_t code_offset) override;
-  bool LookupLine(uint32_t code_offset, uint32_t* line) override;
-  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override;
-  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
+  const char* LookupFile(uint32_t code_offset) const override;
+  const char* LookupFunction(uint32_t code_offset) const override;
+  bool LookupLine(uint32_t code_offset, uint32_t* line) const override;
+  bool LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) const override;
+  bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const override;
   size_t NumFiles() const override;
   const char* GetFileName(size_t index) const override;
   bool HasRtti() const override;
-  const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) override;
+  const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const override;
 
  private:
   SmxV1Image();
@@ -81,7 +81,7 @@ class SmxV1Image
     uint32_t dataoffs;
     uint32_t size;
   };
-  const Section* findSection(const char* name);
+  const Section* findSection(const char* name) const;
 
  public:
   template <typename T>
@@ -191,9 +191,9 @@ class SmxV1Image
     error_ = msg;
     return false;
   }
-  bool validateName(size_t offset);
-  bool validateSection(const Section* section);
-  bool validateRttiHeader(const Section* section);
+  bool validateName(size_t offset) const;
+  bool validateSection(const Section* section) const;
+  bool validateRttiHeader(const Section* section) const;
   bool validateCode();
   bool validateData();
   bool validatePublics();
@@ -217,11 +217,11 @@ class SmxV1Image
 
  private:
   template <typename SymbolType, typename DimType>
-  const char* lookupFunction(const SymbolType* syms, uint32_t addr);
+  const char* lookupFunction(const SymbolType* syms, uint32_t addr) const;
   template <typename SymbolType, typename DimType>
-  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index);
+  bool getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index) const;
 
-  const smx_rtti_table_header* findRttiSection(const char* name) {
+  const smx_rtti_table_header* findRttiSection(const char* name) const {
     const Section* section = findSection(name);
     if (!section)
       return nullptr;
@@ -233,7 +233,7 @@ class SmxV1Image
   }
 
   template <typename T>
-  const T* getRttiRow(const smx_rtti_table_header* header, size_t index) {
+  const T* getRttiRow(const smx_rtti_table_header* header, size_t index) const {
     assert(index < header->row_count);
     const uint8_t* base = reinterpret_cast<const uint8_t*>(header) + header->header_size;
     return reinterpret_cast<const T*>(base + header->row_size * index);
