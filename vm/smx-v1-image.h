@@ -210,6 +210,9 @@ class SmxV1Image
   bool validateRttiTypedefs();
   bool validateRttiTypesets();
   bool validateDebugInfo();
+  bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
+  bool validateDebugMethods();
+  bool validateSymbolAddress(int32_t address, uint8_t vclass);
   bool validateTags();
 
  private:
@@ -222,6 +225,10 @@ class SmxV1Image
     const Section* section = findSection(name);
     if (!section)
       return nullptr;
+    return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
+  }
+
+  const smx_rtti_table_header* toRttiTable(const Section* section) const {
     return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
   }
 
@@ -267,6 +274,9 @@ class SmxV1Image
   const smx_rtti_table_header* rtti_natives_ = nullptr;
   const smx_rtti_table_header* rtti_typedefs_ = nullptr;
   const smx_rtti_table_header* rtti_typesets_ = nullptr;
+  const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
+  const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
+  const smx_rtti_table_header* rtti_dbg_locals_ = nullptr;
 };
 
 } // namespace sp

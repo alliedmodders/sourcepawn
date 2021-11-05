@@ -12,6 +12,7 @@
 #include <amtl/am-string.h>
 #include "smx-v1-image.h"
 #include "zlib/zlib.h"
+#include "environment.h"
 
 using namespace ke;
 using namespace sp;
@@ -644,7 +645,7 @@ SmxV1Image::validateDebugInfo()
   if (!validateSection(files))
     return error("invalid debug file table");
   if (files->size < sizeof(sp_fdbg_file_t) * debug_info_->num_files)
-    return error("invalid debug file table");
+    return error("invalid debug file table size");
   debug_files_ = List<sp_fdbg_file_t>(
     reinterpret_cast<const sp_fdbg_file_t*>(buffer() + files->dataoffs),
     debug_info_->num_files);
@@ -655,7 +656,7 @@ SmxV1Image::validateDebugInfo()
   if (!validateSection(lines))
     return error("invalid debug lines table");
   if (lines->size < sizeof(sp_fdbg_line_t) * debug_info_->num_lines)
-    return error("invalid debug lines table");
+    return error("invalid debug lines table size");
   debug_lines_ = List<sp_fdbg_line_t>(
     reinterpret_cast<const sp_fdbg_line_t*>(buffer() + lines->dataoffs),
     debug_info_->num_lines);
@@ -670,14 +671,23 @@ SmxV1Image::validateDebugInfo()
     if (const Section* globals = findSection(".dbg.globals")) {
       if (!validateRttiHeader(globals))
         return error("invalid debug globals table");
+      rtti_dbg_globals_ = toRttiTable(globals);
+      if (Environment::get()->IsDebugBreakEnabled() && !validateDebugVariables(rtti_dbg_globals_))
+        return false;
     }
     if (const Section* locals = findSection(".dbg.locals")) {
       if (!validateRttiHeader(locals))
         return error("invalid debug locals table");
+      rtti_dbg_locals_ = toRttiTable(locals);
+      if (Environment::get()->IsDebugBreakEnabled() && !validateDebugVariables(rtti_dbg_locals_))
+        return false;
     }
     if (const Section* methods = findSection(".dbg.methods")) {
       if (!validateRttiHeader(methods))
         return error("invalid debug methods table");
+      rtti_dbg_methods_ = toRttiTable(methods);
+      if (Environment::get()->IsDebugBreakEnabled() && !validateDebugMethods())
+        return false;
     }
   }
 
@@ -694,6 +704,62 @@ SmxV1Image::validateDebugInfo()
     }
   }
 
+  return true;
+}
+
+bool
+SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table)
+{
+  for (uint32_t i = 0; i < rtti_table->row_count; i++) {
+    const smx_rtti_debug_var* debug_var = getRttiRow<smx_rtti_debug_var>(rtti_table, i);
+    if (debug_var->vclass > kVarClass_Max)
+      return error("invalid debug variable class");
+    if (!validateSymbolAddress(debug_var->address, debug_var->vclass))
+      return false;
+    if (!validateName(debug_var->name))
+      return error("invalid debug variable name");
+    if (debug_var->code_start > debug_var->code_end)
+      return error("invalid debug variable code range");
+    if (debug_var->code_start >= code_.header()->size)
+      return error("invalid debug variable code start");
+    if (debug_var->code_end > code_.header()->size)
+      return error("invalid debug variable code end");
+    if (!rtti_data_->validateType(debug_var->type_id))
+      return error("invalid debug variable type");
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateSymbolAddress(int32_t address, uint8_t vclass)
+{
+  switch (vclass) {
+  case kVarClass_Global:
+  case kVarClass_Static:
+    if ((uint32_t)address >= HeapSize())
+      return error("invalid global variable address");
+    break;
+  case kVarClass_Local:
+    if (address > 0)
+      return error("invalid local variable address");
+    break;
+  case kVarClass_Arg:
+    if (address <= 0)
+      return error("invalid argument address");
+  }
+  return true;
+}
+
+bool
+SmxV1Image::validateDebugMethods()
+{
+  for (uint32_t i = 0; i < rtti_dbg_methods_->row_count; i++) {
+    const smx_rtti_debug_method* debug_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, i);
+    if (debug_method->method_index >= rtti_methods_->row_count)
+      return error("invalid debug method index");
+    if (rtti_dbg_locals_ && debug_method->first_local >= rtti_dbg_locals_->row_count)
+      return error("invalid first local index");
+  }
   return true;
 }
 
