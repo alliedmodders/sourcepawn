@@ -162,6 +162,7 @@ class Semantics final
     bool CheckSwitchStmt(SwitchStmt* stmt);
     bool CheckForStmt(ForStmt* stmt);
     bool CheckDoWhileStmt(DoWhileStmt* stmt);
+    bool CheckLoopControlStmt(LoopControlStmt* stmt);
     bool CheckExitStmt(ExitStmt* stmt);
     bool CheckDeleteStmt(DeleteStmt* stmt);
     bool CheckAssertStmt(AssertStmt* stmt);

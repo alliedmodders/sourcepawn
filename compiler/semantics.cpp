@@ -149,8 +149,9 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
             return CheckStmtList(stmt->to<StmtList>());
         case AstKind::StaticAssertStmt:
             return CheckStaticAssertStmt(stmt->to<StaticAssertStmt>());
-        case AstKind::EnumDecl:
         case AstKind::LoopControlStmt:
+            return CheckLoopControlStmt(stmt->to<LoopControlStmt>());
+        case AstKind::EnumDecl:
         case AstKind::PstructDecl:
         case AstKind::TypedefDecl:
         case AstKind::TypesetDecl:
@@ -2524,6 +2525,16 @@ AutoCollectSemaFlow::~AutoCollectSemaFlow()
     else
         out_->init(sc_.always_returns());
     sc_.set_always_returns(old_value_);
+}
+
+bool Semantics::CheckLoopControlStmt(LoopControlStmt* stmt) {
+    int token = stmt->token();
+    if (token == tBREAK)
+        sc_->loop_has_break() = true;
+    else if (token == tCONTINUE)
+        sc_->loop_has_continue() = true;
+
+    return true;
 }
 
 bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
