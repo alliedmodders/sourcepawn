@@ -1882,7 +1882,8 @@ Parser::parse_args(FunctionInfo* info)
         auto pos = lexer_->pos();
 
         declinfo_t decl = {};
-        parse_decl(&decl, DECLFLAG_ARGUMENT | DECLFLAG_ENUMROOT);
+        if (!parse_decl(&decl, DECLFLAG_ARGUMENT | DECLFLAG_ENUMROOT))
+            continue;
 
         if (decl.type.ident == iVARARGS) {
             if (info->IsVariadic())
