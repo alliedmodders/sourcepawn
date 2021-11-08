@@ -21,6 +21,8 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "data-queue.h"
@@ -115,6 +117,8 @@ class CodeGenerator final
     void AddDebugFile(const std::string& line);
     void AddDebugLine(int linenr);
     void AddDebugSymbol(symbol* sym);
+    void AddDebugSymbols(std::vector<symbol*>* list);
+    void EnqueueDebugSymbol(symbol* sym);
 
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
@@ -188,6 +192,20 @@ class CodeGenerator final
     int PopScope(std::vector<MemoryScope>& scope_list);
 
   private:
+    typedef std::vector<std::vector<symbol*>> SymbolStack;
+
+    class AutoEnterScope {
+      public:
+        explicit AutoEnterScope(CodeGenerator* cg, SymbolStack* scopes);
+        ~AutoEnterScope();
+
+      private:
+        CodeGenerator* cg_;
+        SymbolStack* scopes_;
+    };
+    friend class AutoEnterScope;
+
+  private:
     CompileContext& cc_;
     ParseTree* tree_;
     symbol* func_ = nullptr;
@@ -201,6 +219,10 @@ class CodeGenerator final
     ke::Maybe<uint32_t> last_break_op_;
     std::vector<MemoryScope> stack_scopes_;
     std::vector<MemoryScope> heap_scopes_;
+    SymbolStack local_syms_;
+    std::vector<symbol*> global_syms_;
+    std::vector<std::pair<SymbolScope*, std::vector<symbol*>>> static_syms_;
+    std::unordered_set<SymbolScope*> static_scopes_;
 
     // Loop handling.
     struct LoopContext {
