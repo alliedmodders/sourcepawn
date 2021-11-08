@@ -1147,7 +1147,7 @@ class IPluginContext
     virtual void ReportErrorNumber(int error) = 0;
 
     /**
-     * @brief Report a error caused by a plugin, specifying a function
+     * @brief Report an error caused by a plugin, specifying a function
      * as the cause.  
      */
     virtual cell_t BlamePluginError(IPluginFunction* pf, const char* msg, ...) = 0;
