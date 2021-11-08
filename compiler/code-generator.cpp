@@ -54,6 +54,14 @@ CodeGenerator::Generate()
     deduce_liveness(cc_);
 
     EmitStmtList(tree_);
+
+    // Finish any un-added debug symbols.
+    while (!static_syms_.empty()) {
+        auto pair = ke::PopBack(&static_syms_);
+        AddDebugSymbols(&pair.second);
+    }
+
+    AddDebugSymbols(&global_syms_);
 }
 
 void
@@ -106,6 +114,13 @@ CodeGenerator::AddDebugSymbol(symbol* sym)
     }
 }
 
+void CodeGenerator::AddDebugSymbols(std::vector<symbol*>* list) {
+    while (!list->empty()) {
+        auto sym = ke::PopBack(list);
+        AddDebugSymbol(sym);
+    }
+}
+
 void
 CodeGenerator::EmitStmtList(StmtList* list)
 {
@@ -148,7 +163,10 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             auto s = stmt->to<BlockStmt>();
             pushstacklist();
 
-            EmitStmtList(s);
+            {
+                AutoEnterScope locals(this, &local_syms_);
+                EmitStmtList(s);
+            }
 
             bool returns = s->flow_type() == Flow_Return;
             popstacklist(!returns);
@@ -218,29 +236,52 @@ void
 CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node)
 {
     AddDebugFile(node->file()->chars());
+    if (static_scopes_.count(node->scope())) {
+        // We've already seen this scope before, which means we entered other
+        // includes and then returned to this file.
+        while (!static_syms_.empty()) {
+            if (static_syms_.back().first == node->scope())
+                break;
+            auto pair = ke::PopBack(&static_syms_);
+
+            // We left the include file, so assign all static variables a
+            // debug entry.
+            AddDebugSymbols(&pair.second);
+
+            // Erase it so we know we left this scope.
+            auto iter = static_scopes_.find(pair.first);
+            assert(iter != static_scopes_.end());
+            static_scopes_.erase(iter);
+        }
+        assert(!static_syms_.empty());
+        assert(static_syms_.back().first == node->scope());
+    } else {
+        // This scope has not been seen before, so it's new.
+        static_syms_.push_back({node->scope(), {}});
+        static_scopes_.emplace(node->scope());
+    }
 }
 
 void
 CodeGenerator::EmitVarDecl(VarDecl* decl)
 {
     symbol* sym = decl->sym();
-    if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
-        AddDebugSymbol(sym);
 
     if (gTypes.find(sym->tag)->kind() == TypeKind::Struct) {
         EmitPstruct(decl);
-        return;
+    } else {
+        sym->codeaddr = asm_.position();
+
+        if (sym->ident != iCONSTEXPR) {
+            if (sym->vclass == sLOCAL)
+                EmitLocalVar(decl);
+            else
+                EmitGlobalVar(decl);
+        }
     }
 
-    sym->codeaddr = asm_.position();
-
-    if (sym->ident == iCONSTEXPR)
-        return;
-
-    if (sym->vclass == sLOCAL)
-        EmitLocalVar(decl);
-    else
-        EmitGlobalVar(decl);
+    if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
+        EnqueueDebugSymbol(sym);
 }
 
 void
@@ -1551,9 +1592,13 @@ CodeGenerator::EmitLoopControlStmt(LoopControlStmt* stmt)
 void
 CodeGenerator::EmitForStmt(ForStmt* stmt)
 {
+    ke::Maybe<AutoEnterScope> debug_scope;
+
     auto scope = stmt->scope();
-    if (scope)
+    if (scope) {
         pushstacklist();
+        debug_scope.init(this, &local_syms_);
+    }
 
     auto init = stmt->init();
     if (init)
@@ -1621,8 +1666,10 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
     }
     __ bind(&loop_cx.break_to);
 
-    if (scope)
+    if (scope) {
+        debug_scope = {};
         popstacklist(true);
+    }
 }
 
 void
@@ -1697,7 +1744,17 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
     EmitBreak();
     current_stack_ = 0;
 
-    EmitStmt(info->body());
+    {
+        AutoEnterScope arg_scope(this, &local_syms_);
+
+        for (const auto& fun_arg : info->args()) {
+            auto sym = fun_arg.decl->sym();
+            sym->codeaddr = asm_.position();
+            EnqueueDebugSymbol(sym);
+        }
+
+        EmitStmt(info->body());
+    }
 
     assert(!has_stack_or_heap_scopes());
 
@@ -2062,4 +2119,26 @@ int CodeGenerator::DynamicMemorySize() const {
     int min_cells = max_script_memory_ + 4096;
     int custom = cc_.options()->pragma_dynamic;
     return std::max(min_cells, custom) * sizeof(cell_t);
+}
+
+void CodeGenerator::EnqueueDebugSymbol(symbol* sym) {
+    if (sym->vclass == sGLOBAL) {
+        global_syms_.emplace_back(sym);
+    } else if (sym->vclass == sSTATIC && !func_) {
+        static_syms_.back().second.emplace_back(sym);
+    } else {
+        local_syms_.back().emplace_back(sym);
+    }
+}
+
+CodeGenerator::AutoEnterScope::AutoEnterScope(CodeGenerator* cg, SymbolStack* scopes)
+  : cg_(cg),
+    scopes_(scopes)
+{
+    scopes_->emplace_back();
+}
+
+CodeGenerator::AutoEnterScope::~AutoEnterScope() {
+    auto scope = ke::PopBack(scopes_);
+    cg_->AddDebugSymbols(&scope);
 }
