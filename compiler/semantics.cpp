@@ -3374,7 +3374,7 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
         symbol* sym = expr->sym();
         assert(sym->vclass == sGLOBAL);
 
-        arg->def->val = ke::Some(sym->addr());
+        arg->def->sym = sym;
         arg->type.set_tag(sym->tag);
         if (sym->usage & uREAD)
             markusage(sym, uREAD);

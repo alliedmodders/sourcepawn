@@ -1,0 +1,1 @@
+(9) : error 017: undefined symbol "NULL_VECTOR"
