@@ -76,6 +76,7 @@ struct DefaultArg : public PoolObject {
     int tag = 0;
     ke::Maybe<cell> val;
     ArrayData* array = nullptr;
+    symbol* sym = nullptr;
 
     ~DefaultArg();
 };

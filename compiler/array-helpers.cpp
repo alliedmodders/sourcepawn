@@ -495,6 +495,12 @@ FixedArrayValidator::CheckArgument(Expr* init)
         return ValidateRank(0, init);
 
     symbol* sym = expr->sym();
+    if (!sym) {
+        // This failed to bind, and we're still in the binding phase, so just
+        // return false.
+        return false;
+    }
+
     assert(sym->vclass == sGLOBAL);
 
     if (sym->ident != iARRAY && sym->ident != iREFARRAY) {

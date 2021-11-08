@@ -1825,6 +1825,11 @@ void
 CodeGenerator::EmitDefaultArray(Expr* expr, arginfo* arg)
 {
     DefaultArg* def = arg->def;
+    if (def->sym) {
+        __ emit(OP_CONST_PRI, def->sym->addr());
+        return;
+    }
+
     if (!def->val) {
         def->val = ke::Some(data_.dat_address());
 
