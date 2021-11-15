@@ -1548,15 +1548,19 @@ CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt)
     loop_cx.heap_scope_id = heap_scope_id();
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
-    __ bind(&loop_cx.continue_to);
-
     auto body = stmt->body();
     auto cond = stmt->cond();
     if (token == tDO) {
+        Label start;
+        __ bind(&start);
+
         EmitStmt(body);
-        if (!body->IsTerminal())
-            EmitTest(cond, true, &loop_cx.continue_to);
+
+        __ bind(&loop_cx.continue_to);
+        EmitTest(cond, true, &start);
     } else {
+        __ bind(&loop_cx.continue_to);
+
         EmitTest(cond, false, &loop_cx.break_to);
         EmitStmt(body);
         if (!body->IsTerminal())
