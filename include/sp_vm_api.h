@@ -584,7 +584,7 @@ class IPluginRuntime
     /**
      * @brief Returns whether the plugin was compiled with direct array support.
      *
-     * Direct arrays were introduced in SourcePawn 1.12. Any plugin with this
+     * Direct arrays were introduced in SourcePawn 1.11. Any plugin with this
      * feature will use absolute addressing for indirection vectors. Eg, for an
      * array of array of cells (int x[][]), you can extract x[3][5] by doing:
      *
@@ -594,7 +594,7 @@ class IPluginRuntime
      *     LocalToPhysAddr(phys_x[3], &phys_x);
      *     cell_t value = phys_x[5];
      *
-     * This code does not work on plugins compiled prior to 1.12, because arrays
+     * This code does not work on plugins compiled prior to 1.11, because arrays
      * had relative indirection vectors.
      */
     virtual bool UsesDirectArrays() = 0;
