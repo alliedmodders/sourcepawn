@@ -178,7 +178,7 @@ class Runner(object):
         else:
             ok = True
             output = ''
-            output_file = path
+            output_file = os.path.join(self.args_.corpus, path)
             argv = []
 
         if ok and self.args_.verifier:
