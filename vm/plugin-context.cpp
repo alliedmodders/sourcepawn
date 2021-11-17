@@ -700,10 +700,7 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
     return SP_ERROR_ARRAY_TOO_BIG;
 
   uint32_t new_hp = hp_ + bytes;
-  cell_t* dat_hp = reinterpret_cast<cell_t*>(memory_ + new_hp);
-
-  // argv, coincidentally, is STK.
-  if (dat_hp >= argv - STACK_MARGIN)
+  if (new_hp >= sp_ - STACK_MARGIN)
     return SP_ERROR_HEAPLOW;
 
   cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);
@@ -1027,4 +1024,52 @@ PluginContext::usesHeapTracker() const
 {
   LegacyImage* image = runtime()->image();
   return !!(image->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes);
+}
+
+bool
+PluginContext::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
+                                const cell_t* init)
+{
+  if (length > INT_MAX || stride > INT_MAX) {
+    ReportErrorNumber(SP_ERROR_ARRAY_TOO_BIG);
+    return false;
+  }
+
+  cell_t argv[2] = { (cell_t)length, (cell_t)stride };
+  int rv = generateFullArray(2, argv, !init);
+  if (rv != SP_ERROR_NONE) {
+    ReportErrorNumber(rv);
+    return false;
+  }
+
+  cell_t array_base = argv[1];
+  *local_addr = array_base;
+
+  cell_t* array_phys;
+  if ((rv = LocalToPhysAddr(array_base, &array_phys)) != SP_ERROR_NONE) {
+    ReportErrorNumber(rv);
+    return false;
+  }
+
+  if (!init)
+    return true;
+
+  bool direct_arrays = m_pRuntime->UsesDirectArrays();
+  for (unsigned int i = 0; i < length; i++) {
+    cell_t elt_base;
+
+    if (direct_arrays)
+      elt_base = array_phys[i];
+    else
+      elt_base = array_base + (i * sizeof(cell_t)) + array_phys[i];
+
+    cell_t* elt_phys;
+    if ((rv = LocalToPhysAddr(elt_base, &elt_phys)) != SP_ERROR_NONE) {
+      ReportErrorNumber(rv);
+      return false;
+    }
+
+    memcpy(elt_phys, &init[i * stride], stride * sizeof(cell_t));
+  }
+  return true;
 }

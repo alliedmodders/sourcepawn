@@ -1254,6 +1254,11 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero)
       __ pop(eax);
     }
   } else {
+    // We need to sync |sp| first.
+    __ subl(stk, dat);
+    __ movl(Operand(spAddr()), stk);
+    __ addl(stk, dat);
+
     __ push(pri);
     __ subl(esp, 12);
 
