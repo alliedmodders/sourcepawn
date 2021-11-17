@@ -57,6 +57,8 @@ class PluginContext : public BasePluginContext
   int LocalToStringNULL(cell_t local_addr, char** addr) override;
   IPluginRuntime* GetRuntime() override;
   cell_t* GetLocalParams() override;
+  bool HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
+                        const cell_t* init) override;
 
   bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
 

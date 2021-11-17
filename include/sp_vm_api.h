@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0xE
-#define SOURCEPAWN_API_VERSION 0x0211
+#define SOURCEPAWN_ENGINE2_API_VERSION 0xF
+#define SOURCEPAWN_API_VERSION 0x0212
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -1166,6 +1166,24 @@ class IPluginContext
      * @brief Frees an IFrameIterator object. Paired with CreateFrameIterator() 
      */
     virtual void DestroyFrameIterator(IFrameIterator* it) = 0;
+
+    /**
+     * @brief Allocate a 2D array on the heap.
+     *
+     * The returned address should be freed with HeapPop or HeapRelease.
+     *
+     * If |init| is not specified, the resulting array will be zeroed.
+     *
+     * If an error occurs, it is automatically reported.
+     *
+     * @param length        Number of elements in the array.
+     * @param stride        Size (in cells) of each element in the array.
+     * @param local_addr    Out address of the resulting array.
+     * @param init          If non-null, array to copy. The length and stride
+     *                      must be the same.
+     */
+    virtual bool HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
+                                  const cell_t* init) = 0;
 };
 
 /**
