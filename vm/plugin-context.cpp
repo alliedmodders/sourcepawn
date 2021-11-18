@@ -1035,7 +1035,7 @@ PluginContext::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t
     return false;
   }
 
-  cell_t argv[2] = { (cell_t)length, (cell_t)stride };
+  cell_t argv[2] = { (cell_t)stride, (cell_t)length };
   int rv = generateFullArray(2, argv, !init);
   if (rv != SP_ERROR_NONE) {
     ReportErrorNumber(rv);

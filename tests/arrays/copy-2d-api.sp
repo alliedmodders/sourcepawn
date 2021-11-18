@@ -8,8 +8,17 @@ int TestData[] = {
   9, 9, 8, 8, 1, 2, 2,
 }
 
+int TestData2[] = {
+  5, 6,
+  1, 2,
+  2, 2,
+  7, 8,
+  9, 9,
+}
+
 public void main() {
   copy_2d_array_to_callback(TestData, 5, 7, callback);
+  copy_2d_array_to_callback(TestData2, 5, 2, callback);
 }
 
 void callback(const int[][] array, int length, int stride) {
