@@ -241,7 +241,10 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   fn->PushCell(params[3]);
   fn->Execute(&ignore);
 
-  cx->HeapRelease(addr);
+  if ((err = cx->HeapPop(addr)) != SP_ERROR_NONE) {
+    return cx->ThrowNativeError("HeapPop error %d", err);
+  }
+
   return 0;
 }
 
