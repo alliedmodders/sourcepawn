@@ -1023,7 +1023,7 @@ bool
 PluginContext::usesHeapTracker() const
 {
   LegacyImage* image = runtime()->image();
-  return !!(image->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes);
+  return !(image->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes);
 }
 
 bool
