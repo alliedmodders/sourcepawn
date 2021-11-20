@@ -114,6 +114,10 @@ class PluginContext : public BasePluginContext
 
   int popTrackerAndSetHeap();
   int pushTracker(uint32_t amount);
+
+  // Note: this is allowed even in legacy plugins, since the underlying
+  // mechanism doesn't actually require opcode support. The heap code
+  // support bit only indicates that we should *not* use the tracker.
   bool enterHeapScope();
   bool leaveHeapScope();
 
@@ -142,7 +146,6 @@ class PluginContext : public BasePluginContext
                  cell_t fill_value);
 
   cell_t* throwIfBadAddress(cell_t addr);
-  bool usesHeapTracker() const;
 
  private:
   PluginRuntime* m_pRuntime;

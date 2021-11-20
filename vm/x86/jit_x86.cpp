@@ -1230,16 +1230,18 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero)
     __ cmpl(alt, stk);
     jumpOnError(not_below, SP_ERROR_HEAPLOW);
 
-    __ shll(tmp, 2);
-    __ subl(esp, 8);
-    __ push(tmp);
-    __ push(intptr_t(rt_->GetBaseContext()));
-    __ callWithABI(ExternalAddress((void*)InvokePushTracker));
-    __ movl(tmp, Operand(esp, 4));
-    __ addl(esp, 16);
-    __ shrl(tmp, 2);
-    __ testl(eax, eax);
-    jumpOnError(not_zero);
+    if (!rt_->UsesHeapScopes()) {
+      __ shll(tmp, 2);
+      __ subl(esp, 8);
+      __ push(tmp);
+      __ push(intptr_t(rt_->GetBaseContext()));
+      __ callWithABI(ExternalAddress((void*)InvokePushTracker));
+      __ movl(tmp, Operand(esp, 4));
+      __ addl(esp, 16);
+      __ shrl(tmp, 2);
+      __ testl(eax, eax);
+      jumpOnError(not_zero);
+    }
 
     if (autozero) {
       // Note - tmp is ecx and still intact.
