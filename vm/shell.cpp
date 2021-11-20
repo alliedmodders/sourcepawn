@@ -231,6 +231,8 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   if (!fn)
     return cx->ThrowNativeError("Could not read argument 4");
 
+  AutoEnterHeapScope heap_scope(cx);
+
   cell_t addr;
   if (!cx->HeapAlloc2dArray(params[2], params[3], &addr, flat_array))
     return 0;
@@ -240,8 +242,6 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   fn->PushCell(params[2]);
   fn->PushCell(params[3]);
   fn->Execute(&ignore);
-
-  cx->HeapRelease(addr);
   return 0;
 }
 
