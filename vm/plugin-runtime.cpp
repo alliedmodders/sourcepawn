@@ -666,3 +666,10 @@ PluginRuntime::UsesDirectArrays()
   auto features = image()->DescribeCode().features;
   return !!(features & SmxConsts::kCodeFeatureDirectArrays);
 }
+
+bool
+PluginRuntime::UsesHeapScopes()
+{
+  auto features = image()->DescribeCode().features;
+  return !!(features & SmxConsts::kCodeFeatureHeapScopes);
+}

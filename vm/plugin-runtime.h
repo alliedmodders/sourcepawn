@@ -101,6 +101,7 @@ class PluginRuntime
   }
   bool PerformFullValidation() override;
   bool UsesDirectArrays() override;
+  bool UsesHeapScopes();
 
   // Mark builtin natives as bound.
   void InstallBuiltinNatives();

@@ -497,7 +497,7 @@ PluginContext::popTrackerAndSetHeap()
 int
 PluginContext::pushTracker(uint32_t amount)
 {
-  assert(usesHeapTracker());
+  assert(!m_pRuntime->UsesHeapScopes());
   if (amount > INT_MAX)
     return SP_ERROR_TRACKER_BOUNDS;
   if (sp_ - hp_ < STACK_MARGIN)
@@ -731,7 +731,7 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
   argv[argc - 1] = hp_;
   hp_ = new_hp;
 
-  if (usesHeapTracker()) {
+  if (!m_pRuntime->UsesHeapScopes()) {
     if (int err = pushTracker(bytes))
       return err;
   }
@@ -753,7 +753,7 @@ PluginContext::generateArray(cell_t dims, cell_t* stk, bool autozero)
       return SP_ERROR_HEAPLOW;
 
     hp_ += bytes;
-    if (usesHeapTracker()) {
+    if (!m_pRuntime->UsesHeapScopes()) {
       if (int err = pushTracker(bytes))
         return err;
     }
@@ -1017,13 +1017,6 @@ PluginContext::initArray(cell_t array_addr,
     memset(fill_pos, 0, data_fill_size * sizeof(cell_t));
   }
   return true;
-}
-
-bool
-PluginContext::usesHeapTracker() const
-{
-  LegacyImage* image = runtime()->image();
-  return !!(image->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes);
 }
 
 bool
