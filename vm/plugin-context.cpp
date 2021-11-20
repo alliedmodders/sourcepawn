@@ -1073,3 +1073,15 @@ PluginContext::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t
   }
   return true;
 }
+
+void
+PluginContext::EnterHeapScope()
+{
+  enterHeapScope();
+}
+
+void
+PluginContext::LeaveHeapScope()
+{
+  leaveHeapScope();
+}
