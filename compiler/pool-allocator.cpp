@@ -26,8 +26,6 @@
 
 using namespace ke;
 
-PoolAllocator gPoolAllocator;
-
 PoolAllocator::PoolAllocator()
 {
 }
@@ -77,40 +75,4 @@ PoolAllocator::ensurePool(size_t actualBytes)
     pool->end = pool->ptr + bytesNeeded;
     pools_.push_back(std::move(pool));
     return pools_.back().get();
-}
-
-void
-PoolAllocationPolicy::reportOutOfMemory()
-{
-    fprintf(stderr, "OUT OF POOL MEMORY\n");
-    abort();
-}
-
-void
-PoolAllocationPolicy::reportAllocationOverflow()
-{
-    fprintf(stderr, "OUT OF POOL MEMORY\n");
-    abort();
-}
-
-void*
-PoolAllocationPolicy::Malloc(size_t bytes)
-{
-    void* p = gPoolAllocator.rawAllocate(bytes);
-    if (!p) {
-        fprintf(stderr, "OUT OF POOL MEMORY\n");
-        abort();
-    }
-    return p;
-}
-
-void*
-PoolAllocationPolicy::am_malloc(size_t bytes)
-{
-    return PoolAllocationPolicy::Malloc(bytes);
-}
-
-void
-PoolAllocationPolicy::am_free(void* ptr)
-{
 }

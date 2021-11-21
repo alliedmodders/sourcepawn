@@ -289,7 +289,7 @@ cleanup:
         }
         if (opt_show_stats.value()) {
             size_t allocated, reserved, bookkeeping;
-            gPoolAllocator.memoryUsage(&allocated, &reserved, &bookkeeping);
+            cc.allocator().memoryUsage(&allocated, &reserved, &bookkeeping);
 
             printf("Pool allocation:   %8" KE_FMT_SIZET " bytes\n", allocated);
             printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);

@@ -32,7 +32,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
-#include "pool-allocator.h"
+#include "pool-objects.h"
 #include "shared/string-atom.h"
 
 typedef int32_t cell;
