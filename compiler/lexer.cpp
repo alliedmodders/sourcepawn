@@ -1471,8 +1471,6 @@ Lexer::substallpatterns(unsigned char* line, int buffersize)
 int
 Lexer::ScanEllipsis(const unsigned char* lptr)
 {
-    static int64_t inpfmark = 0;
-    unsigned char* localbuf;
     short localcomment, found;
 
     /* first look for the ellipsis in the remainder of the string */
@@ -1488,16 +1486,16 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
      */
     if (!inpf_ || inpf_->Eof())
         return 0; /* quick exit: cannot read after EOF */
-    if ((localbuf = (unsigned char*)malloc((sLINEMAX + 1) * sizeof(unsigned char))) == NULL)
-        return 0;
-    inpfmark = inpf_->Pos();
+
+    auto localbuf = std::make_unique<unsigned char[]>(sLINEMAX + 1);
+    auto inpfmark = inpf_->Pos();
     localcomment = icomment_;
 
     found = 0;
     /* read from the file, skip preprocessing, but strip off comments */
-    while (!found && inpf_->Read(localbuf, sLINEMAX)) {
-        StripComments(localbuf);
-        lptr = localbuf;
+    while (!found && inpf_->Read(localbuf.get(), sLINEMAX)) {
+        StripComments(localbuf.get());
+        lptr = localbuf.get();
         /* skip white space */
         while (*lptr <= ' ' && *lptr != '\0')
             lptr++;
@@ -1508,7 +1506,6 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
     }
 
     /* clean up & reset */
-    free(localbuf);
     inpf_->Reset(inpfmark);
     icomment_ = localcomment;
     return found;
