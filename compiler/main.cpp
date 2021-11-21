@@ -119,8 +119,6 @@ static HWND hwndFinish = 0;
 #endif
 static int sc_syntax_only = FALSE;
 
-char g_tmpfile[PATH_MAX] = {0};
-
 args::ToggleOption opt_show_stats(nullptr, "--show-stats", Some(false),
                                   "Show compiler statistics on exit.");
 
@@ -291,10 +289,6 @@ cleanup:
             printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);
             printf("Pool bookkeeping:  %8" KE_FMT_SIZET " bytes\n", bookkeeping);
         }
-    }
-
-    if (g_tmpfile[0] != '\0') {
-        remove(g_tmpfile);
     }
 
     gTypes.clear();
