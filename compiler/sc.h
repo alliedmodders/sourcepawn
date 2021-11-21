@@ -44,7 +44,7 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 
-#include "pool-allocator.h"
+#include "pool-objects.h"
 #include "shared/string-pool.h"
 #include "source-file.h"
 #include "types.h"

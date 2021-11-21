@@ -2168,7 +2168,7 @@ Parser::parse_function_type()
     lexer_->need('(');
 
     while (!lexer_->match(')')) {
-        auto decl = gPoolAllocator.alloc<declinfo_t>();
+        auto decl = cc_.allocator().alloc<declinfo_t>();
         decl->type.ident = iVARIABLE;
 
         parse_new_decl(decl, nullptr, DECLFLAG_ARGUMENT);

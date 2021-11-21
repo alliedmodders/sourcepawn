@@ -58,6 +58,7 @@ binary.sources += [
   'parser.cpp',
   'pawncc.cpp',
   'pool-allocator.cpp',
+  'pool-objects.cpp',
   'sci18n.cpp',
   'sctracker.cpp',
   'scvars.cpp',

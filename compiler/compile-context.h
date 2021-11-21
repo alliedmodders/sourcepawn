@@ -27,9 +27,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "lexer.h"
+#include "pool-allocator.h"
 #include "source-file.h"
 
+class Lexer;
 class ReportManager;
 class SemaContext;
 class SymbolScope;
@@ -88,6 +89,7 @@ class CompileContext final
     void set_inpf_org(std::shared_ptr<SourceFile> sf) { inpf_org_ = sf; }
 
     jmp_buf* errbuf() { return &errbuf_; }
+    PoolAllocator& allocator() { return allocator_; }
 
     // No copy construction.
     CompileContext(const CompileContext&) = delete;
@@ -96,6 +98,7 @@ class CompileContext final
     void operator =(CompileContext&&) = delete;
 
   private:
+    PoolAllocator allocator_;
     SymbolScope* globals_;
     std::string default_include_;
     std::unordered_set<symbol*> functions_;
