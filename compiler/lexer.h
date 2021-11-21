@@ -390,6 +390,8 @@ class Lexer
     token_buffer_t preproc_buffer_;
     token_buffer_t* token_buffer_;
 
+    char literal_buffer_[sLINEMAX + 1];
+
     struct MacroTablePolicy {
         static bool matches(const std::string& a, const std::string& b) {
             return a == b;
