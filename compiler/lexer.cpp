@@ -2193,11 +2193,10 @@ Lexer::LexStringLiteral(full_token_t* tok)
     for (;;) {
         assert(*lptr == '\"' || *lptr == '\'');
 
-        static char buffer[sLINEMAX + 1];
-        char* cat = buffer;
+        char* cat = literal_buffer_;
         if (*lptr == '\"') {
             lptr += 1;
-            while (*lptr != '\"' && *lptr != '\0' && (cat - buffer) < sLINEMAX) {
+            while (*lptr != '\"' && *lptr != '\0' && (cat - literal_buffer_) < sLINEMAX) {
                 if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
                     *cat++ = *lptr;
                     if (*lptr == ctrlchar_ && *(lptr + 1) != '\0')
@@ -2217,7 +2216,7 @@ Lexer::LexStringLiteral(full_token_t* tok)
         }
         *cat = '\0'; /* terminate string */
 
-        packedstring((unsigned char*)buffer, 0, tok);
+        packedstring((unsigned char*)literal_buffer_, 0, tok);
 
         if (*lptr == '\"' || *lptr == '\'')
             lptr += 1; /* skip final quote */
