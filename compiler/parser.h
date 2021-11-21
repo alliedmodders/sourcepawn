@@ -105,8 +105,8 @@ class Parser
 
     Expr* hier14();
     Expr* parse_view_as();
-    Expr* plnge(int* opstr, NewHierFn hier);
-    Expr* plnge_rel(int* opstr, NewHierFn hier);
+    Expr* plnge(const int* opstr, NewHierFn hier);
+    Expr* plnge_rel(const int* opstr, NewHierFn hier);
     Expr* hier13();
     Expr* hier12();
     Expr* hier11();
@@ -125,7 +125,7 @@ class Parser
     Expr* struct_init();
     Expr* parse_new_array(const token_pos_t& pos, const TypenameInfo& rt);
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
-    int nextop(int* opidx, int* list);
+    int nextop(int* opidx, const int* list);
 
     bool consume_line();
 
