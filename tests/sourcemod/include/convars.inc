@@ -171,7 +171,6 @@ methodmap ConVar < Handle
 
 	// Retrieves the string value of a console variable.
 	//
-	// @param convar     Handle to the convar.
 	// @param value      Buffer to store the value of the convar.
 	// @param maxlength  Maximum length of string buffer.
 	public native void GetString(char[] value, int maxlength);
@@ -251,7 +250,6 @@ methodmap ConVar < Handle
 
 	// Removes a hook for when a console variable's value is changed.
 	//
-	// @param convar    Handle to the convar.
 	// @param callback  An OnConVarChanged function pointer.
 	// @error           No active hook on convar.
 	public native void RemoveChangeHook(ConVarChanged callback);

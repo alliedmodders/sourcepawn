@@ -62,6 +62,8 @@ public int MenuHandler_ChangeMap(Menu menu, MenuAction action, int param1, int p
 		Panel panel = view_as<Panel>(param2);
 		panel.SetTitle(title);
 	}
+
+	return 0;
 }
 
 public void AdminMenu_Map(TopMenu topmenu, 
@@ -159,8 +161,10 @@ int LoadMapList(Menu menu)
 	
 	for (int i = 0; i < map_count; i++)
 	{
+		char displayName[PLATFORM_MAX_PATH];
 		GetArrayString(g_map_array, i, map_name, sizeof(map_name));
-		menu.AddItem(map_name, map_name);
+		GetMapDisplayName(map_name, displayName, sizeof(displayName));
+		menu.AddItem(map_name, displayName);
 	}
 	
 	return map_count;
