@@ -980,7 +980,7 @@ VerifyBinary(const char* file, void* buffer, size_t size)
     }
 }
 
-static void
+static bool
 splat_to_binary(CompileContext& cc, const char* binfname, void* bytes, size_t size)
 {
     if (cc.verify_output())
@@ -989,18 +989,19 @@ splat_to_binary(CompileContext& cc, const char* binfname, void* bytes, size_t si
     // Note: error 161 will setjmp(), which skips destructors :(
     FILE* fp = fopen(binfname, "wb");
     if (!fp) {
-        error(FATAL_ERROR_WRITE, binfname);
-        return;
+        report(419) << binfname;
+        return false;
     }
     if (fwrite(bytes, 1, size, fp) != size) {
         fclose(fp);
-        error(FATAL_ERROR_WRITE, binfname);
-        return;
+        report(419) << binfname;
+        return false;
     }
     fclose(fp);
+    return true;
 }
 
-void
+bool
 assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compression_level)
 {
     Assembler assembler(cc, cg);
@@ -1027,8 +1028,7 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
             new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
             new_buffer.writeBytes(zbuf.get(), new_disksize);
 
-            splat_to_binary(cc, binfname, new_buffer.bytes(), new_buffer.size());
-            return;
+            return splat_to_binary(cc, binfname, new_buffer.bytes(), new_buffer.size());
         }
 
         printf("Unable to compress, error %d\n", err);
@@ -1038,5 +1038,5 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
     header->disksize = 0;
     header->compression = SmxConsts::FILE_COMPRESSION_NONE;
 
-    splat_to_binary(cc, binfname, buffer.bytes(), buffer.size());
+    return splat_to_binary(cc, binfname, buffer.bytes(), buffer.size());
 }

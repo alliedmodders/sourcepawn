@@ -81,8 +81,6 @@ DeduceErrorType(int number)
     auto& cc = CompileContext::get();
     if (number < 200 || (number < 300 && cc.options()->warnings_are_errors) || number >= 400)
         return ErrorType::Error;
-    if (number >= 300)
-        return ErrorType::Fatal;
 
     if (cc.reports()->IsWarningDisabled(number))
         return ErrorType::Suppressed;
@@ -95,8 +93,6 @@ GetErrorTypePrefix(ErrorType type)
     switch (type) {
         case ErrorType::Error:
             return "error";
-        case ErrorType::Fatal:
-            return "fatal error";
         case ErrorType::Warning:
         case ErrorType::Suppressed:
             return "warning";
@@ -118,13 +114,10 @@ GetMessageForNumber(int number)
         assert(size_t(number - 200) < sizeof(warnmsg) / sizeof(*warnmsg));
         return warnmsg[number - 200];
     }
-    if (number >= 400) {
-        assert(size_t(number - 400) < sizeof(errmsg_ex) / sizeof(*errmsg_ex));
-        return errmsg_ex[number - 400];
-    }
-    assert(number >= FIRST_FATAL_ERROR);
-    assert(size_t(number - FIRST_FATAL_ERROR) < sizeof(fatalmsg) / sizeof(*fatalmsg));
-    return fatalmsg[number - FIRST_FATAL_ERROR];
+
+    assert(number >= 400);
+    assert(size_t(number - 400) < sizeof(errmsg_ex) / sizeof(*errmsg_ex));
+    return errmsg_ex[number - 400];
 }
 
 /*  error
@@ -282,16 +275,6 @@ error(symbol* sym, int number, ...)
     return 0;
 }
 
-static void
-abort_compiler()
-{
-    auto& cc = CompileContext::get();
-    if (cc.errfname().empty()) {
-        fprintf(stdout, "Compilation aborted.\n");
-    }
-    longjmp(*cc.errbuf(), 2); /* fatal error, quit */
-}
-
 ErrorReport
 ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
 {
@@ -346,16 +329,14 @@ ReportManager::ReportError(ErrorReport&& report)
     /* errflag is reset on each semicolon.
      * In a two-pass compiler, an error should not be reported twice. Therefore
      * the error reporting is enabled only in the second pass (and only when
-     * actually producing output). Fatal errors may never be ignored.
+     * actually producing output).
      */
-    if (report.type != ErrorType::Fatal) {
-        // This is needed so Analyze() can return "true" but still propagate errors.
-        if (report.type == ErrorType::Error)
-            total_errors_++;
+    // This is needed so Analyze() can return "true" but still propagate errors.
+    if (report.type == ErrorType::Error)
+        total_errors_++;
 
-        if (errflag_ && cc_.one_error_per_stmt())
-            return;
-    }
+    if (errflag_ && cc_.one_error_per_stmt())
+        return;
 
     break_on_error(report.number);
 
@@ -367,20 +348,15 @@ ReportManager::ReportError(ErrorReport&& report)
         case ErrorType::Warning:
             break;
         case ErrorType::Error:
-        case ErrorType::Fatal:
             total_errors_++;
             if (cc_.one_error_per_stmt())
                 errflag_ = true;
             break;
     }
 
-    if (error_list_.back().type == ErrorType::Fatal || total_errors_ > 25) {
-        if (cc_.shutting_down())
-            DumpErrorReport(true);
-        else
-            abort_compiler();
-        return;
-    }
+    total_reported_errors_++;
+    if (total_reported_errors_ > 25)
+        cc_.set_must_abort();
 
     // Count messages per line, reset if not the same line.
     if (lastline_ != error_list_.back().lineno || error_list_.back().fileno != lastfile_)
@@ -392,7 +368,7 @@ ReportManager::ReportError(ErrorReport&& report)
     if (error_list_.back().type != ErrorType::Warning)
         errors_on_line_++;
     if (errors_on_line_ >= 3)
-        error(FATAL_ERROR_OVERWHELMED_BY_BAD);
+        cc_.set_must_abort();
 }
 
 void

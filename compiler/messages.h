@@ -224,32 +224,6 @@ static const char* errmsg[] = {
     /*185*/ "invalid default array initializer\n",
 };
 
-static const char* fatalmsg[] = {
-    /*300*/ "cannot read from file: \"%s\"\n",
-    /*301*/ "cannot write to file: \"%s\"\n",
-    /*302*/ "table overflow: \"%s\"\n",
-    /* table can be: loop table
-           *               literal table
-           *               staging buffer
-           *               option table (response file)
-           *               peephole optimizer table
-           */
-    /*303*/ "insufficient memory\n",
-    /*304*/ "invalid assembler instruction \"%s\"\n",
-    /*305*/ "numeric overflow, exceeding capacity\n",
-    /*306*/ "compiled script exceeds the maximum memory size (%ld bytes)\n",
-    /*307*/ "too many error messages on one line\n",
-    /*308*/ "codepage mapping file not found\n",
-    /*309*/ "invalid path: \"%s\"\n",
-    /*310*/ "assertion failed: %s\n",
-    /*311*/ "user error: %s\n",
-    /*312*/ "compiler bug: calling stock \"%s\" that has no generated code\n",
-    /*313*/
-    "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
-    /*314*/ "only one source file can be specified at a time\n",
-    /*315*/ "unhandled AST type: %d\n",
-};
-
 static const char* warnmsg[] = {
     /*200*/ "symbol \"%s\" is truncated to %d characters\n",
     /*201*/ "redefinition of constant/macro (symbol \"%s\")\n",
@@ -318,4 +292,9 @@ static const char* errmsg_ex[] = {
     /*412*/ "function %s implements a forward but is not marked as public\n",
     /*413*/ "returned array does not have the same dimension count as return type\n",
     /*414*/ "include statements are only allowed at the top-level scope\n",
+    /*415*/ "assertion failed: %s\n",
+    /*416*/ "user error: %s\n",
+    /*417*/ "cannot read from file: \"%s\"\n",
+    /*418*/ "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
+    /*419*/ "cannot write to file: \"%s\"\n",
 };

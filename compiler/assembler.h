@@ -30,7 +30,7 @@
 #include "shared/byte-buffer.h"
 #include "shared/string-pool.h"
 
-void assemble(CompileContext& cc, CodeGenerator& cg, const char* outname,
+bool assemble(CompileContext& cc, CodeGenerator& cg, const char* outname,
               int compression_level);
 
 class Assembler

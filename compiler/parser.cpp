@@ -68,7 +68,7 @@ Parser::Parse()
     lexer_->Start();
 
     std::deque<Stmt*> add_to_end;
-    while (lexer_->freading()) {
+    while (lexer_->freading() && !cc_.must_abort()) {
         Stmt* decl = nullptr;
 
         int tok = lexer_->lex();
@@ -117,7 +117,7 @@ Parser::Parse()
                 break;
             case tFUNCENUM:
             case tFUNCTAG:
-                error(FATAL_ERROR_FUNCENUM);
+                report(418);
                 break;
             case tTYPEDEF:
                 decl = parse_typedef();
@@ -155,7 +155,7 @@ Parser::Parse()
                 auto name = lexer_->current_token()->data;
                 auto result = lexer_->PlungeFile(name.c_str() + 1, (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE)
-                    report(FATAL_ERROR_READ) << name.substr(1);
+                    report(417) << name.substr(1);
 
                 int fcurrent = lexer_->fcurrent();
                 static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
@@ -1547,7 +1547,9 @@ Parser::parse_compound(bool sameline)
     }
 
     int indent = -1;
-    while (lexer_->match('}') == 0) { /* repeat until compound statement is closed */
+
+    /* repeat until compound statement is closed */
+    while (lexer_->match('}') == 0 && !cc_.must_abort()) {
         if (!lexer_->freading()) {
             error(30, block_start); /* compound block not closed at end of file */
             break;
