@@ -258,7 +258,6 @@ int alphanum(char c);
 int ishex(char c);
 int isoctal(char c);
 int getlabel(void);
-char* itoh(ucell val);
 std::string get_token_string(int tok_id);
 int alpha(char c);
 

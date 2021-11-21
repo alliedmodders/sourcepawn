@@ -2680,37 +2680,6 @@ isoctal(char c)
     return (c >= '0' && c <= '7');
 }
 
-/*  itoh
- *
- *  Converts a number to a hexadecimal string and returns a pointer to that
- *  string. This function is NOT re-entrant.
- */
-char*
-itoh(ucell val)
-{
-    static char itohstr[30];
-    char* ptr;
-    int i, nibble[16]; /* a 64-bit hexadecimal cell has 16 nibbles */
-    int max = 8;
-    ptr = itohstr;
-    for (i = 0; i < max; i += 1) {
-        nibble[i] = (int)(val & 0x0f); /* nibble 0 is lowest nibble */
-        val >>= 4;
-    } /* endfor */
-    i = max - 1;
-    while (nibble[i] == 0 && i > 0) /* search for highest non-zero nibble */
-        i -= 1;
-    while (i >= 0) {
-        if (nibble[i] >= 10)
-            *ptr++ = (char)('a' + (nibble[i] - 10));
-        else
-            *ptr++ = (char)('0' + nibble[i]);
-        i -= 1;
-    }
-    *ptr = '\0'; /* and a zero-terminator */
-    return itohstr;
-}
-
 bool
 Lexer::matchsymbol(sp::Atom** name)
 {
