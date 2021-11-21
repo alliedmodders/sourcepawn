@@ -378,12 +378,14 @@ public SMCResult KeyValue(SMCParser smc, const char[] key, const char[] value, b
 {
 	g_groupList.groupListName.PushString(key);
 	g_groupList.groupListCommand.PushString(value);
+
 	return SMCParse_Continue;
 }
 
 public SMCResult EndSection(SMCParser smc)
 {
 	g_groupCount = g_groupList.groupListName.Length;
+
 	return SMCParse_Continue;
 }
 

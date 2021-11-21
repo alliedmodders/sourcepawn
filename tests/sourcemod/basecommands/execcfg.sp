@@ -90,6 +90,8 @@ public int MenuHandler_ExecCFG(Menu menu, MenuAction action, int param1, int par
 		Panel panel = view_as<Panel>(param2);
 		panel.SetTitle(title);
 	}
+
+	return 0;
 }
 
 public Action Command_ExecCfg(int client, int args)
@@ -158,6 +160,7 @@ public SMCResult NewSection(SMCParser smc, const char[] name, bool opt_quotes)
 public SMCResult KeyValue(SMCParser smc, const char[] key, const char[] value, bool key_quotes, bool value_quotes)
 {
 	g_ConfigMenu.AddItem(key, value);
+
 	return SMCParse_Continue;
 }
 
