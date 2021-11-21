@@ -38,8 +38,7 @@ class ParseNode;
 enum class ErrorType {
     Suppressed,
     Warning,
-    Error,
-    Fatal
+    Error
 };
 
 struct ErrorReport {
@@ -52,27 +51,6 @@ struct ErrorReport {
     std::string filename;
     std::string message;
     ErrorType type;
-};
-
-enum FatalError {
-    FIRST_FATAL_ERROR = 300,
-
-    FATAL_ERROR_READ = FIRST_FATAL_ERROR,
-    FATAL_ERROR_WRITE,
-    FATAL_ERROR_ALLOC_OVERFLOW,
-    FATAL_ERROR_OOM,
-    FATAL_ERROR_INVALID_INSN,
-    FATAL_ERROR_INT_OVERFLOW,
-    FATAL_ERROR_SCRIPT_OVERFLOW,
-    FATAL_ERROR_OVERWHELMED_BY_BAD,
-    FATAL_ERROR_NO_CODEPAGE,
-    FATAL_ERROR_INVALID_PATH,
-    FATAL_ERROR_ASSERTION_FAILED,
-    FATAL_ERROR_USER_ERROR,
-    FATAL_ERROR_NO_GENERATED_CODE,
-    FATAL_ERROR_FUNCENUM,
-
-    FATAL_ERRORS_TOTAL
 };
 
 class ReportManager;
@@ -200,6 +178,9 @@ class ReportManager
     // suppress generating a report if there are too many errors on one
     // line.
     unsigned int total_errors_ = 0;
+
+    // This is the actual # of reported errors.
+    size_t total_reported_errors_ = 0;
 };
 
 class AutoCountErrors

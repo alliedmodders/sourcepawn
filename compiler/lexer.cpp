@@ -887,7 +887,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     /* nothing */;        /* save start of expression */
                 preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
                 if (!val)
-                    error(FATAL_ERROR_ASSERTION_FAILED, str); /* assertion failed */
+                    report(415) << str;
                 check_empty(lptr);
             }
             break;
@@ -987,7 +987,6 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
         case tpDEFINE: {
             ret = CMD_DEFINE;
             if (!IsSkipping()) {
-                char *pattern, *substitution;
                 const unsigned char *start, *end;
                 int count, prefixlen;
                 /* find the pattern to match */
@@ -1005,10 +1004,8 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     error(74); /* pattern must start with an alphabetic character */
                     break;
                 }
-                /* store matched pattern */
-                pattern = (char*)malloc(count + 1);
-                if (pattern == NULL)
-                    error(FATAL_ERROR_OOM);
+                auto pattern_mem = std::make_unique<char[]>(count + 1);
+                auto pattern = pattern_mem.get();
                 lptr = start;
                 count = 0;
                 while (lptr != end) {
@@ -1040,9 +1037,8 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                 if (end == NULL)
                     end = lptr;
                 /* store matched substitution */
-                substitution = (char*)malloc(count + 1); /* +1 for '\0' */
-                if (substitution == NULL)
-                    error(FATAL_ERROR_OOM);
+                auto substitution_mem = std::make_unique<char[]>(count + 1);
+                auto substitution = substitution_mem.get();
                 lptr = start;
                 count = 0;
                 while (lptr != end) {
@@ -1066,8 +1062,6 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                 /* add the pattern/substitution pair to the list */
                 assert(strlen(pattern) > 0);
                 AddMacro(pattern, prefixlen, substitution);
-                free(pattern);
-                free(substitution);
             }
             break;
         } /* case */
@@ -1086,7 +1080,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             while (*lptr <= ' ' && *lptr != '\0')
                 lptr++;
             if (!IsSkipping())
-                error(FATAL_ERROR_USER_ERROR, lptr); /* user error */
+                report(416) << reinterpret_cast<const char*>(lptr);
             break;
         case tpWARNING:
             while (*lptr <= ' ' && *lptr != '\0')

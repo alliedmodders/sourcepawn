@@ -20,8 +20,6 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include <setjmp.h>
-
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -88,7 +86,9 @@ class CompileContext final
     std::shared_ptr<SourceFile> inpf_org() const { return inpf_org_; }
     void set_inpf_org(std::shared_ptr<SourceFile> sf) { inpf_org_ = sf; }
 
-    jmp_buf* errbuf() { return &errbuf_; }
+    bool must_abort() const { return must_abort_; }
+    void set_must_abort() { must_abort_ = true; }
+
     PoolAllocator& allocator() { return allocator_; }
 
     // No copy construction.
@@ -119,10 +119,12 @@ class CompileContext final
     bool shutting_down_ = false;
     bool one_error_per_stmt_ = false;
     std::unique_ptr<ReportManager> reports_;
-    jmp_buf errbuf_;
 
     // Skip the verify step.
     bool verify_output_ = true;
+
+    // Indicates that compilation must abort immediately.
+    bool must_abort_ = false;
 
     SemaContext* sc_ = nullptr;
 };

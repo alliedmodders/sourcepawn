@@ -170,7 +170,6 @@ args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
  */
 int
 pc_compile(int argc, char* argv[]) {
-    int jmpcode;
     int retcode;
     ParseTree* tree = nullptr;
     std::string ext;
@@ -187,11 +186,6 @@ pc_compile(int argc, char* argv[]) {
 
     /* set global variables to their initial value */
     initglobals();
-
-    /* make sure that we clean up on a fatal error; do this before the first
-     * call to error(). */
-    if ((jmpcode = setjmp(*cc.errbuf())) != 0)
-        goto cleanup;
 
     parseoptions(cc, argc, argv);
 
@@ -212,8 +206,10 @@ pc_compile(int argc, char* argv[]) {
 
     assert(options->source_files.size() == 1);
     cc.set_inpf_org(std::make_shared<SourceFile>());
-    if (!cc.inpf_org()->Open(options->source_files[0]))
-        report(FATAL_ERROR_READ) << options->source_files[0];
+    if (!cc.inpf_org()->Open(options->source_files[0])) {
+        report(417) << options->source_files[0];
+        goto cleanup;
+    }
 
     cc.lexer()->Init(cc.inpf_org());
 
@@ -267,11 +263,11 @@ cleanup:
         cg.Generate();
 
     // Write the binary file.
-    if (!sc_syntax_only && compile_ok && jmpcode == 0) {
-        assemble(cc, cg, cc.binfname().c_str(), opt_compression.value());
+    if (!sc_syntax_only && compile_ok) {
+        compile_ok &= assemble(cc, cg, cc.binfname().c_str(), opt_compression.value());
     }
 
-    if (compile_ok && jmpcode == 0 && opt_showincludes.value()) {
+    if (compile_ok && opt_showincludes.value()) {
         for (const auto& name : cc.included_files())
             fprintf(stdout, "Note: including file: %s\n", name.c_str());
     }
@@ -279,7 +275,7 @@ cleanup:
     cc.set_inpf_org(nullptr);
 
     if (compile_ok && cc.errfname().empty()) {
-        if (verbosity >= 1 && compile_ok && jmpcode == 0) {
+        if (verbosity >= 1 && compile_ok) {
             printf("Code size:         %" PRIu32 " bytes\n", cg.code_size());
             printf("Data size:         %" PRIu32 " bytes\n", cg.data_size());
             printf("Stack/heap size:   %8ld bytes\n", (long)cg.DynamicMemorySize());
@@ -314,7 +310,7 @@ cleanup:
             printf("\n%d Warning%s.\n", warnnum, (warnnum > 1) ? "s" : "");
         retcode = 0; /* use "0", so that MAKE and similar tools continue */
     } else {
-        retcode = jmpcode;
+        retcode = 0;
         if (retcode == 0 && verbosity >= 2)
             printf("\nDone.\n");
     }
