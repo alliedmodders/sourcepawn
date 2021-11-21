@@ -349,12 +349,12 @@ ReportManager::ReportError(ErrorReport&& report)
             break;
         case ErrorType::Error:
             total_errors_++;
+            total_reported_errors_++;
             if (cc_.one_error_per_stmt())
                 errflag_ = true;
             break;
     }
 
-    total_reported_errors_++;
     if (total_reported_errors_ > 25)
         cc_.set_must_abort();
 

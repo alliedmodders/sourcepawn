@@ -265,6 +265,9 @@ cleanup:
         compile_ok &= assemble(cc, cg, cc.binfname().c_str(), opt_compression.value());
     }
 
+    errnum += cc.reports()->NumErrorMessages();
+    cc.reports()->DumpErrorReport(true);
+
     if (compile_ok && opt_showincludes.value()) {
         for (const auto& name : cc.included_files())
             fprintf(stdout, "Note: including file: %s\n", name.c_str());
