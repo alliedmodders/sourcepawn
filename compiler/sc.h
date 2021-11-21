@@ -57,7 +57,6 @@ typedef uint32_t ucell;
 #define PUBLIC_CHAR '@' /* character that defines a function "public" */
 #define sCHARBITS 8     /* size of a packed character */
 
-#define sCOMP_STACK 32     /* maximum nesting of #if .. #endif sections */
 #define sLINEMAX 4095
 #define PREPROC_TERM \
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */

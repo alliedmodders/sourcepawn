@@ -369,10 +369,10 @@ class Lexer
     ke::HashMap<sp::CharsAndLength, int, KeywordTablePolicy> keywords_;
     short icomment_; /* currently in multiline comment? */
     std::vector<short> comment_stack_;
-    std::vector<short> preproc_if_stack_;
-    char ifstack_[sCOMP_STACK]; /* "#if" stack */
-    short iflevel_;             /* nesting level if #if/#else/#endif */
-    short skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
+    std::vector<size_t> preproc_if_stack_;
+    std::vector<char> ifstack_;
+    size_t iflevel_;             /* nesting level if #if/#else/#endif */
+    size_t skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
     int listline_ = -1; /* "current line" for the list file */
     int lexnewline_;
     std::string deprecate_;
