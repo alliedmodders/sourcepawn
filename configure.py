@@ -36,6 +36,8 @@ if ambuild_version.startswith('2.1'):
 	sys.exit(1)
 
 parser = run.BuildParser(sourcePath=sys.path[0], api='2.2')
+parser.options.add_argument('--enable-asan', action='store_true', default=False,
+		                        help='Enable ASAN. Linux only.')
 parser.options.add_argument('--enable-debug', action='store_const', const='1', dest='debug',
                             help='Enable debugging symbols')
 parser.options.add_argument('--enable-optimize', action='store_const', const='1', dest='opt',

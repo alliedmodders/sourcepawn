@@ -16,9 +16,10 @@
 # You should have received a copy of the GNU General Public License along with
 # SourcePawn. If not, see http://www.gnu.org/licenses/.
 #
-import os
-import sys
 import copy
+import os
+import subprocess
+import sys
 
 def Normalize(path):
   return os.path.abspath(os.path.normpath(path))
@@ -35,7 +36,9 @@ class Config(object):
   def __init__(self):
     super(Config, self).__init__()
     self.enable_coverage = getattr(builder.options, 'enable_coverage', False)
+    self.enable_asan = getattr(builder.options, 'enable_asan', False)
     self.targets = []
+    self.asan_libs = {}
 
   def configure(self):
     if builder.options.targets:
@@ -57,106 +60,18 @@ class Config(object):
 
   def configure_cxx(self, cxx):
     if cxx.like('gcc'):
-      cxx.cflags += [
-        '-pipe',
-        '-Wall',
-        '-Werror',
-        '-Wno-switch',
-      ]
-      cxx.cxxflags += ['-std=c++17']
-
-      if builder.options.debug == '1':
-          cxx.cflags += ['-g3']
-          cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
-
-      have_gcc = cxx.family == 'gcc'
-      have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
-      if have_clang or have_gcc:
-        cxx.cflags += ['-fvisibility=hidden']
-        cxx.cxxflags += ['-fvisibility-inlines-hidden']
-        if have_clang or (have_gcc and cxx.version >= '4.7'):
-          cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
-        if not (have_gcc and cxx.version <= 6.3):
-          cxx.cxxflags += ['-Wno-unused-private-field']
-
-      if self.enable_coverage:
-        if cxx.family == 'clang':
-          coverage_argv = [
-            '-fprofile-instr-generate',
-            '-fcoverage-mapping',
-          ]
-          cxx.cflags += coverage_argv
-          cxx.linkflags += coverage_argv
-        else:
-          raise Exception('Code coverage support is not implemented for {0}.'.format(cxx.family))
-
-      # Disable some stuff we don't use, that gives us better binary
-      # compatibility on Linux.
-      cxx.cxxflags += [
-        '-fno-rtti',
-        '-Wno-non-virtual-dtor',
-        '-Wno-overloaded-virtual',
-      ]
-
-      if have_gcc:
-        if cxx.target.arch in ['x86', 'x86_64']:
-          cxx.cflags += ['-mfpmath=sse']
-        cxx.cxxflags += ['-Wformat-truncation=0']
-
-      cxx.postlink += ['-lm']
-
-      is_wsl = False
-      if os.path.exists('/proc/sys/kernel/osrelease'):
-        with open('/proc/sys/kernel/osrelease', 'rb') as fp:
-          contents = fp.read().decode("utf-8")
-          is_wsl = 'Microsoft' in contents
-
-      if cxx.like('emscripten'):
-        emflags = ['-s', 'PRECISE_F32=1']
-        cxx.cflags += emflags
-        cxx.linkflags += emflags
-        cxx.defines += ['__linux__']
+      self.configure_gcc(cxx)
     elif cxx.like('msvc'):
-      if builder.options.debug == '1':
-        cxx.cflags += ['/MTd']
-        cxx.linkflags += ['/NODEFAULTLIB:libcmt']
-      else:
-        cxx.cflags += ['/MT']
-      cxx.defines += [
-        '_CRT_SECURE_NO_DEPRECATE',
-        '_CRT_SECURE_NO_WARNINGS',
-        '_CRT_NONSTDC_NO_DEPRECATE',
-        '_ITERATOR_DEBUG_LEVEL=0',
-      ]
-      cxx.cflags += [
-        '/W3',
-        '/wd4351',
-      ]
-      cxx.cxxflags += [
-        '/EHsc',
-        '/GR-',
-        '/TP',
-      ]
-      cxx.linkflags += [
-        'kernel32.lib',
-        'user32.lib',
-        'gdi32.lib',
-        'winspool.lib',
-        'comdlg32.lib',
-        'advapi32.lib',
-        'shell32.lib',
-        'ole32.lib',
-        'oleaut32.lib',
-        'uuid.lib',
-        'odbc32.lib',
-        'odbccp32.lib',
-      ]
+      self.configure_msvc(cxx)
 
     # Optimization
     if builder.options.opt == '1':
       cxx.defines += ['NDEBUG']
       if cxx.like('gcc'):
-        cxx.cflags += ['-O3']
+        if self.enable_asan:
+          cxx.cflags += ['-O1']
+        else:
+          cxx.cflags += ['-O3']
         if cxx.like('emscripten'):
           emflags = ['--closure', '1', '-flto', '--llvm-lto', '1']
           cxx.cflags += emflags
@@ -218,6 +133,132 @@ class Config(object):
       os.path.join(builder.sourcePath, 'include'),
     ]
 
+  def configure_gcc(self, cxx):
+    cxx.cflags += [
+      '-pipe',
+      '-Wall',
+      '-Werror',
+      '-Wno-switch',
+    ]
+    cxx.cxxflags += ['-std=c++17']
+
+    if builder.options.debug == '1':
+        cxx.cflags += ['-g3']
+        cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
+
+    have_gcc = cxx.family == 'gcc'
+    have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
+    if have_clang or have_gcc:
+      cxx.cflags += ['-fvisibility=hidden']
+      cxx.cxxflags += ['-fvisibility-inlines-hidden']
+      if have_clang or (have_gcc and cxx.version >= '4.7'):
+        cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
+      if not (have_gcc and cxx.version <= 6.3):
+        cxx.cxxflags += ['-Wno-unused-private-field']
+
+    if self.enable_coverage:
+      if cxx.family == 'clang':
+        coverage_argv = [
+          '-fprofile-instr-generate',
+          '-fcoverage-mapping',
+        ]
+        cxx.cflags += coverage_argv
+        cxx.linkflags += coverage_argv
+      else:
+        raise Exception('Code coverage support is not implemented for {0}.'.format(cxx.family))
+
+    # Disable some stuff we don't use, that gives us better binary
+    # compatibility on Linux.
+    cxx.cxxflags += [
+      '-fno-rtti',
+      '-Wno-non-virtual-dtor',
+      '-Wno-overloaded-virtual',
+    ]
+
+    if have_gcc:
+      if cxx.target.arch in ['x86', 'x86_64']:
+        cxx.cflags += ['-mfpmath=sse']
+      cxx.cxxflags += ['-Wformat-truncation=0']
+
+    cxx.postlink += ['-lm']
+
+    is_wsl = False
+    if os.path.exists('/proc/sys/kernel/osrelease'):
+      with open('/proc/sys/kernel/osrelease', 'rb') as fp:
+        contents = fp.read().decode("utf-8")
+        is_wsl = 'Microsoft' in contents
+
+    if cxx.like('emscripten'):
+      emflags = ['-s', 'PRECISE_F32=1']
+      cxx.cflags += emflags
+      cxx.linkflags += emflags
+      cxx.defines += ['__linux__']
+
+    if self.enable_asan:
+      if not have_clang:
+        raise Exception('--enable-asan only supported when using Clang')
+      self.configure_asan(cxx)
+
+  def configure_msvc(self, cxx):
+    if builder.options.debug == '1':
+      cxx.cflags += ['/MTd']
+      cxx.linkflags += ['/NODEFAULTLIB:libcmt']
+    else:
+      cxx.cflags += ['/MT']
+    cxx.defines += [
+      '_CRT_SECURE_NO_DEPRECATE',
+      '_CRT_SECURE_NO_WARNINGS',
+      '_CRT_NONSTDC_NO_DEPRECATE',
+      '_ITERATOR_DEBUG_LEVEL=0',
+    ]
+    cxx.cflags += [
+      '/W3',
+      '/wd4351',
+    ]
+    cxx.cxxflags += [
+      '/EHsc',
+      '/GR-',
+      '/TP',
+    ]
+    cxx.linkflags += [
+      'kernel32.lib',
+      'user32.lib',
+      'gdi32.lib',
+      'winspool.lib',
+      'comdlg32.lib',
+      'advapi32.lib',
+      'shell32.lib',
+      'ole32.lib',
+      'oleaut32.lib',
+      'uuid.lib',
+      'odbc32.lib',
+      'odbccp32.lib',
+    ]
+
+    if self.enable_asan:
+      raise Exception('--enable-asan only supported when using Clang')
+
+  def configure_asan(self, cxx):
+    if cxx.target.platform != 'linux':
+      raise Exception('--enable-asan only supported on Linux')
+    cxx.cflags += ['-fsanitize=address']
+    cxx.linkflags += ['-fsanitize=address']
+    if cxx.target.arch == 'x86':
+      libclang_rt = 'libclang_rt.asan-i386.so'
+    else:
+      libclang_rt = 'libclang_rt.asan-x86_64.so'
+
+    try:
+      argv = cxx.cxx_argv + ['--print-file-name', libclang_rt]
+      output = subprocess.check_output(argv)
+      output = output.decode('utf-8')
+      output = output.strip()
+    except:
+      raise
+      raise Exception('Could not find {}'.format(libclang_rt))
+
+    self.asan_libs[cxx.target.arch] = os.path.dirname(output)
+
   def ProgramBuilder(self, compiler, name):
     binary = compiler.Program(name)
     if binary.compiler.like('msvc'):
@@ -228,6 +269,13 @@ class Config(object):
     binary = compiler.Library(name)
     if binary.compiler.like('msvc'):
       binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
+
+    # Dumb clang behavior means we have to manually find libclang_rt.
+    if self.enable_asan:
+      binary.compiler.linkflags += [
+        '-shared-libsan',
+        '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target.arch]),
+      ]
     return binary
 
   def StaticLibraryBuilder(self, compiler, name):
