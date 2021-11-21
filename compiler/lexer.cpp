@@ -97,9 +97,9 @@ Lexer::PlungeQualifiedFile(const char* name)
         return FALSE;
     cc.included_files().emplace_back(name);
     input_file_stack_.push_back(inpf_);
-    preproc_if_stack_.push_back(iflevel_);
+    preproc_if_stack_.push_back(ifstack_.size());
     assert(!IsSkipping());
-    assert(skiplevel_ == iflevel_); /* these two are always the same when "parsing" */
+    assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
     comment_stack_.push_back(icomment_);
     current_file_stack_.push_back(fcurrent_);
     current_line_stack_.push_back(fline_);
@@ -291,8 +291,7 @@ Lexer::Readline(unsigned char* line)
                 /* when there is nothing more to read, the #if/#else stack should
                  * be empty and we should not be in a comment
                  */
-                assert(iflevel_ >= 0);
-                if (iflevel_ > 0)
+                if (!ifstack_.empty())
                     error(1, "#endif", "-end of file-");
                 else if (icomment_ != 0)
                     error(1, "*/", "-end of file-");
@@ -301,10 +300,15 @@ Lexer::Readline(unsigned char* line)
             fline_ = ke::PopBack(&current_line_stack_);
             fcurrent_ = ke::PopBack(&current_file_stack_);
             icomment_ = ke::PopBack(&comment_stack_);
-            iflevel_ = ke::PopBack(&preproc_if_stack_);
             need_semicolon_stack_.pop_back();
             require_newdecls_stack_.pop_back();
-            skiplevel_ = iflevel_; /* this condition held before including the file */
+
+            /* this condition held before including the file */
+            skiplevel_ = ke::PopBack(&preproc_if_stack_);
+            while (skiplevel_ < ifstack_.size())
+                ifstack_.pop_back();
+            assert(skiplevel_ == ifstack_.size());
+
             assert(!IsSkipping());   /* idem ditto */
             inpf_ = ke::PopBack(&input_file_stack_);
             SetFileDefines(inpf_->name());
@@ -776,45 +780,40 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
     switch (tok) {
         case tpIF: /* conditional compilation */
             ret = CMD_IF;
-            assert(iflevel_ >= 0);
-            if (iflevel_ >= sCOMP_STACK)
-                error(FATAL_ERROR_ALLOC_OVERFLOW, "Conditional compilation stack");
-            iflevel_++;
+            ifstack_.emplace_back(0);
             if (IsSkipping())
                 break; /* break out of switch */
-            skiplevel_ = iflevel_;
+            skiplevel_ = ifstack_.size();
             preproc_expr(&val, NULL); /* get value (or 0 on error) */
-            ifstack_[iflevel_ - 1] = (char)(val ? PARSEMODE : SKIPMODE);
+            ifstack_.back() = (char)(val ? PARSEMODE : SKIPMODE);
             check_empty(lptr);
             break;
         case tpELSE:
         case tpELSEIF:
             ret = CMD_IF;
-            assert(iflevel_ >= 0);
-            if (iflevel_ == 0) {
+            if (ifstack_.empty()) {
                 error(26); /* no matching #if */
                 cc_.reports()->ResetErrorFlag();
             } else {
                 /* check for earlier #else */
-                if ((ifstack_[iflevel_ - 1] & HANDLED_ELSE) == HANDLED_ELSE) {
+                if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE) {
                     if (tok == tpELSEIF)
                         error(61); /* #elseif directive may not follow an #else */
                     else
                         error(60); /* multiple #else directives between #if ... #endif */
                     cc_.reports()->ResetErrorFlag();
                 } else {
-                    assert(iflevel_ > 0);
                     /* if there has been a "parse mode" on this level, set "skip mode",
                      * otherwise, clear "skip mode"
                      */
-                    if ((ifstack_[iflevel_ - 1] & PARSEMODE) == PARSEMODE) {
+                    if ((ifstack_.back() & PARSEMODE) == PARSEMODE) {
                         /* there has been a parse mode already on this level, so skip the rest */
-                        ifstack_[iflevel_ - 1] |= (char)SKIPMODE;
+                        ifstack_.back() |= (char)SKIPMODE;
                         /* if we were already skipping this section, allow expressions with
                          * undefined symbols; otherwise check the expression to catch errors
                          */
                         if (tok == tpELSEIF) {
-                            if (skiplevel_ == iflevel_)
+                            if (skiplevel_ == ifstack_.size())
                                 preproc_expr(&val, NULL); /* get, but ignore the expression */
                             else
                                 lptr = (unsigned char*)strchr((char*)lptr, '\0');
@@ -825,16 +824,16 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                             /* if we were already skipping this section, allow expressions with
                              * undefined symbols; otherwise check the expression to catch errors
                              */
-                            if (skiplevel_ == iflevel_) {
+                            if (skiplevel_ == ifstack_.size()) {
                                 preproc_expr(&val, NULL); /* get value (or 0 on error) */
                             } else {
                                 lptr = (unsigned char*)strchr((char*)lptr, '\0');
                                 val = 0;
                             }
-                            ifstack_[iflevel_ - 1] = (char)(val ? PARSEMODE : SKIPMODE);
+                            ifstack_.back() = (char)(val ? PARSEMODE : SKIPMODE);
                         } else {
                             /* a simple #else, clear skip mode */
-                            ifstack_[iflevel_ - 1] &= (char)~SKIPMODE;
+                            ifstack_.back() &= (char)~SKIPMODE;
                         }
                     }
                 }
@@ -843,13 +842,13 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             break;
         case tpENDIF:
             ret = CMD_IF;
-            if (iflevel_ == 0) {
+            if (ifstack_.empty()) {
                 error(26); /* no matching "#if" */
                 cc_.reports()->ResetErrorFlag();
             } else {
-                iflevel_--;
-                if (iflevel_ < skiplevel_)
-                    skiplevel_ = iflevel_;
+                ifstack_.pop_back();
+                if (ifstack_.size() < skiplevel_)
+                    skiplevel_ = ifstack_.size();
             }
             check_empty(lptr);
             break;
@@ -1754,7 +1753,6 @@ const char* sc_tokens[] = {"*=",
 Lexer::Lexer(CompileContext& cc)
   : cc_(cc)
 {
-    iflevel_ = 0;   /* preprocessor: nesting of "#if" is currently 0 */
     skiplevel_ = 0; /* preprocessor: not currently skipping */
     icomment_ = 0;  /* currently not in a multiline comment */
     lexnewline_ = false;
