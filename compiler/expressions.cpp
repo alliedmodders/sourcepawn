@@ -38,7 +38,7 @@
 #include "types.h"
 
 /* Function addresses of binary operators for signed operations */
-static int op1[17] = {
+static const int op1[17] = {
     // hier3
     '*', '/', '%',
     // hier4

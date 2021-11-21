@@ -734,19 +734,19 @@ Parser::hier14()
 //
 // The "op1" array in sc3.cpp must have the same ordering as if these lists
 // were flattened.
-static int list3[] = {'*', '/', '%', 0};
-static int list4[] = {'+', '-', 0};
-static int list5[] = {tSHL, tSHR, tSHRU, 0};
-static int list6[] = {'&', 0};
-static int list7[] = {'^', 0};
-static int list8[] = {'|', 0};
-static int list9[] = {tlLE, tlGE, '<', '>', 0};
-static int list10[] = {tlEQ, tlNE, 0};
-static int list11[] = {tlAND, 0};
-static int list12[] = {tlOR, 0};
+static const int list3[] = {'*', '/', '%', 0};
+static const int list4[] = {'+', '-', 0};
+static const int list5[] = {tSHL, tSHR, tSHRU, 0};
+static const int list6[] = {'&', 0};
+static const int list7[] = {'^', 0};
+static const int list8[] = {'|', 0};
+static const int list9[] = {tlLE, tlGE, '<', '>', 0};
+static const int list10[] = {tlEQ, tlNE, 0};
+static const int list11[] = {tlAND, 0};
+static const int list12[] = {tlOR, 0};
 
 Expr*
-Parser::plnge(int* opstr, NewHierFn hier)
+Parser::plnge(const int* opstr, NewHierFn hier)
 {
     int opidx;
 
@@ -774,7 +774,7 @@ Parser::plnge(int* opstr, NewHierFn hier)
 }
 
 Expr*
-Parser::plnge_rel(int* opstr, NewHierFn hier)
+Parser::plnge_rel(const int* opstr, NewHierFn hier)
 {
     int opidx;
 
@@ -2717,7 +2717,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
  *  call with omitted parantheses. Mark this...
  */
 int
-Parser::nextop(int* opidx, int* list)
+Parser::nextop(int* opidx, const int* list)
 {
     *opidx = 0;
     while (*list) {
