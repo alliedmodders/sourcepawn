@@ -1,18 +1,18 @@
-# vim: set ts=2 sw=2 tw=99 et ft=python:
-# 
+# vim: set ts=4 sw=4 tw=99 et ft=python:
+#
 # Copyright (C) 2004-2012 David Anderson
-# 
+#
 # This file is part of SourcePawn.
-# 
+#
 # SourcePawn is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free
 # Software Foundation, either version 3 of the License, or (at your option)
 # any later version.
-# 
+#
 # SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 # FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License along with
 # SourcePawn. If not, see http://www.gnu.org/licenses/.
 #
@@ -21,462 +21,471 @@ import os
 import subprocess
 import sys
 
+
 def Normalize(path):
-  return os.path.abspath(os.path.normpath(path))
+    return os.path.abspath(os.path.normpath(path))
+
 
 def SetArchFlags(compiler):
-  if compiler.like('gcc'):
-    if compiler.target.arch == 'x86':
-      if not compiler.like('emscripten'):
-        compiler.cflags += ['-msse']
-    else:
-      compiler.cflags += ['-fPIC']
+    if compiler.like('gcc'):
+        if compiler.target.arch == 'x86':
+            if not compiler.like('emscripten'):
+                compiler.cflags += ['-msse']
+        else:
+            compiler.cflags += ['-fPIC']
+
 
 class Config(object):
-  def __init__(self):
-    super(Config, self).__init__()
-    self.enable_coverage = getattr(builder.options, 'enable_coverage', False)
-    self.enable_asan = getattr(builder.options, 'enable_asan', False)
-    self.targets = []
-    self.asan_libs = {}
+    def __init__(self):
+        super(Config, self).__init__()
+        self.enable_coverage = getattr(builder.options, 'enable_coverage', False)
+        self.enable_asan = getattr(builder.options, 'enable_asan', False)
+        self.targets = []
+        self.asan_libs = {}
 
-  def configure(self):
-    if builder.options.targets:
-        targets = builder.options.targets.split(',')
+    def configure(self):
+        if builder.options.targets:
+            targets = builder.options.targets.split(',')
 
-        dupes = set()
-        for target in targets:
-            if target in dupes:
-                continue
-            dupes.add(target)
+            dupes = set()
+            for target in targets:
+                if target in dupes:
+                    continue
+                dupes.add(target)
 
-            cxx = builder.DetectCxx(target = target)
+                cxx = builder.DetectCxx(target=target)
+                self.configure_cxx(cxx)
+                self.targets.append(cxx)
+        else:
+            cxx = builder.DetectCxx()
             self.configure_cxx(cxx)
             self.targets.append(cxx)
-    else:
-        cxx = builder.DetectCxx()
-        self.configure_cxx(cxx)
-        self.targets.append(cxx)
 
-  def configure_cxx(self, cxx):
-    if cxx.like('gcc'):
-      self.configure_gcc(cxx)
-    elif cxx.like('msvc'):
-      self.configure_msvc(cxx)
+    def configure_cxx(self, cxx):
+        if cxx.like('gcc'):
+            self.configure_gcc(cxx)
+        elif cxx.like('msvc'):
+            self.configure_msvc(cxx)
 
-    # Optimization
-    if builder.options.opt == '1':
-      cxx.defines += ['NDEBUG']
-      if cxx.like('gcc'):
-        if self.enable_asan:
-          cxx.cflags += ['-O1']
+        # Optimization
+        if builder.options.opt == '1':
+            cxx.defines += ['NDEBUG']
+            if cxx.like('gcc'):
+                if self.enable_asan:
+                    cxx.cflags += ['-O1']
+                else:
+                    cxx.cflags += ['-O3']
+                if cxx.like('emscripten'):
+                    emflags = ['--closure', '1', '-flto', '--llvm-lto', '1']
+                    cxx.cflags += emflags
+                    cxx.linkflags += ['-O3'] + emflags
+            elif cxx.like('msvc'):
+                cxx.cflags += ['/Ox']
+                cxx.linkflags += ['/OPT:ICF', '/OPT:REF']
+
+        # Debugging
+        if builder.options.debug == '1':
+            cxx.defines += ['DEBUG', '_DEBUG']
+            if cxx.like('msvc'):
+                cxx.cflags += ['/Od', '/RTC1']
+            elif cxx.like('emscripten'):
+                emflags = [
+                    '-s', 'ASSERTIONS=2', '-s', 'SAFE_HEAP=1', '-s', 'STACK_OVERFLOW_CHECK=2', '-s',
+                    'DEMANGLE_SUPPORT=1'
+                ]
+                cxx.cflags += emflags
+                cxx.linkflags += emflags
+
+        # This needs to be after our optimization flags which could otherwise disable it.
+        if cxx.like('msvc'):
+            # Don't omit the frame pointer.
+            cxx.cflags += ['/Oy-']
+
+        # Platform-specifics
+        if not cxx.like('emscripten'):
+            if cxx.target.platform == 'linux':
+                cxx.postlink += ['-lpthread', '-lrt']
+            elif cxx.target.platform == 'mac':
+                cxx.linkflags.remove('-lstdc++')
+                cxx.cflags += ['-mmacosx-version-min=10.7']
+                cxx.cflags += ['-stdlib=libc++']
+                cxx.linkflags += ['-stdlib=libc++']
+                cxx.linkflags += ['-mmacosx-version-min=10.7']
+            elif cxx.target.platform == 'windows':
+                cxx.defines += ['WIN32', '_WINDOWS']
+                cxx.cxxdefines += ['NOMINMAX']
+
+        cxx.defines += ['KE_THREADSAFE']
+        cxx.defines += ['SOURCEPAWN_VERSION="1.11"']
+
+        if getattr(builder.options, 'enable_spew', False):
+            cxx.defines += ['JIT_SPEW']
+
+        if builder.options.amtl:
+            amtl_path = builder.options.amtl
         else:
-          cxx.cflags += ['-O3']
-        if cxx.like('emscripten'):
-          emflags = ['--closure', '1', '-flto', '--llvm-lto', '1']
-          cxx.cflags += emflags
-          cxx.linkflags += ['-O3'] + emflags
-      elif cxx.like('msvc'):
-        cxx.cflags += ['/Ox']
-        cxx.linkflags += ['/OPT:ICF', '/OPT:REF']
+            amtl_path = os.path.join(builder.sourcePath, 'third_party', 'amtl')
 
-    # Debugging
-    if builder.options.debug == '1':
-      cxx.defines += ['DEBUG', '_DEBUG']
-      if cxx.like('msvc'):
-        cxx.cflags += ['/Od', '/RTC1']
-      elif cxx.like('emscripten'):
-        emflags = ['-s', 'ASSERTIONS=2', '-s', 'SAFE_HEAP=1', '-s', 'STACK_OVERFLOW_CHECK=2', '-s', 'DEMANGLE_SUPPORT=1']
-        cxx.cflags += emflags
-        cxx.linkflags += emflags
+        amtl_path = Normalize(amtl_path)
+        if not os.path.isdir(amtl_path):
+            raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
+        self.amtl = amtl_path
 
-    # This needs to be after our optimization flags which could otherwise disable it.
-    if cxx.like('msvc'):
-      # Don't omit the frame pointer.
-      cxx.cflags += ['/Oy-']
-
-    # Platform-specifics
-    if not cxx.like('emscripten'):
-      if cxx.target.platform == 'linux':
-        cxx.postlink += ['-lpthread', '-lrt']
-      elif cxx.target.platform == 'mac':
-        cxx.linkflags.remove('-lstdc++')
-        cxx.cflags += ['-mmacosx-version-min=10.7']
-        cxx.cflags += ['-stdlib=libc++']
-        cxx.linkflags += ['-stdlib=libc++']
-        cxx.linkflags += ['-mmacosx-version-min=10.7']
-      elif cxx.target.platform == 'windows':
-        cxx.defines += ['WIN32', '_WINDOWS']
-        cxx.cxxdefines += ['NOMINMAX']
-
-    cxx.defines += ['KE_THREADSAFE']
-    cxx.defines += ['SOURCEPAWN_VERSION="1.11"']
-
-    if getattr(builder.options, 'enable_spew', False):
-      cxx.defines += ['JIT_SPEW']
-
-    if builder.options.amtl:
-      amtl_path = builder.options.amtl
-    else:
-      amtl_path = os.path.join(builder.sourcePath, 'third_party', 'amtl')
-
-    amtl_path = Normalize(amtl_path)
-    if not os.path.isdir(amtl_path):
-      raise Exception('Could not find AMTL at: {0}'.format(amtl_path))
-    self.amtl = amtl_path
-
-    cxx.cxxincludes += [
-      self.amtl,
-      os.path.join(builder.sourcePath, 'include'),
-    ]
-
-    if cxx.target.platform == 'linux':
-      cxx.defines += ['_GNU_SOURCE']
-    elif cxx.target.platform == 'mac':
-      cxx.defines += ['DARWIN']
-
-  def configure_gcc(self, cxx):
-    cxx.cflags += [
-      '-pipe',
-      '-Wall',
-      '-Werror',
-      '-Wno-switch',
-    ]
-    cxx.cxxflags += ['-std=c++17']
-    cxx.linkflags += ['-lstdc++']
-
-    if builder.options.debug == '1':
-      cxx.cflags += ['-g3']
-      cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
-
-    have_gcc = cxx.family == 'gcc'
-    have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
-    if have_clang or have_gcc:
-      cxx.cflags += ['-fvisibility=hidden']
-      cxx.cxxflags += ['-fvisibility-inlines-hidden']
-      if have_clang or (have_gcc and cxx.version >= '4.7'):
-        cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
-      if not (have_gcc and cxx.version <= 6.3):
-        cxx.cxxflags += ['-Wno-unused-private-field']
-
-    if self.enable_coverage:
-      if cxx.family == 'clang':
-        coverage_argv = [
-          '-fprofile-instr-generate',
-          '-fcoverage-mapping',
+        cxx.cxxincludes += [
+            self.amtl,
+            os.path.join(builder.sourcePath, 'include'),
         ]
-        cxx.cflags += coverage_argv
-        cxx.linkflags += coverage_argv
-      else:
-        raise Exception('Code coverage support is not implemented for {0}.'.format(cxx.family))
 
-    # Disable some stuff we don't use, that gives us better binary
-    # compatibility on Linux.
-    cxx.cxxflags += [
-      '-fno-rtti',
-      '-Wno-non-virtual-dtor',
-      '-Wno-overloaded-virtual',
-      '-Wno-invalid-offsetof',
-    ]
+        if cxx.target.platform == 'linux':
+            cxx.defines += ['_GNU_SOURCE']
+        elif cxx.target.platform == 'mac':
+            cxx.defines += ['DARWIN']
 
-    if have_gcc:
-      if cxx.target.arch in ['x86', 'x86_64']:
-        cxx.cflags += ['-mfpmath=sse']
-      cxx.cxxflags += ['-Wformat-truncation=0']
+    def configure_gcc(self, cxx):
+        cxx.cflags += [
+            '-pipe',
+            '-Wall',
+            '-Werror',
+            '-Wno-switch',
+        ]
+        cxx.cxxflags += ['-std=c++17']
+        cxx.linkflags += ['-lstdc++']
 
-    cxx.postlink += ['-lm']
+        if builder.options.debug == '1':
+            cxx.cflags += ['-g3']
+            cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
 
-    is_wsl = False
-    if os.path.exists('/proc/sys/kernel/osrelease'):
-      with open('/proc/sys/kernel/osrelease', 'rb') as fp:
-        contents = fp.read().decode("utf-8")
-        is_wsl = 'Microsoft' in contents
+        have_gcc = cxx.family == 'gcc'
+        have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
+        if have_clang or have_gcc:
+            cxx.cflags += ['-fvisibility=hidden']
+            cxx.cxxflags += ['-fvisibility-inlines-hidden']
+            if have_clang or (have_gcc and cxx.version >= '4.7'):
+                cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
+            if not (have_gcc and cxx.version <= 6.3):
+                cxx.cxxflags += ['-Wno-unused-private-field']
 
-    if cxx.like('emscripten'):
-      emflags = ['-s', 'PRECISE_F32=1']
-      cxx.cflags += emflags
-      cxx.linkflags += emflags
-      cxx.defines += ['__linux__']
+        if self.enable_coverage:
+            if cxx.family == 'clang':
+                coverage_argv = [
+                    '-fprofile-instr-generate',
+                    '-fcoverage-mapping',
+                ]
+                cxx.cflags += coverage_argv
+                cxx.linkflags += coverage_argv
+            else:
+                raise Exception('Code coverage support is not implemented for {0}.'.format(
+                    cxx.family))
 
-    if self.enable_asan:
-      if not have_clang:
-        raise Exception('--enable-asan only supported when using Clang')
-      self.configure_asan(cxx)
+        # Disable some stuff we don't use, that gives us better binary
+        # compatibility on Linux.
+        cxx.cxxflags += [
+            '-fno-rtti',
+            '-Wno-non-virtual-dtor',
+            '-Wno-overloaded-virtual',
+            '-Wno-invalid-offsetof',
+        ]
 
-  def configure_msvc(self, cxx):
-    if builder.options.debug == '1':
-      cxx.cflags += ['/MTd']
-      cxx.linkflags += ['/NODEFAULTLIB:libcmt']
-    else:
-      cxx.cflags += ['/MT']
-    cxx.defines += [
-      '_CRT_SECURE_NO_DEPRECATE',
-      '_CRT_SECURE_NO_WARNINGS',
-      '_CRT_NONSTDC_NO_DEPRECATE',
-      '_ITERATOR_DEBUG_LEVEL=0',
-    ]
-    cxx.cflags += [
-      '/W3',
-      '/wd4351',
-    ]
-    cxx.cxxflags += [
-      '/EHsc',
-      '/GR-',
-      '/TP',
-    ]
-    cxx.linkflags += [
-      'kernel32.lib',
-      'user32.lib',
-      'gdi32.lib',
-      'winspool.lib',
-      'comdlg32.lib',
-      'advapi32.lib',
-      'shell32.lib',
-      'ole32.lib',
-      'oleaut32.lib',
-      'uuid.lib',
-      'odbc32.lib',
-      'odbccp32.lib',
-    ]
+        if have_gcc:
+            if cxx.target.arch in ['x86', 'x86_64']:
+                cxx.cflags += ['-mfpmath=sse']
+            cxx.cxxflags += ['-Wformat-truncation=0']
 
-    if self.enable_asan:
-      raise Exception('--enable-asan only supported when using Clang')
+        cxx.postlink += ['-lm']
 
-  def configure_asan(self, cxx):
-    if cxx.target.platform != 'linux':
-      raise Exception('--enable-asan only supported on Linux')
-    cxx.cflags += ['-fsanitize=address']
-    cxx.linkflags += ['-fsanitize=address']
-    if cxx.target.arch == 'x86':
-      libclang_rt = 'libclang_rt.asan-i386.so'
-    else:
-      libclang_rt = 'libclang_rt.asan-x86_64.so'
+        is_wsl = False
+        if os.path.exists('/proc/sys/kernel/osrelease'):
+            with open('/proc/sys/kernel/osrelease', 'rb') as fp:
+                contents = fp.read().decode("utf-8")
+                is_wsl = 'Microsoft' in contents
 
-    try:
-      argv = cxx.cxx_argv + ['--print-file-name', libclang_rt]
-      output = subprocess.check_output(argv)
-      output = output.decode('utf-8')
-      output = output.strip()
-    except:
-      raise
-      raise Exception('Could not find {}'.format(libclang_rt))
+        if cxx.like('emscripten'):
+            emflags = ['-s', 'PRECISE_F32=1']
+            cxx.cflags += emflags
+            cxx.linkflags += emflags
+            cxx.defines += ['__linux__']
 
-    self.asan_libs[cxx.target.arch] = os.path.dirname(output)
+        if self.enable_asan:
+            if not have_clang:
+                raise Exception('--enable-asan only supported when using Clang')
+            self.configure_asan(cxx)
 
-  def ProgramBuilder(self, compiler, name):
-    binary = compiler.Program(name)
-    if binary.compiler.like('msvc'):
-      binary.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
-    return binary
+    def configure_msvc(self, cxx):
+        if builder.options.debug == '1':
+            cxx.cflags += ['/MTd']
+            cxx.linkflags += ['/NODEFAULTLIB:libcmt']
+        else:
+            cxx.cflags += ['/MT']
+        cxx.defines += [
+            '_CRT_SECURE_NO_DEPRECATE',
+            '_CRT_SECURE_NO_WARNINGS',
+            '_CRT_NONSTDC_NO_DEPRECATE',
+            '_ITERATOR_DEBUG_LEVEL=0',
+        ]
+        cxx.cflags += [
+            '/W3',
+            '/wd4351',
+        ]
+        cxx.cxxflags += [
+            '/EHsc',
+            '/GR-',
+            '/TP',
+        ]
+        cxx.linkflags += [
+            'kernel32.lib',
+            'user32.lib',
+            'gdi32.lib',
+            'winspool.lib',
+            'comdlg32.lib',
+            'advapi32.lib',
+            'shell32.lib',
+            'ole32.lib',
+            'oleaut32.lib',
+            'uuid.lib',
+            'odbc32.lib',
+            'odbccp32.lib',
+        ]
 
-  def LibraryBuilder(self, compiler, name):
-    binary = compiler.Library(name)
-    if binary.compiler.like('msvc'):
-      binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
+        if self.enable_asan:
+            raise Exception('--enable-asan only supported when using Clang')
 
-    # Dumb clang behavior means we have to manually find libclang_rt.
-    if self.enable_asan:
-      binary.compiler.linkflags += [
-        '-shared-libsan',
-        '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target.arch]),
-      ]
-    return binary
+    def configure_asan(self, cxx):
+        if cxx.target.platform != 'linux':
+            raise Exception('--enable-asan only supported on Linux')
+        cxx.cflags += ['-fsanitize=address']
+        cxx.linkflags += ['-fsanitize=address']
+        if cxx.target.arch == 'x86':
+            libclang_rt = 'libclang_rt.asan-i386.so'
+        else:
+            libclang_rt = 'libclang_rt.asan-x86_64.so'
 
-  def StaticLibraryBuilder(self, compiler, name):
-    return compiler.StaticLibrary(name)
+        try:
+            argv = cxx.cxx_argv + ['--print-file-name', libclang_rt]
+            output = subprocess.check_output(argv)
+            output = output.decode('utf-8')
+            output = output.strip()
+        except:
+            raise
+            raise Exception('Could not find {}'.format(libclang_rt))
 
-  def Program(self, context, name):
-    compiler = context.cxx.clone()
-    SetArchFlags(compiler)
-    return self.ProgramBuilder(compiler, name)
+        self.asan_libs[cxx.target.arch] = os.path.dirname(output)
 
-  def Library(self, context, name):
-    compiler = context.cxx.clone()
-    SetArchFlags(compiler)
-    return self.LibraryBuilder(compiler, name)
+    def ProgramBuilder(self, compiler, name):
+        binary = compiler.Program(name)
+        if binary.compiler.like('msvc'):
+            binary.compiler.linkflags.append('/SUBSYSTEM:CONSOLE')
+        return binary
 
-  def StaticLibrary(self, context, name):
-    compiler = context.cxx.clone()
-    SetArchFlags(compiler)
-    return self.StaticLibraryBuilder(compiler, name)
+    def LibraryBuilder(self, compiler, name):
+        binary = compiler.Library(name)
+        if binary.compiler.like('msvc'):
+            binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
+
+        # Dumb clang behavior means we have to manually find libclang_rt.
+        if self.enable_asan:
+            binary.compiler.linkflags += [
+                '-shared-libsan',
+                '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target.arch]),
+            ]
+        return binary
+
+    def StaticLibraryBuilder(self, compiler, name):
+        return compiler.StaticLibrary(name)
+
+    def Program(self, context, name):
+        compiler = context.cxx.clone()
+        SetArchFlags(compiler)
+        return self.ProgramBuilder(compiler, name)
+
+    def Library(self, context, name):
+        compiler = context.cxx.clone()
+        SetArchFlags(compiler)
+        return self.LibraryBuilder(compiler, name)
+
+    def StaticLibrary(self, context, name):
+        compiler = context.cxx.clone()
+        SetArchFlags(compiler)
+        return self.StaticLibraryBuilder(compiler, name)
+
 
 class SourcePawn(object):
-  def __init__(self, root, amtl):
-    super(SourcePawn, self).__init__()
-    self.root = root
-    self.amtl = amtl
-    self.vars = {
-      'Root': self.root,
-      'SP': self,
-    }
-    self.spshell = {}
-    self.spcomp = {}
-    self.zlib = None
-    self.libamtl = None
-    self.static_libsp = {}
-    self.dynamic_libsp = {}
+    def __init__(self, root, amtl):
+        super(SourcePawn, self).__init__()
+        self.root = root
+        self.amtl = amtl
+        self.vars = {
+            'Root': self.root,
+            'SP': self,
+        }
+        self.spshell = {}
+        self.spcomp = {}
+        self.zlib = None
+        self.libamtl = None
+        self.static_libsp = {}
+        self.dynamic_libsp = {}
 
-  def BuildCore(self):
-    self.EnsureZlib()
-    self.EnsureAmtl()
+    def BuildCore(self):
+        self.EnsureZlib()
+        self.EnsureAmtl()
 
-    for cxx in self.root.targets:
-      builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
+        for cxx in self.root.targets:
+            builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
 
-  def BuildCoreForArch(self, cxx, builder):
-    builder.cxx = cxx
+    def BuildCoreForArch(self, cxx, builder):
+        builder.cxx = cxx
 
-    cxx.cxxincludes += [
-      os.path.join(builder.currentSourcePath),
-      os.path.join(builder.currentSourcePath, 'third_party'),
-      os.path.join(builder.currentSourcePath, 'third_party', 'amtl'),
-    ]
+        cxx.cxxincludes += [
+            os.path.join(builder.currentSourcePath),
+            os.path.join(builder.currentSourcePath, 'third_party'),
+            os.path.join(builder.currentSourcePath, 'third_party', 'amtl'),
+        ]
 
-    self.BuildStaticCoreLib(builder)
-    self.BuildDynamicCoreLib(builder)
-    self.BuildSpcomp(builder)
-    self.BuildSpshell(builder)
-    self.BuildVerifier(builder)
+        self.BuildStaticCoreLib(builder)
+        self.BuildDynamicCoreLib(builder)
+        self.BuildSpcomp(builder)
+        self.BuildSpshell(builder)
+        self.BuildVerifier(builder)
 
-  def BuildStaticCoreLib(self, builder):
-    cxx = builder.cxx
-    binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
+    def BuildStaticCoreLib(self, builder):
+        cxx = builder.cxx
+        binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
 
-    vars = self.vars.copy()
-    vars['binary'] = binary
+        vars = self.vars.copy()
+        vars['binary'] = binary
 
-    binary.compiler.cxxincludes += [
-        os.path.join(builder.currentSourcePath),
-        os.path.join(builder.currentSourcePath, 'third_party'),
-        self.amtl,
-    ]
+        binary.compiler.cxxincludes += [
+            os.path.join(builder.currentSourcePath),
+            os.path.join(builder.currentSourcePath, 'third_party'),
+            self.amtl,
+        ]
 
-    builder.Build('compiler/AMBuilder', vars)
-    builder.Build('libsmx/AMBuilder', vars)
-    builder.Build('vm/AMBuilder', vars)
+        builder.Build('compiler/AMBuilder', vars)
+        builder.Build('libsmx/AMBuilder', vars)
+        builder.Build('vm/AMBuilder', vars)
 
-    binary.compiler.linkflags += [
-      self.zlib[cxx.target.arch],
-      self.libamtl[cxx.target.arch],
-    ]
-    cppnode = builder.Add(binary)
-    self.static_libsp[cxx.target.arch] = cppnode.binary
+        binary.compiler.linkflags += [
+            self.zlib[cxx.target.arch],
+            self.libamtl[cxx.target.arch],
+        ]
+        cppnode = builder.Add(binary)
+        self.static_libsp[cxx.target.arch] = cppnode.binary
 
-  def BuildDynamicCoreLib(self, builder):
-    cxx = builder.cxx
-    binary = self.root.Library(builder, 'libsourcepawn')
+    def BuildDynamicCoreLib(self, builder):
+        cxx = builder.cxx
+        binary = self.root.Library(builder, 'libsourcepawn')
 
-    vars = self.vars.copy()
-    vars['binary'] = binary
+        vars = self.vars.copy()
+        vars['binary'] = binary
 
-    if binary.compiler.like('gcc') and binary.compiler.target.platform == 'mac':
-      binary.compiler.cxxflags += [
-        '-Wno-implicit-exception-spec-mismatch',
-      ]
-    binary.sources += [
-      'vm/dll_exports.cpp',
-    ]
+        if binary.compiler.like('gcc') and binary.compiler.target.platform == 'mac':
+            binary.compiler.cxxflags += [
+                '-Wno-implicit-exception-spec-mismatch',
+            ]
+        binary.sources += [
+            'vm/dll_exports.cpp',
+        ]
 
-    self.AddStaticLibraries(binary)
+        self.AddStaticLibraries(binary)
 
-    cppnode = builder.Add(binary)
-    self.dynamic_libsp[cxx.target.arch] = cppnode.binary
+        cppnode = builder.Add(binary)
+        self.dynamic_libsp[cxx.target.arch] = cppnode.binary
 
-  def BuildSpcomp(self, builder):
-    binary = self.root.Program(builder, 'spcomp')
-    binary.sources += [
-      'compiler/main.cpp',
-    ]
+    def BuildSpcomp(self, builder):
+        binary = self.root.Program(builder, 'spcomp')
+        binary.sources += [
+            'compiler/main.cpp',
+        ]
 
-    self.AddStaticLibraries(binary)
+        self.AddStaticLibraries(binary)
 
-    cppnodes = builder.Add(binary)
-    self.spcomp[builder.cxx.target.arch] = cppnodes.binary
+        cppnodes = builder.Add(binary)
+        self.spcomp[builder.cxx.target.arch] = cppnodes.binary
 
-  def BuildSpshell(self, builder):
-    binary = self.root.Program(builder, 'spshell')
-    binary.sources += [
-      'vm/shell.cpp',
-    ]
+    def BuildSpshell(self, builder):
+        binary = self.root.Program(builder, 'spshell')
+        binary.sources += [
+            'vm/shell.cpp',
+        ]
 
-    self.AddStaticLibraries(binary)
+        self.AddStaticLibraries(binary)
 
-    cppnodes = builder.Add(binary)
-    self.spshell[builder.cxx.target.arch] = cppnodes.binary
+        cppnodes = builder.Add(binary)
+        self.spshell[builder.cxx.target.arch] = cppnodes.binary
 
-  def BuildVerifier(self, builder):
-    binary = self.root.Program(builder, 'verifier')
-    binary.sources += [
-      'tools/verifier/verifier.cpp',
-    ]
+    def BuildVerifier(self, builder):
+        binary = self.root.Program(builder, 'verifier')
+        binary.sources += [
+            'tools/verifier/verifier.cpp',
+        ]
 
-    self.AddStaticLibraries(binary)
+        self.AddStaticLibraries(binary)
 
-    builder.Add(binary)
+        builder.Add(binary)
 
-  def AddStaticLibraries(self, binary):
-    if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
-      binary.compiler.linkflags += ['-Wl,--start-group']
+    def AddStaticLibraries(self, binary):
+        if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
+            binary.compiler.linkflags += ['-Wl,--start-group']
 
-    arch = binary.compiler.target.arch
-    binary.compiler.linkflags += [
-      self.zlib[arch],
-      self.libamtl[arch],
-      self.static_libsp[arch],
-    ]
+        arch = binary.compiler.target.arch
+        binary.compiler.linkflags += [
+            self.zlib[arch],
+            self.libamtl[arch],
+            self.static_libsp[arch],
+        ]
 
-    if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
-      binary.compiler.linkflags += ['-Wl,--end-group']
+        if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
+            binary.compiler.linkflags += ['-Wl,--end-group']
 
-  def BuildSuite(self):
-    self.BuildCore()
+    def BuildSuite(self):
+        self.BuildCore()
 
-  def EnsureAmtl(self):
-    if self.libamtl is not None:
-      return
+    def EnsureAmtl(self):
+        if self.libamtl is not None:
+            return
 
-    self.libamtl = getattr(self.root, 'libamtl', None)
-    if self.libamtl:
-      return
+        self.libamtl = getattr(self.root, 'libamtl', None)
+        if self.libamtl:
+            return
 
-    self.libamtl = {}
-    for cxx in self.root.targets:
-      def do_config(builder, name):
-          return self.root.StaticLibrary(builder, name)
-      extra_vars = {'Configure': do_config}
-      libamtl = self.BuildForArch("third_party/amtl/amtl/AMBuilder", cxx, extra_vars)
-      self.libamtl[cxx.target.arch] = libamtl.binary
+        self.libamtl = {}
+        for cxx in self.root.targets:
 
-  def EnsureZlib(self):
-    if self.zlib is not None:
-      return
-    self.zlib = {}
-    for cxx in self.root.targets:
-      self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
-    self.included_zlib = True
+            def do_config(builder, name):
+                return self.root.StaticLibrary(builder, name)
 
-  def BuildForArch(self, scripts, cxx, extra_vars = {}):
-    new_vars = copy.copy(self.vars)
-    for key in extra_vars:
-        new_vars[key] = extra_vars[key]
+            extra_vars = {'Configure': do_config}
+            libamtl = self.BuildForArch("third_party/amtl/amtl/AMBuilder", cxx, extra_vars)
+            self.libamtl[cxx.target.arch] = libamtl.binary
 
-    builder.cxx = cxx
-    try:
-        rvalue = builder.Build(scripts, new_vars)
-    finally:
-        builder.cxx = None
-    return rvalue
+    def EnsureZlib(self):
+        if self.zlib is not None:
+            return
+        self.zlib = {}
+        for cxx in self.root.targets:
+            self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
+        self.included_zlib = True
+
+    def BuildForArch(self, scripts, cxx, extra_vars={}):
+        new_vars = copy.copy(self.vars)
+        for key in extra_vars:
+            new_vars[key] = extra_vars[key]
+
+        builder.cxx = cxx
+        try:
+            rvalue = builder.Build(scripts, new_vars)
+        finally:
+            builder.cxx = None
+        return rvalue
+
 
 if builder.parent is None:
-  root = Config()
-  root.configure()
-  sp = SourcePawn(root, root.amtl)
-  build = getattr(builder.options, 'build', 'all').split(',')
+    root = Config()
+    root.configure()
+    sp = SourcePawn(root, root.amtl)
 else:
-  sp = SourcePawn(external_root, external_amtl)
-  build = external_build
+    sp = SourcePawn(external_root, external_amtl)
 
 sp.BuildCore()
 
 if builder.parent is not None:
-  rvalue = sp
+    rvalue = sp
