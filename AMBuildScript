@@ -136,11 +136,6 @@ class Config(object):
             os.path.join(builder.sourcePath, 'include'),
         ]
 
-        if cxx.target.platform == 'linux':
-            cxx.defines += ['_GNU_SOURCE']
-        elif cxx.target.platform == 'mac':
-            cxx.defines += ['DARWIN']
-
     def configure_gcc(self, cxx):
         cxx.cflags += [
             '-pipe',
@@ -340,6 +335,10 @@ class SourcePawn(object):
             cxx.cflags += [
                 '-Wno-invalid-offsetof',
             ]
+            if cxx.target.platform == 'linux':
+                cxx.defines += ['_GNU_SOURCE']
+            elif cxx.target.platform == 'mac':
+                cxx.defines += ['DARWIN']
 
         cxx.cxxincludes += [
             os.path.join(builder.currentSourcePath),
