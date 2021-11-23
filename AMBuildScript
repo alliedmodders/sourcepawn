@@ -183,7 +183,6 @@ class Config(object):
             '-fno-rtti',
             '-Wno-non-virtual-dtor',
             '-Wno-overloaded-virtual',
-            '-Wno-invalid-offsetof',
         ]
 
         if have_gcc:
@@ -324,6 +323,9 @@ class SourcePawn(object):
         self.static_libsp = {}
         self.dynamic_libsp = {}
 
+        # Embedders (aka SourceMod) use this.
+        self.libsourcepawn = {}
+
     def BuildCore(self):
         self.EnsureZlib()
         self.EnsureAmtl()
@@ -334,10 +336,16 @@ class SourcePawn(object):
     def BuildCoreForArch(self, cxx, builder):
         builder.cxx = cxx
 
+        if cxx.like('gcc'):
+            cxx.cflags += [
+                '-Wno-invalid-offsetof',
+            ]
+
         cxx.cxxincludes += [
             os.path.join(builder.currentSourcePath),
+            os.path.join(builder.currentSourcePath, 'include'),
             os.path.join(builder.currentSourcePath, 'third_party'),
-            os.path.join(builder.currentSourcePath, 'third_party', 'amtl'),
+            self.amtl,
         ]
 
         self.BuildStaticCoreLib(builder)
@@ -353,20 +361,10 @@ class SourcePawn(object):
         vars = self.vars.copy()
         vars['binary'] = binary
 
-        binary.compiler.cxxincludes += [
-            os.path.join(builder.currentSourcePath),
-            os.path.join(builder.currentSourcePath, 'third_party'),
-            self.amtl,
-        ]
-
         builder.Build('compiler/AMBuilder', vars)
         builder.Build('libsmx/AMBuilder', vars)
         builder.Build('vm/AMBuilder', vars)
 
-        binary.compiler.linkflags += [
-            self.zlib[cxx.target.arch],
-            self.libamtl[cxx.target.arch],
-        ]
         cppnode = builder.Add(binary)
         self.static_libsp[cxx.target.arch] = cppnode.binary
 
@@ -388,6 +386,7 @@ class SourcePawn(object):
         self.AddStaticLibraries(binary)
 
         cppnode = builder.Add(binary)
+        self.libsourcepawn[cxx.target.arch] = cppnode
         self.dynamic_libsp[cxx.target.arch] = cppnode.binary
 
     def BuildSpcomp(self, builder):
@@ -399,7 +398,7 @@ class SourcePawn(object):
         self.AddStaticLibraries(binary)
 
         cppnodes = builder.Add(binary)
-        self.spcomp[builder.cxx.target.arch] = cppnodes.binary
+        self.spcomp[builder.cxx.target.arch] = cppnodes
 
     def BuildSpshell(self, builder):
         binary = self.root.Program(builder, 'spshell')
@@ -410,7 +409,7 @@ class SourcePawn(object):
         self.AddStaticLibraries(binary)
 
         cppnodes = builder.Add(binary)
-        self.spshell[builder.cxx.target.arch] = cppnodes.binary
+        self.spshell[builder.cxx.target.arch] = cppnodes
 
     def BuildVerifier(self, builder):
         binary = self.root.Program(builder, 'verifier')
@@ -454,7 +453,10 @@ class SourcePawn(object):
                 return self.root.StaticLibrary(builder, name)
 
             extra_vars = {'Configure': do_config}
-            libamtl = self.BuildForArch("third_party/amtl/amtl/AMBuilder", cxx, extra_vars)
+
+            amtl = os.path.relpath(self.amtl, builder.currentSourcePath)
+            amtl_builder = os.path.join(amtl, 'amtl', 'AMBuilder')
+            libamtl = self.BuildForArch(amtl_builder, cxx, extra_vars)
             self.libamtl[cxx.target.arch] = libamtl.binary
 
     def EnsureZlib(self):
