@@ -11,7 +11,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "builtins.h"
-#include <am-float.h>
+#include <amtl/am-float.h>
 #include <math.h>
 
 namespace sp {

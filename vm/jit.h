@@ -19,7 +19,7 @@
 
 #include <sp_vm_types.h>
 #include <sp_vm_api.h>
-#include <am-vector.h>
+#include <amtl/am-vector.h>
 #include "macro-assembler.h"
 #include "opcodes.h"
 #include "pool-allocator.h"

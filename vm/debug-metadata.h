@@ -16,7 +16,7 @@
 #include <vector>
 
 #include <stdint.h>
-#include <am-platform.h>
+#include <amtl/am-platform.h>
 
 #if defined(KE_LINUX)
 #include <stdio.h>

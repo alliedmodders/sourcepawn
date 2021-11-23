@@ -15,8 +15,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <am-refcounting.h>
-#include <am-vector.h>
+#include <amtl/am-refcounting.h>
+#include <amtl/am-vector.h>
 
 namespace sp {
 

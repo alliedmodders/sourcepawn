@@ -11,7 +11,7 @@
 
 #include <amtl/am-string.h>
 #include "smx-v1-image.h"
-#include "zlib/zlib.h"
+#include <zlib/zlib.h>
 #include "environment.h"
 
 using namespace ke;

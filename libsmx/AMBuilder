@@ -18,15 +18,8 @@
 #
 import os
 
-binary = Root.StaticLibrary(builder, 'smx')
-binary.compiler.cxxincludes += [
-  os.path.join(builder.currentSourcePath, '..'),
-  os.path.join(builder.currentSourcePath, '..', 'include'),
-  os.path.join(SP.amtl),
-]
-binary.sources += [
+module = binary.Module(builder, 'smx')
+module.sources += [
   'data-pool.cpp',
   'smx-builder.cpp',
 ]
-
-rvalue = builder.Add(binary)

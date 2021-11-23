@@ -115,7 +115,7 @@ class TestPlan(object):
     return found
 
   def find_shells(self):
-    search_in = os.path.join(self.args.objdir, 'vm', 'spshell')
+    search_in = os.path.join(self.args.objdir, 'spshell')
     found = self.find_executables_in(search_in, 'spshell')
 
     for arch, path in found:
@@ -147,7 +147,7 @@ class TestPlan(object):
       self.find_spcomp()
 
   def find_spcomp(self):
-    search_in = os.path.join(self.args.objdir, 'compiler', 'spcomp')
+    search_in = os.path.join(self.args.objdir, 'spcomp')
     found = self.find_executables_in(search_in, 'spcomp')
 
     for arch, path in found:

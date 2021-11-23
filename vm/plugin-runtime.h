@@ -14,10 +14,10 @@
 #define _INCLUDE_SOURCEPAWN_JIT_RUNTIME_H_
 
 #include <sp_vm_api.h>
-#include <am-vector.h>
-#include <am-string.h>
-#include <am-inlinelist.h>
-#include <am-hashmap.h>
+#include <amtl/am-vector.h>
+#include <amtl/am-string.h>
+#include <amtl/am-inlinelist.h>
+#include <amtl/am-hashmap.h>
 #include <amtl/am-refcounting.h>
 #include "scripted-invoker.h"
 #include "legacy-image.h"
