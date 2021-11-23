@@ -13,7 +13,7 @@
 #include <sp_vm_api.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <am-cxx.h>
+#include <amtl/am-cxx.h>
 #include "dll_exports.h"
 #include "environment.h"
 #include "stack-frames.h"

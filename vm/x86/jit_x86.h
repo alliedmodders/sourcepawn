@@ -19,7 +19,7 @@
 
 #include <sp_vm_types.h>
 #include <sp_vm_api.h>
-#include <am-vector.h>
+#include <amtl/am-vector.h>
 #include "jit.h"
 #include "plugin-runtime.h"
 #include "plugin-context.h"

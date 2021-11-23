@@ -13,7 +13,7 @@
 #ifndef _include_sourcepawn_macro_assembler_x64_h__
 #define _include_sourcepawn_macro_assembler_x64_h__
 
-#include <assembler.h>
+#include "assembler.h"
 #include "assembler-x64.h"
 #include "stack-frames.h"
 #include "constants-x64.h"

@@ -10,8 +10,8 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include "environment.h"
-#include "method-verifier.h"
+#include "vm/environment.h"
+#include "vm/method-verifier.h"
 #include <amtl/experimental/am-argparser.h>
 #include <set>
 #include <deque>

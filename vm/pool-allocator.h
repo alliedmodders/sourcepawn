@@ -24,9 +24,9 @@
 
 #include <new>
 
-#include <am-bits.h>
-#include <am-fixedarray.h>
-#include <am-vector.h>
+#include <amtl/am-bits.h>
+#include <amtl/am-fixedarray.h>
+#include <amtl/am-vector.h>
 
 namespace sp {
 

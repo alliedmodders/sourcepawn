@@ -95,9 +95,6 @@ class Config(object):
       # Don't omit the frame pointer.
       cxx.cflags += ['/Oy-']
 
-    if cxx.like('gcc'):
-      cxx.linkflags += ['-lstdc++']
-
     # Platform-specifics
     if not cxx.like('emscripten'):
       if cxx.target.platform == 'linux':
@@ -133,6 +130,11 @@ class Config(object):
       os.path.join(builder.sourcePath, 'include'),
     ]
 
+    if cxx.target.platform == 'linux':
+      cxx.defines += ['_GNU_SOURCE']
+    elif cxx.target.platform == 'mac':
+      cxx.defines += ['DARWIN']
+
   def configure_gcc(self, cxx):
     cxx.cflags += [
       '-pipe',
@@ -141,10 +143,11 @@ class Config(object):
       '-Wno-switch',
     ]
     cxx.cxxflags += ['-std=c++17']
+    cxx.linkflags += ['-lstdc++']
 
     if builder.options.debug == '1':
-        cxx.cflags += ['-g3']
-        cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
+      cxx.cflags += ['-g3']
+      cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
 
     have_gcc = cxx.family == 'gcc'
     have_clang = cxx.family == 'clang' or cxx.family == 'emscripten'
@@ -173,6 +176,7 @@ class Config(object):
       '-fno-rtti',
       '-Wno-non-virtual-dtor',
       '-Wno-overloaded-virtual',
+      '-Wno-invalid-offsetof',
     ]
 
     if have_gcc:
@@ -301,55 +305,131 @@ class SourcePawn(object):
     super(SourcePawn, self).__init__()
     self.root = root
     self.amtl = amtl
-    self.spcomp_scripts = [
-      os.path.join('compiler', 'AMBuilder'),
-    ]
     self.vars = {
       'Root': self.root,
       'SP': self,
     }
     self.spshell = {}
     self.spcomp = {}
-    self.libspcomp2 = {}
-    self.libsourcepawn = {}
-    self.libsourcepawn_a = {}
     self.zlib = None
-    self.libsmx = None
     self.libamtl = None
+    self.static_libsp = {}
+    self.dynamic_libsp = {}
 
-  def BuildSpcomp(self):
-    self.EnsureZlib()
-    self.EnsureLibSmx()
-    self.EnsureAmtl()
-    self.BuildVM()
-    for cxx in self.root.targets:
-      spcomp = self.BuildForArch('compiler/AMBuilder', cxx)
-      self.spcomp[cxx.target.arch] = spcomp
-
-  def BuildVM(self):
-    if self.spshell:
-        return
-
+  def BuildCore(self):
     self.EnsureZlib()
     self.EnsureAmtl()
-    for cxx in self.root.targets:
-      spshell, libsourcepawn, libsourcepawn_a = self.BuildForArch('vm/AMBuilder', cxx)
-      self.spshell[cxx.target.arch] = spshell
-      self.libsourcepawn[cxx.target.arch] = libsourcepawn
-      self.libsourcepawn_a[cxx.target.arch] = libsourcepawn_a
 
-  def BuildExperimental(self):
-    self.EnsureAmtl()
     for cxx in self.root.targets:
-      libspcomp2 = self.BuildForArch('exp/compiler/AMBuilder', cxx)
-      self.libspcomp2[cxx.target.arch] = libspcomp2
+      builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
 
-      self.BuildForArch('exp/tools/docparse/AMBuilder', cxx)
+  def BuildCoreForArch(self, cxx, builder):
+    builder.cxx = cxx
+
+    cxx.cxxincludes += [
+      os.path.join(builder.currentSourcePath),
+      os.path.join(builder.currentSourcePath, 'third_party'),
+      os.path.join(builder.currentSourcePath, 'third_party', 'amtl'),
+    ]
+
+    self.BuildStaticCoreLib(builder)
+    self.BuildDynamicCoreLib(builder)
+    self.BuildSpcomp(builder)
+    self.BuildSpshell(builder)
+    self.BuildVerifier(builder)
+
+  def BuildStaticCoreLib(self, builder):
+    cxx = builder.cxx
+    binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
+
+    vars = self.vars.copy()
+    vars['binary'] = binary
+
+    binary.compiler.cxxincludes += [
+        os.path.join(builder.currentSourcePath),
+        os.path.join(builder.currentSourcePath, 'third_party'),
+        self.amtl,
+    ]
+
+    builder.Build('compiler/AMBuilder', vars)
+    builder.Build('libsmx/AMBuilder', vars)
+    builder.Build('vm/AMBuilder', vars)
+
+    binary.compiler.linkflags += [
+      self.zlib[cxx.target.arch],
+      self.libamtl[cxx.target.arch],
+    ]
+    cppnode = builder.Add(binary)
+    self.static_libsp[cxx.target.arch] = cppnode.binary
+
+  def BuildDynamicCoreLib(self, builder):
+    cxx = builder.cxx
+    binary = self.root.Library(builder, 'libsourcepawn')
+
+    vars = self.vars.copy()
+    vars['binary'] = binary
+
+    if binary.compiler.like('gcc') and binary.compiler.target.platform == 'mac':
+      binary.compiler.cxxflags += [
+        '-Wno-implicit-exception-spec-mismatch',
+      ]
+    binary.sources += [
+      'vm/dll_exports.cpp',
+    ]
+
+    self.AddStaticLibraries(binary)
+
+    cppnode = builder.Add(binary)
+    self.dynamic_libsp[cxx.target.arch] = cppnode.binary
+
+  def BuildSpcomp(self, builder):
+    binary = self.root.Program(builder, 'spcomp')
+    binary.sources += [
+      'compiler/main.cpp',
+    ]
+
+    self.AddStaticLibraries(binary)
+
+    cppnodes = builder.Add(binary)
+    self.spcomp[builder.cxx.target.arch] = cppnodes.binary
+
+  def BuildSpshell(self, builder):
+    binary = self.root.Program(builder, 'spshell')
+    binary.sources += [
+      'vm/shell.cpp',
+    ]
+
+    self.AddStaticLibraries(binary)
+
+    cppnodes = builder.Add(binary)
+    self.spshell[builder.cxx.target.arch] = cppnodes.binary
+
+  def BuildVerifier(self, builder):
+    binary = self.root.Program(builder, 'verifier')
+    binary.sources += [
+      'tools/verifier/verifier.cpp',
+    ]
+
+    self.AddStaticLibraries(binary)
+
+    builder.Add(binary)
+
+  def AddStaticLibraries(self, binary):
+    if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
+      binary.compiler.linkflags += ['-Wl,--start-group']
+
+    arch = binary.compiler.target.arch
+    binary.compiler.linkflags += [
+      self.zlib[arch],
+      self.libamtl[arch],
+      self.static_libsp[arch],
+    ]
+
+    if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
+      binary.compiler.linkflags += ['-Wl,--end-group']
 
   def BuildSuite(self):
-    self.BuildVM()
-    self.BuildSpcomp()
-    self.BuildExperimental()
+    self.BuildCore()
 
   def EnsureAmtl(self):
     if self.libamtl is not None:
@@ -375,14 +455,6 @@ class SourcePawn(object):
       self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
     self.included_zlib = True
 
-  def EnsureLibSmx(self):
-    if self.libsmx is not None:
-      return
-    self.libsmx = {}
-    for cxx in self.root.targets:
-      lib = self.BuildForArch('libsmx/AMBuilder', cxx)
-      self.libsmx[cxx.target.arch] = lib
-
   def BuildForArch(self, scripts, cxx, extra_vars = {}):
     new_vars = copy.copy(self.vars)
     for key in extra_vars:
@@ -404,18 +476,7 @@ else:
   sp = SourcePawn(external_root, external_amtl)
   build = external_build
 
-if 'all' in build:
-  sp.BuildSuite()
-else:
-  if 'core' in build:
-    build += ['spcomp', 'vm']
-  if 'spcomp' in build:
-    sp.BuildSpcomp()
-  if 'vm' in build:
-    sp.BuildVM()
-  if 'exp' in build:
-    sp.EnsureLibSmx()
-    sp.BuildExperimental()
+sp.BuildCore()
 
 if builder.parent is not None:
   rvalue = sp

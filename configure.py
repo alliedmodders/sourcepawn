@@ -28,11 +28,12 @@ except:
 		sys.stderr.write('AMBuild must be installed to build this project.\n')
 		sys.stderr.write('http://www.alliedmods.net/ambuild\n')
 	sys.exit(1)
+from pkg_resources import parse_version
 
 # Hack to show a decent upgrade message, which wasn't done until 2.2.
 ambuild_version = getattr(run, 'CURRENT_API', '2.1')
-if ambuild_version.startswith('2.1'):
-	sys.stderr.write("AMBuild 2.2 or higher is required; please update\n")
+if parse_version(ambuild_version) < parse_version("2.2.3"):
+	sys.stderr.write("AMBuild 2.2.3 or higher is required; please update\n")
 	sys.exit(1)
 
 parser = run.BuildParser(sourcePath=sys.path[0], api='2.2')
@@ -44,7 +45,7 @@ parser.options.add_argument('--enable-optimize', action='store_const', const='1'
                             help='Enable optimization')
 parser.options.add_argument('--amtl', type=str, dest='amtl', default=None, help='Custom AMTL path')
 parser.options.add_argument('--build', type=str, dest='build', default='all', 
-                            help='Build which components (all, spcomp, vm, exp, test, core)')
+                            help='Deprecated; no effect.')
 parser.options.add_argument('--enable-spew', action='store_true', default=False, dest='enable_spew',
                             help='Enable debug spew')
 parser.options.add_argument("--enable-coverage", action='store_true', default=False,

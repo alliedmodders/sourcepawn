@@ -32,7 +32,7 @@
 #define _include_sourcepawn_macroassembler_x86h__
 
 #include <assembler.h>
-#include <am-vector.h>
+#include <amtl/am-vector.h>
 #include <string.h>
 #include "assembler-x86.h"
 #include "stack-frames.h"

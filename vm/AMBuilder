@@ -1,51 +1,22 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os
 
-libsourcepawn_a = None
-
-def configure_like_shell(name):
-  prog = Root.Program(builder, name)
-  prog.compiler.includes += Includes
-  prog.compiler.linkflags[0:0] = [
-    libsourcepawn_a.binary,
-    SP.zlib[builder.cxx.target.arch],
-  ]
-  if prog.compiler.like('emscripten'):
-    prog.compiler.postlink += ['-lnodefs.js']
-  elif prog.compiler.like('gcc'):
-    prog.compiler.postlink += ['-lstdc++']
-  return prog
-
-Includes = [
-  os.path.join(SP.amtl, 'amtl'),
-  os.path.join(SP.amtl),
-  os.path.join(builder.currentSourcePath),
-  os.path.join(builder.currentSourcePath, '..', 'third_party'),
-
-  # The include path for SP v2 stuff.
-  os.path.join(builder.sourcePath, 'sourcepawn', 'include'),
+module = binary.Module(builder, 'vm')
+module.compiler.cxxincludes += [
+    os.path.join(builder.currentSourcePath),
 ]
 
-if builder.cxx.like('gcc'):
-  builder.cxx.cflags += [
-    '-Wno-invalid-offsetof',
-  ]
-  builder.cxx.cxxflags += ['-fno-rtti']
-if builder.cxx.like('clang'):
-  builder.cxx.cxxflags += [
+if module.compiler.like('clang'):
+  module.compiler.cxxflags += [
     '-Wno-implicit-exception-spec-mismatch',
   ]
-if builder.cxx.family == 'gcc':
+if module.compiler.family == 'gcc':
   # ABI restrictions...
-  builder.cxx.cxxflags += [
+  module.compiler.cxxflags += [
     '-Wno-delete-non-virtual-dtor',
   ]
 
-# Build the static library.
-library = Root.StaticLibrary(builder, 'sourcepawn')
-library.compiler.includes += Includes
-
-library.sources += [
+module.sources += [
   'api.cpp',
   'base-context.cpp',
   'builtins.cpp',
@@ -74,69 +45,29 @@ library.sources += [
   'watchdog_timer.cpp',
 ]
 
-is_emscripten = builder.cxx.family == 'emscripten'
-has_jit = builder.cxx.target.arch in ['x86'] and not is_emscripten
+is_emscripten = module.compiler.family == 'emscripten'
+has_jit = module.compiler.target.arch in ['x86'] and not is_emscripten
 
 if has_jit:
-  library.sources += [
+  module.sources += [
     'jit.cpp',
+    'linking.cpp',
   ]
-  library.compiler.defines += ['SP_HAS_JIT']
+  module.compiler.defines += ['SP_HAS_JIT']
 
 if is_emscripten:
-  library.sources += [
+  module.sources += [
     'code-stubs-null.cpp',
   ]
-elif builder.cxx.target.arch == 'x86':
-  library.sources += [
-    'linking.cpp',
+elif module.compiler.target.arch == 'x86':
+  module.sources += [
     'x86/assembler-x86.cpp',
     'x86/code-stubs-x86.cpp',
     'x86/jit_x86.cpp',
   ]
-elif builder.cxx.target.arch == 'x86_64':
-  library.sources += [
-    'linking.cpp',
+elif module.compiler.target.arch == 'x86_64':
+  module.sources += [
     'x64/assembler-x64.cpp',
     'x64/code-stubs-x64.cpp',
     'x64/macro-assembler-x64.cpp',
   ]
-
-libsourcepawn_a = builder.Add(library)
-
-# Build the dynamically-linked library.
-dll = Root.Library(builder, 'sourcepawn.vm')
-dll.compiler.includes += Includes
-dll.compiler.linkflags[0:0] = [
-  libsourcepawn_a.binary,
-  SP.zlib[builder.cxx.target.arch],
-]
-dll.sources += [
-  'dll_exports.cpp'
-]
-
-libsourcepawn = builder.Add(dll)
-
-# Build the debug shell.
-shell = configure_like_shell('spshell')
-if has_jit:
-  shell.compiler.defines += ['SP_HAS_JIT']
-shell.sources += [
-  'shell.cpp'
-]
-shell.compiler.linkflags[0:0] = [
-  SP.libamtl[builder.cxx.target.arch],
-]
-spshell = builder.Add(shell)
-
-# Build the verifier.
-verifier = configure_like_shell('verifier')
-verifier.sources += [
-  '../tools/verifier/verifier.cpp',
-]
-verifier.compiler.linkflags[0:0] = [
-  SP.libamtl[builder.cxx.target.arch],
-]
-builder.Add(verifier)
-
-rvalue = spshell, libsourcepawn, libsourcepawn_a
