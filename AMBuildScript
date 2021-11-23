@@ -379,7 +379,7 @@ class SourcePawn(object):
             binary.compiler.cxxflags += [
                 '-Wno-implicit-exception-spec-mismatch',
             ]
-        binary.sources += [
+        binary.sources = [
             'vm/dll_exports.cpp',
         ]
 
@@ -391,7 +391,7 @@ class SourcePawn(object):
 
     def BuildSpcomp(self, builder):
         binary = self.root.Program(builder, 'spcomp')
-        binary.sources += [
+        binary.sources = [
             'compiler/main.cpp',
         ]
 
@@ -402,7 +402,7 @@ class SourcePawn(object):
 
     def BuildSpshell(self, builder):
         binary = self.root.Program(builder, 'spshell')
-        binary.sources += [
+        binary.sources = [
             'vm/shell.cpp',
         ]
 
@@ -413,7 +413,7 @@ class SourcePawn(object):
 
     def BuildVerifier(self, builder):
         binary = self.root.Program(builder, 'verifier')
-        binary.sources += [
+        binary.sources = [
             'tools/verifier/verifier.cpp',
         ]
 
