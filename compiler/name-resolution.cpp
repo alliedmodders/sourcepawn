@@ -491,7 +491,7 @@ VarDecl::Bind(SemaContext& sc)
 
     // LHS bind should now succeed.
     if (init_)
-        init_->left()->Bind(sc);
+        init_->left()->BindLval(sc);
     return true;
 }
 
