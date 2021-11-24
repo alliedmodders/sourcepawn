@@ -356,9 +356,7 @@ GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
     }
     if (scope == sc.scope())
         return NewNameStatus::Duplicated;
-    if (scope->IsLocalOrArgument())
-        return NewNameStatus::Shadowed;
-    return NewNameStatus::Ok;
+    return NewNameStatus::Shadowed;
 }
 
 bool
