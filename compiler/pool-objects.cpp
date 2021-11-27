@@ -43,6 +43,11 @@ PoolAllocationPolicy::Malloc(size_t bytes)
     return p;
 }
 
+void PoolAllocationPolicy::Free(size_t bytes) {
+    auto& cc = CompileContext::get();
+    cc.allocator().trackFree(bytes);
+}
+
 void*
 PoolAllocationPolicy::am_malloc(size_t bytes)
 {

@@ -79,6 +79,7 @@ class PoolAllocationPolicy
     void am_free(void* ptr);
 
     static void* Malloc(size_t bytes);
+    static void Free(size_t bytes);
 };
 
 template <typename T>
@@ -105,7 +106,9 @@ class StlPoolAllocator
             throw std::bad_alloc{};
         return reinterpret_cast<T*>(PoolAllocationPolicy::Malloc(n * sizeof(T)));
     }
-    void deallocate(T* p, size_t n) {}
+    void deallocate(T* p, size_t n) {
+        PoolAllocationPolicy::Free(sizeof(T) * n);
+    }
 
     bool operator ==(const StlPoolAllocator& other) const { return true; }
     bool operator !=(const StlPoolAllocator& other) const { return false; }
