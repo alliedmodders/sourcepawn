@@ -51,14 +51,14 @@ class PoolAllocator final
         }
     };
 
-    static const size_t kDefaultPoolSize = 8 * 1024;
+    static const size_t kDefaultPoolSize = 64 * 1024;
     static const size_t kMaxReserveSize = 64 * 1024;
 
   private:
     std::vector<std::unique_ptr<Pool>> pools_;
+    size_t wasted_ = 0;
 
   private:
-    void unwind(char* pos);
     Pool* ensurePool(size_t actualBytes);
 
   public:
@@ -87,6 +87,12 @@ class PoolAllocator final
         return ptr;
     }
 
+    void trackFree(size_t bytes) {
+        wasted_ += bytes;
+    }
+
+    size_t wasted() const { return wasted_; }
+
     template <typename T>
     T* alloc(size_t count = 1) {
         if (!ke::IsUintPtrMultiplySafe(count, sizeof(T))) {
@@ -99,9 +105,6 @@ class PoolAllocator final
 
         return reinterpret_cast<T*>(ptr);
     }
-
-    char* enter();
-    void leave(char* position);
 };
 
 #endif // _include_jitcraft_pool_allocator_h_

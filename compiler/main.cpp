@@ -291,6 +291,7 @@ cleanup:
             printf("Pool allocation:   %8" KE_FMT_SIZET " bytes\n", allocated);
             printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);
             printf("Pool bookkeeping:  %8" KE_FMT_SIZET " bytes\n", bookkeeping);
+            printf("Pool wasted:       %8" KE_FMT_SIZET " bytes\n", cc.allocator().wasted());
         }
     }
 

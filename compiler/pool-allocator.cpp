@@ -32,34 +32,6 @@ PoolAllocator::PoolAllocator()
 
 PoolAllocator::~PoolAllocator()
 {
-    unwind(nullptr);
-}
-
-char*
-PoolAllocator::enter()
-{
-    if (pools_.empty())
-        return nullptr;
-    return pools_.back()->ptr;
-}
-
-void
-PoolAllocator::leave(char* pos)
-{
-    unwind(pos);
-}
-
-void
-PoolAllocator::unwind(char* pos)
-{
-    while (!pools_.empty()) {
-        Pool* last = pools_.back().get();
-        if (pos && pos >= last->base.get() && pos < last->end) {
-            last->ptr = pos;
-            return;
-        }
-        pools_.pop_back();
-    }
 }
 
 PoolAllocator::Pool*
