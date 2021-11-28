@@ -369,10 +369,11 @@ class EnumDecl : public Decl
 {
   public:
     explicit EnumDecl(const token_pos_t& pos, int vclass, sp::Atom* label, sp::Atom* name,
-                      int increment, int multiplier)
+                      const std::vector<EnumField>& fields, int increment, int multiplier)
       : Decl(AstKind::EnumDecl, pos, name),
         vclass_(vclass),
         label_(label),
+        fields_(fields),
         increment_(increment),
         multiplier_(multiplier)
     {}
@@ -383,7 +384,7 @@ class EnumDecl : public Decl
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::EnumDecl; }
 
-    PoolList<EnumField>& fields() {
+    PoolArray<EnumField>& fields() {
         return fields_;
     }
     int increment() const {
@@ -396,7 +397,7 @@ class EnumDecl : public Decl
   private:
     int vclass_;
     sp::Atom* label_;
-    PoolList<EnumField> fields_;
+    PoolArray<EnumField> fields_;
     int increment_;
     int multiplier_;
 };
