@@ -168,11 +168,13 @@ class ChangeScopeNode : public Stmt
 class StmtList : public Stmt
 {
   public:
-    explicit StmtList(AstKind kind, const token_pos_t& pos)
-      : Stmt(kind, pos)
+    explicit StmtList(AstKind kind, const token_pos_t& pos, const std::vector<Stmt*>& stmts)
+      : Stmt(kind, pos),
+        stmts_(stmts)
     {}
-    explicit StmtList(const token_pos_t& pos)
-      : Stmt(AstKind::StmtList, pos)
+    explicit StmtList(const token_pos_t& pos, const std::vector<Stmt*>& stmts)
+      : Stmt(AstKind::StmtList, pos),
+        stmts_(stmts)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -185,19 +187,19 @@ class StmtList : public Stmt
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::StmtList; }
 
-    PoolList<Stmt*>& stmts() {
+    PoolArray<Stmt*>& stmts() {
         return stmts_;
     }
 
   protected:
-    PoolList<Stmt*> stmts_;
+    PoolArray<Stmt*> stmts_;
 };
 
 class ParseTree : public StmtList
 {
   public:
-    explicit ParseTree(const token_pos_t& pos)
-      : StmtList(AstKind::ParseTree, pos)
+    explicit ParseTree(const token_pos_t& pos, const std::vector<Stmt*>& stmts)
+      : StmtList(AstKind::ParseTree, pos, stmts)
     {}
 
     bool ResolveNames(SemaContext& sc);
@@ -208,8 +210,8 @@ class ParseTree : public StmtList
 class BlockStmt : public StmtList
 {
   public:
-    explicit BlockStmt(const token_pos_t& pos)
-      : StmtList(AstKind::BlockStmt, pos),
+    explicit BlockStmt(const token_pos_t& pos, const std::vector<Stmt*>& stmts)
+      : StmtList(AstKind::BlockStmt, pos, stmts),
         scope_(nullptr)
     {}
 

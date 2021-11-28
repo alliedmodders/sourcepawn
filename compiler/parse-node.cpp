@@ -82,9 +82,9 @@ BlockStmt::WrapStmt(Stmt* stmt)
 {
     if (BlockStmt* block = stmt->as<BlockStmt>())
         return block;
-    BlockStmt* block = new BlockStmt(stmt->pos());
-    block->stmts().emplace_back(stmt);
-    return block;
+
+    std::vector<Stmt*> stmts = {stmt};
+    return new BlockStmt(stmt->pos(), stmts);
 }
 
 BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right)

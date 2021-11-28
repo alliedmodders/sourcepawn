@@ -61,8 +61,8 @@ Parser::Parse()
         cc_.set_one_error_per_stmt(false);
     });
 
-    auto list = new ParseTree(token_pos_t{});
-    CreateInitialScopes(list);
+    std::vector<Stmt*> stmts;
+    CreateInitialScopes(&stmts);
 
     // Prime the lexer.
     lexer_->Start();
@@ -85,8 +85,8 @@ Parser::Parse()
         assert(!static_scopes_.empty());
 
         if (changed)
-            list->stmts().emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back(),
-                                                           cc_.input_files().at(fcurrent)));
+            stmts.emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back(),
+                                                   cc_.input_files().at(fcurrent)));
 
         switch (tok) {
             case 0:
@@ -180,27 +180,27 @@ Parser::Parse()
         if (decl) {
             cc_.reports()->ResetErrorFlag();
 
-            list->stmts().emplace_back(decl);
+            stmts.emplace_back(decl);
         }
 
         lexer_->deprecate() = {};
     }
 
     while (!add_to_end.empty()) {
-        list->stmts().emplace_back(add_to_end.front());
+        stmts.emplace_back(add_to_end.front());
         add_to_end.pop_front();
     }
-    return list;
+    return new ParseTree(token_pos_t{}, stmts);
 }
 
-void Parser::CreateInitialScopes(ParseTree* list) {
+void Parser::CreateInitialScopes(std::vector<Stmt*>* stmts) {
     // Create a static scope for the main file.
     {
         int fcurrent = lexer_->fcurrent();
         assert(fcurrent == 0);
         static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-        list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                       cc_.input_files().at(fcurrent)));
+        stmts->emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
+                                                cc_.input_files().at(fcurrent)));
     }
 
     if (!cc_.default_include().empty()) {
@@ -208,8 +208,8 @@ void Parser::CreateInitialScopes(ParseTree* list) {
         if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
             int fcurrent = lexer_->fcurrent();
             static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-            list->stmts().emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                           cc_.input_files().at(fcurrent)));
+            stmts->emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
+                                                    cc_.input_files().at(fcurrent)));
         }
     }
 }
@@ -319,8 +319,7 @@ Parser::PreprocExpr(cell* val, int* tag)
 Stmt*
 Parser::parse_var(declinfo_t* decl, VarParams& params)
 {
-    StmtList* list = nullptr;
-    Stmt* stmt = nullptr;
+    std::vector<Stmt*> stmts;
 
     for (;;) {
         auto pos = lexer_->pos();
@@ -334,18 +333,10 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
 
         VarDecl* var = new VarDecl(pos, decl->name, decl->type, params.vclass, params.is_public,
                                    params.is_static, params.is_stock, init);
+        stmts.emplace_back(var);
+
         if (!params.autozero)
             var->set_no_autozero();
-
-        if (stmt) {
-            if (!list) {
-                list = new StmtList(var->pos());
-                list->stmts().emplace_back(stmt);
-            }
-            list->stmts().emplace_back(var);
-        } else {
-            stmt = var;
-        }
 
         if (!lexer_->match(','))
             break;
@@ -355,7 +346,10 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
         else
             reparse_old_decl(decl, DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT);
     }
-    return list ? list : stmt;
+
+    if (stmts.size() > 1)
+        return new StmtList(stmts[0]->pos(), stmts);
+    return stmts[0];
 }
 
 Decl*
@@ -623,9 +617,7 @@ Parser::parse_pragma_unused()
 Stmt*
 Parser::parse_const(int vclass)
 {
-    StmtList* list = nullptr;
-    Stmt* decl = nullptr;
-
+    std::vector<Stmt*> stmts;
     do {
         auto pos = lexer_->pos();
 
@@ -681,19 +673,14 @@ Parser::parse_const(int vclass)
             continue;
 
         VarDecl* var = new ConstDecl(pos, name, type, vclass, expr);
-        if (decl) {
-            if (!list) {
-                list = new StmtList(var->pos());
-                list->stmts().push_back(decl);
-            }
-            list->stmts().push_back(var);
-        } else {
-            decl = var;
-        }
+        stmts.emplace_back(var);
     } while (lexer_->match(','));
 
     lexer_->need(tTERM);
-    return list ? list : decl;
+
+    if (stmts.size() > 1)
+        return new StmtList(stmts[0]->pos(), stmts);
+    return stmts[0];
 }
 
 Expr*
@@ -1411,7 +1398,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
         case '{': {
             int save = lexer_->fline();
             if (lexer_->match('}'))
-                return new BlockStmt(lexer_->pos());
+                return new BlockStmt(lexer_->pos(), {});
             return parse_compound(save == lexer_->fline());
         }
         case ';':
@@ -1520,8 +1507,7 @@ Stmt*
 Parser::parse_compound(bool sameline)
 {
     auto block_start = lexer_->fline();
-
-    BlockStmt* block = new BlockStmt(lexer_->pos());
+    auto block_pos = lexer_->pos();
 
     /* if there is more text on this line, we should adjust the statement indent */
     if (sameline) {
@@ -1551,16 +1537,16 @@ Parser::parse_compound(bool sameline)
     int indent = -1;
 
     /* repeat until compound statement is closed */
+    std::vector<Stmt*> stmts;
     while (lexer_->match('}') == 0 && !cc_.must_abort()) {
         if (!lexer_->freading()) {
             error(30, block_start); /* compound block not closed at end of file */
             break;
         }
         if (Stmt* stmt = parse_stmt(&indent, true))
-            block->stmts().push_back(stmt);
+            stmts.emplace_back(stmt);
     }
-
-    return block;
+    return new BlockStmt(block_pos, stmts);
 }
 
 Stmt*
