@@ -926,9 +926,12 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     } else if (current_token()->atom->str() == "newdecls") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
-                        if (strncmp((char*)lptr, "required", 8) == 0)
+                        std::string word(((char*) lptr));
+                        word.erase(std::remove(word.begin(), word.end(), '\r'), word.end());
+                        word.erase(std::remove(word.begin(), word.end(), '\n'), word.end());
+                        if (word == "required")
                             require_newdecls_stack_.back() = true;
-                        else if (strncmp((char*)lptr, "optional", 8) == 0)
+                        else if (word == "optional")
                             require_newdecls_stack_.back() = false;
                         else
                             error(146);
