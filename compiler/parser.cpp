@@ -391,7 +391,7 @@ Parser::parse_enum(int vclass)
         lexer_->need(')');
     }
 
-    EnumDecl* decl = new EnumDecl(pos, vclass, label, name, increment, multiplier);
+    std::vector<EnumField> fields;
 
     lexer_->need('{');
 
@@ -422,12 +422,12 @@ Parser::parse_enum(int vclass)
             value = hier14();
 
         if (field_name)
-            decl->fields().push_back(EnumField(pos, field_name, value));
+            fields.push_back(EnumField(pos, field_name, value));
     } while (lexer_->match(','));
 
     lexer_->need('}');
     lexer_->match(';');
-    return decl;
+    return new EnumDecl(pos, vclass, label, name, fields, increment, multiplier);
 }
 
 Decl*
