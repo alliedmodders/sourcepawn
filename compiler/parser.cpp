@@ -1715,7 +1715,8 @@ Parser::parse_switch()
     Expr* cond = parse_expr(false);
     lexer_->need(endtok);
 
-    SwitchStmt* sw = new SwitchStmt(pos, cond);
+    std::vector<SwitchStmt::Case> cases;
+    Stmt* default_case = nullptr;
 
     endtok = '}';
     lexer_->need('{');
@@ -1723,16 +1724,20 @@ Parser::parse_switch()
         int tok = lexer_->lex();
 
         switch (tok) {
-            case tCASE:
-                if (sw->default_case())
+            case tCASE: {
+                if (default_case)
                     error(15); /* "default" case must be last in switch statement */
-                parse_case(sw);
+
+                std::vector<Expr*> exprs;
+                if (auto stmt = parse_case(&exprs))
+                    cases.emplace_back(std::move(exprs), stmt);
                 break;
+            }
             case tDEFAULT:
                 lexer_->need(':');
                 if (Stmt* stmt = parse_stmt(nullptr, false)) {
-                    if (!sw->default_case())
-                        sw->set_default_case(stmt);
+                    if (!default_case)
+                        default_case = stmt;
                     else
                         error(16);
                 }
@@ -1752,20 +1757,19 @@ Parser::parse_switch()
     if (!cond)
         return nullptr;
 
-    return sw;
+    return new SwitchStmt(pos, cond, std::move(cases), default_case);
 }
 
-void
-Parser::parse_case(SwitchStmt* sw)
+Stmt*
+Parser::parse_case(std::vector<Expr*>* exprs)
 {
-    PoolList<Expr*> exprs;
     do {
         /* do not allow tagnames here */
         ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), false);
 
         // hier14 because parse_expr() allows comma exprs
         if (Expr* expr = hier14())
-            exprs.push_back(expr);
+            exprs->emplace_back(expr);
         if (lexer_->match(tDBLDOT))
             error(1, ":", "..");
     } while (lexer_->match(','));
@@ -1773,10 +1777,10 @@ Parser::parse_case(SwitchStmt* sw)
     lexer_->need(':');
 
     Stmt* stmt = parse_stmt(nullptr, false);
-    if (!stmt || exprs.empty())
-        return;
+    if (!stmt || exprs->empty())
+        return nullptr;
 
-    sw->AddCase(std::move(exprs), stmt);
+    return stmt;
 }
 
 Decl*

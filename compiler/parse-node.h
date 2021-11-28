@@ -1473,10 +1473,14 @@ class ForStmt : public Stmt
 class SwitchStmt : public Stmt
 {
   public:
-    explicit SwitchStmt(const token_pos_t& pos, Expr* expr)
+    typedef std::pair<PoolArray<Expr*>, Stmt*> Case;
+
+    explicit SwitchStmt(const token_pos_t& pos, Expr* expr, std::vector<Case>&& cases,
+                        Stmt* default_case)
       : Stmt(AstKind::SwitchStmt, pos),
         expr_(expr),
-        default_case_(nullptr)
+        default_case_(default_case),
+        cases_(std::move(cases))
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1484,23 +1488,16 @@ class SwitchStmt : public Stmt
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::SwitchStmt; }
 
-    void AddCase(PoolList<Expr*>&& exprs, Stmt* stmt) {
-        cases_.emplace_back(std::move(exprs), stmt);
-    }
-
-    typedef std::pair<PoolList<Expr*>, Stmt*> Case;
-
     Expr* expr() const { return expr_; }
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
     Stmt* default_case() const { return default_case_; }
-    void set_default_case(Stmt* stmt) { default_case_ = stmt; }
-    const PoolList<Case>& cases() const { return cases_; }
+    const PoolArray<Case>& cases() const { return cases_; }
 
   private:
     Expr* expr_;
     Stmt* default_case_;
 
-    PoolList<Case> cases_;
+    PoolArray<Case> cases_;
 };
 
 class PragmaUnusedStmt : public Stmt

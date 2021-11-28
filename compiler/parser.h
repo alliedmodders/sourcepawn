@@ -92,7 +92,7 @@ class Parser
     Stmt* parse_if();
     Stmt* parse_for();
     Stmt* parse_switch();
-    void parse_case(SwitchStmt* sw);
+    Stmt* parse_case(std::vector<Expr*>* exprs);
     Stmt* parse_pragma_unused();
     TypedefInfo* parse_function_type();
 
