@@ -44,7 +44,7 @@ class Parser
     typedef Expr* (Parser::*NewHierFn)();
 
     static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
-    void CreateInitialScopes(ParseTree* list);
+    void CreateInitialScopes(std::vector<Stmt*>* list);
 
     Stmt* parse_unknown_decl(const full_token_t* tok);
     Decl* parse_enum(int vclass);

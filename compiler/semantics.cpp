@@ -3127,15 +3127,15 @@ void Semantics::CheckFunctionReturnUsage(FunctionInfo* info) {
     if (sym->must_return_value())
         ReportFunctionReturnError(sym);
 
-    // We should always have a block statement for the body. If no '{' was
-    // detected it would have been an error in the parsing pass.
-    auto block = info->body()->as<BlockStmt>();
-    assert(block);
+        // Synthesize a return statement.
+    std::vector<Stmt*> stmts = {
+        info->body(),
+        new ReturnStmt(info->end_pos(), nullptr),
+    };
 
-    // Synthesize a return statement.
-    auto ret_stmt = new ReturnStmt(info->end_pos(), nullptr);
-    block->stmts().push_back(ret_stmt);
-    block->set_flow_type(Flow_Return);
+    auto new_body = new BlockStmt(info->body()->pos(), stmts);
+    new_body->set_flow_type(Flow_Return);
+    info->set_body(new_body);
 }
 
 void

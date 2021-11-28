@@ -66,7 +66,7 @@ CompiledFunction::FindCipByPc(void* pc)
 
   if (!cip_map_sorted_) {
     qsort(cip_map_->buffer(),
-          cip_map_->length(),
+          cip_map_->size(),
           sizeof(CipMapEntry),
           cip_map_entry_sort_cmp);
     cip_map_sorted_ = true;
@@ -75,7 +75,7 @@ CompiledFunction::FindCipByPc(void* pc)
   void* ptr = bsearch(
     (void*)(uintptr_t)pcoffs,
     cip_map_->buffer(),
-    cip_map_->length(),
+    cip_map_->size(),
     sizeof(CipMapEntry),
     cip_map_entry_cmp);
   assert(ptr);

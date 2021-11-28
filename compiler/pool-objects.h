@@ -19,6 +19,8 @@
 
 #include "compile-context.h"
 
+#include <amtl/am-fixedarray.h>
+
 class PoolObject
 {
   public:
@@ -117,6 +119,9 @@ class StlPoolAllocator
 template <typename T>
 using PoolList = std::vector<T, StlPoolAllocator<T>>;
 
+template <typename T>
+using PoolArray = ke::FixedArray<T, PoolAllocationPolicy>;
+
 template <typename Key,
           typename T,
           typename Hash = std::hash<Key>,
@@ -133,4 +138,3 @@ struct KeywordTablePolicy {
         return ke::HashCharSequence(key.str(), key.length());
     }
 };
-
