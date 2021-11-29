@@ -1217,8 +1217,10 @@ class NewArrayExpr final : public Expr
 class ArrayExpr final : public Expr
 {
   public:
-    explicit ArrayExpr(const token_pos_t& pos)
-      : Expr(AstKind::ArrayExpr, pos)
+    ArrayExpr(const token_pos_t& pos, const std::vector<Expr*>& exprs, bool ellipses)
+      : Expr(AstKind::ArrayExpr, pos),
+        ellipses_(ellipses),
+        exprs_(exprs)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1226,7 +1228,7 @@ class ArrayExpr final : public Expr
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::ArrayExpr; }
 
-    PoolList<Expr*>& exprs() { return exprs_; }
+    PoolArray<Expr*>& exprs() { return exprs_; }
     bool ellipses() const { return ellipses_; }
     void set_ellipses() { ellipses_ = true; }
     bool synthesized_for_compat() const { return synthesized_for_compat_; }
@@ -1235,7 +1237,7 @@ class ArrayExpr final : public Expr
   private:
     bool ellipses_ = false;
     bool synthesized_for_compat_ = false;
-    PoolList<Expr*> exprs_;
+    PoolArray<Expr*> exprs_;
 };
 
 struct StructInitField {
