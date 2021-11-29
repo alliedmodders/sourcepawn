@@ -157,11 +157,11 @@ symbol::symbol(const symbol& other)
 void
 symbol::add_reference_to(symbol* other)
 {
-    for (symbol* sym : refers_to_) {
+    for (symbol* sym : other->function()->refers_to) {
         if (sym == other)
             return;
     }
-    refers_to_.emplace_front(other);
+    function()->refers_to.emplace_front(other);
 }
 
 bool
@@ -297,7 +297,7 @@ deduce_liveness(CompileContext& cc)
     while (!work.empty()) {
         symbol* live = ke::PopBack(&work);
 
-        for (const auto& other : live->refers_to()) {
+        for (const auto& other : live->function()->refers_to) {
             if (!enqueue(other))
                 continue;
             if (auto alias = other->function()->alias)
