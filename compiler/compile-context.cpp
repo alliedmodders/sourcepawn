@@ -62,3 +62,8 @@ DefaultArrayData* CompileContext::NewDefaultArrayData() {
     default_array_data_objects_.emplace_front();
     return &default_array_data_objects_.front();
 }
+
+std::vector<std::string>* CompileContext::NewDebugStringList() {
+    debug_strings_.emplace_front();
+    return &debug_strings_.front();
+}

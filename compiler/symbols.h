@@ -50,7 +50,7 @@ class FunctionData final : public SymbolData
 
     void resizeArgs(size_t nargs);
 
-    PoolList<PoolString> dbgstrs;
+    std::vector<std::string>* dbgstrs = nullptr;
     PoolArray<arginfo> args;
     ReturnArrayInfo* return_array = nullptr;
     FunctionInfo* node;
