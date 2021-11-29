@@ -419,9 +419,10 @@ struct StructField {
 class PstructDecl : public Decl
 {
   public:
-    PstructDecl(const token_pos_t& pos, sp::Atom* name)
+    PstructDecl(const token_pos_t& pos, sp::Atom* name, const std::vector<StructField>& fields)
       : Decl(AstKind::PstructDecl, pos, name),
-        ps_(nullptr)
+        ps_(nullptr),
+        fields_(fields)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -430,19 +431,23 @@ class PstructDecl : public Decl
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::PstructDecl; }
 
-    PoolList<StructField>& fields() {
-        return fields_;
-    }
+    PoolArray<StructField>& fields() { return fields_; }
 
   protected:
     pstruct_t* ps_;
-    PoolList<StructField> fields_;
+    PoolArray<StructField> fields_;
 };
 
 struct TypedefInfo : public PoolObject {
+    TypedefInfo(const token_pos_t& pos, const TypenameInfo& ret_type,
+                const std::vector<declinfo_t*>& args)
+     : pos(pos),
+       ret_type(ret_type),
+       args(args)
+    {}
     token_pos_t pos;
     TypenameInfo ret_type;
-    PoolList<declinfo_t*> args;
+    PoolArray<declinfo_t*> args;
 
     functag_t* Bind(SemaContext& sc);
 };
@@ -470,8 +475,10 @@ class TypedefDecl : public Decl
 class TypesetDecl : public Decl
 {
   public:
-    explicit TypesetDecl(const token_pos_t& pos, sp::Atom* name)
-      : Decl(AstKind::TypesetDecl, pos, name)
+    explicit TypesetDecl(const token_pos_t& pos, sp::Atom* name,
+                         const std::vector<TypedefInfo*>& types)
+      : Decl(AstKind::TypesetDecl, pos, name),
+        types_(types)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -480,12 +487,12 @@ class TypesetDecl : public Decl
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::TypesetDecl; }
 
-    PoolList<TypedefInfo*>& types() {
+    PoolArray<TypedefInfo*>& types() {
         return types_;
     }
 
   private:
-    PoolList<TypedefInfo*> types_;
+    PoolArray<TypedefInfo*> types_;
     funcenum_t* fe_ = nullptr;
 };
 
@@ -679,9 +686,11 @@ struct CompareOp
 class ChainedCompareExpr final : public Expr
 {
   public:
-    explicit ChainedCompareExpr(const token_pos_t& pos, Expr* first)
+    explicit ChainedCompareExpr(const token_pos_t& pos, Expr* first,
+                                const std::vector<CompareOp>& ops)
       : Expr(AstKind::ChainedCompareExpr, pos),
-        first_(first)
+        first_(first),
+        ops_(ops)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -692,11 +701,11 @@ class ChainedCompareExpr final : public Expr
 
     Expr* first() const { return first_; }
     Expr* set_first(Expr* first) { return first_ = first; }
-    PoolList<CompareOp>& ops() { return ops_; }
+    PoolArray<CompareOp>& ops() { return ops_; }
 
   private:
     Expr* first_;
-    PoolList<CompareOp> ops_;
+    PoolArray<CompareOp> ops_;
 };
 
 class TernaryExpr final : public Expr
@@ -1060,8 +1069,9 @@ class RvalueExpr final : public EmitOnlyExpr
 class CommaExpr final : public Expr
 {
   public:
-    explicit CommaExpr(const token_pos_t& pos)
-      : Expr(AstKind::CommaExpr, pos)
+    CommaExpr(const token_pos_t& pos, const std::vector<Expr*>& exprs)
+      : Expr(AstKind::CommaExpr, pos),
+        exprs_(exprs)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1073,11 +1083,11 @@ class CommaExpr final : public Expr
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CommaExpr; }
 
-    PoolList<Expr*>& exprs() { return exprs_; }
+    PoolArray<Expr*>& exprs() { return exprs_; }
     void set_has_side_effects() { has_side_effects_ = true; }
 
   private:
-    PoolList<Expr*> exprs_;
+    PoolArray<Expr*> exprs_;
     bool has_side_effects_ = false;
 };
 
@@ -1176,9 +1186,10 @@ class StringExpr final : public Expr
 class NewArrayExpr final : public Expr
 {
   public:
-    explicit NewArrayExpr(const token_pos_t& pos, const TypenameInfo& ur)
+    NewArrayExpr(const token_pos_t& pos, const TypenameInfo& ur, const std::vector<Expr*>& exprs)
       : Expr(AstKind::NewArrayExpr, pos),
-        type_(ur)
+        type_(ur),
+        exprs_(exprs)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1188,7 +1199,7 @@ class NewArrayExpr final : public Expr
 
     int tag() { return type_.tag(); }
     TypenameInfo& type() { return type_; }
-    PoolList<Expr*>& exprs() { return exprs_; }
+    PoolArray<Expr*>& exprs() { return exprs_; }
     const TypenameInfo& type() const { return type_; }
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
@@ -1198,7 +1209,7 @@ class NewArrayExpr final : public Expr
 
   private:
     TypenameInfo type_;
-    PoolList<Expr*> exprs_;
+    PoolArray<Expr*> exprs_;
     bool autozero_ = true;
     ke::Maybe<bool> analyzed_;
 };

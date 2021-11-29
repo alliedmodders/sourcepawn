@@ -763,15 +763,18 @@ AddImplicitDynamicInitializer(VarDecl* decl)
     // Note that these declarations use old tag-based syntax, and therefore
     // do not work with enum structs, which create implicit dimensions.
     TypenameInfo ti = type->ToTypenameInfo();
-    NewArrayExpr* init = new NewArrayExpr(decl->pos(), ti);
+
+    std::vector<Expr*> exprs;
     for (int i = 0; i < type->numdim(); i++) {
         Expr* expr = type->get_dim_expr(i);
         if (!expr) {
             error(decl->pos(), 184);
             return false;
         }
-        init->exprs().emplace_back(expr);
+        exprs.emplace_back(expr);
     }
+
+    auto init = new NewArrayExpr(decl->pos(), ti, exprs);
     if (!decl->init_rhs())
         decl->set_init(init);
     if (!decl->autozero())

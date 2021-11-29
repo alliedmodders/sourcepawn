@@ -482,13 +482,12 @@ Parser::parse_enumstruct()
 Decl*
 Parser::parse_pstruct()
 {
-    PstructDecl* struct_decl = nullptr;
-
     auto pos = lexer_->pos();
 
-    sp::Atom* ident;
-    if (lexer_->needsymbol(&ident))
-        struct_decl = new PstructDecl(pos, ident);
+    sp::Atom* ident = nullptr;
+    lexer_->needsymbol(&ident);
+
+    std::vector<StructField> fields;
 
     lexer_->need('{');
     do {
@@ -508,15 +507,16 @@ Parser::parse_pstruct()
             continue;
         }
 
-        if (struct_decl)
-            struct_decl->fields().push_back(StructField(pos, decl.name, decl.type));
+        if (ident)
+            fields.push_back(StructField(pos, decl.name, decl.type));
 
         lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     } while (!lexer_->peek('}'));
 
     lexer_->need('}');
     lexer_->match(';'); // eat up optional semicolon
-    return struct_decl;
+
+    return new PstructDecl(pos, ident, fields);
 }
 
 Decl*
@@ -539,20 +539,19 @@ Parser::parse_typeset()
 {
     auto pos = lexer_->pos();
 
-    sp::Atom* ident;
-    if (!lexer_->needsymbol(&ident))
-        return nullptr;
+    sp::Atom* ident = nullptr;
+    lexer_->needsymbol(&ident);
 
-    TypesetDecl* decl = new TypesetDecl(pos, ident);
+    std::vector<TypedefInfo*> types;
 
     lexer_->need('{');
     while (!lexer_->match('}')) {
         auto type = parse_function_type();
-        decl->types().push_back(type);
+        types.emplace_back(type);
     }
 
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
-    return decl;
+    return new TypesetDecl(pos, ident, types);
 }
 
 Decl*
@@ -769,16 +768,17 @@ Parser::plnge_rel(const int* opstr, NewHierFn hier)
     if (nextop(&opidx, opstr) == 0)
         return first;
 
-    ChainedCompareExpr* chain = new ChainedCompareExpr(lexer_->pos(), first);
+    auto chain_pos = lexer_->pos();
 
+    std::vector<CompareOp> ops;
     do {
         auto pos = lexer_->pos();
         Expr* right = (this->*hier)();
 
-        chain->ops().push_back(CompareOp(pos, opstr[opidx], right));
+        ops.push_back(CompareOp(pos, opstr[opidx], right));
     } while (nextop(&opidx, opstr));
 
-    return chain;
+    return new ChainedCompareExpr(chain_pos, first, ops);
 }
 
 Expr*
@@ -1036,25 +1036,19 @@ Parser::primary()
         /* allow tagnames to be used in parenthesized expressions */
         ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), true);
 
+        std::vector<Expr*> exprs;
+
         auto pos = lexer_->pos();
-        CommaExpr* comma = nullptr;
-        Expr* expr = nullptr;
         do {
             Expr* child = hier14();
-            if (expr) {
-                if (!comma) {
-                    comma = new CommaExpr(pos);
-                    comma->exprs().push_back(expr);
-                }
-                comma->exprs().push_back(child);
-            } else {
-                expr = child;
-            }
+            exprs.emplace_back(child);
         } while (lexer_->match(','));
         lexer_->need(')');
         lexer_->lexclr(FALSE); /* clear lexer_->lex() push-back, it should have been
                         * cleared already by lexer_->need() */
-        return comma ? comma : expr;
+        if (exprs.size() > 1)
+            return new CommaExpr(pos, exprs);
+        return exprs[0];
     }
 
     int tok = lexer_->lex();
@@ -1278,15 +1272,14 @@ Parser::var_init(int vclass)
 Expr*
 Parser::parse_new_array(const token_pos_t& pos, const TypenameInfo& rt)
 {
-    auto expr = new NewArrayExpr(pos, rt);
-
+    std::vector<Expr*> exprs;
     do {
         Expr* child = hier14();
-        expr->exprs().emplace_back(child);
+        exprs.emplace_back(child);
 
         lexer_->need(']');
     } while (lexer_->match('['));
-    return expr;
+    return new NewArrayExpr(pos, rt, exprs);
 }
 
 void
@@ -1601,28 +1594,25 @@ Parser::parse_expr(bool parens)
     if (parens)
         lexer_->need('(');
 
-    Expr* expr = nullptr;
-    CommaExpr* comma = nullptr;
+    std::vector<Expr*> exprs;
     while (true) {
-        expr = hier14();
+        auto expr = hier14();
         if (!expr)
             break;
 
-        if (comma)
-            comma->exprs().push_back(expr);
+        exprs.emplace_back(expr);
 
         if (!lexer_->match(','))
             break;
-
-        if (!comma) {
-            comma = new CommaExpr(expr->pos());
-            comma->exprs().push_back(expr);
-        }
     }
     if (parens)
         lexer_->need(')');
 
-    return comma ? comma : expr;
+    if (exprs.empty())
+        return nullptr;
+    if (exprs.size() > 1)
+        return new CommaExpr(exprs[0]->pos(), exprs);
+    return exprs[0];
 }
 
 Stmt*
@@ -2154,10 +2144,11 @@ Parser::parse_function_type()
     if (!lexer_->need(tFUNCTION))
         return nullptr;
 
-    auto info = new TypedefInfo;
-    info->pos = lexer_->pos();
+    auto info_pos = lexer_->pos();
+    TypenameInfo ret_type;
+    std::vector<declinfo_t*> args;
 
-    parse_new_typename(nullptr, &info->ret_type);
+    parse_new_typename(nullptr, &ret_type);
 
     lexer_->need('(');
 
@@ -2170,7 +2161,7 @@ Parser::parse_function_type()
         // Eat optional symbol name.
         lexer_->match(tSYMBOL);
 
-        info->args.emplace_back(decl);
+        args.emplace_back(decl);
 
         if (!lexer_->match(',')) {
             lexer_->need(')');
@@ -2179,7 +2170,7 @@ Parser::parse_function_type()
     }
 
     // Error once when we're past max args.
-    if (info->args.size() >= SP_MAX_EXEC_PARAMS)
+    if (args.size() >= SP_MAX_EXEC_PARAMS)
         report(45);
 
     if (lparen)
@@ -2187,7 +2178,8 @@ Parser::parse_function_type()
 
     lexer_->require_newline(TerminatorPolicy::Semicolon);
     cc_.reports()->ResetErrorFlag();
-    return info;
+
+    return new TypedefInfo(info_pos, ret_type, args);
 }
 
 // Parse a declaration.
