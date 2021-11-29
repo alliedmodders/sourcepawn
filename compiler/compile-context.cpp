@@ -67,3 +67,8 @@ std::vector<std::string>* CompileContext::NewDebugStringList() {
     debug_strings_.emplace_front();
     return &debug_strings_.front();
 }
+
+std::unordered_map<sp::Atom*, symbol*>* CompileContext::NewSymbolMap() {
+    symbol_maps_.emplace_front();
+    return &symbol_maps_.front();
+}
