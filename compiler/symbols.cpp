@@ -118,7 +118,6 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
    documentation(nullptr),
    addr_(symaddr),
    name_(nullptr),
-   referred_from_count_(0),
    parent_(nullptr),
    child_(nullptr)
 {
@@ -161,25 +160,6 @@ symbol::add_reference_to(symbol* other)
             return;
     }
     refers_to_.push_back(other);
-    other->referred_from_.push_back(this);
-    other->referred_from_count_++;
-}
-
-void
-symbol::drop_reference_from(symbol* from)
-{
-#if !defined(NDEBUG)
-    bool found = false;
-    for (size_t i = 0; i < referred_from_.size(); i++) {
-        if (referred_from_[i] == from) {
-            referred_from_[i] = nullptr;
-            found = true;
-            break;
-        }
-    }
-    assert(found);
-#endif
-    referred_from_count_--;
 }
 
 bool

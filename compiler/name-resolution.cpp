@@ -272,6 +272,7 @@ PstructDecl::EnterNames(SemaContext& sc)
     ps_ = pstructs_add(name_);
     gTypes.definePStruct(ps_->name->chars(), ps_);
 
+    std::vector<structarg_t*> args;
     for (auto& field : fields_) {
         if (pstructs_getarg(ps_, field.name)) {
             report(field.pos, 103) << field.name << layout_spec_name(Layout_PawnStruct);
@@ -283,6 +284,9 @@ PstructDecl::EnterNames(SemaContext& sc)
         arg->name = field.name;
         if (arg->type.ident == iARRAY)
             arg->type.ident = iREFARRAY;
+        arg->offs = args.size() * sizeof(cell_t);
+        arg->index = (int)args.size();
+        args.emplace_back(arg);
 
         if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim[0] != 0)) {
             error(field.pos, 69);
@@ -290,8 +294,9 @@ PstructDecl::EnterNames(SemaContext& sc)
         }
 
         field.field = arg;
-        pstructs_addarg(ps_, arg);
     }
+
+    new (&ps_->args) PoolArray<structarg_t*>(args);
     return true;
 }
 
@@ -324,7 +329,7 @@ TypedefDecl::Bind(SemaContext& sc)
     if (!ft)
         return false;
 
-    functags_add(fe_, ft);
+    new (&fe_->entries) PoolArray<functag_t*>({ft});
     return true;
 }
 
@@ -381,14 +386,18 @@ bool
 TypesetDecl::Bind(SemaContext& sc)
 {
     bool ok = true;
+
+    std::vector<functag_t*> tags;
     for (const auto& type : types_) {
         auto ft = type->Bind(sc);
         if (!ft) {
             ok = false;
             continue;
         }
-        functags_add(fe_, ft);
+        tags.emplace_back(ft);
     }
+
+    new (&fe_->entries) PoolArray<functag_t*>(tags);
     return ok;
 }
 
