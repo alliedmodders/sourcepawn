@@ -17,7 +17,7 @@ struct funcenum_t {
     {}
     int tag;
     sp::Atom* name;
-    std::vector<functag_t*> entries;
+    PoolArray<functag_t*> entries;
 };
 
 struct structarg_t : public PoolObject
@@ -40,7 +40,7 @@ struct pstruct_t : public PoolObject
     explicit pstruct_t(sp::Atom* name);
 
     sp::Atom* name;
-    PoolList<structarg_t*> args;
+    PoolArray<structarg_t*> args;
 };
 
 // The ordering of these definitions should be preserved for
@@ -110,7 +110,6 @@ struct methodmap_t : public SymbolData
 pstruct_t* pstructs_add(sp::Atom* name);
 void pstructs_free();
 pstruct_t* pstructs_find(const char* name);
-void pstructs_addarg(pstruct_t* pstruct, structarg_t* arg);
 const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
 
 /**
@@ -118,7 +117,6 @@ const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
  */
 void funcenums_free();
 funcenum_t* funcenums_add(sp::Atom* name);
-void functags_add(funcenum_t* en, functag_t* src);
 funcenum_t* funcenum_for_symbol(symbol* sym);
 functag_t* functag_from_tag(int tag);
 

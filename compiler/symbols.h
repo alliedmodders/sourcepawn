@@ -209,17 +209,9 @@ struct symbol : public PoolObject
     }
 
     void add_reference_to(symbol* other);
-    void drop_reference_from(symbol* from);
 
     PoolList<symbol*>& refers_to() {
         return refers_to_;
-    }
-    bool is_unreferenced() const {
-        return referred_from_count_ == 0;
-    }
-    void clear_refers() {
-        refers_to_.clear();
-        referred_from_.clear();
     }
     bool is_variadic() const;
     bool must_return_value() const;
@@ -238,10 +230,6 @@ struct symbol : public PoolObject
 
     // Other symbols that this symbol refers to.
     PoolList<symbol*> refers_to_;
-
-    // All the symbols that refer to this symbol.
-    PoolList<symbol*> referred_from_;
-    size_t referred_from_count_;
 
     symbol* parent_;
     symbol* child_;

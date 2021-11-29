@@ -62,14 +62,6 @@ pstructs_find(sp::Atom* name)
 }
 
 void
-pstructs_addarg(pstruct_t* pstruct, structarg_t* arg)
-{
-    arg->offs = pstruct->args.size() * sizeof(cell);
-    arg->index = pstruct->args.size();
-    pstruct->args.emplace_back(arg);
-}
-
-void
 funcenums_free()
 {
     sFuncEnums.clear();
@@ -107,7 +99,7 @@ funcenum_for_symbol(symbol* sym)
 
     auto name = ke::StringPrintf("::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
     funcenum_t* fe = funcenums_add(gAtoms.add(name));
-    functags_add(fe, ft);
+    new (&fe->entries) PoolArray<functag_t*>({ft});
 
     return fe;
 }
@@ -123,12 +115,6 @@ functag_from_tag(int tag)
     if (fe->entries.empty())
         return nullptr;
     return fe->entries.back();
-}
-
-void
-functags_add(funcenum_t* en, functag_t* src)
-{
-    en->entries.push_back(src);
 }
 
 methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
