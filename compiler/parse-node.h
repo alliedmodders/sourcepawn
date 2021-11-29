@@ -900,10 +900,11 @@ struct ComputedArg {
 class CallExpr final : public Expr
 {
   public:
-    CallExpr(const token_pos_t& pos, int token, Expr* target)
+    CallExpr(const token_pos_t& pos, int token, Expr* target, const std::vector<ParsedArg>& args)
       : Expr(AstKind::CallExpr, pos),
         token_(token),
-        target_(target)
+        target_(target),
+        args_(args)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -915,9 +916,9 @@ class CallExpr final : public Expr
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CallExpr; }
 
-    PoolList<ParsedArg>& args() { return args_; }
-    PoolList<ComputedArg>& argv() { return argv_; }
-    const PoolList<ComputedArg>& argv() const { return argv_; }
+    PoolArray<ParsedArg>& args() { return args_; }
+    PoolArray<ComputedArg>& argv() { return argv_; }
+    const PoolArray<ComputedArg>& argv() const { return argv_; }
     Expr* target() const { return target_; }
     int token() const { return token_; }
     Expr* implicit_this() const { return implicit_this_; }
@@ -930,10 +931,10 @@ class CallExpr final : public Expr
 
     int token_;
     Expr* target_;
-    PoolList<ParsedArg> args_;
+    PoolArray<ParsedArg> args_;
     symbol* sym_ = nullptr;
     Expr* implicit_this_ = nullptr;
-    PoolList<ComputedArg> argv_;
+    PoolArray<ComputedArg> argv_;
 };
 
 class EmitOnlyExpr : public Expr

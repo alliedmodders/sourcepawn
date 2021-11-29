@@ -1108,12 +1108,11 @@ Parser::constant()
 CallExpr*
 Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
 {
-    CallExpr* call = new CallExpr(pos, tok, target);
-
     if (lexer_->match(')'))
-        return call;
+        return new CallExpr(pos, tok, target, {});
 
     bool named_params = false;
+    std::vector<ParsedArg> args;
     do {
         sp::Atom* name = nullptr;
         if (lexer_->match('.')) {
@@ -1131,7 +1130,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
         if (!lexer_->match('_'))
             expr = hier14();
 
-        call->args().emplace_back(name, expr);
+        args.emplace_back(name, expr);
 
         if (lexer_->match(')'))
             break;
@@ -1139,7 +1138,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
             break;
     } while (lexer_->freading() && !lexer_->match(tENDEXPR));
 
-    return call;
+    return new CallExpr(pos, tok, target, args);
 }
 
 Expr*
