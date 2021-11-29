@@ -58,6 +58,9 @@ class FunctionData final : public SymbolData
     symbol* alias;
     sp::Label label;     // modern replacement for addr
     sp::Label funcid;
+
+    // Other symbols that this symbol refers to.
+    PoolForwardList<symbol*> refers_to;
 };
 
 class EnumStructVarData final : public SymbolData
@@ -210,9 +213,6 @@ struct symbol : public PoolObject
 
     void add_reference_to(symbol* other);
 
-    PoolForwardList<symbol*>& refers_to() {
-        return refers_to_;
-    }
     bool is_variadic() const;
     bool must_return_value() const;
     bool used() const {
@@ -227,9 +227,6 @@ struct symbol : public PoolObject
     cell addr_; /* address or offset (or value for constant, index for native function) */
     sp::Atom* name_;
     SymbolData* data_;
-
-    // Other symbols that this symbol refers to.
-    PoolForwardList<symbol*> refers_to_;
 
     symbol* parent_;
     symbol* child_;
