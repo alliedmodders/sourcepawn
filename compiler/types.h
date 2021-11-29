@@ -100,12 +100,12 @@ struct typeinfo_t {
     PoolList<int> dim;
 
     // Either null or an array of size |numdim|, pool-allocated.
-    PoolList<Expr*> dim_exprs;
+    PoolArray<Expr*> dim_exprs;
 
     // Type information.
     sp::Atom* type_atom;    // Parsed atom.
     int tag_;               // Effective tag.
-    int ident;              // Either iREFERENCE, iARRAY, or iVARIABLE.
+    int ident;          // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;
     bool is_new : 1;        // New-style declaration.
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
@@ -153,7 +153,7 @@ struct typeinfo_t {
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
         assert(i < numdim());
-        return dim_exprs.empty() ? nullptr : dim_exprs[i];
+        return i < dim_exprs.size() ? dim_exprs[i] : nullptr;
     }
 };
 

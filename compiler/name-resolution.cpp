@@ -85,8 +85,6 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
         ti->set_tag(0);
         ti->declared_tag = tag;
         ti->dim.emplace_back(enum_type->addr());
-        if (!ti->dim_exprs.empty())
-            ti->dim_exprs.emplace_back(nullptr);
 
         if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
             ti->ident = iARRAY;
