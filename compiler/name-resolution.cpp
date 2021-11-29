@@ -202,6 +202,8 @@ EnumDecl::EnterNames(SemaContext& sc)
     if (enumsym && enumsym->ident == iMETHODMAP)
         enumsym = NULL;
 
+    std::vector<symbol*> children;
+
     cell value = 0;
     for (const auto& field : fields_ ) {
         AutoErrorPos error_pos(field.pos);
@@ -223,7 +225,7 @@ EnumDecl::EnterNames(SemaContext& sc)
         // add the constant to a separate list as well
         if (enumroot) {
             sym->enumfield = true;
-            enumroot->children.emplace_back(sym);
+            children.emplace_back(sym);
         }
 
         if (multiplier_ == 1)
@@ -240,6 +242,9 @@ EnumDecl::EnterNames(SemaContext& sc)
         assert(enumroot);
         enumsym->set_data(enumroot);
     }
+
+    if (enumroot)
+        new (&enumroot->children) PoolArray<symbol*>(children);
     return true;
 }
 
@@ -339,6 +344,7 @@ TypedefInfo::Bind(SemaContext& sc)
     auto ft = new functag_t();
     ft->ret_tag = ret_type.tag();
 
+    std::vector<funcarg_t> ft_args;
     for (auto& arg : args) {
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
@@ -352,8 +358,10 @@ TypedefInfo::Bind(SemaContext& sc)
             fa.type.ident = iREFARRAY;
         if (fa.type.ident != iREFARRAY && fa.type.ident != iARRAY)
             assert(fa.type.dim.empty());
-        ft->args.emplace_back(fa);
+        ft_args.emplace_back(fa);
     }
+    new (&ft->args) PoolArray<funcarg_t>(ft_args);
+
     return ft;
 }
 
@@ -863,13 +871,14 @@ FunctionInfo::Bind(SemaContext& outer_sc)
 
         auto decl = new VarDecl(pos_, gAtoms.add("this"), typeinfo, sARGUMENT, false,
                                 false, false, nullptr);
-        args_.emplace(args_.begin(), FunctionArg{decl});
+        assert(args_[0] == nullptr);
+        args_[0] = decl;
     }
 
     // Bind all argument types, so we can get an operator name if needed.
     bool ok = true;
-    for (const auto& arg : args_)
-        ok &= arg.decl->BindType(outer_sc);
+    for (const auto& decl : args_)
+        ok &= decl->BindType(outer_sc);
 
     if (!ok)
         return false;
@@ -916,10 +925,10 @@ FunctionInfo::Bind(SemaContext& outer_sc)
         scope_ = sc.scope();
 
         for (const auto& arg : args_)
-            ok &= arg.decl->Bind(sc);
+            ok &= arg->Bind(sc);
 
         if (this_tag_ && ok)
-            markusage(args_[0].decl->sym(), uREAD);
+            markusage(args_[0]->sym(), uREAD);
     }
 
     if ((sym_->native || sym_->is_public || is_forward_) && decl_.type.numdim() > 0)
@@ -945,8 +954,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
     std::vector<arginfo> arglist;
 
     AutoCountErrors errors;
-    for (const auto& parsed_arg : args_) {
-        const auto& var = parsed_arg.decl;
+    for (const auto& var : args_) {
         const auto& typeinfo = var->type();
         symbol* argsym = var->sym();
 
@@ -1068,8 +1076,7 @@ FunctionInfo::NameForOperator()
 
     int count = 0;
     int tags[2] = {0, 0};
-    for (const auto& arg : args_) {
-        auto var = arg.decl;
+    for (const auto& var : args_) {
         if (count < 2)
             tags[count] = var->type().tag();
         if (var->type().ident != iVARIABLE)
@@ -1159,6 +1166,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     root_->set_data(data);
 
     std::unordered_set<sp::Atom*> seen;
+    std::vector<symbol*> fields;
 
     cell position = 0;
     for (auto& field : fields_) {
@@ -1202,7 +1210,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         child->dim.array.level = 0;
         child->set_parent(root_);
         child->enumfield = true;
-        data->fields.emplace_back(child);
+        fields.emplace_back(child);
 
         cell size = 1;
         if (field.decl.type.numdim()) {
@@ -1216,6 +1224,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     if (!position)
         report(pos_, 119) << name_;
 
+    std::vector<symbol*> methods;
     for (const auto& decl : methods_) {
         auto info = decl->info();
         if (seen.count(decl->name())) {
@@ -1227,8 +1236,11 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         auto sym = new symbol(decl->name(), 0, iFUNCTN, sGLOBAL, 0);
         sym->set_parent(root_);
         info->set_sym(sym);
-        data->methods.emplace_back(sym);
+        methods.emplace_back(sym);
     }
+
+    new (&data->fields) PoolArray<symbol*>(fields);
+    new (&data->methods) PoolArray<symbol*>(methods);
 
     assert(root_->enumroot);
     root_->setAddr(position);
@@ -1414,7 +1426,7 @@ MethodmapDecl::BindGetter(SemaContext& sc, MethodmapProperty* prop)
     auto fun = prop->getter;
 
     // There should be no extra arguments.
-    if (fun->args().size() > 0) {
+    if (fun->args().size() > 1) {
         report(fun->pos(), 127);
         return false;
     }
@@ -1430,7 +1442,7 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
     auto fun = prop->setter;
 
     // Must have one extra argument taking the return type.
-    if (fun->args().size() > 1) {
+    if (fun->args().size() > 2) {
         report(prop->pos, 150) << pc_tagname(prop->type.tag());
         return false;
     }
@@ -1445,7 +1457,7 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
         return false;
     }
 
-    auto decl = fun->args()[1].decl;
+    auto decl = fun->args()[1];
     if (decl->type().ident != iVARIABLE || decl->init_rhs() ||
         decl->type().tag() != prop->type.tag())
     {

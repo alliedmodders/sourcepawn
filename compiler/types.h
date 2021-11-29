@@ -168,7 +168,7 @@ struct functag_t : public PoolObject
        args()
     {}
     int ret_tag;
-    PoolList<funcarg_t> args;
+    PoolArray<funcarg_t> args;
 };
 
 class Type

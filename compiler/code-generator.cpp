@@ -1754,7 +1754,7 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
         AutoEnterScope arg_scope(this, &local_syms_);
 
         for (const auto& fun_arg : info->args()) {
-            auto sym = fun_arg.decl->sym();
+            auto sym = fun_arg->sym();
             sym->codeaddr = asm_.position();
             EnqueueDebugSymbol(sym);
         }

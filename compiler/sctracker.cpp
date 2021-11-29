@@ -91,8 +91,9 @@ funcenum_t*
 funcenum_for_symbol(symbol* sym)
 {
     functag_t* ft = new functag_t;
-
     ft->ret_tag = sym->tag;
+
+    std::vector<funcarg_t> args;
     for (arginfo& arg : sym->function()->args) {
         funcarg_t dest;
         dest.type = arg.type;
@@ -100,8 +101,9 @@ funcenum_for_symbol(symbol* sym)
         if (dest.type.ident != iARRAY && dest.type.ident != iREFARRAY)
           assert(dest.type.dim.empty());
 
-        ft->args.push_back(dest);
+        args.emplace_back(dest);
     }
+    new (&ft->args) PoolArray<funcarg_t>(args);
 
     auto name = ke::StringPrintf("::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
     funcenum_t* fe = funcenums_add(gAtoms.add(name));

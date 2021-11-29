@@ -3015,16 +3015,10 @@ FunctionInfo::FunctionInfo(const token_pos_t& pos, const declinfo_t& decl)
 {
 }
 
-void
-FunctionInfo::AddArg(VarDecl* arg)
-{
-    args_.emplace_back(FunctionArg{arg});
-}
-
 bool
 FunctionInfo::IsVariadic() const
 {
-    return !args_.empty() && args_.back().decl->type().ident == iVARARGS;
+    return !args_.empty() && args_.back()->type().ident == iVARARGS;
 }
 
 bool Semantics::CheckFunctionInfo(FunctionInfo* info) {
@@ -3219,7 +3213,7 @@ FunctionInfo::ProcessUses(SemaContext& outer_sc)
     SemaContext sc(outer_sc, sym_, this);
 
     for (const auto& arg : args_)
-        arg.decl->ProcessUses(sc);
+        arg->ProcessUses(sc);
 
     body_->ProcessUses(sc);
 }

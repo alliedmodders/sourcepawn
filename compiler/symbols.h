@@ -67,7 +67,7 @@ class EnumData final : public SymbolData
   public:
     EnumData* asEnum() override { return this; }
 
-    PoolList<symbol*> children;
+    PoolArray<symbol*> children;
 };
 
 class EnumStructData final : public SymbolData
@@ -75,8 +75,8 @@ class EnumStructData final : public SymbolData
   public:
     EnumStructData* asEnumStruct() override { return this; }
 
-    PoolList<symbol*> fields;
-    PoolList<symbol*> methods;
+    PoolArray<symbol*> fields;
+    PoolArray<symbol*> methods;
 };
 
 /*  Symbol table format

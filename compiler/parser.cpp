@@ -221,7 +221,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 
     if (tok->id == tNATIVE || tok->id == tFORWARD) {
         parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
-        return parse_inline_function(tok->id, decl, nullptr);
+        return parse_inline_function(tok->id, decl);
     }
 
     int fpublic = FALSE, fstock = FALSE, fstatic = FALSE;
@@ -287,7 +287,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
             info->set_is_static();
         if (fstock)
             info->set_is_stock();
-        if (!parse_function(info, 0))
+        if (!parse_function(info, 0, false))
             return nullptr;
         auto stmt = new FunctionDecl(pos, info);
         if (!lexer_->deprecate().empty()) {
@@ -446,6 +446,9 @@ Parser::parse_enumstruct()
 
     auto stmt = new EnumStructDecl(pos, struct_name);
 
+    std::vector<EnumStructField> fields;
+    std::vector<FunctionDecl*> methods;
+
     int opening_line = lexer_->fline();
     while (!lexer_->match('}')) {
         if (!lexer_->freading()) {
@@ -462,18 +465,21 @@ Parser::parse_enumstruct()
             auto info = new FunctionInfo(decl_pos, decl);
             info->set_name(decl.name);
             info->set_is_stock();
-            if (!parse_function(info, 0))
+            if (!parse_function(info, 0, true))
                 continue;
 
             auto method = new FunctionDecl(decl_pos, info);
-            stmt->methods().emplace_back(method);
+            methods.emplace_back(method);
             continue;
         }
 
-        stmt->fields().emplace_back(EnumStructField{decl_pos, decl});
+        fields.emplace_back(EnumStructField{decl_pos, decl});
 
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     }
+
+    new (&stmt->fields()) PoolArray<EnumStructField>(fields);
+    new (&stmt->methods()) PoolArray<FunctionDecl*>(methods);
 
     lexer_->require_newline(TerminatorPolicy::Newline);
     return stmt;
@@ -1778,13 +1784,11 @@ Parser::parse_case(std::vector<Expr*>* exprs)
 }
 
 Decl*
-Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this_tag)
+Parser::parse_inline_function(int tokid, const declinfo_t& decl)
 {
     auto pos = lexer_->pos();
     auto info = new FunctionInfo(pos, decl);
     info->set_name(decl.name);
-    if (this_tag)
-        info->set_this_tag(*this_tag);
 
     if (tokid == tNATIVE || tokid == tMETHODMAP)
         info->set_is_native();
@@ -1795,7 +1799,7 @@ Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this
     else
         info->set_is_stock();
 
-    if (!parse_function(info, tokid))
+    if (!parse_function(info, tokid, false))
         return nullptr;
 
     auto stmt = new FunctionDecl(pos, info);
@@ -1807,14 +1811,24 @@ Parser::parse_inline_function(int tokid, const declinfo_t& decl, const int* this
 }
 
 bool
-Parser::parse_function(FunctionInfo* info, int tokid)
+Parser::parse_function(FunctionInfo* info, int tokid, bool has_this)
 {
     if (!lexer_->match('(')) {
         error(10);
         lexer_->lexclr(TRUE);
         return false;
     }
-    parse_args(info); // eats the close paren
+
+    std::vector<VarDecl*> args;
+
+    // Reserve space for |this|.
+    if (has_this)
+        args.emplace_back(nullptr);
+
+    parse_args(info, &args); // eats the close paren
+
+    // Copy arguments.
+    new (&info->args()) PoolArray<VarDecl*>(args);
 
     if (info->is_native()) {
         if (info->decl().opertok != 0) {
@@ -1861,7 +1875,7 @@ Parser::parse_function(FunctionInfo* info, int tokid)
 }
 
 void
-Parser::parse_args(FunctionInfo* info)
+Parser::parse_args(FunctionInfo* info, std::vector<VarDecl*>* args)
 {
     if (lexer_->match(')'))
         return;
@@ -1879,7 +1893,7 @@ Parser::parse_args(FunctionInfo* info)
 
             auto p = new VarDecl(pos, gAtoms.add("..."), decl.type, sARGUMENT, false, false,
                                  false, nullptr);
-            info->AddArg(p);
+            args->emplace_back(p);
             continue;
         }
 
@@ -1897,7 +1911,7 @@ Parser::parse_args(FunctionInfo* info)
 
         auto p = new VarDecl(pos, decl.name, decl.type, sARGUMENT, false, false,
                              false, init);
-        info->AddArg(p);
+        args->emplace_back(p);
     } while (lexer_->match(','));
 
     lexer_->need(')');
@@ -1925,13 +1939,24 @@ Parser::parse_methodmap()
     auto decl = new MethodmapDecl(pos, name_atom, nullable, extends);
 
     lexer_->need('{');
+
+    std::vector<MethodmapMethod*> methods;
+    std::vector<MethodmapProperty*> props;
     while (!lexer_->match('}')) {
-        bool ok = false;
+        bool ok = true;
         int tok_id = lexer_->lex();
         if (tok_id == tPUBLIC) {
-            ok = parse_methodmap_method(decl);
+            auto method = parse_methodmap_method(decl);
+            if (method)
+                methods.emplace_back(method);
+            else
+                ok = false;
         } else if (tok_id == tSYMBOL && lexer_->current_token()->atom->str() == "property") {
-            ok = parse_methodmap_property(decl);
+            auto prop = parse_methodmap_property(decl);
+            if (prop)
+                props.emplace_back(prop);
+            else
+                ok = false;
         } else {
             error(124);
         }
@@ -1942,11 +1967,14 @@ Parser::parse_methodmap()
         }
     }
 
+    new (&decl->methods()) PoolArray<MethodmapMethod*>(methods);
+    new (&decl->properties()) PoolArray<MethodmapProperty*>(props);
+
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
 }
 
-bool
+MethodmapMethod*
 Parser::parse_methodmap_method(MethodmapDecl* map)
 {
     auto pos = lexer_->pos();
@@ -1981,11 +2009,11 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
         // Parse for type expression, priming it with the token we predicted
         // would be an identifier.
         if (!parse_new_typeexpr(&ret_type.type, first, 0))
-            return false;
+            return nullptr;
 
         // Now, we should get an identifier.
         if (!lexer_->needsymbol(&symbol))
-            return false;
+            return nullptr;
 
         ret_type.type.ident = iVARIABLE;
     }
@@ -2002,37 +2030,40 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     else
         fun->set_is_stock();
 
+    bool has_this = false;
+    if (ret_type.type.ident != 0 && !is_static)
+        has_this = true;
+
     ke::SaveAndSet<int> require_newdecls(&lexer_->require_newdecls(), TRUE);
-    if (!parse_function(fun, is_native ? tMETHODMAP : 0))
-        return false;
+    if (!parse_function(fun, is_native ? tMETHODMAP : 0, has_this))
+        return nullptr;
 
     // Use the short name for the function decl
     auto method = new MethodmapMethod;
     method->is_static = is_static;
     method->decl = new FunctionDecl(pos, symbol, fun);
-    map->methods().emplace_back(method);
 
     if (is_native)
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     else
         lexer_->require_newline(TerminatorPolicy::Newline);
-    return true;
+    return method;
 }
 
-bool
+MethodmapProperty*
 Parser::parse_methodmap_property(MethodmapDecl* map)
 {
     auto prop = new MethodmapProperty;
     prop->pos = lexer_->pos();
 
     if (!parse_new_typeexpr(&prop->type, nullptr, 0))
-        return false;
+        return nullptr;
 
     sp::Atom* ident;
     if (!lexer_->needsymbol(&ident))
-        return false;
+        return nullptr;
     if (!lexer_->need('{'))
-        return false;
+        return nullptr;
 
     prop->name = ident;
 
@@ -2041,10 +2072,8 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
             lexer_->lexclr(TRUE);
     }
 
-    map->properties().emplace_back(prop);
-
     lexer_->require_newline(TerminatorPolicy::Newline);
-    return true;
+    return prop;
 }
 
 bool
@@ -2095,7 +2124,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
     else
         fun->set_is_stock();
 
-    if (!parse_function(fun, is_native ? tMETHODMAP : 0))
+    if (!parse_function(fun, is_native ? tMETHODMAP : 0, true))
         return false;
 
     if (getter && prop->getter) {
