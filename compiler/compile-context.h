@@ -100,6 +100,7 @@ class CompileContext final
     void operator =(CompileContext&&) = delete;
 
     DefaultArrayData* NewDefaultArrayData();
+    std::vector<std::string>* NewDebugStringList();
 
   private:
     PoolAllocator allocator_;
@@ -134,4 +135,5 @@ class CompileContext final
 
     // AST attachments.
     std::forward_list<DefaultArrayData> default_array_data_objects_;
+    std::forward_list<std::vector<std::string>> debug_strings_;
 };

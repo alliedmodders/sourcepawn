@@ -414,15 +414,15 @@ RttiBuilder::add_method(symbol* sym)
     method.pcode_end = sym->codeaddr;
     method.signature = encode_signature(sym);
 
-    if (sym->function()->dbgstrs.empty())
+    if (!sym->function()->dbgstrs)
         return;
 
     smx_rtti_debug_method debug;
     debug.method_index = index;
     debug.first_local = dbg_locals_->count();
 
-    for (auto& iter : sym->function()->dbgstrs) {
-        const auto& chars = iter.chars();
+    for (auto& iter : *sym->function()->dbgstrs) {
+        const char* chars = iter.c_str();
         if (chars[0] == '\0')
             continue;
 

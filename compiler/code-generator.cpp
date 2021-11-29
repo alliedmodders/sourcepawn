@@ -77,7 +77,9 @@ CodeGenerator::AddDebugLine(int linenr)
     auto str = ke::StringPrintf("L:%x %x", asm_.position(), linenr);
     if (func_) {
         auto data = func_->function();
-        data->dbgstrs.emplace_back(str.c_str(), str.size());
+        if (!data->dbgstrs)
+            data->dbgstrs = cc_.NewDebugStringList();
+        data->dbgstrs->emplace_back(std::move(str));
     } else {
         debug_strings_.emplace_back(std::move(str));
     }
@@ -108,7 +110,9 @@ CodeGenerator::AddDebugSymbol(symbol* sym)
 
     if (func_) {
         auto data = func_->function();
-        data->dbgstrs.emplace_back(string.c_str(), string.size());
+        if (!data->dbgstrs)
+            data->dbgstrs = cc_.NewDebugStringList();
+        data->dbgstrs->emplace_back(std::move(string));
     } else {
         debug_strings_.emplace_back(std::move(string));
     }
