@@ -210,7 +210,7 @@ struct symbol : public PoolObject
 
     void add_reference_to(symbol* other);
 
-    PoolList<symbol*>& refers_to() {
+    PoolForwardList<symbol*>& refers_to() {
         return refers_to_;
     }
     bool is_variadic() const;
@@ -229,7 +229,7 @@ struct symbol : public PoolObject
     SymbolData* data_;
 
     // Other symbols that this symbol refers to.
-    PoolList<symbol*> refers_to_;
+    PoolForwardList<symbol*> refers_to_;
 
     symbol* parent_;
     symbol* child_;

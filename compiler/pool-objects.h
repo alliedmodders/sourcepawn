@@ -17,6 +17,8 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #pragma once
 
+#include <forward_list>
+
 #include "compile-context.h"
 
 #include <amtl/am-fixedarray.h>
@@ -127,6 +129,9 @@ template <typename Key,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 using PoolMap = std::unordered_map<Key, T, Hash, KeyEqual, StlPoolAllocator<std::pair<const Key, T>>>;
+
+template <typename T>
+using PoolForwardList = std::forward_list<T, StlPoolAllocator<T>>;
 
 struct KeywordTablePolicy {
     static bool matches(const sp::CharsAndLength& a, const sp::CharsAndLength& b) {

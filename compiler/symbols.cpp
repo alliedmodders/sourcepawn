@@ -76,6 +76,8 @@ markusage(symbol* sym, int usage)
     // special handling, there's no concept of "stock" there.
     if (sym->vclass != sGLOBAL && sym->vclass != sSTATIC)
         return;
+    if (sym->ident != iFUNCTN)
+        return;
 
     parent_func->add_reference_to(sym);
 }
@@ -159,7 +161,7 @@ symbol::add_reference_to(symbol* other)
         if (sym == other)
             return;
     }
-    refers_to_.push_back(other);
+    refers_to_.emplace_front(other);
 }
 
 bool
