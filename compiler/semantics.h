@@ -271,5 +271,5 @@ void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
 int check_operatortag(int opertok, int resulttag, const char* opername);
 int argcompare(arginfo* a1, arginfo* a2);
-void fill_arg_defvalue(VarDecl* decl, arginfo* arg);
+void fill_arg_defvalue(CompileContext& cc, VarDecl* decl, arginfo* arg);
 bool IsLegacyEnumTag(SymbolScope* scope, int tag);

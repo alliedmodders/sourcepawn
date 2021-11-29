@@ -996,7 +996,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
-                fill_arg_defvalue(var, &arg);
+                fill_arg_defvalue(sc.cc(), var, &arg);
         } else {
             Expr* init = var->init_rhs();
             if (init && sc.sema()->CheckExpr(init)) {

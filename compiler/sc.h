@@ -69,12 +69,12 @@ static constexpr char DIRSEP_CHAR = '\\';
 static constexpr char DIRSEP_CHAR = '/';
 #endif
 
-struct ArrayData;
+struct DefaultArrayData;
 
 struct DefaultArg : public PoolObject {
     int tag = 0;
     ke::Maybe<cell> val;
-    ArrayData* array = nullptr;
+    DefaultArrayData* array = nullptr;
     symbol* sym = nullptr;
 
     ~DefaultArg();

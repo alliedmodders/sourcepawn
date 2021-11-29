@@ -34,6 +34,12 @@ class FunctionInfo;
 class SemaContext;
 struct token_pos_t;
 
+struct ReturnArrayInfo : public PoolObject {
+    cell_t iv_size;
+    cell_t dat_addr;
+    cell_t zeroes;
+};
+
 class FunctionData final : public SymbolData
 {
   public:
@@ -46,7 +52,7 @@ class FunctionData final : public SymbolData
 
     PoolList<PoolString> dbgstrs;
     PoolArray<arginfo> args;
-    ArrayData* array;    // For functions with array returns
+    ReturnArrayInfo* return_array = nullptr;
     FunctionInfo* node;
     FunctionInfo* forward;
     symbol* alias;

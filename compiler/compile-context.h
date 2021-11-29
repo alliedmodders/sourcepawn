@@ -20,11 +20,13 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <forward_list>
 #include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
+#include "array-data.h"
 #include "pool-allocator.h"
 #include "source-file.h"
 
@@ -97,6 +99,8 @@ class CompileContext final
     void operator =(const CompileContext&) = delete;
     void operator =(CompileContext&&) = delete;
 
+    DefaultArrayData* NewDefaultArrayData();
+
   private:
     PoolAllocator allocator_;
     SymbolScope* globals_;
@@ -127,4 +131,7 @@ class CompileContext final
     bool must_abort_ = false;
 
     SemaContext* sc_ = nullptr;
+
+    // AST attachments.
+    std::forward_list<DefaultArrayData> default_array_data_objects_;
 };

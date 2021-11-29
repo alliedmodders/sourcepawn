@@ -20,21 +20,23 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include "array-data.h"
-#include "parse-node.h"
+#include <stdint.h>
 
-class Semantics;
+#include <vector>
 
-// Determine the static size of an iARRAY based on dimension expressions and
-// array initializers. The array may be converted to an iREFARRAY if it is
-// determined to be dynamic.
-void ResolveArraySize(Semantics* sema, VarDecl* decl);
-void ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
+#include <sp_vm_types.h>
 
-// Perform type and size checks of an array and its initializer if present.
-bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
+struct ArrayData {
+    std::vector<cell_t> iv;
+    std::vector<cell_t> data;
+    uint32_t zeroes;
 
-void BuildArrayInitializer(VarDecl* decl, ArrayData* array, cell_t base_addr);
-void BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
+    size_t total_size() const {
+        return iv.size() + data.size() + zeroes;
+    }
+};
 
-cell_t CalcArraySize(symbol* sym);
+struct DefaultArrayData : public ArrayData {
+    cell_t iv_size;
+    cell_t data_size;
+};
