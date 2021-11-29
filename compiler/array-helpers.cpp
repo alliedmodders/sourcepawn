@@ -950,8 +950,8 @@ ArrayEmitter::Emit(int rank, Expr* init)
     if (!init) {
         assert(type_.dim[rank]);
     } else if (ArrayExpr* array = init->as<ArrayExpr>()) {
-        PoolList<symbol*>* field_list = nullptr;
-        PoolList<symbol*>::iterator field_iter;
+        PoolArray<symbol*>* field_list = nullptr;
+        symbol** field_iter = nullptr;
         if (es_) {
             symbol* esroot = es_->asEnumStruct();
             field_list = &esroot->data()->asEnumStruct()->fields;

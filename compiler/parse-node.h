@@ -1536,16 +1536,11 @@ class PragmaUnusedStmt : public Stmt
     PoolArray<symbol*> symbols_;
 };
 
-struct FunctionArg {
-    VarDecl* decl;
-};
-
 class FunctionInfo : public PoolObject
 {
   public:
     explicit FunctionInfo(const token_pos_t& pos, const declinfo_t& decl);
 
-    void AddArg(VarDecl* arg);
     bool IsVariadic() const;
 
     bool Bind(SemaContext& sc);
@@ -1583,7 +1578,7 @@ class FunctionInfo : public PoolObject
     void set_is_static() { is_static_ = true; }
     bool is_static() const { return is_static_; }
 
-    PoolList<FunctionArg>& args() { return args_; }
+    PoolArray<VarDecl*>& args() { return args_; }
     const token_pos_t& pos() const { return pos_; }
 
     declinfo_t& decl() { return decl_; }
@@ -1624,7 +1619,7 @@ class FunctionInfo : public PoolObject
     bool is_forward_ = false;
     bool is_native_ = false;
     Stmt* body_ = nullptr;
-    PoolList<FunctionArg> args_;
+    PoolArray<VarDecl*> args_;
     symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
@@ -1683,12 +1678,12 @@ class EnumStructDecl : public Decl
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::EnumStructDecl; }
 
-    PoolList<FunctionDecl*>& methods() { return methods_; }
-    PoolList<EnumStructField>& fields() { return fields_; }
+    PoolArray<FunctionDecl*>& methods() { return methods_; }
+    PoolArray<EnumStructField>& fields() { return fields_; }
 
   private:
-    PoolList<FunctionDecl*> methods_;
-    PoolList<EnumStructField> fields_;
+    PoolArray<FunctionDecl*> methods_;
+    PoolArray<EnumStructField> fields_;
     symbol* root_ = nullptr;
 };
 
@@ -1722,8 +1717,8 @@ class MethodmapDecl : public Decl
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::MethodmapDecl; }
 
-    PoolList<MethodmapProperty*>& properties() { return properties_; }
-    PoolList<MethodmapMethod*>& methods() { return methods_; }
+    PoolArray<MethodmapProperty*>& properties() { return properties_; }
+    PoolArray<MethodmapMethod*>& methods() { return methods_; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapProperty* prop);
@@ -1732,8 +1727,8 @@ class MethodmapDecl : public Decl
   private:
     bool nullable_;
     sp::Atom* extends_;
-    PoolList<MethodmapProperty*> properties_;
-    PoolList<MethodmapMethod*> methods_;
+    PoolArray<MethodmapProperty*> properties_;
+    PoolArray<MethodmapMethod*> methods_;
 
     methodmap_t* map_ = nullptr;
     symbol* sym_ = nullptr;

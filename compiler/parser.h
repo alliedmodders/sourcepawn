@@ -57,8 +57,8 @@ class Parser
     Decl* parse_using();
     Decl* parse_enumstruct();
     Decl* parse_methodmap();
-    bool parse_methodmap_method(MethodmapDecl* map);
-    bool parse_methodmap_property(MethodmapDecl* map);
+    MethodmapMethod* parse_methodmap_method(MethodmapDecl* map);
+    MethodmapProperty* parse_methodmap_property(MethodmapDecl* map);
     bool parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop);
 
     struct VarParams {
@@ -73,7 +73,7 @@ class Parser
     Stmt* parse_var(declinfo_t* decl, VarParams& params);
     void parse_post_dims(typeinfo_t* type);
     Expr* var_init(int vclass);
-    Decl* parse_inline_function(int tokid, const declinfo_t& decl, const int* this_tag);
+    Decl* parse_inline_function(int tokid, const declinfo_t& decl);
 
     bool parse_decl(declinfo_t* decl, int flags);
     bool parse_old_decl(declinfo_t* decl, int flags);
@@ -96,8 +96,8 @@ class Parser
     Stmt* parse_pragma_unused();
     TypedefInfo* parse_function_type();
 
-    bool parse_function(FunctionInfo* info, int tokid);
-    void parse_args(FunctionInfo* info);
+    bool parse_function(FunctionInfo* info, int tokid, bool has_this);
+    void parse_args(FunctionInfo* info, std::vector<VarDecl*>* args);
 
     // Wrapper around hier14() that allows comma expressions without a wrapping
     // parens.
