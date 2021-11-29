@@ -45,7 +45,7 @@ class FunctionData final : public SymbolData
     void resizeArgs(size_t nargs);
 
     PoolList<PoolString> dbgstrs;
-    PoolList<arginfo> args;
+    PoolArray<arginfo> args;
     ArrayData* array;    // For functions with array returns
     FunctionInfo* node;
     FunctionInfo* forward;
@@ -352,7 +352,7 @@ bool CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& p
 void markusage(symbol* sym, int usage);
 symbol* NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[],
                     int numdim, int semantic_tag);
-int findnamedarg(arginfo* arg, sp::Atom* name);
+int findnamedarg(const PoolArray<arginfo>& arg, sp::Atom* name);
 symbol* FindEnumStructField(Type* type, sp::Atom* name);
 void deduce_liveness(CompileContext& cc);
 void declare_handle_intrinsics();

@@ -942,10 +942,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
 bool
 FunctionInfo::BindArgs(SemaContext& sc)
 {
-    PoolList<arginfo> arglist;
-
-    // Always have one empty argument at the end.
-    arglist.emplace_back();
+    std::vector<arginfo> arglist;
 
     AutoCountErrors errors;
     for (const auto& parsed_arg : args_) {
@@ -957,9 +954,9 @@ FunctionInfo::BindArgs(SemaContext& sc)
 
         if (typeinfo.ident == iVARARGS) {
             /* redimension the argument list, add the entry iVARARGS */
+            arglist.emplace_back();
             arglist.back().type.ident = iVARARGS;
             arglist.back().type.set_tag(typeinfo.tag());
-            arglist.emplace_back();
             continue;
         }
 
@@ -978,8 +975,9 @@ FunctionInfo::BindArgs(SemaContext& sc)
          *
          * Since arglist has an empty terminator at the end, we actually add 2.
          */
-        argsym->setAddr(static_cast<cell>((arglist.size() + 2) * sizeof(cell)));
+        argsym->setAddr(static_cast<cell>((arglist.size() + 3) * sizeof(cell)));
 
+        arglist.emplace_back();
         arginfo& arg = arglist.back();
         arg.name = var->name();
         arg.type.ident = argsym->ident;
@@ -1021,16 +1019,13 @@ FunctionInfo::BindArgs(SemaContext& sc)
         /* arguments of a public function may not have a default value */
         if (sym_->is_public && arg.def)
             error(59, var->name()->chars());
-
-        // Fill terminator argument.
-        arglist.emplace_back();
     }
 
     // Now, see if the function already had an argument list.
     auto& prev_args = sym_->function()->args;
-    if (!prev_args[0].type.ident) {
+    if (prev_args.empty()) {
         // No, replace it with the new list.
-        sym_->function()->args = std::move(arglist);
+        new (&sym_->function()->args) PoolArray<arginfo>(std::move(arglist));
         return errors.ok();
     }
 
@@ -1052,7 +1047,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
         return false;
     }
 
-    for (size_t i = 0; i < impl_argc - 1; i++) {
+    for (size_t i = 0; i < impl_argc; i++) {
         if (!argcompare(&arglist[i], &prev_args[i]))
             report(error_pos, 181) << arglist[i].name;
     }
@@ -1061,7 +1056,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
     // implementation's. This is so names will bind correctly in CallExpr,
     // though we should really kill off arglist entirely and use VarDecls.
     if (is_public_)
-        sym_->function()->args = std::move(arglist);
+        new (&sym_->function()->args) PoolArray<arginfo>(std::move(arglist));
 
     return errors.ok();
 }
