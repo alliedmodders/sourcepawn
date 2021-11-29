@@ -589,9 +589,10 @@ Parser::parse_using()
 Stmt*
 Parser::parse_pragma_unused()
 {
-    PragmaUnusedStmt* stmt = new PragmaUnusedStmt(lexer_->pos());
+    auto pos = lexer_->pos();
 
     int tok = lexer_->lex_same_line();
+    std::vector<sp::Atom*> names;
     for (;;) {
         if (tok != tSYMBOL) {
             report(1) << get_token_string(tSYMBOL) << get_token_string(tok);
@@ -600,7 +601,7 @@ Parser::parse_pragma_unused()
         }
 
         sp::Atom* name = lexer_->current_token()->atom;
-        stmt->names().emplace_back(name);
+        names.emplace_back(name);
 
         tok = lexer_->lex_same_line();
         if (tok == ',') {
@@ -610,7 +611,7 @@ Parser::parse_pragma_unused()
         if (tok == tEOL)
             break;
     }
-    return stmt;
+    return new PragmaUnusedStmt(pos, names);
 }
 
 Stmt*

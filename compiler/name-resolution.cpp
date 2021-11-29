@@ -1134,14 +1134,18 @@ FunctionDecl::Bind(SemaContext& sc)
 bool
 PragmaUnusedStmt::Bind(SemaContext& sc)
 {
+    std::vector<symbol*> symbols;
     for (const auto& name : names_) {
         symbol* sym = FindSymbol(sc, name);
         if (!sym) {
             report(pos_, 17) << name;
             continue;
         }
-        symbols_.emplace_back(sym);
+        symbols.emplace_back(sym);
     }
+
+    new (&symbols_) PoolArray<symbol*>(symbols);
+
     return names_.size() == symbols_.size();
 }
 

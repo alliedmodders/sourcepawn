@@ -1517,8 +1517,9 @@ class SwitchStmt : public Stmt
 class PragmaUnusedStmt : public Stmt
 {
   public:
-    PragmaUnusedStmt(const token_pos_t& pos)
-      : Stmt(AstKind::PragmaUnusedStmt, pos)
+    PragmaUnusedStmt(const token_pos_t& pos, const std::vector<sp::Atom*>& names)
+      : Stmt(AstKind::PragmaUnusedStmt, pos),
+        names_(names)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1526,12 +1527,12 @@ class PragmaUnusedStmt : public Stmt
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::PragmaUnusedStmt; }
 
-    PoolList<sp::Atom*>& names() { return names_; }
-    PoolList<symbol*>& symbols() { return symbols_; }
+    PoolArray<sp::Atom*>& names() { return names_; }
+    PoolArray<symbol*>& symbols() { return symbols_; }
 
   private:
-    PoolList<sp::Atom*> names_;
-    PoolList<symbol*> symbols_;
+    PoolArray<sp::Atom*> names_;
+    PoolArray<symbol*> symbols_;
 };
 
 struct FunctionArg {
