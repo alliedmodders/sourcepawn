@@ -27,6 +27,7 @@
 #include "sc.h"
 #include "parse-node.h"
 
+class AutoCreateScope;
 class Semantics;
 
 class SemaContext
@@ -100,10 +101,15 @@ class SemaContext
     FunctionInfo* func_node() const { return func_node_; }
     Semantics* sema() const { return sema_; }
 
+    SymbolScope* ScopeForAdd();
+
     // Currently, this only refers to local/argument scopes, and not global
     // scope. They will be linked together when reparse goes away.
     SymbolScope* scope() const { return scope_; }
     void set_scope(SymbolScope* scope) { scope_ = scope; }
+
+    AutoCreateScope* scope_creator() const { return scope_creator_; }
+    void set_scope_creator(AutoCreateScope* scope) { scope_creator_ = scope; }
 
     std::unordered_set<SymbolScope*>& static_scopes() { return static_scopes_; }
 
@@ -111,6 +117,7 @@ class SemaContext
     CompileContext& cc_;
     Semantics* sema_ = nullptr;
     SymbolScope* scope_ = nullptr;
+    AutoCreateScope* scope_creator_ = nullptr;
     symbol* func_ = nullptr;
     FunctionInfo* func_node_ = nullptr;
     Stmt* void_return_ = nullptr;
@@ -251,6 +258,25 @@ class AutoEnterScope final
   private:
     SemaContext& sc_;
     SymbolScope* prev_;
+};
+
+class AutoCreateScope final
+{
+  public:
+    // Create a new scope.
+    AutoCreateScope(SemaContext& sc, ScopeKind kind, SymbolScope** where);
+    ~AutoCreateScope();
+
+    SymbolScope* prev() const { return prev_; }
+    ScopeKind kind() const { return kind_; }
+
+  private:
+    SemaContext& sc_;
+    ScopeKind kind_;
+    SymbolScope** where_;
+    SymbolScope* prev_;
+    AutoCreateScope* prev_creator_;
+    std::vector<SymbolScope*> pending_;
 };
 
 class AutoCollectSemaFlow final

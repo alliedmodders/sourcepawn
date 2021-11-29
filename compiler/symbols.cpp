@@ -319,12 +319,14 @@ GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
     symbol* sym = FindSymbol(sc, name, &scope);
     if (!sym)
         return NewNameStatus::Ok;
-    if (scope->kind() == sGLOBAL && sc.scope()->IsGlobalOrFileStatic()) {
+
+    SymbolScope* current = sc.ScopeForAdd();
+    if (scope->kind() == sGLOBAL && current->IsGlobalOrFileStatic()) {
         if (vclass == sSTATIC)
             return NewNameStatus::Shadowed;
         return NewNameStatus::Duplicated;
     }
-    if (scope == sc.scope())
+    if (scope == current)
         return NewNameStatus::Duplicated;
     return NewNameStatus::Shadowed;
 }
@@ -430,7 +432,7 @@ declare_methodmap_symbol(CompileContext& cc, methodmap_t* map)
 void
 DefineSymbol(SemaContext& sc, symbol* sym)
 {
-    auto scope = sc.scope();
+    auto scope = sc.ScopeForAdd();
     if (scope->kind() == sFILE_STATIC && sym->vclass != sSTATIC) {
         // The default scope is global scope, but "file static" scope comes
         // earlier in the lookup hierarchy, so skip past it if we need to.

@@ -35,6 +35,25 @@
 #include "semantics.h"
 #include "symbols.h"
 
+AutoEnterScope::AutoEnterScope(SemaContext& sc, SymbolScope* scope)
+  : sc_(sc),
+    prev_(sc.scope())
+{
+    sc.set_scope(scope);
+}
+
+AutoEnterScope::AutoEnterScope(SemaContext& sc, ScopeKind kind)
+  : sc_(sc),
+    prev_(sc.scope())
+{
+    sc.set_scope(new SymbolScope(sc.scope(), kind));
+}
+
+AutoEnterScope::~AutoEnterScope()
+{
+    sc_.set_scope(prev_);
+}
+
 bool
 SemaContext::BindType(const token_pos_t& pos, TypenameInfo* ti)
 {
@@ -137,8 +156,7 @@ BlockStmt::Bind(SemaContext& sc)
     if (stmts_.empty())
         return true;
 
-    AutoEnterScope enter_scope(sc, sLOCAL);
-    scope_ = sc.scope();
+    AutoCreateScope enter_scope(sc, sLOCAL, &scope_);
 
     return StmtList::Bind(sc);
 }
@@ -732,12 +750,10 @@ ForStmt::Bind(SemaContext& sc)
 {
     bool ok = true;
 
-    ke::Maybe<AutoEnterScope> enter_scope;
+    ke::Maybe<AutoCreateScope> enter_scope;
     if (init_) {
-        if (!init_->is(AstKind::ExprStmt)) {
-            enter_scope.init(sc, sLOCAL);
-            scope_ = sc.scope();
-        }
+        if (!init_->is(AstKind::ExprStmt))
+            enter_scope.init(sc, sLOCAL, &scope_);
 
         ok &= init_->Bind(sc);
     }
@@ -1503,4 +1519,56 @@ ChangeScopeNode::Bind(SemaContext& sc)
 {
     sc.set_scope(scope_);
     return true;
+}
+
+SymbolScope* SemaContext::ScopeForAdd() {
+    if (!scope_creator_)
+        return scope();
+
+    // Note, when lazily creating scopes, the initial parent may be wrong. We
+    // do this so scope lookups work as normal. However if we wind up having
+    // to lazily create an intervening scope, the parent chain gets fixed up
+    // automatically.
+    //
+    // Once we leave a scope, the hierarchy is never used again, so this fixup
+    // is not super important (yet).
+    if (scope_ == scope_creator_->prev())
+        scope_ = new SymbolScope(scope_, scope_creator_->kind());
+    return scope_;
+}
+
+AutoCreateScope::AutoCreateScope(SemaContext& sc, ScopeKind kind, SymbolScope** where)
+  : sc_(sc),
+    kind_(kind),
+    where_(where),
+    prev_(sc.scope()),
+    prev_creator_(sc.scope_creator())
+{
+    sc.set_scope_creator(this);
+}
+
+AutoCreateScope::~AutoCreateScope() {
+    if (sc_.scope() == prev_) {
+        // We never changed scopes. If there's another lazy scope context, move
+        // all the pending scopes (needing a parent) upwards. Otherwise, we'll
+        // need to reparent to the top scope.
+        if (prev_creator_)
+            ke::MoveExtend(&prev_creator_->pending_, &pending_);
+    } else {
+        *where_ = sc_.scope();
+
+        // Reparent the new scope.
+        if (prev_creator_)
+            prev_creator_->pending_.emplace_back(sc_.scope());
+        else
+            sc_.scope()->set_parent(prev_);
+    }
+
+    // Reparent our pending list. If we never created a new scope, these get
+    // assigned to the previous top scope.
+    for (const auto& child : pending_)
+        child->set_parent(sc_.scope());
+
+    sc_.set_scope(prev_);
+    sc_.set_scope_creator(prev_creator_);
 }
