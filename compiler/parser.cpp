@@ -1084,18 +1084,19 @@ Parser::constant()
             return new TaggedValueExpr(lexer_->pos(), pc_tag_bool, 0);
         case '{':
         {
-            ArrayExpr* expr = new ArrayExpr(pos);
+            std::vector<Expr*> exprs;
+            bool ellipses = false;
             do {
                 if (lexer_->match(tELLIPS)) {
-                    expr->set_ellipses();
+                    ellipses = true;
                     break;
                 }
-                Expr* child = hier14();
-                expr->exprs().push_back(child);
+                if (Expr* child = hier14())
+                    exprs.emplace_back(child);
             } while (lexer_->match(','));
             if (!lexer_->need('}'))
                 lexer_->lexclr(FALSE);
-            return expr;
+            return new ArrayExpr(pos, exprs, ellipses);
         }
         default:
           error(29);
@@ -1245,19 +1246,22 @@ Parser::var_init(int vclass)
             lexer_->lexpush();
         }
 
-        ArrayExpr* expr = new ArrayExpr(lexer_->pos());
+        auto pos = lexer_->pos();
+
+        std::vector<Expr*> exprs;
+        bool ellipses = false;
         do {
             if (lexer_->peek('}'))
                 break;
             if (lexer_->match(tELLIPS)) {
-                expr->set_ellipses();
+                ellipses = true;
                 break;
             }
-            Expr* child = var_init(vclass);
-            expr->exprs().emplace_back(child);
+            if (Expr* child = var_init(vclass))
+                exprs.emplace_back(child);
         } while (lexer_->match(','));
         lexer_->need('}');
-        return expr;
+        return new ArrayExpr(pos, exprs, ellipses);
     }
 
     if (lexer_->match(tSTRING)) {

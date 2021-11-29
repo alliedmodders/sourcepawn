@@ -614,9 +614,9 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
 
         report(init->pos(), 241);
 
-        array = new ArrayExpr(init->pos());
-        array->exprs().push_back(init);
-        array->set_ellipses();
+        std::vector<Expr*> exprs = {init};
+
+        array = new ArrayExpr(init->pos(), exprs, true);
         array->set_synthesized_for_compat();
         decl_->set_init(array);
     }
