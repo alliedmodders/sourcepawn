@@ -81,8 +81,7 @@ markusage(symbol* sym, int usage)
 }
 
 FunctionData::FunctionData()
- : array(nullptr),
-   node(nullptr),
+ : node(nullptr),
    forward(nullptr),
    alias(nullptr)
 {

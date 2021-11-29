@@ -57,3 +57,8 @@ CompileContext::InitLexer()
 {
     lexer_ = std::make_shared<Lexer>(*this);
 }
+
+DefaultArrayData* CompileContext::NewDefaultArrayData() {
+    default_array_data_objects_.emplace_front();
+    return &default_array_data_objects_.front();
+}

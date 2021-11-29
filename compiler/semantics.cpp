@@ -3362,7 +3362,7 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
 }
 
 void
-fill_arg_defvalue(VarDecl* decl, arginfo* arg)
+fill_arg_defvalue(CompileContext& cc, VarDecl* decl, arginfo* arg)
 {
     arg->def = new DefaultArg();
     arg->def->tag = decl->type().tag();
@@ -3378,11 +3378,12 @@ fill_arg_defvalue(VarDecl* decl, arginfo* arg)
         return;
     }
 
-    ArrayData data;
-    BuildArrayInitializer(decl, &data, 0);
+    auto array = cc.NewDefaultArrayData();
+    BuildArrayInitializer(decl, array, 0);
 
-    arg->def->array = new ArrayData;
-    *arg->def->array = std::move(data);
+    arg->def->array = array;
+    arg->def->array->iv_size = (cell_t)array->iv.size();
+    arg->def->array->data_size = (cell_t)array->data.size();
 }
 
 bool Semantics::CheckChangeScopeNode(ChangeScopeNode* node) {

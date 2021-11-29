@@ -28,7 +28,7 @@ class DataQueue final
     DataQueue();
 
     void Add(cell value);
-    void Add(PoolList<cell>&& cells);
+    void Add(std::vector<cell>&& cells);
     void Add(const char* text, size_t length);
     void AddZeroes(cell count);
 

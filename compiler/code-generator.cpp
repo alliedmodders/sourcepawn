@@ -1341,26 +1341,23 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     }
 
     auto fun = func_->function();
-    if (!fun->array) {
-        fun->array = new ArrayData;
-        *fun->array = std::move(array);
+    if (!fun->return_array) {
+        // No initializer, so we should have no data.
+        assert(array.data.empty());
+        assert(array.zeroes);
 
-        // No initializer == no data.
-        assert(fun->array->data.empty());
-        assert(fun->array->zeroes);
+        fun->return_array = new ReturnArrayInfo;
 
-        cell iv_size = (cell)fun->array->iv.size();
-        cell dat_addr = data_.dat_address();
-        data_.Add(std::move(fun->array->iv));
-
-        fun->array->iv.emplace_back(iv_size);
-        fun->array->data.emplace_back(dat_addr);
+        fun->return_array->iv_size = (cell_t)array.iv.size();
+        fun->return_array->dat_addr = data_.dat_address();
+        fun->return_array->zeroes = array.zeroes;
+        data_.Add(std::move(array.iv));
     }
 
-    cell dat_addr = fun->array->data[0];
-    cell iv_size = fun->array->iv[0];
+    cell dat_addr = fun->return_array->dat_addr;
+    cell iv_size = fun->return_array->iv_size;
     assert(iv_size);
-    assert(fun->array->zeroes);
+    assert(fun->return_array->zeroes);
 
     // push.pri                 ; save array expression result
     // alt = hidden array
@@ -1379,7 +1376,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     __ emit(OP_MOVE_ALT);
     __ emit(OP_POP_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
-    __ emit(OP_MOVS, fun->array->zeroes * sizeof(cell));
+    __ emit(OP_MOVS, fun->return_array->zeroes * sizeof(cell));
 }
 
 void
@@ -1839,13 +1836,8 @@ CodeGenerator::EmitDefaultArray(Expr* expr, arginfo* arg)
     if (!def->val) {
         def->val = ke::Some(data_.dat_address());
 
-        // Make copies since we cache DefaultArgs across compilations. This
-        // will go away when the two-pass parser dies.
-        PoolList<cell> iv = def->array->iv;
-        PoolList<cell> data = def->array->data;
-
-        data_.Add(std::move(iv));
-        data_.Add(std::move(data));
+        data_.Add(std::move(def->array->iv));
+        data_.Add(std::move(def->array->data));
         data_.AddZeroes(def->array->zeroes);
     }
 
@@ -1854,8 +1846,8 @@ CodeGenerator::EmitDefaultArray(Expr* expr, arginfo* arg)
         // why we emitted the zeroes above.)
         __ const_pri(def->val.get());
     } else {
-        cell iv_size = (cell)def->array->iv.size();
-        cell data_size = (cell)def->array->data.size();
+        cell iv_size = def->array->iv_size;
+        cell data_size = def->array->data_size;
         cell total_size = iv_size + data_size + def->array->zeroes;
 
         //  heap <size>
