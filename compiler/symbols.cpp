@@ -86,8 +86,6 @@ FunctionData::FunctionData()
    forward(nullptr),
    alias(nullptr)
 {
-    // Always have one empty argument at the end.
-    args.emplace_back();
 }
 
 symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int symtag)
@@ -197,15 +195,9 @@ bool
 symbol::is_variadic() const
 {
     assert(ident == iFUNCTN);
-    arginfo* arg = &function()->args[0];
-    while (arg->type.ident) {
-        if (arg->type.ident == iVARARGS)
-            return true;
-        arg++;
-    }
-    return false;
+    const auto& args = function()->args;
+    return !args.empty() && args.back().type.ident == iVARARGS;
 }
-
 
 symbol*
 NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
@@ -237,14 +229,11 @@ NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[]
     return sym;
 }
 
-int
-findnamedarg(arginfo* arg, sp::Atom* name)
-{
-    int i;
-
-    for (i = 0; arg[i].type.ident != 0 && arg[i].type.ident != iVARARGS; i++)
-        if (arg[i].name == name)
-            return i;
+int findnamedarg(const PoolArray<arginfo>& args, sp::Atom* name) {
+    for (int i = 0; i < args.size() && args[i].type.ident != iVARARGS; i++) {
+        if (args[i].name == name)
+            return (int)i;
+    }
     return -1;
 }
 

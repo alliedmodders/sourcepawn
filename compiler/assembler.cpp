@@ -556,8 +556,8 @@ RttiBuilder::encode_signature(symbol* sym)
 
     uint32_t argc = 0;
     bool is_variadic = false;
-    for (arginfo* arg = &sym->function()->args[0]; arg->type.ident; arg++) {
-        if (arg->type.ident == iVARARGS)
+    for (const auto& arg : sym->function()->args) {
+        if (arg.type.ident == iVARARGS)
             is_variadic = true;
         argc++;
     }
@@ -577,11 +577,11 @@ RttiBuilder::encode_signature(symbol* sym)
         encode_tag_into(bytes, sym->tag);
     }
 
-    for (arginfo* arg = &sym->function()->args[0]; arg->type.ident; arg++) {
-        int tag = arg->type.tag();
-        int numdim = arg->type.numdim();
-        if (arg->type.numdim() && arg->type.enum_struct_tag()) {
-            int last_tag = arg->type.enum_struct_tag();
+    for (const auto& arg : sym->function()->args) {
+        int tag = arg.type.tag();
+        int numdim = arg.type.numdim();
+        if (arg.type.numdim() && arg.type.enum_struct_tag()) {
+            int last_tag = arg.type.enum_struct_tag();
             Type* last_type = types_->find(last_tag);
             if (last_type->isEnumStruct()) {
                 tag = last_tag;
@@ -589,11 +589,11 @@ RttiBuilder::encode_signature(symbol* sym)
             }
         }
 
-        if (arg->type.ident == iREFERENCE)
+        if (arg.type.ident == iREFERENCE)
             bytes.push_back(cb::kByRef);
 
-        auto dim = numdim ? &arg->type.dim[0] : nullptr;
-        variable_type_t info = {tag, dim, numdim, arg->type.is_const};
+        auto dim = numdim ? &arg.type.dim[0] : nullptr;
+        variable_type_t info = {tag, dim, numdim, arg.type.is_const};
         encode_var_type(bytes, info);
     }
 

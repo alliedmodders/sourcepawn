@@ -61,7 +61,7 @@ static inline bool
 MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
 {
     auto fun = sym->function();
-    if (fun->args.size() != size_t(numparam) + 1)
+    if (fun->args.size() != size_t(numparam))
         return false;
 
     assert(numparam == 1 || numparam == 2);
@@ -73,10 +73,6 @@ MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
         if (fun->args[i].type.tag() != tags[i])
             return false;
     }
-
-    if (fun->args[numparam].type.ident != 0)
-        return false;
-
     return true;
 }
 

@@ -94,9 +94,6 @@ funcenum_for_symbol(symbol* sym)
 
     ft->ret_tag = sym->tag;
     for (arginfo& arg : sym->function()->args) {
-        if (!arg.type.ident)
-            break;
-
         funcarg_t dest;
         dest.type = arg.type;
 
@@ -154,8 +151,7 @@ methodmap_method_t::property_tag() const
     assert(getter || setter);
     if (getter)
         return getter->tag;
-    arginfo* thisp = &setter->function()->args[0];
-    if (thisp->type.ident == 0)
+    if (setter->function()->args.size() != 2)
         return types->tag_void();
     arginfo* valp = &setter->function()->args[1];
     if (valp->type.ident != iVARIABLE)

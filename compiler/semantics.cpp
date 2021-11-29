@@ -1983,8 +1983,12 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     unsigned int nargs = 0;
     unsigned int argidx = 0;
-    arginfo* arglist = &sym->function()->args[0];
+    auto& arglist = sym->function()->args;
     if (call->implicit_this()) {
+        if (arglist.empty()) {
+            report(call->implicit_this(), 92);
+            return false;
+        }
         if (!CheckArgument(call, &arglist[0], call->implicit_this(), &argv, 0))
             return false;
         nargs++;
@@ -2008,6 +2012,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
                 return false;
             }
             argpos = nargs;
+            if (argidx >= arglist.size()) {
+                report(param.expr, 92);
+                return false;
+            }
         }
 
         if (argpos >= SP_MAX_CALL_ARGUMENTS) {
@@ -2032,7 +2040,6 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
         // Don't iterate past terminators (0 or varargs).
         switch (arglist[argidx].type.ident) {
-            case 0:
             case iVARARGS:
                 break;
             default:
@@ -2048,9 +2055,9 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     // Check for missing or invalid extra arguments, and fill in default
     // arguments.
-    for (unsigned int argidx = 0; ; argidx++) {
+    for (unsigned int argidx = 0; argidx < arglist.size(); argidx++) {
         auto& arg = arglist[argidx];
-        if (arg.type.ident == 0 || arg.type.ident == iVARARGS)
+        if (arg.type.ident == iVARARGS)
             break;
         if (argidx >= argv.size() || !argv[argidx].expr) {
             if (!CheckArgument(call, &arg, nullptr, &argv, argidx))
@@ -2115,13 +2122,6 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param,
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
     switch (arg->type.ident) {
-        case 0:
-            // On the first pass, we don't have all of the parameter info.
-            // However, use information must be marked anyway, otherwise
-            // vars declared previously will be omitted in the second pass.
-            // See SourceMod bug 4643.
-            report(param, 92); // argument count mismatch
-            break;
         case iVARARGS:
             assert(!handling_this);
 
@@ -2698,9 +2698,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         //   base + ((n-1)+3)*sizeof(cell) == last argument of the function
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
         assert(curfunc != NULL);
-        int argcount;
-        for (argcount = 0; curfunc->function()->args[argcount].type.ident != 0; argcount++)
-            /* nothing */;
+        int argcount = (int)curfunc->function()->args.size();
 
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         sub = NewVariable(curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
