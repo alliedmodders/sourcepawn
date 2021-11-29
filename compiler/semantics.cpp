@@ -34,25 +34,6 @@
 #include "scvars.h"
 #include "symbols.h"
 
-AutoEnterScope::AutoEnterScope(SemaContext& sc, SymbolScope* scope)
-  : sc_(sc),
-    prev_(sc.scope())
-{
-    sc.set_scope(scope);
-}
-
-AutoEnterScope::AutoEnterScope(SemaContext& sc, ScopeKind kind)
-  : sc_(sc),
-    prev_(sc.scope())
-{
-    sc.set_scope(new SymbolScope(sc.scope(), kind));
-}
-
-AutoEnterScope::~AutoEnterScope()
-{
-    sc_.set_scope(prev_);
-}
-
 Semantics::Semantics(CompileContext& cc, ParseTree* tree)
   : cc_(cc),
     tree_(tree)
@@ -305,7 +286,6 @@ bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps, const Struct
             error(expr->pos(), 405);
             return false;
         }
-        decl->sym()->add_reference_to(sym);
     } else {
         assert(false);
         return false;

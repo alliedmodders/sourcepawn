@@ -277,6 +277,8 @@ class SymbolScope final : public PoolObject
     }
 
     SymbolScope* parent() const { return parent_; }
+    void set_parent(SymbolScope* scope) { parent_ = scope; }
+
     ScopeKind kind() const { return kind_; }
     int fnumber() const { return fnumber_; }
 
