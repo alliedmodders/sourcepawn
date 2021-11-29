@@ -1979,17 +1979,17 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         report(call, 234) << sym->name() << ptr; /* deprecated (probably a native function) */
     }
 
+    std::vector<ComputedArg> argv;
+
     unsigned int nargs = 0;
     unsigned int argidx = 0;
     arginfo* arglist = &sym->function()->args[0];
     if (call->implicit_this()) {
-        if (!CheckArgument(call, &arglist[0], call->implicit_this(), 0))
+        if (!CheckArgument(call, &arglist[0], call->implicit_this(), &argv, 0))
             return false;
         nargs++;
         argidx++;
     }
-
-    auto& argv = call->argv();
 
     bool namedparams = false;
     for (const auto& param : call->args()) {
@@ -2014,7 +2014,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             report(call, 45); // too many function arguments
             return false;
         }
-        if (argpos < argv.size() && argv.at(argpos).expr) {
+        if (argpos < argv.size() && argv[argpos].expr) {
             report(call, 58); // argument already set
             return false;
         }
@@ -2024,7 +2024,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             return false;
 
         // Add the argument to |argv| and perform type checks.
-        if (!CheckArgument(call, &arglist[argidx], param.expr, argpos))
+        if (!CheckArgument(call, &arglist[argidx], param.expr, &argv, argpos))
             return false;
 
         assert(argv[argpos].expr != nullptr);
@@ -2053,7 +2053,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         if (arg.type.ident == 0 || arg.type.ident == iVARARGS)
             break;
         if (argidx >= argv.size() || !argv[argidx].expr) {
-            if (!CheckArgument(call, &arg, nullptr, argidx))
+            if (!CheckArgument(call, &arg, nullptr, &argv, argidx))
                 return false;
         }
 
@@ -2064,13 +2064,16 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
                 argv[argidx].expr = new CallUserOpExpr(userop, expr);
         }
     }
+
+    new (&call->argv()) PoolArray<ComputedArg>(argv);
     return true;
 }
 
-bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigned int pos) {
-    auto& argv = call->argv();
-    while (pos >= argv.size())
-        argv.push_back(ComputedArg{});
+bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param,
+                              std::vector<ComputedArg>* argv, unsigned int pos)
+{
+    while (pos >= argv->size())
+        argv->push_back(ComputedArg{});
 
     unsigned int visual_pos = call->implicit_this() ? pos : pos + 1;
 
@@ -2085,13 +2088,13 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigne
         }
 
         // The rest of the code to handle default values is in DoEmit.
-        argv[pos].expr = new DefaultArgExpr(call->pos(), arg);
-        argv[pos].arg = arg;
+        argv->at(pos).expr = new DefaultArgExpr(call->pos(), arg);
+        argv->at(pos).arg = arg;
 
         if (arg->type.ident == iREFERENCE ||
             (arg->type.ident == iREFARRAY && !arg->type.is_const && arg->def->array))
         {
-            NeedsHeapAlloc(argv[pos].expr);
+            NeedsHeapAlloc(argv->at(pos).expr);
         }
         return true;
     }
@@ -2265,8 +2268,8 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param, unsigne
             break;
     }
 
-    argv[pos].expr = param;
-    argv[pos].arg = arg;
+    argv->at(pos).expr = param;
+    argv->at(pos).arg = arg;
     return true;
 }
 
