@@ -1310,7 +1310,7 @@ Parser::parse_post_dims(typeinfo_t* type)
     } while (lexer_->match('['));
 
     if (has_dim_exprs)
-        type->dim_exprs = PoolList<Expr*>(dim_exprs.begin(), dim_exprs.end());
+        new (&type->dim_exprs) PoolArray<Expr*>(dim_exprs);
 }
 
 Stmt*
@@ -2309,13 +2309,13 @@ Parser::fix_mispredicted_postdims(declinfo_t* decl)
     //
     // This is illegal, so report it now, and strip dim_exprs.
     if (!decl->type.dim_exprs.empty()) {
-        for (int i = 0; i < decl->type.numdim(); i++) {
+        for (int i = 0; i < decl->type.dim_exprs.size(); i++) {
             if (decl->type.dim_exprs[i]) {
                 report(decl->type.dim_exprs[i]->pos(), 101);
                 break;
             }
         }
-        decl->type.dim_exprs.clear();
+        decl->type.dim_exprs = {};
     }
 
     // If has_postdims is false, we never want to report an iARRAY.
@@ -2516,8 +2516,6 @@ Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
     // anything here, but we follow what parse_post_array_dims() does.
     info->set_tag(0);
     info->dim.emplace_back(enum_type->addr());
-    if (!info->dim_exprs.empty())
-        info->dim_exprs.emplace_back(nullptr);
     assert(info->declared_tag == enum_type->tag);
 
     if (info->ident != iARRAY && info->ident != iREFARRAY) {
@@ -2537,7 +2535,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         decl->type.dim.pop_back();
     }
 
-    decl->type.dim_exprs.clear();
+    decl->type.dim_exprs = {};
 
     if (decl->type.has_postdims) {
         // We have something like:
