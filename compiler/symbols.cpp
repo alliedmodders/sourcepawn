@@ -34,16 +34,26 @@
 void
 SymbolScope::Add(symbol* sym)
 {
-    assert(symbols_.find(sym->nameAtom()) == symbols_.end());
-    symbols_.emplace(sym->nameAtom(), sym);
+    if (!symbols_) {
+        auto& cc = CompileContext::get();
+        symbols_ = cc.NewSymbolMap();
+    }
+
+    assert(symbols_->find(sym->nameAtom()) == symbols_->end());
+    symbols_->emplace(sym->nameAtom(), sym);
 }
 
 void
 SymbolScope::AddChain(symbol* sym)
 {
-    auto iter = symbols_.find(sym->nameAtom());
-    if (iter == symbols_.end()) {
-        symbols_.emplace(sym->nameAtom(), sym);
+    if (!symbols_) {
+        auto& cc = CompileContext::get();
+        symbols_ = cc.NewSymbolMap();
+    }
+
+    auto iter = symbols_->find(sym->nameAtom());
+    if (iter == symbols_->end()) {
+        symbols_->emplace(sym->nameAtom(), sym);
     } else {
         sym->next = iter->second;
         iter->second = sym;

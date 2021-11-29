@@ -247,12 +247,15 @@ class SymbolScope final : public PoolObject
     SymbolScope(SymbolScope* parent, ScopeKind kind, int fnumber = -1)
       : parent_(parent),
         kind_(kind),
+        symbols_(nullptr),
         fnumber_(fnumber)
     {}
 
     symbol* Find(sp::Atom* atom) const {
-        auto iter = symbols_.find(atom);
-        if (iter == symbols_.end())
+        if (!symbols_)
+            return nullptr;
+        auto iter = symbols_->find(atom);
+        if (iter == symbols_->end())
             return nullptr;
         return iter->second;
     }
@@ -263,7 +266,9 @@ class SymbolScope final : public PoolObject
     void AddChain(symbol* sym);
 
     void ForEachSymbol(const std::function<void(symbol*)>& callback) {
-        for (const auto& pair : symbols_) {
+        if (!symbols_)
+            return;
+        for (const auto& pair : *symbols_) {
             for (symbol* iter = pair.second; iter; iter = iter->next)
                 callback(iter);
         }
@@ -285,7 +290,7 @@ class SymbolScope final : public PoolObject
   private:
     SymbolScope* parent_;
     ScopeKind kind_;
-    PoolMap<sp::Atom*, symbol*> symbols_;
+    std::unordered_map<sp::Atom*, symbol*>* symbols_;
     int fnumber_;
 };
 

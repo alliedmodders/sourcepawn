@@ -101,6 +101,7 @@ class CompileContext final
 
     DefaultArrayData* NewDefaultArrayData();
     std::vector<std::string>* NewDebugStringList();
+    std::unordered_map<sp::Atom*, symbol*>* NewSymbolMap();
 
   private:
     PoolAllocator allocator_;
@@ -136,4 +137,5 @@ class CompileContext final
     // AST attachments.
     std::forward_list<DefaultArrayData> default_array_data_objects_;
     std::forward_list<std::vector<std::string>> debug_strings_;
+    std::forward_list<std::unordered_map<sp::Atom*, symbol*>> symbol_maps_;
 };
