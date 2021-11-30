@@ -167,7 +167,7 @@ symbol::symbol(const symbol& other)
 void
 symbol::add_reference_to(symbol* other)
 {
-    for (symbol* sym : other->function()->refers_to) {
+    for (symbol* sym : function()->refers_to) {
         if (sym == other)
             return;
     }
