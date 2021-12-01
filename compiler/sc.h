@@ -190,4 +190,11 @@ constexpr cell char_array_cells(cell size) {
 
 extern sp::StringPool gAtoms;
 
+// Disable this to enable easy watchpoints on bitfield members.
+#if 1
+# define SP_BITFIELD(n) : n
+#else
+# define SP_BITFIELD(n)
+#endif
+
 #endif /* SC_H_INCLUDED */

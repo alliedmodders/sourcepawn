@@ -2989,12 +2989,6 @@ ReportFunctionReturnError(symbol* sym)
     }
 }
 
-FunctionInfo::FunctionInfo(const token_pos_t& pos, const declinfo_t& decl)
-  : pos_(pos),
-    decl_(decl)
-{
-}
-
 bool
 FunctionInfo::IsVariadic() const
 {
