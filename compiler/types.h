@@ -34,6 +34,7 @@
 #include <sp_vm_types.h>
 #include "pool-objects.h"
 #include "shared/string-atom.h"
+#include "stl/stl-vector.h"
 
 typedef int32_t cell;
 typedef uint32_t ucell;
@@ -153,7 +154,7 @@ struct typeinfo_t {
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
         assert(i < numdim());
-        return i < dim_exprs.size() ? dim_exprs[i] : nullptr;
+        return (size_t)i < dim_exprs.size() ? dim_exprs[i] : nullptr;
     }
 };
 
@@ -171,7 +172,7 @@ struct functag_t : public PoolObject
     PoolArray<funcarg_t> args;
 };
 
-class Type
+class Type : public PoolObject
 {
     friend class TypeDictionary;
 
@@ -338,7 +339,7 @@ class TypeDictionary
     template <typename T>
     void forEachType(const T& callback) {
         for (const auto& type : types_)
-            callback(type.get());
+            callback(type);
     }
 
     int tag_nullfunc() const { return tag_nullfunc_; }
@@ -352,7 +353,7 @@ class TypeDictionary
     Type* findOrAdd(const char* name);
 
   private:
-    std::vector<std::unique_ptr<Type>> types_;
+    tr::vector<Type*> types_;
     int tag_nullfunc_ = -1;
     int tag_object_ = -1;
     int tag_null_ = -1;

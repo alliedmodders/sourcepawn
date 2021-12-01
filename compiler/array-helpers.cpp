@@ -867,10 +867,10 @@ class ArrayEmitter final
 
     void Emit();
 
-    std::vector<cell>& iv() {
+    tr::vector<cell>& iv() {
         return iv_;
     }
-    std::vector<cell>& data() {
+    tr::vector<cell>& data() {
         return data_;
     }
     size_t pending_zeroes() const {
@@ -895,8 +895,8 @@ class ArrayEmitter final
     const typeinfo_t& type_;
     Type* es_;
     Expr* init_;
-    std::vector<cell> iv_;
-    std::vector<cell> data_;
+    tr::vector<cell> iv_;
+    tr::vector<cell> data_;
     size_t pending_zeroes_;
 };
 

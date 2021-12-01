@@ -24,6 +24,8 @@
 #include <memory>
 #include <string>
 
+#include "stl/stl-string.h"
+
 class SourceFile
 {
   public:
@@ -41,6 +43,6 @@ class SourceFile
   private:
     std::unique_ptr<FILE, decltype(&::fclose)> fp_;
     std::string name_;
-    std::string data_;
+    tr::string data_;
     size_t pos_;
 };

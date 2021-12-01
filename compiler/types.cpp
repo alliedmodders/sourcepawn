@@ -127,7 +127,7 @@ TypeDictionary::find(sp::Atom* name)
 {
     for (const auto& type : types_) {
         if (type->nameAtom() == name)
-            return type.get();
+            return type;
     }
     return nullptr;
 }
@@ -137,7 +137,7 @@ TypeDictionary::find(int tag)
 {
     assert(size_t(tag) < types_.size());
 
-    return types_[tag].get();
+    return types_[tag];
 }
 
 Type*
@@ -146,13 +146,13 @@ TypeDictionary::findOrAdd(const char* name)
     sp::Atom* atom = gAtoms.add(name);
     for (const auto& type : types_) {
         if (type->nameAtom() == atom)
-            return type.get();
+            return type;
     }
 
     int tag = int(types_.size());
-    std::unique_ptr<Type> type = std::make_unique<Type>(atom, tag);
-    types_.push_back(std::move(type));
-    return types_.back().get();
+    Type* type = new Type(atom, tag);
+    types_.push_back(type);
+    return types_.back();
 }
 
 void

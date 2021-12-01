@@ -108,7 +108,7 @@ SourceFile::Reset(int64_t pos)
 {
     assert(pos >= 0);
     assert((size_t)pos <= data_.size());
-    pos_ = pos;
+    pos_ = (size_t)pos;
 }
 
 int

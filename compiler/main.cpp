@@ -288,6 +288,10 @@ cleanup:
             size_t allocated, reserved, bookkeeping;
             cc.allocator().memoryUsage(&allocated, &reserved, &bookkeeping);
 
+            printf("\n");
+            printf(" -- Compiler memory usage --\n");
+            printf("Malloc bytes:      %8" KE_FMT_SIZET " bytes\n", cc.malloc_bytes());
+            printf("Malloc bytes peak: %8" KE_FMT_SIZET " bytes\n", cc.malloc_bytes_peak());
             printf("Pool allocation:   %8" KE_FMT_SIZET " bytes\n", allocated);
             printf("Pool unused:       %8" KE_FMT_SIZET " bytes\n", reserved - allocated);
             printf("Pool bookkeeping:  %8" KE_FMT_SIZET " bytes\n", bookkeeping);

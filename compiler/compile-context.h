@@ -20,15 +20,17 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include <forward_list>
 #include <memory>
 #include <string>
 #include <unordered_set>
-#include <vector>
 
 #include "array-data.h"
 #include "pool-allocator.h"
 #include "source-file.h"
+#include "stl/stl-forward-list.h"
+#include "stl/stl-unordered-map.h"
+#include "stl/stl-unordered-set.h"
+#include "stl/stl-vector.h"
 
 class Lexer;
 class ReportManager;
@@ -47,18 +49,22 @@ class CompileContext final
     static CompileContext* sInstance;
 
     static inline CompileContext& get() { return *sInstance; }
+    static inline CompileContext* maybe_get() { return sInstance; }
 
     void CreateGlobalScope();
     void InitLexer();
 
+    void TrackMalloc(size_t bytes);
+    void TrackFree(size_t bytes);
+
     SymbolScope* globals() const { return globals_; }
-    std::unordered_set<symbol*>& functions() { return functions_; }
-    std::unordered_set<symbol*>& publics() { return publics_; }
+    tr::unordered_set<symbol*>& functions() { return functions_; }
+    tr::unordered_set<symbol*>& publics() { return publics_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
-    std::vector<std::string>& input_files() { return input_files_; }
-    std::vector<std::string>& included_files() { return included_files_; }
+    tr::vector<std::string>& input_files() { return input_files_; }
+    tr::vector<std::string>& included_files() { return included_files_; }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
@@ -91,6 +97,9 @@ class CompileContext final
     bool must_abort() const { return must_abort_; }
     void set_must_abort() { must_abort_ = true; }
 
+    size_t malloc_bytes() const { return malloc_bytes_; }
+    size_t malloc_bytes_peak() const { return malloc_bytes_peak_; }
+
     PoolAllocator& allocator() { return allocator_; }
 
     // No copy construction.
@@ -100,18 +109,18 @@ class CompileContext final
     void operator =(CompileContext&&) = delete;
 
     DefaultArrayData* NewDefaultArrayData();
-    std::vector<std::string>* NewDebugStringList();
-    std::unordered_map<sp::Atom*, symbol*>* NewSymbolMap();
+    tr::vector<tr::string>* NewDebugStringList();
+    tr::unordered_map<sp::Atom*, symbol*>* NewSymbolMap();
 
   private:
     PoolAllocator allocator_;
     SymbolScope* globals_;
     std::string default_include_;
-    std::unordered_set<symbol*> functions_;
-    std::unordered_set<symbol*> publics_;
+    tr::unordered_set<symbol*> functions_;
+    tr::unordered_set<symbol*> publics_;
     std::unique_ptr<CompileOptions> options_;
-    std::vector<std::string> input_files_;
-    std::vector<std::string> included_files_;
+    tr::vector<std::string> input_files_;
+    tr::vector<std::string> included_files_;
     std::string outfname_;
     std::string binfname_;
     std::string errfname_;
@@ -135,7 +144,10 @@ class CompileContext final
     SemaContext* sc_ = nullptr;
 
     // AST attachments.
-    std::forward_list<DefaultArrayData> default_array_data_objects_;
-    std::forward_list<std::vector<std::string>> debug_strings_;
-    std::forward_list<std::unordered_map<sp::Atom*, symbol*>> symbol_maps_;
+    tr::forward_list<DefaultArrayData> default_array_data_objects_;
+    tr::forward_list<tr::vector<tr::string>> debug_strings_;
+    tr::forward_list<tr::unordered_map<sp::Atom*, symbol*>> symbol_maps_;
+
+    size_t malloc_bytes_ = 0;
+    size_t malloc_bytes_peak_ = 0;
 };

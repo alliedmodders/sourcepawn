@@ -28,14 +28,14 @@ class DataQueue final
     DataQueue();
 
     void Add(cell value);
-    void Add(std::vector<cell>&& cells);
+    void Add(tr::vector<cell>&& cells);
     void Add(const char* text, size_t length);
     void AddZeroes(cell count);
 
-    cell size() const { return buffer_.size() * sizeof(cell); }
+    cell size() const { return (cell)buffer_.size() * sizeof(cell); }
     cell dat_address() const { return (cell)buffer_.size() * sizeof(cell); }
     const uint8_t* dat() const { return reinterpret_cast<const uint8_t*>(buffer_.data()); }
 
   private:
-    std::vector<cell> buffer_;
+    tr::vector<cell> buffer_;
 };
