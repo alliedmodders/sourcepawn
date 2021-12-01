@@ -1592,9 +1592,12 @@ class FunctionInfo : public PoolObject
 
     bool is_analyzing() const { return is_analyzing_; }
     void set_is_analyzing(bool val) { is_analyzing_ = val; }
-    bool is_analyzed() const { return analyzed_.isValid(); }
-    bool analysis_status() const { return analyzed_.get(); }
-    void set_analyzed(bool val) { analyzed_.init(val); }
+    bool is_analyzed() const { return analyzed_; }
+    bool analysis_status() const { return analyze_result_; }
+    void set_analyzed(bool val) {
+        analyzed_ = true;
+        analyze_result_ = val;
+    }
 
     SymbolScope* scope() const { return scope_; }
 
@@ -1613,20 +1616,21 @@ class FunctionInfo : public PoolObject
     token_pos_t end_pos_;
     declinfo_t decl_;
     sp::Atom* name_ = nullptr;
-    bool is_public_ = false;
-    bool is_static_ = false;
-    bool is_stock_ = false;
-    bool is_forward_ = false;
-    bool is_native_ = false;
     Stmt* body_ = nullptr;
     PoolArray<VarDecl*> args_;
     symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
     sp::Atom* alias_ = nullptr;
-    ke::Maybe<bool> analyzed_;
-    bool is_analyzing_ = false;
-    bool maybe_returns_array_ = false;
+    bool analyzed_ SP_BITFIELD(1);
+    bool analyze_result_ SP_BITFIELD(1);
+    bool is_public_ SP_BITFIELD(1);
+    bool is_static_ SP_BITFIELD(1);
+    bool is_stock_ SP_BITFIELD(1);
+    bool is_forward_ SP_BITFIELD(1);
+    bool is_native_ SP_BITFIELD(1);
+    bool is_analyzing_ SP_BITFIELD(1);
+    bool maybe_returns_array_ SP_BITFIELD(1);
 };
 
 class FunctionDecl : public Decl

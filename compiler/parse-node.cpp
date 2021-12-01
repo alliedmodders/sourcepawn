@@ -95,3 +95,18 @@ BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, 
 {
     assert(right_ != this);
 }
+
+FunctionInfo::FunctionInfo(const token_pos_t& pos, const declinfo_t& decl)
+  : pos_(pos),
+    decl_(decl),
+    analyzed_(false),
+    analyze_result_(false),
+    is_public_(false),
+    is_static_(false),
+    is_stock_(false),
+    is_forward_(false),
+    is_native_(false),
+    is_analyzing_(false),
+    maybe_returns_array_(false)
+{
+}
