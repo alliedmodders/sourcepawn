@@ -1617,8 +1617,11 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
     auto body = stmt->body();
-    bool body_always_exits = body->flow_type() == Flow_Return ||
-                             body->flow_type() == Flow_Break;
+    bool body_always_exits = false;
+    if (body->flow_type() == Flow_Return || body->flow_type() == Flow_Break) {
+        if (!stmt->has_continue())
+            body_always_exits = true;
+    }
 
     auto advance = stmt->advance();
     auto cond = stmt->cond();
