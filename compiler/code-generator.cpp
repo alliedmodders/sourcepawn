@@ -68,7 +68,7 @@ void
 CodeGenerator::AddDebugFile(const std::string& file)
 {
     auto str = ke::StringPrintf("F:%x %s", asm_.position(), file.c_str());
-    debug_strings_.emplace_back(std::move(str));
+    debug_strings_.emplace_back(str.c_str(), str.size());
 }
 
 void
@@ -79,9 +79,9 @@ CodeGenerator::AddDebugLine(int linenr)
         auto data = func_->function();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
-        data->dbgstrs->emplace_back(std::move(str));
+        data->dbgstrs->emplace_back(str.c_str(), str.size());
     } else {
-        debug_strings_.emplace_back(std::move(str));
+        debug_strings_.emplace_back(str.c_str(), str.size());
     }
 }
 
@@ -112,13 +112,13 @@ CodeGenerator::AddDebugSymbol(symbol* sym)
         auto data = func_->function();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
-        data->dbgstrs->emplace_back(std::move(string));
+        data->dbgstrs->emplace_back(string.c_str(), string.size());
     } else {
-        debug_strings_.emplace_back(std::move(string));
+        debug_strings_.emplace_back(string.c_str(), string.size());
     }
 }
 
-void CodeGenerator::AddDebugSymbols(std::vector<symbol*>* list) {
+void CodeGenerator::AddDebugSymbols(tr::vector<symbol*>* list) {
     while (!list->empty()) {
         auto sym = ke::PopBack(list);
         AddDebugSymbol(sym);
@@ -343,13 +343,13 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
         ArrayData array;
         BuildArrayInitializer(decl, &array, 0);
 
-        cell iv_size = array.iv.size();
-        cell data_size = array.data.size() + array.zeroes;
+        cell iv_size = (cell)array.iv.size();
+        cell data_size = (cell)array.data.size() + array.zeroes;
         cell total_size = iv_size + data_size;
 
         markstack(MEMUSE_STATIC, total_size);
-        sym->setAddr(-current_stack_ * sizeof(cell));
-        __ emit(OP_STACK, -(total_size * sizeof(cell)));
+        sym->setAddr(-cell(current_stack_ * sizeof(cell)));
+        __ emit(OP_STACK, -cell(total_size * sizeof(cell)));
 
         cell fill_value = 0;
         cell fill_size = 0;
@@ -1230,7 +1230,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
         __ emit(OP_PUSH_PRI);
     }
 
-    EmitCall(call->sym(), argv.size());
+    EmitCall(call->sym(), (cell)argv.size());
 
     if (val.sym)
         __ emit(OP_POP_PRI);
@@ -2004,7 +2004,7 @@ void CodeGenerator::EmitDec(const value* lval)
 }
 
 void
-CodeGenerator::EnterMemoryScope(std::vector<MemoryScope>& frame)
+CodeGenerator::EnterMemoryScope(tr::vector<MemoryScope>& frame)
 {
     if (frame.empty())
         frame.push_back(MemoryScope{0});
@@ -2026,7 +2026,7 @@ CodeGenerator::AllocInScope(MemoryScope& scope, MemuseType type, int size)
 }
 
 int
-CodeGenerator::PopScope(std::vector<MemoryScope>& scope_list)
+CodeGenerator::PopScope(tr::vector<MemoryScope>& scope_list)
 {
     MemoryScope scope = ke::PopBack(&scope_list);
     int total_use = 0;

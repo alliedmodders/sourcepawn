@@ -28,6 +28,7 @@
 
 #include "label.h"
 #include "sc.h"
+#include "stl/stl-unordered-map.h"
 
 class CompileContext;
 class FunctionInfo;
@@ -50,7 +51,7 @@ class FunctionData final : public SymbolData
 
     void resizeArgs(size_t nargs);
 
-    std::vector<std::string>* dbgstrs = nullptr;
+    tr::vector<tr::string>* dbgstrs = nullptr;
     PoolArray<arginfo> args;
     ReturnArrayInfo* return_array = nullptr;
     FunctionInfo* node;
@@ -290,7 +291,7 @@ class SymbolScope final : public PoolObject
   private:
     SymbolScope* parent_;
     ScopeKind kind_;
-    std::unordered_map<sp::Atom*, symbol*>* symbols_;
+    tr::unordered_map<sp::Atom*, symbol*>* symbols_;
     int fnumber_;
 };
 

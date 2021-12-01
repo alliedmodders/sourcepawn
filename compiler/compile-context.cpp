@@ -63,12 +63,36 @@ DefaultArrayData* CompileContext::NewDefaultArrayData() {
     return &default_array_data_objects_.front();
 }
 
-std::vector<std::string>* CompileContext::NewDebugStringList() {
+tr::vector<tr::string>* CompileContext::NewDebugStringList() {
     debug_strings_.emplace_front();
     return &debug_strings_.front();
 }
 
-std::unordered_map<sp::Atom*, symbol*>* CompileContext::NewSymbolMap() {
+tr::unordered_map<sp::Atom*, symbol*>* CompileContext::NewSymbolMap() {
     symbol_maps_.emplace_front();
     return &symbol_maps_.front();
+}
+
+void CompileContext::TrackMalloc(size_t bytes) {
+    malloc_bytes_ += bytes;
+    malloc_bytes_peak_ = std::max(malloc_bytes_peak_, malloc_bytes_);
+}
+
+void CompileContext::TrackFree(size_t bytes) {
+    malloc_bytes_ -= bytes;
+}
+
+void* NativeAllocator::Malloc(size_t n) {
+    void* p = malloc(n);
+    if (!p)
+        return nullptr;
+    if (auto* cc = CompileContext::maybe_get())
+        cc->TrackMalloc(n);
+    return p;
+}
+
+void NativeAllocator::Free(void* p, size_t n) {
+    if (auto* cc = CompileContext::maybe_get())
+        cc->TrackFree(n);
+    free(p);
 }

@@ -42,11 +42,11 @@ class CodeGenerator final
 
     void LinkPublicFunction(symbol* sym, uint32_t id);
 
-    const std::vector<std::string>& debug_strings() const { return debug_strings_; }
-    const std::vector<symbol*>& native_list() const { return native_list_; }
+    const tr::vector<tr::string>& debug_strings() const { return debug_strings_; }
+    const tr::vector<symbol*>& native_list() const { return native_list_; }
 
     const uint8_t* code_ptr() const { return asm_.bytes(); }
-    uint32_t code_size() const { return asm_.size(); }
+    uint32_t code_size() const { return (uint32_t)asm_.size(); }
     const uint8_t* data_ptr() const { return data_.dat(); }
     uint32_t data_size() const { return data_.size(); }
     int max_script_memory() const { return max_script_memory_; }
@@ -116,7 +116,7 @@ class CodeGenerator final
     void AddDebugFile(const std::string& line);
     void AddDebugLine(int linenr);
     void AddDebugSymbol(symbol* sym);
-    void AddDebugSymbols(std::vector<symbol*>* list);
+    void AddDebugSymbols(tr::vector<symbol*>* list);
     void EnqueueDebugSymbol(symbol* sym);
 
     // Helper that automatically handles heap deallocations.
@@ -187,12 +187,12 @@ class CodeGenerator final
         return !stack_scopes_.empty() || !heap_scopes_.empty();
     }
 
-    void EnterMemoryScope(std::vector<MemoryScope>& frame);
+    void EnterMemoryScope(tr::vector<MemoryScope>& frame);
     void AllocInScope(MemoryScope& scope, MemuseType type, int size);
-    int PopScope(std::vector<MemoryScope>& scope_list);
+    int PopScope(tr::vector<MemoryScope>& scope_list);
 
   private:
-    typedef std::vector<std::vector<symbol*>> SymbolStack;
+    typedef tr::vector<tr::vector<symbol*>> SymbolStack;
 
     class AutoEnterScope {
       public:
@@ -211,18 +211,18 @@ class CodeGenerator final
     symbol* func_ = nullptr;
     int max_script_memory_ = 0;
 
-    std::vector<std::string> debug_strings_;
-    std::vector<symbol*> native_list_;
+    tr::vector<tr::string> debug_strings_;
+    tr::vector<symbol*> native_list_;
     sp::SmxAssemblyBuffer asm_;
     DataQueue data_;
 
     ke::Maybe<uint32_t> last_break_op_;
-    std::vector<MemoryScope> stack_scopes_;
-    std::vector<MemoryScope> heap_scopes_;
+    tr::vector<MemoryScope> stack_scopes_;
+    tr::vector<MemoryScope> heap_scopes_;
     SymbolStack local_syms_;
-    std::vector<symbol*> global_syms_;
-    std::vector<std::pair<SymbolScope*, std::vector<symbol*>>> static_syms_;
-    std::unordered_set<SymbolScope*> static_scopes_;
+    tr::vector<symbol*> global_syms_;
+    tr::vector<std::pair<SymbolScope*, tr::vector<symbol*>>> static_syms_;
+    tr::unordered_set<SymbolScope*> static_scopes_;
 
     // Loop handling.
     struct LoopContext {

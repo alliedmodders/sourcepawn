@@ -61,7 +61,7 @@ DataQueue::Add(const char* text, size_t length)
 }
 
 void
-DataQueue::Add(std::vector<cell>&& cells)
+DataQueue::Add(tr::vector<cell>&& cells)
 {
     if (cells.empty())
         return;

@@ -1,7 +1,6 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-//  Pawn compiler - Recursive descend expresion parser
 //
-//  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) AlliedModders LLC 2021
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -20,22 +19,16 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include <stdint.h>
+#include <string>
 
-#include <sp_vm_types.h>
-#include "stl/stl-vector.h"
+#include "stl-allocator.h"
 
-struct ArrayData {
-    tr::vector<cell_t> iv;
-    tr::vector<cell_t> data;
-    uint32_t zeroes;
+namespace tr {
 
-    size_t total_size() const {
-        return iv.size() + data.size() + zeroes;
-    }
-};
+template <typename Char,
+	  typename Traits = std::char_traits<Char>>
+using basic_string = std::basic_string<Char, Traits, StlAllocator<Char>>;
 
-struct DefaultArrayData : public ArrayData {
-    cell_t iv_size;
-    cell_t data_size;
-};
+using string = basic_string<char>;
+
+} // namespace tr

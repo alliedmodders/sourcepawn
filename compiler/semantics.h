@@ -239,7 +239,7 @@ class Semantics final
     CompileContext& cc_;
     TypeDictionary* types_ = nullptr;
     ParseTree* tree_;
-    std::unordered_set<SymbolScope*> static_scopes_;
+    tr::unordered_set<SymbolScope*> static_scopes_;
     SemaContext* sc_ = nullptr;
     bool pending_heap_allocation_ = false;
 };
