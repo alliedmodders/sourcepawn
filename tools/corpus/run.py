@@ -41,6 +41,10 @@ def main():
                         help = "Abort as soon as a failure is detected")
     parser.add_argument("--show-output", default = False, action = 'store_true',
                         help = "Show spcomp output")
+    parser.add_argument("--num-slices", default = 0, type = int,
+                        help = "Number of test worker slices (for CI).")
+    parser.add_argument("--slice", default = 0, type = int,
+                        help = "Which slice of tests to run, starting at 1.")
 
     args = parser.parse_args()
 
@@ -52,8 +56,29 @@ def main():
         print("Cannot use both -j and --diagnose.")
         return 1
 
+    if args.slice > args.num_slices:
+        print("Slice {} is larger than the number of slices ({}).".format(args.slice,
+              args.num_slices))
+        return 1
+
+    if args.num_slices > 0 and args.slice < 1:
+        print("Invalid slice {} (must be between 1 and {}).".format(args.num_slices,
+              args.slice))
+        return 1
+
     files = []
     get_all_files(args.corpus, ['.sp', '.smx'], files)
+
+    if args.num_slices > 0:
+        # Sort so each worker has a consistent view of the corpus.
+        files.sort()
+
+        per_batch = len(files) // args.num_slices
+        start_index = per_batch * (args.slice - 1)
+        if args.slice == args.num_slices:
+            files = files[start_index:]
+        else:
+            files = files[start_index : start_index + per_batch]
 
     with tempfile.TemporaryDirectory() as temp_dir:
         runner = Runner(args, files, temp_dir)

@@ -11,6 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
+        slice: [1,2,3,4,5]
         build_target: [x64]
     runs-on: ${{ matrix.os }}
     steps:
@@ -47,7 +48,9 @@ jobs:
           cd objdir
           python ../configure.py --enable-optimize --enable-debug --enable-asan --targets=${{ matrix.build_target }}
           ambuild
+          echo "SPCOMP=objdir/spcomp/linux-x86_64/spcomp" >> $GITHUB_ENV
 
       - name: Test
         run: |
-          python tools/corpus/run.py objdir/spcomp/linux-x86_64/spcomp ${GITHUB_WORKSPACE}/sourcepawn-corpus -j --fail-fast
+          python tools/corpus/run.py ${SPCOMP} ${GITHUB_WORKSPACE}/sourcepawn-corpus -j \
+                 --fail-fast --num-slice 5 --slice ${{ matrix.slice }}
