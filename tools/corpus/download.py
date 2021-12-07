@@ -56,6 +56,7 @@ def main():
         with open(out_manifest, 'wt') as fp:
             for entry in lists['include'][forge]:
                 fp.write('{}\n'.format(os.path.join(forge, entry)))
+            fp.write("other_includes\n")
         print('Wrote test list to {}'.format(out_manifest))
 
 def DownloadOrUpdate(args, repo_url, info):
@@ -74,7 +75,7 @@ def DownloadOrUpdate(args, repo_url, info):
         os.makedirs(output_dir)
 
     try:
-        subprocess.check_call(['git', 'clone', '--recursive', repo_url], cwd = output_dir)
+        subprocess.check_call(['git', 'submodule', 'add', repo_url], cwd = output_dir)
         if info['branch']:
             subprocess.check_call(['git', 'checkout', info['branch']], cwd = output_path)
     except:
