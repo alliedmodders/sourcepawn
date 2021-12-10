@@ -328,24 +328,25 @@ class SourcePawn(object):
         for cxx in self.root.targets:
             builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
 
-    def BuildCoreForArch(self, cxx, builder):
-        builder.cxx = cxx
-
-        if cxx.like('gcc'):
-            cxx.cflags += [
+    def SetupBinForArch(self, binary, builder):
+        if binary.compiler.like('gcc'):
+            binary.compiler.cflags += [
                 '-Wno-invalid-offsetof',
             ]
-            if cxx.target.platform == 'linux':
-                cxx.defines += ['_GNU_SOURCE']
-            elif cxx.target.platform == 'mac':
-                cxx.defines += ['DARWIN']
+            if binary.compiler.target.platform == 'linux':
+                binary.compiler.defines += ['_GNU_SOURCE']
+            elif binary.compiler.target.platform == 'mac':
+                binary.compiler.defines += ['DARWIN']
 
-        cxx.cxxincludes += [
+        binary.compiler.includes += [
             os.path.join(builder.currentSourcePath),
             os.path.join(builder.currentSourcePath, 'include'),
             os.path.join(builder.currentSourcePath, 'third_party'),
             self.amtl,
         ]
+
+    def BuildCoreForArch(self, cxx, builder):
+        builder.cxx = cxx
 
         self.BuildStaticCoreLib(builder)
         self.BuildDynamicCoreLib(builder)
@@ -356,6 +357,8 @@ class SourcePawn(object):
     def BuildStaticCoreLib(self, builder):
         cxx = builder.cxx
         binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
+
+        self.SetupBinForArch(binary, builder)
 
         vars = self.vars.copy()
         vars['binary'] = binary
@@ -370,6 +373,8 @@ class SourcePawn(object):
     def BuildDynamicCoreLib(self, builder):
         cxx = builder.cxx
         binary = self.root.Library(builder, 'libsourcepawn')
+
+        self.SetupBinForArch(binary, builder)
 
         vars = self.vars.copy()
         vars['binary'] = binary
@@ -390,6 +395,9 @@ class SourcePawn(object):
 
     def BuildSpcomp(self, builder):
         binary = self.root.Program(builder, 'spcomp')
+        
+        self.SetupBinForArch(binary, builder)
+
         binary.sources = [
             'compiler/main.cpp',
         ]
@@ -401,6 +409,9 @@ class SourcePawn(object):
 
     def BuildSpshell(self, builder):
         binary = self.root.Program(builder, 'spshell')
+
+        self.SetupBinForArch(binary, builder)
+
         binary.sources = [
             'vm/shell.cpp',
         ]
@@ -412,6 +423,9 @@ class SourcePawn(object):
 
     def BuildVerifier(self, builder):
         binary = self.root.Program(builder, 'verifier')
+
+        self.SetupBinForArch(binary, builder)
+
         binary.sources = [
             'tools/verifier/verifier.cpp',
         ]
