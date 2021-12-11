@@ -314,25 +314,28 @@ class Test(object):
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.relpath(self.path, base_path)
 
+  def checkManifests(self, key, default = None):
+    return self.local_manifest_.get(key) or manifest_get(self.manifest_, self.name, key, default)
+
   @property
   def type(self):
-    return manifest_get(self.manifest_, self.name, 'type', 'runtime')
+    return self.checkManifests('type', 'runtime')
 
   @property
   def includes(self):
-    return manifest_get(self.manifest_, self.name, 'includes', [])
+    return self.checkManifests('includes', [])
 
   @property
   def warnings_are_errors(self):
-    return self.local_manifest_.get('warnings_are_errors', None) == 'true'
+    return self.checkManifests('warnings_are_errors') == 'true'
 
   @property
   def force_old_parser(self):
-    return self.local_manifest_.get('force_old_parser', None) == 'true'
+    return self.checkManifests('force_old_parser') == 'true'
 
   @property
   def force_new_parser(self):
-    return self.local_manifest_.get('force_new_parser', None) == 'true'
+    return self.checkManifests('force_new_parser') == 'true'
 
   @property
   def expectedReturnCode(self):

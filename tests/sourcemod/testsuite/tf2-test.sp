@@ -47,11 +47,11 @@ public Action:Command_Remove(client, args)
 	
 	PrintToChat(client, "Test: heavy's classnum is %i (should be %i)", TF2_GetClass("heavy"), TFClass_Heavy);
 	
-	new doms = TF2_GetPlayerResourceData(client, TFResource_Dominations);
+	new doms = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iDominations", _, client);
 	PrintToChat(client, "Dominations read test: %i", doms);
 	
-	TF2_SetPlayerResourceData(client, TFResource_Dominations, doms + 10);
-	doms = TF2_GetPlayerResourceData(client, TFResource_Dominations);
+	SetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iDominations", doms + 10, _, client);
+	doms = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iDominations", _, client);
 	PrintToChat(client, "Dominations write test: %i", doms);
 	
 	/* Note: This didn't appear to change my dominations value when I pressed tab. */
