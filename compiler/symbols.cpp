@@ -326,7 +326,13 @@ static NewNameStatus
 GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
 {
     SymbolScope* scope;
-    symbol* sym = FindSymbol(sc, name, &scope);
+    symbol* sym = nullptr;
+    if (sc.func_node() && sc.func_node()->is_native()) {
+        sym = sc.scope()->Find(name);
+        scope = sc.scope();
+    } else {
+        sym = FindSymbol(sc, name, &scope);
+    }
     if (!sym)
         return NewNameStatus::Ok;
 
