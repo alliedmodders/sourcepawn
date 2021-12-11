@@ -1729,8 +1729,12 @@ Parser::parse_switch()
                     error(15); /* "default" case must be last in switch statement */
 
                 std::vector<Expr*> exprs;
-                if (auto stmt = parse_case(&exprs))
-                    cases.emplace_back(std::move(exprs), stmt);
+                if (auto stmt = parse_case(&exprs)) {
+                    auto entry = SwitchStmt::Case{};
+                    entry.first = PoolArray<Expr*>(std::move(exprs));
+                    entry.second = stmt;
+                    cases.emplace_back(std::move(entry));
+                }
                 break;
             }
             case tDEFAULT:
