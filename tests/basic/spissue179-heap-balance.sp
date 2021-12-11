@@ -1,3 +1,5 @@
+#include <shell>
+
 Handle g_handle[1];
 
 public void main()
