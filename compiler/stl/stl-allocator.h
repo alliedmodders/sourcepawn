@@ -47,9 +47,6 @@ class StlAllocator
     template <typename U>
     StlAllocator(const StlAllocator<U>& other) {}
 
-    template <typename U>
-    using rebind = StlAllocator<U>;
-
     static T* allocate(size_t n, const void* = nullptr) {
         if (!ke::IsUintMultiplySafe(n, sizeof(T)))
             throw std::bad_alloc{};
