@@ -1,0 +1,2 @@
+(1) : error 021: symbol already defined: "a"
+(1) : error 021: symbol already defined: "a"
