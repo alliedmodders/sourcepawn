@@ -59,6 +59,11 @@ class StlAllocator
         NativeAllocator::Free(p, sizeof(T) * n);
     }
 
+    template<typename U>
+    struct rebind {
+      typedef StlAllocator<U> other;
+    };
+
     bool operator ==(const StlAllocator& other) const { return true; }
     bool operator !=(const StlAllocator& other) const { return false; }
 };
