@@ -47,9 +47,6 @@ class StlAllocator
     template <typename U>
     StlAllocator(const StlAllocator<U>& other) {}
 
-    template <typename U>
-    using rebind = StlAllocator<U>;
-
     static T* allocate(size_t n, const void* = nullptr) {
         if (!ke::IsUintMultiplySafe(n, sizeof(T)))
             throw std::bad_alloc{};
@@ -58,6 +55,11 @@ class StlAllocator
     void deallocate(T* p, size_t n) {
         NativeAllocator::Free(p, sizeof(T) * n);
     }
+
+    template<typename U>
+    struct rebind {
+      typedef StlAllocator<U> other;
+    };
 
     bool operator ==(const StlAllocator& other) const { return true; }
     bool operator !=(const StlAllocator& other) const { return false; }
