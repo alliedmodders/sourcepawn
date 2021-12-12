@@ -1508,15 +1508,18 @@ class PragmaUnusedStmt : public Stmt
     PoolArray<symbol*> symbols_;
 };
 
-class FunctionInfo : public PoolObject
+class FunctionDecl : public Decl
 {
   public:
-    explicit FunctionInfo(const token_pos_t& pos, const declinfo_t& decl);
+    FunctionDecl(const token_pos_t& pos, const declinfo_t& decl);
+
+    bool EnterNames(SemaContext& sc) override;
+    bool Bind(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override;
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::FunctionDecl; }
 
     bool IsVariadic() const;
-
-    bool Bind(SemaContext& sc);
-    void ProcessUses(SemaContext& sc);
 
     const token_pos_t& end_pos() const { return end_pos_; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
@@ -1532,8 +1535,10 @@ class FunctionInfo : public PoolObject
     Stmt* body() const { return body_; }
     void set_body(Stmt* body) { body_ = body; }
 
-    sp::Atom* name() const { return name_; }
     void set_name(sp::Atom* name) { name_ = name; }
+
+    // The undecorated name.
+    sp::Atom* decl_name() const { return decl_.name; }
 
     void set_is_native() { is_native_ = true; }
     bool is_native() const { return is_native_; }
@@ -1571,6 +1576,8 @@ class FunctionInfo : public PoolObject
         analyze_result_ = val;
     }
 
+    void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
+
     SymbolScope* scope() const { return scope_; }
 
     bool maybe_returns_array() const { return maybe_returns_array_; }
@@ -1580,20 +1587,19 @@ class FunctionInfo : public PoolObject
 
   private:
     bool BindArgs(SemaContext& sc);
-
+    bool CanRedefine(symbol* sym);
     sp::Atom* NameForOperator();
 
   private:
-    token_pos_t pos_;
     token_pos_t end_pos_;
     declinfo_t decl_;
-    sp::Atom* name_ = nullptr;
     Stmt* body_ = nullptr;
     PoolArray<VarDecl*> args_;
     symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
     sp::Atom* alias_ = nullptr;
+    PoolString* deprecate_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);
@@ -1603,37 +1609,6 @@ class FunctionInfo : public PoolObject
     bool is_native_ SP_BITFIELD(1);
     bool is_analyzing_ SP_BITFIELD(1);
     bool maybe_returns_array_ SP_BITFIELD(1);
-};
-
-class FunctionDecl : public Decl
-{
-  public:
-    explicit FunctionDecl(const token_pos_t& pos, sp::Atom* atom, FunctionInfo* info)
-      : Decl(AstKind::FunctionDecl, pos, atom),
-        info_(info)
-    {}
-    explicit FunctionDecl(const token_pos_t& pos, FunctionInfo* info)
-      : Decl(AstKind::FunctionDecl, pos, info->name()),
-        info_(info)
-    {}
-
-    bool EnterNames(SemaContext& sc) override;
-    bool Bind(SemaContext& sc) override;
-    void ProcessUses(SemaContext& sc) override;
-
-    static bool is_a(ParseNode* node) { return node->kind() == AstKind::FunctionDecl; }
-
-    void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
-
-    FunctionInfo* info() const { return info_; }
-    symbol* sym() const { return info_->sym(); }
-
-  private:
-    bool CanRedefine(symbol* sym);
-
-  private:
-    FunctionInfo* info_;
-    PoolString* deprecate_;
 };
 
 struct EnumStructField {
@@ -1667,8 +1642,8 @@ struct MethodmapProperty : public PoolObject {
     token_pos_t pos;
     typeinfo_t type;
     sp::Atom* name = nullptr;
-    FunctionInfo* getter = nullptr;
-    FunctionInfo* setter = nullptr;
+    FunctionDecl* getter = nullptr;
+    FunctionDecl* setter = nullptr;
     methodmap_method_t* entry = nullptr;
 };
 
