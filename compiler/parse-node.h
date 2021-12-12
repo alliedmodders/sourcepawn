@@ -865,29 +865,28 @@ class SymbolExpr final : public Expr
     symbol* sym_;
 };
 
-struct ParsedArg {
-    ParsedArg()
-      : name(nullptr),
-        expr(nullptr)
-    {}
-    ParsedArg(sp::Atom* name, Expr* expr)
-      : name(name),
+class NamedArgExpr : public Expr
+{
+  public:
+    NamedArgExpr(const token_pos_t& pos, sp::Atom* name, Expr* expr)
+      : Expr(AstKind::NamedArgExpr, pos),
+        name(name),
         expr(expr)
     {}
+
+    bool Bind(SemaContext& sc) override { return expr->Bind(sc); }
+    void ProcessUses(SemaContext& sc) override { expr->ProcessUses(sc); }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::NamedArgExpr; }
 
     sp::Atom* name;
     Expr* expr;
 };
 
-struct ComputedArg {
-    Expr* expr = nullptr;
-    arginfo* arg = nullptr;
-};
-
 class CallExpr final : public Expr
 {
   public:
-    CallExpr(const token_pos_t& pos, int token, Expr* target, const std::vector<ParsedArg>& args)
+    CallExpr(const token_pos_t& pos, int token, Expr* target, const std::vector<Expr*>& args)
       : Expr(AstKind::CallExpr, pos),
         token_(token),
         target_(target),
@@ -900,9 +899,7 @@ class CallExpr final : public Expr
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CallExpr; }
 
-    PoolArray<ParsedArg>& args() { return args_; }
-    PoolArray<ComputedArg>& argv() { return argv_; }
-    const PoolArray<ComputedArg>& argv() const { return argv_; }
+    PoolArray<Expr*>& args() { return args_; }
     Expr* target() const { return target_; }
     int token() const { return token_; }
     Expr* implicit_this() const { return implicit_this_; }
@@ -915,10 +912,9 @@ class CallExpr final : public Expr
 
     int token_;
     Expr* target_;
-    PoolArray<ParsedArg> args_;
+    PoolArray<Expr*> args_;
     symbol* sym_ = nullptr;
     Expr* implicit_this_ = nullptr;
-    PoolArray<ComputedArg> argv_;
 };
 
 class EmitOnlyExpr : public Expr
@@ -951,16 +947,18 @@ class CallUserOpExpr final : public EmitOnlyExpr
     Expr* expr_;
 };
 
-class DefaultArgExpr final : public EmitOnlyExpr
+class DefaultArgExpr final : public Expr
 {
   public:
     DefaultArgExpr(const token_pos_t& pos, arginfo* arg);
 
+    bool Bind(SemaContext& sc) override { return true; }
     void ProcessUses(SemaContext& sc) override {}
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::DefaultArgExpr; }
 
     arginfo* arg() { return arg_; }
+    void set_arg(arginfo* arg) { arg_ = arg; }
 
   private:
     arginfo* arg_;

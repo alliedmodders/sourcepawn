@@ -43,6 +43,7 @@
     FOR_EACH(SizeofExpr) \
     FOR_EACH(SymbolExpr) \
     FOR_EACH(CallExpr) \
+    FOR_EACH(NamedArgExpr) \
     FOR_EACH(CallUserOpExpr) \
     FOR_EACH(DefaultArgExpr) \
     FOR_EACH(FieldAccessExpr) \
