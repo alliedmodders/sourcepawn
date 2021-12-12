@@ -592,10 +592,8 @@ CallExpr::Bind(SemaContext& sc)
         return false;
 
     bool ok = true;
-    for (const auto& arg : args_) {
-        if (arg.expr)
-           ok &= arg.expr->Bind(sc);
-    }
+    for (const auto& arg : args_)
+       ok &= arg->Bind(sc);
     return ok;
 }
 
