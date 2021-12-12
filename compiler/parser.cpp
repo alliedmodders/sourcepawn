@@ -1210,7 +1210,7 @@ Parser::struct_init()
         }
 
         if (name && expr)
-            init->fields().push_back(StructInitField(name, expr, start_pos));
+            init->fields().push_back(new StructInitFieldExpr(name, expr, start_pos));
     } while (lexer_->match(',') && !lexer_->peek('}'));
 
     lexer_->need('}');

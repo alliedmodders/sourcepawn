@@ -447,13 +447,13 @@ CodeGenerator::EmitPstruct(VarDecl* decl)
 
     auto init = decl->init_rhs()->as<StructExpr>();
     for (const auto& field : init->fields()) {
-        auto arg = pstructs_getarg(ps, field.name);
-        if (auto expr = field.value->as<StringExpr>()) {
+        auto arg = pstructs_getarg(ps, field->name);
+        if (auto expr = field->value->as<StringExpr>()) {
             values[arg->index] = data_.dat_address();
             data_.Add(expr->text()->chars(), expr->text()->length());
-        } else if (auto expr = field.value->as<TaggedValueExpr>()) {
+        } else if (auto expr = field->value->as<TaggedValueExpr>()) {
             values[arg->index] = expr->value();
-        } else if (auto expr = field.value->as<SymbolExpr>()) {
+        } else if (auto expr = field->value->as<SymbolExpr>()) {
             values[arg->index] = expr->sym()->addr();
         } else {
             assert(false);

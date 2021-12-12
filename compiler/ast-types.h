@@ -56,6 +56,7 @@
     FOR_EACH(NewArrayExpr) \
     FOR_EACH(ArrayExpr) \
     FOR_EACH(StructExpr) \
+    FOR_EACH(StructInitFieldExpr) \
     FOR_EACH(IfStmt) \
     FOR_EACH(ExprStmt) \
     FOR_EACH(ReturnStmt) \

@@ -183,8 +183,8 @@ class Semantics final
     bool CheckVarDecl(VarDecl* decl);
     bool CheckConstDecl(VarDecl* decl);
     bool CheckPstructDecl(VarDecl* decl);
-    bool CheckPstructArg(VarDecl* decl, const pstruct_t* ps, const StructInitField& field,
-                         std::vector<bool>* visited);
+    bool CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
+                         const StructInitFieldExpr* field, std::vector<bool>* visited);
 
     // Expressions.
     bool CheckExpr(Expr* expr);
