@@ -277,17 +277,15 @@ Parser::parse_unknown_decl(const full_token_t* tok)
         return stmt;
     } else {
         auto pos = lexer_->pos();
-        FunctionInfo* info = new FunctionInfo(pos, decl);
-        info->set_name(decl.name);
+        FunctionDecl* stmt = new FunctionDecl(pos, decl);
         if (fpublic)
-            info->set_is_public();
+            stmt->set_is_public();
         if (fstatic)
-            info->set_is_static();
+            stmt->set_is_static();
         if (fstock)
-            info->set_is_stock();
-        if (!parse_function(info, 0, false))
+            stmt->set_is_stock();
+        if (!parse_function(stmt, 0, false))
             return nullptr;
-        auto stmt = new FunctionDecl(pos, info);
         if (!lexer_->deprecate().empty()) {
             stmt->set_deprecate(lexer_->deprecate());
             lexer_->deprecate() = {};
@@ -462,14 +460,12 @@ Parser::parse_enumstruct()
 
         auto decl_pos = lexer_->pos();
         if (!decl.type.has_postdims && lexer_->peek('(')) {
-            auto info = new FunctionInfo(decl_pos, decl);
-            info->set_name(decl.name);
-            info->set_is_stock();
-            if (!parse_function(info, 0, true))
+            auto fun = new FunctionDecl(decl_pos, decl);
+            fun->set_is_stock();
+            if (!parse_function(fun, 0, true))
                 continue;
 
-            auto method = new FunctionDecl(decl_pos, info);
-            methods.emplace_back(method);
+            methods.emplace_back(fun);
             continue;
         }
 
@@ -1797,31 +1793,29 @@ Decl*
 Parser::parse_inline_function(int tokid, const declinfo_t& decl)
 {
     auto pos = lexer_->pos();
-    auto info = new FunctionInfo(pos, decl);
-    info->set_name(decl.name);
+    auto fun = new FunctionDecl(pos, decl);
 
     if (tokid == tNATIVE || tokid == tMETHODMAP)
-        info->set_is_native();
+        fun->set_is_native();
     else if (tokid == tPUBLIC)
-        info->set_is_public();
+        fun->set_is_public();
     else if (tokid == tFORWARD)
-        info->set_is_forward();
+        fun->set_is_forward();
     else
-        info->set_is_stock();
+        fun->set_is_stock();
 
-    if (!parse_function(info, tokid, false))
+    if (!parse_function(fun, tokid, false))
         return nullptr;
 
-    auto stmt = new FunctionDecl(pos, info);
     if (!lexer_->deprecate().empty()) {
-        stmt->set_deprecate(lexer_->deprecate());
+        fun->set_deprecate(lexer_->deprecate());
         lexer_->deprecate() = {};
     }
-    return stmt;
+    return fun;
 }
 
 bool
-Parser::parse_function(FunctionInfo* info, int tokid, bool has_this)
+Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
 {
     if (!lexer_->match('(')) {
         error(10);
@@ -1835,20 +1829,20 @@ Parser::parse_function(FunctionInfo* info, int tokid, bool has_this)
     if (has_this)
         args.emplace_back(nullptr);
 
-    parse_args(info, &args); // eats the close paren
+    parse_args(fun, &args); // eats the close paren
 
     // Copy arguments.
-    new (&info->args()) PoolArray<VarDecl*>(args);
+    new (&fun->args()) PoolArray<VarDecl*>(args);
 
-    if (info->is_native()) {
-        if (info->decl().opertok != 0) {
+    if (fun->is_native()) {
+        if (fun->decl().opertok != 0) {
             lexer_->need('=');
             lexer_->lexpush();
         }
         if (lexer_->match('=')) {
             sp::Atom* ident;
             if (lexer_->needsymbol(&ident))
-                info->set_alias(ident);
+                fun->set_alias(ident);
         }
     }
 
@@ -1864,7 +1858,7 @@ Parser::parse_function(FunctionInfo* info, int tokid, bool has_this)
             if (lexer_->match(';')) {
                 if (!lexer_->NeedSemicolon())
                     error(10); /* old style prototypes used with optional semicolumns */
-                info->set_is_forward();
+                fun->set_is_forward();
                 return true;
             }
             break;
@@ -1872,20 +1866,20 @@ Parser::parse_function(FunctionInfo* info, int tokid, bool has_this)
 
     if (lexer_->match('{'))
         lexer_->lexpush();
-    else if (info->decl().type.is_new)
+    else if (fun->decl().type.is_new)
         lexer_->need('{');
 
     Stmt* body = parse_stmt(nullptr, false);
     if (!body)
         return false;
 
-    info->set_body(BlockStmt::WrapStmt(body));
-    info->set_end_pos(lexer_->pos());
+    fun->set_body(BlockStmt::WrapStmt(body));
+    fun->set_end_pos(lexer_->pos());
     return true;
 }
 
 void
-Parser::parse_args(FunctionInfo* info, std::vector<VarDecl*>* args)
+Parser::parse_args(FunctionDecl* fun, std::vector<VarDecl*>* args)
 {
     if (lexer_->match(')'))
         return;
@@ -1898,7 +1892,7 @@ Parser::parse_args(FunctionInfo* info, std::vector<VarDecl*>* args)
             continue;
 
         if (decl.type.ident == iVARARGS) {
-            if (info->IsVariadic())
+            if (fun->IsVariadic())
                 error(401);
 
             auto p = new VarDecl(pos, gAtoms.add("..."), decl.type, sARGUMENT, false, false,
@@ -1907,14 +1901,14 @@ Parser::parse_args(FunctionInfo* info, std::vector<VarDecl*>* args)
             continue;
         }
 
-        if (info->IsVariadic())
+        if (fun->IsVariadic())
             error(402);
 
         Expr* init = nullptr;
         if (lexer_->match('='))
             init = var_init(sARGUMENT);
 
-        if (info->args().size() >= SP_MAX_CALL_ARGUMENTS)
+        if (fun->args().size() >= SP_MAX_CALL_ARGUMENTS)
             error(45);
         if (decl.name->chars()[0] == PUBLIC_CHAR)
             report(56) << decl.name; // function arguments cannot be public
@@ -2027,12 +2021,13 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
 
         ret_type.type.ident = iVARIABLE;
     }
+    ret_type.name = symbol;
 
     // Build a new symbol. Construct a temporary name including the class.
     auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), symbol->chars());
     auto fqn = gAtoms.add(fullname);
 
-    auto fun = new FunctionInfo(pos, ret_type);
+    auto fun = new FunctionDecl(pos, ret_type);
     fun->set_name(fqn);
 
     if (is_native)
@@ -2051,7 +2046,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     // Use the short name for the function decl
     auto method = new MethodmapMethod;
     method->is_static = is_static;
-    method->decl = new FunctionDecl(pos, symbol, fun);
+    method->decl = fun;
 
     if (is_native)
         lexer_->require_newline(TerminatorPolicy::Semicolon);
@@ -2121,7 +2116,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
         ret_type.type.ident = iVARIABLE;
     }
 
-    auto fun = new FunctionInfo(pos, ret_type);
+    auto fun = new FunctionDecl(pos, ret_type);
     std::string tmpname = map->name()->str() + "." + prop->name->str();
     if (getter)
         tmpname += ".get";

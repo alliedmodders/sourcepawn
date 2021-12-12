@@ -96,8 +96,8 @@ BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, 
     assert(right_ != this);
 }
 
-FunctionInfo::FunctionInfo(const token_pos_t& pos, const declinfo_t& decl)
-  : pos_(pos),
+FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
+  : Decl(AstKind::FunctionDecl, pos, decl.name),
     decl_(decl),
     analyzed_(false),
     analyze_result_(false),

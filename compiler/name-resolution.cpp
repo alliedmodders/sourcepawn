@@ -785,31 +785,29 @@ SwitchStmt::Bind(SemaContext& sc)
 bool
 FunctionDecl::EnterNames(SemaContext& sc)
 {
-    sp::Atom* name = info_->decl().name;
-
     symbol* sym = nullptr;
-    if (!info_->decl().opertok) {
+    if (!decl_.opertok) {
         // Handle forwards.
-        sym = FindSymbol(sc, name);
+        sym = FindSymbol(sc, name_);
         if (sym && !CanRedefine(sym))
             return false;
     }
 
     if (!sym) {
-        auto scope = info_->is_static() ? sSTATIC : sGLOBAL;
-        sym = new symbol(name, 0, iFUNCTN, scope, 0);
-        if (info_->decl().opertok)
+        auto scope = is_static() ? sSTATIC : sGLOBAL;
+        sym = new symbol(name_, 0, iFUNCTN, scope, 0);
+        if (decl_.opertok)
             sym->is_operator = true;
 
         DefineSymbol(sc, sym);
     }
 
-    if (info_->body())
-        sym->function()->node = info_;
-    else if (info_->is_forward())
-        sym->function()->forward = info_;
+    if (body())
+        sym->function()->node = this;
+    else if (is_forward())
+        sym->function()->forward = this;
 
-    info_->set_sym(sym);
+    sym_ = sym;
     return true;
 }
 
@@ -822,13 +820,11 @@ FunctionDecl::CanRedefine(symbol* sym)
     }
 
     auto data = sym->function();
-    if (data->forward && !info_->is_forward() && !info_->is_native() && !info_->is_stock() &&
-        !info_->is_static())
-    {
-        if (!info_->is_public()) {
+    if (data->forward && !is_forward() && !is_native() && !is_stock() && !is_static()) {
+        if (!is_public()) {
             report(pos_, 245) << sym->name();
 
-            info_->set_is_public();
+            set_is_public();
             return true;
         }
 
@@ -840,11 +836,11 @@ FunctionDecl::CanRedefine(symbol* sym)
     }
 
     if (data->node) {
-        if (info_->is_forward() && !data->node->is_public()) {
+        if (is_forward() && !data->node->is_public()) {
             report(pos_, 412) << name_;
             return false;
         }
-        if (info_->body() && !data->forward) {
+        if (body() && !data->forward) {
             report(pos_, 21) << name_;
             return false;
         }
@@ -856,7 +852,7 @@ FunctionDecl::CanRedefine(symbol* sym)
 }
 
 bool
-FunctionInfo::Bind(SemaContext& outer_sc)
+FunctionDecl::Bind(SemaContext& outer_sc)
 {
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
@@ -917,7 +913,7 @@ FunctionInfo::Bind(SemaContext& outer_sc)
         // :TODO: deprecate this syntax.
         is_public_ = true;  // implicit public function
         if (is_stock_)
-            error(42);      // invalid combination of class specifiers.
+            error(pos(), 42);      // invalid combination of class specifiers.
     }
 
     if (decl_.opertok)
@@ -975,11 +971,16 @@ FunctionInfo::Bind(SemaContext& outer_sc)
             report(pos_, 17) << alias_;
         sym_->function()->alias = alias_sym;
     }
+
+    if (ok && deprecate_) {
+        sym_->documentation = new PoolString(deprecate_->chars(), deprecate_->length());
+        sym_->deprecated = true;
+    }
     return ok;
 }
 
 bool
-FunctionInfo::BindArgs(SemaContext& sc)
+FunctionDecl::BindArgs(SemaContext& sc)
 {
     std::vector<arginfo> arglist;
 
@@ -1001,7 +1002,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
         Type* type = gTypes.find(typeinfo.semantic_tag());
         if (type->isEnumStruct()) {
             if (sym_->native)
-                error(135, type->name());
+                error(var->pos(), 135, type->name());
         }
 
         /* Stack layout:
@@ -1036,7 +1037,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
                 int tag;
                 cell val;
                 if (!init->EvalConst(&val, &tag)) {
-                    error(8);
+                    error(var->pos(), 8);
 
                     // Populate to avoid errors.
                     val = 0;
@@ -1056,7 +1057,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
 
         /* arguments of a public function may not have a default value */
         if (sym_->is_public && arg.def)
-            error(59, var->name()->chars());
+            error(var->pos(), 59, var->name()->chars());
     }
 
     // Now, see if the function already had an argument list.
@@ -1100,7 +1101,7 @@ FunctionInfo::BindArgs(SemaContext& sc)
 }
 
 sp::Atom*
-FunctionInfo::NameForOperator()
+FunctionDecl::NameForOperator()
 {
     std::vector<std::string> params;
 
@@ -1147,20 +1148,6 @@ FunctionInfo::NameForOperator()
     std::string name =
         "operator" + get_token_string(decl_.opertok) + "(" + ke::Join(params, ",") + ")";
     return gAtoms.add(name);
-}
-
-bool
-FunctionDecl::Bind(SemaContext& sc)
-{
-    if (!info_->Bind(sc))
-        return false;
-
-    if (deprecate_) {
-        symbol* sym = info_->sym();
-        sym->documentation = new PoolString(deprecate_->chars(), deprecate_->length());
-        sym->deprecated = true;
-    }
-    return true;
 }
 
 bool
@@ -1256,7 +1243,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
     std::vector<symbol*> methods;
     for (const auto& decl : methods_) {
-        auto info = decl->info();
         if (seen.count(decl->name())) {
             report(decl->pos(), 103) << decl->name() << "enum struct";
             continue;
@@ -1265,7 +1251,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
         auto sym = new symbol(decl->name(), 0, iFUNCTN, sGLOBAL, 0);
         sym->set_parent(root_);
-        info->set_sym(sym);
+        decl->set_sym(sym);
         methods.emplace_back(sym);
     }
 
@@ -1286,12 +1272,12 @@ EnumStructDecl::Bind(SemaContext& sc)
 
     AutoCountErrors errors;
     for (const auto& fun : methods_) {
-        auto inner_name = DecorateInnerName(name_, fun->info()->decl().name);
+        auto inner_name = DecorateInnerName(name_, fun->decl_name());
         if (!inner_name)
             continue;
 
-        fun->info()->set_name(inner_name);
-        fun->info()->set_this_tag(root_->tag);
+        fun->set_name(inner_name);
+        fun->set_this_tag(root_->tag);
         fun->Bind(sc);
     }
     return errors.ok();
@@ -1334,13 +1320,13 @@ MethodmapDecl::EnterNames(SemaContext& sc)
     }
 
     for (auto& method : methods_) {
-        if (map_->methods.count(method->decl->name())) {
-            report(method->decl->pos(), 103) << method->decl->name() << "methodmap";
+        if (map_->methods.count(method->decl->decl_name())) {
+            report(method->decl->pos(), 103) << method->decl->decl_name() << "methodmap";
             continue;
         }
 
         auto m = new methodmap_method_t(map_);
-        m->name = method->decl->name();
+        m->name = method->decl->decl_name();
         if (m->name == map_->name) {
             if (map_->ctor) {
                 report(method->decl->pos(), 113) << method->decl->name();
@@ -1413,7 +1399,7 @@ MethodmapDecl::Bind(SemaContext& sc)
 
     for (const auto& method : methods_) {
         bool is_ctor = false;
-        if (method->decl->name() == map_->name) {
+        if (method->decl->decl_name() == map_->name) {
             // Constructors may not be static.
             if (method->is_static) {
                 report(method->decl->pos(), 175);
@@ -1421,24 +1407,24 @@ MethodmapDecl::Bind(SemaContext& sc)
             }
             is_ctor = true;
 
-            auto& type = method->decl->info()->mutable_type();
+            auto& type = method->decl->mutable_type();
             type.set_tag(map_->tag);
             type.ident = iVARIABLE;
             type.is_new = true;
-        } else if (method->decl->info()->type().ident == 0) {
+        } else if (method->decl->type().ident == 0) {
             // Parsed as a constructor, but not using the map name. This is illegal.
             report(method->decl->pos(), 114) << "constructor" << "methodmap" << map_->name;
             continue;
         }
 
         if (!method->is_static && !is_ctor)
-            method->decl->info()->set_this_tag(map_->tag);
+            method->decl->set_this_tag(map_->tag);
 
         if (!method->decl->Bind(sc))
             continue;
 
         method->decl->sym()->set_parent(sym_);
-        method->decl->sym()->setName(DecorateInnerName(name_, method->decl->name()));
+        method->decl->sym()->setName(DecorateInnerName(name_, method->decl->decl_name()));
 
         auto m = method->entry;
         m->target = method->decl->sym();
