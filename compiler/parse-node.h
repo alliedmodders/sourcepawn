@@ -1213,13 +1213,18 @@ class ArrayExpr final : public Expr
     PoolArray<Expr*> exprs_;
 };
 
-struct StructInitField {
-    StructInitField(sp::Atom* name, Expr* value, const token_pos_t& pos)
-        : name(name), value(value), pos(pos)
+struct StructInitFieldExpr : public Expr {
+    StructInitFieldExpr(sp::Atom* name, Expr* value, const token_pos_t& pos)
+      : Expr(AstKind::StructInitFieldExpr, pos),
+        name(name), value(value)
     {}
+
+    void ProcessUses(SemaContext& sc) override { value->ProcessUses(sc); }
+
+    static bool is_a(ParseNode* node) { return node->kind() == AstKind::StructInitFieldExpr; }
+
     sp::Atom* name;
     Expr* value;
-    token_pos_t pos;
 };
 
 class StructExpr final : public Expr
@@ -1230,16 +1235,19 @@ class StructExpr final : public Expr
     {}
 
     bool Bind(SemaContext& sc) override;
-    void ProcessUses(SemaContext&) override {}
+    void ProcessUses(SemaContext& sc) override {
+        for (const auto& field : fields_)
+            field->ProcessUses(sc);
+    }
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::StructExpr; }
 
-    PoolList<StructInitField>& fields() {
+    PoolList<StructInitFieldExpr*>& fields() {
         return fields_;
     }
 
   private:
-    PoolList<StructInitField> fields_;
+    PoolList<StructInitFieldExpr*> fields_;
 };
 
 class IfStmt : public Stmt
