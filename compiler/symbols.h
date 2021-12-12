@@ -31,7 +31,7 @@
 #include "stl/stl-unordered-map.h"
 
 class CompileContext;
-class FunctionInfo;
+class FunctionDecl;
 class SemaContext;
 struct token_pos_t;
 
@@ -54,8 +54,8 @@ class FunctionData final : public SymbolData
     tr::vector<tr::string>* dbgstrs = nullptr;
     PoolArray<arginfo> args;
     ReturnArrayInfo* return_array = nullptr;
-    FunctionInfo* node;
-    FunctionInfo* forward;
+    FunctionDecl* node;
+    FunctionDecl* forward;
     symbol* alias;
     sp::Label label;     // modern replacement for addr
     sp::Label funcid;

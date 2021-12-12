@@ -67,7 +67,7 @@ class CodeGenerator final
     void EmitDoWhileStmt(DoWhileStmt* stmt);
     void EmitForStmt(ForStmt* stmt);
     void EmitSwitchStmt(SwitchStmt* stmt);
-    void EmitFunctionInfo(FunctionInfo* info);
+    void EmitFunctionDecl(FunctionDecl* info);
     void EmitEnumStructDecl(EnumStructDecl* info);
     void EmitMethodmapDecl(MethodmapDecl* info);
     void EmitReturnStmt(ReturnStmt* stmt);
