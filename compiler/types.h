@@ -89,12 +89,12 @@ struct typeinfo_t {
     typeinfo_t()
       : type_atom(nullptr),
         tag_(-1),
+        declared_tag(0),
         ident(0),
         is_const(false),
         is_new(false),
         has_postdims(false),
-        is_label(false),
-        declared_tag(0)
+        is_label(false)
     {}
 
     // Array information.
@@ -106,15 +106,16 @@ struct typeinfo_t {
     // Type information.
     sp::Atom* type_atom;    // Parsed atom.
     int tag_;               // Effective tag.
-    int ident;          // Either iREFERENCE, iARRAY, or iVARIABLE.
-    bool is_const : 1;
-    bool is_new : 1;        // New-style declaration.
-    bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
-    bool is_label : 1;      // If type_atom came from a tLABEL.
 
     // If non-zero, this type was originally declared with this type, but was
     // rewritten for desugaring.
     int declared_tag;
+
+    int ident : 5;          // Either iREFERENCE, iARRAY, or iVARIABLE.
+    bool is_const : 1;
+    bool is_new : 1;        // New-style declaration.
+    bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
+    bool is_label : 1;      // If type_atom came from a tLABEL.
 
     TypenameInfo ToTypenameInfo() const {
         if (tag_ >= 0)

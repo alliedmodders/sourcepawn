@@ -42,7 +42,7 @@ class SemaContext
         cc_.set_sema(this);
         scope_ = cc_.globals();
     }
-    SemaContext(SemaContext& parent, symbol* func, FunctionInfo* func_node)
+    SemaContext(SemaContext& parent, symbol* func, FunctionDecl* func_node)
       : cc_(parent.cc_),
         sema_(parent.sema()),
         scope_(parent.scope_),
@@ -98,7 +98,7 @@ class SemaContext
     void set_warned_unreachable() { warned_unreachable_ = true; }
 
     symbol* func() const { return func_; }
-    FunctionInfo* func_node() const { return func_node_; }
+    FunctionDecl* func_node() const { return func_node_; }
     Semantics* sema() const { return sema_; }
 
     SymbolScope* ScopeForAdd();
@@ -119,7 +119,7 @@ class SemaContext
     SymbolScope* scope_ = nullptr;
     AutoCreateScope* scope_creator_ = nullptr;
     symbol* func_ = nullptr;
-    FunctionInfo* func_node_ = nullptr;
+    FunctionDecl* func_node_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
@@ -138,7 +138,7 @@ class Semantics final
     friend class ConstDecl;
     friend class EnumDecl;
     friend class FixedArrayValidator;
-    friend class FunctionInfo;
+    friend class FunctionDecl;
     friend class Parser;
 
   public:
@@ -162,9 +162,9 @@ class Semantics final
     bool CheckChangeScopeNode(ChangeScopeNode* node);
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
-    bool CheckFunctionInfo(FunctionInfo* info);
-    bool CheckFunctionInfoImpl(FunctionInfo* info);
-    void CheckFunctionReturnUsage(FunctionInfo* info);
+    bool CheckFunctionDecl(FunctionDecl* info);
+    bool CheckFunctionDeclImpl(FunctionDecl* info);
+    void CheckFunctionReturnUsage(FunctionDecl* info);
     bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
     bool CheckSwitchStmt(SwitchStmt* stmt);
     bool CheckForStmt(ForStmt* stmt);

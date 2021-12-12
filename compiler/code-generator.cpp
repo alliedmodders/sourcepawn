@@ -206,11 +206,9 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         case AstKind::SwitchStmt:
             EmitSwitchStmt(stmt->to<SwitchStmt>());
             break;
-        case AstKind::FunctionDecl: {
-            auto decl = stmt->to<FunctionDecl>();
-            EmitFunctionInfo(decl->info());
+        case AstKind::FunctionDecl:
+            EmitFunctionDecl(stmt->to<FunctionDecl>());
             break;
-        }
         case AstKind::EnumStructDecl:
             EmitEnumStructDecl(stmt->to<EnumStructDecl>());
             break;
@@ -1734,7 +1732,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
 }
 
 void
-CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
+CodeGenerator::EmitFunctionDecl(FunctionDecl* info)
 {
     ke::SaveAndSet<symbol*> set_func(&func_, info->sym());
 
@@ -1798,7 +1796,7 @@ void
 CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl)
 {
     for (const auto& fun : decl->methods())
-        EmitFunctionInfo(fun->info());
+        EmitFunctionDecl(fun);
 }
 
 void
@@ -1806,12 +1804,12 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
 {
     for (const auto& prop : decl->properties()) {
         if (prop->getter)
-            EmitFunctionInfo(prop->getter);
+            EmitFunctionDecl(prop->getter);
         if (prop->setter)
-            EmitFunctionInfo(prop->setter);
+            EmitFunctionDecl(prop->setter);
     }
     for (const auto& method : decl->methods())
-        EmitFunctionInfo(method->decl->info());
+        EmitFunctionDecl(method->decl);
 }
 
 void
