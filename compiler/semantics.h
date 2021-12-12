@@ -207,7 +207,6 @@ class Semantics final
     bool CheckBinaryExpr(BinaryExpr* expr);
     bool CheckUnaryExpr(UnaryExpr* expr);
     bool CheckIsDefinedExpr(IsDefinedExpr* expr);
-
     bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, symbol* root,
@@ -215,13 +214,18 @@ class Semantics final
 
     bool CheckAssignmentLHS(BinaryExpr* expr);
     bool CheckAssignmentRHS(BinaryExpr* expr);
-
     bool AddImplicitDynamicInitializer(VarDecl* decl);
+
+    struct ParamState {
+        std::vector<Expr*> argv;
+    };
+
     bool CheckArrayDeclaration(VarDecl* decl);
     bool CheckExprForArrayInitializer(Expr* expr);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
     bool CheckArgument(CallExpr* call, arginfo* arg, Expr* expr,
-                       std::vector<ComputedArg>* argv, unsigned int argpos);
+                       ParamState* ps, unsigned int argpos);
+    bool CheckWrappedExpr(Expr* outer, Expr* inner);
     symbol* BindNewTarget(Expr* target);
     symbol* BindCallTarget(CallExpr* call, Expr* target);
 

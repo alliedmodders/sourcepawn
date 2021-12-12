@@ -1120,14 +1120,18 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
         return new CallExpr(pos, tok, target, {});
 
     bool named_params = false;
-    std::vector<ParsedArg> args;
+    std::vector<Expr*> args;
     do {
+        token_pos_t name_pos;
+
         sp::Atom* name = nullptr;
         if (lexer_->match('.')) {
             named_params = true;
 
             if (!lexer_->needsymbol(&name))
                 break;
+            name_pos = lexer_->pos();
+
             lexer_->need('=');
         } else {
             if (named_params)
@@ -1138,7 +1142,12 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
         if (!lexer_->match('_'))
             expr = hier14();
 
-        args.emplace_back(name, expr);
+        if (name && expr)
+            expr = new NamedArgExpr(name_pos, name, expr);
+        else if (!expr)
+            expr = new DefaultArgExpr(lexer_->pos(), nullptr);
+
+        args.emplace_back(expr);
 
         if (lexer_->match(')'))
             break;
