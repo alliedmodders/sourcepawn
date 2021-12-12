@@ -220,36 +220,36 @@ bool Semantics::CheckPstructDecl(VarDecl* decl) {
             assert(ps->args[i]->type.tag() == pc_tag_string);
 
             auto expr = new StringExpr(decl->pos(), "", 0);
-            init->fields().push_back(StructInitField(ps->args[i]->name, expr,
-                                                     decl->pos()));
+            init->fields().push_back(new StructInitFieldExpr(ps->args[i]->name, expr,
+                                                             decl->pos()));
         }
     }
 
     return true;
 }
 
-bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps, const StructInitField& field,
-                                std::vector<bool>* visited)
+bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
+                                const StructInitFieldExpr* field, std::vector<bool>* visited)
 {
-    auto arg = pstructs_getarg(ps, field.name);
+    auto arg = pstructs_getarg(ps, field->name);
     if (!arg) {
-        report(field.pos, 96) << field.name << "struct" << decl->name();
+        report(field->pos(), 96) << field->name << "struct" << decl->name();
         return false;
     }
 
     if (visited->at(arg->index))
-        error(field.value->pos(), 244, field.name->chars());
+        error(field->value->pos(), 244, field->name->chars());
 
     visited->at(arg->index) = true;
 
-    if (auto expr = field.value->as<StringExpr>()) {
+    if (auto expr = field->value->as<StringExpr>()) {
         if (arg->type.ident != iREFARRAY) {
             error(expr->pos(), 48);
             return false;
         }
         if (arg->type.tag() != pc_tag_string)
             error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag()));
-    } else if (auto expr = field.value->as<TaggedValueExpr>()) {
+    } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
             return false;
@@ -263,7 +263,7 @@ bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps, const Struct
         {
             matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
         }
-    } else if (auto expr = field.value->as<SymbolExpr>()) {
+    } else if (auto expr = field->value->as<SymbolExpr>()) {
         auto sym = expr->sym();
         if (arg->type.ident == iVARIABLE) {
             if (sym->ident != iVARIABLE) {

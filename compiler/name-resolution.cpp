@@ -694,7 +694,7 @@ StructExpr::Bind(SemaContext& sc)
 {
     bool ok = true;
     for (const auto& field : fields_)
-        ok &= field.value->Bind(sc);
+        ok &= field->value->Bind(sc);
     return ok;
 }
 
