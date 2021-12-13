@@ -206,7 +206,7 @@ class Environment : public ISourcePawnEnvironment
 
   int debug_metadata_flags_;
 
-#if defined(KE_LINUX)
+#if defined(KE_LINUX) && defined(SP_HAS_JIT)
   // There can only be one of each of these per process, as the filenames are
   // only distinguished by PID (although jitdump does internally support per-
   // thread metadata). Once we support multiple environments per process we'll

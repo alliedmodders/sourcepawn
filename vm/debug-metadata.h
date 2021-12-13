@@ -32,7 +32,7 @@ struct CodeDebugMapping {
 
 using CodeDebugMap = std::vector<CodeDebugMapping>;
 
-#if defined(KE_LINUX)
+#if defined(KE_LINUX) && defined(SP_HAS_JIT)
 class PerfJitFile
 {
  public:
