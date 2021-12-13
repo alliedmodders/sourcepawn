@@ -745,8 +745,8 @@ FixedArrayValidator::AddCells(size_t ncells)
     return true;
 }
 
-static bool
-AddImplicitDynamicInitializer(VarDecl* decl)
+bool
+Semantics::AddImplicitDynamicInitializer(VarDecl* decl)
 {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type();
@@ -775,6 +775,8 @@ AddImplicitDynamicInitializer(VarDecl* decl)
     }
 
     auto init = new NewArrayExpr(decl->pos(), ti, exprs);
+    if (!CheckNewArrayExprForArrayInitializer(init))
+        return false;
     if (!decl->init_rhs())
         decl->set_init(init);
     if (!decl->autozero())

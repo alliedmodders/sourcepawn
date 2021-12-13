@@ -216,6 +216,7 @@ class Semantics final
     bool CheckAssignmentLHS(BinaryExpr* expr);
     bool CheckAssignmentRHS(BinaryExpr* expr);
 
+    bool AddImplicitDynamicInitializer(VarDecl* decl);
     bool CheckArrayDeclaration(VarDecl* decl);
     bool CheckExprForArrayInitializer(Expr* expr);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
