@@ -227,7 +227,7 @@ Environment::WriteDebugMetadata(void* address, uint64_t length, const char* symb
   //   Lets GDB show JIT frames when debugging, with source info.
   //   Requires generating full ELF + DWARF objects in memory.
 
-#if defined(KE_LINUX)
+#if defined(KE_LINUX) && defined(SP_HAS_JIT)
   if (!perf_jit_file_ && (debug_metadata_flags_ & JIT_DEBUG_PERF_BASIC) != 0) {
     perf_jit_file_ = std::make_unique<PerfJitFile>((debug_metadata_flags_ & JIT_DEBUG_DELETE_ON_EXIT) != 0);
   }

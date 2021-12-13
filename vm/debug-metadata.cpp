@@ -16,7 +16,7 @@
 
 using namespace sp;
 
-#if defined(KE_LINUX)
+#if defined(KE_LINUX) && defined(SP_HAS_JIT)
 #include "jitdump.h"
 
 #include <unistd.h>
