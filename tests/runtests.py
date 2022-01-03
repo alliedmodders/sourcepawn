@@ -61,7 +61,10 @@ class TestPlan(object):
     self.shells = []
     self.tests = []
     self.modes = []
-    self.tests_path = os.path.split(__file__)[0]
+    if args.test is None:
+      self.tests_path = os.path.split(__file__)[0]
+    else:
+      self.tests_path = args.test
     self.env_ = None
 
     if self.args.coverage:
@@ -236,11 +239,6 @@ class TestPlan(object):
       if os.path.isdir(path):
         self.find_tests_impl(local_path, manifest)
       elif path.endswith('.sp') or path.endswith('.smx'):
-        if self.args.test is not None:
-          if not local_path.startswith(self.args.test) and \
-             not local_path.endswith(self.args.test):
-            continue
-
         test = Test(**{
           'path': os.path.abspath(path),
           'manifest': manifest,
@@ -527,7 +525,7 @@ class TestRunner(object):
     if test.stderr_file is not None:
       if not self.compare_output(test, 'stderr', stderr):
         return False
-        
+
     self.out("PASS")
     return True
 
