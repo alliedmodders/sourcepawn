@@ -72,11 +72,13 @@ def parse_manifest(path, local_folder, source = {}):
     for key, val in cfg.items(section):
       manifest[section][key] = val
 
+  base_path = os.path.dirname(path)
+
   for entry in manifest:
     includes = manifest[entry].get('includes', None)
     if includes and isinstance(includes, str):
       includes = [include.strip() for include in includes.split(',')]
-      includes = [os.path.realpath(include) for include in includes]
+      includes = [os.path.realpath(os.path.join(base_path, include)) for include in includes]
       manifest[entry]['includes'] = includes
 
   return manifest
