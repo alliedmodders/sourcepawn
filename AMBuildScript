@@ -241,11 +241,15 @@ class Config(object):
         ]
 
         if self.enable_asan:
-            raise Exception('--enable-asan only supported when using Clang')
+            self.configure_asan(cxx)
 
     def configure_asan(self, cxx):
-        if cxx.target.platform != 'linux':
-            raise Exception('--enable-asan only supported on Linux')
+        if cxx.target.platform == 'windows' and cxx.version >= '1929':
+            cxx.cflags += ['/fsanitize=address']
+            return
+        elif cxx.target.platform != 'linux':
+             raise Exception('--enable-asan only supported on Windows (>= VS 16.9) & Linux')
+
         cxx.cflags += ['-fsanitize=address']
         cxx.linkflags += ['-fsanitize=address']
         if cxx.target.arch == 'x86':
@@ -276,7 +280,7 @@ class Config(object):
             binary.compiler.linkflags.append('/SUBSYSTEM:WINDOWS')
 
         # Dumb clang behavior means we have to manually find libclang_rt.
-        if self.enable_asan:
+        if self.enable_asan and compiler.target.platform == 'linux':
             binary.compiler.linkflags += [
                 '-shared-libsan',
                 '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target.arch]),
