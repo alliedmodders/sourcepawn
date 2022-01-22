@@ -241,14 +241,16 @@ class Config(object):
         ]
 
         if self.enable_asan:
+            if cxx.version < '1929':
+                raise Exception('--enable-asan requires Visual Studio version >=16.9')
             self.configure_asan(cxx)
 
     def configure_asan(self, cxx):
-        if cxx.target.platform == 'windows' and cxx.version >= '1929':
+        if cxx.target.platform == 'windows':
             cxx.cflags += ['/fsanitize=address']
             return
         elif cxx.target.platform != 'linux':
-             raise Exception('--enable-asan only supported on Windows (>= VS 16.9) & Linux')
+             raise Exception('--enable-asan only supported on Linux and Windows with VS >=16.9')
 
         cxx.cflags += ['-fsanitize=address']
         cxx.linkflags += ['-fsanitize=address']
