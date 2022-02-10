@@ -41,6 +41,7 @@ native float __float_add(float a, float b);
 native float __float_sub(float a, float b);
 native float __float_mul(float a, float b);
 native float __float_div(float dividend, float divisor);
+native float __float_mod(float dividend, float divisor);
 native bool __float_gt(float a, float b);
 native bool __float_ge(float a, float b);
 native bool __float_lt(float a, float b);
@@ -55,6 +56,7 @@ native float operator*(float oper1, float oper2) = __float_mul;
 native float operator/(float oper1, float oper2) = __float_div;
 native float operator+(float oper1, float oper2) = __float_add;
 native float operator-(float oper1, float oper2) = __float_sub;
+native float operator%(float oper1, float oper2) = __float_mod;
 native bool operator!(float oper1) = __float_not;
 native bool operator>(float oper1, float oper2) = __float_gt;
 native bool operator>=(float oper1, float oper2) = __float_ge;
@@ -158,11 +160,13 @@ stock bool operator<=(oper1, float oper2)
   return __float_le(float(oper1), oper2);
 }
 
-/**
- * Forbidden operators.
- *
- */
-forward operator%(float oper1, float oper2);
-forward operator%(float oper1, oper2);
-forward operator%(oper1, float oper2);
+stock float operator%(float oper1, oper2)
+{
+  return __float_mod(oper1, float(oper2));
+}
+
+stock float operator%(oper1, float oper2)
+{
+  return __float_mod(float(oper1), oper2);
+}
 #endif // __sourcepawn2__
