@@ -684,6 +684,8 @@ Parser::parse_const(int vclass)
 
     lexer_->need(tTERM);
 
+    if (stmts.empty())
+        return nullptr;
     if (stmts.size() > 1)
         return new StmtList(stmts[0]->pos(), stmts);
     return stmts[0];

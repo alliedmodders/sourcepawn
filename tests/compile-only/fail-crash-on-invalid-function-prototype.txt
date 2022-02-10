@@ -1,0 +1,2 @@
+(1) : error 001: expected token: ";", but found "const"
+(1) : error 001: expected token: "-identifier-", but found "["
