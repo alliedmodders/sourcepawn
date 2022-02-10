@@ -136,6 +136,7 @@ static const NativeMapping sNativeMap[] = {
   { "__float_sub",    OP_FLOATSUB },
   { "__float_mul",    OP_FLOATMUL },
   { "__float_div",    OP_FLOATDIV },
+  { "__float_mod",    OP_NOP }, // No asm version
   { "__float_ctor",   OP_FLOAT },
   { "__float_gt",     OP_FLOAT_GT },
   { "__float_ge",     OP_FLOAT_GE },
@@ -191,7 +192,7 @@ PluginRuntime::InstallBuiltinNatives()
 unsigned
 PluginRuntime::GetNativeReplacement(size_t index)
 {
-  if (!float_table_[index].found)
+  if (!float_table_[index].found || float_table_[index].index == OP_NOP)
     return (unsigned)OP_NOP;
   return float_table_[index].index;
 }

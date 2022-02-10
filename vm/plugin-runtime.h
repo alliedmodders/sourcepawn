@@ -29,16 +29,6 @@ using namespace ke;
 class PluginContext;
 class MethodInfo;
 
-struct floattbl_t
-{
-  floattbl_t() {
-    found = false;
-    index = 0;
-  }
-  bool found;
-  unsigned int index;
-};
-
 struct NativeEntry : public sp_native_t
 {
   NativeEntry()
@@ -149,6 +139,16 @@ class PluginRuntime
 
  private:
   void SetupFloatNativeRemapping();
+
+  struct floattbl_t
+  {
+    floattbl_t() {
+      found = false;
+      index = 0;
+    }
+    bool found;
+    unsigned int index;
+  };
 
  private:
   std::unique_ptr<sp::LegacyImage> image_;

@@ -25,4 +25,5 @@ public main()
   printfloat(FloatAbs(d));
   printfloat(FloatAbs(a));
   printfloat(-d);
+  printfloat(c % a);
 }
