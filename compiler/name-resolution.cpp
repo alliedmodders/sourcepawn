@@ -823,12 +823,17 @@ FunctionDecl::CanRedefine(symbol* sym)
     if (data->forward && !info_->is_forward() && !info_->is_native() && !info_->is_stock() &&
         !info_->is_static())
     {
-        if (info_->is_public())
+        if (!info_->is_public()) {
+            report(pos_, 245) << sym->name();
+
+            info_->set_is_public();
             return true;
+        }
 
-        report(pos_, 245) << sym->name();
-
-        info_->set_is_public();
+        if (data->node) {
+            report(pos_, 21) << name_;
+            return false;
+        }
         return true;
     }
 
