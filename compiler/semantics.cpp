@@ -1662,8 +1662,10 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 }
                 return map->ctor->target;
             }
-            if (sym->ident != iFUNCTN)
+            if (sym->ident != iFUNCTN) {
+                report(target, 12);
                 return nullptr;
+            }
             if (!sym->defined) {
                 report(target, 4) << sym->name();
                 return nullptr;
