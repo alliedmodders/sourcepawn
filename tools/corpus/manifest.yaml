@@ -5,6 +5,9 @@ git:
         - https://github.com/dysphie/sourcemod-indev incap-wip.sp
         - https://github.com/dysphie/nmrih-qol-ex scripting/qol.sp
         - https://github.com/Bara/fuckZones addons/sourcemod/scripting/fuckZones.sp
+        - https://github.com/JoinedSenses/TF2-Stasis scripting/stasis-dev.sp
+        - https://github.com/JoinedSenses/SM-ShowTriggers-Redux scripting/showtriggers.sp
+        - https://github.com/JoinedSenses/SM-ConnectionData scripting/connectiondata.sp
 
 includes:
         - https://github.com/alliedmodders/sourcemod plugins/include
