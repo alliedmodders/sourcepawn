@@ -69,9 +69,6 @@ class ParseNode : public PoolObject
     virtual bool BindLval(SemaContext& sc) {
         return Bind(sc);
     }
-    virtual bool HasSideEffects() {
-        return false;
-    }
 
     const token_pos_t& pos() const {
         return pos_;
@@ -119,7 +116,8 @@ class Stmt : public ParseNode
 {
   public:
     explicit Stmt(AstKind kind, const token_pos_t& pos)
-      : ParseNode(kind, pos)
+      : ParseNode(kind, pos),
+        flow_type_(Flow_None)
     {}
 
     // Create symbolic information for any names global to the current name
@@ -138,8 +136,7 @@ class Stmt : public ParseNode
     bool IsTerminal() const { return flow_type() != Flow_None; }
 
   private:
-    AstKind kind_;
-    FlowType flow_type_ = Flow_None;
+    FlowType flow_type_ : 3;
 };
 
 class ChangeScopeNode : public Stmt
@@ -539,6 +536,9 @@ class Expr : public ParseNode
     // around FoldToConstant().
     bool EvalConst(cell* value, int* tag);
 
+    // Return whether or not the expression is idempotent (eg has side effects).
+    bool HasSideEffects();
+
     // Mark the node's value as consumed.
     virtual void MarkUsed(SemaContext&) {}
 
@@ -592,7 +592,6 @@ class UnaryExpr final : public Expr
     bool Bind(SemaContext& sc) override {
         return expr_->Bind(sc);
     }
-    bool HasSideEffects() override;
     void ProcessUses(SemaContext& sc) override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::UnaryExpr; }
@@ -615,7 +614,6 @@ class BinaryExprBase : public Expr
     BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right);
 
     bool Bind(SemaContext& sc) override;
-    bool HasSideEffects() override;
     void ProcessUses(SemaContext& sc) override;
 
     int token() const { return token_; }
@@ -635,7 +633,6 @@ class BinaryExpr final : public BinaryExprBase
   public:
     BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right);
 
-    bool HasSideEffects() override;
     bool FoldToConstant() override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::BinaryExpr; }
@@ -694,7 +691,6 @@ class ChainedCompareExpr final : public Expr
     {}
 
     bool Bind(SemaContext& sc) override;
-    bool HasSideEffects() override;
     void ProcessUses(SemaContext& sc) override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::ChainedCompareExpr; }
@@ -725,9 +721,6 @@ class TernaryExpr final : public Expr
         return ok;
     }
     bool FoldToConstant() override;
-    bool HasSideEffects() override {
-        return first_->HasSideEffects() || second_->HasSideEffects() || third_->HasSideEffects();
-    }
     void ProcessUses(SemaContext& sc) override;
     void ProcessDiscardUses(SemaContext& sc) override;
 
@@ -758,9 +751,6 @@ class IncDecExpr : public Expr
 
     bool Bind(SemaContext& sc) override {
         return expr_->Bind(sc);
-    }
-    bool HasSideEffects() override {
-        return true;
     }
     void ProcessUses(SemaContext& sc) override;
 
@@ -805,9 +795,6 @@ class CastExpr final : public Expr
     {}
 
     bool Bind(SemaContext& sc) override;
-    bool HasSideEffects() override {
-        return expr_->HasSideEffects();
-    }
     void ProcessUses(SemaContext& sc) override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CastExpr; }
@@ -910,9 +897,6 @@ class CallExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     void MarkUsed(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
-    bool HasSideEffects() override {
-        return true;
-    }
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CallExpr; }
 
@@ -955,9 +939,6 @@ class CallUserOpExpr final : public EmitOnlyExpr
   public:
     CallUserOpExpr(const UserOperation& userop, Expr* expr);
 
-    bool HasSideEffects() override {
-        return true;
-    }
     void ProcessUses(SemaContext& sc) override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CallUserOpExpr; }
@@ -998,7 +979,6 @@ class FieldAccessExpr final : public Expr
     bool Bind(SemaContext& sc) override {
         return base_->Bind(sc);
     }
-    bool HasSideEffects() override;
     void ProcessUses(SemaContext& sc) override;
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::FieldAccessExpr; }
@@ -1036,9 +1016,6 @@ class IndexExpr final : public Expr
         return ok;
     }
     void ProcessUses(SemaContext& sc) override;
-    bool HasSideEffects() override {
-        return base_->HasSideEffects() || expr_->HasSideEffects();
-    }
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::IndexExpr; }
 
@@ -1078,18 +1055,13 @@ class CommaExpr final : public Expr
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
     void ProcessDiscardUses(SemaContext& sc) override;
-    bool HasSideEffects() override {
-        return has_side_effects_;
-    }
 
     static bool is_a(ParseNode* node) { return node->kind() == AstKind::CommaExpr; }
 
     PoolArray<Expr*>& exprs() { return exprs_; }
-    void set_has_side_effects() { has_side_effects_ = true; }
 
   private:
     PoolArray<Expr*> exprs_;
-    bool has_side_effects_ = false;
 };
 
 class ThisExpr final : public Expr

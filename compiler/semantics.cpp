@@ -96,8 +96,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         case AstKind::VarDecl:
             return CheckVarDecl(stmt->to<VarDecl>());
         case AstKind::ExprStmt:
-            // Check even if no side effects.
-            return CheckExpr(stmt->to<ExprStmt>()->expr());
+            return CheckExprStmt(stmt->to<ExprStmt>());
         case AstKind::ExitStmt:
             return CheckExitStmt(stmt->to<ExitStmt>());
         case AstKind::BlockStmt:
@@ -417,6 +416,89 @@ bool Expr::EvalConst(cell* value, int* tag) {
     return true;
 }
 
+static inline bool HasSideEffects(const PoolArray<Expr*>& exprs) {
+    for (const auto& child : exprs) {
+        if (child->HasSideEffects())
+            return true;
+    }
+    return false;
+}
+
+bool Expr::HasSideEffects() {
+    if (val().ident == iACCESSOR)
+        return true;
+
+    switch (kind()) {
+        case AstKind::UnaryExpr: {
+            auto e = to<UnaryExpr>();
+            return e->userop() || e->expr()->HasSideEffects();
+        }
+        case AstKind::BinaryExpr: {
+            auto e = to<BinaryExpr>();
+            return e->userop().sym || IsAssignOp(e->token()) || e->left()->HasSideEffects() ||
+                   e->right()->HasSideEffects();
+        }
+        case AstKind::LogicalExpr: {
+            auto e = to<LogicalExpr>();
+            return e->left()->HasSideEffects() || e->right()->HasSideEffects();
+        }
+        case AstKind::ChainedCompareExpr: {
+            auto e = to<ChainedCompareExpr>();
+            if (e->first()->HasSideEffects())
+                return true;
+            for (const auto& op : e->ops()) {
+                if (op.userop.sym || op.expr->HasSideEffects())
+                    return true;
+            }
+            return false;
+        }
+        case AstKind::TernaryExpr: {
+            auto e = to<TernaryExpr>();
+            return e->first()->HasSideEffects() || e->second()->HasSideEffects() ||
+                   e->third()->HasSideEffects();
+        }
+        case AstKind::CastExpr:
+            return to<CastExpr>()->expr()->HasSideEffects();
+        case AstKind::CommaExpr: {
+            auto e = to<CommaExpr>();
+            return ::HasSideEffects(e->exprs());
+        }
+        case AstKind::ArrayExpr: {
+            auto e = to<ArrayExpr>();
+            return ::HasSideEffects(e->exprs());
+        }
+        case AstKind::NewArrayExpr: {
+            auto e = to<NewArrayExpr>();
+            return ::HasSideEffects(e->exprs());
+        }
+        case AstKind::IndexExpr: {
+            auto e = to<IndexExpr>();
+            return e->base()->HasSideEffects() || e->index()->HasSideEffects();
+        }
+        case AstKind::FieldAccessExpr: {
+            auto e = to<FieldAccessExpr>();
+            return e->base()->HasSideEffects();
+        }
+        case AstKind::RvalueExpr:
+            return to<RvalueExpr>()->expr()->HasSideEffects();
+        case AstKind::CallExpr: // Not intelligent yet.
+        case AstKind::IncDecExpr:
+        case AstKind::CallUserOpExpr:
+            return true;
+        case AstKind::IsDefinedExpr:
+        case AstKind::NullExpr:
+        case AstKind::SizeofExpr:
+        case AstKind::StringExpr:
+        case AstKind::SymbolExpr:
+        case AstKind::TaggedValueExpr:
+        case AstKind::ThisExpr:
+            return false;
+        default:
+            assert(false);
+            return true;
+    }
+}
+
 Expr* Semantics::AnalyzeForTest(Expr* expr) {
     if (!CheckExpr(expr))
         return nullptr;
@@ -543,12 +625,6 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     return true;
 }
 
-bool
-UnaryExpr::HasSideEffects()
-{
-    return expr_->HasSideEffects();
-}
-
 void
 UnaryExpr::ProcessUses(SemaContext& sc)
 {
@@ -600,14 +676,6 @@ IncDecExpr::ProcessUses(SemaContext& sc)
     expr_->MarkAndProcessUses(sc);
 }
 
-bool
-BinaryExprBase::HasSideEffects()
-{
-    return left_->HasSideEffects() ||
-           right_->HasSideEffects() ||
-           IsAssignOp(token_);
-}
-
 void
 BinaryExprBase::ProcessUses(SemaContext& sc)
 {
@@ -623,14 +691,6 @@ BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* righ
   : BinaryExprBase(AstKind::BinaryExpr, pos, token, left, right)
 {
     oper_tok_ = GetOperToken(token_);
-}
-
-bool
-BinaryExpr::HasSideEffects()
-{
-    if (userop_.sym != nullptr)
-        return true;
-    return BinaryExprBase::HasSideEffects();
 }
 
 bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
@@ -993,18 +1053,6 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     return true;
 }
 
-bool
-ChainedCompareExpr::HasSideEffects()
-{
-    if (first_->HasSideEffects())
-        return true;
-    for (const auto& op : ops_) {
-        if (op.userop.sym || op.expr->HasSideEffects())
-            return true;
-    }
-    return false;
-}
-
 bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     auto first = chain->first();
     if (!CheckExpr(first))
@@ -1318,8 +1366,6 @@ bool Semantics::CheckCommaExpr(CommaExpr* comma) {
     for (const auto& expr : comma->exprs()) {
         if (!CheckExpr(expr))
             return false;
-        if (expr->HasSideEffects())
-            comma->set_has_side_effects();
     }
 
     Expr* last = comma->exprs().back();
@@ -1796,12 +1842,6 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     val.constval = field->addr();
     val.tag = 0;
     return true;
-}
-
-bool
-FieldAccessExpr::HasSideEffects()
-{
-    return base_->HasSideEffects() || val_.ident == iACCESSOR;
 }
 
 bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
