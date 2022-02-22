@@ -1288,6 +1288,12 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     AutoErrorPos aep(expr->pos());
 
     auto sym = expr->sym();
+    if (!sym) {
+        // This can happen if CheckSymbolExpr is called during name resolution.
+        assert(cc_.reports()->total_errors() > 0);
+        return false;
+    }
+
     auto& val = expr->val();
     val.ident = sym->ident;
     val.sym = sym;
