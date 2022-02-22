@@ -142,7 +142,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         default:
             assert(false);
 
-            report(stmt, 315) << (int)stmt->kind();
+            report(stmt, 420) << (int)stmt->kind();
             return false;
     }
 }
@@ -389,7 +389,7 @@ bool Semantics::CheckExpr(Expr* expr) {
         default:
             assert(false);
 
-            report(expr, 315) << (int)expr->kind();
+            report(expr, 420) << (int)expr->kind();
             return false;
     }
 }

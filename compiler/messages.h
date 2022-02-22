@@ -297,4 +297,6 @@ static const char* errmsg_ex[] = {
     /*417*/ "cannot read from file: \"%s\"\n",
     /*418*/ "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
     /*419*/ "cannot write to file: \"%s\"\n",
+    /*420*/ "unhandled AST type: %d\n",
+    /*421*/ "too many functions\n",
 };

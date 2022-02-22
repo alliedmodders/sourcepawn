@@ -896,7 +896,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
         auto id = (uint32_t(i) << 1) | 1;
         if (!Label::ValueFits(id))
-            error(302);
+            error(421);
         cg_.LinkPublicFunction(sym, id);
 
         rtti.add_method(sym);
