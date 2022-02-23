@@ -387,6 +387,8 @@ bool Semantics::CheckExpr(Expr* expr) {
             return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
         case AstKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
+        case AstKind::RvalueExpr:
+            return CheckExpr(expr->to<RvalueExpr>()->expr());
         default:
             assert(false);
 
