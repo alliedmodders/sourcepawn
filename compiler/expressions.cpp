@@ -142,16 +142,18 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
         return false;
 
     symbol* sym = nullptr;
-    bool swapparams = false;
+    bool swapparams;
     bool is_commutative = commutative(oper);
     for (auto iter = chain; iter; iter = iter->next) {
         bool matched = MatchOperator(iter, tag1, tag2, numparam);
+        bool swapped = false;
         if (!matched && is_commutative && tag1 != tag2 && oper) {
             matched = MatchOperator(iter, tag2, tag1, numparam);
-            swapparams = true;
+            swapped = true;
         }
         if (matched) {
             sym = iter;
+            swapparams = swapped;
             break;
         }
     }
