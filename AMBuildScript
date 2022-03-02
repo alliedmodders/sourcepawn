@@ -413,7 +413,10 @@ class SourcePawn(object):
         self.SetupBinForArch(binary, builder)
 
         binary.sources = [
-            'vm/shell.cpp',
+            'vm/shell/shell.cpp',
+        ]
+        binary.compiler.cxxincludes += [
+            os.path.join(builder.sourcePath, 'vm'),
         ]
 
         self.AddStaticLibraries(binary)

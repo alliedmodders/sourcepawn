@@ -15,7 +15,6 @@
 #include <stdarg.h>
 #include <amtl/am-cxx.h>
 #include <amtl/experimental/am-argparser.h>
-#include "dll_exports.h"
 #include "environment.h"
 #include "stack-frames.h"
 
