@@ -268,6 +268,8 @@ ScriptedInvoker::Invoke(cell_t* result)
             context_->StringToLocal(temp_info[i].local_addr, temp_info[i].size,
                                     (const char*)temp_info[i].orig_addr);
           }
+        } else if (temp_info[i].str.sz_flags & SM_PARAM_COPYBACK) {
+          *temp_info[i].phys_addr = 0;
         }
       } /* End array/string calculation */
       /* Update the pushed parameter with the byref local address */
