@@ -215,8 +215,7 @@ ScriptedInvoker::Invoke(cell_t* result)
   unsigned int numparams = m_curparam;
   unsigned int i;
 
-  if (numparams)
-  {
+  if (numparams) {
     //Save the info locally, then reset it for re-entrant calls.
     memcpy(temp_info, m_info, numparams * sizeof(ParamInfo));
   }
@@ -229,28 +228,24 @@ ScriptedInvoker::Invoke(cell_t* result)
     if (temp_info[i].marked) {
       if (!temp_info[i].str.is_sz) {
         /* Allocate a normal/generic array */
-        int err = context_->HeapAlloc(
-          temp_info[i].size, 
-          &(temp_info[i].local_addr),
-          &(temp_info[i].phys_addr));
+        int err = context_->HeapAlloc(temp_info[i].size, &temp_info[i].local_addr,
+                                      &temp_info[i].phys_addr);
         if (err != SP_ERROR_NONE) {
           env_->ReportError(err);
           ok = false;
           break;
         }
-        if (temp_info[i].orig_addr)
-        {
-          memcpy(temp_info[i].phys_addr, temp_info[i].orig_addr, sizeof(cell_t) * temp_info[i].size);
+        if (temp_info[i].orig_addr) {
+          memcpy(temp_info[i].phys_addr, temp_info[i].orig_addr,
+                 sizeof(cell_t) * temp_info[i].size);
         }
       } else {
         /* Calculate cells required for the string */
         size_t cells = (temp_info[i].size + sizeof(cell_t) - 1) / sizeof(cell_t);
 
         /* Allocate the buffer */
-        int err = context_->HeapAlloc(
-          cells,
-          &(temp_info[i].local_addr),
-          &(temp_info[i].phys_addr));
+        int err = context_->HeapAlloc(cells, &temp_info[i].local_addr,
+                                      &temp_info[i].phys_addr);
         if (err != SP_ERROR_NONE) {
           env_->ReportError(err);
           ok = false;
@@ -258,28 +253,20 @@ ScriptedInvoker::Invoke(cell_t* result)
         }
 
         /* Copy original string if necessary */
-        if ((temp_info[i].str.sz_flags & SM_PARAM_STRING_COPY) && (temp_info[i].orig_addr != NULL))
+        if ((temp_info[i].str.sz_flags & SM_PARAM_STRING_COPY) &&
+            (temp_info[i].orig_addr != NULL))
         {
           /* Cut off UTF-8 properly */
           if (temp_info[i].str.sz_flags & SM_PARAM_STRING_UTF8) {
-            context_->StringToLocalUTF8(
-              temp_info[i].local_addr, 
-              temp_info[i].size, 
-              (const char*)temp_info[i].orig_addr,
-              NULL);
-          }
-          /* Copy a binary blob */
-          else if (temp_info[i].str.sz_flags & SM_PARAM_STRING_BINARY)
-          {
+            context_->StringToLocalUTF8(temp_info[i].local_addr, temp_info[i].size,
+                                        (const char*)temp_info[i].orig_addr, NULL);
+          } else if (temp_info[i].str.sz_flags & SM_PARAM_STRING_BINARY) {
+            /* Copy a binary blob */
             memmove(temp_info[i].phys_addr, temp_info[i].orig_addr, temp_info[i].size);
-          }
-          /* Copy ASCII characters */
-          else
-          {
-            context_->StringToLocal(
-              temp_info[i].local_addr,
-              temp_info[i].size,
-              (const char*)temp_info[i].orig_addr);
+          } else {
+            /* Copy ASCII characters */
+            context_->StringToLocal(temp_info[i].local_addr, temp_info[i].size,
+                                    (const char*)temp_info[i].orig_addr);
           }
         }
       } /* End array/string calculation */
@@ -311,14 +298,12 @@ ScriptedInvoker::Invoke(cell_t* result)
       if (temp_info[i].orig_addr) {
         if (temp_info[i].str.is_sz) {
           memcpy(temp_info[i].orig_addr, temp_info[i].phys_addr, temp_info[i].size);
-        
         } else {
           if (temp_info[i].size == 1) {
             *temp_info[i].orig_addr = *(temp_info[i].phys_addr);
           } else {
-            memcpy(temp_info[i].orig_addr, 
-                temp_info[i].phys_addr, 
-                temp_info[i].size * sizeof(cell_t));
+            memcpy(temp_info[i].orig_addr, temp_info[i].phys_addr,
+                   temp_info[i].size * sizeof(cell_t));
           }
         }
       }
