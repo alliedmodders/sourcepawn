@@ -161,6 +161,27 @@ static cell_t WriteFloat(IPluginContext* cx, const cell_t* params)
   return printf("%f", sp_ctof(params[1]));
 }
 
+static cell_t CallWithString(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  char* buf;
+  cx->LocalToString(params[2], &buf);
+
+  int length = params[3];
+  int sz_flags = params[4];
+  int cp_flags = params[5];
+
+  fn->PushStringEx(buf, length, sz_flags, cp_flags);
+  fn->PushCell(length);
+
+  cell_t rval;
+  if (!fn->Invoke(&rval))
+    return 0;
+  return rval;
+}
+
 static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
   int32_t ok = 0;
@@ -299,6 +320,7 @@ static int Execute(const char* file)
   BindNative(rt, "dynamic_native", dynamic_native.get());
   BindNative(rt, "access_2d_array", Access2DArray);
   BindNative(rt, "copy_2d_array_to_callback", Copy2dArrayToCallback);
+  BindNative(rt, "call_with_string", CallWithString);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

@@ -119,6 +119,10 @@ PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_a
 
   *local_addr = hp_;
 
+#ifdef DEBUG
+  memset(addr, 0xcd, realmem);
+#endif
+
   if (phys_addr)
     *phys_addr = addr;
 

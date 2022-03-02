@@ -29,6 +29,16 @@ native bool invoke(InvokeCallback fn, int count);
 // Invoke |fn|, |count| times, returning the number of successful invocations.
 native int execute(InvokeCallback fn, int count);
 
+#define SM_PARAM_COPYBACK (1 << 0)
+#define SM_PARAM_STRING_UTF8 (1 << 0)
+#define SM_PARAM_STRING_COPY (1 << 1)
+#define SM_PARAM_STRING_BINARY (1 << 2)
+
+// Invoke |fn| with the given buffer and sz/cp flags.
+typedef StringCallback = function void (char[] buffer, int length);
+native int call_with_string(StringCallback fn, char[] buffer, int length, int sz_flags,
+                            int cp_flags);
+
 typedef Array2dCallback = function void (const int[][] array, int length, int stride);
 
 // Create a 2D array from the given "flat" array, length and stride.
