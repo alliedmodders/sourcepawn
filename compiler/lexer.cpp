@@ -63,7 +63,7 @@
 using namespace sp;
 
 /* flags for litchar() */
-#define UTF8MODE 0x1
+static constexpr int kLitcharUtf8 = 0x1;
 
 bool
 Lexer::PlungeQualifiedFile(const char* name)
@@ -1546,13 +1546,13 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
 }
 
-void Lexer::packedstring(const unsigned char* lptr, int flags, full_token_t* tok) {
+void Lexer::packedstring(const unsigned char* lptr, full_token_t* tok) {
     while (*lptr != '\0') {
         if (*lptr == '\a') { // ignore '\a' (which was inserted at a line concatenation)
             lptr++;
             continue;
         }
-        ucell c = litchar(&lptr, flags); // litchar() alters "lptr"
+        ucell c = litchar(&lptr, 0); // litchar() alters "lptr"
         if (c >= (ucell)(1 << sCHARBITS))
             error(43); // character constant exceeds range
         tok->data.push_back((char)c);
@@ -2129,7 +2129,7 @@ Lexer::LexOnce(full_token_t* tok)
         case '\'':
             lptr += 1; /* skip quote */
             tok->id = tNUMBER;
-            tok->value = litchar(&lptr, UTF8MODE);
+            tok->value = litchar(&lptr, kLitcharUtf8);
             if (*lptr == '\'') {
                 lptr += 1; /* skip final quote */
             } else {
@@ -2138,7 +2138,7 @@ Lexer::LexOnce(full_token_t* tok)
                 // Eat tokens on the same line until we can close the malformed
                 // string.
                 while (*lptr && *lptr != '\'')
-                    litchar(&lptr, UTF8MODE);
+                    litchar(&lptr, kLitcharUtf8);
                 if (*lptr && *lptr == '\'')
                     lptr++;
             }
@@ -2206,7 +2206,7 @@ Lexer::LexStringLiteral(full_token_t* tok)
             }
         } else {
             lptr += 1;
-            ucell c = litchar(&lptr, UTF8MODE);
+            ucell c = litchar(&lptr, kLitcharUtf8);
             if (c >= (ucell)(1 << sCHARBITS))
                 error(43); // character constant exceeds range
             *cat++ = static_cast<char>(c);
@@ -2216,7 +2216,7 @@ Lexer::LexStringLiteral(full_token_t* tok)
         }
         *cat = '\0'; /* terminate string */
 
-        packedstring((unsigned char*)literal_buffer_, 0, tok);
+        packedstring((unsigned char*)literal_buffer_, tok);
 
         if (*lptr == '\"' || *lptr == '\'')
             lptr += 1; /* skip final quote */
@@ -2552,7 +2552,7 @@ cell Lexer::litchar(const unsigned char** lptr, int flags) {
 
     cptr = *lptr;
     if (*cptr != ctrlchar_) { /* no escape character */
-        if ((flags & UTF8MODE) != 0) {
+        if ((flags & kLitcharUtf8) != 0) {
             c = get_utf8_char(cptr, &cptr);
             assert(c >= 0); /* file was already scanned for conformance to UTF-8 */
         } else {
