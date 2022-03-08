@@ -354,7 +354,7 @@ class Lexer
     cell litchar(const unsigned char** lptr, int flags);
     const unsigned char* skipstring(const unsigned char* string);
     const unsigned char* skippgroup(const unsigned char* string);
-    void packedstring(const unsigned char* lptr, int flags, full_token_t* tok);
+    void packedstring(const unsigned char* lptr, full_token_t* tok);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
