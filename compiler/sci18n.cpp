@@ -107,8 +107,13 @@ skip_utf8_bom(SourceFile* fp)
 }
 
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
+#if defined(_MSC_VER) && _MSC_VER >= 1900 && _MSC_VER < 2000
+    std::wstring_convert<std::codecvt_utf8<__int32>, __int32> convert;
+    __int32 cp = codepoint;
+#else
     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-
     char32_t cp = codepoint;
+#endif
+
     *out += convert.to_bytes(&cp, &cp + 1);
 }
