@@ -2138,7 +2138,7 @@ Lexer::LexOnce(full_token_t* tok)
         case '\'':
             lptr += 1; /* skip quote */
             tok->id = tNUMBER;
-            tok->value = litchar(&lptr, kLitcharUtf8);
+            tok->value = litchar(&lptr, 0);
             if (*lptr == '\'') {
                 lptr += 1; /* skip final quote */
             } else {
