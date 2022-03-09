@@ -62,8 +62,13 @@
 
 using namespace sp;
 
-/* flags for litchar() */
+// Flags for litchar().
+//
+// Decode utf-8 and error on failure. If unset, non-ASCII characters will be
+// returned as their original bytes.
 static constexpr int kLitcharUtf8 = 0x1;
+// Do not error, because the characters are being ignored.
+static constexpr int kLitcharSkipping = 0x2;
 
 bool
 Lexer::PlungeQualifiedFile(const char* name)
@@ -1108,7 +1113,7 @@ const unsigned char* Lexer::skipstring(const unsigned char* string) {
     assert(endquote == '"' || endquote == '\'');
     string++; /* skip open quote */
 
-    int flags = 0;
+    int flags = kLitcharSkipping;
     if (endquote == '"')
         flags |= kLitcharUtf8;
 
@@ -1117,7 +1122,7 @@ const unsigned char* Lexer::skipstring(const unsigned char* string) {
     return string;
 }
 
-const unsigned char* Lexer::skippgroup(const unsigned char* string) {
+const unsigned char* Lexer::skipgroup(const unsigned char* string) {
     int nest = 0;
     char open = *string;
     char close;
@@ -1213,7 +1218,7 @@ Lexer::substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                     if (is_startstring(e)) /* skip strings */
                         e = skipstring(e);
                     else if (strchr("({[", *e) != NULL) /* skip parenthized groups */
-                        e = skippgroup(e);
+                        e = skipgroup(e);
                     if (*e != '\0')
                         e++; /* skip non-alphapetic character (or closing quote of
                               * a string, or the closing paranthese of a group) */
@@ -2564,7 +2569,7 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
 
     cptr = *lptr;
     if (*cptr != ctrlchar_) { /* no escape character */
-        if (flags & kLitcharUtf8) {
+        if ((flags & kLitcharUtf8) && !(flags & kLitcharSkipping)) {
             c = get_utf8_char(cptr, &cptr);
             if (c >= 0) {
                 *is_codepoint = true;
@@ -2644,12 +2649,22 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
             cptr--;
             if (isdigit(*cptr)) { /* \ddd */
                 c = 0;
-                while (*cptr >= '0' && *cptr <= '9') /* decimal! */
+                int ndigits = 0;
+                while (*cptr >= '0' && *cptr <= '9') {
                     c = c * 10 + *cptr++ - '0';
+                    ndigits++;
+                }
+                // max 3-digit codes only, save for nul terminator special case.
+                if (ndigits > 3 && !(flags & kLitcharSkipping))
+                    report(27);
                 if (*cptr == ';')
                     cptr++; /* swallow a trailing ';' */
+                if (c > 0xff && !(flags & kLitcharSkipping)) {
+                    report(27);
+                    c = 0;
+                }
             } else {
-                error(27); /* invalid character constant */
+                report(27); /* invalid character constant */
             }
     }
 
