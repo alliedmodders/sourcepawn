@@ -355,7 +355,7 @@ class Test(object):
     if self.path.endswith('.smx'):
       return
 
-    with open(self.path, 'r') as fp:
+    with open(self.path, 'rt', encoding='utf-8') as fp:
       for line in fp:
         if not self.process_manifest_line(line):
           break
