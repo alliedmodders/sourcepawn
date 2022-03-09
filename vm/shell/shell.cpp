@@ -219,6 +219,13 @@ static cell_t ReportError(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+static cell_t AssertEq(IPluginContext* cx, const cell_t* params)
+{
+  if (params[1] != params[2])
+    cx->ReportError("Expected value %08x to equal %08x\n", params[1], params[2]);
+  return 0;
+}
+
 static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 {
   cell_t* phys_in;
@@ -321,6 +328,7 @@ static int Execute(const char* file)
   BindNative(rt, "access_2d_array", Access2DArray);
   BindNative(rt, "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt, "call_with_string", CallWithString);
+  BindNative(rt, "assert_eq", AssertEq);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

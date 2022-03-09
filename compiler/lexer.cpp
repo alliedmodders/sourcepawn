@@ -2639,6 +2639,26 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
                 cptr++; /* swallow a trailing ';' */
             break;
         }
+        case 'u':
+        case 'U': {
+            int digits = (ch == 'u') ? 4 : 8;
+            for (int i = 1; i <= digits; i++) {
+                c <<= 4;
+                if (*cptr >= '0' && *cptr <= '9') {
+                    c |= (*cptr - '0');
+                } else if (*cptr >= 'a' && *cptr <= 'f') {
+                    c |= 10 + (*cptr - 'a');
+                } else if (*cptr >= 'A' && *cptr <= 'F') {
+                    c |= 10 + (*cptr - 'A');
+                } else {
+                    report(27);
+                    break;
+                }
+                cptr++;
+            }
+            *is_codepoint = true;
+            break;
+        }
         case '\'': /* \' == ' (single quote) */
         case '"':  /* \" == " (single quote) */
         case '%':  /* \% == % (percent) */
