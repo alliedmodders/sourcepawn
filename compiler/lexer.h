@@ -353,7 +353,7 @@ class Lexer
     bool lex_number(full_token_t* tok);
     cell litchar(const unsigned char** lptr, int flags, bool* is_codepoint = nullptr);
     const unsigned char* skipstring(const unsigned char* string);
-    const unsigned char* skippgroup(const unsigned char* string);
+    const unsigned char* skipgroup(const unsigned char* string);
     void packedstring(const unsigned char* lptr, full_token_t* tok);
 
     bool IsSkipping() const {
