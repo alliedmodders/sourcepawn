@@ -19,7 +19,10 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <string>
+
 #include "source-file.h"
 
 cell get_utf8_char(const unsigned char* string, const unsigned char** endptr);
 void skip_utf8_bom(SourceFile* file);
+void UnicodeCodepointToUtf8(ucell codepoint, std::string* out);

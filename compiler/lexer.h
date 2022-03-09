@@ -351,7 +351,7 @@ class Lexer
     void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
     bool lex_match_char(char c);
     bool lex_number(full_token_t* tok);
-    cell litchar(const unsigned char** lptr, int flags);
+    cell litchar(const unsigned char** lptr, int flags, bool* is_codepoint = nullptr);
     const unsigned char* skipstring(const unsigned char* string);
     const unsigned char* skippgroup(const unsigned char* string);
     void packedstring(const unsigned char* lptr, full_token_t* tok);

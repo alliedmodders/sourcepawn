@@ -1107,8 +1107,13 @@ const unsigned char* Lexer::skipstring(const unsigned char* string) {
     char endquote = *string;
     assert(endquote == '"' || endquote == '\'');
     string++; /* skip open quote */
+
+    int flags = 0;
+    if (endquote == '"')
+        flags |= kLitcharUtf8;
+
     while (*string != endquote && *string != '\0')
-        litchar(&string, 0);
+        litchar(&string, flags);
     return string;
 }
 
@@ -1552,10 +1557,14 @@ void Lexer::packedstring(const unsigned char* lptr, full_token_t* tok) {
             lptr++;
             continue;
         }
-        ucell c = litchar(&lptr, 0); // litchar() alters "lptr"
-        if (c >= (ucell)(1 << sCHARBITS))
-            error(43); // character constant exceeds range
-        tok->data.push_back((char)c);
+        bool is_codepoint;
+        cell c = litchar(&lptr, kLitcharUtf8, &is_codepoint);
+        if (c < 0)
+            continue;
+        if (is_codepoint)
+            UnicodeCodepointToUtf8(c, &tok->data);
+        else
+            tok->data.push_back(static_cast<char>(c));
     }
 }
 
@@ -2138,7 +2147,7 @@ Lexer::LexOnce(full_token_t* tok)
                 // Eat tokens on the same line until we can close the malformed
                 // string.
                 while (*lptr && *lptr != '\'')
-                    litchar(&lptr, kLitcharUtf8);
+                    litchar(&lptr, 0);
                 if (*lptr && *lptr == '\'')
                     lptr++;
             }
@@ -2206,9 +2215,7 @@ Lexer::LexStringLiteral(full_token_t* tok)
             }
         } else {
             lptr += 1;
-            ucell c = litchar(&lptr, kLitcharUtf8);
-            if (c >= (ucell)(1 << sCHARBITS))
-                error(43); // character constant exceeds range
+            ucell c = litchar(&lptr, 0);
             *cat++ = static_cast<char>(c);
             /* invalid char declaration */
             if (*lptr != '\'')
@@ -2546,93 +2553,106 @@ litadd_str(const char* str, size_t len, std::vector<cell>* out)
  *        replaced by another character; the syntax '\ddd' is supported,
  *        but ddd must be decimal!
  */
-cell Lexer::litchar(const unsigned char** lptr, int flags) {
+cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
     cell c = 0;
+    bool tmp_codepoint;
     const unsigned char* cptr;
+
+    if (!is_codepoint)
+        is_codepoint = &tmp_codepoint;
+    *is_codepoint = false;
 
     cptr = *lptr;
     if (*cptr != ctrlchar_) { /* no escape character */
-        if ((flags & kLitcharUtf8) != 0) {
+        if (flags & kLitcharUtf8) {
             c = get_utf8_char(cptr, &cptr);
-            assert(c >= 0); /* file was already scanned for conformance to UTF-8 */
-        } else {
-            c = *cptr;
-            cptr += 1;
-        }
-    } else {
-        cptr += 1;
-        if (*cptr == ctrlchar_) {
-            c = *cptr; /* \\ == \ (the escape character itself) */
-            cptr += 1;
-        } else {
-            switch (*cptr) {
-                case 'a': /* \a == audible alarm */
-                    c = 7;
-                    cptr += 1;
-                    break;
-                case 'b': /* \b == backspace */
-                    c = 8;
-                    cptr += 1;
-                    break;
-                case 'e': /* \e == escape */
-                    c = 27;
-                    cptr += 1;
-                    break;
-                case 'f': /* \f == form feed */
-                    c = 12;
-                    cptr += 1;
-                    break;
-                case 'n': /* \n == NewLine character */
-                    c = 10;
-                    cptr += 1;
-                    break;
-                case 'r': /* \r == carriage return */
-                    c = 13;
-                    cptr += 1;
-                    break;
-                case 't': /* \t == horizontal TAB */
-                    c = 9;
-                    cptr += 1;
-                    break;
-                case 'v': /* \v == vertical TAB */
-                    c = 11;
-                    cptr += 1;
-                    break;
-                case 'x': {
-                    int digits = 0;
-                    cptr += 1;
-                    c = 0;
-                    while (ishex(*cptr) && digits < 2) {
-                        if (isdigit(*cptr))
-                            c = (c << 4) + (*cptr - '0');
-                        else
-                            c = (c << 4) + (tolower(*cptr) - 'a' + 10);
-                        cptr++;
-                        digits++;
-                    }
-                    if (*cptr == ';')
-                        cptr++; /* swallow a trailing ';' */
-                    break;
-                }
-                case '\'': /* \' == ' (single quote) */
-                case '"':  /* \" == " (single quote) */
-                case '%':  /* \% == % (percent) */
-                    c = *cptr;
-                    cptr += 1;
-                    break;
-                default:
-                    if (isdigit(*cptr)) { /* \ddd */
-                        c = 0;
-                        while (*cptr >= '0' && *cptr <= '9') /* decimal! */
-                            c = c * 10 + *cptr++ - '0';
-                        if (*cptr == ';')
-                            cptr++; /* swallow a trailing ';' */
-                    } else {
-                        error(27); /* invalid character constant */
-                    }
+            if (c >= 0) {
+                *is_codepoint = true;
+            } else {
+                report(248);
+
+                // Take the raw character.
+                cptr = *lptr;
+                c = *cptr++;
             }
+        } else {
+            c = *cptr++;
+            *is_codepoint = false;
         }
+
+        *lptr = cptr;
+        assert(c >= 0);
+        return c;
     }
+
+    cptr++;
+
+    if (*cptr == ctrlchar_) {
+        c = *cptr++; /* \\ == \ (the escape character itself) */
+        *lptr = cptr;
+        return c;
+    }
+
+    char ch = *cptr++;
+    switch (ch) {
+        case 'a': /* \a == audible alarm */
+            c = 7;
+            break;
+        case 'b': /* \b == backspace */
+            c = 8;
+            break;
+        case 'e': /* \e == escape */
+            c = 27;
+            break;
+        case 'f': /* \f == form feed */
+            c = 12;
+            break;
+        case 'n': /* \n == NewLine character */
+            c = 10;
+            break;
+        case 'r': /* \r == carriage return */
+            c = 13;
+            break;
+        case 't': /* \t == horizontal TAB */
+            c = 9;
+            break;
+        case 'v': /* \v == vertical TAB */
+            c = 11;
+            break;
+        case 'x': {
+            int digits = 0;
+            c = 0;
+            while (ishex(*cptr) && digits < 2) {
+                if (isdigit(*cptr))
+                    c = (c << 4) + (*cptr - '0');
+                else
+                    c = (c << 4) + (tolower(*cptr) - 'a' + 10);
+                cptr++;
+                digits++;
+            }
+            if (*cptr == ';')
+                cptr++; /* swallow a trailing ';' */
+            break;
+        }
+        case '\'': /* \' == ' (single quote) */
+        case '"':  /* \" == " (single quote) */
+        case '%':  /* \% == % (percent) */
+            c = ch;
+            break;
+        default:
+            // Back up.
+            cptr--;
+            if (isdigit(*cptr)) { /* \ddd */
+                c = 0;
+                while (*cptr >= '0' && *cptr <= '9') /* decimal! */
+                    c = c * 10 + *cptr++ - '0';
+                if (*cptr == ';')
+                    cptr++; /* swallow a trailing ';' */
+            } else {
+                error(27); /* invalid character constant */
+            }
+    }
+
     *lptr = cptr;
     assert(c >= 0);
     return c;
