@@ -274,6 +274,7 @@ static const char* warnmsg[] = {
     /*245*/ "function %s implements a forward but is not marked as public\n",
     /*246*/ "function %s returns an array but return type is not marked as an array\n",
     /*247*/ "include paths should be enclosed in \"quotes\" or <angle brackets>\n",
+    /*248*/ "character is not utf-8 encoded\n",
 };
 
 static const char* errmsg_ex[] = {

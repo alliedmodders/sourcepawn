@@ -39,6 +39,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <locale>
+#include <codecvt>
+
+#include <amtl/am-bits.h>
+
 #include "errors.h"
 #include "sc.h"
 #include "scvars.h"
@@ -46,78 +52,41 @@
 cell
 get_utf8_char(const unsigned char* string, const unsigned char** endptr)
 {
-    int follow = 0;
-    long lowmark = 0;
-    unsigned char ch;
-    cell result = 0;
+    const unsigned char* p = string;
 
-    if (endptr != NULL)
-        *endptr = string;
-
-    for (;;) {
-        ch = *string++;
-
-        if (follow > 0 && (ch & 0xc0) == 0x80) {
-            /* leader code is active, combine with earlier code */
-            result = (result << 6) | (ch & 0x3f);
-            if (--follow == 0) {
-                /* encoding a character in more bytes than is strictly needed,
-                 * is not really valid UTF-8; we are strict here to increase
-                 * the chance of heuristic dectection of non-UTF-8 text
-                 * (JAVA writes zero bytes as a 2-byte code UTF-8, which is invalid)
-                 */
-                if (result < lowmark)
-                    return -1;
-                /* the code positions 0xd800--0xdfff and 0xfffe & 0xffff do not
-                 * exist in UCS-4 (and hence, they do not exist in Unicode)
-                 */
-                if ((result >= 0xd800 && result <= 0xdfff) || result == 0xfffe || result == 0xffff)
-                    return -1;
-            }
-            break;
-        } else if (follow == 0 && (ch & 0x80) == 0x80) {
-            /* UTF-8 leader code */
-            if ((ch & 0xe0) == 0xc0) {
-                /* 110xxxxx 10xxxxxx */
-                follow = 1;
-                lowmark = 0x80L;
-                result = ch & 0x1f;
-            } else if ((ch & 0xf0) == 0xe0) {
-                /* 1110xxxx 10xxxxxx 10xxxxxx (16 bits, BMP plane) */
-                follow = 2;
-                lowmark = 0x800L;
-                result = ch & 0x0f;
-            } else if ((ch & 0xf8) == 0xf0) {
-                /* 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
-                follow = 3;
-                lowmark = 0x10000L;
-                result = ch & 0x07;
-            } else if ((ch & 0xfc) == 0xf8) {
-                /* 111110xx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx */
-                follow = 4;
-                lowmark = 0x200000L;
-                result = ch & 0x03;
-            } else if ((ch & 0xfe) == 0xfc) {
-                /* 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx (32 bits) */
-                follow = 5;
-                lowmark = 0x4000000L;
-                result = ch & 0x01;
-            } else {
-                /* this is invalid UTF-8 */
-                return -1;
-            }
-        } else if (follow == 0 && (ch & 0x80) == 0x00) {
-            /* 0xxxxxxx (US-ASCII) */
-            result = ch;
-            break;
-        } else {
-            /* this is invalid UTF-8 */
-            return -1;
-        }
+    unsigned char ch = *p++;
+    if (ch <= 0x7f) {
+        *endptr = p;
+        return ch;
     }
 
-    if (endptr != NULL)
-        *endptr = string;
+    // First byte starts with 11, then up to 4 additional 1s, and then a zero.
+    // By inverting we can find the position of the zero.
+    unsigned char inverted = (~ch) & 0xff;
+
+    if (!inverted)
+        return -1;
+
+    unsigned int indicator_bit = ke::FindLeftmostBit32(inverted);
+    if (indicator_bit == 0 || indicator_bit > 5)
+        return -1;
+
+    unsigned int mask = (1 << indicator_bit) - 1;
+    cell result = ch & mask;
+
+    unsigned int extra_bytes = 6 - indicator_bit;
+    for (unsigned int i = 1; i <= extra_bytes; i++) {
+        if ((*p & 0xc0) != 0x80) {
+            result = -1;
+            break;
+        }
+
+        result <<= 6;
+        result |= (*p & 0x3f);
+        p++;
+    }
+
+    *endptr = p;
     return result;
 }
 
@@ -135,4 +104,11 @@ skip_utf8_bom(SourceFile* fp)
         return;
 
     fp->Reset(resetpos);
+}
+
+void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
+    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
+
+    char32_t cp = codepoint;
+    *out += convert.to_bytes(&cp, &cp + 1);
 }
