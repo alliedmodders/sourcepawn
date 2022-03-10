@@ -416,7 +416,7 @@ class SourcePawn(object):
             'vm/shell/shell.cpp',
         ]
         binary.compiler.cxxincludes += [
-            os.path.join(builder.sourcePath, 'vm'),
+            os.path.join(builder.currentSourcePath, 'vm'),
         ]
 
         self.AddStaticLibraries(binary)
