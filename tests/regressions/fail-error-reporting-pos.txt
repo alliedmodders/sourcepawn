@@ -1,0 +1,6 @@
+(10) : error 213: tag mismatch (expected "int", got "bool")
+(11) : error 213: tag mismatch (expected "e", got "bool")
+(13) : error 213: tag mismatch (expected "int", got "bool")
+(13) : error 215: expression has no effect
+(14) : error 213: tag mismatch (expected "e", got "bool")
+(14) : error 215: expression has no effect

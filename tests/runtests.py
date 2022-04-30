@@ -252,6 +252,7 @@ class TestPlan(object):
 ###
 class Test(object):
   ManifestKeys = set([
+    'type',
     'returnCode',
     'warnings_are_errors',
     'compiler',

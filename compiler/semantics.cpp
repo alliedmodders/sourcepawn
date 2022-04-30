@@ -81,6 +81,7 @@ bool Semantics::CheckStmtList(StmtList* list) {
 }
 
 bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
+    AutoErrorPos aep(stmt->pos());
     ke::Maybe<ke::SaveAndSet<bool>> restore_heap_ownership;
     if (flags & STMT_OWNS_HEAP)
         restore_heap_ownership.init(&pending_heap_allocation_, false);
@@ -345,6 +346,7 @@ static inline int GetOperToken(int token) {
 }
 
 bool Semantics::CheckExpr(Expr* expr) {
+    AutoErrorPos aep(expr->pos());
     switch (expr->kind()) {
         case AstKind::UnaryExpr:
             return CheckUnaryExpr(expr->to<UnaryExpr>());
