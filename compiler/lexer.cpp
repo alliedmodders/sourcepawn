@@ -2486,7 +2486,9 @@ Lexer::peek_same_line()
     // If there's tokens pushed back, then |fline| is the line of the furthest
     // token parsed. If fline == current token's line, we are guaranteed any
     // buffered token is still on the same line.
-    if (token_buffer_->depth > 0 && current_token()->end.line == fline_)
+    if (token_buffer_->depth > 0
+        && current_token()->end.file == next_token()->start.file
+        && current_token()->end.line == fline_)
         return next_token()->id;
 
     // Make sure the next token is lexed, then buffer it.
@@ -2495,7 +2497,8 @@ Lexer::peek_same_line()
 
     // If the next token starts on the line the last token ends, then the next
     // token is considered on the same line.
-    if (next.start.line == current_token()->end.line)
+    if (next.start.line == current_token()->end.line
+        && next.start.file == current_token()->end.file)
         return next.id;
 
     return tEOL;
