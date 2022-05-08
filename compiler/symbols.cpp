@@ -344,6 +344,8 @@ GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
     }
     if (scope == current)
         return NewNameStatus::Duplicated;
+    if (current->kind() == sARGUMENT && sym->ident == iFUNCTN)
+        return NewNameStatus::Ok;
     return NewNameStatus::Shadowed;
 }
 
