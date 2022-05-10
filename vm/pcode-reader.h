@@ -56,11 +56,7 @@ class PcodeReader
     code_ = reinterpret_cast<const cell_t*>(code.bytes);
     cip_ = reinterpret_cast<const cell_t*>(block->start());
     insn_begin_ = cip_;
-
-    const uint8_t* end = block->end();
-    if (block->endType() == BlockEnd::Insn)
-      end = NextInstruction(end);
-    stop_at_ = reinterpret_cast<const cell_t*>(end);
+    stop_at_ = reinterpret_cast<const cell_t*>(block->end());
   }
 
   // We skip the first OP_PROC; it should be handled before parsing bytecode.

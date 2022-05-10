@@ -779,8 +779,19 @@ PluginContext::pushAmxFrame()
 {
   if (!pushStack(frm_))
     return false;
-  if (!pushStack(hp_))
+
+  // Save the entry heap scope.
+  cell_t saved_hp_scope;
+  if (!heapAlloc(sizeof(cell_t), &saved_hp_scope))
     return false;
+  cell_t* saved_hp_scope_addr = throwIfBadAddress(saved_hp_scope);
+  if (!saved_hp_scope_addr)
+    return false;
+  *saved_hp_scope_addr = hp_scope_;
+
+  if (!pushStack(saved_hp_scope))
+    return false;
+
   frm_ = sp_;
   return true;
 }
@@ -790,8 +801,27 @@ PluginContext::popAmxFrame()
 {
   sp_ = frm_;
 
-  if (!popStack(&hp_))
+  cell_t saved_hp_scope;
+  if (!popStack(&saved_hp_scope))
     return false;
+
+  cell_t* saved_hp_scope_addr = throwIfBadAddress(saved_hp_scope);
+  if (!saved_hp_scope_addr)
+    return false;
+
+  // Actual scope address is pushed onto the heap.
+  hp_scope_ = *saved_hp_scope_addr;
+  // The heap address containing the scope address is where we can reset the
+  // heap to. pushAmxFrame calls heapAlloc, which returns |hp| and sets |hp|
+  // to |hp + 4|. So by restoring |hp| here, we're also restoring the original
+  // heap address.
+  hp_ = saved_hp_scope;
+
+  if ((uint32_t)hp_ < data_size_ || hp_ > sp_) {
+    ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
+    return false;
+  }
+
   if (!popStack(&frm_))
     return false;
 

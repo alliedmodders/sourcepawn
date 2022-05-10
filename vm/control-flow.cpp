@@ -276,12 +276,6 @@ ControlFlowGraph::dump(FILE* fp)
                  reinterpret_cast<const cell_t*>(cip));
       cip = NextInstruction(cip);
     }
-    if (block->endType() == BlockEnd::Insn) {
-      SpewOpcode(fp,
-                 rt_,
-                 reinterpret_cast<const cell_t*>(block->start()),
-                 reinterpret_cast<const cell_t*>(cip));
-    }
     fprintf(fp, "\n");
   }
 }

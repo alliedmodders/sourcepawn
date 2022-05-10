@@ -150,6 +150,9 @@ class Block :
   void set_has_compiler_break_bug() {
     has_compiler_break_bug_ = true;
   }
+  uint32_t& heap_scope_depth() {
+    return heap_scope_depth_;
+  }
 
   // For debugging.
   uint32_t startPc() const;
@@ -188,6 +191,9 @@ class Block :
 
   // Counter for fast already-visited testing.
   uint32_t epoch_;
+
+  // Heap scope depth.
+  uint32_t heap_scope_depth_ = 0;
 };
 
 typedef ke::InlineList<Block>::iterator RpoIterator;

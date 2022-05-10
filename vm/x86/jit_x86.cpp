@@ -640,6 +640,9 @@ Compiler::visitSTRB_I(cell_t width)
 bool
 Compiler::visitRETN()
 {
+  for (uint32_t i = 0; i < block_->heap_scope_depth(); i++)
+    visitHEAP_RESTORE();
+
   // Restore the old stack and frame pointer.
   __ movl(stk, frm);
   __ movl(frm, Operand(stk, 4));              // get the old frm
