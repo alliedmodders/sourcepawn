@@ -154,7 +154,7 @@ GraphBuilder::scanFlow() -> FlowState
 
   switch (op) {
     case OP_RETN:
-      current_->end(insn, BlockEnd::Insn);
+      current_->end(cip_, BlockEnd::Insn);
       current_ = nullptr;
       return FlowState::Ended;
 
@@ -193,7 +193,7 @@ GraphBuilder::scanFlow() -> FlowState
       // If this is an unconditional jump, there is only one target, so end.
       if (op == OP_JUMP) {
         current_->addTarget(target_block);
-        current_->end(insn, BlockEnd::Insn);
+        current_->end(cip_, BlockEnd::Insn);
         current_ = nullptr;
         return FlowState::Ended;
       }
@@ -211,7 +211,7 @@ GraphBuilder::scanFlow() -> FlowState
       RefPtr<Block> next_block = getOrAddBlock(cip_);
       current_->addTarget(next_block);
       current_->addTarget(target_block);
-      current_->end(insn, BlockEnd::Insn);
+      current_->end(cip_, BlockEnd::Insn);
       current_ = nullptr;
       return FlowState::Ended;
     }
@@ -259,7 +259,7 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState
     current_->addTarget(target_block);
   }
 
-  current_->end(insn, BlockEnd::Insn);
+  current_->end(NextInstruction(insn), BlockEnd::Insn);
   current_ = nullptr;
   return FlowState::Ended;
 }

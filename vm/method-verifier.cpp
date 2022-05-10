@@ -85,11 +85,11 @@ MethodVerifier::verify()
 
     cip_ = reinterpret_cast<const cell_t*>(block_->start());
     while (cip_ < reinterpret_cast<const cell_t*>(block_->end())) {
-      const cell_t* insn = cip_;
+      insn_ = cip_;
       OPCODE op = (OPCODE)*cip_++;
       if (!verifyOp(op))
         return nullptr;
-      prev_cip_ = insn;
+      prev_cip_ = insn_;
     }
   }
 
@@ -146,7 +146,6 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_MOVE_PRI:
   case OP_MOVE_ALT:
   case OP_XCHG:
-  case OP_RETN:
   case OP_SHL:
   case OP_SHR:
   case OP_SSHR:
@@ -619,6 +618,10 @@ MethodVerifier::verifyOp(OPCODE op)
       return false;
     }
     block_->data<VerifyData>()->heap_scope_depth--;
+    return true;
+
+  case OP_RETN:
+    block_->heap_scope_depth() = block_->data<VerifyData>()->heap_scope_depth;
     return true;
 
   default:
