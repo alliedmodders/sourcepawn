@@ -2781,6 +2781,12 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
             }
             break;
         }
+        case iACCESSOR:
+            if (v.accessor->getter)
+                markusage(v.accessor->getter, uREAD);
+            if (v.accessor->setter)
+                markusage(v.accessor->setter, uREAD);
+            break;
     }
 
     if (v.tag == 0) {
