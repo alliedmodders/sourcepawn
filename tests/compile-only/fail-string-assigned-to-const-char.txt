@@ -1,0 +1,1 @@
+(2) : error 008: must be a constant expression; assumed zero
