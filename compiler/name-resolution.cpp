@@ -443,8 +443,10 @@ ConstDecl::Bind(SemaContext& sc)
 
     int tag;
     cell value;
-    if (!expr_->EvalConst(&value, &tag))
+    if (!expr_->EvalConst(&value, &tag)) {
+        report(expr_, 8);
         return false;
+    }
 
     AutoErrorPos aep(pos_);
     matchtag(type_.tag(), tag, 0);
