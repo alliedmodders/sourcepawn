@@ -175,8 +175,6 @@ Parser::Parse()
                 }
         }
 
-        // Until we can eliminate the two-pass parser, top-level decls must be
-        // resolved immediately.
         if (decl) {
             cc_.reports()->ResetErrorFlag();
 
@@ -551,8 +549,12 @@ Parser::parse_typeset()
     std::vector<TypedefInfo*> types;
 
     lexer_->need('{');
-    while (!lexer_->match('}')) {
+    while (!lexer_->match('}') && lexer_->freading()) {
         auto type = parse_function_type();
+        if (!type) {
+            lexer_->lexclr(TRUE);
+            continue;
+        }
         types.emplace_back(type);
     }
 
@@ -2189,7 +2191,14 @@ Parser::parse_function_type()
 
     parse_new_typename(nullptr, &ret_type);
 
-    lexer_->need('(');
+    if (!lexer_->need('(')) {
+        // If this was an accidental name, skip it (but keep error).
+        lexer_->lex();
+        if (lexer_->peek_same_line() == '(')
+            lexer_->lex();
+        else
+            lexer_->lexpush();
+    }
 
     while (!lexer_->match(')')) {
         auto decl = cc_.allocator().alloc<declinfo_t>();
