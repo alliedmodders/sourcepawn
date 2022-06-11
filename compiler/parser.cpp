@@ -827,11 +827,14 @@ parseoptions(int argc, char** argv, char* oname, char* ename, char* pname) {
                             _MAX_PATH); /* set name of (binary) output file */
                     break;
                 case 'O':
-                    pc_optimize = *option_value(ptr, argv, argc, &arg) - '0';
-                    if (pc_optimize < sOPTIMIZE_NONE || pc_optimize >= sOPTIMIZE_NUMBER ||
-                        pc_optimize == sOPTIMIZE_NOMACRO)
+                {
+                    int value = *option_value(ptr, argv, argc, &arg) - '0';
+                    if (value < sOPTIMIZE_NONE || value >= sOPTIMIZE_NUMBER ||
+                        value == sOPTIMIZE_NOMACRO)
                         about();
+                    pc_optimize = value;
                     break;
+                }
                 case 'p':
                     strlcpy(pname, option_value(ptr, argv, argc, &arg),
                             _MAX_PATH); /* set name of implicit include file */
