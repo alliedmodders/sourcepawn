@@ -549,6 +549,8 @@ class TestRunner(object):
       if os.path.exists(test.smx_path):
         self.out("FAIL: Compile unexpectedly succeeded, expected no .smx file.")
         return False
+    elif test_prefix == 'ignore':
+      return True
 
     if test_prefix == 'ok':
       return True
