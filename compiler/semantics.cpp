@@ -1658,6 +1658,11 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return false;
     }
 
+    if (!from_call) {
+        report(expr, 50);
+        return false;
+    }
+
     val.ident = iFUNCTN;
     val.sym = method->target;
     markusage(method->target, uREAD);
