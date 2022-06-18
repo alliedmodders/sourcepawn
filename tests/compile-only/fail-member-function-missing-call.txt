@@ -1,0 +1,1 @@
+fail-member-function-missing-call.sp(15) : error 050: missing function call, cannot use non-static member function as a value
