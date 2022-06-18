@@ -54,6 +54,7 @@ CodeGenerator::Generate()
     deduce_liveness(cc_);
 
     EmitStmtList(tree_);
+    ComputeStackUsage();
 
     // Finish any un-added debug symbols.
     while (!static_syms_.empty()) {
@@ -1737,8 +1738,9 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
 {
     ke::SaveAndSet<symbol*> set_func(&func_, info->sym());
 
-    max_func_memory_ = 0;
-    current_memory_ = 0;
+    // Minimum 16 cells for general slack.
+    current_memory_ = 16;
+    max_func_memory_ = current_memory_;
 
     if (info->sym()->unused())
         return;
@@ -1776,8 +1778,11 @@ CodeGenerator::EmitFunctionInfo(FunctionInfo* info)
 
     info->sym()->setAddr(info->sym()->function()->label.offset());
     info->sym()->codeaddr = asm_.pc();
+    info->sym()->function()->max_local_stack = max_func_memory_;
 
-    max_script_memory_ = std::max(max_func_memory_, max_script_memory_);
+    // In case there is no callgraph, we still need to track which function has
+    // the biggest stack.
+    max_script_memory_ = std::max(max_script_memory_, max_func_memory_);
 }
 
 void
@@ -1828,7 +1833,15 @@ CodeGenerator::EmitCall(symbol* sym, cell nargs)
     } else {
         __ emit(OP_PUSH_C, nargs);
         __ emit(OP_CALL, &sym->function()->label);
+
+        auto node = callgraph_.find(func_);
+        if (node == callgraph_.end())
+            callgraph_.emplace(func_, tr::vector<symbol*>{sym});
+        else
+            node->second.emplace_back(sym);
     }
+
+    max_func_memory_ = std::max(max_func_memory_, current_memory_ + nargs);
 }
 
 void
@@ -2152,3 +2165,38 @@ CodeGenerator::AutoEnterScope::~AutoEnterScope() {
     auto scope = ke::PopBack(scopes_);
     cg_->AddDebugSymbols(&scope);
 }
+
+void CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
+    symbol* caller = caller_iter->first;
+    tr::vector<symbol*> targets = std::move(caller_iter->second);
+    caller_iter = callgraph_.erase(caller_iter);
+
+    int max_child_stack = 0;
+    while (!targets.empty()) {
+        symbol* target = ke::PopBack(&targets);
+        if (!target->function()->max_callee_stack) {
+            auto iter = callgraph_.find(target);
+            if (iter != callgraph_.end())
+                ComputeStackUsage(iter);
+        }
+
+        max_child_stack = std::max(max_child_stack, target->function()->max_local_stack +
+                                                    target->function()->max_callee_stack);
+
+        // Assign this each iteration so we at least have something useful if
+        // we hit a recursive case.
+        caller->function()->max_callee_stack = max_child_stack;
+    }
+
+    max_script_memory_ = std::max(caller->function()->max_local_stack +
+                                  caller->function()->max_callee_stack,
+                                  max_script_memory_);
+}
+
+void CodeGenerator::ComputeStackUsage() {
+    if (callgraph_.empty())
+        return;
+
+    ComputeStackUsage(callgraph_.begin());
+}
+

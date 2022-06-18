@@ -25,6 +25,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "stl/stl-unordered-map.h"
 #include "data-queue.h"
 #include "parse-node.h"
 #include "smx-assembly-buffer.h"
@@ -49,7 +50,6 @@ class CodeGenerator final
     uint32_t code_size() const { return (uint32_t)asm_.size(); }
     const uint8_t* data_ptr() const { return data_.dat(); }
     uint32_t data_size() const { return data_.size(); }
-    int max_script_memory() const { return max_script_memory_; }
 
     int DynamicMemorySize() const;
 
@@ -191,6 +191,11 @@ class CodeGenerator final
     void AllocInScope(MemoryScope& scope, MemuseType type, int size);
     int PopScope(tr::vector<MemoryScope>& scope_list);
 
+    using CallGraph = tr::unordered_map<symbol*, tr::vector<symbol*>>;
+
+    void ComputeStackUsage();
+    void ComputeStackUsage(CallGraph::iterator caller_iter);
+
   private:
     typedef tr::vector<tr::vector<symbol*>> SymbolStack;
 
@@ -236,4 +241,5 @@ class CodeGenerator final
     int current_stack_ = 0;
     int current_memory_ = 0;
     int max_func_memory_ = 0;
+    CallGraph callgraph_;
 };
