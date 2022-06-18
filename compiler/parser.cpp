@@ -303,6 +303,8 @@ Parser::PreprocExpr(cell* val, int* tag)
     auto& cc = CompileContext::get();
     Parser parser(cc);
     auto expr = parser.hier14();
+    if (!expr)
+        return false;
 
     Semantics sema(cc, nullptr);
 
