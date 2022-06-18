@@ -59,6 +59,8 @@ class FunctionData final : public SymbolData
     symbol* alias;
     sp::Label label;     // modern replacement for addr
     sp::Label funcid;
+    int max_local_stack = 0;
+    int max_callee_stack = 0;
 
     // Other symbols that this symbol refers to.
     PoolForwardList<symbol*> refers_to;
