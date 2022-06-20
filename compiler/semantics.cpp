@@ -851,7 +851,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
 
     if (left_val.ident == iVARIABLE) {
         const auto& right_val = right->val();
-        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym)
+        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !expr->oper())
             report(expr, 226) << left_val.sym->name(); // self-assignment
     }
 
