@@ -215,6 +215,29 @@ array of unknown size. When declaring a local variable in legacy syntax, the
 static scope. The correct syntax is:
 
     static float sVector[3]
+    
+## Preprocessor Changes
+
+In earlier versions of SourcePawn, the preprocessor had visibility into things it shouldn't have, like local variables and enum names. This no longer works:
+
+    enum Blah {
+    };
+    
+    #if defined Blah
+        // ...
+    #endif
+
+Instead, consider either removing your dependence on the preprocessor, or by introducing a new macro:
+
+    enum Blah {
+    };
+    #define BLAH_ENABLED
+    
+    #if defined BLAH_ENABLED
+        // ...
+    #endif
+
+The old behavior only worked in earlier compilers due to an implementation quirk. The preprocessor was sharing symbol tables with the rest of the compiler, meaning it had access to the entire language state. This kind of thing does not work at all in a proper compiler pipeline because the preprocessing stage is textual, not semantic. In fact it is an entirely separate language. So with 1.11, the preprocessor can only see preprocessor state, not language state.
 
 ## C++ Changes
 
