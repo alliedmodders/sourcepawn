@@ -118,7 +118,7 @@ Other changes:
 
 ### SourcePawn 1.11
 
-SourcePawn 1.11 is currently in development.
+SourcePawn 1.11 was released on July 1, 2022.
 
 This release contains a rewrite of the parser, fully eliminating the multi-pass
 reparse model. We now properly generate an Abstract Syntax Tree (AST). Semantic
@@ -133,3 +133,7 @@ bump. Array declaration and access will be much faster for multi-dimensional arr
 
 Also as of this release, both the compiler and VM can run on non-x86 platforms
 (such as ARM).
+
+### SourcePawn 1.12
+
+SourcePawn 1.12 is currently in development.
