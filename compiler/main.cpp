@@ -61,7 +61,6 @@
 
 #if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
 #    include <unistd.h>
-#    include "binreloc.h" /* from BinReloc, see www.autopackage.org */
 #endif
 
 #if defined _MSC_VER && defined _WIN32
@@ -558,12 +557,6 @@ setconfig(char* root)
     /* add the default "include" directory */
 #if defined KE_WINDOWS
     GetModuleFileNameA(NULL, path, PATH_MAX);
-#elif defined ENABLE_BINRELOC
-    /* see www.autopackage.org for the BinReloc module */
-    br_init_lib(NULL);
-    ptr = br_find_exe("spcomp");
-    SafeStrcpy(path, sizeof(path), ptr);
-    free(ptr);
 #elif defined __EMSCRIPTEN__
     if (EM_ASM_INT(
             {
