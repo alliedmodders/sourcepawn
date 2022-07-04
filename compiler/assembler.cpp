@@ -689,10 +689,7 @@ void
 RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym)
 {
     bytes.push_back(cb::kFixedArray);
-    if (sym->tag == pc_tag_string)
-        CompactEncodeUint32(bytes, sym->dim.array.length * 4);
-    else
-        CompactEncodeUint32(bytes, sym->dim.array.length);
+    CompactEncodeUint32(bytes, sym->dim.array.length);
     encode_tag_into(bytes, sym->tag);
 }
 
@@ -788,10 +785,7 @@ RttiBuilder::encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t&
             bytes.push_back(cb::kArray);
         } else {
             bytes.push_back(cb::kFixedArray);
-            if (i == info.dimcount - 1 && info.tag == pc_tag_string)
-                CompactEncodeUint32(bytes, info.dims[i] * 4);
-            else
-                CompactEncodeUint32(bytes, info.dims[i]);
+            CompactEncodeUint32(bytes, info.dims[i]);
         }
 
         if (i != info.dimcount - 1 && info.is_const)
