@@ -50,6 +50,7 @@
 #include "lexer-inl.h"
 #include "parser.h"
 #include "semantics.h"
+#include "source-manager.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -202,10 +203,14 @@ pc_compile(int argc, char* argv[]) {
     setconfig(argv[0]); /* the path to the include files */
 
     assert(options->source_files.size() == 1);
-    cc.set_inpf_org(std::make_shared<SourceFile>());
-    if (!cc.inpf_org()->Open(options->source_files[0])) {
-        report(417) << options->source_files[0];
-        goto cleanup;
+    {
+        auto sf = cc.sources()->Open(options->source_files[0], {});
+        if (!sf) {
+            report(417) << options->source_files[0];
+            goto cleanup;
+        }
+        sf->set_is_main_file();
+        cc.set_inpf_org(sf);
     }
 
     cc.lexer()->Init(cc.inpf_org());
@@ -268,8 +273,11 @@ cleanup:
     cc.reports()->DumpErrorReport(true);
 
     if (compile_ok && opt_showincludes.value()) {
-        for (const auto& name : cc.included_files())
-            fprintf(stdout, "Note: including file: %s\n", name.c_str());
+        for (const auto& file : cc.sources()->opened_files()) {
+            if (file->is_main_file())
+                continue;
+            fprintf(stdout, "Note: including file: %s\n", file->name());
+        }
     }
 
     cc.set_inpf_org(nullptr);

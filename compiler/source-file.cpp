@@ -30,8 +30,7 @@
 #endif
 
 SourceFile::SourceFile()
-  : fp_(nullptr, ::fclose),
-    pos_(0)
+  : pos_(0)
 {
 }
 
@@ -44,20 +43,21 @@ SourceFile::Open(const std::string& file_name)
     if ((s.st_mode & S_IFDIR) == S_IFDIR)
         return false;
 
-    fp_.reset(fopen(file_name.c_str(), "rb"));
-    if (!fp_)
+    std::unique_ptr<FILE, decltype(&::fclose)> fp(fopen(file_name.c_str(), "rb"), &::fclose);
+    if (!fp)
         return false;
 
-    if (fseek(fp_.get(), 0, SEEK_END) != 0)
+    if (fseek(fp.get(), 0, SEEK_END) != 0)
         return false;
-    auto len = ftell(fp_.get());
+    auto len = ftell(fp.get());
     if (len == -1L)
         return false;
-    if (fseek(fp_.get(), 0, SEEK_SET) != 0)
+    if (fseek(fp.get(), 0, SEEK_SET) != 0)
         return false;
 
     data_.resize(len, '\0');
-    if (fread(&data_[0], data_.size(), 1, fp_.get()) != 1)
+    data_.shrink_to_fit();
+    if (fread(&data_[0], data_.size(), 1, fp.get()) != 1)
         return false;
 
     name_ = file_name;

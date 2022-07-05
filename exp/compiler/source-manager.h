@@ -157,7 +157,7 @@ struct LREntry
     return id != 0;
   }
 
-  void init(const SourceLocation& parent, SourceFile* file) {
+  void init(const SourceLocation& parent, std::shared_ptr<SourceFile> file) {
     this->parent = parent;
     this->file = file;
   }

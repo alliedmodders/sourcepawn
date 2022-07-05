@@ -23,6 +23,7 @@ module.sources += [
   'scvars.cpp',
   'semantics.cpp',
   'source-file.cpp',
+  'source-manager.cpp',
   'symbols.cpp',
   'type-checker.cpp',
   'types.cpp',

@@ -300,4 +300,5 @@ static const char* errmsg_ex[] = {
     /*419*/ "cannot write to file: \"%s\"\n",
     /*420*/ "unhandled AST type: %d\n",
     /*421*/ "too many functions\n",
+    /*422*/ "no more source locations, too much source text\n",
 };
