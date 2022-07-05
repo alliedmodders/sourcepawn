@@ -230,11 +230,11 @@ pc_compile(int argc, char* argv[]) {
             SemaContext sc(&sema);
             sema.set_context(&sc);
 
-            if (!tree->EnterNames(sc) || !errors.ok())
+            if (!tree->stmts()->EnterNames(sc) || !errors.ok())
                 goto cleanup;
 
             errors.Reset();
-            if (!tree->Bind(sc) || !errors.ok())
+            if (!tree->stmts()->Bind(sc) || !errors.ok())
                 goto cleanup;
 
             sema.set_context(nullptr);
@@ -243,7 +243,7 @@ pc_compile(int argc, char* argv[]) {
             if (!sema.Analyze() || !errors.ok())
                 goto cleanup;
 
-            tree->ProcessUses(sc);
+            tree->stmts()->ProcessUses(sc);
         }
     }
 

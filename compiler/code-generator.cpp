@@ -53,7 +53,7 @@ CodeGenerator::Generate()
 
     deduce_liveness(cc_);
 
-    EmitStmtList(tree_);
+    EmitStmtList(tree_->stmts());
     ComputeStackUsage();
 
     // Finish any un-added debug symbols.
@@ -145,17 +145,17 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         EnterHeapScope(stmt->flow_type());
 
     switch (stmt->kind()) {
-        case AstKind::ChangeScopeNode:
+        case StmtKind::ChangeScopeNode:
             EmitChangeScopeNode(stmt->to<ChangeScopeNode>());
             break;
-        case AstKind::VarDecl:
+        case StmtKind::VarDecl:
             EmitVarDecl(stmt->to<VarDecl>());
             break;
-        case AstKind::ExprStmt:
+        case StmtKind::ExprStmt:
             // Emit even if no side effects.
             EmitExpr(stmt->to<ExprStmt>()->expr());
             break;
-        case AstKind::ExitStmt: {
+        case StmtKind::ExitStmt: {
             auto e = stmt->to<ExitStmt>();
             if (e->expr())
                 EmitExpr(e->expr());
@@ -164,7 +164,7 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             __ emit(OP_HALT, xEXIT);
             break;
         }
-        case AstKind::BlockStmt: {
+        case StmtKind::BlockStmt: {
             auto s = stmt->to<BlockStmt>();
             pushstacklist();
 
@@ -177,7 +177,7 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             popstacklist(!returns);
             break;
         }
-        case AstKind::AssertStmt: {
+        case StmtKind::AssertStmt: {
             auto s = stmt->to<AssertStmt>();
             Label flab1;
             EmitTest(s->expr(), true, &flab1);
@@ -185,48 +185,48 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             __ bind(&flab1);
             break;
         }
-        case AstKind::IfStmt:
+        case StmtKind::IfStmt:
             EmitIfStmt(stmt->to<IfStmt>());
             break;
-        case AstKind::DeleteStmt:
+        case StmtKind::DeleteStmt:
             EmitDeleteStmt(stmt->to<DeleteStmt>());
             break;
-        case AstKind::DoWhileStmt:
+        case StmtKind::DoWhileStmt:
             EmitDoWhileStmt(stmt->to<DoWhileStmt>());
             break;
-        case AstKind::BreakStmt:
+        case StmtKind::BreakStmt:
             EmitLoopControl(tBREAK);
             break;
-        case AstKind::ContinueStmt:
+        case StmtKind::ContinueStmt:
             EmitLoopControl(tCONTINUE);
             break;
-        case AstKind::ForStmt:
+        case StmtKind::ForStmt:
             EmitForStmt(stmt->to<ForStmt>());
             break;
-        case AstKind::SwitchStmt:
+        case StmtKind::SwitchStmt:
             EmitSwitchStmt(stmt->to<SwitchStmt>());
             break;
-        case AstKind::FunctionDecl:
+        case StmtKind::FunctionDecl:
             EmitFunctionDecl(stmt->to<FunctionDecl>());
             break;
-        case AstKind::EnumStructDecl:
+        case StmtKind::EnumStructDecl:
             EmitEnumStructDecl(stmt->to<EnumStructDecl>());
             break;
-        case AstKind::MethodmapDecl:
+        case StmtKind::MethodmapDecl:
             EmitMethodmapDecl(stmt->to<MethodmapDecl>());
             break;
-        case AstKind::ReturnStmt:
+        case StmtKind::ReturnStmt:
             EmitReturnStmt(stmt->to<ReturnStmt>());
             break;
-        case AstKind::TypedefDecl:
-        case AstKind::TypesetDecl:
-        case AstKind::EnumDecl:
-        case AstKind::UsingDecl:
-        case AstKind::PstructDecl:
-        case AstKind::StaticAssertStmt:
-        case AstKind::PragmaUnusedStmt:
+        case StmtKind::TypedefDecl:
+        case StmtKind::TypesetDecl:
+        case StmtKind::EnumDecl:
+        case StmtKind::UsingDecl:
+        case StmtKind::PstructDecl:
+        case StmtKind::StaticAssertStmt:
+        case StmtKind::PragmaUnusedStmt:
             break;
-        case AstKind::StmtList:
+        case StmtKind::StmtList:
             EmitStmtList(stmt->to<StmtList>());
             break;
 
@@ -477,57 +477,57 @@ CodeGenerator::EmitExpr(Expr* expr)
     }
 
     switch (expr->kind()) {
-        case AstKind::UnaryExpr:
+        case ExprKind::UnaryExpr:
             EmitUnary(expr->to<UnaryExpr>());
             break;
-        case AstKind::IncDecExpr:
+        case ExprKind::IncDecExpr:
             EmitIncDec(expr->to<IncDecExpr>());
             break;
-        case AstKind::BinaryExpr:
+        case ExprKind::BinaryExpr:
             EmitBinary(expr->to<BinaryExpr>());
             break;
-        case AstKind::LogicalExpr:
+        case ExprKind::LogicalExpr:
             EmitLogicalExpr(expr->to<LogicalExpr>());
             break;
-        case AstKind::ChainedCompareExpr:
+        case ExprKind::ChainedCompareExpr:
             EmitChainedCompareExpr(expr->to<ChainedCompareExpr>());
             break;
-        case AstKind::TernaryExpr:
+        case ExprKind::TernaryExpr:
             EmitTernaryExpr(expr->to<TernaryExpr>());
             break;
-        case AstKind::CastExpr:
+        case ExprKind::CastExpr:
             EmitExpr(expr->to<CastExpr>()->expr());
             break;
-        case AstKind::SymbolExpr:
+        case ExprKind::SymbolExpr:
             EmitSymbolExpr(expr->to<SymbolExpr>());
             break;
-        case AstKind::RvalueExpr: {
+        case ExprKind::RvalueExpr: {
             auto e = expr->to<RvalueExpr>();
             EmitExpr(e->expr());
             value val = e->expr()->val();
             EmitRvalue(&val);
             break;
         }
-        case AstKind::CommaExpr: {
+        case ExprKind::CommaExpr: {
             auto ce = expr->to<CommaExpr>();
             for (const auto& expr : ce->exprs())
                 EmitExpr(expr);
             break;
         }
-        case AstKind::ThisExpr: {
+        case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
             if (e->sym()->ident == iREFARRAY)
                 __ address(e->sym(), sPRI);
             break;
         }
-        case AstKind::StringExpr: {
+        case ExprKind::StringExpr: {
             auto se = expr->to<StringExpr>();
             auto addr = data_.dat_address();
             data_.Add(se->text()->chars(), se->text()->length());
             __ const_pri(addr);
             break;
         }
-        case AstKind::ArrayExpr: {
+        case ExprKind::ArrayExpr: {
             auto e = expr->to<ArrayExpr>();
             auto addr = data_.dat_address();
             for (const auto& expr : e->exprs())
@@ -535,25 +535,25 @@ CodeGenerator::EmitExpr(Expr* expr)
             __ const_pri(addr);
             break;
         }
-        case AstKind::IndexExpr:
+        case ExprKind::IndexExpr:
             EmitIndexExpr(expr->to<IndexExpr>());
             break;
-        case AstKind::FieldAccessExpr:
+        case ExprKind::FieldAccessExpr:
             EmitFieldAccessExpr(expr->to<FieldAccessExpr>());
             break;
-        case AstKind::CallExpr:
+        case ExprKind::CallExpr:
             EmitCallExpr(expr->to<CallExpr>());
             break;
-        case AstKind::DefaultArgExpr:
+        case ExprKind::DefaultArgExpr:
             EmitDefaultArgExpr(expr->to<DefaultArgExpr>());
             break;
-        case AstKind::CallUserOpExpr:
+        case ExprKind::CallUserOpExpr:
             EmitCallUserOpExpr(expr->to<CallUserOpExpr>());
             break;
-        case AstKind::NewArrayExpr:
+        case ExprKind::NewArrayExpr:
             EmitNewArrayExpr(expr->to<NewArrayExpr>());
             break;
-        case AstKind::NamedArgExpr:
+        case ExprKind::NamedArgExpr:
             EmitExpr(expr->to<NamedArgExpr>()->expr);
             break;
 
@@ -566,18 +566,18 @@ void
 CodeGenerator::EmitTest(Expr* expr, bool jump_on_true, Label* target)
 {
     switch (expr->kind()) {
-        case AstKind::LogicalExpr:
+        case ExprKind::LogicalExpr:
             EmitLogicalExprTest(expr->to<LogicalExpr>(), jump_on_true, target);
             return;
-        case AstKind::UnaryExpr:
+        case ExprKind::UnaryExpr:
             if (EmitUnaryExprTest(expr->to<UnaryExpr>(), jump_on_true, target))
                 return;
             break;
-        case AstKind::ChainedCompareExpr:
+        case ExprKind::ChainedCompareExpr:
             if (EmitChainedCompareExprTest(expr->to<ChainedCompareExpr>(), jump_on_true, target))
                 return;
             break;
-        case AstKind::CommaExpr: {
+        case ExprKind::CommaExpr: {
             auto ce = expr->to<CommaExpr>();
             for (size_t i = 0; i < ce->exprs().size() - 1; i++)
                 EmitExpr(ce->exprs().at(i));
