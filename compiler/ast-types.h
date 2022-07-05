@@ -19,8 +19,7 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#define AST_TYPE_LIST(FOR_EACH) \
-    FOR_EACH(ParseTree) \
+#define AST_STMT_TYPE_LIST(FOR_EACH) \
     FOR_EACH(StmtList) \
     FOR_EACH(BlockStmt) \
     FOR_EACH(BreakStmt) \
@@ -32,6 +31,22 @@
     FOR_EACH(TypedefDecl) \
     FOR_EACH(TypesetDecl) \
     FOR_EACH(UsingDecl) \
+    FOR_EACH(IfStmt) \
+    FOR_EACH(ExprStmt) \
+    FOR_EACH(ReturnStmt) \
+    FOR_EACH(AssertStmt) \
+    FOR_EACH(DeleteStmt) \
+    FOR_EACH(ExitStmt) \
+    FOR_EACH(DoWhileStmt) \
+    FOR_EACH(ForStmt) \
+    FOR_EACH(SwitchStmt) \
+    FOR_EACH(PragmaUnusedStmt) \
+    FOR_EACH(FunctionDecl) \
+    FOR_EACH(EnumStructDecl) \
+    FOR_EACH(MethodmapDecl) \
+    FOR_EACH(ChangeScopeNode)
+
+#define AST_EXPR_TYPE_LIST(FOR_EACH) \
     FOR_EACH(IsDefinedExpr) \
     FOR_EACH(UnaryExpr) \
     FOR_EACH(BinaryExpr) \
@@ -57,25 +72,18 @@
     FOR_EACH(NewArrayExpr) \
     FOR_EACH(ArrayExpr) \
     FOR_EACH(StructExpr) \
-    FOR_EACH(StructInitFieldExpr) \
-    FOR_EACH(IfStmt) \
-    FOR_EACH(ExprStmt) \
-    FOR_EACH(ReturnStmt) \
-    FOR_EACH(AssertStmt) \
-    FOR_EACH(DeleteStmt) \
-    FOR_EACH(ExitStmt) \
-    FOR_EACH(DoWhileStmt) \
-    FOR_EACH(ForStmt) \
-    FOR_EACH(SwitchStmt) \
-    FOR_EACH(PragmaUnusedStmt) \
-    FOR_EACH(FunctionDecl) \
-    FOR_EACH(EnumStructDecl) \
-    FOR_EACH(MethodmapDecl) \
-    FOR_EACH(ChangeScopeNode)
+    FOR_EACH(StructInitFieldExpr)
 
-enum class AstKind : uint8_t
+enum class ExprKind : uint8_t
 {
 #define _(Name) Name,
-    AST_TYPE_LIST(_)
+    AST_EXPR_TYPE_LIST(_)
+#undef _
+};
+
+enum class StmtKind : uint8_t
+{
+#define _(Name) Name,
+    AST_STMT_TYPE_LIST(_)
 #undef _
 };

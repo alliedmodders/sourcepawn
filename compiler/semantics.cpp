@@ -46,7 +46,7 @@ bool Semantics::Analyze() {
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
     AutoCountErrors errors;
-    if (!CheckStmtList(tree_) || !errors.ok())
+    if (!CheckStmtList(tree_->stmts()) || !errors.ok())
         return false;
 
     // This inserts missing return statements at the global scope, so it cannot
@@ -92,51 +92,51 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
     });
 
     switch (stmt->kind()) {
-        case AstKind::ChangeScopeNode:
+        case StmtKind::ChangeScopeNode:
             return CheckChangeScopeNode(stmt->to<ChangeScopeNode>());
-        case AstKind::VarDecl:
+        case StmtKind::VarDecl:
             return CheckVarDecl(stmt->to<VarDecl>());
-        case AstKind::ExprStmt:
+        case StmtKind::ExprStmt:
             return CheckExprStmt(stmt->to<ExprStmt>());
-        case AstKind::ExitStmt:
+        case StmtKind::ExitStmt:
             return CheckExitStmt(stmt->to<ExitStmt>());
-        case AstKind::BlockStmt:
+        case StmtKind::BlockStmt:
             return CheckBlockStmt(stmt->to<BlockStmt>());
-        case AstKind::AssertStmt:
+        case StmtKind::AssertStmt:
             return CheckAssertStmt(stmt->to<AssertStmt>());
-        case AstKind::IfStmt:
+        case StmtKind::IfStmt:
             return CheckIfStmt(stmt->to<IfStmt>());
-        case AstKind::DeleteStmt:
+        case StmtKind::DeleteStmt:
             return CheckDeleteStmt(stmt->to<DeleteStmt>());
-        case AstKind::DoWhileStmt:
+        case StmtKind::DoWhileStmt:
             return CheckDoWhileStmt(stmt->to<DoWhileStmt>());
-        case AstKind::ForStmt:
+        case StmtKind::ForStmt:
             return CheckForStmt(stmt->to<ForStmt>());
-        case AstKind::SwitchStmt:
+        case StmtKind::SwitchStmt:
             return CheckSwitchStmt(stmt->to<SwitchStmt>());
-        case AstKind::FunctionDecl:
+        case StmtKind::FunctionDecl:
             return CheckFunctionDecl(stmt->to<FunctionDecl>());
-        case AstKind::EnumStructDecl:
+        case StmtKind::EnumStructDecl:
             return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
-        case AstKind::MethodmapDecl:
+        case StmtKind::MethodmapDecl:
             return CheckMethodmapDecl(stmt->to<MethodmapDecl>());
-        case AstKind::ReturnStmt:
+        case StmtKind::ReturnStmt:
             return CheckReturnStmt(stmt->to<ReturnStmt>());
-        case AstKind::PragmaUnusedStmt:
+        case StmtKind::PragmaUnusedStmt:
             return CheckPragmaUnusedStmt(stmt->to<PragmaUnusedStmt>());
-        case AstKind::StmtList:
+        case StmtKind::StmtList:
             return CheckStmtList(stmt->to<StmtList>());
-        case AstKind::StaticAssertStmt:
+        case StmtKind::StaticAssertStmt:
             return CheckStaticAssertStmt(stmt->to<StaticAssertStmt>());
-        case AstKind::BreakStmt:
+        case StmtKind::BreakStmt:
             return CheckBreakStmt(stmt->to<BreakStmt>());
-        case AstKind::ContinueStmt:
+        case StmtKind::ContinueStmt:
             return CheckContinueStmt(stmt->to<ContinueStmt>());
-        case AstKind::EnumDecl:
-        case AstKind::PstructDecl:
-        case AstKind::TypedefDecl:
-        case AstKind::TypesetDecl:
-        case AstKind::UsingDecl:
+        case StmtKind::EnumDecl:
+        case StmtKind::PstructDecl:
+        case StmtKind::TypedefDecl:
+        case StmtKind::TypesetDecl:
+        case StmtKind::UsingDecl:
             return true;
         default:
             assert(false);
@@ -182,7 +182,7 @@ bool Semantics::CheckVarDecl(VarDecl* decl) {
     auto init_rhs = decl->init_rhs();
     if (init && vclass != sLOCAL) {
         if (!init_rhs->EvalConst(nullptr, nullptr)) {
-            if (vclass == sARGUMENT && init_rhs->is(AstKind::SymbolExpr))
+            if (vclass == sARGUMENT && init_rhs->is(ExprKind::SymbolExpr))
                 return true;
             report(init_rhs->pos(), 8);
         }
@@ -346,49 +346,49 @@ static inline int GetOperToken(int token) {
 bool Semantics::CheckExpr(Expr* expr) {
     AutoErrorPos aep(expr->pos());
     switch (expr->kind()) {
-        case AstKind::UnaryExpr:
+        case ExprKind::UnaryExpr:
             return CheckUnaryExpr(expr->to<UnaryExpr>());
-        case AstKind::IncDecExpr:
+        case ExprKind::IncDecExpr:
             return CheckIncDecExpr(expr->to<IncDecExpr>());
-        case AstKind::BinaryExpr:
+        case ExprKind::BinaryExpr:
             return CheckBinaryExpr(expr->to<BinaryExpr>());
-        case AstKind::LogicalExpr:
+        case ExprKind::LogicalExpr:
             return CheckLogicalExpr(expr->to<LogicalExpr>());
-        case AstKind::ChainedCompareExpr:
+        case ExprKind::ChainedCompareExpr:
             return CheckChainedCompareExpr(expr->to<ChainedCompareExpr>());
-        case AstKind::TernaryExpr:
+        case ExprKind::TernaryExpr:
             return CheckTernaryExpr(expr->to<TernaryExpr>());
-        case AstKind::CastExpr:
+        case ExprKind::CastExpr:
             return CheckCastExpr(expr->to<CastExpr>());
-        case AstKind::SymbolExpr:
+        case ExprKind::SymbolExpr:
             return CheckSymbolExpr(expr->to<SymbolExpr>(), false);
-        case AstKind::CommaExpr:
+        case ExprKind::CommaExpr:
             return CheckCommaExpr(expr->to<CommaExpr>());
-        case AstKind::ThisExpr:
+        case ExprKind::ThisExpr:
             return CheckThisExpr(expr->to<ThisExpr>());
-        case AstKind::NullExpr:
+        case ExprKind::NullExpr:
             return CheckNullExpr(expr->to<NullExpr>());
-        case AstKind::StringExpr:
+        case ExprKind::StringExpr:
             return CheckStringExpr(expr->to<StringExpr>());
-        case AstKind::ArrayExpr:
+        case ExprKind::ArrayExpr:
             return CheckArrayExpr(expr->to<ArrayExpr>());
-        case AstKind::IndexExpr:
+        case ExprKind::IndexExpr:
             return CheckIndexExpr(expr->to<IndexExpr>());
-        case AstKind::FieldAccessExpr:
+        case ExprKind::FieldAccessExpr:
             return CheckFieldAccessExpr(expr->to<FieldAccessExpr>(), false);
-        case AstKind::CallExpr:
+        case ExprKind::CallExpr:
             return CheckCallExpr(expr->to<CallExpr>());
-        case AstKind::NewArrayExpr:
+        case ExprKind::NewArrayExpr:
             return CheckNewArrayExpr(expr->to<NewArrayExpr>());
-        case AstKind::IsDefinedExpr:
+        case ExprKind::IsDefinedExpr:
             return CheckIsDefinedExpr(expr->to<IsDefinedExpr>());
-        case AstKind::TaggedValueExpr:
+        case ExprKind::TaggedValueExpr:
             return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
-        case AstKind::SizeofExpr:
+        case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
-        case AstKind::RvalueExpr:
+        case ExprKind::RvalueExpr:
             return CheckWrappedExpr(expr, expr->to<RvalueExpr>()->expr());
-        case AstKind::NamedArgExpr:
+        case ExprKind::NamedArgExpr:
             return CheckWrappedExpr(expr, expr->to<NamedArgExpr>()->expr);
         default:
             assert(false);
@@ -441,20 +441,20 @@ bool Expr::HasSideEffects() {
         return true;
 
     switch (kind()) {
-        case AstKind::UnaryExpr: {
+        case ExprKind::UnaryExpr: {
             auto e = to<UnaryExpr>();
             return e->userop() || e->expr()->HasSideEffects();
         }
-        case AstKind::BinaryExpr: {
+        case ExprKind::BinaryExpr: {
             auto e = to<BinaryExpr>();
             return e->userop().sym || IsAssignOp(e->token()) || e->left()->HasSideEffects() ||
                    e->right()->HasSideEffects();
         }
-        case AstKind::LogicalExpr: {
+        case ExprKind::LogicalExpr: {
             auto e = to<LogicalExpr>();
             return e->left()->HasSideEffects() || e->right()->HasSideEffects();
         }
-        case AstKind::ChainedCompareExpr: {
+        case ExprKind::ChainedCompareExpr: {
             auto e = to<ChainedCompareExpr>();
             if (e->first()->HasSideEffects())
                 return true;
@@ -464,46 +464,46 @@ bool Expr::HasSideEffects() {
             }
             return false;
         }
-        case AstKind::TernaryExpr: {
+        case ExprKind::TernaryExpr: {
             auto e = to<TernaryExpr>();
             return e->first()->HasSideEffects() || e->second()->HasSideEffects() ||
                    e->third()->HasSideEffects();
         }
-        case AstKind::CastExpr:
+        case ExprKind::CastExpr:
             return to<CastExpr>()->expr()->HasSideEffects();
-        case AstKind::CommaExpr: {
+        case ExprKind::CommaExpr: {
             auto e = to<CommaExpr>();
             return ::HasSideEffects(e->exprs());
         }
-        case AstKind::ArrayExpr: {
+        case ExprKind::ArrayExpr: {
             auto e = to<ArrayExpr>();
             return ::HasSideEffects(e->exprs());
         }
-        case AstKind::NewArrayExpr: {
+        case ExprKind::NewArrayExpr: {
             auto e = to<NewArrayExpr>();
             return ::HasSideEffects(e->exprs());
         }
-        case AstKind::IndexExpr: {
+        case ExprKind::IndexExpr: {
             auto e = to<IndexExpr>();
             return e->base()->HasSideEffects() || e->index()->HasSideEffects();
         }
-        case AstKind::FieldAccessExpr: {
+        case ExprKind::FieldAccessExpr: {
             auto e = to<FieldAccessExpr>();
             return e->base()->HasSideEffects();
         }
-        case AstKind::RvalueExpr:
+        case ExprKind::RvalueExpr:
             return to<RvalueExpr>()->expr()->HasSideEffects();
-        case AstKind::CallExpr: // Not intelligent yet.
-        case AstKind::IncDecExpr:
-        case AstKind::CallUserOpExpr:
+        case ExprKind::CallExpr: // Not intelligent yet.
+        case ExprKind::IncDecExpr:
+        case ExprKind::CallUserOpExpr:
             return true;
-        case AstKind::IsDefinedExpr:
-        case AstKind::NullExpr:
-        case AstKind::SizeofExpr:
-        case AstKind::StringExpr:
-        case AstKind::SymbolExpr:
-        case AstKind::TaggedValueExpr:
-        case AstKind::ThisExpr:
+        case ExprKind::IsDefinedExpr:
+        case ExprKind::NullExpr:
+        case ExprKind::SizeofExpr:
+        case ExprKind::StringExpr:
+        case ExprKind::SymbolExpr:
+        case ExprKind::TaggedValueExpr:
+        case ExprKind::ThisExpr:
             return false;
         default:
             assert(false);
@@ -557,7 +557,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
 }
 
 RvalueExpr::RvalueExpr(Expr* expr)
-  : EmitOnlyExpr(AstKind::RvalueExpr, expr->pos()),
+  : EmitOnlyExpr(ExprKind::RvalueExpr, expr->pos()),
     expr_(expr)
 {
     assert(expr_->lvalue());
@@ -700,7 +700,7 @@ BinaryExprBase::ProcessUses(SemaContext& sc)
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
-  : BinaryExprBase(AstKind::BinaryExpr, pos, token, left, right)
+  : BinaryExprBase(ExprKind::BinaryExpr, pos, token, left, right)
 {
     oper_tok_ = GetOperToken(token_);
 }
@@ -1687,7 +1687,7 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
     AutoErrorPos aep(target->pos());
 
     switch (target->kind()) {
-        case AstKind::FieldAccessExpr: {
+        case ExprKind::FieldAccessExpr: {
             auto expr = target->to<FieldAccessExpr>();
             if (!CheckFieldAccessExpr(expr, true))
                 return nullptr;
@@ -1712,7 +1712,7 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 call->set_implicit_this(base);
             return val.sym;
         }
-        case AstKind::SymbolExpr: {
+        case ExprKind::SymbolExpr: {
             call->set_implicit_this(nullptr);
 
             auto expr = target->to<SymbolExpr>();
@@ -1749,7 +1749,7 @@ symbol* Semantics::BindNewTarget(Expr* target) {
     AutoErrorPos aep(target->pos());
 
     switch (target->kind()) {
-        case AstKind::SymbolExpr: {
+        case ExprKind::SymbolExpr: {
             auto expr = target->to<SymbolExpr>();
             auto sym = expr->sym();
 
@@ -1958,7 +1958,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 }
 
 CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
-  : EmitOnlyExpr(AstKind::CallUserOpExpr, expr->pos()),
+  : EmitOnlyExpr(ExprKind::CallUserOpExpr, expr->pos()),
     userop_(userop),
     expr_(expr)
 {
@@ -1973,7 +1973,7 @@ CallUserOpExpr::ProcessUses(SemaContext& sc)
 }
 
 DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, arginfo* arg)
-  : Expr(AstKind::DefaultArgExpr, pos),
+  : Expr(ExprKind::DefaultArgExpr, pos),
     arg_(arg)
 {
     // Leave val bogus, it doesn't participate in anything, and we can't
@@ -2374,7 +2374,7 @@ bool Semantics::CheckNewArrayExpr(NewArrayExpr* expr) {
 
 bool Semantics::CheckExprForArrayInitializer(Expr* expr) {
     switch (expr->kind()) {
-        case AstKind::NewArrayExpr: {
+        case ExprKind::NewArrayExpr: {
             auto actual = expr->to<NewArrayExpr>();
             return CheckNewArrayExprForArrayInitializer(actual);
         }

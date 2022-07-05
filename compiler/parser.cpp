@@ -188,7 +188,9 @@ Parser::Parse()
         stmts.emplace_back(add_to_end.front());
         add_to_end.pop_front();
     }
-    return new ParseTree(token_pos_t{}, stmts);
+
+    auto list = new StmtList(token_pos_t{}, stmts);
+    return new ParseTree(list);
 }
 
 void Parser::CreateInitialScopes(std::vector<Stmt*>* stmts) {
