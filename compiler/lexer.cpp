@@ -74,25 +74,16 @@ static constexpr int kLitcharSkipping = 0x2;
 bool
 Lexer::PlungeQualifiedFile(const char* name)
 {
-    auto& cc = CompileContext::get();
-
     auto fp = OpenFile(name);
     if (!fp)
-        return FALSE;
-    input_file_stack_.push_back(inpf_);
-    preproc_if_stack_.push_back(ifstack_.size());
+        return false;
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
-    comment_stack_.push_back(icomment_);
-    current_line_stack_.push_back(fline_);
-    need_semicolon_stack_.push_back(cc.options()->need_semicolon);
-    require_newdecls_stack_.push_back(cc.options()->require_newdecls);
-    ResetFile(fp);
-    fline_ = 0; /* set current line number to 0 */
-    icomment_ = 0;               /* not in a comment */
+    state_.entry_preproc_if_stack_size = ifstack_.size();
+    prev_state_.emplace_back(state_);
+    EnterFile(std::move(fp));
     listline_ = -1;           /* force a #line directive when changing the file */
-    skip_utf8_bom(inpf_.get());
-    return TRUE;
+    return true;
 }
 
 std::shared_ptr<SourceFile> Lexer::OpenFile(const std::string& name) {
@@ -127,11 +118,11 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
              * there is a (relative) path for the current file
              */
             const char* ptr;
-            if ((ptr = strrchr(inpf_->name(), DIRSEP_CHAR)) != 0) {
-                int len = (int)(ptr - inpf_->name()) + 1;
+            if ((ptr = strrchr(state_.inpf->name(), DIRSEP_CHAR)) != 0) {
+                int len = (int)(ptr - state_.inpf->name()) + 1;
                 if (len + strlen(name) < PATH_MAX) {
                     char path[PATH_MAX];
-                    SafeStrcpyN(path, sizeof(path), inpf_->name(), len);
+                    SafeStrcpyN(path, sizeof(path), state_.inpf->name(), len);
                     SafeStrcat(path, sizeof(path), name);
                     result = PlungeQualifiedFile(path);
                 }
@@ -162,10 +153,10 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
 
     if (pcwd) {
         char path[PATH_MAX];
-        SafeSprintf(path, sizeof(path), "%s%s", pcwd, inpf_->name());
+        SafeSprintf(path, sizeof(path), "%s%s", pcwd, state_.inpf->name());
         SetFileDefines(path);
     } else {
-        SetFileDefines(inpf_->name());
+        SetFileDefines(state_.inpf->name());
     }
 
     return result;
@@ -274,15 +265,14 @@ Lexer::Readline(unsigned char* line)
     num = sLINEMAX;
     cont = FALSE;
     do {
-        if (inpf_ == NULL || inpf_->Eof()) {
+        if (!state_.inpf || state_.inpf->Eof()) {
             auto& cc = CompileContext::get();
-            (void)cc;
 
             if (cont)
                 error(49); /* invalid line continuation */
-            if (inpf_ != NULL && inpf_ != cc.inpf_org())
-                ResetFile(nullptr);
-            if (current_line_stack_.empty()) {
+            if (state_.inpf && state_.inpf != cc.inpf_org())
+                state_.inpf = nullptr;
+            if (prev_state_.empty()) {
                 freading_ = FALSE;
                 *line = '\0';
                 /* when there is nothing more to read, the #if/#else stack should
@@ -290,28 +280,24 @@ Lexer::Readline(unsigned char* line)
                  */
                 if (!ifstack_.empty())
                     error(1, "#endif", "-end of file-");
-                else if (icomment_ != 0)
+                else if (state_.icomment != 0)
                     error(1, "*/", "-end of file-");
                 return;
             }
-            fline_ = ke::PopBack(&current_line_stack_);
-            icomment_ = ke::PopBack(&comment_stack_);
-            need_semicolon_stack_.pop_back();
-            require_newdecls_stack_.pop_back();
+            state_ = ke::PopBack(&prev_state_);
 
             /* this condition held before including the file */
-            skiplevel_ = ke::PopBack(&preproc_if_stack_);
+            skiplevel_ = state_.entry_preproc_if_stack_size;
             while (skiplevel_ < ifstack_.size())
                 ifstack_.pop_back();
             assert(skiplevel_ == ifstack_.size());
 
             assert(!IsSkipping());   /* idem ditto */
-            ResetFile(ke::PopBack(&input_file_stack_));
-            SetFileDefines(inpf_->name());
+            SetFileDefines(state_.inpf->name());
             listline_ = -1; /* force a #line directive when changing the file */
         }
 
-        if (!inpf_->Read(line, num)) {
+        if (!state_.inpf->Read(line, num)) {
             *line = '\0'; /* delete line */
             cont = FALSE;
         } else {
@@ -325,7 +311,7 @@ Lexer::Readline(unsigned char* line)
             }
             cont = FALSE;
             /* check whether a full line was read */
-            if (strchr((char*)line, '\n') == NULL && !inpf_->Eof())
+            if (strchr((char*)line, '\n') == NULL && !state_.inpf->Eof())
                 error(75); /* line too long */
             /* check if the next line must be concatenated to this line */
             if ((ptr = (unsigned char*)strchr((char*)line, '\n')) == NULL)
@@ -346,7 +332,7 @@ Lexer::Readline(unsigned char* line)
             num -= strlen((char*)line);
             line += strlen((char*)line);
         }
-        fline_ += 1;
+        state_.fline += 1;
     } while (num >= 0 && cont);
 }
 
@@ -374,13 +360,13 @@ Lexer::StripComments(unsigned char* line)
     int skipstar = TRUE;
 
     while (*line) {
-        if (icomment_ != 0) {
+        if (state_.icomment != 0) {
             if (*line == '*' && *(line + 1) == '/') {
-                if (icomment_ == 2) {
+                if (state_.icomment == 2) {
                     assert(commentidx < COMMENT_LIMIT + COMMENT_MARGIN);
                     comment[commentidx] = '\0';
                 }
-                icomment_ = 0; /* comment has ended */
+                state_.icomment = 0; /* comment has ended */
                 *line = ' ';  /* replace '*' and '/' characters by spaces */
                 *(line + 1) = ' ';
                 line += 2;
@@ -388,7 +374,7 @@ Lexer::StripComments(unsigned char* line)
                 if (*line == '/' && *(line + 1) == '*')
                     error(216); /* nested comment */
                 /* collect the comment characters in a string */
-                if (icomment_ == 2) {
+                if (state_.icomment == 2) {
                     if (skipstar && ((*line != '\0' && *line <= ' ') || *line == '*')) {
                         /* ignore leading whitespace and '*' characters */
                     } else if (commentidx < COMMENT_LIMIT + COMMENT_MARGIN - 1) {
@@ -405,17 +391,17 @@ Lexer::StripComments(unsigned char* line)
             }
         } else {
             if (*line == '/' && *(line + 1) == '*') {
-                icomment_ = 1; /* start comment */
+                state_.icomment = 1; /* start comment */
                 /* there must be two "*" behind the slash and then white space */
                 if (*(line + 2) == '*' && *(line + 3) <= ' ') {
-                    icomment_ = 2; /* documentation comment */
+                    state_.icomment = 2; /* documentation comment */
                 }
                 commentidx = 0;
                 skipstar = TRUE;
                 *line = ' '; /* replace '/' and '*' characters by spaces */
                 *(line + 1) = ' ';
                 line += 2;
-                if (icomment_ == 2)
+                if (state_.icomment == 2)
                     *line++ = ' ';
             } else if (*line == '/' && *(line + 1) == '/') { /* comment to end of line */
                 if (strchr((char*)line, '\a') != NULL)
@@ -447,7 +433,7 @@ Lexer::StripComments(unsigned char* line)
             }
         }
     }
-    if (icomment_ == 2) {
+    if (state_.icomment == 2) {
         assert(commentidx < COMMENT_LIMIT + COMMENT_MARGIN);
         comment[commentidx] = '\0';
     }
@@ -869,7 +855,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             if (!IsSkipping()) {
                 if (lex() != tNUMBER)
                     error(8); /* invalid/non-constant expression */
-                fline_ = current_token()->value;
+                state_.fline = current_token()->value;
             }
             check_empty(lptr);
             break;
@@ -917,14 +903,14 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                     } else if (current_token()->atom->str() == "semicolon") {
                         cell val;
                         preproc_expr(&val, NULL);
-                        need_semicolon_stack_.back() = !!val;
+                        state_.need_semicolon = !!val;
                     } else if (current_token()->atom->str() == "newdecls") {
                         while (*lptr <= ' ' && *lptr != '\0')
                             lptr++;
                         if (strncmp((char*)lptr, "required", 8) == 0)
-                            require_newdecls_stack_.back() = true;
+                            state_.require_newdecls = true;
                         else if (strncmp((char*)lptr, "optional", 8) == 0)
-                            require_newdecls_stack_.back() = false;
+                            state_.require_newdecls = false;
                         else
                             error(146);
                         lptr = (unsigned char*)strchr(
@@ -975,8 +961,8 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
         case tpENDSCRPT:
             if (!IsSkipping()) {
                 check_empty(lptr);
-                assert(inpf_ != NULL);
-                ResetFile(nullptr);
+                assert(state_.inpf != NULL);
+                state_.inpf = nullptr;
             }
             break;
         case tpDEFINE: {
@@ -1484,16 +1470,16 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
     /* the ellipsis was not on the active line, read more lines from the current
      * file (but save its position first)
      */
-    if (!inpf_ || inpf_->Eof())
+    if (!state_.inpf || state_.inpf->Eof())
         return 0; /* quick exit: cannot read after EOF */
 
     auto localbuf = std::make_unique<unsigned char[]>(sLINEMAX + 1);
-    auto inpfmark = inpf_->Pos();
-    localcomment = icomment_;
+    auto inpfmark = state_.inpf->Pos();
+    localcomment = state_.icomment;
 
     found = 0;
     /* read from the file, skip preprocessing, but strip off comments */
-    while (!found && inpf_->Read(localbuf.get(), sLINEMAX)) {
+    while (!found && state_.inpf->Read(localbuf.get(), sLINEMAX)) {
         StripComments(localbuf.get());
         lptr = localbuf.get();
         /* skip white space */
@@ -1506,8 +1492,8 @@ Lexer::ScanEllipsis(const unsigned char* lptr)
     }
 
     /* clean up & reset */
-    inpf_->Reset(inpfmark);
-    icomment_ = localcomment;
+    state_.inpf->Reset(inpfmark);
+    state_.icomment = localcomment;
     return found;
 }
 
@@ -1749,7 +1735,6 @@ Lexer::Lexer(CompileContext& cc)
   : cc_(cc)
 {
     skiplevel_ = 0; /* preprocessor: not currently skipping */
-    icomment_ = 0;  /* currently not in a multiline comment */
     lexnewline_ = false;
     token_buffer_ = &normal_buffer_;
 
@@ -1771,15 +1756,12 @@ Lexer::Lexer(CompileContext& cc)
 
 void Lexer::Init(std::shared_ptr<SourceFile> sf) {
     freading_ = true;
-    ResetFile(sf);
-    skip_utf8_bom(inpf_.get());
+    EnterFile(std::move(sf));
 }
 
 void
 Lexer::Start()
 {
-    need_semicolon_stack_.emplace_back(cc_.options()->need_semicolon);
-    require_newdecls_stack_.emplace_back(cc_.options()->require_newdecls);
     Preprocess(true);
 }
 
@@ -1878,9 +1860,9 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->value = 0;
     tok->data.clear();
     tok->atom = nullptr;
-    tok->start.line = fline_;
+    tok->start.line = state_.fline;
     tok->start.col = (int)(lptr - pline_);
-    tok->start.file = inpf_->sources_index();
+    tok->start.file = state_.inpf->sources_index();
     tok->end = tok->start;
     lexpush();
     return tok;
@@ -1952,13 +1934,13 @@ Lexer::lex()
         }
     }
 
-    tok->start.line = fline_;
+    tok->start.line = state_.fline;
     tok->start.col = (int)(lptr - pline_);
-    tok->start.file = inpf_->sources_index();
+    tok->start.file = state_.inpf->sources_index();
 
     LexOnce(tok);
 
-    tok->end.line = fline_;
+    tok->end.line = state_.fline;
     tok->end.col = (int)(lptr - pline_);
     tok->end.file = tok->start.file;
     return tok->id;
@@ -2477,7 +2459,7 @@ Lexer::peek_same_line()
     // buffered token is still on the same line.
     if (token_buffer_->depth > 0 &&
         current_token()->end.file == next_token()->start.file &&
-        current_token()->end.line == fline_)
+        current_token()->end.line == state_.fline)
     {
         return next_token()->id;
     }
@@ -2844,15 +2826,20 @@ DefaultArg::~DefaultArg()
 bool
 Lexer::NeedSemicolon()
 {
-    assert(!need_semicolon_stack_.empty());
     if (cc_.options()->need_semicolon)
         return true;
-    return need_semicolon_stack_.back();
+    return state_.need_semicolon;
 }
 
-void Lexer::ResetFile(const std::shared_ptr<SourceFile>& fp) {
-    inpf_ = fp;
-    if (!inpf_)
-        return;
-    inpf_loc_ = cc_.sources()->GetLocationRangeEntryForFile(fp);
+void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf) {
+    auto& cc = CompileContext::get();
+
+    state_.inpf = std::move(sf);
+    state_.inpf_loc = cc_.sources()->GetLocationRangeEntryForFile(state_.inpf);
+    state_.need_semicolon = cc.options()->need_semicolon;
+    state_.require_newdecls = cc.options()->require_newdecls;
+    state_.fline = 0;
+    state_.icomment = 0;
+    state_.fcurrent = state_.inpf->sources_index();
+    skip_utf8_bom(state_.inpf.get());
 }

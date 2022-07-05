@@ -308,17 +308,16 @@ class Lexer
         return &token_buffer_->tokens[token_buffer_->cursor];
     }
     const token_pos_t& pos() { return current_token()->start; }
-    std::vector<bool>& need_semicolon_stack() { return need_semicolon_stack_; }
     std::string& deprecate() { return deprecate_; }
     bool& allow_tags() { return allow_tags_; }
-    int& require_newdecls() { return require_newdecls_stack_.back(); }
+    int& require_newdecls() { return state_.require_newdecls; }
     int& stmtindent() { return stmtindent_; }
     bool& indent_nowarn() { return indent_nowarn_; }
     bool freading() const { return freading_; }
-    int fcurrent() const { return inpf_->sources_index(); }
-    unsigned fline() const { return fline_; }
+    int fcurrent() const { return state_.fcurrent; }
+    unsigned fline() const { return state_.fline; }
     unsigned char* pline() { return pline_; }
-    SourceFile* inpf() const { return inpf_.get(); }
+    SourceFile* inpf() const { return state_.inpf.get(); }
 
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
@@ -344,7 +343,7 @@ class Lexer
     full_token_t* PushSynthesizedToken(TokenKind kind, int col);
     void SynthesizeIncludePathToken();
     void SetFileDefines(std::string file);
-    void ResetFile(const std::shared_ptr<SourceFile>& fp);
+    void EnterFile(std::shared_ptr<SourceFile>&& fp);
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
@@ -371,9 +370,6 @@ class Lexer
   private:
     CompileContext& cc_;
     ke::HashMap<sp::CharsAndLength, int, KeywordTablePolicy> keywords_;
-    short icomment_; /* currently in multiline comment? */
-    std::vector<short> comment_stack_;
-    std::vector<size_t> preproc_if_stack_;
     std::vector<char> ifstack_;
     size_t iflevel_;             /* nesting level if #if/#else/#endif */
     size_t skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
@@ -384,12 +380,8 @@ class Lexer
     int stmtindent_ = 0;
     bool indent_nowarn_ = false;
     bool freading_ = false;
-    unsigned fline_ = 0;
     unsigned char pline_[sLINEMAX + 1];         /* the line read from the input file */
     int ctrlchar_ = CTRL_CHAR;
-
-    std::shared_ptr<SourceFile> inpf_;
-    LREntry inpf_loc_;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
@@ -422,8 +414,17 @@ class Lexer
     };
     ke::HashMap<std::string, MacroEntry, MacroTablePolicy> macros_;
 
-    std::vector<int> current_line_stack_;
-    std::vector<std::shared_ptr<SourceFile>> input_file_stack_;
-    std::vector<bool> need_semicolon_stack_;
-    std::vector<int> require_newdecls_stack_;
+    struct LexerState {
+        std::shared_ptr<SourceFile> inpf;
+        LREntry inpf_loc;
+        int fline = 0;
+        bool need_semicolon = false;
+        int require_newdecls = 0;
+        int fcurrent = -1;
+        short icomment = 0;
+        size_t entry_preproc_if_stack_size = 0;
+    };
+
+    LexerState state_;
+    tr::vector<LexerState> prev_state_;
 };
