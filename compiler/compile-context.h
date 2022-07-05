@@ -35,6 +35,7 @@
 class Lexer;
 class ReportManager;
 class SemaContext;
+class SourceManager;
 class SymbolScope;
 struct CompileOptions;
 struct symbol;
@@ -63,8 +64,7 @@ class CompileContext final
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
-    tr::vector<std::string>& input_files() { return input_files_; }
-    tr::vector<std::string>& included_files() { return included_files_; }
+    SourceManager* sources() const { return sources_.get(); }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
@@ -119,11 +119,10 @@ class CompileContext final
     tr::unordered_set<symbol*> functions_;
     tr::unordered_set<symbol*> publics_;
     std::unique_ptr<CompileOptions> options_;
-    tr::vector<std::string> input_files_;
-    tr::vector<std::string> included_files_;
     std::string outfname_;
     std::string binfname_;
     std::string errfname_;
+    std::unique_ptr<SourceManager> sources_;
     std::shared_ptr<SourceFile> inpf_org_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate

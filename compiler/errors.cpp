@@ -210,7 +210,10 @@ MessageBuilder::~MessageBuilder()
     report.lineno = std::max(where_.line, 1);
     if (report.fileno < 0)
         report.fileno = cc.lexer()->fcurrent();
-    report.filename = cc.input_files().at(report.fileno);
+    if (report.fileno < cc.sources()->opened_files().size())
+        report.filename = cc.sources()->opened_files().at(report.fileno)->name();
+    else
+        report.filename = cc.options()->source_files[0];
     report.type = DeduceErrorType(number_);
 
     std::ostringstream out;
@@ -283,7 +286,10 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     report.lineno = std::max(lineno, 1);
     if (report.fileno < 0)
         report.fileno = cc.lexer()->fcurrent();
-    report.filename = cc.input_files().at(report.fileno);
+    if (report.fileno < cc.sources()->opened_files().size())
+        report.filename = cc.sources()->opened_files().at(report.fileno)->name();
+    else
+        report.filename = cc.options()->source_files[0];
     report.type = DeduceErrorType(number);
 
     const char* prefix = GetErrorTypePrefix(report.type);

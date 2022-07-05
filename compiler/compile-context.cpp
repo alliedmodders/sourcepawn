@@ -26,6 +26,7 @@
 #include "compile-options.h"
 #include "errors.h"
 #include "scvars.h"
+#include "source-manager.h"
 #include "symbols.h"
 
 CompileContext* CompileContext::sInstance = nullptr;
@@ -39,6 +40,7 @@ CompileContext::CompileContext()
 
     reports_ = std::make_unique<ReportManager>(*this);
     options_ = std::make_unique<CompileOptions>();
+    sources_ = std::make_unique<SourceManager>(*this);
 }
 
 CompileContext::~CompileContext()

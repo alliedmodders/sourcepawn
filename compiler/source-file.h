@@ -24,14 +24,17 @@
 #include <memory>
 #include <string>
 
+#include <amtl/am-maybe.h>
 #include "stl/stl-string.h"
 
 class SourceFile
 {
+    friend class SourceManager;
+
   public:
     SourceFile();
-
-    bool Open(const std::string& file_name);
+    SourceFile(const SourceFile&) = delete;
+    SourceFile(SourceFile&&) = delete;
 
     bool Read(unsigned char* target, int maxchars);
     int64_t Pos();
@@ -39,10 +42,28 @@ class SourceFile
     int Eof();
 
     const char* name() const { return name_.c_str(); }
+    const std::string& path() const { return name_; }
+    size_t size() const { return data_.size(); }
+    uint32_t sources_index() const { return sources_index_.get(); }
+
+    bool is_main_file() const { return is_main_file_; }
+    void set_is_main_file() { is_main_file_ = true; }
+
+    void operator =(const SourceFile&) = delete;
+    void operator =(SourceFile&&) = delete;
 
   private:
-    std::unique_ptr<FILE, decltype(&::fclose)> fp_;
+    bool Open(const std::string& file_name);
+
+    void set_sources_index(uint32_t sources_index) { sources_index_ = ke::Some(sources_index); }
+    uint32_t location_index() const { return location_index_.get(); }
+    void set_location_index(uint32_t location_index) { location_index_ = ke::Some(location_index); }
+
+  private:
     std::string name_;
     tr::string data_;
     size_t pos_;
+    bool is_main_file_ = false;
+    ke::Maybe<uint32_t> sources_index_;
+    ke::Maybe<uint32_t> location_index_;
 };
