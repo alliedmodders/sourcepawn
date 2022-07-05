@@ -122,8 +122,8 @@ bool
 ParseTree::ResolveNames(SemaContext& sc)
 {
     bool ok = true;
-    ok &= StmtList::EnterNames(sc);
-    ok &= StmtList::Bind(sc);
+    ok &= stmts_->EnterNames(sc);
+    ok &= stmts_->Bind(sc);
     return ok;
 }
 
@@ -750,7 +750,7 @@ ForStmt::Bind(SemaContext& sc)
 
     ke::Maybe<AutoCreateScope> enter_scope;
     if (init_) {
-        if (!init_->is(AstKind::ExprStmt))
+        if (!init_->is(StmtKind::ExprStmt))
             enter_scope.init(sc, sLOCAL, &scope_);
 
         ok &= init_->Bind(sc);

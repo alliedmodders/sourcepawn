@@ -23,7 +23,7 @@
 
 VarDecl::VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
                  bool is_public, bool is_static, bool is_stock, Expr* initializer)
- : Decl(AstKind::VarDecl, pos, name),
+ : Decl(StmtKind::VarDecl, pos, name),
    type_(type),
    vclass_(vclass),
    is_public_(is_public),
@@ -87,7 +87,7 @@ BlockStmt::WrapStmt(Stmt* stmt)
     return new BlockStmt(stmt->pos(), stmts);
 }
 
-BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right)
+BinaryExprBase::BinaryExprBase(ExprKind kind, const token_pos_t& pos, int token, Expr* left, Expr* right)
   : Expr(kind, pos),
     token_(token),
     left_(left),
@@ -97,7 +97,7 @@ BinaryExprBase::BinaryExprBase(AstKind kind, const token_pos_t& pos, int token, 
 }
 
 FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
-  : Decl(AstKind::FunctionDecl, pos, decl.name),
+  : Decl(StmtKind::FunctionDecl, pos, decl.name),
     decl_(decl),
     analyzed_(false),
     analyze_result_(false),
