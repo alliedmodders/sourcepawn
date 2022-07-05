@@ -84,9 +84,10 @@ Parser::Parse()
         }
         assert(!static_scopes_.empty());
 
-        if (changed)
+        if (changed) {
             stmts.emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back(),
-                                                   cc_.input_files().at(fcurrent)));
+                                                   lexer_->inpf()->name()));
+        }
 
         switch (tok) {
             case 0:
@@ -200,7 +201,7 @@ void Parser::CreateInitialScopes(std::vector<Stmt*>* stmts) {
         assert(fcurrent == 0);
         static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
         stmts->emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                cc_.input_files().at(fcurrent)));
+                                                lexer_->inpf()->name()));
     }
 
     if (!cc_.default_include().empty()) {
@@ -209,7 +210,7 @@ void Parser::CreateInitialScopes(std::vector<Stmt*>* stmts) {
             int fcurrent = lexer_->fcurrent();
             static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
             stmts->emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                    cc_.input_files().at(fcurrent)));
+                                lexer_->inpf()->name()));
         }
     }
 }
