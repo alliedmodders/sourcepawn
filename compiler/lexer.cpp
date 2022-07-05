@@ -57,6 +57,7 @@
 #include "sctracker.h"
 #include "scvars.h"
 #include "semantics.h"
+#include "source-manager.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -75,49 +76,40 @@ Lexer::PlungeQualifiedFile(const char* name)
 {
     auto& cc = CompileContext::get();
 
-    static const char* extensions[] = {".inc", ".p", ".pawn"};
-    std::string alt_name;
-
-    std::shared_ptr<SourceFile> fp;
-    size_t ext_idx;
-
-    ext_idx = 0;
-    do {
-        auto sf = std::make_shared<SourceFile>();
-        if (sf->Open(name)) {
-            fp = std::move(sf);
-            break;
-        }
-
-        /* try to push_back an extension */
-        alt_name = std::string(name) + extensions[ext_idx];
-        if (sf->Open(alt_name)) {
-            fp = std::move(sf);
-            name = alt_name.c_str();
-            break;
-        }
-        ext_idx++;
-    } while (ext_idx < (sizeof extensions / sizeof extensions[0]));
+    auto fp = OpenFile(name);
     if (!fp)
         return FALSE;
-    cc.included_files().emplace_back(name);
     input_file_stack_.push_back(inpf_);
     preproc_if_stack_.push_back(ifstack_.size());
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
     comment_stack_.push_back(icomment_);
-    current_file_stack_.push_back(fcurrent_);
     current_line_stack_.push_back(fline_);
     need_semicolon_stack_.push_back(cc.options()->need_semicolon);
     require_newdecls_stack_.push_back(cc.options()->require_newdecls);
-    inpf_ = fp; /* set input file pointer to include file */
+    ResetFile(fp);
     fline_ = 0; /* set current line number to 0 */
     icomment_ = 0;               /* not in a comment */
-    fcurrent_ = (int)cc.input_files().size();
-    cc.input_files().emplace_back(inpf_->name());
     listline_ = -1;           /* force a #line directive when changing the file */
     skip_utf8_bom(inpf_.get());
     return TRUE;
+}
+
+std::shared_ptr<SourceFile> Lexer::OpenFile(const std::string& name) {
+    AutoCountErrors detect_errors;
+
+    if (auto sf = cc_.sources()->Open(name, pos()))
+        return sf;
+
+    static const std::vector<std::string> extensions = {".inc", ".p", ".pawn"};
+    for (const auto& extension : extensions) {
+        auto alt_name = name + extension;
+        if (auto sf = cc_.sources()->Open(alt_name, pos()))
+            return sf;
+        if (!detect_errors.ok())
+            return nullptr;
+    }
+    return nullptr;
 }
 
 bool
@@ -289,7 +281,7 @@ Lexer::Readline(unsigned char* line)
             if (cont)
                 error(49); /* invalid line continuation */
             if (inpf_ != NULL && inpf_ != cc.inpf_org())
-                inpf_ = nullptr;
+                ResetFile(nullptr);
             if (current_line_stack_.empty()) {
                 freading_ = FALSE;
                 *line = '\0';
@@ -303,7 +295,6 @@ Lexer::Readline(unsigned char* line)
                 return;
             }
             fline_ = ke::PopBack(&current_line_stack_);
-            fcurrent_ = ke::PopBack(&current_file_stack_);
             icomment_ = ke::PopBack(&comment_stack_);
             need_semicolon_stack_.pop_back();
             require_newdecls_stack_.pop_back();
@@ -315,9 +306,8 @@ Lexer::Readline(unsigned char* line)
             assert(skiplevel_ == ifstack_.size());
 
             assert(!IsSkipping());   /* idem ditto */
-            inpf_ = ke::PopBack(&input_file_stack_);
+            ResetFile(ke::PopBack(&input_file_stack_));
             SetFileDefines(inpf_->name());
-            assert(cc.input_files().at(fcurrent_) == inpf_->name());
             listline_ = -1; /* force a #line directive when changing the file */
         }
 
@@ -986,7 +976,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
             if (!IsSkipping()) {
                 check_empty(lptr);
                 assert(inpf_ != NULL);
-                inpf_ = NULL;
+                ResetFile(nullptr);
             }
             break;
         case tpDEFINE: {
@@ -1781,8 +1771,7 @@ Lexer::Lexer(CompileContext& cc)
 
 void Lexer::Init(std::shared_ptr<SourceFile> sf) {
     freading_ = true;
-    inpf_ = std::move(sf);
-    cc_.input_files().emplace_back(inpf_->name());
+    ResetFile(sf);
     skip_utf8_bom(inpf_.get());
 }
 
@@ -1891,7 +1880,7 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->atom = nullptr;
     tok->start.line = fline_;
     tok->start.col = (int)(lptr - pline_);
-    tok->start.file = fcurrent_;
+    tok->start.file = inpf_->sources_index();
     tok->end = tok->start;
     lexpush();
     return tok;
@@ -1965,7 +1954,7 @@ Lexer::lex()
 
     tok->start.line = fline_;
     tok->start.col = (int)(lptr - pline_);
-    tok->start.file = fcurrent_;
+    tok->start.file = inpf_->sources_index();
 
     LexOnce(tok);
 
@@ -2859,4 +2848,11 @@ Lexer::NeedSemicolon()
     if (cc_.options()->need_semicolon)
         return true;
     return need_semicolon_stack_.back();
+}
+
+void Lexer::ResetFile(const std::shared_ptr<SourceFile>& fp) {
+    inpf_ = fp;
+    if (!inpf_)
+        return;
+    inpf_loc_ = cc_.sources()->GetLocationRangeEntryForFile(fp);
 }

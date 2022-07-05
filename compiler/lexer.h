@@ -26,6 +26,8 @@
 
 #include "compile-options.h"
 #include "sc.h"
+#include "source-location.h"
+#include "source-manager.h"
 
 class CompileContext;
 class Type;
@@ -293,6 +295,7 @@ class Lexer
     void Init(std::shared_ptr<SourceFile> sf);
     void Start();
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
+    std::shared_ptr<SourceFile> OpenFile(const std::string& name);
     void Preprocess(bool allow_synthesized_tokens);
     void AddMacro(const char* pattern, size_t length, const char* subst);
     bool NeedSemicolon();
@@ -312,9 +315,10 @@ class Lexer
     int& stmtindent() { return stmtindent_; }
     bool& indent_nowarn() { return indent_nowarn_; }
     bool freading() const { return freading_; }
-    int fcurrent() const { return fcurrent_; }
+    int fcurrent() const { return inpf_->sources_index(); }
     unsigned fline() const { return fline_; }
     unsigned char* pline() { return pline_; }
+    SourceFile* inpf() const { return inpf_.get(); }
 
     bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
 
@@ -340,6 +344,7 @@ class Lexer
     full_token_t* PushSynthesizedToken(TokenKind kind, int col);
     void SynthesizeIncludePathToken();
     void SetFileDefines(std::string file);
+    void ResetFile(const std::shared_ptr<SourceFile>& fp);
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
@@ -379,12 +384,12 @@ class Lexer
     int stmtindent_ = 0;
     bool indent_nowarn_ = false;
     bool freading_ = false;
-    int fcurrent_ = 0;
     unsigned fline_ = 0;
     unsigned char pline_[sLINEMAX + 1];         /* the line read from the input file */
     int ctrlchar_ = CTRL_CHAR;
 
     std::shared_ptr<SourceFile> inpf_;
+    LREntry inpf_loc_;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
@@ -417,7 +422,6 @@ class Lexer
     };
     ke::HashMap<std::string, MacroEntry, MacroTablePolicy> macros_;
 
-    std::vector<short> current_file_stack_;
     std::vector<int> current_line_stack_;
     std::vector<std::shared_ptr<SourceFile>> input_file_stack_;
     std::vector<bool> need_semicolon_stack_;
