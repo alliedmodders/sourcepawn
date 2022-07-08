@@ -9,4 +9,5 @@ static_assert(TEST_MAX == TEST_1)
 
 public main()
 {
+    static_assert(TEST_MAX == TEST_1)
 }
