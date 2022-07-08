@@ -1441,6 +1441,11 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             }
             return new ReturnStmt(pos, expr);
         }
+        case tSTATIC_ASSERT: {
+            auto stmt = parse_static_assert();
+            lexer_->need(tTERM);
+            return stmt;
+        }
         case tASSERT: {
             auto pos = lexer_->pos();
             Expr* expr = parse_expr(true);
