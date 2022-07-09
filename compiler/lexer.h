@@ -359,7 +359,8 @@ class Lexer
     cell litchar(int flags, bool* is_codepoint = nullptr);
     const unsigned char* skipstring(const unsigned char* string);
     const unsigned char* skipgroup(const unsigned char* string);
-    void packedstring(full_token_t* tok);
+    void packedstring(full_token_t* tok, char term);
+    void packedstring_char(full_token_t* tok);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
@@ -411,8 +412,6 @@ class Lexer
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
     token_buffer_t* token_buffer_;
-
-    char literal_buffer_[sLINEMAX + 1];
 
     struct MacroTablePolicy {
         static bool matches(const std::string& a, const std::string& b) {
