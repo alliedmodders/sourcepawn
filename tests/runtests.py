@@ -628,7 +628,7 @@ class TestRunner(object):
     return path
 
   def print_failures(self):
-    self.out("Failures were detected in the following tests:")
+    self.out("{} failures were detected in the following tests:".format(len(self.failures_)))
     failures = sorted([test.unique_name for test in self.failures_])
     for test in failures:
       test_path = os.path.join(os.path.split(__file__)[0], test)

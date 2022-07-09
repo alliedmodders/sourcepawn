@@ -51,6 +51,9 @@ class SourceFile
 
     void operator =(const SourceFile&) = delete;
     void operator =(SourceFile&&) = delete;
+    const unsigned char* data() const {
+        return reinterpret_cast<const unsigned char*>(data_.data());
+    }
 
   private:
     bool Open(const std::string& file_name);

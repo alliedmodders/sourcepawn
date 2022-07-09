@@ -380,8 +380,6 @@ bool Semantics::CheckExpr(Expr* expr) {
             return CheckCallExpr(expr->to<CallExpr>());
         case ExprKind::NewArrayExpr:
             return CheckNewArrayExpr(expr->to<NewArrayExpr>());
-        case ExprKind::IsDefinedExpr:
-            return CheckIsDefinedExpr(expr->to<IsDefinedExpr>());
         case ExprKind::TaggedValueExpr:
             return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
         case ExprKind::SizeofExpr:
@@ -497,7 +495,6 @@ bool Expr::HasSideEffects() {
         case ExprKind::IncDecExpr:
         case ExprKind::CallUserOpExpr:
             return true;
-        case ExprKind::IsDefinedExpr:
         case ExprKind::NullExpr:
         case ExprKind::SizeofExpr:
         case ExprKind::StringExpr:
@@ -577,14 +574,6 @@ void
 RvalueExpr::ProcessUses(SemaContext& sc)
 {
     expr_->MarkAndProcessUses(sc);
-}
-
-bool Semantics::CheckIsDefinedExpr(IsDefinedExpr* expr) {
-    auto& val = expr->val();
-    val.ident = iCONSTEXPR;
-    val.constval = expr->value();
-    val.tag = 0;
-    return true;
 }
 
 bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
@@ -1747,8 +1736,8 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
         }
         default:
             report(target, 12);
+            return nullptr;
     }
-    return nullptr;
 }
 
 symbol* Semantics::BindNewTarget(Expr* target) {

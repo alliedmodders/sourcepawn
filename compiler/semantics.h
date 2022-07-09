@@ -206,7 +206,6 @@ class Semantics final
     bool CheckLogicalExpr(LogicalExpr* expr);
     bool CheckBinaryExpr(BinaryExpr* expr);
     bool CheckUnaryExpr(UnaryExpr* expr);
-    bool CheckIsDefinedExpr(IsDefinedExpr* expr);
     bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, symbol* root,

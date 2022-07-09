@@ -252,7 +252,7 @@ static const char* warnmsg[] = {
     /*224*/ "user warning: %s\n",
     /*225*/ "unreachable code\n",
     /*226*/ "a variable is assigned to itself (symbol \"%s\")\n",
-    /*227*/ "unused227\n",
+    /*227*/ "illegal character\n",
     /*228*/ "enum multiplers are deprecated and will be removed in the next release\n",
     /*229*/ "index tag mismatch (symbol \"%s\")\n",
     /*230*/ "symbol \"%s\" is not a preprocessor symbol; this behavior is undefined and will be removed in the future\n",
@@ -261,7 +261,7 @@ static const char* warnmsg[] = {
     /*233*/ "unused233\n",
     /*234*/ "symbol \"%s\" is marked as deprecated: %s\n",
     /*235*/ "unused235\n",
-    /*236*/ "unknown parameter in substitution (incorrect #define pattern)\n",
+    /*236*/ "unused236\n",
     /*237*/
     "coercing functions to and from primitives is unsupported and will be removed in the future\n",
     /*238*/ "'%s:' is an illegal cast; use view_as<%s>(expression)\n",
@@ -276,6 +276,7 @@ static const char* warnmsg[] = {
     /*247*/ "include paths should be enclosed in \"quotes\" or <angle brackets>\n",
     /*248*/ "character is not utf-8 encoded\n",
     /*249*/ "function name is always true - possible missing parenthesis?\n"
+    /*250*/ "pragma has no effect\n",
 };
 
 static const char* errmsg_ex[] = {
@@ -294,7 +295,7 @@ static const char* errmsg_ex[] = {
     /*412*/ "function %s implements a forward but is not marked as public\n",
     /*413*/ "returned array does not have the same dimension count as return type\n",
     /*414*/ "include statements are only allowed at the top-level scope\n",
-    /*415*/ "assertion failed: %s\n",
+    /*415*/ "assertion failed\n",
     /*416*/ "user error: %s\n",
     /*417*/ "cannot read from file: \"%s\"\n",
     /*418*/ "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
@@ -305,4 +306,9 @@ static const char* errmsg_ex[] = {
     /*423*/ "internal compiler error: error propagated with no message\n",
     /*424*/ "integer literal contains no digits\n",
     /*425*/ "exponential must be followed by integer\n",
+    /*426*/ "macro arguments must be %% followed by a single digit\n",
+    /*427*/ "macro argument %%%d already used\n",
+    /*428*/ "invalid macro argument, mismatched parenthesis\n",
+    /*429*/ "wrong number of macro arguments (expected %s, got %s)\n",
+    /*430*/ "invalid macro definition\n",
 };

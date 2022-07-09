@@ -155,8 +155,10 @@ Parser::Parse()
                     break;
                 auto name = lexer_->current_token()->data;
                 auto result = lexer_->PlungeFile(name.c_str() + 1, (name[0] != '<'), TRUE);
-                if (!result && tok != tpTRYINCLUDE)
+                if (!result && tok != tpTRYINCLUDE) {
                     report(417) << name.substr(1);
+                    cc_.set_must_abort();
+                }
 
                 int fcurrent = lexer_->fcurrent();
                 static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
@@ -600,26 +602,11 @@ Parser::parse_pragma_unused()
 {
     auto pos = lexer_->pos();
 
-    int tok = lexer_->lex_same_line();
+    auto data = std::move(lexer_->current_token()->data);
+    std::vector<std::string> raw_names = ke::Split(data, ",");
     std::vector<sp::Atom*> names;
-    for (;;) {
-        if (tok != tSYMBOL) {
-            report(1) << get_token_string(tSYMBOL) << get_token_string(tok);
-            lexer_->lexclr(TRUE);
-            break;
-        }
-
-        sp::Atom* name = lexer_->current_token()->atom;
-        names.emplace_back(name);
-
-        tok = lexer_->lex_same_line();
-        if (tok == ',') {
-            tok = lexer_->lex_same_line();
-            continue;
-        }
-        if (tok == tEOL)
-            break;
-    }
+    for (const auto& raw_name : raw_names)
+        names.emplace_back(gAtoms.add(raw_name));
     return new PragmaUnusedStmt(pos, names);
 }
 
@@ -923,19 +910,6 @@ Parser::hier2()
             Expr* expr = hier2();
             return new CastExpr(pos, tok, ti, expr);
         }
-        case tDEFINED:
-        {
-            int parens = 0;
-            while (lexer_->match('('))
-                parens++;
-
-            sp::Atom* ident;
-            if (!lexer_->needsymbol(&ident))
-                return nullptr;
-            while (parens--)
-                lexer_->need(')');
-            return new IsDefinedExpr(pos, ident);
-        }
         case tSIZEOF:
         {
             int parens = 0;
@@ -1082,6 +1056,7 @@ Parser::constant()
     switch (tok) {
         case tNULL:
             return new NullExpr(pos);
+        case tCHAR_LITERAL:
         case tNUMBER:
             return new NumberExpr(pos, lexer_->current_token()->value);
         case tRATIONAL:
@@ -1207,6 +1182,7 @@ Parser::struct_init()
                 expr = new StringExpr(pos, str.c_str(), str.size());
                 break;
             }
+            case tCHAR_LITERAL:
             case tNUMBER:
                 expr = new NumberExpr(pos, lexer_->current_token()->value);
                 break;
@@ -1534,10 +1510,10 @@ Parser::parse_compound(bool sameline)
     /* if there is more text on this line, we should adjust the statement indent */
     if (sameline) {
         int i;
-        const unsigned char* p = lexer_->lptr;
+        const unsigned char* p = lexer_->char_stream();
         /* go back to the opening brace */
         while (*p != '{') {
-            assert(p > lexer_->pline());
+            assert(p > lexer_->line_start());
             p--;
         }
         assert(*p == '{'); /* it should be found */
@@ -1547,9 +1523,9 @@ Parser::parse_compound(bool sameline)
             p++;
         assert(*p != '\0'); /* a token should be found */
         lexer_->stmtindent() = 0;
-        for (i = 0; i < (int)(p - lexer_->pline()); i++) {
+        for (i = 0; i < (int)(p - lexer_->line_start()); i++) {
             int tabsize = cc_.options()->tabsize;
-            if (lexer_->pline()[i] == '\t' && tabsize > 0)
+            if (lexer_->line_start()[i] == '\t' && tabsize > 0)
                 lexer_->stmtindent() += (int)(tabsize - (lexer_->stmtindent() + tabsize) % tabsize);
             else
                 lexer_->stmtindent()++;

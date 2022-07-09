@@ -47,7 +47,6 @@
     FOR_EACH(ChangeScopeNode)
 
 #define AST_EXPR_TYPE_LIST(FOR_EACH) \
-    FOR_EACH(IsDefinedExpr) \
     FOR_EACH(UnaryExpr) \
     FOR_EACH(BinaryExpr) \
     FOR_EACH(LogicalExpr) \

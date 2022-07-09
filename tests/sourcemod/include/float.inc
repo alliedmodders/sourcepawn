@@ -262,8 +262,6 @@ stock int RoundFloat(float value)
  * User defined operators.
  */
 #if !defined __sourcepawn2__
-#pragma rational Float
-
 // Internal aliases for backwards compatibility.
 native float __FLOAT_MUL__(float a, float b) = FloatMul;
 native float __FLOAT_DIV__(float a, float b) = FloatDiv;

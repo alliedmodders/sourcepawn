@@ -80,9 +80,8 @@ Lexer::PlungeQualifiedFile(const char* name)
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
     state_.entry_preproc_if_stack_size = ifstack_.size();
-    prev_state_.emplace_back(state_);
+    PushLexerState();
     EnterFile(std::move(fp));
-    listline_ = -1;           /* force a #line directive when changing the file */
     return true;
 }
 
@@ -183,32 +182,34 @@ Lexer::SetFileDefines(std::string file)
     file.push_back('"');
     fileName.push_back('"');
 
-    AddMacro("__FILE_PATH__", 13, file.c_str());
-    AddMacro("__FILE_NAME__", 13, fileName.c_str());
+    AddMacro("__FILE_PATH__", file.c_str());
+    AddMacro("__FILE_NAME__", fileName.c_str());
 }
 
-static void
-check_empty(const unsigned char* lptr)
-{
-    /* verifies that the string contains only whitespace */
-    while (*lptr <= ' ' && *lptr != '\0')
-        lptr++;
-    if (*lptr != '\0')
-        error(38); /* extra characters on line */
+void Lexer::CheckLineEmpty(bool allow_semi) {
+    AutoCountErrors errors;
+    while (true) {
+        int tok = lex_same_line();
+        if (tok == tEOL) {
+            if (IsInMacro()) {
+                HandleEof();
+                continue;
+            }
+            break;
+        }
+        if (tok == ';' && allow_semi && peek_same_line() == tEOL)
+            break;
+        if (errors.ok() && tok >= ' ')
+            error(38);
+    }
 }
 
 void
 Lexer::SynthesizeIncludePathToken()
 {
-    /* skip leading whitespace */
-    while (true) {
-        char c = peek();
-        if (c > ' ' || c == '\0')
-            break;
-        advance();
-    }
+    SkipLineWhitespace();
 
-    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, int(lptr - pline_));
+    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, column());
 
     char open_c = peek();
     char close_c;
@@ -220,20 +221,14 @@ Lexer::SynthesizeIncludePathToken()
         report(247);
     }
 
-    /* skip whitespace after quote */
-    while (true) {
-        char c = peek();
-        if (c > ' ' || c == '\0')
-            break;
-        advance();
-    }
+    SkipLineWhitespace();
 
     char name[PATH_MAX];
 
     int i = 0;
     while (true) {
         char c = peek();
-        if (c == close_c || c == '\0' || i >= (int)sizeof(name) - 1)
+        if (c == close_c || c == '\0' || i >= (int)sizeof(name) - 1 || IsNewline(c))
             break;
         if (DIRSEP_CHAR != '/' && c == '/') {
             name[i++] = DIRSEP_CHAR;
@@ -251,203 +246,12 @@ Lexer::SynthesizeIncludePathToken()
         if (advance() != close_c)
             error(37);
     }
-    check_empty(lptr); /* verify that the rest of the line is whitespace */
+
+    CheckLineEmpty();
 
     if (!open_c)
         open_c = '"';
     tok->data = ke::StringPrintf("%c%s", open_c, name);
-}
-
-/*  readline
- *
- *  Reads in a new line from the input file pointed to by "inpf". readline()
- *  concatenates lines that end with a \ with the next line. If no more data
- *  can be read from the file, readline() attempts to pop off the previous file
- *  from the stack. If that fails too, it sets "freading_" to 0.
- *
- *  Global references: inpf,fline,inpfname,freading_,icomment (altered)
- */
-void
-Lexer::Readline(unsigned char* line)
-{
-    int num, cont;
-    unsigned char* ptr;
-
-    num = sLINEMAX;
-    cont = FALSE;
-    do {
-        if (!state_.inpf || state_.inpf->Eof()) {
-            auto& cc = CompileContext::get();
-
-            if (cont)
-                error(49); /* invalid line continuation */
-            if (state_.inpf && state_.inpf != cc.inpf_org())
-                state_.inpf = nullptr;
-            if (prev_state_.empty()) {
-                freading_ = FALSE;
-                *line = '\0';
-                /* when there is nothing more to read, the #if/#else stack should
-                 * be empty and we should not be in a comment
-                 */
-                if (!ifstack_.empty())
-                    error(1, "#endif", "-end of file-");
-                else if (state_.icomment != 0)
-                    error(1, "*/", "-end of file-");
-                return;
-            }
-            state_ = ke::PopBack(&prev_state_);
-
-            /* this condition held before including the file */
-            skiplevel_ = state_.entry_preproc_if_stack_size;
-            while (skiplevel_ < ifstack_.size())
-                ifstack_.pop_back();
-            assert(skiplevel_ == ifstack_.size());
-
-            assert(!IsSkipping());   /* idem ditto */
-            SetFileDefines(state_.inpf->name());
-            listline_ = -1; /* force a #line directive when changing the file */
-        }
-
-        if (!state_.inpf->Read(line, num)) {
-            *line = '\0'; /* delete line */
-            cont = FALSE;
-        } else {
-            /* check whether to erase leading spaces */
-            if (cont) {
-                unsigned char* ptr = line;
-                while (*ptr <= ' ' && *ptr != '\0')
-                    ptr++;
-                if (ptr != line)
-                    memmove(line, ptr, strlen((char*)ptr) + 1);
-            }
-            cont = FALSE;
-            /* check whether a full line was read */
-            if (strchr((char*)line, '\n') == NULL && !state_.inpf->Eof())
-                error(75); /* line too long */
-            /* check if the next line must be concatenated to this line */
-            if ((ptr = (unsigned char*)strchr((char*)line, '\n')) == NULL)
-                ptr = (unsigned char*)strchr((char*)line, '\r');
-            if (ptr != NULL && ptr > line) {
-                assert(*(ptr + 1) == '\0'); /* '\n' or '\r' should be last in the string */
-                while (ptr > line && *ptr <= ' ')
-                    ptr--; /* skip trailing whitespace */
-                if (*ptr == '\\') {
-                    cont = TRUE;
-                    /* set '\a' at the position of '\\' to make it possible to check
-                     * for a line continuation in a single line comment (error 49)
-                     */
-                    *ptr++ = '\a';
-                    *ptr = '\0'; /* erase '\n' (and any trailing whitespace) */
-                }
-            }
-            num -= strlen((char*)line);
-            line += strlen((char*)line);
-        }
-        state_.fline += 1;
-    } while (num >= 0 && cont);
-}
-
-/*  stripcom
- *
- *  Replaces all comments from the line by space characters. It updates
- *  a global variable ("icomment") for multiline comments.
- *
- *  This routine also supports the C++ extension for single line comments.
- *  These comments are started with "//" and end at the end of the line.
- *
- *  The function also detects (and manages) "documentation comments". The
- *  global variable "icomment" is set to 2 for documentation comments.
- *
- *  Global references: icomment  (private to "stripcom")
- */
-void
-Lexer::StripComments(unsigned char* line)
-{
-    char c;
-#define COMMENT_LIMIT 100
-#define COMMENT_MARGIN 40 /* length of the longest word */
-    char comment[COMMENT_LIMIT + COMMENT_MARGIN];
-    int commentidx = 0;
-    int skipstar = TRUE;
-
-    while (*line) {
-        if (state_.icomment != 0) {
-            if (*line == '*' && *(line + 1) == '/') {
-                if (state_.icomment == 2) {
-                    assert(commentidx < COMMENT_LIMIT + COMMENT_MARGIN);
-                    comment[commentidx] = '\0';
-                }
-                state_.icomment = 0; /* comment has ended */
-                *line = ' ';  /* replace '*' and '/' characters by spaces */
-                *(line + 1) = ' ';
-                line += 2;
-            } else {
-                if (*line == '/' && *(line + 1) == '*')
-                    error(216); /* nested comment */
-                /* collect the comment characters in a string */
-                if (state_.icomment == 2) {
-                    if (skipstar && ((*line != '\0' && *line <= ' ') || *line == '*')) {
-                        /* ignore leading whitespace and '*' characters */
-                    } else if (commentidx < COMMENT_LIMIT + COMMENT_MARGIN - 1) {
-                        comment[commentidx++] = (char)((*line != '\n') ? *line : ' ');
-                        if (commentidx > COMMENT_LIMIT && *line != '\0' && *line <= ' ') {
-                            comment[commentidx] = '\0';
-                            commentidx = 0;
-                        }
-                        skipstar = FALSE;
-                    }
-                }
-                *line = ' '; /* replace comments by spaces */
-                line += 1;
-            }
-        } else {
-            if (*line == '/' && *(line + 1) == '*') {
-                state_.icomment = 1; /* start comment */
-                /* there must be two "*" behind the slash and then white space */
-                if (*(line + 2) == '*' && *(line + 3) <= ' ') {
-                    state_.icomment = 2; /* documentation comment */
-                }
-                commentidx = 0;
-                skipstar = TRUE;
-                *line = ' '; /* replace '/' and '*' characters by spaces */
-                *(line + 1) = ' ';
-                line += 2;
-                if (state_.icomment == 2)
-                    *line++ = ' ';
-            } else if (*line == '/' && *(line + 1) == '/') { /* comment to end of line */
-                if (strchr((char*)line, '\a') != NULL)
-                    error(49); /* invalid line continuation */
-                if (*(line + 2) == '/' && *(line + 3) <= ' ') {
-                    /* documentation comment */
-                    char* str = (char*)line + 3;
-                    char* end;
-                    while (*str <= ' ' && *str != '\0')
-                        str++; /* skip leading whitespace */
-                    if ((end = strrchr(str, '\n')) != NULL)
-                        *end = '\0'; /* erase trailing '\n' */
-                }
-                *line++ = '\n'; /* put "newline" at first slash */
-                *line = '\0';   /* put "zero-terminator" at second slash */
-            } else {
-                if (*line == '\"' || *line == '\'') { /* leave literals unaltered */
-                    c = *line;                        /* ending quote, single or double */
-                    line += 1;
-                    while (*line != c && *line != '\0') {
-                        if (*line == ctrlchar_ && *(line + 1) != '\0')
-                            line += 1; /* skip escape character (but avoid skipping past '\0' */
-                        line += 1;
-                    }
-                    line += 1; /* skip final quote */
-                } else {
-                    line += 1;
-                }
-            }
-        }
-    }
-    if (state_.icomment == 2) {
-        assert(commentidx < COMMENT_LIMIT + COMMENT_MARGIN);
-        comment[commentidx] = '\0';
-    }
 }
 
 /*  ftoi
@@ -475,7 +279,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
     double fmult = 1.0;
     while (true) {
         char c = peek();
-        if (!isdigit(c) && c != '_')
+        if (!IsDigit(c) && c != '_')
             break;
         advance();
         if (c != '_') {
@@ -486,9 +290,9 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
         }
     }
     fnum += ffrac * fmult; /* form the number so far */
-    if (lex_match_char('e')) {     /* optional fractional part */
+    if (match_char('e')) {     /* optional fractional part */
         int sign;
-        if (lex_match_char('-'))
+        if (match_char('-'))
             sign = -1;
         else
             sign = 1;
@@ -496,7 +300,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
         int ndigits = 0;
         while (true) {
             char c = peek();
-            if (!isdigit(c))
+            if (!IsDigit(c))
                 break;
             advance();
             exp = (exp * 10) + (c - '0');
@@ -514,39 +318,9 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
     tok->id = tRATIONAL;
 }
 
-static void
-chrcat(char* str, char chr)
-{
-    str = strchr(str, '\0');
-    *str++ = chr;
-    *str = '\0';
-}
-
-int
-Lexer::preproc_expr(cell* val, int* tag)
-{
-    int result;
-    char* term;
-
+int Lexer::preproc_expr(cell* val, int* tag) {
     ke::SaveAndSet<bool> forbid_const(&Parser::sInPreprocessor, true);
-
-    assert((lptr - pline_) < (int)strlen((char*)pline_)); /* lptr must point inside the string */
-    /* preprocess the string */
-    substallpatterns(pline_, sLINEMAX);
-    assert((lptr - pline_) <
-           (int)strlen((char*)pline_)); /* lptr must STILL point inside the string */
-    /* push_back a special symbol to the string, so the expression
-     * analyzer won't try to read a next line when it encounters
-     * an end-of-line
-     */
-    assert(strlen((char*)pline_) < sLINEMAX);
-    term = strchr((char*)pline_, '\0');
-    assert(term != NULL);
-    chrcat((char*)pline_, PREPROC_TERM); /* the "DEL" code (see SC.H) */
-    result = Parser::PreprocExpr(val, tag); /* get value (or 0 on error) */
-    *term = '\0';                       /* erase the token (if still present) */
-    lexclr(FALSE);                      /* clear any "pushed" tokens */
-    return result;
+    return Parser::PreprocExpr(val, tag); /* get value (or 0 on error) */
 }
 
 enum {
@@ -561,832 +335,689 @@ enum {
     CMD_INJECTED,
 };
 
-/*  command
- *
- *  Recognizes the compiler directives. The function returns:
- *     CMD_NONE         the line must be processed
- *     CMD_TERM         a pending expression must be completed before processing further lines
- *     Other value: the line must be skipped, because:
- *     CMD_CONDFALSE    false "#if.." code
- *     CMD_EMPTYLINE    line is empty
- *     CMD_INCLUDE      the line contains a #include directive
- *     CMD_DEFINE       the line contains a #subst directive
- *     CMD_IF           the line contains a #if/#else/#endif directive
- *     CMD_DIRECTIVE    the line contains some other compiler directive
- *
- *  Global variables: iflevel, ifstack (altered)
- *                    lptr      (altered)
- */
-int
-Lexer::DoCommand(bool allow_synthesized_tokens)
-{
-    cell val;
-    const char* str;
+void Lexer::HandleDirectives() {
+    assert(peek() == '#');
 
-    while (true) {
-        char c = peek();
-        if (c > ' ' || c == '\0')
-            break;
-        advance();
-    }
-    if (peek() == '\0')
-        return CMD_EMPTYLINE; /* empty line */
-    if (peek() != '#')
-        return IsSkipping() ? CMD_CONDFALSE : CMD_NONE; /* it is not a compiler directive */
-    /* compiler directive found */
-    indent_nowarn_ = true; /* allow loose indentation" */
-    lexclr(FALSE);        /* clear any "pushed" tokens */
-    int tok = lex();
-    int ret = IsSkipping() ? CMD_CONDFALSE : CMD_DIRECTIVE; /* preset 'ret' to CMD_DIRECTIVE (most common case) */
+    ke::SaveAndSet<token_buffer_t*> switch_buffers(&token_buffer_, &preproc_buffer_);
+    assert(token_buffer_->depth == 0);
+
+    // We should be guaranteed that nested FindNextToken will bail out, since
+    // we're already at a valid token.
+    int tok = LexNewToken();
     switch (tok) {
-        case tpIF: /* conditional compilation */
-            ret = CMD_IF;
+        case tpIF: {
             ifstack_.emplace_back(0);
-            if (IsSkipping())
-                break; /* break out of switch */
             skiplevel_ = ifstack_.size();
-            preproc_expr(&val, NULL); /* get value (or 0 on error) */
-            ifstack_.back() = (char)(val ? PARSEMODE : SKIPMODE);
-            check_empty(lptr);
-            break;
-        case tpELSE:
-        case tpELSEIF:
-            ret = CMD_IF;
-            if (ifstack_.empty()) {
-                error(26); /* no matching #if */
-                cc_.reports()->ResetErrorFlag();
-            } else {
-                /* check for earlier #else */
-                if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE) {
-                    if (tok == tpELSEIF)
-                        error(61); /* #elseif directive may not follow an #else */
-                    else
-                        error(60); /* multiple #else directives between #if ... #endif */
-                    cc_.reports()->ResetErrorFlag();
-                } else {
-                    /* if there has been a "parse mode" on this level, set "skip mode",
-                     * otherwise, clear "skip mode"
-                     */
-                    if ((ifstack_.back() & PARSEMODE) == PARSEMODE) {
-                        /* there has been a parse mode already on this level, so skip the rest */
-                        ifstack_.back() |= (char)SKIPMODE;
-                        /* if we were already skipping this section, allow expressions with
-                         * undefined symbols; otherwise check the expression to catch errors
-                         */
-                        if (tok == tpELSEIF) {
-                            if (skiplevel_ == ifstack_.size())
-                                preproc_expr(&val, NULL); /* get, but ignore the expression */
-                            else
-                                lptr = (unsigned char*)strchr((char*)lptr, '\0');
-                        }
-                    } else {
-                        /* previous conditions were all FALSE */
-                        if (tok == tpELSEIF) {
-                            /* if we were already skipping this section, allow expressions with
-                             * undefined symbols; otherwise check the expression to catch errors
-                             */
-                            if (skiplevel_ == ifstack_.size()) {
-                                preproc_expr(&val, NULL); /* get value (or 0 on error) */
-                            } else {
-                                lptr = (unsigned char*)strchr((char*)lptr, '\0');
-                                val = 0;
-                            }
-                            ifstack_.back() = (char)(val ? PARSEMODE : SKIPMODE);
-                        } else {
-                            /* a simple #else, clear skip mode */
-                            ifstack_.back() &= (char)~SKIPMODE;
-                        }
-                    }
-                }
-            }
-            check_empty(lptr);
-            break;
-        case tpENDIF:
-            ret = CMD_IF;
-            if (ifstack_.empty()) {
-                error(26); /* no matching "#if" */
-                cc_.reports()->ResetErrorFlag();
-            } else {
-                ifstack_.pop_back();
-                if (ifstack_.size() < skiplevel_)
-                    skiplevel_ = ifstack_.size();
-            }
-            check_empty(lptr);
-            break;
-        case tINCLUDE: /* #include directive */
-        case tpTRYINCLUDE: {
-            ret = CMD_INCLUDE;
-            if (IsSkipping())
-                break;
-            auto col = current_token()->start.col;
-            if (allow_synthesized_tokens) {
-                SynthesizeIncludePathToken();
-                PushSynthesizedToken((TokenKind)tok, col);
-                ret = CMD_INJECTED;
 
-                // Force lexer to reset.
-                pline_[0] = '\0';
-                lptr = pline_;
-                lexnewline_ = TRUE;
-            }
+            cell val = 0;
+            preproc_expr(&val, NULL); /* get value (or 0 on error) */
+            CheckLineEmpty();
+
+            ifstack_.back() = (char)(val ? PARSEMODE : SKIPMODE);
+
+            if (IsSkipping())
+                HandleSkippedSection();
             break;
         }
-        case tpLINE:
-            if (!IsSkipping()) {
-                if (lex() != tNUMBER)
-                    error(8); /* invalid/non-constant expression */
-                state_.fline = current_token()->value;
+
+        // By definition, tpELSE, tpELSEIF, and tpENDIF are reached here by
+        // being in a non-skipped section.
+        case tpELSE:
+            if (ifstack_.empty()) {
+                error(26);
+                break;
             }
-            check_empty(lptr);
+            if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE)
+                error(60); /* multiple #else directives between #if ... #endif */
+            ifstack_.back() |= (char)(SKIPMODE | HANDLED_ELSE);
+            CheckLineEmpty();
+            HandleSkippedSection();
             break;
+
+        case tpELSEIF: {
+            if (ifstack_.empty()) {
+                error(26);
+                break;
+            }
+            if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE)
+                error(61); /* #elseif directive may not follow an #else */
+            ifstack_.back() |= (char)SKIPMODE;
+            HandleSkippedSection();
+            break;
+        }
+
+        case tpENDIF:
+            if (ifstack_.empty()) {
+                error(26); /* no matching "#if" */
+                break;
+            }
+            ifstack_.pop_back();
+            if (ifstack_.size() < skiplevel_)
+                skiplevel_ = ifstack_.size();
+            CheckLineEmpty();
+            break;
+
+        case tINCLUDE: /* #include directive */
+        case tpTRYINCLUDE: {
+            auto col = current_token()->start.col;
+            SynthesizeIncludePathToken();
+            PushSynthesizedToken((TokenKind)tok, col);
+            break;
+        }
         case tpASSERT:
         {
             ke::SaveAndSet<bool> reset(&Parser::sDetectedIllegalPreprocessorSymbols, false);
 
-            if (!IsSkipping()) {
-                for (str = (char*)lptr; *str <= ' ' && *str != '\0'; str++)
-                    /* nothing */;        /* save start of expression */
-                preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
-                if (!val)
-                    report(415) << str;
-                check_empty(lptr);
-            }
+            cell val = 0;
+            preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */
+            if (!val)
+                report(415);
+
+            CheckLineEmpty();
             break;
         }
         case tpPRAGMA:
-            if (!IsSkipping()) {
-                if (lex() == tSYMBOL) {
-                    if (current_token()->atom->str() == "ctrlchar") {
-                        while (*lptr <= ' ' && *lptr != '\0')
-                            lptr++;
-                        if (*lptr == '\0') {
-                            ctrlchar_ = cc_.options()->ctrlchar_org;
-                        } else {
-                            if (lex() != tNUMBER)
-                                error(27); /* invalid character constant */
-                            ctrlchar_ = (char)current_token()->value;
-                        }
-                    } else if (current_token()->atom->str() == "deprecated") {
-                        while (*lptr <= ' ' && *lptr != '\0')
-                            lptr++;
-                        deprecate_ = (char*)lptr;
-                        lptr = (unsigned char*)strchr(
-                            (char*)lptr,
-                            '\0'); /* skip to end (ignore "extra characters on line") */
-                        while (!deprecate_.empty() && isspace(deprecate_.back()))
-                            deprecate_.pop_back();
-                    } else if (current_token()->atom->str() == "dynamic") {
-                        preproc_expr(&cc_.options()->pragma_dynamic, NULL);
-                    } else if (current_token()->atom->str() == "rational") {
-                        while (*lptr != '\0')
-                            lptr++;
-                    } else if (current_token()->atom->str() == "semicolon") {
-                        cell val;
-                        preproc_expr(&val, NULL);
-                        state_.need_semicolon = !!val;
-                    } else if (current_token()->atom->str() == "newdecls") {
-                        while (*lptr <= ' ' && *lptr != '\0')
-                            lptr++;
-                        if (strncmp((char*)lptr, "required", 8) == 0)
-                            state_.require_newdecls = true;
-                        else if (strncmp((char*)lptr, "optional", 8) == 0)
-                            state_.require_newdecls = false;
-                        else
-                            error(146);
-                        lptr = (unsigned char*)strchr(
-                            (char*)lptr,
-                            '\0'); /* skip to end (ignore "extra characters on line") */
-                    } else if (current_token()->atom->str() == "tabsize") {
-                        cell val;
-                        preproc_expr(&val, NULL);
-                        cc_.options()->tabsize = (int)val;
-                    } else if (current_token()->atom->str() == "unused") {
-                        if (allow_synthesized_tokens) {
-                            while (*lptr <= ' ' && *lptr != '\0')
-                                lptr++;
-
-                            PushSynthesizedToken(tSYN_PRAGMA_UNUSED, int(lptr - pline_));
-                            return CMD_INJECTED;
-                        }
-
-                        bool comma;
-                        do {
-                            /* get the name */
-                            while (*lptr <= ' ' && *lptr != '\0')
-                                lptr++;
-                            auto name_start = lptr;
-                            while (alphanum(*lptr))
-                                lptr++;
-
-                            auto ident = std::string((const char*)name_start, lptr - name_start);
-                            report(17) << ident; /* undefined symbol */
-
-                            /* see if a comma follows the name */
-                            while (*lptr <= ' ' && *lptr != '\0')
-                                lptr++;
-                            comma = (*lptr == ',');
-                            if (comma)
-                                lptr++;
-                        } while (comma);
-                    } else {
-                        error(207); /* unknown #pragma */
-                    }
-                } else {
-                    error(207); /* unknown #pragma */
-                }
-                check_empty(lptr);
-            }
-            break;
-        case tpENDINPUT:
-        case tpENDSCRPT:
-            if (!IsSkipping()) {
-                check_empty(lptr);
-                assert(state_.inpf != NULL);
-                state_.inpf = nullptr;
-            }
-            break;
-        case tpDEFINE: {
-            ret = CMD_DEFINE;
-            if (!IsSkipping()) {
-                const unsigned char *start, *end;
-                int count, prefixlen;
-                /* find the pattern to match */
-                while (*lptr <= ' ' && *lptr != '\0')
-                    lptr++;
-                start = lptr; /* save starting point of the match pattern */
-                count = 0;
-                while (*lptr > ' ' && *lptr != '\0') {
-                    litchar(0); /* litchar() advances "lptr" and handles escape characters */
-                    count++;
-                }
-                end = lptr;
-                /* check pattern to match */
-                if (!alpha(*start)) {
-                    error(74); /* pattern must start with an alphabetic character */
+            {
+                ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
+                if (lex() != tSYMBOL) {
+                    error(207);
                     break;
                 }
-                auto pattern_mem = std::make_unique<char[]>(count + 1);
-                auto pattern = pattern_mem.get();
-                lptr = start;
-                count = 0;
-                while (lptr != end) {
-                    assert(lptr < end);
-                    assert(*lptr != '\0');
-                    pattern[count++] = (char)litchar(0);
-                }
-                pattern[count] = '\0';
-                /* special case, erase trailing variable, because it could match anything */
-                if (count >= 2 && isdigit(pattern[count - 1]) && pattern[count - 2] == '%')
-                    pattern[count - 2] = '\0';
-                /* find substitution string */
-                while (*lptr <= ' ' && *lptr != '\0')
-                    lptr++;
-                start = lptr; /* save starting point of the match pattern */
-                count = 0;
-                end = NULL;
-                while (*lptr != '\0') {
-                    /* keep position of the start of trailing whitespace */
-                    if (*lptr <= ' ') {
-                        if (end == NULL)
-                            end = lptr;
-                    } else {
-                        end = NULL;
-                    }
-                    count++;
-                    lptr++;
-                }
-                if (end == NULL)
-                    end = lptr;
-                /* store matched substitution */
-                auto substitution_mem = std::make_unique<char[]>(count + 1);
-                auto substitution = substitution_mem.get();
-                lptr = start;
-                count = 0;
-                while (lptr != end) {
-                    assert(lptr < end);
-                    assert(*lptr != '\0');
-                    substitution[count++] = *lptr++;
-                }
-                substitution[count] = '\0';
-                /* check whether the definition already exists */
-                for (prefixlen = 0, start = (unsigned char*)pattern; alphanum(*start);
-                     prefixlen++, start++)
-                    /* nothing */;
-                assert(prefixlen > 0);
-
-                macro_t def;
-                if (FindMacro(pattern, prefixlen, &def)) {
-                    if (strcmp(def.first, pattern) != 0 || strcmp(def.second, substitution) != 0)
-                        error(201, pattern); /* redefinition of macro (non-identical) */
-                    DeleteMacro(pattern, prefixlen);
-                }
-                /* add the pattern/substitution pair to the list */
-                assert(strlen(pattern) > 0);
-                AddMacro(pattern, prefixlen, substitution);
             }
+            if (current_token()->atom->str() == "ctrlchar") {
+                int tok = lex_same_line();
+                if (tok == tEOL) {
+                    ctrlchar_ = cc_.options()->ctrlchar_org;
+                } else {
+                    if (tok == tNUMBER)
+                        ctrlchar_ = (char)current_token()->value;
+                    else
+                        error(27); /* invalid character constant */
+                }
+            } else if (current_token()->atom->str() == "deprecated") {
+                deprecate_ = SkimUntilEndOfLine();
+            } else if (current_token()->atom->str() == "dynamic") {
+                preproc_expr(&cc_.options()->pragma_dynamic, NULL);
+            } else if (current_token()->atom->str() == "rational") {
+                error(249);
+                SkimUntilEndOfLine();
+            } else if (current_token()->atom->str() == "semicolon") {
+                cell val;
+                preproc_expr(&val, NULL);
+                state_.need_semicolon = !!val;
+            } else if (current_token()->atom->str() == "newdecls") {
+                int tok = lex_same_line();
+                if (tok != tSYMBOL) {
+                    error(146);
+                    break;
+                }
+                auto atom = current_token()->atom;
+                if (atom->str() == "required")
+                    state_.require_newdecls = true;
+                else if (atom->str() == "optional")
+                    state_.require_newdecls = false;
+                else
+                    error(146);
+            } else if (current_token()->atom->str() == "tabsize") {
+                cell val;
+                preproc_expr(&val, NULL);
+                cc_.options()->tabsize = (int)val;
+            } else if (current_token()->atom->str() == "unused") {
+                unsigned col = column();
+                if (!need_same_line(tSYMBOL))
+                    break;
+
+                std::vector<std::string> parts = { current_token()->atom->str() };
+                while (match_same_line(',')) {
+                    if (!need_same_line(tSYMBOL))
+                        break;
+                    parts.emplace_back(current_token()->atom->str());
+                }
+
+                auto tok = PushSynthesizedToken(tSYN_PRAGMA_UNUSED, col);
+                tok->data = ke::Join(parts, ",");
+            } else {
+                error(207); /* unknown #pragma */
+            }
+            CheckLineEmpty(true);
+            break;
+
+        case tpENDINPUT:
+        case tpENDSCRPT:
+            CheckLineEmpty();
+            state_.pos = state_.end;
+            break;
+        case tpDEFINE: {
+            sp::Atom* symbol;
+            {
+                ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
+                ke::SaveAndSet<bool> no_keywords(&allow_keywords_, false);
+                if (!needsymbol(&symbol))
+                    break;
+            }
+            if (!alpha(symbol->str()[0])) {
+                error(74); /* pattern must start with an alphabetic character */
+                break;
+            }
+
+            ke::Maybe<tr::vector<int>> args;
+            if (match_char('(')) {
+                ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
+                AutoCountErrors errors;
+
+                std::unordered_set<int> seen;
+
+                args.init();
+                do {
+                    if (args.get().empty() && match(')')) {
+                        lexpush();
+                        break;
+                    }
+                    if (!need('%'))
+                        break;
+                    char c = peek();
+                    if (c < '0' || c > '9') {
+                        report(426);
+                        break;
+                    }
+                    advance();
+
+                    int arg = (c - '0');
+                    if (seen.count(arg)) {
+                        report(427) << arg;
+                        break;
+                    }
+                    seen.emplace(arg);
+                    args.get().emplace_back(arg);
+                } while (match(','));
+                if (!errors.ok())
+                    break;
+                if (!need(')'))
+                    break;
+            } else {
+                if (!IsSpace(peek())) {
+                    report(430);
+                    break;
+                }
+            }
+
+            MacroEntry def;
+            if (HasMacro(symbol)) {
+                report(201) << symbol; /* redefinition of macro (non-identical) */
+                break;
+            }
+
+            auto macro = std::make_shared<MacroEntry>();
+            macro->args = std::move(args);
+            macro->pattern = symbol;
+            macro->documentation = std::move(deprecate_);
+            macro->deprecated = !macro->documentation.empty();
+
+            tr::vector<size_t>* arg_positions = nullptr;
+            if (macro->args)
+                arg_positions =  &macro->arg_positions;
+            macro->substitute = SkimUntilEndOfLine(arg_positions);
+
+            macros_[symbol] = std::move(macro);
             break;
         } /* case */
-        case tpUNDEF:
-            if (!IsSkipping()) {
-                if (lex() == tSYMBOL) {
-                    const auto& str = current_token()->atom->str();
-                    DeleteMacro(str.c_str(), str.size());
-                } else {
-                    error(20, str); /* invalid symbol name */
-                }
-                check_empty(lptr);
-            }
+        case tpUNDEF: {
+            ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
+            if (!need(tSYMBOL))
+                break;
+            DeleteMacro(current_token()->atom);
+            CheckLineEmpty();
             break;
-        case tpERROR:
-            while (*lptr <= ' ' && *lptr != '\0')
-                lptr++;
-            if (!IsSkipping())
-                report(416) << reinterpret_cast<const char*>(lptr);
+        }
+        case tpERROR: {
+            auto str = SkimUntilEndOfLine();
+            report(416) << str;
             break;
-        case tpWARNING:
-            while (*lptr <= ' ' && *lptr != '\0')
-                lptr++;
-            if (!IsSkipping())
-                error(224, lptr); /* user warning */
+        }
+        case tpWARNING: {
+            auto str = SkimUntilEndOfLine();
+            report(224) << str;
             break;
+        }
         default:
-            error(31);                                 /* unknown compiler directive */
-            ret = IsSkipping() ? CMD_CONDFALSE : CMD_NONE; /* process as normal line */
-    }
-    return ret;
-}
-
-static int
-is_startstring(const unsigned char* string)
-{
-    if (*string == '\"' || *string == '\'')
-        return TRUE; /* "..." */
-    return FALSE;
-}
-
-const unsigned char* Lexer::skipstring(const unsigned char* string) {
-    char endquote = *string;
-    assert(endquote == '"' || endquote == '\'');
-    string++; /* skip open quote */
-
-    int flags = kLitcharSkipping;
-    if (endquote == '"')
-        flags |= kLitcharUtf8;
-
-    ke::SaveAndSet<const unsigned char*> save_lptr(&lptr, string);
-
-    while (*string != endquote && *string != '\0') {
-        litchar(flags);
-        string = lptr;
-    }
-    return lptr;
-}
-
-const unsigned char* Lexer::skipgroup(const unsigned char* string) {
-    int nest = 0;
-    char open = *string;
-    char close;
-
-    switch (open) {
-        case '(':
-            close = ')';
-            break;
-        case '{':
-            close = '}';
-            break;
-        case '[':
-            close = ']';
-            break;
-        case '<':
-            close = '>';
-            break;
-        default:
-            assert(0);
-            close = '\0'; /* only to avoid a compiler warning */
+            error(31); /* unknown compiler directive */
     }
 
-    string++;
-    while (*string != close || nest > 0) {
-        if (*string == open)
-            nest++;
-        else if (*string == close)
-            nest--;
-        else if (is_startstring(string))
-            string = skipstring(string);
-        if (*string == '\0')
-            break;
-        string++;
+    // Make sure we eat everything remaining on the line.
+    while (lex_same_line() != tEOL)
+        continue;
+
+    // Because we might have pre-lexed additional characters into the
+    // preprocessor stream, we need to clear the buffer.
+    preproc_buffer_.depth = 0;
+}
+
+void Lexer::HandleSkippedSection() {
+    // Eat stuff until we reach a new directive.
+    while (more()) {
+        char c = peek();
+        if (IsNewline(c)) {
+            HandleNewline(c, '\0');
+            continue;
+        }
+        if (c == '/' && peek2() == '/') {
+            HandleSingleLineComment();
+            continue;
+        }
+        if (c == '/' && peek2() == '*') {
+            HandleMultiLineComment();
+            continue;
+        }
+
+        if (c == '#' && tokens_on_line_ == 0) {
+            int tok = LexNewToken();
+            switch (tok) {
+                case tpIF:
+                    ifstack_.emplace_back(0);
+                    continue;
+
+                case tpELSE:
+                    // Handle errors in the if/else structure even if skipping.
+                    if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE) {
+                        error(60); /* multiple #else directives between #if ... #endif */
+                        continue;
+                    }
+                    if ((ifstack_.back() & PARSEMODE) != PARSEMODE) {
+                        ifstack_.back() &= (char)~SKIPMODE;
+                        ifstack_.back() |= HANDLED_ELSE;
+                        // Note: just because we enabled parsemode, we might be
+                        // skipping due to a higher-up #if. We need to re-check.
+                        if (!IsSkipping()) {
+                            CheckLineEmpty();
+                            return;
+                        }
+                    }
+                    continue;
+
+                case tpELSEIF:
+                    if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE) {
+                        error(61); /* #elseif directive may not follow an #else */
+                        continue;
+                    }
+
+                    if ((ifstack_.back() & PARSEMODE) != PARSEMODE) {
+                        if (skiplevel_ != ifstack_.size())
+                            continue; // Every section must be skipped.
+
+                        cell val = 0;
+                        preproc_expr(&val, NULL); /* get value (or 0 on error) */
+
+                        ifstack_.back() &= (char)~SKIPMODE;
+                        ifstack_.back() |= (char)(val ? PARSEMODE : SKIPMODE);
+
+                        if (!IsSkipping()) {
+                            CheckLineEmpty();
+                            return;
+                        }
+                    }
+                    continue;
+
+                case tpENDIF:
+                    CheckLineEmpty();
+
+                    ifstack_.pop_back();
+                    if (ifstack_.size() < skiplevel_)
+                        skiplevel_ = ifstack_.size();
+
+                    if (!IsSkipping())
+                        return;
+                    break;
+
+                default:
+                    continue;
+            }
+        }
+
+        if (!IsSpace(c))
+            tokens_on_line_++;
+        advance();
     }
-    return string;
 }
 
-static char*
-strdel(char* str, size_t len)
-{
-    size_t length = strlen(str);
-    if (len > length)
-        len = length;
-    memmove(str, str + len, length - len + 1); /* include EOS byte */
-    return str;
+void Lexer::SkipLineWhitespace() {
+    while (true) {
+        char c = peek();
+        if (!IsSpace(c) || IsNewline(c))
+            break;
+        advance();
+    }
 }
 
-static char*
-strins(char* dest, const char* src, size_t srclen)
+static inline void AddText(std::string* text, const unsigned char** start,
+                           const unsigned char* end, char extra)
 {
-    size_t destlen = strlen(dest);
-    assert(srclen <= strlen(src));
-    memmove(dest + srclen, dest, destlen + 1); /* include EOS byte */
-    memcpy(dest, src, srclen);
-    return dest;
+    if (!*start)
+        return;
+    *text += std::string((const char *)*start, (const char *)end);
+    if (extra != '\0' && !text->empty() && text->back() != extra)
+        text->push_back(extra);
+    *start = nullptr;
 }
 
-bool
-Lexer::substpattern(unsigned char* line, size_t buffersize, const char* pattern,
-                    const char* substitution, int& patternLen, int& substLen)
-{
-    int prefixlen;
-    const unsigned char *p, *s, *e;
-    std::vector<std::unique_ptr<std::string>> args;
-    int match, arg;
-    int stringize;
+std::string Lexer::SkimUntilEndOfLine(tr::vector<size_t>* macro_args) {
+    std::string text;
 
-    /* check the length of the prefix */
-    for (prefixlen = 0, s = (unsigned char*)pattern; alphanum(*s); prefixlen++, s++)
-        /* nothing */;
-    assert(prefixlen > 0);
-    assert(strncmp((char*)line, pattern, prefixlen) == 0);
+    const unsigned char* start = nullptr;
+    while (true) {
+        char c = peek();
+        if (c == '\0' || IsNewline(c))
+            break;
+        if (c == '/' && peek2() == '/')
+            break;
+        if (c == '/' && peek2() == '*') {
+            AddText(&text, &start, char_stream(), ' ');
+            HandleMultiLineComment();
+            continue;
+        }
+        if (c == '\\') {
+            auto end = char_stream();
+            if (MaybeHandleLineContinuation()) {
+                AddText(&text, &start, end, ' ');
+                continue;
+            }
+        }
 
-    /* pattern prefix matches; match the rest of the pattern, gather
-     * the parameters
-     */
-    s = line + prefixlen;
-    p = (unsigned char*)pattern + prefixlen;
-    match = TRUE; /* so far, pattern matches */
-    while (match && *s != '\0' && *p != '\0') {
-        if (*p == '%') {
-            p++; /* skip '%' */
-            if (isdigit(*p)) {
-                arg = *p - '0';
-                assert(arg >= 0 && arg <= 9);
-                p++; /* skip parameter id */
-                assert(*p != '\0');
-                /* match the source string up to the character after the digit
-                 * (skipping strings in the process
-                 */
-                e = s;
-                while (*e != *p && *e != '\0' && *e != '\n') {
-                    if (is_startstring(e)) /* skip strings */
-                        e = skipstring(e);
-                    else if (strchr("({[", *e) != NULL) /* skip parenthized groups */
-                        e = skipgroup(e);
-                    if (*e != '\0')
-                        e++; /* skip non-alphapetic character (or closing quote of
-                              * a string, or the closing paranthese of a group) */
+        if (!IsSpace(c) && !start)
+            start = char_stream();
+
+        advance();
+
+        if (c == '\"' || c == '\'') {
+            // Skip any tokens inside strings.
+            char term = c;
+            while (true) {
+                auto saved_pos = char_stream();
+                cell ch = get_utf8_char();
+                if (ch > 0x7f)
+                    continue;
+
+                if (ch == ctrlchar_ && peek() == term) {
+                    advance();
+                    continue;
                 }
-                /* store the parameter (overrule any earlier) */
-                if (size_t(arg) >= args.size())
-                    args.resize(arg + 1);
-                args[arg] = std::make_unique<std::string>(reinterpret_cast<const char*>(s), e - s);
-                /* character behind the pattern was matched too */
-                if (*e == *p) {
-                    s = e + 1;
-                } else if (*e == '\n' && *p == ';' && *(p + 1) == '\0' && !NeedSemicolon()) {
-                    s = e; /* allow a trailing ; in the pattern match to end of line */
-                } else {
-                    assert(*e == '\0' || *e == '\n');
-                    match = FALSE;
-                    s = e;
+                if (ch == '\\') {
+                    AddText(&text, &start, saved_pos, '\0');
+                    if (MaybeHandleLineContinuation())
+                        start = char_stream();
+                    else
+                        start = saved_pos;
+                    continue;
                 }
-                p++;
-            } else {
-                match = FALSE;
+                if (ch == 0 || ch == term || IsNewline((char)ch))
+                    break;
             }
-        } else if (*p == ';' && *(p + 1) == '\0' && !NeedSemicolon()) {
-            /* source may be ';' or end of the line */
-            while (*s <= ' ' && *s != '\0')
-                s++; /* skip white space */
-            if (*s != ';' && *s != '\0')
-                match = FALSE;
-            p++; /* skip the semicolon in the pattern */
-        } else {
-            cell ch;
-            /* skip whitespace between two non-alphanumeric characters, except
-             * for two identical symbols
-             */
-            assert((char*)p > pattern);
-            if (!alphanum(*p) && *(p - 1) != *p)
-                while (*s <= ' ' && *s != '\0')
-                    s++;         /* skip white space */
-            ke::SaveAndSet<const unsigned char*> save_lptr(&lptr, p);
-            ch = litchar(0); /* this increments "p" */
-            p = lptr;
-            if (*s != ch)
-                match = FALSE;
-            else
-                s++; /* this character matches */
+        } else if (c == '%' && macro_args && IsDigit(peek())) {
+            advance();
+            AddText(&text, &start, char_stream(), '\0');
+            macro_args->emplace_back(text.size() - 2);
+
+            // Don't accidentally trim any whitespace around the %N token.
+            start = char_stream();
         }
     }
 
-    //length of the entire matched pattern, including parameters
-    patternLen = (int)(s - line);
+    AddText(&text, &start, char_stream(), '\0');
 
-    if (match && *p == '\0') {
-        /* if the last character to match is an alphanumeric character, the
-         * current character in the source may not be alphanumeric
-         */
-        assert(p > (unsigned char*)pattern);
-        if (alphanum(*(p - 1)) && alphanum(*s))
-            match = FALSE;
+    while (!text.empty() && IsSpace(text.back()))
+        text.pop_back();
+
+    return text;
+}
+
+// Find the starting position of the next token. This eats newlines, whitespace,
+// and EOF scenarios if there are nested files.
+bool Lexer::FindNextToken() {
+    assert(token_buffer_->depth == 0);
+
+    while (true) {
+        if (!freading_)
+            return false;
+
+        auto work_start = char_stream();
+        auto work_line = line_start();
+        bool is_line_start = (work_line == work_start) && !IsInMacro();
+
+        if (is_line_start)
+            stmtindent_ = 0;
+
+        // Skip whitespace.
+        while (true) {
+            char c = peek();
+            if (!IsSpace(c))
+                break;
+
+            if (c == '\r' || c == '\n')
+                break;
+
+            if (is_line_start) {
+                int indent = 1;
+                if (c == '\t') {
+                    int tabsize = cc_.options()->tabsize;
+                    if (tabsize != 0)
+                        indent = (int)(tabsize - (stmtindent_ + tabsize) % tabsize);
+                }
+                stmtindent_ += indent;
+            }
+
+            advance();
+        }
+
+        char c = peek();
+        switch (c) {
+            case '\r':
+            case '\n':
+                if (IsPreprocessing())
+                    return false;
+
+                // Handling the newline may give us more whitespace, so we restart
+                // the loop.
+                HandleNewline(c, '\0');
+                continue;
+
+            case '/':
+                if (peek2() == '/') {
+                    HandleSingleLineComment();
+                    continue;
+                }
+                if (peek2() == '*') {
+                    HandleMultiLineComment();
+                    continue;
+                }
+                return true;
+
+            case '#':
+                if (IsPreprocessing() || tokens_on_line_ > 0)
+                    return true;
+                HandleDirectives();
+                if (token_buffer_->depth > 0)
+                    return true; // token was synthesized, exit.
+                continue;
+
+            // This is a line continuation, but it's an invalid token anywhere
+            // but at the end of a line (modulo whitespace). It's a little
+            // tricky to handle.
+            case '\\':
+            {
+                if (MaybeHandleLineContinuation())
+                    continue;
+                return true;
+            }
+
+            case '\0':
+                if (IsPreprocessing() && !IsInMacro())
+                    return false;
+                else if (!allow_end_of_file_)
+                    return false;
+                HandleEof();
+                continue;
+
+            default:
+                if (is_line_start && c < ' ') {
+                    // Preserve old behavior where garbage characters at the
+                    // start of the line were ignored. Except warn about it
+                    // now.
+                    report(227);
+                    advance();
+                    continue;
+                }
+                // No whitespace, new comments - we're done!
+                return true;
+        }
     }
+}
 
-    if (!match)
+bool Lexer::MaybeHandleLineContinuation() {
+    // Save the position if we've mispredicted the continuation.
+    auto saved_pos = char_stream();
+
+    // Eat the backslash and adjacent whitespace.
+    advance();
+    SkipLineWhitespace();
+
+    char c = peek();
+    if (!IsNewline(c)) {
+        // Mispredicted.
+        backtrack(saved_pos);
         return false;
-
-    /* calculate the length of the substituted string */
-    for (e = (unsigned char*)substitution, substLen = 0; *e != '\0'; e++) {
-        if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2)) && !args.empty()) {
-            stringize = 1;
-            e++; /* skip '#' */
-        } else {
-            stringize = 0;
-        }
-        if (*e == '%' && isdigit(*(e + 1)) && !args.empty()) {
-            arg = *(e + 1) - '0';
-            assert(arg >= 0 && arg <= 9);
-            assert(stringize == 0 || stringize == 1);
-            if (size_t(arg) < args.size() && args[arg]) {
-                substLen += args[arg]->size() + 2 * stringize;
-                e++;
-            } else {
-                substLen++;
-            }
-        } else {
-            substLen++;
-        }
     }
 
-    /* check length of the string after substitution */
-    if (strlen((char*)line) + substLen - patternLen > buffersize) {
-        error(75); /* line too long */
-        return false;
-    }
-
-    /* substitute pattern */
-    strdel((char*)line, patternLen);
-    for (e = (unsigned char*)substitution, s = line; *e != '\0'; e++) {
-        if (*e == '#' && *(e + 1) == '%' && isdigit(*(e + 2))) {
-            stringize = 1;
-            e++; /* skip '#' */
-        } else {
-            stringize = 0;
-        }
-        if (*e == '%' && isdigit(*(e + 1))) {
-            arg = *(e + 1) - '0';
-            assert(arg >= 0 && arg <= 9);
-            if (size_t(arg) < args.size() && args[arg]) {
-                if (stringize)
-                    strins((char*)s++, "\"", 1);
-                strins((char*)s, (char*)args[arg]->data(), args[arg]->size());
-                s += args[arg]->size();
-                if (stringize)
-                    strins((char*)s++, "\"", 1);
-            } else {
-                error(236); /* parameter does not exist, incorrect #define pattern */
-                strins((char*)s, (char*)e, 2);
-                s += 2;
-            }
-            e++; /* skip %, digit is skipped later */
-        } else if (is_startstring(e)) {
-            p = e;
-            e = skipstring(e);
-            strins((char*)s, (char*)p, (e - p + 1));
-            s += (e - p + 1);
-        } else {
-            strins((char*)s, (char*)e, 1);
-            s++;
-        }
-    }
-
+    HandleNewline(c, '\\');
     return true;
 }
 
-class MacroProcessor
-{
-  public:
-    MacroProcessor(Lexer* lexer, unsigned char* line, int buffersize)
-     : lexer_(lexer),
-       line_(line),
-       buffersize_(buffersize)
-    {}
+void Lexer::HandleEof() {
+    assert(!more());
 
-    void process() {
-        auto end = line_ + strlen((const char*)line_);
-        int ignored;
-        process_range(line_, end, &ignored);
-    }
-
-  private:
-    unsigned char* process_range(unsigned char* start, unsigned char* end, int* delta);
-    bool enter_macro(const char* start, size_t prefixlen, Lexer::macro_t* out);
-
-  private:
-    Lexer* lexer_;
-    std::unordered_set<std::string> blocked_macros;
-    unsigned char* line_;
-    int buffersize_;
-    std::string line_number_buffer_;
-};
-
-unsigned char*
-MacroProcessor::process_range(unsigned char* start, unsigned char* end, int* delta)
-{
-    *delta = 0;
-    while (start < end) {
-        /* find the start of a prefix (skip all non-alphabetic characters),
-         * also skip strings
-         */
-        while (!alpha(*start) && start < end) {
-            /* skip strings */
-            if (is_startstring(start)) {
-                start = (unsigned char*)lexer_->skipstring(start);
-                if (start >= end)
-                    break; /* abort loop on error */
-            }
-            start++; /* skip non-alphapetic character (or closing quote of a string) */
-        }
-        if (start >= end)
-            break; /* abort loop on error */
-        /* if matching the operator "defined", skip it plus the symbol behind it */
-        if (strncmp((char*)start, "defined", 7) == 0 && !isalpha((char)*(start + 7))) {
-            start += 7; /* skip "defined" */
-            /* skip white space & parantheses */
-            while ((*start <= ' ' && *start != '\0') || *start == '(')
-                start++;
-            /* skip the symbol behind it */
-            while (alphanum(*start))
-                start++;
-            /* drop back into the main loop */
-            continue;
-        }
-        /* get the prefix (length), look for a matching definition */
-        size_t prefixlen = 0;
-        unsigned char* prefix_end = start;
-        while (alphanum(*prefix_end) && prefix_end < end) {
-            prefixlen++;
-            prefix_end++;
-        }
-        assert(prefixlen > 0);
-
-        Lexer::macro_t subst;
-        if (!enter_macro((const char *)start, prefixlen, &subst)) {
-            start = prefix_end; /* no macro with this prefix, skip this prefix */
-            continue;
-        }
-
-        /* properly match the pattern and substitute */
-        int patternLen = 0;
-        int substLen = 0;
-        if (!lexer_->substpattern(start, buffersize_ - (int)(start - line_), subst.first,
-                                  subst.second, patternLen, substLen))
-        {
-            start = prefix_end;
-            continue;
-        }
-
-        blocked_macros.emplace(subst.first);
-        int modified;
-        start = process_range(start, start + substLen, &modified);
-        blocked_macros.erase(blocked_macros.find(subst.first));
-
-        modified += substLen - patternLen;
-        end += modified;
-        *delta += modified;
-    }
-    return start;
-}
-
-bool
-MacroProcessor::enter_macro(const char* start, size_t prefixlen, Lexer::macro_t* out)
-{
-    if (!lexer_->FindMacro(start, prefixlen, out)) {
-        static constexpr size_t kLineMacroLen = 8;
-        if (prefixlen != kLineMacroLen)
-            return false;
-        if (strncmp(start, "__LINE__", kLineMacroLen) == 0) {
-            line_number_buffer_ = ke::StringPrintf("%u", lexer_->fline());
-            out->first = "__LINE__";
-            out->second = line_number_buffer_.c_str();
-            return true;
-        }
-        return false;
-    }
-    return blocked_macros.count(out->first) == 0;
-}
-
-void
-Lexer::substallpatterns(unsigned char* line, int buffersize)
-{
-    MacroProcessor mp(this, line, buffersize);
-    mp.process();
-}
-
-/*  scanellipsis
- *  Look for ... in the string and (if not there) in the remainder of the file,
- *  but restore (or keep intact):
- *  - the current position in the file
- *  - the comment parsing state
- *  - the line buffer used by the lexical analyser
- *  - the active line number and the active file
- *
- *  The function returns 1 if an ellipsis was found and 0 if not
- */
-int
-Lexer::ScanEllipsis(const unsigned char* lptr)
-{
-    short localcomment, found;
-
-    /* first look for the ellipsis in the remainder of the string */
-    while (*lptr <= ' ' && *lptr != '\0')
-        lptr++;
-    if (lptr[0] == '.' && lptr[1] == '.' && lptr[2] == '.')
-        return 1;
-    if (*lptr != '\0')
-        return 0; /* stumbled on something that is not an ellipsis and not white-space */
-
-    /* the ellipsis was not on the active line, read more lines from the current
-     * file (but save its position first)
-     */
-    if (!state_.inpf || state_.inpf->Eof())
-        return 0; /* quick exit: cannot read after EOF */
-
-    auto localbuf = std::make_unique<unsigned char[]>(sLINEMAX + 1);
-    auto inpfmark = state_.inpf->Pos();
-    localcomment = state_.icomment;
-
-    found = 0;
-    /* read from the file, skip preprocessing, but strip off comments */
-    while (!found && state_.inpf->Read(localbuf.get(), sLINEMAX)) {
-        StripComments(localbuf.get());
-        lptr = localbuf.get();
-        /* skip white space */
-        while (*lptr <= ' ' && *lptr != '\0')
-            lptr++;
-        if (lptr[0] == '.' && lptr[1] == '.' && lptr[2] == '.')
-            found = 1;
-        else if (*lptr != '\0')
-            break; /* stumbled on something that is not an ellipsis and not white-space */
-    }
-
-    /* clean up & reset */
-    state_.inpf->Reset(inpfmark);
-    state_.icomment = localcomment;
-    return found;
-}
-
-/*  preprocess
- *
- *  Reads a line by readline() into "pline_" and performs basic preprocessing:
- *  deleting comments, skipping lines with false "#if.." code and recognizing
- *  other compiler directives. There is an indirect recursion: lex() calls
- *  preprocess() if a new line must be read, preprocess() calls command(),
- *  which at his turn calls lex() to identify the token.
- *
- *  Global references: lptr     (altered)
- *                     pline_    (altered)
- *                     freading_ (referred to only)
- */
-void
-Lexer::Preprocess(bool allow_synthesized_tokens)
-{
-    int iscommand;
-
-    if (!freading_)
+    if (prev_state_.empty()) {
+        freading_ = false;
+        if (!ifstack_.empty())
+            error(1, "#endif", "-end of file-");
         return;
-    do {
-        Readline(pline_);
-        StripComments(pline_);
-        lptr = pline_; /* set "line pointer" to start of the parsing buffer */
-        iscommand = DoCommand(allow_synthesized_tokens);
-        if (iscommand == CMD_INJECTED)
-            return;
-        if (iscommand != CMD_NONE)
-            cc_.reports()->ResetErrorFlag();
-        if (iscommand == CMD_NONE) {
-            substallpatterns(pline_, sLINEMAX);
-            lptr = pline_; /* reset "line pointer" to start of the parsing buffer */
+    }
+
+    bool was_in_macro = !!state_.macro;
+    if (was_in_macro) {
+        auto p = macros_in_use_.find(state_.macro.get());
+        if (p != macros_in_use_.end())
+            macros_in_use_.erase(p);
+    }
+
+    // Restore any saved tokens.
+    if (state_.token_buffer) {
+        ke::SaveAndSet<token_buffer_t*> switch_buffers(&token_buffer_, state_.token_buffer);
+
+        assert(token_buffer_->depth == 0);
+        for (auto&& saved : state_.saved_tokens) {
+            auto tok = advance_token_ptr();
+            *tok = std::move(saved);
         }
-    } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
+        for (size_t i = 0; i < state_.saved_tokens.size(); i++)
+            lexpush();
+    }
+
+    state_ = ke::PopBack(&prev_state_);
+
+    /* this condition held before including the file */
+    if (!was_in_macro) {
+        skiplevel_ = state_.entry_preproc_if_stack_size;
+        while (skiplevel_ < ifstack_.size())
+            ifstack_.pop_back();
+        assert(skiplevel_ == ifstack_.size());
+
+        assert(!IsSkipping());   /* idem ditto */
+        SetFileDefines(state_.inpf->name());
+    }
+}
+
+void Lexer::HandleNewline(char c, char continuation) {
+    assert(peek() == c);
+
+    if (advance() == '\r')
+        match_char('\n');
+
+    state_.fline++;
+    if (continuation != '\\') {
+        state_.tokline++;
+        tokens_on_line_ = 0;
+        lexnewline_ = true;
+    }
+    state_.line_start = char_stream();
+}
+
+void Lexer::HandleSingleLineComment() {
+    char c = advance();
+    assert(c == '/');
+
+    c = advance();
+    assert(c == '/');
+    (void)c;
+
+    char prev_c = c;
+    while (true) {
+        char c = peek();
+        if (c == '\0' || IsNewline(c)) {
+            if (prev_c == '\\')
+                error(49); // invalid line continuation
+            break;
+        }
+        if (!IsSpace(c))
+            prev_c = c;
+        advance();
+    }
+}
+
+void Lexer::HandleMultiLineComment() {
+    char c = advance();
+    assert(c == '/');
+
+    c = advance();
+    assert(c == '*');
+    (void)c;
+
+    while (true) {
+        if (match_char('*')) {
+            if (match_char('/'))
+                return;
+            continue;
+        }
+        if (match_char('/')) {
+            if (peek() == '*')
+                error(216); // nested comment
+            continue;
+        }
+        char c = peek();
+        if (c == '\0') {
+            error(1, "*/", "-end of file-");
+            return;
+        }
+        if (IsNewline(c)) {
+            // Line continuations are ignored inside comments. Make sure the
+            // tokens-per-line count isn't reset.
+            auto old_tokens_on_line = tokens_on_line_;
+            HandleNewline(c, '\0');
+            tokens_on_line_ = old_tokens_on_line;
+            continue;
+        }
+        advance();
+    }
 }
 
 void Lexer::packedstring(full_token_t* tok, char term) {
     while (true) {
         char c = peek();
-        if (c == term)
+        if (c == term || c == 0)
             break;
-        if (c == '\a') { // ignore '\a' (which was inserted at a line concatenation)
-            advance();
-            continue;
+        if (c == '\\') {
+            if (MaybeHandleLineContinuation())
+                continue;
         }
+        if (IsNewline(c))
+            break;
         packedstring_char(tok);
     }
 }
@@ -1576,35 +1207,30 @@ const char* sc_tokens[] = {"*=",
                            ";",
                            ";",
                            "-integer value-",
-                           "-rational value-",
+                           "-float value-",
                            "-identifier-",
                            "-label-",
                            "-string-",
-                           "-string-",
+                           "-char-",
                            "#pragma unused",
-                           "-include-path-"};
+                           "-include-path-",
+                           "-end of line-",
+                           "-declaration-",
+                           "-macro"};
 
 Lexer::Lexer(CompileContext& cc)
   : cc_(cc)
 {
     skiplevel_ = 0; /* preprocessor: not currently skipping */
-    lexnewline_ = false;
     token_buffer_ = &normal_buffer_;
-
-    keywords_.init(128);
 
     const int kStart = tMIDDLE + 1;
     const char** tokptr = &sc_tokens[kStart - tFIRST];
     for (int i = kStart; i <= tLAST; i++, tokptr++) {
-        CharsAndLength key(*tokptr, strlen(*tokptr));
-        auto p = keywords_.findForAdd(key);
-        assert(!p.found());
-        keywords_.add(p, key, i);
+        sp::Atom* atom = gAtoms.add(*tokptr);
+        assert(keywords_.count(atom) == 0);
+        keywords_.emplace(atom, i);
     }
-
-    macros_.init(128);
-
-    pline_[0] = '\0'; /* the line read from the input file */
 }
 
 void Lexer::Init(std::shared_ptr<SourceFile> sf) {
@@ -1612,32 +1238,26 @@ void Lexer::Init(std::shared_ptr<SourceFile> sf) {
     EnterFile(std::move(sf));
 }
 
-void
-Lexer::Start()
-{
-    Preprocess(true);
+void Lexer::Start() {
+    defined_atom_ = gAtoms.add("defined");
+    line_atom_ = gAtoms.add("__LINE__");
 }
 
-std::string
-get_token_string(int tok_id)
-{
+std::string get_token_string(int tok_id) {
     std::string str;
     if (tok_id < 256)
         return StringPrintf("%c", tok_id);
     if (tok_id == tEOL)
         return "<newline>";
-    assert(tok_id >= tFIRST && tok_id <= tLAST);
+    assert(tok_id >= tFIRST && tok_id <= tLAST_TOKEN_ID);
     return StringPrintf("%s", sc_tokens[tok_id - tFIRST]);
 }
 
-int
-Lexer::LexKeywordImpl(const char* match, size_t length)
-{
-    CharsAndLength key(match, length);
-    auto p = keywords_.find(key);
-    if (!p.found())
-        return 0;
-    return p->value;
+int Lexer::LexKeywordImpl(sp::Atom* atom) {
+    auto iter = keywords_.find(atom);
+    if (iter != keywords_.end())
+        return iter->second;
+    return 0;
 }
 
 static inline bool
@@ -1713,20 +1333,12 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->value = 0;
     tok->data.clear();
     tok->atom = nullptr;
-    tok->start.line = state_.fline;
-    tok->start.col = (int)(lptr - pline_);
+    tok->start.line = state_.tokline;
+    tok->start.col = col;
     tok->start.file = state_.inpf->sources_index();
     tok->end = tok->start;
     lexpush();
     return tok;
-}
-
-void
-Lexer::PreprocessInLex(bool allow_synthesized_tokens)
-{
-    token_buffer_ = &preproc_buffer_;
-    Preprocess(allow_synthesized_tokens);
-    token_buffer_ = &normal_buffer_;
 }
 
 // Pops a token off the token buffer, making it the current token.
@@ -1741,67 +1353,68 @@ Lexer::lexpop()
         token_buffer_->cursor = 0;
 }
 
-int
-Lexer::lex()
-{
-    int newline;
-
+int Lexer::lex() {
     if (token_buffer_->depth > 0) {
         lexpop();
         return current_token()->id;
     }
 
+    return LexNewToken();
+}
+
+int Lexer::LexNewToken() {
     full_token_t* tok = advance_token_ptr();
     *tok = {};
 
-    lexnewline_ = FALSE;
-    if (!freading_)
-        return 0;
+    lexnewline_ = false;
 
-    newline = (lptr == pline_); /* does lptr point to start of line buffer */
-    while (*lptr <= ' ') {     /* delete leading white space */
-        if (*lptr == '\0') {
-            PreprocessInLex(true);
-            if (token_buffer_->depth > 0) {
-                // Token was injected during preprocessing.
-                lexpop();
-                return current_token()->id;
+    do {
+        if (!FindNextToken()) {
+            if (IsPreprocessing() && more()) {
+                // We hit the end of the line; preprocessor should not eat more
+                // tokens without a continuation.
+                FillTokenPos(&tok->start);
+                FillTokenPos(&tok->end);
+                return tok->id = tEOL;
             }
-            if (!freading_)
-                return 0;
-            lexnewline_ = TRUE; /* set this after preprocess(), because
-                                 * preprocess() calls lex() recursively */
-            newline = TRUE;
-        } else {
-            lptr += 1;
+            return 0;
         }
-    }
-    if (newline) {
-        stmtindent_ = 0;
-        for (int i = 0; i < (int)(lptr - pline_); i++) {
-            int tabsize = cc_.options()->tabsize;
-            if (pline_[i] == '\t' && tabsize > 0)
-                stmtindent_ += (int)(tabsize - (stmtindent_ + tabsize) % tabsize);
-            else
-                stmtindent_++;
+
+        // Check for a synthesized token.
+        if (token_buffer_->depth > 0) {
+            lexpop();
+            return current_token()->id;
         }
-    }
 
-    tok->start.line = state_.fline;
-    tok->start.col = (int)(lptr - pline_);
-    tok->start.file = state_.inpf->sources_index();
+        tokens_on_line_++;
 
-    LexOnce(tok);
+        FillTokenPos(&tok->start);
+        LexIntoToken(tok);
 
-    tok->end.line = state_.fline;
-    tok->end.col = (int)(lptr - pline_);
-    tok->end.file = tok->start.file;
+        // Current token may be different if we're in the preproc buffer, so
+        // grab it.
+        tok = current_token();
+        FillTokenPos(&tok->end);
+
+        if (tok->id == tSTRING && !in_string_continuation_) {
+            LexStringContinuation();
+            tok = current_token();
+        } else if (tok->id == tDEFINED) {
+            LexDefinedKeyword();
+            tok = current_token();
+        }
+    } while (tok->id == tENTERED_MACRO);
+
     return tok->id;
 }
 
-void
-Lexer::LexOnce(full_token_t* tok)
-{
+void Lexer::FillTokenPos(token_pos_t* pos) {
+    pos->line = state_.tokline;
+    pos->col = (int)(char_stream() - line_start());
+    pos->file = state_.inpf->sources_index();
+}
+
+void Lexer::LexIntoToken(full_token_t* tok) {
     char c = peek();
     switch (c) {
         case '0':
@@ -1821,7 +1434,7 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '*':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taMULT;
             else
                 tok->id = '*';
@@ -1829,7 +1442,7 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '/':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taDIV;
             else
                 tok->id = '/';
@@ -1837,7 +1450,7 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '%':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taMOD;
             else
                 tok->id = '%';
@@ -1845,9 +1458,9 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '+':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taADD;
-            else if (lex_match_char('+'))
+            else if (match_char('+'))
                 tok->id = tINC;
             else
                 tok->id = '+';
@@ -1855,9 +1468,9 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '-':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taSUB;
-            else if (lex_match_char('-'))
+            else if (match_char('-'))
                 tok->id = tDEC;
             else
                 tok->id = '-';
@@ -1865,12 +1478,12 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '<':
             advance();
-            if (lex_match_char('<')) {
-                if (lex_match_char('='))
+            if (match_char('<')) {
+                if (match_char('='))
                     tok->id = taSHL;
                 else
                     tok->id = tSHL;
-            } else if (lex_match_char('=')) {
+            } else if (match_char('=')) {
                 tok->id = tlLE;
             } else {
                 tok->id = '<';
@@ -1879,18 +1492,18 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '>':
             advance();
-            if (lex_match_char('>')) {
-                if (lex_match_char('>')) {
-                    if (lex_match_char('='))
+            if (match_char('>')) {
+                if (match_char('>')) {
+                    if (match_char('='))
                         tok->id = taSHRU;
                     else
                         tok->id = tSHRU;
-                } else if (lex_match_char('=')) {
+                } else if (match_char('=')) {
                     tok->id = taSHR;
                 } else {
                     tok->id = tSHR;
                 }
-            } else if (lex_match_char('=')) {
+            } else if (match_char('=')) {
                 tok->id = tlGE;
             } else {
                 tok->id = '>';
@@ -1899,9 +1512,9 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '&':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taAND;
-            else if (lex_match_char('&'))
+            else if (match_char('&'))
                 tok->id = tlAND;
             else
                 tok->id = '&';
@@ -1909,7 +1522,7 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '^':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taXOR;
             else
                 tok->id = '^';
@@ -1917,9 +1530,9 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '|':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = taOR;
-            else if (lex_match_char('|'))
+            else if (match_char('|'))
                 tok->id = tlOR;
             else
                 tok->id = '|';
@@ -1927,7 +1540,7 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '=':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = tlEQ;
             else
                 tok->id = '=';
@@ -1935,7 +1548,7 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '!':
             advance();
-            if (lex_match_char('='))
+            if (match_char('='))
                 tok->id = tlNE;
             else
                 tok->id = '!';
@@ -1943,8 +1556,8 @@ Lexer::LexOnce(full_token_t* tok)
 
         case '.':
             advance();
-            if (lex_match_char('.')) {
-                if (lex_match_char('.'))
+            if (match_char('.')) {
+                if (match_char('.'))
                     tok->id = tELLIPS;
                 else
                     tok->id = tDBLDOT;
@@ -1955,19 +1568,19 @@ Lexer::LexOnce(full_token_t* tok)
 
         case ':':
             advance();
-            if (lex_match_char(':'))
+            if (match_char(':'))
                 tok->id = tDBLCOLON;
             else
                 tok->id = ':';
             return;
 
         case '"':
-            LexStringLiteral(tok);
+            LexStringLiteral(tok, 0);
             return;
 
         case '\'':
             advance(); /* skip quote */
-            tok->id = tNUMBER;
+            tok->id = tCHAR_LITERAL;
             tok->value = litchar(0);
             if (peek() == '\'') {
                 advance(); /* skip final quote */
@@ -2000,24 +1613,17 @@ Lexer::LexOnce(full_token_t* tok)
     tok->id = advance();
 }
 
-bool Lexer::lex_match_char(char c) {
-    if (peek() != c)
-        return false;
-    advance();
-    return true;
-}
-
 bool Lexer::lex_number(full_token_t* tok) {
     cell value = 0;
 
     int base = 10;
     int ndigits = 0;
-    if (lex_match_char('0')) {
-        if (lex_match_char('b'))
+    if (match_char('0')) {
+        if (match_char('b'))
             base = 2;
-        else if (lex_match_char('o'))
+        else if (match_char('o'))
             base = 8;
-        else if (lex_match_char('x'))
+        else if (match_char('x'))
             base = 16;
         else
             ndigits = 1;
@@ -2066,8 +1672,8 @@ bool Lexer::lex_number(full_token_t* tok) {
     else if (!ndigits)
         error(424);
 
-    if (base == 10 && lex_match_char('.')) {
-        if (isdigit(peek())) {
+    if (base == 10 && match_char('.')) {
+        if (IsDigit(peek())) {
             lex_float(tok, value);
             return true;
         }
@@ -2079,85 +1685,50 @@ bool Lexer::lex_number(full_token_t* tok) {
     return true;
 }
 
-void
-Lexer::LexStringLiteral(full_token_t* tok)
-{
+void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
     tok->id = tSTRING;
     tok->data.clear();
     tok->atom = nullptr;
     tok->value = -1;  // Catch consumers expecting automatic litadd().
 
-    for (;;) {
-        assert(peek() == '\"' || peek() == '\'');
+    assert(peek() == '\"' || peek() == '\'');
 
-        if (lex_match_char('\"')) {
-            packedstring(tok, '\"');
-            if (!lex_match_char('\"'))
-                error(37);
-        } else {
-            advance();
-            packedstring_char(tok);
-            /* invalid char declaration */
-            if (!lex_match_char('\''))
-                error(27); /* invalid character constant (must be one character) */
-        }
-
-        /* see whether an ellipsis is following the string */
-        if (!ScanEllipsis(lptr))
-            break; /* no concatenation of string literals */
-
-        /* there is an ellipses, go on parsing (this time with full preprocessing) */
-        while (*lptr <= ' ') {
-            if (*lptr == '\0') {
-                PreprocessInLex(false);
-                assert(freading_);
-            } else {
-                lptr++;
-            }
-        }
-        assert(freading_ && lptr[0] == '.' && lptr[1] == '.' && lptr[2] == '.');
-        lptr += 3;
-        while (*lptr <= ' ') {
-            if (*lptr == '\0') {
-                PreprocessInLex(false);
-                assert(freading_);
-            } else {
-                lptr++;
-            }
-        }
-        if (!freading_ || !((*lptr == '\"') || (*lptr == '\''))) {
-            error(37); /* invalid string concatenation */
-            break;
-        }
+    if (match_char('\"')) {
+        packedstring(tok, '\"');
+        if (!match_char('\"'))
+            error(37);
+    } else {
+        advance();
+        packedstring_char(tok);
+        /* invalid char declaration */
+        if (!match_char('\''))
+            error(27); /* invalid character constant (must be one character) */
     }
 }
 
-bool
-Lexer::LexKeyword(full_token_t* tok, const char* token_start, size_t len)
-{
-    int tok_id = LexKeywordImpl(token_start, len);
+bool Lexer::LexKeyword(full_token_t* tok, sp::Atom* atom) {
+    int tok_id = LexKeywordImpl(atom);
     if (!tok_id)
         return false;
 
     if (IsUnimplementedKeyword(tok_id)) {
         // Try to gracefully error.
-        report(173) << get_token_string(tok_id);
+        report(173) << atom;
         tok->id = tSYMBOL;
-        tok->atom = gAtoms.add(get_token_string(tok_id));
-    } else if ((tok_id == tINT || tok_id == tVOID) && lex_match_char(':')) {
+        tok->atom = atom;
+    } else if ((tok_id == tINT || tok_id == tVOID) && match_char(':')) {
         // Special case 'int:' to its old behavior: an implicit view_as<> cast
         // with Pawn's awful lowercase coercion semantics.
-        auto str = get_token_string(tok_id);
         switch (tok_id) {
             case tINT:
-                report(238) << str << str;
+                report(238) << atom << atom;
                 break;
             case tVOID:
-                report(239) << str << str;
+                report(239) << atom << atom;
                 break;
         }
         tok->id = tLABEL;
-        tok->atom = gAtoms.add(str);
+        tok->atom = atom;
     } else {
         tok->id = tok_id;
         cc_.reports()->ResetErrorFlag();
@@ -2170,10 +1741,10 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     char first_char = advance();
     assert(alpha(first_char) || first_char == '#');
 
-    bool maybe_keyword = (first_char != PUBLIC_CHAR);
+    bool maybe_keyword = (first_char != PUBLIC_CHAR) && allow_keywords_;
     while (true) {
         char c = peek();
-        if (isdigit(c)) {
+        if (IsDigit(c)) {
             // Only symbols have numbers, so this terminates a keyword if we
             // started with '#".
             if (first_char == '#')
@@ -2190,12 +1761,35 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
         tok->id = PUBLIC_CHAR;
         return;
     }
-    if (maybe_keyword) {
-        if (LexKeyword(tok, (const char*)token_start, len))
+
+    // Handle preprocessor keywords (ugh).
+    sp::Atom* atom = gAtoms.add((const char *)token_start, len);
+    if (atom == defined_atom_) {
+        tok->id = tDEFINED;
+        return;
+    }
+
+    if (atom == line_atom_) {
+        tok->id = tNUMBER;
+        tok->value = state_.fline;
+        return;
+    }
+
+    if (allow_substitutions_) {
+        if (auto macro = FindMacro(atom)) {
+            if (EnterMacro(macro))
+                return;
+        }
+    }
+
+    // Handle language keywords or preprocessor entry points.
+    if (first_char == '#' || maybe_keyword) {
+        if (LexKeyword(tok, atom))
             return;
     }
+
     if (first_char != '#') {
-        lex_symbol(tok, (const char*)token_start, len);
+        LexSymbol(tok, atom);
         return;
     }
 
@@ -2203,22 +1797,20 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     error(31);
 }
 
-void
-Lexer::lex_symbol(full_token_t* tok, const char* token_start, size_t len)
-{
-    tok->atom = gAtoms.add(token_start, len);
+void Lexer::LexSymbol(full_token_t* tok, sp::Atom* atom) {
+    tok->atom = atom;
     tok->id = tSYMBOL;
 
     if (peek() == ':' && peek2() != ':') {
         if (allow_tags_) {
             tok->id = tLABEL;
             advance();
-        } else if (gTypes.find(tok->atom)) {
+        } else if (gTypes.find(atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
             error(220);
         }
-    } else if (len == 1 && *token_start == '_') {
+    } else if (atom->str().size() == 1 && atom->str()[0] == '_') {
         // By itself, '_' is not a symbol but a placeholder. However, '_:' is
         // a label which is why we handle this after the label check.
         tok->id = '_';
@@ -2241,6 +1833,8 @@ void
 Lexer::lexpush()
 {
     assert(token_buffer_->depth < MAX_TOKEN_DEPTH);
+    if (current_token()->id == 0 || current_token()->id == tEOL)
+        return;
     token_buffer_->depth++;
     if (token_buffer_->cursor == 0)
         token_buffer_->cursor = MAX_TOKEN_DEPTH - 1;
@@ -2260,8 +1854,8 @@ Lexer::lexclr(int clreol)
 {
     token_buffer_->depth = 0;
     if (clreol) {
-        lptr = (unsigned char*)strchr((char*)pline_, '\0');
-        assert(lptr != NULL);
+        while (lex_same_line() != tEOL)
+            continue;
     }
 }
 
@@ -2293,18 +1887,22 @@ Lexer::match(int token)
 
     if (token == tok)
         return true;
-    if (token == tTERM && (tok == ';' || tok == tENDEXPR))
-        return true;
+    if (token == tTERM) {
+        if (tok == ';' || tok == tENDEXPR)
+            return true;
 
-    if (!NeedSemicolon() && token == tTERM && (lexnewline_ || !freading_)) {
-        /* Push "tok" back, because it is the token following the implicit statement
-         * termination (newline) token.
-         */
         lexpush();
-        return true;
-    }
 
-    lexpush();
+        if (!NeedSemicolon() &&
+            (lexnewline_ || !freading_ || peek_same_line() == tEOL))
+        {
+            // Push "tok" back, because it is the token following the implicit statement
+            // termination (newline) token.
+            return true;
+        }
+    } else {
+        lexpush();
+    }
     return false;
 }
 
@@ -2315,30 +1913,28 @@ Lexer::match(int token)
  *  this function returns 1 for "token found" and 2 for "statement termination
  *  token" found; see function matchtoken() for details.
  */
-bool
-Lexer::need(int token)
-{
-    char s1[20], s2[20];
-    int t;
-
-    if ((t = match(token)) != 0) {
+bool Lexer::need(int token) {
+    if (match(token))
         return true;
-    } else {
-        /* token already pushed back */
-        assert(token_buffer_->depth > 0);
-        if (token < 256)
-            sprintf(s1, "%c", (char)token); /* single character token */
-        else
-            strcpy(s1, sc_tokens[token - tFIRST]); /* multi-character symbol */
-        if (!freading_)
-            strcpy(s2, "-end of file-");
-        else if (next_token()->id < 256)
-            sprintf(s2, "%c", (char)next_token()->id);
-        else
-            strcpy(s2, sc_tokens[next_token()->id - tFIRST]);
-        error(1, s1, s2); /* expected ..., but found ... */
-        return false;
-    }
+
+    int got = token_buffer_->depth == 0 ? 0 : next_token()->id;
+    NeedTokenError(token, got);
+    return false;
+}
+
+void Lexer::NeedTokenError(int token, int got) {
+    char s1[20], s2[20];
+    if (token < 256)
+        sprintf(s1, "%c", (char)token); /* single character token */
+    else
+        strcpy(s1, sc_tokens[token - tFIRST]); /* multi-character symbol */
+    if (!freading_)
+        strcpy(s2, "-end of file-");
+    else if (got < 256)
+        sprintf(s2, "%c", (char)got);
+    else
+        strcpy(s2, sc_tokens[got - tFIRST]);
+    error(1, s1, s2); /* expected ..., but found ... */
 }
 
 // If the next token is on the current line, return that token. Otherwise,
@@ -2356,11 +1952,14 @@ Lexer::peek_same_line()
         current_token()->end.file == next_token()->start.file &&
         current_token()->end.line == state_.fline)
     {
-        return next_token()->id;
+        return next_token()->id ? next_token()->id : tEOL;
     }
 
     // Make sure the next token is lexed, then buffer it.
     full_token_t next = lex_tok();
+    if (next.id == 0 || next.id == tEOL)
+        return tEOL;
+
     lexpush();
 
     // If the next token starts on the line the last token ends, then the next
@@ -2381,6 +1980,23 @@ Lexer::lex_same_line()
         return tEOL;
 
     return lex();
+}
+
+bool Lexer::match_same_line(int tok) {
+    if (peek_same_line() != tok)
+        return false;
+    lex_same_line();
+    return true;
+}
+
+bool Lexer::need_same_line(int tok) {
+    int got = peek_same_line();
+    if (tok == got) {
+        lex_same_line();
+        return true;
+    }
+    NeedTokenError(tok, got);
+    return false;
 }
 
 int
@@ -2439,15 +2055,21 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         is_codepoint = &tmp_codepoint;
     *is_codepoint = false;
 
-    if (!lex_match_char(ctrlchar_)) { /* no escape character */
+    if (!match_char(ctrlchar_)) { /* no escape character */
         cell raw = peek_unsigned();
         if ((flags & kLitcharUtf8) && !(flags & kLitcharSkipping)) {
-            auto c = get_utf8_char();
-            if (c >= 0) {
-                *is_codepoint = true;
-                return c;
+            if (raw > 0x7f) {
+                auto saved_pos = char_stream();
+                auto c = get_utf8_char();
+                if (c >= 0) {
+                    *is_codepoint = true;
+                    return c;
+                }
+                report(248);
+
+                // Restore the character position and treat this as a raw byte.
+                state_.pos = saved_pos;
             }
-            report(248);
         } 
 
         assert(raw >= 0);
@@ -2455,7 +2077,7 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         return raw;
     }
 
-    if (lex_match_char(ctrlchar_))
+    if (match_char(ctrlchar_))
         return ctrlchar_;
 
     char ch = advance();
@@ -2491,14 +2113,14 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
                 char ch = peek();
                 if (!ishex(ch) || digits >= 3)
                     break;
-                if (isdigit(ch))
+                if (IsDigit(ch))
                     c = (c << 4) + (ch - '0');
                 else
                     c = (c << 4) + (tolower(ch) - 'a' + 10);
                 advance();
                 digits++;
             }
-            lex_match_char(';'); /* swallow a trailing ';' */
+            match_char(';'); /* swallow a trailing ';' */
             break;
         }
         case 'u':
@@ -2530,7 +2152,7 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         default:
             // Back up.
             backtrack();
-            if (isdigit(ch)) { /* \ddd */
+            if (IsDigit(ch)) { /* \ddd */
                 c = 0;
                 int ndigits = 0;
                 while (true) {
@@ -2544,7 +2166,7 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
                 // max 3-digit codes only, save for nul terminator special case.
                 if (ndigits > 3 && !(flags & kLitcharSkipping))
                     report(27);
-                lex_match_char(';'); /* swallow a trailing ';' */
+                match_char(';'); /* swallow a trailing ';' */
                 if (c > 0xff && !(flags & kLitcharSkipping)) {
                     report(27);
                     c = 0;
@@ -2576,7 +2198,7 @@ alpha(char c)
 int
 alphanum(char c)
 {
-    return (alpha(c) || isdigit(c));
+    return (alpha(c) || IsDigit(c));
 }
 
 /*  ishex
@@ -2621,54 +2243,30 @@ Lexer::needsymbol(sp::Atom** name)
     return true;
 }
 
-void
-Lexer::AddMacro(const char* pattern, size_t length, const char* subst)
-{
-    MacroEntry macro;
-    macro.first = pattern;
-    macro.second = subst;
-    macro.deprecated = false;
-    if (deprecate_.length() > 0) {
-        macro.deprecated = true;
-        macro.documentation = std::move(deprecate_);
-    }
+void Lexer::AddMacro(const char* pattern, const char* subst) {
+    auto atom = gAtoms.add(pattern);
+    auto macro = std::make_shared<MacroEntry>();
+    macro->pattern = atom;
+    macro->substitute = subst;
+    macro->deprecated = false;
 
-    std::string key(pattern, length);
-    auto p = macros_.findForAdd(key);
-    if (p.found())
-        p->value = macro;
-    else
-        macros_.add(p, std::move(key), macro);
+    macros_[atom] = std::move(macro);
 }
 
-bool
-Lexer::FindMacro(const char* name, size_t length, macro_t* macro)
-{
-    sp::CharsAndLength key(name, length);
-    auto p = macros_.find(key);
-    if (!p.found())
-        return false;
+std::shared_ptr<Lexer::MacroEntry> Lexer::FindMacro(sp::Atom* atom) {
+    auto p = macros_.find(atom);
+    if (p == macros_.end())
+        return nullptr;
 
-    MacroEntry& entry = p->value;
-    if (entry.deprecated)
-        error(234, p->key.c_str(), entry.documentation.c_str());
-
-    if (macro) {
-        macro->first = entry.first.c_str();
-        macro->second = entry.second.c_str();
-    }
-    return true;
+    return p->second;
 }
 
-bool
-Lexer::DeleteMacro(const char* name, size_t length)
-{
-    sp::CharsAndLength key(name, length);
-    auto p = macros_.find(key);
-    if (!p.found())
+bool Lexer::DeleteMacro(sp::Atom* atom) {
+    auto p = macros_.find(atom);
+    if (p == macros_.end())
         return false;
 
-    macros_.remove(p);
+    macros_.erase(p);
     return true;
 }
 
@@ -2725,10 +2323,19 @@ void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf) {
     state_.inpf_loc = cc_.sources()->GetLocationRangeEntryForFile(state_.inpf);
     state_.need_semicolon = cc.options()->need_semicolon;
     state_.require_newdecls = cc.options()->require_newdecls;
-    state_.fline = 0;
-    state_.icomment = 0;
-    state_.fcurrent = state_.inpf->sources_index();
-    skip_utf8_bom(state_.inpf.get());
+    state_.fline = 1;
+    state_.tokline = 1;
+    state_.start = state_.inpf->data();
+    state_.end = state_.start + state_.inpf->size();
+    state_.pos = state_.start;
+    state_.line_start = state_.pos;
+    SkipUtf8Bom();
+
+    tokens_on_line_ = 0;
+}
+
+void Lexer::PushLexerState() {
+    prev_state_.emplace_back(std::move(state_));
 }
 
 cell Lexer::get_utf8_char() {
@@ -2765,4 +2372,195 @@ cell Lexer::get_utf8_char() {
     }
 
     return result;
+}
+
+void Lexer::LexStringContinuation() {
+    auto initial = std::move(*current_token());
+    assert(initial.id == tSTRING);
+
+    ke::SaveAndSet<bool> stop_recursion(&in_string_continuation_, true);
+
+    while (match(tELLIPS)) {
+        if (match(tCHAR_LITERAL)) {
+            initial.data.push_back(current_token()->value);
+            continue;
+        }
+        if (!need(tSTRING)) {
+            lexpush();
+            break;
+        }
+        initial.data += current_token()->data;
+    }
+
+    *current_token() = std::move(initial);
+}
+
+bool Lexer::HasMacro(sp::Atom* atom) {
+    return !!FindMacro(atom);
+}
+
+void Lexer::LexDefinedKeyword() {
+    auto initial = *current_token();
+    sp::Atom* symbol = nullptr;
+    {
+        ke::SaveAndSet<bool> stop_recursion(&allow_substitutions_, false);
+        ke::SaveAndSet<token_buffer_t*> switch_buffers(&token_buffer_, &preproc_buffer_);
+
+        assert(token_buffer_->depth == 0);
+
+        int nparens = 0;
+        while (match('('))
+            nparens++;
+
+        if (!needsymbol(&symbol))
+            return;
+
+        for (int i = 0; i < nparens; i++)
+            need(')');
+    }
+
+    initial.id = tNUMBER;
+    initial.value = HasMacro(symbol) ? 1 : 0;
+    *current_token() = initial;
+}
+
+bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
+    assert(allow_substitutions_);
+
+    ke::SaveAndSet<bool> no_eof(&allow_end_of_file_, false);
+
+    if (macros_in_use_.count(macro.get()))
+        return false;
+
+    std::unordered_map<int, std::string> macro_args;
+    if (macro->args) {
+        if (!match('('))
+            return false;
+
+        auto saved_pos = pos();
+
+        for (const auto& argn : macro->args.get()) {
+            auto arg_str = SkimMacroArgument();
+            if (argn != macro->args.get().back()) {
+                if (!need(','))
+                    break;
+            }
+            macro_args.emplace(argn, std::move(arg_str));
+        }
+        need(')');
+
+        if (macro_args.size() != macro->args.get().size()) {
+            report(saved_pos, 429) << macro->args.get().size() << macro_args.size();
+            return false;
+        }
+    }
+
+    PushLexerState();
+
+    if (macro->args) {
+        state_.pattern = PerformMacroSubstitution(macro.get(), macro_args);
+        state_.start = reinterpret_cast<const unsigned char*>(state_.pattern.c_str());
+        state_.end = state_.start + state_.pattern.size();
+    } else {
+        state_.start = reinterpret_cast<const unsigned char*>(macro->substitute.c_str());
+        state_.end = state_.start + macro->substitute.size();
+    }
+    state_.line_start = state_.start;
+    state_.pos = state_.start;
+    state_.macro = macro;
+    state_.inpf = prev_state_.back().inpf;
+    state_.fline = prev_state_.back().fline;
+    state_.tokline = prev_state_.back().tokline;
+
+    // Save any tokens we peeked ahead.
+    state_.token_buffer = token_buffer_;
+    while (token_buffer_->depth > 0) {
+        lexpop();
+        state_.saved_tokens.emplace_back(std::move(*current_token()));
+    }
+
+    macros_in_use_.emplace(macro.get());
+
+    current_token()->id = tENTERED_MACRO;
+    return true;
+}
+
+std::string Lexer::SkimMacroArgument() {
+    std::string text;
+
+    const unsigned char* start = nullptr;
+    int nparens = 0;
+    while (freading()) {
+        char c = peek();
+        if (c == '\0')
+            break;
+        if (c == '/' && peek2() == '/') {
+            AddText(&text, &start, char_stream(), ' ');
+            HandleSingleLineComment();
+            continue;
+        } else if (c == '/' && peek2() == '*') {
+            AddText(&text, &start, char_stream(), ' ');
+            HandleMultiLineComment();
+            continue;
+        } else if (IsNewline(c)) {
+            HandleNewline(c, '\0');
+            AddText(&text, &start, char_stream(), ' ');
+            continue;
+        } else if (c == '\\') {
+            auto end = char_stream();
+            if (MaybeHandleLineContinuation()) {
+                AddText(&text, &start, end, ' ');
+                continue;
+            }
+        } else if (c == '(') {
+            nparens++;
+        } else if (c == ')') {
+            if (nparens == 0)
+                break;
+            nparens--;
+        } else if (c == ',' && !nparens) {
+            break;
+        }
+
+        if (!start && !IsSpace(c))
+            start = char_stream();
+
+        advance();
+    }
+
+    AddText(&text, &start, char_stream(), '\0');
+    return text;
+}
+
+std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
+                                            const std::unordered_map<int, std::string>& args)
+{
+    std::string out;
+
+    size_t last_start = 0;
+    for (const auto& pos : macro->arg_positions) {
+        assert(pos >= last_start);
+        assert(macro->substitute[pos] == '%');
+        assert(IsDigit(macro->substitute[pos + 1]));
+
+        out += macro->substitute.substr(last_start, pos - last_start);
+        last_start = pos + 2;
+
+        char arg_pos = macro->substitute[pos + 1] - '0';
+        auto iter = args.find(arg_pos);
+        if (iter == args.end()) {
+            out.push_back(macro->substitute[pos]);
+            out.push_back(macro->substitute[pos + 1]);
+            continue;
+        }
+        out += iter->second;
+    }
+
+    out += macro->substitute.substr(last_start);
+    return out;
+}
+
+void Lexer::SkipUtf8Bom() {
+    if (state_.pos[0] == 0xef && state_.pos[1] == 0xbb && state_.pos[2] == 0xbf)
+        state_.pos += 3;
 }
