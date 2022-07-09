@@ -801,7 +801,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                 start = lptr; /* save starting point of the match pattern */
                 count = 0;
                 while (*lptr > ' ' && *lptr != '\0') {
-                    litchar(&lptr, 0); /* litchar() advances "lptr" and handles escape characters */
+                    litchar(0); /* litchar() advances "lptr" and handles escape characters */
                     count++;
                 }
                 end = lptr;
@@ -817,7 +817,7 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
                 while (lptr != end) {
                     assert(lptr < end);
                     assert(*lptr != '\0');
-                    pattern[count++] = (char)litchar(&lptr, 0);
+                    pattern[count++] = (char)litchar(0);
                 }
                 pattern[count] = '\0';
                 /* special case, erase trailing variable, because it could match anything */
@@ -918,9 +918,13 @@ const unsigned char* Lexer::skipstring(const unsigned char* string) {
     if (endquote == '"')
         flags |= kLitcharUtf8;
 
-    while (*string != endquote && *string != '\0')
-        litchar(&string, flags);
-    return string;
+    ke::SaveAndSet<const unsigned char*> save_lptr(&lptr, string);
+
+    while (*string != endquote && *string != '\0') {
+        litchar(flags);
+        string = lptr;
+    }
+    return lptr;
 }
 
 const unsigned char* Lexer::skipgroup(const unsigned char* string) {
@@ -1058,7 +1062,9 @@ Lexer::substpattern(unsigned char* line, size_t buffersize, const char* pattern,
             if (!alphanum(*p) && *(p - 1) != *p)
                 while (*s <= ' ' && *s != '\0')
                     s++;         /* skip white space */
-            ch = litchar(&p, 0); /* this increments "p" */
+            ke::SaveAndSet<const unsigned char*> save_lptr(&lptr, p);
+            ch = litchar(0); /* this increments "p" */
+            p = lptr;
             if (*s != ch)
                 match = FALSE;
             else
@@ -1357,20 +1363,23 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
 }
 
-void Lexer::packedstring(const unsigned char* lptr, full_token_t* tok) {
-    while (*lptr != '\0') {
-        if (*lptr == '\a') { // ignore '\a' (which was inserted at a line concatenation)
-            lptr++;
+void Lexer::packedstring(full_token_t* tok) {
+    while (true) {
+        char c = peek();
+        if (c == '\0')
+            break;
+        if (c == '\a') { // ignore '\a' (which was inserted at a line concatenation)
+            advance();
             continue;
         }
         bool is_codepoint;
-        cell c = litchar(&lptr, kLitcharUtf8, &is_codepoint);
-        if (c < 0)
+        cell ch = litchar(kLitcharUtf8, &is_codepoint);
+        if (ch < 0)
             continue;
         if (is_codepoint)
-            UnicodeCodepointToUtf8(c, &tok->data);
+            UnicodeCodepointToUtf8(ch, &tok->data);
         else
-            tok->data.push_back(static_cast<char>(c));
+            tok->data.push_back(static_cast<char>(ch));
     }
 }
 
@@ -1939,7 +1948,7 @@ Lexer::LexOnce(full_token_t* tok)
         case '\'':
             advance(); /* skip quote */
             tok->id = tNUMBER;
-            tok->value = litchar(&lptr, 0);
+            tok->value = litchar(0);
             if (peek() == '\'') {
                 advance(); /* skip final quote */
             } else {
@@ -1948,7 +1957,7 @@ Lexer::LexOnce(full_token_t* tok)
                 // Eat tokens on the same line until we can close the malformed
                 // string.
                 while (more() && peek() != '\'')
-                    litchar(&lptr, 0);
+                    litchar(0);
                 if (more() && peek() == '\'')
                     advance();
             }
@@ -2074,7 +2083,7 @@ Lexer::LexStringLiteral(full_token_t* tok)
             }
         } else {
             lptr += 1;
-            ucell c = litchar(&lptr, 0);
+            ucell c = litchar(0);
             *cat++ = static_cast<char>(c);
             /* invalid char declaration */
             if (*lptr != '\'')
@@ -2082,7 +2091,10 @@ Lexer::LexStringLiteral(full_token_t* tok)
         }
         *cat = '\0'; /* terminate string */
 
-        packedstring((unsigned char*)literal_buffer_, tok);
+        {
+            ke::SaveAndSet<const unsigned char*> save_lptr(&lptr, (unsigned char*)literal_buffer_);
+            packedstring(tok);
+        }
 
         if (*lptr == '\"' || *lptr == '\'')
             lptr += 1; /* skip final quote */
@@ -2419,47 +2431,34 @@ litadd_str(const char* str, size_t len, std::vector<cell>* out)
  *        replaced by another character; the syntax '\ddd' is supported,
  *        but ddd must be decimal!
  */
-cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
+cell Lexer::litchar(int flags, bool* is_codepoint) {
     cell c = 0;
     bool tmp_codepoint;
-    const unsigned char* cptr;
 
     if (!is_codepoint)
         is_codepoint = &tmp_codepoint;
     *is_codepoint = false;
 
-    cptr = *lptr;
-    if (*cptr != ctrlchar_) { /* no escape character */
+    if (!lex_match_char(ctrlchar_)) { /* no escape character */
+        cell raw = peek_unsigned();
         if ((flags & kLitcharUtf8) && !(flags & kLitcharSkipping)) {
-            c = get_utf8_char(cptr, &cptr);
+            auto c = get_utf8_char();
             if (c >= 0) {
                 *is_codepoint = true;
-            } else {
-                report(248);
-
-                // Take the raw character.
-                cptr = *lptr;
-                c = *cptr++;
+                return c;
             }
-        } else {
-            c = *cptr++;
-            *is_codepoint = false;
-        }
+            report(248);
+        } 
 
-        *lptr = cptr;
-        assert(c >= 0);
-        return c;
+        assert(raw >= 0);
+        advance();
+        return raw;
     }
 
-    cptr++;
+    if (lex_match_char(ctrlchar_))
+        return ctrlchar_;
 
-    if (*cptr == ctrlchar_) {
-        c = *cptr++; /* \\ == \ (the escape character itself) */
-        *lptr = cptr;
-        return c;
-    }
-
-    char ch = *cptr++;
+    char ch = advance();
     switch (ch) {
         case 'a': /* \a == audible alarm */
             c = 7;
@@ -2488,16 +2487,18 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
         case 'x': {
             int digits = 0;
             c = 0;
-            while (ishex(*cptr) && digits < 2) {
-                if (isdigit(*cptr))
-                    c = (c << 4) + (*cptr - '0');
+            while (true) {
+                char ch = peek();
+                if (!ishex(ch) || digits >= 3)
+                    break;
+                if (isdigit(ch))
+                    c = (c << 4) + (ch - '0');
                 else
-                    c = (c << 4) + (tolower(*cptr) - 'a' + 10);
-                cptr++;
+                    c = (c << 4) + (tolower(ch) - 'a' + 10);
+                advance();
                 digits++;
             }
-            if (*cptr == ';')
-                cptr++; /* swallow a trailing ';' */
+            lex_match_char(';'); /* swallow a trailing ';' */
             break;
         }
         case 'u':
@@ -2505,17 +2506,18 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
             int digits = (ch == 'u') ? 4 : 8;
             for (int i = 1; i <= digits; i++) {
                 c <<= 4;
-                if (*cptr >= '0' && *cptr <= '9') {
-                    c |= (*cptr - '0');
-                } else if (*cptr >= 'a' && *cptr <= 'f') {
-                    c |= 10 + (*cptr - 'a');
-                } else if (*cptr >= 'A' && *cptr <= 'F') {
-                    c |= 10 + (*cptr - 'A');
+                char ch = peek();
+                if (ch >= '0' && ch <= '9') {
+                    c |= (ch - '0');
+                } else if (ch >= 'a' && ch <= 'f') {
+                    c |= 10 + (ch - 'a');
+                } else if (ch >= 'A' && ch <= 'F') {
+                    c |= 10 + (ch - 'A');
                 } else {
                     report(27);
                     break;
                 }
-                cptr++;
+                advance();
             }
             *is_codepoint = true;
             break;
@@ -2527,19 +2529,22 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
             break;
         default:
             // Back up.
-            cptr--;
-            if (isdigit(*cptr)) { /* \ddd */
+            backtrack();
+            if (isdigit(ch)) { /* \ddd */
                 c = 0;
                 int ndigits = 0;
-                while (*cptr >= '0' && *cptr <= '9') {
-                    c = c * 10 + *cptr++ - '0';
+                while (true) {
+                    char ch = peek();
+                    if (ch < '0' || ch > '9')
+                        break;
+                    c = c * 10 + (ch - '0');
+                    advance();
                     ndigits++;
                 }
                 // max 3-digit codes only, save for nul terminator special case.
                 if (ndigits > 3 && !(flags & kLitcharSkipping))
                     report(27);
-                if (*cptr == ';')
-                    cptr++; /* swallow a trailing ';' */
+                lex_match_char(';'); /* swallow a trailing ';' */
                 if (c > 0xff && !(flags & kLitcharSkipping)) {
                     report(27);
                     c = 0;
@@ -2549,7 +2554,6 @@ cell Lexer::litchar(const unsigned char** lptr, int flags, bool* is_codepoint) {
             }
     }
 
-    *lptr = cptr;
     assert(c >= 0);
     return c;
 }
@@ -2725,4 +2729,40 @@ void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf) {
     state_.icomment = 0;
     state_.fcurrent = state_.inpf->sources_index();
     skip_utf8_bom(state_.inpf.get());
+}
+
+cell Lexer::get_utf8_char() {
+    unsigned char ch = advance();
+    if (ch <= 0x7f)
+        return ch;
+
+    // First byte starts with 11, then up to 4 additional 1s, and then a zero.
+    // By inverting we can find the position of the zero.
+    unsigned char inverted = (~ch) & 0xff;
+
+    if (!inverted)
+        return -1;
+
+    unsigned int indicator_bit = ke::FindLeftmostBit32(inverted);
+    if (indicator_bit == 0 || indicator_bit > 5)
+        return -1;
+
+    unsigned int mask = (1 << indicator_bit) - 1;
+    cell result = ch & mask;
+
+    unsigned int extra_bytes = 6 - indicator_bit;
+    for (unsigned int i = 1; i <= extra_bytes; i++) {
+        unsigned char ch = peek();
+
+        if ((ch & 0xc0) != 0x80) {
+            result = -1;
+            break;
+        }
+
+        result <<= 6;
+        result |= (ch & 0x3f);
+        advance();
+    }
+
+    return result;
 }

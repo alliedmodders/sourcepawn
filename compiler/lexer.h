@@ -356,10 +356,10 @@ class Lexer
     bool lex_match_char(char c);
     bool lex_number(full_token_t* tok);
     void lex_float(full_token_t* tok, cell whole);
-    cell litchar(const unsigned char** lptr, int flags, bool* is_codepoint = nullptr);
+    cell litchar(int flags, bool* is_codepoint = nullptr);
     const unsigned char* skipstring(const unsigned char* string);
     const unsigned char* skipgroup(const unsigned char* string);
-    void packedstring(const unsigned char* lptr, full_token_t* tok);
+    void packedstring(full_token_t* tok);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
@@ -374,12 +374,16 @@ class Lexer
     char peek() {
         return *lptr;
     }
+    unsigned char peek_unsigned() {
+        return *lptr;
+    }
     bool more() {
         return *lptr != '\0';
     }
     void backtrack() {
         lptr--;
     }
+    cell get_utf8_char();
 
   private:
     CompileContext& cc_;
