@@ -1378,24 +1378,28 @@ Lexer::Preprocess(bool allow_synthesized_tokens)
     } while (iscommand != CMD_NONE && iscommand != CMD_TERM && freading_); /* enddo */
 }
 
-void Lexer::packedstring(full_token_t* tok) {
+void Lexer::packedstring(full_token_t* tok, char term) {
     while (true) {
         char c = peek();
-        if (c == '\0')
+        if (c == term)
             break;
         if (c == '\a') { // ignore '\a' (which was inserted at a line concatenation)
             advance();
             continue;
         }
-        bool is_codepoint;
-        cell ch = litchar(kLitcharUtf8, &is_codepoint);
-        if (ch < 0)
-            continue;
-        if (is_codepoint)
-            UnicodeCodepointToUtf8(ch, &tok->data);
-        else
-            tok->data.push_back(static_cast<char>(ch));
+        packedstring_char(tok);
     }
+}
+
+void Lexer::packedstring_char(full_token_t* tok) {
+    bool is_codepoint;
+    cell ch = litchar(kLitcharUtf8, &is_codepoint);
+    if (ch < 0)
+        return;
+    if (is_codepoint)
+        UnicodeCodepointToUtf8(ch, &tok->data);
+    else
+        tok->data.push_back(static_cast<char>(ch));
 }
 
 /*  lex(lexvalue,lexsym)        Lexical Analysis
@@ -2084,41 +2088,24 @@ Lexer::LexStringLiteral(full_token_t* tok)
     tok->value = -1;  // Catch consumers expecting automatic litadd().
 
     for (;;) {
-        assert(*lptr == '\"' || *lptr == '\'');
+        assert(peek() == '\"' || peek() == '\'');
 
-        char* cat = literal_buffer_;
-        if (*lptr == '\"') {
-            lptr += 1;
-            while (*lptr != '\"' && *lptr != '\0' && (cat - literal_buffer_) < sLINEMAX) {
-                if (*lptr != '\a') { /* ignore '\a' (which was inserted at a line concatenation) */
-                    *cat++ = *lptr;
-                    if (*lptr == ctrlchar_ && *(lptr + 1) != '\0')
-                        *cat++ = *++lptr; /* skip escape character plus the escaped character */
-                }
-                lptr++;
-            }
+        if (lex_match_char('\"')) {
+            packedstring(tok, '\"');
+            if (!lex_match_char('\"'))
+                error(37);
         } else {
-            lptr += 1;
-            ucell c = litchar(0);
-            *cat++ = static_cast<char>(c);
+            advance();
+            packedstring_char(tok);
             /* invalid char declaration */
-            if (*lptr != '\'')
+            if (!lex_match_char('\''))
                 error(27); /* invalid character constant (must be one character) */
         }
-        *cat = '\0'; /* terminate string */
 
-        {
-            ke::SaveAndSet<const unsigned char*> save_lptr(&lptr, (unsigned char*)literal_buffer_);
-            packedstring(tok);
-        }
-
-        if (*lptr == '\"' || *lptr == '\'')
-            lptr += 1; /* skip final quote */
-        else
-            error(37); /* invalid (non-terminated) string */
         /* see whether an ellipsis is following the string */
         if (!ScanEllipsis(lptr))
             break; /* no concatenation of string literals */
+
         /* there is an ellipses, go on parsing (this time with full preprocessing) */
         while (*lptr <= ' ') {
             if (*lptr == '\0') {
