@@ -49,47 +49,6 @@
 #include "sc.h"
 #include "scvars.h"
 
-cell
-get_utf8_char(const unsigned char* string, const unsigned char** endptr)
-{
-    const unsigned char* p = string;
-
-    unsigned char ch = *p++;
-    if (ch <= 0x7f) {
-        *endptr = p;
-        return ch;
-    }
-
-    // First byte starts with 11, then up to 4 additional 1s, and then a zero.
-    // By inverting we can find the position of the zero.
-    unsigned char inverted = (~ch) & 0xff;
-
-    if (!inverted)
-        return -1;
-
-    unsigned int indicator_bit = ke::FindLeftmostBit32(inverted);
-    if (indicator_bit == 0 || indicator_bit > 5)
-        return -1;
-
-    unsigned int mask = (1 << indicator_bit) - 1;
-    cell result = ch & mask;
-
-    unsigned int extra_bytes = 6 - indicator_bit;
-    for (unsigned int i = 1; i <= extra_bytes; i++) {
-        if ((*p & 0xc0) != 0x80) {
-            result = -1;
-            break;
-        }
-
-        result <<= 6;
-        result |= (*p & 0x3f);
-        p++;
-    }
-
-    *endptr = p;
-    return result;
-}
-
 void
 skip_utf8_bom(SourceFile* fp)
 {
