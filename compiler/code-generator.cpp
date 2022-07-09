@@ -1571,12 +1571,43 @@ CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt)
         EmitStmt(body);
 
         __ bind(&loop_cx.continue_to);
-        if (body->flow_type() != Flow_Break && body->flow_type() != Flow_Return)
-            EmitTest(cond, true, &start);
+        if (body->flow_type() != Flow_Break && body->flow_type() != Flow_Return) {
+            if (cond->tree_has_heap_allocs()) {
+                // Need to create a temporary heap scope here.
+                Label on_true, join;
+                EnterHeapScope(Flow_None);
+                EmitTest(cond, true, &on_true);
+                __ emit(OP_PUSH_C, 0);
+                __ emit(OP_JUMP, &join);
+                __ bind(&on_true);
+                __ emit(OP_PUSH_C, 1);
+                __ bind(&join);
+                LeaveHeapScope();
+                __ emit(OP_POP_PRI);
+                __ emit(OP_JNZ, &start);
+            } else {
+                EmitTest(cond, true, &start);
+            }
+        }
     } else {
         __ bind(&loop_cx.continue_to);
 
-        EmitTest(cond, false, &loop_cx.break_to);
+        if (cond->tree_has_heap_allocs()) {
+            // Need to create a temporary heap scope here.
+            Label on_true, join;
+            EnterHeapScope(Flow_None);
+            EmitTest(cond, true, &on_true);
+            __ emit(OP_PUSH_C, 0);
+            __ emit(OP_JUMP, &join);
+            __ bind(&on_true);
+            __ emit(OP_PUSH_C, 1);
+            __ bind(&join);
+            LeaveHeapScope();
+            __ emit(OP_POP_PRI);
+            __ emit(OP_JZER, &loop_cx.break_to);
+        } else {
+            EmitTest(cond, false, &loop_cx.break_to);
+        }
         EmitStmt(body);
         if (!body->IsTerminal())
             __ emit(OP_JUMP, &loop_cx.continue_to);
