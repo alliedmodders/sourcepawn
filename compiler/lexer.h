@@ -335,7 +335,7 @@ class Lexer
     void StripComments(unsigned char* line);
     int DoCommand(bool allow_synthesized_tokens);
     int ScanEllipsis(const unsigned char* lptr);
-    bool LexSymbolOrKeyword(full_token_t* tok);
+    void LexSymbolOrKeyword(full_token_t* tok);
     int LexKeywordImpl(const char* match, size_t length);
     bool LexKeyword(full_token_t* tok, const char* token_start, size_t len);
     void LexStringLiteral(full_token_t* tok);
@@ -371,17 +371,24 @@ class Lexer
     char advance() {
         return *lptr++;
     }
-    char peek() {
+    char peek() const {
         return *lptr;
     }
-    unsigned char peek_unsigned() {
+    char peek2() const {
+        assert(*lptr != '\0');
+        return *(lptr + 1);
+    }
+    unsigned char peek_unsigned() const {
         return *lptr;
     }
-    bool more() {
+    bool more() const {
         return *lptr != '\0';
     }
     void backtrack() {
         lptr--;
+    }
+    unsigned char const* char_stream() const {
+        return lptr;
     }
     cell get_utf8_char();
 
