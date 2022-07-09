@@ -200,34 +200,46 @@ check_empty(const unsigned char* lptr)
 void
 Lexer::SynthesizeIncludePathToken()
 {
-    while (*lptr <= ' ' && *lptr != '\0') /* skip leading whitespace */
-        lptr++;
+    /* skip leading whitespace */
+    while (true) {
+        char c = peek();
+        if (c > ' ' || c == '\0')
+            break;
+        advance();
+    }
 
     auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, int(lptr - pline_));
 
-    char open_c = (char)*lptr;
+    char open_c = peek();
     char close_c;
     if (open_c == '"' || open_c == '<') {
         close_c = (char)((open_c == '"') ? '"' : '>');
-        lptr++;
+        advance();
     } else {
         close_c = 0;
         report(247);
     }
 
-    while (*lptr <= ' ' && *lptr != '\0') /* skip whitespace after quote */
-        lptr++;
+    /* skip whitespace after quote */
+    while (true) {
+        char c = peek();
+        if (c > ' ' || c == '\0')
+            break;
+        advance();
+    }
 
     char name[PATH_MAX];
 
     int i = 0;
-    while (*lptr != close_c && *lptr != '\0' && i < (int)sizeof(name) - 1) {
-        if (DIRSEP_CHAR != '/' && *lptr == '/') {
+    while (true) {
+        char c = peek();
+        if (c == close_c || c == '\0' || i >= (int)sizeof(name) - 1)
+            break;
+        if (DIRSEP_CHAR != '/' && c == '/') {
             name[i++] = DIRSEP_CHAR;
-            lptr++;
-        }
-        else {
-            name[i++] = *lptr++;
+            advance();
+        } else {
+            name[i++] = advance();
         }
     }
     while (i > 0 && name[i - 1] <= ' ')
@@ -236,9 +248,8 @@ Lexer::SynthesizeIncludePathToken()
     name[i] = '\0'; /* zero-terminate the string */
 
     if (close_c) {
-        if (*lptr != close_c)
+        if (advance() != close_c)
             error(37);
-        lptr++;
     }
     check_empty(lptr); /* verify that the rest of the line is whitespace */
 
@@ -572,11 +583,15 @@ Lexer::DoCommand(bool allow_synthesized_tokens)
     cell val;
     const char* str;
 
-    while (*lptr <= ' ' && *lptr != '\0')
-        lptr += 1;
-    if (*lptr == '\0')
+    while (true) {
+        char c = peek();
+        if (c > ' ' || c == '\0')
+            break;
+        advance();
+    }
+    if (peek() == '\0')
         return CMD_EMPTYLINE; /* empty line */
-    if (*lptr != '#')
+    if (peek() != '#')
         return IsSkipping() ? CMD_CONDFALSE : CMD_NONE; /* it is not a compiler directive */
     /* compiler directive found */
     indent_nowarn_ = true; /* allow loose indentation" */
@@ -1783,7 +1798,8 @@ Lexer::lex()
 void
 Lexer::LexOnce(full_token_t* tok)
 {
-    switch (peek()) {
+    char c = peek();
+    switch (c) {
         case '0':
         case '1':
         case '2':
@@ -1971,9 +1987,9 @@ Lexer::LexOnce(full_token_t* tok)
             return;
     }
 
-    if (alpha(peek()) || *lptr == '#') {
-        if (LexSymbolOrKeyword(tok))
-            return;
+    if (alpha(c) || c == '#') {
+        LexSymbolOrKeyword(tok);
+        return;
     }
 
     // Unmatched, return the next character.
@@ -2141,7 +2157,7 @@ Lexer::LexKeyword(full_token_t* tok, const char* token_start, size_t len)
         report(173) << get_token_string(tok_id);
         tok->id = tSYMBOL;
         tok->atom = gAtoms.add(get_token_string(tok_id));
-    } else if (*lptr == ':' && (tok_id == tINT || tok_id == tVOID)) {
+    } else if ((tok_id == tINT || tok_id == tVOID) && lex_match_char(':')) {
         // Special case 'int:' to its old behavior: an implicit view_as<> cast
         // with Pawn's awful lowercase coercion semantics.
         auto str = get_token_string(tok_id);
@@ -2153,7 +2169,6 @@ Lexer::LexKeyword(full_token_t* tok, const char* token_start, size_t len)
                 report(239) << str << str;
                 break;
         }
-        lptr++;
         tok->id = tLABEL;
         tok->atom = gAtoms.add(str);
     } else {
@@ -2163,16 +2178,14 @@ Lexer::LexKeyword(full_token_t* tok, const char* token_start, size_t len)
     return true;
 }
 
-bool
-Lexer::LexSymbolOrKeyword(full_token_t* tok)
-{
-    unsigned char const* token_start = lptr;
-    char first_char = *lptr;
+void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
+    unsigned char const* token_start = char_stream();
+    char first_char = advance();
     assert(alpha(first_char) || first_char == '#');
 
     bool maybe_keyword = (first_char != PUBLIC_CHAR);
     while (true) {
-        char c = *++lptr;
+        char c = peek();
         if (isdigit(c)) {
             // Only symbols have numbers, so this terminates a keyword if we
             // started with '#".
@@ -2182,25 +2195,25 @@ Lexer::LexSymbolOrKeyword(full_token_t* tok)
         } else if (!isalpha(c) && c != '_') {
             break;
         }
+        advance();
     }
 
-    size_t len = lptr - token_start;
+    size_t len = char_stream() - token_start;
     if (len == 1 && first_char == PUBLIC_CHAR) {
         tok->id = PUBLIC_CHAR;
-        return true;
+        return;
     }
     if (maybe_keyword) {
         if (LexKeyword(tok, (const char*)token_start, len))
-            return true;
+            return;
     }
     if (first_char != '#') {
         lex_symbol(tok, (const char*)token_start, len);
-        return true;
+        return;
     }
 
-    // Failed to find anything, reset lptr.
-    lptr = token_start;
-    return false;
+    tok->id = 0;
+    error(31);
 }
 
 void
@@ -2209,10 +2222,10 @@ Lexer::lex_symbol(full_token_t* tok, const char* token_start, size_t len)
     tok->atom = gAtoms.add(token_start, len);
     tok->id = tSYMBOL;
 
-    if (*lptr == ':' && *(lptr + 1) != ':') {
+    if (peek() == ':' && peek2() != ':') {
         if (allow_tags_) {
             tok->id = tLABEL;
-            lptr++;
+            advance();
         } else if (gTypes.find(tok->atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
