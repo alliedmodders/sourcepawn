@@ -439,137 +439,6 @@ Lexer::StripComments(unsigned char* line)
     }
 }
 
-/*  btoi
- *
- *  Attempts to interpret a numeric symbol as a binary value. On success
- *  it returns the number of characters processed (so the line pointer can be
- *  adjusted) and the value is stored in "val". Otherwise it returns 0 and
- *  "val" is garbage.
- *
- *  A binary value must start with "0b"
- */
-static int
-btoi(cell* val, const unsigned char* curptr)
-{
-    const unsigned char* ptr;
-
-    *val = 0;
-    ptr = curptr;
-    if (*ptr == '0' && *(ptr + 1) == 'b') {
-        ptr += 2;
-        while (*ptr == '0' || *ptr == '1' || *ptr == '_') {
-            if (*ptr != '_')
-                *val = (*val << 1) | (*ptr - '0');
-            ptr++;
-        }
-    } else {
-        return 0;
-    }
-    if (alphanum(*ptr)) /* number must be delimited by non-alphanumeric char */
-        return 0;
-    else
-        return (int)(ptr - curptr);
-}
-
-/*  otoi
- *
- *  Attempts to interpret a numeric symbol as a octal value. On
- *  success it returns the number of characters processed and the value is
- *  stored in "val". Otherwise it return 0 and "val" is garbage.
- *
- *  An octal value must start with "0o"
- */
-static int
-otoi(cell* val, const unsigned char* curptr)
-{
-    const unsigned char* ptr;
-
-    *val = 0;
-    ptr = curptr;
-    if (!isdigit(*ptr)) /* should start with digit */
-        return 0;
-    if (*ptr == '0' && *(ptr + 1) == 'o') {
-        ptr += 2;
-        while (isoctal(*ptr) || *ptr == '_') {
-            if (*ptr != '_') {
-                assert(isoctal(*ptr));
-                *val = (*val << 3) + (*ptr - '0');
-            }
-            ptr++;
-        }
-    } else {
-        return 0;
-    }
-    if (alphanum(*ptr)) /* number must be delimited by non-alphanumeric char */
-        return 0;
-    else
-        return (int)(ptr - curptr);
-}
-
-/*  dtoi
- *
- *  Attempts to interpret a numeric symbol as a decimal value. On success
- *  it returns the number of characters processed and the value is stored in
- *  "val". Otherwise it returns 0 and "val" is garbage.
- */
-static int
-dtoi(cell* val, const unsigned char* curptr)
-{
-    const unsigned char* ptr;
-
-    *val = 0;
-    ptr = curptr;
-    if (!isdigit(*ptr)) /* should start with digit */
-        return 0;
-    while (isdigit(*ptr) || *ptr == '_') {
-        if (*ptr != '_')
-            *val = (*val * 10) + (*ptr - '0');
-        ptr++;
-    }
-    if (alphanum(*ptr)) /* number must be delimited by non-alphanumerical */
-        return 0;
-    if (*ptr == '.' && isdigit(*(ptr + 1)))
-        return 0; /* but a fractional part must not be present */
-    return (int)(ptr - curptr);
-}
-
-/*  htoi
- *
- *  Attempts to interpret a numeric symbol as a hexadecimal value. On
- *  success it returns the number of characters processed and the value is
- *  stored in "val". Otherwise it return 0 and "val" is garbage.
- */
-static int
-htoi(cell* val, const unsigned char* curptr)
-{
-    const unsigned char* ptr;
-
-    *val = 0;
-    ptr = curptr;
-    if (!isdigit(*ptr)) /* should start with digit */
-        return 0;
-    if (*ptr == '0' && *(ptr + 1) == 'x') { /* C style hexadecimal notation */
-        ptr += 2;
-        while (ishex(*ptr) || *ptr == '_') {
-            if (*ptr != '_') {
-                assert(ishex(*ptr));
-                *val = *val << 4;
-                if (isdigit(*ptr))
-                    *val += (*ptr - '0');
-                else
-                    *val += (tolower(*ptr) - 'a' + 10);
-            }
-            ptr++;
-        }
-    } else {
-        return 0;
-    }
-    if (alphanum(*ptr))
-        return 0;
-    else
-        return (int)(ptr - curptr);
-}
-
 /*  ftoi
  *
  *  Attempts to interpret a numeric symbol as a rational number, either as
@@ -585,58 +454,44 @@ htoi(cell* val, const unsigned char* curptr)
  *  o  at least one digit must follow the period; "6." is not a valid number,
  *     you should write "6.0"
  */
-static int
-ftoi(cell* val, const unsigned char* curptr)
-{
-    const unsigned char* ptr;
-    double fnum, ffrac, fmult;
-    unsigned long dnum, dbase = 1;
+void Lexer::lex_float(full_token_t* tok, cell_t whole) {
+    unsigned long dbase = 1;
 
-    fnum = 0.0;
-    dnum = 0L;
-    ptr = curptr;
-    if (!isdigit(*ptr)) /* should start with digit */
-        return 0;
-    while (isdigit(*ptr) || *ptr == '_') {
-        if (*ptr != '_') {
-            fnum = (fnum * 10.0) + (*ptr - '0');
-            dnum = (dnum * 10L) + (*ptr - '0') * dbase;
-        }
-        ptr++;
-    }
-    if (*ptr != '.')
-        return 0; /* there must be a period */
-    ptr++;
-    if (!isdigit(*ptr)) /* there must be at least one digit after the dot */
-        return 0;
-    ffrac = 0.0;
-    fmult = 1.0;
-    while (isdigit(*ptr) || *ptr == '_') {
-        if (*ptr != '_') {
-            ffrac = (ffrac * 10.0) + (*ptr - '0');
+    double fnum = whole;
+    unsigned long dnum = whole;
+
+    double ffrac = 0.0;
+    double fmult = 1.0;
+    while (true) {
+        char c = peek();
+        if (!isdigit(c) && c != '_')
+            break;
+        advance();
+        if (c != '_') {
+            ffrac = (ffrac * 10.0) + (c - '0');
             fmult = fmult / 10.0;
             dbase /= 10L;
-            dnum += (*ptr - '0') * dbase;
+            dnum += (c - '0') * dbase;
         }
-        ptr++;
     }
     fnum += ffrac * fmult; /* form the number so far */
-    if (*ptr == 'e') {     /* optional fractional part */
-        int exp, sign;
-        ptr++;
-        if (*ptr == '-') {
+    if (lex_match_char('e')) {     /* optional fractional part */
+        int sign;
+        if (lex_match_char('-'))
             sign = -1;
-            ptr++;
-        } else {
+        else
             sign = 1;
+        int exp = 0;
+        int ndigits = 0;
+        while (true) {
+            char c = peek();
+            if (!isdigit(c))
+                break;
+            advance();
+            exp = (exp * 10) + (c - '0');
         }
-        if (!isdigit(*ptr)) /* 'e' should be followed by a digit */
-            return 0;
-        exp = 0;
-        while (isdigit(*ptr)) {
-            exp = (exp * 10) + (*ptr - '0');
-            ptr++;
-        }
+        if (!ndigits)
+            error(425);
         fmult = pow(10.0, exp * sign);
         fnum *= fmult;
         dnum *= (unsigned long)(fmult + 0.5);
@@ -644,38 +499,8 @@ ftoi(cell* val, const unsigned char* curptr)
 
     /* floating point */
     float value = (float)fnum;
-    *val = sp::FloatCellUnion(value).cell;
-    return (int)(ptr - curptr);
-}
-
-/*  number
- *
- *  Reads in a number (binary, decimal or hexadecimal). It returns the number
- *  of characters processed or 0 if the symbol couldn't be interpreted as a
- *  number (in this case the argument "val" remains unchanged). This routine
- *  relies on the 'early dropout' implementation of the logical or (||)
- *  operator.
- *
- *  Note: the routine doesn't check for a sign (+ or -). The - is checked
- *        for at "hier2()" (in fact, it is viewed as an operator, not as a
- *        sign) and the + is invalid (as in K&R C, and unlike ANSI C).
- */
-static int
-number(cell* val, const unsigned char* curptr)
-{
-    int i;
-    cell value;
-
-    if ((i = btoi(&value, curptr)) != 0     /* binary? */
-        || (i = htoi(&value, curptr)) != 0  /* hexadecimal? */
-        || (i = dtoi(&value, curptr)) != 0  /* decimal? */
-        || (i = otoi(&value, curptr)) != 0) /* octal? */
-    {
-        *val = value;
-        return i;
-    } else {
-        return 0; /* else not a number */
-    }
+    tok->value = sp::FloatCellUnion(value).cell;
+    tok->id = tRATIONAL;
 }
 
 static void
@@ -1949,7 +1774,7 @@ Lexer::lex()
 void
 Lexer::LexOnce(full_token_t* tok)
 {
-    switch (*lptr) {
+    switch (peek()) {
         case '0':
         case '1':
         case '2':
@@ -1966,7 +1791,7 @@ Lexer::LexOnce(full_token_t* tok)
         }
 
         case '*':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taMULT;
             else
@@ -1974,7 +1799,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '/':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taDIV;
             else
@@ -1982,7 +1807,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '%':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taMOD;
             else
@@ -1990,7 +1815,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '+':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taADD;
             else if (lex_match_char('+'))
@@ -2000,7 +1825,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '-':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taSUB;
             else if (lex_match_char('-'))
@@ -2010,7 +1835,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '<':
-            lptr++;
+            advance();
             if (lex_match_char('<')) {
                 if (lex_match_char('='))
                     tok->id = taSHL;
@@ -2024,7 +1849,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '>':
-            lptr++;
+            advance();
             if (lex_match_char('>')) {
                 if (lex_match_char('>')) {
                     if (lex_match_char('='))
@@ -2044,7 +1869,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '&':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taAND;
             else if (lex_match_char('&'))
@@ -2054,7 +1879,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '^':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taXOR;
             else
@@ -2062,7 +1887,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '|':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = taOR;
             else if (lex_match_char('|'))
@@ -2072,7 +1897,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '=':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = tlEQ;
             else
@@ -2080,7 +1905,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '!':
-            lptr++;
+            advance();
             if (lex_match_char('='))
                 tok->id = tlNE;
             else
@@ -2088,7 +1913,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '.':
-            lptr++;
+            advance();
             if (lex_match_char('.')) {
                 if (lex_match_char('.'))
                     tok->id = tELLIPS;
@@ -2100,7 +1925,7 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case ':':
-            lptr++;
+            advance();
             if (lex_match_char(':'))
                 tok->id = tDBLCOLON;
             else
@@ -2112,59 +1937,117 @@ Lexer::LexOnce(full_token_t* tok)
             return;
 
         case '\'':
-            lptr += 1; /* skip quote */
+            advance(); /* skip quote */
             tok->id = tNUMBER;
             tok->value = litchar(&lptr, 0);
-            if (*lptr == '\'') {
-                lptr += 1; /* skip final quote */
+            if (peek() == '\'') {
+                advance(); /* skip final quote */
             } else {
                 error(27); /* invalid character constant (must be one character) */
 
                 // Eat tokens on the same line until we can close the malformed
                 // string.
-                while (*lptr && *lptr != '\'')
+                while (more() && peek() != '\'')
                     litchar(&lptr, 0);
-                if (*lptr && *lptr == '\'')
-                    lptr++;
+                if (more() && peek() == '\'')
+                    advance();
             }
             return;
 
         case ';':
             // semicolon resets the error state.
             tok->id = ';';
-            lptr++;
+            advance();
             cc_.reports()->ResetErrorFlag();
             return;
     }
 
-    if (alpha(*lptr) || *lptr == '#') {
+    if (alpha(peek()) || *lptr == '#') {
         if (LexSymbolOrKeyword(tok))
             return;
     }
 
     // Unmatched, return the next character.
-    tok->id = *lptr++;
+    tok->id = advance();
 }
 
 bool Lexer::lex_match_char(char c) {
-    if (*lptr != c)
+    if (peek() != c)
         return false;
-    lptr++;
+    advance();
     return true;
 }
 
 bool Lexer::lex_number(full_token_t* tok) {
-    if (int i = number(&tok->value, lptr)) {
-        tok->id = tNUMBER;
-        lptr += i;
-        return true;
+    cell value = 0;
+
+    int base = 10;
+    int ndigits = 0;
+    if (lex_match_char('0')) {
+        if (lex_match_char('b'))
+            base = 2;
+        else if (lex_match_char('o'))
+            base = 8;
+        else if (lex_match_char('x'))
+            base = 16;
+        else
+            ndigits = 1;
     }
-    if (int i = ftoi(&tok->value, lptr)) {
-        tok->id = tRATIONAL;
-        lptr += i;
-        return true;
+
+    AutoCountErrors errors;
+
+    while (true) {
+        char c = peek();
+        if (c == '_') {
+            advance();
+            continue;
+        }
+        int digit = -1;
+        if (c >= '0' && c <= '9')
+            digit = c - '0';
+        else if (c >= 'A' && c <= 'F')
+            digit = c - 'A' + 10;
+        else if (c >= 'a' && c <= 'f')
+            digit = c - 'a' + 10;
+
+        if (c != '_' && digit < 0)
+            break;
+
+        advance();
+
+        if (digit >= base) {
+            if (errors.ok())
+                error(86);
+            continue;
+        }
+        if (c == '_')
+            continue;
+
+        value = (value * base) + digit;
+        ndigits++;
     }
-    return false;
+
+    // If there was no leading 0, and we got no digits, then there was no actual
+    // number to lex.
+    if (base == 10 && !ndigits)
+        return false;
+
+    if (alphanum(peek()))
+        error(53);
+    else if (!ndigits)
+        error(424);
+
+    if (base == 10 && lex_match_char('.')) {
+        if (isdigit(peek())) {
+            lex_float(tok, value);
+            return true;
+        }
+        backtrack();
+    }
+
+    tok->id = tNUMBER;
+    tok->value = value;
+    return true;
 }
 
 void
