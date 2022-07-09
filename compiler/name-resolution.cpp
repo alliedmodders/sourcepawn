@@ -622,20 +622,6 @@ ArrayExpr::Bind(SemaContext& sc)
 }
 
 bool
-IsDefinedExpr::Bind(SemaContext& sc)
-{
-    AutoErrorPos aep(pos_);
-
-    auto sym = FindSymbol(sc, name_);
-    if (sym && sym->ident == iFUNCTN && !sym->defined)
-        sym = nullptr;
-    value_ = sym ? 1 : 0;
-    if (!value_ && sc.cc().lexer()->HasMacro(name_))
-        value_ = 1;
-    return true;
-}
-
-bool
 SizeofExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);

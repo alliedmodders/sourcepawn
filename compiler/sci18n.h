@@ -23,5 +23,17 @@
 
 #include "source-file.h"
 
-void skip_utf8_bom(SourceFile* file);
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out);
+
+static inline bool IsSpace(char c) {
+    // msvcrt doesn't like negative values.
+    return c > 0 && ::isspace(c);
+}
+
+static inline bool IsNewline(char c) {
+    return c == '\r' || c == '\n';
+}
+
+static inline bool IsDigit(char c) {
+    return c >= '0' && c <= '9';
+}

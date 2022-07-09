@@ -578,26 +578,6 @@ class Expr : public ParseNode
     bool can_alloc_heap_ : 1;
 };
 
-class IsDefinedExpr final : public Expr
-{
-  public:
-    IsDefinedExpr(const token_pos_t& pos, sp::Atom* name)
-      : Expr(ExprKind::IsDefinedExpr, pos),
-        name_(name)
-    {}
-
-    bool Bind(SemaContext& sc) override;
-    void ProcessUses(SemaContext&) override {}
-
-    static bool is_a(Expr* node) { return node->kind() == ExprKind::IsDefinedExpr; }
-
-    cell value() const { return value_; }
-
-  private:
-    cell value_ = 0;
-    sp::Atom* name_;
-};
-
 class UnaryExpr final : public Expr
 {
   public:

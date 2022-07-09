@@ -357,8 +357,8 @@ inst_binary_name(CompileContext& cc, std::string binfile)
     binfile.push_back('"');
     binfileName.push_back('"');
 
-    cc.lexer()->AddMacro("__BINARY_PATH__", 15, binfile.c_str());
-    cc.lexer()->AddMacro("__BINARY_NAME__", 15, binfileName.c_str());
+    cc.lexer()->AddMacro("__BINARY_PATH__", binfile.c_str());
+    cc.lexer()->AddMacro("__BINARY_NAME__", binfileName.c_str());
 }
 
 static void
@@ -382,8 +382,8 @@ inst_datetime_defines(CompileContext& cc)
     strftime(ltime, 31, "\"%H:%M:%S\"", curtime);
 #endif
 
-    cc.lexer()->AddMacro("__DATE__", 8, date);
-    cc.lexer()->AddMacro("__TIME__", 8, ltime);
+    cc.lexer()->AddMacro("__DATE__", date);
+    cc.lexer()->AddMacro("__TIME__", ltime);
 }
 
 static void

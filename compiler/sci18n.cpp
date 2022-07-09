@@ -49,22 +49,6 @@
 #include "sc.h"
 #include "scvars.h"
 
-void
-skip_utf8_bom(SourceFile* fp)
-{
-    auto resetpos = fp->Pos();
-
-    static const size_t kBomSize = 3;
-    unsigned char bom[kBomSize + 1];
-    if (!fp->Read(bom, kBomSize))
-        return;
-
-    if (bom[0] == 0xef && bom[1] == 0xbb && bom[2] == 0xbf)
-        return;
-
-    fp->Reset(resetpos);
-}
-
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
 #if defined(_MSC_VER) && _MSC_VER >= 1900 && _MSC_VER < 2000
     std::wstring_convert<std::codecvt_utf8<__int32>, __int32> convert;

@@ -209,13 +209,12 @@ enum TokenKind {
     tSYMBOL,
     tLABEL,
     tSTRING,
-    tEXPR,           /* for assigment to "lastst" only (see SC1.C) */
+    tCHAR_LITERAL,
     tSYN_PRAGMA_UNUSED,
     tSYN_INCLUDE_PATH,
-    tENDLESS,        /* endless loop, for assigment to "lastst" only */
-    tEMPTYBLOCK,     /* empty blocks for AM bug 4825 */
     tEOL,            /* newline, only returned by peek_new_line() */
     tNEWDECL,        /* for declloc() */
+    tENTERED_MACRO,  /* internal lexer command */
     tLAST_TOKEN_ID
 };
 
@@ -282,6 +281,8 @@ class Lexer
 
     int lex();
     int lex_same_line();
+    bool match_same_line(int tok);
+    bool need_same_line(int tok);
     bool peek(int id);
     bool match(int token);
     bool need(int token);
@@ -296,9 +297,11 @@ class Lexer
     void Start();
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
     std::shared_ptr<SourceFile> OpenFile(const std::string& name);
-    void Preprocess(bool allow_synthesized_tokens);
-    void AddMacro(const char* pattern, size_t length, const char* subst);
     bool NeedSemicolon();
+    void AddMacro(const char* pattern, const char* subst);
+    void LexStringContinuation();
+    void LexDefinedKeyword();
+    bool HasMacro(sp::Atom* atom);
 
     full_token_t lex_tok() {
         lex();
@@ -307,6 +310,7 @@ class Lexer
     full_token_t* current_token() {
         return &token_buffer_->tokens[token_buffer_->cursor];
     }
+    const token_pos_t stream_loc() const;
     const token_pos_t& pos() { return current_token()->start; }
     std::string& deprecate() { return deprecate_; }
     bool& allow_tags() { return allow_tags_; }
@@ -314,36 +318,42 @@ class Lexer
     int& stmtindent() { return stmtindent_; }
     bool& indent_nowarn() { return indent_nowarn_; }
     bool freading() const { return freading_; }
-    int fcurrent() const { return state_.fcurrent; }
+    int fcurrent() const { return state_.inpf->sources_index(); }
     unsigned fline() const { return state_.fline; }
-    unsigned char* pline() { return pline_; }
     SourceFile* inpf() const { return state_.inpf.get(); }
 
-    bool HasMacro(sp::Atom* name) { return FindMacro(name->chars(), name->length(), nullptr); }
-
-    struct macro_t {
-        const char* first;
-        const char* second;
-    };
-
-    const unsigned char* lptr = nullptr;                  /* points to the current position in "pline" */
+    unsigned char const* char_stream() const { return state_.pos; }
+    unsigned char const* line_start() const { return state_.line_start; }
 
   private:
-    void LexOnce(full_token_t* tok);
-    void PreprocessInLex(bool allow_synthesized_tokens);
-    void Readline(unsigned char* line);
-    void StripComments(unsigned char* line);
-    int DoCommand(bool allow_synthesized_tokens);
-    int ScanEllipsis(const unsigned char* lptr);
+    bool FindNextToken();
+    void HandleNewline(char c, char continuation);
+    void HandleSingleLineComment();
+    void HandleMultiLineComment();
+    void HandleDirectives();
+    void HandleEof();
+    void HandleSkippedSection();
+    int LexNewToken();
+    void LexIntoToken(full_token_t* tok);
     void LexSymbolOrKeyword(full_token_t* tok);
-    int LexKeywordImpl(const char* match, size_t length);
-    bool LexKeyword(full_token_t* tok, const char* token_start, size_t len);
-    void LexStringLiteral(full_token_t* tok);
+    int LexKeywordImpl(sp::Atom* atom);
+    bool LexKeyword(full_token_t* tok, sp::Atom* atom);
+    void LexStringLiteral(full_token_t* tok, int flags);
+    void LexSymbol(full_token_t* tok, sp::Atom* atom);
+    bool MaybeHandleLineContinuation();
     bool PlungeQualifiedFile(const char* name);
     full_token_t* PushSynthesizedToken(TokenKind kind, int col);
     void SynthesizeIncludePathToken();
     void SetFileDefines(std::string file);
     void EnterFile(std::shared_ptr<SourceFile>&& fp);
+    void FillTokenPos(token_pos_t* pos);
+    void SkipLineWhitespace();
+    std::string SkimUntilEndOfLine(tr::vector<size_t>* macro_args = nullptr);
+    std::string SkimMacroArgument();
+    void CheckLineEmpty(bool allow_semi = false);
+    void NeedTokenError(int expected, int got);
+    void SkipUtf8Bom();
+    void PushLexerState();
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
@@ -352,101 +362,126 @@ class Lexer
     void substallpatterns(unsigned char* line, int buffersize);
     bool substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                       const char* substitution, int& patternLen, int& substLen);
-    void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
-    bool lex_match_char(char c);
     bool lex_number(full_token_t* tok);
     void lex_float(full_token_t* tok, cell whole);
     cell litchar(int flags, bool* is_codepoint = nullptr);
-    const unsigned char* skipstring(const unsigned char* string);
-    const unsigned char* skipgroup(const unsigned char* string);
     void packedstring(full_token_t* tok, char term);
     void packedstring_char(full_token_t* tok);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;
     }
+    bool IsPreprocessing() const { return token_buffer_ == &preproc_buffer_; }
 
-    bool FindMacro(const char* name, size_t length, macro_t* macro);
-    bool DeleteMacro(const char* name, size_t length);
-
+    bool match_char(char c) {
+        if (peek() == c) {
+            advance();
+            return true;
+        }
+        return false;
+    }
     char advance() {
-        return *lptr++;
+        assert(state_.pos < state_.end);
+        return *state_.pos++;
     }
     char peek() const {
-        return *lptr;
+        assert(state_.pos <= state_.end);
+        return *state_.pos;
     }
     char peek2() const {
-        assert(*lptr != '\0');
-        return *(lptr + 1);
+        assert(state_.pos < state_.end);
+        return *(state_.pos + 1);
     }
     unsigned char peek_unsigned() const {
-        return *lptr;
+        assert(state_.pos <= state_.end);
+        return *state_.pos;
     }
     bool more() const {
-        return *lptr != '\0';
+        return state_.pos < state_.end;
     }
     void backtrack() {
-        lptr--;
+        assert(state_.pos > state_.start);
+        state_.pos--;
     }
-    unsigned char const* char_stream() const {
-        return lptr;
+    void backtrack(const unsigned char* pos) {
+        assert(pos >= state_.line_start);
+        assert(pos <= state_.end);
+        state_.pos = pos;
     }
+    unsigned int column() const { return (unsigned)(state_.pos - state_.line_start); }
     cell get_utf8_char();
 
   private:
+    struct MacroEntry {
+        sp::Atom* pattern;
+        ke::Maybe<tr::vector<int>> args;
+        tr::vector<size_t> arg_positions;
+        std::string substitute;
+        std::string documentation;
+        bool deprecated;
+    };
+    std::shared_ptr<MacroEntry> FindMacro(sp::Atom* atom);
+    bool DeleteMacro(sp::Atom* atom);
+    bool EnterMacro(std::shared_ptr<MacroEntry> macro);
+    bool IsInMacro() const { return state_.macro != nullptr; }
+    std::string PerformMacroSubstitution(MacroEntry* macro,
+                                         const std::unordered_map<int, std::string>& args);
+
+  private:
     CompileContext& cc_;
-    ke::HashMap<sp::CharsAndLength, int, KeywordTablePolicy> keywords_;
+    tr::unordered_map<sp::Atom*, int> keywords_;
     std::vector<char> ifstack_;
     size_t iflevel_;             /* nesting level if #if/#else/#endif */
     size_t skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
-    int listline_ = -1; /* "current line" for the list file */
-    int lexnewline_;
     std::string deprecate_;
+    bool lexnewline_ = false;
     bool allow_tags_ = true;
     int stmtindent_ = 0;
     bool indent_nowarn_ = false;
     bool freading_ = false;
-    unsigned char pline_[sLINEMAX + 1];         /* the line read from the input file */
     int ctrlchar_ = CTRL_CHAR;
+    unsigned int tokens_on_line_ = 0;
+    bool in_string_continuation_ = false;
+    bool allow_substitutions_ = true;
+    bool allow_end_of_file_ = true;
+    bool allow_keywords_ = true;
+    sp::Atom* defined_atom_ = nullptr;
+    sp::Atom* line_atom_ = nullptr;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
     token_buffer_t* token_buffer_;
 
-    struct MacroTablePolicy {
-        static bool matches(const std::string& a, const std::string& b) {
-            return a == b;
-        }
-        static bool matches(const sp::CharsAndLength& a, const std::string& b) {
-            if (a.length() != b.length())
-                return false;
-            return strncmp(a.str(), b.c_str(), a.length()) == 0;
-        }
-        static uint32_t hash(const std::string& key) {
-            return ke::HashCharSequence(key.c_str(), key.length());
-        }
-        static uint32_t hash(const sp::CharsAndLength& key) {
-            return ke::HashCharSequence(key.str(), key.length());
-        }
-    };
-
-    struct MacroEntry {
-        std::string first;
-        std::string second;
-        std::string documentation;
-        bool deprecated;
-    };
-    ke::HashMap<std::string, MacroEntry, MacroTablePolicy> macros_;
+    tr::unordered_map<sp::Atom*, std::shared_ptr<MacroEntry>> macros_;
+    std::unordered_set<MacroEntry*> macros_in_use_;
 
     struct LexerState {
+        LexerState() {}
+        LexerState(const LexerState&) = delete;
+        LexerState(LexerState&&) = default;
+        void operator =(const LexerState &) = delete;
+        LexerState& operator =(LexerState&&) = default;
+
         std::shared_ptr<SourceFile> inpf;
         LREntry inpf_loc;
+        // Visual line in the file.
         int fline = 0;
+        // Line # for token processing.
+        int tokline = 0;
         bool need_semicolon = false;
+        bool is_line_start = false;
         int require_newdecls = 0;
-        int fcurrent = -1;
-        short icomment = 0;
         size_t entry_preproc_if_stack_size = 0;
+        const unsigned char* start = nullptr;
+        const unsigned char* end = nullptr;
+        const unsigned char* pos = nullptr;
+        const unsigned char* line_start = nullptr;
+        tr::vector<full_token_t> saved_tokens;
+        token_buffer_t* token_buffer = nullptr;
+
+        // Macro specific.
+        std::shared_ptr<MacroEntry> macro;
+        std::string pattern;
     };
 
     LexerState state_;

@@ -52,10 +52,6 @@ def main():
         args.j = max(min(mp.cpu_count(), 24), 1)
         print("Running with {} cores.".format(args.j))
 
-    if args.j > 1 and args.diagnose:
-        print("Cannot use both -j and --diagnose.")
-        return 1
-
     if args.slice > args.num_slices:
         print("Slice {} is larger than the number of slices ({}).".format(args.slice,
               args.num_slices))
