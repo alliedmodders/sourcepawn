@@ -2862,8 +2862,14 @@ bool Semantics::CheckExitStmt(ExitStmt* stmt) {
 }
 
 bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
-    if (Expr* expr = AnalyzeForTest(stmt->cond()))
-        stmt->set_cond(expr);
+    {
+        ke::SaveAndSet<bool> restore_heap(&pending_heap_allocation_, false);
+
+        if (Expr* expr = AnalyzeForTest(stmt->cond())) {
+            stmt->set_cond(expr);
+            AssignHeapOwnership(expr);
+        }
+    }
 
     auto cond = stmt->cond();
 
