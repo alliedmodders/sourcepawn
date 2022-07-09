@@ -355,6 +355,7 @@ class Lexer
     void lex_symbol(full_token_t* tok, const char* token_start, size_t len);
     bool lex_match_char(char c);
     bool lex_number(full_token_t* tok);
+    void lex_float(full_token_t* tok, cell whole);
     cell litchar(const unsigned char** lptr, int flags, bool* is_codepoint = nullptr);
     const unsigned char* skipstring(const unsigned char* string);
     const unsigned char* skipgroup(const unsigned char* string);
@@ -366,6 +367,19 @@ class Lexer
 
     bool FindMacro(const char* name, size_t length, macro_t* macro);
     bool DeleteMacro(const char* name, size_t length);
+
+    char advance() {
+        return *lptr++;
+    }
+    char peek() {
+        return *lptr;
+    }
+    bool more() {
+        return *lptr != '\0';
+    }
+    void backtrack() {
+        lptr--;
+    }
 
   private:
     CompileContext& cc_;
