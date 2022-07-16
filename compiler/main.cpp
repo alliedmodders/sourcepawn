@@ -168,8 +168,8 @@ args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
  */
 int
 pc_compile(int argc, char* argv[]) {
-    int retcode;
     ParseTree* tree = nullptr;
+    bool ok = false;
     std::string ext;
 
     CompileContext cc;
@@ -249,10 +249,14 @@ pc_compile(int argc, char* argv[]) {
                 goto cleanup;
 
             tree->stmts()->ProcessUses(sc);
+            ok = true;
         }
     }
 
 cleanup:
+    if (!ok && cc.reports()->NumErrorMessages() == 0)
+        error(423);
+
     unsigned int errnum = cc.reports()->NumErrorMessages();
     unsigned int warnnum = cc.reports()->NumWarnMessages();
     bool compile_ok = (errnum == 0);
@@ -310,6 +314,8 @@ cleanup:
     funcenums_free();
     methodmaps_free();
     pstructs_free();
+
+    int retcode;
     if (!compile_ok) {
         if (cc.errfname().empty())
             printf("\n%d Error%s.\n", errnum, (errnum > 1) ? "s" : "");

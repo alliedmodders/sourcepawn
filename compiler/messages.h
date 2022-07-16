@@ -301,4 +301,5 @@ static const char* errmsg_ex[] = {
     /*420*/ "unhandled AST type: %d\n",
     /*421*/ "too many functions\n",
     /*422*/ "no more source locations, too much source text\n",
+    /*423*/ "internal compiler error: error propagated with no message\n",
 };
