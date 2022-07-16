@@ -1198,8 +1198,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
         return false;
     }
 
-    if (!matchtag_commutative(left.tag, right.tag, FALSE))
-        return false;
+    matchtag_commutative(left.tag, right.tag, FALSE);
 
     /* If both sides are arrays, we should return the maximal as the lvalue.
      * Otherwise we could buffer overflow and the compiler is too stupid.
