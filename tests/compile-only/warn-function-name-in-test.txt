@@ -1,0 +1,1 @@
+(4) : warning 249: function name is always true - possible missing parenthesis?
