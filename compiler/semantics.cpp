@@ -548,6 +548,9 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
             report(expr, 206);
         else
             report(expr, 205);
+    } else if (auto sym_expr = expr->as<SymbolExpr>()) {
+        if (sym_expr->sym()->ident == iFUNCTN)
+            report(expr, 249);
     }
 
     if (expr->lvalue())
