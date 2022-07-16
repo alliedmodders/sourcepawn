@@ -1696,8 +1696,10 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 return nullptr;
 
             auto& val = expr->val();
-            if (val.ident != iFUNCTN)
+            if (val.ident != iFUNCTN) {
+                report(target, 12);
                 return nullptr;
+            }
 
             // The static accessor (::) is offsetof(), so it can't return functions.
             assert(expr->token() == '.');
@@ -1744,6 +1746,8 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             }
             return sym;
         }
+        default:
+            report(target, 12);
     }
     return nullptr;
 }
@@ -2567,7 +2571,7 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
 
     // Blocks always taken heap ownership.
     AssignHeapOwnership(block);
-    return true;
+    return ok;
 }
 
 AutoCollectSemaFlow::AutoCollectSemaFlow(SemaContext& sc, ke::Maybe<bool>* out)
@@ -3136,7 +3140,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         report(info->pos(), 234) << sym->name() << ptr; /* deprecated (probably a public function) */
     }
 
-    CheckStmt(body, STMT_OWNS_HEAP);
+    bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
     sym->returns_value = sc_->returns_value();
     sym->always_returns = sc_->always_returns();
@@ -3172,7 +3176,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     if (sym->is_public)
         cc_.publics().emplace(sym);
-    return true;
+    return ok;
 }
 
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
