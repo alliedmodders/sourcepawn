@@ -187,15 +187,6 @@ pc_compile(int argc, char* argv[]) {
 
     parseoptions(cc, argc, argv);
 
-    cc.set_binfname(cc.outfname());
-    ext = get_extension(cc.binfname());
-    if (strcasecmp(ext.c_str(), ".asm") == 0)
-        set_extension(&cc.binfname(), ".smx", true);
-    else
-        set_extension(&cc.binfname(), ".smx", false);
-    /* set output names that depend on the input name */
-    set_extension(&cc.outfname(), ".asm", true);
-
     if (!cc.errfname().empty())
         remove(cc.errfname().c_str()); /* delete file on startup */
     else if (verbosity > 0)
@@ -218,7 +209,7 @@ pc_compile(int argc, char* argv[]) {
     setconstants(); /* set predefined constants and tagnames */
 
     inst_datetime_defines(cc);
-    inst_binary_name(cc, cc.binfname().c_str());
+    inst_binary_name(cc, cc.outfname().c_str());
 
     {
         Parser parser(cc);
@@ -270,7 +261,7 @@ cleanup:
 
     // Write the binary file.
     if (!sc_syntax_only && compile_ok) {
-        compile_ok &= assemble(cc, cg, cc.binfname().c_str(), opt_compression.value());
+        compile_ok &= assemble(cc, cg, cc.outfname().c_str(), opt_compression.value());
     }
 
     errnum += cc.reports()->NumErrorMessages();
@@ -548,8 +539,8 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
                     ptr = str;
                 assert(strlen(ptr) < PATH_MAX);
                 cc.set_outfname(ptr);
+                set_extension(&cc.outfname(), ".smx", true);
             }
-            set_extension(&cc.outfname(), ".asm", true);
         }
     }
 
