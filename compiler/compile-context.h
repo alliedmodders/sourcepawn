@@ -88,9 +88,6 @@ class CompileContext final
     std::string& outfname() { return outfname_; }
     void set_outfname(const std::string& value) { outfname_ = value; }
 
-    std::string& binfname() { return binfname_; }
-    void set_binfname(const std::string& value) { binfname_ = value; }
-
     std::shared_ptr<SourceFile> inpf_org() const { return inpf_org_; }
     void set_inpf_org(std::shared_ptr<SourceFile> sf) { inpf_org_ = sf; }
 
@@ -120,7 +117,6 @@ class CompileContext final
     tr::unordered_set<symbol*> publics_;
     std::unique_ptr<CompileOptions> options_;
     std::string outfname_;
-    std::string binfname_;
     std::string errfname_;
     std::unique_ptr<SourceManager> sources_;
     std::shared_ptr<SourceFile> inpf_org_;
