@@ -2787,15 +2787,10 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
 
         case iARRAY:
         case iREFARRAY:
-        case iARRAYCELL:
-        case iARRAYCHAR: {
-            symbol* sym = v.sym;
-            if (!sym || sym->dim.array.level > 0) {
-                report(expr, 167) << "arrays";
-                return false;
-            }
+            report(expr, 167) << "arrays";
+            return false;
             break;
-        }
+
         case iACCESSOR:
             if (v.accessor->getter)
                 markusage(v.accessor->getter, uREAD);
