@@ -188,6 +188,8 @@ constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);
 }
 
+static constexpr cell kMaxCells = INT_MAX / sizeof(cell);
+
 extern sp::StringPool gAtoms;
 
 // Disable this to enable easy watchpoints on bitfield members.

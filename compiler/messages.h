@@ -311,4 +311,5 @@ static const char* errmsg_ex[] = {
     /*428*/ "invalid macro argument, mismatched parenthesis\n",
     /*429*/ "wrong number of macro arguments (expected %s, got %s)\n",
     /*430*/ "invalid macro definition\n",
+    /*431*/ "script uses too much memory, cannot compile\n",
 };
