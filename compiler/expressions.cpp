@@ -58,8 +58,11 @@ static const int op1[17] = {
 };
 
 static inline bool
-MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
+MatchOperator(int oper, symbol* sym, int tag1, int tag2, int numparam)
 {
+    if (!oper)
+        numparam = 1;
+
     auto fun = sym->function();
     if (fun->args.size() != size_t(numparam))
         return false;
@@ -73,6 +76,9 @@ MatchOperator(symbol* sym, int tag1, int tag2, int numparam)
         if (fun->args[i].type.tag() != tags[i])
             return false;
     }
+
+    if (!oper && sym->tag != tag2)
+        return false;
     return true;
 }
 
@@ -96,7 +102,9 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
      * a quick exit.
      */
     assert(numparam == 1 || numparam == 2);
-    if (Parser::sInPreprocessor || (tag1 == 0 && (numparam == 1 || tag2 == 0)))
+    if (Parser::sInPreprocessor)
+        return false;
+    if (tag1 == 0 && (numparam == 1 || tag2 == 0))
         return false;
 
     savepri = savealt = false;
@@ -145,10 +153,10 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
     bool swapparams;
     bool is_commutative = commutative(oper);
     for (auto iter = chain; iter; iter = iter->next) {
-        bool matched = MatchOperator(iter, tag1, tag2, numparam);
+        bool matched = MatchOperator(oper, iter, tag1, tag2, numparam);
         bool swapped = false;
         if (!matched && is_commutative && tag1 != tag2 && oper) {
-            matched = MatchOperator(iter, tag2, tag1, numparam);
+            matched = MatchOperator(oper, iter, tag2, tag1, numparam);
             swapped = true;
         }
         if (matched) {

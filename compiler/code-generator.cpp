@@ -328,7 +328,13 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
 
         if (init) {
             const auto& val = init->right()->val();
-            if (val.ident == iCONSTEXPR) {
+            if (init->assignop().sym) {
+                EmitExpr(init->right());
+
+                value tmp = val;
+                EmitUserOp(init->assignop(), &tmp);
+                __ emit(OP_PUSH_PRI);
+            } else if (val.ident == iCONSTEXPR) {
                 __ emit(OP_PUSH_C, val.constval);
             } else {
                 EmitExpr(init->right());

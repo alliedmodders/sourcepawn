@@ -934,10 +934,13 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(*sc_, 0, left_val.tag, right_val.tag, 2, &left_val, &expr->assignop());
+        find_userop(*sc_, 0, right_val.tag, left_val.tag, 2, &left_val, &expr->assignop());
     }
 
-    if (!expr->oper() && !checkval_string(&left_val, &right_val)) {
+    if (!expr->oper() &&
+        !checkval_string(&left_val, &right_val) &&
+        !expr->assignop().sym)
+    {
         if (leftarray &&
             ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
              (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string)))
