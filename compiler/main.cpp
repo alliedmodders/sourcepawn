@@ -257,7 +257,7 @@ cleanup:
 
     CodeGenerator cg(cc, tree);
     if (tree && compile_ok)
-        cg.Generate();
+        compile_ok = cg.Generate();
 
     // Write the binary file.
     if (!sc_syntax_only && compile_ok) {

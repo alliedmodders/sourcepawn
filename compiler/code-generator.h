@@ -27,6 +27,7 @@
 
 #include "stl/stl-unordered-map.h"
 #include "data-queue.h"
+#include "errors.h"
 #include "parse-node.h"
 #include "smx-assembly-buffer.h"
 
@@ -39,7 +40,7 @@ class CodeGenerator final
   public:
     CodeGenerator(CompileContext& cc, ParseTree* tree);
 
-    void Generate();
+    bool Generate();
 
     void LinkPublicFunction(symbol* sym, uint32_t id);
 
@@ -167,12 +168,12 @@ class CodeGenerator final
     void EnterHeapScope(FlowType flow_type);
     void LeaveHeapScope();
     void TrackTempHeapAlloc(Expr* source, int size);
-    void TrackHeapAlloc(MemuseType type, int size);
+    void TrackHeapAlloc(ParseNode* node, MemuseType type, int size);
 
     // Stack functions
     void pushstacklist();
     void popstacklist(bool codegen);
-    int markstack(MemuseType type, int size);
+    int markstack(ParseNode* node, MemuseType type, int size);
     void modheap_for_scope(const MemoryScope& scope);
     void modstk_for_scope(const MemoryScope& scope);
 
@@ -188,13 +189,13 @@ class CodeGenerator final
     }
 
     void EnterMemoryScope(tr::vector<MemoryScope>& frame);
-    void AllocInScope(MemoryScope& scope, MemuseType type, int size);
+    void AllocInScope(ParseNode* node, MemoryScope& scope, MemuseType type, int size);
     int PopScope(tr::vector<MemoryScope>& scope_list);
 
     using CallGraph = tr::unordered_map<symbol*, tr::vector<symbol*>>;
 
-    void ComputeStackUsage();
-    void ComputeStackUsage(CallGraph::iterator caller_iter);
+    bool ComputeStackUsage();
+    bool ComputeStackUsage(CallGraph::iterator caller_iter);
 
   private:
     typedef tr::vector<tr::vector<symbol*>> SymbolStack;
@@ -242,4 +243,6 @@ class CodeGenerator final
     int current_memory_ = 0;
     int max_func_memory_ = 0;
     CallGraph callgraph_;
+
+    AutoCountErrors errors_;
 };

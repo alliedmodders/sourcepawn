@@ -45,16 +45,15 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
 {
 }
 
-void
-CodeGenerator::Generate()
-{
+bool CodeGenerator::Generate() {
     // First instruction is always halt.
     __ emit(OP_HALT, 0);
 
     deduce_liveness(cc_);
 
     EmitStmtList(tree_->stmts());
-    ComputeStackUsage();
+    if (!ComputeStackUsage())
+        return false;
 
     // Finish any un-added debug symbols.
     while (!static_syms_.empty()) {
@@ -63,6 +62,8 @@ CodeGenerator::Generate()
     }
 
     AddDebugSymbols(&global_syms_);
+
+    return errors_.ok();
 }
 
 void
@@ -323,7 +324,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
     BinaryExpr* init = decl->init();
 
     if (sym->ident == iVARIABLE) {
-        markstack(MEMUSE_STATIC, 1);
+        markstack(decl, MEMUSE_STATIC, 1);
         sym->setAddr(-current_stack_ * sizeof(cell));
 
         if (init) {
@@ -352,7 +353,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
         cell data_size = (cell)array.data.size() + array.zeroes;
         cell total_size = iv_size + data_size;
 
-        markstack(MEMUSE_STATIC, total_size);
+        markstack(decl, MEMUSE_STATIC, total_size);
         sym->setAddr(-cell(current_stack_ * sizeof(cell)));
         __ emit(OP_STACK, -cell(total_size * sizeof(cell)));
 
@@ -406,8 +407,8 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
     } else if (sym->ident == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
-        TrackHeapAlloc(MEMUSE_DYNAMIC, 0);
-        markstack(MEMUSE_STATIC, 1);
+        TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
+        markstack(decl, MEMUSE_STATIC, 1);
         sym->setAddr(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
@@ -2075,12 +2076,17 @@ CodeGenerator::EnterMemoryScope(tr::vector<MemoryScope>& frame)
 }
 
 void
-CodeGenerator::AllocInScope(MemoryScope& scope, MemuseType type, int size)
+CodeGenerator::AllocInScope(ParseNode* node, MemoryScope& scope, MemuseType type, int size)
 {
     if (type == MEMUSE_STATIC && !scope.usage.empty() && scope.usage.back().type == MEMUSE_STATIC) {
         scope.usage.back().size += size;
     } else {
         scope.usage.push_back(MemoryUse{type, size});
+    }
+
+    if (size > kMaxCells || current_memory_ + size >= kMaxCells) {
+        report(node, 431);
+        return;
     }
 
     current_memory_ += size;
@@ -2093,7 +2099,7 @@ CodeGenerator::PopScope(tr::vector<MemoryScope>& scope_list)
     MemoryScope scope = ke::PopBack(&scope_list);
     int total_use = 0;
     while (!scope.usage.empty()) {
-        assert(scope.usage.back().size <= current_memory_);
+        assert(!errors_.ok() || scope.usage.back().size <= current_memory_);
         total_use += scope.usage.back().size;
         scope.usage.pop_back();
     }
@@ -2104,12 +2110,12 @@ CodeGenerator::PopScope(tr::vector<MemoryScope>& scope_list)
 void CodeGenerator::TrackTempHeapAlloc(Expr* source, int size) {
     // Make sure the semantic pass determined that temporary allocations were necessary.
     assert(source->can_alloc_heap());
-    TrackHeapAlloc(MEMUSE_STATIC, size);
+    TrackHeapAlloc(source, MEMUSE_STATIC, size);
 }
 
-void CodeGenerator::TrackHeapAlloc(MemuseType type, int size) {
+void CodeGenerator::TrackHeapAlloc(ParseNode* node, MemuseType type, int size) {
     assert(!heap_scopes_.empty());
-    AllocInScope(heap_scopes_.back(), type, size);
+    AllocInScope(node, heap_scopes_.back(), type, size);
 }
 
 void CodeGenerator::EnterHeapScope(FlowType flow_type) {
@@ -2140,10 +2146,10 @@ CodeGenerator::pushstacklist()
 }
 
 int
-CodeGenerator::markstack(MemuseType type, int size)
+CodeGenerator::markstack(ParseNode* node, MemuseType type, int size)
 {
     current_stack_ += size;
-    AllocInScope(stack_scopes_.back(), type, size);
+    AllocInScope(node, stack_scopes_.back(), type, size);
     return size;
 }
 
@@ -2185,7 +2191,10 @@ CodeGenerator::LinkPublicFunction(symbol* sym, uint32_t id)
 }
 
 int CodeGenerator::DynamicMemorySize() const {
-    int min_cells = max_script_memory_ + 4096;
+    int min_cells = max_script_memory_;
+    if (kMaxCells - 4096 > min_cells)
+        min_cells = max_script_memory_ + 4096;
+
     int custom = cc_.options()->pragma_dynamic;
     return std::max(min_cells, custom) * sizeof(cell_t);
 }
@@ -2212,7 +2221,7 @@ CodeGenerator::AutoEnterScope::~AutoEnterScope() {
     cg_->AddDebugSymbols(&scope);
 }
 
-void CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
+bool CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
     symbol* caller = caller_iter->first;
     tr::vector<symbol*> targets = std::move(caller_iter->second);
     caller_iter = callgraph_.erase(caller_iter);
@@ -2222,27 +2231,47 @@ void CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
         symbol* target = ke::PopBack(&targets);
         if (!target->function()->max_callee_stack) {
             auto iter = callgraph_.find(target);
-            if (iter != callgraph_.end())
-                ComputeStackUsage(iter);
+            if (iter != callgraph_.end()) {
+                if (!ComputeStackUsage(iter))
+                    return false;
+            }
         }
 
-        max_child_stack = std::max(max_child_stack, target->function()->max_local_stack +
-                                                    target->function()->max_callee_stack);
+        auto local_stack = target->function()->max_local_stack;
+        auto callee_stack = target->function()->max_callee_stack;
+        if (!ke::IsUint32AddSafe(local_stack, callee_stack) ||
+            local_stack + callee_stack >= kMaxCells)
+        {
+            report(token_pos_t{}, 431);
+            return false;
+        }
+
+        max_child_stack = std::max(max_child_stack, local_stack + callee_stack);
 
         // Assign this each iteration so we at least have something useful if
         // we hit a recursive case.
         caller->function()->max_callee_stack = max_child_stack;
     }
 
+    auto local_stack = caller->function()->max_local_stack;
+    auto callee_stack = caller->function()->max_callee_stack;
+    if (!ke::IsUint32AddSafe(local_stack, callee_stack) ||
+        local_stack + callee_stack >= kMaxCells)
+    {
+        report(token_pos_t{}, 431);
+        return false;
+    }
+
     max_script_memory_ = std::max(caller->function()->max_local_stack +
                                   caller->function()->max_callee_stack,
                                   max_script_memory_);
+    return true;
 }
 
-void CodeGenerator::ComputeStackUsage() {
+bool CodeGenerator::ComputeStackUsage() {
     if (callgraph_.empty())
-        return;
+        return true;
 
-    ComputeStackUsage(callgraph_.begin());
+    return ComputeStackUsage(callgraph_.begin());
 }
 

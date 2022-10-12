@@ -418,8 +418,6 @@ CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init)
     return av.Validate() && errors.ok();
 }
 
-static constexpr cell kMaxCells = INT_MAX / sizeof(cell);
-
 bool
 FixedArrayValidator::Validate()
 {
