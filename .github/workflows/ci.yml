@@ -36,12 +36,12 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
 
       # Setup Python for AMBuild
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - name: Install AMBuild
