@@ -178,11 +178,10 @@ struct declinfo_t {
 
 struct token_t;
 
-/*
- * Functions you call from the "driver" program
- */
-int pc_compile(int argc, char** argv);
 const char* type_to_name(int tag);
+
+void setcaption();
+int RunCompiler(int argc, char** argv, CompileContext& cc);
 
 constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);

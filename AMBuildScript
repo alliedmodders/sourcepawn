@@ -399,7 +399,7 @@ class SourcePawn(object):
         self.SetupBinForArch(binary, builder)
 
         binary.sources = [
-            'compiler/main.cpp',
+            'compiler/driver.cpp',
         ]
 
         self.AddStaticLibraries(binary)
