@@ -111,6 +111,9 @@ class CompileContext final
     size_t malloc_bytes() const { return malloc_bytes_; }
     size_t malloc_bytes_peak() const { return malloc_bytes_peak_; }
 
+    bool& in_preprocessor() { return in_preprocessor_; }
+    bool& detected_illegal_preproc_symbols() { return detected_illegal_preproc_symbols_; }
+
     PoolAllocator& allocator() { return allocator_; }
 
     // No copy construction.
@@ -161,4 +164,7 @@ class CompileContext final
 
     size_t malloc_bytes_ = 0;
     size_t malloc_bytes_peak_ = 0;
+
+    bool in_preprocessor_ = false;
+    bool detected_illegal_preproc_symbols_ = false;
 };
