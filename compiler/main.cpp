@@ -89,7 +89,6 @@ int pc_tag_bool = 0;
 
 sp::StringPool gAtoms;
 
-static void initglobals(void);
 static void setconfig(char* root);
 static void setconstants(void);
 static void inst_datetime_defines(CompileContext& cc);
@@ -131,9 +130,6 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 #ifdef __EMSCRIPTEN__
     setup_emscripten_fs();
 #endif
-
-    /* set global variables to their initial value */
-    initglobals();
 
     if (!cc.errfname().empty())
         remove(cc.errfname().c_str()); /* delete file on startup */
@@ -249,7 +245,6 @@ cleanup:
         }
     }
 
-    gTypes.clear();
     funcenums_free();
     methodmaps_free();
     pstructs_free();
@@ -319,12 +314,6 @@ inst_datetime_defines(CompileContext& cc)
 
     cc.lexer()->AddMacro("__DATE__", date);
     cc.lexer()->AddMacro("__TIME__", ltime);
-}
-
-static void
-initglobals(void)
-{
-    sc_rationaltag = 0;         /* assume no support for rational numbers */
 }
 
 #if defined __EMSCRIPTEN__
@@ -402,12 +391,9 @@ void setcaption() {
 static void
 setconstants(void)
 {
-    gTypes.init();
-    assert(sc_rationaltag);
-
     auto& cc = CompileContext::get();
     DefineConstant(cc, gAtoms.add("EOS"), 0, 0);
-    DefineConstant(cc, gAtoms.add("INVALID_FUNCTION"), -1, gTypes.tag_nullfunc());
+    DefineConstant(cc, gAtoms.add("INVALID_FUNCTION"), -1, cc.types()->tag_nullfunc());
     DefineConstant(cc, gAtoms.add("cellmax"), INT_MAX, 0);
     DefineConstant(cc, gAtoms.add("cellmin"), INT_MIN, 0);
 

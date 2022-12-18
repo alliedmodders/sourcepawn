@@ -37,6 +37,7 @@ class ReportManager;
 class SemaContext;
 class SourceManager;
 class SymbolScope;
+class TypeDictionary;
 struct CompileOptions;
 struct symbol;
 
@@ -65,6 +66,7 @@ class CompileContext final
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
     SourceManager* sources() const { return sources_.get(); }
+    TypeDictionary* types() const { return types_.get(); }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
@@ -120,6 +122,7 @@ class CompileContext final
     std::string errfname_;
     std::unique_ptr<SourceManager> sources_;
     std::shared_ptr<SourceFile> inpf_org_;
+    std::unique_ptr<TypeDictionary> types_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().

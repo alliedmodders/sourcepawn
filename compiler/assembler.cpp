@@ -201,7 +201,7 @@ RttiBuilder::RttiBuilder(CodeGenerator& cg, SmxNameTable* names)
  : cg_(cg),
    names_(names)
 {
-    types_ = &gTypes;
+    types_ = CompileContext::get().types();
     typeid_cache_.init(128);
     data_ = new SmxBlobSection<void>("rtti.data");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
@@ -702,7 +702,7 @@ RttiBuilder::TagToRttiBytecode(int tag)
         return cb::kAny;
     if (tag == pc_tag_string)
         return cb::kChar8;
-    if (tag == sc_rationaltag)
+    if (tag == types_->tag_float())
         return cb::kFloat32;
     if (tag == 0)
         return cb::kInt32;

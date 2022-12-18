@@ -38,7 +38,7 @@ Semantics::Semantics(CompileContext& cc, ParseTree* tree)
   : cc_(cc),
     tree_(tree)
 {
-    types_ = &gTypes;
+    types_ = cc.types();
 }
 
 bool Semantics::Analyze() {
@@ -156,7 +156,7 @@ bool Semantics::CheckVarDecl(VarDecl* decl) {
     if (sym->ident == iCONSTEXPR)
         return true;
 
-    if (gTypes.find(sym->tag)->kind() == TypeKind::Struct)
+    if (types_->find(sym->tag)->kind() == TypeKind::Struct)
         return CheckPstructDecl(decl);
 
     if (type.ident == iARRAY || type.ident == iREFARRAY) {
@@ -198,7 +198,7 @@ bool Semantics::CheckPstructDecl(VarDecl* decl) {
     auto init = decl->init()->right()->as<StructExpr>();
     assert(init); // If we parse struct initializers as a normal global, this check will need to be
                   // soft.
-    auto type = gTypes.find(sym->tag);
+    auto type = types_->find(sym->tag);
     auto ps = type->asStruct();
 
     std::vector<bool> visited;
@@ -608,7 +608,7 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             out_val.tag = pc_tag_bool;
             break;
         case '-':
-            if (out_val.ident == iCONSTEXPR && out_val.tag == sc_rationaltag) {
+            if (out_val.ident == iCONSTEXPR && out_val.tag == types_->tag_float()) {
                 float f = sp::FloatCellUnion(out_val.constval).f32;
                 out_val.constval = sp::FloatCellUnion(-f).cell;
             } else if (find_userop(*sc_, '-', out_val.tag, 0, 1, &out_val, &userop)) {
@@ -972,8 +972,9 @@ BinaryExpr::FoldToConstant()
     if (IsAssignOp(token_) || userop_.sym)
         return false;
 
-    Type* left_type = gTypes.find(left_tag);
-    Type* right_type = gTypes.find(right_tag);
+    auto types = CompileContext::get().types();
+    Type* left_type = types->find(left_tag);
+    Type* right_type = types->find(right_tag);
     if (!IsTypeBinaryConstantFoldable(left_type) || !IsTypeBinaryConstantFoldable(right_type))
         return false;
 
@@ -1256,8 +1257,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     out_val = expr->expr()->val();
     expr->set_lvalue(expr->expr()->lvalue());
 
-    Type* ltype = gTypes.find(out_val.tag);
-    Type* atype = gTypes.find(type.tag());
+    Type* ltype = types_->find(out_val.tag);
+    Type* atype = types_->find(type.tag());
     if (ltype->isObject() || atype->isObject()) {
         matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
@@ -1305,7 +1306,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     val.sym = sym;
 
     // Don't expose the tag of old enumroots.
-    Type* type = gTypes.find(sym->tag);
+    Type* type = types_->find(sym->tag);
     if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
         val.tag = 0;
         report(expr, 174) << sym->name();
@@ -1336,7 +1337,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return false;
         }
 
-        funcenum_t* fe = funcenum_for_symbol(sym);
+        funcenum_t* fe = funcenum_for_symbol(cc_, sym);
 
         // New-style "closure".
         val.ident = iEXPRESSION;
@@ -1470,14 +1471,14 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
 
-    if (gTypes.find(base_val.sym->x.tags.index)->isEnumStruct()) {
+    if (types_->find(base_val.sym->x.tags.index)->isEnumStruct()) {
         report(base, 117);
         return false;
     }
 
     int idx_tag = index->val().tag;
     if (!is_valid_index_tag(idx_tag)) {
-        report(index, 77) << gTypes.find(idx_tag)->prettyName();
+        report(index, 77) << types_->find(idx_tag)->prettyName();
         return false;
     }
 
@@ -1556,7 +1557,7 @@ bool Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
     val.ident = iCONSTEXPR;
     val.constval = 0;
-    val.tag = gTypes.tag_null();
+    val.tag = types_->tag_null();
     return true;
 }
 
@@ -1597,7 +1598,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         case iARRAY:
         case iREFARRAY:
             if (base_val.sym && base_val.sym->dim.array.level == 0) {
-                Type* type = gTypes.find(base_val.sym->x.tags.index);
+                Type* type = types_->find(base_val.sym->x.tags.index);
                 if (symbol* root = type->asEnumStruct())
                     return CheckEnumStructFieldAccessExpr(expr, type, root, from_call);
             }
@@ -1629,7 +1630,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return true;
     }
 
-    Type* base_type = gTypes.find(base_val.tag);
+    Type* base_type = types_->find(base_val.tag);
     methodmap_t* map = base_type->asMethodmap();
     if (!map) {
         report(expr, 104) << type_to_name(base_val.tag);
@@ -1814,7 +1815,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     child->setName(expr->name());
     child->vclass = var->vclass;
 
-    if (gTypes.find(tag)->isEnumStruct()) {
+    if (types_->find(tag)->isEnumStruct()) {
         val.tag = 0;
         child->tag = 0;
         child->x.tags.index = tag;
@@ -1849,7 +1850,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
         return false;
     }
 
-    Type* type = gTypes.find(base_val.tag);
+    Type* type = types_->find(base_val.tag);
     symbol* field = FindEnumStructField(type, expr->name());
     if (!field) {
         report(expr, 105) << type->name() << expr->name();
@@ -1891,7 +1892,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         symbol* subsym = sym;
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
-            if (sym->ident == iENUMSTRUCT || gTypes.find(sym->x.tags.index)->isEnumStruct()) {
+            if (sym->ident == iENUMSTRUCT || types_->find(sym->x.tags.index)->isEnumStruct()) {
                 report(expr, 111) << sym->name();
                 return false;
             }
@@ -1905,9 +1906,9 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(expr, 112) << subsym->name();
                 return false;
             }
-            enum_type = gTypes.find(subsym->tag);
+            enum_type = types_->find(subsym->tag);
         } else if (expr->suffix_token() == '.') {
-            enum_type = gTypes.find(subsym->x.tags.index);
+            enum_type = types_->find(subsym->x.tags.index);
             if (!enum_type->asEnumStruct()) {
                 report(expr, 116) << sym->name();
                 return false;
@@ -2300,9 +2301,8 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param,
                 }
                 if (!matchtag(arg->type.enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    auto types = &gTypes;
-                    if (arg->type.tag() != types->tag_any() ||
-                        !types->find(sym->x.tags.index)->asEnumStruct())
+                    if (arg->type.tag() != types_->tag_any() ||
+                        !types_->find(sym->x.tags.index)->asEnumStruct())
                     {
                         report(param, 229) << sym->name();
                     }
@@ -2807,7 +2807,7 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
         return false;
     }
 
-    methodmap_t* map = gTypes.find(v.tag)->asMethodmap();
+    methodmap_t* map = types_->find(v.tag)->asMethodmap();
     if (!map) {
         report(expr, 115) << "type" << type_to_name(v.tag);
         return false;
@@ -3051,14 +3051,16 @@ ReportFunctionReturnError(symbol* sym)
         return;
     }
 
+    auto types = CompileContext::get().types();
+
     // Normally we want to encourage return values. But for legacy code,
     // we allow "public int" to warn instead of error.
     //
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
         report(sym, 209) << sym->name();
-    } else if (gTypes.find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
-               sym->tag == sc_rationaltag || !sym->retvalue_used)
+    } else if (types->find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
+               sym->tag == types->tag_float() || !sym->retvalue_used)
     {
         report(sym, 242) << sym->name();
     } else {
@@ -3397,7 +3399,7 @@ argcompare(arginfo* a1, arginfo* a2)
 bool
 IsLegacyEnumTag(SymbolScope* scope, int tag)
 {
-    Type* type = gTypes.find(tag);
+    Type* type = CompileContext::get().types()->find(tag);
     if (!type->isEnum())
         return false;
     symbol* sym = FindSymbol(scope, type->nameAtom());

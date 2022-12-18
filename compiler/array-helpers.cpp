@@ -47,6 +47,7 @@ class ArraySizeResolver
 
   private:
     Semantics* sema_;
+    TypeDictionary* types_;
     const token_pos_t& pos_;
     typeinfo_t* type_;
     Expr* initializer_;
@@ -61,6 +62,7 @@ static constexpr int kSizeIndeterminate = -2;
 
 ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDecl* decl)
   : sema_(sema),
+    types_(sema->cc().types()),
     pos_(decl->pos()),
     type_(decl->mutable_type()),
     initializer_(decl->init_rhs()),
@@ -68,7 +70,7 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDecl* decl)
     vclass_(decl->vclass()),
     es_(nullptr)
 {
-    Type* type = gTypes.find(type_->semantic_tag());
+    Type* type = types_->find(type_->semantic_tag());
     if (type->isEnumStruct())
         es_ = type;
 }
@@ -283,7 +285,7 @@ ArraySizeResolver::ResolveDimExprs()
             return false;
 
         if (!is_valid_index_tag(v.tag)) {
-            error(expr->pos(), 77, gTypes.find(v.tag)->prettyName());
+            error(expr->pos(), 77, types_->find(v.tag)->prettyName());
             return false;
         }
 
@@ -335,7 +337,7 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
         //
         // For backward compatibility with a huge number of plugins.
         auto sym = sym_expr->sym();
-        auto type = gTypes.find(sym->tag);
+        auto type = types_->find(sym->tag);
         if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
             *v = {};
             v->ident = iCONSTEXPR;
@@ -374,6 +376,7 @@ class FixedArrayValidator final
   public:
     FixedArrayValidator(Semantics* sema, VarDecl* decl)
       : sema_(sema),
+        types_(sema->cc().types()),
         decl_(decl),
         pos_(decl->pos()),
         init_(decl->init_rhs()),
@@ -384,6 +387,7 @@ class FixedArrayValidator final
 
     FixedArrayValidator(Semantics* sema, const typeinfo_t& type, Expr* init)
       : sema_(sema),
+        types_(sema->cc().types()),
         decl_(nullptr),
         pos_(init->pos()),
         init_(init),
@@ -401,6 +405,7 @@ class FixedArrayValidator final
 
   private:
     Semantics* sema_;
+    TypeDictionary* types_;
     VarDecl* decl_;
     token_pos_t pos_;
     Expr* init_;
@@ -421,7 +426,7 @@ CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init)
 bool
 FixedArrayValidator::Validate()
 {
-    Type* type = gTypes.find(type_.semantic_tag());
+    Type* type = types_->find(type_.semantic_tag());
     if (type->isEnumStruct())
         es_ = type;
 
@@ -571,8 +576,8 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
 
     if (StringExpr* str = init->as<StringExpr>()) {
         if (type_.tag() != pc_tag_string) {
-            error(init->pos(), 134, gTypes.find(pc_tag_string)->prettyName(),
-                  gTypes.find(type_.tag())->prettyName());
+            error(init->pos(), 134, types_->find(pc_tag_string)->prettyName(),
+                  types_->find(type_.tag())->prettyName());
             return false;
         }
 
@@ -748,7 +753,7 @@ Semantics::AddImplicitDynamicInitializer(VarDecl* decl)
 {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type();
-    assert(!gTypes.find(type->tag())->asEnumStruct());
+    assert(!types_->find(type->tag())->asEnumStruct());
 
     // If any one rank was dynamic, the entire array is considered dynamic. For
     // new-style fixed arrays we've thrown an error at this point. For old
@@ -841,7 +846,7 @@ bool Semantics::CheckArrayDeclaration(VarDecl* decl) {
     }
 
     size_t expected_dims = type.numdim();
-    if (gTypes.find(type.semantic_tag())->isEnumStruct())
+    if (types_->find(type.semantic_tag())->isEnumStruct())
         expected_dims--;
     if (expected_dims != ctor->exprs().size()) {
         error(19, (int)expected_dims, (int)ctor->exprs().size());
@@ -860,7 +865,7 @@ class ArrayEmitter final
         init_(init),
         pending_zeroes_(0)
     {
-        Type* t = gTypes.find(type.semantic_tag());
+        Type* t = CompileContext::get().types()->find(type.semantic_tag());
         if (t->asEnumStruct())
             es_ = t;
     }

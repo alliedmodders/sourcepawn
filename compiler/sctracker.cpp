@@ -68,19 +68,19 @@ funcenums_free()
 }
 
 funcenum_t*
-funcenums_add(sp::Atom* name)
+funcenums_add(CompileContext& cc, sp::Atom* name)
 {
     auto e = std::make_unique<funcenum_t>();
 
     e->name = name;
-    e->tag = gTypes.defineFunction(name->chars(), e.get())->tagid();
+    e->tag = cc.types()->defineFunction(name->chars(), e.get())->tagid();
 
     sFuncEnums.push_back(std::move(e));
     return sFuncEnums.back().get();
 }
 
 funcenum_t*
-funcenum_for_symbol(symbol* sym)
+funcenum_for_symbol(CompileContext& cc, symbol* sym)
 {
     functag_t* ft = new functag_t;
     ft->ret_tag = sym->tag;
@@ -98,7 +98,7 @@ funcenum_for_symbol(symbol* sym)
     new (&ft->args) PoolArray<funcarg_t>(args);
 
     auto name = ke::StringPrintf("::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
-    funcenum_t* fe = funcenums_add(gAtoms.add(name));
+    funcenum_t* fe = funcenums_add(cc, gAtoms.add(name));
     new (&fe->entries) PoolArray<functag_t*>({ft});
 
     return fe;
@@ -108,7 +108,7 @@ funcenum_for_symbol(symbol* sym)
 functag_t*
 functag_from_tag(int tag)
 {
-    Type* type = gTypes.find(tag);
+    Type* type = CompileContext::get().types()->find(tag);
     funcenum_t* fe = type->asFunction();
     if (!fe)
         return nullptr;
@@ -134,7 +134,7 @@ methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 int
 methodmap_method_t::property_tag() const
 {
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
 
     assert(getter || setter);
     if (getter)
@@ -148,7 +148,7 @@ methodmap_method_t::property_tag() const
 }
 
 methodmap_t*
-methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
+methodmap_add(CompileContext& cc, methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 {
     auto map = new methodmap_t(parent, spec, name);
 
@@ -160,9 +160,9 @@ methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
     }
 
     if (spec == Layout_MethodMap)
-        map->tag = gTypes.defineMethodmap(name->chars(), map)->tagid();
+        map->tag = cc.types()->defineMethodmap(name->chars(), map)->tagid();
     else
-        map->tag = gTypes.defineObject(name->chars())->tagid();
+        map->tag = cc.types()->defineObject(name->chars())->tagid();
     sMethodmaps.push_back(std::move(map));
 
     return sMethodmaps.back();
@@ -171,13 +171,13 @@ methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
 methodmap_t*
 methodmap_find_by_tag(int tag)
 {
-    return gTypes.find(tag)->asMethodmap();
+    return CompileContext::get().types()->find(tag)->asMethodmap();
 }
 
 methodmap_t*
 methodmap_find_by_name(sp::Atom* name)
 {
-    auto type = gTypes.find(name);
+    auto type = CompileContext::get().types()->find(name);
     if (!type)
         return NULL;
     return methodmap_find_by_tag(type->tagid());
@@ -207,14 +207,14 @@ deduce_layout_spec_by_tag(SemaContext& sc, int tag)
     if (methodmap_t* map = methodmap_find_by_tag(tag))
         return map->spec;
 
-    Type* type = gTypes.find(tag);
+    Type* type = sc.cc().types()->find(tag);
     if (type && type->isFunction())
         return Layout_FuncTag;
 
     if (type && type->isStruct())
         return Layout_PawnStruct;
 
-    if (Type* type = gTypes.find(tag)) {
+    if (Type* type = sc.cc().types()->find(tag)) {
       if (FindSymbol(sc.scope(), type->nameAtom()))
           return Layout_Enum;
     }
@@ -225,7 +225,7 @@ deduce_layout_spec_by_tag(SemaContext& sc, int tag)
 LayoutSpec
 deduce_layout_spec_by_name(SemaContext& sc, sp::Atom* name)
 {
-    Type* type = gTypes.find(name);
+    Type* type = sc.cc().types()->find(name);
     if (!type)
         return Layout_None;
 

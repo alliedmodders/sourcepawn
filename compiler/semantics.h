@@ -146,6 +146,7 @@ class Semantics final
 
     bool Analyze();
 
+    CompileContext& cc() { return cc_; }
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }

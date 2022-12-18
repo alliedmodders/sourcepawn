@@ -1127,9 +1127,7 @@ class NumberExpr final : public TaggedValueExpr
 class FloatExpr final : public TaggedValueExpr
 {
   public:
-    FloatExpr(const token_pos_t& pos, cell value)
-      : TaggedValueExpr(pos, sc_rationaltag, value)
-    {}
+    FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value);
 };
 
 class StringExpr final : public Expr

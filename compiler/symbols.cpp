@@ -177,7 +177,7 @@ symbol::add_reference_to(symbol* other)
 bool
 symbol::must_return_value() const
 {
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     assert(ident == iFUNCTN);
     return retvalue_used || (explicit_return_type && tag != types->tag_void());
 }

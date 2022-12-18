@@ -1,4 +1,4 @@
-/* vim: set sts=2 ts=8 sw=2 tw=99 et: */
+/* vim: set sts=4 ts=8 sw=4 tw=99 et: */
 /*  Pawn compiler
  *
  *  Function and variable definition and declaration, statement parser.
@@ -27,14 +27,13 @@
 
 #include <utility>
 
-#include "types.h"
+#include "compile-context.h"
 #include "sc.h"
 #include "sctracker.h"
 #include "scvars.h"
+#include "types.h"
 
 using namespace ke;
-
-TypeDictionary gTypes;
 
 Type::Type(sp::Atom* name, cell value)
  : name_(name),
@@ -115,7 +114,8 @@ Type::kindName() const
 bool
 Type::isLabelTag() const
 {
-    if (tagid() == 0 || tagid() == pc_tag_bool || tagid() == sc_rationaltag)
+    auto types = CompileContext::get().types();
+    if (tagid() == 0 || tagid() == pc_tag_bool || tagid() == types->tag_float())
         return false;
     return kind_ == TypeKind::None;
 }
@@ -181,7 +181,7 @@ TypeDictionary::init()
     tag_any_ = defineAny()->tagid();
     tag_function_ = defineFunction("Function", nullptr)->tagid();
     pc_tag_string = defineString()->tagid();
-    sc_rationaltag = defineFloat()->tagid();
+    tag_float_ = defineFloat()->tagid();
     tag_void_ = defineVoid()->tagid();
     tag_object_ = defineObject("object")->tagid();
     tag_null_ = defineObject("null_t")->tagid();
@@ -289,7 +289,8 @@ TypeDictionary::definePStruct(const char* name, pstruct_t* ps)
 const char*
 pc_tagname(int tag)
 {
-    if (Type* type = gTypes.find(tag))
+    auto types = CompileContext::get().types();
+    if (Type* type = types->find(tag))
         return type->name();
     return "__unknown__";
 }
