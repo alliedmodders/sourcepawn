@@ -10,7 +10,8 @@
 class CompileContext;
 class SemaContext;
 
-struct funcenum_t {
+struct funcenum_t : public PoolObject
+{
     funcenum_t()
      : tag(0),
        name(),
@@ -74,7 +75,6 @@ struct methodmap_t : public SymbolData
 /**
  * Function enumeration tags
  */
-void funcenums_free();
 funcenum_t* funcenums_add(CompileContext& cc, sp::Atom* name, bool anonymous);
 funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym);
 functag_t* functag_from_tag(int tag);

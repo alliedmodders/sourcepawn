@@ -17,14 +17,6 @@
 #include "symbols.h"
 #include "types.h"
 
-std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
-
-void
-funcenums_free()
-{
-    sFuncEnums.clear();
-}
-
 funcenum_t* funcenums_add(CompileContext& cc, sp::Atom* name, bool anonymous) {
     if (anonymous) {
         if (auto type = cc.types()->find(name)) {
@@ -34,15 +26,13 @@ funcenum_t* funcenums_add(CompileContext& cc, sp::Atom* name, bool anonymous) {
         }
     }
 
-    auto e = std::make_unique<funcenum_t>();
+    auto e = new funcenum_t;
     e->name = name;
     e->anonymous = anonymous;
 
-    auto type = cc.types()->defineFunction(name, e.get());
+    auto type = cc.types()->defineFunction(name, e);
     e->tag = type->tagid();
-
-    sFuncEnums.push_back(std::move(e));
-    return sFuncEnums.back().get();
+    return e;
 }
 
 funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym) {
