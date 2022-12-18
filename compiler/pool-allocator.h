@@ -53,6 +53,7 @@ class PoolAllocator final
 
     static const size_t kDefaultPoolSize = 64 * 1024;
     static const size_t kMaxReserveSize = 64 * 1024;
+    static const size_t kAlignment = sizeof(void*);
 
   private:
     std::vector<std::unique_ptr<Pool>> pools_;
@@ -78,7 +79,7 @@ class PoolAllocator final
 
     void* rawAllocate(size_t bytes) {
         // Guarantee malloc alignment.
-        size_t actualBytes = ke::Align(bytes, ke::kMallocAlignment);
+        size_t actualBytes = ke::Align(bytes, kAlignment);
         Pool* last = pools_.empty() ? nullptr : pools_.back().get();
         if (!last || (size_t(last->end - last->ptr) < actualBytes))
             last = ensurePool(actualBytes);
