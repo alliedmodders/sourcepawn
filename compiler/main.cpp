@@ -242,8 +242,6 @@ cleanup:
         }
     }
 
-    funcenums_free();
-
     int retcode;
     if (!compile_ok) {
         if (cc.errfname().empty())
