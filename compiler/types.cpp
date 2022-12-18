@@ -38,38 +38,9 @@ Type::Type(sp::Atom* name, cell value)
  : name_(name),
    value_(value),
    fixed_(0),
-   intrinsic_(false),
-   first_pass_kind_(TypeKind::None),
    kind_(TypeKind::None)
 {
     private_ptr_ = nullptr;
-}
-
-void
-Type::resetPtr()
-{
-    // We try to persist tag information across passes, since globals are
-    // preserved and core types should be too. However user-defined types
-    // that attach extra structural information are cleared, as that
-    // data is not retained into the statWRITE pass.
-    if (intrinsic_)
-        return;
-
-    if (kind_ != TypeKind::None)
-        first_pass_kind_ = kind_;
-    kind_ = TypeKind::None;
-    private_ptr_ = nullptr;
-}
-
-bool
-Type::isDeclaredButNotDefined() const
-{
-    if (kind_ != TypeKind::None)
-        return false;
-    if (first_pass_kind_ == TypeKind::None || first_pass_kind_ == TypeKind::EnumStruct) {
-        return true;
-    }
-    return false;
 }
 
 const char*
@@ -157,39 +128,18 @@ TypeDictionary::findOrAdd(const char* name)
 }
 
 void
-TypeDictionary::clear()
-{
-    types_.clear();
-}
-
-void
-TypeDictionary::clearExtendedTypes()
-{
-    for (const auto& type : types_)
-        type->resetPtr();
-}
-
-void
 TypeDictionary::init()
 {
-    Type* type = findOrAdd("_");
-    assert(type->tagid() == 0);
-
-    type = defineBool();
-    assert(type->tagid() == 1);
-
-    tag_bool_ = type->tagid();
-    tag_any_ = defineAny()->tagid();
-    tag_function_ = defineFunction("Function", nullptr)->tagid();
-    tag_string_ = defineString()->tagid();
-    tag_float_ = defineFloat()->tagid();
-    tag_void_ = defineVoid()->tagid();
-    tag_object_ = defineObject("object")->tagid();
-    tag_null_ = defineObject("null_t")->tagid();
-    tag_nullfunc_ = defineObject("nullfunc_t")->tagid();
-
-    for (const auto& type : types_)
-        type->setIntrinsic();
+    type_int_ = findOrAdd("_");
+    type_bool_ = defineBool();
+    type_any_ = defineAny();
+    type_function_ = defineFunction("Function", nullptr);
+    type_string_ = defineString();
+    type_float_ = defineFloat();
+    type_void_ = defineVoid();
+    type_object_ = defineObject("object");
+    type_null_ = defineObject("null_t");
+    type_nullfunc_ = defineObject("nullfunc_t");
 }
 
 Type*

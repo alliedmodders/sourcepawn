@@ -194,7 +194,6 @@ class Type : public PoolObject
         return value_;
     }
 
-    bool isDeclaredButNotDefined() const;
     bool isDefinedType() const {
         return kind_ != TypeKind::None;
     }
@@ -286,9 +285,6 @@ class Type : public PoolObject
         // This is separate from "kind_" because it persists across passes.
         fixed_ = 0x40000000;
     }
-    void setIntrinsic() {
-        intrinsic_ = true;
-    }
 
     void resetPtr();
 
@@ -296,8 +292,6 @@ class Type : public PoolObject
     sp::Atom* name_;
     cell value_;
     int fixed_;
-    bool intrinsic_;
-    TypeKind first_pass_kind_;
 
     // These are reset in between the first and second passes, since the
     // underlying structures are reparsed.
@@ -320,8 +314,6 @@ class TypeDictionary
     Type* find(sp::Atom* name);
 
     void init();
-    void clearExtendedTypes();
-    void clear();
 
     Type* defineAny();
     Type* defineFunction(const char* name, funcenum_t* fe);
@@ -343,15 +335,25 @@ class TypeDictionary
             callback(type);
     }
 
-    int tag_nullfunc() const { return tag_nullfunc_; }
-    int tag_object() const { return tag_object_; }
-    int tag_null() const { return tag_null_; }
-    int tag_function() const { return tag_function_; }
-    int tag_any() const { return tag_any_; }
-    int tag_void() const { return tag_void_; }
-    int tag_float() const { return tag_float_; }
-    int tag_bool() const { return tag_bool_; }
-    int tag_string() const { return tag_string_; }
+    Type* type_nullfunc() const { return type_nullfunc_; }
+    Type* type_object() const { return type_object_; }
+    Type* type_null() const { return type_null_; }
+    Type* type_function() const { return type_function_; }
+    Type* type_any() const { return type_any_; }
+    Type* type_void() const { return type_void_; }
+    Type* type_float() const { return type_float_; }
+    Type* type_bool() const { return type_bool_; }
+    Type* type_string() const { return type_string_; }
+
+    int tag_nullfunc() const { return type_nullfunc_->tagid(); }
+    int tag_object() const { return type_object_->tagid(); }
+    int tag_null() const { return type_null_->tagid(); }
+    int tag_function() const { return type_function_->tagid(); }
+    int tag_any() const { return type_any_->tagid(); }
+    int tag_void() const { return type_void_->tagid(); }
+    int tag_float() const { return type_float_->tagid(); }
+    int tag_bool() const { return type_bool_->tagid(); }
+    int tag_string() const { return type_string_->tagid(); }
 
   private:
     Type* findOrAdd(const char* name);
@@ -359,15 +361,16 @@ class TypeDictionary
   private:
     CompileContext& cc_;
     tr::vector<Type*> types_;
-    int tag_nullfunc_ = -1;
-    int tag_object_ = -1;
-    int tag_null_ = -1;
-    int tag_function_ = -1;
-    int tag_any_ = -1;
-    int tag_void_ = -1;
-    int tag_float_ = -1;
-    int tag_bool_ = -1;
-    int tag_string_ = -1;
+    Type* type_int_ = nullptr;
+    Type* type_nullfunc_ = nullptr;
+    Type* type_object_ = nullptr;
+    Type* type_null_ = nullptr;
+    Type* type_function_ = nullptr;
+    Type* type_any_ = nullptr;
+    Type* type_void_ = nullptr;
+    Type* type_float_ = nullptr;
+    Type* type_bool_ = nullptr;
+    Type* type_string_ = nullptr;
 };
 
 const char* pc_tagname(int tag);
