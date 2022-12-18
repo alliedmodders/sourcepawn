@@ -1,1 +1,1 @@
-(2) : error 110: Bar has already been defined (previously seen as typedef)
+(2) : error 432: type Bar was already declared as typedef

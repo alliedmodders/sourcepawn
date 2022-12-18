@@ -99,15 +99,16 @@ bool
 SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag)
 {
     auto types = cc_.types();
-    if (is_label) {
-        *tag = types->defineTag(atom->chars())->tagid();
-        return true;
-    }
 
     Type* type = types->find(atom);
     if (!type) {
-        report(pos, 139) << atom;
-        return false;
+        if (!is_label) {
+            report(pos, 139) << atom;
+            return false;
+        }
+
+        *tag = types->defineTag(atom)->tagid();
+        return true;
     }
 
     *tag = type->tagid();
@@ -163,28 +164,33 @@ EnumDecl::EnterNames(SemaContext& sc)
     int tag = 0;
     if (label_) {
         auto type = sc.cc().types()->find(label_);
-        if (type && type->tagid() == 0) {
-            // No implicit-int allowed.
-            error(pos_, 169);
-            label_ = nullptr;
-        } else {
+        if (!type) {
             tag = sc.cc().types()->defineEnumTag(label_->chars())->tagid();
+        } else if (type->kind() == TypeKind::Int) {
+            // No implicit-int allowed.
+            report(pos_, 169);
+            label_ = nullptr;
+        } else if (type->kind() != TypeKind::Methodmap && type->kind() != TypeKind::Enum) {
+            report(pos_, 432) << label_ << type->kindName();
+        } else {
+            tag = type->tagid();
         }
     }
 
     if (name_) {
         if (label_)
             error(pos_, 168);
-        tag = sc.cc().types()->defineEnumTag(name_->chars())->tagid();
+
+        if (auto type = sc.cc().types()->find(name_)) {
+            if (type->kind() != TypeKind::Methodmap && type->kind() != TypeKind::Enum)
+                report(pos_, 432) << name_ << type->kindName();
+            tag = type->tagid();
+        } else {
+            tag = sc.cc().types()->defineEnumTag(name_->chars())->tagid();
+        }
     } else {
         // The name is automatically the label.
         name_ = label_;
-    }
-
-    if (tag) {
-        auto spec = deduce_layout_spec_by_tag(sc, tag);
-        if (!can_redef_layout_spec(spec, Layout_Enum))
-            report(pos_, 110) << name_ << layout_spec_name(spec);
     }
 
     symbol* enumsym = nullptr;
@@ -271,9 +277,8 @@ EnumDecl::Bind(SemaContext& sc)
 bool
 PstructDecl::EnterNames(SemaContext& sc)
 {
-    auto spec = deduce_layout_spec_by_name(sc, name_);
-    if (!can_redef_layout_spec(spec, Layout_PawnStruct)) {
-        report(pos_, 110) << name_ << layout_spec_name(spec);
+    if (auto type = sc.cc().types()->find(name_)) {
+        report(pos_, 432) << name_ << type->kindName();
         return false;
     }
     if (!isupper(*name_->chars())) {
@@ -287,7 +292,7 @@ PstructDecl::EnterNames(SemaContext& sc)
     std::vector<structarg_t*> args;
     for (auto& field : fields_) {
         if (pstructs_getarg(ps_, field.name)) {
-            report(field.pos, 103) << field.name << layout_spec_name(Layout_PawnStruct);
+            report(field.pos, 103) << field.name << "internal struct";
             return false;
         }
 
@@ -326,11 +331,11 @@ bool
 TypedefDecl::EnterNames(SemaContext& sc)
 {
     if (Type* prev_type = sc.cc().types()->find(name_)) {
-        report(pos_, 110) << name_ << prev_type->kindName();
+        report(pos_, 432) << name_ << prev_type->kindName();
         return false;
     }
 
-    fe_ = funcenums_add(sc.cc(), name_);
+    fe_ = funcenums_add(sc.cc(), name_, false);
     return true;
 }
 
@@ -386,11 +391,11 @@ bool
 TypesetDecl::EnterNames(SemaContext& sc)
 {
     if (Type* prev_type = sc.cc().types()->find(name_)) {
-        report(pos_, 110) << name_ << prev_type->kindName();
+        report(pos_, 432) << name_ << prev_type->kindName();
         return false;
     }
 
-    fe_ = funcenums_add(sc.cc(), name_);
+    fe_ = funcenums_add(sc.cc(), name_, false);
     return true;
 }
 
@@ -1275,11 +1280,14 @@ MethodmapDecl::EnterNames(SemaContext& sc)
 {
     AutoErrorPos error_pos(pos_);
 
-    auto old_spec = deduce_layout_spec_by_name(sc, name_);
-    if (!can_redef_layout_spec(Layout_MethodMap, old_spec))
-        report(110) << name_ << layout_spec_name(old_spec);
+    if (auto type = sc.cc().types()->find(name_)) {
+        if (!type->isEnum()) {
+            report(pos_, 432) << name_ << type->kindName();
+            return false;
+        }
+    }
 
-    map_ = methodmap_add(sc.cc(), nullptr, Layout_MethodMap, name_);
+    map_ = methodmap_add(sc.cc(), nullptr, name_);
     sc.cc().types()->defineMethodmap(name_->chars(), map_);
 
     sym_ = declare_methodmap_symbol(sc.cc(), map_);

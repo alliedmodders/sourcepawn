@@ -312,4 +312,5 @@ static const char* errmsg_ex[] = {
     /*429*/ "wrong number of macro arguments (expected %s, got %s)\n",
     /*430*/ "invalid macro definition\n",
     /*431*/ "script uses too much memory, cannot compile\n",
+    /*432*/ "type %s was already declared as %s\n",
 };

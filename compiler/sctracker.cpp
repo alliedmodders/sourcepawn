@@ -67,21 +67,27 @@ funcenums_free()
     sFuncEnums.clear();
 }
 
-funcenum_t*
-funcenums_add(CompileContext& cc, sp::Atom* name)
-{
-    auto e = std::make_unique<funcenum_t>();
+funcenum_t* funcenums_add(CompileContext& cc, sp::Atom* name, bool anonymous) {
+    if (anonymous) {
+        if (auto type = cc.types()->find(name)) {
+            assert(type->kind() == TypeKind::Function);
+            assert(type->toFunction()->anonymous);
+            return type->toFunction();
+        }
+    }
 
+    auto e = std::make_unique<funcenum_t>();
     e->name = name;
-    e->tag = cc.types()->defineFunction(name->chars(), e.get())->tagid();
+    e->anonymous = anonymous;
+
+    auto type = cc.types()->defineFunction(name, e.get());
+    e->tag = type->tagid();
 
     sFuncEnums.push_back(std::move(e));
     return sFuncEnums.back().get();
 }
 
-funcenum_t*
-funcenum_for_symbol(CompileContext& cc, symbol* sym)
-{
+funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym) {
     functag_t* ft = new functag_t;
     ft->ret_tag = sym->tag;
 
@@ -98,7 +104,7 @@ funcenum_for_symbol(CompileContext& cc, symbol* sym)
     new (&ft->args) PoolArray<funcarg_t>(args);
 
     auto name = ke::StringPrintf("::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
-    funcenum_t* fe = funcenums_add(cc, cc.atom(name));
+    funcenum_t* fe = funcenums_add(cc, cc.atom(name), true);
     new (&fe->entries) PoolArray<functag_t*>({ft});
 
     return fe;
@@ -117,12 +123,11 @@ functag_from_tag(int tag)
     return fe->entries.back();
 }
 
-methodmap_t::methodmap_t(methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
+methodmap_t::methodmap_t(methodmap_t* parent, sp::Atom* name)
  : parent(parent),
    tag(0),
    nullable(false),
    keyword_nullable(false),
-   spec(spec),
    name(name),
    dtor(nullptr),
    ctor(nullptr),
@@ -148,21 +153,18 @@ methodmap_method_t::property_tag() const
 }
 
 methodmap_t*
-methodmap_add(CompileContext& cc, methodmap_t* parent, LayoutSpec spec, sp::Atom* name)
+methodmap_add(CompileContext& cc, methodmap_t* parent, sp::Atom* name)
 {
-    auto map = new methodmap_t(parent, spec, name);
+    auto map = new methodmap_t(parent, name);
 
-    if (spec == Layout_MethodMap && parent) {
+    if (parent) {
         if (parent->nullable)
             map->nullable = parent->nullable;
         if (parent->keyword_nullable)
             map->keyword_nullable = parent->keyword_nullable;
     }
 
-    if (spec == Layout_MethodMap)
-        map->tag = cc.types()->defineMethodmap(name->chars(), map)->tagid();
-    else
-        map->tag = cc.types()->defineObject(name->chars())->tagid();
+    map->tag = cc.types()->defineMethodmap(name->chars(), map)->tagid();
     sMethodmaps.push_back(std::move(map));
 
     return sMethodmaps.back();
@@ -199,83 +201,4 @@ void
 methodmaps_free()
 {
     sMethodmaps.clear();
-}
-
-LayoutSpec
-deduce_layout_spec_by_tag(SemaContext& sc, int tag)
-{
-    if (methodmap_t* map = methodmap_find_by_tag(tag))
-        return map->spec;
-
-    Type* type = sc.cc().types()->find(tag);
-    if (type && type->isFunction())
-        return Layout_FuncTag;
-
-    if (type && type->isStruct())
-        return Layout_PawnStruct;
-
-    if (Type* type = sc.cc().types()->find(tag)) {
-      if (FindSymbol(sc.scope(), type->nameAtom()))
-          return Layout_Enum;
-    }
-
-    return Layout_None;
-}
-
-LayoutSpec
-deduce_layout_spec_by_name(SemaContext& sc, sp::Atom* name)
-{
-    Type* type = sc.cc().types()->find(name);
-    if (!type)
-        return Layout_None;
-
-    return deduce_layout_spec_by_tag(sc, type->tagid());
-}
-
-const char*
-layout_spec_name(LayoutSpec spec)
-{
-    switch (spec) {
-        case Layout_None:
-            return "<none>";
-        case Layout_Enum:
-            return "enum";
-        case Layout_FuncTag:
-            return "functag";
-        case Layout_PawnStruct:
-            return "deprecated-struct";
-        case Layout_MethodMap:
-            return "methodmap";
-        case Layout_Class:
-            return "class";
-    }
-    return "<unknown>";
-}
-
-bool
-can_redef_layout_spec(LayoutSpec def1, LayoutSpec def2)
-{
-    // Normalize the ordering, since these checks are symmetrical.
-    if (def1 > def2) {
-        LayoutSpec temp = def2;
-        def2 = def1;
-        def1 = temp;
-    }
-
-    switch (def1) {
-        case Layout_None:
-            return true;
-        case Layout_Enum:
-            if (def2 == Layout_Enum || def2 == Layout_FuncTag)
-                return true;
-            return def2 == Layout_MethodMap;
-        case Layout_FuncTag:
-            return def2 == Layout_Enum || def2 == Layout_FuncTag;
-        case Layout_PawnStruct:
-        case Layout_MethodMap:
-            return false;
-        case Layout_Class:
-            return false;
-    }
-    return false;
 }

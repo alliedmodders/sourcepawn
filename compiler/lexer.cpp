@@ -2274,7 +2274,7 @@ declare_handle_intrinsics()
         return;
     }
 
-    methodmap_t* map = methodmap_add(cc, nullptr, Layout_MethodMap, handle_atom);
+    methodmap_t* map = methodmap_add(cc, nullptr, handle_atom);
     map->nullable = true;
 
     declare_methodmap_symbol(cc, map);
