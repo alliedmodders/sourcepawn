@@ -696,7 +696,7 @@ RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym)
 uint8_t
 RttiBuilder::TagToRttiBytecode(int tag)
 {
-    if (tag == pc_tag_bool)
+    if (tag == types_->tag_bool())
         return cb::kBool;
     if (tag == types_->tag_any())
         return cb::kAny;

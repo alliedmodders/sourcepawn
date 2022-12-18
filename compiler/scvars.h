@@ -30,4 +30,3 @@
 #include "source-file.h"
 
 extern int pc_tag_string;         /* global String tag */
-extern int pc_tag_bool;           /* global bool tag */

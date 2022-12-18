@@ -1066,9 +1066,9 @@ Parser::constant()
             return new StringExpr(pos, str.c_str(), str.size());
         }
         case tTRUE:
-            return new TaggedValueExpr(lexer_->pos(), pc_tag_bool, 1);
+            return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 1);
         case tFALSE:
-            return new TaggedValueExpr(lexer_->pos(), pc_tag_bool, 0);
+            return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 0);
         case '{':
         {
             std::vector<Expr*> exprs;
@@ -2696,7 +2696,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
                 return true;
             }
             if (tok->atom->str() == "bool") {
-                *out = TypenameInfo{pc_tag_bool};
+                *out = TypenameInfo{types_->tag_bool()};
                 return true;
             }
             if (tok->atom->str() == "Float") {

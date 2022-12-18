@@ -350,6 +350,7 @@ class TypeDictionary
     int tag_any() const { return tag_any_; }
     int tag_void() const { return tag_void_; }
     int tag_float() const { return tag_float_; }
+    int tag_bool() const { return tag_bool_; }
 
   private:
     Type* findOrAdd(const char* name);
@@ -363,6 +364,7 @@ class TypeDictionary
     int tag_any_ = -1;
     int tag_void_ = -1;
     int tag_float_ = -1;
+    int tag_bool_ = -1;
 };
 
 const char* pc_tagname(int tag);
