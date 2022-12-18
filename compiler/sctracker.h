@@ -8,6 +8,7 @@
 #include "pool-allocator.h"
 #include "scvars.h"
 
+class CompileContext;
 class SemaContext;
 
 struct funcenum_t {
@@ -116,8 +117,8 @@ const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
  * Function enumeration tags
  */
 void funcenums_free();
-funcenum_t* funcenums_add(sp::Atom* name);
-funcenum_t* funcenum_for_symbol(symbol* sym);
+funcenum_t* funcenums_add(CompileContext& cc, sp::Atom* name);
+funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym);
 functag_t* functag_from_tag(int tag);
 
 /**
@@ -131,7 +132,7 @@ bool can_redef_layout_spec(LayoutSpec olddef, LayoutSpec newdef);
 /**
  * Method maps.
  */
-methodmap_t* methodmap_add(methodmap_t* parent, LayoutSpec spec, sp::Atom* name);
+methodmap_t* methodmap_add(CompileContext& cc, methodmap_t* parent, LayoutSpec spec, sp::Atom* name);
 methodmap_t* methodmap_find_by_name(sp::Atom* name);
 methodmap_method_t* methodmap_find_method(methodmap_t* map, sp::Atom* name);
 void methodmaps_free();

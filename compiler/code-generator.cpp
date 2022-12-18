@@ -274,7 +274,7 @@ CodeGenerator::EmitVarDecl(VarDecl* decl)
 {
     symbol* sym = decl->sym();
 
-    if (gTypes.find(sym->tag)->kind() == TypeKind::Struct) {
+    if (cc_.types()->find(sym->tag)->kind() == TypeKind::Struct) {
         EmitPstruct(decl);
     } else {
         sym->codeaddr = asm_.position();
@@ -444,7 +444,7 @@ CodeGenerator::EmitPstruct(VarDecl* decl)
         return;
 
     symbol* sym = decl->sym();
-    auto type = gTypes.find(sym->tag);
+    auto type = cc_.types()->find(sym->tag);
     auto ps = type->asStruct();
 
     std::vector<cell> values;
@@ -1305,7 +1305,7 @@ CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr)
         numdim++;
     }
 
-    if (symbol* es = gTypes.find(type.tag())->asEnumStruct()) {
+    if (symbol* es = cc_.types()->find(type.tag())->asEnumStruct()) {
         // The last dimension is implicit in the size of the enum struct. Note
         // that when synthesizing a NewArrayExpr for old-style declarations,
         // it is impossible to have an enum struct.

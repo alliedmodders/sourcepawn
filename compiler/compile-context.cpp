@@ -28,6 +28,7 @@
 #include "scvars.h"
 #include "source-manager.h"
 #include "symbols.h"
+#include "types.h"
 
 CompileContext* CompileContext::sInstance = nullptr;
 
@@ -41,6 +42,8 @@ CompileContext::CompileContext()
     reports_ = std::make_unique<ReportManager>(*this);
     options_ = std::make_unique<CompileOptions>();
     sources_ = std::make_unique<SourceManager>(*this);
+    types_ = std::make_unique<TypeDictionary>();
+    types_->init();
 }
 
 CompileContext::~CompileContext()

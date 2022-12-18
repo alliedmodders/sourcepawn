@@ -20,7 +20,6 @@ module.sources += [
   'pool-objects.cpp',
   'sci18n.cpp',
   'sctracker.cpp',
-  'scvars.cpp',
   'semantics.cpp',
   'source-file.cpp',
   'source-manager.cpp',

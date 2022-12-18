@@ -29,6 +29,5 @@
 #include "sc.h"
 #include "source-file.h"
 
-extern int sc_rationaltag;        /* tag for rational numbers */
 extern int pc_tag_string;         /* global String tag */
 extern int pc_tag_bool;           /* global bool tag */

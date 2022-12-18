@@ -110,3 +110,8 @@ FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
     maybe_returns_array_(false)
 {
 }
+
+FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
+  : TaggedValueExpr(pos, cc.types()->tag_float(), value)
+{
+}

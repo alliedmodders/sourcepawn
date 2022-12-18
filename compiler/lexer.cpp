@@ -1799,7 +1799,7 @@ void Lexer::LexSymbol(full_token_t* tok, sp::Atom* atom) {
         if (allow_tags_) {
             tok->id = tLABEL;
             advance();
-        } else if (gTypes.find(atom)) {
+        } else if (cc_.types()->find(atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
             error(220);
@@ -2274,10 +2274,10 @@ declare_handle_intrinsics()
         return;
     }
 
-    methodmap_t* map = methodmap_add(nullptr, Layout_MethodMap, handle_atom);
+    auto& cc = CompileContext::get();
+    methodmap_t* map = methodmap_add(cc, nullptr, Layout_MethodMap, handle_atom);
     map->nullable = true;
 
-    auto& cc = CompileContext::get();
     declare_methodmap_symbol(cc, map);
 
     auto atom = gAtoms.add("CloseHandle");

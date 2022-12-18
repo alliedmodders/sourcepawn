@@ -171,10 +171,11 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
 
     /* check existance and the proper declaration of this function */
     if (!sym->defined) {
+        auto types = CompileContext::get().types();
         if (numparam == 1)
-            report(406) << opername << gTypes.find(tag1);
+            report(406) << opername << types->find(tag1);
         else
-            report(407) << opername << gTypes.find(tag1) << gTypes.find(tag2);
+            report(407) << opername << types->find(tag1) << types->find(tag2);
         return false;
     }
 
@@ -230,10 +231,10 @@ checkval_string(const value* sym1, const value* sym2)
 const char*
 type_to_name(int tag)
 {
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     if (tag == 0)
         return "int";
-    if (tag == sc_rationaltag)
+    if (tag == types->tag_float())
         return "float";
     if (tag == pc_tag_string)
         return "char";
@@ -270,7 +271,7 @@ obj_typeerror(int id, int tag1, int tag2)
 static int
 matchobjecttags(Type* formal, Type* actual, int flags)
 {
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     int formaltag = formal->tagid();
     int actualtag = actual->tagid();
 
@@ -335,7 +336,7 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
     if (formal->ret_tag == actual->ret_tag)
         return TRUE;
 
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     if (formal->ret_tag == types->tag_void()) {
         if (actual->ret_tag == 0)
             return TRUE;
@@ -348,7 +349,7 @@ IsValidImplicitArrayCast(int formal_tag, int actual_tag)
 {
     // Dumb check for now. This should really do a deep type validation though.
     // Fix this when we overhaul types in 1.12.
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     if ((formal_tag == types->tag_any() && actual_tag != pc_tag_string) ||
         (actual_tag == types->tag_any() && formal_tag != pc_tag_string))
     {
@@ -414,7 +415,7 @@ matchfunctags(Type* formal, Type* actual)
     int formaltag = formal->tagid();
     int actualtag = actual->tagid();
 
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     if (formaltag == types->tag_function() && actual->isFunction())
         return TRUE;
 
@@ -459,7 +460,7 @@ matchtag(int formaltag, int actualtag, int flags)
     if (formaltag == actualtag)
         return TRUE;
 
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     Type* actual = types->find(actualtag);
     Type* formal = types->find(formaltag);
     assert(actual && formal);
@@ -587,7 +588,7 @@ calc(cell left, int oper_tok, cell right, char* boolresult)
 bool
 is_valid_index_tag(int tag)
 {
-    auto types = &gTypes;
+    auto types = CompileContext::get().types();
     if (tag == 0 || tag == types->tag_any() || tag == pc_tag_string)
         return true;
 

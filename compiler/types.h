@@ -349,6 +349,7 @@ class TypeDictionary
     int tag_function() const { return tag_function_; }
     int tag_any() const { return tag_any_; }
     int tag_void() const { return tag_void_; }
+    int tag_float() const { return tag_float_; }
 
   private:
     Type* findOrAdd(const char* name);
@@ -361,10 +362,9 @@ class TypeDictionary
     int tag_function_ = -1;
     int tag_any_ = -1;
     int tag_void_ = -1;
+    int tag_float_ = -1;
 };
 
 const char* pc_tagname(int tag);
-
-extern TypeDictionary gTypes;
 
 #endif // _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_

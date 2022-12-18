@@ -75,7 +75,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
     if (!BindType(pos, ti->type_atom, ti->is_label, &tag))
         return false;
 
-    auto type = gTypes.find(tag);
+    auto type = cc_.types()->find(tag);
     if (auto enum_type = type->asEnumStruct()) {
         if (ti->ident == iREFERENCE) {
             report(pos, 136);
@@ -99,7 +99,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
 bool
 SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag)
 {
-    auto types = &gTypes;
+    auto types = cc_.types();
     if (is_label) {
         *tag = types->defineTag(atom->chars())->tagid();
         return true;
@@ -166,20 +166,20 @@ EnumDecl::EnterNames(SemaContext& sc)
 
     int tag = 0;
     if (label_) {
-        auto type = gTypes.find(label_);
+        auto type = sc.cc().types()->find(label_);
         if (type && type->tagid() == 0) {
             // No implicit-int allowed.
             error(pos_, 169);
             label_ = nullptr;
         } else {
-            tag = gTypes.defineEnumTag(label_->chars())->tagid();
+            tag = sc.cc().types()->defineEnumTag(label_->chars())->tagid();
         }
     }
 
     if (name_) {
         if (label_)
             error(pos_, 168);
-        tag = gTypes.defineEnumTag(name_->chars())->tagid();
+        tag = sc.cc().types()->defineEnumTag(name_->chars())->tagid();
     } else {
         // The name is automatically the label.
         name_ = label_;
@@ -286,7 +286,7 @@ PstructDecl::EnterNames(SemaContext& sc)
     }
 
     ps_ = pstructs_add(name_);
-    gTypes.definePStruct(ps_->name->chars(), ps_);
+    sc.cc().types()->definePStruct(ps_->name->chars(), ps_);
 
     std::vector<structarg_t*> args;
     for (auto& field : fields_) {
@@ -329,12 +329,12 @@ PstructDecl::Bind(SemaContext& sc)
 bool
 TypedefDecl::EnterNames(SemaContext& sc)
 {
-    if (Type* prev_type = gTypes.find(name_)) {
+    if (Type* prev_type = sc.cc().types()->find(name_)) {
         report(pos_, 110) << name_ << prev_type->kindName();
         return false;
     }
 
-    fe_ = funcenums_add(name_);
+    fe_ = funcenums_add(sc.cc(), name_);
     return true;
 }
 
@@ -389,12 +389,12 @@ TypedefInfo::Bind(SemaContext& sc)
 bool
 TypesetDecl::EnterNames(SemaContext& sc)
 {
-    if (Type* prev_type = gTypes.find(name_)) {
+    if (Type* prev_type = sc.cc().types()->find(name_)) {
         report(pos_, 110) << name_ << prev_type->kindName();
         return false;
     }
 
-    fe_ = funcenums_add(name_);
+    fe_ = funcenums_add(sc.cc(), name_);
     return true;
 }
 
@@ -469,7 +469,7 @@ VarDecl::Bind(SemaContext& sc)
     if (type_.ident == iARRAY)
         ResolveArraySize(sc.sema(), this);
 
-    auto types = &gTypes;
+    auto types = sc.cc().types();
     if (type_.tag() == types->tag_void())
         error(pos_, 144);
 
@@ -487,7 +487,7 @@ VarDecl::Bind(SemaContext& sc)
     if ((vclass_ == sSTATIC || vclass_ == sGLOBAL) && type_.ident == iREFARRAY)
         error(pos_, 165);
 
-    if (gTypes.find(type_.tag())->kind() == TypeKind::Struct) {
+    if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
         sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag());
         sym_->is_struct = true;
         sym_->stock = is_stock_;
@@ -865,7 +865,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 
     // Ensure |this| argument exists.
     if (this_tag_) {
-        Type* type = gTypes.find(*this_tag_);
+        Type* type = outer_sc.cc().types()->find(*this_tag_);
 
         typeinfo_t typeinfo = {};
         if (symbol* enum_type = type->asEnumStruct()) {
@@ -983,7 +983,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
             continue;
         }
 
-        Type* type = gTypes.find(typeinfo.semantic_tag());
+        Type* type = sc.cc().types()->find(typeinfo.semantic_tag());
         if (type->isEnumStruct()) {
             if (sym_->native)
                 error(var->pos(), 135, type->name());
@@ -1100,7 +1100,7 @@ FunctionDecl::NameForOperator()
             report(pos_, 59) << var->name();
         count++;
 
-        auto type = gTypes.find(var->type().tag());
+        auto type = CompileContext::get().types()->find(var->type().tag());
         params.emplace_back(type->name());
     }
 
@@ -1159,7 +1159,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
     AutoErrorPos error_pos(pos_);
     root_ = DefineConstant(sc, name_, pos_, 0, sGLOBAL, 0);
-    root_->tag = gTypes.defineEnumStruct(name_->chars(), root_)->tagid();
+    root_->tag = sc.cc().types()->defineEnumStruct(name_->chars(), root_)->tagid();
     root_->enumroot = true;
     root_->ident = iENUMSTRUCT;
 
@@ -1283,8 +1283,8 @@ MethodmapDecl::EnterNames(SemaContext& sc)
     if (!can_redef_layout_spec(Layout_MethodMap, old_spec))
         report(110) << name_ << layout_spec_name(old_spec);
 
-    map_ = methodmap_add(nullptr, Layout_MethodMap, name_);
-    gTypes.defineMethodmap(name_->chars(), map_);
+    map_ = methodmap_add(sc.cc(), nullptr, Layout_MethodMap, name_);
+    sc.cc().types()->defineMethodmap(name_->chars(), map_);
 
     sym_ = declare_methodmap_symbol(sc.cc(), map_);
     if (!sym_)

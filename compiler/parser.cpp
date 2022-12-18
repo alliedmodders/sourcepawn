@@ -46,7 +46,7 @@ Parser::Parser(CompileContext& cc)
   : cc_(cc),
     lexer_(cc.lexer())
 {
-    types_ = &gTypes;
+    types_ = cc_.types();
 }
 
 Parser::~Parser()
@@ -1060,7 +1060,7 @@ Parser::constant()
         case tNUMBER:
             return new NumberExpr(pos, lexer_->current_token()->value);
         case tRATIONAL:
-            return new FloatExpr(pos, lexer_->current_token()->value);
+            return new FloatExpr(cc_, pos, lexer_->current_token()->value);
         case tSTRING: {
             const auto& str = lexer_->current_token()->data;
             return new StringExpr(pos, str.c_str(), str.size());
@@ -1187,7 +1187,7 @@ Parser::struct_init()
                 expr = new NumberExpr(pos, lexer_->current_token()->value);
                 break;
             case tRATIONAL:
-                expr = new FloatExpr(pos, lexer_->current_token()->value);
+                expr = new FloatExpr(cc_, pos, lexer_->current_token()->value);
                 break;
             case tSYMBOL:
                 expr = new SymbolExpr(pos, lexer_->current_token()->atom);
@@ -2692,7 +2692,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
             if (tok->id == tLABEL)
                 error(120);
             if (tok->atom->str() == "float") {
-                *out = TypenameInfo{sc_rationaltag};
+                *out = TypenameInfo{types_->tag_float()};
                 return true;
             }
             if (tok->atom->str() == "bool") {
@@ -2701,7 +2701,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
             }
             if (tok->atom->str() == "Float") {
                 error(98, "Float", "float");
-                *out = TypenameInfo{sc_rationaltag};
+                *out = TypenameInfo{types_->tag_float()};
                 return true;
             }
             if (tok->atom->str() == "String") {
