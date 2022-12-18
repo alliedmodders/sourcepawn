@@ -39,19 +39,22 @@
 typedef int32_t cell;
 typedef uint32_t ucell;
 
-#define TAGTYPEMASK (0x3E000000)
-#define TAGFLAGMASK (TAGTYPEMASK | 0x40000000)
-
-enum class TypeKind : uint32_t {
+enum class TypeKind : uint8_t {
     None,
-    EnumStruct = 0x01000000,
-    Struct = 0x02000000,
-    Methodmap = 0x04000000,
-    Enum = 0x08000000,
-    Object = 0x10000000,
-    Function = 0x20000000
+    Int,
+    Object,
+    Null,
+    Function,
+    Any,
+    Void,
+    Float,
+    Bool,
+    String,
+    EnumStruct,
+    Struct,
+    Methodmap,
+    Enum,
 };
-KE_DEFINE_ENUM_OPERATORS(TypeKind)
 
 struct pstruct_t;
 struct funcenum_t;
@@ -187,19 +190,12 @@ class Type : public PoolObject
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName() const;
-    cell smx_export_value() const {
-        return value_ | int(kind_) | fixed_;
-    }
     int tagid() const {
         return value_;
     }
 
-    bool isDefinedType() const {
-        return kind_ != TypeKind::None;
-    }
-
     bool isFixed() const {
-        return !!fixed_;
+        return fixed_;
     }
 
     bool isStruct() const {
@@ -244,7 +240,6 @@ class Type : public PoolObject
         return methodmap_ptr_;
     }
 
-    bool isLabelTag() const;
     bool isEnum() const {
         return kind_ == TypeKind::Enum;
     }
@@ -283,7 +278,7 @@ class Type : public PoolObject
     }
     void setFixed() {
         // This is separate from "kind_" because it persists across passes.
-        fixed_ = 0x40000000;
+        fixed_ = true;
     }
 
     void resetPtr();
@@ -291,7 +286,7 @@ class Type : public PoolObject
   private:
     sp::Atom* name_;
     cell value_;
-    int fixed_;
+    bool fixed_;
 
     // These are reset in between the first and second passes, since the
     // underlying structures are reparsed.
