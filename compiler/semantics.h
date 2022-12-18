@@ -223,7 +223,7 @@ class Semantics final
     bool CheckArrayDeclaration(VarDecl* decl);
     bool CheckExprForArrayInitializer(Expr* expr);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
-    bool CheckArgument(CallExpr* call, arginfo* arg, Expr* expr,
+    bool CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
                        ParamState* ps, unsigned int argpos);
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
     symbol* BindNewTarget(Expr* target);
@@ -301,6 +301,6 @@ bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
 int check_operatortag(int opertok, int resulttag, const char* opername);
-int argcompare(arginfo* a1, arginfo* a2);
-void fill_arg_defvalue(CompileContext& cc, VarDecl* decl, arginfo* arg);
+int argcompare(ArgDecl* a1, ArgDecl* a2);
+void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl);
 bool IsLegacyEnumTag(SymbolScope* scope, int tag);

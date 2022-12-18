@@ -40,9 +40,9 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym) {
     ft->ret_tag = sym->tag;
 
     std::vector<funcarg_t> args;
-    for (arginfo& arg : sym->function()->args) {
+    for (auto arg : sym->function()->node->args()) {
         funcarg_t dest;
-        dest.type = arg.type;
+        dest.type = arg->type();
 
         if (dest.type.ident != iARRAY && dest.type.ident != iREFARRAY)
           assert(dest.type.dim.empty());
@@ -92,12 +92,12 @@ methodmap_method_t::property_tag() const
     assert(getter || setter);
     if (getter)
         return getter->tag;
-    if (setter->function()->args.size() != 2)
+    if (setter->function()->node->args().size() != 2)
         return types->tag_void();
-    arginfo* valp = &setter->function()->args[1];
-    if (valp->type.ident != iVARIABLE)
+    ArgDecl* valp = setter->function()->node->args()[1];
+    if (valp->type().ident != iVARIABLE)
         return types->tag_void();
-    return valp->type.tag();
+    return valp->type().tag();
 }
 
 methodmap_t*

@@ -79,22 +79,6 @@ struct DefaultArg : public PoolObject {
 
     ~DefaultArg();
 };
-
-struct arginfo { /* function argument info */
-    arginfo()
-      : type(),
-        def(nullptr)
-    {}
-    arginfo(const arginfo& arg) = delete;
-    arginfo(arginfo&& other) = default;
-    void operator =(const arginfo& other) = delete;
-    arginfo& operator =(arginfo&& other) = default;
-
-    sp::Atom* name;
-    typeinfo_t type;
-    DefaultArg* def;
-};
-
 struct methodmap_t;
 struct stringlist;
  

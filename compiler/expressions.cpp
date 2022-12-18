@@ -62,17 +62,18 @@ MatchOperator(int oper, symbol* sym, int tag1, int tag2, int numparam)
     if (!oper)
         numparam = 1;
 
-    auto fun = sym->function();
-    if (fun->args.size() != size_t(numparam))
+    auto fun = sym->function()->node;
+    const auto& args = fun->args();
+    if (args.size() != size_t(numparam))
         return false;
 
     assert(numparam == 1 || numparam == 2);
     int tags[2] = { tag1, tag2 };
 
     for (int i = 0; i < numparam; i++) {
-        if (fun->args[i].type.ident != iVARIABLE)
+        if (args[i]->type().ident != iVARIABLE)
             return false;
-        if (fun->args[i].type.tag() != tags[i])
+        if (args[i]->type().tag() != tags[i])
             return false;
     }
 

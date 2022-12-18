@@ -111,6 +111,14 @@ FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
 {
 }
 
+int FunctionDecl::FindNamedArg(sp::Atom* name) const {
+    for (size_t i = 0; i < args_.size() && args_[i]->type().ident != iVARARGS; i++) {
+        if (args_[i]->name() == name)
+            return (int)i;
+    }
+    return -1;
+}
+
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {

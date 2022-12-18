@@ -98,7 +98,7 @@ class CodeGenerator final
     bool EmitChainedCompareExprTest(ChainedCompareExpr* expr, bool jump_on_true,
                                     sp::Label* target);
 
-    void EmitDefaultArray(Expr* expr, arginfo* arg);
+    void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitUserOp(const UserOperation& user_op, value* lval);
     void EmitCall(symbol* fun, cell nargs);
     void EmitInc(const value* lval);

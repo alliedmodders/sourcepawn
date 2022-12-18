@@ -152,6 +152,9 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         case StmtKind::VarDecl:
             EmitVarDecl(stmt->to<VarDecl>());
             break;
+        case StmtKind::ArgDecl:
+            EmitVarDecl(stmt->to<ArgDecl>());
+            break;
         case StmtKind::ExprStmt:
             // Emit even if no side effects.
             EmitExpr(stmt->to<ExprStmt>()->expr());
@@ -1185,7 +1188,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
     }
 
     const auto& argv = call->args();
-    const auto& arginfov = call->sym()->function()->args;
+    const auto& arginfov = call->sym()->function()->node->args();
     for (size_t i = argv.size() - 1; i < argv.size(); i--) {
         const auto& expr = argv[i];
 
@@ -1199,22 +1202,22 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
         const auto& val = expr->val();
         bool lvalue = expr->lvalue();
 
-        const arginfo* arg;
+        ArgDecl* arg;
         if (i < arginfov.size()) {
-            arg = &arginfov[i];
+            arg = arginfov[i];
         } else {
-            arg = &arginfov.back();
-            assert(arg->type.ident == iVARARGS);
+            arg = arginfov.back();
+            assert(arg->type().ident == iVARARGS);
         }
 
-        switch (arg->type.ident) {
+        switch (arg->type().ident) {
             case iVARARGS:
                 if (val.ident == iVARIABLE || val.ident == iREFERENCE) {
                     assert(val.sym);
                     assert(lvalue);
                     /* treat a "const" variable passed to a function with a non-const
                      * "variable argument list" as a constant here */
-                    if (val.sym->is_const && !arg->type.is_const) {
+                    if (val.sym->is_const && !arg->type().is_const) {
                         EmitRvalue(val);
                         __ setheap_pri();
                         TrackTempHeapAlloc(expr, 1);
@@ -1258,17 +1261,17 @@ void
 CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
 {
     const auto& arg = expr->arg();
-    switch (arg->type.ident) {
+    switch (arg->type().ident) {
         case iREFARRAY:
             EmitDefaultArray(expr, arg);
             break;
         case iREFERENCE:
-            __ const_pri(arg->def->val.get());
+            __ const_pri(arg->default_value()->val.get());
             __ setheap_pri();
             TrackTempHeapAlloc(expr, 1);
             break;
         case iVARIABLE:
-            __ const_pri(arg->def->val.get());
+            __ const_pri(arg->default_value()->val.get());
             break;
         default:
             assert(false);
@@ -1896,9 +1899,9 @@ CodeGenerator::EmitCall(symbol* sym, cell nargs)
 }
 
 void
-CodeGenerator::EmitDefaultArray(Expr* expr, arginfo* arg)
+CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
 {
-    DefaultArg* def = arg->def;
+    DefaultArg* def = arg->default_value();
     if (def->sym) {
         __ emit(OP_CONST_PRI, def->sym->addr());
         return;
@@ -1912,7 +1915,7 @@ CodeGenerator::EmitDefaultArray(Expr* expr, arginfo* arg)
         data_.AddZeroes(def->array->zeroes);
     }
 
-    if (arg->type.is_const || !def->array) {
+    if (arg->type().is_const || !def->array) {
         // No modification is possible, so use the array we emitted. (This is
         // why we emitted the zeroes above.)
         __ const_pri(def->val.get());
