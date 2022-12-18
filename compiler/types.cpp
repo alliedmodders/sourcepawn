@@ -115,7 +115,7 @@ bool
 Type::isLabelTag() const
 {
     auto types = CompileContext::get().types();
-    if (tagid() == 0 || tagid() == pc_tag_bool || tagid() == types->tag_float())
+    if (tagid() == 0 || tagid() == types->tag_bool() || tagid() == types->tag_float())
         return false;
     return kind_ == TypeKind::None;
 }
@@ -177,7 +177,7 @@ TypeDictionary::init()
     type = defineBool();
     assert(type->tagid() == 1);
 
-    pc_tag_bool = type->tagid();
+    tag_bool_ = type->tagid();
     tag_any_ = defineAny()->tagid();
     tag_function_ = defineFunction("Function", nullptr)->tagid();
     pc_tag_string = defineString()->tagid();

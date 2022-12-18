@@ -258,7 +258,7 @@ bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type.tag() == pc_tag_bool && expr->tag() == 0 &&
+        if (!(arg->type.tag() == types_->tag_bool() && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
             matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
@@ -521,7 +521,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
         return nullptr;
     }
 
-    if (val.tag != 0 || val.tag != pc_tag_bool) {
+    if (val.tag != 0 || val.tag != types_->tag_bool()) {
         UserOperation userop;
         if (find_userop(*sc_, '!', val.tag, 0, 1, &val, &userop)) {
             // Call user op for '!', then invert it. EmitTest will fold out the
@@ -535,7 +535,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
             expr = new CallUserOpExpr(userop, expr);
             expr = new UnaryExpr(expr->pos(), '!', expr);
             expr->val().ident = iEXPRESSION;
-            expr->val().tag = pc_tag_bool;
+            expr->val().tag = types_->tag_bool();
             return expr;
         }
     }
@@ -605,7 +605,7 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             } else if (out_val.ident == iCONSTEXPR) {
                 out_val.constval = !out_val.constval;
             }
-            out_val.tag = pc_tag_bool;
+            out_val.tag = types_->tag_bool();
             break;
         case '-':
             if (out_val.ident == iCONSTEXPR && out_val.tag == types_->tag_float()) {
@@ -789,7 +789,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
-            val.tag = pc_tag_bool;
+            val.tag = types_->tag_bool();
     }
 
     return true;
@@ -1057,7 +1057,7 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
         val.ident = iEXPRESSION;
     }
     val.sym = nullptr;
-    val.tag = pc_tag_bool;
+    val.tag = types_->tag_bool();
     return true;
 }
 
@@ -1081,7 +1081,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
 
     auto& val = chain->val();
     val.ident = iEXPRESSION;
-    val.tag = pc_tag_bool;
+    val.tag = types_->tag_bool();
 
     for (auto& op : chain->ops()) {
         Expr* right = op.expr;
@@ -1100,7 +1100,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         }
 
         if (find_userop(*sc_, op.oper_tok, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
-            if (op.userop.sym->tag != pc_tag_bool) {
+            if (op.userop.sym->tag != types_->tag_bool()) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
             }
@@ -3059,7 +3059,7 @@ ReportFunctionReturnError(symbol* sym)
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
         report(sym, 209) << sym->name();
-    } else if (types->find(sym->tag)->isEnum() || sym->tag == pc_tag_bool ||
+    } else if (types->find(sym->tag)->isEnum() || sym->tag == types->tag_bool() ||
                sym->tag == types->tag_float() || !sym->retvalue_used)
     {
         report(sym, 242) << sym->name();
