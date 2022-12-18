@@ -31,7 +31,6 @@
 #include "lexer.h"
 #include "parse-node.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "symbols.h"
 
 Semantics::Semantics(CompileContext& cc, ParseTree* tree)

@@ -24,7 +24,6 @@
 
 #include "errors.h"
 #include "sc.h"
-#include "scvars.h"
 
 template <typename T>
 static void

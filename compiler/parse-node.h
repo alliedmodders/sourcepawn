@@ -29,7 +29,6 @@
 #include "lexer.h"
 #include "pool-allocator.h"
 #include "sc.h"
-#include "scvars.h"
 #include "shared/string-pool.h"
 #include "symbols.h"
 

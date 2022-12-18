@@ -6,7 +6,6 @@
 
 #include "lexer.h"
 #include "pool-allocator.h"
-#include "scvars.h"
 
 class CompileContext;
 class SemaContext;

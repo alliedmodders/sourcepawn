@@ -33,7 +33,6 @@
 #include "parse-node.h"
 #include "sc.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "semantics.h"
 #include "types.h"
 
