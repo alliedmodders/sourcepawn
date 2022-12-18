@@ -119,7 +119,9 @@ Type::isLabelTag() const
     return kind_ == TypeKind::None;
 }
 
-TypeDictionary::TypeDictionary() {}
+TypeDictionary::TypeDictionary(CompileContext& cc)
+  : cc_(cc)
+{}
 
 Type*
 TypeDictionary::find(sp::Atom* name)
@@ -142,7 +144,7 @@ TypeDictionary::find(int tag)
 Type*
 TypeDictionary::findOrAdd(const char* name)
 {
-    sp::Atom* atom = gAtoms.add(name);
+    sp::Atom* atom = cc_.atom(name);
     for (const auto& type : types_) {
         if (type->nameAtom() == atom)
             return type;

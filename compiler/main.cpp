@@ -86,8 +86,6 @@ using namespace ke;
 int pc_tag_string = 0;
 int pc_tag_bool = 0;
 
-sp::StringPool gAtoms;
-
 static void setconfig(char* root);
 static void setconstants(void);
 static void inst_datetime_defines(CompileContext& cc);
@@ -123,7 +121,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
     auto options = cc.options();
 
     for (const auto& pair : options->constants) {
-        DefineConstant(cc, gAtoms.add(pair.first), pair.second, sGLOBAL);
+        DefineConstant(cc, cc.atom(pair.first), pair.second, sGLOBAL);
     }
 
 #ifdef __EMSCRIPTEN__
@@ -391,12 +389,12 @@ static void
 setconstants(void)
 {
     auto& cc = CompileContext::get();
-    DefineConstant(cc, gAtoms.add("EOS"), 0, 0);
-    DefineConstant(cc, gAtoms.add("INVALID_FUNCTION"), -1, cc.types()->tag_nullfunc());
-    DefineConstant(cc, gAtoms.add("cellmax"), INT_MAX, 0);
-    DefineConstant(cc, gAtoms.add("cellmin"), INT_MIN, 0);
+    DefineConstant(cc, cc.atom("EOS"), 0, 0);
+    DefineConstant(cc, cc.atom("INVALID_FUNCTION"), -1, cc.types()->tag_nullfunc());
+    DefineConstant(cc, cc.atom("cellmax"), INT_MAX, 0);
+    DefineConstant(cc, cc.atom("cellmin"), INT_MIN, 0);
 
-    DefineConstant(cc, gAtoms.add("__Pawn"), VERSION_INT, 0);
+    DefineConstant(cc, cc.atom("__Pawn"), VERSION_INT, 0);
 
-    DefineConstant(cc, gAtoms.add("debug"), 2, 0);
+    DefineConstant(cc, cc.atom("debug"), 2, 0);
 }

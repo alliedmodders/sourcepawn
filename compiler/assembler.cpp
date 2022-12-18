@@ -140,7 +140,7 @@ struct variable_type_t {
 class RttiBuilder
 {
   public:
-    RttiBuilder(CodeGenerator& cg, SmxNameTable* names);
+    RttiBuilder(CompileContext& cc, CodeGenerator& cg, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
     void add_method(symbol* sym);
@@ -171,6 +171,7 @@ class RttiBuilder
     uint8_t TagToRttiBytecode(int tag);
 
   private:
+    CompileContext& cc_;
     CodeGenerator& cg_;
     TypeDictionary* types_ = nullptr;
     RefPtr<SmxNameTable> names_;
@@ -196,11 +197,12 @@ class RttiBuilder
     TypeIdCache typeid_cache_;
 };
 
-RttiBuilder::RttiBuilder(CodeGenerator& cg, SmxNameTable* names)
- : cg_(cg),
+RttiBuilder::RttiBuilder(CompileContext& cc, CodeGenerator& cg, SmxNameTable* names)
+ : cc_(cc),
+   cg_(cg),
    names_(names)
 {
-    types_ = CompileContext::get().types();
+    types_ = cc_.types();
     typeid_cache_.init(128);
     data_ = new SmxBlobSection<void>("rtti.data");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
@@ -264,7 +266,7 @@ RttiBuilder::build_debuginfo()
                     if (prev_file_name) {
                         sp_fdbg_file_t& entry = dbg_files_->add();
                         entry.addr = prev_file_addr;
-                        entry.name = names_->add(gAtoms, prev_file_name);
+                        entry.name = names_->add(*cc_.atoms(), prev_file_name);
                     }
                     prev_file_addr = codeidx;
                 }
@@ -286,7 +288,7 @@ RttiBuilder::build_debuginfo()
     if (prev_file_name) {
         sp_fdbg_file_t& entry = dbg_files_->add();
         entry.addr = prev_file_addr;
-        entry.name = names_->add(gAtoms, prev_file_name);
+        entry.name = names_->add(*cc_.atoms(), prev_file_name);
     }
 
     // Make sure debug tables are sorted by address.
@@ -395,7 +397,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
             var.vclass = 0;
             assert(false);
     }
-    var.name = names_->add(gAtoms.add(name_start, name_end - name_start));
+    var.name = names_->add(*cc_.atoms(), name_start, name_end - name_start);
     var.code_start = code_start;
     var.code_end = code_end;
     var.type_id = type_id;
@@ -457,7 +459,7 @@ RttiBuilder::add_enumstruct(Type* type)
     typeid_cache_.add(p, type, es_index);
 
     smx_rtti_enumstruct es = {};
-    es.name = names_->add(gAtoms, type->name());
+    es.name = names_->add(*cc_.atoms(), type->name());
     es.first_field = es_fields_->count();
     es.size = sym->addr();
     enumstructs_->add(es);
@@ -506,7 +508,7 @@ RttiBuilder::add_struct(Type* type)
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
     classdef.flags = kClassDefType_Struct;
-    classdef.name = names_->add(gAtoms, ps->name->chars());
+    classdef.name = names_->add(*cc_.atoms(), ps->name->chars());
     classdef.first_field = fields_->count();
     classdefs_->add(classdef);
 
@@ -611,7 +613,7 @@ RttiBuilder::add_enum(Type* type)
 
     smx_rtti_enum entry;
     memset(&entry, 0, sizeof(entry));
-    entry.name = names_->add(gAtoms, type->name());
+    entry.name = names_->add(*cc_.atoms(), type->name());
     enums_->add(entry);
     return index;
 }
@@ -633,7 +635,7 @@ RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
     uint32_t signature = type_pool_.add(bytes);
 
     smx_rtti_typedef& def = typedefs_->at(index);
-    def.name = names_->add(gAtoms, type->name());
+    def.name = names_->add(*cc_.atoms(), type->name());
     def.type_id = MakeTypeId(signature, kTypeId_Complex);
     return index;
 }
@@ -658,7 +660,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
         encode_signature_into(bytes, iter);
 
     smx_rtti_typeset& entry = typesets_->at(index);
-    entry.name = names_->add(gAtoms, type->name());
+    entry.name = names_->add(*cc_.atoms(), type->name());
     entry.signature = type_pool_.add(bytes);
     return index;
 }
@@ -818,7 +820,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
     RefPtr<SmxNameTable> names = new SmxNameTable(".names");
 
-    RttiBuilder rtti(cg_, names);
+    RttiBuilder rtti(cc_, cg_, names);
 
     std::vector<function_entry> functions;
     std::unordered_set<symbol*> symbols;
@@ -885,7 +887,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
         sp_file_publics_t& pubfunc = publics->add();
         pubfunc.address = sym->addr();
-        pubfunc.name = names->add(gAtoms, f.name.c_str());
+        pubfunc.name = names->add(*cc_.atoms(), f.name.c_str());
 
         auto id = (uint32_t(i) << 1) | 1;
         if (!Label::ValueFits(id))
@@ -903,7 +905,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         sp_file_natives_t& entry = natives->add();
 
         if (auto alias = sym->function()->alias)
-            entry.name = names->add(gAtoms, "@" + alias->nameAtom()->str());
+            entry.name = names->add(*cc_.atoms(), "@" + alias->nameAtom()->str());
         else
             entry.name = names->add(sym->nameAtom());
 
