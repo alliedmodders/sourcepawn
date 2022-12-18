@@ -33,7 +33,7 @@
 class ArraySizeResolver
 {
   public:
-    ArraySizeResolver(Semantics* sema, VarDecl* decl);
+    ArraySizeResolver(Semantics* sema, VarDeclBase* decl);
     ArraySizeResolver(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
     void Resolve();
@@ -60,7 +60,7 @@ class ArraySizeResolver
 static constexpr int kSizeUnknown = -1;
 static constexpr int kSizeIndeterminate = -2;
 
-ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDecl* decl)
+ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDeclBase* decl)
   : sema_(sema),
     types_(sema->cc().types()),
     pos_(decl->pos()),
@@ -353,7 +353,7 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
 }
 
 void
-ResolveArraySize(Semantics* sema, VarDecl* decl)
+ResolveArraySize(Semantics* sema, VarDeclBase* decl)
 {
     assert(decl->type().ident == iARRAY);
 
@@ -373,7 +373,7 @@ ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int 
 class FixedArrayValidator final
 {
   public:
-    FixedArrayValidator(Semantics* sema, VarDecl* decl)
+    FixedArrayValidator(Semantics* sema, VarDeclBase* decl)
       : sema_(sema),
         types_(sema->cc().types()),
         decl_(decl),
@@ -405,7 +405,7 @@ class FixedArrayValidator final
   private:
     Semantics* sema_;
     TypeDictionary* types_;
-    VarDecl* decl_;
+    VarDeclBase* decl_;
     token_pos_t pos_;
     Expr* init_;
     const typeinfo_t& type_;
@@ -474,17 +474,15 @@ CalcArraySize(symbol* sym)
 
     cell size = 0;
     cell last_size = 1;
-    symbol* iter = sym;
-    while (iter) {
-        cell length = iter->dim.array.length;
+    for (int i = 0; i < sym->dim_count(); i++) {
+        cell length = sym->dim(i);
         assert(length);
 
-        if (!iter->dim.array.level && sym->tag == types->tag_string())
+        if (i == sym->dim_count() - 1 && sym->tag == types->tag_string())
             length = char_array_cells(length);
 
         last_size *= length;
         size += last_size;
-        iter = iter->array_child();
     }
     return size;
 }
@@ -517,11 +515,8 @@ FixedArrayValidator::CheckArgument(Expr* init)
     }
 
     std::vector<int> dim;
-    while (sym) {
-        dim.emplace_back(sym->dim.array.length);
-        sym = sym->array_child();
-    }
-    assert(!sym);
+    for (int i = 0; i < sym->dim_count(); i++)
+        dim.emplace_back(sym->dim(i));
 
     if (dim.size() != type_.dim.size()) {
         report(expr->pos(), 19) << type_.numdim() << dim.size();
@@ -750,7 +745,7 @@ FixedArrayValidator::AddCells(size_t ncells)
 }
 
 bool
-Semantics::AddImplicitDynamicInitializer(VarDecl* decl)
+Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
 {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type();
@@ -793,7 +788,7 @@ Semantics::AddImplicitDynamicInitializer(VarDecl* decl)
     return true;
 }
 
-bool Semantics::CheckArrayDeclaration(VarDecl* decl) {
+bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     AutoCountErrors errors;
     const auto& type = decl->type();
     if (type.ident == iARRAY || decl->vclass() == sARGUMENT) {
@@ -975,7 +970,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 symbol* field = *field_iter;
                 assert(field);
 
-                EmitPadding(field->dim.array.length, field->x.tags.index, emitted, false, {}, {});
+                EmitPadding(field->dim(0), field->x.tags.index, emitted, false, {}, {});
             } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
@@ -1020,7 +1015,7 @@ ArrayEmitter::AddInlineArray(symbol* field, ArrayExpr* array)
         prev1 = ke::Some(item->val().constval());
     }
 
-    EmitPadding(field->dim.array.length, field->x.tags.index, array->exprs().size(),
+    EmitPadding(field->dim(0), field->x.tags.index, array->exprs().size(),
                 array->ellipses(), prev1, prev2);
 }
 
@@ -1089,7 +1084,7 @@ BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array)
 }
 
 void
-BuildArrayInitializer(VarDecl* decl, ArrayData* array, cell base_address)
+BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell base_address)
 {
     BuildArrayInitializer(decl->type(), decl->init_rhs(), array);
 

@@ -82,27 +82,6 @@ struct DefaultArg : public PoolObject {
 struct methodmap_t;
 struct stringlist;
  
-// Possible entries for "ident". These are used in the "symbol", "value"
-// and arginfo structures. Not every constant is valid for every use.
-// In an argument list, the list is terminated with a "zero" ident; labels
-// cannot be passed as function arguments, so the value 0 is overloaded.
-enum IdentifierKind {
-    iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
-    iREFERENCE = 2,     /* iVARIABLE, but must be dereferenced */
-    iARRAY = 3,
-    iREFARRAY = 4,      /* an array passed by reference (i.e. a pointer) */
-    iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
-    iARRAYCHAR = 6,     /* array element, character from cell from array */
-    iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
-    iCONSTEXPR = 8,     /* constant expression (or constant symbol) */
-    iFUNCTN = 9,
-    iVARARGS = 11,      /* function specified ... as argument(s) */
-    iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
-    iMETHODMAP = 14,    /* symbol defining a methodmap */
-    iENUMSTRUCT = 15,   /* symbol defining an enumstruct */
-    iSCOPE = 16,        /* local scope chain */
-};
-
 class EnumData;
 class EnumStructData;
 class EnumStructVarData;

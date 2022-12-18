@@ -39,6 +39,28 @@
 typedef int32_t cell;
 typedef uint32_t ucell;
 
+// Possible entries for "ident". These are used in the "symbol", "value"
+// and arginfo structures. Not every constant is valid for every use.
+// In an argument list, the list is terminated with a "zero" ident; labels
+// cannot be passed as function arguments, so the value 0 is overloaded.
+enum IdentifierKind {
+    iINVALID = 0,
+    iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
+    iREFERENCE = 2,     /* iVARIABLE, but must be dereferenced */
+    iARRAY = 3,
+    iREFARRAY = 4,      /* an array passed by reference (i.e. a pointer) */
+    iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
+    iARRAYCHAR = 6,     /* array element, character from cell from array */
+    iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
+    iCONSTEXPR = 8,     /* constant expression (or constant symbol) */
+    iFUNCTN = 9,
+    iVARARGS = 11,      /* function specified ... as argument(s) */
+    iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
+    iMETHODMAP = 14,    /* symbol defining a methodmap */
+    iENUMSTRUCT = 15,   /* symbol defining an enumstruct */
+    iSCOPE = 16,        /* local scope chain */
+};
+
 enum class TypeKind : uint8_t {
     Int,
     Object,
@@ -91,7 +113,7 @@ struct typeinfo_t {
       : type_atom(nullptr),
         tag_(-1),
         declared_tag(0),
-        ident(0),
+        ident(iINVALID),
         is_const(false),
         is_new(false),
         has_postdims(false),
@@ -112,7 +134,7 @@ struct typeinfo_t {
     // rewritten for desugaring.
     int declared_tag;
 
-    int ident : 5;          // Either iREFERENCE, iARRAY, or iVARIABLE.
+    IdentifierKind ident : 6;  // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;
     bool is_new : 1;        // New-style declaration.
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.

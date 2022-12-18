@@ -456,7 +456,7 @@ ConstDecl::Bind(SemaContext& sc)
     return true;
 }
 
-bool VarDecl::Bind(SemaContext& sc) {
+bool VarDeclBase::Bind(SemaContext& sc) {
     if (!sc.BindType(pos(), &type_))
         return false;
 
@@ -491,7 +491,7 @@ bool VarDecl::Bind(SemaContext& sc) {
         sym_->stock = is_stock_;
         sym_->is_const = true;
     } else {
-        int ident = type_.ident;
+        IdentifierKind ident = type_.ident;
         if (vclass_ == sARGUMENT && ident == iARRAY)
             type_.ident = ident = iREFARRAY;
 
@@ -528,9 +528,7 @@ bool VarDecl::Bind(SemaContext& sc) {
     return true;
 }
 
-bool
-VarDecl::BindType(SemaContext& sc)
-{
+bool VarDeclBase::BindType(SemaContext& sc) {
     return sc.BindType(pos(), &type_);
 }
 
@@ -1191,8 +1189,10 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         symbol* child = new symbol(field.decl.name, position, iCONSTEXPR, sGLOBAL, root_->tag);
         child->x.tags.index = field.decl.type.semantic_tag();
         child->x.tags.field = 0;
-        child->dim.array.length = field.decl.type.numdim() ? field.decl.type.dim[0] : 0;
-        child->dim.array.level = 0;
+        if (field.decl.type.numdim()) {
+            child->set_dim_count(1);
+            child->set_dim(0, field.decl.type.dim[0]);
+        }
         child->set_parent(root_);
         child->enumfield = true;
         fields.emplace_back(child);

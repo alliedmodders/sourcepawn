@@ -100,12 +100,12 @@ FunctionData::FunctionData()
 {
 }
 
-symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int symtag)
+symbol::symbol(sp::Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : next(nullptr),
    codeaddr(0),
    vclass((char)symvclass),
-   ident((char)symident),
    tag(symtag),
+   ident(symident),
    usage(0),
    defined(false),
    is_const(false),
@@ -125,19 +125,18 @@ symbol::symbol(sp::Atom* symname, cell symaddr, int symident, int symvclass, int
    queued(false),
    explicit_return_type(false),
    x({}),
+   dim_data(nullptr),
    fnumber(0),
    /* assume global visibility (ignored for local symbols) */
    lnumber(0),
    documentation(nullptr),
    addr_(symaddr),
    name_(nullptr),
-   parent_(nullptr),
-   child_(nullptr)
+   parent_(nullptr)
 {
     name_ = symname;
     if (symident == iFUNCTN)
         data_ = new FunctionData;
-    memset(&dim, 0, sizeof(dim));
 }
 
 symbol::symbol(const symbol& other)
@@ -163,6 +162,22 @@ symbol::symbol(const symbol& other)
     // Note: explicitly don't add queued.
 
     x = other.x;
+
+    if (other.dim_data) {
+        set_dim_count(other.dim_count());
+        for (int i = 0; i < other.dim_count(); i++)
+            set_dim(i, other.dim(i));
+    }
+}
+
+void symbol::set_dim_count(int dim_count) {
+    if (this->dim_count() == dim_count)
+        return;
+
+    auto& cc = CompileContext::get();
+    dim_data = cc.allocator().alloc<int>(dim_count + 1);
+    dim_data[0] = dim_count;
+    dim_data++;
 }
 
 void
@@ -192,31 +207,16 @@ symbol::is_variadic() const
 }
 
 symbol*
-NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[], int numdim,
-            int semantic_tag)
+NewVariable(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
+            int numdim, int semantic_tag)
 {
-    symbol* sym;
+    symbol* sym = new symbol(name, addr, ident, vclass, tag);
 
-    if (ident == iARRAY || ident == iREFARRAY) {
-        symbol *parent = NULL, *top;
-        int level;
-        sym = NULL; /* to avoid a compiler warning */
-        for (level = 0; level < numdim; level++) {
-            top = new symbol(name, addr, ident, vclass, tag);
-            top->defined = true;
-            top->dim.array.length = dim[level];
-            top->dim.array.level = (short)(numdim - level - 1);
-            top->x.tags.index = (level == numdim - 1) ? semantic_tag : 0;
-            top->set_parent(parent);
-            if (parent) {
-                parent->set_array_child(top);
-            }
-            parent = top;
-            if (level == 0)
-                sym = top;
-        }
-    } else {
-        sym = new symbol(name, addr, ident, vclass, tag);
+    if (numdim) {
+        sym->set_dim_count(numdim);
+        for (int i = 0; i < numdim; i++)
+            sym->set_dim(i, dim[i]);
+        sym->x.tags.index = semantic_tag;
     }
     return sym;
 }

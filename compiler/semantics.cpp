@@ -147,7 +147,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
     }
 }
 
-bool Semantics::CheckVarDecl(VarDecl* decl) {
+bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     AutoErrorPos aep(decl->pos());
 
     auto sym = decl->sym();
@@ -159,6 +159,9 @@ bool Semantics::CheckVarDecl(VarDecl* decl) {
 
     if (types_->find(sym->tag)->kind() == TypeKind::Struct)
         return CheckPstructDecl(decl);
+
+    if (!decl->as<ArgDecl>() && type.is_const && !decl->init() && !decl->is_public())
+        report(decl->pos(), 251);
 
     if (type.ident == iARRAY || type.ident == iREFARRAY) {
         if (!CheckArrayDeclaration(decl))
@@ -191,7 +194,7 @@ bool Semantics::CheckVarDecl(VarDecl* decl) {
     return true;
 }
 
-bool Semantics::CheckPstructDecl(VarDecl* decl) {
+bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
     if (!decl->init())
         return true;
 
@@ -229,7 +232,7 @@ bool Semantics::CheckPstructDecl(VarDecl* decl) {
     return true;
 }
 
-bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
+bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
                                 const StructInitFieldExpr* field, std::vector<bool>* visited)
 {
     auto arg = ps->GetArg(field->name);
@@ -277,7 +280,7 @@ bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
                 error(expr->pos(), 405);
                 return false;
             }
-            if (sym->dim.array.level != 0) {
+            if (sym->dim_count() != 1) {
                 error(expr->pos(), 405);
                 return false;
             }
@@ -819,13 +822,11 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
             return false;
         }
 
-        symbol* iter = left_sym;
-        while (iter) {
-            if (!iter->dim.array.length) {
+        for (int i = 0; i < left_sym->dim_count(); i++) {
+            if (!left_sym->dim(i)) {
                 report(expr, 46) << left_sym->name();
                 return false;
             }
-            iter = iter->array_child();
         }
         return true;
     }
@@ -866,16 +867,16 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         bool exact_match = true;
         cell right_length = 0;
         int right_idxtag = 0;
-        int left_length = left_val.sym->dim.array.length;
+        int left_length = left_val.array_size();
         if (right_val.sym) {
             // Change from the old logic - we immediately reject multi-dimensional
             // arrays in assignment and don't bother validating subarray assignment.
-            if (right_val.sym->dim.array.level > 0) {
+            if (right_val.sym->dim_count() - right_val.array_level() > 1) {
                 report(expr, 23);
                 return false;
             }
 
-            right_length = right_val.sym->dim.array.length; // array variable
+            right_length = right_val.array_size();
             right_idxtag = right_val.sym->x.tags.index;
             if (right_idxtag == 0 && left_val.sym->x.tags.index == 0)
                 exact_match = false;
@@ -887,7 +888,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
                     exact_match = false;
             }
         }
-        if (left_val.sym->dim.array.level != 0) {
+        if (left_val.array_dim_count() != 1) {
             report(expr, 47); // array dimensions must match
             return false;
         }
@@ -1444,7 +1445,9 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
 
-    if (types_->find(base_val.sym->x.tags.index)->isEnumStruct()) {
+    if (base_val.array_dim_count() == 1 &&
+        types_->find(base_val.sym->x.tags.index)->isEnumStruct())
+    {
         report(base, 117);
         return false;
     }
@@ -1459,11 +1462,11 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     out_val = base_val;
 
     if (index_val.ident == iCONSTEXPR) {
-        if (!(base_val.sym->tag == types_->tag_string() && base_val.sym->dim.array.level == 0)) {
+        if (!(base_val.sym->tag == types_->tag_string() && base_val.array_level() == 0)) {
             /* normal array index */
             if (index_val.constval() < 0 ||
-                (base_val.sym->dim.array.length != 0 &&
-                 base_val.sym->dim.array.length <= index_val.constval()))
+                (base_val.array_size() != 0 &&
+                 base_val.array_size() <= index_val.constval()))
             {
                 report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                 return false;
@@ -1471,33 +1474,26 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         } else {
             /* character index */
             if (index_val.constval() < 0 ||
-                (base_val.sym->dim.array.length != 0 &&
-                 base_val.sym->dim.array.length <= index_val.constval()))
+                (base_val.array_size() != 0 &&
+                 base_val.array_size() <= index_val.constval()))
             {
                 report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                 return false;
             }
         }
-        /* if the array index is a field from an enumeration, get the tag name
-         * from the field and save the size of the field too.
-         */
-        assert(index_val.sym == nullptr || index_val.sym->dim.array.level == 0);
     }
 
-    if (base_val.sym->dim.array.level > 0) {
+    if (base_val.array_level() < base_val.sym->dim_count() - 1) {
         // Note: Intermediate arrays are not l-values.
-        out_val.set_array(iREFARRAY, base_val.sym->array_child());
-
-        assert(out_val.sym != nullptr);
-        assert(out_val.sym->dim.array.level == base_val.sym->dim.array.level - 1);
+        out_val.set_array(iREFARRAY, base_val.sym, base_val.array_level() + 1);
         return true;
     }
 
     /* set type to fetch... INDIRECTLY */
     if (base_val.sym->tag == types_->tag_string())
-        out_val.set_array(iARRAYCHAR, base_val.sym);
+        out_val.set_array(iARRAYCHAR, base_val.sym, 0);
     else
-        out_val.set_array(iARRAYCELL, base_val.sym);
+        out_val.set_array(iARRAYCELL, base_val.sym, 0);
     out_val.tag = base_val.sym->tag;
 
     expr->set_lvalue(true);
@@ -1564,7 +1560,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     switch (base_val.ident) {
         case iARRAY:
         case iREFARRAY:
-            if (base_val.sym && base_val.sym->dim.array.level == 0) {
+            if (base_val.sym && base_val.array_dim_count() == 1) {
                 Type* type = types_->find(base_val.sym->x.tags.index);
                 if (symbol* root = type->asEnumStruct())
                     return CheckEnumStructFieldAccessExpr(expr, type, root, from_call);
@@ -1791,9 +1787,9 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
         child->x.tags.index = 0;
     }
 
-    if (field->dim.array.length > 0) {
-        child->dim.array.length = field->dim.array.length;
-        child->dim.array.level = 0;
+    if (field->dim_count()) {
+        child->set_dim_count(1);
+        child->set_dim(0, field->dim(0));
         child->ident = iREFARRAY;
     } else {
         child->ident = (tag == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
@@ -1850,26 +1846,24 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     val.set_constval(1);
 
     if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
-        symbol* subsym = sym;
+        bool is_enum_struct = types_->find(sym->x.tags.index)->isEnumStruct();
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
-            if (sym->ident == iENUMSTRUCT || types_->find(sym->x.tags.index)->isEnumStruct()) {
+            if (sym->ident == iENUMSTRUCT || (level == sym->dim_count() - 1 && is_enum_struct)) {
                 report(expr, 111) << sym->name();
                 return false;
             }
-            if (subsym)
-                subsym = subsym->array_child();
         }
 
         Type* enum_type = nullptr;
         if (expr->suffix_token() == tDBLCOLON) {
-            if (subsym->ident != iENUMSTRUCT) {
-                report(expr, 112) << subsym->name();
+            if (sym->ident != iENUMSTRUCT) {
+                report(expr, 112) << sym->name();
                 return false;
             }
-            enum_type = types_->find(subsym->tag);
+            enum_type = types_->find(sym->tag);
         } else if (expr->suffix_token() == '.') {
-            enum_type = types_->find(subsym->x.tags.index);
+            enum_type = types_->find(sym->x.tags.index);
             if (!enum_type->asEnumStruct()) {
                 report(expr, 116) << sym->name();
                 return false;
@@ -1884,8 +1878,8 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(expr, 105) << enum_type->name() << expr->field();
                 return false;
             }
-            if (int array_size = field->dim.array.length) {
-                val.set_constval(array_size);
+            if (field->dim_count()) {
+                val.set_constval(field->dim(0));
                 return true;
             }
             return true;
@@ -1896,21 +1890,18 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             return true;
         }
 
-        if (expr->array_levels() > sym->dim.array.level + 1) {
+        if (expr->array_levels() > sym->dim_count()) {
             report(expr, 28) << sym->name(); // invalid subscript
             return false;
         }
-        if (expr->array_levels() != sym->dim.array.level + 1) {
-            symbol* iter = sym;
-            int level = expr->array_levels();
-            while (level-- > 0)
-                iter = iter->array_child();
+        if (expr->array_levels() != sym->dim_count()) {
+            int size = sym->dim(expr->array_levels());
 
-            if (!iter->dim.array.length) {
+            if (!size) {
                 report(expr, 163) << sym->name(); // indeterminate array size in "sizeof"
                 return false;
             }
-            val.set_constval(iter->dim.array.length);
+            val.set_constval(size);
             return true;
         }
     }
@@ -2239,33 +2230,21 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     }
                 }
             } else {
-                symbol* sym = val->sym;
-                if (sym->dim.array.level + 1 != arg->type().numdim()) {
+                if (val->array_dim_count() != arg->type().numdim()) {
                     report(param, 48); // array dimensions must match
                     return false;
                 }
                 // The lengths for all dimensions must match, unless the dimension
                 // length was defined at zero (which means "undefined").
-                short level = 0;
-                while (sym->dim.array.level > 0) {
-                    if (arg->type().dim[level] != 0 &&
-                        sym->dim.array.length != arg->type().dim[level])
-                    {
-                        report(param, 47); // array sizes must match
-                        return false;
-                    }
-                    sym = sym->array_child();
-                    level++;
-                }
-                // The last dimension is checked too, again, unless it is zero.
-                if (arg->type().dim[level] != 0) {
-                    if (val->ident == iARRAYCELL || val->ident == iARRAYCHAR ||
-                        sym->dim.array.length != arg->type().dim[level])
+                for (int i = 0; i < arg->type().numdim(); i++) {
+                    if (arg->type().dim[i] != 0 &&
+                        val->array_dim(i) != arg->type().dim[i])
                     {
                         report(param, 47); // array sizes must match
                         return false;
                     }
                 }
+                auto sym = val->sym;
                 if (!matchtag(arg->type().enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
                     if (arg->type().tag() != types_->tag_any() ||
@@ -2635,7 +2614,8 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     symbol* curfunc = sc_->func();
     symbol* sub = curfunc->array_return();
-    symbol* sym = stmt->expr()->val().sym;
+    const auto& val = stmt->expr()->val();
+    symbol* sym = val.sym;
 
     auto& array = stmt->array();
     array = {};
@@ -2645,64 +2625,35 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         assert(sub->ident == iREFARRAY);
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
-        int level = sym->dim.array.level;
-        if (sub->dim.array.level != level) {
+        if (sub->dim_count() != val.array_dim_count()) {
             report(stmt, 48); /* array dimensions must match */
             return false;
         }
 
-        for (int i = 0; i <= level; i++) {
-            array.dim.emplace_back((int)sub->dim.array.length);
-            if (sym->dim.array.length != array.dim.back()) {
+        for (int i = 0; i < sub->dim_count(); i++) {
+            array.dim.emplace_back(sub->dim(i));
+            if (val.array_dim(i) != array.dim.back()) {
                 report(stmt, 47); /* array sizes must match */
                 return false;
             }
-
-            if (i != level) {
-                sym = sym->array_child();
-                sub = sub->array_child();
-                assert(sym != NULL && sub != NULL);
-                // ^^^ both arrays have the same dimensions (this was checked
-                //     earlier) so the dependend should always be found
-            }
         }
-        if (!sub->dim.array.length) {
-            report(stmt, 128);
-            return false;
-        }
-
-        // Restore it for below.
-        sub = curfunc->array_return();
     } else {
         // this function does not yet have an array attached; clone the
         // returned symbol beneath the current function
         sub = sym;
-        assert(sub != NULL);
-        int level = sub->dim.array.level;
-        for (int i = 0; i <= level; i++) {
-            array.dim.emplace_back((int)sub->dim.array.length);
+        for (int i = 0; i < sub->dim_count(); i++) {
+            if (!sub->dim(i)) {
+                report(stmt, 128);
+                return false;
+            }
+            array.dim.emplace_back(sub->dim(i));
             if (sub->x.tags.index) {
                 array.set_tag(0);
                 array.declared_tag = sub->x.tags.index;
             }
-            if (i != level) {
-                sub = sub->array_child();
-                assert(sub != NULL);
-            }
-
-            /* check that all dimensions are known */
-            if (array.dim.back() <= 0) {
-                report(stmt, 46) << sym->name();
-                return false;
-            }
         }
         if (!array.has_tag())
             array.set_tag(sub->tag);
-
-        if (!sub->dim.array.length) {
-            report(stmt, 128);
-            return false;
-        }
 
         // the address of the array is stored in a hidden parameter; the address
         // of this parameter is 1 + the number of parameters (times the size of
@@ -3161,7 +3112,7 @@ StmtList::ProcessUses(SemaContext& sc)
 }
 
 void
-VarDecl::ProcessUses(SemaContext& sc)
+VarDeclBase::ProcessUses(SemaContext& sc)
 {
     if (init_)
         init_rhs()->MarkAndProcessUses(sc);

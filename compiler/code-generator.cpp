@@ -98,15 +98,9 @@ CodeGenerator::AddDebugSymbol(symbol* sym)
                                    sym->addr(), sym->tag, symname, sym->codeaddr,
                                    asm_.position(), sym->ident, sym->vclass, (int)sym->is_const);
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
-#if !defined NDEBUG
-        int count = sym->dim.array.level;
-#endif
-        symbol* sub;
         string += " [ ";
-        for (sub = sym; sub != NULL; sub = sub->array_child()) {
-            assert(sub->dim.array.level == count--);
-            string += ke::StringPrintf("%x:%x ", sub->x.tags.index, sub->dim.array.length);
-        }
+        for (int i = 0; i < sym->dim_count(); i++)
+            string += ke::StringPrintf("%x:%x ", sym->x.tags.index, sym->dim(i));
         string += "]";
     }
 
@@ -273,7 +267,7 @@ CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node)
 }
 
 void
-CodeGenerator::EmitVarDecl(VarDecl* decl)
+CodeGenerator::EmitVarDecl(VarDeclBase* decl)
 {
     symbol* sym = decl->sym();
 
@@ -295,7 +289,7 @@ CodeGenerator::EmitVarDecl(VarDecl* decl)
 }
 
 void
-CodeGenerator::EmitGlobalVar(VarDecl* decl)
+CodeGenerator::EmitGlobalVar(VarDeclBase* decl)
 {
     symbol* sym = decl->sym();
     BinaryExpr* init = decl->init();
@@ -321,7 +315,7 @@ CodeGenerator::EmitGlobalVar(VarDecl* decl)
 }
 
 void
-CodeGenerator::EmitLocalVar(VarDecl* decl)
+CodeGenerator::EmitLocalVar(VarDeclBase* decl)
 {
     symbol* sym = decl->sym();
     BinaryExpr* init = decl->init();
@@ -441,7 +435,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
 }
 
 void
-CodeGenerator::EmitPstruct(VarDecl* decl)
+CodeGenerator::EmitPstruct(VarDeclBase* decl)
 {
     if (!decl->init())
         return;
@@ -1110,11 +1104,10 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
 {
     EmitExpr(expr->base());
 
-    symbol* sym = expr->base()->val().sym;
-    assert(sym);
+    auto& base_val = expr->base()->val();
 
     auto types = cc_.types();
-    bool magic_string = (sym->tag == types->tag_string() && sym->dim.array.level == 0);
+    bool magic_string = (base_val.tag == types->tag_string() && base_val.array_dim_count() == 1);
 
     const auto& idxval = expr->index()->val();
     if (idxval.ident == iCONSTEXPR) {
@@ -1135,8 +1128,8 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
         __ emit(OP_PUSH_PRI);
         EmitExpr(expr->index());
 
-        if (sym->dim.array.length != 0) {
-            __ emit(OP_BOUNDS, sym->dim.array.length - 1); /* run time check for array bounds */
+        if (base_val.array_size()) {
+            __ emit(OP_BOUNDS, base_val.array_size() - 1); /* run time check for array bounds */
         } else {
             // vm uses unsigned compare, this protects against negative indices.
             __ emit(OP_BOUNDS, INT_MAX); 
@@ -1152,8 +1145,10 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
     }
 
     // The indexed item is another array (multi-dimensional arrays).
-    if (sym->dim.array.level > 0)
+    if (base_val.array_dim_count() > 1) {
+        assert(expr->val().ident == iARRAY || expr->val().ident == iREFARRAY);
         __ emit(OP_LOAD_I);
+    }
 }
 
 void
@@ -1360,7 +1355,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
         __ load_hidden_arg(func_, sub, true);
 
         auto types = cc_.types();
-        cell size = sub->dim.array.length;
+        cell size = sub->dim(0); // :todo: must be val
         if (sub->tag == types->tag_string())
             size = char_array_cells(size);
 
