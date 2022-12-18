@@ -19,47 +19,6 @@
 
 std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
 
-std::vector<pstruct_t*> sStructs;
-
-pstruct_t::pstruct_t(sp::Atom* name)
-  : name(name)
-{
-}
-
-const structarg_t*
-pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name)
-{
-    for (const auto& arg : pstruct->args) {
-        if (arg->name == name)
-            return arg;
-    }
-    return nullptr;
-}
-
-pstruct_t*
-pstructs_add(sp::Atom* name)
-{
-    auto p = new pstruct_t(name);
-    sStructs.push_back(p);
-    return sStructs.back();
-}
-
-void
-pstructs_free()
-{
-    sStructs.clear();
-}
-
-pstruct_t*
-pstructs_find(sp::Atom* name)
-{
-    for (const auto& p : sStructs) {
-        if (p->name == name)
-            return p;
-    }
-    return nullptr;
-}
-
 void
 funcenums_free()
 {

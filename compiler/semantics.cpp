@@ -198,7 +198,7 @@ bool Semantics::CheckPstructDecl(VarDecl* decl) {
     assert(init); // If we parse struct initializers as a normal global, this check will need to be
                   // soft.
     auto type = types_->find(sym->tag);
-    auto ps = type->asStruct();
+    auto ps = type->as<pstruct_t>();
 
     std::vector<bool> visited;
     visited.resize(ps->args.size());
@@ -230,7 +230,7 @@ bool Semantics::CheckPstructDecl(VarDecl* decl) {
 bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
                                 const StructInitFieldExpr* field, std::vector<bool>* visited)
 {
-    auto arg = pstructs_getarg(ps, field->name);
+    auto arg = ps->GetArg(field->name);
     if (!arg) {
         report(field->pos(), 96) << field->name << "struct" << decl->name();
         return false;

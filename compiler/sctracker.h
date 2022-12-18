@@ -22,29 +22,6 @@ struct funcenum_t {
     bool anonymous;
 };
 
-struct structarg_t : public PoolObject
-{
-    structarg_t()
-      : type(),
-        name(nullptr),
-        offs(0),
-        index(0)
-    {}
-
-    typeinfo_t type;
-    sp::Atom* name;
-    unsigned int offs;
-    int index;
-};
-
-struct pstruct_t : public PoolObject
-{
-    explicit pstruct_t(sp::Atom* name);
-
-    sp::Atom* name;
-    PoolArray<structarg_t*> args;
-};
-
 struct methodmap_method_t : public PoolObject
 {
     explicit methodmap_method_t(methodmap_t* parent)
@@ -93,14 +70,6 @@ struct methodmap_t : public SymbolData
     // Original enum list.
     EnumData* enum_data;
 };
-
-/**
- * Pawn Structs
- */
-pstruct_t* pstructs_add(sp::Atom* name);
-void pstructs_free();
-pstruct_t* pstructs_find(const char* name);
-const structarg_t* pstructs_getarg(const pstruct_t* pstruct, sp::Atom* name);
 
 /**
  * Function enumeration tags
