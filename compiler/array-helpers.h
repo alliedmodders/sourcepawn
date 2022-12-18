@@ -28,13 +28,13 @@ class Semantics;
 // Determine the static size of an iARRAY based on dimension expressions and
 // array initializers. The array may be converted to an iREFARRAY if it is
 // determined to be dynamic.
-void ResolveArraySize(Semantics* sema, VarDecl* decl);
+void ResolveArraySize(Semantics* sema, VarDeclBase* decl);
 void ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
 // Perform type and size checks of an array and its initializer if present.
 bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
 
-void BuildArrayInitializer(VarDecl* decl, ArrayData* array, cell_t base_addr);
+void BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
 void BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
 
 cell_t CalcArraySize(symbol* sym);

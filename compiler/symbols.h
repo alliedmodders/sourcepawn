@@ -56,6 +56,7 @@ class FunctionData final : public SymbolData
     FunctionDecl* node;
     FunctionDecl* forward;
     symbol* alias;
+    symbol* array_return = nullptr;
     sp::Label label;     // modern replacement for addr
     sp::Label funcid;
     int max_local_stack = 0;
@@ -105,13 +106,14 @@ class EnumStructData final : public SymbolData
 struct symbol : public PoolObject
 {
     symbol(const symbol& other);
-    symbol(sp::Atom* name, cell addr, int ident, int vclass, int tag);
+    symbol(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
 
     symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
-    char ident;    /* see below for possible values */
     int tag;       /* tagname id */
+
+    IdentifierKind ident : 6;    /* see below for possible values */
 
     // See uREAD/uWRITTEN above.
     uint8_t usage : 3;
@@ -154,15 +156,21 @@ struct symbol : public PoolObject
             int field; /* enumeration fields, where a size is attached to the field */
         } tags;        /* extra tags */
     } x;               /* 'x' for 'extra' */
-    union {
-        struct {
-            cell length;  /* arrays: length (size) */
-            short level;  /* number of dimensions below this level */
-        } array;
-    } dim;       /* for 'dimension', both functions and arrays */
+    int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
     int fnumber; /* file number in which the symbol is declared */
     int lnumber; /* line number for the declaration */
     PoolString* documentation; /* optional documentation string */
+
+    int dim_count() const { return dim_data ? dim_data[-1] : 0; }
+    void set_dim_count(int dim_count);
+    int dim(int n) const {
+        assert(n < dim_count());
+        return dim_data[n];
+    }
+    void set_dim(int n, int size) {
+        assert(n < dim_count());
+        dim_data[n] = size;
+    }
 
     int addr() const {
         return addr_;
@@ -191,22 +199,11 @@ struct symbol : public PoolObject
     }
 
     symbol* array_return() const {
-        assert(ident == iFUNCTN);
-        return child_;
+        return function()->array_return;
     }
     void set_array_return(symbol* child) {
-        assert(ident == iFUNCTN);
-        assert(!child_);
-        child_ = child;
-    }
-    symbol* array_child() const {
-        assert(ident == iARRAY || ident == iREFARRAY);
-        return child_;
-    }
-    void set_array_child(symbol* child) {
-        assert(ident == iARRAY || ident == iREFARRAY);
-        assert(!child_);
-        child_ = child;
+        assert(!function()->array_return);
+        function()->array_return = child;
     }
     SymbolData* data() const {
         return data_;
@@ -233,7 +230,6 @@ struct symbol : public PoolObject
     SymbolData* data_;
 
     symbol* parent_;
-    symbol* child_;
 };
 
 enum ScopeKind {
@@ -299,13 +295,11 @@ class SymbolScope final : public PoolObject
 };
 
 struct value {
-    value() : ident(0), sym(nullptr), tag(0) {}
+    value() : ident(iINVALID), sym(nullptr), tag(0) {}
 
-    char ident;      /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
-                         * iEXPRESSION or iREFERENCE */
-    /* symbol in symbol table, NULL for (constant) expression */
+    IdentifierKind ident : 6;
     symbol* sym;
-    int tag;         /* tag (of the expression) */
+    int tag;
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
@@ -338,14 +332,14 @@ struct value {
         ident = iCONSTEXPR;
         constval_ = val;
     }
-    void set_array(int ident, symbol* sym) {
+    void set_array(IdentifierKind ident, symbol* sym, int level) {
         assert(ident == iARRAY || ident == iREFARRAY || ident == iARRAYCELL ||
                ident == iARRAYCHAR);
         this->ident = ident;
         this->sym = sym;
-        this->array_level_ = 0;
+        this->array_level_ = level;
     }
-    void set_array(int ident, int size) {
+    void set_array(IdentifierKind ident, int size) {
         assert(ident == iARRAY || ident == iREFARRAY);
         this->ident = ident;
         this->sym = nullptr;
@@ -354,8 +348,34 @@ struct value {
     int array_size() const {
         assert(ident == iARRAY || ident == iREFARRAY);
         if (sym)
-            return sym->dim.array.length;
+            return sym->dim(array_level_);
         return array_level_;
+    }
+    int array_level() const {
+        assert(ident == iARRAY || ident == iREFARRAY);
+        if (sym)
+            return array_level_;
+        return 0;
+    }
+    int array_dim_count() const {
+        if (ident == iARRAYCHAR || ident == iARRAYCELL)
+            return 1;
+        assert(ident == iARRAY || ident == iREFARRAY);
+        if (sym)
+            return sym->dim_count() - array_level_;
+        return 1;
+    }
+    int array_dim(int n) const {
+        if (ident == iARRAYCHAR || ident == iARRAYCELL)
+            return 0;
+
+        assert(ident == iARRAY || ident == iREFARRAY);
+
+        if (sym)
+            return sym->dim(array_level_ + n);
+
+        assert(n == 0);
+        return array_size();
     }
 
     union {
@@ -385,8 +405,8 @@ symbol* DefineConstant(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, 
 bool CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(symbol* sym, int usage);
-symbol* NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[],
-                    int numdim, int semantic_tag);
+symbol* NewVariable(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
+                    int dim[], int numdim, int semantic_tag);
 symbol* FindEnumStructField(Type* type, sp::Atom* name);
 void deduce_liveness(CompileContext& cc);
 void declare_handle_intrinsics();

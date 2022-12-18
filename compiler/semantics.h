@@ -181,10 +181,10 @@ class Semantics final
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);
-    bool CheckVarDecl(VarDecl* decl);
+    bool CheckVarDecl(VarDeclBase* decl);
     bool CheckConstDecl(VarDecl* decl);
-    bool CheckPstructDecl(VarDecl* decl);
-    bool CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
+    bool CheckPstructDecl(VarDeclBase* decl);
+    bool CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
                          const StructInitFieldExpr* field, std::vector<bool>* visited);
 
     // Expressions.
@@ -214,13 +214,13 @@ class Semantics final
 
     bool CheckAssignmentLHS(BinaryExpr* expr);
     bool CheckAssignmentRHS(BinaryExpr* expr);
-    bool AddImplicitDynamicInitializer(VarDecl* decl);
+    bool AddImplicitDynamicInitializer(VarDeclBase* decl);
 
     struct ParamState {
         std::vector<Expr*> argv;
     };
 
-    bool CheckArrayDeclaration(VarDecl* decl);
+    bool CheckArrayDeclaration(VarDeclBase* decl);
     bool CheckExprForArrayInitializer(Expr* expr);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
     bool CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,

@@ -275,8 +275,9 @@ static const char* warnmsg[] = {
     /*246*/ "function %s returns an array but return type is not marked as an array\n",
     /*247*/ "include paths should be enclosed in \"quotes\" or <angle brackets>\n",
     /*248*/ "character is not utf-8 encoded\n",
-    /*249*/ "function name is always true - possible missing parenthesis?\n"
+    /*249*/ "function name is always true - possible missing parenthesis?\n",
     /*250*/ "pragma has no effect\n",
+    /*251*/ "const variable was not initialized\n",
 };
 
 static const char* errmsg_ex[] = {

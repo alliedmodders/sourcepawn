@@ -475,8 +475,8 @@ RttiBuilder::add_enumstruct(Type* type)
         auto field = *iter;
 
         int dims[1], dimcount = 0;
-        if (field->dim.array.length)
-            dims[dimcount++] = field->dim.array.length;
+        if (field->dim_count())
+            dims[dimcount++] = field->dim(0);
 
         variable_type_t type = {field->x.tags.index, dims, dimcount, false};
         std::vector<uint8_t> encoding;
@@ -570,7 +570,7 @@ RttiBuilder::encode_signature(symbol* sym)
         bytes.push_back(cb::kVariadic);
 
     symbol* child = sym->array_return();
-    if (child && child->dim.array.length) {
+    if (child && child->dim_count()) {
         encode_ret_array_into(bytes, child);
     } else if (sym->tag == types_->tag_void()) {
         bytes.push_back(cb::kVoid);
@@ -689,8 +689,10 @@ RttiBuilder::encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type)
 void
 RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym)
 {
-    bytes.push_back(cb::kFixedArray);
-    CompactEncodeUint32(bytes, sym->dim.array.length);
+    for (int i = 0; i < sym->dim_count(); i++) {
+        bytes.push_back(cb::kFixedArray);
+        CompactEncodeUint32(bytes, sym->dim(i));
+    }
     encode_tag_into(bytes, sym->tag);
 }
 

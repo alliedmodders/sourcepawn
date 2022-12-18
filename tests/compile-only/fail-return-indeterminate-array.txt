@@ -1,1 +1,2 @@
-(6) : error 046: unknown array size (variable "sNames")
+(6) : error 128: cannot return an array of indeterminate length
+(11) : error 411: cannot determine fixed array size of return value

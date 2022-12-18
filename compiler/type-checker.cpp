@@ -31,9 +31,9 @@ TypeInfoFromSymbol(symbol* sym)
     type.is_const = sym->is_const;
 
     if (sym->parent() && sym->parent()->ident == iENUMSTRUCT) {
-        if (sym->dim.array.length) {
+        if (sym->dim_count()) {
             type.ident = iARRAY;
-            type.dim.emplace_back(sym->dim.array.length);
+            type.dim.emplace_back(sym->dim(0));
         } else {
             type.ident = iVARIABLE;
         }
@@ -42,15 +42,8 @@ TypeInfoFromSymbol(symbol* sym)
         type.ident = sym->ident;
 
         if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
-            for (symbol* iter = sym; iter; iter = iter->array_child()) {
-                if (iter->x.tags.index && iter->dim.array.level == 0)
-                    type.declared_tag = iter->x.tags.index;
-                if (iter->x.tags.index) {
-                    type.declared_tag = iter->x.tags.index;
-                    type.set_tag(0);
-                }
-                type.dim.emplace_back(iter->dim.array.length);
-            }
+            for (int i = 0; i < sym->dim_count(); i++)
+                type.dim.emplace_back(sym->dim(i));
         }
     }
     return type;

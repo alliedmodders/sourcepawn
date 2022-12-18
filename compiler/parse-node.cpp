@@ -21,9 +21,10 @@
 
 #include "errors.h"
 
-VarDecl::VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
-                 bool is_public, bool is_static, bool is_stock, Expr* initializer)
- : Decl(StmtKind::VarDecl, pos, name),
+VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, sp::Atom* name,
+                         const typeinfo_t& type, int vclass, bool is_public, bool is_static,
+                         bool is_stock, Expr* initializer)
+ : Decl(kind, pos, name),
    type_(type),
    vclass_(vclass),
    is_public_(is_public),
@@ -36,16 +37,12 @@ VarDecl::VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type,
         set_init(initializer);
 }
 
-void
-VarDecl::set_init(Expr* expr)
-{
+void VarDeclBase::set_init(Expr* expr) {
     init_ = new BinaryExpr(pos(), '=', new SymbolExpr(pos(), name()), expr);
     init_->set_initializer();
 }
 
-Expr*
-VarDecl::init_rhs() const
-{
+Expr* VarDeclBase::init_rhs() const {
     if (!init_)
         return nullptr;
     return init_->right();

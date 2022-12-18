@@ -298,16 +298,14 @@ class Decl : public Stmt
 
 class BinaryExpr;
 
-class VarDecl : public Decl
+class VarDeclBase : public Decl
 {
   public:
-    VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
-            bool is_public, bool is_static, bool is_stock, Expr* initializer);
+    VarDeclBase(StmtKind kind, const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type,
+                int vclass, bool is_public, bool is_static, bool is_stock, Expr* initializer);
 
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
-
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::VarDecl; }
 
     // Bind only the typeinfo.
     bool BindType(SemaContext& sc);
@@ -327,6 +325,7 @@ class VarDecl : public Decl
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
     symbol* sym() const { return sym_; }
+    bool is_public() const { return is_public_; }
 
   protected:
     typeinfo_t type_;
@@ -339,12 +338,25 @@ class VarDecl : public Decl
     symbol* sym_ = nullptr;
 };
 
-class ArgDecl : public VarDecl
+class VarDecl : public VarDeclBase
+{
+  public:
+    VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+            bool is_public, bool is_static, bool is_stock, Expr* initializer)
+      : VarDeclBase(StmtKind::VarDecl, pos, name, type, vclass, is_public, is_static, is_stock,
+                    initializer)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::VarDecl; }
+};
+
+class ArgDecl : public VarDeclBase
 {
   public:
     ArgDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
             bool is_public, bool is_static, bool is_stock, Expr* initializer)
-      : VarDecl(pos, name, type, vclass, is_public, is_static, is_stock, initializer)
+      : VarDeclBase(StmtKind::ArgDecl, pos, name, type, vclass, is_public, is_static, is_stock,
+                    initializer)
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ArgDecl; }
