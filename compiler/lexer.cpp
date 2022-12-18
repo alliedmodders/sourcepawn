@@ -1220,7 +1220,7 @@ Lexer::Lexer(CompileContext& cc)
     const int kStart = tMIDDLE + 1;
     const char** tokptr = &sc_tokens[kStart - tFIRST];
     for (int i = kStart; i <= tLAST; i++, tokptr++) {
-        sp::Atom* atom = gAtoms.add(*tokptr);
+        sp::Atom* atom = cc_.atom(*tokptr);
         assert(keywords_.count(atom) == 0);
         keywords_.emplace(atom, i);
     }
@@ -1232,8 +1232,8 @@ void Lexer::Init(std::shared_ptr<SourceFile> sf) {
 }
 
 void Lexer::Start() {
-    defined_atom_ = gAtoms.add("defined");
-    line_atom_ = gAtoms.add("__LINE__");
+    defined_atom_ = cc_.atom("defined");
+    line_atom_ = cc_.atom("__LINE__");
 }
 
 std::string get_token_string(int tok_id) {
@@ -1756,7 +1756,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     }
 
     // Handle preprocessor keywords (ugh).
-    sp::Atom* atom = gAtoms.add((const char *)token_start, len);
+    sp::Atom* atom = cc_.atom((const char *)token_start, len);
     if (atom == defined_atom_) {
         tok->id = tDEFINED;
         return;
@@ -2229,7 +2229,7 @@ bool
 Lexer::needsymbol(sp::Atom** name)
 {
     if (!need(tSYMBOL)) {
-        *name = gAtoms.add("__unknown__");
+        *name = cc_.atom("__unknown__");
         return false;
     }
     *name = current_token()->atom;
@@ -2237,7 +2237,7 @@ Lexer::needsymbol(sp::Atom** name)
 }
 
 void Lexer::AddMacro(const char* pattern, const char* subst) {
-    auto atom = gAtoms.add(pattern);
+    auto atom = cc_.atom(pattern);
     auto macro = std::make_shared<MacroEntry>();
     macro->pattern = atom;
     macro->substitute = subst;
@@ -2267,29 +2267,29 @@ void
 declare_handle_intrinsics()
 {
     // Must not have an existing Handle methodmap.
-    sp::Atom* handle_atom = gAtoms.add("Handle");
+    auto& cc = CompileContext::get();
+    sp::Atom* handle_atom = cc.atom("Handle");
     if (methodmap_find_by_name(handle_atom)) {
         error(156);
         return;
     }
 
-    auto& cc = CompileContext::get();
     methodmap_t* map = methodmap_add(cc, nullptr, Layout_MethodMap, handle_atom);
     map->nullable = true;
 
     declare_methodmap_symbol(cc, map);
 
-    auto atom = gAtoms.add("CloseHandle");
+    auto atom = cc.atom("CloseHandle");
     if (auto sym = FindSymbol(cc.globals(), atom)) {
         auto dtor = new methodmap_method_t(map);
         dtor->target = sym;
-        dtor->name = gAtoms.add("~Handle");
+        dtor->name = cc.atom("~Handle");
         map->dtor = dtor;
         map->methods.emplace(dtor->name, dtor);
 
         auto close = new methodmap_method_t(map);
         close->target = sym;
-        close->name = gAtoms.add("Close");
+        close->name = cc.atom("Close");
         map->methods.emplace(close->name, close);
     }
 

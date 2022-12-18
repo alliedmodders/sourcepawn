@@ -198,11 +198,12 @@ class SmxRttiTable : public SmxListSection<T>
 class SmxNameTable : public SmxSection
 {
  public:
-  SmxNameTable(const char* name)
+  explicit SmxNameTable(const char* name)
    : SmxSection(name),
      buffer_size_(0)
   {}
 
+  uint32_t add(StringPool& pool, const char* str, size_t len);
   uint32_t add(StringPool& pool, const char* str);
   uint32_t add(StringPool& pool, const std::string& str);
 

@@ -605,7 +605,7 @@ Parser::parse_pragma_unused()
     std::vector<std::string> raw_names = ke::Split(data, ",");
     std::vector<sp::Atom*> names;
     for (const auto& raw_name : raw_names)
-        names.emplace_back(gAtoms.add(raw_name));
+        names.emplace_back(cc_.atom(raw_name));
     return new PragmaUnusedStmt(pos, names);
 }
 
@@ -917,7 +917,7 @@ Parser::hier2()
 
             sp::Atom* ident;
             if (lexer_->match(tTHIS)) {
-                ident = gAtoms.add("this");
+                ident = cc_.atom("this");
             } else {
                 if (!lexer_->needsymbol(&ident))
                     return nullptr;
@@ -1887,7 +1887,7 @@ Parser::parse_args(FunctionDecl* fun, std::vector<VarDecl*>* args)
             if (fun->IsVariadic())
                 error(401);
 
-            auto p = new VarDecl(pos, gAtoms.add("..."), decl.type, sARGUMENT, false, false,
+            auto p = new VarDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, false, false,
                                  false, nullptr);
             args->emplace_back(p);
             continue;
@@ -2017,7 +2017,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
 
     // Build a new symbol. Construct a temporary name including the class.
     auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), symbol->chars());
-    auto fqn = gAtoms.add(fullname);
+    auto fqn = cc_.atom(fullname);
 
     auto fun = new FunctionDecl(pos, ret_type);
     fun->set_name(fqn);
@@ -2114,7 +2114,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
         tmpname += ".get";
     else
         tmpname += ".set";
-    fun->set_name(gAtoms.add(tmpname));
+    fun->set_name(cc_.atom(tmpname));
 
     if (is_native)
         fun->set_is_native();
@@ -2387,7 +2387,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         if ((flags & DECLFLAG_MAYBE_FUNCTION) && lexer_->match(tOPERATOR)) {
             decl->opertok = operatorname(&decl->name);
             if (decl->opertok == 0)
-                decl->name = gAtoms.add("__unknown__");
+                decl->name = cc_.atom("__unknown__");
         } else {
             if (!lexer_->peek(tSYMBOL)) {
                 extern const char* sc_tokens[];
@@ -2401,7 +2401,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                             error(143);
                         } else {
                             error(157, sc_tokens[tok_id - tFIRST]);
-                            decl->name = gAtoms.add(sc_tokens[tok_id - tFIRST]);
+                            decl->name = cc_.atom(sc_tokens[tok_id - tFIRST]);
                         }
                         break;
                     default:
@@ -2438,7 +2438,7 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
         if ((flags & DECLFLAG_MAYBE_FUNCTION) && lexer_->match(tOPERATOR)) {
             decl->opertok = operatorname(&decl->name);
             if (decl->opertok == 0)
-                decl->name = gAtoms.add("__unknown__");
+                decl->name = cc_.atom("__unknown__");
         } else {
             lexer_->needsymbol(&decl->name);
         }
@@ -2475,29 +2475,29 @@ Parser::operatorname(sp::Atom** name)
         case '=':
         {
             char str[] = {(char)opertok, '\0'};
-            *name = gAtoms.add(str);
+            *name = cc_.atom(str);
             break;
         }
         case tINC:
-            *name = gAtoms.add("++");
+            *name = cc_.atom("++");
             break;
         case tDEC:
-            *name = gAtoms.add("--");
+            *name = cc_.atom("--");
             break;
         case tlEQ:
-            *name = gAtoms.add("==");
+            *name = cc_.atom("==");
             break;
         case tlNE:
-            *name = gAtoms.add("!=");
+            *name = cc_.atom("!=");
             break;
         case tlLE:
-            *name = gAtoms.add("<=");
+            *name = cc_.atom("<=");
             break;
         case tlGE:
-            *name = gAtoms.add(">=");
+            *name = cc_.atom(">=");
             break;
         default:
-            *name = gAtoms.add("");
+            *name = cc_.atom("");
             error(7); /* operator cannot be redefined (or bad operator name) */
             return 0;
     }

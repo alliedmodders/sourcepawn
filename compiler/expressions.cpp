@@ -143,7 +143,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
         return false;
 
     // :TODO: restrict this to globals.
-    auto opername_atom = gAtoms.add(opername);
+    auto opername_atom = sc.cc().atom(opername);
     symbol* chain = FindSymbol(sc, opername_atom);
     if (!chain)
         return false;

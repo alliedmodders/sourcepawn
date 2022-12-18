@@ -574,7 +574,7 @@ ThisExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = FindSymbol(sc, gAtoms.add("this"));
+    sym_ = FindSymbol(sc, sc.cc().atom("this"));
     if (!sym_) {
         error(pos_, 166);
         return false;
@@ -878,7 +878,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
             typeinfo.is_const = true;
         }
 
-        auto decl = new VarDecl(pos_, gAtoms.add("this"), typeinfo, sARGUMENT, false,
+        auto decl = new VarDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT, false,
                                 false, false, nullptr);
         assert(args_[0] == nullptr);
         args_[0] = decl;
@@ -1130,7 +1130,7 @@ FunctionDecl::NameForOperator()
 
     std::string name =
         "operator" + get_token_string(decl_.opertok) + "(" + ke::Join(params, ",") + ")";
-    return gAtoms.add(name);
+    return CompileContext::get().atom(name);
 }
 
 bool
@@ -1270,7 +1270,7 @@ sp::Atom*
 Decl::DecorateInnerName(sp::Atom* parent_name, sp::Atom* field_name)
 {
     auto full_name = ke::StringPrintf("%s.%s", parent_name->chars(), field_name->chars());
-    return gAtoms.add(full_name);
+    return CompileContext::get().atom(full_name);
 }
 
 bool
@@ -1369,14 +1369,14 @@ MethodmapDecl::Bind(SemaContext& sc)
             method->getter->set_parent(sym_);
 
             auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name->chars());
-            method->getter->setName(gAtoms.add(name));
+            method->getter->setName(sc.cc().atom(name));
         }
         if (prop->setter && BindSetter(sc, prop)) {
             method->setter = prop->setter->sym();
             method->setter->set_parent(sym_);
 
             auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name->chars());
-            method->setter->setName(gAtoms.add(name));
+            method->setter->setName(sc.cc().atom(name));
         }
     }
 

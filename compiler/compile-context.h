@@ -26,6 +26,7 @@
 
 #include "array-data.h"
 #include "pool-allocator.h"
+#include "shared/string-pool.h"
 #include "source-file.h"
 #include "stl/stl-forward-list.h"
 #include "stl/stl-unordered-map.h"
@@ -67,6 +68,17 @@ class CompileContext final
     CompileOptions* options() const { return options_.get(); }
     SourceManager* sources() const { return sources_.get(); }
     TypeDictionary* types() const { return types_.get(); }
+    sp::StringPool* atoms() { return &atoms_; }
+
+    sp::Atom* atom(const std::string& str) {
+        return atoms_.add(str);
+    }
+    sp::Atom* atom(const char* str, size_t length) {
+        return atoms_.add(str, length);
+    }
+    sp::Atom* atom(const char* str) {
+        return atoms_.add(str);
+    }
 
     const std::string& default_include() const { return default_include_; }
     void set_default_include(const std::string& file) { default_include_ = file; }
@@ -123,6 +135,7 @@ class CompileContext final
     std::unique_ptr<SourceManager> sources_;
     std::shared_ptr<SourceFile> inpf_org_;
     std::unique_ptr<TypeDictionary> types_;
+    sp::StringPool atoms_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().

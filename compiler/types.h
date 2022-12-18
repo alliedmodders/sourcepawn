@@ -314,7 +314,7 @@ class Type : public PoolObject
 class TypeDictionary
 {
   public:
-    TypeDictionary();
+    explicit TypeDictionary(CompileContext& cc);
 
     Type* find(int tag);
     Type* find(sp::Atom* name);
@@ -357,6 +357,7 @@ class TypeDictionary
     Type* findOrAdd(const char* name);
 
   private:
+    CompileContext& cc_;
     tr::vector<Type*> types_;
     int tag_nullfunc_ = -1;
     int tag_object_ = -1;

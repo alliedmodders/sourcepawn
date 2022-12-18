@@ -98,7 +98,7 @@ funcenum_for_symbol(CompileContext& cc, symbol* sym)
     new (&ft->args) PoolArray<funcarg_t>(args);
 
     auto name = ke::StringPrintf("::ft:%s:%d:%d", sym->name(), sym->addr(), sym->codeaddr);
-    funcenum_t* fe = funcenums_add(cc, gAtoms.add(name));
+    funcenum_t* fe = funcenums_add(cc, cc.atom(name));
     new (&fe->entries) PoolArray<functag_t*>({ft});
 
     return fe;
