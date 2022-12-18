@@ -55,7 +55,6 @@ enum class TypeKind : uint8_t {
     Enum,
 };
 
-struct pstruct_t;
 struct funcenum_t;
 struct methodmap_t;
 struct symbol;
@@ -175,15 +174,30 @@ struct functag_t : public PoolObject
     PoolArray<funcarg_t> args;
 };
 
+struct structarg_t : public PoolObject
+{
+    structarg_t()
+      : type(),
+        name(nullptr),
+        offs(0),
+        index(0)
+    {}
+
+    typeinfo_t type;
+    sp::Atom* name;
+    unsigned int offs;
+    int index;
+};
+
 class Type : public PoolObject
 {
     friend class TypeDictionary;
 
   public:
-    Type(sp::Atom* name, TypeKind kind, cell value);
+    Type(sp::Atom* name, TypeKind kind);
 
-    const char* name() const {
-        return name_->chars();
+    sp::Atom* name() const {
+        return name_;
     }
     sp::Atom* nameAtom() const { return name_; }
     TypeKind kind() const { return kind_; }
@@ -197,13 +211,18 @@ class Type : public PoolObject
         return fixed_;
     }
 
+    template <class T> T* as() {
+        if (T::is_a(this))
+            return reinterpret_cast<T*>(this);
+        return nullptr;
+    }
+    template <class T> T* to() {
+        assert(T::is_a(this));
+        return reinterpret_cast<T*>(this);
+    }
+
     bool isStruct() const {
         return kind_ == TypeKind::Struct;
-    }
-    pstruct_t* asStruct() const {
-        if (!isStruct())
-            return nullptr;
-        return pstruct_ptr_;
     }
 
     void setMethodmap(methodmap_t* map) {
@@ -268,14 +287,12 @@ class Type : public PoolObject
         assert(kind_ == TypeKind::EnumStruct);
         enumstruct_ptr_ = sym;
     }
-    void setStruct(pstruct_t* ptr) {
-        setFixed();
-        assert(kind_ == TypeKind::Struct);
-        pstruct_ptr_ = ptr;
-    }
     void setFixed() {
         // This is separate from "kind_" because it persists across passes.
         fixed_ = true;
+    }
+    void set_tag(int tagid) {
+        value_ = tagid;
     }
 
     void resetPtr();
@@ -289,13 +306,27 @@ class Type : public PoolObject
     // underlying structures are reparsed.
     TypeKind kind_;
     union {
-        pstruct_t* pstruct_ptr_;
         funcenum_t* funcenum_ptr_;
         methodmap_t* methodmap_ptr_;
         symbol* enumstruct_ptr_;
         void* private_ptr_;
     };
 };
+
+class pstruct_t : public Type
+{
+  public:
+    explicit pstruct_t(sp::Atom* name)
+      : Type(name, TypeKind::Struct)
+    {}
+
+    const structarg_t* GetArg(sp::Atom* name) const;
+
+    static bool is_a(Type* type) { return type->kind() == TypeKind::Struct; }
+
+    PoolArray<structarg_t*> args;
+};
+
 
 class TypeDictionary
 {
@@ -320,7 +351,7 @@ class TypeDictionary
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(const char* name, symbol* sym);
     Type* defineTag(sp::Atom* atom);
-    Type* definePStruct(const char* name, pstruct_t* ps);
+    pstruct_t* definePStruct(sp::Atom* name);
 
     template <typename T>
     void forEachType(const T& callback) {
@@ -351,6 +382,7 @@ class TypeDictionary
   private:
     Type* add(const char* name, TypeKind kind);
     Type* add(sp::Atom* name, TypeKind kind);
+    void RegisterType(Type* type);
 
   private:
     CompileContext& cc_;

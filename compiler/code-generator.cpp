@@ -445,7 +445,7 @@ CodeGenerator::EmitPstruct(VarDecl* decl)
 
     symbol* sym = decl->sym();
     auto type = cc_.types()->find(sym->tag);
-    auto ps = type->asStruct();
+    auto ps = type->as<pstruct_t>();
 
     std::vector<cell> values;
     values.resize(ps->args.size());
@@ -454,7 +454,7 @@ CodeGenerator::EmitPstruct(VarDecl* decl)
 
     auto init = decl->init_rhs()->as<StructExpr>();
     for (const auto& field : init->fields()) {
-        auto arg = pstructs_getarg(ps, field->name);
+        auto arg = ps->GetArg(field->name);
         if (auto expr = field->value->as<StringExpr>()) {
             values[arg->index] = data_.dat_address();
             data_.Add(expr->text()->chars(), expr->text()->length());

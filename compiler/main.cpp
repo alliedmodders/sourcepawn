@@ -243,7 +243,6 @@ cleanup:
     }
 
     funcenums_free();
-    pstructs_free();
 
     int retcode;
     if (!compile_ok) {

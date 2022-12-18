@@ -34,9 +34,9 @@
 
 using namespace ke;
 
-Type::Type(sp::Atom* name, TypeKind kind, cell value)
+Type::Type(sp::Atom* name, TypeKind kind)
  : name_(name),
-   value_(value),
+   value_(0),
    fixed_(0),
    kind_(kind)
 {
@@ -50,7 +50,7 @@ Type::prettyName() const
     return kindName();
   if (tagid() == 0)
     return "int";
-  return name();
+  return name()->chars();
 }
 
 const char*
@@ -103,13 +103,18 @@ Type* TypeDictionary::add(const char* name, TypeKind kind) {
 }
 
 Type* TypeDictionary::add(sp::Atom* name, TypeKind kind) {
-    assert(find(name) == nullptr);
+    Type* type = new Type(name, kind);
+    RegisterType(type);
+    return type;
+}
+
+void TypeDictionary::RegisterType(Type* type) {
+    assert(types_.find(type->name()) == types_.end());
 
     int tag = int(types_.size());
-    Type* type = new Type(name, kind, tag);
-    types_[name] = type;
-    tags_[tag] = type;
-    return type;
+    type->set_tag(tag);
+    types_.emplace(type->name(), type);
+    tags_.emplace(tag, type);
 }
 
 void
@@ -219,11 +224,11 @@ TypeDictionary::defineTag(sp::Atom* name) {
     return type;
 }
 
-Type*
-TypeDictionary::definePStruct(const char* name, pstruct_t* ps)
-{
-    Type* type = add(name, TypeKind::Struct);
-    type->setStruct(ps);
+pstruct_t* TypeDictionary::definePStruct(sp::Atom* name) {
+    assert(find(name) == nullptr);
+
+    pstruct_t* type = new pstruct_t(name);
+    RegisterType(type);
     return type;
 }
 
@@ -232,7 +237,7 @@ pc_tagname(int tag)
 {
     auto types = CompileContext::get().types();
     if (Type* type = types->find(tag))
-        return type->name();
+        return type->name()->chars();
     return "__unknown__";
 }
 
@@ -242,3 +247,12 @@ typeinfo_t::isCharArray() const
     auto types = CompileContext::get().types();
     return numdim() == 1 && tag() == types->tag_string();
 }
+
+const structarg_t* pstruct_t::GetArg(sp::Atom* name) const {
+    for (const auto& arg : args) {
+        if (arg->name == name)
+            return arg;
+    }
+    return nullptr;
+}
+

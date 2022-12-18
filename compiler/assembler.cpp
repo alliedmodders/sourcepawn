@@ -503,12 +503,12 @@ RttiBuilder::add_struct(Type* type)
     uint32_t struct_index = classdefs_->count();
     typeid_cache_.add(p, type, struct_index);
 
-    pstruct_t* ps = type->asStruct();
+    pstruct_t* ps = type->as<pstruct_t>();
 
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
     classdef.flags = kClassDefType_Struct;
-    classdef.name = names_->add(*cc_.atoms(), ps->name->chars());
+    classdef.name = names_->add(*cc_.atoms(), ps->name());
     classdef.first_field = fields_->count();
     classdefs_->add(classdef);
 

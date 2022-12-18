@@ -286,12 +286,11 @@ PstructDecl::EnterNames(SemaContext& sc)
         return false;
     }
 
-    ps_ = pstructs_add(name_);
-    sc.cc().types()->definePStruct(ps_->name->chars(), ps_);
+    ps_ = sc.cc().types()->definePStruct(name_);
 
     std::vector<structarg_t*> args;
     for (auto& field : fields_) {
-        if (pstructs_getarg(ps_, field.name)) {
+        if (ps_->GetArg(field.name)) {
             report(field.pos, 103) << field.name << "internal struct";
             return false;
         }
@@ -987,7 +986,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
         Type* type = sc.cc().types()->find(typeinfo.semantic_tag());
         if (type->isEnumStruct()) {
             if (sym_->native)
-                error(var->pos(), 135, type->name());
+                report(var->pos(), 135) << type->name();
         }
 
         /* Stack layout:
@@ -1102,7 +1101,7 @@ FunctionDecl::NameForOperator()
         count++;
 
         auto type = CompileContext::get().types()->find(var->type().tag());
-        params.emplace_back(type->name());
+        params.emplace_back(type->name()->str());
     }
 
     /* for '!', '++' and '--', count must be 1
