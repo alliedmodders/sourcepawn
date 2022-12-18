@@ -205,7 +205,10 @@ checktag_string(int tag, const value* sym1)
 {
     if (sym1->ident == iARRAY || sym1->ident == iREFARRAY)
         return FALSE;
-    if ((sym1->tag == pc_tag_string && tag == 0) || (sym1->tag == 0 && tag == pc_tag_string)) {
+
+    auto types = CompileContext::get().types();
+    if ((sym1->tag == types->tag_string() && tag == 0) ||
+        (sym1->tag == 0 && tag == types->tag_string())) {
         return TRUE;
     }
     return FALSE;
@@ -219,8 +222,10 @@ checkval_string(const value* sym1, const value* sym2)
     {
         return FALSE;
     }
-    if ((sym1->tag == pc_tag_string && sym2->tag == 0) ||
-        (sym1->tag == 0 && sym2->tag == pc_tag_string))
+
+    auto types = CompileContext::get().types();
+    if ((sym1->tag == types->tag_string() && sym2->tag == 0) ||
+        (sym1->tag == 0 && sym2->tag == types->tag_string()))
     {
         return TRUE;
     }
@@ -236,7 +241,7 @@ type_to_name(int tag)
         return "int";
     if (tag == types->tag_float())
         return "float";
-    if (tag == pc_tag_string)
+    if (tag == types->tag_string())
         return "char";
     if (tag == types->tag_any())
         return "any";
@@ -250,9 +255,10 @@ type_to_name(int tag)
 int
 matchtag_string(int ident, int tag)
 {
+    auto types = CompileContext::get().types();
     if (ident == iARRAY || ident == iREFARRAY)
         return FALSE;
-    return (tag == pc_tag_string) ? TRUE : FALSE;
+    return (tag == types->tag_string()) ? TRUE : FALSE;
 }
 
 static int
@@ -350,8 +356,8 @@ IsValidImplicitArrayCast(int formal_tag, int actual_tag)
     // Dumb check for now. This should really do a deep type validation though.
     // Fix this when we overhaul types in 1.12.
     auto types = CompileContext::get().types();
-    if ((formal_tag == types->tag_any() && actual_tag != pc_tag_string) ||
-        (actual_tag == types->tag_any() && formal_tag != pc_tag_string))
+    if ((formal_tag == types->tag_any() && actual_tag != types->tag_string()) ||
+        (actual_tag == types->tag_any() && formal_tag != types->tag_string()))
     {
         return true;
     }
@@ -465,7 +471,7 @@ matchtag(int formaltag, int actualtag, int flags)
     Type* formal = types->find(formaltag);
     assert(actual && formal);
 
-    if (formaltag == pc_tag_string && actualtag == 0)
+    if (formaltag == types->tag_string() && actualtag == 0)
         return TRUE;
 
     if (formal->isObject() || actual->isObject())
@@ -589,7 +595,7 @@ bool
 is_valid_index_tag(int tag)
 {
     auto types = CompileContext::get().types();
-    if (tag == 0 || tag == types->tag_any() || tag == pc_tag_string)
+    if (tag == 0 || tag == types->tag_any() || tag == types->tag_string())
         return true;
 
     Type* idx_type = types->find(tag);

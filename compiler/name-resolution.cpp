@@ -1215,7 +1215,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
         cell size = 1;
         if (field.decl.type.numdim()) {
-            size = field.decl.type.tag() == pc_tag_string
+            size = field.decl.type.tag() == sc.cc().types()->tag_string()
                    ? char_array_cells(field.decl.type.dim[0])
                    : field.decl.type.dim[0];
         }

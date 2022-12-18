@@ -28,5 +28,3 @@
 
 #include "sc.h"
 #include "source-file.h"
-
-extern int pc_tag_string;         /* global String tag */

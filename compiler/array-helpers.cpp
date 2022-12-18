@@ -471,6 +471,8 @@ FixedArrayValidator::Validate()
 cell
 CalcArraySize(symbol* sym)
 {
+    auto types = CompileContext::get().types();
+
     cell size = 0;
     cell last_size = 1;
     symbol* iter = sym;
@@ -478,7 +480,7 @@ CalcArraySize(symbol* sym)
         cell length = iter->dim.array.length;
         assert(length);
 
-        if (!iter->dim.array.level && sym->tag == pc_tag_string)
+        if (!iter->dim.array.level && sym->tag == types->tag_string())
             length = char_array_cells(length);
 
         last_size *= length;
@@ -575,8 +577,8 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     }
 
     if (StringExpr* str = init->as<StringExpr>()) {
-        if (type_.tag() != pc_tag_string) {
-            error(init->pos(), 134, types_->find(pc_tag_string)->prettyName(),
+        if (type_.tag() != types_->tag_string()) {
+            error(init->pos(), 134, types_->find(types_->tag_string())->prettyName(),
                   types_->find(type_.tag())->prettyName());
             return false;
         }
@@ -592,7 +594,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         return true;
     }
 
-    cell rank_size = (type_.tag() == pc_tag_string && type_.dim[rank])
+    cell rank_size = (type_.tag() == types_->tag_string() && type_.dim[rank])
                      ? char_array_cells(type_.dim[rank])
                      : type_.dim[rank];
 
@@ -1028,7 +1030,7 @@ ArrayEmitter::EmitPadding(size_t rank_size, int tag, size_t emitted, bool ellips
                           const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2)
 {
     // Pad remainder to zeroes if the array was explicitly sized.
-    if (tag == pc_tag_string)
+    if (tag == CompileContext::get().types()->tag_string())
         rank_size = char_array_cells(rank_size);
 
     if (rank_size > emitted) {

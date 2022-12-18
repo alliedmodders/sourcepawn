@@ -180,7 +180,7 @@ TypeDictionary::init()
     tag_bool_ = type->tagid();
     tag_any_ = defineAny()->tagid();
     tag_function_ = defineFunction("Function", nullptr)->tagid();
-    pc_tag_string = defineString()->tagid();
+    tag_string_ = defineString()->tagid();
     tag_float_ = defineFloat()->tagid();
     tag_void_ = defineVoid()->tagid();
     tag_object_ = defineObject("object")->tagid();
@@ -298,5 +298,6 @@ pc_tagname(int tag)
 bool
 typeinfo_t::isCharArray() const
 {
-    return numdim() == 1 && tag() == pc_tag_string;
+    auto types = CompileContext::get().types();
+    return numdim() == 1 && tag() == types->tag_string();
 }

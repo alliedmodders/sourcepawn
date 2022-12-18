@@ -217,7 +217,7 @@ bool Semantics::CheckPstructDecl(VarDecl* decl) {
         if (visited[i])
             continue;
         if (ps->args[i]->type.ident == iREFARRAY) {
-            assert(ps->args[i]->type.tag() == pc_tag_string);
+            assert(ps->args[i]->type.tag() == types_->tag_string());
 
             auto expr = new StringExpr(decl->pos(), "", 0);
             init->fields().push_back(new StructInitFieldExpr(ps->args[i]->name, expr,
@@ -247,8 +247,8 @@ bool Semantics::CheckPstructArg(VarDecl* decl, const pstruct_t* ps,
             error(expr->pos(), 48);
             return false;
         }
-        if (arg->type.tag() != pc_tag_string)
-            error(expr->pos(), 213, type_to_name(pc_tag_string), type_to_name(arg->type.tag()));
+        if (arg->type.tag() != types_->tag_string())
+            error(expr->pos(), 213, type_to_name(types_->tag_string()), type_to_name(arg->type.tag()));
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
@@ -925,7 +925,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         }
 
         expr->set_array_copy_length(right_length);
-        if (left_val.sym->tag == pc_tag_string)
+        if (left_val.sym->tag == types_->tag_string())
             expr->set_array_copy_length(char_array_cells(expr->array_copy_length()));
     } else {
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
@@ -942,8 +942,8 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         !expr->assignop().sym)
     {
         if (leftarray &&
-            ((left_val.tag == pc_tag_string && right_val.tag != pc_tag_string) ||
-             (left_val.tag != pc_tag_string && right_val.tag == pc_tag_string)))
+            ((left_val.tag == types_->tag_string() && right_val.tag != types_->tag_string()) ||
+             (left_val.tag != types_->tag_string() && right_val.tag == types_->tag_string())))
         {
             report(expr, 179) << type_to_name(left_val.tag) << type_to_name(right_val.tag);
             return false;
@@ -1486,7 +1486,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     out_val = base_val;
 
     if (index_val.ident == iCONSTEXPR) {
-        if (!(base_val.sym->tag == pc_tag_string && base_val.sym->dim.array.level == 0)) {
+        if (!(base_val.sym->tag == types_->tag_string() && base_val.sym->dim.array.level == 0)) {
             /* normal array index */
             if (index_val.constval < 0 ||
                 (base_val.sym->dim.array.length != 0 &&
@@ -1522,7 +1522,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     /* set type to fetch... INDIRECTLY */
-    if (base_val.sym->tag == pc_tag_string)
+    if (base_val.sym->tag == types_->tag_string())
         out_val.ident = iARRAYCHAR;
     else
         out_val.ident = iARRAYCELL;
@@ -1573,7 +1573,7 @@ bool Semantics::CheckStringExpr(StringExpr* expr) {
     auto& val = expr->val();
     val.ident = iARRAY;
     val.constval = -((cell)expr->text()->length() + 1);
-    val.tag = pc_tag_string;
+    val.tag = types_->tag_string();
     return true;
 }
 
@@ -1831,7 +1831,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
         child->ident = iREFARRAY;
         val.constval = field->dim.array.length;
     } else {
-        child->ident = (tag == pc_tag_string) ? iARRAYCHAR : iARRAYCELL;
+        child->ident = (tag == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
         val.constval = 0;
         expr->set_lvalue(true);
     }
@@ -2310,8 +2310,8 @@ bool Semantics::CheckArgument(CallExpr* call, arginfo* arg, Expr* param,
             }
 
             checktag(arg->type.tag(), val->tag);
-            if ((arg->type.tag() != pc_tag_string && val->tag == pc_tag_string) ||
-                (arg->type.tag() == pc_tag_string && val->tag != pc_tag_string))
+            if ((arg->type.tag() != types_->tag_string() && val->tag == types_->tag_string()) ||
+                (arg->type.tag() == types_->tag_string() && val->tag != types_->tag_string()))
             {
                 report(param, 178) << type_to_name(val->tag) << type_to_name(arg->type.tag());
                 return false;

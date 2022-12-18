@@ -1110,7 +1110,8 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
     symbol* sym = expr->base()->val().sym;
     assert(sym);
 
-    bool magic_string = (sym->tag == pc_tag_string && sym->dim.array.level == 0);
+    auto types = cc_.types();
+    bool magic_string = (sym->tag == types->tag_string() && sym->dim.array.level == 0);
 
     const auto& idxval = expr->index()->val();
     if (idxval.ident == iCONSTEXPR) {
@@ -1292,13 +1293,15 @@ CodeGenerator::EmitCallUserOpExpr(CallUserOpExpr* expr)
 void
 CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr)
 {
+    auto types = cc_.types();
+
     int numdim = 0;
     auto& exprs = expr->exprs();
     const auto& type = expr->type();
     for (size_t i = 0; i < exprs.size(); i++) {
         EmitExpr(exprs[i]);
 
-        if (i == exprs.size() - 1 && type.tag() == pc_tag_string)
+        if (i == exprs.size() - 1 && type.tag() == types->tag_string())
             __ emit(OP_STRADJUST_PRI);
 
         __ emit(OP_PUSH_PRI);
@@ -1353,8 +1356,9 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
         // A much simpler copy can be emitted.
         __ load_hidden_arg(func_, sub, true);
 
+        auto types = cc_.types();
         cell size = sub->dim.array.length;
-        if (sub->tag == pc_tag_string)
+        if (sub->tag == types->tag_string())
             size = char_array_cells(size);
 
         __ emit(OP_MOVS, size * sizeof(cell));
