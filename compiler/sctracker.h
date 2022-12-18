@@ -116,6 +116,5 @@ functag_t* functag_from_tag(int tag);
 methodmap_t* methodmap_add(CompileContext& cc, methodmap_t* parent, sp::Atom* name);
 methodmap_t* methodmap_find_by_name(sp::Atom* name);
 methodmap_method_t* methodmap_find_method(methodmap_t* map, sp::Atom* name);
-void methodmaps_free();
 
 #endif //_INCLUDE_SOURCEPAWN_COMPILER_TRACKER_H_
