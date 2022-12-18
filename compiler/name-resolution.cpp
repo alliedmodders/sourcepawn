@@ -456,9 +456,7 @@ ConstDecl::Bind(SemaContext& sc)
     return true;
 }
 
-bool
-VarDecl::Bind(SemaContext& sc)
-{
+bool VarDecl::Bind(SemaContext& sc) {
     if (!sc.BindType(pos(), &type_))
         return false;
 
@@ -495,7 +493,7 @@ VarDecl::Bind(SemaContext& sc)
     } else {
         int ident = type_.ident;
         if (vclass_ == sARGUMENT && ident == iARRAY)
-            ident = iREFARRAY;
+            type_.ident = ident = iREFARRAY;
 
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
         sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag(), dim,
@@ -786,9 +784,11 @@ FunctionDecl::EnterNames(SemaContext& sc)
         DefineSymbol(sc, sym);
     }
 
-    if (body())
+    // Prioritize the implementation as the canonical signature.
+    if (!sym->function()->node || body_)
         sym->function()->node = this;
-    else if (is_forward())
+
+    if (is_forward())
         sym->function()->forward = this;
 
     sym_ = sym;
@@ -812,7 +812,7 @@ FunctionDecl::CanRedefine(symbol* sym)
             return true;
         }
 
-        if (data->node) {
+        if (data->node && data->node != data->forward) {
             report(pos_, 21) << name_;
             return false;
         }
@@ -846,7 +846,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
         sym_ = new symbol(decl_.name, 0, iFUNCTN, sGLOBAL, 0);
 
     // This may not be set if EnterNames wasn't called (eg not a global).
-    if (body_ && !sym_->function()->node)
+    if (!sym_->function()->node || body_)
         sym_->function()->node = this;
 
     // The forward's prototype is canonical. If this symbol has a forward, we
@@ -879,7 +879,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
             typeinfo.is_const = true;
         }
 
-        auto decl = new VarDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT, false,
+        auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT, false,
                                 false, false, nullptr);
         assert(args_[0] == nullptr);
         args_[0] = decl;
@@ -966,9 +966,9 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 bool
 FunctionDecl::BindArgs(SemaContext& sc)
 {
-    std::vector<arginfo> arglist;
-
     AutoCountErrors errors;
+
+    size_t arg_index = 0;
     for (const auto& var : args_) {
         const auto& typeinfo = var->type();
         symbol* argsym = var->sym();
@@ -977,9 +977,6 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         if (typeinfo.ident == iVARARGS) {
             /* redimension the argument list, add the entry iVARARGS */
-            arglist.emplace_back();
-            arglist.back().type.ident = iVARARGS;
-            arglist.back().type.set_tag(typeinfo.tag());
             continue;
         }
 
@@ -998,25 +995,17 @@ FunctionDecl::BindArgs(SemaContext& sc)
          *
          * Since arglist has an empty terminator at the end, we actually add 2.
          */
-        argsym->setAddr(static_cast<cell>((arglist.size() + 3) * sizeof(cell)));
-
-        arglist.emplace_back();
-        arginfo& arg = arglist.back();
-        arg.name = var->name();
-        arg.type.ident = argsym->ident;
-        arg.type.is_const = argsym->is_const;
-        arg.type.set_tag(argsym->tag);
-        arg.type.dim = typeinfo.dim;
-        arg.type.declared_tag = typeinfo.enum_struct_tag();
+        argsym->setAddr(static_cast<cell>((arg_index + 3) * sizeof(cell)));
+        arg_index++;
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
-                fill_arg_defvalue(sc.cc(), var, &arg);
+                fill_arg_defvalue(sc.cc(), var);
         } else {
             Expr* init = var->init_rhs();
             if (init && sc.sema()->CheckExpr(init)) {
                 assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
-                arg.def = new DefaultArg();
+                var->set_default_value(new DefaultArg());
 
                 int tag;
                 cell val;
@@ -1027,30 +1016,27 @@ FunctionDecl::BindArgs(SemaContext& sc)
                     val = 0;
                     tag = typeinfo.tag();
                 }
-                arg.def->tag = tag;
-                arg.def->val = ke::Some(val);
+                var->default_value()->tag = tag;
+                var->default_value()->val = ke::Some(val);
 
-                matchtag(arg.type.tag(), arg.def->tag, MATCHTAG_COERCE);
+                matchtag(var->type().tag(), tag, MATCHTAG_COERCE);
             }
         }
 
-        if (arg.type.ident == iREFERENCE)
+        if (var->type().ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
         if (sym_->callback || sym_->stock || sym_->is_public)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
 
         /* arguments of a public function may not have a default value */
-        if (sym_->is_public && arg.def)
-            error(var->pos(), 59, var->name()->chars());
+        if (sym_->is_public && var->default_value())
+            report(var->pos(), 59) << var->name();
     }
 
-    // Now, see if the function already had an argument list.
-    auto& prev_args = sym_->function()->args;
-    if (prev_args.empty()) {
-        // No, replace it with the new list.
-        new (&sym_->function()->args) PoolArray<arginfo>(std::move(arglist));
+    auto forward = sym_->function()->forward;
+    auto impl = sym_->function()->node;
+    if (!(forward && impl))
         return errors.ok();
-    }
 
     // If we get here, we're a public and forward pair, and we need to compare
     // to make sure the argument lists are compatible.
@@ -1058,29 +1044,27 @@ FunctionDecl::BindArgs(SemaContext& sc)
     assert(sym_->function()->node);
     token_pos_t error_pos = sym_->function()->node->pos();
 
-    size_t fwd_argc = prev_args.size();
-    size_t impl_argc = arglist.size();
-    if (is_forward_)
-        std::swap(fwd_argc, impl_argc);
+    size_t fwd_argc = forward->args().size();
+    size_t impl_argc = impl->args().size();
 
     // We allow forwards to omit arguments in their signature, so this is not
     // a straight-up equality test.
-    if (impl_argc > fwd_argc) {
+    if (this == impl && impl_argc > fwd_argc) {
         report(error_pos, 25);
         return false;
     }
 
-    for (size_t i = 0; i < impl_argc; i++) {
-        if (!argcompare(&arglist[i], &prev_args[i]))
-            report(error_pos, 181) << arglist[i].name;
+    if (!sym_->function()->checked_one_signature) {
+        sym_->function()->checked_one_signature = true;
+        return errors.ok();
     }
-
-    // No matter what, always replace the canonical argument list with the
-    // implementation's. This is so names will bind correctly in CallExpr,
-    // though we should really kill off arglist entirely and use VarDecls.
-    if (is_public_)
-        new (&sym_->function()->args) PoolArray<arginfo>(std::move(arglist));
-
+    if (!sym_->function()->compared_prototype_args) {
+        for (size_t i = 0; i < impl_argc; i++) {
+            if (!argcompare(impl->args()[i], forward->args()[i]))
+                report(error_pos, 181) << impl->args()[i]->name();
+        }
+        sym_->function()->compared_prototype_args = true;
+    }
     return errors.ok();
 }
 

@@ -1812,7 +1812,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
         return false;
     }
 
-    std::vector<VarDecl*> args;
+    std::vector<ArgDecl*> args;
 
     // Reserve space for |this|.
     if (has_this)
@@ -1821,7 +1821,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     parse_args(fun, &args); // eats the close paren
 
     // Copy arguments.
-    new (&fun->args()) PoolArray<VarDecl*>(args);
+    new (&fun->args()) PoolArray<ArgDecl*>(args);
 
     if (fun->is_native()) {
         if (fun->decl().opertok != 0) {
@@ -1868,7 +1868,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
 }
 
 void
-Parser::parse_args(FunctionDecl* fun, std::vector<VarDecl*>* args)
+Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
 {
     if (lexer_->match(')'))
         return;
@@ -1884,7 +1884,7 @@ Parser::parse_args(FunctionDecl* fun, std::vector<VarDecl*>* args)
             if (fun->IsVariadic())
                 error(401);
 
-            auto p = new VarDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, false, false,
+            auto p = new ArgDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, false, false,
                                  false, nullptr);
             args->emplace_back(p);
             continue;
@@ -1902,7 +1902,7 @@ Parser::parse_args(FunctionDecl* fun, std::vector<VarDecl*>* args)
         if (decl.name->chars()[0] == PUBLIC_CHAR)
             report(56) << decl.name; // function arguments cannot be public
 
-        auto p = new VarDecl(pos, decl.name, decl.type, sARGUMENT, false, false,
+        auto p = new ArgDecl(pos, decl.name, decl.type, sARGUMENT, false, false,
                              false, init);
         args->emplace_back(p);
     } while (lexer_->match(','));

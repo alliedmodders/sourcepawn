@@ -339,6 +339,23 @@ class VarDecl : public Decl
     symbol* sym_ = nullptr;
 };
 
+class ArgDecl : public VarDecl
+{
+  public:
+    ArgDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+            bool is_public, bool is_static, bool is_stock, Expr* initializer)
+      : VarDecl(pos, name, type, vclass, is_public, is_static, is_stock, initializer)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::ArgDecl; }
+
+    DefaultArg* default_value() const { return default_value_; }
+    void set_default_value(DefaultArg* arg) { default_value_ = arg; }
+
+  private:
+    DefaultArg* default_value_ = nullptr;
+};
+
 class ConstDecl : public VarDecl
 {
   public:
@@ -905,7 +922,7 @@ class CallExpr final : public Expr
     void set_sym(symbol* sym) { sym_ = sym; }
 
   private:
-    bool ProcessArg(SemaContext& sc, arginfo* arg, Expr* param, unsigned int pos);
+    bool ProcessArg(SemaContext& sc, VarDecl* arg, Expr* param, unsigned int pos);
 
     int token_;
     Expr* target_;
@@ -947,18 +964,18 @@ class CallUserOpExpr final : public EmitOnlyExpr
 class DefaultArgExpr final : public Expr
 {
   public:
-    DefaultArgExpr(const token_pos_t& pos, arginfo* arg);
+    DefaultArgExpr(const token_pos_t& pos, ArgDecl* arg);
 
     bool Bind(SemaContext& sc) override { return true; }
     void ProcessUses(SemaContext& sc) override {}
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::DefaultArgExpr; }
 
-    arginfo* arg() { return arg_; }
-    void set_arg(arginfo* arg) { arg_ = arg; }
+    ArgDecl* arg() { return arg_; }
+    void set_arg(ArgDecl* arg) { arg_ = arg; }
 
   private:
-    arginfo* arg_;
+    ArgDecl* arg_;
 };
 
 class FieldAccessExpr final : public Expr
@@ -1521,6 +1538,7 @@ class FunctionDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::FunctionDecl; }
 
     bool IsVariadic() const;
+    int FindNamedArg(sp::Atom* name) const;
 
     const token_pos_t& end_pos() const { return end_pos_; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
@@ -1556,7 +1574,7 @@ class FunctionDecl : public Decl
     void set_is_static() { is_static_ = true; }
     bool is_static() const { return is_static_; }
 
-    PoolArray<VarDecl*>& args() { return args_; }
+    PoolArray<ArgDecl*>& args() { return args_; }
     const token_pos_t& pos() const { return pos_; }
 
     declinfo_t& decl() { return decl_; }
@@ -1595,7 +1613,7 @@ class FunctionDecl : public Decl
     token_pos_t end_pos_;
     declinfo_t decl_;
     Stmt* body_ = nullptr;
-    PoolArray<VarDecl*> args_;
+    PoolArray<ArgDecl*> args_;
     symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;

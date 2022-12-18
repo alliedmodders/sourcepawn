@@ -26,6 +26,7 @@
     FOR_EACH(ContinueStmt) \
     FOR_EACH(StaticAssertStmt) \
     FOR_EACH(VarDecl) \
+    FOR_EACH(ArgDecl) \
     FOR_EACH(EnumDecl) \
     FOR_EACH(PstructDecl) \
     FOR_EACH(TypedefDecl) \

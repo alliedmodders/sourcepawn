@@ -94,7 +94,9 @@ markusage(symbol* sym, int usage)
 FunctionData::FunctionData()
  : node(nullptr),
    forward(nullptr),
-   alias(nullptr)
+   alias(nullptr),
+   checked_one_signature(false),
+   compared_prototype_args(false)
 {
 }
 
@@ -185,8 +187,8 @@ bool
 symbol::is_variadic() const
 {
     assert(ident == iFUNCTN);
-    const auto& args = function()->args;
-    return !args.empty() && args.back().type.ident == iVARARGS;
+    const auto& args = function()->node->args();
+    return !args.empty() && args.back()->type().ident == iVARARGS;
 }
 
 symbol*
@@ -217,14 +219,6 @@ NewVariable(sp::Atom* name, cell addr, int ident, int vclass, int tag, int dim[]
         sym = new symbol(name, addr, ident, vclass, tag);
     }
     return sym;
-}
-
-int findnamedarg(const PoolArray<arginfo>& args, sp::Atom* name) {
-    for (int i = 0; i < args.size() && args[i].type.ident != iVARARGS; i++) {
-        if (args[i].name == name)
-            return (int)i;
-    }
-    return -1;
 }
 
 symbol*
