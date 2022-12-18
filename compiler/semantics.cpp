@@ -2820,7 +2820,7 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     }
 
     if (!map || !map->dtor) {
-        report(expr, 115) << layout_spec_name(map->spec) << map->name;
+        report(expr, 115) << "methodmap" << map->name;
         return false;
     }
 

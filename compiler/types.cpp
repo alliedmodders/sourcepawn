@@ -34,11 +34,11 @@
 
 using namespace ke;
 
-Type::Type(sp::Atom* name, cell value)
+Type::Type(sp::Atom* name, TypeKind kind, cell value)
  : name_(name),
    value_(value),
    fixed_(0),
-   kind_(TypeKind::None)
+   kind_(kind)
 {
     private_ptr_ = nullptr;
 }
@@ -103,17 +103,15 @@ TypeDictionary::find(int tag)
     return types_[tag];
 }
 
-Type*
-TypeDictionary::findOrAdd(const char* name)
-{
-    sp::Atom* atom = cc_.atom(name);
-    for (const auto& type : types_) {
-        if (type->nameAtom() == atom)
-            return type;
-    }
+Type* TypeDictionary::add(const char* name, TypeKind kind) {
+    return add(cc_.atom(name), kind);
+}
+
+Type* TypeDictionary::add(sp::Atom* name, TypeKind kind) {
+    assert(find(name) == nullptr);
 
     int tag = int(types_.size());
-    Type* type = new Type(atom, tag);
+    Type* type = new Type(name, kind, tag);
     types_.push_back(type);
     return types_.back();
 }
@@ -121,10 +119,10 @@ TypeDictionary::findOrAdd(const char* name)
 void
 TypeDictionary::init()
 {
-    type_int_ = findOrAdd("_");
+    type_int_ = add("_", TypeKind::Int);
     type_bool_ = defineBool();
     type_any_ = defineAny();
-    type_function_ = defineFunction("Function", nullptr);
+    type_function_ = defineFunction(cc_.atom("Function"), nullptr);
     type_string_ = defineString();
     type_float_ = defineFloat();
     type_void_ = defineVoid();
@@ -136,13 +134,11 @@ TypeDictionary::init()
 Type*
 TypeDictionary::defineAny()
 {
-    return findOrAdd("any");
+    return add("any", TypeKind::Any);
 }
 
-Type*
-TypeDictionary::defineFunction(const char* name, funcenum_t* fe)
-{
-    Type* type = findOrAdd(name);
+Type* TypeDictionary::defineFunction(sp::Atom* name, funcenum_t* fe) {
+    Type* type = add(name, TypeKind::Function);
     type->setFunction(fe);
     return type;
 }
@@ -150,7 +146,7 @@ TypeDictionary::defineFunction(const char* name, funcenum_t* fe)
 Type*
 TypeDictionary::defineString()
 {
-    Type* type = findOrAdd("String");
+    Type* type = add("String", TypeKind::String);
     type->setFixed();
     return type;
 }
@@ -158,7 +154,7 @@ TypeDictionary::defineString()
 Type*
 TypeDictionary::defineFloat()
 {
-    Type* type = findOrAdd("Float");
+    Type* type = add("Float", TypeKind::Float);
     type->setFixed();
     return type;
 }
@@ -166,7 +162,7 @@ TypeDictionary::defineFloat()
 Type*
 TypeDictionary::defineVoid()
 {
-    Type* type = findOrAdd("void");
+    Type* type = add("void", TypeKind::Void);
     type->setFixed();
     return type;
 }
@@ -174,7 +170,7 @@ TypeDictionary::defineVoid()
 Type*
 TypeDictionary::defineObject(const char* name)
 {
-    Type* type = findOrAdd(name);
+    Type* type = add(name, TypeKind::Object);
     type->setObject();
     return type;
 }
@@ -182,13 +178,16 @@ TypeDictionary::defineObject(const char* name)
 Type*
 TypeDictionary::defineBool()
 {
-    return findOrAdd("bool");
+    return add("bool", TypeKind::Bool);
 }
 
 Type*
 TypeDictionary::defineMethodmap(const char* name, methodmap_t* map)
 {
-    Type* type = findOrAdd(name);
+    auto atom = cc_.atom(name);
+    Type* type = find(atom);
+    if (!type)
+        type = add(atom, TypeKind::Methodmap);
     type->setMethodmap(map);
     return type;
 }
@@ -196,8 +195,13 @@ TypeDictionary::defineMethodmap(const char* name, methodmap_t* map)
 Type*
 TypeDictionary::defineEnumTag(const char* name)
 {
-    Type* type = findOrAdd(name);
-    type->setEnumTag();
+    auto atom = cc_.atom(name);
+    if (auto type = find(atom)) {
+        assert(type->kind() == TypeKind::Methodmap);
+        return type;
+    }
+
+    Type* type = add(atom, TypeKind::Enum);
     if (isupper(*name))
         type->setFixed();
     return type;
@@ -206,16 +210,15 @@ TypeDictionary::defineEnumTag(const char* name)
 Type*
 TypeDictionary::defineEnumStruct(const char* name, symbol* sym)
 {
-    Type* type = findOrAdd(name);
+    Type* type = add(name, TypeKind::EnumStruct);
     type->setEnumStruct(sym);
     return type;
 }
 
 Type*
-TypeDictionary::defineTag(const char* name)
-{
-    Type* type = findOrAdd(name);
-    if (isupper(*name))
+TypeDictionary::defineTag(sp::Atom* name) {
+    Type* type = add(name, TypeKind::Enum);
+    if (isupper(*name->chars()))
         type->setFixed();
     return type;
 }
@@ -223,7 +226,7 @@ TypeDictionary::defineTag(const char* name)
 Type*
 TypeDictionary::definePStruct(const char* name, pstruct_t* ps)
 {
-    Type* type = findOrAdd(name);
+    Type* type = add(name, TypeKind::Struct);
     type->setStruct(ps);
     return type;
 }

@@ -40,7 +40,6 @@ typedef int32_t cell;
 typedef uint32_t ucell;
 
 enum class TypeKind : uint8_t {
-    None,
     Int,
     Object,
     Null,
@@ -181,7 +180,7 @@ class Type : public PoolObject
     friend class TypeDictionary;
 
   public:
-    Type(sp::Atom* name, cell value);
+    Type(sp::Atom* name, TypeKind kind, cell value);
 
     const char* name() const {
         return name_->chars();
@@ -209,6 +208,7 @@ class Type : public PoolObject
 
     void setMethodmap(methodmap_t* map) {
         setFixed();
+        assert(kind_ == TypeKind::Methodmap || kind_ == TypeKind::Enum);
         kind_ = TypeKind::Methodmap;
         methodmap_ptr_ = map;
     }
@@ -256,24 +256,21 @@ class Type : public PoolObject
   private:
     void setFunction(funcenum_t* func) {
         setFixed();
-        kind_ = TypeKind::Function;
+        assert(kind_ == TypeKind::Function);
         funcenum_ptr_ = func;
     }
     void setObject() {
         setFixed();
-        kind_ = TypeKind::Object;
-    }
-    void setEnumTag() {
-        kind_ = TypeKind::Enum;
+        assert(kind_ == TypeKind::Object);
     }
     void setEnumStruct(symbol* sym) {
         setFixed();
-        kind_ = TypeKind::EnumStruct;
+        assert(kind_ == TypeKind::EnumStruct);
         enumstruct_ptr_ = sym;
     }
     void setStruct(pstruct_t* ptr) {
         setFixed();
-        kind_ = TypeKind::Struct;
+        assert(kind_ == TypeKind::Struct);
         pstruct_ptr_ = ptr;
     }
     void setFixed() {
@@ -310,8 +307,9 @@ class TypeDictionary
 
     void init();
 
+    Type* defineInt();
     Type* defineAny();
-    Type* defineFunction(const char* name, funcenum_t* fe);
+    Type* defineFunction(sp::Atom* name, funcenum_t* fe);
     Type* defineTypedef(const char* name, Type* other);
     Type* defineString();
     Type* defineFloat();
@@ -321,7 +319,7 @@ class TypeDictionary
     Type* defineMethodmap(const char* name, methodmap_t* map);
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(const char* name, symbol* sym);
-    Type* defineTag(const char* name);
+    Type* defineTag(sp::Atom* atom);
     Type* definePStruct(const char* name, pstruct_t* ps);
 
     template <typename T>
@@ -351,7 +349,8 @@ class TypeDictionary
     int tag_string() const { return type_string_->tagid(); }
 
   private:
-    Type* findOrAdd(const char* name);
+    Type* add(const char* name, TypeKind kind);
+    Type* add(sp::Atom* name, TypeKind kind);
 
   private:
     CompileContext& cc_;
