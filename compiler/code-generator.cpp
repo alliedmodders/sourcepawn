@@ -100,7 +100,7 @@ CodeGenerator::AddDebugSymbol(symbol* sym)
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < sym->dim_count(); i++)
-            string += ke::StringPrintf("%x:%x ", sym->x.tags.index, sym->dim(i));
+            string += ke::StringPrintf("%x:%x ", sym->semantic_tag, sym->dim(i));
         string += "]";
     }
 

@@ -877,14 +877,14 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             }
 
             right_length = right_val.array_size();
-            right_idxtag = right_val.sym->x.tags.index;
-            if (right_idxtag == 0 && left_val.sym->x.tags.index == 0)
+            right_idxtag = right_val.sym->semantic_tag;
+            if (right_idxtag == 0 && left_val.sym->semantic_tag == 0)
                 exact_match = false;
         } else {
             right_length = right_val.array_size();
 
             if (right_val.tag == types_->tag_string()) {
-                if (left_val.sym->x.tags.index == 0)
+                if (left_val.sym->semantic_tag == 0)
                     exact_match = false;
             }
         }
@@ -899,7 +899,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             return false;
         }
         if (left_val.ident != iARRAYCELL &&
-            !matchtag(left_val.sym->x.tags.index, right_idxtag, MATCHTAG_COERCE | MATCHTAG_SILENT))
+            !matchtag(left_val.sym->semantic_tag, right_idxtag, MATCHTAG_COERCE | MATCHTAG_SILENT))
         {
             report(expr, 229) << (right_val.sym ? right_val.sym->name() : left_val.sym->name());
         }
@@ -1435,7 +1435,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     if (base_val.sym->enumroot) {
-        if (!matchtag(base_val.sym->x.tags.index, index->val().tag, TRUE))
+        if (!matchtag(base_val.sym->semantic_tag, index->val().tag, TRUE))
             return false;
     }
 
@@ -1446,7 +1446,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     if (base_val.array_dim_count() == 1 &&
-        types_->find(base_val.sym->x.tags.index)->isEnumStruct())
+        types_->find(base_val.sym->semantic_tag)->isEnumStruct())
     {
         report(base, 117);
         return false;
@@ -1561,7 +1561,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         case iARRAY:
         case iREFARRAY:
             if (base_val.sym && base_val.array_dim_count() == 1) {
-                Type* type = types_->find(base_val.sym->x.tags.index);
+                Type* type = types_->find(base_val.sym->semantic_tag);
                 if (symbol* root = type->asEnumStruct())
                     return CheckEnumStructFieldAccessExpr(expr, type, root, from_call);
             }
@@ -1762,9 +1762,8 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
         markusage(val.sym, uREAD);
         return true;
     }
-    assert(field->parent() == root);
 
-    int tag = field->x.tags.index;
+    int tag = field->tag;
 
     symbol* var = base->val().sym;
     if (!var->data())
@@ -1780,11 +1779,11 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     if (types_->find(tag)->isEnumStruct()) {
         val.tag = 0;
         child->tag = 0;
-        child->x.tags.index = tag;
+        child->semantic_tag = tag;
     } else {
         val.tag = tag;
         child->tag = tag;
-        child->x.tags.index = 0;
+        child->semantic_tag = 0;
     }
 
     if (field->dim_count()) {
@@ -1816,7 +1815,6 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
         report(expr, 105) << type->name() << expr->name();
         return FALSE;
     }
-    assert(field->parent() == type->asEnumStruct());
 
     auto& val = expr->val();
     val.set_constval(field->addr());
@@ -1846,7 +1844,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     val.set_constval(1);
 
     if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
-        bool is_enum_struct = types_->find(sym->x.tags.index)->isEnumStruct();
+        bool is_enum_struct = types_->find(sym->semantic_tag)->isEnumStruct();
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
             if (sym->ident == iENUMSTRUCT || (level == sym->dim_count() - 1 && is_enum_struct)) {
@@ -1863,7 +1861,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             }
             enum_type = types_->find(sym->tag);
         } else if (expr->suffix_token() == '.') {
-            enum_type = types_->find(sym->x.tags.index);
+            enum_type = types_->find(sym->semantic_tag);
             if (!enum_type->asEnumStruct()) {
                 report(expr, 116) << sym->name();
                 return false;
@@ -2245,10 +2243,10 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     }
                 }
                 auto sym = val->sym;
-                if (!matchtag(arg->type().enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
+                if (!matchtag(arg->type().enum_struct_tag(), sym->semantic_tag, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
                     if (arg->type().tag() != types_->tag_any() ||
-                        !types_->find(sym->x.tags.index)->asEnumStruct())
+                        !types_->find(sym->semantic_tag)->asEnumStruct())
                     {
                         report(param, 229) << sym->name();
                     }
@@ -2464,8 +2462,6 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
             break;
         default:
             /* a variable */
-            if (sym->parent() != NULL)
-                break; /* hierarchical data type */
             if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
                 error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
             } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
@@ -2647,9 +2643,9 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
                 return false;
             }
             array.dim.emplace_back(sub->dim(i));
-            if (sub->x.tags.index) {
+            if (sub->semantic_tag) {
                 array.set_tag(0);
-                array.declared_tag = sub->x.tags.index;
+                array.declared_tag = sub->semantic_tag;
             }
         }
         if (!array.has_tag())
@@ -2672,7 +2668,6 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         sub = NewVariable(curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
                           sGLOBAL, curfunc->tag, dim, array.numdim(),
                           array.enum_struct_tag());
-        sub->set_parent(curfunc);
         curfunc->set_array_return(sub);
     }
 
@@ -2962,7 +2957,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
 void
 ReportFunctionReturnError(symbol* sym)
 {
-    if (sym->parent()) {
+    if (sym->function()->is_member_function) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
         report(sym, 400) << sym->name();
@@ -3074,7 +3069,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     // which functions get used as callbacks in order to emit a warning. The
     // same is true for return value usage: we don't know how to handle
     // compatibility edge cases until we've discovered all callers.
-    if (sym->parent()) {
+    if (sym->function()->is_member_function) {
         CheckFunctionReturnUsage(info);
         if (info->scope())
             TestSymbols(info->scope(), true);

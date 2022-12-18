@@ -478,7 +478,7 @@ RttiBuilder::add_enumstruct(Type* type)
         if (field->dim_count())
             dims[dimcount++] = field->dim(0);
 
-        variable_type_t type = {field->x.tags.index, dims, dimcount, false};
+        variable_type_t type = {field->semantic_tag, dims, dimcount, false};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
