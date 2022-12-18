@@ -270,10 +270,7 @@ Lexer::SynthesizeIncludePathToken()
  *     you should write "6.0"
  */
 void Lexer::lex_float(full_token_t* tok, cell_t whole) {
-    unsigned long dbase = 1;
-
     double fnum = whole;
-    unsigned long dnum = whole;
 
     double ffrac = 0.0;
     double fmult = 1.0;
@@ -285,8 +282,6 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
         if (c != '_') {
             ffrac = (ffrac * 10.0) + (c - '0');
             fmult = fmult / 10.0;
-            dbase /= 10L;
-            dnum += (c - '0') * dbase;
         }
     }
     fnum += ffrac * fmult; /* form the number so far */
@@ -309,7 +304,6 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
             error(425);
         fmult = pow(10.0, exp * sign);
         fnum *= fmult;
-        dnum *= (unsigned long)(fmult + 0.5);
     }
 
     /* floating point */

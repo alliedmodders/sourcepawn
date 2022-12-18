@@ -21,6 +21,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #define CTRL_CHAR '\\'  /* default control character */
@@ -35,4 +36,9 @@ struct CompileOptions {
     bool use_stderr = false;
     int pragma_dynamic = 0;
     int ctrlchar_org = CTRL_CHAR;
+    int compression = 9;
+    bool show_includes = false;
+    bool syntax_only = false;
+    int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
+    std::vector<std::pair<std::string, int>> constants;
 };
