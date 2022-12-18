@@ -2450,7 +2450,6 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
         }
     }
 
-    rewrite_type_for_enum_struct(&decl->type);
     return true;
 }
 
@@ -2502,29 +2501,6 @@ Parser::operatorname(sp::Atom** name)
     return opertok;
 }
 
-void
-Parser::rewrite_type_for_enum_struct(typeinfo_t* info)
-{
-    Type* type = types_->find(info->declared_tag);
-    symbol* enum_type = type->asEnumStruct();
-    if (!enum_type)
-        return;
-
-    // Note that the size here is incorrect. It's fixed up in initials() by
-    // parse_var_decl. Unfortunately type->size is difficult to remove because
-    // it can't be recomputed from array sizes (yet), in the case of
-    // initializers with inconsistent final arrays. We could set it to
-    // anything here, but we follow what parse_post_array_dims() does.
-    info->set_tag(0);
-    info->dim.emplace_back(enum_type->addr());
-    assert(info->declared_tag == enum_type->tag);
-
-    if (info->ident != iARRAY && info->ident != iREFARRAY) {
-        info->ident = iARRAY;
-        info->has_postdims = true;
-    }
-}
-
 bool
 Parser::reparse_new_decl(declinfo_t* decl, int flags)
 {
@@ -2572,7 +2548,6 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         }
     }
 
-    rewrite_type_for_enum_struct(&decl->type);
     return true;
 }
 
@@ -2651,11 +2626,6 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
                 type->ident = iREFERENCE;
         }
     }
-
-    // We're not getting another chance to do enum struct desugaring, since our
-    // caller is not looking for a declaration. Do it now.
-    if (!flags)
-        rewrite_type_for_enum_struct(type);
 
     return true;
 }
