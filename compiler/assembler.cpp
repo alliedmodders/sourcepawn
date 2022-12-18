@@ -700,7 +700,7 @@ RttiBuilder::TagToRttiBytecode(int tag)
         return cb::kBool;
     if (tag == types_->tag_any())
         return cb::kAny;
-    if (tag == pc_tag_string)
+    if (tag == types_->tag_string())
         return cb::kChar8;
     if (tag == types_->tag_float())
         return cb::kFloat32;

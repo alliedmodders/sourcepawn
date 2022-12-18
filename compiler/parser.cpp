@@ -2679,7 +2679,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
             *out = TypenameInfo{0};
             return true;
         case tCHAR:
-            *out = TypenameInfo{pc_tag_string};
+            *out = TypenameInfo{types_->tag_string()};
             return true;
         case tVOID:
             *out = TypenameInfo{types_->tag_void()};
@@ -2706,7 +2706,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
             }
             if (tok->atom->str() == "String") {
                 error(98, "String", "char");
-                *out = TypenameInfo{pc_tag_string};
+                *out = TypenameInfo{types_->tag_string()};
                 return true;
             }
             if (tok->atom->str() == "_") {
