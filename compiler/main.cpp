@@ -243,7 +243,6 @@ cleanup:
     }
 
     funcenums_free();
-    methodmaps_free();
     pstructs_free();
 
     int retcode;

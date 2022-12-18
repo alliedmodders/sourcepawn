@@ -18,7 +18,6 @@
 #include "types.h"
 
 std::vector<std::unique_ptr<funcenum_t>> sFuncEnums;
-std::vector<methodmap_t*> sMethodmaps;
 
 std::vector<pstruct_t*> sStructs;
 
@@ -165,9 +164,7 @@ methodmap_add(CompileContext& cc, methodmap_t* parent, sp::Atom* name)
     }
 
     map->tag = cc.types()->defineMethodmap(name->chars(), map)->tagid();
-    sMethodmaps.push_back(std::move(map));
-
-    return sMethodmaps.back();
+    return map;
 }
 
 methodmap_t*
@@ -195,10 +192,4 @@ methodmap_find_method(methodmap_t* map, sp::Atom* name)
     if (map->parent)
         return methodmap_find_method(map->parent, name);
     return nullptr;
-}
-
-void
-methodmaps_free()
-{
-    sMethodmaps.clear();
 }
