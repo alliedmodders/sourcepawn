@@ -36,9 +36,6 @@ class Parser
 
     ParseTree* Parse();
 
-    static bool sInPreprocessor;
-    static bool sDetectedIllegalPreprocessorSymbols;
-
   private:
     typedef int (Parser::*HierFn)(value*);
     typedef Expr* (Parser::*NewHierFn)();

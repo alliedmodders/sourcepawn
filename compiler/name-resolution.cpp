@@ -552,8 +552,8 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
 {
     AutoErrorPos aep(pos_);
 
-    if (Parser::sInPreprocessor) {
-        Parser::sDetectedIllegalPreprocessorSymbols = true;
+    if (sc.cc().in_preprocessor()) {
+        sc.cc().detected_illegal_preproc_symbols() = true;
 
         report(pos_, 230) << name_;
     }

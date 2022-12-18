@@ -312,7 +312,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
 }
 
 int Lexer::preproc_expr(cell* val, int* tag) {
-    ke::SaveAndSet<bool> forbid_const(&Parser::sInPreprocessor, true);
+    ke::SaveAndSet<bool> forbid_const(&cc_.in_preprocessor(), true);
     return Parser::PreprocExpr(val, tag); /* get value (or 0 on error) */
 }
 
@@ -399,7 +399,7 @@ void Lexer::HandleDirectives() {
         }
         case tpASSERT:
         {
-            ke::SaveAndSet<bool> reset(&Parser::sDetectedIllegalPreprocessorSymbols, false);
+            ke::SaveAndSet<bool> reset(&cc_.detected_illegal_preproc_symbols(), false);
 
             cell val = 0;
             preproc_expr(&val, NULL); /* get constant expression (or 0 on error) */

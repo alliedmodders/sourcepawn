@@ -38,9 +38,6 @@
 
 using namespace sp;
 
-bool Parser::sInPreprocessor = false;
-bool Parser::sDetectedIllegalPreprocessorSymbols = false;
-
 Parser::Parser(CompileContext& cc)
   : cc_(cc),
     lexer_(cc.lexer())

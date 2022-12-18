@@ -101,7 +101,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
      * a quick exit.
      */
     assert(numparam == 1 || numparam == 2);
-    if (Parser::sInPreprocessor)
+    if (sc.cc().in_preprocessor())
         return false;
     if (tag1 == 0 && (numparam == 1 || tag2 == 0))
         return false;
