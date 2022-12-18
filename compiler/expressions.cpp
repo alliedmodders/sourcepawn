@@ -598,7 +598,7 @@ is_valid_index_tag(int tag)
         return true;
 
     Type* idx_type = types->find(tag);
-    return idx_type->isEnum() || idx_type->isLabelTag();
+    return idx_type->isEnum();
 }
 
 int

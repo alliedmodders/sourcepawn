@@ -81,15 +81,6 @@ Type::kindName() const
   }
 }
 
-bool
-Type::isLabelTag() const
-{
-    auto types = CompileContext::get().types();
-    if (tagid() == 0 || tagid() == types->tag_bool() || tagid() == types->tag_float())
-        return false;
-    return kind_ == TypeKind::None;
-}
-
 TypeDictionary::TypeDictionary(CompileContext& cc)
   : cc_(cc)
 {}
