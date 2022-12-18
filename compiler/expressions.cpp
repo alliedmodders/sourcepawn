@@ -33,7 +33,6 @@
 #include "sc.h"
 #include "sctracker.h"
 #include "semantics.h"
-#include "scvars.h"
 #include "symbols.h"
 #include "types.h"
 

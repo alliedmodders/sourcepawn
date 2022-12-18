@@ -30,7 +30,6 @@
 #include "compile-context.h"
 #include "sc.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "types.h"
 
 using namespace ke;

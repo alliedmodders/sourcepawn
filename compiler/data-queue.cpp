@@ -39,7 +39,6 @@
 #include "lexer-inl.h"
 #include "sc.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "symbols.h"
 
 DataQueue::DataQueue()

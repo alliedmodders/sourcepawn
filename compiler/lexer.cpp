@@ -55,7 +55,6 @@
 #include "sc.h"
 #include "sci18n.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "semantics.h"
 #include "source-manager.h"
 #include "symbols.h"

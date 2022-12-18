@@ -31,7 +31,6 @@
 #include "parser.h"
 #include "sc.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "semantics.h"
 #include "symbols.h"
 

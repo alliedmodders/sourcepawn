@@ -47,7 +47,6 @@
 
 #include "errors.h"
 #include "sc.h"
-#include "scvars.h"
 
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
 #if defined(_MSC_VER) && _MSC_VER >= 1900 && _MSC_VER < 2000

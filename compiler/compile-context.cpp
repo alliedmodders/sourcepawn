@@ -25,7 +25,6 @@
 
 #include "compile-options.h"
 #include "errors.h"
-#include "scvars.h"
 #include "source-manager.h"
 #include "symbols.h"
 #include "types.h"

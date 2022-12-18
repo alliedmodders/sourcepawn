@@ -45,7 +45,6 @@
 #include "lexer.h"
 #include "sc.h"
 #include "sctracker.h"
-#include "scvars.h"
 #include "symbols.h"
 #include "types.h"
 
