@@ -110,9 +110,6 @@ SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int
         return false;
     }
 
-    if (type->tagid() != types->tag_any() && type->isDeclaredButNotDefined())
-        report(pos, 139) << atom;
-
     *tag = type->tagid();
     return true;
 }
