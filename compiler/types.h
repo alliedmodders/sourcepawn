@@ -354,7 +354,8 @@ class TypeDictionary
 
   private:
     CompileContext& cc_;
-    tr::vector<Type*> types_;
+    tr::unordered_map<sp::Atom*, Type*> types_;
+    tr::unordered_map<int, Type*> tags_;
     Type* type_int_ = nullptr;
     Type* type_nullfunc_ = nullptr;
     Type* type_object_ = nullptr;
