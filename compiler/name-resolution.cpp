@@ -238,8 +238,6 @@ EnumDecl::EnterNames(SemaContext& sc)
         if (!sym)
             continue;
 
-        // set the item tag and the item size, for use in indexing arrays
-        sym->set_parent(enumsym);
         // add the constant to a separate list as well
         if (enumroot) {
             sym->enumfield = true;
@@ -1186,14 +1184,12 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(field.decl.name);
 
-        symbol* child = new symbol(field.decl.name, position, iCONSTEXPR, sGLOBAL, root_->tag);
-        child->x.tags.index = field.decl.type.semantic_tag();
-        child->x.tags.field = 0;
+        symbol* child = new symbol(field.decl.name, position, field.decl.type.ident, sGLOBAL,
+                                   field.decl.type.semantic_tag());
         if (field.decl.type.numdim()) {
             child->set_dim_count(1);
             child->set_dim(0, field.decl.type.dim[0]);
         }
-        child->set_parent(root_);
         child->enumfield = true;
         fields.emplace_back(child);
 
@@ -1218,7 +1214,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         seen.emplace(decl->name());
 
         auto sym = new symbol(decl->name(), 0, iFUNCTN, sGLOBAL, 0);
-        sym->set_parent(root_);
         decl->set_sym(sym);
         methods.emplace_back(sym);
     }
@@ -1243,6 +1238,8 @@ EnumStructDecl::Bind(SemaContext& sc)
         auto inner_name = DecorateInnerName(name_, fun->decl_name());
         if (!inner_name)
             continue;
+
+        fun->sym()->function()->is_member_function = true;
 
         fun->set_name(inner_name);
         fun->set_this_tag(root_->tag);
@@ -1354,14 +1351,12 @@ MethodmapDecl::Bind(SemaContext& sc)
 
         if (prop->getter && BindGetter(sc, prop)) {
             method->getter = prop->getter->sym();
-            method->getter->set_parent(sym_);
 
             auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name->chars());
             method->getter->setName(sc.cc().atom(name));
         }
         if (prop->setter && BindSetter(sc, prop)) {
             method->setter = prop->setter->sym();
-            method->setter->set_parent(sym_);
 
             auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name->chars());
             method->setter->setName(sc.cc().atom(name));
@@ -1394,7 +1389,7 @@ MethodmapDecl::Bind(SemaContext& sc)
         if (!method->decl->Bind(sc))
             continue;
 
-        method->decl->sym()->set_parent(sym_);
+        method->decl->sym()->function()->is_member_function = true;
         method->decl->sym()->setName(DecorateInnerName(name_, method->decl->decl_name()));
 
         auto m = method->entry;
@@ -1420,7 +1415,11 @@ MethodmapDecl::BindGetter(SemaContext& sc, MethodmapProperty* prop)
 
     fun->set_this_tag(map_->tag);
 
-    return fun->Bind(sc);
+    if (!fun->Bind(sc))
+        return false;
+
+    fun->sym()->function()->is_member_function = true;
+    return true;
 }
 
 bool
@@ -1438,6 +1437,8 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
 
     if (!fun->Bind(sc))
         return false;
+
+    fun->sym()->function()->is_member_function = true;
 
     if (fun->args().size() <= 1) {
         report(prop->pos, 150) << pc_tagname(prop->type.tag());

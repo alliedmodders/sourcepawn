@@ -456,6 +456,7 @@ Parser::parse_enumstruct()
         }
 
         declinfo_t decl = {};
+        decl.type.ident = iVARIABLE;
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 

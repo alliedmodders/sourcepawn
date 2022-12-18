@@ -308,7 +308,7 @@ ArraySizeResolver::ResolveDimExprs()
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
-        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym && !v.sym->parent()) {
+        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym && v.sym->enumroot) {
             error(expr->pos(), 153);
             return false;
         } else {
@@ -717,7 +717,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
                 continue;
             }
 
-            matchtag(field->x.tags.index, v.tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            matchtag(field->tag, v.tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
         }
     }
 
@@ -970,7 +970,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 symbol* field = *field_iter;
                 assert(field);
 
-                EmitPadding(field->dim(0), field->x.tags.index, emitted, false, {}, {});
+                EmitPadding(field->dim(0), field->tag, emitted, false, {}, {});
             } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
@@ -985,7 +985,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
             }
 
             if (field_list) {
-                assert(field_iter != field_list->end() && (*field_iter)->ident == iCONSTEXPR);
+                assert(field_iter != field_list->end());
                 field_iter++;
             }
         }
@@ -1015,7 +1015,7 @@ ArrayEmitter::AddInlineArray(symbol* field, ArrayExpr* array)
         prev1 = ke::Some(item->val().constval());
     }
 
-    EmitPadding(field->dim(0), field->x.tags.index, array->exprs().size(),
+    EmitPadding(field->dim(0), field->tag, array->exprs().size(),
                 array->ellipses(), prev1, prev2);
 }
 

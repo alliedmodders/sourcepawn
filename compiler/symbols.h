@@ -63,6 +63,7 @@ class FunctionData final : public SymbolData
     int max_callee_stack = 0;
     bool checked_one_signature SP_BITFIELD(1);
     bool compared_prototype_args SP_BITFIELD(1);
+    bool is_member_function SP_BITFIELD(1);
 
     // Other symbols that this symbol refers to.
     PoolForwardList<symbol*> refers_to;
@@ -150,12 +151,7 @@ struct symbol : public PoolObject
     bool queued : 1;        // symbol is queued for a local work algorithm
     bool explicit_return_type : 1; // transitional return type was specified
 
-    union {
-        struct {
-            int index; /* array & enum: tag of array indices or the enum item */
-            int field; /* enumeration fields, where a size is attached to the field */
-        } tags;        /* extra tags */
-    } x;               /* 'x' for 'extra' */
+    int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
     int fnumber; /* file number in which the symbol is declared */
     int lnumber; /* line number for the declaration */
@@ -191,12 +187,6 @@ struct symbol : public PoolObject
         assert(ident == iFUNCTN);
         return data_->asFunction();
     }
-    symbol* parent() const {
-        return parent_;
-    }
-    void set_parent(symbol* parent) {
-        parent_ = parent;
-    }
 
     symbol* array_return() const {
         return function()->array_return;
@@ -228,8 +218,6 @@ struct symbol : public PoolObject
     cell addr_; /* address or offset (or value for constant, index for native function) */
     sp::Atom* name_;
     SymbolData* data_;
-
-    symbol* parent_;
 };
 
 enum ScopeKind {

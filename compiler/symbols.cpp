@@ -92,11 +92,12 @@ markusage(symbol* sym, int usage)
 }
 
 FunctionData::FunctionData()
- : node(nullptr),
-   forward(nullptr),
-   alias(nullptr),
-   checked_one_signature(false),
-   compared_prototype_args(false)
+  : node(nullptr),
+    forward(nullptr),
+    alias(nullptr),
+    checked_one_signature(false),
+    compared_prototype_args(false),
+    is_member_function(false)
 {
 }
 
@@ -124,16 +125,16 @@ symbol::symbol(sp::Atom* symname, cell symaddr, IdentifierKind symident, int sym
    deprecated(false),
    queued(false),
    explicit_return_type(false),
-   x({}),
+   semantic_tag(0),
    dim_data(nullptr),
    fnumber(0),
    /* assume global visibility (ignored for local symbols) */
    lnumber(0),
    documentation(nullptr),
    addr_(symaddr),
-   name_(nullptr),
-   parent_(nullptr)
+   name_(nullptr)
 {
+    assert(ident != iINVALID);
     name_ = symname;
     if (symident == iFUNCTN)
         data_ = new FunctionData;
@@ -159,9 +160,8 @@ symbol::symbol(const symbol& other)
     is_const = other.is_const;
     deprecated = other.deprecated;
     documentation = other.documentation;
+    semantic_tag = other.semantic_tag;
     // Note: explicitly don't add queued.
-
-    x = other.x;
 
     if (other.dim_data) {
         set_dim_count(other.dim_count());
@@ -216,7 +216,7 @@ NewVariable(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag
         sym->set_dim_count(numdim);
         for (int i = 0; i < numdim; i++)
             sym->set_dim(i, dim[i]);
-        sym->x.tags.index = semantic_tag;
+        sym->semantic_tag = semantic_tag;
     }
     return sym;
 }
