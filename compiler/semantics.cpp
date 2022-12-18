@@ -421,7 +421,7 @@ bool Expr::EvalConst(cell* value, int* tag) {
     }
 
     if (value)
-        *value = val_.constval;
+        *value = val_.constval();
     if (tag)
         *tag = val_.tag;
     return true;
@@ -542,7 +542,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
     }
 
     if (val.ident == iCONSTEXPR) {
-        if (val.constval)
+        if (val.constval())
             report(expr, 206);
         else
             report(expr, 205);
@@ -565,8 +565,8 @@ RvalueExpr::RvalueExpr(Expr* expr)
 
     val_ = expr_->val();
     if (val_.ident == iACCESSOR) {
-        if (val_.accessor->getter)
-            markusage(val_.accessor->getter, uREAD);
+        if (val_.accessor()->getter)
+            markusage(val_.accessor()->getter, uREAD);
         val_.ident = iEXPRESSION;
     }
 }
@@ -596,7 +596,7 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     switch (unary->token()) {
         case '~':
             if (out_val.ident == iCONSTEXPR)
-                out_val.constval = ~out_val.constval;
+                out_val.set_constval(~out_val.constval());
             break;
         case '!':
             if (find_userop(*sc_, '!', out_val.tag, 0, 1, &out_val, &userop)) {
@@ -604,21 +604,21 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
                 out_val = expr->val();
                 unary->set_userop();
             } else if (out_val.ident == iCONSTEXPR) {
-                out_val.constval = !out_val.constval;
+                out_val.set_constval(!out_val.constval());
             }
             out_val.tag = types_->tag_bool();
             break;
         case '-':
             if (out_val.ident == iCONSTEXPR && out_val.tag == types_->tag_float()) {
-                float f = sp::FloatCellUnion(out_val.constval).f32;
-                out_val.constval = sp::FloatCellUnion(-f).cell;
+                float f = sp::FloatCellUnion(out_val.constval()).f32;
+                out_val.set_constval(sp::FloatCellUnion(-f).cell);
             } else if (find_userop(*sc_, '-', out_val.tag, 0, 1, &out_val, &userop)) {
                 expr = unary->set_expr(new CallUserOpExpr(userop, expr));
                 out_val = expr->val();
                 unary->set_userop();
             } else if (out_val.ident == iCONSTEXPR) {
                 /* the negation of a fixed point number is just an integer negation */
-                out_val.constval = -out_val.constval;
+                out_val.set_constval(-out_val.constval());
             }
             break;
         default:
@@ -654,16 +654,16 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
             return false;
         }
     } else {
-        if (!expr_val.accessor->setter) {
-            report(incdec, 152) << expr_val.accessor->name;
+        if (!expr_val.accessor()->setter) {
+            report(incdec, 152) << expr_val.accessor()->name;
             return false;
         }
-        if (!expr_val.accessor->getter) {
-            report(incdec, 149) << expr_val.accessor->name;
+        if (!expr_val.accessor()->getter) {
+            report(incdec, 149) << expr_val.accessor()->name;
             return false;
         }
-        markusage(expr_val.accessor->getter, uREAD);
-        markusage(expr_val.accessor->setter, uREAD);
+        markusage(expr_val.accessor()->getter, uREAD);
+        markusage(expr_val.accessor()->setter, uREAD);
     }
 
     find_userop(*sc_, incdec->token(), expr_val.tag, 0, 1, &expr_val, &incdec->userop());
@@ -719,7 +719,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             // Update the line number as a hack so we can warn that it was never
             // used.
             sym->lnumber = expr->pos().line;
-        } else if (auto* accessor = left->val().accessor) {
+        } else if (auto* accessor = left->val().accessor()) {
             if (!accessor->setter) {
                 report(expr, 152) << accessor->name;
                 return false;
@@ -782,7 +782,8 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             char boolresult = FALSE;
             matchtag(left_val.tag, right_val.tag, FALSE);
             val.ident = iCONSTEXPR;
-            val.constval = calc(left_val.constval, oper_tok, right_val.constval, &boolresult);
+            val.set_constval(calc(left_val.constval(), oper_tok, right_val.constval(),
+                                  &boolresult));
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
@@ -834,7 +835,7 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
     }
 
     const auto& left_val = left->val();
-    assert(left_val.sym || left_val.accessor);
+    assert(left_val.sym || left_val.accessor());
 
     // may not change "constant" parameters
     if (!expr->initializer() && left_val.sym && left_val.sym->is_const) {
@@ -856,21 +857,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             report(expr, 226) << left_val.sym->name(); // self-assignment
     }
 
-    // :TODO: check this comment post-enumstructectomy
-    /* Array elements are sometimes considered as sub-arrays --when the
-     * array index is an enumeration field and the enumeration size is greater
-     * than 1. If the expression on the right side of the assignment is a cell,
-     * or if an operation is in effect, this does not apply.
-     */
-    auto oper_tok = expr->oper();
-    bool leftarray = left_val.ident == iARRAY ||
-                     left_val.ident == iREFARRAY ||
-                     ((left_val.ident == iARRAYCELL || left_val.ident == iARRAYCHAR) &&
-                       left_val.constval > 1 &&
-                       left_val.sym->dim.array.level == 0 &&
-                       !oper_tok &&
-                       (right_val.ident == iARRAY || right_val.ident == iREFARRAY));
-    if (leftarray) {
+    if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
         if (right_val.ident != iARRAY && right_val.ident != iREFARRAY) {
             report(expr, 47);
             return false;
@@ -888,23 +875,14 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
                 return false;
             }
 
-            if (right_val.constval == 0)
-                right_length = right_val.sym->dim.array.length; // array variable
-            else
-                right_length = right_val.constval;
-
+            right_length = right_val.sym->dim.array.length; // array variable
             right_idxtag = right_val.sym->x.tags.index;
             if (right_idxtag == 0 && left_val.sym->x.tags.index == 0)
                 exact_match = false;
         } else {
-            right_length = right_val.constval; // literal array
+            right_length = right_val.array_size();
 
-            // If val is negative, it means that lval2 is a literal string.
-            // The string array size may be smaller than the destination
-            // array, provided that the destination array does not have an
-            // index tag.
-            if (right_length < 0) {
-                right_length = -right_length;
+            if (right_val.tag == types_->tag_string()) {
                 if (left_val.sym->x.tags.index == 0)
                     exact_match = false;
             }
@@ -942,7 +920,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         !checkval_string(&left_val, &right_val) &&
         !expr->assignop().sym)
     {
-        if (leftarray &&
+        if ((left_val.ident == iARRAY || left_val.ident == iREFARRAY) &&
             ((left_val.tag == types_->tag_string() && right_val.tag != types_->tag_string()) ||
              (left_val.tag != types_->tag_string() && right_val.tag == types_->tag_string())))
         {
@@ -981,7 +959,7 @@ BinaryExpr::FoldToConstant()
 
     switch (token_) {
         case '*':
-            val_.constval = left_val * right_val;
+            val_.set_constval(left_val * right_val);
             break;
         case '/':
         case '%':
@@ -994,39 +972,37 @@ BinaryExpr::FoldToConstant()
                 return false;
             }
             if (token_ == '/')
-                val_.constval = left_val / right_val;
+                val_.set_constval(left_val / right_val);
             else
-                val_.constval = left_val % right_val;
+                val_.set_constval(left_val % right_val);
             break;
         case '+':
-            val_.constval = left_val + right_val;
+            val_.set_constval(left_val + right_val);
             break;
         case '-':
-            val_.constval = left_val - right_val;
+            val_.set_constval(left_val - right_val);
             break;
         case tSHL:
-            val_.constval = left_val << right_val;
+            val_.set_constval(left_val << right_val);
             break;
         case tSHR:
-            val_.constval = left_val >> right_val;
+            val_.set_constval(left_val >> right_val);
             break;
         case tSHRU:
-            val_.constval = uint32_t(left_val) >> uint32_t(right_val);
+            val_.set_constval(uint32_t(left_val) >> uint32_t(right_val));
             break;
         case '&':
-            val_.constval = left_val & right_val;
+            val_.set_constval(left_val & right_val);
             break;
         case '^':
-            val_.constval = left_val ^ right_val;
+            val_.set_constval(left_val ^ right_val);
             break;
         case '|':
-            val_.constval = left_val | right_val;
+            val_.set_constval(left_val | right_val);
             break;
         default:
             return false;
     }
-
-    val_.ident = iCONSTEXPR;
     return true;
 }
 
@@ -1049,9 +1025,9 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
         val.ident = iCONSTEXPR;
         if (expr->token() == tlOR)
-            val.constval = (left_val.constval || right_val.constval);
+            val.set_constval((left_val.constval() || right_val.constval()));
         else if (expr->token() == tlAND)
-            val.constval = (left_val.constval && right_val.constval);
+            val.set_constval((left_val.constval() && right_val.constval()));
         else
             assert(false);
     } else {
@@ -1118,16 +1094,16 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         if (all_const) {
             switch (op.token) {
                 case tlLE:
-                    constval &= left_val.constval <= right_val.constval;
+                    constval &= left_val.constval() <= right_val.constval();
                     break;
                 case tlGE:
-                    constval &= left_val.constval >= right_val.constval;
+                    constval &= left_val.constval() >= right_val.constval();
                     break;
                 case '>':
-                    constval &= left_val.constval > right_val.constval;
+                    constval &= left_val.constval() > right_val.constval();
                     break;
                 case '<':
-                    constval &= left_val.constval < right_val.constval;
+                    constval &= left_val.constval() < right_val.constval();
                     break;
                 default:
                     assert(false);
@@ -1138,10 +1114,8 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         left = right;
     }
 
-    if (all_const) {
-        val.ident = iCONSTEXPR;
-        val.constval = constval ? 1 :0;
-    }
+    if (all_const)
+        val.set_constval(constval ? 1 : 0);
     return true;
 }
 
@@ -1166,7 +1140,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     if (first->lvalue()) {
         first = expr->set_first(new RvalueExpr(first));
     } else if (first->val().ident == iCONSTEXPR) {
-        report(first, first->val().constval ? 206 : 205);
+        report(first, first->val().constval() ? 206 : 205);
     }
 
     if (second->lvalue())
@@ -1200,7 +1174,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
      */
     auto& val = expr->val();
     val = left;
-    if (val.ident == iARRAY && right.ident == iARRAY && val.constval < 0 && val.constval > right.constval)
+    if (val.ident == iARRAY && right.ident == iARRAY && right.array_size() > val.array_size())
         val = right;
 
     if (val.ident == iARRAY)
@@ -1220,8 +1194,7 @@ TernaryExpr::FoldToConstant()
         return false;
     }
 
-    val_.constval = cond ? left : right;
-    val_.ident = iCONSTEXPR;
+    val_.set_constval(cond ? left : right);
     return true;
 }
 
@@ -1316,7 +1289,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     }
 
     if (sym->ident == iCONSTEXPR)
-        val.constval = sym->addr();
+        val.set_constval(sym->addr());
 
     if (sym->vclass == sGLOBAL && sym->ident != iFUNCTN) {
         if (!sym->defined) {
@@ -1433,8 +1406,7 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array) {
     }
 
     auto& val = array->val();
-    val.ident = iARRAY;
-    val.constval = array->exprs().size();
+    val.set_array(iARRAY, array->exprs().size());
     val.tag = lasttag;
     return true;
 }
@@ -1489,18 +1461,18 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     if (index_val.ident == iCONSTEXPR) {
         if (!(base_val.sym->tag == types_->tag_string() && base_val.sym->dim.array.level == 0)) {
             /* normal array index */
-            if (index_val.constval < 0 ||
+            if (index_val.constval() < 0 ||
                 (base_val.sym->dim.array.length != 0 &&
-                 base_val.sym->dim.array.length <= index_val.constval))
+                 base_val.sym->dim.array.length <= index_val.constval()))
             {
                 report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                 return false;
             }
         } else {
             /* character index */
-            if (index_val.constval < 0 ||
+            if (index_val.constval() < 0 ||
                 (base_val.sym->dim.array.length != 0 &&
-                 base_val.sym->dim.array.length <= index_val.constval))
+                 base_val.sym->dim.array.length <= index_val.constval()))
             {
                 report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                 return false;
@@ -1514,8 +1486,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
     if (base_val.sym->dim.array.level > 0) {
         // Note: Intermediate arrays are not l-values.
-        out_val.ident = iREFARRAY;
-        out_val.sym = base_val.sym->array_child();
+        out_val.set_array(iREFARRAY, base_val.sym->array_child());
 
         assert(out_val.sym != nullptr);
         assert(out_val.sym->dim.array.level == base_val.sym->dim.array.level - 1);
@@ -1524,12 +1495,10 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
     /* set type to fetch... INDIRECTLY */
     if (base_val.sym->tag == types_->tag_string())
-        out_val.ident = iARRAYCHAR;
+        out_val.set_array(iARRAYCHAR, base_val.sym);
     else
-        out_val.ident = iARRAYCELL;
-
+        out_val.set_array(iARRAYCELL, base_val.sym);
     out_val.tag = base_val.sym->tag;
-    out_val.constval = 0;
 
     expr->set_lvalue(true);
     return true;
@@ -1556,24 +1525,21 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
 
 bool Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
-    val.ident = iCONSTEXPR;
-    val.constval = 0;
+    val.set_constval(0);
     val.tag = types_->tag_null();
     return true;
 }
 
 bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
     auto& val = expr->val();
-    val.ident = iCONSTEXPR;
     val.tag = expr->tag();
-    val.constval = expr->value();
+    val.set_constval(expr->value());
     return true;
 }
 
 bool Semantics::CheckStringExpr(StringExpr* expr) {
     auto& val = expr->val();
-    val.ident = iARRAY;
-    val.constval = -((cell)expr->text()->length() + 1);
+    val.set_array(iARRAY, (cell)expr->text()->length() + 1);
     val.tag = types_->tag_string();
     return true;
 }
@@ -1650,9 +1616,8 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())
             base = expr->set_base(new RvalueExpr(base));
-        val.ident = iACCESSOR;
         val.tag = method->property_tag();
-        val.accessor = method;
+        val.set_accessor(method);
         expr->set_lvalue(true);
         return true;
     }
@@ -1830,10 +1795,8 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
         child->dim.array.length = field->dim.array.length;
         child->dim.array.level = 0;
         child->ident = iREFARRAY;
-        val.constval = field->dim.array.length;
     } else {
         child->ident = (tag == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
-        val.constval = 0;
         expr->set_lvalue(true);
     }
     val.ident = child->ident;
@@ -1860,9 +1823,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     assert(field->parent() == type->asEnumStruct());
 
     auto& val = expr->val();
-    val.ident = iCONSTEXPR;
-    val.sym = nullptr;
-    val.constval = field->addr();
+    val.set_constval(field->addr());
     val.tag = 0;
     return true;
 }
@@ -1886,8 +1847,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     }
 
     auto& val = expr->val();
-    val.ident = iCONSTEXPR;
-    val.constval = 1;
+    val.set_constval(1);
 
     if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
         symbol* subsym = sym;
@@ -1925,14 +1885,14 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 return false;
             }
             if (int array_size = field->dim.array.length) {
-                val.constval = array_size;
+                val.set_constval(array_size);
                 return true;
             }
             return true;
         }
 
         if (sym->ident == iENUMSTRUCT) {
-            val.constval = sym->addr();
+            val.set_constval(sym->addr());
             return true;
         }
 
@@ -1950,7 +1910,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(expr, 163) << sym->name(); // indeterminate array size in "sizeof"
                 return false;
             }
-            val.constval = iter->dim.array.length;
+            val.set_constval(iter->dim.array.length);
             return true;
         }
     }
@@ -2173,8 +2133,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
     if (param->val().ident == iACCESSOR) {
         // We must always compute r-values for accessors.
-        if (!param->val().accessor->getter) {
-            report(param, 149) << param->val().accessor->name;
+        if (!param->val().accessor()->getter) {
+            report(param, 149) << param->val().accessor()->name;
             return false;
         }
         param = new RvalueExpr(param);
@@ -2256,29 +2216,26 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             // Verify that the dimensions match those in |arg|. A literal array
             // always has a single dimension. An iARRAYCELL parameter is also
             // assumed to have a single dimension.
-            if (!val->sym || val->ident == iARRAYCELL || val->ident == iARRAYCHAR) {
+            if (!val->sym) {
+                assert(val->ident == iARRAY || val->ident == iREFARRAY);
                 if (arg->type().numdim() != 1) {
                     report(param, 48); // array dimensions must match
                     return false;
                 }
                 if (arg->type().dim[0] != 0) {
                     assert(arg->type().dim[0] > 0);
-                    if (val->constval == 0) {
+                    if (val->array_size() == 0) {
                         report(param, 47);
                         return false;
                     }
-                    if (val->ident == iARRAYCELL) {
-                        if (arg->type().dim[0] != val->constval) {
+                    if (arg->type().tag() == types_->tag_string()) {
+                        if (arg->type().dim[0] < val->array_size()) {
                             report(param, 47); // array sizes must match
                             return false;
                         }
-                    } else {
-                        if ((val->constval > 0 && arg->type().dim[0] != val->constval) ||
-                            (val->constval < 0 && arg->type().dim[0] < -val->constval))
-                        {
-                            report(param, 47); // array sizes must match
-                            return false;
-                        }
+                    } else if (arg->type().dim[0] != val->array_size()) {
+                        report(param, 47); // array sizes must match
+                        return false;
                     }
                 }
             } else {
@@ -2301,9 +2258,13 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     level++;
                 }
                 // The last dimension is checked too, again, unless it is zero.
-                if (arg->type().dim[level] != 0 && sym->dim.array.length != arg->type().dim[level]) {
-                    report(param, 47); // array sizes must match
-                    return false;
+                if (arg->type().dim[level] != 0) {
+                    if (val->ident == iARRAYCELL || val->ident == iARRAYCHAR ||
+                        sym->dim.array.length != arg->type().dim[level])
+                    {
+                        report(param, 47); // array sizes must match
+                        return false;
+                    }
                 }
                 if (!matchtag(arg->type().enum_struct_tag(), sym->x.tags.index, MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
@@ -2412,7 +2373,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             report(expr, 77) << type_to_name(v.tag);
             return false;
         }
-        if (v.ident == iCONSTEXPR && v.constval <= 0) {
+        if (v.ident == iCONSTEXPR && v.constval() <= 0) {
             report(expr, 9);
             return false;
         }
@@ -2801,10 +2762,10 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
             break;
 
         case iACCESSOR:
-            if (v.accessor->getter)
-                markusage(v.accessor->getter, uREAD);
-            if (v.accessor->setter)
-                markusage(v.accessor->setter, uREAD);
+            if (v.accessor()->getter)
+                markusage(v.accessor()->getter, uREAD);
+            if (v.accessor()->setter)
+                markusage(v.accessor()->setter, uREAD);
             break;
     }
 
@@ -2874,7 +2835,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
 
     ke::Maybe<cell> constval;
     if (cond->val().ident == iCONSTEXPR)
-        constval.init(cond->val().constval);
+        constval.init(cond->val().constval());
 
     bool has_break = false;
     bool has_return = false;
@@ -2932,7 +2893,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
 
     ke::Maybe<cell> constval;
     if (cond && cond->val().ident == iCONSTEXPR)
-        constval.init(cond->val().constval);
+        constval.init(cond->val().constval());
 
     bool has_break = false;
     bool has_return = false;

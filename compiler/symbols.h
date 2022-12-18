@@ -299,12 +299,12 @@ class SymbolScope final : public PoolObject
 };
 
 struct value {
+    value() : ident(0), sym(nullptr), tag(0) {}
+
     char ident;      /* iCONSTEXPR, iVARIABLE, iARRAY, iARRAYCELL,
                          * iEXPRESSION or iREFERENCE */
     /* symbol in symbol table, NULL for (constant) expression */
     symbol* sym;
-    cell constval;   /* value of the constant expression (if ident==iCONSTEXPR)
-                         * also used for the size of a literal array */
     int tag;         /* tag (of the expression) */
 
     // Returns whether the value can be rematerialized based on static
@@ -321,23 +321,56 @@ struct value {
         }
     }
 
-    /* when ident == iACCESSOR */
-    methodmap_method_t* accessor;
+    methodmap_method_t* accessor() const {
+        if (ident != iACCESSOR)
+            return nullptr;
+        return accessor_;
+    }
+    void set_accessor(methodmap_method_t* accessor) {
+        ident = iACCESSOR;
+        accessor_ = accessor;
+    }
+    cell constval() const {
+        assert(ident == iCONSTEXPR);
+        return constval_;
+    }
+    void set_constval(cell val) {
+        ident = iCONSTEXPR;
+        constval_ = val;
+    }
+    void set_array(int ident, symbol* sym) {
+        assert(ident == iARRAY || ident == iREFARRAY || ident == iARRAYCELL ||
+               ident == iARRAYCHAR);
+        this->ident = ident;
+        this->sym = sym;
+        this->array_level_ = 0;
+    }
+    void set_array(int ident, int size) {
+        assert(ident == iARRAY || ident == iREFARRAY);
+        this->ident = ident;
+        this->sym = nullptr;
+        this->array_level_ = size;
+    }
+    int array_size() const {
+        assert(ident == iARRAY || ident == iREFARRAY);
+        if (sym)
+            return sym->dim.array.length;
+        return array_level_;
+    }
+
+    union {
+        // when ident == iACCESSOR
+        methodmap_method_t* accessor_;
+        // when ident == iCONSTEXPR
+        cell constval_;
+        // when ident == iARRAY
+        int array_level_;
+    };
 
     static value ErrorValue() {
         value v = {};
         v.ident = iCONSTEXPR;
         return v;
-    }
-};
-
-/* Wrapper around value + l/rvalue bit. */
-struct svalue {
-    value val;
-    int lvalue;
-
-    bool canRematerialize() const {
-        return val.canRematerialize();
     }
 };
 

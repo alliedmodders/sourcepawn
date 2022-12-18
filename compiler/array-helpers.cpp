@@ -313,11 +313,11 @@ ArraySizeResolver::ResolveDimExprs()
             return false;
         } else {
             // Constant must be > 0.
-            if (v.constval <= 0) {
+            if (v.constval() <= 0) {
                 error(expr->pos(), 9);
                 return false;
             }
-            type_->dim[i] = v.constval;
+            type_->dim[i] = v.constval();
         }
     }
     return true;
@@ -340,8 +340,7 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
         auto type = types_->find(sym->tag);
         if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
             *v = {};
-            v->ident = iCONSTEXPR;
-            v->constval = sym->addr();
+            v->set_constval(sym->addr());
             return true;
         }
     }
@@ -652,7 +651,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         matchtag(type_.tag(), v.tag, MATCHTAG_COERCE);
 
         prev2 = prev1;
-        prev1 = ke::Some(v.constval);
+        prev1 = ke::Some(v.constval());
     }
 
     cell ncells = rank_size ? rank_size : array->exprs().size();
@@ -985,9 +984,9 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 AddInlineArray(field, expr);
             } else {
                 assert(item->val().ident == iCONSTEXPR);
-                add_data(item->val().constval);
+                add_data(item->val().constval());
                 prev2 = prev1;
-                prev1 = ke::Some(item->val().constval);
+                prev1 = ke::Some(item->val().constval());
             }
 
             if (field_list) {
@@ -1016,9 +1015,9 @@ ArrayEmitter::AddInlineArray(symbol* field, ArrayExpr* array)
 
     for (const auto& item : array->exprs()) {
         assert(item->val().ident == iCONSTEXPR);
-        add_data(item->val().constval);
+        add_data(item->val().constval());
         prev2 = prev1;
-        prev1 = ke::Some(item->val().constval);
+        prev1 = ke::Some(item->val().constval());
     }
 
     EmitPadding(field->dim.array.length, field->x.tags.index, array->exprs().size(),
