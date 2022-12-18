@@ -85,22 +85,17 @@ TypeDictionary::TypeDictionary(CompileContext& cc)
   : cc_(cc)
 {}
 
-Type*
-TypeDictionary::find(sp::Atom* name)
-{
-    for (const auto& type : types_) {
-        if (type->nameAtom() == name)
-            return type;
-    }
-    return nullptr;
+Type* TypeDictionary::find(sp::Atom* atom) {
+    auto iter = types_.find(atom);
+    if (iter == types_.end())
+        return nullptr;
+    return iter->second;
 }
 
-Type*
-TypeDictionary::find(int tag)
-{
-    assert(size_t(tag) < types_.size());
-
-    return types_[tag];
+Type* TypeDictionary::find(int tag) {
+    auto iter = tags_.find(tag);
+    assert(iter != tags_.end());
+    return iter->second;
 }
 
 Type* TypeDictionary::add(const char* name, TypeKind kind) {
@@ -112,8 +107,9 @@ Type* TypeDictionary::add(sp::Atom* name, TypeKind kind) {
 
     int tag = int(types_.size());
     Type* type = new Type(name, kind, tag);
-    types_.push_back(type);
-    return types_.back();
+    types_[name] = type;
+    tags_[tag] = type;
+    return type;
 }
 
 void
