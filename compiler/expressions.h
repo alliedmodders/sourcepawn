@@ -30,7 +30,6 @@
 
 class SemaContext;
 struct value;
-struct svalue;
 
 int NextExprOp(Lexer* lexer, int* opidx, int* list);
 

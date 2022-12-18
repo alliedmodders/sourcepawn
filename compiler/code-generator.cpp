@@ -305,7 +305,7 @@ CodeGenerator::EmitGlobalVar(VarDecl* decl)
     if (sym->ident == iVARIABLE) {
         assert(!init || init->right()->val().ident == iCONSTEXPR);
         if (init)
-            data_.Add(init->right()->val().constval);
+            data_.Add(init->right()->val().constval());
         else
             data_.Add(0);
     } else if (sym->ident == iARRAY) {
@@ -339,7 +339,7 @@ CodeGenerator::EmitLocalVar(VarDecl* decl)
                 EmitUserOp(init->assignop(), &tmp);
                 __ emit(OP_PUSH_PRI);
             } else if (val.ident == iCONSTEXPR) {
-                __ emit(OP_PUSH_C, val.constval);
+                __ emit(OP_PUSH_C, val.constval());
             } else {
                 EmitExpr(init->right());
                 __ emit(OP_PUSH_PRI);
@@ -482,7 +482,7 @@ CodeGenerator::EmitExpr(Expr* expr)
     AutoErrorPos aep(expr->pos());
 
     if (expr->val().ident == iCONSTEXPR) {
-        __ const_pri(expr->val().constval);
+        __ const_pri(expr->val().constval());
         return;
     }
 
@@ -541,7 +541,7 @@ CodeGenerator::EmitExpr(Expr* expr)
             auto e = expr->to<ArrayExpr>();
             auto addr = data_.dat_address();
             for (const auto& expr : e->exprs())
-                data_.Add(expr->val().constval);
+                data_.Add(expr->val().constval());
             __ const_pri(addr);
             break;
         }
@@ -662,7 +662,7 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
             EmitRvalue(&tmp);  /* and read the result into PRI */
         } else {
             __ emit(OP_PUSH_PRI);
-            InvokeGetter(val.accessor);
+            InvokeGetter(val.accessor());
             if (userop.sym) {
                 EmitUserOp(userop, &tmp);
             } else {
@@ -672,7 +672,7 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
                     __ emit(OP_DEC_PRI);
             }
             __ emit(OP_POP_ALT);
-            InvokeSetter(val.accessor, TRUE);
+            InvokeSetter(val.accessor(), TRUE);
         }
     } else {
         if (val.ident == iARRAYCELL || val.ident == iARRAYCHAR || val.ident == iACCESSOR) {
@@ -801,10 +801,10 @@ CodeGenerator::EmitBinaryInner(int oper_tok, const UserOperation& in_user_op, Ex
     // commutative operations.
     if (left_val.ident == iCONSTEXPR) {
         if (right_val.ident == iCONSTEXPR)
-            __ const_pri(right_val.constval);
+            __ const_pri(right_val.constval());
         else
             EmitExpr(right);
-        __ const_alt(left_val.constval);
+        __ const_alt(left_val.constval());
     } else {
         // If performing a binary operation, we need to make sure the LHS winds
         // up in ALT. If performing a store, we only need to preserve LHS to
@@ -812,12 +812,12 @@ CodeGenerator::EmitBinaryInner(int oper_tok, const UserOperation& in_user_op, Ex
         bool must_save_lhs = oper_tok || !left_val.canRematerialize();
         if (right_val.ident == iCONSTEXPR) {
             if (commutative(oper_tok)) {
-                __ const_alt(right_val.constval);
+                __ const_alt(right_val.constval());
                 user_op.swapparams ^= true;
             } else {
                 if (must_save_lhs)
                     __ emit(OP_PUSH_PRI);
-                __ const_pri(right_val.constval);
+                __ const_pri(right_val.constval());
                 if (must_save_lhs)
                     __ emit(OP_POP_ALT);
             }
@@ -1120,15 +1120,15 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
     if (idxval.ident == iCONSTEXPR) {
         if (!magic_string) {
             /* normal array index */
-            if (idxval.constval != 0) {
+            if (idxval.constval() != 0) {
                 /* don't add offsets for zero subscripts */
-                __ emit(OP_ADD_C, idxval.constval << 2);
+                __ emit(OP_ADD_C, idxval.constval() << 2);
             }
         } else {
             /* character index */
-            if (idxval.constval != 0) {
+            if (idxval.constval() != 0) {
                 /* don't add offsets for zero subscripts */
-                __ emit(OP_ADD_C, idxval.constval); /* 8-bit character */
+                __ emit(OP_ADD_C, idxval.constval()); /* 8-bit character */
             }
         }
     } else {
@@ -1445,7 +1445,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
             switch (v.ident) {
                 case iACCESSOR:
                     // EmitRvalue() removes iACCESSOR so we store it locally.
-                    accessor = v.accessor;
+                    accessor = v.accessor();
                     if (!accessor->setter) {
                         zap = false;
                         break;
@@ -1500,9 +1500,8 @@ CodeGenerator::EmitRvalue(value* lval)
             __ emit(OP_LREF_S_PRI, lval->sym->addr());
             break;
         case iACCESSOR:
-            InvokeGetter(lval->accessor);
+            InvokeGetter(lval->accessor());
             lval->ident = iEXPRESSION;
-            lval->accessor = nullptr;
             break;
         default:
             assert(lval->sym);
@@ -1530,7 +1529,7 @@ CodeGenerator::EmitStore(const value* lval)
             __ emit(OP_SREF_S_PRI, lval->sym->addr());
             break;
         case iACCESSOR:
-            InvokeSetter(lval->accessor, true);
+            InvokeSetter(lval->accessor(), true);
             break;
         default:
             assert(lval->sym);
@@ -1758,7 +1757,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
             const auto& v = expr->val();
             assert(v.ident == iCONSTEXPR);
 
-            case_labels.emplace(v.constval, label);
+            case_labels.emplace(v.constval(), label);
         }
 
         EmitStmt(stmt);
@@ -2026,7 +2025,7 @@ void CodeGenerator::EmitInc(const value* lval)
             break;
         case iACCESSOR:
             __ emit(OP_INC_PRI);
-            InvokeSetter(lval->accessor, false);
+            InvokeSetter(lval->accessor(), false);
             break;
         default:
             if (lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT)
@@ -2062,7 +2061,7 @@ void CodeGenerator::EmitDec(const value* lval)
             break;
         case iACCESSOR:
             __ emit(OP_DEC_PRI);
-            InvokeSetter(lval->accessor, false);
+            InvokeSetter(lval->accessor(), false);
             break;
         default:
             if (lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT)
