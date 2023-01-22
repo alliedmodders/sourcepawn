@@ -203,7 +203,7 @@ char *MD5::hex_digest(){
   assert(finalized);
 
   for (i=0; i<16; i++)
-    sprintf(s+i*2, "%02x", digest[i]);
+    snprintf(s+i*2, 3, "%02x", digest[i]);
 
   s[32]='\0';
 
@@ -218,7 +218,7 @@ char *MD5::hex_digest(char buffer[33]){
   assert(finalized);
 
   for (i=0; i<16; i++)
-    sprintf(buffer+i*2, "%02x", digest[i]);
+    snprintf(buffer+i*2, 3, "%02x", digest[i]);
 
   buffer[32]='\0';
 
