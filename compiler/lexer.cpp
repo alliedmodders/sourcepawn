@@ -1918,15 +1918,15 @@ bool Lexer::need(int token) {
 void Lexer::NeedTokenError(int token, int got) {
     char s1[20], s2[20];
     if (token < 256)
-        sprintf(s1, "%c", (char)token); /* single character token */
+        SafeSprintf(s1, sizeof(s1), "%c", (char)token); /* single character token */
     else
-        strcpy(s1, sc_tokens[token - tFIRST]); /* multi-character symbol */
+        SafeStrcpy(s1, sizeof(s1), sc_tokens[token - tFIRST]); /* multi-character symbol */
     if (!freading_)
-        strcpy(s2, "-end of file-");
+        SafeStrcpy(s2, sizeof(s2), "-end of file-");
     else if (got < 256)
-        sprintf(s2, "%c", (char)got);
+        SafeSprintf(s2, sizeof(s2), "%c", (char)got);
     else
-        strcpy(s2, sc_tokens[got - tFIRST]);
+        SafeStrcpy(s2, sizeof(s2), sc_tokens[got - tFIRST]);
     error(1, s1, s2); /* expected ..., but found ... */
 }
 
@@ -2016,9 +2016,9 @@ Lexer::require_newline(TerminatorPolicy policy)
 
     char s[20];
     if (tokid < 256)
-        sprintf(s, "%c", (char)tokid);
+        SafeSprintf(s, sizeof(s), "%c", (char)tokid);
     else
-        strcpy(s, sc_tokens[tokid - tFIRST]);
+        SafeStrcpy(s, sizeof(s), sc_tokens[tokid - tFIRST]);
     error(155, s);
     return FALSE;
 }
