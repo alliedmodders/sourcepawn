@@ -2386,13 +2386,19 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
             return false;
     }
 
-    if (stmt->on_true() && stmt->on_false()) {
+    if (stmt->on_false()) {
         FlowType a = stmt->on_true()->flow_type();
         FlowType b = stmt->on_false()->flow_type();
         if (a == b)
             stmt->set_flow_type(a);
         else if (a != Flow_None && b != Flow_None)
             stmt->set_flow_type(Flow_Mixed);
+    } else if (stmt->on_true()->flow_type() != Flow_None) {
+        // Ideally, we'd take the "on-true" flow type and propagate it upward.
+        // But that's not accurate, because it's really mixed with an implicit
+        // fallthrough. There's no nice way to handle this and the flow tracker
+        // is already way too complex.
+        stmt->set_flow_type(Flow_Mixed);
     }
 
     if (*always_returns)
@@ -2487,7 +2493,7 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
         cc_.reports()->ResetErrorFlag();
 
         if (ok && !sc_->warned_unreachable() && (sc_->always_returns() ||
-            block->flow_type() != Flow_None))
+            (block->flow_type() != Flow_None && block->flow_type() != Flow_Mixed)))
         {
             report(stmt, 225);
             sc_->set_warned_unreachable();
