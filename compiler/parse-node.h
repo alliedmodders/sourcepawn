@@ -135,7 +135,7 @@ class Stmt : public ParseNode
 
   private:
     StmtKind kind_ : 8;
-    FlowType flow_type_ : 3;
+    FlowType flow_type_ : 4;
 };
 
 class ChangeScopeNode : public Stmt
