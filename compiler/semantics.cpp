@@ -1012,13 +1012,19 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
 
     auto left = expr->left();
     auto right = expr->right();
-    if (!CheckExpr(left) || !CheckExpr(right))
+
+    if ((left = AnalyzeForTest(left)) == nullptr)
+        return false;
+    if ((right = AnalyzeForTest(right)) == nullptr)
         return false;
 
     if (left->lvalue())
-        left = expr->set_left(new RvalueExpr(left));
+        left = new RvalueExpr(left);
     if (right->lvalue())
-        right = expr->set_right(new RvalueExpr(right));
+        right = new RvalueExpr(right);
+
+    expr->set_left(left);
+    expr->set_right(right);
 
     const auto& left_val = left->val();
     const auto& right_val = right->val();
