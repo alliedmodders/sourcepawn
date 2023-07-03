@@ -1368,6 +1368,12 @@ bool Semantics::CheckCommaExpr(CommaExpr* comma) {
         comma->exprs().back() = last;
     }
 
+    for (size_t i = 0; i < comma->exprs().size() - 1; i++) {
+        auto expr = comma->exprs().at(i);
+        if (!expr->HasSideEffects())
+            report(expr, 231) << i;
+    }
+
     comma->val() = last->val();
     comma->set_lvalue(last->lvalue());
 
