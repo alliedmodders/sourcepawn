@@ -2025,6 +2025,11 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     else
         fun->set_is_stock();
 
+    if (map->name() == symbol && ret_type.type.ident != 0) {
+        // Keep parsing, as long as we abort before name resolution it's fine.
+        report(fun, 434);
+    }
+
     bool has_this = false;
     if (ret_type.type.ident != 0 && !is_static)
         has_this = true;
