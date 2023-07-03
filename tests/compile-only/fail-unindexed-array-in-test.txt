@@ -1,0 +1,3 @@
+(10) : error 033: array must be indexed (variable "g_sStr")
+(26) : error 033: array must be indexed (variable "localStr")
+(28) : error 033: array must be indexed (variable "arg1")
