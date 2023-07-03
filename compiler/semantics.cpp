@@ -200,8 +200,11 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
 
     auto sym = decl->sym();
     auto init = decl->init()->right()->as<StructExpr>();
-    assert(init); // If we parse struct initializers as a normal global, this check will need to be
-                  // soft.
+    if (!init) {
+        report(decl->init(), 433);
+        return false;
+    }
+
     auto type = types_->find(sym->tag);
     auto ps = type->as<pstruct_t>();
 
