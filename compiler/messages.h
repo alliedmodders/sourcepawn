@@ -315,4 +315,5 @@ static const char* errmsg_ex[] = {
     /*431*/ "script uses too much memory, cannot compile\n",
     /*432*/ "type %s was already declared as %s\n",
     /*433*/ "struct variable must have struct initializer\n",
+    /*434*/ "constructor cannot have a return type\n",
 };
