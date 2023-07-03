@@ -314,4 +314,5 @@ static const char* errmsg_ex[] = {
     /*430*/ "invalid macro definition\n",
     /*431*/ "script uses too much memory, cannot compile\n",
     /*432*/ "type %s was already declared as %s\n",
+    /*433*/ "struct variable must have struct initializer\n",
 };

@@ -1,0 +1,1 @@
+(7) : error 433: struct variable must have struct initializer
