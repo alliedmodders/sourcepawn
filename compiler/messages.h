@@ -317,4 +317,5 @@ static const char* errmsg_ex[] = {
     /*433*/ "struct variable must have struct initializer\n",
     /*434*/ "constructor cannot have a return type\n",
     /*435*/ "can't get current working directory\n",
+    /*436*/ "wrong number of dimensions, expected %d got %d\n",
 };

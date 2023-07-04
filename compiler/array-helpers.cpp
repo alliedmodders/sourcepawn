@@ -845,7 +845,7 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     if (types_->find(type.semantic_tag())->isEnumStruct())
         expected_dims--;
     if (expected_dims != ctor->exprs().size()) {
-        report(19) << (int)expected_dims << (int)ctor->exprs().size();
+        report(436) << (int)expected_dims << (int)ctor->exprs().size();
         return false;
     }
 
