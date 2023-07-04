@@ -132,21 +132,15 @@ GetMessageForNumber(int number)
  *                     errflag    (altered)
  */
 int
-error(int number, ...)
+error(int number)
 {
     auto& cc = CompileContext::get();
     if (auto pos_override = cc.reports()->pos_override()) {
-        va_list ap;
-        va_start(ap, number);
-        error_va(pos_override->pos(), number, ap);
-        va_end(ap);
+        error(pos_override->pos(), number);
         return 0;
     }
 
-    va_list ap;
-    va_start(ap, number);
-    ErrorReport report = ErrorReport::infer_va(number, ap);
-    va_end(ap);
+    ErrorReport report = ErrorReport::infer(number);
 
     report_error(std::move(report));
     return 0;
@@ -240,12 +234,9 @@ MessageBuilder::~MessageBuilder()
 }
 
 int
-error(const token_pos_t& where, int number, ...)
+error(const token_pos_t& where, int number)
 {
-    va_list ap;
-    va_start(ap, number);
-    ErrorReport report = ErrorReport::create_va(number, where.file, where.line, ap);
-    va_end(ap);
+    ErrorReport report = ErrorReport::create(number, where.file, where.line);
 
     report.lineno = where.line;
     report_error(std::move(report));
@@ -253,29 +244,16 @@ error(const token_pos_t& where, int number, ...)
 }
 
 int
-error_va(const token_pos_t& where, int number, va_list ap)
+error(symbol* sym, int number)
 {
-    ErrorReport report = ErrorReport::create_va(number, where.file, where.line, ap);
-
-    report.lineno = where.line;
-    report_error(std::move(report));
-    return 0;
-}
-
-int
-error(symbol* sym, int number, ...)
-{
-    va_list ap;
-    va_start(ap, number);
-    ErrorReport report = ErrorReport::create_va(number, sym->fnumber, sym->lnumber, ap);
-    va_end(ap);
+    ErrorReport report = ErrorReport::create(number, sym->fnumber, sym->lnumber);
 
     report_error(std::move(report));
     return 0;
 }
 
 ErrorReport
-ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
+ErrorReport::create(int number, int fileno, int lineno)
 {
     auto& cc = CompileContext::get();
 
@@ -294,25 +272,18 @@ ErrorReport::create_va(int number, int fileno, int lineno, va_list ap)
     const char* prefix = GetErrorTypePrefix(report.type);
     const char* format = GetMessageForNumber(report.number);
 
-    char msg[1024];
-    ke::SafeVsprintf(msg, sizeof(msg), format, ap);
-
-    char base[1024];
-    ke::SafeSprintf(base, sizeof(base), "%s(%d) : %s %03d: ", report.filename.c_str(),
-                    report.lineno, prefix, report.number);
-
-    char full[2048];
-    ke::SafeSprintf(full, sizeof(full), "%s%s", base, msg);
-    report.message = full;
-
+    // Do not format "format" anymore, legacy error() is only allowed for
+    // non-formatted messages.
+    report.message = ke::StringPrintf("%s(%d) : %s %03d: %s", report.filename.c_str(),
+                                      report.lineno, prefix, report.number, format);
     return report;
 }
 
 ErrorReport
-ErrorReport::infer_va(int number, va_list ap)
+ErrorReport::infer(int number)
 {
     auto& cc = CompileContext::get();
-    return create_va(number, -1, cc.lexer()->fline(), ap);
+    return create(number, -1, cc.lexer()->fline());
 }
 
 void

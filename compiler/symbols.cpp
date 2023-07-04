@@ -253,13 +253,13 @@ check_operatortag(int opertok, int resulttag, const char* opername)
         case tlLE:
         case tlGE:
             if (resulttag != CompileContext::get().types()->tag_bool()) {
-                error(63, opername, "bool:"); /* operator X requires a "bool:" result tag */
+                report(63) << opername << "bool:"; /* operator X requires a "bool:" result tag */
                 return FALSE;
             }
             break;
         case '~':
             if (resulttag != 0) {
-                error(63, opername, "_:"); /* operator "~" requires a "_:" result tag */
+                report(63) << opername << "_:"; /* operator "~" requires a "_:" result tag */
                 return FALSE;
             }
             break;

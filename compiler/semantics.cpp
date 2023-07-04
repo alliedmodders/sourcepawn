@@ -245,7 +245,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
     }
 
     if (visited->at(arg->index))
-        error(field->value->pos(), 244, field->name->chars());
+        report(field->value->pos(), 244) << field->name->chars();
 
     visited->at(arg->index) = true;
 
@@ -255,7 +255,8 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
             return false;
         }
         if (arg->type.tag() != types_->tag_string())
-            error(expr->pos(), 213, type_to_name(types_->tag_string()), type_to_name(arg->type.tag()));
+            report(expr->pos(), 213) << type_to_name(types_->tag_string())
+                                     << type_to_name(arg->type.tag());
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         if (arg->type.ident != iVARIABLE) {
             error(expr->pos(), 23);
@@ -2474,7 +2475,7 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
         }
         case iCONSTEXPR:
             if (testconst && (sym->usage & uREAD) == 0) {
-                error(sym, 203, sym->name()); /* symbol isn't used: ... */
+                report(sym, 203) << sym->name(); /* symbol isn't used: ... */
             }
             break;
         case iMETHODMAP:
@@ -2484,9 +2485,9 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
         default:
             /* a variable */
             if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
-                error(sym, 203, sym->name()); /* symbol isn't used (and not stock) */
+                report(sym, 203) << sym->name(); /* symbol isn't used (and not stock) */
             } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
-                error(sym, 204, sym->name()); /* value assigned to symbol is never used */
+                report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
             }
     }
     return entry;

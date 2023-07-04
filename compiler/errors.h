@@ -42,8 +42,8 @@ enum class ErrorType {
 };
 
 struct ErrorReport {
-    static ErrorReport infer_va(int number, va_list ap);
-    static ErrorReport create_va(int number, int fileno, int lineno, va_list ap);
+    static ErrorReport infer(int number);
+    static ErrorReport create(int number, int fileno, int lineno);
 
     int number;
     int fileno;
@@ -71,10 +71,9 @@ class AutoErrorPos final
     AutoErrorPos* prev_;
 };
 
-int error(int number, ...);
-int error(symbol* sym, int number, ...);
-int error(const token_pos_t& where, int number, ...);
-int error_va(const token_pos_t& where, int number, va_list ap);
+int error(int number);
+int error(symbol* sym, int number);
+int error(const token_pos_t& where, int number);
 
 class MessageBuilder
 {

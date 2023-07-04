@@ -280,7 +280,7 @@ PstructDecl::EnterNames(SemaContext& sc)
         return false;
     }
     if (!isupper(*name_->chars())) {
-        error(pos_, 109, "struct");
+        report(pos_, 109) << "struct";
         return false;
     }
 

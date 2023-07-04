@@ -451,7 +451,7 @@ Parser::parse_enumstruct()
     int opening_line = lexer_->fline();
     while (!lexer_->match('}')) {
         if (!lexer_->freading()) {
-            error(151, opening_line);
+            report(151) << opening_line;
             break;
         }
 
@@ -1535,7 +1535,7 @@ Parser::parse_compound(bool sameline)
     std::vector<Stmt*> stmts;
     while (lexer_->match('}') == 0 && !cc_.must_abort()) {
         if (!lexer_->freading()) {
-            error(30, block_start); /* compound block not closed at end of file */
+            report(30) << block_start; /* compound block not closed at end of file */
             break;
         }
         if (Stmt* stmt = parse_stmt(&indent, true))
@@ -1767,7 +1767,7 @@ Parser::parse_case(std::vector<Expr*>* exprs)
         if (Expr* expr = hier14())
             exprs->emplace_back(expr);
         if (lexer_->match(tDBLDOT))
-            error(1, ":", "..");
+            report(1) << ":" << "..";
     } while (lexer_->match(','));
 
     lexer_->need(':');
@@ -2403,7 +2403,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                         if (lexer_->peek(tSYMBOL)) {
                             error(143);
                         } else {
-                            error(157, sc_tokens[tok_id - tFIRST]);
+                            report(157) << sc_tokens[tok_id - tFIRST];
                             decl->name = cc_.atom(sc_tokens[tok_id - tFIRST]);
                         }
                         break;
@@ -2672,17 +2672,17 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
                 return true;
             }
             if (tok->atom->str() == "Float") {
-                error(98, "Float", "float");
+                report(98) << "Float" << "float";
                 *out = TypenameInfo{types_->tag_float()};
                 return true;
             }
             if (tok->atom->str() == "String") {
-                error(98, "String", "char");
+                report(98) << "String" << "char";
                 *out = TypenameInfo{types_->tag_string()};
                 return true;
             }
             if (tok->atom->str() == "_") {
-                error(98, "_", "int");
+                report(98) << "_" << "int";
                 *out = TypenameInfo{0};
                 return true;
             }

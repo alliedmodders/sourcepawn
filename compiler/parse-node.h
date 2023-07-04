@@ -76,12 +76,12 @@ class ParseNode : public PoolObject
     void set_tree_has_heap_allocs(bool b) { tree_has_heap_allocs_ = b; }
 
   protected:
-    void error(const token_pos_t& pos, int number, ...);
+    void error(const token_pos_t& pos, int number);
 
   private:
     // Hide this symbol. Calls to error(pos... will get more accurate as we
     // make adjustments.
-    void error(int number, ...) = delete;
+    void error(int number) = delete;
 
   protected:
     token_pos_t pos_;
