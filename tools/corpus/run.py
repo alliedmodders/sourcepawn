@@ -81,6 +81,7 @@ def main():
         failed = runner.run()
 
     if failed:
+        print("{} out of {} failed to compile.".format(failed, len(files)))
         sys.exit(1)
 
 class Runner(object):
@@ -95,7 +96,7 @@ class Runner(object):
         self.skip_set_ = set()
         self.missing_includes_ = {}
         self.log_ = sys.stderr
-        self.failed_ = False
+        self.failed_ = 0
 
         self.includes_ = [os.path.join(self.args_.corpus, 'include')]
         self.includes_.extend(args.include)
@@ -275,7 +276,7 @@ class Runner(object):
                     remove = True
             elif not self.args_.remove_good:
                 # Normal testing mode.
-                self.failed_ = True
+                self.failed_ += 1
 
             m = re.search("cannot read from file: \"(.+)\"", output)
             if m is not None:
