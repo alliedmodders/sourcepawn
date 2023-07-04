@@ -285,7 +285,7 @@ ArraySizeResolver::ResolveDimExprs()
             return false;
 
         if (!is_valid_index_tag(v.tag)) {
-            error(expr->pos(), 77, types_->find(v.tag)->prettyName());
+            report(expr->pos(), 77) << types_->find(v.tag)->prettyName();
             return false;
         }
 
@@ -295,7 +295,7 @@ ArraySizeResolver::ResolveDimExprs()
             //     int blah[y];
             //              ^-- no
             if (type_->is_new) {
-                error(expr->pos(), 161, type_to_name(type_->tag()));
+                report(expr->pos(), 161) << type_to_name(type_->tag());
                 return false;
             }
 
@@ -439,7 +439,7 @@ FixedArrayValidator::Validate()
 
     for (int i = 0; i < type_.numdim(); i++) {
         if (!type_.dim[i] && decl_ && decl_->vclass() != sARGUMENT) {
-            error(decl_->pos(), 46, decl_->name()->chars());
+            report(decl_->pos(), 46) << decl_->name()->chars();
             return true;
         }
     }
@@ -506,11 +506,11 @@ FixedArrayValidator::CheckArgument(Expr* init)
     assert(sym->vclass == sGLOBAL);
 
     if (sym->ident != iARRAY && sym->ident != iREFARRAY) {
-        error(expr->pos(), 134, type_to_name(type_.tag()), "array");
+        report(expr->pos(), 134) << type_to_name(type_.tag()) << "array";
         return false;
     }
     if (type_.tag() != sym->tag) {
-        error(expr->pos(), 134, type_to_name(type_.tag()), type_to_name(sym->tag));
+        report(expr->pos(), 134) << type_to_name(type_.tag()) << type_to_name(sym->tag);
         return false;
     }
 
@@ -572,8 +572,8 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
 
     if (StringExpr* str = init->as<StringExpr>()) {
         if (type_.tag() != types_->tag_string()) {
-            error(init->pos(), 134, types_->find(types_->tag_string())->prettyName(),
-                  types_->find(type_.tag())->prettyName());
+            report(init->pos(), 134) << types_->find(types_->tag_string())->prettyName()
+                                     << types_->find(type_.tag())->prettyName();
             return false;
         }
 
@@ -661,7 +661,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         }
         if (prev1.isValid() && prev2.isValid() && type_.tag()) {
             // Unknown stepping type.
-            error(array->exprs().back()->pos(), 68, type_to_name(type_.tag()));
+            report(array->exprs().back()->pos(), 68) << type_to_name(type_.tag());
             return false;
         }
         if (!rank_size ||
@@ -837,7 +837,7 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     }
 
     if (ctor->tag() != type.semantic_tag()) {
-        error(ctor->pos(), 164, type_to_name(ctor->tag()), type_to_name(type.semantic_tag()));
+        report(ctor->pos(), 164) << type_to_name(ctor->tag()) << type_to_name(type.semantic_tag());
         return false;
     }
 
@@ -845,7 +845,7 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     if (types_->find(type.semantic_tag())->isEnumStruct())
         expected_dims--;
     if (expected_dims != ctor->exprs().size()) {
-        error(19, (int)expected_dims, (int)ctor->exprs().size());
+        report(19) << (int)expected_dims << (int)ctor->exprs().size();
         return false;
     }
 

@@ -128,7 +128,8 @@ Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
         } else {
             pcwd = getcwd(cwd, sizeof(cwd));
             if (!pcwd) {
-                error(194, "can't get current working directory, either the internal buffer is too small or the working directory can't be determined.");
+                report(435);
+                return false;
             }
 
 #ifdef _WIN32
@@ -889,7 +890,7 @@ void Lexer::HandleEof() {
     if (prev_state_.empty()) {
         freading_ = false;
         if (!ifstack_.empty())
-            error(1, "#endif", "-end of file-");
+            report(1) << "#endif" << "-end of file-";
         return;
     }
 
@@ -985,7 +986,7 @@ void Lexer::HandleMultiLineComment() {
         }
         char c = peek();
         if (c == '\0') {
-            error(1, "*/", "-end of file-");
+            report(1) << "*/" << "-end of file-";
             return;
         }
         if (IsNewline(c)) {
@@ -1927,7 +1928,7 @@ void Lexer::NeedTokenError(int token, int got) {
         SafeSprintf(s2, sizeof(s2), "%c", (char)got);
     else
         SafeStrcpy(s2, sizeof(s2), sc_tokens[got - tFIRST]);
-    error(1, s1, s2); /* expected ..., but found ... */
+    report(1) << s1 << s2; /* expected ..., but found ... */
 }
 
 // If the next token is on the current line, return that token. Otherwise,
@@ -2019,7 +2020,7 @@ Lexer::require_newline(TerminatorPolicy policy)
         SafeSprintf(s, sizeof(s), "%c", (char)tokid);
     else
         SafeStrcpy(s, sizeof(s), sc_tokens[tokid - tFIRST]);
-    error(155, s);
+    report(155) << s;
     return FALSE;
 }
 

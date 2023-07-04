@@ -270,7 +270,7 @@ obj_typeerror(int id, int tag1, int tag2)
         left = "int";
     if (!right || strcmp(right, "_") == 0)
         right = "int";
-    error(id, right, left);
+    report(id) << right << left;
     return FALSE;
 }
 
@@ -295,7 +295,7 @@ matchobjecttags(Type* formal, Type* actual, int flags)
             return TRUE;
 
         if (!(flags & MATCHTAG_SILENT))
-            error(154, pc_tagname(formaltag));
+            report(154) << pc_tagname(formaltag);
         return FALSE;
     }
 
@@ -311,7 +311,7 @@ matchobjecttags(Type* formal, Type* actual, int flags)
             return TRUE;
 
         if (!(flags & MATCHTAG_SILENT))
-            error(148, pc_tagname(formaltag));
+            report(148) << pc_tagname(formaltag);
         return FALSE;
     }
 
@@ -533,7 +533,7 @@ matchtag(int formaltag, int actualtag, int flags)
     }
 
     if (!(flags & MATCHTAG_SILENT))
-        error(213, type_to_name(formaltag), type_to_name(actualtag));
+        report(213) << type_to_name(formaltag) << type_to_name(actualtag);
     return FALSE;
 }
 
@@ -612,7 +612,7 @@ checktag(int tag, int exprtag)
 
     // If matchtag() didn't error, report an error.
     if (errors.ok())
-        error(213, type_to_name(tag), type_to_name(exprtag));
+        report(213) << type_to_name(tag) << type_to_name(exprtag);
 
     return FALSE; /* no tag matched */
 }
