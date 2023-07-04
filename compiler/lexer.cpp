@@ -432,7 +432,7 @@ void Lexer::HandleDirectives() {
             } else if (current_token()->atom->str() == "dynamic") {
                 preproc_expr(&cc_.options()->pragma_dynamic, NULL);
             } else if (current_token()->atom->str() == "rational") {
-                error(249);
+                error(250);
                 SkimUntilEndOfLine();
             } else if (current_token()->atom->str() == "semicolon") {
                 cell val;

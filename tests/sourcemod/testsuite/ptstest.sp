@@ -17,7 +17,7 @@ public OnPluginStart()
 public bool:filter(const String:pattern[], Handle:clients)
 {
 	for (new i = 1; i <= MaxClients; i++) {
-		if (IsClientInGame(i))
+		if (IsPlayerInGame(i))
 			PushArrayCell(clients, i)
 	}
 

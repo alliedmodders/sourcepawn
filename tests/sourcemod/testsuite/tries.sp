@@ -1,3 +1,4 @@
+// vim: set sts=2 ts=8 sw=2 tw=99 et ft=c :
 #include <sourcemod>
 
 public Plugin:myinfo = 

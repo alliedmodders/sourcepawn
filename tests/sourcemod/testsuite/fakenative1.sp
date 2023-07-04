@@ -9,14 +9,14 @@ public Plugin:myinfo =
 	url = "http://www.sourcemod.net/"
 };
 
-public APLRes AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+public bool:AskPluginLoad(Handle:myself, bool:late, String:error[], err_max)
 {
 	CreateNative("TestNative1", __TestNative1);
 	CreateNative("TestNative2", __TestNative2);
 	CreateNative("TestNative3", __TestNative3);
 	CreateNative("TestNative4", __TestNative4);
 	CreateNative("TestNative5", __TestNative5);
-	return APLRes_Success;
+	return true;
 }
 
 public __TestNative1(Handle:plugin, numParams)
