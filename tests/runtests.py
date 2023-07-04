@@ -371,6 +371,8 @@ class Test(object):
 
     key = m.group(1)
     value = m.group(2).strip()
+    if key == 'vim':
+      return True
     if key not in Test.ManifestKeys:
       raise Exception("Test {0} contains unsupported manifest key {1}".format(
         self.name, key))
