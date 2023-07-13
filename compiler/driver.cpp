@@ -116,8 +116,8 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
         parser.allow_slashes();
     }
 
-    parser.add_usage_line("sym=val", "Define constant \"sym\" with value \"val\".");
-    parser.add_usage_line("sym=", "Define constant \"sym\" with value 0.");
+    parser.add_usage_line("sym=val", "Define macro \"sym\" with value \"val\".");
+    parser.add_usage_line("sym=", "Define macro \"sym\" with value 0.");
 
     auto usage = "[options] <filename> [filename...]";
     parser.set_usage_line(usage);
