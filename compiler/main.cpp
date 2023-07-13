@@ -120,10 +120,6 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 
     auto options = cc.options();
 
-    for (const auto& pair : options->constants) {
-        DefineConstant(cc, cc.atom(pair.first), pair.second, sGLOBAL);
-    }
-
 #ifdef __EMSCRIPTEN__
     setup_emscripten_fs();
 #endif
@@ -146,6 +142,10 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
     }
 
     cc.lexer()->Init(cc.inpf_org());
+
+    for (const auto& pair : options->predefines) {
+        cc.lexer().get()->AddMacro(pair.first.c_str(), pair.second.c_str());
+    }
 
     setconstants(); /* set predefined constants and tagnames */
 

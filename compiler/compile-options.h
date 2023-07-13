@@ -40,5 +40,5 @@ struct CompileOptions {
     bool show_includes = false;
     bool syntax_only = false;
     int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
-    std::vector<std::pair<std::string, int>> constants;
+    std::vector<std::pair<std::string, std::string>> predefines;
 };
