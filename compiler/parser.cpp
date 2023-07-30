@@ -308,6 +308,8 @@ Parser::PreprocExpr(cell* val, int* tag)
     Semantics sema(cc, nullptr);
 
     SemaContext sc(&sema);
+    sc.set_preprocessing();
+
     sema.set_context(&sc);
 
     if (!expr->Bind(sc) || !sema.CheckExpr(expr))

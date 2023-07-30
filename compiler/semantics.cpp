@@ -549,10 +549,12 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
     }
 
     if (val.ident == iCONSTEXPR) {
-        if (val.constval())
-            report(expr, 206);
-        else
-            report(expr, 205);
+        if (!sc_->preprocessing()) {
+            if (val.constval())
+                report(expr, 206);
+            else
+                report(expr, 205);
+        }
     } else if (auto sym_expr = expr->as<SymbolExpr>()) {
         if (sym_expr->sym()->ident == iFUNCTN)
             report(expr, 249);

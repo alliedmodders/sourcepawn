@@ -47,7 +47,8 @@ class SemaContext
         sema_(parent.sema()),
         scope_(parent.scope_),
         func_(func),
-        func_node_(func_node)
+        func_node_(func_node),
+        preprocessing_(parent.preprocessing())
     {
         cc_prev_sc_ = cc_.sema();
         cc_.set_sema(this);
@@ -111,6 +112,9 @@ class SemaContext
     AutoCreateScope* scope_creator() const { return scope_creator_; }
     void set_scope_creator(AutoCreateScope* scope) { scope_creator_ = scope; }
 
+    void set_preprocessing() { preprocessing_ = true; }
+    bool preprocessing() const { return preprocessing_; }
+
     std::unordered_set<SymbolScope*>& static_scopes() { return static_scopes_; }
 
   private:
@@ -128,6 +132,7 @@ class SemaContext
     bool loop_has_continue_ = false;
     bool loop_has_return_ = false;
     bool warned_unreachable_ = false;
+    bool preprocessing_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
     std::unordered_set<SymbolScope*> static_scopes_;
 };
