@@ -14,31 +14,27 @@ AppIcon ICON "pawn.ico"
  *  for details on version information and the VERSIONINFO structure.
  */
 
-#define VERSIONNAME          "smcomp.exe\0"
+#define VERSIONNAME          "spcomp.exe\0"
 #define VERSIONDESCRIPTION   "SourcePawn Compiler\0"
-#define VERSIONPRODUCTNAME   "smcomp\0"
+#define VERSIONPRODUCTNAME   "spcomp\0"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION    SM_VERSION_FILE
 PRODUCTVERSION SM_VERSION_FILE
 FILEFLAGSMASK  0x0000003FL
 FILEFLAGS      0
-#if defined(WIN32)
-  FILEOS       VOS__WINDOWS32
-#else
-  FILEOS       VOS__WINDOWS16
-#endif
+FILEOS       VOS__WINDOWS32
 FILETYPE       VFT_DLL
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
         BLOCK "040904E4"
         BEGIN
-            VALUE "CompanyName",      "(C)1998-2006 ITB CompuPhase, AlliedModders LLC\0"
+            VALUE "CompanyName",      "AlliedModders LLC\0"
             VALUE "FileDescription",  VERSIONDESCRIPTION
             VALUE "FileVersion",      SM_VERSION_STRING
             VALUE "InternalName",     VERSIONNAME
-            VALUE "LegalCopyright",   "(C)1998-2006 ITB CompuPhase, AlliedModders LLC\0"
+            VALUE "LegalCopyright",   "Copyright (C) 2023 AlliedModders LLC\0"
             VALUE "OriginalFilename", VERSIONNAME
             VALUE "ProductName",      VERSIONPRODUCTNAME
             VALUE "ProductVersion",   SM_VERSION_STRING

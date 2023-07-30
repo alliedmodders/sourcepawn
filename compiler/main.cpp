@@ -64,10 +64,10 @@
 #endif
 
 #include <time.h>
-#if defined(SOURCEMOD_BUILD)
-#    include <sourcemod_version.h>
-#    define SOURCEPAWN_VERSION SOURCEMOD_VERSION
-#endif
+
+// Hack to build under SourceMod. This should be cleaned up at some point.
+#undef SM_USE_VERSIONLIB
+#include <sourcemod_version.h>
 
 #ifdef __EMSCRIPTEN__
 #    include <emscripten.h>
@@ -376,7 +376,7 @@ setconfig(char* root)
 }
 
 void setcaption() {
-    printf("SourcePawn Compiler %s\n", SOURCEPAWN_VERSION);
+    printf("SourcePawn Compiler %s\n", SM_VERSION_STRING);
     printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
     printf("Copyright (c) 2004-2021 AlliedModders LLC\n\n");
 }
