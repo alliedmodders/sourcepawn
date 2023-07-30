@@ -22,10 +22,9 @@
 # include <emscripten.h>
 #endif
 
-#if defined(SOURCEMOD_BUILD)
-# include <sourcemod_version.h>
-# define SOURCEPAWN_VERSION SOURCEMOD_VERSION
-#endif
+// Hack to build under SourceMod. This should be cleaned up at some point.
+#undef SM_USE_VERSIONLIB
+#include <sourcemod_version.h>
 
 using namespace ke;
 using namespace ke::args;
@@ -392,7 +391,7 @@ int main(int argc, char** argv)
   }
 
   if (show_version.value()) {
-    fprintf(stdout, "SourcePawn version: %s\n", SOURCEPAWN_VERSION);
+    fprintf(stdout, "SourcePawn version: %s\n", SM_VERSION_STRING);
     fprintf(stdout, "API version: %x/%x\n", SOURCEPAWN_API_VERSION, SOURCEPAWN_ENGINE2_API_VERSION);
 #if defined(SP_HAS_JIT)
     fprintf(stdout, "Just-in-time (JIT) compiler available.\n");

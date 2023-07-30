@@ -21,10 +21,8 @@ import os
 import subprocess
 import sys
 
-
 def Normalize(path):
     return os.path.abspath(os.path.normpath(path))
-
 
 def SetArchFlags(compiler):
     if compiler.like('gcc'):
@@ -34,7 +32,6 @@ def SetArchFlags(compiler):
         else:
             compiler.cflags += ['-fPIC']
 
-
 class Config(object):
     def __init__(self):
         super(Config, self).__init__()
@@ -42,6 +39,7 @@ class Config(object):
         self.enable_asan = getattr(builder.options, 'enable_asan', False)
         self.targets = []
         self.asan_libs = {}
+        self.generated_headers = None
 
     def configure(self):
         if builder.options.targets:
@@ -60,6 +58,9 @@ class Config(object):
             cxx = builder.DetectCxx()
             self.configure_cxx(cxx)
             self.targets.append(cxx)
+
+        if builder.backend == 'amb2':
+            self.generate_version_header()
 
     def configure_cxx(self, cxx):
         if cxx.like('gcc'):
@@ -116,7 +117,6 @@ class Config(object):
                 cxx.cxxdefines += ['NOMINMAX']
 
         cxx.defines += ['KE_THREADSAFE']
-        cxx.defines += ['SOURCEPAWN_VERSION="1.12"']
 
         if getattr(builder.options, 'enable_spew', False):
             cxx.defines += ['JIT_SPEW']
@@ -264,6 +264,24 @@ class Config(object):
 
         self.asan_libs[cxx.target.arch] = os.path.dirname(output)
 
+    def generate_version_header(self):
+        includes = builder.AddFolder('includes')
+        script = os.path.join(builder.sourcePath, 'tools', 'generate_version_header.py')
+        inputs = [
+            os.path.join(builder.sourcePath, 'product.version'),
+            script,
+        ]
+        outputs = [
+            os.path.join(builder.buildFolder, 'includes', 'sourcemod_version.h')
+        ]
+        argv = [
+            sys.executable,
+            script,
+            inputs[0],
+            outputs[0],
+        ]
+        self.generated_headers = builder.AddCommand(inputs = [], argv = argv, outputs = outputs)
+
     def ProgramBuilder(self, compiler, name):
         binary = compiler.Program(name)
         if binary.compiler.like('msvc'):
@@ -345,6 +363,13 @@ class SourcePawn(object):
             self.amtl,
         ]
 
+        generated_headers = getattr(self.root, 'generated_headers', None)
+        if generated_headers:
+            for entry in generated_headers:
+                include_path = os.path.join(builder.buildPath, os.path.dirname(entry.path))
+                binary.compiler.includes += [include_path]
+            binary.compiler.sourcedeps += generated_headers
+
     def BuildCoreForArch(self, cxx, builder):
         builder.cxx = cxx
 
@@ -401,6 +426,9 @@ class SourcePawn(object):
         binary.sources = [
             'compiler/driver.cpp',
         ]
+
+        if binary.compiler.target.platform == 'windows':
+            binary.sources += ['compiler/version.rc']
 
         self.AddStaticLibraries(binary)
 
