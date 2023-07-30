@@ -1009,10 +1009,11 @@ CodeGenerator::EmitChainedCompareExprTest(ChainedCompareExpr* root, bool jump_on
     Expr* left = root->first();
     Expr* right = root->ops()[0].expr;
 
-    EmitExpr(right);
-    __ emit(OP_PUSH_PRI);
     EmitExpr(left);
+    __ emit(OP_PUSH_PRI);
+    EmitExpr(right);
     __ emit(OP_POP_ALT);
+    __ emit(OP_XCHG);
 
     int token = root->ops()[0].token;
     if (!jump_on_true) {
