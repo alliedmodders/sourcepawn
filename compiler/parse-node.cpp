@@ -71,6 +71,17 @@ LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
     }
 }
 
+bool Stmt::IsTerminal() const {
+    switch (flow_type()) {
+        case Flow_Break:
+        case Flow_Continue:
+        case Flow_Return:
+            return true;
+        default:
+            return false;
+    }
+}
+
 BlockStmt*
 BlockStmt::WrapStmt(Stmt* stmt)
 {
