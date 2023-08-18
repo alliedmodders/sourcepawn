@@ -118,7 +118,7 @@ class Stmt : public ParseNode
     FlowType flow_type() const { return flow_type_; }
     void set_flow_type(FlowType type) { flow_type_ = type; }
 
-    bool IsTerminal() const { return flow_type() != Flow_None; }
+    bool IsTerminal() const;
 
     StmtKind kind() const { return kind_; }
     bool is(StmtKind k) const { return kind() == k; }
