@@ -1,11 +1,12 @@
 # vim: set ts=2 sw=2 tw=99 et:
 import argparse
+import ast
 import datetime
 import os
 import platform
 import re
-import subprocess
 import sys
+
 import testutil
 from testutil import manifest_get
 
@@ -252,12 +253,13 @@ class TestPlan(object):
 ###
 class Test(object):
   ManifestKeys = set([
-    'type',
-    'returnCode',
-    'warnings_are_errors',
     'compiler',
-    'force_old_parser',
+    'defines',
     'force_new_parser',
+    'force_old_parser',
+    'returnCode',
+    'type',
+    'warnings_are_errors',
   ])
 
   def __init__(self, **kwargs):
@@ -341,6 +343,22 @@ class Test(object):
     if 'returnCode' in self.local_manifest_:
       return int(self.local_manifest_['returnCode'])
     return 0
+  
+  @property
+  def defines(self):
+    if 'defines' in self.local_manifest_:
+      value = self.local_manifest_['defines']
+      if isinstance(value, str):
+        try:
+          value = ast.literal_eval(value)
+          if isinstance(value, list):
+            return value
+        except:
+          pass
+
+      return [value]
+
+    return []
 
   def should_run(self, mode):
     compiler = self.local_manifest_.get('compiler', None)
@@ -495,8 +513,12 @@ class TestRunner(object):
     argv += mode['spcomp']['args']
     argv += mode['args']
     argv += ['-z', '1'] # Fast compilation for tests.
+
     if test.warnings_are_errors:
       argv += ['-E']
+    for define in test.defines:
+      argv += [define]
+
     if mode['spcomp']['name'] == 'spcomp2':
       argv += ['-o', test.smx_path]
     argv += [self.fix_path(spcomp_path, test.path)]
