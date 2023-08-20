@@ -1,0 +1,2 @@
+(6) : error 017: undefined symbol "A"
+(6) : error 017: undefined symbol "B"

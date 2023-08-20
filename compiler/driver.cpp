@@ -116,8 +116,8 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
         parser.allow_slashes();
     }
 
-    parser.add_usage_line("sym=val", "Define constant \"sym\" with value \"val\".");
-    parser.add_usage_line("sym=", "Define constant \"sym\" with value 0.");
+    parser.add_usage_line("sym=val", "Define macro \"sym\" with value \"val\".");
+    parser.add_usage_line("sym=", "Define macro \"sym\" with value 0.");
 
     auto usage = "[options] <filename> [filename...]";
     parser.set_usage_line(usage);
@@ -205,8 +205,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
         } else if ((ptr = strchr(arg, '=')) != NULL) {
             int i = (int)(ptr - arg);
             SafeStrcpyN(str, PATH_MAX, arg, i);
-            i = atoi(ptr + 1);
-            cc.options()->constants.emplace_back(str, i);
+            cc.options()->predefines.emplace_back(str, ptr + 1);
         } else {
             std::string path = arg;
             set_extension(&path, ".sp", false);
