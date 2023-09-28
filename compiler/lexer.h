@@ -19,9 +19,11 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <amtl/am-deque.h>
 #include <amtl/am-hashtable.h>
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
+#include <amtl/am-inlinelist.h>
 #include <shared/string-pool.h>
 
 #include "compile-options.h"
@@ -213,6 +215,7 @@ enum TokenKind {
     tEOL,            /* newline, only returned by peek_new_line() */
     tNEWDECL,        /* for declloc() */
     tENTERED_MACRO,  /* internal lexer command */
+    tMAYBE_LABEL,    /* internal lexer command, followed by ':' */
     tLAST_TOKEN_ID
 };
 
@@ -275,12 +278,19 @@ static constexpr int SKIPMODE = 1;     /* bit field in "#if" stack */
 static constexpr int PARSEMODE = 2;    /* bit field in "#if" stack */
 static constexpr int HANDLED_ELSE = 4; /* bit field in "#if" stack */
 
+struct TokenCache : public ke::InlineListNode<TokenCache> {
+    std::deque<full_token_t> tokens;
+    bool require_newdecls;
+    bool need_semicolon;
+};
+
 class Lexer
 {
     friend class MacroProcessor;
 
   public:
     Lexer(CompileContext& cc);
+    ~Lexer();
 
     int lex();
     int lex_same_line();
@@ -306,6 +316,17 @@ class Lexer
     void LexDefinedKeyword();
     bool HasMacro(sp::Atom* atom);
 
+    // Lexer must be at a '{' token. Lexes until it reaches a balanced '}' token,
+    // and returns a pointer to the cached tokens.
+    //
+    // The opening '{' token, even though already lexed, will be re-added to the
+    // stream. This is to avoid significantly changing parse_stmt.
+    TokenCache* LexFunctionBody();
+
+    // Consumes a TokenCache. The pointer is deleted after. Consumed tokens will
+    // be replayed by lex().
+    void InjectCachedTokens(TokenCache* cache);
+
     full_token_t lex_tok() {
         lex();
         return *current_token();
@@ -317,7 +338,8 @@ class Lexer
     const token_pos_t& pos() { return current_token()->start; }
     std::string& deprecate() { return deprecate_; }
     bool& allow_tags() { return allow_tags_; }
-    int& require_newdecls() { return state_.require_newdecls; }
+    bool& require_newdecls() { return state_.require_newdecls; }
+    bool& need_semicolon() { return state_.need_semicolon; }
     bool freading() const { return freading_; }
     int fcurrent() const { return state_.inpf->sources_index(); }
     unsigned fline() const { return state_.fline; }
@@ -335,6 +357,7 @@ class Lexer
     void HandleEof();
     void HandleSkippedSection();
     int LexNewToken();
+    int LexInjectedToken();
     void LexIntoToken(full_token_t* tok);
     void LexSymbolOrKeyword(full_token_t* tok);
     int LexKeywordImpl(sp::Atom* atom);
@@ -356,6 +379,7 @@ class Lexer
     void SkipUtf8Bom();
     void PushLexerState();
     bool IsSameSourceFile(const token_pos_t& a, const token_pos_t& b);
+    void AssertCleanState();
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
@@ -470,7 +494,7 @@ class Lexer
         int tokline = 0;
         bool need_semicolon = false;
         bool is_line_start = false;
-        int require_newdecls = 0;
+        bool require_newdecls = false;
         size_t entry_preproc_if_stack_size = 0;
         const unsigned char* start = nullptr;
         const unsigned char* end = nullptr;
@@ -485,4 +509,7 @@ class Lexer
 
     LexerState state_;
     tr::vector<LexerState> prev_state_;
+    ke::InlineList<TokenCache> token_caches_;
+    std::deque<full_token_t> injected_token_stream_;
+    bool caching_tokens_ = false;
 };

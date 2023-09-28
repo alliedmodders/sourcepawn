@@ -1566,6 +1566,9 @@ class FunctionDecl : public Decl
     Stmt* body() const { return body_; }
     void set_body(Stmt* body) { body_ = body; }
 
+    TokenCache* tokens() const { return tokens_; }
+    void set_tokens(TokenCache* tokens) { tokens_ = tokens; }
+
     void set_name(sp::Atom* name) { name_ = name; }
 
     // The undecorated name.
@@ -1631,6 +1634,7 @@ class FunctionDecl : public Decl
     ke::Maybe<int> this_tag_;
     sp::Atom* alias_ = nullptr;
     PoolString* deprecate_ = nullptr;
+    TokenCache* tokens_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);

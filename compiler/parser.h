@@ -136,4 +136,5 @@ class Parser
     std::vector<SymbolScope*> static_scopes_;
     std::shared_ptr<Lexer> lexer_;
     TypeDictionary* types_ = nullptr;
+    std::deque<FunctionDecl*> delayed_functions_;
 };

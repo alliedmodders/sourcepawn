@@ -189,6 +189,25 @@ Parser::Parse()
         add_to_end.pop_front();
     }
 
+    while (!delayed_functions_.empty()) {
+        auto fun = ke::PopFront(&delayed_functions_);
+
+        auto tokens = fun->tokens();
+        fun->set_tokens(nullptr);
+
+        // Technically this is not good enough, as the lexer state could have
+        // changed in the middle of a function. But that's fairly complex to
+        // handle and pretty ridiculous as far as use cases go.
+        ke::SaveAndSet<bool> change_newdecls(&lexer_->require_newdecls(),
+                                             tokens->require_newdecls);
+        ke::SaveAndSet<bool> change_need_semicolon(&lexer_->need_semicolon(),
+                                             tokens->need_semicolon);
+
+        lexer_->InjectCachedTokens(tokens);
+        auto body = parse_stmt(false);
+        fun->set_body(BlockStmt::WrapStmt(body));
+    }
+
     auto list = new StmtList(token_pos_t{}, stmts);
     return new ParseTree(list);
 }
@@ -1808,15 +1827,16 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
             break;
     }
 
-    if (!lexer_->peek('{'))
+    if (!lexer_->match('{')) {
         report(437);
-
-    Stmt* body = parse_stmt(false);
-    if (!body)
         return false;
+    }
 
-    fun->set_body(BlockStmt::WrapStmt(body));
+    auto cache = lexer_->LexFunctionBody();
+    fun->set_tokens(cache);
     fun->set_end_pos(lexer_->pos());
+    delayed_functions_.emplace_back(fun);
+
     return true;
 }
 
@@ -1987,7 +2007,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     if (ret_type.type.ident != 0 && !is_static)
         has_this = true;
 
-    ke::SaveAndSet<int> require_newdecls(&lexer_->require_newdecls(), TRUE);
+    ke::SaveAndSet<bool> require_newdecls(&lexer_->require_newdecls(), true);
     if (!parse_function(fun, is_native ? tMETHODMAP : 0, has_this))
         return nullptr;
 

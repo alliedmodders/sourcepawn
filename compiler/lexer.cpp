@@ -1221,6 +1221,14 @@ Lexer::Lexer(CompileContext& cc)
     }
 }
 
+Lexer::~Lexer() {
+    while (!token_caches_.empty()) {
+        auto node = *token_caches_.begin();
+        token_caches_.remove(node);
+        delete node;
+    }
+}
+
 void Lexer::Init(std::shared_ptr<SourceFile> sf) {
     freading_ = true;
     EnterFile(std::move(sf), {});
@@ -1342,6 +1350,9 @@ int Lexer::lex() {
         return current_token()->id;
     }
 
+    if (!injected_token_stream_.empty())
+        return LexInjectedToken();
+
     return LexNewToken();
 }
 
@@ -1387,6 +1398,22 @@ int Lexer::LexNewToken() {
         }
     } while (tok->id == tENTERED_MACRO);
 
+    return tok->id;
+}
+
+int Lexer::LexInjectedToken() {
+    auto tok = advance_token_ptr();
+    *tok = ke::PopFront(&injected_token_stream_);
+
+    if (tok->id == tMAYBE_LABEL) {
+        if (allow_tags_) {
+            tok->id = tLABEL;
+            [[maybe_unused]] auto tok = ke::PopFront(&injected_token_stream_);
+            assert(tok.id == ':');
+        } else {
+            tok->id = tSYMBOL;
+        }
+    }
     return tok->id;
 }
 
@@ -1789,7 +1816,9 @@ void Lexer::LexSymbol(full_token_t* tok, sp::Atom* atom) {
     tok->id = tSYMBOL;
 
     if (peek() == ':' && peek2() != ':') {
-        if (allow_tags_) {
+        if (caching_tokens_) {
+            tok->id = tMAYBE_LABEL;
+        } else if (allow_tags_) {
             tok->id = tLABEL;
             advance();
         } else if (cc_.types()->find(atom)) {
@@ -2570,4 +2599,57 @@ bool Lexer::IsSameSourceFile(const token_pos_t& a, const token_pos_t& b) {
     if (state_.loc_range.owns(a) && state_.loc_range.owns(b))
         return true;
     return cc_.sources()->IsSameSourceFile(a, b);
+}
+
+void Lexer::AssertCleanState() {
+    assert(allow_keywords_);
+    assert(allow_substitutions_);
+    assert(!in_string_continuation_);
+    assert(allow_tags_);
+    assert(injected_token_stream_.empty());
+}
+
+TokenCache* Lexer::LexFunctionBody() {
+    TokenCache* cache = new TokenCache;
+    cache->require_newdecls = state_.require_newdecls;
+    cache->need_semicolon = state_.need_semicolon;
+
+    // To cache tokens we must be assured that the lexer state contains no
+    // surprises, otherwise, the uncached stream may resolve incorrectly.
+    AssertCleanState();
+
+    assert(current_token()->id == '{');
+    cache->tokens.emplace_back(std::move(*current_token()));
+
+    ke::SaveAndSet<bool> caching_tokens(&caching_tokens_, true);
+
+    int brace_balance = 1;
+    while (freading_) {
+        int tok = lex();
+        if (tok == 0)
+            break;
+        cache->tokens.emplace_back(std::move(*current_token()));
+
+        if (tok == '{') {
+            brace_balance++;
+        } else if (tok == '}') {
+            brace_balance--;
+            if (brace_balance == 0)
+                break;
+        }
+    }
+
+    cache->tokens.shrink_to_fit();
+    token_caches_.append(cache);
+    return cache;
+}
+
+void Lexer::InjectCachedTokens(TokenCache* cache) {
+    AssertCleanState();
+
+    injected_token_stream_ = std::move(cache->tokens);
+    token_caches_.remove(cache);
+    delete cache;
+
+    freading_ = true;
 }
