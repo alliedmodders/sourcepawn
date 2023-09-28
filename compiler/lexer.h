@@ -41,10 +41,12 @@ struct token_pos_t {
 struct full_token_t {
     int id = 0;
     int value = 0;
-    std::string data;
     sp::Atom* atom = nullptr;
     token_pos_t start;
     token_pos_t end;
+    const std::string& data() const {
+        return atom->str();
+    }
 };
 
 #define MAX_TOKEN_DEPTH 4
@@ -366,7 +368,7 @@ class Lexer
     void lex_float(full_token_t* tok, cell whole);
     cell litchar(int flags, bool* is_codepoint = nullptr);
     void packedstring(full_token_t* tok, char term);
-    void packedstring_char(full_token_t* tok);
+    void packedstring_char(std::string* data);
 
     bool IsSkipping() const {
         return skiplevel_ > 0 && (ifstack_[skiplevel_ - 1] & SKIPMODE) == SKIPMODE;

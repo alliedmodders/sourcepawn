@@ -149,7 +149,7 @@ Parser::Parse()
             case tpTRYINCLUDE: {
                 if (!lexer_->need(tSYN_INCLUDE_PATH))
                     break;
-                auto name = lexer_->current_token()->data;
+                auto name = lexer_->current_token()->data();
                 auto result = lexer_->PlungeFile(name.c_str() + 1, (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE) {
                     report(417) << name.substr(1);
@@ -601,7 +601,7 @@ Parser::parse_pragma_unused()
 {
     auto pos = lexer_->pos();
 
-    auto data = std::move(lexer_->current_token()->data);
+    const auto& data = lexer_->current_token()->data();
     std::vector<std::string> raw_names = ke::Split(data, ",");
     std::vector<sp::Atom*> names;
     for (const auto& raw_name : raw_names)
@@ -1061,7 +1061,7 @@ Parser::constant()
         case tRATIONAL:
             return new FloatExpr(cc_, pos, lexer_->current_token()->value);
         case tSTRING: {
-            const auto& str = lexer_->current_token()->data;
+            const auto& str = lexer_->current_token()->data();
             return new StringExpr(pos, str.c_str(), str.size());
         }
         case tTRUE:
@@ -1177,7 +1177,7 @@ Parser::struct_init()
         Expr* expr = nullptr;
         switch (lexer_->lex()) {
             case tSTRING: {
-                const auto& str = lexer_->current_token()->data;
+                const auto& str = lexer_->current_token()->data();
                 expr = new StringExpr(pos, str.c_str(), str.size());
                 break;
             }
@@ -1218,7 +1218,7 @@ Parser::parse_static_assert()
     PoolString * text = nullptr;
     if (lexer_->match(',') && lexer_->need(tSTRING)) {
         auto tok = lexer_->current_token();
-        text = new PoolString(tok->data.c_str(), tok->data.size());
+        text = new PoolString(tok->data().c_str(), tok->data().size());
     }
 
     lexer_->need(')');
@@ -1261,7 +1261,7 @@ Parser::var_init(int vclass)
 
     if (lexer_->match(tSTRING)) {
         auto tok = lexer_->current_token();
-        return new StringExpr(tok->start, tok->data.c_str(), tok->data.size());
+        return new StringExpr(tok->start, tok->data().c_str(), tok->data().size());
     }
 
     // We'll check const or symbol-ness for non-sLOCALs in the semantic pass.
