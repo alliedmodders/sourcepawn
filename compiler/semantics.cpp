@@ -226,7 +226,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         if (ps->args[i]->type.ident == iREFARRAY) {
             assert(ps->args[i]->type.tag() == types_->tag_string());
 
-            auto expr = new StringExpr(decl->pos(), "", 0);
+            auto expr = new StringExpr(decl->pos(), cc_.atom(""));
             init->fields().push_back(new StructInitFieldExpr(ps->args[i]->name, expr,
                                                              decl->pos()));
         }
