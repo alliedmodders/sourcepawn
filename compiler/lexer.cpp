@@ -251,7 +251,7 @@ Lexer::SynthesizeIncludePathToken()
 
     if (!open_c)
         open_c = '"';
-    tok->data = ke::StringPrintf("%c%s", open_c, name);
+    tok->atom = cc_.atom(ke::StringPrintf("%c%s", open_c, name));
 }
 
 /*  ftoi
@@ -469,7 +469,7 @@ void Lexer::HandleDirectives() {
                 }
 
                 auto tok = PushSynthesizedToken(tSYN_PRAGMA_UNUSED, col);
-                tok->data = ke::Join(parts, ",");
+                tok->atom = cc_.atom(ke::Join(parts, ","));
             } else {
                 error(207); /* unknown #pragma */
             }
@@ -1002,6 +1002,7 @@ void Lexer::HandleMultiLineComment() {
 }
 
 void Lexer::packedstring(full_token_t* tok, char term) {
+    std::string data;
     while (true) {
         char c = peek();
         if (c == term || c == 0)
@@ -1012,19 +1013,20 @@ void Lexer::packedstring(full_token_t* tok, char term) {
         }
         if (IsNewline(c))
             break;
-        packedstring_char(tok);
+        packedstring_char(&data);
     }
+    tok->atom = cc_.atom(data);
 }
 
-void Lexer::packedstring_char(full_token_t* tok) {
+void Lexer::packedstring_char(std::string* data) {
     bool is_codepoint;
     cell ch = litchar(kLitcharUtf8, &is_codepoint);
     if (ch < 0)
         return;
     if (is_codepoint)
-        UnicodeCodepointToUtf8(ch, &tok->data);
+        UnicodeCodepointToUtf8(ch, data);
     else
-        tok->data.push_back(static_cast<char>(ch));
+        data->push_back(static_cast<char>(ch));
 }
 
 /*  lex(lexvalue,lexsym)        Lexical Analysis
@@ -1325,7 +1327,6 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     auto tok = current_token();
     tok->id = kind;
     tok->value = 0;
-    tok->data.clear();
     tok->atom = nullptr;
     tok->start.line = state_.tokline;
     tok->start.col = col;
@@ -1681,7 +1682,6 @@ bool Lexer::lex_number(full_token_t* tok) {
 
 void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
     tok->id = tSTRING;
-    tok->data.clear();
     tok->atom = nullptr;
     tok->value = -1;  // Catch consumers expecting automatic litadd().
 
@@ -1693,7 +1693,11 @@ void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
             error(37);
     } else {
         advance();
-        packedstring_char(tok);
+
+        std::string data;
+        packedstring_char(&data);
+        tok->atom = cc_.atom(data);
+
         /* invalid char declaration */
         if (!match_char('\''))
             error(27); /* invalid character constant (must be one character) */
@@ -2369,24 +2373,29 @@ cell Lexer::get_utf8_char() {
 }
 
 void Lexer::LexStringContinuation() {
+    ke::SaveAndSet<bool> stop_recursion(&in_string_continuation_, true);
+
+    if (!peek(tELLIPS))
+        return;
+
     auto initial = std::move(*current_token());
     assert(initial.id == tSTRING);
 
-    ke::SaveAndSet<bool> stop_recursion(&in_string_continuation_, true);
-
+    std::string data = initial.data();
     while (match(tELLIPS)) {
         if (match(tCHAR_LITERAL)) {
-            initial.data.push_back(current_token()->value);
+            data.push_back(current_token()->value);
             continue;
         }
         if (!need(tSTRING)) {
             lexpush();
             break;
         }
-        initial.data += current_token()->data;
+        data += current_token()->data();
     }
 
     *current_token() = std::move(initial);
+    current_token()->atom = cc_.atom(data);
 }
 
 bool Lexer::HasMacro(sp::Atom* atom) {
