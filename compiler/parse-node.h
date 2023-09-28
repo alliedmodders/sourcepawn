@@ -258,7 +258,7 @@ class ContinueStmt : public Stmt
 class StaticAssertStmt : public Stmt
 {
   public:
-    explicit StaticAssertStmt(const token_pos_t& pos, Expr* expr, PoolString* text)
+    explicit StaticAssertStmt(const token_pos_t& pos, Expr* expr, sp::Atom* text)
       : Stmt(StmtKind::StaticAssertStmt, pos),
         expr_(expr),
         text_(text)
@@ -270,11 +270,11 @@ class StaticAssertStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::StaticAssertStmt; }
 
     Expr* expr() const { return expr_; }
-    PoolString* text() const { return text_; }
+    sp::Atom* text() const { return text_; }
 
   private:
     Expr* expr_;
-    PoolString* text_;
+    sp::Atom* text_;
 };
 
 class Decl : public Stmt
@@ -1161,21 +1161,21 @@ class FloatExpr final : public TaggedValueExpr
 class StringExpr final : public Expr
 {
   public:
-    StringExpr(const token_pos_t& pos, const char* str, size_t len)
+    StringExpr(const token_pos_t& pos, sp::Atom* atom)
       : Expr(ExprKind::StringExpr, pos),
-        text_(new PoolString(str, len))
+        text_(atom)
     {}
 
     void ProcessUses(SemaContext&) override {}
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::StringExpr; }
 
-    PoolString* text() const {
+    sp::Atom* text() const {
         return text_;
     }
 
   private:
-    PoolString* text_;
+    sp::Atom* text_;
 };
 
 class NewArrayExpr final : public Expr

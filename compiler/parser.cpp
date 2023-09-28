@@ -1061,8 +1061,8 @@ Parser::constant()
         case tRATIONAL:
             return new FloatExpr(cc_, pos, lexer_->current_token()->value);
         case tSTRING: {
-            const auto& str = lexer_->current_token()->data();
-            return new StringExpr(pos, str.c_str(), str.size());
+            const auto& atom = lexer_->current_token()->atom;
+            return new StringExpr(pos, atom);
         }
         case tTRUE:
             return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 1);
@@ -1177,8 +1177,8 @@ Parser::struct_init()
         Expr* expr = nullptr;
         switch (lexer_->lex()) {
             case tSTRING: {
-                const auto& str = lexer_->current_token()->data();
-                expr = new StringExpr(pos, str.c_str(), str.size());
+                const auto& atom = lexer_->current_token()->atom;
+                expr = new StringExpr(pos, atom);
                 break;
             }
             case tCHAR_LITERAL:
@@ -1215,10 +1215,10 @@ Parser::parse_static_assert()
     if (!expr)
         return nullptr;
 
-    PoolString * text = nullptr;
+    sp::Atom* text = nullptr;
     if (lexer_->match(',') && lexer_->need(tSTRING)) {
         auto tok = lexer_->current_token();
-        text = new PoolString(tok->data().c_str(), tok->data().size());
+        text = tok->atom;
     }
 
     lexer_->need(')');
@@ -1261,7 +1261,7 @@ Parser::var_init(int vclass)
 
     if (lexer_->match(tSTRING)) {
         auto tok = lexer_->current_token();
-        return new StringExpr(tok->start, tok->data().c_str(), tok->data().size());
+        return new StringExpr(tok->start, tok->atom);
     }
 
     // We'll check const or symbol-ness for non-sLOCALs in the semantic pass.
