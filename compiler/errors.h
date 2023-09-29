@@ -72,8 +72,6 @@ class AutoErrorPos final
 };
 
 int error(int number);
-int error(symbol* sym, int number);
-int error(const token_pos_t& where, int number);
 
 class MessageBuilder
 {

@@ -136,7 +136,7 @@ error(int number)
 {
     auto& cc = CompileContext::get();
     if (auto pos_override = cc.reports()->pos_override()) {
-        error(pos_override->pos(), number);
+        report(pos_override->pos(), number);
         return 0;
     }
 
@@ -231,25 +231,6 @@ MessageBuilder::~MessageBuilder()
 
     report.message = out.str();
     report_error(std::move(report));
-}
-
-int
-error(const token_pos_t& where, int number)
-{
-    ErrorReport report = ErrorReport::create(number, where.file, where.line);
-
-    report.lineno = where.line;
-    report_error(std::move(report));
-    return 0;
-}
-
-int
-error(symbol* sym, int number)
-{
-    ErrorReport report = ErrorReport::create(number, sym->fnumber, sym->lnumber);
-
-    report_error(std::move(report));
-    return 0;
 }
 
 ErrorReport
