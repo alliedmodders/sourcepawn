@@ -283,7 +283,7 @@ ErrorReport
 ErrorReport::infer(int number)
 {
     auto& cc = CompileContext::get();
-    return create(number, -1, cc.lexer()->current_token()->end.line);
+    return create(number, -1, cc.lexer()->current_token()->start.line);
 }
 
 void
