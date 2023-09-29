@@ -209,7 +209,7 @@ Lexer::SynthesizeIncludePathToken()
 {
     SkipLineWhitespace();
 
-    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, column());
+    auto tok = PushSynthesizedToken(tSYN_INCLUDE_PATH, pos());
 
     char open_c = peek();
     char close_c;
@@ -393,9 +393,9 @@ void Lexer::HandleDirectives() {
 
         case tINCLUDE: /* #include directive */
         case tpTRYINCLUDE: {
-            auto col = current_token()->start.col;
+            auto pos = current_token()->start;
             SynthesizeIncludePathToken();
-            PushSynthesizedToken((TokenKind)tok, col);
+            PushSynthesizedToken((TokenKind)tok, pos);
             break;
         }
         case tpASSERT:
@@ -457,7 +457,7 @@ void Lexer::HandleDirectives() {
                 preproc_expr(&val, NULL);
                 cc_.options()->tabsize = (int)val;
             } else if (current_token()->atom->str() == "unused") {
-                unsigned col = column();
+                auto pos = current_token()->start;
                 if (!need_same_line(tSYMBOL))
                     break;
 
@@ -468,7 +468,7 @@ void Lexer::HandleDirectives() {
                     parts.emplace_back(current_token()->atom->str());
                 }
 
-                auto tok = PushSynthesizedToken(tSYN_PRAGMA_UNUSED, col);
+                auto tok = PushSynthesizedToken(tSYN_PRAGMA_UNUSED, pos);
                 tok->atom = cc_.atom(ke::Join(parts, ","));
             } else {
                 report(207); /* unknown #pragma */
@@ -1316,7 +1316,7 @@ Lexer::advance_token_ptr()
 }
 
 full_token_t*
-Lexer::PushSynthesizedToken(TokenKind kind, int col)
+Lexer::PushSynthesizedToken(TokenKind kind, const token_pos_t& pos)
 {
     ke::SaveAndSet<token_buffer_t*> switch_buffer(&token_buffer_, &normal_buffer_);
 
@@ -1327,7 +1327,6 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->id = kind;
     tok->atom = nullptr;
     tok->start.line = state_.tokline;
-    tok->start.col = col;
     tok->start.file = state_.inpf->sources_index();
     lexpush();
     return tok;
@@ -1398,7 +1397,6 @@ int Lexer::LexNewToken() {
 
 void Lexer::FillTokenPos(token_pos_t* pos) {
     pos->line = state_.tokline;
-    pos->col = (int)(char_stream() - line_start());
     pos->file = state_.inpf->sources_index();
 }
 

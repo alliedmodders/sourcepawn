@@ -31,7 +31,6 @@ class CompileContext;
 struct token_pos_t {
     int file = 0;
     int line = 0;
-    int col = 0;
 };
 
 // An LREntry is created each time we register a range of locations (it is
