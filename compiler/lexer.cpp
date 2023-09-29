@@ -1329,7 +1329,6 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     tok->start.line = state_.tokline;
     tok->start.col = col;
     tok->start.file = state_.inpf->sources_index();
-    tok->end = tok->start;
     lexpush();
     return tok;
 }
@@ -1365,7 +1364,6 @@ int Lexer::LexNewToken() {
                 // We hit the end of the line; preprocessor should not eat more
                 // tokens without a continuation.
                 FillTokenPos(&tok->start);
-                FillTokenPos(&tok->end);
                 return tok->id = tEOL;
             }
             return 0;
@@ -1385,7 +1383,6 @@ int Lexer::LexNewToken() {
         // Current token may be different if we're in the preproc buffer, so
         // grab it.
         tok = current_token();
-        FillTokenPos(&tok->end);
 
         if (tok->id == tSTRING && !in_string_continuation_) {
             LexStringContinuation();
@@ -1942,8 +1939,8 @@ Lexer::peek_same_line()
     // token parsed. If fline == current token's line, we are guaranteed any
     // buffered token is still on the same line.
     if (token_buffer_->depth > 0 &&
-        current_token()->end.file == next_token()->start.file &&
-        current_token()->end.line == state_.fline)
+        current_token()->start.file == next_token()->start.file &&
+        current_token()->start.line == state_.fline)
     {
         return next_token()->id ? next_token()->id : tEOL;
     }
@@ -1957,8 +1954,8 @@ Lexer::peek_same_line()
 
     // If the next token starts on the line the last token ends, then the next
     // token is considered on the same line.
-    if (next.start.line == current_token()->end.line &&
-        next.start.file == current_token()->end.file)
+    if (next.start.line == current_token()->start.line &&
+        next.start.file == current_token()->start.file)
     {
         return next.id;
     }

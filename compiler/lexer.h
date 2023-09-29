@@ -46,7 +46,6 @@ struct full_token_t {
     };
     int value();
     token_pos_t start;
-    token_pos_t end;
     const std::string& data() const {
         return atom->str();
     }
