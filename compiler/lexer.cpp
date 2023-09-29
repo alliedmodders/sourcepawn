@@ -1327,7 +1327,7 @@ Lexer::PushSynthesizedToken(TokenKind kind, const token_pos_t& pos)
     tok->id = kind;
     tok->atom = nullptr;
     tok->start.line = state_.tokline;
-    tok->start.file = state_.inpf->sources_index();
+    tok->start.file_ = state_.inpf->sources_index();
     lexpush();
     return tok;
 }
@@ -1397,7 +1397,7 @@ int Lexer::LexNewToken() {
 
 void Lexer::FillTokenPos(token_pos_t* pos) {
     pos->line = state_.tokline;
-    pos->file = state_.inpf->sources_index();
+    pos->file_ = state_.inpf->sources_index();
 }
 
 void Lexer::LexIntoToken(full_token_t* tok) {
@@ -1933,12 +1933,14 @@ Lexer::peek_same_line()
     // We should not call this without having parsed at least one token.
     assert(token_buffer_->num_tokens > 0);
 
+    auto sm = cc_.sources();
+
     // If there's tokens pushed back, then |fline| is the line of the furthest
     // token parsed. If fline == current token's line, we are guaranteed any
     // buffered token is still on the same line.
     if (token_buffer_->depth > 0 &&
-        current_token()->start.file == next_token()->start.file &&
-        current_token()->start.line == state_.fline)
+        current_token()->start.line == state_.fline &&
+        sm->IsSameSourceFile(current_token()->start, next_token()->start))
     {
         return next_token()->id ? next_token()->id : tEOL;
     }
@@ -1953,7 +1955,7 @@ Lexer::peek_same_line()
     // If the next token starts on the line the last token ends, then the next
     // token is considered on the same line.
     if (next.start.line == current_token()->start.line &&
-        next.start.file == current_token()->start.file)
+        sm->IsSameSourceFile(current_token()->start, next_token()->start))
     {
         return next.id;
     }
