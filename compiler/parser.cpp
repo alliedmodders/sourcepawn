@@ -1955,6 +1955,7 @@ Parser::parse_methodmap()
                 ok = false;
         } else {
             error(124);
+            ok = false;
         }
         if (!ok) {
             if (!consume_line())
