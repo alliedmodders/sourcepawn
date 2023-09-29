@@ -30,10 +30,9 @@ def main():
   parser.add_argument('--spcomp-arg', default=None, type=str, action='append',
                       dest='spcomp_args',
                       help="Add an extra argument to all spcomp invocations.")
+  parser.add_argument('--filter', default=None, type=str,
+                      help='Filter for tests with a particular name.')
   args = parser.parse_args()
-
-  if args.test and args.test.startswith('tests/'):
-    args.test = args.test[6:]
 
   plan = TestPlan(args)
   plan.find_compilers()
@@ -245,6 +244,8 @@ class TestPlan(object):
           'manifest': manifest,
         })
         if manifest_get(manifest, test.name, 'skip') == 'true':
+          continue
+        if self.args.filter and self.args.filter not in path:
           continue
         self.tests.append(test)
 
