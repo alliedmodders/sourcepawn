@@ -345,7 +345,7 @@ class Lexer
     void LexSymbol(full_token_t* tok, sp::Atom* atom);
     bool MaybeHandleLineContinuation();
     bool PlungeQualifiedFile(const char* name);
-    full_token_t* PushSynthesizedToken(TokenKind kind, int col);
+    full_token_t* PushSynthesizedToken(TokenKind kind, const token_pos_t& pos);
     void SynthesizeIncludePathToken();
     void SetFileDefines(std::string file);
     void EnterFile(std::shared_ptr<SourceFile>&& fp);
