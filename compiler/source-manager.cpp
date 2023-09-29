@@ -31,7 +31,7 @@ std::shared_ptr<SourceFile> SourceManager::Open(const std::string& path,
 {
     auto file = std::make_shared<SourceFile>();
     if (!file->Open(path))
-	      return nullptr;
+        return nullptr;
 
     size_t loc_index;
     if (!TrackExtents(file->size(), &loc_index)) {
