@@ -70,30 +70,32 @@ static constexpr int kLitcharUtf8 = 0x1;
 // Do not error, because the characters are being ignored.
 static constexpr int kLitcharSkipping = 0x2;
 
-bool
-Lexer::PlungeQualifiedFile(const char* name)
-{
+bool Lexer::PlungeQualifiedFile(const char* name) {
     auto fp = OpenFile(name);
     if (!fp)
         return false;
+
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
+
+    auto pos = current_token()->start;
+
     state_.entry_preproc_if_stack_size = ifstack_.size();
     PushLexerState();
-    EnterFile(std::move(fp));
+    EnterFile(std::move(fp), pos);
     return true;
 }
 
 std::shared_ptr<SourceFile> Lexer::OpenFile(const std::string& name) {
     AutoCountErrors detect_errors;
 
-    if (auto sf = cc_.sources()->Open(name, pos()))
+    if (auto sf = cc_.sources()->Open(name))
         return sf;
 
     static const std::vector<std::string> extensions = {".inc", ".p", ".pawn"};
     for (const auto& extension : extensions) {
         auto alt_name = name + extension;
-        if (auto sf = cc_.sources()->Open(alt_name, pos()))
+        if (auto sf = cc_.sources()->Open(alt_name))
             return sf;
         if (!detect_errors.ok())
             return nullptr;
@@ -486,6 +488,7 @@ void Lexer::HandleDirectives() {
             {
                 ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
                 ke::SaveAndSet<bool> no_keywords(&allow_keywords_, false);
+
                 if (!needsymbol(&symbol))
                     break;
             }
@@ -493,6 +496,8 @@ void Lexer::HandleDirectives() {
                 report(74); /* pattern must start with an alphabetic character */
                 break;
             }
+
+            auto macro_pos = current_token()->start;
 
             ke::Maybe<tr::vector<int>> args;
             if (match_char('(')) {
@@ -546,11 +551,12 @@ void Lexer::HandleDirectives() {
             macro->pattern = symbol;
             macro->documentation = std::move(deprecate_);
             macro->deprecated = !macro->documentation.empty();
+            macro->pos = macro_pos;
 
             tr::vector<size_t>* arg_positions = nullptr;
             if (macro->args)
                 arg_positions =  &macro->arg_positions;
-            macro->substitute = SkimUntilEndOfLine(arg_positions);
+            macro->substitute = cc_.atom(SkimUntilEndOfLine(arg_positions));
 
             macros_[symbol] = std::move(macro);
             break;
@@ -1230,7 +1236,7 @@ Lexer::Lexer(CompileContext& cc)
 
 void Lexer::Init(std::shared_ptr<SourceFile> sf) {
     freading_ = true;
-    EnterFile(std::move(sf));
+    EnterFile(std::move(sf), {});
 }
 
 void Lexer::Start() {
@@ -1326,8 +1332,7 @@ Lexer::PushSynthesizedToken(TokenKind kind, const token_pos_t& pos)
     auto tok = current_token();
     tok->id = kind;
     tok->atom = nullptr;
-    tok->start.line = state_.tokline;
-    tok->start.file_ = state_.inpf->sources_index();
+    tok->start = token_pos_t(pos, state_.tokline);
     lexpush();
     return tok;
 }
@@ -1365,6 +1370,9 @@ int Lexer::LexNewToken() {
                 FillTokenPos(&tok->start);
                 return tok->id = tEOL;
             }
+
+            // Always fill a valid location.
+            FillTokenPos(&tok->start);
             return 0;
         }
 
@@ -1396,8 +1404,12 @@ int Lexer::LexNewToken() {
 }
 
 void Lexer::FillTokenPos(token_pos_t* pos) {
-    pos->line = state_.tokline;
-    pos->file_ = state_.inpf->sources_index();
+    uint32_t offset = state_.pos - state_.start;
+    if (!state_.macro)
+        *pos = token_pos_t(state_.loc_range.FilePos(offset), state_.tokline);
+    else
+        *pos = token_pos_t(state_.loc_range.MacroPos(offset), state_.tokline);
+    assert(pos->valid());
 }
 
 void Lexer::LexIntoToken(full_token_t* tok) {
@@ -1927,20 +1939,16 @@ void Lexer::NeedTokenError(int token, int got) {
 
 // If the next token is on the current line, return that token. Otherwise,
 // return tNEWLINE.
-int
-Lexer::peek_same_line()
-{
+int Lexer::peek_same_line() {
     // We should not call this without having parsed at least one token.
     assert(token_buffer_->num_tokens > 0);
-
-    auto sm = cc_.sources();
 
     // If there's tokens pushed back, then |fline| is the line of the furthest
     // token parsed. If fline == current token's line, we are guaranteed any
     // buffered token is still on the same line.
     if (token_buffer_->depth > 0 &&
         current_token()->start.line == state_.fline &&
-        sm->IsSameSourceFile(current_token()->start, next_token()->start))
+        IsSameSourceFile(current_token()->start, next_token()->start))
     {
         return next_token()->id ? next_token()->id : tEOL;
     }
@@ -1955,7 +1963,7 @@ Lexer::peek_same_line()
     // If the next token starts on the line the last token ends, then the next
     // token is considered on the same line.
     if (next.start.line == current_token()->start.line &&
-        sm->IsSameSourceFile(current_token()->start, next_token()->start))
+        IsSameSourceFile(current_token()->start, next_token()->start))
     {
         return next.id;
     }
@@ -2237,7 +2245,7 @@ void Lexer::AddMacro(const char* pattern, const char* subst) {
     auto atom = cc_.atom(pattern);
     auto macro = std::make_shared<MacroEntry>();
     macro->pattern = atom;
-    macro->substitute = subst;
+    macro->substitute = cc_.atom(subst);
     macro->deprecated = false;
 
     macros_[atom] = std::move(macro);
@@ -2306,11 +2314,11 @@ Lexer::NeedSemicolon()
     return state_.need_semicolon;
 }
 
-void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf) {
+void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf, const token_pos_t& from) {
     auto& cc = CompileContext::get();
 
     state_.inpf = std::move(sf);
-    state_.inpf_loc = cc_.sources()->GetLocationRangeEntryForFile(state_.inpf);
+    state_.loc_range = cc_.sources()->EnterFile(state_.inpf, from);
     state_.need_semicolon = cc.options()->need_semicolon;
     state_.require_newdecls = cc.options()->require_newdecls;
     state_.fline = 1;
@@ -2424,6 +2432,8 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
 
     ke::SaveAndSet<bool> no_eof(&allow_end_of_file_, false);
 
+    auto expansion_pos = current_token()->start;
+
     if (macros_in_use_.count(macro.get()))
         return false;
 
@@ -2452,20 +2462,26 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
 
     PushLexerState();
 
+    Atom* text = nullptr;
     if (macro->args) {
-        state_.pattern = PerformMacroSubstitution(macro.get(), macro_args);
-        state_.start = reinterpret_cast<const unsigned char*>(state_.pattern.c_str());
-        state_.end = state_.start + state_.pattern.size();
+        // Atomization is important here since it keeps the macro text alive
+        // during lexing, since we do not pre-lex its tokens.
+        //
+        // We used to not atomize here, in which case it was stored on the
+        // lexer state.
+        text = cc_.atom(PerformMacroSubstitution(macro.get(), macro_args));
     } else {
-        state_.start = reinterpret_cast<const unsigned char*>(macro->substitute.c_str());
-        state_.end = state_.start + macro->substitute.size();
+        text = macro->substitute;
     }
+    state_.start = reinterpret_cast<const unsigned char*>(text->chars());
+    state_.end = state_.start + text->length();
     state_.line_start = state_.start;
     state_.pos = state_.start;
     state_.macro = macro;
     state_.inpf = prev_state_.back().inpf;
     state_.fline = prev_state_.back().fline;
     state_.tokline = prev_state_.back().tokline;
+    state_.loc_range = cc_.sources()->EnterMacro(macro->pos, expansion_pos, text);
 
     // Save any tokens we peeked ahead.
     state_.token_buffer = token_buffer_;
@@ -2533,29 +2549,38 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
     std::string out;
 
     size_t last_start = 0;
+    const auto& substitute = macro->substitute->str();
     for (const auto& pos : macro->arg_positions) {
         assert(pos >= last_start);
-        assert(macro->substitute[pos] == '%');
-        assert(IsDigit(macro->substitute[pos + 1]));
+        assert(substitute[pos] == '%');
+        assert(IsDigit(substitute[pos + 1]));
 
-        out += macro->substitute.substr(last_start, pos - last_start);
+        out += substitute.substr(last_start, pos - last_start);
         last_start = pos + 2;
 
-        char arg_pos = macro->substitute[pos + 1] - '0';
+        char arg_pos = substitute[pos + 1] - '0';
         auto iter = args.find(arg_pos);
         if (iter == args.end()) {
-            out.push_back(macro->substitute[pos]);
-            out.push_back(macro->substitute[pos + 1]);
+            out.push_back(substitute[pos]);
+            out.push_back(substitute[pos + 1]);
             continue;
         }
         out += iter->second;
     }
 
-    out += macro->substitute.substr(last_start);
+    out += substitute.substr(last_start);
     return out;
 }
 
 void Lexer::SkipUtf8Bom() {
     if (state_.pos[0] == 0xef && state_.pos[1] == 0xbb && state_.pos[2] == 0xbf)
         state_.pos += 3;
+}
+
+bool Lexer::IsSameSourceFile(const token_pos_t& a, const token_pos_t& b) {
+    // Almost always, we'll be looking at the most recent location. peek_same_line
+    // is extremely hot so keep this fast-path fast.
+    if (state_.loc_range.owns(a) && state_.loc_range.owns(b))
+        return true;
+    return cc_.sources()->IsSameSourceFile(a, b);
 }

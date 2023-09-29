@@ -296,10 +296,10 @@ class Lexer
     void lexpush();
     void lexclr(int clreol);
 
-    void Init(std::shared_ptr<SourceFile> sf);
+    void Init(std::shared_ptr<sp::SourceFile> sf);
     void Start();
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
-    std::shared_ptr<SourceFile> OpenFile(const std::string& name);
+    std::shared_ptr<sp::SourceFile> OpenFile(const std::string& name);
     bool NeedSemicolon();
     void AddMacro(const char* pattern, const char* subst);
     void LexStringContinuation();
@@ -323,7 +323,7 @@ class Lexer
     bool freading() const { return freading_; }
     int fcurrent() const { return state_.inpf->sources_index(); }
     unsigned fline() const { return state_.fline; }
-    SourceFile* inpf() const { return state_.inpf.get(); }
+    sp::SourceFile* inpf() const { return state_.inpf.get(); }
 
     unsigned char const* char_stream() const { return state_.pos; }
     unsigned char const* line_start() const { return state_.line_start; }
@@ -348,7 +348,7 @@ class Lexer
     full_token_t* PushSynthesizedToken(TokenKind kind, const token_pos_t& pos);
     void SynthesizeIncludePathToken();
     void SetFileDefines(std::string file);
-    void EnterFile(std::shared_ptr<SourceFile>&& fp);
+    void EnterFile(std::shared_ptr<sp::SourceFile>&& fp, const token_pos_t& from);
     void FillTokenPos(token_pos_t* pos);
     void SkipLineWhitespace();
     std::string SkimUntilEndOfLine(tr::vector<size_t>* macro_args = nullptr);
@@ -357,6 +357,7 @@ class Lexer
     void NeedTokenError(int expected, int got);
     void SkipUtf8Bom();
     void PushLexerState();
+    bool IsSameSourceFile(const token_pos_t& a, const token_pos_t& b);
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
@@ -416,11 +417,12 @@ class Lexer
 
   private:
     struct MacroEntry {
-        sp::Atom* pattern;
+        sp::Atom* pattern = nullptr;
         ke::Maybe<tr::vector<int>> args;
         tr::vector<size_t> arg_positions;
-        std::string substitute;
+        sp::Atom* substitute = nullptr;
         std::string documentation;
+        token_pos_t pos;
         bool deprecated;
     };
     std::shared_ptr<MacroEntry> FindMacro(sp::Atom* atom);
@@ -464,8 +466,8 @@ class Lexer
         void operator =(const LexerState &) = delete;
         LexerState& operator =(LexerState&&) = default;
 
-        std::shared_ptr<SourceFile> inpf;
-        LREntry inpf_loc;
+        std::shared_ptr<sp::SourceFile> inpf;
+        sp::LocationRange loc_range;
         // Visual line in the file.
         int fline = 0;
         // Line # for token processing.
@@ -483,7 +485,6 @@ class Lexer
 
         // Macro specific.
         std::shared_ptr<MacroEntry> macro;
-        std::string pattern;
     };
 
     LexerState state_;

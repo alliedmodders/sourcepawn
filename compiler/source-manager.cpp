@@ -17,45 +17,73 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "source-manager.h"
 
+#include <filesystem>
+
 #include <amtl/am-arithmetic.h>
 #include "errors.h"
 #include "lexer.h"
 
+using namespace sp;
+
+namespace sp {
+
 SourceManager::SourceManager(CompileContext& cc)
   : cc_(cc)
 {
+    loc_ranges_.emplace_back();
 }
 
-std::shared_ptr<SourceFile> SourceManager::Open(const std::string& path,
-                                                const token_pos_t& from)
-{
+std::shared_ptr<SourceFile> SourceManager::Open(const std::string& path) {
+    for (const auto& other : opened_files_) {
+        std::error_code ec;
+        if (std::filesystem::equivalent(path, other->path(), ec))
+            return other;
+    }
+
     auto file = std::make_shared<SourceFile>();
     if (!file->Open(path))
         return nullptr;
 
+    file->set_sources_index(opened_files_.size());
+    opened_files_.emplace_back(file);
+
+    return file;
+}
+
+LocationRange SourceManager::EnterFile(std::shared_ptr<SourceFile> file, const token_pos_t& from) {
     size_t loc_index;
     if (!TrackExtents(file->size(), &loc_index)) {
         report(from, 422);
-        return nullptr;
+        return {};
     }
 
     if (opened_files_.size() >= UINT_MAX) {
         report(from, 422);
-        return nullptr;
+        return {};
     }
 
-    file->set_sources_index(opened_files_.size());
-    opened_files_.emplace_back(file);
+    loc_ranges_[loc_index].init(from, file.get());
+    return loc_ranges_[loc_index];
+}
 
-    // :TODO: fix
-    locations_[loc_index].init({}, file);
-    file->set_location_index(loc_index);
-    return file;
+LocationRange SourceManager::EnterMacro(const token_pos_t& from, SourceLocation expansion_loc,
+                                        Atom* text)
+{
+    assert(expansion_loc.valid());
+
+    size_t lr_index;
+    if (!TrackExtents(text->length(), &lr_index)) {
+        report(from, 422);
+        return {};
+    }
+
+    loc_ranges_[lr_index].init(from, expansion_loc, text);
+    return loc_ranges_[lr_index];
 }
 
 bool SourceManager::TrackExtents(uint32_t length, size_t* index) {
     // We allocate an extra 2 so we can refer to the end-of-file position without
-    // colling with the next range.
+    // colliding with the next range.
     uint32_t next_source_id;
     if (!ke::TryUint32Add(next_source_id_, length, &next_source_id) ||
         !ke::TryUint32Add(next_source_id, 2, &next_source_id) ||
@@ -64,16 +92,59 @@ bool SourceManager::TrackExtents(uint32_t length, size_t* index) {
         return false;
     }
 
-    *index = locations_.size();
+    *index = loc_ranges_.size();
 
-    LREntry tracker;
+    LocationRange tracker;
     tracker.id = next_source_id_;
-    locations_.push_back(tracker);
+    loc_ranges_.push_back(tracker);
 
     next_source_id_ = next_source_id;
     return true;
 }
 
-LREntry SourceManager::GetLocationRangeEntryForFile(const std::shared_ptr<SourceFile>& file) {
-    return locations_[file->location_index()];
+bool SourceManager::IsSameSourceFile(const SourceLocation& a, const SourceLocation& b) {
+    return GetSourceFileIndex(a) == GetSourceFileIndex(b);
 }
+
+size_t SourceManager::FindLocRangeSlow(const SourceLocation& loc) {
+    assert(loc.valid());
+
+    if (loc_ranges_[last_lr_lookup_].owns(loc))
+        return last_lr_lookup_;
+
+    size_t lower = 1;
+    size_t upper = loc_ranges_.size();
+    while (lower < upper) {
+        size_t mid = (lower + upper) / 2;
+        const auto& range = loc_ranges_[mid];
+        if (loc.offset() < range.id) {
+            upper = mid;
+        } else if (loc.offset() > range.id + range.length() + 1) {
+            // Note +1 for the terminal offset.
+            lower = mid + 1;
+        } else {
+            assert(range.owns(loc));
+            last_lr_lookup_ = mid;
+            return mid;
+        }
+    }
+
+    assert(false);
+    return 0;
+}
+
+uint32_t SourceManager::GetSourceFileIndex(const SourceLocation& loc) {
+    size_t lr_index = FindLocRange(loc);
+    if (lr_index == 0)
+        return 0;
+
+    while (lr_index && loc_ranges_[lr_index].is_macro())
+        lr_index = FindLocRange(loc_ranges_[lr_index].expansion_loc());
+
+    if (!loc_ranges_[lr_index].file())
+        return 0;
+
+    return loc_ranges_[lr_index].file()->sources_index();
+}
+
+} // namespace sp

@@ -36,11 +36,14 @@
 class Lexer;
 class ReportManager;
 class SemaContext;
-class SourceManager;
 class SymbolScope;
 class TypeDictionary;
 struct CompileOptions;
 struct symbol;
+
+namespace sp {
+class SourceManager;
+} // namespace sp
 
 // The thread-safe successor to scvars.
 class CompileContext final
@@ -66,7 +69,7 @@ class CompileContext final
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
-    SourceManager* sources() const { return sources_.get(); }
+    sp::SourceManager* sources() const { return sources_.get(); }
     TypeDictionary* types() const { return types_.get(); }
     sp::StringPool* atoms() { return &atoms_; }
 
@@ -102,8 +105,8 @@ class CompileContext final
     std::string& outfname() { return outfname_; }
     void set_outfname(const std::string& value) { outfname_ = value; }
 
-    std::shared_ptr<SourceFile> inpf_org() const { return inpf_org_; }
-    void set_inpf_org(std::shared_ptr<SourceFile> sf) { inpf_org_ = sf; }
+    std::shared_ptr<sp::SourceFile> inpf_org() const { return inpf_org_; }
+    void set_inpf_org(std::shared_ptr<sp::SourceFile> sf) { inpf_org_ = sf; }
 
     bool must_abort() const { return must_abort_; }
     void set_must_abort() { must_abort_ = true; }
@@ -135,8 +138,8 @@ class CompileContext final
     std::unique_ptr<CompileOptions> options_;
     std::string outfname_;
     std::string errfname_;
-    std::unique_ptr<SourceManager> sources_;
-    std::shared_ptr<SourceFile> inpf_org_;
+    std::unique_ptr<sp::SourceManager> sources_;
+    std::shared_ptr<sp::SourceFile> inpf_org_;
     std::unique_ptr<TypeDictionary> types_;
     sp::StringPool atoms_;
 

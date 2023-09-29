@@ -170,7 +170,10 @@ MessageBuilder::~MessageBuilder()
 
     ErrorReport report;
     report.number = number_;
-    report.fileno = cc.sources()->GetSourceFileIndex(where_);
+    if (where_.valid())
+        report.fileno = cc.sources()->GetSourceFileIndex(where_);
+    else
+        report.fileno = 0;
     report.lineno = std::max(where_.line, 1);
     if (report.fileno < 0)
         report.fileno = cc.lexer()->fcurrent();
