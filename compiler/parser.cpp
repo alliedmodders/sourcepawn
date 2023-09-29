@@ -162,14 +162,14 @@ Parser::Parse()
                 break;
             }
             case '}':
-                error(54); /* unmatched closing brace */
+                report(54); /* unmatched closing brace */
                 break;
             case '{':
-                error(55); /* start of function body without function header */
+                report(55); /* start of function body without function header */
                 break;
             default:
                 if (lexer_->freading()) {
-                    error(10);    /* illegal function or declaration */
+                    report(10);    /* illegal function or declaration */
                     lexer_->lexclr(TRUE); /* drop the rest of the line */
                 }
         }
@@ -259,7 +259,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 
     if (!decl.opertok && probablyVariable) {
         if (tok->id == tNEW && decl.type.is_new)
-            error(143);
+            report(143);
 
         VarParams params;
         params.vclass = fstatic ? sSTATIC : sGLOBAL;
@@ -373,7 +373,7 @@ Parser::parse_enum(int vclass)
     cell increment = 1;
     cell multiplier = 1;
     if (lexer_->match('(')) {
-        error(228);
+        report(228);
         if (lexer_->match(taADD)) {
             if (lexer_->need(tNUMBER)) {
                 if (lexer_->current_token()->value() != 1)
@@ -402,7 +402,7 @@ Parser::parse_enum(int vclass)
             break;
         }
         if (lexer_->match(tLABEL))
-            error(153);
+            report(153);
 
         sp::Atom* field_name = nullptr;
         if (lexer_->need(tSYMBOL))
@@ -411,7 +411,7 @@ Parser::parse_enum(int vclass)
         auto pos = lexer_->pos();
 
         if (lexer_->match('[')) {
-            error(153);
+            report(153);
             if (!lexer_->match(']')) {
                 hier14();
                 lexer_->need(']');
@@ -574,7 +574,7 @@ Parser::parse_using()
         if (!lexer_->needsymbol(&ident))
             return false;
         if (strcmp(ident->chars(), "__intrinsics__") != 0) {
-            error(156);
+            report(156);
             return false;
         }
         if (!lexer_->need('.'))
@@ -582,7 +582,7 @@ Parser::parse_using()
         if (!lexer_->needsymbol(&ident))
             return false;
         if (strcmp(ident->chars(), "Handle") != 0) {
-            error(156);
+            report(156);
             return false;
         }
         return true;
@@ -647,7 +647,7 @@ Parser::parse_const(int vclass)
                 break;
             }
             default:
-                error(122);
+                report(122);
                 break;
         }
 
@@ -702,7 +702,7 @@ Parser::hier14()
             break;
         case '=': /* simple assignment */
             if (in_test_)
-                error(211); /* possibly unintended assignment */
+                report(211); /* possibly unintended assignment */
             break;
         default:
             lexer_->lexpush();
@@ -1085,7 +1085,7 @@ Parser::constant()
             return new ArrayExpr(pos, exprs, ellipses);
         }
         default:
-          error(29);
+          report(29);
           return nullptr;
     }
 }
@@ -1112,7 +1112,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
             lexer_->need('=');
         } else {
             if (named_params)
-                error(44);
+                report(44);
         }
 
         Expr* expr = nullptr;
@@ -1306,7 +1306,7 @@ Stmt*
 Parser::parse_stmt(int* lastindent, bool allow_decl)
 {
     if (!lexer_->freading()) {
-        error(36); /* empty statement */
+        report(36); /* empty statement */
         return nullptr;
     }
     cc_.reports()->ResetErrorFlag();
@@ -1319,7 +1319,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
         if (*lastindent >= 0 && *lastindent != lexer_->stmtindent() && !lexer_->indent_nowarn() &&
             tabsize > 0)
         {
-            error(217); /* loose indentation */
+            report(217); /* loose indentation */
         }
         *lastindent = lexer_->stmtindent();
         lexer_->indent_nowarn() = false; /* if warning was blocked, re-enable it */
@@ -1339,7 +1339,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
 
         if (is_decl) {
             if (!allow_decl) {
-                error(3);
+                report(3);
                 return nullptr;
             }
             lexer_->lexpush();
@@ -1370,7 +1370,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
                 lexer_->lexpush(); // we lexer_->match'ed, give it back to lex for declloc
             }
             if (!allow_decl) {
-                error(3);
+                report(3);
                 return nullptr;
             }
             auto stmt = parse_local_decl(tok, tok != tDECL);
@@ -1385,7 +1385,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return parse_enum(sLOCAL);
         case tCASE:
         case tDEFAULT:
-            error(14); /* not in switch */
+            report(14); /* not in switch */
             return nullptr;
         case '{': {
             int save = lexer_->fline();
@@ -1394,14 +1394,14 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             return parse_compound(save == lexer_->fline());
         }
         case ';':
-            error(36); /* empty statement */
+            report(36); /* empty statement */
             return nullptr;
         case tBREAK:
         case tCONTINUE: {
             auto pos = lexer_->pos();
             lexer_->need(tTERM);
             if (!in_loop_) {
-                error(24);
+                report(24);
                 return nullptr;
             }
             if (tok == tBREAK)
@@ -1460,7 +1460,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             if (parens)
                 lexer_->need(')');
             else
-                error(243);
+                report(243);
             lexer_->need(tTERM);
             if (!stmt || !cond)
                 return nullptr;
@@ -1580,7 +1580,7 @@ Parser::parse_if()
         /* to avoid the "dangling else" error, we want a warning if the "else"
          * has a lower indent than the matching "if" */
         if (lexer_->stmtindent() < ifindent && cc_.options()->tabsize > 0)
-            error(217); /* loose indentation */
+            report(217); /* loose indentation */
         else_stmt = parse_stmt(nullptr, false);
         if (!else_stmt)
             return nullptr;
@@ -1626,7 +1626,7 @@ Parser::parse_for()
 
     int endtok = lexer_->match('(') ? ')' : tDO;
     if (endtok != ')')
-        error(243);
+        report(243);
 
     Stmt* init = nullptr;
     if (!lexer_->match(';')) {
@@ -1704,7 +1704,7 @@ Parser::parse_switch()
 
     int endtok = lexer_->match('(') ? ')' : tDO;
     if (endtok != ')')
-        error(243);
+        report(243);
 
     Expr* cond = parse_expr(false);
     lexer_->need(endtok);
@@ -1720,7 +1720,7 @@ Parser::parse_switch()
         switch (tok) {
             case tCASE: {
                 if (default_case)
-                    error(15); /* "default" case must be last in switch statement */
+                    report(15); /* "default" case must be last in switch statement */
 
                 std::vector<Expr*> exprs;
                 if (auto stmt = parse_case(&exprs)) {
@@ -1737,12 +1737,12 @@ Parser::parse_switch()
                     if (!default_case)
                         default_case = stmt;
                     else
-                        error(16);
+                        report(16);
                 }
                 break;
             default:
                 if (tok != '}') {
-                    error(2);
+                    report(2);
                     lexer_->indent_nowarn() = true;
                     tok = endtok;
                 }
@@ -1810,7 +1810,7 @@ bool
 Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
 {
     if (!lexer_->match('(')) {
-        error(10);
+        report(10);
         lexer_->lexclr(TRUE);
         return false;
     }
@@ -1849,7 +1849,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
         default:
             if (lexer_->match(';')) {
                 if (!lexer_->NeedSemicolon())
-                    error(10); /* old style prototypes used with optional semicolumns */
+                    report(10); /* old style prototypes used with optional semicolumns */
                 fun->set_is_forward();
                 return true;
             }
@@ -1885,7 +1885,7 @@ Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
 
         if (decl.type.ident == iVARARGS) {
             if (fun->IsVariadic())
-                error(401);
+                report(401);
 
             auto p = new ArgDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, false, false,
                                  false, nullptr);
@@ -1894,14 +1894,14 @@ Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
         }
 
         if (fun->IsVariadic())
-            error(402);
+            report(402);
 
         Expr* init = nullptr;
         if (lexer_->match('='))
             init = var_init(sARGUMENT);
 
         if (fun->args().size() >= SP_MAX_CALL_ARGUMENTS)
-            error(45);
+            report(45);
         if (decl.name->chars()[0] == PUBLIC_CHAR)
             report(56) << decl.name; // function arguments cannot be public
 
@@ -1954,7 +1954,7 @@ Parser::parse_methodmap()
             else
                 ok = false;
         } else {
-            error(124);
+            report(124);
             ok = false;
         }
         if (!ok) {
@@ -1985,7 +1985,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
         symbol_tok = *lexer_->current_token();
 
     if (lexer_->match('~'))
-        error(118);
+        report(118);
 
     declinfo_t ret_type = {};
 
@@ -2288,7 +2288,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
             }
 
             if (lexer_->require_newdecls())
-                error(147);
+                report(147);
 
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
@@ -2339,7 +2339,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
 
     if (lexer_->match(tCONST)) {
         if (type->is_const)
-            error(138);
+            report(138);
         type->is_const = true;
     }
 
@@ -2369,7 +2369,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
             lexer_->need(':');
         }
         if (numtags > 1)
-            error(158);
+            report(158);
     }
 
     if (numtags == 0) {
@@ -2381,7 +2381,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
     type->set_type(ti);
 
     if (lexer_->require_newdecls())
-        error(147);
+        report(147);
 
     // Look for varargs and end early.
     if (lexer_->match(tELLIPS)) {
@@ -2404,7 +2404,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                     case tVOID:
                     case tINT:
                         if (lexer_->peek(tSYMBOL)) {
-                            error(143);
+                            report(143);
                         } else {
                             report(157) << sc_tokens[tok_id - tFIRST];
                             decl->name = cc_.atom(sc_tokens[tok_id - tFIRST]);
@@ -2455,7 +2455,7 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
             if (decl->type.numdim() == 0)
                 parse_post_array_dims(decl, flags);
             else
-                error(121);
+                report(121);
         }
     }
 
@@ -2503,7 +2503,7 @@ Parser::operatorname(sp::Atom** name)
             break;
         default:
             *name = cc_.atom("");
-            error(7); /* operator cannot be redefined (or bad operator name) */
+            report(7); /* operator cannot be redefined (or bad operator name) */
             return 0;
     }
 
@@ -2541,7 +2541,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
             if (decl->type.numdim() > 0) {
                 // int[] x, y[]
                 //           ^-- not allowed
-                error(121);
+                report(121);
             }
 
             // int x, y[]
@@ -2601,7 +2601,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
 
     if (tok.id == tCONST) {
         if (type->is_const)
-            error(138);
+            report(138);
         type->is_const = true;
         tok = lexer_->lex_tok();
     }
@@ -2617,7 +2617,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
         do {
             type->dim.emplace_back(0);
             if (!lexer_->match(']')) {
-                error(101);
+                report(101);
 
                 // Try to eat a close bracket anyway.
                 hier14();
@@ -2630,7 +2630,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
     if (flags & DECLFLAG_ARGUMENT) {
         if (lexer_->match('&')) {
             if (type->ident == iARRAY || type->ident == iREFARRAY)
-                error(137);
+                report(137);
             else
                 type->ident = iREFERENCE;
         }
@@ -2665,7 +2665,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
         case tLABEL:
         case tSYMBOL:
             if (tok->id == tLABEL)
-                error(120);
+                report(120);
             if (tok->atom->str() == "float") {
                 *out = TypenameInfo{types_->tag_float()};
                 return true;
@@ -2697,7 +2697,7 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
             return true;
     }
 
-    error(122);
+    report(122);
     return false;
 }
 

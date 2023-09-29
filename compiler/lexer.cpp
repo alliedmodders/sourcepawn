@@ -200,7 +200,7 @@ void Lexer::CheckLineEmpty(bool allow_semi) {
         if (tok == ';' && allow_semi && peek_same_line() == tEOL)
             break;
         if (errors.ok() && tok >= ' ')
-            error(38);
+            report(38);
     }
 }
 
@@ -244,7 +244,7 @@ Lexer::SynthesizeIncludePathToken()
 
     if (close_c) {
         if (advance() != close_c)
-            error(37);
+            report(37);
     }
 
     CheckLineEmpty();
@@ -301,7 +301,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
             exp = (exp * 10) + (c - '0');
         }
         if (!ndigits)
-            error(425);
+            report(425);
         fmult = pow(10.0, exp * sign);
         fnum *= fmult;
     }
@@ -358,11 +358,11 @@ void Lexer::HandleDirectives() {
         // being in a non-skipped section.
         case tpELSE:
             if (ifstack_.empty()) {
-                error(26);
+                report(26);
                 break;
             }
             if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE)
-                error(60); /* multiple #else directives between #if ... #endif */
+                report(60); /* multiple #else directives between #if ... #endif */
             ifstack_.back() |= (char)(SKIPMODE | HANDLED_ELSE);
             CheckLineEmpty();
             HandleSkippedSection();
@@ -370,11 +370,11 @@ void Lexer::HandleDirectives() {
 
         case tpELSEIF: {
             if (ifstack_.empty()) {
-                error(26);
+                report(26);
                 break;
             }
             if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE)
-                error(61); /* #elseif directive may not follow an #else */
+                report(61); /* #elseif directive may not follow an #else */
             ifstack_.back() |= (char)SKIPMODE;
             HandleSkippedSection();
             break;
@@ -382,7 +382,7 @@ void Lexer::HandleDirectives() {
 
         case tpENDIF:
             if (ifstack_.empty()) {
-                error(26); /* no matching "#if" */
+                report(26); /* no matching "#if" */
                 break;
             }
             ifstack_.pop_back();
@@ -414,7 +414,7 @@ void Lexer::HandleDirectives() {
             {
                 ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
                 if (lex() != tSYMBOL) {
-                    error(207);
+                    report(207);
                     break;
                 }
             }
@@ -426,14 +426,14 @@ void Lexer::HandleDirectives() {
                     if (tok == tNUMBER)
                         ctrlchar_ = (char)current_token()->value();
                     else
-                        error(27); /* invalid character constant */
+                        report(27); /* invalid character constant */
                 }
             } else if (current_token()->atom->str() == "deprecated") {
                 deprecate_ = SkimUntilEndOfLine();
             } else if (current_token()->atom->str() == "dynamic") {
                 preproc_expr(&cc_.options()->pragma_dynamic, NULL);
             } else if (current_token()->atom->str() == "rational") {
-                error(250);
+                report(250);
                 SkimUntilEndOfLine();
             } else if (current_token()->atom->str() == "semicolon") {
                 cell val;
@@ -442,7 +442,7 @@ void Lexer::HandleDirectives() {
             } else if (current_token()->atom->str() == "newdecls") {
                 int tok = lex_same_line();
                 if (tok != tSYMBOL) {
-                    error(146);
+                    report(146);
                     break;
                 }
                 auto atom = current_token()->atom;
@@ -451,7 +451,7 @@ void Lexer::HandleDirectives() {
                 else if (atom->str() == "optional")
                     state_.require_newdecls = false;
                 else
-                    error(146);
+                    report(146);
             } else if (current_token()->atom->str() == "tabsize") {
                 cell val;
                 preproc_expr(&val, NULL);
@@ -471,7 +471,7 @@ void Lexer::HandleDirectives() {
                 auto tok = PushSynthesizedToken(tSYN_PRAGMA_UNUSED, col);
                 tok->atom = cc_.atom(ke::Join(parts, ","));
             } else {
-                error(207); /* unknown #pragma */
+                report(207); /* unknown #pragma */
             }
             CheckLineEmpty(true);
             break;
@@ -490,7 +490,7 @@ void Lexer::HandleDirectives() {
                     break;
             }
             if (!alpha(symbol->str()[0])) {
-                error(74); /* pattern must start with an alphabetic character */
+                report(74); /* pattern must start with an alphabetic character */
                 break;
             }
 
@@ -574,7 +574,7 @@ void Lexer::HandleDirectives() {
             break;
         }
         default:
-            error(31); /* unknown compiler directive */
+            report(31); /* unknown compiler directive */
     }
 
     // Make sure we eat everything remaining on the line.
@@ -613,7 +613,7 @@ void Lexer::HandleSkippedSection() {
                 case tpELSE:
                     // Handle errors in the if/else structure even if skipping.
                     if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE) {
-                        error(60); /* multiple #else directives between #if ... #endif */
+                        report(60); /* multiple #else directives between #if ... #endif */
                         continue;
                     }
                     if ((ifstack_.back() & PARSEMODE) != PARSEMODE) {
@@ -630,7 +630,7 @@ void Lexer::HandleSkippedSection() {
 
                 case tpELSEIF:
                     if ((ifstack_.back() & HANDLED_ELSE) == HANDLED_ELSE) {
-                        error(61); /* #elseif directive may not follow an #else */
+                        report(61); /* #elseif directive may not follow an #else */
                         continue;
                     }
 
@@ -955,7 +955,7 @@ void Lexer::HandleSingleLineComment() {
         char c = peek();
         if (c == '\0' || IsNewline(c)) {
             if (prev_c == '\\')
-                error(49); // invalid line continuation
+                report(49); // invalid line continuation
             break;
         }
         if (!IsSpace(c))
@@ -980,7 +980,7 @@ void Lexer::HandleMultiLineComment() {
         }
         if (match_char('/')) {
             if (peek() == '*')
-                error(216); // nested comment
+                report(216); // nested comment
             continue;
         }
         char c = peek();
@@ -1573,7 +1573,7 @@ void Lexer::LexIntoToken(full_token_t* tok) {
             if (peek() == '\'') {
                 advance(); /* skip final quote */
             } else {
-                error(27); /* invalid character constant (must be one character) */
+                report(27); /* invalid character constant (must be one character) */
 
                 // Eat tokens on the same line until we can close the malformed
                 // string.
@@ -1640,7 +1640,7 @@ bool Lexer::lex_number(full_token_t* tok) {
 
         if (digit >= base) {
             if (errors.ok())
-                error(86);
+                report(86);
             continue;
         }
         if (c == '_')
@@ -1656,9 +1656,9 @@ bool Lexer::lex_number(full_token_t* tok) {
         return false;
 
     if (alphanum(peek()))
-        error(53);
+        report(53);
     else if (!ndigits)
-        error(424);
+        report(424);
 
     if (base == 10 && match_char('.')) {
         if (IsDigit(peek())) {
@@ -1682,7 +1682,7 @@ void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
     if (match_char('\"')) {
         packedstring(tok, '\"');
         if (!match_char('\"'))
-            error(37);
+            report(37);
     } else {
         advance();
 
@@ -1692,7 +1692,7 @@ void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
 
         /* invalid char declaration */
         if (!match_char('\''))
-            error(27); /* invalid character constant (must be one character) */
+            report(27); /* invalid character constant (must be one character) */
     }
 }
 
@@ -1784,7 +1784,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     }
 
     tok->id = 0;
-    error(31);
+    report(31);
 }
 
 void Lexer::LexSymbol(full_token_t* tok, sp::Atom* atom) {
@@ -1798,7 +1798,7 @@ void Lexer::LexSymbol(full_token_t* tok, sp::Atom* atom) {
         } else if (cc_.types()->find(atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
-            error(220);
+            report(220);
         }
     } else if (atom->str().size() == 1 && atom->str()[0] == '_') {
         // By itself, '_' is not a symbol but a placeholder. However, '_:' is
@@ -2267,7 +2267,7 @@ declare_handle_intrinsics()
     auto& cc = CompileContext::get();
     sp::Atom* handle_atom = cc.atom("Handle");
     if (methodmap_find_by_name(handle_atom)) {
-        error(156);
+        report(156);
         return;
     }
 

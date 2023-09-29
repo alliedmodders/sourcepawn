@@ -119,33 +119,6 @@ GetMessageForNumber(int number)
     return errmsg_ex[number - 400];
 }
 
-/*  error
- *
- *  Outputs an error message (note: msg is passed optionally).
- *  If an error is found, the variable "errflag" is set and subsequent
- *  errors are ignored until lex() finds a semicolumn or a keyword
- *  (lex() resets "errflag" in that case).
- *
- *  Global references: inpfname   (reffered to only)
- *                     fline      (reffered to only)
- *                     fcurrent   (reffered to only)
- *                     errflag    (altered)
- */
-int
-error(int number)
-{
-    auto& cc = CompileContext::get();
-    if (auto pos_override = cc.reports()->pos_override()) {
-        report(pos_override->pos(), number);
-        return 0;
-    }
-
-    ErrorReport report = ErrorReport::infer(number);
-
-    report_error(std::move(report));
-    return 0;
-}
-
 MessageBuilder::MessageBuilder(int number)
   : number_(number)
 {
@@ -231,40 +204,6 @@ MessageBuilder::~MessageBuilder()
 
     report.message = out.str();
     report_error(std::move(report));
-}
-
-ErrorReport
-ErrorReport::create(int number, int fileno, int lineno)
-{
-    auto& cc = CompileContext::get();
-
-    ErrorReport report;
-    report.number = number;
-    report.fileno = fileno;
-    report.lineno = std::max(lineno, 1);
-    if (report.fileno < 0)
-        report.fileno = cc.lexer()->fcurrent();
-    if (report.fileno < cc.sources()->opened_files().size())
-        report.filename = cc.sources()->opened_files().at(report.fileno)->name();
-    else
-        report.filename = cc.options()->source_files[0];
-    report.type = DeduceErrorType(number);
-
-    const char* prefix = GetErrorTypePrefix(report.type);
-    const char* format = GetMessageForNumber(report.number);
-
-    // Do not format "format" anymore, legacy error() is only allowed for
-    // non-formatted messages.
-    report.message = ke::StringPrintf("%s(%d) : %s %03d: %s", report.filename.c_str(),
-                                      report.lineno, prefix, report.number, format);
-    return report;
-}
-
-ErrorReport
-ErrorReport::infer(int number)
-{
-    auto& cc = CompileContext::get();
-    return create(number, -1, cc.lexer()->current_token()->start.line);
 }
 
 void

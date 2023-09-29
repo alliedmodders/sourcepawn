@@ -563,7 +563,7 @@ RttiBuilder::encode_signature(symbol* sym)
         argc++;
     }
     if (argc > UCHAR_MAX)
-        error(45);
+        report(45);
 
     bytes.push_back((uint8_t)argc);
     if (is_variadic)
@@ -893,7 +893,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
         auto id = (uint32_t(i) << 1) | 1;
         if (!Label::ValueFits(id))
-            error(421);
+            report(421);
         cg_.LinkPublicFunction(sym, id);
 
         rtti.add_method(sym);
