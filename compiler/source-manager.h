@@ -29,7 +29,7 @@
 class CompileContext;
 
 struct token_pos_t {
-    int file = 0;
+    int file_ = 0;
     int line = 0;
 };
 
@@ -105,6 +105,14 @@ class SourceManager final
     std::shared_ptr<SourceFile> Open(const std::string& path, const token_pos_t& from);
 
     LREntry GetLocationRangeEntryForFile(const std::shared_ptr<SourceFile>& file);
+
+    // For a given token location, retrieve the nearest source file index it maps to.
+    uint32_t GetSourceFileIndex(const token_pos_t& pos) {
+      return pos.file_;
+    }
+    bool IsSameSourceFile(const token_pos_t& current, const token_pos_t& next) {
+      return current.file_ == next.file_;
+    }
 
     const tr::vector<std::shared_ptr<SourceFile>>& opened_files() const {
       return opened_files_;
