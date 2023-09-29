@@ -308,7 +308,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
 
     /* floating point */
     float value = (float)fnum;
-    tok->value = sp::FloatCellUnion(value).cell;
+    tok->numeric_value = sp::FloatCellUnion(value).cell;
     tok->id = tRATIONAL;
 }
 
@@ -424,7 +424,7 @@ void Lexer::HandleDirectives() {
                     ctrlchar_ = cc_.options()->ctrlchar_org;
                 } else {
                     if (tok == tNUMBER)
-                        ctrlchar_ = (char)current_token()->value;
+                        ctrlchar_ = (char)current_token()->value();
                     else
                         error(27); /* invalid character constant */
                 }
@@ -1325,7 +1325,6 @@ Lexer::PushSynthesizedToken(TokenKind kind, int col)
     // Now fill it in.
     auto tok = current_token();
     tok->id = kind;
-    tok->value = 0;
     tok->atom = nullptr;
     tok->start.line = state_.tokline;
     tok->start.col = col;
@@ -1573,7 +1572,7 @@ void Lexer::LexIntoToken(full_token_t* tok) {
         case '\'':
             advance(); /* skip quote */
             tok->id = tCHAR_LITERAL;
-            tok->value = litchar(0);
+            tok->numeric_value = litchar(0);
             if (peek() == '\'') {
                 advance(); /* skip final quote */
             } else {
@@ -1673,14 +1672,13 @@ bool Lexer::lex_number(full_token_t* tok) {
     }
 
     tok->id = tNUMBER;
-    tok->value = value;
+    tok->numeric_value = value;
     return true;
 }
 
 void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
     tok->id = tSTRING;
     tok->atom = nullptr;
-    tok->value = -1;  // Catch consumers expecting automatic litadd().
 
     assert(peek() == '\"' || peek() == '\'');
 
@@ -1766,7 +1764,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
 
     if (atom == line_atom_) {
         tok->id = tNUMBER;
-        tok->value = state_.fline;
+        tok->numeric_value = state_.fline;
         return;
     }
 
@@ -2381,7 +2379,7 @@ void Lexer::LexStringContinuation() {
     std::string data = initial.data();
     while (match(tELLIPS)) {
         if (match(tCHAR_LITERAL)) {
-            data.push_back(current_token()->value);
+            data.push_back(current_token()->value());
             continue;
         }
         if (!need(tSTRING)) {
@@ -2420,7 +2418,7 @@ void Lexer::LexDefinedKeyword() {
     }
 
     initial.id = tNUMBER;
-    initial.value = HasMacro(symbol) ? 1 : 0;
+    initial.numeric_value = HasMacro(symbol) ? 1 : 0;
     *current_token() = initial;
 }
 
@@ -2563,45 +2561,4 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
 void Lexer::SkipUtf8Bom() {
     if (state_.pos[0] == 0xef && state_.pos[1] == 0xbb && state_.pos[2] == 0xbf)
         state_.pos += 3;
-}
-
-void Lexer::AssertCleanState() {
-    assert(allow_keywords_);
-    assert(allow_substitutions_);
-    assert(!in_string_continuation_);
-    assert(allow_tags_);
-    assert(injected_token_stream_.empty());
-}
-
-TokenCache* Lexer::LexFunctionBody() {
-    TokenCache* cache = new TokenCache;
-
-    // To cache tokens we must be assured that the lexer state contains no
-    // surprises, otherwise, the uncached stream may resolve incorrectly.
-    AssertCleanState();
-
-    int brace_balance = 1;
-    while (freading_) {
-        int tok = lex();
-        if (tok == 0)
-            break;
-        if (tok == '}') {
-            brace_balance--;
-            if (brace_balance == 0)
-                break;
-        }
-        cache->tokens.emplace_back(std::move(*current_token()));
-    }
-
-    cache->tokens.shrink_to_fit();
-    token_caches_.append(cache);
-    return cache;
-}
-
-void Lexer::InjectCachedTokens(TokenCache* cache) {
-    AssertCleanState();
-
-    injected_token_stream_ = std::move(cache->tokens);
-    token_caches_.remove(cache);
-    delete cache;
 }
