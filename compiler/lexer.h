@@ -436,7 +436,6 @@ class Lexer
     size_t iflevel_;             /* nesting level if #if/#else/#endif */
     size_t skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
     std::string deprecate_;
-    bool lexnewline_ = false;
     bool allow_tags_ = true;
     int stmtindent_ = 0;
     bool indent_nowarn_ = false;
