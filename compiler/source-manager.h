@@ -45,56 +45,56 @@ struct token_pos_t {
 // trackFile() or trackMacro().
 struct LREntry
 {
-  // Starting id for this source range.
-  uint32_t id;
+    // Starting id for this source range.
+    uint32_t id;
 
  private:
-  // If we're creating a range from an #include, this is the location in the
-  // parent file we were #included from, if any.
-  //
-  // If we're creating a range for macro insertion, this is where we started
-  // inserting tokens.
-  SourceLocation parent_;
+    // If we're creating a range from an #include, this is the location in the
+    // parent file we were #included from, if any.
+    //
+    // If we're creating a range for macro insertion, this is where we started
+    // inserting tokens.
+    SourceLocation parent_;
 
-  // If we included from a file, this is where we included.
-  std::shared_ptr<SourceFile> file_;
+    // If we included from a file, this is where we included.
+    std::shared_ptr<SourceFile> file_;
 
  public:
-  LREntry()
-   : id(0)
-  {}
+    LREntry()
+     : id(0)
+    {}
 
-  bool valid() const {
-    return id != 0;
-  }
+    bool valid() const {
+        return id != 0;
+    }
 
-  void init(const SourceLocation& parent, std::shared_ptr<SourceFile> file) {
-    this->parent_ = parent;
-    this->file_ = std::move(file);
-  }
+    void init(const SourceLocation& parent, std::shared_ptr<SourceFile> file) {
+        this->parent_ = parent;
+        this->file_ = std::move(file);
+    }
 
-  std::shared_ptr<SourceFile> file() const {
-    return file_;
-  }
-  const SourceLocation& parent() const {
-    return parent_;
-  }
+    std::shared_ptr<SourceFile> file() const {
+        return file_;
+    }
+    const SourceLocation& parent() const {
+        return parent_;
+    }
 
-  uint32_t length() const {
-    return file_->size();
-  }
+    uint32_t length() const {
+        return file_->size();
+    }
 
-  bool owns(const SourceLocation& loc) const {
-    if (loc.offset() >= id && loc.offset() <= id + length())
-      return true;
-    return false;
-  }
+    bool owns(const SourceLocation& loc) const {
+        if (loc.offset() >= id && loc.offset() <= id + length())
+            return true;
+        return false;
+    }
 
-  SourceLocation FilePos(uint32_t offset) const {
-    assert(file_);
-    assert(offset <= file_->size());
-    return SourceLocation::FromFile(id, offset);
-  }
+    SourceLocation FilePos(uint32_t offset) const {
+        assert(file_);
+        assert(offset <= file_->size());
+        return SourceLocation::FromFile(id, offset);
+    }
 };
 
 class SourceManager final

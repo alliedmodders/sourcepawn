@@ -76,16 +76,3 @@ class SourceLocation
  private:
   uint32_t id_;
 };
-
-struct SourceRange
-{
-  SourceLocation start;
-  SourceLocation end;
-
-  SourceRange()
-  {}
-  SourceRange(const SourceLocation& start, const SourceLocation& end)
-   : start(start),
-     end(end)
-  {}
-};
