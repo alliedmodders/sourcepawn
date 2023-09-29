@@ -151,9 +151,9 @@ ArraySizeResolver::Resolve()
             // As noted in ResolveDimExprs, we allow this for arguments as long
             // as the last dimension is filled.
         } else if (vclass_ == sLOCAL) {
-            error(pos_, 159);
+            report(pos_, 159);
         } else {
-            error(pos_, 183);
+            report(pos_, 183);
         }
     }
 }
@@ -209,7 +209,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
     }
 
     if (!type_->dim[rank] && expr->ellipses())
-        error(expr->pos(), 41);
+        report(expr->pos(), 41);
 
     SetRankSize(expr, rank, expr->exprs().size());
 
@@ -235,7 +235,7 @@ ArraySizeResolver::SetRankSize(Expr* expr, int rank, int size)
             computed_[rank] = kSizeIndeterminate;
     } else if (computed_[rank] > 0) {
         // Intermediate ranks must not vary in size.
-        error(expr->pos(), 47);
+        report(expr->pos(), 47);
         computed_[rank] = kSizeIndeterminate;
     }
 }
@@ -266,13 +266,13 @@ ArraySizeResolver::ResolveDimExprs()
             // And this seems like a perfectly valid thing to want (a dynamic
             // array of fixed-size arrays).
             if (i == type_->numdim() - 1 && vclass_ == sARGUMENT && type_->is_new) {
-                error(pos_, 183);
+                report(pos_, 183);
                 return false;
             }
 
             // Enum fields must always be fixed size.
             if (vclass_ == sENUMFIELD) {
-                error(pos_, 183);
+                report(pos_, 183);
                 return false;
             }
             continue;
@@ -301,7 +301,7 @@ ArraySizeResolver::ResolveDimExprs()
 
             // Old-style dynamic arrays are only allowed in local scope.
             if (vclass_ != sLOCAL) {
-                error(expr->pos(), 162);
+                report(expr->pos(), 162);
                 return false;
             }
             assert(type_->dim[i] == 0);
@@ -309,12 +309,12 @@ ArraySizeResolver::ResolveDimExprs()
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
         } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym && v.sym->enumroot) {
-            error(expr->pos(), 153);
+            report(expr->pos(), 153);
             return false;
         } else {
             // Constant must be > 0.
             if (v.constval() <= 0) {
-                error(expr->pos(), 9);
+                report(expr->pos(), 9);
                 return false;
             }
             type_->dim[i] = v.constval();
@@ -453,12 +453,12 @@ FixedArrayValidator::Validate()
         if (!type_.dim[i])
             break;
         if (!ke::IsUintMultiplySafe<uint32_t>(last_size, type_.dim[i])) {
-            error(pos_, 52);
+            report(pos_, 52);
             return false;
         }
         last_size *= type_.dim[i];
         if (last_size >= kMaxCells) {
-            error(pos_, 52);
+            report(pos_, 52);
             return false;
         }
         if (!AddCells(last_size))
@@ -530,7 +530,7 @@ FixedArrayValidator::CheckArgument(Expr* init)
 
     for (size_t i = 0; i < type_.dim.size(); i++) {
         if (type_.dim[i] && type_.dim[i] != dim[i]) {
-            error(expr->pos(), 48);
+            report(expr->pos(), 48);
             return false;
         }
     }
@@ -543,11 +543,11 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     if (rank != type_.numdim() - 1) {
         ArrayExpr* array = init->as<ArrayExpr>();
         if (!array) {
-            error(init->pos(), 47);
+            report(init->pos(), 47);
             return false;
         }
         if ((cell)array->exprs().size() != type_.dim[rank]) {
-            error(init->pos(), 47);
+            report(init->pos(), 47);
             return false;
         }
 
@@ -582,7 +582,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             return false;
 
         if (type_.dim[rank] && cells > type_.dim[rank]) {
-            error(str->pos(), 47);
+            report(str->pos(), 47);
             return false;
         }
         return true;
@@ -599,7 +599,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         //
         //    int x[10] = 0;
         if (!decl_ || type_.numdim() != 1) {
-            error(init->pos(), 47);
+            report(init->pos(), 47);
             return false;
         }
 
@@ -607,7 +607,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             return false;
 
         if (init->val().ident != iCONSTEXPR) {
-            error(init->pos(), 47);
+            report(init->pos(), 47);
             return false;
         }
 
@@ -621,7 +621,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     }
 
     if (rank_size && rank_size < (cell)array->exprs().size()) {
-        error(init->pos(), 47);
+        report(init->pos(), 47);
         return false;
     }
 
@@ -633,13 +633,13 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         AutoErrorPos pos(expr->pos());
 
         if (expr->as<StringExpr>()) {
-            error(47);
+            report(47);
             continue;
         }
 
         const auto& v = expr->val();
         if (v.ident != iCONSTEXPR) {
-            error(8);
+            report(8);
             continue;
         }
 
@@ -656,7 +656,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     if (array->ellipses()) {
         if (array->exprs().empty()) {
             // Invalid ellipses, array size unknown.
-            error(array->pos(), 41);
+            report(array->pos(), 41);
             return true;
         }
         if (prev1.isValid() && prev2.isValid() && type_.tag()) {
@@ -668,7 +668,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             (rank_size == (cell)array->exprs().size() && !array->synthesized_for_compat()))
         {
             // Initialization data exceeds declared size.
-            error(array->exprs().back()->pos(), 18);
+            report(array->exprs().back()->pos(), 18);
             return false;
         }
     }
@@ -682,7 +682,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
 
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
-        error(init->pos(), 47);
+        report(init->pos(), 47);
         return false;
     }
 
@@ -692,7 +692,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
 
     for (const auto& expr : array->exprs()) {
         if (field_iter == field_list.end()) {
-            error(expr->pos(), 91);
+            report(expr->pos(), 91);
             return false;
         }
 
@@ -713,7 +713,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
 
             const auto& v = expr->val();
             if (v.ident != iCONSTEXPR) {
-                error(8);
+                report(8);
                 continue;
             }
 
@@ -722,7 +722,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
     }
 
     if (array->ellipses()) {
-        error(array->pos(), 80);
+        report(array->pos(), 80);
         return false;
     }
     return true;
@@ -732,13 +732,13 @@ bool
 FixedArrayValidator::AddCells(size_t ncells)
 {
     if (!ke::IsUintAddSafe<uint32_t>(total_cells_, ncells)) {
-        error(pos_, 52);
+        report(pos_, 52);
         return false;
     }
 
     total_cells_ += ncells;
     if (total_cells_ >= kMaxCells) {
-        error(pos_, 52);
+        report(pos_, 52);
         return false;
     }
     return true;
@@ -767,7 +767,7 @@ Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
     for (int i = 0; i < type->numdim(); i++) {
         Expr* expr = type->get_dim_expr(i);
         if (!expr) {
-            error(decl->pos(), 184);
+            report(decl->pos(), 184);
             return false;
         }
         exprs.emplace_back(expr);
@@ -811,7 +811,7 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
             return true;
 
         if (type.is_new) {
-            error(decl->pos(), 101);
+            report(decl->pos(), 101);
             return false;
         }
         return AddImplicitDynamicInitializer(decl);
@@ -826,13 +826,13 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     }
 
     if (decl->vclass() == sARGUMENT) {
-        error(init->pos(), 185);
+        report(init->pos(), 185);
         return false;
     }
 
     NewArrayExpr* ctor = init->as<NewArrayExpr>();
     if (!ctor) {
-        error(init->pos(), 160);
+        report(init->pos(), 160);
         return false;
     }
 

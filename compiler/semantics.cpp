@@ -251,7 +251,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
 
     if (auto expr = field->value->as<StringExpr>()) {
         if (arg->type.ident != iREFARRAY) {
-            error(expr->pos(), 48);
+            report(expr->pos(), 48);
             return false;
         }
         if (arg->type.tag() != types_->tag_string())
@@ -259,7 +259,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
                                      << type_to_name(arg->type.tag());
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         if (arg->type.ident != iVARIABLE) {
-            error(expr->pos(), 23);
+            report(expr->pos(), 23);
             return false;
         }
 
@@ -275,21 +275,21 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
         auto sym = expr->sym();
         if (arg->type.ident == iVARIABLE) {
             if (sym->ident != iVARIABLE) {
-                error(expr->pos(), 405);
+                report(expr->pos(), 405);
                 return false;
             }
             matchtag(arg->type.tag(), sym->tag, MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
             if (sym->ident != iARRAY) {
-                error(expr->pos(), 405);
+                report(expr->pos(), 405);
                 return false;
             }
             if (sym->dim_count() != 1) {
-                error(expr->pos(), 405);
+                report(expr->pos(), 405);
                 return false;
             }
         } else {
-            error(expr->pos(), 405);
+            report(expr->pos(), 405);
             return false;
         }
     } else {
@@ -971,11 +971,11 @@ BinaryExpr::FoldToConstant()
         case '/':
         case '%':
             if (!right_val) {
-                error(pos_, 93);
+                report(pos_, 93);
                 return false;
             }
             if (left_val == cell(0x80000000) && right_val == -1) {
-                error(pos_, 97);
+                report(pos_, 97);
                 return false;
             }
             if (token_ == '/')
@@ -3281,12 +3281,12 @@ void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {
         return;
 
     if (variable) {
-        error(144);
+        report(144);
         return;
     }
 
     if (type->numdim() > 0) {
-        error(145);
+        report(145);
         return;
     }
 }
