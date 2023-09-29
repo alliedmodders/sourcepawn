@@ -376,7 +376,7 @@ Parser::parse_enum(int vclass)
         error(228);
         if (lexer_->match(taADD)) {
             if (lexer_->need(tNUMBER)) {
-                if (lexer_->current_token()->value != 1)
+                if (lexer_->current_token()->value() != 1)
                     report(404);
             }
         } else if (lexer_->match(taMULT)) {
@@ -384,7 +384,7 @@ Parser::parse_enum(int vclass)
                 report(404);
         } else if (lexer_->match(taSHL)) {
             if (lexer_->need(tNUMBER)) {
-                if (lexer_->current_token()->value != 1)
+                if (lexer_->current_token()->value() != 1)
                     report(404);
                 multiplier = 2;
             }
@@ -1057,9 +1057,9 @@ Parser::constant()
             return new NullExpr(pos);
         case tCHAR_LITERAL:
         case tNUMBER:
-            return new NumberExpr(pos, lexer_->current_token()->value);
+            return new NumberExpr(pos, lexer_->current_token()->value());
         case tRATIONAL:
-            return new FloatExpr(cc_, pos, lexer_->current_token()->value);
+            return new FloatExpr(cc_, pos, lexer_->current_token()->value());
         case tSTRING: {
             const auto& atom = lexer_->current_token()->atom;
             return new StringExpr(pos, atom);
@@ -1183,10 +1183,10 @@ Parser::struct_init()
             }
             case tCHAR_LITERAL:
             case tNUMBER:
-                expr = new NumberExpr(pos, lexer_->current_token()->value);
+                expr = new NumberExpr(pos, lexer_->current_token()->value());
                 break;
             case tRATIONAL:
-                expr = new FloatExpr(cc_, pos, lexer_->current_token()->value);
+                expr = new FloatExpr(cc_, pos, lexer_->current_token()->value());
                 break;
             case tSYMBOL:
                 expr = new SymbolExpr(pos, lexer_->current_token()->atom);

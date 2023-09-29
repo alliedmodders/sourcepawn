@@ -40,8 +40,11 @@ struct token_pos_t {
 
 struct full_token_t {
     int id = 0;
-    int value = 0;
-    sp::Atom* atom = nullptr;
+    union {
+        sp::Atom* atom = nullptr;
+        int numeric_value; // Set on tRATIONAL, tNUMBER, and tCHAR_LITERAL.
+    };
+    int value();
     token_pos_t start;
     token_pos_t end;
     const std::string& data() const {
@@ -219,6 +222,11 @@ enum TokenKind {
     tENTERED_MACRO,  /* internal lexer command */
     tLAST_TOKEN_ID
 };
+
+inline int full_token_t::value() {
+    assert(id == tRATIONAL || id == tNUMBER || id == tCHAR_LITERAL);
+    return numeric_value;
+}
 
 static inline bool
 IsChainedOp(int token)
