@@ -29,6 +29,8 @@
 # include <unistd.h>
 #endif
 
+namespace sp {
+
 SourceFile::SourceFile()
   : pos_(0)
 {
@@ -116,3 +118,5 @@ SourceFile::Eof()
 {
     return pos_ == data_.size();
 }
+
+} // namespace sp

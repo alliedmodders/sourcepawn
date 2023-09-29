@@ -27,7 +27,9 @@
 #include <amtl/am-maybe.h>
 #include "stl/stl-string.h"
 
-class SourceFile
+namespace sp {
+
+class SourceFile : public std::enable_shared_from_this<SourceFile>
 {
     friend class SourceManager;
 
@@ -55,12 +57,12 @@ class SourceFile
         return reinterpret_cast<const unsigned char*>(data_.data());
     }
 
+    std::shared_ptr<SourceFile> to_shared() { return shared_from_this(); }
+
   private:
     bool Open(const std::string& file_name);
 
     void set_sources_index(uint32_t sources_index) { sources_index_ = ke::Some(sources_index); }
-    uint32_t location_index() const { return location_index_.get(); }
-    void set_location_index(uint32_t location_index) { location_index_ = ke::Some(location_index); }
 
   private:
     std::string name_;
@@ -68,5 +70,6 @@ class SourceFile
     size_t pos_;
     bool is_main_file_ = false;
     ke::Maybe<uint32_t> sources_index_;
-    ke::Maybe<uint32_t> location_index_;
 };
+
+} // namespace sp

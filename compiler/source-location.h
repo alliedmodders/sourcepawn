@@ -19,6 +19,10 @@
 
 #include <stdint.h>
 
+namespace sp {
+
+class SourceManager;
+
 // An encoded referece to a location in a source file. We keep this structure
 // as small as feasible since our average script can have hundreds of thousands
 // of source locations.
@@ -27,7 +31,7 @@ class SourceLocation
   friend class MacroLexer;
   friend class SourceFile;
   friend class SourceManager;
-  friend struct LREntry;
+  friend struct LocationRange;
   friend struct Macro;
 
   static const uint32_t kInMacro = 0x80000000;
@@ -49,8 +53,9 @@ class SourceLocation
    : id_(0)
   {
   }
+  SourceLocation(const SourceLocation&) = default;
 
-  bool IsSet() const {
+  bool valid() const {
     return id_ != 0;
   }
   bool operator ==(const SourceLocation& other) {
@@ -76,3 +81,5 @@ class SourceLocation
  private:
   uint32_t id_;
 };
+
+} // namespace sp

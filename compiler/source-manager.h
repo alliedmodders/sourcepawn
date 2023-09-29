@@ -1,6 +1,6 @@
-// vim: set ts=2 sw=2 tw=99 et:
+// vim: set ts=4 sw=4 tw=99 et:
 // 
-// Copyright (C) 2022 David Anderson
+// Copyright (C) 2022 AlliedModders LLC
 // 
 // This file is part of SourcePawn.
 // 
@@ -19,8 +19,10 @@
 
 #include <limits.h>
 
+#include <limits>
 #include <memory>
 
+#include "shared/string-pool.h"
 #include "stl/stl-unordered-map.h"
 #include "stl/stl-vector.h"
 #include "source-file.h"
@@ -28,22 +30,30 @@
 
 class CompileContext;
 
-struct token_pos_t {
-    int file_ = 0;
+// Of course, we'd love if tokens could just be SourceLocations. But peek_same_line()
+// is an extremely hot function, and line checks need to be fast, so we track
+// it explicitly.
+struct token_pos_t : public sp::SourceLocation {
     int line = 0;
+
+    token_pos_t() {}
+    token_pos_t(const SourceLocation& loc, int line)
+      : SourceLocation(loc),
+        line(line)
+    {}
 };
 
-// An LREntry is created each time we register a range of locations (it is
-// short for LocationRangeEntry). For a file, an LREntry covers each character
+namespace sp {
+
+// Location Range. Design is taken from LLVM.
+//
+// An LocationRange is created each time we register a range of locations (it is
+// short for LocationRangeEntry). For a file, an LocationRange covers each character
 // in the file, including a position for EOF. For macros, it covers the number
 // of characters in its token stream, with a position for EOF.
 //
-// LREntries are allocated by calling trackFile() or trackMacro() in the
-// SourceManager.
-//
-// LREntries are not malloc'd, so references must not be held past calls to
-// trackFile() or trackMacro().
-struct LREntry
+// LREntries are allocated by calling TrackExtents.
+struct LocationRange
 {
     // Starting id for this source range.
     uint32_t id;
@@ -52,15 +62,22 @@ struct LREntry
     // If we're creating a range from an #include, this is the location in the
     // parent file we were #included from, if any.
     //
-    // If we're creating a range for macro insertion, this is where we started
-    // inserting tokens.
+    // If we're creating a range for macro insertion, this is where the macro was
+    // defined.
     SourceLocation parent_;
 
-    // If we included from a file, this is where we included.
-    std::shared_ptr<SourceFile> file_;
+    // If we're creating a range from a macro, this is the insertion point.
+    SourceLocation expansion_loc_;
+
+    // If we included from a file, this is where we included. No refcount
+    // needed since SourceFiles are held open by CompileContext.
+    union {
+        SourceFile* file_;
+        Atom* text_;
+    };
 
  public:
-    LREntry()
+    LocationRange()
      : id(0)
     {}
 
@@ -68,23 +85,40 @@ struct LREntry
         return id != 0;
     }
 
-    void init(const SourceLocation& parent, std::shared_ptr<SourceFile> file) {
+    void init(const SourceLocation& parent, SourceFile* file) {
         this->parent_ = parent;
-        this->file_ = std::move(file);
+        this->file_ = file;
+    }
+
+    void init(SourceLocation parent, SourceLocation expansion_loc, Atom* text) {
+        this->parent_ = parent;
+        this->expansion_loc_ = expansion_loc;
+        this->text_ = text;
     }
 
     std::shared_ptr<SourceFile> file() const {
-        return file_;
-    }
-    const SourceLocation& parent() const {
-        return parent_;
+        if (!is_file())
+            return nullptr;
+        return file_->to_shared();
     }
 
+    const SourceLocation& parent() const { return parent_; }
+    const SourceLocation& expansion_loc() const { return expansion_loc_; }
+
+    bool is_macro() const { return expansion_loc_.valid(); }
+    bool is_file() const { return !expansion_loc_.valid(); }
+
     uint32_t length() const {
+        if (!valid())
+            return 0;
+        if (is_macro())
+            return text_->length();
         return file_->size();
     }
 
     bool owns(const SourceLocation& loc) const {
+        if (!loc.valid())
+            return false;
         if (loc.offset() >= id && loc.offset() <= id + length())
             return true;
         return false;
@@ -95,6 +129,16 @@ struct LREntry
         assert(offset <= file_->size());
         return SourceLocation::FromFile(id, offset);
     }
+
+    SourceLocation MacroPos(uint32_t offset) const {
+        assert(text_);
+        assert(offset <= text_->length());
+        return SourceLocation::FromMacro(id, offset);
+    }
+
+    bool operator ==(const LocationRange& other) const {
+        return id == other.id;
+    }
 };
 
 class SourceManager final
@@ -102,32 +146,48 @@ class SourceManager final
   public:
     explicit SourceManager(CompileContext& cc);
 
-    std::shared_ptr<SourceFile> Open(const std::string& path, const token_pos_t& from);
+    std::shared_ptr<SourceFile> Open(const std::string& path);
+    LocationRange EnterFile(std::shared_ptr<SourceFile> file, const token_pos_t& from);
 
-    LREntry GetLocationRangeEntryForFile(const std::shared_ptr<SourceFile>& file);
+    // Return a location range for a macro. If the macro has unique text, the
+    // location range will not be cached.
+    LocationRange EnterMacro(const token_pos_t& from, SourceLocation expansion_loc,
+                             Atom* text);
 
     // For a given token location, retrieve the nearest source file index it maps to.
-    uint32_t GetSourceFileIndex(const token_pos_t& pos) {
-      return pos.file_;
-    }
-    bool IsSameSourceFile(const token_pos_t& current, const token_pos_t& next) {
-      return current.file_ == next.file_;
-    }
+    uint32_t GetSourceFileIndex(const SourceLocation& loc);
+
+    // Checks whether two tokens are in the same file. Runtime is O(log n) for
+    // n = # of files opened.
+    bool IsSameSourceFile(const SourceLocation& a, const SourceLocation& b);
 
     const tr::vector<std::shared_ptr<SourceFile>>& opened_files() const {
       return opened_files_;
     }
 
+    // Find the index of the owning LocationRange. 0 is an invalid range.
+    size_t FindLocRange(const SourceLocation& loc) {
+        if (loc_ranges_[last_lr_lookup_].owns(loc))
+            return last_lr_lookup_;
+        return FindLocRangeSlow(loc);
+    }
+
   private:
     bool TrackExtents(uint32_t length, size_t* index);
+    size_t FindLocRangeSlow(const SourceLocation& loc);
 
   private:
     CompileContext& cc_;
     tr::vector<std::shared_ptr<SourceFile>> opened_files_;
-    tr::vector<LREntry> locations_;
+    tr::vector<LocationRange> loc_ranges_;
 
     // Source ids start from 1. The source file id is 1 + len(source) + 1. This
     // lets us store source locations as a single integer, as we can always
     // bisect to a particular file, and from there, to a line number and column.
     uint32_t next_source_id_ = 1;
+
+    // One-entry cache for SL lookup.
+    size_t last_lr_lookup_ = 0;
 };
+
+} // namespace sp

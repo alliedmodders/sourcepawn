@@ -132,7 +132,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 
     assert(options->source_files.size() == 1);
     {
-        auto sf = cc.sources()->Open(options->source_files[0], {});
+        auto sf = cc.sources()->Open(options->source_files[0]);
         if (!sf) {
             report(417) << options->source_files[0];
             goto cleanup;
