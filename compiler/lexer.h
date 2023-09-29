@@ -32,12 +32,6 @@
 class CompileContext;
 class Type;
 
-struct token_pos_t {
-    int file = 0;
-    int line = 0;
-    int col = 0;
-};
-
 struct full_token_t {
     int id = 0;
     union {

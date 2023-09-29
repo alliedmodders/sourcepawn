@@ -27,6 +27,7 @@
 #include <unordered_map>
 
 #include "label.h"
+#include "lexer.h"
 #include "sc.h"
 #include "stl/stl-unordered-map.h"
 
@@ -153,8 +154,7 @@ struct symbol : public PoolObject
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
-    int fnumber; /* file number in which the symbol is declared */
-    int lnumber; /* line number for the declaration */
+    token_pos_t pos;
     PoolString* documentation; /* optional documentation string */
 
     int dim_count() const { return dim_data ? dim_data[-1] : 0; }

@@ -127,9 +127,6 @@ symbol::symbol(sp::Atom* symname, cell symaddr, IdentifierKind symident, int sym
    explicit_return_type(false),
    semantic_tag(0),
    dim_data(nullptr),
-   fnumber(0),
-   /* assume global visibility (ignored for local symbols) */
-   lnumber(0),
    documentation(nullptr),
    addr_(symaddr),
    name_(nullptr)
@@ -359,8 +356,7 @@ static symbol*
 NewConstant(sp::Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 {
     auto sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
-    sym->fnumber = pos.file;
-    sym->lnumber = pos.line;
+    sym->pos = pos;
     sym->defined = true;
     return sym;
 }

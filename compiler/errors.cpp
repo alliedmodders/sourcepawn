@@ -132,9 +132,7 @@ MessageBuilder::MessageBuilder(int number)
 MessageBuilder::MessageBuilder(symbol* sym, int number)
   : number_(number)
 {
-    where_.file = sym->fnumber;
-    where_.line = sym->lnumber;
-    where_.col = 0;
+    where_ = sym->pos;
 }
 
 MessageBuilder::MessageBuilder(MessageBuilder&& other)
