@@ -938,7 +938,6 @@ void Lexer::HandleNewline(char c, char continuation) {
     if (continuation != '\\') {
         state_.tokline++;
         tokens_on_line_ = 0;
-        lexnewline_ = true;
     }
     state_.line_start = char_stream();
 }
@@ -1360,8 +1359,6 @@ int Lexer::lex() {
 int Lexer::LexNewToken() {
     full_token_t* tok = advance_token_ptr();
     *tok = {};
-
-    lexnewline_ = false;
 
     do {
         if (!FindNextToken()) {
@@ -1892,7 +1889,7 @@ Lexer::match(int token)
         lexpush();
 
         if (!NeedSemicolon() &&
-            (lexnewline_ || !freading_ || peek_same_line() == tEOL))
+            (!freading_ || peek_same_line() == tEOL))
         {
             // Push "tok" back, because it is the token following the implicit statement
             // termination (newline) token.
@@ -2566,4 +2563,45 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
 void Lexer::SkipUtf8Bom() {
     if (state_.pos[0] == 0xef && state_.pos[1] == 0xbb && state_.pos[2] == 0xbf)
         state_.pos += 3;
+}
+
+void Lexer::AssertCleanState() {
+    assert(allow_keywords_);
+    assert(allow_substitutions_);
+    assert(!in_string_continuation_);
+    assert(allow_tags_);
+    assert(injected_token_stream_.empty());
+}
+
+TokenCache* Lexer::LexFunctionBody() {
+    TokenCache* cache = new TokenCache;
+
+    // To cache tokens we must be assured that the lexer state contains no
+    // surprises, otherwise, the uncached stream may resolve incorrectly.
+    AssertCleanState();
+
+    int brace_balance = 1;
+    while (freading_) {
+        int tok = lex();
+        if (tok == 0)
+            break;
+        if (tok == '}') {
+            brace_balance--;
+            if (brace_balance == 0)
+                break;
+        }
+        cache->tokens.emplace_back(std::move(*current_token()));
+    }
+
+    cache->tokens.shrink_to_fit();
+    token_caches_.append(cache);
+    return cache;
+}
+
+void Lexer::InjectCachedTokens(TokenCache* cache) {
+    AssertCleanState();
+
+    injected_token_stream_ = std::move(cache->tokens);
+    token_caches_.remove(cache);
+    delete cache;
 }
