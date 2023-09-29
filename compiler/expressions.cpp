@@ -479,7 +479,7 @@ matchtag(int formaltag, int actualtag, int flags)
 
     if (actual->isFunction() && !formal->isFunction()) {
         // We're being given a function, but the destination is not a function.
-        error(130);
+        report(130);
         return FALSE;
     }
 
@@ -500,7 +500,7 @@ matchtag(int formaltag, int actualtag, int flags)
 
     if (formal->isFunction()) {
         if (!matchfunctags(formal, actual)) {
-            error(100);
+            report(100);
             return FALSE;
         }
         return TRUE;
@@ -575,19 +575,19 @@ calc(cell left, int oper_tok, cell right, char* boolresult)
             return (left * right);
         case '/':
             if (right == 0) {
-                error(29);
+                report(29);
                 return 0;
             }
             return left / right;
         case '%':
             if (right == 0) {
-                error(29);
+                report(29);
                 return 0;
             }
             return left % right;
     }
     assert(false);
-    error(29); /* invalid expression, assumed 0 (this should never occur) */
+    report(29); /* invalid expression, assumed 0 (this should never occur) */
     return 0;
 }
 

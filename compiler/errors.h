@@ -42,9 +42,6 @@ enum class ErrorType {
 };
 
 struct ErrorReport {
-    static ErrorReport infer(int number);
-    static ErrorReport create(int number, int fileno, int lineno);
-
     int number;
     int fileno;
     int lineno;
@@ -70,8 +67,6 @@ class AutoErrorPos final
     token_pos_t pos_;
     AutoErrorPos* prev_;
 };
-
-int error(int number);
 
 class MessageBuilder
 {

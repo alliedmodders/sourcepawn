@@ -187,7 +187,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 
 cleanup:
     if (!ok && cc.reports()->NumErrorMessages() == 0)
-        error(423);
+        report(423);
 
     unsigned int errnum = cc.reports()->NumErrorMessages();
     unsigned int warnnum = cc.reports()->NumWarnMessages();
