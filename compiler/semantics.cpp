@@ -727,7 +727,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
             // Update the line number as a hack so we can warn that it was never
             // used.
-            sym->pos = expr->pos();
+            sym->loc = expr->pos();
         } else if (auto* accessor = left->val().accessor()) {
             if (!accessor->setter) {
                 report(expr, 152) << accessor->name;

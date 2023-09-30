@@ -26,6 +26,7 @@
 
 #include <amtl/am-maybe.h>
 #include "stl/stl-string.h"
+#include "stl/stl-vector.h"
 
 namespace sp {
 
@@ -59,8 +60,11 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
 
     std::shared_ptr<SourceFile> to_shared() { return shared_from_this(); }
 
+    bool OffsetToLineAndCol(uint32_t offset, uint32_t* line, uint32_t* col = nullptr);
+
   private:
     bool Open(const std::string& file_name);
+    void ComputeLineExtents();
 
     void set_sources_index(uint32_t sources_index) { sources_index_ = ke::Some(sources_index); }
 
@@ -70,6 +74,7 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     size_t pos_;
     bool is_main_file_ = false;
     ke::Maybe<uint32_t> sources_index_;
+    tr::vector<uint32_t> line_extents_;
 };
 
 } // namespace sp

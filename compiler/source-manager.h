@@ -136,6 +136,11 @@ struct LocationRange
         return SourceLocation::FromMacro(id, offset);
     }
 
+    uint32_t ToOffset(SourceLocation loc) {
+        assert(owns(loc));
+        return loc.offset() - id;
+    }
+
     bool operator ==(const LocationRange& other) const {
         return id == other.id;
     }
@@ -157,6 +162,11 @@ class SourceManager final
     // For a given token location, retrieve the nearest source file index it maps to.
     uint32_t GetSourceFileIndex(const SourceLocation& loc);
 
+    // Return the closest line and column number for a given location. If the
+    // location is a macro expansion, the expansion location is used. If the
+    // location is invalid, 0 is returned.
+    uint32_t GetLineAndCol(SourceLocation loc, uint32_t* col);
+
     // Checks whether two tokens are in the same file. Runtime is O(log n) for
     // n = # of files opened.
     bool IsSameSourceFile(const SourceLocation& a, const SourceLocation& b);
@@ -175,6 +185,7 @@ class SourceManager final
   private:
     bool TrackExtents(uint32_t length, size_t* index);
     size_t FindLocRangeSlow(const SourceLocation& loc);
+    size_t FindSourceFileRangeIndex(SourceLocation loc, SourceLocation* expansion_loc);
 
   private:
     CompileContext& cc_;

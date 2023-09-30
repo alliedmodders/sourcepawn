@@ -29,6 +29,7 @@
 #include "label.h"
 #include "lexer.h"
 #include "sc.h"
+#include "source-location.h"
 #include "stl/stl-unordered-map.h"
 
 class CompileContext;
@@ -154,7 +155,7 @@ struct symbol : public PoolObject
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
-    token_pos_t pos;
+    sp::SourceLocation loc;
     PoolString* documentation; /* optional documentation string */
 
     int dim_count() const { return dim_data ? dim_data[-1] : 0; }
