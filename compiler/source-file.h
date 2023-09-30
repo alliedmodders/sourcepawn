@@ -61,6 +61,8 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     std::shared_ptr<SourceFile> to_shared() { return shared_from_this(); }
 
     bool OffsetToLineAndCol(uint32_t offset, uint32_t* line, uint32_t* col = nullptr);
+    bool OffsetOfLine(uint32_t line, uint32_t* offset);
+    tr::string GetLine(uint32_t line);
 
   private:
     bool Open(const std::string& file_name);
