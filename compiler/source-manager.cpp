@@ -133,18 +133,52 @@ size_t SourceManager::FindLocRangeSlow(const SourceLocation& loc) {
     return 0;
 }
 
-uint32_t SourceManager::GetSourceFileIndex(const SourceLocation& loc) {
+size_t SourceManager::FindSourceFileRangeIndex(SourceLocation loc, SourceLocation* expansion_loc) {
     size_t lr_index = FindLocRange(loc);
     if (lr_index == 0)
         return 0;
 
-    while (lr_index && loc_ranges_[lr_index].is_macro())
+    if (expansion_loc)
+        *expansion_loc = loc;
+
+    while (lr_index && loc_ranges_[lr_index].is_macro()) {
+        if (expansion_loc)
+            *expansion_loc = loc_ranges_[lr_index].expansion_loc();
         lr_index = FindLocRange(loc_ranges_[lr_index].expansion_loc());
+    }
 
     if (!loc_ranges_[lr_index].file())
         return 0;
 
+    return lr_index;
+}
+
+uint32_t SourceManager::GetSourceFileIndex(const SourceLocation& loc) {
+    auto lr_index = FindSourceFileRangeIndex(loc, nullptr);
+    if (!lr_index)
+        return 0; // Default to the main file.
     return loc_ranges_[lr_index].file()->sources_index();
+}
+
+uint32_t SourceManager::GetLineAndCol(SourceLocation loc, uint32_t* col) {
+    if (col)
+        *col = 0;
+
+    if (!loc.valid())
+        return 0;
+
+    SourceLocation expansion_loc;
+    auto lr_index = FindSourceFileRangeIndex(loc, &expansion_loc);
+    if (!lr_index)
+        return 0;
+
+    auto file = loc_ranges_[lr_index].file();
+    uint32_t offset = loc_ranges_[lr_index].ToOffset(expansion_loc);
+
+    uint32_t line;
+    if (!file->OffsetToLineAndCol(offset, &line, col))
+        return 0;
+    return line;
 }
 
 } // namespace sp

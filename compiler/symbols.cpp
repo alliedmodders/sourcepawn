@@ -356,7 +356,7 @@ static symbol*
 NewConstant(sp::Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 {
     auto sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
-    sym->pos = pos;
+    sym->loc = pos;
     sym->defined = true;
     return sym;
 }

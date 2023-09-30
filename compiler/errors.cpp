@@ -132,7 +132,7 @@ MessageBuilder::MessageBuilder(int number)
 MessageBuilder::MessageBuilder(symbol* sym, int number)
   : number_(number)
 {
-    where_ = sym->pos;
+    where_ = token_pos_t(sym->loc, 0);
 }
 
 MessageBuilder::MessageBuilder(MessageBuilder&& other)
@@ -174,18 +174,20 @@ MessageBuilder::~MessageBuilder()
         report.fileno = cc.sources()->GetSourceFileIndex(where_);
     else
         report.fileno = 0;
-    report.lineno = std::max(where_.line, 1);
-    if (report.fileno < 0)
-        report.fileno = cc.lexer()->fcurrent();
+
     if (report.fileno < cc.sources()->opened_files().size())
-        report.filename = cc.sources()->opened_files().at(report.fileno)->name();
+        report.file = cc.sources()->opened_files().at(report.fileno);
     else
-        report.filename = cc.options()->source_files[0];
+        report.file = cc.sources()->opened_files().at(0);
+
+    if (where_.valid() && !where_.line)
+        where_.line = cc.sources()->GetLineAndCol(where_, &report.col);
+    report.lineno = std::max(where_.line, 1);
+
     report.type = DeduceErrorType(number_);
 
     std::ostringstream out;
-    if (!report.filename.empty())
-        out << report.filename << "(" << report.lineno << ") : ";
+    out << report.file->name() << "(" << report.lineno << ") : ";
     out << GetErrorTypePrefix(report.type)
         << " " << ke::StringPrintf("%03d", report.number) << ": ";
 

@@ -514,7 +514,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         sym_->usage |= uREAD;
     }
 
-    sym_->pos = pos_;
+    sym_->loc = pos_;
 
     if (def_ok)
         DefineSymbol(sc, sym_);
@@ -854,7 +854,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 
     // But position info belongs to the implementation.
     if (!sym_->function()->forward || is_public_) {
-        sym_->pos = pos_;
+        sym_->loc = pos_;
     }
 
     // Ensure |this| argument exists.

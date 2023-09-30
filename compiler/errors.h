@@ -42,10 +42,12 @@ enum class ErrorType {
 };
 
 struct ErrorReport {
+    sp::SourceLocation loc;
     int number;
-    int fileno;
-    int lineno;
-    std::string filename;
+    uint32_t fileno;
+    uint32_t lineno;
+    uint32_t col;
+    std::shared_ptr<sp::SourceFile> file;
     std::string message;
     ErrorType type;
 };
