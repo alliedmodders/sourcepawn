@@ -169,6 +169,7 @@ MessageBuilder::~MessageBuilder()
     auto& cc = CompileContext::get();
 
     ErrorReport report;
+    report.loc = where_;
     report.number = number_;
     if (where_.valid())
         report.fileno = cc.sources()->GetSourceFileIndex(where_);
@@ -180,8 +181,12 @@ MessageBuilder::~MessageBuilder()
     else
         report.file = cc.sources()->opened_files().at(0);
 
+    uint32_t actual_line = cc.sources()->GetLineAndCol(where_, &report.col);
+
+    // Rely on tokline when it's there, but... we should ditch it here, we
+    // have the technology.
     if (where_.valid() && !where_.line)
-        where_.line = cc.sources()->GetLineAndCol(where_, &report.col);
+        where_.line = actual_line;
     report.lineno = std::max(where_.line, 1);
 
     report.type = DeduceErrorType(number_);
@@ -264,9 +269,20 @@ ReportManager::ReportError(ErrorReport&& report)
         cc_.set_must_abort();
 }
 
-void
-ReportManager::DumpErrorReport(bool clear)
-{
+void DumpDiagnostic(FILE* fp, const ErrorReport& report) {
+    auto line = report.file->GetLine(report.lineno);
+    while (!line.empty() && (line.back() == '\r' || line.back() == '\n'))
+        line.pop_back();
+
+    fprintf(fp, "%6u | %s\n", report.lineno, line.c_str());
+
+    uint32_t num_dashes = 9 + report.col - 1;
+    for (uint32_t i = 0; i < num_dashes; i++)
+        fprintf(fp, "-");
+    fprintf(fp, "^\n");
+}
+
+void ReportManager::DumpErrorReport(bool clear) {
     FILE* stdfp = cc_.options()->use_stderr ? stderr : stdout;
 
     FILE* fp = nullptr;
@@ -282,8 +298,13 @@ ReportManager::DumpErrorReport(bool clear)
         return a.fileno > b.fileno;
     });
 
-    for (const auto& report : error_list_)
+    for (const auto& report : error_list_) {
         fprintf(fp, "%s", report.message.c_str());
+        if (report.loc.valid())
+            DumpDiagnostic(fp, report);
+        if (&report != &error_list_.back())
+            fprintf(fp, "\n");
+    }
     fflush(fp);
 
     if (fp != stdfp)

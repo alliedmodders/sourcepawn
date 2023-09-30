@@ -117,7 +117,8 @@ void SourceFile::ComputeLineExtents() {
     if (!line_extents_.empty())
         return;
 
-    line_extents_.emplace_back(0);
+    tr::vector<uint32_t> extents;
+    extents.emplace_back(0);
     for (uint32_t i = 0; i < data_.size(); i++) {
         if (data_[i] != '\r' && data_[i] != '\n')
             continue;
@@ -126,10 +127,13 @@ void SourceFile::ComputeLineExtents() {
             if (i + 1 < data_.size() && data_[i + 1] == '\n')
                 i++;
         }
-        line_extents_.emplace_back(i + 1);
+        extents.emplace_back(i + 1);
     }
 
-    line_extents_.shrink_to_fit();
+
+    line_extents_.resize(extents.size());
+    for (size_t i = 0; i < extents.size(); i++)
+        line_extents_[i] = extents[i];
 }
 
 bool SourceFile::OffsetToLineAndCol(uint32_t offset, uint32_t* line, uint32_t* col) {
@@ -176,6 +180,34 @@ bool SourceFile::OffsetToLineAndCol(uint32_t offset, uint32_t* line, uint32_t* c
 
     assert(false);
     return false;
+}
+
+bool SourceFile::OffsetOfLine(uint32_t line, uint32_t* offset) {
+    ComputeLineExtents();
+
+    uint32_t line_index = line - 1;
+    if (line_index > line_extents_.size())
+        return false;
+
+    if (line_index == line_extents_.size())
+        *offset = data_.size();
+    else
+        *offset = line_extents_[line_index];
+    return true;
+}
+
+tr::string SourceFile::GetLine(uint32_t line) {
+    ComputeLineExtents();
+
+    uint32_t offset;
+    if (!OffsetOfLine(line, &offset))
+        return {};
+
+    uint32_t end;
+    if (!OffsetOfLine(line + 1, &end))
+        end = data_.size();
+
+    return data_.substr(offset, end - offset);
 }
 
 } // namespace sp
