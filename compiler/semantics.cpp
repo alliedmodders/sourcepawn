@@ -33,19 +33,18 @@
 #include "sctracker.h"
 #include "symbols.h"
 
-Semantics::Semantics(CompileContext& cc, ParseTree* tree)
-  : cc_(cc),
-    tree_(tree)
+Semantics::Semantics(CompileContext& cc)
+  : cc_(cc)
 {
     types_ = cc.types();
 }
 
-bool Semantics::Analyze() {
+bool Semantics::Analyze(ParseTree* tree) {
     SemaContext sc(this);
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
     AutoCountErrors errors;
-    if (!CheckStmtList(tree_->stmts()) || !errors.ok())
+    if (!CheckStmtList(tree->stmts()) || !errors.ok())
         return false;
 
     // This inserts missing return statements at the global scope, so it cannot

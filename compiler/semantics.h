@@ -147,9 +147,9 @@ class Semantics final
     friend class Parser;
 
   public:
-    Semantics(CompileContext& cc, ParseTree* tree);
+    explicit Semantics(CompileContext& cc);
 
-    bool Analyze();
+    bool Analyze(ParseTree* tree);
 
     CompileContext& cc() { return cc_; }
     SymbolScope* current_scope() const;
@@ -248,7 +248,6 @@ class Semantics final
   private:
     CompileContext& cc_;
     TypeDictionary* types_ = nullptr;
-    ParseTree* tree_;
     tr::unordered_set<SymbolScope*> static_scopes_;
     SemaContext* sc_ = nullptr;
     bool pending_heap_allocation_ = false;

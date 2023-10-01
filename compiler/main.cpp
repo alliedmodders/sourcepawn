@@ -153,7 +153,8 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
     inst_binary_name(cc, cc.outfname().c_str());
 
     {
-        Parser parser(cc);
+        Semantics sema(cc);
+        Parser parser(cc, &sema);
 
         AutoCountErrors errors;
         tree = parser.Parse();      /* process all input */
@@ -162,7 +163,6 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 
         errors.Reset();
 
-        Semantics sema(cc, tree);
         {
             SemaContext sc(&sema);
             sema.set_context(&sc);
@@ -177,7 +177,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
             sema.set_context(nullptr);
 
             errors.Reset();
-            if (!sema.Analyze() || !errors.ok())
+            if (!sema.Analyze(tree) || !errors.ok())
                 goto cleanup;
 
             tree->stmts()->ProcessUses(sc);
