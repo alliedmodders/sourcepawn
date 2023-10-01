@@ -38,8 +38,9 @@
 
 using namespace sp;
 
-Parser::Parser(CompileContext& cc)
+Parser::Parser(CompileContext& cc, Semantics* sema)
   : cc_(cc),
+    sema_(sema),
     lexer_(cc.lexer())
 {
     types_ = cc_.types();
@@ -300,12 +301,12 @@ bool
 Parser::PreprocExpr(cell* val, int* tag)
 {
     auto& cc = CompileContext::get();
-    Parser parser(cc);
+
+    Semantics sema(cc);
+    Parser parser(cc, &sema);
     auto expr = parser.hier14();
     if (!expr)
         return false;
-
-    Semantics sema(cc, nullptr);
 
     SemaContext sc(&sema);
     sc.set_preprocessing();

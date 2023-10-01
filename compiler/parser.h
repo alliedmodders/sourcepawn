@@ -26,10 +26,12 @@
 #include "sc.h"
 #include "sctracker.h"
 
+class Semantics;
+
 class Parser
 {
   public:
-    explicit Parser(CompileContext& cc);
+    Parser(CompileContext& cc, Semantics* sema);
     ~Parser();
 
     static bool PreprocExpr(cell* val, int* tag);
@@ -128,6 +130,7 @@ class Parser
 
   private:
     CompileContext& cc_;
+    Semantics* sema_;
     bool in_loop_ = false;
     bool in_test_ = false;
     std::vector<SymbolScope*> static_scopes_;
