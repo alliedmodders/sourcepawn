@@ -318,8 +318,6 @@ class Lexer
     std::string& deprecate() { return deprecate_; }
     bool& allow_tags() { return allow_tags_; }
     int& require_newdecls() { return state_.require_newdecls; }
-    int& stmtindent() { return stmtindent_; }
-    bool& indent_nowarn() { return indent_nowarn_; }
     bool freading() const { return freading_; }
     int fcurrent() const { return state_.inpf->sources_index(); }
     unsigned fline() const { return state_.fline; }
@@ -440,8 +438,6 @@ class Lexer
     size_t skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
     std::string deprecate_;
     bool allow_tags_ = true;
-    int stmtindent_ = 0;
-    bool indent_nowarn_ = false;
     bool freading_ = false;
     int ctrlchar_ = CTRL_CHAR;
     unsigned int tokens_on_line_ = 0;

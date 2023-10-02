@@ -782,9 +782,6 @@ bool Lexer::FindNextToken() {
         auto work_line = line_start();
         bool is_line_start = (work_line == work_start) && !IsInMacro();
 
-        if (is_line_start)
-            stmtindent_ = 0;
-
         // Skip whitespace.
         while (true) {
             char c = peek();
@@ -793,16 +790,6 @@ bool Lexer::FindNextToken() {
 
             if (c == '\r' || c == '\n')
                 break;
-
-            if (is_line_start) {
-                int indent = 1;
-                if (c == '\t') {
-                    int tabsize = cc_.options()->tabsize;
-                    if (tabsize != 0)
-                        indent = (int)(tabsize - (stmtindent_ + tabsize) % tabsize);
-                }
-                stmtindent_ += indent;
-            }
 
             advance();
         }

@@ -48,7 +48,7 @@ class Parser
     Stmt* parse_unknown_decl(const full_token_t* tok);
     Decl* parse_enum(int vclass);
     Stmt* parse_const(int vclass);
-    Stmt* parse_stmt(int* lastindent, bool allow_decl);
+    Stmt* parse_stmt(bool allow_decl);
     Stmt* parse_static_assert();
     Decl* parse_pstruct();
     Decl* parse_typedef();
@@ -86,7 +86,7 @@ class Parser
     void rewrite_type_for_enum_struct(typeinfo_t* info);
     int operatorname(sp::Atom** name);
 
-    Stmt* parse_compound(bool sameline);
+    Stmt* parse_compound();
     Stmt* parse_local_decl(int tokid, bool autozero);
     Stmt* parse_if();
     Stmt* parse_for();

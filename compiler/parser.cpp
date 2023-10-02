@@ -1304,7 +1304,7 @@ Parser::parse_post_dims(typeinfo_t* type)
 }
 
 Stmt*
-Parser::parse_stmt(int* lastindent, bool allow_decl)
+Parser::parse_stmt(bool allow_decl)
 {
     if (!lexer_->freading()) {
         report(36); /* empty statement */
@@ -1313,18 +1313,6 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
     cc_.reports()->ResetErrorFlag();
 
     int tok = lexer_->lex();
-
-    /* lexer_->lex() has set stmtindent */
-    if (lastindent && tok != tLABEL) {
-        int tabsize = cc_.options()->tabsize;
-        if (*lastindent >= 0 && *lastindent != lexer_->stmtindent() && !lexer_->indent_nowarn() &&
-            tabsize > 0)
-        {
-            report(217); /* loose indentation */
-        }
-        *lastindent = lexer_->stmtindent();
-        lexer_->indent_nowarn() = false; /* if warning was blocked, re-enable it */
-    }
 
     if (tok == tSYMBOL) {
         // We reaaaally don't have enough lookahead for this, so we cheat and try
@@ -1389,10 +1377,9 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             report(14); /* not in switch */
             return nullptr;
         case '{': {
-            int save = lexer_->fline();
             if (lexer_->match('}'))
                 return new BlockStmt(lexer_->pos(), {});
-            return parse_compound(save == lexer_->fline());
+            return parse_compound();
         }
         case ';':
             report(36); /* empty statement */
@@ -1453,7 +1440,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             Stmt* stmt = nullptr;
             {
                 ke::SaveAndSet<bool> in_loop(&in_loop_, true);
-                stmt = parse_stmt(nullptr, false);
+                stmt = parse_stmt(false);
             }
             lexer_->need(tWHILE);
             bool parens = lexer_->match('(');
@@ -1473,7 +1460,7 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
             Stmt* stmt = nullptr;
             {
                 ke::SaveAndSet<bool> in_loop(&in_loop_, true);
-                stmt = parse_stmt(nullptr, false);
+                stmt = parse_stmt(false);
             }
             if (!stmt || !cond)
                 return nullptr;
@@ -1501,47 +1488,17 @@ Parser::parse_stmt(int* lastindent, bool allow_decl)
     return new ExprStmt(expr->pos(), expr);
 }
 
-Stmt*
-Parser::parse_compound(bool sameline)
-{
-    auto block_start = lexer_->fline();
+Stmt* Parser::parse_compound() {
     auto block_pos = lexer_->pos();
-
-    /* if there is more text on this line, we should adjust the statement indent */
-    if (sameline) {
-        int i;
-        const unsigned char* p = lexer_->char_stream();
-        /* go back to the opening brace */
-        while (*p != '{') {
-            assert(p > lexer_->line_start());
-            p--;
-        }
-        assert(*p == '{'); /* it should be found */
-        /* go forward, skipping white-space */
-        p++;
-        while (*p <= ' ' && *p != '\0')
-            p++;
-        assert(*p != '\0'); /* a token should be found */
-        lexer_->stmtindent() = 0;
-        for (i = 0; i < (int)(p - lexer_->line_start()); i++) {
-            int tabsize = cc_.options()->tabsize;
-            if (lexer_->line_start()[i] == '\t' && tabsize > 0)
-                lexer_->stmtindent() += (int)(tabsize - (lexer_->stmtindent() + tabsize) % tabsize);
-            else
-                lexer_->stmtindent()++;
-        }
-    }
-
-    int indent = -1;
 
     /* repeat until compound statement is closed */
     std::vector<Stmt*> stmts;
     while (lexer_->match('}') == 0 && !cc_.must_abort()) {
         if (!lexer_->freading()) {
-            report(30) << block_start; /* compound block not closed at end of file */
+            report(30) << block_pos.line; /* compound block not closed at end of file */
             break;
         }
-        if (Stmt* stmt = parse_stmt(&indent, true))
+        if (Stmt* stmt = parse_stmt(true))
             stmts.emplace_back(stmt);
     }
     return new BlockStmt(block_pos, stmts);
@@ -1570,19 +1527,14 @@ Parser::parse_local_decl(int tokid, bool autozero)
 Stmt*
 Parser::parse_if()
 {
-    auto ifindent = lexer_->stmtindent();
     auto pos = lexer_->pos();
     auto expr = parse_expr(true);
     if (!expr)
         return nullptr;
-    auto stmt = parse_stmt(nullptr, false);
+    auto stmt = parse_stmt(false);
     Stmt* else_stmt = nullptr;
     if (lexer_->match(tELSE)) {
-        /* to avoid the "dangling else" error, we want a warning if the "else"
-         * has a lower indent than the matching "if" */
-        if (lexer_->stmtindent() < ifindent && cc_.options()->tabsize > 0)
-            report(217); /* loose indentation */
-        else_stmt = parse_stmt(nullptr, false);
+        else_stmt = parse_stmt(false);
         if (!else_stmt)
             return nullptr;
     }
@@ -1691,7 +1643,7 @@ Parser::parse_for()
     Stmt* body = nullptr;
     {
         ke::SaveAndSet<bool> in_loop(&in_loop_, true);
-        body = parse_stmt(nullptr, false);
+        body = parse_stmt(false);
     }
     if (!body)
         return nullptr;
@@ -1734,7 +1686,7 @@ Parser::parse_switch()
             }
             case tDEFAULT:
                 lexer_->need(':');
-                if (Stmt* stmt = parse_stmt(nullptr, false)) {
+                if (Stmt* stmt = parse_stmt(false)) {
                     if (!default_case)
                         default_case = stmt;
                     else
@@ -1744,7 +1696,6 @@ Parser::parse_switch()
             default:
                 if (tok != '}') {
                     report(2);
-                    lexer_->indent_nowarn() = true;
                     tok = endtok;
                 }
                 break;
@@ -1775,7 +1726,7 @@ Parser::parse_case(std::vector<Expr*>* exprs)
 
     lexer_->need(':');
 
-    Stmt* stmt = parse_stmt(nullptr, false);
+    Stmt* stmt = parse_stmt(false);
     if (!stmt || exprs->empty())
         return nullptr;
 
@@ -1862,7 +1813,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     else if (fun->decl().type.is_new)
         lexer_->need('{');
 
-    Stmt* body = parse_stmt(nullptr, false);
+    Stmt* body = parse_stmt(false);
     if (!body)
         return false;
 

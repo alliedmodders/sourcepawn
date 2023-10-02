@@ -242,7 +242,7 @@ static const char* warnmsg[] = {
     /*214*/ "possibly a \"const\" array argument was intended: \"%s\"\n",
     /*215*/ "expression has no effect\n",
     /*216*/ "nested comment\n",
-    /*217*/ "inconsistent indentation (did you mix tabs and spaces?)\n",
+    /*217*/ "unused217\n",
     /*218*/ "old style prototypes used with optional semicolumns\n",
     /*219*/ "local variable \"%s\" shadows a variable at a preceding level\n",
     /*220*/ "expression with tag override must appear between parentheses\n",
