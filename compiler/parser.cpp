@@ -1808,10 +1808,8 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
             break;
     }
 
-    if (lexer_->match('{'))
-        lexer_->lexpush();
-    else if (fun->decl().type.is_new)
-        lexer_->need('{');
+    if (!lexer_->peek('{'))
+        report(437);
 
     Stmt* body = parse_stmt(false);
     if (!body)
