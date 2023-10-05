@@ -318,4 +318,5 @@ static const char* errmsg_ex[] = {
     /*434*/ "constructor cannot have a return type\n",
     /*435*/ "can't get current working directory\n",
     /*436*/ "wrong number of dimensions, expected %d got %d\n",
+    /*437*/ "functions in global scope must use braces\n",
 };

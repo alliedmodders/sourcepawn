@@ -1,1 +1,1 @@
-expected token: "{", but found "return"
+(2) : error 437: functions in global scope must use braces
