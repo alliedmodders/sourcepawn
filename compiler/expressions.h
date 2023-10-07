@@ -21,12 +21,13 @@
  *
  *  Version: $Id$
  */
-#ifndef am_sourcepawn_compiler_sc3_h
-#define am_sourcepawn_compiler_sc3_h
+#pragma once
 
 #include "lexer.h"
 #include "parse-node.h"
 #include "sc.h"
+
+namespace sp {
 
 class SemaContext;
 struct value;
@@ -56,4 +57,4 @@ void user_inc();
 void user_dec();
 int checktag(int tag, int exprtag);
 
-#endif // am_sourcepawn_compiler_sc3_h
+} // namespace sp

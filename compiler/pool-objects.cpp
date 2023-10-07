@@ -17,6 +17,9 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #include "pool-objects.h"
 
+namespace sp {
+namespace cc {
+
 void
 PoolAllocationPolicy::reportOutOfMemory()
 {
@@ -58,3 +61,6 @@ void
 PoolAllocationPolicy::am_free(void* ptr)
 {
 }
+
+} // namespace cc
+} // namespace sp

@@ -35,7 +35,6 @@
 #include "shared/string-pool.h"
 
 namespace sp {
-namespace cc {
 
 // Allocates memory in chunks that are not freed until the entire allocator
 // is freed. This is intended for use with large, temporary data structures.
@@ -110,5 +109,4 @@ class PoolAllocator final
     }
 };
 
-} // namespace cc
 } // namespace sp

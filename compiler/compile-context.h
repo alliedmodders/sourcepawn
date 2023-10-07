@@ -28,10 +28,13 @@
 #include "pool-allocator.h"
 #include "shared/string-pool.h"
 #include "source-file.h"
+#include "source-manager.h"
 #include "stl/stl-forward-list.h"
 #include "stl/stl-unordered-map.h"
 #include "stl/stl-unordered-set.h"
 #include "stl/stl-vector.h"
+
+namespace sp {
 
 class Lexer;
 class ReportManager;
@@ -40,10 +43,6 @@ class SymbolScope;
 class TypeDictionary;
 struct CompileOptions;
 struct symbol;
-
-namespace sp {
-class SourceManager;
-} // namespace sp
 
 // The thread-safe successor to scvars.
 class CompileContext final
@@ -63,23 +62,23 @@ class CompileContext final
     void TrackMalloc(size_t bytes);
     void TrackFree(size_t bytes);
 
-    SymbolScope* globals() const { return globals_; }
+    sp::SymbolScope* globals() const { return globals_; }
     tr::unordered_set<symbol*>& functions() { return functions_; }
     tr::unordered_set<symbol*>& publics() { return publics_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
-    sp::SourceManager* sources() const { return sources_.get(); }
+    SourceManager* sources() const { return sources_.get(); }
     TypeDictionary* types() const { return types_.get(); }
-    sp::StringPool* atoms() { return &atoms_; }
+    StringPool* atoms() { return &atoms_; }
 
-    sp::Atom* atom(const std::string& str) {
+    Atom* atom(const std::string& str) {
         return atoms_.add(str);
     }
-    sp::Atom* atom(const char* str, size_t length) {
+    Atom* atom(const char* str, size_t length) {
         return atoms_.add(str, length);
     }
-    sp::Atom* atom(const char* str) {
+    Atom* atom(const char* str) {
         return atoms_.add(str);
     }
 
@@ -117,7 +116,7 @@ class CompileContext final
     bool& in_preprocessor() { return in_preprocessor_; }
     bool& detected_illegal_preproc_symbols() { return detected_illegal_preproc_symbols_; }
 
-    PoolAllocator& allocator() { return allocator_; }
+    cc::PoolAllocator& allocator() { return allocator_; }
 
     // No copy construction.
     CompileContext(const CompileContext&) = delete;
@@ -127,18 +126,18 @@ class CompileContext final
 
     DefaultArrayData* NewDefaultArrayData();
     tr::vector<tr::string>* NewDebugStringList();
-    tr::unordered_map<sp::Atom*, symbol*>* NewSymbolMap();
+    tr::unordered_map<Atom*, symbol*>* NewSymbolMap();
 
   private:
-    PoolAllocator allocator_;
-    SymbolScope* globals_;
+    cc::PoolAllocator allocator_;
+    sp::SymbolScope* globals_;
     std::string default_include_;
     tr::unordered_set<symbol*> functions_;
     tr::unordered_set<symbol*> publics_;
     std::unique_ptr<CompileOptions> options_;
     std::string outfname_;
     std::string errfname_;
-    std::unique_ptr<sp::SourceManager> sources_;
+    std::unique_ptr<SourceManager> sources_;
     std::shared_ptr<sp::SourceFile> inpf_org_;
     std::unique_ptr<TypeDictionary> types_;
     sp::StringPool atoms_;
@@ -163,7 +162,7 @@ class CompileContext final
     // AST attachments.
     tr::forward_list<DefaultArrayData> default_array_data_objects_;
     tr::forward_list<tr::vector<tr::string>> debug_strings_;
-    tr::forward_list<tr::unordered_map<sp::Atom*, symbol*>> symbol_maps_;
+    tr::forward_list<tr::unordered_map<Atom*, symbol*>> symbol_maps_;
 
     size_t malloc_bytes_ = 0;
     size_t malloc_bytes_peak_ = 0;
@@ -171,3 +170,5 @@ class CompileContext final
     bool in_preprocessor_ = false;
     bool detected_illegal_preproc_symbols_ = false;
 };
+
+} // namespace sp

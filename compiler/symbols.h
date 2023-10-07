@@ -32,6 +32,8 @@
 #include "source-location.h"
 #include "stl/stl-unordered-map.h"
 
+namespace sp {
+
 class CompileContext;
 class FunctionDecl;
 class SemaContext;
@@ -59,8 +61,8 @@ class FunctionData final : public SymbolData
     FunctionDecl* forward;
     symbol* alias;
     symbol* array_return = nullptr;
-    sp::Label label;     // modern replacement for addr
-    sp::Label funcid;
+    Label label;     // modern replacement for addr
+    Label funcid;
     int max_local_stack = 0;
     int max_callee_stack = 0;
     bool checked_one_signature SP_BITFIELD(1);
@@ -109,7 +111,7 @@ class EnumStructData final : public SymbolData
 struct symbol : public PoolObject
 {
     symbol(const symbol& other);
-    symbol(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
+    symbol(Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
 
     symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
@@ -155,7 +157,7 @@ struct symbol : public PoolObject
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
-    sp::SourceLocation loc;
+    SourceLocation loc;
     PoolString* documentation; /* optional documentation string */
 
     int dim_count() const { return dim_data ? dim_data[-1] : 0; }
@@ -175,13 +177,13 @@ struct symbol : public PoolObject
     void setAddr(int addr) {
         addr_ = addr;
     }
-    sp::Atom* nameAtom() const {
+    Atom* nameAtom() const {
         return name_;
     }
     const char* name() const {
         return name_ ? name_->chars() : "";
     }
-    void setName(sp::Atom* name) {
+    void setName(Atom* name) {
         name_ = name;
     }
     FunctionData* function() const {
@@ -217,7 +219,7 @@ struct symbol : public PoolObject
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
-    sp::Atom* name_;
+    Atom* name_;
     SymbolData* data_;
 };
 
@@ -228,59 +230,6 @@ enum ScopeKind {
     sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
     sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
     sFILE_STATIC = 5, /* only appears on SymbolScope, to clarify sSTATIC */
-};
-
-class SymbolScope final : public PoolObject
-{
-  public:
-    SymbolScope(SymbolScope* parent, ScopeKind kind, int fnumber = -1)
-      : parent_(parent),
-        kind_(kind),
-        symbols_(nullptr),
-        fnumber_(fnumber)
-    {}
-
-    symbol* Find(sp::Atom* atom) const {
-        if (!symbols_)
-            return nullptr;
-        auto iter = symbols_->find(atom);
-        if (iter == symbols_->end())
-            return nullptr;
-        return iter->second;
-    }
-
-    void Add(symbol* sym);
-
-    // Add, but allow duplicates by linking together.
-    void AddChain(symbol* sym);
-
-    void ForEachSymbol(const std::function<void(symbol*)>& callback) {
-        if (!symbols_)
-            return;
-        for (const auto& pair : *symbols_) {
-            for (symbol* iter = pair.second; iter; iter = iter->next)
-                callback(iter);
-        }
-    }
-
-    bool IsGlobalOrFileStatic() const {
-        return kind_ == sGLOBAL || kind_ == sFILE_STATIC;
-    }
-    bool IsLocalOrArgument() const {
-        return kind_ == sLOCAL || kind_ == sARGUMENT;
-    }
-
-    SymbolScope* parent() const { return parent_; }
-    void set_parent(SymbolScope* scope) { parent_ = scope; }
-
-    ScopeKind kind() const { return kind_; }
-    int fnumber() const { return fnumber_; }
-
-  private:
-    SymbolScope* parent_;
-    ScopeKind kind_;
-    tr::unordered_map<sp::Atom*, symbol*>* symbols_;
-    int fnumber_;
 };
 
 struct value {
@@ -385,18 +334,18 @@ struct value {
 
 void AddGlobal(CompileContext& cc, symbol* sym);
 
-symbol* FindSymbol(SymbolScope* scope, sp::Atom* name, SymbolScope** found = nullptr);
-symbol* FindSymbol(SemaContext& sc, sp::Atom* name, SymbolScope** found = nullptr);
 void DefineSymbol(SemaContext& sc, symbol* sym);
-symbol* DefineConstant(CompileContext& cc, sp::Atom* name, cell val, int tag);
-symbol* DefineConstant(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, cell val,
+symbol* DefineConstant(CompileContext& cc, Atom* name, cell val, int tag);
+symbol* DefineConstant(SemaContext& sc, Atom* name, const token_pos_t& pos, cell val,
                        int vclass, int tag);
-bool CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, int vclass);
+bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(symbol* sym, int usage);
-symbol* NewVariable(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
+symbol* NewVariable(Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
-symbol* FindEnumStructField(Type* type, sp::Atom* name);
+symbol* FindEnumStructField(Type* type, Atom* name);
 void deduce_liveness(CompileContext& cc);
 void declare_handle_intrinsics();
 symbol* declare_methodmap_symbol(CompileContext& cc, methodmap_t* map);
+
+} // namespace sp

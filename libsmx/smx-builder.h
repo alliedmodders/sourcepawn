@@ -206,7 +206,7 @@ class SmxNameTable : public SmxSection
   uint32_t add(StringPool& pool, const char* str, size_t len);
   uint32_t add(StringPool& pool, const char* str);
   uint32_t add(StringPool& pool, const std::string& str);
-  uint32_t add(StringPool& pool, sp::Atom* atom);
+  uint32_t add(StringPool& pool, Atom* atom);
 
   uint32_t add(Atom* str) {
     auto iter = name_table_.find(str);

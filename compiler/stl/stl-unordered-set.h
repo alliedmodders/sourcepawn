@@ -22,6 +22,7 @@
 
 #include "stl-allocator.h"
 
+namespace sp {
 namespace tr {
 
 template <typename Key,
@@ -30,3 +31,4 @@ template <typename Key,
 using unordered_set = std::unordered_set<Key, Hash, KeyEqual, StlAllocator<Key>>;
 
 } // namespace tr
+} // namespace sp

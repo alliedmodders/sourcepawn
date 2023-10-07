@@ -22,8 +22,7 @@
  *
  *  Version: $Id$
  */
-#ifndef am_sourcepawn_compiler_sc5_h
-#define am_sourcepawn_compiler_sc5_h
+#pragma once
 
 #include <stdarg.h>
 
@@ -32,6 +31,8 @@
 #include <amtl/am-string.h>
 #include "lexer.h"
 #include "sc.h"
+
+namespace sp {
 
 class ParseNode;
 
@@ -42,12 +43,12 @@ enum class ErrorType {
 };
 
 struct ErrorReport {
-    sp::SourceLocation loc;
+    SourceLocation loc;
     int number;
     uint32_t fileno;
     uint32_t lineno;
     uint32_t col;
-    std::shared_ptr<sp::SourceFile> file;
+    std::shared_ptr<SourceFile> file;
     std::string message;
     ErrorType type;
 };
@@ -94,7 +95,7 @@ class MessageBuilder
         args_.emplace_back(arg);
         return *this;
     }
-    MessageBuilder& operator <<(sp::Atom* atom) {
+    MessageBuilder& operator <<(Atom* atom) {
         args_.emplace_back(atom ? atom->chars() : "<unknown>");
         return *this;
     }
@@ -190,4 +191,4 @@ class AutoCountErrors
     unsigned old_errors_;
 };
 
-#endif // am_sourcepawn_compiler_sc5_h
+} // namespace sp

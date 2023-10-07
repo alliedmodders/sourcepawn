@@ -23,8 +23,7 @@
  *
  *  Version: $Id$
  */
-#ifndef _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_
-#define _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_
+#pragma once
 
 #include <memory>
 
@@ -38,6 +37,10 @@
 
 typedef int32_t cell;
 typedef uint32_t ucell;
+
+namespace sp {
+
+using namespace cc;
 
 // Possible entries for "ident". These are used in the "symbol", "value"
 // and arginfo structures. Not every constant is valid for every use.
@@ -85,13 +88,13 @@ class Expr;
 struct TypenameInfo {
     TypenameInfo() {}
     explicit TypenameInfo(int tag) : resolved_tag(tag) {}
-    explicit TypenameInfo(sp::Atom* type_atom) : type_atom(type_atom) {}
-    TypenameInfo(sp::Atom* type_atom, bool is_label) : type_atom(type_atom) {
+    explicit TypenameInfo(Atom* type_atom) : type_atom(type_atom) {}
+    TypenameInfo(Atom* type_atom, bool is_label) : type_atom(type_atom) {
         if (is_label)
             set_is_label();
     }
 
-    sp::Atom* type_atom = nullptr;
+    Atom* type_atom = nullptr;
     int resolved_tag = -1;
 
     int tag() const {
@@ -127,7 +130,7 @@ struct typeinfo_t {
     PoolArray<Expr*> dim_exprs;
 
     // Type information.
-    sp::Atom* type_atom;    // Parsed atom.
+    Atom* type_atom;    // Parsed atom.
     int tag_;               // Effective tag.
 
     // If non-zero, this type was originally declared with this type, but was
@@ -206,7 +209,7 @@ struct structarg_t : public PoolObject
     {}
 
     typeinfo_t type;
-    sp::Atom* name;
+    Atom* name;
     unsigned int offs;
     int index;
 };
@@ -216,12 +219,12 @@ class Type : public PoolObject
     friend class TypeDictionary;
 
   public:
-    Type(sp::Atom* name, TypeKind kind);
+    Type(Atom* name, TypeKind kind);
 
-    sp::Atom* name() const {
+    Atom* name() const {
         return name_;
     }
-    sp::Atom* nameAtom() const { return name_; }
+    Atom* nameAtom() const { return name_; }
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName() const;
@@ -320,7 +323,7 @@ class Type : public PoolObject
     void resetPtr();
 
   private:
-    sp::Atom* name_;
+    Atom* name_;
     cell value_;
     bool fixed_;
 
@@ -338,11 +341,11 @@ class Type : public PoolObject
 class pstruct_t : public Type
 {
   public:
-    explicit pstruct_t(sp::Atom* name)
+    explicit pstruct_t(Atom* name)
       : Type(name, TypeKind::Struct)
     {}
 
-    const structarg_t* GetArg(sp::Atom* name) const;
+    const structarg_t* GetArg(Atom* name) const;
 
     static bool is_a(Type* type) { return type->kind() == TypeKind::Struct; }
 
@@ -356,13 +359,13 @@ class TypeDictionary
     explicit TypeDictionary(CompileContext& cc);
 
     Type* find(int tag);
-    Type* find(sp::Atom* name);
+    Type* find(Atom* name);
 
     void init();
 
     Type* defineInt();
     Type* defineAny();
-    Type* defineFunction(sp::Atom* name, funcenum_t* fe);
+    Type* defineFunction(Atom* name, funcenum_t* fe);
     Type* defineTypedef(const char* name, Type* other);
     Type* defineString();
     Type* defineFloat();
@@ -372,8 +375,8 @@ class TypeDictionary
     Type* defineMethodmap(const char* name, methodmap_t* map);
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(const char* name, symbol* sym);
-    Type* defineTag(sp::Atom* atom);
-    pstruct_t* definePStruct(sp::Atom* name);
+    Type* defineTag(Atom* atom);
+    pstruct_t* definePStruct(Atom* name);
 
     template <typename T>
     void forEachType(const T& callback) {
@@ -403,12 +406,12 @@ class TypeDictionary
 
   private:
     Type* add(const char* name, TypeKind kind);
-    Type* add(sp::Atom* name, TypeKind kind);
+    Type* add(Atom* name, TypeKind kind);
     void RegisterType(Type* type);
 
   private:
     CompileContext& cc_;
-    tr::unordered_map<sp::Atom*, Type*> types_;
+    tr::unordered_map<Atom*, Type*> types_;
     tr::unordered_map<int, Type*> tags_;
     Type* type_int_ = nullptr;
     Type* type_nullfunc_ = nullptr;
@@ -424,4 +427,4 @@ class TypeDictionary
 
 const char* pc_tagname(int tag);
 
-#endif // _INCLUDE_SOURCEPAWN_COMPILER_TYPES_H_
+} // namespace sp

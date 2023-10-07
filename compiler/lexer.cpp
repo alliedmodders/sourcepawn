@@ -60,7 +60,7 @@
 #include "symbols.h"
 #include "types.h"
 
-using namespace sp;
+namespace sp {
 
 // Flags for litchar().
 //
@@ -310,7 +310,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
 
     /* floating point */
     float value = (float)fnum;
-    tok->numeric_value = sp::FloatCellUnion(value).cell;
+    tok->numeric_value = FloatCellUnion(value).cell;
     tok->id = tRATIONAL;
 }
 
@@ -484,7 +484,7 @@ void Lexer::HandleDirectives() {
             state_.pos = state_.end;
             break;
         case tpDEFINE: {
-            sp::Atom* symbol;
+            Atom* symbol;
             {
                 ke::SaveAndSet<bool> no_macros(&allow_substitutions_, false);
                 ke::SaveAndSet<bool> no_keywords(&allow_keywords_, false);
@@ -1215,7 +1215,7 @@ Lexer::Lexer(CompileContext& cc)
     const int kStart = tMIDDLE + 1;
     const char** tokptr = &sc_tokens[kStart - tFIRST];
     for (int i = kStart; i <= tLAST; i++, tokptr++) {
-        sp::Atom* atom = cc_.atom(*tokptr);
+        Atom* atom = cc_.atom(*tokptr);
         assert(keywords_.count(atom) == 0);
         keywords_.emplace(atom, i);
     }
@@ -1249,7 +1249,7 @@ std::string get_token_string(int tok_id) {
     return StringPrintf("%s", sc_tokens[tok_id - tFIRST]);
 }
 
-int Lexer::LexKeywordImpl(sp::Atom* atom) {
+int Lexer::LexKeywordImpl(Atom* atom) {
     auto iter = keywords_.find(atom);
     if (iter != keywords_.end())
         return iter->second;
@@ -1720,7 +1720,7 @@ void Lexer::LexStringLiteral(full_token_t* tok, int flags) {
     }
 }
 
-bool Lexer::LexKeyword(full_token_t* tok, sp::Atom* atom) {
+bool Lexer::LexKeyword(full_token_t* tok, Atom* atom) {
     int tok_id = LexKeywordImpl(atom);
     if (!tok_id)
         return false;
@@ -1777,7 +1777,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     }
 
     // Handle preprocessor keywords (ugh).
-    sp::Atom* atom = cc_.atom((const char *)token_start, len);
+    Atom* atom = cc_.atom((const char *)token_start, len);
     if (atom == defined_atom_) {
         tok->id = tDEFINED;
         return;
@@ -1811,7 +1811,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     report(31);
 }
 
-void Lexer::LexSymbol(full_token_t* tok, sp::Atom* atom) {
+void Lexer::LexSymbol(full_token_t* tok, Atom* atom) {
     tok->atom = atom;
     tok->id = tSYMBOL;
 
@@ -2236,7 +2236,7 @@ isoctal(char c)
 }
 
 bool
-Lexer::matchsymbol(sp::Atom** name)
+Lexer::matchsymbol(Atom** name)
 {
     if (lex() != tSYMBOL) {
         lexpush();
@@ -2247,7 +2247,7 @@ Lexer::matchsymbol(sp::Atom** name)
 }
 
 bool
-Lexer::needsymbol(sp::Atom** name)
+Lexer::needsymbol(Atom** name)
 {
     if (!need(tSYMBOL)) {
         *name = cc_.atom("__unknown__");
@@ -2267,7 +2267,7 @@ void Lexer::AddMacro(const char* pattern, const char* subst) {
     macros_[atom] = std::move(macro);
 }
 
-std::shared_ptr<Lexer::MacroEntry> Lexer::FindMacro(sp::Atom* atom) {
+std::shared_ptr<Lexer::MacroEntry> Lexer::FindMacro(Atom* atom) {
     auto p = macros_.find(atom);
     if (p == macros_.end())
         return nullptr;
@@ -2275,7 +2275,7 @@ std::shared_ptr<Lexer::MacroEntry> Lexer::FindMacro(sp::Atom* atom) {
     return p->second;
 }
 
-bool Lexer::DeleteMacro(sp::Atom* atom) {
+bool Lexer::DeleteMacro(Atom* atom) {
     auto p = macros_.find(atom);
     if (p == macros_.end())
         return false;
@@ -2289,7 +2289,7 @@ declare_handle_intrinsics()
 {
     // Must not have an existing Handle methodmap.
     auto& cc = CompileContext::get();
-    sp::Atom* handle_atom = cc.atom("Handle");
+    Atom* handle_atom = cc.atom("Handle");
     if (methodmap_find_by_name(handle_atom)) {
         report(156);
         return;
@@ -2414,13 +2414,13 @@ void Lexer::LexStringContinuation() {
     current_token()->atom = cc_.atom(data);
 }
 
-bool Lexer::HasMacro(sp::Atom* atom) {
+bool Lexer::HasMacro(Atom* atom) {
     return !!FindMacro(atom);
 }
 
 void Lexer::LexDefinedKeyword() {
     auto initial = *current_token();
-    sp::Atom* symbol = nullptr;
+    Atom* symbol = nullptr;
     {
         ke::SaveAndSet<bool> stop_recursion(&allow_substitutions_, false);
         ke::SaveAndSet<token_buffer_t*> switch_buffers(&token_buffer_, &preproc_buffer_);
@@ -2653,3 +2653,5 @@ void Lexer::InjectCachedTokens(TokenCache* cache) {
 
     freading_ = true;
 }
+
+} // namespace sp

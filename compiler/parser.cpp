@@ -36,7 +36,7 @@
 #include "semantics.h"
 #include "types.h"
 
-using namespace sp;
+namespace sp {
 
 Parser::Parser(CompileContext& cc, Semantics* sema)
   : cc_(cc),
@@ -424,7 +424,7 @@ Parser::parse_enum(int vclass)
         if (lexer_->match(tLABEL))
             report(153);
 
-        sp::Atom* field_name = nullptr;
+        Atom* field_name = nullptr;
         if (lexer_->need(tSYMBOL))
             field_name = lexer_->current_token()->atom;
 
@@ -456,7 +456,7 @@ Parser::parse_enumstruct()
 {
     auto pos = lexer_->pos();
 
-    sp::Atom* struct_name;
+    Atom* struct_name;
     if (!lexer_->needsymbol(&struct_name))
         return nullptr;
 
@@ -510,7 +510,7 @@ Parser::parse_pstruct()
 {
     auto pos = lexer_->pos();
 
-    sp::Atom* ident = nullptr;
+    Atom* ident = nullptr;
     lexer_->needsymbol(&ident);
 
     std::vector<StructField> fields;
@@ -550,7 +550,7 @@ Parser::parse_typedef()
 {
     auto pos = lexer_->pos();
 
-    sp::Atom* ident;
+    Atom* ident;
     if (!lexer_->needsymbol(&ident))
         return nullptr;
 
@@ -565,7 +565,7 @@ Parser::parse_typeset()
 {
     auto pos = lexer_->pos();
 
-    sp::Atom* ident = nullptr;
+    Atom* ident = nullptr;
     lexer_->needsymbol(&ident);
 
     std::vector<TypedefInfo*> types;
@@ -590,7 +590,7 @@ Parser::parse_using()
     auto pos = lexer_->pos();
 
     auto validate = [this]() -> bool {
-        sp::Atom* ident;
+        Atom* ident;
         if (!lexer_->needsymbol(&ident))
             return false;
         if (strcmp(ident->chars(), "__intrinsics__") != 0) {
@@ -623,7 +623,7 @@ Parser::parse_pragma_unused()
 
     const auto& data = lexer_->current_token()->data();
     std::vector<std::string> raw_names = ke::Split(data, ",");
-    std::vector<sp::Atom*> names;
+    std::vector<Atom*> names;
     for (const auto& raw_name : raw_names)
         names.emplace_back(cc_.atom(raw_name));
     return new PragmaUnusedStmt(pos, names);
@@ -671,7 +671,7 @@ Parser::parse_const(int vclass)
                 break;
         }
 
-        sp::Atom* name = nullptr;
+        Atom* name = nullptr;
         lexer_->needsymbol(&name);
 
         lexer_->need('=');
@@ -901,7 +901,7 @@ Parser::hier2()
         {
             // :TODO: unify this to only care about types. This will depend on
             // removing immediate name resolution from parse_new_typename.
-            sp::Atom* ident;
+            Atom* ident;
             if (lexer_->matchsymbol(&ident)) {
                 if (lexer_->match('(')) {
                     Expr* target = new SymbolExpr(lexer_->pos(), ident);
@@ -935,7 +935,7 @@ Parser::hier2()
             while (lexer_->match('('))
                 parens++;
 
-            sp::Atom* ident;
+            Atom* ident;
             if (lexer_->match(tTHIS)) {
                 ident = cc_.atom("this");
             } else {
@@ -1012,7 +1012,7 @@ Parser::hier1()
         int tok = lexer_->lex();
         if (tok == '.' || tok == tDBLCOLON) {
             auto pos = lexer_->pos();
-            sp::Atom* ident;
+            Atom* ident;
             if (!lexer_->needsymbol(&ident))
                 break;
             base = new FieldAccessExpr(pos, tok, base, ident);
@@ -1121,7 +1121,7 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
     do {
         token_pos_t name_pos;
 
-        sp::Atom* name = nullptr;
+        Atom* name = nullptr;
         if (lexer_->match('.')) {
             named_params = true;
 
@@ -1185,7 +1185,7 @@ Parser::struct_init()
 
     // '}' has already been lexed.
     do {
-        sp::Atom* name = nullptr;
+        Atom* name = nullptr;
         lexer_->needsymbol(&name);
 
         auto start_pos = lexer_->pos();
@@ -1235,7 +1235,7 @@ Parser::parse_static_assert()
     if (!expr)
         return nullptr;
 
-    sp::Atom* text = nullptr;
+    Atom* text = nullptr;
     if (lexer_->match(',') && lexer_->need(tSTRING)) {
         auto tok = lexer_->current_token();
         text = tok->atom;
@@ -1803,7 +1803,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
             lexer_->lexpush();
         }
         if (lexer_->match('=')) {
-            sp::Atom* ident;
+            Atom* ident;
             if (lexer_->needsymbol(&ident))
                 fun->set_alias(ident);
         }
@@ -1889,7 +1889,7 @@ Parser::parse_methodmap()
 {
     auto pos = lexer_->pos();
 
-    sp::Atom* ident;
+    Atom* ident;
     lexer_->needsymbol(&ident);
 
     auto name_atom = ident;
@@ -1898,7 +1898,7 @@ Parser::parse_methodmap()
 
     bool nullable = lexer_->match(tNULLABLE);
 
-    sp::Atom* extends = nullptr;
+    Atom* extends = nullptr;
     if (lexer_->match('<') && lexer_->needsymbol(&ident))
         extends = ident;
 
@@ -1949,7 +1949,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     bool is_static = lexer_->match(tSTATIC);
     bool is_native = lexer_->match(tNATIVE);
 
-    sp::Atom* symbol = nullptr;
+    Atom* symbol = nullptr;
     full_token_t symbol_tok;
     if (lexer_->matchsymbol(&symbol))
         symbol_tok = *lexer_->current_token();
@@ -2032,7 +2032,7 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     if (!parse_new_typeexpr(&prop->type, nullptr, 0))
         return nullptr;
 
-    sp::Atom* ident;
+    Atom* ident;
     if (!lexer_->needsymbol(&ident))
         return nullptr;
     if (!lexer_->need('{'))
@@ -2057,7 +2057,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
 
     lexer_->need(tPUBLIC);
 
-    sp::Atom* ident;
+    Atom* ident;
     if (!lexer_->matchsymbol(&ident)) {
         if (!lexer_->match(tNATIVE)) {
             report(125);
@@ -2204,7 +2204,7 @@ Parser::parse_function_type()
 bool
 Parser::parse_decl(declinfo_t* decl, int flags)
 {
-    sp::Atom* ident = nullptr;
+    Atom* ident = nullptr;
 
     decl->type.ident = iVARIABLE;
 
@@ -2326,7 +2326,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
             while (true) {
                 if (!lexer_->match('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
-                    sp::Atom* name;
+                    Atom* name;
                     if (lexer_->needsymbol(&name))
                         ti = TypenameInfo(name, true);
                 }
@@ -2366,7 +2366,6 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                 decl->name = cc_.atom("__unknown__");
         } else {
             if (!lexer_->peek(tSYMBOL)) {
-                extern const char* sc_tokens[];
                 int tok_id = lexer_->lex();
                 switch (tok_id) {
                     case tOBJECT:
@@ -2376,8 +2375,8 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                         if (lexer_->peek(tSYMBOL)) {
                             report(143);
                         } else {
-                            report(157) << sc_tokens[tok_id - tFIRST];
-                            decl->name = cc_.atom(sc_tokens[tok_id - tFIRST]);
+                            report(157) << get_token_string(tok_id);
+                            decl->name = cc_.atom(get_token_string(tok_id));
                         }
                         break;
                     default:
@@ -2433,7 +2432,7 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
 }
 
 int
-Parser::operatorname(sp::Atom** name)
+Parser::operatorname(Atom** name)
 {
     /* check the operator */
     int opertok = lexer_->lex();
@@ -2695,3 +2694,5 @@ Parser::nextop(int* opidx, const int* list)
     }
     return FALSE; /* entire list scanned, nothing found */
 }
+
+} // namespace sp

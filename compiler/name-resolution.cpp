@@ -30,9 +30,12 @@
 #include "parse-node.h"
 #include "parser.h"
 #include "sc.h"
+#include "scopes.h"
 #include "sctracker.h"
 #include "semantics.h"
 #include "symbols.h"
+
+namespace sp {
 
 AutoEnterScope::AutoEnterScope(SemaContext& sc, SymbolScope* scope)
   : sc_(sc),
@@ -96,7 +99,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
 }
 
 bool
-SemaContext::BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag)
+SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* tag)
 {
     auto types = cc_.types();
 
@@ -1062,7 +1065,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
     return errors.ok();
 }
 
-sp::Atom*
+Atom*
 FunctionDecl::NameForOperator()
 {
     std::vector<std::string> params;
@@ -1144,7 +1147,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     auto data = new EnumStructData;
     root_->set_data(data);
 
-    std::unordered_set<sp::Atom*> seen;
+    std::unordered_set<Atom*> seen;
     std::vector<symbol*> fields;
 
     cell position = 0;
@@ -1246,8 +1249,8 @@ EnumStructDecl::Bind(SemaContext& sc)
     return errors.ok();
 }
 
-sp::Atom*
-Decl::DecorateInnerName(sp::Atom* parent_name, sp::Atom* field_name)
+Atom*
+Decl::DecorateInnerName(Atom* parent_name, Atom* field_name)
 {
     auto full_name = ke::StringPrintf("%s.%s", parent_name->chars(), field_name->chars());
     return CompileContext::get().atom(full_name);
@@ -1533,3 +1536,5 @@ AutoCreateScope::~AutoCreateScope() {
     sc_.set_scope(prev_);
     sc_.set_scope_creator(prev_creator_);
 }
+
+} // namespace sp

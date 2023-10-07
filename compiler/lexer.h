@@ -31,13 +31,15 @@
 #include "source-location.h"
 #include "source-manager.h"
 
+namespace sp {
+
 class CompileContext;
 class Type;
 
 struct full_token_t {
     int id = 0;
     union {
-        sp::Atom* atom = nullptr;
+        Atom* atom = nullptr;
         int numeric_value; // Set on tRATIONAL, tNUMBER, and tCHAR_LITERAL.
     };
     int value();
@@ -299,22 +301,22 @@ class Lexer
     bool peek(int id);
     bool match(int token);
     bool need(int token);
-    bool matchsymbol(sp::Atom** atom);
-    bool needsymbol(sp::Atom** atom);
+    bool matchsymbol(Atom** atom);
+    bool needsymbol(Atom** atom);
     int require_newline(TerminatorPolicy policy);
     int peek_same_line();
     void lexpush();
     void lexclr(int clreol);
 
-    void Init(std::shared_ptr<sp::SourceFile> sf);
+    void Init(std::shared_ptr<SourceFile> sf);
     void Start();
     bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
-    std::shared_ptr<sp::SourceFile> OpenFile(const std::string& name);
+    std::shared_ptr<SourceFile> OpenFile(const std::string& name);
     bool NeedSemicolon();
     void AddMacro(const char* pattern, const char* subst);
     void LexStringContinuation();
     void LexDefinedKeyword();
-    bool HasMacro(sp::Atom* atom);
+    bool HasMacro(Atom* atom);
 
     // Lexer must be at a '{' token. Lexes until it reaches a balanced '}' token,
     // and returns a pointer to the cached tokens.
@@ -343,7 +345,7 @@ class Lexer
     bool freading() const { return freading_; }
     int fcurrent() const { return state_.inpf->sources_index(); }
     unsigned fline() const { return state_.fline; }
-    sp::SourceFile* inpf() const { return state_.inpf.get(); }
+    SourceFile* inpf() const { return state_.inpf.get(); }
 
     unsigned char const* char_stream() const { return state_.pos; }
     unsigned char const* line_start() const { return state_.line_start; }
@@ -360,16 +362,16 @@ class Lexer
     int LexInjectedToken();
     void LexIntoToken(full_token_t* tok);
     void LexSymbolOrKeyword(full_token_t* tok);
-    int LexKeywordImpl(sp::Atom* atom);
-    bool LexKeyword(full_token_t* tok, sp::Atom* atom);
+    int LexKeywordImpl(Atom* atom);
+    bool LexKeyword(full_token_t* tok, Atom* atom);
     void LexStringLiteral(full_token_t* tok, int flags);
-    void LexSymbol(full_token_t* tok, sp::Atom* atom);
+    void LexSymbol(full_token_t* tok, Atom* atom);
     bool MaybeHandleLineContinuation();
     bool PlungeQualifiedFile(const char* name);
     full_token_t* PushSynthesizedToken(TokenKind kind, const token_pos_t& pos);
     void SynthesizeIncludePathToken();
     void SetFileDefines(std::string file);
-    void EnterFile(std::shared_ptr<sp::SourceFile>&& fp, const token_pos_t& from);
+    void EnterFile(std::shared_ptr<SourceFile>&& fp, const token_pos_t& from);
     void FillTokenPos(token_pos_t* pos);
     void SkipLineWhitespace();
     std::string SkimUntilEndOfLine(tr::vector<size_t>* macro_args = nullptr);
@@ -439,16 +441,16 @@ class Lexer
 
   private:
     struct MacroEntry {
-        sp::Atom* pattern = nullptr;
+        Atom* pattern = nullptr;
         ke::Maybe<tr::vector<int>> args;
         tr::vector<size_t> arg_positions;
-        sp::Atom* substitute = nullptr;
+        Atom* substitute = nullptr;
         std::string documentation;
         token_pos_t pos;
         bool deprecated;
     };
-    std::shared_ptr<MacroEntry> FindMacro(sp::Atom* atom);
-    bool DeleteMacro(sp::Atom* atom);
+    std::shared_ptr<MacroEntry> FindMacro(Atom* atom);
+    bool DeleteMacro(Atom* atom);
     bool EnterMacro(std::shared_ptr<MacroEntry> macro);
     bool IsInMacro() const { return state_.macro != nullptr; }
     std::string PerformMacroSubstitution(MacroEntry* macro,
@@ -456,7 +458,7 @@ class Lexer
 
   private:
     CompileContext& cc_;
-    tr::unordered_map<sp::Atom*, int> keywords_;
+    tr::unordered_map<Atom*, int> keywords_;
     std::vector<char> ifstack_;
     size_t iflevel_;             /* nesting level if #if/#else/#endif */
     size_t skiplevel_; /* level at which we started skipping (including nested #if .. #endif) */
@@ -469,14 +471,14 @@ class Lexer
     bool allow_substitutions_ = true;
     bool allow_end_of_file_ = true;
     bool allow_keywords_ = true;
-    sp::Atom* defined_atom_ = nullptr;
-    sp::Atom* line_atom_ = nullptr;
+    Atom* defined_atom_ = nullptr;
+    Atom* line_atom_ = nullptr;
 
     token_buffer_t normal_buffer_;;
     token_buffer_t preproc_buffer_;
     token_buffer_t* token_buffer_;
 
-    tr::unordered_map<sp::Atom*, std::shared_ptr<MacroEntry>> macros_;
+    tr::unordered_map<Atom*, std::shared_ptr<MacroEntry>> macros_;
     std::unordered_set<MacroEntry*> macros_in_use_;
 
     struct LexerState {
@@ -486,8 +488,8 @@ class Lexer
         void operator =(const LexerState &) = delete;
         LexerState& operator =(LexerState&&) = default;
 
-        std::shared_ptr<sp::SourceFile> inpf;
-        sp::LocationRange loc_range;
+        std::shared_ptr<SourceFile> inpf;
+        LocationRange loc_range;
         // Visual line in the file.
         int fline = 0;
         // Line # for token processing.
@@ -513,3 +515,5 @@ class Lexer
     std::deque<full_token_t> injected_token_stream_;
     bool caching_tokens_ = false;
 };
+
+} // namespace sp

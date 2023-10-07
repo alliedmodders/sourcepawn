@@ -22,6 +22,8 @@
 #include "sc.h"
 #include "symbols.h"
 
+namespace sp {
+
 class DataQueue final
 {
   public:
@@ -39,3 +41,5 @@ class DataQueue final
   private:
     tr::vector<cell> buffer_;
 };
+
+} // namespace sp

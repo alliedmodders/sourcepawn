@@ -23,6 +23,9 @@
 
 #include <amtl/am-fixedarray.h>
 
+namespace sp {
+namespace cc {
+
 class PoolObject
 {
   public:
@@ -143,3 +146,6 @@ struct KeywordTablePolicy {
         return ke::HashCharSequence(key.str(), key.length());
     }
 };
+
+} // namespace cc
+} // namespace sp

@@ -1,6 +1,6 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) AlliedModders 2021
+//  Copyright (c) AlliedModders LLC 2021
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -18,13 +18,34 @@
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
 
-#pragma once
-
-#include "types.h"
+#include "scopes.h"
 
 namespace sp {
 
-typeinfo_t TypeInfoFromSymbol(symbol* sym);
-typeinfo_t TypeInfoFromTag(int tag);
+void SymbolScope::Add(symbol* sym) {
+    if (!symbols_) {
+        auto& cc = CompileContext::get();
+        symbols_ = cc.NewSymbolMap();
+    }
+
+    assert(symbols_->find(sym->nameAtom()) == symbols_->end());
+    symbols_->emplace(sym->nameAtom(), sym);
+}
+
+void SymbolScope::AddChain(symbol* sym) {
+    if (!symbols_) {
+        auto& cc = CompileContext::get();
+        symbols_ = cc.NewSymbolMap();
+    }
+
+    auto iter = symbols_->find(sym->nameAtom());
+    if (iter == symbols_->end()) {
+        symbols_->emplace(sym->nameAtom(), sym);
+    } else {
+        sym->next = iter->second;
+        iter->second = sym;
+    }
+}
+
 
 } // namespace sp

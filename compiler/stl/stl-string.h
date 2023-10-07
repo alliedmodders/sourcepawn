@@ -23,6 +23,7 @@
 
 #include "stl-allocator.h"
 
+namespace sp {
 namespace tr {
 
 template <typename Char,
@@ -32,3 +33,4 @@ using basic_string = std::basic_string<Char, Traits, StlAllocator<Char>>;
 using string = basic_string<char>;
 
 } // namespace tr
+} // namespace sp

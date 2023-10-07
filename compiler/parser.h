@@ -26,6 +26,8 @@
 #include "sc.h"
 #include "sctracker.h"
 
+namespace sp {
+
 class Semantics;
 
 class Parser
@@ -84,7 +86,7 @@ class Parser
     bool reparse_new_decl(declinfo_t* decl, int flags);
     void fix_mispredicted_postdims(declinfo_t* decl);
     void rewrite_type_for_enum_struct(typeinfo_t* info);
-    int operatorname(sp::Atom** name);
+    int operatorname(Atom** name);
 
     Stmt* parse_compound();
     Stmt* parse_local_decl(int tokid, bool autozero);
@@ -133,8 +135,10 @@ class Parser
     Semantics* sema_;
     bool in_loop_ = false;
     bool in_test_ = false;
-    std::vector<SymbolScope*> static_scopes_;
+    std::vector<sp::SymbolScope*> static_scopes_;
     std::shared_ptr<Lexer> lexer_;
     TypeDictionary* types_ = nullptr;
     std::deque<FunctionDecl*> delayed_functions_;
 };
+
+} // namespace sp

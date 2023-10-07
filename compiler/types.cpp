@@ -32,9 +32,11 @@
 #include "sctracker.h"
 #include "types.h"
 
+namespace sp {
+
 using namespace ke;
 
-Type::Type(sp::Atom* name, TypeKind kind)
+Type::Type(Atom* name, TypeKind kind)
  : name_(name),
    value_(0),
    fixed_(0),
@@ -85,7 +87,7 @@ TypeDictionary::TypeDictionary(CompileContext& cc)
   : cc_(cc)
 {}
 
-Type* TypeDictionary::find(sp::Atom* atom) {
+Type* TypeDictionary::find(Atom* atom) {
     auto iter = types_.find(atom);
     if (iter == types_.end())
         return nullptr;
@@ -102,7 +104,7 @@ Type* TypeDictionary::add(const char* name, TypeKind kind) {
     return add(cc_.atom(name), kind);
 }
 
-Type* TypeDictionary::add(sp::Atom* name, TypeKind kind) {
+Type* TypeDictionary::add(Atom* name, TypeKind kind) {
     Type* type = new Type(name, kind);
     RegisterType(type);
     return type;
@@ -138,7 +140,7 @@ TypeDictionary::defineAny()
     return add("any", TypeKind::Any);
 }
 
-Type* TypeDictionary::defineFunction(sp::Atom* name, funcenum_t* fe) {
+Type* TypeDictionary::defineFunction(Atom* name, funcenum_t* fe) {
     Type* type = add(name, TypeKind::Function);
     type->setFunction(fe);
     return type;
@@ -217,14 +219,14 @@ TypeDictionary::defineEnumStruct(const char* name, symbol* sym)
 }
 
 Type*
-TypeDictionary::defineTag(sp::Atom* name) {
+TypeDictionary::defineTag(Atom* name) {
     Type* type = add(name, TypeKind::Enum);
     if (isupper(*name->chars()))
         type->setFixed();
     return type;
 }
 
-pstruct_t* TypeDictionary::definePStruct(sp::Atom* name) {
+pstruct_t* TypeDictionary::definePStruct(Atom* name) {
     assert(find(name) == nullptr);
 
     pstruct_t* type = new pstruct_t(name);
@@ -248,7 +250,7 @@ typeinfo_t::isCharArray() const
     return numdim() == 1 && tag() == types->tag_string();
 }
 
-const structarg_t* pstruct_t::GetArg(sp::Atom* name) const {
+const structarg_t* pstruct_t::GetArg(Atom* name) const {
     for (const auto& arg : args) {
         if (arg->name == name)
             return arg;
@@ -256,3 +258,4 @@ const structarg_t* pstruct_t::GetArg(sp::Atom* name) const {
     return nullptr;
 }
 
+} // namespace sp

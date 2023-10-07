@@ -28,12 +28,14 @@
 #include "source-file.h"
 #include "source-location.h"
 
+namespace sp {
+
 class CompileContext;
 
 // Of course, we'd love if tokens could just be SourceLocations. But peek_same_line()
 // is an extremely hot function, and line checks need to be fast, so we track
 // it explicitly.
-struct token_pos_t : public sp::SourceLocation {
+struct token_pos_t : public SourceLocation {
     int line = 0;
 
     token_pos_t() {}
@@ -42,8 +44,6 @@ struct token_pos_t : public sp::SourceLocation {
         line(line)
     {}
 };
-
-namespace sp {
 
 // Location Range. Design is taken from LLVM.
 //

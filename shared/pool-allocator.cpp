@@ -25,7 +25,6 @@
 #include "pool-allocator.h"
 
 namespace sp {
-namespace cc {
 
 PoolAllocator::PoolAllocator()
 {
@@ -50,5 +49,4 @@ PoolAllocator::ensurePool(size_t actualBytes)
     return pools_.back().get();
 }
 
-} // namespace cc
 } // namespace sp

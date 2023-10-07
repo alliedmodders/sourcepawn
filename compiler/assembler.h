@@ -30,6 +30,8 @@
 #include "shared/byte-buffer.h"
 #include "shared/string-pool.h"
 
+namespace sp {
+
 bool assemble(CompileContext& cc, CodeGenerator& cg, const char* outname,
               int compression_level);
 
@@ -49,3 +51,5 @@ class Assembler
     CompileContext& cc_;
     CodeGenerator& cg_;
 };
+
+} // namespace sp
