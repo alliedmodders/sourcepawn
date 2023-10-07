@@ -180,7 +180,7 @@ MessageBuilder::~MessageBuilder()
 
     if (report.fileno < cc.sources()->opened_files().size())
         report.file = cc.sources()->opened_files().at(report.fileno);
-    else
+    else if (!cc.sources()->opened_files().empty())
         report.file = cc.sources()->opened_files().at(0);
 
     uint32_t actual_line = cc.sources()->GetLineAndCol(where_, &report.col);
@@ -194,7 +194,8 @@ MessageBuilder::~MessageBuilder()
     report.type = DeduceErrorType(number_);
 
     std::ostringstream out;
-    out << report.file->name() << "(" << report.lineno << ") : ";
+    if (report.file)
+        out << report.file->name() << "(" << report.lineno << ") : ";
     out << GetErrorTypePrefix(report.type)
         << " " << ke::StringPrintf("%03d", report.number) << ": ";
 

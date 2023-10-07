@@ -151,7 +151,7 @@ Parser::Parse()
                 if (!lexer_->need(tSYN_INCLUDE_PATH))
                     break;
                 auto name = lexer_->current_token()->data();
-                auto result = lexer_->PlungeFile(name.c_str() + 1, (name[0] != '<'), TRUE);
+                auto result = lexer_->PlungeFile(name.substr(1), (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE) {
                     report(417) << name.substr(1);
                     cc_.set_must_abort();
@@ -223,7 +223,7 @@ void Parser::CreateInitialScopes(std::vector<Stmt*>* stmts) {
     }
 
     if (!cc_.default_include().empty()) {
-        const char* incfname = cc_.default_include().c_str();
+        auto incfname = cc_.default_include();
         if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
             int fcurrent = lexer_->fcurrent();
             static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));

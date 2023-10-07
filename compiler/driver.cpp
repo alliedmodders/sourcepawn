@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #include <amtl/experimental/am-argparser.h>
 
+#include <filesystem>
+
 #include "compile-options.h"
 #include "errors.h"
 #include "sc.h"
@@ -32,6 +34,8 @@
 
 using namespace ke;
 using namespace sp;
+
+namespace fs = std::filesystem;
 
 #if defined _WIN32
 static HWND hwndFinish = 0;
@@ -69,22 +73,6 @@ args::ToggleOption opt_stderr(nullptr, "--use-stderr", Some(false),
 args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
                                  "Disable opcode verification (for debugging).");
 
-static std::string get_extension(const std::string& filename) {
-    auto pos = filename.rfind('.');
-    if (pos == std::string::npos)
-        return {};
-
-    /* ignore extension on a directory or at the start of the filename */
-    if (pos == 0)
-        return {};
-    if (filename[pos - 1] == DIRSEP_CHAR)
-        return {};
-    if (filename.find(DIRSEP_CHAR, pos) != std::string::npos)
-        return {};
-
-    return filename.substr(pos);
-}
-
 /* set_extension
  * Set the default extension, or force an extension. To erase the
  * extension of a filename, set "extension" to an empty string.
@@ -93,11 +81,11 @@ static void set_extension(std::string* filename, const char* extension, bool for
     assert(extension != NULL && (*extension == '\0' || *extension == '.'));
     assert(filename != NULL);
 
-    auto old_ext = get_extension(*filename);
-    if (force && !old_ext.empty())
-        *filename = filename->substr(0, filename->size() - old_ext.size());
-    if (force || old_ext.empty())
-        *filename += extension;
+    fs::path path(*filename);
+    if (force && !path.has_extension())
+        *filename = path.stem().string();
+    if (force || path.has_extension())
+        *filename = fs::path(*filename).replace_extension(extension).string();
 }
 
 static void Usage(CompileContext& cc, args::Parser& parser, int argc, char** argv)
@@ -113,7 +101,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
     args::Parser parser;
     parser.enable_inline_values();
     parser.collect_extra_args();
-    if (DIRSEP_CHAR != '/') {
+    if (fs::path::preferred_separator != '/') {
         parser.allow_slashes();
     }
 
@@ -179,8 +167,6 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
 
         if (str.empty())
             continue;
-        if (str.back() != DIRSEP_CHAR)
-            str.push_back(DIRSEP_CHAR);
 
         cc.options()->include_paths.emplace_back(str);
     }
@@ -197,32 +183,23 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
     }
 
     for (const auto& option : parser.extra_args()) {
-        char str[PATH_MAX];
-        const char* ptr = nullptr;
-        const char* arg = option.c_str();
-        if (arg[0] == '@') {
+        size_t pos;
+        if (option[0] == '@') {
             fprintf(stderr, "Response files (@ prefix) are no longer supported.");
             exit(1);
-        } else if ((ptr = strchr(arg, '=')) != NULL) {
-            int i = (int)(ptr - arg);
-            SafeStrcpyN(str, PATH_MAX, arg, i);
-            cc.options()->predefines.emplace_back(str, ptr + 1);
+        } else if ((pos = option.find('=')) != std::string::npos) {
+            std::string key = option.substr(0, pos);
+            std::string value = option.substr(pos + 1);
+            cc.options()->predefines.emplace_back(std::move(key), std::move(value));
         } else {
-            std::string path = arg;
-            set_extension(&path, ".sp", false);
-            ke::SafeStrcpy(str, sizeof(str), path.c_str());
+            cc.options()->source_files.emplace_back(option);
 
-            cc.options()->source_files.emplace_back(str);
             /* The output name is the first input name with a different extension,
              * but it is stored in a different directory
              */
             if (cc.outfname().empty()) {
-                if ((ptr = strrchr(str, DIRSEP_CHAR)) != NULL)
-                    ptr++; /* strip path */
-                else
-                    ptr = str;
-                assert(strlen(ptr) < PATH_MAX);
-                cc.set_outfname(ptr);
+                fs::path out_path(option);
+                cc.set_outfname(out_path.filename().string());
                 set_extension(&cc.outfname(), ".smx", true);
             }
         }

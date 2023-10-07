@@ -28,8 +28,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <string>
 
+#include <filesystem>
+#include <string>
 #include <unordered_set>
 #include <utility>
 
@@ -62,6 +63,8 @@
 
 namespace sp {
 
+namespace fs = std::filesystem;
+
 // Flags for litchar().
 //
 // Decode utf-8 and error on failure. If unset, non-ASCII characters will be
@@ -70,7 +73,7 @@ static constexpr int kLitcharUtf8 = 0x1;
 // Do not error, because the characters are being ignored.
 static constexpr int kLitcharSkipping = 0x2;
 
-bool Lexer::PlungeQualifiedFile(const char* name) {
+bool Lexer::PlungeQualifiedFile(const std::string& name) {
     auto fp = OpenFile(name);
     if (!fp)
         return false;
@@ -104,88 +107,54 @@ std::shared_ptr<SourceFile> Lexer::OpenFile(const std::string& name) {
 }
 
 bool
-Lexer::PlungeFile(const char* name, int try_currentpath, int try_includepaths)
+Lexer::PlungeFile(const std::string& name, int try_currentpath, int try_includepaths)
 {
-    bool result = false;
-    char* pcwd = NULL;
-    char cwd[PATH_MAX];
-
     if (try_currentpath) {
-        result = PlungeQualifiedFile(name);
-        if (!result) {
-            /* failed to open the file in the active directory, try to open the file
-             * in the same directory as the current file --but first check whether
-             * there is a (relative) path for the current file
-             */
-            const char* ptr;
-            if ((ptr = strrchr(state_.inpf->name(), DIRSEP_CHAR)) != 0) {
-                int len = (int)(ptr - state_.inpf->name()) + 1;
-                if (len + strlen(name) < PATH_MAX) {
-                    char path[PATH_MAX];
-                    SafeStrcpyN(path, sizeof(path), state_.inpf->name(), len);
-                    SafeStrcat(path, sizeof(path), name);
-                    result = PlungeQualifiedFile(path);
-                }
-            }
-        } else {
-            pcwd = getcwd(cwd, sizeof(cwd));
-            if (!pcwd) {
-                report(435);
-                return false;
-            }
+        if (PlungeQualifiedFile(name))
+            return true;
 
-#ifdef _WIN32
-            // make the drive letter on windows lower case to be in line with the rest of SP, as they have a small drive letter in the path
-            cwd[0] = tolower(cwd[0]);
-#endif
+        // failed to open the file in the active directory, try to open the file
+        // in the same directory as the current file --but first check whether
+        // there is a (relative) path for the current file
+        fs::path current_path(state_.inpf->name());
+        auto parent_path = current_path.parent_path();
+        if (!parent_path.empty()) {
+            auto new_path = parent_path / name;
+            if (PlungeQualifiedFile(new_path.string()))
+                return true;
         }
     }
 
-    if (!result && try_includepaths && name[0] != DIRSEP_CHAR) {
+    if (try_includepaths && !fs::path(name).is_absolute()) {
         auto& cc = CompileContext::get();
         for (const auto& inc_path : cc.options()->include_paths) {
-            auto path = inc_path + name;
-            if (PlungeQualifiedFile(path.c_str())) {
-                result = true;
-                break;
-            }
+            auto path = fs::path(inc_path) / fs::path(name);
+            if (PlungeQualifiedFile(path.string()))
+                return true;
         }
     }
 
-    if (pcwd) {
-        char path[PATH_MAX];
-        SafeSprintf(path, sizeof(path), "%s%s", pcwd, state_.inpf->name());
-        SetFileDefines(path);
-    } else {
-        SetFileDefines(state_.inpf->name());
-    }
-
-    return result;
+    return false;
 }
 
-void
-Lexer::SetFileDefines(std::string file)
-{
-    auto sepIndex = file.find_last_of(DIRSEP_CHAR);
-
-    std::string fileName = sepIndex == std::string::npos ? file : file.substr(sepIndex + 1);
-
-    if (DIRSEP_CHAR == '\\') {
-        auto pos = file.find('\\');
-        while (pos != std::string::npos) {
-            file.insert(pos + 1, 1, '\\');
-            pos = file.find('\\', pos + 2);
-        }
+std::string StringizePath(const fs::path& in_path) {
+    auto path = '"' + in_path.string() + '"';
+    auto pos = path.find('\\');
+    while (pos != std::string::npos) {
+        path.insert(pos + 1, 1, '\\');
+        pos = path.find('\\', pos + 2);
     }
+    return path;
+}
 
-    file.insert(file.begin(), '"');
-    fileName.insert(fileName.begin(), '"');
+void Lexer::SetFileDefines(const std::string& file) {
+    fs::path path = fs::canonical(file);
 
-    file.push_back('"');
-    fileName.push_back('"');
+    auto full_path = StringizePath(path);
+    auto name = StringizePath(path.filename());
 
-    AddMacro("__FILE_PATH__", file.c_str());
-    AddMacro("__FILE_NAME__", fileName.c_str());
+    AddMacro("__FILE_PATH__", full_path.c_str());
+    AddMacro("__FILE_NAME__", name.c_str());
 }
 
 void Lexer::CheckLineEmpty(bool allow_semi) {
@@ -225,24 +194,22 @@ Lexer::SynthesizeIncludePathToken()
 
     SkipLineWhitespace();
 
-    char name[PATH_MAX];
+    std::string name;
 
     int i = 0;
     while (true) {
         char c = peek();
         if (c == close_c || c == '\0' || i >= (int)sizeof(name) - 1 || IsNewline(c))
             break;
-        if (DIRSEP_CHAR != '/' && c == '/') {
-            name[i++] = DIRSEP_CHAR;
+        if (fs::path::preferred_separator != '/' && c == '/') {
+            name.push_back(fs::path::preferred_separator);
             advance();
         } else {
-            name[i++] = advance();
+            name.push_back(advance());
         }
     }
-    while (i > 0 && name[i - 1] <= ' ')
-        i--; /* strip trailing whitespace */
-    assert(i < (int)sizeof name);
-    name[i] = '\0'; /* zero-terminate the string */
+    while (!name.empty() && name.back() == ' ')
+        name.pop_back();
 
     if (close_c) {
         if (advance() != close_c)
@@ -253,7 +220,7 @@ Lexer::SynthesizeIncludePathToken()
 
     if (!open_c)
         open_c = '"';
-    tok->atom = cc_.atom(ke::StringPrintf("%c%s", open_c, name));
+    tok->atom = cc_.atom(ke::StringPrintf("%c%s", open_c, name.c_str()));
 }
 
 /*  ftoi
@@ -2344,6 +2311,7 @@ void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf, const token_pos_t& from)
     state_.pos = state_.start;
     state_.line_start = state_.pos;
     SkipUtf8Bom();
+    SetFileDefines(state_.inpf->name());
 
     tokens_on_line_ = 0;
 }
