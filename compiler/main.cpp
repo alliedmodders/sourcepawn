@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -85,13 +86,15 @@ using namespace ke;
 
 namespace sp {
 
+namespace fs = std::filesystem;
+
 int pc_tag_string = 0;
 int pc_tag_bool = 0;
 
-static void setconfig(char* root);
+static void setconfig(const char* root);
 static void setconstants(void);
 static void inst_datetime_defines(CompileContext& cc);
-static void inst_binary_name(CompileContext& cc, std::string binfile);
+static void inst_binary_name(CompileContext& cc, const std::string& binfile);
 
 enum {
     TEST_PLAIN,  /* no parentheses */
@@ -261,29 +264,12 @@ cleanup:
     return retcode;
 }
 
-static void
-inst_binary_name(CompileContext& cc, std::string binfile)
-{
-    auto sepIndex = binfile.find_last_of(DIRSEP_CHAR);
+static void inst_binary_name(CompileContext& cc, const std::string& binfile) {
+    fs::path binfile_path(binfile);
+    fs::path binfile_name = binfile_path.filename();
 
-    std::string binfileName = sepIndex == std::string::npos ? binfile : binfile.substr(sepIndex + 1);
-
-    if (DIRSEP_CHAR == '\\') {
-        auto pos = binfile.find('\\');
-        while (pos != std::string::npos) {
-            binfile.insert(pos + 1, 1, '\\');
-            pos = binfile.find('\\', pos + 2);
-        }
-    }
-
-    binfile.insert(binfile.begin(), '"');
-    binfileName.insert(binfileName.begin(), '"');
-
-    binfile.push_back('"');
-    binfileName.push_back('"');
-
-    cc.lexer()->AddMacro("__BINARY_PATH__", binfile.c_str());
-    cc.lexer()->AddMacro("__BINARY_NAME__", binfileName.c_str());
+    cc.lexer()->AddMacro("__BINARY_PATH__", binfile_path.string().c_str());
+    cc.lexer()->AddMacro("__BINARY_NAME__", binfile_name.string().c_str());
 }
 
 static void
@@ -311,21 +297,13 @@ inst_datetime_defines(CompileContext& cc)
     cc.lexer()->AddMacro("__TIME__", ltime);
 }
 
-#if defined __EMSCRIPTEN__
-// Needed due to EM_ASM usage
-__attribute__((noinline))
-#endif
-static void
-setconfig(char* root)
-{
-    char path[PATH_MAX];
-    char *ptr, *base;
-    int len;
-
-    /* add the default "include" directory */
+static fs::path GetProcessPath([[maybe_unused]] const char* root) {
 #if defined KE_WINDOWS
-    GetModuleFileNameA(NULL, path, PATH_MAX);
+    char path[MAX_PATH];
+    GetModuleFileNameA(NULL, path, sizeof(path));
+    return fs::path(path);
 #elif defined __EMSCRIPTEN__
+    char path[PATH_MAX];
     if (EM_ASM_INT(
             {
                 if (ENVIRONMENT_IS_NODE) {
@@ -338,43 +316,38 @@ setconfig(char* root)
         root != NULL) {
         SafeStrcpy(path, sizeof(path), root);
     }
+    return fs::path(path);
 #else
-    if (root != NULL)
-        SafeStrcpy(path, sizeof(path), root); /* path + filename (hopefully) */
+    return fs::path(root);
 #endif
+}
 
-    /* terminate just behind last \ or : */
-    if ((ptr = strrchr(path, DIRSEP_CHAR)) != NULL || (ptr = strchr(path, ':')) != NULL) {
-        /* If there is no "\" or ":", the string probably does not contain the
-         * path; so we just don't add it to the list in that case
-         */
-        *(ptr + 1) = '\0';
-        base = ptr;
-        strcat(path, "include");
-        len = strlen(path);
-        path[len] = DIRSEP_CHAR;
-        path[len + 1] = '\0';
-        /* see if it exists */
-        if (access(path, 0) != 0 && *base == DIRSEP_CHAR) {
-            /* There is no "include" directory below the directory where the compiler
-             * is found. This typically means that the compiler is in a "bin" sub-directory
-             * and the "include" is below the *parent*. So find the parent...
-             */
-            *base = '\0';
-            if ((ptr = strrchr(path, DIRSEP_CHAR)) != NULL) {
-                *(ptr + 1) = '\0';
-                strcat(path, "include");
-                len = strlen(path);
-                path[len] = DIRSEP_CHAR;
-                path[len + 1] = '\0';
-            } else {
-                *base = DIRSEP_CHAR;
-            }
-        }
+#if defined __EMSCRIPTEN__
+// Needed due to EM_ASM usage
+__attribute__((noinline))
+#endif
+static void setconfig(const char* root) {
+    fs::path proc_path = GetProcessPath(root);
 
-        auto& cc = CompileContext::get();
-        cc.options()->include_paths.emplace_back(path);
+    fs::path proc_dir = proc_path.parent_path();
+    if (proc_dir.empty())
+        return;
+
+    auto& cc = CompileContext::get();
+
+    fs::path include_dir = proc_dir / "include";
+    if (!fs::is_directory(include_dir)) {
+        // There is no "include" directory below the directory where the compiler
+        // is found. This typically means that the compiler is in a "bin" sub-directory
+        // and the "include" is below the *parent*. So find the parent...
+        proc_dir = proc_dir.parent_path();
+        if (proc_dir.empty())
+            return;
+        include_dir = proc_dir / "include";
     }
+
+    if (fs::is_directory(include_dir))
+        cc.options()->include_paths.emplace_back(include_dir.string());
 }
 
 void setcaption() {

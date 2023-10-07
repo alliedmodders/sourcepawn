@@ -64,13 +64,6 @@ namespace sp {
     '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
 
-#ifdef _WIN32
-static constexpr char DIRSEP_CHAR = '\\';
-# define PATH_MAX _MAX_PATH
-#else
-static constexpr char DIRSEP_CHAR = '/';
-#endif
-
 struct DefaultArrayData;
 
 struct DefaultArg : public PoolObject {

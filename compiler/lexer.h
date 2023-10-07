@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <filesystem>
+
 #include <amtl/am-deque.h>
 #include <amtl/am-hashtable.h>
 #include <amtl/am-string.h>
@@ -310,7 +312,7 @@ class Lexer
 
     void Init(std::shared_ptr<SourceFile> sf);
     void Start();
-    bool PlungeFile(const char* name, int try_currentpath, int try_includepaths);
+    bool PlungeFile(const std::string& name, int try_currentpath, int try_includepaths);
     std::shared_ptr<SourceFile> OpenFile(const std::string& name);
     bool NeedSemicolon();
     void AddMacro(const char* pattern, const char* subst);
@@ -367,10 +369,10 @@ class Lexer
     void LexStringLiteral(full_token_t* tok, int flags);
     void LexSymbol(full_token_t* tok, Atom* atom);
     bool MaybeHandleLineContinuation();
-    bool PlungeQualifiedFile(const char* name);
+    bool PlungeQualifiedFile(const std::string& name);
     full_token_t* PushSynthesizedToken(TokenKind kind, const token_pos_t& pos);
     void SynthesizeIncludePathToken();
-    void SetFileDefines(std::string file);
+    void SetFileDefines(const std::string& file);
     void EnterFile(std::shared_ptr<SourceFile>&& fp, const token_pos_t& from);
     void FillTokenPos(token_pos_t* pos);
     void SkipLineWhitespace();
@@ -515,5 +517,7 @@ class Lexer
     std::deque<full_token_t> injected_token_stream_;
     bool caching_tokens_ = false;
 };
+
+std::string StringizePath(const std::filesystem::path& in_path);
 
 } // namespace sp
