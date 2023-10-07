@@ -30,6 +30,8 @@
 #include "symbols.h"
 #include "type-checker.h"
 
+namespace sp {
+
 class ArraySizeResolver
 {
   public:
@@ -1091,3 +1093,5 @@ BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell base_address)
     for (auto& v : array->iv)
         v += base_address;
 }
+
+} // namespace sp

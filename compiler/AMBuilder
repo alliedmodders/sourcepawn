@@ -21,6 +21,7 @@ module.sources += [
   'sci18n.cpp',
   'sctracker.cpp',
   'semantics.cpp',
+  'scopes.cpp',
   'source-file.cpp',
   'source-manager.cpp',
   'symbols.cpp',

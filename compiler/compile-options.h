@@ -26,6 +26,8 @@
 
 #define CTRL_CHAR '\\'  /* default control character */
 
+namespace sp {
+
 struct CompileOptions {
     bool need_semicolon = false;
     std::vector<std::string> source_files;
@@ -42,3 +44,5 @@ struct CompileOptions {
     int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
     std::vector<std::pair<std::string, std::string>> predefines;
 };
+
+} // namespace sp

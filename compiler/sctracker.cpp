@@ -1,4 +1,22 @@
-/* vim: set ts=8 sts=4 sw=4 tw=99 et: */
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
+//
+//  Copyright (c) 2023 AlliedModders LLC
+//
+//  This software is provided "as-is", without any express or implied warranty.
+//  In no event will the authors be held liable for any damages arising from
+//  the use of this software.
+//
+//  Permission is granted to anyone to use this software for any purpose,
+//  including commercial applications, and to alter it and redistribute it
+//  freely, subject to the following restrictions:
+//
+//  1.  The origin of this software must not be misrepresented; you must not
+//      claim that you wrote the original software. If you use this software in
+//      a product, an acknowledgment in the product documentation would be
+//      appreciated but is not required.
+//  2.  Altered source versions must be plainly marked as such, and must not be
+//      misrepresented as being the original software.
+//  3.  This notice may not be removed or altered from any source distribution.
 #include "sctracker.h"
 
 #include <assert.h>
@@ -17,7 +35,9 @@
 #include "symbols.h"
 #include "types.h"
 
-funcenum_t* funcenums_add(CompileContext& cc, sp::Atom* name, bool anonymous) {
+namespace sp {
+
+funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous) {
     if (anonymous) {
         if (auto type = cc.types()->find(name)) {
             assert(type->kind() == TypeKind::Function);
@@ -71,7 +91,7 @@ functag_from_tag(int tag)
     return fe->entries.back();
 }
 
-methodmap_t::methodmap_t(methodmap_t* parent, sp::Atom* name)
+methodmap_t::methodmap_t(methodmap_t* parent, Atom* name)
  : parent(parent),
    tag(0),
    nullable(false),
@@ -101,7 +121,7 @@ methodmap_method_t::property_tag() const
 }
 
 methodmap_t*
-methodmap_add(CompileContext& cc, methodmap_t* parent, sp::Atom* name)
+methodmap_add(CompileContext& cc, methodmap_t* parent, Atom* name)
 {
     auto map = new methodmap_t(parent, name);
 
@@ -123,7 +143,7 @@ methodmap_find_by_tag(int tag)
 }
 
 methodmap_t*
-methodmap_find_by_name(sp::Atom* name)
+methodmap_find_by_name(Atom* name)
 {
     auto type = CompileContext::get().types()->find(name);
     if (!type)
@@ -132,7 +152,7 @@ methodmap_find_by_name(sp::Atom* name)
 }
 
 methodmap_method_t*
-methodmap_find_method(methodmap_t* map, sp::Atom* name)
+methodmap_find_method(methodmap_t* map, Atom* name)
 {
     auto iter = map->methods.find(name);
     if (iter != map->methods.end())
@@ -142,3 +162,5 @@ methodmap_find_method(methodmap_t* map, sp::Atom* name)
         return methodmap_find_method(map->parent, name);
     return nullptr;
 }
+
+} // namespace sp

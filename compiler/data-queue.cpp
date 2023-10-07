@@ -41,6 +41,8 @@
 #include "sctracker.h"
 #include "symbols.h"
 
+namespace sp {
+
 DataQueue::DataQueue()
 {
 }
@@ -75,3 +77,5 @@ DataQueue::AddZeroes(cell count)
 {
     buffer_.resize(buffer_.size() + count, 0);
 }
+
+} // namespace sp

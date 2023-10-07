@@ -44,13 +44,15 @@
 #include "errors.h"
 #include "lexer.h"
 #include "sc.h"
+#include "scopes.h"
 #include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
 
 using namespace SourcePawn;
 using namespace ke;
-using namespace sp;
+
+namespace sp {
 
 static int
 sort_by_name(const void* a1, const void* a2)
@@ -1037,3 +1039,5 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
 
     return splat_to_binary(cc, binfname, buffer.bytes(), buffer.size());
 }
+
+} // namespace sp

@@ -25,7 +25,10 @@
 
 #include "compile-context.h"
 #include "sc.h"
+#include "scopes.h"
 #include "parse-node.h"
+
+namespace sp {
 
 class AutoCreateScope;
 class Semantics;
@@ -62,7 +65,7 @@ class SemaContext
 
     bool BindType(const token_pos_t& pos, TypenameInfo* ti);
     bool BindType(const token_pos_t& pos, typeinfo_t* ti);
-    bool BindType(const token_pos_t& pos, sp::Atom* atom, bool is_label, int* tag);
+    bool BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* tag);
 
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
@@ -308,3 +311,5 @@ int check_operatortag(int opertok, int resulttag, const char* opername);
 int argcompare(ArgDecl* a1, ArgDecl* a2);
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl);
 bool IsLegacyEnumTag(SymbolScope* scope, int tag);
+
+} // namespace sp

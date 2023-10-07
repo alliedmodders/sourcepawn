@@ -30,34 +30,7 @@
 #include "sc.h"
 #include "semantics.h"
 
-void
-SymbolScope::Add(symbol* sym)
-{
-    if (!symbols_) {
-        auto& cc = CompileContext::get();
-        symbols_ = cc.NewSymbolMap();
-    }
-
-    assert(symbols_->find(sym->nameAtom()) == symbols_->end());
-    symbols_->emplace(sym->nameAtom(), sym);
-}
-
-void
-SymbolScope::AddChain(symbol* sym)
-{
-    if (!symbols_) {
-        auto& cc = CompileContext::get();
-        symbols_ = cc.NewSymbolMap();
-    }
-
-    auto iter = symbols_->find(sym->nameAtom());
-    if (iter == symbols_->end()) {
-        symbols_->emplace(sym->nameAtom(), sym);
-    } else {
-        sym->next = iter->second;
-        iter->second = sym;
-    }
-}
+namespace sp {
 
 void AddGlobal(CompileContext& cc, symbol* sym)
 {
@@ -101,7 +74,7 @@ FunctionData::FunctionData()
 {
 }
 
-symbol::symbol(sp::Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
+symbol::symbol(Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : next(nullptr),
    codeaddr(0),
    vclass((char)symvclass),
@@ -204,7 +177,7 @@ symbol::is_variadic() const
 }
 
 symbol*
-NewVariable(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
+NewVariable(Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
             int numdim, int semantic_tag)
 {
     symbol* sym = new symbol(name, addr, ident, vclass, tag);
@@ -219,7 +192,7 @@ NewVariable(sp::Atom* name, cell addr, IdentifierKind ident, int vclass, int tag
 }
 
 symbol*
-FindEnumStructField(Type* type, sp::Atom* name)
+FindEnumStructField(Type* type, Atom* name)
 {
     symbol* sym = type->asEnumStruct();
     if (!sym->data())
@@ -313,7 +286,7 @@ enum class NewNameStatus {
 };
 
 static NewNameStatus
-GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
+GetNewNameStatus(SemaContext& sc, Atom* name, int vclass)
 {
     SymbolScope* scope;
     symbol* sym = nullptr;
@@ -340,7 +313,7 @@ GetNewNameStatus(SemaContext& sc, sp::Atom* name, int vclass)
 }
 
 bool
-CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, int vclass)
+CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass)
 {
     auto name_status = GetNewNameStatus(sc, name, vclass);
     if (name_status == NewNameStatus::Duplicated) {
@@ -353,7 +326,7 @@ CheckNameRedefinition(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, i
 }
 
 static symbol*
-NewConstant(sp::Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
+NewConstant(Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 {
     auto sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
     sym->loc = pos;
@@ -362,7 +335,7 @@ NewConstant(sp::Atom* name, const token_pos_t& pos, cell val, int vclass, int ta
 }
 
 symbol*
-DefineConstant(CompileContext& cc, sp::Atom* name, cell val, int tag)
+DefineConstant(CompileContext& cc, Atom* name, cell val, int tag)
 {
     auto globals = cc.globals();
     if (auto sym = globals->Find(name)) {
@@ -377,7 +350,7 @@ DefineConstant(CompileContext& cc, sp::Atom* name, cell val, int tag)
 }
 
 symbol*
-DefineConstant(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, cell val, int vclass,
+DefineConstant(SemaContext& sc, Atom* name, const token_pos_t& pos, cell val, int vclass,
                int tag)
 {
     auto sym = NewConstant(name, pos, val, vclass, tag);
@@ -387,7 +360,7 @@ DefineConstant(SemaContext& sc, sp::Atom* name, const token_pos_t& pos, cell val
 }
 
 symbol*
-FindSymbol(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
+FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found)
 {
     for (auto iter = scope; iter; iter = iter->parent()) {
         if (auto sym = iter->Find(name)) {
@@ -400,7 +373,7 @@ FindSymbol(SymbolScope* scope, sp::Atom* name, SymbolScope** found)
 }
 
 symbol*
-FindSymbol(SemaContext& sc, sp::Atom* name, SymbolScope** found)
+FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found)
 {
     return FindSymbol(sc.scope(), name, found);
 }
@@ -452,3 +425,5 @@ DefineSymbol(SemaContext& sc, symbol* sym)
     else
         scope->Add(sym);
 }
+
+} // namespace sp

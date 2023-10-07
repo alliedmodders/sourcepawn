@@ -33,6 +33,8 @@
 #include "sctracker.h"
 #include "symbols.h"
 
+namespace sp {
+
 Semantics::Semantics(CompileContext& cc)
   : cc_(cc)
 {
@@ -478,15 +480,15 @@ bool Expr::HasSideEffects() {
             return to<CastExpr>()->expr()->HasSideEffects();
         case ExprKind::CommaExpr: {
             auto e = to<CommaExpr>();
-            return ::HasSideEffects(e->exprs());
+            return sp::HasSideEffects(e->exprs());
         }
         case ExprKind::ArrayExpr: {
             auto e = to<ArrayExpr>();
-            return ::HasSideEffects(e->exprs());
+            return sp::HasSideEffects(e->exprs());
         }
         case ExprKind::NewArrayExpr: {
             auto e = to<NewArrayExpr>();
-            return ::HasSideEffects(e->exprs());
+            return sp::HasSideEffects(e->exprs());
         }
         case ExprKind::IndexExpr: {
             auto e = to<IndexExpr>();
@@ -3382,3 +3384,5 @@ void DeleteStmt::ProcessUses(SemaContext& sc) {
     expr_->MarkAndProcessUses(sc);
     markusage(map_->dtor->target, uREAD);
 }
+
+} // namespace sp

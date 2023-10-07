@@ -23,6 +23,8 @@
 #include "array-data.h"
 #include "parse-node.h"
 
+namespace sp {
+
 class Semantics;
 
 // Determine the static size of an iARRAY based on dimension expressions and
@@ -38,3 +40,5 @@ void BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr
 void BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
 
 cell_t CalcArraySize(symbol* sym);
+
+} // namespace sp

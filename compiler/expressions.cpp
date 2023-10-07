@@ -36,6 +36,8 @@
 #include "symbols.h"
 #include "types.h"
 
+namespace sp {
+
 /* Function addresses of binary operators for signed operations */
 static const int op1[17] = {
     // hier3
@@ -649,3 +651,5 @@ commutative(int oper)
             return false;
     }
 }
+
+} // namespace sp

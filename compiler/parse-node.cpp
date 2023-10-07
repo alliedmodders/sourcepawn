@@ -21,7 +21,9 @@
 
 #include "errors.h"
 
-VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, sp::Atom* name,
+namespace sp {
+
+VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
                          const typeinfo_t& type, int vclass, bool is_public, bool is_static,
                          bool is_stock, Expr* initializer)
  : Decl(kind, pos, name),
@@ -116,7 +118,7 @@ FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
 {
 }
 
-int FunctionDecl::FindNamedArg(sp::Atom* name) const {
+int FunctionDecl::FindNamedArg(Atom* name) const {
     for (size_t i = 0; i < args_.size() && args_[i]->type().ident != iVARARGS; i++) {
         if (args_[i]->name() == name)
             return (int)i;
@@ -128,3 +130,5 @@ FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {
 }
+
+} // namespace sp

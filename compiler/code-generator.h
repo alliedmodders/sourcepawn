@@ -31,6 +31,8 @@
 #include "parse-node.h"
 #include "smx-assembly-buffer.h"
 
+namespace sp {
+
 class CompileContext;
 class ParseTree;
 struct symbol;
@@ -246,3 +248,5 @@ class CodeGenerator final
 
     AutoCountErrors errors_;
 };
+
+} // namespace sp

@@ -32,6 +32,8 @@
 #include "shared/string-pool.h"
 #include "symbols.h"
 
+namespace sp {
+
 struct UserOperation
 {
     UserOperation() {}
@@ -47,11 +49,10 @@ struct UserOperation
 typedef void (*OpFunc)();
 
 class Expr;
+class SemaContext;
 class SymbolScope;
 struct StructInitField;
 struct structarg_t;
-
-class SemaContext;
 
 class ParseNode : public PoolObject
 {
@@ -258,7 +259,7 @@ class ContinueStmt : public Stmt
 class StaticAssertStmt : public Stmt
 {
   public:
-    explicit StaticAssertStmt(const token_pos_t& pos, Expr* expr, sp::Atom* text)
+    explicit StaticAssertStmt(const token_pos_t& pos, Expr* expr, Atom* text)
       : Stmt(StmtKind::StaticAssertStmt, pos),
         expr_(expr),
         text_(text)
@@ -270,30 +271,34 @@ class StaticAssertStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::StaticAssertStmt; }
 
     Expr* expr() const { return expr_; }
-    sp::Atom* text() const { return text_; }
+    Atom* text() const { return text_; }
 
   private:
     Expr* expr_;
-    sp::Atom* text_;
+    Atom* text_;
 };
 
 class Decl : public Stmt
 {
   public:
-    Decl(StmtKind kind, const token_pos_t& pos, sp::Atom* name)
+    Decl(StmtKind kind, const token_pos_t& pos, Atom* name)
       : Stmt(kind, pos),
         name_(name)
     {}
 
-    sp::Atom* name() const {
+    Atom* name() const {
         return name_;
     }
 
   protected:
-    sp::Atom* DecorateInnerName(sp::Atom* parent_name, sp::Atom* field_name);
+    Atom* DecorateInnerName(Atom* parent_name, Atom* field_name);
 
   protected:
-    sp::Atom* name_;
+    Atom* name_;
+
+  public:
+    // :TODO: remove.
+    Decl* next = nullptr;
 };
 
 class BinaryExpr;
@@ -301,7 +306,7 @@ class BinaryExpr;
 class VarDeclBase : public Decl
 {
   public:
-    VarDeclBase(StmtKind kind, const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type,
+    VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name, const typeinfo_t& type,
                 int vclass, bool is_public, bool is_static, bool is_stock, Expr* initializer);
 
     bool Bind(SemaContext& sc) override;
@@ -341,7 +346,7 @@ class VarDeclBase : public Decl
 class VarDecl : public VarDeclBase
 {
   public:
-    VarDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+    VarDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
             bool is_public, bool is_static, bool is_stock, Expr* initializer)
       : VarDeclBase(StmtKind::VarDecl, pos, name, type, vclass, is_public, is_static, is_stock,
                     initializer)
@@ -353,7 +358,7 @@ class VarDecl : public VarDeclBase
 class ArgDecl : public VarDeclBase
 {
   public:
-    ArgDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+    ArgDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
             bool is_public, bool is_static, bool is_stock, Expr* initializer)
       : VarDeclBase(StmtKind::ArgDecl, pos, name, type, vclass, is_public, is_static, is_stock,
                     initializer)
@@ -371,7 +376,7 @@ class ArgDecl : public VarDeclBase
 class ConstDecl : public VarDecl
 {
   public:
-    ConstDecl(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& type, int vclass,
+    ConstDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
               Expr* expr)
       : VarDecl(pos, name, type, vclass, false, false, false, nullptr),
         expr_(expr)
@@ -385,18 +390,18 @@ class ConstDecl : public VarDecl
 };
 
 struct EnumField {
-    EnumField(const token_pos_t& pos, sp::Atom* name, Expr* value)
+    EnumField(const token_pos_t& pos, Atom* name, Expr* value)
       : pos(pos), name(name), value(value)
     {}
     token_pos_t pos;
-    sp::Atom* name;
+    Atom* name;
     Expr* value;
 };
 
 class EnumDecl : public Decl
 {
   public:
-    explicit EnumDecl(const token_pos_t& pos, int vclass, sp::Atom* label, sp::Atom* name,
+    explicit EnumDecl(const token_pos_t& pos, int vclass, Atom* label, Atom* name,
                       const std::vector<EnumField>& fields, int increment, int multiplier)
       : Decl(StmtKind::EnumDecl, pos, name),
         vclass_(vclass),
@@ -424,19 +429,19 @@ class EnumDecl : public Decl
 
   private:
     int vclass_;
-    sp::Atom* label_;
+    Atom* label_;
     PoolArray<EnumField> fields_;
     int increment_;
     int multiplier_;
 };
 
 struct StructField {
-    StructField(const token_pos_t& pos, sp::Atom* name, const typeinfo_t& typeinfo)
+    StructField(const token_pos_t& pos, Atom* name, const typeinfo_t& typeinfo)
       : pos(pos), name(name), type(typeinfo), field(nullptr)
     {}
 
     token_pos_t pos;
-    sp::Atom* name;
+    Atom* name;
     typeinfo_t type;
     structarg_t* field;
 };
@@ -447,7 +452,7 @@ struct StructField {
 class PstructDecl : public Decl
 {
   public:
-    PstructDecl(const token_pos_t& pos, sp::Atom* name, const std::vector<StructField>& fields)
+    PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<StructField>& fields)
       : Decl(StmtKind::PstructDecl, pos, name),
         ps_(nullptr),
         fields_(fields)
@@ -483,7 +488,7 @@ struct TypedefInfo : public PoolObject {
 class TypedefDecl : public Decl
 {
   public:
-    explicit TypedefDecl(const token_pos_t& pos, sp::Atom* name, TypedefInfo* type)
+    explicit TypedefDecl(const token_pos_t& pos, Atom* name, TypedefInfo* type)
       : Decl(StmtKind::TypedefDecl, pos, name),
         type_(type)
     {}
@@ -503,7 +508,7 @@ class TypedefDecl : public Decl
 class TypesetDecl : public Decl
 {
   public:
-    explicit TypesetDecl(const token_pos_t& pos, sp::Atom* name,
+    explicit TypesetDecl(const token_pos_t& pos, Atom* name,
                          const std::vector<TypedefInfo*>& types)
       : Decl(StmtKind::TypesetDecl, pos, name),
         types_(types)
@@ -837,7 +842,7 @@ class CastExpr final : public Expr
 class SizeofExpr final : public Expr
 {
   public:
-    SizeofExpr(const token_pos_t& pos, sp::Atom* ident, sp::Atom* field, int suffix_token, int array_levels)
+    SizeofExpr(const token_pos_t& pos, Atom* ident, Atom* field, int suffix_token, int array_levels)
       : Expr(ExprKind::SizeofExpr, pos),
         ident_(ident),
         field_(field),
@@ -850,15 +855,15 @@ class SizeofExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SizeofExpr; }
 
-    sp::Atom* ident() const { return ident_; }
-    sp::Atom* field() const { return field_; }
+    Atom* ident() const { return ident_; }
+    Atom* field() const { return field_; }
     int suffix_token() const { return suffix_token_; }
     int array_levels() const { return array_levels_; }
     symbol* sym() const { return sym_; }
 
   private:
-    sp::Atom* ident_;
-    sp::Atom* field_;
+    Atom* ident_;
+    Atom* field_;
     int suffix_token_;
     int array_levels_;
     symbol* sym_ = nullptr;
@@ -867,7 +872,7 @@ class SizeofExpr final : public Expr
 class SymbolExpr final : public Expr
 {
   public:
-    SymbolExpr(const token_pos_t& pos, sp::Atom* name)
+    SymbolExpr(const token_pos_t& pos, Atom* name)
       : Expr(ExprKind::SymbolExpr, pos),
         name_(name),
         sym_(nullptr)
@@ -887,14 +892,14 @@ class SymbolExpr final : public Expr
     bool DoBind(SemaContext& sc, bool is_lval);
 
   private:
-    sp::Atom* name_;
+    Atom* name_;
     symbol* sym_;
 };
 
 class NamedArgExpr : public Expr
 {
   public:
-    NamedArgExpr(const token_pos_t& pos, sp::Atom* name, Expr* expr)
+    NamedArgExpr(const token_pos_t& pos, Atom* name, Expr* expr)
       : Expr(ExprKind::NamedArgExpr, pos),
         name(name),
         expr(expr)
@@ -905,7 +910,7 @@ class NamedArgExpr : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::NamedArgExpr; }
 
-    sp::Atom* name;
+    Atom* name;
     Expr* expr;
 };
 
@@ -993,7 +998,7 @@ class DefaultArgExpr final : public Expr
 class FieldAccessExpr final : public Expr
 {
   public:
-    FieldAccessExpr(const token_pos_t& pos, int tok, Expr* base, sp::Atom* name)
+    FieldAccessExpr(const token_pos_t& pos, int tok, Expr* base, Atom* name)
       : Expr(ExprKind::FieldAccessExpr, pos),
         token_(tok),
         base_(base),
@@ -1010,7 +1015,7 @@ class FieldAccessExpr final : public Expr
     int token() const { return token_; }
     Expr* base() const { return base_; }
     Expr* set_base(Expr* base) { return base_ = base; }
-    sp::Atom* name() const { return name_; }
+    Atom* name() const { return name_; }
     symbol* field() const { return field_; }
     void set_field(symbol* field) { field_ = field; }
 
@@ -1020,7 +1025,7 @@ class FieldAccessExpr final : public Expr
   private:
     int token_;
     Expr* base_;
-    sp::Atom* name_;
+    Atom* name_;
     methodmap_method_t* method_ = nullptr;
     symbol* field_ = nullptr;
 };
@@ -1161,7 +1166,7 @@ class FloatExpr final : public TaggedValueExpr
 class StringExpr final : public Expr
 {
   public:
-    StringExpr(const token_pos_t& pos, sp::Atom* atom)
+    StringExpr(const token_pos_t& pos, Atom* atom)
       : Expr(ExprKind::StringExpr, pos),
         text_(atom)
     {}
@@ -1170,12 +1175,12 @@ class StringExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::StringExpr; }
 
-    sp::Atom* text() const {
+    Atom* text() const {
         return text_;
     }
 
   private:
-    sp::Atom* text_;
+    Atom* text_;
 };
 
 class NewArrayExpr final : public Expr
@@ -1236,7 +1241,7 @@ class ArrayExpr final : public Expr
 };
 
 struct StructInitFieldExpr : public Expr {
-    StructInitFieldExpr(sp::Atom* name, Expr* value, const token_pos_t& pos)
+    StructInitFieldExpr(Atom* name, Expr* value, const token_pos_t& pos)
       : Expr(ExprKind::StructInitFieldExpr, pos),
         name(name), value(value)
     {}
@@ -1245,7 +1250,7 @@ struct StructInitFieldExpr : public Expr {
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::StructInitFieldExpr; }
 
-    sp::Atom* name;
+    Atom* name;
     Expr* value;
 };
 
@@ -1520,7 +1525,7 @@ class SwitchStmt : public Stmt
 class PragmaUnusedStmt : public Stmt
 {
   public:
-    PragmaUnusedStmt(const token_pos_t& pos, const std::vector<sp::Atom*>& names)
+    PragmaUnusedStmt(const token_pos_t& pos, const std::vector<Atom*>& names)
       : Stmt(StmtKind::PragmaUnusedStmt, pos),
         names_(names)
     {}
@@ -1530,11 +1535,11 @@ class PragmaUnusedStmt : public Stmt
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PragmaUnusedStmt; }
 
-    PoolArray<sp::Atom*>& names() { return names_; }
+    PoolArray<Atom*>& names() { return names_; }
     PoolArray<symbol*>& symbols() { return symbols_; }
 
   private:
-    PoolArray<sp::Atom*> names_;
+    PoolArray<Atom*> names_;
     PoolArray<symbol*> symbols_;
 };
 
@@ -1550,12 +1555,12 @@ class FunctionDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::FunctionDecl; }
 
     bool IsVariadic() const;
-    int FindNamedArg(sp::Atom* name) const;
+    int FindNamedArg(Atom* name) const;
 
     const token_pos_t& end_pos() const { return end_pos_; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
 
-    void set_alias(sp::Atom* alias) { alias_ = alias; }
+    void set_alias(Atom* alias) { alias_ = alias; }
 
     const ke::Maybe<int>& this_tag() const { return this_tag_; }
     void set_this_tag(int this_tag) {
@@ -1569,10 +1574,10 @@ class FunctionDecl : public Decl
     TokenCache* tokens() const { return tokens_; }
     void set_tokens(TokenCache* tokens) { tokens_ = tokens; }
 
-    void set_name(sp::Atom* name) { name_ = name; }
+    void set_name(Atom* name) { name_ = name; }
 
     // The undecorated name.
-    sp::Atom* decl_name() const { return decl_.name; }
+    Atom* decl_name() const { return decl_.name; }
 
     void set_is_native() { is_native_ = true; }
     bool is_native() const { return is_native_; }
@@ -1622,7 +1627,7 @@ class FunctionDecl : public Decl
   private:
     bool BindArgs(SemaContext& sc);
     bool CanRedefine(symbol* sym);
-    sp::Atom* NameForOperator();
+    Atom* NameForOperator();
 
   private:
     token_pos_t end_pos_;
@@ -1632,7 +1637,7 @@ class FunctionDecl : public Decl
     symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
-    sp::Atom* alias_ = nullptr;
+    Atom* alias_ = nullptr;
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);
@@ -1654,7 +1659,7 @@ struct EnumStructField {
 class EnumStructDecl : public Decl
 {
   public:
-    explicit EnumStructDecl(const token_pos_t& pos, sp::Atom* name)
+    explicit EnumStructDecl(const token_pos_t& pos, Atom* name)
       : Decl(StmtKind::EnumStructDecl, pos, name)
     {}
 
@@ -1676,7 +1681,7 @@ class EnumStructDecl : public Decl
 struct MethodmapProperty : public PoolObject {
     token_pos_t pos;
     typeinfo_t type;
-    sp::Atom* name = nullptr;
+    Atom* name = nullptr;
     FunctionDecl* getter = nullptr;
     FunctionDecl* setter = nullptr;
     methodmap_method_t* entry = nullptr;
@@ -1691,7 +1696,7 @@ struct MethodmapMethod : public PoolObject {
 class MethodmapDecl : public Decl
 {
   public:
-    explicit MethodmapDecl(const token_pos_t& pos, sp::Atom* name, bool nullable, sp::Atom* extends)
+    explicit MethodmapDecl(const token_pos_t& pos, Atom* name, bool nullable, Atom* extends)
       : Decl(StmtKind::MethodmapDecl, pos, name),
         nullable_(nullable),
         extends_(extends)
@@ -1712,10 +1717,12 @@ class MethodmapDecl : public Decl
 
   private:
     bool nullable_;
-    sp::Atom* extends_;
+    Atom* extends_;
     PoolArray<MethodmapProperty*> properties_;
     PoolArray<MethodmapMethod*> methods_;
 
     methodmap_t* map_ = nullptr;
     symbol* sym_ = nullptr;
 };
+
+} // namespace sp

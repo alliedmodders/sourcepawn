@@ -22,9 +22,11 @@
 
 #include "stl-allocator.h"
 
+namespace sp {
 namespace tr {
 
 template <typename T>
 using vector = std::vector<T, StlAllocator<T>>;
 
 } // namespace tr
+} // namespace sp

@@ -28,8 +28,8 @@
  *
  *  Version: $Id$
  */
-#ifndef SC_H_INCLUDED
-#define SC_H_INCLUDED
+#pragma once
+
 #include <limits.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -51,6 +51,8 @@
 
 typedef int32_t cell;
 typedef uint32_t ucell;
+
+namespace sp {
 
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
@@ -159,4 +161,4 @@ static constexpr cell kMaxCells = INT_MAX / sizeof(cell);
 # define SP_BITFIELD(n)
 #endif
 
-#endif /* SC_H_INCLUDED */
+} // namespace sp

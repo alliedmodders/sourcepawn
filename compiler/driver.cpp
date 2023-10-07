@@ -31,6 +31,7 @@
 #endif
 
 using namespace ke;
+using namespace sp;
 
 #if defined _WIN32
 static HWND hwndFinish = 0;

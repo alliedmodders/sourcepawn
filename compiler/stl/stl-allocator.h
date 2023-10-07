@@ -24,6 +24,8 @@
 
 #include <amtl/am-bits.h>
 
+namespace sp {
+
 class NativeAllocator
 {
   public:
@@ -72,3 +74,5 @@ class StlAllocator
     bool operator ==(const StlAllocator& other) const { return true; }
     bool operator !=(const StlAllocator& other) const { return false; }
 };
+
+} // namespace sp

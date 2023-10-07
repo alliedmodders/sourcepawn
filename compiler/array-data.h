@@ -1,7 +1,6 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-//  Pawn compiler - Recursive descend expresion parser
 //
-//  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) 2023 AlliedModders LLC
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -25,6 +24,8 @@
 #include <sp_vm_types.h>
 #include "stl/stl-vector.h"
 
+namespace sp {
+
 struct ArrayData {
     tr::vector<cell_t> iv;
     tr::vector<cell_t> data;
@@ -39,3 +40,5 @@ struct DefaultArrayData : public ArrayData {
     cell_t iv_size;
     cell_t data_size;
 };
+
+} // namespace sp

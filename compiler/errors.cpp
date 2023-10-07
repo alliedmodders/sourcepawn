@@ -58,6 +58,8 @@
 #    pragma warning(pop)
 #endif
 
+namespace sp {
+
 void report_error(ErrorReport&& report);
 
 AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
@@ -411,3 +413,5 @@ AutoCountErrors::ok() const
 {
     return old_errors_ == reports_->total_errors();
 }
+
+} // namespace sp

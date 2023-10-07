@@ -83,6 +83,8 @@
 
 using namespace ke;
 
+namespace sp {
+
 int pc_tag_string = 0;
 int pc_tag_bool = 0;
 
@@ -394,3 +396,5 @@ setconstants(void)
 
     DefineConstant(cc, cc.atom("debug"), 2, 0);
 }
+
+} // namespace sp

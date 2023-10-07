@@ -22,6 +22,8 @@
 #include "sc.h"
 #include "symbols.h"
 
+namespace sp {
+
 typeinfo_t
 TypeInfoFromSymbol(symbol* sym)
 {
@@ -47,3 +49,5 @@ TypeInfoFromTag(int tag)
 
     return type;
 }
+
+} // namespace sp
