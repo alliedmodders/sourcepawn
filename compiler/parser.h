@@ -25,6 +25,7 @@
 #include "parse-node.h"
 #include "sc.h"
 #include "sctracker.h"
+#include "stl/stl-deque.h"
 
 namespace sp {
 
@@ -44,8 +45,10 @@ class Parser
     typedef int (Parser::*HierFn)(value*);
     typedef Expr* (Parser::*NewHierFn)();
 
+
     static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
-    void CreateInitialScopes(std::vector<Stmt*>* list);
+
+    void ChangeStaticScope(std::vector<Stmt*>* stmts);
 
     Stmt* parse_unknown_decl(const full_token_t* tok);
     Decl* parse_enum(int vclass);
@@ -135,10 +138,11 @@ class Parser
     Semantics* sema_;
     bool in_loop_ = false;
     bool in_test_ = false;
-    std::vector<sp::SymbolScope*> static_scopes_;
     std::shared_ptr<Lexer> lexer_;
     TypeDictionary* types_ = nullptr;
-    std::deque<FunctionDecl*> delayed_functions_;
+    tr::deque<FunctionDecl*> delayed_functions_;
+    tr::unordered_map<size_t, SymbolScope*> static_scopes_;
+    int sources_index_ = -1;
 };
 
 } // namespace sp

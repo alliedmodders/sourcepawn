@@ -77,6 +77,8 @@ bool Lexer::PlungeQualifiedFile(const std::string& name) {
     auto fp = OpenFile(name);
     if (!fp)
         return false;
+    if (fp->included())
+        return true;
 
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
@@ -2312,6 +2314,8 @@ void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf, const token_pos_t& from)
     state_.line_start = state_.pos;
     SkipUtf8Bom();
     SetFileDefines(state_.inpf->name());
+
+    state_.inpf->set_included();
 
     tokens_on_line_ = 0;
 }
