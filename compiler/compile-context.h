@@ -62,7 +62,7 @@ class CompileContext final
     void TrackMalloc(size_t bytes);
     void TrackFree(size_t bytes);
 
-    sp::SymbolScope* globals() const { return globals_; }
+    SymbolScope* globals() const { return globals_; }
     tr::unordered_set<symbol*>& functions() { return functions_; }
     tr::unordered_set<symbol*>& publics() { return publics_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
@@ -104,8 +104,8 @@ class CompileContext final
     std::string& outfname() { return outfname_; }
     void set_outfname(const std::string& value) { outfname_ = value; }
 
-    std::shared_ptr<sp::SourceFile> inpf_org() const { return inpf_org_; }
-    void set_inpf_org(std::shared_ptr<sp::SourceFile> sf) { inpf_org_ = sf; }
+    std::shared_ptr<SourceFile> inpf_org() const { return inpf_org_; }
+    void set_inpf_org(std::shared_ptr<SourceFile> sf) { inpf_org_ = sf; }
 
     bool must_abort() const { return must_abort_; }
     void set_must_abort() { must_abort_ = true; }
@@ -130,7 +130,7 @@ class CompileContext final
 
   private:
     cc::PoolAllocator allocator_;
-    sp::SymbolScope* globals_;
+    SymbolScope* globals_;
     std::string default_include_;
     tr::unordered_set<symbol*> functions_;
     tr::unordered_set<symbol*> publics_;
@@ -138,9 +138,9 @@ class CompileContext final
     std::string outfname_;
     std::string errfname_;
     std::unique_ptr<SourceManager> sources_;
-    std::shared_ptr<sp::SourceFile> inpf_org_;
+    std::shared_ptr<SourceFile> inpf_org_;
     std::unique_ptr<TypeDictionary> types_;
-    sp::StringPool atoms_;
+    StringPool atoms_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
     // PreprocExpr().

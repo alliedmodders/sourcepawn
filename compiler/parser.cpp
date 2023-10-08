@@ -59,7 +59,11 @@ Parser::Parse()
     });
 
     std::vector<Stmt*> stmts;
-    CreateInitialScopes(&stmts);
+
+    if (!cc_.default_include().empty()) {
+        auto incfname = cc_.default_include();
+        lexer_->PlungeFile(incfname, FALSE, TRUE);
+    }
 
     // Prime the lexer.
     lexer_->Start();
@@ -70,20 +74,9 @@ Parser::Parse()
 
         int tok = lexer_->lex();
 
-        // We don't have end-of-file tokens (yet), so we pop static scopes
-        // before every declaration. This should be after lexer_->lex() so we've
-        // processed any end-of-file events. 
-        bool changed = false;
-        int fcurrent = lexer_->fcurrent();
-        while (!static_scopes_.empty() && static_scopes_.back()->fnumber() != fcurrent) {
-            changed = true;
-            static_scopes_.pop_back();
-        }
-        assert(!static_scopes_.empty());
-
-        if (changed) {
-            stmts.emplace_back(new ChangeScopeNode(lexer_->pos(), static_scopes_.back(),
-                                                   lexer_->inpf()->name()));
+        if (sources_index_ != lexer_->fcurrent()) {
+            ChangeStaticScope(&stmts);
+            sources_index_ = lexer_->fcurrent();
         }
 
         switch (tok) {
@@ -156,10 +149,6 @@ Parser::Parse()
                     report(417) << name.substr(1);
                     cc_.set_must_abort();
                 }
-
-                int fcurrent = lexer_->fcurrent();
-                static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-                decl = new ChangeScopeNode(lexer_->pos(), static_scopes_.back(), name.substr(1));
                 break;
             }
             case '}':
@@ -212,25 +201,15 @@ Parser::Parse()
     return new ParseTree(list);
 }
 
-void Parser::CreateInitialScopes(std::vector<Stmt*>* stmts) {
-    // Create a static scope for the main file.
-    {
-        int fcurrent = lexer_->fcurrent();
-        assert(fcurrent == 0);
-        static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-        stmts->emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                                lexer_->inpf()->name()));
+void Parser::ChangeStaticScope(std::vector<Stmt*>* stmts) {
+    auto sources_index = lexer_->fcurrent();
+    auto iter = static_scopes_.find(sources_index);
+    if (iter == static_scopes_.end()) {
+        auto scope = new SymbolScope(cc_.globals(), sFILE_STATIC, sources_index);
+        iter = static_scopes_.emplace(sources_index, scope).first;
     }
 
-    if (!cc_.default_include().empty()) {
-        auto incfname = cc_.default_include();
-        if (lexer_->PlungeFile(incfname, FALSE, TRUE)) {
-            int fcurrent = lexer_->fcurrent();
-            static_scopes_.emplace_back(new SymbolScope(cc_.globals(), sFILE_STATIC, fcurrent));
-            stmts->emplace_back(new ChangeScopeNode({}, static_scopes_.back(),
-                                lexer_->inpf()->name()));
-        }
-    }
+    stmts->emplace_back(new ChangeScopeNode(lexer_->pos(), iter->second,                        lexer_->inpf()->name()));
 }
 
 Stmt*

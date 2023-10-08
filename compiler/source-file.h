@@ -52,6 +52,9 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     bool is_main_file() const { return is_main_file_; }
     void set_is_main_file() { is_main_file_ = true; }
 
+    bool included() const { return included_; }
+    void set_included() { included_ = true; }
+
     void operator =(const SourceFile&) = delete;
     void operator =(SourceFile&&) = delete;
     const unsigned char* data() const {
@@ -75,6 +78,7 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     tr::string data_;
     size_t pos_;
     bool is_main_file_ = false;
+    bool included_ = false;
     ke::Maybe<uint32_t> sources_index_;
     tr::vector<uint32_t> line_extents_;
 };
