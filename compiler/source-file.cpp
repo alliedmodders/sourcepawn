@@ -36,6 +36,12 @@ SourceFile::SourceFile()
 {
 }
 
+SourceFile::SourceFile(const std::string& name, tr::string&& data)
+  : name_(name),
+    data_(std::move(data)),
+    is_builtin_(true)
+{}
+
 bool
 SourceFile::Open(const std::string& file_name)
 {

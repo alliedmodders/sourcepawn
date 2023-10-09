@@ -143,6 +143,7 @@ enum TokenKind {
     tINT64,
     tINTERFACE,
     tINTN,
+    tINVALID_FUNCTION,
     tLET,
     tMETHODMAP,
     tNAMESPACE,
@@ -220,6 +221,7 @@ enum TokenKind {
     tNEWDECL,        /* for declloc() */
     tENTERED_MACRO,  /* internal lexer command */
     tMAYBE_LABEL,    /* internal lexer command, followed by ':' */
+    // Make sure to update the token list in lexer.cpp.
     tLAST_TOKEN_ID
 };
 
@@ -296,6 +298,9 @@ class Lexer
     Lexer(CompileContext& cc);
     ~Lexer();
 
+    void AddFile(std::shared_ptr<SourceFile> sf);
+    void PlungeFile(std::shared_ptr<SourceFile> sf);
+
     int lex();
     int lex_same_line();
     bool match_same_line(int tok);
@@ -310,12 +315,12 @@ class Lexer
     void lexpush();
     void lexclr(int clreol);
 
-    void Init(std::shared_ptr<SourceFile> sf);
+    void Init();
     void Start();
-    bool PlungeFile(const std::string& name, int try_currentpath, int try_includepaths);
-    std::shared_ptr<SourceFile> OpenFile(const std::string& name);
+    bool PlungeFile(const token_pos_t& from, const std::string& name, int try_currentpath,
+                    int try_includepaths);
+    std::shared_ptr<SourceFile> OpenFile(const token_pos_t& from, const std::string& name);
     bool NeedSemicolon();
-    void AddMacro(const char* pattern, const char* subst);
     void LexStringContinuation();
     void LexDefinedKeyword();
     bool HasMacro(Atom* atom);
@@ -372,10 +377,10 @@ class Lexer
     void LexStringLiteral(full_token_t* tok, int flags);
     void LexSymbol(full_token_t* tok, Atom* atom);
     bool MaybeHandleLineContinuation();
-    bool PlungeQualifiedFile(const std::string& name);
+    bool PlungeQualifiedFile(const token_pos_t& from, const std::string& name);
     full_token_t* PushSynthesizedToken(TokenKind kind, const token_pos_t& pos);
     void SynthesizeIncludePathToken();
-    void SetFileDefines(const std::string& file);
+    void SetFileDefines(const std::shared_ptr<SourceFile> file);
     void EnterFile(std::shared_ptr<SourceFile>&& fp, const token_pos_t& from);
     void FillTokenPos(token_pos_t* pos);
     void SkipLineWhitespace();
@@ -455,6 +460,7 @@ class Lexer
         bool deprecated;
     };
     std::shared_ptr<MacroEntry> FindMacro(Atom* atom);
+    void AddMacro(const char* pattern, const char* subst);
     bool DeleteMacro(Atom* atom);
     bool EnterMacro(std::shared_ptr<MacroEntry> macro);
     bool IsInMacro() const { return state_.macro != nullptr; }
@@ -515,6 +521,7 @@ class Lexer
     };
 
     LexerState state_;
+    std::deque<std::shared_ptr<SourceFile>> file_queue_;
     tr::vector<LexerState> prev_state_;
 
     // Set if tokens are being lexed into a new token cache.

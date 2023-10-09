@@ -18,6 +18,7 @@
 #include "source-manager.h"
 
 #include <filesystem>
+#include <limits>
 
 #include <amtl/am-arithmetic.h>
 #include "errors.h"
@@ -33,7 +34,7 @@ SourceManager::SourceManager(CompileContext& cc)
     loc_ranges_.emplace_back();
 }
 
-std::shared_ptr<SourceFile> SourceManager::Open(const std::string& path) {
+std::shared_ptr<SourceFile> SourceManager::Open(const token_pos_t& from, const std::string& path) {
     for (const auto& other : opened_files_) {
         std::error_code ec;
         if (std::filesystem::equivalent(path, other->path(), ec))
@@ -43,21 +44,32 @@ std::shared_ptr<SourceFile> SourceManager::Open(const std::string& path) {
     auto file = std::make_shared<SourceFile>();
     if (!file->Open(path))
         return nullptr;
+    if (!Open(from, file))
+        return nullptr;
+    return file;
+}
+
+bool SourceManager::Open(const token_pos_t& from, std::shared_ptr<SourceFile> file) {
+    if (opened_files_.size() >= std::numeric_limits<int>::max()) {
+        report(from, 422);
+        return {};
+    }
 
     file->set_sources_index(opened_files_.size());
     opened_files_.emplace_back(file);
+    return true;
+}
 
+std::shared_ptr<SourceFile> SourceManager::Open(const std::string& name, tr::string&& data) {
+    auto file = std::make_shared<SourceFile>(name, std::move(data));
+    if (!Open({}, file))
+        return nullptr;
     return file;
 }
 
 LocationRange SourceManager::EnterFile(std::shared_ptr<SourceFile> file, const token_pos_t& from) {
     size_t loc_index;
     if (!TrackExtents(file->size(), &loc_index)) {
-        report(from, 422);
-        return {};
-    }
-
-    if (opened_files_.size() >= UINT_MAX) {
         report(from, 422);
         return {};
     }

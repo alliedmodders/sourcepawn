@@ -1,10 +1,6 @@
 // vim: set ts=2 sw=2 tw=99 et:
-#if defined _shell_included
- #endinput
-#endif
-#define _shell_included
-
 #include <float>
+#include <handles>
 
 native void printnum(int n);
 native void writenum(int n);
@@ -46,7 +42,3 @@ native void copy_2d_array_to_callback(const int[] flat_array, int length, int st
                                       Array2dCallback callback);
 
 native void assert_eq(any a1, any a2);
-
-enum Handle { INVALID_HANDLE = 0 }
-native void CloseHandle(Handle h);
-using __intrinsics__.Handle;

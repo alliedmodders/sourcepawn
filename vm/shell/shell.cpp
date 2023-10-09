@@ -324,7 +324,7 @@ static int Execute(const char* file)
   BindNative(rt, "invoke", DoInvoke);
   BindNative(rt, "dump_stack_trace", DumpStackTrace);
   BindNative(rt, "report_error", ReportError);
-  BindNative(rt, "CloseHandle", DoNothing);
+  BindNative(rt, "Handle.~Handle", DoNothing);
   BindNative(rt, "dynamic_native", dynamic_native.get());
   BindNative(rt, "access_2d_array", Access2DArray);
   BindNative(rt, "copy_2d_array_to_callback", Copy2dArrayToCallback);

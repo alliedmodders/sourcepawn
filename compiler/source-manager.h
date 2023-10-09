@@ -151,7 +151,9 @@ class SourceManager final
   public:
     explicit SourceManager(CompileContext& cc);
 
-    std::shared_ptr<SourceFile> Open(const std::string& path);
+    std::shared_ptr<SourceFile> Open(const token_pos_t& from, const std::string& path);
+    std::shared_ptr<SourceFile> Open(const std::string& name, tr::string&& data);
+
     LocationRange EnterFile(std::shared_ptr<SourceFile> file, const token_pos_t& from);
 
     // Return a location range for a macro. If the macro has unique text, the
@@ -183,6 +185,7 @@ class SourceManager final
     }
 
   private:
+    bool Open(const token_pos_t& from, std::shared_ptr<SourceFile> file);
     bool TrackExtents(uint32_t length, size_t* index);
     size_t FindLocRangeSlow(const SourceLocation& loc);
     size_t FindSourceFileRangeIndex(SourceLocation loc, SourceLocation* expansion_loc);

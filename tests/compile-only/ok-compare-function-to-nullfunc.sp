@@ -1,6 +1,5 @@
 // warnings_are_errors: true
-enum Handle { INVALID_HANDLE = 0 }
-using __intrinsics__.Handle;
+#include <handles>
 
 methodmap ArrayList < Handle { }
 methodmap ArrayLister < ArrayList { }

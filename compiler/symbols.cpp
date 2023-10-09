@@ -335,21 +335,6 @@ NewConstant(Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 }
 
 symbol*
-DefineConstant(CompileContext& cc, Atom* name, cell val, int tag)
-{
-    auto globals = cc.globals();
-    if (auto sym = globals->Find(name)) {
-        sym->setAddr(val);
-        sym->tag = tag;
-        return sym;
-    }
-
-    auto sym = NewConstant(name, {}, val, sGLOBAL, tag);
-    globals->Add(sym);
-    return sym;
-}
-
-symbol*
 DefineConstant(SemaContext& sc, Atom* name, const token_pos_t& pos, cell val, int vclass,
                int tag)
 {

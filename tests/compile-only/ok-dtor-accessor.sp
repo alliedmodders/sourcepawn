@@ -1,8 +1,4 @@
-enum Handle {};
-
-native void CloseHandle(Handle hndl);
-
-using __intrinsics__.Handle;
+#include <handles>
 
 #define MAXPLAYERS 64
 

@@ -48,6 +48,7 @@
 #include "assembler.h"
 #include "code-generator.h"
 #include "compile-options.h"
+#include "lexer.h"
 #include "lexer-inl.h"
 #include "parser.h"
 #include "semantics.h"
@@ -74,6 +75,7 @@
 #    include <emscripten.h>
 #endif
 
+#include "builtin-generator.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
@@ -92,9 +94,8 @@ int pc_tag_string = 0;
 int pc_tag_bool = 0;
 
 static void setconfig(const char* root);
-static void setconstants(void);
-static void inst_datetime_defines(CompileContext& cc);
-static void inst_binary_name(CompileContext& cc, const std::string& binfile);
+static void inst_datetime_defines(BuiltinGenerator& gen);
+static void inst_binary_name(BuiltinGenerator& gen, const std::string& binfile);
 
 enum {
     TEST_PLAIN,  /* no parentheses */
@@ -119,6 +120,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
     ParseTree* tree = nullptr;
     bool ok = false;
     std::string ext;
+    BuiltinGenerator gen(cc);
 
     cc.CreateGlobalScope();
     cc.InitLexer();
@@ -137,7 +139,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 
     assert(options->source_files.size() == 1);
     {
-        auto sf = cc.sources()->Open(options->source_files[0]);
+        auto sf = cc.sources()->Open({}, options->source_files[0]);
         if (!sf) {
             report(417) << options->source_files[0];
             goto cleanup;
@@ -146,16 +148,22 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
         cc.set_inpf_org(sf);
     }
 
-    cc.lexer()->Init(cc.inpf_org());
+    // Add command-line defines.
+    for (const auto& pair : options->predefines)
+        gen.AddDefine(pair.first, pair.second);
+    cc.lexer()->AddFile(gen.Generate("<command-line>"));
 
-    for (const auto& pair : options->predefines) {
-        cc.lexer().get()->AddMacro(pair.first.c_str(), pair.second.c_str());
-    }
+    // Add builtin defines.
+    inst_binary_name(gen, cc.outfname());
+    inst_datetime_defines(gen);
 
-    setconstants(); /* set predefined constants and tagnames */
+    gen.AddBuiltinConstants();
+    gen.AddDefaultInclude();
 
-    inst_datetime_defines(cc);
-    inst_binary_name(cc, cc.outfname().c_str());
+    cc.lexer()->AddFile(gen.Generate("<built-in>"));
+
+    cc.lexer()->AddFile(cc.inpf_org());
+    cc.lexer()->Init();
 
     {
         Semantics sema(cc);
@@ -264,17 +272,15 @@ cleanup:
     return retcode;
 }
 
-static void inst_binary_name(CompileContext& cc, const std::string& binfile) {
+static void inst_binary_name(BuiltinGenerator& gen, const std::string& binfile) {
     fs::path binfile_path(binfile);
     fs::path binfile_name = binfile_path.filename();
 
-    cc.lexer()->AddMacro("__BINARY_PATH__", binfile_path.string().c_str());
-    cc.lexer()->AddMacro("__BINARY_NAME__", binfile_name.string().c_str());
+    gen.AddDefine("__BINARY_PATH__", StringizePath(binfile_path));
+    gen.AddDefine("__BINARY_NAME__", StringizePath(binfile_name.string()));
 }
 
-static void
-inst_datetime_defines(CompileContext& cc)
-{
+static void inst_datetime_defines(BuiltinGenerator& gen) {
     char date[64];
     char ltime[64];
     time_t td;
@@ -293,8 +299,8 @@ inst_datetime_defines(CompileContext& cc)
     strftime(ltime, 31, "\"%H:%M:%S\"", curtime);
 #endif
 
-    cc.lexer()->AddMacro("__DATE__", date);
-    cc.lexer()->AddMacro("__TIME__", ltime);
+    gen.AddDefine("__DATE__", date);
+    gen.AddDefine("__TIME__", ltime);
 }
 
 static fs::path GetProcessPath([[maybe_unused]] const char* root) {
@@ -354,20 +360,6 @@ void setcaption() {
     printf("SourcePawn Compiler %s\n", SM_VERSION_STRING);
     printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
     printf("Copyright (c) 2004-2021 AlliedModders LLC\n\n");
-}
-
-static void
-setconstants(void)
-{
-    auto& cc = CompileContext::get();
-    DefineConstant(cc, cc.atom("EOS"), 0, 0);
-    DefineConstant(cc, cc.atom("INVALID_FUNCTION"), 0, cc.types()->tag_null());
-    DefineConstant(cc, cc.atom("cellmax"), INT_MAX, 0);
-    DefineConstant(cc, cc.atom("cellmin"), INT_MIN, 0);
-
-    DefineConstant(cc, cc.atom("__Pawn"), VERSION_INT, 0);
-
-    DefineConstant(cc, cc.atom("debug"), 2, 0);
 }
 
 } // namespace sp

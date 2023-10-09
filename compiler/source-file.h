@@ -39,6 +39,8 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     SourceFile(const SourceFile&) = delete;
     SourceFile(SourceFile&&) = delete;
 
+    explicit SourceFile(const std::string& name, tr::string&& data);
+
     bool Read(unsigned char* target, int maxchars);
     int64_t Pos();
     void Reset(int64_t pos);
@@ -51,6 +53,7 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
 
     bool is_main_file() const { return is_main_file_; }
     void set_is_main_file() { is_main_file_ = true; }
+    bool is_builtin() const { return is_builtin_; }
 
     bool included() const { return included_; }
     void set_included() { included_ = true; }
@@ -79,6 +82,7 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     size_t pos_;
     bool is_main_file_ = false;
     bool included_ = false;
+    bool is_builtin_ = false;
     ke::Maybe<uint32_t> sources_index_;
     tr::vector<uint32_t> line_extents_;
 };

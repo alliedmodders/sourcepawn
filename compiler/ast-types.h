@@ -31,7 +31,6 @@
     FOR_EACH(PstructDecl) \
     FOR_EACH(TypedefDecl) \
     FOR_EACH(TypesetDecl) \
-    FOR_EACH(UsingDecl) \
     FOR_EACH(IfStmt) \
     FOR_EACH(ExprStmt) \
     FOR_EACH(ReturnStmt) \

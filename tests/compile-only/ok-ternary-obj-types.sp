@@ -1,4 +1,5 @@
-using __intrinsics__.Handle;
+#include <handles>
+
 methodmap ArrayList < Handle {
 	public ArrayList() { return view_as<ArrayList>(1); }
 }
