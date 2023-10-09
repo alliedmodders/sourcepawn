@@ -361,7 +361,7 @@ setconstants(void)
 {
     auto& cc = CompileContext::get();
     DefineConstant(cc, cc.atom("EOS"), 0, 0);
-    DefineConstant(cc, cc.atom("INVALID_FUNCTION"), -1, cc.types()->tag_nullfunc());
+    DefineConstant(cc, cc.atom("INVALID_FUNCTION"), 0, cc.types()->tag_null());
     DefineConstant(cc, cc.atom("cellmax"), INT_MAX, 0);
     DefineConstant(cc, cc.atom("cellmin"), INT_MIN, 0);
 

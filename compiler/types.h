@@ -384,7 +384,6 @@ class TypeDictionary
             callback(type);
     }
 
-    Type* type_nullfunc() const { return type_nullfunc_; }
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
     Type* type_function() const { return type_function_; }
@@ -394,7 +393,6 @@ class TypeDictionary
     Type* type_bool() const { return type_bool_; }
     Type* type_string() const { return type_string_; }
 
-    int tag_nullfunc() const { return type_nullfunc_->tagid(); }
     int tag_object() const { return type_object_->tagid(); }
     int tag_null() const { return type_null_->tagid(); }
     int tag_function() const { return type_function_->tagid(); }
@@ -414,7 +412,6 @@ class TypeDictionary
     tr::unordered_map<Atom*, Type*> types_;
     tr::unordered_map<int, Type*> tags_;
     Type* type_int_ = nullptr;
-    Type* type_nullfunc_ = nullptr;
     Type* type_object_ = nullptr;
     Type* type_null_ = nullptr;
     Type* type_function_ = nullptr;

@@ -280,7 +280,8 @@ SmxV1Image::validateCode()
 
   uint32_t supported_features =
     SmxConsts::kCodeFeatureDirectArrays |
-    SmxConsts::kCodeFeatureHeapScopes;
+    SmxConsts::kCodeFeatureHeapScopes |
+    SmxConsts::kCodeFeatureNullFunctions;
   if (features & ~supported_features)
     return error("unsupported feature set; code is too new");
 

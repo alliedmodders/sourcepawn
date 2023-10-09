@@ -178,7 +178,7 @@ static const char* errmsg[] = {
     /*151*/ "unmatched opening brace ('{') (line %d)\n",
     /*152*/ "no setter found for property %s\n",
     /*153*/ "Array-based enum structs have been removed. See https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Enum_Structs\n",
-    /*154*/ "cannot assign INVALID_FUNCTION to a non-function type\n",
+    /*154*/ "unused154\n",
     /*155*/ "expected newline, but found '%s'\n",
     /*156*/ "invalid 'using' declaration\n",
     /*157*/ "'%s' is a reserved keyword\n",

@@ -1101,14 +1101,43 @@ PluginContext::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t
   return true;
 }
 
-void
-PluginContext::EnterHeapScope()
-{
+void PluginContext::EnterHeapScope() {
   enterHeapScope();
 }
 
-void
-PluginContext::LeaveHeapScope()
-{
+void PluginContext::LeaveHeapScope() {
   leaveHeapScope();
+}
+
+cell_t PluginContext::GetNullFunctionValue() {
+  auto image = runtime()->image();
+  if (image->DescribeCode().features & SmxConsts::kCodeFeatureNullFunctions) {
+    return 0;
+  }
+  return -1;
+}
+
+bool PluginContext::IsNullFunctionId(funcid_t func) {
+  return func == GetNullFunctionValue();
+}
+
+bool PluginContext::GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) {
+  if (IsNullFunctionId(func)) {
+    *out = nullptr;
+    return true;
+  }
+
+  *out = GetFunctionById(func);
+  if (!*out) {
+    ReportError("Invalid function id: 0x%08x", func);
+    return false;
+  }
+  return true;
+}
+
+IPluginFunction* PluginContext::GetFunctionByIdOrError(funcid_t func_id) {
+  if (auto fn = GetFunctionById(func_id))
+    return fn;
+  ReportError("Invalid function id: 0x%08x", func_id);
+  return nullptr;
 }

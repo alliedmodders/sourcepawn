@@ -290,20 +290,9 @@ matchobjecttags(Type* formal, Type* actual, int flags)
         return FALSE;
     }
 
-    if (actualtag == types->tag_nullfunc()) {
-        // All functions are nullable. We use a separate constant for backward
-        // compatibility; plugins and extensions check -1, not 0.
-        if (formal->isFunction())
-            return TRUE;
-
-        if (!(flags & MATCHTAG_SILENT))
-            report(154) << pc_tagname(formaltag);
-        return FALSE;
-    }
-
     if (actualtag == types->tag_null()) {
         // All objects are nullable.
-        if (formal->isObject())
+        if (formal->isFunction() || formal->isObject())
             return TRUE;
 
         // Some methodmaps are nullable. The nullable property is inherited
@@ -427,7 +416,7 @@ matchfunctags(Type* formal, Type* actual)
     if (formaltag == types->tag_function() && actual->isFunction())
         return TRUE;
 
-    if (actualtag == types->tag_nullfunc())
+    if (actualtag == types->tag_null())
         return TRUE;
 
     if (!actual->isFunction())

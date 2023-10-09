@@ -131,7 +131,6 @@ TypeDictionary::init()
     type_void_ = defineVoid();
     type_object_ = defineObject("object");
     type_null_ = defineObject("null_t");
-    type_nullfunc_ = defineObject("nullfunc_t");
 }
 
 Type*

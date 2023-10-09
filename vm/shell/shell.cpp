@@ -185,11 +185,12 @@ static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
   int32_t ok = 0;
   for (size_t i = 0; i < size_t(params[2]); i++) {
-    if (IPluginFunction* fn = cx->GetFunctionById(params[1])) {
-      if (fn->Execute(nullptr) != SP_ERROR_NONE)
-        continue;
-      ok++;
-    }
+    IPluginFunction* fn;
+    if (!cx->GetFunctionByIdOrNull(params[1], &fn) || !fn)
+      return 0;
+    if (fn->Execute(nullptr) != SP_ERROR_NONE)
+      continue;
+    ok++;
   }
   return ok;
 }
@@ -197,10 +198,11 @@ static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 static cell_t DoInvoke(IPluginContext* cx, const cell_t* params)
 {
   for (size_t i = 0; i < size_t(params[2]); i++) {
-    if (IPluginFunction* fn = cx->GetFunctionById(params[1])) {
-      if (!fn->Invoke())
-        return 0;
-    }
+    IPluginFunction* fn;
+    if (!cx->GetFunctionByIdOrNull(params[1], &fn) || !fn)
+      return 0;
+    if (!fn->Invoke())
+      return 0;
   }
   return 1;
 }
