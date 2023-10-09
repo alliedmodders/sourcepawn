@@ -1,4 +1,4 @@
-using __intrinsics__.Handle;
+#include <handles>
 
 enum Crab {};
 

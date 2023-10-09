@@ -1,5 +1,4 @@
-native void CloseHandle(Handle:hndl);
-using __intrinsics__.Handle;
+#include <handles>
 
 methodmap Crab < Handle
 {

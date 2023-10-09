@@ -335,7 +335,6 @@ struct value {
 void AddGlobal(CompileContext& cc, symbol* sym);
 
 void DefineSymbol(SemaContext& sc, symbol* sym);
-symbol* DefineConstant(CompileContext& cc, Atom* name, cell val, int tag);
 symbol* DefineConstant(SemaContext& sc, Atom* name, const token_pos_t& pos, cell val,
                        int vclass, int tag);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
@@ -345,7 +344,6 @@ symbol* NewVariable(Atom* name, cell addr, IdentifierKind ident, int vclass, int
                     int dim[], int numdim, int semantic_tag);
 symbol* FindEnumStructField(Type* type, Atom* name);
 void deduce_liveness(CompileContext& cc);
-void declare_handle_intrinsics();
 symbol* declare_methodmap_symbol(CompileContext& cc, methodmap_t* map);
 
 } // namespace sp

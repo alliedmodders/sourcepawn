@@ -529,19 +529,6 @@ class TypesetDecl : public Decl
     funcenum_t* fe_ = nullptr;
 };
 
-class UsingDecl : public Decl
-{
-  public:
-    explicit UsingDecl(const token_pos_t& pos)
-      : Decl(StmtKind::UsingDecl, pos, nullptr)
-    {}
-
-    bool EnterNames(SemaContext& sc) override;
-    void ProcessUses(SemaContext& sc) override {}
-
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::UsingDecl; }
-};
-
 class Expr : public ParseNode
 {
   public:
@@ -1689,6 +1676,8 @@ struct MethodmapProperty : public PoolObject {
 
 struct MethodmapMethod : public PoolObject {
     bool is_static = false;
+    bool is_ctor = false;
+    bool is_dtor = false;
     FunctionDecl* decl = nullptr;
     methodmap_method_t* entry = nullptr;
 };

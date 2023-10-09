@@ -1,6 +1,6 @@
 native Handle:CreateHandle();
 
-using __intrinsics__.Handle;
+#include <handles>
 
 public main()
 {

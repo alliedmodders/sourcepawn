@@ -350,13 +350,6 @@ TypedefDecl::Bind(SemaContext& sc)
     return true;
 }
 
-bool
-UsingDecl::EnterNames(SemaContext& sc)
-{
-    declare_handle_intrinsics();
-    return true;
-}
-
 functag_t*
 TypedefInfo::Bind(SemaContext& sc)
 {
@@ -1001,6 +994,8 @@ FunctionDecl::BindArgs(SemaContext& sc)
         } else {
             Expr* init = var->init_rhs();
             if (init && sc.sema()->CheckExpr(init)) {
+                AutoErrorPos pos(init->pos());
+
                 assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
                 var->set_default_value(new DefaultArg());
 
@@ -1261,17 +1256,18 @@ MethodmapDecl::EnterNames(SemaContext& sc)
 {
     AutoErrorPos error_pos(pos_);
 
-    if (auto type = sc.cc().types()->find(name_)) {
+    auto& cc = sc.cc();
+    if (auto type = cc.types()->find(name_)) {
         if (!type->isEnum()) {
             report(pos_, 432) << name_ << type->kindName();
             return false;
         }
     }
 
-    map_ = methodmap_add(sc.cc(), nullptr, name_);
-    sc.cc().types()->defineMethodmap(name_->chars(), map_);
+    map_ = methodmap_add(cc, nullptr, name_);
+    cc.types()->defineMethodmap(name_->chars(), map_);
 
-    sym_ = declare_methodmap_symbol(sc.cc(), map_);
+    sym_ = declare_methodmap_symbol(cc, map_);
     if (!sym_)
         return false;
 
@@ -1296,7 +1292,21 @@ MethodmapDecl::EnterNames(SemaContext& sc)
 
         auto m = new methodmap_method_t(map_);
         m->name = method->decl->decl_name();
-        if (m->name == map_->name) {
+
+        if (method->is_dtor) {
+            if (map_->dtor) {
+                report(method->decl->pos(), 154) << method->decl->name();
+                continue;
+            }
+
+            if (method->decl->decl_name() != map_->name)
+                report(method->decl->pos(), 440);
+
+            // Hack: modify name.
+            method->decl->decl().name = cc.atom("~" + map_->name->str());
+
+            map_->dtor = m;
+        } else if (method->is_ctor) {
             if (map_->ctor) {
                 report(method->decl->pos(), 113) << method->decl->name();
                 continue;
@@ -1310,9 +1320,7 @@ MethodmapDecl::EnterNames(SemaContext& sc)
     return true;
 }
 
-bool
-MethodmapDecl::Bind(SemaContext& sc)
-{
+bool MethodmapDecl::Bind(SemaContext& sc) {
     AutoCountErrors errors;
 
     methodmap_t* extends_map = nullptr;
@@ -1336,6 +1344,8 @@ MethodmapDecl::Bind(SemaContext& sc)
     map_->parent = extends_map;
     if (map_->parent)
         map_->nullable = map_->parent->nullable;
+    else
+        map_->nullable = nullable_;
 
     map_->is_bound = true;
 
@@ -1365,26 +1375,36 @@ MethodmapDecl::Bind(SemaContext& sc)
     }
 
     for (const auto& method : methods_) {
-        bool is_ctor = false;
-        if (method->decl->decl_name() == map_->name) {
+        if (method->is_ctor) {
             // Constructors may not be static.
-            if (method->is_static) {
+            if (method->is_static)
                 report(method->decl->pos(), 175);
-                continue;
-            }
-            is_ctor = true;
 
             auto& type = method->decl->mutable_type();
             type.set_tag(map_->tag);
             type.ident = iVARIABLE;
             type.is_new = true;
+        } else if (method->is_dtor) {
+            if (method->decl->is_static())
+                report(method->decl->pos(), 441);
+            if (method->decl->args().size() > 1)
+                report(method->decl->pos(), 438);
+            if (!method->decl->is_native())
+                report(method->decl->pos(), 118);
+
+            auto& type = method->decl->mutable_type();
+            if (type.ident != 0)
+                report(method->decl->pos(), 439);
+            type.set_tag(sc.cc().types()->tag_void());
+            type.is_new = true;
+            type.ident = iVARIABLE;
         } else if (method->decl->type().ident == 0) {
             // Parsed as a constructor, but not using the map name. This is illegal.
             report(method->decl->pos(), 114) << "constructor" << "methodmap" << map_->name;
             continue;
         }
 
-        if (!method->is_static && !is_ctor)
+        if (!method->is_static && !method->is_ctor)
             method->decl->set_this_tag(map_->tag);
 
         if (!method->decl->Bind(sc))

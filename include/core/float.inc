@@ -26,14 +26,7 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
- 
-#if defined _core_float_included
- #endinput
-#endif
-#define _core_float_included
 
 #if !defined __sourcepawn2__
 native float __float_ctor(int value);

@@ -58,7 +58,6 @@ class Parser
     Decl* parse_pstruct();
     Decl* parse_typedef();
     Decl* parse_typeset();
-    Decl* parse_using();
     Decl* parse_enumstruct();
     Decl* parse_methodmap();
     MethodmapMethod* parse_methodmap_method(MethodmapDecl* map);

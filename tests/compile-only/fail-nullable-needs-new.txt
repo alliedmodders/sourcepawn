@@ -1,1 +1,1 @@
-(11) : error 170: creating new object 'Crab' requires using 'new' before its constructor
+(10) : error 170: creating new object 'Crab' requires using 'new' before its constructor

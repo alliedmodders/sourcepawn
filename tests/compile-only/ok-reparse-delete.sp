@@ -1,5 +1,4 @@
-native void CloseHandle(Handle:handle);
-using __intrinsics__.Handle;
+#include <handles>
 
 stock Crab(Handle h)
 {

@@ -138,7 +138,6 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         case StmtKind::PstructDecl:
         case StmtKind::TypedefDecl:
         case StmtKind::TypesetDecl:
-        case StmtKind::UsingDecl:
             return true;
         default:
             assert(false);

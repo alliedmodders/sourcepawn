@@ -25,6 +25,7 @@
 #include <deque>
 
 #include <amtl/am-raii.h>
+#include "builtin-generator.h"
 #include "compile-options.h"
 #include "errors.h"
 #include "lexer.h"
@@ -59,11 +60,6 @@ Parser::Parse()
     });
 
     std::vector<Stmt*> stmts;
-
-    if (!cc_.default_include().empty()) {
-        auto incfname = cc_.default_include();
-        lexer_->PlungeFile(incfname, FALSE, TRUE);
-    }
 
     // Prime the lexer.
     lexer_->Start();
@@ -131,9 +127,6 @@ Parser::Parse()
             case tMETHODMAP:
                 decl = parse_methodmap();
                 break;
-            case tUSING:
-                decl = parse_using();
-                break;
             case tSYN_PRAGMA_UNUSED:
                 // These get added to the end so they can bind before use.
                 if (auto decl = parse_pragma_unused())
@@ -144,7 +137,8 @@ Parser::Parse()
                 if (!lexer_->need(tSYN_INCLUDE_PATH))
                     break;
                 auto name = lexer_->current_token()->data();
-                auto result = lexer_->PlungeFile(name.substr(1), (name[0] != '<'), TRUE);
+                auto pos = lexer_->current_token()->start;
+                auto result = lexer_->PlungeFile(pos, name.substr(1), (name[0] != '<'), TRUE);
                 if (!result && tok != tpTRYINCLUDE) {
                     report(417) << name.substr(1);
                     cc_.set_must_abort();
@@ -569,38 +563,6 @@ Parser::parse_typeset()
 
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return new TypesetDecl(pos, ident, types);
-}
-
-Decl*
-Parser::parse_using()
-{
-    auto pos = lexer_->pos();
-
-    auto validate = [this]() -> bool {
-        Atom* ident;
-        if (!lexer_->needsymbol(&ident))
-            return false;
-        if (strcmp(ident->chars(), "__intrinsics__") != 0) {
-            report(156);
-            return false;
-        }
-        if (!lexer_->need('.'))
-            return false;
-        if (!lexer_->needsymbol(&ident))
-            return false;
-        if (strcmp(ident->chars(), "Handle") != 0) {
-            report(156);
-            return false;
-        }
-        return true;
-    };
-    if (!validate()) {
-        lexer_->lexclr(TRUE);
-        return nullptr;
-    }
-
-    lexer_->require_newline(TerminatorPolicy::Semicolon);
-    return new UsingDecl(pos);
 }
 
 Stmt*
@@ -1075,6 +1037,8 @@ Parser::constant()
             return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 1);
         case tFALSE:
             return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 0);
+        case tINVALID_FUNCTION:
+            return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_null(), 0);
         case '{':
         {
             std::vector<Expr*> exprs;
@@ -1935,17 +1899,14 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
 
     bool is_static = lexer_->match(tSTATIC);
     bool is_native = lexer_->match(tNATIVE);
+    bool is_dtor = lexer_->match('~');
 
     Atom* symbol = nullptr;
     full_token_t symbol_tok;
     if (lexer_->matchsymbol(&symbol))
         symbol_tok = *lexer_->current_token();
 
-    if (lexer_->match('~'))
-        report(118);
-
     declinfo_t ret_type = {};
-
     if (symbol && lexer_->match('(')) {
         // ::= ident '('
 
@@ -1991,7 +1952,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     }
 
     bool has_this = false;
-    if (ret_type.type.ident != 0 && !is_static)
+    if (is_dtor || (ret_type.type.ident != 0 && !is_static))
         has_this = true;
 
     ke::SaveAndSet<bool> require_newdecls(&lexer_->require_newdecls(), true);
@@ -2001,6 +1962,8 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     // Use the short name for the function decl
     auto method = new MethodmapMethod;
     method->is_static = is_static;
+    method->is_dtor = is_dtor;
+    method->is_ctor = (!is_dtor && map->name() == symbol);
     method->decl = fun;
 
     if (is_native)

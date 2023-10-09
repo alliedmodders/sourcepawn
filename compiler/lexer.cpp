@@ -73,13 +73,18 @@ static constexpr int kLitcharUtf8 = 0x1;
 // Do not error, because the characters are being ignored.
 static constexpr int kLitcharSkipping = 0x2;
 
-bool Lexer::PlungeQualifiedFile(const std::string& name) {
-    auto fp = OpenFile(name);
+bool Lexer::PlungeQualifiedFile(const token_pos_t& from, const std::string& name) {
+    auto fp = OpenFile(from, name);
     if (!fp)
         return false;
     if (fp->included())
         return true;
 
+    PlungeFile(fp);
+    return true;
+}
+
+void Lexer::PlungeFile(std::shared_ptr<SourceFile> fp) {
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
 
@@ -91,23 +96,21 @@ bool Lexer::PlungeQualifiedFile(const std::string& name) {
     }
 
     auto pos = current_token()->start;
-
     state_.entry_preproc_if_stack_size = ifstack_.size();
     PushLexerState();
     EnterFile(std::move(fp), pos);
-    return true;
 }
 
-std::shared_ptr<SourceFile> Lexer::OpenFile(const std::string& name) {
+std::shared_ptr<SourceFile> Lexer::OpenFile(const token_pos_t& from, const std::string& name) {
     AutoCountErrors detect_errors;
 
-    if (auto sf = cc_.sources()->Open(name))
+    if (auto sf = cc_.sources()->Open(from, name))
         return sf;
 
     static const std::vector<std::string> extensions = {".inc", ".p", ".pawn"};
     for (const auto& extension : extensions) {
         auto alt_name = name + extension;
-        if (auto sf = cc_.sources()->Open(alt_name))
+        if (auto sf = cc_.sources()->Open(from, alt_name))
             return sf;
         if (!detect_errors.ok())
             return nullptr;
@@ -116,10 +119,11 @@ std::shared_ptr<SourceFile> Lexer::OpenFile(const std::string& name) {
 }
 
 bool
-Lexer::PlungeFile(const std::string& name, int try_currentpath, int try_includepaths)
+Lexer::PlungeFile(const token_pos_t& from, const std::string& name, int try_currentpath,
+                  int try_includepaths)
 {
     if (try_currentpath) {
-        if (PlungeQualifiedFile(name))
+        if (PlungeQualifiedFile(from, name))
             return true;
 
         // failed to open the file in the active directory, try to open the file
@@ -129,7 +133,7 @@ Lexer::PlungeFile(const std::string& name, int try_currentpath, int try_includep
         auto parent_path = current_path.parent_path();
         if (!parent_path.empty()) {
             auto new_path = parent_path / name;
-            if (PlungeQualifiedFile(new_path.string()))
+            if (PlungeQualifiedFile(from, new_path.string()))
                 return true;
         }
     }
@@ -138,7 +142,7 @@ Lexer::PlungeFile(const std::string& name, int try_currentpath, int try_includep
         auto& cc = CompileContext::get();
         for (const auto& inc_path : cc.options()->include_paths) {
             auto path = fs::path(inc_path) / fs::path(name);
-            if (PlungeQualifiedFile(path.string()))
+            if (PlungeQualifiedFile(from, path.string()))
                 return true;
         }
     }
@@ -156,8 +160,11 @@ std::string StringizePath(const fs::path& in_path) {
     return path;
 }
 
-void Lexer::SetFileDefines(const std::string& file) {
-    fs::path path = fs::canonical(file);
+void Lexer::SetFileDefines(const std::shared_ptr<SourceFile> file) {
+    if (file->is_builtin())
+        return;
+
+    fs::path path = fs::canonical(file->name());
 
     auto full_path = StringizePath(path);
     auto name = StringizePath(path.filename());
@@ -853,8 +860,15 @@ bool Lexer::MaybeHandleLineContinuation() {
     return true;
 }
 
+// Returns true if the EOF resulted in a file change.
 void Lexer::HandleEof() {
     assert(!more());
+
+    if (prev_state_.empty() && !file_queue_.empty()) {
+        auto file = ke::PopFront(&file_queue_);
+        EnterFile(std::move(file), {});
+        return;
+    }
 
     if (prev_state_.empty()) {
         freading_ = false;
@@ -896,7 +910,7 @@ void Lexer::HandleEof() {
         assert(skiplevel_ == ifstack_.size());
 
         assert(!IsSkipping());   /* idem ditto */
-        SetFileDefines(state_.inpf->name());
+        SetFileDefines(state_.inpf);
     }
 }
 
@@ -1112,6 +1126,7 @@ const char* sc_tokens[] = {"*=",
                            "int64",
                            "interface",
                            "intn",
+                           "INVALID_FUNCTION",
                            "let",
                            "methodmap",
                            "namespace",
@@ -1183,7 +1198,8 @@ const char* sc_tokens[] = {"*=",
                            "-include-path-",
                            "-end of line-",
                            "-declaration-",
-                           "-macro"};
+                           "-macro-",
+                           "-maybe-label-"};
 
 Lexer::Lexer(CompileContext& cc)
   : cc_(cc)
@@ -1208,8 +1224,16 @@ Lexer::~Lexer() {
     }
 }
 
-void Lexer::Init(std::shared_ptr<SourceFile> sf) {
+void Lexer::AddFile(std::shared_ptr<SourceFile> sf) {
+    file_queue_.emplace_back(std::move(sf));
+}
+
+void Lexer::Init() {
+    assert(!file_queue_.empty());
+
     freading_ = true;
+
+    auto sf = ke::PopFront(&file_queue_);
     EnterFile(std::move(sf), {});
 }
 
@@ -2272,39 +2296,6 @@ bool Lexer::DeleteMacro(Atom* atom) {
     return true;
 }
 
-void
-declare_handle_intrinsics()
-{
-    // Must not have an existing Handle methodmap.
-    auto& cc = CompileContext::get();
-    Atom* handle_atom = cc.atom("Handle");
-    if (methodmap_find_by_name(handle_atom)) {
-        report(156);
-        return;
-    }
-
-    methodmap_t* map = methodmap_add(cc, nullptr, handle_atom);
-    map->nullable = true;
-
-    declare_methodmap_symbol(cc, map);
-
-    auto atom = cc.atom("CloseHandle");
-    if (auto sym = FindSymbol(cc.globals(), atom)) {
-        auto dtor = new methodmap_method_t(map);
-        dtor->target = sym;
-        dtor->name = cc.atom("~Handle");
-        map->dtor = dtor;
-        map->methods.emplace(dtor->name, dtor);
-
-        auto close = new methodmap_method_t(map);
-        close->target = sym;
-        close->name = cc.atom("Close");
-        map->methods.emplace(close->name, close);
-    }
-
-    map->is_bound = true;
-}
-
 DefaultArg::~DefaultArg()
 {
     delete array;
@@ -2332,7 +2323,7 @@ void Lexer::EnterFile(std::shared_ptr<SourceFile>&& sf, const token_pos_t& from)
     state_.pos = state_.start;
     state_.line_start = state_.pos;
     SkipUtf8Bom();
-    SetFileDefines(state_.inpf->name());
+    SetFileDefines(state_.inpf);
 
     state_.inpf->set_included();
 
