@@ -25,7 +25,7 @@ static const cell_t STACK_MARGIN = 64; // 16 parameters of safety, I guess
 class Environment;
 class PluginContext;
 
-class PluginContext : public BasePluginContext
+class PluginContext final : public BasePluginContext
 {
  public:
   PluginContext(PluginRuntime* pRuntime);
@@ -61,6 +61,10 @@ class PluginContext : public BasePluginContext
                         const cell_t* init) override;
   void EnterHeapScope() override;
   void LeaveHeapScope() override;
+  cell_t GetNullFunctionValue() override;
+  bool IsNullFunctionId(funcid_t func) override;
+  bool GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) override;
+  IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
   bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
 
   size_t HeapSize() const {

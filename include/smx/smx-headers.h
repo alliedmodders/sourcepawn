@@ -78,6 +78,9 @@ struct SmxConsts {
 
     // This feature adds the HEAP_SAVE and HEAP_RESTORE opcodes.
     static const uint32_t kCodeFeatureHeapScopes = (1 << 2);
+
+    // This feature indicates that INVALID_FUNCTION is null (0) instead of -1.
+    static const uint32_t kCodeFeatureNullFunctions = (1 << 3);
 };
 
 // These structures are byte-packed.

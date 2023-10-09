@@ -475,7 +475,7 @@ class IPluginRuntime
     virtual IPluginFunction* GetFunctionByName(const char* public_name) = 0;
 
     /**
-     * @brief Returns a function by its id.
+     * @brief Deprecated. Use GetFunctionByIdOrNull or GetFunctionByIdOrError instead.
      *
      * @param func_id      Function ID.
      * @return          A new IPluginFunction pointer, NULL if not found.
@@ -1198,6 +1198,38 @@ class IPluginContext
      * EnterHeapScope.
      */
     virtual void LeaveHeapScope() = 0;
+
+    /**
+     * @brief Returns the value of a null function. If kCodeFeatureNullFunction
+     * is set, this returns 0. If unset, this returns -1, the legacy value.
+     */
+    virtual cell_t GetNullFunctionValue() = 0;
+
+    /**
+     * @brief Returns whether the value is a null function.
+     */
+    virtual bool IsNullFunctionId(funcid_t func) = 0;
+
+    /**
+     * @brief Convert a funcid_t to an IPluginFunction, reporting an error if
+     * the function is invalid. funcid_t can be INVALID_FUNCTION.
+     *
+     * If |func| is non-null and valid, |out| is set to the function and true
+     * is returned.
+     *
+     * If |func| is non-null and invalid, |out| is set to null, false is
+     * returned, and an error is reported.
+     *
+     * If |func| is GetNullFunctionValue(), |out| is set to null and true is
+     * returned.
+     */
+    virtual bool GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) = 0;
+
+    /**
+     * @brief Convert a funcid_t to an IPluginFunction, reporting an error if
+     * the function is invalid or null.
+     */
+    virtual IPluginFunction* GetFunctionByIdOrError(funcid_t func) = 0;
 };
 
 class AutoEnterHeapScope

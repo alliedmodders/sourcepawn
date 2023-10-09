@@ -185,3 +185,14 @@ Also as of this release, both the compiler and VM can run on non-x86 platforms
 ### SourcePawn 1.12
 
 SourcePawn 1.12 is currently in development.
+
+This release contains a number of bug fixes and internal improvements. It also greatly improves
+error message readability in the style of modern compilers.
+
+This release contains a number of language changes.
+ - Function bodies must now be braced. There is no compatibility mode for this change.
+ - `INVALID_FUNCTION` is now type `null_t`. The old internal type `nullfunc_t` has been removed.
+   `INVALID_FUNCTION` and `null` are now equivalent, which means code manually checking for `-1`
+    will not work. There are three functions added to `IPluginContext` to help native code with
+    this change: `GetNullFunctionValue()`, `IsNullFunctionId()`, and `GetFunctionByIdOrNull()`.
+ - Warnings around indentation have been removed.
