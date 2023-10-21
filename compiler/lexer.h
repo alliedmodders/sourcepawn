@@ -331,6 +331,9 @@ class Lexer
     // be replayed by lex().
     void InjectCachedTokens(TokenCache* cache);
 
+    // Throw away tokens injected by InjectCachedTokens().
+    void DiscardCachedTokens();
+
     full_token_t lex_tok() {
         lex();
         return *current_token();
@@ -344,7 +347,7 @@ class Lexer
     bool& allow_tags() { return allow_tags_; }
     bool& require_newdecls() { return state_.require_newdecls; }
     bool& need_semicolon() { return state_.need_semicolon; }
-    bool freading() const { return freading_; }
+    bool freading() const;
     int fcurrent() const { return state_.inpf->sources_index(); }
     unsigned fline() const { return state_.fline; }
     SourceFile* inpf() const { return state_.inpf.get(); }
@@ -513,9 +516,13 @@ class Lexer
 
     LexerState state_;
     tr::vector<LexerState> prev_state_;
-    ke::InlineList<TokenCache> token_caches_;
-    std::deque<full_token_t> injected_token_stream_;
+
+    // Set if tokens are being lexed into a new token cache.
     bool caching_tokens_ = false;
+    ke::InlineList<TokenCache> token_caches_;
+
+    std::deque<full_token_t> injected_token_stream_;
+    bool using_injected_tokens_ = false;
 };
 
 std::string StringizePath(const std::filesystem::path& in_path);
