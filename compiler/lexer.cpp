@@ -83,6 +83,13 @@ bool Lexer::PlungeQualifiedFile(const std::string& name) {
     assert(!IsSkipping());
     assert(skiplevel_ == ifstack_.size()); /* these two are always the same when "parsing" */
 
+    // Save any lookahead tokens.
+    state_.token_buffer = token_buffer_;
+    while (token_buffer_->depth > 0) {
+        lexpop();
+        state_.saved_tokens.emplace_back(std::move(*current_token()));
+    }
+
     auto pos = current_token()->start;
 
     state_.entry_preproc_if_stack_size = ifstack_.size();
@@ -863,6 +870,8 @@ void Lexer::HandleEof() {
             macros_in_use_.erase(p);
     }
 
+    state_ = ke::PopBack(&prev_state_);
+
     // Restore any saved tokens.
     if (state_.token_buffer) {
         ke::SaveAndSet<token_buffer_t*> switch_buffers(&token_buffer_, state_.token_buffer);
@@ -874,9 +883,10 @@ void Lexer::HandleEof() {
         }
         for (size_t i = 0; i < state_.saved_tokens.size(); i++)
             lexpush();
-    }
 
-    state_ = ke::PopBack(&prev_state_);
+        state_.token_buffer = nullptr;
+        state_.saved_tokens.clear();
+    }
 
     /* this condition held before including the file */
     if (!was_in_macro) {
@@ -2459,6 +2469,8 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
 
     PushLexerState();
 
+    auto& prev_state = prev_state_.back();
+
     Atom* text = nullptr;
     if (macro->args) {
         // Atomization is important here since it keeps the macro text alive
@@ -2475,16 +2487,16 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
     state_.line_start = state_.start;
     state_.pos = state_.start;
     state_.macro = macro;
-    state_.inpf = prev_state_.back().inpf;
-    state_.fline = prev_state_.back().fline;
-    state_.tokline = prev_state_.back().tokline;
+    state_.inpf = prev_state.inpf;
+    state_.fline = prev_state.fline;
+    state_.tokline = prev_state.tokline;
     state_.loc_range = cc_.sources()->EnterMacro(macro->pos, expansion_pos, text);
 
     // Save any tokens we peeked ahead.
-    state_.token_buffer = token_buffer_;
+    prev_state.token_buffer = token_buffer_;
     while (token_buffer_->depth > 0) {
         lexpop();
-        state_.saved_tokens.emplace_back(std::move(*current_token()));
+        prev_state.saved_tokens.emplace_back(std::move(*current_token()));
     }
 
     macros_in_use_.emplace(macro.get());
