@@ -1319,10 +1319,19 @@ int Lexer::lex() {
         return current_token()->id;
     }
 
-    if (!injected_token_stream_.empty())
-        return LexInjectedToken();
+    if (using_injected_tokens_) {
+        if (!injected_token_stream_.empty())
+            return LexInjectedToken();
+        return 0;
+    }
 
     return LexNewToken();
+}
+
+bool Lexer::freading() const {
+    if (using_injected_tokens_)
+        return !injected_token_stream_.empty();
+    return freading_;
 }
 
 int Lexer::LexNewToken() {
@@ -2579,6 +2588,7 @@ void Lexer::AssertCleanState() {
     assert(!in_string_continuation_);
     assert(allow_tags_);
     assert(injected_token_stream_.empty());
+    assert(!using_injected_tokens_);
 }
 
 TokenCache* Lexer::LexFunctionBody() {
@@ -2620,10 +2630,16 @@ void Lexer::InjectCachedTokens(TokenCache* cache) {
     AssertCleanState();
 
     injected_token_stream_ = std::move(cache->tokens);
+    using_injected_tokens_ = true;
     token_caches_.remove(cache);
     delete cache;
 
     freading_ = true;
+}
+
+void Lexer::DiscardCachedTokens() {
+    using_injected_tokens_ = false;
+    injected_token_stream_.clear();
 }
 
 } // namespace sp

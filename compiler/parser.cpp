@@ -193,8 +193,16 @@ Parser::Parse()
                                              tokens->need_semicolon);
 
         lexer_->InjectCachedTokens(tokens);
-        auto body = parse_stmt(false);
-        fun->set_body(BlockStmt::WrapStmt(body));
+
+        AutoCountErrors errors;
+        if (auto body = parse_stmt(false)) {
+            fun->set_body(BlockStmt::WrapStmt(body));
+
+            // If there were no errors, we should have consumed every token.
+            assert(!errors.ok() || !lexer_->freading());
+        }
+
+        lexer_->DiscardCachedTokens();
     }
 
     auto list = new StmtList(token_pos_t{}, stmts);
