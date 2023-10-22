@@ -393,7 +393,7 @@ Parser::parse_enum(int vclass)
         lexer_->need(')');
     }
 
-    std::vector<EnumField> fields;
+    std::vector<EnumFieldDecl*> fields;
 
     lexer_->need('{');
 
@@ -424,7 +424,7 @@ Parser::parse_enum(int vclass)
             value = hier14();
 
         if (field_name)
-            fields.push_back(EnumField(pos, field_name, value));
+            fields.push_back(new EnumFieldDecl(pos, field_name, value));
     } while (lexer_->match(','));
 
     lexer_->need('}');

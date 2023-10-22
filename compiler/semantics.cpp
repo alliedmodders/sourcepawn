@@ -135,6 +135,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         case StmtKind::ContinueStmt:
             return CheckContinueStmt(stmt->to<ContinueStmt>());
         case StmtKind::EnumDecl:
+        case StmtKind::EnumFieldDecl:
         case StmtKind::PstructDecl:
         case StmtKind::TypedefDecl:
         case StmtKind::TypesetDecl:

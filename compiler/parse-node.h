@@ -389,20 +389,29 @@ class ConstDecl : public VarDecl
     Expr* expr_;
 };
 
-struct EnumField {
-    EnumField(const token_pos_t& pos, Atom* name, Expr* value)
-      : pos(pos), name(name), value(value)
+class EnumFieldDecl : public Decl
+{
+  public:
+    EnumFieldDecl(const token_pos_t& pos, Atom* name, Expr* value)
+      : Decl(StmtKind::EnumFieldDecl, pos, name),
+        value_(value)
     {}
-    token_pos_t pos;
-    Atom* name;
-    Expr* value;
+
+    void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumFieldDecl; }
+
+    Expr* value() const { return value_; }
+
+  private:
+    Expr* value_;
 };
 
 class EnumDecl : public Decl
 {
   public:
     explicit EnumDecl(const token_pos_t& pos, int vclass, Atom* label, Atom* name,
-                      const std::vector<EnumField>& fields, int increment, int multiplier)
+                      const std::vector<EnumFieldDecl*>& fields, int increment, int multiplier)
       : Decl(StmtKind::EnumDecl, pos, name),
         vclass_(vclass),
         label_(label),
@@ -417,7 +426,7 @@ class EnumDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumDecl; }
 
-    PoolArray<EnumField>& fields() {
+    PoolArray<EnumFieldDecl*>& fields() {
         return fields_;
     }
     int increment() const {
@@ -430,7 +439,7 @@ class EnumDecl : public Decl
   private:
     int vclass_;
     Atom* label_;
-    PoolArray<EnumField> fields_;
+    PoolArray<EnumFieldDecl*> fields_;
     int increment_;
     int multiplier_;
 };

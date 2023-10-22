@@ -28,6 +28,7 @@
     FOR_EACH(VarDecl) \
     FOR_EACH(ArgDecl) \
     FOR_EACH(EnumDecl) \
+    FOR_EACH(EnumFieldDecl) \
     FOR_EACH(PstructDecl) \
     FOR_EACH(TypedefDecl) \
     FOR_EACH(TypesetDecl) \
