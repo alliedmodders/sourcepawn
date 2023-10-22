@@ -223,7 +223,7 @@ cleanup:
 
     if (compile_ok && options->show_includes) {
         for (const auto& file : cc.sources()->opened_files()) {
-            if (file->is_main_file())
+            if (file->is_main_file() || file->is_builtin())
                 continue;
             fprintf(stdout, "Note: including file: %s\n", file->name());
         }
