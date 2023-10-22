@@ -35,6 +35,7 @@
 namespace sp {
 
 class CompileContext;
+class Decl;
 class FunctionDecl;
 class SemaContext;
 struct token_pos_t;
@@ -110,7 +111,7 @@ class EnumStructData final : public SymbolData
 struct symbol : public PoolObject
 {
     symbol(const symbol& other);
-    symbol(Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
+    symbol(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
 
     symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
@@ -158,6 +159,7 @@ struct symbol : public PoolObject
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
     SourceLocation loc;
     PoolString* documentation; /* optional documentation string */
+    Decl* decl;
 
     int dim_count() const { return dim_data ? dim_data[-1] : 0; }
     void set_dim_count(int dim_count);
@@ -334,15 +336,15 @@ struct value {
 void AddGlobal(CompileContext& cc, symbol* sym);
 
 void DefineSymbol(SemaContext& sc, symbol* sym);
-symbol* DefineConstant(SemaContext& sc, Atom* name, const token_pos_t& pos, cell val,
+symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_t& pos, cell val,
                        int vclass, int tag);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(symbol* sym, int usage);
-symbol* NewVariable(Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
+symbol* NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
 symbol* FindEnumStructField(Type* type, Atom* name);
 void deduce_liveness(CompileContext& cc);
-symbol* declare_methodmap_symbol(CompileContext& cc, methodmap_t* map);
+symbol* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map);
 
 } // namespace sp

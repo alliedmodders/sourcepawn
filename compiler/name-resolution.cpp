@@ -210,7 +210,7 @@ EnumDecl::EnterNames(SemaContext& sc)
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = DefineConstant(sc, name_, pos_, 0, vclass_, tag);
+            enumsym = DefineConstant(sc, this, name_, pos_, 0, vclass_, tag);
             if (enumsym)
                 enumsym->enumroot = true;
             // start a new list for the element names
@@ -237,7 +237,7 @@ EnumDecl::EnterNames(SemaContext& sc)
                 error(field->pos(), 80);
         }
 
-        symbol* sym = DefineConstant(sc, field->name(), field->pos(), value, vclass_, tag);
+        symbol* sym = DefineConstant(sc, field, field->name(), field->pos(), value, vclass_, tag);
         if (!sym)
             continue;
 
@@ -414,7 +414,7 @@ TypesetDecl::Bind(SemaContext& sc)
 bool
 ConstDecl::EnterNames(SemaContext& sc)
 {
-    sym_ = DefineConstant(sc, name_, pos_, 0, vclass_, 0);
+    sym_ = DefineConstant(sc, this, name_, pos_, 0, vclass_, 0);
     return !!sym_;
 }
 
@@ -480,7 +480,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(name_, 0, iVARIABLE, sGLOBAL, type_.tag());
+        sym_ = new symbol(this, name_, 0, iVARIABLE, sGLOBAL, type_.tag());
         sym_->is_struct = true;
         sym_->stock = is_stock_;
         sym_->is_const = true;
@@ -490,7 +490,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
             type_.ident = ident = iREFARRAY;
 
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-        sym_ = NewVariable(name_, 0, ident, vclass_, type_.tag(), dim,
+        sym_ = NewVariable(this, name_, 0, ident, vclass_, type_.tag(), dim,
                            type_.numdim(), type_.enum_struct_tag());
         sym_->defined = true;
         sym_->is_static = is_static_;
@@ -768,7 +768,7 @@ FunctionDecl::EnterNames(SemaContext& sc)
 
     if (!sym) {
         auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym = new symbol(name_, 0, iFUNCTN, scope, 0);
+        sym = new symbol(this, name_, 0, iFUNCTN, scope, 0);
         if (decl_.opertok)
             sym->is_operator = true;
 
@@ -834,7 +834,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
-        sym_ = new symbol(decl_.name, 0, iFUNCTN, sGLOBAL, 0);
+        sym_ = new symbol(this, decl_.name, 0, iFUNCTN, sGLOBAL, 0);
 
     // This may not be set if EnterNames wasn't called (eg not a global).
     if (!sym_->function()->node || body_)
@@ -1127,7 +1127,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     AutoCountErrors errors;
 
     AutoErrorPos error_pos(pos_);
-    root_ = DefineConstant(sc, name_, pos_, 0, sGLOBAL, 0);
+    root_ = DefineConstant(sc, this, name_, pos_, 0, sGLOBAL, 0);
     root_->tag = sc.cc().types()->defineEnumStruct(name_->chars(), root_)->tagid();
     root_->enumroot = true;
     root_->ident = iENUMSTRUCT;
@@ -1173,7 +1173,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(field->name());
 
-        symbol* child = new symbol(field->name(), position, field->type().ident, sGLOBAL,
+        symbol* child = new symbol(field, field->name(), position, field->type().ident, sGLOBAL,
                                    field->type().semantic_tag());
         if (field->type().numdim()) {
             child->set_dim_count(1);
@@ -1202,7 +1202,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(decl->name());
 
-        auto sym = new symbol(decl->name(), 0, iFUNCTN, sGLOBAL, 0);
+        auto sym = new symbol(decl, decl->name(), 0, iFUNCTN, sGLOBAL, 0);
         decl->set_sym(sym);
         methods.emplace_back(sym);
     }
@@ -1244,9 +1244,7 @@ Decl::DecorateInnerName(Atom* parent_name, Atom* field_name)
     return CompileContext::get().atom(full_name);
 }
 
-bool
-MethodmapDecl::EnterNames(SemaContext& sc)
-{
+bool MethodmapDecl::EnterNames(SemaContext& sc) {
     AutoErrorPos error_pos(pos_);
 
     auto& cc = sc.cc();
@@ -1260,7 +1258,7 @@ MethodmapDecl::EnterNames(SemaContext& sc)
     map_ = methodmap_add(cc, nullptr, name_);
     cc.types()->defineMethodmap(name_->chars(), map_);
 
-    sym_ = declare_methodmap_symbol(cc, map_);
+    sym_ = declare_methodmap_symbol(cc, this, map_);
     if (!sym_)
         return false;
 

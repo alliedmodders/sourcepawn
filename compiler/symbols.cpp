@@ -73,7 +73,7 @@ FunctionData::FunctionData()
 {
 }
 
-symbol::symbol(Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
+symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : next(nullptr),
    codeaddr(0),
    vclass((char)symvclass),
@@ -100,17 +100,19 @@ symbol::symbol(Atom* symname, cell symaddr, IdentifierKind symident, int symvcla
    semantic_tag(0),
    dim_data(nullptr),
    documentation(nullptr),
+   decl(decl),
    addr_(symaddr),
    name_(nullptr)
 {
     assert(ident != iINVALID);
+    assert(decl);
     name_ = symname;
     if (symident == iFUNCTN)
         data_ = new FunctionData;
 }
 
 symbol::symbol(const symbol& other)
- : symbol(nullptr, other.addr_, other.ident, other.vclass, other.tag)
+ : symbol(other.decl, nullptr, other.addr_, other.ident, other.vclass, other.tag)
 {
     name_ = other.name_;
 
@@ -176,10 +178,10 @@ symbol::is_variadic() const
 }
 
 symbol*
-NewVariable(Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
+NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
             int numdim, int semantic_tag)
 {
-    symbol* sym = new symbol(name, addr, ident, vclass, tag);
+    symbol* sym = new symbol(decl, name, addr, ident, vclass, tag);
 
     if (numdim) {
         sym->set_dim_count(numdim);
@@ -323,19 +325,18 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
 }
 
 static symbol*
-NewConstant(Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
+NewConstant(Decl* decl, Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 {
-    auto sym = new symbol(name, val, iCONSTEXPR, vclass, tag);
+    auto sym = new symbol(decl, name, val, iCONSTEXPR, vclass, tag);
     sym->loc = pos;
     sym->defined = true;
     return sym;
 }
 
-symbol*
-DefineConstant(SemaContext& sc, Atom* name, const token_pos_t& pos, cell val, int vclass,
-               int tag)
+symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_t& pos, cell val,
+                       int vclass, int tag)
 {
-    auto sym = NewConstant(name, pos, val, vclass, tag);
+    auto sym = NewConstant(decl, name, pos, val, vclass, tag);
     if (CheckNameRedefinition(sc, name, pos, vclass))
         DefineSymbol(sc, sym);
     return sym;
@@ -360,9 +361,7 @@ FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found)
     return FindSymbol(sc.scope(), name, found);
 }
 
-symbol*
-declare_methodmap_symbol(CompileContext& cc, methodmap_t* map)
-{
+symbol* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map) {
     symbol* sym = FindSymbol(cc.globals(), map->name);
     if (sym && sym->ident != iMETHODMAP) {
         if (sym->ident == iCONSTEXPR) {
@@ -383,7 +382,7 @@ declare_methodmap_symbol(CompileContext& cc, methodmap_t* map)
         return nullptr;
     }
 
-    sym = new symbol(map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
+    sym = new symbol(decl, map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
     cc.globals()->Add(sym);
 
     sym->defined = true;
