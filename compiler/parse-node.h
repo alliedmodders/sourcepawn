@@ -1644,15 +1644,29 @@ class FunctionDecl : public Decl
     bool maybe_returns_array_ SP_BITFIELD(1);
 };
 
-struct EnumStructField {
-    token_pos_t pos;
-    declinfo_t decl;
+class EnumStructFieldDecl : public Decl
+{
+  public:
+    EnumStructFieldDecl(const token_pos_t& pos, const declinfo_t& decl)
+      : Decl(StmtKind::EnumStructFieldDecl, pos, decl.name),
+        type_(decl.type)
+    {}
+
+    void ProcessUses(SemaContext& sc) override {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumStructFieldDecl; }
+
+    const typeinfo_t& type() const { return type_; }
+    typeinfo_t& mutable_type() { return type_; }
+
+  private:
+    typeinfo_t type_;
 };
 
 class EnumStructDecl : public Decl
 {
   public:
-    explicit EnumStructDecl(const token_pos_t& pos, Atom* name)
+    EnumStructDecl(const token_pos_t& pos, Atom* name)
       : Decl(StmtKind::EnumStructDecl, pos, name)
     {}
 
@@ -1663,11 +1677,11 @@ class EnumStructDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumStructDecl; }
 
     PoolArray<FunctionDecl*>& methods() { return methods_; }
-    PoolArray<EnumStructField>& fields() { return fields_; }
+    PoolArray<EnumStructFieldDecl*>& fields() { return fields_; }
 
   private:
     PoolArray<FunctionDecl*> methods_;
-    PoolArray<EnumStructField> fields_;
+    PoolArray<EnumStructFieldDecl*> fields_;
     symbol* root_ = nullptr;
 };
 

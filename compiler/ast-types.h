@@ -44,6 +44,7 @@
     FOR_EACH(PragmaUnusedStmt) \
     FOR_EACH(FunctionDecl) \
     FOR_EACH(EnumStructDecl) \
+    FOR_EACH(EnumStructFieldDecl) \
     FOR_EACH(MethodmapDecl) \
     FOR_EACH(ChangeScopeNode)
 
