@@ -2690,7 +2690,9 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         int argcount = (int)curfunc->function()->node->args().size();
 
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
-        sub = NewVariable(curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
+        auto var = new VarDecl(stmt->pos(), curfunc->nameAtom(), array, sGLOBAL, false,
+                               false, false, nullptr);
+        sub = NewVariable(var, curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
                           sGLOBAL, curfunc->tag, dim, array.numdim(),
                           array.enum_struct_tag());
         curfunc->set_array_return(sub);
