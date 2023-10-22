@@ -1140,53 +1140,53 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
     cell position = 0;
     for (auto& field : fields_) {
-        if (!sc.BindType(field.pos, &field.decl.type))
+        if (!sc.BindType(field->pos(), &field->mutable_type()))
             continue;
 
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
-        if (field.decl.type.semantic_tag() == root_->tag) {
-            report(field.pos, 87) << name_;
+        if (field->type().semantic_tag() == root_->tag) {
+            report(field->pos(), 87) << name_;
             continue;
         }
 
-        if (field.decl.type.is_const)
-            report(field.pos, 94) << field.decl.name;
+        if (field->type().is_const)
+            report(field->pos(), 94) << field->name();
 
-        if (field.decl.type.numdim()) {
-            if (field.decl.type.ident == iARRAY) {
-                ResolveArraySize(sc.sema(), field.pos, &field.decl.type, sENUMFIELD);
+        if (field->type().numdim()) {
+            if (field->type().ident == iARRAY) {
+                ResolveArraySize(sc.sema(), field->pos(), &field->mutable_type(), sENUMFIELD);
 
-                if (field.decl.type.numdim() > 1) {
-                    error(field.pos, 65);
+                if (field->type().numdim() > 1) {
+                    error(field->pos(), 65);
                     continue;
                 }
             } else {
-                error(field.pos, 81);
+                error(field->pos(), 81);
                 continue;
             }
         }
 
-        if (seen.count(field.decl.name)) {
-            report(field.pos, 103) << field.decl.name << "enum struct";
+        if (seen.count(field->name())) {
+            report(field->pos(), 103) << field->name() << "enum struct";
             continue;
         }
-        seen.emplace(field.decl.name);
+        seen.emplace(field->name());
 
-        symbol* child = new symbol(field.decl.name, position, field.decl.type.ident, sGLOBAL,
-                                   field.decl.type.semantic_tag());
-        if (field.decl.type.numdim()) {
+        symbol* child = new symbol(field->name(), position, field->type().ident, sGLOBAL,
+                                   field->type().semantic_tag());
+        if (field->type().numdim()) {
             child->set_dim_count(1);
-            child->set_dim(0, field.decl.type.dim[0]);
+            child->set_dim(0, field->type().dim[0]);
         }
         child->enumfield = true;
         fields.emplace_back(child);
 
         cell size = 1;
-        if (field.decl.type.numdim()) {
-            size = field.decl.type.tag() == sc.cc().types()->tag_string()
-                   ? char_array_cells(field.decl.type.dim[0])
-                   : field.decl.type.dim[0];
+        if (field->type().numdim()) {
+            size = field->type().tag() == sc.cc().types()->tag_string()
+                   ? char_array_cells(field->type().dim[0])
+                   : field->type().dim[0];
         }
         position += size;
     }

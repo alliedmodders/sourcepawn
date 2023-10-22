@@ -220,6 +220,7 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         case StmtKind::TypesetDecl:
         case StmtKind::EnumDecl:
         case StmtKind::EnumFieldDecl:
+        case StmtKind::EnumStructFieldDecl:
         case StmtKind::PstructDecl:
         case StmtKind::StaticAssertStmt:
         case StmtKind::PragmaUnusedStmt:

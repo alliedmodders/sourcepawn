@@ -448,7 +448,7 @@ Parser::parse_enumstruct()
 
     auto stmt = new EnumStructDecl(pos, struct_name);
 
-    std::vector<EnumStructField> fields;
+    std::vector<EnumStructFieldDecl*> fields;
     std::vector<FunctionDecl*> methods;
 
     int opening_line = lexer_->fline();
@@ -474,12 +474,12 @@ Parser::parse_enumstruct()
             continue;
         }
 
-        fields.emplace_back(EnumStructField{decl_pos, decl});
+        fields.emplace_back(new EnumStructFieldDecl(decl_pos, decl));
 
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     }
 
-    new (&stmt->fields()) PoolArray<EnumStructField>(fields);
+    new (&stmt->fields()) PoolArray<EnumStructFieldDecl*>(fields);
     new (&stmt->methods()) PoolArray<FunctionDecl*>(methods);
 
     lexer_->require_newline(TerminatorPolicy::Newline);
