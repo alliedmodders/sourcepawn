@@ -227,17 +227,17 @@ EnumDecl::EnterNames(SemaContext& sc)
 
     cell value = 0;
     for (const auto& field : fields_ ) {
-        AutoErrorPos error_pos(field.pos);
+        AutoErrorPos error_pos(field->pos());
 
-        if (field.value && field.value->Bind(sc) && sc.sema()->CheckExpr(field.value)) {
+        if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
             int field_tag;
-            if (field.value->EvalConst(&value, &field_tag))
+            if (field->value()->EvalConst(&value, &field_tag))
                 matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
             else
-                error(field.pos, 80);
+                error(field->pos(), 80);
         }
 
-        symbol* sym = DefineConstant(sc, field.name, field.pos, value, vclass_, tag);
+        symbol* sym = DefineConstant(sc, field->name(), field->pos(), value, vclass_, tag);
         if (!sym)
             continue;
 
