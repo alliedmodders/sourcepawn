@@ -1308,12 +1308,12 @@ CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr)
         numdim++;
     }
 
-    if (symbol* es = cc_.types()->find(type.tag())->asEnumStruct()) {
+    if (auto es = cc_.types()->find(type.tag())->asEnumStruct()) {
         // The last dimension is implicit in the size of the enum struct. Note
         // that when synthesizing a NewArrayExpr for old-style declarations,
         // it is impossible to have an enum struct.
         // :TODO: test this
-        __ emit(OP_PUSH_C, es->addr());
+        __ emit(OP_PUSH_C, es->s->addr());
         numdim++;
     }
 

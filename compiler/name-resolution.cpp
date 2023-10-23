@@ -86,7 +86,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
 
         ti->set_tag(0);
         ti->declared_tag = tag;
-        ti->dim.emplace_back(enum_type->addr());
+        ti->dim.emplace_back(enum_type->s->addr());
 
         if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
             ti->ident = iARRAY;
@@ -840,11 +840,11 @@ FunctionDecl::Bind(SemaContext& outer_sc)
         Type* type = outer_sc.cc().types()->find(*this_tag_);
 
         typeinfo_t typeinfo = {};
-        if (symbol* enum_type = type->asEnumStruct()) {
+        if (auto enum_type = type->asEnumStruct()) {
             typeinfo.set_tag(0);
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
-            typeinfo.dim.emplace_back(enum_type->addr());
+            typeinfo.dim.emplace_back(enum_type->s->addr());
         } else {
             typeinfo.set_tag(*this_tag_);
             typeinfo.ident = iVARIABLE;
@@ -1106,15 +1106,11 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
     AutoErrorPos error_pos(pos_);
     root_ = DefineConstant(sc, this, name_, pos_, 0, sGLOBAL, 0);
-    root_->tag = sc.cc().types()->defineEnumStruct(name_->chars(), root_)->tagid();
+    root_->tag = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
     root_->enumroot = true;
     root_->ident = iENUMSTRUCT;
 
-    auto data = new EnumStructData;
-    root_->set_data(data);
-
     std::unordered_set<Atom*> seen;
-    std::vector<symbol*> fields;
 
     cell position = 0;
     for (auto& field : fields_) {
@@ -1157,7 +1153,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
             child->set_dim_count(1);
             child->set_dim(0, field->type().dim[0]);
         }
-        fields.emplace_back(child);
 
         cell size = 1;
         if (field->type().numdim()) {
@@ -1171,7 +1166,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     if (!position)
         report(pos_, 119) << name_;
 
-    std::vector<symbol*> methods;
     for (const auto& decl : methods_) {
         if (seen.count(decl->name())) {
             report(decl->pos(), 103) << decl->name() << "enum struct";
@@ -1181,11 +1175,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
         auto sym = new symbol(decl, decl->name(), 0, iFUNCTN, sGLOBAL, 0);
         decl->set_sym(sym);
-        methods.emplace_back(sym);
     }
-
-    new (&data->fields) PoolArray<symbol*>(fields);
-    new (&data->methods) PoolArray<symbol*>(methods);
 
     assert(root_->enumroot);
     root_->setAddr(position);

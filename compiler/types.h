@@ -83,6 +83,7 @@ enum class TypeKind : uint8_t {
 struct funcenum_t;
 struct methodmap_t;
 struct symbol;
+class EnumStructDecl;
 class Expr;
 
 struct TypenameInfo {
@@ -291,7 +292,7 @@ class Type : public PoolObject
     bool isEnumStruct() const {
         return kind_ == TypeKind::EnumStruct;
     }
-    symbol* asEnumStruct() const {
+    EnumStructDecl* asEnumStruct() const {
         if (!isEnumStruct())
             return nullptr;
         return enumstruct_ptr_;
@@ -307,10 +308,10 @@ class Type : public PoolObject
         setFixed();
         assert(kind_ == TypeKind::Object);
     }
-    void setEnumStruct(symbol* sym) {
+    void setEnumStruct(EnumStructDecl* decl) {
         setFixed();
         assert(kind_ == TypeKind::EnumStruct);
-        enumstruct_ptr_ = sym;
+        enumstruct_ptr_ = decl;
     }
     void setFixed() {
         // This is separate from "kind_" because it persists across passes.
@@ -333,7 +334,7 @@ class Type : public PoolObject
     union {
         funcenum_t* funcenum_ptr_;
         methodmap_t* methodmap_ptr_;
-        symbol* enumstruct_ptr_;
+        EnumStructDecl* enumstruct_ptr_;
         void* private_ptr_;
     };
 };
@@ -374,7 +375,7 @@ class TypeDictionary
     Type* defineBool();
     Type* defineMethodmap(const char* name, methodmap_t* map);
     Type* defineEnumTag(const char* name);
-    Type* defineEnumStruct(const char* name, symbol* sym);
+    Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
     Type* defineTag(Atom* atom);
     pstruct_t* definePStruct(Atom* name);
 

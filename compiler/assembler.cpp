@@ -456,25 +456,25 @@ RttiBuilder::add_enumstruct(Type* type)
     if (p.found())
         return p->value;
 
-    symbol* sym = type->asEnumStruct();
+    auto es_decl = type->asEnumStruct();
     uint32_t es_index = enumstructs_->count();
     typeid_cache_.add(p, type, es_index);
 
     smx_rtti_enumstruct es = {};
     es.name = names_->add(*cc_.atoms(), type->name());
     es.first_field = es_fields_->count();
-    es.size = sym->addr();
+    es.size = es_decl->s->addr();
     enumstructs_->add(es);
 
     // Pre-allocate storage in case of nested types.
-    auto& enumlist = sym->data()->asEnumStruct()->fields;
+    const auto& enumlist = es_decl->fields();
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++)
         es_fields_->add() = smx_rtti_es_field{};
 
     // Add all fields.
     size_t index = 0;
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
-        auto field = *iter;
+        auto field = (*iter)->s;
 
         int dims[1], dimcount = 0;
         if (field->dim_count())

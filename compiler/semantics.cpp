@@ -1577,7 +1577,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         case iREFARRAY:
             if (base_val.sym && base_val.array_dim_count() == 1) {
                 Type* type = types_->find(base_val.sym->semantic_tag);
-                if (symbol* root = type->asEnumStruct())
+                if (auto root = type->asEnumStruct())
                     return CheckEnumStructFieldAccessExpr(expr, type, root, from_call);
             }
             report(expr, 96) << expr->name() << "type" << "array";
@@ -1749,7 +1749,7 @@ symbol* Semantics::BindNewTarget(Expr* target) {
     return nullptr;
 }
 
-bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, symbol* root,
+bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
                                                bool from_call)
 {
     auto base = expr->base();

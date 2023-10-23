@@ -209,11 +209,9 @@ TypeDictionary::defineEnumTag(const char* name)
     return type;
 }
 
-Type*
-TypeDictionary::defineEnumStruct(const char* name, symbol* sym)
-{
+Type* TypeDictionary::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
     Type* type = add(name, TypeKind::EnumStruct);
-    type->setEnumStruct(sym);
+    type->setEnumStruct(decl);
     return type;
 }
 
