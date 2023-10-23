@@ -92,7 +92,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    retvalue_used(false),
    is_operator(false),
    enumroot(false),
-   enumfield(false),
    queued(false),
    explicit_return_type(false),
    semantic_tag(0),
@@ -118,7 +117,6 @@ symbol::symbol(const symbol& other)
     usage = other.usage;
     defined = other.defined;
     enumroot = other.enumroot;
-    enumfield = other.enumfield;
     callback = other.callback;
     returns_value = other.returns_value;
     always_returns = other.always_returns;

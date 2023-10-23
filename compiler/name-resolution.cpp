@@ -197,7 +197,6 @@ EnumDecl::EnterNames(SemaContext& sc)
     }
 
     symbol* enumsym = nullptr;
-    EnumData* enumroot = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
             if (auto decl = FindSymbol(sc, name_)) {
@@ -213,8 +212,6 @@ EnumDecl::EnterNames(SemaContext& sc)
             enumsym = DefineConstant(sc, this, name_, pos_, 0, vclass_, tag);
             if (enumsym)
                 enumsym->enumroot = true;
-            // start a new list for the element names
-            enumroot = new EnumData();
         }
     }
 
@@ -222,8 +219,6 @@ EnumDecl::EnterNames(SemaContext& sc)
     // build an enum struct.
     if (enumsym && enumsym->ident == iMETHODMAP)
         enumsym = NULL;
-
-    std::vector<symbol*> children;
 
     cell value = 0;
     for (const auto& field : fields_ ) {
@@ -241,12 +236,6 @@ EnumDecl::EnterNames(SemaContext& sc)
         if (!sym)
             continue;
 
-        // add the constant to a separate list as well
-        if (enumroot) {
-            sym->enumfield = true;
-            children.emplace_back(sym);
-        }
-
         if (multiplier_ == 1)
             value += increment_;
         else
@@ -257,13 +246,7 @@ EnumDecl::EnterNames(SemaContext& sc)
     if (enumsym) {
         assert(enumsym->enumroot);
         enumsym->setAddr(value);
-        // assign the constant list
-        assert(enumroot);
-        enumsym->set_data(enumroot);
     }
-
-    if (enumroot)
-        new (&enumroot->children) PoolArray<symbol*>(children);
     return true;
 }
 
@@ -1174,7 +1157,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
             child->set_dim_count(1);
             child->set_dim(0, field->type().dim[0]);
         }
-        child->enumfield = true;
         fields.emplace_back(child);
 
         cell size = 1;
