@@ -131,12 +131,6 @@ MessageBuilder::MessageBuilder(int number)
         where_ = CompileContext::get().lexer()->pos();
 }
 
-MessageBuilder::MessageBuilder(symbol* sym, int number)
-  : number_(number)
-{
-    where_ = token_pos_t(sym->loc, 0);
-}
-
 MessageBuilder::MessageBuilder(MessageBuilder&& other)
   : where_(other.where_),
     number_(other.number_),

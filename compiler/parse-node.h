@@ -317,6 +317,10 @@ class VarDeclBase : public Decl
     // Bind only the typeinfo.
     bool BindType(SemaContext& sc);
 
+    static bool is_a(Stmt* node) {
+        return node->kind() == StmtKind::VarDecl || node->kind() == StmtKind::ArgDecl;
+    }
+
     BinaryExpr* init() const { return init_; }
     Expr* init_rhs() const;
     int vclass() const {

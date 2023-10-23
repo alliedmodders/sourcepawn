@@ -329,7 +329,6 @@ static symbol*
 NewConstant(Decl* decl, Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 {
     auto sym = new symbol(decl, name, val, iCONSTEXPR, vclass, tag);
-    sym->loc = pos;
     sym->defined = true;
     return sym;
 }

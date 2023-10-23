@@ -75,7 +75,6 @@ class MessageBuilder
 {
   public:
     explicit MessageBuilder(int number);
-    MessageBuilder(symbol* sym, int number);
     MessageBuilder(ParseNode* node, int number);
     MessageBuilder(MessageBuilder&& other);
 
@@ -123,9 +122,6 @@ static inline MessageBuilder report(const token_pos_t& where, int number) {
 }
 static inline MessageBuilder report(int number) {
     return MessageBuilder(number);
-}
-static inline MessageBuilder report(symbol* sym, int number) {
-    return MessageBuilder(sym, number);
 }
 static inline MessageBuilder report(ParseNode* node, int number) {
     return MessageBuilder(node, number);

@@ -148,7 +148,6 @@ struct symbol : public PoolObject
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
-    SourceLocation loc;
     PoolString* documentation; /* optional documentation string */
     Decl* decl;
 

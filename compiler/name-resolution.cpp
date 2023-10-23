@@ -510,8 +510,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         sym_->usage |= uREAD;
     }
 
-    sym_->loc = pos_;
-
     if (def_ok)
         DefineSymbol(sc, this, vclass_);
 
@@ -852,11 +850,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     if (!sym_->function()->forward || is_forward_) {
         sym_->tag = decl_.type.tag();
         sym_->explicit_return_type = decl_.type.is_new;
-    }
-
-    // But position info belongs to the implementation.
-    if (!sym_->function()->forward || is_public_) {
-        sym_->loc = pos_;
     }
 
     // Ensure |this| argument exists.
