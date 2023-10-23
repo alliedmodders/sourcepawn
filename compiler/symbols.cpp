@@ -187,21 +187,18 @@ NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass,
     return sym;
 }
 
-symbol*
-FindEnumStructField(Type* type, Atom* name)
-{
-    symbol* sym = type->asEnumStruct();
-    if (!sym->data())
+symbol* FindEnumStructField(Type* type, Atom* name) {
+    auto decl = type->asEnumStruct();
+    if (!decl)
         return nullptr;
 
-    auto es = sym->data()->asEnumStruct();
-    for (const auto& field : es->fields) {
-        if (field->nameAtom() == name)
-            return field;
+    for (const auto& field : decl->fields()) {
+        if (field->name() == name)
+            return field->s;
     }
-    for (const auto& method : es->methods) {
-        if (method->nameAtom() == name)
-            return method;
+    for (const auto& method : decl->methods()) {
+        if (method->name() == name)
+            return method->s;
     }
     return nullptr;
 }

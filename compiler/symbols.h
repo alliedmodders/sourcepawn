@@ -73,15 +73,6 @@ class FunctionData final : public SymbolData
     PoolForwardList<symbol*> refers_to;
 };
 
-class EnumStructData final : public SymbolData
-{
-  public:
-    EnumStructData* asEnumStruct() override { return this; }
-
-    PoolArray<symbol*> fields;
-    PoolArray<symbol*> methods;
-};
-
 /*  Symbol table format
  *
  *  The symbol name read from the input file is stored in "name", the

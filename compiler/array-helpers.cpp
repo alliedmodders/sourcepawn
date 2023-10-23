@@ -688,8 +688,8 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
         return false;
     }
 
-    symbol* esroot = es_->asEnumStruct();
-    auto& field_list = esroot->data()->asEnumStruct()->fields;
+    auto decl = es_->asEnumStruct();
+    const auto& field_list = decl->fields();
     auto field_iter = field_list.begin();
 
     for (const auto& expr : array->exprs()) {
@@ -698,7 +698,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
             return false;
         }
 
-        symbol* field = *field_iter;
+        symbol* field = (*field_iter)->s;
 
         // Advance early so we can use |continue|.
         field_iter++;
@@ -953,11 +953,11 @@ ArrayEmitter::Emit(int rank, Expr* init)
     if (!init) {
         assert(type_.dim[rank]);
     } else if (ArrayExpr* array = init->as<ArrayExpr>()) {
-        PoolArray<symbol*>* field_list = nullptr;
-        symbol** field_iter = nullptr;
+        PoolArray<EnumStructFieldDecl*>* field_list = nullptr;
+        EnumStructFieldDecl** field_iter = nullptr;
         if (es_) {
-            symbol* esroot = es_->asEnumStruct();
-            field_list = &esroot->data()->asEnumStruct()->fields;
+            auto decl = es_->asEnumStruct();
+            field_list = &decl->fields();
             field_iter = field_list->begin();
         }
 
@@ -969,7 +969,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
                 size_t emitted = AddString(expr);
 
-                symbol* field = *field_iter;
+                symbol* field = (*field_iter)->s;
                 assert(field);
 
                 EmitPadding(field->dim(0), field->tag, emitted, false, {}, {});
@@ -977,7 +977,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
                 assert(es_);
-                symbol* field = *field_iter;
+                symbol* field = (*field_iter)->s;
                 AddInlineArray(field, expr);
             } else {
                 assert(item->val().ident == iCONSTEXPR);

@@ -217,7 +217,7 @@ class Semantics final
     bool CheckUnaryExpr(UnaryExpr* expr);
     bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
-    bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, symbol* root,
+    bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
                                         bool from_call);
 
     bool CheckAssignmentLHS(BinaryExpr* expr);
