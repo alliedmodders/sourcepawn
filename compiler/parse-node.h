@@ -1616,6 +1616,9 @@ class FunctionDecl : public Decl
     }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
+    const char* deprecate() const {
+        return deprecate_ ? deprecate_->chars() : nullptr;
+    }
 
     SymbolScope* scope() const { return scope_; }
 

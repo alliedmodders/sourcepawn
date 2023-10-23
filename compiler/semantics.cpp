@@ -1980,10 +1980,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         NeedsHeapAlloc(call);
     }
 
-    if (sym->deprecated) {
-        const char* ptr = sym->documentation->chars();
-        report(call, 234) << sym->name() << ptr; /* deprecated (probably a native function) */
-    }
+    // We don't have canonical decls yet, so get the one attached to the symbol.
+    auto decl_fun = sym->decl->as<FunctionDecl>();
+    if (decl_fun->deprecate())
+        report(call, 234) << sym->name() << decl_fun->deprecate();
 
     ParamState ps;
 
@@ -3054,10 +3054,9 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         return false;
     }
 
-    if (sym->deprecated && !sym->stock) {
-        const char* ptr = sym->documentation->chars();
-        report(info->pos(), 234) << sym->name() << ptr; /* deprecated (probably a public function) */
-    }
+    auto fwd = sym->function()->forward;
+    if (fwd && fwd->deprecate() && !sym->stock)
+        report(info->pos(), 234) << sym->name() << fwd->deprecate();
 
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
