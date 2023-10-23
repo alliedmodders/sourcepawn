@@ -831,11 +831,11 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
     // Sort globals.
     std::vector<symbol*> global_symbols;
-    cc_.globals()->ForEachSymbol([&](symbol* sym) -> void {
-        global_symbols.push_back(sym);
+    cc_.globals()->ForEachSymbol([&](Decl* decl) -> void {
+        global_symbols.push_back(decl->s);
 
         // This is only to assert that we embedded pointers properly in the assembly buffer.
-        symbols.emplace(sym);
+        symbols.emplace(decl->s);
     });
     for (const auto& sym : cc_.functions()) {
         if (symbols.count(sym))

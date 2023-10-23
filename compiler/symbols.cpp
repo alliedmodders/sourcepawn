@@ -37,7 +37,7 @@ void AddGlobal(CompileContext& cc, symbol* sym)
     assert(sym->vclass == sGLOBAL);
 
     auto scope = cc.globals();
-    scope->AddChain(sym);
+    scope->AddChain(sym->decl);
 }
 
 void
@@ -290,14 +290,14 @@ static NewNameStatus
 GetNewNameStatus(SemaContext& sc, Atom* name, int vclass)
 {
     SymbolScope* scope;
-    symbol* sym = nullptr;
+    Decl* decl = nullptr;
     if (sc.func_node() && sc.func_node()->is_native()) {
-        sym = sc.scope()->Find(name);
+        decl = sc.scope()->Find(name);
         scope = sc.scope();
     } else {
-        sym = FindSymbol(sc, name, &scope);
+        decl = FindSymbol(sc, name, &scope);
     }
-    if (!sym)
+    if (!decl)
         return NewNameStatus::Ok;
 
     SymbolScope* current = sc.ScopeForAdd();
@@ -308,7 +308,7 @@ GetNewNameStatus(SemaContext& sc, Atom* name, int vclass)
     }
     if (scope == current)
         return NewNameStatus::Duplicated;
-    if (current->kind() == sARGUMENT && sym->ident == iFUNCTN)
+    if (current->kind() == sARGUMENT && decl->s->ident == iFUNCTN)
         return NewNameStatus::Ok;
     return NewNameStatus::Shadowed;
 }
@@ -340,32 +340,29 @@ symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_
 {
     auto sym = NewConstant(decl, name, pos, val, vclass, tag);
     if (CheckNameRedefinition(sc, name, pos, vclass))
-        DefineSymbol(sc, sym);
+        DefineSymbol(sc, decl, vclass);
     return sym;
 }
 
-symbol*
-FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found)
-{
+Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
     for (auto iter = scope; iter; iter = iter->parent()) {
-        if (auto sym = iter->Find(name)) {
+        if (auto decl = iter->Find(name)) {
             if (found)
                 *found = iter;
-            return sym;
+            return decl;
         }
     }
     return nullptr;
 }
 
-symbol*
-FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found)
-{
+Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found) {
     return FindSymbol(sc.scope(), name, found);
 }
 
-symbol* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map) {
-    symbol* sym = FindSymbol(cc.globals(), map->name);
-    if (sym && sym->ident != iMETHODMAP) {
+Decl* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map) {
+    Decl* d = FindSymbol(cc.globals(), map->name);
+    if (d && d->s->ident != iMETHODMAP) {
+        symbol* sym = d->s;
         if (sym->ident == iCONSTEXPR) {
             // We should only hit this on the first pass. Assert really hard that
             // we're about to kill an enum definition and not something random.
@@ -378,35 +375,33 @@ symbol* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* ma
             auto data = sym->data() ? sym->data()->asEnum() : nullptr;
             map->enum_data = data;
             sym->set_data(map);
-            return sym;
+            return d;
         }
         report(11) << map->name;
         return nullptr;
     }
 
-    sym = new symbol(decl, map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
-    cc.globals()->Add(sym);
+    auto sym = new symbol(decl, map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
+    cc.globals()->Add(decl);
 
     sym->defined = true;
     sym->set_data(map);
-    return sym;
+    return decl;
 }
 
-void
-DefineSymbol(SemaContext& sc, symbol* sym)
-{
+void DefineSymbol(SemaContext& sc, Decl* decl, int vclass) {
     auto scope = sc.ScopeForAdd();
-    if (scope->kind() == sFILE_STATIC && sym->vclass != sSTATIC) {
+    if (scope->kind() == sFILE_STATIC && vclass != sSTATIC) {
         // The default scope is global scope, but "file static" scope comes
         // earlier in the lookup hierarchy, so skip past it if we need to.
-        assert(sym->vclass == sGLOBAL);
+        assert(vclass == sGLOBAL);
         assert(scope->parent()->kind() == sGLOBAL);
         scope = scope->parent();
     }
     if (scope->kind() == sGLOBAL || scope->kind() == sFILE_STATIC)
-        scope->AddChain(sym);
+        scope->AddChain(decl);
     else
-        scope->Add(sym);
+        scope->Add(decl);
 }
 
 } // namespace sp

@@ -36,6 +36,7 @@
 
 namespace sp {
 
+class Decl;
 class Lexer;
 class ReportManager;
 class SemaContext;
@@ -126,7 +127,7 @@ class CompileContext final
 
     DefaultArrayData* NewDefaultArrayData();
     tr::vector<tr::string>* NewDebugStringList();
-    tr::unordered_map<Atom*, symbol*>* NewSymbolMap();
+    tr::unordered_map<Atom*, Decl*>* NewSymbolMap();
 
   private:
     cc::PoolAllocator allocator_;
@@ -162,7 +163,7 @@ class CompileContext final
     // AST attachments.
     tr::forward_list<DefaultArrayData> default_array_data_objects_;
     tr::forward_list<tr::vector<tr::string>> debug_strings_;
-    tr::forward_list<tr::unordered_map<Atom*, symbol*>> symbol_maps_;
+    tr::forward_list<tr::unordered_map<Atom*, Decl*>> symbol_maps_;
 
     size_t malloc_bytes_ = 0;
     size_t malloc_bytes_peak_ = 0;

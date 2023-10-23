@@ -200,11 +200,11 @@ EnumDecl::EnterNames(SemaContext& sc)
     EnumData* enumroot = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
-            if ((enumsym = FindSymbol(sc, name_)) != nullptr) {
+            if (auto decl = FindSymbol(sc, name_)) {
                 // If we were previously defined as a methodmap, don't overwrite the
                 // symbol. Otherwise, flow into DefineConstant where we will error.
-                if (enumsym->ident != iMETHODMAP)
-                    enumsym = nullptr;
+                if (decl->s->ident == iMETHODMAP)
+                    enumsym = decl->s; 
             }
         }
 
@@ -513,7 +513,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     sym_->loc = pos_;
 
     if (def_ok)
-        DefineSymbol(sc, sym_);
+        DefineSymbol(sc, this, vclass_);
 
     // LHS bind should now succeed.
     if (init_)
@@ -548,11 +548,12 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         report(pos_, 230) << name_;
     }
 
-    sym_ = FindSymbol(sc, name_);
-    if (!sym_) {
+    auto decl = FindSymbol(sc, name_);
+    if (!decl) {
         report(pos_, 17) << name_;
         return false;
     }
+    sym_ = decl->s;
 
     if (!is_lval)
         markusage(sym_, uREAD);
@@ -564,11 +565,12 @@ ThisExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = FindSymbol(sc, sc.cc().atom("this"));
-    if (!sym_) {
+    auto decl = FindSymbol(sc, sc.cc().atom("this"));
+    if (!decl) {
         error(pos_, 166);
         return false;
     }
+    sym_ = decl->s;
     return true;
 }
 
@@ -615,11 +617,12 @@ SizeofExpr::Bind(SemaContext& sc)
 {
     AutoErrorPos aep(pos_);
 
-    sym_ = FindSymbol(sc, ident_);
-    if (!sym_) {
+    auto decl = FindSymbol(sc, ident_);
+    if (!decl) {
         report(pos_, 17) << ident_;
         return false;
     }
+    sym_ = decl->s;
     markusage(sym_, uREAD);
     return true;
 }
@@ -761,9 +764,12 @@ FunctionDecl::EnterNames(SemaContext& sc)
     symbol* sym = nullptr;
     if (!decl_.opertok) {
         // Handle forwards.
-        sym = FindSymbol(sc, name_);
-        if (sym && !CanRedefine(sym))
-            return false;
+        auto decl = FindSymbol(sc, name_);
+        if (decl) {
+            if (!CanRedefine(decl->s))
+                return false;
+            sym = decl->s;
+        }
     }
 
     if (!sym) {
@@ -772,7 +778,7 @@ FunctionDecl::EnterNames(SemaContext& sc)
         if (decl_.opertok)
             sym->is_operator = true;
 
-        DefineSymbol(sc, sym);
+        DefineSymbol(sc, this, scope);
     }
 
     // Prioritize the implementation as the canonical signature.
@@ -1108,12 +1114,12 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
 {
     std::vector<symbol*> symbols;
     for (const auto& name : names_) {
-        symbol* sym = FindSymbol(sc, name);
-        if (!sym) {
+        auto decl = FindSymbol(sc, name);
+        if (!decl) {
             report(pos_, 17) << name;
             continue;
         }
-        symbols.emplace_back(sym);
+        symbols.emplace_back(decl->s);
     }
 
     new (&symbols_) PoolArray<symbol*>(symbols);
@@ -1258,9 +1264,10 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
     map_ = methodmap_add(cc, nullptr, name_);
     cc.types()->defineMethodmap(name_->chars(), map_);
 
-    sym_ = declare_methodmap_symbol(cc, this, map_);
-    if (!sym_)
+    auto decl = declare_methodmap_symbol(cc, this, map_);
+    if (!decl)
         return false;
+    sym_ = decl->s;
 
     for (auto& prop : properties_) {
         if (map_->methods.count(prop->name)) {

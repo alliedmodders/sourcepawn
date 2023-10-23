@@ -147,7 +147,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
 
     // :TODO: restrict this to globals.
     auto opername_atom = sc.cc().atom(opername);
-    symbol* chain = FindSymbol(sc, opername_atom);
+    Decl* chain = FindSymbol(sc, opername_atom);
     if (!chain)
         return false;
 
@@ -155,14 +155,14 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
     bool swapparams;
     bool is_commutative = commutative(oper);
     for (auto iter = chain; iter; iter = iter->next) {
-        bool matched = MatchOperator(oper, iter, tag1, tag2, numparam);
+        bool matched = MatchOperator(oper, iter->s, tag1, tag2, numparam);
         bool swapped = false;
         if (!matched && is_commutative && tag1 != tag2 && oper) {
-            matched = MatchOperator(oper, iter, tag2, tag1, numparam);
+            matched = MatchOperator(oper, iter->s, tag2, tag1, numparam);
             swapped = true;
         }
         if (matched) {
-            sym = iter;
+            sym = iter->s;
             swapparams = swapped;
             break;
         }
