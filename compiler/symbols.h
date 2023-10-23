@@ -73,14 +73,6 @@ class FunctionData final : public SymbolData
     PoolForwardList<symbol*> refers_to;
 };
 
-class EnumData final : public SymbolData
-{
-  public:
-    EnumData* asEnum() override { return this; }
-
-    PoolArray<symbol*> children;
-};
-
 class EnumStructData final : public SymbolData
 {
   public:
@@ -139,7 +131,6 @@ struct symbol : public PoolObject
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
-    bool enumfield : 1;     // the constant is a field in a named enumeration
 
     // General symbol flags.
     bool queued : 1;        // symbol is queued for a local work algorithm
