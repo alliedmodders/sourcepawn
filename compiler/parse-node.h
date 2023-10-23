@@ -299,6 +299,8 @@ class Decl : public Stmt
   public:
     // :TODO: remove.
     Decl* next = nullptr;
+    // :TODO: remove
+    symbol* s = nullptr;
 };
 
 class BinaryExpr;
