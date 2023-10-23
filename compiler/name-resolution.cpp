@@ -938,10 +938,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     if (body_)
         ok &= body_->Bind(sc);
 
-    if (ok && deprecate_) {
-        sym_->documentation = new PoolString(deprecate_->chars(), deprecate_->length());
-        sym_->deprecated = true;
-    }
     return ok;
 }
 

@@ -142,13 +142,11 @@ struct symbol : public PoolObject
     bool enumfield : 1;     // the constant is a field in a named enumeration
 
     // General symbol flags.
-    bool deprecated : 1;    // symbol is deprecated (avoid use)
     bool queued : 1;        // symbol is queued for a local work algorithm
     bool explicit_return_type : 1; // transitional return type was specified
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
-    PoolString* documentation; /* optional documentation string */
     Decl* decl;
 
     int dim_count() const { return dim_data ? dim_data[-1] : 0; }

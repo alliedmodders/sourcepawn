@@ -93,12 +93,10 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    is_operator(false),
    enumroot(false),
    enumfield(false),
-   deprecated(false),
    queued(false),
    explicit_return_type(false),
    semantic_tag(0),
    dim_data(nullptr),
-   documentation(nullptr),
    decl(decl),
    addr_(symaddr),
    name_(nullptr)
@@ -130,8 +128,6 @@ symbol::symbol(const symbol& other)
     is_struct = other.is_struct;
     is_public = other.is_public;
     is_const = other.is_const;
-    deprecated = other.deprecated;
-    documentation = other.documentation;
     semantic_tag = other.semantic_tag;
     // Note: explicitly don't add queued.
 
