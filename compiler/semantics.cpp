@@ -725,10 +725,6 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             // If it's an outparam, also mark it as read.
             if (sym->vclass == sARGUMENT && (sym->ident == iREFERENCE || sym->ident == iREFARRAY))
                 markusage(sym, uREAD);
-
-            // Update the line number as a hack so we can warn that it was never
-            // used.
-            sym->loc = expr->pos();
         } else if (auto* accessor = left->val().accessor()) {
             if (!accessor->setter) {
                 report(expr, 152) << accessor->name;
@@ -2457,7 +2453,7 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
                 sym->defined)
             {
                 /* symbol isn't used ... (and not public/native/stock) */
-                report(sym, 203) << sym->name();
+                report(sym->decl, 203) << sym->name();
                 return entry;
             }
 
@@ -2475,7 +2471,7 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
         }
         case iCONSTEXPR:
             if (testconst && (sym->usage & uREAD) == 0) {
-                report(sym, 203) << sym->name(); /* symbol isn't used: ... */
+                report(sym->decl, 203) << sym->name(); /* symbol isn't used: ... */
             }
             break;
         case iMETHODMAP:
@@ -2485,9 +2481,9 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
         default:
             /* a variable */
             if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
-                report(sym, 203) << sym->name(); /* symbol isn't used (and not stock) */
+                report(sym->decl, 203) << sym->name(); /* symbol isn't used (and not stock) */
             } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
-                report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
+                report(sym->decl, 204) << sym->name(); /* value assigned to symbol is never used */
             }
     }
     return entry;
@@ -2978,13 +2974,11 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     return true;
 }
 
-void
-ReportFunctionReturnError(symbol* sym)
-{
+void ReportFunctionReturnError(symbol* sym) {
     if (sym->function()->is_member_function) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
-        report(sym, 400) << sym->name();
+        report(sym->decl, 400) << sym->name();
         return;
     }
 
@@ -2995,13 +2989,13 @@ ReportFunctionReturnError(symbol* sym)
     //
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
-        report(sym, 209) << sym->name();
+        report(sym->decl, 209) << sym->name();
     } else if (types->find(sym->tag)->isEnum() || sym->tag == types->tag_bool() ||
                sym->tag == types->tag_float() || !sym->retvalue_used)
     {
-        report(sym, 242) << sym->name();
+        report(sym->decl, 242) << sym->name();
     } else {
-        report(sym, 400) << sym->name();
+        report(sym->decl, 400) << sym->name();
     }
 }
 
