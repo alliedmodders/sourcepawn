@@ -74,8 +74,7 @@ FunctionData::FunctionData()
 }
 
 symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
- : next(nullptr),
-   codeaddr(0),
+ : codeaddr(0),
    vclass((char)symvclass),
    tag(symtag),
    ident(symident),

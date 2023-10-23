@@ -105,7 +105,6 @@ struct symbol : public PoolObject
     symbol(const symbol& other);
     symbol(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
 
-    symbol* next;
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
     int tag;       /* tagname id */
