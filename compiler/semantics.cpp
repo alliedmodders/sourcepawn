@@ -1784,16 +1784,9 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
 
     int tag = field->tag;
 
-    symbol* var = base->val().sym;
-    if (!var->data())
-        var->set_data(new EnumStructVarData());
-
-    EnumStructVarData* es_var = var->data()->asEnumStructVar();
-    es_var->children.emplace_back(new symbol(*field));
-
-    symbol* child = es_var->children.back();
+    symbol* child = new symbol(*field);
     child->setName(expr->name());
-    child->vclass = var->vclass;
+    child->vclass = base->val().sym->vclass;
 
     if (types_->find(tag)->isEnumStruct()) {
         val.tag = 0;
