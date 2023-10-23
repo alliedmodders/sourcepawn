@@ -2495,8 +2495,8 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
 
 bool Semantics::TestSymbols(SymbolScope* root, bool testconst) {
     bool entry = false;
-    root->ForEachSymbol([&](symbol* sym) -> void {
-        entry |= TestSymbol(sym, testconst);
+    root->ForEachSymbol([&](Decl* decl) -> void {
+        entry |= TestSymbol(decl->s, testconst);
     });
     return entry;
 }
@@ -3338,9 +3338,10 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
     Type* type = CompileContext::get().types()->find(tag);
     if (!type->isEnum())
         return false;
-    symbol* sym = FindSymbol(scope, type->nameAtom());
-    if (!sym)
+    auto decl = FindSymbol(scope, type->nameAtom());
+    if (!decl)
         return false;
+    auto sym = decl->s;
     return sym->data() && (sym->data()->asEnumStruct() || sym->data()->asEnum());
 }
 

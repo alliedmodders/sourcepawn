@@ -75,7 +75,7 @@ tr::vector<tr::string>* CompileContext::NewDebugStringList() {
     return &debug_strings_.front();
 }
 
-tr::unordered_map<Atom*, symbol*>* CompileContext::NewSymbolMap() {
+tr::unordered_map<Atom*, Decl*>* CompileContext::NewSymbolMap() {
     symbol_maps_.emplace_front();
     return &symbol_maps_.front();
 }

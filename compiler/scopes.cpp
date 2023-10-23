@@ -20,30 +20,32 @@
 
 #include "scopes.h"
 
+#include "parse-node.h"
+
 namespace sp {
 
-void SymbolScope::Add(symbol* sym) {
+void SymbolScope::Add(Decl* decl) {
     if (!symbols_) {
         auto& cc = CompileContext::get();
         symbols_ = cc.NewSymbolMap();
     }
 
-    assert(symbols_->find(sym->nameAtom()) == symbols_->end());
-    symbols_->emplace(sym->nameAtom(), sym);
+    assert(symbols_->find(decl->name()) == symbols_->end());
+    symbols_->emplace(decl->name(), decl);
 }
 
-void SymbolScope::AddChain(symbol* sym) {
+void SymbolScope::AddChain(Decl* decl) {
     if (!symbols_) {
         auto& cc = CompileContext::get();
         symbols_ = cc.NewSymbolMap();
     }
 
-    auto iter = symbols_->find(sym->nameAtom());
+    auto iter = symbols_->find(decl->name());
     if (iter == symbols_->end()) {
-        symbols_->emplace(sym->nameAtom(), sym);
+        symbols_->emplace(decl->name(), decl);
     } else {
-        sym->next = iter->second;
-        iter->second = sym;
+        decl->next = iter->second;
+        iter->second = decl;
     }
 }
 
