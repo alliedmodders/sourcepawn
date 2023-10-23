@@ -79,13 +79,11 @@ struct stringlist;
  
 class EnumData;
 class EnumStructData;
-class EnumStructVarData;
 class FunctionData;
 class SymbolData : public PoolObject
 {
   public:
     virtual FunctionData* asFunction() { return nullptr; }
-    virtual EnumStructVarData* asEnumStructVar() { return nullptr; }
     virtual methodmap_t* asMethodmap() { return nullptr; }
     virtual EnumStructData* asEnumStruct() { return nullptr; }
     virtual EnumData* asEnum() { return nullptr; }

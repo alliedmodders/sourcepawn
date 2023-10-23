@@ -73,14 +73,6 @@ class FunctionData final : public SymbolData
     PoolForwardList<symbol*> refers_to;
 };
 
-class EnumStructVarData final : public SymbolData
-{
-  public:
-    EnumStructVarData* asEnumStructVar() override { return this; }
-
-    PoolList<symbol*> children;
-};
-
 class EnumData final : public SymbolData
 {
   public:
