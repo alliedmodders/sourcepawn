@@ -1782,32 +1782,36 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
         return true;
     }
 
-    int tag = field->tag;
-
-    symbol* child = new symbol(*field);
-    child->setName(expr->name());
-    child->vclass = base->val().sym->vclass;
-
-    if (types_->find(tag)->isEnumStruct()) {
+    typeinfo_t ti{};
+    if (types_->find(field->tag)->isEnumStruct()) {
         val.tag = 0;
-        child->tag = 0;
-        child->semantic_tag = tag;
+        ti.declared_tag = field->tag;
     } else {
-        val.tag = tag;
-        child->tag = tag;
-        child->semantic_tag = 0;
+        val.tag = field->tag;
     }
+    ti.set_tag(val.tag);
 
     if (field->dim_count()) {
-        child->set_dim_count(1);
-        child->set_dim(0, field->dim(0));
-        child->ident = iREFARRAY;
+        ti.dim = {field->dim(0)};
+        ti.ident = iREFARRAY;
     } else {
-        child->ident = (tag == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
+        ti.ident = (ti.tag() == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
         expr->set_lvalue(true);
     }
-    val.ident = child->ident;
-    val.sym = child;
+
+    // Hack. Remove when we can.
+    auto var = new VarDecl(expr->pos(), field->nameAtom(), ti, base->val().sym->vclass, false,
+                           false, false, nullptr);
+    auto sym = new symbol(var, var->name(), field->addr(), ti.ident, var->vclass(), ti.tag());
+    if (ti.dim.size()) {
+        sym->set_dim_count(ti.dim.size());
+        for (int i = 0; i < ti.dim.size(); i++)
+            sym->set_dim(i, ti.dim[i]);
+        sym->semantic_tag = ti.declared_tag;
+    }
+
+    val.ident = ti.ident;
+    val.sym = sym;
     return true;
 }
 

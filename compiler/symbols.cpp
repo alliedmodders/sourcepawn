@@ -106,9 +106,11 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
 {
     assert(ident != iINVALID);
     assert(decl);
+    assert(!decl->s);
     name_ = symname;
     if (symident == iFUNCTN)
         data_ = new FunctionData;
+    decl->s = this;
 }
 
 symbol::symbol(const symbol& other)
