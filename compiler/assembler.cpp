@@ -557,18 +557,13 @@ RttiBuilder::encode_signature(symbol* sym)
 {
     std::vector<uint8_t> bytes;
 
-    uint32_t argc = 0;
-    bool is_variadic = false;
-    for (const auto& arg : sym->function()->node->args()) {
-        if (arg->type().ident == iVARARGS)
-            is_variadic = true;
-        argc++;
-    }
+    auto fun = sym->decl->as<FunctionDecl>()->canonical();
+    uint32_t argc = fun->args().size();
     if (argc > UCHAR_MAX)
         report(45);
 
     bytes.push_back((uint8_t)argc);
-    if (is_variadic)
+    if (fun->IsVariadic())
         bytes.push_back(cb::kVariadic);
 
     symbol* child = sym->array_return();
@@ -580,7 +575,7 @@ RttiBuilder::encode_signature(symbol* sym)
         encode_tag_into(bytes, sym->tag);
     }
 
-    for (const auto& arg : sym->function()->node->args()) {
+    for (const auto& arg : fun->args()) {
         int tag = arg->type().tag();
         int numdim = arg->type().numdim();
         if (arg->type().numdim() && arg->type().enum_struct_tag()) {

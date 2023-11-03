@@ -58,8 +58,6 @@ class FunctionData final : public SymbolData
 
     tr::vector<tr::string>* dbgstrs = nullptr;
     ReturnArrayInfo* return_array = nullptr;
-    FunctionDecl* node;
-    FunctionDecl* forward;
     symbol* array_return = nullptr;
     Label label;     // modern replacement for addr
     Label funcid;
@@ -178,7 +176,6 @@ struct symbol : public PoolObject
 
     void add_reference_to(symbol* other);
 
-    bool is_variadic() const;
     bool must_return_value() const;
     bool used() const {
         assert(ident == iFUNCTN);

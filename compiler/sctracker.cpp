@@ -56,11 +56,13 @@ funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous) {
 }
 
 funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym) {
+    FunctionDecl* fun = sym->decl->as<FunctionDecl>();
+
     functag_t* ft = new functag_t;
     ft->ret_tag = sym->tag;
 
     std::vector<funcarg_t> args;
-    for (auto arg : sym->function()->node->args()) {
+    for (auto arg : fun->canonical()->args()) {
         funcarg_t dest;
         dest.type = arg->type();
 
@@ -104,17 +106,15 @@ methodmap_t::methodmap_t(methodmap_t* parent, Atom* name)
 {
 }
 
-int
-methodmap_method_t::property_tag() const
-{
+int methodmap_method_t::property_tag() const {
     auto types = CompileContext::get().types();
 
     assert(getter || setter);
     if (getter)
         return getter->tag;
-    if (setter->function()->node->args().size() != 2)
+    if (setter->decl->as<FunctionDecl>()->canonical()->args().size() != 2)
         return types->tag_void();
-    ArgDecl* valp = setter->function()->node->args()[1];
+    ArgDecl* valp = setter->decl->as<FunctionDecl>()->canonical()->args()[1];
     if (valp->type().ident != iVARIABLE)
         return types->tag_void();
     return valp->type().tag();

@@ -216,6 +216,7 @@ class CodeGenerator final
   private:
     CompileContext& cc_;
     ParseTree* tree_;
+    FunctionDecl* fun_ = nullptr;
     symbol* func_ = nullptr;
     int max_script_memory_ = 0;
 

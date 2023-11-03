@@ -111,8 +111,8 @@ class SmxAssemblyBuffer : public ByteBuffer
     emit(OP_POP_ALT);
   }
 
-  void load_hidden_arg(symbol* fun, symbol* sym, bool save_pri) {
-    if (!fun->is_variadic()) {
+  void load_hidden_arg(FunctionDecl* fun, symbol* sym, bool save_pri) {
+    if (!fun->IsVariadic()) {
       address(sym, sALT);
       return;
     }
