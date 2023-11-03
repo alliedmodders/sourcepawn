@@ -126,6 +126,30 @@ int FunctionDecl::FindNamedArg(Atom* name) const {
     return -1;
 }
 
+FunctionDecl* FunctionDecl::prototype() {
+    if (!proto_or_impl_)
+        return this;
+    if (!body_)
+        return this;
+    return proto_or_impl_;
+}
+
+FunctionDecl* FunctionDecl::impl() {
+    if (body_)
+        return this;
+    return proto_or_impl_;
+}
+
+FunctionDecl* FunctionDecl::canonical() {
+    if (body_ || !proto_or_impl_)
+        return this;
+    return proto_or_impl_;
+}
+
+bool FunctionDecl::IsVariadic() {
+    return !args_.empty() && args_.back()->type().ident == iVARARGS;
+}
+
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {

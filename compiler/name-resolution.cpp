@@ -739,78 +739,69 @@ SwitchStmt::Bind(SemaContext& sc)
     return ok;
 }
 
-bool
-FunctionDecl::EnterNames(SemaContext& sc)
-{
-    symbol* sym = nullptr;
+bool FunctionDecl::EnterNames(SemaContext& sc) {
+    FunctionDecl* other = nullptr;
     if (!decl_.opertok) {
         // Handle forwards.
-        auto decl = FindSymbol(sc, name_);
-        if (decl) {
-            if (!CanRedefine(decl->s))
+        Decl* found = FindSymbol(sc, name_);
+        if (found) {
+            if ((other = CanRedefine(found)) == nullptr)
                 return false;
-            sym = decl->s;
+            assert(!other || !other->proto_or_impl_);
         }
     }
 
-    if (!sym) {
+    if (other) {
+        sym_ = other->s;
+        proto_or_impl_ = other;
+        other->proto_or_impl_ = this;
+    } else {
         auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym = new symbol(this, name_, 0, iFUNCTN, scope, 0);
+        sym_ = new symbol(this, name_, 0, iFUNCTN, scope, 0);
         if (decl_.opertok)
-            sym->is_operator = true;
+            sym_->is_operator = true;
 
         DefineSymbol(sc, this, scope);
     }
-
-    // Prioritize the implementation as the canonical signature.
-    if (!sym->function()->node || body_)
-        sym->function()->node = this;
-
-    if (is_forward())
-        sym->function()->forward = this;
-
-    sym_ = sym;
     return true;
 }
 
-bool
-FunctionDecl::CanRedefine(symbol* sym)
-{
-    if (sym->ident != iFUNCTN) {
+FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
+    FunctionDecl* fun = other_decl->as<FunctionDecl>();
+    if (!fun) {
         report(pos_, 21) << name_;
-        return false;
+        return nullptr;
     }
 
-    auto data = sym->function();
-    if (data->forward && !is_forward() && !is_native() && !is_stock() && !is_static()) {
+    if (fun->is_forward() && !is_forward() && !is_native() && !is_stock() && !is_static()) {
         if (!is_public()) {
-            report(pos_, 245) << sym->name();
+            report(pos_, 245) << name_;
 
             set_is_public();
-            return true;
+            return fun;
         }
 
-        if (data->node && data->node != data->forward) {
+        if (fun->impl()) {
             report(pos_, 21) << name_;
-            return false;
+            return nullptr;
         }
-        return true;
+        return fun;
     }
 
-    if (data->node) {
-        if (is_forward() && !data->node->is_public()) {
+    if (fun->body()) {
+        if (is_forward() && !fun->is_public()) {
             report(pos_, 412) << name_;
-            return false;
+            return nullptr;
         }
-        if (body() && !data->forward) {
+        if (body()) {
             report(pos_, 21) << name_;
-            return false;
+            return nullptr;
         }
-        return true;
+        return fun;
     }
 
-    report(pos(), 21) << sym->name();
-    return false;
+    report(pos(), 21) << name_;
+    return nullptr;
 }
 
 bool
@@ -823,14 +814,10 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     if (!sym_)
         sym_ = new symbol(this, decl_.name, 0, iFUNCTN, sGLOBAL, 0);
 
-    // This may not be set if EnterNames wasn't called (eg not a global).
-    if (!sym_->function()->node || body_)
-        sym_->function()->node = this;
-
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
     // implementation. Note that args are checked similarly in BindArgs.
-    if (!sym_->function()->forward || is_forward_) {
+    if (!prototype()->is_forward() || is_forward_) {
         sym_->tag = decl_.type.tag();
         sym_->explicit_return_type = decl_.type.is_new;
     }
@@ -920,7 +907,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 
     if (body_)
         ok &= body_->Bind(sc);
-
     return ok;
 }
 
@@ -996,23 +982,19 @@ FunctionDecl::BindArgs(SemaContext& sc)
             report(var->pos(), 59) << var->name();
     }
 
-    auto forward = sym_->function()->forward;
-    auto impl = sym_->function()->node;
-    if (!(forward && impl))
+    if (!proto_or_impl_)
         return errors.ok();
 
     // If we get here, we're a public and forward pair, and we need to compare
     // to make sure the argument lists are compatible.
-    assert(sym_->function()->forward);
-    assert(sym_->function()->node);
-    token_pos_t error_pos = sym_->function()->node->pos();
+    token_pos_t error_pos = impl()->pos();
 
-    size_t fwd_argc = forward->args().size();
-    size_t impl_argc = impl->args().size();
+    size_t fwd_argc = prototype()->args().size();
+    size_t impl_argc = impl()->args().size();
 
     // We allow forwards to omit arguments in their signature, so this is not
     // a straight-up equality test.
-    if (this == impl && impl_argc > fwd_argc) {
+    if (this == impl() && impl_argc > fwd_argc) {
         report(error_pos, 25);
         return false;
     }
@@ -1022,9 +1004,11 @@ FunctionDecl::BindArgs(SemaContext& sc)
         return errors.ok();
     }
     if (!sym_->function()->compared_prototype_args) {
+        auto impl_fun = impl();
+        auto proto_fun = prototype();
         for (size_t i = 0; i < impl_argc; i++) {
-            if (!argcompare(impl->args()[i], forward->args()[i]))
-                report(error_pos, 181) << impl->args()[i]->name();
+            if (!argcompare(impl_fun->args()[i], proto_fun->args()[i]))
+                report(error_pos, 181) << impl_fun->args()[i]->name();
         }
         sym_->function()->compared_prototype_args = true;
     }

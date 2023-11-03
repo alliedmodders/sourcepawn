@@ -59,12 +59,11 @@ static const int op1[17] = {
 };
 
 static inline bool
-MatchOperator(int oper, symbol* sym, int tag1, int tag2, int numparam)
+MatchOperator(int oper, FunctionDecl* fun, int tag1, int tag2, int numparam)
 {
     if (!oper)
         numparam = 1;
 
-    auto fun = sym->function()->node;
     const auto& args = fun->args();
     if (args.size() != size_t(numparam))
         return false;
@@ -79,7 +78,7 @@ MatchOperator(int oper, symbol* sym, int tag1, int tag2, int numparam)
             return false;
     }
 
-    if (!oper && sym->tag != tag2)
+    if (!oper && fun->type().tag() != tag2)
         return false;
     return true;
 }
@@ -155,10 +154,15 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
     bool swapparams;
     bool is_commutative = commutative(oper);
     for (auto iter = chain; iter; iter = iter->next) {
-        bool matched = MatchOperator(oper, iter->s, tag1, tag2, numparam);
+        auto fun = iter->as<FunctionDecl>();
+        if (!fun)
+            continue;
+        fun = fun->canonical();
+
+        bool matched = MatchOperator(oper, fun, tag1, tag2, numparam);
         bool swapped = false;
         if (!matched && is_commutative && tag1 != tag2 && oper) {
-            matched = MatchOperator(oper, iter->s, tag2, tag1, numparam);
+            matched = MatchOperator(oper, fun, tag2, tag1, numparam);
             swapped = true;
         }
         if (matched) {

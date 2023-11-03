@@ -1185,7 +1185,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
     }
 
     const auto& argv = call->args();
-    const auto& arginfov = call->sym()->function()->node->args();
+    const auto& arginfov = call->sym()->decl->as<FunctionDecl>()->canonical()->args();
     for (size_t i = argv.size() - 1; i < argv.size(); i--) {
         const auto& expr = argv[i];
 
@@ -1354,7 +1354,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
         symbol* sub = func_->array_return();
 
         // A much simpler copy can be emitted.
-        __ load_hidden_arg(func_, sub, true);
+        __ load_hidden_arg(fun_, sub, true);
 
         auto types = cc_.types();
         cell size = sub->dim(0); // :todo: must be val
@@ -1394,7 +1394,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     // add.c <iv-size * 4>      ; address to data
     // memcopy <data-size>
     __ emit(OP_PUSH_PRI);
-    __ load_hidden_arg(func_, func_->array_return(), false);
+    __ load_hidden_arg(fun_, func_->array_return(), false);
     __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, 0, 0);
     __ emit(OP_MOVE_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
@@ -1786,6 +1786,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
 void
 CodeGenerator::EmitFunctionDecl(FunctionDecl* info)
 {
+    ke::SaveAndSet<FunctionDecl*> set_fun(&fun_, info);
     ke::SaveAndSet<symbol*> set_func(&func_, info->sym());
 
     // Minimum 16 cells for general slack.

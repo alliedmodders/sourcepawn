@@ -1579,6 +1579,17 @@ class FunctionDecl : public Decl
     // The undecorated name.
     Atom* decl_name() const { return decl_.name; }
 
+    // Return the prototype version of this function, or |this| if there is
+    // only one definition.
+    FunctionDecl* prototype();
+
+    // Return the implementation version of this function, or |this| if there is
+    // only one definition. If no version has a body, this returns nullptr.
+    FunctionDecl* impl();
+
+    // Returns impl ? impl : prototype.
+    FunctionDecl* canonical();
+
     void set_is_native() { is_native_ = true; }
     bool is_native() const { return is_native_; }
 
@@ -1626,10 +1637,11 @@ class FunctionDecl : public Decl
     void set_maybe_returns_array() { maybe_returns_array_ = true; }
 
     void CheckReturnUsage();
+    bool IsVariadic();
 
   private:
     bool BindArgs(SemaContext& sc);
-    bool CanRedefine(symbol* sym);
+    FunctionDecl* CanRedefine(Decl* other);
     Atom* NameForOperator();
 
   private:
@@ -1642,6 +1654,7 @@ class FunctionDecl : public Decl
     ke::Maybe<int> this_tag_;
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
+    FunctionDecl* proto_or_impl_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);

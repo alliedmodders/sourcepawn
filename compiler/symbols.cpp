@@ -65,9 +65,7 @@ markusage(symbol* sym, int usage)
 }
 
 FunctionData::FunctionData()
-  : node(nullptr),
-    forward(nullptr),
-    checked_one_signature(false),
+  : checked_one_signature(false),
     compared_prototype_args(false),
     is_member_function(false)
 {
@@ -164,14 +162,6 @@ symbol::must_return_value() const
     return retvalue_used || (explicit_return_type && tag != types->tag_void());
 }
 
-bool
-symbol::is_variadic() const
-{
-    assert(ident == iFUNCTN);
-    const auto& args = function()->node->args();
-    return !args.empty() && args.back()->type().ident == iVARARGS;
-}
-
 symbol*
 NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
             int numdim, int semantic_tag)
@@ -197,7 +187,7 @@ symbol* FindEnumStructField(Type* type, Atom* name) {
             return field->s;
     }
     for (const auto& method : decl->methods()) {
-        if (method->name() == name)
+        if (method->decl_name() == name)
             return method->s;
     }
     return nullptr;

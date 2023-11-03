@@ -1956,7 +1956,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     call->set_sym(sym);
 
-    auto fun = sym->function()->node;
+    auto fun = sym->decl->as<FunctionDecl>()->canonical();
     if (fun &&
         (fun->decl().type.numdim() > 0 || fun->maybe_returns_array()) &&
         !sym->array_return())
@@ -1989,7 +1989,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     unsigned int nargs = 0;
     unsigned int argidx = 0;
-    auto& arglist = sym->function()->node->args();
+    auto& arglist = fun->args();
     if (call->implicit_this()) {
         if (arglist.empty()) {
             report(call->implicit_this(), 92);
@@ -2005,7 +2005,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     for (const auto& param : call->args()) {
         unsigned int argpos;
         if (auto named = param->as<NamedArgExpr>()) {
-            int pos = sym->function()->node->FindNamedArg(named->name);
+            int pos = fun->FindNamedArg(named->name);
             if (pos < 0) {
                 report(call, 17) << named->name;
                 break;
@@ -2440,9 +2440,7 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
  *  The function returns whether there is an "entry" point for the file.
  *  This flag will only be 1 when browsing the global symbol table.
  */
-bool
-Semantics::TestSymbol(symbol* sym, bool testconst)
-{
+bool Semantics::TestSymbol(symbol* sym, bool testconst) {
     bool entry = false;
     switch (sym->ident) {
         case iFUNCTN:
@@ -2461,11 +2459,11 @@ Semantics::TestSymbol(symbol* sym, bool testconst)
             // whether their arguments were used or not. We can't tell this until
             // the scope is exiting, which is right here, so peek at the arguments
             // for the function and check now.
-            auto node = sym->function()->node;
-            if (node && node->body()) {
-                CheckFunctionReturnUsage(node);
-                if (node->scope() && !sym->callback)
-                    TestSymbols(node->scope(), true);
+            auto canonical = sym->decl->as<FunctionDecl>()->canonical();
+            if (canonical->body()) {
+                CheckFunctionReturnUsage(canonical);
+                if (canonical->scope() && !sym->callback)
+                    TestSymbols(canonical->scope(), true);
             }
             break;
         }
@@ -2680,7 +2678,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         //   base + ((n-1)+3)*sizeof(cell) == last argument of the function
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
         assert(curfunc != NULL);
-        int argcount = (int)curfunc->function()->node->args().size();
+        int argcount = (int)curfunc->decl->as<FunctionDecl>()->canonical()->args().size();
 
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         auto var = new VarDecl(stmt->pos(), curfunc->nameAtom(), array, sGLOBAL, false,
@@ -3054,7 +3052,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         return false;
     }
 
-    auto fwd = sym->function()->forward;
+    auto fwd = info->prototype();
     if (fwd && fwd->deprecate() && !sym->stock)
         report(info->pos(), 234) << sym->name() << fwd->deprecate();
 
@@ -3064,7 +3062,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     sym->always_returns = sc_->always_returns();
 
     if (!sym->returns_value) {
-        if (sym->tag == types_->tag_void() && sym->function()->forward && !decl.type.tag() &&
+        if (sym->tag == types_->tag_void() && fwd && !decl.type.tag() &&
             !decl.type.is_new)
         {
             // We got something like:
@@ -3077,7 +3075,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     }
 
     // Make sure that a public return type matches the forward (if any).
-    if (sym->function()->forward && info->is_public()) {
+    if (fwd && info->is_public()) {
         if (sym->tag != decl.type.tag())
             report(info->pos(), 180) << type_to_name(sym->tag) << type_to_name(decl.type.tag());
     }
