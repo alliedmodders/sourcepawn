@@ -848,7 +848,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
             if (fun->is_native())
                 continue;
 
-            if (!fun->sym()->defined)
+            if (!fun->body())
                 continue;
             if (fun->sym()->unused())
                 continue;
@@ -884,7 +884,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         symbol* sym = f.sym;
 
         assert(sym->addr() > 0);
-        assert(sym->defined);
+        assert(sym->decl->as<FunctionDecl>()->impl());
         assert(sym->codeaddr > sym->addr());
 
         sp_file_publics_t& pubfunc = publics->add();

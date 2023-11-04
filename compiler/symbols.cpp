@@ -77,7 +77,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    tag(symtag),
    ident(symident),
    usage(0),
-   defined(false),
    is_const(false),
    is_static(false),
    callback(false),
@@ -105,7 +104,6 @@ symbol::symbol(const symbol& other)
     name_ = other.name_;
 
     usage = other.usage;
-    defined = other.defined;
     enumroot = other.enumroot;
     callback = other.callback;
     returns_value = other.returns_value;
@@ -276,9 +274,7 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
 static symbol*
 NewConstant(Decl* decl, Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
 {
-    auto sym = new symbol(decl, name, val, iCONSTEXPR, vclass, tag);
-    sym->defined = true;
-    return sym;
+    return new symbol(decl, name, val, iCONSTEXPR, vclass, tag);
 }
 
 symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_t& pos, cell val,
@@ -330,7 +326,6 @@ Decl* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map)
     auto sym = new symbol(decl, map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
     cc.globals()->Add(decl);
 
-    sym->defined = true;
     sym->set_data(map);
     return decl;
 }
