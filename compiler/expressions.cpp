@@ -175,16 +175,6 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
     if (!sym)
         return false;
 
-    /* check existance and the proper declaration of this function */
-    if (!sym->defined) {
-        auto types = CompileContext::get().types();
-        if (numparam == 1)
-            report(406) << opername << types->find(tag1);
-        else
-            report(407) << opername << types->find(tag1) << types->find(tag2);
-        return false;
-    }
-
     /* we don't want to use the redefined operator in the function that
      * redefines the operator itself, otherwise the snippet below gives
      * an unexpected recursion:

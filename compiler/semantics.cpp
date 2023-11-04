@@ -1301,12 +1301,6 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     if (sym->ident == iCONSTEXPR)
         val.set_constval(sym->addr());
 
-    if (sym->vclass == sGLOBAL && sym->ident != iFUNCTN) {
-        if (!sym->defined) {
-            report(expr, 17) << sym->name();
-            return false;
-        }
-    }
     if (auto fun = sym->decl->as<FunctionDecl>()) {
         if (fun->is_native()) {
             report(expr, 76);
@@ -1316,7 +1310,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             report(expr, 182);
             return false;
         }
-        if (!sym->defined) {
+        if (!fun->impl()) {
             report(expr, 4) << sym->name();
             return false;
         }
@@ -1691,6 +1685,7 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
 
             auto expr = target->to<SymbolExpr>();
             auto sym = expr->sym();
+            auto fun = sym->decl->as<FunctionDecl>();
             if (call->token() != tNEW && sym->ident == iMETHODMAP && sym->data()) {
                 auto map = sym->data()->asMethodmap();
                 if (!map->ctor) {
@@ -1709,7 +1704,7 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 report(target, 12);
                 return nullptr;
             }
-            if (!sym->defined) {
+            if (!fun->is_native() && !fun->impl()) {
                 report(target, 4) << sym->name();
                 return nullptr;
             }
@@ -1846,9 +1841,6 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         return false;
     } else if (sym->ident == iFUNCTN) {
         report(expr, 72); // "function" symbol has no size
-        return false;
-    } else if (!sym->defined) {
-        report(expr, 17) << expr->ident();
         return false;
     }
 
@@ -2450,7 +2442,7 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
                 entry = true; /* there is an entry point */
             if ((sym->usage & uREAD) == 0 &&
                 !(canonical->is_native() || canonical->is_stock() || canonical->is_public()) &&
-                sym->defined)
+                canonical->impl())
             {
                 /* symbol isn't used ... (and not public/native/stock) */
                 report(sym->decl, 203) << sym->name();

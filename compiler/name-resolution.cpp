@@ -473,7 +473,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
         sym_ = NewVariable(this, name_, 0, ident, vclass_, type_.tag(), dim,
                            type_.numdim(), type_.enum_struct_tag());
-        sym_->defined = true;
         sym_->is_static = is_static_;
 
         if (ident == iVARARGS)
@@ -481,9 +480,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
 
         sym_->is_const = type_.is_const;
     }
-
-    if (vclass_ == sGLOBAL)
-        sym_->defined = true;
 
     if (is_public_)
         sym_->usage |= uREAD;
@@ -870,8 +866,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
         is_public_ = true;
     }
 
-    if (body_ || is_native_)
-        sym_->defined = true;
     if (is_static_)
         sym_->is_static = true;
     if (is_native_)
