@@ -303,7 +303,7 @@ class AutoCollectSemaFlow final
     bool old_value_;
 };
 
-void ReportFunctionReturnError(symbol* sym);
+void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym);
 bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);

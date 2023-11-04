@@ -114,7 +114,9 @@ FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
     is_forward_(false),
     is_native_(false),
     is_analyzing_(false),
-    maybe_returns_array_(false)
+    maybe_returns_array_(false),
+    explicit_return_type_(false),
+    retvalue_used_(false)
 {
 }
 
@@ -152,7 +154,7 @@ bool FunctionDecl::IsVariadic() {
 
 bool FunctionDecl::MustReturnValue() const {
     auto types = CompileContext::get().types();
-    return sym_->retvalue_used || (explicit_return_type_ && sym_->tag != types->tag_void());
+    return retvalue_used_ || (explicit_return_type_ && sym_->tag != types->tag_void());
 }
 
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
