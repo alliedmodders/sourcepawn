@@ -78,8 +78,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    ident(symident),
    usage(0),
    is_const(false),
-   returns_value(false),
-   always_returns(false),
    enumroot(false),
    semantic_tag(0),
    dim_data(nullptr),
@@ -103,8 +101,6 @@ symbol::symbol(const symbol& other)
 
     usage = other.usage;
     enumroot = other.enumroot;
-    returns_value = other.returns_value;
-    always_returns = other.always_returns;
     is_const = other.is_const;
     semantic_tag = other.semantic_tag;
 
