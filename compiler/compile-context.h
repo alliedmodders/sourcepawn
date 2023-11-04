@@ -65,7 +65,7 @@ class CompileContext final
     void TrackFree(size_t bytes);
 
     SymbolScope* globals() const { return globals_; }
-    tr::unordered_set<symbol*>& functions() { return functions_; }
+    tr::unordered_set<FunctionDecl*>& functions() { return functions_; }
     tr::unordered_set<FunctionDecl*>& publics() { return publics_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
@@ -134,7 +134,7 @@ class CompileContext final
     cc::PoolAllocator allocator_;
     SymbolScope* globals_;
     std::string default_include_;
-    tr::unordered_set<symbol*> functions_;
+    tr::unordered_set<FunctionDecl*> functions_;
     tr::unordered_set<FunctionDecl*> publics_;
     std::unique_ptr<CompileOptions> options_;
     std::string outfname_;

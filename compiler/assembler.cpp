@@ -43,6 +43,7 @@
 #include "compile-options.h"
 #include "errors.h"
 #include "lexer.h"
+#include "parse-node.h"
 #include "sc.h"
 #include "scopes.h"
 #include "sctracker.h"
@@ -54,12 +55,10 @@ using namespace ke;
 
 namespace sp {
 
-static int
-sort_by_name(const void* a1, const void* a2)
-{
-    symbol* s1 = *(symbol**)a1;
-    symbol* s2 = *(symbol**)a2;
-    return strcmp(s1->name(), s2->name());
+static int sort_by_name(const void* a1, const void* a2) {
+    Decl* s1 = *(Decl**)a1;
+    Decl* s2 = *(Decl**)a2;
+    return s1->name()->str().compare(s2->name()->str());
 }
 
 struct function_entry {
@@ -822,51 +821,55 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     RttiBuilder rtti(cc_, cg_, names);
 
     std::vector<function_entry> functions;
-    std::unordered_set<symbol*> symbols;
+    std::unordered_set<Decl*> symbols;
 
     // Sort globals.
-    std::vector<symbol*> global_symbols;
+    std::vector<Decl*> global_symbols;
     cc_.globals()->ForEachSymbol([&](Decl* decl) -> void {
-        global_symbols.push_back(decl->s);
+        global_symbols.push_back(decl);
 
         // This is only to assert that we embedded pointers properly in the assembly buffer.
-        symbols.emplace(decl->s);
+        symbols.emplace(decl);
     });
-    for (const auto& sym : cc_.functions()) {
-        if (symbols.count(sym))
+    for (const auto& decl : cc_.functions()) {
+        if (symbols.count(decl))
             continue;
-        global_symbols.push_back(sym);
-        symbols.emplace(sym);
+        if (decl->canonical() != decl)
+            continue;
+        global_symbols.push_back(decl);
+        symbols.emplace(decl);
     }
 
     qsort(global_symbols.data(), global_symbols.size(), sizeof(symbol*), sort_by_name);
 
     // Build the easy symbol tables.
-    for (const auto& sym : global_symbols) {
-        if (sym->ident == iFUNCTN) {
-            if (sym->native)
+    for (const auto& decl : global_symbols) {
+        if (auto fun = decl->as<FunctionDecl>()) {
+            if (fun->is_native())
                 continue;
 
-            if (!sym->defined)
+            if (!fun->sym()->defined)
                 continue;
-            if (sym->unused())
+            if (fun->sym()->unused())
+                continue;
+            if (fun->canonical() != fun)
                 continue;
 
             function_entry entry;
-            entry.sym = sym;
-            if (sym->is_public) {
-                entry.name = sym->name();
+            entry.sym = fun->sym();
+            if (fun->is_public()) {
+                entry.name = fun->name()->str();
             } else {
                 // Create a private name.
-                entry.name = ke::StringPrintf(".%d.%s", sym->addr(), sym->name());
+                entry.name = ke::StringPrintf(".%d.%s", fun->sym()->addr(), fun->name()->chars());
             }
 
             functions.emplace_back(std::move(entry));
-        } else if (sym->ident == iVARIABLE || sym->ident == iARRAY || sym->ident == iREFARRAY) {
-            if (sym->is_public || (sym->usage & (uREAD | uWRITTEN)) != 0) {
+        } else if (auto var = decl->as<VarDeclBase>()) {
+            if (var->is_public() || (var->sym()->usage & (uREAD | uWRITTEN)) != 0) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
-                pubvar.address = sym->addr();
-                pubvar.name = names->add(sym->nameAtom());
+                pubvar.address = var->sym()->addr();
+                pubvar.name = names->add(var->name());
             }
         }
     }
