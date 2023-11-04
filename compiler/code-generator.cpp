@@ -1796,7 +1796,8 @@ CodeGenerator::EmitFunctionDecl(FunctionDecl* info)
     if (info->sym()->unused())
         return;
 
-    cc_.functions().emplace(info->sym());
+    if (info->canonical() == info)
+        cc_.functions().emplace(info);
 
     if (!info->body())
         return;
