@@ -106,7 +106,6 @@ struct symbol : public PoolObject
     bool callback : 1;      // used as a callback
     bool returns_value : 1; // whether any path returns a value
     bool always_returns: 1; // whether all paths have an explicit return statement
-    bool is_operator : 1;
 
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration

@@ -83,7 +83,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    callback(false),
    returns_value(false),
    always_returns(false),
-   is_operator(false),
    enumroot(false),
    semantic_tag(0),
    dim_data(nullptr),
@@ -111,7 +110,6 @@ symbol::symbol(const symbol& other)
     callback = other.callback;
     returns_value = other.returns_value;
     always_returns = other.always_returns;
-    is_operator = other.is_operator;
     is_const = other.is_const;
     semantic_tag = other.semantic_tag;
 
