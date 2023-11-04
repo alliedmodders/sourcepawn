@@ -1302,6 +1302,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         val.set_constval(sym->addr());
 
     if (auto fun = sym->decl->as<FunctionDecl>()) {
+        fun = fun->canonical();
         if (fun->is_native()) {
             report(expr, 76);
             return false;
@@ -1323,7 +1324,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
         // Mark as being indirectly invoked. Direct invocations go through
         // BindCallTarget.
-        sym->callback = true;
+        fun->set_is_callback();
     }
 
     switch (sym->ident) {
@@ -2455,7 +2456,7 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             // for the function and check now.
             if (canonical->body()) {
                 CheckFunctionReturnUsage(canonical);
-                if (canonical->scope() && !sym->callback)
+                if (canonical->scope() && !canonical->is_callback())
                     TestSymbols(canonical->scope(), true);
             }
             break;
