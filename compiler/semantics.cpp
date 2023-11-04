@@ -3091,7 +3091,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     }
 
     if (sym->is_public)
-        cc_.publics().emplace(sym);
+        cc_.publics().emplace(sym->decl->as<FunctionDecl>()->canonical());
     return ok;
 }
 

@@ -61,7 +61,7 @@ markusage(symbol* sym, int usage)
     if (sym->ident != iFUNCTN)
         return;
 
-    parent_func->add_reference_to(sym);
+    parent_func->add_reference_to(sym->decl->as<FunctionDecl>()->canonical());
 }
 
 FunctionData::FunctionData()
@@ -145,10 +145,10 @@ void symbol::set_dim_count(int dim_count) {
 }
 
 void
-symbol::add_reference_to(symbol* other)
+symbol::add_reference_to(FunctionDecl* other)
 {
-    for (symbol* sym : function()->refers_to) {
-        if (sym == other)
+    for (FunctionDecl* decl : function()->refers_to) {
+        if (decl == other)
             return;
     }
     function()->refers_to.emplace_front(other);
@@ -221,41 +221,30 @@ check_operatortag(int opertok, int resulttag, const char* opername)
 }
 
 // Determine the set of live functions.
-void
-deduce_liveness(CompileContext& cc)
-{
-    std::vector<symbol*> work;
+void deduce_liveness(CompileContext& cc) {
+    std::vector<FunctionDecl*> work;
+    std::unordered_set<FunctionDecl*> seen;
 
     // The root set is all public functions.
-    for (const auto& sym : cc.publics()) {
-        if (sym->native)
-            return;
+    for (const auto& decl : cc.publics()) {
+        assert(!decl->is_native());
+        assert(decl->is_public());
 
-        if (sym->is_public) {
-            sym->queued = true;
-            sym->usage |= uLIVE;
-            work.push_back(sym);
-        } else {
-            sym->queued = false;
-        }
+        seen.emplace(decl);
+        decl->s->usage |= uLIVE;
+        work.emplace_back(decl);
     }
-
-    auto enqueue = [&](symbol* other) -> bool {
-        if (other->ident != iFUNCTN || other->queued)
-            return false;
-        other->queued = true;
-        other->usage |= uLIVE;
-        work.push_back(other);
-        return true;
-    };
 
     // Traverse referrers to find the transitive set of live functions.
     while (!work.empty()) {
-        symbol* live = ke::PopBack(&work);
+        FunctionDecl* live = ke::PopBack(&work);
 
-        for (const auto& other : live->function()->refers_to) {
-            if (!enqueue(other))
+        for (const auto& other : live->sym()->function()->refers_to) {
+            if (seen.count(other))
                 continue;
+            seen.emplace(other);
+            other->sym()->usage |= uLIVE;
+            work.emplace_back(other);
         }
     }
 }
