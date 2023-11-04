@@ -939,13 +939,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     if (body_)
         ok &= body_->Bind(sc);
 
-    if (sym_->native && alias_) {
-        auto alias_sym = FindSymbol(sc, alias_);
-        if (!alias_sym)
-            report(pos_, 17) << alias_;
-        sym_->function()->alias = alias_sym;
-    }
-
     if (ok && deprecate_) {
         sym_->documentation = new PoolString(deprecate_->chars(), deprecate_->length());
         sym_->deprecated = true;

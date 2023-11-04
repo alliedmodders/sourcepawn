@@ -1868,11 +1868,6 @@ CodeGenerator::EmitCall(symbol* sym, cell nargs)
     assert(sym->used());
 
     if (sym->native) {
-        if (auto alias = sym->function()->alias) {
-            sym = alias;
-            assert(sym->used());
-        }
-
         if (sym->addr() < 0) {
             sym->setAddr((cell)native_list_.size());
             native_list_.emplace_back(sym);

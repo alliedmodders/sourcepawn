@@ -45,18 +45,18 @@ native bool __float_not(float a);
 native int __float_to_int(float a);
 native float float(int value);
 
-native float operator*(float oper1, float oper2) = __float_mul;
-native float operator/(float oper1, float oper2) = __float_div;
-native float operator+(float oper1, float oper2) = __float_add;
-native float operator-(float oper1, float oper2) = __float_sub;
-native float operator%(float oper1, float oper2) = __float_mod;
-native bool operator!(float oper1) = __float_not;
-native bool operator>(float oper1, float oper2) = __float_gt;
-native bool operator>=(float oper1, float oper2) = __float_ge;
-native bool operator<(float oper1, float oper2) = __float_lt;
-native bool operator<=(float oper1, float oper2) = __float_le;
-native bool operator!=(float oper1, float oper2) = __float_ne;
-native bool operator==(float oper1, float oper2) = __float_eq;
+stock float operator*(float oper1, float oper2) { return __float_mul(oper1, oper2); }
+stock float operator/(float oper1, float oper2) { return __float_div(oper1, oper2); }
+stock float operator+(float oper1, float oper2) { return __float_add(oper1, oper2); }
+stock float operator-(float oper1, float oper2) { return __float_sub(oper1, oper2); }
+stock float operator%(float oper1, float oper2) { return __float_mod(oper1, oper2); }
+stock bool operator!(float oper1) { return __float_not(oper1); }
+stock bool operator>(float oper1, float oper2) { return __float_gt(oper1, oper2); }
+stock bool operator>=(float oper1, float oper2) { return __float_ge(oper1, oper2); }
+stock bool operator<(float oper1, float oper2) { return __float_lt(oper1, oper2); }
+stock bool operator<=(float oper1, float oper2) { return __float_le(oper1, oper2); }
+stock bool operator!=(float oper1, float oper2) { return __float_ne(oper1, oper2); }
+stock bool operator==(float oper1, float oper2) { return __float_eq(oper1, oper2); }
 
 stock float operator++(float oper)
 {

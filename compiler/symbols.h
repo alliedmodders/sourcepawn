@@ -59,7 +59,6 @@ class FunctionData final : public SymbolData
     ReturnArrayInfo* return_array = nullptr;
     FunctionDecl* node;
     FunctionDecl* forward;
-    symbol* alias;
     symbol* array_return = nullptr;
     Label label;     // modern replacement for addr
     Label funcid;

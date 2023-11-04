@@ -907,11 +907,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         assert(size_t(sym->addr()) == i);
 
         sp_file_natives_t& entry = natives->add();
-
-        if (auto alias = sym->function()->alias)
-            entry.name = names->add(*cc_.atoms(), "@" + alias->nameAtom()->str());
-        else
-            entry.name = names->add(sym->nameAtom());
+        entry.name = names->add(sym->nameAtom());
 
         rtti.add_native(sym);
     }

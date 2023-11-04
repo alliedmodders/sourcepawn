@@ -67,7 +67,6 @@ markusage(symbol* sym, int usage)
 FunctionData::FunctionData()
   : node(nullptr),
     forward(nullptr),
-    alias(nullptr),
     checked_one_signature(false),
     compared_prototype_args(false),
     is_member_function(false)
@@ -273,8 +272,6 @@ deduce_liveness(CompileContext& cc)
         for (const auto& other : live->function()->refers_to) {
             if (!enqueue(other))
                 continue;
-            if (auto alias = other->function()->alias)
-                enqueue(alias);
         }
     }
 }
