@@ -98,9 +98,6 @@ struct symbol : public PoolObject
     // Constant: the symbol is defined in the source file.
     bool is_const : 1;
 
-    // Variables and functions.
-    bool is_static : 1;     // declared as static
-
     // Functions only.
     bool callback : 1;      // used as a callback
     bool returns_value : 1; // whether any path returns a value
