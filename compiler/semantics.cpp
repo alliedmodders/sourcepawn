@@ -1265,10 +1265,8 @@ CastExpr::ProcessUses(SemaContext& sc)
     expr_->MarkAndProcessUses(sc);
 }
 
-void
-SymbolExpr::MarkUsed(SemaContext& sc)
-{
-    markusage(sym_, uREAD);
+void SymbolExpr::MarkUsed(SemaContext& sc) {
+    markusage(sym(), uREAD);
 }
 
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
