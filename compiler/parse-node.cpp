@@ -116,7 +116,8 @@ FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
     is_analyzing_(false),
     maybe_returns_array_(false),
     explicit_return_type_(false),
-    retvalue_used_(false)
+    retvalue_used_(false),
+    is_callback_(false)
 {
 }
 

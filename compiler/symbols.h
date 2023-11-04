@@ -99,7 +99,6 @@ struct symbol : public PoolObject
     bool is_const : 1;
 
     // Functions only.
-    bool callback : 1;      // used as a callback
     bool returns_value : 1; // whether any path returns a value
     bool always_returns: 1; // whether all paths have an explicit return statement
 

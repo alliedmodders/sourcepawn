@@ -954,7 +954,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         if (var->type().ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (sym_->callback || is_stock_ || is_public_)
+        if (is_callback_ || is_stock_ || is_public_)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
 
         /* arguments of a public function may not have a default value */

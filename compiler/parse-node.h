@@ -1629,6 +1629,8 @@ class FunctionDecl : public Decl
     }
     bool retvalue_used() const { return retvalue_used_; }
     void set_retvalue_used() { retvalue_used_ = true; }
+    bool is_callback() const { return is_callback_; }
+    void set_is_callback() { is_callback_ = true; }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
     const char* deprecate() const {
@@ -1670,6 +1672,7 @@ class FunctionDecl : public Decl
     bool maybe_returns_array_ SP_BITFIELD(1);
     bool explicit_return_type_ SP_BITFIELD(1);
     bool retvalue_used_ SP_BITFIELD(1);
+    bool is_callback_ SP_BITFIELD(1);
 };
 
 class EnumStructFieldDecl : public Decl
