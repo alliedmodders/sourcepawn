@@ -54,8 +54,6 @@ class FunctionData final : public SymbolData
         return this;
     }
 
-    void resizeArgs(size_t nargs);
-
     tr::vector<tr::string>* dbgstrs = nullptr;
     ReturnArrayInfo* return_array = nullptr;
     symbol* array_return = nullptr;
@@ -112,7 +110,6 @@ struct symbol : public PoolObject
     // Functions only.
     bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback
-    bool native : 1;        // the function is native
     bool returns_value : 1; // whether any path returns a value
     bool always_returns: 1; // whether all paths have an explicit return statement
     bool retvalue_used : 1; // the return value is used

@@ -285,7 +285,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
         }
     }
 
-    if ((sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0) && !sym->native)
+    if (sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0)
         EnqueueDebugSymbol(sym);
 }
 
@@ -1087,7 +1087,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
             __ address(sym, sPRI);
             break;
         case iFUNCTN:
-            assert(!sym->native);
+            assert(!sym->decl->as<FunctionDecl>()->canonical()->is_native());
             assert(sym->used());
             assert(sym->usage & uREAD);
             __ emit(OP_CONST_PRI, &sym->function()->funcid);
@@ -1869,9 +1869,10 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
 void
 CodeGenerator::EmitCall(symbol* sym, cell nargs)
 {
+    auto fun = sym->decl->as<FunctionDecl>();
     assert(sym->used());
 
-    if (sym->native) {
+    if (fun->is_native()) {
         if (sym->addr() < 0) {
             sym->setAddr((cell)native_list_.size());
             native_list_.emplace_back(sym);
