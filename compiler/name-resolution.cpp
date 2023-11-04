@@ -485,10 +485,8 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (vclass_ == sGLOBAL)
         sym_->defined = true;
 
-    if (is_public_) {
-        sym_->is_public = true;
+    if (is_public_)
         sym_->usage |= uREAD;
-    }
 
     if (def_ok)
         DefineSymbol(sc, this, vclass_);
@@ -876,8 +874,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 
     if (body_ || is_native_)
         sym_->defined = true;
-    if (is_public_)
-        sym_->is_public = true;
     if (is_static_)
         sym_->is_static = true;
     if (is_native_)
@@ -895,7 +891,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
             markusage(args_[0]->sym(), uREAD);
     }
 
-    if ((is_native_ || sym_->is_public || is_forward_) && decl_.type.numdim() > 0)
+    if ((is_native_ || is_public_ || is_forward_) && decl_.type.numdim() > 0)
         error(pos_, 141);
 
     ok &= BindArgs(sc);
@@ -969,11 +965,11 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         if (var->type().ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (sym_->callback || is_stock_ || sym_->is_public)
+        if (sym_->callback || is_stock_ || is_public_)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
 
         /* arguments of a public function may not have a default value */
-        if (sym_->is_public && var->default_value())
+        if (is_public_ && var->default_value())
             report(var->pos(), 59) << var->name();
     }
 
