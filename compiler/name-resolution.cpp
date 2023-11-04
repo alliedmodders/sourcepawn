@@ -464,7 +464,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
         sym_ = new symbol(this, name_, 0, iVARIABLE, sGLOBAL, type_.tag());
-        sym_->stock = is_stock_;
         sym_->is_const = true;
     } else {
         IdentifierKind ident = type_.ident;
@@ -481,7 +480,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
             markusage(sym_, uREAD);
 
         sym_->is_const = type_.is_const;
-        sym_->stock = is_stock_;
     }
 
     if (vclass_ == sGLOBAL)
@@ -882,8 +880,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
         sym_->is_public = true;
     if (is_static_)
         sym_->is_static = true;
-    if (is_stock_)
-        sym_->stock = true;
     if (is_native_)
         sym_->setAddr(-1);
 
@@ -973,7 +969,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         if (var->type().ident == iREFERENCE)
             argsym->usage |= uREAD; /* because references are passed back */
-        if (sym_->callback || sym_->stock || sym_->is_public)
+        if (sym_->callback || is_stock_ || sym_->is_public)
             argsym->usage |= uREAD; /* arguments of public functions are always "used" */
 
         /* arguments of a public function may not have a default value */
