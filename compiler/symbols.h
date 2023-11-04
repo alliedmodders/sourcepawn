@@ -100,7 +100,6 @@ struct symbol : public PoolObject
     bool is_const : 1;
 
     // Variables and functions.
-    bool stock : 1;         // discardable without warning
     bool is_public : 1;     // publicly exposed
     bool is_static : 1;     // declared as static
 

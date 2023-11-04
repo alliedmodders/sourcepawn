@@ -79,7 +79,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    usage(0),
    defined(false),
    is_const(false),
-   stock(false),
    is_public(false),
    is_static(false),
    callback(false),
@@ -117,7 +116,6 @@ symbol::symbol(const symbol& other)
     returns_value = other.returns_value;
     always_returns = other.always_returns;
     is_operator = other.is_operator;
-    stock = other.stock;
     is_public = other.is_public;
     is_const = other.is_const;
     semantic_tag = other.semantic_tag;

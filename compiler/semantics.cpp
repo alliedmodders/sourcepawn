@@ -2449,7 +2449,8 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
                 entry = true; /* there is an entry point */
             if ((sym->usage & uREAD) == 0 &&
-                !(canonical->is_native() || sym->stock || sym->is_public) && sym->defined)
+                !(canonical->is_native() || canonical->is_stock() || sym->is_public) &&
+                sym->defined)
             {
                 /* symbol isn't used ... (and not public/native/stock) */
                 report(sym->decl, 203) << sym->name();
@@ -2476,13 +2477,15 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
         case iENUMSTRUCT:
             // Ignore usage on methodmaps and enumstructs.
             break;
-        default:
+        default: {
+            auto var = sym->decl->as<VarDeclBase>();
             /* a variable */
-            if (!sym->stock && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
+            if (!var->is_stock() && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
                 report(sym->decl, 203) << sym->name(); /* symbol isn't used (and not stock) */
-            } else if (!sym->stock && !sym->is_public && (sym->usage & uREAD) == 0) {
+            } else if (!var->is_stock() && !sym->is_public && (sym->usage & uREAD) == 0) {
                 report(sym->decl, 204) << sym->name(); /* value assigned to symbol is never used */
             }
+        }
     }
     return entry;
 }
@@ -3053,7 +3056,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     }
 
     auto fwd = info->prototype();
-    if (fwd && fwd->deprecate() && !sym->stock)
+    if (fwd && fwd->deprecate() && !info->is_stock())
         report(info->pos(), 234) << sym->name() << fwd->deprecate();
 
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);

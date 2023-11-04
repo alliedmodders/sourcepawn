@@ -337,6 +337,7 @@ class VarDeclBase : public Decl
     void set_no_autozero() { autozero_ = false; }
     symbol* sym() const { return sym_; }
     bool is_public() const { return is_public_; }
+    bool is_stock() const { return is_stock_; }
 
   protected:
     typeinfo_t type_;
