@@ -2446,10 +2446,10 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
         case iFUNCTN:
         {
             auto canonical = sym->decl->as<FunctionDecl>()->canonical();
-            if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
+            if (canonical->is_public() || strcmp(sym->name(), uMAINFUNC) == 0)
                 entry = true; /* there is an entry point */
             if ((sym->usage & uREAD) == 0 &&
-                !(canonical->is_native() || canonical->is_stock() || sym->is_public) &&
+                !(canonical->is_native() || canonical->is_stock() || canonical->is_public()) &&
                 sym->defined)
             {
                 /* symbol isn't used ... (and not public/native/stock) */
@@ -2480,9 +2480,9 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
         default: {
             auto var = sym->decl->as<VarDeclBase>();
             /* a variable */
-            if (!var->is_stock() && (sym->usage & (uWRITTEN | uREAD)) == 0 && !sym->is_public) {
+            if (!var->is_stock() && (sym->usage & (uWRITTEN | uREAD)) == 0 && !var->is_public()) {
                 report(sym->decl, 203) << sym->name(); /* symbol isn't used (and not stock) */
-            } else if (!var->is_stock() && !sym->is_public && (sym->usage & uREAD) == 0) {
+            } else if (!var->is_stock() && !var->is_public() && (sym->usage & uREAD) == 0) {
                 report(sym->decl, 204) << sym->name(); /* value assigned to symbol is never used */
             }
         }
@@ -2606,7 +2606,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
             report(stmt, 79); /* mixing "return array;" and "return value;" */
             return false;
         }
-        if (retarray && curfunc->is_public) {
+        if (retarray && sc_->func_node()->is_public()) {
             report(stmt, 90) << curfunc->name(); /* public function may not return array */
             return false;
         }
@@ -3093,7 +3093,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
             TestSymbols(info->scope(), true);
     }
 
-    if (sym->is_public)
+    if (info->is_public())
         cc_.publics().emplace(sym->decl->as<FunctionDecl>()->canonical());
     return ok;
 }

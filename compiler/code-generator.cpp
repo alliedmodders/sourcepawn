@@ -285,7 +285,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
         }
     }
 
-    if (sym->is_public || (sym->usage & (uWRITTEN | uREAD)) != 0)
+    if (decl->is_public() || (sym->usage & (uWRITTEN | uREAD)) != 0)
         EnqueueDebugSymbol(sym);
 }
 
