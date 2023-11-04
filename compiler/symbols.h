@@ -104,9 +104,6 @@ struct symbol : public PoolObject
     bool is_public : 1;     // publicly exposed
     bool is_static : 1;     // declared as static
 
-    // TODO: make this an ident.
-    bool is_struct : 1;
-
     // Functions only.
     bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback

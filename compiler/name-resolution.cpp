@@ -464,7 +464,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
         sym_ = new symbol(this, name_, 0, iVARIABLE, sGLOBAL, type_.tag());
-        sym_->is_struct = true;
         sym_->stock = is_stock_;
         sym_->is_const = true;
     } else {
