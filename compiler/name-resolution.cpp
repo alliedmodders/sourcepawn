@@ -473,7 +473,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
         sym_ = NewVariable(this, name_, 0, ident, vclass_, type_.tag(), dim,
                            type_.numdim(), type_.enum_struct_tag());
-        sym_->is_static = is_static_;
 
         if (ident == iVARARGS)
             markusage(sym_, uREAD);
@@ -866,8 +865,6 @@ FunctionDecl::Bind(SemaContext& outer_sc)
         is_public_ = true;
     }
 
-    if (is_static_)
-        sym_->is_static = true;
     if (is_native_)
         sym_->setAddr(-1);
 
