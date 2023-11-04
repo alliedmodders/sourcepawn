@@ -878,7 +878,7 @@ class SymbolExpr final : public Expr
     SymbolExpr(const token_pos_t& pos, Atom* name)
       : Expr(ExprKind::SymbolExpr, pos),
         name_(name),
-        sym_(nullptr)
+        decl_(nullptr)
     {
     }
 
@@ -889,14 +889,14 @@ class SymbolExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SymbolExpr; }
 
-    symbol* sym() const { return sym_; }
+    symbol* sym() const { return decl_ ? decl_->s : nullptr; }
 
   private:
     bool DoBind(SemaContext& sc, bool is_lval);
 
   private:
     Atom* name_;
-    symbol* sym_;
+    Decl* decl_;
 };
 
 class NamedArgExpr : public Expr

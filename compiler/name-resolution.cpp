@@ -519,15 +519,14 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         report(pos_, 230) << name_;
     }
 
-    auto decl = FindSymbol(sc, name_);
-    if (!decl) {
+    decl_ = FindSymbol(sc, name_);
+    if (!decl_) {
         report(pos_, 17) << name_;
         return false;
     }
-    sym_ = decl->s;
 
     if (!is_lval)
-        markusage(sym_, uREAD);
+        markusage(sym(), uREAD);
     return true;
 }
 
