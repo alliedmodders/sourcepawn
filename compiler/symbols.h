@@ -106,7 +106,6 @@ struct symbol : public PoolObject
     bool callback : 1;      // used as a callback
     bool returns_value : 1; // whether any path returns a value
     bool always_returns: 1; // whether all paths have an explicit return statement
-    bool retvalue_used : 1; // the return value is used
     bool is_operator : 1;
 
     // Constants only.

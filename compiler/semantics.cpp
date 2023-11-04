@@ -2293,7 +2293,7 @@ void
 CallExpr::MarkUsed(SemaContext& sc)
 {
     if (sym_)
-        sym_->retvalue_used = true;
+        sym_->decl->as<FunctionDecl>()->canonical()->set_retvalue_used();
 }
 
 bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
@@ -2563,7 +2563,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     auto expr = stmt->expr();
     if (!expr) {
         if (fun->MustReturnValue())
-            ReportFunctionReturnError(curfunc);
+            ReportFunctionReturnError(fun, curfunc);
         if (sc_->void_return())
             return true;
         sc_->set_void_return(stmt);
@@ -2976,7 +2976,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     return true;
 }
 
-void ReportFunctionReturnError(symbol* sym) {
+void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
     if (sym->function()->is_member_function) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
@@ -2993,7 +2993,7 @@ void ReportFunctionReturnError(symbol* sym) {
     if (sym->tag == 0) {
         report(sym->decl, 209) << sym->name();
     } else if (types->find(sym->tag)->isEnum() || sym->tag == types->tag_bool() ||
-               sym->tag == types->tag_float() || !sym->retvalue_used)
+               sym->tag == types->tag_float() || !decl->retvalue_used())
     {
         report(sym->decl, 242) << sym->name();
     } else {
@@ -3105,7 +3105,7 @@ void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
         return;
 
     if (info->MustReturnValue())
-        ReportFunctionReturnError(sym);
+        ReportFunctionReturnError(info, sym);
 
         // Synthesize a return statement.
     std::vector<Stmt*> stmts = {
