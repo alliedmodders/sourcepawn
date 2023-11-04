@@ -86,7 +86,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    retvalue_used(false),
    is_operator(false),
    enumroot(false),
-   explicit_return_type(false),
    semantic_tag(0),
    dim_data(nullptr),
    decl(decl),
@@ -142,14 +141,6 @@ symbol::add_reference_to(FunctionDecl* other)
             return;
     }
     function()->refers_to.emplace_front(other);
-}
-
-bool
-symbol::must_return_value() const
-{
-    auto types = CompileContext::get().types();
-    assert(ident == iFUNCTN);
-    return retvalue_used || (explicit_return_type && tag != types->tag_void());
 }
 
 symbol*

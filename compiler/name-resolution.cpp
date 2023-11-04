@@ -816,7 +816,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     // implementation. Note that args are checked similarly in BindArgs.
     if (!prototype()->is_forward() || is_forward_) {
         sym_->tag = decl_.type.tag();
-        sym_->explicit_return_type = decl_.type.is_new;
+        explicit_return_type_ = decl_.type.is_new;
     }
 
     // Ensure |this| argument exists.
