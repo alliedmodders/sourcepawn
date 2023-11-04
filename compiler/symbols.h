@@ -112,9 +112,6 @@ struct symbol : public PoolObject
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
 
-    // General symbol flags.
-    bool explicit_return_type : 1; // transitional return type was specified
-
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
     Decl* decl;
@@ -166,7 +163,6 @@ struct symbol : public PoolObject
 
     void add_reference_to(FunctionDecl* other);
 
-    bool must_return_value() const;
     bool used() const {
         assert(ident == iFUNCTN);
         return (usage & uLIVE) == uLIVE;

@@ -1559,6 +1559,7 @@ class FunctionDecl : public Decl
 
     bool IsVariadic() const;
     int FindNamedArg(Atom* name) const;
+    bool MustReturnValue() const;
 
     const token_pos_t& end_pos() const { return end_pos_; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
@@ -1665,6 +1666,7 @@ class FunctionDecl : public Decl
     bool is_native_ SP_BITFIELD(1);
     bool is_analyzing_ SP_BITFIELD(1);
     bool maybe_returns_array_ SP_BITFIELD(1);
+    bool explicit_return_type_ SP_BITFIELD(1);
 };
 
 class EnumStructFieldDecl : public Decl

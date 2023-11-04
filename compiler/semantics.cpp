@@ -2557,11 +2557,12 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     sc_->set_always_returns();
     sc_->loop_has_return() = true;
 
+    auto fun = sc_->func_node();
     symbol* curfunc = sc_->func();
 
     auto expr = stmt->expr();
     if (!expr) {
-        if (curfunc->must_return_value())
+        if (fun->MustReturnValue())
             ReportFunctionReturnError(curfunc);
         if (sc_->void_return())
             return true;
@@ -3103,7 +3104,7 @@ void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
     if (sym->returns_value && sym->always_returns)
         return;
 
-    if (sym->must_return_value())
+    if (info->MustReturnValue())
         ReportFunctionReturnError(sym);
 
         // Synthesize a return statement.

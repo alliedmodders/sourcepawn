@@ -150,6 +150,11 @@ bool FunctionDecl::IsVariadic() {
     return !args_.empty() && args_.back()->type().ident == iVARARGS;
 }
 
+bool FunctionDecl::MustReturnValue() const {
+    auto types = CompileContext::get().types();
+    return sym_->retvalue_used || (explicit_return_type_ && sym_->tag != types->tag_void());
+}
+
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {
