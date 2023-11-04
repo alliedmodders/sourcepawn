@@ -3055,10 +3055,10 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
-    sym->returns_value = sc_->returns_value();
-    sym->always_returns = sc_->always_returns();
+    info->set_returns_value(sc_->returns_value());
+    info->set_always_returns(sc_->always_returns());
 
-    if (!sym->returns_value) {
+    if (!info->returns_value()) {
         if (sym->tag == types_->tag_void() && fwd && !decl.type.tag() &&
             !decl.type.is_new)
         {
@@ -3094,7 +3094,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
     auto sym = info->sym();
-    if (sym->returns_value && sym->always_returns)
+    if (info->returns_value() && info->always_returns())
         return;
 
     if (info->MustReturnValue())

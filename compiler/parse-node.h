@@ -1631,6 +1631,10 @@ class FunctionDecl : public Decl
     void set_retvalue_used() { retvalue_used_ = true; }
     bool is_callback() const { return is_callback_; }
     void set_is_callback() { is_callback_ = true; }
+    bool returns_value() const { return returns_value_; }
+    void set_returns_value(bool value) { returns_value_ = value; }
+    bool always_returns() const { return always_returns_; }
+    void set_always_returns(bool value) { always_returns_ = value; }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
     const char* deprecate() const {
@@ -1673,6 +1677,8 @@ class FunctionDecl : public Decl
     bool explicit_return_type_ SP_BITFIELD(1);
     bool retvalue_used_ SP_BITFIELD(1);
     bool is_callback_ SP_BITFIELD(1);
+    bool returns_value_ SP_BITFIELD(1); // whether any path returns a value
+    bool always_returns_ SP_BITFIELD(1); // whether all paths have an explicit return statement
 };
 
 class EnumStructFieldDecl : public Decl

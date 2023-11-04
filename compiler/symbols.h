@@ -98,10 +98,6 @@ struct symbol : public PoolObject
     // Constant: the symbol is defined in the source file.
     bool is_const : 1;
 
-    // Functions only.
-    bool returns_value : 1; // whether any path returns a value
-    bool always_returns: 1; // whether all paths have an explicit return statement
-
     // Constants only.
     bool enumroot : 1;      // the constant is the "root" of an enumeration
 
