@@ -1307,8 +1307,8 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return false;
         }
     }
-    if (sym->ident == iFUNCTN) {
-        if (sym->native) {
+    if (auto fun = sym->decl->as<FunctionDecl>()) {
+        if (fun->is_native()) {
             report(expr, 76);
             return false;
         }
@@ -2445,10 +2445,11 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
     switch (sym->ident) {
         case iFUNCTN:
         {
+            auto canonical = sym->decl->as<FunctionDecl>()->canonical();
             if (sym->is_public || strcmp(sym->name(), uMAINFUNC) == 0)
                 entry = true; /* there is an entry point */
-            if ((sym->usage & uREAD) == 0 && !(sym->native || sym->stock || sym->is_public) &&
-                sym->defined)
+            if ((sym->usage & uREAD) == 0 &&
+                !(canonical->is_native() || sym->stock || sym->is_public) && sym->defined)
             {
                 /* symbol isn't used ... (and not public/native/stock) */
                 report(sym->decl, 203) << sym->name();
@@ -2459,7 +2460,6 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             // whether their arguments were used or not. We can't tell this until
             // the scope is exiting, which is right here, so peek at the arguments
             // for the function and check now.
-            auto canonical = sym->decl->as<FunctionDecl>()->canonical();
             if (canonical->body()) {
                 CheckFunctionReturnUsage(canonical);
                 if (canonical->scope() && !sym->callback)
@@ -3036,7 +3036,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     }
 
     auto sym = info->sym();
-    if (sym->native) {
+    if (info->is_native()) {
         if (decl.type.numdim() > 0) {
             report(info->pos(), 83);
             return false;

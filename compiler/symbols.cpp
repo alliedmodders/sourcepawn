@@ -84,7 +84,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    is_static(false),
    is_struct(false),
    callback(false),
-   native(false),
    returns_value(false),
    always_returns(false),
    retvalue_used(false),
@@ -119,7 +118,6 @@ symbol::symbol(const symbol& other)
     returns_value = other.returns_value;
     always_returns = other.always_returns;
     is_operator = other.is_operator;
-    native = other.native;
     stock = other.stock;
     is_struct = other.is_struct;
     is_public = other.is_public;
