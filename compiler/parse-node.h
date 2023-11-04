@@ -1547,8 +1547,6 @@ class FunctionDecl : public Decl
     const token_pos_t& end_pos() const { return end_pos_; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
 
-    void set_alias(Atom* alias) { alias_ = alias; }
-
     const ke::Maybe<int>& this_tag() const { return this_tag_; }
     void set_this_tag(int this_tag) {
         if (this_tag != -1)
@@ -1624,7 +1622,6 @@ class FunctionDecl : public Decl
     symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
-    Atom* alias_ = nullptr;
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);

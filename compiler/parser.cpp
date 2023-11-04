@@ -1754,9 +1754,8 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
             lexer_->lexpush();
         }
         if (lexer_->match('=')) {
-            Atom* ident;
-            if (lexer_->needsymbol(&ident))
-                fun->set_alias(ident);
+            report(442);
+            lexer_->match(tSYMBOL);
         }
     }
 
