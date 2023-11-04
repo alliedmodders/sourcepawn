@@ -103,7 +103,6 @@ struct symbol : public PoolObject
     bool is_static : 1;     // declared as static
 
     // Functions only.
-    bool missing : 1;       // the function is not implemented in this source file
     bool callback : 1;      // used as a callback
     bool returns_value : 1; // whether any path returns a value
     bool always_returns: 1; // whether all paths have an explicit return statement
