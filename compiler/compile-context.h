@@ -37,6 +37,7 @@
 namespace sp {
 
 class Decl;
+class FunctionDecl;
 class Lexer;
 class ReportManager;
 class SemaContext;
@@ -65,7 +66,7 @@ class CompileContext final
 
     SymbolScope* globals() const { return globals_; }
     tr::unordered_set<symbol*>& functions() { return functions_; }
-    tr::unordered_set<symbol*>& publics() { return publics_; }
+    tr::unordered_set<FunctionDecl*>& publics() { return publics_; }
     const std::shared_ptr<Lexer>& lexer() const { return lexer_; }
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
@@ -134,7 +135,7 @@ class CompileContext final
     SymbolScope* globals_;
     std::string default_include_;
     tr::unordered_set<symbol*> functions_;
-    tr::unordered_set<symbol*> publics_;
+    tr::unordered_set<FunctionDecl*> publics_;
     std::unique_ptr<CompileOptions> options_;
     std::string outfname_;
     std::string errfname_;

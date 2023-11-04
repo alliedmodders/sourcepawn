@@ -813,6 +813,8 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
         sym_ = new symbol(this, decl_.name, 0, iFUNCTN, sGLOBAL, 0);
+    if (!s)
+        s = sym_;
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public

@@ -68,7 +68,7 @@ class FunctionData final : public SymbolData
     bool is_member_function SP_BITFIELD(1);
 
     // Other symbols that this symbol refers to.
-    PoolForwardList<symbol*> refers_to;
+    PoolForwardList<FunctionDecl*> refers_to;
 };
 
 /*  Symbol table format
@@ -174,7 +174,7 @@ struct symbol : public PoolObject
         data_ = std::move(data);
     }
 
-    void add_reference_to(symbol* other);
+    void add_reference_to(FunctionDecl* other);
 
     bool must_return_value() const;
     bool used() const {
