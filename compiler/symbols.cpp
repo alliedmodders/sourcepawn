@@ -86,7 +86,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    retvalue_used(false),
    is_operator(false),
    enumroot(false),
-   queued(false),
    explicit_return_type(false),
    semantic_tag(0),
    dim_data(nullptr),
@@ -117,7 +116,6 @@ symbol::symbol(const symbol& other)
     is_operator = other.is_operator;
     is_const = other.is_const;
     semantic_tag = other.semantic_tag;
-    // Note: explicitly don't add queued.
 
     if (other.dim_data) {
         set_dim_count(other.dim_count());

@@ -114,7 +114,6 @@ struct symbol : public PoolObject
     bool enumroot : 1;      // the constant is the "root" of an enumeration
 
     // General symbol flags.
-    bool queued : 1;        // symbol is queued for a local work algorithm
     bool explicit_return_type : 1; // transitional return type was specified
 
     int semantic_tag;
