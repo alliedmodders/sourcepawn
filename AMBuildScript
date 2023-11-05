@@ -20,9 +20,15 @@ import copy
 import os
 import subprocess
 import sys
+from ambuild2.frontend.system import System
 
 def Normalize(path):
     return os.path.abspath(os.path.normpath(path))
+
+class LipoEntry(object):
+    def __init__(self, binary, target):
+        self.binary = binary
+        self.target = target
 
 def SetArchFlags(compiler):
     if compiler.like('gcc'):
@@ -327,7 +333,7 @@ class SourcePawn(object):
             'SP': self,
         }
         self.spshell = {}
-        self.spcomp = {}
+        self.spcomp = []
         self.zlib = None
         self.libamtl = None
         self.static_libsp = {}
@@ -342,6 +348,8 @@ class SourcePawn(object):
 
         for cxx in self.root.targets:
             builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
+
+        builder.CallBuilder(lambda builder: self.BuildFatSpcomp(builder))
 
     def SetupBinForArch(self, binary, builder):
         if binary.compiler.like('gcc'):
@@ -430,7 +438,7 @@ class SourcePawn(object):
         self.AddStaticLibraries(binary)
 
         cppnodes = builder.Add(binary)
-        self.spcomp[builder.cxx.target.arch] = cppnodes
+        self.spcomp.append(cppnodes)
 
     def BuildSpshell(self, builder):
         binary = self.root.Program(builder, 'spshell')
@@ -476,6 +484,34 @@ class SourcePawn(object):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--end-group']
 
+    def BuildFatSpcomp(self, builder):
+        # Building fat binaries is currently only supported on macOS hosts
+        # building macOS targets.
+        if builder.host.platform != 'mac':
+            return
+
+        mac_targets = []
+        for spcomp in self.spcomp:
+            if spcomp.target.platform == 'mac':
+                mac_targets.append(spcomp.binary)
+
+        if len(mac_targets) == 0:
+            return
+
+        lipo_argv = [
+            'lipo', '-create',
+        ]
+        for spcomp in mac_targets:
+            lipo_argv += [os.path.join(builder.buildPath, spcomp.path)]
+        lipo_argv += ['-output', 'spcomp']
+
+        out = builder.AddCommand(inputs = mac_targets,
+                                 argv = lipo_argv,
+                                 outputs = ['spcomp'],
+                                 folder = builder.AddFolder('spcomp/mac-universal'))
+
+        self.spcomp.append(LipoEntry(out[0], System('mac', 'universal')))
+
     def BuildSuite(self):
         self.BuildCore()
 
@@ -519,7 +555,6 @@ class SourcePawn(object):
         finally:
             builder.cxx = None
         return rvalue
-
 
 if builder.parent is None:
     root = Config()
