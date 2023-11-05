@@ -48,6 +48,13 @@
 #include "errors.h"
 #include "sc.h"
 
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
 #if defined(_MSC_VER) && _MSC_VER >= 1900 && _MSC_VER < 2000
     std::wstring_convert<std::codecvt_utf8<__int32>, __int32> convert;
@@ -59,3 +66,7 @@ void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
 
     *out += convert.to_bytes(&cp, &cp + 1);
 }
+
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#endif

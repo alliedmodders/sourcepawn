@@ -107,10 +107,7 @@ class Config(object):
             if cxx.target.platform == 'linux':
                 cxx.postlink += ['-lpthread', '-lrt']
             elif cxx.target.platform == 'mac':
-                cxx.linkflags.remove('-lstdc++')
                 cxx.cflags += ['-mmacosx-version-min=10.15']
-                cxx.cflags += ['-stdlib=libc++']
-                cxx.linkflags += ['-stdlib=libc++']
                 cxx.linkflags += ['-mmacosx-version-min=10.15']
             elif cxx.target.platform == 'windows':
                 cxx.defines += ['WIN32', '_WINDOWS']
@@ -144,7 +141,6 @@ class Config(object):
             '-Wno-switch',
         ]
         cxx.cxxflags += ['-std=c++17']
-        cxx.linkflags += ['-lstdc++']
 
         if builder.options.debug == '1':
             cxx.cflags += ['-g3']
