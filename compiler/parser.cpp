@@ -1857,7 +1857,7 @@ Parser::parse_methodmap()
     lexer_->need('{');
 
     std::vector<MethodmapMethod*> methods;
-    std::vector<MethodmapProperty*> props;
+    std::vector<MethodmapPropertyDecl*> props;
     while (!lexer_->match('}')) {
         bool ok = true;
         int tok_id = lexer_->lex();
@@ -1885,7 +1885,7 @@ Parser::parse_methodmap()
     }
 
     new (&decl->methods()) PoolArray<MethodmapMethod*>(methods);
-    new (&decl->properties()) PoolArray<MethodmapProperty*>(props);
+    new (&decl->properties()) PoolArray<MethodmapPropertyDecl*>(props);
 
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
@@ -1972,13 +1972,13 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     return method;
 }
 
-MethodmapProperty*
+MethodmapPropertyDecl*
 Parser::parse_methodmap_property(MethodmapDecl* map)
 {
-    auto prop = new MethodmapProperty;
-    prop->pos = lexer_->pos();
+    auto pos = lexer_->pos();
 
-    if (!parse_new_typeexpr(&prop->type, nullptr, 0))
+    typeinfo_t type{};
+    if (!parse_new_typeexpr(&type, nullptr, 0))
         return nullptr;
 
     Atom* ident;
@@ -1987,19 +1987,21 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     if (!lexer_->need('{'))
         return nullptr;
 
-    prop->name = ident;
-
+    MemberFunctionDecl* getter = nullptr;
+    MemberFunctionDecl* setter = nullptr;
     while (!lexer_->match('}')) {
-        if (!parse_methodmap_property_accessor(map, prop))
+        if (!parse_methodmap_property_accessor(map, ident, type, &getter, &setter))
             lexer_->lexclr(TRUE);
     }
 
     lexer_->require_newline(TerminatorPolicy::Newline);
-    return prop;
+    return new MethodmapPropertyDecl(pos, ident, type, getter, setter);
 }
 
-bool
-Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop)
+bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
+                                               const typeinfo_t& type,
+                                               MemberFunctionDecl** out_getter,
+                                               MemberFunctionDecl** out_setter)
 {
     bool is_native = false;
     auto pos = lexer_->pos();
@@ -2027,14 +2029,14 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
 
     declinfo_t ret_type = {};
     if (getter) {
-        ret_type.type = prop->type;
+        ret_type.type = type;
     } else {
         ret_type.type.set_tag(types_->tag_void());
         ret_type.type.ident = iVARIABLE;
     }
 
     auto fun = new MemberFunctionDecl(pos, ret_type);
-    std::string tmpname = map->name()->str() + "." + prop->name->str();
+    std::string tmpname = map->name()->str() + "." + name->str();
     if (getter)
         tmpname += ".get";
     else
@@ -2049,19 +2051,19 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
     if (!parse_function(fun, is_native ? tMETHODMAP : 0, true))
         return false;
 
-    if (getter && prop->getter) {
-        report(126) << "getter" << prop->name;
+    if (getter && *out_getter) {
+        report(126) << "getter" << name;
         return false;
     }
-    if (setter && prop->setter) {
-        report(126) << "setter" << prop->name;
+    if (setter && *out_setter) {
+        report(126) << "setter" << name;
         return false;
     }
 
     if (getter)
-        prop->getter = fun;
+        *out_getter = fun;
     else
-        prop->setter = fun;
+        *out_setter = fun;
 
     if (is_native)
         lexer_->require_newline(TerminatorPolicy::Semicolon);

@@ -1855,10 +1855,10 @@ void
 CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
 {
     for (const auto& prop : decl->properties()) {
-        if (prop->getter)
-            EmitFunctionDecl(prop->getter);
-        if (prop->setter)
-            EmitFunctionDecl(prop->setter);
+        if (prop->getter())
+            EmitFunctionDecl(prop->getter());
+        if (prop->setter())
+            EmitFunctionDecl(prop->setter());
     }
     for (const auto& method : decl->methods())
         EmitFunctionDecl(method->decl);

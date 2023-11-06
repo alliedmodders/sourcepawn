@@ -47,7 +47,8 @@
     FOR_EACH(EnumStructDecl) \
     FOR_EACH(EnumStructFieldDecl) \
     FOR_EACH(MethodmapDecl) \
-    FOR_EACH(ChangeScopeNode)
+    FOR_EACH(ChangeScopeNode) \
+    FOR_EACH(MethodmapPropertyDecl)
 
 #define AST_EXPR_TYPE_LIST(FOR_EACH) \
     FOR_EACH(UnaryExpr) \

@@ -61,8 +61,10 @@ class Parser
     Decl* parse_enumstruct();
     Decl* parse_methodmap();
     MethodmapMethod* parse_methodmap_method(MethodmapDecl* map);
-    MethodmapProperty* parse_methodmap_property(MethodmapDecl* map);
-    bool parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty* prop);
+    MethodmapPropertyDecl* parse_methodmap_property(MethodmapDecl* map);
+    bool parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name, const typeinfo_t& type,
+                                           MemberFunctionDecl** out_getter,
+                                           MemberFunctionDecl** out_setter);
 
     struct VarParams {
         int vclass;
