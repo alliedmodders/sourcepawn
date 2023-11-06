@@ -3241,10 +3241,10 @@ EnumStructDecl::ProcessUses(SemaContext& sc)
 bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
     bool ok = true;
     for (const auto& prop : decl->properties()) {
-        if (prop->getter)
-            ok &= CheckFunctionDecl(prop->getter);
-        if (prop->setter)
-            ok &= CheckFunctionDecl(prop->setter);
+        if (prop->getter())
+            ok &= CheckFunctionDecl(prop->getter());
+        if (prop->setter())
+            ok &= CheckFunctionDecl(prop->setter());
     }
     for (const auto& method : decl->methods())
         ok &= CheckStmt(method->decl);
@@ -3263,17 +3263,18 @@ void Semantics::AssignHeapOwnership(ParseNode* node) {
     }
 }
 
-void
-MethodmapDecl::ProcessUses(SemaContext& sc)
-{
-    for (const auto& prop : properties_) {
-        if (prop->getter)
-            prop->getter->ProcessUses(sc);
-        if (prop->setter)
-            prop->setter->ProcessUses(sc);
-    }
+void MethodmapDecl::ProcessUses(SemaContext& sc) {
+    for (const auto& prop : properties_)
+        prop->ProcessUses(sc);
     for (const auto& method : methods_)
         method->decl->ProcessUses(sc);
+}
+
+void MethodmapPropertyDecl::ProcessUses(SemaContext& sc) {
+    if (getter_)
+        getter_->ProcessUses(sc);
+    if (setter_)
+        setter_->ProcessUses(sc);
 }
 
 void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {

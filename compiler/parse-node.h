@@ -1753,13 +1753,33 @@ class EnumStructDecl : public Decl
     symbol* root_ = nullptr;
 };
 
-struct MethodmapProperty : public PoolObject {
-    token_pos_t pos;
-    typeinfo_t type;
-    Atom* name = nullptr;
-    FunctionDecl* getter = nullptr;
-    FunctionDecl* setter = nullptr;
-    methodmap_method_t* entry = nullptr;
+class MethodmapPropertyDecl : public Decl {
+  public:
+    MethodmapPropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
+                          MemberFunctionDecl* getter, MemberFunctionDecl* setter)
+      : Decl(StmtKind::MethodmapPropertyDecl, pos, name),
+        type_(type),
+        getter_(getter),
+        setter_(setter)
+    {}
+
+    void ProcessUses(SemaContext& sc) override;
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapPropertyDecl; }
+
+    const typeinfo_t& type() const { return type_; }
+    typeinfo_t& mutable_type() { return type_; }
+    MemberFunctionDecl* getter() const { return getter_; }
+    MemberFunctionDecl* setter() const { return setter_; }
+
+    methodmap_method_t* entry() { return entry_; }
+    void set_entry(methodmap_method_t* entry) { entry_ = entry; }
+
+  private:
+    typeinfo_t type_;
+    MemberFunctionDecl* getter_;
+    MemberFunctionDecl* setter_;
+    methodmap_method_t* entry_ = nullptr;
 };
 
 struct MethodmapMethod : public PoolObject {
@@ -1787,18 +1807,18 @@ class MethodmapDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapDecl; }
 
-    PoolArray<MethodmapProperty*>& properties() { return properties_; }
+    PoolArray<MethodmapPropertyDecl*>& properties() { return properties_; }
     PoolArray<MethodmapMethod*>& methods() { return methods_; }
     methodmap_t* map() const { return map_; }
 
   private:
-    bool BindGetter(SemaContext& sc, MethodmapProperty* prop);
-    bool BindSetter(SemaContext& sc, MethodmapProperty* prop);
+    bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);
+    bool BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop);
 
   private:
     bool nullable_;
     Atom* extends_;
-    PoolArray<MethodmapProperty*> properties_;
+    PoolArray<MethodmapPropertyDecl*> properties_;
     PoolArray<MethodmapMethod*> methods_;
 
     methodmap_t* map_ = nullptr;

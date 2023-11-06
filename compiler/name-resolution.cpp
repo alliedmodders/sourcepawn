@@ -1210,16 +1210,16 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
     sym_->set_data(map_);
 
     for (auto& prop : properties_) {
-        if (map_->methods.count(prop->name)) {
-            report(prop->pos, 103) << prop->name << "methodmap";
+        if (map_->methods.count(prop->name())) {
+            report(prop, 103) << prop->name() << "methodmap";
             continue;
         }
 
         auto method = new methodmap_method_t(map_);
-        method->name = prop->name;
-        map_->methods.emplace(prop->name, method);
+        method->name = prop->name();
+        map_->methods.emplace(prop->name(), method);
 
-        prop->entry = method;
+        prop->set_entry(method);
     }
 
     for (auto& method : methods_) {
@@ -1288,26 +1288,26 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
     map_->is_bound = true;
 
     for (const auto& prop : properties_) {
-        if (!sc.BindType(prop->pos, &prop->type))
+        if (!sc.BindType(prop->pos(), &prop->mutable_type()))
             return false;
 
-        if (prop->type.numdim() > 0) {
-            report(prop->pos, 82);
+        if (prop->type().numdim() > 0) {
+            report(prop, 82);
             continue;
         }
 
-        auto method = prop->entry;
+        auto method = prop->entry();
 
-        if (prop->getter && BindGetter(sc, prop)) {
-            method->getter = prop->getter->sym();
+        if (prop->getter() && BindGetter(sc, prop)) {
+            method->getter = prop->getter()->sym();
 
-            auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name->chars());
+            auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name()->chars());
             method->getter->setName(sc.cc().atom(name));
         }
-        if (prop->setter && BindSetter(sc, prop)) {
-            method->setter = prop->setter->sym();
+        if (prop->setter() && BindSetter(sc, prop)) {
+            method->setter = prop->setter()->sym();
 
-            auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name->chars());
+            auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name()->chars());
             method->setter->setName(sc.cc().atom(name));
         }
     }
@@ -1361,10 +1361,8 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
     return errors.ok();
 }
 
-bool
-MethodmapDecl::BindGetter(SemaContext& sc, MethodmapProperty* prop)
-{
-    auto fun = prop->getter;
+bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
+    auto fun = prop->getter();
 
     // There should be no extra arguments.
     if (fun->args().size() > 1) {
@@ -1381,14 +1379,12 @@ MethodmapDecl::BindGetter(SemaContext& sc, MethodmapProperty* prop)
     return true;
 }
 
-bool
-MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
-{
-    auto fun = prop->setter;
+bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
+    auto fun = prop->setter();
 
     // Must have one extra argument taking the return type.
     if (fun->args().size() > 2) {
-        report(prop->pos, 150) << pc_tagname(prop->type.tag());
+        report(prop, 150) << pc_tagname(prop->type().tag());
         return false;
     }
 
@@ -1400,15 +1396,15 @@ MethodmapDecl::BindSetter(SemaContext& sc, MethodmapProperty* prop)
     fun->sym()->function()->is_member_function = true;
 
     if (fun->args().size() <= 1) {
-        report(prop->pos, 150) << pc_tagname(prop->type.tag());
+        report(prop, 150) << pc_tagname(prop->type().tag());
         return false;
     }
 
     auto decl = fun->args()[1];
     if (decl->type().ident != iVARIABLE || decl->init_rhs() ||
-        decl->type().tag() != prop->type.tag())
+        decl->type().tag() != prop->type().tag())
     {
-        report(prop->pos, 150) << pc_tagname(prop->type.tag());
+        report(prop, 150) << pc_tagname(prop->type().tag());
         return false;
     }
     return true;
