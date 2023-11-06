@@ -102,22 +102,6 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
     decl->s = this;
 }
 
-symbol::symbol(const symbol& other)
- : symbol(other.decl, nullptr, other.addr_, other.ident, other.vclass, other.tag)
-{
-    name_ = other.name_;
-
-    enumroot = other.enumroot;
-    is_const = other.is_const;
-    semantic_tag = other.semantic_tag;
-
-    if (other.dim_data) {
-        set_dim_count(other.dim_count());
-        for (int i = 0; i < other.dim_count(); i++)
-            set_dim(i, other.dim(i));
-    }
-}
-
 void symbol::set_dim_count(int dim_count) {
     if (this->dim_count() == dim_count)
         return;
