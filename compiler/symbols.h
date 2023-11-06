@@ -82,7 +82,6 @@ class FunctionData final : public SymbolData
  */
 struct symbol : public PoolObject
 {
-    symbol(const symbol& other);
     symbol(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
 
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
