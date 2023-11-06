@@ -121,6 +121,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
             return CheckSwitchStmt(stmt->to<SwitchStmt>());
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
             return CheckFunctionDecl(stmt->to<FunctionDecl>());
         case StmtKind::EnumStructDecl:
             return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
@@ -3247,7 +3248,7 @@ bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
             ok &= CheckFunctionDecl(prop->setter());
     }
     for (const auto& method : decl->methods())
-        ok &= CheckStmt(method->decl);
+        ok &= CheckStmt(method);
     return ok;
 }
 
@@ -3267,7 +3268,7 @@ void MethodmapDecl::ProcessUses(SemaContext& sc) {
     for (const auto& prop : properties_)
         prop->ProcessUses(sc);
     for (const auto& method : methods_)
-        method->decl->ProcessUses(sc);
+        method->ProcessUses(sc);
 }
 
 void MethodmapPropertyDecl::ProcessUses(SemaContext& sc) {

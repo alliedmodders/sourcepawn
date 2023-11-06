@@ -204,6 +204,7 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
             EmitFunctionDecl(stmt->to<FunctionDecl>());
             break;
         case StmtKind::EnumStructDecl:
@@ -1781,9 +1782,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
     __ bind(&exit_label);
 }
 
-void
-CodeGenerator::EmitFunctionDecl(FunctionDecl* info)
-{
+void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     ke::SaveAndSet<FunctionDecl*> set_fun(&fun_, info);
     ke::SaveAndSet<symbol*> set_func(&func_, info->sym());
 
@@ -1861,7 +1860,7 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
             EmitFunctionDecl(prop->setter());
     }
     for (const auto& method : decl->methods())
-        EmitFunctionDecl(method->decl);
+        EmitFunctionDecl(method);
 }
 
 void CodeGenerator::EmitCall(symbol* fun, cell nargs) {

@@ -60,7 +60,7 @@ class Parser
     Decl* parse_typeset();
     Decl* parse_enumstruct();
     Decl* parse_methodmap();
-    MethodmapMethod* parse_methodmap_method(MethodmapDecl* map);
+    MethodmapMethodDecl* parse_methodmap_method(MethodmapDecl* map);
     MethodmapPropertyDecl* parse_methodmap_property(MethodmapDecl* map);
     bool parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name, const typeinfo_t& type,
                                            MemberFunctionDecl** out_getter,

@@ -1223,37 +1223,37 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
     }
 
     for (auto& method : methods_) {
-        if (map_->methods.count(method->decl->decl_name())) {
-            report(method->decl->pos(), 103) << method->decl->decl_name() << "methodmap";
+        if (map_->methods.count(method->decl_name())) {
+            report(method->pos(), 103) << method->decl_name() << "methodmap";
             continue;
         }
 
         auto m = new methodmap_method_t(map_);
-        m->name = method->decl->decl_name();
+        m->name = method->decl_name();
 
-        if (method->is_dtor) {
+        if (method->is_dtor()) {
             if (map_->dtor) {
-                report(method->decl->pos(), 154) << method->decl->name();
+                report(method, 154) << method->name();
                 continue;
             }
 
-            if (method->decl->decl_name() != map_->name)
-                report(method->decl->pos(), 440);
+            if (method->decl_name() != map_->name)
+                report(method, 440);
 
             // Hack: modify name.
-            method->decl->decl().name = cc.atom("~" + map_->name->str());
+            method->decl().name = cc.atom("~" + map_->name->str());
 
             map_->dtor = m;
-        } else if (method->is_ctor) {
+        } else if (method->is_ctor()) {
             if (map_->ctor) {
-                report(method->decl->pos(), 113) << method->decl->name();
+                report(method, 113) << method->name();
                 continue;
             }
             map_->ctor = m;
         }
         map_->methods.emplace(m->name, m);
 
-        method->entry = m;
+        method->set_entry(m);
     }
     return true;
 }
@@ -1313,47 +1313,47 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
     }
 
     for (const auto& method : methods_) {
-        if (method->is_ctor) {
+        if (method->is_ctor()) {
             // Constructors may not be static.
-            if (method->is_static)
-                report(method->decl->pos(), 175);
+            if (method->is_static())
+                report(method, 175);
 
-            auto& type = method->decl->mutable_type();
+            auto& type = method->mutable_type();
             type.set_tag(map_->tag);
             type.ident = iVARIABLE;
             type.is_new = true;
-        } else if (method->is_dtor) {
-            if (method->decl->is_static())
-                report(method->decl->pos(), 441);
-            if (method->decl->args().size() > 1)
-                report(method->decl->pos(), 438);
-            if (!method->decl->is_native())
-                report(method->decl->pos(), 118);
+        } else if (method->is_dtor()) {
+            if (method->is_static())
+                report(method, 441);
+            if (method->args().size() > 1)
+                report(method, 438);
+            if (!method->is_native())
+                report(method, 118);
 
-            auto& type = method->decl->mutable_type();
+            auto& type = method->mutable_type();
             if (type.ident != 0)
-                report(method->decl->pos(), 439);
+                report(method, 439);
             type.set_tag(sc.cc().types()->tag_void());
             type.is_new = true;
             type.ident = iVARIABLE;
-        } else if (method->decl->type().ident == 0) {
+        } else if (method->type().ident == 0) {
             // Parsed as a constructor, but not using the map name. This is illegal.
-            report(method->decl->pos(), 114) << "constructor" << "methodmap" << map_->name;
+            report(method, 114) << "constructor" << "methodmap" << map_->name;
             continue;
         }
 
-        if (!method->is_static && !method->is_ctor)
-            method->decl->set_this_tag(map_->tag);
+        if (!method->is_static() && !method->is_ctor())
+            method->set_this_tag(map_->tag);
 
-        if (!method->decl->Bind(sc))
+        if (!method->Bind(sc))
             continue;
 
-        method->decl->sym()->function()->is_member_function = true;
-        method->decl->sym()->setName(DecorateInnerName(name_, method->decl->decl_name()));
+        method->sym()->function()->is_member_function = true;
+        method->sym()->setName(DecorateInnerName(name_, method->decl_name()));
 
-        auto m = method->entry;
-        m->target = method->decl->sym();
-        if (method->is_static)
+        auto m = method->entry();
+        m->target = method->sym();
+        if (method->is_static())
             m->is_static = true;
     }
 

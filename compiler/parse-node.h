@@ -1569,7 +1569,8 @@ class FunctionDecl : public Decl
 
     static bool is_a(Stmt* node) {
         return node->kind() == StmtKind::FunctionDecl ||
-               node->kind() == StmtKind::MemberFunctionDecl;
+               node->kind() == StmtKind::MemberFunctionDecl ||
+               node->kind() == StmtKind::MethodmapMethodDecl;
     }
 
     bool IsVariadic() const;
@@ -1708,8 +1709,14 @@ class MemberFunctionDecl : public FunctionDecl
     MemberFunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
       : FunctionDecl(StmtKind::MemberFunctionDecl, pos, decl)
     {}
+    MemberFunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo_t& decl)
+      : FunctionDecl(kind, pos, decl)
+    {}
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MemberFunctionDecl; }
+    static bool is_a(Stmt* node) {
+        return node->kind() == StmtKind::MemberFunctionDecl ||
+               node->kind() == StmtKind::MethodmapMethodDecl;
+    }
 };
 
 class EnumStructFieldDecl : public Decl
@@ -1782,12 +1789,23 @@ class MethodmapPropertyDecl : public Decl {
     methodmap_method_t* entry_ = nullptr;
 };
 
-struct MethodmapMethod : public PoolObject {
-    bool is_static = false;
-    bool is_ctor = false;
-    bool is_dtor = false;
-    FunctionDecl* decl = nullptr;
-    methodmap_method_t* entry = nullptr;
+struct MethodmapMethodDecl : public MemberFunctionDecl {
+  public:
+    MethodmapMethodDecl(const token_pos_t& pos, const declinfo_t& decl, bool is_ctor, bool is_dtor)
+      : MemberFunctionDecl(StmtKind::MethodmapMethodDecl, pos, decl),
+        is_ctor_(is_ctor),
+        is_dtor_(is_dtor)
+    {}
+
+    bool is_ctor() const { return is_ctor_; }
+    bool is_dtor() const { return is_dtor_; }
+    void set_entry(methodmap_method_t* entry) { entry_ = entry; }
+    methodmap_method_t* entry() const { return entry_; }
+
+  private:
+    bool is_ctor_ : 1;
+    bool is_dtor_ : 1;
+    methodmap_method_t* entry_ = nullptr;
 };
 
 class MethodmapDecl : public Decl
@@ -1808,7 +1826,7 @@ class MethodmapDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapDecl; }
 
     PoolArray<MethodmapPropertyDecl*>& properties() { return properties_; }
-    PoolArray<MethodmapMethod*>& methods() { return methods_; }
+    PoolArray<MethodmapMethodDecl*>& methods() { return methods_; }
     methodmap_t* map() const { return map_; }
 
   private:
@@ -1819,7 +1837,7 @@ class MethodmapDecl : public Decl
     bool nullable_;
     Atom* extends_;
     PoolArray<MethodmapPropertyDecl*> properties_;
-    PoolArray<MethodmapMethod*> methods_;
+    PoolArray<MethodmapMethodDecl*> methods_;
 
     methodmap_t* map_ = nullptr;
     symbol* sym_ = nullptr;
