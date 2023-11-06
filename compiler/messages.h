@@ -324,4 +324,5 @@ static const char* errmsg_ex[] = {
     /*440*/ "destructor must have the same name as methodmap\n",
     /*441*/ "destructors cannot be static\n",
     /*442*/ "method aliases are no longer supported\n",
+    /*443*/ "enum %s already has a methodmap\n",
 };

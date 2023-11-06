@@ -465,7 +465,7 @@ Parser::parse_enumstruct()
 
         auto decl_pos = lexer_->pos();
         if (!decl.type.has_postdims && lexer_->peek('(')) {
-            auto fun = new FunctionDecl(decl_pos, decl);
+            auto fun = new MemberFunctionDecl(decl_pos, decl);
             fun->set_is_stock();
             if (!parse_function(fun, 0, true))
                 continue;
@@ -1937,7 +1937,7 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), symbol->chars());
     auto fqn = cc_.atom(fullname);
 
-    auto fun = new FunctionDecl(pos, ret_type);
+    auto fun = new MemberFunctionDecl(pos, ret_type);
     fun->set_name(fqn);
 
     if (is_native)
@@ -2033,7 +2033,7 @@ Parser::parse_methodmap_property_accessor(MethodmapDecl* map, MethodmapProperty*
         ret_type.type.ident = iVARIABLE;
     }
 
-    auto fun = new FunctionDecl(pos, ret_type);
+    auto fun = new MemberFunctionDecl(pos, ret_type);
     std::string tmpname = map->name()->str() + "." + prop->name->str();
     if (getter)
         tmpname += ".get";
@@ -2116,6 +2116,8 @@ Parser::parse_function_type()
 
     while (!lexer_->match(')')) {
         auto decl = cc_.allocator().alloc<declinfo_t>();
+        new (decl) declinfo_t();
+
         decl->type.ident = iVARIABLE;
 
         parse_new_decl(decl, nullptr, DECLFLAG_ARGUMENT);

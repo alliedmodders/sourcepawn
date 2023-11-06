@@ -481,7 +481,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     }
 
     if (is_public_)
-        sym_->usage |= uREAD;
+        is_read_ = true;
 
     if (def_ok)
         DefineSymbol(sc, this, vclass_);
@@ -582,9 +582,7 @@ ArrayExpr::Bind(SemaContext& sc)
     return ok;
 }
 
-bool
-SizeofExpr::Bind(SemaContext& sc)
-{
+bool SizeofExpr::Bind(SemaContext& sc) {
     AutoErrorPos aep(pos_);
 
     auto decl = FindSymbol(sc, ident_);
@@ -860,7 +858,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     if (strcmp(sym_->name(), uMAINFUNC) == 0) {
         if (!args_.empty())
             error(pos_, 5);     /* "main()" functions may not have any arguments */
-        sym_->usage |= uREAD;   /* "main()" is the program's entry point: always used */
+        is_live_ = true;
         is_public_ = true;
     }
 
@@ -952,9 +950,9 @@ FunctionDecl::BindArgs(SemaContext& sc)
         }
 
         if (var->type().ident == iREFERENCE)
-            argsym->usage |= uREAD; /* because references are passed back */
+            var->set_is_read();
         if (is_callback_ || is_stock_ || is_public_)
-            argsym->usage |= uREAD; /* arguments of public functions are always "used" */
+            var->set_is_read();
 
         /* arguments of a public function may not have a default value */
         if (is_public_ && var->default_value())
@@ -1047,17 +1045,17 @@ FunctionDecl::NameForOperator()
 bool
 PragmaUnusedStmt::Bind(SemaContext& sc)
 {
-    std::vector<symbol*> symbols;
+    std::vector<VarDeclBase*> symbols;
     for (const auto& name : names_) {
         auto decl = FindSymbol(sc, name);
-        if (!decl) {
+        if (!decl || !decl->as<VarDeclBase>()) {
             report(pos_, 17) << name;
             continue;
         }
-        symbols.emplace_back(decl->s);
+        symbols.emplace_back(decl->as<VarDeclBase>());
     }
 
-    new (&symbols_) PoolArray<symbol*>(symbols);
+    symbols_ = PoolArray<VarDeclBase*>(symbols);
 
     return names_.size() == symbols_.size();
 }
@@ -1188,10 +1186,28 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
     map_ = methodmap_add(cc, nullptr, name_);
     cc.types()->defineMethodmap(name_->chars(), map_);
 
-    auto decl = declare_methodmap_symbol(cc, this, map_);
-    if (!decl)
-        return false;
-    sym_ = decl->s;
+    if (auto prev_decl = FindSymbol(cc.globals(), name_)) {
+        auto ed = prev_decl->as<EnumDecl>();
+        if (!ed) {
+            report(pos_, 11) << name_;
+            return false;
+        }
+        if (ed->mm()) {
+            report(pos_, 443) << name_;
+            return false;
+        }
+
+        assert(ed->s->ident == iCONSTEXPR);
+        assert(map_->tag == ed->s->tag);
+
+        sym_ = ed->s;
+        sym_->ident = iMETHODMAP;
+        ed->set_mm(this);
+    } else {
+        sym_ = new symbol(this, name_, 0, iMETHODMAP, sGLOBAL, map_->tag);
+        cc.globals()->Add(this);
+    }
+    sym_->set_data(map_);
 
     for (auto& prop : properties_) {
         if (map_->methods.count(prop->name)) {

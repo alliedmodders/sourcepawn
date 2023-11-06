@@ -43,7 +43,13 @@ void AddGlobal(CompileContext& cc, symbol* sym)
 void
 markusage(symbol* sym, int usage)
 {
-    sym->usage |= usage;
+    if (auto var = sym->decl->as<VarDeclBase>()) {
+        if (usage & uREAD)
+            var->set_is_read();
+        if (usage & uWRITTEN)
+            var->set_is_written();
+        return;
+    }
 
     auto& cc = CompileContext::get();
     if (!cc.sema())
@@ -76,14 +82,14 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    vclass((char)symvclass),
    tag(symtag),
    ident(symident),
-   usage(0),
    is_const(false),
    enumroot(false),
    semantic_tag(0),
    dim_data(nullptr),
    decl(decl),
    addr_(symaddr),
-   name_(nullptr)
+   name_(nullptr),
+   data_(nullptr)
 {
     assert(ident != iINVALID);
     assert(decl);
@@ -99,7 +105,6 @@ symbol::symbol(const symbol& other)
 {
     name_ = other.name_;
 
-    usage = other.usage;
     enumroot = other.enumroot;
     is_const = other.is_const;
     semantic_tag = other.semantic_tag;
@@ -189,35 +194,6 @@ check_operatortag(int opertok, int resulttag, const char* opername)
     return TRUE;
 }
 
-// Determine the set of live functions.
-void deduce_liveness(CompileContext& cc) {
-    std::vector<FunctionDecl*> work;
-    std::unordered_set<FunctionDecl*> seen;
-
-    // The root set is all public functions.
-    for (const auto& decl : cc.publics()) {
-        assert(!decl->is_native());
-        assert(decl->is_public());
-
-        seen.emplace(decl);
-        decl->s->usage |= uLIVE;
-        work.emplace_back(decl);
-    }
-
-    // Traverse referrers to find the transitive set of live functions.
-    while (!work.empty()) {
-        FunctionDecl* live = ke::PopBack(&work);
-
-        for (const auto& other : live->sym()->function()->refers_to) {
-            if (seen.count(other))
-                continue;
-            seen.emplace(other);
-            other->sym()->usage |= uLIVE;
-            work.emplace_back(other);
-        }
-    }
-}
-
 enum class NewNameStatus {
     Ok,
     Shadowed,
@@ -292,35 +268,6 @@ Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
 
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found) {
     return FindSymbol(sc.scope(), name, found);
-}
-
-Decl* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map) {
-    Decl* d = FindSymbol(cc.globals(), map->name);
-    if (d && d->s->ident != iMETHODMAP) {
-        symbol* sym = d->s;
-        if (sym->ident == iCONSTEXPR) {
-            // We should only hit this on the first pass. Assert really hard that
-            // we're about to kill an enum definition and not something random.
-            assert(sym->ident == iCONSTEXPR);
-            assert(map->tag == sym->tag);
-
-            sym->ident = iMETHODMAP;
-
-            // Kill previous enumstruct properties, if any.
-            auto data = sym->data() ? sym->data()->asEnum() : nullptr;
-            map->enum_data = data;
-            sym->set_data(map);
-            return d;
-        }
-        report(11) << map->name;
-        return nullptr;
-    }
-
-    auto sym = new symbol(decl, map->name, 0, iMETHODMAP, sGLOBAL, map->tag);
-    cc.globals()->Add(decl);
-
-    sym->set_data(map);
-    return decl;
 }
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass) {

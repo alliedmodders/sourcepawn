@@ -234,14 +234,16 @@ class Semantics final
     bool CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
                        ParamState* ps, unsigned int argpos);
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
-    symbol* BindNewTarget(Expr* target);
-    symbol* BindCallTarget(CallExpr* call, Expr* target);
+    FunctionDecl* BindNewTarget(Expr* target);
+    FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
 
     void NeedsHeapAlloc(Expr* expr);
     void AssignHeapOwnership(ParseNode* node);
 
     Expr* AnalyzeForTest(Expr* expr);
 
+    void DeduceLiveness();
+    void DeduceMaybeUsed();
     bool TestSymbol(symbol* sym, bool testconst);
     bool TestSymbols(SymbolScope* scope, bool testconst);
 
@@ -252,6 +254,7 @@ class Semantics final
     CompileContext& cc_;
     TypeDictionary* types_ = nullptr;
     tr::unordered_set<SymbolScope*> static_scopes_;
+    tr::vector<FunctionDecl*> maybe_used_;
     SemaContext* sc_ = nullptr;
     bool pending_heap_allocation_ = false;
 };

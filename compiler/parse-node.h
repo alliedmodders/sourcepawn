@@ -49,6 +49,7 @@ struct UserOperation
 typedef void (*OpFunc)();
 
 class Expr;
+class MethodmapDecl;
 class SemaContext;
 class SymbolScope;
 struct StructInitField;
@@ -338,6 +339,12 @@ class VarDeclBase : public Decl
     symbol* sym() const { return sym_; }
     bool is_public() const { return is_public_; }
     bool is_stock() const { return is_stock_; }
+    bool is_read() const { return is_read_; }
+    void set_is_read() { is_read_ = true; }
+    bool is_written() const { return is_written_; }
+    void set_is_written() { is_written_ = true; }
+
+    bool is_used() const { return is_read_ || is_written_; }
 
   protected:
     typeinfo_t type_;
@@ -347,6 +354,8 @@ class VarDeclBase : public Decl
     bool is_static_ : 1;
     bool is_stock_ : 1;
     bool autozero_ : 1;
+    bool is_read_ : 1;
+    bool is_written_ : 1;
     symbol* sym_ = nullptr;
 };
 
@@ -424,7 +433,8 @@ class EnumDecl : public Decl
         label_(label),
         fields_(fields),
         increment_(increment),
-        multiplier_(multiplier)
+        multiplier_(multiplier),
+        mm_(nullptr)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -433,15 +443,12 @@ class EnumDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumDecl; }
 
-    PoolArray<EnumFieldDecl*>& fields() {
-        return fields_;
-    }
-    int increment() const {
-        return increment_;
-    }
-    int multiplier() const {
-        return multiplier_;
-    }
+    PoolArray<EnumFieldDecl*>& fields() { return fields_; }
+    int increment() const { return increment_; }
+    int multiplier() const { return multiplier_; }
+
+    MethodmapDecl* mm() const { return mm_; }
+    void set_mm(MethodmapDecl* mm) { mm_ = mm; }
 
   private:
     int vclass_;
@@ -449,6 +456,7 @@ class EnumDecl : public Decl
     PoolArray<EnumFieldDecl*> fields_;
     int increment_;
     int multiplier_;
+    MethodmapDecl* mm_;
 };
 
 struct StructField {
@@ -889,6 +897,7 @@ class SymbolExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SymbolExpr; }
 
+    Decl* decl() const { return decl_; }
     symbol* sym() const { return decl_ ? decl_->s : nullptr; }
 
   private:
@@ -938,8 +947,8 @@ class CallExpr final : public Expr
     int token() const { return token_; }
     Expr* implicit_this() const { return implicit_this_; }
     void set_implicit_this(Expr* expr) { implicit_this_ = expr; }
-    symbol* sym() const { return sym_; }
-    void set_sym(symbol* sym) { sym_ = sym; }
+    FunctionDecl* fun() const { return fun_; }
+    void set_fun(FunctionDecl* fun) { fun_ = fun; }
 
   private:
     bool ProcessArg(SemaContext& sc, VarDecl* arg, Expr* param, unsigned int pos);
@@ -947,7 +956,7 @@ class CallExpr final : public Expr
     int token_;
     Expr* target_;
     PoolArray<Expr*> args_;
-    symbol* sym_ = nullptr;
+    FunctionDecl* fun_ = nullptr;
     Expr* implicit_this_ = nullptr;
 };
 
@@ -1539,23 +1548,29 @@ class PragmaUnusedStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PragmaUnusedStmt; }
 
     PoolArray<Atom*>& names() { return names_; }
-    PoolArray<symbol*>& symbols() { return symbols_; }
+    PoolArray<VarDeclBase*>& symbols() { return symbols_; }
 
   private:
     PoolArray<Atom*> names_;
-    PoolArray<symbol*> symbols_;
+    PoolArray<VarDeclBase*> symbols_;
 };
 
 class FunctionDecl : public Decl
 {
   public:
-    FunctionDecl(const token_pos_t& pos, const declinfo_t& decl);
+    FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
+      : FunctionDecl(StmtKind::FunctionDecl, pos, decl)
+    {}
+    FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo_t& decl);
 
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::FunctionDecl; }
+    static bool is_a(Stmt* node) {
+        return node->kind() == StmtKind::FunctionDecl ||
+               node->kind() == StmtKind::MemberFunctionDecl;
+    }
 
     bool IsVariadic() const;
     int FindNamedArg(Atom* name) const;
@@ -1635,6 +1650,10 @@ class FunctionDecl : public Decl
     void set_returns_value(bool value) { returns_value_ = value; }
     bool always_returns() const { return always_returns_; }
     void set_always_returns(bool value) { always_returns_ = value; }
+    bool is_live() const { return is_live_; }
+    void set_is_live() { is_live_ = true; }
+    bool maybe_used() const { return maybe_used_; }
+    void set_maybe_used() { maybe_used_ = true; }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
     const char* deprecate() const {
@@ -1649,12 +1668,12 @@ class FunctionDecl : public Decl
     void CheckReturnUsage();
     bool IsVariadic();
 
-  private:
+  protected:
     bool BindArgs(SemaContext& sc);
     FunctionDecl* CanRedefine(Decl* other);
     Atom* NameForOperator();
 
-  private:
+  protected:
     token_pos_t end_pos_;
     declinfo_t decl_;
     Stmt* body_ = nullptr;
@@ -1677,8 +1696,20 @@ class FunctionDecl : public Decl
     bool explicit_return_type_ SP_BITFIELD(1);
     bool retvalue_used_ SP_BITFIELD(1);
     bool is_callback_ SP_BITFIELD(1);
-    bool returns_value_ SP_BITFIELD(1); // whether any path returns a value
+    bool returns_value_ SP_BITFIELD(1);  // whether any path returns a value
     bool always_returns_ SP_BITFIELD(1); // whether all paths have an explicit return statement
+    bool is_live_ SP_BITFIELD(1);        // must have code generated/linkage
+    bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
+};
+
+class MemberFunctionDecl : public FunctionDecl
+{
+  public:
+    MemberFunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
+      : FunctionDecl(StmtKind::MemberFunctionDecl, pos, decl)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MemberFunctionDecl; }
 };
 
 class EnumStructFieldDecl : public Decl
@@ -1752,10 +1783,13 @@ class MethodmapDecl : public Decl
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
 
+    static MethodmapDecl* LookupMethodmap(Decl* decl);
+
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapDecl; }
 
     PoolArray<MethodmapProperty*>& properties() { return properties_; }
     PoolArray<MethodmapMethod*>& methods() { return methods_; }
+    methodmap_t* map() const { return map_; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapProperty* prop);

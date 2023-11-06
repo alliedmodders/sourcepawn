@@ -55,31 +55,16 @@ using namespace ke;
 
 namespace sp {
 
-static int sort_by_name(const void* a1, const void* a2) {
-    Decl* s1 = *(Decl**)a1;
-    Decl* s2 = *(Decl**)a2;
-    return s1->name()->str().compare(s2->name()->str());
-}
-
 struct function_entry {
-    function_entry() : sym(nullptr)
-    {}
+    function_entry() {}
 
-    function_entry(function_entry&& other)
-      : sym(other.sym),
-        name(std::move(other.name))
-    {}
-
-    function_entry& operator =(function_entry&& other) {
-        sym = other.sym;
-        name = std::move(other.name);
-        return *this;
-    }
+    function_entry(function_entry&& other) = default;
+    function_entry& operator =(function_entry&& other) = default;
 
     function_entry(const function_entry& other) = delete;
     function_entry& operator =(const function_entry& other) = delete;
 
-    symbol* sym;
+    FunctionDecl* decl = nullptr;
     std::string name;
 };
 
@@ -144,7 +129,7 @@ class RttiBuilder
     RttiBuilder(CompileContext& cc, CodeGenerator& cg, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
-    void add_method(symbol* sym);
+    void add_method(FunctionDecl* fun);
     void add_native(symbol* sym);
 
   private:
@@ -404,10 +389,10 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     var.type_id = type_id;
 }
 
-void
-RttiBuilder::add_method(symbol* sym)
-{
-    assert(!sym->unused());
+void RttiBuilder::add_method(FunctionDecl* fun) {
+    assert(fun->is_live());
+
+    auto sym = fun->sym();
 
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
@@ -840,7 +825,10 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         symbols.emplace(decl);
     }
 
-    qsort(global_symbols.data(), global_symbols.size(), sizeof(symbol*), sort_by_name);
+    std::sort(global_symbols.begin(), global_symbols.end(),
+              [](const Decl* a, const Decl *b) -> bool {
+        return a->name()->str() < b->name()->str();
+    });
 
     // Build the easy symbol tables.
     for (const auto& decl : global_symbols) {
@@ -850,13 +838,13 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
             if (!fun->body())
                 continue;
-            if (fun->sym()->unused())
+            if (!fun->is_live())
                 continue;
             if (fun->canonical() != fun)
                 continue;
 
             function_entry entry;
-            entry.sym = fun->sym();
+            entry.decl = fun;
             if (fun->is_public()) {
                 entry.name = fun->name()->str();
             } else {
@@ -866,7 +854,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
             functions.emplace_back(std::move(entry));
         } else if (auto var = decl->as<VarDeclBase>()) {
-            if (var->is_public() || (var->sym()->usage & (uREAD | uWRITTEN)) != 0) {
+            if (var->is_public() || var->is_used()) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
                 pubvar.address = var->sym()->addr();
                 pubvar.name = names->add(var->name());
@@ -881,7 +869,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     });
     for (size_t i = 0; i < functions.size(); i++) {
         function_entry& f = functions[i];
-        symbol* sym = f.sym;
+        symbol* sym = f.decl->sym();
 
         assert(sym->addr() > 0);
         assert(sym->decl->as<FunctionDecl>()->impl());
@@ -896,7 +884,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
             report(421);
         cg_.LinkPublicFunction(sym, id);
 
-        rtti.add_method(sym);
+        rtti.add_method(f.decl);
     }
 
     // Populate the native table.

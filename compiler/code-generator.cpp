@@ -49,8 +49,6 @@ bool CodeGenerator::Generate() {
     // First instruction is always halt.
     __ emit(OP_HALT, 0);
 
-    deduce_liveness(cc_);
-
     EmitStmtList(tree_->stmts());
     if (!ComputeStackUsage())
         return false;
@@ -205,6 +203,7 @@ CodeGenerator::EmitStmt(Stmt* stmt)
             EmitSwitchStmt(stmt->to<SwitchStmt>());
             break;
         case StmtKind::FunctionDecl:
+        case StmtKind::MemberFunctionDecl:
             EmitFunctionDecl(stmt->to<FunctionDecl>());
             break;
         case StmtKind::EnumStructDecl:
@@ -285,7 +284,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
         }
     }
 
-    if (decl->is_public() || (sym->usage & (uWRITTEN | uREAD)) != 0)
+    if (decl->is_public() || decl->is_used())
         EnqueueDebugSymbol(sym);
 }
 
@@ -1088,8 +1087,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
             break;
         case iFUNCTN:
             assert(!sym->decl->as<FunctionDecl>()->canonical()->is_native());
-            assert(sym->used());
-            assert(sym->usage & uREAD);
+            assert(sym->decl->as<FunctionDecl>()->canonical()->is_live());
             __ emit(OP_CONST_PRI, &sym->function()->funcid);
             break;
         case iVARIABLE:
@@ -1185,7 +1183,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
     }
 
     const auto& argv = call->args();
-    const auto& arginfov = call->sym()->decl->as<FunctionDecl>()->canonical()->args();
+    const auto& arginfov = call->fun()->args();
     for (size_t i = argv.size() - 1; i < argv.size(); i--) {
         const auto& expr = argv[i];
 
@@ -1248,7 +1246,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
         __ emit(OP_PUSH_PRI);
     }
 
-    EmitCall(call->sym(), (cell)argv.size());
+    EmitCall(call->fun(), (cell)argv.size());
 
     if (val.sym)
         __ emit(OP_POP_PRI);
@@ -1793,7 +1791,7 @@ CodeGenerator::EmitFunctionDecl(FunctionDecl* info)
     current_memory_ = 16;
     max_func_memory_ = current_memory_;
 
-    if (info->sym()->unused())
+    if (!info->is_live())
         return;
 
     if (info->canonical() == info)
@@ -1866,12 +1864,14 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
         EmitFunctionDecl(method->decl);
 }
 
-void
-CodeGenerator::EmitCall(symbol* sym, cell nargs)
-{
-    auto fun = sym->decl->as<FunctionDecl>();
-    assert(sym->used());
+void CodeGenerator::EmitCall(symbol* fun, cell nargs) {
+    return EmitCall(fun->decl->as<FunctionDecl>()->canonical(), nargs);
+}
 
+void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
+    assert(fun->is_live());
+
+    auto sym = fun->sym();
     if (fun->is_native()) {
         if (sym->addr() < 0) {
             sym->setAddr((cell)native_list_.size());

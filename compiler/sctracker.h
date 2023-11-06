@@ -88,9 +88,6 @@ struct methodmap_t : public SymbolData
 
     // Set in MethodmapDecl::Bind.
     bool is_bound;
-
-    // Original enum list.
-    EnumData* enum_data;
 };
 
 /**

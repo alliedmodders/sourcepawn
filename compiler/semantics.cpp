@@ -49,6 +49,9 @@ bool Semantics::Analyze(ParseTree* tree) {
     if (!CheckStmtList(tree->stmts()) || !errors.ok())
         return false;
 
+    DeduceLiveness();
+    DeduceMaybeUsed();
+
     // This inserts missing return statements at the global scope, so it cannot
     // be omitted.
     bool has_public = false;
@@ -117,6 +120,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         case StmtKind::SwitchStmt:
             return CheckSwitchStmt(stmt->to<SwitchStmt>());
         case StmtKind::FunctionDecl:
+        case StmtKind::MemberFunctionDecl:
             return CheckFunctionDecl(stmt->to<FunctionDecl>());
         case StmtKind::EnumStructDecl:
             return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
@@ -1648,7 +1652,7 @@ FieldAccessExpr::ProcessUses(SemaContext& sc)
     base_->MarkAndProcessUses(sc);
 }
 
-symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
+FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
     AutoErrorPos aep(target->pos());
 
     switch (target->kind()) {
@@ -1677,37 +1681,39 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 base = expr->set_base(new RvalueExpr(base));
             if (expr->field() || !method->is_static)
                 call->set_implicit_this(base);
-            return val.sym;
+            return val.sym->decl->as<FunctionDecl>()->canonical();
         }
         case ExprKind::SymbolExpr: {
             call->set_implicit_this(nullptr);
 
             auto expr = target->to<SymbolExpr>();
-            auto sym = expr->sym();
-            auto fun = sym->decl->as<FunctionDecl>();
-            if (call->token() != tNEW && sym->ident == iMETHODMAP && sym->data()) {
-                auto map = sym->data()->asMethodmap();
+            auto decl = expr->decl();
+            if (auto mm = decl->as<MethodmapDecl>()) {
+                auto map = mm->map();
                 if (!map->ctor) {
                     // Immediately fatal - no function to call.
-                    report(target, 172) << sym->name();
+                    report(target, 172) << decl->name();
                     return nullptr;
                 }
                 if (map->must_construct_with_new()) {
                     // Keep going, this is basically a style thing.
-                    report(target, 170) << map->name;
+                    report(target, 170) << decl->name();
                     return nullptr;
                 }
-                return map->ctor->target;
+                return map->ctor->target->decl->as<FunctionDecl>()->canonical();
             }
-            if (sym->ident != iFUNCTN) {
+            auto fun = decl->as<FunctionDecl>();
+            if (!fun) {
                 report(target, 12);
                 return nullptr;
             }
+
+            fun = fun->canonical();
             if (!fun->is_native() && !fun->impl()) {
-                report(target, 4) << sym->name();
+                report(target, 4) << decl->name();
                 return nullptr;
             }
-            return sym;
+            return fun;
         }
         default:
             report(target, 12);
@@ -1715,20 +1721,21 @@ symbol* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
     }
 }
 
-symbol* Semantics::BindNewTarget(Expr* target) {
+FunctionDecl* Semantics::BindNewTarget(Expr* target) {
     AutoErrorPos aep(target->pos());
 
     switch (target->kind()) {
         case ExprKind::SymbolExpr: {
             auto expr = target->to<SymbolExpr>();
-            auto sym = expr->sym();
+            auto decl = expr->decl();
 
-            if (sym->ident != iMETHODMAP) {
-                report(expr, 116) << sym->name();
+            auto mm = MethodmapDecl::LookupMethodmap(decl);
+            if (!mm) {
+                report(expr, 116) << decl->name();
                 return nullptr;
             }
 
-            methodmap_t* methodmap = sym->data()->asMethodmap();
+            methodmap_t* methodmap = mm->map();
             if (!methodmap->must_construct_with_new()) {
                 report(expr, 171) << methodmap->name;
                 return nullptr;
@@ -1737,7 +1744,7 @@ symbol* Semantics::BindNewTarget(Expr* target) {
                 report(expr, 172) << methodmap->name;
                 return nullptr;
             }
-            return methodmap->ctor->target;
+            return methodmap->ctor->target->decl->as<FunctionDecl>()->canonical();
         }
     }
     return nullptr;
@@ -1937,19 +1944,20 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     // Note: we do not Analyze the call target. We leave this to the
     // implementation of BindCallTarget.
-    symbol* sym;
+    FunctionDecl* fun;
     if (call->token() == tNEW)
-        sym = BindNewTarget(call->target());
+        fun = BindNewTarget(call->target());
     else
-        sym = BindCallTarget(call, call->target());
-    if (!sym)
+        fun = BindCallTarget(call, call->target());
+    if (!fun)
         return false;
 
-    call->set_sym(sym);
+    assert(fun->canonical() == fun);
 
-    auto fun = sym->decl->as<FunctionDecl>()->canonical();
-    if (fun &&
-        (fun->decl().type.numdim() > 0 || fun->maybe_returns_array()) &&
+    call->set_fun(fun);
+
+    auto sym = fun->sym();
+    if ((fun->decl().type.numdim() > 0 || fun->maybe_returns_array()) &&
         !sym->array_return())
     {
         // We need to know the size of the returned array. Recursively analyze
@@ -1972,9 +1980,8 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     }
 
     // We don't have canonical decls yet, so get the one attached to the symbol.
-    auto decl_fun = sym->decl->as<FunctionDecl>();
-    if (decl_fun->deprecate())
-        report(call, 234) << sym->name() << decl_fun->deprecate();
+    if (fun->deprecate())
+        report(call, 234) << fun->name() << fun->deprecate();
 
     ParamState ps;
 
@@ -2283,8 +2290,8 @@ CallExpr::ProcessUses(SemaContext& sc)
 void
 CallExpr::MarkUsed(SemaContext& sc)
 {
-    if (sym_)
-        sym_->decl->as<FunctionDecl>()->canonical()->set_retvalue_used();
+    if (fun_)
+        fun_->set_retvalue_used();
 }
 
 bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
@@ -2439,7 +2446,7 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             auto canonical = sym->decl->as<FunctionDecl>()->canonical();
             if (canonical->is_public() || strcmp(sym->name(), uMAINFUNC) == 0)
                 entry = true; /* there is an entry point */
-            if ((sym->usage & uREAD) == 0 &&
+            if (!(canonical->maybe_used() || canonical->is_live()) &&
                 !(canonical->is_native() || canonical->is_stock() || canonical->is_public()) &&
                 canonical->impl())
             {
@@ -2459,11 +2466,12 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             }
             break;
         }
-        case iCONSTEXPR:
-            if (testconst && (sym->usage & uREAD) == 0) {
+        case iCONSTEXPR: {
+            auto var = sym->decl->as<VarDeclBase>();
+            if (testconst && var && !var->is_read())
                 report(sym->decl, 203) << sym->name(); /* symbol isn't used: ... */
-            }
             break;
+        }
         case iMETHODMAP:
         case iENUMSTRUCT:
             // Ignore usage on methodmaps and enumstructs.
@@ -2471,9 +2479,9 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
         default: {
             auto var = sym->decl->as<VarDeclBase>();
             /* a variable */
-            if (!var->is_stock() && (sym->usage & (uWRITTEN | uREAD)) == 0 && !var->is_public()) {
+            if (!var->is_stock() && !var->is_used() && !var->is_public()) {
                 report(sym->decl, 203) << sym->name(); /* symbol isn't used (and not stock) */
-            } else if (!var->is_stock() && !var->is_public() && (sym->usage & uREAD) == 0) {
+            } else if (!var->is_stock() && !var->is_public() && !var->is_read()) {
                 report(sym->decl, 204) << sym->name(); /* value assigned to symbol is never used */
             }
         }
@@ -2750,6 +2758,8 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
         report(expr, 115) << "methodmap" << map->name;
         return false;
     }
+
+    markusage(map->dtor->target, uREAD);
 
     stmt->set_map(map);
     return true;
@@ -3047,6 +3057,10 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         return false;
     }
 
+    // We never warn about unused member functions.
+    if (info->as<MemberFunctionDecl>())
+        maybe_used_.emplace_back(info);
+
     auto fwd = info->prototype();
     if (fwd && fwd->deprecate() && !info->is_stock())
         report(info->pos(), 234) << sym->name() << fwd->deprecate();
@@ -3195,15 +3209,15 @@ FunctionDecl::ProcessUses(SemaContext& outer_sc)
 }
 
 bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
-    for (const auto& sym : stmt->symbols()) {
-        sym->usage |= uREAD;
+    for (const auto& decl : stmt->symbols()) {
+        decl->set_is_read();
 
-        switch (sym->ident) {
+        switch (decl->sym()->ident) {
             case iVARIABLE:
             case iREFERENCE:
             case iARRAY:
             case iREFARRAY:
-                sym->usage |= uWRITTEN;
+                decl->set_is_written();
                 break;
         }
     }
@@ -3327,8 +3341,9 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
     auto decl = FindSymbol(scope, type->nameAtom());
     if (!decl)
         return false;
-    auto sym = decl->s;
-    return sym->data() && (sym->data()->asEnumStruct() || sym->data()->asEnum());
+    if (auto ed = decl->as<EnumDecl>())
+        return !ed->mm();
+    return false;
 }
 
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
@@ -3340,8 +3355,6 @@ void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
         assert(sym->vclass == sGLOBAL);
 
         def->sym = sym;
-        if (sym->usage & uREAD)
-            markusage(sym, uREAD);
     } else {
         auto array = cc.NewDefaultArrayData();
         BuildArrayInitializer(decl, array, 0);
@@ -3364,6 +3377,60 @@ SymbolScope* Semantics::current_scope() const {
     if (sc_)
         return sc_->scope();
     return cc_.globals();
+}
+
+// Determine the set of live functions.
+void Semantics::DeduceLiveness() {
+    std::vector<FunctionDecl*> work;
+    std::unordered_set<FunctionDecl*> seen;
+
+    // The root set is all public functions.
+    for (const auto& decl : cc_.publics()) {
+        assert(!decl->is_native());
+        assert(decl->is_public());
+
+        decl->set_is_live();
+
+        seen.emplace(decl);
+        work.emplace_back(decl);
+    }
+
+    // Traverse referrers to find the transitive set of live functions.
+    while (!work.empty()) {
+        FunctionDecl* live = ke::PopBack(&work);
+
+        for (const auto& other : live->sym()->function()->refers_to) {
+            other->set_is_live();
+            if (!seen.count(other)) {
+                seen.emplace(other);
+                work.emplace_back(other);
+            }
+        }
+    }
+}
+
+void Semantics::DeduceMaybeUsed() {
+    std::vector<FunctionDecl*> work;
+    std::unordered_set<FunctionDecl*> seen;
+
+    while (!maybe_used_.empty()) {
+        auto decl = ke::PopBack(&maybe_used_);
+        decl->set_maybe_used();
+        seen.emplace(decl);
+        work.emplace_back(decl);
+    }
+
+    while (!work.empty()) {
+        FunctionDecl* live = ke::PopBack(&work);
+
+        for (const auto& other : live->sym()->function()->refers_to) {
+            other->set_maybe_used();
+            if (!seen.count(other)) {
+                seen.emplace(other);
+                work.emplace_back(other);
+            }
+        }
+    }
 }
 
 void DeleteStmt::ProcessUses(SemaContext& sc) {
