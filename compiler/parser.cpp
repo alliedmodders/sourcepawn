@@ -1936,7 +1936,7 @@ MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     auto fqn = cc_.atom(fullname);
 
     auto is_ctor = (!is_dtor && map->name() == symbol);
-    auto fun = new MethodmapMethodDecl(pos, ret_type, is_ctor, is_dtor);
+    auto fun = new MethodmapMethodDecl(pos, ret_type, map, is_ctor, is_dtor);
     if (is_static)
         fun->set_is_static();
     fun->set_name(fqn);

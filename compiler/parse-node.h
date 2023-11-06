@@ -1031,14 +1031,14 @@ class FieldAccessExpr final : public Expr
     symbol* field() const { return field_; }
     void set_field(symbol* field) { field_ = field; }
 
-    methodmap_method_t* method() const { return method_; }
-    void set_method(methodmap_method_t* method) { method_ = method; }
+    Decl* method() const { return method_; }
+    void set_method(Decl* method) { method_ = method; }
 
   private:
     int token_;
     Expr* base_;
     Atom* name_;
-    methodmap_method_t* method_ = nullptr;
+    Decl* method_ = nullptr;
     symbol* field_ = nullptr;
 };
 
@@ -1403,12 +1403,12 @@ class DeleteStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::DeleteStmt; }
 
     Expr* expr() const { return expr_; }
-    methodmap_t* map() const { return map_; }
-    void set_map(methodmap_t* map) { map_ = map; }
+    MethodmapDecl* map() const { return map_; }
+    void set_map(MethodmapDecl* map) { map_ = map; }
 
   private:
     Expr* expr_;
-    methodmap_t* map_;
+    MethodmapDecl* map_;
 };
 
 class ExitStmt : public Stmt
@@ -1774,38 +1774,37 @@ class MethodmapPropertyDecl : public Decl {
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapPropertyDecl; }
 
+    int property_tag() const;
+
     const typeinfo_t& type() const { return type_; }
     typeinfo_t& mutable_type() { return type_; }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
 
-    methodmap_method_t* entry() { return entry_; }
-    void set_entry(methodmap_method_t* entry) { entry_ = entry; }
-
   private:
     typeinfo_t type_;
     MemberFunctionDecl* getter_;
     MemberFunctionDecl* setter_;
-    methodmap_method_t* entry_ = nullptr;
 };
 
 struct MethodmapMethodDecl : public MemberFunctionDecl {
   public:
-    MethodmapMethodDecl(const token_pos_t& pos, const declinfo_t& decl, bool is_ctor, bool is_dtor)
+    MethodmapMethodDecl(const token_pos_t& pos, const declinfo_t& decl, MethodmapDecl* parent,
+                        bool is_ctor, bool is_dtor)
       : MemberFunctionDecl(StmtKind::MethodmapMethodDecl, pos, decl),
+        parent_(parent),
         is_ctor_(is_ctor),
         is_dtor_(is_dtor)
     {}
 
+    MethodmapDecl* parent() const { return parent_; }
     bool is_ctor() const { return is_ctor_; }
     bool is_dtor() const { return is_dtor_; }
-    void set_entry(methodmap_method_t* entry) { entry_ = entry; }
-    methodmap_method_t* entry() const { return entry_; }
 
   private:
+    MethodmapDecl* parent_ = nullptr;
     bool is_ctor_ : 1;
     bool is_dtor_ : 1;
-    methodmap_method_t* entry_ = nullptr;
 };
 
 class MethodmapDecl : public Decl
@@ -1814,6 +1813,7 @@ class MethodmapDecl : public Decl
     explicit MethodmapDecl(const token_pos_t& pos, Atom* name, bool nullable, Atom* extends)
       : Decl(StmtKind::MethodmapDecl, pos, name),
         nullable_(nullable),
+        is_bound_(false),
         extends_(extends)
     {}
 
@@ -1825,22 +1825,32 @@ class MethodmapDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapDecl; }
 
-    PoolArray<MethodmapPropertyDecl*>& properties() { return properties_; }
+    Decl* FindMember(Atom* name) const;
+
     PoolArray<MethodmapMethodDecl*>& methods() { return methods_; }
-    methodmap_t* map() const { return map_; }
+    PoolArray<MethodmapPropertyDecl*>& properties() { return properties_; }
+    MethodmapDecl* parent() const { return parent_; }
+    bool nullable() const { return nullable_; }
+    bool is_bound() const { return is_bound_; }
+    int tag() const { return tag_; }
+    MethodmapMethodDecl* ctor() const { return ctor_; }
+    MethodmapMethodDecl* dtor() const { return dtor_; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);
     bool BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop);
 
   private:
-    bool nullable_;
+    bool nullable_ : 1;
+    bool is_bound_ : 1;
+    int tag_ = 0;
     Atom* extends_;
     PoolArray<MethodmapPropertyDecl*> properties_;
     PoolArray<MethodmapMethodDecl*> methods_;
-
-    methodmap_t* map_ = nullptr;
+    MethodmapDecl* parent_ = nullptr;
     symbol* sym_ = nullptr;
+    MethodmapMethodDecl* ctor_ = nullptr;
+    MethodmapMethodDecl* dtor_ = nullptr;
 };
 
 } // namespace sp

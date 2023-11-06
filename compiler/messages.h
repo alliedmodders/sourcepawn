@@ -325,4 +325,5 @@ static const char* errmsg_ex[] = {
     /*441*/ "destructors cannot be static\n",
     /*442*/ "method aliases are no longer supported\n",
     /*443*/ "enum %s already has a methodmap\n",
+    /*444*/ "cannot find method \"%s.%s\"\n",
 };

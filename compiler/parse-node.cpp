@@ -177,4 +177,31 @@ MethodmapDecl* MethodmapDecl::LookupMethodmap(Decl* decl) {
     return nullptr;
 }
 
+Decl* MethodmapDecl::FindMember(Atom* name) const {
+    for (const auto& prop : properties_) {
+        if (prop->name() == name)
+            return prop;
+    }
+    for (const auto& method : methods_) {
+        if (method->decl_name() == name)
+            return method;
+    }
+    if (parent_)
+        return parent_->FindMember(name);
+    return nullptr;
+}
+
+int MethodmapPropertyDecl::property_tag() const {
+    auto types = CompileContext::get().types();
+
+    if (getter_)
+        return getter_->type().tag();
+    if (setter_->args().size() != 2)
+        return types->tag_void();
+    ArgDecl* valp = setter_->args()[1];
+    if (valp->type().ident != iVARIABLE)
+        return types->tag_void();
+    return valp->type().tag();
+}
+
 } // namespace sp

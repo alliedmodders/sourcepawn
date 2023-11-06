@@ -37,6 +37,7 @@ namespace sp {
 class CompileContext;
 class Decl;
 class FunctionDecl;
+class MethodmapPropertyDecl;
 class SemaContext;
 struct token_pos_t;
 
@@ -185,12 +186,12 @@ struct value {
         }
     }
 
-    methodmap_method_t* accessor() const {
+    MethodmapPropertyDecl* accessor() const {
         if (ident != iACCESSOR)
             return nullptr;
         return accessor_;
     }
-    void set_accessor(methodmap_method_t* accessor) {
+    void set_accessor(MethodmapPropertyDecl* accessor) {
         ident = iACCESSOR;
         accessor_ = accessor;
     }
@@ -250,7 +251,7 @@ struct value {
 
     union {
         // when ident == iACCESSOR
-        methodmap_method_t* accessor_;
+        MethodmapPropertyDecl* accessor_;
         // when ident == iCONSTEXPR
         cell constval_;
         // when ident == iARRAY
@@ -272,9 +273,9 @@ symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(symbol* sym, int usage);
+void markusage(FunctionDecl* decl, int usage);
 symbol* NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
 symbol* FindEnumStructField(Type* type, Atom* name);
-Decl* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map);
 
 } // namespace sp

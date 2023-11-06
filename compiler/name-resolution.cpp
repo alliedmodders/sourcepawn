@@ -1183,8 +1183,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         }
     }
 
-    map_ = methodmap_add(cc, nullptr, name_);
-    cc.types()->defineMethodmap(name_->chars(), map_);
+    tag_ = cc.types()->defineMethodmap(name_, this)->tagid();
 
     if (auto prev_decl = FindSymbol(cc.globals(), name_)) {
         auto ed = prev_decl->as<EnumDecl>();
@@ -1198,62 +1197,52 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         }
 
         assert(ed->s->ident == iCONSTEXPR);
-        assert(map_->tag == ed->s->tag);
+        assert(tag_ == ed->s->tag);
 
         sym_ = ed->s;
         sym_->ident = iMETHODMAP;
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(this, name_, 0, iMETHODMAP, sGLOBAL, map_->tag);
+        sym_ = new symbol(this, name_, 0, iMETHODMAP, sGLOBAL, tag_);
         cc.globals()->Add(this);
     }
-    sym_->set_data(map_);
 
+    std::unordered_map<Atom*, Decl*> names;
     for (auto& prop : properties_) {
-        if (map_->methods.count(prop->name())) {
+        if (names.count(prop->name())) {
             report(prop, 103) << prop->name() << "methodmap";
             continue;
         }
-
-        auto method = new methodmap_method_t(map_);
-        method->name = prop->name();
-        map_->methods.emplace(prop->name(), method);
-
-        prop->set_entry(method);
+        names.emplace(prop->name(), prop);
     }
 
     for (auto& method : methods_) {
-        if (map_->methods.count(method->decl_name())) {
+        if (names.count(method->decl_name())) {
             report(method->pos(), 103) << method->decl_name() << "methodmap";
             continue;
         }
-
-        auto m = new methodmap_method_t(map_);
-        m->name = method->decl_name();
+        names.emplace(method->decl_name(), method);
 
         if (method->is_dtor()) {
-            if (map_->dtor) {
+            if (dtor_) {
                 report(method, 154) << method->name();
                 continue;
             }
 
-            if (method->decl_name() != map_->name)
+            if (method->decl_name() != name_)
                 report(method, 440);
 
             // Hack: modify name.
-            method->decl().name = cc.atom("~" + map_->name->str());
+            method->decl().name = cc.atom("~" + name_->str());
 
-            map_->dtor = m;
+            dtor_ = method;
         } else if (method->is_ctor()) {
-            if (map_->ctor) {
+            if (ctor_) {
                 report(method, 113) << method->name();
                 continue;
             }
-            map_->ctor = m;
+            ctor_ = method;
         }
-        map_->methods.emplace(m->name, m);
-
-        method->set_entry(m);
     }
     return true;
 }
@@ -1261,31 +1250,30 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
 bool MethodmapDecl::Bind(SemaContext& sc) {
     AutoCountErrors errors;
 
-    methodmap_t* extends_map = nullptr;
+    is_bound_ = true;
+
+    auto& cc = sc.cc();
     if (extends_) {
-        if ((extends_map = methodmap_find_by_name(extends_)) == nullptr)
+        auto parent = FindSymbol(cc.globals(), extends_);
+        parent_ = MethodmapDecl::LookupMethodmap(parent);
+        if (!parent_)
             report(pos_, 102) << "methodmap" << extends_;
     }
 
-    if (extends_map) {
-        if (!extends_map->is_bound)
+    if (parent_) {
+        if (!parent_->is_bound())
             report(pos_, 409) << extends_;
 
-        for (auto iter = extends_map; iter; iter = iter->parent) {
-            if (iter == map_) {
-                extends_map = nullptr;
+        for (auto iter = parent_; iter; iter = iter->parent_) {
+            if (iter == this) {
+                parent_ = nullptr;
                 report(pos_, 410);
             }
         }
     }
 
-    map_->parent = extends_map;
-    if (map_->parent)
-        map_->nullable = map_->parent->nullable;
-    else
-        map_->nullable = nullable_;
-
-    map_->is_bound = true;
+    if (parent_)
+        nullable_ = parent_->nullable();
 
     for (const auto& prop : properties_) {
         if (!sc.BindType(prop->pos(), &prop->mutable_type()))
@@ -1296,19 +1284,13 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
             continue;
         }
 
-        auto method = prop->entry();
-
         if (prop->getter() && BindGetter(sc, prop)) {
-            method->getter = prop->getter()->sym();
-
             auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name()->chars());
-            method->getter->setName(sc.cc().atom(name));
+            prop->getter()->sym()->setName(sc.cc().atom(name));
         }
         if (prop->setter() && BindSetter(sc, prop)) {
-            method->setter = prop->setter()->sym();
-
             auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name()->chars());
-            method->setter->setName(sc.cc().atom(name));
+            prop->setter()->sym()->setName(sc.cc().atom(name));
         }
     }
 
@@ -1319,7 +1301,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
                 report(method, 175);
 
             auto& type = method->mutable_type();
-            type.set_tag(map_->tag);
+            type.set_tag(tag_);
             type.ident = iVARIABLE;
             type.is_new = true;
         } else if (method->is_dtor()) {
@@ -1338,26 +1320,19 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
             type.ident = iVARIABLE;
         } else if (method->type().ident == 0) {
             // Parsed as a constructor, but not using the map name. This is illegal.
-            report(method, 114) << "constructor" << "methodmap" << map_->name;
+            report(method, 114) << "constructor" << "methodmap" << name_;
             continue;
         }
 
         if (!method->is_static() && !method->is_ctor())
-            method->set_this_tag(map_->tag);
+            method->set_this_tag(tag_);
 
         if (!method->Bind(sc))
             continue;
 
         method->sym()->function()->is_member_function = true;
         method->sym()->setName(DecorateInnerName(name_, method->decl_name()));
-
-        auto m = method->entry();
-        m->target = method->sym();
-        if (method->is_static())
-            m->is_static = true;
     }
-
-    map_->keyword_nullable = nullable_;
     return errors.ok();
 }
 
@@ -1370,7 +1345,7 @@ bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_tag(map_->tag);
+    fun->set_this_tag(tag_);
 
     if (!fun->Bind(sc))
         return false;
@@ -1388,7 +1363,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_tag(map_->tag);
+    fun->set_this_tag(tag_);
 
     if (!fun->Bind(sc))
         return false;
