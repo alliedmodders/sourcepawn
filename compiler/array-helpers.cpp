@@ -310,7 +310,9 @@ ArraySizeResolver::ResolveDimExprs()
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
-        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym && v.sym->enumroot) {
+        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym &&
+                   v.sym->decl->as<EnumDecl>())
+        {
             report(expr->pos(), 153);
             return false;
         } else {
@@ -340,7 +342,7 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
         // For backward compatibility with a huge number of plugins.
         auto sym = sym_expr->sym();
         auto type = types_->find(sym->tag);
-        if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
+        if (sym->decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
             *v = {};
             v->set_constval(sym->addr());
             return true;

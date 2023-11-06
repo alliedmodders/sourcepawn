@@ -210,8 +210,6 @@ EnumDecl::EnterNames(SemaContext& sc)
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
             enumsym = DefineConstant(sc, this, name_, pos_, 0, vclass_, tag);
-            if (enumsym)
-                enumsym->enumroot = true;
         }
     }
 
@@ -243,10 +241,8 @@ EnumDecl::EnterNames(SemaContext& sc)
     }
 
     // set the enum name to the "next" value (typically the last value plus one)
-    if (enumsym) {
-        assert(enumsym->enumroot);
+    if (enumsym)
         enumsym->setAddr(value);
-    }
     return true;
 }
 
@@ -1068,7 +1064,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     AutoErrorPos error_pos(pos_);
     root_ = DefineConstant(sc, this, name_, pos_, 0, sGLOBAL, 0);
     root_->tag = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
-    root_->enumroot = true;
     root_->ident = iENUMSTRUCT;
 
     std::unordered_set<Atom*> seen;
@@ -1138,7 +1133,6 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         decl->set_sym(sym);
     }
 
-    assert(root_->enumroot);
     root_->setAddr(position);
 
     return errors.ok();
