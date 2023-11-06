@@ -580,8 +580,8 @@ RvalueExpr::RvalueExpr(Expr* expr)
 
     val_ = expr_->val();
     if (val_.ident == iACCESSOR) {
-        if (val_.accessor()->getter)
-            markusage(val_.accessor()->getter, uREAD);
+        if (val_.accessor()->getter())
+            markusage(val_.accessor()->getter(), uREAD);
         val_.ident = iEXPRESSION;
     }
 }
@@ -669,16 +669,16 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
             return false;
         }
     } else {
-        if (!expr_val.accessor()->setter) {
-            report(incdec, 152) << expr_val.accessor()->name;
+        if (!expr_val.accessor()->setter()) {
+            report(incdec, 152) << expr_val.accessor()->name();
             return false;
         }
-        if (!expr_val.accessor()->getter) {
-            report(incdec, 149) << expr_val.accessor()->name;
+        if (!expr_val.accessor()->getter()) {
+            report(incdec, 149) << expr_val.accessor()->name();
             return false;
         }
-        markusage(expr_val.accessor()->getter, uREAD);
-        markusage(expr_val.accessor()->setter, uREAD);
+        markusage(expr_val.accessor()->getter(), uREAD);
+        markusage(expr_val.accessor()->setter(), uREAD);
     }
 
     find_userop(*sc_, incdec->token(), expr_val.tag, 0, 1, &expr_val, &incdec->userop());
@@ -731,13 +731,13 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             if (sym->vclass == sARGUMENT && (sym->ident == iREFERENCE || sym->ident == iREFARRAY))
                 markusage(sym, uREAD);
         } else if (auto* accessor = left->val().accessor()) {
-            if (!accessor->setter) {
-                report(expr, 152) << accessor->name;
+            if (!accessor->setter()) {
+                report(expr, 152) << accessor->name();
                 return false;
             }
-            markusage(accessor->setter, uREAD);
-            if (accessor->getter && token != '=')
-                markusage(accessor->getter, uREAD);
+            markusage(accessor->setter()->sym(), uREAD);
+            if (accessor->getter() && token != '=')
+                markusage(accessor->getter(), uREAD);
         }
 
         if (!CheckAssignmentLHS(expr))
@@ -1586,55 +1586,55 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     }
 
     auto& val = expr->val();
-    if (base_val.ident == iMETHODMAP && base_val.sym->data()) {
-        methodmap_t* map = base_val.sym->data()->asMethodmap();
-        if (map)
-            expr->set_method(methodmap_find_method(map, expr->name()));
-
-        auto method = expr->method();
-        if (!method) {
-            report(expr, 105) << base_val.sym->name() << expr->name();
+    if (base_val.ident == iMETHODMAP) {
+        auto map = MethodmapDecl::LookupMethodmap(base_val.sym->decl);
+        auto member = map->FindMember(expr->name());
+        if (!member || !member->as<MethodmapMethodDecl>()) {
+            report(expr, 444) << base_val.sym->name() << expr->name();
             return false;
         }
-        if (!method->is_static) {
-            report(expr, 176) << method->name << map->name;
+        auto method = member->as<MethodmapMethodDecl>();
+        if (!method->is_static()) {
+            report(expr, 176) << method->decl_name() << map->name();
             return false;
         }
+        expr->set_method(method);
         val.ident = iFUNCTN;
-        val.sym = method->target;
-        markusage(method->target, uREAD);
+        val.sym = method->sym();
+        markusage(method, uREAD);
         return true;
     }
 
     Type* base_type = types_->find(base_val.tag);
-    methodmap_t* map = base_type->asMethodmap();
+    auto map = base_type->asMethodmap();
     if (!map) {
         report(expr, 104) << type_to_name(base_val.tag);
         return false;
     }
 
-    expr->set_method(methodmap_find_method(map, expr->name()));
-    auto method = expr->method();
-    if (!method) {
-        report(expr, 105) << map->name << expr->name();
+    auto member = map->FindMember(expr->name());
+    if (!member) {
+        report(expr, 105) << map->name() << expr->name();
         return false;
     }
 
-    if (method->getter || method->setter) {
+    if (auto prop = member->as<MethodmapPropertyDecl>()) {
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())
             base = expr->set_base(new RvalueExpr(base));
-        val.tag = method->property_tag();
-        val.set_accessor(method);
+        val.tag = prop->property_tag();
+        val.set_accessor(prop);
         expr->set_lvalue(true);
         return true;
     }
 
-    if (method->is_static) {
-        report(expr, 177) << method->name << map->name << method->name;
+    auto method = member->as<MethodmapMethodDecl>();
+    if (method->is_static()) {
+        report(expr, 177) << method->decl_name() << map->name() << method->decl_name();
         return false;
     }
+    expr->set_method(method);
 
     if (!from_call) {
         report(expr, 50);
@@ -1642,8 +1642,8 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     }
 
     val.ident = iFUNCTN;
-    val.sym = method->target;
-    markusage(method->target, uREAD);
+    val.sym = method->sym();
+    markusage(method->sym(), uREAD);
     return true;
 }
 
@@ -1671,16 +1671,17 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             // The static accessor (::) is offsetof(), so it can't return functions.
             assert(expr->token() == '.');
 
-            auto method = expr->method();
-            if (method && method->parent->ctor == method) {
-                report(call, 84) << method->parent->name;
+            auto mm = expr->method();
+            auto method = mm ? mm->as<MethodmapMethodDecl>() : nullptr;
+            if (method && method->parent()->ctor() == method) {
+                report(call, 84) << method->parent()->name();
                 return nullptr;
             }
 
             auto base = expr->base();
             if (base->lvalue())
                 base = expr->set_base(new RvalueExpr(base));
-            if (expr->field() || !method->is_static)
+            if (expr->field() || !method->is_static())
                 call->set_implicit_this(base);
             return val.sym->decl->as<FunctionDecl>()->canonical();
         }
@@ -1690,18 +1691,17 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             auto expr = target->to<SymbolExpr>();
             auto decl = expr->decl();
             if (auto mm = decl->as<MethodmapDecl>()) {
-                auto map = mm->map();
-                if (!map->ctor) {
+                if (!mm->ctor()) {
                     // Immediately fatal - no function to call.
                     report(target, 172) << decl->name();
                     return nullptr;
                 }
-                if (map->must_construct_with_new()) {
+                if (mm->nullable()) {
                     // Keep going, this is basically a style thing.
                     report(target, 170) << decl->name();
                     return nullptr;
                 }
-                return map->ctor->target->decl->as<FunctionDecl>()->canonical();
+                return mm->ctor();
             }
             auto fun = decl->as<FunctionDecl>();
             if (!fun) {
@@ -1736,16 +1736,15 @@ FunctionDecl* Semantics::BindNewTarget(Expr* target) {
                 return nullptr;
             }
 
-            methodmap_t* methodmap = mm->map();
-            if (!methodmap->must_construct_with_new()) {
-                report(expr, 171) << methodmap->name;
+            if (!mm->nullable()) {
+                report(expr, 171) << mm->name();
                 return nullptr;
             }
-            if (!methodmap->ctor) {
-                report(expr, 172) << methodmap->name;
+            if (!mm->ctor()) {
+                report(expr, 172) << mm->name();
                 return nullptr;
             }
-            return methodmap->ctor->target->decl->as<FunctionDecl>()->canonical();
+            return mm->ctor();
         }
     }
     return nullptr;
@@ -2133,8 +2132,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
     if (param->val().ident == iACCESSOR) {
         // We must always compute r-values for accessors.
-        if (!param->val().accessor()->getter) {
-            report(param, 149) << param->val().accessor()->name;
+        if (!param->val().accessor()->getter()) {
+            report(param, 149) << param->val().accessor()->name();
             return false;
         }
         param = new RvalueExpr(param);
@@ -2730,10 +2729,10 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
             break;
 
         case iACCESSOR:
-            if (v.accessor()->getter)
-                markusage(v.accessor()->getter, uREAD);
-            if (v.accessor()->setter)
-                markusage(v.accessor()->setter, uREAD);
+            if (v.accessor()->getter())
+                markusage(v.accessor()->getter(), uREAD);
+            if (v.accessor()->setter())
+                markusage(v.accessor()->setter(), uREAD);
             break;
     }
 
@@ -2742,25 +2741,25 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
         return false;
     }
 
-    methodmap_t* map = types_->find(v.tag)->asMethodmap();
+    auto map = types_->find(v.tag)->asMethodmap();
     if (!map) {
         report(expr, 115) << "type" << type_to_name(v.tag);
         return false;
     }
 
-    for (methodmap_t* iter = map; iter; iter = iter->parent) {
-        if (iter->dtor) {
+    for (auto iter = map; iter; iter = iter->parent()) {
+        if (iter->dtor()) {
             map = iter;
             break;
         }
     }
 
-    if (!map || !map->dtor) {
-        report(expr, 115) << "methodmap" << map->name;
+    if (!map || !map->dtor()) {
+        report(expr, 115) << "methodmap" << map->name();
         return false;
     }
 
-    markusage(map->dtor->target, uREAD);
+    markusage(map->dtor()->sym(), uREAD);
 
     stmt->set_map(map);
     return true;
@@ -3437,7 +3436,7 @@ void Semantics::DeduceMaybeUsed() {
 
 void DeleteStmt::ProcessUses(SemaContext& sc) {
     expr_->MarkAndProcessUses(sc);
-    markusage(map_->dtor->target, uREAD);
+    markusage(map_->dtor()->sym(), uREAD);
 }
 
 } // namespace sp

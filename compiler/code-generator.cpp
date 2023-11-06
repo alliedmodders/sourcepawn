@@ -1435,14 +1435,14 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     EmitExpr(expr);
 
     bool popaddr = false;
-    methodmap_method_t* accessor = nullptr;
+    MethodmapPropertyDecl* accessor = nullptr;
     if (expr->lvalue()) {
         if (zap) {
             switch (v.ident) {
                 case iACCESSOR:
                     // EmitRvalue() removes iACCESSOR so we store it locally.
                     accessor = v.accessor();
-                    if (!accessor->setter) {
+                    if (!accessor->setter()) {
                         zap = false;
                         break;
                     }
@@ -1465,7 +1465,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     // sysreq.c N 1
     // stack 8
     __ emit(OP_PUSH_PRI);
-    EmitCall(stmt->map()->dtor->target, 1);
+    EmitCall(stmt->map()->dtor(), 1);
 
     if (zap) {
         if (popaddr)
@@ -1537,25 +1537,21 @@ CodeGenerator::EmitStore(const value* lval)
     }
 }
 
-void
-CodeGenerator::InvokeGetter(methodmap_method_t* method)
-{
-    assert(method->getter);
+void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
+    assert(prop->getter());
 
     __ emit(OP_PUSH_PRI);
-    EmitCall(method->getter, 1);
+    EmitCall(prop->getter(), 1);
 }
 
-void
-CodeGenerator::InvokeSetter(methodmap_method_t* method, bool save_pri)
-{
-    assert(method->setter);
+void CodeGenerator::InvokeSetter(MethodmapPropertyDecl* prop, bool save_pri) {
+    assert(prop->setter());
 
     if (save_pri)
       __ emit(OP_PUSH_PRI);
     __ emit(OP_PUSH_PRI);
     __ emit(OP_PUSH_ALT);
-    EmitCall (method->setter, 2);
+    EmitCall(prop->setter(), 2);
     if (save_pri)
       __ emit(OP_POP_PRI);
 }

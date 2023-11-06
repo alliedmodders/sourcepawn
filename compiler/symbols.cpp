@@ -40,9 +40,11 @@ void AddGlobal(CompileContext& cc, symbol* sym)
     scope->AddChain(sym->decl);
 }
 
-void
-markusage(symbol* sym, int usage)
-{
+void markusage(FunctionDecl* decl, int usage) {
+    markusage(decl->sym(), usage);
+}
+
+void markusage(symbol* sym, int usage) {
     if (auto var = sym->decl->as<VarDeclBase>()) {
         if (usage & uREAD)
             var->set_is_read();

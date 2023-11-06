@@ -74,7 +74,6 @@ struct DefaultArg : public PoolObject {
 
     ~DefaultArg();
 };
-struct methodmap_t;
 struct stringlist;
  
 class EnumStructData;
@@ -83,7 +82,6 @@ class SymbolData : public PoolObject
 {
   public:
     virtual FunctionData* asFunction() { return nullptr; }
-    virtual methodmap_t* asMethodmap() { return nullptr; }
 };
 
 struct symbol;
@@ -94,8 +92,6 @@ struct symbol;
 #define uLIVE       0x4     // Marked during liveness analysis.
 
 #define uMAINFUNC "main"
-
-struct methodmap_method_t;
 
 #define DECLFLAG_ARGUMENT 0x02       // The declaration is for an argument.
 #define DECLFLAG_VARIABLE 0x04       // The declaration is for a variable.

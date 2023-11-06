@@ -81,10 +81,10 @@ enum class TypeKind : uint8_t {
 };
 
 struct funcenum_t;
-struct methodmap_t;
 struct symbol;
 class EnumStructDecl;
 class Expr;
+class MethodmapDecl;
 
 struct TypenameInfo {
     TypenameInfo() {}
@@ -251,7 +251,7 @@ class Type : public PoolObject
         return kind_ == TypeKind::Struct;
     }
 
-    void setMethodmap(methodmap_t* map) {
+    void setMethodmap(MethodmapDecl* map) {
         setFixed();
         assert(kind_ == TypeKind::Methodmap || kind_ == TypeKind::Enum);
         kind_ = TypeKind::Methodmap;
@@ -279,7 +279,7 @@ class Type : public PoolObject
     bool isMethodmap() const {
         return kind_ == TypeKind::Methodmap;
     }
-    methodmap_t* asMethodmap() const {
+    MethodmapDecl* asMethodmap() const {
         if (!isMethodmap())
             return nullptr;
         return methodmap_ptr_;
@@ -333,7 +333,7 @@ class Type : public PoolObject
     TypeKind kind_;
     union {
         funcenum_t* funcenum_ptr_;
-        methodmap_t* methodmap_ptr_;
+        MethodmapDecl* methodmap_ptr_;
         EnumStructDecl* enumstruct_ptr_;
         void* private_ptr_;
     };
@@ -373,7 +373,7 @@ class TypeDictionary
     Type* defineVoid();
     Type* defineObject(const char* name);
     Type* defineBool();
-    Type* defineMethodmap(const char* name, methodmap_t* map);
+    Type* defineMethodmap(Atom* name, MethodmapDecl* map);
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
     Type* defineTag(Atom* atom);

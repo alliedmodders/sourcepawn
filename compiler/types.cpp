@@ -183,13 +183,10 @@ TypeDictionary::defineBool()
     return add("bool", TypeKind::Bool);
 }
 
-Type*
-TypeDictionary::defineMethodmap(const char* name, methodmap_t* map)
-{
-    auto atom = cc_.atom(name);
-    Type* type = find(atom);
+Type* TypeDictionary::defineMethodmap(Atom* name, MethodmapDecl* map) {
+    Type* type = find(name);
     if (!type)
-        type = add(atom, TypeKind::Methodmap);
+        type = add(name, TypeKind::Methodmap);
     type->setMethodmap(map);
     return type;
 }

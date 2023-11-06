@@ -291,8 +291,8 @@ matchobjecttags(Type* formal, Type* actual, int flags)
 
         // Some methodmaps are nullable. The nullable property is inherited
         // automatically.
-        methodmap_t* map = formal->asMethodmap();
-        if (map && map->nullable)
+        auto map = formal->asMethodmap();
+        if (map && map->nullable())
             return TRUE;
 
         if (!(flags & MATCHTAG_SILENT))
@@ -310,9 +310,9 @@ matchobjecttags(Type* formal, Type* actual, int flags)
     if (flags & MATCHTAG_COERCE)
         return obj_typeerror(134, formaltag, actualtag);
 
-    methodmap_t* map = actual->asMethodmap();
-    for (; map; map = map->parent) {
-        if (map->tag == formaltag)
+    auto map = actual->asMethodmap();
+    for (; map; map = map->parent()) {
+        if (map->tag() == formaltag)
             return TRUE;
     }
 
@@ -435,11 +435,11 @@ matchfunctags(Type* formal, Type* actual)
 static bool
 HasTagOnInheritanceChain(Type* type, int tag)
 {
-    methodmap_t* map = type->asMethodmap();
+    auto map = type->asMethodmap();
     if (!map)
         return false;
-    for (; map; map = map->parent) {
-        if (map->tag == tag)
+    for (; map; map = map->parent()) {
+        if (map->tag() == tag)
             return true;
     }
     return false;

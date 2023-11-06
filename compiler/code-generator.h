@@ -106,8 +106,8 @@ class CodeGenerator final
     void EmitCall(symbol* fun, cell nargs);
     void EmitInc(const value* lval);
     void EmitDec(const value* lval);
-    void InvokeGetter(methodmap_method_t* method);
-    void InvokeSetter(methodmap_method_t* method, bool save);
+    void InvokeGetter(MethodmapPropertyDecl* method);
+    void InvokeSetter(MethodmapPropertyDecl* method, bool save);
     void EmitRvalue(value* lval);
     void EmitStore(const value* lval);
     void EmitBreak();
