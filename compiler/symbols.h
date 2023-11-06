@@ -95,9 +95,6 @@ struct symbol : public PoolObject
     // Constant: the symbol is defined in the source file.
     bool is_const : 1;
 
-    // Constants only.
-    bool enumroot : 1;      // the constant is the "root" of an enumeration
-
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
     Decl* decl;

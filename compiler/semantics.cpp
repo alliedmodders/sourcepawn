@@ -1281,20 +1281,21 @@ void SymbolExpr::MarkUsed(SemaContext& sc) {
 bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     AutoErrorPos aep(expr->pos());
 
-    auto sym = expr->sym();
-    if (!sym) {
+    auto decl = expr->decl();
+    if (!decl) {
         // This can happen if CheckSymbolExpr is called during name resolution.
         assert(cc_.reports()->total_errors() > 0);
         return false;
     }
 
+    auto sym = expr->sym();
     auto& val = expr->val();
     val.ident = sym->ident;
     val.sym = sym;
 
     // Don't expose the tag of old enumroots.
     Type* type = types_->find(sym->tag);
-    if (sym->enumroot && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
+    if (decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
         val.tag = 0;
         report(expr, 174) << sym->name();
     } else {
@@ -1447,7 +1448,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
 
-    if (base_val.sym->enumroot) {
+    if (base_val.sym->decl->as<EnumStructDecl>()) {
         if (!matchtag(base_val.sym->semantic_tag, index->val().tag, TRUE))
             return false;
     }
