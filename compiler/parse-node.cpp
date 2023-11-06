@@ -32,7 +32,9 @@ VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
    is_public_(is_public),
    is_static_(is_static),
    is_stock_(is_stock),
-   autozero_(true)
+   autozero_(true),
+   is_read_(false),
+   is_written_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)
@@ -103,8 +105,8 @@ BinaryExprBase::BinaryExprBase(ExprKind kind, const token_pos_t& pos, int token,
     assert(right_ != this);
 }
 
-FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
-  : Decl(StmtKind::FunctionDecl, pos, decl.name),
+FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo_t& decl)
+  : Decl(kind, pos, decl.name),
     decl_(decl),
     analyzed_(false),
     analyze_result_(false),
@@ -119,7 +121,9 @@ FunctionDecl::FunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
     retvalue_used_(false),
     is_callback_(false),
     returns_value_(false),
-    always_returns_(false)
+    always_returns_(false),
+    is_live_(false),
+    maybe_used_(false)
 {
 }
 
@@ -163,6 +167,14 @@ bool FunctionDecl::MustReturnValue() const {
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {
+}
+
+MethodmapDecl* MethodmapDecl::LookupMethodmap(Decl* decl) {
+    if (auto mm = decl->as<MethodmapDecl>())
+        return mm;
+    if (auto ed = decl->as<EnumDecl>())
+        return ed->mm();
+    return nullptr;
 }
 
 } // namespace sp

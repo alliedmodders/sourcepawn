@@ -90,9 +90,6 @@ struct symbol : public PoolObject
 
     IdentifierKind ident : 6;    /* see below for possible values */
 
-    // See uREAD/uWRITTEN above.
-    uint8_t usage : 3;
-
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
     // Constant: the symbol is defined in the source file.
@@ -151,14 +148,6 @@ struct symbol : public PoolObject
     }
 
     void add_reference_to(FunctionDecl* other);
-
-    bool used() const {
-        assert(ident == iFUNCTN);
-        return (usage & uLIVE) == uLIVE;
-    }
-    bool unused() const {
-        return !used();
-    }
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
@@ -286,7 +275,6 @@ void markusage(symbol* sym, int usage);
 symbol* NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
 symbol* FindEnumStructField(Type* type, Atom* name);
-void deduce_liveness(CompileContext& cc);
 Decl* declare_methodmap_symbol(CompileContext& cc, Decl* decl, methodmap_t* map);
 
 } // namespace sp

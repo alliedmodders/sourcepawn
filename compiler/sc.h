@@ -77,7 +77,6 @@ struct DefaultArg : public PoolObject {
 struct methodmap_t;
 struct stringlist;
  
-class EnumData;
 class EnumStructData;
 class FunctionData;
 class SymbolData : public PoolObject
@@ -85,8 +84,6 @@ class SymbolData : public PoolObject
   public:
     virtual FunctionData* asFunction() { return nullptr; }
     virtual methodmap_t* asMethodmap() { return nullptr; }
-    virtual EnumStructData* asEnumStruct() { return nullptr; }
-    virtual EnumData* asEnum() { return nullptr; }
 };
 
 struct symbol;

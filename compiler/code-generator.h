@@ -102,6 +102,7 @@ class CodeGenerator final
 
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitUserOp(const UserOperation& user_op, value* lval);
+    void EmitCall(FunctionDecl* fun, cell nargs);
     void EmitCall(symbol* fun, cell nargs);
     void EmitInc(const value* lval);
     void EmitDec(const value* lval);

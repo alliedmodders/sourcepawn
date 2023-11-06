@@ -101,8 +101,7 @@ methodmap_t::methodmap_t(methodmap_t* parent, Atom* name)
    name(name),
    dtor(nullptr),
    ctor(nullptr),
-   is_bound(false),
-   enum_data(nullptr)
+   is_bound(false)
 {
 }
 
