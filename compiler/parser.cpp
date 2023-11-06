@@ -1856,7 +1856,7 @@ Parser::parse_methodmap()
 
     lexer_->need('{');
 
-    std::vector<MethodmapMethod*> methods;
+    std::vector<MethodmapMethodDecl*> methods;
     std::vector<MethodmapPropertyDecl*> props;
     while (!lexer_->match('}')) {
         bool ok = true;
@@ -1884,16 +1884,14 @@ Parser::parse_methodmap()
         }
     }
 
-    new (&decl->methods()) PoolArray<MethodmapMethod*>(methods);
+    new (&decl->methods()) PoolArray<MethodmapMethodDecl*>(methods);
     new (&decl->properties()) PoolArray<MethodmapPropertyDecl*>(props);
 
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
 }
 
-MethodmapMethod*
-Parser::parse_methodmap_method(MethodmapDecl* map)
-{
+MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     auto pos = lexer_->pos();
 
     bool is_static = lexer_->match(tSTATIC);
@@ -1937,7 +1935,10 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), symbol->chars());
     auto fqn = cc_.atom(fullname);
 
-    auto fun = new MemberFunctionDecl(pos, ret_type);
+    auto is_ctor = (!is_dtor && map->name() == symbol);
+    auto fun = new MethodmapMethodDecl(pos, ret_type, is_ctor, is_dtor);
+    if (is_static)
+        fun->set_is_static();
     fun->set_name(fqn);
 
     if (is_native)
@@ -1958,18 +1959,11 @@ Parser::parse_methodmap_method(MethodmapDecl* map)
     if (!parse_function(fun, is_native ? tMETHODMAP : 0, has_this))
         return nullptr;
 
-    // Use the short name for the function decl
-    auto method = new MethodmapMethod;
-    method->is_static = is_static;
-    method->is_dtor = is_dtor;
-    method->is_ctor = (!is_dtor && map->name() == symbol);
-    method->decl = fun;
-
     if (is_native)
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     else
         lexer_->require_newline(TerminatorPolicy::Newline);
-    return method;
+    return fun;
 }
 
 MethodmapPropertyDecl*
