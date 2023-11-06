@@ -85,13 +85,12 @@ CodeGenerator::AddDebugLine(int linenr)
     }
 }
 
-void
-CodeGenerator::AddDebugSymbol(symbol* sym)
-{
-    auto symname = sym->name();
+void CodeGenerator::AddDebugSymbol(Decl* decl) {
+    auto symname = decl->name()->chars();
 
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
-    assert(sym->ident != iFUNCTN);
+    auto var = decl->as<VarDeclBase>();
+    auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    sym->addr(), sym->tag, symname, sym->codeaddr,
                                    asm_.position(), sym->ident, sym->vclass, (int)sym->is_const);
@@ -112,10 +111,10 @@ CodeGenerator::AddDebugSymbol(symbol* sym)
     }
 }
 
-void CodeGenerator::AddDebugSymbols(tr::vector<symbol*>* list) {
+void CodeGenerator::AddDebugSymbols(tr::vector<Decl*>* list) {
     while (!list->empty()) {
-        auto sym = ke::PopBack(list);
-        AddDebugSymbol(sym);
+        auto decl = ke::PopBack(list);
+        AddDebugSymbol(decl);
     }
 }
 
@@ -286,7 +285,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
     }
 
     if (decl->is_public() || decl->is_used())
-        EnqueueDebugSymbol(sym);
+        EnqueueDebugSymbol(decl);
 }
 
 void
@@ -1807,7 +1806,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
         for (const auto& fun_arg : info->args()) {
             auto sym = fun_arg->sym();
             sym->codeaddr = asm_.position();
-            EnqueueDebugSymbol(sym);
+            EnqueueDebugSymbol(fun_arg);
         }
 
         EmitStmt(info->body());
@@ -2195,13 +2194,13 @@ int CodeGenerator::DynamicMemorySize() const {
     return std::max(min_cells, custom) * sizeof(cell_t);
 }
 
-void CodeGenerator::EnqueueDebugSymbol(symbol* sym) {
-    if (sym->vclass == sGLOBAL) {
-        global_syms_.emplace_back(sym);
-    } else if (sym->vclass == sSTATIC && !func_) {
-        static_syms_.back().second.emplace_back(sym);
+void CodeGenerator::EnqueueDebugSymbol(Decl* decl) {
+    if (decl->s->vclass == sGLOBAL) {
+        global_syms_.emplace_back(decl);
+    } else if (decl->s->vclass == sSTATIC && !func_) {
+        static_syms_.back().second.emplace_back(decl);
     } else {
-        local_syms_.back().emplace_back(sym);
+        local_syms_.back().emplace_back(decl);
     }
 }
 

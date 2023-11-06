@@ -43,11 +43,6 @@ class Assembler
     void Assemble(sp::SmxByteBuffer* buffer);
 
   private:
-    void InitOpcodeLookup();
-
-    int FindOpcode(const char* instr, size_t maxlen);
-
-  private:
     CompileContext& cc_;
     CodeGenerator& cg_;
 };
