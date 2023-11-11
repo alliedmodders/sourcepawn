@@ -2979,7 +2979,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
 }
 
 void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
-    if (sym->function()->is_member_function) {
+    if (decl->as<MemberFunctionDecl>()) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
         report(sym->decl, 400) << sym->name();
@@ -3094,7 +3094,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     // which functions get used as callbacks in order to emit a warning. The
     // same is true for return value usage: we don't know how to handle
     // compatibility edge cases until we've discovered all callers.
-    if (sym->function()->is_member_function) {
+    if (info->as<MemberFunctionDecl>()) {
         CheckFunctionReturnUsage(info);
         if (info->scope())
             TestSymbols(info->scope(), true);

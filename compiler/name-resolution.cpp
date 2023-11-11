@@ -1150,8 +1150,6 @@ EnumStructDecl::Bind(SemaContext& sc)
         if (!inner_name)
             continue;
 
-        fun->sym()->function()->is_member_function = true;
-
         fun->set_name(inner_name);
         fun->set_this_tag(root_->tag);
         fun->Bind(sc);
@@ -1324,7 +1322,6 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
         if (!method->Bind(sc))
             continue;
 
-        method->sym()->function()->is_member_function = true;
         method->sym()->setName(DecorateInnerName(name_, method->decl_name()));
     }
     return errors.ok();
@@ -1343,8 +1340,6 @@ bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
 
     if (!fun->Bind(sc))
         return false;
-
-    fun->sym()->function()->is_member_function = true;
     return true;
 }
 
@@ -1361,8 +1356,6 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
 
     if (!fun->Bind(sc))
         return false;
-
-    fun->sym()->function()->is_member_function = true;
 
     if (fun->args().size() <= 1) {
         report(prop, 150) << pc_tagname(prop->type().tag());
