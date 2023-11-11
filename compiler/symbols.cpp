@@ -74,8 +74,7 @@ void markusage(symbol* sym, int usage) {
 
 FunctionData::FunctionData()
   : checked_one_signature(false),
-    compared_prototype_args(false),
-    is_member_function(false)
+    compared_prototype_args(false)
 {
 }
 
