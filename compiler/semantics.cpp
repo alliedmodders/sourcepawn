@@ -529,7 +529,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
     auto& val = expr->val();
     if (val.ident == iARRAY || val.ident == iREFARRAY) {
         if (val.sym)
-            report(expr, 33) << val.sym->name();
+            report(expr, 33) << val.sym->decl->name();
         else
             report(expr, 29);
         return nullptr;
@@ -759,12 +759,12 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
         assert(token != '=');
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
-            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name() : "-unknown-";
+            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->decl->name()->chars() : "-unknown-";
             report(expr, 33) << ptr; /* array must be indexed */
             return false;
         }
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
-            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name() : "-unknown-";
+            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->decl->name()->chars() : "-unknown-";
             report(expr, 33) << ptr; /* array must be indexed */
             return false;
         }
@@ -832,7 +832,7 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
 
         for (int i = 0; i < left_sym->dim_count(); i++) {
             if (!left_sym->dim(i)) {
-                report(expr, 46) << left_sym->name();
+                report(expr, 46) << left_sym->decl->name();
                 return false;
             }
         }
@@ -863,7 +863,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
     if (left_val.ident == iVARIABLE) {
         const auto& right_val = right->val();
         if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !expr->oper())
-            report(expr, 226) << left_val.sym->name(); // self-assignment
+            report(expr, 226) << left_val.sym->decl->name(); // self-assignment
     }
 
     if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
@@ -909,7 +909,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         if (left_val.ident != iARRAYCELL &&
             !matchtag(left_val.sym->semantic_tag, right_idxtag, MATCHTAG_COERCE | MATCHTAG_SILENT))
         {
-            report(expr, 229) << (right_val.sym ? right_val.sym->name() : left_val.sym->name());
+            report(expr, 229) << (right_val.sym ? right_val.sym->decl->name() : left_val.sym->decl->name());
         }
 
         expr->set_array_copy_length(right_length);
@@ -1081,12 +1081,12 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         const auto& right_val = right->val();
 
         if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
-            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name() : "-unknown-";
+            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->decl->name()->chars() : "-unknown-";
             report(left, 33) << ptr; /* array must be indexed */
             return false;
         }
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
-            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name() : "-unknown-";
+            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->decl->name()->chars() : "-unknown-";
             report(right, 33) << ptr; /* array must be indexed */
             return false;
         }
@@ -1170,13 +1170,13 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     if (!left_array && right_array) {
         const char* ptr = "-unknown-";
         if (left.sym != nullptr)
-            ptr = left.sym->name();
+            ptr = left.sym->decl->name()->chars();
         report(expr, 33) << ptr; /* array must be indexed */
         return false;
     } else if (left_array && !right_array) {
         const char* ptr = "-unknown-";
         if (right.sym != nullptr)
-            ptr = right.sym->name();
+            ptr = right.sym->decl->name()->chars();
         report(expr, 33) << ptr; /* array must be indexed */
         return false;
     }
@@ -1297,7 +1297,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     Type* type = types_->find(sym->tag);
     if (decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
         val.tag = 0;
-        report(expr, 174) << sym->name();
+        report(expr, 174) << decl->name();
     } else {
         val.tag = sym->tag;
     }
@@ -1316,7 +1316,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return false;
         }
         if (!fun->impl()) {
-            report(expr, 4) << sym->name();
+            report(expr, 4) << fun->name();
             return false;
         }
 
@@ -1345,7 +1345,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         case iMETHODMAP:
         case iENUMSTRUCT:
             if (!allow_types) {
-                report(expr, 174) << sym->name();
+                report(expr, 174) << sym->decl->name();
                 return false;
             }
             break;
@@ -1444,7 +1444,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
     if (base_val.sym->ident != iARRAY && base_val.sym->ident != iREFARRAY) {
-        report(base, 28) << base_val.sym->name();
+        report(base, 28) << base_val.sym->decl->name();
         return false;
     }
 
@@ -1455,7 +1455,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
     const auto& index_val = index->val();
     if (index_val.ident == iARRAY || index_val.ident == iREFARRAY) {
-        report(index, 33) << (index_val.sym ? index_val.sym->name() : "-unknown-"); /* array must be indexed */
+        report(index, 33) << (index_val.sym ? index_val.sym->decl->name()->chars() : "-unknown-"); /* array must be indexed */
         return false;
     }
 
@@ -1482,7 +1482,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
                 (base_val.array_size() != 0 &&
                  base_val.array_size() <= index_val.constval()))
             {
-                report(index, 32) << base_val.sym->name(); /* array index out of bounds */
+                report(index, 32) << base_val.sym->decl->name(); /* array index out of bounds */
                 return false;
             }
         } else {
@@ -1491,7 +1491,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
                 (base_val.array_size() != 0 &&
                  base_val.array_size() <= index_val.constval()))
             {
-                report(index, 32) << base_val.sym->name(); /* array index out of bounds */
+                report(index, 32) << base_val.sym->decl->name(); /* array index out of bounds */
                 return false;
             }
         }
@@ -1591,7 +1591,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         auto map = MethodmapDecl::LookupMethodmap(base_val.sym->decl);
         auto member = map->FindMember(expr->name());
         if (!member || !member->as<MethodmapMethodDecl>()) {
-            report(expr, 444) << base_val.sym->name() << expr->name();
+            report(expr, 444) << base_val.sym->decl->name() << expr->name();
             return false;
         }
         auto method = member->as<MethodmapMethodDecl>();
@@ -1805,9 +1805,9 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     }
 
     // Hack. Remove when we can.
-    auto var = new VarDecl(expr->pos(), field->nameAtom(), ti, base->val().sym->vclass, false,
+    auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass, false,
                            false, false, nullptr);
-    auto sym = new symbol(var, var->name(), field->addr(), ti.ident, var->vclass(), ti.tag());
+    auto sym = new symbol(var, field->addr(), ti.ident, var->vclass(), ti.tag());
     if (ti.dim.size()) {
         sym->set_dim_count(ti.dim.size());
         for (int i = 0; i < ti.dim.size(); i++)
@@ -1866,7 +1866,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
             if (sym->ident == iENUMSTRUCT || (level == sym->dim_count() - 1 && is_enum_struct)) {
-                report(expr, 111) << sym->name();
+                report(expr, 111) << sym->decl->name();
                 return false;
             }
         }
@@ -1874,14 +1874,14 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         Type* enum_type = nullptr;
         if (expr->suffix_token() == tDBLCOLON) {
             if (sym->ident != iENUMSTRUCT) {
-                report(expr, 112) << sym->name();
+                report(expr, 112) << sym->decl->name();
                 return false;
             }
             enum_type = types_->find(sym->tag);
         } else if (expr->suffix_token() == '.') {
             enum_type = types_->find(sym->semantic_tag);
             if (!enum_type->asEnumStruct()) {
-                report(expr, 116) << sym->name();
+                report(expr, 116) << sym->decl->name();
                 return false;
             }
         }
@@ -1907,14 +1907,14 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         }
 
         if (expr->array_levels() > sym->dim_count()) {
-            report(expr, 28) << sym->name(); // invalid subscript
+            report(expr, 28) << sym->decl->name(); // invalid subscript
             return false;
         }
         if (expr->array_levels() != sym->dim_count()) {
             int size = sym->dim(expr->array_levels());
 
             if (!size) {
-                report(expr, 163) << sym->name(); // indeterminate array size in "sizeof"
+                report(expr, 163) << sym->decl->name(); // indeterminate array size in "sizeof"
                 return false;
             }
             val.set_constval(size);
@@ -2266,7 +2266,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     if (arg->type().tag() != types_->tag_any() ||
                         !types_->find(sym->semantic_tag)->asEnumStruct())
                     {
-                        report(param, 229) << sym->name();
+                        report(param, 229) << sym->decl->name();
                     }
                 }
             }
@@ -2452,14 +2452,14 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
         case iFUNCTN:
         {
             auto canonical = sym->decl->as<FunctionDecl>()->canonical();
-            if (canonical->is_public() || strcmp(sym->name(), uMAINFUNC) == 0)
+            if (canonical->is_public() || canonical->name()->str() == uMAINFUNC)
                 entry = true; /* there is an entry point */
             if (!(canonical->maybe_used() || canonical->is_live()) &&
                 !(canonical->is_native() || canonical->is_stock() || canonical->is_public()) &&
                 canonical->impl())
             {
                 /* symbol isn't used ... (and not public/native/stock) */
-                report(sym->decl, 203) << sym->name();
+                report(sym->decl, 203) << canonical->name();
                 return entry;
             }
 
@@ -2477,7 +2477,7 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
         case iCONSTEXPR: {
             auto var = sym->decl->as<VarDeclBase>();
             if (testconst && var && !var->is_read())
-                report(sym->decl, 203) << sym->name(); /* symbol isn't used: ... */
+                report(sym->decl, 203) << var->name(); /* symbol isn't used: ... */
             break;
         }
         case iMETHODMAP:
@@ -2488,9 +2488,9 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             auto var = sym->decl->as<VarDeclBase>();
             /* a variable */
             if (!var->is_stock() && !var->is_used() && !var->is_public()) {
-                report(sym->decl, 203) << sym->name(); /* symbol isn't used (and not stock) */
+                report(sym->decl, 203) << sym->decl->name(); /* symbol isn't used (and not stock) */
             } else if (!var->is_stock() && !var->is_public() && !var->is_read()) {
-                report(sym->decl, 204) << sym->name(); /* value assigned to symbol is never used */
+                report(sym->decl, 204) << sym->decl->name(); /* value assigned to symbol is never used */
             }
         }
     }
@@ -2615,7 +2615,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
             return false;
         }
         if (retarray && sc_->func_node()->is_public()) {
-            report(stmt, 90) << curfunc->name(); /* public function may not return array */
+            report(stmt, 90) << sc_->func_node()->name(); /* public function may not return array */
             return false;
         }
     } else {
@@ -2692,9 +2692,9 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         int argcount = (int)curfunc->decl->as<FunctionDecl>()->canonical()->args().size();
 
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
-        auto var = new VarDecl(stmt->pos(), curfunc->nameAtom(), array, sGLOBAL, false,
+        auto var = new VarDecl(stmt->pos(), sc_->func_node()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        sub = NewVariable(var, curfunc->nameAtom(), (argcount + 3) * sizeof(cell), iREFARRAY,
+        sub = NewVariable(var, (argcount + 3) * sizeof(cell), iREFARRAY,
                           sGLOBAL, curfunc->tag, dim, array.numdim(),
                           array.enum_struct_tag());
         curfunc->set_array_return(sub);
@@ -2989,7 +2989,7 @@ void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
     if (decl->as<MemberFunctionDecl>()) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
-        report(sym->decl, 400) << sym->name();
+        report(sym->decl, 400) << decl->name();
         return;
     }
 
@@ -3000,13 +3000,13 @@ void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
     //
     // :TODO: stronger enforcement when function result is used from call
     if (sym->tag == 0) {
-        report(sym->decl, 209) << sym->name();
+        report(sym->decl, 209) << decl->name();
     } else if (types->find(sym->tag)->isEnum() || sym->tag == types->tag_bool() ||
                sym->tag == types->tag_float() || !decl->retvalue_used())
     {
-        report(sym->decl, 242) << sym->name();
+        report(sym->decl, 242) << decl->name();
     } else {
-        report(sym->decl, 400) << sym->name();
+        report(sym->decl, 400) << decl->name();
     }
 }
 
@@ -3071,7 +3071,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     auto fwd = info->prototype();
     if (fwd && fwd->deprecate() && !info->is_stock())
-        report(info->pos(), 234) << sym->name() << fwd->deprecate();
+        report(info->pos(), 234) << info->name() << fwd->deprecate();
 
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 

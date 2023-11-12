@@ -78,7 +78,7 @@ FunctionData::FunctionData()
 {
 }
 
-symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
+symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : codeaddr(0),
    vclass((char)symvclass),
    tag(symtag),
@@ -88,13 +88,11 @@ symbol::symbol(Decl* decl, Atom* symname, cell symaddr, IdentifierKind symident,
    dim_data(nullptr),
    decl(decl),
    addr_(symaddr),
-   name_(nullptr),
    data_(nullptr)
 {
     assert(ident != iINVALID);
     assert(decl);
     assert(!decl->s);
-    name_ = symname;
     if (symident == iFUNCTN)
         data_ = new FunctionData;
     decl->s = this;
@@ -121,10 +119,10 @@ symbol::add_reference_to(FunctionDecl* other)
 }
 
 symbol*
-NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
+NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
             int numdim, int semantic_tag)
 {
-    symbol* sym = new symbol(decl, name, addr, ident, vclass, tag);
+    symbol* sym = new symbol(decl, addr, ident, vclass, tag);
 
     if (numdim) {
         sym->set_dim_count(numdim);
@@ -225,16 +223,16 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
 }
 
 static symbol*
-NewConstant(Decl* decl, Atom* name, const token_pos_t& pos, cell val, int vclass, int tag)
+NewConstant(Decl* decl, const token_pos_t& pos, cell val, int vclass, int tag)
 {
-    return new symbol(decl, name, val, iCONSTEXPR, vclass, tag);
+    return new symbol(decl, val, iCONSTEXPR, vclass, tag);
 }
 
-symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_t& pos, cell val,
+symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, cell val,
                        int vclass, int tag)
 {
-    auto sym = NewConstant(decl, name, pos, val, vclass, tag);
-    if (CheckNameRedefinition(sc, name, pos, vclass))
+    auto sym = NewConstant(decl, pos, val, vclass, tag);
+    if (CheckNameRedefinition(sc, decl->name(), pos, vclass))
         DefineSymbol(sc, decl, vclass);
     return sym;
 }

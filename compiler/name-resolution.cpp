@@ -209,7 +209,7 @@ EnumDecl::EnterNames(SemaContext& sc)
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = DefineConstant(sc, this, name_, pos_, 0, vclass_, tag);
+            enumsym = DefineConstant(sc, this, pos_, 0, vclass_, tag);
         }
     }
 
@@ -230,7 +230,7 @@ EnumDecl::EnterNames(SemaContext& sc)
                 error(field->pos(), 80);
         }
 
-        symbol* sym = DefineConstant(sc, field, field->name(), field->pos(), value, vclass_, tag);
+        symbol* sym = DefineConstant(sc, field, field->pos(), value, vclass_, tag);
         if (!sym)
             continue;
 
@@ -393,7 +393,7 @@ TypesetDecl::Bind(SemaContext& sc)
 bool
 ConstDecl::EnterNames(SemaContext& sc)
 {
-    sym_ = DefineConstant(sc, this, name_, pos_, 0, vclass_, 0);
+    sym_ = DefineConstant(sc, this, pos_, 0, vclass_, 0);
     return !!sym_;
 }
 
@@ -459,7 +459,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(this, name_, 0, iVARIABLE, sGLOBAL, type_.tag());
+        sym_ = new symbol(this, 0, iVARIABLE, sGLOBAL, type_.tag());
         sym_->is_const = true;
     } else {
         IdentifierKind ident = type_.ident;
@@ -467,7 +467,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
             type_.ident = ident = iREFARRAY;
 
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-        sym_ = NewVariable(this, name_, 0, ident, vclass_, type_.tag(), dim,
+        sym_ = NewVariable(this, 0, ident, vclass_, type_.tag(), dim,
                            type_.numdim(), type_.enum_struct_tag());
 
         if (ident == iVARARGS)
@@ -740,7 +740,7 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
         other->proto_or_impl_ = this;
     } else {
         auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym_ = new symbol(this, name_, 0, iFUNCTN, scope, 0);
+        sym_ = new symbol(this, 0, iFUNCTN, scope, 0);
 
         DefineSymbol(sc, this, scope);
     }
@@ -793,7 +793,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
-        sym_ = new symbol(this, decl_.name, 0, iFUNCTN, sGLOBAL, 0);
+        sym_ = new symbol(this, 0, iFUNCTN, sGLOBAL, 0);
     if (!s)
         s = sym_;
 
@@ -851,7 +851,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
     });
     sc.sema()->set_context(&sc);
 
-    if (strcmp(sym_->name(), uMAINFUNC) == 0) {
+    if (name_->str() == uMAINFUNC) {
         if (!args_.empty())
             error(pos_, 5);     /* "main()" functions may not have any arguments */
         is_live_ = true;
@@ -1062,7 +1062,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     AutoCountErrors errors;
 
     AutoErrorPos error_pos(pos_);
-    root_ = DefineConstant(sc, this, name_, pos_, 0, sGLOBAL, 0);
+    root_ = DefineConstant(sc, this, pos_, 0, sGLOBAL, 0);
     root_->tag = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
     root_->ident = iENUMSTRUCT;
 
@@ -1103,7 +1103,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(field->name());
 
-        symbol* child = new symbol(field, field->name(), position, field->type().ident, sGLOBAL,
+        symbol* child = new symbol(field, position, field->type().ident, sGLOBAL,
                                    field->type().semantic_tag());
         if (field->type().numdim()) {
             child->set_dim_count(1);
@@ -1129,7 +1129,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(decl->name());
 
-        auto sym = new symbol(decl, decl->name(), 0, iFUNCTN, sGLOBAL, 0);
+        auto sym = new symbol(decl, 0, iFUNCTN, sGLOBAL, 0);
         decl->set_sym(sym);
     }
 
@@ -1195,7 +1195,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         sym_->ident = iMETHODMAP;
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(this, name_, 0, iMETHODMAP, sGLOBAL, tag_);
+        sym_ = new symbol(this, 0, iMETHODMAP, sGLOBAL, tag_);
         cc.globals()->Add(this);
     }
 
@@ -1278,11 +1278,11 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
 
         if (prop->getter() && BindGetter(sc, prop)) {
             auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name()->chars());
-            prop->getter()->sym()->setName(sc.cc().atom(name));
+            prop->getter()->set_name(sc.cc().atom(name));
         }
         if (prop->setter() && BindSetter(sc, prop)) {
             auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name()->chars());
-            prop->setter()->sym()->setName(sc.cc().atom(name));
+            prop->setter()->set_name(sc.cc().atom(name));
         }
     }
 
@@ -1322,7 +1322,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
         if (!method->Bind(sc))
             continue;
 
-        method->sym()->setName(DecorateInnerName(name_, method->decl_name()));
+        method->set_name(DecorateInnerName(name_, method->decl_name()));
     }
     return errors.ok();
 }

@@ -396,7 +396,7 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
 
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
-    method.name = names_->add(sym->nameAtom());
+    method.name = names_->add(fun->name());
     method.pcode_start = sym->addr();
     method.pcode_end = sym->codeaddr;
     method.signature = encode_signature(sym);
@@ -429,7 +429,7 @@ void
 RttiBuilder::add_native(symbol* sym)
 {
     smx_rtti_native& native = natives_->add();
-    native.name = names_->add(sym->nameAtom());
+    native.name = names_->add(sym->decl->name());
     native.signature = encode_signature(sym);
 }
 
@@ -458,7 +458,8 @@ RttiBuilder::add_enumstruct(Type* type)
     // Add all fields.
     size_t index = 0;
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
-        auto field = (*iter)->s;
+        auto field_decl = (*iter);
+        auto field = field_decl->s;
 
         int dims[1], dimcount = 0;
         if (field->dim_count())
@@ -469,7 +470,7 @@ RttiBuilder::add_enumstruct(Type* type)
         encode_var_type(encoding, type);
 
         smx_rtti_es_field info;
-        info.name = names_->add(field->nameAtom());
+        info.name = names_->add(field_decl->name());
         info.type_id = to_typeid(encoding);
         info.offset = field->addr();
         es_fields_->at(es.first_field + index) = info;
@@ -893,7 +894,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         assert(size_t(sym->addr()) == i);
 
         sp_file_natives_t& entry = natives->add();
-        entry.name = names->add(sym->nameAtom());
+        entry.name = names->add(sym->decl->name());
 
         rtti.add_native(sym);
     }
