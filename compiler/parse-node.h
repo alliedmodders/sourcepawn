@@ -50,6 +50,7 @@ typedef void (*OpFunc)();
 
 class Expr;
 class MethodmapDecl;
+class MethodmapMethodDecl;
 class SemaContext;
 class SymbolScope;
 struct StructInitField;
@@ -1703,33 +1704,54 @@ class FunctionDecl : public Decl
     bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
 };
 
+class LayoutDecl : public Decl
+{
+  public:
+    explicit LayoutDecl(StmtKind kind, const token_pos_t& pos, Atom* name)
+      : Decl(kind, pos, name)
+    {}
+
+    static bool is_a(Stmt* node) {
+        return node->kind() == StmtKind::MethodmapDecl ||
+               node->kind() == StmtKind::EnumStructDecl;
+    }
+};
+
 class MemberFunctionDecl : public FunctionDecl
 {
   public:
-    MemberFunctionDecl(const token_pos_t& pos, const declinfo_t& decl)
-      : FunctionDecl(StmtKind::MemberFunctionDecl, pos, decl)
+    MemberFunctionDecl(const token_pos_t& pos, LayoutDecl* parent, const declinfo_t& decl)
+      : FunctionDecl(StmtKind::MemberFunctionDecl, pos, decl),
+        parent_(parent)
     {}
-    MemberFunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo_t& decl)
-      : FunctionDecl(kind, pos, decl)
+    MemberFunctionDecl(StmtKind kind, const token_pos_t& pos, LayoutDecl* parent,
+                       const declinfo_t& decl)
+      : FunctionDecl(kind, pos, decl),
+        parent_(parent)
     {}
 
     static bool is_a(Stmt* node) {
         return node->kind() == StmtKind::MemberFunctionDecl ||
                node->kind() == StmtKind::MethodmapMethodDecl;
     }
+
+    LayoutDecl* parent() const { return parent_; }
+
+  private:
+    LayoutDecl* parent_;
 };
 
-class EnumStructFieldDecl : public Decl
+class LayoutFieldDecl : public Decl
 {
   public:
-    EnumStructFieldDecl(const token_pos_t& pos, const declinfo_t& decl)
-      : Decl(StmtKind::EnumStructFieldDecl, pos, decl.name),
+    LayoutFieldDecl(const token_pos_t& pos, const declinfo_t& decl)
+      : Decl(StmtKind::LayoutFieldDecl, pos, decl.name),
         type_(decl.type)
     {}
 
     void ProcessUses(SemaContext& sc) override {}
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumStructFieldDecl; }
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::LayoutFieldDecl; }
 
     const typeinfo_t& type() const { return type_; }
     typeinfo_t& mutable_type() { return type_; }
@@ -1738,11 +1760,11 @@ class EnumStructFieldDecl : public Decl
     typeinfo_t type_;
 };
 
-class EnumStructDecl : public Decl
+class EnumStructDecl : public LayoutDecl
 {
   public:
     EnumStructDecl(const token_pos_t& pos, Atom* name)
-      : Decl(StmtKind::EnumStructDecl, pos, name)
+      : LayoutDecl(StmtKind::EnumStructDecl, pos, name)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -1752,11 +1774,11 @@ class EnumStructDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumStructDecl; }
 
     PoolArray<FunctionDecl*>& methods() { return methods_; }
-    PoolArray<EnumStructFieldDecl*>& fields() { return fields_; }
+    PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
   private:
     PoolArray<FunctionDecl*> methods_;
-    PoolArray<EnumStructFieldDecl*> fields_;
+    PoolArray<LayoutFieldDecl*> fields_;
     symbol* root_ = nullptr;
 };
 
@@ -1780,6 +1802,9 @@ class MethodmapPropertyDecl : public Decl {
     typeinfo_t& mutable_type() { return type_; }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
+    LayoutDecl* parent() const {
+        return getter_ ? getter_->parent() : setter_->parent();
+    }
 
   private:
     typeinfo_t type_;
@@ -1787,31 +1812,11 @@ class MethodmapPropertyDecl : public Decl {
     MemberFunctionDecl* setter_;
 };
 
-struct MethodmapMethodDecl : public MemberFunctionDecl {
-  public:
-    MethodmapMethodDecl(const token_pos_t& pos, const declinfo_t& decl, MethodmapDecl* parent,
-                        bool is_ctor, bool is_dtor)
-      : MemberFunctionDecl(StmtKind::MethodmapMethodDecl, pos, decl),
-        parent_(parent),
-        is_ctor_(is_ctor),
-        is_dtor_(is_dtor)
-    {}
-
-    MethodmapDecl* parent() const { return parent_; }
-    bool is_ctor() const { return is_ctor_; }
-    bool is_dtor() const { return is_dtor_; }
-
-  private:
-    MethodmapDecl* parent_ = nullptr;
-    bool is_ctor_ : 1;
-    bool is_dtor_ : 1;
-};
-
-class MethodmapDecl : public Decl
+class MethodmapDecl : public LayoutDecl
 {
   public:
     explicit MethodmapDecl(const token_pos_t& pos, Atom* name, bool nullable, Atom* extends)
-      : Decl(StmtKind::MethodmapDecl, pos, name),
+      : LayoutDecl(StmtKind::MethodmapDecl, pos, name),
         nullable_(nullable),
         is_bound_(false),
         extends_(extends)
@@ -1851,6 +1856,23 @@ class MethodmapDecl : public Decl
     symbol* sym_ = nullptr;
     MethodmapMethodDecl* ctor_ = nullptr;
     MethodmapMethodDecl* dtor_ = nullptr;
+};
+
+class MethodmapMethodDecl : public MemberFunctionDecl {
+  public:
+    MethodmapMethodDecl(const token_pos_t& pos, const declinfo_t& decl, MethodmapDecl* parent,
+                        bool is_ctor, bool is_dtor)
+      : MemberFunctionDecl(StmtKind::MethodmapMethodDecl, pos, parent, decl),
+        is_ctor_(is_ctor),
+        is_dtor_(is_dtor)
+    {}
+
+    bool is_ctor() const { return is_ctor_; }
+    bool is_dtor() const { return is_dtor_; }
+
+  private:
+    bool is_ctor_ : 1;
+    bool is_dtor_ : 1;
 };
 
 } // namespace sp

@@ -448,7 +448,7 @@ Parser::parse_enumstruct()
 
     auto stmt = new EnumStructDecl(pos, struct_name);
 
-    std::vector<EnumStructFieldDecl*> fields;
+    std::vector<LayoutFieldDecl*> fields;
     std::vector<FunctionDecl*> methods;
 
     int opening_line = lexer_->fline();
@@ -465,7 +465,7 @@ Parser::parse_enumstruct()
 
         auto decl_pos = lexer_->pos();
         if (!decl.type.has_postdims && lexer_->peek('(')) {
-            auto fun = new MemberFunctionDecl(decl_pos, decl);
+            auto fun = new MemberFunctionDecl(decl_pos, stmt, decl);
             fun->set_is_stock();
             if (!parse_function(fun, 0, true))
                 continue;
@@ -474,12 +474,12 @@ Parser::parse_enumstruct()
             continue;
         }
 
-        fields.emplace_back(new EnumStructFieldDecl(decl_pos, decl));
+        fields.emplace_back(new LayoutFieldDecl(decl_pos, decl));
 
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     }
 
-    new (&stmt->fields()) PoolArray<EnumStructFieldDecl*>(fields);
+    new (&stmt->fields()) PoolArray<LayoutFieldDecl*>(fields);
     new (&stmt->methods()) PoolArray<FunctionDecl*>(methods);
 
     lexer_->require_newline(TerminatorPolicy::Newline);
@@ -2029,7 +2029,7 @@ bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
         ret_type.type.ident = iVARIABLE;
     }
 
-    auto fun = new MemberFunctionDecl(pos, ret_type);
+    auto fun = new MemberFunctionDecl(pos, map, ret_type);
     std::string tmpname = map->name()->str() + "." + name->str();
     if (getter)
         tmpname += ".get";

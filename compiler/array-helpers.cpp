@@ -955,8 +955,8 @@ ArrayEmitter::Emit(int rank, Expr* init)
     if (!init) {
         assert(type_.dim[rank]);
     } else if (ArrayExpr* array = init->as<ArrayExpr>()) {
-        PoolArray<EnumStructFieldDecl*>* field_list = nullptr;
-        EnumStructFieldDecl** field_iter = nullptr;
+        PoolArray<LayoutFieldDecl*>* field_list = nullptr;
+        LayoutFieldDecl** field_iter = nullptr;
         if (es_) {
             auto decl = es_->asEnumStruct();
             field_list = &decl->fields();
