@@ -81,7 +81,7 @@ class FunctionData final : public SymbolData
  */
 struct symbol : public PoolObject
 {
-    symbol(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag);
+    symbol(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag);
 
     cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
@@ -115,15 +115,6 @@ struct symbol : public PoolObject
     void setAddr(int addr) {
         addr_ = addr;
     }
-    Atom* nameAtom() const {
-        return name_;
-    }
-    const char* name() const {
-        return name_ ? name_->chars() : "";
-    }
-    void setName(Atom* name) {
-        name_ = name;
-    }
     FunctionData* function() const {
         assert(ident == iFUNCTN);
         return data_->asFunction();
@@ -147,7 +138,6 @@ struct symbol : public PoolObject
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
-    Atom* name_;
     SymbolData* data_;
 };
 
@@ -263,13 +253,13 @@ struct value {
 void AddGlobal(CompileContext& cc, symbol* sym);
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
-symbol* DefineConstant(SemaContext& sc, Decl* decl, Atom* name, const token_pos_t& pos, cell val,
+symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, cell val,
                        int vclass, int tag);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(symbol* sym, int usage);
 void markusage(FunctionDecl* decl, int usage);
-symbol* NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
+symbol* NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
