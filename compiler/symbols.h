@@ -271,6 +271,6 @@ void markusage(symbol* sym, int usage);
 void markusage(FunctionDecl* decl, int usage);
 symbol* NewVariable(Decl* decl, Atom* name, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
-symbol* FindEnumStructField(Type* type, Atom* name);
+Decl* FindEnumStructField(Type* type, Atom* name);
 
 } // namespace sp
