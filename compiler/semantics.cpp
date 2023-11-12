@@ -1599,7 +1599,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
             report(expr, 176) << method->decl_name() << map->name();
             return false;
         }
-        expr->set_method(method);
+        expr->set_resolved(method);
         val.ident = iFUNCTN;
         val.sym = method->sym();
         markusage(method, uREAD);
@@ -1635,7 +1635,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         report(expr, 177) << method->decl_name() << map->name() << method->decl_name();
         return false;
     }
-    expr->set_method(method);
+    expr->set_resolved(method);
 
     if (!from_call) {
         report(expr, 50);
@@ -1672,18 +1672,22 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             // The static accessor (::) is offsetof(), so it can't return functions.
             assert(expr->token() == '.');
 
-            auto mm = expr->method();
-            auto method = mm ? mm->as<MethodmapMethodDecl>() : nullptr;
-            auto map = method ? method->parent()->as<MethodmapDecl>() : nullptr;
-            if (map && map->ctor() == method) {
-                report(call, 84) << method->parent()->name();
-                return nullptr;
+            auto resolved = expr->resolved();
+            if (auto method = resolved->as<MethodmapMethodDecl>()) {
+                auto map = method->parent()->as<MethodmapDecl>();
+                if (map->ctor() == method) {
+                    report(call, 84) << method->parent()->name();
+                    return nullptr;
+                }
             }
+
+            auto method = resolved->as<MemberFunctionDecl>();
+            assert(resolved->as<LayoutFieldDecl>() || method);
 
             auto base = expr->base();
             if (base->lvalue())
                 base = expr->set_base(new RvalueExpr(base));
-            if (expr->field() || !method->is_static())
+            if (resolved->as<LayoutFieldDecl>() || !method->is_static())
                 call->set_implicit_this(base);
             return val.sym->decl->as<FunctionDecl>()->canonical();
         }
@@ -1760,26 +1764,28 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Enum structs are always arrays, so they're never l-values.
     assert(!base->lvalue());
 
-    expr->set_field(FindEnumStructField(type, expr->name()));
+    expr->set_resolved(FindEnumStructField(type, expr->name()));
 
-    auto field = expr->field();
-    if (!field) {
+    auto field_decl = expr->resolved();
+    if (!field_decl) {
         report(expr, 105) << type->name() << expr->name();
         return false;
     }
 
     auto& val = expr->val();
-    if (field->ident == iFUNCTN) {
+    if (field_decl->as<MemberFunctionDecl>()) {
         if (!from_call) {
             report(expr, 76);
             return false;
         }
 
         val.ident = iFUNCTN;
-        val.sym = field;
+        val.sym = field_decl->s;
         markusage(val.sym, uREAD);
         return true;
     }
+
+    auto field = field_decl->s;
 
     typeinfo_t ti{};
     if (types_->find(field->tag)->isEnumStruct()) {
@@ -1825,14 +1831,14 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     }
 
     Type* type = types_->find(base_val.tag);
-    symbol* field = FindEnumStructField(type, expr->name());
+    Decl* field = FindEnumStructField(type, expr->name());
     if (!field) {
         report(expr, 105) << type->name() << expr->name();
         return FALSE;
     }
 
     auto& val = expr->val();
-    val.set_constval(field->addr());
+    val.set_constval(field->s->addr());
     val.tag = 0;
     return true;
 }
@@ -1883,13 +1889,13 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         if (enum_type) {
             assert(enum_type->asEnumStruct());
 
-            symbol* field = FindEnumStructField(enum_type, expr->field());
+            Decl* field = FindEnumStructField(enum_type, expr->field());
             if (!field) {
                 report(expr, 105) << enum_type->name() << expr->field();
                 return false;
             }
-            if (field->dim_count()) {
-                val.set_constval(field->dim(0));
+            if (field->s->dim_count()) {
+                val.set_constval(field->s->dim(0));
                 return true;
             }
             return true;

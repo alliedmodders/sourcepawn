@@ -1161,8 +1161,8 @@ CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr)
     // reserved for RvalueExpr().
     EmitExpr(expr->base());
 
-    if (expr->field() && expr->field()->addr()) {
-        __ const_alt(expr->field()->addr() << 2);
+    if (expr->resolved() && expr->resolved()->s->addr()) {
+        __ const_alt(expr->resolved()->s->addr() << 2);
         __ emit(OP_ADD);
     }
 }

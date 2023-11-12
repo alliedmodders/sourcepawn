@@ -1029,18 +1029,14 @@ class FieldAccessExpr final : public Expr
     Expr* base() const { return base_; }
     Expr* set_base(Expr* base) { return base_ = base; }
     Atom* name() const { return name_; }
-    symbol* field() const { return field_; }
-    void set_field(symbol* field) { field_ = field; }
-
-    Decl* method() const { return method_; }
-    void set_method(Decl* method) { method_ = method; }
+    Decl* resolved() const { return resolved_; }
+    void set_resolved(Decl* resolved) { resolved_ = resolved; }
 
   private:
     int token_;
     Expr* base_;
     Atom* name_;
-    Decl* method_ = nullptr;
-    symbol* field_ = nullptr;
+    Decl* resolved_;
 };
 
 class IndexExpr final : public Expr
@@ -1866,6 +1862,8 @@ class MethodmapMethodDecl : public MemberFunctionDecl {
         is_ctor_(is_ctor),
         is_dtor_(is_dtor)
     {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapMethodDecl; }
 
     bool is_ctor() const { return is_ctor_; }
     bool is_dtor() const { return is_dtor_; }
