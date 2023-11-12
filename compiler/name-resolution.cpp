@@ -972,18 +972,18 @@ FunctionDecl::BindArgs(SemaContext& sc)
         return false;
     }
 
-    if (!sym_->function()->checked_one_signature) {
-        sym_->function()->checked_one_signature = true;
+    if (!canonical()->checked_one_signature) {
+        canonical()->checked_one_signature = true;
         return errors.ok();
     }
-    if (!sym_->function()->compared_prototype_args) {
+    if (!canonical()->compared_prototype_args) {
         auto impl_fun = impl();
         auto proto_fun = prototype();
         for (size_t i = 0; i < impl_argc; i++) {
             if (!argcompare(impl_fun->args()[i], proto_fun->args()[i]))
                 report(error_pos, 181) << impl_fun->args()[i]->name();
         }
-        sym_->function()->compared_prototype_args = true;
+        canonical()->compared_prototype_args = true;
     }
     return errors.ok();
 }

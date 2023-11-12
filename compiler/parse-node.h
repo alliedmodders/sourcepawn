@@ -1698,6 +1698,8 @@ class FunctionDecl : public Decl
     bool always_returns_ SP_BITFIELD(1); // whether all paths have an explicit return statement
     bool is_live_ SP_BITFIELD(1);        // must have code generated/linkage
     bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
+    bool checked_one_signature SP_BITFIELD(1);
+    bool compared_prototype_args SP_BITFIELD(1);
 };
 
 class LayoutDecl : public Decl

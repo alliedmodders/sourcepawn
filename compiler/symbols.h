@@ -62,8 +62,6 @@ class FunctionData final : public SymbolData
     Label funcid;
     int max_local_stack = 0;
     int max_callee_stack = 0;
-    bool checked_one_signature SP_BITFIELD(1);
-    bool compared_prototype_args SP_BITFIELD(1);
 
     // Other symbols that this symbol refers to.
     PoolForwardList<FunctionDecl*> refers_to;
