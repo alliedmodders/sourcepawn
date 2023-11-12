@@ -45,7 +45,7 @@
     FOR_EACH(FunctionDecl) \
     FOR_EACH(MemberFunctionDecl) \
     FOR_EACH(EnumStructDecl) \
-    FOR_EACH(EnumStructFieldDecl) \
+    FOR_EACH(LayoutFieldDecl) \
     FOR_EACH(MethodmapDecl) \
     FOR_EACH(ChangeScopeNode) \
     FOR_EACH(MethodmapPropertyDecl) \

@@ -1674,7 +1674,8 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
 
             auto mm = expr->method();
             auto method = mm ? mm->as<MethodmapMethodDecl>() : nullptr;
-            if (method && method->parent()->ctor() == method) {
+            auto map = method ? method->parent()->as<MethodmapDecl>() : nullptr;
+            if (map && map->ctor() == method) {
                 report(call, 84) << method->parent()->name();
                 return nullptr;
             }
