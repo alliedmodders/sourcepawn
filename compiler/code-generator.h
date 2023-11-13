@@ -117,11 +117,13 @@ class CodeGenerator final
         EmitRvalue(&tmp);
     }
 
+    using DebugSymbol = std::pair<Decl*, uint32_t>;
+
     void AddDebugFile(const std::string& line);
     void AddDebugLine(int linenr);
-    void AddDebugSymbol(Decl* sym);
-    void AddDebugSymbols(tr::vector<Decl*>* list);
-    void EnqueueDebugSymbol(Decl* decl);
+    void AddDebugSymbol(Decl* sym, uint32_t pc);
+    void AddDebugSymbols(tr::vector<DebugSymbol>* list);
+    void EnqueueDebugSymbol(Decl* decl, uint32_t pc);
 
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
@@ -201,7 +203,7 @@ class CodeGenerator final
     bool ComputeStackUsage(CallGraph::iterator caller_iter);
 
   private:
-    typedef tr::vector<tr::vector<Decl*>> SymbolStack;
+    typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;
 
     class AutoEnterScope {
       public:
@@ -230,8 +232,8 @@ class CodeGenerator final
     tr::vector<MemoryScope> stack_scopes_;
     tr::vector<MemoryScope> heap_scopes_;
     SymbolStack local_syms_;
-    tr::vector<Decl*> global_syms_;
-    tr::vector<std::pair<SymbolScope*, tr::vector<Decl*>>> static_syms_;
+    tr::vector<DebugSymbol> global_syms_;
+    tr::vector<std::pair<SymbolScope*, tr::vector<DebugSymbol>>> static_syms_;
     tr::unordered_set<SymbolScope*> static_scopes_;
 
     // Loop handling.

@@ -55,7 +55,6 @@ struct symbol : public PoolObject
 {
     symbol(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag);
 
-    cell codeaddr; /* address (in the code segment) where the symbol declaration starts */
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
     int tag;       /* tagname id */
 

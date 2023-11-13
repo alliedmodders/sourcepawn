@@ -85,14 +85,14 @@ CodeGenerator::AddDebugLine(int linenr)
     }
 }
 
-void CodeGenerator::AddDebugSymbol(Decl* decl) {
+void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto symname = decl->name()->chars();
 
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
     auto var = decl->as<VarDeclBase>();
     auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   sym->addr(), sym->tag, symname, sym->codeaddr,
+                                   sym->addr(), sym->tag, symname, pc,
                                    asm_.position(), sym->ident, sym->vclass, (int)sym->is_const);
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         string += " [ ";
@@ -111,10 +111,10 @@ void CodeGenerator::AddDebugSymbol(Decl* decl) {
     }
 }
 
-void CodeGenerator::AddDebugSymbols(tr::vector<Decl*>* list) {
+void CodeGenerator::AddDebugSymbols(tr::vector<DebugSymbol>* list) {
     while (!list->empty()) {
-        auto decl = ke::PopBack(list);
-        AddDebugSymbol(decl);
+        auto entry = ke::PopBack(list);
+        AddDebugSymbol(entry.first, entry.second);
     }
 }
 
@@ -274,8 +274,6 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
     if (cc_.types()->find(sym->tag)->kind() == TypeKind::Struct) {
         EmitPstruct(decl);
     } else {
-        sym->codeaddr = asm_.position();
-
         if (sym->ident != iCONSTEXPR) {
             if (sym->vclass == sLOCAL)
                 EmitLocalVar(decl);
@@ -285,7 +283,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
     }
 
     if (decl->is_public() || decl->is_used())
-        EnqueueDebugSymbol(decl);
+        EnqueueDebugSymbol(decl, asm_.position());
 }
 
 void
@@ -446,8 +444,6 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
 
     std::vector<cell> values;
     values.resize(ps->args.size());
-
-    sym->codeaddr = asm_.position();
 
     auto init = decl->init_rhs()->as<StructExpr>();
     for (const auto& field : init->fields()) {
@@ -1806,11 +1802,8 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     {
         AutoEnterScope arg_scope(this, &local_syms_);
 
-        for (const auto& fun_arg : info->args()) {
-            auto sym = fun_arg->sym();
-            sym->codeaddr = asm_.position();
-            EnqueueDebugSymbol(fun_arg);
-        }
+        for (const auto& fun_arg : info->args())
+            EnqueueDebugSymbol(fun_arg, asm_.position());
 
         EmitStmt(info->body());
     }
@@ -1824,7 +1817,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     heap_scopes_.clear();
 
     info->sym()->setAddr(info->cg()->label.offset());
-    info->sym()->codeaddr = asm_.pc();
+    info->cg()->pcode_end = asm_.pc();
     info->cg()->max_local_stack = max_func_memory_;
 
     // In case there is no callgraph, we still need to track which function has
@@ -2195,13 +2188,13 @@ int CodeGenerator::DynamicMemorySize() const {
     return std::max(min_cells, custom) * sizeof(cell_t);
 }
 
-void CodeGenerator::EnqueueDebugSymbol(Decl* decl) {
+void CodeGenerator::EnqueueDebugSymbol(Decl* decl, uint32_t pc) {
     if (decl->s->vclass == sGLOBAL) {
-        global_syms_.emplace_back(decl);
+        global_syms_.emplace_back(decl, pc);
     } else if (decl->s->vclass == sSTATIC && !func_) {
-        static_syms_.back().second.emplace_back(decl);
+        static_syms_.back().second.emplace_back(decl, pc);
     } else {
-        local_syms_.back().emplace_back(decl);
+        local_syms_.back().emplace_back(decl, pc);
     }
 }
 

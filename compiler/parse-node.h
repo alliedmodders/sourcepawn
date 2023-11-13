@@ -1687,6 +1687,7 @@ class FunctionDecl : public Decl
         Label funcid;
         int max_local_stack = 0;
         int max_callee_stack = 0;
+        uint32_t pcode_end = 0;
     };
     CGInfo* cg();
 
