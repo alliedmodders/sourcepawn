@@ -40,12 +40,8 @@ void AddGlobal(CompileContext& cc, symbol* sym)
     scope->AddChain(sym->decl);
 }
 
-void markusage(FunctionDecl* decl, int usage) {
-    markusage(decl->sym(), usage);
-}
-
-void markusage(symbol* sym, int usage) {
-    if (auto var = sym->decl->as<VarDeclBase>()) {
+void markusage(Decl* decl, int usage) {
+    if (auto var = decl->as<VarDeclBase>()) {
         if (usage & uREAD)
             var->set_is_read();
         if (usage & uWRITTEN)
@@ -61,6 +57,13 @@ void markusage(symbol* sym, int usage) {
     if (!parent_func)
         return;
 
+    auto fun = decl->as<FunctionDecl>();
+    if (!fun)
+        return;
+    fun = fun->canonical();
+
+    symbol* sym = fun->sym();
+
     // The reference graph only contains outgoing edges to global or file-static
     // variables. Locals and such are computed by TestSymbols and don't need
     // special handling, there's no concept of "stock" there.
@@ -70,7 +73,11 @@ void markusage(symbol* sym, int usage) {
         return;
 
     assert(parent_func->canonical() == parent_func);
-    parent_func->AddReferenceTo(sym->decl->as<FunctionDecl>()->canonical());
+    parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
+}
+
+void markusage(symbol* sym, int usage) {
+    markusage(sym->decl, usage);
 }
 
 symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
@@ -85,8 +92,6 @@ symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass,
 {
     assert(ident != iINVALID);
     assert(decl);
-    assert(!decl->s);
-    decl->s = this;
 }
 
 void symbol::set_dim_count(int dim_count) {
@@ -163,9 +168,7 @@ enum class NewNameStatus {
     Duplicated
 };
 
-static NewNameStatus
-GetNewNameStatus(SemaContext& sc, Atom* name, int vclass)
-{
+static NewNameStatus GetNewNameStatus(SemaContext& sc, Atom* name, int vclass) {
     SymbolScope* scope;
     Decl* decl = nullptr;
     if (sc.func_node() && sc.func_node()->is_native()) {
@@ -185,7 +188,7 @@ GetNewNameStatus(SemaContext& sc, Atom* name, int vclass)
     }
     if (scope == current)
         return NewNameStatus::Duplicated;
-    if (current->kind() == sARGUMENT && decl->s->ident == iFUNCTN)
+    if (current->kind() == sARGUMENT && decl->as<FunctionDecl>())
         return NewNameStatus::Ok;
     return NewNameStatus::Shadowed;
 }

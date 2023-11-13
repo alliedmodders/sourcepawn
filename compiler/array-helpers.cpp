@@ -327,9 +327,7 @@ ArraySizeResolver::ResolveDimExprs()
     return true;
 }
 
-bool
-ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
-{
+bool ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v) {
     auto& sc = *sema_->context();
     if (!expr->Bind(sc))
         return false;
@@ -340,12 +338,13 @@ ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v)
         //   int blah[X];
         //
         // For backward compatibility with a huge number of plugins.
-        auto sym = sym_expr->sym();
-        auto type = types_->find(sym->tag);
-        if (sym->decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
-            *v = {};
-            v->set_constval(sym->addr());
-            return true;
+        auto decl = sym_expr->decl();
+        if (auto ed = decl->as<EnumDecl>()) {
+            if (ed->sym()) {
+                *v = {};
+                v->set_constval(ed->array_size());
+                return true;
+            }
         }
     }
 
@@ -491,16 +490,22 @@ CalcArraySize(symbol* sym)
     return size;
 }
 
-bool
-FixedArrayValidator::CheckArgument(Expr* init)
-{
+bool FixedArrayValidator::CheckArgument(Expr* init) {
     // As a special exception, array arguments can be initialized with a global
     // reference.
     SymbolExpr* expr = init->as<SymbolExpr>();
     if (!expr)
         return ValidateRank(0, init);
 
-    symbol* sym = expr->sym();
+    Decl* decl = expr->decl();
+    if (!decl)
+        return false;
+
+    VarDecl* var = decl->as<VarDecl>();
+    if (!var)
+        return false;
+
+    symbol* sym = var->sym();
     if (!sym) {
         // This failed to bind, and we're still in the binding phase, so just
         // return false.
@@ -700,12 +705,12 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
             return false;
         }
 
-        symbol* field = (*field_iter)->s;
+        auto field = (*field_iter);
 
         // Advance early so we can use |continue|.
         field_iter++;
 
-        typeinfo_t type = TypeInfoFromSymbol(field);
+        const auto& type = field->type();
         if (type.ident == iARRAY) {
             if (!CheckArrayInitialization(sema_, type, expr))
                 continue;
@@ -721,7 +726,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
                 continue;
             }
 
-            matchtag(field->tag, v.tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            matchtag(type.tag(), v.tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
         }
     }
 
@@ -892,7 +897,7 @@ class ArrayEmitter final
     cell Emit(int rank, Expr* expr);
 
     size_t AddString(StringExpr* expr);
-    void AddInlineArray(symbol* field, ArrayExpr* expr);
+    void AddInlineArray(LayoutFieldDecl* field, ArrayExpr* expr);
     void EmitPadding(size_t rank_size, int tag, size_t emitted, bool ellipses,
                      const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2);
 
@@ -971,15 +976,15 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
                 size_t emitted = AddString(expr);
 
-                symbol* field = (*field_iter)->s;
+                auto field = (*field_iter);
                 assert(field);
 
-                EmitPadding(field->dim(0), field->tag, emitted, false, {}, {});
+                EmitPadding(field->type().dim[0], field->type().tag(), emitted, false, {}, {});
             } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
                 assert(es_);
-                symbol* field = (*field_iter)->s;
+                auto field = (*field_iter);
                 AddInlineArray(field, expr);
             } else {
                 assert(item->val().ident == iCONSTEXPR);
@@ -1007,9 +1012,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
     return (start * sizeof(cell)) | kDataFlag;
 }
 
-void
-ArrayEmitter::AddInlineArray(symbol* field, ArrayExpr* array)
-{
+void ArrayEmitter::AddInlineArray(LayoutFieldDecl* field, ArrayExpr* array) {
     ke::Maybe<cell> prev1, prev2;
 
     for (const auto& item : array->exprs()) {
@@ -1019,7 +1022,7 @@ ArrayEmitter::AddInlineArray(symbol* field, ArrayExpr* array)
         prev1 = ke::Some(item->val().constval());
     }
 
-    EmitPadding(field->dim(0), field->tag, array->exprs().size(),
+    EmitPadding(field->type().dim[0], field->type().tag(), array->exprs().size(),
                 array->ellipses(), prev1, prev2);
 }
 

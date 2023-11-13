@@ -208,7 +208,7 @@ symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, cell
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(symbol* sym, int usage);
-void markusage(FunctionDecl* decl, int usage);
+void markusage(Decl* decl, int usage);
 symbol* NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
 Decl* FindEnumStructField(Type* type, Atom* name);
