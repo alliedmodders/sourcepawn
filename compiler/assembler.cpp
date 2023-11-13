@@ -398,7 +398,7 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(fun->name());
     method.pcode_start = sym->addr();
-    method.pcode_end = sym->codeaddr;
+    method.pcode_end = fun->cg()->pcode_end;
     method.signature = encode_signature(fun->canonical());
 
     if (!fun->cg()->dbgstrs)
@@ -873,8 +873,8 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         symbol* sym = f.decl->sym();
 
         assert(sym->addr() > 0);
-        assert(sym->decl->as<FunctionDecl>()->impl());
-        assert(sym->codeaddr > sym->addr());
+        assert(f.decl->impl());
+        assert(f.decl->cg()->pcode_end > sym->addr());
 
         sp_file_publics_t& pubfunc = publics->add();
         pubfunc.address = sym->addr();
