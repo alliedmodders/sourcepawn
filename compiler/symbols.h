@@ -41,12 +41,6 @@ class MethodmapPropertyDecl;
 class SemaContext;
 struct token_pos_t;
 
-struct ReturnArrayInfo : public PoolObject {
-    cell_t iv_size;
-    cell_t dat_addr;
-    cell_t zeroes;
-};
-
 class FunctionData final : public SymbolData
 {
   public:
@@ -56,8 +50,6 @@ class FunctionData final : public SymbolData
     }
 
     tr::vector<tr::string>* dbgstrs = nullptr;
-    ReturnArrayInfo* return_array = nullptr;
-    symbol* array_return = nullptr;
     Label label;     // modern replacement for addr
     Label funcid;
     int max_local_stack = 0;
@@ -118,13 +110,6 @@ struct symbol : public PoolObject
         return data_->asFunction();
     }
 
-    symbol* array_return() const {
-        return function()->array_return;
-    }
-    void set_array_return(symbol* child) {
-        assert(!function()->array_return);
-        function()->array_return = child;
-    }
     SymbolData* data() const {
         return data_;
     }
