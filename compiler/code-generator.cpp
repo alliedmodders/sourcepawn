@@ -454,7 +454,7 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         } else if (auto expr = field->value->as<TaggedValueExpr>()) {
             values[arg->index] = expr->value();
         } else if (auto expr = field->value->as<SymbolExpr>()) {
-            values[arg->index] = expr->sym()->addr();
+            values[arg->index] = expr->decl()->sym()->addr();
         } else {
             assert(false);
         }
@@ -516,8 +516,8 @@ CodeGenerator::EmitExpr(Expr* expr)
         }
         case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
-            if (e->sym()->ident == iREFARRAY)
-                __ address(e->sym(), sPRI);
+            if (e->decl()->sym()->ident == iREFARRAY)
+                __ address(e->decl()->sym(), sPRI);
             break;
         }
         case ExprKind::StringExpr: {
@@ -1075,7 +1075,7 @@ CodeGenerator::EmitTernaryExpr(TernaryExpr* expr)
 void
 CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
 {
-    symbol* sym = expr->sym();
+    symbol* sym = expr->decl()->sym();
     switch (sym->ident) {
         case iARRAY:
         case iREFARRAY:
@@ -1161,9 +1161,15 @@ CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr)
     // reserved for RvalueExpr().
     EmitExpr(expr->base());
 
-    if (expr->resolved() && expr->resolved()->s->addr()) {
-        __ const_alt(expr->resolved()->s->addr() << 2);
-        __ emit(OP_ADD);
+    // Only enum struct accesses have a resolved decl.
+    if (!expr->resolved())
+        return;
+
+    if (LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>()) {
+        if (field->offset()) {
+            __ const_alt(field->offset() << 2);
+            __ emit(OP_ADD);
+        }
     }
 }
 
@@ -1311,7 +1317,7 @@ CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr)
         // that when synthesizing a NewArrayExpr for old-style declarations,
         // it is impossible to have an enum struct.
         // :TODO: test this
-        __ emit(OP_PUSH_C, es->s->addr());
+        __ emit(OP_PUSH_C, es->array_size());
         numdim++;
     }
 
@@ -1351,7 +1357,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     auto info = fun_->return_array();
     if (array.iv.empty()) {
         VarDecl* sub_decl = info->var;
-        symbol* sub = sub_decl->s;
+        symbol* sub = sub_decl->sym();
 
         // A much simpler copy can be emitted.
         __ load_hidden_arg(fun_, sub, true);
@@ -1391,7 +1397,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     // add.c <iv-size * 4>      ; address to data
     // memcopy <data-size>
     __ emit(OP_PUSH_PRI);
-    __ load_hidden_arg(fun_, info->var->s, false);
+    __ load_hidden_arg(fun_, info->var->sym(), false);
     __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, 0, 0);
     __ emit(OP_MOVE_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
@@ -2189,9 +2195,17 @@ int CodeGenerator::DynamicMemorySize() const {
 }
 
 void CodeGenerator::EnqueueDebugSymbol(Decl* decl, uint32_t pc) {
-    if (decl->s->vclass == sGLOBAL) {
+    int vclass = 0;
+    if (auto fun = decl->as<FunctionDecl>())
+        vclass = fun->is_static() ? sSTATIC : sGLOBAL;
+    else if (auto var = decl->as<VarDeclBase>())
+        vclass = var->vclass();
+    else
+        assert(false);
+
+    if (vclass == sGLOBAL) {
         global_syms_.emplace_back(decl, pc);
-    } else if (decl->s->vclass == sSTATIC && !func_) {
+    } else if (vclass == sSTATIC && !func_) {
         static_syms_.back().second.emplace_back(decl, pc);
     } else {
         local_syms_.back().emplace_back(decl, pc);

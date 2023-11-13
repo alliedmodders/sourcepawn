@@ -278,7 +278,13 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
             matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field->value->as<SymbolExpr>()) {
-        auto sym = expr->sym();
+        auto var = expr->decl()->as<VarDecl>();
+        if (!var) {
+            report(expr->pos(), 405);
+            return false;
+        }
+
+        auto sym = var->sym();
         if (arg->type.ident == iVARIABLE) {
             if (sym->ident != iVARIABLE) {
                 report(expr->pos(), 405);
@@ -562,7 +568,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
                 report(expr, 205);
         }
     } else if (auto sym_expr = expr->as<SymbolExpr>()) {
-        if (sym_expr->sym()->ident == iFUNCTN)
+        if (sym_expr->decl()->as<FunctionDecl>())
             report(expr, 249);
     }
 
@@ -1271,7 +1277,7 @@ CastExpr::ProcessUses(SemaContext& sc)
 }
 
 void SymbolExpr::MarkUsed(SemaContext& sc) {
-    markusage(sym(), uREAD);
+    markusage(decl_, uREAD);
 }
 
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
@@ -1288,7 +1294,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         return false;
     }
 
-    auto sym = expr->sym();
+    auto sym = decl->sym();
     auto& val = expr->val();
     val.ident = sym->ident;
     val.sym = sym;
@@ -1522,7 +1528,7 @@ IndexExpr::ProcessUses(SemaContext& sc)
 }
 
 bool Semantics::CheckThisExpr(ThisExpr* expr) {
-    auto sym = expr->sym();
+    auto sym = expr->decl()->sym();
     assert(sym->ident == iREFARRAY || sym->ident == iVARIABLE);
 
     auto& val = expr->val();
@@ -1773,31 +1779,34 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     }
 
     auto& val = expr->val();
-    if (field_decl->as<MemberFunctionDecl>()) {
+    if (auto fun = field_decl->as<MemberFunctionDecl>()) {
         if (!from_call) {
             report(expr, 76);
             return false;
         }
 
         val.ident = iFUNCTN;
-        val.sym = field_decl->s;
+        val.sym = fun->sym();
         markusage(val.sym, uREAD);
         return true;
     }
 
-    auto field = field_decl->s;
+    auto field = field_decl->as<LayoutFieldDecl>();
+    assert(field);
+
+    int tag = field->type().semantic_tag();
 
     typeinfo_t ti{};
-    if (types_->find(field->tag)->isEnumStruct()) {
+    if (types_->find(tag)->isEnumStruct()) {
         val.tag = 0;
-        ti.declared_tag = field->tag;
+        ti.declared_tag = tag;
     } else {
-        val.tag = field->tag;
+        val.tag = tag;
     }
     ti.set_tag(val.tag);
 
-    if (field->dim_count()) {
-        ti.dim = {field->dim(0)};
+    if (field->type().numdim()) {
+        ti.dim = {field->type().dim[0]};
         ti.ident = iREFARRAY;
     } else {
         ti.ident = (ti.tag() == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
@@ -1807,7 +1816,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Hack. Remove when we can.
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass, false,
                            false, false, nullptr);
-    auto sym = new symbol(var, field->addr(), ti.ident, var->vclass(), ti.tag());
+    auto sym = new symbol(var, field->offset(), ti.ident, var->vclass(), ti.tag());
     if (ti.dim.size()) {
         sym->set_dim_count(ti.dim.size());
         for (int i = 0; i < ti.dim.size(); i++)
@@ -1834,11 +1843,17 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     Decl* field = FindEnumStructField(type, expr->name());
     if (!field) {
         report(expr, 105) << type->name() << expr->name();
-        return FALSE;
+        return false;
+    }
+
+    auto fd = field->as<LayoutFieldDecl>();
+    if (!fd) {
+        report(expr, 445) << field->name();
+        return false;
     }
 
     auto& val = expr->val();
-    val.set_constval(field->s->addr());
+    val.set_constval(fd->offset());
     val.tag = 0;
     return true;
 }
@@ -1846,15 +1861,22 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
 bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
-    symbol* sym = expr->sym();
+    symbol* sym = nullptr;
+    if (auto var = expr->decl()->as<VarDeclBase>())
+        sym = var->sym();
+    else if (auto ed = expr->decl()->as<EnumDecl>())
+        sym = ed->sym();
+    else if (auto esd = expr->decl()->as<EnumStructDecl>())
+        sym = esd->sym();
 
+    if (!sym) {
+        report(expr, 72);
+        return false;
+    }
     markusage(sym, uREAD);
 
     if (sym->ident == iCONSTEXPR) {
         report(expr, 39); // constant symbol has no size
-        return false;
-    } else if (sym->ident == iFUNCTN) {
-        report(expr, 72); // "function" symbol has no size
         return false;
     }
 
@@ -1889,13 +1911,18 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         if (enum_type) {
             assert(enum_type->asEnumStruct());
 
-            Decl* field = FindEnumStructField(enum_type, expr->field());
-            if (!field) {
+            Decl* decl = FindEnumStructField(enum_type, expr->field());
+            if (!decl) {
                 report(expr, 105) << enum_type->name() << expr->field();
                 return false;
             }
-            if (field->s->dim_count()) {
-                val.set_constval(field->s->dim(0));
+            auto field = decl->as<LayoutFieldDecl>();
+            if (!field) {
+                report(expr, 445) << expr->field();
+                return false;
+            }
+            if (field->type().numdim()) {
+                val.set_constval(field->type().dim[0]);
                 return true;
             }
             return true;
@@ -1983,7 +2010,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     val.tag = sym->tag;
     if (fun->return_array()) {
         val.ident = iREFARRAY;
-        val.sym = fun->return_array()->var->s;
+        val.sym = fun->return_array()->var->sym();
         NeedsHeapAlloc(call);
     }
 
@@ -2500,7 +2527,9 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
 bool Semantics::TestSymbols(SymbolScope* root, bool testconst) {
     bool entry = false;
     root->ForEachSymbol([&](Decl* decl) -> void {
-        entry |= TestSymbol(decl->s, testconst);
+        auto sym = decl->sym();
+        if (sym)
+            entry |= TestSymbol(sym, testconst);
     });
     return entry;
 }
@@ -2606,7 +2635,6 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     }
     /* see if this function already has a sub type (an array attached) */
     auto sub = fun->return_array() ? fun->return_array()->var : nullptr;
-    assert(sub == nullptr || sub->s->ident == iREFARRAY);
     if (sc_->returns_value()) {
         int retarray = (v.ident == iARRAY || v.ident == iREFARRAY);
         /* there was an earlier "return" statement in this function */
@@ -2647,7 +2675,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
     if (curfunc->return_array()) {
         VarDecl* sub_decl = curfunc->return_array()->var;
-        auto sub = sub_decl->s;
+        auto sub = sub_decl->sym();
 
         assert(sub->ident == iREFARRAY);
         // this function has an array attached already; check that the current
@@ -2700,6 +2728,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         sub = NewVariable(var, (argcount + 3) * sizeof(cell), iREFARRAY,
                           sGLOBAL, curfunc->type().tag(), dim, array.numdim(),
                           array.enum_struct_tag());
+        var->set_sym(sub);
 
         auto info = new FunctionDecl::ReturnArrayInfo;
         info->var = var;
@@ -3366,7 +3395,7 @@ void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
     def->tag = decl->type().tag();
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
-        symbol* sym = expr->sym();
+        symbol* sym = expr->decl()->sym();
         assert(sym->vclass == sGLOBAL);
 
         def->sym = sym;

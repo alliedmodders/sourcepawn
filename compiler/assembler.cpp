@@ -142,7 +142,7 @@ class RttiBuilder
     void encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_tag_into(std::vector<uint8_t>& bytes, int tag);
-    void encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym);
+    void encode_ret_array_into(std::vector<uint8_t>& bytes, const typeinfo_t& type);
     void encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
     void encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t& info);
     void encode_struct_into(std::vector<uint8_t>& bytes, Type* type);
@@ -447,7 +447,7 @@ RttiBuilder::add_enumstruct(Type* type)
     smx_rtti_enumstruct es = {};
     es.name = names_->add(*cc_.atoms(), type->name());
     es.first_field = es_fields_->count();
-    es.size = es_decl->s->addr();
+    es.size = es_decl->sym()->addr();
     enumstructs_->add(es);
 
     // Pre-allocate storage in case of nested types.
@@ -458,21 +458,20 @@ RttiBuilder::add_enumstruct(Type* type)
     // Add all fields.
     size_t index = 0;
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
-        auto field_decl = (*iter);
-        auto field = field_decl->s;
+        auto field = (*iter);
 
         int dims[1], dimcount = 0;
-        if (field->dim_count())
-            dims[dimcount++] = field->dim(0);
+        if (field->type().numdim())
+            dims[dimcount++] = field->type().dim[0];
 
-        variable_type_t type = {field->semantic_tag, dims, dimcount, false};
+        variable_type_t type = {field->type().semantic_tag(), dims, dimcount, false};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
         smx_rtti_es_field info;
-        info.name = names_->add(field_decl->name());
+        info.name = names_->add(field->name());
         info.type_id = to_typeid(encoding);
-        info.offset = field->addr();
+        info.offset = field->offset();
         es_fields_->at(es.first_field + index) = info;
         index++;
     }
@@ -539,7 +538,7 @@ RttiBuilder::to_typeid(const std::vector<uint8_t>& bytes)
 
 uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     assert(fun == fun->canonical());
-    auto sym = fun->s;
+    auto sym = fun->sym();
 
     std::vector<uint8_t> bytes;
 
@@ -552,8 +551,8 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
         bytes.push_back(cb::kVariadic);
 
     VarDecl* child = fun->return_array() ? fun->return_array()->var : nullptr;
-    if (child && child->s->dim_count()) {
-        encode_ret_array_into(bytes, child->s);
+    if (child && child->type().numdim()) {
+        encode_ret_array_into(bytes, child->type());
     } else if (sym->tag == types_->tag_void()) {
         bytes.push_back(cb::kVoid);
     } else {
@@ -668,14 +667,12 @@ RttiBuilder::encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type)
     CompactEncodeUint32(bytes, add_enumstruct(type));
 }
 
-void
-RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, symbol* sym)
-{
-    for (int i = 0; i < sym->dim_count(); i++) {
+void RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, const typeinfo_t& type) {
+    for (int i = 0; i < type.numdim(); i++) {
         bytes.push_back(cb::kFixedArray);
-        CompactEncodeUint32(bytes, sym->dim(i));
+        CompactEncodeUint32(bytes, type.dim[i]);
     }
-    encode_tag_into(bytes, sym->tag);
+    encode_tag_into(bytes, type.tag());
 }
 
 uint8_t

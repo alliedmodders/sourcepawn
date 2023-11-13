@@ -288,9 +288,9 @@ class Decl : public Stmt
         name_(name)
     {}
 
-    Atom* name() const {
-        return name_;
-    }
+    virtual symbol* sym() const { return nullptr; }
+
+    Atom* name() const { return name_; }
 
   protected:
     Atom* DecorateInnerName(Atom* parent_name, Atom* field_name);
@@ -301,8 +301,6 @@ class Decl : public Stmt
   public:
     // :TODO: remove.
     Decl* next = nullptr;
-    // :TODO: remove
-    symbol* s = nullptr;
 };
 
 class BinaryExpr;
@@ -325,32 +323,30 @@ class VarDeclBase : public Decl
 
     BinaryExpr* init() const { return init_; }
     Expr* init_rhs() const;
-    int vclass() const {
-        return vclass_;
-    }
-    const typeinfo_t& type() const {
-        return type_;
-    }
-    typeinfo_t* mutable_type() {
-        return &type_;
-    }
+    int vclass() const { return vclass_; }
+    const typeinfo_t& type() const { return type_; }
+    typeinfo_t* mutable_type() { return &type_; }
     void set_init(Expr* expr);
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
-    symbol* sym() const { return sym_; }
     bool is_public() const { return is_public_; }
     bool is_stock() const { return is_stock_; }
     bool is_read() const { return is_read_; }
     void set_is_read() { is_read_ = true; }
     bool is_written() const { return is_written_; }
     void set_is_written() { is_written_ = true; }
+    symbol* sym() const override { return sym_; }
+    void set_sym(symbol* sym) {
+        assert(!sym_);
+        sym_ = sym;
+    }
 
     bool is_used() const { return is_read_ || is_written_; }
 
   protected:
     typeinfo_t type_;
-    int vclass_; // This will be implied by scope, when we get there.
     BinaryExpr* init_ = nullptr;
+    uint8_t vclass_; // This will be implied by scope, when we get there.
     bool is_public_ : 1;
     bool is_static_ : 1;
     bool is_stock_ : 1;
@@ -419,9 +415,12 @@ class EnumFieldDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumFieldDecl; }
 
     Expr* value() const { return value_; }
+    symbol* sym() const override { return sym_; }
+    void set_sym(symbol* sym) { sym_ = sym; }
 
   private:
     Expr* value_;
+    symbol* sym_ = nullptr;
 };
 
 class EnumDecl : public Decl
@@ -447,6 +446,8 @@ class EnumDecl : public Decl
     PoolArray<EnumFieldDecl*>& fields() { return fields_; }
     int increment() const { return increment_; }
     int multiplier() const { return multiplier_; }
+    symbol* sym() const override { return sym_; }
+    int array_size() const { return array_size_; }
 
     MethodmapDecl* mm() const { return mm_; }
     void set_mm(MethodmapDecl* mm) { mm_ = mm; }
@@ -457,7 +458,9 @@ class EnumDecl : public Decl
     PoolArray<EnumFieldDecl*> fields_;
     int increment_;
     int multiplier_;
+    int array_size_ = 0;
     MethodmapDecl* mm_;
+    symbol* sym_ = nullptr;
 };
 
 struct StructField {
@@ -871,14 +874,14 @@ class SizeofExpr final : public Expr
     Atom* field() const { return field_; }
     int suffix_token() const { return suffix_token_; }
     int array_levels() const { return array_levels_; }
-    symbol* sym() const { return sym_; }
+    Decl* decl() const { return decl_; }
 
   private:
     Atom* ident_;
     Atom* field_;
     int suffix_token_;
     int array_levels_;
-    symbol* sym_ = nullptr;
+    Decl* decl_ = nullptr;
 };
 
 class SymbolExpr final : public Expr
@@ -899,7 +902,6 @@ class SymbolExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SymbolExpr; }
 
     Decl* decl() const { return decl_; }
-    symbol* sym() const { return decl_ ? decl_->s : nullptr; }
 
   private:
     bool DoBind(SemaContext& sc, bool is_lval);
@@ -1106,8 +1108,7 @@ class ThisExpr final : public Expr
 {
   public:
     explicit ThisExpr(const token_pos_t& pos)
-      : Expr(ExprKind::ThisExpr, pos),
-        sym_(nullptr)
+      : Expr(ExprKind::ThisExpr, pos)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1115,10 +1116,10 @@ class ThisExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::ThisExpr; }
 
-    symbol* sym() const { return sym_; }
+    VarDeclBase* decl() const { return decl_; }
 
   private:
-    symbol* sym_;
+    VarDeclBase* decl_ = nullptr;
 };
 
 class NullExpr final : public Expr
@@ -1628,7 +1629,7 @@ class FunctionDecl : public Decl
     declinfo_t& decl() { return decl_; }
     const declinfo_t& decl() const { return decl_; }
 
-    symbol* sym() const { return sym_; }
+    symbol* sym() const override { return sym_; }
     void set_sym(symbol* sym) { sym_ = sym; }
 
     const typeinfo_t& type() const { return decl_.type; }
@@ -1787,8 +1788,15 @@ class LayoutFieldDecl : public Decl
     const typeinfo_t& type() const { return type_; }
     typeinfo_t& mutable_type() { return type_; }
 
+    cell_t offset() const { return offset_; }
+    void set_offset(cell_t offset) { offset_ = offset; }
+    symbol* sym() const override { return sym_; }
+    void set_sym(symbol* sym) { sym_ = sym; }
+
   private:
     typeinfo_t type_;
+    cell_t offset_;
+    symbol* sym_ = nullptr;
 };
 
 class EnumStructDecl : public LayoutDecl
@@ -1807,10 +1815,14 @@ class EnumStructDecl : public LayoutDecl
     PoolArray<FunctionDecl*>& methods() { return methods_; }
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
+    symbol* sym() const override { return root_; }
+    cell_t array_size() const { return array_size_; }
+
   private:
     PoolArray<FunctionDecl*> methods_;
     PoolArray<LayoutFieldDecl*> fields_;
     symbol* root_ = nullptr;
+    cell_t array_size_ = 0;
 };
 
 class MethodmapPropertyDecl : public Decl {
@@ -1871,6 +1883,7 @@ class MethodmapDecl : public LayoutDecl
     int tag() const { return tag_; }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
+    symbol* sym() const override { return sym_; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);

@@ -150,7 +150,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
     if (!chain)
         return false;
 
-    symbol* sym = nullptr;
+    FunctionDecl* decl = nullptr;
     bool swapparams;
     bool is_commutative = commutative(oper);
     for (auto iter = chain; iter; iter = iter->next) {
@@ -166,13 +166,13 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
             swapped = true;
         }
         if (matched) {
-            sym = iter->s;
+            decl = fun;
             swapparams = swapped;
             break;
         }
     }
 
-    if (!sym)
+    if (!decl)
         return false;
 
     /* we don't want to use the redefined operator in the function that
@@ -181,13 +181,13 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
      *    fixed:operator+(fixed:a, fixed:b)
      *        return a + b
      */
-    if (sym == sc.func()) {
+    if (decl == sc.func_node()) {
         report(408);
     }
 
-    markusage(sym, uREAD);
+    markusage(decl, uREAD);
 
-    op->sym = sym;
+    op->sym = decl->sym();
     op->oper = oper;
     op->paramspassed = (oper == 0) ? 1 : numparam;
     op->savepri = savepri;

@@ -86,7 +86,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
 
         ti->set_tag(0);
         ti->declared_tag = tag;
-        ti->dim.emplace_back(enum_type->s->addr());
+        ti->dim.emplace_back(enum_type->array_size());
 
         if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
             ti->ident = iARRAY;
@@ -159,9 +159,7 @@ BlockStmt::Bind(SemaContext& sc)
     return StmtList::Bind(sc);
 }
 
-bool
-EnumDecl::EnterNames(SemaContext& sc)
-{
+bool EnumDecl::EnterNames(SemaContext& sc) {
     AutoErrorPos error_pos(pos_);
 
     int tag = 0;
@@ -202,8 +200,8 @@ EnumDecl::EnterNames(SemaContext& sc)
             if (auto decl = FindSymbol(sc, name_)) {
                 // If we were previously defined as a methodmap, don't overwrite the
                 // symbol. Otherwise, flow into DefineConstant where we will error.
-                if (decl->s->ident == iMETHODMAP)
-                    enumsym = decl->s; 
+                if (auto mm = decl->as<MethodmapDecl>())
+                    enumsym = mm->sym();
             }
         }
 
@@ -238,11 +236,16 @@ EnumDecl::EnterNames(SemaContext& sc)
             value += increment_;
         else
             value *= increment_ * multiplier_;
+        field->set_sym(sym);
     }
 
     // set the enum name to the "next" value (typically the last value plus one)
-    if (enumsym)
+    if (enumsym) {
         enumsym->setAddr(value);
+        array_size_ = value;
+    }
+
+    sym_ = enumsym;
     return true;
 }
 
@@ -524,22 +527,21 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
     if (auto fun = decl_->as<FunctionDecl>())
         decl_ = fun->canonical();
 
-    if (!is_lval)
-        markusage(sym(), uREAD);
+    if (decl_ && !is_lval)
+        markusage(decl_, uREAD);
     return true;
 }
 
-bool
-ThisExpr::Bind(SemaContext& sc)
-{
+bool ThisExpr::Bind(SemaContext& sc) {
     AutoErrorPos aep(pos_);
 
-    auto decl = FindSymbol(sc, sc.cc().atom("this"));
-    if (!decl) {
+    if (auto decl = FindSymbol(sc, sc.cc().atom("this")))
+        decl_ = decl->as<VarDeclBase>();
+
+    if (!decl_) {
         error(pos_, 166);
         return false;
     }
-    sym_ = decl->s;
     return true;
 }
 
@@ -584,13 +586,12 @@ ArrayExpr::Bind(SemaContext& sc)
 bool SizeofExpr::Bind(SemaContext& sc) {
     AutoErrorPos aep(pos_);
 
-    auto decl = FindSymbol(sc, ident_);
-    if (!decl) {
+    decl_ = FindSymbol(sc, ident_);
+    if (!decl_) {
         report(pos_, 17) << ident_;
         return false;
     }
-    sym_ = decl->s;
-    markusage(sym_, uREAD);
+    markusage(decl_, uREAD);
     return true;
 }
 
@@ -663,9 +664,11 @@ ReturnStmt::Bind(SemaContext& sc)
     // Do some peeking to see if this really returns an array. This is a
     // compatibility hack.
     if (auto sym_expr = expr_->as<SymbolExpr>()) {
-        if (auto sym = sym_expr->sym()) {
-            if (sym->ident == iARRAY || sym->ident == iREFARRAY)
-                sc.func_node()->set_maybe_returns_array();
+        if (auto decl = sym_expr->decl()) {
+            if (auto var = decl->as<VarDeclBase>()) {
+                if (var->type().ident == iARRAY || var->type().ident == iREFARRAY)
+                    sc.func_node()->set_maybe_returns_array();
+            }
         }
     }
 
@@ -738,7 +741,7 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
     }
 
     if (other) {
-        sym_ = other->s;
+        sym_ = other->sym();
         proto_or_impl_ = other;
         other->proto_or_impl_ = this;
     } else {
@@ -747,10 +750,6 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
 
         DefineSymbol(sc, this, scope);
     }
-
-    if (!s)
-        s = sym_;
-
     return true;
 }
 
@@ -792,17 +791,13 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
     return nullptr;
 }
 
-bool
-FunctionDecl::Bind(SemaContext& outer_sc)
-{
+bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
         sym_ = new symbol(this, 0, iFUNCTN, sGLOBAL, 0);
-    if (!s)
-        s = sym_;
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
@@ -821,7 +816,7 @@ FunctionDecl::Bind(SemaContext& outer_sc)
             typeinfo.set_tag(0);
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
-            typeinfo.dim.emplace_back(enum_type->s->addr());
+            typeinfo.dim.emplace_back(enum_type->array_size());
         } else {
             typeinfo.set_tag(*this_tag_);
             typeinfo.ident = iVARIABLE;
@@ -1110,12 +1105,15 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(field->name());
 
+        field->set_offset(position);
+
         symbol* child = new symbol(field, position, field->type().ident, sGLOBAL,
                                    field->type().semantic_tag());
         if (field->type().numdim()) {
             child->set_dim_count(1);
             child->set_dim(0, field->type().dim[0]);
         }
+        field->set_sym(child);
 
         cell size = 1;
         if (field->type().numdim()) {
@@ -1141,6 +1139,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     }
 
     root_->setAddr(position);
+    array_size_ = position;
 
     return errors.ok();
 }
@@ -1195,10 +1194,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
             return false;
         }
 
-        assert(ed->s->ident == iCONSTEXPR);
-        assert(tag_ == ed->s->tag);
-
-        sym_ = ed->s;
+        sym_ = ed->sym();
         sym_->ident = iMETHODMAP;
         ed->set_mm(this);
     } else {

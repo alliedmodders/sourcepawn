@@ -326,4 +326,5 @@ static const char* errmsg_ex[] = {
     /*442*/ "method aliases are no longer supported\n",
     /*443*/ "enum %s already has a methodmap\n",
     /*444*/ "cannot find method \"%s.%s\"\n",
+    /*445*/ "%s must be a field\n",
 };
