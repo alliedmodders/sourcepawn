@@ -164,6 +164,18 @@ bool FunctionDecl::MustReturnValue() const {
     return retvalue_used_ || (explicit_return_type_ && sym_->tag != types->tag_void());
 }
 
+void FunctionDecl::AddReferenceTo(FunctionDecl* other) {
+    if (!refers_to_) {
+        auto& cc = CompileContext::get();
+        refers_to_ = cc.allocator().alloc<PoolForwardList<FunctionDecl*>>();
+    }
+    for (FunctionDecl* decl : *refers_to_) {
+        if (decl == other)
+            return;
+    }
+    refers_to_->emplace_front(other);
+}
+
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {

@@ -54,9 +54,6 @@ class FunctionData final : public SymbolData
     Label funcid;
     int max_local_stack = 0;
     int max_callee_stack = 0;
-
-    // Other symbols that this symbol refers to.
-    PoolForwardList<FunctionDecl*> refers_to;
 };
 
 /*  Symbol table format
@@ -116,8 +113,6 @@ struct symbol : public PoolObject
     void set_data(SymbolData* data) {
         data_ = std::move(data);
     }
-
-    void add_reference_to(FunctionDecl* other);
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
