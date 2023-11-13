@@ -1564,6 +1564,8 @@ class FunctionDecl : public Decl
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
 
+    void AddReferenceTo(FunctionDecl* other);
+
     static bool is_a(Stmt* node) {
         return node->kind() == StmtKind::FunctionDecl ||
                node->kind() == StmtKind::MemberFunctionDecl ||
@@ -1675,6 +1677,10 @@ class FunctionDecl : public Decl
     ReturnArrayInfo* return_array() const { return return_array_; }
     void set_return_array(ReturnArrayInfo* base) { return_array_ =  base; }
 
+    const PoolForwardList<FunctionDecl*>* refers_to() const {
+        return refers_to_;
+    }
+
   protected:
     bool BindArgs(SemaContext& sc);
     FunctionDecl* CanRedefine(Decl* other);
@@ -1692,6 +1698,8 @@ class FunctionDecl : public Decl
     TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
     ReturnArrayInfo* return_array_ = nullptr;
+    // Other symbols that this symbol refers to.
+    PoolForwardList<FunctionDecl*>* refers_to_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);

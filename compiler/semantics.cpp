@@ -3413,8 +3413,10 @@ void Semantics::DeduceLiveness() {
     // Traverse referrers to find the transitive set of live functions.
     while (!work.empty()) {
         FunctionDecl* live = ke::PopBack(&work);
+        if (!live->refers_to())
+            continue;
 
-        for (const auto& other : live->sym()->function()->refers_to) {
+        for (const auto& other : *live->refers_to()) {
             other->set_is_live();
             if (!seen.count(other)) {
                 seen.emplace(other);
@@ -3437,8 +3439,10 @@ void Semantics::DeduceMaybeUsed() {
 
     while (!work.empty()) {
         FunctionDecl* live = ke::PopBack(&work);
+        if (!live->refers_to())
+            continue;
 
-        for (const auto& other : live->sym()->function()->refers_to) {
+        for (const auto& other : *live->refers_to()) {
             other->set_maybe_used();
             if (!seen.count(other)) {
                 seen.emplace(other);

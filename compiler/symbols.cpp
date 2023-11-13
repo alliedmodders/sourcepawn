@@ -57,7 +57,7 @@ void markusage(symbol* sym, int usage) {
     if (!cc.sema())
         return;
 
-    auto parent_func = cc.sema()->func();
+    auto parent_func = cc.sema()->func_node();
     if (!parent_func)
         return;
 
@@ -69,7 +69,8 @@ void markusage(symbol* sym, int usage) {
     if (sym->ident != iFUNCTN)
         return;
 
-    parent_func->add_reference_to(sym->decl->as<FunctionDecl>()->canonical());
+    assert(parent_func->canonical() == parent_func);
+    parent_func->AddReferenceTo(sym->decl->as<FunctionDecl>()->canonical());
 }
 
 FunctionData::FunctionData()
@@ -104,16 +105,6 @@ void symbol::set_dim_count(int dim_count) {
     dim_data = cc.allocator().alloc<int>(dim_count + 1);
     dim_data[0] = dim_count;
     dim_data++;
-}
-
-void
-symbol::add_reference_to(FunctionDecl* other)
-{
-    for (FunctionDecl* decl : function()->refers_to) {
-        if (decl == other)
-            return;
-    }
-    function()->refers_to.emplace_front(other);
 }
 
 symbol*
