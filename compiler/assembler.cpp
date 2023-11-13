@@ -401,14 +401,14 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
     method.pcode_end = sym->codeaddr;
     method.signature = encode_signature(fun->canonical());
 
-    if (!sym->function()->dbgstrs)
+    if (!fun->cg()->dbgstrs)
         return;
 
     smx_rtti_debug_method debug;
     debug.method_index = index;
     debug.first_local = dbg_locals_->count();
 
-    for (auto& iter : *sym->function()->dbgstrs) {
+    for (auto& iter : *fun->cg()->dbgstrs) {
         const char* chars = iter.c_str();
         if (chars[0] == '\0')
             continue;
@@ -883,7 +883,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         auto id = (uint32_t(i) << 1) | 1;
         if (!Label::ValueFits(id))
             report(421);
-        cg_.LinkPublicFunction(sym, id);
+        cg_.LinkPublicFunction(f.decl, id);
 
         rtti.add_method(f.decl);
     }

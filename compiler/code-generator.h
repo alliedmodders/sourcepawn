@@ -44,7 +44,7 @@ class CodeGenerator final
 
     bool Generate();
 
-    void LinkPublicFunction(symbol* sym, uint32_t id);
+    void LinkPublicFunction(FunctionDecl* decl, uint32_t id);
 
     const tr::vector<tr::string>& debug_strings() const { return debug_strings_; }
     const tr::vector<symbol*>& native_list() const { return native_list_; }
@@ -195,7 +195,7 @@ class CodeGenerator final
     void AllocInScope(ParseNode* node, MemoryScope& scope, MemuseType type, int size);
     int PopScope(tr::vector<MemoryScope>& scope_list);
 
-    using CallGraph = tr::unordered_map<symbol*, tr::vector<symbol*>>;
+    using CallGraph = tr::unordered_map<FunctionDecl*, tr::vector<FunctionDecl*>>;
 
     bool ComputeStackUsage();
     bool ComputeStackUsage(CallGraph::iterator caller_iter);

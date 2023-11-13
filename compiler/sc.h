@@ -74,16 +74,7 @@ struct DefaultArg : public PoolObject {
 
     ~DefaultArg();
 };
-struct stringlist;
  
-class EnumStructData;
-class FunctionData;
-class SymbolData : public PoolObject
-{
-  public:
-    virtual FunctionData* asFunction() { return nullptr; }
-};
-
 struct symbol;
 
 // Values for symbol::usage.

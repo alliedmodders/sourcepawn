@@ -41,21 +41,6 @@ class MethodmapPropertyDecl;
 class SemaContext;
 struct token_pos_t;
 
-class FunctionData final : public SymbolData
-{
-  public:
-    FunctionData();
-    FunctionData* asFunction() override {
-        return this;
-    }
-
-    tr::vector<tr::string>* dbgstrs = nullptr;
-    Label label;     // modern replacement for addr
-    Label funcid;
-    int max_local_stack = 0;
-    int max_callee_stack = 0;
-};
-
 /*  Symbol table format
  *
  *  The symbol name read from the input file is stored in "name", the
@@ -102,21 +87,9 @@ struct symbol : public PoolObject
     void setAddr(int addr) {
         addr_ = addr;
     }
-    FunctionData* function() const {
-        assert(ident == iFUNCTN);
-        return data_->asFunction();
-    }
-
-    SymbolData* data() const {
-        return data_;
-    }
-    void set_data(SymbolData* data) {
-        data_ = std::move(data);
-    }
 
   private:
     cell addr_; /* address or offset (or value for constant, index for native function) */
-    SymbolData* data_;
 };
 
 enum ScopeKind {

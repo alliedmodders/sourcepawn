@@ -1681,6 +1681,15 @@ class FunctionDecl : public Decl
         return refers_to_;
     }
 
+    struct CGInfo : public PoolObject {
+        tr::vector<tr::string>* dbgstrs = nullptr;
+        Label label;     // modern replacement for addr
+        Label funcid;
+        int max_local_stack = 0;
+        int max_callee_stack = 0;
+    };
+    CGInfo* cg();
+
   protected:
     bool BindArgs(SemaContext& sc);
     FunctionDecl* CanRedefine(Decl* other);
@@ -1698,8 +1707,13 @@ class FunctionDecl : public Decl
     TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
     ReturnArrayInfo* return_array_ = nullptr;
+
     // Other symbols that this symbol refers to.
     PoolForwardList<FunctionDecl*>* refers_to_ = nullptr;
+
+    // Set during codegen.
+    CGInfo* cg_ = nullptr;
+
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);

@@ -76,7 +76,7 @@ CodeGenerator::AddDebugLine(int linenr)
 {
     auto str = ke::StringPrintf("L:%x %x", asm_.position(), linenr);
     if (func_) {
-        auto data = func_->function();
+        auto data = fun_->cg();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
         data->dbgstrs->emplace_back(str.c_str(), str.size());
@@ -102,7 +102,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl) {
     }
 
     if (func_) {
-        auto data = func_->function();
+        auto data = fun_->cg();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
         data->dbgstrs->emplace_back(string.c_str(), string.size());
@@ -1085,11 +1085,15 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
         case iREFARRAY:
             __ address(sym, sPRI);
             break;
-        case iFUNCTN:
-            assert(!sym->decl->as<FunctionDecl>()->canonical()->is_native());
-            assert(sym->decl->as<FunctionDecl>()->canonical()->is_live());
-            __ emit(OP_CONST_PRI, &sym->function()->funcid);
+        case iFUNCTN: {
+            auto fun = expr->decl()->as<FunctionDecl>();
+            assert(fun == fun->canonical());
+
+            assert(!fun->is_native());
+            assert(fun->is_live());
+            __ emit(OP_CONST_PRI, &fun->cg()->funcid);
             break;
+        }
         case iVARIABLE:
         case iREFERENCE:
             break;
@@ -1793,7 +1797,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     if (!info->body())
         return;
 
-    __ bind(&info->sym()->function()->label);
+    __ bind(&info->cg()->label);
     __ emit(OP_PROC);
     AddDebugLine(info->pos().line);
     EmitBreak();
@@ -1819,9 +1823,9 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     stack_scopes_.clear();
     heap_scopes_.clear();
 
-    info->sym()->setAddr(info->sym()->function()->label.offset());
+    info->sym()->setAddr(info->cg()->label.offset());
     info->sym()->codeaddr = asm_.pc();
-    info->sym()->function()->max_local_stack = max_func_memory_;
+    info->cg()->max_local_stack = max_func_memory_;
 
     // In case there is no callgraph, we still need to track which function has
     // the biggest stack.
@@ -1873,13 +1877,13 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
         __ emit(OP_SYSREQ_N, sym->addr(), nargs);
     } else {
         __ emit(OP_PUSH_C, nargs);
-        __ emit(OP_CALL, &sym->function()->label);
+        __ emit(OP_CALL, &fun->cg()->label);
 
-        auto node = callgraph_.find(func_);
+        auto node = callgraph_.find(fun_);
         if (node == callgraph_.end())
-            callgraph_.emplace(func_, tr::vector<symbol*>{sym});
+            callgraph_.emplace(fun_, tr::vector<FunctionDecl*>{fun});
         else
-            node->second.emplace_back(sym);
+            node->second.emplace_back(fun);
     }
 
     max_func_memory_ = std::max(max_func_memory_, current_memory_ + nargs);
@@ -2178,10 +2182,8 @@ CodeGenerator::popstacklist(bool codegen)
     current_stack_ -= PopScope(stack_scopes_);
 }
 
-void
-CodeGenerator::LinkPublicFunction(symbol* sym, uint32_t id)
-{
-    __ bind_to(&sym->function()->funcid, id);
+void CodeGenerator::LinkPublicFunction(FunctionDecl* decl, uint32_t id) {
+    __ bind_to(&decl->cg()->funcid, id);
 }
 
 int CodeGenerator::DynamicMemorySize() const {
@@ -2216,14 +2218,14 @@ CodeGenerator::AutoEnterScope::~AutoEnterScope() {
 }
 
 bool CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
-    symbol* caller = caller_iter->first;
-    tr::vector<symbol*> targets = std::move(caller_iter->second);
+    FunctionDecl* caller = caller_iter->first;
+    tr::vector<FunctionDecl*> targets = std::move(caller_iter->second);
     caller_iter = callgraph_.erase(caller_iter);
 
     int max_child_stack = 0;
     while (!targets.empty()) {
-        symbol* target = ke::PopBack(&targets);
-        if (!target->function()->max_callee_stack) {
+        FunctionDecl* target = ke::PopBack(&targets);
+        if (!target->cg()->max_callee_stack) {
             auto iter = callgraph_.find(target);
             if (iter != callgraph_.end()) {
                 if (!ComputeStackUsage(iter))
@@ -2231,8 +2233,8 @@ bool CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
             }
         }
 
-        auto local_stack = target->function()->max_local_stack;
-        auto callee_stack = target->function()->max_callee_stack;
+        auto local_stack = target->cg()->max_local_stack;
+        auto callee_stack = target->cg()->max_callee_stack;
         if (!ke::IsUint32AddSafe(local_stack, callee_stack) ||
             local_stack + callee_stack >= kMaxCells)
         {
@@ -2244,11 +2246,11 @@ bool CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
 
         // Assign this each iteration so we at least have something useful if
         // we hit a recursive case.
-        caller->function()->max_callee_stack = max_child_stack;
+        caller->cg()->max_callee_stack = max_child_stack;
     }
 
-    auto local_stack = caller->function()->max_local_stack;
-    auto callee_stack = caller->function()->max_callee_stack;
+    auto local_stack = caller->cg()->max_local_stack;
+    auto callee_stack = caller->cg()->max_callee_stack;
     if (!ke::IsUint32AddSafe(local_stack, callee_stack) ||
         local_stack + callee_stack >= kMaxCells)
     {
@@ -2256,8 +2258,8 @@ bool CodeGenerator::ComputeStackUsage(CallGraph::iterator caller_iter) {
         return false;
     }
 
-    max_script_memory_ = std::max(caller->function()->max_local_stack +
-                                  caller->function()->max_callee_stack,
+    max_script_memory_ = std::max(caller->cg()->max_local_stack +
+                                  caller->cg()->max_callee_stack,
                                   max_script_memory_);
     return true;
 }

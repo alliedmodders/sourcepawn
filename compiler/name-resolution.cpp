@@ -521,6 +521,9 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         return false;
     }
 
+    if (auto fun = decl_->as<FunctionDecl>())
+        decl_ = fun->canonical();
+
     if (!is_lval)
         markusage(sym(), uREAD);
     return true;
@@ -744,6 +747,10 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
 
         DefineSymbol(sc, this, scope);
     }
+
+    if (!s)
+        s = sym_;
+
     return true;
 }
 

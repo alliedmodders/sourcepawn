@@ -73,10 +73,6 @@ void markusage(symbol* sym, int usage) {
     parent_func->AddReferenceTo(sym->decl->as<FunctionDecl>()->canonical());
 }
 
-FunctionData::FunctionData()
-{
-}
-
 symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : codeaddr(0),
    vclass((char)symvclass),
@@ -86,14 +82,11 @@ symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass,
    semantic_tag(0),
    dim_data(nullptr),
    decl(decl),
-   addr_(symaddr),
-   data_(nullptr)
+   addr_(symaddr)
 {
     assert(ident != iINVALID);
     assert(decl);
     assert(!decl->s);
-    if (symident == iFUNCTN)
-        data_ = new FunctionData;
     decl->s = this;
 }
 
