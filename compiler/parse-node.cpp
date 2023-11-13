@@ -176,6 +176,12 @@ void FunctionDecl::AddReferenceTo(FunctionDecl* other) {
     refers_to_->emplace_front(other);
 }
 
+auto FunctionDecl::cg() -> CGInfo* {
+    if (!cg_)
+        cg_ = new CGInfo();
+    return cg_;
+}
+
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
   : TaggedValueExpr(pos, cc.types()->tag_float(), value)
 {
