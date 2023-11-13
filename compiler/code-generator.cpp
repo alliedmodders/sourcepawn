@@ -1348,8 +1348,10 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     ArrayData array;
     BuildArrayInitializer(stmt->array(), nullptr, &array);
 
+    auto info = fun_->return_array();
     if (array.iv.empty()) {
-        symbol* sub = func_->array_return();
+        VarDecl* sub_decl = info->var;
+        symbol* sub = sub_decl->s;
 
         // A much simpler copy can be emitted.
         __ load_hidden_arg(fun_, sub, true);
@@ -1363,24 +1365,21 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
         return;
     }
 
-    auto fun = func_->function();
-    if (!fun->return_array) {
+    if (!info->iv_size) {
         // No initializer, so we should have no data.
         assert(array.data.empty());
         assert(array.zeroes);
 
-        fun->return_array = new ReturnArrayInfo;
-
-        fun->return_array->iv_size = (cell_t)array.iv.size();
-        fun->return_array->dat_addr = data_.dat_address();
-        fun->return_array->zeroes = array.zeroes;
+        info->iv_size = (cell_t)array.iv.size();
+        info->dat_addr = data_.dat_address();
+        info->zeroes = array.zeroes;
         data_.Add(std::move(array.iv));
     }
 
-    cell dat_addr = fun->return_array->dat_addr;
-    cell iv_size = fun->return_array->iv_size;
+    cell dat_addr = info->dat_addr;
+    cell iv_size = info->iv_size;
     assert(iv_size);
-    assert(fun->return_array->zeroes);
+    assert(info->zeroes);
 
     // push.pri                 ; save array expression result
     // alt = hidden array
@@ -1392,14 +1391,14 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     // add.c <iv-size * 4>      ; address to data
     // memcopy <data-size>
     __ emit(OP_PUSH_PRI);
-    __ load_hidden_arg(fun_, func_->array_return(), false);
+    __ load_hidden_arg(fun_, info->var->s, false);
     __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, 0, 0);
     __ emit(OP_MOVE_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
     __ emit(OP_MOVE_ALT);
     __ emit(OP_POP_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
-    __ emit(OP_MOVS, fun->return_array->zeroes * sizeof(cell));
+    __ emit(OP_MOVS, info->zeroes * sizeof(cell));
 }
 
 void

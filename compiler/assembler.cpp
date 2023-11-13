@@ -138,7 +138,7 @@ class RttiBuilder
     uint32_t add_typeset(Type* type, funcenum_t* fe);
     uint32_t add_struct(Type* type);
     uint32_t add_enumstruct(Type* type);
-    uint32_t encode_signature(symbol* sym);
+    uint32_t encode_signature(FunctionDecl* decl);
     void encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_tag_into(std::vector<uint8_t>& bytes, int tag);
@@ -399,7 +399,7 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
     method.name = names_->add(fun->name());
     method.pcode_start = sym->addr();
     method.pcode_end = sym->codeaddr;
-    method.signature = encode_signature(sym);
+    method.signature = encode_signature(fun->canonical());
 
     if (!sym->function()->dbgstrs)
         return;
@@ -430,7 +430,7 @@ RttiBuilder::add_native(symbol* sym)
 {
     smx_rtti_native& native = natives_->add();
     native.name = names_->add(sym->decl->name());
-    native.signature = encode_signature(sym);
+    native.signature = encode_signature(sym->decl->as<FunctionDecl>());
 }
 
 uint32_t
@@ -537,12 +537,12 @@ RttiBuilder::to_typeid(const std::vector<uint8_t>& bytes)
     return MakeTypeId(offset, kTypeId_Complex);
 }
 
-uint32_t
-RttiBuilder::encode_signature(symbol* sym)
-{
+uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
+    assert(fun == fun->canonical());
+    auto sym = fun->s;
+
     std::vector<uint8_t> bytes;
 
-    auto fun = sym->decl->as<FunctionDecl>()->canonical();
     uint32_t argc = fun->args().size();
     if (argc > UCHAR_MAX)
         report(45);
@@ -551,9 +551,9 @@ RttiBuilder::encode_signature(symbol* sym)
     if (fun->IsVariadic())
         bytes.push_back(cb::kVariadic);
 
-    symbol* child = sym->array_return();
-    if (child && child->dim_count()) {
-        encode_ret_array_into(bytes, child);
+    VarDecl* child = fun->return_array() ? fun->return_array()->var : nullptr;
+    if (child && child->s->dim_count()) {
+        encode_ret_array_into(bytes, child->s);
     } else if (sym->tag == types_->tag_void()) {
         bytes.push_back(cb::kVoid);
     } else {

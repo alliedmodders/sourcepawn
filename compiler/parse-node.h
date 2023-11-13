@@ -1666,6 +1666,15 @@ class FunctionDecl : public Decl
     void CheckReturnUsage();
     bool IsVariadic();
 
+    struct ReturnArrayInfo : public PoolObject {
+        VarDecl* var = nullptr;
+        cell_t iv_size = 0;
+        cell_t dat_addr = 0;
+        cell_t zeroes = 0;
+    };
+    ReturnArrayInfo* return_array() const { return return_array_; }
+    void set_return_array(ReturnArrayInfo* base) { return_array_ =  base; }
+
   protected:
     bool BindArgs(SemaContext& sc);
     FunctionDecl* CanRedefine(Decl* other);
@@ -1682,6 +1691,7 @@ class FunctionDecl : public Decl
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
+    ReturnArrayInfo* return_array_ = nullptr;
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);

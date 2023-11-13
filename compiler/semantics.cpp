@@ -1311,7 +1311,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             report(expr, 76);
             return false;
         }
-        if (sym->array_return()) {
+        if (fun->return_array()) {
             report(expr, 182);
             return false;
         }
@@ -1966,7 +1966,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     auto sym = fun->sym();
     if ((fun->decl().type.numdim() > 0 || fun->maybe_returns_array()) &&
-        !sym->array_return())
+        !fun->return_array())
     {
         // We need to know the size of the returned array. Recursively analyze
         // the function.
@@ -1981,9 +1981,9 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     auto& val = call->val();
     val.ident = iEXPRESSION;
     val.tag = sym->tag;
-    if (sym->array_return()) {
+    if (fun->return_array()) {
         val.ident = iREFARRAY;
-        val.sym = sym->array_return();
+        val.sym = fun->return_array()->var->s;
         NeedsHeapAlloc(call);
     }
 
@@ -2605,8 +2605,8 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         return false;
     }
     /* see if this function already has a sub type (an array attached) */
-    auto sub = curfunc->array_return();
-    assert(sub == nullptr || sub->ident == iREFARRAY);
+    auto sub = fun->return_array() ? fun->return_array()->var : nullptr;
+    assert(sub == nullptr || sub->s->ident == iREFARRAY);
     if (sc_->returns_value()) {
         int retarray = (v.ident == iARRAY || v.ident == iREFARRAY);
         /* there was an earlier "return" statement in this function */
@@ -2614,7 +2614,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
             report(stmt, 79); /* mixing "return array;" and "return value;" */
             return false;
         }
-        if (retarray && sc_->func_node()->is_public()) {
+        if (retarray && fun->is_public()) {
             report(stmt, 90) << sc_->func_node()->name(); /* public function may not return array */
             return false;
         }
@@ -2635,8 +2635,9 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 }
 
 bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
-    symbol* curfunc = sc_->func();
-    symbol* sub = curfunc->array_return();
+    FunctionDecl* curfunc = sc_->func_node();
+    assert(curfunc == curfunc->canonical());
+
     const auto& val = stmt->expr()->val();
     symbol* sym = val.sym;
 
@@ -2644,7 +2645,10 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     array = {};
     array.ident = iARRAY;
 
-    if (sub) {
+    if (curfunc->return_array()) {
+        VarDecl* sub_decl = curfunc->return_array()->var;
+        auto sub = sub_decl->s;
+
         assert(sub->ident == iREFARRAY);
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
@@ -2663,7 +2667,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     } else {
         // this function does not yet have an array attached; clone the
         // returned symbol beneath the current function
-        sub = sym;
+        auto sub = sym;
         for (int i = 0; i < sub->dim_count(); i++) {
             if (!sub->dim(i)) {
                 report(stmt, 128);
@@ -2688,16 +2692,18 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         //   ...
         //   base + ((n-1)+3)*sizeof(cell) == last argument of the function
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
-        assert(curfunc != NULL);
-        int argcount = (int)curfunc->decl->as<FunctionDecl>()->canonical()->args().size();
+        int argcount = (int)curfunc->args().size();
 
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         auto var = new VarDecl(stmt->pos(), sc_->func_node()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
         sub = NewVariable(var, (argcount + 3) * sizeof(cell), iREFARRAY,
-                          sGLOBAL, curfunc->tag, dim, array.numdim(),
+                          sGLOBAL, curfunc->type().tag(), dim, array.numdim(),
                           array.enum_struct_tag());
-        curfunc->set_array_return(sub);
+
+        auto info = new FunctionDecl::ReturnArrayInfo;
+        info->var = var;
+        curfunc->set_return_array(info);
     }
 
     auto func_node = sc_->func_node();
@@ -2706,7 +2712,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     else if (func_node->type().numdim() != array.numdim())
         report(stmt, 413);
 
-    array.set_tag(sub->tag);
+    array.set_tag(curfunc->return_array()->var->type().tag());
     array.has_postdims = true;
     return true;
 }
