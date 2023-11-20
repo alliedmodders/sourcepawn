@@ -244,7 +244,7 @@ class Semantics final
 
     void DeduceLiveness();
     void DeduceMaybeUsed();
-    bool TestSymbol(symbol* sym, bool testconst);
+    bool TestSymbol(Decl* sym, bool testconst);
     bool TestSymbols(SymbolScope* scope, bool testconst);
 
     void CheckVoidDecl(const typeinfo_t* type, int variable);

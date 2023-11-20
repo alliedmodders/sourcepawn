@@ -32,6 +32,7 @@
 
 namespace sp {
 
+#if 0
 void AddGlobal(CompileContext& cc, symbol* sym)
 {
     assert(sym->vclass() == sGLOBAL);
@@ -39,6 +40,7 @@ void AddGlobal(CompileContext& cc, symbol* sym)
     auto scope = cc.globals();
     scope->AddChain(sym->decl());
 }
+#endif
 
 void markusage(Decl* decl, int usage) {
     if (auto var = decl->as<VarDeclBase>()) {
@@ -76,22 +78,16 @@ void markusage(Decl* decl, int usage) {
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
-void markusage(symbol* sym, int usage) {
-    markusage(sym->decl(), usage);
-}
-
-symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
+symbol::symbol(cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : vclass_((char)symvclass),
    tag_(symtag),
    ident_(symident),
    is_const_(false),
    semantic_tag_(0),
    dim_data_(nullptr),
-   decl_(decl),
    addr_(symaddr)
 {
     assert(ident_ != iINVALID);
-    assert(decl);
 }
 
 void symbol::set_dim_count(int dim_count) {
@@ -108,7 +104,7 @@ symbol*
 NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag, int dim[],
             int numdim, int semantic_tag)
 {
-    symbol* sym = new symbol(decl, addr, ident, vclass, tag);
+    symbol* sym = new symbol(addr, ident, vclass, tag);
 
     if (numdim) {
         sym->set_dim_count(numdim);
@@ -209,7 +205,7 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
 static symbol*
 NewConstant(Decl* decl, const token_pos_t& pos, cell val, int vclass, int tag)
 {
-    return new symbol(decl, val, iCONSTEXPR, vclass, tag);
+    return new symbol(val, iCONSTEXPR, vclass, tag);
 }
 
 symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, cell val,

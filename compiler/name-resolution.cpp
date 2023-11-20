@@ -462,7 +462,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(this, 0, iVARIABLE, sGLOBAL, type_.tag());
+        sym_ = new symbol(0, iVARIABLE, sGLOBAL, type_.tag());
         sym_->set_is_const(true);
     } else {
         IdentifierKind ident = type_.ident;
@@ -474,7 +474,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
                            type_.numdim(), type_.enum_struct_tag());
 
         if (ident == iVARARGS)
-            markusage(sym_, uREAD);
+            markusage(this, uREAD);
 
         sym_->set_is_const(type_.is_const);
     }
@@ -746,7 +746,7 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
         other->proto_or_impl_ = this;
     } else {
         auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym_ = new symbol(this, 0, iFUNCTN, scope, 0);
+        sym_ = new symbol(0, iFUNCTN, scope, 0);
 
         DefineSymbol(sc, this, scope);
     }
@@ -797,7 +797,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
-        sym_ = new symbol(this, 0, iFUNCTN, sGLOBAL, 0);
+        sym_ = new symbol(0, iFUNCTN, sGLOBAL, 0);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
@@ -872,7 +872,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
             ok &= arg->Bind(sc);
 
         if (this_tag_ && ok)
-            markusage(args_[0]->sym(), uREAD);
+            markusage(args_[0], uREAD);
     }
 
     if ((is_native_ || is_public_ || is_forward_) && decl_.type.numdim() > 0)
@@ -1107,7 +1107,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
         field->set_offset(position);
 
-        symbol* child = new symbol(field, position, field->type().ident, sGLOBAL,
+        symbol* child = new symbol(position, field->type().ident, sGLOBAL,
                                    field->type().semantic_tag());
         if (field->type().numdim()) {
             child->set_dim_count(1);
@@ -1134,7 +1134,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(decl->name());
 
-        auto sym = new symbol(decl, 0, iFUNCTN, sGLOBAL, 0);
+        auto sym = new symbol(0, iFUNCTN, sGLOBAL, 0);
         decl->set_sym(sym);
     }
 
@@ -1198,7 +1198,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         sym_->set_ident(iMETHODMAP);
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(this, 0, iMETHODMAP, sGLOBAL, tag_);
+        sym_ = new symbol(0, iMETHODMAP, sGLOBAL, tag_);
         cc.globals()->Add(this);
     }
 

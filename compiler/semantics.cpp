@@ -742,7 +742,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
                 report(expr, 152) << accessor->name();
                 return false;
             }
-            markusage(accessor->setter()->sym(), uREAD);
+            markusage(accessor->setter(), uREAD);
             if (accessor->getter() && token != '=')
                 markusage(accessor->getter(), uREAD);
         }
@@ -1327,7 +1327,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return false;
         }
 
-        funcenum_t* fe = funcenum_for_symbol(cc_, sym);
+        funcenum_t* fe = funcenum_for_symbol(cc_, fun);
 
         // New-style "closure".
         val.ident = iEXPRESSION;
@@ -1651,7 +1651,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
 
     val.ident = iFUNCTN;
     val.sym = method;
-    markusage(method->sym(), uREAD);
+    markusage(method, uREAD);
     return true;
 }
 
@@ -1817,7 +1817,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Hack. Remove when we can.
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
-    auto sym = new symbol(var, field->offset(), ti.ident, var->vclass(), ti.tag());
+    auto sym = new symbol(field->offset(), ti.ident, var->vclass(), ti.tag());
     if (ti.dim.size()) {
         sym->set_dim_count(ti.dim.size());
         for (int i = 0; i < ti.dim.size(); i++)
@@ -2005,7 +2005,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         }
     }
 
-    markusage(sym, uREAD);
+    markusage(fun, uREAD);
 
     auto& val = call->val();
     val.ident = iEXPRESSION;
@@ -2475,12 +2475,12 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
  *  The function returns whether there is an "entry" point for the file.
  *  This flag will only be 1 when browsing the global symbol table.
  */
-bool Semantics::TestSymbol(symbol* sym, bool testconst) {
+bool Semantics::TestSymbol(Decl* sym, bool testconst) {
     bool entry = false;
     switch (sym->ident()) {
         case iFUNCTN:
         {
-            auto canonical = sym->decl()->as<FunctionDecl>()->canonical();
+            auto canonical = sym->as<FunctionDecl>()->canonical();
             if (canonical->is_public() || canonical->name()->str() == uMAINFUNC)
                 entry = true; /* there is an entry point */
             if (!(canonical->maybe_used() || canonical->is_live()) &&
@@ -2504,7 +2504,7 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             break;
         }
         case iCONSTEXPR: {
-            auto var = sym->decl()->as<VarDeclBase>();
+            auto var = sym->as<VarDeclBase>();
             if (testconst && var && !var->is_read())
                 report(var, 203) << var->name(); /* symbol isn't used: ... */
             break;
@@ -2514,12 +2514,12 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
             // Ignore usage on methodmaps and enumstructs.
             break;
         default: {
-            auto var = sym->decl()->as<VarDeclBase>();
+            auto var = sym->as<VarDeclBase>();
             /* a variable */
             if (!var->is_stock() && !var->is_used() && !var->is_public()) {
-                report(sym->decl(), 203) << sym->decl()->name(); /* symbol isn't used (and not stock) */
+                report(sym, 203) << sym->name(); /* symbol isn't used (and not stock) */
             } else if (!var->is_stock() && !var->is_public() && !var->is_read()) {
-                report(sym->decl(), 204) << sym->decl()->name(); /* value assigned to symbol is never used */
+                report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
             }
         }
     }
@@ -2529,9 +2529,7 @@ bool Semantics::TestSymbol(symbol* sym, bool testconst) {
 bool Semantics::TestSymbols(SymbolScope* root, bool testconst) {
     bool entry = false;
     root->ForEachSymbol([&](Decl* decl) -> void {
-        auto sym = decl->sym();
-        if (sym)
-            entry |= TestSymbol(sym, testconst);
+        entry |= TestSymbol(decl, testconst);
     });
     return entry;
 }
@@ -2804,7 +2802,7 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
         return false;
     }
 
-    markusage(map->dtor()->sym(), uREAD);
+    markusage(map->dtor(), uREAD);
 
     stmt->set_map(map);
     return true;
@@ -3485,7 +3483,7 @@ void Semantics::DeduceMaybeUsed() {
 
 void DeleteStmt::ProcessUses(SemaContext& sc) {
     expr_->MarkAndProcessUses(sc);
-    markusage(map_->dtor()->sym(), uREAD);
+    markusage(map_->dtor(), uREAD);
 }
 
 } // namespace sp
