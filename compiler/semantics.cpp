@@ -734,7 +734,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             markusage(sym, uWRITTEN);
 
             // If it's an outparam, also mark it as read.
-            if (sym->vclass == sARGUMENT && (sym->ident == iREFERENCE || sym->ident == iREFARRAY))
+            if (sym->vclass() == sARGUMENT && (sym->ident == iREFERENCE || sym->ident == iREFARRAY))
                 markusage(sym, uREAD);
         } else if (auto* accessor = left->val().accessor()) {
             if (!accessor->setter()) {
@@ -1814,7 +1814,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     }
 
     // Hack. Remove when we can.
-    auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass, false,
+    auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
     auto sym = new symbol(var, field->offset(), ti.ident, var->vclass(), ti.tag());
     if (ti.dim.size()) {
@@ -3396,7 +3396,7 @@ void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         symbol* sym = expr->decl()->sym();
-        assert(sym->vclass == sGLOBAL);
+        assert(sym->vclass() == sGLOBAL);
 
         def->sym = sym;
     } else {

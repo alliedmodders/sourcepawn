@@ -34,7 +34,7 @@ namespace sp {
 
 void AddGlobal(CompileContext& cc, symbol* sym)
 {
-    assert(sym->vclass == sGLOBAL);
+    assert(sym->vclass() == sGLOBAL);
 
     auto scope = cc.globals();
     scope->AddChain(sym->decl());
@@ -67,7 +67,7 @@ void markusage(Decl* decl, int usage) {
     // The reference graph only contains outgoing edges to global or file-static
     // variables. Locals and such are computed by TestSymbols and don't need
     // special handling, there's no concept of "stock" there.
-    if (sym->vclass != sGLOBAL && sym->vclass != sSTATIC)
+    if (sym->vclass() != sGLOBAL && sym->vclass() != sSTATIC)
         return;
     if (sym->ident != iFUNCTN)
         return;
@@ -81,7 +81,7 @@ void markusage(symbol* sym, int usage) {
 }
 
 symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
- : vclass((char)symvclass),
+ : vclass_((char)symvclass),
    tag_(symtag),
    ident(symident),
    is_const(false),

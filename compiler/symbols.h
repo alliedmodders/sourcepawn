@@ -55,7 +55,8 @@ struct symbol : public PoolObject
 {
     symbol(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag);
 
-    char vclass;   /* sLOCAL if "addr" refers to a local symbol */
+    char vclass() const { return vclass_; }
+    char vclass_;   /* sLOCAL if "addr" refers to a local symbol */
     int tag() const { return tag_; }
     void set_tag(int tag) { tag_ = tag; }
     int tag_;       /* tagname id */
@@ -119,7 +120,7 @@ struct value {
             case iCONSTEXPR:
                 return true;
             case iREFERENCE:
-                return sym->vclass == sARGUMENT || sym->vclass == sLOCAL;
+                return sym->vclass() == sARGUMENT || sym->vclass() == sLOCAL;
             default:
                 return false;
         }

@@ -151,12 +151,12 @@ class SmxAssemblyBuffer : public ByteBuffer
         emit(OP_LOAD_S_ALT, sym->addr());
     } else {
       if (reg == sPRI) {
-        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
+        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
           emit(OP_ADDR_PRI, sym->addr());
         else
           emit(OP_CONST_PRI, sym->addr());
       } else {
-        if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT)
+        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
           emit(OP_ADDR_ALT, sym->addr());
         else
           emit(OP_CONST_ALT, sym->addr());
@@ -166,9 +166,9 @@ class SmxAssemblyBuffer : public ByteBuffer
 
   void copyarray(symbol* sym, cell size) {
     if (sym->ident == iREFARRAY) {
-      assert(sym->vclass == sLOCAL || sym->vclass == sARGUMENT); // symbol must be stack relative
+      assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
       emit(OP_LOAD_S_ALT, sym->addr());
-    } else if (sym->vclass == sLOCAL || sym->vclass == sARGUMENT) {
+    } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
       emit(OP_ADDR_ALT, sym->addr());
     } else {
       emit(OP_CONST_ALT, sym->addr());

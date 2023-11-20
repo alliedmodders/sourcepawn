@@ -512,7 +512,7 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
         return false;
     }
 
-    assert(sym->vclass == sGLOBAL);
+    assert(sym->vclass() == sGLOBAL);
 
     if (sym->ident != iARRAY && sym->ident != iREFARRAY) {
         report(expr->pos(), 134) << type_to_name(type_.tag()) << "array";
