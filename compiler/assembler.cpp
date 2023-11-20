@@ -130,7 +130,7 @@ class RttiBuilder
 
     void finish(SmxBuilder& builder);
     void add_method(FunctionDecl* fun);
-    void add_native(symbol* sym);
+    void add_native(FunctionDecl* sym);
 
   private:
     uint32_t add_enum(Type* type);
@@ -425,12 +425,10 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
         dbg_methods_->add(debug);
 }
 
-void
-RttiBuilder::add_native(symbol* sym)
-{
+void RttiBuilder::add_native(FunctionDecl* fun) {
     smx_rtti_native& native = natives_->add();
-    native.name = names_->add(sym->decl()->name());
-    native.signature = encode_signature(sym->decl()->as<FunctionDecl>());
+    native.name = names_->add(fun->name());
+    native.signature = encode_signature(fun);
 }
 
 uint32_t
@@ -887,11 +885,11 @@ Assembler::Assemble(SmxByteBuffer* buffer)
 
     // Populate the native table.
     for (size_t i = 0; i < cg_.native_list().size(); i++) {
-        symbol* sym = cg_.native_list()[i];
+        FunctionDecl* sym = cg_.native_list()[i];
         assert(size_t(sym->addr()) == i);
 
         sp_file_natives_t& entry = natives->add();
-        entry.name = names->add(sym->decl()->name());
+        entry.name = names->add(sym->name());
 
         rtti.add_native(sym);
     }

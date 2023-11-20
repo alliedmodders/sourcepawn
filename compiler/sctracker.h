@@ -48,7 +48,7 @@ struct funcenum_t : public PoolObject
  * Function enumeration tags
  */
 funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous);
-funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym);
+funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym);
 functag_t* functag_from_tag(int tag);
 
 } // namespace sp

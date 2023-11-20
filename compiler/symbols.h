@@ -53,7 +53,7 @@ struct token_pos_t;
  */
 struct symbol : public PoolObject
 {
-    symbol(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag);
+    symbol(cell addr, IdentifierKind ident, int vclass, int tag);
 
     char vclass() const { return vclass_; }
     char vclass_;   /* sLOCAL if "addr" refers to a local symbol */
@@ -77,9 +77,6 @@ struct symbol : public PoolObject
     int semantic_tag_;
 
     int* dim_data_;     /* -1 = dim count, 0..n = dim sizes */
-
-    Decl* decl() const { return decl_; }
-    Decl* decl_;
 
     int dim_count() const { return dim_data_ ? dim_data_[-1] : 0; }
     void set_dim_count(int dim_count);
@@ -175,14 +172,11 @@ struct value {
     }
 };
 
-void AddGlobal(CompileContext& cc, symbol* sym);
-
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
 symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, cell val,
                        int vclass, int tag);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
-void markusage(symbol* sym, int usage);
 void markusage(Decl* decl, int usage);
 symbol* NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);

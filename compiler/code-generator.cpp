@@ -1860,10 +1860,6 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
         EmitFunctionDecl(method);
 }
 
-void CodeGenerator::EmitCall(symbol* fun, cell nargs) {
-    return EmitCall(fun->decl()->as<FunctionDecl>()->canonical(), nargs);
-}
-
 void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
     assert(fun->is_live());
 
@@ -1871,7 +1867,7 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
     if (fun->is_native()) {
         if (sym->addr() < 0) {
             sym->setAddr((cell)native_list_.size());
-            native_list_.emplace_back(sym);
+            native_list_.emplace_back(fun);
         }
         __ emit(OP_SYSREQ_N, sym->addr(), nargs);
     } else {

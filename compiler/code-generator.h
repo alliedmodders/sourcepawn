@@ -47,7 +47,7 @@ class CodeGenerator final
     void LinkPublicFunction(FunctionDecl* decl, uint32_t id);
 
     const tr::vector<tr::string>& debug_strings() const { return debug_strings_; }
-    const tr::vector<symbol*>& native_list() const { return native_list_; }
+    const tr::vector<FunctionDecl*>& native_list() const { return native_list_; }
 
     const uint8_t* code_ptr() const { return asm_.bytes(); }
     uint32_t code_size() const { return (uint32_t)asm_.size(); }
@@ -103,7 +103,6 @@ class CodeGenerator final
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitUserOp(const UserOperation& user_op, value* lval);
     void EmitCall(FunctionDecl* fun, cell nargs);
-    void EmitCall(symbol* fun, cell nargs);
     void EmitInc(const value* lval);
     void EmitDec(const value* lval);
     void InvokeGetter(MethodmapPropertyDecl* method);
@@ -224,7 +223,7 @@ class CodeGenerator final
     int max_script_memory_ = 0;
 
     tr::vector<tr::string> debug_strings_;
-    tr::vector<symbol*> native_list_;
+    tr::vector<FunctionDecl*> native_list_;
     sp::SmxAssemblyBuffer asm_;
     DataQueue data_;
 
