@@ -463,7 +463,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
         sym_ = new symbol(this, 0, iVARIABLE, sGLOBAL, type_.tag());
-        sym_->is_const = true;
+        sym_->set_is_const(true);
     } else {
         IdentifierKind ident = type_.ident;
         if (vclass_ == sARGUMENT && ident == iARRAY)
@@ -476,7 +476,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         if (ident == iVARARGS)
             markusage(sym_, uREAD);
 
-        sym_->is_const = type_.is_const;
+        sym_->set_is_const(type_.is_const);
     }
 
     if (is_public_)
