@@ -2593,13 +2593,12 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     sc_->set_always_returns();
     sc_->loop_has_return() = true;
 
-    auto fun = sc_->func_node();
-    symbol* curfunc = sc_->func();
+    auto fun = sc_->func();
 
     auto expr = stmt->expr();
     if (!expr) {
         if (fun->MustReturnValue())
-            ReportFunctionReturnError(fun, curfunc);
+            ReportFunctionReturnError(fun);
         if (sc_->void_return())
             return true;
         sc_->set_void_return(stmt);
@@ -2622,7 +2621,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     AutoErrorPos aep(expr->pos());
 
-    if (curfunc->tag() == types_->tag_void()) {
+    if (fun->tag() == types_->tag_void()) {
         report(stmt, 88);
         return false;
     }
@@ -2643,7 +2642,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
             return false;
         }
         if (retarray && fun->is_public()) {
-            report(stmt, 90) << sc_->func_node()->name(); /* public function may not return array */
+            report(stmt, 90) << sc_->func()->name(); /* public function may not return array */
             return false;
         }
     } else {
@@ -2651,9 +2650,9 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     }
 
     /* check tagname with function tagname */
-    assert(curfunc != nullptr);
+    assert(fun != nullptr);
     if (!matchtag_string(v.ident, v.tag))
-        matchtag(curfunc->tag(), v.tag, TRUE);
+        matchtag(fun->tag(), v.tag, TRUE);
 
     if (v.ident == iARRAY || v.ident == iREFARRAY) {
         if (!CheckArrayReturnStmt(stmt))
@@ -2663,7 +2662,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 }
 
 bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
-    FunctionDecl* curfunc = sc_->func_node();
+    FunctionDecl* curfunc = sc_->func();
     assert(curfunc == curfunc->canonical());
 
     const auto& val = stmt->expr()->val();
@@ -2723,7 +2722,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         int argcount = (int)curfunc->args().size();
 
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
-        auto var = new VarDecl(stmt->pos(), sc_->func_node()->name(), array, sGLOBAL, false,
+        auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
         auto sub_sym = NewVariable(var, (argcount + 3) * sizeof(cell), iREFARRAY,
                                    sGLOBAL, curfunc->type().tag(), dim, array.numdim(),
@@ -2735,7 +2734,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         curfunc->set_return_array(info);
     }
 
-    auto func_node = sc_->func_node();
+    auto func_node = sc_->func();
     if (func_node->type().numdim() == 0)
         report(stmt, 246) << func_node->name();
     else if (func_node->type().numdim() != array.numdim())
@@ -3020,7 +3019,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     return true;
 }
 
-void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
+void ReportFunctionReturnError(FunctionDecl* decl) {
     if (decl->as<MemberFunctionDecl>()) {
         // This is a member function, ignore compatibility checks and go
         // straight to erroring.
@@ -3034,10 +3033,10 @@ void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
     // we allow "public int" to warn instead of error.
     //
     // :TODO: stronger enforcement when function result is used from call
-    if (sym->tag() == 0) {
+    if (decl->tag() == 0) {
         report(decl, 209) << decl->name();
-    } else if (types->find(sym->tag())->isEnum() || sym->tag() == types->tag_bool() ||
-               sym->tag() == types->tag_float() || !decl->retvalue_used())
+    } else if (types->find(decl->tag())->isEnum() || decl->tag() == types->tag_bool() ||
+               decl->tag() == types->tag_float() || !decl->retvalue_used())
     {
         report(decl, 242) << decl->name();
     } else {
@@ -3066,7 +3065,7 @@ bool Semantics::CheckFunctionDecl(FunctionDecl* info) {
 }
 
 bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
-    SemaContext sc(*sc_, info->sym(), info);
+    SemaContext sc(*sc_, info);
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
     auto& decl = info->decl();
@@ -3148,12 +3147,11 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 }
 
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
-    auto sym = info->sym();
     if (info->returns_value() && info->always_returns())
         return;
 
     if (info->MustReturnValue())
-        ReportFunctionReturnError(info, sym);
+        ReportFunctionReturnError(info);
 
         // Synthesize a return statement.
     std::vector<Stmt*> stmts = {
@@ -3243,7 +3241,7 @@ FunctionDecl::ProcessUses(SemaContext& outer_sc)
     if (!body_)
         return;
 
-    SemaContext sc(outer_sc, sym_, this);
+    SemaContext sc(outer_sc, this);
 
     for (const auto& arg : args_)
         arg->ProcessUses(sc);

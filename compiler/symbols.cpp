@@ -55,7 +55,7 @@ void markusage(Decl* decl, int usage) {
     if (!cc.sema())
         return;
 
-    auto parent_func = cc.sema()->func_node();
+    auto parent_func = cc.sema()->func();
     if (!parent_func)
         return;
 
@@ -167,7 +167,7 @@ enum class NewNameStatus {
 static NewNameStatus GetNewNameStatus(SemaContext& sc, Atom* name, int vclass) {
     SymbolScope* scope;
     Decl* decl = nullptr;
-    if (sc.func_node() && sc.func_node()->is_native()) {
+    if (sc.func() && sc.func()->is_native()) {
         decl = sc.scope()->Find(name);
         scope = sc.scope();
     } else {

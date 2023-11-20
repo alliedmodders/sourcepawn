@@ -667,7 +667,7 @@ ReturnStmt::Bind(SemaContext& sc)
         if (auto decl = sym_expr->decl()) {
             if (auto var = decl->as<VarDeclBase>()) {
                 if (var->type().ident == iARRAY || var->type().ident == iREFARRAY)
-                    sc.func_node()->set_maybe_returns_array();
+                    sc.func()->set_maybe_returns_array();
             }
         }
     }
@@ -847,7 +847,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (decl_.opertok)
         name_ = NameForOperator();
 
-    SemaContext sc(outer_sc, sym_, this);
+    SemaContext sc(outer_sc, this);
     auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {
         outer_sc.sema()->set_context(&outer_sc);
     });
