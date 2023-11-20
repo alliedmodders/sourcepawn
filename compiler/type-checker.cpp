@@ -35,7 +35,7 @@ TypeInfoFromSymbol(symbol* sym)
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         for (int i = 0; i < sym->dim_count(); i++)
             type.dim.emplace_back(sym->dim(i));
-        type.declared_tag = sym->semantic_tag;
+        type.declared_tag = sym->semantic_tag();
     }
     return type;
 }
