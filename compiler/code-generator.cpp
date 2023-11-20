@@ -1861,7 +1861,7 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
 }
 
 void CodeGenerator::EmitCall(symbol* fun, cell nargs) {
-    return EmitCall(fun->decl->as<FunctionDecl>()->canonical(), nargs);
+    return EmitCall(fun->decl()->as<FunctionDecl>()->canonical(), nargs);
 }
 
 void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
