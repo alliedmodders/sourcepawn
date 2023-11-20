@@ -187,7 +187,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
 
     markusage(decl, uREAD);
 
-    op->sym = decl->sym();
+    op->sym = decl;
     op->oper = oper;
     op->paramspassed = (oper == 0) ? 1 : numparam;
     op->savepri = savepri;
