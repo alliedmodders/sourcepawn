@@ -37,7 +37,7 @@ void AddGlobal(CompileContext& cc, symbol* sym)
     assert(sym->vclass == sGLOBAL);
 
     auto scope = cc.globals();
-    scope->AddChain(sym->decl);
+    scope->AddChain(sym->decl());
 }
 
 void markusage(Decl* decl, int usage) {
@@ -77,7 +77,7 @@ void markusage(Decl* decl, int usage) {
 }
 
 void markusage(symbol* sym, int usage) {
-    markusage(sym->decl, usage);
+    markusage(sym->decl(), usage);
 }
 
 symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
@@ -87,7 +87,7 @@ symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass,
    is_const(false),
    semantic_tag(0),
    dim_data(nullptr),
-   decl(decl),
+   decl_(decl),
    addr_(symaddr)
 {
     assert(ident != iINVALID);

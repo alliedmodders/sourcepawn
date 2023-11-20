@@ -429,8 +429,8 @@ void
 RttiBuilder::add_native(symbol* sym)
 {
     smx_rtti_native& native = natives_->add();
-    native.name = names_->add(sym->decl->name());
-    native.signature = encode_signature(sym->decl->as<FunctionDecl>());
+    native.name = names_->add(sym->decl()->name());
+    native.signature = encode_signature(sym->decl()->as<FunctionDecl>());
 }
 
 uint32_t
@@ -891,7 +891,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
         assert(size_t(sym->addr()) == i);
 
         sp_file_natives_t& entry = natives->add();
-        entry.name = names->add(sym->decl->name());
+        entry.name = names->add(sym->decl()->name());
 
         rtti.add_native(sym);
     }

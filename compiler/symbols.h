@@ -67,7 +67,9 @@ struct symbol : public PoolObject
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
-    Decl* decl;
+
+    Decl* decl() const { return decl_; }
+    Decl* decl_;
 
     int dim_count() const { return dim_data ? dim_data[-1] : 0; }
     void set_dim_count(int dim_count);

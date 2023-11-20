@@ -56,7 +56,7 @@ funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous) {
 }
 
 funcenum_t* funcenum_for_symbol(CompileContext& cc, symbol* sym) {
-    FunctionDecl* fun = sym->decl->as<FunctionDecl>();
+    FunctionDecl* fun = sym->decl()->as<FunctionDecl>();
 
     functag_t* ft = new functag_t;
     ft->ret_tag = sym->tag;
