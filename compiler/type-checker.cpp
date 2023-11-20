@@ -29,7 +29,7 @@ TypeInfoFromSymbol(symbol* sym)
 {
     typeinfo_t type = {};
 
-    type.set_tag(sym->tag);
+    type.set_tag(sym->tag());
     type.is_const = sym->is_const;
     type.ident = sym->ident;
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {

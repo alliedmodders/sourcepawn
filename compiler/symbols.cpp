@@ -82,7 +82,7 @@ void markusage(symbol* sym, int usage) {
 
 symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : vclass((char)symvclass),
-   tag(symtag),
+   tag_(symtag),
    ident(symident),
    is_const(false),
    semantic_tag(0),
