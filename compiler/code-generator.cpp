@@ -97,7 +97,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < sym->dim_count(); i++)
-            string += ke::StringPrintf("%x:%x ", sym->semantic_tag, sym->dim(i));
+            string += ke::StringPrintf("%x:%x ", sym->semantic_tag(), sym->dim(i));
         string += "]";
     }
 

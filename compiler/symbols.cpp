@@ -85,7 +85,7 @@ symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass,
    tag_(symtag),
    ident(symident),
    is_const_(false),
-   semantic_tag(0),
+   semantic_tag_(0),
    dim_data(nullptr),
    decl_(decl),
    addr_(symaddr)
@@ -114,7 +114,7 @@ NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag, in
         sym->set_dim_count(numdim);
         for (int i = 0; i < numdim; i++)
             sym->set_dim(i, dim[i]);
-        sym->semantic_tag = semantic_tag;
+        sym->set_semantic_tag(semantic_tag);
     }
     return sym;
 }

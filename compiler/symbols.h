@@ -70,7 +70,10 @@ struct symbol : public PoolObject
     bool is_const_ : 1;
     void set_is_const(bool is_const) { is_const_ = is_const; }
 
-    int semantic_tag;
+    int semantic_tag() const { return semantic_tag_; }
+    void set_semantic_tag(int semantic_tag) { semantic_tag_ = semantic_tag; }
+    int semantic_tag_;
+
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
 
     Decl* decl() const { return decl_; }
