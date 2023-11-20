@@ -61,7 +61,9 @@ struct symbol : public PoolObject
     void set_tag(int tag) { tag_ = tag; }
     int tag_;       /* tagname id */
 
-    IdentifierKind ident : 6;    /* see below for possible values */
+    IdentifierKind ident() const { return ident_; }
+    void set_ident(IdentifierKind ident) { ident_ = ident; }
+    IdentifierKind ident_ : 6;    /* see below for possible values */
 
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file

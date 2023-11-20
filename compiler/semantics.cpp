@@ -160,7 +160,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     const auto& type = decl->type();
 
     // Constants are checked during binding.
-    if (sym->ident == iCONSTEXPR)
+    if (sym->ident() == iCONSTEXPR)
         return true;
 
     if (types_->find(sym->tag())->kind() == TypeKind::Struct)
@@ -172,7 +172,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (type.ident == iARRAY || type.ident == iREFARRAY) {
         if (!CheckArrayDeclaration(decl))
             return false;
-        if (decl->vclass() == sLOCAL && sym->ident == iREFARRAY)
+        if (decl->vclass() == sLOCAL && sym->ident() == iREFARRAY)
             pending_heap_allocation_ = true;
         return true;
     }
@@ -286,13 +286,13 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
 
         auto sym = var->sym();
         if (arg->type.ident == iVARIABLE) {
-            if (sym->ident != iVARIABLE) {
+            if (sym->ident() != iVARIABLE) {
                 report(expr->pos(), 405);
                 return false;
             }
             matchtag(arg->type.tag(), sym->tag(), MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
-            if (sym->ident != iARRAY) {
+            if (sym->ident() != iARRAY) {
                 report(expr->pos(), 405);
                 return false;
             }
@@ -734,7 +734,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             markusage(sym, uWRITTEN);
 
             // If it's an outparam, also mark it as read.
-            if (sym->vclass() == sARGUMENT && (sym->ident == iREFERENCE || sym->ident == iREFARRAY))
+            if (sym->vclass() == sARGUMENT && (sym->ident() == iREFERENCE || sym->ident() == iREFARRAY))
                 markusage(sym, uREAD);
         } else if (auto* accessor = left->val().accessor()) {
             if (!accessor->setter()) {
@@ -1296,19 +1296,19 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
     auto sym = decl->sym();
     auto& val = expr->val();
-    val.ident = sym->ident;
+    val.ident = sym->ident();
     val.sym = sym;
 
     // Don't expose the tag of old enumroots.
     Type* type = types_->find(sym->tag());
-    if (decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
+    if (decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident() == iCONSTEXPR) {
         val.tag = 0;
         report(expr, 174) << decl->name();
     } else {
         val.tag = sym->tag();
     }
 
-    if (sym->ident == iCONSTEXPR)
+    if (sym->ident() == iCONSTEXPR)
         val.set_constval(sym->addr());
 
     if (auto fun = sym->decl()->as<FunctionDecl>()) {
@@ -1337,7 +1337,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         fun->set_is_callback();
     }
 
-    switch (sym->ident) {
+    switch (sym->ident()) {
         case iVARIABLE:
         case iREFERENCE:
             expr->set_lvalue(true);
@@ -1449,7 +1449,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         report(base, 29);
         return false;
     }
-    if (base_val.sym->ident != iARRAY && base_val.sym->ident != iREFARRAY) {
+    if (base_val.sym->ident() != iARRAY && base_val.sym->ident() != iREFARRAY) {
         report(base, 28) << base_val.sym->decl()->name();
         return false;
     }
@@ -1529,13 +1529,13 @@ IndexExpr::ProcessUses(SemaContext& sc)
 
 bool Semantics::CheckThisExpr(ThisExpr* expr) {
     auto sym = expr->decl()->sym();
-    assert(sym->ident == iREFARRAY || sym->ident == iVARIABLE);
+    assert(sym->ident() == iREFARRAY || sym->ident() == iVARIABLE);
 
     auto& val = expr->val();
-    val.ident = sym->ident;
+    val.ident = sym->ident();
     val.sym = sym;
     val.tag = sym->tag();
-    expr->set_lvalue(sym->ident != iREFARRAY);
+    expr->set_lvalue(sym->ident() != iREFARRAY);
     return true;
 }
 
@@ -1875,7 +1875,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     }
     markusage(sym, uREAD);
 
-    if (sym->ident == iCONSTEXPR) {
+    if (sym->ident() == iCONSTEXPR) {
         report(expr, 39); // constant symbol has no size
         return false;
     }
@@ -1883,11 +1883,11 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     auto& val = expr->val();
     val.set_constval(1);
 
-    if (sym->ident == iARRAY || sym->ident == iREFARRAY || sym->ident == iENUMSTRUCT) {
+    if (sym->ident() == iARRAY || sym->ident() == iREFARRAY || sym->ident() == iENUMSTRUCT) {
         bool is_enum_struct = types_->find(sym->semantic_tag())->isEnumStruct();
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
-            if (sym->ident == iENUMSTRUCT || (level == sym->dim_count() - 1 && is_enum_struct)) {
+            if (sym->ident() == iENUMSTRUCT || (level == sym->dim_count() - 1 && is_enum_struct)) {
                 report(expr, 111) << sym->decl()->name();
                 return false;
             }
@@ -1895,7 +1895,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 
         Type* enum_type = nullptr;
         if (expr->suffix_token() == tDBLCOLON) {
-            if (sym->ident != iENUMSTRUCT) {
+            if (sym->ident() != iENUMSTRUCT) {
                 report(expr, 112) << sym->decl()->name();
                 return false;
             }
@@ -1928,7 +1928,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             return true;
         }
 
-        if (sym->ident == iENUMSTRUCT) {
+        if (sym->ident() == iENUMSTRUCT) {
             val.set_constval(sym->addr());
             return true;
         }
@@ -2475,7 +2475,7 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
  */
 bool Semantics::TestSymbol(symbol* sym, bool testconst) {
     bool entry = false;
-    switch (sym->ident) {
+    switch (sym->ident()) {
         case iFUNCTN:
         {
             auto canonical = sym->decl()->as<FunctionDecl>()->canonical();
@@ -2677,7 +2677,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         VarDecl* sub_decl = curfunc->return_array()->var;
         auto sub = sub_decl->sym();
 
-        assert(sub->ident == iREFARRAY);
+        assert(sub->ident() == iREFARRAY);
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
         if (sub->dim_count() != val.array_dim_count()) {
@@ -3255,7 +3255,7 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
     for (const auto& decl : stmt->symbols()) {
         decl->set_is_read();
 
-        switch (decl->sym()->ident) {
+        switch (decl->sym()->ident()) {
             case iVARIABLE:
             case iREFERENCE:
             case iARRAY:

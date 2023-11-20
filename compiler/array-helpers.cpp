@@ -514,7 +514,7 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
 
     assert(sym->vclass() == sGLOBAL);
 
-    if (sym->ident != iARRAY && sym->ident != iREFARRAY) {
+    if (sym->ident() != iARRAY && sym->ident() != iREFARRAY) {
         report(expr->pos(), 134) << type_to_name(type_.tag()) << "array";
         return false;
     }

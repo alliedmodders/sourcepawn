@@ -213,7 +213,7 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
     // If this enum is for a methodmap, forget the symbol so code below doesn't
     // build an enum struct.
-    if (enumsym && enumsym->ident == iMETHODMAP)
+    if (enumsym && enumsym->ident() == iMETHODMAP)
         enumsym = NULL;
 
     cell value = 0;
@@ -1066,7 +1066,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
     AutoErrorPos error_pos(pos_);
     root_ = DefineConstant(sc, this, pos_, 0, sGLOBAL, 0);
     root_->set_tag(sc.cc().types()->defineEnumStruct(name_, this)->tagid());
-    root_->ident = iENUMSTRUCT;
+    root_->set_ident(iENUMSTRUCT);
 
     std::unordered_set<Atom*> seen;
 
@@ -1195,7 +1195,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         }
 
         sym_ = ed->sym();
-        sym_->ident = iMETHODMAP;
+        sym_->set_ident(iMETHODMAP);
         ed->set_mm(this);
     } else {
         sym_ = new symbol(this, 0, iMETHODMAP, sGLOBAL, tag_);
