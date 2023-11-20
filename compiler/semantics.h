@@ -45,12 +45,11 @@ class SemaContext
         cc_.set_sema(this);
         scope_ = cc_.globals();
     }
-    SemaContext(SemaContext& parent, symbol* func, FunctionDecl* func_node)
+    SemaContext(SemaContext& parent, FunctionDecl* func)
       : cc_(parent.cc_),
         sema_(parent.sema()),
         scope_(parent.scope_),
         func_(func),
-        func_node_(func_node),
         preprocessing_(parent.preprocessing())
     {
         cc_prev_sc_ = cc_.sema();
@@ -101,8 +100,7 @@ class SemaContext
     bool warned_unreachable() const { return warned_unreachable_; }
     void set_warned_unreachable() { warned_unreachable_ = true; }
 
-    symbol* func() const { return func_; }
-    FunctionDecl* func_node() const { return func_node_; }
+    FunctionDecl* func() const { return func_; }
     Semantics* sema() const { return sema_; }
 
     SymbolScope* ScopeForAdd();
@@ -125,8 +123,7 @@ class SemaContext
     Semantics* sema_ = nullptr;
     SymbolScope* scope_ = nullptr;
     AutoCreateScope* scope_creator_ = nullptr;
-    symbol* func_ = nullptr;
-    FunctionDecl* func_node_ = nullptr;
+    FunctionDecl* func_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
@@ -306,7 +303,7 @@ class AutoCollectSemaFlow final
     bool old_value_;
 };
 
-void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym);
+void ReportFunctionReturnError(FunctionDecl* decl);
 bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);

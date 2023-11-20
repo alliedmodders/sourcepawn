@@ -181,7 +181,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
      *    fixed:operator+(fixed:a, fixed:b)
      *        return a + b
      */
-    if (decl == sc.func_node()) {
+    if (decl == sc.func()) {
         report(408);
     }
 
