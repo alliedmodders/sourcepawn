@@ -86,7 +86,7 @@ symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass,
    ident(symident),
    is_const_(false),
    semantic_tag_(0),
-   dim_data(nullptr),
+   dim_data_(nullptr),
    decl_(decl),
    addr_(symaddr)
 {
@@ -99,9 +99,9 @@ void symbol::set_dim_count(int dim_count) {
         return;
 
     auto& cc = CompileContext::get();
-    dim_data = cc.allocator().alloc<int>(dim_count + 1);
-    dim_data[0] = dim_count;
-    dim_data++;
+    dim_data_ = cc.allocator().alloc<int>(dim_count + 1);
+    dim_data_[0] = dim_count;
+    dim_data_++;
 }
 
 symbol*
