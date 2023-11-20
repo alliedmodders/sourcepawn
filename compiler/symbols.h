@@ -66,7 +66,9 @@ struct symbol : public PoolObject
     // Variable: the variable is defined in the source file.
     // Function: the function is defined ("implemented") in the source file
     // Constant: the symbol is defined in the source file.
-    bool is_const : 1;
+    bool is_const() const { return is_const_; }
+    bool is_const_ : 1;
+    void set_is_const(bool is_const) { is_const_ = is_const; }
 
     int semantic_tag;
     int* dim_data;     /* -1 = dim count, 0..n = dim sizes */

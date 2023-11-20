@@ -670,7 +670,7 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
 
     const auto& expr_val = expr->val();
     if (expr_val.ident != iACCESSOR) {
-        if (expr_val.sym->is_const) {
+        if (expr_val.sym->is_const()) {
             report(incdec, 22); /* assignment to const argument */
             return false;
         }
@@ -853,7 +853,7 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
     assert(left_val.sym || left_val.accessor());
 
     // may not change "constant" parameters
-    if (!expr->initializer() && left_val.sym && left_val.sym->is_const) {
+    if (!expr->initializer() && left_val.sym && left_val.sym->is_const()) {
         report(expr, 22);
         return false;
     }
@@ -2182,7 +2182,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
             // Always pass by reference.
             if (val->ident == iVARIABLE || val->ident == iREFERENCE) {
-                if (val->sym->is_const && !arg->type().is_const) {
+                if (val->sym->is_const() && !arg->type().is_const) {
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
                     if (!lvalue) {
@@ -2230,7 +2230,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            if (val->sym && val->sym->is_const && !arg->type().is_const) {
+            if (val->sym && val->sym->is_const() && !arg->type().is_const) {
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
@@ -2243,7 +2243,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            if (val->sym && val->sym->is_const && !arg->type().is_const) {
+            if (val->sym && val->sym->is_const() && !arg->type().is_const) {
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }

@@ -93,7 +93,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    sym->addr(), sym->tag(), symname, pc,
-                                   asm_.position(), sym->ident, sym->vclass(), (int)sym->is_const);
+                                   asm_.position(), sym->ident, sym->vclass(), (int)sym->is_const());
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < sym->dim_count(); i++)
@@ -1218,7 +1218,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
                     assert(lvalue);
                     /* treat a "const" variable passed to a function with a non-const
                      * "variable argument list" as a constant here */
-                    if (val.sym->is_const && !arg->type().is_const) {
+                    if (val.sym->is_const() && !arg->type().is_const) {
                         EmitRvalue(val);
                         __ setheap_pri();
                         TrackTempHeapAlloc(expr, 1);
@@ -1433,7 +1433,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
-    if (zap && v.sym && v.sym->is_const)
+    if (zap && v.sym && v.sym->is_const())
         zap = false;
 
     EmitExpr(expr);
