@@ -93,7 +93,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    sym->addr(), sym->tag(), symname, pc,
-                                   asm_.position(), sym->ident, sym->vclass, (int)sym->is_const);
+                                   asm_.position(), sym->ident, sym->vclass(), (int)sym->is_const);
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < sym->dim_count(); i++)
@@ -275,7 +275,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
         EmitPstruct(decl);
     } else {
         if (sym->ident != iCONSTEXPR) {
-            if (sym->vclass == sLOCAL)
+            if (sym->vclass() == sLOCAL)
                 EmitLocalVar(decl);
             else
                 EmitGlobalVar(decl);
@@ -1496,7 +1496,7 @@ CodeGenerator::EmitRvalue(value* lval)
             break;
         case iREFERENCE:
             assert(lval->sym);
-            assert(lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT);
+            assert(lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT);
             __ emit(OP_LREF_S_PRI, lval->sym->addr());
             break;
         case iACCESSOR:
@@ -1505,7 +1505,7 @@ CodeGenerator::EmitRvalue(value* lval)
             break;
         default:
             assert(lval->sym);
-            if (lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT)
+            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
               __ emit(OP_LOAD_S_PRI, lval->sym->addr());
             else
               __ emit(OP_LOAD_PRI, lval->sym->addr());
@@ -1525,7 +1525,7 @@ CodeGenerator::EmitStore(const value* lval)
             break;
         case iREFERENCE:
             assert(lval->sym);
-            assert(lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT);
+            assert(lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT);
             __ emit(OP_SREF_S_PRI, lval->sym->addr());
             break;
         case iACCESSOR:
@@ -1533,7 +1533,7 @@ CodeGenerator::EmitStore(const value* lval)
             break;
         default:
             assert(lval->sym);
-            if (lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT)
+            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
                 __ emit(OP_STOR_S_PRI, lval->sym->addr());
             else
                 __ emit(OP_STOR_PRI, lval->sym->addr());
@@ -2019,7 +2019,7 @@ void CodeGenerator::EmitInc(const value* lval)
             InvokeSetter(lval->accessor(), false);
             break;
         default:
-            if (lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT)
+            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
                 __ emit(OP_INC_S, lval->sym->addr());
             else
                 __ emit(OP_INC, lval->sym->addr());
@@ -2055,7 +2055,7 @@ void CodeGenerator::EmitDec(const value* lval)
             InvokeSetter(lval->accessor(), false);
             break;
         default:
-            if (lval->sym->vclass == sLOCAL || lval->sym->vclass == sARGUMENT)
+            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
                 __ emit(OP_DEC_S, lval->sym->addr());
             else
                 __ emit(OP_DEC, lval->sym->addr());
