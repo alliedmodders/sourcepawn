@@ -34,6 +34,7 @@
 #include "expressions.h"
 #include "sctracker.h"
 #include "symbols.h"
+#include "value-inl.h"
 
 using namespace sp;
 
@@ -517,7 +518,7 @@ CodeGenerator::EmitExpr(Expr* expr)
         case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
             if (e->decl()->sym()->ident() == iREFARRAY)
-                __ address(e->decl()->sym(), sPRI);
+                __ address(e->decl(), sPRI);
             break;
         }
         case ExprKind::StringExpr: {
@@ -1075,14 +1076,14 @@ CodeGenerator::EmitTernaryExpr(TernaryExpr* expr)
 void
 CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
 {
-    symbol* sym = expr->decl()->sym();
+    Decl* sym = expr->decl();
     switch (sym->ident()) {
         case iARRAY:
         case iREFARRAY:
             __ address(sym, sPRI);
             break;
         case iFUNCTN: {
-            auto fun = expr->decl()->as<FunctionDecl>();
+            auto fun = sym->as<FunctionDecl>();
             assert(fun == fun->canonical());
 
             assert(!fun->is_native());
@@ -1357,14 +1358,13 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     auto info = fun_->return_array();
     if (array.iv.empty()) {
         VarDecl* sub_decl = info->var;
-        symbol* sub = sub_decl->sym();
 
         // A much simpler copy can be emitted.
-        __ load_hidden_arg(fun_, sub, true);
+        __ load_hidden_arg(fun_, sub_decl, true);
 
         auto types = cc_.types();
-        cell size = sub->dim(0); // :todo: must be val
-        if (sub->tag() == types->tag_string())
+        cell size = sub_decl->dim(0); // :todo: must be val
+        if (sub_decl->tag() == types->tag_string())
             size = char_array_cells(size);
 
         __ emit(OP_MOVS, size * sizeof(cell));
@@ -1397,7 +1397,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     // add.c <iv-size * 4>      ; address to data
     // memcopy <data-size>
     __ emit(OP_PUSH_PRI);
-    __ load_hidden_arg(fun_, info->var->sym(), false);
+    __ load_hidden_arg(fun_, info->var, false);
     __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, 0, 0);
     __ emit(OP_MOVE_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));

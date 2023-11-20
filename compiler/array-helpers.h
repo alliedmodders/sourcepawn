@@ -39,6 +39,6 @@ bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* ini
 void BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
 void BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
 
-cell_t CalcArraySize(symbol* sym);
+cell_t CalcArraySize(Decl* sym);
 
 } // namespace sp

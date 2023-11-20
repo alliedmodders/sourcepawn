@@ -111,7 +111,7 @@ class SmxAssemblyBuffer : public ByteBuffer
     emit(OP_POP_ALT);
   }
 
-  void load_hidden_arg(FunctionDecl* fun, symbol* sym, bool save_pri) {
+  void load_hidden_arg(FunctionDecl* fun, VarDecl* sym, bool save_pri) {
     if (!fun->IsVariadic()) {
       address(sym, sALT);
       return;
@@ -143,7 +143,7 @@ class SmxAssemblyBuffer : public ByteBuffer
       emit(OP_POP_PRI);
   }
 
-  void address(symbol* sym, regid reg) {
+  void address(Decl* sym, regid reg) {
     if (sym->ident() == iREFARRAY || sym->ident() == iREFERENCE) {
       if (reg == sPRI)
         emit(OP_LOAD_S_PRI, sym->addr());
