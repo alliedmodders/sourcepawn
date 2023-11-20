@@ -311,7 +311,7 @@ ArraySizeResolver::ResolveDimExprs()
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
         } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym &&
-                   v.sym->decl()->as<EnumDecl>())
+                   v.sym->as<EnumDecl>())
         {
             report(expr->pos(), 153);
             return false;
@@ -470,9 +470,7 @@ FixedArrayValidator::Validate()
     return true;
 }
 
-cell
-CalcArraySize(symbol* sym)
-{
+cell CalcArraySize(Decl* sym) {
     auto types = CompileContext::get().types();
 
     cell size = 0;

@@ -290,6 +290,31 @@ class Decl : public Stmt
 
     virtual symbol* sym() const { return nullptr; }
 
+    int semantic_tag() const {
+        return sym()->semantic_tag();
+    }
+    cell addr() const {
+        return sym()->addr();
+    }
+    IdentifierKind ident() const {
+        return sym()->ident();
+    }
+    char vclass() const {
+        return sym()->vclass();
+    }
+    int tag() const {
+        return sym()->tag();
+    }
+    int dim_count() const {
+        return sym()->dim_count();
+    }
+    bool is_const() const {
+        return sym()->is_const();
+    }
+    int dim(int n) const {
+        return sym()->dim(n);
+    }
+
     Atom* name() const { return name_; }
 
   protected:

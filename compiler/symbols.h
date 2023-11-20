@@ -116,22 +116,12 @@ struct value {
     value() : ident(iINVALID), sym(nullptr), tag(0) {}
 
     IdentifierKind ident : 6;
-    symbol* sym;
+    Decl* sym;
     int tag;
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
-    bool canRematerialize() const {
-        switch (ident) {
-            case iVARIABLE:
-            case iCONSTEXPR:
-                return true;
-            case iREFERENCE:
-                return sym->vclass() == sARGUMENT || sym->vclass() == sLOCAL;
-            default:
-                return false;
-        }
-    }
+    bool canRematerialize() const;
 
     MethodmapPropertyDecl* accessor() const {
         if (ident != iACCESSOR)
@@ -150,7 +140,7 @@ struct value {
         ident = iCONSTEXPR;
         constval_ = val;
     }
-    void set_array(IdentifierKind ident, symbol* sym, int level) {
+    void set_array(IdentifierKind ident, Decl* sym, int level) {
         assert(ident == iARRAY || ident == iREFARRAY || ident == iARRAYCELL ||
                ident == iARRAYCHAR);
         this->ident = ident;
@@ -163,38 +153,11 @@ struct value {
         this->sym = nullptr;
         this->array_level_ = size;
     }
-    int array_size() const {
-        assert(ident == iARRAY || ident == iREFARRAY);
-        if (sym)
-            return sym->dim(array_level_);
-        return array_level_;
-    }
-    int array_level() const {
-        assert(ident == iARRAY || ident == iREFARRAY);
-        if (sym)
-            return array_level_;
-        return 0;
-    }
-    int array_dim_count() const {
-        if (ident == iARRAYCHAR || ident == iARRAYCELL)
-            return 1;
-        assert(ident == iARRAY || ident == iREFARRAY);
-        if (sym)
-            return sym->dim_count() - array_level_;
-        return 1;
-    }
-    int array_dim(int n) const {
-        if (ident == iARRAYCHAR || ident == iARRAYCELL)
-            return 0;
 
-        assert(ident == iARRAY || ident == iREFARRAY);
-
-        if (sym)
-            return sym->dim(array_level_ + n);
-
-        assert(n == 0);
-        return array_size();
-    }
+    int array_size() const;
+    int array_level() const;
+    int array_dim_count() const;
+    int array_dim(int n) const;
 
     union {
         // when ident == iACCESSOR
