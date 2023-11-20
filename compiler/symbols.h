@@ -74,20 +74,20 @@ struct symbol : public PoolObject
     void set_semantic_tag(int semantic_tag) { semantic_tag_ = semantic_tag; }
     int semantic_tag_;
 
-    int* dim_data;     /* -1 = dim count, 0..n = dim sizes */
+    int* dim_data_;     /* -1 = dim count, 0..n = dim sizes */
 
     Decl* decl() const { return decl_; }
     Decl* decl_;
 
-    int dim_count() const { return dim_data ? dim_data[-1] : 0; }
+    int dim_count() const { return dim_data_ ? dim_data_[-1] : 0; }
     void set_dim_count(int dim_count);
     int dim(int n) const {
         assert(n < dim_count());
-        return dim_data[n];
+        return dim_data_[n];
     }
     void set_dim(int n, int size) {
         assert(n < dim_count());
-        dim_data[n] = size;
+        dim_data_[n] = size;
     }
 
     int addr() const {
