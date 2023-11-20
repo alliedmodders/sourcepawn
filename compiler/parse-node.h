@@ -34,11 +34,13 @@
 
 namespace sp {
 
+class FunctionDecl;
+
 struct UserOperation
 {
     UserOperation() {}
 
-    symbol* sym = nullptr;
+    FunctionDecl* sym = nullptr;
     int oper = 0;
     int paramspassed;
     bool savepri;
