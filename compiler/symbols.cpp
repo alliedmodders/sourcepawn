@@ -69,7 +69,7 @@ void markusage(Decl* decl, int usage) {
     // special handling, there's no concept of "stock" there.
     if (sym->vclass() != sGLOBAL && sym->vclass() != sSTATIC)
         return;
-    if (sym->ident != iFUNCTN)
+    if (sym->ident() != iFUNCTN)
         return;
 
     assert(parent_func->canonical() == parent_func);
@@ -83,14 +83,14 @@ void markusage(symbol* sym, int usage) {
 symbol::symbol(Decl* decl, cell symaddr, IdentifierKind symident, int symvclass, int symtag)
  : vclass_((char)symvclass),
    tag_(symtag),
-   ident(symident),
+   ident_(symident),
    is_const_(false),
    semantic_tag_(0),
    dim_data_(nullptr),
    decl_(decl),
    addr_(symaddr)
 {
-    assert(ident != iINVALID);
+    assert(ident_ != iINVALID);
     assert(decl);
 }
 

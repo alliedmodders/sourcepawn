@@ -93,8 +93,8 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    sym->addr(), sym->tag(), symname, pc,
-                                   asm_.position(), sym->ident, sym->vclass(), (int)sym->is_const());
-    if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
+                                   asm_.position(), sym->ident(), sym->vclass(), (int)sym->is_const());
+    if (sym->ident() == iARRAY || sym->ident() == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < sym->dim_count(); i++)
             string += ke::StringPrintf("%x:%x ", sym->semantic_tag(), sym->dim(i));
@@ -274,7 +274,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
     if (cc_.types()->find(sym->tag())->kind() == TypeKind::Struct) {
         EmitPstruct(decl);
     } else {
-        if (sym->ident != iCONSTEXPR) {
+        if (sym->ident() != iCONSTEXPR) {
             if (sym->vclass() == sLOCAL)
                 EmitLocalVar(decl);
             else
@@ -294,13 +294,13 @@ CodeGenerator::EmitGlobalVar(VarDeclBase* decl)
 
     sym->setAddr(data_.dat_address());
 
-    if (sym->ident == iVARIABLE) {
+    if (sym->ident() == iVARIABLE) {
         assert(!init || init->right()->val().ident == iCONSTEXPR);
         if (init)
             data_.Add(init->right()->val().constval());
         else
             data_.Add(0);
-    } else if (sym->ident == iARRAY) {
+    } else if (sym->ident() == iARRAY) {
         ArrayData array;
         BuildArrayInitializer(decl, &array, data_.dat_address());
 
@@ -318,7 +318,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
     symbol* sym = decl->sym();
     BinaryExpr* init = decl->init();
 
-    if (sym->ident == iVARIABLE) {
+    if (sym->ident() == iVARIABLE) {
         markstack(decl, MEMUSE_STATIC, 1);
         sym->setAddr(-current_stack_ * sizeof(cell));
 
@@ -340,7 +340,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
         }
-    } else if (sym->ident == iARRAY) {
+    } else if (sym->ident() == iARRAY) {
         ArrayData array;
         BuildArrayInitializer(decl, &array, 0);
 
@@ -399,7 +399,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
 
         __ emit(OP_ADDR_PRI, sym->addr());
         __ emit(OP_INITARRAY_PRI, iv_addr, iv_size, non_filled, fill_size, fill_value);
-    } else if (sym->ident == iREFARRAY) {
+    } else if (sym->ident() == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
@@ -516,7 +516,7 @@ CodeGenerator::EmitExpr(Expr* expr)
         }
         case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
-            if (e->decl()->sym()->ident == iREFARRAY)
+            if (e->decl()->sym()->ident() == iREFARRAY)
                 __ address(e->decl()->sym(), sPRI);
             break;
         }
@@ -1076,7 +1076,7 @@ void
 CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
 {
     symbol* sym = expr->decl()->sym();
-    switch (sym->ident) {
+    switch (sym->ident()) {
         case iARRAY:
         case iREFARRAY:
             __ address(sym, sPRI);
@@ -1975,7 +1975,7 @@ CodeGenerator::EmitUserOp(const UserOperation& user_op, value* lval)
         default:
             assert(0);
     }
-    assert(user_op.sym->ident == iFUNCTN);
+    assert(user_op.sym->ident() == iFUNCTN);
     EmitCall(user_op.sym, user_op.paramspassed);
 
     if (user_op.savepri || user_op.savealt)
