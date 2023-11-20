@@ -428,7 +428,7 @@ ConstDecl::Bind(SemaContext& sc)
     matchtag(type_.tag(), tag, 0);
 
     sym_->setAddr(value);
-    sym_->tag = type_.tag();
+    sym_->set_tag(type_.tag());
     return true;
 }
 
@@ -803,7 +803,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     // don't set or override the return type when we see the public
     // implementation. Note that args are checked similarly in BindArgs.
     if (!prototype()->is_forward() || is_forward_) {
-        sym_->tag = decl_.type.tag();
+        sym_->set_tag(decl_.type.tag());
         explicit_return_type_ = decl_.type.is_new;
     }
 
@@ -1065,7 +1065,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
     AutoErrorPos error_pos(pos_);
     root_ = DefineConstant(sc, this, pos_, 0, sGLOBAL, 0);
-    root_->tag = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
+    root_->set_tag(sc.cc().types()->defineEnumStruct(name_, this)->tagid());
     root_->ident = iENUMSTRUCT;
 
     std::unordered_set<Atom*> seen;
@@ -1077,7 +1077,7 @@ EnumStructDecl::EnterNames(SemaContext& sc)
 
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
-        if (field->type().semantic_tag() == root_->tag) {
+        if (field->type().semantic_tag() == root_->tag()) {
             report(field->pos(), 87) << name_;
             continue;
         }
@@ -1157,7 +1157,7 @@ EnumStructDecl::Bind(SemaContext& sc)
             continue;
 
         fun->set_name(inner_name);
-        fun->set_this_tag(root_->tag);
+        fun->set_this_tag(root_->tag());
         fun->Bind(sc);
     }
     return errors.ok();

@@ -56,7 +56,9 @@ struct symbol : public PoolObject
     symbol(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag);
 
     char vclass;   /* sLOCAL if "addr" refers to a local symbol */
-    int tag;       /* tagname id */
+    int tag() const { return tag_; }
+    void set_tag(int tag) { tag_ = tag; }
+    int tag_;       /* tagname id */
 
     IdentifierKind ident : 6;    /* see below for possible values */
 

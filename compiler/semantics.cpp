@@ -163,7 +163,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (sym->ident == iCONSTEXPR)
         return true;
 
-    if (types_->find(sym->tag)->kind() == TypeKind::Struct)
+    if (types_->find(sym->tag())->kind() == TypeKind::Struct)
         return CheckPstructDecl(decl);
 
     if (!decl->as<ArgDecl>() && type.is_const && !decl->init() && !decl->is_public())
@@ -211,7 +211,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         return false;
     }
 
-    auto type = types_->find(sym->tag);
+    auto type = types_->find(sym->tag());
     auto ps = type->as<pstruct_t>();
 
     std::vector<bool> visited;
@@ -290,7 +290,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
                 report(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type.tag(), sym->tag, MATCHTAG_COERCE);
+            matchtag(arg->type.tag(), sym->tag(), MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
             if (sym->ident != iARRAY) {
                 report(expr->pos(), 405);
@@ -789,12 +789,12 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
     auto& assignop = expr->assignop();
     if (assignop.sym)
-        val.tag = assignop.sym->tag;
+        val.tag = assignop.sym->tag();
 
     if (oper_tok) {
         auto& userop = expr->userop();
         if (find_userop(*sc_, oper_tok, left_val.tag, right_val.tag, 2, nullptr, &userop)) {
-            val.tag = userop.sym->tag;
+            val.tag = userop.sym->tag();
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
             matchtag(left_val.tag, right_val.tag, FALSE);
@@ -919,7 +919,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         }
 
         expr->set_array_copy_length(right_length);
-        if (left_val.sym->tag == types_->tag_string())
+        if (left_val.sym->tag() == types_->tag_string())
             expr->set_array_copy_length(char_array_cells(expr->array_copy_length()));
     } else {
         if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
@@ -1098,7 +1098,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         }
 
         if (find_userop(*sc_, op.oper_tok, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
-            if (op.userop.sym->tag != types_->tag_bool()) {
+            if (op.userop.sym->tag() != types_->tag_bool()) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
             }
@@ -1261,7 +1261,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         report(expr, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
         matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
-    } else if (out_val.sym && out_val.sym->tag == types_->tag_void()) {
+    } else if (out_val.sym && out_val.sym->tag() == types_->tag_void()) {
         report(expr, 89);
     } else if (atype->isEnumStruct()) {
         report(expr, 95) << atype->name();
@@ -1300,12 +1300,12 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     val.sym = sym;
 
     // Don't expose the tag of old enumroots.
-    Type* type = types_->find(sym->tag);
+    Type* type = types_->find(sym->tag());
     if (decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident == iCONSTEXPR) {
         val.tag = 0;
         report(expr, 174) << decl->name();
     } else {
-        val.tag = sym->tag;
+        val.tag = sym->tag();
     }
 
     if (sym->ident == iCONSTEXPR)
@@ -1482,7 +1482,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     out_val = base_val;
 
     if (index_val.ident == iCONSTEXPR) {
-        if (!(base_val.sym->tag == types_->tag_string() && base_val.array_level() == 0)) {
+        if (!(base_val.sym->tag() == types_->tag_string() && base_val.array_level() == 0)) {
             /* normal array index */
             if (index_val.constval() < 0 ||
                 (base_val.array_size() != 0 &&
@@ -1510,11 +1510,11 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     /* set type to fetch... INDIRECTLY */
-    if (base_val.sym->tag == types_->tag_string())
+    if (base_val.sym->tag() == types_->tag_string())
         out_val.set_array(iARRAYCHAR, base_val.sym, 0);
     else
         out_val.set_array(iARRAYCELL, base_val.sym, 0);
-    out_val.tag = base_val.sym->tag;
+    out_val.tag = base_val.sym->tag();
 
     expr->set_lvalue(true);
     return true;
@@ -1534,7 +1534,7 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
     auto& val = expr->val();
     val.ident = sym->ident;
     val.sym = sym;
-    val.tag = sym->tag;
+    val.tag = sym->tag();
     expr->set_lvalue(sym->ident != iREFARRAY);
     return true;
 }
@@ -1899,7 +1899,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(expr, 112) << sym->decl()->name();
                 return false;
             }
-            enum_type = types_->find(sym->tag);
+            enum_type = types_->find(sym->tag());
         } else if (expr->suffix_token() == '.') {
             enum_type = types_->find(sym->semantic_tag);
             if (!enum_type->asEnumStruct()) {
@@ -1957,7 +1957,7 @@ CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
     expr_(expr)
 {
     val_.ident = iEXPRESSION;
-    val_.tag = userop_.sym->tag;
+    val_.tag = userop_.sym->tag();
 }
 
 void
@@ -2007,7 +2007,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     auto& val = call->val();
     val.ident = iEXPRESSION;
-    val.tag = sym->tag;
+    val.tag = sym->tag();
     if (fun->return_array()) {
         val.ident = iREFARRAY;
         val.sym = fun->return_array()->var->sym();
@@ -2622,7 +2622,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     AutoErrorPos aep(expr->pos());
 
-    if (curfunc->tag == types_->tag_void()) {
+    if (curfunc->tag() == types_->tag_void()) {
         report(stmt, 88);
         return false;
     }
@@ -2653,7 +2653,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     /* check tagname with function tagname */
     assert(curfunc != nullptr);
     if (!matchtag_string(v.ident, v.tag))
-        matchtag(curfunc->tag, v.tag, TRUE);
+        matchtag(curfunc->tag(), v.tag, TRUE);
 
     if (v.ident == iARRAY || v.ident == iREFARRAY) {
         if (!CheckArrayReturnStmt(stmt))
@@ -2708,7 +2708,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
             }
         }
         if (!array.has_tag())
-            array.set_tag(sub->tag);
+            array.set_tag(sub->tag());
 
         // the address of the array is stored in a hidden parameter; the address
         // of this parameter is 1 + the number of parameters (times the size of
@@ -3034,10 +3034,10 @@ void ReportFunctionReturnError(FunctionDecl* decl, symbol* sym) {
     // we allow "public int" to warn instead of error.
     //
     // :TODO: stronger enforcement when function result is used from call
-    if (sym->tag == 0) {
+    if (sym->tag() == 0) {
         report(sym->decl(), 209) << decl->name();
-    } else if (types->find(sym->tag)->isEnum() || sym->tag == types->tag_bool() ||
-               sym->tag == types->tag_float() || !decl->retvalue_used())
+    } else if (types->find(sym->tag())->isEnum() || sym->tag() == types->tag_bool() ||
+               sym->tag() == types->tag_float() || !decl->retvalue_used())
     {
         report(sym->decl(), 242) << decl->name();
     } else {
@@ -3114,7 +3114,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     info->set_always_returns(sc_->always_returns());
 
     if (!info->returns_value()) {
-        if (sym->tag == types_->tag_void() && fwd && !decl.type.tag() &&
+        if (sym->tag() == types_->tag_void() && fwd && !decl.type.tag() &&
             !decl.type.is_new)
         {
             // We got something like:
@@ -3128,8 +3128,8 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     // Make sure that a public return type matches the forward (if any).
     if (fwd && info->is_public()) {
-        if (sym->tag != decl.type.tag())
-            report(info->pos(), 180) << type_to_name(sym->tag) << type_to_name(decl.type.tag());
+        if (sym->tag() != decl.type.tag())
+            report(info->pos(), 180) << type_to_name(sym->tag()) << type_to_name(decl.type.tag());
     }
 
     // For globals, we test arguments in a later pass, since we need to know

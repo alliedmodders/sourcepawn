@@ -481,7 +481,7 @@ CalcArraySize(symbol* sym)
         cell length = sym->dim(i);
         assert(length);
 
-        if (i == sym->dim_count() - 1 && sym->tag == types->tag_string())
+        if (i == sym->dim_count() - 1 && sym->tag() == types->tag_string())
             length = char_array_cells(length);
 
         last_size *= length;
@@ -518,8 +518,8 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
         report(expr->pos(), 134) << type_to_name(type_.tag()) << "array";
         return false;
     }
-    if (type_.tag() != sym->tag) {
-        report(expr->pos(), 134) << type_to_name(type_.tag()) << type_to_name(sym->tag);
+    if (type_.tag() != sym->tag()) {
+        report(expr->pos(), 134) << type_to_name(type_.tag()) << type_to_name(sym->tag());
         return false;
     }
 

@@ -92,7 +92,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto var = decl->as<VarDeclBase>();
     auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   sym->addr(), sym->tag, symname, pc,
+                                   sym->addr(), sym->tag(), symname, pc,
                                    asm_.position(), sym->ident, sym->vclass, (int)sym->is_const);
     if (sym->ident == iARRAY || sym->ident == iREFARRAY) {
         string += " [ ";
@@ -271,7 +271,7 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
 {
     symbol* sym = decl->sym();
 
-    if (cc_.types()->find(sym->tag)->kind() == TypeKind::Struct) {
+    if (cc_.types()->find(sym->tag())->kind() == TypeKind::Struct) {
         EmitPstruct(decl);
     } else {
         if (sym->ident != iCONSTEXPR) {
@@ -439,7 +439,7 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         return;
 
     symbol* sym = decl->sym();
-    auto type = cc_.types()->find(sym->tag);
+    auto type = cc_.types()->find(sym->tag());
     auto ps = type->as<pstruct_t>();
 
     std::vector<cell> values;
@@ -1364,7 +1364,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
 
         auto types = cc_.types();
         cell size = sub->dim(0); // :todo: must be val
-        if (sub->tag == types->tag_string())
+        if (sub->tag() == types->tag_string())
             size = char_array_cells(size);
 
         __ emit(OP_MOVS, size * sizeof(cell));
