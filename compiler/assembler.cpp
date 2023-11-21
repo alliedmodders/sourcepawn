@@ -534,7 +534,6 @@ RttiBuilder::to_typeid(const std::vector<uint8_t>& bytes)
 
 uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     assert(fun == fun->canonical());
-    auto sym = fun->sym();
 
     std::vector<uint8_t> bytes;
 
@@ -549,10 +548,10 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     VarDecl* child = fun->return_array() ? fun->return_array()->var : nullptr;
     if (child && child->type().numdim()) {
         encode_ret_array_into(bytes, child->type());
-    } else if (sym->tag() == types_->tag_void()) {
+    } else if (fun->tag() == types_->tag_void()) {
         bytes.push_back(cb::kVoid);
     } else {
-        encode_tag_into(bytes, sym->tag());
+        encode_tag_into(bytes, fun->tag());
     }
 
     for (const auto& arg : fun->args()) {

@@ -78,9 +78,8 @@ void markusage(Decl* decl, int usage) {
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
-symbol::symbol(IdentifierKind symident, int symvclass, int symtag)
+symbol::symbol(IdentifierKind symident, int symvclass)
  : vclass_((char)symvclass),
-   tag_(symtag),
    ident_(symident),
    is_const_(false),
    semantic_tag_(0),
@@ -100,10 +99,10 @@ void symbol::set_dim_count(int dim_count) {
 }
 
 symbol*
-NewVariable(Decl* decl, IdentifierKind ident, int vclass, int tag, int dim[],
+NewVariable(Decl* decl, IdentifierKind ident, int vclass, int dim[],
             int numdim, int semantic_tag)
 {
-    symbol* sym = new symbol(ident, vclass, tag);
+    symbol* sym = new symbol(ident, vclass);
 
     if (numdim) {
         sym->set_dim_count(numdim);
@@ -201,16 +200,14 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
     return true;
 }
 
-static symbol*
-NewConstant(Decl* decl, const token_pos_t& pos, int vclass, int tag)
-{
-    return new symbol(iCONSTEXPR, vclass, tag);
+static symbol* NewConstant(Decl* decl, const token_pos_t& pos, int vclass) {
+    return new symbol(iCONSTEXPR, vclass);
 }
 
 symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
-                       int vclass, int tag)
+                       int vclass)
 {
-    auto sym = NewConstant(decl, pos, vclass, tag);
+    auto sym = NewConstant(decl, pos, vclass);
     if (CheckNameRedefinition(sc, decl->name(), pos, vclass))
         DefineSymbol(sc, decl, vclass);
     return sym;

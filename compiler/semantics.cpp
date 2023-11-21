@@ -164,7 +164,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (sym->ident() == iCONSTEXPR)
         return true;
 
-    if (types_->find(sym->tag())->kind() == TypeKind::Struct)
+    if (types_->find(type.tag())->kind() == TypeKind::Struct)
         return CheckPstructDecl(decl);
 
     if (!decl->as<ArgDecl>() && type.is_const && !decl->init() && !decl->is_public())
@@ -205,14 +205,13 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
     if (!decl->init())
         return true;
 
-    auto sym = decl->sym();
     auto init = decl->init()->right()->as<StructExpr>();
     if (!init) {
         report(decl->init(), 433);
         return false;
     }
 
-    auto type = types_->find(sym->tag());
+    auto type = types_->find(decl->tag());
     auto ps = type->as<pstruct_t>();
 
     std::vector<bool> visited;
@@ -291,7 +290,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
                 report(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type.tag(), sym->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type.tag(), var->tag(), MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
             if (sym->ident() != iARRAY) {
                 report(expr->pos(), 405);
@@ -1301,12 +1300,12 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     val.sym = decl;
 
     // Don't expose the tag of old enumroots.
-    Type* type = types_->find(sym->tag());
-    if (decl->as<EnumDecl>() && !type->asEnumStruct() && sym->ident() == iCONSTEXPR) {
+    Type* type = types_->find(decl->tag());
+    if (decl->as<EnumDecl>() && !type->asEnumStruct() && decl->ident() == iCONSTEXPR) {
         val.tag = 0;
         report(expr, 174) << decl->name();
     } else {
-        val.tag = sym->tag();
+        val.tag = decl->tag();
     }
 
     if (sym->ident() == iCONSTEXPR)
@@ -1817,7 +1816,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Hack. Remove when we can.
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
-    auto sym = new symbol(ti.ident, var->vclass(), ti.tag());
+    auto sym = new symbol(ti.ident, var->vclass());
     if (ti.dim.size()) {
         sym->set_dim_count(ti.dim.size());
         for (int i = 0; i < ti.dim.size(); i++)
@@ -1994,7 +1993,6 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     call->set_fun(fun);
 
-    auto sym = fun->sym();
     if ((fun->decl().type.numdim() > 0 || fun->maybe_returns_array()) &&
         !fun->return_array())
     {
@@ -2010,7 +2008,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     auto& val = call->val();
     val.ident = iEXPRESSION;
-    val.tag = sym->tag();
+    val.tag = fun->tag();
     if (fun->return_array()) {
         val.ident = iREFARRAY;
         val.sym = fun->return_array()->var;
@@ -2725,8 +2723,8 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL, curfunc->type().tag(), dim,
-                                   array.numdim(), array.enum_struct_tag());
+        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL, dim, array.numdim(),
+                                   array.enum_struct_tag());
         var->set_addr((argcount + 3) * sizeof(cell));
         var->set_sym(sub_sym);
 
@@ -3083,7 +3081,6 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
             report(info->pos(), 141);
     }
 
-    auto sym = info->sym();
     if (info->is_native()) {
         if (decl.type.numdim() > 0) {
             report(info->pos(), 83);
@@ -3114,7 +3111,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     info->set_always_returns(sc_->always_returns());
 
     if (!info->returns_value()) {
-        if (sym->tag() == types_->tag_void() && fwd && !decl.type.tag() &&
+        if (fwd && fwd->tag() == types_->tag_void() && !decl.type.tag() &&
             !decl.type.is_new)
         {
             // We got something like:
@@ -3128,8 +3125,8 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     // Make sure that a public return type matches the forward (if any).
     if (fwd && info->is_public()) {
-        if (sym->tag() != decl.type.tag())
-            report(info->pos(), 180) << type_to_name(sym->tag()) << type_to_name(decl.type.tag());
+        if (fwd->tag() != decl.type.tag())
+            report(info->pos(), 180) << type_to_name(fwd->tag()) << type_to_name(decl.type.tag());
     }
 
     // For globals, we test arguments in a later pass, since we need to know

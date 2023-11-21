@@ -161,7 +161,7 @@ bool FunctionDecl::IsVariadic() {
 
 bool FunctionDecl::MustReturnValue() const {
     auto types = CompileContext::get().types();
-    return retvalue_used_ || (explicit_return_type_ && sym_->tag() != types->tag_void());
+    return retvalue_used_ || (explicit_return_type_ && tag() != types->tag_void());
 }
 
 void FunctionDecl::AddReferenceTo(FunctionDecl* other) {
