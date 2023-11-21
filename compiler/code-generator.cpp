@@ -90,15 +90,13 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto symname = decl->name()->chars();
 
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
-    auto var = decl->as<VarDeclBase>();
-    auto sym = var->sym();
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   sym->addr(), sym->tag(), symname, pc,
-                                   asm_.position(), sym->ident(), sym->vclass(), (int)sym->is_const());
-    if (sym->ident() == iARRAY || sym->ident() == iREFARRAY) {
+                                   decl->addr(), decl->tag(), symname, pc,
+                                   asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
+    if (decl->ident() == iARRAY || decl->ident() == iREFARRAY) {
         string += " [ ";
-        for (int i = 0; i < sym->dim_count(); i++)
-            string += ke::StringPrintf("%x:%x ", sym->semantic_tag(), sym->dim(i));
+        for (int i = 0; i < decl->dim_count(); i++)
+            string += ke::StringPrintf("%x:%x ", decl->semantic_tag(), decl->dim(i));
         string += "]";
     }
 
@@ -290,18 +288,17 @@ CodeGenerator::EmitVarDecl(VarDeclBase* decl)
 void
 CodeGenerator::EmitGlobalVar(VarDeclBase* decl)
 {
-    symbol* sym = decl->sym();
     BinaryExpr* init = decl->init();
 
-    sym->setAddr(data_.dat_address());
+    decl->set_addr(data_.dat_address());
 
-    if (sym->ident() == iVARIABLE) {
+    if (decl->ident() == iVARIABLE) {
         assert(!init || init->right()->val().ident == iCONSTEXPR);
         if (init)
             data_.Add(init->right()->val().constval());
         else
             data_.Add(0);
-    } else if (sym->ident() == iARRAY) {
+    } else if (decl->ident() == iARRAY) {
         ArrayData array;
         BuildArrayInitializer(decl, &array, data_.dat_address());
 
@@ -321,7 +318,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
 
     if (sym->ident() == iVARIABLE) {
         markstack(decl, MEMUSE_STATIC, 1);
-        sym->setAddr(-current_stack_ * sizeof(cell));
+        decl->set_addr(-current_stack_ * sizeof(cell));
 
         if (init) {
             const auto& val = init->right()->val();
@@ -350,7 +347,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
         cell total_size = iv_size + data_size;
 
         markstack(decl, MEMUSE_STATIC, total_size);
-        sym->setAddr(-cell(current_stack_ * sizeof(cell)));
+        decl->set_addr(-cell(current_stack_ * sizeof(cell)));
         __ emit(OP_STACK, -cell(total_size * sizeof(cell)));
 
         cell fill_value = 0;
@@ -398,14 +395,14 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
         if (!decl->autozero() && fill_size && fill_value == 0)
             fill_size = 0;
 
-        __ emit(OP_ADDR_PRI, sym->addr());
+        __ emit(OP_ADDR_PRI, decl->addr());
         __ emit(OP_INITARRAY_PRI, iv_addr, iv_size, non_filled, fill_size, fill_value);
     } else if (sym->ident() == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
         markstack(decl, MEMUSE_STATIC, 1);
-        sym->setAddr(-current_stack_ * sizeof(cell));
+        decl->set_addr(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
         if (NewArrayExpr* ctor = init_rhs->as<NewArrayExpr>()) {
@@ -424,7 +421,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
             else
                 __ emit(OP_GENARRAY, 1);
             __ const_pri(str_addr);
-            __ copyarray(sym, cells * sizeof(cell));
+            __ copyarray(decl, cells * sizeof(cell));
         } else {
             assert(false);
         }
@@ -455,13 +452,13 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         } else if (auto expr = field->value->as<TaggedValueExpr>()) {
             values[arg->index] = expr->value();
         } else if (auto expr = field->value->as<SymbolExpr>()) {
-            values[arg->index] = expr->decl()->sym()->addr();
+            values[arg->index] = expr->decl()->addr();
         } else {
             assert(false);
         }
     }
 
-    sym->setAddr(data_.dat_address());
+    decl->set_addr(data_.dat_address());
 
     for (const auto& value : values)
         data_.Add(value);
@@ -1822,7 +1819,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     stack_scopes_.clear();
     heap_scopes_.clear();
 
-    info->sym()->setAddr(info->cg()->label.offset());
+    info->set_addr(info->cg()->label.offset());
     info->cg()->pcode_end = asm_.pc();
     info->cg()->max_local_stack = max_func_memory_;
 
@@ -1863,13 +1860,12 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
 void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
     assert(fun->is_live());
 
-    auto sym = fun->sym();
     if (fun->is_native()) {
-        if (sym->addr() < 0) {
-            sym->setAddr((cell)native_list_.size());
+        if (fun->addr() < 0) {
+            fun->set_addr((cell)native_list_.size());
             native_list_.emplace_back(fun);
         }
-        __ emit(OP_SYSREQ_N, sym->addr(), nargs);
+        __ emit(OP_SYSREQ_N, fun->addr(), nargs);
     } else {
         __ emit(OP_PUSH_C, nargs);
         __ emit(OP_CALL, &fun->cg()->label);

@@ -207,7 +207,7 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = DefineConstant(sc, this, pos_, 0, vclass_, tag);
+            enumsym = DefineConstant(sc, this, pos_, vclass_, tag);
         }
     }
 
@@ -228,7 +228,9 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
                 error(field->pos(), 80);
         }
 
-        symbol* sym = DefineConstant(sc, field, field->pos(), value, vclass_, tag);
+        field->set_addr(value);
+
+        symbol* sym = DefineConstant(sc, field, field->pos(), vclass_, tag);
         if (!sym)
             continue;
 
@@ -241,7 +243,7 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
     // set the enum name to the "next" value (typically the last value plus one)
     if (enumsym) {
-        enumsym->setAddr(value);
+        addr_ = value;
         array_size_ = value;
     }
 
@@ -396,7 +398,7 @@ TypesetDecl::Bind(SemaContext& sc)
 bool
 ConstDecl::EnterNames(SemaContext& sc)
 {
-    sym_ = DefineConstant(sc, this, pos_, 0, vclass_, 0);
+    sym_ = DefineConstant(sc, this, pos_, vclass_, 0);
     return !!sym_;
 }
 
@@ -427,7 +429,7 @@ ConstDecl::Bind(SemaContext& sc)
     AutoErrorPos aep(pos_);
     matchtag(type_.tag(), tag, 0);
 
-    sym_->setAddr(value);
+    addr_ = value;
     sym_->set_tag(type_.tag());
     return true;
 }
@@ -462,7 +464,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(0, iVARIABLE, sGLOBAL, type_.tag());
+        sym_ = new symbol(iVARIABLE, sGLOBAL, type_.tag());
         sym_->set_is_const(true);
     } else {
         IdentifierKind ident = type_.ident;
@@ -470,7 +472,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
             type_.ident = ident = iREFARRAY;
 
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-        sym_ = NewVariable(this, 0, ident, vclass_, type_.tag(), dim,
+        sym_ = NewVariable(this, ident, vclass_, type_.tag(), dim,
                            type_.numdim(), type_.enum_struct_tag());
 
         if (ident == iVARARGS)
@@ -746,7 +748,7 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
         other->proto_or_impl_ = this;
     } else {
         auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym_ = new symbol(0, iFUNCTN, scope, 0);
+        sym_ = new symbol(iFUNCTN, scope, 0);
 
         DefineSymbol(sc, this, scope);
     }
@@ -797,7 +799,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
-        sym_ = new symbol(0, iFUNCTN, sGLOBAL, 0);
+        sym_ = new symbol(iFUNCTN, sGLOBAL, 0);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
@@ -861,7 +863,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     }
 
     if (is_native_)
-        sym_->setAddr(-1);
+        addr_ = -1;
 
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {
@@ -891,15 +893,15 @@ FunctionDecl::BindArgs(SemaContext& sc)
     AutoCountErrors errors;
 
     size_t arg_index = 0;
-    for (const auto& var : args_) {
+    for (auto& var : args_) {
         const auto& typeinfo = var->type();
-        symbol* argsym = var->sym();
 
         AutoErrorPos pos(var->pos());
 
         if (typeinfo.ident == iVARARGS) {
             /* redimension the argument list, add the entry iVARARGS */
-            continue;
+            var->set_addr(static_cast<cell>((arg_index + 3) * sizeof(cell)));
+            break;
         }
 
         Type* type = sc.cc().types()->find(typeinfo.semantic_tag());
@@ -917,7 +919,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
          *
          * Since arglist has an empty terminator at the end, we actually add 2.
          */
-        argsym->setAddr(static_cast<cell>((arg_index + 3) * sizeof(cell)));
+        var->set_addr(static_cast<cell>((arg_index + 3) * sizeof(cell)));
         arg_index++;
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
@@ -1058,13 +1060,11 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
     return names_.size() == symbols_.size();
 }
 
-bool
-EnumStructDecl::EnterNames(SemaContext& sc)
-{
+bool EnumStructDecl::EnterNames(SemaContext& sc) {
     AutoCountErrors errors;
 
     AutoErrorPos error_pos(pos_);
-    root_ = DefineConstant(sc, this, pos_, 0, sGLOBAL, 0);
+    root_ = DefineConstant(sc, this, pos_, sGLOBAL, 0);
     root_->set_tag(sc.cc().types()->defineEnumStruct(name_, this)->tagid());
     root_->set_ident(iENUMSTRUCT);
 
@@ -1105,14 +1105,13 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(field->name());
 
-        field->set_offset(position);
-
-        symbol* child = new symbol(position, field->type().ident, sGLOBAL,
+        symbol* child = new symbol(field->type().ident, sGLOBAL,
                                    field->type().semantic_tag());
         if (field->type().numdim()) {
             child->set_dim_count(1);
             child->set_dim(0, field->type().dim[0]);
         }
+        field->set_offset(position);
         field->set_sym(child);
 
         cell size = 1;
@@ -1134,11 +1133,11 @@ EnumStructDecl::EnterNames(SemaContext& sc)
         }
         seen.emplace(decl->name());
 
-        auto sym = new symbol(0, iFUNCTN, sGLOBAL, 0);
+        auto sym = new symbol(iFUNCTN, sGLOBAL, 0);
         decl->set_sym(sym);
     }
 
-    root_->setAddr(position);
+    addr_ = position;
     array_size_ = position;
 
     return errors.ok();
@@ -1198,7 +1197,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         sym_->set_ident(iMETHODMAP);
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(0, iMETHODMAP, sGLOBAL, tag_);
+        sym_ = new symbol(iMETHODMAP, sGLOBAL, tag_);
         cc.globals()->Add(this);
     }
 

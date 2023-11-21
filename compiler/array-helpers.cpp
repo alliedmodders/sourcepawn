@@ -503,27 +503,20 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
     if (!var)
         return false;
 
-    symbol* sym = var->sym();
-    if (!sym) {
-        // This failed to bind, and we're still in the binding phase, so just
-        // return false.
-        return false;
-    }
+    assert(var->vclass() == sGLOBAL);
 
-    assert(sym->vclass() == sGLOBAL);
-
-    if (sym->ident() != iARRAY && sym->ident() != iREFARRAY) {
+    if (var->ident() != iARRAY && var->ident() != iREFARRAY) {
         report(expr->pos(), 134) << type_to_name(type_.tag()) << "array";
         return false;
     }
-    if (type_.tag() != sym->tag()) {
-        report(expr->pos(), 134) << type_to_name(type_.tag()) << type_to_name(sym->tag());
+    if (type_.tag() != var->tag()) {
+        report(expr->pos(), 134) << type_to_name(type_.tag()) << type_to_name(var->tag());
         return false;
     }
 
     std::vector<int> dim;
-    for (int i = 0; i < sym->dim_count(); i++)
-        dim.emplace_back(sym->dim(i));
+    for (int i = 0; i < var->dim_count(); i++)
+        dim.emplace_back(var->dim(i));
 
     if (dim.size() != type_.dim.size()) {
         report(expr->pos(), 19) << type_.numdim() << dim.size();

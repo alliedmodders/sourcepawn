@@ -1310,7 +1310,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     }
 
     if (sym->ident() == iCONSTEXPR)
-        val.set_constval(sym->addr());
+        val.set_constval(decl->addr());
 
     if (auto fun = decl->as<FunctionDecl>()) {
         fun = fun->canonical();
@@ -1817,13 +1817,14 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Hack. Remove when we can.
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
-    auto sym = new symbol(field->offset(), ti.ident, var->vclass(), ti.tag());
+    auto sym = new symbol(ti.ident, var->vclass(), ti.tag());
     if (ti.dim.size()) {
         sym->set_dim_count(ti.dim.size());
         for (int i = 0; i < ti.dim.size(); i++)
             sym->set_dim(i, ti.dim[i]);
         sym->set_semantic_tag(ti.declared_tag);
     }
+    var->set_addr(field->offset());
     var->set_sym(sym);
 
     val.ident = ti.ident;
@@ -2724,9 +2725,9 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        auto sub_sym = NewVariable(var, (argcount + 3) * sizeof(cell), iREFARRAY,
-                                   sGLOBAL, curfunc->type().tag(), dim, array.numdim(),
-                                   array.enum_struct_tag());
+        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL, curfunc->type().tag(), dim,
+                                   array.numdim(), array.enum_struct_tag());
+        var->set_addr((argcount + 3) * sizeof(cell));
         var->set_sym(sub_sym);
 
         auto info = new FunctionDecl::ReturnArrayInfo;

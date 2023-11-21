@@ -164,7 +164,7 @@ class SmxAssemblyBuffer : public ByteBuffer
     }
   }
 
-  void copyarray(symbol* sym, cell size) {
+  void copyarray(Decl* sym, cell size) {
     if (sym->ident() == iREFARRAY) {
       assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
       emit(OP_LOAD_S_ALT, sym->addr());
