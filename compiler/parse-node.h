@@ -303,9 +303,6 @@ class Decl : public Stmt
     char vclass() const {
         return sym()->vclass();
     }
-    int tag() const {
-        return sym()->tag();
-    }
     int dim_count() const {
         return sym()->dim_count();
     }
@@ -315,6 +312,7 @@ class Decl : public Stmt
     int dim(int n) const {
         return sym()->dim(n);
     }
+    virtual int tag() const;
     cell addr() const { return *addr_; }
     void set_addr(cell addr) { addr_.emplace(addr); }
 
@@ -369,13 +367,14 @@ class VarDeclBase : public Decl
         assert(!sym_);
         sym_ = sym;
     }
+    int tag() const override { return type_.tag(); }
 
     bool is_used() const { return is_read_ || is_written_; }
 
   protected:
     typeinfo_t type_;
     BinaryExpr* init_ = nullptr;
-    uint8_t vclass_; // This will be implied by scope, when we get there.
+    uint8_t vclass_ : 4; // This will be implied by scope, when we get there.
     bool is_public_ : 1;
     bool is_static_ : 1;
     bool is_stock_ : 1;
@@ -446,8 +445,11 @@ class EnumFieldDecl : public Decl
     Expr* value() const { return value_; }
     symbol* sym() const override { return sym_; }
     void set_sym(symbol* sym) { sym_ = sym; }
+    int tag() const override { return tag_; }
+    void set_tag(int tag) { tag_ = tag; }
 
   private:
+    int tag_ = 0;
     Expr* value_;
     symbol* sym_ = nullptr;
 };
@@ -462,8 +464,7 @@ class EnumDecl : public Decl
         label_(label),
         fields_(fields),
         increment_(increment),
-        multiplier_(multiplier),
-        mm_(nullptr)
+        multiplier_(multiplier)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -477,6 +478,7 @@ class EnumDecl : public Decl
     int multiplier() const { return multiplier_; }
     symbol* sym() const override { return sym_; }
     int array_size() const { return array_size_; }
+    int tag() const override { return tag_; }
 
     MethodmapDecl* mm() const { return mm_; }
     void set_mm(MethodmapDecl* mm) { mm_ = mm; }
@@ -488,7 +490,8 @@ class EnumDecl : public Decl
     int increment_;
     int multiplier_;
     int array_size_ = 0;
-    MethodmapDecl* mm_;
+    int tag_ = 0;
+    MethodmapDecl* mm_ = nullptr;
     symbol* sym_ = nullptr;
 };
 
@@ -1661,6 +1664,8 @@ class FunctionDecl : public Decl
     symbol* sym() const override { return sym_; }
     void set_sym(symbol* sym) { sym_ = sym; }
 
+    int tag() const override { return decl_.type.tag(); }
+
     const typeinfo_t& type() const { return decl_.type; }
     typeinfo_t& mutable_type() { return decl_.type; }
 
@@ -1846,10 +1851,12 @@ class EnumStructDecl : public LayoutDecl
 
     symbol* sym() const override { return root_; }
     cell_t array_size() const { return array_size_; }
+    int tag() const override { return tag_; }
 
   private:
     PoolArray<FunctionDecl*> methods_;
     PoolArray<LayoutFieldDecl*> fields_;
+    int tag_ = 0;
     symbol* root_ = nullptr;
     cell_t array_size_ = 0;
 };
@@ -1909,7 +1916,7 @@ class MethodmapDecl : public LayoutDecl
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
-    int tag() const { return tag_; }
+    int tag() const override { return tag_; }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
     symbol* sym() const override { return sym_; }
