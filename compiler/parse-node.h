@@ -24,6 +24,8 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 
+#include <optional>
+
 #include "ast-types.h"
 #include "expressions.h"
 #include "lexer.h"
@@ -295,9 +297,6 @@ class Decl : public Stmt
     int semantic_tag() const {
         return sym()->semantic_tag();
     }
-    cell addr() const {
-        return sym()->addr();
-    }
     IdentifierKind ident() const {
         return sym()->ident();
     }
@@ -316,6 +315,8 @@ class Decl : public Stmt
     int dim(int n) const {
         return sym()->dim(n);
     }
+    cell addr() const { return *addr_; }
+    void set_addr(cell addr) { addr_.emplace(addr); }
 
     Atom* name() const { return name_; }
 
@@ -324,6 +325,7 @@ class Decl : public Stmt
 
   protected:
     Atom* name_;
+    std::optional<cell> addr_;
 
   public:
     // :TODO: remove.

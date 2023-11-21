@@ -53,7 +53,7 @@ struct token_pos_t;
  */
 struct symbol : public PoolObject
 {
-    symbol(cell addr, IdentifierKind ident, int vclass, int tag);
+    symbol(IdentifierKind ident, int vclass, int tag);
 
     char vclass() const { return vclass_; }
     char vclass_;   /* sLOCAL if "addr" refers to a local symbol */
@@ -88,16 +88,6 @@ struct symbol : public PoolObject
         assert(n < dim_count());
         dim_data_[n] = size;
     }
-
-    int addr() const {
-        return addr_;
-    }
-    void setAddr(int addr) {
-        addr_ = addr;
-    }
-
-  private:
-    cell addr_; /* address or offset (or value for constant, index for native function) */
 };
 
 enum ScopeKind {
@@ -173,12 +163,12 @@ struct value {
 };
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
-symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, cell val,
+symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
                        int vclass, int tag);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
-symbol* NewVariable(Decl* decl, cell addr, IdentifierKind ident, int vclass, int tag,
+symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass, int tag,
                     int dim[], int numdim, int semantic_tag);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
