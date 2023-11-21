@@ -24,7 +24,6 @@
 
 namespace sp {
 
-typeinfo_t TypeInfoFromSymbol(symbol* sym);
 typeinfo_t TypeInfoFromTag(int tag);
 
 } // namespace sp
