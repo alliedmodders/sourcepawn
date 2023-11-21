@@ -25,22 +25,6 @@
 namespace sp {
 
 typeinfo_t
-TypeInfoFromSymbol(symbol* sym)
-{
-    typeinfo_t type = {};
-
-    type.set_tag(sym->tag());
-    type.is_const = sym->is_const();
-    type.ident = sym->ident();
-    if (sym->ident() == iARRAY || sym->ident() == iREFARRAY) {
-        for (int i = 0; i < sym->dim_count(); i++)
-            type.dim.emplace_back(sym->dim(i));
-        type.declared_tag = sym->semantic_tag();
-    }
-    return type;
-}
-
-typeinfo_t
 TypeInfoFromTag(int tag)
 {
     typeinfo_t type = {};
