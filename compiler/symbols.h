@@ -53,13 +53,10 @@ struct token_pos_t;
  */
 struct symbol : public PoolObject
 {
-    symbol(IdentifierKind ident, int vclass, int tag);
+    symbol(IdentifierKind ident, int vclass);
 
     char vclass() const { return vclass_; }
     char vclass_;   /* sLOCAL if "addr" refers to a local symbol */
-    int tag() const { return tag_; }
-    void set_tag(int tag) { tag_ = tag; }
-    int tag_;       /* tagname id */
 
     IdentifierKind ident() const { return ident_; }
     void set_ident(IdentifierKind ident) { ident_ = ident; }
@@ -164,12 +161,12 @@ struct value {
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
 symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
-                       int vclass, int tag);
+                       int vclass);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
-symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass, int tag,
-                    int dim[], int numdim, int semantic_tag);
+symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass, int dim[], int numdim,
+                    int semantic_tag);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
 } // namespace sp

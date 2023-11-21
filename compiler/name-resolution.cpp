@@ -178,8 +178,6 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         }
     }
 
-    tag_ = tag;
-
     if (name_) {
         if (label_)
             error(pos_, 168);
@@ -196,6 +194,8 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         name_ = label_;
     }
 
+    tag_ = tag;
+
     symbol* enumsym = nullptr;
     if (name_) {
         if (vclass_ == sGLOBAL) {
@@ -209,7 +209,7 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
         if (!enumsym) {
             // create the root symbol, so the fields can have it as their "parent"
-            enumsym = DefineConstant(sc, this, pos_, vclass_, tag);
+            enumsym = DefineConstant(sc, this, pos_, vclass_);
         }
     }
 
@@ -222,18 +222,18 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
     for (const auto& field : fields_ ) {
         AutoErrorPos error_pos(field->pos());
 
-        int field_tag = tag;
         if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
+            int field_tag;
             if (field->value()->EvalConst(&value, &field_tag))
                 matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
             else
                 error(field->pos(), 80);
         }
 
-        field->set_tag(field_tag);
+        field->set_tag(tag);
         field->set_addr(value);
 
-        symbol* sym = DefineConstant(sc, field, field->pos(), vclass_, tag);
+        symbol* sym = DefineConstant(sc, field, field->pos(), vclass_);
         if (!sym)
             continue;
 
@@ -401,7 +401,7 @@ TypesetDecl::Bind(SemaContext& sc)
 bool
 ConstDecl::EnterNames(SemaContext& sc)
 {
-    sym_ = DefineConstant(sc, this, pos_, vclass_, 0);
+    sym_ = DefineConstant(sc, this, pos_, vclass_);
     return !!sym_;
 }
 
@@ -433,7 +433,6 @@ ConstDecl::Bind(SemaContext& sc)
     matchtag(type_.tag(), tag, 0);
 
     addr_ = value;
-    sym_->set_tag(type_.tag());
     return true;
 }
 
@@ -467,7 +466,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(iVARIABLE, sGLOBAL, type_.tag());
+        sym_ = new symbol(iVARIABLE, sGLOBAL);
         sym_->set_is_const(true);
     } else {
         IdentifierKind ident = type_.ident;
@@ -475,7 +474,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
             type_.ident = ident = iREFARRAY;
 
         auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-        sym_ = NewVariable(this, ident, vclass_, type_.tag(), dim,
+        sym_ = NewVariable(this, ident, vclass_, dim,
                            type_.numdim(), type_.enum_struct_tag());
 
         if (ident == iVARARGS)
@@ -751,7 +750,7 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
         other->proto_or_impl_ = this;
     } else {
         auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym_ = new symbol(iFUNCTN, scope, 0);
+        sym_ = new symbol(iFUNCTN, scope);
 
         DefineSymbol(sc, this, scope);
     }
@@ -802,15 +801,13 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
-        sym_ = new symbol(iFUNCTN, sGLOBAL, 0);
+        sym_ = new symbol(iFUNCTN, sGLOBAL);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
     // implementation. Note that args are checked similarly in BindArgs.
-    if (!prototype()->is_forward() || is_forward_) {
-        sym_->set_tag(decl_.type.tag());
+    if (!prototype()->is_forward() || is_forward_)
         explicit_return_type_ = decl_.type.is_new;
-    }
 
     // Ensure |this| argument exists.
     if (this_tag_) {
@@ -1069,8 +1066,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
     tag_ = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
 
     AutoErrorPos error_pos(pos_);
-    root_ = DefineConstant(sc, this, pos_, sGLOBAL, 0);
-    root_->set_tag(tag_);
+    root_ = DefineConstant(sc, this, pos_, sGLOBAL);
     root_->set_ident(iENUMSTRUCT);
 
     std::unordered_set<Atom*> seen;
@@ -1082,7 +1078,9 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
-        if (field->type().semantic_tag() == root_->tag()) {
+        //
+        // :TODO: this will not be true when we move to recursive binding.
+        if (field->type().semantic_tag() == tag_) {
             report(field->pos(), 87) << name_;
             continue;
         }
@@ -1110,8 +1108,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         }
         seen.emplace(field->name());
 
-        symbol* child = new symbol(field->type().ident, sGLOBAL,
-                                   field->type().semantic_tag());
+        symbol* child = new symbol(field->type().ident, sGLOBAL);
         if (field->type().numdim()) {
             child->set_dim_count(1);
             child->set_dim(0, field->type().dim[0]);
@@ -1138,7 +1135,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         }
         seen.emplace(decl->name());
 
-        auto sym = new symbol(iFUNCTN, sGLOBAL, 0);
+        auto sym = new symbol(iFUNCTN, sGLOBAL);
         decl->set_sym(sym);
     }
 
@@ -1148,9 +1145,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
     return errors.ok();
 }
 
-bool
-EnumStructDecl::Bind(SemaContext& sc)
-{
+bool EnumStructDecl::Bind(SemaContext& sc) {
     if (!root_)
         return false;
 
@@ -1161,7 +1156,7 @@ EnumStructDecl::Bind(SemaContext& sc)
             continue;
 
         fun->set_name(inner_name);
-        fun->set_this_tag(root_->tag());
+        fun->set_this_tag(tag_);
         fun->Bind(sc);
     }
     return errors.ok();
@@ -1202,7 +1197,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         sym_->set_ident(iMETHODMAP);
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(iMETHODMAP, sGLOBAL, tag_);
+        sym_ = new symbol(iMETHODMAP, sGLOBAL);
         cc.globals()->Add(this);
     }
 

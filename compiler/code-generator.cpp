@@ -265,16 +265,12 @@ CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node)
     }
 }
 
-void
-CodeGenerator::EmitVarDecl(VarDeclBase* decl)
-{
-    symbol* sym = decl->sym();
-
-    if (cc_.types()->find(sym->tag())->kind() == TypeKind::Struct) {
+void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
+    if (cc_.types()->find(decl->tag())->kind() == TypeKind::Struct) {
         EmitPstruct(decl);
     } else {
-        if (sym->ident() != iCONSTEXPR) {
-            if (sym->vclass() == sLOCAL)
+        if (decl->ident() != iCONSTEXPR) {
+            if (decl->vclass() == sLOCAL)
                 EmitLocalVar(decl);
             else
                 EmitGlobalVar(decl);
@@ -436,8 +432,7 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
     if (!decl->init())
         return;
 
-    symbol* sym = decl->sym();
-    auto type = cc_.types()->find(sym->tag());
+    auto type = cc_.types()->find(decl->tag());
     auto ps = type->as<pstruct_t>();
 
     std::vector<cell> values;
@@ -514,7 +509,7 @@ CodeGenerator::EmitExpr(Expr* expr)
         }
         case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
-            if (e->decl()->sym()->ident() == iREFARRAY)
+            if (e->decl()->ident() == iREFARRAY)
                 __ address(e->decl(), sPRI);
             break;
         }
