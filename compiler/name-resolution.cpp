@@ -178,6 +178,8 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         }
     }
 
+    tag_ = tag;
+
     if (name_) {
         if (label_)
             error(pos_, 168);
@@ -220,14 +222,15 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
     for (const auto& field : fields_ ) {
         AutoErrorPos error_pos(field->pos());
 
+        int field_tag = tag;
         if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
-            int field_tag;
             if (field->value()->EvalConst(&value, &field_tag))
                 matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
             else
                 error(field->pos(), 80);
         }
 
+        field->set_tag(field_tag);
         field->set_addr(value);
 
         symbol* sym = DefineConstant(sc, field, field->pos(), vclass_, tag);
@@ -1063,9 +1066,11 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
 bool EnumStructDecl::EnterNames(SemaContext& sc) {
     AutoCountErrors errors;
 
+    tag_ = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
+
     AutoErrorPos error_pos(pos_);
     root_ = DefineConstant(sc, this, pos_, sGLOBAL, 0);
-    root_->set_tag(sc.cc().types()->defineEnumStruct(name_, this)->tagid());
+    root_->set_tag(tag_);
     root_->set_ident(iENUMSTRUCT);
 
     std::unordered_set<Atom*> seen;

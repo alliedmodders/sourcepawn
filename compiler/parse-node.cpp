@@ -222,4 +222,9 @@ int MethodmapPropertyDecl::property_tag() const {
     return valp->type().tag();
 }
 
+int Decl::tag() const {
+    assert(false);
+    return 0;
+}
+
 } // namespace sp
