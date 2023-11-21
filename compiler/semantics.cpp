@@ -3393,7 +3393,7 @@ void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
     def->tag = decl->type().tag();
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
-        symbol* sym = expr->decl()->sym();
+        Decl* sym = expr->decl();
         assert(sym->vclass() == sGLOBAL);
 
         def->sym = sym;
