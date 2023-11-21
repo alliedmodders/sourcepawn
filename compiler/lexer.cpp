@@ -2296,11 +2296,6 @@ bool Lexer::DeleteMacro(Atom* atom) {
     return true;
 }
 
-DefaultArg::~DefaultArg()
-{
-    delete array;
-}
-
 bool
 Lexer::NeedSemicolon()
 {
