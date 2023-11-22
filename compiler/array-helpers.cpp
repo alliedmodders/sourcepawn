@@ -470,16 +470,16 @@ FixedArrayValidator::Validate()
     return true;
 }
 
-cell CalcArraySize(Decl* sym) {
+cell CalcArraySize(const typeinfo_t& type) {
     auto types = CompileContext::get().types();
 
     cell size = 0;
     cell last_size = 1;
-    for (int i = 0; i < sym->dim_count(); i++) {
-        cell length = sym->dim(i);
+    for (int i = 0; i < type.dim.size(); i++) {
+        cell length = type.dim[i];
         assert(length);
 
-        if (i == sym->dim_count() - 1 && sym->tag() == types->tag_string())
+        if (i == type.dim.size() - 1 && type.tag() == types->tag_string())
             length = char_array_cells(length);
 
         last_size *= length;

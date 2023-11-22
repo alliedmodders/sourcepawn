@@ -26,6 +26,7 @@
 namespace sp {
 
 class Semantics;
+struct typeinfo_t;
 
 // Determine the static size of an iARRAY based on dimension expressions and
 // array initializers. The array may be converted to an iREFARRAY if it is
@@ -39,6 +40,6 @@ bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* ini
 void BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
 void BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
 
-cell_t CalcArraySize(Decl* sym);
+cell_t CalcArraySize(const typeinfo_t& type);
 
 } // namespace sp
