@@ -68,10 +68,6 @@ struct symbol : public PoolObject
     bool is_const() const { return is_const_; }
     bool is_const_ : 1;
     void set_is_const(bool is_const) { is_const_ = is_const; }
-
-    int semantic_tag() const { return semantic_tag_; }
-    void set_semantic_tag(int semantic_tag) { semantic_tag_ = semantic_tag; }
-    int semantic_tag_;
 };
 
 enum ScopeKind {
@@ -152,7 +148,7 @@ symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
-symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass, int semantic_tag);
+symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
 } // namespace sp

@@ -1820,8 +1820,6 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
     auto sym = new symbol(ti.ident, var->vclass());
-    if (ti.dim.size())
-        sym->set_semantic_tag(ti.declared_tag);
     var->set_addr(field->offset());
     var->set_sym(sym);
 
@@ -2721,7 +2719,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL, array.enum_struct_tag());
+        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL);
         var->set_addr((argcount + 3) * sizeof(cell));
         var->set_sym(sub_sym);
 

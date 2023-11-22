@@ -241,4 +241,13 @@ int Decl::dim_count() {
     return (int)var->type().dim.size();
 }
 
+int Decl::semantic_tag() {
+    if (auto var = as<VarDeclBase>())
+        return var->type().enum_struct_tag();
+    if (auto es = as<EnumStructDecl>())
+        return es->tag();
+    assert(false);
+    return 0;
+}
+
 } // namespace sp
