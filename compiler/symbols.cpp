@@ -80,8 +80,7 @@ void markusage(Decl* decl, int usage) {
 
 symbol::symbol(IdentifierKind symident, int symvclass)
  : vclass_((char)symvclass),
-   ident_(symident),
-   is_const_(false)
+   ident_(symident)
 {
     assert(ident_ != iINVALID);
 }

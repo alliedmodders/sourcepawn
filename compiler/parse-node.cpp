@@ -250,4 +250,11 @@ int Decl::semantic_tag() {
     return 0;
 }
 
+bool Decl::is_const() {
+    auto var = as<VarDeclBase>();
+    assert(var);
+
+    return (int)var->type().is_const;
+}
+
 } // namespace sp
