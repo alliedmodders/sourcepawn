@@ -1819,7 +1819,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Hack. Remove when we can.
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
-    auto sym = new symbol(ti.ident, var->vclass());
+    auto sym = new symbol(ti.ident);
     var->set_addr(field->offset());
     var->set_sym(sym);
 
@@ -2719,7 +2719,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL);
+        auto sub_sym = NewVariable(var, iREFARRAY);
         var->set_addr((argcount + 3) * sizeof(cell));
         var->set_sym(sub_sym);
 

@@ -53,10 +53,7 @@ struct token_pos_t;
  */
 struct symbol : public PoolObject
 {
-    symbol(IdentifierKind ident, int vclass);
-
-    char vclass() const { return vclass_; }
-    char vclass_;   /* sLOCAL if "addr" refers to a local symbol */
+    explicit symbol(IdentifierKind ident);
 
     IdentifierKind ident() const { return ident_; }
     void set_ident(IdentifierKind ident) { ident_ = ident; }
@@ -141,7 +138,7 @@ symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
-symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass);
+symbol* NewVariable(Decl* decl, IdentifierKind ident);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
 } // namespace sp

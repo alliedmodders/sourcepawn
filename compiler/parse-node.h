@@ -298,9 +298,7 @@ class Decl : public Stmt
     IdentifierKind ident() const {
         return sym()->ident();
     }
-    char vclass() const {
-        return sym()->vclass();
-    }
+    char vclass();
     bool is_const();
     int dim(int n);
     int dim_count();
