@@ -1173,7 +1173,8 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
 
     // If returning an array, push a hidden parameter.
     if (val.sym) {
-        cell retsize = CalcArraySize(val.sym);
+        auto var = val.sym->as<VarDecl>();
+        cell retsize = CalcArraySize(var->type());
 
         if (retsize)
             __ emit(OP_HEAP, retsize * sizeof(cell));
