@@ -32,16 +32,6 @@
 
 namespace sp {
 
-#if 0
-void AddGlobal(CompileContext& cc, symbol* sym)
-{
-    assert(sym->vclass() == sGLOBAL);
-
-    auto scope = cc.globals();
-    scope->AddChain(sym->decl());
-}
-#endif
-
 void markusage(Decl* decl, int usage) {
     if (auto var = decl->as<VarDeclBase>()) {
         if (usage & uREAD)
@@ -64,31 +54,26 @@ void markusage(Decl* decl, int usage) {
         return;
     fun = fun->canonical();
 
-    symbol* sym = fun->sym();
-
     // The reference graph only contains outgoing edges to global or file-static
     // variables. Locals and such are computed by TestSymbols and don't need
     // special handling, there's no concept of "stock" there.
-    if (sym->vclass() != sGLOBAL && sym->vclass() != sSTATIC)
-        return;
-    if (sym->ident() != iFUNCTN)
+    if (fun->vclass() != sGLOBAL && fun->vclass() != sSTATIC)
         return;
 
     assert(parent_func->canonical() == parent_func);
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
-symbol::symbol(IdentifierKind symident, int symvclass)
- : vclass_((char)symvclass),
-   ident_(symident)
+symbol::symbol(IdentifierKind symident)
+ : ident_(symident)
 {
     assert(ident_ != iINVALID);
 }
 
 symbol*
-NewVariable(Decl* decl, IdentifierKind ident, int vclass)
+NewVariable(Decl* decl, IdentifierKind ident)
 {
-    return new symbol(ident, vclass);
+    return new symbol(ident);
 }
 
 Decl* FindEnumStructField(Type* type, Atom* name) {
@@ -178,14 +163,13 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
     return true;
 }
 
-static symbol* NewConstant(Decl* decl, const token_pos_t& pos, int vclass) {
-    return new symbol(iCONSTEXPR, vclass);
+static symbol* NewConstant(Decl* decl, const token_pos_t& pos) {
+    return new symbol(iCONSTEXPR);
 }
 
-symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
-                       int vclass)
+symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, int vclass)
 {
-    auto sym = NewConstant(decl, pos, vclass);
+    auto sym = NewConstant(decl, pos);
     if (CheckNameRedefinition(sc, decl->name(), pos, vclass))
         DefineSymbol(sc, decl, vclass);
     return sym;

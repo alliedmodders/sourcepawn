@@ -149,7 +149,7 @@ class Config(object):
         cxx.cxxflags += ['-std=c++17']
 
         if builder.options.debug == '1':
-            cxx.cflags += ['-g3']
+            cxx.cflags += ['-gdwarf-4']
             cxx.cxxflags += ['-D_GLIBCXX_DEBUG']
 
         have_gcc = cxx.family == 'gcc'

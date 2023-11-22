@@ -466,14 +466,14 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(iVARIABLE, sGLOBAL);
+        sym_ = new symbol(iVARIABLE);
         type_.is_const = true;
     } else {
         IdentifierKind ident = type_.ident;
         if (vclass_ == sARGUMENT && ident == iARRAY)
             type_.ident = ident = iREFARRAY;
 
-        sym_ = NewVariable(this, ident, vclass_);
+        sym_ = NewVariable(this, ident);
 
         if (ident == iVARARGS)
             markusage(this, uREAD);
@@ -745,9 +745,9 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
         proto_or_impl_ = other;
         other->proto_or_impl_ = this;
     } else {
-        auto scope = is_static() ? sSTATIC : sGLOBAL;
-        sym_ = new symbol(iFUNCTN, scope);
+        sym_ = new symbol(iFUNCTN);
 
+        auto scope = is_static() ? sSTATIC : sGLOBAL;
         DefineSymbol(sc, this, scope);
     }
     return true;
@@ -797,7 +797,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
     // Only named functions get an early symbol in EnterNames.
     if (!sym_)
-        sym_ = new symbol(iFUNCTN, sGLOBAL);
+        sym_ = new symbol(iFUNCTN);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
@@ -1104,7 +1104,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         }
         seen.emplace(field->name());
 
-        symbol* child = new symbol(field->type().ident, sGLOBAL);
+        symbol* child = new symbol(field->type().ident);
         field->set_offset(position);
         field->set_sym(child);
 
@@ -1127,7 +1127,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         }
         seen.emplace(decl->name());
 
-        auto sym = new symbol(iFUNCTN, sGLOBAL);
+        auto sym = new symbol(iFUNCTN);
         decl->set_sym(sym);
     }
 
@@ -1189,7 +1189,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         sym_->set_ident(iMETHODMAP);
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(iMETHODMAP, sGLOBAL);
+        sym_ = new symbol(iMETHODMAP);
         cc.globals()->Add(this);
     }
 

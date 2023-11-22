@@ -257,4 +257,14 @@ bool Decl::is_const() {
     return (int)var->type().is_const;
 }
 
+char Decl::vclass() {
+    if (auto var = as<VarDeclBase>()) {
+        return var->vclass();
+    } else if (auto fun = as<FunctionDecl>()) {
+        return fun->is_static() ? sSTATIC : sGLOBAL;
+    }
+    assert(false);
+    return 0;
+}
+
 } // namespace sp
