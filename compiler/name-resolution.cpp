@@ -473,7 +473,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         if (vclass_ == sARGUMENT && ident == iARRAY)
             type_.ident = ident = iREFARRAY;
 
-        sym_ = NewVariable(this, ident, vclass_, type_.enum_struct_tag());
+        sym_ = NewVariable(this, ident, vclass_);
 
         if (ident == iVARARGS)
             markusage(this, uREAD);

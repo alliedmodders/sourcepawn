@@ -81,18 +81,15 @@ void markusage(Decl* decl, int usage) {
 symbol::symbol(IdentifierKind symident, int symvclass)
  : vclass_((char)symvclass),
    ident_(symident),
-   is_const_(false),
-   semantic_tag_(0)
+   is_const_(false)
 {
     assert(ident_ != iINVALID);
 }
 
 symbol*
-NewVariable(Decl* decl, IdentifierKind ident, int vclass, int semantic_tag)
+NewVariable(Decl* decl, IdentifierKind ident, int vclass)
 {
-    symbol* sym = new symbol(ident, vclass);
-    sym->semantic_tag_ = semantic_tag;
-    return sym;
+    return new symbol(ident, vclass);
 }
 
 Decl* FindEnumStructField(Type* type, Atom* name) {

@@ -294,9 +294,7 @@ class Decl : public Stmt
 
     virtual symbol* sym() const { return nullptr; }
 
-    int semantic_tag() const {
-        return sym()->semantic_tag();
-    }
+    int semantic_tag();
     IdentifierKind ident() const {
         return sym()->ident();
     }
