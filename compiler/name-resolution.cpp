@@ -473,9 +473,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         if (vclass_ == sARGUMENT && ident == iARRAY)
             type_.ident = ident = iREFARRAY;
 
-        auto dim = type_.dim.empty() ? nullptr : &type_.dim[0];
-        sym_ = NewVariable(this, ident, vclass_, dim,
-                           type_.numdim(), type_.enum_struct_tag());
+        sym_ = NewVariable(this, ident, vclass_, type_.enum_struct_tag());
 
         if (ident == iVARARGS)
             markusage(this, uREAD);
@@ -1109,10 +1107,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         seen.emplace(field->name());
 
         symbol* child = new symbol(field->type().ident, sGLOBAL);
-        if (field->type().numdim()) {
-            child->set_dim_count(1);
-            child->set_dim(0, field->type().dim[0]);
-        }
         field->set_offset(position);
         field->set_sym(child);
 

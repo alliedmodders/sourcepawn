@@ -292,11 +292,11 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
             }
             matchtag(arg->type.tag(), var->tag(), MATCHTAG_COERCE);
         } else if (arg->type.ident == iREFARRAY) {
-            if (sym->ident() != iARRAY) {
+            if (var->ident() != iARRAY) {
                 report(expr->pos(), 405);
                 return false;
             }
-            if (sym->dim_count() != 1) {
+            if (var->type().dim.size() != 1) {
                 report(expr->pos(), 405);
                 return false;
             }
@@ -836,8 +836,9 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
             return false;
         }
 
-        for (int i = 0; i < left_sym->dim_count(); i++) {
-            if (!left_sym->dim(i)) {
+        auto left_var = left_sym->as<VarDeclBase>();
+        for (int i = 0; i < left_var->type().dim.size(); i++) {
+            if (!left_var->type().dim[i]) {
                 report(expr, 46) << left_sym->name();
                 return false;
             }
@@ -885,7 +886,8 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         if (right_val.sym) {
             // Change from the old logic - we immediately reject multi-dimensional
             // arrays in assignment and don't bother validating subarray assignment.
-            if (right_val.sym->dim_count() - right_val.array_level() > 1) {
+            auto right_var = right_val.sym->as<VarDeclBase>();
+            if (right_var->type().dim.size() - right_val.array_level() > 1) {
                 report(expr, 23);
                 return false;
             }
@@ -1503,7 +1505,8 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         }
     }
 
-    if (base_val.array_level() < base_val.sym->dim_count() - 1) {
+    auto base_var = base_val.sym->as<VarDeclBase>();
+    if (base_val.array_level() < base_var->type().dim.size() - 1) {
         // Note: Intermediate arrays are not l-values.
         out_val.set_array(iREFARRAY, base_val.sym, base_val.array_level() + 1);
         return true;
@@ -1817,12 +1820,8 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
     auto sym = new symbol(ti.ident, var->vclass());
-    if (ti.dim.size()) {
-        sym->set_dim_count(ti.dim.size());
-        for (int i = 0; i < ti.dim.size(); i++)
-            sym->set_dim(i, ti.dim[i]);
+    if (ti.dim.size())
         sym->set_semantic_tag(ti.declared_tag);
-    }
     var->set_addr(field->offset());
     var->set_sym(sym);
 
@@ -2678,13 +2677,13 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         assert(sub->ident() == iREFARRAY);
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
-        if (sub->dim_count() != val.array_dim_count()) {
+        if (sub_decl->type().dim.size() != val.array_dim_count()) {
             report(stmt, 48); /* array dimensions must match */
             return false;
         }
 
-        for (int i = 0; i < sub->dim_count(); i++) {
-            array.dim.emplace_back(sub->dim(i));
+        for (int i = 0; i < sub_decl->type().dim.size(); i++) {
+            array.dim.emplace_back(sub_decl->type().dim[i]);
             if (val.array_dim(i) != array.dim.back()) {
                 report(stmt, 47); /* array sizes must match */
                 return false;
@@ -2720,11 +2719,9 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
         int argcount = (int)curfunc->args().size();
 
-        auto dim = array.dim.empty() ? nullptr : &array.dim[0];
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL, dim, array.numdim(),
-                                   array.enum_struct_tag());
+        auto sub_sym = NewVariable(var, iREFARRAY, sGLOBAL, array.enum_struct_tag());
         var->set_addr((argcount + 3) * sizeof(cell));
         var->set_sym(sub_sym);
 

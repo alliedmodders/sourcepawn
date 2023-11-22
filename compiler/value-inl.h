@@ -29,8 +29,10 @@ namespace sp {
 
 inline int value::array_size() const {
     assert(ident == iARRAY || ident == iREFARRAY);
-    if (sym)
-        return sym->dim(array_level_);
+    if (sym) {
+        auto var = sym->as<VarDeclBase>();
+        return var->type().dim[array_level_];
+    }
     return array_level_;
 }
 
@@ -45,8 +47,10 @@ inline int value::array_dim_count() const {
     if (ident == iARRAYCHAR || ident == iARRAYCELL)
         return 1;
     assert(ident == iARRAY || ident == iREFARRAY);
-    if (sym)
-        return sym->dim_count() - array_level_;
+    if (sym) {
+        auto var = sym->as<VarDeclBase>();
+        return var->type().dim.size() - array_level_;
+    }
     return 1;
 }
 
@@ -56,8 +60,10 @@ inline int value::array_dim(int n) const {
 
     assert(ident == iARRAY || ident == iREFARRAY);
 
-    if (sym)
-        return sym->dim(array_level_ + n);
+    if (sym) {
+        auto var = sym->as<VarDeclBase>();
+        return var->type().dim[array_level_ + n];
+    }
 
     assert(n == 0);
     return array_size();

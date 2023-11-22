@@ -515,8 +515,8 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
     }
 
     std::vector<int> dim;
-    for (int i = 0; i < var->dim_count(); i++)
-        dim.emplace_back(var->dim(i));
+    for (int i = 0; i < var->type().dim.size(); i++)
+        dim.emplace_back(var->type().dim[i]);
 
     if (dim.size() != type_.dim.size()) {
         report(expr->pos(), 19) << type_.numdim() << dim.size();
