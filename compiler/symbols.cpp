@@ -82,34 +82,16 @@ symbol::symbol(IdentifierKind symident, int symvclass)
  : vclass_((char)symvclass),
    ident_(symident),
    is_const_(false),
-   semantic_tag_(0),
-   dim_data_(nullptr)
+   semantic_tag_(0)
 {
     assert(ident_ != iINVALID);
 }
 
-void symbol::set_dim_count(int dim_count) {
-    if (this->dim_count() == dim_count)
-        return;
-
-    auto& cc = CompileContext::get();
-    dim_data_ = cc.allocator().alloc<int>(dim_count + 1);
-    dim_data_[0] = dim_count;
-    dim_data_++;
-}
-
 symbol*
-NewVariable(Decl* decl, IdentifierKind ident, int vclass, int dim[],
-            int numdim, int semantic_tag)
+NewVariable(Decl* decl, IdentifierKind ident, int vclass, int semantic_tag)
 {
     symbol* sym = new symbol(ident, vclass);
-
-    if (numdim) {
-        sym->set_dim_count(numdim);
-        for (int i = 0; i < numdim; i++)
-            sym->set_dim(i, dim[i]);
-        sym->set_semantic_tag(semantic_tag);
-    }
+    sym->semantic_tag_ = semantic_tag;
     return sym;
 }
 

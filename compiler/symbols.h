@@ -72,19 +72,6 @@ struct symbol : public PoolObject
     int semantic_tag() const { return semantic_tag_; }
     void set_semantic_tag(int semantic_tag) { semantic_tag_ = semantic_tag; }
     int semantic_tag_;
-
-    int* dim_data_;     /* -1 = dim count, 0..n = dim sizes */
-
-    int dim_count() const { return dim_data_ ? dim_data_[-1] : 0; }
-    void set_dim_count(int dim_count);
-    int dim(int n) const {
-        assert(n < dim_count());
-        return dim_data_[n];
-    }
-    void set_dim(int n, int size) {
-        assert(n < dim_count());
-        dim_data_[n] = size;
-    }
 };
 
 enum ScopeKind {
@@ -165,8 +152,7 @@ symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
-symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass, int dim[], int numdim,
-                    int semantic_tag);
+symbol* NewVariable(Decl* decl, IdentifierKind ident, int vclass, int semantic_tag);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
 } // namespace sp

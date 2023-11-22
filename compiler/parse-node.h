@@ -303,15 +303,11 @@ class Decl : public Stmt
     char vclass() const {
         return sym()->vclass();
     }
-    int dim_count() const {
-        return sym()->dim_count();
-    }
     bool is_const() const {
         return sym()->is_const();
     }
-    int dim(int n) const {
-        return sym()->dim(n);
-    }
+    int dim(int n);
+    int dim_count();
     virtual int tag() const;
     cell addr() const { return *addr_; }
     void set_addr(cell addr) { addr_.emplace(addr); }
