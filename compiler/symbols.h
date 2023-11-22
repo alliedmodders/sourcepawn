@@ -61,13 +61,6 @@ struct symbol : public PoolObject
     IdentifierKind ident() const { return ident_; }
     void set_ident(IdentifierKind ident) { ident_ = ident; }
     IdentifierKind ident_ : 6;    /* see below for possible values */
-
-    // Variable: the variable is defined in the source file.
-    // Function: the function is defined ("implemented") in the source file
-    // Constant: the symbol is defined in the source file.
-    bool is_const() const { return is_const_; }
-    bool is_const_ : 1;
-    void set_is_const(bool is_const) { is_const_ = is_const; }
 };
 
 enum ScopeKind {
