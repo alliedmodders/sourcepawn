@@ -340,11 +340,9 @@ bool ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v) {
         // For backward compatibility with a huge number of plugins.
         auto decl = sym_expr->decl();
         if (auto ed = decl->as<EnumDecl>()) {
-            if (ed->sym()) {
-                *v = {};
-                v->set_constval(ed->array_size());
-                return true;
-            }
+            *v = {};
+            v->set_constval(ed->array_size());
+            return true;
         }
     }
 

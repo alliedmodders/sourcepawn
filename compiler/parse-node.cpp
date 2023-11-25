@@ -281,4 +281,36 @@ char Decl::vclass() {
     return 0;
 }
 
+IdentifierKind Decl::ident() {
+    return ident_impl();
+}
+
+IdentifierKind Decl::ident_impl() {
+    switch (kind()) {
+        case StmtKind::ArgDecl:
+        case StmtKind::VarDecl:
+            return as<VarDeclBase>()->type().ident;
+        case StmtKind::ConstDecl:
+        case StmtKind::EnumFieldDecl:
+            return iCONSTEXPR;
+        case StmtKind::FunctionDecl:
+        case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
+            return iFUNCTN;
+        case StmtKind::EnumStructDecl:
+            return iENUMSTRUCT;
+        case StmtKind::EnumDecl: {
+            auto es = as<EnumDecl>();
+            if (es->mm())
+                return iMETHODMAP;
+            return iCONSTEXPR;
+        }
+        case StmtKind::MethodmapDecl:
+            return iMETHODMAP;
+        default:
+            assert(false);
+            return iINVALID;
+    }
+}
+
 } // namespace sp

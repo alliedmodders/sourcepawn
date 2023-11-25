@@ -41,25 +41,6 @@ class MethodmapPropertyDecl;
 class SemaContext;
 struct token_pos_t;
 
-/*  Symbol table format
- *
- *  The symbol name read from the input file is stored in "name", the
- *  value of "addr" is written to the output file. The address in "addr"
- *  depends on the class of the symbol:
- *      global          offset into the data segment
- *      local           offset relative to the stack frame
- *      label           generated hexadecimal number
- *      function        offset into code segment
- */
-struct symbol : public PoolObject
-{
-    explicit symbol(IdentifierKind ident);
-
-    IdentifierKind ident() const { return ident_; }
-    void set_ident(IdentifierKind ident) { ident_ = ident; }
-    IdentifierKind ident_ : 6;    /* see below for possible values */
-};
-
 enum ScopeKind {
     sGLOBAL = 0,      /* global variable/constant class (no states) */
     sLOCAL = 1,       /* local variable/constant */
@@ -133,12 +114,9 @@ struct value {
 };
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
-symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos,
-                       int vclass);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
-symbol* NewVariable(Decl* decl, IdentifierKind ident);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
 } // namespace sp

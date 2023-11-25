@@ -46,8 +46,6 @@ class Parser
     typedef Expr* (Parser::*NewHierFn)();
 
 
-    static symbol* ParseInlineFunction(int tokid, const declinfo_t& decl, const int* this_tag);
-
     void ChangeStaticScope(std::vector<Stmt*>* stmts);
 
     Stmt* parse_unknown_decl(const full_token_t* tok);

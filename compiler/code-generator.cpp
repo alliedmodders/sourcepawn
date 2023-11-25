@@ -77,7 +77,7 @@ void
 CodeGenerator::AddDebugLine(int linenr)
 {
     auto str = ke::StringPrintf("L:%x %x", asm_.position(), linenr);
-    if (func_) {
+    if (fun_) {
         auto data = fun_->cg();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
@@ -111,7 +111,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
         string += "]";
     }
 
-    if (func_) {
+    if (fun_) {
         auto data = fun_->cg();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
@@ -138,7 +138,7 @@ CodeGenerator::EmitStmtList(StmtList* list)
 void
 CodeGenerator::EmitStmt(Stmt* stmt)
 {
-    if (func_) {
+    if (fun_) {
         AddDebugLine(stmt->pos().line);
         EmitBreak();
     }
@@ -1790,7 +1790,6 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
 
 void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     ke::SaveAndSet<FunctionDecl*> set_fun(&fun_, info);
-    ke::SaveAndSet<symbol*> set_func(&func_, info->sym());
 
     // Minimum 16 cells for general slack.
     current_memory_ = 16;
@@ -2215,7 +2214,7 @@ void CodeGenerator::EnqueueDebugSymbol(Decl* decl, uint32_t pc) {
 
     if (vclass == sGLOBAL) {
         global_syms_.emplace_back(decl, pc);
-    } else if (vclass == sSTATIC && !func_) {
+    } else if (vclass == sSTATIC && !fun_) {
         static_syms_.back().second.emplace_back(decl, pc);
     } else {
         local_syms_.back().emplace_back(decl, pc);

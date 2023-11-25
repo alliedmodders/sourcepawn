@@ -64,18 +64,6 @@ void markusage(Decl* decl, int usage) {
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
-symbol::symbol(IdentifierKind symident)
- : ident_(symident)
-{
-    assert(ident_ != iINVALID);
-}
-
-symbol*
-NewVariable(Decl* decl, IdentifierKind ident)
-{
-    return new symbol(ident);
-}
-
 Decl* FindEnumStructField(Type* type, Atom* name) {
     auto decl = type->asEnumStruct();
     if (!decl)
@@ -161,18 +149,6 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
     if (name_status == NewNameStatus::Shadowed)
         report(pos, 219) << name;
     return true;
-}
-
-static symbol* NewConstant(Decl* decl, const token_pos_t& pos) {
-    return new symbol(iCONSTEXPR);
-}
-
-symbol* DefineConstant(SemaContext& sc, Decl* decl, const token_pos_t& pos, int vclass)
-{
-    auto sym = NewConstant(decl, pos);
-    if (CheckNameRedefinition(sc, decl->name(), pos, vclass))
-        DefineSymbol(sc, decl, vclass);
-    return sym;
 }
 
 Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {

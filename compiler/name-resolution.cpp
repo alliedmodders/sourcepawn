@@ -196,27 +196,18 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
     tag_ = tag;
 
-    symbol* enumsym = nullptr;
     if (name_) {
+        bool is_methodmap = false;
         if (vclass_ == sGLOBAL) {
-            if (auto decl = FindSymbol(sc, name_)) {
-                // If we were previously defined as a methodmap, don't overwrite the
-                // symbol. Otherwise, flow into DefineConstant where we will error.
-                if (auto mm = decl->as<MethodmapDecl>())
-                    enumsym = mm->sym();
-            }
+            if (auto decl = FindSymbol(sc, name_))
+                is_methodmap = decl->kind() == StmtKind::MethodmapDecl;
         }
 
-        if (!enumsym) {
-            // create the root symbol, so the fields can have it as their "parent"
-            enumsym = DefineConstant(sc, this, pos_, vclass_);
+        if (!is_methodmap) {
+            if (CheckNameRedefinition(sc, name_, pos_, vclass_))
+                DefineSymbol(sc, this, vclass_);
         }
     }
-
-    // If this enum is for a methodmap, forget the symbol so code below doesn't
-    // build an enum struct.
-    if (enumsym && enumsym->ident() == iMETHODMAP)
-        enumsym = NULL;
 
     cell value = 0;
     for (const auto& field : fields_ ) {
@@ -233,22 +224,18 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         field->set_tag(tag);
         field->set_const_val(value);
 
-        symbol* sym = DefineConstant(sc, field, field->pos(), vclass_);
-        if (!sym)
+        if (!CheckNameRedefinition(sc, field->name(), field->pos(), vclass_))
             continue;
+        DefineSymbol(sc, field, vclass_);
 
         if (multiplier_ == 1)
             value += increment_;
         else
             value *= increment_ * multiplier_;
-        field->set_sym(sym);
     }
 
     // set the enum name to the "next" value (typically the last value plus one)
-    if (enumsym)
-        array_size_ = value;
-
-    sym_ = enumsym;
+    array_size_ = value;
     return true;
 }
 
@@ -396,20 +383,17 @@ TypesetDecl::Bind(SemaContext& sc)
     return ok;
 }
 
-bool
-ConstDecl::EnterNames(SemaContext& sc)
-{
-    sym_ = DefineConstant(sc, this, pos_, vclass_);
-    return !!sym_;
+bool ConstDecl::EnterNames(SemaContext& sc) {
+    if (!CheckNameRedefinition(sc, name(), pos(), vclass()))
+        return false;
+    DefineSymbol(sc, this, vclass());
+    return true;
 }
 
 bool
 ConstDecl::Bind(SemaContext& sc)
 {
     if (sc.func() && !EnterNames(sc))
-        return false;
-
-    if (!sym_)
         return false;
 
     if (!sc.BindType(pos_, &type_))
@@ -461,14 +445,11 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         error(pos_, 165);
 
     if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
-        sym_ = new symbol(iVARIABLE);
         type_.is_const = true;
     } else {
         IdentifierKind ident = type_.ident;
         if (vclass_ == sARGUMENT && ident == iARRAY)
             type_.ident = ident = iREFARRAY;
-
-        sym_ = NewVariable(this, ident);
 
         if (ident == iVARARGS)
             markusage(this, uREAD);
@@ -736,12 +717,9 @@ bool FunctionDecl::EnterNames(SemaContext& sc) {
     }
 
     if (other) {
-        sym_ = other->sym();
         proto_or_impl_ = other;
         other->proto_or_impl_ = this;
     } else {
-        sym_ = new symbol(iFUNCTN);
-
         auto scope = is_static() ? sSTATIC : sGLOBAL;
         DefineSymbol(sc, this, scope);
     }
@@ -789,10 +767,6 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
 bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
-
-    // Only named functions get an early symbol in EnterNames.
-    if (!sym_)
-        sym_ = new symbol(iFUNCTN);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
@@ -1054,8 +1028,10 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
     tag_ = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
 
     AutoErrorPos error_pos(pos_);
-    root_ = DefineConstant(sc, this, pos_, sGLOBAL);
-    root_->set_ident(iENUMSTRUCT);
+
+    if (!CheckNameRedefinition(sc, name(), pos_, sGLOBAL))
+        return false;
+    DefineSymbol(sc, this, sGLOBAL);
 
     std::unordered_set<Atom*> seen;
 
@@ -1096,9 +1072,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         }
         seen.emplace(field->name());
 
-        symbol* child = new symbol(field->type().ident);
         field->set_offset(position);
-        field->set_sym(child);
 
         cell size = 1;
         if (field->type().numdim()) {
@@ -1118,9 +1092,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             continue;
         }
         seen.emplace(decl->name());
-
-        auto sym = new symbol(iFUNCTN);
-        decl->set_sym(sym);
     }
 
     array_size_ = position;
@@ -1128,9 +1099,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 }
 
 bool EnumStructDecl::Bind(SemaContext& sc) {
-    if (!root_)
-        return false;
-
     AutoCountErrors errors;
     for (const auto& fun : methods_) {
         auto inner_name = DecorateInnerName(name_, fun->decl_name());
@@ -1174,12 +1142,8 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
             report(pos_, 443) << name_;
             return false;
         }
-
-        sym_ = ed->sym();
-        sym_->set_ident(iMETHODMAP);
         ed->set_mm(this);
     } else {
-        sym_ = new symbol(iMETHODMAP);
         cc.globals()->Add(this);
     }
 
