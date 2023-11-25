@@ -52,6 +52,10 @@ Expr* VarDeclBase::init_rhs() const {
     return init_->right();
 }
 
+void VarDeclBase::BindAddress(cell addr) {
+    addr_.bind(addr);
+}
+
 void
 ParseNode::error(const token_pos_t& pos, int number)
 {
@@ -220,6 +224,16 @@ int MethodmapPropertyDecl::property_tag() const {
     if (valp->type().ident != iVARIABLE)
         return types->tag_void();
     return valp->type().tag();
+}
+
+cell Decl::ConstVal() {
+    if (auto cv = as<ConstDecl>())
+        return cv->const_val();
+    else if (auto efd = as<EnumFieldDecl>())
+        return efd->const_val();
+
+    assert(false);
+    return 0;
 }
 
 int Decl::tag() const {

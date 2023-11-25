@@ -65,12 +65,13 @@ namespace sp {
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
 
 struct DefaultArrayData;
+class VarDecl;
 
 struct DefaultArg : public PoolObject {
     int tag = 0;
     ke::Maybe<cell> val;
     DefaultArrayData* array = nullptr;
-    Decl* sym = nullptr;
+    VarDecl* sym = nullptr;
 };
  
 struct symbol;
@@ -125,7 +126,8 @@ constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);
 }
 
-static constexpr cell kMaxCells = INT_MAX / sizeof(cell);
+// Label needs one extra bit, so divide by 2.
+static constexpr cell kMaxCells = INT_MAX / sizeof(cell) / 2;
 
 // Disable this to enable easy watchpoints on bitfield members.
 #if 1

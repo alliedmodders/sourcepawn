@@ -144,6 +144,10 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void address(Decl* sym, regid reg) {
+    address(sym->as<VarDeclBase>(), reg);
+  }
+
+  void address(VarDeclBase* sym, regid reg) {
     if (sym->ident() == iREFARRAY || sym->ident() == iREFERENCE) {
       if (reg == sPRI)
         emit(OP_LOAD_S_PRI, sym->addr());
@@ -164,7 +168,7 @@ class SmxAssemblyBuffer : public ByteBuffer
     }
   }
 
-  void copyarray(Decl* sym, cell size) {
+  void copyarray(VarDeclBase* sym, cell size) {
     if (sym->ident() == iREFARRAY) {
       assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
       emit(OP_LOAD_S_ALT, sym->addr());

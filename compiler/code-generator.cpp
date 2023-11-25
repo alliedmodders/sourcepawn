@@ -22,6 +22,7 @@
 //  Version: $Id$
 
 #include <map>
+#include <optional>
 
 #include <amtl/am-raii.h>
 
@@ -89,9 +90,19 @@ CodeGenerator::AddDebugLine(int linenr)
 void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto symname = decl->name()->chars();
 
+    std::optional<cell> addr;
+    if (auto fun = decl->as<FunctionDecl>()) {
+        addr.emplace(fun->cg()->label.offset());
+    } else if (auto var = decl->as<VarDeclBase>()) {
+        if (auto cv = var->as<ConstDecl>())
+            addr.emplace(cv->const_val());
+        else
+            addr.emplace(var->addr());
+    }
+
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   decl->addr(), decl->tag(), symname, pc,
+                                   *addr, decl->tag(), symname, pc,
                                    asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
     if (decl->ident() == iARRAY || decl->ident() == iREFARRAY) {
         string += " [ ";
@@ -139,11 +150,10 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         case StmtKind::ChangeScopeNode:
             EmitChangeScopeNode(stmt->to<ChangeScopeNode>());
             break;
+        case StmtKind::ConstDecl:
         case StmtKind::VarDecl:
-            EmitVarDecl(stmt->to<VarDecl>());
-            break;
         case StmtKind::ArgDecl:
-            EmitVarDecl(stmt->to<ArgDecl>());
+            EmitVarDecl(stmt->to<VarDeclBase>());
             break;
         case StmtKind::ExprStmt:
             // Emit even if no side effects.
@@ -281,12 +291,10 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
         EnqueueDebugSymbol(decl, asm_.position());
 }
 
-void
-CodeGenerator::EmitGlobalVar(VarDeclBase* decl)
-{
+void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
     BinaryExpr* init = decl->init();
 
-    decl->set_addr(data_.dat_address());
+    __ bind_to(decl->label(), data_.dat_address());
 
     if (decl->ident() == iVARIABLE) {
         assert(!init || init->right()->val().ident == iCONSTEXPR);
@@ -309,12 +317,11 @@ CodeGenerator::EmitGlobalVar(VarDeclBase* decl)
 void
 CodeGenerator::EmitLocalVar(VarDeclBase* decl)
 {
-    symbol* sym = decl->sym();
     BinaryExpr* init = decl->init();
 
-    if (sym->ident() == iVARIABLE) {
+    if (decl->ident() == iVARIABLE) {
         markstack(decl, MEMUSE_STATIC, 1);
-        decl->set_addr(-current_stack_ * sizeof(cell));
+        decl->BindAddress(-current_stack_ * sizeof(cell));
 
         if (init) {
             const auto& val = init->right()->val();
@@ -334,7 +341,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
         }
-    } else if (sym->ident() == iARRAY) {
+    } else if (decl->ident() == iARRAY) {
         ArrayData array;
         BuildArrayInitializer(decl, &array, 0);
 
@@ -343,7 +350,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
         cell total_size = iv_size + data_size;
 
         markstack(decl, MEMUSE_STATIC, total_size);
-        decl->set_addr(-cell(current_stack_ * sizeof(cell)));
+        decl->BindAddress(-cell(current_stack_ * sizeof(cell)));
         __ emit(OP_STACK, -cell(total_size * sizeof(cell)));
 
         cell fill_value = 0;
@@ -393,12 +400,12 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
 
         __ emit(OP_ADDR_PRI, decl->addr());
         __ emit(OP_INITARRAY_PRI, iv_addr, iv_size, non_filled, fill_size, fill_value);
-    } else if (sym->ident() == iREFARRAY) {
+    } else if (decl->ident() == iREFARRAY) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
         markstack(decl, MEMUSE_STATIC, 1);
-        decl->set_addr(-current_stack_ * sizeof(cell));
+        decl->BindAddress(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
         if (NewArrayExpr* ctor = init_rhs->as<NewArrayExpr>()) {
@@ -447,13 +454,15 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         } else if (auto expr = field->value->as<TaggedValueExpr>()) {
             values[arg->index] = expr->value();
         } else if (auto expr = field->value->as<SymbolExpr>()) {
-            values[arg->index] = expr->decl()->addr();
+            auto var = expr->decl()->as<VarDeclBase>();
+            assert(var);
+            values[arg->index] = var->addr();
         } else {
             assert(false);
         }
     }
 
-    decl->set_addr(data_.dat_address());
+    decl->BindAddress(data_.dat_address());
 
     for (const auto& value : values)
         data_.Add(value);
@@ -1487,22 +1496,24 @@ CodeGenerator::EmitRvalue(value* lval)
         case iARRAYCHAR:
             __ emit(OP_LODB_I, 1);
             break;
-        case iREFERENCE:
-            assert(lval->sym);
-            assert(lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT);
-            __ emit(OP_LREF_S_PRI, lval->sym->addr());
+        case iREFERENCE: {
+            auto var = lval->sym->as<VarDeclBase>();
+            assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
+            __ emit(OP_LREF_S_PRI, var->addr());
             break;
+        }
         case iACCESSOR:
             InvokeGetter(lval->accessor());
             lval->ident = iEXPRESSION;
             break;
-        default:
-            assert(lval->sym);
-            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
-              __ emit(OP_LOAD_S_PRI, lval->sym->addr());
+        default: {
+            auto var = lval->sym->as<VarDeclBase>();
+            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
+              __ emit(OP_LOAD_S_PRI, var->addr());
             else
-              __ emit(OP_LOAD_PRI, lval->sym->addr());
+              __ emit(OP_LOAD_PRI, var->addr());
             break;
+        }
     }
 }
 
@@ -1516,21 +1527,23 @@ CodeGenerator::EmitStore(const value* lval)
         case iARRAYCHAR:
             __ emit(OP_STRB_I, 1);
             break;
-        case iREFERENCE:
-            assert(lval->sym);
-            assert(lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT);
-            __ emit(OP_SREF_S_PRI, lval->sym->addr());
+        case iREFERENCE: {
+            auto var = lval->sym->as<VarDeclBase>();
+            assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
+            __ emit(OP_SREF_S_PRI, var->addr());
             break;
+        }
         case iACCESSOR:
             InvokeSetter(lval->accessor(), true);
             break;
-        default:
-            assert(lval->sym);
-            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
-                __ emit(OP_STOR_S_PRI, lval->sym->addr());
+        default: {
+            auto var = lval->sym->as<VarDeclBase>();
+            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
+                __ emit(OP_STOR_S_PRI, var->addr());
             else
-                __ emit(OP_STOR_PRI, lval->sym->addr());
+                __ emit(OP_STOR_PRI, var->addr());
             break;
+        }
     }
 }
 
@@ -1815,7 +1828,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     stack_scopes_.clear();
     heap_scopes_.clear();
 
-    info->set_addr(info->cg()->label.offset());
     info->cg()->pcode_end = asm_.pc();
     info->cg()->max_local_stack = max_func_memory_;
 
@@ -1857,11 +1869,11 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
     assert(fun->is_live());
 
     if (fun->is_native()) {
-        if (fun->addr() < 0) {
-            fun->set_addr((cell)native_list_.size());
+        if (!fun->cg()->label.bound()) {
+            __ bind_to(&fun->cg()->label, native_list_.size());
             native_list_.emplace_back(fun);
         }
-        __ emit(OP_SYSREQ_N, fun->addr(), nargs);
+        __ sysreq_n(&fun->cg()->label, nargs);
     } else {
         __ emit(OP_PUSH_C, nargs);
         __ emit(OP_CALL, &fun->cg()->label);
@@ -1881,7 +1893,9 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
 {
     DefaultArg* def = arg->default_value();
     if (def->sym) {
-        __ emit(OP_CONST_PRI, def->sym->addr());
+        // Need to use the address label rather than raw address, since the
+        // variable may not be emitted yet.
+        __ emit(OP_CONST_PRI, def->sym->label());
         return;
     }
 
@@ -1995,23 +2009,27 @@ void CodeGenerator::EmitInc(const value* lval)
             __ emit(OP_POP_ALT);
             __ emit(OP_POP_PRI);
             break;
-        case iREFERENCE:
+        case iREFERENCE: {
+            auto var = lval->sym->as<VarDeclBase>();
             __ emit(OP_PUSH_PRI);
-            __ emit(OP_LREF_S_PRI, lval->sym->addr());
+            __ emit(OP_LREF_S_PRI, var->addr());
             __ emit(OP_INC_PRI);
-            __ emit(OP_SREF_S_PRI, lval->sym->addr());
+            __ emit(OP_SREF_S_PRI, var->addr());
             __ emit(OP_POP_PRI);
             break;
+        }
         case iACCESSOR:
             __ emit(OP_INC_PRI);
             InvokeSetter(lval->accessor(), false);
             break;
-        default:
-            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
-                __ emit(OP_INC_S, lval->sym->addr());
+        default: {
+            auto var = lval->sym->as<VarDeclBase>();
+            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
+                __ emit(OP_INC_S, var->addr());
             else
-                __ emit(OP_INC, lval->sym->addr());
+                __ emit(OP_INC, var->addr());
             break;
+        }
     }
 }
 
@@ -2031,23 +2049,27 @@ void CodeGenerator::EmitDec(const value* lval)
             __ emit(OP_POP_ALT);
             __ emit(OP_POP_PRI);
             break;
-        case iREFERENCE:
+        case iREFERENCE: {
+            auto var = lval->sym->as<VarDeclBase>();
             __ emit(OP_PUSH_PRI);
-            __ emit(OP_LREF_S_PRI, lval->sym->addr());
+            __ emit(OP_LREF_S_PRI, var->addr());
             __ emit(OP_DEC_PRI);
-            __ emit(OP_SREF_S_PRI, lval->sym->addr());
+            __ emit(OP_SREF_S_PRI, var->addr());
             __ emit(OP_POP_PRI);
             break;
+        }
         case iACCESSOR:
             __ emit(OP_DEC_PRI);
             InvokeSetter(lval->accessor(), false);
             break;
-        default:
-            if (lval->sym->vclass() == sLOCAL || lval->sym->vclass() == sARGUMENT)
-                __ emit(OP_DEC_S, lval->sym->addr());
+        default: {
+            auto var = lval->sym->as<VarDeclBase>();
+            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
+                __ emit(OP_DEC_S, var->addr());
             else
-                __ emit(OP_DEC, lval->sym->addr());
+                __ emit(OP_DEC, var->addr());
             break;
+        }
     }
 }
 

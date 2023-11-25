@@ -1,3 +1,3 @@
 public void OnPluginStart() {
-    int a[268435454];
+    int a[536870908];
 }

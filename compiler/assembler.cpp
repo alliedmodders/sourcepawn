@@ -395,7 +395,7 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(fun->name());
-    method.pcode_start = fun->addr();
+    method.pcode_start = fun->cg()->label.offset();
     method.pcode_end = fun->cg()->pcode_end;
     method.signature = encode_signature(fun->canonical());
 
@@ -443,7 +443,7 @@ RttiBuilder::add_enumstruct(Type* type)
     smx_rtti_enumstruct es = {};
     es.name = names_->add(*cc_.atoms(), type->name());
     es.first_field = es_fields_->count();
-    es.size = es_decl->addr();
+    es.size = es_decl->array_size();
     enumstructs_->add(es);
 
     // Pre-allocate storage in case of nested types.
@@ -842,12 +842,12 @@ Assembler::Assemble(SmxByteBuffer* buffer)
                 entry.name = fun->name()->str();
             } else {
                 // Create a private name.
-                entry.name = ke::StringPrintf(".%d.%s", fun->addr(), fun->name()->chars());
+                entry.name = ke::StringPrintf(".%d.%s", fun->cg()->label.offset(), fun->name()->chars());
             }
 
             functions.emplace_back(std::move(entry));
-        } else if (auto var = decl->as<VarDeclBase>()) {
-            if (var->is_public() || var->is_used()) {
+        } else if (auto var = decl->as<VarDecl>()) {
+            if (var->is_public() || (var->is_used() && !var->as<ConstDecl>())) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
                 pubvar.address = var->addr();
                 pubvar.name = names->add(var->name());
@@ -863,12 +863,12 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     for (size_t i = 0; i < functions.size(); i++) {
         function_entry& f = functions[i];
 
-        assert(f.decl->addr() > 0);
+        assert(f.decl->cg()->label.offset() > 0);
         assert(f.decl->impl());
-        assert(f.decl->cg()->pcode_end > f.decl->addr());
+        assert(f.decl->cg()->pcode_end > f.decl->cg()->label.offset());
 
         sp_file_publics_t& pubfunc = publics->add();
-        pubfunc.address = f.decl->addr();
+        pubfunc.address = f.decl->cg()->label.offset();
         pubfunc.name = names->add(*cc_.atoms(), f.name.c_str());
 
         auto id = (uint32_t(i) << 1) | 1;
@@ -882,7 +882,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     // Populate the native table.
     for (size_t i = 0; i < cg_.native_list().size(); i++) {
         FunctionDecl* sym = cg_.native_list()[i];
-        assert(size_t(sym->addr()) == i);
+        assert(size_t(sym->cg()->label.offset()) == i);
 
         sp_file_natives_t& entry = natives->add();
         entry.name = names->add(sym->name());

@@ -99,6 +99,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         case StmtKind::ChangeScopeNode:
             return CheckChangeScopeNode(stmt->to<ChangeScopeNode>());
         case StmtKind::VarDecl:
+        case StmtKind::ConstDecl:
             return CheckVarDecl(stmt->to<VarDecl>());
         case StmtKind::ArgDecl:
             return CheckVarDecl(stmt->to<ArgDecl>());
@@ -1304,14 +1305,10 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     // Don't expose the tag of old enumroots.
     Type* type = types_->find(decl->tag());
     if (decl->as<EnumDecl>() && !type->asEnumStruct() && decl->ident() == iCONSTEXPR) {
-        val.tag = 0;
         report(expr, 174) << decl->name();
-    } else {
-        val.tag = decl->tag();
+        return false;
     }
-
-    if (sym->ident() == iCONSTEXPR)
-        val.set_constval(decl->addr());
+    val.tag = decl->tag();
 
     if (auto fun = decl->as<FunctionDecl>()) {
         fun = fun->canonical();
@@ -1361,6 +1358,9 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             // Should not be a symbol.
             assert(false);
     }
+
+    if (sym->ident() == iCONSTEXPR)
+        val.set_constval(decl->ConstVal());
     return true;
 }
 
@@ -1820,7 +1820,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
     auto sym = new symbol(ti.ident);
-    var->set_addr(field->offset());
+    var->label()->bind(field->offset());
     var->set_sym(sym);
 
     val.ident = ti.ident;
@@ -1927,8 +1927,8 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             return true;
         }
 
-        if (decl->ident() == iENUMSTRUCT) {
-            val.set_constval(decl->addr());
+        if (auto esd = decl->as<EnumStructDecl>()) {
+            val.set_constval(esd->array_size());
             return true;
         }
 
@@ -2462,11 +2462,6 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
  *
  *  "Public" functions are excluded from the check, since these
  *  may be exported to other object modules.
- *  Labels are excluded from the check if the argument 'testlabs'
- *  is 0. Thus, labels are not tested until the end of the function.
- *  Constants may also be excluded (convenient for global constants).
- *
- *  When the nesting level drops below "level", the check stops.
  *
  *  The function returns whether there is an "entry" point for the file.
  *  This flag will only be 1 when browsing the global symbol table.
@@ -2720,7 +2715,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
         auto sub_sym = NewVariable(var, iREFARRAY);
-        var->set_addr((argcount + 3) * sizeof(cell));
+        var->BindAddress((argcount + 3) * sizeof(cell));
         var->set_sym(sub_sym);
 
         auto info = new FunctionDecl::ReturnArrayInfo;
@@ -3388,8 +3383,9 @@ void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         Decl* sym = expr->decl();
         assert(sym->vclass() == sGLOBAL);
+        assert(sym->as<VarDecl>());
 
-        def->sym = sym;
+        def->sym = sym->as<VarDecl>();
     } else {
         auto array = cc.NewDefaultArrayData();
         BuildArrayInitializer(decl, array, 0);
