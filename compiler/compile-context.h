@@ -44,7 +44,6 @@ class SemaContext;
 class SymbolScope;
 class TypeDictionary;
 struct CompileOptions;
-struct symbol;
 
 // The thread-safe successor to scvars.
 class CompileContext final

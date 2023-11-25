@@ -292,14 +292,11 @@ class Decl : public Stmt
         name_(name)
     {}
 
-    virtual symbol* sym() const { return nullptr; }
-
     cell ConstVal();
 
     int semantic_tag();
-    IdentifierKind ident() const {
-        return sym()->ident();
-    }
+    IdentifierKind ident();
+    IdentifierKind ident_impl();
     char vclass();
     bool is_const();
     int dim(int n);
@@ -355,11 +352,6 @@ class VarDeclBase : public Decl
     void set_is_read() { is_read_ = true; }
     bool is_written() const { return is_written_; }
     void set_is_written() { is_written_ = true; }
-    symbol* sym() const override { return sym_; }
-    void set_sym(symbol* sym) {
-        assert(!sym_);
-        sym_ = sym;
-    }
     int tag() const override { return type_.tag(); }
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
@@ -376,7 +368,6 @@ class VarDeclBase : public Decl
     bool autozero_ : 1;
     bool is_read_ : 1;
     bool is_written_ : 1;
-    symbol* sym_ = nullptr;
     Label addr_;
 };
 
@@ -451,8 +442,6 @@ class EnumFieldDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumFieldDecl; }
 
     Expr* value() const { return value_; }
-    symbol* sym() const override { return sym_; }
-    void set_sym(symbol* sym) { sym_ = sym; }
     int tag() const override { return tag_; }
     void set_tag(int tag) { tag_ = tag; }
 
@@ -462,7 +451,6 @@ class EnumFieldDecl : public Decl
   private:
     int tag_ = 0;
     Expr* value_;
-    symbol* sym_ = nullptr;
     cell const_val_ = 0;
 };
 
@@ -488,7 +476,6 @@ class EnumDecl : public Decl
     PoolArray<EnumFieldDecl*>& fields() { return fields_; }
     int increment() const { return increment_; }
     int multiplier() const { return multiplier_; }
-    symbol* sym() const override { return sym_; }
     int array_size() const { return array_size_; }
     int tag() const override { return tag_; }
 
@@ -504,7 +491,6 @@ class EnumDecl : public Decl
     int array_size_ = 0;
     int tag_ = 0;
     MethodmapDecl* mm_ = nullptr;
-    symbol* sym_ = nullptr;
 };
 
 struct StructField {
@@ -1673,9 +1659,6 @@ class FunctionDecl : public Decl
     declinfo_t& decl() { return decl_; }
     const declinfo_t& decl() const { return decl_; }
 
-    symbol* sym() const override { return sym_; }
-    void set_sym(symbol* sym) { sym_ = sym; }
-
     int tag() const override { return decl_.type.tag(); }
 
     const typeinfo_t& type() const { return decl_.type; }
@@ -1748,7 +1731,6 @@ class FunctionDecl : public Decl
     declinfo_t decl_;
     Stmt* body_ = nullptr;
     PoolArray<ArgDecl*> args_;
-    symbol* sym_ = nullptr;
     SymbolScope* scope_ = nullptr;
     ke::Maybe<int> this_tag_;
     PoolString* deprecate_ = nullptr;
@@ -1836,13 +1818,10 @@ class LayoutFieldDecl : public Decl
 
     cell_t offset() const { return offset_; }
     void set_offset(cell_t offset) { offset_ = offset; }
-    symbol* sym() const override { return sym_; }
-    void set_sym(symbol* sym) { sym_ = sym; }
 
   private:
     typeinfo_t type_;
     cell_t offset_;
-    symbol* sym_ = nullptr;
 };
 
 class EnumStructDecl : public LayoutDecl
@@ -1861,7 +1840,6 @@ class EnumStructDecl : public LayoutDecl
     PoolArray<FunctionDecl*>& methods() { return methods_; }
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
-    symbol* sym() const override { return root_; }
     cell_t array_size() const { return array_size_; }
     int tag() const override { return tag_; }
 
@@ -1869,7 +1847,6 @@ class EnumStructDecl : public LayoutDecl
     PoolArray<FunctionDecl*> methods_;
     PoolArray<LayoutFieldDecl*> fields_;
     int tag_ = 0;
-    symbol* root_ = nullptr;
     cell_t array_size_ = 0;
 };
 
@@ -1931,7 +1908,6 @@ class MethodmapDecl : public LayoutDecl
     int tag() const override { return tag_; }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
-    symbol* sym() const override { return sym_; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);
@@ -1945,7 +1921,6 @@ class MethodmapDecl : public LayoutDecl
     PoolArray<MethodmapPropertyDecl*> properties_;
     PoolArray<MethodmapMethodDecl*> methods_;
     MethodmapDecl* parent_ = nullptr;
-    symbol* sym_ = nullptr;
     MethodmapMethodDecl* ctor_ = nullptr;
     MethodmapMethodDecl* dtor_ = nullptr;
 };

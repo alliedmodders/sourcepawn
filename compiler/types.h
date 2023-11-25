@@ -81,7 +81,6 @@ enum class TypeKind : uint8_t {
 };
 
 struct funcenum_t;
-struct symbol;
 class EnumStructDecl;
 class Expr;
 class MethodmapDecl;

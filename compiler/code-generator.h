@@ -35,7 +35,6 @@ namespace sp {
 
 class CompileContext;
 class ParseTree;
-struct symbol;
 
 class CodeGenerator final
 {
@@ -219,7 +218,6 @@ class CodeGenerator final
     CompileContext& cc_;
     ParseTree* tree_;
     FunctionDecl* fun_ = nullptr;
-    symbol* func_ = nullptr;
     int max_script_memory_ = 0;
 
     tr::vector<tr::string> debug_strings_;

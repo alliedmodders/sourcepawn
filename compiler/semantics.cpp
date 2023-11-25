@@ -158,11 +158,10 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
 bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     AutoErrorPos aep(decl->pos());
 
-    auto sym = decl->sym();
     const auto& type = decl->type();
 
     // Constants are checked during binding.
-    if (sym->ident() == iCONSTEXPR)
+    if (decl->ident() == iCONSTEXPR)
         return true;
 
     if (types_->find(type.tag())->kind() == TypeKind::Struct)
@@ -174,7 +173,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (type.ident == iARRAY || type.ident == iREFARRAY) {
         if (!CheckArrayDeclaration(decl))
             return false;
-        if (decl->vclass() == sLOCAL && sym->ident() == iREFARRAY)
+        if (decl->vclass() == sLOCAL && decl->ident() == iREFARRAY)
             pending_heap_allocation_ = true;
         return true;
     }
@@ -285,9 +284,8 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
             return false;
         }
 
-        auto sym = var->sym();
         if (arg->type.ident == iVARIABLE) {
-            if (sym->ident() != iVARIABLE) {
+            if (var->type().ident != iVARIABLE) {
                 report(expr->pos(), 405);
                 return false;
             }
@@ -1297,9 +1295,8 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         return false;
     }
 
-    auto sym = decl->sym();
     auto& val = expr->val();
-    val.ident = sym->ident();
+    val.ident = decl->ident();
     val.sym = decl;
 
     // Don't expose the tag of old enumroots.
@@ -1336,7 +1333,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         fun->set_is_callback();
     }
 
-    switch (sym->ident()) {
+    switch (decl->ident()) {
         case iVARIABLE:
         case iREFERENCE:
             expr->set_lvalue(true);
@@ -1344,7 +1341,6 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         case iARRAY:
         case iREFARRAY:
         case iFUNCTN:
-        case iCONSTEXPR:
             // Not an l-value.
             break;
         case iMETHODMAP:
@@ -1354,13 +1350,13 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
                 return false;
             }
             break;
+        case iCONSTEXPR:
+            val.set_constval(decl->ConstVal());
+            break;
         default:
             // Should not be a symbol.
             assert(false);
     }
-
-    if (sym->ident() == iCONSTEXPR)
-        val.set_constval(decl->ConstVal());
     return true;
 }
 
@@ -1819,9 +1815,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     // Hack. Remove when we can.
     auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
                            false, false, nullptr);
-    auto sym = new symbol(ti.ident);
     var->label()->bind(field->offset());
-    var->set_sym(sym);
 
     val.ident = ti.ident;
     val.sym = var;
@@ -2661,13 +2655,11 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
     auto& array = stmt->array();
     array = {};
-    array.ident = iARRAY;
+    array.ident = iREFARRAY;
 
     if (curfunc->return_array()) {
         VarDecl* sub_decl = curfunc->return_array()->var;
-        auto sub = sub_decl->sym();
 
-        assert(sub->ident() == iREFARRAY);
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
         if (sub_decl->type().dim.size() != val.array_dim_count()) {
@@ -2714,9 +2706,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
         auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
                                false, false, nullptr);
-        auto sub_sym = NewVariable(var, iREFARRAY);
         var->BindAddress((argcount + 3) * sizeof(cell));
-        var->set_sym(sub_sym);
 
         auto info = new FunctionDecl::ReturnArrayInfo;
         info->var = var;
@@ -3241,7 +3231,7 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
     for (const auto& decl : stmt->symbols()) {
         decl->set_is_read();
 
-        switch (decl->sym()->ident()) {
+        switch (decl->ident()) {
             case iVARIABLE:
             case iREFERENCE:
             case iARRAY:
