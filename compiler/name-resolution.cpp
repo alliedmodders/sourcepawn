@@ -231,7 +231,7 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         }
 
         field->set_tag(tag);
-        field->set_addr(value);
+        field->set_const_val(value);
 
         symbol* sym = DefineConstant(sc, field, field->pos(), vclass_);
         if (!sym)
@@ -245,10 +245,8 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
     }
 
     // set the enum name to the "next" value (typically the last value plus one)
-    if (enumsym) {
-        addr_ = value;
+    if (enumsym)
         array_size_ = value;
-    }
 
     sym_ = enumsym;
     return true;
@@ -423,16 +421,13 @@ ConstDecl::Bind(SemaContext& sc)
         return false;
 
     int tag;
-    cell value;
-    if (!expr_->EvalConst(&value, &tag)) {
+    if (!expr_->EvalConst(&value_, &tag)) {
         report(expr_, 8);
         return false;
     }
 
     AutoErrorPos aep(pos_);
     matchtag(type_.tag(), tag, 0);
-
-    addr_ = value;
     return true;
 }
 
@@ -858,9 +853,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         is_public_ = true;
     }
 
-    if (is_native_)
-        addr_ = -1;
-
     ke::Maybe<AutoEnterScope> enter_scope;
     if (!args_.empty()) {
         enter_scope.init(sc, sARGUMENT);
@@ -896,7 +888,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         if (typeinfo.ident == iVARARGS) {
             /* redimension the argument list, add the entry iVARARGS */
-            var->set_addr(static_cast<cell>((arg_index + 3) * sizeof(cell)));
+            var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
             break;
         }
 
@@ -915,7 +907,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
          *
          * Since arglist has an empty terminator at the end, we actually add 2.
          */
-        var->set_addr(static_cast<cell>((arg_index + 3) * sizeof(cell)));
+        var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
         arg_index++;
 
         if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
@@ -1131,9 +1123,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         decl->set_sym(sym);
     }
 
-    addr_ = position;
     array_size_ = position;
-
     return errors.ok();
 }
 

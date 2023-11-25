@@ -68,7 +68,7 @@ class Label
     return status != 0;
   }
   static inline uint32_t ToOffset(uint32_t status) {
-    return status >> 1;
+    return int32_t(status) >> 1;
   }
 
   bool used() const {
@@ -77,7 +77,7 @@ class Label
   bool bound() const {
     return !!(status_ & kBound);
   }
-  uint32_t offset() const {
+  int32_t offset() const {
     assert(bound());
     return ToOffset(status_);
   }

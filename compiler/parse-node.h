@@ -294,6 +294,8 @@ class Decl : public Stmt
 
     virtual symbol* sym() const { return nullptr; }
 
+    cell ConstVal();
+
     int semantic_tag();
     IdentifierKind ident() const {
         return sym()->ident();
@@ -303,8 +305,6 @@ class Decl : public Stmt
     int dim(int n);
     int dim_count();
     virtual int tag() const;
-    cell addr() const { return *addr_; }
-    void set_addr(cell addr) { addr_.emplace(addr); }
 
     Atom* name() const { return name_; }
 
@@ -313,7 +313,6 @@ class Decl : public Stmt
 
   protected:
     Atom* name_;
-    std::optional<cell> addr_;
 
   public:
     // :TODO: remove.
@@ -334,8 +333,12 @@ class VarDeclBase : public Decl
     // Bind only the typeinfo.
     bool BindType(SemaContext& sc);
 
+    void BindAddress(cell addr);
+
     static bool is_a(Stmt* node) {
-        return node->kind() == StmtKind::VarDecl || node->kind() == StmtKind::ArgDecl;
+        return node->kind() == StmtKind::VarDecl ||
+               node->kind() == StmtKind::ArgDecl ||
+               node->kind() == StmtKind::ConstDecl;
     }
 
     BinaryExpr* init() const { return init_; }
@@ -358,6 +361,8 @@ class VarDeclBase : public Decl
         sym_ = sym;
     }
     int tag() const override { return type_.tag(); }
+    Label* label() { return &addr_; }
+    cell addr() const { return addr_.offset(); }
 
     bool is_used() const { return is_read_ || is_written_; }
 
@@ -372,6 +377,7 @@ class VarDeclBase : public Decl
     bool is_read_ : 1;
     bool is_written_ : 1;
     symbol* sym_ = nullptr;
+    Label addr_;
 };
 
 class VarDecl : public VarDeclBase
@@ -382,8 +388,15 @@ class VarDecl : public VarDeclBase
       : VarDeclBase(StmtKind::VarDecl, pos, name, type, vclass, is_public, is_static, is_stock,
                     initializer)
     {}
+    VarDecl(StmtKind kind, const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
+            bool is_public, bool is_static, bool is_stock, Expr* initializer)
+      : VarDeclBase(kind, pos, name, type, vclass, is_public, is_static, is_stock,
+                    initializer)
+    {}
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::VarDecl; }
+    static bool is_a(Stmt* node) {
+        return node->kind() == StmtKind::VarDecl || node->kind() == StmtKind::ConstDecl;
+    }
 };
 
 class ArgDecl : public VarDeclBase
@@ -409,15 +422,20 @@ class ConstDecl : public VarDecl
   public:
     ConstDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
               Expr* expr)
-      : VarDecl(pos, name, type, vclass, false, false, false, nullptr),
+      : VarDecl(StmtKind::ConstDecl, pos, name, type, vclass, false, false, false, nullptr),
         expr_(expr)
     {}
 
-    bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
+    bool EnterNames(SemaContext& sc) override;
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::ConstDecl; }
+
+    cell const_val() const { return value_; }
 
   private:
     Expr* expr_;
+    cell value_;
 };
 
 class EnumFieldDecl : public Decl
@@ -438,10 +456,14 @@ class EnumFieldDecl : public Decl
     int tag() const override { return tag_; }
     void set_tag(int tag) { tag_ = tag; }
 
+    cell const_val() const { return const_val_; }
+    void set_const_val(cell const_val) { const_val_ = const_val; }
+
   private:
     int tag_ = 0;
     Expr* value_;
     symbol* sym_ = nullptr;
+    cell const_val_ = 0;
 };
 
 class EnumDecl : public Decl
