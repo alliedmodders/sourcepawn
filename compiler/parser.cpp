@@ -244,7 +244,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
             break;
     }
 
-    int flags = DECLFLAG_MAYBE_FUNCTION | DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT;
+    int flags = DECLFLAG_MAYBE_FUNCTION | DECLFLAG_VARIABLE;
     if (tok->id == tNEW)
         flags |= DECLFLAG_OLD;
 
@@ -344,9 +344,9 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
             break;
 
         if (decl->type.is_new)
-            reparse_new_decl(decl, DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT);
+            reparse_new_decl(decl, DECLFLAG_VARIABLE);
         else
-            reparse_old_decl(decl, DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT);
+            reparse_old_decl(decl, DECLFLAG_VARIABLE);
     }
 
     if (stmts.size() > 1)
@@ -1479,7 +1479,7 @@ Parser::parse_local_decl(int tokid, bool autozero)
 {
     declinfo_t decl = {};
 
-    int declflags = DECLFLAG_VARIABLE | DECLFLAG_ENUMROOT;
+    int declflags = DECLFLAG_VARIABLE;
     if (tokid == tNEW || tokid == tDECL)
         declflags |= DECLFLAG_OLD;
     else if (tokid == tNEWDECL)
@@ -1800,7 +1800,7 @@ Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
         auto pos = lexer_->pos();
 
         declinfo_t decl = {};
-        if (!parse_decl(&decl, DECLFLAG_ARGUMENT | DECLFLAG_ENUMROOT))
+        if (!parse_decl(&decl, DECLFLAG_ARGUMENT))
             continue;
 
         if (decl.type.ident == iVARARGS) {

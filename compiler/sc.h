@@ -83,7 +83,6 @@ struct DefaultArg : public PoolObject {
 
 #define DECLFLAG_ARGUMENT 0x02       // The declaration is for an argument.
 #define DECLFLAG_VARIABLE 0x04       // The declaration is for a variable.
-#define DECLFLAG_ENUMROOT 0x08       // Multi-dimensional arrays should have an enumroot.
 #define DECLFLAG_MAYBE_FUNCTION 0x10 // Might be a named function.
 #define DECLFLAG_OLD 0x40            // Known old-style declaration.
 #define DECLFLAG_FIELD 0x80          // Struct field.
