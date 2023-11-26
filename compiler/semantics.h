@@ -249,7 +249,7 @@ class Semantics final
 
   private:
     CompileContext& cc_;
-    TypeDictionary* types_ = nullptr;
+    TypeManager* types_ = nullptr;
     tr::unordered_set<SymbolScope*> static_scopes_;
     tr::vector<FunctionDecl*> maybe_used_;
     SemaContext* sc_ = nullptr;

@@ -159,7 +159,7 @@ class RttiBuilder
   private:
     CompileContext& cc_;
     CodeGenerator& cg_;
-    TypeDictionary* types_ = nullptr;
+    TypeManager* types_ = nullptr;
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> data_;

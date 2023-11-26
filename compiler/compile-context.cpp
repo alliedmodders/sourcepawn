@@ -44,7 +44,7 @@ CompileContext::CompileContext()
     reports_ = std::make_unique<ReportManager>(*this);
     options_ = std::make_unique<CompileOptions>();
     sources_ = std::make_unique<SourceManager>(*this);
-    types_ = std::make_unique<TypeDictionary>(*this);
+    types_ = std::make_unique<TypeManager>(*this);
     types_->init();
 }
 

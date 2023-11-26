@@ -131,7 +131,7 @@ struct typeinfo_t {
 
     // Type information.
     Atom* type_atom;    // Parsed atom.
-    int tag_;               // Effective tag.
+    int tag_;           // Effective tag.
 
     // If non-zero, this type was originally declared with this type, but was
     // rewritten for desugaring.
@@ -216,7 +216,7 @@ struct structarg_t : public PoolObject
 
 class Type : public PoolObject
 {
-    friend class TypeDictionary;
+    friend class TypeManager;
 
   public:
     Type(Atom* name, TypeKind kind);
@@ -353,10 +353,10 @@ class pstruct_t : public Type
 };
 
 
-class TypeDictionary
+class TypeManager
 {
   public:
-    explicit TypeDictionary(CompileContext& cc);
+    explicit TypeManager(CompileContext& cc);
 
     Type* find(int tag);
     Type* find(Atom* name);

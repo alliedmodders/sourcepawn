@@ -83,34 +83,34 @@ Type::kindName() const
   }
 }
 
-TypeDictionary::TypeDictionary(CompileContext& cc)
+TypeManager::TypeManager(CompileContext& cc)
   : cc_(cc)
 {}
 
-Type* TypeDictionary::find(Atom* atom) {
+Type* TypeManager::find(Atom* atom) {
     auto iter = types_.find(atom);
     if (iter == types_.end())
         return nullptr;
     return iter->second;
 }
 
-Type* TypeDictionary::find(int tag) {
+Type* TypeManager::find(int tag) {
     auto iter = tags_.find(tag);
     assert(iter != tags_.end());
     return iter->second;
 }
 
-Type* TypeDictionary::add(const char* name, TypeKind kind) {
+Type* TypeManager::add(const char* name, TypeKind kind) {
     return add(cc_.atom(name), kind);
 }
 
-Type* TypeDictionary::add(Atom* name, TypeKind kind) {
+Type* TypeManager::add(Atom* name, TypeKind kind) {
     Type* type = new Type(name, kind);
     RegisterType(type);
     return type;
 }
 
-void TypeDictionary::RegisterType(Type* type) {
+void TypeManager::RegisterType(Type* type) {
     assert(types_.find(type->name()) == types_.end());
 
     int tag = int(types_.size());
@@ -120,7 +120,7 @@ void TypeDictionary::RegisterType(Type* type) {
 }
 
 void
-TypeDictionary::init()
+TypeManager::init()
 {
     type_int_ = add("_", TypeKind::Int);
     type_bool_ = defineBool();
@@ -134,19 +134,19 @@ TypeDictionary::init()
 }
 
 Type*
-TypeDictionary::defineAny()
+TypeManager::defineAny()
 {
     return add("any", TypeKind::Any);
 }
 
-Type* TypeDictionary::defineFunction(Atom* name, funcenum_t* fe) {
+Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {
     Type* type = add(name, TypeKind::Function);
     type->setFunction(fe);
     return type;
 }
 
 Type*
-TypeDictionary::defineString()
+TypeManager::defineString()
 {
     Type* type = add("String", TypeKind::String);
     type->setFixed();
@@ -154,7 +154,7 @@ TypeDictionary::defineString()
 }
 
 Type*
-TypeDictionary::defineFloat()
+TypeManager::defineFloat()
 {
     Type* type = add("Float", TypeKind::Float);
     type->setFixed();
@@ -162,7 +162,7 @@ TypeDictionary::defineFloat()
 }
 
 Type*
-TypeDictionary::defineVoid()
+TypeManager::defineVoid()
 {
     Type* type = add("void", TypeKind::Void);
     type->setFixed();
@@ -170,7 +170,7 @@ TypeDictionary::defineVoid()
 }
 
 Type*
-TypeDictionary::defineObject(const char* name)
+TypeManager::defineObject(const char* name)
 {
     Type* type = add(name, TypeKind::Object);
     type->setObject();
@@ -178,12 +178,12 @@ TypeDictionary::defineObject(const char* name)
 }
 
 Type*
-TypeDictionary::defineBool()
+TypeManager::defineBool()
 {
     return add("bool", TypeKind::Bool);
 }
 
-Type* TypeDictionary::defineMethodmap(Atom* name, MethodmapDecl* map) {
+Type* TypeManager::defineMethodmap(Atom* name, MethodmapDecl* map) {
     Type* type = find(name);
     if (!type)
         type = add(name, TypeKind::Methodmap);
@@ -192,7 +192,7 @@ Type* TypeDictionary::defineMethodmap(Atom* name, MethodmapDecl* map) {
 }
 
 Type*
-TypeDictionary::defineEnumTag(const char* name)
+TypeManager::defineEnumTag(const char* name)
 {
     auto atom = cc_.atom(name);
     if (auto type = find(atom)) {
@@ -206,21 +206,21 @@ TypeDictionary::defineEnumTag(const char* name)
     return type;
 }
 
-Type* TypeDictionary::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
+Type* TypeManager::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
     Type* type = add(name, TypeKind::EnumStruct);
     type->setEnumStruct(decl);
     return type;
 }
 
 Type*
-TypeDictionary::defineTag(Atom* name) {
+TypeManager::defineTag(Atom* name) {
     Type* type = add(name, TypeKind::Enum);
     if (isupper(*name->chars()))
         type->setFixed();
     return type;
 }
 
-pstruct_t* TypeDictionary::definePStruct(Atom* name) {
+pstruct_t* TypeManager::definePStruct(Atom* name) {
     assert(find(name) == nullptr);
 
     pstruct_t* type = new pstruct_t(name);

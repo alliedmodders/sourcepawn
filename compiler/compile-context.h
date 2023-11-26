@@ -42,7 +42,7 @@ class Lexer;
 class ReportManager;
 class SemaContext;
 class SymbolScope;
-class TypeDictionary;
+class TypeManager;
 struct CompileOptions;
 
 // The thread-safe successor to scvars.
@@ -70,7 +70,7 @@ class CompileContext final
     ReportManager* reports() const { return reports_.get(); }
     CompileOptions* options() const { return options_.get(); }
     SourceManager* sources() const { return sources_.get(); }
-    TypeDictionary* types() const { return types_.get(); }
+    TypeManager* types() const { return types_.get(); }
     StringPool* atoms() { return &atoms_; }
 
     Atom* atom(const std::string& str) {
@@ -140,7 +140,7 @@ class CompileContext final
     std::string errfname_;
     std::unique_ptr<SourceManager> sources_;
     std::shared_ptr<SourceFile> inpf_org_;
-    std::unique_ptr<TypeDictionary> types_;
+    std::unique_ptr<TypeManager> types_;
     StringPool atoms_;
 
     // The lexer is in CompileContext rather than Parser until we can eliminate
