@@ -77,7 +77,6 @@ struct DefaultArg : public PoolObject {
 // Values for symbol::usage.
 #define uREAD       0x1     // Used/accessed.
 #define uWRITTEN    0x2     // Altered/written (variables only).
-#define uLIVE       0x4     // Marked during liveness analysis.
 
 #define uMAINFUNC "main"
 
