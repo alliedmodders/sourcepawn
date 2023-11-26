@@ -124,7 +124,7 @@ struct typeinfo_t {
     {}
 
     // Array information.
-    PoolList<int> dim;
+    PoolList<int> dim_;
 
     // Either null or an array of size |numdim|, pool-allocated.
     PoolArray<Expr*> dim_exprs;
@@ -148,6 +148,10 @@ struct typeinfo_t {
             return TypenameInfo(tag_);
         return TypenameInfo(type_atom, is_label);
     }
+
+    int numdim() const { return (int)dim_.size(); }
+    int dim(int i) const { return dim_[i]; }
+    const PoolList<int>& dim_vec() const { return dim_; }
 
     void set_type(const TypenameInfo& rt) {
         if (rt.resolved_tag >= 0) {
@@ -177,7 +181,6 @@ struct typeinfo_t {
     bool is_implicit_dim(int i) const {
         return semantic_tag() != tag() && i == numdim() - 1;
     }
-    int numdim() const { return (int)dim.size(); }
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
         assert(i < numdim());

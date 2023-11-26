@@ -357,13 +357,13 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
         return FALSE;
 
     if (actual->type.ident == iREFARRAY || actual->type.ident == iARRAY) {
-        if (actual->type.dim != formal->type.dim)
+        if (actual->type.dim_vec() != formal->type.dim_vec())
             return FALSE;
     }
 
     // Do not allow casting between different array types, eg:
     //   any[] <-> float[] is illegal.
-    if (!formal->type.dim.empty() &&
+    if (formal->type.numdim() &&
         !IsValidImplicitArrayCast(formal->type.tag(), actual->type.tag()))
     {
         return FALSE;
