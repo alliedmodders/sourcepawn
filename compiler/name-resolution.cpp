@@ -86,7 +86,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
 
         ti->set_tag(0);
         ti->declared_tag = tag;
-        ti->dim.emplace_back(enum_type->array_size());
+        ti->dim_.emplace_back(enum_type->array_size());
 
         if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
             ti->ident = iARRAY;
@@ -277,7 +277,7 @@ PstructDecl::EnterNames(SemaContext& sc)
         arg->index = (int)args.size();
         args.emplace_back(arg);
 
-        if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim[0] != 0)) {
+        if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim(0) != 0)) {
             error(field.pos, 69);
             return false;
         }
@@ -344,7 +344,7 @@ TypedefInfo::Bind(SemaContext& sc)
         if (fa.type.ident == iARRAY)
             fa.type.ident = iREFARRAY;
         if (fa.type.ident != iREFARRAY && fa.type.ident != iARRAY)
-            assert(fa.type.dim.empty());
+            assert(!fa.type.numdim());
         ft_args.emplace_back(fa);
     }
     new (&ft->args) PoolArray<funcarg_t>(ft_args);
@@ -783,7 +783,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
             typeinfo.set_tag(0);
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
-            typeinfo.dim.emplace_back(enum_type->array_size());
+            typeinfo.dim_.emplace_back(enum_type->array_size());
         } else {
             typeinfo.set_tag(*this_tag_);
             typeinfo.ident = iVARIABLE;
@@ -1077,8 +1077,8 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         cell size = 1;
         if (field->type().numdim()) {
             size = field->type().tag() == sc.cc().types()->tag_string()
-                   ? char_array_cells(field->type().dim[0])
-                   : field->type().dim[0];
+                   ? char_array_cells(field->type().dim(0))
+                   : field->type().dim(0);
         }
         position += size;
     }

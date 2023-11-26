@@ -67,7 +67,7 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
         dest.type = arg->type();
 
         if (dest.type.ident != iARRAY && dest.type.ident != iREFARRAY)
-          assert(dest.type.dim.empty());
+          assert(!dest.type.numdim());
 
         args.emplace_back(dest);
     }

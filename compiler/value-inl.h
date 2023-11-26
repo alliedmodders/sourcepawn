@@ -31,7 +31,7 @@ inline int value::array_size() const {
     assert(ident == iARRAY || ident == iREFARRAY);
     if (sym) {
         auto var = sym->as<VarDeclBase>();
-        return var->type().dim[array_level_];
+        return var->type().dim(array_level_);
     }
     return array_level_;
 }
@@ -49,7 +49,7 @@ inline int value::array_dim_count() const {
     assert(ident == iARRAY || ident == iREFARRAY);
     if (sym) {
         auto var = sym->as<VarDeclBase>();
-        return var->type().dim.size() - array_level_;
+        return var->type().numdim() - array_level_;
     }
     return 1;
 }
@@ -62,7 +62,7 @@ inline int value::array_dim(int n) const {
 
     if (sym) {
         auto var = sym->as<VarDeclBase>();
-        return var->type().dim[array_level_ + n];
+        return var->type().dim(array_level_ + n);
     }
 
     assert(n == 0);

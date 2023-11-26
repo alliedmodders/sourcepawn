@@ -68,7 +68,7 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDeclBase* decl)
     pos_(decl->pos()),
     type_(decl->mutable_type()),
     initializer_(decl->init_rhs()),
-    computed_(type_->dim.size()),
+    computed_(type_->numdim()),
     vclass_(decl->vclass()),
     es_(nullptr)
 {
@@ -83,7 +83,7 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, const token_pos_t& pos, ty
     pos_(pos),
     type_(type),
     initializer_(nullptr),
-    computed_(type_->dim.size()),
+    computed_(type_->numdim()),
     vclass_(vclass)
 {
 }
@@ -127,11 +127,11 @@ ArraySizeResolver::Resolve()
     // analysis will catch type or other size errors in the initializer.
     bool indeterminate = false;
     for (int i = 0; i < type_->numdim(); i++) {
-        if (type_->dim[i])
+        if (type_->dim(i))
             continue;
 
         if (computed_[i] >= 0)
-            type_->dim[i] = computed_[i];
+            type_->dim_[i] = computed_[i];
         else if (i != type_->numdim() - 1)
             indeterminate = true;
     }
@@ -149,7 +149,7 @@ ArraySizeResolver::Resolve()
     // technical reason with our new array code to not support indeterminism.
     // But for now, we retain the old error.
     if (type_->is_new && indeterminate) {
-        if (vclass_ == sARGUMENT && type_->dim[type_->numdim() - 1]) {
+        if (vclass_ == sARGUMENT && type_->dim(type_->numdim() - 1)) {
             // As noted in ResolveDimExprs, we allow this for arguments as long
             // as the last dimension is filled.
         } else if (vclass_ == sLOCAL) {
@@ -164,8 +164,8 @@ void
 ArraySizeResolver::PrepareDimArray()
 {
     for (int i = 0; i < type_->numdim(); i++) {
-        if (type_->dim[i] != 0) {
-            computed_[i] = type_->dim[i];
+        if (type_->dim(i) != 0) {
+            computed_[i] = type_->dim(i);
         } else {
             // If we're an iARRAY, we need an initializer and this will be
             // checked later during size resolution. If we're an iREFARRAY,
@@ -189,7 +189,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
     if (es_ && type_->is_implicit_dim(rank)) {
         // Enum struct assignments are validated later - the size of the last
         // rank is fixed by the compiler.
-        assert(type_->dim[rank] > 0);
+        assert(type_->dim(rank) > 0);
         return;
     }
 
@@ -210,7 +210,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
         return;
     }
 
-    if (!type_->dim[rank] && expr->ellipses())
+    if (!type_->dim(rank) && expr->ellipses())
         report(expr->pos(), 41);
 
     SetRankSize(expr, rank, expr->exprs().size());
@@ -233,7 +233,7 @@ ArraySizeResolver::SetRankSize(Expr* expr, int rank, int size)
         // The final rank is allowed to vary as long as the size was not
         // explicitly specified. If it was specified, we'll error during
         // semantic analysis, so there's no need to handle it now.
-        if (!type_->dim[rank])
+        if (!type_->dim(rank))
             computed_[rank] = kSizeIndeterminate;
     } else if (computed_[rank] > 0) {
         // Intermediate ranks must not vary in size.
@@ -306,7 +306,7 @@ ArraySizeResolver::ResolveDimExprs()
                 report(expr->pos(), 162);
                 return false;
             }
-            assert(type_->dim[i] == 0);
+            assert(type_->dim(i) == 0);
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
@@ -321,7 +321,7 @@ ArraySizeResolver::ResolveDimExprs()
                 report(expr->pos(), 9);
                 return false;
             }
-            type_->dim[i] = v.constval();
+            type_->dim_[i] = v.constval();
         }
     }
     return true;
@@ -439,7 +439,7 @@ FixedArrayValidator::Validate()
     }
 
     for (int i = 0; i < type_.numdim(); i++) {
-        if (!type_.dim[i] && decl_ && decl_->vclass() != sARGUMENT) {
+        if (!type_.dim(i) && decl_ && decl_->vclass() != sARGUMENT) {
             report(decl_->pos(), 46) << decl_->name()->chars();
             return true;
         }
@@ -451,13 +451,13 @@ FixedArrayValidator::Validate()
     // The calculation is not simply 3*4*5 because of indirection vectors.
     unsigned last_size = 1;
     for (int i = 0; i < type_.numdim(); i++) {
-        if (!type_.dim[i])
+        if (!type_.dim(i))
             break;
-        if (!ke::IsUintMultiplySafe<uint32_t>(last_size, type_.dim[i])) {
+        if (!ke::IsUintMultiplySafe<uint32_t>(last_size, type_.dim(i))) {
             report(pos_, 52);
             return false;
         }
-        last_size *= type_.dim[i];
+        last_size *= type_.dim(i);
         if (last_size >= kMaxCells) {
             report(pos_, 52);
             return false;
@@ -473,11 +473,11 @@ cell CalcArraySize(const typeinfo_t& type) {
 
     cell size = 0;
     cell last_size = 1;
-    for (int i = 0; i < type.dim.size(); i++) {
-        cell length = type.dim[i];
+    for (int i = 0; i < type.numdim(); i++) {
+        cell length = type.dim(i);
         assert(length);
 
-        if (i == type.dim.size() - 1 && type.tag() == types->tag_string())
+        if (i == type.numdim() - 1 && type.tag() == types->tag_string())
             length = char_array_cells(length);
 
         last_size *= length;
@@ -513,10 +513,10 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
     }
 
     std::vector<int> dim;
-    for (int i = 0; i < var->type().dim.size(); i++)
-        dim.emplace_back(var->type().dim[i]);
+    for (int i = 0; i < var->type().numdim(); i++)
+        dim.emplace_back(var->type().dim(i));
 
-    if (dim.size() != type_.dim.size()) {
+    if (dim.size() != type_.numdim()) {
         report(expr->pos(), 19) << type_.numdim() << dim.size();
         return false;
     }
@@ -526,8 +526,8 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
     if (type_.ident == iREFARRAY)
         return true;
 
-    for (size_t i = 0; i < type_.dim.size(); i++) {
-        if (type_.dim[i] && type_.dim[i] != dim[i]) {
+    for (int i = 0; i < type_.numdim(); i++) {
+        if (type_.dim(i) && type_.dim(i) != dim[i]) {
             report(expr->pos(), 48);
             return false;
         }
@@ -544,7 +544,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             report(init->pos(), 47);
             return false;
         }
-        if ((cell)array->exprs().size() != type_.dim[rank]) {
+        if ((cell)array->exprs().size() != type_.dim(rank)) {
             report(init->pos(), 47);
             return false;
         }
@@ -563,7 +563,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     if (es_ && type_.is_implicit_dim(rank)) {
        if (!ValidateEnumStruct(init))
            return false;
-       if (!AddCells(type_.dim[rank]))
+       if (!AddCells(type_.dim(rank)))
            return false;
        return true;
     }
@@ -579,16 +579,16 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         if (!AddCells(cells))
             return false;
 
-        if (type_.dim[rank] && cells > type_.dim[rank]) {
+        if (type_.dim(rank) && cells > type_.dim(rank)) {
             report(str->pos(), 47);
             return false;
         }
         return true;
     }
 
-    cell rank_size = (type_.tag() == types_->tag_string() && type_.dim[rank])
-                     ? char_array_cells(type_.dim[rank])
-                     : type_.dim[rank];
+    cell rank_size = (type_.tag() == types_->tag_string() && type_.dim(rank))
+                     ? char_array_cells(type_.dim(rank))
+                     : type_.dim(rank);
 
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
@@ -673,10 +673,8 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     return true;
 }
 
-bool
-FixedArrayValidator::ValidateEnumStruct(Expr* init)
-{
-    assert(type_.dim[type_.numdim() - 1] > 0);
+bool FixedArrayValidator::ValidateEnumStruct(Expr* init) {
+    assert(type_.dim(type_.numdim() - 1) > 0);
 
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
@@ -919,17 +917,17 @@ cell
 ArrayEmitter::Emit(int rank, Expr* init)
 {
     if (rank != type_.numdim() - 1) {
-        assert(type_.dim[rank]);
+        assert(type_.dim(rank));
 
         size_t start = iv_.size();
         assert(!(start & kDataFlag));
 
-        iv_.resize(start + type_.dim[rank]);
+        iv_.resize(start + type_.dim(rank));
 
         ArrayExpr* array = init ? init->as<ArrayExpr>() : nullptr;
-        assert(!array || (array->exprs().size() == size_t(type_.dim[rank])));
+        assert(!array || (array->exprs().size() == size_t(type_.dim(rank))));
 
-        for (int i = 0; i < type_.dim[rank]; i++) {
+        for (int i = 0; i < type_.dim(rank); i++) {
             Expr* child = array ? array->exprs().at(i) : nullptr;
 
             // Note: use a temporary to store the result of Emit(), since
@@ -947,7 +945,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
     bool ellipses = false;
     ke::Maybe<cell> prev1, prev2;
     if (!init) {
-        assert(type_.dim[rank]);
+        assert(type_.dim(rank));
     } else if (ArrayExpr* array = init->as<ArrayExpr>()) {
         PoolArray<LayoutFieldDecl*>* field_list = nullptr;
         LayoutFieldDecl** field_iter = nullptr;
@@ -968,7 +966,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 auto field = (*field_iter);
                 assert(field);
 
-                EmitPadding(field->type().dim[0], field->type().tag(), emitted, false, {}, {});
+                EmitPadding(field->type().dim(0), field->type().tag(), emitted, false, {}, {});
             } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
@@ -996,7 +994,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
     size_t emitted = data_size() - start;
 
-    EmitPadding(type_.dim[rank], type_.tag(), emitted, ellipses, prev1, prev2);
+    EmitPadding(type_.dim(rank), type_.tag(), emitted, ellipses, prev1, prev2);
 
     return (start * sizeof(cell)) | kDataFlag;
 }
@@ -1011,7 +1009,7 @@ void ArrayEmitter::AddInlineArray(LayoutFieldDecl* field, ArrayExpr* array) {
         prev1 = ke::Some(item->val().constval());
     }
 
-    EmitPadding(field->type().dim[0], field->type().tag(), array->exprs().size(),
+    EmitPadding(field->type().dim(0), field->type().tag(), array->exprs().size(),
                 array->ellipses(), prev1, prev2);
 }
 

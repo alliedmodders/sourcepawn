@@ -295,7 +295,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
                 report(expr->pos(), 405);
                 return false;
             }
-            if (var->type().dim.size() != 1) {
+            if (var->type().numdim() != 1) {
                 report(expr->pos(), 405);
                 return false;
             }
@@ -836,8 +836,8 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
         }
 
         auto left_var = left_sym->as<VarDeclBase>();
-        for (int i = 0; i < left_var->type().dim.size(); i++) {
-            if (!left_var->type().dim[i]) {
+        for (int i = 0; i < left_var->type().numdim(); i++) {
+            if (!left_var->type().dim(i)) {
                 report(expr, 46) << left_sym->name();
                 return false;
             }
@@ -886,7 +886,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             // Change from the old logic - we immediately reject multi-dimensional
             // arrays in assignment and don't bother validating subarray assignment.
             auto right_var = right_val.sym->as<VarDeclBase>();
-            if (right_var->type().dim.size() - right_val.array_level() > 1) {
+            if (right_var->type().numdim() - right_val.array_level() > 1) {
                 report(expr, 23);
                 return false;
             }
@@ -1502,7 +1502,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     auto base_var = base_val.sym->as<VarDeclBase>();
-    if (base_val.array_level() < base_var->type().dim.size() - 1) {
+    if (base_val.array_level() < base_var->type().numdim() - 1) {
         // Note: Intermediate arrays are not l-values.
         out_val.set_array(iREFARRAY, base_val.sym, base_val.array_level() + 1);
         return true;
@@ -1805,7 +1805,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     ti.set_tag(val.tag);
 
     if (field->type().numdim()) {
-        ti.dim = {field->type().dim[0]};
+        ti.dim_ = {field->type().dim(0)};
         ti.ident = iREFARRAY;
     } else {
         ti.ident = (ti.tag() == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
@@ -1915,7 +1915,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 return false;
             }
             if (field->type().numdim()) {
-                val.set_constval(field->type().dim[0]);
+                val.set_constval(field->type().dim(0));
                 return true;
             }
             return true;
@@ -2248,18 +2248,18 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     report(param, 48); // array dimensions must match
                     return false;
                 }
-                if (arg->type().dim[0] != 0) {
-                    assert(arg->type().dim[0] > 0);
+                if (arg->type().dim(0) != 0) {
+                    assert(arg->type().dim(0) > 0);
                     if (val->array_size() == 0) {
                         report(param, 47);
                         return false;
                     }
                     if (arg->type().tag() == types_->tag_string()) {
-                        if (arg->type().dim[0] < val->array_size()) {
+                        if (arg->type().dim(0) < val->array_size()) {
                             report(param, 47); // array sizes must match
                             return false;
                         }
-                    } else if (arg->type().dim[0] != val->array_size()) {
+                    } else if (arg->type().dim(0) != val->array_size()) {
                         report(param, 47); // array sizes must match
                         return false;
                     }
@@ -2272,8 +2272,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 // The lengths for all dimensions must match, unless the dimension
                 // length was defined at zero (which means "undefined").
                 for (int i = 0; i < arg->type().numdim(); i++) {
-                    if (arg->type().dim[i] != 0 &&
-                        val->array_dim(i) != arg->type().dim[i])
+                    if (arg->type().dim(i) != 0 &&
+                        val->array_dim(i) != arg->type().dim(i))
                     {
                         report(param, 47); // array sizes must match
                         return false;
@@ -2662,14 +2662,14 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
-        if (sub_decl->type().dim.size() != val.array_dim_count()) {
+        if (sub_decl->type().numdim() != val.array_dim_count()) {
             report(stmt, 48); /* array dimensions must match */
             return false;
         }
 
-        for (int i = 0; i < sub_decl->type().dim.size(); i++) {
-            array.dim.emplace_back(sub_decl->type().dim[i]);
-            if (val.array_dim(i) != array.dim.back()) {
+        for (int i = 0; i < sub_decl->type().numdim(); i++) {
+            array.dim_.emplace_back(sub_decl->type().dim(i));
+            if (val.array_dim(i) != array.dim(array.numdim() - 1)) {
                 report(stmt, 47); /* array sizes must match */
                 return false;
             }
@@ -2683,7 +2683,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
                 report(stmt, 128);
                 return false;
             }
-            array.dim.emplace_back(sub->dim(i));
+            array.dim_.emplace_back(sub->dim(i));
             if (sub->semantic_tag()) {
                 array.set_tag(0);
                 array.declared_tag = sub->semantic_tag();
@@ -3325,7 +3325,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
     if (result)
         result = a1->type().tag() == a2->type().tag();
     if (result)
-        result = a1->type().dim == a2->type().dim; /* array dimensions & index tags */
+        result = a1->type().dim_ == a2->type().dim_; /* array dimensions & index tags */
     if (result)
         result = a1->type().declared_tag == a2->type().declared_tag;
     if (result)

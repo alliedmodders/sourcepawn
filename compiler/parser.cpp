@@ -1258,7 +1258,7 @@ Parser::parse_post_dims(typeinfo_t* type)
     std::vector<Expr*> dim_exprs;
     bool has_dim_exprs = false;
     do {
-        type->dim.emplace_back(0);
+        type->dim_.emplace_back(0);
 
         if (lexer_->match(']')) {
             dim_exprs.emplace_back(nullptr);
@@ -2434,7 +2434,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
 
     if (decl->type.declared_tag && !decl->type.tag()) {
         assert(decl->type.numdim() > 0);
-        decl->type.dim.pop_back();
+        decl->type.dim_.pop_back();
     }
 
     decl->type.dim_exprs = {};
@@ -2444,7 +2444,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         //    int x[], y...
         //
         // Reset the fact that we saw an array.
-        decl->type.dim.clear();
+        decl->type.dim_.clear();
         decl->type.ident = iVARIABLE;
         decl->type.has_postdims = false;
         if (lexer_->match('[')) {
@@ -2468,7 +2468,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
             //          ^-- still an array, because the type is int[]
             //
             // Dim count should be 0 but we zap it anyway.
-            for (auto& dim : decl->type.dim)
+            for (auto& dim : decl->type.dim_)
                 dim = 0;
         }
     }
@@ -2531,7 +2531,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
     // that ident != iARRAY before looking for an open bracket.
     if (type->ident != iARRAY && lexer_->match('[')) {
         do {
-            type->dim.emplace_back(0);
+            type->dim_.emplace_back(0);
             if (!lexer_->match(']')) {
                 report(101);
 

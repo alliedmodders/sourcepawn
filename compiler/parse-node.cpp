@@ -245,14 +245,14 @@ int Decl::dim(int n) {
     auto var = as<VarDeclBase>();
     assert(var);
 
-    return var->type().dim[n];
+    return var->type().dim(n);
 }
 
 int Decl::dim_count() {
     auto var = as<VarDeclBase>();
     assert(var);
 
-    return (int)var->type().dim.size();
+    return (int)var->type().numdim();
 }
 
 int Decl::semantic_tag() {
