@@ -31,7 +31,6 @@
 #pragma once
 
 #include <limits.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -100,13 +99,6 @@ struct declinfo_t {
 #    define FALSE 0
 #    define TRUE 1
 #endif
-#define sIN_CSEG 1     /* if parsing CODE */
-#define sIN_DSEG 2     /* if parsing DATA */
-#define sSYMBOLIC 2    /* bit position in "debug" variable: symbolic info */
-
-#define CELL_MAX (((ucell)1 << (sizeof(cell) * 8 - 1)) - 1)
-
-struct token_t;
 
 const char* type_to_name(int tag);
 
