@@ -138,7 +138,7 @@ class Parser
     bool in_loop_ = false;
     bool in_test_ = false;
     std::shared_ptr<Lexer> lexer_;
-    TypeDictionary* types_ = nullptr;
+    TypeManager* types_ = nullptr;
     tr::deque<FunctionDecl*> delayed_functions_;
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;

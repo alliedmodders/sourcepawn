@@ -49,7 +49,7 @@ class ArraySizeResolver
 
   private:
     Semantics* sema_;
-    TypeDictionary* types_;
+    TypeManager* types_;
     const token_pos_t& pos_;
     typeinfo_t* type_;
     Expr* initializer_;
@@ -405,7 +405,7 @@ class FixedArrayValidator final
 
   private:
     Semantics* sema_;
-    TypeDictionary* types_;
+    TypeManager* types_;
     VarDeclBase* decl_;
     token_pos_t pos_;
     Expr* init_;
