@@ -57,11 +57,6 @@ namespace sp {
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
 #define PUBLIC_CHAR '@' /* character that defines a function "public" */
-#define sCHARBITS 8     /* size of a packed character */
-
-#define sLINEMAX 4095
-#define PREPROC_TERM \
-    '\x7f' /* termination character for preprocessor expressions (the "DEL" code) */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
 
 struct DefaultArrayData;
