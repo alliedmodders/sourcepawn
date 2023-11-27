@@ -2135,9 +2135,9 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         case 'x': {
             int digits = 0;
             c = 0;
-            while (true) {
+            while (digits < 2) {
                 char ch = peek();
-                if (!ishex(ch) || digits >= 3)
+                if (!ishex(ch))
                     break;
                 if (IsDigit(ch))
                     c = (c << 4) + (ch - '0');
