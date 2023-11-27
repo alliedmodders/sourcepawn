@@ -284,6 +284,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
                 break;
             advance();
             exp = (exp * 10) + (c - '0');
+            ndigits++;
         }
         if (!ndigits)
             report(425);
