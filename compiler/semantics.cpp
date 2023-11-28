@@ -186,7 +186,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     // be performed by the Analyze(sc) call here.
     //
     // :TODO: write flag when removing ProcessUses
-    if (init && !CheckExpr(init))
+    if (init && !CheckRvalue(init))
         return false;
 
     auto vclass = decl->vclass();
@@ -528,7 +528,7 @@ bool Expr::HasSideEffects() {
 }
 
 Expr* Semantics::AnalyzeForTest(Expr* expr) {
-    if (!CheckExpr(expr))
+    if (!CheckRvalue(expr))
         return nullptr;
 
     auto& val = expr->val();
@@ -601,7 +601,7 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     AutoErrorPos aep(unary->pos());
 
     auto expr = unary->expr();
-    if (!CheckExpr(expr))
+    if (!CheckRvalue(expr))
         return false;
 
     if (expr->lvalue())
@@ -723,7 +723,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
     auto left = expr->left();
     auto right = expr->right();
-    if (!CheckExpr(left) || !CheckExpr(right))
+    if (!CheckExpr(left) || !CheckRvalue(right))
         return false;
 
     int token = expr->token();
@@ -747,7 +747,11 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
         if (!CheckAssignmentLHS(expr))
             return false;
+        if (token != '=' && !CheckRvalue(left->pos(), left->val()))
+            return false;
     } else if (left->lvalue()) {
+        if (!CheckRvalue(left->pos(), left->val()))
+            return false;
         left = expr->set_left(new RvalueExpr(left));
     }
 
@@ -1062,13 +1066,13 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
 
 bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     auto first = chain->first();
-    if (!CheckExpr(first))
+    if (!CheckRvalue(first))
         return false;
     if (first->lvalue())
         first = chain->set_first(new RvalueExpr(first));
 
     for (auto& op : chain->ops()) {
-        if (!CheckExpr(op.expr))
+        if (!CheckRvalue(op.expr))
             return false;
         if (op.expr->lvalue())
             op.expr = new RvalueExpr(op.expr);
@@ -1156,7 +1160,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     auto second = expr->second();
     auto third = expr->third();
 
-    if (!CheckExpr(first) || !CheckExpr(second) || !CheckExpr(third))
+    if (!CheckRvalue(first) || !CheckRvalue(second) || !CheckRvalue(third))
         return false;
 
     if (first->lvalue()) {
@@ -1364,7 +1368,7 @@ bool Semantics::CheckCommaExpr(CommaExpr* comma) {
     AutoErrorPos aep(comma->pos());
 
     for (const auto& expr : comma->exprs()) {
-        if (!CheckExpr(expr))
+        if (!CheckRvalue(expr))
             return false;
     }
 
@@ -1435,7 +1439,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
     auto base = expr->base();
     auto index = expr->index();
-    if (!CheckExpr(base) || !CheckExpr(index))
+    if (!CheckRvalue(base) || !CheckRvalue(index))
         return false;
     if (base->lvalue() && base->val().ident == iACCESSOR)
         base = expr->set_base(new RvalueExpr(base));
@@ -1567,7 +1571,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         if (!CheckSymbolExpr(sym_expr, true))
             return false;
     } else {
-        if (!CheckExpr(base))
+        if (!CheckRvalue(base))
             return false;
     }
 
@@ -2149,7 +2153,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     }
 
     if (param != call->implicit_this()) {
-        if (!CheckExpr(param))
+        if (!CheckRvalue(param))
             return false;
     }
 
@@ -2158,11 +2162,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     bool handling_this = call->implicit_this() && (pos == 0);
 
     if (param->val().ident == iACCESSOR) {
-        // We must always compute r-values for accessors.
-        if (!param->val().accessor()->getter()) {
-            report(param, 149) << param->val().accessor()->name();
+        if (!CheckRvalue(param->pos(), param->val()))
             return false;
-        }
         param = new RvalueExpr(param);
     }
 
@@ -2358,7 +2359,7 @@ bool Semantics::CheckExprForArrayInitializer(Expr* expr) {
             return CheckNewArrayExprForArrayInitializer(actual);
         }
         default:
-            return CheckExpr(expr);
+            return CheckRvalue(expr);
     }
 }
 
@@ -2373,7 +2374,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     val.ident = iREFARRAY;
     val.tag = type.tag();
     for (auto& expr : na->exprs()) {
-        if (!CheckExpr(expr))
+        if (!CheckRvalue(expr))
             return false;
         if (expr->lvalue())
             expr = new RvalueExpr(expr);
@@ -2598,7 +2599,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         }
     }
 
-    if (!CheckExpr(expr))
+    if (!CheckRvalue(expr))
         return false;
 
     if (expr->lvalue())
@@ -2734,7 +2735,7 @@ bool Semantics::CheckAssertStmt(AssertStmt* stmt) {
 
 bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckExpr(expr))
+    if (!CheckRvalue(expr))
         return false;
 
     const auto& v = expr->val();
@@ -2788,7 +2789,7 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
 
 bool Semantics::CheckExitStmt(ExitStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckExpr(expr))
+    if (!CheckRvalue(expr))
         return false;
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
@@ -2875,7 +2876,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
     }
     if (stmt->advance()) {
         ke::SaveAndSet<bool> restore(&pending_heap_allocation_, false);
-        if (CheckExpr(stmt->advance()))
+        if (CheckRvalue(stmt->advance()))
             AssignHeapOwnership(stmt->advance());
         else
             ok = false;
@@ -2930,7 +2931,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
 
 bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     auto expr = stmt->expr();
-    bool tag_ok = CheckExpr(expr);
+    bool tag_ok = CheckRvalue(expr);
     const auto& v = expr->val();
     if (tag_ok && (v.ident == iARRAY || v.ident == iREFARRAY))
         report(expr, 33) << "-unknown-";
@@ -2955,7 +2956,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     std::unordered_set<cell> case_values;
     for (const auto& case_entry : stmt->cases()) {
         for (Expr* expr : case_entry.first) {
-            if (!CheckExpr(expr))
+            if (!CheckRvalue(expr))
                 continue;
 
             int tag;
@@ -3456,6 +3457,22 @@ void Semantics::DeduceMaybeUsed() {
             }
         }
     }
+}
+
+bool Semantics::CheckRvalue(Expr* expr) {
+    if (!CheckExpr(expr))
+        return false;
+    return CheckRvalue(expr->pos(), expr->val());
+}
+
+bool Semantics::CheckRvalue(const token_pos_t& pos, const value& val) {
+    if (auto accessor = val.accessor()) {
+        if (!accessor->getter()) {
+            report(pos, 149) << accessor->name();
+            return false;
+        }
+    }
+    return true;
 }
 
 void DeleteStmt::ProcessUses(SemaContext& sc) {

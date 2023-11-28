@@ -216,6 +216,8 @@ class Semantics final
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
                                         bool from_call);
+    bool CheckRvalue(Expr* expr);
+    bool CheckRvalue(const token_pos_t& pos, const value& val);
 
     bool CheckAssignmentLHS(BinaryExpr* expr);
     bool CheckAssignmentRHS(BinaryExpr* expr);
