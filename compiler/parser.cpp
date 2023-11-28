@@ -654,6 +654,9 @@ Parser::hier14()
 {
     Expr* node = hier13();
 
+    if (!node)
+        return node;
+
     int tok = lexer_->lex();
     auto pos = lexer_->pos();
     switch (tok) {
