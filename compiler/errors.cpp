@@ -1,27 +1,23 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-/*  Pawn compiler - Error message system
- *  In fact a very simple system, using only 'panic mode'.
- *
- *  Copyright (c) ITB CompuPhase, 1997-2006
- *
- *  This software is provided "as-is", without any express or implied warranty.
- *  In no event will the authors be held liable for any damages arising from
- *  the use of this software.
- *
- *  Permission is granted to anyone to use this software for any purpose,
- *  including commercial applications, and to alter it and redistribute it
- *  freely, subject to the following restrictions:
- *
- *  1.  The origin of this software must not be misrepresented; you must not
- *      claim that you wrote the original software. If you use this software in
- *      a product, an acknowledgment in the product documentation would be
- *      appreciated but is not required.
- *  2.  Altered source versions must be plainly marked as such, and must not be
- *      misrepresented as being the original software.
- *  3.  This notice may not be removed or altered from any source distribution.
- *
- *  Version: $Id$
- */
+//
+//  Copyright (c) ITB CompuPhase, 1997-2006
+//  Copyright (c) 2023 AlliedModders LLC
+//
+//  This software is provided "as-is", without any express or implied warranty.
+//  In no event will the authors be held liable for any damages arising from
+//  the use of this software.
+//
+//  Permission is granted to anyone to use this software for any purpose,
+//  including commercial applications, and to alter it and redistribute it
+//  freely, subject to the following restrictions:
+//
+//  1.  The origin of this software must not be misrepresented; you must not
+//      claim that you wrote the original software. If you use this software in
+//      a product, an acknowledgment in the product documentation would be
+//      appreciated but is not required.
+//  2.  Altered source versions must be plainly marked as such, and must not be
+//      misrepresented as being the original software.
+//  3.  This notice may not be removed or altered from any source distribution.
 #include <assert.h>
 #ifdef _WIN32
 #    include <io.h>
@@ -296,6 +292,8 @@ void ReportManager::DumpErrorReport(bool clear) {
     });
 
     for (const auto& report : error_list_) {
+        if (report.type == ErrorType::Suppressed)
+            continue;
         fprintf(fp, "%s", report.message.c_str());
         if (report.loc.valid())
             DumpDiagnostic(fp, report);
@@ -321,9 +319,7 @@ void ReportManager::DumpErrorReport(bool clear) {
  *  o  1 for enable
  *  o  2 for toggle
  */
-void
-ReportManager::EnableWarning(int number, int enable)
-{
+void ReportManager::EnableWarning(int number, int enable) {
     switch (enable) {
         case 0:
             warn_disable_.emplace(number);
