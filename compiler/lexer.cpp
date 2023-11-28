@@ -2551,7 +2551,17 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
         assert(substitute[pos] == '%');
         assert(IsDigit(substitute[pos + 1]));
 
-        out += substitute.substr(last_start, pos - last_start);
+        // Position where the last text run ends.
+        size_t last_end = pos;
+
+        // If #%n, chop the # from the text run.
+        bool stringize = false;
+        if (pos > 0 && substitute[pos - 1] == '#') {
+            last_end--;
+            stringize = true;
+        }
+
+        out += substitute.substr(last_start, last_end - last_start);
         last_start = pos + 2;
 
         char arg_pos = substitute[pos + 1] - '0';
@@ -2561,7 +2571,10 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
             out.push_back(substitute[pos + 1]);
             continue;
         }
-        out += iter->second;
+        if (stringize)
+            out += '"' + iter->second + '"';
+        else
+            out += iter->second;
     }
 
     out += substitute.substr(last_start);
