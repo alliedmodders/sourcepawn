@@ -1,0 +1,1 @@
+(12) : error 149: no getter found for property m_nBugTrigger
