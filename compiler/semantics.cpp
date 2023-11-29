@@ -1451,8 +1451,8 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         report(base, 29);
         return false;
     }
-    if (base_val.sym->ident() != iARRAY && base_val.sym->ident() != iREFARRAY) {
-        report(base, 28) << base_val.sym->name();
+    if (base_val.ident != iARRAY && base_val.ident != iREFARRAY) {
+        report(index, 28) << base_val.sym->name();
         return false;
     }
 
