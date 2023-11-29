@@ -1,0 +1,3 @@
+(10) : error 028: invalid subscript (not an array or too many subscripts): "b"
+(11) : error 028: invalid subscript (not an array or too many subscripts): "b"
+(12) : error 028: invalid subscript (not an array or too many subscripts): "b"
