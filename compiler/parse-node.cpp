@@ -313,4 +313,12 @@ IdentifierKind Decl::ident_impl() {
     }
 }
 
+LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
+    for (const auto& field : fields_) {
+        if (field->name() == name)
+            return field;
+    }
+    return nullptr;
+}
+
 } // namespace sp

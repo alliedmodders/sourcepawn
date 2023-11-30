@@ -485,7 +485,7 @@ RttiBuilder::add_struct(Type* type)
     uint32_t struct_index = classdefs_->count();
     typeid_cache_.add(p, type, struct_index);
 
-    pstruct_t* ps = type->as<pstruct_t>();
+    auto ps = type->asPstruct();
 
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
@@ -495,22 +495,22 @@ RttiBuilder::add_struct(Type* type)
     classdefs_->add(classdef);
 
     // Pre-reserve space in case we recursively add structs.
-    for (size_t i = 0; i < ps->args.size(); i++)
+    for (size_t i = 0; i < ps->fields().size(); i++)
         fields_->add();
 
-    for (size_t i = 0; i < ps->args.size(); i++) {
-        const structarg_t* arg = ps->args[i];
+    for (size_t i = 0; i < ps->fields().size(); i++) {
+        auto arg = ps->fields()[i];
 
         int dims[1] = {0};
-        int dimcount = arg->type.ident == iREFARRAY ? 1 : 0;
+        int dimcount = arg->type().ident == iREFARRAY ? 1 : 0;
 
-        variable_type_t type = {arg->type.tag(), dims, dimcount, !!arg->type.is_const};
+        variable_type_t type = {arg->type().tag(), dims, dimcount, !!arg->type().is_const};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
         smx_rtti_field field;
         field.flags = 0;
-        field.name = names_->add(arg->name);
+        field.name = names_->add(arg->name());
         field.type_id = to_typeid(encoding);
         fields_->at(classdef.first_field + i) = field;
     }
@@ -701,7 +701,7 @@ RttiBuilder::encode_tag_into(std::vector<uint8_t>& bytes, int tag)
     Type* type = types_->find(tag);
     assert(!type->isObject());
 
-    if (type->isStruct()) {
+    if (type->isPstruct()) {
         encode_struct_into(bytes, type);
         return;
     }

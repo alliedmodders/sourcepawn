@@ -494,7 +494,7 @@ Parser::parse_pstruct()
     Atom* ident = nullptr;
     lexer_->needsymbol(&ident);
 
-    std::vector<StructField> fields;
+    std::vector<LayoutFieldDecl*> fields;
 
     lexer_->need('{');
     do {
@@ -515,7 +515,7 @@ Parser::parse_pstruct()
         }
 
         if (ident)
-            fields.push_back(StructField(pos, decl.name, decl.type));
+            fields.push_back(new LayoutFieldDecl(pos, decl));
 
         lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     } while (!lexer_->peek('}'));

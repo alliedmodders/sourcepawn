@@ -53,6 +53,7 @@ struct UserOperation
 typedef void (*OpFunc)();
 
 class Expr;
+class LayoutFieldDecl;
 class MethodmapDecl;
 class MethodmapMethodDecl;
 class SemaContext;
@@ -493,26 +494,14 @@ class EnumDecl : public Decl
     MethodmapDecl* mm_ = nullptr;
 };
 
-struct StructField {
-    StructField(const token_pos_t& pos, Atom* name, const typeinfo_t& typeinfo)
-      : pos(pos), name(name), type(typeinfo), field(nullptr)
-    {}
-
-    token_pos_t pos;
-    Atom* name;
-    typeinfo_t type;
-    structarg_t* field;
-};
-
 // "Pawn Struct", or p-struct, a hack to effect a replacement for register_plugin()
 // when SourceMod was first being prototyped. Theoretically these could be retooled
 // as proper structs.
 class PstructDecl : public Decl
 {
   public:
-    PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<StructField>& fields)
+    PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<LayoutFieldDecl*>& fields)
       : Decl(StmtKind::PstructDecl, pos, name),
-        ps_(nullptr),
         fields_(fields)
     {}
 
@@ -522,11 +511,12 @@ class PstructDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PstructDecl; }
 
-    PoolArray<StructField>& fields() { return fields_; }
+    LayoutFieldDecl* FindField(Atom* name);
+
+    PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
   protected:
-    pstruct_t* ps_;
-    PoolArray<StructField> fields_;
+    PoolArray<LayoutFieldDecl*> fields_;
 };
 
 struct TypedefInfo : public PoolObject {
