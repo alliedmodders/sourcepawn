@@ -164,7 +164,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (decl->ident() == iCONSTEXPR)
         return true;
 
-    if (types_->find(type.tag())->kind() == TypeKind::Struct)
+    if (types_->find(type.tag())->kind() == TypeKind::Pstruct)
         return CheckPstructDecl(decl);
 
     if (!decl->as<ArgDecl>() && type.is_const && !decl->init() && !decl->is_public())
@@ -212,10 +212,10 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
     }
 
     auto type = types_->find(decl->tag());
-    auto ps = type->as<pstruct_t>();
+    auto ps = type->asPstruct();
 
     std::vector<bool> visited;
-    visited.resize(ps->args.size());
+    visited.resize(ps->fields().size());
 
     // Do as much checking as we can before bailing out.
     bool ok = true;
@@ -229,42 +229,42 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
     for (size_t i = 0; i < visited.size(); i++) {
         if (visited[i])
             continue;
-        if (ps->args[i]->type.ident == iREFARRAY) {
-            assert(ps->args[i]->type.tag() == types_->tag_string());
+        auto arg = ps->fields()[i];
+        if (arg->type().ident == iREFARRAY) {
+            assert(arg->type().tag() == types_->tag_string());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
-            init->fields().push_back(new StructInitFieldExpr(ps->args[i]->name, expr,
-                                                             decl->pos()));
+            init->fields().push_back(new StructInitFieldExpr(arg->name(), expr, decl->pos()));
         }
     }
 
     return true;
 }
 
-bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
+bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
                                 const StructInitFieldExpr* field, std::vector<bool>* visited)
 {
-    auto arg = ps->GetArg(field->name);
+    auto arg = ps->FindField(field->name);
     if (!arg) {
         report(field->pos(), 96) << field->name << "struct" << decl->name();
         return false;
     }
 
-    if (visited->at(arg->index))
+    if (visited->at(arg->offset()))
         report(field->value->pos(), 244) << field->name->chars();
 
-    visited->at(arg->index) = true;
+    visited->at(arg->offset()) = true;
 
     if (auto expr = field->value->as<StringExpr>()) {
-        if (arg->type.ident != iREFARRAY) {
+        if (arg->type().ident != iREFARRAY) {
             report(expr->pos(), 48);
             return false;
         }
-        if (arg->type.tag() != types_->tag_string())
+        if (arg->type().tag() != types_->tag_string())
             report(expr->pos(), 213) << type_to_name(types_->tag_string())
-                                     << type_to_name(arg->type.tag());
+                                     << type_to_name(arg->type().tag());
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
-        if (arg->type.ident != iVARIABLE) {
+        if (arg->type().ident != iVARIABLE) {
             report(expr->pos(), 23);
             return false;
         }
@@ -272,10 +272,10 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type.tag() == types_->tag_bool() && expr->tag() == 0 &&
+        if (!(arg->type().tag() == types_->tag_bool() && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->type.tag(), expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type().tag(), expr->tag(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field->value->as<SymbolExpr>()) {
         auto var = expr->decl()->as<VarDecl>();
@@ -284,13 +284,13 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, const pstruct_t* ps,
             return false;
         }
 
-        if (arg->type.ident == iVARIABLE) {
+        if (arg->type().ident == iVARIABLE) {
             if (var->type().ident != iVARIABLE) {
                 report(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type.tag(), var->tag(), MATCHTAG_COERCE);
-        } else if (arg->type.ident == iREFARRAY) {
+            matchtag(arg->type().tag(), var->tag(), MATCHTAG_COERCE);
+        } else if (arg->type().ident == iREFARRAY) {
             if (var->ident() != iARRAY) {
                 report(expr->pos(), 405);
                 return false;

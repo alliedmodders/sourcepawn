@@ -69,7 +69,7 @@ enum class TypeKind : uint8_t {
     Bool,
     String,
     EnumStruct,
-    Struct,
+    Pstruct,
     Methodmap,
     Enum,
 };
@@ -78,6 +78,7 @@ struct funcenum_t;
 class EnumStructDecl;
 class Expr;
 class MethodmapDecl;
+class PstructDecl;
 
 struct TypenameInfo {
     TypenameInfo() {}
@@ -243,10 +244,6 @@ class Type : public PoolObject
         return reinterpret_cast<T*>(this);
     }
 
-    bool isStruct() const {
-        return kind_ == TypeKind::Struct;
-    }
-
     void setMethodmap(MethodmapDecl* map) {
         setFixed();
         assert(kind_ == TypeKind::Methodmap || kind_ == TypeKind::Enum);
@@ -294,6 +291,15 @@ class Type : public PoolObject
         return enumstruct_ptr_;
     }
 
+    bool isPstruct() const {
+        return kind_ == TypeKind::Pstruct;
+    }
+    PstructDecl* asPstruct() const {
+        if (!isPstruct())
+            return nullptr;
+        return pstruct_ptr_;
+    }
+
   private:
     void setFunction(funcenum_t* func) {
         setFixed();
@@ -308,6 +314,11 @@ class Type : public PoolObject
         setFixed();
         assert(kind_ == TypeKind::EnumStruct);
         enumstruct_ptr_ = decl;
+    }
+    void setPstruct(PstructDecl* decl) {
+        setFixed();
+        assert(kind_ == TypeKind::Pstruct);
+        pstruct_ptr_ = decl;
     }
     void setFixed() {
         // This is separate from "kind_" because it persists across passes.
@@ -331,24 +342,9 @@ class Type : public PoolObject
         funcenum_t* funcenum_ptr_;
         MethodmapDecl* methodmap_ptr_;
         EnumStructDecl* enumstruct_ptr_;
-        void* private_ptr_;
+        PstructDecl* pstruct_ptr_;
     };
 };
-
-class pstruct_t : public Type
-{
-  public:
-    explicit pstruct_t(Atom* name)
-      : Type(name, TypeKind::Struct)
-    {}
-
-    const structarg_t* GetArg(Atom* name) const;
-
-    static bool is_a(Type* type) { return type->kind() == TypeKind::Struct; }
-
-    PoolArray<structarg_t*> args;
-};
-
 
 class TypeManager
 {
@@ -373,7 +369,7 @@ class TypeManager
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
     Type* defineTag(Atom* atom);
-    pstruct_t* definePStruct(Atom* name);
+    Type* definePstruct(PstructDecl* decl);
 
     template <typename T>
     void forEachType(const T& callback) {

@@ -28,6 +28,7 @@
 #include <utility>
 
 #include "compile-context.h"
+#include "parse-node.h"
 #include "sc.h"
 #include "sctracker.h"
 #include "types.h"
@@ -42,7 +43,6 @@ Type::Type(Atom* name, TypeKind kind)
    fixed_(0),
    kind_(kind)
 {
-    private_ptr_ = nullptr;
 }
 
 const char*
@@ -61,7 +61,7 @@ Type::kindName() const
   switch (kind_) {
     case TypeKind::EnumStruct:
       return "enum struct";
-    case TypeKind::Struct:
+    case TypeKind::Pstruct:
       return "struct";
     case TypeKind::Methodmap:
       return "methodmap";
@@ -220,11 +220,11 @@ TypeManager::defineTag(Atom* name) {
     return type;
 }
 
-pstruct_t* TypeManager::definePStruct(Atom* name) {
-    assert(find(name) == nullptr);
+Type* TypeManager::definePstruct(PstructDecl* decl) {
+    assert(find(decl->name()) == nullptr);
 
-    pstruct_t* type = new pstruct_t(name);
-    RegisterType(type);
+    Type* type = add(decl->name(), TypeKind::Pstruct);
+    type->setPstruct(decl);
     return type;
 }
 
@@ -242,14 +242,6 @@ typeinfo_t::isCharArray() const
 {
     auto types = CompileContext::get().types();
     return numdim() == 1 && tag() == types->tag_string();
-}
-
-const structarg_t* pstruct_t::GetArg(Atom* name) const {
-    for (const auto& arg : args) {
-        if (arg->name == name)
-            return arg;
-    }
-    return nullptr;
 }
 
 } // namespace sp

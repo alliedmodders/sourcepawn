@@ -259,43 +259,35 @@ PstructDecl::EnterNames(SemaContext& sc)
         return false;
     }
 
-    ps_ = sc.cc().types()->definePStruct(name_);
+    sc.cc().types()->definePstruct(this);
 
-    std::vector<structarg_t*> args;
+    size_t position = 0;
     for (auto& field : fields_) {
-        if (ps_->GetArg(field.name)) {
-            report(field.pos, 103) << field.name << "internal struct";
+        if (FindField(field->name()) != field) {
+            report(field, 103) << field->name() << "struct";
             return false;
         }
 
-        auto arg = new structarg_t;
-        arg->type = field.type;
-        arg->name = field.name;
-        if (arg->type.ident == iARRAY)
-            arg->type.ident = iREFARRAY;
-        arg->offs = args.size() * sizeof(cell_t);
-        arg->index = (int)args.size();
-        args.emplace_back(arg);
+        if (field->type().ident == iARRAY)
+            field->mutable_type().ident = iREFARRAY;
+        field->set_offset(position);
 
-        if (field.type.numdim() > 1 || (field.type.numdim() == 1 && field.type.dim(0) != 0)) {
-            error(field.pos, 69);
+        position++;
+
+        if (field->type().numdim() > 1 ||
+            (field->type().numdim() == 1 && field->type().dim(0) != 0))
+        {
+            report(field, 69);
             return false;
         }
-
-        field.field = arg;
     }
-
-    new (&ps_->args) PoolArray<structarg_t*>(args);
     return true;
 }
 
-bool
-PstructDecl::Bind(SemaContext& sc)
-{
+bool PstructDecl::Bind(SemaContext& sc) {
     bool ok = true;
-    for (const auto& field : fields_) {
-        ok &= field.field && sc.BindType(field.pos, &field.field->type);
-    }
+    for (const auto& field : fields_)
+        ok &= sc.BindType(field->pos(), &field->mutable_type());
     return ok;
 }
 
@@ -444,7 +436,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if ((vclass_ == sSTATIC || vclass_ == sGLOBAL) && type_.ident == iREFARRAY)
         error(pos_, 165);
 
-    if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Struct) {
+    if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Pstruct) {
         type_.is_const = true;
     } else {
         IdentifierKind ident = type_.ident;

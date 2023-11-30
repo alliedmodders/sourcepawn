@@ -276,7 +276,7 @@ CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node)
 }
 
 void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
-    if (cc_.types()->find(decl->tag())->kind() == TypeKind::Struct) {
+    if (cc_.types()->find(decl->tag())->kind() == TypeKind::Pstruct) {
         EmitPstruct(decl);
     } else {
         if (decl->ident() != iCONSTEXPR) {
@@ -440,23 +440,23 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         return;
 
     auto type = cc_.types()->find(decl->tag());
-    auto ps = type->as<pstruct_t>();
+    auto ps = type->asPstruct();
 
     std::vector<cell> values;
-    values.resize(ps->args.size());
+    values.resize(ps->fields().size());
 
     auto init = decl->init_rhs()->as<StructExpr>();
     for (const auto& field : init->fields()) {
-        auto arg = ps->GetArg(field->name);
+        auto arg = ps->FindField(field->name);
         if (auto expr = field->value->as<StringExpr>()) {
-            values[arg->index] = data_.dat_address();
+            values[arg->offset()] = data_.dat_address();
             data_.Add(expr->text()->chars(), expr->text()->length());
         } else if (auto expr = field->value->as<TaggedValueExpr>()) {
-            values[arg->index] = expr->value();
+            values[arg->offset()] = expr->value();
         } else if (auto expr = field->value->as<SymbolExpr>()) {
             auto var = expr->decl()->as<VarDeclBase>();
             assert(var);
-            values[arg->index] = var->addr();
+            values[arg->offset()] = var->addr();
         } else {
             assert(false);
         }
