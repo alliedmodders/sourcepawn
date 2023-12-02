@@ -58,15 +58,20 @@ enum IdentifierKind {
     iENUMSTRUCT = 15,   /* symbol defining an enumstruct */
 };
 
-enum class TypeKind : uint8_t {
+enum class BuiltinType {
+    Bool,
+    Char,
     Int,
-    Object,
+    Float,
     Null,
-    Function,
     Any,
     Void,
-    Float,
-    Bool,
+};
+
+enum class TypeKind : uint8_t {
+    Builtin,
+    Object,
+    Function,
     String,
     EnumStruct,
     Pstruct,
@@ -244,6 +249,11 @@ class Type : public PoolObject
         return reinterpret_cast<T*>(this);
     }
 
+    bool isBuiltin() const { return kind_ == TypeKind::Builtin; }
+    bool isBuiltin(BuiltinType type) const { return isBuiltin() && builtin_type_ == type; }
+    bool isInt() const { return isBuiltin(BuiltinType::Int); }
+    bool isNull() const { return isBuiltin(BuiltinType::Null); }
+
     void setMethodmap(MethodmapDecl* map) {
         setFixed();
         assert(kind_ == TypeKind::Methodmap || kind_ == TypeKind::Enum);
@@ -252,7 +262,7 @@ class Type : public PoolObject
     }
 
     bool isObject() const {
-        return kind_ == TypeKind::Object;
+        return kind_ == TypeKind::Object || isNull();
     }
 
     bool isFunction() const {
@@ -328,6 +338,11 @@ class Type : public PoolObject
         value_ = tagid;
     }
 
+    void setBuiltinType(BuiltinType type) {
+        assert(kind_ == TypeKind::Builtin);
+        builtin_type_ = type;
+    }
+
     void resetPtr();
 
   private:
@@ -343,6 +358,7 @@ class Type : public PoolObject
         MethodmapDecl* methodmap_ptr_;
         EnumStructDecl* enumstruct_ptr_;
         PstructDecl* pstruct_ptr_;
+        BuiltinType builtin_type_;
     };
 };
 
@@ -356,15 +372,10 @@ class TypeManager
 
     void init();
 
-    Type* defineInt();
-    Type* defineAny();
     Type* defineFunction(Atom* name, funcenum_t* fe);
     Type* defineTypedef(const char* name, Type* other);
     Type* defineString();
-    Type* defineFloat();
-    Type* defineVoid();
     Type* defineObject(const char* name);
-    Type* defineBool();
     Type* defineMethodmap(Atom* name, MethodmapDecl* map);
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
@@ -399,6 +410,7 @@ class TypeManager
     Type* add(const char* name, TypeKind kind);
     Type* add(Atom* name, TypeKind kind);
     void RegisterType(Type* type);
+    Type* defineBuiltin(const char* name, BuiltinType type);
 
   private:
     CompileContext& cc_;

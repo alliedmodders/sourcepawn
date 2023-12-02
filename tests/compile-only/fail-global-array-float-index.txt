@@ -1,1 +1,1 @@
-(1) : error 077: arrays cannot be indexed by non-integral type 'Float'
+(1) : error 077: arrays cannot be indexed by non-integral type 'float'
