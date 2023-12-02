@@ -1881,6 +1881,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 
     auto& val = expr->val();
     val.set_constval(1);
+    val.set_type(types_->type_int());
 
     if (decl->ident() == iARRAY || decl->ident() == iREFARRAY || decl->ident() == iENUMSTRUCT) {
         bool is_enum_struct = types_->find(decl->semantic_tag())->isEnumStruct();
