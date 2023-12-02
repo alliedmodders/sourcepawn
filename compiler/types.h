@@ -249,6 +249,9 @@ class Type : public PoolObject
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
     bool isChar() const { return isBuiltin(BuiltinType::Char); }
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
+    bool isVoid() const { return isBuiltin(BuiltinType::Void); }
+    bool isFloat() const { return isBuiltin(BuiltinType::Float); }
+    bool isBool() const { return isBuiltin(BuiltinType::Float); }
 
     bool coercesFromInt() const {
         if (kind_ == TypeKind::Enum)

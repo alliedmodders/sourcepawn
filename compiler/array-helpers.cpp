@@ -286,8 +286,8 @@ ArraySizeResolver::ResolveDimExprs()
         if (!ResolveDimExpr(expr, &v))
             return false;
 
-        if (!is_valid_index_tag(v.tag)) {
-            report(expr->pos(), 77) << types_->find(v.tag)->prettyName();
+        if (!is_valid_index_tag(v.tag())) {
+            report(expr->pos(), 77) << v.type();
             return false;
         }
 
@@ -310,7 +310,7 @@ ArraySizeResolver::ResolveDimExprs()
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
-        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag) && v.sym &&
+        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag()) && v.sym &&
                    v.sym->as<EnumDecl>())
         {
             report(expr->pos(), 153);
@@ -641,7 +641,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             continue;
         }
 
-        matchtag(type_.tag(), v.tag, MATCHTAG_COERCE);
+        matchtag(type_.type, v.type(), MATCHTAG_COERCE);
 
         prev2 = prev1;
         prev1 = ke::Some(v.constval());
@@ -713,7 +713,7 @@ bool FixedArrayValidator::ValidateEnumStruct(Expr* init) {
                 continue;
             }
 
-            matchtag(type.tag(), v.tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            matchtag(type.type, v.type(), MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
         }
     }
 

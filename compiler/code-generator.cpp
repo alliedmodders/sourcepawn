@@ -1108,8 +1108,7 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
 
     auto& base_val = expr->base()->val();
 
-    auto types = cc_.types();
-    bool magic_string = (base_val.tag == types->tag_string() && base_val.array_dim_count() == 1);
+    bool magic_string = (base_val.type()->isChar() && base_val.array_dim_count() == 1);
 
     const auto& idxval = expr->index()->val();
     if (idxval.ident == iCONSTEXPR) {

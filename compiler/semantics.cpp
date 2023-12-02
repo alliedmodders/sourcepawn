@@ -441,7 +441,7 @@ bool Expr::EvalConst(cell* value, int* tag) {
     if (value)
         *value = val_.constval();
     if (tag)
-        *tag = val_.tag;
+        *tag = val_.tag();
     return true;
 }
 
@@ -540,9 +540,9 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
         return nullptr;
     }
 
-    if (val.tag != 0 || val.tag != types_->tag_bool()) {
+    if (!val.type()->isInt() && !val.type()->isBool()) {
         UserOperation userop;
-        if (find_userop(*sc_, '!', val.tag, 0, 1, &val, &userop)) {
+        if (find_userop(*sc_, '!', val.type(), 0, 1, &val, &userop)) {
             // Call user op for '!', then invert it. EmitTest will fold out the
             // extra invert.
             //
@@ -554,7 +554,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
             expr = new CallUserOpExpr(userop, expr);
             expr = new UnaryExpr(expr->pos(), '!', expr);
             expr->val().ident = iEXPRESSION;
-            expr->val().tag = types_->tag_bool();
+            expr->val().set_tag(types_->tag_bool());
             return expr;
         }
     }
@@ -619,20 +619,20 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
                 out_val.set_constval(~out_val.constval());
             break;
         case '!':
-            if (find_userop(*sc_, '!', out_val.tag, 0, 1, &out_val, &userop)) {
+            if (find_userop(*sc_, '!', out_val.type(), 0, 1, &out_val, &userop)) {
                 expr = unary->set_expr(new CallUserOpExpr(userop, expr));
                 out_val = expr->val();
                 unary->set_userop();
             } else if (out_val.ident == iCONSTEXPR) {
                 out_val.set_constval(!out_val.constval());
             }
-            out_val.tag = types_->tag_bool();
+            out_val.set_tag(types_->tag_bool());
             break;
         case '-':
-            if (out_val.ident == iCONSTEXPR && out_val.tag == types_->tag_float()) {
+            if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
                 float f = sp::FloatCellUnion(out_val.constval()).f32;
                 out_val.set_constval(sp::FloatCellUnion(-f).cell);
-            } else if (find_userop(*sc_, '-', out_val.tag, 0, 1, &out_val, &userop)) {
+            } else if (find_userop(*sc_, '-', out_val.type(), 0, 1, &out_val, &userop)) {
                 expr = unary->set_expr(new CallUserOpExpr(userop, expr));
                 out_val = expr->val();
                 unary->set_userop();
@@ -686,12 +686,12 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
         markusage(expr_val.accessor()->setter(), uREAD);
     }
 
-    find_userop(*sc_, incdec->token(), expr_val.tag, 0, 1, &expr_val, &incdec->userop());
+    find_userop(*sc_, incdec->token(), expr_val.type(), 0, 1, &expr_val, &incdec->userop());
 
     // :TODO: more type checks
     auto& val = incdec->val();
     val.ident = iEXPRESSION;
-    val.tag = expr_val.tag;
+    val.set_tag(expr_val.tag());
     return true;
 }
 
@@ -788,30 +788,30 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
     auto& val = expr->val();
     val.ident = iEXPRESSION;
-    val.tag = left_val.tag;
+    val.set_tag(left_val.tag());
 
     auto& assignop = expr->assignop();
     if (assignop.sym)
-        val.tag = assignop.sym->tag();
+        val.set_tag(assignop.sym->tag());
 
     if (oper_tok) {
         auto& userop = expr->userop();
-        if (find_userop(*sc_, oper_tok, left_val.tag, right_val.tag, 2, nullptr, &userop)) {
-            val.tag = userop.sym->tag();
+        if (find_userop(*sc_, oper_tok, left_val.type(), right_val.type(), 2, nullptr, &userop)) {
+            val.set_tag(userop.sym->tag());
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
-            matchtag(left_val.tag, right_val.tag, FALSE);
+            matchtag(left_val.type(), right_val.type(), FALSE);
             val.ident = iCONSTEXPR;
             val.set_constval(calc(left_val.constval(), oper_tok, right_val.constval(),
                                   &boolresult));
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
-                matchtag_commutative(left_val.tag, right_val.tag, MATCHTAG_DEDUCE);
+                matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
-            val.tag = types_->tag_bool();
+            val.set_tag(types_->tag_bool());
     }
 
     return true;
@@ -902,7 +902,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         } else {
             right_length = right_val.array_size();
 
-            if (right_val.tag == types_->tag_string()) {
+            if (right_val.type()->isChar()) {
                 if (left_val.sym->semantic_tag() == 0)
                     exact_match = false;
             }
@@ -933,7 +933,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(*sc_, 0, right_val.tag, left_val.tag, 2, &left_val, &expr->assignop());
+        find_userop(*sc_, 0, right_val.type(), left_val.type(), 2, &left_val, &expr->assignop());
     }
 
     if (!expr->oper() &&
@@ -941,13 +941,13 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         !expr->assignop().sym)
     {
         if ((left_val.ident == iARRAY || left_val.ident == iREFARRAY) &&
-            ((left_val.tag == types_->tag_string() && right_val.tag != types_->tag_string()) ||
-             (left_val.tag != types_->tag_string() && right_val.tag == types_->tag_string())))
+            ((left_val.type()->isChar() && !right_val.type()->isChar()) ||
+             (!left_val.type()->isChar() && right_val.type()->isChar())))
         {
-            report(expr, 179) << type_to_name(left_val.tag) << type_to_name(right_val.tag);
+            report(expr, 179) << left_val.type() << right_val.type();
             return false;
         }
-        matchtag(left_val.tag, right_val.tag, TRUE);
+        matchtag(left_val.type(), right_val.type(), TRUE);
     }
     return true;
 }
@@ -1060,7 +1060,7 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
         val.ident = iEXPRESSION;
     }
     val.sym = nullptr;
-    val.tag = types_->tag_bool();
+    val.set_tag(types_->tag_bool());
     return true;
 }
 
@@ -1084,7 +1084,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
 
     auto& val = chain->val();
     val.ident = iEXPRESSION;
-    val.tag = types_->tag_bool();
+    val.set_tag(types_->tag_bool());
 
     for (auto& op : chain->ops()) {
         Expr* right = op.expr;
@@ -1102,7 +1102,9 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
             return false;
         }
 
-        if (find_userop(*sc_, op.oper_tok, left_val.tag, right_val.tag, 2, nullptr, &op.userop)) {
+        if (find_userop(*sc_, op.oper_tok, left_val.type(), right_val.type(), 2, nullptr,
+                        &op.userop))
+        {
             if (op.userop.sym->tag() != types_->tag_bool()) {
                 report(op.pos, 51) << get_token_string(op.token);
                 return false;
@@ -1110,7 +1112,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
             if (!checkval_string(&left_val, &right_val))
-                matchtag_commutative(left_val.tag, right_val.tag, MATCHTAG_DEDUCE);
+                matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
         }
 
         if (right_val.ident != iCONSTEXPR || op.userop.sym)
@@ -1192,7 +1194,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
         return false;
     }
 
-    matchtag_commutative(left.tag, right.tag, FALSE);
+    matchtag_commutative(left.type(), right.type(), FALSE);
 
     /* If both sides are arrays, we should return the maximal as the lvalue.
      * Otherwise we could buffer overflow and the compiler is too stupid.
@@ -1257,21 +1259,21 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     out_val = expr->expr()->val();
     expr->set_lvalue(expr->expr()->lvalue());
 
-    Type* ltype = types_->find(out_val.tag);
+    Type* ltype = out_val.type();
     Type* atype = types_->find(type.tag());
     if (ltype->isObject() || atype->isObject()) {
-        matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
+        matchtag(atype, out_val.type(), MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
         // Warn: unsupported cast.
         report(expr, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
-        matchtag(type.tag(), out_val.tag, MATCHTAG_COERCE);
-    } else if (out_val.sym && out_val.sym->tag() == types_->tag_void()) {
+        matchtag(atype, out_val.type(), MATCHTAG_COERCE);
+    } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (atype->isEnumStruct()) {
         report(expr, 95) << atype->name();
     }
-    out_val.tag = type.tag();
+    out_val.set_tag(type.tag());
     return true;
 }
 
@@ -1309,7 +1311,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         report(expr, 174) << decl->name();
         return false;
     }
-    val.tag = decl->tag();
+    val.set_tag(decl->tag());
 
     if (auto fun = decl->as<FunctionDecl>()) {
         fun = fun->canonical();
@@ -1330,7 +1332,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
         // New-style "closure".
         val.ident = iEXPRESSION;
-        val.tag = fe->tag;
+        val.set_tag(fe->tag);
 
         // Mark as being indirectly invoked. Direct invocations go through
         // BindCallTarget.
@@ -1412,7 +1414,7 @@ CommaExpr::ProcessDiscardUses(SemaContext& sc)
 bool Semantics::CheckArrayExpr(ArrayExpr* array) {
     AutoErrorPos aep(array->pos());
 
-    int lasttag = -1;
+    Type* last_type = nullptr;
     for (const auto& expr : array->exprs()) {
         if (!CheckExpr(expr))
             return false;
@@ -1422,15 +1424,15 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array) {
             report(expr, 8);
             return false;
         }
-        if (lasttag < 0)
-            lasttag = val.tag;
+        if (!last_type)
+            last_type = val.type();
         else
-            matchtag(lasttag, val.tag, FALSE);
+            matchtag(last_type, val.type(), 0);
     }
 
     auto& val = array->val();
     val.set_array(iARRAY, array->exprs().size());
-    val.tag = lasttag;
+    val.set_tag(last_type->tagid());
     return true;
 }
 
@@ -1457,7 +1459,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     if (base_val.sym->as<EnumStructDecl>()) {
-        if (!matchtag(base_val.sym->semantic_tag(), index->val().tag, TRUE))
+        if (!matchtag(base_val.sym->semantic_tag(), index->val().tag(), TRUE))
             return false;
     }
 
@@ -1474,9 +1476,9 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
 
-    int idx_tag = index->val().tag;
+    int idx_tag = index->val().tag();
     if (!is_valid_index_tag(idx_tag)) {
-        report(index, 77) << types_->find(idx_tag)->prettyName();
+        report(index, 77) << types_->find(idx_tag);
         return false;
     }
 
@@ -1517,7 +1519,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         out_val.set_array(iARRAYCHAR, base_val.sym, 0);
     else
         out_val.set_array(iARRAYCELL, base_val.sym, 0);
-    out_val.tag = base_val.sym->tag();
+    out_val.set_tag(base_val.sym->tag());
 
     expr->set_lvalue(true);
     return true;
@@ -1537,7 +1539,7 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
     auto& val = expr->val();
     val.ident = sym->ident();
     val.sym = sym;
-    val.tag = sym->tag();
+    val.set_tag(sym->tag());
     expr->set_lvalue(sym->ident() != iREFARRAY);
     return true;
 }
@@ -1545,13 +1547,13 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
 bool Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
     val.set_constval(0);
-    val.tag = types_->tag_null();
+    val.set_tag(types_->tag_null());
     return true;
 }
 
 bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
     auto& val = expr->val();
-    val.tag = expr->tag();
+    val.set_tag(expr->tag());
     val.set_constval(expr->value());
     return true;
 }
@@ -1559,7 +1561,7 @@ bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
 bool Semantics::CheckStringExpr(StringExpr* expr) {
     auto& val = expr->val();
     val.set_array(iARRAY, (cell)expr->text()->length() + 1);
-    val.tag = types_->tag_string();
+    val.set_tag(types_->tag_string());
     return true;
 }
 
@@ -1615,10 +1617,10 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return true;
     }
 
-    Type* base_type = types_->find(base_val.tag);
+    Type* base_type = base_val.type();
     auto map = base_type->asMethodmap();
     if (!map) {
-        report(expr, 104) << type_to_name(base_val.tag);
+        report(expr, 104) << base_val.type();
         return false;
     }
 
@@ -1633,7 +1635,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())
             base = expr->set_base(new RvalueExpr(base));
-        val.tag = prop->property_tag();
+        val.set_tag(prop->property_tag());
         val.set_accessor(prop);
         expr->set_lvalue(true);
         return true;
@@ -1801,12 +1803,12 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
 
     typeinfo_t ti{};
     if (types_->find(tag)->isEnumStruct()) {
-        val.tag = 0;
+        val.set_tag(0);
         ti.declared_tag = tag;
     } else {
-        val.tag = tag;
+        val.set_tag(tag);
     }
-    ti.set_tag(val.tag);
+    ti.set_tag(val.tag());
 
     if (field->type().numdim()) {
         ti.dim_ = {field->type().dim(0)};
@@ -1836,7 +1838,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
         return false;
     }
 
-    Type* type = types_->find(base_val.tag);
+    Type* type = base_val.type();
     Decl* field = FindEnumStructField(type, expr->name());
     if (!field) {
         report(expr, 105) << type->name() << expr->name();
@@ -1851,7 +1853,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
 
     auto& val = expr->val();
     val.set_constval(fd->offset());
-    val.tag = 0;
+    val.set_tag(0);
     return true;
 }
 
@@ -1954,7 +1956,7 @@ CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
     expr_(expr)
 {
     val_.ident = iEXPRESSION;
-    val_.tag = userop_.sym->tag();
+    val_.set_tag(userop_.sym->tag());
 }
 
 void
@@ -2003,7 +2005,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     auto& val = call->val();
     val.ident = iEXPRESSION;
-    val.tag = fun->tag();
+    val.set_tag(fun->tag());
     if (fun->return_array()) {
         val.ident = iREFARRAY;
         val.sym = fun->return_array()->var;
@@ -2189,8 +2191,11 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
                 NeedsHeapAlloc(param);
             }
-            if (!checktag_string(arg->type().tag(), val) && !checktag(arg->type().tag(), val->tag))
-                report(param, 213) << type_to_name(arg->type().tag()) << type_to_name(val->tag);
+            if (!checktag_string(arg->type().tag(), val) &&
+                !checktag(arg->type().tag(), val->tag()))
+            {
+                report(param, 213) << type_to_name(arg->type().tag()) << val->type();
+            }
             break;
         case iVARIABLE:
         {
@@ -2207,13 +2212,13 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(*sc_, 0, val->tag, arg->type().tag(), 2, nullptr, &userop))
+                find_userop(*sc_, 0, val->type(), arg->type().type, 2, nullptr, &userop))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
             }
             if (!checktag_string(arg->type().tag(), val))
-                checktag(arg->type().tag(), val->tag);
+                checktag(arg->type().tag(), val->tag());
             break;
         }
         case iREFERENCE:
@@ -2227,7 +2232,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            checktag(arg->type().tag(), val->tag);
+            checktag(arg->type().tag(), val->tag());
             break;
         case iREFARRAY:
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
@@ -2291,11 +2296,11 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 }
             }
 
-            checktag(arg->type().tag(), val->tag);
-            if ((arg->type().tag() != types_->tag_string() && val->tag == types_->tag_string()) ||
-                (arg->type().tag() == types_->tag_string() && val->tag != types_->tag_string()))
+            checktag(arg->type().tag(), val->tag());
+            if ((arg->type().tag() != types_->tag_string() && val->type()->isChar()) ||
+                (arg->type().tag() == types_->tag_string() && !val->type()->isChar()))
             {
-                report(param, 178) << type_to_name(val->tag) << type_to_name(arg->type().tag());
+                report(param, 178) << val->type() << type_to_name(arg->type().tag());
                 return false;
             }
             break;
@@ -2372,7 +2377,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     auto& val = na->val();
     auto& type = na->type();
     val.ident = iREFARRAY;
-    val.tag = type.tag();
+    val.set_tag(type.tag());
     for (auto& expr : na->exprs()) {
         if (!CheckRvalue(expr))
             return false;
@@ -2380,12 +2385,12 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             expr = new RvalueExpr(expr);
 
         const auto& v = expr->val();
-        if (IsLegacyEnumTag(sc_->scope(), v.tag)) {
+        if (IsLegacyEnumTag(sc_->scope(), v.tag())) {
             report(expr, 153);
             return false;
         }
-        if (!is_valid_index_tag(v.tag)) {
-            report(expr, 77) << type_to_name(v.tag);
+        if (!is_valid_index_tag(v.tag())) {
+            report(expr, 77) << v.type();
             return false;
         }
         if (v.ident == iCONSTEXPR && v.constval() <= 0) {
@@ -2637,8 +2642,8 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     /* check tagname with function tagname */
     assert(fun != nullptr);
-    if (!matchtag_string(v.ident, v.tag))
-        matchtag(fun->tag(), v.tag, TRUE);
+    if (!matchtag_string(v.ident, v.type()))
+        matchtag(fun->tag(), v.tag(), TRUE);
 
     if (v.ident == iARRAY || v.ident == iREFARRAY) {
         if (!CheckArrayReturnStmt(stmt))
@@ -2758,14 +2763,14 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
             break;
     }
 
-    if (v.tag == 0) {
+    if (v.type()->isInt()) {
         report(expr, 167) << "integers";
         return false;
     }
 
-    auto map = types_->find(v.tag)->asMethodmap();
+    auto map = v.type()->asMethodmap();
     if (!map) {
-        report(expr, 115) << "type" << type_to_name(v.tag);
+        report(expr, 115) << "type" << v.type();
         return false;
     }
 
@@ -2802,7 +2807,7 @@ bool Semantics::CheckExitStmt(ExitStmt* stmt) {
         case iARRAYCHAR:
         case iARRAYCELL: {
             AutoErrorPos aep(expr->pos());
-            matchtag(0, expr->val().tag, MATCHTAG_COERCE);
+            matchtag(0, expr->val().tag(), MATCHTAG_COERCE);
             break;
         }
         default:
@@ -2967,7 +2972,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
             }
             if (tag_ok) {
                 AutoErrorPos aep(expr->pos());
-                matchtag(v.tag, tag, MATCHTAG_COERCE);
+                matchtag(v.tag(), tag, MATCHTAG_COERCE);
             }
 
             if (!case_values.count(value))
