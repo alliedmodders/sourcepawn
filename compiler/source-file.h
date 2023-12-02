@@ -41,7 +41,6 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
 
     explicit SourceFile(const std::string& name, tr::string&& data);
 
-    bool Read(unsigned char* target, int maxchars);
     int64_t Pos();
     void Reset(int64_t pos);
     int Eof();
