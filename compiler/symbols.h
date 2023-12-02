@@ -51,11 +51,14 @@ enum ScopeKind {
 };
 
 struct value {
-    value() : ident(iINVALID), sym(nullptr), tag(0) {}
+    value() : ident(iINVALID), sym(nullptr), tag_(0) {}
 
     IdentifierKind ident : 6;
     Decl* sym;
-    int tag;
+    int tag_;
+
+    int tag() const { return tag_; }
+    void set_tag(int tag) { tag_ = tag; }
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
