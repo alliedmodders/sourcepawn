@@ -84,6 +84,7 @@ class EnumStructDecl;
 class Expr;
 class MethodmapDecl;
 class PstructDecl;
+class Type;
 
 struct TypenameInfo {
     TypenameInfo() {}
@@ -114,7 +115,7 @@ struct TypenameInfo {
 struct typeinfo_t {
     typeinfo_t()
       : type_atom(nullptr),
-        tag_(-1),
+        type(nullptr),
         declared_tag(0),
         ident(iINVALID),
         is_const(false),
@@ -131,7 +132,7 @@ struct typeinfo_t {
 
     // Type information.
     Atom* type_atom;    // Parsed atom.
-    int tag_;           // Effective tag.
+    Type* type;
 
     // If non-zero, this type was originally declared with this type, but was
     // rewritten for desugaring.
@@ -143,11 +144,7 @@ struct typeinfo_t {
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
     bool is_label : 1;      // If type_atom came from a tLABEL.
 
-    TypenameInfo ToTypenameInfo() const {
-        if (tag_ >= 0)
-            return TypenameInfo(tag_);
-        return TypenameInfo(type_atom, is_label);
-    }
+    TypenameInfo ToTypenameInfo() const;
 
     int numdim() const { return (int)dim_.size(); }
     int dim(int i) const { return dim_[i]; }
@@ -161,16 +158,13 @@ struct typeinfo_t {
             assert(rt.type_atom);
             type_atom = rt.type_atom;
             is_label = rt.is_label();
-            tag_ = -1;
+            type = nullptr;
         }
     }
 
-    int tag() const {
-        assert(tag_ >= 0);
-        return tag_;
-    }
-    void set_tag(int tag) { tag_ = tag; }
-    bool has_tag() const { return tag_ >= 0; }
+    int tag() const;
+    void set_tag(int tag);
+    bool has_tag() const { return !!type; }
 
     int enum_struct_tag() const {
         return tag() ? 0 : declared_tag;
