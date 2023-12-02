@@ -41,6 +41,8 @@ int NextExprOp(Lexer* lexer, int* opidx, int* list);
 #define MATCHTAG_ENUM_ASSN 0x10  // enum assignment
 
 struct UserOperation;
+bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numparam,
+                 const value* lval, UserOperation* op);
 bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam,
                  const value* lval, UserOperation* op);
 

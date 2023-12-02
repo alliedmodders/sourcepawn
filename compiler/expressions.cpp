@@ -59,8 +59,8 @@ static const int op1[17] = {
     tlEQ, tlNE
 };
 
-static inline bool
-MatchOperator(int oper, FunctionDecl* fun, int tag1, int tag2, int numparam)
+static inline bool MatchOperator(int oper, FunctionDecl* fun, Type* type1, Type* type2,
+                                 int numparam)
 {
     if (!oper)
         numparam = 1;
@@ -70,23 +70,35 @@ MatchOperator(int oper, FunctionDecl* fun, int tag1, int tag2, int numparam)
         return false;
 
     assert(numparam == 1 || numparam == 2);
-    int tags[2] = { tag1, tag2 };
+    Type* types[2] = { type1, type2 };
 
     for (int i = 0; i < numparam; i++) {
         if (args[i]->type().ident != iVARIABLE)
             return false;
-        if (args[i]->type().tag() != tags[i])
+        if (args[i]->type().type != types[i])
             return false;
     }
 
-    if (!oper && fun->type().tag() != tag2)
+    if (!oper && fun->type().type != type2)
         return false;
     return true;
 }
 
-bool
-find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const value* lval,
-            UserOperation* op)
+bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const value* lval,
+                 UserOperation* op)
+{
+    auto& cc = CompileContext::get();
+
+    Type* type1 = cc.types()->find(tag1);
+    Type* type2 = nullptr;
+    if (numparam == 2)
+        type2 = cc.types()->find(tag2);
+
+    return find_userop(sc, oper, type1, type2, numparam, lval, op);
+}
+
+bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numparam,
+                 const value* lval, UserOperation* op)
 {
     static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
                                        "",  "",  "<=", ">=", "<", ">", "==", "!="};
@@ -106,7 +118,7 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
     assert(numparam == 1 || numparam == 2);
     if (sc.cc().in_preprocessor())
         return false;
-    if (tag1 == 0 && (numparam == 1 || tag2 == 0))
+    if (type1->isInt() && (numparam == 1 || type2->isInt()))
         return false;
 
     savepri = savealt = false;
@@ -160,10 +172,10 @@ find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const v
             continue;
         fun = fun->canonical();
 
-        bool matched = MatchOperator(oper, fun, tag1, tag2, numparam);
+        bool matched = MatchOperator(oper, fun, type1, type2, numparam);
         bool swapped = false;
-        if (!matched && is_commutative && tag1 != tag2 && oper) {
-            matched = MatchOperator(oper, fun, tag2, tag1, numparam);
+        if (!matched && is_commutative && type1 != type2 && oper) {
+            matched = MatchOperator(oper, fun, type2, type1, numparam);
             swapped = true;
         }
         if (matched) {
