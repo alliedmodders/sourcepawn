@@ -51,14 +51,15 @@ enum ScopeKind {
 };
 
 struct value {
-    value() : ident(iINVALID), sym(nullptr), tag_(0) {}
+    value() : ident(iINVALID), sym(nullptr), type_(nullptr) {}
 
     IdentifierKind ident : 6;
     Decl* sym;
-    int tag_;
+    Type* type_;
 
-    int tag() const { return tag_; }
-    void set_type(Type* type);
+    int tag() const;
+    Type* type() const { return type_; }
+    void set_type(Type* type) { type_ = type; }
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
@@ -99,8 +100,6 @@ struct value {
     int array_level() const;
     int array_dim_count() const;
     int array_dim(int n) const;
-
-    Type* type() const;
 
     union {
         // when ident == iACCESSOR

@@ -342,6 +342,7 @@ bool ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v) {
         if (auto ed = decl->as<EnumDecl>()) {
             *v = {};
             v->set_constval(ed->array_size());
+            v->set_type(sc.cc().types()->type_int());
             return true;
         }
     }

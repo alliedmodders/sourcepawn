@@ -83,13 +83,8 @@ inline bool value::canRematerialize() const {
     }
 }
 
-inline Type* value::type() const {
-    auto& cc = CompileContext::get();
-    return cc.types()->find(tag_);
-}
-
-inline void value::set_type(Type* type) {
-    tag_ = type->tagid();
+inline int value::tag() const {
+    return type_->tagid();
 }
 
 } // namespace sp
