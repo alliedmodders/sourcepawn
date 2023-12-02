@@ -554,7 +554,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
             expr = new CallUserOpExpr(userop, expr);
             expr = new UnaryExpr(expr->pos(), '!', expr);
             expr->val().ident = iEXPRESSION;
-            expr->val().set_tag(types_->tag_bool());
+            expr->val().set_type(types_->type_bool());
             return expr;
         }
     }
@@ -626,7 +626,7 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             } else if (out_val.ident == iCONSTEXPR) {
                 out_val.set_constval(!out_val.constval());
             }
-            out_val.set_tag(types_->tag_bool());
+            out_val.set_type(types_->type_bool());
             break;
         case '-':
             if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
@@ -691,7 +691,7 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
     // :TODO: more type checks
     auto& val = incdec->val();
     val.ident = iEXPRESSION;
-    val.set_tag(expr_val.tag());
+    val.set_type(expr_val.type());
     return true;
 }
 
@@ -788,16 +788,16 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
     auto& val = expr->val();
     val.ident = iEXPRESSION;
-    val.set_tag(left_val.tag());
+    val.set_type(left_val.type());
 
     auto& assignop = expr->assignop();
     if (assignop.sym)
-        val.set_tag(assignop.sym->tag());
+        val.set_type(types_->find(assignop.sym->tag()));
 
     if (oper_tok) {
         auto& userop = expr->userop();
         if (find_userop(*sc_, oper_tok, left_val.type(), right_val.type(), 2, nullptr, &userop)) {
-            val.set_tag(userop.sym->tag());
+            val.set_type(types_->find(userop.sym->tag()));
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
             matchtag(left_val.type(), right_val.type(), FALSE);
@@ -811,7 +811,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
-            val.set_tag(types_->tag_bool());
+            val.set_type(types_->type_bool());
     }
 
     return true;
@@ -1060,7 +1060,7 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
         val.ident = iEXPRESSION;
     }
     val.sym = nullptr;
-    val.set_tag(types_->tag_bool());
+    val.set_type(types_->type_bool());
     return true;
 }
 
@@ -1084,7 +1084,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
 
     auto& val = chain->val();
     val.ident = iEXPRESSION;
-    val.set_tag(types_->tag_bool());
+    val.set_type(types_->type_bool());
 
     for (auto& op : chain->ops()) {
         Expr* right = op.expr;
@@ -1273,7 +1273,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     } else if (atype->isEnumStruct()) {
         report(expr, 95) << atype->name();
     }
-    out_val.set_tag(type.tag());
+    out_val.set_type(types_->find(type.tag()));
     return true;
 }
 
@@ -1311,7 +1311,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         report(expr, 174) << decl->name();
         return false;
     }
-    val.set_tag(decl->tag());
+    val.set_type(types_->find(decl->tag()));
 
     if (auto fun = decl->as<FunctionDecl>()) {
         fun = fun->canonical();
@@ -1332,7 +1332,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
         // New-style "closure".
         val.ident = iEXPRESSION;
-        val.set_tag(fe->tag);
+        val.set_type(types_->find(fe->tag));
 
         // Mark as being indirectly invoked. Direct invocations go through
         // BindCallTarget.
@@ -1432,7 +1432,7 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array) {
 
     auto& val = array->val();
     val.set_array(iARRAY, array->exprs().size());
-    val.set_tag(last_type->tagid());
+    val.set_type(last_type);
     return true;
 }
 
@@ -1519,7 +1519,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         out_val.set_array(iARRAYCHAR, base_val.sym, 0);
     else
         out_val.set_array(iARRAYCELL, base_val.sym, 0);
-    out_val.set_tag(base_val.sym->tag());
+    out_val.set_type(types_->find(base_val.sym->tag()));
 
     expr->set_lvalue(true);
     return true;
@@ -1539,7 +1539,7 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
     auto& val = expr->val();
     val.ident = sym->ident();
     val.sym = sym;
-    val.set_tag(sym->tag());
+    val.set_type(types_->find(sym->tag()));
     expr->set_lvalue(sym->ident() != iREFARRAY);
     return true;
 }
@@ -1547,13 +1547,13 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
 bool Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
     val.set_constval(0);
-    val.set_tag(types_->tag_null());
+    val.set_type(types_->type_null());
     return true;
 }
 
 bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
     auto& val = expr->val();
-    val.set_tag(expr->tag());
+    val.set_type(types_->find(expr->tag()));
     val.set_constval(expr->value());
     return true;
 }
@@ -1561,7 +1561,7 @@ bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
 bool Semantics::CheckStringExpr(StringExpr* expr) {
     auto& val = expr->val();
     val.set_array(iARRAY, (cell)expr->text()->length() + 1);
-    val.set_tag(types_->tag_string());
+    val.set_type(types_->type_char());
     return true;
 }
 
@@ -1635,7 +1635,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())
             base = expr->set_base(new RvalueExpr(base));
-        val.set_tag(prop->property_tag());
+        val.set_type(types_->find(prop->property_tag()));
         val.set_accessor(prop);
         expr->set_lvalue(true);
         return true;
@@ -1802,13 +1802,13 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     int tag = field->type().semantic_tag();
 
     typeinfo_t ti{};
-    if (types_->find(tag)->isEnumStruct()) {
-        val.set_tag(0);
+    if (auto sem_type = types_->find(tag); sem_type->isEnumStruct()) {
+        val.set_type(types_->type_int());
         ti.declared_tag = tag;
     } else {
-        val.set_tag(tag);
+        val.set_type(sem_type);
     }
-    ti.set_tag(val.tag());
+    ti.set_type(val.type());
 
     if (field->type().numdim()) {
         ti.dim_ = {field->type().dim(0)};
@@ -1853,7 +1853,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
 
     auto& val = expr->val();
     val.set_constval(fd->offset());
-    val.set_tag(0);
+    val.set_type(types_->type_int());
     return true;
 }
 
@@ -1955,8 +1955,9 @@ CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
     userop_(userop),
     expr_(expr)
 {
+    auto& cc = CompileContext::get();
     val_.ident = iEXPRESSION;
-    val_.set_tag(userop_.sym->tag());
+    val_.set_type(cc.types()->find(userop_.sym->tag()));
 }
 
 void
@@ -2005,7 +2006,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     auto& val = call->val();
     val.ident = iEXPRESSION;
-    val.set_tag(fun->tag());
+    val.set_type(types_->find(fun->tag()));
     if (fun->return_array()) {
         val.ident = iREFARRAY;
         val.sym = fun->return_array()->var;
@@ -2288,7 +2289,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 auto sym = val->sym;
                 if (!matchtag(arg->type().enum_struct_tag(), sym->semantic_tag(), MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    if (arg->type().tag() != types_->tag_any() ||
+                    if (!arg->type().type->isAny() ||
                         !types_->find(sym->semantic_tag())->asEnumStruct())
                     {
                         report(param, 229) << sym->name();
@@ -2377,7 +2378,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     auto& val = na->val();
     auto& type = na->type();
     val.ident = iREFARRAY;
-    val.set_tag(type.tag());
+    val.set_type(types_->find(type.tag()));
     for (auto& expr : na->exprs()) {
         if (!CheckRvalue(expr))
             return false;
@@ -2691,7 +2692,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
             }
             array.dim_.emplace_back(sub->dim(i));
             if (sub->semantic_tag()) {
-                array.set_tag(0);
+                array.set_tag(types_->tag_int());
                 array.declared_tag = sub->semantic_tag();
             }
         }

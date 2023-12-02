@@ -88,4 +88,8 @@ inline Type* value::type() const {
     return cc.types()->find(tag_);
 }
 
+inline void value::set_type(Type* type) {
+    tag_ = type->tagid();
+}
+
 } // namespace sp
