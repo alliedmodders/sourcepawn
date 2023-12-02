@@ -1122,7 +1122,7 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
         }
     }
 
-    tag_ = cc.types()->defineMethodmap(name_, this)->tagid();
+    type_ = cc.types()->defineMethodmap(name_, this);
 
     if (auto prev_decl = FindSymbol(cc.globals(), name_)) {
         auto ed = prev_decl->as<EnumDecl>();
@@ -1233,7 +1233,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
                 report(method, 175);
 
             auto& type = method->mutable_type();
-            type.set_tag(tag_);
+            type.set_type(type_);
             type.ident = iVARIABLE;
             type.is_new = true;
         } else if (method->is_dtor()) {
@@ -1247,7 +1247,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
             auto& type = method->mutable_type();
             if (type.ident != 0)
                 report(method, 439);
-            type.set_tag(sc.cc().types()->tag_void());
+            type.set_type(sc.cc().types()->type_void());
             type.is_new = true;
             type.ident = iVARIABLE;
         } else if (method->type().ident == 0) {
@@ -1257,7 +1257,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
         }
 
         if (!method->is_static() && !method->is_ctor())
-            method->set_this_tag(tag_);
+            method->set_this_tag(type_->tagid());
 
         if (!method->Bind(sc))
             continue;
@@ -1276,7 +1276,7 @@ bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_tag(tag_);
+    fun->set_this_tag(type_->tagid());
 
     if (!fun->Bind(sc))
         return false;
@@ -1292,7 +1292,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_tag(tag_);
+    fun->set_this_tag(type_->tagid());
 
     if (!fun->Bind(sc))
         return false;

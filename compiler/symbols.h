@@ -97,6 +97,8 @@ struct value {
     int array_dim_count() const;
     int array_dim(int n) const;
 
+    Type* type() const;
+
     union {
         // when ident == iACCESSOR
         MethodmapPropertyDecl* accessor_;

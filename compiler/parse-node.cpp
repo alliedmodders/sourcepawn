@@ -213,6 +213,10 @@ Decl* MethodmapDecl::FindMember(Atom* name) const {
     return nullptr;
 }
 
+int MethodmapDecl::tag() const {
+    return type_->tagid();
+}
+
 int MethodmapPropertyDecl::property_tag() const {
     auto types = CompileContext::get().types();
 

@@ -22,8 +22,10 @@
 
 #pragma once
 
+#include "compile-context.h"
 #include "parse-node.h"
 #include "symbols.h"
+#include "types.h"
 
 namespace sp {
 
@@ -79,6 +81,11 @@ inline bool value::canRematerialize() const {
         default:
             return false;
     }
+}
+
+inline Type* value::type() const {
+    auto& cc = CompileContext::get();
+    return cc.types()->find(tag);
 }
 
 } // namespace sp
