@@ -232,4 +232,21 @@ typeinfo_t::isCharArray() const
     return numdim() == 1 && tag() == types->tag_string();
 }
 
+int typeinfo_t::tag() const {
+    assert(type);
+    return type->tagid();
+}
+
+TypenameInfo typeinfo_t::ToTypenameInfo() const {
+    if (type)
+        return TypenameInfo(type->tagid());
+    return TypenameInfo(type_atom, is_label);
+}
+
+void typeinfo_t::set_tag(int tag) {
+    auto& cc = CompileContext::get();
+    type = cc.types()->find(tag);
+    assert(type);
+}
+
 } // namespace sp
