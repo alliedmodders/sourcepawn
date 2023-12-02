@@ -45,13 +45,9 @@ Type::Type(Atom* name, TypeKind kind)
 {
 }
 
-const char*
-Type::prettyName() const
-{
+const char* Type::prettyName() const {
   if (kind_ == TypeKind::Function)
     return kindName();
-  if (tagid() == 0)
-    return "int";
   return name()->chars();
 }
 
@@ -123,6 +119,7 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
     Type* ptr = add(name, TypeKind::Builtin);
     switch (type) {
         case BuiltinType::Float:
+        case BuiltinType::Null:
         case BuiltinType::Void:
             ptr->setFixed();
             break;
@@ -134,7 +131,9 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
 void
 TypeManager::init()
 {
-    type_int_ = defineBuiltin("_", BuiltinType::Int);
+    type_int_ = defineBuiltin("int", BuiltinType::Int);
+    types_.emplace(cc_.atom("_"), type_int_);
+
     type_bool_ = defineBuiltin("bool", BuiltinType::Bool);
     type_any_ = defineBuiltin("any", BuiltinType::Any);
 
@@ -144,22 +143,16 @@ TypeManager::init()
     type_void_ = defineBuiltin("void", BuiltinType::Void);
     type_null_ = defineBuiltin("null_t", BuiltinType::Null);
 
+    type_string_ = defineBuiltin("char", BuiltinType::Char);
+    types_.emplace(cc_.atom("String"), type_string_);
+
     type_function_ = defineFunction(cc_.atom("Function"), nullptr);
-    type_string_ = defineString();
     type_object_ = defineObject("object");
 }
 
 Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {
     Type* type = add(name, TypeKind::Function);
     type->setFunction(fe);
-    return type;
-}
-
-Type*
-TypeManager::defineString()
-{
-    Type* type = add("String", TypeKind::String);
-    type->setFixed();
     return type;
 }
 

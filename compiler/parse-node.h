@@ -1895,7 +1895,8 @@ class MethodmapDecl : public LayoutDecl
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
-    int tag() const override { return tag_; }
+    int tag() const override;
+    Type* type() const { return type_; }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
 
@@ -1906,13 +1907,13 @@ class MethodmapDecl : public LayoutDecl
   private:
     bool nullable_ : 1;
     bool is_bound_ : 1;
-    int tag_ = 0;
     Atom* extends_;
     PoolArray<MethodmapPropertyDecl*> properties_;
     PoolArray<MethodmapMethodDecl*> methods_;
     MethodmapDecl* parent_ = nullptr;
     MethodmapMethodDecl* ctor_ = nullptr;
     MethodmapMethodDecl* dtor_ = nullptr;
+    Type* type_ = nullptr;
 };
 
 class MethodmapMethodDecl : public MemberFunctionDecl {

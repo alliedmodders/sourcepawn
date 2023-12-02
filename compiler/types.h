@@ -72,7 +72,6 @@ enum class TypeKind : uint8_t {
     Builtin,
     Object,
     Function,
-    String,
     EnumStruct,
     Pstruct,
     Methodmap,
@@ -164,6 +163,7 @@ struct typeinfo_t {
 
     int tag() const;
     void set_tag(int tag);
+    void set_type(Type* t) { type = t; }
     bool has_tag() const { return !!type; }
 
     int enum_struct_tag() const {
@@ -247,6 +247,22 @@ class Type : public PoolObject
     bool isBuiltin(BuiltinType type) const { return isBuiltin() && builtin_type_ == type; }
     bool isInt() const { return isBuiltin(BuiltinType::Int); }
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
+    bool isChar() const { return isBuiltin(BuiltinType::Char); }
+    bool isAny() const { return isBuiltin(BuiltinType::Any); }
+
+    bool coercesFromInt() const {
+        if (kind_ == TypeKind::Enum)
+            return true;
+        if (kind_ != TypeKind::Builtin)
+            return false;
+        switch (builtin_type_) {
+            case BuiltinType::Bool:
+            case BuiltinType::Char:
+            case BuiltinType::Int:
+                return true;
+        }
+        return false;
+    }
 
     void setMethodmap(MethodmapDecl* map) {
         setFixed();
@@ -368,7 +384,6 @@ class TypeManager
 
     Type* defineFunction(Atom* name, funcenum_t* fe);
     Type* defineTypedef(const char* name, Type* other);
-    Type* defineString();
     Type* defineObject(const char* name);
     Type* defineMethodmap(Atom* name, MethodmapDecl* map);
     Type* defineEnumTag(const char* name);

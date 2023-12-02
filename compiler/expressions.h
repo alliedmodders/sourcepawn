@@ -47,11 +47,16 @@ bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam,
 int commutative(int oper);
 cell calc(cell left, int oper_tok, cell right, char* boolresult);
 bool is_valid_index_tag(int tag);
-int matchtag(int formaltag, int actualtag, int flags);
-int matchtag_commutative(int formaltag, int actualtag, int flags);
-int matchtag_string(int ident, int tag);
-int checkval_string(const value* sym1, const value* sym2);
-int checktag_string(int tag, const value* sym1);
-int checktag(int tag, int exprtag);
+bool matchtag(int formaltag, int actualtag, int flags);
+bool matchtag(Type* formaltag, Type* actualtag, int flags);
+bool matchtag_commutative(Type* formal, Type* actual, int flags);
+bool matchtag_commutative(int formaltag, int actualtag, int flags);
+bool matchtag_string(int ident, int tag);
+bool matchtag_string(int ident, Type* type);
+bool checkval_string(const value* sym1, const value* sym2);
+bool checktag_string(Type* type, const value* sym1);
+bool checktag(Type* type, Type* expr_type);
+bool checktag_string(int tag, const value* sym1);
+bool checktag(int tag, int exprtag);
 
 } // namespace sp
