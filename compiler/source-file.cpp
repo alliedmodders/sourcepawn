@@ -72,39 +72,6 @@ SourceFile::Open(const std::string& file_name)
     return true;
 }
 
-bool
-SourceFile::Read(unsigned char* target, int maxchars)
-{
-    if (pos_ == data_.size())
-        return false;
-
-    char* outptr = (char*)target;
-    char* outend = outptr + maxchars;
-    while (outptr < outend && pos_ < data_.size()) {
-        char c = data_[pos_++];
-        *outptr++ = c;
-
-        if (c == '\n')
-            break;
-        if (c == '\r') {
-            // Handle CRLF.
-            if (pos_ < data_.size() && data_[pos_] == '\n') {
-                pos_++;
-                if (outptr < outend)
-                    *outptr++ = '\n';
-            } else {
-                // Replace with \n.
-                *(outptr - 1) = '\n';
-            }
-            break;
-        }
-    }
-
-    // Caller passes in a buffer of size >= maxchars+1.
-    *outptr = '\0';
-    return true;
-}
-
 int64_t SourceFile::Pos() {
     return pos_;
 }
