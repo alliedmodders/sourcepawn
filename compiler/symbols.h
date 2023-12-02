@@ -58,7 +58,7 @@ struct value {
     int tag_;
 
     int tag() const { return tag_; }
-    void set_tag(int tag) { tag_ = tag; }
+    void set_type(Type* type);
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
