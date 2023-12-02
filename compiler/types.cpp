@@ -119,24 +119,34 @@ void TypeManager::RegisterType(Type* type) {
     tags_.emplace(tag, type);
 }
 
+Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
+    Type* ptr = add(name, TypeKind::Builtin);
+    switch (type) {
+        case BuiltinType::Float:
+        case BuiltinType::Void:
+            ptr->setFixed();
+            break;
+    }
+    ptr->setBuiltinType(type);
+    return ptr;
+}
+
 void
 TypeManager::init()
 {
-    type_int_ = add("_", TypeKind::Int);
-    type_bool_ = defineBool();
-    type_any_ = defineAny();
+    type_int_ = defineBuiltin("_", BuiltinType::Int);
+    type_bool_ = defineBuiltin("bool", BuiltinType::Bool);
+    type_any_ = defineBuiltin("any", BuiltinType::Any);
+
+    type_float_ = defineBuiltin("float", BuiltinType::Float);
+    types_.emplace(cc_.atom("Float"), type_float_);
+
+    type_void_ = defineBuiltin("void", BuiltinType::Void);
+    type_null_ = defineBuiltin("null_t", BuiltinType::Null);
+
     type_function_ = defineFunction(cc_.atom("Function"), nullptr);
     type_string_ = defineString();
-    type_float_ = defineFloat();
-    type_void_ = defineVoid();
     type_object_ = defineObject("object");
-    type_null_ = defineObject("null_t");
-}
-
-Type*
-TypeManager::defineAny()
-{
-    return add("any", TypeKind::Any);
 }
 
 Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {
@@ -154,33 +164,11 @@ TypeManager::defineString()
 }
 
 Type*
-TypeManager::defineFloat()
-{
-    Type* type = add("Float", TypeKind::Float);
-    type->setFixed();
-    return type;
-}
-
-Type*
-TypeManager::defineVoid()
-{
-    Type* type = add("void", TypeKind::Void);
-    type->setFixed();
-    return type;
-}
-
-Type*
 TypeManager::defineObject(const char* name)
 {
     Type* type = add(name, TypeKind::Object);
     type->setObject();
     return type;
-}
-
-Type*
-TypeManager::defineBool()
-{
-    return add("bool", TypeKind::Bool);
 }
 
 Type* TypeManager::defineMethodmap(Atom* name, MethodmapDecl* map) {

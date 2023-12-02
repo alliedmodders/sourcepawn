@@ -167,7 +167,7 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         auto type = sc.cc().types()->find(label_);
         if (!type) {
             tag = sc.cc().types()->defineEnumTag(label_->chars())->tagid();
-        } else if (type->kind() == TypeKind::Int) {
+        } else if (type->isInt()) {
             // No implicit-int allowed.
             report(pos_, 169);
             label_ = nullptr;
