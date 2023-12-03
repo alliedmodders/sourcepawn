@@ -883,7 +883,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
 
         bool exact_match = true;
         cell right_length = 0;
-        int right_idxtag = 0;
+        Type* right_idx_type = nullptr;
         int left_length = left_val.array_size();
         if (right_val.sym) {
             // Change from the old logic - we immediately reject multi-dimensional
@@ -895,16 +895,17 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             }
 
             right_length = right_val.array_size();
-            right_idxtag = right_val.sym->semantic_tag();
-            if (right_idxtag == 0 && left_val.sym->semantic_tag() == 0)
+            right_idx_type = right_val.sym->semantic_type();
+            if (right_idx_type->isInt() && left_val.sym->semantic_type()->isInt())
                 exact_match = false;
         } else {
             right_length = right_val.array_size();
 
             if (right_val.type()->isChar()) {
-                if (left_val.sym->semantic_tag() == 0)
+                if (left_val.sym->semantic_type()->isInt())
                     exact_match = false;
             }
+            right_idx_type = types_->type_int();
         }
         if (left_val.array_dim_count() != 1) {
             report(expr, 47); // array dimensions must match
@@ -917,7 +918,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             return false;
         }
         if (left_val.ident != iARRAYCELL &&
-            !matchtag(left_val.sym->semantic_tag(), right_idxtag, MATCHTAG_COERCE | MATCHTAG_SILENT))
+            !matchtag(left_val.sym->semantic_type(), right_idx_type, MATCHTAG_COERCE | MATCHTAG_SILENT))
         {
             report(expr, 229) << (right_val.sym ? right_val.sym->name() : left_val.sym->name());
         }
@@ -1455,7 +1456,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     if (base_val.sym->as<EnumStructDecl>()) {
-        if (!matchtag(base_val.sym->semantic_tag(), index->val().tag(), TRUE))
+        if (!matchtag(base_val.sym->semantic_type(), index->val().type(), TRUE))
             return false;
     }
 
@@ -1465,9 +1466,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
 
-    if (base_val.array_dim_count() == 1 &&
-        types_->find(base_val.sym->semantic_tag())->isEnumStruct())
-    {
+    if (base_val.array_dim_count() == 1 && base_val.sym->semantic_type()->isEnumStruct()) {
         report(base, 117);
         return false;
     }
@@ -1582,7 +1581,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         case iARRAY:
         case iREFARRAY:
             if (base_val.sym && base_val.array_dim_count() == 1) {
-                Type* type = types_->find(base_val.sym->semantic_tag());
+                Type* type = base_val.sym->semantic_type();
                 if (auto root = type->asEnumStruct())
                     return CheckEnumStructFieldAccessExpr(expr, type, root, from_call);
             }
@@ -1880,7 +1879,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     val.set_type(types_->type_int());
 
     if (decl->ident() == iARRAY || decl->ident() == iREFARRAY || decl->ident() == iENUMSTRUCT) {
-        bool is_enum_struct = types_->find(decl->semantic_tag())->isEnumStruct();
+        bool is_enum_struct = decl->semantic_type()->isEnumStruct();
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
             if (decl->ident() == iENUMSTRUCT || (level == decl->dim_count() - 1 && is_enum_struct)) {
@@ -1897,7 +1896,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             }
             enum_type = decl->type();
         } else if (expr->suffix_token() == '.') {
-            enum_type = types_->find(decl->semantic_tag());
+            enum_type = decl->semantic_type();
             if (!enum_type->asEnumStruct()) {
                 report(expr, 116) << decl->name();
                 return false;
@@ -2280,13 +2279,12 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     }
                 }
                 auto sym = val->sym;
-                if (!matchtag(arg->type_info().enum_struct_tag(), sym->semantic_tag(), MATCHTAG_SILENT)) {
+                if (!matchtag(arg->type_info().enum_struct_tag(), sym->semantic_type()->tagid(),
+                              MATCHTAG_SILENT))
+                {
                     // We allow enumstruct -> any[].
-                    if (!arg->type()->isAny() ||
-                        !types_->find(sym->semantic_tag())->asEnumStruct())
-                    {
+                    if (!arg->type()->isAny() || !sym->semantic_type()->asEnumStruct())
                         report(param, 229) << sym->name();
-                    }
                 }
             }
 
@@ -2684,9 +2682,9 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
                 return false;
             }
             array.dim_.emplace_back(sub->dim(i));
-            if (sub->semantic_tag()) {
+            if (Type* type = sub->semantic_type(); !type->isInt()) {
                 array.set_type(types_->type_int());
-                array.declared_tag = sub->semantic_tag();
+                array.declared_tag = type->tagid();
             }
         }
         if (!array.has_tag())
