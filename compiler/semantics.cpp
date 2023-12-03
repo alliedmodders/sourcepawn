@@ -2682,7 +2682,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
                 array.declared_type = type;
             }
         }
-        if (!array.has_tag())
+        if (!array.type)
             array.set_type(sub->type());
 
         // the address of the array is stored in a hidden parameter; the address

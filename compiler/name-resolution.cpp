@@ -69,7 +69,7 @@ bool SemaContext::BindType(const token_pos_t& pos, TypenameInfo* ti) {
 }
 
 bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
-    if (ti->has_tag())
+    if (ti->type)
         return true;
 
     Type* type;
