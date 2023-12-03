@@ -833,8 +833,8 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
         return false;
     }
 
-    if (ctor->tag() != type.semantic_tag()) {
-        report(ctor->pos(), 164) << type_to_name(ctor->tag()) << type_to_name(type.semantic_tag());
+    if (ctor->type()->tagid() != type.semantic_tag()) {
+        report(ctor->pos(), 164) << ctor->type() << type_to_name(type.semantic_tag());
         return false;
     }
 

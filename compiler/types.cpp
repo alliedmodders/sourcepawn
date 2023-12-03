@@ -232,7 +232,7 @@ int typeinfo_t::tag() const {
 
 TypenameInfo typeinfo_t::ToTypenameInfo() const {
     if (type)
-        return TypenameInfo(type->tagid());
+        return TypenameInfo(type);
     return TypenameInfo(type_atom, is_label);
 }
 

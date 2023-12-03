@@ -56,20 +56,19 @@ AutoEnterScope::~AutoEnterScope()
     sc_.set_scope(prev_);
 }
 
-bool
-SemaContext::BindType(const token_pos_t& pos, TypenameInfo* ti)
-{
-    if (ti->has_tag())
+bool SemaContext::BindType(const token_pos_t& pos, TypenameInfo* ti) {
+    if (ti->has_type())
         return true;
 
-    if (!BindType(pos, ti->type_atom, ti->is_label(), &ti->resolved_tag))
+    Type* type;
+    if (!BindType(pos, ti->type_atom(), ti->is_label(), &type))
         return false;
+
+    *ti = TypenameInfo(type);
     return true;
 }
 
-bool
-SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
-{
+bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
     if (ti->has_tag())
         return true;
 
@@ -98,9 +97,7 @@ SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti)
     return true;
 }
 
-bool
-SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* tag)
-{
+bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, Type** out_type) {
     auto types = cc_.types();
 
     Type* type = types->find(atom);
@@ -110,10 +107,18 @@ SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* ta
             return false;
         }
 
-        *tag = types->defineTag(atom)->tagid();
+        *out_type = types->defineTag(atom);
         return true;
     }
 
+    *out_type = type;
+    return true;
+}
+
+bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* tag) {
+    Type* type;
+    if (!BindType(pos, atom, is_label, &type))
+        return false;
     *tag = type->tagid();
     return true;
 }
@@ -321,7 +326,7 @@ TypedefInfo::Bind(SemaContext& sc)
         return nullptr;
 
     auto ft = new functag_t();
-    ft->ret_tag = ret_type.tag();
+    ft->ret_tag = ret_type.type()->tagid();
 
     std::vector<funcarg_t> ft_args;
     for (auto& arg : args) {
