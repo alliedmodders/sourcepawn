@@ -562,13 +562,6 @@ bool checktag(Type* type, Type* expr_type) {
     return false;
 }
 
-bool checktag(int tag, int exprtag) {
-    auto types = CompileContext::get().types();
-    Type* type = types->find(tag);
-    Type* expr_type = types->find(exprtag);
-    return checktag(type, expr_type);
-}
-
 /*  commutative
  *
  *  Test whether an operator is commutative, i.e. x oper y == y oper x.
