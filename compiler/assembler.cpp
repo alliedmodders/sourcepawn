@@ -557,11 +557,9 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     for (const auto& arg : fun->args()) {
         int tag = arg->type()->tagid();
         int numdim = arg->type_info().numdim();
-        if (arg->type_info().numdim() && arg->type_info().enum_struct_tag()) {
-            int last_tag = arg->type_info().enum_struct_tag();
-            Type* last_type = types_->find(last_tag);
-            if (last_type->isEnumStruct()) {
-                tag = last_tag;
+        if (arg->type_info().numdim() && arg->type_info().enum_struct_type()) {
+            if (Type* last_type = arg->type_info().enum_struct_type()) {
+                tag = last_type->tagid();
                 numdim--;
             }
         }
