@@ -1597,10 +1597,10 @@ class FunctionDecl : public Decl
     const token_pos_t& end_pos() const { return end_pos_; }
     void set_end_pos(const token_pos_t& end_pos) { end_pos_ = end_pos; }
 
-    const ke::Maybe<int>& this_tag() const { return this_tag_; }
-    void set_this_tag(int this_tag) {
-        if (this_tag != -1)
-            this_tag_.init(this_tag);
+    Type* this_type() const { return this_type_; }
+    void set_this_type(Type* type) {
+        assert(type);
+        this_type_ = type;
     }
 
     Stmt* body() const { return body_; }
@@ -1720,7 +1720,7 @@ class FunctionDecl : public Decl
     Stmt* body_ = nullptr;
     PoolArray<ArgDecl*> args_;
     SymbolScope* scope_ = nullptr;
-    ke::Maybe<int> this_tag_;
+    Type* this_type_ = nullptr;
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
