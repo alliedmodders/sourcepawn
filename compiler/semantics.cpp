@@ -2372,7 +2372,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             expr = new RvalueExpr(expr);
 
         const auto& v = expr->val();
-        if (IsLegacyEnumTag(sc_->scope(), v.tag())) {
+        if (IsLegacyEnumType(sc_->scope(), v.type())) {
             report(expr, 153);
             return false;
         }
@@ -3343,10 +3343,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
     return result;
 }
 
-bool
-IsLegacyEnumTag(SymbolScope* scope, int tag)
-{
-    Type* type = CompileContext::get().types()->find(tag);
+bool IsLegacyEnumType(SymbolScope* scope, Type* type) {
     if (!type->isEnum())
         return false;
     auto decl = FindSymbol(scope, type->nameAtom());

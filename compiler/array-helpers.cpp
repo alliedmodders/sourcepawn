@@ -309,7 +309,7 @@ ArraySizeResolver::ResolveDimExprs()
 
             // The array type must automatically become iREFARRAY.
             type_->ident = iREFARRAY;
-        } else if (IsLegacyEnumTag(sema_->current_scope(), v.tag()) && v.sym &&
+        } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym &&
                    v.sym->as<EnumDecl>())
         {
             report(expr->pos(), 153);
