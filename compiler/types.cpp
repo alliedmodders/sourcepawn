@@ -231,13 +231,19 @@ TypenameInfo typeinfo_t::ToTypenameInfo() const {
 int typeinfo_t::enum_struct_tag() const {
     if (!type->isInt())
         return 0;
-    return declared_tag;
+    if (!declared_type)
+        return 0;
+    return declared_type->tagid();
 }
+
 int typeinfo_t::semantic_tag() const {
     if (!type->isInt())
         return type->tagid();
-    return declared_tag;
+    if (!declared_type)
+        return 0;
+    return declared_type->tagid();
 }
+
 bool typeinfo_t::is_implicit_dim(int i) const {
     return semantic_tag() != type->tagid() && i == numdim() - 1;
 }

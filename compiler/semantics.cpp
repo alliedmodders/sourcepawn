@@ -1796,7 +1796,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     typeinfo_t ti{};
     if (auto sem_type = types_->find(tag); sem_type->isEnumStruct()) {
         val.set_type(types_->type_int());
-        ti.declared_tag = tag;
+        ti.declared_type = sem_type;
     } else {
         val.set_type(sem_type);
     }
@@ -2681,7 +2681,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
             array.dim_.emplace_back(sub->dim(i));
             if (Type* type = sub->semantic_type(); !type->isInt()) {
                 array.set_type(types_->type_int());
-                array.declared_tag = type->tagid();
+                array.declared_type = type;
             }
         }
         if (!array.has_tag())
@@ -3320,7 +3320,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
     if (result)
         result = a1->type_info().dim_ == a2->type_info().dim_; /* array dimensions & index tags */
     if (result)
-        result = a1->type_info().declared_tag == a2->type_info().declared_tag;
+        result = a1->type_info().declared_type == a2->type_info().declared_type;
     if (result)
         result = !!a1->default_value() == !!a2->default_value(); /* availability of default value */
     if (auto a1_def = a1->default_value()) {
