@@ -414,16 +414,6 @@ class TypeManager
     Type* type_char() const { return type_string_; }
     Type* type_int() const { return type_int_; }
 
-    int tag_object() const { return type_object_->tagid(); }
-    int tag_null() const { return type_null_->tagid(); }
-    int tag_function() const { return type_function_->tagid(); }
-    int tag_any() const { return type_any_->tagid(); }
-    int tag_void() const { return type_void_->tagid(); }
-    int tag_float() const { return type_float_->tagid(); }
-    int tag_bool() const { return type_bool_->tagid(); }
-    int tag_string() const { return type_string_->tagid(); }
-    int tag_int() const { return type_int_->tagid(); }
-
   private:
     Type* add(const char* name, TypeKind kind);
     Type* add(Atom* name, TypeKind kind);
