@@ -209,15 +209,6 @@ Type* TypeManager::definePstruct(PstructDecl* decl) {
     return type;
 }
 
-const char*
-pc_tagname(int tag)
-{
-    auto types = CompileContext::get().types();
-    if (Type* type = types->find(tag))
-        return type->name()->chars();
-    return "__unknown__";
-}
-
 bool typeinfo_t::isCharArray() const {
     return numdim() == 1 && type->isChar();
 }
