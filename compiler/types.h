@@ -174,19 +174,12 @@ struct typeinfo_t {
         }
     }
 
-    int tag() const;
     void set_type(Type* t) { type = t; }
     bool has_tag() const { return !!type; }
 
-    int enum_struct_tag() const {
-        return tag() ? 0 : declared_tag;
-    }
-    int semantic_tag() const {
-        return tag() ? tag() : declared_tag;
-    }
-    bool is_implicit_dim(int i) const {
-        return semantic_tag() != tag() && i == numdim() - 1;
-    }
+    int enum_struct_tag() const;
+    int semantic_tag() const;
+    bool is_implicit_dim(int i) const;
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
         assert(i < numdim());
@@ -263,7 +256,7 @@ class Type : public PoolObject
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
     bool isVoid() const { return isBuiltin(BuiltinType::Void); }
     bool isFloat() const { return isBuiltin(BuiltinType::Float); }
-    bool isBool() const { return isBuiltin(BuiltinType::Float); }
+    bool isBool() const { return isBuiltin(BuiltinType::Bool); }
 
     bool coercesFromInt() const {
         if (kind_ == TypeKind::Enum)

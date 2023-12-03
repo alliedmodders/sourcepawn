@@ -296,7 +296,7 @@ ArraySizeResolver::ResolveDimExprs()
             //     int blah[y];
             //              ^-- no
             if (type_->is_new) {
-                report(expr->pos(), 161) << type_to_name(type_->tag());
+                report(expr->pos(), 161) << type_->type;
                 return false;
             }
 
@@ -469,15 +469,13 @@ FixedArrayValidator::Validate()
 }
 
 cell CalcArraySize(const typeinfo_t& type) {
-    auto types = CompileContext::get().types();
-
     cell size = 0;
     cell last_size = 1;
     for (int i = 0; i < type.numdim(); i++) {
         cell length = type.dim(i);
         assert(length);
 
-        if (i == type.numdim() - 1 && type.tag() == types->tag_string())
+        if (i == type.numdim() - 1 && type.type->isChar())
             length = char_array_cells(length);
 
         last_size *= length;
@@ -504,11 +502,11 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
     assert(var->vclass() == sGLOBAL);
 
     if (var->ident() != iARRAY && var->ident() != iREFARRAY) {
-        report(expr->pos(), 134) << type_to_name(type_.tag()) << "array";
+        report(expr->pos(), 134) << type_.type << "array";
         return false;
     }
-    if (type_.tag() != var->tag()) {
-        report(expr->pos(), 134) << type_to_name(type_.tag()) << type_to_name(var->tag());
+    if (type_.type != var->type()) {
+        report(expr->pos(), 134) << type_.type << var->type();
         return false;
     }
 
@@ -569,9 +567,8 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
     }
 
     if (StringExpr* str = init->as<StringExpr>()) {
-        if (type_.tag() != types_->tag_string()) {
-            report(init->pos(), 134) << types_->find(types_->tag_string())->prettyName()
-                                     << types_->find(type_.tag())->prettyName();
+        if (!type_.type->isChar()) {
+            report(init->pos(), 134) << types_->type_char() << type_.type;
             return false;
         }
 
@@ -586,7 +583,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         return true;
     }
 
-    cell rank_size = (type_.tag() == types_->tag_string() && type_.dim(rank))
+    cell rank_size = (type_.type->isChar() && type_.dim(rank))
                      ? char_array_cells(type_.dim(rank))
                      : type_.dim(rank);
 
@@ -657,9 +654,9 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             report(array->pos(), 41);
             return true;
         }
-        if (prev1.isValid() && prev2.isValid() && type_.tag()) {
+        if (prev1.isValid() && prev2.isValid() && !type_.type->isInt()) {
             // Unknown stepping type.
-            report(array->exprs().back()->pos(), 68) << type_to_name(type_.tag());
+            report(array->exprs().back()->pos(), 68) << type_.type;
             return false;
         }
         if (!rank_size ||
@@ -745,7 +742,7 @@ Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
 {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type_info();
-    assert(!types_->find(type->tag())->asEnumStruct());
+    assert(!type->type->asEnumStruct());
 
     // If any one rank was dynamic, the entire array is considered dynamic. For
     // new-style fixed arrays we've thrown an error at this point. For old
@@ -885,7 +882,7 @@ class ArrayEmitter final
 
     size_t AddString(StringExpr* expr);
     void AddInlineArray(LayoutFieldDecl* field, ArrayExpr* expr);
-    void EmitPadding(size_t rank_size, int tag, size_t emitted, bool ellipses,
+    void EmitPadding(size_t rank_size, Type* type, size_t emitted, bool ellipses,
                      const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2);
 
   private:
@@ -966,7 +963,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 auto field = (*field_iter);
                 assert(field);
 
-                EmitPadding(field->type_info().dim(0), field->type()->tagid(), emitted, false, {}, {});
+                EmitPadding(field->type_info().dim(0), field->type(), emitted, false, {}, {});
             } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
@@ -994,7 +991,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
     size_t emitted = data_size() - start;
 
-    EmitPadding(type_.dim(rank), type_.tag(), emitted, ellipses, prev1, prev2);
+    EmitPadding(type_.dim(rank), type_.type, emitted, ellipses, prev1, prev2);
 
     return (start * sizeof(cell)) | kDataFlag;
 }
@@ -1009,16 +1006,16 @@ void ArrayEmitter::AddInlineArray(LayoutFieldDecl* field, ArrayExpr* array) {
         prev1 = ke::Some(item->val().constval());
     }
 
-    EmitPadding(field->type_info().dim(0), field->type()->tagid(), array->exprs().size(),
+    EmitPadding(field->type_info().dim(0), field->type(), array->exprs().size(),
                 array->ellipses(), prev1, prev2);
 }
 
 void
-ArrayEmitter::EmitPadding(size_t rank_size, int tag, size_t emitted, bool ellipses,
+ArrayEmitter::EmitPadding(size_t rank_size, Type* type, size_t emitted, bool ellipses,
                           const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2)
 {
     // Pad remainder to zeroes if the array was explicitly sized.
-    if (tag == CompileContext::get().types()->tag_string())
+    if (type->isChar())
         rank_size = char_array_cells(rank_size);
 
     if (rank_size > emitted) {

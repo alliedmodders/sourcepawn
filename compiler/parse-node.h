@@ -353,7 +353,7 @@ class VarDeclBase : public Decl
     void set_is_read() { is_read_ = true; }
     bool is_written() const { return is_written_; }
     void set_is_written() { is_written_ = true; }
-    int tag() const override { return type_.tag(); }
+    int tag() const override;
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
     Type* type() const { return type_.type; }
@@ -1651,7 +1651,8 @@ class FunctionDecl : public Decl
     declinfo_t& decl() { return decl_; }
     const declinfo_t& decl() const { return decl_; }
 
-    int tag() const override { return decl_.type.tag(); }
+    int tag() const override;
+    Type* return_type() const { return decl_.type.type; }
 
     const typeinfo_t& type_info() const { return decl_.type; }
     typeinfo_t& mutable_type_info() { return decl_.type; }
@@ -1862,6 +1863,7 @@ class MethodmapPropertyDecl : public Decl {
 
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t& mutable_type_info() { return type_; }
+    Type* type() const { return type_.type; }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
     LayoutDecl* parent() const {

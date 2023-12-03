@@ -218,22 +218,28 @@ pc_tagname(int tag)
     return "__unknown__";
 }
 
-bool
-typeinfo_t::isCharArray() const
-{
-    auto types = CompileContext::get().types();
-    return numdim() == 1 && tag() == types->tag_string();
-}
-
-int typeinfo_t::tag() const {
-    assert(type);
-    return type->tagid();
+bool typeinfo_t::isCharArray() const {
+    return numdim() == 1 && type->isChar();
 }
 
 TypenameInfo typeinfo_t::ToTypenameInfo() const {
     if (type)
         return TypenameInfo(type);
     return TypenameInfo(type_atom, is_label);
+}
+
+int typeinfo_t::enum_struct_tag() const {
+    if (!type->isInt())
+        return 0;
+    return declared_tag;
+}
+int typeinfo_t::semantic_tag() const {
+    if (!type->isInt())
+        return type->tagid();
+    return declared_tag;
+}
+bool typeinfo_t::is_implicit_dim(int i) const {
+    return semantic_tag() != type->tagid() && i == numdim() - 1;
 }
 
 } // namespace sp

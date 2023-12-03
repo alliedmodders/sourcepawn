@@ -56,6 +56,10 @@ void VarDeclBase::BindAddress(cell addr) {
     addr_.bind(addr);
 }
 
+int VarDeclBase::tag() const {
+    return type_.type->tagid();
+}
+
 void
 ParseNode::error(const token_pos_t& pos, int number)
 {
@@ -221,13 +225,13 @@ int MethodmapPropertyDecl::property_tag() const {
     auto types = CompileContext::get().types();
 
     if (getter_)
-        return getter_->type_info().tag();
+        return getter_->type_info().type->tagid();
     if (setter_->args().size() != 2)
         return types->tag_void();
     ArgDecl* valp = setter_->args()[1];
     if (valp->type_info().ident != iVARIABLE)
         return types->tag_void();
-    return valp->type_info().tag();
+    return valp->type_info().type->tagid();
 }
 
 cell Decl::ConstVal() {
@@ -323,6 +327,10 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
             return field;
     }
     return nullptr;
+}
+
+int FunctionDecl::tag() const {
+    return decl_.type.type->tagid();
 }
 
 } // namespace sp

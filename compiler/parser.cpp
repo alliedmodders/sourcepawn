@@ -2435,7 +2435,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
     if (lexer_->match(tSYMBOL))
         decl->name = lexer_->current_token()->atom;
 
-    if (decl->type.declared_tag && !decl->type.tag()) {
+    if (decl->type.declared_tag && decl->type.type->isInt()) {
         assert(decl->type.numdim() > 0);
         decl->type.dim_.pop_back();
     }
