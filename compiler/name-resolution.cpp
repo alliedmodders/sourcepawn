@@ -72,19 +72,18 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
     if (ti->has_tag())
         return true;
 
-    int tag;
-    if (!BindType(pos, ti->type_atom, ti->is_label, &tag))
+    Type* type;
+    if (!BindType(pos, ti->type_atom, ti->is_label, &type))
         return false;
 
-    auto type = cc_.types()->find(tag);
     if (auto enum_type = type->asEnumStruct()) {
         if (ti->ident == iREFERENCE) {
             report(pos, 136);
             return false;
         }
 
-        ti->set_tag(0);
-        ti->declared_tag = tag;
+        ti->set_type(cc_.types()->type_int());
+        ti->declared_tag = type->tagid();
         ti->dim_.emplace_back(enum_type->array_size());
 
         if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
@@ -92,7 +91,7 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
             ti->has_postdims = true;
         }
     } else {
-        ti->set_tag(tag);
+        ti->set_type(type);
     }
     return true;
 }
@@ -777,12 +776,12 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
         typeinfo_t typeinfo = {};
         if (auto enum_type = type->asEnumStruct()) {
-            typeinfo.set_tag(0);
+            typeinfo.set_type(outer_sc.cc().types()->type_int());
             typeinfo.ident = iREFARRAY;
             typeinfo.declared_tag = *this_tag_;
             typeinfo.dim_.emplace_back(enum_type->array_size());
         } else {
-            typeinfo.set_tag(*this_tag_);
+            typeinfo.set_type(outer_sc.cc().types()->find(*this_tag_));
             typeinfo.ident = iVARIABLE;
             typeinfo.is_const = true;
         }

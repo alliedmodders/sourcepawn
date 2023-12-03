@@ -252,7 +252,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
     if (!parse_decl(&decl, flags)) {
         // Error will have been reported earlier. Reset |decl| so we don't crash
         // thinking tag -1 has every flag.
-        decl.type.set_tag(0);
+        decl.type.set_type(types_->type_int());
     }
 
     // Hacky bag o' hints as to whether this is a variable decl.
@@ -1037,11 +1037,11 @@ Parser::constant()
             return new StringExpr(pos, atom);
         }
         case tTRUE:
-            return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 1);
+            return new TaggedValueExpr(lexer_->pos(), types_->tag_bool(), 1);
         case tFALSE:
-            return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_bool(), 0);
+            return new TaggedValueExpr(lexer_->pos(), types_->tag_bool(), 0);
         case tINVALID_FUNCTION:
-            return new TaggedValueExpr(lexer_->pos(), cc_.types()->tag_null(), 0);
+            return new TaggedValueExpr(lexer_->pos(), types_->tag_null(), 0);
         case '{':
         {
             std::vector<Expr*> exprs;
@@ -2028,7 +2028,7 @@ bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
     if (getter) {
         ret_type.type = type;
     } else {
-        ret_type.type.set_tag(types_->tag_void());
+        ret_type.type.set_type(types_->type_void());
         ret_type.type.ident = iVARIABLE;
     }
 
@@ -2213,7 +2213,7 @@ Parser::parse_decl(declinfo_t* decl, int flags)
             // The most basic - "x[]" and that's it. Well, we know it has no tag and
             // we know its name. We might as well just complete the entire decl.
             decl->name = ident;
-            decl->type.set_tag(0);
+            decl->type.set_type(types_->type_int());
             return true;
         }
 

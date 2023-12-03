@@ -175,7 +175,6 @@ struct typeinfo_t {
     }
 
     int tag() const;
-    void set_tag(int tag);
     void set_type(Type* t) { type = t; }
     bool has_tag() const { return !!type; }
 
