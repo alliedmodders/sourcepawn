@@ -1859,7 +1859,7 @@ class MethodmapPropertyDecl : public Decl {
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapPropertyDecl; }
 
-    int property_tag() const;
+    Type* property_type() const;
 
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t& mutable_type_info() { return type_; }
