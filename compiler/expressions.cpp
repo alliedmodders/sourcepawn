@@ -84,19 +84,6 @@ static inline bool MatchOperator(int oper, FunctionDecl* fun, Type* type1, Type*
     return true;
 }
 
-bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam, const value* lval,
-                 UserOperation* op)
-{
-    auto& cc = CompileContext::get();
-
-    Type* type1 = cc.types()->find(tag1);
-    Type* type2 = nullptr;
-    if (numparam == 2)
-        type2 = cc.types()->find(tag2);
-
-    return find_userop(sc, oper, type1, type2, numparam, lval, op);
-}
-
 bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numparam,
                  const value* lval, UserOperation* op)
 {
@@ -221,11 +208,6 @@ bool checktag_string(Type* type, const value* sym1) {
     return false;
 }
 
-bool checktag_string(int tag, const value* sym1) {
-    auto types = CompileContext::get().types();
-    return checktag_string(types->find(tag), sym1);
-}
-
 bool checkval_string(const value* sym1, const value* sym2) {
     if (sym1->ident == iARRAY || sym2->ident == iARRAY || sym1->ident == iREFARRAY ||
         sym2->ident == iREFARRAY)
@@ -238,17 +220,6 @@ bool checkval_string(const value* sym1, const value* sym2) {
         return true;
     }
     return false;
-}
-
-const char* type_to_name(int tag) {
-    auto types = CompileContext::get().types();
-    Type* type = types->find(tag);
-    return type->prettyName();
-}
-
-bool matchtag_string(int ident, int tag) {
-    auto types = CompileContext::get().types();
-    return matchtag_string(ident, types->find(tag));
 }
 
 bool matchtag_string(int ident, Type* type) {
@@ -412,13 +383,6 @@ static bool HasTagOnInheritanceChain(Type* type, Type* other) {
     return false;
 }
 
-bool matchtag(int formaltag, int actualtag, int flags) {
-    auto& cc = CompileContext::get();
-    auto formal = cc.types()->find(formaltag);
-    auto actual = cc.types()->find(actualtag);
-    return matchtag(formal, actual, flags);
-}
-
 bool matchtag(Type* formal, Type* actual, int flags) {
     if (formal == actual)
         return true;
@@ -493,13 +457,6 @@ bool matchtag_commutative(Type* formal, Type* actual, int flags) {
         return false;
     // Report the error.
     return matchtag(formal, actual, flags);
-}
-
-bool matchtag_commutative(int formaltag, int actualtag, int flags) {
-    auto& cc = CompileContext::get();
-    auto formal = cc.types()->find(formaltag);
-    auto actual = cc.types()->find(actualtag);
-    return matchtag_commutative(formal, actual, flags);
 }
 
 cell
