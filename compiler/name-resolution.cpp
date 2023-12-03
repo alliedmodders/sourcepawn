@@ -114,14 +114,6 @@ bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, Ty
     return true;
 }
 
-bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* tag) {
-    Type* type;
-    if (!BindType(pos, atom, is_label, &type))
-        return false;
-    *tag = type->tagid();
-    return true;
-}
-
 bool
 ParseTree::ResolveNames(SemaContext& sc)
 {

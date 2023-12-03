@@ -65,7 +65,6 @@ class SemaContext
     bool BindType(const token_pos_t& pos, TypenameInfo* ti);
     bool BindType(const token_pos_t& pos, typeinfo_t* ti);
     bool BindType(const token_pos_t& pos, Atom* atom, bool is_label, Type** type);
-    bool BindType(const token_pos_t& pos, Atom* atom, bool is_label, int* tag);
 
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
