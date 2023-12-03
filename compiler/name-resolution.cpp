@@ -888,7 +888,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
                     val = 0;
                     type = typeinfo.type;
                 }
-                var->default_value()->tag = type->tagid();
+                var->default_value()->type = type;
                 var->default_value()->val = ke::Some(val);
 
                 matchtag(var->type(), type, MATCHTAG_COERCE);
