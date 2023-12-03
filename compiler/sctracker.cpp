@@ -64,7 +64,7 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     std::vector<funcarg_t> args;
     for (auto arg : fun->canonical()->args()) {
         funcarg_t dest;
-        dest.type = arg->type();
+        dest.type = arg->type_info();
 
         if (dest.type.ident != iARRAY && dest.type.ident != iREFARRAY)
           assert(!dest.type.numdim());

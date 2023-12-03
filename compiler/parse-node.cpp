@@ -132,7 +132,7 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
 }
 
 int FunctionDecl::FindNamedArg(Atom* name) const {
-    for (size_t i = 0; i < args_.size() && args_[i]->type().ident != iVARARGS; i++) {
+    for (size_t i = 0; i < args_.size() && args_[i]->type_info().ident != iVARARGS; i++) {
         if (args_[i]->name() == name)
             return (int)i;
     }
@@ -160,7 +160,7 @@ FunctionDecl* FunctionDecl::canonical() {
 }
 
 bool FunctionDecl::IsVariadic() {
-    return !args_.empty() && args_.back()->type().ident == iVARARGS;
+    return !args_.empty() && args_.back()->type_info().ident == iVARARGS;
 }
 
 bool FunctionDecl::MustReturnValue() const {
@@ -221,13 +221,13 @@ int MethodmapPropertyDecl::property_tag() const {
     auto types = CompileContext::get().types();
 
     if (getter_)
-        return getter_->type().tag();
+        return getter_->type_info().tag();
     if (setter_->args().size() != 2)
         return types->tag_void();
     ArgDecl* valp = setter_->args()[1];
-    if (valp->type().ident != iVARIABLE)
+    if (valp->type_info().ident != iVARIABLE)
         return types->tag_void();
-    return valp->type().tag();
+    return valp->type_info().tag();
 }
 
 cell Decl::ConstVal() {
@@ -249,19 +249,19 @@ int Decl::dim(int n) {
     auto var = as<VarDeclBase>();
     assert(var);
 
-    return var->type().dim(n);
+    return var->type_info().dim(n);
 }
 
 int Decl::dim_count() {
     auto var = as<VarDeclBase>();
     assert(var);
 
-    return (int)var->type().numdim();
+    return (int)var->type_info().numdim();
 }
 
 int Decl::semantic_tag() {
     if (auto var = as<VarDeclBase>())
-        return var->type().enum_struct_tag();
+        return var->type_info().enum_struct_tag();
     if (auto es = as<EnumStructDecl>())
         return es->tag();
     assert(false);
@@ -272,7 +272,7 @@ bool Decl::is_const() {
     auto var = as<VarDeclBase>();
     assert(var);
 
-    return (int)var->type().is_const;
+    return (int)var->type_info().is_const;
 }
 
 char Decl::vclass() {
@@ -293,7 +293,7 @@ IdentifierKind Decl::ident_impl() {
     switch (kind()) {
         case StmtKind::ArgDecl:
         case StmtKind::VarDecl:
-            return as<VarDeclBase>()->type().ident;
+            return as<VarDeclBase>()->type_info().ident;
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl:
             return iCONSTEXPR;

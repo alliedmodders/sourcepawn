@@ -158,7 +158,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
 bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     AutoErrorPos aep(decl->pos());
 
-    const auto& type = decl->type();
+    const auto& type = decl->type_info();
 
     // Constants are checked during binding.
     if (decl->ident() == iCONSTEXPR)
@@ -230,8 +230,8 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         if (visited[i])
             continue;
         auto arg = ps->fields()[i];
-        if (arg->type().ident == iREFARRAY) {
-            assert(arg->type().tag() == types_->tag_string());
+        if (arg->type_info().ident == iREFARRAY) {
+            assert(arg->type_info().tag() == types_->tag_string());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
             init->fields().push_back(new StructInitFieldExpr(arg->name(), expr, decl->pos()));
@@ -256,15 +256,15 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     visited->at(arg->offset()) = true;
 
     if (auto expr = field->value->as<StringExpr>()) {
-        if (arg->type().ident != iREFARRAY) {
+        if (arg->type_info().ident != iREFARRAY) {
             report(expr->pos(), 48);
             return false;
         }
-        if (arg->type().tag() != types_->tag_string())
+        if (arg->type_info().tag() != types_->tag_string())
             report(expr->pos(), 213) << type_to_name(types_->tag_string())
-                                     << type_to_name(arg->type().tag());
+                                     << type_to_name(arg->type_info().tag());
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
-        if (arg->type().ident != iVARIABLE) {
+        if (arg->type_info().ident != iVARIABLE) {
             report(expr->pos(), 23);
             return false;
         }
@@ -272,10 +272,10 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type().tag() == types_->tag_bool() && expr->tag() == 0 &&
+        if (!(arg->type_info().tag() == types_->tag_bool() && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->type().tag(), expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type_info().tag(), expr->tag(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field->value->as<SymbolExpr>()) {
         auto var = expr->decl()->as<VarDecl>();
@@ -284,18 +284,18 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
             return false;
         }
 
-        if (arg->type().ident == iVARIABLE) {
-            if (var->type().ident != iVARIABLE) {
+        if (arg->type_info().ident == iVARIABLE) {
+            if (var->type_info().ident != iVARIABLE) {
                 report(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type().tag(), var->tag(), MATCHTAG_COERCE);
-        } else if (arg->type().ident == iREFARRAY) {
+            matchtag(arg->type_info().tag(), var->tag(), MATCHTAG_COERCE);
+        } else if (arg->type_info().ident == iREFARRAY) {
             if (var->ident() != iARRAY) {
                 report(expr->pos(), 405);
                 return false;
             }
-            if (var->type().numdim() != 1) {
+            if (var->type_info().numdim() != 1) {
                 report(expr->pos(), 405);
                 return false;
             }
@@ -840,8 +840,8 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
         }
 
         auto left_var = left_sym->as<VarDeclBase>();
-        for (int i = 0; i < left_var->type().numdim(); i++) {
-            if (!left_var->type().dim(i)) {
+        for (int i = 0; i < left_var->type_info().numdim(); i++) {
+            if (!left_var->type_info().dim(i)) {
                 report(expr, 46) << left_sym->name();
                 return false;
             }
@@ -890,7 +890,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             // Change from the old logic - we immediately reject multi-dimensional
             // arrays in assignment and don't bother validating subarray assignment.
             auto right_var = right_val.sym->as<VarDeclBase>();
-            if (right_var->type().numdim() - right_val.array_level() > 1) {
+            if (right_var->type_info().numdim() - right_val.array_level() > 1) {
                 report(expr, 23);
                 return false;
             }
@@ -1507,7 +1507,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     }
 
     auto base_var = base_val.sym->as<VarDeclBase>();
-    if (base_val.array_level() < base_var->type().numdim() - 1) {
+    if (base_val.array_level() < base_var->type_info().numdim() - 1) {
         // Note: Intermediate arrays are not l-values.
         out_val.set_array(iREFARRAY, base_val.sym, base_val.array_level() + 1);
         return true;
@@ -1798,7 +1798,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     auto field = field_decl->as<LayoutFieldDecl>();
     assert(field);
 
-    int tag = field->type().semantic_tag();
+    int tag = field->type_info().semantic_tag();
 
     typeinfo_t ti{};
     if (auto sem_type = types_->find(tag); sem_type->isEnumStruct()) {
@@ -1809,8 +1809,8 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     }
     ti.set_type(val.type());
 
-    if (field->type().numdim()) {
-        ti.dim_ = {field->type().dim(0)};
+    if (field->type_info().numdim()) {
+        ti.dim_ = {field->type_info().dim(0)};
         ti.ident = iREFARRAY;
     } else {
         ti.ident = (ti.tag() == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
@@ -1920,8 +1920,8 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(expr, 445) << expr->field();
                 return false;
             }
-            if (field->type().numdim()) {
-                val.set_constval(field->type().dim(0));
+            if (field->type_info().numdim()) {
+                val.set_constval(field->type_info().dim(0));
                 return true;
             }
             return true;
@@ -2073,7 +2073,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         nargs++;
 
         // Don't iterate past terminators (0 or varargs).
-        switch (arglist[argidx]->type().ident) {
+        switch (arglist[argidx]->type_info().ident) {
             case iVARARGS:
                 break;
             default:
@@ -2091,7 +2091,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     // arguments.
     for (unsigned int argidx = 0; argidx < arglist.size(); argidx++) {
         auto arg = arglist[argidx];
-        if (arg->type().ident == iVARARGS)
+        if (arg->type_info().ident == iVARARGS)
             break;
         if (argidx >= ps.argv.size() || !ps.argv[argidx]) {
             if (!CheckArgument(call, arg, nullptr, &ps, argidx))
@@ -2099,9 +2099,9 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         }
 
         Expr* expr = ps.argv[argidx];
-        if (expr->as<DefaultArgExpr>() && arg->type().ident == iVARIABLE) {
+        if (expr->as<DefaultArgExpr>() && arg->type_info().ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(*sc_, 0, arg->default_value()->tag, arg->type().tag(), 2, nullptr,
+            if (find_userop(*sc_, 0, arg->default_value()->tag, arg->type_info().tag(), 2, nullptr,
                             &userop))
             {
                 ps.argv[argidx] = new CallUserOpExpr(userop, expr);
@@ -2128,8 +2128,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     unsigned int visual_pos = call->implicit_this() ? pos : pos + 1;
 
     if (!param || param->as<DefaultArgExpr>()) {
-        assert(arg->type().ident != 0);
-        if (arg->type().ident == iVARARGS) {
+        assert(arg->type_info().ident != 0);
+        if (arg->type_info().ident == iVARARGS) {
             report(call, 92); // argument count mismatch
             return false;
         }
@@ -2146,8 +2146,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         // The rest of the code to handle default values is in DoEmit.
         ps->argv[pos] = param;
 
-        if (arg->type().ident == iREFERENCE ||
-            (arg->type().ident == iREFARRAY && !arg->type().is_const &&
+        if (arg->type_info().ident == iREFERENCE ||
+            (arg->type_info().ident == iREFARRAY && !arg->type_info().is_const &&
              arg->default_value()->array))
         {
             NeedsHeapAlloc(ps->argv[pos]);
@@ -2172,13 +2172,13 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
-    switch (arg->type().ident) {
+    switch (arg->type_info().ident) {
         case iVARARGS:
             assert(!handling_this);
 
             // Always pass by reference.
             if (val->ident == iVARIABLE || val->ident == iREFERENCE) {
-                if (val->sym->is_const() && !arg->type().is_const) {
+                if (val->sym->is_const() && !arg->type_info().is_const) {
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
                     if (!lvalue) {
@@ -2192,10 +2192,10 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
                 NeedsHeapAlloc(param);
             }
-            if (!checktag_string(arg->type().tag(), val) &&
-                !checktag(arg->type().tag(), val->tag()))
+            if (!checktag_string(arg->type_info().tag(), val) &&
+                !checktag(arg->type_info().tag(), val->tag()))
             {
-                report(param, 213) << type_to_name(arg->type().tag()) << val->type();
+                report(param, 213) << type_to_name(arg->type_info().tag()) << val->type();
             }
             break;
         case iVARIABLE:
@@ -2213,13 +2213,13 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             // Do not allow user operators to transform |this|.
             UserOperation userop;
             if (!handling_this &&
-                find_userop(*sc_, 0, val->type(), arg->type().type, 2, nullptr, &userop))
+                find_userop(*sc_, 0, val->type(), arg->type(), 2, nullptr, &userop))
             {
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
             }
-            if (!checktag_string(arg->type().tag(), val))
-                checktag(arg->type().tag(), val->tag());
+            if (!checktag_string(arg->type_info().tag(), val))
+                checktag(arg->type_info().tag(), val->tag());
             break;
         }
         case iREFERENCE:
@@ -2229,11 +2229,11 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            if (val->sym && val->sym->is_const() && !arg->type().is_const) {
+            if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            checktag(arg->type().tag(), val->tag());
+            checktag(arg->type_info().tag(), val->tag());
             break;
         case iREFARRAY:
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
@@ -2242,7 +2242,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            if (val->sym && val->sym->is_const() && !arg->type().is_const) {
+            if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
@@ -2251,45 +2251,45 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             // assumed to have a single dimension.
             if (!val->sym) {
                 assert(val->ident == iARRAY || val->ident == iREFARRAY);
-                if (arg->type().numdim() != 1) {
+                if (arg->type_info().numdim() != 1) {
                     report(param, 48); // array dimensions must match
                     return false;
                 }
-                if (arg->type().dim(0) != 0) {
-                    assert(arg->type().dim(0) > 0);
+                if (arg->type_info().dim(0) != 0) {
+                    assert(arg->type_info().dim(0) > 0);
                     if (val->array_size() == 0) {
                         report(param, 47);
                         return false;
                     }
-                    if (arg->type().tag() == types_->tag_string()) {
-                        if (arg->type().dim(0) < val->array_size()) {
+                    if (arg->type_info().tag() == types_->tag_string()) {
+                        if (arg->type_info().dim(0) < val->array_size()) {
                             report(param, 47); // array sizes must match
                             return false;
                         }
-                    } else if (arg->type().dim(0) != val->array_size()) {
+                    } else if (arg->type_info().dim(0) != val->array_size()) {
                         report(param, 47); // array sizes must match
                         return false;
                     }
                 }
             } else {
-                if (val->array_dim_count() != arg->type().numdim()) {
+                if (val->array_dim_count() != arg->type_info().numdim()) {
                     report(param, 48); // array dimensions must match
                     return false;
                 }
                 // The lengths for all dimensions must match, unless the dimension
                 // length was defined at zero (which means "undefined").
-                for (int i = 0; i < arg->type().numdim(); i++) {
-                    if (arg->type().dim(i) != 0 &&
-                        val->array_dim(i) != arg->type().dim(i))
+                for (int i = 0; i < arg->type_info().numdim(); i++) {
+                    if (arg->type_info().dim(i) != 0 &&
+                        val->array_dim(i) != arg->type_info().dim(i))
                     {
                         report(param, 47); // array sizes must match
                         return false;
                     }
                 }
                 auto sym = val->sym;
-                if (!matchtag(arg->type().enum_struct_tag(), sym->semantic_tag(), MATCHTAG_SILENT)) {
+                if (!matchtag(arg->type_info().enum_struct_tag(), sym->semantic_tag(), MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
-                    if (!arg->type().type->isAny() ||
+                    if (!arg->type()->isAny() ||
                         !types_->find(sym->semantic_tag())->asEnumStruct())
                     {
                         report(param, 229) << sym->name();
@@ -2297,11 +2297,11 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 }
             }
 
-            checktag(arg->type().tag(), val->tag());
-            if ((arg->type().tag() != types_->tag_string() && val->type()->isChar()) ||
-                (arg->type().tag() == types_->tag_string() && !val->type()->isChar()))
+            checktag(arg->type_info().tag(), val->tag());
+            if ((arg->type_info().tag() != types_->tag_string() && val->type()->isChar()) ||
+                (arg->type_info().tag() == types_->tag_string() && !val->type()->isChar()))
             {
-                report(param, 178) << val->type() << type_to_name(arg->type().tag());
+                report(param, 178) << val->type() << type_to_name(arg->type_info().tag());
                 return false;
             }
             break;
@@ -2669,13 +2669,13 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
 
         // this function has an array attached already; check that the current
         // "return" statement returns exactly the same array
-        if (sub_decl->type().numdim() != val.array_dim_count()) {
+        if (sub_decl->type_info().numdim() != val.array_dim_count()) {
             report(stmt, 48); /* array dimensions must match */
             return false;
         }
 
-        for (int i = 0; i < sub_decl->type().numdim(); i++) {
-            array.dim_.emplace_back(sub_decl->type().dim(i));
+        for (int i = 0; i < sub_decl->type_info().numdim(); i++) {
+            array.dim_.emplace_back(sub_decl->type_info().dim(i));
             if (val.array_dim(i) != array.dim(array.numdim() - 1)) {
                 report(stmt, 47); /* array sizes must match */
                 return false;
@@ -2721,12 +2721,12 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     }
 
     auto func_node = sc_->func();
-    if (func_node->type().numdim() == 0)
+    if (func_node->type_info().numdim() == 0)
         report(stmt, 246) << func_node->name();
-    else if (func_node->type().numdim() != array.numdim())
+    else if (func_node->type_info().numdim() != array.numdim())
         report(stmt, 413);
 
-    array.set_type(curfunc->return_array()->var->type().type);
+    array.set_type(curfunc->return_array()->var->type());
     array.has_postdims = true;
     return true;
 }
@@ -3033,7 +3033,7 @@ void ReportFunctionReturnError(FunctionDecl* decl) {
 bool
 FunctionDecl::IsVariadic() const
 {
-    return !args_.empty() && args_.back()->type().ident == iVARARGS;
+    return !args_.empty() && args_.back()->type_info().ident == iVARARGS;
 }
 
 bool Semantics::CheckFunctionDecl(FunctionDecl* info) {
@@ -3326,20 +3326,20 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
     int result = 1;
 
     if (result)
-        result = a1->type().ident == a2->type().ident; /* type()/class */
+        result = a1->type_info().ident == a2->type_info().ident; /* type()/class */
     if (result)
-        result = a1->type().is_const == a2->type().is_const; /* "const" flag */
+        result = a1->type_info().is_const == a2->type_info().is_const; /* "const" flag */
     if (result)
-        result = a1->type().tag() == a2->type().tag();
+        result = a1->type_info().tag() == a2->type_info().tag();
     if (result)
-        result = a1->type().dim_ == a2->type().dim_; /* array dimensions & index tags */
+        result = a1->type_info().dim_ == a2->type_info().dim_; /* array dimensions & index tags */
     if (result)
-        result = a1->type().declared_tag == a2->type().declared_tag;
+        result = a1->type_info().declared_tag == a2->type_info().declared_tag;
     if (result)
         result = !!a1->default_value() == !!a2->default_value(); /* availability of default value */
     if (auto a1_def = a1->default_value()) {
         auto a2_def = a2->default_value();
-        if (a1->type().ident == iREFARRAY) {
+        if (a1->type_info().ident == iREFARRAY) {
             if (result)
                 result = !!a1_def->array == !!a2_def->array;
             if (result && a1_def->array)
@@ -3375,7 +3375,7 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
 
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
     auto def = new DefaultArg();
-    def->tag = decl->type().tag();
+    def->tag = decl->type_info().tag();
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         Decl* sym = expr->decl();

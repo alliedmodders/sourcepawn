@@ -457,10 +457,10 @@ RttiBuilder::add_enumstruct(Type* type)
         auto field = (*iter);
 
         int dims[1], dimcount = 0;
-        if (field->type().numdim())
-            dims[dimcount++] = field->type().dim(0);
+        if (field->type_info().numdim())
+            dims[dimcount++] = field->type_info().dim(0);
 
-        variable_type_t type = {field->type().semantic_tag(), dims, dimcount, false};
+        variable_type_t type = {field->type_info().semantic_tag(), dims, dimcount, false};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -502,9 +502,9 @@ RttiBuilder::add_struct(Type* type)
         auto arg = ps->fields()[i];
 
         int dims[1] = {0};
-        int dimcount = arg->type().ident == iREFARRAY ? 1 : 0;
+        int dimcount = arg->type_info().ident == iREFARRAY ? 1 : 0;
 
-        variable_type_t type = {arg->type().tag(), dims, dimcount, !!arg->type().is_const};
+        variable_type_t type = {arg->type_info().tag(), dims, dimcount, !!arg->type_info().is_const};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -546,8 +546,8 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
         bytes.push_back(cb::kVariadic);
 
     VarDecl* child = fun->return_array() ? fun->return_array()->var : nullptr;
-    if (child && child->type().numdim()) {
-        encode_ret_array_into(bytes, child->type());
+    if (child && child->type_info().numdim()) {
+        encode_ret_array_into(bytes, child->type_info());
     } else if (fun->tag() == types_->tag_void()) {
         bytes.push_back(cb::kVoid);
     } else {
@@ -555,10 +555,10 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     }
 
     for (const auto& arg : fun->args()) {
-        int tag = arg->type().tag();
-        int numdim = arg->type().numdim();
-        if (arg->type().numdim() && arg->type().enum_struct_tag()) {
-            int last_tag = arg->type().enum_struct_tag();
+        int tag = arg->type_info().tag();
+        int numdim = arg->type_info().numdim();
+        if (arg->type_info().numdim() && arg->type_info().enum_struct_tag()) {
+            int last_tag = arg->type_info().enum_struct_tag();
             Type* last_type = types_->find(last_tag);
             if (last_type->isEnumStruct()) {
                 tag = last_tag;
@@ -566,15 +566,15 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
             }
         }
 
-        if (arg->type().ident == iREFERENCE)
+        if (arg->type_info().ident == iREFERENCE)
             bytes.push_back(cb::kByRef);
 
         std::vector<int> dims;
-        for (int i = 0; i < arg->type().numdim(); i++)
-            dims.emplace_back(arg->type().dim(i));
+        for (int i = 0; i < arg->type_info().numdim(); i++)
+            dims.emplace_back(arg->type_info().dim(i));
 
         auto dim = dims.empty() ? nullptr : &dims[0];
-        variable_type_t info = {tag, dim, numdim, arg->type().is_const};
+        variable_type_t info = {tag, dim, numdim, arg->type_info().is_const};
         encode_var_type(bytes, info);
     }
 

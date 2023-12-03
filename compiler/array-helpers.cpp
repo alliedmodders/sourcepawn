@@ -65,7 +65,7 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDeclBase* decl)
   : sema_(sema),
     types_(sema->cc().types()),
     pos_(decl->pos()),
-    type_(decl->mutable_type()),
+    type_(decl->mutable_type_info()),
     initializer_(decl->init_rhs()),
     computed_(type_->numdim()),
     vclass_(decl->vclass()),
@@ -356,7 +356,7 @@ bool ArraySizeResolver::ResolveDimExpr(Expr* expr, value* v) {
 void
 ResolveArraySize(Semantics* sema, VarDeclBase* decl)
 {
-    assert(decl->type().ident == iARRAY);
+    assert(decl->type_info().ident == iARRAY);
 
     ArraySizeResolver resolver(sema, decl);
     resolver.Resolve();
@@ -380,7 +380,7 @@ class FixedArrayValidator final
         decl_(decl),
         pos_(decl->pos()),
         init_(decl->init_rhs()),
-        type_(decl->type()),
+        type_(decl->type_info()),
         es_(nullptr)
     {
     }
@@ -513,8 +513,8 @@ bool FixedArrayValidator::CheckArgument(Expr* init) {
     }
 
     std::vector<int> dim;
-    for (int i = 0; i < var->type().numdim(); i++)
-        dim.emplace_back(var->type().dim(i));
+    for (int i = 0; i < var->type_info().numdim(); i++)
+        dim.emplace_back(var->type_info().dim(i));
 
     if (dim.size() != type_.numdim()) {
         report(expr->pos(), 19) << type_.numdim() << dim.size();
@@ -697,7 +697,7 @@ bool FixedArrayValidator::ValidateEnumStruct(Expr* init) {
         // Advance early so we can use |continue|.
         field_iter++;
 
-        const auto& type = field->type();
+        const auto& type = field->type_info();
         if (type.ident == iARRAY) {
             if (!CheckArrayInitialization(sema_, type, expr))
                 continue;
@@ -744,7 +744,7 @@ bool
 Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
 {
     // Enum structs should be impossible here.
-    typeinfo_t* type = decl->mutable_type();
+    typeinfo_t* type = decl->mutable_type_info();
     assert(!types_->find(type->tag())->asEnumStruct());
 
     // If any one rank was dynamic, the entire array is considered dynamic. For
@@ -786,7 +786,7 @@ Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
 
 bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     AutoCountErrors errors;
-    const auto& type = decl->type();
+    const auto& type = decl->type_info();
     if (type.ident == iARRAY || decl->vclass() == sARGUMENT) {
         FixedArrayValidator validator(this, decl);
         if (!validator.Validate() || !errors.ok())
@@ -966,7 +966,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
                 auto field = (*field_iter);
                 assert(field);
 
-                EmitPadding(field->type().dim(0), field->type().tag(), emitted, false, {}, {});
+                EmitPadding(field->type_info().dim(0), field->type()->tagid(), emitted, false, {}, {});
             } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
@@ -1009,7 +1009,7 @@ void ArrayEmitter::AddInlineArray(LayoutFieldDecl* field, ArrayExpr* array) {
         prev1 = ke::Some(item->val().constval());
     }
 
-    EmitPadding(field->type().dim(0), field->type().tag(), array->exprs().size(),
+    EmitPadding(field->type_info().dim(0), field->type()->tagid(), array->exprs().size(),
                 array->ellipses(), prev1, prev2);
 }
 
@@ -1080,7 +1080,7 @@ BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array)
 void
 BuildArrayInitializer(VarDeclBase* decl, ArrayData* array, cell base_address)
 {
-    BuildArrayInitializer(decl->type(), decl->init_rhs(), array);
+    BuildArrayInitializer(decl->type_info(), decl->init_rhs(), array);
 
     for (auto& v : array->iv)
         v += base_address;
