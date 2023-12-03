@@ -186,10 +186,6 @@ struct typeinfo_t {
     }
 };
 
-struct funcarg_t {
-    typeinfo_t type;
-};
-
 struct functag_t : public PoolObject
 {
     functag_t()
@@ -197,7 +193,7 @@ struct functag_t : public PoolObject
        args()
     {}
     int ret_tag;
-    PoolArray<funcarg_t> args;
+    PoolArray<typeinfo_t> args;
 };
 
 struct structarg_t : public PoolObject

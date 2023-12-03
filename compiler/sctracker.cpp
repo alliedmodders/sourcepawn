@@ -61,17 +61,15 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     functag_t* ft = new functag_t;
     ft->ret_tag = sym->type()->tagid();
 
-    std::vector<funcarg_t> args;
+    std::vector<typeinfo_t> args;
     for (auto arg : fun->canonical()->args()) {
-        funcarg_t dest;
-        dest.type = arg->type_info();
+        typeinfo_t type = arg->type_info();
+        if (type.ident != iARRAY && type.ident != iREFARRAY)
+          assert(!type.numdim());
 
-        if (dest.type.ident != iARRAY && dest.type.ident != iREFARRAY)
-          assert(!dest.type.numdim());
-
-        args.emplace_back(dest);
+        args.emplace_back(type);
     }
-    new (&ft->args) PoolArray<funcarg_t>(args);
+    new (&ft->args) PoolArray<typeinfo_t>(args);
 
     auto name = ke::StringPrintf("::ft:%s", fun->name()->chars());
     funcenum_t* fe = funcenums_add(cc, cc.atom(name), true);
