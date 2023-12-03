@@ -39,7 +39,7 @@ using namespace ke;
 
 Type::Type(Atom* name, TypeKind kind)
  : name_(name),
-   value_(0),
+   index_(-1),
    fixed_(0),
    kind_(kind)
 {
@@ -90,10 +90,8 @@ Type* TypeManager::find(Atom* atom) {
     return iter->second;
 }
 
-Type* TypeManager::find(int tag) {
-    auto iter = tags_.find(tag);
-    assert(iter != tags_.end());
-    return iter->second;
+Type* TypeManager::Get(int index) {
+    return by_index_[index];
 }
 
 Type* TypeManager::add(const char* name, TypeKind kind) {
@@ -109,10 +107,10 @@ Type* TypeManager::add(Atom* name, TypeKind kind) {
 void TypeManager::RegisterType(Type* type) {
     assert(types_.find(type->name()) == types_.end());
 
-    int tag = int(types_.size());
-    type->set_tag(tag);
+    type->set_index((int)by_index_.size());
+    by_index_.emplace_back(type);
+
     types_.emplace(type->name(), type);
-    tags_.emplace(tag, type);
 }
 
 Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {

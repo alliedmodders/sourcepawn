@@ -102,12 +102,12 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
 
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   *addr, decl->type()->tagid(), symname, pc,
+                                   *addr, decl->type()->type_index(), symname, pc,
                                    asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
     if (decl->ident() == iARRAY || decl->ident() == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < decl->dim_count(); i++)
-            string += ke::StringPrintf("%x:%x ", decl->semantic_type()->tagid(), decl->dim(i));
+            string += ke::StringPrintf("%x:%x ", decl->semantic_type()->type_index(), decl->dim(i));
         string += "]";
     }
 
