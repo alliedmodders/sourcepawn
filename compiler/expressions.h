@@ -48,7 +48,7 @@ bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam,
 
 int commutative(int oper);
 cell calc(cell left, int oper_tok, cell right, char* boolresult);
-bool is_valid_index_tag(int tag);
+bool IsValidIndexType(Type* type);
 bool matchtag(int formaltag, int actualtag, int flags);
 bool matchtag(Type* formaltag, Type* actualtag, int flags);
 bool matchtag_commutative(Type* formal, Type* actual, int flags);

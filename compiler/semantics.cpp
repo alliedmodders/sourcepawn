@@ -1468,9 +1468,9 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         return false;
     }
 
-    int idx_tag = index->val().tag();
-    if (!is_valid_index_tag(idx_tag)) {
-        report(index, 77) << types_->find(idx_tag);
+    auto idx_type = index->val().type();
+    if (!IsValidIndexType(idx_type)) {
+        report(index, 77) << idx_type;
         return false;
     }
 
@@ -2376,7 +2376,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             report(expr, 153);
             return false;
         }
-        if (!is_valid_index_tag(v.tag())) {
+        if (!IsValidIndexType(v.type())) {
             report(expr, 77) << v.type();
             return false;
         }

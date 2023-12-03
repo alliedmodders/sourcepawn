@@ -285,7 +285,7 @@ ArraySizeResolver::ResolveDimExprs()
         if (!ResolveDimExpr(expr, &v))
             return false;
 
-        if (!is_valid_index_tag(v.tag())) {
+        if (!IsValidIndexType(v.type())) {
             report(expr->pos(), 77) << v.type();
             return false;
         }
