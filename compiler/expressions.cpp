@@ -572,15 +572,8 @@ calc(cell left, int oper_tok, cell right, char* boolresult)
     return 0;
 }
 
-bool
-is_valid_index_tag(int tag)
-{
-    auto types = CompileContext::get().types();
-    if (tag == 0 || tag == types->tag_any() || tag == types->tag_string())
-        return true;
-
-    Type* idx_type = types->find(tag);
-    return idx_type->isEnum();
+bool IsValidIndexType(Type* type) {
+    return type->isInt() || type->isAny() || type->isChar() || type->isEnum();
 }
 
 bool checktag(Type* type, Type* expr_type) {
