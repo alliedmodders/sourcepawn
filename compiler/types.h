@@ -435,6 +435,4 @@ class TypeManager
     Type* type_string_ = nullptr;
 };
 
-const char* pc_tagname(int tag);
-
 } // namespace sp
