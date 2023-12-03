@@ -3044,7 +3044,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         CheckVoidDecl(&decl, FALSE);
 
         if (decl.opertok)
-            check_operatortag(decl.opertok, decl.type.type->tagid(), decl.name->chars());
+            check_operatortag(decl.opertok, decl.type.type, decl.name->chars());
     }
 
     if (info->is_public() || info->is_forward()) {

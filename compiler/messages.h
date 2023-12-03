@@ -87,7 +87,7 @@ static const char* errmsg[] = {
     /*060*/ "multiple \"#else\" directives between \"#if ... #endif\"\n",
     /*061*/ "\"#elseif\" directive follows an \"#else\" directive\n",
     /*062*/ "number of operands does not fit the operator\n",
-    /*063*/ "function result tag of operator \"%s\" must be \"%s\"\n",
+    /*063*/ "function result type of operator \"%s\" must be \"%s\"\n",
     /*064*/ "cannot change predefined operators\n",
     /*065*/ "enum struct fields cannot have more than one dimension\n",
     /*066*/ "function argument may not be a reference argument or an array (argument \"%s\")\n",

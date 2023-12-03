@@ -80,9 +80,7 @@ Decl* FindEnumStructField(Type* type, Atom* name) {
     return nullptr;
 }
 
-int
-check_operatortag(int opertok, int resulttag, const char* opername)
-{
+bool check_operatortag(int opertok, Type* result_type, const char* opername) {
     assert(opername != NULL && strlen(opername) > 0);
     switch (opertok) {
         case '!':
@@ -92,19 +90,19 @@ check_operatortag(int opertok, int resulttag, const char* opername)
         case tlNE:
         case tlLE:
         case tlGE:
-            if (resulttag != CompileContext::get().types()->tag_bool()) {
-                report(63) << opername << "bool:"; /* operator X requires a "bool:" result tag */
-                return FALSE;
+            if (!result_type->isBool()) {
+                report(63) << opername << "bool"; /* operator X requires a "bool:" result tag */
+                return false;
             }
             break;
         case '~':
-            if (resulttag != 0) {
-                report(63) << opername << "_:"; /* operator "~" requires a "_:" result tag */
-                return FALSE;
+            if (!result_type->isInt()) {
+                report(63) << opername << "int"; /* operator "~" requires a "_:" result tag */
+                return false;
             }
             break;
     }
-    return TRUE;
+    return true;
 }
 
 enum class NewNameStatus {
