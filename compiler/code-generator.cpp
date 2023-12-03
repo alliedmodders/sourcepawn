@@ -1182,7 +1182,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
     // If returning an array, push a hidden parameter.
     if (val.sym) {
         auto var = val.sym->as<VarDecl>();
-        cell retsize = CalcArraySize(var->type());
+        cell retsize = CalcArraySize(var->type_info());
 
         if (retsize)
             __ emit(OP_HEAP, retsize * sizeof(cell));
@@ -1210,17 +1210,17 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
             arg = arginfov[i];
         } else {
             arg = arginfov.back();
-            assert(arg->type().ident == iVARARGS);
+            assert(arg->type_info().ident == iVARARGS);
         }
 
-        switch (arg->type().ident) {
+        switch (arg->type_info().ident) {
             case iVARARGS:
                 if (val.ident == iVARIABLE || val.ident == iREFERENCE) {
                     assert(val.sym);
                     assert(lvalue);
                     /* treat a "const" variable passed to a function with a non-const
                      * "variable argument list" as a constant here */
-                    if (val.sym->is_const() && !arg->type().is_const) {
+                    if (val.sym->is_const() && !arg->type_info().is_const) {
                         EmitRvalue(val);
                         __ setheap_pri();
                         TrackTempHeapAlloc(expr, 1);
@@ -1264,7 +1264,7 @@ void
 CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
 {
     const auto& arg = expr->arg();
-    switch (arg->type().ident) {
+    switch (arg->type_info().ident) {
         case iREFARRAY:
             EmitDefaultArray(expr, arg);
             break;
@@ -1901,7 +1901,7 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
         data_.AddZeroes(def->array->zeroes);
     }
 
-    if (arg->type().is_const || !def->array) {
+    if (arg->type_info().is_const || !def->array) {
         // No modification is possible, so use the array we emitted. (This is
         // why we emitted the zeroes above.)
         __ const_pri(def->val.get());

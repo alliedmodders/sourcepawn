@@ -342,8 +342,8 @@ class VarDeclBase : public Decl
     BinaryExpr* init() const { return init_; }
     Expr* init_rhs() const;
     int vclass() const { return vclass_; }
-    const typeinfo_t& type() const { return type_; }
-    typeinfo_t* mutable_type() { return &type_; }
+    const typeinfo_t& type_info() const { return type_; }
+    typeinfo_t* mutable_type_info() { return &type_; }
     void set_init(Expr* expr);
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
@@ -356,6 +356,7 @@ class VarDeclBase : public Decl
     int tag() const override { return type_.tag(); }
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
+    Type* type() const { return type_.type; }
 
     bool is_used() const { return is_read_ || is_written_; }
 
@@ -1652,8 +1653,9 @@ class FunctionDecl : public Decl
 
     int tag() const override { return decl_.type.tag(); }
 
-    const typeinfo_t& type() const { return decl_.type; }
-    typeinfo_t& mutable_type() { return decl_.type; }
+    const typeinfo_t& type_info() const { return decl_.type; }
+    typeinfo_t& mutable_type_info() { return decl_.type; }
+    Type* type() const { return decl_.type.type; }
 
     bool is_analyzing() const { return is_analyzing_; }
     void set_is_analyzing(bool val) { is_analyzing_ = val; }
@@ -1804,8 +1806,9 @@ class LayoutFieldDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::LayoutFieldDecl; }
 
-    const typeinfo_t& type() const { return type_; }
-    typeinfo_t& mutable_type() { return type_; }
+    const typeinfo_t& type_info() const { return type_; }
+    typeinfo_t& mutable_type_info() { return type_; }
+    Type* type() const { return type_info().type; }
 
     cell_t offset() const { return offset_; }
     void set_offset(cell_t offset) { offset_ = offset; }
@@ -1857,8 +1860,8 @@ class MethodmapPropertyDecl : public Decl {
 
     int property_tag() const;
 
-    const typeinfo_t& type() const { return type_; }
-    typeinfo_t& mutable_type() { return type_; }
+    const typeinfo_t& type_info() const { return type_; }
+    typeinfo_t& mutable_type_info() { return type_; }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
     LayoutDecl* parent() const {

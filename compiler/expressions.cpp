@@ -73,13 +73,13 @@ static inline bool MatchOperator(int oper, FunctionDecl* fun, Type* type1, Type*
     Type* types[2] = { type1, type2 };
 
     for (int i = 0; i < numparam; i++) {
-        if (args[i]->type().ident != iVARIABLE)
+        if (args[i]->type_info().ident != iVARIABLE)
             return false;
-        if (args[i]->type().type != types[i])
+        if (args[i]->type_info().type != types[i])
             return false;
     }
 
-    if (!oper && fun->type().type != type2)
+    if (!oper && fun->type() != type2)
         return false;
     return true;
 }

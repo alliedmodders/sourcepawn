@@ -272,14 +272,14 @@ PstructDecl::EnterNames(SemaContext& sc)
             return false;
         }
 
-        if (field->type().ident == iARRAY)
-            field->mutable_type().ident = iREFARRAY;
+        if (field->type_info().ident == iARRAY)
+            field->mutable_type_info().ident = iREFARRAY;
         field->set_offset(position);
 
         position++;
 
-        if (field->type().numdim() > 1 ||
-            (field->type().numdim() == 1 && field->type().dim(0) != 0))
+        if (field->type_info().numdim() > 1 ||
+            (field->type_info().numdim() == 1 && field->type_info().dim(0) != 0))
         {
             report(field, 69);
             return false;
@@ -291,7 +291,7 @@ PstructDecl::EnterNames(SemaContext& sc)
 bool PstructDecl::Bind(SemaContext& sc) {
     bool ok = true;
     for (const auto& field : fields_)
-        ok &= sc.BindType(field->pos(), &field->mutable_type());
+        ok &= sc.BindType(field->pos(), &field->mutable_type_info());
     return ok;
 }
 
@@ -638,7 +638,7 @@ ReturnStmt::Bind(SemaContext& sc)
     if (auto sym_expr = expr_->as<SymbolExpr>()) {
         if (auto decl = sym_expr->decl()) {
             if (auto var = decl->as<VarDeclBase>()) {
-                if (var->type().ident == iARRAY || var->type().ident == iREFARRAY)
+                if (var->type_info().ident == iARRAY || var->type_info().ident == iREFARRAY)
                     sc.func()->set_maybe_returns_array();
             }
         }
@@ -852,7 +852,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
     size_t arg_index = 0;
     for (auto& var : args_) {
-        const auto& typeinfo = var->type();
+        const auto& typeinfo = var->type_info();
 
         AutoErrorPos pos(var->pos());
 
@@ -903,11 +903,11 @@ FunctionDecl::BindArgs(SemaContext& sc)
                 var->default_value()->tag = tag;
                 var->default_value()->val = ke::Some(val);
 
-                matchtag(var->type().tag(), tag, MATCHTAG_COERCE);
+                matchtag(var->type_info().tag(), tag, MATCHTAG_COERCE);
             }
         }
 
-        if (var->type().ident == iREFERENCE)
+        if (var->type_info().ident == iREFERENCE)
             var->set_is_read();
         if (is_callback_ || is_stock_ || is_public_)
             var->set_is_read();
@@ -950,24 +950,21 @@ FunctionDecl::BindArgs(SemaContext& sc)
     return errors.ok();
 }
 
-Atom*
-FunctionDecl::NameForOperator()
-{
+Atom* FunctionDecl::NameForOperator() {
     std::vector<std::string> params;
 
     int count = 0;
-    int tags[2] = {0, 0};
+    Type* tags[2] = {nullptr, nullptr};
     for (const auto& var : args_) {
         if (count < 2)
-            tags[count] = var->type().tag();
-        if (var->type().ident != iVARIABLE)
+            tags[count] = var->type();
+        if (var->type_info().ident != iVARIABLE)
             report(pos_, 66) << var->name();
         if (var->init_rhs())
             report(pos_, 59) << var->name();
         count++;
 
-        auto type = CompileContext::get().types()->find(var->type().tag());
-        params.emplace_back(type->name()->str());
+        params.emplace_back(var->type()->name()->str());
     }
 
     /* for '!', '++' and '--', count must be 1
@@ -1033,26 +1030,26 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 
     cell position = 0;
     for (auto& field : fields_) {
-        if (!sc.BindType(field->pos(), &field->mutable_type()))
+        if (!sc.BindType(field->pos(), &field->mutable_type_info()))
             continue;
 
         // It's not possible to have circular references other than this, because
         // Pawn is inherently forward-pass only.
         //
         // :TODO: this will not be true when we move to recursive binding.
-        if (field->type().semantic_tag() == tag_) {
+        if (field->type_info().semantic_tag() == tag_) {
             report(field->pos(), 87) << name_;
             continue;
         }
 
-        if (field->type().is_const)
+        if (field->type_info().is_const)
             report(field->pos(), 94) << field->name();
 
-        if (field->type().numdim()) {
-            if (field->type().ident == iARRAY) {
-                ResolveArraySize(sc.sema(), field->pos(), &field->mutable_type(), sENUMFIELD);
+        if (field->type_info().numdim()) {
+            if (field->type_info().ident == iARRAY) {
+                ResolveArraySize(sc.sema(), field->pos(), &field->mutable_type_info(), sENUMFIELD);
 
-                if (field->type().numdim() > 1) {
+                if (field->type_info().numdim() > 1) {
                     error(field->pos(), 65);
                     continue;
                 }
@@ -1071,10 +1068,10 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         field->set_offset(position);
 
         cell size = 1;
-        if (field->type().numdim()) {
-            size = field->type().tag() == sc.cc().types()->tag_string()
-                   ? char_array_cells(field->type().dim(0))
-                   : field->type().dim(0);
+        if (field->type_info().numdim()) {
+            size = field->type()->isChar()
+                   ? char_array_cells(field->type_info().dim(0))
+                   : field->type_info().dim(0);
         }
         position += size;
     }
@@ -1212,10 +1209,10 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
         nullable_ = parent_->nullable();
 
     for (const auto& prop : properties_) {
-        if (!sc.BindType(prop->pos(), &prop->mutable_type()))
+        if (!sc.BindType(prop->pos(), &prop->mutable_type_info()))
             return false;
 
-        if (prop->type().numdim() > 0) {
+        if (prop->type_info().numdim() > 0) {
             report(prop, 82);
             continue;
         }
@@ -1236,7 +1233,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
             if (method->is_static())
                 report(method, 175);
 
-            auto& type = method->mutable_type();
+            auto& type = method->mutable_type_info();
             type.set_type(type_);
             type.ident = iVARIABLE;
             type.is_new = true;
@@ -1248,13 +1245,13 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
             if (!method->is_native())
                 report(method, 118);
 
-            auto& type = method->mutable_type();
+            auto& type = method->mutable_type_info();
             if (type.ident != 0)
                 report(method, 439);
             type.set_type(sc.cc().types()->type_void());
             type.is_new = true;
             type.ident = iVARIABLE;
-        } else if (method->type().ident == 0) {
+        } else if (method->type_info().ident == 0) {
             // Parsed as a constructor, but not using the map name. This is illegal.
             report(method, 114) << "constructor" << "methodmap" << name_;
             continue;
@@ -1292,7 +1289,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
 
     // Must have one extra argument taking the return type.
     if (fun->args().size() > 2) {
-        report(prop, 150) << pc_tagname(prop->type().tag());
+        report(prop, 150) << pc_tagname(prop->type_info().tag());
         return false;
     }
 
@@ -1302,15 +1299,15 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
 
     if (fun->args().size() <= 1) {
-        report(prop, 150) << pc_tagname(prop->type().tag());
+        report(prop, 150) << pc_tagname(prop->type_info().tag());
         return false;
     }
 
     auto decl = fun->args()[1];
-    if (decl->type().ident != iVARIABLE || decl->init_rhs() ||
-        decl->type().tag() != prop->type().tag())
+    if (decl->type_info().ident != iVARIABLE || decl->init_rhs() ||
+        decl->type_info().tag() != prop->type_info().tag())
     {
-        report(prop, 150) << pc_tagname(prop->type().tag());
+        report(prop, 150) << pc_tagname(prop->type_info().tag());
         return false;
     }
     return true;
