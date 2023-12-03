@@ -256,8 +256,9 @@ int Decl::dim_count() {
 
 Type* Decl::semantic_type() {
     if (auto var = as<VarDeclBase>()) {
-        int tag = var->type_info().enum_struct_tag();
-        return CompileContext::get().types()->find(tag);
+        if (Type* type = var->type_info().enum_struct_type())
+            return type;
+        return var->type();
     }
     if (auto es = as<EnumStructDecl>())
         return es->type();

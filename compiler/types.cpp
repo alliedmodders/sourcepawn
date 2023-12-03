@@ -228,12 +228,10 @@ TypenameInfo typeinfo_t::ToTypenameInfo() const {
     return TypenameInfo(type_atom, is_label);
 }
 
-int typeinfo_t::enum_struct_tag() const {
+Type* typeinfo_t::enum_struct_type() const {
     if (!type->isInt())
-        return 0;
-    if (!declared_type)
-        return 0;
-    return declared_type->tagid();
+        return nullptr;
+    return declared_type;
 }
 
 int typeinfo_t::semantic_tag() const {

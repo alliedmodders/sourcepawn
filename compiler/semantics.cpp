@@ -2276,9 +2276,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     }
                 }
                 auto sym = val->sym;
-                if (!matchtag(arg->type_info().enum_struct_tag(), sym->semantic_type()->tagid(),
-                              MATCHTAG_SILENT))
-                {
+                if (!matchtag(arg->type_info().semantic_tag(), val->tag(), MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
                     if (!arg->type()->isAny() || !sym->semantic_type()->asEnumStruct())
                         report(param, 229) << sym->name();
@@ -2679,7 +2677,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
                 return false;
             }
             array.dim_.emplace_back(sub->dim(i));
-            if (Type* type = sub->semantic_type(); !type->isInt()) {
+            if (Type* type = sub->semantic_type(); type->asEnumStruct()) {
                 array.set_type(types_->type_int());
                 array.declared_type = type;
             }
