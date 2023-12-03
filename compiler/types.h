@@ -281,6 +281,9 @@ class Type : public PoolObject
     bool isFunction() const {
         return kind_ == TypeKind::Function;
     }
+    bool isCanonicalFunction() const {
+        return isFunction() && !funcenum_ptr_;
+    }
     funcenum_t* asFunction() const {
         if (!isFunction())
             return nullptr;
