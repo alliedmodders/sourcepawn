@@ -1633,7 +1633,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())
             base = expr->set_base(new RvalueExpr(base));
-        val.set_type(types_->find(prop->property_tag()));
+        val.set_type(prop->property_type());
         val.set_accessor(prop);
         expr->set_lvalue(true);
         return true;

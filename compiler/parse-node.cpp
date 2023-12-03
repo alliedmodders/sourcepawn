@@ -221,17 +221,17 @@ int MethodmapDecl::tag() const {
     return type_->tagid();
 }
 
-int MethodmapPropertyDecl::property_tag() const {
+Type* MethodmapPropertyDecl::property_type() const {
     auto types = CompileContext::get().types();
 
     if (getter_)
-        return getter_->type_info().type->tagid();
+        return getter_->type_info().type;
     if (setter_->args().size() != 2)
-        return types->tag_void();
+        return types->type_void();
     ArgDecl* valp = setter_->args()[1];
     if (valp->type_info().ident != iVARIABLE)
-        return types->tag_void();
-    return valp->type_info().type->tagid();
+        return types->type_void();
+    return valp->type();
 }
 
 cell Decl::ConstVal() {
