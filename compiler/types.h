@@ -189,10 +189,10 @@ struct typeinfo_t {
 struct functag_t : public PoolObject
 {
     functag_t()
-     : ret_tag(0),
+     : ret_type(nullptr),
        args()
     {}
-    int ret_tag;
+    Type* ret_type;
     PoolArray<typeinfo_t> args;
 };
 

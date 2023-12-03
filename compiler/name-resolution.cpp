@@ -325,7 +325,7 @@ TypedefInfo::Bind(SemaContext& sc)
         return nullptr;
 
     auto ft = new functag_t();
-    ft->ret_tag = ret_type.type()->tagid();
+    ft->ret_type = ret_type.type();
 
     std::vector<typeinfo_t> ft_args;
     for (auto& arg : args) {
