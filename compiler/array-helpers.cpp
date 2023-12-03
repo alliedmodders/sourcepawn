@@ -28,7 +28,6 @@
 #include "lexer-inl.h"
 #include "semantics.h"
 #include "symbols.h"
-#include "type-checker.h"
 
 namespace sp {
 

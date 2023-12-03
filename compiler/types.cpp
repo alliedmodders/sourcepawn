@@ -236,10 +236,4 @@ TypenameInfo typeinfo_t::ToTypenameInfo() const {
     return TypenameInfo(type_atom, is_label);
 }
 
-void typeinfo_t::set_tag(int tag) {
-    auto& cc = CompileContext::get();
-    type = cc.types()->find(tag);
-    assert(type);
-}
-
 } // namespace sp

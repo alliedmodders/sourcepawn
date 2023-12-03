@@ -2692,12 +2692,12 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
             }
             array.dim_.emplace_back(sub->dim(i));
             if (sub->semantic_tag()) {
-                array.set_tag(types_->tag_int());
+                array.set_type(types_->type_int());
                 array.declared_tag = sub->semantic_tag();
             }
         }
         if (!array.has_tag())
-            array.set_tag(sub->tag());
+            array.set_type(types_->find(sub->tag()));
 
         // the address of the array is stored in a hidden parameter; the address
         // of this parameter is 1 + the number of parameters (times the size of
@@ -2726,7 +2726,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     else if (func_node->type().numdim() != array.numdim())
         report(stmt, 413);
 
-    array.set_tag(curfunc->return_array()->var->type().tag());
+    array.set_type(curfunc->return_array()->var->type().type);
     array.has_postdims = true;
     return true;
 }
@@ -3106,7 +3106,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
             //    public X()
             //
             // Switch our decl type to void.
-            decl.type.set_tag(types_->tag_void());
+            decl.type.set_type(types_->type_void());
         }
     }
 
