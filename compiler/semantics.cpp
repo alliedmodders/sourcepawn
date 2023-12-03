@@ -2093,7 +2093,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         Expr* expr = ps.argv[argidx];
         if (expr->as<DefaultArgExpr>() && arg->type_info().ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(*sc_, 0, arg->default_value()->tag, arg->type()->tagid(), 2, nullptr,
+            if (find_userop(*sc_, 0, arg->default_value()->type, arg->type(), 2, nullptr,
                             &userop))
             {
                 ps.argv[argidx] = new CallUserOpExpr(userop, expr);
@@ -3338,7 +3338,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
                 result = a1_def->val.get() == a2_def->val.get();
         }
         if (result)
-            result = a1_def->tag == a2_def->tag;
+            result = a1_def->type == a2_def->type;
     }
     return result;
 }
@@ -3356,7 +3356,7 @@ bool IsLegacyEnumType(SymbolScope* scope, Type* type) {
 
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
     auto def = new DefaultArg();
-    def->tag = decl->type()->tagid();
+    def->type = decl->type();
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         Decl* sym = expr->decl();
