@@ -741,10 +741,10 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
     bytes.push_back((uint8_t)ft->args.size());
     if (!ft->args.empty() && ft->args[ft->args.size() - 1].ident == iVARARGS)
         bytes.push_back(cb::kVariadic);
-    if (ft->ret_tag == types_->tag_void())
+    if (ft->ret_type->isVoid())
         bytes.push_back(cb::kVoid);
     else
-        encode_tag_into(bytes, ft->ret_tag);
+        encode_tag_into(bytes, ft->ret_type->tagid());
 
     for (const auto& arg : ft->args) {
         if (arg.ident == iREFERENCE)

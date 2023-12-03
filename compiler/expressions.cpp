@@ -322,12 +322,11 @@ matchobjecttags(Type* formal, Type* actual, int flags)
 }
 
 static bool matchreturntag(const functag_t* formal, const functag_t* actual) {
-    if (formal->ret_tag == actual->ret_tag)
+    if (formal->ret_type == actual->ret_type)
         return true;
 
-    auto types = CompileContext::get().types();
-    if (formal->ret_tag == types->tag_void()) {
-        if (actual->ret_tag == 0)
+    if (formal->ret_type->isVoid()) {
+        if (actual->ret_type->isInt())
             return true;
     }
     return false;
