@@ -129,7 +129,7 @@ struct typeinfo_t {
     typeinfo_t()
       : type_atom(nullptr),
         type(nullptr),
-        declared_tag(0),
+        declared_type(nullptr),
         ident(iINVALID),
         is_const(false),
         is_new(false),
@@ -147,9 +147,9 @@ struct typeinfo_t {
     Atom* type_atom;    // Parsed atom.
     Type* type;
 
-    // If non-zero, this type was originally declared with this type, but was
+    // If non-null, this type was originally declared with this type, but was
     // rewritten for desugaring.
-    int declared_tag;
+    Type* declared_type;
 
     IdentifierKind ident : 6;  // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;

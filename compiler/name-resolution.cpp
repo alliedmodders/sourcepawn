@@ -83,7 +83,7 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
         }
 
         ti->set_type(cc_.types()->type_int());
-        ti->declared_tag = type->tagid();
+        ti->declared_type = type;
         ti->dim_.emplace_back(enum_type->array_size());
 
         if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
@@ -775,7 +775,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         if (auto enum_type = this_type_->asEnumStruct()) {
             typeinfo.set_type(outer_sc.cc().types()->type_int());
             typeinfo.ident = iREFARRAY;
-            typeinfo.declared_tag = this_type_->tagid();
+            typeinfo.declared_type = this_type_;
             typeinfo.dim_.emplace_back(enum_type->array_size());
         } else {
             typeinfo.set_type(this_type_);
