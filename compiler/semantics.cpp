@@ -1326,7 +1326,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
         // New-style "closure".
         val.ident = iEXPRESSION;
-        val.set_type(types_->find(fe->tag));
+        val.set_type(fe->type);
 
         // Mark as being indirectly invoked. Direct invocations go through
         // BindCallTarget.

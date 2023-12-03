@@ -34,11 +34,11 @@ class SemaContext;
 struct funcenum_t : public PoolObject
 {
     funcenum_t()
-     : tag(0),
+     : type(nullptr),
        name(),
        anonymous(false)
     {}
-    int tag;
+    Type* type;
     Atom* name;
     PoolArray<functag_t*> entries;
     bool anonymous;
