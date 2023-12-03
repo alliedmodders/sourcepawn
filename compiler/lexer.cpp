@@ -298,9 +298,9 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
     tok->id = tRATIONAL;
 }
 
-int Lexer::preproc_expr(cell* val, int* tag) {
+int Lexer::preproc_expr(cell* val, Type** type) {
     ke::SaveAndSet<bool> forbid_const(&cc_.in_preprocessor(), true);
-    return Parser::PreprocExpr(val, tag); /* get value (or 0 on error) */
+    return Parser::PreprocExpr(val, type); /* get value (or 0 on error) */
 }
 
 enum {

@@ -396,7 +396,7 @@ class Lexer
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
     void lexpop();
-    int preproc_expr(cell* val, int* tag);
+    int preproc_expr(cell* val, Type** type);
     void substallpatterns(unsigned char* line, int buffersize);
     bool substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                       const char* substitution, int& patternLen, int& substLen);

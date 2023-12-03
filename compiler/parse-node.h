@@ -606,7 +606,7 @@ class Expr : public ParseNode
 
     // Evaluate as a constant. Returns false if non-const. This is a wrapper
     // around FoldToConstant().
-    bool EvalConst(cell* value, int* tag);
+    bool EvalConst(cell* value, Type** type);
 
     // Return whether or not the expression is idempotent (eg has side effects).
     bool HasSideEffects();
