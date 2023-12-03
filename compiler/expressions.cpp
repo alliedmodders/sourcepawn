@@ -312,7 +312,7 @@ matchobjecttags(Type* formal, Type* actual, int flags)
 
     auto map = actual->asMethodmap();
     for (; map; map = map->parent()) {
-        if (map->tag() == formaltag)
+        if (map->type()->tagid() == formaltag)
             return TRUE;
     }
 

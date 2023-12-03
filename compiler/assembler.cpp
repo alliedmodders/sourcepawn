@@ -548,10 +548,10 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     VarDecl* child = fun->return_array() ? fun->return_array()->var : nullptr;
     if (child && child->type_info().numdim()) {
         encode_ret_array_into(bytes, child->type_info());
-    } else if (fun->tag() == types_->tag_void()) {
+    } else if (fun->return_type()->isVoid()) {
         bytes.push_back(cb::kVoid);
     } else {
-        encode_tag_into(bytes, fun->tag());
+        encode_tag_into(bytes, fun->return_type()->tagid());
     }
 
     for (const auto& arg : fun->args()) {

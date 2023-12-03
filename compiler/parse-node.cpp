@@ -56,10 +56,6 @@ void VarDeclBase::BindAddress(cell addr) {
     addr_.bind(addr);
 }
 
-int VarDeclBase::tag() const {
-    return type_.type->tagid();
-}
-
 void
 ParseNode::error(const token_pos_t& pos, int number)
 {
@@ -168,8 +164,7 @@ bool FunctionDecl::IsVariadic() {
 }
 
 bool FunctionDecl::MustReturnValue() const {
-    auto types = CompileContext::get().types();
-    return retvalue_used_ || (explicit_return_type_ && tag() != types->tag_void());
+    return retvalue_used_ || (explicit_return_type_ && !return_type()->isVoid());
 }
 
 void FunctionDecl::AddReferenceTo(FunctionDecl* other) {
@@ -217,10 +212,6 @@ Decl* MethodmapDecl::FindMember(Atom* name) const {
     return nullptr;
 }
 
-int MethodmapDecl::tag() const {
-    return type_->tagid();
-}
-
 Type* MethodmapPropertyDecl::property_type() const {
     auto types = CompileContext::get().types();
 
@@ -244,9 +235,9 @@ cell Decl::ConstVal() {
     return 0;
 }
 
-int Decl::tag() const {
+Type* Decl::type() const {
     assert(false);
-    return 0;
+    return nullptr;
 }
 
 int Decl::dim(int n) {
@@ -267,7 +258,7 @@ int Decl::semantic_tag() {
     if (auto var = as<VarDeclBase>())
         return var->type_info().enum_struct_tag();
     if (auto es = as<EnumStructDecl>())
-        return es->tag();
+        return es->type()->tagid();
     assert(false);
     return 0;
 }
@@ -327,10 +318,6 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
             return field;
     }
     return nullptr;
-}
-
-int FunctionDecl::tag() const {
-    return decl_.type.type->tagid();
 }
 
 } // namespace sp
