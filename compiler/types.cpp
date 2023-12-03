@@ -234,16 +234,14 @@ Type* typeinfo_t::enum_struct_type() const {
     return declared_type;
 }
 
-int typeinfo_t::semantic_tag() const {
-    if (!type->isInt())
-        return type->tagid();
-    if (!declared_type)
-        return 0;
-    return declared_type->tagid();
+Type* typeinfo_t::semantic_type() const {
+    if (!type->isInt() || !declared_type)
+        return type;
+    return declared_type;
 }
 
 bool typeinfo_t::is_implicit_dim(int i) const {
-    return semantic_tag() != type->tagid() && i == numdim() - 1;
+    return semantic_type() != type && i == numdim() - 1;
 }
 
 } // namespace sp

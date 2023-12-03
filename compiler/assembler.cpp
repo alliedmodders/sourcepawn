@@ -460,7 +460,7 @@ RttiBuilder::add_enumstruct(Type* type)
         if (field->type_info().numdim())
             dims[dimcount++] = field->type_info().dim(0);
 
-        variable_type_t type = {field->type_info().semantic_tag(), dims, dimcount, false};
+        variable_type_t type = {field->type_info().semantic_type()->tagid(), dims, dimcount, false};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
