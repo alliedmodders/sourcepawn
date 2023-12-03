@@ -302,7 +302,7 @@ class Decl : public Stmt
     bool is_const();
     int dim(int n);
     int dim_count();
-    virtual int tag() const;
+    virtual Type* type() const;
 
     Atom* name() const { return name_; }
 
@@ -353,10 +353,9 @@ class VarDeclBase : public Decl
     void set_is_read() { is_read_ = true; }
     bool is_written() const { return is_written_; }
     void set_is_written() { is_written_ = true; }
-    int tag() const override;
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
-    Type* type() const { return type_.type; }
+    Type* type() const override { return type_.type; }
 
     bool is_used() const { return is_read_ || is_written_; }
 
@@ -444,14 +443,14 @@ class EnumFieldDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumFieldDecl; }
 
     Expr* value() const { return value_; }
-    int tag() const override { return tag_; }
-    void set_tag(int tag) { tag_ = tag; }
+    Type* type() const override { return type_; }
+    void set_type(Type* type) { type_ = type; }
 
     cell const_val() const { return const_val_; }
     void set_const_val(cell const_val) { const_val_ = const_val; }
 
   private:
-    int tag_ = 0;
+    Type* type_ = nullptr;
     Expr* value_;
     cell const_val_ = 0;
 };
@@ -479,7 +478,7 @@ class EnumDecl : public Decl
     int increment() const { return increment_; }
     int multiplier() const { return multiplier_; }
     int array_size() const { return array_size_; }
-    int tag() const override { return tag_; }
+    Type* type() const override { return type_; }
 
     MethodmapDecl* mm() const { return mm_; }
     void set_mm(MethodmapDecl* mm) { mm_ = mm; }
@@ -491,7 +490,7 @@ class EnumDecl : public Decl
     int increment_;
     int multiplier_;
     int array_size_ = 0;
-    int tag_ = 0;
+    Type* type_ = nullptr;
     MethodmapDecl* mm_ = nullptr;
 };
 
@@ -1651,12 +1650,11 @@ class FunctionDecl : public Decl
     declinfo_t& decl() { return decl_; }
     const declinfo_t& decl() const { return decl_; }
 
-    int tag() const override;
+    Type* type() const override { return return_type(); }
     Type* return_type() const { return decl_.type.type; }
 
     const typeinfo_t& type_info() const { return decl_.type; }
     typeinfo_t& mutable_type_info() { return decl_.type; }
-    Type* type() const { return decl_.type.type; }
 
     bool is_analyzing() const { return is_analyzing_; }
     void set_is_analyzing(bool val) { is_analyzing_ = val; }
@@ -1809,7 +1807,7 @@ class LayoutFieldDecl : public Decl
 
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t& mutable_type_info() { return type_; }
-    Type* type() const { return type_info().type; }
+    Type* type() const override { return type_info().type; }
 
     cell_t offset() const { return offset_; }
     void set_offset(cell_t offset) { offset_ = offset; }
@@ -1836,12 +1834,12 @@ class EnumStructDecl : public LayoutDecl
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
     cell_t array_size() const { return array_size_; }
-    int tag() const override { return tag_; }
+    Type* type() const override { return type_; }
 
   private:
     PoolArray<FunctionDecl*> methods_;
     PoolArray<LayoutFieldDecl*> fields_;
-    int tag_ = 0;
+    Type* type_ = nullptr;
     cell_t array_size_ = 0;
 };
 
@@ -1863,7 +1861,7 @@ class MethodmapPropertyDecl : public Decl {
 
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t& mutable_type_info() { return type_; }
-    Type* type() const { return type_.type; }
+    Type* type() const override { return type_.type; }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
     LayoutDecl* parent() const {
@@ -1901,8 +1899,7 @@ class MethodmapDecl : public LayoutDecl
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
-    int tag() const override;
-    Type* type() const { return type_; }
+    Type* type() const override { return type_; }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
 

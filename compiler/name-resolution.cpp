@@ -166,19 +166,18 @@ BlockStmt::Bind(SemaContext& sc)
 bool EnumDecl::EnterNames(SemaContext& sc) {
     AutoErrorPos error_pos(pos_);
 
-    int tag = 0;
+    auto types = sc.cc().types();
+
     if (label_) {
-        auto type = sc.cc().types()->find(label_);
-        if (!type) {
-            tag = sc.cc().types()->defineEnumTag(label_->chars())->tagid();
-        } else if (type->isInt()) {
+        type_ = types->find(label_);
+        if (!type_) {
+            type_ = types->defineEnumTag(label_->chars());
+        } else if (type_->isInt()) {
             // No implicit-int allowed.
             report(pos_, 169);
             label_ = nullptr;
-        } else if (type->kind() != TypeKind::Methodmap && type->kind() != TypeKind::Enum) {
-            report(pos_, 432) << label_ << type->kindName();
-        } else {
-            tag = type->tagid();
+        } else if (type_->kind() != TypeKind::Methodmap && type_->kind() != TypeKind::Enum) {
+            report(pos_, 432) << label_ << type_->kindName();
         }
     }
 
@@ -186,19 +185,20 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         if (label_)
             error(pos_, 168);
 
-        if (auto type = sc.cc().types()->find(name_)) {
+        if (auto type = types->find(name_)) {
             if (type->kind() != TypeKind::Methodmap && type->kind() != TypeKind::Enum)
                 report(pos_, 432) << name_ << type->kindName();
-            tag = type->tagid();
+            type_ = type;
         } else {
-            tag = sc.cc().types()->defineEnumTag(name_->chars())->tagid();
+            type_ = types->defineEnumTag(name_->chars());
         }
     } else {
         // The name is automatically the label.
         name_ = label_;
     }
 
-    tag_ = tag;
+    if (!type_)
+        type_ = types->type_int();
 
     if (name_) {
         bool is_methodmap = false;
@@ -220,12 +220,12 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
             int field_tag;
             if (field->value()->EvalConst(&value, &field_tag))
-                matchtag(tag, field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+                matchtag(type_->tagid(), field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
             else
                 error(field->pos(), 80);
         }
 
-        field->set_tag(tag);
+        field->set_type(type_);
         field->set_const_val(value);
 
         if (!CheckNameRedefinition(sc, field->name(), field->pos(), vclass_))
@@ -1017,7 +1017,7 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
 bool EnumStructDecl::EnterNames(SemaContext& sc) {
     AutoCountErrors errors;
 
-    tag_ = sc.cc().types()->defineEnumStruct(name_, this)->tagid();
+    type_ = sc.cc().types()->defineEnumStruct(name_, this);
 
     AutoErrorPos error_pos(pos_);
 
@@ -1036,7 +1036,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         // Pawn is inherently forward-pass only.
         //
         // :TODO: this will not be true when we move to recursive binding.
-        if (field->type_info().semantic_tag() == tag_) {
+        if (field->type_info().semantic_tag() == type_->tagid()) {
             report(field->pos(), 87) << name_;
             continue;
         }
@@ -1098,7 +1098,7 @@ bool EnumStructDecl::Bind(SemaContext& sc) {
             continue;
 
         fun->set_name(inner_name);
-        fun->set_this_tag(tag_);
+        fun->set_this_tag(type_->tagid());
         fun->Bind(sc);
     }
     return errors.ok();

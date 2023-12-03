@@ -59,7 +59,7 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     FunctionDecl* fun = sym->as<FunctionDecl>();
 
     functag_t* ft = new functag_t;
-    ft->ret_tag = sym->tag();
+    ft->ret_tag = sym->type()->tagid();
 
     std::vector<funcarg_t> args;
     for (auto arg : fun->canonical()->args()) {

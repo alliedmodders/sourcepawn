@@ -102,7 +102,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
 
     /* address tag:name codestart codeend ident vclass [tag:dim ...] */
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   *addr, decl->tag(), symname, pc,
+                                   *addr, decl->type()->tagid(), symname, pc,
                                    asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
     if (decl->ident() == iARRAY || decl->ident() == iREFARRAY) {
         string += " [ ";
@@ -276,7 +276,7 @@ CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node)
 }
 
 void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
-    if (cc_.types()->find(decl->tag())->kind() == TypeKind::Pstruct) {
+    if (decl->type()->isPstruct()) {
         EmitPstruct(decl);
     } else {
         if (decl->ident() != iCONSTEXPR) {
@@ -439,7 +439,7 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
     if (!decl->init())
         return;
 
-    auto type = cc_.types()->find(decl->tag());
+    auto type = decl->type();
     auto ps = type->asPstruct();
 
     std::vector<cell> values;
@@ -1359,9 +1359,8 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
         // A much simpler copy can be emitted.
         __ load_hidden_arg(fun_, sub_decl, true);
 
-        auto types = cc_.types();
         cell size = sub_decl->dim(0); // :todo: must be val
-        if (sub_decl->tag() == types->tag_string())
+        if (sub_decl->type()->isChar())
             size = char_array_cells(size);
 
         __ emit(OP_MOVS, size * sizeof(cell));
