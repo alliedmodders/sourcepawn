@@ -83,8 +83,4 @@ inline bool value::canRematerialize() const {
     }
 }
 
-inline int value::tag() const {
-    return type_->tagid();
-}
-
 } // namespace sp

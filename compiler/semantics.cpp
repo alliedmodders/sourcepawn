@@ -2208,7 +2208,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 val = &param->val();
             }
             if (!checktag_string(arg->type(), val))
-                checktag(arg->type()->tagid(), val->tag());
+                checktag(arg->type(), val->type());
             break;
         }
         case iREFERENCE:
@@ -2794,7 +2794,7 @@ bool Semantics::CheckExitStmt(ExitStmt* stmt) {
         case iARRAYCHAR:
         case iARRAYCELL: {
             AutoErrorPos aep(expr->pos());
-            matchtag(0, expr->val().tag(), MATCHTAG_COERCE);
+            matchtag(types_->type_int(), expr->val().type(), MATCHTAG_COERCE);
             break;
         }
         default:
