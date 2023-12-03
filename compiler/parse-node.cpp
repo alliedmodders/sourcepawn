@@ -186,7 +186,7 @@ auto FunctionDecl::cg() -> CGInfo* {
 }
 
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
-  : TaggedValueExpr(pos, cc.types()->tag_float(), value)
+  : TaggedValueExpr(pos, cc.types()->type_float(), value)
 {
 }
 
