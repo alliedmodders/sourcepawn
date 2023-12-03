@@ -1,0 +1,1 @@
+(4) : error 047: array sizes do not match, or destination array is too small
