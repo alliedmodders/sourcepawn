@@ -57,7 +57,6 @@ struct value {
     Decl* sym;
     Type* type_;
 
-    int tag() const;
     Type* type() const { return type_; }
     void set_type(Type* type) { type_ = type; }
 
