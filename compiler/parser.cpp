@@ -11,6 +11,7 @@
 //  including commercial applications, and to alter it and redistribute it
 //  freely, subject to the following restrictions:
 //
+//  This software is provided "as-is", without any express or implied warranty.
 //  1.  The origin of this software must not be misrepresented; you must not
 //      claim that you wrote the original software. If you use this software in
 //      a product, an acknowledgment in the product documentation would be
@@ -598,8 +599,7 @@ Parser::parse_const(int vclass)
                 break;
             }
             case tLABEL:
-                rt = TypenameInfo{lexer_->current_token()->atom};
-                rt.set_is_label();
+                rt = TypenameInfo(lexer_->current_token()->atom, true);
                 break;
             case tSYMBOL: {
                 auto tok = *lexer_->current_token();
@@ -611,7 +611,7 @@ Parser::parse_const(int vclass)
                     // Otherwise, we got "const X ..." so the tag is int. Give the
                     // symbol back to the lexer so we get it as the name.
                     lexer_->lexpush();
-                    rt = TypenameInfo{0};
+                    rt = TypenameInfo{types_->type_int()};
                 }
                 break;
             }
@@ -864,7 +864,7 @@ Parser::hier2()
 
             TypenameInfo rt;
             if (!parse_new_typename(nullptr, &rt))
-                rt = TypenameInfo{0};
+                rt = TypenameInfo{types_->type_int()};
 
             if (!lexer_->need('['))
                 return nullptr;
@@ -1118,7 +1118,7 @@ Parser::parse_view_as()
     TypenameInfo ti;
     {
         if (!parse_new_typename(nullptr, &ti))
-            ti = TypenameInfo{0};
+            ti = TypenameInfo{types_->type_int()};
     }
     lexer_->need('>');
 
@@ -2263,7 +2263,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         type->is_const = true;
     }
 
-    TypenameInfo ti = TypenameInfo(0);
+    TypenameInfo ti = TypenameInfo(types_->type_int());
 
     int numtags = 0;
     if (flags & DECLFLAG_ARGUMENT) {
@@ -2570,46 +2570,46 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
 
     switch (tok->id) {
         case tINT:
-            *out = TypenameInfo{0};
+            *out = TypenameInfo{types_->type_int()};
             return true;
         case tCHAR:
-            *out = TypenameInfo{types_->tag_string()};
+            *out = TypenameInfo{types_->type_char()};
             return true;
         case tVOID:
-            *out = TypenameInfo{types_->tag_void()};
+            *out = TypenameInfo{types_->type_void()};
             return true;
         case tOBJECT:
-            *out = TypenameInfo{types_->tag_object()};
+            *out = TypenameInfo{types_->type_object()};
             return true;
         case tLABEL:
         case tSYMBOL:
             if (tok->id == tLABEL)
                 report(120);
             if (tok->atom->str() == "float") {
-                *out = TypenameInfo{types_->tag_float()};
+                *out = TypenameInfo{types_->type_float()};
                 return true;
             }
             if (tok->atom->str() == "bool") {
-                *out = TypenameInfo{types_->tag_bool()};
+                *out = TypenameInfo{types_->type_bool()};
                 return true;
             }
             if (tok->atom->str() == "Float") {
                 report(98) << "Float" << "float";
-                *out = TypenameInfo{types_->tag_float()};
+                *out = TypenameInfo{types_->type_float()};
                 return true;
             }
             if (tok->atom->str() == "String") {
                 report(98) << "String" << "char";
-                *out = TypenameInfo{types_->tag_string()};
+                *out = TypenameInfo{types_->type_string()};
                 return true;
             }
             if (tok->atom->str() == "_") {
                 report(98) << "_" << "int";
-                *out = TypenameInfo{0};
+                *out = TypenameInfo{types_->type_int()};
                 return true;
             }
             if (tok->atom->str() == "any") {
-                *out = TypenameInfo(types_->tag_any());
+                *out = TypenameInfo(types_->type_any());
                 return true;
             }
             *out = TypenameInfo(tok->atom, tok->id == tLABEL);

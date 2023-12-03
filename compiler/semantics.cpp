@@ -1245,8 +1245,8 @@ TernaryExpr::ProcessDiscardUses(SemaContext& sc)
 bool Semantics::CheckCastExpr(CastExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
-    const auto& type = expr->type();
-    if (type.tag() == types_->tag_void()) {
+    const auto& atype = expr->type();
+    if (atype->isVoid()) {
         report(expr, 144);
         return false;
     }
@@ -1260,7 +1260,6 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     expr->set_lvalue(expr->expr()->lvalue());
 
     Type* ltype = out_val.type();
-    Type* atype = types_->find(type.tag());
     if (ltype->isObject() || atype->isObject()) {
         matchtag(atype, out_val.type(), MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
@@ -1273,7 +1272,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     } else if (atype->isEnumStruct()) {
         report(expr, 95) << atype->name();
     }
-    out_val.set_type(types_->find(type.tag()));
+    out_val.set_type(atype);
     return true;
 }
 
@@ -2377,9 +2376,9 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     na->set_analysis_result(false);
 
     auto& val = na->val();
-    auto& type = na->type();
+    auto type = na->type();
     val.ident = iREFARRAY;
-    val.set_type(types_->find(type.tag()));
+    val.set_type(type);
     for (auto& expr : na->exprs()) {
         if (!CheckRvalue(expr))
             return false;

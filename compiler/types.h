@@ -22,6 +22,7 @@
 
 #include <memory>
 
+#include <amtl/am-bits.h>
 #include <amtl/am-enum.h>
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
@@ -86,29 +87,42 @@ class PstructDecl;
 class Type;
 
 struct TypenameInfo {
+    static constexpr uintptr_t kAtomFlag = 0x1;
+    static constexpr uintptr_t kLabelFlag = 0x2;
+
     TypenameInfo() {}
-    explicit TypenameInfo(int tag) : resolved_tag(tag) {}
-    explicit TypenameInfo(Atom* type_atom) : type_atom(type_atom) {}
-    TypenameInfo(Atom* type_atom, bool is_label) : type_atom(type_atom) {
+    explicit TypenameInfo(Type* type) {
+        impl.type = type;
+    }
+    explicit TypenameInfo(Atom* type_atom) {
+        impl.atom = ke::SetPointerBits(type_atom, kAtomFlag);
+    }
+    TypenameInfo(Atom* type_atom, bool is_label) {
+        impl.atom = ke::SetPointerBits(type_atom, kAtomFlag);
         if (is_label)
-            set_is_label();
+            impl.atom = ke::SetPointerBits(impl.atom, kLabelFlag);
     }
 
-    Atom* type_atom = nullptr;
-    int resolved_tag = -1;
+    union {
+        Atom* atom;
+        Type* type;
+        void* raw;
+    } impl;
 
-    int tag() const {
-        assert(has_tag());
-        return resolved_tag;
+    Type* type() const {
+        assert(has_type());
+        return ke::ClearPointerBits<2>(impl.type);
     }
-    bool has_tag() const { return resolved_tag >= 0; }
-
-    void set_is_label() {
-        assert(type_atom);
-        assert(resolved_tag == -1);
-        resolved_tag = -2;
+    bool has_type() const {
+        return ke::GetPointerBits<2>(impl.raw) == 0;
     }
-    bool is_label() const { return resolved_tag == -2; }
+    bool is_label() const {
+        return ke::GetPointerBits<2>(impl.raw) == (kAtomFlag | kLabelFlag);
+    }
+    Atom* type_atom() const {
+        assert((ke::GetPointerBits<2>(impl.raw) & kAtomFlag) == kAtomFlag);
+        return ke::ClearPointerBits<2>(impl.atom);
+    }
 };
 
 struct typeinfo_t {
@@ -150,12 +164,11 @@ struct typeinfo_t {
     const PoolList<int>& dim_vec() const { return dim_; }
 
     void set_type(const TypenameInfo& rt) {
-        if (rt.resolved_tag >= 0) {
+        if (rt.has_type()) {
             type_atom = nullptr;
-            set_tag(rt.tag());
+            set_type(rt.type());
         } else {
-            assert(rt.type_atom);
-            type_atom = rt.type_atom;
+            type_atom = rt.type_atom();
             is_label = rt.is_label();
             type = nullptr;
         }

@@ -866,7 +866,8 @@ class CastExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::CastExpr; }
 
     Expr* expr() const { return expr_; }
-    const auto& type() const { return type_; }
+    const auto& type_info() const { return type_; }
+    Type* type() const { return type_.type(); }
 
   private:
     int token_;
@@ -1227,10 +1228,10 @@ class NewArrayExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::NewArrayExpr; }
 
-    int tag() { return type_.tag(); }
-    TypenameInfo& type() { return type_; }
+    Type* type() const { return type_.type(); }
+    TypenameInfo& type_info() { return type_; }
     PoolArray<Expr*>& exprs() { return exprs_; }
-    const TypenameInfo& type() const { return type_; }
+    const TypenameInfo& type_info() const { return type_; }
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
     bool analyzed() const { return analyzed_.isValid(); }
