@@ -295,7 +295,7 @@ class Decl : public Stmt
 
     cell ConstVal();
 
-    int semantic_tag();
+    Type* semantic_type();
     IdentifierKind ident();
     IdentifierKind ident_impl();
     char vclass();

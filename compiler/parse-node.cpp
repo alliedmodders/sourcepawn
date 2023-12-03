@@ -254,13 +254,15 @@ int Decl::dim_count() {
     return (int)var->type_info().numdim();
 }
 
-int Decl::semantic_tag() {
-    if (auto var = as<VarDeclBase>())
-        return var->type_info().enum_struct_tag();
+Type* Decl::semantic_type() {
+    if (auto var = as<VarDeclBase>()) {
+        int tag = var->type_info().enum_struct_tag();
+        return CompileContext::get().types()->find(tag);
+    }
     if (auto es = as<EnumStructDecl>())
-        return es->type()->tagid();
+        return es->type();
     assert(false);
-    return 0;
+    return nullptr;
 }
 
 bool Decl::is_const() {
