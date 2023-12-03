@@ -49,9 +49,7 @@ funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous) {
     auto e = new funcenum_t;
     e->name = name;
     e->anonymous = anonymous;
-
-    auto type = cc.types()->defineFunction(name, e);
-    e->tag = type->tagid();
+    e->type = cc.types()->defineFunction(name, e);
     return e;
 }
 
