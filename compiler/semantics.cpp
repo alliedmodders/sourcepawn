@@ -952,7 +952,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
 static inline bool
 IsTypeBinaryConstantFoldable(Type* type)
 {
-    if (type->isEnum() || type->tagid() == 0)
+    if (type->isEnum() || type->isInt())
         return true;
     return false;
 }

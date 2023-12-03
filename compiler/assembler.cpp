@@ -320,7 +320,7 @@ void
 RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str)
 {
     int address = str.parse();
-    Type* type = cc_.types()->find(str.parse());
+    Type* type = cc_.types()->Get(str.parse());
     str.skipspaces();
     str.expect(':');
     const char* name_start = str.skipspaces();
@@ -340,7 +340,7 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     Type* last_type = nullptr;
     if (str.getc() == '[') {
         for (const char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
-            last_type = cc_.types()->find(str.parse());
+            last_type = cc_.types()->Get(str.parse());
             str.skipspaces();
             str.expect(':');
             dims.emplace_back(str.parse());

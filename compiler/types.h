@@ -225,8 +225,8 @@ class Type : public PoolObject
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName() const;
-    int tagid() const {
-        return value_;
+    int type_index() const {
+        return index_;
     }
 
     bool isFixed() const {
@@ -350,8 +350,8 @@ class Type : public PoolObject
         // This is separate from "kind_" because it persists across passes.
         fixed_ = true;
     }
-    void set_tag(int tagid) {
-        value_ = tagid;
+    void set_index(int index) {
+        index_ = index;
     }
 
     void setBuiltinType(BuiltinType type) {
@@ -363,7 +363,7 @@ class Type : public PoolObject
 
   private:
     Atom* name_;
-    cell value_;
+    int index_;
     bool fixed_;
 
     // These are reset in between the first and second passes, since the
@@ -383,7 +383,8 @@ class TypeManager
   public:
     explicit TypeManager(CompileContext& cc);
 
-    Type* find(int tag);
+    Type* Get(int index);
+
     Type* find(Atom* name);
 
     void init();
@@ -423,7 +424,7 @@ class TypeManager
   private:
     CompileContext& cc_;
     tr::unordered_map<Atom*, Type*> types_;
-    tr::unordered_map<int, Type*> tags_;
+    std::vector<Type*> by_index_;
     Type* type_int_ = nullptr;
     Type* type_object_ = nullptr;
     Type* type_null_ = nullptr;
