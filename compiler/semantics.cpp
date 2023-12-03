@@ -896,17 +896,14 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
 
             right_length = right_val.array_size();
             right_idx_type = right_val.sym->semantic_type();
-            if (right_idx_type->isInt() && left_val.sym->semantic_type()->isInt())
-                exact_match = false;
         } else {
             right_length = right_val.array_size();
-
-            if (right_val.type()->isChar()) {
-                if (left_val.sym->semantic_type()->isInt())
-                    exact_match = false;
-            }
             right_idx_type = types_->type_int();
         }
+
+        if (right_val.type()->isChar())
+            exact_match = false;
+
         if (left_val.array_dim_count() != 1) {
             report(expr, 47); // array dimensions must match
             return false;
