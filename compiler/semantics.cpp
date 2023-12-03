@@ -271,10 +271,10 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type()->isBool() && expr->tag() == 0 &&
+        if (!(arg->type()->isBool() && expr->type()->isInt() &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->type()->tagid(), expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type(), expr->type(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field->value->as<SymbolExpr>()) {
         auto var = expr->decl()->as<VarDecl>();
@@ -1549,7 +1549,7 @@ bool Semantics::CheckNullExpr(NullExpr* expr) {
 
 bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
     auto& val = expr->val();
-    val.set_type(types_->find(expr->tag()));
+    val.set_type(expr->type());
     val.set_constval(expr->value());
     return true;
 }

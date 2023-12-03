@@ -1158,9 +1158,9 @@ class NullExpr final : public Expr
 class TaggedValueExpr : public Expr
 {
   public:
-    TaggedValueExpr(const token_pos_t& pos, int tag, cell value)
+    TaggedValueExpr(const token_pos_t& pos, Type* type, cell value)
       : Expr(ExprKind::TaggedValueExpr, pos),
-        tag_(tag),
+        type_(type),
         value_(value)
     {}
 
@@ -1168,23 +1168,19 @@ class TaggedValueExpr : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::TaggedValueExpr; }
 
-    int tag() const {
-        return tag_;
-    }
-    cell value() const {
-        return value_;
-    }
+    Type* type() const { return type_; }
+    cell value() const { return value_; }
 
   protected:
-    int tag_;
+    Type* type_;
     cell value_;
 };
 
 class NumberExpr final : public TaggedValueExpr
 {
   public:
-    NumberExpr(const token_pos_t& pos, cell value)
-      : TaggedValueExpr(pos, 0, value)
+    NumberExpr(const token_pos_t& pos, Type* type, cell value)
+      : TaggedValueExpr(pos, type, value)
     {}
 };
 

@@ -1027,7 +1027,7 @@ Parser::constant()
             return new NullExpr(pos);
         case tCHAR_LITERAL:
         case tNUMBER:
-            return new NumberExpr(pos, lexer_->current_token()->value());
+            return new NumberExpr(pos, types_->type_int(), lexer_->current_token()->value());
         case tRATIONAL:
             return new FloatExpr(cc_, pos, lexer_->current_token()->value());
         case tSTRING: {
@@ -1035,11 +1035,11 @@ Parser::constant()
             return new StringExpr(pos, atom);
         }
         case tTRUE:
-            return new TaggedValueExpr(lexer_->pos(), types_->tag_bool(), 1);
+            return new TaggedValueExpr(lexer_->pos(), types_->type_bool(), 1);
         case tFALSE:
-            return new TaggedValueExpr(lexer_->pos(), types_->tag_bool(), 0);
+            return new TaggedValueExpr(lexer_->pos(), types_->type_bool(), 0);
         case tINVALID_FUNCTION:
-            return new TaggedValueExpr(lexer_->pos(), types_->tag_null(), 0);
+            return new TaggedValueExpr(lexer_->pos(), types_->type_null(), 0);
         case '{':
         {
             std::vector<Expr*> exprs;
@@ -1130,9 +1130,7 @@ Parser::parse_view_as()
     return new CastExpr(pos, tVIEW_AS, ti, expr);
 }
 
-Expr*
-Parser::struct_init()
-{
+Expr* Parser::struct_init() {
     StructExpr* init = new StructExpr(lexer_->pos());
 
     // '}' has already been lexed.
@@ -1155,7 +1153,7 @@ Parser::struct_init()
             }
             case tCHAR_LITERAL:
             case tNUMBER:
-                expr = new NumberExpr(pos, lexer_->current_token()->value());
+                expr = new NumberExpr(pos, types_->type_int(), lexer_->current_token()->value());
                 break;
             case tRATIONAL:
                 expr = new FloatExpr(cc_, pos, lexer_->current_token()->value());
