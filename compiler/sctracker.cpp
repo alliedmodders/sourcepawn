@@ -76,17 +76,4 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     return fe;
 }
 
-// Finds a functag that was created intrinsically.
-functag_t*
-functag_from_tag(int tag)
-{
-    Type* type = CompileContext::get().types()->find(tag);
-    funcenum_t* fe = type->asFunction();
-    if (!fe)
-        return nullptr;
-    if (fe->entries.empty())
-        return nullptr;
-    return fe->entries.back();
-}
-
 } // namespace sp

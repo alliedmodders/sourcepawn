@@ -372,36 +372,33 @@ static bool functag_compare(const functag_t* formal, const functag_t* actual) {
     return true;
 }
 
-static int
-matchfunctags(Type* formal, Type* actual)
-{
-    int formaltag = formal->tagid();
-    int actualtag = actual->tagid();
+static bool matchfunctags(Type* formal, Type* actual) {
+    if (formal->isCanonicalFunction() && actual->isFunction())
+        return true;
 
-    auto types = CompileContext::get().types();
-    if (formaltag == types->tag_function() && actual->isFunction())
-        return TRUE;
-
-    if (actualtag == types->tag_null())
-        return TRUE;
+    if (actual->isNull())
+        return true;
 
     if (!actual->isFunction())
-        return FALSE;
+        return false;
 
-    functag_t* actualfn = functag_from_tag(actualtag);
+    auto actual_fe = actual->asFunction();
+    if (!actual_fe || actual_fe->entries.empty())
+        return false;
+
+    functag_t* actualfn = actual_fe->entries.back();
     if (!actualfn)
-        return FALSE;
+        return false; 
 
     funcenum_t* e = formal->toFunction();
     if (!e)
-        return FALSE;
+        return false;
 
     for (const auto& formalfn : e->entries) {
         if (functag_compare(formalfn, actualfn))
-            return TRUE;
+            return true;
     }
-
-    return FALSE;
+    return false;
 }
 
 static bool HasTagOnInheritanceChain(Type* type, Type* other) {
