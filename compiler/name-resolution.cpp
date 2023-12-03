@@ -407,7 +407,7 @@ ConstDecl::Bind(SemaContext& sc)
     }
 
     AutoErrorPos aep(pos_);
-    matchtag(type_.tag(), tag, 0);
+    matchtag(type_.type->tagid(), tag, 0);
     return true;
 }
 
@@ -422,8 +422,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (type_.ident == iARRAY)
         ResolveArraySize(sc.sema(), this);
 
-    auto types = sc.cc().types();
-    if (type_.tag() == types->tag_void())
+    if (type()->isVoid())
         error(pos_, 144);
 
     if (vclass_ == sGLOBAL) {
@@ -440,7 +439,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if ((vclass_ == sSTATIC || vclass_ == sGLOBAL) && type_.ident == iREFARRAY)
         error(pos_, 165);
 
-    if (sc.cc().types()->find(type_.tag())->kind() == TypeKind::Pstruct) {
+    if (type()->isPstruct()) {
         type_.is_const = true;
     } else {
         IdentifierKind ident = type_.ident;
@@ -898,12 +897,12 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
                     // Populate to avoid errors.
                     val = 0;
-                    tag = typeinfo.tag();
+                    tag = typeinfo.type->tagid();
                 }
                 var->default_value()->tag = tag;
                 var->default_value()->val = ke::Some(val);
 
-                matchtag(var->type_info().tag(), tag, MATCHTAG_COERCE);
+                matchtag(var->type()->tagid(), tag, MATCHTAG_COERCE);
             }
         }
 
@@ -1289,7 +1288,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
 
     // Must have one extra argument taking the return type.
     if (fun->args().size() > 2) {
-        report(prop, 150) << pc_tagname(prop->type_info().tag());
+        report(prop, 150) << prop->type();
         return false;
     }
 
@@ -1299,15 +1298,15 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
 
     if (fun->args().size() <= 1) {
-        report(prop, 150) << pc_tagname(prop->type_info().tag());
+        report(prop, 150) << prop->type();
         return false;
     }
 
     auto decl = fun->args()[1];
     if (decl->type_info().ident != iVARIABLE || decl->init_rhs() ||
-        decl->type_info().tag() != prop->type_info().tag())
+        decl->type_info().type != prop->type())
     {
-        report(prop, 150) << pc_tagname(prop->type_info().tag());
+        report(prop, 150) << prop->type();
         return false;
     }
     return true;

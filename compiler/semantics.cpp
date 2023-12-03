@@ -164,7 +164,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (decl->ident() == iCONSTEXPR)
         return true;
 
-    if (types_->find(type.tag())->kind() == TypeKind::Pstruct)
+    if (decl->type()->isPstruct())
         return CheckPstructDecl(decl);
 
     if (!decl->as<ArgDecl>() && type.is_const && !decl->init() && !decl->is_public())
@@ -231,7 +231,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
             continue;
         auto arg = ps->fields()[i];
         if (arg->type_info().ident == iREFARRAY) {
-            assert(arg->type_info().tag() == types_->tag_string());
+            assert(arg->type()->isChar());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
             init->fields().push_back(new StructInitFieldExpr(arg->name(), expr, decl->pos()));
@@ -260,9 +260,8 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
             report(expr->pos(), 48);
             return false;
         }
-        if (arg->type_info().tag() != types_->tag_string())
-            report(expr->pos(), 213) << type_to_name(types_->tag_string())
-                                     << type_to_name(arg->type_info().tag());
+        if (!arg->type()->isChar())
+            report(expr->pos(), 213) << types_->type_char() << arg->type();
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         if (arg->type_info().ident != iVARIABLE) {
             report(expr->pos(), 23);
@@ -272,10 +271,10 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         // Proper tag checks were missing in the old parser, and unfortunately
         // adding them breaks older code. As a special case, we allow implicit
         // coercion of constants 0 or 1 to bool.
-        if (!(arg->type_info().tag() == types_->tag_bool() && expr->tag() == 0 &&
+        if (!(arg->type()->isBool() && expr->tag() == 0 &&
             (expr->value() == 0 || expr->value() == 1)))
         {
-            matchtag(arg->type_info().tag(), expr->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type()->tagid(), expr->tag(), MATCHTAG_COERCE);
         }
     } else if (auto expr = field->value->as<SymbolExpr>()) {
         auto var = expr->decl()->as<VarDecl>();
@@ -289,7 +288,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
                 report(expr->pos(), 405);
                 return false;
             }
-            matchtag(arg->type_info().tag(), var->tag(), MATCHTAG_COERCE);
+            matchtag(arg->type(), var->type(), MATCHTAG_COERCE);
         } else if (arg->type_info().ident == iREFARRAY) {
             if (var->ident() != iARRAY) {
                 report(expr->pos(), 405);
@@ -1813,7 +1812,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
         ti.dim_ = {field->type_info().dim(0)};
         ti.ident = iREFARRAY;
     } else {
-        ti.ident = (ti.tag() == types_->tag_string()) ? iARRAYCHAR : iARRAYCELL;
+        ti.ident = ti.type->isChar() ? iARRAYCHAR : iARRAYCELL;
         expr->set_lvalue(true);
     }
 
@@ -2101,7 +2100,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         Expr* expr = ps.argv[argidx];
         if (expr->as<DefaultArgExpr>() && arg->type_info().ident == iVARIABLE) {
             UserOperation userop;
-            if (find_userop(*sc_, 0, arg->default_value()->tag, arg->type_info().tag(), 2, nullptr,
+            if (find_userop(*sc_, 0, arg->default_value()->tag, arg->type()->tagid(), 2, nullptr,
                             &userop))
             {
                 ps.argv[argidx] = new CallUserOpExpr(userop, expr);
@@ -2192,11 +2191,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
                 NeedsHeapAlloc(param);
             }
-            if (!checktag_string(arg->type_info().tag(), val) &&
-                !checktag(arg->type_info().tag(), val->tag()))
-            {
-                report(param, 213) << type_to_name(arg->type_info().tag()) << val->type();
-            }
+            if (!checktag_string(arg->type(), val) && !checktag(arg->type(), val->type()))
+                report(param, 213) << arg->type() << val->type();
             break;
         case iVARIABLE:
         {
@@ -2218,8 +2214,8 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 param = new CallUserOpExpr(userop, param);
                 val = &param->val();
             }
-            if (!checktag_string(arg->type_info().tag(), val))
-                checktag(arg->type_info().tag(), val->tag());
+            if (!checktag_string(arg->type(), val))
+                checktag(arg->type()->tagid(), val->tag());
             break;
         }
         case iREFERENCE:
@@ -2233,7 +2229,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
-            checktag(arg->type_info().tag(), val->tag());
+            checktag(arg->type(), val->type());
             break;
         case iREFARRAY:
             if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
@@ -2261,7 +2257,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                         report(param, 47);
                         return false;
                     }
-                    if (arg->type_info().tag() == types_->tag_string()) {
+                    if (arg->type()->isChar()) {
                         if (arg->type_info().dim(0) < val->array_size()) {
                             report(param, 47); // array sizes must match
                             return false;
@@ -2297,11 +2293,11 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 }
             }
 
-            checktag(arg->type_info().tag(), val->tag());
-            if ((arg->type_info().tag() != types_->tag_string() && val->type()->isChar()) ||
-                (arg->type_info().tag() == types_->tag_string() && !val->type()->isChar()))
+            checktag(arg->type(), val->type());
+            if ((!arg->type()->isChar() && val->type()->isChar()) ||
+                (arg->type()->isChar() && !val->type()->isChar()))
             {
-                report(param, 178) << val->type() << type_to_name(arg->type_info().tag());
+                report(param, 178) << val->type() << arg->type();
                 return false;
             }
             break;
@@ -3060,7 +3056,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         CheckVoidDecl(&decl, FALSE);
 
         if (decl.opertok)
-            check_operatortag(decl.opertok, decl.type.tag(), decl.name->chars());
+            check_operatortag(decl.opertok, decl.type.type->tagid(), decl.name->chars());
     }
 
     if (info->is_public() || info->is_forward()) {
@@ -3098,7 +3094,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     info->set_always_returns(sc_->always_returns());
 
     if (!info->returns_value()) {
-        if (fwd && fwd->tag() == types_->tag_void() && !decl.type.tag() &&
+        if (fwd && fwd->return_type()->isVoid() && decl.type.type->isInt() &&
             !decl.type.is_new)
         {
             // We got something like:
@@ -3112,8 +3108,8 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     // Make sure that a public return type matches the forward (if any).
     if (fwd && info->is_public()) {
-        if (fwd->tag() != decl.type.tag())
-            report(info->pos(), 180) << type_to_name(fwd->tag()) << type_to_name(decl.type.tag());
+        if (fwd->return_type() != decl.type.type)
+            report(info->pos(), 180) << fwd->return_type() << decl.type.type;
     }
 
     // For globals, we test arguments in a later pass, since we need to know
@@ -3304,7 +3300,7 @@ void MethodmapPropertyDecl::ProcessUses(SemaContext& sc) {
 }
 
 void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {
-    if (type->tag() != types_->tag_void())
+    if (!type->type->isVoid())
         return;
 
     if (variable) {
@@ -3330,7 +3326,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
     if (result)
         result = a1->type_info().is_const == a2->type_info().is_const; /* "const" flag */
     if (result)
-        result = a1->type_info().tag() == a2->type_info().tag();
+        result = a1->type() == a2->type();
     if (result)
         result = a1->type_info().dim_ == a2->type_info().dim_; /* array dimensions & index tags */
     if (result)
@@ -3375,7 +3371,7 @@ IsLegacyEnumTag(SymbolScope* scope, int tag)
 
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
     auto def = new DefaultArg();
-    def->tag = decl->type_info().tag();
+    def->tag = decl->type()->tagid();
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         Decl* sym = expr->decl();

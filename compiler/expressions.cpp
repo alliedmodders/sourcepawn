@@ -335,18 +335,13 @@ matchreturntag(const functag_t* formal, const functag_t* actual)
     return FALSE;
 }
 
-static bool
-IsValidImplicitArrayCast(int formal_tag, int actual_tag)
-{
+static bool IsValidImplicitArrayCast(Type* formal, Type* actual) {
     // Dumb check for now. This should really do a deep type validation though.
     // Fix this when we overhaul types in 1.12.
-    auto types = CompileContext::get().types();
-    if ((formal_tag == types->tag_any() && actual_tag != types->tag_string()) ||
-        (actual_tag == types->tag_any() && formal_tag != types->tag_string()))
-    {
+    if ((formal->isAny() && !actual->isChar()) || (actual->isAny() && !formal->isChar())) {
         return true;
     }
-    return formal_tag == actual_tag;
+    return formal == actual;
 }
 
 static int
@@ -364,12 +359,12 @@ funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
     // Do not allow casting between different array types, eg:
     //   any[] <-> float[] is illegal.
     if (formal->type.numdim() &&
-        !IsValidImplicitArrayCast(formal->type.tag(), actual->type.tag()))
+        !IsValidImplicitArrayCast(formal->type.type, actual->type.type))
     {
         return FALSE;
     }
 
-    if (!matchtag(formal->type.tag(), actual->type.tag(), MATCHTAG_SILENT | MATCHTAG_FUNCARG))
+    if (!matchtag(formal->type.type, actual->type.type, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return FALSE;
     return TRUE;
 }
