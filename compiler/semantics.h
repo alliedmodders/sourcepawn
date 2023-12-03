@@ -310,7 +310,7 @@ void ReportFunctionReturnError(FunctionDecl* decl);
 bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
-int check_operatortag(int opertok, int resulttag, const char* opername);
+bool check_operatortag(int opertok, Type* result_type, const char* opername);
 int argcompare(ArgDecl* a1, ArgDecl* a2);
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl);
 bool IsLegacyEnumTag(SymbolScope* scope, int tag);
