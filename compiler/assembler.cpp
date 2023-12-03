@@ -117,7 +117,7 @@ typedef SmxListSection<sp_fdbg_line_t> SmxDebugLineSection;
 typedef SmxListSection<sp_fdbg_file_t> SmxDebugFileSection;
 
 struct variable_type_t {
-    int tag;
+    Type* type;
     const int* dims;
     int dimcount;
     bool is_const;
@@ -141,7 +141,7 @@ class RttiBuilder
     uint32_t encode_signature(FunctionDecl* decl);
     void encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
-    void encode_tag_into(std::vector<uint8_t>& bytes, int tag);
+    void encode_type_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_ret_array_into(std::vector<uint8_t>& bytes, const typeinfo_t& type);
     void encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
     void encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t& info);
@@ -154,7 +154,7 @@ class RttiBuilder
     void add_debug_line(DebugString& str);
     void build_debuginfo();
 
-    uint8_t TagToRttiBytecode(int tag);
+    uint8_t TypeToRttiBytecode(Type* type);
 
   private:
     CompileContext& cc_;
@@ -320,7 +320,7 @@ void
 RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str)
 {
     int address = str.parse();
-    int tag = str.parse();
+    Type* type = cc_.types()->find(str.parse());
     str.skipspaces();
     str.expect(':');
     const char* name_start = str.skipspaces();
@@ -337,10 +337,10 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     str.skipspaces();
 
     std::vector<int> dims;
-    int last_tag = 0;
+    Type* last_type = nullptr;
     if (str.getc() == '[') {
         for (const char* ptr = str.skipspaces(); *ptr != ']'; ptr = str.skipspaces()) {
-            last_tag = str.parse();
+            last_type = cc_.types()->find(str.parse());
             str.skipspaces();
             str.expect(':');
             dims.emplace_back(str.parse());
@@ -348,18 +348,18 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     }
 
     // Rewrite enum structs to look less like arrays.
-    if (types_->find(last_tag)->asEnumStruct()) {
+    if (last_type && last_type->asEnumStruct()) {
         dims.pop_back();
-        tag = last_tag;
+        type = last_type;
     }
 
     // Encode the type.
     uint32_t type_id;
     {
         auto dimptr = dims.empty() ? nullptr : &dims[0];
-        variable_type_t type = {tag, dimptr, (int)dims.size(), is_const};
+        variable_type_t vt = {type, dimptr, (int)dims.size(), is_const};
         std::vector<uint8_t> encoding;
-        encode_var_type(encoding, type);
+        encode_var_type(encoding, vt);
 
         type_id = to_typeid(encoding);
     }
@@ -460,7 +460,7 @@ RttiBuilder::add_enumstruct(Type* type)
         if (field->type_info().numdim())
             dims[dimcount++] = field->type_info().dim(0);
 
-        variable_type_t type = {field->type_info().semantic_type()->tagid(), dims, dimcount, false};
+        variable_type_t type = {field->type_info().semantic_type(), dims, dimcount, false};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -504,7 +504,7 @@ RttiBuilder::add_struct(Type* type)
         int dims[1] = {0};
         int dimcount = arg->type_info().ident == iREFARRAY ? 1 : 0;
 
-        variable_type_t type = {arg->type()->tagid(), dims, dimcount, !!arg->type_info().is_const};
+        variable_type_t type = {arg->type(), dims, dimcount, !!arg->type_info().is_const};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -551,15 +551,15 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     } else if (fun->return_type()->isVoid()) {
         bytes.push_back(cb::kVoid);
     } else {
-        encode_tag_into(bytes, fun->return_type()->tagid());
+        encode_type_into(bytes, fun->return_type());
     }
 
     for (const auto& arg : fun->args()) {
-        int tag = arg->type()->tagid();
+        Type* type = arg->type();
         int numdim = arg->type_info().numdim();
         if (arg->type_info().numdim() && arg->type_info().enum_struct_type()) {
             if (Type* last_type = arg->type_info().enum_struct_type()) {
-                tag = last_type->tagid();
+                type = last_type;
                 numdim--;
             }
         }
@@ -572,7 +572,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
             dims.emplace_back(arg->type_info().dim(i));
 
         auto dim = dims.empty() ? nullptr : &dims[0];
-        variable_type_t info = {tag, dim, numdim, arg->type_info().is_const};
+        variable_type_t info = {type, dim, numdim, arg->type_info().is_const};
         encode_var_type(bytes, info);
     }
 
@@ -669,34 +669,29 @@ void RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, const typei
         bytes.push_back(cb::kFixedArray);
         CompactEncodeUint32(bytes, type.dim(i));
     }
-    encode_tag_into(bytes, type.type->tagid());
+    encode_type_into(bytes, type.type);
 }
 
-uint8_t
-RttiBuilder::TagToRttiBytecode(int tag)
-{
-    if (tag == types_->tag_bool())
+uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
+    if (type->isBool())
         return cb::kBool;
-    if (tag == types_->tag_any())
+    if (type->isAny())
         return cb::kAny;
-    if (tag == types_->tag_string())
+    if (type->isChar())
         return cb::kChar8;
-    if (tag == types_->tag_float())
+    if (type->isFloat())
         return cb::kFloat32;
-    if (tag == 0)
+    if (type->isInt())
         return cb::kInt32;
     return 0;
 }
 
-void
-RttiBuilder::encode_tag_into(std::vector<uint8_t>& bytes, int tag)
-{
-    if (uint8_t b = TagToRttiBytecode(tag)) {
+void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, Type* type) {
+    if (uint8_t b = TypeToRttiBytecode(type)) {
         bytes.push_back(b);
         return;
     }
 
-    Type* type = types_->find(tag);
     assert(!type->isObject());
 
     if (type->isPstruct()) {
@@ -744,7 +739,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
     if (ft->ret_type->isVoid())
         bytes.push_back(cb::kVoid);
     else
-        encode_tag_into(bytes, ft->ret_type->tagid());
+        encode_type_into(bytes, ft->ret_type);
 
     for (const auto& arg : ft->args) {
         if (arg.ident == iREFERENCE)
@@ -755,7 +750,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
             dims.emplace_back(arg.dim(i));
 
         auto dim = dims.empty() ? nullptr : &dims[0];
-        variable_type_t info = {arg.type->tagid(), dim, arg.numdim(), arg.is_const};
+        variable_type_t info = {arg.type, dim, arg.numdim(), arg.is_const};
         encode_var_type(bytes, info);
     }
 }
@@ -776,7 +771,7 @@ RttiBuilder::encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t&
     }
     if (info.is_const)
         bytes.push_back(cb::kConst);
-    encode_tag_into(bytes, info.tag);
+    encode_type_into(bytes, info.type);
 }
 
 typedef SmxListSection<sp_file_natives_t> SmxNativeSection;
