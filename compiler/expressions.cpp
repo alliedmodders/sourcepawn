@@ -257,68 +257,53 @@ bool matchtag_string(int ident, Type* type) {
     return type->isChar();
 }
 
-static int
-obj_typeerror(int id, int tag1, int tag2)
-{
-    const char* left = pc_tagname(tag1);
-    const char* right = pc_tagname(tag2);
-    if (!left || strcmp(left, "_") == 0)
-        left = "int";
-    if (!right || strcmp(right, "_") == 0)
-        right = "int";
-    report(id) << right << left;
-    return FALSE;
-}
-
-static int
-matchobjecttags(Type* formal, Type* actual, int flags)
-{
-    auto types = CompileContext::get().types();
-    int formaltag = formal->tagid();
-    int actualtag = actual->tagid();
-
+static bool matchobjecttags(Type* formal, Type* actual, int flags) {
     // objects never coerce to non-objects, YET.
     if (formal->isObject() && !(actual->isObject() || actual->isFunction())) {
         if (!(flags & MATCHTAG_SILENT))
-            obj_typeerror(132, formaltag, actualtag);
-        return FALSE;
+            report(132) << formal << actual;
+        return false;
     }
 
-    if (actualtag == types->tag_null()) {
+    if (actual->isNull()) {
         // All objects are nullable.
         if (formal->isFunction() || formal->isObject())
-            return TRUE;
+            return true;
 
         // Some methodmaps are nullable. The nullable property is inherited
         // automatically.
         auto map = formal->asMethodmap();
         if (map && map->nullable())
-            return TRUE;
+            return true;
 
         if (!(flags & MATCHTAG_SILENT))
-            report(148) << pc_tagname(formaltag);
-        return FALSE;
+            report(148) << formal;
+        return false;
     }
 
-    if (!formal->isObject() && actual->isObject())
-        return obj_typeerror(131, formaltag, actualtag);
+    if (!formal->isObject() && actual->isObject()) {
+        report(131) << formal << actual;
+        return false;
+    }
 
     // Every object coerces to "object".
-    if (formaltag == types->tag_object())
-        return TRUE;
+    if (formal->isObject())
+        return true;
 
-    if (flags & MATCHTAG_COERCE)
-        return obj_typeerror(134, formaltag, actualtag);
+    if (flags & MATCHTAG_COERCE) {
+        report(134) << formal << actual;
+        return false;
+    }
 
     auto map = actual->asMethodmap();
     for (; map; map = map->parent()) {
-        if (map->type()->tagid() == formaltag)
-            return TRUE;
+        if (map->type() == formal)
+            return true;
     }
 
     if (!(flags & MATCHTAG_SILENT))
-        obj_typeerror(133, formaltag, actualtag);
-    return FALSE;
+        report(133) << formal << actual;
+    return false;
 }
 
 static bool matchreturntag(const functag_t* formal, const functag_t* actual) {
