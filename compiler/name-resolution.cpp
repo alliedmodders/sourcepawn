@@ -770,17 +770,15 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         explicit_return_type_ = decl_.type.is_new;
 
     // Ensure |this| argument exists.
-    if (this_tag_) {
-        Type* type = outer_sc.cc().types()->find(*this_tag_);
-
+    if (this_type_) {
         typeinfo_t typeinfo = {};
-        if (auto enum_type = type->asEnumStruct()) {
+        if (auto enum_type = this_type_->asEnumStruct()) {
             typeinfo.set_type(outer_sc.cc().types()->type_int());
             typeinfo.ident = iREFARRAY;
-            typeinfo.declared_tag = *this_tag_;
+            typeinfo.declared_tag = this_type_->tagid();
             typeinfo.dim_.emplace_back(enum_type->array_size());
         } else {
-            typeinfo.set_type(outer_sc.cc().types()->find(*this_tag_));
+            typeinfo.set_type(this_type_);
             typeinfo.ident = iVARIABLE;
             typeinfo.is_const = true;
         }
@@ -830,7 +828,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         for (const auto& arg : args_)
             ok &= arg->Bind(sc);
 
-        if (this_tag_ && ok)
+        if (this_type_ && ok)
             markusage(args_[0], uREAD);
     }
 
@@ -1098,7 +1096,7 @@ bool EnumStructDecl::Bind(SemaContext& sc) {
             continue;
 
         fun->set_name(inner_name);
-        fun->set_this_tag(type_->tagid());
+        fun->set_this_type(type_);
         fun->Bind(sc);
     }
     return errors.ok();
@@ -1257,7 +1255,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
         }
 
         if (!method->is_static() && !method->is_ctor())
-            method->set_this_tag(type_->tagid());
+            method->set_this_type(type_);
 
         if (!method->Bind(sc))
             continue;
@@ -1276,7 +1274,7 @@ bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_tag(type_->tagid());
+    fun->set_this_type(type_);
 
     if (!fun->Bind(sc))
         return false;
@@ -1292,7 +1290,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_tag(type_->tagid());
+    fun->set_this_type(type_);
 
     if (!fun->Bind(sc))
         return false;
