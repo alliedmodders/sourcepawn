@@ -218,9 +218,9 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         AutoErrorPos error_pos(field->pos());
 
         if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
-            int field_tag;
-            if (field->value()->EvalConst(&value, &field_tag))
-                matchtag(type_->tagid(), field_tag, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            Type* field_type = nullptr;
+            if (field->value()->EvalConst(&value, &field_type))
+                matchtag(type_, field_type, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
             else
                 error(field->pos(), 80);
         }
@@ -400,14 +400,14 @@ ConstDecl::Bind(SemaContext& sc)
     if (!sc.sema()->CheckExpr(expr_))
         return false;
 
-    int tag;
-    if (!expr_->EvalConst(&value_, &tag)) {
+    Type* type;
+    if (!expr_->EvalConst(&value_, &type)) {
         report(expr_, 8);
         return false;
     }
 
     AutoErrorPos aep(pos_);
-    matchtag(type_.type->tagid(), tag, 0);
+    matchtag(type_.type, type, 0);
     return true;
 }
 
@@ -890,19 +890,19 @@ FunctionDecl::BindArgs(SemaContext& sc)
                 assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
                 var->set_default_value(new DefaultArg());
 
-                int tag;
                 cell val;
-                if (!init->EvalConst(&val, &tag)) {
+                Type* type;
+                if (!init->EvalConst(&val, &type)) {
                     error(var->pos(), 8);
 
                     // Populate to avoid errors.
                     val = 0;
-                    tag = typeinfo.type->tagid();
+                    type = typeinfo.type;
                 }
-                var->default_value()->tag = tag;
+                var->default_value()->tag = type->tagid();
                 var->default_value()->val = ke::Some(val);
 
-                matchtag(var->type()->tagid(), tag, MATCHTAG_COERCE);
+                matchtag(var->type(), type, MATCHTAG_COERCE);
             }
         }
 

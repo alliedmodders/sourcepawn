@@ -430,7 +430,7 @@ CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
 {
 }
 
-bool Expr::EvalConst(cell* value, int* tag) {
+bool Expr::EvalConst(cell* value, Type** type) {
     if (val_.ident != iCONSTEXPR) {
         if (!FoldToConstant())
             return false;
@@ -439,8 +439,8 @@ bool Expr::EvalConst(cell* value, int* tag) {
 
     if (value)
         *value = val_.constval();
-    if (tag)
-        *tag = val_.tag();
+    if (type)
+        *type = val_.type();
     return true;
 }
 
@@ -963,16 +963,14 @@ bool
 BinaryExpr::FoldToConstant()
 {
     cell left_val, right_val;
-    int left_tag, right_tag;
+    Type* left_type;
+    Type* right_type;
 
-    if (!left_->EvalConst(&left_val, &left_tag) || !right_->EvalConst(&right_val, &right_tag))
+    if (!left_->EvalConst(&left_val, &left_type) || !right_->EvalConst(&right_val, &right_type))
         return false;
     if (IsAssignOp(token_) || userop_.sym)
         return false;
 
-    auto types = CompileContext::get().types();
-    Type* left_type = types->find(left_tag);
-    Type* right_type = types->find(right_tag);
     if (!IsTypeBinaryConstantFoldable(left_type) || !IsTypeBinaryConstantFoldable(right_type))
         return false;
 
@@ -2329,9 +2327,9 @@ bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
         return false;
 
     // :TODO: insert coercion to bool.
-    int tag;
     cell value;
-    if (!expr->EvalConst(&value, &tag)) {
+    Type* type;
+    if (!expr->EvalConst(&value, &type)) {
         report(expr, 8);
         return false;
     }
@@ -2960,15 +2958,15 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
             if (!CheckRvalue(expr))
                 continue;
 
-            int tag;
             cell value;
-            if (!expr->EvalConst(&value, &tag)) {
+            Type* type;
+            if (!expr->EvalConst(&value, &type)) {
                 report(expr, 8);
                 continue;
             }
             if (tag_ok) {
                 AutoErrorPos aep(expr->pos());
-                matchtag(v.tag(), tag, MATCHTAG_COERCE);
+                matchtag(v.type(), type, MATCHTAG_COERCE);
             }
 
             if (!case_values.count(value))

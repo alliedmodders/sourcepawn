@@ -298,9 +298,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
     return nullptr;
 }
 
-bool
-Parser::PreprocExpr(cell* val, int* tag)
-{
+bool Parser::PreprocExpr(cell* val, Type** type) {
     auto& cc = CompileContext::get();
 
     Semantics sema(cc);
@@ -316,7 +314,7 @@ Parser::PreprocExpr(cell* val, int* tag)
 
     if (!expr->Bind(sc) || !sema.CheckExpr(expr))
         return false;
-    return expr->EvalConst(val, tag);
+    return expr->EvalConst(val, type);
 }
 
 Stmt*
