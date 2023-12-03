@@ -321,18 +321,16 @@ matchobjecttags(Type* formal, Type* actual, int flags)
     return FALSE;
 }
 
-static int
-matchreturntag(const functag_t* formal, const functag_t* actual)
-{
+static bool matchreturntag(const functag_t* formal, const functag_t* actual) {
     if (formal->ret_tag == actual->ret_tag)
-        return TRUE;
+        return true;
 
     auto types = CompileContext::get().types();
     if (formal->ret_tag == types->tag_void()) {
         if (actual->ret_tag == 0)
-            return TRUE;
+            return true;
     }
-    return FALSE;
+    return false;
 }
 
 static bool IsValidImplicitArrayCast(Type* formal, Type* actual) {
@@ -344,55 +342,50 @@ static bool IsValidImplicitArrayCast(Type* formal, Type* actual) {
     return formal == actual;
 }
 
-static int
-funcarg_compare(const funcarg_t* formal, const funcarg_t* actual)
-{
+static bool funcarg_compare(const typeinfo_t& formal, const typeinfo_t& actual) {
     // Check type.
-    if (actual->type.ident != formal->type.ident)
-        return FALSE;
+    if (actual.ident != formal.ident)
+        return false;
 
-    if (actual->type.ident == iREFARRAY || actual->type.ident == iARRAY) {
-        if (actual->type.dim_vec() != formal->type.dim_vec())
-            return FALSE;
+    if (actual.ident == iREFARRAY || actual.ident == iARRAY) {
+        if (actual.dim_vec() != formal.dim_vec())
+            return false;
     }
 
     // Do not allow casting between different array types, eg:
-    //   any[] <-> float[] is illegal.
-    if (formal->type.numdim() &&
-        !IsValidImplicitArrayCast(formal->type.type, actual->type.type))
+    //   any[] <. float[] is illegal.
+    if (formal.numdim() &&
+        !IsValidImplicitArrayCast(formal.type, actual.type))
     {
-        return FALSE;
+        return false;
     }
 
-    if (!matchtag(formal->type.type, actual->type.type, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
-        return FALSE;
-    return TRUE;
+    if (!matchtag(formal.type, actual.type, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
+        return false;
+    return true;
 }
 
-static int
-functag_compare(const functag_t* formal, const functag_t* actual)
-{
+static bool functag_compare(const functag_t* formal, const functag_t* actual) {
     // Check return types.
     if (!matchreturntag(formal, actual))
-        return FALSE;
+        return false;
 
     // Make sure there are no trailing arguments.
     if (actual->args.size() > formal->args.size())
-        return FALSE;
+        return false;
 
     // Check arguments.
     for (size_t i = 0; i < formal->args.size(); i++) {
-        const funcarg_t* formal_arg = &formal->args[i];
+        const typeinfo_t& formal_arg = formal->args[i];
 
         if (i >= actual->args.size())
-            return FALSE;
+            return false;
 
-        const funcarg_t* actual_arg = &actual->args[i];
+        const typeinfo_t& actual_arg = actual->args[i];
         if (!funcarg_compare(formal_arg, actual_arg))
-            return FALSE;
+            return false;
     }
-
-    return TRUE;
+    return true;
 }
 
 static int

@@ -327,7 +327,7 @@ TypedefInfo::Bind(SemaContext& sc)
     auto ft = new functag_t();
     ft->ret_tag = ret_type.type()->tagid();
 
-    std::vector<funcarg_t> ft_args;
+    std::vector<typeinfo_t> ft_args;
     for (auto& arg : args) {
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
@@ -335,15 +335,14 @@ TypedefInfo::Bind(SemaContext& sc)
         if (arg->type.ident == iARRAY)
             ResolveArraySize(sc.sema(), pos, &arg->type, sARGUMENT);
 
-        funcarg_t fa = {};
-        fa.type = arg->type;
-        if (fa.type.ident == iARRAY)
-            fa.type.ident = iREFARRAY;
-        if (fa.type.ident != iREFARRAY && fa.type.ident != iARRAY)
-            assert(!fa.type.numdim());
-        ft_args.emplace_back(fa);
+        typeinfo_t type = arg->type;
+        if (type.ident == iARRAY)
+            type.ident = iREFARRAY;
+        if (type.ident != iREFARRAY && type.ident != iARRAY)
+            assert(!type.numdim());
+        ft_args.emplace_back(type);
     }
-    new (&ft->args) PoolArray<funcarg_t>(ft_args);
+    new (&ft->args) PoolArray<typeinfo_t>(ft_args);
 
     return ft;
 }

@@ -739,7 +739,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
 {
     bytes.push_back(cb::kFunction);
     bytes.push_back((uint8_t)ft->args.size());
-    if (!ft->args.empty() && ft->args[ft->args.size() - 1].type.ident == iVARARGS)
+    if (!ft->args.empty() && ft->args[ft->args.size() - 1].ident == iVARARGS)
         bytes.push_back(cb::kVariadic);
     if (ft->ret_tag == types_->tag_void())
         bytes.push_back(cb::kVoid);
@@ -747,15 +747,15 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
         encode_tag_into(bytes, ft->ret_tag);
 
     for (const auto& arg : ft->args) {
-        if (arg.type.ident == iREFERENCE)
+        if (arg.ident == iREFERENCE)
             bytes.push_back(cb::kByRef);
 
         std::vector<int> dims;
-        for (int i = 0; i < arg.type.numdim(); i++)
-            dims.emplace_back(arg.type.dim(i));
+        for (int i = 0; i < arg.numdim(); i++)
+            dims.emplace_back(arg.dim(i));
 
         auto dim = dims.empty() ? nullptr : &dims[0];
-        variable_type_t info = {arg.type.type->tagid(), dim, arg.type.numdim(), arg.type.is_const};
+        variable_type_t info = {arg.type->tagid(), dim, arg.numdim(), arg.is_const};
         encode_var_type(bytes, info);
     }
 }
