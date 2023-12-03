@@ -1791,14 +1791,14 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     auto field = field_decl->as<LayoutFieldDecl>();
     assert(field);
 
-    int tag = field->type_info().semantic_tag();
+    Type* field_type = field->type_info().semantic_type();
 
     typeinfo_t ti{};
-    if (auto sem_type = types_->find(tag); sem_type->isEnumStruct()) {
+    if (field_type->isEnumStruct()) {
         val.set_type(types_->type_int());
-        ti.declared_type = sem_type;
+        ti.declared_type = field_type;
     } else {
-        val.set_type(sem_type);
+        val.set_type(field_type);
     }
     ti.set_type(val.type());
 
@@ -2276,7 +2276,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     }
                 }
                 auto sym = val->sym;
-                if (!matchtag(arg->type_info().semantic_tag(), val->tag(), MATCHTAG_SILENT)) {
+                if (!matchtag(arg->type_info().semantic_type(), val->type(), MATCHTAG_SILENT)) {
                     // We allow enumstruct -> any[].
                     if (!arg->type()->isAny() || !sym->semantic_type()->asEnumStruct())
                         report(param, 229) << sym->name();

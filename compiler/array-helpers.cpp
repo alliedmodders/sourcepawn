@@ -71,7 +71,7 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDeclBase* decl)
     vclass_(decl->vclass()),
     es_(nullptr)
 {
-    Type* type = types_->find(type_->semantic_tag());
+    Type* type = type_->semantic_type();
     if (type->isEnumStruct())
         es_ = type;
 }
@@ -426,7 +426,7 @@ CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init)
 bool
 FixedArrayValidator::Validate()
 {
-    Type* type = types_->find(type_.semantic_tag());
+    Type* type = type_.semantic_type();
     if (type->isEnumStruct())
         es_ = type;
 
@@ -829,13 +829,13 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
         return false;
     }
 
-    if (ctor->type()->tagid() != type.semantic_tag()) {
-        report(ctor->pos(), 164) << ctor->type() << type_to_name(type.semantic_tag());
+    if (ctor->type() != type.semantic_type()) {
+        report(ctor->pos(), 164) << ctor->type() << type.semantic_type();
         return false;
     }
 
     size_t expected_dims = type.numdim();
-    if (types_->find(type.semantic_tag())->isEnumStruct())
+    if (type.semantic_type()->isEnumStruct())
         expected_dims--;
     if (expected_dims != ctor->exprs().size()) {
         report(436) << (int)expected_dims << (int)ctor->exprs().size();
@@ -854,7 +854,7 @@ class ArrayEmitter final
         init_(init),
         pending_zeroes_(0)
     {
-        Type* t = CompileContext::get().types()->find(type.semantic_tag());
+        Type* t = type.semantic_type();
         if (t->asEnumStruct())
             es_ = t;
     }

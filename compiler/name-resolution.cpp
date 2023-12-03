@@ -859,7 +859,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
             break;
         }
 
-        Type* type = sc.cc().types()->find(typeinfo.semantic_tag());
+        Type* type = typeinfo.semantic_type();
         if (type->isEnumStruct()) {
             if (is_native_)
                 report(var->pos(), 135) << type->name();
@@ -1034,7 +1034,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         // Pawn is inherently forward-pass only.
         //
         // :TODO: this will not be true when we move to recursive binding.
-        if (field->type_info().semantic_tag() == type_->tagid()) {
+        if (field->type_info().semantic_type() == type_) {
             report(field->pos(), 87) << name_;
             continue;
         }

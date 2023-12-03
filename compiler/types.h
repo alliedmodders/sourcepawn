@@ -177,7 +177,7 @@ struct typeinfo_t {
     void set_type(Type* t) { type = t; }
 
     Type* enum_struct_type() const;
-    int semantic_tag() const;
+    Type* semantic_type() const;
     bool is_implicit_dim(int i) const;
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
