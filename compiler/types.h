@@ -175,7 +175,6 @@ struct typeinfo_t {
     }
 
     void set_type(Type* t) { type = t; }
-    bool has_tag() const { return !!type; }
 
     Type* enum_struct_type() const;
     int semantic_tag() const;
