@@ -112,13 +112,16 @@ class Runner(object):
                     self.includes_.append(include)
 
         self.skip_file_path_ = os.path.join(self.args_.corpus, 'corpus_skip.list')
-        if os.path.exists(self.skip_file_path_) and not self.args_.retry_bad:
+        if os.path.exists(self.skip_file_path_):
             with open(self.skip_file_path_, 'rt') as fp:
                 for line in fp.readlines():
                     self.skip_set_.add(line.strip())
 
-        self.files_ = [os.path.relpath(file, self.args_.corpus) for file in self.files_]
-        self.files_ = [file for file in self.files_ if file not in self.skip_set_]
+        if self.args_.retry_bad:
+            self.files_ = [file for file in self.skip_set_]
+        else:
+            self.files_ = [os.path.relpath(file, self.args_.corpus) for file in self.files_]
+            self.files_ = [file for file in self.files_ if file not in self.skip_set_]
 
     def run(self):
         progressbar.streams.wrap_stderr()
@@ -137,14 +140,9 @@ class Runner(object):
             print("Missing include {} used {} times.".format(include, encounters))
 
         # Re-sort the skip list.
-        if os.path.exists(self.skip_file_path_):
-            skip_set = set()
-            with open(self.skip_file_path_, 'rt') as fp:
-                for line in fp.readlines():
-                    skip_set.add(line.strip())
-
+        if self.skip_set_ and self.args_.commit:
             with open(self.skip_file_path_, 'wt') as fp:
-                for path in sorted(skip_set):
+                for path in sorted(self.skip_set_):
                     fp.write(path + "\n")
 
         return self.failed_
@@ -287,10 +285,11 @@ class Runner(object):
                 self.log_.write("rm \"{}\"".format(path) + "\n")
                 if self.args_.commit:
                     remove = True
+            elif self.args_.retry_bad:
+                self.skip_set_.discard(path)
 
         if remove:
-            with open(self.skip_file_path_, 'at') as fp:
-                fp.write(path + "\n")
+            self.skip_set_.add(path)
 
 def diagnose_error(path, output):
     print("Error compiling {}:".format(path))
