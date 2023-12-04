@@ -101,13 +101,8 @@ bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, Ty
 
     Type* type = types->find(atom);
     if (!type) {
-        if (!is_label) {
-            report(pos, 139) << atom;
-            return false;
-        }
-
-        *out_type = types->defineTag(atom);
-        return true;
+        report(pos, 139) << atom;
+        return false;
     }
 
     *out_type = type;
