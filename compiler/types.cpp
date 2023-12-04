@@ -40,7 +40,6 @@ using namespace ke;
 Type::Type(Atom* name, TypeKind kind)
  : name_(name),
    index_(-1),
-   fixed_(0),
    kind_(kind)
 {
 }
@@ -115,13 +114,6 @@ void TypeManager::RegisterType(Type* type) {
 
 Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
     Type* ptr = add(name, TypeKind::Builtin);
-    switch (type) {
-        case BuiltinType::Float:
-        case BuiltinType::Null:
-        case BuiltinType::Void:
-            ptr->setFixed();
-            break;
-    }
     ptr->setBuiltinType(type);
     return ptr;
 }
@@ -180,8 +172,6 @@ TypeManager::defineEnumTag(const char* name)
     }
 
     Type* type = add(atom, TypeKind::Enum);
-    if (isupper(*name))
-        type->setFixed();
     return type;
 }
 
@@ -194,8 +184,6 @@ Type* TypeManager::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
 Type*
 TypeManager::defineTag(Atom* name) {
     Type* type = add(name, TypeKind::Enum);
-    if (isupper(*name->chars()))
-        type->setFixed();
     return type;
 }
 
