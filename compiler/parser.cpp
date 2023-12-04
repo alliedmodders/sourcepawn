@@ -173,7 +173,7 @@ Parser::Parse()
         add_to_end.pop_front();
     }
 
-    while (!delayed_functions_.empty()) {
+    while (!delayed_functions_.empty() && !cc_.must_abort()) {
         auto fun = ke::PopFront(&delayed_functions_);
 
         auto tokens = fun->tokens();
@@ -1462,7 +1462,7 @@ Stmt* Parser::parse_compound() {
 
     /* repeat until compound statement is closed */
     std::vector<Stmt*> stmts;
-    while (lexer_->match('}') == 0 && !cc_.must_abort()) {
+    while (!lexer_->match('}') && !cc_.must_abort()) {
         if (!lexer_->freading()) {
             report(30) << block_pos.line; /* compound block not closed at end of file */
             break;
