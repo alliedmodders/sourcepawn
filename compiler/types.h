@@ -229,10 +229,6 @@ class Type : public PoolObject
         return index_;
     }
 
-    bool isFixed() const {
-        return fixed_;
-    }
-
     template <class T> T* as() {
         if (T::is_a(this))
             return reinterpret_cast<T*>(this);
@@ -268,7 +264,6 @@ class Type : public PoolObject
     }
 
     void setMethodmap(MethodmapDecl* map) {
-        setFixed();
         assert(kind_ == TypeKind::Methodmap || kind_ == TypeKind::Enum);
         kind_ = TypeKind::Methodmap;
         methodmap_ptr_ = map;
@@ -328,27 +323,19 @@ class Type : public PoolObject
 
   private:
     void setFunction(funcenum_t* func) {
-        setFixed();
         assert(kind_ == TypeKind::Function);
         funcenum_ptr_ = func;
     }
     void setObject() {
-        setFixed();
         assert(kind_ == TypeKind::Object);
     }
     void setEnumStruct(EnumStructDecl* decl) {
-        setFixed();
         assert(kind_ == TypeKind::EnumStruct);
         enumstruct_ptr_ = decl;
     }
     void setPstruct(PstructDecl* decl) {
-        setFixed();
         assert(kind_ == TypeKind::Pstruct);
         pstruct_ptr_ = decl;
-    }
-    void setFixed() {
-        // This is separate from "kind_" because it persists across passes.
-        fixed_ = true;
     }
     void set_index(int index) {
         index_ = index;
@@ -364,10 +351,6 @@ class Type : public PoolObject
   private:
     Atom* name_;
     int index_;
-    bool fixed_;
-
-    // These are reset in between the first and second passes, since the
-    // underlying structures are reparsed.
     TypeKind kind_;
     union {
         funcenum_t* funcenum_ptr_;
@@ -397,12 +380,6 @@ class TypeManager
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
     Type* defineTag(Atom* atom);
     Type* definePstruct(PstructDecl* decl);
-
-    template <typename T>
-    void forEachType(const T& callback) {
-        for (const auto& type : types_)
-            callback(type);
-    }
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
