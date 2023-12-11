@@ -892,7 +892,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         if (var->type_info().ident == iREFERENCE)
             var->set_is_read();
-        if (is_callback_ || is_stock_ || is_public_)
+        if (is_callback_ || is_public_)
             var->set_is_read();
 
         /* arguments of a public function may not have a default value */
