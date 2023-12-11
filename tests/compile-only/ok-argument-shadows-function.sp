@@ -5,6 +5,8 @@ int min(int a, int b) {
 }
 
 stock void test(float min, float max) {
+#pragma unused min
+#pragma unused max
 }
 
 public main() {
