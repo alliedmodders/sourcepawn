@@ -2604,6 +2604,19 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         return false;
     }
 
+    /* if a ternary expression is used, check it and its left/right nodes for return */
+    if (auto ternary = expr->as<TernaryExpr>()) { 
+        CheckTernaryExpr(ternary);
+        if (!CheckReturnNode(stmt, fun, ternary->second()))
+            return false;
+        return CheckReturnNode(stmt, fun, ternary->third());
+    }
+    
+    /* continue further with the current expresison */
+    return CheckReturnNode(stmt, fun, expr);
+}
+
+bool Semantics::CheckReturnNode(ReturnStmt* stmt, FunctionDecl* fun, Expr* expr) {
     const auto& v = expr->val();
     if (v.ident == iARRAY && !v.sym) {
         /* returning a literal string is not supported (it must be a variable) */

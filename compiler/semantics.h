@@ -182,6 +182,7 @@ class Semantics final
     bool CheckAssertStmt(AssertStmt* stmt);
     bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
     bool CheckReturnStmt(ReturnStmt* stmt);
+    bool CheckReturnNode(ReturnStmt* stmt, FunctionDecl* fun, Expr* expr) ;
     bool CheckArrayReturnStmt(ReturnStmt* stmt);
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
