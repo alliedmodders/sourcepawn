@@ -2606,7 +2606,6 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     /* if a ternary expression is used, check it and its left/right nodes for return */
     if (auto ternary = expr->as<TernaryExpr>()) { 
-        CheckTernaryExpr(ternary);
         if (!CheckReturnNode(stmt, fun, ternary->second()))
             return false;
         return CheckReturnNode(stmt, fun, ternary->third());
