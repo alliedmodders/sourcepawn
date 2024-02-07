@@ -1343,8 +1343,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         case iFUNCTN:
             // Not an l-value.
             break;
-        case iMETHODMAP:
-        case iENUMSTRUCT:
+        case iTYPENAME:
             if (!allow_types) {
                 report(expr, 174) << decl->name();
                 return false;
@@ -1590,9 +1589,9 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     }
 
     auto& val = expr->val();
-    if (base_val.ident == iMETHODMAP) {
+    if (base_val.ident == iTYPENAME) {
         auto map = MethodmapDecl::LookupMethodmap(base_val.sym);
-        auto member = map->FindMember(expr->name());
+        auto member = map ? map->FindMember(expr->name()) : nullptr;
         if (!member || !member->as<MethodmapMethodDecl>()) {
             report(expr, 444) << base_val.sym->name() << expr->name();
             return false;
@@ -1825,7 +1824,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
 
     auto base = expr->base();
     const auto& base_val = base->val();
-    if (base_val.ident != iENUMSTRUCT) {
+    if (base_val.ident != iTYPENAME) {
         report(expr, 108);
         return false;
     }
@@ -1875,11 +1874,11 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     val.set_constval(1);
     val.set_type(types_->type_int());
 
-    if (decl->ident() == iARRAY || decl->ident() == iREFARRAY || decl->ident() == iENUMSTRUCT) {
+    if (decl->ident() == iARRAY || decl->ident() == iREFARRAY || decl->ident() == iTYPENAME) {
         bool is_enum_struct = decl->semantic_type()->isEnumStruct();
         for (int level = 0; level < expr->array_levels(); level++) {
             // Forbid index operations on enum structs.
-            if (decl->ident() == iENUMSTRUCT || (level == decl->dim_count() - 1 && is_enum_struct)) {
+            if (decl->ident() == iTYPENAME || (level == decl->dim_count() - 1 && is_enum_struct)) {
                 report(expr, 111) << decl->name();
                 return false;
             }
@@ -1887,7 +1886,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 
         Type* enum_type = nullptr;
         if (expr->suffix_token() == tDBLCOLON) {
-            if (decl->ident() != iENUMSTRUCT) {
+            if (decl->ident() != iTYPENAME) {
                 report(expr, 112) << decl->name();
                 return false;
             }
@@ -1901,8 +1900,6 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         }
 
         if (enum_type) {
-            assert(enum_type->asEnumStruct());
-
             Decl* decl = FindEnumStructField(enum_type, expr->field());
             if (!decl) {
                 report(expr, 105) << enum_type->name() << expr->field();
@@ -2487,8 +2484,7 @@ bool Semantics::TestSymbol(Decl* sym, bool testconst) {
                 report(var, 203) << var->name(); /* symbol isn't used: ... */
             break;
         }
-        case iMETHODMAP:
-        case iENUMSTRUCT:
+        case iTYPENAME:
             // Ignore usage on methodmaps and enumstructs.
             break;
         default: {

@@ -55,8 +55,7 @@ enum IdentifierKind {
     iFUNCTN = 9,
     iVARARGS = 11,      /* function specified ... as argument(s) */
     iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
-    iMETHODMAP = 14,    /* symbol defining a methodmap */
-    iENUMSTRUCT = 15,   /* symbol defining an enumstruct */
+    iTYPENAME = 14,    /* symbol defining a type */
 };
 
 enum class BuiltinType {
