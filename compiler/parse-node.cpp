@@ -300,15 +300,14 @@ IdentifierKind Decl::ident_impl() {
         case StmtKind::MethodmapMethodDecl:
             return iFUNCTN;
         case StmtKind::EnumStructDecl:
-            return iENUMSTRUCT;
+        case StmtKind::MethodmapDecl:
+            return iTYPENAME;
         case StmtKind::EnumDecl: {
             auto es = as<EnumDecl>();
             if (es->mm())
-                return iMETHODMAP;
+                return iTYPENAME;
             return iCONSTEXPR;
         }
-        case StmtKind::MethodmapDecl:
-            return iMETHODMAP;
         default:
             assert(false);
             return iINVALID;
