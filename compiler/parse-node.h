@@ -295,7 +295,6 @@ class Decl : public Stmt
 
     cell ConstVal();
 
-    Type* semantic_type();
     IdentifierKind ident();
     IdentifierKind ident_impl();
     char vclass();
@@ -878,12 +877,9 @@ class CastExpr final : public Expr
 class SizeofExpr final : public Expr
 {
   public:
-    SizeofExpr(const token_pos_t& pos, Atom* ident, Atom* field, int suffix_token, int array_levels)
+    SizeofExpr(const token_pos_t& pos, Expr* child)
       : Expr(ExprKind::SizeofExpr, pos),
-        ident_(ident),
-        field_(field),
-        suffix_token_(suffix_token),
-        array_levels_(array_levels)
+        child_(child)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -891,18 +887,10 @@ class SizeofExpr final : public Expr
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SizeofExpr; }
 
-    Atom* ident() const { return ident_; }
-    Atom* field() const { return field_; }
-    int suffix_token() const { return suffix_token_; }
-    int array_levels() const { return array_levels_; }
-    Decl* decl() const { return decl_; }
+    Expr* child() const { return child_; }
 
   private:
-    Atom* ident_;
-    Atom* field_;
-    int suffix_token_;
-    int array_levels_;
-    Decl* decl_ = nullptr;
+    Expr* child_;
 };
 
 class SymbolExpr final : public Expr
@@ -1073,7 +1061,8 @@ class IndexExpr final : public Expr
 
     bool Bind(SemaContext& sc) override {
         bool ok = base_->Bind(sc);
-        ok &= expr_->Bind(sc);
+        if (expr_)
+            ok &= expr_->Bind(sc);
         return ok;
     }
     void ProcessUses(SemaContext& sc) override;

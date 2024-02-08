@@ -399,6 +399,14 @@ bool matchtag(Type* formal, Type* actual, int flags) {
         return false;
     }
 
+    if (formal->asEnumStruct() || actual->asEnumStruct()) {
+        if (formal != actual) {
+            report(134) << formal << actual;
+            return false;
+        }
+        return true;
+    }
+
     // int coerces to bool/any.
     if ((flags & MATCHTAG_COERCE) && formal->isInt() && actual->coercesFromInt())
         return true;

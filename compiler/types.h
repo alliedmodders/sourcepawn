@@ -55,7 +55,7 @@ enum IdentifierKind {
     iFUNCTN = 9,
     iVARARGS = 11,      /* function specified ... as argument(s) */
     iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
-    iTYPENAME = 14,    /* symbol defining a type */
+    iTYPENAME = 14,     /* symbol defining a type */
 };
 
 enum class BuiltinType {
@@ -128,7 +128,6 @@ struct typeinfo_t {
     typeinfo_t()
       : type_atom(nullptr),
         type(nullptr),
-        declared_type(nullptr),
         ident(iINVALID),
         is_const(false),
         is_new(false),
@@ -145,10 +144,6 @@ struct typeinfo_t {
     // Type information.
     Atom* type_atom;    // Parsed atom.
     Type* type;
-
-    // If non-null, this type was originally declared with this type, but was
-    // rewritten for desugaring.
-    Type* declared_type;
 
     IdentifierKind ident : 6;  // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;
@@ -175,9 +170,6 @@ struct typeinfo_t {
 
     void set_type(Type* t) { type = t; }
 
-    Type* enum_struct_type() const;
-    Type* semantic_type() const;
-    bool is_implicit_dim(int i) const;
     bool isCharArray() const;
     Expr* get_dim_expr(int i) {
         assert(i < numdim());

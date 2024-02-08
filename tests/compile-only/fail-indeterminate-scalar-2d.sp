@@ -4,5 +4,5 @@ int Array1[][] = { {1}, {2, 3}, {4, 5, 6} };
 
 public main()
 {
-  printnums(sizeof(Array1), sizeof(Array1[]));
+  printnums(sizeof(Array1), sizeof(Array1[0]));
 }

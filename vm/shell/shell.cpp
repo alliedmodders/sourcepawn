@@ -412,6 +412,9 @@ int main(int argc, char** argv)
   if (getenv("VALIDATE_DEBUG_SECTIONS") || validate_debug_sections.value())
     sEnv->EnableDebugBreak();
 
+  if (getenv("SPEW_INTERP_OPS"))
+    sEnv->set_spew_interp_ops(true);
+
   ShellDebugListener debug;
   sEnv->SetDebugger(&debug);
 

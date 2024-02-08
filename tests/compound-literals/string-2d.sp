@@ -8,9 +8,9 @@ public main()
 {
   printnums(sizeof(Array1));
   print(Array1[2]);
-  printnums(sizeof(Array2), sizeof(Array2[]));
+  printnums(sizeof(Array2), sizeof(Array2[0]));
   print(Array2[2]);
-  printnums(sizeof(Array3), sizeof(Array3[]));
+  printnums(sizeof(Array3), sizeof(Array3[0]));
   print(Array3[0]);
   print(Array3[4]);
   print("\n");

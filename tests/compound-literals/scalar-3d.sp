@@ -29,9 +29,9 @@ int Array2[3][2][] = {
 
 public main()
 {
-  printnums(sizeof(Array1), sizeof(Array1[]), sizeof(Array1[][]),
+  printnums(sizeof(Array1), sizeof(Array1[0]), sizeof(Array1[0][0]),
             Array1[0][1][2], Array1[0][1][1], Array1[0][0][0]);
-  printnums(sizeof(Array2), sizeof(Array2[]), sizeof(Array2[][]),
+  printnums(sizeof(Array2), sizeof(Array2[0]), sizeof(Array2[0][0]),
             Array2[0][1][2], Array2[0][1][1], Array2[0][0][0],
             Array2[2][1][2], Array2[1][1][1], Array2[1][0][0]);
 }

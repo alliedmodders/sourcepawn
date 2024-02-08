@@ -1,2 +1,2 @@
-(13) : error 117: enum structs cannot be indexed as arrays
-(14) : error 117: enum structs cannot be indexed as arrays
+(13) : error 028: invalid subscript (not an array or too many subscripts): "x"
+(14) : error 028: invalid subscript (not an array or too many subscripts): "x"

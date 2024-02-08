@@ -1,1 +1,1 @@
-(14) : error 163: indeterminate array size in "sizeof" expression (symbol "arr")
+(14) : error 163: indeterminate array size in "sizeof" expression

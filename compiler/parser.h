@@ -137,6 +137,7 @@ class Parser
     Semantics* sema_;
     bool in_loop_ = false;
     bool in_test_ = false;
+    bool allow_empty_array_index_ = false;
     std::shared_ptr<Lexer> lexer_;
     TypeManager* types_ = nullptr;
     tr::deque<FunctionDecl*> delayed_functions_;

@@ -81,18 +81,8 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
             report(pos, 136);
             return false;
         }
-
-        ti->set_type(cc_.types()->type_int());
-        ti->declared_type = type;
-        ti->dim_.emplace_back(enum_type->array_size());
-
-        if (ti->ident != iARRAY && ti->ident != iREFARRAY) {
-            ti->ident = iARRAY;
-            ti->has_postdims = true;
-        }
-    } else {
-        ti->set_type(type);
     }
+    ti->set_type(type);
     return true;
 }
 
@@ -261,6 +251,8 @@ PstructDecl::EnterNames(SemaContext& sc)
 
         if (field->type_info().ident == iARRAY)
             field->mutable_type_info().ident = iREFARRAY;
+        else if (field->type_info().type->isEnumStruct())
+            report(field, 446);
         field->set_offset(position);
 
         position++;
@@ -543,12 +535,8 @@ ArrayExpr::Bind(SemaContext& sc)
 bool SizeofExpr::Bind(SemaContext& sc) {
     AutoErrorPos aep(pos_);
 
-    decl_ = FindSymbol(sc, ident_);
-    if (!decl_) {
-        report(pos_, 17) << ident_;
+    if (!child_->Bind(sc))
         return false;
-    }
-    markusage(decl_, uREAD);
     return true;
 }
 
@@ -758,16 +746,9 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     // Ensure |this| argument exists.
     if (this_type_) {
         typeinfo_t typeinfo = {};
-        if (auto enum_type = this_type_->asEnumStruct()) {
-            typeinfo.set_type(outer_sc.cc().types()->type_int());
-            typeinfo.ident = iREFARRAY;
-            typeinfo.declared_type = this_type_;
-            typeinfo.dim_.emplace_back(enum_type->array_size());
-        } else {
-            typeinfo.set_type(this_type_);
-            typeinfo.ident = iVARIABLE;
-            typeinfo.is_const = true;
-        }
+        typeinfo.set_type(this_type_);
+        typeinfo.ident = iVARIABLE;
+        typeinfo.is_const = true;
 
         auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT, false,
                                 false, false, nullptr);
@@ -845,7 +826,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
             break;
         }
 
-        Type* type = typeinfo.semantic_type();
+        Type* type = typeinfo.type;
         if (type->isEnumStruct()) {
             if (is_native_)
                 report(var->pos(), 135) << type->name();
@@ -863,7 +844,9 @@ FunctionDecl::BindArgs(SemaContext& sc)
         var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
         arg_index++;
 
-        if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY) {
+        if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY ||
+            typeinfo.type->isEnumStruct())
+        {
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
                 fill_arg_defvalue(sc.cc(), var);
         } else {
@@ -1020,7 +1003,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         // Pawn is inherently forward-pass only.
         //
         // :TODO: this will not be true when we move to recursive binding.
-        if (field->type_info().semantic_type() == type_) {
+        if (field->type_info().type == type_) {
             report(field->pos(), 87) << name_;
             continue;
         }
@@ -1197,6 +1180,10 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
 
         if (prop->type_info().numdim() > 0) {
             report(prop, 82);
+            continue;
+        }
+        if (prop->type_info().type->isEnumStruct()) {
+            report(prop, 117);
             continue;
         }
 

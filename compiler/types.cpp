@@ -205,20 +205,4 @@ TypenameInfo typeinfo_t::ToTypenameInfo() const {
     return TypenameInfo(type_atom, is_label);
 }
 
-Type* typeinfo_t::enum_struct_type() const {
-    if (!type->isInt())
-        return nullptr;
-    return declared_type;
-}
-
-Type* typeinfo_t::semantic_type() const {
-    if (!type->isInt() || !declared_type)
-        return type;
-    return declared_type;
-}
-
-bool typeinfo_t::is_implicit_dim(int i) const {
-    return semantic_type() != type && i == numdim() - 1;
-}
-
 } // namespace sp

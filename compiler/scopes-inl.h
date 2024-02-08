@@ -1,7 +1,6 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-//  Pawn compiler - Recursive descend expresion parser
 //
-//  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) AlliedModders LLC 2023
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -20,26 +19,18 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include "array-data.h"
 #include "parse-node.h"
+#include "scopes.h"
 
 namespace sp {
 
-class Semantics;
-struct typeinfo_t;
+inline void SymbolScope::ForEachSymbol(const std::function<void(Decl*)>& callback) {
+    if (!symbols_)
+        return;
+    for (const auto& pair : *symbols_) {
+        for (auto iter = pair.second; iter; iter = iter->next)
+            callback(iter);
+    }
+}
 
-// Determine the static size of an iARRAY based on dimension expressions and
-// array initializers. The array may be converted to an iREFARRAY if it is
-// determined to be dynamic.
-void ResolveArraySize(Semantics* sema, VarDeclBase* decl);
-void ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
-
-// Perform type and size checks of an array and its initializer if present.
-bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
-
-void BuildCompoundInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
-void BuildCompoundInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
-
-cell_t CalcArraySize(const typeinfo_t& type);
-
-} // namespace sp
+}

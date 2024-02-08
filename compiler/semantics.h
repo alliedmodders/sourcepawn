@@ -249,6 +249,8 @@ class Semantics final
     void CheckVoidDecl(const typeinfo_t* type, int variable);
     void CheckVoidDecl(const declinfo_t* decl, int variable);
 
+    bool CheckScalarType(Expr* expr);
+
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;

@@ -11,5 +11,5 @@ char arr[8][2][] =
 }  
 
 public int main() {
-	return sizeof(arr[][]);
+	return sizeof(arr[0][0]);
 }
