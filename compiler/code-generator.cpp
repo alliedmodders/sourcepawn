@@ -107,7 +107,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     if (decl->ident() == iARRAY || decl->ident() == iREFARRAY) {
         string += " [ ";
         for (int i = 0; i < decl->dim_count(); i++)
-            string += ke::StringPrintf("%x:%x ", decl->semantic_type()->type_index(), decl->dim(i));
+            string += ke::StringPrintf("%x:%x ", decl->type()->type_index(), decl->dim(i));
         string += "]";
     }
 
@@ -296,19 +296,24 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
 
     __ bind_to(decl->label(), data_.dat_address());
 
-    if (decl->ident() == iVARIABLE) {
-        assert(!init || init->right()->val().ident == iCONSTEXPR);
-        if (init)
-            data_.Add(init->right()->val().constval());
-        else
-            data_.Add(0);
-    } else if (decl->ident() == iARRAY) {
+    if (decl->ident() == iARRAY || (decl->ident() == iVARIABLE && decl->type()->isEnumStruct())) {
         ArrayData array;
-        BuildArrayInitializer(decl, &array, data_.dat_address());
+        BuildCompoundInitializer(decl, &array, data_.dat_address());
 
         data_.Add(std::move(array.iv));
         data_.Add(std::move(array.data));
         data_.AddZeroes(array.zeroes);
+    } else if (decl->ident() == iVARIABLE) {
+        cell_t cells = 1;
+        if (auto es = decl->type()->asEnumStruct())
+            cells = es->array_size();
+
+        // TODO initialize ES
+        assert(!init || init->right()->val().ident == iCONSTEXPR);
+        if (init)
+            data_.Add(init->right()->val().constval());
+        else
+            data_.AddZeroes(cells);
     } else {
         assert(false);
     }
@@ -319,8 +324,14 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
 {
     BinaryExpr* init = decl->init();
 
-    if (decl->ident() == iVARIABLE) {
-        markstack(decl, MEMUSE_STATIC, 1);
+    bool is_struct = (decl->ident() == iVARIABLE && decl->type()->isEnumStruct());
+
+    if (decl->ident() == iVARIABLE && !is_struct) {
+        cell_t cells = 1;
+        if (auto es = decl->type()->asEnumStruct())
+            cells = es->array_size();
+
+        markstack(decl, MEMUSE_STATIC, cells);
         decl->BindAddress(-current_stack_ * sizeof(cell));
 
         if (init) {
@@ -337,13 +348,18 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
                 EmitExpr(init->right());
                 __ emit(OP_PUSH_PRI);
             }
-        } else {
+        } else if (cells == 1) {
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
+        } else {
+            __ emit(OP_STACK, -(cells * sizeof(cell_t)));
+            __ emit(OP_CONST_PRI, 0);
+            __ emit(OP_ADDR_ALT, decl->addr());
+            __ emit(OP_FILL, cells * sizeof(cell_t));
         }
-    } else if (decl->ident() == iARRAY) {
+    } else if (decl->ident() == iARRAY || is_struct) {
         ArrayData array;
-        BuildArrayInitializer(decl, &array, 0);
+        BuildCompoundInitializer(decl, &array, 0);
 
         cell iv_size = (cell)array.iv.size();
         cell data_size = (cell)array.data.size() + array.zeroes;
@@ -518,7 +534,7 @@ CodeGenerator::EmitExpr(Expr* expr)
         }
         case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
-            if (e->decl()->ident() == iREFARRAY)
+            if (e->decl()->type()->isEnumStruct())
                 __ address(e->decl(), sPRI);
             break;
         }
@@ -1093,6 +1109,10 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
             break;
         }
         case iVARIABLE:
+            if (sym->type()->isEnumStruct()) {
+                __ address(sym, sPRI);
+                break;
+            }
         case iREFERENCE:
             break;
         default:
@@ -1108,23 +1128,20 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
 
     auto& base_val = expr->base()->val();
 
-    bool magic_string = (base_val.type()->isChar() && base_val.array_dim_count() == 1);
+    cell_t rank_size = sizeof(cell_t);
+    if (base_val.array_dim_count() == 1) {
+        if (base_val.type()->isChar())
+            rank_size = 1;
+        else if (auto es = base_val.type()->asEnumStruct())
+            rank_size = es->array_size() * sizeof(cell_t);
+    }
+
+    assert(rank_size == 1 || (rank_size % sizeof(cell_t) == 0));
 
     const auto& idxval = expr->index()->val();
     if (idxval.ident == iCONSTEXPR) {
-        if (!magic_string) {
-            /* normal array index */
-            if (idxval.constval() != 0) {
-                /* don't add offsets for zero subscripts */
-                __ emit(OP_ADD_C, idxval.constval() << 2);
-            }
-        } else {
-            /* character index */
-            if (idxval.constval() != 0) {
-                /* don't add offsets for zero subscripts */
-                __ emit(OP_ADD_C, idxval.constval()); /* 8-bit character */
-            }
-        }
+        if (idxval.constval() != 0)
+            __ emit(OP_ADD_C, idxval.constval() * rank_size);
     } else {
         __ emit(OP_PUSH_PRI);
         EmitExpr(expr->index());
@@ -1136,11 +1153,13 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
             __ emit(OP_BOUNDS, INT_MAX); 
         }
 
-        if (magic_string) {
+        if (rank_size == 1) {
             __ emit(OP_POP_ALT);
             __ emit(OP_ADD);
         } else {
             __ emit(OP_POP_ALT);
+            if (rank_size != sizeof(cell_t))
+                __ emit(OP_SMUL_C, rank_size / sizeof(cell_t));
             __ emit(OP_IDXADDR);
         }
     }
@@ -1274,7 +1293,10 @@ CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
             TrackTempHeapAlloc(expr, 1);
             break;
         case iVARIABLE:
-            __ const_pri(arg->default_value()->val.get());
+            if (arg->type()->isEnumStruct())
+                EmitDefaultArray(expr, arg);
+            else
+                __ const_pri(arg->default_value()->val.get());
             break;
         default:
             assert(false);
@@ -1350,7 +1372,7 @@ void
 CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
 {
     ArrayData array;
-    BuildArrayInitializer(stmt->array(), nullptr, &array);
+    BuildCompoundInitializer(stmt->array(), nullptr, &array);
 
     auto info = fun_->return_array();
     if (array.iv.empty()) {
@@ -1485,7 +1507,8 @@ CodeGenerator::EmitRvalue(value* lval)
 {
     switch (lval->ident) {
         case iARRAYCELL:
-            __ emit(OP_LOAD_I);
+            if (!lval->type()->asEnumStruct())
+                __ emit(OP_LOAD_I);
             break;
         case iARRAYCHAR:
             __ emit(OP_LODB_I, 1);
@@ -1502,10 +1525,12 @@ CodeGenerator::EmitRvalue(value* lval)
             break;
         default: {
             auto var = lval->sym->as<VarDeclBase>();
-            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
-              __ emit(OP_LOAD_S_PRI, var->addr());
-            else
-              __ emit(OP_LOAD_PRI, var->addr());
+            if (!var->type()->isEnumStruct()) {
+                if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
+                  __ emit(OP_LOAD_S_PRI, var->addr());
+                else
+                  __ emit(OP_LOAD_PRI, var->addr());
+            }
             break;
         }
     }

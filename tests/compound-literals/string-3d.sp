@@ -23,7 +23,7 @@ char Array3[][][25] = {
 
 public main()
 {
-  printnums(sizeof(Array1), sizeof(Array1[]), sizeof(Array1[][][]));
+  printnums(sizeof(Array1), sizeof(Array1[0]));
   print(Array1[0][2]);
   print("\n");
   print(Array1[3][2]);
@@ -31,7 +31,7 @@ public main()
   printnum(Array1[3][2][3]);
 
   // Same as above.
-  printnums(sizeof(Array2), sizeof(Array2[]), sizeof(Array2[][][]));
+  printnums(sizeof(Array2), sizeof(Array2[0]));
   print(Array2[0][2]);
   print("\n");
   print(Array2[3][2]);
@@ -40,7 +40,7 @@ public main()
 
   // Last dimension should be 25, but it is not. However we do get the
   // indirection vectors correct.
-  printnums(sizeof(Array3), sizeof(Array3[]), sizeof(Array3[][][]));
+  printnums(sizeof(Array3), sizeof(Array3[0]), sizeof(Array3[0][0]));
   print(Array3[0][2]);
   print("\n");
   print(Array3[3][2]);

@@ -650,6 +650,8 @@ Parser::parse_const(int vclass)
 Expr*
 Parser::hier14()
 {
+    ke::SaveAndSet<bool> disallow_empty_array_index(&allow_empty_array_index_, false);
+
     Expr* node = hier13();
 
     if (!node)
@@ -881,38 +883,24 @@ Parser::hier2()
         }
         case tSIZEOF:
         {
-            int parens = 0;
+            ke::SaveAndSet<bool> allow_empty_array_index(&allow_empty_array_index_, true);
+
+            // Manually strip '(' tokens to avoid re-entering hier14 and resetting
+            // the IndexExpr parsing flag.
+            unsigned int nparens = 0;
             while (lexer_->match('('))
-                parens++;
+                nparens++;
 
-            Atom* ident;
-            if (lexer_->match(tTHIS)) {
-                ident = cc_.atom("this");
-            } else {
-                if (!lexer_->needsymbol(&ident))
-                    return nullptr;
+            Expr* inner = hier1();
+            if (!inner)
+                return nullptr;
+
+            while (nparens--) {
+                if (!lexer_->match(')'))
+                    break;
             }
 
-            int array_levels = 0;
-            while (lexer_->match('[')) {
-                array_levels++;
-                lexer_->need(']');
-            }
-
-            Atom* field = nullptr;
-            int token = lexer_->lex();
-            if (token == tDBLCOLON || token == '.') {
-                if (!lexer_->needsymbol(&field))
-                    return nullptr;
-            } else {
-                lexer_->lexpush();
-                token = 0;
-            }
-
-            while (parens--)
-                lexer_->need(')');
-
-            return new SizeofExpr(pos, ident, field, token, array_levels);
+            return new SizeofExpr(pos, inner);
         }
         default:
             lexer_->lexpush();
@@ -968,7 +956,9 @@ Parser::hier1()
             base = new FieldAccessExpr(pos, tok, base, ident);
         } else if (tok == '[') {
             auto pos = lexer_->pos();
-            Expr* inner = hier14();
+            Expr* inner = nullptr;
+            if (!(allow_empty_array_index_ && lexer_->peek(']')))
+                inner = hier14();
             base = new IndexExpr(pos, base, inner);
             lexer_->need(']');
         } else if (tok == '(') {
@@ -2430,11 +2420,6 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
 {
     if (lexer_->match(tSYMBOL))
         decl->name = lexer_->current_token()->atom;
-
-    if (decl->type.declared_type && decl->type.type->isInt()) {
-        assert(decl->type.numdim() > 0);
-        decl->type.dim_.pop_back();
-    }
 
     decl->type.dim_exprs = {};
 

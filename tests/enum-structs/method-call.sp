@@ -21,4 +21,8 @@ public main()
   p.set(5, 10);
   printnum(p.x);
   printnum(p.y);
+
+  Set(p, 6, 11);
+  printnum(p.x);
+  printnum(p.y);
 }

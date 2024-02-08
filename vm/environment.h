@@ -169,6 +169,9 @@ class Environment : public ISourcePawnEnvironment
     return exit_fp_;
   }
 
+  bool spew_interp_ops() const { return spew_interp_ops_; }
+  void set_spew_interp_ops(bool spew) { spew_interp_ops_ = spew; }
+
  public:
   static inline size_t offsetOfTopFrame() {
     return offsetof(Environment, top_);
@@ -218,6 +221,7 @@ class Environment : public ISourcePawnEnvironment
   IProfilingTool* profiler_;
   bool jit_enabled_;
   bool profiling_enabled_;
+  bool spew_interp_ops_ = false;
 
   std::unique_ptr<CodeAllocator> code_alloc_;
   std::unique_ptr<CodeStubs> code_stubs_;

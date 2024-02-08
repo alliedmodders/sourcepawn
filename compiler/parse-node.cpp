@@ -254,18 +254,6 @@ int Decl::dim_count() {
     return (int)var->type_info().numdim();
 }
 
-Type* Decl::semantic_type() {
-    if (auto var = as<VarDeclBase>()) {
-        if (Type* type = var->type_info().enum_struct_type())
-            return type;
-        return var->type();
-    }
-    if (auto es = as<EnumStructDecl>())
-        return es->type();
-    assert(false);
-    return nullptr;
-}
-
 bool Decl::is_const() {
     auto var = as<VarDeclBase>();
     assert(var);

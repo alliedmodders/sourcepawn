@@ -96,7 +96,7 @@ static const char* errmsg[] = {
     /*069*/ "arrays in info structs must be unsized and single dimension\n",
     /*070*/ "assertion failed%s\n",
     /*071*/ "user-defined operator must be declared before use (function \"%s\")\n",
-    /*072*/ "\"sizeof\" operator is only valid on variables\n",
+    /*072*/ "invalid expression for \"sizeof\" operator\n",
     /*073*/ "function argument must be an array (argument \"%s\")\n",
     /*074*/ "#define pattern must start with an alphabetic character\n",
     /*075*/ "input line too long (after substitutions)\n",
@@ -141,7 +141,7 @@ static const char* errmsg[] = {
     /*114*/ "missing type, or %s must have the same name as %s \"%s\"\n",
     /*115*/ "cannot use delete, %s %s has no destructor\n",
     /*116*/ "no methodmap or class was found for %s\n",
-    /*117*/ "enum structs cannot be indexed as arrays\n",
+    /*117*/ "properties cannot be enum structs\n",
     /*118*/ "scripted destructors are not supported\n",
     /*119*/ "enum struct \"%s\" must have at least one field\n",
     /*120*/ "methodmap and class signatures must use new-style type declarations\n",
@@ -194,7 +194,7 @@ static const char* errmsg[] = {
     "you mean to use 'new %s[size]' syntax?\n",
     /*162*/ "cannot create dynamic arrays in global scope - did you mean to "
 	    "create a fixed-length array?\n",
-    /*163*/ "indeterminate array size in \"sizeof\" expression (symbol \"%s\")\n",
+    /*163*/ "indeterminate array size in \"sizeof\" expression\n",
     /*164*/ "allocated array type '%s' doesn't match original type '%s'\n",
     /*165*/
     "cannot create dynamic arrays in static scope - did you mean to create a fixed-length array "
@@ -278,6 +278,7 @@ static const char* warnmsg[] = {
     /*249*/ "function name is always true - possible missing parenthesis?\n",
     /*250*/ "pragma has no effect\n",
     /*251*/ "const variable was not initialized\n",
+    /*252*/ "sizeof on scalar will always return 1\n",
 };
 
 static const char* errmsg_ex[] = {
@@ -327,4 +328,7 @@ static const char* errmsg_ex[] = {
     /*443*/ "enum %s already has a methodmap\n",
     /*444*/ "cannot find method \"%s.%s\"\n",
     /*445*/ "%s must be a field\n",
+    /*446*/ "enum structs are not allowed in legacy structs\n",
+    /*447*/ "invalid use of enum struct in expression\n",
+    /*448*/ "invalid enum struct initializer\n",
 };

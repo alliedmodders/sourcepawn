@@ -460,7 +460,7 @@ RttiBuilder::add_enumstruct(Type* type)
         if (field->type_info().numdim())
             dims[dimcount++] = field->type_info().dim(0);
 
-        variable_type_t type = {field->type_info().semantic_type(), dims, dimcount, false};
+        variable_type_t type = {field->type_info().type, dims, dimcount, false};
         std::vector<uint8_t> encoding;
         encode_var_type(encoding, type);
 
@@ -557,12 +557,6 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     for (const auto& arg : fun->args()) {
         Type* type = arg->type();
         int numdim = arg->type_info().numdim();
-        if (arg->type_info().numdim() && arg->type_info().enum_struct_type()) {
-            if (Type* last_type = arg->type_info().enum_struct_type()) {
-                type = last_type;
-                numdim--;
-            }
-        }
 
         if (arg->type_info().ident == iREFERENCE)
             bytes.push_back(cb::kByRef);

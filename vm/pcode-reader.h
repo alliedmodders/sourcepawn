@@ -78,6 +78,10 @@ class PcodeReader
     return (OPCODE)*cip_;
   }
 
+  const cell_t* start() const {
+    return code_;
+  }
+
   // Return whether or not there is more to decode.
   bool more() const {
     return cip_ < stop_at_;
