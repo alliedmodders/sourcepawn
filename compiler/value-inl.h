@@ -76,8 +76,6 @@ inline bool value::canRematerialize() const {
         case iVARIABLE:
         case iCONSTEXPR:
             return true;
-        case iREFERENCE:
-            return sym->vclass() == sARGUMENT || sym->vclass() == sLOCAL;
         default:
             return false;
     }

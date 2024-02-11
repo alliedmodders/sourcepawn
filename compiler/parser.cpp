@@ -2254,7 +2254,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
     int numtags = 0;
     if (flags & DECLFLAG_ARGUMENT) {
         if (lexer_->match('&'))
-            type->ident = iREFERENCE;
+            type->reference = true;
 
         // grammar for multitags is:
         //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
@@ -2478,7 +2478,7 @@ Parser::parse_post_array_dims(declinfo_t* decl, int flags)
     typeinfo_t* type = &decl->type;
 
     // Illegal declaration (we'll have a name since ref requires decl).
-    if (type->ident == iREFERENCE)
+    if (type->reference)
         report(67) << decl->name;
 
     parse_post_dims(type);
@@ -2532,7 +2532,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
             if (type->ident == iARRAY || type->ident == iREFARRAY)
                 report(137);
             else
-                type->ident = iREFERENCE;
+                type->reference = true;
         }
     }
 

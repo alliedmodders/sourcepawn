@@ -148,7 +148,7 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void address(VarDeclBase* sym, regid reg) {
-    if (sym->ident() == iREFARRAY || sym->ident() == iREFERENCE ||
+    if (sym->ident() == iREFARRAY || sym->type()->isReference() ||
         (sym->type()->isEnumStruct() && sym->vclass() == sARGUMENT))
     {
       if (reg == sPRI)
